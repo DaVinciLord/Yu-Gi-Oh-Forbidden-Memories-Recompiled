@@ -450,6 +450,7 @@ static const char *fragment_source =
     "    st += back * (1.0 - 1.0 / float(scale));\n"
     "    vec2 half_step = 0.5 * (dFdx(st) + dFdy(st));\n"
     "    float spread = max(fwidth(st.x), fwidth(st.y));\n"
+    "    float cover = 1.0;\n"
     "    if ((flags & 4) != 0) {\n"
     "        float ub = st.x + 1.0 / 256.0, vb = st.y + 1.0 / 256.0;\n"
     /* Only the primitive's own texels: a pixel drawn for a sample it
@@ -471,7 +472,10 @@ static const char *fragment_source =
     "                    int px = int(floor((float(texel_x) + fract(ub)) * float(pack_size.x) / float(pack_entry.z)));\n"
     "                    int py = int(floor((float(row) + fract(vb)) * float(pack_size.y) / float(pack_entry.w)));\n"
     "                    vec4 p = texelFetch(pack, ivec2(clamp(px, 0, pack_size.x - 1), clamp(py, 0, pack_size.y - 1)), 0);\n"
-    "                    if (p.a < 0.5) discard;\n"
+    /* A partly clear pixel (a letter's smoothed edge) is mixed over what
+     * lies beneath as much as it covers (texture_pack.c, sample). */
+    "                    if (p.a < 8.0 / 255.0) discard;\n"
+    "                    cover = p.a;\n"
     "                    t = floor(p.rgb * 255.0 + 0.5);\n"
     "                    replaced = true;\n"
     "                }\n"
@@ -528,6 +532,11 @@ static const char *fragment_source =
     "        else if (mode.y == 3) { c = floor(c * 0.25); alpha = 1.0; }\n"
     "        else alpha = 1.0;\n"
     "    }\n"
+    /* With the blend (one, source alpha): the result over the picture as
+     * much as the pixel covers; the subtracting pass takes it as it is. */
+    "    c *= cover;\n"
+    "    if (!semi) alpha = 1.0 - cover;\n"
+    "    else if (mode.y == 0) alpha = 1.0 - 0.5 * cover;\n"
     "    fragment = vec4(c / 255.0, alpha);\n"
     "}\n";
 
