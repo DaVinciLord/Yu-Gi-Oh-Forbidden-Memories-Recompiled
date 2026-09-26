@@ -488,11 +488,16 @@ static const char *fragment_source =
      * which says whether it is transparent and semi-transparent, and takes
      * its colour from the picture the game read it from. */
     "        } else if (!replaced && capture.z > 0 && mode.x == 2 && mode.z == 0 &&\n"
-    "                   ((page.x + u) & 1023) - capture.x >= 0 && ((page.x + u) & 1023) - capture.x < capture.z &&\n"
-    "                   ((page.y + v) & 511) - capture.y >= 0 && ((page.y + v) & 511) - capture.y < capture.w) {\n"
+    "                   ((page.x + (((u & ~window.x) | window.z) & 255)) & 1023) - capture.x >= 0 &&\n"
+    "                   ((page.x + (((u & ~window.x) | window.z) & 255)) & 1023) - capture.x < capture.z &&\n"
+    "                   ((page.y + (((v & ~window.y) | window.w) & 255)) & 511) - capture.y >= 0 &&\n"
+    "                   ((page.y + (((v & ~window.y) | window.w) & 255)) & 511) - capture.y < capture.w) {\n"
     "            word = texel_word(u, v);\n"
     "            if (word != 0u) {\n"
-    "                vec2 at = vec2(ivec2((page.x + u) & 1023, (page.y + v) & 511) - capture.xy) + fract(vec2(ub, vb));\n"
+    /* The texel texel_word read, through the texture window as there. */
+    "                ivec2 texel = ivec2((page.x + (((u & ~window.x) | window.z) & 255)) & 1023,\n"
+    "                                    (page.y + (((v & ~window.y) | window.w) & 255)) & 511);\n"
+    "                vec2 at = vec2(texel - capture.xy) + fract(vec2(ub, vb));\n"
     "                ivec2 px = clamp(ivec2(floor(at * float(scale))), ivec2(0), textureSize(captured, 0) - 1);\n"
     "                t = floor(texelFetch(captured, px, 0).rgb * 255.0 + 0.5);\n"
     "                replaced = true;\n"
