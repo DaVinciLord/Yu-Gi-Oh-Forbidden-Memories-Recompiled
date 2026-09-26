@@ -67,6 +67,8 @@ int Cards_FindIdentity(const char *identity)
 }
 int Cards_ModelId(int id) { return Cards_Valid(id) && model_ids[id] ? model_ids[id] : Cards_BaseId(id); }
 int Cards_EffectId(int id) { return Cards_Valid(id) && effect_ids[id] ? effect_ids[id] : Cards_BaseId(id); }
+static int retail_monster(int id);
+int Cards_HasModel(int id) { return Cards_Valid(id) && retail_monster(Cards_ModelId(id)); }
 int Cards_ExodiaPiece(int id)
 {
     return (unsigned)(id - EXODIA_FIRST_CARD_ID) < EXODIA_PIECE_COUNT && !not_exodia[id - EXODIA_FIRST_CARD_ID];
@@ -593,10 +595,13 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         int id;
         if (replace) {
             id = base;
-            replaced[id] = mod;
-            if ((unsigned)(id - EXODIA_FIRST_CARD_ID) < EXODIA_PIECE_COUNT) {
+            /* Left out, "exodia" is false for the first entry to replace a
+             * piece and what the earlier one said for a later one. */
+            if ((unsigned)(id - EXODIA_FIRST_CARD_ID) < EXODIA_PIECE_COUNT &&
+                (!replaced[id] || Json_Member(entry, "exodia"))) {
                 not_exodia[id - EXODIA_FIRST_CARD_ID] = !Json_Bool(Json_Member(entry, "exodia"), 0);
             }
+            replaced[id] = mod;
             replace_model_effect(mod, index, entry, id, &stats);
             goto own;
         }
@@ -612,9 +617,9 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         gCard_nCount = id;
         definitions[id] = entry;
         /* A replaced base lends the model and effect it was given. */
-        value = (int)Json_Number(Json_Member(entry, "model"), base);
+        value = (int)Json_Number(Json_Member(entry, "model"), 0);
         model_ids[id] = (unsigned short)(value >= 1 && value <= CARD_COUNT ? value : Cards_ModelId(base));
-        value = (int)Json_Number(Json_Member(entry, "effect"), base);
+        value = (int)Json_Number(Json_Member(entry, "effect"), 0);
         effect_ids[id] = (unsigned short)(value >= 1 && value <= CARD_COUNT ? value : Cards_EffectId(base));
         gCard_awBaseId[id] = (unsigned short)base;
         gCard_asNameSortKey[id - 1] = gCard_asNameSortKey[base - 1];
