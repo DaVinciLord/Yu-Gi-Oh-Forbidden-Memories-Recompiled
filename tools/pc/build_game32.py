@@ -702,7 +702,11 @@ def main():
         # Large-address-aware for guest RAM at 0x80000000, fixed base (like
         # -no-pie) for the symbol table, NX for the guest-call trap. Mods
         # bind through mod_exports.o, not an export table.
+        # -debug:symtab keeps the COFF symbol table beside the PDB (--pdb
+        # alone drops it): the save-state tables below are read from it
+        # with nm, and an empty one gave every build the same id.
         run([CC, *(["-mwindows"] if options.release else []), "-o", output, f"-Wl,--pdb={options.build}/memories-pc.pdb",
+             "-Wl,-Xlink=-debug:symtab",
              "-Wl,--large-address-aware", "-Wl,--disable-dynamicbase", "-Wl,--nxcompat",
              "-Wl,--allow-multiple-definition", f"{options.build}/guest_symbols.o",
              *[obj(s) for s in NATIVE + game], f"{options.build}/stubs.o", f"{options.build}/mod_exports.o",
@@ -752,6 +756,8 @@ def main():
             if int(row[1], 16) == 0 and index + 1 < len(rows):
                 row[1] = f"{int(rows[index + 1][0], 16) - int(row[0], 16):08x}"
         table = [" ".join(row) + "\n" for row in rows]
+    if not table:
+        sys.exit(f"{output}: no symbols to carry save states between builds with (the link dropped its symbol table)")
     build_id = hashlib.sha256("".join(table).encode()).hexdigest()[:8]
     for name in (build_id, digest.hexdigest()[:8]):  # the second serves states saved before build ids
         with open(f"{options.build}/symbols/{name}.txt", "w") as handle:
