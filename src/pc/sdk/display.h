@@ -19,4 +19,9 @@ void Memories_DumpFrame(const char *path, int full_vram);
 /* The internal resolution (SoftGpu_SetScale) from the main thread while
  * the game runs; 3 and 5 to 7 round down to 2 and 4. */
 int Memories_SetInternalScale(int scale);
+/* For game code that reads part of the picture back (StoreImage) and loads
+ * it elsewhere to draw with (LoadImage): after the load, so the OpenGL
+ * picture draws that copy from its scaled picture (SoftGpu_Capture)
+ * instead of from the console-resolution VRAM. */
+void Memories_PictureCapture(int sx, int sy, int dx, int dy, int w, int h);
 #endif

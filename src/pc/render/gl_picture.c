@@ -15,8 +15,9 @@
  * picture only, and after the replay VRAM as the software GPU left it is
  * uploaded whole, so the next frame's textures are what the console's
  * would be (what a primitive draws is not sampled by a later primitive of
- * the same frame: that would be render-to-texture, which the game does not
- * do). Blending: a fragment's colour comes out pre-multiplied and its alpha
+ * the same frame: that would be render-to-texture, which the game does
+ * only through a read-back and a load, and where it matters the game code
+ * says so: SoftGpu_Capture, below). Blending: a fragment's colour comes out pre-multiplied and its alpha
  * is the destination's factor, so opaque pixels and modes 0, 1 and 3 share
  * one draw; mode 2 (subtractive) draws its opaque texels first and then
  * its semi-transparent ones with a subtracting equation. No dithering, and
@@ -105,7 +106,7 @@ static int load_functions(void)
 }
 
 /* --- the record ---------------------------------------------------------- */
-enum { OP_GP0 = 1, OP_LOAD, OP_MOVE, OP_FILL, OP_RESYNC, OP_PRECISE };
+enum { OP_GP0 = 1, OP_LOAD, OP_MOVE, OP_FILL, OP_RESYNC, OP_PRECISE, OP_CAPTURE };
 #define ARENA_WORDS (8u << 20) /* 32 MiB: a frame's list is at most 2 MiB */
 static uint32_t *arena;
 static volatile size_t arena_used;
@@ -170,6 +171,19 @@ static void record_move(int sx, int sy, int dx, int dy, int w, int h)
     at[6] = (uint32_t)h;
 }
 
+static void record_capture(int sx, int sy, int dx, int dy, int w, int h)
+{
+    uint32_t *at = reserve(7);
+    if (!at) return;
+    at[0] = OP_CAPTURE;
+    at[1] = (uint32_t)sx;
+    at[2] = (uint32_t)sy;
+    at[3] = (uint32_t)dx;
+    at[4] = (uint32_t)dy;
+    at[5] = (uint32_t)w;
+    at[6] = (uint32_t)h;
+}
+
 static void record_fill(int x, int y, int w, int h, uint32_t rgb24)
 {
     uint32_t *at = reserve(6);
@@ -195,7 +209,7 @@ static void record_resync(int scale, const uint32_t state[6])
 }
 
 static const SoftGpuRecorder recorder = {record_gp0, record_load, record_move, record_fill, record_resync,
-                                          record_precise};
+                                          record_precise, record_capture};
 
 /* --- GL objects ---------------------------------------------------------- */
 static int scale;                 /* of the picture in the framebuffer, 0 before the first resync */
@@ -231,6 +245,14 @@ static GLint u_entry_map, u_place_map, u_pack, u_pack_entry, u_pack_size;
  * glyph pictures, 8-bit indices, as an integer texture on unit 6; and HD
  * numbers and labels, whose pictures are in the same atlas. */
 static int hd_text, hd_hud, opponent_name;
+/* A capture (SoftGpu_Capture): the scaled picture of what the game loaded
+ * at capture_rect (x, y, w, h in VRAM words; w 0 for none), on unit 7,
+ * which 16-bit textures there take their colour from. It holds until a
+ * load, copy or fill reaches that rect, a resync or a new scale. */
+static GLuint capture_texture;
+static int capture_rect[4], capture_w, capture_h;
+static GLint u_captured, u_capture;
+static void capture_touch(int x, int y, int w, int h);
 static GLuint glyphs_texture;
 static int glyphs_side;
 static unsigned glyphs_generation = ~0u;
@@ -361,6 +383,8 @@ static const char *fragment_source =
     "uniform usampler2D glyphs;\n"
     "uniform ivec4 pack_entry;\n" /* entry index + 1, crop left, crop width, rows */
     "uniform ivec3 pack_size;\n"  /* image width, height, texels per word */
+    "uniform sampler2D captured;\n" /* a capture's scaled picture (SoftGpu_Capture) */
+    "uniform ivec4 capture;\n"      /* its rect in VRAM words, w 0 for none */
     "uniform ivec4 window;\n"
     "uniform int op;\n"
     "uniform int pass;\n"
@@ -460,6 +484,19 @@ static const char *fragment_source =
      * glyph's palette as ever. */
     "            ivec2 at = clamp(ivec2(floor(vec2(ub, vb) * float(scale))), ivec2(0), textureSize(glyphs, 0) - 1);\n"
     "            word = word_at(page.z + int(texelFetch(glyphs, at, 0).r), page.w);\n"
+    /* A capture (SoftGpu_Capture): a 16-bit texel there keeps its word,
+     * which says whether it is transparent and semi-transparent, and takes
+     * its colour from the picture the game read it from. */
+    "        } else if (!replaced && capture.z > 0 && mode.x == 2 && mode.z == 0 &&\n"
+    "                   ((page.x + u) & 1023) - capture.x >= 0 && ((page.x + u) & 1023) - capture.x < capture.z &&\n"
+    "                   ((page.y + v) & 511) - capture.y >= 0 && ((page.y + v) & 511) - capture.y < capture.w) {\n"
+    "            word = texel_word(u, v);\n"
+    "            if (word != 0u) {\n"
+    "                vec2 at = vec2(ivec2((page.x + u) & 1023, (page.y + v) & 511) - capture.xy) + fract(vec2(ub, vb));\n"
+    "                ivec2 px = clamp(ivec2(floor(at * float(scale))), ivec2(0), textureSize(captured, 0) - 1);\n"
+    "                t = floor(texelFetch(captured, px, 0).rgb * 255.0 + 0.5);\n"
+    "                replaced = true;\n"
+    "            }\n"
     "        } else if (tex_xbr != 0 && (flags & 8) == 0) {\n"
     "            vec4 k = texture_xbr(vec2(ub, vb), half_step, spread);\n"
     "            word = k.a > 0.5 ? near_word : centre_word;\n"
@@ -552,6 +589,8 @@ static int make_program(void)
     u_glyphs = gl_GetUniformLocation(program, "glyphs");
     u_pack_entry = gl_GetUniformLocation(program, "pack_entry");
     u_pack_size = gl_GetUniformLocation(program, "pack_size");
+    u_captured = gl_GetUniformLocation(program, "captured");
+    u_capture = gl_GetUniformLocation(program, "capture");
     return 1;
 }
 
@@ -655,6 +694,7 @@ static int make_picture(int wanted)
         return 0;
     }
     wide_free(); /* their textures are at the old scale */
+    capture_rect[2] = capture_rect[3] = 0; /* so is the capture's */
     free_multisampled(&picture_ms_fbo, &picture_ms_buffer);
     if (picture_fbo) gl_DeleteFramebuffers(1, &picture_fbo);
     if (picture_scratch_fbo) gl_DeleteFramebuffers(1, &picture_scratch_fbo);
@@ -1836,6 +1876,7 @@ static void apply_load(int x, int y, int w, int h, const uint16_t *pixels)
     y &= SOFT_GPU_HEIGHT - 1;
     clip_rect(&x, &y, &cw, &ch); /* an upload past the edge wraps on the console; here it is cut */
     if (cw <= 0 || ch <= 0) return;
+    capture_touch(x, y, cw, ch);
     glBindTexture(GL_TEXTURE_2D, vram_texture);
     glPixelStorei(GL_UNPACK_ROW_LENGTH, w);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
@@ -1857,6 +1898,7 @@ static void apply_fill(int x, int y, int w, int h, uint32_t rgb24)
     y &= SOFT_GPU_HEIGHT - 1;
     clip_rect(&x, &y, &w, &h);
     if (w <= 0 || h <= 0) return;
+    capture_touch(x, y, w, h);
     gl_BindFramebuffer(GL_FRAMEBUFFER, vram_fbo);
     glEnable(GL_SCISSOR_TEST);
     glScissor(x, y, w, h);
@@ -1889,6 +1931,7 @@ static void apply_move(int sx, int sy, int dx, int dy, int w, int h)
     w = sw < dw ? sw : dw;
     h = sh < dh ? sh : dh;
     if (w <= 0 || h <= 0) return;
+    capture_touch(dx, dy, w, h);
     gl_BindFramebuffer(GL_READ_FRAMEBUFFER, vram_fbo);
     glBindTexture(GL_TEXTURE_2D, vram_scratch);
     glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, sx, sy, w, h);
@@ -1907,6 +1950,61 @@ static void apply_move(int sx, int sy, int dx, int dy, int w, int h)
     wide_mirror(dx, dy, w, h, 0, 0, 0, 0);
 }
 
+static void capture_uniform(void)
+{
+    gl_UseProgram(program);
+    gl_Uniform4i(u_capture, capture_rect[0], capture_rect[1], capture_rect[2], capture_rect[3]);
+}
+
+/* A load, copy or fill reaching the capture's rect ends it (the runs drawn
+ * before it are flushed already). */
+static void capture_touch(int x, int y, int w, int h)
+{
+    if (!capture_rect[2] || x >= capture_rect[0] + capture_rect[2] || x + w <= capture_rect[0] ||
+        y >= capture_rect[1] + capture_rect[3] || y + h <= capture_rect[1]) {
+        return;
+    }
+    capture_rect[2] = capture_rect[3] = 0;
+    if (program) capture_uniform();
+}
+
+/* The scaled picture at sx,sy into the capture texture, for the texels the
+ * game has just loaded at dx,dy (SoftGpu_Capture). */
+static void apply_capture(int sx, int sy, int dx, int dy, int w, int h)
+{
+    int sw = w, sh = h, dw = w, dh = h;
+    flush_runs();
+    if (scale < 2) return;
+    sx &= SOFT_GPU_WIDTH - 1;
+    sy &= SOFT_GPU_HEIGHT - 1;
+    dx &= SOFT_GPU_WIDTH - 1;
+    dy &= SOFT_GPU_HEIGHT - 1;
+    clip_rect(&sx, &sy, &sw, &sh);
+    clip_rect(&dx, &dy, &dw, &dh);
+    w = sw < dw ? sw : dw;
+    h = sh < dh ? sh : dh;
+    if (w <= 0 || h <= 0) return;
+    if (!capture_texture || capture_w != w * scale || capture_h != h * scale) {
+        if (capture_texture) glDeleteTextures(1, &capture_texture);
+        capture_texture = make_texture(GL_RGBA8, w * scale, h * scale, GL_RGBA, GL_UNSIGNED_BYTE);
+        capture_w = w * scale;
+        capture_h = h * scale;
+    }
+    picture_resolve(sx, sy, w, h);
+    gl_BindFramebuffer(GL_READ_FRAMEBUFFER, picture_fbo);
+    gl_ActiveTexture(GL_TEXTURE7);
+    glBindTexture(GL_TEXTURE_2D, capture_texture);
+    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, sx * scale, sy * scale, w * scale, h * scale);
+    gl_ActiveTexture(GL_TEXTURE0);
+    gl_BindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    glBindTexture(GL_TEXTURE_2D, vram_texture); /* unit 0 samples VRAM again */
+    capture_rect[0] = dx;
+    capture_rect[1] = dy;
+    capture_rect[2] = w;
+    capture_rect[3] = h;
+    capture_uniform();
+}
+
 /* VRAM as the software GPU has it, whole, into its texture. */
 static void upload_vram(void)
 {
@@ -1923,6 +2021,8 @@ static void resync(int wanted, const uint32_t words[6])
 {
     vertex_count = 0;
     run_count = 0;
+    capture_rect[2] = capture_rect[3] = 0; /* VRAM may be anything now */
+    if (program) capture_uniform();
     if (wanted < 2) {
         wide_free();
         scale = 0;
@@ -2020,6 +2120,11 @@ int GlPicture_Replay(void)
     gl_Uniform1i(u_place_map, 4);
     gl_Uniform1i(u_pack, 5);
     gl_Uniform1i(u_glyphs, 6);
+    gl_Uniform1i(u_captured, 7);
+    gl_ActiveTexture(GL_TEXTURE7);
+    glBindTexture(GL_TEXTURE_2D, capture_texture);
+    gl_ActiveTexture(GL_TEXTURE0);
+    capture_uniform();
     gl_Uniform1i(u_tex_xbr, Settings_Get(SET_XBR));
     hd_text = HdText_Enabled();
     set_samples(Settings_Get(SET_MSAA));
@@ -2065,6 +2170,10 @@ int GlPicture_Replay(void)
         case OP_FILL:
             used = 6;
             apply_fill((int)op[1], (int)op[2], (int)op[3], (int)op[4], op[5]);
+            break;
+        case OP_CAPTURE:
+            used = 7;
+            apply_capture((int)op[1], (int)op[2], (int)op[3], (int)op[4], (int)op[5], (int)op[6]);
             break;
         case OP_RESYNC:
             used = 8;
