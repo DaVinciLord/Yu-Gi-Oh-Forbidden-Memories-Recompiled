@@ -199,6 +199,29 @@ Matrix *RotMatrix_gte(ShortVector *r, Matrix *m)
     return m;
 }
 
+/* Rotation order Z, X, Y, from the resident routine (0x800889C0), which
+ * multiplies on the CPU and negates before the shift. The Exodia win's model
+ * scene calls it. */
+Matrix *RotMatrixZXY(ShortVector *r, Matrix *m)
+{
+    int sx, cx, sy, cy, sz, cz, sxsy, sxcy;
+    sin_cos(r->x, &sx, &cx);
+    sin_cos(r->y, &sy, &cy);
+    sin_cos(r->z, &sz, &cz);
+    m->m[2][1] = (short)sx;
+    m->m[2][0] = (short)(-(cx * sy) >> 12);
+    m->m[2][2] = (short)((cx * cy) >> 12);
+    m->m[1][1] = (short)((cz * cx) >> 12);
+    m->m[0][1] = (short)(-(sz * cx) >> 12);
+    sxsy = (sx * sy) >> 12;
+    m->m[0][0] = (short)(((cz * cy) >> 12) - ((sxsy * sz) >> 12));
+    m->m[1][0] = (short)(((sz * cy) >> 12) + ((sxsy * cz) >> 12));
+    sxcy = (sx * cy) >> 12;
+    m->m[0][2] = (short)(((cz * sy) >> 12) + ((sxcy * sz) >> 12));
+    m->m[1][2] = (short)(((sz * sy) >> 12) - ((sxcy * cz) >> 12));
+    return m;
+}
+
 /* Rotation order Y, X, Z, from the resident GTE routine. */
 Matrix *RotMatrixYXZ_gte(ShortVector *r, Matrix *m)
 {
