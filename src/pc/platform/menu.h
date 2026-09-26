@@ -11,7 +11,8 @@
  * Audio > Volume slider over the whole mix (src/pc/audio/spu.c)
  * View  > Scale 1x-4x
  * Game  > Mods opens the searchable mod manager
- * Debug > development helpers (src/pc/debug) */
+ * Debug > development helpers (src/pc/debug)
+ * Help  > update checks and this build's version (update_runtime.h) */
 
 typedef struct MenuCanvas {
     uint32_t *pixels; /* 0xAARRGGBB (alpha ignored unless `alpha`), row-major */
@@ -109,6 +110,25 @@ void Menu_SetItemEnabled(int id, int enabled);
  * it, or at console resolution, the Video menu's HD items could show
  * nothing: they are dimmed with the reason beside them. */
 void Menu_SetHdPicture(int on);
+
+/* A notice over the middle of the picture, drawn with the menu (also while
+ * the bar is hidden in fullscreen): a title, text wrapped to fit (newlines
+ * break it) and up to MENU_NOTICE_BUTTONS buttons in a row. While it is up
+ * it has the window's mouse and keyboard: Left and Right (or Tab) move the
+ * focus, Enter presses the focused button, Escape the last one. `chosen`
+ * gets the button's index after the notice has closed, and may show
+ * another; *quit ends the game as File > Exit does. One at a time: a new
+ * notice replaces the one shown. Main thread only. */
+#define MENU_NOTICE_BUTTONS 4
+void Menu_ShowNotice(const char *title, const char *text, const char *const *buttons, int count, int focus,
+                     void (*chosen)(int button, int *quit));
+/* New text for the notice shown, keeping its buttons and focus (progress). */
+void Menu_SetNoticeText(const char *text);
+void Menu_CloseNotice(void);
+int Menu_NoticeShown(void);
+/* Nonzero once after a notice appeared, changed or closed other than by an
+ * event: the backend repaints the menu then. */
+int Menu_TakeChanged(void);
 
 /* Provided by the platform for the Video menu. */
 int Platform_Scale(void);

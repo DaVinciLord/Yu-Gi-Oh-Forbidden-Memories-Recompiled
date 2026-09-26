@@ -24,6 +24,7 @@
 #include "paths.h"
 #include "pc/sdk/display.h"
 #include "title_jump.h"
+#include "update_runtime.h"
 #include "pc/saves/deck_menu.h"
 #ifdef _WIN32
 #include "win32.h"
@@ -81,6 +82,7 @@ enum {
     ACT_MODS, ACT_CONTROLS, ACT_RELOAD_SETTINGS, ACT_PAUSE, ACT_FRAME_STEP, ACT_DUMP_FRAME, ACT_DUMP_VRAM,
     SLIDER_MASTER, SLIDER_MUSIC, SLIDER_SFX, CHECK_MUTE,
     CHECK_HUD, CHECK_HUD_FULL, RADIO_STATE_SLOT, ACT_UNLOCK_FREE_DUELISTS, ACT_RESET_COLOR,
+    ACT_CHECK_UPDATES, ACT_RELEASES, ACT_VERSION,
     CHECK_TRACE = 300  /* value is a LogChannel */
 };
 
@@ -95,7 +97,7 @@ typedef struct {
 } Item;
 typedef struct { const char *label; Item items[20]; int count; int x, w; } Menu;
 
-enum { MENU_FILE, MENU_VIDEO, MENU_AUDIO, MENU_GAME, MENU_VIEW, MENU_DEBUG, MENU_COUNT };
+enum { MENU_FILE, MENU_VIDEO, MENU_AUDIO, MENU_GAME, MENU_VIEW, MENU_DEBUG, MENU_HELP, MENU_COUNT };
 enum { SUB_SCALE, SUB_MENU_SIZE, SUB_SPEED, SUB_FPS, SUB_CHEATS, SUB_TRACE, SUB_SCALING, SUB_ASPECT, SUB_RESOLUTION, SUB_COLOR, SUB_EFFECTS, SUB_JUMP, SUB_ANTIALIAS, SUB_FILTER, SUB_COUNT };
 static Menu menus[MENU_COUNT] = {
     {"File", {{"Save state", "F5", ITEM_ACTION, ACT_SAVE_STATE, -1},
@@ -150,6 +152,14 @@ static Menu menus[MENU_COUNT] = {
                {"Dump frame (PPM)", 0, ITEM_ACTION, ACT_DUMP_FRAME, -1, 0, ITEM_GROUP_BREAK},
                {"Dump VRAM (PPM)", 0, ITEM_ACTION, ACT_DUMP_VRAM, -1},
                {"Trace", 0, ITEM_SUBMENU, 0, -1, SUB_TRACE, ITEM_GROUP_BREAK}}, 8},
+    /* Updates from the project's GitHub releases (update_runtime.h). The
+     * last row's label is this build's version, set by Menu_Init. */
+    {"Help", {{"Check for updates at start", 0, ITEM_CHECK, 0, SET_UPDATE_CHECK},
+              {"Install updates automatically", 0, ITEM_CHECK, 0, SET_UPDATE_AUTO},
+              {"Include pre-releases", 0, ITEM_CHECK, 0, SET_UPDATE_PRERELEASES},
+              {"Check for updates now", 0, ITEM_ACTION, ACT_CHECK_UPDATES, -1, 0, ITEM_GROUP_BREAK},
+              {"Releases page", 0, ITEM_ACTION, ACT_RELEASES, -1},
+              {"Version", 0, ITEM_ACTION, ACT_VERSION, -1, 0, ITEM_GROUP_BREAK | ITEM_DISABLED}}, 6},
 };
 static Menu submenus[SUB_COUNT] = {
     {"Window scale", {{"1x", 0, ITEM_RADIO, MENU_ITEM_SCALE_1, SET_SCALE, 1},
@@ -217,6 +227,24 @@ static int open_menu = -1, hot_item = -1, hover_bar = -1, grabbed, ready, visibl
 static int open_sub = -1, sub_item = -1, hot_sub = -1;
 static int consumed_press[8];
 
+/* One notice at a time, over the middle of the picture (menu.h). */
+#define NOTICE_MAX_W (500 * ui)
+#define NOTICE_PAD (18 * ui)
+#define NOTICE_LINE (19 * ui)
+#define NOTICE_BUTTON_H (28 * ui)
+#define NOTICE_BUTTON_PAD (14 * ui)
+#define NOTICE_BUTTON_GAP (8 * ui)
+#define NOTICE_LINES 24
+
+static struct {
+    int shown, count, focus, hover;
+    char title[128], text[1024], buttons[MENU_NOTICE_BUTTONS][48];
+    void (*chosen)(int button, int *quit);
+    /* The text wrapped to the box: where each line starts and its length. */
+    int line_start[NOTICE_LINES], line_length[NOTICE_LINES], lines, wrapped_ui, wrapped_width;
+} notice;
+static int changed;
+
 /* --- text ------------------------------------------------------------ */
 
 typedef struct { unsigned char *coverage; int w, h, left, top, advance; } Glyph;
@@ -263,6 +291,9 @@ static const BitmapGlyph bitmap_font[] = {
     {'-', {0x00, 0x00, 0x00, 0x1f, 0x00, 0x00, 0x00}}, {'.', {0x00, 0x00, 0x00, 0x00, 0x00, 0x0c, 0x0c}},
     {':', {0x00, 0x0c, 0x0c, 0x00, 0x0c, 0x0c, 0x00}}, {'(', {0x02, 0x04, 0x08, 0x08, 0x08, 0x04, 0x02}},
     {')', {0x08, 0x04, 0x02, 0x02, 0x02, 0x04, 0x08}}, {'/', {0x01, 0x01, 0x02, 0x04, 0x08, 0x10, 0x10}},
+    {',', {0x00, 0x00, 0x00, 0x00, 0x0c, 0x04, 0x08}}, {';', {0x00, 0x0c, 0x0c, 0x00, 0x0c, 0x04, 0x08}},
+    {'\'', {0x0c, 0x04, 0x08, 0x00, 0x00, 0x00, 0x00}}, {'!', {0x04, 0x04, 0x04, 0x04, 0x04, 0x00, 0x04}},
+    {'?', {0x0e, 0x11, 0x01, 0x02, 0x04, 0x00, 0x04}},
 };
 static const int bitmap_font_count = (int)(sizeof(bitmap_font) / sizeof(bitmap_font[0]));
 
@@ -586,6 +617,9 @@ static void layout_bar(void)
 
 void Menu_Init(void)
 {
+    int i;
+    for (i = 0; i < menus[MENU_HELP].count; i++)
+        if (menus[MENU_HELP].items[i].id == ACT_VERSION) menus[MENU_HELP].items[i].label = Update_VersionLabel();
     load_font();
     layout_bar();
     Settings_Observe(setting_changed);
@@ -694,22 +728,28 @@ static void drop_geometry(int level, int *x, int *y, int *w, int *h)
     }
 }
 
+static void notice_geometry(int *x, int *y, int *w, int *h);
+
 void Menu_Bounds(int *x, int *y, int *w, int *h)
 {
     int level;
-    if (!visible) {
-        *x = *y = *w = *h = 0;
-        return;
+    *x = *y = *w = *h = 0;
+    if (visible) {
+        *w = canvas ? canvas->width : 0;
+        *h = MENU_H;
+        for (level = 0; level < (open_sub >= 0 ? 2 : open_menu >= 0 ? 1 : 0); level++) {
+            int dx, dy, dw, dh;
+            drop_geometry(level, &dx, &dy, &dw, &dh);
+            if (dy + dh + SHADOW > *h) *h = dy + dh + SHADOW;
+            if (dx + dw + SHADOW > *w) *w = dx + dw + SHADOW;
+        }
     }
-    *x = 0;
-    *y = 0;
-    *w = canvas ? canvas->width : 0;
-    *h = MENU_H;
-    for (level = 0; level < (open_sub >= 0 ? 2 : open_menu >= 0 ? 1 : 0); level++) {
-        int dx, dy, dw, dh;
-        drop_geometry(level, &dx, &dy, &dw, &dh);
-        if (dy + dh + SHADOW > *h) *h = dy + dh + SHADOW;
-        if (dx + dw + SHADOW > *w) *w = dx + dw + SHADOW;
+    if (notice.shown && ready && canvas) {
+        /* From the top, as the bar is: one rectangle holds both. */
+        int nx, ny, nw, nh;
+        notice_geometry(&nx, &ny, &nw, &nh);
+        if (*w < canvas->width) *w = canvas->width;
+        if (*h < ny + nh + SHADOW) *h = ny + nh + SHADOW;
     }
 }
 
@@ -832,11 +872,224 @@ static int item_state(const Item *item)
     return 0;
 }
 
+static void close_menu(void);
+
+/* --- notices --------------------------------------------------------- */
+
+
+static int span_width(const char *text, int length)
+{
+    char part[256];
+    if (length >= (int)sizeof(part)) length = (int)sizeof(part) - 1;
+    memcpy(part, text, (size_t)length);
+    part[length] = '\0';
+    return text_width(part);
+}
+
+static int notice_buttons_width(void)
+{
+    int i, width = 0;
+    for (i = 0; i < notice.count; i++)
+        width += text_width(notice.buttons[i]) + NOTICE_BUTTON_PAD * 2 + (i ? NOTICE_BUTTON_GAP : 0);
+    return width;
+}
+
+/* Break the text at spaces to fit `width`, and at every newline. */
+static void wrap_notice(int width)
+{
+    const char *text = notice.text;
+    int at = 0;
+    notice.lines = 0;
+    while (text[at] && notice.lines < NOTICE_LINES) {
+        int end = at, fit = -1;
+        while (text[end] && text[end] != '\n') {
+            int next = end;
+            while (text[next] && text[next] != ' ' && text[next] != '\n') next++;
+            if (fit >= 0 && span_width(text + at, next - at) > width) break;
+            fit = next;
+            end = next;
+            if (text[end] == ' ') end++;
+        }
+        if (fit < 0) fit = end;
+        notice.line_start[notice.lines] = at;
+        notice.line_length[notice.lines++] = fit - at;
+        at = fit;
+        while (text[at] == ' ') at++;
+        if (text[at] == '\n') at++;
+    }
+    notice.wrapped_ui = ui;
+    notice.wrapped_width = width;
+}
+
+static void notice_geometry(int *x, int *y, int *w, int *h)
+{
+    int canvas_w = canvas ? canvas->width : 640, canvas_h = canvas ? canvas->height : 480;
+    int inner = NOTICE_MAX_W, least = notice_buttons_width(), title = text_width(notice.title);
+    if (least < title) least = title;
+    if (inner < least) inner = least;
+    if (inner > canvas_w - NOTICE_PAD * 2 - 16 * ui) inner = canvas_w - NOTICE_PAD * 2 - 16 * ui;
+    if (notice.wrapped_ui != ui || notice.wrapped_width != inner) wrap_notice(inner);
+    *w = inner + NOTICE_PAD * 2;
+    *h = NOTICE_PAD + NOTICE_LINE + 6 * ui + notice.lines * NOTICE_LINE + NOTICE_PAD + NOTICE_BUTTON_H + NOTICE_PAD;
+    *x = (canvas_w - *w) / 2;
+    *y = (canvas_h - *h) / 2;
+    if (*y < MENU_H + 8 * ui) *y = MENU_H + 8 * ui;
+}
+
+static void notice_button(int index, int *bx, int *by, int *bw)
+{
+    int x, y, w, h, i, at;
+    notice_geometry(&x, &y, &w, &h);
+    at = x + w - NOTICE_PAD - notice_buttons_width();
+    for (i = 0; i < index; i++) at += text_width(notice.buttons[i]) + NOTICE_BUTTON_PAD * 2 + NOTICE_BUTTON_GAP;
+    *bx = at;
+    *by = y + h - NOTICE_PAD - NOTICE_BUTTON_H;
+    *bw = text_width(notice.buttons[index]) + NOTICE_BUTTON_PAD * 2;
+}
+
+static int notice_button_at(int px, int py)
+{
+    int i, bx, by, bw;
+    for (i = 0; i < notice.count; i++) {
+        notice_button(i, &bx, &by, &bw);
+        if (px >= bx && px < bx + bw && py >= by && py < by + NOTICE_BUTTON_H) return i;
+    }
+    return -1;
+}
+
+static void draw_notice(void)
+{
+    int x, y, w, h, i, top;
+    notice_geometry(&x, &y, &w, &h);
+    if (canvas->alpha) clear_alpha_rect(x, y, w + SHADOW, h + SHADOW);
+    for (i = SHADOW; i > 0; i--) {
+        unsigned alpha = (unsigned)(10 + (SHADOW - i) * 8 / ui);
+        fill(x + w, y + i, i, h, 0x000000u, alpha);
+        fill(x + i, y + h, w, i, 0x000000u, alpha);
+    }
+    fill(x, y, w, h, C_DROP, 255);
+    outline(x, y, w, h, C_DROP_EDGE);
+    fill(x, y, w, 3 * ui, C_ACCENT, 255);
+    top = y + NOTICE_PAD;
+    draw_text(x + NOTICE_PAD, top + NOTICE_LINE / 2, notice.title, C_TEXT_ON_ACCENT);
+    top += NOTICE_LINE + 6 * ui;
+    for (i = 0; i < notice.lines; i++, top += NOTICE_LINE) {
+        char line[256];
+        int length = notice.line_length[i] < (int)sizeof(line) - 1 ? notice.line_length[i] : (int)sizeof(line) - 1;
+        memcpy(line, notice.text + notice.line_start[i], (size_t)length);
+        line[length] = '\0';
+        draw_text(x + NOTICE_PAD, top + NOTICE_LINE / 2, line, C_TEXT);
+    }
+    for (i = 0; i < notice.count; i++) {
+        int bx, by, bw, focus = i == notice.focus;
+        notice_button(i, &bx, &by, &bw);
+        fill(bx, by, bw, NOTICE_BUTTON_H, focus ? C_ACCENT : i == notice.hover ? C_TRACK : C_BAR_HOVER, 255);
+        if (!focus) outline(bx, by, bw, NOTICE_BUTTON_H, C_DROP_EDGE);
+        draw_text(bx + NOTICE_BUTTON_PAD, by + NOTICE_BUTTON_H / 2, notice.buttons[i], focus ? C_TEXT_ON_ACCENT : C_TEXT);
+    }
+}
+
+void Menu_ShowNotice(const char *title, const char *text, const char *const *buttons, int count, int focus,
+                     void (*chosen)(int button, int *quit))
+{
+    int i;
+    if (count < 1) count = 1;
+    if (count > MENU_NOTICE_BUTTONS) count = MENU_NOTICE_BUTTONS;
+    close_menu();
+    snprintf(notice.title, sizeof(notice.title), "%s", title ? title : "");
+    snprintf(notice.text, sizeof(notice.text), "%s", text ? text : "");
+    for (i = 0; i < count; i++) snprintf(notice.buttons[i], sizeof(notice.buttons[i]), "%s", buttons && buttons[i] ? buttons[i] : "OK");
+    notice.count = count;
+    notice.focus = focus >= 0 && focus < count ? focus : count - 1;
+    notice.hover = -1;
+    notice.chosen = chosen;
+    notice.wrapped_ui = 0;
+    notice.shown = 1;
+    changed = 1;
+    LOG(LOG_MENU, "notice \"%s\" with %d buttons", notice.title, count);
+}
+
+void Menu_SetNoticeText(const char *text)
+{
+    if (!notice.shown || !strcmp(notice.text, text ? text : "")) return;
+    snprintf(notice.text, sizeof(notice.text), "%s", text ? text : "");
+    notice.wrapped_ui = 0;
+    changed = 1;
+}
+
+void Menu_CloseNotice(void)
+{
+    if (!notice.shown) return;
+    notice.shown = 0;
+    changed = 1;
+}
+
+int Menu_NoticeShown(void) { return notice.shown; }
+
+int Menu_TakeChanged(void)
+{
+    int was = changed;
+    changed = 0;
+    return was;
+}
+
+static void choose_notice(int button, int *quit)
+{
+    void (*chosen)(int, int *) = notice.chosen;
+    LOG(LOG_MENU, "notice \"%s\": %s", notice.title, notice.buttons[button]);
+    notice.shown = 0; /* before the callback, which may show the next one */
+    if (chosen) chosen(button, quit);
+}
+
+/* The notice has the window's mouse and keyboard while it is up. */
+static int notice_event(const MenuEvent *event, int *quit)
+{
+    switch (event->type) {
+    case MENU_EVENT_BUTTON_DOWN: {
+        int button = event->button == 1 ? notice_button_at(event->x, event->y) : -1;
+        if (button >= 0) choose_notice(button, quit);
+        return 1;
+    }
+    case MENU_EVENT_MOTION: {
+        int hover = notice_button_at(event->x, event->y);
+        if (hover == notice.hover) return 0;
+        notice.hover = hover;
+        return 1;
+    }
+    case MENU_EVENT_LEAVE:
+        if (notice.hover < 0) return 0;
+        notice.hover = -1;
+        return 1;
+    case MENU_EVENT_KEY_DOWN:
+        switch (event->key) {
+        case MENU_KEY_LEFT: case MENU_KEY_UP:
+            notice.focus = (notice.focus + notice.count - 1) % notice.count;
+            break;
+        case MENU_KEY_RIGHT: case MENU_KEY_DOWN: case MENU_KEY_TAB:
+            notice.focus = (notice.focus + 1) % notice.count;
+            break;
+        case MENU_KEY_ENTER: choose_notice(notice.focus, quit); break;
+        case MENU_KEY_ESCAPE: choose_notice(notice.count - 1, quit); break;
+        default: break;
+        }
+        return 1;
+    case MENU_EVENT_NONE:
+        return 0;
+    default:
+        return 1; /* button up, wheel, key up, text */
+    }
+}
+
+
 void Menu_Draw(MenuCanvas *into)
 {
     int i, level;
     canvas = into;
-    if (!ready || !visible) {
+    if (!ready) {
+        return;
+    }
+    if (!visible) {
+        if (notice.shown) draw_notice();
         return;
     }
     if (canvas->alpha) {
@@ -925,7 +1178,9 @@ void Menu_Draw(MenuCanvas *into)
             top += ITEM_H;
         }
     }
+    if (notice.shown) draw_notice();
 }
+
 
 /* --- behaviour ------------------------------------------------------- */
 
@@ -997,6 +1252,8 @@ static void activate(const Item *item, int *quit)
         Settings_Set(SET_GAMMA, 100);
         Settings_Save();
         break;
+    case ACT_CHECK_UPDATES: Update_CheckNow(); break;
+    case ACT_RELEASES: Update_OpenReleases(); break;
     case MENU_ITEM_TITLE: TitleJump_Request(); break;
     case MENU_ITEM_DECKS: DeckMenu_Request(); break;
     case ACT_RELOAD_SETTINGS:
@@ -1054,6 +1311,9 @@ static int step_item(int level, int from, int direction)
 
 int Menu_Event(const MenuEvent *event, int *quit)
 {
+    if (ready && notice.shown) {
+        return notice_event(event, quit);
+    }
     if (!ready || !visible) {
         return 0;
     }
