@@ -70,10 +70,15 @@ static void picking(void)
     assert(Update_PickRelease(releases, "v0.1.0", 1, NULL, &release) == 1);
     assert(!strcmp(release.tag, "v0.2.0-rc.1") && release.prerelease);
     assert(!strcmp(release.title, "Second release candidate"));
-    /* Skipped, current, and newer-than-everything. */
+    /* Skipped, current, and newer-than-everything. Skipping a version skips
+     * what is older than it too (skipping rc.1 does not bring up the
+     * preview it replaced), but not what is newer. */
     assert(Update_PickRelease(releases, "v0.1.0", 0, "v0.1.1", &release) == 0);
-    assert(Update_PickRelease(releases, "v0.1.0", 1, "v0.2.0-rc.1", &release) == 1);
-    assert(!strcmp(release.tag, "v0.2.0-preview.1"));
+    assert(Update_PickRelease(releases, "v0.1.0", 1, "v0.2.0-rc.1", &release) == 0);
+    assert(Update_PickRelease(releases, "v0.1.0", 1, "v0.2.0-preview.1", &release) == 1);
+    assert(!strcmp(release.tag, "v0.2.0-rc.1"));
+    assert(Update_PickRelease(releases, "v0.1.0", 1, "v0.1.1", &release) == 1);
+    assert(!strcmp(release.tag, "v0.2.0-rc.1"));
     assert(Update_PickRelease(releases, "v0.1.1", 0, NULL, &release) == 0);
     assert(Update_PickRelease(releases, "v0.2.0", 1, NULL, &release) == 0);
     assert(Update_PickRelease(releases, "v0.2.0-preview.1", 1, NULL, &release) == 1);

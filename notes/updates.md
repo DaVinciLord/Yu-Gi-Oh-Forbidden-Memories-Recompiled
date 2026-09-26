@@ -4,8 +4,8 @@ A release build can ask GitHub for the project's releases when it starts
 and, when a newer one is out, say so in a notice over the picture:
 
 - **Release page** opens the release on GitHub in the browser.
-- **Skip this version** is remembered: that version is not offered again at
-  start (a newer one still is).
+- **Skip this version** is remembered: that version, and any older one, is
+  not offered again at start (a newer one still is).
 - **Later** (Esc) asks again next start.
 
 That is all the game does. It never downloads, unpacks or installs a

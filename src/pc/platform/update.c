@@ -117,7 +117,8 @@ int Update_PickRelease(const char *json, const char *current, int prereleases, c
         pre = Json_Bool(Json_Member(item, "prerelease"), 0) || version.pre[0];
         if (pre && !prereleases) continue;
         if (Update_CompareVersions(&version, &now) <= 0) continue;
-        if (have_skip && !Update_CompareVersions(&version, &skipped)) continue;
+        /* Skipping a version also skips any older one it would have hidden. */
+        if (have_skip && Update_CompareVersions(&version, &skipped) <= 0) continue;
         if (best && Update_CompareVersions(&version, &newest) <= 0) continue;
         best = item;
         newest = version;
