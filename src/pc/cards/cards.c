@@ -56,6 +56,7 @@ extern void Library_UpdateCardUsedFlag(int flag);
 static char *identities[CARD_TABLE_ID_END];
 static const JsonValue *definitions[CARD_TABLE_ID_END];
 static unsigned short model_ids[CARD_TABLE_ID_END], effect_ids[CARD_TABLE_ID_END];
+static unsigned char not_exodia[EXODIA_PIECE_COUNT];  /* a replaced piece without Exodia's rules */
 const char *Cards_Identity(int id) { return id > CARD_COUNT && Cards_Valid(id) && identities[id] ? identities[id] : ""; }
 int Cards_FindIdentity(const char *identity)
 {
@@ -66,6 +67,12 @@ int Cards_FindIdentity(const char *identity)
 }
 int Cards_ModelId(int id) { return Cards_Valid(id) && model_ids[id] ? model_ids[id] : Cards_BaseId(id); }
 int Cards_EffectId(int id) { return Cards_Valid(id) && effect_ids[id] ? effect_ids[id] : Cards_BaseId(id); }
+static int retail_monster(int id);
+int Cards_HasModel(int id) { return Cards_Valid(id) && retail_monster(Cards_ModelId(id)); }
+int Cards_ExodiaPiece(int id)
+{
+    return (unsigned)(id - EXODIA_FIRST_CARD_ID) < EXODIA_PIECE_COUNT && !not_exodia[id - EXODIA_FIRST_CARD_ID];
+}
 static int card_reference(const JsonValue *value)
 {
     return Cards_Reference(value);   /* -1 matches no card, and makes none */
@@ -439,6 +446,47 @@ static int clamp(int value, int low, int high)
     return value < low ? low : value > high ? high : value;
 }
 
+static int retail_monster(int id)
+{
+    return id >= 1 && id <= CARD_COUNT &&
+           (int)((((const unsigned *)(uintptr_t)RETAIL_STATS)[id - 1] >> 26) & 0x1F) < CARD_TYPE_MAGIC;
+}
+
+/* A replaced card's 3D model and effect: its own unless the entry names
+ * others. Only a card that is a monster on the disc has a model; a magic,
+ * trap, ritual or equip card made a monster has none unless "model" names a
+ * monster whose model it takes, and fights without one. A monster made
+ * anything else has no effect unless "effect" names a card whose effect it
+ * takes. */
+static void replace_model_effect(const char *mod, int index, const JsonValue *entry, int id, unsigned *stats)
+{
+    const JsonValue *model = Json_Member(entry, "model"), *effect = Json_Member(entry, "effect");
+    int type = (int)((*stats >> 26) & 0x1F), value;
+    if (model) {
+        value = Cards_Reference(model);
+        if (retail_monster(value)) {
+            model_ids[id] = (unsigned short)value;
+        } else {
+            Mods_Note(mod, "cards[%d]: \"model\" must name a monster of the disc", index);
+        }
+    }
+    /* A card that was no monster has no guardian stars either: unless
+     * "stars" gives some, its model's, or the Sun and the Moon. */
+    if (type < CARD_TYPE_MAGIC && !(*stats & (0xFFu << 18))) {
+        *stats |= retail_monster(Cards_ModelId(id))
+                      ? ((const unsigned *)(uintptr_t)RETAIL_STATS)[Cards_ModelId(id) - 1] & (0xFFu << 18)
+                      : (8u << 22) | (9u << 18);
+    }
+    if (effect) {
+        value = Cards_Reference(effect);
+        if (value >= 1 && value <= CARD_COUNT) {
+            effect_ids[id] = (unsigned short)value;
+        } else {
+            Mods_Note(mod, "cards[%d]: \"effect\" must name a card of the disc", index);
+        }
+    }
+}
+
 static void add_entry(const char *mod, const char *directory, int index, const JsonValue *entry, BuildContext *context)
 {
     const JsonValue *replace = Json_Member(entry, "replace");
@@ -492,10 +540,12 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     }
     if ((value = choice(Json_Member(entry, "type"), type_names, 24)) >= 0) {
         /* A monster has its base's 3D model and a magic, trap or equip card
-         * its base's effect: a copy stays on the same side of that line. */
+         * its base's effect: a copy stays on the same side of that line.
+         * A replaced card may cross it, with a "model" or "effect" to go with
+         * its new side (below). */
         int monster = ((stats >> 26) & 0x1F) < CARD_TYPE_MAGIC;
         value = clamp(value, 0, CARD_TYPE_EQUIP);
-        if (monster ? value >= CARD_TYPE_MAGIC : value != (int)((stats >> 26) & 0x1F)) {
+        if (!replace && (monster ? value >= CARD_TYPE_MAGIC : value != (int)((stats >> 26) & 0x1F))) {
             Mods_Note(mod, "cards[%d]: %s; \"type\" left out", index,
                       monster ? "a copy of a monster stays a monster" : "a copy of a magic, trap, ritual or equip card keeps its type");
         } else {
@@ -545,7 +595,14 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         int id;
         if (replace) {
             id = base;
+            /* Left out, "exodia" is false for the first entry to replace a
+             * piece and what the earlier one said for a later one. */
+            if ((unsigned)(id - EXODIA_FIRST_CARD_ID) < EXODIA_PIECE_COUNT &&
+                (!replaced[id] || Json_Member(entry, "exodia"))) {
+                not_exodia[id - EXODIA_FIRST_CARD_ID] = !Json_Bool(Json_Member(entry, "exodia"), 0);
+            }
             replaced[id] = mod;
+            replace_model_effect(mod, index, entry, id, &stats);
             goto own;
         }
         if (!*key) { snprintf(fallback, sizeof(fallback), "entry-%d", index); key = fallback; }
@@ -559,10 +616,11 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         if (!identities[id]) { Mods_Note(mod, "out of memory for card identity"); break; }
         gCard_nCount = id;
         definitions[id] = entry;
-        value = (int)Json_Number(Json_Member(entry, "model"), base);
-        model_ids[id] = (unsigned short)(value >= 1 && value <= CARD_COUNT ? value : base);
-        value = (int)Json_Number(Json_Member(entry, "effect"), base);
-        effect_ids[id] = (unsigned short)(value >= 1 && value <= CARD_COUNT ? value : base);
+        /* A replaced base lends the model and effect it was given. */
+        value = (int)Json_Number(Json_Member(entry, "model"), 0);
+        model_ids[id] = (unsigned short)(value >= 1 && value <= CARD_COUNT ? value : Cards_ModelId(base));
+        value = (int)Json_Number(Json_Member(entry, "effect"), 0);
+        effect_ids[id] = (unsigned short)(value >= 1 && value <= CARD_COUNT ? value : Cards_EffectId(base));
         gCard_awBaseId[id] = (unsigned short)base;
         gCard_asNameSortKey[id - 1] = gCard_asNameSortKey[base - 1];
     own:

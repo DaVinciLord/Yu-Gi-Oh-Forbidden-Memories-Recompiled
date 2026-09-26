@@ -45,6 +45,13 @@ const char *Cards_Identity(int id);
 int Cards_FindIdentity(const char *identity);
 int Cards_ModelId(int id);
 int Cards_EffectId(int id);
+/* Whether the disc has a 3D model for `id` to stand as: a magic, trap, ritual
+ * or equip card a mod made a monster has none unless it borrows one. */
+int Cards_HasModel(int id);
+/* Whether `id` is one of the five pieces of Exodia, with their rules (one of
+ * each in a deck, all five in hand win): a piece a mod replaced is not,
+ * unless its entry says "exodia": true. */
+int Cards_ExodiaPiece(int id);
 int Cards_Fusion(int a, int b, int *result);
 
 /* A card a manifest names: its id, a stable identity ("mod:entry:n"), or a

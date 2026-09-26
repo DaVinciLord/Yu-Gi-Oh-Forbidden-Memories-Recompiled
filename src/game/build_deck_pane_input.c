@@ -17,6 +17,9 @@
 #include "build_deck_pane_input.h"
 #include "graphics_frame.h"
 #include "build_deck_update_pane_transition.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/cards.h"
+#endif
 
 void BuildDeck_UpdateDeckPaneInput(BuildDeckTransitionState *state) {
     CardList *e;
@@ -110,7 +113,12 @@ void BuildDeck_UpdateChestPaneInput(BuildDeckTransitionState *state)
 
     r = BuildDeck_GetActiveCardID(e);
     c = 1;
+#ifdef MEMORIES_PC
+    /* A piece a mod made another card is no longer one of a kind. */
+    if (Cards_ExodiaPiece(r)) {
+#else
     if ((u32)(r - EXODIA_FIRST_CARD_ID) < EXODIA_PIECE_COUNT) {
+#endif
         c = state->deck_card_quantities[r] < c;
     }
 

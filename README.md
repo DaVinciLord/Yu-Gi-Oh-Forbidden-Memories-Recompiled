@@ -11,7 +11,7 @@ included.
 - Up to 4x internal resolution, widescreen and HD text
 - **3D Monsters**: face-up monsters stand on the field as their battle models
 - Optional **Forbidden Memories HD** pack: redrawn cards, frames and portraits
-- Mods: new cards past the original 722, fusions, textures, music, gameplay tables
+- Mods: framework for new cards past the original 722, fusions, textures, music, gameplay tables
 - Save slots, fusion helper, card drop rates, rebindable controls
 
 ![HD Free Duel portraits](docs/screenshots/portraits.jpg)
