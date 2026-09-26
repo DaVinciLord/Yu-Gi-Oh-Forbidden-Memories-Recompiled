@@ -79,10 +79,24 @@ so a mod can rework the existing cards without adding any:
 It takes the keys above that change what a player reads off the card:
 `name`, `description`, `art`, `thumbnail`, `title`, `attack`, `defense`,
 `type`, `attribute`, `level` and `stars`. It gets no id of its own, so `id`,
-`count`, `count_setting`, `drops`, `opponents`, `model`, `effect` and
-`fusions` do not apply: the card keeps its model, effect and place in the
-disc's tables, and the [gameplay tables](gameplay-tables.md) change its
-fusions, equips and rituals. Nothing of it goes in the save, so the mod can be
+`count`, `count_setting`, `drops`, `opponents` and `fusions` do not apply:
+the card keeps its place in the disc's tables, and the
+[gameplay tables](gameplay-tables.md) change its fusions, equips and rituals.
+
+Unlike a copy, a replaced card may change sides with `type`: a magic, trap,
+ritual or equip card can become a monster, and a monster a magic, trap,
+ritual or equip card. The disc has 3D models for its monsters only, so a card
+made a monster fights without one unless `model` names a monster whose model
+it takes (`"model": "Kuriboh"`), and without `stars` it gets that monster's
+guardian stars, or the Sun and the Moon. A monster made anything else does
+nothing when played unless `effect` names the card whose effect it takes
+(`"effect": "Legendary Sword"`); what an equip made so may equip is up to
+`equips` in the [gameplay tables](gameplay-tables.md). `model` and `effect`
+work the same on a card that stays on its side.
+
+A replaced piece of Exodia (cards 17 to 21) is an ordinary card: a deck may
+hold three of it, and Exodia can no longer be assembled. `"exodia": true`
+keeps both rules, for a mod that only changes how the pieces look. Nothing of it goes in the save, so the mod can be
 removed at any time (after a restart). A card with a name of its own gets a
 plate that says it, as an added card does (a `title` PNG replaces it), and
 the HD text renderer sets its title from the same name. Its name and text
