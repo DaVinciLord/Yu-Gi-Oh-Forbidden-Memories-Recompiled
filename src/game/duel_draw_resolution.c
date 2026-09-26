@@ -12,6 +12,9 @@
 #include "duel_card_layout.h"
 #include "duel_deck_card.h"
 #include "duel_rank.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/cards.h"
+#endif
 #include "sound.h"
 #include "duel_scene_state.h"
 #include "../unmatched.h"
@@ -31,6 +34,13 @@ s32 Duel_HasAllExodiaPieces(void) {
     for (card_id = EXODIA_FIRST_CARD_ID;
          card_id < EXODIA_CARD_ID_END;
          card_id++) {
+#ifdef MEMORIES_PC
+        /* Once a mod makes a piece another card, Exodia cannot be
+           assembled. */
+        if (!Cards_ExodiaPiece(card_id)) {
+            return 0;
+        }
+#endif
         for (i = 0; i < HAND_SIZE; i++) {
             s16 index = hand[i];
             if (index >= 0) {

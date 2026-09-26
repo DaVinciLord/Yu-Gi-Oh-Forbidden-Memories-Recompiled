@@ -160,10 +160,13 @@ void func_8002ACA4(u8 *state)
             state[4] = 0;
             id = H(state, 6) - 1;
 #ifdef MEMORIES_PC
-            /* A card past the disc's stands as its base's model. */
-            id = Cards_ModelId(id + 1) - 1;
-#endif
+            /* A card past the disc's stands as its base's model, and a card
+               a mod made a monster may have none to load. */
+            id = Cards_HasModel(id + 1) ? Cards_ModelId(id + 1) - 1 : -1;
+            if (id >= 0 && ((gDuel_adwCardStats[id] >> 0x1A) & 0x1F) < 0x14) {
+#else
             if (((gDuel_adwCardStats[id] >> 0x1A) & 0x1F) < 0x14) {
+#endif
                 Model_LoadMonsterMerge(0, id, 0, 0, 0, 0, 4);
                 W(state, 0x20) = 0x12C;
                 state[4] = 2;
