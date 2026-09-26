@@ -6,7 +6,7 @@
 #include "pc/debug/cheats.h"
 #include "pc/cards/cards.h"
 #include "pc/cards/fusion_helper.h"
-#include "update_runtime.h"
+#include "update_check.h"
 #include "pc/debug/log.h"
 #include "pc/debug/monitor.h"
 #include "pc/debug/hud.h"

@@ -1,7 +1,7 @@
-/* HTTP(S) GETs for the updater (update_net.h), without a TLS library in the
- * executable: Windows has WinHTTP, and on Linux curl is part of practically
- * every installation, so the game runs it and reads what it prints. Called
- * on the updater's own thread only. */
+/* HTTP(S) GETs for the update check (update_net.h), without a TLS library
+ * in the executable: Windows has WinHTTP, and on Linux curl is part of
+ * practically every installation, so the game runs it and reads what it
+ * prints. Called on the check's own thread only. */
 #define _GNU_SOURCE
 #include "update_net.h"
 #include <stdio.h>
@@ -29,16 +29,6 @@ static void say(char *why, size_t size, const char *text)
 }
 
 #ifdef _WIN32
-
-int UpdateNet_Virtualized(void)
-{
-    HANDLE token;
-    DWORD on = 0, size = sizeof(on);
-    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) return 0;
-    if (!GetTokenInformation(token, TokenVirtualizationEnabled, &on, sizeof(on), &size)) on = 0;
-    CloseHandle(token);
-    return on != 0;
-}
 
 int UpdateNet_Get(const char *url, int timeout_seconds, UpdateNetSink sink, void *context, char *why, size_t why_size)
 {
@@ -103,8 +93,6 @@ int UpdateNet_Get(const char *url, int timeout_seconds, UpdateNetSink sink, void
 }
 
 #else
-
-int UpdateNet_Virtualized(void) { return 0; }
 
 int UpdateNet_Get(const char *url, int timeout_seconds, UpdateNetSink sink, void *context, char *why, size_t why_size)
 {

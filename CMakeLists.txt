@@ -326,17 +326,16 @@ if(BUILD_TESTING)
         target_compile_options(memories_texture_pack_test PRIVATE -Wall -Wextra -Werror)
     endif()
     add_test(NAME pc_texture_pack COMMAND memories_texture_pack_test)
-    # The updater's versions, release choice, archives and install step
-    # (src/pc/platform/update.h, notes/updates.md); no network.
-    find_package(ZLIB REQUIRED)
-    add_executable(memories_update_test tests/pc/update_test.c src/pc/platform/update.c src/pc/mods/json.c
-        src/pc/platform/paths.c)
-    target_include_directories(memories_update_test PRIVATE src tests/pc)
-    target_link_libraries(memories_update_test PRIVATE ZLIB::ZLIB)
+    # The update check's version order and release choice
+    # (src/pc/platform/update.h, notes/updates.md); no network. The program's
+    # name has no "update" in it: Windows takes a 32-bit program without a
+    # manifest named so for an installer and asks to elevate it.
+    add_executable(memories_release_check_test tests/pc/update_test.c src/pc/platform/update.c src/pc/mods/json.c)
+    target_include_directories(memories_release_check_test PRIVATE src)
     if(NOT MSVC)
-        target_compile_options(memories_update_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+        target_compile_options(memories_release_check_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
     endif()
-    add_test(NAME pc_update COMMAND memories_update_test)
+    add_test(NAME pc_update COMMAND memories_release_check_test)
     add_executable(memories_log_test tests/pc/log_test.c src/pc/debug/log.c)
     target_include_directories(memories_log_test PRIVATE src)
     target_link_libraries(memories_log_test PRIVATE Threads::Threads)

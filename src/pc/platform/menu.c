@@ -24,7 +24,7 @@
 #include "paths.h"
 #include "pc/sdk/display.h"
 #include "title_jump.h"
-#include "update_runtime.h"
+#include "update_check.h"
 #include "pc/saves/deck_menu.h"
 #ifdef _WIN32
 #include "win32.h"
@@ -152,14 +152,13 @@ static Menu menus[MENU_COUNT] = {
                {"Dump frame (PPM)", 0, ITEM_ACTION, ACT_DUMP_FRAME, -1, 0, ITEM_GROUP_BREAK},
                {"Dump VRAM (PPM)", 0, ITEM_ACTION, ACT_DUMP_VRAM, -1},
                {"Trace", 0, ITEM_SUBMENU, 0, -1, SUB_TRACE, ITEM_GROUP_BREAK}}, 8},
-    /* Updates from the project's GitHub releases (update_runtime.h). The
-     * last row's label is this build's version, set by Menu_Init. */
+    /* Update checks against the project's GitHub releases (update_check.h).
+     * The last row's label is this build's version, set by Menu_Init. */
     {"Help", {{"Check for updates at start", 0, ITEM_CHECK, 0, SET_UPDATE_CHECK},
-              {"Install updates automatically", 0, ITEM_CHECK, 0, SET_UPDATE_AUTO},
               {"Include pre-releases", 0, ITEM_CHECK, 0, SET_UPDATE_PRERELEASES},
               {"Check for updates now", 0, ITEM_ACTION, ACT_CHECK_UPDATES, -1, 0, ITEM_GROUP_BREAK},
               {"Releases page", 0, ITEM_ACTION, ACT_RELEASES, -1},
-              {"Version", 0, ITEM_ACTION, ACT_VERSION, -1, 0, ITEM_GROUP_BREAK | ITEM_DISABLED}}, 6},
+              {"Version", 0, ITEM_ACTION, ACT_VERSION, -1, 0, ITEM_GROUP_BREAK | ITEM_DISABLED}}, 5},
 };
 static Menu submenus[SUB_COUNT] = {
     {"Window scale", {{"1x", 0, ITEM_RADIO, MENU_ITEM_SCALE_1, SET_SCALE, 1},
@@ -1009,22 +1008,12 @@ void Menu_ShowNotice(const char *title, const char *text, const char *const *but
     LOG(LOG_MENU, "notice \"%s\" with %d buttons", notice.title, count);
 }
 
-void Menu_SetNoticeText(const char *text)
-{
-    if (!notice.shown || !strcmp(notice.text, text ? text : "")) return;
-    snprintf(notice.text, sizeof(notice.text), "%s", text ? text : "");
-    notice.wrapped_ui = 0;
-    changed = 1;
-}
-
 void Menu_CloseNotice(void)
 {
     if (!notice.shown) return;
     notice.shown = 0;
     changed = 1;
 }
-
-int Menu_NoticeShown(void) { return notice.shown; }
 
 int Menu_TakeChanged(void)
 {

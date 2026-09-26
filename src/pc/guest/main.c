@@ -11,7 +11,7 @@
 #include "pc/mods/mods.h"
 #include "pc/mods/exports.h"
 #include "pc/platform/game_files.h"
-#include "pc/platform/update_runtime.h"
+#include "pc/platform/update_check.h"
 #include "pc/cards/cards.h"
 #include "pc/text/text.h"
 #include <stdio.h>

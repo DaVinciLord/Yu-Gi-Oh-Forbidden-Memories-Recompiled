@@ -12,7 +12,7 @@
  * View  > Scale 1x-4x
  * Game  > Mods opens the searchable mod manager
  * Debug > development helpers (src/pc/debug)
- * Help  > update checks and this build's version (update_runtime.h) */
+ * Help  > update checks and this build's version (update_check.h) */
 
 typedef struct MenuCanvas {
     uint32_t *pixels; /* 0xAARRGGBB (alpha ignored unless `alpha`), row-major */
@@ -122,10 +122,7 @@ void Menu_SetHdPicture(int on);
 #define MENU_NOTICE_BUTTONS 4
 void Menu_ShowNotice(const char *title, const char *text, const char *const *buttons, int count, int focus,
                      void (*chosen)(int button, int *quit));
-/* New text for the notice shown, keeping its buttons and focus (progress). */
-void Menu_SetNoticeText(const char *text);
 void Menu_CloseNotice(void);
-int Menu_NoticeShown(void);
 /* Nonzero once after a notice appeared, changed or closed other than by an
  * event: the backend repaints the menu then. */
 int Menu_TakeChanged(void);

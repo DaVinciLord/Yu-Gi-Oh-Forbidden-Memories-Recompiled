@@ -38,7 +38,7 @@ def smoke_environment(case: dict[str, object], image: Path, settings: Path, user
     environment.update(
         {
             "MEMORIES_HEADLESS": "1",
-            # Headless runs never check (update_runtime.h); said anyway, as
+            # Headless runs never check (update_check.h); said anyway, as
             # a smoke test must not depend on the network.
             "MEMORIES_NO_UPDATE_CHECK": "1",
             "MEMORIES_NO_AUDIO": "1",
