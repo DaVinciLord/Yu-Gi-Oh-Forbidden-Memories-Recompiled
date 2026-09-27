@@ -60,6 +60,13 @@ void Glyphs_AddFont(const char *path);
  * Windows-1252, say), for the caller to say so. */
 #define GLYPHS_NOT_UTF8 0xFFFFFFFFu
 uint32_t Glyphs_NextCharacter(const char **text);
+/* The same, composed (NFC, for the Latin letters): the next character with
+ * the combining marks after it that compose with it (e + U+0302 + U+0301 is
+ * U+1EBF), and in `left` the ones that do not, for the caller to take as
+ * characters of their own after it. A mark run longer than
+ * GLYPHS_MARKS_MAX is taken in pieces. */
+#define GLYPHS_MARKS_MAX 8
+uint32_t Glyphs_NextComposed(const char **text, uint32_t left[GLYPHS_MARKS_MAX], int *left_count);
 
 /* For HD text (hd_text.h): the character a glyph cell holds, 0 for none
  * a font can set: a retail letter, digit or ASCII punctuation at u, v of

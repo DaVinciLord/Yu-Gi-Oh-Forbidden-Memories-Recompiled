@@ -340,14 +340,17 @@ void *CardArt_SerifFace(void)
 static int set_name(const char *name, int factor, unsigned char *cover)
 {
     const int wide = 512 * factor, baseline = 11 * factor, left = 3 * factor, room = 90 * factor;
-    const int width = CARD_TITLE_WIDTH * factor, height = CARD_TITLE_HEIGHT * factor;
-    unsigned char *line;
-    int pen = left, x, y, ink_low = wide, ink_high = -1, previous = 0;
+    const int width = CARD_TITLE_WIDTH * factor, height = CARD_TITLE_HEIGHT * factor, above = 8 * factor;
+    unsigned char *line, *drawn;
+    int pen = left, x, y, ink_low = wide, ink_high = -1, previous = 0, first = above;
     const char *c = name;
     CardArt_SerifFace();
     if (!face || FT_Set_Pixel_Sizes(face, 0, 13 * factor)) return 0;
-    line = calloc((size_t)height * wide, 1);
-    if (!line) return 0;
+    /* Drawn with `above` rows over the plate, for marks that reach past
+     * its top (a Vietnamese capital's two). */
+    drawn = calloc((size_t)(above + height) * wide, 1);
+    if (!drawn) return 0;
+    line = drawn + (size_t)above * wide;
     while (*c) {
         /* A character at a time, as the name's glyphs are (cards.c,
          * encode_name): an accented letter is one glyph, not two. */
@@ -363,18 +366,42 @@ static int set_name(const char *name, int factor, unsigned char *cover)
         bitmap = &face->glyph->bitmap;
         for (y = 0; y < (int)bitmap->rows; y++) {
             int ty = baseline - face->glyph->bitmap_top + y;
-            if (ty < 0 || ty >= height) continue;
+            if (ty < -above || ty >= height) continue;
             for (x = 0; x < (int)bitmap->width; x++) {
                 int tx = pen + face->glyph->bitmap_left + x;
                 unsigned char v = bitmap->buffer[y * bitmap->pitch + x];
                 if (tx < 0 || tx >= wide || !v) continue;
                 if (v > line[ty * wide + tx]) line[ty * wide + tx] = v;
+                if (ty < first) first = ty;
                 if (tx < ink_low) ink_low = tx;
                 if (tx > ink_high) ink_high = tx;
             }
         }
         pen += (int)((face->glyph->advance.x + 32) >> 6);
         if (pen >= wide) break;
+    }
+    if (first < 0) {
+        /* Ink above the plate: what is above the baseline is fitted into
+         * the rows above it (each row the most of the ones it takes), so
+         * the marks stay on; the baseline and what is below stay. A name
+         * that fits (any ASCII one) is left as it is. */
+        unsigned char *fitted = calloc((size_t)baseline * wide, 1);
+        if (!fitted) {
+            free(drawn);
+            return 0;
+        }
+        for (y = 0; y < baseline; y++) {
+            int from = first + y * (baseline - first) / baseline, to = first + (y + 1) * (baseline - first) / baseline, k;
+            unsigned char *row = fitted + (size_t)y * wide;
+            if (to <= from) to = from + 1;
+            for (k = from; k < to; k++) {
+                for (x = 0; x < wide; x++) {
+                    if (line[(ptrdiff_t)k * wide + x] > row[x]) row[x] = line[(ptrdiff_t)k * wide + x];
+                }
+            }
+        }
+        memcpy(line, fitted, (size_t)baseline * wide);
+        free(fitted);
     }
     memset(cover, 0, (size_t)width * height);
     if (ink_high < ink_low) {
@@ -386,7 +413,7 @@ static int set_name(const char *name, int factor, unsigned char *cover)
         float *squeezed = malloc(sizeof(float) * (size_t)height * room);
         float step = (float)(ink_high - ink_low + 1) / room, peak = 1.0f;
         if (!squeezed) {
-            free(line);
+            free(drawn);
             return 0;
         }
         for (y = 0; y < height; y++) {
@@ -408,7 +435,7 @@ static int set_name(const char *name, int factor, unsigned char *cover)
         }
         free(squeezed);
     }
-    free(line);
+    free(drawn);
     return 1;
 }
 

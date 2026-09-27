@@ -100,27 +100,33 @@ static int retail_code(uint32_t character)
 
 enum {
     MARK_NONE, MARK_GRAVE, MARK_ACUTE, MARK_CIRCUMFLEX, MARK_TILDE, MARK_MACRON, MARK_BREVE, MARK_DOT,
-    MARK_DIAERESIS, MARK_RING, MARK_DOUBLE_ACUTE, MARK_CARON, MARK_CEDILLA, MARK_OGONEK, MARK_COUNT,
+    MARK_DIAERESIS, MARK_RING, MARK_DOUBLE_ACUTE, MARK_CARON, MARK_CEDILLA, MARK_OGONEK, MARK_HOOK,
+    MARK_DOT_BELOW, MARK_HORN, MARK_COUNT,
     /* Not marks of Unicode's, but drawn the same way. */
     MARK_FLIP = MARK_COUNT, MARK_DOTLESS, MARK_SLASH, MARK_BAR
 };
 
-static const struct { uint32_t character; char base; unsigned char mark; } accents[] = {
+/* A letter with two marks (Vietnamese's) has its shape mark (^, the breve
+ * or the horn) as `mark` and its tone as `tone`. */
+static const struct { uint32_t character; char base; unsigned char mark, tone; } accents[] = {
 #include "accents.inc"
-    {0x00BF, '?', MARK_FLIP}, {0x00A1, '!', MARK_FLIP}, {0x0131, 'i', MARK_DOTLESS},
-    {0x00F8, 'o', MARK_SLASH}, {0x00D8, 'O', MARK_SLASH}, {0x0142, 'l', MARK_SLASH}, {0x0141, 'L', MARK_SLASH},
-    {0x0111, 'd', MARK_BAR}, {0x0110, 'D', MARK_BAR}, {0x0127, 'h', MARK_BAR}, {0x0126, 'H', MARK_BAR},
+    {0x00BF, '?', MARK_FLIP, MARK_NONE}, {0x00A1, '!', MARK_FLIP, MARK_NONE}, {0x0131, 'i', MARK_DOTLESS, MARK_NONE},
+    {0x00F8, 'o', MARK_SLASH, MARK_NONE}, {0x00D8, 'O', MARK_SLASH, MARK_NONE}, {0x0142, 'l', MARK_SLASH, MARK_NONE},
+    {0x0141, 'L', MARK_SLASH, MARK_NONE}, {0x0111, 'd', MARK_BAR, MARK_NONE}, {0x0110, 'D', MARK_BAR, MARK_NONE},
+    {0x0127, 'h', MARK_BAR, MARK_NONE}, {0x0126, 'H', MARK_BAR, MARK_NONE},
 };
 
 /* The marks, drawn for the two sizes: '#' is the mark, and the retail
  * glyphs' dark outline goes round it. Rows top to bottom. */
 static const char *const small_marks[MARK_COUNT][3] = {
     {0}, {"#..", ".#."}, {"..#", ".#."}, {".#.", "#.#"}, {".#.#", "#.#."}, {"###"}, {"#..#", ".##."},
-    {"#"}, {"#.#"}, {".#.", "#.#", ".#."}, {".#.#", "#.#."}, {"#.#", ".#."}, {".#", "#."}, {"#.", ".#"}};
+    {"#"}, {"#.#"}, {".#.", "#.#", ".#."}, {".#.#", "#.#."}, {"#.#", ".#."}, {".#", "#."}, {"#.", ".#"},
+    {"##", ".#"}, {"#"}, {0}};
 static const char *const large_marks[MARK_COUNT][3] = {
     {0}, {"##...", ".##..", "..##."}, {"...##", "..##.", ".##.."}, {".##.", "#..#"}, {".##..#", "#..##."},
     {"#####"}, {"#..#", ".##."}, {"##", "##"}, {"##.##", "##.##"}, {".##.", "#..#", ".##."},
-    {"..#..#", ".#..#.", "#..#.."}, {"#..#", ".##."}, {"..##", "...#", ".##."}, {"##..", ".##."}};
+    {"..#..#", ".#..#.", "#..#.."}, {"#..#", ".##."}, {"..##", "...#", ".##."}, {"##..", ".##."},
+    {"###.", "...#", "..#."}, {"##", "##"}, {0}};
 
 static const struct {
     uint32_t character;
@@ -133,7 +139,7 @@ typedef struct {
     uint32_t character;
     int base;              /* the retail glyph it stands for where it is not drawn */
     char letter;           /* composed: the retail letter */
-    unsigned char mark;
+    unsigned char mark, tone;
     unsigned char made;    /* its pictures are in the bank */
     unsigned char made_tiny; /* and its 8x8 one */
     short letter_shape;    /* one of `letters`, or -1 */
@@ -226,6 +232,7 @@ int Glyphs_Code(uint32_t character)
         if (accents[a].character == character && retail_code((unsigned char)accents[a].base) >= 0) {
             glyph.letter = accents[a].base;
             glyph.mark = accents[a].mark;
+            glyph.tone = accents[a].tone;
             glyph.base = retail_code((unsigned char)accents[a].base);
             break;
         }
@@ -467,6 +474,57 @@ static void stamp(Cell *cell, const int (*points)[2], int count, int fill, int o
     }
 }
 
+/* Marks beside another, for the tone the small fonts have no rows to stack
+ * over ^ or the breve (Vietnamese's): two rows, three columns at most, so
+ * that the two and a column between fit the cell. */
+static const char *const side_marks[MARK_COUNT][3] = {
+    {0}, {"#.", ".#"}, {".#", "#."}, {".#.", "#.#"}, {".##", "##."}, {0}, {"#.#", ".#."},
+    {0}, {0}, {0}, {0}, {0}, {0}, {0}, {"##", ".#"}, {0}, {0}};
+
+static int mark_width(const char *const *rows)
+{
+    int y, width = 0;
+    for (y = 0; y < 3 && rows[y]; y++) {
+        if ((int)strlen(rows[y]) > width) width = (int)strlen(rows[y]);
+    }
+    return width;
+}
+
+/* Whether a mark put at row `at`, column 0, would touch (or run into) what
+ * `grid` has from that row up. */
+static int touches(char grid[8][16], int at, const char *const *rows)
+{
+    int y, x, dy, dx;
+    for (y = 0; y < 3 && rows[y]; y++) {
+        for (x = 0; rows[y][x]; x++) {
+            if (rows[y][x] != '#') continue;
+            for (dy = -1; dy <= 1; dy++) {
+                for (dx = -1; dx <= 1; dx++) {
+                    int gy = at + y + dy, gx = x + dx;
+                    if (gy >= 0 && gy < 8 && gx >= 0 && gx < 16 && grid[gy][gx] == '#') return 1;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+/* A mark's rows into `grid` from row `at`, column `column`; returns the row
+ * after it. */
+static int mark_rows(char grid[8][16], int at, int column, const char *const *rows)
+{
+    int y, x;
+    for (y = 0; y < 3 && rows[y] && at + y < 8; y++) {
+        for (x = 0; x < column + (int)strlen(rows[y]) && x < 15; x++) {
+            if (!grid[at + y][x]) grid[at + y][x] = '.';
+        }
+        for (x = 0; rows[y][x] && column + x < 15; x++) {
+            if (rows[y][x] == '#') grid[at + y][column + x] = '#';
+        }
+    }
+    return at + y;
+}
+
 static void compose(const Added *glyph, int font_page, int size, Cell *cell)
 {
     int top, bottom, left, right, fill, outline = 1, count = 0, x, y, large = size == FONT_LARGE;
@@ -475,7 +533,8 @@ static void compose(const Added *glyph, int font_page, int size, Cell *cell)
     if (!ink(cell, &top, &bottom, &left, &right)) return;
     if (size == FONT_TINY) tiny_colours(cell, &fill, &outline);
     else fill = bright(cell);
-    if ((glyph->letter == 'i' || glyph->letter == 'j') && glyph->mark != MARK_CEDILLA && glyph->mark != MARK_OGONEK) {
+    if ((glyph->letter == 'i' || glyph->letter == 'j') && glyph->mark != MARK_CEDILLA && glyph->mark != MARK_OGONEK &&
+        glyph->mark != MARK_DOT_BELOW) {
         /* The dot goes: the letter keeps what is below the x-height. */
         Cell n;
         int n_top, n_bottom, n_left, n_right;
@@ -514,19 +573,57 @@ static void compose(const Added *glyph, int font_page, int size, Cell *cell)
         return;
     }
     {
-        const char *const *rows = large ? large_marks[glyph->mark] : small_marks[glyph->mark];
-        static const char *const tiny_below[3] = {"#"};
-        int height = 0, width = 0, x0, y0, below = glyph->mark == MARK_CEDILLA || glyph->mark == MARK_OGONEK;
-        if (below && size == FONT_TINY) rows = tiny_below;   /* the 8x8 font has one row below: a dot */
-        while (height < 3 && rows[height]) height++;
-        for (y = 0; y < height; y++) {
-            if ((int)strlen(rows[y]) > width) width = (int)strlen(rows[y]);
+        /* The marks: above (one, or Vietnamese's two), below, and the
+         * horn, which is part of the letter's right side. */
+        int above[2], above_count = 0, below = MARK_NONE, horn = 0, i, x0, y0, height = 0, width = 0;
+        int marks[2], letter_top, letter_right;
+        char grid[8][16];
+        marks[0] = glyph->mark;
+        marks[1] = glyph->tone;
+        for (i = 0; i < 2; i++) {
+            if (marks[i] == MARK_NONE) continue;
+            if (marks[i] == MARK_HORN) horn = 1;
+            else if (marks[i] == MARK_CEDILLA || marks[i] == MARK_OGONEK || marks[i] == MARK_DOT_BELOW) below = marks[i];
+            else above[above_count++] = marks[i];
         }
-        if (below) {
-            y0 = bottom < cell->height - height ? bottom : cell->height - height;
+        memset(grid, 0, sizeof(grid));
+        if (above_count == 2 && large) {
+            /* Stacked: the tone over the shape mark and to its right, as
+             * Vietnamese type sets it, its last row beside the mark's
+             * first, as far right as it takes not to touch it; so the
+             * letter gives up one row more than for one mark, not four. */
+            const char *const *shape = large_marks[above[0]], *const *tone = large_marks[above[1]];
+            int tone_high = 0, column;
+            while (tone_high < 3 && tone[tone_high]) tone_high++;
+            for (column = 0; column < 8; column++) {
+                memset(grid, 0, sizeof(grid));
+                mark_rows(grid, 0, column, tone);
+                if (!touches(grid, tone_high - 1, shape)) break;
+            }
+            height = mark_rows(grid, tone_high - 1, 0, shape);
+        } else if (above_count == 2) {
+            /* The small fonts have no rows to stack them in: the tone goes
+             * beside the shape mark, on its right, as the compact Vietnamese
+             * fonts have it. The 8x8 font leaves the tone out if the two
+             * do not fit (the letter keeps its ^ or breve, and is never
+             * left out). */
+            const char *const *shape = side_marks[above[0]], *const *tone = side_marks[above[1]];
+            height = mark_rows(grid, 0, 0, shape);
+            if (mark_width(shape) + 1 + mark_width(tone) <= cell->width - (size == FONT_TINY)) {
+                int tone_height = mark_rows(grid, 0, mark_width(shape) + 1, tone);
+                if (tone_height > height) height = tone_height;
+            }
+        } else if (above_count == 1) {
+            height = mark_rows(grid, 0, 0, large ? large_marks[above[0]] : small_marks[above[0]]);
+        }
+        for (y = 0; y < height; y++) {
+            if ((int)strlen(grid[y]) > width) width = (int)strlen(grid[y]);
+        }
+        y0 = 0;
+        if (!height) {
         } else if (large && top < height + 1) {
             squash(cell, top, bottom, height + 1);
-            y0 = 0;
+            ink(cell, &top, &bottom, &left, &right);
         } else if (!large && top < height) {
             /* A capital in the small fonts, its outline on the cell's top
              * row: it gives up a row of its body (two for a three-row
@@ -538,20 +635,74 @@ static void compose(const Added *glyph, int font_page, int size, Cell *cell)
                 drop_rows(cell, top, bottom, target - top, outline);
                 ink(cell, &top, &bottom, &left, &right);
             }
-            y0 = 0;
         } else if (!large && top == height) {
             /* The letter's top outline is the mark's below it. */
-            y0 = 0;
         } else {
             y0 = top - 1 - height;
         }
         x0 = (left + right + 1) / 2 - width / 2;
-        if (glyph->mark == MARK_OGONEK) x0 = right - width + 1;
-        if (glyph->mark == MARK_CEDILLA) x0 = (left + right + 1) / 2 - width / 2;
+        /* Two: the shape mark over the letter's middle, the tone beside. */
+        if (above_count == 2) x0 = (left + right + 1) / 2 - mark_width(large ? large_marks[above[0]] : side_marks[above[0]]) / 2;
+        if (above_count == 2 && x0 + width > cell->width) x0 = cell->width - width;
+        if (above_count == 2 && x0 < 0) x0 = 0;
+        letter_top = top;
+        letter_right = right;
         for (y = 0; y < height; y++) {
-            for (x = 0; rows[y][x] && count < 64; x++) {
-                if (rows[y][x] != '#') continue;
+            for (x = 0; grid[y][x] && count < 64; x++) {
+                if (grid[y][x] != '#') continue;
                 points[count][0] = x0 + x; points[count][1] = y0 + y; count++;
+            }
+        }
+        if (below == MARK_DOT_BELOW) {
+            /* Under the letter, a row of its outline between; where there
+             * is no room, on the cell's last row, and under a tail (a y's)
+             * beside it, under the right arm, just below the line. */
+            int dot = large ? 2 : 1, cx = (left + right + 1) / 2 - dot / 2;
+            y0 = bottom + 1;
+            if (y0 + dot > cell->height) {
+                Cell n;
+                int n_top, n_bottom, n_left, n_right;
+                read_cell(font_page, 'n', size, &n);
+                y0 = cell->height - dot;
+                if (ink(&n, &n_top, &n_bottom, &n_left, &n_right) && n_bottom < bottom && n_bottom + dot <= cell->height) {
+                    y0 = n_bottom;
+                    cx = right - dot;
+                }
+            }
+            for (y = 0; y < dot; y++) {
+                for (x = 0; x < dot && count < 64; x++) {
+                    points[count][0] = cx + x; points[count][1] = y0 + y; count++;
+                }
+            }
+            /* Where it sits right under the letter's ink (the small fonts'
+             * last row is the letters' foot), that pixel is outline: the
+             * dot stays a dot, not a longer stem. */
+            for (x = cx; x < cx + dot && y0 > 0; x++) {
+                if (x >= 0 && x < cell->width && cell->pixels[y0 - 1][x] && cell->pixels[y0 - 1][x] != outline)
+                    cell->pixels[y0 - 1][x] = (unsigned char)outline;
+            }
+        } else if (below) {
+            static const char *const tiny_below[3] = {"#"};
+            const char *const *rows = size == FONT_TINY ? tiny_below   /* the 8x8 font has one row below: a dot */
+                : large ? large_marks[below] : small_marks[below];
+            int rows_high = 0, rows_wide = mark_width(rows);
+            while (rows_high < 3 && rows[rows_high]) rows_high++;
+            y0 = bottom < cell->height - rows_high ? bottom : cell->height - rows_high;
+            x0 = below == MARK_OGONEK ? right - rows_wide + 1 : (left + right + 1) / 2 - rows_wide / 2;
+            for (y = 0; y < rows_high; y++) {
+                for (x = 0; rows[y][x] && count < 64; x++) {
+                    if (rows[y][x] != '#') continue;
+                    points[count][0] = x0 + x; points[count][1] = y0 + y; count++;
+                }
+            }
+        }
+        if (horn) {
+            /* Out and up from the letter's top right, where its own outline
+             * was: two pixels in the small fonts, three in the large. */
+            for (i = 0; i < (large ? 3 : 2) && count < 64; i++) {
+                points[count][0] = letter_right - 1 + (i + 1) / 2;
+                points[count][1] = letter_top + 1 - i;
+                count++;
             }
         }
         stamp(cell, (const int (*)[2])points, count, fill, outline);
@@ -680,12 +831,68 @@ static void copy_palettes(uint16_t *bank)
     memcpy(&bank[0xFA * SOFT_GPU_WIDTH + 656], &vram[0xFA * SOFT_GPU_WIDTH + 656], 256 * sizeof(uint16_t));
 }
 
+/* MEMORIES_GLYPH_SHEET=file.ppm: the pictures of every letter the text
+ * added (a translation's), made as the game makes them, written once the
+ * first is drawn: a column each, the 8x12, 16x16 and 8x8 ones down it; the
+ * outline black, the letter in greys, the cell blue. For a translator to
+ * see the letters whole, and for the tests (notes/translation.md). */
+static void write_sheet(int font_page)
+{
+    static int written;
+    const char *path = getenv("MEMORIES_GLYPH_SHEET");
+    FILE *file;
+    int n, size, x, y, width = added_count * 17 + 1, height = 12 + 16 + 8 + 4;
+    unsigned char *rgb;
+    if (written || !path || !*path || !added_count) return;
+    written = 1;
+    rgb = calloc((size_t)width * height, 3);
+    if (!rgb) return;
+    for (n = 0; n < added_count; n++) {
+        int at_y = 1;
+        for (size = 0; size < 3; size++) {
+            Cell cell;
+            int fill, outline = 1;
+            if (size == FONT_TINY && !added[n].letter) continue;
+            if (!added[n].letter) render(&added[n], font_page, size, &cell);
+            else compose(&added[n], size == FONT_TINY ? TINY_PAGE : font_page, size, &cell);
+            if (size == FONT_TINY) tiny_colours(&cell, &fill, &outline);
+            for (y = 0; y < cell.height; y++) {
+                for (x = 0; x < cell.width; x++) {
+                    unsigned char *at = &rgb[((size_t)(at_y + y) * width + 1 + n * 17 + x) * 3];
+                    int index = cell.pixels[y][x];
+                    at[0] = at[1] = (unsigned char)(!index ? 40 : index == outline ? 0 : 96 + index * 10);
+                    at[2] = !index ? 110 : at[0];
+                }
+            }
+            at_y += cell.height + 1;
+        }
+    }
+    file = fopen(path, "wb");
+    if (file) {
+        fprintf(file, "P6\n%d %d\n255\n", width, height);
+        fwrite(rgb, 3, (size_t)width * height, file);
+        fclose(file);
+        /* Which letter each column is: their code points, one a line. */
+        {
+            char list[1024];
+            snprintf(list, sizeof(list), "%s.txt", path);
+            if ((file = fopen(list, "w")) != NULL) {
+                for (n = 0; n < added_count; n++) fprintf(file, "%04X\n", (unsigned)added[n].character);
+                fclose(file);
+            }
+        }
+        LOG(LOG_MODS, "glyphs: %d letters drawn into %s", added_count, path);
+    }
+    free(rgb);
+}
+
 int Glyphs_Cell(uint32_t sjis, int large, int font_page, int *tpage, int *u, int *v)
 {
     uint16_t *bank;
     Added *glyph;
     int n = (int)sjis - (int)ADDED_SJIS, page;
     if (n < 0 || n >= added_count) return 0;
+    write_sheet(font_page);
     bank = SoftGpu_Bank(GLYPHS_BANK);
     if (!bank) return 0;
     glyph = &added[n];
