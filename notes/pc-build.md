@@ -1242,10 +1242,13 @@ View > Duel rank (`rank_meter` in `settings.txt`, `MEMORIES_RANK_METER`,
 0 by default) shows, during a duel against the computer, the rank the duel
 would end with: **Rank** (1) the letter and axis, S-POW to S-TEC, and
 **Rank and score** (2) also the score, 0-99 as the rank uses it (below 50
-is TEC). The plate sits right of the FIELD box, as tall as it. The letter
-is orange for S/A-POW and blue for S/A-TEC (the two special drop pools)
-and grey for B, C and D (the shared one). Off, nothing is drawn and nothing
-is computed: `update()` returns before reading anything.
+is TEC). It is drawn with the result screen's own pictures, right of the
+FIELD box and as tall as it: the stone plate with the rank letter on it (D
+blue, C green, B yellow, A red, S magenta, the colours the result screen
+gives them) and the POW or TEC badge behind the letter's top left; the
+score follows in the cards' ATK/DEF digits. Off, nothing is drawn, nothing
+is computed and the disc is not read: `update()` returns before reading
+anything.
 
 - **The sum** is `Rank_Score` (`src/pc/cards/rank.c`): 50, the ending's
   adjustment, and `Duel_CalcRankScoreChange` of the ten counters in the
@@ -1269,18 +1272,57 @@ is computed: `update()` returns before reading anything.
   or the quit dialog is up. It follows the FIELD box sprite (`D_8009B214`)
   and is hidden while the box is not all on screen: the box slides off for
   battles and some camera views, and for the outro.
+- **The pictures** come off the player's disc the first time the rank is
+  drawn (`src/pc/cards/rank_art.c`), never from the console's VRAM, so they
+  are there before any result screen has been seen, and nothing of the
+  game is kept in the repository. They are not TIM files: the packages are
+  raw VRAM words, one sector a 64 x 16 block placed down a column and on to
+  the next 64 words every 256 rows (`File_StepActiveTransfer`), with the
+  palettes as separate `LoadImage` rectangles. `src/pc/cards/disc_art.c`
+  unpacks them into a private VRAM the way the loaders do and cuts sprites
+  from it:
+  - the result screen's package, WA sector `0x1DAB`
+    (`FILE_WA_DUEL_RESULTS_START_SECTOR`; `func_80020BE4`): 32 sectors of
+    image to VRAM 0, 256, the palette sector (+32) to 0, 248 (256 x 4), and
+    the display resource (+33, `D_801AF000`). The pieces are what that
+    resource's sprite sheets say for the two objects `func_800218F0` makes,
+    indices 0, 5, `is_tec_rank` and 0, 6, `rank_tier`, walked as
+    `DisplayObject_UpdateCommandStream` and drawn as
+    `DisplayObject_RenderSpriteSheet` does (the objects set flag 0x20, so
+    the sheet's own palette step is added). That gives, on page 0, 256 in
+    4-bit colour: the badge 24 x 24 at 184, 312 (POW, palette 112, 248) or
+    184, 288 (TEC, 96, 248), the plate 56 x 48 at 128, 288 (16, 248), and
+    the letter 40 x 40 at 0/40/80, 128/168 with a palette for each (S 144
+    ... D 208). `pc_rank_art` checks each against this hand decode.
+  - the card digits from a terrain package, WA sector `0x16C6`
+    (`Duel_LoadPackageStage`, all seven are the same here): 64 sectors of
+    image to 0x300, 0x100 and four of palette to 0x100, 0xF0 (256 x 16);
+    `Duel_DrawCardFrame` draws them from page 0x1E, v 0x58, 8 x 8 in
+    8-bit colour, palette 0x100, 0xF1.
+  If the disc cannot give them the rank is not drawn and the log says so
+  once; there is no fallback to other lettering.
 - **Drawing** is the host overlay, like the fusion helper's (`hud.c`,
-  `Hud_Signature`, FreeType through `OverlayText`), in window pixels, so it
-  is sharp at any window scale or internal resolution and works with the
-  SDL/OpenGL, SDL renderer and X11 backends. Nothing goes through the GPU
-  or the present pass.
+  `Hud_Signature`), laid on the game picture in its own pixels: the plate at
+  half size (28 x 24, the box's height), the letter at 24 x 24, the badge at
+  12 x 12, the digits 8 x 8. Each window pixel takes the texel under it when
+  a piece is enlarged, so it is as sharp as the game's own 2D at any window
+  size, internal resolution or in widescreen, and the average of the texels
+  it covers when shrunk (a 1x window). Nothing goes through the GPU or the
+  present pass. With Video > xBR texture filtering on, the game's own 2D is
+  smoothed and these pieces are not.
+- **The shared module** `disc_art.c`/`disc_art.h` is added, byte for byte
+  the same, by View > Free Duel progress too (for the game's text font), so
+  each change stands alone and whichever lands second merges it unchanged.
+  A change to one copy belongs in the other.
 - **Check:** when the result screen opens, with the option on, the log gets
   `memories-pc: duel rank: ours N, the game's N (winner side 0, same rank)`:
   the same sum with the adjustment the duel ended with, against
   `side_scores[0]` and the game's own rank. `pc_rank`
   (`tests/pc/rank_test.c`) links the unchanged `duel_result_runtime.c` and
   compares both sides over 20,000 random records and tables, including the
-  retail rows.
+  retail rows. `pc_rank_art` (`tests/pc/rank_art_test.c`) reads the real
+  `game/DATA/WA_MRG.MRG` (skipped without it) and draws the ten ranks
+  through `RankArt_Draw`; `MEMORIES_RANK_ART_SHEET=<file.ppm>` saves them.
 
 ### Precise geometry (PGXP)
 

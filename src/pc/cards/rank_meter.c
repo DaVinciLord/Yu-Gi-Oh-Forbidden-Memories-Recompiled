@@ -1,13 +1,13 @@
 /* View > Duel rank: the rank the duel is heading for, drawn by the host over
- * the picture as the fusion helper is (FreeType, window pixels, any
- * internal resolution). The numbers come from rank.c. */
+ * the picture as the fusion helper is, with the result screen's own
+ * pictures (rank_art.c). The numbers come from rank.c. */
 #define D_8009B360_AS_SIDE_ARRAY
 #include "rank_meter.h"
 #include "rank.h"
 #include "fusion_helper.h"
 #include "pc/platform/settings.h"
 #include "pc/platform/platform.h"
-#include "pc/text/overlay_text.h"
+#include "rank_art.h"
 #include "game/duel_scene_state.h"
 #include "game/duel_effect.h"
 #include "game/duel_check_quit_input.h"
@@ -18,7 +18,6 @@
 #include "game/duel_init_scene.h"
 #include "game/display_object.h"
 #include <stdio.h>
-#include <string.h>
 
 extern unsigned char D_8009B26C, D_8009B26E;
 
@@ -92,51 +91,26 @@ unsigned RankMeter_Signature(void)
              (unsigned)view.box_y) * 31u + (unsigned)x * 17u + (unsigned)y) * 31u + (unsigned)w * 7u + (unsigned)h + 1u;
 }
 
-/* Game picture coordinates (320x240; 2D stays centred when widened) to
- * window pixels, as the fusion helper maps them. */
-static int screen_x(int x)
-{ return view.x + view.w / 2 + (x - 160) * view.w / (Platform_Widescreen() ? 426 : 320); }
-static int screen_y(int y) { return view.y + y * view.h / 240; }
+/* The FIELD box sprite from its position: its right edge. */
+enum { FIELD_BOX_RIGHT = 55 };
 
-/* The FIELD box sprite from its position: its right edge, and its height
- * (12,24 at rest; the frame spans 13-67 and 24-48). */
-enum { FIELD_BOX_RIGHT = 55, FIELD_BOX_HEIGHT = 24, GAP = 5 };
-
-/* A see-through plate right of the FIELD box, as tall as it: "S-POW",
- * orange for POW and blue for TEC when the rank picks that pool (S and A),
- * grey for B, C and D; the score after it in grey at level 2. */
+/* The result screen's badge and rank letter on its stone plate, right of
+ * the FIELD box and as tall as it, with the score in card digits at level
+ * 2: the game's own pictures (rank_art.h), laid on the picture in its own
+ * pixels, so they grow with the window and keep their place in
+ * widescreen. */
 void RankMeter_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
 {
-    static const char letters[] = "DCBAS";
-    char rank[8], score[8] = "";
-    int font, small, pad, width, height, row, col, left, top;
-    uint32_t colour;
+    RankArtView picture;
     *x = *y = *w = *h = 0;
     update();
     FusionHelper_GetViewport(&view.x, &view.y, &view.w, &view.h);
     if (!view.visible || view.w <= 0 || view.h <= 0) return;
-    snprintf(rank, sizeof(rank), "%c-%s", letters[view.tier], view.tec ? "TEC" : "POW");
-    if (view.level == 2) snprintf(score, sizeof(score), "%d", view.score < 0 ? 0 : view.score > 99 ? 99 : view.score);
-    height = screen_y(view.box_y + FIELD_BOX_HEIGHT) - screen_y(view.box_y);
-    font = height * 3 / 5 < 8 ? 8 : height * 3 / 5;
-    small = font * 3 / 4 < 8 ? 8 : font * 3 / 4;
-    pad = font / 2;
-    width = pad + OverlayText_Width(rank, font) + pad;
-    if (score[0]) width += OverlayText_Width(score, small) + pad;
-    left = screen_x(view.box_x + FIELD_BOX_RIGHT + GAP);
-    top = screen_y(view.box_y);
-    if (width > view.x + view.w - left) width = view.x + view.w - left;
-    if (width <= 0 || height <= 0) return;
-    for (row = top; row < top + height; row++)
-        for (col = left; col < left + width; col++) OverlayText_Blend(canvas, col, row, 0x0b0f18u, 150);
-    colour = view.tier < 3 ? 0xc4ccd2u : view.tec ? 0x74c6f2u : 0xf2a65au;
-    OverlayText_Draw(canvas, left + pad, top + height / 2, left + width, rank, font, colour);
-    if (score[0])
-        OverlayText_Draw(canvas, left + width - pad - OverlayText_Width(score, small), top + height / 2,
-                         left + width, score, small, 0xc4ccd2u);
-    *x = left; *y = top; *w = width; *h = height;
-    if (*x < 0) { *w += *x; *x = 0; }
-    if (*y < 0) { *h += *y; *y = 0; }
-    if (*w > canvas->width - *x) *w = canvas->width - *x;
-    if (*h > canvas->height - *y) *h = canvas->height - *y;
+    picture.x = view.x;
+    picture.y = view.y;
+    picture.w = view.w;
+    picture.h = view.h;
+    picture.width_2d = Platform_Widescreen() ? 426 : 320;
+    RankArt_Draw(canvas, &picture, view.box_x + FIELD_BOX_RIGHT, view.box_y, view.tec, view.tier,
+                 view.level == 2 ? (view.score < 0 ? 0 : view.score) : -1, x, y, w, h);
 }
