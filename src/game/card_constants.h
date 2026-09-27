@@ -60,9 +60,14 @@ extern int gCard_nCount;
  * copies of retail ones at ids FREE_DUEL_GRID_ENTRY_COUNT onwards
  * (notes/more-duelists.md). FREE_DUEL_GRID_ENTRY_COUNT stays what the disc
  * and the save block are laid out by; DUELIST_TABLE_COUNT is what the port's
- * own arrays hold. On the console they are the same. */
+ * own arrays hold. On the console they are the same.
+ *
+ * The limit is 128 rather than what a byte holds because gDuel_bOpponentID is
+ * signed: an id of 128 or over reads back negative, which Duel_InitScene takes
+ * for a two-player duel, the results screen takes for no opponent, and every
+ * table lookup misses. */
 #ifdef MEMORIES_PC
-#define DUELIST_ID_LIMIT 256
+#define DUELIST_ID_LIMIT 128
 #define DUELIST_TABLE_COUNT DUELIST_ID_LIMIT
 #else
 #define DUELIST_TABLE_COUNT FREE_DUEL_GRID_ENTRY_COUNT
