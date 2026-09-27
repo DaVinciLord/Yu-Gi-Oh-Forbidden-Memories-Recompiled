@@ -94,6 +94,14 @@ int Cards_NameUtf8(int id, char *out, size_t size);
  * NULL when it has its base's. */
 const unsigned char *Cards_DescriptionText(int id);
 
+/* A card's password, eight BCD digits as the disc's password table has
+ * them (0x89631139 is 89631139), or CARD_PASSWORD_NONE for a card no
+ * password gives (the disc's value for them). */
+#define CARD_PASSWORD_NONE 0xFFFFFFFEu
+/* The password a mod's entry gave the card ("password"): 1 and *password
+ * if it gave one, else 0 (passwords.h has the disc's). */
+int Cards_OwnPassword(int id, unsigned *password);
+
 /* A card's own artwork over its base's, as the game loads it: the art record
  * func_80029164 read (the picture, the title plate, the thumbnail), and the
  * 0x580-byte thumbnail block the duel copies for the hand and field. */

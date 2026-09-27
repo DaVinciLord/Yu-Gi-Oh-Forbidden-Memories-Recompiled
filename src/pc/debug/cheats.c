@@ -22,7 +22,7 @@ int Cheats_SaveLoaded(void)
 /* The chest lives in the persistent save state at 0x801D0250: one byte per
  * card, ids 1..722, read by the Library, BUILD DECK and the duel's deck
  * checks, and written out whole by SAVE. */
-int Cheats_GiveAllCards(int count)
+int Cheats_GiveAllCards(int count, int top_up)
 {
     int id;
     if (!Cheats_SaveLoaded()) {
@@ -35,13 +35,14 @@ int Cheats_GiveAllCards(int count)
         count = CARD_CHEST_QUANTITY_MAX;
     }
     for (id = 0; id < CARD_COUNT; id++) {
-        gLibrary_abCardChest[id] = (u8)count;
+        if (!top_up || gLibrary_abCardChest[id] < count) gLibrary_abCardChest[id] = (u8)count;
     }
     /* And the cards mods added, whose trunk is kept outside the save. */
     for (id = CARD_ID_END; id <= gCard_nCount; id++) {
-        *Cards_ChestSlot(gDuel_awPlayerDeck, id) = (u8)count;
+        u8 *slot = Cards_ChestSlot(gDuel_awPlayerDeck, id);
+        if (!top_up || *slot < count) *slot = (u8)count;
     }
-    fprintf(stderr, "memories-pc: chest now holds %d of every card\n", count);
+    fprintf(stderr, "memories-pc: chest now holds %s%d of every card\n", top_up ? "at least " : "", count);
     return 1;
 }
 
@@ -139,7 +140,7 @@ void Cheats_Frame(void)
         return;
     }
     if (Cheats_SaveLoaded()) {
-        if (wanted >= 0) Cheats_GiveAllCards(wanted);
+        if (wanted >= 0) Cheats_GiveAllCards(wanted, 0);
         if (deck) set_deck(deck);
         wanted = -1;
         deck = NULL;
