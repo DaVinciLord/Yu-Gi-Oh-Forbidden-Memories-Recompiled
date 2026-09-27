@@ -154,11 +154,12 @@ static void say(const char *format, ...)
     LOG(LOG_MODS, "%s", message);
 }
 
-/* A manifest's id, name and file names are cut to fit their fields. */
+/* A manifest's id, name and file names are cut to fit their fields, between
+ * two UTF-8 characters. */
 static void copy_text(char *out, size_t size, const char *text)
 {
     size_t length = strlen(text);
-    if (length >= size) length = size - 1;
+    if (length >= size) length = Menu_TextFit(text, size - 1);
     memcpy(out, text, length);
     out[length] = '\0';
 }
@@ -169,6 +170,7 @@ static void note(Mod *mod, const char *format, ...)
     va_start(arguments, format);
     vsnprintf(mod->status, sizeof(mod->status), format, arguments);
     va_end(arguments);
+    Menu_TextTrim(mod->status);
     fprintf(stderr, "memories-pc: mod %s: %s\n", mod->id, mod->status);
 }
 
@@ -187,9 +189,11 @@ static void warn(Mod *mod, int lasting, const char *format, ...)
     fprintf(stderr, "memories-pc: mod %s: warning: %s\n", mod->id, message);
     length = strlen(mod->status);
     snprintf(mod->status + length, sizeof(mod->status) - length, "%s%s", length ? "; " : "", message);
+    Menu_TextTrim(mod->status);
     if (lasting) {
         length = strlen(mod->warnings);
         snprintf(mod->warnings + length, sizeof(mod->warnings) - length, "%s%s", length ? "; " : "", message);
+        Menu_TextTrim(mod->warnings);
     }
 }
 

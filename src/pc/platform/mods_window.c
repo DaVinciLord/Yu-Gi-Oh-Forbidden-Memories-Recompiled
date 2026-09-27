@@ -207,12 +207,12 @@ static void text(MenuCanvas *c, int x, int y, int w, const char *s, unsigned col
     if (!c || w <= 0)
         return;
     if (n >= sizeof(line))
-        n = sizeof(line) - 1;
+        n = Menu_TextFit(s, sizeof(line) - 1);
     memcpy(line, s, n);
     line[n] = 0;
     if (width_text(line) > w) {
         while (n && width_text(line) + width_text("...") > w)
-            line[--n] = 0;
+            line[n = Menu_TextBack(line, n)] = 0;
         if (n + 3 < sizeof(line))
             strcat(line, "...");
     }
@@ -234,15 +234,18 @@ static int wrap(MenuCanvas *c, int x, int y, int w, const char *s, unsigned colo
     char line[512];
     int n = 0;
     while (*s) {
-        line[n++] = *s++;
+        /* A whole character at a time, so no line ends inside one. */
+        do
+            line[n++] = *s++;
+        while (n < (int)sizeof(line) - 1 && ((unsigned char)*s & 0xC0) == 0x80); /* bad UTF-8: a long tail */
         line[n] = 0;
         if (n >= 500 || *s == '\n' || !*s || width_text(line) > w) {
-            if (width_text(line) > w && n > 1) {
+            if (width_text(line) > w && Menu_TextBack(line, (size_t)n) > 0) {
                 int split = n - 1;
                 while (split > 0 && line[split] != ' ')
                     split--;
                 if (!split)
-                    split = n - 1;
+                    split = (int)Menu_TextBack(line, (size_t)n);
                 s -= n - split;
                 n = split;
                 line[n] = 0;
@@ -760,7 +763,7 @@ int ModsWindow_Event(const MenuEvent *e)
             char *target = focus == 1 ? query : profile;
             size_t cap = focus == 1 ? sizeof(query) : sizeof(profile), n = strlen(target);
             if (e->key == MENU_KEY_BACKSPACE && n)
-                target[n - 1] = 0;
+                target[Menu_TextBack(target, n)] = 0;
             if (e->text[0] && n + strlen(e->text) < cap)
                 strcat(target, e->text);
             scroll = 0;

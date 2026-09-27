@@ -8,9 +8,11 @@
  * text over a flat fill and costs nothing measurable.
  *
  * Text is anti-aliased through FreeType, in whatever face fontconfig names
- * for "sans-serif" at 13 px, cached as coverage bitmaps once at start. A
- * machine without either falls back to the 5x7 bitmap font at the end of
- * the file, drawn at twice its size. */
+ * for "sans-serif" at 13 px, cached as coverage bitmaps: printable ASCII
+ * once at start, any other character (text is UTF-8) the first time it is
+ * drawn or measured, "?" where the face has none. A machine without either
+ * falls back to the 5x7 bitmap font at the end of the file, drawn at twice
+ * its size. */
 #include "menu.h"
 #include "platform.h"
 #include "settings.h"
@@ -32,6 +34,7 @@
 #include <fontconfig/fontconfig.h>
 #endif
 #include "pc/debug/crash.h"
+#include "pc/text/glyphs.h"
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include "pc/compat/font.h"
@@ -272,6 +275,15 @@ static int changed;
 typedef struct { unsigned char *coverage; int w, h, left, top, advance; } Glyph;
 static Glyph glyphs[96];
 static int font_ascent, font_descent, font_loaded;
+/* Past ASCII: the face stays open and each character is rendered the first
+ * time it is asked for, kept in an open-addressed table (code 0 is a free
+ * slot); `missing` marks one the face has no glyph for. */
+typedef struct { uint32_t code; int missing; Glyph glyph; } ExtraGlyph;
+#define EXTRA_GLYPHS_MAX 4096
+static FT_Library font_library;
+static FT_Face font_face;
+static ExtraGlyph *extra_glyphs;
+static unsigned extra_mask, extra_count;
 
 typedef struct { char code; unsigned char rows[7]; } BitmapGlyph;
 /* --- the fallback font ----------------------------------------------- */
@@ -319,6 +331,46 @@ static const BitmapGlyph bitmap_font[] = {
 };
 static const int bitmap_font_count = (int)(sizeof(bitmap_font) / sizeof(bitmap_font[0]));
 
+/* Renders one character of `face` into `g`; 0 when the face cannot. */
+static int render_glyph(FT_Face face, FT_ULong character, Glyph *g)
+{
+    FT_Bitmap *b;
+    /* Outlines only: a font's embedded bitmaps (Wine's Tahoma has them
+     * at 8-16 px) come back 1 bit per pixel, not the bytes read below. */
+    if (FT_Load_Char(face, character, FT_LOAD_RENDER | FT_LOAD_TARGET_LIGHT | FT_LOAD_NO_BITMAP)) {
+        return 0;
+    }
+    b = &face->glyph->bitmap;
+    g->w = (int)b->width;
+    g->h = (int)b->rows;
+    g->left = face->glyph->bitmap_left;
+    g->top = face->glyph->bitmap_top;
+    g->advance = (int)((face->glyph->advance.x + 32) >> 6);
+    g->coverage = malloc((size_t)g->w * (size_t)g->h + 1);
+    if (g->coverage) {
+        int row;
+        for (row = 0; row < g->h; row++) {
+            memcpy(g->coverage + row * g->w, b->buffer + row * b->pitch, (size_t)g->w);
+        }
+    }
+    return 1;
+}
+
+/* Forgets the characters past ASCII and closes the face (a new size renders
+ * them again). */
+static void free_extra_glyphs(void)
+{
+    unsigned i;
+    for (i = 0; extra_glyphs && i <= extra_mask; i++) free(extra_glyphs[i].glyph.coverage);
+    free(extra_glyphs);
+    extra_glyphs = NULL;
+    extra_mask = extra_count = 0;
+    if (font_face) FT_Done_Face(font_face);
+    if (font_library) FT_Done_FreeType(font_library);
+    font_face = NULL;
+    font_library = NULL;
+}
+
 static void load_font(void)
 {
     FT_Library library;
@@ -335,6 +387,7 @@ static void load_font(void)
         free(glyphs[c].coverage);
         memset(&glyphs[c], 0, sizeof(glyphs[c]));
     }
+    free_extra_glyphs();
     font_loaded = 0;
 #ifdef _WIN32
     if (!file || FT_Init_FreeType(&library)) {
@@ -357,26 +410,7 @@ static void load_font(void)
     }
 #endif
     for (c = 32; c < 127; c++) {
-        Glyph *g = &glyphs[c - 32];
-        FT_Bitmap *b;
-        /* Outlines only: a font's embedded bitmaps (Wine's Tahoma has them
-         * at 8-16 px) come back 1 bit per pixel, not the bytes read below. */
-        if (FT_Load_Char(face, (FT_ULong)c, FT_LOAD_RENDER | FT_LOAD_TARGET_LIGHT | FT_LOAD_NO_BITMAP)) {
-            continue;
-        }
-        b = &face->glyph->bitmap;
-        g->w = (int)b->width;
-        g->h = (int)b->rows;
-        g->left = face->glyph->bitmap_left;
-        g->top = face->glyph->bitmap_top;
-        g->advance = (int)((face->glyph->advance.x + 32) >> 6);
-        g->coverage = malloc((size_t)g->w * (size_t)g->h + 1);
-        if (g->coverage) {
-            int row;
-            for (row = 0; row < g->h; row++) {
-                memcpy(g->coverage + row * g->w, b->buffer + row * b->pitch, (size_t)g->w);
-            }
-        }
+        render_glyph(face, (FT_ULong)c, &glyphs[c - 32]);
     }
     font_ascent = (int)(face->size->metrics.ascender >> 6);
     font_descent = (int)(-face->size->metrics.descender >> 6);
@@ -385,8 +419,46 @@ static void load_font(void)
     FcPatternDestroy(pattern);
     FcPatternDestroy(match);
 #endif
-    FT_Done_Face(face);
-    FT_Done_FreeType(library);
+    font_face = face;
+    font_library = library;
+}
+
+/* The glyph a character is drawn with: control characters (and DEL) take
+ * the space's room as they always have; anything the face cannot draw, and
+ * any byte that is not UTF-8, is "?". Needs font_loaded. */
+static const Glyph *glyph_for(uint32_t character)
+{
+    const Glyph *unknown = &glyphs['?' - 32];
+    unsigned slot;
+    if (character < 128) return &glyphs[character >= 32 && character < 127 ? character - 32 : 0];
+    if (character == GLYPHS_NOT_UTF8 || !font_face) return unknown;
+    if (extra_glyphs) {
+        for (slot = (character * 2654435761u) & extra_mask; extra_glyphs[slot].code; slot = (slot + 1) & extra_mask)
+            if (extra_glyphs[slot].code == character)
+                return extra_glyphs[slot].missing ? unknown : &extra_glyphs[slot].glyph;
+    }
+    if (extra_count >= EXTRA_GLYPHS_MAX) return unknown;
+    /* Keep the table at most half full: grow it (and rehash) first. */
+    if (!extra_glyphs || (extra_count + 1) * 2 > extra_mask + 1) {
+        unsigned size = extra_glyphs ? (extra_mask + 1) * 2 : 256, i;
+        ExtraGlyph *table = calloc(size, sizeof(*table));
+        if (!table) return unknown;
+        for (i = 0; extra_glyphs && i <= extra_mask; i++) {
+            if (!extra_glyphs[i].code) continue;
+            for (slot = (extra_glyphs[i].code * 2654435761u) & (size - 1); table[slot].code;
+                 slot = (slot + 1) & (size - 1)) {}
+            table[slot] = extra_glyphs[i];
+        }
+        free(extra_glyphs);
+        extra_glyphs = table;
+        extra_mask = size - 1;
+    }
+    for (slot = (character * 2654435761u) & extra_mask; extra_glyphs[slot].code; slot = (slot + 1) & extra_mask) {}
+    extra_glyphs[slot].code = character;
+    extra_glyphs[slot].missing = !FT_Get_Char_Index(font_face, (FT_ULong)character) ||
+                                 !render_glyph(font_face, (FT_ULong)character, &extra_glyphs[slot].glyph);
+    extra_count++;
+    return extra_glyphs[slot].missing ? unknown : &extra_glyphs[slot].glyph;
 }
 
 static void layout_bar(void);
@@ -419,12 +491,9 @@ static MenuCanvas *canvas;
 static int text_width(const char *text)
 {
     int width = 0;
-    if (!font_loaded) {
-        return (int)strlen(text) * 12 * ui;
-    }
-    for (; *text; text++) {
-        unsigned char c = (unsigned char)*text;
-        width += c >= 32 && c < 127 ? glyphs[c - 32].advance : glyphs[0].advance;
+    while (*text) {
+        uint32_t character = Glyphs_NextCharacter(&text);
+        width += font_loaded ? glyph_for(character)->advance : 12 * ui;
     }
     return width;
 }
@@ -515,11 +584,13 @@ static void disc(int cx, int cy, int radius, uint32_t colour)
 
 static void draw_bitmap_text(int x, int middle, const char *text, uint32_t colour)
 {
-    for (; *text; text++, x += 12 * ui) {
+    for (; *text; x += 12 * ui) {
+        uint32_t character = Glyphs_NextCharacter(&text);
+        char code = character < 128 ? (char)character : '?';
         int i;
         for (i = 0; i < bitmap_font_count; i++) {
             int row, column;
-            if (bitmap_font[i].code != *text) {
+            if (bitmap_font[i].code != code) {
                 continue;
             }
             for (row = 0; row < 7; row++) {
@@ -543,9 +614,8 @@ static void draw_text(int x, int middle, const char *text, uint32_t colour)
         return;
     }
     baseline = middle + (font_ascent - font_descent + 1) / 2;
-    for (; *text; text++) {
-        unsigned char c = (unsigned char)*text;
-        const Glyph *g = &glyphs[c >= 32 && c < 127 ? c - 32 : 0];
+    while (*text) {
+        const Glyph *g = glyph_for(Glyphs_NextCharacter(&text));
         int row, column;
         for (row = 0; row < g->h && g->coverage; row++) {
             for (column = 0; column < g->w; column++) {
@@ -574,9 +644,8 @@ void Menu_DrawTextScaled(MenuCanvas *into, int x, int middle, const char *text, 
     }
     int baseline = middle + (font_ascent - font_descent + 1) * scale / (2 * ui);
     int advance = 0;
-    for (; *text; text++) {
-        unsigned char c = (unsigned char)*text;
-        const Glyph *g = &glyphs[c >= 32 && c < 127 ? c - 32 : 0];
+    while (*text) {
+        const Glyph *g = glyph_for(Glyphs_NextCharacter(&text));
         for (int row = 0; row < g->h * scale / ui && g->coverage; row++)
             for (int col = 0; col < g->w * scale / ui; col++)
                 put(x + advance * scale / ui + g->left * scale / ui + col,
@@ -902,7 +971,7 @@ static void close_menu(void);
 static int span_width(const char *text, int length)
 {
     char part[256];
-    if (length >= (int)sizeof(part)) length = (int)sizeof(part) - 1;
+    if (length >= (int)sizeof(part)) length = (int)Menu_TextFit(text, sizeof(part) - 1);
     memcpy(part, text, (size_t)length);
     part[length] = '\0';
     return text_width(part);
@@ -997,8 +1066,10 @@ static void draw_notice(void)
     top += NOTICE_LINE + 6 * ui;
     for (i = 0; i < notice.lines; i++, top += NOTICE_LINE) {
         char line[256];
-        int length = notice.line_length[i] < (int)sizeof(line) - 1 ? notice.line_length[i] : (int)sizeof(line) - 1;
-        memcpy(line, notice.text + notice.line_start[i], (size_t)length);
+        const char *start = notice.text + notice.line_start[i];
+        int length = notice.line_length[i] < (int)sizeof(line) - 1 ? notice.line_length[i]
+                                                                   : (int)Menu_TextFit(start, sizeof(line) - 1);
+        memcpy(line, start, (size_t)length);
         line[length] = '\0';
         draw_text(x + NOTICE_PAD, top + NOTICE_LINE / 2, line, C_TEXT);
     }
@@ -1020,7 +1091,12 @@ void Menu_ShowNotice(const char *title, const char *text, const char *const *but
     close_menu();
     snprintf(notice.title, sizeof(notice.title), "%s", title ? title : "");
     snprintf(notice.text, sizeof(notice.text), "%s", text ? text : "");
-    for (i = 0; i < count; i++) snprintf(notice.buttons[i], sizeof(notice.buttons[i]), "%s", buttons && buttons[i] ? buttons[i] : "OK");
+    Menu_TextTrim(notice.title);
+    Menu_TextTrim(notice.text);
+    for (i = 0; i < count; i++) {
+        snprintf(notice.buttons[i], sizeof(notice.buttons[i]), "%s", buttons && buttons[i] ? buttons[i] : "OK");
+        Menu_TextTrim(notice.buttons[i]);
+    }
     notice.count = count;
     notice.focus = focus >= 0 && focus < count ? focus : count - 1;
     notice.hover = -1;

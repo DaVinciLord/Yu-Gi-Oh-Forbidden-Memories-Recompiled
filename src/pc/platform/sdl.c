@@ -1233,6 +1233,7 @@ static void translate(const SDL_Event *event, MenuEvent *out)
     case SDL_EVENT_TEXT_INPUT:
         out->type = MENU_EVENT_TEXT;
         snprintf(out->text, sizeof(out->text), "%s", event->text.text);
+        Menu_TextTrim(out->text);
         break;
     case SDL_EVENT_WINDOW_MOUSE_LEAVE: out->type = MENU_EVENT_LEAVE; break;
     case SDL_EVENT_KEY_DOWN: case SDL_EVENT_KEY_UP:

@@ -101,6 +101,7 @@ static void draw_stats(MenuCanvas *canvas)
     for (i = 0; i < tail_count; i++) {
         snprintf(line, sizeof(line), "%.90s", tail[i]);
         line[strcspn(line, "\n")] = 0;
+        Menu_TextTrim(line);
         text(canvas, bounds.x + 10 * s, &y, line);
     }
 }

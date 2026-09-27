@@ -469,6 +469,17 @@ static const MenuEvent *translate(const XEvent *event)
             if (length > 0) out.text[length] = 0;
             for (int i = 0; i < length; i++) /* Delete and Ctrl+letter are not text */
                 if ((unsigned char)out.text[i] < 0x20 || out.text[i] == 0x7f) { out.text[0] = 0; break; }
+            if (length > 0 && out.text[0]) { /* XLookupString writes Latin-1; the menu reads UTF-8 */
+                char utf8[sizeof(out.text)];
+                int n = 0;
+                for (int i = 0; i < length && n + 2 < (int)sizeof(utf8); i++) {
+                    unsigned char c = (unsigned char)out.text[i];
+                    if (c < 0x80) utf8[n++] = (char)c;
+                    else { utf8[n++] = (char)(0xC0 | c >> 6); utf8[n++] = (char)(0x80 | (c & 0x3F)); }
+                }
+                utf8[n] = 0;
+                memcpy(out.text, utf8, (size_t)n + 1);
+            }
         }
         break;
     }
