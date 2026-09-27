@@ -84,6 +84,30 @@ Within one entry a named card is surer than a type and a type surer than
 `replace`, so `"add": ["Dragon"], "remove": ["Curse of Dragon"]` equips every
 dragon but one. What no entry mentions, the disc's table decides.
 
+An entry may also set what the equip adds to the monster's ATK and DEF, in
+place of the disc's +500 (+1000 for Megamorph):
+
+| Key | Meaning |
+|---|---|
+| `bonus` | points, with a sign, for any monster it equips |
+| `bonus_if` | an object of monster types (`"Dragon"`) or attributes (`"Light"`, `"Dark"`, `"Earth"`, `"Water"`, `"Fire"`, `"Wind"`) and their points |
+
+```json
+"equips": [
+    {"card": "Legendary Sword", "bonus": 300, "bonus_if": {"Warrior": 800, "Light": 600}},
+    {"card": "Megamorph", "bonus": 1500}
+]
+```
+
+The first `bonus_if` that fits the monster decides, then `bonus`; an entry
+with neither for this monster says nothing, and an earlier entry, or the
+disc, decides. The latest entry that says something wins, as for what an
+equip may equip, and a copy of an equip a mod added has its base's bonus.
+Values are whole points from -9999 to 9999; a negative bonus lowers the
+monster. ATK and DEF still stop at 9999 and 0. Reverse Trap turns
+the bonus the equip gave into as large a loss, as it does on the disc. The CPU chooses its equips as before: it
+never counted the bonus.
+
 ## Rituals
 
 `"rituals"` is a list, one entry per ritual card. `card` is one of the
@@ -249,6 +273,7 @@ it first:
 |---|---|---|
 | `Duel_CheckFusion` (`duel_card_checks.c`) | fusion table, `0x8017C2D8` | `Tables_Fusion`, then `Tables_FilterFusion` over the disc's answer |
 | `Duel_CheckEquip` (`duel_card_checks.c`) | equip table, `0x8017A1D8` | `Tables_Equip` |
+| `DuelScene_UpdateCardPlacement` (`duel_scene_card_placement.c`) | +500, +1000 for Megamorph | `Tables_EquipBonus` |
 | `Duel_CheckRitual` (`duel_check_ritual.c`) | ritual table, `0x801799D8` | `Tables_Ritual`, whose recipe is laid out like the disc's |
 | `Duel_ShuffleDeck` (`duel_shuffle_deck.c`) | deck pool, `0x801781D8` | `Tables_FixedDeck`, then `Tables_Pool(TABLES_POOL_DECK)` |
 | `Duel_SelectCardDrop` (`duel_result_runtime.c`) | drop pools, `0x8017878C` | `Tables_Pool(TABLES_POOL_POW + pool)` |

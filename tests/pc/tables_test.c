@@ -23,6 +23,16 @@ int Cards_Type(int id)
     return id == 20 ? CARD_TYPE_EQUIP : id == 21 ? CARD_TYPE_RITUAL : id == 12 || id == 13 ? 0 : 3;
 }
 int Cards_TypeNamed(const char *text) { return same_letters(text, "Dragon") ? 0 : same_letters(text, "Warrior") ? 3 : -1; }
+/* Card 12 is Light, 13 Dark, the rest Earth. */
+int Cards_AttributeNamed(const char *text)
+{
+    return same_letters(text, "Light") ? 0 : same_letters(text, "Dark") ? 1 : same_letters(text, "Earth") ? 2 : -1;
+}
+int Cards_Attribute(int id)
+{
+    id = Cards_BaseId(id);
+    return id == 12 ? 0 : id == 13 ? 1 : 2;
+}
 int Cards_Named(const char *text)
 {
     size_t i;
@@ -255,10 +265,32 @@ int main(void)
         assert(Tables_TerrainBonus(4, 3, &bonus) && bonus == 100 && Tables_TerrainBonus(4, 0, &bonus) && bonus == -50);
     }
 
+    /* Equip bonuses: none is the disc's; "bonus" for any monster; the first
+     * "bonus_if" that fits comes before it; a later entry wins; a copy of
+     * the equip is the equip; refusals. 12 is a Light dragon, 13 a Dark
+     * dragon, 5 an Earth warrior. */
+    assert(Tables_EquipBonus(20, 12, 500) == 500);
+    notes = 0;
+    add("r", "{\"equips\": [{\"card\": \"Legendary Sword\", \"bonus\": 300,"
+             "\"bonus_if\": {\"Light\": 900, \"Dragon\": 700, \"Magic\": 1, \"Earth\": 10000}},"
+             "{\"card\": \"Kuriboh\", \"bonus\": 5}, {\"card\": 20, \"bonus\": \"lots\"}]}");
+    assert(notes == 4);                    /* Magic, 10000, Kuriboh not an equip, "lots" */
+    assert(Tables_EquipBonus(20, 12, 500) == 900);           /* Light first */
+    assert(Tables_EquipBonus(20, 13, 500) == 700);           /* a Dark dragon */
+    assert(Tables_EquipBonus(20, 5, 500) == 300);            /* neither */
+    assert(Tables_EquipBonus(CARD_COUNT + 20, 13, 500) == 700);
+    assert(Tables_EquipBonus(21, 13, 1000) == 1000);         /* another equip: the disc's */
+    add("s", "{\"equips\": [{\"card\": 20, \"bonus_if\": {\"Warrior\": -200}}]}");
+    assert(Tables_EquipBonus(20, 5, 500) == -200);           /* the later entry fits */
+    assert(Tables_EquipBonus(20, 12, 500) == 900);           /* it says nothing of a dragon */
+    add("t", "{\"equips\": [{\"card\": 20, \"bonus\": 0, \"add\": [\"Dragon\"]}]}");
+    assert(Tables_EquipBonus(20, 12, 500) == 0 && Tables_Equip(20, 12) == 1);
+
     Tables_Clear();
     {
         int bonus;
         assert(!Tables_TerrainBonus(1, 0, &bonus) && !Tables_TerrainBonus(6, 19, &bonus));
+        assert(Tables_EquipBonus(20, 12, 500) == 500);
     }
     {
         unsigned starchips = 7;

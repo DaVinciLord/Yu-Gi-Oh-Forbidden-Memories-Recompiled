@@ -31,6 +31,10 @@ int Tables_FilterFusion(int result);
 /* Whether `equip` may equip `monster`: 1 or 0 by a mod's rule, -1 when no
  * rule says, and the disc's table decides. */
 int Tables_Equip(int equip, int monster);
+/* What `equip` adds to `monster`'s ATK and DEF: a mod's "bonus" or
+ * "bonus_if" for it (the latest entry that fits), else `retail`, the disc's
+ * +500 (+1000 for Megamorph). */
+int Tables_EquipBonus(int equip, int monster, int retail);
 
 /* A ritual's recipe: 1 with the ritual card, its three tributes, its result
  * and a 0 after them in `recipe` (the layout of the game's ritual table),

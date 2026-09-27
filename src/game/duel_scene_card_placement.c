@@ -31,6 +31,9 @@
 #include "../unmatched.h"
 #include "duel_scene_card_placement.h"
 #include "card_constants.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/tables.h"
+#endif
 
 #define PLACEMENT_PX(object) ((object)->field_30.h.field_30)
 #define PLACEMENT_PY(object) ((object)->field_30.h.field_32)
@@ -405,6 +408,17 @@ request_combination:
                                 PLACEMENT_TY(object) = 1000;
                                 D_8009B154 += 500;
                             }
+#ifdef MEMORIES_PC
+                            {
+                                /* A mod's bonus for this equip and monster
+                                   (tables.h). D_8009B154 is what Reverse
+                                   Trap takes back, so it follows. */
+                                s32 bonus = Tables_EquipBonus(D_8009B206, card->card_id,
+                                                              (s16)PLACEMENT_TY(object));
+                                D_8009B154 += bonus - (s16)PLACEMENT_TY(object);
+                                PLACEMENT_TY(object) = bonus;
+                            }
+#endif
                         }
                     }
                     if (D_8009B210 & 0x40) {

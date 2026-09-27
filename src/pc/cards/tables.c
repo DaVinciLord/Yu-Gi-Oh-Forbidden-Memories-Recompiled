@@ -94,6 +94,17 @@ static unsigned char *removed_results;   /* by card id: no retail recipe makes i
 static int removed_room;
 static EquipRule *equips;
 static int equip_count, equip_room;
+/* An equip's bonus: for any monster, or one of a type or an attribute. */
+enum { BONUS_ANY, BONUS_TYPE, BONUS_ATTRIBUTE };
+typedef struct {
+    unsigned short equip;
+    unsigned char kind, value;  /* BONUS_*, and the type or attribute */
+    short bonus;
+    unsigned order, rank;       /* the entry, and the place in its "bonus_if" */
+} BonusRule;
+
+static BonusRule *bonuses;
+static int bonus_count, bonus_room;
 static RitualRule *rituals;
 static int ritual_count, ritual_room;
 static PoolEdit *edits;
@@ -293,6 +304,60 @@ static void add_equip(int equip, EquipRule rule, unsigned order)
     equip_count++;
 }
 
+static void add_bonus(int equip, int kind, int value, long bonus, unsigned order, unsigned rank)
+{
+    BonusRule *slot = grow(&bonuses, &bonus_room, bonus_count, sizeof(*bonuses));
+    if (!slot) return;
+    slot->equip = (unsigned short)equip;
+    slot->kind = (unsigned char)kind;
+    slot->value = (unsigned char)value;
+    slot->bonus = (short)bonus;
+    slot->order = order;
+    slot->rank = rank;
+    bonus_count++;
+}
+
+static int bonus_points(const char *mod, const char *where, const JsonValue *value, long *points)
+{
+    *points = Json_Number(value, 0);
+    if (Json_TypeOf(value) == JSON_NUMBER && *points >= -CARD_STAT_MAX && *points <= CARD_STAT_MAX) return 1;
+    Mods_Note(mod, "%s: a bonus is a whole number of points, -%d to %d", where, CARD_STAT_MAX, CARD_STAT_MAX);
+    return 0;
+}
+
+/* An equip entry's "bonus": points, in place of the disc's +500 (+1000 for
+ * Megamorph), and "bonus_if": { type or attribute: points }, for monsters
+ * of that type or attribute; the first that fits comes before "bonus". */
+static void read_equip_bonus(const char *mod, int index, int equip, const JsonValue *entry, unsigned order)
+{
+    const JsonValue *plain = Json_Member(entry, "bonus"), *conditions = Json_Member(entry, "bonus_if");
+    char where[128];
+    long points;
+    int j;
+    if (plain) {
+        snprintf(where, sizeof(where), "equips[%d].bonus", index);
+        if (bonus_points(mod, where, plain, &points)) add_bonus(equip, BONUS_ANY, 0, points, order, 0);
+    }
+    if (!conditions) return;
+    if (Json_TypeOf(conditions) != JSON_OBJECT) {
+        Mods_Note(mod, "equips[%d].bonus_if: an object of monster types or attributes and their bonus", index);
+        return;
+    }
+    for (j = 0; j < Json_Count(conditions); j++) {
+        const JsonValue *member = Json_At(conditions, j);
+        const char *name = Json_Name(member);
+        int type = Cards_TypeNamed(name), attribute = Cards_AttributeNamed(name);
+        snprintf(where, sizeof(where), "equips[%d].bonus_if \"%s\"", index, name);
+        if ((type < 0 || type >= CARD_TYPE_MAGIC) && attribute < 0) {
+            Mods_Note(mod, "%s: not a monster type or an attribute", where);
+            continue;
+        }
+        if (!bonus_points(mod, where, member, &points)) continue;
+        if (type >= 0 && type < CARD_TYPE_MAGIC) add_bonus(equip, BONUS_TYPE, type, points, order, (unsigned)j + 1);
+        else add_bonus(equip, BONUS_ATTRIBUTE, attribute, points, order, (unsigned)j + 1);
+    }
+}
+
 static void read_equips(const char *mod, const JsonValue *list)
 {
     int i, j, pass;
@@ -312,6 +377,7 @@ static void read_equips(const char *mod, const JsonValue *list)
             Mods_Note(mod, "%s: \"card\" is not an equip card", where);
             continue;
         }
+        read_equip_bonus(mod, i, equip, entry, order);
         if (Json_Bool(Json_Member(entry, "replace"), 0)) {
             EquipRule none = {0};
             none.kind = TARGET_ANY;
@@ -350,6 +416,32 @@ int Tables_Equip(int equip, int monster)
         if (!best || rule->order > best->order || (rule->order == best->order && rule->kind >= best->kind)) best = rule;
     }
     return best ? best->allow : -1;
+}
+
+int Tables_EquipBonus(int equip, int monster, int retail)
+{
+    const BonusRule *best = NULL;
+    int i, base_equip, type, attribute;
+    if (!bonus_count || !Cards_Valid(equip) || !Cards_Valid(monster)) return retail;
+    base_equip = Cards_BaseId(equip);
+    type = Cards_Type(monster);
+    attribute = Cards_Attribute(monster);
+    /* The latest entry that says anything about this monster decides;
+     * within it the first "bonus_if" that fits, then its "bonus". */
+    for (i = 0; i < bonus_count; i++) {
+        const BonusRule *rule = &bonuses[i];
+        int fits;
+        if (rule->equip != equip && rule->equip != base_equip) continue;
+        fits = rule->kind == BONUS_ANY || (rule->kind == BONUS_TYPE && rule->value == type) ||
+               (rule->kind == BONUS_ATTRIBUTE && rule->value == attribute);
+        if (!fits) continue;
+        if (!best || rule->order > best->order ||
+            (rule->order == best->order && rule->rank && (!best->rank || rule->rank < best->rank)))
+            best = rule;
+    }
+    if (!best) return retail;
+    LOG(LOG_MODS, "tables: equip %d on %d: %+d (the disc's %+d)", equip, monster, best->bonus, retail);
+    return best->bonus;
 }
 
 /* --- rituals --------------------------------------------------------- */
@@ -935,7 +1027,7 @@ void Tables_Clear(void)
             free(edits[i].weights);
         }
     }
-    fusion_count = equip_count = ritual_count = edit_count = fixed_count = 0;
+    fusion_count = equip_count = ritual_count = edit_count = fixed_count = bonus_count = 0;
     overflow_starchips = 0;
     memset(terrain_bonus, 0, sizeof(terrain_bonus));
     memset(terrain_listed, 0, sizeof(terrain_listed));
@@ -954,8 +1046,8 @@ void Tables_Build(void)
         int mod = Mods_Loaded(i);
         if (Mods_Active(mod)) Tables_Add(Mods_Id(mod), Mods_Manifest(mod));
     }
-    if (fusion_count || equip_count || ritual_count || edit_count || fixed_count || overflow_starchips)
-        LOG(LOG_MODS, "tables: %d fusion rules, %d equip rules, %d rituals, %d pool edits, %d fixed decks, "
-            "%ld starchips a card past the chest", fusion_count, equip_count, ritual_count, edit_count, fixed_count,
-            overflow_starchips);
+    if (fusion_count || equip_count || bonus_count || ritual_count || edit_count || fixed_count || overflow_starchips)
+        LOG(LOG_MODS, "tables: %d fusion rules, %d equip rules, %d equip bonuses, %d rituals, %d pool edits, "
+            "%d fixed decks, %ld starchips a card past the chest", fusion_count, equip_count, bonus_count,
+            ritual_count, edit_count, fixed_count, overflow_starchips);
 }

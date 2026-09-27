@@ -63,6 +63,10 @@ int Cards_Named(const char *text);
 /* A monster type by name ("Winged Beast"), or -1; and the type of a card. */
 int Cards_TypeNamed(const char *text);
 int Cards_Type(int id);
+/* An attribute by name ("Light", "Dark", "Earth", "Water", "Fire",
+ * "Wind"), 0-5, or -1; and the attribute of a card. */
+int Cards_AttributeNamed(const char *text);
+int Cards_Attribute(int id);
 
 /* The retail card `id` is a copy of, or `id` itself; 0 for no card. */
 int Cards_BaseId(int id);
