@@ -699,6 +699,11 @@ static void pump(void)
                     continue;
                 }
             }
+            /* Keypad +/-: master volume, unless the bindings use the key. */
+            if (Platform_VolumeKey(physical_keys[event.xkey.keycode & 255], event.type == KeyPress)) {
+                if (event.type == KeyPress) repaint_menu();
+                continue;
+            }
             if (key == XK_Escape && event.type == KeyPress && DeckMenu_Active()) {
                 DeckMenu_Close(); /* the deck slot screen, not the game */
                 continue;
@@ -827,6 +832,11 @@ uint16_t Platform_Pad(int port)
 {
     return port == 0 ? (uint16_t)(ControlsRuntime_Keyboard() | (ControlsRuntime_Blocked()?0:(mouse_bits | wheel_now)) | scripted_bits | Gamepad_Bits(0))
                      : (uint16_t)(Gamepad_Bits(1) | scripted_bits2);
+}
+
+uint16_t Platform_PadFixedBits(int port)
+{
+    return port == 0 ? (uint16_t)((ControlsRuntime_Blocked()?0:(mouse_bits | wheel_now)) | scripted_bits) : scripted_bits2;
 }
 
 int Platform_PadConnected(int port) { return port == 0 || Gamepad_Connected(port) || Platform_ScriptedPad2(); }

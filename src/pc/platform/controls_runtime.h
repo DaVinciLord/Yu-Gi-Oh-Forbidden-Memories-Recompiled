@@ -21,6 +21,9 @@ void ControlsRuntime_Reconcile(void);
 ControlsProfile *ControlsRuntime_Profile(ControlsConfig *cfg, int port, int create);
 CtrlIconStyle *ControlsRuntime_Style(ControlsConfig *cfg, int port, int create);
 void ControlsRuntime_Key(int key, int down);
+/* Nonzero when the keyboard profile binds `key` (a CTRL_KEY_*) to a pad
+ * button: a host shortcut on an unreserved key yields to the binding. */
+int ControlsRuntime_KeyBound(int key);
 void ControlsRuntime_ResetKeys(void);
 int ControlsRuntime_Keys(ControlSource *out);
 void ControlsRuntime_Block(int block);

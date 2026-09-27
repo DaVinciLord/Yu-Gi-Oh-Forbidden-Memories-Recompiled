@@ -47,6 +47,12 @@ enum { TABLES_POOL_DECK, TABLES_POOL_POW, TABLES_POOL_BCD, TABLES_POOL_TEC, TABL
 const unsigned short *Tables_Pool(int pool, const unsigned short *retail);
 /* The same for a given opponent (0-39), for the tests and tools. */
 const unsigned short *Tables_PoolFor(int duelist, int pool, const unsigned short *retail);
+/* Scale the weights `chosen` marks (by card id, 1..count) so they add up to
+ * `target` exactly: each its share rounded down, the rest to the largest
+ * remainders, the lower id first. The others are left as they are. 0 when
+ * it runs out of memory, or when nothing chosen weighs anything and the
+ * target is not 0. Pools use it, and so does Game > Smart drops (drops.h). */
+int Tables_Scale(unsigned *weights, const unsigned char *chosen, int count, unsigned target);
 
 /* The opponent names a manifest may use, by duelist id; "all" means every
  * one of them. */

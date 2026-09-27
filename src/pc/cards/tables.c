@@ -535,7 +535,7 @@ static int by_remainder(const void *left, const void *right)
 static Share *shares;
 static int share_room;
 
-static int scale(unsigned *weights, const unsigned char *chosen, int count, unsigned target)
+int Tables_Scale(unsigned *weights, const unsigned char *chosen, int count, unsigned target)
 {
     unsigned long long sum = 0;
     unsigned given = 0;
@@ -583,11 +583,11 @@ static int apply(const PoolEdit *edit, unsigned *weights, unsigned *before, unsi
     if (given >= POOL_TOTAL || !rest) {
         /* The listed cards are the pool, in proportion. */
         for (id = 1; id <= count; id++) if (!listed[id]) weights[id] = 0;
-        if (!scale(weights, listed, count, POOL_TOTAL) || !given) goto refuse;
+        if (!Tables_Scale(weights, listed, count, POOL_TOTAL) || !given) goto refuse;
     } else {
         /* The listed cards have their weights; the rest share what is left. */
         for (id = 1; id <= count; id++) listed[id] = !listed[id];
-        if (!scale(weights, listed, count, POOL_TOTAL - (unsigned)given)) goto refuse;
+        if (!Tables_Scale(weights, listed, count, POOL_TOTAL - (unsigned)given)) goto refuse;
     }
     for (id = 1; id <= count; id++) cards += weights[id] != 0;
     if (edit->pool == TABLES_POOL_DECK && cards < DECK_POOL_MIN_CARDS) goto refuse;

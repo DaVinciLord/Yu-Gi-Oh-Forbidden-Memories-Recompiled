@@ -3,7 +3,8 @@
 **Game > Card drops** sets how many cards a won duel deals: 1 (the console's)
 to 99. Drag the slider, or open the menu with the keyboard and step it one at
 a time with Left/Right. The setting is saved as `card_drops`;
-`MEMORIES_CARD_DROPS=N` sets it for one run.
+`MEMORIES_CARD_DROPS=N` sets it for one run. **Game > Smart drops** keeps the
+cards you already have three of out of those rolls ([below](#smart-drops)).
 
 ## On RESULTS OF DUEL
 
@@ -44,6 +45,42 @@ through `Duel_AwardCard`, so mods see `MEMORIES_EVENT_REWARD` for each card.
 SPOILS' card is awarded last and is the newest of the chest's 16 recent cards
 (its New! marks). A card already at the chest's 250 stays at 250.
 
+## Smart drops
+
+**Game > Smart drops** (setting `smart_drops`, 0 by default;
+`MEMORIES_SMART_DROPS=1` for one run) keeps a won duel from dealing cards you
+already have three of, the most a deck can hold (`DECK_CARD_COPY_LIMIT`).
+Before each card's roll, the table's cards with three copies or more across
+your deck, your chest and the cards this duel already dealt are left out, and
+the rest are scaled back to 2048 with `Tables_Scale` (`src/pc/cards/tables.c`,
+the scaling mods' drop and deck edits use: each card its share rounded down,
+what is left to the largest remainders, the lower id first). It is still one
+roll per card: the same draw for the threshold, the same walk by card id,
+the same pool (a mod's edit of it included) and the same copy pick
+(`Cards_PickVariant`) as `Duel_SelectCardDrop`, so the random numbers drawn
+and the order they are drawn in do not change, only which card a roll lands
+on.
+
+- **SPOILS' card is filtered too.** `CardDrops_Roll` (`src/pc/cards/drops.c`)
+  already makes every roll of a won duel, SPOILS' included, and
+  `DuelScene_UpdateResultRewards` only calls it (under the `MEMORIES_PC` the
+  card drops already added), so nothing in a matched function changes. At
+  one card SPOILS' is the only card: leaving it out would make the setting
+  do nothing there. It is rolled last, so the cards dealt before it count.
+  The static recomp's Smart Drops filtered every normal reward, the first
+  included, too.
+- **Everything at three:** when every card the table can deal is at three,
+  that roll uses the table as it is (the console's roll, card for card).
+  With Cheats > "Give 3 of every card" every roll does. The same happens
+  part way through a deal once the cards short of three are used up: a
+  table with room for seven more copies deals those seven, and the rest
+  come from the whole table.
+- **Nothing at three:** the roll is the game's own `Duel_SelectCardDrop`.
+- **Off** (the default): every roll is `Duel_SelectCardDrop`, exactly as
+  before.
+- A card is counted by the id the table lists; a mod card that takes a
+  retail card's place (`Cards_PickVariant`) is counted as its own card.
+
 ## Save states
 
 The dealt cards and the page on screen are game variables
@@ -57,8 +94,8 @@ states from earlier builds fail to load ("game variable ... moved").
 
 ## Code
 
-- `src/pc/cards/drops.c`, `drops.h`: dealing, awarding, page order and
-  the page text.
+- `src/pc/cards/drops.c`, `drops.h`: dealing (and Smart drops'
+  `CardDrops_SmartPool`), awarding, page order and the page text.
 - `src/game/func_800218F0.c` (`DuelScene_UpdateResultRewards`): calls
   the roll, the award and the page turn, under `MEMORIES_PC`.
 - `src/game/duel_result_runtime.c` (`Duel_ShowResultPage`): an added page
@@ -84,5 +121,16 @@ opponent's life points zeroed in a saved state) and checks that:
 - leaving awards twenty cards, from a state saved on the screen and with
   the setting set back to one, with SPOILS' card the newest.
 
-`--windows` runs it on the Windows build under Wine. Screenshots and frames
-are left in `tmp/pc/card-drops-smoke/`.
+`--smart` then checks Smart drops, five cards a duel: with three of every
+card (the cheat, through `MEMORIES_DEBUG_CHEST=3`) the cards are the same
+with the setting on and off; with three of every card but four of the
+table's lightest (one at two copies, three at none), all five come from
+those four and none passes three copies, where with the setting off they
+come from the whole table. `tests/pc/card_drops_test.c` (CTest
+`pc_card_drops`) checks the pool itself: which cards leave, the sum of
+2048, a full table left alone, and the same draws with the setting on and
+off.
+
+`--windows` runs it on the Windows build under Wine; `--executable` names
+another build (a `.exe` runs directly on Windows) and `--out` another folder.
+Screenshots and frames are left in `tmp/pc/card-drops-smoke/`.

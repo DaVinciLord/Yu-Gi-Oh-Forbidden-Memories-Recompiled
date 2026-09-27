@@ -1,6 +1,8 @@
 /* The two roots the port reads and writes through (paths.h). Both are
  * resolved once and cached: the program directory from /proc/self/exe, the
- * user directory from the platform's own convention for a game's files. */
+ * user directory from MEMORIES_USER_DIR, else portable.txt beside the
+ * executable (portable mode), else the platform's own convention for a
+ * game's files. */
 #define _POSIX_C_SOURCE 200809L
 #include "paths.h"
 #include <stdio.h>
@@ -57,12 +59,31 @@ const char *Paths_ProgramDir(void)
     return program_dir;
 }
 
+/* Portable mode: a file named portable.txt beside the executable (what it
+ * holds does not matter) keeps the player's files beside it too, in a
+ * folder of their own -- mods/ beside the executable is the release's. */
+static int portable(char *out, size_t size)
+{
+    char marker[PATH_MAX_];
+    int n;
+    if (Paths_Program(marker, sizeof(marker), "portable.txt") || access(marker, F_OK)) return 0;
+    n = snprintf(out, size, "%s/user", Paths_ProgramDir());
+    if (n < 0 || (size_t)n >= size) {
+        out[0] = '\0';
+        return 0;
+    }
+    fprintf(stderr, "memories-pc: %s found; the player's files go to %s\n", marker, out);
+    return 1;
+}
+
 const char *Paths_UserDir(void)
 {
     const char *named = getenv("MEMORIES_USER_DIR");
     if (user_dir[0]) return user_dir;
     if (named && *named) {
         snprintf(user_dir, sizeof(user_dir), "%s", named);
+    } else if (portable(user_dir, sizeof(user_dir))) {
+        /* user/ beside the executable */
     } else {
         char root[PATH_MAX_ - 32] = ""; /* room for the folder name after it */
 #ifdef _WIN32
