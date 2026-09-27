@@ -1,17 +1,17 @@
 """The window's File > Import entries."""
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from tkinter import filedialog, messagebox
 
 from . import disc, importer, ygomods
+from .importer import slug
 
 
-def slug(text: str) -> str:
-    """A mod id out of a file name."""
-    text = re.sub(r"[^A-Za-z0-9_-]+", "-", Path(text).stem).strip("-").lower()
-    return (text or "imported-mod")[:63]
+def _failed(app, problem: Exception):
+    """Anything the importer did not expect, said in a window: a program
+    built --windowed has no console for the traceback."""
+    messagebox.showerror("Import", f"The import stopped: {type(problem).__name__}: {problem}", parent=app)
 
 
 def ask_modded_files(app):
@@ -54,6 +54,9 @@ def import_modded_game(app):
     except ValueError as problem:
         messagebox.showerror("Import", str(problem), parent=app)
         return
+    except Exception as problem:
+        _failed(app, problem)
+        return
     finally:
         app.config(cursor="")
     app.set_project(result.project)
@@ -74,6 +77,9 @@ def import_ygomods(app):
         project, report = ygomods.import_package(app.retail, app.files.wa, path, slug(path), Path(path).stem)
     except ygomods.PackageError as problem:
         messagebox.showerror("Import", str(problem), parent=app)
+        return
+    except Exception as problem:
+        _failed(app, problem)
         return
     app.set_project(project)
     app.changed()
