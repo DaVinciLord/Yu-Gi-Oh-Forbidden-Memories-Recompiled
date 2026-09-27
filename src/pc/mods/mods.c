@@ -357,6 +357,18 @@ unsigned Mods_CardSignature(void) { return card_signature; }
 void Mods_SetCardResolver(int (*resolve_card)(const char *)) { card_resolver = resolve_card; }
 static int host_card_id(const MemoriesModHost *host, const char *identity)
 { (void)host; return card_resolver ? card_resolver(identity) : 0; }
+static int (*duelist_resolver)(const char *);
+void Mods_SetDuelistResolver(int (*resolve)(const char *)) { duelist_resolver = resolve; }
+static int host_duelist_id(const MemoriesModHost *host, const char *identity)
+{
+    /* Duelists_Find answers -1 for one it does not have; the API says 0, as
+       card_id does. */
+    int id;
+    (void)host;
+    if (!duelist_resolver) return 0;
+    id = duelist_resolver(identity);
+    return id > 0 ? id : 0;
+}
 static int host_subscribe(const MemoriesModHost *host, unsigned event, int priority, MemoriesModCallback callback)
 { return owner(host) ? Mods_Subscribe((int)(owner(host) - mods), event, priority, callback) : 0; }
 static void host_unsubscribe(const MemoriesModHost *host, int token)
@@ -489,6 +501,7 @@ static void fill_host(Mod *mod)
     mod->host.unsubscribe = host_unsubscribe;
     mod->host.register_state = host_register_state;
     mod->host.card_id = host_card_id;
+    mod->host.duelist_id = host_duelist_id;
     mod->host.api = MEMORIES_MOD_API;
     mod->host.id = mod->id;
     mod->host.directory = mod->directory;
@@ -1164,8 +1177,8 @@ static int load_library(Mod *mod)
 static const char *const manifest_keys[] = {
     "id", "name", "version", "author", "description", "library", "enabled", "restart", "legacy_setting",
     "data", "textures", "cards", "audio", "min_api", "game", "requires", "after", "conflicts", "priority",
-    "settings", "fusions", "equips", "rituals", "drops", "decks", "text", "font", "chest_overflow",
-    "terrain_bonus", "trap_thresholds", "equip_bonus_default", "passwords",
+    "settings", "fusions", "equips", "rituals", "drops", "decks", "duelists", "text", "font",
+    "chest_overflow", "terrain_bonus", "trap_thresholds", "equip_bonus_default", "passwords",
 };
 
 /* How many letters to add, remove or change to turn one word into the
@@ -1294,8 +1307,9 @@ static int read_manifest(Mod *mod, const char *directory, const char *origin)
     if (Json_Count(mod->cards)) mod->restart = 1;
     {   /* So are the rule tables (src/pc/cards/tables.c) and a translation
          * (src/pc/text): both are read once, at startup. */
-        static const char *const tables[] = {"fusions", "equips", "rituals", "drops", "decks", "text", "font",
-                                             "terrain_bonus", "trap_thresholds", "chest_overflow", "passwords"};
+        static const char *const tables[] = {"fusions", "equips", "rituals", "drops", "decks", "duelists",
+                                             "text", "font", "terrain_bonus", "trap_thresholds",
+                                             "chest_overflow", "passwords"};
         for (size_t t = 0; t < sizeof(tables) / sizeof(tables[0]); t++) {
             const JsonValue *value = Json_Member(root, tables[t]);
             /* "text": "text.txt" is one file named as a string. */

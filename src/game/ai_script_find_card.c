@@ -4,6 +4,10 @@
 #include "ai_script_read_byte.h"
 #include "ai.h"
 #include "ai_script_commands.h"
+#ifdef MEMORIES_PC
+#include "ai_opponent_data.h"   /* gDuel_bOpponentID */
+#include "pc/free_duel/duelists.h"
+#endif
 
 /* AI script opcode taking two operand bytes: a register that when non-zero
  * makes a face-down opponent card invisible to the scan, and the register to
@@ -28,6 +32,11 @@ void AiScript_FindDefenseStopper(void)
     AiActiveCard *others;
 
     hide_face_down = gAiScript_aMemory[AiScript_ReadByte()];
+#ifdef MEMORIES_PC
+    /* "sight" in the duelist's "ai" over what the script asked for
+       (pc/free_duel/duelists.h); its own answer when it says nothing. */
+    hide_face_down = Duelists_HidesFaceDown(gDuel_bOpponentID, hide_face_down);
+#endif
     result = AiScript_ReadByte();
     answer = 1;
 

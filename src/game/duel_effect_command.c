@@ -11,6 +11,7 @@
 #include "../unmatched.h"
 #ifdef MEMORIES_PC
 #include "pc/cards/cards.h"
+#include "pc/free_duel/duelists.h"
 #include "pc/text/text.h"
 #endif
 
@@ -365,6 +366,8 @@ u32 *func_800383DC(DuelEffectChannel *a0) {
     }
 #ifdef MEMORIES_PC
     v1 = (u32)Text_Resolve(D_8009B32E, (const u8 *)v1);   /* a translation's (text.h) */
+    /* then an added duelist's own name, which no translation has. */
+    v1 = (u32)Duelists_Text(D_8009B32E, (const u8 *)v1);
 #endif
 
     counter = *(u8 *)&a3->stream_58 + 1;

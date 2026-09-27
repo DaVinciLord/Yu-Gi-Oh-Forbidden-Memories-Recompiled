@@ -2,6 +2,9 @@
 #define D_8009B204_UNSIGNED
 #define DUEL_TERRAIN_SCALAR_IN_DATA
 #include "../types.h"
+#ifdef MEMORIES_PC
+#include "pc/free_duel/duelists.h"
+#endif
 #include "duel_scene_state.h"
 #include "duel_shuffle_both_decks.h"
 #include "duel_draw_status_numbers.h"
@@ -80,6 +83,21 @@ void Duel_InitScene(void)
     D_8009B174 = 0;
     if (D_8009B369 != 1) {
         if (gDuel_bOpponentID >= 0) {
+#ifdef MEMORIES_PC
+            /* The disc has no block for a duelist a mod added, so its base's
+               is read: that is what gives it a deck, drop pools and an AI
+               until "decks" and "drops" say otherwise (duelists.h). */
+            {
+                const s32 block = Duelists_BaseId(gDuel_bOpponentID);
+                File_RequestAsyncTransfer(
+                    0, 0,
+                    block * (DUELIST_DATA_SECTOR_COUNT - 1) +
+                        block + DUELIST_DATA_FIRST_SECTOR,
+                    DUELIST_DATA_SECTOR_COUNT, 0, 0,
+                    (s32)gDuel_awOpponentDeckPool
+                );
+            }
+#else
             File_RequestAsyncTransfer(
                 0, 0,
                 gDuel_bOpponentID * (DUELIST_DATA_SECTOR_COUNT - 1) +
@@ -87,6 +105,7 @@ void Duel_InitScene(void)
                 DUELIST_DATA_SECTOR_COUNT, 0, 0,
                 (s32)gDuel_awOpponentDeckPool
             );
+#endif
         }
         D_8009B1D5 = 0;
         gDuel_wSceneStateFlags = 1;
@@ -168,7 +187,15 @@ void Duel_InitScene(void)
             }
             p = (u8 *)gDuel_awPlayerDeck;
             D_8009B1D8 = p;
+            /* Duel Master K is dealt the player's own deck, and anything at
+               or past its id was too -- which caught every duelist a mod adds.
+               The base decides it, so a copy of Duel Master K still mirrors
+               and a copy of anybody else plays its own pool (duelists.h). */
+#ifdef MEMORIES_PC
+            if (Duelists_BaseId(gDuel_bOpponentID) < DUEL_MASTER_K_OPPONENT_ID) {
+#else
             if (gDuel_bOpponentID < DUEL_MASTER_K_OPPONENT_ID) {
+#endif
                 q = 0;
                 goto shuffle;
             }

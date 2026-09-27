@@ -20,12 +20,21 @@
 #define CARD_THUMB_BLOCK 0x580
 #define CARD_ART_RECORD 0x3060
 
+/* A Free Duel portrait: 48x48 at 8 bits a pixel, then a 64-entry palette
+ * (FREE_DUEL_PORTRAIT_IMAGE_SIZE and _RECORD_SIZE say the same in the game's
+ * constants). */
+#define PORTRAIT_SIDE 48
+#define PORTRAIT_PIXELS 2304
+#define PORTRAIT_RECORD 2432
+
 /* 1 on success; `why` says what went wrong otherwise. */
 int CardArt_FromImage(const char *path, unsigned char *record, char *why, size_t why_size);
 int CardArt_ThumbnailFromImage(const char *path, unsigned char *record, char *why, size_t why_size);
 /* The title plate alone, CARD_TITLE_BYTES, what a record holds at
  * CARD_TITLE_PIXELS. */
 int CardArt_TitleFromImage(const char *path, unsigned char *plate, char *why, size_t why_size);
+/* PORTRAIT_RECORD bytes: a duelist's face for the Free Duel grid. */
+int CardArt_PortraitFromImage(const char *path, unsigned char *record, char *why, size_t why_size);
 /* `name` in UTF-8. 0 when no serif font could be found; the plate is left
  * as it was. */
 int CardArt_TitleFromName(const char *name, unsigned char *plate);

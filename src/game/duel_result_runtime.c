@@ -1,5 +1,6 @@
 #ifdef MEMORIES_PC
 #include "pc/mods/mods.h"
+#include "pc/free_duel/duelists.h"
 #endif
 #define D_8009B0CC_IN_DATA
 #define D_8009B362_IN_DATA
@@ -233,6 +234,16 @@ void DuelScene_UpdateResultOutro(void)
             if (id < 0) {
                 id = 1;
             }
+#ifdef MEMORIES_PC
+            /* The disc has no block for a duelist a mod added, so the block
+               read here is its base's -- the same one the duel itself read
+               (duelists.h). Reading at the raw id would seek past the
+               duelist data altogether. */
+            id = Duelists_BaseId(id);
+            if (id <= 0) {
+                id = 1;
+            }
+#endif
             File_RequestAsyncTransfer(
                 0, 0,
                 id * DUELIST_DATA_SECTOR_COUNT + DUELIST_DATA_FIRST_SECTOR,
@@ -392,6 +403,22 @@ s32 Duel_CalcRankScoreChange(s32 arg0, s32 arg1)
 {
     DuelRankScoreChangeEntry *p = &gDuel_awRankScoreChange[arg0][0];
 
+#ifdef MEMORIES_PC
+    {
+        /* The rule as this opponent's mods have it (tables.h). The disc gives
+           every duelist the same forty copies of this table; "ranks" is what
+           lets one of them differ. */
+        const short *edited = Tables_Rank(arg0);
+
+        if (edited != 0) {
+            int k;
+            for (k = 0; k < TABLES_RANK_STEPS; k++) {
+                if (arg1 < edited[k * 2]) return edited[k * 2 + 1];
+            }
+            return edited[(TABLES_RANK_STEPS - 1) * 2 + 1];
+        }
+    }
+#endif
     while (1) {
         if (arg1 < p->threshold) {
             return p->score_change;

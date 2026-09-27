@@ -10,6 +10,7 @@
 #include "pc/cards/tables.h"
 #include "pc/cards/drops.h"
 #include "pc/cards/passwords.h"
+#include "pc/free_duel/page_box.h"
 #include "pc/saves/deck_menu.h"
 #include "pc/debug/log.h"
 #include "game/card_constants.h"
@@ -362,6 +363,8 @@ const unsigned char *Text_Resolve(int id, const unsigned char *retail)
 {
     const unsigned char *own = overrides && id >= 0 && id <= 0xFFFF ? overrides[id] : NULL;
     const unsigned char *card = NULL, *side = side_name(id), *drops = CardDrops_Text(id), *shop = DeckMenu_Text(id);
+    const unsigned char *page = FreeDuelPage_Text(id);
+    if (page) return page;   /* the Free Duel grid's page (free_duel/page_box.h) */
     if (drops) return drops; /* the results screen's added pages (drops.h) */
     if (shop) return shop;   /* the card shop's menu with DECK SLOTS (deck_menu.h) */
     if (CardPassword_Text(id)) return CardPassword_Text(id); /* View > Card passwords (passwords.h) */

@@ -24,6 +24,19 @@
 int TexturePack_Load(const char *directory, unsigned rank, int (*part)(const char *setting, void *context),
                      void *context, char *problems, size_t problems_size);
 void TexturePack_Unload(void);
+
+/* An image the port supplies rather than a pack: a mod's own picture for
+ * something the disc does not carry, keyed in the space
+ * TEXTURE_MOD_OFFSET_BASE names (texture_dump.h) and drawn once
+ * TextureDump_ModImage has tagged the upload with the same `offset`. The
+ * geometry is the texture's, as a manifest entry gives it: `words` 16-bit
+ * words across, `rows` down, `bpp` 4, 8 or 16, and the palette's own offset
+ * in that space with how many entries it has (0 for none). Registered
+ * images are the port's and outlive a pack being loaded or unloaded, so a
+ * mod need not carry a pack for one. Returns 0 when it could not be added;
+ * naming the same offset twice replaces it. */
+int TexturePack_AddImage(const char *file, unsigned offset, int words, int rows, int bpp, unsigned clut_offset,
+                         int clut_entries);
 /* Once a frame, on the main thread: reads what uploads asked for (an
  * upload can come from the interrupt tick, where reading is not safe). */
 void TexturePack_Service(void);

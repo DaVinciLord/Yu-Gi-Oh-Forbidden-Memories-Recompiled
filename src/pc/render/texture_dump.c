@@ -189,6 +189,27 @@ void TextureDump_Written(const void *destination, unsigned bytes)
     forget((uintptr_t)destination, (uintptr_t)destination + bytes);
 }
 
+void TextureDump_ModImage(const void *destination, unsigned bytes, unsigned offset)
+{
+    Delivery *delivery;
+    unsigned slot;
+    if (!TextureDump_Tags || !bytes) return;
+    forget((uintptr_t)destination, (uintptr_t)destination + bytes);
+    if (bytes > DELIVERY_BYTES) return;
+    slot = delivery_head++ % DELIVERIES;
+    delivery = &deliveries[slot];
+    memcpy(delivery_copies + (size_t)slot * DELIVERY_BYTES, destination, bytes);
+    delivery->destination = (uintptr_t)destination;
+    delivery->bytes = bytes;
+    /* Where a disc delivery puts lba * 2048 + offset. Everything that reads a
+       tag treats the two alike: what a tag names is settled by which entry
+       covers it, and the mod space is above every archive. */
+    delivery->disc_offset = TEXTURE_MOD_OFFSET_BASE + offset;
+    delivery->copy_offset = 0;
+    delivery->copy_bytes = bytes;
+    delivery->copy_disc = delivery->disc_offset;
+}
+
 int TextureDump_DiscFile(const char *path, int *lba, unsigned *size)
 {
     return disc_file_info ? disc_file_info(path, lba, size) : -2; /* -2: no disc yet */

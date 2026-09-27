@@ -668,6 +668,136 @@ static void rediscover(void)
 
 static void restored(void) { wanted_rediscover = 1; }
 
+/* --- images the port supplies (texture_pack.h) ----------------------------
+ *
+ * A mod's own picture for something the disc does not carry. These belong to
+ * the port and not to any pack directory, so they are kept here and their
+ * entries made again whenever the entry list is built: a pack loading or
+ * unloading must not lose them, and a mod carrying one picture need not carry
+ * a pack at all.
+ */
+typedef struct {
+    char *file;
+    uint32_t offset, clut_offset;
+    int words, rows, bpp, clut_entries;
+} PortImage;
+
+static PortImage *port_images;
+static int port_count, port_room;
+
+/* Entries in the mod space, told apart by their offset: no archive reaches
+ * that far, the manifest holding an entry below 1e9 and a disc below 700MB. */
+static void drop_port_entries(void)
+{
+    int i, kept = 0;
+    for (i = 0; i < entry_count; i++) {
+        if (entries[i].offset >= TEXTURE_MOD_OFFSET_BASE) {
+            free(entries[i].file);
+            free(entries[i].row_offsets);
+            free(entries[i].pixels);
+            free(entries[i].image);
+            continue;
+        }
+        entries[kept++] = entries[i];
+    }
+    entry_count = kept;
+}
+
+/* The offsets are already in the mod space, so the entries are absolute and
+ * resolve passes over them; it still sorts them in with the rest. */
+static int add_port_entries(void)
+{
+    Entry *more;
+    int i;
+    if (!port_count) return 1;
+    more = realloc(entries, (size_t)(entry_count + port_count) * sizeof(*entries));
+    if (!more) return 0;
+    entries = more;
+    for (i = 0; i < port_count; i++) {
+        const PortImage *image = &port_images[i];
+        Entry *entry = &entries[entry_count];
+        char *file = malloc(strlen(image->file) + 1);
+        if (!file) continue;
+        strcpy(file, image->file);
+        memset(entry, 0, sizeof(*entry));
+        entry->file = file;
+        entry->offset = image->offset;
+        entry->clut_offset = image->clut_offset;
+        entry->clut_entries = image->clut_entries;
+        entry->words = image->words;
+        entry->rows = image->rows;
+        entry->bpp = image->bpp;
+        entry->stride = (uint32_t)image->words;
+        entry->crop_width = image->words * per_word(image->bpp);
+        entry->absolute = 1;
+        entry->position = i;
+        entry_count++;
+    }
+    return 1;
+}
+
+int TexturePack_AddImage(const char *file, unsigned offset, int words, int rows, int bpp, unsigned clut_offset,
+                         int clut_entries)
+{
+    PortImage *image = NULL;
+    char *copy;
+    int i;
+
+    if (!file || !*file) return 0;
+    if (words < 1 || words > SOFT_GPU_WIDTH || rows < 1 || rows > SOFT_GPU_HEIGHT) return 0;
+    if (bpp != 4 && bpp != 8 && bpp != 16) return 0;
+    /* The same place twice is the same picture named again. */
+    for (i = 0; i < port_count; i++) {
+        if (port_images[i].offset == TEXTURE_MOD_OFFSET_BASE + offset) image = &port_images[i];
+    }
+    if (!image) {
+        if (port_count == port_room) {
+            const int room = port_room ? port_room * 2 : 8;
+            PortImage *bigger = realloc(port_images, (size_t)room * sizeof(*bigger));
+            if (!bigger) return 0;
+            port_images = bigger;
+            port_room = room;
+        }
+        image = &port_images[port_count];
+        memset(image, 0, sizeof(*image));
+        port_count++;
+    }
+    copy = malloc(strlen(file) + 1);
+    if (!copy) return 0;
+    strcpy(copy, file);
+    free(image->file);
+    image->file = copy;
+    image->offset = TEXTURE_MOD_OFFSET_BASE + offset;
+    image->clut_offset = clut_entries ? TEXTURE_MOD_OFFSET_BASE + clut_offset : 0;
+    image->clut_entries = clut_entries;
+    image->words = words;
+    image->rows = rows;
+    image->bpp = bpp;
+
+    /* What a pack would have brought up, so one picture needs no pack. */
+    if (!TextureDump_EnableShadow()) return 0;
+    if (!entry_of) entry_of = calloc((size_t)SOFT_GPU_WIDTH * SOFT_GPU_HEIGHT, sizeof(*entry_of));
+    if (!place_of) place_of = calloc((size_t)SOFT_GPU_WIDTH * SOFT_GPU_HEIGHT, sizeof(*place_of));
+    if (!entry_of || !place_of) return 0;
+    TextureDump_Paint = paint;
+    TextureDump_Prepare = prepare;
+    TextureDump_Sample = sample;
+    TextureDump_Forget = forget;
+    TextureDump_Follow = follow;
+    TextureDump_Recall = recall;
+    TextureDump_Restored = restored;
+
+    drop_port_entries();
+    if (!add_port_entries()) return 0;
+    /* The entries' order changes, and the maps name them by index. */
+    memset(entry_of, 0, (size_t)SOFT_GPU_WIDTH * SOFT_GPU_HEIGHT * sizeof(*entry_of));
+    resolved = 0;
+    wanted_resolve = 1;
+    generation++;
+    map_generation++;
+    return 1;
+}
+
 int TexturePack_Load(const char *from, unsigned rank, int (*part)(const char *setting, void *context), void *context,
                      char *problems, size_t problems_size)
 {
@@ -837,6 +967,8 @@ int TexturePack_Load(const char *from, unsigned rank, int (*part)(const char *se
      * disc is open, and an upload can ask for an image from the interrupt
      * tick. Until then paint only notes what it needs and sample sees no
      * image. */
+    drop_port_entries();
+    add_port_entries(); /* the port's own, which a pack unloading took with it */
     resolved = 0; /* the new entries, and the order, with the others */
     wanted_resolve = 1;
     generation++;

@@ -22,6 +22,37 @@
 #include "../../game/sound.h"
 #include "../../game/save_data.h"
 #include "../../game/display_object_helpers.h"
+#ifdef MEMORIES_PC
+#include "pc/free_duel/duelists.h"
+#include "pc/render/texture_dump.h"
+#include "pc/free_duel/page_box.h"
+
+/* Which page of forty the grid shows, and the duelist a cell stands for on it.
+ * The grid holds forty at a time whatever the roster is: page 0 is the disc's
+ * own -- Deck Build and the thirty-nine opponents -- and a page past it shows
+ * the duelists a mod added (notes/more-duelists.md). Every index the screen
+ * takes from the cursor is a cell; everything that means a duelist goes
+ * through here. */
+extern int gFreeDuel_nPage;
+
+static int cell_duelist(int cell)
+{
+    return gFreeDuel_nPage * FREE_DUEL_GRID_ENTRY_COUNT + cell;
+}
+
+/* How many pages the roster fills, always at least the disc's own. */
+static int page_count(void)
+{
+    return (Duelists_Count() + FREE_DUEL_GRID_ENTRY_COUNT - 1) / FREE_DUEL_GRID_ENTRY_COUNT;
+}
+
+void FreeDuel_ShowPage(int page);
+extern void *gFreeDuel_apCells[FREE_DUEL_GRID_ENTRY_COUNT];
+extern void *gFreeDuel_pPageBox;
+extern void *gFreeDuel_apPageArrows[2];
+extern void *gFreeDuel_pPortraits;
+
+#endif
 #define DISPLAY_OBJECT_RELEASE_IF_PRESENT_AMBIENT_OBJECT
 #include "../../game/display_object_core.h"
 #include "../../game/func_80039794.h"
@@ -89,20 +120,49 @@ void FreeDuel_PlaceCursor(DisplayObject *w, s32 arm)
     }
     index = gFreeDuel_bTargetColumn +
             gFreeDuel_bCursorRow * FREE_DUEL_GRID_COLUMN_COUNT;
+#ifdef MEMORIES_PC
+    if (!Duelists_Available(cell_duelist(index))) {
+        return;
+    }
+#else
     if (gFreeDuel_abGridAvailable[index] == 0) {
         return;
     }
+#endif
     slot = &D_8009B32E;
+#ifdef MEMORIES_PC
+    /* The string that names the duelist, which is the duelist's and not the
+     * cell's: on a later page they are not the same. */
+    trunc = cell_duelist(index) - 31960;
+#else
     trunc = index - 31960;
+#endif
     *slot = trunc;
     param = trunc;
+    /* Deck Build is duelist 0, and only it gets the bare name; everyone else
+     * gets the template with the win and loss counts. On a later page cell 0
+     * is a duelist, so the test is on the duelist. */
+#ifdef MEMORIES_PC
+    if (cell_duelist(index) != 0) {
+#else
     if (index != 0) {
+#endif
         param = 12;
         base = (SaveDataWorkspace *)D_801D0000;
+#ifdef MEMORIES_PC
+        /* A duelist a mod added keeps its record beside the save rather than
+         * in the block; the slot is the same either way (duelists.h). */
+        {
+            const u16 *record = Duelists_RecordSlot(&base->state, cell_duelist(index));
+            D_801D5608[0].pair.lo = (s16)record[0];
+            D_801D5608[0].pair.hi = (s16)record[1];
+        }
+#else
         D_801D5608[0].pair.lo =
             (s16)base->state.duelist_records[index].result.wins;
         D_801D5608[0].pair.hi =
             (s16)base->state.duelist_records[index].result.losses;
+#endif
     }
     TextBox_Create(0, param, 16, 204, 288, 16);
     func_80039A60((struct DuelEffectChannel *)panel);
@@ -121,6 +181,131 @@ DisplayObject *FreeDuel_SpawnSparkle(void)
     return x;
 }
 
+#ifdef MEMORIES_PC
+/* Show a page in the forty cells.
+ *
+ * A cell's texture slot and palette are fixed by the cell, so the sprites
+ * built once in FreeDuel_Init stand for whatever is put in those slots: only
+ * the texels change, and a cell the page does not fill is simply not drawn.
+ * That is what makes a page cost nothing in video memory over the grid the
+ * disc already had, which is the whole reason for paging.
+ *
+ * The portraits come from the forty records the screen was opened with, taken
+ * by base: a duelist a mod added has its base's face until it is given one.
+ */
+void FreeDuel_ShowPage(int page)
+{
+    RECT slot;
+    int cell;
+
+    if (page < 0) page = 0;
+    if (page >= page_count()) page = page_count() - 1;
+    gFreeDuel_nPage = page;
+
+    /* Which page this is, in the game's own letters on the title's row: the
+     * one band of the screen the scrolling grid never reaches. */
+    FreeDuelPage_Compose(page, page_count());
+    if (gFreeDuel_pPageBox) {
+        TextBox_Destroy((struct DuelEffectChannel *)gFreeDuel_pPageBox);
+        gFreeDuel_pPageBox = 0;
+    }
+    for (cell = 0; cell < 2; cell++) {
+        if (gFreeDuel_apPageArrows[cell]) {
+            DisplayObject_ReleaseIfPresent(gFreeDuel_apPageArrows[cell]);
+            gFreeDuel_apPageArrows[cell] = 0;
+        }
+    }
+    if (page_count() > 1) {
+        /* Channel 2: the screen's own name box is 0 and its "no deck" message
+         * is 1, and there are four. Channel 3 is Build Deck's and the
+         * Library's, and a box left there by either would be what this screen
+         * found, so the whole line goes in one box here. Creating a box only
+         * arms it -- it draws once it has been pumped, which is what the name
+         * box does too.
+         *
+         * Along the top of the picture, above the FREE DUEL artwork, which
+         * begins around 27 down. The string places its three runs itself
+         * (page_box.h). */
+        gFreeDuel_pPageBox = TextBox_Create(2, FREE_DUEL_PAGE_TEXT_ID, FREE_DUEL_PAGE_BOX_X, 0x01,
+                                            FREE_DUEL_PAGE_BOX_WIDTH, 0x10);
+        if (gFreeDuel_pPageBox) {
+            func_80039A60((struct DuelEffectChannel *)gFreeDuel_pPageBox);
+        }
+        /* The red arrow either side, which is the game's own: the card viewer
+         * puts the same one at the foot of its page, and the hand's card
+         * cycling puts the pair around a card. The last operand before the
+         * colour is which way it faces. */
+        for (cell = 0; cell < 2; cell++) {
+            DisplayObject *arrow =
+                DisplayObject_AcquireSlot(DisplayObject_FindFreeGeneralSlot(), 2);
+            if (!arrow) break;
+            /* The pair duel_scene_hand_actions.c puts either side of a card:
+             * it places this one on the left and the other on the right, so
+             * they are a matched set and face the way their side wants. The
+             * card viewer's arrow is red but has no left-facing sibling in
+             * the sheet -- the two ends would not match. */
+            DisplayObject_ConfigureSpriteAtPosition(arrow, cell ? 0x120 : 0x1E, 0x01,
+                                                    3, 1, cell ? 0 : 2, 0xB, 0x20C);
+            DisplayObject_SelectOrderingTable1(arrow);
+            DisplayObject_SetDepthOffset(arrow, 0xA);
+            arrow->flags |= 0x28;
+            gFreeDuel_apPageArrows[cell] = arrow;
+        }
+    }
+
+    for (cell = 0; cell < FREE_DUEL_GRID_ENTRY_COUNT; cell++) {
+        DisplayObject *obj = (DisplayObject *)gFreeDuel_apCells[cell];
+        const int duelist = cell_duelist(cell);
+        const int shown = Duelists_Valid(duelist) && Duelists_Available(duelist);
+        const u8 *record;
+
+        if (obj) {
+            if (shown) obj->flags |= DISPLAY_OBJECT_FLAG_RENDERABLE;
+            else obj->flags &= ~DISPLAY_OBJECT_FLAG_RENDERABLE;
+        }
+        if (!shown || !gFreeDuel_pPortraits) continue;
+
+        /* Its own face when it has one, its base's otherwise. A record a mod
+         * made has no disc offset behind it, so the texture pack has nothing
+         * to put over it -- which is what stops an added duelist wearing the
+         * pack's picture of whoever it copies. */
+        record = Duelists_Portrait(duelist);
+        if (!record) {
+            record = (const u8 *)gFreeDuel_pPortraits +
+                     Duelists_BaseId(duelist) * FREE_DUEL_PORTRAIT_RECORD_SIZE;
+        }
+        /* The image, then its palette, into the slot this cell draws from --
+         * the same places FreeDuel_Init put the disc's forty. */
+        slot.x = (s16)((cell < 25 ? 128 : 256) +
+                       (cell % FREE_DUEL_GRID_COLUMN_COUNT) * 24);
+        slot.y = (s16)(256 + ((cell < 25 ? cell : cell - 25) /
+                              FREE_DUEL_GRID_COLUMN_COUNT) * 48);
+        slot.w = 24;
+        slot.h = 48;
+        {
+            /* A picture a mod gave is tagged as its own before it goes up, so
+             * the texture pack knows these words are that file's and the
+             * scaled picture draws it at its own size (duelists.h). A face
+             * from the disc is tagged by the read that brought it. */
+            const int key = Duelists_PortraitKey(duelist);
+            if (key >= 0) {
+                TextureDump_ModImage(record, FREE_DUEL_PORTRAIT_IMAGE_SIZE, (unsigned)key);
+                TextureDump_ModImage(record + FREE_DUEL_PORTRAIT_IMAGE_SIZE,
+                                     FREE_DUEL_PORTRAIT_RECORD_SIZE - FREE_DUEL_PORTRAIT_IMAGE_SIZE,
+                                     (unsigned)key + FREE_DUEL_PORTRAIT_IMAGE_SIZE);
+            }
+        }
+        LoadImage2(&slot, (u32 *)record);
+        slot.x = (s16)((cell / 16) * 64 + 128);
+        slot.y = (s16)((cell & 15) + 496);
+        slot.w = 64;
+        slot.h = 1;
+        LoadImage2(&slot, (u32 *)(record + FREE_DUEL_PORTRAIT_IMAGE_SIZE));
+    }
+    DrawSync(0);
+}
+#endif
+
 void FreeDuel_Init(u8 *src)
 {
     s32 i;
@@ -135,10 +320,38 @@ void FreeDuel_Init(u8 *src)
     DisplayObject *obj;
     RECT *clut;
 
+#ifdef MEMORIES_PC
+    /* Kept before anything else: the upload loops below walk `src` along the
+     * block as they go, so the start of it has to be taken now for a page
+     * turn to find the records again. */
+    gFreeDuel_pPortraits = src;
+    /* The screen's display objects do not outlive it -- the grid's forty are
+     * acquired again below, every visit -- so the page line's from the last
+     * one are gone, and the pointers kept to them name whatever holds those
+     * slots now. FreeDuel_ShowPage releases what it is about to remake, which
+     * would take somebody else's object with it: the "select opponent" box's
+     * backdrop is the one that shows. They are forgotten here instead, before
+     * anything of this visit is acquired. */
+    {
+        DuelEffectChannel *box = &D_800EB0F8[2];
+        box->field_28 = 0;
+        box->field_2C = 0;
+        box->field_30 = 0;
+        gFreeDuel_pPageBox = 0;
+        gFreeDuel_apPageArrows[0] = 0;
+        gFreeDuel_apPageArrows[1] = 0;
+    }
+#endif
     if (gFreeDuel_bReturnFlags & 0x80) {
+#ifdef MEMORIES_PC
+        rec = Duelists_RecordSlot(&((SaveDataWorkspace *)D_801D0000)->state,
+                                  cell_duelist(gFreeDuel_bCursorRow * FREE_DUEL_GRID_COLUMN_COUNT +
+                                               gFreeDuel_bCursorColumn));
+#else
         rec = gFreeDuel_aDuelistRecords[
             gFreeDuel_bCursorRow * FREE_DUEL_GRID_COLUMN_COUNT +
             gFreeDuel_bCursorColumn].counts;
+#endif
         if (D_8009B362 == 1) {
             rec++;
         }
@@ -180,6 +393,18 @@ void FreeDuel_Init(u8 *src)
             gFreeDuel_abGridAvailable[i] = 0;
         }
     }
+#ifdef MEMORIES_PC
+    /* A duelist a mod added has no campaign flag to unlock it: it appears when
+     * the running save meets the conditions its mod wrote, and from the start
+     * when it wrote none. A stock duelist a mod gave conditions to answers to
+     * those in place of its flag, which is why this comes after the flags and
+     * not before them (duelists.h). Read afresh every time the screen opens,
+     * so a win in the duel just left opens up what it was the condition for. */
+    for (i = 1; i < Duelists_Count(); i++) {
+        if (i < FREE_DUEL_GRID_ENTRY_COUNT && !Duelists_HasUnlock(i)) continue;
+        Duelists_SetAvailable(i, Duelists_Unlocked(&((SaveDataWorkspace *)D_801D0000)->state, i));
+    }
+#endif
     do {
     } while (IsIdleGPU(10) != 0);
     count = 0;
@@ -231,7 +456,14 @@ void FreeDuel_Init(u8 *src)
     }
 done:
     for (i = 0; i < 25; i++) {
+#ifdef MEMORIES_PC
+        /* Every cell gets its sprite, shown or not: turning the page changes
+         * which duelists are there, and a cell with no sprite could not be
+         * made to appear without building one. */
+        if (1) {
+#else
         if (gFreeDuel_abGridAvailable[i] != 0) {
+#endif
             obj = DisplayObject_AcquireSlot(DisplayObject_FindFreeGeneralSlot(), 1);
             DisplayObject_ConfigureScreenSprite(obj,
                           (i % FREE_DUEL_GRID_COLUMN_COUNT) * 56 + 20,
@@ -241,10 +473,17 @@ done:
                           (i / 16) * 64 + 128, (i & 15) + 496);
             obj->attribute |= 0x1000000;
             obj->flags &= ~DISPLAY_OBJECT_FLAG_SCREEN_SPACE;
+#ifdef MEMORIES_PC
+            gFreeDuel_apCells[i] = obj;
+#endif
         }
     }
     for (k = 25, i = 0; i < 15; i++, k++) {
+#ifdef MEMORIES_PC
+        if (1) {
+#else
         if (gFreeDuel_abGridAvailable[k] != 0) {
+#endif
             obj = DisplayObject_AcquireSlot(DisplayObject_FindFreeGeneralSlot(), 1);
             DisplayObject_ConfigureScreenSprite(obj,
                           (i % FREE_DUEL_GRID_COLUMN_COUNT) * 56 + 20,
@@ -254,8 +493,15 @@ done:
                           (k / 16) * 64 + 128, (k & 15) + 496);
             obj->attribute |= 0x1000000;
             obj->flags &= ~DISPLAY_OBJECT_FLAG_SCREEN_SPACE;
+#ifdef MEMORIES_PC
+            gFreeDuel_apCells[k] = obj;
+#endif
         }
     }
+#ifdef MEMORIES_PC
+    /* The portraits the page wants, and which cells it shows. */
+    FreeDuel_ShowPage(gFreeDuel_nPage);
+#endif
     obj = DisplayObject_AcquireSlot(DisplayObject_FindFreeGeneralSlot(), 2);
     DisplayObject_ConfigureSpriteAtPositionWithResource(obj, 0, 0, 0, 0, 0, 16, 0, D_801AF000);
     DisplayObject_SetDepthOffset(obj, 10);
@@ -416,6 +662,27 @@ void FreeDuel_UpdateScreen(void)
         return;
     }
 
+#ifdef MEMORIES_PC
+    /* L1 and R1 turn the page. The screen reads only the pad's directions,
+     * Cancel and Confirm, so the shoulder buttons are free here, and they
+     * already mean "by a page" on the Library's grid. */
+    if (page_count() > 1 && (gInput_wPad1Pressed & PAD_BUTTON_L1_R1_MASK) != 0) {
+        const int want = gFreeDuel_nPage + ((gInput_wPad1Pressed & PAD_BUTTON_R1) ? 1 : -1);
+        if (want >= 0 && want < page_count()) {
+            FreeDuel_ShowPage(want);
+            /* The name and the win/loss box are only rebuilt when the cursor
+             * arrives somewhere, so the page asks for that itself. */
+            if (gFreeDuel_pCursorWidget) {
+                FreeDuel_PlaceCursor(gFreeDuel_pCursorWidget, 1);
+            }
+            SD_SEPlayFull(6);
+        } else {
+            SD_SEPlayFull(9);
+        }
+        return;
+    }
+#endif
+
     if ((gInput_wPad1Held & PAD_DIRECTION_MASK) != 0) {
         if ((gInput_wPad1Held & PAD_DIRECTION_RIGHT) != 0) {
             if (++gFreeDuel_bTargetColumn >= FREE_DUEL_GRID_COLUMN_COUNT) {
@@ -446,12 +713,23 @@ void FreeDuel_UpdateScreen(void)
         if ((gInput_wPad1Pressed & PAD_BUTTON_CONFIRM_MASK) == 0) {
             return;
         }
+#ifdef MEMORIES_PC
+        if (!Duelists_Available(cell_duelist(gFreeDuel_bCursorRow * FREE_DUEL_GRID_COLUMN_COUNT +
+                                             gFreeDuel_bCursorColumn))) {
+            return;
+        }
+        /* Deck Build is duelist 0, which is the top left of the first page
+         * only: on a later page that cell is somebody to duel. */
+        if (cell_duelist(gFreeDuel_bCursorRow * FREE_DUEL_GRID_COLUMN_COUNT +
+                         gFreeDuel_bCursorColumn) == 0) {
+#else
         if (gFreeDuel_abGridAvailable[
                 gFreeDuel_bCursorRow * FREE_DUEL_GRID_COLUMN_COUNT +
                 gFreeDuel_bCursorColumn] == 0) {
             return;
         }
         if ((gFreeDuel_bCursorColumn | gFreeDuel_bCursorRow) == 0) {
+#endif
             BuildDeck_EnterNarrowConfirmMode();
             D_8009B269 = 6;
             gFreeDuel_bReturnFlags = 0x40;
@@ -472,8 +750,14 @@ void FreeDuel_UpdateScreen(void)
         gFreeDuel_bReturnFlags = 0x80;
         func_80024DC8(
             -1,
+#ifdef MEMORIES_PC
+            /* The opponent, which is the cell only on the first page. */
+            cell_duelist(gFreeDuel_bCursorRow * FREE_DUEL_GRID_COLUMN_COUNT +
+                         gFreeDuel_bCursorColumn),
+#else
             gFreeDuel_bCursorRow * FREE_DUEL_GRID_COLUMN_COUNT +
                 gFreeDuel_bCursorColumn,
+#endif
             0x6000, 0x6000);
         D_8009B368 = 6;
         D_8009B26C = 3;

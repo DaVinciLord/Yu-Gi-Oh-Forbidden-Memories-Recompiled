@@ -3,6 +3,7 @@
  * with. Called from the memory card dialog's port path
  * (src/game/mem_card_dialog_runtime.c) once the menu has finished. */
 #include "save_cards.h"
+#include "pc/free_duel/duelists.h"
 #include "save_menu.h"
 #include "save_slots.h"
 #include "pc/cards/cards.h"
@@ -37,6 +38,7 @@ void SaveCards_Saved(const void *state, unsigned sequence)
 {
     set_tokens();
     Cards_SaveWritten(state, sequence);
+    Duelists_SaveWritten(state, sequence);
     tell_mods(MEMORIES_EVENT_SLOT_SAVE, sequence);
 }
 

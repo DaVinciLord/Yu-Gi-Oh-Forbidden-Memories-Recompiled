@@ -478,6 +478,30 @@ The [FM Editor](../tools/pc/fm_editor/README.md) (`python tools/pc/fm_editor`)
 reads these tables and the cards out of the player's own game files and
 writes a mod folder whose `mod.json` holds only what was changed.
 
+## Duelists: more than the disc has
+
+The Free Duel grid holds forty because the disc lays out forty. A mod may add
+its own past that, replace one of the disc's, and give each a deck, drop pools,
+a portrait, an AI and conditions for when it appears — as files in four folders
+beside the manifest, with no code at all.
+
+```
+shadow-duelists/
+├── mod.json                     switches the mod on; nothing about duelists
+├── duelists/dark-simon.json     who it is
+├── decks/dark-simon.json        what it plays
+├── drops/dark-simon.json        what you win from it
+└── portraits/dark-simon.png     its face
+```
+
+The filename is the duelist's id, and anything missing falls back to the
+duelist it copies. The same folders are read from the player's own directory,
+so a character can be added without touching a mod.
+
+[More duelists](more-duelists.md) has every property, what each folder holds,
+how weights, unlocks, the AI row and the rank score work, and the disc layouts
+the whole thing rests on.
+
 ## Translations
 
 A mod may put the game's text in another language: dialogue, menus, card
@@ -545,7 +569,7 @@ the player's settings file as `mod.<id>.<key>`, and read from
 `MEMORIES_MOD_<ID>_<KEY>` first when that is set; a key is letters, digits,
 `_` and `-`, and `order` is the manager's), `disc_file_start`/
 `disc_read`, `pad`, and from mod API 2 `now_us` (a clock) and `map_fixed`
-(memory at an address the mod chooses, as 3D Monsters' model arenas need). API 4 adds `hook`/`unhook`/`symbol`, below.
+(memory at an address the mod chooses, as 3D Monsters' model arenas need). API 4 adds `hook`/`unhook`/`symbol`, below; API 5 adds `duelist_id`, which resolves an added duelist's identity to the id it has this run as `card_id` does for a card.
 A mod that uses an entry newer than API 1 should refuse to start when
 `host->api` is older.
 

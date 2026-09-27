@@ -10,6 +10,7 @@
 #include "cards.h"
 #include "art.h"
 #include "tables.h"
+#include "pc/free_duel/duelists.h"
 #include "pc/text/glyphs.h"
 #include "pc/text/text.h"
 #include "pc/mods/mods.h"
@@ -780,6 +781,9 @@ void Cards_Build(void)
     }
     /* The mods' fusions, equips, rituals, drops and decks name cards, the
      * new ones included. */
+    /* The duelists a mod adds, before the tables: "drops" and "decks" name
+     * them, so they have to exist by the time those are read. */
+    Duelists_Build();
     Tables_Build();
 }
 

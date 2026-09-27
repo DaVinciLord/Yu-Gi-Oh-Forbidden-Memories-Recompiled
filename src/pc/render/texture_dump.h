@@ -84,6 +84,15 @@ int TextureDump_DiscFile(const char *path, int *lba, unsigned *size);
 void TextureDump_Delivered(const void *destination, unsigned bytes, int lba, unsigned offset_in_sector);
 /* Bytes of game memory written by anything but a delivery (Memories_GuestWritten). */
 void TextureDump_Written(const void *destination, unsigned bytes);
+/* An image the port supplies rather than the disc -- a mod's own picture for
+ * something the disc does not carry. It is tagged in a space of its own above
+ * every disc offset, so a pack image can be keyed to it exactly as to a disc
+ * image and nothing downstream of the tag knows the difference
+ * (texture_pack.h). `offset` is that space's; the caller keeps it apart.
+ * One call per upload, so a picture and its palette are registered
+ * separately, as they are delivered separately. */
+#define TEXTURE_MOD_OFFSET_BASE 0xF0000000u
+void TextureDump_ModImage(const void *destination, unsigned bytes, unsigned offset);
 void TextureDump_Loaded(int x, int y, int w, int h, const uint16_t *pixels);
 void TextureDump_Moved(int sx, int sy, int dx, int dy, int w, int h);
 void TextureDump_Cleared(int x, int y, int w, int h);

@@ -6,6 +6,10 @@
 #include "duel_card_layout.h"
 #include "ai_script_read_byte.h"
 #include "ai_script_commands.h"
+#ifdef MEMORIES_PC
+#include "ai_opponent_data.h"   /* gDuel_bOpponentID */
+#include "pc/free_duel/duelists.h"
+#endif
 
 void AiScript_LoadDeckSize(void)
 {
@@ -113,6 +117,11 @@ void AiScript_FindStrongest(void)
     type = table[AiScript_ReadByte()];
     best_power = -1;
     hide_face_down = table[AiScript_ReadByte()];
+#ifdef MEMORIES_PC
+    /* "sight" in the duelist's "ai" over what the script asked for
+       (pc/free_duel/duelists.h); its own answer when it says nothing. */
+    hide_face_down = Duelists_HidesFaceDown(gDuel_bOpponentID, hide_face_down);
+#endif
     sets = table[AiScript_ReadByte()];
     result = AiScript_ReadByte();
 
@@ -201,6 +210,11 @@ void AiScript_FindWeakest(void)
     type = table[AiScript_ReadByte()];
     best_power = CARD_STAT_MAX;
     hide_face_down = table[AiScript_ReadByte()];
+#ifdef MEMORIES_PC
+    /* "sight" in the duelist's "ai" over what the script asked for
+       (pc/free_duel/duelists.h); its own answer when it says nothing. */
+    hide_face_down = Duelists_HidesFaceDown(gDuel_bOpponentID, hide_face_down);
+#endif
     sets = table[AiScript_ReadByte()];
     result = AiScript_ReadByte();
 

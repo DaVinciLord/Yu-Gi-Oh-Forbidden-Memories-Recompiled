@@ -1,4 +1,7 @@
 #include "../types.h"
+#ifdef MEMORIES_PC
+#include "pc/free_duel/duelists.h"
+#endif
 #include "ai.h"
 #include "ai_constants.h"
 #include "ai_opponent_data.h"
@@ -171,11 +174,20 @@ void AiScript_LoadOpponentData(void)
     index = mem[AiScript_ReadByte()];
     field = mem[AiScript_ReadByte()];
     dst = AiScript_ReadByte();
+#ifdef MEMORIES_PC
+    {   /* The duelist's own row when a mod gave it one, its base's otherwise
+           (duelists.h): the table below has an entry per duelist the disc
+           has, and an added duelist is past the end of it. */
+        const signed char *row = Duelists_AiRow(index);
+        mem[dst] = field == 0 ? row[1] * 100 : row[field + 1];
+    }
+#else
     if (field == 0) {
         mem[dst] = gDuel_aOpponentData[index].values[1] * 100;
     } else {
         mem[dst] = gDuel_aOpponentData[index].values[field + 1];
     }
+#endif
 }
 
 void AiScript_Store(void)

@@ -20,6 +20,7 @@
 #ifdef MEMORIES_PC
 #include "dialog_choice.h"
 #include "pc/cards/cards.h"
+#include "pc/free_duel/duelists.h"
 #include "pc/text/glyphs.h"
 #include "pc/text/text.h"
 #endif
@@ -78,6 +79,7 @@ void TextBox_BuildStep(DuelEffectChannel *object)
            strings that spell out how many cards there are. */
         text = (u8 *)Cards_Text((u16)object->field_36,
                                  Text_Resolve((u16)object->field_36, text));
+        text = (u8 *)Duelists_Text((u16)object->field_36, text);
 #endif
         object->text_00 = text;
         object->field_56 = 0;

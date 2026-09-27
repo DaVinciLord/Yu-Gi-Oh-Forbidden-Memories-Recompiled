@@ -163,6 +163,16 @@ struct MemoriesModHost {
     void (*draw_text)(const MemoriesModHost *, int x, int middle, const char *text, uint32_t rgb, int scale);
     int (*text_width)(const MemoriesModHost *, const char *text, int scale);
     void (*fill)(const MemoriesModHost *, int x, int y, int w, int h, uint32_t rgb, unsigned alpha);
+
+    /* --- API 5 ---
+     * Resolve a stable "mod-id:duelist-key" identity to the id that duelist
+     * has this run, as card_id does for a card: the id depends on which mods
+     * are applied, in what order, and what slots they asked for, so it cannot
+     * be written down in advance. 0 for a duelist not here this run, and for
+     * one of the disc's own, which its id already names
+     * (pc/free_duel/duelists.h). Answers once the duelist list is built,
+     * which is before any screen shows it. */
+    int (*duelist_id)(const MemoriesModHost *, const char *identity);
 };
 
 /* The symbol a mod's object defines, and its type. */

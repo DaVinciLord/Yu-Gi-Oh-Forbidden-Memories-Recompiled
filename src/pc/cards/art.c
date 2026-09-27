@@ -245,6 +245,29 @@ int CardArt_ThumbnailFromImage(const char *path, unsigned char *record, char *wh
     return image_into(path, record, 1, why, why_size);
 }
 
+/* A Free Duel portrait record: the 48x48 image at 8 bits a pixel, then its
+ * 64-entry palette, which is what the screen uploads and the disc holds forty
+ * of (notes/more-duelists.md). The same shape as a card's, at another size. */
+int CardArt_PortraitFromImage(const char *path, unsigned char *record, char *why, size_t why_size)
+{
+    int width, height;
+    Rgb *source = load_png(path, &width, &height), *art;
+    unsigned short clut[256];
+
+    if (!source) {
+        snprintf(why, why_size, "%s is not a PNG it could read", path);
+        return 0;
+    }
+    art = malloc((size_t)PORTRAIT_SIDE * PORTRAIT_SIDE * sizeof(*art));
+    if (!art) { free(source); return 0; }
+    resample(source, width, height, art, PORTRAIT_SIDE, PORTRAIT_SIDE);
+    quantize(art, PORTRAIT_SIDE * PORTRAIT_SIDE, 63, clut, record);
+    put_clut(record + PORTRAIT_PIXELS, clut, 64);
+    free(art);
+    free(source);
+    return 1;
+}
+
 /* --- the title plate --------------------------------------------------- */
 
 static void put_ink(unsigned char *plate, int x, int y, int ink)
