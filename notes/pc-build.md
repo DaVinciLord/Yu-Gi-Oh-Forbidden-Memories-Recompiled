@@ -744,34 +744,54 @@ save loaded through the save slot menu:
 ### Language (Game > Language)
 
 Game > Language puts the game's own European translations in the US game:
-English (US), the default, English (Europe), French, German, Italian and
-Spanish (the menu writes Francais and Espanol until its font has accents).
-The text comes from the player's own PAL disc at startup; nothing of it is in
-the repository or the release. A language can be picked when a PAL disc that
-has it is in `game/languages` or `game/pal`, beside the US disc (also
-`game/languages` and `game/pal` beside the program or in the current
-directory; `MEMORIES_LANGUAGES_DIR` names one folder instead of all
-those). Any `.bin`, or the `.bin` a `.cue` names, is read for what it is,
-never by its name: SYSTEM.CNF's SLES-03947 to 03951, and the language
-pack's three file ids in WA_MRG. One disc of France, Germany, Italy or
-Spain has all four of those languages; the port takes the language's own
-disc first, then the Italian or Spanish one (which carry the final text of
-all four), then the others. English (Europe) comes only from SLES-03947.
-Without a disc the entry is grey and a last row says to put the PAL disc in
-`game/languages`.
+English (US), the default, English (Europe), Français, Deutsch, Italiano and
+Español. Their text ships with the port, one listing a language in
+`languages/` (`en-eu.txt`, `fr.txt`, `de.txt`, `it.txt`, `es.txt`), which
+the build copies beside the program and the release packs; no PAL disc is
+needed. The packs are the port's own reading of the PAL discs, written by
+`tools/pc/export_languages.py` (below); they are the one exception to
+"nothing of the game in the repository", text only, as the team agreed.
+The port reads `languages/<name>.txt` beside the program, else in the
+current directory. When a pack is not there, a PAL disc is read instead:
+any `.bin`, or the `.bin` a `.cue` names, in `game/languages` or
+`game/pal` beside the US disc (also beside the program or in the current
+directory), found by what it is, never by its name (SYSTEM.CNF's
+SLES-03947 to 03951 and the language pack's three file ids in WA_MRG);
+each language from its own country's disc first. `MEMORIES_LANGUAGES_DIR`
+names one folder to look in for both packs and discs, instead of all
+those. A language with neither is greyed in the menu and named in the log
+(`MEMORIES_TRACE=menu`).
 
 The choice is the `language` setting (0-5, `MEMORIES_LANGUAGE`), saved at
 once and taken up at the next launch, as a translation mod is: the menu
 offers Restart now, Later or Cancel. A mod's translation stands over it
 string by string. What the text is and how it is read and spaced is in
 notes/translation.md, "The official languages" (src/pc/text/language.c,
-pal_text.c; the spacing hook in text_box_build_step.c). Tested: CTest
-`pc_pal_text` (a made-up pack), and in the game with Spanish the name
-entry, Simon's talk and his choice, the duel's hand, the card viewer and
-RESULTS (whose pages stay
-English in phase 1); French with a long line of its own; an empty folder with Spanish
-chosen (the game in English, the log saying no disc has it). The six smoke
-cases are unchanged with English (US).
+pal_text.c; the spacing hook in text_box_build_step.c).
+
+**The packs.** `python3 tools/pc/export_languages.py --discs game/pal`
+writes them again from the five PAL discs, with a built game (it runs the
+game with `MEMORIES_EXPORT_LANGUAGES=<folder>`, which writes each
+language's listing from the first source that has it and exits, so the
+packs are byte for byte what the disc source gives). `--check` compares
+instead of writing: `--discs game/pal --check` says the committed packs are
+what the discs give, and `--discs languages --check` that the port reads
+the packs back unchanged. They are UTF-8 with LF line ends
+(`.gitattributes`); a carriage return an editor adds is dropped on reading.
+
+Tested: CTest `pc_pal_text` (a made-up pack); both `--check`s; with only
+the packs beside the program (`MEMORIES_LANGUAGES_DIR` on an empty folder
+for the discs' side, and the default run, whose log names
+`languages/es.txt`), Spanish, French and German in the game: the name
+entry, Simon's talk and his choice, the duel's hand, the Library's card
+view, RESULTS (whose pages stay English in phase 1) and the card drops'
+list (`11 CARTAS MÁS`, `PÁGINA 1 DE 2`, `NUEVA`, the accented capitals of
+the small letters); HD text (the Forbidden Memories HD mod's setting, at
+Internal 2x) against it off, with Spanish in the Library's card view: the
+smooth letters, `ú` among them. In a window: every language enabled with the packs,
+all greyed with an empty `MEMORIES_LANGUAGES_DIR`; choosing Español and
+Restart now started the game again in Spanish from the pack. The six
+smoke cases are unchanged with English (US).
 
 ### Present pass (Video > Color)
 

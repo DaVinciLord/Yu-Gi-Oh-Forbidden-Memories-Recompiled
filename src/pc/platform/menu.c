@@ -243,16 +243,14 @@ static Menu submenus[SUB_COUNT] = {
     {"Duel rank", {{"Off", 0, ITEM_RADIO, 0, SET_RANK_METER, 0},
                    {"Rank", 0, ITEM_RADIO, 0, SET_RANK_METER, 1},
                    {"Rank and score", 0, ITEM_RADIO, 0, SET_RANK_METER, 2}}, 3},
-    /* The game's own translations, from the player's PAL disc (language.h);
-     * labels and the last row's state set by update_language_items. */
+    /* The game's own translations (language.h); labels and states set by
+     * update_language_items. */
     {"Language", {{"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_US},
                   {"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_EN_EU, ITEM_GROUP_BREAK},
                   {"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_FR},
                   {"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_DE},
                   {"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_IT},
-                  {"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_ES},
-                  {"Put the PAL disc in game/languages", 0, ITEM_ACTION, 0, -1, 0,
-                   ITEM_GROUP_BREAK | ITEM_DISABLED}}, 7},
+                  {"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_ES}}, 6},
 };
 
 static int open_menu = -1, hot_item = -1, hover_bar = -1, grabbed, ready, visible = 1;
@@ -714,20 +712,18 @@ static void layout_bar(void)
     }
 }
 
-/* A language whose disc is not there cannot be chosen; the hint under
- * them says where the disc goes, while one is missing. */
+/* A language whose text is not there (language.h) cannot be chosen. */
 static void update_language_items(void)
 {
     Menu *menu = &submenus[SUB_LANGUAGE];
-    int i, missing = 0;
+    int i;
     for (i = 0; i < LANGUAGE_COUNT; i++) {
         Item *item = &menu->items[i];
         int available = Language_Available(item->value);
         item->label = Language_Label(item->value);
         item->flags = (item->flags & ~ITEM_DISABLED) | (available ? 0 : ITEM_DISABLED);
-        missing |= !available;
+        if (!available) LOG(LOG_MENU, "menu: no text for %s; its Language entry is off", item->label);
     }
-    menu->count = LANGUAGE_COUNT + (missing != 0);
 }
 
 static int language_before;

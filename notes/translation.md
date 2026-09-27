@@ -443,11 +443,17 @@ compiler.
 
 Game > Language (notes/pc-build.md, "Language") puts in the game the
 European releases' own translations, English (Europe), French, German,
-Italian and Spanish, read at startup from the player's PAL disc and
-handed to the same machinery as a mod's text. Nothing of those discs is in
-the repository: the port knows where the text is and how to read it, and
-which letter each language's font draws on a code; the words come off the
-disc.
+Italian and Spanish, handed at startup to the same machinery as a mod's
+text. Their text ships with the port: `languages/en-eu.txt`, `fr.txt`,
+`de.txt`, `it.txt` and `es.txt`, one listing a language in this file's
+format, which the build copies beside the program. This is the one
+exception to "never commit game data", agreed by the team: the text
+only, as a transcription; the pictures with words and everything else on
+the discs stay out. The packs are not written by hand: they are the port's
+own reading of the PAL discs (`tools/pc/export_languages.py --discs
+game/pal` writes them again; `--check` compares), so a fix to the reading
+below is a fix to the packs once they are exported again. A PAL disc is
+still read when a pack is not there.
 
 **Where the text is.** Unlike the US disc, the PAL discs keep no text in
 the executable. DATA/WA_MRG.MRG has a pack per language (English, French,
@@ -491,12 +497,16 @@ the US text:
   each language's font draws its own way (the tables in pal_text.c).
 
 **Sources.** Where the text comes from is one table in language.c
-(`sources`: whether a source has the language, and its listing): today
-only the PAL discs. A pack the release ships (phase 1b: a tool writes
-each language's listing with `PalText_Listing`, from the discs) goes in
-that table ahead of the discs, which stay a source; the rest (the port's
-own strings, the compiling, the spacing) does not change. Images with
-words stay disc-only.
+(`sources`: whether a source has the language, and its listing): the pack
+first, then the disc. `MEMORIES_EXPORT_LANGUAGES=<folder>` makes the game
+write each language's listing from the first source that has it and exit;
+the exporter runs it with `MEMORIES_LANGUAGES_DIR` on the discs, so a pack
+is byte for byte the disc's listing, and pointed at the packs it shows they
+read back unchanged. Each language is read off its own country's disc
+(SLES-03947 to 03951); English (Europe) has one glyph with no character,
+`{g 9C}` in the debug menu `51`. The port's own strings (below) are not in
+the packs: they are added after either source. Images with words stay
+disc-only, and English.
 
 **Under the mods.** The language is compiled first and a mod's string
 stands over it, string by string, so pt-BR over Spanish is pt-BR where it
@@ -508,7 +518,8 @@ with a full translation mod.
 
 **The port's own strings** (FE00-FE10 above) come with the language where
 written: Spanish has them (NUEVA, `%d CARTA MÁS`, `%d CARTAS MÁS`,
-`PÁGINA %d DE %d`, RANURAS; the small letters draw MÁS as MAS). The
+`PÁGINA %d DE %d`, RANURAS; the small letters draw the accented
+capitals, so MÁS and PÁGINA show their accents). The
 Spanish shop menu's four lines have 43 letters of the box's 44, so DECK
 SLOTS stays out of it (F6 still opens the slots). French, German and
 Italian keep the port's English for now: phase 2, for a speaker to write.
@@ -541,8 +552,11 @@ condition, no PAL string says TOTAL ANNIHILATION, and `41`/`42` jump into
 `40`'s tail, so under the US screens an attrition or Exodia win would show
 one page twice and never the statistics. The images with words (main menu,
 game over, the results' headings) stay English. Six German card texts have more than
-the 8 lines the duel's card viewer shows (untested; the text box waits for
-a button past its height rather than stopping, as with the dialogue).
+the 8 lines of the US card view (D10C, D111-D114 with 10, D1DA with 9).
+Seen in the Library with 012 (Barbar Nr. 2): the ninth line is drawn on the
+box's lower edge and the tenth is on a second page, which the view never
+turns to (Cross goes on to the 3D model); nothing stops. The PAL view's
+box is laid out by code of its own (phase 2).
 
 **Phase 2.** The PAL result pages (func_80020EAC's layout, then their
 strings) and the other modes of the

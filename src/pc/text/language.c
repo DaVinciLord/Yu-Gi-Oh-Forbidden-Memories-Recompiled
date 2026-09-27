@@ -1,5 +1,5 @@
-/* Game > Language (language.h): finding the player's PAL discs and reading
- * a language pack's text off one. */
+/* Game > Language (language.h): the text packs in languages/, and the PAL
+ * discs they are written from (read too, when a pack is not there). */
 #include "pc/compat/fs.h"
 #include "language.h"
 #include "pal_text.h"
@@ -50,8 +50,8 @@ static const int preference[LANGUAGE_COUNT][SERIALS] = {
 
 const char *Language_Label(int language)
 {
-    static const char *const labels[LANGUAGE_COUNT] = {"English (US)", "English (Europe)", "Francais",
-                                                       "Deutsch",      "Italiano",         "Espanol"};
+    static const char *const labels[LANGUAGE_COUNT] = {"English (US)", "English (Europe)", "Français",
+                                                       "Deutsch",      "Italiano",         "Español"};
     return language >= 0 && language < LANGUAGE_COUNT ? labels[language] : "";
 }
 
@@ -267,17 +267,88 @@ static char *disc_listing(int language, size_t *length, char *origin, size_t ori
 
 static int disc_available(int language) { return disc_for(language) != NULL; }
 
-/* Where a language's text can come from, tried in order: the seam for a
- * pack the release ships (a listing a tool writes with PalText_Listing,
- * read before the discs; the discs stay a source). Each says whether it
- * has the language, and gives its listing (malloc'd) and where it came
- * from. */
+/* The text packs: languages/<name>.txt beside the program (or in the
+ * working folder, or in MEMORIES_LANGUAGES_DIR), each the listing
+ * disc_listing gives for the language, written by
+ * tools/pc/export_languages.py. */
+static const char *const pack_names[LANGUAGE_COUNT] = {NULL, "en-eu", "fr", "de", "it", "es"};
+#define PACK_LIMIT (16u << 20)
+
+static FILE *open_pack(int language, char *path, size_t size)
+{
+    const char *named = getenv("MEMORIES_LANGUAGES_DIR");
+    char relative[64];
+    FILE *file;
+    if (language <= LANGUAGE_US || language >= LANGUAGE_COUNT) return NULL;
+    if (named && *named) {
+        snprintf(path, size, "%s/%s.txt", named, pack_names[language]);
+        return fopen(path, "rb");
+    }
+    snprintf(relative, sizeof(relative), "languages/%s.txt", pack_names[language]);
+    if (!Paths_Program(path, size, relative) && (file = fopen(path, "rb"))) return file;
+    snprintf(path, size, "%s", relative);
+    return fopen(path, "rb");
+}
+
+static int pack_available(int language)
+{
+    static signed char found[LANGUAGE_COUNT];
+    char path[PATH_SIZE];
+    FILE *file;
+    if (language <= LANGUAGE_US || language >= LANGUAGE_COUNT) return 0;
+    if (!found[language]) {
+        file = open_pack(language, path, sizeof(path));
+        found[language] = file ? 1 : -1;
+        if (file) fclose(file);
+    }
+    return found[language] > 0;
+}
+
+/* A pack's listing as it is, but for carriage returns (an editor's). */
+static char *pack_listing(int language, size_t *length, char *origin, size_t origin_size)
+{
+    char path[PATH_SIZE], *text = NULL;
+    FILE *file = open_pack(language, path, sizeof(path));
+    long size;
+    size_t n = 0, i;
+    if (!file) return NULL;
+    if (!fseek(file, 0, SEEK_END) && (size = ftell(file)) > 0 && (unsigned long)size < PACK_LIMIT &&
+        !fseek(file, 0, SEEK_SET) && (text = malloc((size_t)size + 1)) &&
+        fread(text, 1, (size_t)size, file) == (size_t)size) {
+        for (i = 0; i < (size_t)size; i++) {
+            if (text[i] != '\r') text[n++] = text[i];
+        }
+        text[n] = '\0';
+        *length = n;
+        snprintf(origin, origin_size, "%s", path);
+    } else {
+        free(text);
+        text = NULL;
+    }
+    fclose(file);
+    return text;
+}
+
+/* Where a language's text can come from, tried in order: the pack, then
+ * the disc it is written from. Each says whether it has the language, and
+ * gives its listing (malloc'd) and where it came from. */
 typedef struct {
     int (*available)(int language);
     char *(*listing)(int language, size_t *length, char *origin, size_t origin_size);
 } Source;
-static const Source sources[] = {{disc_available, disc_listing}};
+static const Source sources[] = {{pack_available, pack_listing}, {disc_available, disc_listing}};
 #define SOURCE_COUNT ((int)(sizeof(sources) / sizeof(sources[0])))
+
+/* The listing of `language` from the first source that has it. */
+static char *source_listing(int language, size_t *length, char *origin, size_t origin_size)
+{
+    char *listing = NULL;
+    int i;
+    for (i = 0; i < SOURCE_COUNT && !listing; i++) {
+        if (sources[i].available(language)) listing = sources[i].listing(language, length, origin, origin_size);
+    }
+    return listing;
+}
 
 int Language_Available(int language)
 {
@@ -307,14 +378,13 @@ static const char *const own_words[LANGUAGE_COUNT] = {
 
 char *Language_Listing(size_t *length)
 {
-    int language = Settings_Get(SET_LANGUAGE), i;
-    char *listing = NULL, origin[PATH_SIZE + 64] = "";
+    int language = Settings_Get(SET_LANGUAGE);
+    char *listing, origin[PATH_SIZE + 64] = "";
     if (language <= LANGUAGE_US || language >= LANGUAGE_COUNT) return NULL;
-    for (i = 0; i < SOURCE_COUNT && !listing; i++) {
-        if (sources[i].available(language)) listing = sources[i].listing(language, length, origin, sizeof(origin));
-    }
+    listing = source_listing(language, length, origin, sizeof(origin));
     if (!listing) {
-        LOG(LOG_MODS, "language: no PAL disc with %s; English (US)", Language_Label(language));
+        LOG(LOG_MODS, "language: no text for %s (languages/%s.txt); English (US)", Language_Label(language),
+            pack_names[language]);
         return NULL;
     }
     if (own_words[language]) {
@@ -338,4 +408,30 @@ int Language_Advance(unsigned flags, int code, int *shift)
      * own paths, which PAL does not space either. */
     if (current == LANGUAGE_US || (flags & 0x180)) return 0;
     return PalText_Advance(Glyphs_Character(code), shift);
+}
+
+int Language_Export(const char *folder)
+{
+    int language, missing = 0;
+    for (language = LANGUAGE_US + 1; language < LANGUAGE_COUNT; language++) {
+        char path[PATH_SIZE], origin[PATH_SIZE + 64] = "";
+        size_t length = 0;
+        char *listing = source_listing(language, &length, origin, sizeof(origin));
+        FILE *file;
+        snprintf(path, sizeof(path), "%s/%s.txt", folder, pack_names[language]);
+        if (!listing) {
+            printf("%s: no pack or PAL disc has it\n", pack_names[language]);
+            missing++;
+            continue;
+        }
+        if (!(file = fopen(path, "wb")) || fwrite(listing, 1, length, file) != length) {
+            printf("%s: could not write %s\n", pack_names[language], path);
+            missing++;
+        } else {
+            printf("%s: %s\n", pack_names[language], origin);
+        }
+        if (file) fclose(file);
+        free(listing);
+    }
+    return missing ? 1 : 0;
 }
