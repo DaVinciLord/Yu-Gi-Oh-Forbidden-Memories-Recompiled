@@ -69,7 +69,7 @@ def import_modded_game(app):
 def import_ygomods(app):
     if not app.need_game() or not app.confirm_discard():
         return
-    path = filedialog.askopenfilename(parent=app, title="A .ygomods package",
+    path = filedialog.askopenfilename(parent=app, title="An old recomp's .ygomods package, to convert",
                                       filetypes=[(".ygomods package", "*.ygomods"), ("All files", "*.*")])
     if not path:
         return
@@ -83,11 +83,12 @@ def import_ygomods(app):
         return
     app.set_project(project)
     app.changed()
-    app.say(f"Imported {path}: save it to write the mod folder.")
-    app.report("Import report", "From the package:\n\n" + "\n".join("- " + line for line in report)
+    app.say(f"Converted {path}: save it to write the mod folder.")
+    app.report("Import report", "Converted once from the old recomp's package (the port does not read .ygomods; "
+               "check the result in the game):\n\n" + "\n".join("- " + line for line in report)
                + "\n\nThe report is saved with the mod as import-report.txt.")
 
 
 def install(app):
     app.add_import("Import a modified game (.bin or SLUS_014.11)...", lambda: import_modded_game(app))
-    app.add_import("Import a .ygomods package...", lambda: import_ygomods(app))
+    app.add_import("Convert an old recomp's .ygomods package (one way)...", lambda: import_ygomods(app))
