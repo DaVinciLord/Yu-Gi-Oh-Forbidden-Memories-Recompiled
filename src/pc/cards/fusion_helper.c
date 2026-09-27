@@ -36,6 +36,9 @@ static struct {
 void FusionHelper_Viewport(int x, int y, int w, int h)
 { viewport.x = x; viewport.y = y; viewport.w = w; viewport.h = h; }
 
+void FusionHelper_GetViewport(int *x, int *y, int *w, int *h)
+{ *x = viewport.x; *y = viewport.y; *w = viewport.w; *h = viewport.h; }
+
 static FusionCard card(int id)
 {
     FusionCard result = {0};

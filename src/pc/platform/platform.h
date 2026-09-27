@@ -59,6 +59,10 @@ uint16_t Platform_Pad(int port);
 /* Whether the port has a pad: port 0 always (the keyboard), port 1 when a
  * second controller is connected. Async-signal-safe. */
 int Platform_PadConnected(int port);
+/* The part of Platform_Pad(port) the player's own keys and controllers did
+ * not press: scripted input and, on port 0, the mouse. Game > Japanese
+ * buttons leaves these alone (button_layout.h). Async-signal-safe. */
+uint16_t Platform_PadFixedBits(int port);
 /* Controllers (gamepad_evdev.c): polled once a frame on the main thread. */
 void Gamepad_Poll(unsigned frame);
 uint16_t Gamepad_Bits(int port);
@@ -101,12 +105,26 @@ void Platform_StopTimers(void);
  * lets 1 ms of game time pass, since a loop polling it is waiting for time
  * (movie playback waits for its strips that way). Nothing otherwise. */
 void Platform_PollTime(void);
+/* Run what the cooperative clock owes (ticks, VBlanks) at a point where the
+ * console would have taken them while the game waited (DrawSync). Never
+ * steps time itself; nothing under the interrupt clock or in a
+ * deterministic run. */
+void Platform_ServiceClock(void);
+/* At most `count` more VBlanks from the clock (-1: no limit); VSync(0) holds
+ * the clock to one while it waits, as on the console. */
+void Platform_LimitVBlanks(int count);
 unsigned Platform_VBlankCount(void);
 void Platform_SetClockRate(int percent);
 int Platform_ClockRate(void);
 /* Game frames per second at the current speed; 0 when paused or uncapped. */
 float Platform_GameHz(void);
 void Platform_StepFrame(void);
+/* The keypad's + and - (CTRL_KEY_KP_PLUS / CTRL_KEY_KP_MINUS) step the
+ * master volume by 5, the Audio menu's Master slider, and save it; the mute
+ * (M) stays as it is. Returns nonzero when the key is the shortcut's: never
+ * for other keys, nor for a keypad key the keyboard bindings use, which then
+ * goes to the pad as before. `down` is 0 for a release (consumed, no step). */
+int Platform_VolumeKey(int key, int down);
 void Platform_SetPresentCap(int fps);
 int Platform_PresentCap(void);
 /* Present period from the cap and the display refresh, in microseconds; 0 for every frame. */

@@ -9,9 +9,12 @@
  * pages are ordinary strings for the game's text box. */
 #include "drops.h"
 #include "cards.h"
+#include "tables.h"
 #include "pc/platform/settings.h"
 #include "pc/rng.h"
 #include "pc/text/glyphs.h"
+#include "pc/text/text.h"
+#include "pc/debug/log.h"
 #include "game/card_constants.h"
 #include "game/duel_rewards.h"
 #include "game/save_data.h"
@@ -33,28 +36,103 @@ static int owned(int id)
     return count;
 }
 
+/* --- Game > Smart drops --------------------------------------------------- */
+
+/* Copies of `id` the player will have: deck, chest, and the cards this duel
+ * already dealt (awarded later, when the player leaves the screen). */
+static int copies(int id)
+{
+    int count = owned(id), i;
+    for (i = 0; i < gCardDrops.count; i++) count += gCardDrops.cards[i] == id;
+    return count;
+}
+
+static unsigned *smart_weights;
+static unsigned char *smart_keep;
+static int smart_room;
+
+static int smart_grow(int count)
+{
+    if (count + 1 > smart_room) {
+        unsigned *weights = realloc(smart_weights, (size_t)(count + 1) * sizeof(*weights));
+        unsigned char *keep;
+        if (!weights) return 0;
+        smart_weights = weights;
+        keep = realloc(smart_keep, (size_t)(count + 1));
+        if (!keep) return 0;
+        smart_keep = keep;
+        smart_room = count + 1;
+    }
+    return 1;
+}
+
+int CardDrops_SmartPool(unsigned *weights, int count)
+{
+    int id, cut = 0, kept = 0;
+    if (!smart_grow(count)) return 0;
+    for (id = 1; id <= count; id++) {
+        smart_keep[id] = weights[id] && copies(id) < DECK_CARD_COPY_LIMIT;
+        cut += weights[id] && !smart_keep[id];
+        kept += smart_keep[id];
+    }
+    /* Nothing to leave out, or nothing left: the pool as it is. */
+    if (!cut || !kept) return 0;
+    for (id = 1; id <= count; id++) {
+        if (!smart_keep[id]) weights[id] = 0;
+    }
+    return Tables_Scale(weights, smart_keep, count, DUEL_DROP_WEIGHT_TOTAL) ? cut : 0;
+}
+
+/* Duel_SelectCardDrop over the pool CardDrops_SmartPool leaves: the same
+ * pool (a mod's edit of it included), the same one draw for the threshold,
+ * the same walk by card id, and the same variant pick for a retail card. */
+static int select_drop(int pool)
+{
+    const unsigned short *edited;
+    unsigned sum = 0;
+    int count = CARD_COUNT, id, threshold;
+    if (!Settings_Get(SET_SMART_DROPS) || pool < 0 || pool >= TABLES_POOL_COUNT - TABLES_POOL_POW) {
+        return Duel_SelectCardDrop(pool);
+    }
+    edited = Tables_Pool(TABLES_POOL_POW + pool, gDuel_awSaPowCardDrops[pool].weights);
+    if (edited) count = gCard_nCount;
+    if (!smart_grow(count)) return Duel_SelectCardDrop(pool);
+    smart_weights[0] = 0;
+    for (id = 1; id <= count; id++) {
+        smart_weights[id] = edited ? edited[id] : gDuel_awSaPowCardDrops[pool].weights[id - 1];
+    }
+    if (!CardDrops_SmartPool(smart_weights, count)) return Duel_SelectCardDrop(pool);
+    threshold = (Memories_Rand() & (DUEL_DROP_WEIGHT_TOTAL - 1)) + 1;
+    for (id = 1; id <= count; id++) {
+        sum += smart_weights[id];
+        if (sum >= (unsigned)threshold) return id <= CARD_COUNT ? Cards_PickVariant(id, CARDS_USE_DROP) : id;
+    }
+    return 0;
+}
+
 /* Several cards are dealt in the community drop mod's order, so a seed
  * gives the same cards here as on its patched discs (the static recomp
  * matched it too): one draw the mod throws away, then for each card six
  * more and the roll, 1 + 7N draws in all. The last roll is the game's own
- * card for SPOILS. One card is the console's single roll. */
+ * card for SPOILS. One card is the console's single roll. Smart drops
+ * changes which card a roll gives, never how many draws it takes. */
 int CardDrops_Roll(int pool)
 {
     int wanted = Settings_Get(SET_CARD_DROPS), i;
     CardDrops_Begin();
-    if (wanted <= 1) return Duel_SelectCardDrop(pool);
+    if (wanted <= 1) return select_drop(pool);
     if (wanted > CARD_DROPS_MAX) wanted = CARD_DROPS_MAX;
     Memories_Rand();
     for (i = 1; i < wanted; i++) {
         int burn, card;
         for (burn = 0; burn < 6; burn++) Memories_Rand();
-        card = Duel_SelectCardDrop(pool);
+        card = select_drop(pool);
         if (!Cards_Valid(card)) continue; /* an empty table */
         gCardDrops.fresh[gCardDrops.count] = owned(card) == 0;
         gCardDrops.cards[gCardDrops.count++] = (u16)card;
     }
     for (i = 0; i < 6; i++) Memories_Rand();
-    return Duel_SelectCardDrop(pool);
+    return select_drop(pool);
 }
 
 void CardDrops_Award(void)
@@ -175,6 +253,62 @@ static void words(Out *out, const char *text)
     }
 }
 
+/* Whether a translation's string is letters and spaces alone, which is
+ * what a page's heading and NEW can take. */
+static int plain(const u8 *text)
+{
+    for (; *text != 0xFF; text++) {
+        if (*text >= 0xF6) return 0;
+        if (*text >= 0xF0 && *++text == 0xFF) return 0;
+    }
+    return 1;
+}
+
+/* One of the port's own strings (text.h): as a translation gives it, else
+ * `english`, with each %d the next of `a` and `b`. Written to `out` unless
+ * it is NULL; returns the width in pixels and, in `glyphs`, the letters. */
+static int own_text(Out *out, int id, const char *english, int a, int b, int *glyphs)
+{
+    const u8 *text = Text_Own(id);
+    int numbers[2] = {a, b}, used = 0, width = 0, count = 0, i;
+    int percent = Glyphs_Code('%'), letter_d = Glyphs_Code('d');
+    char buffer[48];
+    if (text && !plain(text)) {
+        static unsigned char said[TEXT_OWN_LAST - TEXT_OWN_FIRST + 1]; /* once per string */
+        if (!said[id - TEXT_OWN_FIRST])
+            LOG(LOG_MODS, "text: string %04X has codes other than letters; the port's own is used", id);
+        said[id - TEXT_OWN_FIRST] = 1;
+        text = NULL;
+    }
+    if (!text) {
+        snprintf(buffer, sizeof(buffer), english, a, b);
+        if (out) words(out, buffer);
+        for (i = 0; buffer[i]; i++) count += buffer[i] != ' ';
+        if (glyphs) *glyphs = count;
+        return 8 * (int)strlen(buffer);
+    }
+    while (*text != 0xFF) {
+        int code = *text++;
+        if (code >= 0xF0) code = ((code - 0xF0) << 8) | *text++;
+        if (code == percent && *text == letter_d && used < 2) {
+            text++;
+            snprintf(buffer, sizeof(buffer), "%d", numbers[used++]);
+            if (out) words(out, buffer);
+            width += 8 * (int)strlen(buffer);
+            count += (int)strlen(buffer);
+            continue;
+        }
+        if (out) {
+            if (code) glyph(out, code);
+            else command(out, 0x02, 8); /* a space, as words() has it */
+        }
+        width += 8;
+        count += code != 0;
+    }
+    if (glyphs) *glyphs = count;
+    return width;
+}
+
 static int name_length(const u8 *name)
 {
     int n = 0;
@@ -206,8 +340,7 @@ static void name(Out *out, int id, int room)
 #define ROW_STEP 0x18  /* and the step to the next */
 #define HEADER_TOP 0x08
 #define WIDTH 0x108    /* where the plates end: SPECIAL ARTS' COM column */
-#define NEW_X (WIDTH - 3 * 8)
-#define COUNT_END (NEW_X - 8)
+#define NEW_ENGLISH_GLYPHS 3 /* ROW_GLYPHS counts NEW's */
 
 enum { WHITE = 0x00, GOLD = 0x01, BLUE = 0x02 };
 
@@ -219,13 +352,25 @@ void CardDrops_ComposePage(int page)
     int first = (page - CARD_DROPS_FIRST_PAGE) * CARD_DROPS_PER_PAGE, r, y = ROW_TOP;
     int last = count < first + CARD_DROPS_PER_PAGE ? count : first + CARD_DROPS_PER_PAGE;
     char buffer[32];
+    /* NEW ends at the plate's end, and a count ends a letter before where
+     * NEW starts; a translation's (text.h) moves both and takes as many
+     * letters of the budget as it has. */
+    int new_glyphs, heading, more_glyphs, page_glyphs = 0;
+    int new_x = WIDTH - own_text(NULL, TEXT_OWN_NEW, "NEW", 0, 0, &new_glyphs), count_end = new_x - 8;
+    int row_glyphs = ROW_GLYPHS + (new_glyphs > NEW_ENGLISH_GLYPHS ? new_glyphs - NEW_ENGLISH_GLYPHS : 0);
+    int more = gCardDrops.count == 1 ? TEXT_OWN_MORE_CARD : TEXT_OWN_MORE_CARDS;
+    const char *more_english = gCardDrops.count == 1 ? "%d MORE CARD" : "%d MORE CARDS";
+    int page_number = page - CARD_DROPS_FIRST_PAGE + 1;
+    own_text(NULL, more, more_english, gCardDrops.count, 0, &more_glyphs);
+    if (pages > 1) own_text(NULL, TEXT_OWN_PAGE_OF, "PAGE %d OF %d", page_number, pages, &page_glyphs);
+    heading = more_glyphs + page_glyphs > HEADING_GLYPHS ? more_glyphs + page_glyphs : HEADING_GLYPHS;
     gCardDrops.page = (s16)page;
     /* Rows first, as the game's own pages are written, then the heading. */
     command(&out, 0x04, 2);
     line(&out, ROW_TOP);
     for (r = first; r < last; r++) {
         const Row *row = &all[r];
-        int budget = GLYPH_BUDGET - HEADING_GLYPHS - out.glyphs - ROW_GLYPHS * (last - r);
+        int budget = GLYPH_BUDGET - heading - out.glyphs - row_glyphs * (last - r);
         int digits = snprintf(buffer, sizeof(buffer), "%03d", row->id);
         int name_x = (digits + 1) * 8, end = WIDTH, room;
         if (r > first) {
@@ -234,21 +379,21 @@ void CardDrops_ComposePage(int page)
         }
         command(&out, 0x0A, BLUE);
         words(&out, buffer);
-        if (row->copies > 1) end = COUNT_END - 8 * (snprintf(buffer, sizeof(buffer), "x%d", row->copies) + 1);
-        else if (row->fresh) end = NEW_X - 8;
+        if (row->copies > 1) end = count_end - 8 * (snprintf(buffer, sizeof(buffer), "x%d", row->copies) + 1);
+        else if (row->fresh) end = new_x - 8;
         room = (end - name_x) / 8;
         if (room > budget) room = budget;
         at_x(&out, name_x);
         command(&out, 0x0A, WHITE);
         name(&out, row->id, room);
         if (row->copies > 1) {
-            at_x(&out, COUNT_END - 8 * (int)strlen(buffer));
+            at_x(&out, count_end - 8 * (int)strlen(buffer));
             words(&out, buffer);
         }
         if (row->fresh) {
-            at_x(&out, NEW_X);
+            at_x(&out, new_x);
             command(&out, 0x0A, GOLD);
-            words(&out, "NEW");
+            own_text(&out, TEXT_OWN_NEW, "NEW", 0, 0, NULL);
         }
     }
     /* The heading above the first plate, in the small letters, as SPECIAL
@@ -257,12 +402,10 @@ void CardDrops_ComposePage(int page)
     command(&out, 0x0A, WHITE);
     command(&out, 0x04, 1);
     at_x(&out, -8);
-    snprintf(buffer, sizeof(buffer), "%d MORE CARD%s", gCardDrops.count, gCardDrops.count == 1 ? "" : "S");
-    words(&out, buffer);
+    own_text(&out, more, more_english, gCardDrops.count, 0, NULL);
     if (pages > 1) {
-        snprintf(buffer, sizeof(buffer), "PAGE %d OF %d", page - CARD_DROPS_FIRST_PAGE + 1, pages);
-        at_x(&out, WIDTH - 8 * (int)strlen(buffer));
-        words(&out, buffer);
+        at_x(&out, WIDTH - own_text(NULL, TEXT_OWN_PAGE_OF, "PAGE %d OF %d", page_number, pages, NULL));
+        own_text(&out, TEXT_OWN_PAGE_OF, "PAGE %d OF %d", page_number, pages, NULL);
     }
     *out.at = 0xFF;
 }

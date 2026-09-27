@@ -101,6 +101,16 @@ int main(void)
     assert(!memcmp(string(unit, 0xD101), "\xF7\x05\x01\x01\xF8\x03\x08\x56\x1D\x80\x83\x5A\xFF", 13));
     TextListing_Free(unit);
 
+    /* The port's own strings (text.h, TEXT_OWN_FIRST) are in the dialogue
+     * bank, and in no other. */
+    reports = 0;
+    unit = compile("@bank dialog\n[FE00]\nab{end}\n[FEFF]\nc{end}\n@bank names\n[FE01]\na{end}\n");
+    assert(unit && reports == 1);
+    assert(!memcmp(string(unit, 0xFE00), "\x01\x02\xFF", 3) && !memcmp(string(unit, 0xFEFF), "\x03\xFF", 2));
+    assert(!string(unit, 0xFE01));
+    TextListing_Free(unit);
+    assert(TextListing_Bank(0xFDFF) < 0 && TextListing_Bank(0xFE10) == TEXT_BANK_DIALOG);
+
     /* What cannot be read is said and left out; the rest still compiles. */
     reports = 0;
     unit = compile("[0500]\nno bank\n@bank dialog\n[8001]\nwrong bank{end}\n[0500]\nA{nope}{g 700}\nb{end} c\n");
