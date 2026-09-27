@@ -427,6 +427,16 @@ console's value, until the player picks it; nothing changes on screen before.
   reapplied at start; save normally to keep it. The Password screen copies the
   balance for display when it opens and at each payment step, so a change
   made while that screen is open shows from the next of those.
+- **Free spending (Password)** (`cheat_free_spending`,
+  `MEMORIES_CHEAT_FREE_SPENDING`): a card bought on the Password screen costs
+  nothing. The payment step (`Password_UpdateShopScreen` state 3,
+  `overlays/password/shop.c`) still counts the price down and refreshes the
+  display, but one `#ifdef MEMORIES_PC` skips the subtraction from the balance
+  while `Cheats_FreeSpending` says so. The screen's own check still refuses a
+  card the balance does not cover (message 228); Set StarChips covers that.
+  Checked by buying Orion the Battle King (02971090, 290 StarChips) from 999999
+  after a new game: 999709 with it off, 999999 with it on, and the two final
+  frames differ only in those digits.
 - **Starting LP 1000 / 4000 / 8000 (console) / 9999** (`cheat_life_points`,
   `MEMORIES_CHEAT_LIFE_POINTS`, 1-9999, default 8000) is what both sides start
   a duel against the CPU with, from the next duel on. `Duel_InitSideStates`

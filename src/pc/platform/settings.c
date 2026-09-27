@@ -40,6 +40,8 @@ static const SettingInfo info[SET_COUNT] = {
     [SET_CHEAT_LIFE_POINTS] = {"cheat_life_points", NULL, "MEMORIES_CHEAT_LIFE_POINTS", NULL, 8000, 1, 9999},
     /* 1: the CPU's hand drawn face up, as the player's is. */
     [SET_CHEAT_SHOW_HAND] = {"cheat_show_hand", NULL, "MEMORIES_CHEAT_SHOW_HAND", NULL, 0, 0, 1},
+    /* 1: the Password screen's purchases leave the StarChips alone. */
+    [SET_CHEAT_FREE_SPENDING] = {"cheat_free_spending", NULL, "MEMORIES_CHEAT_FREE_SPENDING", NULL, 0, 0, 1},
     [SET_MASTER_VOLUME] = {"master_volume", "volume", "MEMORIES_MASTER_VOLUME", "MEMORIES_VOLUME", 100, 0, 100},
     [SET_MUSIC_VOLUME] = {"music_volume", NULL, "MEMORIES_MUSIC_VOLUME", NULL, 100, 0, 100},
     [SET_SFX_VOLUME] = {"sfx_volume", NULL, "MEMORIES_SFX_VOLUME", NULL, 100, 0, 100},

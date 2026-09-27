@@ -16,6 +16,11 @@ void Cheats_SetStarchips(unsigned value);
  * Duel_InitSideStates. Two-player duels keep the values their own setup
  * screen chose. */
 int Cheats_StartingLifePoints(void);
+/* Nonzero while Free spending (SET_CHEAT_FREE_SPENDING) is on: the Password
+ * screen's payment (overlays/password/shop.c) counts the price down without
+ * taking it from the balance. The screen still refuses a card the balance
+ * does not cover; Set StarChips covers that. */
+int Cheats_FreeSpending(void);
 /* Show CPU's hand (SET_CHEAT_SHOW_HAND) is Cheats_CardViewMode, declared
  * beside the field it reads in game/duel_side_state.h. */
 /* Once a frame: MEMORIES_DEBUG_CHEST=N gives N of every card, and

@@ -68,6 +68,11 @@ int Cheats_StartingLifePoints(void)
     return Settings_Get(SET_CHEAT_LIFE_POINTS);
 }
 
+int Cheats_FreeSpending(void)
+{
+    return Settings_Get(SET_CHEAT_FREE_SPENDING);
+}
+
 extern signed char gDuel_bOpponentID;
 
 /* The card display reads a side's card_view_mode through this
