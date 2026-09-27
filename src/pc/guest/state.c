@@ -1,6 +1,8 @@
 #define _GNU_SOURCE
 #include "state.h"
 #include "state_remap.h"
+#include "rewind.h"
+#include "pc/platform/settings.h"
 #include "pc/platform/paths.h"
 #include "pc/mods/mods.h"
 #include "pc/mods/events.h"
@@ -59,9 +61,12 @@ typedef struct Region {
 
 struct MemoriesState {
     int loading;
-    FILE *file;              /* saving */
+    FILE *file;              /* saving to a file */
     const uint8_t *image;    /* loading: the whole file */
     size_t image_size;
+    uint8_t *buffer;         /* saving to memory (rewind), when there is no file */
+    size_t used, room;
+    int failed;              /* out of memory while saving to it */
 };
 
 static Region *regions;
@@ -128,6 +133,14 @@ static volatile int last_loaded_slot;
 static uint8_t *pending_image;
 static uint32_t build_id; /* from the `buildid` file beside the executable */
 static size_t pending_size;
+/* Rewind (Memories_RewindHold): the ring, the buffer states are written
+ * into before they join it, and the copy a step back is applied from (a
+ * load may remap an image in place; the ring's own must stay as it is). */
+static RewindRing rewind_ring;
+static MemoriesState rewind_snapshot = {0, NULL, NULL, 0, NULL, 0, 0, 0};
+static uint8_t *rewind_image;
+static size_t rewind_image_room;
+static volatile int rewind_held;
 
 int Memories_StateLoading(const MemoriesState *state) { return state->loading; }
 int Memories_LastStateSlot(void) { return last_loaded_slot; }
@@ -138,6 +151,30 @@ void Memories_StateRequest(int what, int slot)
         requested_slot = slot;
     }
     requested = what;
+}
+
+/* Saving: to the file, or to the growing buffer. */
+static void emit(MemoriesState *state, const void *data, size_t size)
+{
+    if (state->file) {
+        fwrite(data, 1, size, state->file);
+        return;
+    }
+    if (state->failed) return;
+    if (state->used + size > state->room) {
+        size_t room = state->room ? state->room : (size_t)8 << 20;
+        uint8_t *grown;
+        while (room < state->used + size) room += room / 2;
+        grown = realloc(state->buffer, room);
+        if (!grown) {
+            state->failed = 1;
+            return;
+        }
+        state->buffer = grown;
+        state->room = room;
+    }
+    memcpy(state->buffer + state->used, data, size);
+    state->used += size;
 }
 
 /* Chunk: 16-byte tag, 32-bit size, payload. */
@@ -179,10 +216,10 @@ int Memories_StateChunk(MemoriesState *state, const char *tag, const MemoriesSta
         uint32_t length = (uint32_t)total;
         memset(padded, 0, sizeof(padded));
         strncpy(padded, tag, sizeof(padded) - 1);
-        fwrite(padded, 1, 16, state->file);
-        fwrite(&length, 4, 1, state->file);
+        emit(state, padded, 16);
+        emit(state, &length, 4);
         for (i = 0; i < count; i++) {
-            fwrite(fields[i].data, 1, fields[i].size, state->file);
+            emit(state, fields[i].data, fields[i].size);
         }
         return 0;
     }
@@ -302,35 +339,28 @@ static void slot_path(char *out, size_t size, int slot)
     snprintf(out, size, "%s/slot%d.state", directory, slot);
 }
 
-static int save(const char *path)
+/* The whole state, to a file or to memory. Chunks are found by tag, in any
+ * order; the stack, whose size follows the depth of the VSync call, goes
+ * last so that everything else sits at the same offsets from one state to
+ * the next (the rewind ring keeps differences between them). */
+static void serialize(MemoriesState *state)
 {
-    MemoriesState state = {0, NULL, NULL, 0};
     MemoriesStateEntry entry = Memories_StateEntry;
-    char partial[600], tag[32];
+    char tag[32];
     uint32_t header[2] = {VERSION, build_id};
     unsigned i;
-    snprintf(partial, sizeof(partial), "%s.partial", path);
-    state.file = fopen(partial, "wb");
-    if (!state.file) {
-        perror(partial);
-        return -1;
-    }
     hold_signals(1);
     Spu_Hold(1);
-    fwrite("YFMSTATE", 1, 8, state.file);
-    fwrite(header, 4, 2, state.file);
+    emit(state, "YFMSTATE", 8);
+    emit(state, header, 8);
     {
         MemoriesStateField fields[] = {{&entry, sizeof(entry)}};
-        Memories_StateChunk(&state, "entry", fields, 1);
-    }
-    {
-        MemoriesStateField fields[] = {{(void *)(uintptr_t)entry.esp, STACK_TOP - entry.esp}};
-        Memories_StateChunk(&state, "stack", fields, 1);
+        Memories_StateChunk(state, "entry", fields, 1);
     }
     {
         MemoriesStateField fields[] = {{(void *)(uintptr_t)MEMORIES_GUEST_RAM, MEMORIES_GUEST_RAM_SIZE},
                                        {(void *)(uintptr_t)SCRATCHPAD, SCRATCHPAD_SIZE}};
-        Memories_StateChunk(&state, "memory", fields, 2);
+        Memories_StateChunk(state, "memory", fields, 2);
     }
     for (i = 0; i < region_count; i++) {
         Region *region = &regions[i];
@@ -338,17 +368,34 @@ static int save(const char *path)
                                      {region->data, (size_t)(region->data_end - region->data)}};
         MemoriesStateField bss[] = {{region->bss, (size_t)(region->bss_end - region->bss)}};
         tagged(tag, sizeof(tag), "data", region->name);
-        Memories_StateChunk(&state, tag, data, 2);
+        Memories_StateChunk(state, tag, data, 2);
         tagged(tag, sizeof(tag), "bss", region->name);
-        Memories_StateChunk(&state, tag, bss, 1);
+        Memories_StateChunk(state, tag, bss, 1);
     }
     {
         MemoriesModEvent event = {MEMORIES_EVENT_SAVE, MEMORIES_BEFORE, 0, 0, 0, 0, 0};
         Mods_Dispatch(&event);
     }
-    subsystems(&state);
+    subsystems(state);
+    {
+        MemoriesStateField fields[] = {{(void *)(uintptr_t)entry.esp, STACK_TOP - entry.esp}};
+        Memories_StateChunk(state, "stack", fields, 1);
+    }
     Spu_Hold(0);
     hold_signals(0);
+}
+
+static int save(const char *path)
+{
+    MemoriesState state = {0, NULL, NULL, 0, NULL, 0, 0, 0};
+    char partial[600];
+    snprintf(partial, sizeof(partial), "%s.partial", path);
+    state.file = fopen(partial, "wb");
+    if (!state.file) {
+        perror(partial);
+        return -1;
+    }
+    serialize(&state);
     if (fclose(state.file) != 0 || rename(partial, path) != 0) {
         perror(path);
         return -1;
@@ -399,7 +446,7 @@ static void apply(void)
     memcpy(&entry, chunk, sizeof(entry));
     chunk = find_chunk(&state, "stack", &size);
     memcpy((void *)(uintptr_t)entry.esp, chunk, size);
-    free(pending_image);
+    if (pending_image != rewind_image) free(pending_image);
     pending_image = NULL;
     Spu_Hold(0);
     Mods_Reset(); /* another game: whatever the mods were holding is not it */
@@ -408,7 +455,8 @@ static void apply(void)
         MemoriesModEvent event = {MEMORIES_EVENT_LOAD, MEMORIES_AFTER, 0, 0, 0, 0, 0};
         Mods_Dispatch(&event);
     }
-    fprintf(stderr, "memories-pc: state loaded\n");
+    if (state.image == rewind_image) LOG(LOG_STATE, "rewound");
+    else fprintf(stderr, "memories-pc: state loaded\n");
     hold_signals(0);
 #ifdef _WIN32
     set_stack_bounds(game_bounds);
@@ -722,6 +770,119 @@ static int load(const char *path)
     return 0; /* not reached: the state resumes in its own VSync caller */
 }
 
+int Memories_RewindHold(int held)
+{
+    int on = Settings_Get(SET_REWIND) != 0;
+    __atomic_store_n(&rewind_held, on && held, __ATOMIC_SEQ_CST);
+    return on;
+}
+
+static uint64_t microseconds(void)
+{
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return (uint64_t)now.tv_sec * 1000000u + (uint64_t)now.tv_nsec / 1000u;
+}
+
+static void rewind_release(void)
+{
+    Rewind_Clear(&rewind_ring);
+    free(rewind_snapshot.buffer);
+    rewind_snapshot.buffer = NULL;
+    rewind_snapshot.used = rewind_snapshot.room = 0;
+    free(rewind_image);
+    rewind_image = NULL;
+    rewind_image_room = 0;
+}
+
+/* Rewind, when the `rewind` setting is on: a state every REWIND_EVERY
+ * presented frames goes into the ring (rewind.h), and while F8 is held a
+ * state from it is applied at every state point, one further back each
+ * REWIND_STEP frames. The game does not run on while held: each frame shown
+ * is the one right after a stored state. Off, nothing is taken or kept. */
+#define REWIND_EVERY 10u
+#define REWIND_STEP 3u
+#define REWIND_ENTRIES 120u              /* 20 seconds at 60 frames */
+#define REWIND_BUDGET ((size_t)96 << 20) /* bytes of differences */
+static void rewind_point(unsigned presented_frames)
+{
+    static unsigned next, held_frames, snapshots;
+    static int ready;
+    const uint8_t *latest;
+    size_t size;
+    if (!Settings_Get(SET_REWIND)) {
+        if (ready) {
+            rewind_release();
+            ready = 0;
+            LOG(LOG_STATE, "rewind off: ring freed");
+        }
+        return;
+    }
+    if (!ready) {
+        Rewind_Init(&rewind_ring, REWIND_BUDGET, REWIND_ENTRIES);
+        ready = 1;
+        next = presented_frames;
+        held_frames = 0;
+    }
+    if (__atomic_load_n(&rewind_held, __ATOMIC_SEQ_CST)) {
+        MemoriesState check = {1, NULL, NULL, 0, NULL, 0, 0, 0};
+        uint64_t start = microseconds();
+        if (held_frames && held_frames % REWIND_STEP == 0) Rewind_Back(&rewind_ring);
+        held_frames++;
+        latest = Rewind_Latest(&rewind_ring, &size);
+        if (!latest) return;
+        check.image = latest;
+        check.image_size = size;
+        if (!compatible_mods(&check)) {
+            /* The mods changed since: nothing in the ring fits them. */
+            Rewind_Clear(&rewind_ring);
+            LOG(LOG_STATE, "rewind: the mods changed; ring emptied");
+            return;
+        }
+        if (rewind_image_room < size) {
+            free(rewind_image);
+            rewind_image = malloc(size);
+            rewind_image_room = rewind_image ? size : 0;
+            if (!rewind_image) return;
+        }
+        memcpy(rewind_image, latest, size);
+        LOG(LOG_STATE, "rewind: step %u, %u states left, %llu us to prepare", held_frames, rewind_ring.count,
+            (unsigned long long)(microseconds() - start));
+        pending_image = rewind_image;
+        pending_size = size;
+        /* Leave the game stack; the service context applies the state. */
+#ifdef _WIN32
+        leave_game_stack();
+#else
+        swapcontext(&game_context, &service_context);
+#endif
+        return; /* not reached */
+    }
+    if (held_frames) {
+        held_frames = 0;
+        next = presented_frames + REWIND_EVERY; /* on from the state shown */
+    }
+    if ((int)(presented_frames - next) >= 0) {
+        uint64_t start = microseconds(), taken;
+        next = presented_frames + REWIND_EVERY;
+        rewind_snapshot.used = 0;
+        rewind_snapshot.failed = 0;
+        serialize(&rewind_snapshot);
+        taken = microseconds();
+        if (rewind_snapshot.failed || Rewind_Push(&rewind_ring, rewind_snapshot.buffer, rewind_snapshot.used)) {
+            Rewind_Clear(&rewind_ring);
+            LOG(LOG_STATE, "rewind: out of memory; ring emptied");
+            return;
+        }
+        snapshots++;
+        LOG(LOG_STATE, "rewind: state %u, %lu bytes, %llu us to take, %llu us to store; %u states, %lu bytes of "
+            "differences, %lu bytes in all", snapshots, (unsigned long)rewind_snapshot.used,
+            (unsigned long long)(taken - start), (unsigned long long)(microseconds() - taken), rewind_ring.count,
+            (unsigned long)rewind_ring.used,
+            (unsigned long)(Rewind_Memory(&rewind_ring) + rewind_snapshot.room + rewind_image_room));
+    }
+}
+
 static int from_game_code(void)
 {
     uint32_t caller;
@@ -809,6 +970,7 @@ void Memories_StatePoint(unsigned presented_frames)
             else Crash_ReportSoft("state load failed", path);
         }
     }
+    if (startup_done) rewind_point(presented_frames);
 }
 
 static void run_game(void)

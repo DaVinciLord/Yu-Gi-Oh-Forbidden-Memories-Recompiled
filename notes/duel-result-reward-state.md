@@ -69,6 +69,12 @@ The result is:
 The stored tier is not the ten-rank index by itself; the axis byte supplies
 the POW/TEC half.
 
+The PC port repeats the score and this derivation read-only while the duel
+is played (`Rank_Score` and `Rank_Grade` in `src/pc/cards/rank.c`, for
+View > Duel rank; `notes/pc-build.md` §Duel rank). `Duel_CalcRankScore`
+itself is not called or changed there, because it writes this record and
+`D_801D5608`.
+
 ## Drop-pool selection
 
 The normal player-win path derives the three drop-pool indices from the same

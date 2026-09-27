@@ -89,6 +89,16 @@ typedef char DuelSideState_card_view_mode_must_be_at_0x1F[
     DUEL_SIDE_STATE_OFFSET(card_view_mode) == 0x1F ? 1 : -1
 ];
 
+/* How the card display reads card_view_mode. On the PC port Game > Cheats >
+ * Show CPU's hand answers 0 for the CPU's record, whose -1 draws its hand
+ * as card backs (src/pc/debug/cheats.c); the byte itself is left alone. */
+#ifdef MEMORIES_PC
+s8 Cheats_CardViewMode(const DuelSideState *side);
+#define DUEL_CARD_VIEW_MODE(side) Cheats_CardViewMode(side)
+#else
+#define DUEL_CARD_VIEW_MODE(side) ((side)->card_view_mode)
+#endif
+
 /* The side selector: 0 or 1, and the index behind both cursors this header
  * and duel_grid.h describe. Thirty-nine private declarations before this. */
 #ifdef D_8009B1D5_IS_AGGREGATE

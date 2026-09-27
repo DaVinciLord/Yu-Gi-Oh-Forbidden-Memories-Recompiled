@@ -47,15 +47,33 @@ enum { TABLES_POOL_DECK, TABLES_POOL_POW, TABLES_POOL_BCD, TABLES_POOL_TEC, TABL
 const unsigned short *Tables_Pool(int pool, const unsigned short *retail);
 /* The same for a given opponent (0-39), for the tests and tools. */
 const unsigned short *Tables_PoolFor(int duelist, int pool, const unsigned short *retail);
+/* Scale the weights `chosen` marks (by card id, 1..count) so they add up to
+ * `target` exactly: each its share rounded down, the rest to the largest
+ * remainders, the lower id first. The others are left as they are. 0 when
+ * it runs out of memory, or when nothing chosen weighs anything and the
+ * target is not 0. Pools use it, and so does Game > Smart drops (drops.h). */
+int Tables_Scale(unsigned *weights, const unsigned char *chosen, int count, unsigned target);
 
 /* The opponent names a manifest may use, by duelist id; "all" means every
  * one of them. */
 #define TABLES_DUELIST_COUNT 40
 extern const char *const Tables_DuelistNames[TABLES_DUELIST_COUNT];
-/* The name the duel shows for an opponent in place of COM (hd_text.h):
- * the whole name up to 11 letters, else the part that tells them apart
- * (High Mage Anubisius: H.M. Anubisius). NULL for no opponent (a 2P duel). */
+/* The English name the duel shows for an opponent in place of COM
+ * (hd_text.h): the whole name up to 11 letters, else the part that tells
+ * them apart (High Mage Anubisius: H.M. Anubisius). NULL for no opponent
+ * (a 2P duel). A translation's is Text_OpponentName's (text.h). */
 const char *Tables_DuelistShortName(int duelist);
+/* The most letters (spaces and full stops too) a name in place of COM
+ * has: H.M. Anubisius, the longest English one, still fits the box. */
+#define TABLES_SHORT_NAME_LIMIT 14
+/* A translated full name made a name in place of COM, as the English ones
+ * are: `name` (Latin-1) up to its first character that is not a letter, a
+ * space or a full stop (Jono 2º Duelo: Jono), then whole if it has at most
+ * TABLES_SHORT_NAME_LIMIT; else, when its words all start with a capital,
+ * the first ones as initials (Sumo Mago Martis: S.M. Martis), else its last
+ * word (Mago da Montanha: Montanha); else its first letters. Written to
+ * `out` (TABLES_SHORT_NAME_LIMIT + 1 bytes); 0 when nothing is left. */
+int Tables_ShortenName(const char *name, char *out);
 /* The opponent of the duel under way (gDuel_bOpponentID): 1-39, negative
  * in a 2P duel. */
 int Tables_OpponentId(void);

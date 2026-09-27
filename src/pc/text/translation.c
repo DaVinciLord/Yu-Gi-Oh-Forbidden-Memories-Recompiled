@@ -9,6 +9,7 @@
 #include "pc/platform/settings.h"
 #include "pc/cards/tables.h"
 #include "pc/cards/drops.h"
+#include "pc/cards/passwords.h"
 #include "pc/saves/deck_menu.h"
 #include "pc/debug/log.h"
 #include "game/card_constants.h"
@@ -173,18 +174,25 @@ void Text_Build(void)
  * full stop and other digits. NULL when even that is too long. */
 #define TEXT_RESULTS_WIDE 9
 
+/* A letter of Latin-1, which the opponent's name is in (Text_OpponentName):
+ * A-Z, a-z or an accented one. */
+static int latin_letter(unsigned char c)
+{
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= 0xC0 && c != 0xD7 && c != 0xF7);
+}
+
 static const char *results_name(void)
 {
     static char name[TEXT_RESULTS_WIDE + 1];
-    const char *whole = Tables_DuelistShortName(Tables_OpponentId()), *c, *best = NULL;
+    const char *whole = Text_OpponentName(Tables_OpponentId()), *c, *best = NULL;
     int plain = 1, best_length = 0;
     if (!whole) return NULL;
-    for (c = whole; *c; c++) plain &= isalpha((unsigned char)*c) || *c == ' ';
+    for (c = whole; *c; c++) plain &= latin_letter((unsigned char)*c) || *c == ' ';
     if (plain && strlen(whole) <= TEXT_RESULTS_WIDE) return whole;
     for (c = whole; *c;) {
         const char *start = c;
         int letters = 1;
-        while (*c && *c != ' ') letters &= isalpha((unsigned char)*c++) != 0;
+        while (*c && *c != ' ') letters &= latin_letter((unsigned char)*c++);
         if (letters && c - start > best_length) best = start, best_length = (int)(c - start);
         while (*c == ' ') c++;
     }
@@ -207,12 +215,17 @@ static const unsigned char *side_name(int id)
     unsigned char *out;
     int i, n = 0;
     if (id < TEXT_YOU_FIRST || id > TEXT_COM || !Settings_Get(SET_OPPONENT_NAME)) return NULL;
-    if (!Tables_DuelistShortName(Tables_OpponentId())) return NULL;
+    if (!Text_OpponentName(Tables_OpponentId())) return NULL;
     name = id == TEXT_COM ? results_name() : "You";
     if (!name) return NULL;
     out = texts[id == TEXT_COM];
     for (i = 0; name[i] && n < (int)sizeof(texts[0]) - 1; i++) {
-        int code = Glyphs_Code((unsigned char)name[i]);
+        /* An accented letter as its plain one: the small font has none.
+         * A letter made whole (ß, æ, þ...) has no plain one (its base is
+         * 0, the space): the screen keeps COM. */
+        int code = Glyphs_Code((unsigned char)name[i]), base = Glyphs_Base(code);
+        if (code >= GLYPHS_EXTENDED_FIRST && base == 0) return NULL;
+        code = base;
         if (code < 0 || code >= 0xF0) return NULL;
         out[n++] = (unsigned char)code;
     }
@@ -259,6 +272,79 @@ static const unsigned char *results_copy(const unsigned char *retail)
 
 int Text_Overridden(int id) { return overrides && id >= 0 && id <= 0xFFFF && overrides[id]; }
 
+const unsigned char *Text_Own(int id) { return Text_Overridden(id) ? overrides[id] : NULL; }
+
+/* A translation's string `id` in Latin-1, to `out` (`size` bytes): 0 when
+ * it has none, -1 when it has a character past Latin-1, or a code other
+ * than a letter or a space. */
+static int latin_text(int id, char *out, size_t size)
+{
+    const unsigned char *text = Text_Own(id);
+    size_t n = 0;
+    if (!text) return 0;
+    while (*text != 0xFF) {
+        int code = *text++;
+        uint32_t character;
+        if (code >= 0xF6) return -1;
+        if (code >= 0xF0) {
+            if (*text == 0xFF) return -1;
+            code = ((code - 0xF0) << 8) | *text++;
+        }
+        character = Glyphs_Character(code);
+        if (!character || character > 0xFF) return -1;
+        if (n + 1 < size) out[n++] = (char)character;
+    }
+    out[n] = '\0';
+    return 1;
+}
+
+/* The names bank's names of the duelists: 0x8328 + id. */
+#define TEXT_DUELIST_NAMES 0x8328
+
+const char *Text_OpponentName(int duelist)
+{
+    static char name[TABLES_SHORT_NAME_LIMIT + 1];
+    static int said[TABLES_DUELIST_COUNT];
+    const char *english = Tables_DuelistShortName(duelist);
+    char text[64];
+    const unsigned char *c;
+    int got;
+    if (!english) return NULL;
+    /* A translation's own: letters, spaces and full stops, cut to the
+     * limit. */
+    got = latin_text(TEXT_OWN_OPPONENT + duelist, text, sizeof(text));
+    for (c = (const unsigned char *)text; got > 0 && *c; c++) {
+        if (!latin_letter(*c) && *c != ' ' && *c != '.') got = -1;
+    }
+    if (got > 0) {
+        size_t n = strlen(text);
+        if (n > TABLES_SHORT_NAME_LIMIT) {
+            if (!(said[duelist] & 1)) {
+                LOG(LOG_MODS, "text: string %04X has %d letters; the first %d are shown", TEXT_OWN_OPPONENT + duelist,
+                    (int)n, TABLES_SHORT_NAME_LIMIT);
+            }
+            said[duelist] |= 1;
+            n = TABLES_SHORT_NAME_LIMIT;
+        }
+        while (n && text[n - 1] == ' ') n--;
+        if (n) {
+            memcpy(name, text, n);
+            name[n] = '\0';
+            return name;
+        }
+    } else if (got < 0 && !(said[duelist] & 2)) {
+        said[duelist] |= 2;
+        LOG(LOG_MODS, "text: string %04X is not letters, spaces and full stops of Latin-1; not used",
+            TEXT_OWN_OPPONENT + duelist);
+    }
+    /* The translation's full name, when it changed the English. */
+    if (latin_text(TEXT_DUELIST_NAMES + duelist, text, sizeof(text)) > 0 &&
+        strcmp(text, Tables_DuelistNames[duelist]) && Tables_ShortenName(text, name)) {
+        return name;
+    }
+    return english;
+}
+
 static void report_own(void *context, int line, const char *message)
 {
     (void)context;
@@ -294,6 +380,7 @@ const unsigned char *Text_Resolve(int id, const unsigned char *retail)
     const unsigned char *card = NULL, *side = side_name(id), *drops = CardDrops_Text(id), *shop = DeckMenu_Text(id);
     if (drops) return drops; /* the results screen's added pages (drops.h) */
     if (shop) return shop;   /* the card shop's menu with DECK SLOTS (deck_menu.h) */
+    if (CardPassword_Text(id)) return CardPassword_Text(id); /* View > Card passwords (passwords.h) */
     if (side) return side;
     /* A retail card a mod's "cards" replaced: its name and text, over a
      * translation's (cards.h). */
@@ -305,6 +392,22 @@ const unsigned char *Text_Resolve(int id, const unsigned char *retail)
         if (copy) return copy;
     }
     return own ? own : retail;
+}
+
+int Text_CutsMenuGlyph(int id, int x, int width, int y, int line_height, int height, int lines_left)
+{
+    static unsigned char told[0x10000 / 8];
+    if (x < width) return 0;
+    /* The line wraps (TextBox_WrapLineIfNeeded) and every line still to
+     * come but the last needs a row under it: while that fits the box,
+     * the game goes on as the console does. */
+    if (y + (lines_left + 1) * line_height <= height) return 0;
+    if (id >= 0 && id <= 0xFFFF && !(told[id >> 3] & (1 << (id & 7)))) {
+        told[id >> 3] |= (unsigned char)(1 << (id & 7));
+        LOG(LOG_MODS, "text: [%04X] has a line wider than its box (%d pixels), which stops the game; "
+                      "cut at the edge", id, width);
+    }
+    return 1;
 }
 
 unsigned char *Text_Retarget(unsigned char *cursor, unsigned target)

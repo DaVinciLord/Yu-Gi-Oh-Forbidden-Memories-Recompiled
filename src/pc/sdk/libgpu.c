@@ -489,6 +489,10 @@ int DrawSync(int mode)
 {
     (void)mode;
     flush_drawing();
+    /* The console's VBlanks arrive while it draws: those this frame ran past
+     * are counted before Graphics_SyncFrame reads the game's VBlank counter
+     * (Platform_ServiceClock). */
+    Platform_ServiceClock();
     return 0;
 }
 
