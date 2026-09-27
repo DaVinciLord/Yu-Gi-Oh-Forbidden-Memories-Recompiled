@@ -3,12 +3,15 @@
 /* Where the port's files live. Two roots:
  *
  *  - the program directory, which holds the executable and the mods shipped
- *    with the release; nothing is ever written there;
+ *    with the release; nothing is ever written there (outside user/ in
+ *    portable mode, below);
  *  - the user directory, which holds everything the player owns: settings,
  *    controls, save slots, save states, screenshots, their own mods and
  *    whatever a mod stores. On Windows that is
  *    Documents\My Games\YFM Re-Decomp; elsewhere $XDG_DATA_HOME/YFM Re-Decomp
- *    (~/.local/share/YFM Re-Decomp). MEMORIES_USER_DIR names another.
+ *    (~/.local/share/YFM Re-Decomp). A file named portable.txt in the
+ *    program directory makes it user/ there instead (portable mode).
+ *    MEMORIES_USER_DIR names another and wins over both.
  */
 #include <stddef.h>
 

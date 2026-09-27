@@ -185,7 +185,23 @@ after-hook sees what the game gets ([mod API](mod-api-3.md)).
 
 Esc quits (it closes an open menu first); F1, F2 and F4 select those state
 slots, F5 saves, and F7 loads. F3 cycles the debug HUD; slot 3 is selectable
-from File. Controllers
+from File. F11 or Alt+Enter (the main Enter or the keypad's) switches between
+the window and desktop fullscreen and saves `fullscreen`; in fullscreen Esc
+first returns to the window. The Enter pressed under Alt stops there, so it
+never presses Start, and Alt is a reserved modifier no binding can use. While
+a menu or a notice is open it takes the keys first, F11 and Alt+Enter
+included. Both are SDL only: the X11 backend has a fixed window with no
+fullscreen (`Platform_HasWindowModes` is 0 there).
+
+The keypad's + and - raise and lower the master volume by 5 (0-100, held
+keys repeat on SDL), which is the Audio menu's Master slider and the saved
+`master_volume`; M's mute stays on or off as it was, so a change while muted
+is heard when M unmutes. There is no on-screen notice: an open Audio menu
+shows the slider move, and `MEMORIES_TRACE=menu` logs each step. The
+keypad keys are not reserved, so **Game > Controls...** may bind them: a
+keypad + or - the keyboard bindings use (`controls.txt`) goes to the pad as
+before and that half of the shortcut is off (`Platform_VolumeKey`,
+`ControlsRuntime_KeyBound`). Both backends (SDL and X11). Controllers
 (`platform/gamepad_evdev.c`) are read through evdev, which names controls by
 meaning, so the one table covers Xbox pads on xpad, xone and xpadneo and most
 other pads. `/dev/input` is rescanned about once a second while a port is
@@ -340,6 +356,18 @@ under it:
 | `mods/` | mods the player installed (`notes/modding.md`) |
 | `mod-data/<id>/` | whatever a mod stores, the only place one may write |
 
+Portable mode: when a file named `portable.txt` sits beside the executable
+(its contents are ignored), the user directory is `user/` beside the
+executable instead, with the same layout -- settings, controls, saves,
+states, screenshots, the player's mods and mod data all go there, and the
+port says so on stderr. It is a folder of its own because `mods/` beside the
+executable is the release's. `MEMORIES_USER_DIR` still wins over it, and
+`MEMORIES_SETTINGS`, `MEMORIES_CONTROLS`, `MEMORIES_STATE_DIR` and
+`MEMORIES_SCREENSHOT_DIR` still name their own places. The folder must be
+writable (not under `Program Files`); if `user/` cannot be made the port
+falls back to `./saves` as for any user directory. Without the file nothing
+changes.
+
 What an older build left in `./saves` is carried over on the first launch
 that finds the destination missing (`Paths_MigrateLegacySaves`), so an
 existing card, settings and bindings survive the move. The game's own files
@@ -426,10 +454,13 @@ window is sized for the bar it gets. Automatic (0) follows the window height
 and above (including a 4K display). This is one step smaller than the original
 automatic size, with a minimum of 1; explicit 1x–4x choices are unchanged.
 `MEMORIES_SDL_SCRIPT` accepts `frame:shot` to save the composed
-window, which is how the menus are checked. `frame:key:name` presses and
-releases a key at once, which the game never sees; `frame:keydown:name` and
-`frame:keyup:name` hold it between two frames (`s` is Circle and `x` Cross by
-default), which is how Japanese buttons was checked through the keyboard.
+window, which is how the menus are checked, `frame:key:alt+<name>` to
+send a key with Left Alt held (`alt+return` is Alt+Enter; `kp_plus` and
+`kp_minus` are the keypad's + and -, `f5` saves a state), and
+`frame:keydown:<name>` / `frame:keyup:<name>` (or `down` / `up`) to hold a
+key across frames (a `key` is pressed and released in one pump, before the
+game reads the pad; `s` is Circle and `x` Cross by default), which is how
+Japanese buttons was checked through the keyboard.
 
 ### Cheats
 
@@ -443,68 +474,6 @@ Deck slots and `MEMORIES_DEBUG_CHEST`). Before that the workspace is scratch,
 and on a new game it becomes the save when the name entry closes. The settings
 rows (LP, free spending, the CPU's hand) change nothing in the save and work
 at any time.
-
-- **Give 1 / 2 / 3 of every card** raises every card in the trunk to at least
-  that many copies, the mods' cards included (`Cheats_GiveAllCards`). A card
-  held more times keeps its count. Open BUILD DECK to see it, and save
-  normally to keep it.
-- **Unlock all Free Duel CPU duelists** unlocks the full CPU roster without
-  changing story progress or win/loss records. If Free Duel is already open,
-  leave and reopen it to refresh the portraits and selection grid. Save
-  normally to keep the unlocks.
-- **Set StarChips to 999999** sets the balance (`gLibrary_dwStarchips`,
-  `SaveDataState.starchips`), capped at 999999 as the duel's reward caps it.
-  It is save data, so it is an action, not a setting: nothing is stored or
-  reapplied at start; save normally to keep it. The Password screen copies the
-  balance for display when it opens and at each payment step, so a change
-  made while that screen is open shows from the next of those.
-- **Free spending (Password)** (`cheat_free_spending`,
-  `MEMORIES_CHEAT_FREE_SPENDING`): a card bought on the Password screen costs
-  nothing. The payment step (`Password_UpdateShopScreen` state 3,
-  `overlays/password/shop.c`) still counts the price down and refreshes the
-  display, but one `#ifdef MEMORIES_PC` skips the subtraction from the balance
-  while `Cheats_FreeSpending` says so. The screen's own check still refuses a
-  card the balance does not cover (message 228); Set StarChips covers that.
-  Checked by buying Orion the Battle King (02971090, 290 StarChips) from 999999
-  after a new game: 999709 with it off, 999999 with it on, and the two final
-  frames differ only in those digits.
-
-**Proposal, not built: Force face up.** The old static recomp had a row that
-made the CPU play every card face up and turned its face-down cards over.
-That is game state, not display: `DUEL_CARD_FLAG_FACE_DOWN` (0x1000) on a
-card record is what the AI scripts read (`ai_script_*.c`, `ai_turn_action.c`),
-what battle checks before flipping a set monster, and what counts towards
-the CPU's rank statistics (`face_down_plays`), so clearing it changes how
-the duel plays, not only what it shows. If it is wanted, the place is the C
-that sets the bit when the CPU places a card (one `#ifdef MEMORIES_PC` in the
-placement, CPU side only, against a CPU only), never a per-frame pass that
-clears the bit on cards already on the field, and it needs its own check of
-battle, the AI's choices and the rank before it ships.
-- **Starting LP 1000 / 4000 / 8000 (console) / 9999** (`cheat_life_points`,
-  `MEMORIES_CHEAT_LIFE_POINTS`, 1-9999, default 8000) is what both sides start
-  a duel against the CPU with, from the next duel on. `Duel_InitSideStates`
-  asks `Cheats_StartingLifePoints` in place of `DUEL_STARTING_LIFE_POINTS`
-  (one `#ifdef MEMORIES_PC` in `duel_state_init.c`), so it is both the
-  starting and the maximum LP, as the console's 8000 is: recovery stops there.
-  Other values can be typed into the settings file. Two-player duels keep the
-  values their own setup screen chose (`D_8009B234`/`D_8009B236`, 1 to 8000 in
-  steps of 500): that screen draws its bar as a fraction of 8000, so the
-  cheat does not seed it.
-- **Show CPU's hand** (`cheat_show_hand`, `MEMORIES_CHEAT_SHOW_HAND`) draws
-  the hand the CPU plays from face up on its turn, as the player's is: art,
-  name, ATK/DEF and the stars. `Duel_InitSideStates` gives the CPU's side
-  record `card_view_mode` (+0x1F) = -1, and the three places the card display
-  reads it (`func_80017DB4`, `func_80018004`, `func_80023144`) draw card
-  backs and dim them for a negative value. They read it through
-  `DUEL_CARD_VIEW_MODE` (`game/duel_side_state.h`), which is the plain field
-  in the console build and `Cheats_CardViewMode` on the PC, answering 0 for
-  the CPU's record while the cheat is on. The byte in RAM is never written, so
-  nothing the game does with it changes, and turning the cheat off shows backs
-  again at once. Two-player duels (a negative opponent id) keep their own
-  setting. Checked at the same frame of the CPU's first turn: with the cheat
-  off the picture is identical to a build without it; with it on only the
-  hand and the card name bar change, and a later frame of the duel is identical,
-  so the CPU played the same.
 
 ### Back to the title screen
 

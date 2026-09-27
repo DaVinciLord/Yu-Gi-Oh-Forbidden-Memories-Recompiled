@@ -699,6 +699,11 @@ static void pump(void)
                     continue;
                 }
             }
+            /* Keypad +/-: master volume, unless the bindings use the key. */
+            if (Platform_VolumeKey(physical_keys[event.xkey.keycode & 255], event.type == KeyPress)) {
+                if (event.type == KeyPress) repaint_menu();
+                continue;
+            }
             if (key == XK_Escape && event.type == KeyPress && DeckMenu_Active()) {
                 DeckMenu_Close(); /* the deck slot screen, not the game */
                 continue;
