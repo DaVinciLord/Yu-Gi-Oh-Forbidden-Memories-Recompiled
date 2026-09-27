@@ -1385,6 +1385,12 @@ static void pump(void)
         case SDL_EVENT_KEY_DOWN: case SDL_EVENT_KEY_UP: {
             SDL_Keycode key = event.key.key;
             int down = event.type == SDL_EVENT_KEY_DOWN;
+            /* Keypad +/-: master volume, repeating while held; a keypad
+             * key the bindings use stays the pad's (Platform_VolumeKey). */
+            if (Platform_VolumeKey(controls_key(event.key.scancode), down)) {
+                if (down) menu_dirty = 1;
+                break;
+            }
             if (event.key.repeat) {
                 break;
             }
@@ -1884,6 +1890,8 @@ static void run_event_script(unsigned frame)
                           : strncmp(name, "tab", n) == 0 ? SDLK_TAB : strncmp(name, "p", n) == 0 ? SDLK_P
                           : strncmp(name, "m", n) == 0 ? SDLK_M
                           : strncmp(name, "period", n) == 0 ? SDLK_PERIOD
+                          : strncmp(name, "kp_plus", n) == 0 ? SDLK_KP_PLUS
+                          : strncmp(name, "kp_minus", n) == 0 ? SDLK_KP_MINUS
                           : SDLK_UNKNOWN;
             event.key.scancode = SDL_GetScancodeFromKey(event.key.key, NULL);
             event.key.windowID = SDL_GetWindowID(window);

@@ -171,7 +171,17 @@ first returns to the window. The Enter pressed under Alt stops there, so it
 never presses Start, and Alt is a reserved modifier no binding can use. While
 a menu or a notice is open it takes the keys first, F11 and Alt+Enter
 included. Both are SDL only: the X11 backend has a fixed window with no
-fullscreen (`Platform_HasWindowModes` is 0 there). Controllers
+fullscreen (`Platform_HasWindowModes` is 0 there).
+
+The keypad's + and - raise and lower the master volume by 5 (0-100, held
+keys repeat on SDL), which is the Audio menu's Master slider and the saved
+`master_volume`; M's mute stays on or off as it was, so a change while muted
+is heard when M unmutes. There is no on-screen notice: an open Audio menu
+shows the slider move, and `MEMORIES_TRACE=menu` logs each step. The
+keypad keys are not reserved, so **Game > Controls...** may bind them: a
+keypad + or - the keyboard bindings use (`controls.txt`) goes to the pad as
+before and that half of the shortcut is off (`Platform_VolumeKey`,
+`ControlsRuntime_KeyBound`). Both backends (SDL and X11). Controllers
 (`platform/gamepad_evdev.c`) are read through evdev, which names controls by
 meaning, so the one table covers Xbox pads on xpad, xone and xpadneo and most
 other pads. `/dev/input` is rescanned about once a second while a port is
@@ -418,7 +428,8 @@ and above (including a 4K display). This is one step smaller than the original
 automatic size, with a minimum of 1; explicit 1x–4x choices are unchanged.
 `MEMORIES_SDL_SCRIPT` accepts `frame:shot` to save the composed
 window, which is how the menus are checked, `frame:key:alt+<name>` to
-send a key with Left Alt held (`alt+return` is Alt+Enter), and
+send a key with Left Alt held (`alt+return` is Alt+Enter; `kp_plus` and
+`kp_minus` are the keypad's + and -), and
 `frame:down:<name>` / `frame:up:<name>` to hold a key across frames (a
 `key` is pressed and released in one pump, before the game reads the pad).
 
