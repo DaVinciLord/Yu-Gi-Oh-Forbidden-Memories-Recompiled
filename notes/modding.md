@@ -448,7 +448,8 @@ from, with no code and naming cards by name:
 ```
 
 Weights are out of 2048, as the game's are, and the pools are always brought
-back to 2048. Several mods' edits of the same opponent add up rather than
+back to 2048. A deck may be fixed instead, its forty cards counted out by
+copies with no limit of three (`{"fixed": true, "Kuriboh": 4, ...}`). Several mods' edits of the same opponent add up rather than
 replace each other. [Gameplay tables](gameplay-tables.md) has every key, the
 opponents' names, and how the rules combine. Like cards, they need a restart.
 

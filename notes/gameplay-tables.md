@@ -102,7 +102,7 @@ opponent:
 
 | Key | Pool |
 |---|---|
-| `decks` | the cards its deck is dealt from (40 cards, at most 3 of each) |
+| `decks` | the cards its deck is dealt from (40 cards, at most 3 of each), or its fixed deck (below) |
 | `drops` → `pow` (or `sa-pow`) | the prize for an S or A rank won on POW |
 | `drops` → `bcd` (or `b-c-d`) | the prize for a B, C or D rank |
 | `drops` → `tec` (or `sa-tec`) | the prize for an S or A rank won on TEC |
@@ -152,6 +152,34 @@ mod's edits of one opponent. Cards a mod adds may be in a pool too.
 Opponent 0 is an unused copy of Simon Muran. The disc's own pools are in
 `notes/research/fusion-and-drop-tables/drops.csv`.
 
+### Fixed decks
+
+A deck may instead be written down card by card, as some community mods do:
+`"fixed": true` makes the numbers **copies**, not weights, and they must add
+up to exactly 40:
+
+```json
+"decks": {
+    "Simon Muran": {"fixed": true, "Kuriboh": 4, "Mystical Elf": 6, "Celtic Guardian": 30}
+}
+```
+
+The duel deals those forty cards and shuffles them as it shuffles any deck.
+The limit of three copies of a card does **not** apply to a fixed deck: the
+counts are the deck, so a limit could only refuse the list or change it
+behind the author's back, and nothing in the duel needs it (the game
+itself deals a two-player deck of whatever its save holds). A dealt,
+weighted deck keeps the limit. A card named in a fixed deck is dealt as it
+is: a copy a mod added is not traded for its base, nor a retail card for one
+of its copies.
+
+A fixed deck that does not come to 40 cards, or names a card the game does
+not have, is reported and left out. The latest fixed deck of an opponent
+wins, and a fixed deck wins over weighted edits of the same deck from any
+mod, which are reported as left out the first time the deck is dealt.
+`"all"` fixes every opponent's deck. `MEMORIES_TRACE=mods` logs each fixed
+deck as it is dealt.
+
 ## Where two mods disagree
 
 Mods apply in load order (priority, then `after` and `requires`, then the
@@ -178,7 +206,7 @@ it first:
 | `Duel_CheckFusion` (`duel_card_checks.c`) | fusion table, `0x8017C2D8` | `Tables_Fusion`, then `Tables_FilterFusion` over the disc's answer |
 | `Duel_CheckEquip` (`duel_card_checks.c`) | equip table, `0x8017A1D8` | `Tables_Equip` |
 | `Duel_CheckRitual` (`duel_check_ritual.c`) | ritual table, `0x801799D8` | `Tables_Ritual`, whose recipe is laid out like the disc's |
-| `Duel_ShuffleDeck` (`duel_shuffle_deck.c`) | deck pool, `0x801781D8` | `Tables_Pool(TABLES_POOL_DECK)` |
+| `Duel_ShuffleDeck` (`duel_shuffle_deck.c`) | deck pool, `0x801781D8` | `Tables_FixedDeck`, then `Tables_Pool(TABLES_POOL_DECK)` |
 | `Duel_SelectCardDrop` (`duel_result_runtime.c`) | drop pools, `0x8017878C` | `Tables_Pool(TABLES_POOL_POW + pool)` |
 
 A pool is worked out from the opponent's loaded pool and every edit of it

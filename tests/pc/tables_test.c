@@ -65,7 +65,7 @@ int Mods_Active(int mod) { return mod >= 0; }
 const char *Mods_Id(int mod) { (void)mod; return ""; }
 const JsonValue *Mods_Manifest(int mod) { (void)mod; return NULL; }
 
-static JsonDocument *documents[16];
+static JsonDocument *documents[64];
 static int document_count;
 static void add(const char *mod, const char *text)
 {
@@ -73,6 +73,7 @@ static void add(const char *mod, const char *text)
     JsonDocument *document = Json_Parse(text, error, sizeof(error));
     if (!document) fprintf(stderr, "%s\n", error);
     assert(document);
+    assert(document_count < (int)(sizeof(documents) / sizeof(documents[0])));
     documents[document_count++] = document;
     Tables_Add(mod, Json_Root(document));
 }
@@ -188,9 +189,38 @@ int main(void)
     pool = Tables_PoolFor(15, TABLES_POOL_DECK, retail);
     assert(pool[101] == 0 && pool[10] == 300 && total(pool) == 2048);
 
+    /* Fixed decks: copies by card, past three of one, in id order; a later
+     * fixed deck wins; one that is not 40 cards is left out; a fixed deck
+     * wins over the weighted edits of the same deck, which are told so. */
+    {
+        unsigned short deck[TABLES_DECK_SIZE];
+        assert(!Tables_FixedDeck(15, deck) && !Tables_FixedDeck(-1, deck));
+        notes = 0;
+        add("f", "{\"decks\": {\"Pegasus\": {\"fixed\": true, \"Kuriboh\": 30, \"test:copy:1\": 4, \"12\": 6}}}");
+        assert(notes == 0 && Tables_FixedDeck(15, deck));
+        assert(notes == 1);                /* Pegasus's weighted edit above waits */
+        for (id = 0; id < 30; id++) assert(deck[id] == 10);
+        for (id = 30; id < 36; id++) assert(deck[id] == 12);
+        for (id = 36; id < 40; id++) assert(deck[id] == 723);
+        assert(Tables_FixedDeck(15, deck) && notes == 1);   /* told once */
+        notes = 0;
+        add("g", "{\"decks\": {\"Pegasus\": {\"fixed\": true, \"Kuriboh\": 39}, \"Shadi\": {\"fixed\": true, \"nothing\": 40},"
+                 "\"Seto\": {\"fixed\": true, \"Kuriboh\": -1}, \"all\": {\"fixed\": true, \"11\": 40, \"12\": 0}}}");
+        assert(notes == 5);                /* 39 cards; no card, and so 0; a count under 0, and so 0 */
+        assert(Tables_FixedDeck(15, deck) && deck[0] == 11 && deck[39] == 11);   /* "all" came later */
+        assert(Tables_FixedDeck(1, deck) && deck[0] == 11);
+        add("h", "{\"decks\": {\"Pegasus\": {\"fixed\": true, \"Kuriboh\": 20, \"Thunder Dragon\": 20}}}");
+        assert(Tables_FixedDeck(15, deck) && deck[0] == 10 && deck[19] == 10 && deck[20] == 11 && deck[39] == 11);
+        assert(Tables_FixedDeck(14, deck) && deck[0] == 11);
+    }
+
     Tables_Clear();
     assert(fusion(10, 11) == -1 && Tables_Equip(20, 12) == -1 && Tables_Ritual(21, own) == -1);
     assert(!Tables_PoolFor(15, TABLES_POOL_DECK, retail));
+    {
+        unsigned short deck[TABLES_DECK_SIZE];
+        assert(!Tables_FixedDeck(15, deck));
+    }
     while (document_count) Json_Free(documents[--document_count]);
     puts("tables: ok");
     return 0;

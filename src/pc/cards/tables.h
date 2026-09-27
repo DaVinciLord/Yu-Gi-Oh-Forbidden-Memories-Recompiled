@@ -48,6 +48,13 @@ const unsigned short *Tables_Pool(int pool, const unsigned short *retail);
 /* The same for a given opponent (0-39), for the tests and tools. */
 const unsigned short *Tables_PoolFor(int duelist, int pool, const unsigned short *retail);
 
+/* An opponent's fixed deck ("decks": {"fixed": true, card: copies}): 1 with
+ * its 40 cards, in id order, in `cards`, which the duel then shuffles; 0 when
+ * no mod fixes it. A fixed deck wins over weighted edits of the same deck,
+ * and the latest fixed deck over earlier ones. */
+#define TABLES_DECK_SIZE 40
+int Tables_FixedDeck(int duelist, unsigned short cards[TABLES_DECK_SIZE]);
+
 /* The opponent names a manifest may use, by duelist id; "all" means every
  * one of them. */
 #define TABLES_DUELIST_COUNT 40

@@ -4,7 +4,8 @@
  * Each applied mod's "fusions", "equips", "rituals", "drops" and "decks" are
  * read into rules here, once, in the order the mods load. The game's table
  * readers (duel_card_checks.c, duel_check_ritual.c, duel_shuffle_deck.c,
- * duel_result_runtime.c) ask these first. A drop or deck pool is worked out
+ * duel_result_runtime.c) ask these first. A deck may also be fixed: forty
+ * cards written down by their copies, dealt as they are. A drop or deck pool is worked out
  * from what the game loaded when it is drawn from, so a data mod's patch of
  * the same pool comes first and the edits here go on top of it. */
 #include "tables.h"
@@ -94,6 +95,13 @@ static RitualRule *rituals;
 static int ritual_count, ritual_room;
 static PoolEdit *edits;
 static int edit_count, edit_room;
+typedef struct {
+    const char *mod;
+    unsigned char duelist;
+    unsigned short cards[DECK_SIZE];   /* in id order */
+} FixedDeck;
+static FixedDeck *fixed_decks;
+static int fixed_count, fixed_room;
 static unsigned char edited[TABLES_DUELIST_COUNT][TABLES_POOL_COUNT];
 static unsigned order_counter;
 static int fusions_sorted;
@@ -477,8 +485,110 @@ static void read_pool(const char *mod, const char *where, int duelist, int pool,
     /* The edit's lists are shared by the opponents it names, and live on. */
 }
 
+/* A fixed deck: { "fixed": true, card: copies, ... }, the copies adding up
+ * to the 40 cards of a deck. The counts are the deck, so the three-copy limit
+ * of a dealt deck does not apply: the author wrote down every copy, and a
+ * limit could only refuse the list or change it behind their back. */
+typedef struct {
+    int id, copies;
+} Copies;
+
+static int by_id(const void *left, const void *right)
+{
+    return ((const Copies *)left)->id - ((const Copies *)right)->id;
+}
+
+static void read_fixed_deck(const char *mod, const char *where, int duelist, const JsonValue *cards)
+{
+    Copies *list;
+    FixedDeck deck;
+    int i, n = 0, dealt = 0, total = 0, first, last;
+    if (Json_TypeOf(cards) != JSON_OBJECT) {
+        Mods_Note(mod, "%s: a deck is an object of cards and their copies", where);
+        return;
+    }
+    list = calloc((size_t)Json_Count(cards) + 1, sizeof(*list));
+    if (!list) return;
+    for (i = 0; i < Json_Count(cards); i++) {
+        const JsonValue *member = Json_At(cards, i);
+        const char *name = Json_Name(member);
+        long copies;
+        int id;
+        char at[160];
+        if (!strcmp(name, "fixed") || !strcmp(name, "replace")) continue;
+        snprintf(at, sizeof(at), "%s \"%s\"", where, name);
+        id = Cards_Named(name);
+        if (id <= 0) {
+            Mods_Note(mod, "%s: no such card", at);
+            continue;
+        }
+        copies = Json_Number(member, -1);
+        if (Json_TypeOf(member) != JSON_NUMBER || copies < 0 || copies > DECK_SIZE) {
+            Mods_Note(mod, "%s: a fixed deck gives each card its copies, 0 to %d", at, DECK_SIZE);
+            continue;
+        }
+        total += (int)copies;
+        if (!copies) continue;
+        list[n].id = id;
+        list[n++].copies = (int)copies;
+    }
+    if (total != DECK_SIZE) {
+        Mods_Note(mod, "%s: a fixed deck is %d cards, and this one has %d; left out", where, DECK_SIZE, total);
+        free(list);
+        return;
+    }
+    /* In id order, as the game's own pools are read; the duel shuffles it. */
+    qsort(list, (size_t)n, sizeof(*list), by_id);
+    memset(&deck, 0, sizeof(deck));
+    deck.mod = mod;
+    for (i = 0; i < n; i++) {
+        int copy;
+        for (copy = 0; copy < list[i].copies; copy++) deck.cards[dealt++] = (unsigned short)list[i].id;
+    }
+    free(list);
+    first = duelist < 0 ? 0 : duelist;
+    last = duelist < 0 ? TABLES_DUELIST_COUNT - 1 : duelist;
+    for (i = first; i <= last; i++) {
+        FixedDeck *slot = grow(&fixed_decks, &fixed_room, fixed_count, sizeof(*fixed_decks));
+        if (!slot) break;
+        *slot = deck;
+        slot->duelist = (unsigned char)i;
+        fixed_count++;
+    }
+}
+
+int Tables_FixedDeck(int duelist, unsigned short cards[TABLES_DECK_SIZE])
+{
+    const FixedDeck *deck = NULL;
+    int i;
+    if (duelist < 0 || duelist >= TABLES_DUELIST_COUNT) return 0;
+    for (i = fixed_count - 1; i >= 0 && !deck; i--) {   /* the latest */
+        if (fixed_decks[i].duelist == duelist) deck = &fixed_decks[i];
+    }
+    if (!deck) return 0;
+    for (i = 0; i < edit_count; i++) {
+        /* A fixed deck is the whole deck: the weighted edits of it wait. */
+        PoolEdit *edit = &edits[i];
+        if (edit->duelist != duelist || edit->pool != TABLES_POOL_DECK || edit->warned) continue;
+        edit->warned = 1;
+        Mods_Note(edit->mod, "%s's deck: left as it is; %s fixes it", Tables_DuelistNames[duelist], deck->mod);
+    }
+    memcpy(cards, deck->cards, sizeof(deck->cards));
+    if (Log_Wanted(LOG_MODS)) {
+        char text[DECK_SIZE * 12];
+        int at = 0;
+        for (i = 0; i < DECK_SIZE; i++) {
+            int copies = 1;
+            while (i + 1 < DECK_SIZE && deck->cards[i + 1] == deck->cards[i]) i++, copies++;
+            at += snprintf(text + at, sizeof(text) - (size_t)at, " %dx%d", copies, deck->cards[i]);
+        }
+        LOG(LOG_MODS, "tables: %s's deck fixed by %s (copies x card):%s", Tables_DuelistNames[duelist], deck->mod, text);
+    }
+    return 1;
+}
+
 /* "drops": { opponent: { pool: { card: weight } } }, and
- * "decks": { opponent: { card: weight } }. */
+ * "decks": { opponent: { card: weight } } or { "fixed": true, card: copies }. */
 static void read_pools(const char *mod, const JsonValue *table, int decks)
 {
     int i, j;
@@ -497,7 +607,8 @@ static void read_pools(const char *mod, const JsonValue *table, int decks)
         }
         if (decks) {
             snprintf(where, sizeof(where), "decks \"%s\"", name);
-            read_pool(mod, where, duelist, TABLES_POOL_DECK, entry);
+            if (Json_Bool(Json_Member(entry, "fixed"), 0)) read_fixed_deck(mod, where, duelist, entry);
+            else read_pool(mod, where, duelist, TABLES_POOL_DECK, entry);
             continue;
         }
         if (Json_TypeOf(entry) != JSON_OBJECT) {
@@ -706,7 +817,7 @@ void Tables_Clear(void)
             free(edits[i].weights);
         }
     }
-    fusion_count = equip_count = ritual_count = edit_count = 0;
+    fusion_count = equip_count = ritual_count = edit_count = fixed_count = 0;
     if (removed_results) memset(removed_results, 0, (size_t)removed_room);
     memset(edited, 0, sizeof(edited));
     forget_pools();
@@ -722,7 +833,7 @@ void Tables_Build(void)
         int mod = Mods_Loaded(i);
         if (Mods_Active(mod)) Tables_Add(Mods_Id(mod), Mods_Manifest(mod));
     }
-    if (fusion_count || equip_count || ritual_count || edit_count)
-        LOG(LOG_MODS, "tables: %d fusion rules, %d equip rules, %d rituals, %d pool edits",
-            fusion_count, equip_count, ritual_count, edit_count);
+    if (fusion_count || equip_count || ritual_count || edit_count || fixed_count)
+        LOG(LOG_MODS, "tables: %d fusion rules, %d equip rules, %d rituals, %d pool edits, %d fixed decks",
+            fusion_count, equip_count, ritual_count, edit_count, fixed_count);
 }
