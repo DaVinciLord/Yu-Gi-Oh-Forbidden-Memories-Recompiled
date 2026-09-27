@@ -129,6 +129,15 @@ void ControlsRuntime_Key(int key, int down)
     if (key > 0 && key < CTRL_KEY_COUNT)
         keys[key] = down != 0;
 }
+int ControlsRuntime_KeyBound(int key)
+{
+    ControlsRuntime_Init();
+    for (int d = 0; d < CTRL_DEST_COUNT; d++)
+        for (int s = 0; s < CTRL_SLOT_COUNT; s++)
+            if (active.kb.src[d][s].kind == CTRL_SRC_KEY && active.kb.src[d][s].code == key)
+                return 1;
+    return 0;
+}
 void ControlsRuntime_ResetKeys(void)
 {
     memset(keys, 0, sizeof(keys));

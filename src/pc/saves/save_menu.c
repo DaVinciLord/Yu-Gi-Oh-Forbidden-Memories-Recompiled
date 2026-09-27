@@ -1,6 +1,7 @@
 /* The save slot menu. See save_menu.h. */
 #include "save_menu.h"
 #include "pc/guest/state.h"
+#include "pc/platform/settings.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -450,7 +451,14 @@ void SaveMenu_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
     }
     if (menu.top > 0) draw_text(canvas, px + pw - 30 * s, py + 20 * s, "^", COLOUR_DIM);
     if (menu.top + rows < SAVE_SLOT_COUNT) draw_text(canvas, px + pw - 18 * s, py + 20 * s, "v", COLOUR_DIM);
-    draw_text(canvas, px + 14 * s, py + ph - 16 * s,
+    /* The menu reads the game's pad state, so Game > Japanese buttons
+     * (button_layout.h) exchanges its buttons too. */
+    if (Settings_Get(SET_JP_BUTTONS))
+        draw_text(canvas, px + 14 * s, py + ph - 16 * s,
+                  menu.step == SAVE_MENU_SAVE ? "Circle: save here    Cross: back" : "Circle: load    Cross: back",
+                  COLOUR_DIM);
+    else
+        draw_text(canvas, px + 14 * s, py + ph - 16 * s,
                   menu.step == SAVE_MENU_SAVE ? "Cross: save here    Circle: back" : "Cross: load    Circle: back",
                   COLOUR_DIM);
     if (menu.view == VIEW_CONFIRM) {
@@ -459,7 +467,8 @@ void SaveMenu_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
         int mw = pw - 96 * s, mh = 64 * s, mx = px + 48 * s, my = py + (ph - mh) / 2;
         frame(canvas, mx, my, mw, mh, s);
         centred(canvas, mx, mw, my + 24 * s, menu.message, COLOUR_TEXT);
-        if (menu.message_waits) centred(canvas, mx, mw, my + 46 * s, "Press Cross", COLOUR_DIM);
+        if (menu.message_waits)
+            centred(canvas, mx, mw, my + 46 * s, Settings_Get(SET_JP_BUTTONS) ? "Press Circle" : "Press Cross", COLOUR_DIM);
     }
     *x = px;
     *y = py;
