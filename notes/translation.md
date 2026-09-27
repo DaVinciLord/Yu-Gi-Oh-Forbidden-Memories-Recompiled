@@ -128,6 +128,93 @@ retail glyphs can be typed as themselves: letters, digits, `! " # $ % & '
 ( ) * + , - . / : ; < = > ?`, `«` `»`, `·`, `α β γ`, `← →`, `♂ ♀`; typographic
 quotes and dashes are taken as their plain ones.
 
+## The port's own strings
+
+A few words the port adds to the game's screens are drawn in the game's
+letters, inside the game's picture, and a translation gives them in the
+same listing, in the dialogue bank, with ids no retail string has
+(`FE00`-`FEFF`, `TEXT_OWN_*` in `src/pc/text/text.h`). They are not in the
+extracted listing; add them:
+
+```text
+@bank dialog
+
+[FE00]
+NEW{end}
+
+[FE01]
+%d MORE CARD{end}
+
+[FE02]
+%d MORE CARDS{end}
+
+[FE03]
+PAGE %d OF %d{end}
+
+[FE10]
+DECK SLOTS{end}
+
+[FE41]
+Simon Muran{end}
+```
+
+| Id | Where | Room |
+|---|---|---|
+| `FE00` | Card drops' added result pages: after a card the player had none of | ends at the plate's end; each letter past 3 takes one from the card's name |
+| `FE01`, `FE02` | the same pages' heading, left: one card past the first, or more | with `FE03` right-aligned on the same line: 33 letters for both, numbers and spaces included |
+| `FE03` | the heading, right, when there is more than one page | as above |
+| `FE10` | the card shop's menu (string `0011`): the entry under BUILD DECK | the menu's box shows 44 letters in all (spaces are none); retail's four lines have 35, so 9; a line is 15 wide |
+| `FE41`-`FE67` | the opponent's name in place of COM (Video > Opponent's name for COM): `FE40` + the duelist's id, 1-39 (the names bank's `8328` + id is the same duelist) | 14 letters, spaces and full stops (H.M. Anubisius, the longest English one); past that, the first 14 |
+
+Letters and spaces only: a string with other codes is not used (the port's
+English is). `%d` is where the port puts a number, in the order above
+(`FE03`: the page, then how many). The headings are in the small letters,
+which have no accents: an accented letter is drawn as its plain one.
+
+The shop's menu with the entry is rebuilt from the translation's string
+`0011` when it has one: its four lines as they are, `FE10` (or the English)
+added under the second, centred as the others are, and its `{choice}` given
+the fifth entry. A `0011` that is not four lines of letters, spaces,
+`{f8 02}` steps and `{f8 0A}` colours, or five lines past the box's 44
+letters, leaves the menu the translation's four entries, and the log
+(`MEMORIES_TRACE=mods`) says so. A translation whose own four lines have
+more letters than retail's has less room for `FE10`: the pt-BR menu has 38,
+so 6.
+
+The opponent's name in place of COM (`FE41`-`FE67`) is set in the text's
+font, not the game's letters, so it may have accents (Simão): letters,
+spaces and full stops of Latin-1; a string with anything else is not used
+(the log says so). Without it, a translation that renames the duelist in
+the names bank (`8329`-`834F`, as pt-BR's does) has that name shown, made
+short as the English ones are (`Tables_ShortenName`): up to its first
+character that is not a letter, a space or a full stop (Jono 2º Duelo:
+Jono), whole up to 14; longer, its first words as initials when every word
+starts with a capital (Sumo Mago Martis: S.M. Martis), else its last word
+(Mago da Montanha: Montanha). A name the translation gives as the English
+(Weevil Underwood) keeps the English short one (Weevil). Without either,
+the English. The result screens show the same name over COM's column,
+an accented letter as its plain one (their small letters have none).
+
+| Id | Duelist | Id | Duelist | Id | Duelist |
+|---|---|---|---|---|---|
+| `FE41` | Simon Muran | `FE4E` | Yami Bakura | `FE5B` | Desert Mage |
+| `FE42` | Teana | `FE4F` | Pegasus | `FE5C` | High Mage Martis |
+| `FE43` | Jono | `FE50` | Isis | `FE5D` | Meadow Mage |
+| `FE44` | Villager 1 | `FE51` | Kaiba | `FE5E` | High Mage Kepura |
+| `FE45` | Villager 2 | `FE52` | Mage Soldier | `FE5F` | Labyrinth Mage |
+| `FE46` | Villager 3 | `FE53` | Jono 2nd | `FE60` | Seto 2nd |
+| `FE47` | Seto | `FE54` | Teana 2nd | `FE61` | Guardian Sebek |
+| `FE48` | Heishin | `FE55` | Ocean Mage | `FE62` | Guardian Neku |
+| `FE49` | Rex Raptor | `FE56` | High Mage Secmeton | `FE63` | Heishin 2nd |
+| `FE4A` | Weevil Underwood | `FE57` | Forest Mage | `FE64` | Seto 3rd |
+| `FE4B` | Mai Valentine | `FE58` | High Mage Anubisius | `FE65` | DarkNite |
+| `FE4C` | Bandit Keith | `FE59` | Mountain Mage | `FE66` | Nitemare |
+| `FE4D` | Shadi | `FE5A` | High Mage Atenza | `FE67` | Duel Master K |
+
+The port's other words (the save slot and deck slot menus, the host
+window's menus) are drawn in the host's font over the game, not in the
+game's letters, and are not part of a translation's text.
+
 ## Letters
 
 The game's font has 91 letters, none accented. The port draws more,

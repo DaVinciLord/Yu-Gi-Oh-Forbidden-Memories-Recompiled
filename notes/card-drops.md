@@ -23,7 +23,8 @@ name (cut with `...` when it would run into the columns), `xN` for more than
 one copy, and **NEW** when you had no copy of the card in your deck or chest
 before the duel. New cards come first, then the rest, each by number. The
 heading gives how many cards the pages hold and which page of how many this
-is.
+is. A translation can give NEW and the heading in its words (strings
+`FE00`-`FE03`, [translations](translation.md#the-ports-own-strings)).
 
 The card SPOILS shows is never listed again. A page can still show the same
 card when the table dealt another copy of it, since that copy is a separate
