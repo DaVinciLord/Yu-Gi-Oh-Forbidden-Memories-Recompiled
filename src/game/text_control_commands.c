@@ -13,6 +13,7 @@
 #include "text_control_commands.h"
 #include "../unmatched.h"
 #ifdef MEMORIES_PC
+#include "pc/text/menu_cut.h"
 #include "pc/text/text.h"
 #endif
 
@@ -96,6 +97,9 @@ void Text_HandleChoiceCommand(DuelEffectChannel *object)
         object->field_56 = 0;
         D_8009B340 = Text_TryCompleteChoiceLayout;
         object->flags_34 = v | 0x1000;
+#ifdef MEMORIES_PC
+        TextMenu_Begin(object->index_57);
+#endif
     }
 }
 
@@ -151,15 +155,32 @@ void Text_PushStreamOffset(DuelEffectChannel *arg0)
 
 void Text_NewLine(DuelEffectChannel *record)
 {
+#ifdef MEMORIES_PC
+    s32 menu = record->flags_34 & 0x1000;
+#endif
     record->field_56++;
     record->field_38 = 0x1000;
     if (TextBox_WrapLineIfNeeded(record)) {
+#ifdef MEMORIES_PC
+        /* 0x1000: a menu's choices are being laid out, in one go. A row
+           past the box before its last line would wait for a button there
+           that nothing reads, and the game would stop: its lines past the
+           box are cut instead (menu_cut.h). */
+        if (!menu || !TextMenu_CutsLine(record->index_57, record->field_56, gDialog_bChoiceCount))
+#endif
         record->state_51 = 4;
     }
     D_8009B350 = 1;
     if (D_8009B340) {
         D_8009B340(record);
     }
+#ifdef MEMORIES_PC
+    /* The menu is laid out: the player picks from the choices in the box. */
+    if (menu && !(record->flags_34 & 0x1000)) {
+        gDialog_bChoiceCount = TextMenu_Finish(record->field_36, record->index_57,
+                                               (D_8009B34C & 0x30) >> 4, gDialog_bChoiceCount);
+    }
+#endif
 }
 
 void Text_EndStream(DuelEffectChannel *record)
