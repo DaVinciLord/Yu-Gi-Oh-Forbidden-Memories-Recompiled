@@ -445,6 +445,18 @@ at any time.
   Checked by buying Orion the Battle King (02971090, 290 StarChips) from 999999
   after a new game: 999709 with it off, 999999 with it on, and the two final
   frames differ only in those digits.
+
+**Proposal, not built: Force face up.** The old static recomp had a row that
+made the CPU play every card face up and turned its face-down cards over.
+That is game state, not display: `DUEL_CARD_FLAG_FACE_DOWN` (0x1000) on a
+card record is what the AI scripts read (`ai_script_*.c`, `ai_turn_action.c`),
+what battle checks before flipping a set monster, and what counts towards
+the CPU's rank statistics (`face_down_plays`), so clearing it changes how
+the duel plays, not only what it shows. If it is wanted, the place is the C
+that sets the bit when the CPU places a card (one `#ifdef MEMORIES_PC` in the
+placement, CPU side only, against a CPU only), never a per-frame pass that
+clears the bit on cards already on the field, and it needs its own check of
+battle, the AI's choices and the rank before it ships.
 - **Starting LP 1000 / 4000 / 8000 (console) / 9999** (`cheat_life_points`,
   `MEMORIES_CHEAT_LIFE_POINTS`, 1-9999, default 8000) is what both sides start
   a duel against the CPU with, from the next duel on. `Duel_InitSideStates`
