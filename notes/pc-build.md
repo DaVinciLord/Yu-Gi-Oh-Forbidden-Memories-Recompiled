@@ -336,6 +336,18 @@ under it:
 | `mods/` | mods the player installed (`notes/modding.md`) |
 | `mod-data/<id>/` | whatever a mod stores, the only place one may write |
 
+Portable mode: when a file named `portable.txt` sits beside the executable
+(its contents are ignored), the user directory is `user/` beside the
+executable instead, with the same layout -- settings, controls, saves,
+states, screenshots, the player's mods and mod data all go there, and the
+port says so on stderr. It is a folder of its own because `mods/` beside the
+executable is the release's. `MEMORIES_USER_DIR` still wins over it, and
+`MEMORIES_SETTINGS`, `MEMORIES_CONTROLS`, `MEMORIES_STATE_DIR` and
+`MEMORIES_SCREENSHOT_DIR` still name their own places. The folder must be
+writable (not under `Program Files`); if `user/` cannot be made the port
+falls back to `./saves` as for any user directory. Without the file nothing
+changes.
+
 What an older build left in `./saves` is carried over on the first launch
 that finds the destination missing (`Paths_MigrateLegacySaves`), so an
 existing card, settings and bindings survive the move. The game's own files
@@ -429,7 +441,7 @@ automatic size, with a minimum of 1; explicit 1x–4x choices are unchanged.
 `MEMORIES_SDL_SCRIPT` accepts `frame:shot` to save the composed
 window, which is how the menus are checked, `frame:key:alt+<name>` to
 send a key with Left Alt held (`alt+return` is Alt+Enter; `kp_plus` and
-`kp_minus` are the keypad's + and -), and
+`kp_minus` are the keypad's + and -, `f5` saves a state), and
 `frame:down:<name>` / `frame:up:<name>` to hold a key across frames (a
 `key` is pressed and released in one pump, before the game reads the pad).
 

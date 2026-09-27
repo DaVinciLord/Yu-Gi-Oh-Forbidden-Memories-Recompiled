@@ -1881,6 +1881,7 @@ static void run_event_script(unsigned frame)
             }
             event.key.key = strncmp(name, "escape", n) == 0 ? SDLK_ESCAPE : strncmp(name, "f10", n) == 0 ? SDLK_F10
                           : strncmp(name, "f3", n) == 0 ? SDLK_F3
+                          : strncmp(name, "f5", n) == 0 ? SDLK_F5
                           : strncmp(name, "f6", n) == 0 ? SDLK_F6
                           : strncmp(name, "f11", n) == 0 ? SDLK_F11
                           : strncmp(name, "f12", n) == 0 ? SDLK_F12
