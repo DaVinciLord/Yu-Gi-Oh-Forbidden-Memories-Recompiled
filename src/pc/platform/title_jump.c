@@ -1,4 +1,6 @@
-/* Debug > Jump to > Title Screen: the game's own way back, taken from anywhere.
+/* Debug > Jump to > Title Screen and Game > Restart game: the game's own way
+ * back, taken from anywhere. Restart game is the player's version: it asks
+ * first, then makes the same request, like a console's soft reset.
  *
  * Retail already has one: when a campaign loss is over, Main_RunGameOver
  * (src/game/main_mode_runners.c) fades the music and the screen out, asks
@@ -36,11 +38,28 @@ void TitleJump_SetActive(int enabled)
     active = !!enabled;
     if (!active) requested = 0;
     Menu_SetItemEnabled(MENU_ITEM_TITLE, active);
+    Menu_SetItemEnabled(MENU_ITEM_RESTART, active);
 }
 
 void TitleJump_Request(void)
 {
     if (active) requested = 1;
+}
+
+/* Yes is taken only if the item is still on: the game may have reached the
+ * title by itself while the question was up. */
+static void restart_chosen(int button, int *quit)
+{
+    (void)quit;
+    if (button == 0) TitleJump_Request();
+}
+
+void TitleJump_Confirm(void)
+{
+    static const char *const buttons[] = {"Yes", "No"};
+    if (!active) return;
+    /* No is focused and last, so Enter and Escape both keep playing. */
+    Menu_ShowNotice("Restart game", "Restart the game? Unsaved progress is lost.", buttons, 2, 1, restart_chosen);
 }
 
 void TitleJump_Frame(unsigned presented)
