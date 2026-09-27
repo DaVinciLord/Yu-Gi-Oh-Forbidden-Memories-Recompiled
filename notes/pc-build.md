@@ -165,7 +165,13 @@ custom bindings are stored separately in `controls.txt`.
 
 Esc quits (it closes an open menu first); F1, F2 and F4 select those state
 slots, F5 saves, and F7 loads. F3 cycles the debug HUD; slot 3 is selectable
-from File. Controllers
+from File. F11 or Alt+Enter (the main Enter or the keypad's) switches between
+the window and desktop fullscreen and saves `fullscreen`; in fullscreen Esc
+first returns to the window. The Enter pressed under Alt stops there, so it
+never presses Start, and Alt is a reserved modifier no binding can use. While
+a menu or a notice is open it takes the keys first, F11 and Alt+Enter
+included. Both are SDL only: the X11 backend has a fixed window with no
+fullscreen (`Platform_HasWindowModes` is 0 there). Controllers
 (`platform/gamepad_evdev.c`) are read through evdev, which names controls by
 meaning, so the one table covers Xbox pads on xpad, xone and xpadneo and most
 other pads. `/dev/input` is rescanned about once a second while a port is
@@ -411,7 +417,10 @@ window is sized for the bar it gets. Automatic (0) follows the window height
 and above (including a 4K display). This is one step smaller than the original
 automatic size, with a minimum of 1; explicit 1x–4x choices are unchanged.
 `MEMORIES_SDL_SCRIPT` accepts `frame:shot` to save the composed
-window, which is how the menus are checked.
+window, which is how the menus are checked, `frame:key:alt+<name>` to
+send a key with Left Alt held (`alt+return` is Alt+Enter), and
+`frame:down:<name>` / `frame:up:<name>` to hold a key across frames (a
+`key` is pressed and released in one pump, before the game reads the pad).
 
 ### Back to the title screen
 

@@ -1388,7 +1388,11 @@ static void pump(void)
             if (event.key.repeat) {
                 break;
             }
-            if (down && (key == SDLK_F11 || (key == SDLK_RETURN && (event.key.mod & SDL_KMOD_ALT)))) {
+            /* F11 or Alt+Enter (either Enter). The press stops here, so the
+             * Enter under Alt never reaches the pad as Start; Alt itself is a
+             * reserved modifier that cannot be bound (controls.c). */
+            if (down && (key == SDLK_F11 || ((key == SDLK_RETURN || key == SDLK_KP_ENTER) &&
+                                             (event.key.mod & SDL_KMOD_ALT)))) {
                 int on = covers_screen();
                 Settings_Set(SET_FULLSCREEN, !on);
                 if (on) Settings_Set(SET_BORDERLESS, 0);
@@ -1855,11 +1859,20 @@ static void run_event_script(unsigned frame)
         memset(&event, 0, sizeof(event));
         if (strcmp(kind, "shot") == 0) {
             Platform_Screenshot(1);
-        } else if (strcmp(kind, "key") == 0) {
+        } else if (strcmp(kind, "key") == 0 || strcmp(kind, "down") == 0 || strcmp(kind, "up") == 0) {
+            /* "key" presses and releases in one go; "down" and "up" hold a
+             * key across frames, as the game only sees what is held when
+             * it reads the pad. */
             const char *name = script + 1;
             n = strcspn(name, ",");
             event.type = SDL_EVENT_KEY_DOWN;
             event.key.down = true;
+            /* "alt+<name>": the same key with Left Alt held. */
+            if (n > 4 && strncmp(name, "alt+", 4) == 0) {
+                event.key.mod = SDL_KMOD_LALT;
+                name += 4;
+                n -= 4;
+            }
             event.key.key = strncmp(name, "escape", n) == 0 ? SDLK_ESCAPE : strncmp(name, "f10", n) == 0 ? SDLK_F10
                           : strncmp(name, "f3", n) == 0 ? SDLK_F3
                           : strncmp(name, "f6", n) == 0 ? SDLK_F6
@@ -1874,10 +1887,10 @@ static void run_event_script(unsigned frame)
                           : SDLK_UNKNOWN;
             event.key.scancode = SDL_GetScancodeFromKey(event.key.key, NULL);
             event.key.windowID = SDL_GetWindowID(window);
-            SDL_PushEvent(&event);
+            if (strcmp(kind, "up") != 0) SDL_PushEvent(&event);
             event.type = SDL_EVENT_KEY_UP;
             event.key.down = false;
-            SDL_PushEvent(&event);
+            if (strcmp(kind, "down") != 0) SDL_PushEvent(&event);
             script = name + n;
         } else {
             x = (int)strtol(script + 1, &end, 10);
