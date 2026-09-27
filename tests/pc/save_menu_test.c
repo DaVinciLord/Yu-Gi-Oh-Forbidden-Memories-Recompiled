@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "pc/saves/save_menu.h"
 #include "pc/guest/state.h"
+#include "pc/platform/settings.h"
 #include "pc/compat/posix.h"
 #include "scratch.h"
 #include <assert.h>
@@ -11,6 +12,7 @@
 #define NAME "BASLUS-01411-YUGIOH"
 
 /* Exercise the menu's real file I/O and input state machine without a window. */
+int Settings_Get(SettingId id) { (void)id; return 0; } /* Game > Japanese buttons off: the hints only */
 int Menu_Scale(void) { return 1; }
 int Menu_Height(void) { return 24; }
 int Menu_TextWidthScaled(const char *text, int scale) { return (int)strlen(text) * 6 * scale; }
