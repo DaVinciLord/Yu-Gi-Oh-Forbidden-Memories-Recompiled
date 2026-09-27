@@ -8,7 +8,8 @@
  * cards written down by their copies, dealt as they are. Past the tables,
  * "chest_overflow_starchips" turns a card the chest has no room for into
  * starchips (Duel_AwardCard), and "terrain_bonus" sets what a terrain gives
- * each monster type (Duel_GetTerrainBoost). A drop or deck pool is worked out
+ * each monster type (Duel_GetTerrainBoost), and "trap_thresholds" the attack
+ * each attack trap stops (Duel_SelectAttackTrap). A drop or deck pool is worked out
  * from what the game loaded when it is drawn from, so a data mod's patch of
  * the same pool comes first and the edits here go on top of it. */
 #include "tables.h"
@@ -120,6 +121,8 @@ static long overflow_starchips;          /* per card the chest has no room for *
 #define TERRAINS 6                        /* DUEL_TERRAIN_COUNT: Forest to Yami, 1-6 */
 static short terrain_bonus[TERRAINS][CARD_TYPE_MAGIC];
 static unsigned char terrain_listed[TERRAINS][CARD_TYPE_MAGIC];
+static long trap_threshold[DUEL_ATTACK_TRAP_COUNT];   /* House of Adhesive Tape to Widespread Ruin */
+static unsigned char trap_listed[DUEL_ATTACK_TRAP_COUNT];
 static unsigned char edited[TABLES_DUELIST_COUNT][TABLES_POOL_COUNT];
 static unsigned order_counter;
 static int fusions_sorted;
@@ -966,6 +969,62 @@ int Tables_TerrainBonus(int terrain, int type, int *bonus)
     return 1;
 }
 
+/* --- attack traps --------------------------------------------------- */
+
+#define TRAP_THRESHOLD_MAX 65535L
+
+static const long retail_thresholds[DUEL_ATTACK_TRAP_COUNT] = {
+    DUEL_HOUSE_OF_ADHESIVE_TAPE_ATTACK_THRESHOLD, DUEL_EATGABOON_ATTACK_THRESHOLD, DUEL_BEAR_TRAP_ATTACK_THRESHOLD,
+    DUEL_INVISIBLE_WIRE_ATTACK_THRESHOLD, DUEL_ACID_TRAP_HOLE_ATTACK_THRESHOLD, DUEL_WIDESPREAD_RUIN_ATTACK_THRESHOLD};
+
+/* "trap_thresholds": { trap: points }, the attack at or under which each of
+ * the six attack traps springs, in place of the disc's 500 to 3000. */
+static void read_trap_thresholds(const char *mod, const JsonValue *table)
+{
+    int i;
+    char where[128];
+    if (!table) return;
+    if (Json_TypeOf(table) != JSON_OBJECT) {
+        Mods_Note(mod, "\"trap_thresholds\" is an object of attack traps and the attack each stops");
+        return;
+    }
+    for (i = 0; i < Json_Count(table); i++) {
+        const JsonValue *member = Json_At(table, i);
+        const char *name = Json_Name(member);
+        long points = Json_Number(member, -1);
+        int id = Cards_Named(name), trap;
+        snprintf(where, sizeof(where), "trap_thresholds \"%s\"", name);
+        trap = id > 0 ? Cards_BaseId(id) - DUEL_ATTACK_TRAP_FIRST_CARD_ID : -1;
+        if (trap < 0 || trap >= DUEL_ATTACK_TRAP_COUNT) {
+            Mods_Note(mod, "%s: not one of the attack traps (House of Adhesive Tape, Eatgaboon, Bear Trap, "
+                      "Invisible Wire, Acid Trap Hole, Widespread Ruin)", where);
+            continue;
+        }
+        if (Json_TypeOf(member) != JSON_NUMBER || points < 0 || points > TRAP_THRESHOLD_MAX) {
+            Mods_Note(mod, "%s: a threshold is a whole number of points, 0 to %ld", where, TRAP_THRESHOLD_MAX);
+            continue;
+        }
+        trap_threshold[trap] = points;
+        trap_listed[trap] = 1;
+    }
+    for (i = 1; i < DUEL_ATTACK_TRAP_COUNT; i++) {
+        /* The duel looks from the strongest trap down and stops at the first
+         * set one the attack is over: out of order, a weaker trap behind it
+         * is never reached. */
+        if (Tables_TrapThreshold(i, retail_thresholds[i]) < Tables_TrapThreshold(i - 1, retail_thresholds[i - 1])) {
+            Mods_Note(mod, "trap_thresholds: out of order (House of Adhesive Tape to Widespread Ruin, each at "
+                      "least the one before); a trap behind a lower threshold never springs");
+            break;
+        }
+    }
+}
+
+int Tables_TrapThreshold(int trap, int retail)
+{
+    if (trap < 0 || trap >= DUEL_ATTACK_TRAP_COUNT || !trap_listed[trap]) return retail;
+    return (int)trap_threshold[trap];
+}
+
 /* --- the chest ------------------------------------------------------ */
 
 #define STARCHIP_MAX 999999L   /* SAVE_DATA_STARCHIP_MAX */
@@ -1013,6 +1072,7 @@ void Tables_Add(const char *mod, const JsonValue *manifest)
     read_pools(mod, Json_Member(manifest, "decks"), 1);
     read_chest_overflow(mod, Json_Member(manifest, "chest_overflow_starchips"));
     read_terrain_bonus(mod, Json_Member(manifest, "terrain_bonus"));
+    read_trap_thresholds(mod, Json_Member(manifest, "trap_thresholds"));
 }
 
 void Tables_Clear(void)
@@ -1031,6 +1091,7 @@ void Tables_Clear(void)
     overflow_starchips = 0;
     memset(terrain_bonus, 0, sizeof(terrain_bonus));
     memset(terrain_listed, 0, sizeof(terrain_listed));
+    memset(trap_listed, 0, sizeof(trap_listed));
     if (removed_results) memset(removed_results, 0, (size_t)removed_room);
     memset(edited, 0, sizeof(edited));
     forget_pools();

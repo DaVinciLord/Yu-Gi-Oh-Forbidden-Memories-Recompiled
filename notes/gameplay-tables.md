@@ -1,4 +1,4 @@
-# Gameplay tables: fusions, equips, rituals, drops and decks
+# Gameplay tables: fusions, equips, rituals, drops, decks and more
 
 A mod can change the duel's rule tables with no code at all: which cards
 fuse and into what, what an equip card may equip, what a ritual needs and
@@ -233,6 +233,27 @@ fusion helper and the CPU's weighing of its cards. A monster's attribute is
 not a terrain's affair (a mod whose fields favour attributes needs code),
 and there are still only the six terrains.
 
+## Attack traps
+
+Six traps spring when a monster attacks, each up to an attack of its own:
+House of Adhesive Tape 500, Eatgaboon 1000, Bear Trap 1500, Invisible Wire
+2000, Acid Trap Hole 3000, and Widespread Ruin whatever the attack (25500
+on the disc). A mod may set those thresholds, in points of ATK:
+
+```json
+"trap_thresholds": {"House of Adhesive Tape": 800, "Acid Trap Hole": 3500}
+```
+
+A trap springs when the attacker's ATK is at or under its threshold. The
+duel looks at the attacked side's set attack traps from Widespread Ruin
+down and stops at the first whose threshold is under the attack; the last
+trap it passed springs, which, with the thresholds in order, is the weakest
+trap that stops the attacker. Keep the six in that order (each at least the
+one before it): the Mods window warns when they are not, since a trap behind
+a lower threshold would never spring. Values are whole points, 0 to 65535;
+a trap no mod names keeps the disc's threshold. A copy of a trap springs as
+its base. Which cards are attack traps, and what they do, is the disc's.
+
 ## A full chest pays starchips
 
 The chest holds at most 250 copies of a card; on the disc a copy won past
@@ -278,6 +299,7 @@ it first:
 | `Duel_ShuffleDeck` (`duel_shuffle_deck.c`) | deck pool, `0x801781D8` | `Tables_FixedDeck`, then `Tables_Pool(TABLES_POOL_DECK)` |
 | `Duel_SelectCardDrop` (`duel_result_runtime.c`) | drop pools, `0x8017878C` | `Tables_Pool(TABLES_POOL_POW + pool)` |
 | `Duel_GetTerrainBoost` (`duel_card_record_lifecycle.c`) | terrain table, `0x800909D4` | `Tables_TerrainBonus` |
+| `Duel_SelectAttackTrap` (`duel_trap_resolution.c`) | trap thresholds, `0x8009AF24` (bytes, x100) | `Tables_TrapThreshold` |
 | `Duel_AwardCard` (`duel_result_runtime.c`) | chest, `0x801D0250`; starchips, `0x801D07E0` | `Tables_ChestOverflow`, before the card is counted |
 
 A pool is worked out from the opponent's loaded pool and every edit of it

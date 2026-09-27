@@ -3,7 +3,7 @@
     "name": "Community rules example",
     "version": "1.0",
     "author": "DecompRecomp",
-    "description": "The rules community mods change, without code: a fixed CPU deck, starchips for a full chest, terrain and equip bonuses. Values made up for the example.",
+    "description": "The rules community mods change, without code: a fixed CPU deck, starchips for a full chest, terrain and equip bonuses, trap thresholds. Values made up for the example.",
     "enabled": false,
     "chest_overflow_starchips": 2,
     "terrain_bonus": {
@@ -14,6 +14,7 @@
         {"card": "Legendary Sword", "bonus": 300, "bonus_if": {"Warrior": 800, "Light": 600}},
         {"card": "Megamorph", "bonus": 1500}
     ],
+    "trap_thresholds": {"House of Adhesive Tape": 800, "Acid Trap Hole": 3500},
     "decks": {
         "Simon Muran": {"fixed": true, "Kuriboh": 4, "Mystical Elf": 6, "Celtic Guardian": 5,
                         "Baby Dragon": 5, "Time Wizard": 20}

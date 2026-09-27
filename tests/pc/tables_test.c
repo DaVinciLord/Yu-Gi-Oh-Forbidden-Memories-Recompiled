@@ -286,7 +286,22 @@ int main(void)
     add("t", "{\"equips\": [{\"card\": 20, \"bonus\": 0, \"add\": [\"Dragon\"]}]}");
     assert(Tables_EquipBonus(20, 12, 500) == 0 && Tables_Equip(20, 12) == 1);
 
+    /* Attack traps: the disc's thresholds until a mod sets one, in points;
+     * only the six attack traps; a warning when they fall out of order. */
+    assert(Tables_TrapThreshold(0, 500) == 500 && Tables_TrapThreshold(5, 25500) == 25500);
+    notes = 0;
+    add("u", "{\"trap_thresholds\": {\"681\": 800, \"686\": 30000, \"Kuriboh\": 5, \"683\": -1, \"684\": 70000}}");
+    assert(notes == 3);                    /* Kuriboh, -1, 70000 */
+    assert(Tables_TrapThreshold(0, 500) == 800 && Tables_TrapThreshold(1, 1000) == 1000);
+    assert(Tables_TrapThreshold(5, 25500) == 30000 && Tables_TrapThreshold(6, 7) == 7);
+    notes = 0;
+    add("v", "{\"trap_thresholds\": {\"682\": 700}}");
+    assert(notes == 1 && Tables_TrapThreshold(1, 1000) == 700);   /* 700 after 800: out of order */
+    add("w", "{\"trap_thresholds\": {\"682\": 900}}");
+    assert(notes == 1 && Tables_TrapThreshold(1, 1000) == 900);
+
     Tables_Clear();
+    assert(Tables_TrapThreshold(0, 500) == 500);
     {
         int bonus;
         assert(!Tables_TerrainBonus(1, 0, &bonus) && !Tables_TerrainBonus(6, 19, &bonus));

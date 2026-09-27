@@ -2,8 +2,9 @@
 #define MEMORIES_PC_TABLES_H
 /* The duel's rule tables as mods change them (notes/gameplay-tables.md).
  *
- * A mod's manifest may carry "fusions", "equips", "rituals", "drops" and
- * "decks": edits to the tables the duel reads from the disc, written with
+ * A mod's manifest may carry "fusions", "equips", "rituals", "drops",
+ * "decks", "terrain_bonus", "trap_thresholds" and "chest_overflow_starchips":
+ * edits to the tables and constants the duel reads from the disc, written with
  * card names, stable identities or ids. They are read once at startup, after
  * the cards (cards.h), in the order the mods load; where two mods set the
  * same thing the later one wins, and drop and deck edits of the same
@@ -71,6 +72,11 @@ int Tables_ChestOverflow(unsigned quantity, unsigned *starchips);
  * *bonus; 0 when no mod lists the pair (nor replaced the table), and the
  * disc's table decides. */
 int Tables_TerrainBonus(int terrain, int type, int *bonus);
+
+/* The attack, in points, at or under which attack trap `trap` springs (0
+ * House of Adhesive Tape to 5 Widespread Ruin): a mod's "trap_thresholds",
+ * else `retail`, the disc's. */
+int Tables_TrapThreshold(int trap, int retail);
 
 /* The opponent names a manifest may use, by duelist id; "all" means every
  * one of them. */

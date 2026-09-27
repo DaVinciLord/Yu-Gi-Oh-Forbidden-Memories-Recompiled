@@ -61,6 +61,7 @@ editors write, is fine):
 | `fusions`, `equips`, `rituals`, `drops`, `decks` | changes to the duel's rule tables, below |
 | `chest_overflow_starchips` | starchips for each card won when the chest already holds 250 of it, below |
 | `terrain_bonus` | what each terrain gives each monster type, in place of the disc's +500 and -500, below |
+| `trap_thresholds` | the attack each of the six attack traps stops, below |
 | `text`, `font` | a translation of the game's text, and fonts for letters it has none of, below |
 
 `version`, `author` and `description` are displayed in the manager. Version
@@ -435,7 +436,7 @@ MEMORIES_INPUT="700:0008,706:0000" tmp/pc/game32/memories-pc
 
 `out.raw` is s16le stereo at 44.1 kHz. How it is done:
 [`src/pc/audio/replace.h`](../src/pc/audio/replace.h).
-## Rules: fusions, equips, rituals, drops and decks
+## Rules: fusions, equips, rituals, drops, decks and more
 
 A mod may change what fuses into what, what an equip card may equip, what a
 ritual needs and makes, what each opponent drops and what its deck is dealt
@@ -457,7 +458,13 @@ copies with no limit of three (`{"fixed": true, "Kuriboh": 4, ...}`).
 `"terrain_bonus": {"Forest": {"Beast": 300, "Fairy": -200}}` sets, in points,
 what a terrain gives a monster type.
 An equip entry's `"bonus": 800` and `"bonus_if": {"Dragon": 1000, "Light": 700}`
-set what it adds, in place of the disc's +500. Several mods' edits of the same opponent add up rather than
+set what it adds, in place of the disc's +500.
+`"trap_thresholds": {"House of Adhesive Tape": 800}` sets, in points of ATK,
+the attack each attack trap springs on. These are the rules a community mod
+such as The Wicked Gods changes in its code; with them it plays close to its
+own rules without C. The Wicked Gods also makes a monster's attribute count on
+a terrain, lets monsters be equips and raises the stat cap to 30000: those
+need a code mod or the port itself. Several mods' edits of the same opponent add up rather than
 replace each other. [Gameplay tables](gameplay-tables.md) has every key, the
 opponents' names, and how the rules combine. Like cards, they need a restart.
 
