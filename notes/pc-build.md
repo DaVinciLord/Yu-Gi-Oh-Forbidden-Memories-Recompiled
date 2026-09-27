@@ -163,6 +163,26 @@ custom bindings are stored separately in `controls.txt`.
 | Start | Enter | Menu/Start | |
 | Select | Right Shift | View/Back | |
 
+**Game > Japanese buttons (Circle confirms)** (`jp_buttons`,
+`MEMORIES_JP_BUTTONS=1`; off by default) gives the Japanese release's layout:
+Circle confirms and Cross cancels (Square confirms in both). Every button
+check matched in both releases is the USA one with Cross and Circle
+exchanged (the card viewer's close button is the one that is not), so the
+port exchanges those two bits of the pad state the game reads, in
+`run_vblank` (`libetc.c`, `platform/button_layout.h`), for both pads, and
+changes no game code. It
+applies from the next VBlank. What the player's keys and controllers press is
+exchanged; the mouse (right button stays "back") and scripted input
+(`MEMORIES_INPUT`, `MEMORIES_INPUT2`, written in the USA layout, so a
+check's input means the same whatever the setting) are not. The memory card
+slot menu reads the game's pad state, so it follows and its hints name the
+buttons it takes. The deck slot screen (F6) reads the pad itself but
+exchanges the same two bits, so it follows too, hints included. The Controls
+and Mods windows read the keys and controllers themselves and keep their own
+buttons. Mods: an
+`INPUT` before-hook sees the controller's bits, as `host->pad` does; the
+after-hook sees what the game gets ([mod API](mod-api-3.md)).
+
 Esc quits (it closes an open menu first); F1, F2 and F4 select those state
 slots, F5 saves, and F7 loads. F3 cycles the debug HUD; slot 3 is selectable
 from File. Controllers
@@ -379,15 +399,10 @@ move, Enter activates, Esc closes (Esc quits only when no menu is open).
 | File | Save/load state, slots 1-4, screenshot, reload settings, exit |
 | Audio | Master/music/SFX sliders, mute and focus-loss mute, Gaussian (console) or cubic (sharper) voice interpolation (`audio_interpolation`) |
 | View | Window scale and Menu size submenus, window mode, scaling/aspect/filter/VSync choices |
-| Game | Game speed, Frame rate and Cheats submenus (Give 3 of every card; Unlock all Free Duel CPU duelists) |
+| Game | Game speed, Frame rate and Cheats submenus (see [Cheats](#cheats)), Japanese buttons |
 | Mods | opens the mods window, which lists every mod found in `mods/` beside the executable and in the user directory (`notes/modding.md`) |
 | Debug | HUD levels, pause/step, frame and VRAM dumps |
 | Trace | Live frames, disc, SPU, input and state log-channel switches |
-
-After starting or loading a game, **Game > Cheats > Unlock all Free Duel CPU
-duelists** unlocks the full CPU roster without changing story progress or
-win/loss records. If Free Duel is already open, leave and reopen it to refresh
-the portraits and selection grid. Save normally to keep the unlocks.
 
 `MEMORIES_TRACE_MENU=1` logs menu clicks and keys. The menu never reaches the pad:
 a click on the bar or in an open menu, and the wheel there, are the menu's.
@@ -411,9 +426,98 @@ window is sized for the bar it gets. Automatic (0) follows the window height
 and above (including a 4K display). This is one step smaller than the original
 automatic size, with a minimum of 1; explicit 1x–4x choices are unchanged.
 `MEMORIES_SDL_SCRIPT` accepts `frame:shot` to save the composed
-window, which is how the menus are checked.
+window, which is how the menus are checked. `frame:key:name` presses and
+releases a key at once, which the game never sees; `frame:keydown:name` and
+`frame:keyup:name` hold it between two frames (`s` is Circle and `x` Cross by
+default), which is how Japanese buttons was checked through the keyboard.
+
+### Cheats
+
+**Game > Cheats** (`src/pc/debug/cheats.c`). Every row is off, or at the
+console's value, until the player picks it; nothing changes on screen before.
+
+The rows that change the save (Give, Unlock and Set StarChips) do nothing
+until a game is started or loaded, and say **Load a save first** instead
+(`Cheats_SaveLoaded`: the save workspace holds a deck, the same test as
+Deck slots and `MEMORIES_DEBUG_CHEST`). Before that the workspace is scratch,
+and on a new game it becomes the save when the name entry closes. The settings
+rows (LP, free spending, the CPU's hand) change nothing in the save and work
+at any time.
+
+- **Give 1 / 2 / 3 of every card** raises every card in the trunk to at least
+  that many copies, the mods' cards included (`Cheats_GiveAllCards`). A card
+  held more times keeps its count. Open BUILD DECK to see it, and save
+  normally to keep it.
+- **Unlock all Free Duel CPU duelists** unlocks the full CPU roster without
+  changing story progress or win/loss records. If Free Duel is already open,
+  leave and reopen it to refresh the portraits and selection grid. Save
+  normally to keep the unlocks.
+- **Set StarChips to 999999** sets the balance (`gLibrary_dwStarchips`,
+  `SaveDataState.starchips`), capped at 999999 as the duel's reward caps it.
+  It is save data, so it is an action, not a setting: nothing is stored or
+  reapplied at start; save normally to keep it. The Password screen copies the
+  balance for display when it opens and at each payment step, so a change
+  made while that screen is open shows from the next of those.
+- **Free spending (Password)** (`cheat_free_spending`,
+  `MEMORIES_CHEAT_FREE_SPENDING`): a card bought on the Password screen costs
+  nothing. The payment step (`Password_UpdateShopScreen` state 3,
+  `overlays/password/shop.c`) still counts the price down and refreshes the
+  display, but one `#ifdef MEMORIES_PC` skips the subtraction from the balance
+  while `Cheats_FreeSpending` says so. The screen's own check still refuses a
+  card the balance does not cover (message 228); Set StarChips covers that.
+  Checked by buying Orion the Battle King (02971090, 290 StarChips) from 999999
+  after a new game: 999709 with it off, 999999 with it on, and the two final
+  frames differ only in those digits.
+
+**Proposal, not built: Force face up.** The old static recomp had a row that
+made the CPU play every card face up and turned its face-down cards over.
+That is game state, not display: `DUEL_CARD_FLAG_FACE_DOWN` (0x1000) on a
+card record is what the AI scripts read (`ai_script_*.c`, `ai_turn_action.c`),
+what battle checks before flipping a set monster, and what counts towards
+the CPU's rank statistics (`face_down_plays`), so clearing it changes how
+the duel plays, not only what it shows. If it is wanted, the place is the C
+that sets the bit when the CPU places a card (one `#ifdef MEMORIES_PC` in the
+placement, CPU side only, against a CPU only), never a per-frame pass that
+clears the bit on cards already on the field, and it needs its own check of
+battle, the AI's choices and the rank before it ships.
+- **Starting LP 1000 / 4000 / 8000 (console) / 9999** (`cheat_life_points`,
+  `MEMORIES_CHEAT_LIFE_POINTS`, 1-9999, default 8000) is what both sides start
+  a duel against the CPU with, from the next duel on. `Duel_InitSideStates`
+  asks `Cheats_StartingLifePoints` in place of `DUEL_STARTING_LIFE_POINTS`
+  (one `#ifdef MEMORIES_PC` in `duel_state_init.c`), so it is both the
+  starting and the maximum LP, as the console's 8000 is: recovery stops there.
+  Other values can be typed into the settings file. Two-player duels keep the
+  values their own setup screen chose (`D_8009B234`/`D_8009B236`, 1 to 8000 in
+  steps of 500): that screen draws its bar as a fraction of 8000, so the
+  cheat does not seed it.
+- **Show CPU's hand** (`cheat_show_hand`, `MEMORIES_CHEAT_SHOW_HAND`) draws
+  the hand the CPU plays from face up on its turn, as the player's is: art,
+  name, ATK/DEF and the stars. `Duel_InitSideStates` gives the CPU's side
+  record `card_view_mode` (+0x1F) = -1, and the three places the card display
+  reads it (`func_80017DB4`, `func_80018004`, `func_80023144`) draw card
+  backs and dim them for a negative value. They read it through
+  `DUEL_CARD_VIEW_MODE` (`game/duel_side_state.h`), which is the plain field
+  in the console build and `Cheats_CardViewMode` on the PC, answering 0 for
+  the CPU's record while the cheat is on. The byte in RAM is never written, so
+  nothing the game does with it changes, and turning the cheat off shows backs
+  again at once. Two-player duels (a negative opponent id) keep their own
+  setting. Checked at the same frame of the CPU's first turn: with the cheat
+  off the picture is identical to a build without it; with it on only the
+  hand and the card name bar change, and a later frame of the duel is identical,
+  so the CPU played the same.
 
 ### Back to the title screen
+
+**Game > Restart game...** is the player's way back to the title without
+closing the program, like a console's soft reset. It first asks "Restart the
+game? Unsaved progress is lost." with Yes and No. No is focused and last, so
+Enter and Escape both keep playing; the game keeps running behind the
+question. Yes makes the same request as Debug > Jump to > Title Screen
+(`TitleJump_Confirm` in `title_jump.c`), and both items are enabled and
+dimmed together. A Yes given after the game reached the title by itself is
+dropped. It does not boot the game again (logos and intro): that would mean
+resetting the whole guest (RAM, VRAM, SPU, disc) under the running C code,
+while the title is what a player restarting wants.
 
 Debug > Jump to > Title Screen leaves whatever is running for the title, the
 way the retail game leaves a campaign loss. `Main_RunGameOver` fades the
@@ -440,7 +544,7 @@ lost, as with a reset.
 
 Save states carry the item's enabled state and discard pending UI requests
 on load. `pc_title_jump` tests title entry, save-menu deferral, repeated
-requests during a jump and state restoration.
+requests during a jump, state restoration and Restart game's Yes and No.
 
 `MEMORIES_TITLE_AT=N[,N...]` makes the request at presented frames N, for
 checks. Requests scheduled while the item is disabled are consumed and
@@ -452,7 +556,10 @@ Options, game over and Trade. After each one, the title and then the main
 menu on Start come back pixel-identical. In the credits, a request made while
 their save slot menu was open waited, and the jump came once Cross had saved
 to a slot. By mouse (`MEMORIES_SDL_SCRIPT`), the item jumps from a duel and
-is disabled at the title. 2P Duel setup forced by `MEMORIES_MODE_AT` stops
+is disabled at the title. Restart game was checked the same way in a
+campaign conversation reached with the `duel-hand-camera` smoke input: No
+closed the question and the game went on, Yes brought the title back with
+the item dimmed there. 2P Duel setup forced by `MEMORIES_MODE_AT` stops
 presenting frames right after the switch, with or without this change.
 Reached from the menu with no saves, it stays in the title's loop.
 
@@ -685,6 +792,25 @@ and publishes every press a second time on the next frame. A catch-up
 variant was tried and doubled inputs at 300%. A frame that overruns its
 VBlank therefore costs a whole slot, as on the console; 200% and 400% hold
 their rates because presents are cheap on the accelerated path (below).
+
+The counter must equal exactly 0 at `Input_UpdatePads`, and a value above 0
+doubles presses as well (retail defers that frame's pressed and repeat bits
+and publishes them again on the next frame: one tap of Down moved the title
+menu's cursor two places, with keyboard, gamepad or wheel alike). On the
+console exactly one VBlank callback runs between that reset and the return
+of `VSync(0)`: VBlanks a slow frame runs past interrupt it while it computes
+and draws, so `Graphics_SyncFrame` counts them (`D_8009B0D8 = 2`) before the
+reset. The cooperative clock used to take them only at `VSync(0)`'s entry,
+after the reset, and several at once after a present or a host hiccup longer
+than two VBlank periods. Two service points restore the console's order: `DrawSync` runs
+what the clock owes (`Platform_ServiceClock`), which `Graphics_SyncFrame`
+calls just before its read, and `VSync(0)` holds the clock to one VBlank
+until it returns (`Platform_LimitVBlanks`); the rest wait for the next
+service point. Neither steps time, so deterministic runs are unchanged. When
+the host cannot keep up, a frame now shows the overrun the console's way
+(the next frame advances two VBlanks' worth, `D_8009B0D8 = 2`) instead of
+catching up with extra frames; 400% on a loaded machine keeps 240 VBlanks a
+second at fewer game frames.
 
 The HUD (F3) shows game frames a second and shown frames a second; with
 `MEMORIES_TRACE=frames` the same appears every 120 frames with the clock
@@ -1278,6 +1404,69 @@ loaded menu on SAVE, and the game is saved to slot 1.
 
 The option is read when the Library opens: switching it while the Library
 is open takes effect the next time it opens.
+### Card passwords (View)
+
+View > Card passwords (`card_passwords`, `MEMORIES_CARD_PASSWORDS=1`, off by
+default) shows the card's eight-digit password in the card view: the viewer
+the duel, Build Deck (deck and trunk) and Trade share, and the Library's
+card page. The digits go on the second Guardian Star's row, flush right; a
+magic, trap, ritual or equip card has the same row at the bottom of its
+empty middle panel. Leading zeros stay (Right Leg of the Forbidden One is
+08124921). The 24 cards the Password screen cannot give (`N/A` in
+`notes/card-catalog.csv`) show nothing; the ones that cost 999999
+starchips show theirs.
+
+- **The table** is the Password screen's (`src/overlays/password/shop.h`):
+  `Password_LoadPackageStage` reads the package from sector
+  `FILE_WA_PASSWORD_START_SECTOR` of `WA_MRG.MRG`, 64 + 4 sectors of
+  pictures and then 3 to `0x801A8000`, one record per card id from 0: the
+  price and the password, eight BCD digits, as little-endian words (Blue-eyes
+  is `3F 42 0F 00 39 11 63 89`: 999999 and 89631139; no password is
+  `0xFFFFFFFE`). `Cards_Password(id)` (`src/pc/cards/passwords.c`) reads
+  those 3 sectors from the disc once, the first time it is asked, checks
+  every value is BCD or `0xFFFFFFFE`, and logs card 1's and how many have
+  none (89631139 and 24 on the retail disc). A mod card can have one with
+  `"password"` ([More cards](more-cards.md)).
+- **The drawing** is the game's text. The viewer's text box is laid out by
+  string 3 (a monster) or 4 (the rest), whose `{f8 00 40}` inserts the
+  card's text 80 pixels down in both. Once the face is up, the box is made
+  again in place, on its channel, with its position and settings, from a
+  copy of that layout (a translation's, through `Text_LookupString`) with
+  the digits before `{f8 00 40}`: up 24 to the star row, to x 96, the
+  digits, down 24. `Text_Resolve` gives that copy for string 0xFFFE
+  (`CardPassword_Text`). HD text and a mod's fonts draw it like the rest,
+  and the card's own text is where it was: dumps with the option on and off
+  differ only in the digits' rectangle.
+- **When:** the hooks are the handler tables, not the matched functions.
+  Under `MEMORIES_PC`, `gDuelEffect_apfnStateHandler`'s card viewer is
+  `CardPassword_UpdateViewer` and `gMain_apfnModeRunner`'s Library
+  `CardPassword_RunLibraryMenu`; each runs the game's function, then looks
+  at its state. The viewer shows the digits once `0x20` (face up) is set in
+  its flags and neither `0x40` (slides) nor `0x10` (closing); the Library
+  on its card page's resting step 5 (not the 3D model, step 4, nor the way
+  back, 6). Either way only once the game's box has all its text and every
+  letter has settled (`TEXT_BOX_FLAG_DONE`, no `DuelEffect_HasActiveEntry`):
+  the Library types its text in, and a box made again at once would skip
+  the last letters' appearance. The box goes back to the retail layout on the frame Circle is
+  read, so the closing's first picture is the retail one: in a
+  deterministic duel dump the flip's last frame is identical with the option
+  on and off, the next shows the digits, and the first closing frame is
+  identical again. The same holds in the Library.
+- Nothing is kept that a loaded state could contradict: which layout the
+  box has is its string id, and the retail one comes from the card's type.
+  Off, nothing is made and nothing changes.
+- The box's channel has a slice of the text entries (255, 160, 160 or 45).
+  If the card's text and the digits do not fit together, the retail box is
+  made again and that card shows no password: in the duel the viewer's box
+  is on a 160-entry channel, where Right Leg, Left Leg and Right Arm of the
+  Forbidden One (17-19, eight lines of text) do not fit; in Build Deck and
+  the Library (255) they do.
+
+Checked in a window (deterministic, 1x and 2x with HD text): Dancing Elf
+59983499 in a duel, Blue-eyes 89631139, Right Leg 08124921, Tenderness,
+Eternal Rest (a magic card) and Super War-lion (none) in the Library, and
+Blue-eyes and Mushroom Man in Build Deck's trunk and deck. Trade shares the
+viewer and was not reached.
 
 ### Precise geometry (PGXP)
 
@@ -1570,7 +1759,7 @@ Native pieces (all under `src/pc/`):
 | Menu bar | `platform/menu_x11.c` | **File > Exit**, **Audio > Volume** and **Mods**, one checked item per extra (a 0-100 slider: drag it, click the track, or use the wheel over it). Drawn with plain Xlib, since the port has no toolkit; the window is `Menu_Height()` (22 px) taller than the picture and the picture sits below it. Labels use an X core font, falling back to a small built-in glyph table because a server started under Wayland often has no core fonts. The volume is kept in `settings.txt` in the user directory (see `MEMORIES_SETTINGS`) and applied through `Spu_SetOutputVolume`, which is the port's own control and deliberately outside save states. While a menu is open it owns every mouse event, including the wheel: otherwise the wheel stepped the game's cursor behind the menu and played its sound |
 | Window/input | `platform/x11.c` | Plain Xlib. The 59.94 Hz VBlank is a `SIGALRM` tick on the main thread, standing in for the interrupt, so the game's busy-waits on VBlank counters work unchanged. Game units are built `-O0` so those non-volatile polls are not hoisted. The frame and the menu bar are composed in an offscreen pixmap and reach the window in one `XCopyArea`: an open menu hangs over the picture, so drawing both straight to the window made the menu flash once a frame |
 | LIBETC/pads | `sdk/libetc.c` | Callbacks, `VSync` (presents, then waits), critical sections that defer the tick, BIOS pad buffers |
-| LIBGPU | `sdk/libgpu.c` | Environments, `DrawOTag` through `Memories_GpuCollect`, image transfers. `DrawOTag` snapshots the list and it is rasterized at `DrawSync` or before the next VRAM access, where the hardware would have finished it. Drawing inside `DrawOTag` put ~8 ms between `VSync` and `Input_UpdatePads`; whenever a second VBlank got in there the pad code published each press twice (two cursor steps, two sounds) |
+| LIBGPU | `sdk/libgpu.c` | Environments, `DrawOTag` through `Memories_GpuCollect`, image transfers. `DrawOTag` snapshots the list and it is rasterized at `DrawSync` or before the next VRAM access, where the hardware would have finished it. Drawing inside `DrawOTag` put ~8 ms between `VSync` and `Input_UpdatePads`; whenever a second VBlank got in there the pad code published each press twice (two cursor steps, two sounds). `DrawSync` also runs what the cooperative clock owes, so a frame's overrun is counted before `Graphics_SyncFrame` reads the game's VBlank counter (see "VSync(0)" under the clock) |
 | LIBGS | `sdk/libgs.c` | Ported from the resident assembly against the library's guest globals (`GsDRAWENV` `0x800FE048`, `GsDISPENV` `0x800FE0A8`, ...): graph init, display-buffer swap, OT clear/sort, `GsSortSprite`/`FastSprite`/`FlipSprite`/`Poly`/`BoxFill` |
 | LIBDS/LIBCD | `sdk/libds.c` | ISO9660 lookup and sector delivery from the disc image on the VBlank tick (8 sectors per tick; faster than hardware). Resolved LBAs equal `disc_layout.json`. XA "play" only advances the head |
 | SPU | `audio/spu.c`, `sdk/libspu.c`, `platform/audio_alsa.c` | 24 ADPCM voices, hardware ADSR, pitch, volumes, Gaussian interpolation, CD/XA input, mixed on an ALSA thread at 44.1 kHz. The menu's output volume is a separate gain the mixer walks to its target over about 36 ms, because stepping it mid-waveform is an audible click and dragging the slider made a burst of them. No reverb, noise, sweeps or pitch modulation. Key on/off cross threads as atomic bit sets (a key-off after a still-pending key-on is applied after it); no locks where a signal handler runs. `SpuSetVoiceAttr` follows the decompiled library (`tmp/port-research/psyz/decomp/src/libspu/sr_sv.c`): pitch, then sample note, then note, so a note overrides a pitch in the same call, with the library's integer note-to-pitch; ADSR modes are written only with their rates. The sound-effect voice sends mask `0xFFFF` with pitch `0x1000` and note `0x2400` against sample note `0x3C00`; applying the pitch last played every effect two octaves high |

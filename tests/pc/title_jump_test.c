@@ -8,12 +8,33 @@
 #include <stdlib.h>
 #include <string.h>
 
-static int enabled, saving, jumps;
+static int enabled, restart_enabled, saving, jumps, notices;
+static void (*notice_chosen)(int button, int *quit);
 
 void Menu_SetItemEnabled(int id, int value)
 {
-    assert(id == MENU_ITEM_TITLE);
-    enabled = value;
+    assert(id == MENU_ITEM_TITLE || id == MENU_ITEM_RESTART);
+    if (id == MENU_ITEM_TITLE) enabled = value;
+    else restart_enabled = value;
+}
+void Menu_ShowNotice(const char *title, const char *text, const char *const *buttons, int count, int focus,
+                     void (*chosen)(int button, int *quit))
+{
+    (void)title;
+    (void)text;
+    /* Yes, then No: No is focused and last, which Escape presses. */
+    assert(count == 2 && !strcmp(buttons[0], "Yes") && !strcmp(buttons[1], "No") && focus == 1 && chosen);
+    notices++;
+    notice_chosen = chosen;
+}
+static void answer(int button)
+{
+    int quit = 0;
+    void (*chosen)(int, int *) = notice_chosen;
+    assert(chosen);
+    notice_chosen = NULL;
+    chosen(button, &quit);
+    assert(!quit);
 }
 int SaveMenu_Active(void) { return saving; }
 void TitleJump_Execute(void)
@@ -115,6 +136,34 @@ int main(void)
     assert(!enabled);
     TitleJump_Poll();
     assert(enabled && jumps == 2);
+
+    /* Game > Restart game follows the Debug item and asks first: No keeps
+     * playing, Yes makes the same request. */
+    assert(restart_enabled);
+    TitleJump_Confirm();
+    assert(notices == 1);
+    answer(1);
+    TitleJump_Poll();
+    assert(jumps == 2);
+    TitleJump_Confirm();
+    answer(0);
+    TitleJump_Poll();
+    assert(jumps == 3 && !restart_enabled);
+    TitleJump_Poll();
+    assert(restart_enabled);
+
+    /* At the title there is nothing to ask; a Yes given as the game got
+     * there by itself is dropped. */
+    TitleJump_SetActive(0);
+    assert(!restart_enabled);
+    TitleJump_Confirm();
+    assert(notices == 2);
+    TitleJump_SetActive(1);
+    TitleJump_Confirm();
+    TitleJump_SetActive(0);
+    answer(0);
+    TitleJump_Poll();
+    assert(jumps == 3);
     puts("title jump: ok");
     return 0;
 }
