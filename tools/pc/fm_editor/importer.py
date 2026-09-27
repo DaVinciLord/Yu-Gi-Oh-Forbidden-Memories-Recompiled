@@ -21,6 +21,7 @@ import bisect
 import re
 import struct
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from . import gamedata as g, kit, manifest
 from .model import Project
@@ -62,6 +63,12 @@ PLACES_SHOWN = 12           # changed places listed one by one in the report
 DRAW_ADD = 0x80021860
 TEAONLINE_ENCODING = (2512, 3)      # (bias, shift) that tool writes
 DROP_POOLS = ("pow", "bcd", "tec")  # the deck pools are never encoded
+
+
+def slug(text: str) -> str:
+    """A mod id out of a file name (File > Import and the command line)."""
+    text = re.sub(r"[^A-Za-z0-9_-]+", "-", Path(text).stem).strip("-").lower()
+    return (text or "imported-mod")[:63]
 
 
 @dataclass
@@ -932,6 +939,5 @@ def import_modded(retail_files, modded_files, mod_id: str = "imported-mod", name
 
 def save(result: ImportResult, folder) -> None:
     """Write the imported mod: mod.json and the files it names."""
-    from pathlib import Path
     folder = Path(folder)
     manifest.save_mod(result.project, folder)

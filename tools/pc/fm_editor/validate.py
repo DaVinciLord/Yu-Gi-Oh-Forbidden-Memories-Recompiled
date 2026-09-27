@@ -18,7 +18,7 @@ SETTING_TYPES = ("int", "bool", "choice", "key")
 MANIFEST_KEYS = ("id", "name", "version", "author", "description", "library", "enabled", "restart",
                  "legacy_setting", "data", "textures", "cards", "audio", "min_api", "game", "requires", "after",
                  "conflicts", "priority", "settings", "fusions", "equips", "rituals", "drops", "decks", "text", "font",
-                 "chest_overflow", "terrain_bonus", "trap_thresholds", "equip_bonus_default")
+                 "chest_overflow", "terrain_bonus", "trap_thresholds", "equip_bonus_default", "passwords")
 HOST_API = 4
 
 

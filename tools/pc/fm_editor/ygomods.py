@@ -34,6 +34,7 @@ import json
 import re
 import struct
 import zipfile
+import zlib
 
 from . import gamedata as g
 from .model import Project, duelist_named, type_named
@@ -45,6 +46,10 @@ FREE_DUEL_PORTRAITS = 0xF55000  # WA_MRG.MRG: 40 records of 0x980 bytes
 KNOWN_CARD_KEYS = {"name", "description", "attack", "defense", "level", "type", "attribute", "star1", "star2",
                    "price", "password", "equips", "ritual"}
 MAX_ENTRY = 8 << 20
+PRICE_MOST = 999999             # the starchips a card can cost
+WEIGHT_MOST = 65535             # a pool weight (a u16 on the disc)
+# A folder of cards/ or duelists/ by number, zeros in front or not.
+NUMBERED = re.compile(r"(cards|duelists)/0*(\d{1,9})/")
 
 
 class PackageError(Exception):
@@ -82,26 +87,46 @@ def _choice(text, names):
     return _int(text, -1)
 
 
+def _canonical(name: str) -> str:
+    """An entry's name with "/" and its card or duelist folder as a plain
+    number: "cards\\007\\card.ini" is "cards/7/card.ini"."""
+    name = name.replace("\\", "/")
+    match = NUMBERED.match(name)
+    if match:
+        name = f"{match.group(1)}/{int(match.group(2))}/" + name[match.end():]
+    return name
+
+
 class Package:
     def __init__(self, path):
         try:
             self.zip = zipfile.ZipFile(path)
         except (zipfile.BadZipFile, OSError) as problem:
             raise PackageError(f"{path} is not a .ygomods package ({problem})")
-        self.names = {n.replace("\\", "/"): n for n in self.zip.namelist()}
-        for info in self.zip.infolist():
-            if info.file_size > MAX_ENTRY or ".." in info.filename.replace("\\", "/").split("/"):
-                raise PackageError(f"{info.filename}: an entry this importer will not read")
-        manifest = dict((k, v) for _, k, v in parse_ini(self.text("manifest.ini") or ""))
-        if manifest.get("format") != "YGOFM-MOD-PACKAGE":
-            raise PackageError("manifest.ini does not say format = YGOFM-MOD-PACKAGE")
-        self.manifest = manifest
+        try:
+            self.names = {_canonical(n): n for n in self.zip.namelist()}
+            for info in self.zip.infolist():
+                if info.file_size > MAX_ENTRY or ".." in info.filename.replace("\\", "/").split("/"):
+                    raise PackageError(f"{info.filename}: an entry this importer will not read")
+            manifest = dict((k, v) for _, k, v in parse_ini(self.text("manifest.ini") or ""))
+            if manifest.get("format") != "YGOFM-MOD-PACKAGE":
+                raise PackageError("manifest.ini does not say format = YGOFM-MOD-PACKAGE")
+            self.manifest = manifest
+        except BaseException:
+            self.zip.close()
+            raise
 
     def has(self, name):
         return name in self.names
 
     def data(self, name):
-        return self.zip.read(self.names[name]) if name in self.names else None
+        if name not in self.names:
+            return None
+        try:
+            return self.zip.read(self.names[name])
+        except (zipfile.BadZipFile, zlib.error, RuntimeError, NotImplementedError, EOFError, OSError) as problem:
+            # a bad checksum, a password, a compression Python lacks, a cut-off file
+            raise PackageError(f"{self.names[name]}: could not be read from the package ({problem})")
 
     def text(self, name):
         blob = self.data(name)
@@ -129,8 +154,16 @@ def _import(package, retail, retail_wa, mod_id, name):
         unsupported[what] = unsupported.get(what, 0) + count
 
     # --- cards ----------------------------------------------------------------
-    card_ids = sorted({int(m.group(1)) for n in package.names for m in [re.match(r"cards/(\d+)/", n)] if m})
-    patches = {}
+    card_ids = sorted({int(m.group(1)) for n in package.names for m in [re.match(r"cards/(\d{1,9})/", n)] if m})
+    patches, equip_lists, ritual_lists, clamped = {}, {}, {}, 0
+
+    def ranged(key, value, low, high):
+        """value when it is low..high, else None and a report line."""
+        if value is not None and low <= value <= high:
+            return value
+        unhandled(f"card \"{key}\" values out of range ({low} to {high})")
+        return None
+
     for cid in card_ids:
         if not 1 <= cid <= g.CARD_COUNT:
             unhandled(f"cards past 722 (card {cid})")
@@ -141,25 +174,30 @@ def _import(package, retail, retail_wa, mod_id, name):
             card.name = values["name"]
         if "description" in values:
             card.description = values["description"].replace("|", "\n")
-        for key in ("attack", "defense", "level"):
-            if _int(values.get(key)) is not None:
-                setattr(card, key, _int(values[key]))
+        for key, high in (("attack", 5110), ("defense", 5110), ("level", 12)):
+            if key in values:
+                value = ranged(key, _int(values[key]), 0, high)
+                if value is not None:
+                    setattr(card, key, value)
         if "type" in values:
             t = type_named(values["type"]) if not values["type"].isdigit() else int(values["type"])
-            if t >= 0:
+            if ranged("type", t, 0, g.TYPE_EQUIP) is not None:
                 card.type = t
-        if "attribute" in values and _choice(values["attribute"], g.ATTRIBUTE_NAMES) >= 0:
-            card.attribute = _choice(values["attribute"], g.ATTRIBUTE_NAMES)
+        if "attribute" in values:
+            a = ranged("attribute", _choice(values["attribute"], g.ATTRIBUTE_NAMES), 0, len(g.ATTRIBUTE_NAMES) - 1)
+            if a is not None:
+                card.attribute = a
         for key in ("star1", "star2"):
-            if key in values and _choice(values[key], g.STAR_NAMES) >= 0:
-                setattr(card, key, _choice(values[key], g.STAR_NAMES))
+            if key in values:
+                star = ranged(key, _choice(values[key], g.STAR_NAMES), 0, len(g.STAR_NAMES) - 1)
+                if star is not None:
+                    setattr(card, key, star)
         if "equips" in values:
-            monsters = {_int(x) for x in values["equips"].replace(";", ",").split(",") if _int(x)}
-            project.equips[cid] = {m for m in monsters if m in project.cards}
+            equip_lists[cid] = {_int(x) for x in values["equips"].replace(";", ",").split(",") if _int(x)}
         if "ritual" in values:
             match = re.match(r"\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*->\s*(\d+)", values["ritual"])
             if match:
-                project.rituals[cid] = tuple(int(x) for x in match.groups())
+                ritual_lists[cid] = tuple(int(x) for x in match.groups())
             else:
                 unhandled("ritual recipes it could not read")
         # Passwords and costs: a data patch of WA_MRG.MRG's table, when they change.
@@ -167,10 +205,13 @@ def _import(package, retail, retail_wa, mod_id, name):
             at = PASSWORDS + 8 * cid
             cost, code = struct.unpack_from("<II", retail_wa, at)
             new_cost = _int(values.get("price"), cost)
+            if not 0 <= new_cost <= PRICE_MOST:
+                new_cost = min(max(new_cost, 0), PRICE_MOST)
+                clamped += 1
             password = values.get("password", "")
             new_code = int(password, 16) if re.fullmatch(r"\d{1,8}", password or "") else code
             if (new_cost, new_code) != (cost, code):
-                patches[at] = struct.pack("<II", new_cost & 0xFFFFFFFF, new_code)
+                patches[at] = struct.pack("<II", new_cost, new_code)
         for part, key in (("art.png", "art"), ("thumb.png", "thumbnail"), ("title.png", "title")):
             blob = package.data(f"cards/{cid}/{part}")
             if blob:
@@ -180,6 +221,26 @@ def _import(package, retail, retail_wa, mod_id, name):
         for key in values:
             if key not in KNOWN_CARD_KEYS:
                 unhandled(f"card key \"{key}\"")
+    # Equips and rituals once every card has its type: the port takes an
+    # equips entry for an equip card only, a rituals one for a ritual card,
+    # naming cards of the disc (src/pc/cards/tables.c).
+    for cid, monsters in equip_lists.items():
+        if project.cards[cid].type != g.TYPE_EQUIP:
+            unhandled("\"equips\" on cards that are not equip cards")
+            continue
+        fits = {m for m in monsters if m in project.cards and project.cards[m].is_monster()}
+        if fits != monsters:
+            unhandled("\"equips\" naming no monster of the disc", len(monsters - fits))
+        project.equips[cid] = fits
+    for cid, recipe in ritual_lists.items():
+        if project.cards[cid].type != g.TYPE_RITUAL:
+            unhandled("\"ritual\" on cards that are not ritual cards")
+        elif not all(1 <= c <= g.CARD_COUNT for c in recipe):
+            unhandled("ritual recipes naming no card of the disc")
+        else:
+            project.rituals[cid] = recipe
+    if clamped:
+        report.append(f"cards: {clamped} prices outside 0 to {PRICE_MOST} starchips, brought inside")
     changed = sum(1 for cid in card_ids if cid in project.retail.cards and project.card_changed(cid))
     report.append(f"cards: {len(card_ids)} in the package, {changed} differ from retail")
     if patches:
@@ -233,8 +294,10 @@ def _import(package, retail, retail_wa, mod_id, name):
                 for item in value.split(","):
                     if ":" in item:
                         cid, weight = (_int(x) for x in item.split(":", 1))
-                        if cid in project.cards and weight:
+                        if cid in project.cards and weight is not None and 0 < weight <= WEIGHT_MOST:
                             pool[cid] = weight
+                        elif weight:
+                            unhandled(f"{label} table weights out of range (1 to {WEIGHT_MOST}) or for no card")
                 if pool:
                     project.pools[d][table.group(1)] = normalize(pool)
                 continue
@@ -242,6 +305,9 @@ def _import(package, retail, retail_wa, mod_id, name):
             weights = [_int(x) for x in value.split(",")]
             if cid not in project.cards or len(weights) != 3 or None in weights:
                 unhandled(f"{label} lines it could not read")
+                continue
+            if not all(0 <= w <= WEIGHT_MOST for w in weights):
+                unhandled(f"{label} lines with weights out of range (0 to {WEIGHT_MOST})")
                 continue
             for band, weight in zip(BAND_NAMES, weights):
                 listed.setdefault((d, band), {})[cid] = weight
@@ -271,15 +337,16 @@ def _import(package, retail, retail_wa, mod_id, name):
                 unhandled("cpu-duelists.ini sections naming no opponent")
                 continue
             if key == "ai":
-                if [x.strip() for x in value.split(",")]:
-                    unhandled("AI profile bytes (ai =)")
+                unhandled("AI profile bytes (ai =)")
                 continue
             if key == "name":
                 renamed[d] = value
                 continue
             cid, weight = _int(key), _int(value)
-            if cid in project.cards and weight is not None:
+            if cid in project.cards and weight is not None and 0 <= weight <= WEIGHT_MOST:
                 decks.setdefault(d, {})[cid] = weight
+            else:
+                unhandled(f"cpu-duelists.ini lines with no card or a weight out of range (0 to {WEIGHT_MOST})")
         for d, pool in decks.items():
             result = apply_edit(project.pools[d]["deck"], {c: w for c, w in pool.items() if w}, replace=True, deck=True)
             if result is None:
@@ -298,7 +365,7 @@ def _import(package, retail, retail_wa, mod_id, name):
 
     # --- portraits ---------------------------------------------------------------
     portraits = sorted(int(m.group(1)) for n in package.names
-                       for m in [re.fullmatch(r"duelists/(\d+)/portrait\.png", n)] if m)
+                       for m in [re.fullmatch(r"duelists/(\d{1,9})/portrait\.png", n)] if m)
     if portraits:
         entries = []
         for d in portraits:

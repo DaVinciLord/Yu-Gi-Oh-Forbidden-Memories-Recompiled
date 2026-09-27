@@ -4,9 +4,11 @@ import json
 import tempfile
 import unittest
 import zipfile
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+from unittest import mock
 
-from fm_editor import manifest, validate, ygomods
+from fm_editor import cli, gamedata as g, manifest, validate, ygomods
 from fm_editor.tests.test_data import fixture, state
 
 
@@ -76,6 +78,82 @@ class YgomodsTest(unittest.TestCase):
             opened, messages = manifest.open_mod(self.retail, out)
             self.assertEqual(messages, [])
             self.assertEqual(state(opened), state(project))
+
+    def write(self, files: dict) -> Path:
+        path = Path(self.tmp.name) / "case.ygomods"
+        path.write_bytes(package({"manifest.ini": "format = YGOFM-MOD-PACKAGE\n", **files}))
+        return path
+
+    def test_zero_padded_folders(self):
+        # "duelists/007/" once reached save_mod as None (TypeError).
+        path = self.write({"duelists/007/portrait.png": b"\x89PNG seven", "cards/005/card.ini": "attack = 1230\n"})
+        project, _ = ygomods.import_package(self.retail, self.f.wa, path, "pad")
+        self.assertEqual(project.files["textures/portraits/freeduel-07.png"], b"\x89PNG seven")
+        self.assertEqual(project.cards[5].attack, 1230)
+        with tempfile.TemporaryDirectory() as out:
+            manifest.save_mod(project, out)
+            self.assertTrue((Path(out) / "textures" / "portraits" / "freeduel-07.png").exists())
+
+    def test_out_of_range_values(self):
+        ritual = next(c for c, card in self.retail.cards.items() if card.type == g.TYPE_RITUAL)
+        equip = next(c for c, card in self.retail.cards.items() if card.type == g.TYPE_EQUIP)
+        path = self.write({
+            "cards/5/card.ini": "type = 99\nattack = 99999\nlevel = 200\nprice = -5\nequips = 1, 2\n"
+                                "ritual = 1, 2, 3 -> 4\n",
+            f"cards/{ritual}/card.ini": "ritual = 9999, 0, 5 -> 70000\n",
+            f"cards/{equip}/card.ini": "equips = 1, 99999\n",
+            "cards/6/card.ini": "price = 5000000\n",
+            "drop_table_edits.ini": "[Simon Muran]\n5 = -100, 99999, 3\npow_table = 5:-10, 6:100\n",
+            "cpu-duelists.ini": "[Heishin]\n" + "".join(f"{c} = -{c}\n" for c in range(1, 30)),
+        })
+        project, report = ygomods.import_package(self.retail, self.f.wa, path, "range")
+        text = "\n".join(report)
+        retail5 = self.retail.cards[5]
+        card = project.cards[5]
+        self.assertEqual((card.type, card.attack, card.level), (retail5.type, retail5.attack, retail5.level))
+        self.assertNotIn(5, project.rituals)
+        self.assertEqual(project.rituals.get(ritual), self.retail.rituals.get(ritual))
+        self.assertEqual(project.equips.get(equip), {1})
+        self.assertEqual(project.pools[1]["pow"], {6: 2048})          # pow_table: the negative weight left out
+        self.assertEqual(project.pools[8]["deck"], self.retail.pools[8]["deck"])   # no deck of negative counts
+        costs = {p["at"]: p["bytes"] for p in project.other["data"][0]["patch"]}
+        self.assertEqual(costs.get(f"0x{0xFB9800 + 8 * 5:X}", "00 00 00 00")[:11], "00 00 00 00")   # patched or already 0
+        self.assertEqual(costs[f"0x{0xFB9800 + 8 * 6:X}"][:11], "3F 42 0F 00")     # 999999
+        for what in ("out of range", "not equip cards", "not ritual cards", "no card of the disc", "prices outside"):
+            self.assertIn(what, text)
+        self.assertEqual(validate.errors(validate.validate(project)), [])
+
+    def test_unreadable_entry(self):
+        path = self.write({"cards/5/card.ini": "attack = 1230\n" * 50})
+        blob = bytearray(path.read_bytes())
+        at = blob.find(b"attack = 1230")
+        blob[at] ^= 0xFF                                            # a bad CRC
+        path.write_bytes(bytes(blob))
+        with self.assertRaises(ygomods.PackageError):
+            ygomods.import_package(self.retail, self.f.wa, path, "crc")
+
+    def test_closed_when_refused(self):
+        bad = self.write({"manifest.ini": "format = OTHER\n"})
+        close = zipfile.ZipFile.close
+        with mock.patch.object(zipfile.ZipFile, "close", autospec=True, side_effect=close) as closed:
+            with self.assertRaises(ygomods.PackageError):
+                ygomods.Package(bad)
+        self.assertEqual(closed.call_count, 1)
+
+    def test_command_line_import(self):
+        game = Path(self.tmp.name) / "game"
+        (game / "DATA").mkdir(parents=True)
+        (game / "SLUS_014.11").write_bytes(self.f.slus)
+        (game / "DATA" / "WA_MRG.MRG").write_bytes(self.f.wa)
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            code = cli.main(["import", str(self.path), "-o", str(Path(self.tmp.name) / "mod"), "--game", str(game)])
+        self.assertEqual(code, 0, err.getvalue())
+        self.assertTrue((Path(self.tmp.name) / "mod" / "mod.json").exists())
+        self.assertIn("fusions:", out.getvalue())
+        bad = self.write({"manifest.ini": "format = OTHER\n"})
+        with redirect_stdout(out), redirect_stderr(err), self.assertRaises(SystemExit):
+            cli.main(["import", str(bad), "-o", str(Path(self.tmp.name) / "bad"), "--game", str(game)])
 
     def test_not_a_package(self):
         bad = Path(self.tmp.name) / "bad.ygomods"

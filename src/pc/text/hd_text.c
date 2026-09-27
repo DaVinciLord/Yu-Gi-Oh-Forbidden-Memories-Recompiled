@@ -32,6 +32,8 @@
 #include "pc/cards/art.h"
 #include "pc/cards/cards.h"
 #include "pc/cards/tables.h"
+#include "pc/saves/save_slots.h"
+#include "game/save_data.h"
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include FT_OUTLINE_H
@@ -1518,16 +1520,26 @@ static int make_label(const uint16_t *words, const Label *l, unsigned char texel
  * 18 of the panel, made as long as the name needs, leftwards from where it
  * meets the panel (column 25): its left end as the panel has it, then its
  * rows' border and background, the name set over the background as COM
- * is. And YOU's box (rows 21 to 30) the same way with You, in the name's
- * case. Their pictures are in the HUD rows' last row: the name's in cells
- * 0 to 3, You's in 24 and 25. */
+ * is. And YOU's box (rows 21 to 30) the same way with the name the player
+ * gave at name entry, or You when the save has none. Their pictures are in
+ * the HUD rows' free cells, as wide as each other: the opponent's in the
+ * last row's cells 0 to 3, the player's in the first row's 24 to 27. */
 #define NAME_ROWS 10
 #define NAME_JOIN 25
 static const struct {
-    int label, top, column, room; /* panel_labels[label]; its box's first row; the picture's cell; texels */
-} name_boxes[2] = {{1, 9, 0, 64}, {2, 21, 24, 32}};
+    int label, top, column, row, room; /* panel_labels[label]; its box's first row; the picture's cell; texels */
+} name_boxes[2] = {{1, 9, 0, 3, 64}, {2, 21, 24, 0, 64}};
 static int name_duelist, name_width[2];
 static unsigned name_made[2];
+static char name_player[16];
+
+/* The player's name as the save has it (SaveSlots_StateName), else You. */
+static const char *player_name(void)
+{
+    static char name[sizeof(name_player)];
+    SaveSlots_StateName((const unsigned char *)&((SaveDataWorkspace *)D_801D0000)->state, name, sizeof(name));
+    return name[0] ? name : "You";
+}
 
 static int make_name(const uint16_t *words, const char *name, int which, int *width)
 {
@@ -1539,7 +1551,8 @@ static int make_name(const uint16_t *words, const char *name, int which, int *wi
     int far = 0;
     FT_Face face = (FT_Face)Glyphs_Face((unsigned char)name[0]);
     const Font *font = face ? measure_font(face) : NULL;
-    uint8_t *origin = atlas + (size_t)(HUD_TOP + 3) * CELL * f * side + (size_t)name_boxes[which].column * CELL * f;
+    uint8_t *origin = atlas + (size_t)(HUD_TOP + name_boxes[which].row) * CELL * f * side +
+                      (size_t)name_boxes[which].column * CELL * f;
     int used[16], n_used = 0;
     if (!font) return 0;
     for (y = 0; y < PANEL_H; y++) {
@@ -1605,7 +1618,7 @@ static int make_name(const uint16_t *words, const char *name, int which, int *wi
                   panel_labels[label].y1 - top, name, ramp, n, 0, 0, 1, NULL, origin)) {
         return 0;
     }
-    changed((HUD_TOP + 3) * CELL * f, (HUD_TOP + 4) * CELL * f - 1);
+    changed((HUD_TOP + name_boxes[which].row) * CELL * f, (HUD_TOP + name_boxes[which].row + 1) * CELL * f - 1);
     *width = wide;
     return 1;
 }
@@ -1624,13 +1637,20 @@ int HdText_NameBox(int wanted, int which, int *atlas_u, int *atlas_v, int *x, in
         name_duelist = duelist;
         name_made[0] = name_made[1] = 0;
     }
+    if (which) {
+        const char *player = player_name();
+        if (strcmp(name_player, player)) {
+            strcpy(name_player, player);
+            name_made[1] = 0;
+        }
+    }
     if (name_made[which] != generation) {
         name_made[which] = generation;
-        if (!make_name(words, which ? "You" : name, which, &name_width[which])) name_width[which] = 0;
+        if (!make_name(words, which ? name_player : name, which, &name_width[which])) name_width[which] = 0;
     }
     if (!name_width[which]) return 0;
     *atlas_u = name_boxes[which].column * CELL;
-    *atlas_v = (HUD_TOP + 3) * CELL;
+    *atlas_v = (HUD_TOP + name_boxes[which].row) * CELL;
     *x = NAME_JOIN - name_width[which];
     *y = name_boxes[which].top;
     *width = name_width[which];

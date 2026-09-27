@@ -43,34 +43,44 @@ def command_check(arguments) -> int:
 
 
 def command_import(arguments) -> int:
-    retail, retail_files = load_retail(arguments.game)
     from pathlib import Path
-    from .importers import slug
+    from .importer import slug
+    retail, retail_files = load_retail(arguments.game)
     if arguments.modded.lower().endswith(".ygomods"):
         from . import ygomods
-        project, report = ygomods.import_package(retail, retail_files.wa, arguments.modded,
-                                                 arguments.id or slug(arguments.modded), Path(arguments.modded).stem)
+        try:
+            project, report = ygomods.import_package(retail, retail_files.wa, arguments.modded,
+                                                     arguments.id or slug(arguments.modded),
+                                                     Path(arguments.modded).stem)
+        except ygomods.PackageError as problem:
+            raise SystemExit(f"import: {problem}")
         manifest.save_mod(project, arguments.output)
-        for line in report:
-            print(line)
-        return 0
-    if arguments.wa:
-        modded = disc.load_pair(arguments.modded, arguments.wa)
     else:
-        modded = disc.load(arguments.modded)
-    from pathlib import Path
-    from .importers import slug
-    source = Path(arguments.modded).resolve()
-    if source.is_file() and source.suffix.lower() in (".bin", ".iso", ".img"):
-        name = source.stem
-    else:
-        name = source.parent.name if source.is_file() else source.name
-    result = importer.import_modded(retail_files, modded, arguments.id or slug(name), name)
-    importer.save(result, arguments.output)
-    for line in result.report:
+        try:
+            modded = disc.load_pair(arguments.modded, arguments.wa) if arguments.wa else disc.load(arguments.modded)
+        except (disc.GameFilesError, OSError) as problem:
+            raise SystemExit(f"import: {problem}")
+        source = Path(arguments.modded).resolve()
+        if source.is_file() and source.suffix.lower() in (".bin", ".iso", ".img"):
+            name = source.stem
+        else:
+            name = source.parent.name if source.is_file() else source.name
+        try:
+            result = importer.import_modded(retail_files, modded, arguments.id or slug(name), name)
+        except ValueError as problem:
+            raise SystemExit(f"import: {problem}")
+        importer.save(result, arguments.output)
+        project, report = result.project, result.report
+    for line in report:
         print(line)
     print(f"wrote {Path(arguments.output) / 'mod.json'}", file=sys.stderr)
-    return 0
+    # What the loader would refuse, as "check" says it (the GUI will not save it).
+    errors = validate.errors(validate.validate(project))
+    for issue in errors:
+        print(issue, file=sys.stderr)
+    if errors:
+        print(f"{len(errors)} errors: the loader will leave those rules out; fix them in the editor", file=sys.stderr)
+    return 1 if errors else 0
 
 
 def build_parser():
