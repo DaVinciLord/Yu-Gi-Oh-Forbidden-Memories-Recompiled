@@ -122,7 +122,7 @@ def make_slus(cards: dict, other_names: dict = None) -> bytes:
 
 
 def make_wa(fusions, equips, rituals, pools) -> bytes:
-    data = bytearray(0xED8000)
+    data = bytearray(0xFC0000)   # through the password table
     for k in range(g.TERRAIN_COPIES):
         base = g.TERRAIN_BASE + k * g.TERRAIN_STRIDE
         for offset, blob in ((g.EQUIP_OFFSET, g.encode_equips(equips)), (g.FUSION_OFFSET, g.encode_fusions(fusions)),

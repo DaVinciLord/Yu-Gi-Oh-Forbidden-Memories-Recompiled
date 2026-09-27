@@ -105,6 +105,31 @@ The report is shown and saved with the mod as `import-report.txt`.
     python tools/pc/fm_editor import <modified .bin, folder or SLUS_014.11> -o <mod folder>
         [--wa <modified WA_MRG.MRG>] [--game <retail>] [--id <mod id>]
 
+## Importing a .ygomods package
+
+The old static recompilation's in-game editor exported `.ygomods` packages
+(a ZIP of INI and text files and PNGs). **File > Import a .ygomods package**
+(or `import <file>.ygomods -o <mod folder>`) reads one over retail:
+
+| In the package | Becomes |
+|---|---|
+| `cards/<id>/card.ini`: name, description (`\|` breaks a line), ATK/DEF, level, type, attribute, stars | `cards` replace entries |
+| `cards/<id>/card.ini`: `equips`, `ritual` | `equips` (the complete list), `rituals` |
+| `cards/<id>/card.ini`: `price`, `password` | a `data` patch of the password table in `WA_MRG.MRG` (`price` taken as the starchip cost) |
+| `cards/<id>/art.png`, `thumb.png`, `title.png` | the card's `art`, `thumbnail`, `title` |
+| `fusion-edits.txt` | `fusions` (a `clear` line removes every retail fusion first) |
+| `drop_table_edits.ini`, `drop_missing_cards.ini` | `drops` (the listed weights, the rest sharing the remainder, as the port does) |
+| `cpu-duelists.ini` deck weights; `name =` | `decks` (the whole pool); a renamed opponent in `text.txt` |
+| `duelists/<n>/portrait.png` | a texture pack image of the Free Duel portrait |
+
+Listed in the report and left out, as the port has no data key for them:
+scripted monster and magic effects (`on_flip`, `battle`, `effect`...),
+card and name colours, the nine AI bytes, scripted rewards and StarChip
+rules, the recomp's card shop and its settings, and `dialogue.txt`, whose
+code numbering is the recomp's own (translate with `text_listing.py`).
+The importer was written from the packages' own file layout; no code of the
+recomp is used.
+
 ## Checks
 
 Before saving, the editor runs the loader's checks (`validate.py`): the mod

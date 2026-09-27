@@ -7,7 +7,7 @@
         open the mod over the retail tables, list what the loader would
         complain about, and print the mod.json the editor would save
 
-    python tools/pc/fm_editor import <modified .bin, folder or SLUS_014.11> -o <mod folder>
+    python tools/pc/fm_editor import <modified .bin, folder, SLUS_014.11 or .ygomods> -o <mod folder>
                              [--wa <modified WA_MRG.MRG>] [--game <retail>] [--id <mod id>]
         turn a community mod's modified game files into a port mod (what
         differs from retail); what cannot be carried over is reported
@@ -43,7 +43,17 @@ def command_check(arguments) -> int:
 
 
 def command_import(arguments) -> int:
-    _, retail_files = load_retail(arguments.game)
+    retail, retail_files = load_retail(arguments.game)
+    from pathlib import Path
+    from .importers import slug
+    if arguments.modded.lower().endswith(".ygomods"):
+        from . import ygomods
+        project, report = ygomods.import_package(retail, retail_files.wa, arguments.modded,
+                                                 arguments.id or slug(arguments.modded), Path(arguments.modded).stem)
+        manifest.save_mod(project, arguments.output)
+        for line in report:
+            print(line)
+        return 0
     if arguments.wa:
         modded = disc.load_pair(arguments.modded, arguments.wa)
     else:
@@ -74,7 +84,7 @@ def build_parser():
                        help="the game: a folder with SLUS_014.11 and DATA/WA_MRG.MRG, or the .bin")
     check.add_argument("--print", action="store_true", help="print the mod.json the editor would write")
     imp = commands.add_parser("import", help="turn a modified game into a port mod")
-    imp.add_argument("modded", help="the modified game: a .bin, a folder, or its SLUS_014.11")
+    imp.add_argument("modded", help="the modified game: a .bin, a folder, its SLUS_014.11, or a .ygomods package")
     imp.add_argument("-o", "--output", required=True, help="the mod folder to write")
     imp.add_argument("--wa", help="the modified WA_MRG.MRG, when the first argument is SLUS_014.11 alone")
     imp.add_argument("--game", help="the retail game (default: found where the port looks)")

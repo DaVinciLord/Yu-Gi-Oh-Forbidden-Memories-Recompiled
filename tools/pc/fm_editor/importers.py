@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from tkinter import filedialog, messagebox
 
-from . import disc, importer
+from . import disc, importer, ygomods
 
 
 def slug(text: str) -> str:
@@ -63,5 +63,25 @@ def import_modded_game(app):
                + "\n\nThe report is saved with the mod as import-report.txt.")
 
 
+def import_ygomods(app):
+    if not app.need_game() or not app.confirm_discard():
+        return
+    path = filedialog.askopenfilename(parent=app, title="A .ygomods package",
+                                      filetypes=[(".ygomods package", "*.ygomods"), ("All files", "*.*")])
+    if not path:
+        return
+    try:
+        project, report = ygomods.import_package(app.retail, app.files.wa, path, slug(path), Path(path).stem)
+    except ygomods.PackageError as problem:
+        messagebox.showerror("Import", str(problem), parent=app)
+        return
+    app.set_project(project)
+    app.changed()
+    app.say(f"Imported {path}: save it to write the mod folder.")
+    app.report("Import report", "From the package:\n\n" + "\n".join("- " + line for line in report)
+               + "\n\nThe report is saved with the mod as import-report.txt.")
+
+
 def install(app):
     app.add_import("Import a modified game (.bin or SLUS_014.11)...", lambda: import_modded_game(app))
+    app.add_import("Import a .ygomods package...", lambda: import_ygomods(app))
