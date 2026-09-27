@@ -40,6 +40,25 @@ static void Duel_DealEditedDeck(const u16 *pool, u8 *out16, u8 *out8)
         out8 += 1;
     }
 }
+
+/* An opponent's deck a mod fixed (tables.h): its forty cards as written,
+   which the swaps below shuffle. */
+static s32 Duel_DealFixedDeck(u8 *out16, u8 *out8)
+{
+    static u16 fixed[DECK_SIZE];
+    s32 n;
+
+    if (!Tables_FixedDeck(Tables_OpponentId(), fixed)) {
+        return 0;
+    }
+    for (n = 0; n < DECK_SIZE; n++) {
+        *(s16 *)out16 = fixed[n];
+        *out8 = n;
+        out16 += 2;
+        out8 += 1;
+    }
+    return 1;
+}
 #endif
 
 void Duel_ShuffleDeck(s32 src, u8 *out16, u8 *out8) {
@@ -64,7 +83,8 @@ void Duel_ShuffleDeck(s32 src, u8 *out16, u8 *out8) {
     b8 = out8;
 
 #ifdef MEMORIES_PC
-    if (src == 0 && Tables_Pool(TABLES_POOL_DECK, (const u16 *)gDuel_awOpponentDeckPool) != 0) {
+    if (src == 0 && Duel_DealFixedDeck(out16, out8)) {
+    } else if (src == 0 && Tables_Pool(TABLES_POOL_DECK, (const u16 *)gDuel_awOpponentDeckPool) != 0) {
         Duel_DealEditedDeck(Tables_Pool(TABLES_POOL_DECK, (const u16 *)gDuel_awOpponentDeckPool),
                             out16, out8);
     } else

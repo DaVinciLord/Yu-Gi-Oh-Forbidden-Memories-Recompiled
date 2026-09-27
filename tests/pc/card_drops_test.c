@@ -63,6 +63,8 @@ void Duel_AwardCard(s32 id) { chest[id]++; }
 /* What tables.c asks of the cards and the mods: no mod edits a pool. */
 int Cards_Type(int id) { (void)id; return 0; }
 int Cards_TypeNamed(const char *text) { (void)text; return -1; }
+int Cards_Attribute(int id) { (void)id; return 0; }
+int Cards_AttributeNamed(const char *text) { (void)text; return -1; }
 int Cards_Named(const char *text) { (void)text; return -1; }
 int Cards_Reference(const JsonValue *value) { (void)value; return -1; }
 void Mods_Note(const char *id, const char *format, ...) { (void)id; (void)format; }

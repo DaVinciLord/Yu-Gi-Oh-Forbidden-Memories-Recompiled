@@ -23,6 +23,16 @@ int Cards_Type(int id)
     return id == 20 ? CARD_TYPE_EQUIP : id == 21 ? CARD_TYPE_RITUAL : id == 12 || id == 13 ? 0 : 3;
 }
 int Cards_TypeNamed(const char *text) { return same_letters(text, "Dragon") ? 0 : same_letters(text, "Warrior") ? 3 : -1; }
+/* Card 12 is Light, 13 Dark, the rest Earth. */
+int Cards_AttributeNamed(const char *text)
+{
+    return same_letters(text, "Light") ? 0 : same_letters(text, "Dark") ? 1 : same_letters(text, "Earth") ? 2 : -1;
+}
+int Cards_Attribute(int id)
+{
+    id = Cards_BaseId(id);
+    return id == 12 ? 0 : id == 13 ? 1 : 2;
+}
 int Cards_Named(const char *text)
 {
     size_t i;
@@ -65,7 +75,7 @@ int Mods_Active(int mod) { return mod >= 0; }
 const char *Mods_Id(int mod) { (void)mod; return ""; }
 const JsonValue *Mods_Manifest(int mod) { (void)mod; return NULL; }
 
-static JsonDocument *documents[16];
+static JsonDocument *documents[64];
 static int document_count;
 static void add(const char *mod, const char *text)
 {
@@ -73,6 +83,7 @@ static void add(const char *mod, const char *text)
     JsonDocument *document = Json_Parse(text, error, sizeof(error));
     if (!document) fprintf(stderr, "%s\n", error);
     assert(document);
+    assert(document_count < (int)(sizeof(documents) / sizeof(documents[0])));
     documents[document_count++] = document;
     Tables_Add(mod, Json_Root(document));
 }
@@ -194,14 +205,143 @@ int main(void)
     assert(notes == 2);
     pool = Tables_PoolFor(15, TABLES_POOL_DECK, retail);
     assert(pool[10] == 300 && total(pool) == 2048);
+    add("a", "{\"decks\": {\"Isis\": {\"fixed\": false, \"Kuriboh\": 300}}}");
+    assert(notes == 2 && Tables_PoolFor(16, TABLES_POOL_DECK, retail)[10] == 300);
     /* The pool follows what the game loaded (a data mod may patch it). */
     retail[100] = 0;
     pool = Tables_PoolFor(15, TABLES_POOL_DECK, retail);
     assert(pool[101] == 0 && pool[10] == 300 && total(pool) == 2048);
 
+    /* Fixed decks: copies by card, past three of one, in id order; a later
+     * fixed deck wins; one that is not 40 cards is left out; a fixed deck
+     * wins over the weighted edits of the same deck, which are told so. */
+    {
+        unsigned short deck[TABLES_DECK_SIZE];
+        assert(!Tables_FixedDeck(15, deck) && !Tables_FixedDeck(-1, deck));
+        notes = 0;
+        add("f", "{\"decks\": {\"Pegasus\": {\"fixed\": true, \"Kuriboh\": 30, \"test:copy:1\": 4, \"12\": 6}}}");
+        assert(notes == 0 && Tables_FixedDeck(15, deck));
+        assert(notes == 1);                /* Pegasus's weighted edit above waits */
+        for (id = 0; id < 30; id++) assert(deck[id] == 10);
+        for (id = 30; id < 36; id++) assert(deck[id] == 12);
+        for (id = 36; id < 40; id++) assert(deck[id] == 723);
+        assert(Tables_FixedDeck(15, deck) && notes == 1);   /* told once */
+        notes = 0;
+        add("g", "{\"decks\": {\"Pegasus\": {\"fixed\": true, \"Kuriboh\": 39}, \"Shadi\": {\"fixed\": true, \"nothing\": 40},"
+                 "\"Seto\": {\"fixed\": true, \"Kuriboh\": -1}, \"all\": {\"fixed\": true, \"11\": 40, \"12\": 0}}}");
+        assert(notes == 5);                /* 39 cards; no card, and so 0; a count under 0, and so 0 */
+        assert(Tables_FixedDeck(15, deck) && deck[0] == 11 && deck[39] == 11);   /* "all" came later */
+        assert(Tables_FixedDeck(1, deck) && deck[0] == 11);
+        add("h", "{\"decks\": {\"Pegasus\": {\"fixed\": true, \"Kuriboh\": 20, \"Thunder Dragon\": 20}}}");
+        assert(Tables_FixedDeck(15, deck) && deck[0] == 10 && deck[19] == 10 && deck[20] == 11 && deck[39] == 11);
+        assert(Tables_FixedDeck(14, deck) && deck[0] == 11);
+    }
+
+    /* The chest: without the rule it keeps 250 and a card past that is lost,
+     * as on the disc; with it, it keeps "limit" and each card past that is
+     * worth its starchips, up to 999999; the later mod wins. */
+    {
+        unsigned starchips = 100;
+        assert(Tables_ChestLimit() == 250 && Tables_ChestOverflow(250, &starchips) == 0 && starchips == 100);
+        notes = 0;
+        add("i", "{\"chest_overflow\": {\"starchips\": 3}}");
+        add("j", "{\"chest_overflow\": {\"limit\": 0, \"starchips\": 9}}");
+        add("k", "{\"chest_overflow\": {\"limit\": 3, \"starchips\": \"many\"}}");
+        add("k2", "{\"chest_overflow\": 3}");
+        assert(notes == 3 && Tables_ChestLimit() == 250);
+        assert(Tables_ChestOverflow(249, &starchips) == 0 && starchips == 100);
+        assert(Tables_ChestOverflow(250, &starchips) == 3 && starchips == 103);
+        add("l", "{\"chest_overflow\": {\"limit\": 3, \"starchips\": 999999}}");
+        assert(Tables_ChestLimit() == 3);
+        assert(Tables_ChestOverflow(2, &starchips) == 0 && starchips == 103);
+        assert(Tables_ChestOverflow(3, &starchips) == 999999 && starchips == 999999);
+        assert(Tables_ChestOverflow(40, &starchips) == 999999 && starchips == 999999);
+        add("m", "{\"chest_overflow\": {\"limit\": 10}}");
+        starchips = 5;
+        assert(Tables_ChestLimit() == 10 && Tables_ChestOverflow(10, &starchips) == 0 && starchips == 5);
+        add("n", "{\"chest_overflow\": {\"limit\": 250, \"starchips\": 1}}");
+    }
+
+    /* Terrains: a listed pair has its points; the rest are the disc's until
+     * a mod replaces the table; names, aliases and numbers; refusals. */
+    {
+        int bonus = 12345;
+        assert(!Tables_TerrainBonus(1, 0, &bonus) && bonus == 12345);
+        notes = 0;
+        add("o", "{\"terrain_bonus\": {\"Forest\": {\"Dragon\": -300}, \"sea\": {\"Warrior\": 700},"
+                 "\"7\": {\"Dragon\": 1}, \"Umi\": {\"Magic\": 5, \"Dragon\": 10000, \"Warrior\": 650}, \"Yami\": 3}}");
+        assert(notes == 4);                /* terrain 7, Magic, 10000, not an object */
+        assert(Tables_TerrainBonus(1, 0, &bonus) && bonus == -300);
+        assert(Tables_TerrainBonus(5, 3, &bonus) && bonus == 650);          /* "Umi" is "sea", later */
+        assert(!Tables_TerrainBonus(1, 3, &bonus) && !Tables_TerrainBonus(5, 0, &bonus));
+        assert(!Tables_TerrainBonus(0, 0, &bonus) && !Tables_TerrainBonus(1, CARD_TYPE_MAGIC, &bonus));
+        add("p", "{\"terrain_bonus\": {\"Mountain\": {\"Dragon\": 250}, \"replace\": true}}");
+        assert(Tables_TerrainBonus(3, 0, &bonus) && bonus == 250);
+        assert(Tables_TerrainBonus(1, 0, &bonus) && bonus == 0);            /* replaced */
+        assert(Tables_TerrainBonus(6, 19, &bonus) && bonus == 0);
+        add("q", "{\"terrain_bonus\": {\"4\": {\"Warrior\": 100}, \"Meadow\": {\"Dragon\": -50}}}");
+        assert(Tables_TerrainBonus(4, 3, &bonus) && bonus == 100 && Tables_TerrainBonus(4, 0, &bonus) && bonus == -50);
+    }
+
+    /* Equip bonuses: none is the disc's; "bonus" for any monster; the first
+     * "bonus_if" that fits comes before it; a later entry wins; a copy of
+     * the equip is the equip; refusals. 12 is a Light dragon, 13 a Dark
+     * dragon, 5 an Earth warrior. */
+    assert(Tables_EquipBonus(20, 12, 500) == 500);
+    notes = 0;
+    add("r", "{\"equips\": [{\"card\": \"Legendary Sword\", \"bonus\": 300,"
+             "\"bonus_if\": {\"Light\": 900, \"Dragon\": 700, \"Magic\": 1, \"Earth\": 10000}},"
+             "{\"card\": \"Kuriboh\", \"bonus\": 5}, {\"card\": 20, \"bonus\": \"lots\"}]}");
+    assert(notes == 4);                    /* Magic, 10000, Kuriboh not an equip, "lots" */
+    assert(Tables_EquipBonus(20, 12, 500) == 900);           /* Light first */
+    assert(Tables_EquipBonus(20, 13, 500) == 700);           /* a Dark dragon */
+    assert(Tables_EquipBonus(20, 5, 500) == 300);            /* neither */
+    assert(Tables_EquipBonus(CARD_COUNT + 20, 13, 500) == 700);
+    assert(Tables_EquipBonus(21, 13, 1000) == 1000);         /* another equip: the disc's */
+    add("s", "{\"equips\": [{\"card\": 20, \"bonus_if\": {\"Warrior\": -200}}]}");
+    assert(Tables_EquipBonus(20, 5, 500) == -200);           /* the later entry fits */
+    assert(Tables_EquipBonus(20, 12, 500) == 900);           /* it says nothing of a dragon */
+    add("t", "{\"equips\": [{\"card\": 20, \"bonus\": 0, \"add\": [\"Dragon\"]}]}");
+    assert(Tables_EquipBonus(20, 12, 500) == 0 && Tables_Equip(20, 12) == 1);
+    /* A default for the equips no entry gives a bonus: Megamorph's +1000 too. */
+    notes = 0;
+    add("t2", "{\"equip_bonus_default\": 20000}");
+    assert(notes == 1 && Tables_EquipBonus(21, 13, 1000) == 1000);
+    add("t3", "{\"equip_bonus_default\": 700}");
+    assert(Tables_EquipBonus(21, 13, 1000) == 700 && Tables_EquipBonus(21, 5, 500) == 700);
+    assert(Tables_EquipBonus(20, 12, 500) == 0 && Tables_EquipBonus(20, 5, 500) == 0);
+
+    /* Attack traps: the disc's thresholds until a mod sets one, in points;
+     * only the six attack traps; a warning when they fall out of order. */
+    assert(Tables_TrapThreshold(0, 500) == 500 && Tables_TrapThreshold(5, 25500) == 25500);
+    notes = 0;
+    add("u", "{\"trap_thresholds\": {\"681\": 800, \"686\": 30000, \"Kuriboh\": 5, \"683\": -1, \"684\": 70000}}");
+    assert(notes == 3);                    /* Kuriboh, -1, 70000 */
+    assert(Tables_TrapThreshold(0, 500) == 800 && Tables_TrapThreshold(1, 1000) == 1000);
+    assert(Tables_TrapThreshold(5, 25500) == 30000 && Tables_TrapThreshold(6, 7) == 7);
+    notes = 0;
+    add("v", "{\"trap_thresholds\": {\"682\": 700}}");
+    assert(notes == 1 && Tables_TrapThreshold(1, 1000) == 700);   /* 700 after 800: out of order */
+    add("w", "{\"trap_thresholds\": {\"682\": 900}}");
+    assert(notes == 1 && Tables_TrapThreshold(1, 1000) == 900);
+
     Tables_Clear();
+    assert(Tables_TrapThreshold(0, 500) == 500);
+    {
+        int bonus;
+        assert(!Tables_TerrainBonus(1, 0, &bonus) && !Tables_TerrainBonus(6, 19, &bonus));
+        assert(Tables_EquipBonus(20, 12, 500) == 500);
+    }
+    {
+        unsigned starchips = 7;
+        assert(Tables_ChestLimit() == 250 && Tables_ChestOverflow(250, &starchips) == 0 && starchips == 7);
+    }
     assert(fusion(10, 11) == -1 && Tables_Equip(20, 12) == -1 && Tables_Ritual(21, own) == -1);
     assert(!Tables_PoolFor(15, TABLES_POOL_DECK, retail));
+    {
+        unsigned short deck[TABLES_DECK_SIZE];
+        assert(!Tables_FixedDeck(15, deck));
+    }
     while (document_count) Json_Free(documents[--document_count]);
     puts("tables: ok");
     return 0;

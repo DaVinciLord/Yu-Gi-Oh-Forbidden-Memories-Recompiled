@@ -1,4 +1,4 @@
-# Gameplay tables: fusions, equips, rituals, drops and decks
+# Gameplay tables: fusions, equips, rituals, drops, decks and more
 
 A mod can change the duel's rule tables with no code at all: which cards
 fuse and into what, what an equip card may equip, what a ritual needs and
@@ -84,6 +84,38 @@ Within one entry a named card is surer than a type and a type surer than
 `replace`, so `"add": ["Dragon"], "remove": ["Curse of Dragon"]` equips every
 dragon but one. What no entry mentions, the disc's table decides.
 
+An entry may also set what the equip adds to the monster's ATK and DEF, in
+place of the disc's +500 (+1000 for Megamorph):
+
+| Key | Meaning |
+|---|---|
+| `bonus` | points, with a sign, for any monster it equips |
+| `bonus_if` | an object of monster types (`"Dragon"`) or attributes (`"Light"`, `"Dark"`, `"Earth"`, `"Water"`, `"Fire"`, `"Wind"`) and their points |
+
+```json
+"equips": [
+    {"card": "Legendary Sword", "bonus": 300, "bonus_if": {"Warrior": 800, "Light": 600}},
+    {"card": "Megamorph", "bonus": 1500}
+]
+```
+
+The first `bonus_if` that fits the monster decides, then `bonus`; an entry
+with neither for this monster says nothing, and an earlier entry decides,
+else `equip_bonus_default` (below) if a mod sets it, else the disc. The latest entry that says something wins, as for what an
+equip may equip, and a copy of an equip a mod added has its base's bonus.
+Values are whole points from -9999 to 9999; a negative bonus lowers the
+monster.
+
+`"equip_bonus_default": 700`, beside `equips` at the top of the manifest,
+sets what every equip no entry gives a bonus for adds, in place of the
+disc's +500 and Megamorph's +1000 alike (give Megamorph an entry to keep it
+apart). Without it those keep the disc's values. The latest mod that sets it
+wins. Equips whose effect is more than a bonus (a Wicked Gods or Remaster
+equip that heals, or gives +400 ATK and -200 DEF) need a code mod: the
+bonus here always goes to ATK and DEF alike. ATK and DEF still stop at 9999 and 0. Reverse Trap turns
+the bonus the equip gave into as large a loss, as it does on the disc. The CPU chooses its equips as before: it
+never counted the bonus.
+
 ## Rituals
 
 `"rituals"` is a list, one entry per ritual card. `card` is one of the
@@ -102,7 +134,7 @@ opponent:
 
 | Key | Pool |
 |---|---|
-| `decks` | the cards its deck is dealt from (40 cards, at most 3 of each) |
+| `decks` | the cards its deck is dealt from (40 cards, at most 3 of each), or its fixed deck (below) |
 | `drops` → `pow` (or `sa-pow`) | the prize for an S or A rank won on POW |
 | `drops` → `bcd` (or `b-c-d`) | the prize for a B, C or D rank |
 | `drops` → `tec` (or `sa-tec`) | the prize for an S or A rank won on TEC |
@@ -152,6 +184,109 @@ mod's edits of one opponent. Cards a mod adds may be in a pool too.
 Opponent 0 is an unused copy of Simon Muran. The disc's own pools are in
 `notes/research/fusion-and-drop-tables/drops.csv`.
 
+### Fixed decks
+
+A deck may instead be written down card by card, as some community mods do:
+`"fixed": true` makes the numbers **copies**, not weights, and they must add
+up to exactly 40:
+
+```json
+"decks": {
+    "Simon Muran": {"fixed": true, "Kuriboh": 4, "Mystical Elf": 6, "Celtic Guardian": 30}
+}
+```
+
+The duel deals those forty cards and shuffles them as it shuffles any deck.
+The limit of three copies of a card does **not** apply to a fixed deck: the
+counts are the deck, so a limit could only refuse the list or change it
+behind the author's back, and nothing in the duel needs it (the game
+itself deals a two-player deck of whatever its save holds). A dealt,
+weighted deck keeps the limit. A card named in a fixed deck is dealt as it
+is: a copy a mod added is not traded for its base, nor a retail card for one
+of its copies.
+
+A fixed deck that does not come to 40 cards, or names a card the game does
+not have, is reported and left out. The latest fixed deck of an opponent
+wins, and a fixed deck wins over weighted edits of the same deck from any
+mod, which are reported as left out the first time the deck is dealt.
+`"all"` fixes every opponent's deck. `MEMORIES_TRACE=mods` logs each fixed
+deck as it is dealt.
+
+## Terrain bonuses
+
+A terrain (the field a Forest, Wasteland, Mountain, Sogen, Umi or Yami card
+sets, or an opponent's home field) gives some monster types +500 and a few
+-500 on the disc. A mod may set the bonus of any terrain and monster type,
+in points, with a sign:
+
+```json
+"terrain_bonus": {
+    "Forest": {"Beast": 300, "Insect": 300, "Fairy": -200},
+    "Umi":    {"Aqua": 400, "Machine": -400},
+    "replace": true
+}
+```
+
+Terrains are named as the field cards are, `Forest`, `Wasteland`,
+`Mountain`, `Sogen`, `Umi` and `Yami` (also `Meadow`, `Sea` and `Dark`, or
+1 to 6), and types as a card's are (`"Winged Beast"`, `"Beast-Warrior"`).
+Only monster types have a terrain bonus. Values are whole points from -9999
+to 9999; they need not be multiples of 500, nor of 10. A pair the mod lists
+has its value; a pair it does not keeps the disc's, unless `"replace": true`,
+which gives every pair the mods do not list no bonus at all. Several mods'
+tables add up the same way, the later one winning for a pair it lists, and a
+later `"replace"` clearing what earlier mods set. Everything the game works
+out from a terrain asks the same function (`Duel_GetTerrainBoost`) and
+follows: a monster's ATK and DEF when it is placed, their recount when a
+field card is played, the CPU's weighing of its cards and the fusion
+helper. A monster's attribute is
+not a terrain's affair (a mod whose fields favour attributes needs code),
+and there are still only the six terrains.
+
+## Attack traps
+
+Six traps spring when a monster attacks, each up to an attack of its own:
+House of Adhesive Tape 500, Eatgaboon 1000, Bear Trap 1500, Invisible Wire
+2000, Acid Trap Hole 3000, and Widespread Ruin whatever the attack (25500
+on the disc). A mod may set those thresholds, in points of ATK:
+
+```json
+"trap_thresholds": {"House of Adhesive Tape": 800, "Acid Trap Hole": 3500}
+```
+
+A trap springs when the attacker's ATK is at or under its threshold. The
+duel looks at the attacked side's set attack traps from Widespread Ruin
+down and stops at the first whose threshold is under the attack; the last
+trap it passed springs, which, with the thresholds in order, is the weakest
+trap that stops the attacker. Keep the six in that order (each at least the
+one before it): the Mods window warns when they are not, since a trap behind
+a lower threshold would never spring. Values are whole points, 0 to 65535;
+a trap no mod names keeps the disc's threshold. A copy of a trap springs as
+its base. Which cards are attack traps, and what they do, is the disc's.
+
+## A full chest pays starchips
+
+The chest holds at most 250 copies of a card; on the disc a copy won past
+that is lost. A mod may keep the chest smaller, and make each copy it has no
+room for worth starchips instead:
+
+```json
+"chest_overflow": {"limit": 3, "starchips": 3}
+```
+
+| Key | Meaning |
+|---|---|
+| `limit` | the copies of a card the chest keeps, 1 to 250 (250 when left out) |
+| `starchips` | what each card won past `limit` is worth, 0 to 999999 (0 when left out) |
+
+The Wicked Gods keeps the 250 and pays 1 starchip (`{"starchips": 1}`); the
+Remaster keeps 3 and pays 3. The balance stops at 999999, as the game's own
+prize does. It holds wherever the game gives the player a card
+(`Duel_AwardCard`): a duel's drop, the extra drops of Game > Card drops, and
+a card bought in the password shop. A chest that already held more than
+`limit` of a card (a save from before the mod) keeps them; only new copies
+are turned away. The latest mod that sets it wins.
+
 ## Where two mods disagree
 
 Mods apply in load order (priority, then `after` and `requires`, then the
@@ -177,9 +312,13 @@ it first:
 |---|---|---|
 | `Duel_CheckFusion` (`duel_card_checks.c`) | fusion table, `0x8017C2D8` | `Tables_Fusion`, then `Tables_FilterFusion` over the disc's answer |
 | `Duel_CheckEquip` (`duel_card_checks.c`) | equip table, `0x8017A1D8` | `Tables_Equip` |
+| `DuelScene_UpdateCardPlacement` (`duel_scene_card_placement.c`) | +500, +1000 for Megamorph | `Tables_EquipBonus` |
 | `Duel_CheckRitual` (`duel_check_ritual.c`) | ritual table, `0x801799D8` | `Tables_Ritual`, whose recipe is laid out like the disc's |
-| `Duel_ShuffleDeck` (`duel_shuffle_deck.c`) | deck pool, `0x801781D8` | `Tables_Pool(TABLES_POOL_DECK)` |
+| `Duel_ShuffleDeck` (`duel_shuffle_deck.c`) | deck pool, `0x801781D8` | `Tables_FixedDeck`, then `Tables_Pool(TABLES_POOL_DECK)` |
 | `Duel_SelectCardDrop` (`duel_result_runtime.c`) | drop pools, `0x8017878C` | `Tables_Pool(TABLES_POOL_POW + pool)` |
+| `Duel_GetTerrainBoost` (`duel_card_record_lifecycle.c`) | terrain table, `0x800909D4` | `Tables_TerrainBonus` |
+| `Duel_SelectAttackTrap` (`duel_trap_resolution.c`) | trap thresholds, `0x8009AF24` (bytes, x100) | `Tables_TrapThreshold` |
+| `Duel_AwardCard` (`duel_result_runtime.c`) | chest, `0x801D0250`; starchips, `0x801D07E0` | `Tables_ChestOverflow` before the card is counted, `Tables_ChestLimit` after |
 
 A pool is worked out from the opponent's loaded pool and every edit of it
 when the game draws from it, and kept until the opponent or the loaded pool

@@ -2,8 +2,10 @@
 #define MEMORIES_PC_TABLES_H
 /* The duel's rule tables as mods change them (notes/gameplay-tables.md).
  *
- * A mod's manifest may carry "fusions", "equips", "rituals", "drops" and
- * "decks": edits to the tables the duel reads from the disc, written with
+ * A mod's manifest may carry "fusions", "equips", "rituals", "drops",
+ * "decks", "equip_bonus_default", "terrain_bonus", "trap_thresholds" and
+ * "chest_overflow":
+ * edits to the tables and constants the duel reads from the disc, written with
  * card names, stable identities or ids. They are read once at startup, after
  * the cards (cards.h), in the order the mods load; where two mods set the
  * same thing the later one wins, and drop and deck edits of the same
@@ -31,6 +33,11 @@ int Tables_FilterFusion(int result);
 /* Whether `equip` may equip `monster`: 1 or 0 by a mod's rule, -1 when no
  * rule says, and the disc's table decides. */
 int Tables_Equip(int equip, int monster);
+/* What `equip` adds to `monster`'s ATK and DEF: a mod's "bonus" or
+ * "bonus_if" for it (the latest entry that fits), else the mods'
+ * "equip_bonus_default", else `retail`, the disc's +500 (+1000 for
+ * Megamorph). */
+int Tables_EquipBonus(int equip, int monster, int retail);
 
 /* A ritual's recipe: 1 with the ritual card, its three tributes, its result
  * and a 0 after them in `recipe` (the layout of the game's ritual table),
@@ -53,6 +60,33 @@ const unsigned short *Tables_PoolFor(int duelist, int pool, const unsigned short
  * it runs out of memory, or when nothing chosen weighs anything and the
  * target is not 0. Pools use it, and so does Game > Smart drops (drops.h). */
 int Tables_Scale(unsigned *weights, const unsigned char *chosen, int count, unsigned target);
+
+/* An opponent's fixed deck ("decks": {"fixed": true, card: copies}): 1 with
+ * its 40 cards, in id order, in `cards`, which the duel then shuffles; 0 when
+ * no mod fixes it. A fixed deck wins over weighted edits of the same deck,
+ * and the latest fixed deck over earlier ones. */
+#define TABLES_DECK_SIZE 40
+int Tables_FixedDeck(int duelist, unsigned short cards[TABLES_DECK_SIZE]);
+
+/* Duel_AwardCard's questions before it adds a card to the chest, which holds
+ * `quantity` of it. With a mod's "chest_overflow", the chest keeps at most
+ * Tables_ChestLimit copies (CARD_CHEST_QUANTITY_MAX, 250, without one), and a
+ * card it has no room for adds the mod's starchips to the save's
+ * `starchips`, up to 999999. Tables_ChestOverflow returns the starchips
+ * added, 0 when the card fits or no mod says. */
+int Tables_ChestLimit(void);
+int Tables_ChestOverflow(unsigned quantity, unsigned *starchips);
+
+/* A mod's "terrain_bonus" for a monster of `type` (0-19) on `terrain`
+ * (gDuel_bTerrain: 1 Forest to 6 Yami): 1 with the points, signed, in
+ * *bonus; 0 when no mod lists the pair (nor replaced the table), and the
+ * disc's table decides. */
+int Tables_TerrainBonus(int terrain, int type, int *bonus);
+
+/* The attack, in points, at or under which attack trap `trap` springs (0
+ * House of Adhesive Tape to 5 Widespread Ruin): a mod's "trap_thresholds",
+ * else `retail`, the disc's. */
+int Tables_TrapThreshold(int trap, int retail);
 
 /* The opponent names a manifest may use, by duelist id; "all" means every
  * one of them. */

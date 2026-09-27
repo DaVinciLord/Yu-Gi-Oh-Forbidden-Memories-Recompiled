@@ -441,6 +441,20 @@ int Cards_Type(int id)
     return Cards_Valid(id) ? (int)(((unsigned)gDuel_adwCardStats[id - 1] >> 26) & 0x1F) : -1;
 }
 
+int Cards_AttributeNamed(const char *text)
+{
+    int attribute;
+    for (attribute = 0; text && attribute < (int)(sizeof(attribute_names) / sizeof(attribute_names[0])); attribute++) {
+        if (same_letters(text, attribute_names[attribute])) return attribute;
+    }
+    return -1;
+}
+
+int Cards_Attribute(int id)
+{
+    return Cards_Valid(id) ? gDuel_abCardLevelAttr[id] >> 4 : -1;
+}
+
 typedef struct {
     int use_count[2][CARD_ID_END];  /* copies taking a base's place, per use */
     unsigned char use[CARD_TABLE_ID_END];
