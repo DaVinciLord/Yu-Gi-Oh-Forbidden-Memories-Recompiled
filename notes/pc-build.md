@@ -421,6 +421,16 @@ console's value, until the player picks it; nothing changes on screen before.
   changing story progress or win/loss records. If Free Duel is already open,
   leave and reopen it to refresh the portraits and selection grid. Save
   normally to keep the unlocks.
+- **Starting LP 1000 / 4000 / 8000 (console) / 9999** (`cheat_life_points`,
+  `MEMORIES_CHEAT_LIFE_POINTS`, 1-9999, default 8000) is what both sides start
+  a duel against the CPU with, from the next duel on. `Duel_InitSideStates`
+  asks `Cheats_StartingLifePoints` in place of `DUEL_STARTING_LIFE_POINTS`
+  (one `#ifdef MEMORIES_PC` in `duel_state_init.c`), so it is both the
+  starting and the maximum LP, as the console's 8000 is: recovery stops there.
+  Other values can be typed into the settings file. Two-player duels keep the
+  values their own setup screen chose (`D_8009B234`/`D_8009B236`, 1 to 8000 in
+  steps of 500): that screen draws its bar as a fraction of 8000, so the
+  cheat does not seed it.
 
 ### Back to the title screen
 

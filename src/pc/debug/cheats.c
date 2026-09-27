@@ -4,6 +4,7 @@
 #include "game/card_constants.h"
 #include "game/save_data.h"
 #include "pc/cards/cards.h"
+#include "pc/platform/settings.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -45,6 +46,11 @@ void Cheats_UnlockAllFreeDuelists(void)
         Library_UpdateCardUsedFlag(FREE_DUEL_UNLOCK_FLAG_BASE + opponent);
     }
     fprintf(stderr, "memories-pc: all CPU duelists unlocked; reopen Free Duel to refresh the roster, then save to keep them\n");
+}
+
+int Cheats_StartingLifePoints(void)
+{
+    return Settings_Get(SET_CHEAT_LIFE_POINTS);
 }
 
 /* MEMORIES_DEBUG_DECK: the forty cards of the deck, as ids and ranges

@@ -9,6 +9,11 @@ void Cheats_GiveAllCards(int count);
 /* Unlock every CPU opponent in the live save. Reopen Free Duel to refresh
  * its portraits and selection grid; save normally to keep the unlocks. */
 void Cheats_UnlockAllFreeDuelists(void);
+/* The life points both sides start a duel against the CPU with
+ * (SET_CHEAT_LIFE_POINTS, 1-9999, 8000 the console's), read by
+ * Duel_InitSideStates. Two-player duels keep the values their own setup
+ * screen chose. */
+int Cheats_StartingLifePoints(void);
 /* Once a frame: MEMORIES_DEBUG_CHEST=N gives N of every card, and
  * MEMORIES_DEBUG_DECK="723-762" (ids and ranges, repeated to forty) sets the
  * deck, the first time a save is live in the workspace. */
