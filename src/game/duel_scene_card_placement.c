@@ -415,6 +415,12 @@ request_combination:
                                    Trap takes back, so it follows. */
                                 s32 bonus = Tables_EquipBonus(D_8009B206, card->card_id,
                                                               (s16)PLACEMENT_TY(object));
+                                /* stat_modifier is 16-bit: past twice the
+                                   stat cap changes nothing, and several big
+                                   bonuses would wrap it negative. */
+                                s32 room = 2 * CARD_STAT_MAX;
+                                if (card->stat_modifier + bonus > room) bonus = room - card->stat_modifier;
+                                if (card->stat_modifier + bonus < -room) bonus = -room - card->stat_modifier;
                                 D_8009B154 += bonus - (s16)PLACEMENT_TY(object);
                                 PLACEMENT_TY(object) = bonus;
                             }

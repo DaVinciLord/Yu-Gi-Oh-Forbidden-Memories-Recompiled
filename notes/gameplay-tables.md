@@ -100,8 +100,8 @@ place of the disc's +500 (+1000 for Megamorph):
 ```
 
 The first `bonus_if` that fits the monster decides, then `bonus`; an entry
-with neither for this monster says nothing, and an earlier entry, or the
-disc, decides. The latest entry that says something wins, as for what an
+with neither for this monster says nothing, and an earlier entry decides,
+else `equip_bonus_default` (below) if a mod sets it, else the disc. The latest entry that says something wins, as for what an
 equip may equip, and a copy of an equip a mod added has its base's bonus.
 Values are whole points from -9999 to 9999; a negative bonus lowers the
 monster.
