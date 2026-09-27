@@ -846,8 +846,36 @@ static int art_of(int id, int part)
     return art_parts[Cards_BaseId(id)] & part ? Cards_BaseId(id) : 0;
 }
 
+/* The plate of a retail card a translation renames (its name, string
+ * 0x8000 + id, rewritten by a mod's "text"): the retail plate is the English
+ * name drawn into the art, so it is set anew from the translated name, as a
+ * mod's own name is (above), once per card. A translation that keeps the
+ * name, or a system with no serif face, leaves the retail plate as it is:
+ * the English name beats a blank one when the name reads right everywhere
+ * else. HD text still sets the title from the name at its own size
+ * (hd_text.h) over this plate. */
+static unsigned char *text_plates[CARD_ID_END];
+static unsigned char text_plate_tried[CARD_ID_END];
+
+static const unsigned char *translated_plate(int id)
+{
+    char name[128], retail[128];
+    if (id < CARD_ID_FIRST || id > CARD_COUNT || names[id] || !Text_Overridden(0x8000 + id)) return NULL;
+    if (!text_plate_tried[id]) {
+        text_plate_tried[id] = 1;
+        retail_name(id, retail, sizeof(retail));
+        if (Cards_NameUtf8(id, name, sizeof(name)) && strcmp(name, retail) != 0 &&
+            (text_plates[id] = malloc(CARD_TITLE_BYTES)) != NULL && !CardArt_TitleFromName(name, text_plates[id])) {
+            free(text_plates[id]);
+            text_plates[id] = NULL;
+        }
+    }
+    return text_plates[id];
+}
+
 void Cards_PatchArtRecord(int id, unsigned char *record)
 {
+    const unsigned char *translated;
     int from;
     if (!Cards_Valid(id)) return;
     if ((from = art_of(id, ART_PICTURE)) != 0) patch(record, art_records[from], CARD_TITLE_PIXELS);
@@ -858,6 +886,8 @@ void Cards_PatchArtRecord(int id, unsigned char *record)
      * the base's are the same inks, so its pack picture there is no harm. */
     if (plates[id] || plates[Cards_BaseId(id)]) {
         memcpy(record + CARD_TITLE_PIXELS, plates[id] ? plates[id] : plates[Cards_BaseId(id)], CARD_TITLE_BYTES);
+    } else if (!names[id] && (translated = translated_plate(Cards_BaseId(id))) != NULL) {
+        memcpy(record + CARD_TITLE_PIXELS, translated, CARD_TITLE_BYTES);
     }
     if ((from = art_of(id, ART_THUMBNAIL)) != 0) {
         patch(record + CARD_THUMB_PIXELS, art_records[from] + CARD_THUMB_PIXELS, CARD_THUMB_BLOCK);

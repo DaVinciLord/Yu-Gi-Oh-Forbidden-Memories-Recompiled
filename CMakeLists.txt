@@ -326,6 +326,32 @@ if(BUILD_TESTING)
         target_compile_options(memories_texture_pack_test PRIVATE -Wall -Wextra -Werror)
     endif()
     add_test(NAME pc_texture_pack COMMAND memories_texture_pack_test)
+    # Card title plates (src/pc/cards/art.c), set from a name in the serif
+    # face as a translated card's is: where FreeType is at hand (beside
+    # libpng, as in the Windows dependencies), and skipped (77) on a system
+    # without the face.
+    get_filename_component(memories_png_lib_dir "${PNG_LIBRARY}" DIRECTORY)
+    find_path(MEMORIES_FREETYPE_INCLUDE ft2build.h PATH_SUFFIXES freetype2 HINTS "${PNG_PNG_INCLUDE_DIR}")
+    find_library(MEMORIES_FREETYPE_LIBRARY freetype HINTS "${memories_png_lib_dir}")
+    set(memories_plate_fonts "")
+    if(NOT WIN32)
+        find_library(MEMORIES_FONTCONFIG_LIBRARY fontconfig)
+        set(memories_plate_fonts ${MEMORIES_FONTCONFIG_LIBRARY})
+    endif()
+    if(MEMORIES_FREETYPE_INCLUDE AND MEMORIES_FREETYPE_LIBRARY AND (WIN32 OR MEMORIES_FONTCONFIG_LIBRARY))
+        add_executable(memories_card_plate_test tests/pc/card_plate_test.c src/pc/cards/art.c)
+        target_include_directories(memories_card_plate_test PRIVATE src ${MEMORIES_FREETYPE_INCLUDE})
+        target_link_libraries(memories_card_plate_test PRIVATE ${MEMORIES_FREETYPE_LIBRARY} ${memories_plate_fonts}
+            PNG::PNG)
+        if(WIN32)
+            target_link_libraries(memories_card_plate_test PRIVATE memories_pc_fs)
+        endif()
+        if(NOT MSVC)
+            target_compile_options(memories_card_plate_test PRIVATE -Wall -Wextra -Werror)
+        endif()
+        add_test(NAME pc_card_plate COMMAND memories_card_plate_test)
+        set_tests_properties(pc_card_plate PROPERTIES SKIP_RETURN_CODE 77)
+    endif()
     # The update check's version order and release choice
     # (src/pc/platform/update.h, notes/updates.md); no network. The program's
     # name has no "update" in it: Windows takes a 32-bit program without a
