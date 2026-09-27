@@ -77,6 +77,42 @@ jobs:
         run: python tools/pc/package.py "${{ matrix.system }}" --skip-smoke --version "$PACKAGE_VERSION"
       - name: Test archive structure
         run: python tools/pc/test_package.py --archives dist
+      # The FM Editor as one program (tools/pc/fm_editor/README.md), in an
+      # archive of its own: it unpacks into the same folder as the game's,
+      # beside memories-pc(.exe), where it finds game/.
+      - name: FM Editor (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          python -m pip install pyinstaller==6.18.0
+          python tools/pc/fm_editor/build_exe.py --dist tmp/fm-editor
+          python - <<'EOF'
+          import os, zipfile
+          version = os.environ["PACKAGE_VERSION"]
+          folder = f"yfm-redecomp-{version}"
+          with zipfile.ZipFile(f"dist/fm-editor-{version}-windows.zip", "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+              archive.write("tmp/fm-editor/fm-editor.exe", f"{folder}/fm-editor.exe")
+              archive.write("tools/pc/fm_editor/README.md", f"{folder}/fm-editor-README.md")
+          EOF
+      # Built in Debian 11, like the game (tools/pc/build_linux_sysroot.py):
+      # a program built on the runner would ask for Ubuntu 24.04's glibc.
+      # The python image carries Tk, which PyInstaller bundles.
+      - name: FM Editor (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src -e PACKAGE_VERSION -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" python:3.12-bullseye sh -ec '
+            python -m pip install --root-user-action=ignore pyinstaller==6.18.0
+            python tools/pc/fm_editor/build_exe.py --dist tmp/fm-editor
+            python - <<EOF
+          import os, tarfile
+          version = os.environ["PACKAGE_VERSION"]
+          folder = f"yfm-redecomp-{version}"
+          def mode(value):
+              return lambda info: (setattr(info, "mode", value), setattr(info, "uid", 0), setattr(info, "gid", 0), setattr(info, "uname", ""), setattr(info, "gname", ""), info)[-1]
+          with tarfile.open(f"dist/fm-editor-{version}-linux.tar.gz", "w:gz", compresslevel=9) as archive:
+              archive.add("tmp/fm-editor/fm-editor", f"{folder}/fm-editor", filter=mode(0o755))
+              archive.add("tools/pc/fm_editor/README.md", f"{folder}/fm-editor-README.md", filter=mode(0o644))
+          EOF
+            chown -R "$HOST_UID:$HOST_GID" tmp/fm-editor dist'
       - name: ROM setup tests (Linux)
         if: runner.os == 'Linux'
         run: |
