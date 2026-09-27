@@ -252,3 +252,83 @@ def equip_bitmaps(retail_slus: bytes, slus: bytes, wa: bytes):
             table.blocked.add(value >> 4)
     table.where = f"Duel_CheckEquip (0x{CHECK_EQUIP:08X})" + (f", and the mod's code at 0x{found[1]:08X}" if found else "")
     return table
+
+
+# --- the deck and the drops ------------------------------------------------------------------
+
+SHUFFLE_DECK = 0x80024460, 0x800244E8      # Duel_ShuffleDeck's dealing loop
+RESULT_DRAW = 0x80021C6C                   # DuelScene_UpdateResultRewards: the prize's draw
+DECK_SIZE = 40
+
+
+def deals_by_count(retail_slus: bytes, slus: bytes) -> bool:
+    """Whether the mod's Duel_ShuffleDeck deals the deck pool as counts of
+    copies (signature A4): the loop rewritten to walk the cards in order and
+    stop at 40 (slti ..., 40), where retail draws weights of 2048."""
+    retail, memory = Memory(retail_slus), Memory(slus)
+    start, end = SHUFFLE_DECK
+    if memory.bytes(start, end - start) == retail.bytes(start, end - start):
+        return False
+    return any(ins.is_slti() and ins.imm == DECK_SIZE for ins in instructions(memory, start, (end - start) // 4 + 2))
+
+
+def dealt_by_count(pool: dict) -> dict:
+    """The forty cards the kit's shuffle deals from a pool: every card in
+    id order, as many copies as its number, until there are 40."""
+    deck, total = {}, 0
+    for cid in sorted(pool):
+        take = min(pool[cid], DECK_SIZE - total)
+        if take > 0:
+            deck[cid] = take
+            total += take
+    return deck
+
+
+def decoder_at(memory: Memory, code: int):
+    """(bias, shift) when the code at `code` turns v-register weight into
+    (weight - bias) >> shift (an addiu of -bias, then an sra) before it
+    branches, else None."""
+    bias = register = None
+    for ins in instructions(memory, code, 8):
+        if ins.is_addiu() and bias is None and ins.rs == ins.rt and ins.imm < 0:
+            bias, register = -ins.imm, ins.rt
+        elif ins.is_sra() and bias is not None and ins.rt == ins.rd == register:
+            return bias, ins.sa
+        elif ins.is_branch_or_return() or ins.is_jump or ins.is_call:
+            return None
+    return None
+
+
+class ExtraDraws:
+    count = None            # cards the mod draws a win, or None when not read
+    encoding = None         # (bias, shift, code) of the weights' decoding, or None: raw weights
+    code = 0
+
+
+def extra_draws(retail_slus: bytes, slus: bytes):
+    """The kit's drawing of several prizes (signature A1/A2): the result
+    screen's draw jumps to the mod's loop, which counts draws in one byte
+    against a limit in the next and may call code decoding the weights."""
+    retail, memory = Memory(retail_slus), Memory(slus)
+    word = memory.word(RESULT_DRAW)
+    if word is None or word == retail.word(RESULT_DRAW) or word >> 26 != 2:
+        return None
+    found = ExtraDraws()
+    found.code = jump_target(word, RESULT_DRAW)
+    code = instructions(memory, found.code, 0x60)
+    constants, loads = Constants(), []
+    for ins in code:
+        address = constants.step(ins)
+        if ins.load(36) and address is not None:
+            loads.append(address)
+        if ins.is_call and found.encoding is None:
+            decoded = decoder_at(memory, ins.target)
+            if decoded:
+                found.encoding = decoded + (ins.target,)
+    for address in loads:
+        if address + 1 in loads:
+            limit = memory.bytes(address + 1, 1)
+            if limit and limit[0] >= 2:
+                found.count = limit[0] - 1
+            break
+    return found

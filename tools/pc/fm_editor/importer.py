@@ -480,13 +480,19 @@ def decode_drop_pools(retail, modded, retail_files, modded_files) -> list:
     if not changed:
         return []
     found = draw_code_encoding(retail_files.slus, modded_files.slus)
+    where = f"the draw at 0x{DRAW_ADD:08X} jumps to the mod's code at 0x{found[2]:08X}" if found else ""
+    extra = kit.extra_draws(retail_files.slus, modded_files.slus)
+    if not found and extra and extra.encoding:
+        found = extra.encoding
+        where = (f"the prize draw at 0x{kit.RESULT_DRAW:08X} jumps to the mod's code at 0x{extra.code:08X}, which "
+                 f"calls 0x{found[2]:08X}")
     notes = []
     if found:
         bias, shift, code = found
         decode = changed
-        notes.append(f"pools: the drop pools are encoded: the draw at 0x{DRAW_ADD:08X} jumps to the mod's code at "
-                     f"0x{code:08X}, which reads each weight as max(0, (raw - {bias}) >> {shift}); the "
-                     f"{len(decode)} changed drop pools were decoded that way (the deck pools are not encoded)")
+        notes.append(f"pools: the drop pools are encoded: {where}, which reads each weight as max(0, (raw - {bias}) >> "
+                     f"{shift}); the {len(decode)} changed drop pools were decoded that way (the deck pools are not "
+                     "encoded)")
         kept = [f"{g.DUELIST_NAMES[d]} {p}" for d in range(len(modded.pools)) for p in DROP_POOLS
                 if (d, p) not in changed]
         if kept:
@@ -629,6 +635,42 @@ def wa_data(project: Project, retail_files, modded_files, report: list) -> list:
     return data
 
 
+def fixed_decks(project: Project, retail, modded, retail_files, modded_files) -> list:
+    """Fixed decks when the mod's shuffle deals counts of copies (A4): each
+    opponent's deck is the forty cards that shuffle deals from its pool,
+    and its weighted pool stays retail's."""
+    if not kit.deals_by_count(retail_files.slus, modded_files.slus):
+        return []
+    short, walked = [], []
+    for d in range(len(modded.pools)):
+        pool = modded.pools[d]["deck"]
+        deck = kit.dealt_by_count(pool)
+        if sum(deck.values()) < kit.DECK_SIZE:
+            short.append(g.DUELIST_NAMES[d])
+            project.pools[d]["deck"] = dict(retail.pools[d]["deck"])
+            modded.pools[d]["deck"] = dict(retail.pools[d]["deck"])
+            continue
+        if sum(pool.values()) != kit.DECK_SIZE:
+            walked.append(g.DUELIST_NAMES[d])
+        body = {"fixed": True}      # kept as written: the editor shows the weighted deck, the port deals this
+        for cid, count in sorted(deck.items()):
+            body[str(project.ref(cid))] = count
+        project.kept_fixed[manifest._duelist_key(d)] = body
+        project.pools[d]["deck"] = dict(retail.pools[d]["deck"])
+        modded.pools[d]["deck"] = dict(retail.pools[d]["deck"])       # nothing left to scale
+    notes = [f"decks: the mod's Duel_ShuffleDeck deals each deck pool as counts of copies, in card order up to "
+             f"{kit.DECK_SIZE}, with no limit of three (signature A4); {len(project.kept_fixed)} decks written as "
+             "fixed decks"]
+    if walked:
+        notes.append(f"decks: {len(walked)} pools do not add up to {kit.DECK_SIZE} ({', '.join(walked[:4])}"
+                     f"{'...' if len(walked) > 4 else ''}): the fixed deck is what that shuffle deals from them, "
+                     "the first cards by id")
+    if short:
+        notes.append(f"decks: {len(short)} pools hold fewer than {kit.DECK_SIZE} cards ({', '.join(short[:4])}); "
+                     "the mod's shuffle would never finish; left as retail's")
+    return notes
+
+
 def import_modded(retail_files, modded_files, mod_id: str = "imported-mod", name: str = None) -> ImportResult:
     retail = g.load_game(retail_files)
     report = []
@@ -676,6 +718,7 @@ def import_modded(retail_files, modded_files, mod_id: str = "imported-mod", name
     pools_changed = sum(1 for d in range(len(retail.pools)) for p in g.POOLS if retail.pools[d][p] != modded.pools[d][p])
     report.append(f"pools: {pools_changed} of {len(retail.pools) * len(g.POOLS)} differ")
     report += drop_notes
+    report += fixed_decks(project, retail, modded, retail_files, modded_files)
     off_total = []
     for d in range(len(modded.pools)):
         for p in g.POOLS:

@@ -235,5 +235,50 @@ class TextTest(unittest.TestCase):
         self.assertIn("[D109]", result.project.files["text.txt"].decode("utf-8"))
 
 
+class DeckAndDropTest(unittest.TestCase):
+    def test_decks_dealt_by_count_are_fixed(self):
+        f = fixture()
+        slus = bytearray(f.slus)
+        start = kit.SHUFFLE_DECK[0]
+        fixtures.put(slus, start, fixtures.asm(start, [
+            ("lhu", "v0", 0, "v1"), ("beq", "v0", "zero", start + 0x68), ("addiu", "s3", "s3", 1),
+            ("slti", "v0", "s3", 40), ("bne", "v0", "zero", start + 8), ("nop",)]))
+        pools = [{p: dict(v) for p, v in d.items()} for d in f.pools]
+        pools[3]["deck"] = {5: 30, 6: 10}
+        pools[5]["deck"] = {7: 2}                                  # too few: the shuffle would never end
+        wa = fixtures.make_wa(f.fusions, f.equips, f.rituals, pools)
+        result, report = imported(f, bytes(slus), wa)
+        project = result.project
+        decks = manifest.build(project)["decks"]
+        self.assertEqual(decks["Jono"], {"fixed": True, "Card 5": 30, "Card 6": 10})
+        first = sorted(f.pools[4]["deck"])                         # 2048 weights: the first cards up to 40
+        self.assertEqual(decks["Villager 1"], {"fixed": True, str(project.ref(first[0])): 40})   # weights of 100+
+        self.assertNotIn("Villager 2", decks)
+        self.assertEqual(project.pools[3]["deck"], f.pools[3]["deck"])
+        self.assertNotIn("scaled", report)
+        self.assertIn("pools hold fewer than 40 cards (Villager 2)", report)
+        from fm_editor.model import Project
+        again = Project(f.game())                                  # read back, kept as written
+        manifest.apply(again, manifest.build(project))
+        self.assertEqual(manifest.build(again)["decks"], decks)
+
+    def test_extra_draws_decoding_the_weights(self):
+        from fm_editor.tests.test_importer import encoded_mod
+        f, files, pools = encoded_mod(2512, 3, code=False)
+        slus = bytearray(files.slus)
+        loop, decode = 0x8000B300, 0x8000B380
+        fixtures.put(slus, kit.RESULT_DRAW, fixtures.asm(kit.RESULT_DRAW, [("j", loop)]))
+        fixtures.put(slus, loop, fixtures.asm(loop, [
+            ("lui", "sp", 0x8001), ("lbu", "s6", -0x4C00, "sp"), ("lbu", "s7", -0x4BFF, "sp"),
+            ("jal", decode), ("nop",), ("jr", "ra")]))
+        fixtures.put(slus, decode, fixtures.asm(decode, [("addiu", "v0", "v0", -2512), ("sra", "v0", "v0", 3),
+                                                         ("jr", "ra")]))
+        fixtures.put(slus, 0x8000B400, bytes([0, 6]))
+        result, report = imported(f, bytes(slus), files.wa)
+        self.assertEqual(result.project.pools, pools)
+        self.assertIn("the prize draw at 0x80021C6C jumps to the mod's code at 0x8000B300, which calls 0x8000B380", report)
+        self.assertEqual(kit.extra_draws(f.slus, bytes(slus)).count, 5)
+
+
 if __name__ == "__main__":
     unittest.main()
