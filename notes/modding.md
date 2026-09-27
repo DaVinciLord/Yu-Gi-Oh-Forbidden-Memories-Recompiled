@@ -8,7 +8,7 @@ directory in, restart, apply it in **Game > Mods**.
 
 | Directory | What is in it |
 |---|---|
-| `mods/` beside the executable | the mods the release ships (`3d-monsters`, `hand-camera`, `ai-hard-mode`, `yamyi-mods`) |
+| `mods/` beside the executable | the mods the release ships (`3d-monsters`, `hand-camera`, `ai-hard-mode`, `yamyi-mods`, `drop-missing-cards`) |
 | `mods/` in the user directory | mods the player installed |
 
 The user directory is where everything the player owns lives: settings,
@@ -675,6 +675,7 @@ the reason beside any that failed to load.
 | `mods/hand-camera` | L1/R1 turn and L3/R3 zoom the duel camera while the hand is up |
 | `mods/ai-hard-mode` | optional stronger opponent decisions |
 | `mods/yamyi-mods` | return-to-title confirmation, rarity colours and Library drop odds, with independent switches |
+| `mods/drop-missing-cards` | off by default: gives the 82 cards no duelist drops a duelist to win them from, as the old static recomp's option did; a data-only `drops` table |
 
 The first two were part of the executable until they became mods; they are the worked
 examples of a code mod that reaches deep into the game. 3D Monsters' knobs
