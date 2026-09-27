@@ -15,6 +15,7 @@
 #include "pc/mods/mods.h"
 #include "pc/mods/json.h"
 #include "pc/platform/paths.h"
+#include "pc/platform/settings.h"
 #include "pc/debug/log.h"
 #include "pc/render/texture_dump.h"
 #include "pc/rng.h"
@@ -761,6 +762,11 @@ int Cards_Seen(int id)
     if (id >= CARD_ID_FIRST && id <= CARD_COUNT) return Campaign_TestStoryFlag(LIBRARY_SEEN_FLAG_BASE + id);
     if (!Cards_Valid(id)) return 0;
     return (gCard_abExtraSeen[id >> 3] >> (id & 7)) & 1;
+}
+
+int Cards_LibraryPlaceholder(int id)
+{
+    return Settings_Get(SET_LIBRARY_ALL_CARDS) && Cards_Valid(id) && !Cards_Seen(id);
 }
 
 void Cards_MarkSeen(int id)

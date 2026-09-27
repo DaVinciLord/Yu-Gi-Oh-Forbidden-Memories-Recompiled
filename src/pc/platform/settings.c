@@ -30,6 +30,9 @@ static const SettingInfo info[SET_COUNT] = {
     [SET_OPPONENT_NAME] = {"opponent_name", NULL, "MEMORIES_OPPONENT_NAME", NULL, 0, 0, 1},
     /* Cards a won duel deals; 1 is the console's (src/pc/cards/drops.h). */
     [SET_CARD_DROPS] = {"card_drops", NULL, "MEMORIES_CARD_DROPS", NULL, 1, 1, 99},
+    /* 1: the Library lays out every card never seen as a seen one, while it
+     * is open; nothing is given or saved (Cards_LibraryPlaceholder, cards.h). */
+    [SET_LIBRARY_ALL_CARDS] = {"library_all_cards", NULL, "MEMORIES_LIBRARY_ALL_CARDS", NULL, 0, 0, 1},
     /* Help > updates (update_check.h): look for a newer release at start
      * (on unless the player turns it off: it only tells, never installs)
      * and count pre-releases as newer. */
