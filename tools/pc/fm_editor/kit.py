@@ -332,3 +332,201 @@ def extra_draws(retail_slus: bytes, slus: bytes):
                 found.count = limit[0] - 1
             break
     return found
+
+
+# --- rules mod.json has keys for -------------------------------------------------------------
+
+AWARD_CARD = 0x800218AC          # Duel_AwardCard: a card into the chest
+STARCHIP_CAP = 999999            # 0xF423F
+
+
+def chest_overflow(retail_slus: bytes, slus: bytes):
+    """(limit, starchips) when the mod's Duel_AwardCard caps the chest at
+    `limit` copies and pays `starchips` a card past it (signature A3):
+    sltiu against limit + 1, the starchips word raised by an addiu, and the
+    999999 cap; else None."""
+    retail, memory = Memory(retail_slus), Memory(slus)
+    found = hook(retail, memory, AWARD_CARD, AWARD_CARD + 4)
+    if not found:
+        return None
+    constants, limit, pay, capped, loaded = Constants(), None, None, False, set()
+    for ins in instructions(memory, found[1], 24):
+        constants.step(ins)
+        if ins.is_sltiu() and ins.rs == 2 and limit is None:
+            limit = ins.imm - 1
+        if ins.load(35):
+            loaded.add(ins.rt)
+        if ins.is_addiu() and ins.rs == ins.rt and ins.rt in loaded and ins.imm > 0 and pay is None:
+            pay = ins.imm
+        if STARCHIP_CAP in constants.value.values():
+            capped = True
+    if limit is None or pay is None or not capped or not 1 <= limit <= 250:
+        return None
+    return limit, pay
+
+
+ATTACK_TRAP = 0x8001F0F0         # Duel_SelectAttackTrap
+TRAP_THRESHOLDS = 0x8009AF24     # retail: six bytes, hundreds of ATK
+ATTACK_TRAPS = ("House of Adhesive Tape", "Eatgaboon", "Bear Trap", "Invisible Wire", "Acid Trap Hole",
+                "Widespread Ruin")
+
+
+def trap_thresholds(retail_slus: bytes, slus: bytes):
+    """{trap: points} when the mod's Duel_SelectAttackTrap is rewritten and
+    reads the thresholds as u16 hundreds (signature A8), else None."""
+    retail, memory = Memory(retail_slus), Memory(slus)
+    if not hook(retail, memory, ATTACK_TRAP, ATTACK_TRAP + 4):
+        return None
+    values = struct.unpack("<6H", memory.bytes(TRAP_THRESHOLDS, 12))
+    if not all(values) or list(values) != sorted(values) or max(values) > 655:
+        return None
+    return {trap: value * 100 for trap, value in zip(ATTACK_TRAPS, values)}
+
+
+TERRAIN_BOOST = 0x800909D4       # gDuel_aTerrainBoost: s8 [20 monster types][6 terrains], tens of points
+GET_TERRAIN_BOOST = 0x8002497C, 0x800249DC
+TERRAIN_NAMES = ("Forest", "Wasteland", "Mountain", "Sogen", "Umi", "Yami")
+
+
+class TerrainBonus:
+    table = None             # {terrain 1-6: {type: points}}
+    where = ""
+    more_terrains = 0        # terrains past the six in the mod's rows
+    by_attribute = None      # the first terrain that looks at the attribute instead, or None
+
+
+def terrain_bonus(retail_slus: bytes, slus: bytes):
+    """The mod's terrain bonuses (signature A9): the retail table with other
+    values, or Duel_GetTerrainBoost rewritten to read a table
+    of its own, a row of terrains per type."""
+    retail, memory = Memory(retail_slus), Memory(slus)
+    start, end = GET_TERRAIN_BOOST
+    found = TerrainBonus()
+    if memory.bytes(start, end - start) == retail.bytes(start, end - start):
+        if memory.bytes(TERRAIN_BOOST, 120) == retail.bytes(TERRAIN_BOOST, 120):
+            return None
+        address, row = TERRAIN_BOOST, 6
+        found.where = f"gDuel_aTerrainBoost (0x{TERRAIN_BOOST:08X})"
+    else:
+        constants, tables, bound = Constants(), [], None
+        for ins in instructions(memory, start, (end - start) // 4):
+            upper = ins.is_addiu() and ins.rs == ins.rt and ins.rs in constants.value and \
+                constants.value[ins.rs] & 0xFFFF == 0
+            constants.step(ins)
+            if upper:
+                tables.append(constants.value[ins.rt])
+            if ins.is_slti() and bound is None and 7 <= ins.imm <= 32:
+                bound = ins.imm
+        if not tables or bound is None:
+            return None
+        address, row = tables[0], bound - 1
+        found.more_terrains = row - 6
+        found.by_attribute = bound
+        found.where = f"Duel_GetTerrainBoost (0x{start:08X}), rewritten to read the mod's table at 0x{address:08X}"
+    found.table = {}
+    for terrain in range(1, 7):
+        values = {}
+        for t in range(g.TYPE_MAGIC):
+            value = memory.s8(address + t * row + terrain - 1)
+            if value is None:
+                return None
+            if value:
+                values[t] = value * 10
+        found.table[terrain] = values
+    return found
+
+
+# --- equip bonuses (DuelScene_UpdateCardPlacement) ----------------------------------------
+
+EQUIP_BONUS_SITE = 0x8001A7F0, 0x8001A838
+NO_CARD = 723                    # the kit's list end
+
+
+class EquipBonus:
+    def __init__(self):
+        self.fixed = {}          # card -> points: a bonus of its own
+        self.conditional = []    # (card, selector, points): scaled by a count the mod keeps
+        self.special = []        # cards the mod's code gives a bonus of their own logic
+        self.where = ""
+
+
+def _loop_tables(code):
+    """(index of the load, table address, step, entries) for each loop that
+    walks a u16 table: a lui base (plus an index register), a load, and an
+    addiu step and slti bound on the index."""
+    found, base = [], {}
+    for i, ins in enumerate(code):
+        if ins.op == 15:
+            base[ins.rt] = (ins.word & 0xFFFF) << 16
+        elif ins.is_addiu() and ins.rt in base and ins.rs == ins.rt:
+            base[ins.rt] = (base[ins.rt] + ins.imm) & 0xFFFFFFFF
+        elif ins.op == 0 and ins.fn == 33 and ins.rd == ins.rs and ins.rd in base:
+            pass                                          # addu base, base, index: still the table
+        elif ins.load(37) and ins.rs in base:
+            address = (base[ins.rs] + ins.imm) & 0xFFFFFFFF
+            step = bound = None
+            for later in code[i + 1:i + 8]:
+                if later.is_addiu() and later.rs == later.rt and later.imm in (2, 4) and step is None:
+                    step = later.imm
+                if later.is_slti() and bound is None:
+                    bound = later.imm
+            if step and bound:
+                found.append((i, address, step, bound // step))
+            base.pop(ins.rt, None)
+        elif ins.op not in (1, 2, 3, 4, 5, 6, 7, 40, 41, 43) and not (ins.op == 0 and ins.fn in (8, 9)):
+            base.pop(ins.rt if ins.op else ins.rd, None)
+    return found
+
+
+def equip_bonus(retail_slus: bytes, slus: bytes):
+    """What the mod's DuelScene_UpdateCardPlacement gives an equip (signature
+    A7), else None: a table of (card, points), bands of
+    cards per value, cards scaled by a count the mod keeps,
+    and a chain of cards with code of their own."""
+    retail, memory = Memory(retail_slus), Memory(slus)
+    start, end = EQUIP_BONUS_SITE
+    targets = []
+    for at in range(start, end + 4, 4):
+        word = memory.word(at)
+        if word is not None and word != retail.word(at) and word >> 26 == 2:
+            targets.append(jump_target(word, at))
+    if not targets:
+        return None
+    found = EquipBonus()
+    found.where = ", ".join(f"0x{t:08X}" for t in targets)
+    for target in targets:
+        code = instructions(memory, target, 96)
+        for i, address, step, entries in _loop_tables(code):
+            after = code[i + 1:i + 40]
+            ids = [memory.u16(address + step * k) for k in range(entries)]
+            if step == 4 and any(ins.load(33) and ins.imm == 2 for ins in after[:12]):
+                for k, cid in enumerate(ids):
+                    if cid and cid != NO_CARD:
+                        found.fixed[cid] = s16(memory.u16(address + 4 * k + 2))
+            elif step == 4 and any(ins.op == 0 and ins.fn == 25 for ins in after[:12]):       # multu: scaled
+                for k, cid in enumerate(ids):
+                    if cid and cid != NO_CARD:
+                        found.conditional.append((cid, memory.bytes(address + 4 * k + 2, 1)[0],
+                                                  memory.bytes(address + 4 * k + 3, 1)[0] * 10))
+            elif step == 2:
+                bands, pending = [], None
+                for ins in after:
+                    if ins.is_slti() and ins.rs != ins.rt:
+                        pending = ins.imm
+                    elif ins.is_addiu(rs=0) and pending is not None and ins.imm > 0:
+                        bands.append((pending, ins.imm))
+                        pending = None
+                low = 0
+                for high, value in bands:
+                    for k in range(low // 2, min(high // 2, entries)):
+                        if ids[k] and ids[k] != NO_CARD:
+                            found.fixed.setdefault(ids[k], value)
+                    low = high
+        for i, ins in enumerate(code[:-1]):
+            nxt = code[i + 1]
+            if ins.is_addiu(rs=0) and 1 <= ins.imm <= g.CARD_COUNT and nxt.op in (4, 5) and \
+                    ins.rt in (nxt.rs, nxt.rt) and ins.imm not in found.special and ins.imm not in found.fixed:
+                found.special.append(ins.imm)
+    if not (found.fixed or found.conditional or found.special):
+        return None
+    return found

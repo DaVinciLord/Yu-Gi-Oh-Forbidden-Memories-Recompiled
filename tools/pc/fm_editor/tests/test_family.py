@@ -280,5 +280,61 @@ class DeckAndDropTest(unittest.TestCase):
         self.assertEqual(kit.extra_draws(f.slus, bytes(slus)).count, 5)
 
 
+class RulesTest(unittest.TestCase):
+    def kit_mod(self):
+        """The fixture with the kit's rules in made-up code and values."""
+        f = fixture()
+        slus = bytearray(f.slus)
+        chest = 0x8000B100
+        fixtures.put(slus, kit.AWARD_CARD, fixtures.asm(kit.AWARD_CARD, [("j", chest)]))
+        fixtures.put(slus, chest, fixtures.asm(chest, [
+            ("sltiu", "t3", "v0", 8), ("bne", "t3", "zero", chest + 0x30), ("nop",), ("addiu", "v0", "v0", -1),
+            ("lui", "t4", 0x801D), ("addiu", "t4", "t4", 0x7E0), ("lw", "t5", 0, "t4"), ("addiu", "t5", "t5", 2),
+            ("lui", "t3", 0xF), ("ori", "t3", "t3", 0x423F), ("jr", "ra"), ("nop",)]))
+        trap = 0x8000B200
+        fixtures.put(slus, kit.ATTACK_TRAP, fixtures.asm(kit.ATTACK_TRAP, [("j", trap)]))
+        fixtures.put(slus, kit.TRAP_THRESHOLDS, struct.pack("<6H", 4, 8, 15, 20, 30, 300))
+        boost = bytearray(fixtures.make_slus(f.cards)[g.slus_offset(kit.TERRAIN_BOOST):g.slus_offset(kit.TERRAIN_BOOST) + 120])
+        boost[3 * 6 + 0] = 30                    # Warrior on the Forest: +300
+        boost[19 * 6 + 5] = (-80) & 0xFF         # Plant on Yami: -800
+        fixtures.put(slus, kit.TERRAIN_BOOST, bytes(boost))
+        place = 0x8000B300
+        start = kit.EQUIP_BONUS_SITE[0]
+        fixtures.put(slus, start + 0x3C, fixtures.asm(start + 0x3C, [("j", place)]))
+        table = 0x8000B600
+        fixtures.put(slus, place, fixtures.asm(place, [
+            ("li", "a2", 0), ("lui", "t0", 0x8001), ("addu", "t0", "t0", "a2"), ("lhu", "t0", table - 0x80010000, "t0"),
+            ("beq", "a3", "t0", place + 0x24), ("nop",), ("addiu", "a2", "a2", 2), ("slti", "t0", "a2", 8),
+            ("nop",), ("slti", "a1", "a2", 4), ("bne", "a1", "zero", place + 0x40), ("li", "v1", 700),
+            ("slti", "a1", "a2", 8), ("bne", "a1", "zero", place + 0x40), ("li", "v1", 1500), ("nop",),
+            ("li", "t0", 657), ("beq", "a3", "t0", place + 0x60), ("jr", "ra"), ("nop",)]))
+        fixtures.put(slus, table, struct.pack("<4H", 651, 5, 652, 723))
+        return f, bytes(slus)
+
+    def test_the_kits_rules(self):
+        f, slus = self.kit_mod()
+        result, report = imported(f, slus=slus)
+        built = manifest.build(result.project)
+        self.assertEqual(built["chest_overflow"], {"limit": 7, "starchips": 2})
+        self.assertEqual(built["trap_thresholds"]["House of Adhesive Tape"], 400)
+        self.assertEqual(built["trap_thresholds"]["Widespread Ruin"], 30000)
+        terrain = built["terrain_bonus"]
+        self.assertEqual(terrain["Forest"]["Warrior"], 300)
+        self.assertEqual(terrain["Yami"]["Plant"], -800)
+        self.assertTrue(terrain["replace"])
+        equips = {e["card"]: e for e in built["equips"]}
+        self.assertEqual(equips["Card 651"], {"card": "Card 651", "bonus": 700})
+        self.assertEqual(equips["Card 652"]["bonus"], 1500)
+        self.assertIn("bonuses the mod gives cards that are not equip cards (5 Card 5)", report)
+        self.assertIn("Card 657", report)                            # a card with code of its own
+        readme = result.project.files["README.txt"].decode("utf-8")
+        self.assertIn("The chest keeps 7 copies", readme)
+        # Read back, the editor keeps the rules and the bonuses.
+        from fm_editor.model import Project
+        again = Project(f.game())
+        manifest.apply(again, built)
+        self.assertEqual(manifest.build(again), built)
+
+
 if __name__ == "__main__":
     unittest.main()

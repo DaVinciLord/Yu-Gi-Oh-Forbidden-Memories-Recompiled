@@ -671,6 +671,115 @@ def fixed_decks(project: Project, retail, modded, retail_files, modded_files) ->
     return notes
 
 
+AI_COMMANDS = 0x800916E0, 0x800916E0 + 4 * 72    # gAiScript_apfnCommand
+STAT_CAP_SITES = (0x800170E0, 0x80017200)       # Duel_CalcCardStats
+OPPONENT_FIELD = 0x80024E08                     # func_80024DC8: the opponent's home field
+CARD_FRAME = 0x8002C290                         # func_8002BFCC: the card's frame
+
+
+def kit_rules(project: Project, modded, retail_files, modded_files) -> tuple:
+    """(report lines, README lines): the rules the kit's code sets that
+    mod.json has keys for, read from the code and its tables, and what it
+    changes that no key carries, in the game's terms."""
+    retail_slus, slus = retail_files.slus, modded_files.slus
+    notes, readme, missing = [], [], []
+    memory, retail = kit.Memory(slus), kit.Memory(retail_slus)
+    cards = modded.cards
+
+    chest = kit.chest_overflow(retail_slus, slus)
+    if chest:
+        limit, pay = chest
+        project.other["chest_overflow"] = {"limit": limit, "starchips": pay}
+        notes.append(f"rules: the mod's Duel_AwardCard keeps {limit} copies of a card in the chest and pays {pay} "
+                     f"starchips for each card past them (A3): \"chest_overflow\"")
+        readme.append(f"- The chest keeps {limit} copies of a card; each card won past them is worth {pay} starchips.")
+    terrain = kit.terrain_bonus(retail_slus, slus)
+    if terrain:
+        table = {kit.TERRAIN_NAMES[t - 1]: {g.TYPE_NAMES[k]: v for k, v in sorted(values.items())}
+                 for t, values in terrain.table.items() if values}
+        table["replace"] = True
+        project.other["terrain_bonus"] = table
+        notes.append(f"rules: the terrain bonuses are the mod's, from {terrain.where} (A9): \"terrain_bonus\", every "
+                     "pair, and no bonus for the others")
+        readme.append("- Each field card's terrain gives the monster types the mod's bonuses (in steps of 10, "
+                      "not the disc's +500/-500).")
+        if terrain.more_terrains > 0:
+            missing.append(f"{terrain.more_terrains} terrains of the mod's own past the six (7 and up, some opponents' "
+                           "home fields): the port has six")
+        if terrain.by_attribute:
+            missing.append(f"terrains from {terrain.by_attribute} up that favour a monster's attribute, not its type")
+    traps = kit.trap_thresholds(retail_slus, slus)
+    if traps:
+        project.other["trap_thresholds"] = traps
+        notes.append(f"rules: the attack traps' thresholds are the mod's (A8): \"trap_thresholds\" "
+                     f"({', '.join(f'{k} {v}' for k, v in traps.items())})")
+        readme.append("- Attack traps spring up to the mod's attack thresholds.")
+        missing.append("which cards act as which attack trap (the mod's lists, in its rewritten "
+                       "Duel_SelectAttackTrap): the disc's six traps keep their places")
+    bonus = kit.equip_bonus(retail_slus, slus)
+    if bonus:
+        equips = {cid: v for cid, v in bonus.fixed.items() if cid in cards and cards[cid].type == g.TYPE_EQUIP}
+        others = [cid for cid in bonus.fixed if cid not in equips]
+        for cid, points in sorted(equips.items()):     # kept as written: the editor does not show bonuses
+            project.kept["equips"].append({"card": project.ref(cid), "bonus": points})
+        notes.append(f"rules: the mod's DuelScene_UpdateCardPlacement (code at {bonus.where}) sets {len(equips)} "
+                     f"equips' bonuses (A7): \"equips\" \"bonus\"; the rest keep +500")
+        if equips:
+            readme.append(f"- {len(equips)} equips add the mod's own bonus instead of +500.")
+        if others:
+            missing.append(f"bonuses the mod gives cards that are not equip cards ({_names(project, others)}): "
+                           "monsters used as equips and magic")
+        if bonus.conditional:
+            missing.append(f"{len(bonus.conditional)} equip bonuses that grow with a count the mod keeps "
+                           f"({_names(project, [c for c, _, _ in bonus.conditional])})")
+        if bonus.special:
+            missing.append(f"{len(bonus.special)} equips (or more) with an effect of their own in the mod's code "
+                           f"({_names(project, bonus.special)}): they keep +500 (Megamorph +1000)")
+    draws = kit.extra_draws(retail_slus, slus)
+    if draws and draws.count:
+        notes.append(f"rules: the mod draws {draws.count} prizes a win (A1: its loop at 0x{draws.code:08X}); "
+                     f"mod.json has no key for it: set Game > Card drops to {draws.count} (the player's setting "
+                     "card_drops)")
+        readme.append(f"- The mod gives {draws.count} cards a win: set Game > Card drops to {draws.count} to play "
+                      "it that way (a mod cannot set it for you).")
+    if any(memory.bytes(a, 0x40) != retail.bytes(a, 0x40) and b"\x31\x75" in memory.bytes(a, 0x120)
+           for a in STAT_CAP_SITES):
+        missing.append("ATK, DEF and life points up to 30000 (5 digits): the port keeps 9999")
+    if memory.word(OPPONENT_FIELD) != retail.word(OPPONENT_FIELD):
+        missing.append("each opponent's home field from the mod's table")
+    start, end = AI_COMMANDS
+    changed = [k for k in range(0, end - start, 4) if memory.word(start + k) != retail.word(start + k)]
+    if changed:
+        missing.append(f"the opponents' play (AI): {len(changed)} of its script commands are the mod's code, and "
+                       "the mod's scripts in WA_MRG.MRG expect them, so they play by the disc's commands")
+    if memory.bytes(CARD_FRAME, 16) != retail.bytes(CARD_FRAME, 16):
+        missing.append("each card's frame colour by its class (Effect, Union...)")
+    if any(slus[0x88:0x800]):
+        notes.append("rules: the executable's header holds code (0x8000B070 and up): a mod made with the kit "
+                     "that patches the duel in MIPS (A16)")
+    effects = sum(1 for card in project.cards.values() if "Effect" in card.description)
+    if effects:
+        missing.append(f"monster effects: {effects} cards say «Effect» in their text, which the mod's code "
+                       "carries out in battle and when summoned")
+    for line in missing:
+        notes.append(f"not imported: {line}")
+    return notes, readme, missing
+
+
+def write_readme(project: Project, readme: list, missing: list):
+    if not readme and not missing:
+        return
+    lines = [f"{project.info.name}", "", "Imported by the FM Editor from a modified game. It plays close to the "
+             "mod's own rules; what the mod does in code of its own is not here.", ""]
+    if readme:
+        lines += ["What the port does the mod's way:", ""] + readme + [""]
+    if missing:
+        lines += ["What the mod changes that this import cannot bring:", ""] + [f"- {m[0].upper()}{m[1:]}."
+                                                                             for m in missing] + [""]
+    lines.append("import-report.txt has the details.")
+    project.files["README.txt"] = ("\n".join(lines) + "\n").encode("utf-8")
+
+
 def import_modded(retail_files, modded_files, mod_id: str = "imported-mod", name: str = None) -> ImportResult:
     retail = g.load_game(retail_files)
     report = []
@@ -754,6 +863,12 @@ def import_modded(retail_files, modded_files, mod_id: str = "imported-mod", name
         project.cards[cid].name = retail.cards[cid].name
     if blank:
         report.append(f"cards: {len(blank)} names could not be read; kept as retail's")
+
+    # Rules the kit's code sets.
+    rule_notes, readme, missing = kit_rules(project, modded, retail_files, modded_files)
+    report += rule_notes
+    result.unhandled += len(missing)
+    write_readme(project, readme, missing)
 
     # The rest of the executable.
     slus_runs = _runs(retail_files.slus, modded_files.slus, 0, max(len(retail_files.slus), len(modded_files.slus)), 0)
