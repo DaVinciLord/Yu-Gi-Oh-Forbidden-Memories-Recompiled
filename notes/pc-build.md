@@ -431,6 +431,21 @@ console's value, until the player picks it; nothing changes on screen before.
   values their own setup screen chose (`D_8009B234`/`D_8009B236`, 1 to 8000 in
   steps of 500): that screen draws its bar as a fraction of 8000, so the
   cheat does not seed it.
+- **Show CPU's hand** (`cheat_show_hand`, `MEMORIES_CHEAT_SHOW_HAND`) draws
+  the hand the CPU plays from face up on its turn, as the player's is: art,
+  name, ATK/DEF and the stars. `Duel_InitSideStates` gives the CPU's side
+  record `card_view_mode` (+0x1F) = -1, and the three places the card display
+  reads it (`func_80017DB4`, `func_80018004`, `func_80023144`) draw card
+  backs and dim them for a negative value. They read it through
+  `DUEL_CARD_VIEW_MODE` (`game/duel_side_state.h`), which is the plain field
+  in the console build and `Cheats_CardViewMode` on the PC, answering 0 for
+  the CPU's record while the cheat is on. The byte in RAM is never written, so
+  nothing the game does with it changes, and turning the cheat off shows backs
+  again at once. Two-player duels (a negative opponent id) keep their own
+  setting. Checked at the same frame of the CPU's first turn: with the cheat
+  off the picture is identical to a build without it; with it on only the
+  hand and the card name bar change, and a later frame of the duel is identical,
+  so the CPU played the same.
 
 ### Back to the title screen
 

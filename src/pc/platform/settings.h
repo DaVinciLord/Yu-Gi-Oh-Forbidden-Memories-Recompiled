@@ -48,6 +48,7 @@ typedef enum {
     SET_UPDATE_CHECK,
     SET_UPDATE_PRERELEASES,
     SET_CHEAT_LIFE_POINTS,
+    SET_CHEAT_SHOW_HAND,
     SET_COUNT
 } SettingId;
 

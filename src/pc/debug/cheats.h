@@ -14,6 +14,8 @@ void Cheats_UnlockAllFreeDuelists(void);
  * Duel_InitSideStates. Two-player duels keep the values their own setup
  * screen chose. */
 int Cheats_StartingLifePoints(void);
+/* Show CPU's hand (SET_CHEAT_SHOW_HAND) is Cheats_CardViewMode, declared
+ * beside the field it reads in game/duel_side_state.h. */
 /* Once a frame: MEMORIES_DEBUG_CHEST=N gives N of every card, and
  * MEMORIES_DEBUG_DECK="723-762" (ids and ranges, repeated to forty) sets the
  * deck, the first time a save is live in the workspace. */

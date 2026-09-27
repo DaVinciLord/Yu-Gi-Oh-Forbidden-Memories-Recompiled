@@ -19,11 +19,11 @@ DuelCardDisplayObject *func_80018004(DuelCardRecord *card)
         (DuelCardDisplayObject *)func_80017F04((u8 *)card);
 #endif
 
-    if (D_8009B1C8->card_view_mode != 0) {
+    if (DUEL_CARD_VIEW_MODE(D_8009B1C8) != 0) {
         card->flags |= DUEL_CARD_FLAG_DISPLAY_MARKER;
         result->field_67 =
             ((DuelCardDisplayData *)card->data)->field_04 + 1;
-        if (D_8009B1C8->card_view_mode < 0) {
+        if (DUEL_CARD_VIEW_MODE(D_8009B1C8) < 0) {
             result->field_67 = 0xFF;
         }
     }

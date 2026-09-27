@@ -5,6 +5,7 @@
 #include "game/save_data.h"
 #include "pc/cards/cards.h"
 #include "pc/platform/settings.h"
+#include "game/duel_side_state.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -51,6 +52,22 @@ void Cheats_UnlockAllFreeDuelists(void)
 int Cheats_StartingLifePoints(void)
 {
     return Settings_Get(SET_CHEAT_LIFE_POINTS);
+}
+
+extern signed char gDuel_bOpponentID;
+
+/* The card display reads a side's card_view_mode through this
+ * (DUEL_CARD_VIEW_MODE). Duel_InitSideStates gives the CPU's record -1,
+ * which draws the hand it plays from as card backs and dims it; 0, the
+ * player's, draws the cards. With the cheat on the CPU's record reads 0.
+ * Two-player duels (a negative opponent) keep the value their setup chose. */
+s8 Cheats_CardViewMode(const DuelSideState *side)
+{
+    if (side->card_view_mode < 0 && side == &D_800E9FF0[1] && gDuel_bOpponentID >= 0 &&
+        Settings_Get(SET_CHEAT_SHOW_HAND)) {
+        return 0;
+    }
+    return side->card_view_mode;
 }
 
 /* MEMORIES_DEBUG_DECK: the forty cards of the deck, as ids and ranges
