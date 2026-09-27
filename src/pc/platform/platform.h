@@ -101,6 +101,14 @@ void Platform_StopTimers(void);
  * lets 1 ms of game time pass, since a loop polling it is waiting for time
  * (movie playback waits for its strips that way). Nothing otherwise. */
 void Platform_PollTime(void);
+/* Run what the cooperative clock owes (ticks, VBlanks) at a point where the
+ * console would have taken them while the game waited (DrawSync). Never
+ * steps time itself; nothing under the interrupt clock or in a
+ * deterministic run. */
+void Platform_ServiceClock(void);
+/* At most `count` more VBlanks from the clock (-1: no limit); VSync(0) holds
+ * the clock to one while it waits, as on the console. */
+void Platform_LimitVBlanks(int count);
 unsigned Platform_VBlankCount(void);
 void Platform_SetClockRate(int percent);
 int Platform_ClockRate(void);

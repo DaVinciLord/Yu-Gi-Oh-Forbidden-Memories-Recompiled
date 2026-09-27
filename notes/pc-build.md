@@ -686,6 +686,25 @@ variant was tried and doubled inputs at 300%. A frame that overruns its
 VBlank therefore costs a whole slot, as on the console; 200% and 400% hold
 their rates because presents are cheap on the accelerated path (below).
 
+The counter must equal exactly 0 at `Input_UpdatePads`, and a value above 0
+doubles presses as well (retail defers that frame's pressed and repeat bits
+and publishes them again on the next frame: one tap of Down moved the title
+menu's cursor two places, with keyboard, gamepad or wheel alike). On the
+console exactly one VBlank callback runs between that reset and the return
+of `VSync(0)`: VBlanks a slow frame runs past interrupt it while it computes
+and draws, so `Graphics_SyncFrame` counts them (`D_8009B0D8 = 2`) before the
+reset. The cooperative clock used to take them only at `VSync(0)`'s entry,
+after the reset, and several at once after a present or a host hiccup longer
+than two VBlank periods. Two service points restore the console's order: `DrawSync` runs
+what the clock owes (`Platform_ServiceClock`), which `Graphics_SyncFrame`
+calls just before its read, and `VSync(0)` holds the clock to one VBlank
+until it returns (`Platform_LimitVBlanks`); the rest wait for the next
+service point. Neither steps time, so deterministic runs are unchanged. When
+the host cannot keep up, a frame now shows the overrun the console's way
+(the next frame advances two VBlanks' worth, `D_8009B0D8 = 2`) instead of
+catching up with extra frames; 400% on a loaded machine keeps 240 VBlanks a
+second at fewer game frames.
+
 The HUD (F3) shows game frames a second and shown frames a second; with
 `MEMORIES_TRACE=frames` the same appears every 120 frames with the clock
 rate, VBlank rate and sequencer rate.
@@ -1526,7 +1545,7 @@ Native pieces (all under `src/pc/`):
 | Menu bar | `platform/menu_x11.c` | **File > Exit**, **Audio > Volume** and **Mods**, one checked item per extra (a 0-100 slider: drag it, click the track, or use the wheel over it). Drawn with plain Xlib, since the port has no toolkit; the window is `Menu_Height()` (22 px) taller than the picture and the picture sits below it. Labels use an X core font, falling back to a small built-in glyph table because a server started under Wayland often has no core fonts. The volume is kept in `settings.txt` in the user directory (see `MEMORIES_SETTINGS`) and applied through `Spu_SetOutputVolume`, which is the port's own control and deliberately outside save states. While a menu is open it owns every mouse event, including the wheel: otherwise the wheel stepped the game's cursor behind the menu and played its sound |
 | Window/input | `platform/x11.c` | Plain Xlib. The 59.94 Hz VBlank is a `SIGALRM` tick on the main thread, standing in for the interrupt, so the game's busy-waits on VBlank counters work unchanged. Game units are built `-O0` so those non-volatile polls are not hoisted. The frame and the menu bar are composed in an offscreen pixmap and reach the window in one `XCopyArea`: an open menu hangs over the picture, so drawing both straight to the window made the menu flash once a frame |
 | LIBETC/pads | `sdk/libetc.c` | Callbacks, `VSync` (presents, then waits), critical sections that defer the tick, BIOS pad buffers |
-| LIBGPU | `sdk/libgpu.c` | Environments, `DrawOTag` through `Memories_GpuCollect`, image transfers. `DrawOTag` snapshots the list and it is rasterized at `DrawSync` or before the next VRAM access, where the hardware would have finished it. Drawing inside `DrawOTag` put ~8 ms between `VSync` and `Input_UpdatePads`; whenever a second VBlank got in there the pad code published each press twice (two cursor steps, two sounds) |
+| LIBGPU | `sdk/libgpu.c` | Environments, `DrawOTag` through `Memories_GpuCollect`, image transfers. `DrawOTag` snapshots the list and it is rasterized at `DrawSync` or before the next VRAM access, where the hardware would have finished it. Drawing inside `DrawOTag` put ~8 ms between `VSync` and `Input_UpdatePads`; whenever a second VBlank got in there the pad code published each press twice (two cursor steps, two sounds). `DrawSync` also runs what the cooperative clock owes, so a frame's overrun is counted before `Graphics_SyncFrame` reads the game's VBlank counter (see "VSync(0)" under the clock) |
 | LIBGS | `sdk/libgs.c` | Ported from the resident assembly against the library's guest globals (`GsDRAWENV` `0x800FE048`, `GsDISPENV` `0x800FE0A8`, ...): graph init, display-buffer swap, OT clear/sort, `GsSortSprite`/`FastSprite`/`FlipSprite`/`Poly`/`BoxFill` |
 | LIBDS/LIBCD | `sdk/libds.c` | ISO9660 lookup and sector delivery from the disc image on the VBlank tick (8 sectors per tick; faster than hardware). Resolved LBAs equal `disc_layout.json`. XA "play" only advances the head |
 | SPU | `audio/spu.c`, `sdk/libspu.c`, `platform/audio_alsa.c` | 24 ADPCM voices, hardware ADSR, pitch, volumes, Gaussian interpolation, CD/XA input, mixed on an ALSA thread at 44.1 kHz. The menu's output volume is a separate gain the mixer walks to its target over about 36 ms, because stepping it mid-waveform is an audible click and dragging the slider made a burst of them. No reverb, noise, sweeps or pitch modulation. Key on/off cross threads as atomic bit sets (a key-off after a still-pending key-on is applied after it); no locks where a signal handler runs. `SpuSetVoiceAttr` follows the decompiled library (`tmp/port-research/psyz/decomp/src/libspu/sr_sv.c`): pitch, then sample note, then note, so a note overrides a pitch in the same call, with the library's integer note-to-pitch; ADSR modes are written only with their rates. The sound-effect voice sends mask `0xFFFF` with pitch `0x1000` and note `0x2400` against sample note `0x3C00`; applying the pitch last played every effect two octaves high |
