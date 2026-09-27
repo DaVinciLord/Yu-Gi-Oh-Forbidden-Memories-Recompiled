@@ -22,6 +22,7 @@
 #include "../unmatched.h"
 #ifdef MEMORIES_PC
 #include "pc/cards/cards.h"
+#include "pc/cards/tables.h"
 #endif
 
 /* The combined-deck producer and one duel card record's lifecycle, in address
@@ -101,6 +102,14 @@ void DuelCard_RemoveFromField(DuelCardRecord *object)
 s32 Duel_GetTerrainBoost(s32 cardType)
 {
     u8 *terrain = gDuel_bTerrainCodegenAlias;
+#ifdef MEMORIES_PC
+    /* A mod's bonus for this terrain and type (tables.h). */
+    s32 bonus;
+
+    if (Tables_TerrainBonus(gDuel_bTerrain[0], cardType, &bonus)) {
+        return bonus;
+    }
+#endif
 
     if (gDuel_bTerrain[0] == 0 || cardType >= CARD_TYPE_MAGIC) {
         return 0;

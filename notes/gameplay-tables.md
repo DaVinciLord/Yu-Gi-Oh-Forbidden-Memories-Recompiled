@@ -180,6 +180,35 @@ mod, which are reported as left out the first time the deck is dealt.
 `"all"` fixes every opponent's deck. `MEMORIES_TRACE=mods` logs each fixed
 deck as it is dealt.
 
+## Terrain bonuses
+
+A terrain (the field a Forest, Wasteland, Mountain, Sogen, Umi or Yami card
+sets, or an opponent's home field) gives some monster types +500 and a few
+-500 on the disc. A mod may set the bonus of any terrain and monster type,
+in points, with a sign:
+
+```json
+"terrain_bonus": {
+    "Forest": {"Beast": 300, "Insect": 300, "Fairy": -200},
+    "Umi":    {"Aqua": 400, "Machine": -400},
+    "replace": true
+}
+```
+
+Terrains are named as the field cards are, `Forest`, `Wasteland`,
+`Mountain`, `Sogen`, `Umi` and `Yami` (also `Meadow`, `Sea` and `Dark`, or
+1 to 6), and types as a card's are (`"Winged Beast"`, `"Beast-Warrior"`).
+Only monster types have a terrain bonus. Values are whole points from -9999
+to 9999; they need not be multiples of 500, nor of 10. A pair the mod lists
+has its value; a pair it does not keeps the disc's, unless `"replace": true`,
+which gives every pair the mods do not list no bonus at all. Several mods'
+tables add up the same way, the later one winning for a pair it lists, and a
+later `"replace"` clearing what earlier mods set. Everything the game works
+out from a terrain follows: the ATK and DEF on the field and in the hand, the
+fusion helper and the CPU's weighing of its cards. A monster's attribute is
+not a terrain's affair (a mod whose fields favour attributes needs code),
+and there are still only the six terrains.
+
 ## A full chest pays starchips
 
 The chest holds at most 250 copies of a card; on the disc a copy won past
@@ -223,6 +252,7 @@ it first:
 | `Duel_CheckRitual` (`duel_check_ritual.c`) | ritual table, `0x801799D8` | `Tables_Ritual`, whose recipe is laid out like the disc's |
 | `Duel_ShuffleDeck` (`duel_shuffle_deck.c`) | deck pool, `0x801781D8` | `Tables_FixedDeck`, then `Tables_Pool(TABLES_POOL_DECK)` |
 | `Duel_SelectCardDrop` (`duel_result_runtime.c`) | drop pools, `0x8017878C` | `Tables_Pool(TABLES_POOL_POW + pool)` |
+| `Duel_GetTerrainBoost` (`duel_card_record_lifecycle.c`) | terrain table, `0x800909D4` | `Tables_TerrainBonus` |
 | `Duel_AwardCard` (`duel_result_runtime.c`) | chest, `0x801D0250`; starchips, `0x801D07E0` | `Tables_ChestOverflow`, before the card is counted |
 
 A pool is worked out from the opponent's loaded pool and every edit of it

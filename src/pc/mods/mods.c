@@ -1161,6 +1161,7 @@ static const char *const manifest_keys[] = {
     "id", "name", "version", "author", "description", "library", "enabled", "restart", "legacy_setting",
     "data", "textures", "cards", "audio", "min_api", "game", "requires", "after", "conflicts", "priority",
     "settings", "fusions", "equips", "rituals", "drops", "decks", "text", "font", "chest_overflow_starchips",
+    "terrain_bonus",
 };
 
 /* How many letters to add, remove or change to turn one word into the
@@ -1289,7 +1290,8 @@ static int read_manifest(Mod *mod, const char *directory, const char *origin)
     if (Json_Count(mod->cards)) mod->restart = 1;
     {   /* So are the rule tables (src/pc/cards/tables.c) and a translation
          * (src/pc/text): both are read once, at startup. */
-        static const char *const tables[] = {"fusions", "equips", "rituals", "drops", "decks", "text", "font"};
+        static const char *const tables[] = {"fusions", "equips", "rituals", "drops", "decks", "text", "font",
+                                             "terrain_bonus"};
         for (size_t t = 0; t < sizeof(tables) / sizeof(tables[0]); t++) {
             const JsonValue *value = Json_Member(root, tables[t]);
             /* "text": "text.txt" is one file named as a string. */

@@ -234,7 +234,32 @@ int main(void)
         add("n", "{\"chest_overflow_starchips\": 1}");
     }
 
+    /* Terrains: a listed pair has its points; the rest are the disc's until
+     * a mod replaces the table; names, aliases and numbers; refusals. */
+    {
+        int bonus = 12345;
+        assert(!Tables_TerrainBonus(1, 0, &bonus) && bonus == 12345);
+        notes = 0;
+        add("o", "{\"terrain_bonus\": {\"Forest\": {\"Dragon\": -300}, \"sea\": {\"Warrior\": 700},"
+                 "\"7\": {\"Dragon\": 1}, \"Umi\": {\"Magic\": 5, \"Dragon\": 10000, \"Warrior\": 650}, \"Yami\": 3}}");
+        assert(notes == 4);                /* terrain 7, Magic, 10000, not an object */
+        assert(Tables_TerrainBonus(1, 0, &bonus) && bonus == -300);
+        assert(Tables_TerrainBonus(5, 3, &bonus) && bonus == 650);          /* "Umi" is "sea", later */
+        assert(!Tables_TerrainBonus(1, 3, &bonus) && !Tables_TerrainBonus(5, 0, &bonus));
+        assert(!Tables_TerrainBonus(0, 0, &bonus) && !Tables_TerrainBonus(1, CARD_TYPE_MAGIC, &bonus));
+        add("p", "{\"terrain_bonus\": {\"Mountain\": {\"Dragon\": 250}, \"replace\": true}}");
+        assert(Tables_TerrainBonus(3, 0, &bonus) && bonus == 250);
+        assert(Tables_TerrainBonus(1, 0, &bonus) && bonus == 0);            /* replaced */
+        assert(Tables_TerrainBonus(6, 19, &bonus) && bonus == 0);
+        add("q", "{\"terrain_bonus\": {\"4\": {\"Warrior\": 100}, \"Meadow\": {\"Dragon\": -50}}}");
+        assert(Tables_TerrainBonus(4, 3, &bonus) && bonus == 100 && Tables_TerrainBonus(4, 0, &bonus) && bonus == -50);
+    }
+
     Tables_Clear();
+    {
+        int bonus;
+        assert(!Tables_TerrainBonus(1, 0, &bonus) && !Tables_TerrainBonus(6, 19, &bonus));
+    }
     {
         unsigned starchips = 7;
         assert(Tables_ChestOverflow(250, &starchips) == 0 && starchips == 7);

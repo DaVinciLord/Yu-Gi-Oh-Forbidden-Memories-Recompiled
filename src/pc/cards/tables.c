@@ -7,7 +7,8 @@
  * duel_result_runtime.c) ask these first. A deck may also be fixed: forty
  * cards written down by their copies, dealt as they are. Past the tables,
  * "chest_overflow_starchips" turns a card the chest has no room for into
- * starchips (Duel_AwardCard). A drop or deck pool is worked out
+ * starchips (Duel_AwardCard), and "terrain_bonus" sets what a terrain gives
+ * each monster type (Duel_GetTerrainBoost). A drop or deck pool is worked out
  * from what the game loaded when it is drawn from, so a data mod's patch of
  * the same pool comes first and the edits here go on top of it. */
 #include "tables.h"
@@ -105,6 +106,9 @@ typedef struct {
 static FixedDeck *fixed_decks;
 static int fixed_count, fixed_room;
 static long overflow_starchips;          /* per card the chest has no room for */
+#define TERRAINS 6                        /* DUEL_TERRAIN_COUNT: Forest to Yami, 1-6 */
+static short terrain_bonus[TERRAINS][CARD_TYPE_MAGIC];
+static unsigned char terrain_listed[TERRAINS][CARD_TYPE_MAGIC];
 static unsigned char edited[TABLES_DUELIST_COUNT][TABLES_POOL_COUNT];
 static unsigned order_counter;
 static int fusions_sorted;
@@ -790,6 +794,86 @@ const unsigned short *Tables_Pool(int pool, const unsigned short *retail)
     return Tables_PoolFor(gDuel_bOpponentID, pool, retail);
 }
 
+/* --- terrains ------------------------------------------------------- */
+
+/* The terrains by gDuel_bTerrain's value, 1-6, as the field cards name them,
+ * and the English words for the last three. */
+static const char *const terrain_names[TERRAINS][2] = {
+    {"Forest", NULL}, {"Wasteland", NULL}, {"Mountain", NULL}, {"Sogen", "Meadow"}, {"Umi", "Sea"}, {"Yami", "Dark"}};
+
+static int terrain_named(const char *text)
+{
+    int terrain;
+    if (strspn(text, "0123456789") == strlen(text) && *text) {
+        terrain = atoi(text);
+        return terrain >= 1 && terrain <= TERRAINS ? terrain : -1;
+    }
+    for (terrain = 0; terrain < TERRAINS; terrain++) {
+        if (same_letters(text, terrain_names[terrain][0]) ||
+            (terrain_names[terrain][1] && same_letters(text, terrain_names[terrain][1])))
+            return terrain + 1;
+    }
+    return -1;
+}
+
+/* "terrain_bonus": { terrain: { type: points }, "replace": true }. A listed
+ * pair's bonus is its points, with a sign, in place of the disc's +-500;
+ * "replace" gives every pair the mod does not list none at all. */
+static void read_terrain_bonus(const char *mod, const JsonValue *table)
+{
+    int i, j;
+    char where[128];
+    if (!table) return;
+    if (Json_TypeOf(table) != JSON_OBJECT) {
+        Mods_Note(mod, "\"terrain_bonus\" is an object of terrains (Forest, Wasteland, Mountain, Sogen, Umi, Yami)");
+        return;
+    }
+    if (Json_Bool(Json_Member(table, "replace"), 0)) {
+        memset(terrain_bonus, 0, sizeof(terrain_bonus));
+        memset(terrain_listed, 1, sizeof(terrain_listed));
+    }
+    for (i = 0; i < Json_Count(table); i++) {
+        const JsonValue *entry = Json_At(table, i);
+        const char *name = Json_Name(entry);
+        int terrain;
+        if (!strcmp(name, "replace")) continue;
+        snprintf(where, sizeof(where), "terrain_bonus \"%s\"", name);
+        terrain = terrain_named(name);
+        if (terrain < 0) {
+            Mods_Note(mod, "%s: the terrains are Forest, Wasteland, Mountain, Sogen, Umi and Yami", where);
+            continue;
+        }
+        if (Json_TypeOf(entry) != JSON_OBJECT) {
+            Mods_Note(mod, "%s: an object of monster types and their bonus", where);
+            continue;
+        }
+        for (j = 0; j < Json_Count(entry); j++) {
+            const JsonValue *member = Json_At(entry, j);
+            int type = Cards_TypeNamed(Json_Name(member));
+            long points = Json_Number(member, 0);
+            if (type < 0 || type >= CARD_TYPE_MAGIC) {
+                Mods_Note(mod, "%s \"%s\": not a monster type", where, Json_Name(member));
+                continue;
+            }
+            if (Json_TypeOf(member) != JSON_NUMBER || points < -CARD_STAT_MAX || points > CARD_STAT_MAX) {
+                Mods_Note(mod, "%s \"%s\": a bonus is a whole number of points, -%d to %d", where, Json_Name(member),
+                          CARD_STAT_MAX, CARD_STAT_MAX);
+                continue;
+            }
+            terrain_bonus[terrain - 1][type] = (short)points;
+            terrain_listed[terrain - 1][type] = 1;
+        }
+    }
+}
+
+int Tables_TerrainBonus(int terrain, int type, int *bonus)
+{
+    if (terrain < 1 || terrain > TERRAINS || type < 0 || type >= CARD_TYPE_MAGIC) return 0;
+    if (!terrain_listed[terrain - 1][type]) return 0;
+    *bonus = terrain_bonus[terrain - 1][type];
+    return 1;
+}
+
 /* --- the chest ------------------------------------------------------ */
 
 #define STARCHIP_MAX 999999L   /* SAVE_DATA_STARCHIP_MAX */
@@ -836,6 +920,7 @@ void Tables_Add(const char *mod, const JsonValue *manifest)
     read_pools(mod, Json_Member(manifest, "drops"), 0);
     read_pools(mod, Json_Member(manifest, "decks"), 1);
     read_chest_overflow(mod, Json_Member(manifest, "chest_overflow_starchips"));
+    read_terrain_bonus(mod, Json_Member(manifest, "terrain_bonus"));
 }
 
 void Tables_Clear(void)
@@ -852,6 +937,8 @@ void Tables_Clear(void)
     }
     fusion_count = equip_count = ritual_count = edit_count = fixed_count = 0;
     overflow_starchips = 0;
+    memset(terrain_bonus, 0, sizeof(terrain_bonus));
+    memset(terrain_listed, 0, sizeof(terrain_listed));
     if (removed_results) memset(removed_results, 0, (size_t)removed_room);
     memset(edited, 0, sizeof(edited));
     forget_pools();

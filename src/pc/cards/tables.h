@@ -62,6 +62,12 @@ int Tables_FixedDeck(int duelist, unsigned short cards[TABLES_DECK_SIZE]);
  * card fits or no mod says. */
 int Tables_ChestOverflow(unsigned quantity, unsigned *starchips);
 
+/* A mod's "terrain_bonus" for a monster of `type` (0-19) on `terrain`
+ * (gDuel_bTerrain: 1 Forest to 6 Yami): 1 with the points, signed, in
+ * *bonus; 0 when no mod lists the pair (nor replaced the table), and the
+ * disc's table decides. */
+int Tables_TerrainBonus(int terrain, int type, int *bonus);
+
 /* The opponent names a manifest may use, by duelist id; "all" means every
  * one of them. */
 #define TABLES_DUELIST_COUNT 40
