@@ -24,6 +24,9 @@ typedef struct {
 
 static const SettingInfo info[SET_COUNT] = {
     [SET_FUSION_HELPER] = {"fusion_helper", NULL, "MEMORIES_FUSION_HELPER", NULL, 0, 0, 1},
+    /* View > Free Duel progress (src/pc/cards/free_duel_progress.h): owned
+     * and obtainable cards of the opponent under the Free Duel cursor. */
+    [SET_FREE_DUEL_PROGRESS] = {"free_duel_progress", NULL, "MEMORIES_FREE_DUEL_PROGRESS", NULL, 0, 0, 1},
     /* 1: the duel's numbers and labels drawn from a font (hd_text.h). */
     [SET_HD_HUD] = {"hd_hud", NULL, "MEMORIES_HD_HUD", NULL, 0, 0, 1},
     /* 1: the opponent's name in place of COM (hd_text.h). */

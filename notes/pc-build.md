@@ -1235,6 +1235,47 @@ picture pass ("needs OpenGL 3 or 1x").
 
 Not covered yet: the sword and shield icons (pictures, not lettering).
 
+### View > Free Duel progress
+
+View > Free Duel progress (`free_duel_progress`, `MEMORIES_FREE_DUEL_PROGRESS=1`,
+off by default) shows `owned/obtainable` right of the FREE DUEL title for
+the opponent under the grid cursor: `12/157` for Duel Master K, gold once
+every card is owned. The host draws it over the picture as it draws the
+fusion helper (`src/pc/cards/free_duel_progress_view.c`, from `Hud_Draw`),
+so it keeps its place in widescreen and at any internal resolution. With
+the option off nothing is drawn; a window capture of the grid with the
+cursor on an opponent is identical to master's.
+
+- **Obtainable** is every card with a weight in any of the opponent's three
+  drop pools (S/A-POW, B/C/D, S/A-TEC). The disc's rows are read once, as
+  the yamyi-mods Library panel reads them (WA_MRG `0xE9B000 + 0x1800 * (id -
+  1)`, three sectors an opponent, rows 1-3 of four 1460-byte rows), and each
+  goes through `Tables_PoolFor`, the call the drop roll makes: a mod's
+  `"drops"` counts, Drop missing cards included (Simon Muran 58 -> 61). The
+  deck pool is not counted. Checked against the rows read with Python:
+  Simon Muran 58, Teana 28, Seto 102, Duel Master K 157. The rows and the
+  mods' tables are fixed for a session (data mods and `Tables_Build` are
+  applied at startup), so each opponent's cards are worked out once, the
+  first time the cursor rests on it.
+- **Owned** is how many of those the deck and trunk hold now
+  (`Cards_ChestSlot` and `gDuel_awPlayerDeck`, as `owned()` in `drops.c`
+  counts). The game keeps no record of who gave a card, so this is the
+  collection, not where it came from.
+- The cell is the pending one the pad moves (`gFreeDuel_bTargetColumn/Row`),
+  so the count changes as soon as the cursor starts to glide. Its index is
+  the opponent's id (`func_80024DC8`); Build Deck (cell 0) and empty cells
+  show nothing. It also shows nothing while the screen's text box is up or
+  it is leaving (`gFreeDuel_bScreenFlags` 0x20/0x40), during a fade, and
+  while `Main_InitFreeDuelMenu` is still loading the module: until
+  `FreeDuel_Init` runs, the module's state is the last screen's.
+
+`pc_free_duel_progress` (`tests/pc/free_duel_progress_test.c`) counts over a
+made-up WA_MRG with the real `tables.c`: the union of the three pools, a
+zero weight and the deck pool left out, deck and trunk counted once per
+card, a mod's added and removed cards (a mod card among them), an edit of
+`all`, and a disc without the file. Not done: a frame on the portraits of
+opponents whose cards are all owned.
+
 ### Precise geometry (PGXP)
 
 Precise geometry (PGXP) is currently disabled and has no Video menu option.
