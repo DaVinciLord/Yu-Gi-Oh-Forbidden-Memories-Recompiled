@@ -168,23 +168,28 @@ static double median(double *values, int count)
  * half the row's brightest (the letters are shaded down the cell, and the
  * large font across its strokes too) and up all of it, and between a
  * share. */
-static double coverage(const Retail *r, const unsigned char cell[CELL][CELL], int x, int y)
+static double coverage(const Retail *r, const unsigned char *cell, int pitch, int x, int y)
 {
-    double c;
-    if (r->ramp_n) return r->level[cell[y][x]] / (double)(r->ramp_n - 1);
-    c = cell[y][x] > r->dark ? (cell[y][x] - r->dark) / (SATURATE * (r->shade[y] - r->dark)) : 0;
+    double c, index = cell[y * pitch + x];
+    if (r->ramp_n) return r->level[cell[y * pitch + x]] / (double)(r->ramp_n - 1);
+    c = index > r->dark ? (index - r->dark) / (SATURATE * (r->shade[y] - r->dark)) : 0;
     return c > 1 ? 1 : c;
 }
 
-/* Where a cell's letter is: an edge row or column is covered as far into
- * it as the letter reaches. Returns 0 for no letter. */
-static int extents(const Retail *r, const unsigned char cell[CELL][CELL], int cells_high, Box *box)
+/* A picture as wide as SPAN_MAX cells at most: a word the font draws
+ * across neighbouring cells (render_span). */
+#define SPAN_MAX 2
+
+/* Where a cell's letter is (or the letters of `pitch` texels across, cells
+ * side by side): an edge row or column is covered as far into it as the
+ * letter reaches. Returns 0 for no letter. */
+static int extents(const Retail *r, const unsigned char *cell, int pitch, int cells_high, Box *box)
 {
-    double rows[CELL] = {0}, columns[CELL] = {0};
+    double rows[CELL] = {0}, columns[CELL * SPAN_MAX] = {0};
     int x, y, top = -1, bottom = -1, left = -1, right = -1;
     for (y = 0; y < cells_high; y++) {
-        for (x = 0; x < CELL; x++) {
-            double c = coverage(r, cell, x, y);
+        for (x = 0; x < pitch; x++) {
+            double c = coverage(r, cell, pitch, x, y);
             if (c > rows[y]) rows[y] = c;
             if (c > columns[x]) columns[x] = c;
         }
@@ -194,7 +199,7 @@ static int extents(const Retail *r, const unsigned char cell[CELL][CELL], int ce
         if (top < 0) top = y;
         bottom = y;
     }
-    for (x = 0; x < CELL; x++) {
+    for (x = 0; x < pitch; x++) {
         if (columns[x] <= 0) continue;
         if (left < 0) left = x;
         right = x;
@@ -286,10 +291,12 @@ static void measure_retail(Retail *r, const uint16_t *words, int page_x, int pag
             read_cell(words, page_x, page_y, large, u, v, cell);
             if (k >= 5) {
                 for (y = 0; y < CELL; y++) {
-                    for (x = 0; x < CELL; x++) cover[y * CELL + x] = y < cells_high ? (float)coverage(r, cell, x, y) : 0;
+                    for (x = 0; x < CELL; x++) {
+                        cover[y * CELL + x] = y < cells_high ? (float)coverage(r, &cell[0][0], CELL, x, y) : 0;
+                    }
                 }
                 add_runs(cover, CELL, CELL, k == 6, run_list, &count, RUN_LIMIT);
-            } else if (extents(r, cell, cells_high, &box)) {
+            } else if (extents(r, &cell[0][0], CELL, cells_high, &box)) {
                 run_list[count++] = k == 0 || k == 4 ? box.bottom : box.top;
             }
         }
@@ -382,7 +389,7 @@ static double through(const double *from, const double *to, int count, double va
 }
 
 /* A rectangle (in pixels) filled into the coverage, its edges shared. */
-static void fill(unsigned char cover[CELL * MAX_FACTOR][CELL * MAX_FACTOR], double x0, double y0, double x1,
+static void fill(unsigned char cover[CELL * MAX_FACTOR][CELL * MAX_FACTOR * SPAN_MAX], double x0, double y0, double x1,
                  double y1, int width, int height)
 {
     int x, y;
@@ -415,30 +422,46 @@ static void changed(int y0, int y1)
     if (y1 > last_dirty) last_dirty = y1;
 }
 
-/* The picture of `character` for a cell `cells_high` texels high into the
- * atlas at cell (at_column, at_row) of CELL texels; 0 when no font sets it or the
- * cell holds no letter. */
-static int render_at(int at_column, int at_row, const unsigned char cell[CELL][CELL], int cells_high, uint32_t character,
-                     const Retail *r)
+/* The picture of the `count` characters of `text`, set across the `span`
+ * cells side by side of `texels` (CELL * span across, `cells_high` high),
+ * as one letter is in its cell; the part in cell `slice` goes into the
+ * atlas at cell (at_column, at_row) of CELL texels. 0 when no font sets it
+ * or the cells hold no letter. */
+static int render_span(int at_column, int at_row, const unsigned char *texels, int span, int cells_high,
+                       const uint32_t *text, int count, int slice, const Retail *r)
 {
-    static unsigned char cover[CELL * MAX_FACTOR][CELL * MAX_FACTOR];
-    static unsigned short distance[CELL * MAX_FACTOR][CELL * MAX_FACTOR];
-    int f = factor, width = CELL * f, height = cells_high * f;
-    int x, y, i, n = 0, main = 0, pass, upper = character < 128 && (isupper((int)character) || isdigit((int)character));
-    int lower = character < 128 && islower((int)character);
+    static unsigned char cover[CELL * MAX_FACTOR][CELL * MAX_FACTOR * SPAN_MAX];
+    static unsigned char one[CELL * MAX_FACTOR][CELL * MAX_FACTOR * SPAN_MAX];
+    static unsigned short distance[CELL * MAX_FACTOR][CELL * MAX_FACTOR * SPAN_MAX];
+    int f = factor, pitch = CELL * span, width = pitch * f, height = cells_high * f, at_x = slice * CELL * f;
+    int x, y, i, k, n = 0, main = 0, pass, upper = 1, lower = 1;
     uint8_t *origin = atlas + (size_t)at_row * CELL * f * side + (size_t)at_column * CELL * f;
-    FT_Face face = (FT_Face)Glyphs_Face(character);
+    FT_Face face = count > 0 ? (FT_Face)Glyphs_Face(text[0]) : NULL;
     const Font *font = face ? measure_font(face) : NULL;
-    double from[5], to[5], tops[5], room, sx, sv, ex = 0, ey = 0, centre_f, centre_r, stem_f, width_f;
-    FT_BBox bbox;
-    FT_Outline *outline;
-    FT_Bitmap bitmap;
+    double from[5], to[5], tops[5], room, sx, sv, ex = 0, ey = 0, centre_f, centre_r, stem_f, width_f, pen;
+    double ink_left = 1e9, ink_right = -1e9, ink_bottom = 1e9, ink_top = -1e9;
     Box box;
-    if (!font || !extents(r, cell, cells_high, &box) || !load(face, character)) return 0;
-    outline = &face->glyph->outline;
-    FT_Outline_Get_BBox(outline, &bbox);
-    width_f = (bbox.xMax - bbox.xMin) / 64.0;
-    centre_f = (bbox.xMax + bbox.xMin) / 128.0;
+    if (!font || span < 1 || span > SPAN_MAX || slice < 0 || slice >= span || !extents(r, texels, pitch, cells_high, &box)) {
+        return 0;
+    }
+    for (k = 0; k < count; k++) {
+        upper &= text[k] < 128 && (isupper((int)text[k]) || isdigit((int)text[k]));
+        lower &= text[k] < 128 && islower((int)text[k]);
+    }
+    /* The text's ink in the font, each character at its pen. */
+    for (pen = 0, k = 0; k < count; k++) {
+        FT_BBox bbox;
+        double step = advance(face, text[k]);
+        if (step < 0 || !load(face, text[k])) return 0;
+        FT_Outline_Get_BBox(&face->glyph->outline, &bbox);
+        if (pen + bbox.xMin / 64.0 < ink_left) ink_left = pen + bbox.xMin / 64.0;
+        if (pen + bbox.xMax / 64.0 > ink_right) ink_right = pen + bbox.xMax / 64.0;
+        if (bbox.yMin / 64.0 < ink_bottom) ink_bottom = bbox.yMin / 64.0;
+        if (bbox.yMax / 64.0 > ink_top) ink_top = bbox.yMax / 64.0;
+        pen += step;
+    }
+    width_f = ink_right - ink_left;
+    centre_f = (ink_right + ink_left) / 2;
     centre_r = (box.left + box.right) / 2;
     if (upper || lower) {
         /* The lines, up the font; tops[] says which are tops of strokes.
@@ -449,8 +472,8 @@ static int render_at(int at_column, int at_row, const unsigned char cell[CELL][C
             /* A letter's own tail to where the cell's glyph ends: the
              * retail g reaches a texel below the p and q the line is
              * measured by, and squeezed onto the line its tail is a blot. */
-            if (bbox.yMin / 64.0 < -font->bar && box.bottom > r->base + 0.25) {
-                from[n] = bbox.yMin / 64.0, to[n] = box.bottom, tops[n++] = 0;
+            if (ink_bottom < -font->bar && box.bottom > r->base + 0.25) {
+                from[n] = ink_bottom, to[n] = box.bottom, tops[n++] = 0;
             } else {
                 from[n] = font->descender, to[n] = r->descender, tops[n++] = 0;
             }
@@ -462,8 +485,8 @@ static int render_at(int at_column, int at_row, const unsigned char cell[CELL][C
             from[n] = font->ascender, to[n] = r->ascender, tops[n++] = 1;
         }
     } else {
-        from[n] = bbox.yMin / 64.0, to[n] = box.bottom, tops[n++] = 0;
-        from[n] = bbox.yMax / 64.0, to[n] = box.top, tops[n++] = 1;
+        from[n] = ink_bottom, to[n] = box.bottom, tops[n++] = 0;
+        from[n] = ink_top, to[n] = box.top, tops[n++] = 1;
     }
     if (from[main + 1] <= from[main] || to[main + 1] >= to[main]) return 0;
     /* Heavier (or lighter) by ex across and ey down puts half of each
@@ -493,25 +516,39 @@ static int render_at(int at_column, int at_row, const unsigned char cell[CELL][C
     }
     ex = r->stem - stem_f * sx;
     if (ex < -stem_f * sx / 2) ex = -stem_f * sx / 2;
-    /* Into the cell's pixels: across about the centre, down along the
+    /* Into the cells' pixels: across about the centre, down along the
      * lines (the outline's y is up from the picture's foot). */
-    for (i = 0; i < outline->n_points; i++) {
-        double px = outline->points[i].x / 64.0, py = outline->points[i].y / 64.0;
-        double column = centre_r + (px - centre_f) * sx, row = through(from, to, n, py);
-        outline->points[i].x = (FT_Pos)(column * f * 64);
-        outline->points[i].y = (FT_Pos)((cells_high - row) * f * 64);
-    }
-    embolden(outline, ex * f, ey * f);
     memset(cover, 0, sizeof(cover));
-    memset(&bitmap, 0, sizeof(bitmap));
-    bitmap.rows = (unsigned)height;
-    bitmap.width = (unsigned)width;
-    bitmap.pitch = CELL * MAX_FACTOR;
-    bitmap.buffer = &cover[0][0];
-    bitmap.num_grays = 256;
-    bitmap.pixel_mode = FT_PIXEL_MODE_GRAY;
-    if (FT_Outline_Get_Bitmap(face->glyph->library, outline, &bitmap)) return 0;
-    if (character == 'I' && width_f < font->stem * 1.8 && box.right - box.left > r->stem * 1.5) {
+    for (pen = 0, k = 0; k < count; k++) {
+        FT_Outline *outline;
+        FT_Bitmap bitmap;
+        double step = advance(face, text[k]);
+        if (step < 0 || !load(face, text[k])) return 0;
+        outline = &face->glyph->outline;
+        for (i = 0; i < outline->n_points; i++) {
+            double px = pen + outline->points[i].x / 64.0, py = outline->points[i].y / 64.0;
+            double column = centre_r + (px - centre_f) * sx, row = through(from, to, n, py);
+            outline->points[i].x = (FT_Pos)(column * f * 64);
+            outline->points[i].y = (FT_Pos)((cells_high - row) * f * 64);
+        }
+        embolden(outline, ex * f, ey * f);
+        memset(one, 0, sizeof(one));
+        memset(&bitmap, 0, sizeof(bitmap));
+        bitmap.rows = (unsigned)height;
+        bitmap.width = (unsigned)width;
+        bitmap.pitch = CELL * MAX_FACTOR * SPAN_MAX;
+        bitmap.buffer = &one[0][0];
+        bitmap.num_grays = 256;
+        bitmap.pixel_mode = FT_PIXEL_MODE_GRAY;
+        if (FT_Outline_Get_Bitmap(face->glyph->library, outline, &bitmap)) return 0;
+        for (y = 0; y < height; y++) {
+            for (x = 0; x < width; x++) {
+                if (one[y][x] > cover[y][x]) cover[y][x] = one[y][x];
+            }
+        }
+        pen += step;
+    }
+    if (count == 1 && text[0] == 'I' && width_f < font->stem * 1.8 && box.right - box.left > r->stem * 1.5) {
         /* The retail I has serifs, which tell it from an l; a font's bare
          * stem gets them. */
         fill(cover, box.left * f, box.top * f, box.right * f, (box.top + r->bar) * f, width, height);
@@ -550,24 +587,33 @@ static int render_at(int at_column, int at_row, const unsigned char cell[CELL][C
         if (r->ramp_n) {
             /* A digit sheet: the nearest step of its ramp, the outline
              * round it as for the text. */
-            for (x = 0; x < width; x++) {
-                int step = (int)(cover[y][x] * (r->ramp_n - 1) / 255.0 + 0.5);
+            for (x = 0; x < CELL * f; x++) {
+                int step = (int)(cover[y][at_x + x] * (r->ramp_n - 1) / 255.0 + 0.5);
                 if (step > 0) origin[(size_t)y * side + x] = r->ramp[step];
-                else if (distance[y][x] <= 3u * (unsigned)f) origin[(size_t)y * side + x] = r->ramp[0];
+                else if (distance[y][at_x + x] <= 3u * (unsigned)f) origin[(size_t)y * side + x] = r->ramp[0];
             }
             continue;
         }
-        for (x = 0; x < width; x++) {
+        for (x = 0; x < CELL * f; x++) {
             /* Coverage on the run from the outline's index to the shade;
              * too little to rise above it is outline, as the cells'
              * faintest edges are. */
-            int index = r->dark + (int)(cover[y][x] * (shade - r->dark) / 255 + 0.5);
+            int index = r->dark + (int)(cover[y][at_x + x] * (shade - r->dark) / 255 + 0.5);
             if (index > r->dark) origin[(size_t)y * side + x] = (uint8_t)index;
-            else if (distance[y][x] <= 3u * (unsigned)f) origin[(size_t)y * side + x] = (uint8_t)r->outline;
+            else if (distance[y][at_x + x] <= 3u * (unsigned)f) origin[(size_t)y * side + x] = (uint8_t)r->outline;
         }
     }
     changed(at_row * CELL * f, (at_row + 1) * CELL * f - 1);
     return 1;
+}
+
+/* The picture of `character` for a cell `cells_high` texels high into the
+ * atlas at cell (at_column, at_row); 0 when no font sets it or the cell
+ * holds no letter. */
+static int render_at(int at_column, int at_row, const unsigned char cell[CELL][CELL], int cells_high, uint32_t character,
+                     const Retail *r)
+{
+    return render_span(at_column, at_row, &cell[0][0], 1, cells_high, &character, 1, 0, r);
 }
 
 static int render(int slot, const unsigned char cell[CELL][CELL], int large, uint32_t character, const Retail *r)
@@ -880,7 +926,7 @@ static int measure_sheet(Sheet *s, const uint16_t *words)
     for (d = 0; d < 10; d++) {
         Box box;
         read_digit(words, s, d, cell, 0);
-        if (!extents(r, cell, s->height, &box)) return 0;
+        if (!extents(r, &cell[0][0], CELL, s->height, &box)) return 0;
         tops[d] = box.top;
         bottoms[d] = box.bottom;
     }
@@ -894,7 +940,9 @@ static int measure_sheet(Sheet *s, const uint16_t *words)
         for (d = 0; d < 10; d++) {
             read_digit(words, s, d, cell, 0);
             for (y = 0; y < CELL; y++) {
-                for (x = 0; x < CELL; x++) cover[y * CELL + x] = y < s->height ? (float)coverage(r, cell, x, y) : 0;
+                for (x = 0; x < CELL; x++) {
+                    cover[y * CELL + x] = y < s->height ? (float)coverage(r, &cell[0][0], CELL, x, y) : 0;
+                }
             }
             add_runs(cover, CELL, CELL, i, run_list, &runs, RUN_LIMIT);
         }
