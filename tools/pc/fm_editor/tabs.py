@@ -159,6 +159,7 @@ class CardsTab(Tab):
             if isinstance(child, (ttk.Entry, ttk.Spinbox)):
                 child.bind("<Return>", lambda e: self.apply())
         self.fill()
+        self.show(None)
 
     # the list
     def wanted(self, cid) -> bool:

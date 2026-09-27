@@ -144,6 +144,15 @@ least 14 cards, a drop pool with a card left, and pools adding up to 2048.
 opens a mod over retail, lists what the loader would complain about, and
 with `--print` shows the `mod.json` the editor would write for it.
 
+## A standalone executable
+
+    python -m pip install pyinstaller
+    python tools/pc/fm_editor/build_exe.py [--dist tmp/pc/fm-editor]
+
+builds `tmp/pc/fm-editor/fm-editor.exe` (one file, about 11 MB, no Python
+needed to run it). Put it beside `memories-pc.exe` and it finds the game's
+`game/` folder there. Build outputs never go in git.
+
 ## Tests
 
     python -m unittest discover -s tools/pc/fm_editor/tests -t tools/pc
