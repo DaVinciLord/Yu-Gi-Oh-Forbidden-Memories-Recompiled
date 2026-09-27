@@ -9,6 +9,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+/* The duel's reward stops the balance here (func_800218F0). */
+#define CHEATS_STARCHIPS_MAX 999999u
+
 /* The chest lives in the persistent save state at 0x801D0250: one byte per
  * card, ids 1..722, read by the Library, BUILD DECK and the duel's deck
  * checks, and written out whole by SAVE. */
@@ -47,6 +50,17 @@ void Cheats_UnlockAllFreeDuelists(void)
         Library_UpdateCardUsedFlag(FREE_DUEL_UNLOCK_FLAG_BASE + opponent);
     }
     fprintf(stderr, "memories-pc: all CPU duelists unlocked; reopen Free Duel to refresh the roster, then save to keep them\n");
+}
+
+/* SaveDataState.starchips (0x801D07E0), which the duel's reward caps at
+ * 999999 (func_800218F0) and the Password screen spends. That screen copies
+ * the balance for display when it opens and at each payment step, so a
+ * change made while it is open shows from the next of those. */
+void Cheats_SetStarchips(unsigned value)
+{
+    if (value > CHEATS_STARCHIPS_MAX) value = CHEATS_STARCHIPS_MAX;
+    gLibrary_dwStarchips = value;
+    fprintf(stderr, "memories-pc: StarChips now %u\n", value);
 }
 
 int Cheats_StartingLifePoints(void)

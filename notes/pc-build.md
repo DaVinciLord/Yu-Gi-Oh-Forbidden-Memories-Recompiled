@@ -421,6 +421,12 @@ console's value, until the player picks it; nothing changes on screen before.
   changing story progress or win/loss records. If Free Duel is already open,
   leave and reopen it to refresh the portraits and selection grid. Save
   normally to keep the unlocks.
+- **Set StarChips to 999999** sets the balance (`gLibrary_dwStarchips`,
+  `SaveDataState.starchips`), capped at 999999 as the duel's reward caps it.
+  It is save data, so it is an action, not a setting: nothing is stored or
+  reapplied at start; save normally to keep it. The Password screen copies the
+  balance for display when it opens and at each payment step, so a change
+  made while that screen is open shows from the next of those.
 - **Starting LP 1000 / 4000 / 8000 (console) / 9999** (`cheat_life_points`,
   `MEMORIES_CHEAT_LIFE_POINTS`, 1-9999, default 8000) is what both sides start
   a duel against the CPU with, from the next duel on. `Duel_InitSideStates`

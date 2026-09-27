@@ -9,6 +9,8 @@ void Cheats_GiveAllCards(int count);
 /* Unlock every CPU opponent in the live save. Reopen Free Duel to refresh
  * its portraits and selection grid; save normally to keep the unlocks. */
 void Cheats_UnlockAllFreeDuelists(void);
+/* Set the StarChips balance, capped at the game's own 999999. */
+void Cheats_SetStarchips(unsigned value);
 /* The life points both sides start a duel against the CPU with
  * (SET_CHEAT_LIFE_POINTS, 1-9999, 8000 the console's), read by
  * Duel_InitSideStates. Two-player duels keep the values their own setup
