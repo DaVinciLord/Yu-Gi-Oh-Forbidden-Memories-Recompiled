@@ -75,8 +75,12 @@ int Tables_FixedDeck(int duelist, unsigned short cards[TABLES_DECK_SIZE]);
  * Tables_ChestLimit copies (CARD_CHEST_QUANTITY_MAX, 250, without one), and a
  * card it has no room for adds the mod's starchips to the save's
  * `starchips`, up to 999999. Tables_ChestOverflow returns the starchips
- * added, 0 when the card fits or no mod says. */
+ * added, 0 when the card fits or no mod says. Tables_ChestFull is 1 when a
+ * mod's "chest_overflow" is read and `quantity` is at its limit: the chest
+ * then keeps what it holds, and the password shop sells no copy. Without
+ * one it is always 0, and the chest is the disc's. */
 int Tables_ChestLimit(void);
+int Tables_ChestFull(unsigned quantity);
 int Tables_ChestOverflow(unsigned quantity, unsigned *starchips);
 
 /* A mod's "terrain_bonus" for a monster of `type` (0-19) on `terrain`

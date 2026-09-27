@@ -104,7 +104,8 @@ with neither for this monster says nothing, and an earlier entry decides,
 else `equip_bonus_default` (below) if a mod sets it, else the disc. The latest entry that says something wins, as for what an
 equip may equip, and a copy of an equip a mod added has its base's bonus.
 Values are whole points from -9999 to 9999; a negative bonus lowers the
-monster.
+monster. A bonus past Megamorph's +1000 climbs on screen in about the time
++1000 takes, instead of 31 points a frame.
 
 `"equip_bonus_default": 700`, beside `equips` at the top of the manifest,
 sets what every equip no entry gives a bonus for adds, in place of the
@@ -206,7 +207,8 @@ is: a copy a mod added is not traded for its base, nor a retail card for one
 of its copies.
 
 A fixed deck that does not come to 40 cards, or names a card the game does
-not have, is reported and left out. The latest fixed deck of an opponent
+not have, is reported and left out, and so is a deck whose `"fixed"` is not
+`true` or `false` (`"fixed": "true"`, in quotes). The latest fixed deck of an opponent
 wins, and a fixed deck wins over weighted edits of the same deck from any
 mod, which are reported as left out the first time the deck is dealt.
 `"all"` fixes every opponent's deck. `MEMORIES_TRACE=mods` logs each fixed
@@ -259,7 +261,8 @@ duel looks at the attacked side's set attack traps from Widespread Ruin
 down and stops at the first whose threshold is under the attack; the last
 trap it passed springs, which, with the thresholds in order, is the weakest
 trap that stops the attacker. Keep the six in that order (each at least the
-one before it): the Mods window warns when they are not, since a trap behind
+one before it): the Mods window warns when they are not, naming the two
+thresholds and the mod that set each (or the disc), since a trap behind
 a lower threshold would never spring. Values are whole points, 0 to 65535;
 a trap no mod names keeps the disc's threshold. A copy of a trap springs as
 its base. Which cards are attack traps, and what they do, is the disc's.
@@ -283,9 +286,12 @@ The Wicked Gods keeps the 250 and pays 1 starchip (`{"starchips": 1}`); the
 Remaster keeps 3 and pays 3. The balance stops at 999999, as the game's own
 prize does. It holds wherever the game gives the player a card
 (`Duel_AwardCard`): a duel's drop, the extra drops of Game > Card drops, and
-a card bought in the password shop. A chest that already held more than
-`limit` of a card (a save from before the mod) keeps them; only new copies
-are turned away. The latest mod that sets it wins.
+a card bought in the password shop. The shop sells no copy the chest has no
+room for: EXCHANGE is red and only QUIT can be chosen, as when the starchips
+fall short, and neither the price nor the password is spent. A chest that
+already held more than `limit` of a card (a save from before the mod) keeps
+them; only new copies are turned away. The latest mod that sets it wins.
+Without the key the chest is the disc's in every case.
 
 ## Passwords and prices on the Password screen
 
@@ -356,7 +362,8 @@ each table ask it first:
 | `Duel_SelectCardDrop` (`duel_result_runtime.c`) | drop pools, `0x8017878C` | `Tables_Pool(TABLES_POOL_POW + pool)` |
 | `Duel_GetTerrainBoost` (`duel_card_record_lifecycle.c`) | terrain table, `0x800909D4` | `Tables_TerrainBonus` |
 | `Duel_SelectAttackTrap` (`duel_trap_resolution.c`) | trap thresholds, `0x8009AF24` (bytes, x100) | `Tables_TrapThreshold` |
-| `Duel_AwardCard` (`duel_result_runtime.c`) | chest, `0x801D0250`; starchips, `0x801D07E0` | `Tables_ChestOverflow` before the card is counted, `Tables_ChestLimit` after |
+| `Duel_AwardCard` (`duel_result_runtime.c`) | chest, `0x801D0250`; starchips, `0x801D07E0` | `Tables_ChestOverflow` before the card is counted, `Tables_ChestFull` after |
+| `Password_UpdateShopScreen` (`overlays/password/shop.c`) | chest, `0x801D0250` | `Duel_ChestFull` (`Tables_ChestFull`) before EXCHANGE is offered |
 | `Main_RunPasswordMenu` (`main_run_password_menu.c`) | price and password table, `0x801A8000` | `Tables_PasswordShop` for each card once the table is loaded, written into it |
 
 A pool is worked out from the opponent's loaded pool and every edit of it

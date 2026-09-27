@@ -551,11 +551,18 @@ void Duel_AwardCard(s32 card_id)
 
         Tables_ChestOverflow(before, &((SaveDataState *)gDuel_awPlayerDeck)->starchips);
         Duel_AwardCardRetail(event.a);
-        if (before >= Tables_ChestLimit()) {
+        if (Tables_ChestFull(before)) {
             *quantity = before;
         }
     }
     event.phase = MEMORIES_AFTER; Mods_Dispatch(&event);
 
+}
+
+/* The password shop asks before it sells a copy (shop.c): a mod's chest at
+   its limit has no room for it. */
+s32 Duel_ChestFull(s32 card_id)
+{
+    return Cards_Valid(card_id) && Tables_ChestFull(*Cards_ChestSlot(gDuel_awPlayerDeck, card_id));
 }
 #endif

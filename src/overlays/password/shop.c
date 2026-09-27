@@ -401,7 +401,15 @@ void Password_UpdateShopScreen(void)
                 Password_CreateMessageBox(229, 128);
                 return;
             }
-            if (gLibrary_dwStarchips < D_801A8000[D_8016D4DC].price) {
+            if (gLibrary_dwStarchips < D_801A8000[D_8016D4DC].price
+#ifdef MEMORIES_PC
+                /* A mod's chest with no room for another copy: EXCHANGE
+                   is red and only QUIT answers, as when the starchips
+                   fall short, so neither the price nor the password
+                   goes on a copy the chest would not keep. */
+                || Duel_ChestFull(D_8016D4DC)
+#endif
+            ) {
                 Password_CreateMessageBox(228, 0);
             } else {
                 Password_CreateMessageBox(227, 0);
