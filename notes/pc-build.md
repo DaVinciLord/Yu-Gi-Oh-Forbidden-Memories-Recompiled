@@ -1235,6 +1235,70 @@ picture pass ("needs OpenGL 3 or 1x").
 
 Not covered yet: the sword and shield icons (pictures, not lettering).
 
+### Card passwords (View)
+
+View > Card passwords (`card_passwords`, `MEMORIES_CARD_PASSWORDS=1`, off by
+default) shows the card's eight-digit password in the card view: the viewer
+the duel, Build Deck (deck and trunk) and Trade share, and the Library's
+card page. The digits go on the second Guardian Star's row, flush right; a
+magic, trap, ritual or equip card has the same row at the bottom of its
+empty middle panel. Leading zeros stay (Right Leg of the Forbidden One is
+08124921). The 24 cards the Password screen cannot give (`N/A` in
+`notes/card-catalog.csv`) show nothing; the ones that cost 999999
+starchips show theirs.
+
+- **The table** is the Password screen's (`src/overlays/password/shop.h`):
+  `Password_LoadPackageStage` reads the package from sector
+  `FILE_WA_PASSWORD_START_SECTOR` of `WA_MRG.MRG`, 64 + 4 sectors of
+  pictures and then 3 to `0x801A8000`, one record per card id from 0: the
+  price and the password, eight BCD digits, as little-endian words (Blue-eyes
+  is `3F 42 0F 00 39 11 63 89`: 999999 and 89631139; no password is
+  `0xFFFFFFFE`). `Cards_Password(id)` (`src/pc/cards/passwords.c`) reads
+  those 3 sectors from the disc once, the first time it is asked, checks
+  every value is BCD or `0xFFFFFFFE`, and logs card 1's and how many have
+  none (89631139 and 24 on the retail disc). A mod card can have one with
+  `"password"` ([More cards](more-cards.md)).
+- **The drawing** is the game's text. The viewer's text box is laid out by
+  string 3 (a monster) or 4 (the rest), whose `{f8 00 40}` inserts the
+  card's text 80 pixels down in both. Once the face is up, the box is made
+  again in place, on its channel, with its position and settings, from a
+  copy of that layout (a translation's, through `Text_LookupString`) with
+  the digits before `{f8 00 40}`: up 24 to the star row, to x 96, the
+  digits, down 24. `Text_Resolve` gives that copy for string 0xFFFE
+  (`CardPassword_Text`). HD text and a mod's fonts draw it like the rest,
+  and the card's own text is where it was: dumps with the option on and off
+  differ only in the digits' rectangle.
+- **When:** the hooks are the handler tables, not the matched functions.
+  Under `MEMORIES_PC`, `gDuelEffect_apfnStateHandler`'s card viewer is
+  `CardPassword_UpdateViewer` and `gMain_apfnModeRunner`'s Library
+  `CardPassword_RunLibraryMenu`; each runs the game's function, then looks
+  at its state. The viewer shows the digits once `0x20` (face up) is set in
+  its flags and neither `0x40` (slides) nor `0x10` (closing); the Library
+  on its card page's resting step 5 (not the 3D model, step 4, nor the way
+  back, 6). Either way only once the game's box has all its text and every
+  letter has settled (`TEXT_BOX_FLAG_DONE`, no `DuelEffect_HasActiveEntry`):
+  the Library types its text in, and a box made again at once would skip
+  the last letters' appearance. The box goes back to the retail layout on the frame Circle is
+  read, so the closing's first picture is the retail one: in a
+  deterministic duel dump the flip's last frame is identical with the option
+  on and off, the next shows the digits, and the first closing frame is
+  identical again. The same holds in the Library.
+- Nothing is kept that a loaded state could contradict: which layout the
+  box has is its string id, and the retail one comes from the card's type.
+  Off, nothing is made and nothing changes.
+- The box's channel has a slice of the text entries (255, 160, 160 or 45).
+  If the card's text and the digits do not fit together, the retail box is
+  made again and that card shows no password: in the duel the viewer's box
+  is on a 160-entry channel, where Right Leg, Left Leg and Right Arm of the
+  Forbidden One (17-19, eight lines of text) do not fit; in Build Deck and
+  the Library (255) they do.
+
+Checked in a window (deterministic, 1x and 2x with HD text): Dancing Elf
+59983499 in a duel, Blue-eyes 89631139, Right Leg 08124921, Tenderness,
+Eternal Rest (a magic card) and Super War-lion (none) in the Library, and
+Blue-eyes and Mushroom Man in Build Deck's trunk and deck. Trade shares the
+viewer and was not reached.
+
 ### Precise geometry (PGXP)
 
 Precise geometry (PGXP) is currently disabled and has no Video menu option.

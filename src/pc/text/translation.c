@@ -9,6 +9,7 @@
 #include "pc/platform/settings.h"
 #include "pc/cards/tables.h"
 #include "pc/cards/drops.h"
+#include "pc/cards/passwords.h"
 #include "pc/saves/deck_menu.h"
 #include "pc/debug/log.h"
 #include "game/card_constants.h"
@@ -294,6 +295,7 @@ const unsigned char *Text_Resolve(int id, const unsigned char *retail)
     const unsigned char *card = NULL, *side = side_name(id), *drops = CardDrops_Text(id), *shop = DeckMenu_Text(id);
     if (drops) return drops; /* the results screen's added pages (drops.h) */
     if (shop) return shop;   /* the card shop's menu with DECK SLOTS (deck_menu.h) */
+    if (CardPassword_Text(id)) return CardPassword_Text(id); /* View > Card passwords (passwords.h) */
     if (side) return side;
     /* A retail card a mod's "cards" replaced: its name and text, over a
      * translation's (cards.h). */
