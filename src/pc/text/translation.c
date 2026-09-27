@@ -307,6 +307,22 @@ const unsigned char *Text_Resolve(int id, const unsigned char *retail)
     return own ? own : retail;
 }
 
+int Text_CutsMenuGlyph(int id, int x, int width, int y, int line_height, int height, int lines_left)
+{
+    static unsigned char told[0x10000 / 8];
+    if (x < width) return 0;
+    /* The line wraps (TextBox_WrapLineIfNeeded) and every line still to
+     * come but the last needs a row under it: while that fits the box,
+     * the game goes on as the console does. */
+    if (y + (lines_left + 1) * line_height <= height) return 0;
+    if (id >= 0 && id <= 0xFFFF && !(told[id >> 3] & (1 << (id & 7)))) {
+        told[id >> 3] |= (unsigned char)(1 << (id & 7));
+        LOG(LOG_MODS, "text: [%04X] has a line wider than its box (%d pixels), which stops the game; "
+                      "cut at the edge", id, width);
+    }
+    return 1;
+}
+
 unsigned char *Text_Retarget(unsigned char *cursor, unsigned target)
 {
     int i;
