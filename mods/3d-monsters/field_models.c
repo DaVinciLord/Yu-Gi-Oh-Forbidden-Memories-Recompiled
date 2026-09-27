@@ -124,6 +124,16 @@ extern u32 D_800FE240;         /* GsSetWorkBase */
 #define SCALE_SMALLEST 0x100
 #define SCALE_LARGEST 0x1800
 
+/* fit() sizes a monster by its height alone: one whose arms or wings reach
+ * far out to the sides comes out too wide for its card. These are drawn at
+ * a share of the fitted size (MODEL_FIXED_ONE is the whole). */
+static const struct {
+    int card;
+    int share;
+} WIDE_MONSTERS[] = {
+    {458, MODEL_FIXED_ONE / 2}, /* Kaminari Attack */
+};
+
 #define SECTOR 2048
 #define RECORD_SECTORS MODEL_MRG_SECTOR_COUNT
 #define CACHE 8
@@ -705,7 +715,7 @@ static void scale_body(Monster *monster)
 static void fit(Monster *monster)
 {
     ModelSlot *slot = &D_800F2C40[0];
-    int target = tunable("pixels", TALL_PIXELS), attempt, height = 0;
+    int target = tunable("pixels", TALL_PIXELS), attempt, wide, height = 0;
 
     monster->scale = MODEL_FIXED_ONE / 2;
     measure_body(monster);
@@ -735,6 +745,11 @@ static void fit(Monster *monster)
         monster->scale = (int)(MODEL_FIXED_ONE * target / sqrt(natural * MIDDLING_PIXELS));
         monster->scale = monster->scale < SCALE_SMALLEST ? SCALE_SMALLEST
                        : monster->scale > SCALE_LARGEST ? SCALE_LARGEST : monster->scale;
+    }
+    for (wide = 0; wide < (int)(sizeof(WIDE_MONSTERS) / sizeof(WIDE_MONSTERS[0])); wide++) {
+        if (WIDE_MONSTERS[wide].card == monster->card) {
+            monster->scale = monster->scale * WIDE_MONSTERS[wide].share / MODEL_FIXED_ONE;
+        }
     }
     monster->scale = monster->scale * tunable("scale", MODEL_FIXED_ONE) / MODEL_FIXED_ONE;
     scale_body(monster);
