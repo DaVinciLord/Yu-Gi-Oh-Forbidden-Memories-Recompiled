@@ -1,12 +1,12 @@
 /* View > Free Duel progress: "owned/obtainable" right of the FREE DUEL title
  * for the opponent under the grid cursor, drawn by the host over the picture
- * as the fusion helper is (FreeType, window pixels, any internal
- * resolution). The numbers come from free_duel_progress.c. */
+ * as the fusion helper is, in the game's own font (font_art.c). The numbers
+ * come from free_duel_progress.c. */
 #include "free_duel_progress.h"
 #include "fusion_helper.h"
 #include "pc/platform/settings.h"
 #include "pc/platform/platform.h"
-#include "pc/text/overlay_text.h"
+#include "font_art.h"
 #include "game/card_constants.h"
 #include "game/main_modes.h"
 #include "game/fade.h"
@@ -58,39 +58,27 @@ unsigned FreeDuelProgress_Signature(void)
             (unsigned)x * 17u + (unsigned)y) * 31u + (unsigned)w * 7u + (unsigned)h + 1u;
 }
 
-/* Game picture coordinates (320x240; 2D stays centred when widened) to
- * window pixels, as the fusion helper maps them. */
-static int screen_x(int x)
-{ return view.x + view.w / 2 + (x - 160) * view.w / (Platform_Widescreen() ? 426 : 320); }
-static int screen_y(int y) { return view.y + y * view.h / 240; }
-
 /* The title banner's middle row and the right edge of the text, in picture
  * pixels: over the eye right of the banner, clear of the grid's frame. */
-enum { TITLE_MIDDLE = 23, TEXT_RIGHT = 304, TEXT_HEIGHT = 11 };
+enum { TITLE_MIDDLE = 23, TEXT_RIGHT = 304 };
 
-/* A see-through plate with "12/157" on it, gold once every card is owned. */
+/* "12/157" in the game's own text font and colours (font_art.h), white, or
+ * yellow once every card is owned, laid on the picture in its pixels, so it
+ * grows with the window and keeps its place in widescreen. */
 void FreeDuelProgress_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
 {
     char text[24];
-    int font, pad, width, height, left, top, row, col;
+    FontArtView picture;
     *x = *y = *w = *h = 0;
     update();
     FusionHelper_GetViewport(&view.x, &view.y, &view.w, &view.h);
     if (!view.visible || view.w <= 0 || view.h <= 0) return;
     snprintf(text, sizeof(text), "%d/%d", view.owned, view.obtainable);
-    font = screen_y(TEXT_HEIGHT) - screen_y(0);
-    if (font < 8) font = 8;
-    pad = font / 3 > 1 ? font / 3 : 1;
-    height = font + 2 * pad;
-    width = pad * 2 + OverlayText_Width(text, font);
-    left = screen_x(TEXT_RIGHT) - width;
-    top = screen_y(TITLE_MIDDLE) - height / 2;
-    if (left < 0) left = 0;
-    if (width > canvas->width - left) width = canvas->width - left;
-    if (width <= 0 || height <= 0 || top < 0 || top + height > canvas->height) return;
-    for (row = top; row < top + height; row++)
-        for (col = left; col < left + width; col++) OverlayText_Blend(canvas, col, row, 0x0b0f18u, 150);
-    OverlayText_Draw(canvas, left + pad, top + height / 2, left + width, text, font,
-                     view.obtainable && view.owned == view.obtainable ? 0xf2c85au : 0xe4ecdcu);
-    *x = left; *y = top; *w = width; *h = height;
+    picture.x = view.x;
+    picture.y = view.y;
+    picture.w = view.w;
+    picture.h = view.h;
+    picture.width_2d = Platform_Widescreen() ? 426 : 320;
+    FontArt_Draw(canvas, &picture, TEXT_RIGHT, TITLE_MIDDLE, text,
+                 view.obtainable && view.owned == view.obtainable ? FONT_ART_YELLOW : FONT_ART_WHITE, x, y, w, h);
 }

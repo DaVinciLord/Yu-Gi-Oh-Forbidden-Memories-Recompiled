@@ -1239,12 +1239,35 @@ Not covered yet: the sword and shield icons (pictures, not lettering).
 
 View > Free Duel progress (`free_duel_progress`, `MEMORIES_FREE_DUEL_PROGRESS=1`,
 off by default) shows `owned/obtainable` right of the FREE DUEL title for
-the opponent under the grid cursor: `12/157` for Duel Master K, gold once
-every card is owned. The host draws it over the picture as it draws the
-fusion helper (`src/pc/cards/free_duel_progress_view.c`, from `Hud_Draw`),
-so it keeps its place in widescreen and at any internal resolution. With
-the option off nothing is drawn; a window capture of the grid with the
-cursor on an opponent is identical to master's.
+the opponent under the grid cursor: `12/157` for Duel Master K, in the
+game's own 8x12 text font, white, and yellow (the game's own yellow text
+ramp) once every card is owned. The host draws it over the picture as it
+draws the fusion helper (`src/pc/cards/free_duel_progress_view.c`, from
+`Hud_Draw`), laid on the game picture in its own pixels, so it keeps its
+place in widescreen and at any internal resolution and is as sharp as the
+game's text. With the option off nothing is drawn and the disc is not read;
+a window capture of the grid with the cursor on an opponent is identical to
+master's.
+
+- **The font** comes off the player's disc the first time the count is
+  drawn (`src/pc/cards/font_art.c`), never from the console's VRAM, and
+  nothing of the game is kept in the repository. It is the boot package,
+  WA sector `0x1690` (`Main_RunBootSequence`, `Main_LoadBootPackageStage`):
+  not a TIM but raw VRAM words, one sector a 64 x 16 block placed down a
+  column from 0x280, 0 (`File_StepActiveTransfer`), so the font's page is
+  its first 16 sectors; the text colour ramps are the first 0x100 bytes of
+  its sector 50, a 16 x 8 `LoadImage` at 0x280, 0xE8, one row a colour in
+  the order of `gText_abColorSlots`' values (0 white, 1 yellow, 2 blue, 3
+  green, 4 grey, 5 orange, 6 red). The glyphs are 4-bit 8 x 12 cells where
+  `func_80035E20` finds them (`retail_cell` in `glyphs.c`): '0' at 120, 0,
+  '1'-'9' from 0, 12, '/' at 112, 0. `src/pc/cards/disc_art.c` unpacks the
+  package into a private VRAM the way the loader does, cuts the glyphs and
+  draws them (each window pixel takes the texel under it). If the disc
+  cannot give them nothing is drawn and the log says so once.
+- **The shared module** `disc_art.c`/`disc_art.h` is added, byte for byte
+  the same, by View > Duel rank too (for the result screen's pictures), so
+  each change stands alone and whichever lands second merges it unchanged.
+  A change to one copy belongs in the other.
 
 - **Obtainable** is every card with a weight in any of the opponent's three
   drop pools (S/A-POW, B/C/D, S/A-TEC). The disc's rows are read once, as
@@ -1273,8 +1296,11 @@ cursor on an opponent is identical to master's.
 made-up WA_MRG with the real `tables.c`: the union of the three pools, a
 zero weight and the deck pool left out, deck and trunk counted once per
 card, a mod's added and removed cards (a mod card among them), an edit of
-`all`, and a disc without the file. Not done: a frame on the portraits of
-opponents whose cards are all owned.
+`all`, and a disc without the file. `pc_font_art` (`tests/pc/font_art_test.c`)
+reads the real `game/DATA/WA_MRG.MRG` (skipped without it), checks the
+glyphs against the hand decode above in all seven colours and draws counts
+through `FontArt_Draw`; `MEMORIES_FONT_ART_SHEET=<file.ppm>` saves them.
+Not done: a frame on the portraits of opponents whose cards are all owned.
 
 ### Precise geometry (PGXP)
 
