@@ -57,12 +57,17 @@ class ReadTest(unittest.TestCase):
 
     def test_glitch_pair(self):
         # One pair under card 5: a three-byte group; the game compares a second
-        # pair made of the next record's first two bytes.
-        pairs = {(5, 6): 7, (8, 9): 10, (8, 11): 12}
+        # pair made of the next record's first two bytes: card 8's count (7,
+        # the partner) and its first group's control byte (the result):
+        # partners 300 and 301 (high bits 1, 1), results 700 (2, 2): 1 | 2 << 2
+        # | 1 << 4 | 2 << 6 = 153.
+        pairs = {(5, 6): 7}
+        pairs.update({(8, 300 + i): 700 for i in range(7)})
         decoded, glitch = g.decode_fusions(g.encode_fusions(pairs))
         for pair, result in pairs.items():
             self.assertEqual(decoded[pair], result)
-        self.assertTrue(all(p[0] == 5 for p in glitch))
+        self.assertEqual(glitch, {(5, 7)})
+        self.assertEqual(decoded[(5, 7)], 153)
 
     def test_disc_images(self):
         f = fixture()
@@ -243,6 +248,93 @@ class ManifestTest(unittest.TestCase):
         self.assertTrue(any("cannot place" in m for m in messages))
         built = manifest.build(p)
         self.assertIn({"with": ["other:x:1", 1], "result": 2}, built["fusions"])
+
+    def reopen(self, p: Project) -> Project:
+        again = Project(self.retail)
+        manifest.apply(again, json.loads(manifest.dumps(manifest.build(p))))
+        return again
+
+    def game_equips(self, p: Project) -> dict:
+        """What the port makes of the written equips."""
+        built = manifest.build(p)
+        return manifest.simulate_equips(p, manifest.equip_rules(p, built.get("equips", []), []))
+
+    def test_copies_in_equips(self):
+        p = Project(self.retail)
+        p.info.id = "t"
+        monster = p.add_card(5, "c5")        # 652 fits 5, so its copy too
+        equip = p.add_card(652, "e2")        # a copy of 652 fits what 652 does
+        self.assertIn(monster, p.equips[652])
+        self.assertEqual(p.equips[equip], p.equips[652])
+        # swap 5 for its copy on 652: the rule for 5 must not take the copy out
+        p.equips[652].discard(5)
+        # the copied equip: only 6 and the copy of 5, not 5 itself
+        p.equips[equip] = {6, monster}
+        # 651 fits 1-30: take the copy of 5 out of it only
+        p.equips[651].discard(monster)
+        want = {e: p.equips.get(e, p.equip_baseline(e)) for e in p.equip_cards()}
+        self.assertEqual(self.game_equips(p), want)
+        again = self.reopen(p)
+        for e in p.equip_cards():
+            self.assertEqual(again.equips.get(e, again.equip_baseline(e)), want[e], e)
+
+    def test_forbidden_copy_fusion(self):
+        p = Project(self.retail)
+        p.info.id = "t"
+        copy = p.add_card(1, "c1")
+        p.set_fusion(copy, 2, None)        # 1 + 2 makes 3; the copy of 1 must not
+        self.assertEqual(p.fusions[(2, copy)], 0)
+        built = manifest.build(p)
+        self.assertIn({"with": [p.ref(2), "t:c1:1"], "result": None}, built["fusions"])
+        again = self.reopen(p)
+        self.assertEqual(again.fusions.get((2, copy)), 0)
+        again.revert_fusion((2, copy))
+        self.assertNotIn((2, copy), again.fusions)
+
+    def test_unnamed_copy_keeps_the_disc_name(self):
+        p = Project(self.retail)
+        data = {"id": "t", "cards": [{"replace": 3, "name": "New Three"}, {"copy": 3, "id": "c3"}]}
+        manifest.apply(p, data)
+        copy = max(p.added)
+        self.assertEqual(p.cards[3].name, "New Three")
+        self.assertEqual(p.cards[copy].name, self.retail.cards[3].name)
+        self.assertEqual(manifest.build(p)["cards"][1]["name"], self.retail.cards[3].name)
+
+    def test_json_like_the_port(self):
+        p = Project(self.retail)
+        data = {"id": "t", "cards": [{"copy": 3, "id": "a", "drops": None, "opponents": 1, "attack": 2000.0},
+                                     {"replace": 4, "password": "12345678", "defense": True}],
+                "equips": [{"card": 653, "replace": 1, "add": [1], "bonus": 300, "bonus_if": {"Dragon": 900}}],
+                "decks": {"Simon Muran": {"fixed": True, "Card 1": 40}},
+                "drops": {"all": {"pow": {"Nobody At All": 5, "Card 1": 10}}}}
+        messages = manifest.apply(p, data)
+        copy = max(p.added)
+        self.assertTrue(p.added[copy].drops)
+        self.assertTrue(p.added[copy].opponents)
+        self.assertEqual(p.cards[copy].attack, 2000)
+        self.assertEqual(p.cards[4].defense, 0)            # true is 1, stored in tens
+        self.assertEqual(p.equips[653], {1})
+        built = manifest.build(p)
+        self.assertEqual(built["cards"][0]["password"], "12345678")
+        self.assertIn({"card": 653, "bonus": 300, "bonus_if": {"Dragon": 900}}, built["equips"])
+        self.assertEqual(built["decks"]["Simon Muran"], {"fixed": True, "Card 1": 40})
+        self.assertEqual(list(built["drops"])[0], "all")
+        self.assertEqual(built["drops"]["all"]["pow"]["Nobody At All"], 5)
+        self.assertFalse(any("Nobody At All" in str(v) for k, v in built["drops"].items() if k != "all"))
+        self.assertTrue(any("fixed deck" in m for m in messages))
+
+    def test_settings_the_port_refuses(self):
+        p = Project(self.retail)
+        p.info.settings = [{"key": "a", "min": 5, "max": 1}, {"key": "b", "step": 0},
+                           {"key": "c", "type": "bool", "default": 2}, {"key": "d", "type": "choice",
+                                                                         "choices": ["x"], "default": 1}]
+        text = "\n".join(i.message for i in validate.validate(p) if i.level == "error")
+        self.assertIn("a (min is more than max)", text)
+        self.assertIn("b (step is at least 1)", text)
+        self.assertIn("c (default 2 is outside 0 to 1)", text)
+        self.assertIn("d (default 1 is outside 0 to 0)", text)
+        messages = manifest.apply(Project(self.retail), {"id": "t", "settings": {}})
+        self.assertTrue(any("settings" in m for m in messages))
 
 
 class ValidateTest(unittest.TestCase):

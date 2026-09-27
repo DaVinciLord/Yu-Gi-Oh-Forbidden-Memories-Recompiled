@@ -1,9 +1,13 @@
 """The window, driven as a user would, on synthetic game files. Skipped
-where there is no display (Tk cannot start)."""
+where there is no Tk or no display (Tk cannot start)."""
 import json
 import tempfile
-import tkinter as tk
 import unittest
+
+try:
+    import tkinter as tk
+except ImportError:     # a Python built without Tk
+    tk = None
 from pathlib import Path
 
 from fm_editor.tests.test_data import fixture
@@ -12,6 +16,8 @@ from fm_editor.tests.test_data import fixture
 class GuiTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        if tk is None:
+            raise unittest.SkipTest("this Python has no Tk")
         try:
             probe = tk.Tk()
             probe.destroy()

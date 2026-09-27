@@ -102,6 +102,10 @@ class CardPicker(tk.Toplevel):
 def pick_card(master, project, title="Choose a card", only=None, initial=""):
     dialog = CardPicker(master, project, title, only, initial)
     master.wait_window(dialog)
+    # The picker took the grab: a dialog it was opened from gets it back.
+    top = master.winfo_toplevel()
+    if isinstance(top, tk.Toplevel) and top.winfo_exists():
+        top.grab_set()
     return dialog.result
 
 
@@ -133,8 +137,12 @@ class CardField(ttk.Frame):
         text = self.var.get().strip()
         if not text:
             return 0
+        # A number, or a card as set() shows it ("7 Name"); otherwise a name,
+        # which may start with a digit ("7 Colored Fish").
+        if text.isdigit() and int(text) in project.cards:
+            return int(text)
         head = text.split(" ", 1)[0]
-        if head.isdigit() and int(head) in project.cards:
+        if head.isdigit() and int(head) in project.cards and project.card_label(int(head)) == text:
             return int(head)
         cid = project.resolve(text)
         if cid:

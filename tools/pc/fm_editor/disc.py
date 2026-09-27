@@ -155,11 +155,31 @@ def load_pair(slus_path, wa_path) -> GameFiles:
     return GameFiles(Path(slus_path).read_bytes(), Path(wa_path).read_bytes(), f"{slus_path} + {wa_path}")
 
 
+def _windows_documents():
+    """Documents as the shell has it (it may be moved, to OneDrive say):
+    SHGetFolderPathW(CSIDL_PERSONAL), as paths.c asks."""
+    try:
+        import ctypes
+        buffer = ctypes.create_unicode_buffer(260)
+        if ctypes.windll.shell32.SHGetFolderPathW(None, 5, None, 0, buffer) == 0 and buffer.value:
+            return Path(buffer.value)
+    except (AttributeError, OSError):
+        pass
+    return Path(os.environ.get("USERPROFILE") or ".") / "Documents"
+
+
 def user_dir() -> Path:
-    """The port's user directory (src/pc/platform/paths.c)."""
+    """The port's user directory (src/pc/platform/paths.c): MEMORIES_USER_DIR,
+    else Documents/My Games on Windows, else an absolute XDG_DATA_HOME or
+    ~/.local/share. (A portable build's user/ is beside the game, which
+    candidates() looks in anyway.)"""
+    named = os.environ.get("MEMORIES_USER_DIR")
+    if named:
+        return Path(named)
     if sys.platform == "win32":
-        return Path(os.path.expanduser("~")) / "Documents" / "My Games" / "YFM Re-Decomp"
-    base = os.environ.get("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share")
+        return _windows_documents() / "My Games" / "YFM Re-Decomp"
+    xdg = os.environ.get("XDG_DATA_HOME", "")
+    base = xdg if xdg.startswith("/") else os.path.join(os.path.expanduser("~"), ".local", "share")
     return Path(base) / "YFM Re-Decomp"
 
 

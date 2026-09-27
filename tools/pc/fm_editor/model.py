@@ -105,7 +105,8 @@ class Project:
         self.info = ModInfo()
         self.other = {}                 # top-level keys the editor keeps as written (data, text, audio...)
         self.kept = {"fusions": [], "equips": [], "rituals": []}   # rules naming cards it cannot place
-        self.kept_pools = {}            # (duelist, pool) -> {name: weight} it cannot place
+        self.kept_pools = {}            # (duelist or "all", pool) -> {name: weight} it cannot place
+        self.kept_fixed = {}            # opponent's name -> a fixed deck ("fixed": true), kept as written
         self.source_dir = None
 
     # --- cards -------------------------------------------------------------
@@ -163,6 +164,12 @@ class Project:
         source = self.cards[base]
         self.cards[cid] = source.copy(id=cid)
         self.added[cid] = AddedCard(key=key, base=base)
+        # A copy equips and is equipped as its base (tables.c Tables_Equip).
+        if base in self.equips:
+            self.equips[cid] = set(self.equips[base])
+        for monsters in self.equips.values():
+            if base in monsters:
+                monsters.add(cid)
         return cid
 
     def remove_card(self, cid: int):
@@ -197,21 +204,47 @@ class Project:
         return (a, b) if a <= b else (b, a)
 
     def set_fusion(self, a: int, b: int, result):
+        """A result, or none. A pair with an added card fuses as its bases
+        when no rule names it, so taking its fusion away keeps a rule that
+        forbids it (0), as {"result": null} does in the game."""
+        pair = self.pair(a, b)
         if result:
-            self.fusions[self.pair(a, b)] = result
+            self.fusions[pair] = result
+        elif a in self.added or b in self.added:
+            self.fusions[pair] = 0
         else:
-            self.fusions.pop(self.pair(a, b), None)
+            self.fusions.pop(pair, None)
+
+    def revert_fusion(self, pair):
+        """Back to the disc's: an added card's pair to no rule at all."""
+        retail = self.retail.fusions.get(pair)
+        if retail:
+            self.fusions[pair] = retail
+        else:
+            self.fusions.pop(pair, None)
 
     def fusion_status(self, pair) -> str:
         retail = self.retail.fusions.get(pair)
         now = self.fusions.get(pair)
         if retail == now:
             return "glitch" if pair in self.retail.glitch_fusions else ""
+        if not now:
+            return "removed"
         if retail is None:
             return "added"
-        if now is None:
-            return "removed"
         return "changed"
+
+    def monsters(self):
+        return [cid for cid, card in self.cards.items() if card.is_monster()]
+
+    def equip_retail(self, equip: int, monster: int) -> bool:
+        """What the disc's table says, by the base ids (duel_card_checks.c)."""
+        return self.base_of(monster) in self.retail.equips.get(self.base_of(equip), ())
+
+    def equip_baseline(self, equip: int) -> set:
+        """What the equip fits with no mod: the disc's list, copies as their
+        bases."""
+        return {m for m in self.cards if self.equip_retail(equip, m)}
 
     def equip_cards(self):
         return sorted(cid for cid, card in self.cards.items() if card.type == 23)

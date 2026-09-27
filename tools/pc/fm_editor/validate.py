@@ -17,7 +17,8 @@ MOD_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,63}$")
 SETTING_TYPES = ("int", "bool", "choice", "key")
 MANIFEST_KEYS = ("id", "name", "version", "author", "description", "library", "enabled", "restart",
                  "legacy_setting", "data", "textures", "cards", "audio", "min_api", "game", "requires", "after",
-                 "conflicts", "priority", "settings", "fusions", "equips", "rituals", "drops", "decks", "text", "font")
+                 "conflicts", "priority", "settings", "fusions", "equips", "rituals", "drops", "decks", "text", "font",
+                 "chest_overflow", "terrain_bonus", "trap_thresholds", "equip_bonus_default")
 HOST_API = 4
 
 
@@ -86,6 +87,26 @@ def _check_info(project: Project, out: list):
             choices = setting.get("choices")
             if not isinstance(choices, list) or not choices or not all(isinstance(c, str) for c in choices):
                 out.append(Issue("error", "Mod info", where, f"Invalid setting schema: {key} (a choice needs \"choices\")"))
+        # manager.c Mods_CheckManifest and Mods_OptionValid: either refuses the whole mod.
+        whole = lambda name, fallback: setting[name] if isinstance(setting.get(name), int) and \
+            not isinstance(setting.get(name), bool) else fallback
+        low, high, step, default = whole("min", 0), whole("max", 100), whole("step", 1), whole("default", 0)
+        if low > high:
+            out.append(Issue("error", "Mod info", where, f"Invalid setting schema: {key} (min is more than max)"))
+        if step < 1:
+            out.append(Issue("error", "Mod info", where, f"Invalid setting schema: {key} (step is at least 1)"))
+        if kind == "bool":
+            low, high = 0, 1
+        elif kind == "choice":
+            choices = setting.get("choices")
+            low, high = 0, (len(choices) if isinstance(choices, list) else 0) - 1
+        elif kind == "key":
+            low, high = 0, 0xFFFF
+        if not low <= default <= high:
+            out.append(Issue("error", "Mod info", where,
+                             f"Invalid setting schema: {key} (default {default} is outside {low} to {high})"))
+        if len(f"mod.{info.id}.{key}") >= 256:
+            out.append(Issue("error", "Mod info", where, f"Invalid setting schema: {key} (the key is too long)"))
     for key in project.other:
         if key not in MANIFEST_KEYS:
             out.append(Issue("warning", "Mod info", key, f"unknown key '{key}'"))
@@ -154,18 +175,18 @@ def _check_tables(project: Project, out: list):
         if project.retail.fusions.get(pair) == result:
             continue
         where = f"{project.card_label(pair[0])} + {project.card_label(pair[1])}"
-        if not (valid(pair[0]) and valid(pair[1]) and valid(result)):
+        if not (valid(pair[0]) and valid(pair[1]) and (result == 0 or valid(result))):
             out.append(Issue("error", "Fusions", where, "names a card that does not exist", pair))
-        elif not project.cards[result].is_monster():
+        elif result and not project.cards[result].is_monster():
             out.append(Issue("warning", "Fusions", where, "the result is not a monster", pair))
-    retail_equips = {e: set(m) for e, m in project.retail.equips.items()}
     for equip, monsters in project.equips.items():
-        if retail_equips.get(equip, set()) == monsters:
+        baseline = project.equip_baseline(equip) if equip in project.cards else set()
+        if baseline == monsters:
             continue
         where = project.card_label(equip)
         if not valid(equip) or project.cards[equip].type != TYPE_EQUIP:
             out.append(Issue("error", "Equips", where, "\"card\" is not an equip card", equip))
-        for m in sorted(monsters - retail_equips.get(equip, set())):
+        for m in sorted(monsters - baseline):
             if not valid(m):
                 out.append(Issue("error", "Equips", where, f"no card {m}", equip))
             elif not project.cards[m].is_monster():

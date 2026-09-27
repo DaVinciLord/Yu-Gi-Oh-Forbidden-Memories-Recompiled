@@ -2,7 +2,9 @@
 
 A standalone editor for mods of the PC port: cards, fusions, equips, rituals
 and the opponents' deck and drop pools. It is a program of its own, not part
-of the game, and needs nothing but Python 3 (Tkinter comes with it).
+of the game, and needs nothing but Python 3 and Tkinter (part of Python on
+Windows and macOS; on Linux maybe a package of its own: `python3-tk`, or `tk`
+on Arch).
 
 **The mod is the diff.** The editor reads the retail tables from your own
 game files, lets you change them, and on save writes a mod folder whose
@@ -59,16 +61,22 @@ record are shown as retail fusions and marked.
 
 * `cards`: a `replace` entry per changed retail card with only the changed
   keys, and a `copy` entry per added card with a stable `id`. Keys the editor
-  does not show (`art`, `title`, `model`, `count`...) are kept as written.
+  does not show (`art`, `title`, `model`, `count`, `password`...) are kept
+  as written. A copy with no `name` shows its base's name from the disc.
 * `fusions`: one rule per pair whose result changed (`"result": null` for a
-  fusion taken away).
+  fusion taken away). An added card fuses as its base until a rule names it,
+  so taking away its pair's fusion writes a `null` rule for it.
 * `equips`: per equip card, `add` and `remove` (a whole monster type as its
-  name), or `replace` when that is shorter.
+  name), or `replace` when that is shorter. An added card is equipped (and
+  equips) as its base, so what differs for it is written in later entries,
+  which the game's reading of the rules confirms before saving. `bonus` and
+  `bonus_if` are kept as written.
 * `rituals`: a changed recipe, or `"result": null`.
 * `drops` and `decks`: per opponent and pool, the fewest listed weights that
   make the port's arithmetic (`tables.c`, mirrored in `pools.py`) come out
   at exactly the edited pool; an edit every opponent shares is written once
-  as `"all"`.
+  as `"all"`. A fixed deck (`"fixed": true`) is kept as written; the
+  Duelists tab shows the weighted deck under it.
 * Every other key of an opened mod (`data`, `text`, `textures`, `audio`,
   `requires`...) is kept as written, and the folder's other files are
   copied when the mod is saved somewhere new.

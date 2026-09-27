@@ -101,10 +101,14 @@ def build_fusions(project: Project) -> list:
 
 
 def build_equips(project: Project) -> list:
+    """The disc's equips first, by retail cards (with types where that is
+    shorter); then what the added cards need, checked against the game's
+    own reading of those rules (equip_rules/simulate_equips)."""
     entries = []
     retail = {e: set(m) for e, m in project.retail.equips.items()}
-    for equip in sorted(set(retail) | set(project.equips)):
-        before, after = retail.get(equip, set()), project.equips.get(equip, set())
+    for equip in sorted(e for e in set(retail) | set(project.equips) if e <= CARD_COUNT):
+        before = retail.get(equip, set())
+        after = {m for m in project.equips.get(equip, set()) if m <= CARD_COUNT}
         if before == after:
             continue
         add, remove = after - before, before - after
@@ -118,7 +122,7 @@ def build_equips(project: Project) -> list:
         # within an entry a named card still goes over its type.
         add_types, remove_types = [], []
         for t in range(TYPE_MAGIC):
-            members = {cid for cid, card in project.cards.items() if card.type == t}
+            members = {cid for cid, card in project.cards.items() if card.type == t and cid <= CARD_COUNT}
             if project.resolve(TYPE_NAMES[t]):
                 continue        # a card of that name: the port would read the card
             if not members:
@@ -136,7 +140,49 @@ def build_equips(project: Project) -> list:
         if remove or remove_types:
             entry["remove"] = remove_types + [project.ref(m) for m in sorted(remove)]
         entries.append(entry)
+    entries += _equip_fixes(project, entries)
     return entries + project.kept["equips"]
+
+
+def _equip_fixes(project: Project, entries: list) -> list:
+    """Entries after the disc's cards' own that make every equip, added
+    cards included, fit what the project says. A rule for a card is also
+    one for its copies, and the later entry decides (Tables_Equip), so:
+    the retail monsters an entry got wrong, then the copies, each in an
+    entry of its own; an added equip card gets a "replace" of its own
+    whose removes, coming after its adds, take out a copy whose base it
+    fits."""
+    got = simulate_equips(project, equip_rules(project, entries, []))
+    fixes = []
+    for equip in sorted(got):
+        want = project.equips.get(equip, project.equip_baseline(equip))
+        have = got[equip]
+        if want == have:
+            continue
+        card = project.ref(equip)
+        if equip in project.added:
+            copies_out = sorted(m for m in project.added if m not in want and project.base_of(m) in want)
+            entry = {"card": card, "replace": True, "add": [project.ref(m) for m in sorted(want)]}
+            if copies_out:
+                entry["remove"] = [project.ref(m) for m in copies_out]
+            fixes.append(entry)
+            continue
+        for retail_pass in (True, False):
+            wrong = {m for m in want ^ have if (m <= CARD_COUNT) == retail_pass}
+            if retail_pass and not wrong:
+                continue
+            if not retail_pass:     # the retail fix may have moved copies too
+                have = simulate_equips(project, equip_rules(project, entries + fixes, []))[equip]
+                wrong = {m for m in want ^ have if m > CARD_COUNT}
+                if not wrong:
+                    continue
+            entry = {"card": card}
+            if wrong & want:
+                entry["add"] = [project.ref(m) for m in sorted(wrong & want)]
+            if wrong - want:
+                entry["remove"] = [project.ref(m) for m in sorted(wrong - want)]
+            fixes.append(entry)
+    return fixes
 
 
 def build_rituals(project: Project) -> list:
@@ -194,6 +240,11 @@ def _pool_edits(project: Project, pool: str):
             out["all"] = _pool_body(project, listed, False, {})
             bases, edits = after, later
         break
+    kept_all = project.kept_pools.get(("all", pool), {})
+    if kept_all:
+        body = out.get("all", {})
+        body.update(kept_all)
+        out["all"] = body
     for d in range(count):
         kept = project.kept_pools.get((d, pool), {})
         if edits[d] is None and not kept:
@@ -205,6 +256,9 @@ def _pool_edits(project: Project, pool: str):
 
 def build_pools(project: Project):
     decks = _pool_edits(project, "deck")
+    decks.update(project.kept_fixed)     # a fixed deck wins over weighted edits of it anyway
+    if "all" in decks:
+        decks = {"all": decks.pop("all"), **decks}
     drops = {}
     for pool in ("pow", "bcd", "tec"):
         for name, body in _pool_edits(project, pool).items():
@@ -278,10 +332,14 @@ def _choice(value, names):
 
 
 def _number(value, default=-1):
+    """json.c Json_Number: a whole number (2048.0 is one), true as 1, or a
+    number written as a string."""
     if isinstance(value, bool):
-        return default
+        return int(value)
     if isinstance(value, int):
         return value
+    if isinstance(value, float):
+        return int(value) if value.is_integer() else default
     if isinstance(value, str):
         text = value.strip().lower()
         try:
@@ -357,11 +415,9 @@ def read_cards(project: Project, entries, messages: list):
             continue
         if is_replace:
             _apply_fields(project.cards[base], entry, True, messages, where)
-            extra = {k: entry[k] for k in REPLACE_EXTRA if k in entry}
-            unknown = [k for k in entry if k not in extra and k not in (
-                "replace", "name", "description", "attack", "defense", "type", "attribute", "level", "stars")]
-            if unknown:
-                messages.append(f"{where}: keys a replace does not use, dropped: {', '.join(unknown)}")
+            # What the editor does not show (art, password...) is kept as written.
+            extra = {k: v for k, v in entry.items() if k not in (
+                "replace", "name", "description", "attack", "defense", "type", "attribute", "level", "stars")}
             if extra:
                 project.card_extra.setdefault(base, {}).update(extra)
             continue
@@ -375,10 +431,13 @@ def read_cards(project: Project, entries, messages: list):
             messages.append(f"{where}: duplicate card identity {key}; left out")
             continue
         cid = project.add_card(base, key)
+        # A copy with no name of its own shows its base's name from the disc,
+        # not the name a "replace" gave the base (cards.c Cards_NameCodes).
+        project.cards[cid].name = project.retail.cards[base].name
         _apply_fields(project.cards[cid], entry, False, messages, where)
         added = project.added[cid]
-        added.drops = bool(entry.get("drops", True))
-        added.opponents = bool(entry.get("opponents", False))
+        added.drops = _json_bool(entry.get("drops"), True)
+        added.opponents = _json_bool(entry.get("opponents"), False)
         added.extra = {k: v for k, v in entry.items() if k not in (
             "copy", "id", "name", "description", "attack", "defense", "type", "attribute", "level", "stars",
             "drops", "opponents")}
@@ -429,13 +488,88 @@ def read_fusions(project: Project, rules, messages: list):
         project.set_fusion(pair[0], pair[1], made)
 
 
-def _expand_target(project: Project, value):
-    """A card, or every monster of a type; (ids, is_type)."""
-    if isinstance(value, str) and type_named(value) >= 0 and project.resolve(value) <= 0:
-        t = type_named(value)
-        return {cid for cid, card in project.cards.items() if card.type == t}, True
-    cid = project.resolve(value)
-    return ({cid} if cid else set()), False
+def _json_bool(value, default: bool) -> bool:
+    """json.c Json_Bool: true/false, a number (not 0), else the default."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    return default
+
+
+EQUIP_ANY, EQUIP_TYPE, EQUIP_CARD = 0, 1, 2
+
+
+def equip_rules(project: Project, entries, messages: list, kept: list = None) -> list:
+    """The equip rules the port makes of "equips" (tables.c read_equips):
+    (equip, kind, target, allow, order), an entry's adds before its removes."""
+    rules = []
+    for i, entry in enumerate(entries):
+        where = f"equips[{i}]"
+        if not isinstance(entry, dict):
+            messages.append(f"{where} is not an object; left out")
+            continue
+        order = i + 1
+        equip = project.resolve(entry.get("card"))
+        if not equip:
+            messages.append(f"{where}: no card {entry.get('card')!r}; kept as written")
+            if kept is not None:
+                kept.append(entry)
+            continue
+        if project.cards[equip].type != 23:
+            messages.append(f"{where}: \"card\" is not an equip card; left out")
+            continue
+        bonus = {k: entry[k] for k in ("bonus", "bonus_if") if k in entry}
+        if bonus and kept is not None:
+            kept.append({"card": entry.get("card"), **bonus})     # the editor does not show bonuses
+        if _json_bool(entry.get("replace"), False):
+            rules.append((equip, EQUIP_ANY, 0, False, order))
+        unplaced = False
+        for allow, key in ((True, "add"), (False, "remove")):
+            targets = entry.get(key)
+            for target in targets if isinstance(targets, list) else []:
+                t = type_named(target) if isinstance(target, str) else -1
+                if t >= 0 and project.resolve(target) <= 0:
+                    rules.append((equip, EQUIP_TYPE, t, allow, order))
+                    continue
+                cid = project.resolve(target)
+                if cid:
+                    rules.append((equip, EQUIP_CARD, cid, allow, order))
+                else:
+                    unplaced = True
+        if unplaced:
+            messages.append(f"{where}: names cards the editor cannot place; those are left out")
+    return rules
+
+
+def simulate_equips(project: Project, rules: list) -> dict:
+    """{equip card: the monsters it fits} as Tables_Equip answers, with the
+    disc's table by base ids where no rule says anything."""
+    by_equip = {}
+    for rule in rules:
+        by_equip.setdefault(rule[0], []).append(rule)
+    monsters = project.monsters()
+    out = {}
+    for equip in project.equip_cards():
+        mine = by_equip.get(equip, []) + (by_equip.get(project.base_of(equip), [])
+                                         if project.base_of(equip) != equip else [])
+        mine.sort(key=lambda r: r[4])       # by order; within an entry as listed
+        fits = set()
+        for monster in monsters:
+            base, kind_of = project.base_of(monster), project.cards[monster].type
+            best = None
+            for rule in mine:
+                _, kind, target, allow, order = rule
+                if kind == EQUIP_TYPE and target != kind_of:
+                    continue
+                if kind == EQUIP_CARD and target not in (monster, base):
+                    continue
+                if best is None or order > best[4] or (order == best[4] and kind >= best[1]):
+                    best = rule
+            if best[3] if best else project.equip_retail(equip, monster):
+                fits.add(monster)
+        out[equip] = fits
+    return out
 
 
 def read_equips(project: Project, entries, messages: list):
@@ -444,38 +578,9 @@ def read_equips(project: Project, entries, messages: list):
     if not isinstance(entries, list):
         messages.append("\"equips\" is not an array; left out")
         return
-    for i, entry in enumerate(entries):
-        where = f"equips[{i}]"
-        if not isinstance(entry, dict):
-            messages.append(f"{where} is not an object; left out")
-            continue
-        equip = project.resolve(entry.get("card"))
-        if not equip:
-            messages.append(f"{where}: no card {entry.get('card')!r}; kept as written")
-            project.kept["equips"].append(entry)
-            continue
-        if project.cards[equip].type != 23:
-            messages.append(f"{where}: \"card\" is not an equip card; left out")
-            continue
-        now = set(project.equips.get(equip, set()))
-        if entry.get("replace") is True:
-            now = set()
-        unplaced = False
-        # Within one entry a card is surer than a type: types first, then cards.
-        for is_type_pass in (True, False):
-            for allow, key in ((True, "add"), (False, "remove")):
-                for target in entry.get(key, []) or []:
-                    ids, is_type = _expand_target(project, target)
-                    if is_type != is_type_pass:
-                        continue
-                    if not ids and not is_type:
-                        unplaced = True
-                        continue
-                    now = now | ids if allow else now - ids
-        if unplaced:
-            messages.append(f"{where}: names cards the editor cannot place; those are left out")
-        if entry.get("replace") is True or now != project.equips.get(equip, set()):
-            project.equips[equip] = now
+    rules = equip_rules(project, entries, messages, project.kept["equips"])
+    if rules:
+        project.equips.update(simulate_equips(project, rules))
 
 
 def read_rituals(project: Project, entries, messages: list):
@@ -513,21 +618,25 @@ def _read_pool(project: Project, where, duelists, pool, body, messages):
         return
     listed, kept = {}, {}
     for name, weight in body.items():
-        if name == "replace":
+        if name in ("replace", "fixed"):
             continue
-        if isinstance(weight, bool) or not isinstance(weight, int) or weight < 0:
+        if isinstance(weight, bool) or not isinstance(weight, (int, float)) or _number(weight) < 0:
             messages.append(f"{where} \"{name}\": a weight is a whole number, 0 or more; left out")
             continue
+        weight = _number(weight)
         cid = project.resolve(name)
         if not cid:
             messages.append(f"{where} \"{name}\": no such card; kept as written")
             kept[name] = weight
             continue
         listed[cid] = min(weight, 0xFFFF)
-    replace = body.get("replace") is True
+    replace = _json_bool(body.get("replace"), False)
+    if kept:
+        # Kept under the name they were written for: an "all" edit's own
+        # stays one body, before the opponents' edits.
+        key = "all" if len(duelists) > 1 else duelists[0]
+        project.kept_pools.setdefault((key, pool), {}).update(kept)
     for d in duelists:
-        if kept:
-            project.kept_pools.setdefault((d, pool), {}).update(kept)
         if not listed and not replace:
             continue
         result = poolmath.apply_edit(project.pools[d][pool], listed, replace, pool == "deck")
@@ -545,6 +654,10 @@ def read_pools(project: Project, table, decks: bool, messages: list):
         messages.append(f"\"{label}\" is an object of opponents; left out")
         return
     for name, entry in table.items():
+        if decks and isinstance(entry, dict) and _json_bool(entry.get("fixed"), False):
+            messages.append(f"decks \"{name}\": a fixed deck; kept as written (the editor shows the weighted deck)")
+            project.kept_fixed[name] = entry
+            continue
         if same_all(name):
             duelists = list(range(len(project.pools)))
         else:
@@ -584,6 +697,8 @@ def apply(project: Project, manifest: dict, messages: list = None, default_id: s
         if isinstance(value, str):
             setattr(info, key, value)
     settings = manifest.get("settings")
+    if settings is not None and not isinstance(settings, list):
+        messages.append("\"settings\" is not an array: the port refuses the mod; left out")
     info.settings = settings if isinstance(settings, list) else []
     project.info = info
     project.other = {k: v for k, v in manifest.items() if k not in INFO_KEYS and k not in TABLE_KEYS}
@@ -637,7 +752,8 @@ def save_mod(project: Project, folder, manifest: dict = None) -> Path:
     manifest = build(project) if manifest is None else manifest
     path = folder / "mod.json"
     temporary = folder / "mod.json.tmp"
-    temporary.write_text(dumps(manifest), encoding="utf-8", newline="\n")
+    with open(temporary, "w", encoding="utf-8", newline="\n") as out:     # write_text(newline=) is 3.10+
+        out.write(dumps(manifest))
     temporary.replace(path)
     project.source_dir = folder
     return path

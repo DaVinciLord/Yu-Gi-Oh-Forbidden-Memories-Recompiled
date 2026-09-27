@@ -7,7 +7,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from . import disc, gamedata, manifest, validate
-from .model import Project
+from .model import KEY_RE, Project
 from .tabs import CardsTab, DuelistsTab, EquipsTab, FusionsTab, ModInfoTab, ProblemsTab, RitualsTab
 
 APP_TITLE = "FM Editor"
@@ -43,10 +43,18 @@ class App(tk.Tk):
         self.status.pack(fill="x", side="bottom")
         self.notebook.bind("<<NotebookTabChanged>>", lambda e: self.tab_changed())
         self.protocol("WM_DELETE_WINDOW", self.quit_app)
-        self.bind_all("<Control-s>", lambda e: self.save())
-        self.bind_all("<Control-o>", lambda e: self.open_mod())
+        # On the window, not bind_all: a dialog's keys stay its own. Text's
+        # own Ctrl+O inserts a line, so the text boxes get the shortcut too.
+        self.bind("<Control-s>", lambda e: self.shortcut(self.save))
+        self.bind("<Control-o>", lambda e: self.shortcut(self.open_mod))
+        self.bind_class("Text", "<Control-o>", lambda e: self.shortcut(self.open_mod))
         if autostart:
             self.after(50, lambda: self.start(game, mod, ask))
+
+    def shortcut(self, action):
+        if self.grab_current() is None:     # not while a dialog is up
+            action()
+        return "break"
 
     # --- menus -------------------------------------------------------------
 
@@ -83,9 +91,10 @@ class App(tk.Tk):
         files = None
         try:
             files = disc.load(game) if game else disc.find_game()
-        except disc.GameFilesError as problem:
+        except (disc.GameFilesError, OSError) as problem:
             messagebox.showerror(APP_TITLE, str(problem), parent=self)
-        while files is None:
+        while files is None or not self.use_game(files):
+            files = None
             if not ask:
                 self.say("No game files: File > Game files... to choose them.")
                 return
@@ -97,7 +106,6 @@ class App(tk.Tk):
                 self.say("No game files: File > Game files... to choose them.")
                 return
             files = self.ask_game_files()
-        self.use_game(files)
         if mod:
             self.load_mod(mod)
 
@@ -158,8 +166,18 @@ class App(tk.Tk):
     def say(self, text):
         self.status.configure(text=text)
 
-    def commit_all(self):
-        return all(tab.commit() for tab in self.tabs)
+    def commit_all(self, show=False):
+        """Store every tab's form. With show, a form that cannot be stored
+        is brought up with the reason."""
+        for tab in self.tabs:
+            if not tab.commit():
+                if show:
+                    self.notebook.select(tab)
+                    messagebox.showerror(APP_TITLE, f"The {self.notebook.tab(tab, 'text')} tab holds something "
+                                         "that cannot be stored (the tab says what). Correct it or revert it first.",
+                                         parent=self)
+                return False
+        return True
 
     def tab_changed(self):
         self.commit_all()
@@ -184,6 +202,8 @@ class App(tk.Tk):
         return True
 
     def confirm_discard(self):
+        if not self.commit_all(show=True):
+            return False
         if not self.dirty:
             return True
         answer = messagebox.askyesnocancel(APP_TITLE, "Save the changes to this mod first?", parent=self)
@@ -229,7 +249,7 @@ class App(tk.Tk):
         return folder if folder.is_dir() else Path.cwd()
 
     def save(self, ask=False):
-        if self.project is None or not self.commit_all():
+        if self.project is None or not self.commit_all(show=True):
             return False
         issues = validate.validate(self.project)
         errors = validate.errors(issues)
@@ -249,6 +269,12 @@ class App(tk.Tk):
                 return False
             chosen = Path(chosen)
             if chosen.is_dir() and any(chosen.iterdir()) and not (chosen / "mod.json").exists():
+                if not KEY_RE.match(self.project.info.id or ""):
+                    self.notebook.select(self.info)
+                    messagebox.showerror(APP_TITLE, "The mod's folder is named after its id: give it one of "
+                                         "letters, digits, hyphens and underscores (Mod info), or choose an empty "
+                                         "folder.", parent=self)
+                    return False
                 chosen = chosen / self.project.info.id
             folder = chosen
             if (folder / "mod.json").exists() and folder != self.project.source_dir:
@@ -299,7 +325,6 @@ class App(tk.Tk):
                             "tools/pc/fm_editor/README.md", parent=self)
 
     def quit_app(self):
-        self.commit_all()
         if self.confirm_discard():
             self.destroy()
 

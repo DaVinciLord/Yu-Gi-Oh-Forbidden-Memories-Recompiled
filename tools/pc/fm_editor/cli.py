@@ -44,7 +44,8 @@ def build_parser():
     commands = parser.add_subparsers(dest="command")
     check = commands.add_parser("check", help="validate a mod folder against the retail tables")
     check.add_argument("mod")
-    check.add_argument("--game", help="the game: a folder with SLUS_014.11 and DATA/WA_MRG.MRG, or the .bin")
+    check.add_argument("--game", default=argparse.SUPPRESS,     # so a --game before "check" counts too
+                       help="the game: a folder with SLUS_014.11 and DATA/WA_MRG.MRG, or the .bin")
     check.add_argument("--print", action="store_true", help="print the mod.json the editor would write")
     return parser
 

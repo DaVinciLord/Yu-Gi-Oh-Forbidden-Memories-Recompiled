@@ -212,6 +212,7 @@ class CardsTab(Tab):
         if cid == self.current:
             return
         if self.current is not None and not self.apply(quiet=True):
+            self.tree.selection_set(str(self.current))    # stay on the card whose form cannot be stored
             return
         self.show(cid)
 
@@ -315,7 +316,7 @@ class CardsTab(Tab):
         card = self.read_form(cid)
         if isinstance(card, str):
             self.status.configure(text=card)
-            return quiet    # moving away drops what could not be read
+            return False
         changed = not card.same(self.project.cards[cid])
         if cid in self.project.added:
             added = self.project.added[cid]
@@ -323,7 +324,7 @@ class CardsTab(Tab):
             if key != added.key:
                 if not KEY_RE.match(key) or any(a.key == key for a in self.project.added.values()):
                     self.status.configure(text="the stable id is letters, digits, _ and -, and unique")
-                    return quiet
+                    return False
                 added.key = key
                 changed = True
             if (added.drops, added.opponents) != (self.drops.get(), self.opponents.get()):
@@ -359,9 +360,12 @@ class CardsTab(Tab):
             return
         if not self.apply(quiet=True):
             return
+        source = self.project.cards[base]
         base = self.project.base_of(base)
         cid = self.project.add_card(base)
-        self.project.cards[cid].name = self.project.cards[base].name + " II"
+        # The selected card as it is (an added card's own stats too); its base
+        # is the disc's card under it.
+        self.project.cards[cid] = source.copy(id=cid, name=source.name + " II")
         self.app.changed()
         self.filter.set(self.FILTERS[0])
         self.search.set("")
@@ -437,7 +441,9 @@ class FusionsTab(Tab):
         rows.sort()
         for pair, status in rows[:self.LIMIT]:
             result = p.fusions.get(pair)
-            shown = p.card_label(result) if result else f"(none; retail {p.card_label(p.retail.fusions[pair])})"
+            retail = p.retail.fusions.get(pair)
+            shown = p.card_label(result) if result else \
+                f"(none; retail {p.card_label(retail)})" if retail else "(none: forbidden)"
             self.tree.insert("", "end", iid=f"{pair[0]}:{pair[1]}", tags=(status,) if status else (),
                              values=(p.card_label(pair[0]), p.card_label(pair[1]), shown, status))
         more = f" (first {self.LIMIT} shown; search to narrow)" if len(rows) > self.LIMIT else ""
@@ -464,6 +470,8 @@ class FusionsTab(Tab):
             a, b, r = fields["a"].get(), fields["b"].get(), fields["r"].get()
             if not (a and b and r):
                 return "name three cards (a number, a name, or pick one with ...)"
+            if pair and self.project.pair(a, b) != pair:
+                self.project.set_fusion(pair[0], pair[1], None)     # the fusion moved to other cards
             self.project.set_fusion(a, b, r)
             self.app.changed()
             self.search.set(self.project.card_label(a).split(" ", 1)[1] if " " in self.project.card_label(a) else "")
@@ -482,15 +490,18 @@ class FusionsTab(Tab):
             self.dialog("Change fusion", pair, self.project.fusions.get(pair) or self.project.retail.fusions.get(pair))
 
     def remove(self):
+        if not self.selected():
+            return
         for pair in self.selected():
             self.project.set_fusion(pair[0], pair[1], None)
         self.app.changed()
         self.fill()
 
     def revert(self):
+        if not self.selected():
+            return
         for pair in self.selected():
-            retail = self.project.retail.fusions.get(pair)
-            self.project.set_fusion(pair[0], pair[1], retail)
+            self.project.revert_fusion(pair)
         self.app.changed()
         self.fill()
 
@@ -541,7 +552,7 @@ class EquipsTab(Tab):
             if cid not in p.cards:
                 continue
             now = p.equips.get(cid, set())
-            changed = now != set(p.retail.equips.get(cid, []))
+            changed = now != p.equip_baseline(cid)
             self.equips.insert("", "end", iid=str(cid), values=(cid, p.cards[cid].name, len(now)),
                                tags=("changed",) if changed else ())
         if self.current and self.equips.exists(str(self.current)):
@@ -561,7 +572,7 @@ class EquipsTab(Tab):
             return
         self.heading.configure(text=f"{p.card_label(self.current)} may equip:")
         now = p.equips.get(self.current, set())
-        retail = set(p.retail.equips.get(self.current, []))
+        retail = p.equip_baseline(self.current)
         for cid in sorted(now | retail):
             state = "" if cid in now and cid in retail else "added" if cid in now else "removed"
             card = p.cards.get(cid)
@@ -605,7 +616,7 @@ class EquipsTab(Tab):
 
     def revert(self):
         if self.current:
-            self.project.equips[self.current] = set(self.project.retail.equips.get(self.current, []))
+            self.project.equips[self.current] = self.project.equip_baseline(self.current)
             self.edited()
 
 
