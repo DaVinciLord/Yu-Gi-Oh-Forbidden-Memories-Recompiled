@@ -131,7 +131,7 @@ static const struct {
     int card;
     int share;
 } WIDE_MONSTERS[] = {
-    {458, MODEL_FIXED_ONE / 2}, /* Kaminari Attack */
+    {458, MODEL_FIXED_ONE * 3 / 5}, /* Kaminari Attack */
 };
 
 #define SECTOR 2048
