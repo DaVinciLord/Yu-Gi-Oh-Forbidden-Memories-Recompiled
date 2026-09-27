@@ -34,12 +34,19 @@ enum {
     TEXT_OWN_MORE_CARD = 0xFE01,    /* card drops: the heading, one card past the first */
     TEXT_OWN_MORE_CARDS = 0xFE02,   /* card drops: the heading, more */
     TEXT_OWN_PAGE_OF = 0xFE03,      /* card drops: which page of how many */
-    TEXT_OWN_DECK_SLOTS = 0xFE10    /* the card shop's added menu entry */
+    TEXT_OWN_DECK_SLOTS = 0xFE10,   /* the card shop's added menu entry */
+    TEXT_OWN_OPPONENT = 0xFE40      /* + duelist id (1-39, FE41-FE67): the name in place of COM */
 };
 /* The compiled text an applied mod gives string `id` (glyph codes and
  * codes, ending in {end}), or NULL: for the port's own strings, and for a
  * retail string the port adds to. */
 const unsigned char *Text_Own(int id);
+/* The name in place of COM (Video > Opponent's name for COM) for a duelist
+ * (1-39), in Latin-1: a translation's TEXT_OWN_OPPONENT + id; else its name
+ * for the duelist in the names bank (0x8328 + id) when it differs from the
+ * English, shortened as Tables_ShortenName does; else the English
+ * (Tables_DuelistShortName). NULL for no opponent. */
+const char *Text_OpponentName(int duelist);
 
 /* String `id` of a listing the port writes itself (a menu it adds an entry
  * to), compiled as a mod's text is, so that its jumps land (Text_Retarget);
