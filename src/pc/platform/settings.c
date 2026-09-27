@@ -38,6 +38,8 @@ static const SettingInfo info[SET_COUNT] = {
     /* 1: the Japanese release's buttons, Circle confirms and Cross cancels
      * (src/pc/platform/button_layout.h). */
     [SET_JP_BUTTONS] = {"jp_buttons", NULL, "MEMORIES_JP_BUTTONS", NULL, 0, 0, 1},
+    /* 1: Up and Down in the card viewer show the list's next card (src/pc/cards/card_browse.h). */
+    [SET_CARD_BROWSE] = {"card_browse", NULL, "MEMORIES_CARD_BROWSE", NULL, 0, 0, 1},
     [SET_MASTER_VOLUME] = {"master_volume", "volume", "MEMORIES_MASTER_VOLUME", "MEMORIES_VOLUME", 100, 0, 100},
     [SET_MUSIC_VOLUME] = {"music_volume", NULL, "MEMORIES_MUSIC_VOLUME", NULL, 100, 0, 100},
     [SET_SFX_VOLUME] = {"sfx_volume", NULL, "MEMORIES_SFX_VOLUME", NULL, 100, 0, 100},

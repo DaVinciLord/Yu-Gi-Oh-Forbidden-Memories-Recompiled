@@ -48,6 +48,7 @@ typedef enum {
     SET_UPDATE_CHECK,
     SET_UPDATE_PRERELEASES,
     SET_JP_BUTTONS,
+    SET_CARD_BROWSE,
     SET_COUNT
 } SettingId;
 

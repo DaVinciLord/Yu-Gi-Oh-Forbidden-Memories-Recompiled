@@ -764,6 +764,7 @@ static const char *status_text(int slot)
 void DeckMenu_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
 {
     int s, row_h, rows, pw, ph, px, py, i, list_y;
+    const int jp = Settings_Get(SET_JP_BUTTONS);
     char line[160];
     *x = *y = *w = *h = 0;
     if (menu.view == VIEW_CLOSED || !canvas || !canvas->pixels) return;
@@ -784,7 +785,7 @@ void DeckMenu_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
     if (menu.view == VIEW_MESSAGE && menu.close_after) {
         /* Opened where it cannot be used: only the message. */
         centred(canvas, px, pw, py + ph / 2, menu.message, COLOUR_TEXT);
-        centred(canvas, px, pw, py + ph / 2 + 22 * s, "Press Cross", COLOUR_DIM);
+        centred(canvas, px, pw, py + ph / 2 + 22 * s, jp ? "Press Circle" : "Press Cross", COLOUR_DIM);
         *x = px, *y = py, *w = pw, *h = ph;
         return;
     }
@@ -803,10 +804,17 @@ void DeckMenu_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
     }
     if (menu.top > 0) text(canvas, px + pw - 30 * s, py + 20 * s, "^", COLOUR_DIM);
     if (menu.top + rows < DECK_SLOT_COUNT) text(canvas, px + pw - 18 * s, py + 20 * s, "v", COLOUR_DIM);
-    text(canvas, px + 14 * s, py + ph - 16 * s,
-         picking == PICK_OPEN ? "Cross: edit this deck (an empty slot: a copy of yours)   Triangle: clear   Circle: back"
-                              : "Cross: use (an empty slot: a copy of yours)   Triangle: clear   Circle: close",
-         COLOUR_DIM);
+    /* The slots take the exchanged pad (pad_bits), so the hints name its buttons. */
+    if (jp)
+        text(canvas, px + 14 * s, py + ph - 16 * s,
+             picking == PICK_OPEN ? "Circle: edit this deck (an empty slot: a copy of yours)   Triangle: clear   Cross: back"
+                                  : "Circle: use (an empty slot: a copy of yours)   Triangle: clear   Cross: close",
+             COLOUR_DIM);
+    else
+        text(canvas, px + 14 * s, py + ph - 16 * s,
+             picking == PICK_OPEN ? "Cross: edit this deck (an empty slot: a copy of yours)   Triangle: clear   Circle: back"
+                                  : "Cross: use (an empty slot: a copy of yours)   Triangle: clear   Circle: close",
+             COLOUR_DIM);
     if (draft.dirty) {
         /* Kept with the game: lost with it when it is not saved. */
         const char *note = "saved with the game";
@@ -828,7 +836,7 @@ void DeckMenu_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
         int mw = pw - 96 * s, mh = 64 * s, mx = px + 48 * s, my = py + (ph - mh) / 2;
         frame_box(canvas, mx, my, mw, mh, s);
         centred(canvas, mx, mw, my + 24 * s, menu.message, COLOUR_TEXT);
-        centred(canvas, mx, mw, my + 46 * s, "Press Cross", COLOUR_DIM);
+        centred(canvas, mx, mw, my + 46 * s, jp ? "Press Circle" : "Press Cross", COLOUR_DIM);
     }
     *x = px;
     *y = py;

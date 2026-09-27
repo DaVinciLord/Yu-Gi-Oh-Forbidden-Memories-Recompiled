@@ -176,8 +176,10 @@ exchanged; the mouse (right button stays "back") and scripted input
 (`MEMORIES_INPUT`, `MEMORIES_INPUT2`, written in the USA layout, so a
 check's input means the same whatever the setting) are not. The memory card
 slot menu reads the game's pad state, so it follows and its hints name the
-buttons it takes. The deck slot screen (F6), the Controls and Mods windows
-read the keys and controllers themselves and keep their own buttons. Mods: an
+buttons it takes. The deck slot screen (F6) reads the pad itself but
+exchanges the same two bits, so it follows too, hints included. The Controls
+and Mods windows read the keys and controllers themselves and keep their own
+buttons. Mods: an
 `INPUT` before-hook sees the controller's bits, as `host->pad` does; the
 after-hook sees what the game gets ([mod API](mod-api-3.md)).
 
@@ -436,6 +438,17 @@ default), which is how Japanese buttons was checked through the keyboard.
 
 ### Back to the title screen
 
+**Game > Restart game...** is the player's way back to the title without
+closing the program, like a console's soft reset. It first asks "Restart the
+game? Unsaved progress is lost." with Yes and No. No is focused and last, so
+Enter and Escape both keep playing; the game keeps running behind the
+question. Yes makes the same request as Debug > Jump to > Title Screen
+(`TitleJump_Confirm` in `title_jump.c`), and both items are enabled and
+dimmed together. A Yes given after the game reached the title by itself is
+dropped. It does not boot the game again (logos and intro): that would mean
+resetting the whole guest (RAM, VRAM, SPU, disc) under the running C code,
+while the title is what a player restarting wants.
+
 Debug > Jump to > Title Screen leaves whatever is running for the title, the
 way the retail game leaves a campaign loss. `Main_RunGameOver` fades the
 music and the screen out, asks for the title menu (`D_8009B268 = 1`,
@@ -461,7 +474,7 @@ lost, as with a reset.
 
 Save states carry the item's enabled state and discard pending UI requests
 on load. `pc_title_jump` tests title entry, save-menu deferral, repeated
-requests during a jump and state restoration.
+requests during a jump, state restoration and Restart game's Yes and No.
 
 `MEMORIES_TITLE_AT=N[,N...]` makes the request at presented frames N, for
 checks. Requests scheduled while the item is disabled are consumed and
@@ -473,7 +486,10 @@ Options, game over and Trade. After each one, the title and then the main
 menu on Start come back pixel-identical. In the credits, a request made while
 their save slot menu was open waited, and the jump came once Cross had saved
 to a slot. By mouse (`MEMORIES_SDL_SCRIPT`), the item jumps from a duel and
-is disabled at the title. 2P Duel setup forced by `MEMORIES_MODE_AT` stops
+is disabled at the title. Restart game was checked the same way in a
+campaign conversation reached with the `duel-hand-camera` smoke input: No
+closed the question and the game went on, Yes brought the title back with
+the item dimmed there. 2P Duel setup forced by `MEMORIES_MODE_AT` stops
 presenting frames right after the switch, with or without this change.
 Reached from the menu with no saves, it stays in the title's loop.
 
