@@ -129,12 +129,12 @@ explicit IDs and keep them stable across releases.
 after the startup card build. It returns zero before the registry is ready or
 when the card is unavailable. Names and artwork are presentation, not identity.
 
-`host->duelist_id(host, "my-roster:dark-simon")` (API 5) does the same for a
+`host->duelist_id(host, "shadow-duelists:dark-simon")` (API 5) does the same for a
 duelist a mod added, once the duelist list is built. An added duelist's id
 depends on which mods are applied, in what order and what slots they asked
 for, so it cannot be written down in advance. Zero for a duelist that is not
 here this run, and for one of the disc's own, whose id already names it
-(`notes/duelist-mods.md`).
+(`notes/more-duelists.md`).
 
 An entry's `fusions` list accepts `{ "with": <retail-id-or-stable-identity>,
 "result": <retail-id-or-stable-identity> }`. A result of zero forbids that

@@ -6,9 +6,10 @@
  * name order; this one sorts after both of those, so no existing variable
  * moves, which would keep states from earlier builds from loading.
  *
- * The grid's availability array is defined here rather than in the overlay's
- * module_state.c at the larger size, the same move card_storage.c makes for
- * the Library's D_800EA1E8.
+ * Nothing the disc laid out moves: gFreeDuel_abGridAvailable stays in the
+ * overlay's module_state.c at its forty entries and the records stay at 0x51C
+ * in the save block. What an added duelist needs sits beside them, which is
+ * what is here.
  */
 #include "types.h"
 #include "game/card_constants.h"
