@@ -180,6 +180,21 @@ mod, which are reported as left out the first time the deck is dealt.
 `"all"` fixes every opponent's deck. `MEMORIES_TRACE=mods` logs each fixed
 deck as it is dealt.
 
+## A full chest pays starchips
+
+The chest holds at most 250 copies of a card; on the disc a copy won past
+that is lost. A mod may make each such copy worth starchips instead:
+
+```json
+"chest_overflow_starchips": 1
+```
+
+Every card the chest has no room for then adds that many starchips (0 to
+999999), and the balance stops at 999999 as the game's own prize does. It
+holds wherever the game gives the player a card (`Duel_AwardCard`): a duel's
+drop, the extra drops of Game > Card drops, and a card bought in the
+password shop. The latest mod that sets it wins; `0` turns it off again.
+
 ## Where two mods disagree
 
 Mods apply in load order (priority, then `after` and `requires`, then the
@@ -208,6 +223,7 @@ it first:
 | `Duel_CheckRitual` (`duel_check_ritual.c`) | ritual table, `0x801799D8` | `Tables_Ritual`, whose recipe is laid out like the disc's |
 | `Duel_ShuffleDeck` (`duel_shuffle_deck.c`) | deck pool, `0x801781D8` | `Tables_FixedDeck`, then `Tables_Pool(TABLES_POOL_DECK)` |
 | `Duel_SelectCardDrop` (`duel_result_runtime.c`) | drop pools, `0x8017878C` | `Tables_Pool(TABLES_POOL_POW + pool)` |
+| `Duel_AwardCard` (`duel_result_runtime.c`) | chest, `0x801D0250`; starchips, `0x801D07E0` | `Tables_ChestOverflow`, before the card is counted |
 
 A pool is worked out from the opponent's loaded pool and every edit of it
 when the game draws from it, and kept until the opponent or the loaded pool

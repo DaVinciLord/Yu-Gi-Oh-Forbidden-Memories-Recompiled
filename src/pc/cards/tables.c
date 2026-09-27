@@ -5,7 +5,9 @@
  * read into rules here, once, in the order the mods load. The game's table
  * readers (duel_card_checks.c, duel_check_ritual.c, duel_shuffle_deck.c,
  * duel_result_runtime.c) ask these first. A deck may also be fixed: forty
- * cards written down by their copies, dealt as they are. A drop or deck pool is worked out
+ * cards written down by their copies, dealt as they are. Past the tables,
+ * "chest_overflow_starchips" turns a card the chest has no room for into
+ * starchips (Duel_AwardCard). A drop or deck pool is worked out
  * from what the game loaded when it is drawn from, so a data mod's patch of
  * the same pool comes first and the edits here go on top of it. */
 #include "tables.h"
@@ -102,6 +104,7 @@ typedef struct {
 } FixedDeck;
 static FixedDeck *fixed_decks;
 static int fixed_count, fixed_room;
+static long overflow_starchips;          /* per card the chest has no room for */
 static unsigned char edited[TABLES_DUELIST_COUNT][TABLES_POOL_COUNT];
 static unsigned order_counter;
 static int fusions_sorted;
@@ -787,6 +790,35 @@ const unsigned short *Tables_Pool(int pool, const unsigned short *retail)
     return Tables_PoolFor(gDuel_bOpponentID, pool, retail);
 }
 
+/* --- the chest ------------------------------------------------------ */
+
+#define STARCHIP_MAX 999999L   /* SAVE_DATA_STARCHIP_MAX */
+
+/* "chest_overflow_starchips": n, the starchips a card is worth when the
+ * chest already holds all it can of it. The latest mod that says wins. */
+static void read_chest_overflow(const char *mod, const JsonValue *value)
+{
+    long starchips = Json_Number(value, -1);
+    if (!value) return;
+    if (Json_TypeOf(value) != JSON_NUMBER || starchips < 0 || starchips > STARCHIP_MAX) {
+        Mods_Note(mod, "\"chest_overflow_starchips\" is a whole number of starchips, 0 to %ld", STARCHIP_MAX);
+        return;
+    }
+    overflow_starchips = starchips;
+}
+
+int Tables_ChestOverflow(unsigned quantity, unsigned *starchips)
+{
+    unsigned long long total;
+    if (!overflow_starchips || quantity < CARD_CHEST_QUANTITY_MAX) return 0;
+    total = (unsigned long long)*starchips + (unsigned long long)overflow_starchips;
+    if (total > STARCHIP_MAX) total = STARCHIP_MAX;
+    LOG(LOG_MODS, "tables: a card past the chest's %d: %ld starchips, %u -> %u", CARD_CHEST_QUANTITY_MAX,
+        overflow_starchips, *starchips, (unsigned)total);
+    *starchips = (unsigned)total;
+    return (int)overflow_starchips;
+}
+
 /* --- building -------------------------------------------------------- */
 
 static void forget_pools(void)
@@ -803,6 +835,7 @@ void Tables_Add(const char *mod, const JsonValue *manifest)
     read_rituals(mod, Json_Member(manifest, "rituals"));
     read_pools(mod, Json_Member(manifest, "drops"), 0);
     read_pools(mod, Json_Member(manifest, "decks"), 1);
+    read_chest_overflow(mod, Json_Member(manifest, "chest_overflow_starchips"));
 }
 
 void Tables_Clear(void)
@@ -818,6 +851,7 @@ void Tables_Clear(void)
         }
     }
     fusion_count = equip_count = ritual_count = edit_count = fixed_count = 0;
+    overflow_starchips = 0;
     if (removed_results) memset(removed_results, 0, (size_t)removed_room);
     memset(edited, 0, sizeof(edited));
     forget_pools();
@@ -833,7 +867,8 @@ void Tables_Build(void)
         int mod = Mods_Loaded(i);
         if (Mods_Active(mod)) Tables_Add(Mods_Id(mod), Mods_Manifest(mod));
     }
-    if (fusion_count || equip_count || ritual_count || edit_count || fixed_count)
-        LOG(LOG_MODS, "tables: %d fusion rules, %d equip rules, %d rituals, %d pool edits, %d fixed decks",
-            fusion_count, equip_count, ritual_count, edit_count, fixed_count);
+    if (fusion_count || equip_count || ritual_count || edit_count || fixed_count || overflow_starchips)
+        LOG(LOG_MODS, "tables: %d fusion rules, %d equip rules, %d rituals, %d pool edits, %d fixed decks, "
+            "%ld starchips a card past the chest", fusion_count, equip_count, ritual_count, edit_count, fixed_count,
+            overflow_starchips);
 }

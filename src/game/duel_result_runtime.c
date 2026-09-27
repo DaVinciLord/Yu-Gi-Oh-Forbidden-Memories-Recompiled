@@ -543,7 +543,12 @@ void Duel_AwardCard(s32 card_id)
     event.a = card_id;
     Mods_Dispatch(&event);
     if (!Cards_Valid(event.a)) return;
-    if (!event.handled) { Duel_AwardCardRetail(event.a); }
+    if (!event.handled) {
+        /* A copy the chest has no room for may be worth starchips (tables.h). */
+        Tables_ChestOverflow(*Cards_ChestSlot(gDuel_awPlayerDeck, event.a),
+                             &((SaveDataState *)gDuel_awPlayerDeck)->starchips);
+        Duel_AwardCardRetail(event.a);
+    }
     event.phase = MEMORIES_AFTER; Mods_Dispatch(&event);
 
 }

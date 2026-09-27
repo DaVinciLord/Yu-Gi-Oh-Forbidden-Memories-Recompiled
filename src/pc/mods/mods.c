@@ -1160,7 +1160,7 @@ static int load_library(Mod *mod)
 static const char *const manifest_keys[] = {
     "id", "name", "version", "author", "description", "library", "enabled", "restart", "legacy_setting",
     "data", "textures", "cards", "audio", "min_api", "game", "requires", "after", "conflicts", "priority",
-    "settings", "fusions", "equips", "rituals", "drops", "decks", "text", "font",
+    "settings", "fusions", "equips", "rituals", "drops", "decks", "text", "font", "chest_overflow_starchips",
 };
 
 /* How many letters to add, remove or change to turn one word into the
@@ -1295,6 +1295,7 @@ static int read_manifest(Mod *mod, const char *directory, const char *origin)
             /* "text": "text.txt" is one file named as a string. */
             if (Json_Count(value) || *Json_String(value, "")) mod->restart = 1;
         }
+        if (Json_Member(root, "chest_overflow_starchips")) mod->restart = 1;   /* a number */
     }
     {   /* The key this mod's choice was stored under before it was a mod. */
         const char *legacy = Json_String(Json_Member(root, "legacy_setting"), NULL);

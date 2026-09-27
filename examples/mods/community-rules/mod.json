@@ -3,8 +3,9 @@
     "name": "Community rules example",
     "version": "1.0",
     "author": "DecompRecomp",
-    "description": "The rules community mods change, without code: a fixed CPU deck. Values made up for the example.",
+    "description": "The rules community mods change, without code: a fixed CPU deck and starchips for a full chest. Values made up for the example.",
     "enabled": false,
+    "chest_overflow_starchips": 2,
     "decks": {
         "Simon Muran": {"fixed": true, "Kuriboh": 4, "Mystical Elf": 6, "Celtic Guardian": 5,
                         "Baby Dragon": 5, "Time Wizard": 20}

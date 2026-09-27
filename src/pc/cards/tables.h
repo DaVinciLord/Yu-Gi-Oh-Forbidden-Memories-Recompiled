@@ -55,6 +55,13 @@ const unsigned short *Tables_PoolFor(int duelist, int pool, const unsigned short
 #define TABLES_DECK_SIZE 40
 int Tables_FixedDeck(int duelist, unsigned short cards[TABLES_DECK_SIZE]);
 
+/* Duel_AwardCard's question before it adds a card to the chest, which holds
+ * `quantity` of it: with a mod's "chest_overflow_starchips", a card the chest
+ * has no room for (CARD_CHEST_QUANTITY_MAX already) adds that many to the
+ * save's `starchips`, up to 999999. Returns the starchips added, 0 when the
+ * card fits or no mod says. */
+int Tables_ChestOverflow(unsigned quantity, unsigned *starchips);
+
 /* The opponent names a manifest may use, by duelist id; "all" means every
  * one of them. */
 #define TABLES_DUELIST_COUNT 40

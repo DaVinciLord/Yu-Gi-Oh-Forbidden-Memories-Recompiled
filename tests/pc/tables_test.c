@@ -214,7 +214,31 @@ int main(void)
         assert(Tables_FixedDeck(14, deck) && deck[0] == 11);
     }
 
+    /* The chest: without the rule a card past 250 is lost as on the disc;
+     * with it each is worth its starchips, up to 999999; the later mod wins. */
+    {
+        unsigned starchips = 100;
+        assert(Tables_ChestOverflow(250, &starchips) == 0 && starchips == 100);
+        notes = 0;
+        add("i", "{\"chest_overflow_starchips\": 3}");
+        add("j", "{\"chest_overflow_starchips\": -1}");
+        add("k", "{\"chest_overflow_starchips\": \"many\"}");
+        assert(notes == 2);
+        assert(Tables_ChestOverflow(249, &starchips) == 0 && starchips == 100);
+        assert(Tables_ChestOverflow(250, &starchips) == 3 && starchips == 103);
+        add("l", "{\"chest_overflow_starchips\": 999999}");
+        assert(Tables_ChestOverflow(250, &starchips) == 999999 && starchips == 999999);
+        add("m", "{\"chest_overflow_starchips\": 0}");
+        starchips = 5;
+        assert(Tables_ChestOverflow(250, &starchips) == 0 && starchips == 5);
+        add("n", "{\"chest_overflow_starchips\": 1}");
+    }
+
     Tables_Clear();
+    {
+        unsigned starchips = 7;
+        assert(Tables_ChestOverflow(250, &starchips) == 0 && starchips == 7);
+    }
     assert(fusion(10, 11) == -1 && Tables_Equip(20, 12) == -1 && Tables_Ritual(21, own) == -1);
     assert(!Tables_PoolFor(15, TABLES_POOL_DECK, retail));
     {
