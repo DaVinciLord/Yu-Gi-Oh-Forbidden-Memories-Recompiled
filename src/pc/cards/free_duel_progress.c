@@ -17,6 +17,7 @@
 #include "free_duel_progress.h"
 #include "tables.h"
 #include "cards.h"
+#include "pc/free_duel/duelists.h"
 #include "pc/sdk/disc.h"
 #include "game/card_constants.h"
 #include <stdlib.h>
@@ -30,25 +31,47 @@ extern unsigned short gDuel_awPlayerDeck[];
 #define DROPS_SECTORS 3   /* one opponent's block */
 #define DROP_ROW 1460     /* 722 weights and 16 bytes of padding */
 #define DROP_POOLS 3
+/* The disc's own rows: opponents 1-39. A duelist a mod added has none, and
+ * reads its base's (Duelists_BaseId), as everything disc-shaped does. */
 #define DUELISTS (TABLES_DUELIST_COUNT - 1) /* 1-39; 0 is no opponent */
 
 static int read_state; /* 0 unread, 1 read, -1 not readable */
 static unsigned short (*retail)[DROP_POOLS][CARD_COUNT];
 
-/* Per opponent: its obtainable cards by id, once worked out. */
-static struct {
+/* Per opponent: its obtainable cards by id, once worked out. Grown to the
+ * duelist list, which a mod's "duelists" takes past the disc's forty. */
+typedef struct {
     int count, card_count; /* card_count: gCard_nCount they were worked out for */
     unsigned short *ids;
-} pools[TABLES_DUELIST_COUNT];
+} Pool;
+static Pool *pools;
+static int pool_room;
+
+/* `duelist`'s entry, made if it is not there yet; NULL if memory runs out. */
+static Pool *pool_for(int duelist)
+{
+    if (duelist >= pool_room) {
+        const int room = Duelists_Count() > duelist + 1 ? Duelists_Count() : duelist + 1;
+        Pool *bigger = realloc(pools, (size_t)room * sizeof(*pools));
+        if (!bigger) return NULL;
+        memset(bigger + pool_room, 0, (size_t)(room - pool_room) * sizeof(*pools));
+        pools = bigger;
+        pool_room = room;
+    }
+    return &pools[duelist];
+}
 
 void FreeDuelProgress_Reset(void)
 {
     int i;
-    for (i = 0; i < TABLES_DUELIST_COUNT; i++) {
+    for (i = 0; i < pool_room; i++) {
         free(pools[i].ids);
         pools[i].ids = NULL;
         pools[i].count = pools[i].card_count = 0;
     }
+    free(pools);
+    pools = NULL;
+    pool_room = 0;
     free(retail);
     retail = NULL;
     read_state = 0;
@@ -90,11 +113,15 @@ static int work_out(int duelist)
 {
     unsigned char *seen;
     int count = gCard_nCount < CARD_COUNT ? CARD_COUNT : gCard_nCount, pool, id, n = 0;
-    if (pools[duelist].ids && pools[duelist].card_count == gCard_nCount) return 1;
+    const int base = Duelists_BaseId(duelist);
+    Pool *mine = pool_for(duelist);
+    if (!mine || base < 1 || base > DUELISTS) return 0;
+    if (mine->ids && mine->card_count == gCard_nCount) return 1;
     seen = calloc((size_t)count + 1, 1);
     if (!seen) return 0;
     for (pool = 0; pool < DROP_POOLS; pool++) {
-        const unsigned short *row = retail[duelist - 1][pool];
+        /* The disc's row is the base's; the edits are this duelist's own. */
+        const unsigned short *row = retail[base - 1][pool];
         const unsigned short *edited = Tables_PoolFor(duelist, TABLES_POOL_POW + pool, row);
         if (edited) {
             for (id = 1; id <= gCard_nCount; id++) seen[id] |= edited[id] != 0;
@@ -102,18 +129,18 @@ static int work_out(int duelist)
             for (id = 1; id <= CARD_COUNT; id++) seen[id] |= row[id - 1] != 0;
         }
     }
-    free(pools[duelist].ids);
-    pools[duelist].ids = malloc(((size_t)count + 1) * sizeof(*pools[duelist].ids));
-    if (!pools[duelist].ids) {
+    free(mine->ids);
+    mine->ids = malloc(((size_t)count + 1) * sizeof(*mine->ids));
+    if (!mine->ids) {
         free(seen);
         return 0;
     }
     for (id = 1; id <= count; id++) {
-        if (seen[id]) pools[duelist].ids[n++] = (unsigned short)id;
+        if (seen[id]) mine->ids[n++] = (unsigned short)id;
     }
     free(seen);
-    pools[duelist].count = n;
-    pools[duelist].card_count = gCard_nCount;
+    mine->count = n;
+    mine->card_count = gCard_nCount;
     return 1;
 }
 
@@ -131,7 +158,7 @@ static int held(int id)
 int FreeDuelProgress_Count(int duelist, int *owned, int *obtainable)
 {
     int i, have = 0;
-    if (duelist < 1 || duelist > DUELISTS || !read_retail() || !work_out(duelist)) return 0;
+    if (duelist < 1 || !Duelists_Valid(duelist) || !read_retail() || !work_out(duelist)) return 0;
     for (i = 0; i < pools[duelist].count; i++) have += held(pools[duelist].ids[i]);
     *owned = have;
     *obtainable = pools[duelist].count;

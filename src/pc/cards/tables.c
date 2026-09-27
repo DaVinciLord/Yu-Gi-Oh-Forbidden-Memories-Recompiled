@@ -836,13 +836,17 @@ static void read_fixed_deck(const char *mod, const char *where, int duelist, con
         for (copy = 0; copy < list[i].copies; copy++) deck.cards[dealt++] = (unsigned short)list[i].id;
     }
     free(list);
+    /* "all" is every duelist this run has, the added ones included; a slot
+     * nothing was placed in is no duelist and is passed over. */
     first = duelist < 0 ? 0 : duelist;
-    last = duelist < 0 ? TABLES_DUELIST_COUNT - 1 : duelist;
+    last = duelist < 0 ? Duelists_Count() - 1 : duelist;
     for (i = first; i <= last; i++) {
-        FixedDeck *slot = grow(&fixed_decks, &fixed_room, fixed_count, sizeof(*fixed_decks));
+        FixedDeck *slot;
+        if (duelist < 0 && !Duelists_Valid(i)) continue;
+        slot = grow(&fixed_decks, &fixed_room, fixed_count, sizeof(*fixed_decks));
         if (!slot) break;
         *slot = deck;
-        slot->duelist = (unsigned char)i;
+        slot->duelist = i;
         fixed_count++;
     }
 }
@@ -851,7 +855,7 @@ int Tables_FixedDeck(int duelist, unsigned short cards[TABLES_DECK_SIZE])
 {
     const FixedDeck *deck = NULL;
     int i;
-    if (duelist < 0 || duelist >= TABLES_DUELIST_COUNT) return 0;
+    if (!Duelists_Valid(duelist)) return 0;
     for (i = fixed_count - 1; i >= 0 && !deck; i--) {   /* the latest */
         if (fixed_decks[i].duelist == duelist) deck = &fixed_decks[i];
     }
@@ -861,7 +865,7 @@ int Tables_FixedDeck(int duelist, unsigned short cards[TABLES_DECK_SIZE])
         PoolEdit *edit = &edits[i];
         if (edit->duelist != duelist || edit->pool != TABLES_POOL_DECK || edit->waiting) continue;
         edit->waiting = 1;
-        Mods_Note(edit->mod, "%s's deck: left as it is; %s fixes it", Tables_DuelistNames[duelist], deck->mod);
+        Mods_Note(edit->mod, "%s's deck: left as it is; %s fixes it", Duelists_Name(duelist), deck->mod);
     }
     memcpy(cards, deck->cards, sizeof(deck->cards));
     if (Log_Wanted(LOG_MODS)) {
@@ -872,7 +876,7 @@ int Tables_FixedDeck(int duelist, unsigned short cards[TABLES_DECK_SIZE])
             while (i + 1 < DECK_SIZE && deck->cards[i + 1] == deck->cards[i]) i++, copies++;
             at += snprintf(text + at, sizeof(text) - (size_t)at, " %dx%d", copies, deck->cards[i]);
         }
-        LOG(LOG_MODS, "tables: %s's deck fixed by %s (copies x card):%s", Tables_DuelistNames[duelist], deck->mod, text);
+        LOG(LOG_MODS, "tables: %s's deck fixed by %s (copies x card):%s", Duelists_Name(duelist), deck->mod, text);
     }
     return 1;
 }
@@ -1176,9 +1180,9 @@ const unsigned short *Tables_PoolFor(int duelist, int pool, const unsigned short
         if (!apply(edit, work, spare, marks, count) && !edit->warned) {
             edit->warned = 1;
             if (pool) Mods_Note(edit->mod, "%s's %s drops: left as they were; no card would be left to win",
-                                Tables_DuelistNames[duelist], pool_names[pool]);
+                                Duelists_Name(duelist), pool_names[pool]);
             else Mods_Note(edit->mod, "%s's deck: left as it was; a deck is dealt from at least %d cards",
-                           Tables_DuelistNames[duelist], DECK_POOL_MIN_CARDS);
+                           Duelists_Name(duelist), DECK_POOL_MIN_CARDS);
         }
     }
     {
@@ -1196,7 +1200,7 @@ const unsigned short *Tables_PoolFor(int duelist, int pool, const unsigned short
             if (work[id] > work[heaviest]) heaviest = id;
         }
         LOG(LOG_MODS, "tables: %s's %s as the mods have it: %d cards, the likeliest %d (%u/%d)",
-            Tables_DuelistNames[duelist], pool_names[pool], cards, heaviest, work[heaviest], POOL_TOTAL);
+            Duelists_Name(duelist), pool_names[pool], cards, heaviest, work[heaviest], POOL_TOTAL);
     }
     cache->duelist = duelist;
     cache->count = count;
