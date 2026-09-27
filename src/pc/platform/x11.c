@@ -6,6 +6,7 @@
 #include "pc/debug/cheats.h"
 #include "pc/cards/cards.h"
 #include "pc/cards/fusion_helper.h"
+#include "update_check.h"
 #include "pc/debug/log.h"
 #include "pc/debug/monitor.h"
 #include "pc/debug/hud.h"
@@ -508,6 +509,8 @@ static void resize_mods(int w, int h)
     mods_canvas.width = w; mods_canvas.height = h; mods_canvas.stride = next->bytes_per_line / 4;
     ModsWindow_Resize(w, h);
 }
+int Platform_OpenUrl(const char *url) { return Platform_OpenFolder(url); } /* xdg-open takes both */
+
 int Platform_OpenFolder(const char *path)
 {
     /* Twice forked, so xdg-open is never left a zombie of the game. */
@@ -835,6 +838,8 @@ void Platform_Frame(unsigned frame)
     Gamepad_Poll(frame);
     Cheats_Frame();
     Cards_Frame();
+    Update_Frame(); /* a notice shows with the next frame's menu */
+    Menu_TakeChanged();
     wheel_now = wheel_frames > 0 && wheel_frames-- ? wheel_bits : 0;
     scripted_bits = Platform_ScriptedBits(frame);
     scripted_bits2 = Platform_ScriptedBits2(frame);

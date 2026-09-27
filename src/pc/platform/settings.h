@@ -45,6 +45,8 @@ typedef enum {
     SET_OPPONENT_NAME,
     SET_PGXP,
     SET_CARD_DROPS,
+    SET_UPDATE_CHECK,
+    SET_UPDATE_PRERELEASES,
     SET_COUNT
 } SettingId;
 

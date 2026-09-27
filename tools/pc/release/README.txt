@@ -57,9 +57,27 @@ in your user folder, not next to the program:
   Windows: Documents\My Games\YFM Re-Decomp
   Linux:   ~/.local/share/YFM Re-Decomp
 
+Updates
+-------
+
+The game tells you when a new version is released. "Check for updates at
+start" in Help on the menu bar (F10) turns this off. A few seconds after the
+game starts it asks GitHub for the list of
+releases (without a connection it stays silent), and a newer one shows a
+notice with three choices:
+
+  Release page       open the release on GitHub in your browser
+  Skip this version  do not mention this version again
+  Later              ask again next time
+
+Help also has "Include pre-releases" (off) and "Check for updates now",
+which asks right away. The game never downloads or installs anything
+itself; you do that.
+
 To update, extract the new release into a fresh folder and launch it.
-Your ROM selection, settings and memory-card saves stay in your user folder.
-Save states may depend on the build; use an in-game save before updating.
+Your ROM selection, settings and memory-card saves stay in your user
+folder. Save states may depend on the build; use an in-game save before
+updating.
 
 
 Mods

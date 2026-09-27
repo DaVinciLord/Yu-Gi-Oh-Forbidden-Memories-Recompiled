@@ -21,6 +21,7 @@
 #include "pc/debug/cheats.h"
 #include "pc/cards/cards.h"
 #include "pc/cards/fusion_helper.h"
+#include "update_check.h"
 #include "pc/debug/log.h"
 #include "pc/debug/monitor.h"
 #include "pc/debug/hud.h"
@@ -153,6 +154,7 @@ int Platform_OpenFolder(const char *path)
 #endif
     return SDL_OpenURL(path) ? 0 : -1;
 }
+int Platform_OpenUrl(const char *url) { return SDL_OpenURL(url) ? 0 : -1; }
 void Platform_OpenMods(void)
 {
     sigset_t previous;
@@ -1805,6 +1807,8 @@ void Platform_PumpEvents(void)
     uint64_t now;
     if (!window) return;
     pump();
+    Update_Frame();
+    if (Menu_TakeChanged()) menu_dirty = 1;
     if (use_gl && GlPicture_Behind()) GlPicture_Replay();
     /* A running game shows the change with its next frame; paused, the wait
      * loop pumps every half millisecond, so keep hover repaints to ~120/s. */
@@ -1949,6 +1953,8 @@ void Platform_Frame(unsigned frame)
     Gamepad_Poll(frame);
     Cheats_Frame();
     Cards_Frame();
+    Update_Frame();
+    if (Menu_TakeChanged()) menu_dirty = 1;
     if (window) {
         run_event_script(frame);
     }

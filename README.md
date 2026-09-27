@@ -20,7 +20,8 @@ included.
 
 Download the latest build from [Releases](https://github.com/Unchiga/Yu-Gi-Oh-Forbidden-Memories-Recompiled/releases),
 extract it and run `memories-pc.exe` (Windows) or `./memories-pc` (Linux). On first
-launch, pick your USA disc's `.bin`.
+launch, pick your USA disc's `.bin`. The game can tell you when a newer release is out
+(**Help > Check for updates at start** turns it off; see [Updates](notes/updates.md)).
 
 ### HD pack
 
@@ -78,7 +79,8 @@ _Generated from `config/slus_01411/functions.csv` and `config/slus_01411/overlay
 ## Docs
 
 [Modding](notes/modding.md) · [More cards](notes/more-cards.md) · [Fusion helper](notes/fusion-helper.md) ·
-[Card drops](notes/card-drops.md) · [Setup](notes/setup.md) · [Build](notes/build.md) · [Releases](notes/pc-release.md)
+[Card drops](notes/card-drops.md) · [Updates](notes/updates.md) · [Setup](notes/setup.md) · [Build](notes/build.md) ·
+[Releases](notes/pc-release.md)
 
 ## Community
 

@@ -32,10 +32,12 @@ def version():
     return f"{datetime.date.today():%Y%m%d}-{commit}"
 
 
-def build(system, skip_smoke=False):
+def build(system, label, skip_smoke=False):
     command = [sys.executable, "tools/pc/build_game32.py", "--target", system,
                "--backend", "sdl", "--release", "--build", BUILDS[system][0]]
-    subprocess.run(command, cwd=ROOT, check=True)
+    # The label is the version the update check compares (notes/updates.md);
+    # one that is not vX.Y.Z[-PRE] makes a build that never checks.
+    subprocess.run(command, cwd=ROOT, check=True, env=dict(os.environ, MEMORIES_VERSION=label))
     if skip_smoke:
         print("package: gameplay smoke tests skipped (no disc required)")
         return
@@ -114,7 +116,7 @@ def main():
     made = []
     for system in systems:
         if not options.no_build:
-            build(system, options.skip_smoke)
+            build(system, label, options.skip_smoke)
         made.append(pack(system, stage(system, label)))
     shutil.rmtree(os.path.join(DIST, "stage"), ignore_errors=True)
     for path in made:

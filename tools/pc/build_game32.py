@@ -450,6 +450,34 @@ def write_sdk(build):
     if os.path.isdir(stale):
         shutil.rmtree(stale)
 
+VERSION_PATTERN = r"v\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?"
+
+def release_version():
+    """The release this build is, for the update check (notes/updates.md):
+    MEMORIES_VERSION when it is set (tools/pc/package.py sets it from
+    --version, the tag in CI), else the v* tag the checkout is exactly at.
+    Anything that is not vX.Y.Z or vX.Y.Z-PRE is a development build: ""."""
+    import re
+    version = os.environ.get("MEMORIES_VERSION")
+    if version is None:
+        try:
+            version = subprocess.run(["git", "describe", "--tags", "--exact-match", "--match", "v[0-9]*"],
+                                     capture_output=True, text=True).stdout.strip()
+        except OSError:
+            version = ""
+    return version if re.fullmatch(VERSION_PATTERN, version) else ""
+
+def write_version(build):
+    """version.c: Memories_Version, rewritten only when it changes."""
+    text = f'const char Memories_Version[] = "{release_version()}";\n'
+    path = f"{build}/version.c"
+    if not os.path.exists(path) or open(path).read() != text:
+        with open(path, "w") as handle:
+            handle.write(text)
+    if not os.path.exists(f"{build}/version.o") or os.path.getmtime(f"{build}/version.o") < os.path.getmtime(path):
+        run([CC, *NATIVE_CFLAGS, "-c", path, "-o", f"{build}/version.o"])
+    return f"{build}/version.o"
+
 def main():
     global NEWEST_HEADER
     parser = argparse.ArgumentParser(description=__doc__)
@@ -689,6 +717,7 @@ def main():
         handle.write(f"}};\nconst unsigned Memories_ModuleCount = {len(shared)};\n")
     run([CC, *NATIVE_CFLAGS, "-c", f"{options.build}/stubs.c", "-o", f"{options.build}/stubs.o"])
     write_mod_exports(options.build, game_defined | native_defined | tentative | set(pinned) | set(stubs), aliases)
+    version = write_version(options.build)
     output = f"{options.build}/memories-pc"
     if WINDOWS:
         output += ".exe"
@@ -709,10 +738,10 @@ def main():
              "-Wl,-Xlink=-debug:symtab",
              "-Wl,--large-address-aware", "-Wl,--disable-dynamicbase", "-Wl,--nxcompat",
              "-Wl,--allow-multiple-definition", f"{options.build}/guest_symbols.o",
-             *[obj(s) for s in NATIVE + game], f"{options.build}/stubs.o", f"{options.build}/mod_exports.o",
+             *[obj(s) for s in NATIVE + game], f"{options.build}/stubs.o", f"{options.build}/mod_exports.o", version,
              f"{options.build}/section_markers.o", *icon,
              f"{WIN32_DEPS}/sdl/lib/libSDL3.dll.a", "-lopengl32", f"{WIN32_DEPS}/lib/libfreetype.a",
-             f"{WIN32_DEPS}/lib/libpng16.a", f"{WIN32_DEPS}/lib/libzs.a", "-ldbghelp", "-static", "-lpthread"])
+             f"{WIN32_DEPS}/lib/libpng16.a", f"{WIN32_DEPS}/lib/libzs.a", "-ldbghelp", "-lwinhttp", "-static", "-lpthread"])
         shutil.copy(f"{WIN32_DEPS}/sdl/bin/SDL3.dll", options.build)
     else:
         # Mods bind through mod_exports.o, so nothing needs -rdynamic.
@@ -726,7 +755,7 @@ def main():
         run(["gcc", "-m32", "-no-pie", "-o", output, *build_linux_sysroot.startfiles(),
              *[f"-Wl,--section-start={name}=0x{address:08X}" for name, address in sorted(fixed.items())],
              *[obj(s) for s in game + NATIVE],
-             f"{options.build}/stubs.o", f"{options.build}/mod_exports.o", f"{options.build}/guest_symbols.ld", *(libraries if options.backend == "sdl"
+             f"{options.build}/stubs.o", f"{options.build}/mod_exports.o", version, f"{options.build}/guest_symbols.ld", *(libraries if options.backend == "sdl"
                else ["-lm", *fonts, "-lX11", "-lXext", "-lasound", *system]), *build_linux_sysroot.endfiles()])
     build_mods(options.build, options.release)
     # Save states are carried between builds with these tables
