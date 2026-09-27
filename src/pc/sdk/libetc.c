@@ -226,6 +226,12 @@ int Memories_VSync(int mode)
         }
     }
     if (mode < 0 || mode == 1) Platform_PollTime();
+    /* One VBlank between entry and return, as on the console: the game's
+     * counter Graphics_SyncFrame just set to -1 must read 0 at
+     * Input_UpdatePads, or the frame's presses are published twice
+     * (Platform_LimitVBlanks). Held from before the count is read, so any
+     * VBlank the limit lets through ends the wait below. */
+    if (mode == 0) Platform_LimitVBlanks(1);
     now = Platform_VBlankCount();
     Platform_VSyncHeartbeat();
     if (mode < 0) {
@@ -296,6 +302,7 @@ int Memories_VSync(int mode)
             frames = game_us = present_us = late = game_max = present_max = 0;
         }
         Platform_WaitVBlank(now);
+        Platform_LimitVBlanks(-1);
         clock_gettime(CLOCK_MONOTONIC, &left);
         Memories_StatePoint(Memories_PresentedFrames());
     } else if (mode > 1) {
