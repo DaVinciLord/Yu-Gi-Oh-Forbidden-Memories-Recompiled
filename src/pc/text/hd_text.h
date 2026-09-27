@@ -55,8 +55,8 @@ int HdText_Hud(int depth, int page_x, int page_y, int clut_x, int clut_y, int u,
  * (at 1x too: HdText_NamePixels): a box made from COM's, as long as the name needs
  * (Tables_DuelistShortName), drawn over the life-point panel at x, y
  * (panel texels; x runs left of the panel for a long name), width x height,
- * its picture at atlas_u, atlas_v; `which` 1 is YOU's box with You, in
- * the name's case. 0 with no opponent (2P) or no retail panel. */
+ * its picture at atlas_u, atlas_v; `which` 1 is YOU's box with the
+ * player's name from name entry, or You. 0 with no opponent (2P) or no retail panel. */
 int HdText_NameEnabled(void);
 int HdText_NameBox(int factor, int which, int *atlas_u, int *atlas_v, int *x, int *y, int *width, int *height);
 /* The same box at the console's resolution (soft_gpu.c draws it there):
