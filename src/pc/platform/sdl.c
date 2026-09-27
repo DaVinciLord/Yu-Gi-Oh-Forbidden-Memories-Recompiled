@@ -1350,6 +1350,7 @@ static void pump(void)
             break;
         case SDL_EVENT_WINDOW_FOCUS_LOST:
             if(!controls_window)ControlsRuntime_ResetKeys(); mouse_bits=wheel_now=0;wheel_frames=0;
+            Memories_RewindHold(0); /* the key-up may never come */
             if (Settings_Get(SET_MUTE_ON_FOCUS_LOSS)) Spu_SetOutputVolume(0);
             if (Settings_Get(SET_PAUSE_ON_FOCUS_LOSS) && Platform_ClockRate() != 0) {
                 focus_clock_rate = Platform_ClockRate();
@@ -1428,6 +1429,10 @@ static void pump(void)
             }
             if (down && key == SDLK_F6) {
                 DeckMenu_Request();
+                break;
+            }
+            if (key == SDLK_F8) {
+                Memories_RewindHold(down); /* acts only with Game > Rewind on */
                 break;
             }
             if (down && key == SDLK_ESCAPE) {
@@ -1855,7 +1860,10 @@ static void run_event_script(unsigned frame)
         memset(&event, 0, sizeof(event));
         if (strcmp(kind, "shot") == 0) {
             Platform_Screenshot(1);
-        } else if (strcmp(kind, "key") == 0) {
+        } else if (strcmp(kind, "key") == 0 || strcmp(kind, "down") == 0 || strcmp(kind, "up") == 0) {
+            /* "key" presses and releases in one go; "down" and "up" hold a
+             * key across frames, as the game only sees what is held when
+             * it reads the pad. */
             const char *name = script + 1;
             n = strcspn(name, ",");
             event.type = SDL_EVENT_KEY_DOWN;
@@ -1863,6 +1871,7 @@ static void run_event_script(unsigned frame)
             event.key.key = strncmp(name, "escape", n) == 0 ? SDLK_ESCAPE : strncmp(name, "f10", n) == 0 ? SDLK_F10
                           : strncmp(name, "f3", n) == 0 ? SDLK_F3
                           : strncmp(name, "f6", n) == 0 ? SDLK_F6
+                          : strncmp(name, "f8", n) == 0 ? SDLK_F8
                           : strncmp(name, "f11", n) == 0 ? SDLK_F11
                           : strncmp(name, "f12", n) == 0 ? SDLK_F12
                           : strncmp(name, "left", n) == 0 ? SDLK_LEFT : strncmp(name, "right", n) == 0 ? SDLK_RIGHT
@@ -1874,10 +1883,10 @@ static void run_event_script(unsigned frame)
                           : SDLK_UNKNOWN;
             event.key.scancode = SDL_GetScancodeFromKey(event.key.key, NULL);
             event.key.windowID = SDL_GetWindowID(window);
-            SDL_PushEvent(&event);
+            if (strcmp(kind, "up") != 0) SDL_PushEvent(&event);
             event.type = SDL_EVENT_KEY_UP;
             event.key.down = false;
-            SDL_PushEvent(&event);
+            if (strcmp(kind, "down") != 0) SDL_PushEvent(&event);
             script = name + n;
         } else {
             x = (int)strtol(script + 1, &end, 10);

@@ -240,9 +240,9 @@ static int test_reserved_keys(void)
     CHECK(Controls_IsReservedKey(CTRL_KEY_P, 0));
     CHECK(Controls_IsReservedKey(CTRL_KEY_M, 0));
     CHECK(Controls_IsReservedKey(CTRL_KEY_PERIOD, 0));
-    /* F6/F8/F9 are NOT in the reserved set. */
+    /* F8 is held to rewind (Game > Rewind); F6/F9 are NOT in the reserved set. */
+    CHECK(Controls_IsReservedKey(CTRL_KEY_F8, 0));
     CHECK(!Controls_IsReservedKey(CTRL_KEY_F6, 0));
-    CHECK(!Controls_IsReservedKey(CTRL_KEY_F8, 0));
     CHECK(!Controls_IsReservedKey(CTRL_KEY_F9, 0));
     /* Modifiers are reserved, except Right Shift. */
     CHECK(Controls_IsReservedKey(CTRL_KEY_LEFT_SHIFT, 1));

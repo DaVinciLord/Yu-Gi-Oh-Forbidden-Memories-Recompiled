@@ -652,7 +652,7 @@ static void pump(void)
             continue;
         }
         if(controls_window && (event.type==KeyPress||event.type==KeyRelease||event.type==ButtonPress||event.type==ButtonRelease))continue;
-        if(event.type==FocusOut){if(!controls_window)ControlsRuntime_ResetKeys();mouse_bits=wheel_now=0;wheel_frames=0;}
+        if(event.type==FocusOut){Memories_RewindHold(0);if(!controls_window)ControlsRuntime_ResetKeys();mouse_bits=wheel_now=0;wheel_frames=0;}
 
         if (mods_window && event.xany.window == mods_window) {
             MenuEvent input = *translate(&event);
@@ -705,6 +705,10 @@ static void pump(void)
             }
             if (key == XK_F6 && event.type == KeyPress) {
                 DeckMenu_Request();
+                continue;
+            }
+            if (key == XK_F8) {
+                Memories_RewindHold(event.type == KeyPress); /* acts only with Game > Rewind on */
                 continue;
             }
             if (key == XK_Escape && event.type == KeyPress) {
