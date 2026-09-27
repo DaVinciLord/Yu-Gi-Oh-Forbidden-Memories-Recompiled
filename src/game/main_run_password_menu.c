@@ -16,6 +16,10 @@
 #include "options.h"
 #include "../unmatched.h"
 #include "main_mode_state.h"
+#ifdef MEMORIES_PC
+#include "card_constants.h"
+#include "pc/cards/tables.h"
+#endif
 
 void Main_RunPasswordMenu(void)
 {
@@ -24,6 +28,18 @@ void Main_RunPasswordMenu(void)
     if ((flags & 0x40) == 0) {
         D_8009B26C = flags | 0x40;
         File_RequestPasswordPackage();
+#ifdef MEMORIES_PC
+        {   /* The mods' "passwords" (tables.h) over the table just loaded. */
+            int id;
+            for (id = 1; id <= CARD_COUNT; id++) {
+                unsigned price = D_801A8000[id].price, password = (unsigned)D_801A8000[id].password;
+                if (Tables_PasswordShop(id, &price, &password)) {
+                    D_801A8000[id].price = price;
+                    D_801A8000[id].password = (s32)password;
+                }
+            }
+        }
+#endif
         Password_InitShopScreen();
     }
     Password_UpdateShopScreen();

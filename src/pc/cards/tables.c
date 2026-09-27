@@ -9,9 +9,11 @@
  * "chest_overflow" turns a card the chest has no room for into
  * starchips (Duel_AwardCard), and "terrain_bonus" sets what a terrain gives
  * each monster type (Duel_GetTerrainBoost), and "trap_thresholds" the attack
- * each attack trap stops (Duel_SelectAttackTrap). A drop or deck pool is worked out
- * from what the game loaded when it is drawn from, so a data mod's patch of
- * the same pool comes first and the edits here go on top of it. */
+ * each attack trap stops (Duel_SelectAttackTrap), and "passwords" the
+ * Password screen's passwords and prices (Main_RunPasswordMenu). A drop or
+ * deck pool is worked out from what the game loaded when it is drawn from,
+ * so a data mod's patch of the same pool comes first and the edits here go
+ * on top of it. */
 #include "tables.h"
 #include "cards.h"
 #include "pc/mods/mods.h"
@@ -1145,6 +1147,173 @@ int Tables_ChestOverflow(unsigned quantity, unsigned *starchips)
     return (int)overflow_starchips;
 }
 
+/* --- the Password screen ------------------------------------------- */
+
+#define SHOP_PASSWORD 1     /* shop_password[id] is the card's */
+#define SHOP_PRICE 2        /* shop_price[id] is the card's */
+#define SHOP_PERCENT 4      /* shop_price[id] is a percent of the disc's */
+
+static unsigned shop_password[CARD_COUNT + 1], shop_price[CARD_COUNT + 1];
+static unsigned char shop_set[CARD_COUNT + 1];
+static int shop_count;
+
+/* Eight decimal digits as the game keeps them, a digit a nibble. */
+static unsigned password_digits(unsigned long number)
+{
+    unsigned packed = 0;
+    int shift;
+    for (shift = 0; shift < 32; shift += 4, number /= 10) packed |= (unsigned)(number % 10) << shift;
+    return packed;
+}
+
+/* A "password": up to eight digits as a string ("00000001") or a number
+ * (1), "card number" for the card's own number, "" or null for none (the
+ * screen cannot give the card). 0 when it is none of those. */
+static int read_shop_password(const JsonValue *value, int id, unsigned *out)
+{
+    const char *text = Json_String(value, NULL);
+    long number = Json_Number(value, -1);
+    size_t length;
+    if (Json_TypeOf(value) == JSON_NULL || (text && !*text)) {
+        *out = CARD_PASSWORD_NONE;
+        return 1;
+    }
+    if (Json_TypeOf(value) == JSON_NUMBER) {
+        if (number < 0 || number > 99999999L) return 0;
+        *out = password_digits((unsigned long)number);
+        return 1;
+    }
+    if (!text) return 0;
+    if (same_letters(text, "card number")) {
+        *out = password_digits((unsigned long)id);
+        return 1;
+    }
+    length = strlen(text);
+    if (length > 8 || strspn(text, "0123456789") != length) return 0;
+    *out = password_digits(strtoul(text, NULL, 10));
+    return 1;
+}
+
+/* One card's entry: {"password": ..., "starchips": n} or
+ * {"starchips_percent": n}; what it leaves out stays. */
+static void read_shop_card(const char *mod, const char *where, const JsonValue *entry, int id)
+{
+    const JsonValue *password = Json_Member(entry, "password");
+    const JsonValue *starchips = Json_Member(entry, "starchips");
+    const JsonValue *percent = Json_Member(entry, "starchips_percent");
+    unsigned value;
+    long n;
+    if (password) {
+        if (read_shop_password(password, id, &value)) {
+            shop_password[id] = value;
+            shop_set[id] |= SHOP_PASSWORD;
+        } else {
+            Mods_Note(mod, "%s: \"password\" is up to 8 digits (\"00000001\"), \"card number\", or \"\" for none", where);
+        }
+    }
+    if (starchips && percent) Mods_Note(mod, "%s: \"starchips\" and \"starchips_percent\" both; \"starchips\" used", where);
+    if (starchips) {
+        n = Json_Number(starchips, -1);
+        if (Json_TypeOf(starchips) != JSON_NUMBER || n < 0 || n > STARCHIP_MAX) {
+            Mods_Note(mod, "%s: \"starchips\" is a whole number, 0 to %ld", where, STARCHIP_MAX);
+        } else {
+            shop_price[id] = (unsigned)n;
+            shop_set[id] = (unsigned char)((shop_set[id] & ~SHOP_PERCENT) | SHOP_PRICE);
+        }
+    } else if (percent) {
+        n = Json_Number(percent, -1);
+        if (Json_TypeOf(percent) != JSON_NUMBER || n < 0 || n > 1000) {
+            Mods_Note(mod, "%s: \"starchips_percent\" is a whole number, 0 to 1000", where);
+        } else {
+            shop_price[id] = (unsigned)n;
+            shop_set[id] = (unsigned char)((shop_set[id] & ~SHOP_PRICE) | SHOP_PERCENT);
+        }
+    }
+}
+
+/* "passwords": { card: {"password": ..., "starchips": n} }, with "all" for
+ * every card of the disc; "all" goes first, so a card named beside it
+ * keeps what its own entry says. */
+static void read_passwords(const char *mod, const JsonValue *table)
+{
+    int i, id, pass;
+    char where[128];
+    if (!table) return;
+    if (Json_TypeOf(table) != JSON_OBJECT) {
+        Mods_Note(mod, "\"passwords\" is an object: {\"Blue-eyes White Dragon\": {\"password\": \"00000001\", "
+                  "\"starchips\": 100}}");
+        return;
+    }
+    for (pass = 0; pass < 2; pass++) {
+        for (i = 0; i < Json_Count(table); i++) {
+            const JsonValue *entry = Json_At(table, i);
+            const char *name = Json_Name(entry);
+            int all = same_letters(name, "all");
+            if (all != (pass == 0)) continue;
+            snprintf(where, sizeof(where), "passwords \"%s\"", name);
+            if (Json_TypeOf(entry) != JSON_OBJECT) {
+                Mods_Note(mod, "%s: an entry is {\"password\": \"00000001\", \"starchips\": 100}", where);
+                continue;
+            }
+            if (all) {
+                for (id = 1; id <= CARD_COUNT; id++) read_shop_card(mod, where, entry, id);
+                shop_count += CARD_COUNT;
+                continue;
+            }
+            id = Cards_Named(name);
+            if (id <= 0) {
+                Mods_Note(mod, "%s: no card by that name or number", where);
+                continue;
+            }
+            if (id > CARD_COUNT) {
+                Mods_Note(mod, "%s: only the disc's 722 cards are on the Password screen", where);
+                continue;
+            }
+            read_shop_card(mod, where, entry, id);
+            shop_count++;
+        }
+    }
+}
+
+/* Two cards with one password: the screen gives the lower card number. */
+static void check_passwords(void)
+{
+    int a, b;
+    for (a = 1; a <= CARD_COUNT; a++) {
+        if (!(shop_set[a] & SHOP_PASSWORD) || shop_password[a] == CARD_PASSWORD_NONE) continue;
+        for (b = a + 1; b <= CARD_COUNT; b++) {
+            if ((shop_set[b] & SHOP_PASSWORD) && shop_password[b] == shop_password[a]) {
+                LOG(LOG_MODS, "tables: cards %d and %d both have password %08X; the screen gives card %d", a, b,
+                    shop_password[a], a);
+                break;
+            }
+        }
+    }
+}
+
+int Tables_PasswordShop(int id, unsigned *price, unsigned *password)
+{
+    int changed = 0;
+    if (id < 1 || id > CARD_COUNT || !shop_set[id]) return 0;
+    if (shop_set[id] & SHOP_PASSWORD) {
+        changed |= *password != shop_password[id];
+        *password = shop_password[id];
+    }
+    if (shop_set[id] & (SHOP_PRICE | SHOP_PERCENT)) {
+        unsigned long long value = shop_price[id];
+        if (shop_set[id] & SHOP_PERCENT) {
+            /* Rounded, and never down to free: a card that cost something
+             * still costs a starchip. */
+            value = ((unsigned long long)*price * shop_price[id] + 50) / 100;
+            if (!value && *price && shop_price[id]) value = 1;
+            if (value > STARCHIP_MAX) value = STARCHIP_MAX;
+        }
+        changed |= *price != (unsigned)value;
+        *price = (unsigned)value;
+    }
+    return changed;
+}
+
 /* --- building -------------------------------------------------------- */
 
 static void forget_pools(void)
@@ -1165,6 +1334,7 @@ void Tables_Add(const char *mod, const JsonValue *manifest)
     read_chest_overflow(mod, Json_Member(manifest, "chest_overflow"));
     read_terrain_bonus(mod, Json_Member(manifest, "terrain_bonus"));
     read_trap_thresholds(mod, Json_Member(manifest, "trap_thresholds"));
+    read_passwords(mod, Json_Member(manifest, "passwords"));
 }
 
 void Tables_Clear(void)
@@ -1181,6 +1351,8 @@ void Tables_Clear(void)
     }
     fusion_count = equip_count = ritual_count = edit_count = fixed_count = bonus_count = 0;
     overflow_starchips = chest_limit = 0;
+    memset(shop_set, 0, sizeof(shop_set));
+    shop_count = 0;
     equip_default = 0;
     equip_default_set = 0;
     memset(terrain_bonus, 0, sizeof(terrain_bonus));
@@ -1205,4 +1377,8 @@ void Tables_Build(void)
         LOG(LOG_MODS, "tables: %d fusion rules, %d equip rules, %d equip bonuses, %d rituals, %d pool edits, "
             "%d fixed decks, a chest of %d with %ld starchips a card past it", fusion_count, equip_count,
             bonus_count, ritual_count, edit_count, fixed_count, Tables_ChestLimit(), overflow_starchips);
+    if (shop_count) {
+        LOG(LOG_MODS, "tables: %d Password screen entries", shop_count);
+        check_passwords();
+    }
 }
