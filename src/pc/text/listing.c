@@ -252,8 +252,11 @@ static int line_text(Compiler *c, int bank, const char *text, size_t length, int
             }
         } else {
             const char *letter = at;
-            uint32_t character = Glyphs_NextCharacter(&at);
-            int glyph_code;
+            /* Composed (NFC): an editor that saves letters decomposed (e,
+             * then its marks) still writes one letter, not one per mark. */
+            uint32_t left[GLYPHS_MARKS_MAX], character;
+            int glyph_code, left_count, i;
+            character = Glyphs_NextComposed(&at, left, &left_count);
             if (character == GLYPHS_NOT_UTF8) {
                 /* Most likely the whole file is in another encoding (an
                  * editor's Windows-1252): said once, where it starts; the
@@ -268,17 +271,19 @@ static int line_text(Compiler *c, int bank, const char *text, size_t length, int
                 }
                 continue;
             }
-            glyph_code = c->encode(character);
-            if (glyph_code < 0) {
-                say(c, "no letter for \"%.*s\"; left out", (int)(at - letter), letter);
-                continue;
-            }
-            glyph(c, glyph_code);
-            /* A space is no entry of the box's; anything else is one. */
-            if (glyph_code && ++c->letters > TEXT_PAGE_LETTERS && !c->page_warned) {
-                say(c, "more than %d letters on one page; no text box shows more (most menus, %d)", TEXT_PAGE_LETTERS,
-                    TEXT_MENU_LETTERS);
-                c->page_warned = 1;
+            for (i = -1; i < left_count; i++) {
+                glyph_code = c->encode(i < 0 ? character : left[i]);
+                if (glyph_code < 0) {
+                    say(c, "no letter for \"%.*s\"; left out", (int)(at - letter), letter);
+                    continue;
+                }
+                glyph(c, glyph_code);
+                /* A space is no entry of the box's; anything else is one. */
+                if (glyph_code && ++c->letters > TEXT_PAGE_LETTERS && !c->page_warned) {
+                    say(c, "more than %d letters on one page; no text box shows more (most menus, %d)",
+                        TEXT_PAGE_LETTERS, TEXT_MENU_LETTERS);
+                    c->page_warned = 1;
+                }
             }
         }
     }

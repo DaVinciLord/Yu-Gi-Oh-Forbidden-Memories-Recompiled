@@ -273,7 +273,7 @@ the first time a text uses them:
   all three text sizes (16x16, 8x12 and the 8x8 of the duel results'
   headings): acute, grave, circumflex, diaeresis, tilde, ring, cedilla,
   caron, macron, breve, dot, double acute and ogonek, on any letter Unicode
-  combines them with (251 of them: á, Ž, ő, ę, ǎ, ẽ...). Also
+  combines them with (251 of them: á, Ž, ő, ę, ǎ, ẽ...; Vietnamese below). Also
   ¿ ¡ ı ø Ø ł Ł đ Đ ħ Ħ, and `:` in the 8x8 font, which has none (two of its
   `·`, in the letters' colours).
 * **How a mark fits** a cell with no room above the letter. In the 16x16
@@ -289,6 +289,43 @@ the first time a text uses them:
   mark's outline goes below it (é, ã, ô in 8x12, all of them in 8x8)
   shares that row instead of being squeezed. The 8x8 font's cedilla is one
   pixel on its bottom row, under the letter.
+* **Vietnamese** (all 134 letters past ASCII: ả ạ ơ ư ế ặ ự...) is composed
+  the same way, with three more marks and letters of two:
+  * the **hook above** (ả) is drawn like the other marks; the **dot
+    below** (ạ) goes on the row under the letter, the pixel of the letter
+    above it turned to outline so it stays a dot (the small fonts' last row
+    is the letters' foot); under a tail (ỵ) it goes beside it, under the
+    right arm; the **horn** (ơ ư) is a stroke of two pixels (three in
+    16x16) out and up from the letter's top right. Any letter Unicode gives
+    one of these marks is drawn too (ḍ, ṣ, ṭ...).
+  * **Two marks** (^, the breve or the horn, and a tone): in the 8x12 and
+    8x8 fonts, which have no rows to stack them, the tone goes **beside**
+    the ^ or breve, on its right, in the same two rows, as compact
+    Vietnamese fonts do (Ấ is ^´ over A; the breve beside a tone is drawn
+    as a v, so that the two fit), so a capital gives up only the row it
+    gives up for one mark. In 16x16 the tone is **stacked** over the ^ or
+    breve, to its right. The 8x8 font leaves the tone out (keeping the ^ or
+    breve) if the two do not fit its cell; none of the Vietnamese ones needs
+    to. Horn and dot below take no rows above, so ớ, ợ, ậ are a mark above
+    and one of these.
+  * The table (`src/pc/text/accents.inc`) is written by
+    `tools/pc/glyph_accents.py` from Python's `unicodedata`.
+  * HD text sets these from the font as it does é, fitted to the composed
+    cell; the dot below touches the letter in ọ ộ ợ ụ ự ệ ỵ and their capitals
+    (Ộ's circumflex too; readable, a drop under the letter, about 2% of the
+    letters of a Vietnamese text) and ỵ reads poorly. At 1x they stand apart. A renamed card's
+    title plate (Times, `cards/art.c`) fits a name whose marks reach past
+    its top (two-mark capitals) into its rows instead of cutting them.
+* **Text is composed (NFC)** when a listing is compiled: a letter followed
+  by combining marks (U+0300-U+036F), as some editors and macOS save them,
+  is one letter (e + U+0302 + U+0301 is ế), whatever order the marks are in;
+  a mark with nothing to compose with stays a glyph of its own after it.
+  Only the listing does this; a mod's card names and host menus read the
+  UTF-8 as it is, so save those composed.
+* `MEMORIES_GLYPH_SHEET=file.ppm` writes the pictures of every letter the
+  text added (8x12, 16x16 and 8x8, one column each, outline black) the first
+  time one is drawn, and `file.ppm.txt` with their code points: a way to see
+  all of a translation's letters without finding each on screen.
 * **ß ẞ æ Æ œ Œ ð Ð þ Þ º ª ° €** are built in, drawn from Noto Sans Bold
   (SIL Open Font License) and given the retail letters' outline and
   shading.
