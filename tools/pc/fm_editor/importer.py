@@ -22,7 +22,7 @@ import re
 import struct
 from dataclasses import dataclass, field
 
-from . import gamedata as g, manifest
+from . import gamedata as g, kit, manifest
 from .model import Project
 from .pools import normalize
 
@@ -268,7 +268,7 @@ def text_spans(slus: bytes):
 
 def _where(address: int) -> str:
     if address < 0x80010000:
-        return f", in the executable's header (file offset 0x{g.slus_offset(address):X})"
+        return f", in the executable's header (file offset 0x{address - kit.HEADER_ADDRESS:X})"
     for low, high, name in TEXT_BANKS:
         if low <= address < high:
             return f", in {name}"
@@ -284,7 +284,9 @@ def describe_places(retail_slus: bytes, slus: bytes, pieces) -> list:
             groups[-1][1:] = [end, groups[-1][2] + end - start]
         else:
             groups.append([start, end, end - start])
-    places = [(start + g.EXE_DELTA, end + g.EXE_DELTA, count) for start, end, count in groups]
+    # The header's bytes are where the BIOS leaves them (the kit runs code there).
+    places = [(start + (kit.HEADER_ADDRESS if start < 0x800 else g.EXE_DELTA),
+               end + (kit.HEADER_ADDRESS if start < 0x800 else g.EXE_DELTA), count) for start, end, count in groups]
     callers = jumps_into(retail_slus, slus, [(start, end) for start, end, _ in places])
     lines = []
     for start, end, count in places[:PLACES_SHOWN]:
@@ -404,6 +406,56 @@ def decode_drop_pools(retail, modded, retail_files, modded_files) -> list:
     return notes
 
 
+def _names(project: Project, ids, most: int = 8) -> str:
+    ids = sorted(ids)
+    shown = ", ".join(project.card_label(i) if i in project.cards else str(i) for i in ids[:most])
+    return shown + (f" and {len(ids) - most} more" if len(ids) > most else "")
+
+
+def read_equip_bitmaps(project: Project, modded, retail_files, modded_files) -> list:
+    """The equips when the mod's Duel_CheckEquip reads a bitmap per equip
+    (kit.equip_bitmaps): every equip card's monsters as the mod's code
+    decides. Records of cards the port's equips cannot take are reported."""
+    table = kit.equip_bitmaps(retail_files.slus, modded_files.slus, modded_files.wa)
+    if table is None:
+        return []
+    cards = modded.cards
+    monsters = {cid for cid, card in cards.items() if card.is_monster()}
+    equips = {cid for cid, card in cards.items() if card.type == g.TYPE_EQUIP}
+    project.equips = {e: table.allowed(e) & monsters for e in equips}
+    project.equips = {e: m for e, m in project.equips.items() if m or e in project.retail.equips}
+    notes = [f"equips: the mod's {table.where} reads its table as bitmaps of {kit.EQUIP_RECORD} bytes per card "
+             f"({len(table.records)} records{'' if table.limit is None else f', {table.limit} read'}); every "
+             "equip card's monsters were read that way"]
+    others = [key for key, _ in table.records if key not in equips]
+    if others:
+        notes.append(f"equips: {len(others)} records are for cards that are not equip cards ({_names(project, others)}): "
+                     "monsters or magic used as equips (\"Union\"); the port's equips take equip cards only "
+                     "(src/pc/cards/tables.c: \"not an equip card\"), so they are not imported")
+    if table.by_monster:
+        notes.append(f"equips: {len(table.by_monster)} records name a monster and the equips it takes "
+                     f"({_names(project, [m for m, _ in table.by_monster])}); those equips' lists include it")
+    if table.blocked:
+        notes.append(f"equips: no equip equips {_names(project, table.blocked)}, as the mod's code decides")
+    return notes
+
+
+def check_rituals(project: Project, modded) -> list:
+    """No rituals when the ritual table holds no recipe the game could
+    read: the kit keeps code there and takes the rituals away."""
+    cards = modded.cards
+    valid = {r: rec for r, rec in project.rituals.items()
+             if r in cards and cards[r].type == g.TYPE_RITUAL and all(1 <= c <= g.CARD_COUNT for c in rec)}
+    bad = len(project.rituals) - len(valid)
+    if not bad:
+        return []
+    project.rituals = valid
+    if valid:
+        return [f"rituals: {bad} records of the modified ritual table name no ritual card or no card at all; left out"]
+    return [f"rituals: the modified ritual table holds no recipe ({bad} records naming no ritual card or no card: "
+            "code, or another format); the rituals were imported as removed, as the game finds none there"]
+
+
 def _starter_sums(wa: bytes) -> list:
     stride = g.STARTER_LENGTH // 7
     return [sum(struct.unpack_from("<%dH" % g.CARD_COUNT, wa, g.STARTER_BASE + k * stride + 2)) for k in range(7)]
@@ -507,7 +559,9 @@ def import_modded(retail_files, modded_files, mod_id: str = "imported-mod", name
     drop_notes = decode_drop_pools(retail, modded, retail_files, modded_files)
     project.fusions = dict(modded.fusions)
     project.equips = {e: set(m) for e, m in modded.equips.items()}
+    equip_notes = read_equip_bitmaps(project, modded, retail_files, modded_files)
     project.rituals = dict(modded.rituals)
+    ritual_notes = check_rituals(project, modded)
     project.pools = [{p: dict(modded.pools[d][p]) for p in g.POOLS} for d in range(len(modded.pools))]
     changed_cards = sum(1 for cid in retail.cards if project.card_changed(cid))
     report.append(f"cards: {changed_cards} changed")
@@ -515,8 +569,10 @@ def import_modded(retail_files, modded_files, mod_id: str = "imported-mod", name
         report.append(f"cards: {spaced} names or texts differ from retail only by spaces at the end of a line; "
                       "kept as retail")
     report.append(f"fusions: {sum(1 for p in set(retail.fusions) | set(modded.fusions) if retail.fusions.get(p) != modded.fusions.get(p))} pairs differ")
-    report.append(f"equips: {sum(1 for e in set(retail.equips) | set(modded.equips) if set(retail.equips.get(e, [])) != set(modded.equips.get(e, [])))} equip cards differ")
-    report.append(f"rituals: {sum(1 for r in set(retail.rituals) | set(modded.rituals) if retail.rituals.get(r) != modded.rituals.get(r))} differ")
+    report.append(f"equips: {sum(1 for e in set(retail.equips) | set(project.equips) if set(retail.equips.get(e, [])) != set(project.equips.get(e, [])))} equip cards differ")
+    report += equip_notes
+    report.append(f"rituals: {sum(1 for r in set(retail.rituals) | set(project.rituals) if retail.rituals.get(r) != project.rituals.get(r))} differ")
+    report += ritual_notes
     pools_changed = sum(1 for d in range(len(retail.pools)) for p in g.POOLS if retail.pools[d][p] != modded.pools[d][p])
     report.append(f"pools: {pools_changed} of {len(retail.pools) * len(g.POOLS)} differ")
     report += drop_notes

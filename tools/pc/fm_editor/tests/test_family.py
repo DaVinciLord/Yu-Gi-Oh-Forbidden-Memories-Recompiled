@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from fm_editor import gamedata as g, importer, manifest
+from fm_editor import gamedata as g, importer, kit, manifest
 from fm_editor.disc import GameFiles
 from fm_editor.tests import fixtures
 from fm_editor.tests.test_data import fixture
@@ -65,6 +65,92 @@ class ArchiveTest(unittest.TestCase):
         data = manifest.build(result.project)["data"]
         self.assertEqual(data[0]["patch"], [{"at": "0x200", "bytes": "01"}])
         self.assertEqual(data[1:], [{"lba": 10102 + 0x169000 // 2048, "sectors": 6, "replace": "data/wa_002D2.bin"}])
+
+
+def bitmap_record(key: int, ids) -> bytes:
+    bits = bytearray(92)
+    for m in ids:
+        bits[m >> 3] |= 0x80 >> (m & 7)
+    bits[91] = 0xFF                          # past the last card: the kit's padding, ignored
+    return struct.pack("<H", key) + bytes(bits)
+
+
+def with_equip_table(f, records: bytes) -> bytearray:
+    wa = bytearray(f.wa)
+    for k in range(g.TERRAIN_COPIES):
+        at = g.TERRAIN_BASE + k * g.TERRAIN_STRIDE + g.EQUIP_OFFSET
+        wa[at:at + g.EQUIP_LENGTH] = records.ljust(g.EQUIP_LENGTH, b"\0")
+    return wa
+
+
+EQUIP_LO = kit.EQUIP_ADDRESS - 0x80180000     # the low half, as addiu adds it to lui 0x8018
+
+
+class EquipTest(unittest.TestCase):
+    def test_bitmaps_read_up_to_id_0(self):
+        """One shape: Duel_CheckEquip itself steps 94 bytes."""
+        f = fixture()
+        slus = bytearray(f.slus)
+        fixtures.put(slus, kit.CHECK_EQUIP, fixtures.asm(kit.CHECK_EQUIP, [
+            ("lui", "v0", 0x8018), ("addiu", "v0", "v0", EQUIP_LO), ("lhu", "v1", 0, "v0"),
+            ("bne", "v1", "zero", kit.CHECK_EQUIP + 0x1C), ("addiu", "a2", "v0", 2), ("jr", "ra"), ("nop",),
+            ("bne", "v1", "a0", kit.CHECK_EQUIP + 8), ("addiu", "v0", "v0", 94), ("srl", "v1", "a1", 3),
+            ("addu", "v1", "v1", "a2"), ("lbu", "v1", 0, "v1"), ("srlv", "v1", "v1", "v0"), ("jr", "ra"), ("nop",)]))
+        wa = with_equip_table(f, bitmap_record(651, [1, 2, 3]) + bitmap_record(652, [9]) +
+                              bitmap_record(10, [7]) + bitmap_record(0, []) + bitmap_record(653, [4]))
+        result, report = imported(f, bytes(slus), bytes(wa))
+        equips = result.project.equips
+        self.assertEqual(equips[651], {1, 2, 3})
+        self.assertEqual(equips[652], {9})
+        self.assertEqual(equips[653], set())              # past id 0: the game never reads it
+        self.assertNotIn(10, equips)
+        self.assertIn("reads its table as bitmaps of 94 bytes", report)
+        self.assertIn("1 records are for cards that are not equip cards (10 Card 10)", report)
+        built = manifest.build(result.project)["equips"]
+        self.assertIn({"card": "Card 653", "replace": True, "add": []}, built)
+        # The archive's table itself stays retail's: the rules say it all.
+        self.assertNotIn("data", manifest.build(result.project))
+
+    def test_bitmaps_with_monster_records_and_blocked_monsters(self):
+        """Another shape: a jump to the mod's code, a count of
+        records, records per monster after them and a list of monsters no
+        equip takes."""
+        f = fixture()
+        slus = bytearray(f.slus)
+        code = 0x8000B200
+        fixtures.put(slus, kit.CHECK_EQUIP, fixtures.asm(kit.CHECK_EQUIP, [
+            ("lui", "v0", 0x8018), ("addiu", "v0", "v0", EQUIP_LO), ("li", "a2", 0), ("j", code), ("lui", "a3", 0x801D)]))
+        second = EQUIP_LO + 3 * 94
+        fixtures.put(slus, code, fixtures.asm(code, [
+            ("lhu", "a3", 0x197C, "a3"), ("srl", "a3", "a3", 4), ("beq", "a3", "a1", code + 0x60),
+            ("lui", "a3", 0x801D), ("lhu", "a3", 0x197E, "a3"), ("srl", "a3", "a3", 4),
+            ("lhu", "v1", 0, "v0"), ("beq", "v1", "a0", code + 0x70), ("addiu", "a2", "a2", 1),
+            ("slti", "a3", "a2", 3), ("bne", "a3", "zero", code + 0x18), ("addiu", "v0", "v0", 94),
+            ("lui", "v0", 0x8018), ("addiu", "v0", "v0", second), ("lhu", "v1", 0, "v0"), ("li", "a2", 0),
+            ("addiu", "a2", "a2", 1), ("slti", "a3", "a2", 2), ("addiu", "v0", "v0", 94),
+            ("srlv", "v1", "v1", "a3"), ("jr", "ra"), ("nop",)]))
+        fixtures.put(slus, 0x801D197C, struct.pack("<HH", (2 << 4) | 1, 723 << 4))
+        wa = with_equip_table(f, bitmap_record(651, [1, 2, 3]) + bitmap_record(652, [5]) + bitmap_record(10, [7]) +
+                              bitmap_record(20, [653, 651]) + bitmap_record(21, [654]))
+        result, report = imported(f, bytes(slus), bytes(wa))
+        equips = result.project.equips
+        self.assertEqual(equips[651], {1, 3})             # 2 is turned away; 20's record is not asked for 651
+        self.assertEqual(equips[652], {5})
+        self.assertEqual(equips[653], {20})               # in no record of its own: the monsters' records
+        self.assertEqual(equips[654], {21})
+        self.assertIn("2 records name a monster and the equips it takes", report)
+        self.assertIn("no equip equips 2 Mystic Elf", report)
+
+    def test_rituals_that_are_code_are_removed(self):
+        f = fixture()
+        wa = bytearray(f.wa)
+        for k in range(g.TERRAIN_COPIES):
+            at = g.TERRAIN_BASE + k * g.TERRAIN_STRIDE + g.RITUAL_OFFSET
+            wa[at:at + 20] = struct.pack("<10H", 0x2402, 0x27BD, 0xFFE8, 0xAFBF, 0x0010, 0x0C00, 0x1234, 0, 0, 0)
+        result, report = imported(f, wa=bytes(wa))
+        self.assertEqual(result.project.rituals, {})
+        self.assertIn({"card": "Card 681", "result": None}, manifest.build(result.project)["rituals"])
+        self.assertIn("the rituals were imported as removed", report)
 
 
 if __name__ == "__main__":
