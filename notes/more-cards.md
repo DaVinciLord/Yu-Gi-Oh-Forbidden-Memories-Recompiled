@@ -54,7 +54,9 @@ The release ships no card mod; the checks below were made with test mods
 | `stars` | the two guardian stars, as numbers or names (`"Mars"` to `"Venus"`) |
 | `drops` | whether the card can be won in its base's place (default `true`, below) |
 | `opponents` | whether an opponent's deck can be dealt it in its base's place (default `false`) |
-| `password` | what View > Card passwords shows for it ([PC build](pc-build.md#card-passwords-view)): up to eight digits as a string (`"08124921"`, leading zeros kept) or a number, `""` or `null` for none. It is only shown: the Password screen does not know it. A copy without one shows none (its base's would give the base) |
+| `password` | what View > Card passwords shows for it ([PC build](pc-build.md#card-passwords-view)): up to eight digits as a string (`"08124921"`, leading zeros kept) or a number, `""` or `null` for none. It is only shown: the Password screen does not know it (a disc card's
+password and price there are the [gameplay tables'](gameplay-tables.md#passwords-and-prices-on-the-password-screen)
+`passwords`, which win over this one in the view). A copy without one shows none (its base's would give the base) |
 
 What an entry leaves out is its base's. Give entries explicit stable `id` keys. Saves use these identities; runtime
 IDs are remapped when mods change. Legacy numeric sidecars require explicit
