@@ -42,6 +42,7 @@ class ImporterTest(unittest.TestCase):
         f = fixture()
         retail_files = GameFiles(f.slus, f.wa, "retail")
         modded_files, cards, fusions, equips, pools = modded()
+        modded_files.wa_lba = 9173        # a modified disc lays its files out elsewhere: the lba stays retail's
         result = importer.import_modded(retail_files, modded_files, "community")
         report = "\n".join(result.report)
         self.assertIn("AI parameters", report)
