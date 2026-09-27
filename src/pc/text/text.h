@@ -21,6 +21,16 @@ void Text_SortCards(void);
 /* The text for string `id`: a mod's, else `retail`. */
 const unsigned char *Text_Resolve(int id, const unsigned char *retail);
 
+/* A menu with choices is laid out in one go: func_80039794 steps its text
+ * with no frame in between until the last choice line is down. A line
+ * wider than the box wraps by itself, and if that row pushes the menu past
+ * the box's height first, the text waits for a button that nothing in that
+ * loop reads, and the game stops (the console's too; notes/translation.md).
+ * Whether the glyph at `x`, `y` of string `id`'s menu, with `lines_left`
+ * choice lines still to come, is dropped instead: only where the wrap would
+ * stop the game, so a line cut at the box's edge is all that changes. */
+int Text_CutsMenuGlyph(int id, int x, int width, int y, int line_height, int height, int lines_left);
+
 /* Whether an applied mod's text rewrites string `id`. */
 int Text_Overridden(int id);
 /* String `id` of a listing the port writes itself (a menu it adds an entry
