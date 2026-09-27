@@ -177,8 +177,16 @@ void AiScript_LoadOpponentData(void)
 #ifdef MEMORIES_PC
     {   /* The duelist's own row when a mod gave it one, its base's otherwise
            (duelists.h): the table below has an entry per duelist the disc
-           has, and an added duelist is past the end of it. */
-        const signed char *row = Duelists_AiRow(index);
+           has, and an added duelist is past the end of it.
+           What the script asks about is the base's id, because that is what
+           AiScript_LoadOpponentID put in its memory -- the script compares it
+           against ids written into it. So when the id asked about is this
+           duel's own opponent, the row wanted is the opponent's, which is
+           where a mod's "ai" lives; asked about anyone else, the id means
+           itself. */
+        const int who = gDuel_bOpponentID >= 0 && index == Duelists_BaseId(gDuel_bOpponentID)
+                            ? gDuel_bOpponentID : index;
+        const signed char *row = Duelists_AiRow(who);
         mem[dst] = field == 0 ? row[1] * 100 : row[field + 1];
     }
 #else
