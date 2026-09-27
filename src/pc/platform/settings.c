@@ -35,6 +35,8 @@ static const SettingInfo info[SET_COUNT] = {
      * and count pre-releases as newer. */
     [SET_UPDATE_CHECK] = {"check_for_updates", NULL, "MEMORIES_CHECK_FOR_UPDATES", NULL, 1, 0, 1},
     [SET_UPDATE_PRERELEASES] = {"update_prereleases", NULL, "MEMORIES_UPDATE_PRERELEASES", NULL, 0, 0, 1},
+    /* 1: Up and Down in the card viewer show the list's next card (src/pc/cards/card_browse.h). */
+    [SET_CARD_BROWSE] = {"card_browse", NULL, "MEMORIES_CARD_BROWSE", NULL, 1, 0, 1},
     [SET_MASTER_VOLUME] = {"master_volume", "volume", "MEMORIES_MASTER_VOLUME", "MEMORIES_VOLUME", 100, 0, 100},
     [SET_MUSIC_VOLUME] = {"music_volume", NULL, "MEMORIES_MUSIC_VOLUME", NULL, 100, 0, 100},
     [SET_SFX_VOLUME] = {"sfx_volume", NULL, "MEMORIES_SFX_VOLUME", NULL, 100, 0, 100},
