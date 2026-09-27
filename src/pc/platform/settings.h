@@ -47,6 +47,7 @@ typedef enum {
     SET_CARD_DROPS,
     SET_UPDATE_CHECK,
     SET_UPDATE_PRERELEASES,
+    SET_JP_BUTTONS,
     SET_COUNT
 } SettingId;
 
