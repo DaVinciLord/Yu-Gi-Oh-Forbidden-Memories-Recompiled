@@ -422,8 +422,9 @@ names.
 **Game > Rewind (hold F8)** (`rewind`, `MEMORIES_REWIND`, off by default)
 keeps the last seconds of play in memory; holding F8 walks back through
 them, like an emulator's rewind, and letting go plays on from the moment
-shown. F8 is a reserved host key (the Controls window will not bind it) and
-does nothing while the setting is off.
+shown. F8 is the rewind key only while the setting is on: then it is taken
+before the controls (a binding to F8 does nothing); with the setting off it
+is an ordinary key, bound or not, as before.
 
 It is the save-state mechanism (`src/pc/guest/state.c`) pointed at memory.
 `serialize` writes a state either to the file or to a growing buffer

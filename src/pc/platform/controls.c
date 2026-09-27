@@ -167,7 +167,6 @@ static int host_shortcut(int key)
     case CTRL_KEY_F4:
     case CTRL_KEY_F5:
     case CTRL_KEY_F7:
-    case CTRL_KEY_F8:
     case CTRL_KEY_F10:
     case CTRL_KEY_F11:
     case CTRL_KEY_F12:
@@ -220,7 +219,6 @@ const char *Controls_ReservedReason(int key, int is_modifier)
                                                   [CTRL_KEY_F4] = "Reserved: state slot 4 / shortcut",
                                                   [CTRL_KEY_F5] = "Reserved: save state",
                                                   [CTRL_KEY_F7] = "Reserved: shortcut",
-                                                  [CTRL_KEY_F8] = "Reserved: rewind",
                                                   [CTRL_KEY_F10] = "Reserved: shortcut",
                                                   [CTRL_KEY_F11] = "Reserved: shortcut",
                                                   [CTRL_KEY_F12] = "Reserved: shortcut",

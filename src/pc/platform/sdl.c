@@ -1431,10 +1431,7 @@ static void pump(void)
                 DeckMenu_Request();
                 break;
             }
-            if (key == SDLK_F8) {
-                Memories_RewindHold(down); /* acts only with Game > Rewind on */
-                break;
-            }
+            if (key == SDLK_F8 && Memories_RewindHold(down)) break; /* Game > Rewind on */
             if (down && key == SDLK_ESCAPE) {
                 if (covers_screen()) {
                     /* Out of fullscreen first, then out of borderless. */

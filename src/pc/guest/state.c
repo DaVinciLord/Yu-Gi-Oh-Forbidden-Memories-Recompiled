@@ -770,9 +770,11 @@ static int load(const char *path)
     return 0; /* not reached: the state resumes in its own VSync caller */
 }
 
-void Memories_RewindHold(int held)
+int Memories_RewindHold(int held)
 {
-    __atomic_store_n(&rewind_held, held, __ATOMIC_SEQ_CST);
+    int on = Settings_Get(SET_REWIND) != 0;
+    __atomic_store_n(&rewind_held, on && held, __ATOMIC_SEQ_CST);
+    return on;
 }
 
 static uint64_t microseconds(void)
