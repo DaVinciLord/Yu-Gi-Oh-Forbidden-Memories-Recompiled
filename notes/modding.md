@@ -190,7 +190,9 @@ primitive uses is the one drawn; at the console's resolution only the first
 of them shows, the scaled picture shows all. The packs of every enabled
 mod add up. The extracted images themselves are the game's, so a pack
 ships painted images or a way to make them from the player's own disc,
-never the originals.
+never the originals. The FM Editor's Art tab
+([tools/pc/fm_editor](../tools/pc/fm_editor/README.md)) writes such a pack
+for card pictures and thumbnails, a PNG at a time.
 
 A pack image does not need the extracted image's shape either: it is
 stretched to the texture's width and rows (the crop's width, below), so a

@@ -133,7 +133,37 @@ def make_wa(fusions, equips, rituals, pools) -> bytes:
             blob = g.encode_pool(record[pool])
             start = g.DUELIST_BASE + d * g.DUELIST_STRIDE + offset
             data[start:start + len(blob)] = blob
+    for cid in ART_CARDS:
+        paint_art(data, cid)
     return bytes(data)
+
+
+ART_CARDS = (1, 2, 3, 5)
+
+
+def art_colour(cid: int, index: int) -> int:
+    """The synthetic palette: a 15-bit colour per entry (never 0, the
+    transparent one)."""
+    return ((index * 7 + cid) & 0x1F) | (((index * 3) & 0x1F) << 5) | (((cid * 5 + index) & 0x1F) << 10) | 0x8000
+
+
+def paint_art(data: bytearray, cid: int):
+    """A recognizable art record and thumbnail sector for a card: a
+    diagonal pattern through its own palette, and plate inks 0-7."""
+    base = ((cid - 1) * 7 + 722) * 2048
+    for y in range(96):
+        for x in range(102):
+            data[base + y * 102 + x] = 1 + (x + y * 2 + cid) % 255
+    for i in range(256):
+        struct.pack_into("<H", data, base + 0x2640 + i * 2, art_colour(cid, i))
+    for i in range(48 * 14):
+        data[base + 0x2840 + i] = (i % 8) | (((i + cid) % 8) << 4)
+    small = (cid - 1) * 2048
+    for y in range(32):
+        for x in range(40):
+            data[small + y * 40 + x] = 1 + (x * 3 + y + cid) % 63
+    for i in range(64):
+        struct.pack_into("<H", data, small + 0x500 + i * 2, art_colour(cid + 1, i))
 
 
 class Fixture:
