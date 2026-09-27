@@ -293,6 +293,43 @@ already held more than `limit` of a card (a save from before the mod) keeps
 them; only new copies are turned away. The latest mod that sets it wins.
 Without the key the chest is the disc's in every case.
 
+## Passwords and prices on the Password screen
+
+A mod may change what password gives each card on the Password screen and
+what it costs, naming the card as it names cards everywhere else:
+
+```json
+"passwords": {
+    "Blue-eyes White Dragon": {"password": "00000001", "starchips": 100000},
+    "Mystical Elf": {"password": "00000002", "starchips": 16},
+    "Dark Magic Ritual": {"password": ""}
+}
+```
+
+Or every card at once, with `"all"`:
+
+```json
+"passwords": {
+    "all": {"password": "card number", "starchips_percent": 10},
+    "Blue-eyes White Dragon": {"starchips": 5000}
+}
+```
+
+| Key | Meaning |
+|---|---|
+| `password` | up to eight digits, as a string (`"00000001"`) or a number (`1`); `"card number"` for the card's own number (Blue-eyes `00000001`, Magician of Black Chaos `00000722`); `""` or `null` for none, so the screen cannot give the card |
+| `starchips` | what the card costs, 0 to 999999 |
+| `starchips_percent` | what it costs as a percent of the disc's price, 0 to 1000, rounded; a card that cost something still costs at least 1 |
+
+An entry may leave out either key, and the card keeps the disc's (or an
+earlier mod's). `"all"` applies to the disc's 722 cards before the cards named beside
+it, wherever it is written, so a named card keeps what its own entry says.
+A card is a name, a number or a stable identity; cards a mod adds past 722
+are not on the Password screen. Two cards with the same password: the
+screen gives the lower card number (`MEMORIES_TRACE=mods` logs the pair).
+View > Card passwords shows the passwords the mods set. The latest mod that
+sets a card's password or price wins.
+
 ## Where two mods disagree
 
 Mods apply in load order (priority, then `after` and `requires`, then the
@@ -311,8 +348,9 @@ card a drop pool gave.
 
 `src/pc/cards/tables.c` reads the rules once, after the cards
 (`Cards_Build`), from the mods in the order they loaded (`Mods_Loaded`).
-Nothing the game loaded is changed; the functions that read each table ask
-it first:
+Nothing the game loaded is changed, except the Password screen's table
+(its search is a loop over the loaded records); the functions that read
+each table ask it first:
 
 | Game function | Table | Asks |
 |---|---|---|
@@ -326,6 +364,7 @@ it first:
 | `Duel_SelectAttackTrap` (`duel_trap_resolution.c`) | trap thresholds, `0x8009AF24` (bytes, x100) | `Tables_TrapThreshold` |
 | `Duel_AwardCard` (`duel_result_runtime.c`) | chest, `0x801D0250`; starchips, `0x801D07E0` | `Tables_ChestOverflow` before the card is counted, `Tables_ChestFull` after |
 | `Password_UpdateShopScreen` (`overlays/password/shop.c`) | chest, `0x801D0250` | `Duel_ChestFull` (`Tables_ChestFull`) before EXCHANGE is offered |
+| `Main_RunPasswordMenu` (`main_run_password_menu.c`) | price and password table, `0x801A8000` | `Tables_PasswordShop` for each card once the table is loaded, written into it |
 
 A pool is worked out from the opponent's loaded pool and every edit of it
 when the game draws from it, and kept until the opponent or the loaded pool

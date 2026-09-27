@@ -1095,8 +1095,8 @@ static size_t polygon(const uint32_t *words, size_t count)
     return need;
 }
 
-/* The opponent's name over the life-point panel just drawn, and You for
- * YOU (hd_text.h): in the panel's colour, drawn from the atlas whatever
+/* The opponent's name over the life-point panel just drawn, and the
+ * player's for YOU (hd_text.h): in the panel's colour, drawn from the atlas whatever
  * drew the panel. */
 static void name_over_panel(const Vertex *base, int w, int h, int flags)
 {

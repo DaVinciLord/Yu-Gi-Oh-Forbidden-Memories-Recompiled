@@ -338,7 +338,50 @@ int main(void)
     add("w", "{\"trap_thresholds\": {\"682\": 900}}");
     assert(notes == 1 && Tables_TrapThreshold(1, 1000) == 900);
 
+    /* The Password screen: a card by name or number, "all" first whatever
+     * its place, passwords as digits, numbers or the card's own number, and
+     * prices in starchips or a percent of the disc's. */
+    {
+        unsigned price = 999999, password = 0x89631139u;
+        assert(!Tables_PasswordShop(12, &price, &password));
+        notes = 0;
+        add("x", "{\"passwords\": {\"Blue-eyes White Dragon\": {\"password\": \"00000001\", \"starchips\": 100},"
+                 " \"all\": {\"password\": \"card number\", \"starchips_percent\": 10},"
+                 " \"Kuriboh\": {\"password\": 12345678}, \"11\": {\"password\": \"\"},"
+                 " \"723\": {\"password\": \"1\"}, \"Nobody\": {\"starchips\": 1},"
+                 " \"20\": {\"password\": \"12a\", \"starchips\": 1000000}}}");
+        assert(notes == 4);                    /* 723, Nobody, "12a", 1000000 */
+        assert(Tables_PasswordShop(12, &price, &password) && price == 100 && password == 0x00000001u);
+        price = 70, password = 0x76184692u;    /* card 3 by "all": 10% of 70 */
+        assert(Tables_PasswordShop(3, &price, &password) && price == 7 && password == 0x00000003u);
+        price = 4, password = 0x1u;
+        assert(Tables_PasswordShop(10, &price, &password) && price == 1 && password == 0x12345678u);
+        price = 999999, password = 0x1u;
+        assert(Tables_PasswordShop(722, &price, &password) && price == 100000 && password == 0x00000722u);
+        price = 50, password = 0x1u;
+        assert(Tables_PasswordShop(11, &price, &password) && price == 5 && password == CARD_PASSWORD_NONE);
+        price = 50, password = 0x1u;           /* 20: its bad keys left out, "all" stands */
+        assert(Tables_PasswordShop(20, &price, &password) && price == 5 && password == 0x00000020u);
+        price = 0, password = 0x1u;            /* free stays free */
+        assert(Tables_PasswordShop(5, &price, &password) && price == 0);
+        price = 5, password = 0x1u;            /* 10% of 5 still costs one */
+        assert(Tables_PasswordShop(5, &price, &password) && price == 1);
+        price = 1, password = 0x1u;
+        assert(!Tables_PasswordShop(0, &price, &password) && !Tables_PasswordShop(723, &price, &password));
+        notes = 0;
+        add("y", "{\"passwords\": {\"Kuriboh\": {\"starchips\": 3}}}");
+        assert(notes == 0);
+        price = 4, password = 0x1u;            /* a later mod: its price, the earlier password */
+        assert(Tables_PasswordShop(10, &price, &password) && price == 3 && password == 0x12345678u);
+        add("z", "{\"passwords\": [1]}");
+        assert(notes == 1);
+    }
+
     Tables_Clear();
+    {
+        unsigned price = 70, password = 0x76184692u;
+        assert(!Tables_PasswordShop(3, &price, &password) && price == 70 && password == 0x76184692u);
+    }
     assert(Tables_TrapThreshold(0, 500) == 500);
     {
         int bonus;

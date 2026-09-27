@@ -10,7 +10,7 @@ from fm_editor.gamedata import Card
 
 GLYPH_TABLE = 0x801D9000
 NAME_TEXT = 0x801D9200          # after the glyph table
-DESCRIPTION_TEXT = 0x801C0800   # after the string table
+DESCRIPTION_TEXT = 0x801C0A00   # after the string table (dialog entries 0x400-0x4F9 included)
 
 # Glyph codes 1.. for these characters, skipping the codes text_listing spells
 # its own way; each is the full-width Shift-JIS form, as the retail table's.
@@ -91,7 +91,9 @@ def encode_text(text: str, codes: dict) -> bytes:
     return bytes(out) + b"\xFF"
 
 
-def make_slus(cards: dict) -> bytes:
+def make_slus(cards: dict, other_names: dict = None) -> bytes:
+    """The executable: glyphs, stats, names and texts; `other_names` are
+    names-bank strings past the cards ({index: text}, a duelist's say)."""
     data = bytearray(0x1D0800)
     at = g.slus_offset
     codes = glyph_codes()
@@ -110,12 +112,17 @@ def make_slus(cards: dict) -> bytes:
         struct.pack_into("<H", data, at(g.STRING_TABLE + (0x100 + cid) * 2), text_at - g.DESCRIPTION_BANK)
         data[at(text_at):at(text_at) + len(text)] = text
         text_at += len(text)
+    for index, text in (other_names or {}).items():
+        name = encode_text(text, codes)
+        struct.pack_into("<H", data, at(g.NAME_TABLE + index * 2), name_at - g.NAME_BANK)
+        data[at(name_at):at(name_at) + len(name)] = name
+        name_at += len(name)
     assert name_at < 0x801E0000 and text_at < 0x801D0000
     return bytes(data)
 
 
 def make_wa(fusions, equips, rituals, pools) -> bytes:
-    data = bytearray(0xED8000)
+    data = bytearray(0xFC0000)   # through the password table
     for k in range(g.TERRAIN_COPIES):
         base = g.TERRAIN_BASE + k * g.TERRAIN_STRIDE
         for offset, blob in ((g.EQUIP_OFFSET, g.encode_equips(equips)), (g.FUSION_OFFSET, g.encode_fusions(fusions)),
@@ -135,7 +142,8 @@ class Fixture:
     def __init__(self):
         self.cards = make_cards()
         self.fusions, self.equips, self.rituals, self.pools = make_tables()
-        self.slus = make_slus(self.cards)
+        self.other_names = {0x330: "Heishin"}
+        self.slus = make_slus(self.cards, self.other_names)
         self.wa = make_wa(self.fusions, self.equips, self.rituals, self.pools)
 
     def game(self) -> g.GameData:
@@ -191,3 +199,63 @@ def make_iso(files: dict, raw: bool = True) -> bytes:
         else:
             out += user
     return bytes(out)
+
+
+# --- a few MIPS instructions, for made-up mod code ----------------------------------------
+
+REGISTERS = {name: i for i, name in enumerate(
+    "zero at v0 v1 a0 a1 a2 a3 t0 t1 t2 t3 t4 t5 t6 t7 s0 s1 s2 s3 s4 s5 s6 s7 t8 t9 k0 k1 gp sp fp ra".split())}
+
+
+def _r(name):
+    return REGISTERS[name]
+
+
+def _i(op, rs, rt, imm):
+    return (op << 26) | (_r(rs) << 21) | (_r(rt) << 16) | (imm & 0xFFFF)
+
+
+def asm(address: int, lines) -> bytes:
+    """Assemble ("op", args...) tuples at `address`: j, jal, lui, addiu,
+    li, ori, lhu, lbu, lh, lw, sltiu, slti, srl, sra, srlv, addu, beq,
+    bne, jr, nop. Branch targets are absolute."""
+    out = bytearray()
+    for n, (op, *a) in enumerate(lines):
+        pc = address + 4 * n
+        if op in ("j", "jal"):
+            word = ((2 if op == "j" else 3) << 26) | ((a[0] >> 2) & 0x3FFFFFF)
+        elif op == "lui":
+            word = _i(15, "zero", a[0], a[1])
+        elif op == "addiu":
+            word = _i(9, a[1], a[0], a[2])
+        elif op == "li":
+            word = _i(9, "zero", a[0], a[1])
+        elif op == "ori":
+            word = _i(13, a[1], a[0], a[2])
+        elif op in ("lb", "lh", "lw", "lbu", "lhu"):
+            word = _i({"lb": 32, "lh": 33, "lw": 35, "lbu": 36, "lhu": 37}[op], a[2], a[0], a[1])
+        elif op in ("sltiu", "slti"):
+            word = _i(11 if op == "sltiu" else 10, a[1], a[0], a[2])
+        elif op in ("srl", "sra"):
+            word = (_r(a[1]) << 16) | (_r(a[0]) << 11) | (a[2] << 6) | (2 if op == "srl" else 3)
+        elif op == "srlv":
+            word = (_r(a[2]) << 21) | (_r(a[1]) << 16) | (_r(a[0]) << 11) | 6
+        elif op == "addu":
+            word = (_r(a[1]) << 21) | (_r(a[2]) << 16) | (_r(a[0]) << 11) | 33
+        elif op in ("beq", "bne"):
+            word = _i(4 if op == "beq" else 5, a[0], a[1], (a[2] - pc - 4) >> 2)
+        elif op == "jr":
+            word = (_r(a[0]) << 21) | 8
+        elif op == "nop":
+            word = 0
+        else:
+            raise ValueError(op)
+        out += struct.pack("<I", word)
+    return bytes(out)
+
+
+def put(slus: bytearray, address: int, blob: bytes):
+    """Bytes at a RAM address of the executable (its header's code at
+    0x8000B070 and up, as the kit puts it)."""
+    at = address - 0x8000B070 if address < 0x80010000 else g.slus_offset(address)
+    slus[at:at + len(blob)] = blob

@@ -330,11 +330,8 @@ class App(tk.Tk):
 
 
 def main(game=None, mod=None):
+    from . import importers
     app = App(game, mod)
-    try:
-        from . import importers
-        importers.install(app)
-    except ImportError:
-        pass
+    importers.install(app)
     app.mainloop()
     return 0

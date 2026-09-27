@@ -3,8 +3,8 @@
 /* The duel's rule tables as mods change them (notes/gameplay-tables.md).
  *
  * A mod's manifest may carry "fusions", "equips", "rituals", "drops",
- * "decks", "equip_bonus_default", "terrain_bonus", "trap_thresholds" and
- * "chest_overflow":
+ * "decks", "equip_bonus_default", "terrain_bonus", "trap_thresholds",
+ * "chest_overflow" and "passwords":
  * edits to the tables and constants the duel reads from the disc, written with
  * card names, stable identities or ids. They are read once at startup, after
  * the cards (cards.h), in the order the mods load; where two mods set the
@@ -13,7 +13,9 @@
  *
  * Nothing here changes the tables the game loaded. The game's own code asks
  * these functions first, where it reads a table, and falls back to what the
- * disc (or a data mod's patch of it) says. */
+ * disc (or a data mod's patch of it) says. The Password screen's table is
+ * the exception: its search is a loop over the loaded records, so
+ * Main_RunPasswordMenu writes the mods' passwords and prices into them. */
 
 /* Read every applied mod's tables; once, from Cards_Build. */
 void Tables_Build(void);
@@ -91,6 +93,14 @@ int Tables_TerrainBonus(int terrain, int type, int *bonus);
  * House of Adhesive Tape to 5 Widespread Ruin): a mod's "trap_thresholds",
  * else `retail`, the disc's. */
 int Tables_TrapThreshold(int trap, int retail);
+
+/* The Password screen's record for card `id` (1-722) as the mods'
+ * "passwords" have it: `price` and `password` come in as the disc's table
+ * has them (starchips, and eight digits a nibble each or
+ * CARD_PASSWORD_NONE) and are changed in place. 1 when a mod changed
+ * either. Main_RunPasswordMenu runs every record through it once the
+ * screen's table is loaded, and View > Card passwords the password. */
+int Tables_PasswordShop(int id, unsigned *price, unsigned *password);
 
 /* The opponent names a manifest may use, by duelist id; "all" means every
  * one of them. */
