@@ -3,7 +3,8 @@
 /* The duel's rule tables as mods change them (notes/gameplay-tables.md).
  *
  * A mod's manifest may carry "fusions", "equips", "rituals", "drops",
- * "decks", "terrain_bonus", "trap_thresholds" and "chest_overflow_starchips":
+ * "decks", "equip_bonus_default", "terrain_bonus", "trap_thresholds" and
+ * "chest_overflow":
  * edits to the tables and constants the duel reads from the disc, written with
  * card names, stable identities or ids. They are read once at startup, after
  * the cards (cards.h), in the order the mods load; where two mods set the
@@ -33,8 +34,9 @@ int Tables_FilterFusion(int result);
  * rule says, and the disc's table decides. */
 int Tables_Equip(int equip, int monster);
 /* What `equip` adds to `monster`'s ATK and DEF: a mod's "bonus" or
- * "bonus_if" for it (the latest entry that fits), else `retail`, the disc's
- * +500 (+1000 for Megamorph). */
+ * "bonus_if" for it (the latest entry that fits), else the mods'
+ * "equip_bonus_default", else `retail`, the disc's +500 (+1000 for
+ * Megamorph). */
 int Tables_EquipBonus(int equip, int monster, int retail);
 
 /* A ritual's recipe: 1 with the ritual card, its three tributes, its result
@@ -60,11 +62,13 @@ const unsigned short *Tables_PoolFor(int duelist, int pool, const unsigned short
 #define TABLES_DECK_SIZE 40
 int Tables_FixedDeck(int duelist, unsigned short cards[TABLES_DECK_SIZE]);
 
-/* Duel_AwardCard's question before it adds a card to the chest, which holds
- * `quantity` of it: with a mod's "chest_overflow_starchips", a card the chest
- * has no room for (CARD_CHEST_QUANTITY_MAX already) adds that many to the
- * save's `starchips`, up to 999999. Returns the starchips added, 0 when the
- * card fits or no mod says. */
+/* Duel_AwardCard's questions before it adds a card to the chest, which holds
+ * `quantity` of it. With a mod's "chest_overflow", the chest keeps at most
+ * Tables_ChestLimit copies (CARD_CHEST_QUANTITY_MAX, 250, without one), and a
+ * card it has no room for adds the mod's starchips to the save's
+ * `starchips`, up to 999999. Tables_ChestOverflow returns the starchips
+ * added, 0 when the card fits or no mod says. */
+int Tables_ChestLimit(void);
 int Tables_ChestOverflow(unsigned quantity, unsigned *starchips);
 
 /* A mod's "terrain_bonus" for a monster of `type` (0-19) on `terrain`

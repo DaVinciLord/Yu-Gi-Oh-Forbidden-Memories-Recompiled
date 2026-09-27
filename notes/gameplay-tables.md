@@ -104,7 +104,15 @@ with neither for this monster says nothing, and an earlier entry, or the
 disc, decides. The latest entry that says something wins, as for what an
 equip may equip, and a copy of an equip a mod added has its base's bonus.
 Values are whole points from -9999 to 9999; a negative bonus lowers the
-monster. ATK and DEF still stop at 9999 and 0. Reverse Trap turns
+monster.
+
+`"equip_bonus_default": 700`, beside `equips` at the top of the manifest,
+sets what every equip no entry gives a bonus for adds, in place of the
+disc's +500 and Megamorph's +1000 alike (give Megamorph an entry to keep it
+apart). Without it those keep the disc's values. The latest mod that sets it
+wins. Equips whose effect is more than a bonus (a Wicked Gods or Remaster
+equip that heals, or gives +400 ATK and -200 DEF) need a code mod: the
+bonus here always goes to ATK and DEF alike. ATK and DEF still stop at 9999 and 0. Reverse Trap turns
 the bonus the equip gave into as large a loss, as it does on the disc. The CPU chooses its equips as before: it
 never counted the bonus.
 
@@ -228,8 +236,10 @@ has its value; a pair it does not keeps the disc's, unless `"replace": true`,
 which gives every pair the mods do not list no bonus at all. Several mods'
 tables add up the same way, the later one winning for a pair it lists, and a
 later `"replace"` clearing what earlier mods set. Everything the game works
-out from a terrain follows: the ATK and DEF on the field and in the hand, the
-fusion helper and the CPU's weighing of its cards. A monster's attribute is
+out from a terrain asks the same function (`Duel_GetTerrainBoost`) and
+follows: a monster's ATK and DEF when it is placed, their recount when a
+field card is played, the CPU's weighing of its cards and the fusion
+helper. A monster's attribute is
 not a terrain's affair (a mod whose fields favour attributes needs code),
 and there are still only the six terrains.
 
@@ -257,17 +267,25 @@ its base. Which cards are attack traps, and what they do, is the disc's.
 ## A full chest pays starchips
 
 The chest holds at most 250 copies of a card; on the disc a copy won past
-that is lost. A mod may make each such copy worth starchips instead:
+that is lost. A mod may keep the chest smaller, and make each copy it has no
+room for worth starchips instead:
 
 ```json
-"chest_overflow_starchips": 1
+"chest_overflow": {"limit": 3, "starchips": 3}
 ```
 
-Every card the chest has no room for then adds that many starchips (0 to
-999999), and the balance stops at 999999 as the game's own prize does. It
-holds wherever the game gives the player a card (`Duel_AwardCard`): a duel's
-drop, the extra drops of Game > Card drops, and a card bought in the
-password shop. The latest mod that sets it wins; `0` turns it off again.
+| Key | Meaning |
+|---|---|
+| `limit` | the copies of a card the chest keeps, 1 to 250 (250 when left out) |
+| `starchips` | what each card won past `limit` is worth, 0 to 999999 (0 when left out) |
+
+The Wicked Gods keeps the 250 and pays 1 starchip (`{"starchips": 1}`); the
+Remaster keeps 3 and pays 3. The balance stops at 999999, as the game's own
+prize does. It holds wherever the game gives the player a card
+(`Duel_AwardCard`): a duel's drop, the extra drops of Game > Card drops, and
+a card bought in the password shop. A chest that already held more than
+`limit` of a card (a save from before the mod) keeps them; only new copies
+are turned away. The latest mod that sets it wins.
 
 ## Where two mods disagree
 
@@ -300,7 +318,7 @@ it first:
 | `Duel_SelectCardDrop` (`duel_result_runtime.c`) | drop pools, `0x8017878C` | `Tables_Pool(TABLES_POOL_POW + pool)` |
 | `Duel_GetTerrainBoost` (`duel_card_record_lifecycle.c`) | terrain table, `0x800909D4` | `Tables_TerrainBonus` |
 | `Duel_SelectAttackTrap` (`duel_trap_resolution.c`) | trap thresholds, `0x8009AF24` (bytes, x100) | `Tables_TrapThreshold` |
-| `Duel_AwardCard` (`duel_result_runtime.c`) | chest, `0x801D0250`; starchips, `0x801D07E0` | `Tables_ChestOverflow`, before the card is counted |
+| `Duel_AwardCard` (`duel_result_runtime.c`) | chest, `0x801D0250`; starchips, `0x801D07E0` | `Tables_ChestOverflow` before the card is counted, `Tables_ChestLimit` after |
 
 A pool is worked out from the opponent's loaded pool and every edit of it
 when the game draws from it, and kept until the opponent or the loaded pool

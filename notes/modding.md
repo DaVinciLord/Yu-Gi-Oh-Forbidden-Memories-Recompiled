@@ -59,8 +59,9 @@ editors write, is fine):
 | `cards` | cards the mod adds after the disc's 722, and changes to the disc's own cards, below |
 | `audio` | songs, XA clips and sound effects the mod replaces with WAV or Ogg files, below |
 | `fusions`, `equips`, `rituals`, `drops`, `decks` | changes to the duel's rule tables, below |
-| `chest_overflow_starchips` | starchips for each card won when the chest already holds 250 of it, below |
+| `chest_overflow` | how many copies of a card the chest keeps, and the starchips each one past that is worth, below |
 | `terrain_bonus` | what each terrain gives each monster type, in place of the disc's +500 and -500, below |
+| `equip_bonus_default` | what an equip adds when no `equips` entry sets its bonus, below |
 | `trap_thresholds` | the attack each of the six attack traps stops, below |
 | `text`, `font` | a translation of the game's text, and fonts for letters it has none of, below |
 
@@ -453,12 +454,13 @@ from, with no code and naming cards by name:
 Weights are out of 2048, as the game's are, and the pools are always brought
 back to 2048. A deck may be fixed instead, its forty cards counted out by
 copies with no limit of three (`{"fixed": true, "Kuriboh": 4, ...}`).
-`"chest_overflow_starchips": 1` makes a card the chest has no room for
-(250 copies already) worth a starchip instead of lost.
+`"chest_overflow": {"limit": 3, "starchips": 3}` keeps 3 copies of a card in
+the chest and makes each card past them worth 3 starchips instead of lost.
 `"terrain_bonus": {"Forest": {"Beast": 300, "Fairy": -200}}` sets, in points,
 what a terrain gives a monster type.
 An equip entry's `"bonus": 800` and `"bonus_if": {"Dragon": 1000, "Light": 700}`
-set what it adds, in place of the disc's +500.
+set what it adds, in place of the disc's +500, and a top-level
+`"equip_bonus_default": 700` what every other equip adds.
 `"trap_thresholds": {"House of Adhesive Tape": 800}` sets, in points of ATK,
 the attack each attack trap springs on. These are the rules a community mod
 such as The Wicked Gods changes in its code; with them it plays close to its

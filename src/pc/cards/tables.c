@@ -6,7 +6,7 @@
  * readers (duel_card_checks.c, duel_check_ritual.c, duel_shuffle_deck.c,
  * duel_result_runtime.c) ask these first. A deck may also be fixed: forty
  * cards written down by their copies, dealt as they are. Past the tables,
- * "chest_overflow_starchips" turns a card the chest has no room for into
+ * "chest_overflow" turns a card the chest has no room for into
  * starchips (Duel_AwardCard), and "terrain_bonus" sets what a terrain gives
  * each monster type (Duel_GetTerrainBoost), and "trap_thresholds" the attack
  * each attack trap stops (Duel_SelectAttackTrap). A drop or deck pool is worked out
@@ -106,6 +106,8 @@ typedef struct {
 
 static BonusRule *bonuses;
 static int bonus_count, bonus_room;
+static short equip_default;             /* "equip_bonus_default", when set */
+static unsigned char equip_default_set;
 static RitualRule *rituals;
 static int ritual_count, ritual_room;
 static PoolEdit *edits;
@@ -118,6 +120,7 @@ typedef struct {
 static FixedDeck *fixed_decks;
 static int fixed_count, fixed_room;
 static long overflow_starchips;          /* per card the chest has no room for */
+static int chest_limit;                  /* copies the chest keeps; 0: the disc's 250 */
 #define TERRAINS 6                        /* DUEL_TERRAIN_COUNT: Forest to Yami, 1-6 */
 static short terrain_bonus[TERRAINS][CARD_TYPE_MAGIC];
 static unsigned char terrain_listed[TERRAINS][CARD_TYPE_MAGIC];
@@ -361,6 +364,16 @@ static void read_equip_bonus(const char *mod, int index, int equip, const JsonVa
     }
 }
 
+/* "equip_bonus_default": points, what an equip no entry gives a bonus for
+ * adds, in place of the disc's +500 and Megamorph's +1000 alike. */
+static void read_equip_default(const char *mod, const JsonValue *value)
+{
+    long points;
+    if (!value || !bonus_points(mod, "equip_bonus_default", value, &points)) return;
+    equip_default = (short)points;
+    equip_default_set = 1;
+}
+
 static void read_equips(const char *mod, const JsonValue *list)
 {
     int i, j, pass;
@@ -425,7 +438,7 @@ int Tables_EquipBonus(int equip, int monster, int retail)
 {
     const BonusRule *best = NULL;
     int i, base_equip, type, attribute;
-    if (!bonus_count || !Cards_Valid(equip) || !Cards_Valid(monster)) return retail;
+    if ((!bonus_count && !equip_default_set) || !Cards_Valid(equip) || !Cards_Valid(monster)) return retail;
     base_equip = Cards_BaseId(equip);
     type = Cards_Type(monster);
     attribute = Cards_Attribute(monster);
@@ -442,9 +455,10 @@ int Tables_EquipBonus(int equip, int monster, int retail)
             (rule->order == best->order && rule->rank && (!best->rank || rule->rank < best->rank)))
             best = rule;
     }
-    if (!best) return retail;
-    LOG(LOG_MODS, "tables: equip %d on %d: %+d (the disc's %+d)", equip, monster, best->bonus, retail);
-    return best->bonus;
+    if (!best && !equip_default_set) return retail;
+    LOG(LOG_MODS, "tables: equip %d on %d: %+d (the disc's %+d)%s", equip, monster, best ? best->bonus : equip_default,
+        retail, best ? "" : ", the mods' default");
+    return best ? best->bonus : equip_default;
 }
 
 /* --- rituals --------------------------------------------------------- */
@@ -553,7 +567,7 @@ static void read_pool(const char *mod, const char *where, int duelist, int pool,
         long weight;
         int id;
         char at[160];
-        if (!strcmp(name, "replace")) continue;
+        if (!strcmp(name, "replace") || !strcmp(name, "fixed")) continue;   /* "fixed": false */
         snprintf(at, sizeof(at), "%s \"%s\"", where, name);
         id = Cards_Named(name);
         if (id <= 0) {
@@ -1029,26 +1043,43 @@ int Tables_TrapThreshold(int trap, int retail)
 
 #define STARCHIP_MAX 999999L   /* SAVE_DATA_STARCHIP_MAX */
 
-/* "chest_overflow_starchips": n, the starchips a card is worth when the
- * chest already holds all it can of it. The latest mod that says wins. */
+/* "chest_overflow": {"limit": n, "starchips": m}: the chest keeps at most n
+ * copies of a card (1-250; the disc's 250 when left out), and a card won
+ * when it already holds n is worth m starchips instead (0 when left out).
+ * The latest mod that says wins. */
 static void read_chest_overflow(const char *mod, const JsonValue *value)
 {
-    long starchips = Json_Number(value, -1);
+    const JsonValue *limit = Json_Member(value, "limit"), *starchips = Json_Member(value, "starchips");
+    long n = Json_Number(limit, CARD_CHEST_QUANTITY_MAX), m = Json_Number(starchips, 0);
     if (!value) return;
-    if (Json_TypeOf(value) != JSON_NUMBER || starchips < 0 || starchips > STARCHIP_MAX) {
-        Mods_Note(mod, "\"chest_overflow_starchips\" is a whole number of starchips, 0 to %ld", STARCHIP_MAX);
+    if (Json_TypeOf(value) != JSON_OBJECT) {
+        Mods_Note(mod, "\"chest_overflow\" is an object: {\"limit\": copies, \"starchips\": per card past it}");
         return;
     }
-    overflow_starchips = starchips;
+    if ((limit && Json_TypeOf(limit) != JSON_NUMBER) || n < 1 || n > CARD_CHEST_QUANTITY_MAX) {
+        Mods_Note(mod, "chest_overflow: \"limit\" is a whole number of copies, 1 to %d; left out", CARD_CHEST_QUANTITY_MAX);
+        return;
+    }
+    if ((starchips && Json_TypeOf(starchips) != JSON_NUMBER) || m < 0 || m > STARCHIP_MAX) {
+        Mods_Note(mod, "chest_overflow: \"starchips\" is a whole number, 0 to %ld; left out", STARCHIP_MAX);
+        return;
+    }
+    chest_limit = (int)n;
+    overflow_starchips = m;
+}
+
+int Tables_ChestLimit(void)
+{
+    return chest_limit ? chest_limit : CARD_CHEST_QUANTITY_MAX;
 }
 
 int Tables_ChestOverflow(unsigned quantity, unsigned *starchips)
 {
     unsigned long long total;
-    if (!overflow_starchips || quantity < CARD_CHEST_QUANTITY_MAX) return 0;
+    if (!overflow_starchips || quantity < (unsigned)Tables_ChestLimit()) return 0;
     total = (unsigned long long)*starchips + (unsigned long long)overflow_starchips;
     if (total > STARCHIP_MAX) total = STARCHIP_MAX;
-    LOG(LOG_MODS, "tables: a card past the chest's %d: %ld starchips, %u -> %u", CARD_CHEST_QUANTITY_MAX,
+    LOG(LOG_MODS, "tables: a card past the chest's %d: %ld starchips, %u -> %u", Tables_ChestLimit(),
         overflow_starchips, *starchips, (unsigned)total);
     *starchips = (unsigned)total;
     return (int)overflow_starchips;
@@ -1067,10 +1098,11 @@ void Tables_Add(const char *mod, const JsonValue *manifest)
     forget_pools();
     read_fusions(mod, Json_Member(manifest, "fusions"));
     read_equips(mod, Json_Member(manifest, "equips"));
+    read_equip_default(mod, Json_Member(manifest, "equip_bonus_default"));
     read_rituals(mod, Json_Member(manifest, "rituals"));
     read_pools(mod, Json_Member(manifest, "drops"), 0);
     read_pools(mod, Json_Member(manifest, "decks"), 1);
-    read_chest_overflow(mod, Json_Member(manifest, "chest_overflow_starchips"));
+    read_chest_overflow(mod, Json_Member(manifest, "chest_overflow"));
     read_terrain_bonus(mod, Json_Member(manifest, "terrain_bonus"));
     read_trap_thresholds(mod, Json_Member(manifest, "trap_thresholds"));
 }
@@ -1088,7 +1120,9 @@ void Tables_Clear(void)
         }
     }
     fusion_count = equip_count = ritual_count = edit_count = fixed_count = bonus_count = 0;
-    overflow_starchips = 0;
+    overflow_starchips = chest_limit = 0;
+    equip_default = 0;
+    equip_default_set = 0;
     memset(terrain_bonus, 0, sizeof(terrain_bonus));
     memset(terrain_listed, 0, sizeof(terrain_listed));
     memset(trap_listed, 0, sizeof(trap_listed));
@@ -1107,8 +1141,8 @@ void Tables_Build(void)
         int mod = Mods_Loaded(i);
         if (Mods_Active(mod)) Tables_Add(Mods_Id(mod), Mods_Manifest(mod));
     }
-    if (fusion_count || equip_count || bonus_count || ritual_count || edit_count || fixed_count || overflow_starchips)
+    if (fusion_count || equip_count || bonus_count || equip_default_set || ritual_count || edit_count || fixed_count || overflow_starchips || chest_limit)
         LOG(LOG_MODS, "tables: %d fusion rules, %d equip rules, %d equip bonuses, %d rituals, %d pool edits, "
-            "%d fixed decks, %ld starchips a card past the chest", fusion_count, equip_count, bonus_count,
-            ritual_count, edit_count, fixed_count, overflow_starchips);
+            "%d fixed decks, a chest of %d with %ld starchips a card past it", fusion_count, equip_count,
+            bonus_count, ritual_count, edit_count, fixed_count, Tables_ChestLimit(), overflow_starchips);
 }

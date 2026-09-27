@@ -1160,8 +1160,8 @@ static int load_library(Mod *mod)
 static const char *const manifest_keys[] = {
     "id", "name", "version", "author", "description", "library", "enabled", "restart", "legacy_setting",
     "data", "textures", "cards", "audio", "min_api", "game", "requires", "after", "conflicts", "priority",
-    "settings", "fusions", "equips", "rituals", "drops", "decks", "text", "font", "chest_overflow_starchips",
-    "terrain_bonus", "trap_thresholds",
+    "settings", "fusions", "equips", "rituals", "drops", "decks", "text", "font", "chest_overflow",
+    "terrain_bonus", "trap_thresholds", "equip_bonus_default",
 };
 
 /* How many letters to add, remove or change to turn one word into the
@@ -1291,13 +1291,13 @@ static int read_manifest(Mod *mod, const char *directory, const char *origin)
     {   /* So are the rule tables (src/pc/cards/tables.c) and a translation
          * (src/pc/text): both are read once, at startup. */
         static const char *const tables[] = {"fusions", "equips", "rituals", "drops", "decks", "text", "font",
-                                             "terrain_bonus", "trap_thresholds"};
+                                             "terrain_bonus", "trap_thresholds", "chest_overflow"};
         for (size_t t = 0; t < sizeof(tables) / sizeof(tables[0]); t++) {
             const JsonValue *value = Json_Member(root, tables[t]);
             /* "text": "text.txt" is one file named as a string. */
             if (Json_Count(value) || *Json_String(value, "")) mod->restart = 1;
         }
-        if (Json_Member(root, "chest_overflow_starchips")) mod->restart = 1;   /* a number */
+        if (Json_Member(root, "equip_bonus_default")) mod->restart = 1;   /* a number */
     }
     {   /* The key this mod's choice was stored under before it was a mod. */
         const char *legacy = Json_String(Json_Member(root, "legacy_setting"), NULL);

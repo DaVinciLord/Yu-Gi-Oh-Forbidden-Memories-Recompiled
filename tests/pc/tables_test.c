@@ -194,6 +194,8 @@ int main(void)
     assert(notes == 2);
     pool = Tables_PoolFor(15, TABLES_POOL_DECK, retail);
     assert(pool[10] == 300 && total(pool) == 2048);
+    add("a", "{\"decks\": {\"Isis\": {\"fixed\": false, \"Kuriboh\": 300}}}");
+    assert(notes == 2 && Tables_PoolFor(16, TABLES_POOL_DECK, retail)[10] == 300);
     /* The pool follows what the game loaded (a data mod may patch it). */
     retail[100] = 0;
     pool = Tables_PoolFor(15, TABLES_POOL_DECK, retail);
@@ -224,24 +226,29 @@ int main(void)
         assert(Tables_FixedDeck(14, deck) && deck[0] == 11);
     }
 
-    /* The chest: without the rule a card past 250 is lost as on the disc;
-     * with it each is worth its starchips, up to 999999; the later mod wins. */
+    /* The chest: without the rule it keeps 250 and a card past that is lost,
+     * as on the disc; with it, it keeps "limit" and each card past that is
+     * worth its starchips, up to 999999; the later mod wins. */
     {
         unsigned starchips = 100;
-        assert(Tables_ChestOverflow(250, &starchips) == 0 && starchips == 100);
+        assert(Tables_ChestLimit() == 250 && Tables_ChestOverflow(250, &starchips) == 0 && starchips == 100);
         notes = 0;
-        add("i", "{\"chest_overflow_starchips\": 3}");
-        add("j", "{\"chest_overflow_starchips\": -1}");
-        add("k", "{\"chest_overflow_starchips\": \"many\"}");
-        assert(notes == 2);
+        add("i", "{\"chest_overflow\": {\"starchips\": 3}}");
+        add("j", "{\"chest_overflow\": {\"limit\": 0, \"starchips\": 9}}");
+        add("k", "{\"chest_overflow\": {\"limit\": 3, \"starchips\": \"many\"}}");
+        add("k2", "{\"chest_overflow\": 3}");
+        assert(notes == 3 && Tables_ChestLimit() == 250);
         assert(Tables_ChestOverflow(249, &starchips) == 0 && starchips == 100);
         assert(Tables_ChestOverflow(250, &starchips) == 3 && starchips == 103);
-        add("l", "{\"chest_overflow_starchips\": 999999}");
-        assert(Tables_ChestOverflow(250, &starchips) == 999999 && starchips == 999999);
-        add("m", "{\"chest_overflow_starchips\": 0}");
+        add("l", "{\"chest_overflow\": {\"limit\": 3, \"starchips\": 999999}}");
+        assert(Tables_ChestLimit() == 3);
+        assert(Tables_ChestOverflow(2, &starchips) == 0 && starchips == 103);
+        assert(Tables_ChestOverflow(3, &starchips) == 999999 && starchips == 999999);
+        assert(Tables_ChestOverflow(40, &starchips) == 999999 && starchips == 999999);
+        add("m", "{\"chest_overflow\": {\"limit\": 10}}");
         starchips = 5;
-        assert(Tables_ChestOverflow(250, &starchips) == 0 && starchips == 5);
-        add("n", "{\"chest_overflow_starchips\": 1}");
+        assert(Tables_ChestLimit() == 10 && Tables_ChestOverflow(10, &starchips) == 0 && starchips == 5);
+        add("n", "{\"chest_overflow\": {\"limit\": 250, \"starchips\": 1}}");
     }
 
     /* Terrains: a listed pair has its points; the rest are the disc's until
@@ -285,6 +292,13 @@ int main(void)
     assert(Tables_EquipBonus(20, 12, 500) == 900);           /* it says nothing of a dragon */
     add("t", "{\"equips\": [{\"card\": 20, \"bonus\": 0, \"add\": [\"Dragon\"]}]}");
     assert(Tables_EquipBonus(20, 12, 500) == 0 && Tables_Equip(20, 12) == 1);
+    /* A default for the equips no entry gives a bonus: Megamorph's +1000 too. */
+    notes = 0;
+    add("t2", "{\"equip_bonus_default\": 20000}");
+    assert(notes == 1 && Tables_EquipBonus(21, 13, 1000) == 1000);
+    add("t3", "{\"equip_bonus_default\": 700}");
+    assert(Tables_EquipBonus(21, 13, 1000) == 700 && Tables_EquipBonus(21, 5, 500) == 700);
+    assert(Tables_EquipBonus(20, 12, 500) == 0 && Tables_EquipBonus(20, 5, 500) == 0);
 
     /* Attack traps: the disc's thresholds until a mod sets one, in points;
      * only the six attack traps; a warning when they fall out of order. */
@@ -309,7 +323,7 @@ int main(void)
     }
     {
         unsigned starchips = 7;
-        assert(Tables_ChestOverflow(250, &starchips) == 0 && starchips == 7);
+        assert(Tables_ChestLimit() == 250 && Tables_ChestOverflow(250, &starchips) == 0 && starchips == 7);
     }
     assert(fusion(10, 11) == -1 && Tables_Equip(20, 12) == -1 && Tables_Ritual(21, own) == -1);
     assert(!Tables_PoolFor(15, TABLES_POOL_DECK, retail));
