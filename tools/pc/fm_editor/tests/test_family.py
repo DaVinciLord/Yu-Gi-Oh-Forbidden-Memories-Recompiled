@@ -372,5 +372,31 @@ class RulesTest(unittest.TestCase):
         self.assertEqual(manifest.build(again), built)
 
 
+    def test_reads_past_the_executable_end(self):
+        """A table the mod's code points at the executable's last bytes, or
+        an executable cut off before the thresholds: the readers say None or
+        skip the entry (a TypeError and a struct.error before)."""
+        f = fixture()
+        slus = bytearray(f.slus)
+        last = len(slus) + g.EXE_DELTA - 2          # the image's last u16: an id with no points after it
+        struct.pack_into("<H", slus, len(slus) - 2, 651)
+        place = 0x8000B300
+        start = kit.EQUIP_BONUS_SITE[0]
+        fixtures.put(slus, start, fixtures.asm(start, [("j", place)]))
+        high, low = (last + 0x8000) >> 16, last & 0xFFFF
+        for selector in ("lh", "scaled"):
+            code = [("lui", "t0", high), ("addiu", "t0", "t0", low - 0x10000 if low & 0x8000 else low),
+                    ("lhu", "t1", 0, "t0"), ("addiu", "a2", "a2", 4), ("slti", "at", "a2", 8)]
+            code += [("lh", "t2", 2, "t0")] if selector == "lh" else [("nop",)]
+            fixtures.put(slus, place, fixtures.asm(place, code + [("jr", "ra"), ("nop",)]))
+            if selector == "scaled":
+                fixtures.put(slus, place + 4 * 5, struct.pack("<I", (8 << 21) | (9 << 16) | 25))   # multu t0, t1
+            found = kit.equip_bonus(f.slus, bytes(slus))
+            self.assertTrue(found is None or (651 not in found.fixed and not found.conditional), selector)
+        cut = bytearray(f.slus[:g.slus_offset(kit.TRAP_THRESHOLDS) + 4])
+        fixtures.put(cut, kit.ATTACK_TRAP, fixtures.asm(kit.ATTACK_TRAP, [("j", 0x8000B200)]))
+        self.assertIsNone(kit.trap_thresholds(f.slus, bytes(cut)))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -59,6 +59,10 @@ class Memory:
         data = self.bytes(address, 1)
         return struct.unpack("<b", data)[0] if data else None
 
+    def u8(self, address: int):
+        data = self.bytes(address, 1)
+        return data[0] if data else None
+
 
 def s16(value: int) -> int:
     return value - 0x10000 if value & 0x8000 else value
@@ -377,7 +381,10 @@ def trap_thresholds(retail_slus: bytes, slus: bytes):
     retail, memory = Memory(retail_slus), Memory(slus)
     if not hook(retail, memory, ATTACK_TRAP, ATTACK_TRAP + 4):
         return None
-    values = struct.unpack("<6H", memory.bytes(TRAP_THRESHOLDS, 12))
+    data = memory.bytes(TRAP_THRESHOLDS, 12)
+    if len(data) != 12:             # a cut-off executable
+        return None
+    values = struct.unpack("<6H", data)
     if not all(values) or list(values) != sorted(values) or max(values) > 655:
         return None
     return {trap: value * 100 for trap, value in zip(ATTACK_TRAPS, values)}
@@ -501,13 +508,14 @@ def equip_bonus(retail_slus: bytes, slus: bytes):
             ids = [memory.u16(address + step * k) for k in range(entries)]
             if step == 4 and any(ins.load(33) and ins.imm == 2 for ins in after[:12]):
                 for k, cid in enumerate(ids):
-                    if cid and cid != NO_CARD:
-                        found.fixed[cid] = s16(memory.u16(address + 4 * k + 2))
+                    points = memory.u16(address + 4 * k + 2)
+                    if cid and cid != NO_CARD and points is not None:      # None: past the executable's end
+                        found.fixed[cid] = s16(points)
             elif step == 4 and any(ins.op == 0 and ins.fn == 25 for ins in after[:12]):       # multu: scaled
                 for k, cid in enumerate(ids):
-                    if cid and cid != NO_CARD:
-                        found.conditional.append((cid, memory.bytes(address + 4 * k + 2, 1)[0],
-                                                  memory.bytes(address + 4 * k + 3, 1)[0] * 10))
+                    selector, points = memory.u8(address + 4 * k + 2), memory.u8(address + 4 * k + 3)
+                    if cid and cid != NO_CARD and selector is not None and points is not None:
+                        found.conditional.append((cid, selector, points * 10))
             elif step == 2:
                 bands, pending = [], None
                 for ins in after:
