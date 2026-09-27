@@ -111,6 +111,19 @@ class EquipTest(unittest.TestCase):
         # The archive's table itself stays retail's: the rules say it all.
         self.assertNotIn("data", manifest.build(result.project))
 
+    def test_an_equip_the_mod_made_a_monster_is_left_alone(self):
+        f = fixture()
+        cards = {cid: card.copy() for cid, card in f.cards.items()}
+        cards[653].type = 3                           # a Warrior now: the port would refuse an equips entry
+        slus = bytearray(fixtures.make_slus(cards, f.other_names))
+        fixtures.put(slus, kit.CHECK_EQUIP, fixtures.asm(kit.CHECK_EQUIP, [
+            ("lui", "v0", 0x8018), ("addiu", "v0", "v0", EQUIP_LO), ("lhu", "v1", 0, "v0"),
+            ("addiu", "v0", "v0", 94), ("srlv", "v1", "v1", "v0"), ("jr", "ra"), ("nop",)]))
+        wa = with_equip_table(f, bitmap_record(651, [1]))
+        result, report = imported(f, bytes(slus), bytes(wa))
+        built = manifest.build(result.project)["equips"]
+        self.assertFalse([e for e in built if e["card"] == "Card 653"])
+
     def test_bitmaps_with_monster_records_and_blocked_monsters(self):
         """Another shape: a jump to the mod's code, a count of
         records, records per monster after them and a list of monsters no

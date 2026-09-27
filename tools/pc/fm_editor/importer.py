@@ -530,6 +530,9 @@ def read_equip_bitmaps(project: Project, modded, retail_files, modded_files) -> 
     equips = {cid for cid, card in cards.items() if card.type == g.TYPE_EQUIP}
     project.equips = {e: table.allowed(e) & monsters for e in equips}
     project.equips = {e: m for e, m in project.equips.items() if m or e in project.retail.equips}
+    for e, m in project.retail.equips.items():
+        if e not in equips:         # no longer an equip card in the mod: nothing to say about it
+            project.equips[e] = set(m)
     notes = [f"equips: the mod's {table.where} reads its table as bitmaps of {kit.EQUIP_RECORD} bytes per card "
              f"({len(table.records)} records{'' if table.limit is None else f', {table.limit} read'}); every "
              "equip card's monsters were read that way"]
