@@ -8,6 +8,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from . import disc, gamedata, manifest, validate
 from .model import KEY_RE, Project
+from .art_tab import ArtTab
 from .tabs import CardsTab, DuelistsTab, EquipsTab, FusionsTab, ModInfoTab, ProblemsTab, RitualsTab
 
 APP_TITLE = "FM Editor"
@@ -32,13 +33,14 @@ class App(tk.Tk):
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(fill="both", expand=True)
         self.cards = CardsTab(self.notebook, self)
+        self.art = ArtTab(self.notebook, self)
         self.fusions = FusionsTab(self.notebook, self)
         self.equips = EquipsTab(self.notebook, self)
         self.rituals = RitualsTab(self.notebook, self)
         self.duelists = DuelistsTab(self.notebook, self)
         self.info = ModInfoTab(self.notebook, self)
         self.problems = ProblemsTab(self.notebook, self)
-        self.tabs = [self.cards, self.fusions, self.equips, self.rituals, self.duelists, self.info, self.problems]
+        self.tabs = [self.cards, self.art, self.fusions, self.equips, self.rituals, self.duelists, self.info, self.problems]
         self.status = ttk.Label(self, relief="sunken", anchor="w", padding=(6, 2))
         self.status.pack(fill="x", side="bottom")
         self.notebook.bind("<<NotebookTabChanged>>", lambda e: self.tab_changed())
@@ -194,6 +196,9 @@ class App(tk.Tk):
             current.fill()
         elif current in (self.fusions, self.rituals, self.cards):
             current.fill()
+        elif current is self.art:
+            current.fill()
+            current.show(current.current)
 
     def need_game(self):
         if self.retail is None:
@@ -301,6 +306,10 @@ class App(tk.Tk):
         if issue.area == "Cards" and target:
             self.notebook.select(self.cards)
             self.cards.goto(target)
+        elif issue.area == "Art":
+            self.notebook.select(self.art)
+            if target:
+                self.art.goto(target)
         elif issue.area == "Fusions" and target:
             self.notebook.select(self.fusions)
             self.fusions.search.set(str(target[0]))

@@ -91,6 +91,34 @@ class GuiTest(unittest.TestCase):
         self.assertEqual(app.project.cards[1].name, "Bulbasaur")
         self.assertEqual(len(app.project.added), 1)
 
+    def test_art(self):
+        from fm_editor import art, pngio
+        from fm_editor.tests.test_art import gradient
+        app = self.app
+        app.notebook.select(app.art)
+        app.update()
+        app.art.goto(2)
+        self.assertEqual(app.art.current, 2)
+        picture = Path(self.tmp.name) / "picture.png"
+        pngio.write(picture, gradient(408, 384))
+        self.assertTrue(app.art.use_file("art", str(picture)))
+        self.assertEqual(app.art.tree.item("2", "values")[3], "picture, thumbnail")
+        self.assertTrue(app.dirty)
+        out = Path(self.tmp.name) / "saved-art"
+        app.project.info.id = "art-test"
+        app.project.source_dir = out
+        self.assertTrue(app.save())
+        data = json.loads((out / "mod.json").read_text(encoding="utf-8"))
+        self.assertEqual(data["textures"], "textures")
+        app.load_mod(out)
+        app.notebook.select(app.art)
+        app.update()
+        app.art.goto(2)
+        self.assertEqual(art.changed_cards(app.project), {2})
+        self.assertIn("Internal 4x", app.art.rows["art"]["info"].cget("text"))
+        app.art.revert("art")
+        self.assertEqual(art.changed_cards(app.project), set())
+
     def test_tabs_fill(self):
         app = self.app
         for tab in app.tabs:
