@@ -15,6 +15,7 @@
 #include "pc/mods/mods.h"
 #include "pc/mods/json.h"
 #include "pc/platform/paths.h"
+#include "pc/platform/settings.h"
 #include "pc/debug/log.h"
 #include "pc/render/texture_dump.h"
 #include "pc/rng.h"
@@ -99,6 +100,10 @@ int Cards_Fusion(int a, int b, int *result)
 
 static unsigned char *names[CARD_TABLE_ID_END];     /* own names, glyph codes */
 static unsigned char *descriptions[CARD_TABLE_ID_END];  /* own card text, glyph codes */
+/* An entry's "password": its eight digits, a nibble each, or
+ * CARD_PASSWORD_NONE ("" or null); `own_password` says the entry gave one. */
+static unsigned passwords[CARD_TABLE_ID_END];
+static unsigned char own_password[CARD_TABLE_ID_END];
 /* Own artwork: an art record (art.h) shared by an entry's cards, which of its
  * parts are the card's own, and the card's own title plate. */
 #define ART_PICTURE 1
@@ -436,6 +441,20 @@ int Cards_Type(int id)
     return Cards_Valid(id) ? (int)(((unsigned)gDuel_adwCardStats[id - 1] >> 26) & 0x1F) : -1;
 }
 
+int Cards_AttributeNamed(const char *text)
+{
+    int attribute;
+    for (attribute = 0; text && attribute < (int)(sizeof(attribute_names) / sizeof(attribute_names[0])); attribute++) {
+        if (same_letters(text, attribute_names[attribute])) return attribute;
+    }
+    return -1;
+}
+
+int Cards_Attribute(int id)
+{
+    return Cards_Valid(id) ? gDuel_abCardLevelAttr[id] >> 4 : -1;
+}
+
 typedef struct {
     int use_count[2][CARD_ID_END];  /* copies taking a base's place, per use */
     unsigned char use[CARD_TABLE_ID_END];
@@ -487,6 +506,33 @@ static void replace_model_effect(const char *mod, int index, const JsonValue *en
     }
 }
 
+/* "password": up to eight digits as a string ("08124921", leading zeros
+ * kept) or a whole number, "" or null for none. 0 and a note if it is
+ * neither. */
+static int read_password(const char *mod, int index, const JsonValue *value, unsigned *out)
+{
+    char digits[16];
+    const char *text;
+    size_t length, i;
+    *out = CARD_PASSWORD_NONE;
+    if (Json_TypeOf(value) == JSON_NULL) return 1;
+    if (Json_TypeOf(value) == JSON_NUMBER && Json_Number(value, -1) >= 0 && Json_Number(value, -1) <= 99999999) {
+        snprintf(digits, sizeof(digits), "%ld", Json_Number(value, 0));
+        text = digits;
+    } else {
+        text = Json_String(value, NULL);
+    }
+    length = text ? strlen(text) : 9;
+    if (length > 8 || strspn(text, "0123456789") != length) {
+        Mods_Note(mod, "cards[%d]: \"password\" must be up to 8 digits", index);
+        return 0;
+    }
+    if (!length) return 1;
+    *out = 0;
+    for (i = 0; i < length; i++) *out = (*out << 4) | (unsigned)(text[i] - '0');
+    return 1;
+}
+
 static void add_entry(const char *mod, const char *directory, int index, const JsonValue *entry, BuildContext *context)
 {
     const JsonValue *replace = Json_Member(entry, "replace");
@@ -495,10 +541,11 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     const char *name = Json_String(Json_Member(entry, "name"), NULL);
     const char *setting = Json_String(Json_Member(entry, "count_setting"), NULL);
     const char *description = Json_String(Json_Member(entry, "description"), NULL);
+    const JsonValue *password_value = Json_Member(entry, "password");
     unsigned char *record = NULL, *title = NULL, *named_plate = NULL;
     int parts = 0;
-    int base = 0, count, n, value;
-    unsigned stats;
+    int base = 0, count, n, value, has_password;
+    unsigned stats, password = CARD_PASSWORD_NONE;
     unsigned char level_attr;
     if (Json_TypeOf(entry) != JSON_OBJECT) {
         Mods_Note(mod, "cards[%d] is not an object", index);
@@ -563,6 +610,9 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     if ((value = choice(Json_Member(entry, "attribute"), attribute_names, 6)) >= 0) {
         level_attr = (unsigned char)((level_attr & 0x0F) | (clamp(value, 0, 15) << 4));
     }
+    /* What View > Card passwords shows (passwords.h): a copy has none
+     * unless it says, a replaced card keeps the disc's. */
+    has_password = password_value && read_password(mod, index, password_value, &password);
     /* Artwork: PNGs relative to the mod's directory, shared by the entry's
      * cards; a card with a name of its own gets a title plate that says it. */
     {
@@ -628,6 +678,10 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         gDuel_abCardLevelAttr[id] = level_attr;
         names[id] = name && *name ? encode_name(mod, name, n, id) : NULL;
         descriptions[id] = description && *description ? encode_description(mod, description, id) : NULL;
+        /* Reset as names and descriptions are, so a later mod's entry for
+         * the same card without one does not keep an earlier mod's. */
+        own_password[id] = (unsigned char)(has_password != 0);
+        if (has_password) passwords[id] = password;
         art_records[id] = parts ? record : NULL;
         art_parts[id] = (unsigned char)parts;
         if (title) {
@@ -763,6 +817,11 @@ int Cards_Seen(int id)
     return (gCard_abExtraSeen[id >> 3] >> (id & 7)) & 1;
 }
 
+int Cards_LibraryPlaceholder(int id)
+{
+    return Settings_Get(SET_LIBRARY_ALL_CARDS) && Cards_Valid(id) && !Cards_Seen(id);
+}
+
 void Cards_MarkSeen(int id)
 {
     if (id >= CARD_ID_FIRST && id <= CARD_COUNT) {
@@ -828,6 +887,13 @@ const unsigned char *Cards_DescriptionText(int id)
     return Cards_Valid(id) ? descriptions[id] : NULL;
 }
 
+int Cards_OwnPassword(int id, unsigned *password)
+{
+    if (!Cards_Valid(id) || !own_password[id]) return 0;
+    *password = passwords[id];
+    return 1;
+}
+
 /* The bytes written over the base's are no longer the disc's: a texture
  * pack must not find the base card's picture in them (texture_dump.h),
  * even in the words that happen to match it. */
@@ -846,8 +912,62 @@ static int art_of(int id, int part)
     return art_parts[Cards_BaseId(id)] & part ? Cards_BaseId(id) : 0;
 }
 
+/* The plate of a retail card a translation renames (its name, string
+ * 0x8000 + id, rewritten by a mod's "text"): the retail plate is the English
+ * name drawn into the art, so it is set anew from the translated name, as a
+ * mod's own name is (above), once per card. A translation that keeps the
+ * name, or a system with no serif face, leaves the retail plate as it is:
+ * the English name beats a blank one when the name reads right everywhere
+ * else. HD text still sets the title from the name at its own size
+ * (hd_text.h) over this plate. */
+static unsigned char *text_plates[CARD_ID_END];
+static unsigned char text_plate_tried[CARD_ID_END];
+
+/* The next character of a name's glyph codes (0 at its end), advancing. */
+static uint32_t name_character(const unsigned char **at)
+{
+    int code = *(*at)++;
+    if (code >= 0xF6) return 0;
+    if (code >= 0xF0) code = ((code - 0xF0) << 8) | *(*at)++;
+    return code ? Glyphs_Character(code) : ' ';
+}
+
+/* Whether the name the text gives is the disc's, character for character
+ * (a translation lists every name, the ones it keeps too). Compared as
+ * characters, not as retail_name's ASCII, which spells a glyph outside
+ * it as '?', nor as codes, which differ for a glyph the port added. */
+static int retail_name_kept(int id)
+{
+    const unsigned short *offsets = (const unsigned short *)(uintptr_t)RETAIL_NAME_OFFSETS;
+    const unsigned char *retail = (const unsigned char *)(uintptr_t)(TEXT_BANK + offsets[id]);
+    const unsigned char *name = Cards_NameCodes(id);
+    uint32_t a, b;
+    if (!name) return 1;
+    do {
+        a = name_character(&name);
+        b = name_character(&retail);
+    } while (a == b && a);
+    return a == b;
+}
+
+static const unsigned char *translated_plate(int id)
+{
+    char name[128];
+    if (id < CARD_ID_FIRST || id > CARD_COUNT || names[id] || !Text_Overridden(0x8000 + id)) return NULL;
+    if (!text_plate_tried[id]) {
+        text_plate_tried[id] = 1;
+        if (!retail_name_kept(id) && Cards_NameUtf8(id, name, sizeof(name)) &&
+            (text_plates[id] = malloc(CARD_TITLE_BYTES)) != NULL && !CardArt_TitleFromName(name, text_plates[id])) {
+            free(text_plates[id]);
+            text_plates[id] = NULL;
+        }
+    }
+    return text_plates[id];
+}
+
 void Cards_PatchArtRecord(int id, unsigned char *record)
 {
+    const unsigned char *translated;
     int from;
     if (!Cards_Valid(id)) return;
     if ((from = art_of(id, ART_PICTURE)) != 0) patch(record, art_records[from], CARD_TITLE_PIXELS);
@@ -858,6 +978,8 @@ void Cards_PatchArtRecord(int id, unsigned char *record)
      * the base's are the same inks, so its pack picture there is no harm. */
     if (plates[id] || plates[Cards_BaseId(id)]) {
         memcpy(record + CARD_TITLE_PIXELS, plates[id] ? plates[id] : plates[Cards_BaseId(id)], CARD_TITLE_BYTES);
+    } else if (!names[id] && (translated = translated_plate(Cards_BaseId(id))) != NULL) {
+        memcpy(record + CARD_TITLE_PIXELS, translated, CARD_TITLE_BYTES);
     }
     if ((from = art_of(id, ART_THUMBNAIL)) != 0) {
         patch(record + CARD_THUMB_PIXELS, art_records[from] + CARD_THUMB_PIXELS, CARD_THUMB_BLOCK);

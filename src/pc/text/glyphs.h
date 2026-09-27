@@ -30,8 +30,17 @@ uint32_t Glyphs_Character(int code);
  * mouth-animation kind above. */
 uint32_t Glyphs_Word(int code);
 /* The retail glyph an added one stands for where the port draws none (the
- * 8x8 font, the mouth animation); a retail code is itself. */
+ * mouth animation); a retail code is itself. */
 int Glyphs_Base(int code);
+
+/* For DuelEffect_AppendEntry: the 8x8 font's index in a glyph word (an
+ * added letter's is its retail letter's), and for ':', which that font
+ * lacks, one that is not 0, so that the glyph is kept and drawn. */
+int Glyphs_TinyIndex(uint32_t word);
+/* For func_80035E20: if `sjis` is an added letter's or ':', where its 8x8
+ * picture is (as Glyphs_Cell), made from the 8x8 font in VRAM the first
+ * time. Returns 0 for any other glyph, which the font has as it is. */
+int Glyphs_TinyCell(uint32_t sjis, int *tpage, int *u, int *v);
 
 /* What a glyph sorts as: its letter in lower case, an accented letter as
  * its plain one; anything else as its character. */
@@ -57,6 +66,10 @@ uint32_t Glyphs_NextCharacter(const char **text);
  * the font's page (not in_bank), or an added glyph at u, v of the bank's
  * page `page`. `large` is the 16x16 font, else the 8x12. */
 uint32_t Glyphs_CellCharacter(int in_bank, int page, int large, int u, int v);
+/* For a cell that is part of a word the font draws across neighbouring
+ * cells (the name entry's END): the word, its first cell's u and how many
+ * cells it takes; NULL for any other cell. */
+const char *Glyphs_CellWord(int in_bank, int page, int large, int u, int v, int *first_u, int *cells);
 /* Where the retail font has a character's glyph in its page; 0 if not. */
 int Glyphs_RetailCell(uint32_t character, int large, int *u, int *v);
 /* The font a character is set in (an FT_Face), NULL for none. */

@@ -8,7 +8,7 @@ directory in, restart, apply it in **Game > Mods**.
 
 | Directory | What is in it |
 |---|---|
-| `mods/` beside the executable | the mods the release ships (`3d-monsters`, `hand-camera`, `ai-hard-mode`, `yamyi-mods`) |
+| `mods/` beside the executable | the mods the release ships (`3d-monsters`, `hand-camera`, `ai-hard-mode`, `yamyi-mods`, `drop-missing-cards`) |
 | `mods/` in the user directory | mods the player installed |
 
 The user directory is where everything the player owns lives: settings,
@@ -59,6 +59,10 @@ editors write, is fine):
 | `cards` | cards the mod adds after the disc's 722, and changes to the disc's own cards, below |
 | `audio` | songs, XA clips and sound effects the mod replaces with WAV or Ogg files, below |
 | `fusions`, `equips`, `rituals`, `drops`, `decks` | changes to the duel's rule tables, below |
+| `chest_overflow` | how many copies of a card the chest keeps, and the starchips each one past that is worth, below |
+| `terrain_bonus` | what each terrain gives each monster type, in place of the disc's +500 and -500, below |
+| `equip_bonus_default` | what an equip adds when no `equips` entry sets its bonus, below |
+| `trap_thresholds` | the attack each of the six attack traps stops, below |
 | `text`, `font` | a translation of the game's text, and fonts for letters it has none of, below |
 
 `version`, `author` and `description` are displayed in the manager. Version
@@ -433,7 +437,7 @@ MEMORIES_INPUT="700:0008,706:0000" tmp/pc/game32/memories-pc
 
 `out.raw` is s16le stereo at 44.1 kHz. How it is done:
 [`src/pc/audio/replace.h`](../src/pc/audio/replace.h).
-## Rules: fusions, equips, rituals, drops and decks
+## Rules: fusions, equips, rituals, drops, decks and more
 
 A mod may change what fuses into what, what an equip card may equip, what a
 ritual needs and makes, what each opponent drops and what its deck is dealt
@@ -448,7 +452,21 @@ from, with no code and naming cards by name:
 ```
 
 Weights are out of 2048, as the game's are, and the pools are always brought
-back to 2048. Several mods' edits of the same opponent add up rather than
+back to 2048. A deck may be fixed instead, its forty cards counted out by
+copies with no limit of three (`{"fixed": true, "Kuriboh": 4, ...}`).
+`"chest_overflow": {"limit": 3, "starchips": 3}` keeps 3 copies of a card in
+the chest and makes each card past them worth 3 starchips instead of lost.
+`"terrain_bonus": {"Forest": {"Beast": 300, "Fairy": -200}}` sets, in points,
+what a terrain gives a monster type.
+An equip entry's `"bonus": 800` and `"bonus_if": {"Dragon": 1000, "Light": 700}`
+set what it adds, in place of the disc's +500, and a top-level
+`"equip_bonus_default": 700` what every other equip adds.
+`"trap_thresholds": {"House of Adhesive Tape": 800}` sets, in points of ATK,
+the attack each attack trap springs on. These are the rules a community mod
+such as The Wicked Gods changes in its code; with them it plays close to its
+own rules without C. The Wicked Gods also makes a monster's attribute count on
+a terrain, lets monsters be equips and raises the stat cap to 30000: those
+need a code mod or the port itself. Several mods' edits of the same opponent add up rather than
 replace each other. [Gameplay tables](gameplay-tables.md) has every key, the
 opponents' names, and how the rules combine. Like cards, they need a restart.
 
@@ -470,6 +488,18 @@ as an editable UTF-8 listing; the mod ships the translated file:
 [Translations](translation.md) describes the listing, its codes, the
 letters the port draws and how a font is added. Like cards, a translation
 needs a restart.
+
+A `text` or `font` entry may be `{"file": "names.txt", "setting": "card_names"}`
+instead of a name, which lets the player switch that file off, as a pack
+entry's `setting` does (above): it is read only while the mod's declared
+setting of that key is not 0. With `"value": N` as well it is read only
+while the setting is exactly N, which gives each choice of a `choice`
+setting a file of its own ([Translations](translation.md) has an example).
+The text is built once, as the game starts,
+so a mod with `text` or `font` asks for a restart on its own, and so does a
+change to any of its settings (the setting may still say `"restart": true`,
+which shows "Requires a restart" beside it). A `setting` the mod does not
+declare is noted beside the mod and the file read.
 
 ## Code mods
 
@@ -679,6 +709,7 @@ the reason beside any that failed to load.
 | `mods/hand-camera` | L1/R1 turn and L3/R3 zoom the duel camera while the hand is up |
 | `mods/ai-hard-mode` | optional stronger opponent decisions |
 | `mods/yamyi-mods` | return-to-title confirmation, rarity colours and Library drop odds, with independent switches |
+| `mods/drop-missing-cards` | off by default: gives the 82 cards no duelist drops a duelist to win them from, as the old static recomp's option did; a data-only `drops` table |
 
 The first two were part of the executable until they became mods; they are the worked
 examples of a code mod that reaches deep into the game. 3D Monsters' knobs

@@ -54,6 +54,7 @@ The release ships no card mod; the checks below were made with test mods
 | `stars` | the two guardian stars, as numbers or names (`"Mars"` to `"Venus"`) |
 | `drops` | whether the card can be won in its base's place (default `true`, below) |
 | `opponents` | whether an opponent's deck can be dealt it in its base's place (default `false`) |
+| `password` | what View > Card passwords shows for it ([PC build](pc-build.md#card-passwords-view)): up to eight digits as a string (`"08124921"`, leading zeros kept) or a number, `""` or `null` for none. It is only shown: the Password screen does not know it. A copy without one shows none (its base's would give the base) |
 
 What an entry leaves out is its base's. Give entries explicit stable `id` keys. Saves use these identities; runtime
 IDs are remapped when mods change. Legacy numeric sidecars require explicit
@@ -78,7 +79,8 @@ so a mod can rework the existing cards without adding any:
 
 It takes the keys above that change what a player reads off the card:
 `name`, `description`, `art`, `thumbnail`, `title`, `attack`, `defense`,
-`type`, `attribute`, `level` and `stars`. It gets no id of its own, so `id`,
+`type`, `attribute`, `level`, `stars` and `password` (without one it shows
+the disc's). It gets no id of its own, so `id`,
 `count`, `count_setting`, `drops`, `opponents` and `fusions` do not apply:
 the card keeps its place in the disc's tables, and the
 [gameplay tables](gameplay-tables.md) change its fusions, equips and rituals.
@@ -215,9 +217,11 @@ plates follow the settings the
 project measured against window captures (its `psx_card_packs.c`,
 `render_title`): Times
 regular at 13 pixels, the baseline under row 11, whole-pixel advances,
-coverage in hard steps (150 and up ink 1, 96 an edge at 3, 40 a halo at 6),
 and a name wider than 90 pixels squeezed into columns 3 to 93 and brought
-back up to full ink. The name is read as UTF-8, as its glyphs are, so an
+back up to full ink. Each texel takes the ink of the nearest tone, from
+what each ink was measured to take from the gold in the game (`ink_of`);
+a retail card a translation renames gets its plate the same way
+([translations](translation.md#how-the-port-does-it)). The name is read as UTF-8, as its glyphs are, so an
 accented letter is one character on the plate too; one the font lacks is
 left out. An entry's cards share one plate unless the name has `{n}` or
 `{id}` in it. A patched picture and thumbnail are reported written

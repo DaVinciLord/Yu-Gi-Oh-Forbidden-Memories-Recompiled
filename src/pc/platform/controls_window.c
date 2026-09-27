@@ -257,15 +257,25 @@ static void text_at(int x, int middle, const char *s, uint32_t color)
 {
     Menu_DrawTextScaled(canvas, x * scale, middle * scale, s, color, scale);
 }
+/* `s` in `buf`, cut a whole character at a time to fit `width`, its last
+ * three characters "..." when anything was cut. */
+static void clip(char *buf, size_t size, const char *s, int width)
+{
+    snprintf(buf, size, "%s", s);
+    Menu_TextTrim(buf);
+    size_t n = strlen(buf);
+    while (n && text_w(buf) > width)
+        buf[n = Menu_TextBack(buf, n)] = 0;
+    if (n < strlen(s) && n > 3) {
+        for (int i = 0; i < 3; i++)
+            n = Menu_TextBack(buf, n);
+        memcpy(buf + n, "...", 4);
+    }
+}
 static void text_clip(int x, int middle, const char *s, int width, uint32_t color)
 {
     char buf[256];
-    snprintf(buf, sizeof(buf), "%s", s);
-    size_t n = strlen(buf);
-    while (n && text_w(buf) > width)
-        buf[--n] = 0;
-    if (n < strlen(s) && n > 3)
-        memcpy(buf + n - 3, "...", 3);
+    clip(buf, sizeof(buf), s, width);
     text_at(x, middle, buf, color);
 }
 static void text_right(int right, int middle, const char *s, uint32_t color)
@@ -275,12 +285,7 @@ static void text_right(int right, int middle, const char *s, uint32_t color)
 static void text_right_clip(int right, int middle, const char *s, int width, uint32_t color)
 {
     char buf[256];
-    snprintf(buf, sizeof(buf), "%s", s);
-    size_t n = strlen(buf);
-    while (n && text_w(buf) > width)
-        buf[--n] = 0;
-    if (n < strlen(s) && n > 3)
-        memcpy(buf + n - 3, "...", 3);
+    clip(buf, sizeof(buf), s, width);
     text_right(right, middle, buf, color);
 }
 /* Word-wrapped body text for the dialogs. With `draw` clear it only counts
@@ -308,7 +313,7 @@ static int text_wrap(int x, int middle, const char *s, int width, uint32_t color
                 break;
         }
         if (!best)
-            best = strlen(s) < sizeof(line) - 1 ? strlen(s) : sizeof(line) - 1;
+            best = Menu_TextFit(s, sizeof(line) - 1);
         memcpy(line, s, best);
         line[best] = 0;
         if (draw)

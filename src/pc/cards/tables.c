@@ -4,7 +4,12 @@
  * Each applied mod's "fusions", "equips", "rituals", "drops" and "decks" are
  * read into rules here, once, in the order the mods load. The game's table
  * readers (duel_card_checks.c, duel_check_ritual.c, duel_shuffle_deck.c,
- * duel_result_runtime.c) ask these first. A drop or deck pool is worked out
+ * duel_result_runtime.c) ask these first. A deck may also be fixed: forty
+ * cards written down by their copies, dealt as they are. Past the tables,
+ * "chest_overflow" turns a card the chest has no room for into
+ * starchips (Duel_AwardCard), and "terrain_bonus" sets what a terrain gives
+ * each monster type (Duel_GetTerrainBoost), and "trap_thresholds" the attack
+ * each attack trap stops (Duel_SelectAttackTrap). A drop or deck pool is worked out
  * from what the game loaded when it is drawn from, so a data mod's patch of
  * the same pool comes first and the edits here go on top of it. */
 #include "tables.h"
@@ -44,6 +49,66 @@ const char *Tables_DuelistShortName(int duelist)
         if (shorter[i].duelist == duelist) return shorter[i].name;
     }
     return Tables_DuelistNames[duelist];
+}
+
+/* A letter of Latin-1: A-Z, a-z, or an accented one (not × or ÷). */
+static int name_letter(unsigned char c)
+{
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= 0xC0 && c != 0xD7 && c != 0xF7);
+}
+
+static int name_capital(unsigned char c)
+{
+    return (c >= 'A' && c <= 'Z') || (c >= 0xC0 && c <= 0xDE && c != 0xD7);
+}
+
+int Tables_ShortenName(const char *name, char *out)
+{
+    const unsigned char *in = (const unsigned char *)name;
+    char whole[64];
+    size_t n = 0, last = 0, i;
+    int capitals = 1, words = 0;
+    out[0] = '\0';
+    while (*in && n < sizeof(whole) - 1 && (name_letter(*in) || *in == ' ' || *in == '.')) whole[n++] = (char)*in++;
+    while (n && whole[n - 1] == ' ') n--;
+    whole[n] = '\0';
+    if (!n) return 0;
+    if (n <= TABLES_SHORT_NAME_LIMIT) {
+        memcpy(out, whole, n + 1);
+        return 1;
+    }
+    /* Its words: where the last starts, and whether each starts with a
+     * capital. */
+    for (i = 0; i < n; i++) {
+        if (whole[i] != ' ' && (i == 0 || whole[i - 1] == ' ')) {
+            capitals &= name_capital((unsigned char)whole[i]);
+            last = i;
+            words++;
+        }
+    }
+    /* Each first word's initial and full stop, a space, the last word. */
+    if (words > 1 && capitals && 2 * (size_t)(words - 1) + 1 + (n - last) <= TABLES_SHORT_NAME_LIMIT) {
+        size_t k = 0;
+        for (i = 0; i < last; i++) {
+            if (whole[i] != ' ' && (i == 0 || whole[i - 1] == ' ')) {
+                out[k++] = whole[i];
+                out[k++] = '.';
+            }
+        }
+        out[k++] = ' ';
+        memcpy(out + k, whole + last, n - last + 1);
+        return 1;
+    }
+    if (words > 1 && n - last <= TABLES_SHORT_NAME_LIMIT) {
+        memcpy(out, whole + last, n - last + 1);
+        return 1;
+    }
+    /* One word too long: its first letters. */
+    for (n = TABLES_SHORT_NAME_LIMIT; n && (whole[n - 1] == ' ' || whole[n - 1] == '.'); n--) {
+    }
+    memcpy(out, whole, n);
+    out[n] = '\0';
+    return n != 0;
 }
 
 int Tables_OpponentId(void)
@@ -90,10 +155,37 @@ static unsigned char *removed_results;   /* by card id: no retail recipe makes i
 static int removed_room;
 static EquipRule *equips;
 static int equip_count, equip_room;
+/* An equip's bonus: for any monster, or one of a type or an attribute. */
+enum { BONUS_ANY, BONUS_TYPE, BONUS_ATTRIBUTE };
+typedef struct {
+    unsigned short equip;
+    unsigned char kind, value;  /* BONUS_*, and the type or attribute */
+    short bonus;
+    unsigned order, rank;       /* the entry, and the place in its "bonus_if" */
+} BonusRule;
+
+static BonusRule *bonuses;
+static int bonus_count, bonus_room;
+static short equip_default;             /* "equip_bonus_default", when set */
+static unsigned char equip_default_set;
 static RitualRule *rituals;
 static int ritual_count, ritual_room;
 static PoolEdit *edits;
 static int edit_count, edit_room;
+typedef struct {
+    const char *mod;
+    unsigned char duelist;
+    unsigned short cards[DECK_SIZE];   /* in id order */
+} FixedDeck;
+static FixedDeck *fixed_decks;
+static int fixed_count, fixed_room;
+static long overflow_starchips;          /* per card the chest has no room for */
+static int chest_limit;                  /* copies the chest keeps; 0: the disc's 250 */
+#define TERRAINS 6                        /* DUEL_TERRAIN_COUNT: Forest to Yami, 1-6 */
+static short terrain_bonus[TERRAINS][CARD_TYPE_MAGIC];
+static unsigned char terrain_listed[TERRAINS][CARD_TYPE_MAGIC];
+static long trap_threshold[DUEL_ATTACK_TRAP_COUNT];   /* House of Adhesive Tape to Widespread Ruin */
+static unsigned char trap_listed[DUEL_ATTACK_TRAP_COUNT];
 static unsigned char edited[TABLES_DUELIST_COUNT][TABLES_POOL_COUNT];
 static unsigned order_counter;
 static int fusions_sorted;
@@ -278,6 +370,70 @@ static void add_equip(int equip, EquipRule rule, unsigned order)
     equip_count++;
 }
 
+static void add_bonus(int equip, int kind, int value, long bonus, unsigned order, unsigned rank)
+{
+    BonusRule *slot = grow(&bonuses, &bonus_room, bonus_count, sizeof(*bonuses));
+    if (!slot) return;
+    slot->equip = (unsigned short)equip;
+    slot->kind = (unsigned char)kind;
+    slot->value = (unsigned char)value;
+    slot->bonus = (short)bonus;
+    slot->order = order;
+    slot->rank = rank;
+    bonus_count++;
+}
+
+static int bonus_points(const char *mod, const char *where, const JsonValue *value, long *points)
+{
+    *points = Json_Number(value, 0);
+    if (Json_TypeOf(value) == JSON_NUMBER && *points >= -CARD_STAT_MAX && *points <= CARD_STAT_MAX) return 1;
+    Mods_Note(mod, "%s: a bonus is a whole number of points, -%d to %d", where, CARD_STAT_MAX, CARD_STAT_MAX);
+    return 0;
+}
+
+/* An equip entry's "bonus": points, in place of the disc's +500 (+1000 for
+ * Megamorph), and "bonus_if": { type or attribute: points }, for monsters
+ * of that type or attribute; the first that fits comes before "bonus". */
+static void read_equip_bonus(const char *mod, int index, int equip, const JsonValue *entry, unsigned order)
+{
+    const JsonValue *plain = Json_Member(entry, "bonus"), *conditions = Json_Member(entry, "bonus_if");
+    char where[128];
+    long points;
+    int j;
+    if (plain) {
+        snprintf(where, sizeof(where), "equips[%d].bonus", index);
+        if (bonus_points(mod, where, plain, &points)) add_bonus(equip, BONUS_ANY, 0, points, order, 0);
+    }
+    if (!conditions) return;
+    if (Json_TypeOf(conditions) != JSON_OBJECT) {
+        Mods_Note(mod, "equips[%d].bonus_if: an object of monster types or attributes and their bonus", index);
+        return;
+    }
+    for (j = 0; j < Json_Count(conditions); j++) {
+        const JsonValue *member = Json_At(conditions, j);
+        const char *name = Json_Name(member);
+        int type = Cards_TypeNamed(name), attribute = Cards_AttributeNamed(name);
+        snprintf(where, sizeof(where), "equips[%d].bonus_if \"%s\"", index, name);
+        if ((type < 0 || type >= CARD_TYPE_MAGIC) && attribute < 0) {
+            Mods_Note(mod, "%s: not a monster type or an attribute", where);
+            continue;
+        }
+        if (!bonus_points(mod, where, member, &points)) continue;
+        if (type >= 0 && type < CARD_TYPE_MAGIC) add_bonus(equip, BONUS_TYPE, type, points, order, (unsigned)j + 1);
+        else add_bonus(equip, BONUS_ATTRIBUTE, attribute, points, order, (unsigned)j + 1);
+    }
+}
+
+/* "equip_bonus_default": points, what an equip no entry gives a bonus for
+ * adds, in place of the disc's +500 and Megamorph's +1000 alike. */
+static void read_equip_default(const char *mod, const JsonValue *value)
+{
+    long points;
+    if (!value || !bonus_points(mod, "equip_bonus_default", value, &points)) return;
+    equip_default = (short)points;
+    equip_default_set = 1;
+}
+
 static void read_equips(const char *mod, const JsonValue *list)
 {
     int i, j, pass;
@@ -297,6 +453,7 @@ static void read_equips(const char *mod, const JsonValue *list)
             Mods_Note(mod, "%s: \"card\" is not an equip card", where);
             continue;
         }
+        read_equip_bonus(mod, i, equip, entry, order);
         if (Json_Bool(Json_Member(entry, "replace"), 0)) {
             EquipRule none = {0};
             none.kind = TARGET_ANY;
@@ -335,6 +492,33 @@ int Tables_Equip(int equip, int monster)
         if (!best || rule->order > best->order || (rule->order == best->order && rule->kind >= best->kind)) best = rule;
     }
     return best ? best->allow : -1;
+}
+
+int Tables_EquipBonus(int equip, int monster, int retail)
+{
+    const BonusRule *best = NULL;
+    int i, base_equip, type, attribute;
+    if ((!bonus_count && !equip_default_set) || !Cards_Valid(equip) || !Cards_Valid(monster)) return retail;
+    base_equip = Cards_BaseId(equip);
+    type = Cards_Type(monster);
+    attribute = Cards_Attribute(monster);
+    /* The latest entry that says anything about this monster decides;
+     * within it the first "bonus_if" that fits, then its "bonus". */
+    for (i = 0; i < bonus_count; i++) {
+        const BonusRule *rule = &bonuses[i];
+        int fits;
+        if (rule->equip != equip && rule->equip != base_equip) continue;
+        fits = rule->kind == BONUS_ANY || (rule->kind == BONUS_TYPE && rule->value == type) ||
+               (rule->kind == BONUS_ATTRIBUTE && rule->value == attribute);
+        if (!fits) continue;
+        if (!best || rule->order > best->order ||
+            (rule->order == best->order && rule->rank && (!best->rank || rule->rank < best->rank)))
+            best = rule;
+    }
+    if (!best && !equip_default_set) return retail;
+    LOG(LOG_MODS, "tables: equip %d on %d: %+d (the disc's %+d)%s", equip, monster, best ? best->bonus : equip_default,
+        retail, best ? "" : ", the mods' default");
+    return best ? best->bonus : equip_default;
 }
 
 /* --- rituals --------------------------------------------------------- */
@@ -443,7 +627,7 @@ static void read_pool(const char *mod, const char *where, int duelist, int pool,
         long weight;
         int id;
         char at[160];
-        if (!strcmp(name, "replace")) continue;
+        if (!strcmp(name, "replace") || !strcmp(name, "fixed")) continue;   /* "fixed": false */
         snprintf(at, sizeof(at), "%s \"%s\"", where, name);
         id = Cards_Named(name);
         if (id <= 0) {
@@ -477,8 +661,110 @@ static void read_pool(const char *mod, const char *where, int duelist, int pool,
     /* The edit's lists are shared by the opponents it names, and live on. */
 }
 
+/* A fixed deck: { "fixed": true, card: copies, ... }, the copies adding up
+ * to the 40 cards of a deck. The counts are the deck, so the three-copy limit
+ * of a dealt deck does not apply: the author wrote down every copy, and a
+ * limit could only refuse the list or change it behind their back. */
+typedef struct {
+    int id, copies;
+} Copies;
+
+static int by_id(const void *left, const void *right)
+{
+    return ((const Copies *)left)->id - ((const Copies *)right)->id;
+}
+
+static void read_fixed_deck(const char *mod, const char *where, int duelist, const JsonValue *cards)
+{
+    Copies *list;
+    FixedDeck deck;
+    int i, n = 0, dealt = 0, total = 0, first, last;
+    if (Json_TypeOf(cards) != JSON_OBJECT) {
+        Mods_Note(mod, "%s: a deck is an object of cards and their copies", where);
+        return;
+    }
+    list = calloc((size_t)Json_Count(cards) + 1, sizeof(*list));
+    if (!list) return;
+    for (i = 0; i < Json_Count(cards); i++) {
+        const JsonValue *member = Json_At(cards, i);
+        const char *name = Json_Name(member);
+        long copies;
+        int id;
+        char at[160];
+        if (!strcmp(name, "fixed") || !strcmp(name, "replace")) continue;
+        snprintf(at, sizeof(at), "%s \"%s\"", where, name);
+        id = Cards_Named(name);
+        if (id <= 0) {
+            Mods_Note(mod, "%s: no such card", at);
+            continue;
+        }
+        copies = Json_Number(member, -1);
+        if (Json_TypeOf(member) != JSON_NUMBER || copies < 0 || copies > DECK_SIZE) {
+            Mods_Note(mod, "%s: a fixed deck gives each card its copies, 0 to %d", at, DECK_SIZE);
+            continue;
+        }
+        total += (int)copies;
+        if (!copies) continue;
+        list[n].id = id;
+        list[n++].copies = (int)copies;
+    }
+    if (total != DECK_SIZE) {
+        Mods_Note(mod, "%s: a fixed deck is %d cards, and this one has %d; left out", where, DECK_SIZE, total);
+        free(list);
+        return;
+    }
+    /* In id order, as the game's own pools are read; the duel shuffles it. */
+    qsort(list, (size_t)n, sizeof(*list), by_id);
+    memset(&deck, 0, sizeof(deck));
+    deck.mod = mod;
+    for (i = 0; i < n; i++) {
+        int copy;
+        for (copy = 0; copy < list[i].copies; copy++) deck.cards[dealt++] = (unsigned short)list[i].id;
+    }
+    free(list);
+    first = duelist < 0 ? 0 : duelist;
+    last = duelist < 0 ? TABLES_DUELIST_COUNT - 1 : duelist;
+    for (i = first; i <= last; i++) {
+        FixedDeck *slot = grow(&fixed_decks, &fixed_room, fixed_count, sizeof(*fixed_decks));
+        if (!slot) break;
+        *slot = deck;
+        slot->duelist = (unsigned char)i;
+        fixed_count++;
+    }
+}
+
+int Tables_FixedDeck(int duelist, unsigned short cards[TABLES_DECK_SIZE])
+{
+    const FixedDeck *deck = NULL;
+    int i;
+    if (duelist < 0 || duelist >= TABLES_DUELIST_COUNT) return 0;
+    for (i = fixed_count - 1; i >= 0 && !deck; i--) {   /* the latest */
+        if (fixed_decks[i].duelist == duelist) deck = &fixed_decks[i];
+    }
+    if (!deck) return 0;
+    for (i = 0; i < edit_count; i++) {
+        /* A fixed deck is the whole deck: the weighted edits of it wait. */
+        PoolEdit *edit = &edits[i];
+        if (edit->duelist != duelist || edit->pool != TABLES_POOL_DECK || edit->warned) continue;
+        edit->warned = 1;
+        Mods_Note(edit->mod, "%s's deck: left as it is; %s fixes it", Tables_DuelistNames[duelist], deck->mod);
+    }
+    memcpy(cards, deck->cards, sizeof(deck->cards));
+    if (Log_Wanted(LOG_MODS)) {
+        char text[DECK_SIZE * 12];
+        int at = 0;
+        for (i = 0; i < DECK_SIZE; i++) {
+            int copies = 1;
+            while (i + 1 < DECK_SIZE && deck->cards[i + 1] == deck->cards[i]) i++, copies++;
+            at += snprintf(text + at, sizeof(text) - (size_t)at, " %dx%d", copies, deck->cards[i]);
+        }
+        LOG(LOG_MODS, "tables: %s's deck fixed by %s (copies x card):%s", Tables_DuelistNames[duelist], deck->mod, text);
+    }
+    return 1;
+}
+
 /* "drops": { opponent: { pool: { card: weight } } }, and
- * "decks": { opponent: { card: weight } }. */
+ * "decks": { opponent: { card: weight } } or { "fixed": true, card: copies }. */
 static void read_pools(const char *mod, const JsonValue *table, int decks)
 {
     int i, j;
@@ -497,7 +783,8 @@ static void read_pools(const char *mod, const JsonValue *table, int decks)
         }
         if (decks) {
             snprintf(where, sizeof(where), "decks \"%s\"", name);
-            read_pool(mod, where, duelist, TABLES_POOL_DECK, entry);
+            if (Json_Bool(Json_Member(entry, "fixed"), 0)) read_fixed_deck(mod, where, duelist, entry);
+            else read_pool(mod, where, duelist, TABLES_POOL_DECK, entry);
             continue;
         }
         if (Json_TypeOf(entry) != JSON_OBJECT) {
@@ -535,7 +822,7 @@ static int by_remainder(const void *left, const void *right)
 static Share *shares;
 static int share_room;
 
-static int scale(unsigned *weights, const unsigned char *chosen, int count, unsigned target)
+int Tables_Scale(unsigned *weights, const unsigned char *chosen, int count, unsigned target)
 {
     unsigned long long sum = 0;
     unsigned given = 0;
@@ -583,11 +870,11 @@ static int apply(const PoolEdit *edit, unsigned *weights, unsigned *before, unsi
     if (given >= POOL_TOTAL || !rest) {
         /* The listed cards are the pool, in proportion. */
         for (id = 1; id <= count; id++) if (!listed[id]) weights[id] = 0;
-        if (!scale(weights, listed, count, POOL_TOTAL) || !given) goto refuse;
+        if (!Tables_Scale(weights, listed, count, POOL_TOTAL) || !given) goto refuse;
     } else {
         /* The listed cards have their weights; the rest share what is left. */
         for (id = 1; id <= count; id++) listed[id] = !listed[id];
-        if (!scale(weights, listed, count, POOL_TOTAL - (unsigned)given)) goto refuse;
+        if (!Tables_Scale(weights, listed, count, POOL_TOTAL - (unsigned)given)) goto refuse;
     }
     for (id = 1; id <= count; id++) cards += weights[id] != 0;
     if (edit->pool == TABLES_POOL_DECK && cards < DECK_POOL_MIN_CARDS) goto refuse;
@@ -676,6 +963,188 @@ const unsigned short *Tables_Pool(int pool, const unsigned short *retail)
     return Tables_PoolFor(gDuel_bOpponentID, pool, retail);
 }
 
+/* --- terrains ------------------------------------------------------- */
+
+/* The terrains by gDuel_bTerrain's value, 1-6, as the field cards name them,
+ * and the English words for the last three. */
+static const char *const terrain_names[TERRAINS][2] = {
+    {"Forest", NULL}, {"Wasteland", NULL}, {"Mountain", NULL}, {"Sogen", "Meadow"}, {"Umi", "Sea"}, {"Yami", "Dark"}};
+
+static int terrain_named(const char *text)
+{
+    int terrain;
+    if (strspn(text, "0123456789") == strlen(text) && *text) {
+        terrain = atoi(text);
+        return terrain >= 1 && terrain <= TERRAINS ? terrain : -1;
+    }
+    for (terrain = 0; terrain < TERRAINS; terrain++) {
+        if (same_letters(text, terrain_names[terrain][0]) ||
+            (terrain_names[terrain][1] && same_letters(text, terrain_names[terrain][1])))
+            return terrain + 1;
+    }
+    return -1;
+}
+
+/* "terrain_bonus": { terrain: { type: points }, "replace": true }. A listed
+ * pair's bonus is its points, with a sign, in place of the disc's +-500;
+ * "replace" gives every pair the mod does not list none at all. */
+static void read_terrain_bonus(const char *mod, const JsonValue *table)
+{
+    int i, j;
+    char where[128];
+    if (!table) return;
+    if (Json_TypeOf(table) != JSON_OBJECT) {
+        Mods_Note(mod, "\"terrain_bonus\" is an object of terrains (Forest, Wasteland, Mountain, Sogen, Umi, Yami)");
+        return;
+    }
+    if (Json_Bool(Json_Member(table, "replace"), 0)) {
+        memset(terrain_bonus, 0, sizeof(terrain_bonus));
+        memset(terrain_listed, 1, sizeof(terrain_listed));
+    }
+    for (i = 0; i < Json_Count(table); i++) {
+        const JsonValue *entry = Json_At(table, i);
+        const char *name = Json_Name(entry);
+        int terrain;
+        if (!strcmp(name, "replace")) continue;
+        snprintf(where, sizeof(where), "terrain_bonus \"%s\"", name);
+        terrain = terrain_named(name);
+        if (terrain < 0) {
+            Mods_Note(mod, "%s: the terrains are Forest, Wasteland, Mountain, Sogen, Umi and Yami", where);
+            continue;
+        }
+        if (Json_TypeOf(entry) != JSON_OBJECT) {
+            Mods_Note(mod, "%s: an object of monster types and their bonus", where);
+            continue;
+        }
+        for (j = 0; j < Json_Count(entry); j++) {
+            const JsonValue *member = Json_At(entry, j);
+            int type = Cards_TypeNamed(Json_Name(member));
+            long points = Json_Number(member, 0);
+            if (type < 0 || type >= CARD_TYPE_MAGIC) {
+                Mods_Note(mod, "%s \"%s\": not a monster type", where, Json_Name(member));
+                continue;
+            }
+            if (Json_TypeOf(member) != JSON_NUMBER || points < -CARD_STAT_MAX || points > CARD_STAT_MAX) {
+                Mods_Note(mod, "%s \"%s\": a bonus is a whole number of points, -%d to %d", where, Json_Name(member),
+                          CARD_STAT_MAX, CARD_STAT_MAX);
+                continue;
+            }
+            terrain_bonus[terrain - 1][type] = (short)points;
+            terrain_listed[terrain - 1][type] = 1;
+        }
+    }
+}
+
+int Tables_TerrainBonus(int terrain, int type, int *bonus)
+{
+    if (terrain < 1 || terrain > TERRAINS || type < 0 || type >= CARD_TYPE_MAGIC) return 0;
+    if (!terrain_listed[terrain - 1][type]) return 0;
+    *bonus = terrain_bonus[terrain - 1][type];
+    return 1;
+}
+
+/* --- attack traps --------------------------------------------------- */
+
+#define TRAP_THRESHOLD_MAX 65535L
+
+static const long retail_thresholds[DUEL_ATTACK_TRAP_COUNT] = {
+    DUEL_HOUSE_OF_ADHESIVE_TAPE_ATTACK_THRESHOLD, DUEL_EATGABOON_ATTACK_THRESHOLD, DUEL_BEAR_TRAP_ATTACK_THRESHOLD,
+    DUEL_INVISIBLE_WIRE_ATTACK_THRESHOLD, DUEL_ACID_TRAP_HOLE_ATTACK_THRESHOLD, DUEL_WIDESPREAD_RUIN_ATTACK_THRESHOLD};
+
+/* "trap_thresholds": { trap: points }, the attack at or under which each of
+ * the six attack traps springs, in place of the disc's 500 to 3000. */
+static void read_trap_thresholds(const char *mod, const JsonValue *table)
+{
+    int i;
+    char where[128];
+    if (!table) return;
+    if (Json_TypeOf(table) != JSON_OBJECT) {
+        Mods_Note(mod, "\"trap_thresholds\" is an object of attack traps and the attack each stops");
+        return;
+    }
+    for (i = 0; i < Json_Count(table); i++) {
+        const JsonValue *member = Json_At(table, i);
+        const char *name = Json_Name(member);
+        long points = Json_Number(member, -1);
+        int id = Cards_Named(name), trap;
+        snprintf(where, sizeof(where), "trap_thresholds \"%s\"", name);
+        trap = id > 0 ? Cards_BaseId(id) - DUEL_ATTACK_TRAP_FIRST_CARD_ID : -1;
+        if (trap < 0 || trap >= DUEL_ATTACK_TRAP_COUNT) {
+            Mods_Note(mod, "%s: not one of the attack traps (House of Adhesive Tape, Eatgaboon, Bear Trap, "
+                      "Invisible Wire, Acid Trap Hole, Widespread Ruin)", where);
+            continue;
+        }
+        if (Json_TypeOf(member) != JSON_NUMBER || points < 0 || points > TRAP_THRESHOLD_MAX) {
+            Mods_Note(mod, "%s: a threshold is a whole number of points, 0 to %ld", where, TRAP_THRESHOLD_MAX);
+            continue;
+        }
+        trap_threshold[trap] = points;
+        trap_listed[trap] = 1;
+    }
+    for (i = 1; i < DUEL_ATTACK_TRAP_COUNT; i++) {
+        /* The duel looks from the strongest trap down and stops at the first
+         * set one the attack is over: out of order, a weaker trap behind it
+         * is never reached. */
+        if (Tables_TrapThreshold(i, retail_thresholds[i]) < Tables_TrapThreshold(i - 1, retail_thresholds[i - 1])) {
+            Mods_Note(mod, "trap_thresholds: out of order (House of Adhesive Tape to Widespread Ruin, each at "
+                      "least the one before); a trap behind a lower threshold never springs");
+            break;
+        }
+    }
+}
+
+int Tables_TrapThreshold(int trap, int retail)
+{
+    if (trap < 0 || trap >= DUEL_ATTACK_TRAP_COUNT || !trap_listed[trap]) return retail;
+    return (int)trap_threshold[trap];
+}
+
+/* --- the chest ------------------------------------------------------ */
+
+#define STARCHIP_MAX 999999L   /* SAVE_DATA_STARCHIP_MAX */
+
+/* "chest_overflow": {"limit": n, "starchips": m}: the chest keeps at most n
+ * copies of a card (1-250; the disc's 250 when left out), and a card won
+ * when it already holds n is worth m starchips instead (0 when left out).
+ * The latest mod that says wins. */
+static void read_chest_overflow(const char *mod, const JsonValue *value)
+{
+    const JsonValue *limit = Json_Member(value, "limit"), *starchips = Json_Member(value, "starchips");
+    long n = Json_Number(limit, CARD_CHEST_QUANTITY_MAX), m = Json_Number(starchips, 0);
+    if (!value) return;
+    if (Json_TypeOf(value) != JSON_OBJECT) {
+        Mods_Note(mod, "\"chest_overflow\" is an object: {\"limit\": copies, \"starchips\": per card past it}");
+        return;
+    }
+    if ((limit && Json_TypeOf(limit) != JSON_NUMBER) || n < 1 || n > CARD_CHEST_QUANTITY_MAX) {
+        Mods_Note(mod, "chest_overflow: \"limit\" is a whole number of copies, 1 to %d; left out", CARD_CHEST_QUANTITY_MAX);
+        return;
+    }
+    if ((starchips && Json_TypeOf(starchips) != JSON_NUMBER) || m < 0 || m > STARCHIP_MAX) {
+        Mods_Note(mod, "chest_overflow: \"starchips\" is a whole number, 0 to %ld; left out", STARCHIP_MAX);
+        return;
+    }
+    chest_limit = (int)n;
+    overflow_starchips = m;
+}
+
+int Tables_ChestLimit(void)
+{
+    return chest_limit ? chest_limit : CARD_CHEST_QUANTITY_MAX;
+}
+
+int Tables_ChestOverflow(unsigned quantity, unsigned *starchips)
+{
+    unsigned long long total;
+    if (!overflow_starchips || quantity < (unsigned)Tables_ChestLimit()) return 0;
+    total = (unsigned long long)*starchips + (unsigned long long)overflow_starchips;
+    if (total > STARCHIP_MAX) total = STARCHIP_MAX;
+    LOG(LOG_MODS, "tables: a card past the chest's %d: %ld starchips, %u -> %u", Tables_ChestLimit(),
+        overflow_starchips, *starchips, (unsigned)total);
+    *starchips = (unsigned)total;
+    return (int)overflow_starchips;
+}
+
 /* --- building -------------------------------------------------------- */
 
 static void forget_pools(void)
@@ -689,9 +1158,13 @@ void Tables_Add(const char *mod, const JsonValue *manifest)
     forget_pools();
     read_fusions(mod, Json_Member(manifest, "fusions"));
     read_equips(mod, Json_Member(manifest, "equips"));
+    read_equip_default(mod, Json_Member(manifest, "equip_bonus_default"));
     read_rituals(mod, Json_Member(manifest, "rituals"));
     read_pools(mod, Json_Member(manifest, "drops"), 0);
     read_pools(mod, Json_Member(manifest, "decks"), 1);
+    read_chest_overflow(mod, Json_Member(manifest, "chest_overflow"));
+    read_terrain_bonus(mod, Json_Member(manifest, "terrain_bonus"));
+    read_trap_thresholds(mod, Json_Member(manifest, "trap_thresholds"));
 }
 
 void Tables_Clear(void)
@@ -706,7 +1179,13 @@ void Tables_Clear(void)
             free(edits[i].weights);
         }
     }
-    fusion_count = equip_count = ritual_count = edit_count = 0;
+    fusion_count = equip_count = ritual_count = edit_count = fixed_count = bonus_count = 0;
+    overflow_starchips = chest_limit = 0;
+    equip_default = 0;
+    equip_default_set = 0;
+    memset(terrain_bonus, 0, sizeof(terrain_bonus));
+    memset(terrain_listed, 0, sizeof(terrain_listed));
+    memset(trap_listed, 0, sizeof(trap_listed));
     if (removed_results) memset(removed_results, 0, (size_t)removed_room);
     memset(edited, 0, sizeof(edited));
     forget_pools();
@@ -722,7 +1201,8 @@ void Tables_Build(void)
         int mod = Mods_Loaded(i);
         if (Mods_Active(mod)) Tables_Add(Mods_Id(mod), Mods_Manifest(mod));
     }
-    if (fusion_count || equip_count || ritual_count || edit_count)
-        LOG(LOG_MODS, "tables: %d fusion rules, %d equip rules, %d rituals, %d pool edits",
-            fusion_count, equip_count, ritual_count, edit_count);
+    if (fusion_count || equip_count || bonus_count || equip_default_set || ritual_count || edit_count || fixed_count || overflow_starchips || chest_limit)
+        LOG(LOG_MODS, "tables: %d fusion rules, %d equip rules, %d equip bonuses, %d rituals, %d pool edits, "
+            "%d fixed decks, a chest of %d with %ld starchips a card past it", fusion_count, equip_count,
+            bonus_count, ritual_count, edit_count, fixed_count, Tables_ChestLimit(), overflow_starchips);
 }

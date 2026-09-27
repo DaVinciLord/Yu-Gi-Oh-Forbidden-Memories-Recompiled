@@ -17,6 +17,14 @@
 #define RETAIL_CODES 0x5C
 #define ADDED_SJIS 0xF040u           /* Shift-JIS's user area: no retail glyph has one */
 #define ADDED_MAX 672                /* small cells in one page: 32 x 21 of 8x12 */
+/* The 8x8 font (the results' headings): its pictures at (704, 0), a glyph's
+ * cell at u (index & 15) * 8 + 0x80, v (index >> 4) * 8 of that page, the
+ * index being bits 20-27 of the glyph's word (func_80035E20). */
+#define TINY_PAGE 0xB
+#define TINY_COLON 0xBC              /* the index ':' stands in with: the 8x8 font's '·' */
+
+/* The fonts' sizes. */
+enum { FONT_SMALL, FONT_LARGE, FONT_TINY };
 
 /* --- the retail glyphs ------------------------------------------------ */
 
@@ -127,11 +135,12 @@ typedef struct {
     char letter;           /* composed: the retail letter */
     unsigned char mark;
     unsigned char made;    /* its pictures are in the bank */
+    unsigned char made_tiny; /* and its 8x8 one */
     short letter_shape;    /* one of `letters`, or -1 */
 } Added;
 
 static Added added[ADDED_MAX];
-static int added_count;
+static int added_count, tiny_colon_made;
 
 uint32_t Glyphs_Character(int code)
 {
@@ -284,7 +293,7 @@ static int retail_cell(unsigned sjis, int large, int *u, int *v)
             *u = i * (large ? 16 : 8);
             *v = large ? 0x48 : 0;
         } else {
-            *u = large ? i * 16 - 0x160 : i * 8 - 0x30;
+            *u = large ? i * 16 - 0x60 : i * 8 - 0x30;
             *v = large ? 0x58 : 0xC;
         }
         return 1;
@@ -295,14 +304,29 @@ static int retail_cell(unsigned sjis, int large, int *u, int *v)
 static int page_x(int page) { return (page & 0xF) * 64; }
 static int page_y(int page) { return ((page >> 4) & 1) * 256; }
 
-static void read_cell(int font_page, char letter, int large, Cell *cell)
+/* A retail glyph's index in the 8x8 font, 0 for none. */
+static int tiny_index(int code)
+{
+    return code >= 0 && code < RETAIL_CODES ? (int)((table()[code] >> 20) & 0xFF) : 0;
+}
+
+static void read_cell(int font_page, char letter, int size, Cell *cell)
 {
     const uint16_t *vram = SoftGpu_Vram();
-    int u, v, x, y;
+    int u, v, x, y, large = size == FONT_LARGE;
     memset(cell, 0, sizeof(*cell));
     cell->width = large ? 16 : 8;
-    cell->height = large ? 16 : 12;
-    if (!retail_cell(character_sjis((unsigned char)letter), large, &u, &v)) return;
+    cell->height = large ? 16 : size == FONT_TINY ? 8 : 12;
+    if (size == FONT_TINY) {
+        /* A letter, or with `letter` 0 the index in `font_page`. */
+        int index = letter ? tiny_index(retail_code((unsigned char)letter)) : font_page;
+        if (!index) return;
+        font_page = TINY_PAGE;
+        u = (index & 0xF) * 8 + 0x80;
+        v = (index >> 4) * 8;
+    } else if (!retail_cell(character_sjis((unsigned char)letter), large, &u, &v)) {
+        return;
+    }
     for (y = 0; y < cell->height; y++) {
         for (x = 0; x < cell->width; x++) {
             int tu = u + x;
@@ -358,8 +382,74 @@ static void squash(Cell *cell, int top, int bottom, int to)
     }
 }
 
+/* What a pixel is to the shape: nothing, outline or ink. */
+static int kind(const Cell *cell, int x, int y, int outline)
+{
+    int index = cell->pixels[y][x];
+    return !index ? 0 : index == outline ? 1 : 2;
+}
+
+static int rows_differ(const Cell *cell, int a, int b, int outline)
+{
+    int x, count = 0;
+    for (x = 0; x < cell->width; x++) count += kind(cell, x, a, outline) != kind(cell, x, b, outline);
+    return count;
+}
+
+/* `count` rows taken out of the glyph (top..bottom, its outline included)
+ * for a mark to go above it, on the same baseline: each time the inner row
+ * most like a neighbour, nearer the middle on a tie, so a thick stroke
+ * thins and a thin one stays; its first and last rows of ink stay. What is
+ * above moves down. */
+static void drop_rows(Cell *cell, int top, int bottom, int count, int outline)
+{
+    while (count-- > 0) {
+        int y, best = -1, best_score = 0;
+        for (y = top + 2; y <= bottom - 2; y++) {
+            int above = rows_differ(cell, y, y - 1, outline), below = rows_differ(cell, y, y + 1, outline);
+            int middle = 2 * y - top - bottom;
+            int score = (above < below ? above : below) * 4 + (middle < 0 ? -middle : middle);
+            if (best < 0 || score < best_score) {
+                best = y;
+                best_score = score;
+            }
+        }
+        if (best < 0) return;
+        for (y = best; y > 0; y--) memcpy(cell->pixels[y], cell->pixels[y - 1], sizeof(cell->pixels[y]));
+        memset(cell->pixels[0], 0, sizeof(cell->pixels[0]));
+        top++;
+    }
+}
+
+/* The 8x8 font's colours, which are not the others' (its outline is 15):
+ * the outline is the index most pixels next to nothing have, the letter the
+ * most common of the rest. */
+static void tiny_colours(const Cell *cell, int *fill, int *outline)
+{
+    int edge[16] = {0}, inner[16] = {0}, x, y, i;
+    for (y = 0; y < cell->height; y++) {
+        for (x = 0; x < cell->width; x++) {
+            int index = cell->pixels[y][x];
+            if (!index) continue;
+            if (x == 0 || y == 0 || x == cell->width - 1 || y == cell->height - 1 || !cell->pixels[y][x - 1] ||
+                !cell->pixels[y][x + 1] || !cell->pixels[y - 1][x] || !cell->pixels[y + 1][x])
+                edge[index]++;
+            else
+                inner[index]++;
+        }
+    }
+    *outline = 15;
+    for (i = 1; i < 16; i++) {
+        if (edge[i] > edge[*outline]) *outline = i;
+    }
+    *fill = 0;
+    for (i = 1; i < 16; i++) {
+        if (i != *outline && (!*fill || inner[i] > inner[*fill])) *fill = i;
+    }
+}
+
 /* Mark pixels in the fill colour, and the outline round them. */
-static void stamp(Cell *cell, const int (*points)[2], int count, int fill)
+static void stamp(Cell *cell, const int (*points)[2], int count, int fill, int outline)
 {
     int i, dx, dy;
     for (i = 0; i < count; i++) {
@@ -370,24 +460,26 @@ static void stamp(Cell *cell, const int (*points)[2], int count, int fill)
         for (dy = -1; dy <= 1; dy++) {
             for (dx = -1; dx <= 1; dx++) {
                 int x = points[i][0] + dx, y = points[i][1] + dy;
-                if (x >= 0 && x < cell->width && y >= 0 && y < cell->height && !cell->pixels[y][x]) cell->pixels[y][x] = 1;
+                if (x >= 0 && x < cell->width && y >= 0 && y < cell->height && !cell->pixels[y][x])
+                    cell->pixels[y][x] = (unsigned char)outline;
             }
         }
     }
 }
 
-static void compose(const Added *glyph, int font_page, int large, Cell *cell)
+static void compose(const Added *glyph, int font_page, int size, Cell *cell)
 {
-    int top, bottom, left, right, fill, count = 0, x, y;
+    int top, bottom, left, right, fill, outline = 1, count = 0, x, y, large = size == FONT_LARGE;
     int points[64][2];
-    read_cell(font_page, glyph->letter, large, cell);
+    read_cell(font_page, glyph->letter, size, cell);
     if (!ink(cell, &top, &bottom, &left, &right)) return;
-    fill = bright(cell);
+    if (size == FONT_TINY) tiny_colours(cell, &fill, &outline);
+    else fill = bright(cell);
     if ((glyph->letter == 'i' || glyph->letter == 'j') && glyph->mark != MARK_CEDILLA && glyph->mark != MARK_OGONEK) {
         /* The dot goes: the letter keeps what is below the x-height. */
         Cell n;
         int n_top, n_bottom, n_left, n_right;
-        read_cell(font_page, 'n', large, &n);
+        read_cell(font_page, 'n', size, &n);
         if (ink(&n, &n_top, &n_bottom, &n_left, &n_right)) {
             for (y = 0; y < n_top; y++) memset(cell->pixels[y], 0, sizeof(cell->pixels[y]));
             ink(cell, &top, &bottom, &left, &right);
@@ -418,20 +510,37 @@ static void compose(const Added *glyph, int font_page, int large, Cell *cell)
                 count++;
             }
         }
-        stamp(cell, (const int (*)[2])points, count, fill);
+        stamp(cell, (const int (*)[2])points, count, fill, outline);
         return;
     }
     {
         const char *const *rows = large ? large_marks[glyph->mark] : small_marks[glyph->mark];
+        static const char *const tiny_below[3] = {"#"};
         int height = 0, width = 0, x0, y0, below = glyph->mark == MARK_CEDILLA || glyph->mark == MARK_OGONEK;
-        while (height < 3 && rows[height]) {
-            if ((int)strlen(rows[height]) > width) width = (int)strlen(rows[height]);
-            height++;
+        if (below && size == FONT_TINY) rows = tiny_below;   /* the 8x8 font has one row below: a dot */
+        while (height < 3 && rows[height]) height++;
+        for (y = 0; y < height; y++) {
+            if ((int)strlen(rows[y]) > width) width = (int)strlen(rows[y]);
         }
         if (below) {
             y0 = bottom < cell->height - height ? bottom : cell->height - height;
-        } else if (top < height + 1) {
+        } else if (large && top < height + 1) {
             squash(cell, top, bottom, height + 1);
+            y0 = 0;
+        } else if (!large && top < height) {
+            /* A capital in the small fonts, its outline on the cell's top
+             * row: it gives up a row of its body (two for a three-row
+             * mark), and the mark's last row takes its top outline's place,
+             * on the letter, so the capital stays taller than the small
+             * letters (notes/translation.md). */
+            int target = height > 2 ? height - 1 : 1;
+            if (top < target) {
+                drop_rows(cell, top, bottom, target - top, outline);
+                ink(cell, &top, &bottom, &left, &right);
+            }
+            y0 = 0;
+        } else if (!large && top == height) {
+            /* The letter's top outline is the mark's below it. */
             y0 = 0;
         } else {
             y0 = top - 1 - height;
@@ -445,7 +554,7 @@ static void compose(const Added *glyph, int font_page, int large, Cell *cell)
                 points[count][0] = x0 + x; points[count][1] = y0 + y; count++;
             }
         }
-        stamp(cell, (const int (*)[2])points, count, fill);
+        stamp(cell, (const int (*)[2])points, count, fill, outline);
     }
 }
 
@@ -525,10 +634,14 @@ static void render(const Added *glyph, int font_page, int large, Cell *cell)
 }
 
 /* Where added glyph `n` is in the bank: small ones on page 0, large ones on
- * pages 1 on, 256 to a page. */
-static void place(int n, int large, int *page, int *u, int *v)
+ * pages 1 on, 256 to a page, 8x8 ones on page 4 (with ':' after them). */
+static void place(int n, int size, int *page, int *u, int *v)
 {
-    if (large) {
+    if (size == FONT_TINY) {
+        *page = 4;
+        *u = (n % 32) * 8;
+        *v = (n / 32) * 8;
+    } else if (size == FONT_LARGE) {
         *page = 1 + n / 256;
         *u = (n % 16) * 16;
         *v = ((n % 256) / 16) * 16;
@@ -539,10 +652,10 @@ static void place(int n, int large, int *page, int *u, int *v)
     }
 }
 
-static void store(uint16_t *bank, int n, int large, const Cell *cell)
+static void store(uint16_t *bank, int n, int size, const Cell *cell)
 {
     int page, u, v, x, y;
-    place(n, large, &page, &u, &v);
+    place(n, size, &page, &u, &v);
     for (y = 0; y < cell->height; y++) {
         for (x = 0; x < cell->width; x++) {
             int tu = u + x;
@@ -563,6 +676,8 @@ static void copy_palettes(uint16_t *bank)
         memcpy(&bank[y * SOFT_GPU_WIDTH + 640], &vram[y * SOFT_GPU_WIDTH + 640], 16 * sizeof(uint16_t));
     }
     memcpy(&bank[0xFF * SOFT_GPU_WIDTH + 544], &vram[0xFF * SOFT_GPU_WIDTH + 544], 16 * sizeof(uint16_t));
+    /* The 8x8 font's, at 0x290 + 16 per colour on row 0xFA. */
+    memcpy(&bank[0xFA * SOFT_GPU_WIDTH + 656], &vram[0xFA * SOFT_GPU_WIDTH + 656], 256 * sizeof(uint16_t));
 }
 
 int Glyphs_Cell(uint32_t sjis, int large, int font_page, int *tpage, int *u, int *v)
@@ -590,6 +705,63 @@ int Glyphs_Cell(uint32_t sjis, int large, int font_page, int *tpage, int *u, int
     return 1;
 }
 
+/* ':' in the 8x8 font, which has none: two of its '·', in the letters'
+ * colours (the '·' has its own). */
+static void tiny_colon(Cell *cell)
+{
+    Cell dot, letter;
+    int top, bottom, left, right, x, y, dot_fill, dot_outline, fill, outline;
+    read_cell(TINY_COLON, 0, FONT_TINY, &dot);
+    read_cell(0, 'A', FONT_TINY, &letter);
+    memset(cell, 0, sizeof(*cell));
+    cell->width = 8;
+    cell->height = 8;
+    if (!ink(&dot, &top, &bottom, &left, &right) || bottom - top > 2 || !ink(&letter, &y, &y, &y, &y)) return;
+    tiny_colours(&dot, &dot_fill, &dot_outline);
+    tiny_colours(&letter, &fill, &outline);
+    for (y = top; y <= bottom; y++) {
+        for (x = 0; x < 8; x++) {
+            int index = dot.pixels[y][x];
+            index = !index ? 0 : index == dot_outline ? outline : fill;
+            cell->pixels[1 + y - top][x] = cell->pixels[4 + y - top][x] = (unsigned char)index;
+        }
+    }
+}
+
+int Glyphs_TinyIndex(uint32_t word)
+{
+    int index = (int)((word >> 20) & 0xFF);
+    return !index && (word & 0xFFFF) == 0x8146 ? TINY_COLON : index;
+}
+
+int Glyphs_TinyCell(uint32_t sjis, int *tpage, int *u, int *v)
+{
+    uint16_t *bank;
+    int n = (int)sjis - (int)ADDED_SJIS, page;
+    if (sjis == 0x8146) {
+        n = ADDED_MAX;
+    } else if (n < 0 || n >= added_count || !added[n].letter) {
+        return 0;
+    }
+    bank = SoftGpu_Bank(GLYPHS_BANK);
+    if (!bank) return 0;
+    if (n == ADDED_MAX ? !tiny_colon_made : !added[n].made_tiny) {
+        Cell cell;
+        if (n == ADDED_MAX) {
+            tiny_colon(&cell);
+            tiny_colon_made = 1;
+        } else {
+            compose(&added[n], TINY_PAGE, FONT_TINY, &cell);
+            added[n].made_tiny = 1;
+        }
+        store(bank, n, FONT_TINY, &cell);
+    }
+    copy_palettes(bank);
+    place(n, FONT_TINY, &page, u, v);
+    *tpage = page | (GLYPHS_BANK << 11);
+    return 1;
+}
+
 /* --- for HD text (hd_text.h) ---------------------------------------------- */
 
 uint32_t Glyphs_CellCharacter(int in_bank, int page, int large, int u, int v)
@@ -611,7 +783,21 @@ uint32_t Glyphs_CellCharacter(int in_bank, int page, int large, int u, int v)
     for (character = '!'; character <= '~'; character++) {
         if (retail_cell(character_sjis(character), large, &cu, &cv) && cu == u && cv == v) return character;
     }
+    /* The large font's arrows, where ASCII has { and | (0x827B and 0x827C,
+     * after z): the name entry's left and right. */
+    if (large && v == 0x78 && (u == 0xB0 || u == 0xC0)) return u == 0xB0 ? 0x2190 : 0x2192;
     return 0;
+}
+
+const char *Glyphs_CellWord(int in_bank, int page, int large, int u, int v, int *first_u, int *cells)
+{
+    (void)page;
+    /* The large font's END, drawn across the two cells where ASCII has ~
+     * and DEL (0x827E and 0x827F): the name entry's. */
+    if (in_bank || !large || v != 0x78 || (u != 0xE0 && u != 0xF0)) return NULL;
+    *first_u = 0xE0;
+    *cells = 2;
+    return "END";
 }
 
 int Glyphs_RetailCell(uint32_t character, int large, int *u, int *v)

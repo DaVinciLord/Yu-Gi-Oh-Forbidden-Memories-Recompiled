@@ -17,6 +17,7 @@
 #include "duel_trap_resolution.h"
 #ifdef MEMORIES_PC
 #include "pc/cards/cards.h"
+#include "pc/cards/tables.h"
 #endif
 
 /* Small data at 0x8009AF24, owned here: the attack threshold of each trap
@@ -114,7 +115,12 @@ s32 Duel_SelectAttackTrap(u8 *p) {
         do {
             if (*(u16 *)(q + off3 + 0x3C68) != 0) {
                 v = *(u8 *)(i + (s32)tb);
+#ifdef MEMORIES_PC
+                /* A mod's threshold for this trap (tables.h). */
+                if (Tables_TrapThreshold(i, v * DUEL_ATTACK_TRAP_THRESHOLD_SCALE) < th) {
+#else
                 if (v * DUEL_ATTACK_TRAP_THRESHOLD_SCALE < th) {
+#endif
                     break;
                 }
                 sel = i;

@@ -543,7 +543,18 @@ void Duel_AwardCard(s32 card_id)
     event.a = card_id;
     Mods_Dispatch(&event);
     if (!Cards_Valid(event.a)) return;
-    if (!event.handled) { Duel_AwardCardRetail(event.a); }
+    if (!event.handled) {
+        /* A mod's chest may keep fewer copies, and a copy it has no room
+           for may be worth starchips (tables.h). */
+        u8 *quantity = Cards_ChestSlot(gDuel_awPlayerDeck, event.a);
+        u8 before = *quantity;
+
+        Tables_ChestOverflow(before, &((SaveDataState *)gDuel_awPlayerDeck)->starchips);
+        Duel_AwardCardRetail(event.a);
+        if (before >= Tables_ChestLimit()) {
+            *quantity = before;
+        }
+    }
     event.phase = MEMORIES_AFTER; Mods_Dispatch(&event);
 
 }

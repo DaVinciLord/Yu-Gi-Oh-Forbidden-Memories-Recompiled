@@ -469,6 +469,17 @@ static const MenuEvent *translate(const XEvent *event)
             if (length > 0) out.text[length] = 0;
             for (int i = 0; i < length; i++) /* Delete and Ctrl+letter are not text */
                 if ((unsigned char)out.text[i] < 0x20 || out.text[i] == 0x7f) { out.text[0] = 0; break; }
+            if (length > 0 && out.text[0]) { /* XLookupString writes Latin-1; the menu reads UTF-8 */
+                char utf8[sizeof(out.text)];
+                int n = 0;
+                for (int i = 0; i < length && n + 2 < (int)sizeof(utf8); i++) {
+                    unsigned char c = (unsigned char)out.text[i];
+                    if (c < 0x80) utf8[n++] = (char)c;
+                    else { utf8[n++] = (char)(0xC0 | c >> 6); utf8[n++] = (char)(0x80 | (c & 0x3F)); }
+                }
+                utf8[n] = 0;
+                memcpy(out.text, utf8, (size_t)n + 1);
+            }
         }
         break;
     }
@@ -635,6 +646,9 @@ static void pump(void)
             if(next.type==KeyPress && next.xkey.time==event.xkey.time && next.xkey.keycode==event.xkey.keycode){XNextEvent(display,&next);continue;}
         }
         if(event.type==KeyRelease)ControlsRuntime_Key(physical_keys[event.xkey.keycode&255],0);
+        /* F8's release too, before a menu can take it: else the rewind
+         * would run on after the menu closes. */
+        if(event.type==KeyRelease&&XLookupKeysym(&event.xkey,0)==XK_F8)Memories_RewindHold(0);
         if(controls_window && event.xany.window==controls_window) {
             if(event.type==KeyPress || event.type==KeyRelease) {
                 int key=physical_keys[event.xkey.keycode&255],down=event.type==KeyPress;
@@ -652,7 +666,7 @@ static void pump(void)
             continue;
         }
         if(controls_window && (event.type==KeyPress||event.type==KeyRelease||event.type==ButtonPress||event.type==ButtonRelease))continue;
-        if(event.type==FocusOut){if(!controls_window)ControlsRuntime_ResetKeys();mouse_bits=wheel_now=0;wheel_frames=0;}
+        if(event.type==FocusOut){Memories_RewindHold(0);if(!controls_window)ControlsRuntime_ResetKeys();mouse_bits=wheel_now=0;wheel_frames=0;}
 
         if (mods_window && event.xany.window == mods_window) {
             MenuEvent input = *translate(&event);
@@ -699,6 +713,11 @@ static void pump(void)
                     continue;
                 }
             }
+            /* Keypad +/-: master volume, unless the bindings use the key. */
+            if (Platform_VolumeKey(physical_keys[event.xkey.keycode & 255], event.type == KeyPress)) {
+                if (event.type == KeyPress) repaint_menu();
+                continue;
+            }
             if (key == XK_Escape && event.type == KeyPress && DeckMenu_Active()) {
                 DeckMenu_Close(); /* the deck slot screen, not the game */
                 continue;
@@ -707,6 +726,7 @@ static void pump(void)
                 DeckMenu_Request();
                 continue;
             }
+            if (key == XK_F8 && Memories_RewindHold(event.type == KeyPress)) continue; /* Game > Rewind on */
             if (key == XK_Escape && event.type == KeyPress) {
                 quit = 1;
             }
@@ -827,6 +847,11 @@ uint16_t Platform_Pad(int port)
 {
     return port == 0 ? (uint16_t)(ControlsRuntime_Keyboard() | (ControlsRuntime_Blocked()?0:(mouse_bits | wheel_now)) | scripted_bits | Gamepad_Bits(0))
                      : (uint16_t)(Gamepad_Bits(1) | scripted_bits2);
+}
+
+uint16_t Platform_PadFixedBits(int port)
+{
+    return port == 0 ? (uint16_t)((ControlsRuntime_Blocked()?0:(mouse_bits | wheel_now)) | scripted_bits) : scripted_bits2;
 }
 
 int Platform_PadConnected(int port) { return port == 0 || Gamepad_Connected(port) || Platform_ScriptedPad2(); }
