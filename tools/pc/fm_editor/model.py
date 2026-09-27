@@ -108,6 +108,7 @@ class Project:
         self.kept_pools = {}            # (duelist or "all", pool) -> {name: weight} it cannot place
         self.kept_fixed = {}            # opponent's name -> a fixed deck ("fixed": true), kept as written
         self.source_dir = None
+        self.files = {}                 # path in the mod folder -> bytes to write with it (an import's)
 
     # --- cards -------------------------------------------------------------
 

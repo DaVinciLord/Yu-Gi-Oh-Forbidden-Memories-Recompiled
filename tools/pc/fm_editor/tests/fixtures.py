@@ -10,7 +10,7 @@ from fm_editor.gamedata import Card
 
 GLYPH_TABLE = 0x801D9000
 NAME_TEXT = 0x801D9200          # after the glyph table
-DESCRIPTION_TEXT = 0x801C0800   # after the string table
+DESCRIPTION_TEXT = 0x801C0A00   # after the string table (dialog entries 0x400-0x4F9 included)
 
 # Glyph codes 1.. for these characters, skipping the codes text_listing spells
 # its own way; each is the full-width Shift-JIS form, as the retail table's.
@@ -91,7 +91,9 @@ def encode_text(text: str, codes: dict) -> bytes:
     return bytes(out) + b"\xFF"
 
 
-def make_slus(cards: dict) -> bytes:
+def make_slus(cards: dict, other_names: dict = None) -> bytes:
+    """The executable: glyphs, stats, names and texts; `other_names` are
+    names-bank strings past the cards ({index: text}, a duelist's say)."""
     data = bytearray(0x1D0800)
     at = g.slus_offset
     codes = glyph_codes()
@@ -110,6 +112,11 @@ def make_slus(cards: dict) -> bytes:
         struct.pack_into("<H", data, at(g.STRING_TABLE + (0x100 + cid) * 2), text_at - g.DESCRIPTION_BANK)
         data[at(text_at):at(text_at) + len(text)] = text
         text_at += len(text)
+    for index, text in (other_names or {}).items():
+        name = encode_text(text, codes)
+        struct.pack_into("<H", data, at(g.NAME_TABLE + index * 2), name_at - g.NAME_BANK)
+        data[at(name_at):at(name_at) + len(name)] = name
+        name_at += len(name)
     assert name_at < 0x801E0000 and text_at < 0x801D0000
     return bytes(data)
 
@@ -135,7 +142,8 @@ class Fixture:
     def __init__(self):
         self.cards = make_cards()
         self.fusions, self.equips, self.rituals, self.pools = make_tables()
-        self.slus = make_slus(self.cards)
+        self.other_names = {0x330: "Heishin"}
+        self.slus = make_slus(self.cards, self.other_names)
         self.wa = make_wa(self.fusions, self.equips, self.rituals, self.pools)
 
     def game(self) -> g.GameData:

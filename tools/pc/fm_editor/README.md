@@ -85,6 +85,26 @@ Cards are named by their retail name when that finds the card again in the
 port (`retail_by_name`), by number otherwise, and added cards by their
 stable identity `<mod id>:<id>:1`.
 
+## Importing a modified game
+
+The PS1 scene's mods (Mod 13, FM 2023, rebalances...) ship patched copies of
+the game's files. **File > Import a modified game** (or the `import`
+command) compares a modified `.bin`, or its `SLUS_014.11` and `WA_MRG.MRG`,
+with your retail files and makes a port mod of the difference, which then
+opens and saves like any other:
+
+| Changed in the modified game | Becomes |
+|---|---|
+| card stats, names, texts; fusions, equips, rituals; deck and drop pools | `cards`, `fusions`, `equips`, `rituals`, `decks`, `drops`. A name or text that differs only by spaces at line ends stays retail's. Drop pools a mod stores encoded (the TeaOnline drop tool writes `bias + 8 * weight + noise` and makes the draw at `0x80021860` jump to code that undoes it) are decoded as `max(0, (raw - bias) >> shift)`, with the bias and shift read from that code's `addiu` and `sra`, or, when the code is not recognized, the values that make every such pool add up to 2048. Any other pool that does not add up to 2048 is scaled to 2048 keeping each card's share. The report says which |
+| other text: dialogue, menus, types, stars, duelists, places | `text.txt`, a partial [text listing](../../../notes/translation.md) (a bank whose changed strings jump is written whole) |
+| other bytes of `WA_MRG.MRG` (pictures, passwords and costs, starter decks, portraits...) | `data` patches; a run longer than 4 KB becomes whole sectors in `data/`, replaced by LBA |
+| code and tables of the executable (AI parameters, field bonuses, equip bonuses, the draw...) | nothing: the port runs the executable's code natively. Listed in the report by RAM address, with the `j`/`jal` instructions that reach each place; changed bytes of the text banks that the text listing does not read (a mod's code or tables in the banks' free space, text left over) are listed too |
+
+The report is shown and saved with the mod as `import-report.txt`.
+
+    python tools/pc/fm_editor import <modified .bin, folder or SLUS_014.11> -o <mod folder>
+        [--wa <modified WA_MRG.MRG>] [--game <retail>] [--id <mod id>]
+
 ## Checks
 
 Before saving, the editor runs the loader's checks (`validate.py`): the mod
