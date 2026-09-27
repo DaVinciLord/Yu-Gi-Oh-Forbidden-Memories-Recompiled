@@ -97,7 +97,9 @@ int UpdateNet_Get(const char *url, int timeout_seconds, UpdateNetSink sink, void
 int UpdateNet_Get(const char *url, int timeout_seconds, UpdateNetSink sink, void *context, char *why, size_t why_size)
 {
     char seconds[16], buffer[65536];
-    char *argv[] = {"curl", "--silent", "--show-error", "--fail", "--location", "--proto", "=https,http",
+    /* --disable (first) ignores the player's .curlrc, which could send the
+     * body elsewhere or mix headers into it. */
+    char *argv[] = {"curl", "--disable", "--silent", "--show-error", "--fail", "--location", "--proto", "=https,http",
                     "--connect-timeout", "10", "--max-time", seconds, "--user-agent", USER_AGENT,
                     "--header", "Accept: application/vnd.github+json, */*", "--", (char *)url, NULL};
     posix_spawn_file_actions_t actions;
@@ -108,8 +110,10 @@ int UpdateNet_Get(const char *url, int timeout_seconds, UpdateNetSink sink, void
     ssize_t got;
     snprintf(seconds, sizeof(seconds), "%d", timeout_seconds);
     if (strncmp(url, "https://", 8) && strncmp(url, "http://", 7)) { say(why, why_size, "Bad address."); return -1; }
-    if (pipe(pipe_ends)) { say(why, why_size, "Could not start curl."); return -1; }
-    fcntl(pipe_ends[0], F_SETFD, FD_CLOEXEC);
+    /* Both ends close-on-exec (the dup2 onto curl's stdout clears it there):
+     * a program the main thread starts meanwhile (the browser, a restart)
+     * must not inherit the write end, or the read below never sees EOF. */
+    if (pipe2(pipe_ends, O_CLOEXEC)) { say(why, why_size, "Could not start curl."); return -1; }
     posix_spawn_file_actions_init(&actions);
     posix_spawn_file_actions_adddup2(&actions, pipe_ends[1], 1);
     posix_spawn_file_actions_addclose(&actions, pipe_ends[1]);

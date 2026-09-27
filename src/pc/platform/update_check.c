@@ -11,6 +11,7 @@
 #include "platform.h"
 #include "settings.h"
 #include "pc/compat/signal.h"
+#include <ctype.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,6 +33,10 @@ static struct {
     int running; /* main thread: a check has started and not been answered */
     int manual;  /* whether the player asked for it */
     int done;    /* the thread's answer (atomic); 0 while it works */
+    /* Read by start() on the main thread, so the thread touches neither the
+     * settings nor the environment nor the user folder. */
+    int prereleases;
+    char url[512], current[64], skip[64];
     UpdateRelease release;
     char why[256];
 } job;
@@ -107,20 +112,13 @@ static int to_buffer(const void *data, size_t size, void *context)
 
 static int check(void)
 {
-    const char *url = getenv("MEMORIES_UPDATE_URL");
     Buffer list = {0};
-    UpdateVersion current;
-    char skip[64] = "";
-    int prereleases = Settings_Get(SET_UPDATE_PRERELEASES), found;
-    if (!url || !*url) url = RELEASES_API;
-    if (!job.manual) read_skip(skip, sizeof(skip));
-    /* Someone running a preview wants to hear of the next one. */
-    if (Update_ParseVersion(current_version(), &current) && current.pre[0]) prereleases = 1;
-    if (UpdateNet_Get(url, CHECK_SECONDS, to_buffer, &list, job.why, sizeof(job.why)) || !list.data) {
+    int found;
+    if (UpdateNet_Get(job.url, CHECK_SECONDS, to_buffer, &list, job.why, sizeof(job.why)) || !list.data) {
         free(list.data);
         return CHECK_FAILED;
     }
-    found = Update_PickRelease(list.data, current_version(), prereleases, skip, &job.release);
+    found = Update_PickRelease(list.data, job.current, job.prereleases, job.skip, &job.release);
     free(list.data);
     if (found < 0) {
         snprintf(job.why, sizeof(job.why), "GitHub's list of releases could not be read.");
@@ -140,11 +138,20 @@ static int start(int manual)
 {
     pthread_t thread;
     sigset_t all, previous;
+    UpdateVersion current;
+    const char *url = getenv("MEMORIES_UPDATE_URL");
     int error;
     if (job.running) return -1;
     job.manual = manual;
     job.done = 0;
     job.why[0] = '\0';
+    snprintf(job.url, sizeof(job.url), "%s", url && *url ? url : RELEASES_API);
+    snprintf(job.current, sizeof(job.current), "%s", current_version());
+    job.skip[0] = '\0';
+    if (!manual) read_skip(job.skip, sizeof(job.skip));
+    job.prereleases = Settings_Get(SET_UPDATE_PRERELEASES);
+    /* Someone running a preview wants to hear of the next one. */
+    if (Update_ParseVersion(job.current, &current) && current.pre[0]) job.prereleases = 1;
     /* The game's clock signal belongs to the main thread (platform_common.c). */
     sigfillset(&all);
     pthread_sigmask(SIG_BLOCK, &all, &previous);
@@ -164,11 +171,25 @@ static void open_url(const char *url)
         fprintf(stderr, "memories-pc: update: could not open %s\n", url && *url ? url : RELEASES_PAGE);
 }
 
+/* The release's html_url when it is a release page of this repository, else
+ * the releases page: the answer never chooses what the browser (or, on
+ * Windows, the shell) is handed. */
+static const char *release_page(const char *page)
+{
+    static const char prefix[] = RELEASES_PAGE "/tag/";
+    size_t length = sizeof(prefix) - 1;
+    const char *at;
+    if (strncmp(page, prefix, length) || !page[length]) return RELEASES_PAGE;
+    for (at = page + length; *at; at++)
+        if (!isalnum((unsigned char)*at) && !strchr(".-_%", *at)) return RELEASES_PAGE;
+    return page;
+}
+
 static void chosen_newer(int button, int *quit)
 {
     (void)quit;
     switch (button) {
-    case 0: open_url(offered.page); break;
+    case 0: open_url(release_page(offered.page)); break;
     case 1: write_skip(offered.tag); break;
     default: break;
     }

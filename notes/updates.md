@@ -3,7 +3,9 @@
 A release build can ask GitHub for the project's releases when it starts
 and, when a newer one is out, say so in a notice over the picture:
 
-- **Release page** opens the release on GitHub in the browser.
+- **Release page** opens the release on GitHub in the browser (only a
+  `github.com/Unchiga/Yu-Gi-Oh-Forbidden-Memories-Recompiled/releases/tag/...`
+  address from the answer; anything else opens the releases page).
 - **Skip this version** is remembered: that version, and any older one, is
   not offered again at start (a newer one still is).
 - **Later** (Esc) asks again next start.
@@ -71,7 +73,7 @@ never a release's files.
 The check at start is skipped when any of these hold, so tests and CI never
 touch the network:
 
-- `check_for_updates` is 0 (the default);
+- `check_for_updates` is 0 (it is 1 by default);
 - `MEMORIES_NO_UPDATE_CHECK` is set to anything but `0` (`tools/pc/smoke.py`
   sets it);
 - `MEMORIES_HEADLESS` is set;

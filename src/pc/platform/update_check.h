@@ -8,7 +8,7 @@
  * blocks the game: the network is the thread's, and the main thread only
  * looks at its answer once a frame.
  *
- * The check at start is off by default (check_for_updates). It is also
+ * The check at start is on by default (check_for_updates). It is
  * skipped when this build has no release version (a development build),
  * headless or with scripted input (MEMORIES_HEADLESS, MEMORIES_INPUT,
  * MEMORIES_SDL_SCRIPT), and whenever MEMORIES_NO_UPDATE_CHECK is set to

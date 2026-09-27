@@ -47,7 +47,11 @@ int Update_ParseVersion(const char *text, UpdateVersion *out)
         }
         memcpy(version.pre, at, length + 1);
     } else if (*at == '+') {
-        /* Build metadata does not take part in the order. */
+        /* Build metadata does not take part in the order, but is checked as
+         * the pre-release is: the tag is shown and written to skip.txt. */
+        if (!at[1] || strspn(at + 1, "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.-") !=
+                          strlen(at + 1))
+            return 0;
     } else if (*at) {
         return 0;
     }

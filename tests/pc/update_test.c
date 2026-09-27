@@ -41,6 +41,9 @@ static void versions(void)
     assert(!Update_ParseVersion("dev-0123456789ab", NULL));
     assert(!Update_ParseVersion("20260926-abcdef0", NULL));
     assert(!Update_ParseVersion(NULL, NULL));
+    assert(!Update_ParseVersion("v1.2.3+", NULL));
+    assert(!Update_ParseVersion("v1.2.3+a\nb", NULL));
+    assert(!Update_ParseVersion("v1.2.3+a/../b", NULL));
 }
 
 static const char releases[] =
@@ -88,6 +91,15 @@ static void picking(void)
     assert(Update_PickRelease("<html>", "v0.1.0", 0, NULL, &release) == -1);
     assert(Update_PickRelease(releases, "", 0, NULL, &release) == -1);
     assert(Update_PickRelease("[]", "v0.1.0", 0, NULL, &release) == 0);
+    /* Hostile answers: nested too deeply, cut short, not strings. */
+    {
+        static char deep[20002];
+        memset(deep, '[', 20000);
+        assert(Update_PickRelease(deep, "v0.1.0", 0, NULL, &release) == -1);
+    }
+    assert(Update_PickRelease("[{\"tag_name\":\"v9.0.0\"", "v0.1.0", 0, NULL, &release) == -1);
+    assert(Update_PickRelease("[{\"tag_name\":9},{\"tag_name\":[\"v9.0.0\"]},1,null]", "v0.1.0", 0, NULL,
+                              &release) == 0);
 }
 
 int main(void)
