@@ -1,5 +1,6 @@
 /* Game > Deck slots. See deck_menu.h. */
 #include "deck_menu.h"
+#include "pc/platform/button_layout.h"
 #include "pc/platform/menu.h"
 #include "deck_slots.h"
 #include "save_menu.h"
@@ -446,10 +447,17 @@ static void choose(void)
     DeckMenu_Close();
 }
 
+/* The pad in the layout the game gets: Game > Japanese buttons exchanges
+ * Cross and Circle here too, so the slots confirm like the screen under them. */
+static unsigned pad_bits(void)
+{
+    return ButtonLayout_Apply(Platform_Pad(0), Platform_PadFixedBits(0), Settings_Get(SET_JP_BUTTONS));
+}
+
 static void show(void)
 {
     char name[16];
-    previous_bits = Platform_Pad(0); /* a button already down is not a press */
+    previous_bits = pad_bits(); /* a button already down is not a press */
     holding = 1;
     menu.top = 0;
     if (!allowed) {
@@ -618,7 +626,7 @@ void DeckMenu_Poll(int where)
     unsigned bits, pressed;
     last_poll = Memories_PresentedFrames();
     allowed = Settings_Get(SET_DECK_SLOTS) && game_loaded() && !SaveMenu_Active() && screen_allowed(where);
-    bits = Platform_Pad(0);
+    bits = pad_bits();
     pressed = bits & ~previous_bits;
     previous_bits = bits;
     /* The not-ready confirm answered with a return to the deck: no list. */

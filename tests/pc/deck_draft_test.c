@@ -14,6 +14,7 @@ s32 gDuel_adwCardStats[1];
 unsigned Memories_PresentedFrames(void) { return 0; }
 int SaveMenu_Active(void) { return 0; }
 uint16_t Platform_Pad(int port) { (void)port; return 0; }
+uint16_t Platform_PadFixedBits(int port) { (void)port; return 0; }
 void SD_SEPlayFull(u32 id) { (void)id; }
 void Menu_SetItemEnabled(int id, int enabled) { (void)id; (void)enabled; }
 int Menu_Scale(void) { return 1; }
@@ -36,7 +37,7 @@ void DeckSlots_Use(unsigned short *current, const DeckSlot *want, DeckTrunkFn tr
 static int enabled = 1, writes;
 static unsigned saves, loads;
 static DeckSlot disk[DECK_SLOT_COUNT];
-int Settings_Get(SettingId id) { assert(id == SET_DECK_SLOTS); return enabled; }
+int Settings_Get(SettingId id) { assert(id == SET_DECK_SLOTS || id == SET_JP_BUTTONS); return id == SET_DECK_SLOTS ? enabled : 0; }
 unsigned SaveMenu_SaveCount(void) { return saves; }
 unsigned SaveMenu_LoadCount(void) { return loads; }
 int Cards_FindIdentity(const char *name) { (void)name; return 0; }
