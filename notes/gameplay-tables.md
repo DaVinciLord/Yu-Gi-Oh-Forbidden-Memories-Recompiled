@@ -104,7 +104,8 @@ with neither for this monster says nothing, and an earlier entry decides,
 else `equip_bonus_default` (below) if a mod sets it, else the disc. The latest entry that says something wins, as for what an
 equip may equip, and a copy of an equip a mod added has its base's bonus.
 Values are whole points from -9999 to 9999; a negative bonus lowers the
-monster.
+monster. A bonus past Megamorph's +1000 climbs on screen in about the time
++1000 takes, instead of 31 points a frame.
 
 `"equip_bonus_default": 700`, beside `equips` at the top of the manifest,
 sets what every equip no entry gives a bonus for adds, in place of the

@@ -430,6 +430,14 @@ request_combination:
                     if (D_8009B210 & 0x40) {
                         s32 below;
                         u16 limit;
+#ifdef MEMORIES_PC
+                        /* A mod's bonus past Megamorph's 1000 climbs in
+                           about the frames 1000 takes, not 31 a frame
+                           (+9999 took five seconds). */
+                        if ((s16)PLACEMENT_TY(object) > 1000)
+                            PLACEMENT_TX(object) += (s16)PLACEMENT_TY(object) / 32;
+                        else
+#endif
                         PLACEMENT_TX(object) += 31;
                         below = (s16)PLACEMENT_TX(object) < (s16)PLACEMENT_TY(object);
                         limit = PLACEMENT_TY(object);
