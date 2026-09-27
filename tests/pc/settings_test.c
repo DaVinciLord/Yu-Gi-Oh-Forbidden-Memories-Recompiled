@@ -35,18 +35,18 @@ int main(void)
     assert(Settings_Get(SET_MASTER_VOLUME) == 40);
     assert(Settings_Get(SET_MUSIC_VOLUME) == 70);
     assert(Settings_Get(SET_SFX_VOLUME) == 100);
-    /* Disabled PGXP cannot be restored by an old preference, environment
-     * override or runtime setting change. */
-    assert(Settings_Get(SET_PGXP) == 0);
+    /* Only "Textures" (1) is offered yet; a saved, env-supplied or runtime
+     * "Textures and positions" (2) preference clamps down to it. */
+    assert(Settings_Get(SET_PGXP) == 1);
     assert(!setenv("MEMORIES_PGXP", "1", 1));
     Settings_Load();
-    assert(Settings_Get(SET_PGXP) == 0);
+    assert(Settings_Get(SET_PGXP) == 1);
     assert(!setenv("MEMORIES_PGXP", "2", 1));
     Settings_Load();
-    assert(Settings_Get(SET_PGXP) == 0);
+    assert(Settings_Get(SET_PGXP) == 1);
     assert(!unsetenv("MEMORIES_PGXP"));
     Settings_Set(SET_PGXP, 2);
-    assert(Settings_Get(SET_PGXP) == 0);
+    assert(Settings_Get(SET_PGXP) == 1);
     Settings_Set(SET_ASPECT, 2);
     assert(Settings_Get(SET_ASPECT) == 2);
     Settings_Set(SET_ASPECT, 3);
@@ -64,7 +64,7 @@ int main(void)
     assert(contains(path, "volume=40\n"));
     assert(contains(path, "sfx_volume=65\n"));
     assert(contains(path, "unknown=7\n"));
-    assert(contains(path, "pgxp=0\n"));
+    assert(contains(path, "pgxp=1\n"));
     /* A retired id keeps its number for code mods (settings.h), but has no
      * key: its old line is carried through as any other unknown one. */
     assert(SET_HD_TEXT == 32 && SET_CARD_DROPS == 38 && Settings_Key(SET_HD_HUD) == NULL);

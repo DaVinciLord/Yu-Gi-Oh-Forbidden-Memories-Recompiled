@@ -1858,24 +1858,29 @@ viewer and was not reached.
 
 ### Precise geometry (PGXP)
 
-Precise geometry (PGXP) is currently disabled and has no Video menu option.
-The `pgxp` setting is clamped to zero, including saved preferences,
-`MEMORIES_PGXP` overrides and runtime changes. Its implementation and tests
-remain in place for future use. The modes described below are inactive;
-when enabled in the code, they affect the OpenGL picture at 2x and up.
+Precise geometry (PGXP) has a Video menu option, *Off*/*Textures*
+(`MENU_ITEM_PGXP`, `menu.c`), disabled where it cannot draw: below Internal
+2x, or without the OpenGL picture pass. It affects the OpenGL picture only,
+at 2x and up.
 
 - **Affine textures** (`pgxp=1`, *Textures*). The GTE keeps no depth with a
   vertex, so textures on 3D polygons bend. Textured polygons are drawn in
   perspective, at the console's whole-pixel vertices.
-- **Rounded vertices** (`pgxp=2`, *Textures and positions*, experimental).
-  The GTE's perspective transform rounds each vertex to a whole console
-  pixel, which makes 3D polygons wobble as they move. Polygons are also
-  drawn at the vertices' precise positions. A model's parts are projected
-  each with its own matrix, and where they meet, the vertices lie up to
-  about a console pixel apart; the console's rounding closes those seams.
-  So a frame word that carries two different precise positions keeps its
-  whole-pixel one (`snap_seams` in `libgpu.c`; its depth stays precise).
-  Still experimental, so not the default level.
+- **Rounded vertices** (`pgxp=2`, *Textures and positions*). The GTE's
+  perspective transform rounds each vertex to a whole console pixel, which
+  makes 3D polygons wobble as they move. Polygons are also drawn at the
+  vertices' precise positions. A model's parts are projected each with its
+  own matrix, and where they meet, the vertices lie up to about a console
+  pixel apart; the console's rounding closes those seams. So a frame word
+  that carries two different precise positions keeps its whole-pixel one
+  (`snap_seams` in `libgpu.c`; its depth stays precise).
+
+  The `pgxp` setting is clamped to 1 for now: level 2 is not offered from
+  the menu yet, pending a fix to `snap_seams` (a small model or part that
+  happens to land on the same screen word as an unrelated one can be
+  wrongly treated as a seam) and independent testing across more than one
+  OS/GPU driver combination. Level 1 has none of that seam logic and is not
+  affected.
 
 **How it works** (`src/pc/compat/pgxp.c`):
 

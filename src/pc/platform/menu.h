@@ -79,7 +79,9 @@ typedef enum {
     MENU_ITEM_HD_HUD,  /* retired (a code mod may still name it): the menu has no such item */
     MENU_ITEM_OPPONENT_NAME, /* View > Opponent's name for COM: drawn by the OpenGL picture pass at
                               * Internal 2x and up (Menu_SetHdPicture), by the software GPU at 1x */
-    MENU_ITEM_RESTART /* Game > Restart game: asks, then goes back as MENU_ITEM_TITLE does */
+    MENU_ITEM_RESTART, /* Game > Restart game: asks, then goes back as MENU_ITEM_TITLE does */
+    MENU_ITEM_PGXP /* Video > Precise geometry: needs the OpenGL picture pass at Internal 2x and up,
+                    * no software-GPU fallback (Menu_SetHdPicture) */
 } MenuItemId;
 
 /* The stored settings (settings.txt in the user directory, see paths.h;
