@@ -428,7 +428,7 @@ move, Enter activates, Esc closes (Esc quits only when no menu is open).
 | File | Save/load state, slots 1-4, screenshot, reload settings, exit |
 | Audio | Master/music/SFX sliders, mute and focus-loss mute, Gaussian (console) or cubic (sharper) voice interpolation (`audio_interpolation`) |
 | Video | Window scale and Menu size submenus, window mode, scaling/aspect/filter/VSync choices |
-| View | Fusion helper (`fusion_helper`, [notes/fusion-helper.md](fusion-helper.md)), Card passwords, Library: show every card; Duel rank submenu: Off, Rank, Rank and score (`rank_meter` 0/1/2, see [Duel rank](#duel-rank)) |
+| View | Fusion helper (`fusion_helper`, [notes/fusion-helper.md](fusion-helper.md)), Card passwords, Library: show every card, Free Duel progress (see [View > Free Duel progress](#view--free-duel-progress)); Duel rank submenu: Off, Rank, Rank and score (`rank_meter` 0/1/2, see [Duel rank](#duel-rank)) |
 | Game | Game speed, Frame rate and Cheats submenus (see [Cheats](#cheats)), Japanese buttons, Rewind (hold F8) |
 | Mods | opens the mods window, which lists every mod found in `mods/` beside the executable and in the user directory (`notes/modding.md`) |
 | Debug | HUD levels, pause/step, frame and VRAM dumps |
@@ -1396,6 +1396,73 @@ picture pass ("needs OpenGL 3 or 1x").
   strings steps less before COM, so the name ends where COM did.
 
 Not covered yet: the sword and shield icons (pictures, not lettering).
+
+### View > Free Duel progress
+
+View > Free Duel progress (`free_duel_progress`, `MEMORIES_FREE_DUEL_PROGRESS=1`,
+off by default) shows `owned/obtainable` right of the FREE DUEL title for
+the opponent under the grid cursor: `12/157` for Duel Master K, in the
+game's own 8x12 text font, white, and yellow (the game's own yellow text
+ramp) once every card is owned. The host draws it over the picture as it
+draws the fusion helper (`src/pc/cards/free_duel_progress_view.c`, from
+`Hud_Draw`), laid on the game picture in its own pixels, so it keeps its
+place in widescreen and at any internal resolution and is as sharp as the
+game's text. With the option off nothing is drawn and the disc is not read;
+a window capture of the grid with the cursor on an opponent is identical to
+master's.
+
+- **The font** comes off the player's disc the first time the count is
+  drawn (`src/pc/cards/font_art.c`), never from the console's VRAM, and
+  nothing of the game is kept in the repository. It is the boot package,
+  WA sector `0x1690` (`Main_RunBootSequence`, `Main_LoadBootPackageStage`):
+  not a TIM but raw VRAM words, one sector a 64 x 16 block placed down a
+  column from 0x280, 0 (`File_StepActiveTransfer`), so the font's page is
+  its first 16 sectors; the text colour ramps are the first 0x100 bytes of
+  its sector 50, a 16 x 8 `LoadImage` at 0x280, 0xE8, one row a colour in
+  the order of `gText_abColorSlots`' values (0 white, 1 yellow, 2 blue, 3
+  green, 4 grey, 5 orange, 6 red). The glyphs are 4-bit 8 x 12 cells where
+  `func_80035E20` finds them (`retail_cell` in `glyphs.c`): '0' at 120, 0,
+  '1'-'9' from 0, 12, '/' at 112, 0. `src/pc/cards/disc_art.c` unpacks the
+  package into a private VRAM the way the loader does, cuts the glyphs and
+  draws them (each window pixel takes the texel under it). If the disc
+  cannot give them nothing is drawn and the log says so once.
+- **The shared module** `disc_art.c`/`disc_art.h` is added, byte for byte
+  the same, by View > Duel rank too (for the result screen's pictures), so
+  each change stands alone and whichever lands second merges it unchanged.
+  A change to one copy belongs in the other.
+
+- **Obtainable** is every card with a weight in any of the opponent's three
+  drop pools (S/A-POW, B/C/D, S/A-TEC). The disc's rows are read once, as
+  the yamyi-mods Library panel reads them (WA_MRG `0xE9B000 + 0x1800 * (id -
+  1)`, three sectors an opponent, rows 1-3 of four 1460-byte rows), and each
+  goes through `Tables_PoolFor`, the call the drop roll makes: a mod's
+  `"drops"` counts, Drop missing cards included (Simon Muran 58 -> 61). The
+  deck pool is not counted. Checked against the rows read with Python:
+  Simon Muran 58, Teana 28, Seto 102, Duel Master K 157. The rows and the
+  mods' tables are fixed for a session (data mods and `Tables_Build` are
+  applied at startup), so each opponent's cards are worked out once, the
+  first time the cursor rests on it.
+- **Owned** is how many of those the deck and trunk hold now
+  (`Cards_ChestSlot` and `gDuel_awPlayerDeck`, as `owned()` in `drops.c`
+  counts). The game keeps no record of who gave a card, so this is the
+  collection, not where it came from.
+- The cell is the pending one the pad moves (`gFreeDuel_bTargetColumn/Row`),
+  so the count changes as soon as the cursor starts to glide. Its index is
+  the opponent's id (`func_80024DC8`); Build Deck (cell 0) and empty cells
+  show nothing. It also shows nothing while the screen's text box is up or
+  it is leaving (`gFreeDuel_bScreenFlags` 0x20/0x40), during a fade, and
+  while `Main_InitFreeDuelMenu` is still loading the module: until
+  `FreeDuel_Init` runs, the module's state is the last screen's.
+
+`pc_free_duel_progress` (`tests/pc/free_duel_progress_test.c`) counts over a
+made-up WA_MRG with the real `tables.c`: the union of the three pools, a
+zero weight and the deck pool left out, deck and trunk counted once per
+card, a mod's added and removed cards (a mod card among them), an edit of
+`all`, and a disc without the file. `pc_font_art` (`tests/pc/font_art_test.c`)
+reads the real `game/DATA/WA_MRG.MRG` (skipped without it), checks the
+glyphs against the hand decode above in all seven colours and draws counts
+through `FontArt_Draw`; `MEMORIES_FONT_ART_SHEET=<file.ppm>` saves them.
+Not done: a frame on the portraits of opponents whose cards are all owned.
 
 ### Duel rank
 
