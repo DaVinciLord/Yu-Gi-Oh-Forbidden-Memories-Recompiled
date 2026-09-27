@@ -827,6 +827,14 @@ void func_8002BFCC(void) {
                 *(u8 *)(r + n * 4 + 0x56) |= 1;
             }
         }
+#ifdef MEMORIES_PC
+        /* View > Library: show every card: a card never seen is laid out
+           as a seen card the player does not own, only in this screen
+           state. It is not counted and no flag is written (cards.h). */
+        else if (Cards_LibraryPlaceholder(n)) {
+            *(u8 *)(r + n * 4 + 0x56) = 0x80 | (Library_CheckCardOwned(n) < 0);
+        }
+#endif
         n++;
     } while (n < CARD_ID_END_LIVE);
     func_8003B6AC(3, 1);

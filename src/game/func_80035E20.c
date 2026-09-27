@@ -201,6 +201,22 @@ void func_80035E20(DisplayObject *obj, GsOT *ot)
                 spr->cy = 0xFA;
                 spr->u = ((p[-6] & 0xF) * 8) - 0x80;
                 spr->v = (u32)(p[-6] & 0xF0) >> 1;
+#ifdef MEMORIES_PC
+                /* An accented letter or ':' in the 8x8 font is the port's
+                   (glyphs.h); the page goes back for the next glyph. */
+                spr->tpage = 0xB;
+                {
+                    int tpage;
+                    int u;
+                    int v;
+
+                    if (Glyphs_TinyCell((u16)c, &tpage, &u, &v)) {
+                        spr->tpage = tpage;
+                        spr->u = u;
+                        spr->v = v;
+                    }
+                }
+#endif
             }
             spr->x = *(u16 *)(p - 0xA) + x;
             spr->y = *(u16 *)(p - 8) + y;
@@ -391,7 +407,7 @@ placed:
                    the object's semi-transparency and depth. */
                 u16 page = ft4->tpage;
 
-                if (spr == sprites[0] && (spr->tpage & (0x7800 | HD_TEXT_MARK))) {
+                if ((spr == sprites[0] || spr == sprites[2]) && (spr->tpage & (0x7800 | HD_TEXT_MARK))) {
                     ft4->tpage = (page & 0x1E0) | (spr->tpage & (0x781F | HD_TEXT_MARK));
                 }
 #endif

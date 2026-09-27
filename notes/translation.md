@@ -77,9 +77,21 @@ wind of your activities...
   the next line. Card `n`'s name is `8000 + n` and its text `D100 + n`
   (`[8001]` and `[D101]` are Blue-eyes White Dragon's); the descriptions
   carry the card's name as a comment.
-* A line break is a line break in the game's text box. The text box does
-  not wrap by itself: break the lines where they fit. Card texts have
-  lines of 20 letters and room for 8 lines.
+* A line break is a line break in the game's text box. Break the lines
+  where they fit: a line wider than its box goes on at the start of the
+  next row, which pushes the rest of the text down a row. Card texts have
+  lines of 20 letters and room for 8 lines. A letter is 8 pixels wide, so
+  a box has as many columns as its width in pixels over 8, and the width is
+  the box's, not the string's: `[0021]`, the guardian star choice, has 22
+  columns, and `[0022]`, the two-player duel's quit box, 10.
+* In a menu with choices (`{choice ...}` then `{choose ...}`) that row is
+  worse: when it pushes the choices past the bottom of the box, the console
+  stops for good, with no frame after (the menu is laid out in one go and
+  waits for a button nothing reads). The port cuts that line at the box's
+  edge instead, and says so in `MEMORIES_TRACE=mods`; a menu that fits is
+  drawn as the console draws it. Keep menu lines within their box. A line
+  break of your own in a menu does not stop the game, but it counts as one
+  of the choices' lines, so the last choice is lost.
 * A text box has room for so many letters at once: 254 in the dialogue
   box and some menus, 159 in most menus. What is past that on a page is
   left out, and a page with more than 254 is reported. A menu writes its
@@ -122,11 +134,25 @@ The game's font has 91 letters, none accented. The port draws more,
 the first time a text uses them:
 
 * **An accented letter** is the retail letter with its mark drawn on, in
-  both text sizes: acute, grave, circumflex, diaeresis, tilde, ring,
-  cedilla, caron, macron, breve, dot, double acute and ogonek, on any letter
-  Unicode combines them with (251 of them: á, Ž, ő, ę, ǎ, ẽ...). A
-  capital with a mark above is set a little shorter so the mark fits the
-  line. Also ¿ ¡ ı ø Ø ł Ł đ Đ ħ Ħ.
+  all three text sizes (16x16, 8x12 and the 8x8 of the duel results'
+  headings): acute, grave, circumflex, diaeresis, tilde, ring, cedilla,
+  caron, macron, breve, dot, double acute and ogonek, on any letter Unicode
+  combines them with (251 of them: á, Ž, ő, ę, ǎ, ẽ...). Also
+  ¿ ¡ ı ø Ø ł Ł đ Đ ħ Ħ, and `:` in the 8x8 font, which has none (two of its
+  `·`, in the letters' colours).
+* **How a mark fits** a cell with no room above the letter. In the 16x16
+  font a capital is squeezed down to leave the mark its rows. The small
+  fonts have none to spare: an 8x12 capital's outline is on the cell's top
+  row (body 9 rows, a small letter's 7), an 8x8 capital's too (body 6, small
+  4), so squeezing would leave a small letter. There the capital gives up
+  **one** row of its body, the inner row most like a neighbour, nearer the
+  middle on a tie (a thick stroke thins, a thin one stays), and the mark's
+  two rows go on the cell's top two, its lower row where the letter's top
+  outline was, touching the letter: É, Ê, Ã, Õ read as capitals, a row
+  shorter than the others. A small letter whose outline row is where the
+  mark's outline goes below it (é, ã, ô in 8x12, all of them in 8x8)
+  shares that row instead of being squeezed. The 8x8 font's cedilla is one
+  pixel on its bottom row, under the letter.
 * **ß ẞ æ Æ œ Œ ð Ð þ Þ º ª ° €** are built in, drawn from Noto Sans Bold
   (SIL Open Font License) and given the retail letters' outline and
   shading.
@@ -170,14 +196,31 @@ channels). The console's text always fits; the port's
 full, rather than writing into the next channel's (or past the table), and
 `func_80039A14`/`func_80039A60`, which build a menu's text in one go, stop
 at a page that waits for a button (state 4) instead of looping forever.
-The Library's heading (string `F8`, "<seen/722>") is rewritten for the
+A menu with choices has the same loop in `func_80039794`, which steps the
+text unbounded while `flags_34 & 0x1000` (the choices' layout) is up; there
+`TextBox_BuildStep` drops a letter past the box's right edge when its wrap
+would leave the choices' last line below the box, the one case that ends
+in state 4 inside that loop (`Text_CutsMenuGlyph`). The Library's heading (string `F8`, "<seen/722>") is rewritten for the
 number of cards there are, by its id, whether the text is the disc's or a
 translation's (`Cards_Text`).
 
 Glyph codes above the retail ones (`0x100` on, written `F1`-`F5` and a low
 byte, which the game already reads as a glyph) have words of their own
 (`Glyphs_Word`), and `func_80035E20` draws them from bank 15
-(`Glyphs_Cell`). If a translation renames cards, their alphabetical order
+(`Glyphs_Cell`). The 8x8 font is another path: `DuelEffect_AppendEntry`
+keeps only the glyph's index in that font (bits 20-27 of its word, the
+retail letter's for an accented one, 0 for `:`, which the retail game then
+drops), so on the port it also writes the glyph's Shift-JIS into the entry
+(`code_00`, which the retail 8x8 path leaves stale) and gives `:` a stand-in
+index (`Glyphs_TinyIndex`); the draw asks `Glyphs_TinyCell`, which makes the
+8x8 picture from the font at (704, 0) and puts it on page 4 of the bank,
+with the 8x8 palettes (row `0xFA`, from x 656) copied beside the others.
+Retail text never has an accented letter or `:` in the 8x8 font (its only
+8x8 strings are the results' headings, YOU/COM and the ♂/♀ marks), so its
+pictures are the same as before, byte for byte. The built-in letters (ß,
+æ...) and characters set in a font (Greek...) still have no 8x8 picture and
+are left out there, as before.
+If a translation renames cards, their alphabetical order
 (`gCard_asNameSortKey`) is worked out again from the new names, accents
 sorting as their plain letters. The names and texts of cards a mod adds
 ([more cards](more-cards.md)) are UTF-8 too and take the same letters.
