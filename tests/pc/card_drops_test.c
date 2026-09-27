@@ -37,6 +37,7 @@ int Memories_Rand(void)
     return (int)((seed >> 16) & 0x7FFF);
 }
 int Glyphs_Code(uint32_t character) { return (int)character; }
+const unsigned char *Text_Own(int id) { (void)id; return NULL; } /* no translation: the port's English */
 const unsigned char *Cards_NameCodes(int id) { (void)id; return NULL; }
 unsigned char *Cards_ChestSlot(void *state, int id)
 {
