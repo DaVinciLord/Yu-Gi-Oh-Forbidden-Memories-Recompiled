@@ -470,6 +470,10 @@ need a code mod or the port itself. Several mods' edits of the same opponent add
 replace each other. [Gameplay tables](gameplay-tables.md) has every key, the
 opponents' names, and how the rules combine. Like cards, they need a restart.
 
+The [FM Editor](../tools/pc/fm_editor/README.md) (`python tools/pc/fm_editor`)
+reads these tables and the cards out of the player's own game files and
+writes a mod folder whose `mod.json` holds only what was changed.
+
 ## Translations
 
 A mod may put the game's text in another language: dialogue, menus, card

@@ -482,6 +482,12 @@ if(Python3_Interpreter_FOUND)
             COMMAND "${Python3_EXECUTABLE}" tools/pc/test_object_loader.py --target linux
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
     endif()
+    # The FM Editor's data layer (tools/pc/fm_editor), on synthetic game files.
+    if(BUILD_TESTING)
+        add_test(NAME pc_fm_editor
+            COMMAND "${Python3_EXECUTABLE}" -m unittest discover -s tools/pc/fm_editor/tests -t tools/pc
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+    endif()
 endif()
 
 if(MEMORIES_PSYZ_ROOT)
