@@ -616,6 +616,24 @@ static int render_at(int at_column, int at_row, const unsigned char cell[CELL][C
     return render_span(at_column, at_row, &cell[0][0], 1, cells_high, &character, 1, 0, r);
 }
 
+/* A word the font draws across `cells` large cells from first_u, v (the
+ * name entry's END): set whole from all their texels, and cell `slice`'s
+ * part put at `slot`. */
+static int render_word(int slot, const uint16_t *words, int page_x, int page_y, int first_u, int v, int cells,
+                       int slice, const char *word, const Retail *r)
+{
+    unsigned char cell[CELL][CELL], texels[CELL * CELL * SPAN_MAX];
+    uint32_t text[8];
+    int count, i, y;
+    if (cells < 1 || cells > SPAN_MAX) return 0;
+    for (i = 0; i < cells; i++) {
+        read_cell(words, page_x, page_y, 1, first_u + i * CELL, v, cell);
+        for (y = 0; y < CELL; y++) memcpy(&texels[y * CELL * cells + i * CELL], cell[y], CELL);
+    }
+    for (count = 0; word[count] && count < 8; count++) text[count] = (unsigned char)word[count];
+    return render_span(slot % SLOTS_ACROSS, slot / SLOTS_ACROSS, texels, cells, CELL, text, count, slice, r);
+}
+
 static int render(int slot, const unsigned char cell[CELL][CELL], int large, uint32_t character, const Retail *r)
 {
     return render_at(slot % SLOTS_ACROSS, slot / SLOTS_ACROSS, cell, large ? 16 : 12, character, r);
@@ -679,10 +697,17 @@ int HdText_Cell(int bank, int page_x, int page_y, int large, int u, int v, int w
         /* New, or the cell holds something else now (an added glyph made
          * since, another font loaded). */
         uint32_t character = Glyphs_CellCharacter(bank != 0, page_x / 64, large, u, v);
-        int slot = entry->slot >= 0 ? entry->slot : slots_used < GLYPH_SLOTS ? slots_used : -1;
+        int slot = entry->slot >= 0 ? entry->slot : slots_used < GLYPH_SLOTS ? slots_used : -1, first_u = 0, cells = 0;
+        const char *word = character ? NULL : Glyphs_CellWord(bank != 0, page_x / 64, large, u, v, &first_u, &cells);
         entry->sum = sum;
-        entry->drawn = character && slot >= 0 &&
-                       render(slot, (const unsigned char (*)[CELL])cell, large, character, &retail[large != 0]);
+        if (slot < 0) {
+            entry->drawn = 0;
+        } else if (character) {
+            entry->drawn = render(slot, (const unsigned char (*)[CELL])cell, large, character, &retail[large != 0]);
+        } else {
+            entry->drawn = word && render_word(slot, words, page_x, page_y, first_u, v, cells, (u - first_u) / CELL, word,
+                                               &retail[large != 0]);
+        }
         if (entry->drawn && entry->slot < 0) {
             /* The place stays the cell's when it later holds no letter, to
              * be drawn over when it holds one again. */

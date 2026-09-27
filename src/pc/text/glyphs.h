@@ -57,6 +57,10 @@ uint32_t Glyphs_NextCharacter(const char **text);
  * the font's page (not in_bank), or an added glyph at u, v of the bank's
  * page `page`. `large` is the 16x16 font, else the 8x12. */
 uint32_t Glyphs_CellCharacter(int in_bank, int page, int large, int u, int v);
+/* For a cell that is part of a word the font draws across neighbouring
+ * cells (the name entry's END): the word, its first cell's u and how many
+ * cells it takes; NULL for any other cell. */
+const char *Glyphs_CellWord(int in_bank, int page, int large, int u, int v, int *first_u, int *cells);
 /* Where the retail font has a character's glyph in its page; 0 if not. */
 int Glyphs_RetailCell(uint32_t character, int large, int *u, int *v);
 /* The font a character is set in (an FT_Face), NULL for none. */
