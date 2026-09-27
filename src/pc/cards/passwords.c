@@ -120,8 +120,17 @@ static int compose(int card)
     text_card = -1;
     if (password == CARD_PASSWORD_NONE || !layout) return 0;
     for (; *layout != 0xFF; layout++) {
-        if (*layout >= 0xF9 && *layout <= 0xFD) return 0;   /* {if}, {choice}, {call}, {jump} */
         if (out >= end) return 0;
+        /* A port glyph (glyphs.h: F1-F5 and a low byte, any value) or a
+         * command's index is copied with its prefix, so a translation's
+         * accented letter is not read as a code or the end of the text. */
+        if ((*layout >= 0xF1 && *layout <= 0xF5) || (*layout == 0xF8 && layout[1] != 0x00)) {
+            if (layout[1] == 0xFF) break;   /* cut short: end there */
+            *out++ = *layout++;
+            *out++ = *layout;
+            continue;
+        }
+        if (*layout >= 0xF9 && *layout <= 0xFD) return 0;   /* {if}, {choice}, {call}, {jump} */
         if (!placed && layout[0] == 0xF8 && layout[1] == 0x00 && layout[2] == 0x40) {
             *out++ = 0xF8, *out++ = 0x01, *out++ = (unsigned char)-ROW_ABOVE_TEXT;   /* up to the row */
             *out++ = 0xF8, *out++ = 0x06, *out++ = DIGITS_X & 0xFF, *out++ = DIGITS_X >> 8;

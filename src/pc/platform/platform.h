@@ -59,6 +59,10 @@ uint16_t Platform_Pad(int port);
 /* Whether the port has a pad: port 0 always (the keyboard), port 1 when a
  * second controller is connected. Async-signal-safe. */
 int Platform_PadConnected(int port);
+/* The part of Platform_Pad(port) the player's own keys and controllers did
+ * not press: scripted input and, on port 0, the mouse. Game > Japanese
+ * buttons leaves these alone (button_layout.h). Async-signal-safe. */
+uint16_t Platform_PadFixedBits(int port);
 /* Controllers (gamepad_evdev.c): polled once a frame on the main thread. */
 void Gamepad_Poll(unsigned frame);
 uint16_t Gamepad_Bits(int port);
@@ -101,6 +105,14 @@ void Platform_StopTimers(void);
  * lets 1 ms of game time pass, since a loop polling it is waiting for time
  * (movie playback waits for its strips that way). Nothing otherwise. */
 void Platform_PollTime(void);
+/* Run what the cooperative clock owes (ticks, VBlanks) at a point where the
+ * console would have taken them while the game waited (DrawSync). Never
+ * steps time itself; nothing under the interrupt clock or in a
+ * deterministic run. */
+void Platform_ServiceClock(void);
+/* At most `count` more VBlanks from the clock (-1: no limit); VSync(0) holds
+ * the clock to one while it waits, as on the console. */
+void Platform_LimitVBlanks(int count);
 unsigned Platform_VBlankCount(void);
 void Platform_SetClockRate(int percent);
 int Platform_ClockRate(void);

@@ -663,10 +663,10 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         gDuel_abCardLevelAttr[id] = level_attr;
         names[id] = name && *name ? encode_name(mod, name, n, id) : NULL;
         descriptions[id] = description && *description ? encode_description(mod, description, id) : NULL;
-        if (has_password) {
-            passwords[id] = password;
-            own_password[id] = 1;
-        }
+        /* Reset as names and descriptions are, so a later mod's entry for
+         * the same card without one does not keep an earlier mod's. */
+        own_password[id] = (unsigned char)(has_password != 0);
+        if (has_password) passwords[id] = password;
         art_records[id] = parts ? record : NULL;
         art_parts[id] = (unsigned char)parts;
         if (title) {
