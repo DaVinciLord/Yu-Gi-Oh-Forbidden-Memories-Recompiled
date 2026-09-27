@@ -8,9 +8,11 @@
  * text over a flat fill and costs nothing measurable.
  *
  * Text is anti-aliased through FreeType, in whatever face fontconfig names
- * for "sans-serif" at 13 px, cached as coverage bitmaps once at start. A
- * machine without either falls back to the 5x7 bitmap font at the end of
- * the file, drawn at twice its size. */
+ * for "sans-serif" at 13 px, cached as coverage bitmaps: printable ASCII
+ * once at start, any other character (text is UTF-8) the first time it is
+ * drawn or measured, "?" where the face has none. A machine without either
+ * falls back to the 5x7 bitmap font at the end of the file, drawn at twice
+ * its size. */
 #include "menu.h"
 #include "platform.h"
 #include "settings.h"
@@ -32,6 +34,7 @@
 #include <fontconfig/fontconfig.h>
 #endif
 #include "pc/debug/crash.h"
+#include "pc/text/glyphs.h"
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include "pc/compat/font.h"
@@ -82,7 +85,7 @@ enum {
     ACT_MODS, ACT_CONTROLS, ACT_RELOAD_SETTINGS, ACT_PAUSE, ACT_FRAME_STEP, ACT_DUMP_FRAME, ACT_DUMP_VRAM,
     SLIDER_MASTER, SLIDER_MUSIC, SLIDER_SFX, CHECK_MUTE,
     CHECK_HUD, CHECK_HUD_FULL, RADIO_STATE_SLOT, ACT_UNLOCK_FREE_DUELISTS, ACT_RESET_COLOR,
-    ACT_CHECK_UPDATES, ACT_RELEASES, ACT_VERSION,
+    ACT_CHECK_UPDATES, ACT_RELEASES, ACT_VERSION, ACT_SET_STARCHIPS,
     CHECK_TRACE = 300  /* value is a LogChannel */
 };
 
@@ -98,7 +101,7 @@ typedef struct {
 typedef struct { const char *label; Item items[20]; int count; int x, w; } Menu;
 
 enum { MENU_FILE, MENU_VIDEO, MENU_AUDIO, MENU_GAME, MENU_VIEW, MENU_DEBUG, MENU_HELP, MENU_COUNT };
-enum { SUB_SCALE, SUB_MENU_SIZE, SUB_SPEED, SUB_FPS, SUB_CHEATS, SUB_TRACE, SUB_SCALING, SUB_ASPECT, SUB_RESOLUTION, SUB_COLOR, SUB_EFFECTS, SUB_JUMP, SUB_ANTIALIAS, SUB_FILTER, SUB_COUNT };
+enum { SUB_SCALE, SUB_MENU_SIZE, SUB_SPEED, SUB_FPS, SUB_CHEATS, SUB_TRACE, SUB_SCALING, SUB_ASPECT, SUB_RESOLUTION, SUB_COLOR, SUB_EFFECTS, SUB_JUMP, SUB_ANTIALIAS, SUB_FILTER, SUB_RANK, SUB_COUNT };
 static Menu menus[MENU_COUNT] = {
     {"File", {{"Save state", "F5", ITEM_ACTION, ACT_SAVE_STATE, -1},
               {"Load state", "F7", ITEM_ACTION, ACT_LOAD_STATE, -1},
@@ -140,10 +143,19 @@ static Menu menus[MENU_COUNT] = {
               {"Frame rate", 0, ITEM_SUBMENU, 0, -1, SUB_FPS},
               {"Title screen after the credits", 0, ITEM_CHECK, 0, SET_RETURN_AFTER_CREDITS, 0, ITEM_GROUP_BREAK},
               {"Card drops", 0, ITEM_SLIDER, 0, SET_CARD_DROPS, 1},
+              {"Smart drops", 0, ITEM_CHECK, 0, SET_SMART_DROPS},
               {"Deck slots...", "F6", ITEM_ACTION, MENU_ITEM_DECKS, -1, 0, ITEM_GROUP_BREAK | ITEM_DISABLED},
               {"Use deck slots", 0, ITEM_CHECK, 0, SET_DECK_SLOTS},
-              {"Cheats", 0, ITEM_SUBMENU, 0, -1, SUB_CHEATS, ITEM_GROUP_BREAK}}, 9},
-    {"View", {{"Fusion helper", 0, ITEM_CHECK, 0, SET_FUSION_HELPER}}, 1},
+              {"Japanese buttons (Circle confirms)", 0, ITEM_CHECK, 0, SET_JP_BUTTONS, 0, ITEM_GROUP_BREAK},
+              {"Browse cards with Up/Down", 0, ITEM_CHECK, 0, SET_CARD_BROWSE},
+              {"Rewind (hold F8)", 0, ITEM_CHECK, 0, SET_REWIND, 0, ITEM_GROUP_BREAK},
+              {"Cheats", 0, ITEM_SUBMENU, 0, -1, SUB_CHEATS, ITEM_GROUP_BREAK},
+              {"Restart game...", 0, ITEM_ACTION, MENU_ITEM_RESTART, -1, 0, ITEM_GROUP_BREAK | ITEM_DISABLED}}, 14},
+    {"View", {{"Fusion helper", 0, ITEM_CHECK, 0, SET_FUSION_HELPER},
+              {"Card passwords", 0, ITEM_CHECK, 0, SET_CARD_PASSWORDS},
+              {"Library: show every card", 0, ITEM_CHECK, 0, SET_LIBRARY_ALL_CARDS},
+              {"Free Duel progress", 0, ITEM_CHECK, 0, SET_FREE_DUEL_PROGRESS},
+              {"Duel rank", 0, ITEM_SUBMENU, 0, -1, SUB_RANK}}, 5},
     {"Debug", {{"Jump to", 0, ITEM_SUBMENU, 0, -1, SUB_JUMP},
                {"Show HUD", "F3", ITEM_CHECK, CHECK_HUD, -1, 0, ITEM_GROUP_BREAK},
                {"Full stats", 0, ITEM_CHECK, CHECK_HUD_FULL, -1},
@@ -186,8 +198,18 @@ static Menu submenus[SUB_COUNT] = {
                     {"144", 0, ITEM_RADIO, 0, SET_FPS, 144},
                     {"240", 0, ITEM_RADIO, 0, SET_FPS, 240},
                     {"Every game frame", 0, ITEM_RADIO, 0, SET_FPS, -1}}, 7},
-    {"Cheats", {{"Give 3 of every card", 0, ITEM_ACTION, ACT_GIVE_CARDS, -1},
-                {"Unlock all Free Duel CPU duelists", 0, ITEM_ACTION, ACT_UNLOCK_FREE_DUELISTS, -1}}, 2},
+    /* Give N: the row's value is the copies of every card (cheats.h). */
+    {"Cheats", {{"Give 1 of every card", 0, ITEM_ACTION, ACT_GIVE_CARDS, -1, 1},
+                {"Give 2 of every card", 0, ITEM_ACTION, ACT_GIVE_CARDS, -1, 2},
+                {"Give 3 of every card", 0, ITEM_ACTION, ACT_GIVE_CARDS, -1, 3},
+                {"Unlock all Free Duel CPU duelists", 0, ITEM_ACTION, ACT_UNLOCK_FREE_DUELISTS, -1, 0, ITEM_GROUP_BREAK},
+                {"Set StarChips to 999999", 0, ITEM_ACTION, ACT_SET_STARCHIPS, -1, 999999, ITEM_GROUP_BREAK},
+                {"Free spending (Password)", 0, ITEM_CHECK, 0, SET_CHEAT_FREE_SPENDING},
+                {"Starting LP 1000", 0, ITEM_RADIO, 0, SET_CHEAT_LIFE_POINTS, 1000, ITEM_GROUP_BREAK},
+                {"Starting LP 4000", 0, ITEM_RADIO, 0, SET_CHEAT_LIFE_POINTS, 4000},
+                {"Starting LP 8000 (console)", 0, ITEM_RADIO, 0, SET_CHEAT_LIFE_POINTS, 8000},
+                {"Starting LP 9999", 0, ITEM_RADIO, 0, SET_CHEAT_LIFE_POINTS, 9999},
+                {"Show CPU's hand", 0, ITEM_CHECK, 0, SET_CHEAT_SHOW_HAND, 0, ITEM_GROUP_BREAK}}, 11},
     {"Trace", {{"Frames", 0, ITEM_CHECK, CHECK_TRACE, -1, LOG_FRAMES},
                {"Disc", 0, ITEM_CHECK, CHECK_TRACE, -1, LOG_DISC},
                {"SPU", 0, ITEM_CHECK, CHECK_TRACE, -1, LOG_SPU},
@@ -219,6 +241,10 @@ static Menu submenus[SUB_COUNT] = {
     {"Filtering", {{"Nearest", 0, ITEM_RADIO, MENU_ITEM_FILTER_NEAREST, SET_FILTER, 0},
                    {"Smooth (bilinear)", 0, ITEM_RADIO, MENU_ITEM_FILTER_LINEAR, SET_FILTER, 1},
                    {"Sharp bilinear", 0, ITEM_RADIO, MENU_ITEM_FILTER_SHARP, SET_FILTER, 2}}, 3},
+    /* The rank a duel against the computer is heading for (rank_meter.h). */
+    {"Duel rank", {{"Off", 0, ITEM_RADIO, 0, SET_RANK_METER, 0},
+                   {"Rank", 0, ITEM_RADIO, 0, SET_RANK_METER, 1},
+                   {"Rank and score", 0, ITEM_RADIO, 0, SET_RANK_METER, 2}}, 3},
 };
 
 static int open_menu = -1, hot_item = -1, hover_bar = -1, grabbed, ready, visible = 1;
@@ -249,6 +275,15 @@ static int changed;
 typedef struct { unsigned char *coverage; int w, h, left, top, advance; } Glyph;
 static Glyph glyphs[96];
 static int font_ascent, font_descent, font_loaded;
+/* Past ASCII: the face stays open and each character is rendered the first
+ * time it is asked for, kept in an open-addressed table (code 0 is a free
+ * slot); `missing` marks one the face has no glyph for. */
+typedef struct { uint32_t code; int missing; Glyph glyph; } ExtraGlyph;
+#define EXTRA_GLYPHS_MAX 4096
+static FT_Library font_library;
+static FT_Face font_face;
+static ExtraGlyph *extra_glyphs;
+static unsigned extra_mask, extra_count;
 
 typedef struct { char code; unsigned char rows[7]; } BitmapGlyph;
 /* --- the fallback font ----------------------------------------------- */
@@ -296,6 +331,46 @@ static const BitmapGlyph bitmap_font[] = {
 };
 static const int bitmap_font_count = (int)(sizeof(bitmap_font) / sizeof(bitmap_font[0]));
 
+/* Renders one character of `face` into `g`; 0 when the face cannot. */
+static int render_glyph(FT_Face face, FT_ULong character, Glyph *g)
+{
+    FT_Bitmap *b;
+    /* Outlines only: a font's embedded bitmaps (Wine's Tahoma has them
+     * at 8-16 px) come back 1 bit per pixel, not the bytes read below. */
+    if (FT_Load_Char(face, character, FT_LOAD_RENDER | FT_LOAD_TARGET_LIGHT | FT_LOAD_NO_BITMAP)) {
+        return 0;
+    }
+    b = &face->glyph->bitmap;
+    g->w = (int)b->width;
+    g->h = (int)b->rows;
+    g->left = face->glyph->bitmap_left;
+    g->top = face->glyph->bitmap_top;
+    g->advance = (int)((face->glyph->advance.x + 32) >> 6);
+    g->coverage = malloc((size_t)g->w * (size_t)g->h + 1);
+    if (g->coverage) {
+        int row;
+        for (row = 0; row < g->h; row++) {
+            memcpy(g->coverage + row * g->w, b->buffer + row * b->pitch, (size_t)g->w);
+        }
+    }
+    return 1;
+}
+
+/* Forgets the characters past ASCII and closes the face (a new size renders
+ * them again). */
+static void free_extra_glyphs(void)
+{
+    unsigned i;
+    for (i = 0; extra_glyphs && i <= extra_mask; i++) free(extra_glyphs[i].glyph.coverage);
+    free(extra_glyphs);
+    extra_glyphs = NULL;
+    extra_mask = extra_count = 0;
+    if (font_face) FT_Done_Face(font_face);
+    if (font_library) FT_Done_FreeType(font_library);
+    font_face = NULL;
+    font_library = NULL;
+}
+
 static void load_font(void)
 {
     FT_Library library;
@@ -312,6 +387,7 @@ static void load_font(void)
         free(glyphs[c].coverage);
         memset(&glyphs[c], 0, sizeof(glyphs[c]));
     }
+    free_extra_glyphs();
     font_loaded = 0;
 #ifdef _WIN32
     if (!file || FT_Init_FreeType(&library)) {
@@ -334,26 +410,7 @@ static void load_font(void)
     }
 #endif
     for (c = 32; c < 127; c++) {
-        Glyph *g = &glyphs[c - 32];
-        FT_Bitmap *b;
-        /* Outlines only: a font's embedded bitmaps (Wine's Tahoma has them
-         * at 8-16 px) come back 1 bit per pixel, not the bytes read below. */
-        if (FT_Load_Char(face, (FT_ULong)c, FT_LOAD_RENDER | FT_LOAD_TARGET_LIGHT | FT_LOAD_NO_BITMAP)) {
-            continue;
-        }
-        b = &face->glyph->bitmap;
-        g->w = (int)b->width;
-        g->h = (int)b->rows;
-        g->left = face->glyph->bitmap_left;
-        g->top = face->glyph->bitmap_top;
-        g->advance = (int)((face->glyph->advance.x + 32) >> 6);
-        g->coverage = malloc((size_t)g->w * (size_t)g->h + 1);
-        if (g->coverage) {
-            int row;
-            for (row = 0; row < g->h; row++) {
-                memcpy(g->coverage + row * g->w, b->buffer + row * b->pitch, (size_t)g->w);
-            }
-        }
+        render_glyph(face, (FT_ULong)c, &glyphs[c - 32]);
     }
     font_ascent = (int)(face->size->metrics.ascender >> 6);
     font_descent = (int)(-face->size->metrics.descender >> 6);
@@ -362,8 +419,46 @@ static void load_font(void)
     FcPatternDestroy(pattern);
     FcPatternDestroy(match);
 #endif
-    FT_Done_Face(face);
-    FT_Done_FreeType(library);
+    font_face = face;
+    font_library = library;
+}
+
+/* The glyph a character is drawn with: control characters (and DEL) take
+ * the space's room as they always have; anything the face cannot draw, and
+ * any byte that is not UTF-8, is "?". Needs font_loaded. */
+static const Glyph *glyph_for(uint32_t character)
+{
+    const Glyph *unknown = &glyphs['?' - 32];
+    unsigned slot;
+    if (character < 128) return &glyphs[character >= 32 && character < 127 ? character - 32 : 0];
+    if (character == GLYPHS_NOT_UTF8 || !font_face) return unknown;
+    if (extra_glyphs) {
+        for (slot = (character * 2654435761u) & extra_mask; extra_glyphs[slot].code; slot = (slot + 1) & extra_mask)
+            if (extra_glyphs[slot].code == character)
+                return extra_glyphs[slot].missing ? unknown : &extra_glyphs[slot].glyph;
+    }
+    if (extra_count >= EXTRA_GLYPHS_MAX) return unknown;
+    /* Keep the table at most half full: grow it (and rehash) first. */
+    if (!extra_glyphs || (extra_count + 1) * 2 > extra_mask + 1) {
+        unsigned size = extra_glyphs ? (extra_mask + 1) * 2 : 256, i;
+        ExtraGlyph *table = calloc(size, sizeof(*table));
+        if (!table) return unknown;
+        for (i = 0; extra_glyphs && i <= extra_mask; i++) {
+            if (!extra_glyphs[i].code) continue;
+            for (slot = (extra_glyphs[i].code * 2654435761u) & (size - 1); table[slot].code;
+                 slot = (slot + 1) & (size - 1)) {}
+            table[slot] = extra_glyphs[i];
+        }
+        free(extra_glyphs);
+        extra_glyphs = table;
+        extra_mask = size - 1;
+    }
+    for (slot = (character * 2654435761u) & extra_mask; extra_glyphs[slot].code; slot = (slot + 1) & extra_mask) {}
+    extra_glyphs[slot].code = character;
+    extra_glyphs[slot].missing = !FT_Get_Char_Index(font_face, (FT_ULong)character) ||
+                                 !render_glyph(font_face, (FT_ULong)character, &extra_glyphs[slot].glyph);
+    extra_count++;
+    return extra_glyphs[slot].missing ? unknown : &extra_glyphs[slot].glyph;
 }
 
 static void layout_bar(void);
@@ -396,12 +491,9 @@ static MenuCanvas *canvas;
 static int text_width(const char *text)
 {
     int width = 0;
-    if (!font_loaded) {
-        return (int)strlen(text) * 12 * ui;
-    }
-    for (; *text; text++) {
-        unsigned char c = (unsigned char)*text;
-        width += c >= 32 && c < 127 ? glyphs[c - 32].advance : glyphs[0].advance;
+    while (*text) {
+        uint32_t character = Glyphs_NextCharacter(&text);
+        width += font_loaded ? glyph_for(character)->advance : 12 * ui;
     }
     return width;
 }
@@ -492,11 +584,13 @@ static void disc(int cx, int cy, int radius, uint32_t colour)
 
 static void draw_bitmap_text(int x, int middle, const char *text, uint32_t colour)
 {
-    for (; *text; text++, x += 12 * ui) {
+    for (; *text; x += 12 * ui) {
+        uint32_t character = Glyphs_NextCharacter(&text);
+        char code = character < 128 ? (char)character : '?';
         int i;
         for (i = 0; i < bitmap_font_count; i++) {
             int row, column;
-            if (bitmap_font[i].code != *text) {
+            if (bitmap_font[i].code != code) {
                 continue;
             }
             for (row = 0; row < 7; row++) {
@@ -520,9 +614,8 @@ static void draw_text(int x, int middle, const char *text, uint32_t colour)
         return;
     }
     baseline = middle + (font_ascent - font_descent + 1) / 2;
-    for (; *text; text++) {
-        unsigned char c = (unsigned char)*text;
-        const Glyph *g = &glyphs[c >= 32 && c < 127 ? c - 32 : 0];
+    while (*text) {
+        const Glyph *g = glyph_for(Glyphs_NextCharacter(&text));
         int row, column;
         for (row = 0; row < g->h && g->coverage; row++) {
             for (column = 0; column < g->w; column++) {
@@ -551,9 +644,8 @@ void Menu_DrawTextScaled(MenuCanvas *into, int x, int middle, const char *text, 
     }
     int baseline = middle + (font_ascent - font_descent + 1) * scale / (2 * ui);
     int advance = 0;
-    for (; *text; text++) {
-        unsigned char c = (unsigned char)*text;
-        const Glyph *g = &glyphs[c >= 32 && c < 127 ? c - 32 : 0];
+    while (*text) {
+        const Glyph *g = glyph_for(Glyphs_NextCharacter(&text));
         for (int row = 0; row < g->h * scale / ui && g->coverage; row++)
             for (int col = 0; col < g->w * scale / ui; col++)
                 put(x + advance * scale / ui + g->left * scale / ui + col,
@@ -879,7 +971,7 @@ static void close_menu(void);
 static int span_width(const char *text, int length)
 {
     char part[256];
-    if (length >= (int)sizeof(part)) length = (int)sizeof(part) - 1;
+    if (length >= (int)sizeof(part)) length = (int)Menu_TextFit(text, sizeof(part) - 1);
     memcpy(part, text, (size_t)length);
     part[length] = '\0';
     return text_width(part);
@@ -974,8 +1066,10 @@ static void draw_notice(void)
     top += NOTICE_LINE + 6 * ui;
     for (i = 0; i < notice.lines; i++, top += NOTICE_LINE) {
         char line[256];
-        int length = notice.line_length[i] < (int)sizeof(line) - 1 ? notice.line_length[i] : (int)sizeof(line) - 1;
-        memcpy(line, notice.text + notice.line_start[i], (size_t)length);
+        const char *start = notice.text + notice.line_start[i];
+        int length = notice.line_length[i] < (int)sizeof(line) - 1 ? notice.line_length[i]
+                                                                   : (int)Menu_TextFit(start, sizeof(line) - 1);
+        memcpy(line, start, (size_t)length);
         line[length] = '\0';
         draw_text(x + NOTICE_PAD, top + NOTICE_LINE / 2, line, C_TEXT);
     }
@@ -997,7 +1091,12 @@ void Menu_ShowNotice(const char *title, const char *text, const char *const *but
     close_menu();
     snprintf(notice.title, sizeof(notice.title), "%s", title ? title : "");
     snprintf(notice.text, sizeof(notice.text), "%s", text ? text : "");
-    for (i = 0; i < count; i++) snprintf(notice.buttons[i], sizeof(notice.buttons[i]), "%s", buttons && buttons[i] ? buttons[i] : "OK");
+    Menu_TextTrim(notice.title);
+    Menu_TextTrim(notice.text);
+    for (i = 0; i < count; i++) {
+        snprintf(notice.buttons[i], sizeof(notice.buttons[i]), "%s", buttons && buttons[i] ? buttons[i] : "OK");
+        Menu_TextTrim(notice.buttons[i]);
+    }
     notice.count = count;
     notice.focus = focus >= 0 && focus < count ? focus : count - 1;
     notice.hover = -1;
@@ -1222,6 +1321,16 @@ static void open_submenu(int index)
 static int active_level(void) { return open_sub >= 0 ? 1 : 0; }
 static int *active_hot(void) { return open_sub >= 0 ? &hot_sub : &hot_item; }
 
+/* The cheats that change the save refuse before a game is loaded. */
+static void need_save(int done)
+{
+    static const char *const ok[] = {"OK"};
+    if (!done) {
+        Menu_ShowNotice("Load a save first", "This cheat changes the game in progress. "
+                        "Start a new game or load a save, then choose it again.", ok, 1, 0, NULL);
+    }
+}
+
 static void activate(const Item *item, int *quit)
 {
     if (item->flags & ITEM_DISABLED) return;
@@ -1232,8 +1341,9 @@ static void activate(const Item *item, int *quit)
     case ACT_LOAD_STATE: Memories_StateRequest(2, Platform_StateSlot()); break;
     case ACT_SCREENSHOT: Platform_Screenshot(0); break;
     case ACT_EXIT: *quit = 1; break;
-    case ACT_GIVE_CARDS: Cheats_GiveAllCards(3); break;
-    case ACT_UNLOCK_FREE_DUELISTS: Cheats_UnlockAllFreeDuelists(); break;
+    case ACT_GIVE_CARDS: need_save(Cheats_GiveAllCards(item->value, 1)); break;
+    case ACT_UNLOCK_FREE_DUELISTS: need_save(Cheats_UnlockAllFreeDuelists()); break;
+    case ACT_SET_STARCHIPS: need_save(Cheats_SetStarchips((unsigned)item->value)); break;
     case ACT_RESET_COLOR:
         Settings_Set(SET_BRIGHTNESS, 100);
         Settings_Set(SET_CONTRAST, 100);
@@ -1244,6 +1354,7 @@ static void activate(const Item *item, int *quit)
     case ACT_CHECK_UPDATES: Update_CheckNow(); break;
     case ACT_RELEASES: Update_OpenReleases(); break;
     case MENU_ITEM_TITLE: TitleJump_Request(); break;
+    case MENU_ITEM_RESTART: TitleJump_Confirm(); break;
     case MENU_ITEM_DECKS: DeckMenu_Request(); break;
     case ACT_RELOAD_SETTINGS:
         Menu_LoadSettings();

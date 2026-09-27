@@ -108,6 +108,17 @@ int main(void)
     unsigned short own[6];
     const unsigned short *pool;
     int id;
+    char name[TABLES_SHORT_NAME_LIMIT + 1];
+
+    /* A translated full name made a name in place of COM. */
+    assert(Tables_ShortenName("Sim\xE3o Muran", name) && !strcmp(name, "Sim\xE3o Muran"));
+    assert(Tables_ShortenName("Jono 2\xBA Duelo", name) && !strcmp(name, "Jono"));
+    assert(Tables_ShortenName("Weevil Underwood", name) && !strcmp(name, "W. Underwood"));
+    assert(Tables_ShortenName("Sumo Mago Anubisius", name) && !strcmp(name, "S.M. Anubisius"));
+    assert(Tables_ShortenName("Mago da Montanha", name) && !strcmp(name, "Montanha"));
+    assert(Tables_ShortenName("Abcdefghijklmnopq", name) && !strcmp(name, "Abcdefghijklmn"));
+    assert(Tables_ShortenName("A B C D E F G H Ijklmnopq", name) && !strcmp(name, "Ijklmnopq"));
+    assert(!Tables_ShortenName("2P", name) && !name[0]);
 
     /* Fusions: added, changed by a later mod, forbidden, and removed by
      * result; either order; a copy fuses as its base. */

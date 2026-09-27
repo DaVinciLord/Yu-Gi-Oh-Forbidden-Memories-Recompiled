@@ -51,6 +51,66 @@ const char *Tables_DuelistShortName(int duelist)
     return Tables_DuelistNames[duelist];
 }
 
+/* A letter of Latin-1: A-Z, a-z, or an accented one (not × or ÷). */
+static int name_letter(unsigned char c)
+{
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= 0xC0 && c != 0xD7 && c != 0xF7);
+}
+
+static int name_capital(unsigned char c)
+{
+    return (c >= 'A' && c <= 'Z') || (c >= 0xC0 && c <= 0xDE && c != 0xD7);
+}
+
+int Tables_ShortenName(const char *name, char *out)
+{
+    const unsigned char *in = (const unsigned char *)name;
+    char whole[64];
+    size_t n = 0, last = 0, i;
+    int capitals = 1, words = 0;
+    out[0] = '\0';
+    while (*in && n < sizeof(whole) - 1 && (name_letter(*in) || *in == ' ' || *in == '.')) whole[n++] = (char)*in++;
+    while (n && whole[n - 1] == ' ') n--;
+    whole[n] = '\0';
+    if (!n) return 0;
+    if (n <= TABLES_SHORT_NAME_LIMIT) {
+        memcpy(out, whole, n + 1);
+        return 1;
+    }
+    /* Its words: where the last starts, and whether each starts with a
+     * capital. */
+    for (i = 0; i < n; i++) {
+        if (whole[i] != ' ' && (i == 0 || whole[i - 1] == ' ')) {
+            capitals &= name_capital((unsigned char)whole[i]);
+            last = i;
+            words++;
+        }
+    }
+    /* Each first word's initial and full stop, a space, the last word. */
+    if (words > 1 && capitals && 2 * (size_t)(words - 1) + 1 + (n - last) <= TABLES_SHORT_NAME_LIMIT) {
+        size_t k = 0;
+        for (i = 0; i < last; i++) {
+            if (whole[i] != ' ' && (i == 0 || whole[i - 1] == ' ')) {
+                out[k++] = whole[i];
+                out[k++] = '.';
+            }
+        }
+        out[k++] = ' ';
+        memcpy(out + k, whole + last, n - last + 1);
+        return 1;
+    }
+    if (words > 1 && n - last <= TABLES_SHORT_NAME_LIMIT) {
+        memcpy(out, whole + last, n - last + 1);
+        return 1;
+    }
+    /* One word too long: its first letters. */
+    for (n = TABLES_SHORT_NAME_LIMIT; n && (whole[n - 1] == ' ' || whole[n - 1] == '.'); n--) {
+    }
+    memcpy(out, whole, n);
+    out[n] = '\0';
+    return n != 0;
+}
+
 int Tables_OpponentId(void)
 {
     return gDuel_bOpponentID;
@@ -762,7 +822,7 @@ static int by_remainder(const void *left, const void *right)
 static Share *shares;
 static int share_room;
 
-static int scale(unsigned *weights, const unsigned char *chosen, int count, unsigned target)
+int Tables_Scale(unsigned *weights, const unsigned char *chosen, int count, unsigned target)
 {
     unsigned long long sum = 0;
     unsigned given = 0;
@@ -810,11 +870,11 @@ static int apply(const PoolEdit *edit, unsigned *weights, unsigned *before, unsi
     if (given >= POOL_TOTAL || !rest) {
         /* The listed cards are the pool, in proportion. */
         for (id = 1; id <= count; id++) if (!listed[id]) weights[id] = 0;
-        if (!scale(weights, listed, count, POOL_TOTAL) || !given) goto refuse;
+        if (!Tables_Scale(weights, listed, count, POOL_TOTAL) || !given) goto refuse;
     } else {
         /* The listed cards have their weights; the rest share what is left. */
         for (id = 1; id <= count; id++) listed[id] = !listed[id];
-        if (!scale(weights, listed, count, POOL_TOTAL - (unsigned)given)) goto refuse;
+        if (!Tables_Scale(weights, listed, count, POOL_TOTAL - (unsigned)given)) goto refuse;
     }
     for (id = 1; id <= count; id++) cards += weights[id] != 0;
     if (edit->pool == TABLES_POOL_DECK && cards < DECK_POOL_MIN_CARDS) goto refuse;

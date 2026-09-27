@@ -21,9 +21,11 @@
  * the most away: it is the darkest ink, and 7 barely shows. The retail
  * plates are authored that way, stems at 1 with faint 6 and 7 fringes. The
  * measurements, and the settings below that make a legible plate (Times
- * regular at 13 pixels, baseline under row 11, whole-pixel advances, hard
- * coverage steps), are the YuGiOhForbiddenMemoriesRecomp project's
- * (src/psx_card_packs.c, render_title), found against window captures. */
+ * regular at 13 pixels, baseline under row 11, whole-pixel advances), are the
+ * YuGiOhForbiddenMemoriesRecomp project's (src/psx_card_packs.c,
+ * render_title), found against window captures; each texel takes the ink of
+ * the nearest tone (ink_of). Besides a mod's own cards, a retail card a
+ * translation renames gets its plate from here (cards.c, translated_plate). */
 #include "pc/compat/fs.h"
 #include "cards.h"
 #include "art.h"
@@ -254,11 +256,21 @@ static void put_ink(unsigned char *plate, int x, int y, int ink)
     else *byte = (unsigned char)((*byte & 0xF0) | ink);
 }
 
-/* Coverage (0-255) to the plate's inks: full coverage is 1, the darkest;
- * an edge 3; a faint halo 6, as the retail plates carry; else clear. */
+/* Coverage (0-255) to the plate ink of the nearest tone. What each ink
+ * takes from the gold under it, as a share of what 1 takes, measured on a
+ * retail plate drawn in the game (Dancing Elf's, at 1x): 1 all of it, then
+ * about .93, .8, .6, .5, .35 and .18 for 7; 0 none. The thresholds are the
+ * midpoints between those, so an edge is drawn in the ink that darkens it as
+ * much as its coverage says, stems at 1 and fringes at 6 and 7 as the retail
+ * plates have them. */
 static int ink_of(int coverage)
 {
-    return coverage >= 150 ? 1 : coverage >= 96 ? 3 : coverage >= 40 ? 6 : 0;
+    static const unsigned char from[7] = {247, 221, 179, 140, 109, 69, 23};
+    int ink;
+    for (ink = 0; ink < 7; ink++) {
+        if (coverage >= from[ink]) return ink + 1;
+    }
+    return 0;
 }
 
 int CardArt_TitleFromImage(const char *path, unsigned char *plate, char *why, size_t why_size)

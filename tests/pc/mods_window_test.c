@@ -40,10 +40,38 @@ static int input(MenuEventType type, int x, int y, MenuKey key, const char *text
     return ModsWindow_Event(&e);
 }
 static int click(int x, int y) { return input(MENU_EVENT_BUTTON_DOWN, x, y, MENU_KEY_OTHER, NULL); }
+/* menu.h's UTF-8 cuts: never inside a character. */
+static void test_text_cuts(void)
+{
+    const char *word = "Portugu\xC3\xAAs"; /* "Português": ê is bytes 7-8 */
+    char cut[16];
+    assert(Menu_TextBack(word, 9) == 7);
+    assert(Menu_TextBack(word, 7) == 6);
+    assert(Menu_TextBack(word, 0) == 0);
+    assert(Menu_TextFit(word, 8) == 7);
+    assert(Menu_TextFit(word, 9) == 9);
+    {
+        /* Ends before `length`: a buffer that long, as a caller's is (gcc
+         * reads the string literal's 11 bytes as out of bounds for 50). */
+        static const char padded[64] = "Portugu\xC3\xAAs";
+        assert(Menu_TextFit(padded, 50) == 10);
+    }
+    memcpy(cut, word, 8); /* "Portugu" and the first byte of ê */
+    cut[8] = '\0';
+    Menu_TextTrim(cut);
+    assert(strcmp(cut, "Portugu") == 0);
+    snprintf(cut, sizeof(cut), "%s", word);
+    Menu_TextTrim(cut);
+    assert(strcmp(cut, word) == 0);
+    snprintf(cut, sizeof(cut), "a\xE2\x80");  /* a cut-short U+2014 */
+    Menu_TextTrim(cut);
+    assert(strcmp(cut, "a") == 0);
+}
 int main(void)
 {
     char path[1024];
     int w, h;
+    test_text_cuts();
     scratch_template(root, sizeof(root), "memories-mod-window");
     assert(mkdtemp(root));
     make_dir("mods");

@@ -1,5 +1,6 @@
 #ifndef MEMORIES_PC_DECK_MENU_H
 #define MEMORIES_PC_DECK_MENU_H
+#include <stddef.h>
 /* Game > Deck slots (F6): keep up to ten decks beside a save and switch to
  * one in a step (deck_slots.h has the rules and the file). The screen is
  * drawn in the port's overlay, like the save slot menu, and read with the
@@ -33,8 +34,11 @@ void DeckMenu_Draw(struct MenuCanvas *canvas, int *x, int *y, int *w, int *h);
 unsigned DeckMenu_Signature(void);
 
 /* The campaign's card shop (Script_OpSavePrompt) offers DECK SLOTS under
- * BUILD DECK while the setting is on, unless a translation rewrites the
- * shop's menu. DeckMenu_ShopMenu decides it as the menu is made (1: five
+ * BUILD DECK while the setting is on. A translation's shop menu (string
+ * 0x11) gets the entry too, in its words (TEXT_OWN_DECK_SLOTS, text.h), when
+ * it is a menu of four plain lines as retail's is and the five fit the box;
+ * else it has none.
+ * DeckMenu_ShopMenu decides it as the menu is made (1: five
  * entries); the menu's text then comes from DeckMenu_Text. The game's code
  * numbers the entries as its own four: DeckMenu_ShopChoice turns the
  * cursor into that numbering (DECK_MENU_SHOP_SLOTS for the new one), and
@@ -47,6 +51,13 @@ int DeckMenu_ShopChoice(int choice);
 void DeckMenu_ShopRestore(void);
 /* String `id` as the shop's menu has it, or NULL (Text_Resolve). */
 const unsigned char *DeckMenu_Text(int id);
+/* The listing of the shop's menu with the entry: over `menu`, a
+ * translation's compiled string 0x11 (NULL: retail's lines), with `label`, a
+ * translation's compiled DECK SLOTS (NULL: the English), centred as the
+ * other lines are. 0 when `menu` is not a menu of four lines of letters,
+ * steps and colours, `label` not letters and spaces, or the five lines have
+ * more letters than the menu's box shows (44). */
+int DeckMenu_ShopListing(char *out, size_t size, const unsigned char *menu, const unsigned char *label);
 
 /* The decks are a draft kept with the save: written to the file when the
  * game is saved (the save slot menu), read again when one is loaded, and

@@ -3,6 +3,8 @@
  * The VBlank "interrupt" is the platform's 60 Hz signal; everything reachable
  * from it must stay async-signal-safe (no stdio, no allocation, no Xlib). */
 #include "pc/platform/platform.h"
+#include "pc/platform/button_layout.h"
+#include "pc/platform/settings.h"
 #include "pc/platform/ai_trace.h"
 #include "pc/platform/title_jump.h"
 #include "pc/saves/deck_menu.h"
@@ -85,6 +87,11 @@ static void run_vblank(void)
             MemoriesModEvent input = {MEMORIES_EVENT_INPUT, MEMORIES_BEFORE, port, (int)bits, 0, (int)bits, 0};
             Mods_Dispatch(&input);
             bits = (unsigned)(input.handled ? input.result : input.b) & 0xffffu;
+            /* Game > Japanese buttons: Cross and Circle exchange here, the one
+             * place every pad the game reads passes (button_layout.h). The
+             * mods' before-hooks see the controller's own bits, as host->pad
+             * does; after-hooks see what the game gets. */
+            if (Settings_Get(SET_JP_BUTTONS)) bits = ButtonLayout_Apply((uint16_t)bits, Platform_PadFixedBits(port), 1);
             input.result = (int)bits; input.phase = MEMORIES_AFTER; Mods_Dispatch(&input);
             pad_buffer[port][0] = Platform_PadConnected(port) ? 0x00 : 0xff; /* 0xff: no pad */
             pad_buffer[port][1] = 0x41;
@@ -219,6 +226,12 @@ int Memories_VSync(int mode)
         }
     }
     if (mode < 0 || mode == 1) Platform_PollTime();
+    /* One VBlank between entry and return, as on the console: the game's
+     * counter Graphics_SyncFrame just set to -1 must read 0 at
+     * Input_UpdatePads, or the frame's presses are published twice
+     * (Platform_LimitVBlanks). Held from before the count is read, so any
+     * VBlank the limit lets through ends the wait below. */
+    if (mode == 0) Platform_LimitVBlanks(1);
     now = Platform_VBlankCount();
     Platform_VSyncHeartbeat();
     if (mode < 0) {
@@ -289,6 +302,7 @@ int Memories_VSync(int mode)
             frames = game_us = present_us = late = game_max = present_max = 0;
         }
         Platform_WaitVBlank(now);
+        Platform_LimitVBlanks(-1);
         clock_gettime(CLOCK_MONOTONIC, &left);
         Memories_StatePoint(Memories_PresentedFrames());
     } else if (mode > 1) {

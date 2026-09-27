@@ -2,6 +2,9 @@
 #include "duel_effect.h"
 #include "func_80036C14.h"
 #include "../unmatched.h"
+#ifdef MEMORIES_PC
+#include "pc/text/glyphs.h"
+#endif
 
 /* D_801D9174: a lookup table of 0x1E-byte records, each prefixed by a
    big-endian u16 id (id field for record i lives 2 bytes apart, but the
@@ -69,10 +72,20 @@ void DuelEffect_AppendEntry(DuelEffectChannel *p, s32 a)
         q->flags_11 = 0xA0;
         q->field_17 = b;
     } else if (f & 0x100) {
+#ifdef MEMORIES_PC
+        /* The 8x8 font: an added letter and ':' are the port's to draw
+           (glyphs.h), and func_80035E20 knows them by the Shift-JIS, which
+           the retail entry leaves as it was. */
+        v = Glyphs_TinyIndex(a);
+#else
         v = (a >> 20) & 0xFF;
+#endif
         if (v == 0) {
             return;
         }
+#ifdef MEMORIES_PC
+        q->code_00 = (u16)a;
+#endif
         q->field_10 = v;
         q->flags_11 = 0xC0;
         c = p->field_54;
