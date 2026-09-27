@@ -74,7 +74,30 @@ on both platforms; it also includes the new ROM setup tests.
 
 Public runners do not receive a disc or need a ROM secret. They compile the
 full game and check archive structure; they skip ROM-dependent gameplay smoke
-tests explicitly. Run those locally before publishing a draft. Workflow events
+tests explicitly. Run those locally before publishing a draft.
+
+### Mods made for earlier releases
+
+A mod made for one release has to keep working in the later ones.
+`tools/pc/mod_compat.txt` lists the releases that promise covers, and
+`tools/pc/check_mod_abi.py` enforces it:
+
+- In CI, on every pull request (Linux job, no disc), it compares the SDK
+  just built with each listed release's SDK. Every name that release lent
+  a code mod must still be exported. Every exported function and variable
+  its headers declare must keep its type. Every structure they reach must
+  keep its layout, and every enumerator its value.
+- Locally, `smoke.py` (and so `package.py`) runs it with `--run`. This
+  loads each listed release's own mods, and its SDK's examples built with
+  its own `build_mod.py`, into the new build. Every code mod must load.
+  Each smoke case that turns mods on must draw the same frame with the old
+  release's copies of those mods as with this build's.
+
+A difference that fails the check is fixed, not waved through. Keep the old
+number, argument list or layout, and add beside it. Only a difference
+that provably breaks no mod goes in `mod_compat.txt` as `accept`, with the
+reason. After publishing a release, add `baseline <tag>` for it to
+`mod_compat.txt`. Workflow events
 follow [GitHub's trigger documentation](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow).
 
 ## Local commands

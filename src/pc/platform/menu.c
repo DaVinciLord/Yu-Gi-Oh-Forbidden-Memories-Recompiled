@@ -1328,7 +1328,7 @@ static void activate(const Item *item, int *quit)
     case ACT_LOAD_STATE: Memories_StateRequest(2, Platform_StateSlot()); break;
     case ACT_SCREENSHOT: Platform_Screenshot(0); break;
     case ACT_EXIT: *quit = 1; break;
-    case ACT_GIVE_CARDS: need_save(Cheats_GiveAllCards(item->value, 1)); break;
+    case ACT_GIVE_CARDS: need_save(Cheats_TopUpAllCards(item->value)); break;
     case ACT_UNLOCK_FREE_DUELISTS: need_save(Cheats_UnlockAllFreeDuelists()); break;
     case ACT_SET_STARCHIPS: need_save(Cheats_SetStarchips((unsigned)item->value)); break;
     case ACT_RESET_COLOR:

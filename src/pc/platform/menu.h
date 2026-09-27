@@ -50,6 +50,9 @@ typedef struct MenuEvent {
     char text[32];
 } MenuEvent;
 
+/* A code mod may name these (Menu_SetItemEnabled), so each keeps its number
+ * from release to release: new ones go at the end, retired ones stay
+ * (tools/pc/check_mod_abi.py). */
 typedef enum {
     MENU_ITEM_SCALE_1 = 100,
     MENU_ITEM_SCALE_2,
@@ -72,6 +75,8 @@ typedef enum {
     MENU_ITEM_FILTER_NEAREST,
     MENU_ITEM_FILTER_LINEAR,
     MENU_ITEM_FILTER_SHARP,
+    MENU_ITEM_HD_TEXT, /* retired (a code mod may still name them): the menu has no such items */
+    MENU_ITEM_HD_HUD,
     MENU_ITEM_OPPONENT_NAME, /* View > Opponent's name for COM: drawn by the OpenGL picture pass at
                               * Internal 2x and up (Menu_SetHdPicture), by the software GPU at 1x */
     MENU_ITEM_RESTART /* Game > Restart game: asks, then goes back as MENU_ITEM_TITLE does */

@@ -149,6 +149,7 @@ static int find_key(const char *key)
 {
     int id;
     for (id = 0; id < SET_COUNT; id++) {
+        if (!info[id].key) continue;   /* retired (settings.h) */
         if (!strcmp(key, info[id].key) ||
             (info[id].legacy_key && !strcmp(key, info[id].legacy_key))) {
             return id;
@@ -239,7 +240,7 @@ void Settings_Load(void)
         fclose(file);
     }
     for (id = 0; id < SET_COUNT; id++) {
-        const char *text = getenv(info[id].env);
+        const char *text = info[id].env ? getenv(info[id].env) : NULL;
         int value;
         if ((!text || !*text) && info[id].legacy_env) text = getenv(info[id].legacy_env);
         if (text && *text && parse_value(text, &value)) values[id] = clamp((SettingId)id, value);
@@ -258,6 +259,7 @@ int Settings_Save(void)
     file = fopen(temporary, "w");
     if (!file) return 0;
     for (id = 0; id < SET_COUNT; id++) {
+        if (!info[id].key) continue;
         fprintf(file, "%s=%d\n", info[id].key, stored[id]);
         /* TODO remove legacy keys after one compatibility release. */
         if (info[id].legacy_key && strcmp(info[id].legacy_key, info[id].key)) {
