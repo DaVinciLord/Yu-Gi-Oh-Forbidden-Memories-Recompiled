@@ -63,22 +63,6 @@ static char *read_file(const char *path, size_t *length)
     return text;
 }
 
-/* A mod's files of one key ("text", "font"): a name, or a list of them. */
-static int mod_files(int mod, const char *key, int index, char *path, size_t size, const char **name)
-{
-    const JsonValue *value = Json_Member(Mods_Manifest(mod), key);
-    const JsonValue *entry = Json_TypeOf(value) == JSON_ARRAY ? Json_At(value, index) : index ? NULL : value;
-    const char *file = Json_String(entry, NULL);
-    if (!entry) return 0;
-    *name = file ? file : "";
-    if (!file || !*file || !Paths_Contained(file) ||
-        snprintf(path, size, "%s/%s", Mods_Directory(mod), file) >= (int)size) {
-        Mods_Note(Mods_Id(mod), "\"%s\": %s is not a file in the mod", key, *name);
-        path[0] = '\0';
-    }
-    return 1;
-}
-
 static void add_unit(int mod, const char *path, const char *name)
 {
     Reporting reporting = {Mods_Id(mod), name, 0};
@@ -131,7 +115,7 @@ void Text_Build(void)
         int mod = Mods_Loaded(i);
         const char *name;
         if (!Mods_Active(mod)) continue;
-        for (index = 0; mod_files(mod, "font", index, path, sizeof(path), &name); index++) {
+        for (index = 0; Mods_File(mod, "font", index, path, sizeof(path), &name); index++) {
             if (path[0]) Glyphs_AddFont(path);
         }
     }
@@ -139,7 +123,7 @@ void Text_Build(void)
         int mod = Mods_Loaded(i);
         const char *name;
         if (!Mods_Active(mod)) continue;
-        for (index = 0; mod_files(mod, "text", index, path, sizeof(path), &name); index++) {
+        for (index = 0; Mods_File(mod, "text", index, path, sizeof(path), &name); index++) {
             if (path[0]) add_unit(mod, path, name);
         }
     }

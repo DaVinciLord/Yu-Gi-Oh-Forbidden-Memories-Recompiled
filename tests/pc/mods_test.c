@@ -210,6 +210,32 @@ int main(void)
                "{ \"id\": \"sounds\", \"enabled\": true, \"audio\": { \"music\": { \"0x2D0\": \"gone.wav\" } } }");
     Mods_SetAudio(fake_audio_load, fake_audio_unload);
 
+    /* A translation whose files the mod's settings switch: "text" and
+     * "font" entries are a name or {"file", "setting"}. */
+    make_dir("mods/wording");
+    write_text("mods/wording/mod.json",
+               "{ \"id\": \"wording\", \"enabled\": true,"
+               "  \"settings\": [ { \"key\": \"names\", \"type\": \"bool\", \"default\": 1 },"
+               "                  { \"key\": \"menus\", \"type\": \"bool\", \"default\": 0 } ],"
+               "  \"text\": [ \"base.txt\", { \"file\": \"names.txt\", \"setting\": \"names\" },"
+               "            { \"file\": \"menus.txt\", \"setting\": \"menus\" },"
+               "            { \"file\": \"lost.txt\", \"setting\": \"nope\" } ],"
+               "  \"font\": { \"file\": \"letters.png\", \"setting\": \"menus\" } }");
+    /* One file per choice of a "choice" setting ("value"), in a mod the
+     * player has not applied: its settings then read as they are now. */
+    make_dir("mods/people");
+    write_text("mods/people/mod.json",
+               "{ \"id\": \"people\","
+               "  \"settings\": [ { \"key\": \"names\", \"type\": \"choice\", \"default\": 0,"
+               "                    \"choices\": [ \"US\", \"JP\", \"BR\" ] } ],"
+               "  \"text\": [ { \"file\": \"us.txt\", \"setting\": \"names\", \"value\": 0 },"
+               "            { \"file\": \"jp.txt\", \"setting\": \"names\", \"value\": 1 },"
+               "            { \"file\": \"br.txt\", \"setting\": \"names\", \"value\": 2 },"
+               "            { \"file\": \"any.txt\", \"setting\": \"names\" } ],"
+               "  \"font\": [ { \"file\": \"jp.png\", \"setting\": \"names\", \"value\": 1 } ] }");
+    make_dir("mods/plain");
+    write_text("mods/plain/mod.json", "{ \"id\": \"plain\", \"enabled\": true, \"text\": \"text.txt\" }");
+
     snprintf(settings, sizeof(settings), "%s/settings.txt", root);
     write_text("settings.txt", "hand_camera=1\nmod.replacer=1\n");
     assert(!setenv("MEMORIES_SETTINGS", settings, 1));
@@ -224,7 +250,7 @@ int main(void)
     assert(patcher >= 0 && replacer >= 0 && broken >= 0 && camera >= 0);
     assert(find("not-a-mod") < 0);          /* no manifest, no mod */
     sounds = find("sounds");
-    assert(Mods_Count() == 9);
+    assert(Mods_Count() == 12);
     assert(!Mods_Active(find("xa-named")) && strstr(Mods_Status(find("xa-named")), "MASTER.XA") &&
            strstr(Mods_Status(find("xa-named")), "\"audio\""));
     assert(!Mods_Active(find("xa-raw")) && strstr(Mods_Status(find("xa-raw")), "MASTER.XA"));
@@ -242,6 +268,57 @@ int main(void)
     assert(audio_unloads == 1 && !Mods_Active(sounds));
     Mods_SetEnabled(sounds, 1);
     assert(audio_loads == 2 && Mods_Active(sounds));
+    /* A "text" entry with a setting is read only while that setting is not
+     * 0, as the mod was applied: the text is built once, so the mod asks for
+     * a restart without saying so and a later change waits for it. A setting
+     * the mod does not declare is noted and its file used; a name as a
+     * string is read as it always was. */
+    {
+        int wording = find("wording"), plain = find("plain");
+        char path[1024];
+        const char *name;
+        assert(wording >= 0 && plain >= 0 && Mods_Active(wording) && Mods_RequiresRestart(wording));
+        assert(Mods_File(wording, "text", 0, path, sizeof(path), &name) && !strcmp(name, "base.txt") &&
+               strstr(path, "/wording/base.txt"));
+        assert(Mods_File(wording, "text", 1, path, sizeof(path), &name) && !strcmp(name, "names.txt") &&
+               strstr(path, "/wording/names.txt"));
+        assert(Mods_File(wording, "text", 2, path, sizeof(path), &name) && !strcmp(name, "menus.txt") && !path[0]);
+        assert(Mods_File(wording, "text", 3, path, sizeof(path), &name) && strstr(path, "/wording/lost.txt"));
+        assert(strstr(Mods_Status(wording), "does not declare (nope)"));
+        assert(!Mods_File(wording, "text", 4, path, sizeof(path), &name));
+        assert(Mods_File(wording, "font", 0, path, sizeof(path), &name) && !path[0]);
+        assert(!Mods_File(wording, "font", 1, path, sizeof(path), &name));
+        assert(Mods_File(plain, "text", 0, path, sizeof(path), &name) && !strcmp(name, "text.txt") &&
+               strstr(path, "/plain/text.txt") && !Mods_Status(plain)[0]);
+        assert(!Mods_File(plain, "text", 1, path, sizeof(path), &name));
+        assert(!Mods_File(plain, "font", 0, path, sizeof(path), &name));
+        assert(!setenv("MEMORIES_MOD_WORDING_NAMES", "0", 1) && !setenv("MEMORIES_MOD_WORDING_MENUS", "1", 1));
+        assert(Mods_OptionValue(wording, 0) == 0 && Mods_OptionValue(wording, 1) == 1);
+        assert(Mods_File(wording, "text", 1, path, sizeof(path), &name) && path[0]);
+        assert(Mods_File(wording, "text", 2, path, sizeof(path), &name) && !path[0]);
+    }
+    /* With "value", an entry is read only while its setting is that value. */
+    {
+        static const char *const files[] = {"us.txt", "jp.txt", "br.txt"};
+        int people = find("people"), value, entry;
+        char path[1024];
+        const char *name;
+        assert(people >= 0 && !Mods_Active(people) && Mods_RequiresRestart(people));
+        for (value = 0; value < 3; value++) {
+            char number[4];
+            snprintf(number, sizeof(number), "%d", value);
+            assert(!setenv("MEMORIES_MOD_PEOPLE_NAMES", number, 1));
+            for (entry = 0; entry < 3; entry++) {
+                assert(Mods_File(people, "text", entry, path, sizeof(path), &name) && !strcmp(name, files[entry]));
+                assert(entry == value ? strstr(path, files[entry]) != NULL : !path[0]);
+            }
+            /* Without "value", any choice but the first. */
+            assert(Mods_File(people, "text", 3, path, sizeof(path), &name) && !path[0] == !value);
+            assert(Mods_File(people, "font", 0, path, sizeof(path), &name) && !path[0] == (value != 1));
+            assert(!Mods_File(people, "text", 4, path, sizeof(path), &name));
+        }
+        assert(!Mods_Status(people)[0]);
+    }
     assert(!strcmp(Mods_Name(patcher), "Patcher"));
     assert(!strcmp(Mods_Name(broken), "broken") && Mods_Status(broken)[0]);
     /* The manifest's own default, and what the settings say instead. */

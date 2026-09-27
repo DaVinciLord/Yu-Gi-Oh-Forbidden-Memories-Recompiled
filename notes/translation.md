@@ -38,6 +38,46 @@ a [texture pack](modding.md) repaints those.
    file does not define lands in the latest file read before it (this
    mod's or an earlier mod's) that does. So may `font` (below).
 
+   An entry may also be an object naming a setting of the mod, so the
+   player can leave that file out, for example to keep the cards' English
+   names:
+
+   ```json
+   "text": ["text.txt", {"file": "card_names.txt", "setting": "card_names"}],
+   "settings": [
+       {"key": "card_names", "label": "Translated card names", "type": "bool",
+        "default": 1, "restart": true}
+   ]
+   ```
+
+   The file is read only while the setting is not 0 (`mod.<id>.card_names`
+   in the settings, or `MEMORIES_MOD_<ID>_CARD_NAMES=0` for one run). The
+   text is built once, as the game starts, so changing it takes a restart;
+   `"restart": true` is what says so beside the setting in the Mods window.
+   A setting the mod does not declare is noted there, and the file read.
+
+   With `"value"` the file is read only while the setting is exactly that
+   value, so each choice of a `choice` setting can have its own file:
+
+   ```json
+   "text": [
+       "text.txt",
+       {"file": "people_us.txt", "setting": "people", "value": 0},
+       {"file": "people_jp.txt", "setting": "people", "value": 1},
+       {"file": "people_br.txt", "setting": "people", "value": 2}
+   ],
+   "settings": [
+       {"key": "people", "label": "Character names", "type": "choice",
+        "default": 0, "choices": ["Original (US)", "Romanized (JP)", "Localized"],
+        "restart": true}
+   ]
+   ```
+
+   `font` entries take `setting` and `value` the same way.
+   A build older than this form reads the object as a file with no name:
+   it notes `"text":  is not a file in the mod`, leaves that entry out and
+   reads the rest.
+
    Save the files as UTF-8. A file in another encoding (Windows-1252, or
    what Notepad calls "Unicode") is reported, with the line where it goes
    wrong, rather than read as boxes.

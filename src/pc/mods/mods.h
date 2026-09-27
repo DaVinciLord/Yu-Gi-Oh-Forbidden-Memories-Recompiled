@@ -61,6 +61,14 @@ int Mods_Loaded(int index);
 /* One of a mod's settings (`mod.<id>.<key>`, or MEMORIES_MOD_<ID>_<KEY> for
  * the run), as a code mod's host->setting reads it. */
 int Mods_Setting(const char *id, const char *key, int fallback);
+/* One of a mod's files of `key` ("text", "font"; src/pc/text): entry `index`
+ * of a name or a list of them, each a string or {"file": ..., "setting": ...}
+ * with an optional "value". Returns 0 past the last entry, else 1 with `path`
+ * the file inside the mod, or empty when the entry is left out: its declared
+ * setting (as the mod was applied) is 0, or is not the entry's "value" when
+ * it has one; or it names no file in the mod (noted). A setting the mod does
+ * not declare is noted and the file used. `name` is the file as written. */
+int Mods_File(int mod, const char *key, int index, char *path, size_t size, const char **name);
 /* Say why a mod is not quite what it asked for: on stderr and beside it in
  * the Mods window. */
 void Mods_Note(const char *id, const char *format, ...);

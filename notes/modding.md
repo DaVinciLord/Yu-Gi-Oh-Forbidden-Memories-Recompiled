@@ -467,6 +467,18 @@ as an editable UTF-8 listing; the mod ships the translated file:
 letters the port draws and how a font is added. Like cards, a translation
 needs a restart.
 
+A `text` or `font` entry may be `{"file": "names.txt", "setting": "card_names"}`
+instead of a name, which lets the player switch that file off, as a pack
+entry's `setting` does (above): it is read only while the mod's declared
+setting of that key is not 0. With `"value": N` as well it is read only
+while the setting is exactly N, which gives each choice of a `choice`
+setting a file of its own ([Translations](translation.md) has an example).
+The text is built once, as the game starts,
+so a mod with `text` or `font` asks for a restart on its own, and so does a
+change to any of its settings (the setting may still say `"restart": true`,
+which shows "Requires a restart" beside it). A `setting` the mod does not
+declare is noted beside the mod and the file read.
+
 ## Code mods
 
 A code mod is **one object file**, `<library>.o`, that runs on both the
