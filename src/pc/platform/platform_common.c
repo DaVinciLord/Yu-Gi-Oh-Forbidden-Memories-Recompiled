@@ -82,6 +82,8 @@ static void deliver_vblank(void)
  * interrupts the game, as the console's VBlank would; the sampling profiler
  * (MEMORIES_PROFILE) samples from that timer, so it chooses it too. */
 static int cooperative;
+/* VBlanks the clock may still deliver, -1 for no limit (Platform_LimitVBlanks). */
+static volatile int vblank_budget = -1;
 
 static void advance(uint64_t real_now, uintptr_t eip)
 {
@@ -126,18 +128,21 @@ static void advance(uint64_t real_now, uintptr_t eip)
     if (rate == -1) virtual_now += elapsed;
     if (tick_handler) tick_handler(virtual_now, real_now);
     if (!next_vblank) next_vblank = virtual_now;
-    while (virtual_now >= next_vblank) {
+    while (virtual_now >= next_vblank && vblank_budget != 0) {
         next_vblank += vblank_period;
         if (virtual_now > next_vblank + 4 * vblank_period) next_vblank = virtual_now;
         deliver_vblank();
+        if (vblank_budget > 0) vblank_budget--;
     }
-    if (step_pending) {
+    if (step_pending && vblank_budget != 0) {
         step_pending = 0;
         deliver_vblank();
+        if (vblank_budget > 0) vblank_budget--;
     }
 }
 
 /* The cooperative clock's service point: the time now, and whatever it owes. */
+static int servicing; /* inside advance(): the handlers it runs are the game's interrupt code */
 static void service(void)
 {
     sigset_t set, previous;
@@ -145,7 +150,9 @@ static void service(void)
     sigemptyset(&set);
     sigaddset(&set, SIGALRM);
     sigprocmask(SIG_BLOCK, &set, &previous);
+    servicing++;
     advance(now_us(), (uintptr_t)__builtin_return_address(0));
+    servicing--;
     sigprocmask(SIG_SETMASK, &previous, NULL);
 }
 
@@ -424,9 +431,46 @@ void Platform_PollTime(void)
     sigprocmask(SIG_SETMASK, &previous, NULL);
 }
 
+/* DrawSync's service point (libgpu.c). The console takes its VBlank
+ * interrupts while the game computes and draws a frame, so when a frame runs
+ * past a VBlank, Graphics_SyncFrame's read of the game's VBlank counter
+ * (D_8009B0C8) already counts it: that frame gets D_8009B0D8 = 2, then
+ * VSync(0) returns at the next VBlank with the counter at 0. The cooperative
+ * clock took those VBlanks only at VSync(0)'s entry, after Graphics_SyncFrame
+ * had read the counter and set it to -1, so a slow frame left the counter at
+ * 1 or more when Input_UpdatePads ran. Input_UpdatePads takes that as a
+ * VBlank that came in after VSync and publishes the frame's newly pressed and
+ * repeat bits once more on the next frame: one tap of Down moved the title
+ * menu's cursor two places (every screen, every input device). Graphics_SyncFrame
+ * calls DrawSync(0) just before its read, after the frame's drawing is
+ * rasterized, so the VBlanks the frame overran are delivered here, where the
+ * console would have delivered them. */
+void Platform_ServiceClock(void)
+{
+    if (servicing) return; /* DrawSync from the game's own interrupt code */
+    service();
+}
+
+/* VSync(0) on the console returns at the first VBlank after its entry, with
+ * the game's VBlank callback run once; later ones interrupt the next frame,
+ * whose Graphics_SyncFrame counts them. A present or a host hiccup that runs
+ * past two VBlank periods inside VSync(0) had the clock deliver them all
+ * there, in one go, after Graphics_SyncFrame had set the game's counter to
+ * -1: Input_UpdatePads then found it at 1 or more, took the frame as late
+ * and published its presses twice (see Platform_ServiceClock). VSync(0)
+ * limits the clock to one VBlank until it returns; those still owed come at
+ * the next service point, normally the next frame's DrawSync. */
+void Platform_LimitVBlanks(int count)
+{
+    vblank_budget = count;
+}
+
 void Platform_WaitVBlank(unsigned count_at_entry)
 {
     struct timespec nap = {0, 500000};
+    /* Spent, and still no VBlank since the caller's count: a wait nested in
+     * VSync(0) after its VBlank, which the limit must not hold forever. */
+    if (vblank_budget == 0 && vblank_count == count_at_entry) vblank_budget = -1;
     while (vblank_count == count_at_entry && !Platform_ShouldQuit()) {
         if (rate == -1 && deterministic_dump) {
             sigset_t set, previous;

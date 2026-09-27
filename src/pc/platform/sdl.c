@@ -1835,11 +1835,18 @@ uint16_t Platform_Pad(int port)
                      : (uint16_t)(Gamepad_Bits(1) | scripted_bits2);
 }
 
+uint16_t Platform_PadFixedBits(int port)
+{
+    return port == 0 ? (uint16_t)((ControlsRuntime_Blocked()?0:(mouse_bits | wheel_now)) | scripted_bits) : scripted_bits2;
+}
+
 int Platform_PadConnected(int port) { return port == 0 || Gamepad_Connected(port) || Platform_ScriptedPad2(); }
 
 /* MEMORIES_SDL_SCRIPT="200:click:20:13,260:move:60:69,420:key:escape": events
  * pushed into SDL's queue at presented frames, for testing the menu without
  * a pointer (external synthetic X input does not reach SDL correctly).
+ * "key" presses and releases at once; "keydown" and "keyup" hold a key
+ * between two frames, so the game sees it ("600:keydown:s,606:keyup:s").
  * "300:shot" saves the composed window (menu included) like Shift+F12. */
 static void run_event_script(unsigned frame)
 {
@@ -1865,10 +1872,13 @@ static void run_event_script(unsigned frame)
         memset(&event, 0, sizeof(event));
         if (strcmp(kind, "shot") == 0) {
             Platform_Screenshot(1);
-        } else if (strcmp(kind, "key") == 0 || strcmp(kind, "down") == 0 || strcmp(kind, "up") == 0) {
-            /* "key" presses and releases in one go; "down" and "up" hold a
-             * key across frames, as the game only sees what is held when
-             * it reads the pad. */
+        } else if (strcmp(kind, "key") == 0 || strcmp(kind, "keydown") == 0 || strcmp(kind, "keyup") == 0 ||
+                   strcmp(kind, "down") == 0 || strcmp(kind, "up") == 0) {
+            /* "key" presses and releases in one go; "keydown"/"keyup" (or
+             * "down"/"up") hold a key across frames, as the game only sees
+             * what is held when it reads the pad. */
+            const int press = strcmp(kind, "keyup") != 0 && strcmp(kind, "up") != 0;
+            const int release = strcmp(kind, "keydown") != 0 && strcmp(kind, "down") != 0;
             const char *name = script + 1;
             n = strcspn(name, ",");
             event.type = SDL_EVENT_KEY_DOWN;
@@ -1893,13 +1903,15 @@ static void run_event_script(unsigned frame)
                           : strncmp(name, "period", n) == 0 ? SDLK_PERIOD
                           : strncmp(name, "kp_plus", n) == 0 ? SDLK_KP_PLUS
                           : strncmp(name, "kp_minus", n) == 0 ? SDLK_KP_MINUS
+                          : strncmp(name, "s", n) == 0 ? SDLK_S /* Circle */
+                          : strncmp(name, "x", n) == 0 ? SDLK_X /* Cross */
                           : SDLK_UNKNOWN;
             event.key.scancode = SDL_GetScancodeFromKey(event.key.key, NULL);
             event.key.windowID = SDL_GetWindowID(window);
-            if (strcmp(kind, "up") != 0) SDL_PushEvent(&event);
+            if (press) SDL_PushEvent(&event);
             event.type = SDL_EVENT_KEY_UP;
             event.key.down = false;
-            if (strcmp(kind, "down") != 0) SDL_PushEvent(&event);
+            if (release) SDL_PushEvent(&event);
             script = name + n;
         } else {
             x = (int)strtol(script + 1, &end, 10);

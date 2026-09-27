@@ -30,11 +30,29 @@ static const SettingInfo info[SET_COUNT] = {
     [SET_OPPONENT_NAME] = {"opponent_name", NULL, "MEMORIES_OPPONENT_NAME", NULL, 0, 0, 1},
     /* Cards a won duel deals; 1 is the console's (src/pc/cards/drops.h). */
     [SET_CARD_DROPS] = {"card_drops", NULL, "MEMORIES_CARD_DROPS", NULL, 1, 1, 99},
+    /* 1: the Library lays out every card never seen as a seen one, while it
+     * is open; nothing is given or saved (Cards_LibraryPlaceholder, cards.h). */
+    [SET_LIBRARY_ALL_CARDS] = {"library_all_cards", NULL, "MEMORIES_LIBRARY_ALL_CARDS", NULL, 0, 0, 1},
     /* Help > updates (update_check.h): look for a newer release at start
      * (on unless the player turns it off: it only tells, never installs)
      * and count pre-releases as newer. */
     [SET_UPDATE_CHECK] = {"check_for_updates", NULL, "MEMORIES_CHECK_FOR_UPDATES", NULL, 1, 0, 1},
     [SET_UPDATE_PRERELEASES] = {"update_prereleases", NULL, "MEMORIES_UPDATE_PRERELEASES", NULL, 0, 0, 1},
+    /* Game > Cheats (src/pc/debug/cheats.h): the life points both sides
+     * start a duel against the CPU with; 8000 is the console's. */
+    [SET_CHEAT_LIFE_POINTS] = {"cheat_life_points", NULL, "MEMORIES_CHEAT_LIFE_POINTS", NULL, 8000, 1, 9999},
+    /* 1: the CPU's hand drawn face up, as the player's is. */
+    [SET_CHEAT_SHOW_HAND] = {"cheat_show_hand", NULL, "MEMORIES_CHEAT_SHOW_HAND", NULL, 0, 0, 1},
+    /* 1: the Password screen's purchases leave the StarChips alone. */
+    [SET_CHEAT_FREE_SPENDING] = {"cheat_free_spending", NULL, "MEMORIES_CHEAT_FREE_SPENDING", NULL, 0, 0, 1},
+    /* View > Card passwords: the card's eight-digit password in the card
+     * viewer (src/pc/cards/passwords.h). */
+    [SET_CARD_PASSWORDS] = {"card_passwords", NULL, "MEMORIES_CARD_PASSWORDS", NULL, 0, 0, 1},
+    /* 1: the Japanese release's buttons, Circle confirms and Cross cancels
+     * (src/pc/platform/button_layout.h). */
+    [SET_JP_BUTTONS] = {"jp_buttons", NULL, "MEMORIES_JP_BUTTONS", NULL, 0, 0, 1},
+    /* 1: Up and Down in the card viewer show the list's next card (src/pc/cards/card_browse.h). */
+    [SET_CARD_BROWSE] = {"card_browse", NULL, "MEMORIES_CARD_BROWSE", NULL, 0, 0, 1},
     [SET_MASTER_VOLUME] = {"master_volume", "volume", "MEMORIES_MASTER_VOLUME", "MEMORIES_VOLUME", 100, 0, 100},
     [SET_MUSIC_VOLUME] = {"music_volume", NULL, "MEMORIES_MUSIC_VOLUME", NULL, 100, 0, 100},
     [SET_SFX_VOLUME] = {"sfx_volume", NULL, "MEMORIES_SFX_VOLUME", NULL, 100, 0, 100},

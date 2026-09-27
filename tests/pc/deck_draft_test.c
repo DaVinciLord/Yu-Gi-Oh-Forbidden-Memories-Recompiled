@@ -13,7 +13,9 @@ u32 D_801D9000[1];
 s32 gDuel_adwCardStats[1];
 unsigned Memories_PresentedFrames(void) { return 0; }
 int SaveMenu_Active(void) { return 0; }
-uint16_t Platform_Pad(int port) { (void)port; return 0; }
+static uint16_t pad, pad_fixed;
+uint16_t Platform_Pad(int port) { (void)port; return pad; }
+uint16_t Platform_PadFixedBits(int port) { (void)port; return pad_fixed; }
 void SD_SEPlayFull(u32 id) { (void)id; }
 void Menu_SetItemEnabled(int id, int enabled) { (void)id; (void)enabled; }
 int Menu_Scale(void) { return 1; }
@@ -33,10 +35,10 @@ int DeckSlots_Check(const unsigned short *current, const DeckSlot *want, DeckTru
 void DeckSlots_Use(unsigned short *current, const DeckSlot *want, DeckTrunkFn trunk, void *context)
 { (void)current; (void)want; (void)trunk; (void)context; assert(0); }
 
-static int enabled = 1, writes;
+static int enabled = 1, jp_buttons, writes;
 static unsigned saves, loads;
 static DeckSlot disk[DECK_SLOT_COUNT];
-int Settings_Get(SettingId id) { assert(id == SET_DECK_SLOTS); return enabled; }
+int Settings_Get(SettingId id) { assert(id == SET_DECK_SLOTS || id == SET_JP_BUTTONS); return id == SET_DECK_SLOTS ? enabled : jp_buttons; }
 unsigned SaveMenu_SaveCount(void) { return saves; }
 unsigned SaveMenu_LoadCount(void) { return loads; }
 int Cards_FindIdentity(const char *name) { (void)name; return 0; }
@@ -137,5 +139,18 @@ int main(void)
         DeckMenu_Poll(DECK_MENU_MAIN_LOOP); assert(!list_after_build_deck);
         list_after_build_deck = 1; DeckMenu_State(&snapshot); assert(!list_after_build_deck);
     }
+    /* Game > Japanese buttons: the slots take the exchanged pad, so the
+     * controller's Circle picks (the game's Cross) and its Cross backs out;
+     * fixed bits (scripted input, the mouse) keep their meaning. */
+    pad = 0x2000;
+    assert(pad_bits() == 0x2000);
+    jp_buttons = 1;
+    assert(pad_bits() == 0x4000);
+    pad = 0x4000;
+    assert(pad_bits() == 0x2000);
+    pad_fixed = 0x4000;
+    assert(pad_bits() == 0x4000);
+    jp_buttons = 0;
+    pad = pad_fixed = 0;
     return 0;
 }

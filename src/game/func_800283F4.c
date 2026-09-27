@@ -41,6 +41,9 @@
 #define D_8009B26C_AS_SCALAR_DATA
 #include "../unmatched.h"
 #include "main_mode_state.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/card_browse.h"
+#endif
 
 #define DISPLAY_OBJECT_POSITION_VIEW(object) \
     ((DisplayObjectPosition *)(object))
@@ -234,6 +237,12 @@ void DuelEffect_UpdateCardViewerState(void)
         return;
     }
 
+#ifdef MEMORIES_PC
+    /* Up and Down show the list's next card in place (card_browse.h). */
+    if (CardBrowse_Poll()) {
+        return;
+    }
+#endif
     if ((D_8009B26C & 0x1F) == 0xE) {
         if (((gInput_wPad1Pressed | gInput_wPad2Pressed) & 0x20) != 0) {
             goto press;

@@ -28,6 +28,9 @@
 #include "dialog_choice_ref.h"
 #include "../../game/func_800291E0.h"
 #include "../../game/func_80029574.h"
+#ifdef MEMORIES_PC
+#include "pc/debug/cheats.h"
+#endif
 #include "../../game/duel_effect_resource_setup.h"
 #include "../../game/text_box_lifecycle.h"
 #include "../../game/save_data.h"
@@ -444,6 +447,10 @@ void Password_UpdateShopScreen(void)
         }
         pool = (SaveDataWorkspace *)D_801D0000;
         D_8016D438 -= step;
+#ifdef MEMORIES_PC
+        /* Game > Cheats > Free spending: the count runs, the balance stays. */
+        if (!Cheats_FreeSpending())
+#endif
         pool->state.starchips -= step;
         if (D_8016D438 == 0) {
             D_8016D424 = 4;

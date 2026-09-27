@@ -834,6 +834,11 @@ uint16_t Platform_Pad(int port)
                      : (uint16_t)(Gamepad_Bits(1) | scripted_bits2);
 }
 
+uint16_t Platform_PadFixedBits(int port)
+{
+    return port == 0 ? (uint16_t)((ControlsRuntime_Blocked()?0:(mouse_bits | wheel_now)) | scripted_bits) : scripted_bits2;
+}
+
 int Platform_PadConnected(int port) { return port == 0 || Gamepad_Connected(port) || Platform_ScriptedPad2(); }
 
 void Platform_Frame(unsigned frame)

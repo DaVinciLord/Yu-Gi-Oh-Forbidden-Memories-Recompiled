@@ -82,7 +82,7 @@ enum {
     ACT_MODS, ACT_CONTROLS, ACT_RELOAD_SETTINGS, ACT_PAUSE, ACT_FRAME_STEP, ACT_DUMP_FRAME, ACT_DUMP_VRAM,
     SLIDER_MASTER, SLIDER_MUSIC, SLIDER_SFX, CHECK_MUTE,
     CHECK_HUD, CHECK_HUD_FULL, RADIO_STATE_SLOT, ACT_UNLOCK_FREE_DUELISTS, ACT_RESET_COLOR,
-    ACT_CHECK_UPDATES, ACT_RELEASES, ACT_VERSION,
+    ACT_CHECK_UPDATES, ACT_RELEASES, ACT_VERSION, ACT_SET_STARCHIPS,
     CHECK_TRACE = 300  /* value is a LogChannel */
 };
 
@@ -142,8 +142,13 @@ static Menu menus[MENU_COUNT] = {
               {"Card drops", 0, ITEM_SLIDER, 0, SET_CARD_DROPS, 1},
               {"Deck slots...", "F6", ITEM_ACTION, MENU_ITEM_DECKS, -1, 0, ITEM_GROUP_BREAK | ITEM_DISABLED},
               {"Use deck slots", 0, ITEM_CHECK, 0, SET_DECK_SLOTS},
-              {"Cheats", 0, ITEM_SUBMENU, 0, -1, SUB_CHEATS, ITEM_GROUP_BREAK}}, 9},
-    {"View", {{"Fusion helper", 0, ITEM_CHECK, 0, SET_FUSION_HELPER}}, 1},
+              {"Japanese buttons (Circle confirms)", 0, ITEM_CHECK, 0, SET_JP_BUTTONS, 0, ITEM_GROUP_BREAK},
+              {"Browse cards with Up/Down", 0, ITEM_CHECK, 0, SET_CARD_BROWSE},
+              {"Cheats", 0, ITEM_SUBMENU, 0, -1, SUB_CHEATS, ITEM_GROUP_BREAK},
+              {"Restart game...", 0, ITEM_ACTION, MENU_ITEM_RESTART, -1, 0, ITEM_GROUP_BREAK | ITEM_DISABLED}}, 12},
+    {"View", {{"Fusion helper", 0, ITEM_CHECK, 0, SET_FUSION_HELPER},
+              {"Card passwords", 0, ITEM_CHECK, 0, SET_CARD_PASSWORDS},
+              {"Library: show every card", 0, ITEM_CHECK, 0, SET_LIBRARY_ALL_CARDS}}, 3},
     {"Debug", {{"Jump to", 0, ITEM_SUBMENU, 0, -1, SUB_JUMP},
                {"Show HUD", "F3", ITEM_CHECK, CHECK_HUD, -1, 0, ITEM_GROUP_BREAK},
                {"Full stats", 0, ITEM_CHECK, CHECK_HUD_FULL, -1},
@@ -186,8 +191,18 @@ static Menu submenus[SUB_COUNT] = {
                     {"144", 0, ITEM_RADIO, 0, SET_FPS, 144},
                     {"240", 0, ITEM_RADIO, 0, SET_FPS, 240},
                     {"Every game frame", 0, ITEM_RADIO, 0, SET_FPS, -1}}, 7},
-    {"Cheats", {{"Give 3 of every card", 0, ITEM_ACTION, ACT_GIVE_CARDS, -1},
-                {"Unlock all Free Duel CPU duelists", 0, ITEM_ACTION, ACT_UNLOCK_FREE_DUELISTS, -1}}, 2},
+    /* Give N: the row's value is the copies of every card (cheats.h). */
+    {"Cheats", {{"Give 1 of every card", 0, ITEM_ACTION, ACT_GIVE_CARDS, -1, 1},
+                {"Give 2 of every card", 0, ITEM_ACTION, ACT_GIVE_CARDS, -1, 2},
+                {"Give 3 of every card", 0, ITEM_ACTION, ACT_GIVE_CARDS, -1, 3},
+                {"Unlock all Free Duel CPU duelists", 0, ITEM_ACTION, ACT_UNLOCK_FREE_DUELISTS, -1, 0, ITEM_GROUP_BREAK},
+                {"Set StarChips to 999999", 0, ITEM_ACTION, ACT_SET_STARCHIPS, -1, 999999, ITEM_GROUP_BREAK},
+                {"Free spending (Password)", 0, ITEM_CHECK, 0, SET_CHEAT_FREE_SPENDING},
+                {"Starting LP 1000", 0, ITEM_RADIO, 0, SET_CHEAT_LIFE_POINTS, 1000, ITEM_GROUP_BREAK},
+                {"Starting LP 4000", 0, ITEM_RADIO, 0, SET_CHEAT_LIFE_POINTS, 4000},
+                {"Starting LP 8000 (console)", 0, ITEM_RADIO, 0, SET_CHEAT_LIFE_POINTS, 8000},
+                {"Starting LP 9999", 0, ITEM_RADIO, 0, SET_CHEAT_LIFE_POINTS, 9999},
+                {"Show CPU's hand", 0, ITEM_CHECK, 0, SET_CHEAT_SHOW_HAND, 0, ITEM_GROUP_BREAK}}, 11},
     {"Trace", {{"Frames", 0, ITEM_CHECK, CHECK_TRACE, -1, LOG_FRAMES},
                {"Disc", 0, ITEM_CHECK, CHECK_TRACE, -1, LOG_DISC},
                {"SPU", 0, ITEM_CHECK, CHECK_TRACE, -1, LOG_SPU},
@@ -1222,6 +1237,16 @@ static void open_submenu(int index)
 static int active_level(void) { return open_sub >= 0 ? 1 : 0; }
 static int *active_hot(void) { return open_sub >= 0 ? &hot_sub : &hot_item; }
 
+/* The cheats that change the save refuse before a game is loaded. */
+static void need_save(int done)
+{
+    static const char *const ok[] = {"OK"};
+    if (!done) {
+        Menu_ShowNotice("Load a save first", "This cheat changes the game in progress. "
+                        "Start a new game or load a save, then choose it again.", ok, 1, 0, NULL);
+    }
+}
+
 static void activate(const Item *item, int *quit)
 {
     if (item->flags & ITEM_DISABLED) return;
@@ -1232,8 +1257,9 @@ static void activate(const Item *item, int *quit)
     case ACT_LOAD_STATE: Memories_StateRequest(2, Platform_StateSlot()); break;
     case ACT_SCREENSHOT: Platform_Screenshot(0); break;
     case ACT_EXIT: *quit = 1; break;
-    case ACT_GIVE_CARDS: Cheats_GiveAllCards(3); break;
-    case ACT_UNLOCK_FREE_DUELISTS: Cheats_UnlockAllFreeDuelists(); break;
+    case ACT_GIVE_CARDS: need_save(Cheats_GiveAllCards(item->value, 1)); break;
+    case ACT_UNLOCK_FREE_DUELISTS: need_save(Cheats_UnlockAllFreeDuelists()); break;
+    case ACT_SET_STARCHIPS: need_save(Cheats_SetStarchips((unsigned)item->value)); break;
     case ACT_RESET_COLOR:
         Settings_Set(SET_BRIGHTNESS, 100);
         Settings_Set(SET_CONTRAST, 100);
@@ -1244,6 +1270,7 @@ static void activate(const Item *item, int *quit)
     case ACT_CHECK_UPDATES: Update_CheckNow(); break;
     case ACT_RELEASES: Update_OpenReleases(); break;
     case MENU_ITEM_TITLE: TitleJump_Request(); break;
+    case MENU_ITEM_RESTART: TitleJump_Confirm(); break;
     case MENU_ITEM_DECKS: DeckMenu_Request(); break;
     case ACT_RELOAD_SETTINGS:
         Menu_LoadSettings();

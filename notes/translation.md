@@ -77,9 +77,21 @@ wind of your activities...
   the next line. Card `n`'s name is `8000 + n` and its text `D100 + n`
   (`[8001]` and `[D101]` are Blue-eyes White Dragon's); the descriptions
   carry the card's name as a comment.
-* A line break is a line break in the game's text box. The text box does
-  not wrap by itself: break the lines where they fit. Card texts have
-  lines of 20 letters and room for 8 lines.
+* A line break is a line break in the game's text box. Break the lines
+  where they fit: a line wider than its box goes on at the start of the
+  next row, which pushes the rest of the text down a row. Card texts have
+  lines of 20 letters and room for 8 lines. A letter is 8 pixels wide, so
+  a box has as many columns as its width in pixels over 8, and the width is
+  the box's, not the string's: `[0021]`, the guardian star choice, has 22
+  columns, and `[0022]`, the two-player duel's quit box, 10.
+* In a menu with choices (`{choice ...}` then `{choose ...}`) that row is
+  worse: when it pushes the choices past the bottom of the box, the console
+  stops for good, with no frame after (the menu is laid out in one go and
+  waits for a button nothing reads). The port cuts that line at the box's
+  edge instead, and says so in `MEMORIES_TRACE=mods`; a menu that fits is
+  drawn as the console draws it. Keep menu lines within their box. A line
+  break of your own in a menu does not stop the game, but it counts as one
+  of the choices' lines, so the last choice is lost.
 * A text box has room for so many letters at once: 254 in the dialogue
   box and some menus, 159 in most menus. What is past that on a page is
   left out, and a page with more than 254 is reported. A menu writes its
@@ -170,7 +182,11 @@ channels). The console's text always fits; the port's
 full, rather than writing into the next channel's (or past the table), and
 `func_80039A14`/`func_80039A60`, which build a menu's text in one go, stop
 at a page that waits for a button (state 4) instead of looping forever.
-The Library's heading (string `F8`, "<seen/722>") is rewritten for the
+A menu with choices has the same loop in `func_80039794`, which steps the
+text unbounded while `flags_34 & 0x1000` (the choices' layout) is up; there
+`TextBox_BuildStep` drops a letter past the box's right edge when its wrap
+would leave the choices' last line below the box, the one case that ends
+in state 4 inside that loop (`Text_CutsMenuGlyph`). The Library's heading (string `F8`, "<seen/722>") is rewritten for the
 number of cards there are, by its id, whether the text is the disc's or a
 translation's (`Cards_Text`).
 
