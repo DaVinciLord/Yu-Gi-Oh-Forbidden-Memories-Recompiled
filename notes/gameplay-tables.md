@@ -206,7 +206,8 @@ is: a copy a mod added is not traded for its base, nor a retail card for one
 of its copies.
 
 A fixed deck that does not come to 40 cards, or names a card the game does
-not have, is reported and left out. The latest fixed deck of an opponent
+not have, is reported and left out, and so is a deck whose `"fixed"` is not
+`true` or `false` (`"fixed": "true"`, in quotes). The latest fixed deck of an opponent
 wins, and a fixed deck wins over weighted edits of the same deck from any
 mod, which are reported as left out the first time the deck is dealt.
 `"all"` fixes every opponent's deck. `MEMORIES_TRACE=mods` logs each fixed

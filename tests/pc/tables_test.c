@@ -235,6 +235,15 @@ int main(void)
         add("h", "{\"decks\": {\"Pegasus\": {\"fixed\": true, \"Kuriboh\": 20, \"Thunder Dragon\": 20}}}");
         assert(Tables_FixedDeck(15, deck) && deck[0] == 10 && deck[19] == 10 && deck[20] == 11 && deck[39] == 11);
         assert(Tables_FixedDeck(14, deck) && deck[0] == 11);
+        /* "fixed" in quotes is neither kind of deck, and is told so. */
+        notes = 0;
+        add("h2", "{\"decks\": {\"Teana\": {\"fixed\": \"true\", \"Kuriboh\": 40}}}");
+        assert(notes == 1 && Tables_FixedDeck(2, deck) && deck[0] == 11);
+        /* Told a fixed deck wins, a weighted edit is still told it fails. */
+        add("h3", "{\"decks\": {\"Pegasus\": {\"replace\": true, \"10\": 5, \"11\": 5}}}");
+        notes = 0;
+        assert(Tables_FixedDeck(15, deck) && notes == 1);
+        assert(Tables_PoolFor(15, TABLES_POOL_DECK, retail) && notes == 2);
     }
 
     /* The chest: without the rule it keeps 250 and a card past that is lost,

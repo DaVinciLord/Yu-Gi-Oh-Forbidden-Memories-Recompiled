@@ -144,7 +144,8 @@ typedef struct {
 
 typedef struct {
     const char *mod;
-    unsigned char duelist, pool, replace, warned;
+    unsigned char duelist, pool, replace;
+    unsigned char warned, waiting;   /* told it failed; told a fixed deck wins */
     int count;
     unsigned short *cards, *weights;
 } PoolEdit;
@@ -745,8 +746,8 @@ int Tables_FixedDeck(int duelist, unsigned short cards[TABLES_DECK_SIZE])
     for (i = 0; i < edit_count; i++) {
         /* A fixed deck is the whole deck: the weighted edits of it wait. */
         PoolEdit *edit = &edits[i];
-        if (edit->duelist != duelist || edit->pool != TABLES_POOL_DECK || edit->warned) continue;
-        edit->warned = 1;
+        if (edit->duelist != duelist || edit->pool != TABLES_POOL_DECK || edit->waiting) continue;
+        edit->waiting = 1;
         Mods_Note(edit->mod, "%s's deck: left as it is; %s fixes it", Tables_DuelistNames[duelist], deck->mod);
     }
     memcpy(cards, deck->cards, sizeof(deck->cards));
@@ -782,8 +783,14 @@ static void read_pools(const char *mod, const JsonValue *table, int decks)
             continue;
         }
         if (decks) {
+            const JsonValue *fixed = Json_Member(entry, "fixed");
             snprintf(where, sizeof(where), "decks \"%s\"", name);
-            if (Json_Bool(Json_Member(entry, "fixed"), 0)) read_fixed_deck(mod, where, duelist, entry);
+            if (fixed && Json_TypeOf(fixed) != JSON_BOOL && Json_TypeOf(fixed) != JSON_NUMBER) {
+                /* "true" in quotes: neither deck is what the mod meant. */
+                Mods_Note(mod, "%s: \"fixed\" is true or false, without quotes; left out", where);
+                continue;
+            }
+            if (Json_Bool(fixed, 0)) read_fixed_deck(mod, where, duelist, entry);
             else read_pool(mod, where, duelist, TABLES_POOL_DECK, entry);
             continue;
         }
