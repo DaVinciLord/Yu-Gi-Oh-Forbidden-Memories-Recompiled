@@ -9,6 +9,7 @@ textures, audio, library, requires...) is kept as it was written.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from pathlib import Path
 
@@ -63,6 +64,9 @@ def build_cards(project: Project) -> list:
     for cid in sorted(project.retail.cards):
         card, retail = project.cards[cid], project.retail.cards[cid]
         fields = _card_fields(card, retail)
+        for name, value in project.text_cards.get(cid, {}).items():
+            if fields.get(name) == value:
+                del fields[name]        # the mod's text file carries it, codes and all
         extra = project.card_extra.get(cid, {})
         if fields or extra:
             entry = {"replace": cid}
@@ -312,6 +316,85 @@ def dumps(manifest: dict) -> str:
     """JSON laid out as the example mods are: four spaces, and each rule or
     card entry on a line of its own when it fits."""
     return _format(manifest, 0) + "\n"
+
+
+# --- the card texts a text listing carries ---------------------------------------
+
+ITEM_START = re.compile(r"^(\[[0-9A-Fa-f ]+\]|\{:L[0-9A-Fa-f]{4}\})")
+
+
+def listing_items(listing: str) -> dict:
+    """{bank: {item key: text}} of a text listing (tools/pc/text_listing.py),
+    comments left out; an item's text starts with its key line."""
+    banks, bank, key = {}, None, None
+    for line in listing.split("\n"):
+        if line.startswith("@bank "):
+            bank, key = line.split()[1], None
+            banks.setdefault(bank, {})
+            continue
+        if bank is None:
+            continue
+        match = ITEM_START.match(line)
+        if match:
+            key = match.group(1)
+            banks[bank][key] = [line.split("#")[0].rstrip() if line.startswith("[") else line]
+            continue
+        if key is not None:
+            banks[bank][key].append(line)
+    for items in banks.values():
+        for lines in items.values():
+            while len(lines) > 1 and (not lines[-1].strip() or lines[-1].startswith("#")):
+                lines.pop()             # the comments and blank lines before the next item
+    return {b: {k: "\n".join(v) for k, v in items.items()} for b, items in banks.items()}
+
+
+def item_ids(key: str) -> list:
+    return [int(i, 16) for i in key[1:-1].split()] if key.startswith("[") else []
+
+
+def listing_plain(item: str) -> str:
+    """An item's text as the editor shows it: the key line and the end
+    left out, line breaks as lines; colour and icon codes kept as spelled."""
+    body = item.split("\n", 1)[1] if "\n" in item else ""
+    for code in ("{end}", "{cont}"):
+        body = body.replace(code, "")
+    return body.replace("{nl}", "\n").replace("{sp}", " ").strip("\n")
+
+
+def plain_name(text: str) -> str:
+    return re.sub(r"\{[^{}]*\}", "", listing_plain(text)).strip()
+
+
+def card_texts(listing: str) -> dict:
+    """{(card id, "name" or "description"): text as the editor shows it} for
+    the card names and texts a listing carries."""
+    out = {}
+    items = listing_items(listing)
+    for bank, first, field, plain in (("names", 0x8000, "name", plain_name),
+                                      ("descriptions", 0xD100, "description", listing_plain)):
+        for key, item in items.get(bank, {}).items():
+            for i in item_ids(key):
+                if 1 <= i - first <= CARD_COUNT:
+                    out[(i - first, field)] = plain(item)
+    return out
+
+
+def read_text_cards(project: Project, folder: Path, messages: list):
+    """Cards whose name or text the mod's "text" file carries (an imported
+    mod's coloured names, texts with codes, texts empty on purpose): shown
+    in the editor, and left to the file while unchanged."""
+    name = project.other.get("text")
+    if not isinstance(name, str) or not (folder / name).is_file():
+        return
+    try:
+        listing = (folder / name).read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError) as problem:
+        messages.append(f"{name}: not read ({problem})")
+        return
+    for (cid, field), value in card_texts(listing).items():
+        if getattr(project.cards[cid], field) == getattr(project.retail.cards[cid], field):   # cards[] says nothing
+            setattr(project.cards[cid], field, value)
+            project.text_cards.setdefault(cid, {})[field] = value
 
 
 # --- reading ----------------------------------------------------------------
@@ -723,6 +806,7 @@ def open_mod(retail: GameData, folder) -> tuple:
     folder = Path(folder)
     project = Project(retail)
     messages = apply(project, read_json(folder / "mod.json"), default_id=folder.name)
+    read_text_cards(project, folder, messages)
     project.source_dir = folder
     return project, messages
 

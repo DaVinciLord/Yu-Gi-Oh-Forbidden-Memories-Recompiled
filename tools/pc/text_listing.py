@@ -339,9 +339,12 @@ def card_names(image: Image, glyphs: dict[int, str]) -> dict[int, str]:
     return names
 
 
-def write_listing(image: Image) -> str:
+def write_listing(image: Image, bank_list: list[Bank] | None = None, names: dict[int, str] | None = None) -> str:
+    """The listing of `bank_list` (every bank of the image when None), with
+    `names` (card id -> name) in the descriptions' comments."""
     glyphs = glyph_characters(image)
-    names = card_names(image, glyphs)
+    if names is None:
+        names = card_names(image, glyphs)
     out = [
         "# Yu-Gi-Oh! Forbidden Memories text listing (notes/translation.md).",
         "# [ID] starts a string; its text runs to {end}. A line break in the text",
@@ -349,7 +352,7 @@ def write_listing(image: Image) -> str:
         "# codes: keep them, move them with the words they belong to.",
         "",
     ]
-    for bank in banks(image):
+    for bank in banks(image) if bank_list is None else bank_list:
         ops, targets = decode_bank(image, bank, glyphs)
         starts: dict[int, list[int]] = {}
         for string_id, offset in sorted(bank.ids.items()):

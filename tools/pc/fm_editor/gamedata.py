@@ -148,25 +148,92 @@ def decode_text(image, address: int, glyphs: dict, limit: int = 1024) -> str:
         elif code <= 0xF5:
             out.append("{g %X}" % (((code - 0xF0) << 8) | image.bytes(at + 1, 1)[0]))
             at += 2
+        elif code == 0xF8 and image.bytes(at + 1, 1) and image.bytes(at + 1, 1)[0] in (0x0A, 0x0B):
+            out.append("{f8 %02X %02X}" % tuple(image.bytes(at + 1, 2)))      # a colour or an icon, as the listing
+            at += 3
         else:
             out.append("{%02X}" % code)
             at += 1
     return "".join(out)
 
 
-def read_cards(slus: bytes) -> dict:
+def plain_names(image, glyphs: dict) -> dict:
+    """Card names as text: a colour or icon code (F8 0A NN, F8 0B NN) at
+    the start or inside, as community mods write them, is skipped."""
+    names = {}
+    for cid in range(1, CARD_COUNT + 1):
+        at = NAME_BANK + image.u16(NAME_TABLE + cid * 2)
+        text = ""
+        while len(text) < 64:
+            code = image.bytes(at, 1)[0]
+            if code == 0xF8:
+                at += 3 if image.bytes(at + 1, 1)[0] in (0x0A, 0x0B) else 2
+                continue
+            if code >= 0xF0:
+                break
+            text += glyphs.get(code, "?")
+            at += 1
+        names[cid] = text
+    return names
+
+
+def text_bytes(image, address: int, limit: int = 1024) -> bytes:
+    """A string's bytes, through its 0xFF."""
+    data = image.bytes(address, limit)
+    end = data.find(b"\xFF")
+    return data[:end + 1] if end >= 0 else data
+
+
+# Card texts kept past the retail end of WA_MRG.MRG, 256 bytes a card (the
+# patch kit's mods): the executable's string table then points descriptions
+# 1-8 at eight slots of 0x100 the mod loads a sector into.
+WA_TEXT_BASE, WA_TEXT_SLOT = 0x2400000, 0x100
+
+
+def wa_descriptions(slus: bytes, wa: bytes) -> bool:
+    image = _image(slus)
+    return len(wa) >= WA_TEXT_BASE + CARD_COUNT * WA_TEXT_SLOT and \
+        all(image.u16(STRING_TABLE + (0x101 + k) * 2) == 0xA00 + 0x100 * k for k in range(8))
+
+
+def description_bytes(slus: bytes, wa: bytes = b"") -> dict:
+    """{card id: its description's bytes}, from the executable's bank or,
+    when the mod keeps them there, from WA_MRG.MRG."""
+    if wa and wa_descriptions(slus, wa):
+        out = {}
+        for cid in range(1, CARD_COUNT + 1):
+            slot = wa[WA_TEXT_BASE + (cid - 1) * WA_TEXT_SLOT:WA_TEXT_BASE + cid * WA_TEXT_SLOT]
+            end = slot.find(b"\xFF")
+            out[cid] = slot[:end + 1] if end >= 0 else slot + b"\xFF"
+        return out
+    image = _image(slus)
+    return {cid: text_bytes(image, DESCRIPTION_BANK + image.u16(STRING_TABLE + (0x100 + cid) * 2))
+            for cid in range(1, CARD_COUNT + 1)}
+
+
+class _Bytes:
+    """A string's bytes where decode_text looks for them."""
+
+    def __init__(self, data: bytes):
+        self.data = data
+
+    def bytes(self, address: int, count: int) -> bytes:
+        return self.data[address:address + count]
+
+
+def read_cards(slus: bytes, wa: bytes = b"") -> dict:
     image = _image(slus)
     glyphs = _tl.glyph_characters(image)
-    names = _tl.card_names(image, glyphs)
+    names = plain_names(image, glyphs)
+    texts = description_bytes(slus, wa)
     cards = {}
     for cid in range(1, CARD_COUNT + 1):
         stats = image.u32(STATS_ADDRESS + (cid - 1) * 4)
         level_attr = image.bytes(LEVEL_ATTR_ADDRESS + cid, 1)[0]
-        text_at = DESCRIPTION_BANK + image.u16(STRING_TABLE + (0x100 + cid) * 2)
         cards[cid] = Card(
             id=cid,
             name=names.get(cid, ""),
-            description=decode_text(image, text_at, glyphs),
+            description=decode_text(_Bytes(texts[cid]), 0, glyphs, len(texts[cid])),
             attack=(stats & 0x1FF) * 10,
             defense=((stats >> 9) & 0x1FF) * 10,
             star2=(stats >> 18) & 0xF,
@@ -274,7 +341,7 @@ def read_archive(wa: bytes, data: GameData):
 
 
 def read_game(slus: bytes, wa: bytes) -> GameData:
-    data = GameData(cards=read_cards(slus))
+    data = GameData(cards=read_cards(slus, wa))
     read_archive(wa, data)
     return data
 

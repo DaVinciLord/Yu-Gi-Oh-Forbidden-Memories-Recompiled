@@ -153,5 +153,87 @@ class EquipTest(unittest.TestCase):
         self.assertIn("the rituals were imported as removed", report)
 
 
+def put_text(slus: bytearray, table_entry: int, bank: int, address: int, data: bytes):
+    """A string's bytes at `address`, and the u16 offset entry pointing at it."""
+    fixtures.put(slus, address, data)
+    struct.pack_into("<H", slus, g.slus_offset(table_entry), address - bank)
+
+
+class TextTest(unittest.TestCase):
+    def test_coloured_names_and_empty_texts_go_to_the_text_file(self):
+        f = fixture()
+        codes = fixtures.glyph_codes()
+        slus = bytearray(f.slus)
+        put_text(slus, g.NAME_TABLE + 6 * 2, g.NAME_BANK, 0x801DF000,
+                 b"\xF8\x0A\x05" + fixtures.encode_text("Dark Card", codes))           # a coloured name
+        put_text(slus, g.NAME_TABLE + 9 * 2, g.NAME_BANK, 0x801DF100, fixtures.encode_text("Plain New", codes))
+        put_text(slus, g.STRING_TABLE + (0x100 + 7) * 2, g.DESCRIPTION_BANK, 0x801CF000, b"\xFF")   # empty
+        put_text(slus, g.STRING_TABLE + (0x100 + 8) * 2, g.DESCRIPTION_BANK, 0x801CF010,
+                 b"\xF8\x0A\x05" + fixtures.encode_text("Effect", codes)[:-1] + b"\xF8\x0A\x00\xFE" +
+                 fixtures.encode_text("Burns", codes))
+        result, report = imported(f, slus=bytes(slus))
+        project = result.project
+        self.assertEqual(project.cards[6].name, "Dark Card")
+        self.assertEqual(project.cards[7].description, "")
+        self.assertEqual(project.cards[8].description, "{f8 0A 05}Effect{f8 0A 00}\nBurns")
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "family"
+            importer.save(result, folder)
+            built = manifest.read_json(folder / "mod.json")
+            entries = {e["replace"]: e for e in built["cards"]}
+            self.assertNotIn(6, entries)                                  # the text file has it, colour and all
+            self.assertEqual(entries[9], {"replace": 9, "name": "Plain New"})
+            self.assertNotIn(7, entries)
+            self.assertNotIn(8, entries)
+            text = (folder / "text.txt").read_text(encoding="utf-8")
+            self.assertIn("[8006]\n{f8 0A 05}Dark Card{end}", text)
+            self.assertIn("[D107]", text)
+            self.assertIn("{f8 0A 05}Effect{f8 0A 00}", text)
+            self.assertNotIn("Plain New", text)
+            # Opened again, the editor shows them and writes the same mod.json.
+            opened, messages = manifest.open_mod(f.game(), folder)
+            self.assertEqual(opened.cards[6].name, "Dark Card")
+            self.assertEqual(opened.cards[8].description, project.cards[8].description)
+            self.assertEqual(manifest.build(opened)["cards"], built["cards"])
+            opened.cards[6].name = "Darker Card"                          # an edit goes to cards[] again
+            self.assertIn({"replace": 6, "name": "Darker Card"}, manifest.build(opened)["cards"])
+        self.assertIn("carry colour or icon codes or are empty on purpose (1 empty)", report)
+
+    def test_the_name_entry_strings_stay_retail(self):
+        f = fixture()
+        codes = fixtures.glyph_codes()
+        slus = bytearray(f.slus)
+        dialog = 0x801B0000
+        put_text(slus, g.STRING_TABLE + 0x10 * 2, dialog, dialog + 0x100, fixtures.encode_text("Hello", codes))
+        put_text(slus, g.STRING_TABLE + 0xF5 * 2, dialog, dialog + 0x200, fixtures.encode_text("Pick a deck", codes))
+        result, report = imported(f, slus=bytes(slus))
+        text = result.project.files["text.txt"].decode("utf-8")
+        self.assertIn("[0010]\nHello{end}", text)
+        self.assertNotIn("Pick a deck", text)
+        self.assertIn("the name entry's strings [00F5] stay retail's", report)
+
+    def test_texts_kept_in_the_archive(self):
+        """Texts kept in the archive: the string table points descriptions 1-8
+        at slots of 0x100 and the texts are past the archive's retail end."""
+        f = fixture()
+        codes = fixtures.glyph_codes()
+        slus = bytearray(f.slus)
+        for k in range(8):
+            struct.pack_into("<H", slus, g.slus_offset(g.STRING_TABLE + (0x101 + k) * 2), 0xA00 + 0x100 * k)
+        fixtures.put(slus, 0x801C0A00, bytes(range(0x20, 0x40)) * 8)   # what the mod keeps there instead: code
+        wa = bytearray(f.wa).ljust(g.WA_TEXT_BASE, b"\0")
+        for cid in range(1, g.CARD_COUNT + 1):
+            text = fixtures.encode_text(f"Kept {cid}", codes) if cid != 9 else \
+                b"\xF8\x0A\x05" + fixtures.encode_text("Union", codes)
+            wa += text.ljust(g.WA_TEXT_SLOT, b"\0")
+        result, report = imported(f, bytes(slus), bytes(wa))
+        project = result.project
+        self.assertEqual(project.cards[5].description, "Kept 5")
+        self.assertEqual(project.cards[9].description, "{f8 0A 05}Union")
+        self.assertIn("the card texts are in WA_MRG.MRG", report)
+        self.assertEqual(result.project.text_cards[9], {"description": "{f8 0A 05}Union"})
+        self.assertIn("[D109]", result.project.files["text.txt"].decode("utf-8"))
+
+
 if __name__ == "__main__":
     unittest.main()

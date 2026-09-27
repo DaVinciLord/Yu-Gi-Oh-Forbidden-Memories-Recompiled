@@ -301,75 +301,175 @@ def describe_places(retail_slus: bytes, slus: bytes, pieces) -> list:
 
 # --- text ---------------------------------------------------------------------------
 
-ITEM_START = re.compile(r"^(\[[0-9A-Fa-f ]+\]|\{:L[0-9A-Fa-f]{4}\})")
 USES_LABELS = re.compile(r"\{:L|\{(jump|call|if|choose|f8 1[78]|f8 2[78])\b")
+_items = manifest.listing_items
+CARD_BANKS = {"names": (0x8000, "name"), "descriptions": (0xD100, "description")}
+# The name entry's own strings (the password overlay's box, three lines):
+# a mod that turns them into its own menus (a starter deck
+# chooser after YES) needs its code, and a menu taller than the box stops
+# the retail text engine for good (TextBox_BuildStep waits on a page in a
+# loop, func_80039794). They stay retail's.
+NAME_ENTRY_IDS = range(0xF0, 0x100)
 
 
-def _items(listing: str) -> dict:
-    """{bank: {item key: text}} of a text listing, comments left out."""
-    banks, bank, key = {}, None, None
-    for line in listing.split("\n"):
-        if line.startswith("@bank "):
-            bank, key = line.split()[1], None
-            banks[bank] = {}
-            continue
-        if bank is None:
-            continue
-        match = ITEM_START.match(line)
-        if match:
-            key = match.group(1)
-            banks[bank][key] = [line.split("#")[0].rstrip() if line.startswith("[") else line]
-            continue
-        if key is not None:
-            banks[bank][key].append(line)
-    return {b: {k: "\n".join(v).rstrip("\n") for k, v in items.items()} for b, items in banks.items()}
+def _card_ids(bank: str, key: str) -> list:
+    """The card ids an item of the names or descriptions bank is for."""
+    if bank not in CARD_BANKS:
+        return []
+    first = CARD_BANKS[bank][0]
+    return [i - first for i in manifest.item_ids(key) if 1 <= i - first <= g.CARD_COUNT]
 
 
 def _card_item(bank: str, key: str) -> bool:
-    """A card's name or text, which cards[] carries instead."""
+    """A card's name or text, which cards[] carries unless the text file must."""
     if bank == "descriptions":
         return True
-    if bank == "names" and key.startswith("["):
-        ids = [int(i, 16) for i in key[1:-1].split()]
-        return all(0x8001 <= i <= 0x8000 + g.CARD_COUNT for i in ids)
-    return False
+    return bank == "names" and bool(manifest.item_ids(key)) and \
+        len(_card_ids(bank, key)) == len(manifest.item_ids(key))
 
 
-def text_changes(retail_slus: bytes, modded_slus: bytes, report: list):
-    """A partial listing of the text that differs (card names and texts
-    aside), or None. A bank whose changed strings jump anywhere is written
+class _PackedTexts:
+    """An executable whose descriptions bank holds packed card texts."""
+
+    def __init__(self, image, memory: bytes):
+        self.image, self.memory, self.data = image, memory, image.data
+
+    def bytes(self, address: int, count: int) -> bytes:
+        if address == g.DESCRIPTION_BANK and count == 0x10000:
+            return self.memory
+        return self.image.bytes(address, count)
+
+    def __getattr__(self, name):
+        return getattr(self.image, name)
+
+
+def wa_description_listing(image, texts: dict, names: dict) -> str:
+    """The descriptions a mod keeps in WA_MRG.MRG as listing items: packed
+    into banks of under 64 KB (they are plain strings, no jumps), each
+    listed as the executable's own bank would be."""
+    from .gamedata import _tl
+    out, group, size = [], [], 0
+    groups = []
+    for cid in sorted(texts):
+        if size + len(texts[cid]) > 0xF000:
+            groups.append(group)
+            group, size = [], 0
+        group.append(cid)
+        size += len(texts[cid])
+    groups.append(group)
+    for group in groups:
+        memory = bytearray(0x10000)
+        bank = _tl.Bank("descriptions", g.DESCRIPTION_BANK)
+        at = 0x10                                    # offset 0 means "no string"
+        for cid in group:
+            memory[at:at + len(texts[cid])] = texts[cid]
+            bank.ids[0xD100 + cid] = at
+            at += len(texts[cid])
+        out.append(_tl.write_listing(_PackedTexts(image, bytes(memory)), [bank], names))
+    return "\n".join(out)
+
+
+def modded_listing(modded_slus: bytes, modded_wa: bytes, report: list) -> str:
+    """The modified executable's text, bank by bank: a bank the listing
+    cannot follow (its bytes are the mod's code) is left out and reported;
+    card texts a mod keeps in WA_MRG.MRG are listed from there."""
+    from .gamedata import _tl
+    image = g._image(modded_slus)
+    names = g.plain_names(image, _tl.glyph_characters(image))
+    parts = []
+    for bank in _tl.banks(image):
+        if bank.name == "descriptions" and modded_wa and g.wa_descriptions(modded_slus, modded_wa):
+            parts.append(wa_description_listing(image, g.description_bytes(modded_slus, modded_wa), names))
+            report.append("text: the card texts are in WA_MRG.MRG (256 bytes a card from 0x2400000, sector "
+                          f"{g.WA_TEXT_BASE // 2048}), where the mod's code loads them; read from there")
+            continue
+        try:
+            parts.append(_tl.write_listing(image, [bank], names))
+        except Exception as problem:      # a text bank the listing cannot follow
+            report.append(f"text: the modified {bank.name} bank could not be read ({problem}); its strings are not "
+                          "imported")
+    return "\n".join(parts)
+
+
+def text_changes(retail_slus: bytes, modded_slus: bytes, report: list, modded_wa: bytes = b"",
+                 card_fields: dict = None):
+    """(A partial listing of the text that differs, {(card id, field): its
+    item}), the listing None when nothing differs. Card names and texts are
+    left to cards[], except the `card_fields` ({field: card ids}) the text
+    file must carry. A bank whose changed strings jump anywhere is written
     whole, so every place they name is in the file."""
     from .gamedata import _tl
-    try:
-        before = _items(_tl.write_listing(g._image(retail_slus)))
-        after = _items(_tl.write_listing(g._image(modded_slus)))
-    except Exception as problem:     # a text bank the listing cannot follow
-        report.append(f"text: the modded executable's text could not be read ({problem}); not imported")
-        return None
-    out = []
+    card_fields = card_fields or {}
+    before = _items(_tl.write_listing(g._image(retail_slus)))
+    after = _items(modded_listing(modded_slus, modded_wa, report))
+    out, carried = [], {}
+
+    def wanted(bank, key):
+        if not _card_item(bank, key):
+            return True
+        field = CARD_BANKS.get(bank, (0, ""))[1]
+        return any(cid in card_fields.get(field, ()) for cid in _card_ids(bank, key))
+
     for bank in ("dialog", "names", "descriptions"):
         old, new = before.get(bank, {}), after.get(bank, {})
-        changed = [k for k in new if old.get(k) != new[k] and not _card_item(bank, k)]
+        if not new:
+            continue
+        changed = [k for k in new if old.get(k) != new[k] and wanted(bank, k)]
         gone = [k for k in old if k not in new and not _card_item(bank, k)]
         if not changed and not gone:
             continue
         whole = bool(gone) or any(not k.startswith("[") or USES_LABELS.search(new[k]) for k in changed)
-        keys = [k for k in new if not _card_item(bank, k)] if whole else changed
+        keys = [k for k in new if wanted(bank, k)] if whole else changed
+        if bank == "dialog":
+            kept = [k for k in keys if any(i in NAME_ENTRY_IDS for i in manifest.item_ids(k))
+                    and old.get(k) != new[k] and "{:L" not in new[k].split("\n")[0]]
+            if kept:
+                keys = [k for k in keys if k not in kept]
+                report.append(f"text: the name entry's strings {', '.join(k for k in kept)} stay retail's: the mod "
+                              "makes them its own menus (a starter deck chooser after the name), which need its "
+                              "code, and a menu taller than the name box's three lines stops the game")
         out.append(f"@bank {bank}\n")
         out += [new[k] + "\n" for k in keys]
+        for k in keys:
+            for cid in _card_ids(bank, k):
+                carried[(cid, CARD_BANKS[bank][1])] = new[k]
         report.append(f"text: {len(changed)} strings of the {bank} bank differ" +
                       ("; the bank is written whole (its strings jump)" if whole else ""))
     if not out:
-        return None
+        return None, carried
     head = ("# Text of a modified game that differs from retail, written by the FM Editor's importer\n"
-            "# (notes/translation.md). Card names and texts are in mod.json.\n\n")
-    return head + "\n".join(out)
+            "# (notes/translation.md). Card names and texts are in mod.json, except those with colour\n"
+            "# or icon codes and those the mod left empty, which only this file can carry.\n\n")
+    return head + "\n".join(out), carried
 
 
 # --- the import ------------------------------------------------------------------------
 
 def _line_ends(text: str) -> str:
     return "\n".join(line.rstrip(" ") for line in text.split("\n"))
+
+
+def _has_codes(text: bytes) -> bool:
+    return any(0xF6 <= b < 0xFE for b in text)
+
+
+def coded_card_texts(retail_files, modded_files) -> dict:
+    """{field: card ids} of the names and texts that only a text listing can
+    carry: changed ones with a colour or icon code in them, and texts the
+    mod left empty (cards.c reads "" as "not set")."""
+    from .gamedata import _tl
+    image, retail_image = g._image(modded_files.slus), g._image(retail_files.slus)
+    out = {"name": set(), "description": set()}
+    for cid in range(1, g.CARD_COUNT + 1):
+        name = g.text_bytes(image, g.NAME_BANK + image.u16(g.NAME_TABLE + cid * 2), 128)
+        old = g.text_bytes(retail_image, g.NAME_BANK + retail_image.u16(g.NAME_TABLE + cid * 2), 128)
+        if name != old and _has_codes(name):
+            out["name"].add(cid)
+    texts, old_texts = g.description_bytes(modded_files.slus, modded_files.wa), g.description_bytes(retail_files.slus)
+    for cid, text in texts.items():
+        if text != old_texts[cid] and (_has_codes(text) or text == b"\xFF"):
+            out["description"].add(cid)
+    return out
 
 
 def decode_drop_pools(retail, modded, retail_files, modded_files) -> list:
@@ -589,10 +689,28 @@ def import_modded(retail_files, modded_files, mod_id: str = "imported-mod", name
                       "in its code. They are scaled to 2048, keeping each card's share")
 
     # Text.
-    text = text_changes(retail_files.slus, modded_files.slus, report)
+    card_fields = coded_card_texts(retail_files, modded_files)
+    text, carried = text_changes(retail_files.slus, modded_files.slus, report, modded_files.wa, card_fields)
     if text:
         project.files["text.txt"] = text.encode("utf-8")
         project.other["text"] = "text.txt"
+    for (cid, field), item in carried.items():
+        value = manifest.plain_name(item) if field == "name" else manifest.listing_plain(item)
+        setattr(project.cards[cid], field, value)
+        project.text_cards.setdefault(cid, {})[field] = value
+    for field, label in (("name", "names"), ("description", "texts")):
+        ids = [cid for cid in card_fields.get(field, ()) if (cid, field) in carried]
+        empty = [cid for cid in ids if field == "description" and not project.cards[cid].description]
+        if ids:
+            report.append(f"cards: {len(ids)} card {label} carry colour or icon codes"
+                          + (f" or are empty on purpose ({len(empty)} empty)" if empty else "")
+                          + "; text.txt carries them (cards[] cannot)")
+    blank = [cid for cid, card in project.cards.items() if cid <= g.CARD_COUNT and not card.name
+             and (cid, "name") not in carried]
+    for cid in blank:
+        project.cards[cid].name = retail.cards[cid].name
+    if blank:
+        report.append(f"cards: {len(blank)} names could not be read; kept as retail's")
 
     # The rest of the executable.
     slus_runs = _runs(retail_files.slus, modded_files.slus, 0, max(len(retail_files.slus), len(modded_files.slus)), 0)
