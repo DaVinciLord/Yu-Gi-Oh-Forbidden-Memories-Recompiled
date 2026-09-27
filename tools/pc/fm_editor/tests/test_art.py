@@ -230,6 +230,23 @@ class ArtModTest(unittest.TestCase):
         thumb = next(e for e in entries if art.entry_card(e) == (1, "thumbnail"))
         self.assertEqual(pngio.read(folder / "textures" / thumb["file"]), gradient(40, 32))
 
+    def test_a_retail_art_key_moves_with_a_new_thumbnail(self):
+        folder = self.root / "mod"
+        (folder / "images").mkdir(parents=True)
+        pngio.write(folder / "images" / "old.png", gradient(102, 96))
+        (folder / "mod.json").write_text(json.dumps({"id": "m", "name": "M", "cards": [
+            {"replace": 1, "art": "images/old.png"}]}), encoding="utf-8")
+        project, _ = self.reopen(folder)
+        art.set_image(project, 1, "thumbnail", gradient(80, 64))
+        manifest.save_mod(project, folder)
+        written = json.loads((folder / "mod.json").read_text(encoding="utf-8"))
+        self.assertNotIn("cards", written)
+        entries = json.loads((folder / "textures" / "manifest.json").read_text(encoding="utf-8"))
+        files = {art.entry_card(e): e["file"] for e in entries}
+        self.assertEqual(sorted(files), [(1, "art"), (1, "thumbnail")])
+        self.assertEqual(pngio.read(folder / "textures" / files[(1, "art")]), gradient(102, 96))
+        self.assertEqual(pngio.read(folder / "textures" / files[(1, "thumbnail")]), gradient(80, 64))
+
     def test_a_pack_of_others_is_kept(self):
         folder = self.root / "hd"
         pack = folder / "images"

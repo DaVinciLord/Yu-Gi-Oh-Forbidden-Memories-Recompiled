@@ -406,18 +406,19 @@ def set_image(project, cid: int, part: str, image: Image) -> list:
         return notes
     st.changed = True
     for key in ("art", "thumbnail"):
-        # A retail card's own "art" would hide the pack's picture: the pack
-        # has it now. A thumbnail of its own moves to the pack with it.
+        # A retail card's own "art" or "thumbnail" is drawn over the record
+        # and reported written, which would hide the pack's: the pack has
+        # them now, the one not being replaced moved there as it is.
         if not isinstance(_extra_keys(project, cid).get(key), str):
             continue
-        if key == "thumbnail" and part == "art":
+        if key != part:
             try:
-                own = replacement_image(project, cid, "thumbnail")
+                own = replacement_image(project, cid, key)
             except (OSError, pngio.PngError):
                 own = None
             if own is not None:
-                st.images[(cid, "thumbnail")] = Replacement("pack", _editor_file(project, cid, "thumbnail"),
-                                                            normalize(own, "thumbnail")[0], pending=True)
+                st.images[(cid, key)] = Replacement("pack", _editor_file(project, cid, key),
+                                                    normalize(own, key)[0], pending=True)
         _set_extra(project, cid, key, None)
         notes.append(f"its \"{key}\" in mod.json moves to the texture pack")
     _sync(project, st)
