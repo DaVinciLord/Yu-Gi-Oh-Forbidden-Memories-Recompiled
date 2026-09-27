@@ -63,6 +63,7 @@ editors write, is fine):
 | `terrain_bonus` | what each terrain gives each monster type, in place of the disc's +500 and -500, below |
 | `equip_bonus_default` | what an equip adds when no `equips` entry sets its bonus, below |
 | `trap_thresholds` | the attack each of the six attack traps stops, below |
+| `passwords` | each card's password and starchip price on the Password screen, below |
 | `text`, `font` | a translation of the game's text, and fonts for letters it has none of, below |
 
 `version`, `author` and `description` are displayed in the manager. Version
@@ -462,7 +463,10 @@ An equip entry's `"bonus": 800` and `"bonus_if": {"Dragon": 1000, "Light": 700}`
 set what it adds, in place of the disc's +500, and a top-level
 `"equip_bonus_default": 700` what every other equip adds.
 `"trap_thresholds": {"House of Adhesive Tape": 800}` sets, in points of ATK,
-the attack each attack trap springs on. These are the rules a community mod
+the attack each attack trap springs on.
+`"passwords": {"Blue-eyes White Dragon": {"password": "00000001", "starchips": 100}}`
+sets what the Password screen takes for a card and what it costs;
+`"all": {"password": "card number", "starchips_percent": 10}` does every card. These are the rules a community mod
 such as The Wicked Gods changes in its code; with them it plays close to its
 own rules without C. The Wicked Gods also makes a monster's attribute count on
 a terrain, lets monsters be equips and raises the stat cap to 30000: those

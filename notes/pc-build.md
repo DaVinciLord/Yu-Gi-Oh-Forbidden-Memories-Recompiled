@@ -1620,7 +1620,9 @@ starchips show theirs.
   those 3 sectors from the disc once, the first time it is asked, checks
   every value is BCD or `0xFFFFFFFE`, and logs card 1's and how many have
   none (89631139 and 24 on the retail disc). A mod card can have one with
-  `"password"` ([More cards](more-cards.md)).
+  `"password"` ([More cards](more-cards.md)), and a mod's `passwords`
+  ([gameplay tables](gameplay-tables.md#passwords-and-prices-on-the-password-screen))
+  changes a disc card's, as the Password screen has it.
 - **The drawing** is the game's text. The viewer's text box is laid out by
   string 3 (a monster) or 4 (the rest), whose `{f8 00 40}` inserts the
   card's text 80 pixels down in both. Once the face is up, the box is made

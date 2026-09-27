@@ -1,6 +1,7 @@
 /* View > Card passwords (passwords.h). */
 #include "passwords.h"
 #include "cards.h"
+#include "tables.h"
 #include "pc/platform/settings.h"
 #include "pc/debug/log.h"
 #include "pc/sdk/disc.h"
@@ -38,6 +39,7 @@ extern unsigned Memories_PresentedFrames(void);
 #define BLUE_EYES_PASSWORD 0x89631139u  /* card 1, the check that the table is where it should be */
 
 static unsigned table[CARD_ID_END];
+static unsigned char from_mod[CARD_ID_END];   /* a mod's "passwords" set table[id] */
 static int table_state;                  /* 0 unread, 1 read, -1 not there */
 
 static int bcd(unsigned value)
@@ -71,14 +73,26 @@ static void read_table(void)
     table_state = 1;
     fprintf(stderr, "memories-pc: card passwords: read, card 1's is %08X%s, %d cards have none\n", table[1],
             table[1] == BLUE_EYES_PASSWORD ? " (as it should be)" : " (not 89631139: a changed disc)", none);
+    /* What the Password screen will have once the mods' "passwords" are
+     * written over it (Main_RunPasswordMenu). */
+    for (id = 1; id <= CARD_COUNT; id++) {
+        const unsigned char *p = data + id * 8;
+        unsigned price = (unsigned)p[0] | (unsigned)p[1] << 8 | (unsigned)p[2] << 16 | (unsigned)p[3] << 24;
+        unsigned value = table[id];
+        Tables_PasswordShop(id, &price, &table[id]);
+        from_mod[id] = (unsigned char)(table[id] != value);
+    }
 }
 
 unsigned Cards_Password(int id)
 {
     unsigned own;
+    /* A "passwords" entry is what the Password screen takes, so it wins
+     * over a replaced card's "password", which is only shown. */
+    if (id >= 1 && id <= CARD_COUNT && !table_state) read_table();
+    if (id >= 1 && id <= CARD_COUNT && table_state > 0 && from_mod[id]) return table[id];
     if (Cards_OwnPassword(id, &own)) return own;
     if (id < 1 || id > CARD_COUNT) return CARD_PASSWORD_NONE;
-    if (!table_state) read_table();
     return table_state > 0 ? table[id] : CARD_PASSWORD_NONE;
 }
 
