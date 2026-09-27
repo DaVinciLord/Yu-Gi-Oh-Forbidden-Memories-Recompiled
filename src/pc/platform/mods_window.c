@@ -237,7 +237,7 @@ static int wrap(MenuCanvas *c, int x, int y, int w, const char *s, unsigned colo
         /* A whole character at a time, so no line ends inside one. */
         do
             line[n++] = *s++;
-        while (((unsigned char)*s & 0xC0) == 0x80);
+        while (n < (int)sizeof(line) - 1 && ((unsigned char)*s & 0xC0) == 0x80); /* bad UTF-8: a long tail */
         line[n] = 0;
         if (n >= 500 || *s == '\n' || !*s || width_text(line) > w) {
             if (width_text(line) > w && Menu_TextBack(line, (size_t)n) > 0) {

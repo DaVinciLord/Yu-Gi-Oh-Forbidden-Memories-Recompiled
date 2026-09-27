@@ -105,7 +105,7 @@ int Menu_TextWidthScaled(const char *text, int scale);
 /* For code that cuts UTF-8 text to fit, so a cut never splits a character.
  * Menu_TextBack: where the character that ends at byte `at` starts.
  * Menu_TextFit: the longest prefix of at most `length` bytes that ends
- * between characters (`text` must hold `length` bytes or end sooner).
+ * between characters (`text` must hold `length` + 1 bytes or end sooner).
  * Menu_TextTrim: drops a last character cut short (by snprintf, say).
  * (No <string.h> here: game units that declare their own include this.) */
 static inline size_t Menu_TextBack(const char *text, size_t at)

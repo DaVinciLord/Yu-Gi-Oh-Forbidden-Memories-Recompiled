@@ -50,8 +50,14 @@ static void test_text_cuts(void)
     assert(Menu_TextBack(word, 0) == 0);
     assert(Menu_TextFit(word, 8) == 7);
     assert(Menu_TextFit(word, 9) == 9);
-    assert(Menu_TextFit(word, 50) == 10);
-    snprintf(cut, 9, "%s", word); /* snprintf leaves the first byte of ê */
+    {
+        /* Ends before `length`: a buffer that long, as a caller's is (gcc
+         * reads the string literal's 11 bytes as out of bounds for 50). */
+        static const char padded[64] = "Portugu\xC3\xAAs";
+        assert(Menu_TextFit(padded, 50) == 10);
+    }
+    memcpy(cut, word, 8); /* "Portugu" and the first byte of ê */
+    cut[8] = '\0';
     Menu_TextTrim(cut);
     assert(strcmp(cut, "Portugu") == 0);
     snprintf(cut, sizeof(cut), "%s", word);
