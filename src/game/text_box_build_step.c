@@ -21,6 +21,7 @@
 #include "dialog_choice.h"
 #include "pc/cards/cards.h"
 #include "pc/text/glyphs.h"
+#include "pc/text/menu_cut.h"
 #include "pc/text/text.h"
 #endif
 
@@ -140,10 +141,12 @@ next_opcode:
     }
 #ifdef MEMORIES_PC
     /* 0x1000: a menu's choices are being laid out. A line too wide for
-       the box is cut where its wrap would stop the game (text.h). */
+       the box is cut where its wrap would stop the game (text.h), and so
+       are the letters of the lines past its box (menu_cut.h). */
     if ((object->flags_34 & 0x1000) &&
-        Text_CutsMenuGlyph(object->field_36, (s16)object->field_38, object->field_3E, (s16)object->field_3A,
-                           object->field_5B, object->field_42, gDialog_bChoiceCount - object->field_56)) {
+        (TextMenu_Cutting(object->index_57) ||
+         Text_CutsMenuGlyph(object->field_36, (s16)object->field_38, object->field_3E, (s16)object->field_3A,
+                            object->field_5B, object->field_42, gDialog_bChoiceCount - object->field_56))) {
         return;
     }
 #endif
