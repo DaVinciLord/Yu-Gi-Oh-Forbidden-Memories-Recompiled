@@ -77,6 +77,22 @@ jobs:
         run: python tools/pc/package.py "${{ matrix.system }}" --skip-smoke --version "$PACKAGE_VERSION"
       - name: Test archive structure
         run: python tools/pc/test_package.py --archives dist
+      # The FM Editor as one program (tools/pc/fm_editor/README.md), in an
+      # archive of its own: it unpacks into the same folder as the game's,
+      # beside memories-pc.exe, where it finds game/.
+      - name: FM Editor (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          python -m pip install pyinstaller==6.18.0
+          python tools/pc/fm_editor/build_exe.py --dist tmp/fm-editor
+          python - <<'EOF'
+          import os, zipfile
+          version = os.environ["PACKAGE_VERSION"]
+          folder = f"yfm-redecomp-{version}"
+          with zipfile.ZipFile(f"dist/fm-editor-{version}-windows.zip", "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+              archive.write("tmp/fm-editor/fm-editor.exe", f"{folder}/fm-editor.exe")
+              archive.write("tools/pc/fm_editor/README.md", f"{folder}/fm-editor-README.md")
+          EOF
       - name: ROM setup tests (Linux)
         if: runner.os == 'Linux'
         run: |

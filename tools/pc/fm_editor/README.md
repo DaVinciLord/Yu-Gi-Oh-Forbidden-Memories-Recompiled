@@ -180,6 +180,11 @@ builds `tmp/pc/fm-editor/fm-editor.exe` (one file, about 11 MB, no Python
 needed to run it). Put it beside `memories-pc.exe` and it finds the game's
 `game/` folder there. Build outputs never go in git.
 
+Each Windows release carries it as `fm-editor-<version>-windows.zip`
+(`.github/workflows/pc-release.yml`): unpack it where the game's archive
+was unpacked, and `fm-editor.exe` lands beside `memories-pc.exe`. On Linux,
+run the editor from the source as above.
+
 ## Tests
 
     python -m unittest discover -s tools/pc/fm_editor/tests -t tools/pc
