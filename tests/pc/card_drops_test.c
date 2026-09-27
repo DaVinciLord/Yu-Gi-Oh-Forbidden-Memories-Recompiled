@@ -1,8 +1,7 @@
-/* Game > Smart drops (src/pc/cards/drops.c): a made-up drop pool and a
- * chest with three copies of some of its cards. The cards the player has
- * three of leave the pool, the rest add up to 2048 again, a full pool
- * stands as it is, and a roll takes the same draws with the setting on or
- * off. tables.c (Tables_Scale, Tables_Pool) is linked as it is. */
+/* Game > Card drops (src/pc/cards/drops.c) over a made-up drop pool: every
+ * card is one roll of the game's Duel_SelectCardDrop (which a code mod may
+ * hook), in the community drop mod's order of draws, 1 + 7N for N cards.
+ * tables.c (Tables_Scale, Tables_Pool) is linked as it is. */
 #include "../../src/pc/cards/drops.c"
 #include "pc/mods/json.h"
 #include "pc/debug/log.h"
@@ -26,10 +25,10 @@ CardDropsState gCardDrops;
 u16 gDuel_awPlayerDeck[DECK_SIZE];
 DuelDropTable gDuel_awSaPowCardDrops[3];
 static unsigned char chest[CARD_COUNT + 1];
-static int smart, card_drops = 1;
+static int card_drops = 1;
 static unsigned seed = 1, draws;
 
-int Settings_Get(SettingId id) { return id == SET_SMART_DROPS ? smart : id == SET_CARD_DROPS ? card_drops : 0; }
+int Settings_Get(SettingId id) { return id == SET_CARD_DROPS ? card_drops : 0; }
 int Memories_Rand(void)
 {
     draws++;
@@ -95,20 +94,6 @@ static void reset(void)
     CardDrops_Begin();
 }
 
-static void load(unsigned *weights)
-{
-    int id;
-    for (id = 0; id <= CARD_COUNT; id++) weights[id] = id ? gDuel_awSaPowCardDrops[0].weights[id - 1] : 0;
-}
-
-static unsigned total(const unsigned *weights)
-{
-    unsigned sum = 0;
-    int id;
-    for (id = 1; id <= CARD_COUNT; id++) sum += weights[id];
-    return sum;
-}
-
 static int in_pool(int id)
 {
     int i;
@@ -118,131 +103,41 @@ static int in_pool(int id)
     return 0;
 }
 
-/* Three copies of 5 in the chest, of 6 across the deck and the chest, and
- * of 9 once this duel's dealt copy counts; 7 has two, 8 and 10 none. */
-static void partial(void)
-{
-    reset();
-    chest[5] = 3;
-    chest[6] = 2;
-    gDuel_awPlayerDeck[0] = 6;
-    chest[7] = 2;
-    chest[9] = 2;
-    gCardDrops.cards[gCardDrops.count++] = 9;
-}
-
-static void excludes_the_full_cards(void)
-{
-    static unsigned weights[CARD_COUNT + 1];
-    int id;
-    partial();
-    load(weights);
-    CHECK(CardDrops_SmartPool(weights, CARD_COUNT) == 3);
-    CHECK(weights[5] == 0 && weights[6] == 0 && weights[9] == 0);
-    CHECK(weights[7] && weights[8] && weights[10]);
-    CHECK(total(weights) == DUEL_DROP_WEIGHT_TOTAL);
-    /* 400 : 248 : 100 of 748, scaled to 2048 by the largest remainders. */
-    CHECK(weights[7] == 1095 && weights[8] == 679 && weights[10] == 274);
-    for (id = 1; id <= CARD_COUNT; id++) CHECK(in_pool(id) || weights[id] == 0);
-}
-
-static void a_full_pool_stands(void)
-{
-    static unsigned weights[CARD_COUNT + 1], before[CARD_COUNT + 1];
-    int id;
-    reset();
-    for (id = 1; id <= CARD_COUNT; id++) chest[id] = 3;   /* the cheat's 3 of every card */
-    load(weights);
-    load(before);
-    CHECK(CardDrops_SmartPool(weights, CARD_COUNT) == 0);
-    CHECK(!memcmp(weights, before, sizeof(weights)));
-    /* And nothing full leaves it alone too. */
-    reset();
-    chest[5] = 2;
-    load(weights);
-    CHECK(CardDrops_SmartPool(weights, CARD_COUNT) == 0);
-    CHECK(!memcmp(weights, before, sizeof(weights)));
-}
-
-/* The partial chest with 9 at three too: 7, 8 and 10 have room for seven
- * more copies in all. */
-static void open_chest(void)
-{
-    partial();
-    chest[9] = 3;
-}
-
-/* `wanted` cards from the same seed; 1 + 7 * wanted draws (drops.c). */
-static int roll(int on, int wanted, unsigned *used)
-{
-    int spoils;
-    open_chest();
-    card_drops = wanted;
-    smart = on;
-    seed = 0x1234;
-    draws = 0;
-    spoils = CardDrops_Roll(0);
-    *used = draws;
-    card_drops = 1;
-    smart = 0;
-    return spoils;
-}
-
+/* `wanted` cards from the same seed: the draws, the cards dealt, and SPOILS'
+ * card from the pool. */
 static void rolls(void)
 {
-    unsigned used[2], seeds[2];
-    int on, i, spoils;
-    /* Five cards fit in the room left: none reaches a fourth copy, SPOILS'
-     * card (rolled last, after the others count) included. */
-    for (on = 0; on < 2; on++) {
-        spoils = roll(on, 5, &used[on]);
-        seeds[on] = seed;
-        CHECK(in_pool(spoils) && gCardDrops.count == 4);
-        if (!on) continue;
-        for (i = 0; i < gCardDrops.count; i++) {
-            int id = gCardDrops.cards[i];
-            CHECK(id == 7 || id == 8 || id == 10);
-            CHECK(copies(id) <= DECK_CARD_COPY_LIMIT);
-        }
-        CHECK((spoils == 7 || spoils == 8 || spoils == 10) && copies(spoils) < DECK_CARD_COPY_LIMIT);
+    int wanted, spoils, i;
+    for (wanted = 1; wanted <= 20; wanted += 19) {
+        reset();
+        card_drops = wanted;
+        seed = 0x1234;
+        draws = 0;
+        spoils = CardDrops_Roll(0);
+        CHECK(in_pool(spoils));
+        CHECK(gCardDrops.count == wanted - 1);
+        CHECK(draws == (wanted == 1 ? 1u : 1u + 7u * (unsigned)wanted));
+        for (i = 0; i < gCardDrops.count; i++) CHECK(in_pool(gCardDrops.cards[i]));
     }
-    CHECK(used[0] == 1 + 7 * 5 && used[1] == used[0] && seeds[0] == seeds[1]);
-    /* Twenty do not: the first seven fill the room, and then every card is
-     * at three and the pool stands as the game has it. */
-    for (on = 0; on < 2; on++) {
-        spoils = roll(on, 20, &used[on]);
-        seeds[on] = seed;
-        CHECK(in_pool(spoils) && gCardDrops.count == 19);
-    }
-    CHECK(used[0] == 1 + 7 * 20 && used[1] == used[0] && seeds[0] == seeds[1]);
-    {
-        int dealt[CARD_COUNT + 1] = {0};
-        for (i = 0; i < 7; i++) dealt[gCardDrops.cards[i]]++;
-        CHECK(dealt[7] == 1 && dealt[8] == 3 && dealt[10] == 3);
-    }
+    card_drops = 1;
 }
 
-/* Off, and on with nothing full: the game's own roll, card for card. */
+/* One card is the game's own roll, card for card. */
 static void same_as_the_game(void)
 {
-    int on, run, cards[2][64];
-    for (on = 0; on < 2; on++) {
-        reset();
-        chest[5] = 2;
-        smart = on;
-        seed = 77;
-        for (run = 0; run < 64; run++) cards[on][run] = CardDrops_Roll(0);
-    }
+    int run, cards[2][64];
+    reset();
+    seed = 77;
+    for (run = 0; run < 64; run++) cards[0][run] = CardDrops_Roll(0);
+    seed = 77;
+    for (run = 0; run < 64; run++) cards[1][run] = Duel_SelectCardDrop(0);
     CHECK(!memcmp(cards[0], cards[1], sizeof(cards[0])));
-    smart = 0;
 }
 
 int main(void)
 {
-    excludes_the_full_cards();
-    a_full_pool_stands();
     rolls();
     same_as_the_game();
-    puts("card drops: smart pools passed");
+    puts("card drops: rolls passed");
     return 0;
 }

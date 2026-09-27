@@ -447,7 +447,7 @@ static void choose(void)
     DeckMenu_Close();
 }
 
-/* The pad in the layout the game gets: Game > Japanese buttons exchanges
+/* The pad in the layout the game gets: View > Japanese buttons exchanges
  * Cross and Circle here too, so the slots confirm like the screen under them. */
 static unsigned pad_bits(void)
 {

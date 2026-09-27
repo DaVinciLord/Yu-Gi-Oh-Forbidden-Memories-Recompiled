@@ -726,7 +726,7 @@ static void pump(void)
                 DeckMenu_Request();
                 continue;
             }
-            if (key == XK_F8 && Memories_RewindHold(event.type == KeyPress)) continue; /* Game > Rewind on */
+            if (key == XK_F8 && Memories_RewindHold(event.type == KeyPress)) continue; /* the rewind setting on */
             if (key == XK_Escape && event.type == KeyPress) {
                 quit = 1;
             }

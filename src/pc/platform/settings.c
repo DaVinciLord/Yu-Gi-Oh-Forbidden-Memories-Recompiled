@@ -27,14 +27,10 @@ static const SettingInfo info[SET_COUNT] = {
     /* View > Free Duel progress (src/pc/cards/free_duel_progress.h): owned
      * and obtainable cards of the opponent under the Free Duel cursor. */
     [SET_FREE_DUEL_PROGRESS] = {"free_duel_progress", NULL, "MEMORIES_FREE_DUEL_PROGRESS", NULL, 0, 0, 1},
-    /* 1: the duel's numbers and labels drawn from a font (hd_text.h). */
-    [SET_HD_HUD] = {"hd_hud", NULL, "MEMORIES_HD_HUD", NULL, 0, 0, 1},
     /* 1: the opponent's name in place of COM (hd_text.h). */
     [SET_OPPONENT_NAME] = {"opponent_name", NULL, "MEMORIES_OPPONENT_NAME", NULL, 0, 0, 1},
     /* Cards a won duel deals; 1 is the console's (src/pc/cards/drops.h). */
     [SET_CARD_DROPS] = {"card_drops", NULL, "MEMORIES_CARD_DROPS", NULL, 1, 1, 99},
-    /* 1: a drop leaves out the cards the player has three of (src/pc/cards/drops.h). */
-    [SET_SMART_DROPS] = {"smart_drops", NULL, "MEMORIES_SMART_DROPS", NULL, 0, 0, 1},
     /* 1: the Library lays out every card never seen as a seen one, while it
      * is open; nothing is given or saved (Cards_LibraryPlaceholder, cards.h). */
     [SET_LIBRARY_ALL_CARDS] = {"library_all_cards", NULL, "MEMORIES_LIBRARY_ALL_CARDS", NULL, 0, 0, 1},
@@ -94,8 +90,6 @@ static const SettingInfo info[SET_COUNT] = {
     [SET_AUDIO_INTERPOLATION] = {"audio_interpolation", NULL, "MEMORIES_AUDIO_INTERPOLATION", NULL, 0, 0, 1},
     /* Pixels drawn per VRAM word each way (soft_gpu.h, SoftGpu_SetScale): 1 is the console's. */
     [SET_INTERNAL_SCALE] = {"internal_scale", NULL, "MEMORIES_INTERNAL_SCALE", NULL, 1, 1, 8},
-    /* 1: the title three seconds after the credits end (credits.c); 0: a black screen, as the console. */
-    [SET_RETURN_AFTER_CREDITS] = {"return_after_credits", NULL, "MEMORIES_RETURN_AFTER_CREDITS", NULL, 1, 0, 1},
     /* 1: Game > Deck slots and F6 keep and switch decks (src/pc/saves/deck_menu.c). */
     [SET_DECK_SLOTS] = {"deck_slots", NULL, "MEMORIES_DECK_SLOTS", NULL, 1, 0, 1},
     /* Percent, the present pass's colour (src/pc/render/present_pass.c); 100 leaves the picture alone. */
@@ -110,8 +104,6 @@ static const SettingInfo info[SET_COUNT] = {
     [SET_FLASH] = {"reduce_flashes", NULL, "MEMORIES_REDUCE_FLASHES", NULL, 0, 0, 1},
     /* 1: xBR smoothing of the picture's pixel art (present_pass.c). */
     [SET_XBR] = {"xbr", NULL, "MEMORIES_XBR", NULL, 0, 0, 1},
-    /* 1: text set in a font at the internal resolution (src/pc/text/hd_text.h). */
-    [SET_HD_TEXT] = {"hd_text", NULL, "MEMORIES_HD_TEXT", NULL, 0, 0, 1},
     /* Samples a pixel of the OpenGL picture is drawn with: 0 (off), 2, 4, 8
      * (gl_picture.c). */
     [SET_MSAA] = {"msaa", NULL, "MEMORIES_MSAA", NULL, 0, 0, 8},

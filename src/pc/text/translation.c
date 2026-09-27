@@ -129,7 +129,7 @@ void Text_Build(void)
     }
 }
 
-/* Video > Opponent's name for COM (hd_text.h) names the sides after the
+/* View > Opponent's name for COM (hd_text.h) names the sides after the
  * duel too: strings 0x3D and 0x3E (YOU, or 1P in a 2P duel) and 0x3F (COM,
  * or 2P) become You and the opponent's short name, as the life-point panel
  * has them. The result screens call them by their place in the dialogue

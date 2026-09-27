@@ -27,6 +27,7 @@
 #include "glyphs.h"
 #include "text.h"
 #include "pc/platform/settings.h"
+#include "pc/mods/mods.h"
 #include "pc/render/soft_gpu.h"
 #include "pc/cards/art.h"
 #include "pc/cards/cards.h"
@@ -87,13 +88,25 @@ typedef struct {
     uint32_t name;  /* a hash of the name it was drawn from */
     unsigned used;  /* when it was last asked for */
 } Title;
+extern unsigned Memories_PresentedFrames(void);
+
 static TitleUpload title_uploads[TITLE_UPLOADS];
 static unsigned title_upload_next, title_clock;
 static Title titles[TITLE_PLACES];
 
+/* HD text, and the duel's numbers and labels with it, is the Forbidden
+ * Memories HD mod's "hd_text" setting (Mods_FeatureOn): on while that mod is
+ * applied with it on. Asked for every glyph, so read once a presented frame. */
 int HdText_Enabled(void)
 {
-    return Settings_Get(SET_HD_TEXT) != 0;
+    static unsigned frame = ~0u;
+    static int on;
+    unsigned now = Memories_PresentedFrames();
+    if (now != frame) {
+        frame = now;
+        on = Mods_FeatureOn("hd_text");
+    }
+    return on;
 }
 
 /* The cell's 4-bit indices, and a sum of them. */
@@ -1640,7 +1653,7 @@ int HdText_NameEnabled(void)
 
 int HdText_HudEnabled(void)
 {
-    return Settings_Get(SET_HD_HUD) != 0;
+    return HdText_Enabled();
 }
 
 int HdText_Hud(int depth, int page_x, int page_y, int clut_x, int clut_y, int u, int v, int w, int h, int wanted,

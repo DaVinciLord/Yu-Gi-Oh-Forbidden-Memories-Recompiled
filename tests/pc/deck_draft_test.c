@@ -139,7 +139,7 @@ int main(void)
         DeckMenu_Poll(DECK_MENU_MAIN_LOOP); assert(!list_after_build_deck);
         list_after_build_deck = 1; DeckMenu_State(&snapshot); assert(!list_after_build_deck);
     }
-    /* Game > Japanese buttons: the slots take the exchanged pad, so the
+    /* View > Japanese buttons: the slots take the exchanged pad, so the
      * controller's Circle picks (the game's Cross) and its Cross backs out;
      * fixed bits (scripted input, the mouse) keep their meaning. */
     pad = 0x2000;

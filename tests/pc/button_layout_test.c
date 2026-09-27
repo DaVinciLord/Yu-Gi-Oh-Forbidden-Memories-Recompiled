@@ -2,7 +2,7 @@
 #include <assert.h>
 #include <stdio.h>
 
-/* Game > Japanese buttons: Cross and Circle exchange, nothing else moves,
+/* View > Japanese buttons: Cross and Circle exchange, nothing else moves,
  * and the bits the player did not press keep their meaning. */
 int main(void)
 {
