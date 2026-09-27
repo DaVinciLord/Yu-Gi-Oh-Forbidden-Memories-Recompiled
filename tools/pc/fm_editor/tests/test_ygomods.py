@@ -8,7 +8,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
-from fm_editor import cli, gamedata as g, manifest, validate, ygomods
+from fm_editor import art, cli, gamedata as g, manifest, pngio, validate, ygomods
 from fm_editor.tests.test_data import fixture, state
 
 
@@ -24,7 +24,7 @@ FILES = {
     "manifest.ini": "; test\nformat = YGOFM-MOD-PACKAGE\nversion = 1\ngame = SLUS-01411\n",
     "cards/1/card.ini": "color = pink\nname = Big Dragon\nattack = 2070\nstar1 = Pluto\nstar2 = Uranus\n"
                         "price = 4100\npassword = 70022514\ndescription = Line one|line two\non_flip = raigeki\n",
-    "cards/1/art.png": b"\x89PNG fake",
+    "cards/1/art.png": pngio.encode(pngio.Image(102, 96, b"\x10\x20\x30\xff" * (102 * 96))),
     "cards/651/card.ini": "equips = 1, 2, 3\n",
     "cards/681/card.ini": "ritual = 4, 5, 6 -> 7\n",
     "fusion-edits.txt": "# a b result\n1\t2\t9\n2\t1\t0\n5\t6\t7\n",
@@ -78,6 +78,18 @@ class YgomodsTest(unittest.TestCase):
             opened, messages = manifest.open_mod(self.retail, out)
             self.assertEqual(messages, [])
             self.assertEqual(state(opened), state(project))
+
+    def test_portraits_kept_with_new_art(self):
+        """The package's portraits share the texture pack with the Art tab's
+        pictures: both stay through two saves."""
+        project, _ = ygomods.import_package(self.retail, self.f.wa, self.path, "pkg")
+        art.set_image(project, 2, "art", pngio.Image(102, 96, b"\x40\x50\x60\xff" * (102 * 96)))
+        with tempfile.TemporaryDirectory() as out:
+            for _ in range(2):
+                manifest.save_mod(project, out)
+                entries = json.loads((Path(out) / "textures" / "manifest.json").read_text(encoding="utf-8"))
+                self.assertIn(0xF55000 + 10 * 0x980, [e["offset"] for e in entries])
+                self.assertIn((2, "art"), [art.entry_card(e) for e in entries])
 
     def write(self, files: dict) -> Path:
         path = Path(self.tmp.name) / "case.ygomods"
