@@ -2,6 +2,9 @@
 #define MEMORIES_PC_PLATFORM_TITLE_JUMP_H
 /* Back to the title screen from anywhere (title_jump.c). */
 void TitleJump_Request(void);
+/* Game > Restart game: asks first in a notice (Menu_ShowNotice); Yes makes
+ * the same request as Debug > Jump to > Title Screen. */
+void TitleJump_Confirm(void);
 /* Main_RunFrontendLoop disables requests on every entry to the title. */
 void TitleJump_SetActive(int enabled);
 /* Consume scripted requests at the actual presented frame, even at the

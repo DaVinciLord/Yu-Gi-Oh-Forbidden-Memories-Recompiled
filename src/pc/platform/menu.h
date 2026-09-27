@@ -1,5 +1,6 @@
 #ifndef MEMORIES_PC_MENU_H
 #define MEMORIES_PC_MENU_H
+#include <stddef.h>
 #include <stdint.h>
 
 /* The window's menu bar. It is composited in software into a buffer the
@@ -10,7 +11,8 @@
  * File  > Save state, Load state, Exit
  * Audio > Volume slider over the whole mix (src/pc/audio/spu.c)
  * View  > Scale 1x-4x
- * Game  > Mods opens the searchable mod manager
+ * Game  > Mods opens the searchable mod manager; Restart game goes back to
+ *         the title screen once confirmed (title_jump.h)
  * Debug > development helpers (src/pc/debug)
  * Help  > update checks and this build's version (update_check.h) */
 
@@ -72,7 +74,8 @@ typedef enum {
     MENU_ITEM_FILTER_SHARP,
     MENU_ITEM_HD_TEXT, /* Video > HD text, HD numbers and labels, Opponent's name for COM: */
     MENU_ITEM_HD_HUD,  /* drawn by the OpenGL picture pass at Internal 2x and up (Menu_SetHdPicture); */
-    MENU_ITEM_OPPONENT_NAME /* the name by the software GPU at 1x too */
+    MENU_ITEM_OPPONENT_NAME, /* the name by the software GPU at 1x too */
+    MENU_ITEM_RESTART /* Game > Restart game: asks, then goes back as MENU_ITEM_TITLE does */
 } MenuItemId;
 
 /* The stored settings (settings.txt in the user directory, see paths.h;
@@ -91,11 +94,42 @@ void Menu_SetScale(int scale);
 int Menu_AutoScale(int window_h);
 /* Draw the bar and, when open, its menu. */
 void Menu_Draw(MenuCanvas *canvas);
+/* Text is UTF-8: a character the face has no glyph for, or a byte that is
+ * not UTF-8, is drawn as "?". */
 void Menu_DrawText(MenuCanvas *canvas, int x, int y, const char *text, uint32_t colour);
 int Menu_TextWidth(const char *text);
 /* Auxiliary windows can fit their UI without changing the game menu scale. */
 void Menu_DrawTextScaled(MenuCanvas *canvas, int x, int y, const char *text, uint32_t colour, int scale);
 int Menu_TextWidthScaled(const char *text, int scale);
+
+/* For code that cuts UTF-8 text to fit, so a cut never splits a character.
+ * Menu_TextBack: where the character that ends at byte `at` starts.
+ * Menu_TextFit: the longest prefix of at most `length` bytes that ends
+ * between characters (`text` must hold `length` + 1 bytes or end sooner).
+ * Menu_TextTrim: drops a last character cut short (by snprintf, say).
+ * (No <string.h> here: game units that declare their own include this.) */
+static inline size_t Menu_TextBack(const char *text, size_t at)
+{
+    while (at && ((unsigned char)text[--at] & 0xC0) == 0x80) {}
+    return at;
+}
+static inline size_t Menu_TextFit(const char *text, size_t length)
+{
+    size_t end = 0;
+    while (end < length && text[end]) end++;
+    if (end < length || !text[end]) return end;
+    while (length && ((unsigned char)text[length] & 0xC0) == 0x80) length--;
+    return length;
+}
+static inline void Menu_TextTrim(char *text)
+{
+    size_t length = 0, lead;
+    while (text[length]) length++;
+    lead = Menu_TextBack(text, length);
+    unsigned char c = (unsigned char)text[lead];
+    size_t need = c < 0x80 ? 1 : (c & 0xE0) == 0xC0 ? 2 : (c & 0xF0) == 0xE0 ? 3 : (c & 0xF8) == 0xF0 ? 4 : 1;
+    if (length && length - lead < need) text[lead] = '\0';
+}
 void Menu_SetVisible(int visible);
 int Menu_IsOpen(void);
 /* The rectangle the menu currently covers (the bar, plus an open menu). */

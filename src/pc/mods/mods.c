@@ -154,11 +154,12 @@ static void say(const char *format, ...)
     LOG(LOG_MODS, "%s", message);
 }
 
-/* A manifest's id, name and file names are cut to fit their fields. */
+/* A manifest's id, name and file names are cut to fit their fields, between
+ * two UTF-8 characters. */
 static void copy_text(char *out, size_t size, const char *text)
 {
     size_t length = strlen(text);
-    if (length >= size) length = size - 1;
+    if (length >= size) length = Menu_TextFit(text, size - 1);
     memcpy(out, text, length);
     out[length] = '\0';
 }
@@ -169,6 +170,7 @@ static void note(Mod *mod, const char *format, ...)
     va_start(arguments, format);
     vsnprintf(mod->status, sizeof(mod->status), format, arguments);
     va_end(arguments);
+    Menu_TextTrim(mod->status);
     fprintf(stderr, "memories-pc: mod %s: %s\n", mod->id, mod->status);
 }
 
@@ -187,9 +189,11 @@ static void warn(Mod *mod, int lasting, const char *format, ...)
     fprintf(stderr, "memories-pc: mod %s: warning: %s\n", mod->id, message);
     length = strlen(mod->status);
     snprintf(mod->status + length, sizeof(mod->status) - length, "%s%s", length ? "; " : "", message);
+    Menu_TextTrim(mod->status);
     if (lasting) {
         length = strlen(mod->warnings);
         snprintf(mod->warnings + length, sizeof(mod->warnings) - length, "%s%s", length ? "; " : "", message);
+        Menu_TextTrim(mod->warnings);
     }
 }
 
@@ -1401,16 +1405,58 @@ void Mods_SetTexturePack(int (*load)(const char *directory, unsigned rank,
     texture_pack_unload = unload;
 }
 
-/* A pack entry's "setting" (texture_pack.h): whether that declared setting
- * of the mod is on, -1 when the mod declares none of that key. */
+/* An entry's "setting" (a pack's image, a "text" or "font" file): the value
+ * of that declared setting of the mod, as the mod was applied with it
+ * (Mods_RuntimeOption), in `value`; 0 when the mod declares none of that key. */
+static int setting_value(int index, const char *setting, int *value)
+{
+    int i;
+    for (i = 0; i < Mods_OptionCount(index); i++) {
+        if (!strcmp(setting, Json_String(Json_Member(Mods_Option(index, i), "key"), ""))) {
+            *value = Mods_RuntimeOption(index, i);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* Whether the pack's part is on, -1 when the mod declares no such setting. */
 static int texture_part(const char *setting, void *context)
 {
-    int index = (int)((Mod *)context - mods), i;
-    for (i = 0; i < Mods_OptionCount(index); i++) {
-        if (!strcmp(setting, Json_String(Json_Member(Mods_Option(index, i), "key"), "")))
-            return Mods_RuntimeOption(index, i) != 0;
+    int value;
+    return setting_value((int)((Mod *)context - mods), setting, &value) ? value != 0 : -1;
+}
+
+int Mods_File(int index, const char *key, int entry_index, char *path, size_t size, const char **name)
+{
+    const JsonValue *value = Json_Member(Mods_Manifest(index), key);
+    const JsonValue *entry = Json_TypeOf(value) == JSON_ARRAY ? Json_At(value, entry_index) : entry_index ? NULL : value;
+    int object = Json_TypeOf(entry) == JSON_OBJECT;
+    const JsonValue *setting = object ? Json_Member(entry, "setting") : NULL;
+    const char *file = Json_String(object ? Json_Member(entry, "file") : entry, NULL);
+    if (!entry) return 0;
+    path[0] = '\0';
+    *name = file ? file : "";
+    if (setting) {   /* a part the mod's settings switch off, or a setting it lacks: then used */
+        const char *wanted = Json_String(setting, "");
+        const JsonValue *only = Json_Member(entry, "value");   /* one choice of a "choice" setting */
+        int current = 0;
+        if (!*wanted || !setting_value(index, wanted, &current)) {
+            warn(&mods[index], 0, "\"%s\": %s names a setting the mod does not declare (%s); used", key, *name,
+                 *wanted ? wanted : "not a key");
+        } else if (only && Json_TypeOf(only) != JSON_NUMBER) {
+            warn(&mods[index], 0, "\"%s\": %s's \"value\" is not a number; used", key, *name);
+        } else if (only ? current != (int)Json_Number(only, 0) : !current) {
+            say("%s: \"%s\": %s left out, setting %s is %d", Mods_Id(index), key, *name, wanted, current);
+            return 1;
+        }
     }
-    return -1;
+    if (!file || !*file || !Paths_Contained(file) ||
+        snprintf(path, size, "%s/%s", Mods_Directory(index), file) >= (int)size) {
+        Mods_Note(Mods_Id(index), "\"%s\": %s is not a file in the mod", key, *name);
+        path[0] = '\0';
+    }
+    return 1;
 }
 
 /* The texture packs of the active mods, with `with` about to be one and
