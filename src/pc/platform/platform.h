@@ -59,6 +59,10 @@ uint16_t Platform_Pad(int port);
 /* Whether the port has a pad: port 0 always (the keyboard), port 1 when a
  * second controller is connected. Async-signal-safe. */
 int Platform_PadConnected(int port);
+/* The part of Platform_Pad(port) the player's own keys and controllers did
+ * not press: scripted input and, on port 0, the mouse. Game > Japanese
+ * buttons leaves these alone (button_layout.h). Async-signal-safe. */
+uint16_t Platform_PadFixedBits(int port);
 /* Controllers (gamepad_evdev.c): polled once a frame on the main thread. */
 void Gamepad_Poll(unsigned frame);
 uint16_t Gamepad_Bits(int port);

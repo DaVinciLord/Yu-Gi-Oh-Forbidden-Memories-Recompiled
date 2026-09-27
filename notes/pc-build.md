@@ -163,6 +163,26 @@ custom bindings are stored separately in `controls.txt`.
 | Start | Enter | Menu/Start | |
 | Select | Right Shift | View/Back | |
 
+**Game > Japanese buttons (Circle confirms)** (`jp_buttons`,
+`MEMORIES_JP_BUTTONS=1`; off by default) gives the Japanese release's layout:
+Circle confirms and Cross cancels (Square confirms in both). Every button
+check matched in both releases is the USA one with Cross and Circle
+exchanged (the card viewer's close button is the one that is not), so the
+port exchanges those two bits of the pad state the game reads, in
+`run_vblank` (`libetc.c`, `platform/button_layout.h`), for both pads, and
+changes no game code. It
+applies from the next VBlank. What the player's keys and controllers press is
+exchanged; the mouse (right button stays "back") and scripted input
+(`MEMORIES_INPUT`, `MEMORIES_INPUT2`, written in the USA layout, so a
+check's input means the same whatever the setting) are not. The memory card
+slot menu reads the game's pad state, so it follows and its hints name the
+buttons it takes. The deck slot screen (F6) reads the pad itself but
+exchanges the same two bits, so it follows too, hints included. The Controls
+and Mods windows read the keys and controllers themselves and keep their own
+buttons. Mods: an
+`INPUT` before-hook sees the controller's bits, as `host->pad` does; the
+after-hook sees what the game gets ([mod API](mod-api-3.md)).
+
 Esc quits (it closes an open menu first); F1, F2 and F4 select those state
 slots, F5 saves, and F7 loads. F3 cycles the debug HUD; slot 3 is selectable
 from File. Controllers
@@ -379,7 +399,7 @@ move, Enter activates, Esc closes (Esc quits only when no menu is open).
 | File | Save/load state, slots 1-4, screenshot, reload settings, exit |
 | Audio | Master/music/SFX sliders, mute and focus-loss mute, Gaussian (console) or cubic (sharper) voice interpolation (`audio_interpolation`) |
 | View | Window scale and Menu size submenus, window mode, scaling/aspect/filter/VSync choices |
-| Game | Game speed, Frame rate and Cheats submenus (Give 3 of every card; Unlock all Free Duel CPU duelists) |
+| Game | Game speed, Frame rate and Cheats submenus (Give 3 of every card; Unlock all Free Duel CPU duelists), Japanese buttons |
 | Mods | opens the mods window, which lists every mod found in `mods/` beside the executable and in the user directory (`notes/modding.md`) |
 | Debug | HUD levels, pause/step, frame and VRAM dumps |
 | Trace | Live frames, disc, SPU, input and state log-channel switches |
@@ -411,7 +431,10 @@ window is sized for the bar it gets. Automatic (0) follows the window height
 and above (including a 4K display). This is one step smaller than the original
 automatic size, with a minimum of 1; explicit 1x–4x choices are unchanged.
 `MEMORIES_SDL_SCRIPT` accepts `frame:shot` to save the composed
-window, which is how the menus are checked.
+window, which is how the menus are checked. `frame:key:name` presses and
+releases a key at once, which the game never sees; `frame:keydown:name` and
+`frame:keyup:name` hold it between two frames (`s` is Circle and `x` Cross by
+default), which is how Japanese buttons was checked through the keyboard.
 
 ### Back to the title screen
 
