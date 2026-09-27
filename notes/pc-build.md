@@ -163,7 +163,7 @@ custom bindings are stored separately in `controls.txt`.
 | Start | Enter | Menu/Start | |
 | Select | Right Shift | View/Back | |
 
-**Game > Japanese buttons (Circle confirms)** (`jp_buttons`,
+**View > Japanese buttons (Circle confirms)** (`jp_buttons`,
 `MEMORIES_JP_BUTTONS=1`; off by default) gives the Japanese release's layout:
 Circle confirms and Cross cancels (Square confirms in both). Every button
 check matched in both releases is the USA one with Cross and Circle
@@ -185,8 +185,8 @@ after-hook sees what the game gets ([mod API](mod-api-3.md)).
 
 Esc quits (it closes an open menu first); F1, F2 and F4 select those state
 slots, F5 saves, and F7 loads. F3 cycles the debug HUD; slot 3 is selectable
-from File. F8, held, rewinds when **Game > Rewind (hold F8)** is on (see
-Rewind below). F11 or Alt+Enter (the main Enter or the keypad's) switches between
+from File. F8, held, rewinds when the `rewind` setting is on (see Rewind
+below; it has no menu item). F11 or Alt+Enter (the main Enter or the keypad's) switches between
 the window and desktop fullscreen and saves `fullscreen`; in fullscreen Esc
 first returns to the window. The Enter pressed under Alt stops there, so it
 never presses Start, and Alt is a reserved modifier no binding can use. While
@@ -330,11 +330,11 @@ address. Checked from a state at the ending's last dialogue, mashing Cross
 The retail game never leaves the credits: `Main_RunCredits` runs the scene in
 its last phase, after the save and the secret number, and drops the answer of
 `Model_IsCreditsPresentationComplete`, so the screen stays on the last credit
-until the console is reset. Game > Title screen after the credits (the
-`return_after_credits` setting, `MEMORIES_RETURN_AFTER_CREDITS`, on by
-default) has the port publish the main menu's mode three seconds after the
-presentation is complete (`platform/credits.c`); the game's code is
-unchanged. Checked by entering the ending with `MEMORIES_MODE_AT=1000:15`,
+until the console is reset. The port publishes the main menu's mode three
+seconds after the presentation is complete (`platform/credits.c`), so the
+game always goes back to the title; the game's code is unchanged. (It was a
+setting, `return_after_credits`, on by default, until the Game menu was
+trimmed; the key is ignored now.) Checked by entering the ending with `MEMORIES_MODE_AT=1000:15`,
 declining the save and running 60,000 frames: the main menu with the
 setting, the last credit without it.
 
@@ -431,8 +431,8 @@ move, Enter activates, Esc closes (Esc quits only when no menu is open).
 | File | Save/load state, slots 1-4, screenshot, reload settings, exit |
 | Audio | Master/music/SFX sliders, mute and focus-loss mute, Gaussian (console) or cubic (sharper) voice interpolation (`audio_interpolation`) |
 | Video | Window scale and Menu size submenus, window mode, scaling/aspect/filter/VSync choices |
-| View | Fusion helper (`fusion_helper`, [notes/fusion-helper.md](fusion-helper.md)), Card passwords, Library: show every card, Free Duel progress (see [View > Free Duel progress](#view--free-duel-progress)); Duel rank submenu: Off, Rank, Rank and score (`rank_meter` 0/1/2, see [Duel rank](#duel-rank)) |
-| Game | Game speed, Frame rate and Cheats submenus (see [Cheats](#cheats)), Japanese buttons, Rewind (hold F8) |
+| View | Fusion helper (`fusion_helper`, [notes/fusion-helper.md](fusion-helper.md)), Card passwords, Library: show every card, Free Duel progress (see [View > Free Duel progress](#view--free-duel-progress)); Duel rank submenu: Off, Rank, Rank and score (`rank_meter` 0/1/2, see [Duel rank](#duel-rank)); Opponent's name for COM; Japanese buttons |
+| Game | Game speed, Frame rate and Cheats submenus (see [Cheats](#cheats)), Card drops, Deck slots, card browsing, Restart game |
 | Mods | opens the mods window, which lists every mod found in `mods/` beside the executable and in the user directory (`notes/modding.md`) |
 | Debug | HUD levels, pause/step, frame and VRAM dumps |
 | Trace | Live frames, disc, SPU, input and state log-channel switches |
@@ -469,8 +469,9 @@ Japanese buttons was checked through the keyboard; `f8` is one of the names.
 
 ### Rewind
 
-**Game > Rewind (hold F8)** (`rewind`, `MEMORIES_REWIND`, off by default)
-keeps the last seconds of play in memory; holding F8 walks back through
+Rewind (`rewind=1` in `settings.txt`, or `MEMORIES_REWIND=1`; off by
+default, and taken out of the Game menu, so only those turn it on) keeps
+the last seconds of play in memory; holding F8 walks back through
 them, like an emulator's rewind, and letting go plays on from the moment
 shown. F8 is the rewind key only while the setting is on: then it is taken
 before the controls (a binding to F8 does nothing); with the setting off it
@@ -1249,7 +1250,9 @@ It changes nothing at 1x, and nothing in the software picture.
 
 ### HD text
 
-Video > HD text (`hd_text`, `MEMORIES_HD_TEXT=1`, off by default) sets the
+HD text is a setting of the Forbidden Memories HD mod (its `hd_text`, on by
+default; Game > Mods, or `mod.forbidden-memories-hd.hd_text` in
+`settings.txt`): while that mod is applied with it on, the port sets the
 text's letters in a font at the internal resolution instead of drawing the
 retail 8x12 and 16x16 cells texel by texel (`src/pc/text/hd_text.c`). It is
 a change to the OpenGL picture above, so it shows at internal 2x and up,
@@ -1315,9 +1318,9 @@ carry names, and a card a mod adds reads like the rest.
 
 ### HD numbers and labels
 
-Video > HD numbers and labels (`hd_hud`, `MEMORIES_HD_HUD=1`, off by
-default) does for the duel's numbers and labels what HD text does for the
-text. They are sprites from sheets of their own, not the font's cells, so
+HD numbers and labels come with HD text (the same mod setting; they were
+two items of the Video menu before). They do for the duel's numbers and
+labels what HD text does for the text. They are sprites from sheets of their own, not the font's cells, so
 HD text never reached them. It works in the OpenGL picture at 2x and up; 1x
 and the software picture never change.
 
@@ -1354,7 +1357,7 @@ The pictures share HD text's atlas (four rows of cells above the titles).
 
 ### Opponent's name for COM
 
-Video > Opponent's name for COM (`opponent_name`, `MEMORIES_OPPONENT_NAME=1`,
+View > Opponent's name for COM (`opponent_name`, `MEMORIES_OPPONENT_NAME=1`,
 off by default) shows the opponent's name in the life-point panel's COM
 box, in the OpenGL picture at 2x and up and at the console's resolution. A
 pack can't do this, because the panel is one texture for every opponent.
@@ -1365,13 +1368,14 @@ at 1x (`HdText_NamePixels`), through the panel's CLUT, so the inactive
 side's dimming applies and whatever the game draws over the panel stays
 over it. With the option off nothing is drawn.
 
-HD text and HD numbers and labels are dimmed in the Video menu when they
-could not show: "needs OpenGL 3" when the picture pass is off (no OpenGL 3,
-the SDL renderer fallback, `MEMORIES_GL_PICTURE=0`, the X11 backend) and
-"needs Internal 2x" at console resolution (`Menu_SetHdPicture`, `menu.c`).
-Before, they could be switched on and silently did nothing. This item works
-at 1x with or without OpenGL, so it is dimmed only at 2x and up without the
-picture pass ("needs OpenGL 3 or 1x").
+HD text shows only in the OpenGL picture pass (not with no OpenGL 3, the
+SDL renderer fallback, `MEMORIES_GL_PICTURE=0` or the X11 backend) at
+Internal 2x and up; elsewhere its mod setting changes nothing. The
+opponent's name works at 1x with or without OpenGL, so its View item is
+dimmed only at 2x and up without the picture pass ("needs OpenGL 3 or 1x",
+`Menu_SetHdPicture`, `menu.c`). `Mods_FeatureOn` (`mods.h`) is how a mod's
+setting switches on a feature of the port; `HdText_Enabled` reads it once
+a presented frame.
 
 - The name comes from the opponent id (`gDuel_bOpponentID`, 1-39) through
   `Tables_DuelistShortName`. A name of up to 11 letters is shown whole.
@@ -1389,7 +1393,8 @@ picture pass ("needs OpenGL 3 or 1x").
 - It is drawn over the panel whatever drew the panel: the retail panel, HD
   numbers and labels, or a texture pack's image.
 - A 2P duel (no opponent id) and a panel other than the retail one keep COM.
-- YOU's box shows You, in the name's case, made the same way.
+- YOU's box shows the name the player gave at name entry (the save's,
+  `SaveSlots_StateName`), made the same way; You when the save has none.
 - The result screens name the sides too (You, and the opponent over COM's
   column). They call the dialogue bank's YOU and COM labels by their place,
   which `Text_Retarget` points at the names. Their small font has no full

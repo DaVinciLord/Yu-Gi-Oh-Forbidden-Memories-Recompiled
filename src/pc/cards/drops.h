@@ -33,15 +33,6 @@ void CardDrops_Begin(void);
  * SPOILS shows. With more than one card set, the others are dealt first
  * and kept for the added pages. */
 int CardDrops_Roll(int pool);
-/* Game > Smart drops (SET_SMART_DROPS), a pool before its roll: `weights`
- * by card id (1..count) with every card the player has
- * DECK_CARD_COPY_LIMIT copies of (deck, chest and the cards this duel
- * already dealt) set to 0 and the rest scaled back to
- * DUEL_DROP_WEIGHT_TOTAL (Tables_Scale). Returns how many cards it left
- * out; 0, with `weights` as they were, when none is, or when every card
- * would be and the pool stands as it is. CardDrops_Roll uses it for every
- * card it deals, SPOILS' included, with one draw per card as before. */
-int CardDrops_SmartPool(unsigned *weights, int count);
 /* The player leaves the screen with a save: award the kept cards (the game
  * then awards the first). */
 void CardDrops_Award(void);

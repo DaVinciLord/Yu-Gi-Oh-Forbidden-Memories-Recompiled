@@ -52,7 +52,7 @@ int SoftGpu_WideFrameView(int x, int y, int w, int h, const uint16_t **pixels, i
  * is NULL then), so their pixels are not to be shown. */
 int SoftGpu_WideRastered(void);
 /* The opponent's name over the life-point panel at the console's
- * resolution (hd_text.h, HdText_NamePixels): set while Video > Opponent's
+ * resolution (hd_text.h, HdText_NamePixels): set while View > Opponent's
  * name for COM is on (libgpu.c), NULL otherwise, when nothing changes. */
 extern const uint8_t *(*SoftGpu_PanelName)(int which, int *x, int *y, int *width, int *height, int *stride);
 /* Scaled widened picture, SOFT_GPU_WIDTH * scale pixels per row. NULL at

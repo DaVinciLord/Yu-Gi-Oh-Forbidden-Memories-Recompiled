@@ -87,7 +87,7 @@ static void run_vblank(void)
             MemoriesModEvent input = {MEMORIES_EVENT_INPUT, MEMORIES_BEFORE, port, (int)bits, 0, (int)bits, 0};
             Mods_Dispatch(&input);
             bits = (unsigned)(input.handled ? input.result : input.b) & 0xffffu;
-            /* Game > Japanese buttons: Cross and Circle exchange here, the one
+            /* View > Japanese buttons: Cross and Circle exchange here, the one
              * place every pad the game reads passes (button_layout.h). The
              * mods' before-hooks see the controller's own bits, as host->pad
              * does; after-hooks see what the game gets. */

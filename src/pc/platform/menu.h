@@ -72,9 +72,8 @@ typedef enum {
     MENU_ITEM_FILTER_NEAREST,
     MENU_ITEM_FILTER_LINEAR,
     MENU_ITEM_FILTER_SHARP,
-    MENU_ITEM_HD_TEXT, /* Video > HD text, HD numbers and labels, Opponent's name for COM: */
-    MENU_ITEM_HD_HUD,  /* drawn by the OpenGL picture pass at Internal 2x and up (Menu_SetHdPicture); */
-    MENU_ITEM_OPPONENT_NAME, /* the name by the software GPU at 1x too */
+    MENU_ITEM_OPPONENT_NAME, /* View > Opponent's name for COM: drawn by the OpenGL picture pass at
+                              * Internal 2x and up (Menu_SetHdPicture), by the software GPU at 1x */
     MENU_ITEM_RESTART /* Game > Restart game: asks, then goes back as MENU_ITEM_TITLE does */
 } MenuItemId;
 

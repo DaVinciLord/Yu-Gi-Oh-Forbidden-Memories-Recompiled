@@ -1,6 +1,6 @@
 #ifndef MEMORIES_PC_HD_TEXT_H
 #define MEMORIES_PC_HD_TEXT_H
-/* HD text (Video > HD text): at an internal resolution above the console's,
+/* HD text (the Forbidden Memories HD mod's "HD text" setting): at an internal resolution above the console's,
  * the OpenGL picture (gl_picture.c) draws the text's glyphs from pictures
  * set in a font at that resolution instead of the retail 8x12 and 16x16
  * cells. The pictures are 4-bit indices like the cells, with the cells'
@@ -35,7 +35,7 @@ void HdText_TitleUploaded(int card, int x, int y);
 int HdText_Title(int page_x, int page_y, int u, int v, int factor, int *atlas_u, int *atlas_v, int *title_u,
                  int *title_v);
 
-/* HD numbers and labels (Video > HD numbers and labels): the duel's digits
+/* HD numbers and labels (with HD text, HdText_Enabled): the duel's digits
  * (life points, deck counts, the field cards' ATK and DEF, the card view's,
  * the menus'), the life-point panel's LP, COM and YOU, the card kinds, the
  * FIELD box and the terrains' names, which are sprites from sheets of their
@@ -51,12 +51,12 @@ int HdText_Title(int page_x, int page_y, int u, int v, int factor, int *atlas_u,
 int HdText_HudEnabled(void);
 int HdText_Hud(int depth, int page_x, int page_y, int clut_x, int clut_y, int u, int v, int w, int h, int factor,
                int *atlas_u, int *atlas_v);
-/* The opponent's name in place of COM (Video > Opponent's name for COM),
+/* The opponent's name in place of COM (View > Opponent's name for COM),
  * (at 1x too: HdText_NamePixels): a box made from COM's, as long as the name needs
  * (Tables_DuelistShortName), drawn over the life-point panel at x, y
  * (panel texels; x runs left of the panel for a long name), width x height,
- * its picture at atlas_u, atlas_v; `which` 1 is YOU's box with You, in
- * the name's case. 0 with no opponent (2P) or no retail panel. */
+ * its picture at atlas_u, atlas_v; `which` 1 is YOU's box with the
+ * player's name from name entry, or You. 0 with no opponent (2P) or no retail panel. */
 int HdText_NameEnabled(void);
 int HdText_NameBox(int factor, int which, int *atlas_u, int *atlas_v, int *x, int *y, int *width, int *height);
 /* The same box at the console's resolution (soft_gpu.c draws it there):

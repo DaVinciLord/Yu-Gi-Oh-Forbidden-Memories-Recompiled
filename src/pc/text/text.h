@@ -51,7 +51,7 @@ enum {
  * codes, ending in {end}), or NULL: for the port's own strings, and for a
  * retail string the port adds to. */
 const unsigned char *Text_Own(int id);
-/* The name in place of COM (Video > Opponent's name for COM) for a duelist
+/* The name in place of COM (View > Opponent's name for COM) for a duelist
  * (1-39), in Latin-1: a translation's TEXT_OWN_OPPONENT + id; else its name
  * for the duelist in the names bank (0x8328 + id) when it differs from the
  * English, shortened as Tables_ShortenName does; else the English
