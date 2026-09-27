@@ -40,6 +40,10 @@ static const SettingInfo info[SET_COUNT] = {
      * and count pre-releases as newer. */
     [SET_UPDATE_CHECK] = {"check_for_updates", NULL, "MEMORIES_CHECK_FOR_UPDATES", NULL, 1, 0, 1},
     [SET_UPDATE_PRERELEASES] = {"update_prereleases", NULL, "MEMORIES_UPDATE_PRERELEASES", NULL, 0, 0, 1},
+    /* 1: states kept in memory every few frames, and holding F8 goes back
+     * through them (src/pc/guest/state.c, rewind.h). Off by default: it
+     * costs memory and a little time per frame. */
+    [SET_REWIND] = {"rewind", NULL, "MEMORIES_REWIND", NULL, 0, 0, 1},
     /* Game > Cheats (src/pc/debug/cheats.h): the life points both sides
      * start a duel against the CPU with; 8000 is the console's. */
     [SET_CHEAT_LIFE_POINTS] = {"cheat_life_points", NULL, "MEMORIES_CHEAT_LIFE_POINTS", NULL, 8000, 1, 9999},

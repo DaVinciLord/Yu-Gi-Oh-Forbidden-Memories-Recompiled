@@ -54,6 +54,12 @@ int Memories_StateRunGame(int (*entry)(void));
 void Memories_StatePoint(unsigned presented_frames);
 /* 1 save, 2 load; taken up at the next state point. Async-signal-safe. */
 void Memories_StateRequest(int what, int slot);
+/* The rewind key (F8) is held or not. With the `rewind` setting on, state
+ * points keep a ring of recent states in memory and, while held, go back
+ * through it (state.c, rewind.h). Returns whether the setting is on: only
+ * then is F8 the rewind key, so with it off the key reaches the game like
+ * any other. Async-signal-safe. */
+int Memories_RewindHold(int held);
 /* Locate the running build's symbol table beside the executable. */
 int Memories_SymbolTablePath(char *out, size_t size);
 int Memories_LastStateSlot(void);
