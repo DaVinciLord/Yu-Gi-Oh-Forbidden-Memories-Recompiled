@@ -151,6 +151,13 @@ class EquipTest(unittest.TestCase):
         self.assertEqual(result.project.rituals, {})
         self.assertIn({"card": "Card 681", "result": None}, manifest.build(result.project)["rituals"])
         self.assertIn("the rituals were imported as removed", report)
+        # Code whose bytes happen to spell one recipe among the rest: still code.
+        for k in range(g.TERRAIN_COPIES):
+            at = g.TERRAIN_BASE + k * g.TERRAIN_STRIDE + g.RITUAL_OFFSET
+            wa[at:at + 30] = struct.pack("<15H", 0x2402, 0x27BD, 0xFFE8, 0xAFBF, 0x0010,
+                                         681, 1, 2, 3, 500, 0x0C00, 0x1234, 0x8000, 0x9000, 0xA000)
+        result, report = imported(f, wa=bytes(wa))
+        self.assertEqual(result.project.rituals, {})
 
 
 def put_text(slus: bytearray, table_entry: int, bank: int, address: int, data: bytes):

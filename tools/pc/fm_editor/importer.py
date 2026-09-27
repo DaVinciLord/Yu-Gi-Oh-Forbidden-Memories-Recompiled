@@ -555,6 +555,8 @@ def check_rituals(project: Project, modded) -> list:
     bad = len(project.rituals) - len(valid)
     if not bad:
         return []
+    if len(valid) * 2 < len(project.rituals):
+        valid = {}      # mostly not recipes: the few that look like one are the code's bytes by chance
     project.rituals = valid
     if valid:
         return [f"rituals: {bad} records of the modified ritual table name no ritual card or no card at all; left out"]
