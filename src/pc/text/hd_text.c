@@ -398,6 +398,16 @@ static void fill(unsigned char cover[CELL * MAX_FACTOR][CELL * MAX_FACTOR], doub
     }
 }
 
+/* Heavier by x across and y down (pixels), half beyond each edge.
+ * FT_Outline_EmboldenXY keeps the left and bottom edges and moves the
+ * whole outline right and up by half the weight; it is moved back. */
+static void embolden(FT_Outline *outline, double x, double y)
+{
+    FT_Pos across = (FT_Pos)(x * 64), down = (FT_Pos)(y * 64);
+    FT_Outline_EmboldenXY(outline, across, down);
+    FT_Outline_Translate(outline, -(across / 2), -(down / 2));
+}
+
 /* Rows y0 to y1 (atlas pixels) of the atlas have changed. */
 static void changed(int y0, int y1)
 {
@@ -436,7 +446,14 @@ static int render_at(int at_column, int at_row, const unsigned char cell[CELL][C
          * order) is left out. */
         double top_f = lower ? font->x_height : font->cap, top_r = lower ? r->x_height : r->cap;
         if (font->descender < -1 && r->descender > r->base + 0.25) {
-            from[n] = font->descender, to[n] = r->descender, tops[n++] = 0;
+            /* A letter's own tail to where the cell's glyph ends: the
+             * retail g reaches a texel below the p and q the line is
+             * measured by, and squeezed onto the line its tail is a blot. */
+            if (bbox.yMin / 64.0 < -font->bar && box.bottom > r->base + 0.25) {
+                from[n] = bbox.yMin / 64.0, to[n] = box.bottom, tops[n++] = 0;
+            } else {
+                from[n] = font->descender, to[n] = r->descender, tops[n++] = 0;
+            }
         }
         main = n;
         from[n] = 0, to[n] = r->base, tops[n++] = 0;
@@ -484,7 +501,7 @@ static int render_at(int at_column, int at_row, const unsigned char cell[CELL][C
         outline->points[i].x = (FT_Pos)(column * f * 64);
         outline->points[i].y = (FT_Pos)((cells_high - row) * f * 64);
     }
-    FT_Outline_EmboldenXY(outline, (FT_Pos)(ex * f * 64), (FT_Pos)(ey * f * 64));
+    embolden(outline, ex * f, ey * f);
     memset(cover, 0, sizeof(cover));
     memset(&bitmap, 0, sizeof(bitmap));
     bitmap.rows = (unsigned)height;
@@ -1034,7 +1051,7 @@ static int set_text(void *face_pointer, const unsigned char *texels, int pitch, 
             outline->points[i].x = (FT_Pos)(column * f * 64);
             outline->points[i].y = (FT_Pos)((y1 - y0 - row) * f * 64);
         }
-        FT_Outline_EmboldenXY(outline, (FT_Pos)(ex * f * 64), (FT_Pos)(ey * f * 64));
+        embolden(outline, ex * f, ey * f);
         memset(one, 0, sizeof(one));
         memset(&bitmap, 0, sizeof(bitmap));
         bitmap.rows = (unsigned)height;
