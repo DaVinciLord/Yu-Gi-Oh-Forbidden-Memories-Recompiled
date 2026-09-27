@@ -85,6 +85,51 @@ Cards are named by their retail name when that finds the card again in the
 port (`retail_by_name`), by number otherwise, and added cards by their
 stable identity `<mod id>:<id>:1`.
 
+## Importing a modified game
+
+The PS1 scene's mods (Mod 13, FM 2023, rebalances...) ship patched copies of
+the game's files. **File > Import a modified game** (or the `import`
+command) compares a modified `.bin`, or its `SLUS_014.11` and `WA_MRG.MRG`,
+with your retail files and makes a port mod of the difference, which then
+opens and saves like any other:
+
+| Changed in the modified game | Becomes |
+|---|---|
+| card stats, names, texts; fusions, equips, rituals; deck and drop pools | `cards`, `fusions`, `equips`, `rituals`, `decks`, `drops`. A name or text that differs only by spaces at line ends stays retail's. Drop pools a mod stores encoded (the TeaOnline drop tool writes `bias + 8 * weight + noise` and makes the draw at `0x80021860` jump to code that undoes it) are decoded as `max(0, (raw - bias) >> shift)`, with the bias and shift read from that code's `addiu` and `sra`, or, when the code is not recognized, the values that make every such pool add up to 2048. Any other pool that does not add up to 2048 is scaled to 2048 keeping each card's share. The report says which |
+| other text: dialogue, menus, types, stars, duelists, places | `text.txt`, a partial [text listing](../../../notes/translation.md) (a bank whose changed strings jump is written whole) |
+| other bytes of `WA_MRG.MRG` (pictures, passwords and costs, starter decks, portraits...) | `data` patches; a run longer than 4 KB becomes whole sectors in `data/`, replaced by LBA |
+| code and tables of the executable (AI parameters, field bonuses, equip bonuses, the draw...) | nothing: the port runs the executable's code natively. Listed in the report by RAM address, with the `j`/`jal` instructions that reach each place; changed bytes of the text banks that the text listing does not read (a mod's code or tables in the banks' free space, text left over) are listed too |
+
+The report is shown and saved with the mod as `import-report.txt`.
+
+    python tools/pc/fm_editor import <modified .bin, folder or SLUS_014.11> -o <mod folder>
+        [--wa <modified WA_MRG.MRG>] [--game <retail>] [--id <mod id>]
+
+## Importing a .ygomods package
+
+The old static recompilation's in-game editor exported `.ygomods` packages
+(a ZIP of INI and text files and PNGs). **File > Import a .ygomods package**
+(or `import <file>.ygomods -o <mod folder>`) reads one over retail:
+
+| In the package | Becomes |
+|---|---|
+| `cards/<id>/card.ini`: name, description (`\|` breaks a line), ATK/DEF, level, type, attribute, stars | `cards` replace entries |
+| `cards/<id>/card.ini`: `equips`, `ritual` | `equips` (the complete list), `rituals` |
+| `cards/<id>/card.ini`: `price`, `password` | a `data` patch of the password table in `WA_MRG.MRG` (`price` taken as the starchip cost) |
+| `cards/<id>/art.png`, `thumb.png`, `title.png` | the card's `art`, `thumbnail`, `title` |
+| `fusion-edits.txt` | `fusions` (a `clear` line removes every retail fusion first) |
+| `drop_table_edits.ini`, `drop_missing_cards.ini` | `drops` (the listed weights, the rest sharing the remainder, as the port does) |
+| `cpu-duelists.ini` deck weights; `name =` | `decks` (the whole pool); a renamed opponent in `text.txt` |
+| `duelists/<n>/portrait.png` | a texture pack image of the Free Duel portrait |
+
+Listed in the report and left out, as the port has no data key for them:
+scripted monster and magic effects (`on_flip`, `battle`, `effect`...),
+card and name colours, the nine AI bytes, scripted rewards and StarChip
+rules, the recomp's card shop and its settings, and `dialogue.txt`, whose
+code numbering is the recomp's own (translate with `text_listing.py`).
+The importer was written from the packages' own file layout; no code of the
+recomp is used.
+
 ## Checks
 
 Before saving, the editor runs the loader's checks (`validate.py`): the mod
@@ -98,6 +143,15 @@ least 14 cards, a drop pool with a card left, and pools adding up to 2048.
 
 opens a mod over retail, lists what the loader would complain about, and
 with `--print` shows the `mod.json` the editor would write for it.
+
+## A standalone executable
+
+    python -m pip install pyinstaller
+    python tools/pc/fm_editor/build_exe.py [--dist tmp/pc/fm-editor]
+
+builds `tmp/pc/fm-editor/fm-editor.exe` (one file, about 11 MB, no Python
+needed to run it). Put it beside `memories-pc.exe` and it finds the game's
+`game/` folder there. Build outputs never go in git.
 
 ## Tests
 

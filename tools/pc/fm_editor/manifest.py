@@ -749,6 +749,10 @@ def save_mod(project: Project, folder, manifest: dict = None) -> Path:
                 if not target.exists():
                     target.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(item, target)
+    for name, blob in project.files.items():
+        target = folder / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(blob)
     manifest = build(project) if manifest is None else manifest
     path = folder / "mod.json"
     temporary = folder / "mod.json.tmp"

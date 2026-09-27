@@ -1,0 +1,538 @@
+"""A community mod's modified game files, turned into a port mod.
+
+The mods of the PS1 scene (Mod 13, FM 2023, Shin...) ship patched copies of
+SLUS_014.11 and WA_MRG.MRG, or a patched disc. This compares them with the
+player's retail files and writes what differs in the port's terms:
+
+* cards, fusions, equips, rituals, deck and drop pools: the editor's own
+  diff (manifest.build), so the result opens in the editor like any mod;
+* other text (dialogue, menus, types, duelists, places): a partial text
+  listing (text_listing.py's format), "text" in mod.json;
+* other changed bytes of WA_MRG.MRG (images, passwords and costs, starter
+  decks...): "data" patches, or sector replacements for long runs; the port
+  reads WA_MRG.MRG through its override layer, so they apply;
+* what the port cannot take from a data file (code and tables in the
+  executable, such as the AI's parameters or the field bonuses; other disc
+  files) is listed in the report instead.
+"""
+from __future__ import annotations
+
+import bisect
+import re
+import struct
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from . import gamedata as g, manifest
+from .model import Project
+from .pools import normalize
+
+WA_FILE = "\\DATA\\WA_MRG.MRG;1"
+MERGE_GAP = 32              # changed runs closer than this are one patch
+PATCH_LIMIT = 4096          # longer runs become sector replacements
+
+# Executable regions the port has no data key for, by RAM address.
+SLUS_REGIONS = [
+    (0x800909D4, 0x80090A4C, "field (terrain) bonus table"),
+    (0x80090A4C, 0x80090AD4, "destroy-by-type/ATK effect table"),
+    (0x80090AD4, 0x80090B39, "magic effect classes"),
+    (0x800917F0, 0x80091958, "opponents' AI parameters (9 bytes each)"),
+    (0x8009AF24, 0x8009AF40, "trap ceilings / heal and burn amounts"),
+    (0x8001A7F8, 0x8001A7FC, "equip bonus (+500)"),
+    (0x8001A820, 0x8001A824, "Megamorph bonus (+1000)"),
+    (0x801D9000, 0x801D9170, "the font's glyph table"),
+    (0x801D5EC0, 0x801D6000, "the names table's entries 0x8360-0x83FF (past the ones the text listing reads)"),
+]
+# Executable regions the editor turns into cards[]; the text banks' bytes
+# the text listing reads are added per file (text_spans).
+SLUS_HANDLED = [
+    (g.STATS_ADDRESS, g.STATS_ADDRESS + 4 * g.CARD_COUNT),
+    (g.LEVEL_ATTR_ADDRESS, g.LEVEL_ATTR_ADDRESS + g.CARD_COUNT + 1),
+]
+TEXT_BANKS = [(0x801B0000, 0x801C0000, "the dialog bank"), (0x801C0000, 0x801D0000, "the card texts' bank"),
+              (0x801D0000, 0x801E0000, "the names bank")]
+PLACES_SHOWN = 12           # changed places listed one by one in the report
+
+# The drop draw (Duel_SelectCardDrop) adds each card's weight at this
+# instruction. The TeaOnline drop tool's mods write every drop weight as
+# bias + 8*weight + noise and replace it with a jump to code that undoes it.
+DRAW_ADD = 0x80021860
+TEAONLINE_ENCODING = (2512, 3)      # (bias, shift) that tool writes
+DROP_POOLS = ("pow", "bcd", "tec")  # the deck pools are never encoded
+
+
+def slug(text: str) -> str:
+    """A mod id out of a file name (File > Import and the command line)."""
+    text = re.sub(r"[^A-Za-z0-9_-]+", "-", Path(text).stem).strip("-").lower()
+    return (text or "imported-mod")[:63]
+
+
+@dataclass
+class ImportResult:
+    project: Project
+    report: list = field(default_factory=list)       # lines for the user
+    unhandled: int = 0                               # count of things the port cannot take
+
+
+def _runs(a: bytes, b: bytes, start: int, end: int, gap: int = MERGE_GAP):
+    """[start, end) runs where a and b differ, merged across small gaps."""
+    runs = []
+    at = start
+    end = min(end, len(a), len(b))
+    step = 4096
+    while at < end:
+        stop = min(at + step, end)
+        if a[at:stop] == b[at:stop]:
+            at = stop
+            continue
+        for i in range(at, stop):
+            if a[i] != b[i]:
+                if runs and i - runs[-1][1] <= gap:
+                    runs[-1][1] = i + 1
+                else:
+                    runs.append([i, i + 1])
+        at = stop
+    return [tuple(r) for r in runs]
+
+
+def _trim(a: bytes, b: bytes, runs):
+    """Each run cut down to its first and last differing byte; runs where
+    nothing differs (a gap between two regions, left by _subtract) dropped."""
+    out = []
+    for start, end in runs:
+        while start < end and a[start] == b[start]:
+            start += 1
+        while end > start and a[end - 1] == b[end - 1]:
+            end -= 1
+        if start < end:
+            out.append((start, end))
+    return out
+
+
+def _merge(runs, gap: int):
+    out = []
+    for start, end in sorted(runs):
+        if out and start - out[-1][1] <= gap:
+            out[-1] = (out[-1][0], max(end, out[-1][1]))
+        else:
+            out.append((start, end))
+    return out
+
+
+def _subtract(runs, regions):
+    """The parts of runs outside every region."""
+    out = []
+    for start, end in runs:
+        pieces = [(start, end)]
+        for low, high in regions:
+            next_pieces = []
+            for s, e in pieces:
+                if e <= low or s >= high:
+                    next_pieces.append((s, e))
+                    continue
+                if s < low:
+                    next_pieces.append((s, low))
+                if e > high:
+                    next_pieces.append((high, e))
+            pieces = next_pieces
+        out += pieces
+    return out
+
+
+def wa_structured_regions():
+    regions = []
+    for k in range(g.TERRAIN_COPIES):
+        base = g.TERRAIN_BASE + k * g.TERRAIN_STRIDE
+        regions += [(base + g.EQUIP_OFFSET, base + g.EQUIP_OFFSET + g.EQUIP_LENGTH),
+                    (base + g.FUSION_OFFSET, base + g.FUSION_OFFSET + g.FUSION_LENGTH),
+                    (base + g.RITUAL_OFFSET, base + g.RITUAL_OFFSET + g.RITUAL_LENGTH)]
+    for d in range(g.DUELIST_COUNT):
+        for offset in g.POOL_OFFSETS.values():
+            start = g.DUELIST_BASE + d * g.DUELIST_STRIDE + offset
+            regions.append((start, start + 2 * g.CARD_COUNT))
+    return regions
+
+
+def describe_wa(offset: int) -> str:
+    if 0x169000 <= offset < 0x169000 + 0x3800 * g.CARD_COUNT:
+        return "the cards' pictures and name plates"
+    if offset < 0x800 * g.CARD_COUNT:
+        return "the cards' small pictures"
+    if 0xFB9800 <= offset < 0xFB9800 + 8 * 723:
+        return "the cards' passwords and starchip costs"
+    if 0xF92BD4 <= offset < 0xF92BD4 + 7 * (2 + 2 * g.CARD_COUNT):
+        return "the starter deck pools"
+    if 0xF55000 <= offset < 0xF55000 + 40 * 2432:
+        return "the duelists' portraits"
+    if g.DUELIST_BASE <= offset < g.DUELIST_BASE + g.DUELIST_COUNT * g.DUELIST_STRIDE:
+        inside = (offset - g.DUELIST_BASE) % g.DUELIST_STRIDE
+        return "the opponents' records (between their pools)" if inside < 4 * 0x5B4 else \
+            "the opponents' records (rank tables)"
+    if g.TERRAIN_BASE <= offset < g.TERRAIN_BASE + g.TERRAIN_COPIES * g.TERRAIN_STRIDE:
+        return f"the duel package (terrain copy {(offset - g.TERRAIN_BASE) // g.TERRAIN_STRIDE})"
+    return "WA_MRG.MRG"
+
+
+# --- the executable's code ------------------------------------------------------------
+
+def _word(slus: bytes, address: int):
+    at = g.slus_offset(address)
+    return struct.unpack_from("<I", slus, at)[0] if 0 <= at <= len(slus) - 4 else None
+
+
+def _jump_target(word: int, address: int) -> int:
+    return ((address + 4) & 0xF0000000) | ((word & 0x03FFFFFF) << 2)
+
+
+def jumps_into(retail_slus: bytes, slus: bytes, places) -> dict:
+    """{(start, end): ["j at 0x80021860 (patched)", ...]}: the j and jal
+    instructions of the executable that land in each [start, end) RAM range;
+    "patched" when that instruction is not retail's."""
+    found = {place: [] for place in places}
+    ranges = sorted(places)
+    starts = [start for start, _ in ranges]
+    header = g.slus_offset(0x80010000)
+    for index, (word,) in enumerate(struct.iter_unpack("<I", slus[header:header + (len(slus) - header) // 4 * 4])):
+        if word >> 26 not in (2, 3):
+            continue
+        address = 0x80010000 + 4 * index
+        target = _jump_target(word, address)
+        k = bisect.bisect_right(starts, target) - 1
+        if k >= 0 and target < ranges[k][1]:
+            patched = " (patched)" if _word(retail_slus, address) != word else ""
+            found[ranges[k]].append(f"{'j' if word >> 26 == 2 else 'jal'} at 0x{address:08X}{patched}")
+    return found
+
+
+def draw_code_encoding(retail_slus: bytes, slus: bytes):
+    """(bias, shift, code address) when the drop draw's add (DRAW_ADD) is a
+    jump to code that turns the weight into (weight - bias) >> shift with an
+    addiu and an sra before anything else branches, else None."""
+    word = _word(slus, DRAW_ADD)
+    if word is None or word == _word(retail_slus, DRAW_ADD) or word >> 26 != 2:
+        return None
+    code = _jump_target(word, DRAW_ADD)
+    bias = register = None
+    for i in range(8):
+        w = _word(slus, code + 4 * i)
+        if w is None:
+            return None
+        op, rs, rt, rd = w >> 26, (w >> 21) & 31, (w >> 16) & 31, (w >> 11) & 31
+        if op == 9 and bias is None and rs == rt:                       # addiu r, r, -bias
+            imm = w & 0xFFFF
+            bias, register = -(imm - 0x10000 if imm & 0x8000 else imm), rt
+        elif op == 0 and w & 63 == 3 and bias is not None and rt == rd == register:     # sra r, r, shift
+            return bias, (w >> 6) & 31, code
+        elif 1 <= op <= 7 or (op == 0 and w & 63 in (8, 9)):             # a branch or a jump first
+            return None
+    return None
+
+
+def _raw_pool(wa: bytes, duelist: int, pool: str):
+    at = g.DUELIST_BASE + duelist * g.DUELIST_STRIDE + g.POOL_OFFSETS[pool]
+    return struct.unpack_from("<%dH" % g.CARD_COUNT, wa, at)
+
+
+def decode_weights(raw, bias: int, shift: int) -> dict:
+    weights = {cid: max(0, (x - bias) >> shift) for cid, x in enumerate(raw, 1)}
+    return {cid: w for cid, w in weights.items() if w}
+
+
+def guess_encoding(raws):
+    """(bias, shift) that makes every one of `raws` (pools not adding up to
+    2048) add up to exactly 2048 once decoded: the TeaOnline tool's own
+    values first, then biases just under the smallest weight. None if none."""
+    if not raws:
+        return None
+    low = min(min(raw) for raw in raws)
+    candidates = [TEAONLINE_ENCODING] + [(low - k, shift) for shift in (3, 1, 2, 4) for k in range(1 << shift)]
+    for bias, shift in candidates:
+        if bias >= 0 and all(sum(max(0, (x - bias) >> shift) for x in raw) == g.POOL_TOTAL for raw in raws):
+            return bias, shift
+    return None
+
+
+def text_spans(slus: bytes):
+    """[start, end) RAM ranges of the text banks that the text listing reads
+    (the two offset tables and every string's bytes), or None when the
+    listing cannot follow the file's text."""
+    from .gamedata import _tl
+    image = g._image(slus)
+    spans = [(_tl.STRING_TABLE, _tl.STRING_TABLE + 2 * 0x4FA), (_tl.NAME_TABLE, _tl.NAME_TABLE + 2 * 0x360)]
+    try:
+        glyphs = _tl.glyph_characters(image)
+        for bank in _tl.banks(image):
+            ops, _ = _tl.decode_bank(image, bank, glyphs)
+            spans += [(bank.base + op.offset, bank.base + op.offset + op.length) for op in ops.values()]
+    except Exception:
+        return None
+    return _merge(spans, 0)
+
+
+def _where(address: int) -> str:
+    if address < 0x80010000:
+        return f", in the executable's header (file offset 0x{g.slus_offset(address):X})"
+    for low, high, name in TEXT_BANKS:
+        if low <= address < high:
+            return f", in {name}"
+    return ""
+
+
+def describe_places(retail_slus: bytes, slus: bytes, pieces) -> list:
+    """Report lines for changed file-offset pieces of the executable, grouped
+    when close: RAM addresses, bytes, and the jumps that reach them."""
+    groups = []
+    for start, end in sorted(pieces):
+        if groups and start - groups[-1][1] <= MERGE_GAP:
+            groups[-1][1:] = [end, groups[-1][2] + end - start]
+        else:
+            groups.append([start, end, end - start])
+    places = [(start + g.EXE_DELTA, end + g.EXE_DELTA, count) for start, end, count in groups]
+    callers = jumps_into(retail_slus, slus, [(start, end) for start, end, _ in places])
+    lines = []
+    for start, end, count in places[:PLACES_SHOWN]:
+        reached = callers[(start, end)]
+        more = f" and {len(reached) - 4} more" if len(reached) > 4 else ""
+        lines.append(f"  0x{start:08X}-0x{end:08X} ({count} bytes{_where(start)}"
+                     f"{'; reached by ' + ', '.join(reached[:4]) + more if reached else ''})")
+    if len(places) > PLACES_SHOWN:
+        lines.append(f"  ... and {len(places) - PLACES_SHOWN} more places")
+    return lines
+
+
+# --- text ---------------------------------------------------------------------------
+
+ITEM_START = re.compile(r"^(\[[0-9A-Fa-f ]+\]|\{:L[0-9A-Fa-f]{4}\})")
+USES_LABELS = re.compile(r"\{:L|\{(jump|call|if|choose|f8 1[78]|f8 2[78])\b")
+
+
+def _items(listing: str) -> dict:
+    """{bank: {item key: text}} of a text listing, comments left out."""
+    banks, bank, key = {}, None, None
+    for line in listing.split("\n"):
+        if line.startswith("@bank "):
+            bank, key = line.split()[1], None
+            banks[bank] = {}
+            continue
+        if bank is None:
+            continue
+        match = ITEM_START.match(line)
+        if match:
+            key = match.group(1)
+            banks[bank][key] = [line.split("#")[0].rstrip() if line.startswith("[") else line]
+            continue
+        if key is not None:
+            banks[bank][key].append(line)
+    return {b: {k: "\n".join(v).rstrip("\n") for k, v in items.items()} for b, items in banks.items()}
+
+
+def _card_item(bank: str, key: str) -> bool:
+    """A card's name or text, which cards[] carries instead."""
+    if bank == "descriptions":
+        return True
+    if bank == "names" and key.startswith("["):
+        ids = [int(i, 16) for i in key[1:-1].split()]
+        return all(0x8001 <= i <= 0x8000 + g.CARD_COUNT for i in ids)
+    return False
+
+
+def text_changes(retail_slus: bytes, modded_slus: bytes, report: list):
+    """A partial listing of the text that differs (card names and texts
+    aside), or None. A bank whose changed strings jump anywhere is written
+    whole, so every place they name is in the file."""
+    from .gamedata import _tl
+    try:
+        before = _items(_tl.write_listing(g._image(retail_slus)))
+        after = _items(_tl.write_listing(g._image(modded_slus)))
+    except Exception as problem:     # a text bank the listing cannot follow
+        report.append(f"text: the modded executable's text could not be read ({problem}); not imported")
+        return None
+    out = []
+    for bank in ("dialog", "names", "descriptions"):
+        old, new = before.get(bank, {}), after.get(bank, {})
+        changed = [k for k in new if old.get(k) != new[k] and not _card_item(bank, k)]
+        gone = [k for k in old if k not in new and not _card_item(bank, k)]
+        if not changed and not gone:
+            continue
+        whole = bool(gone) or any(not k.startswith("[") or USES_LABELS.search(new[k]) for k in changed)
+        keys = [k for k in new if not _card_item(bank, k)] if whole else changed
+        out.append(f"@bank {bank}\n")
+        out += [new[k] + "\n" for k in keys]
+        report.append(f"text: {len(changed)} strings of the {bank} bank differ" +
+                      ("; the bank is written whole (its strings jump)" if whole else ""))
+    if not out:
+        return None
+    head = ("# Text of a modified game that differs from retail, written by the FM Editor's importer\n"
+            "# (notes/translation.md). Card names and texts are in mod.json.\n\n")
+    return head + "\n".join(out)
+
+
+# --- the import ------------------------------------------------------------------------
+
+def _line_ends(text: str) -> str:
+    return "\n".join(line.rstrip(" ") for line in text.split("\n"))
+
+
+def decode_drop_pools(retail, modded, retail_files, modded_files) -> list:
+    """Decode the modded drop pools in place when the mod stores them
+    encoded (DRAW_ADD); report lines saying which reading was used."""
+    changed = [(d, p) for d in range(len(modded.pools)) for p in DROP_POOLS
+               if modded.pools[d][p] != retail.pools[d][p]]
+    if not changed:
+        return []
+    found = draw_code_encoding(retail_files.slus, modded_files.slus)
+    notes = []
+    if found:
+        bias, shift, code = found
+        decode = changed
+        notes.append(f"pools: the drop pools are encoded: the draw at 0x{DRAW_ADD:08X} jumps to the mod's code at "
+                     f"0x{code:08X}, which reads each weight as max(0, (raw - {bias}) >> {shift}); the "
+                     f"{len(decode)} changed drop pools were decoded that way (the deck pools are not encoded)")
+        kept = [f"{g.DUELIST_NAMES[d]} {p}" for d in range(len(modded.pools)) for p in DROP_POOLS
+                if (d, p) not in changed]
+        if kept:
+            notes.append(f"pools: {len(kept)} drop pools are as retail wrote them (for example {'; '.join(kept[:3])})"
+                         "; kept as retail, although the mod's draw would read them encoded")
+    else:
+        decode = [(d, p) for d, p in changed if sum(modded.pools[d][p].values()) != g.POOL_TOTAL]
+        guess = guess_encoding([_raw_pool(modded_files.wa, d, p) for d, p in decode])
+        if not guess:
+            return []
+        bias, shift = guess
+        notes.append(f"pools: {len(decode)} changed drop pools do not add up to 2048 but do once each weight is read "
+                     f"as max(0, (raw - {bias}) >> {shift}), the way the TeaOnline drop tool encodes them; the "
+                     f"mod's draw code at 0x{DRAW_ADD:08X} was not recognized, so they were decoded that way")
+    for d, p in decode:
+        modded.pools[d][p] = decode_weights(_raw_pool(modded_files.wa, d, p), bias, shift)
+    return notes
+
+
+def import_modded(retail_files, modded_files, mod_id: str = "imported-mod", name: str = None) -> ImportResult:
+    retail = g.load_game(retail_files)
+    report = []
+    try:
+        modded = g.load_game(modded_files)
+    except Exception as problem:
+        raise ValueError(f"the modified files could not be read as the game's tables: {problem}")
+    project = Project(retail)
+    project.info.id = mod_id
+    project.info.name = name or mod_id
+    project.info.description = "Imported from a modified game by the FM Editor."
+    result = ImportResult(project, report)
+    for note in modded.notes:
+        report.append(f"note: {note}")
+        result.unhandled += 1
+
+    # Cards and the rule tables: the editor's own diff.
+    spaced = 0
+    for cid, card in modded.cards.items():
+        card = card.copy()
+        old = retail.cards.get(cid)
+        for name in ("name", "description"):
+            if old is not None and getattr(card, name) != getattr(old, name) and \
+                    _line_ends(getattr(card, name)) == _line_ends(getattr(old, name)):
+                setattr(card, name, getattr(old, name))     # only spaces at line ends differ: the same text
+                spaced += 1
+        project.cards[cid] = card
+    drop_notes = decode_drop_pools(retail, modded, retail_files, modded_files)
+    project.fusions = dict(modded.fusions)
+    project.equips = {e: set(m) for e, m in modded.equips.items()}
+    project.rituals = dict(modded.rituals)
+    project.pools = [{p: dict(modded.pools[d][p]) for p in g.POOLS} for d in range(len(modded.pools))]
+    changed_cards = sum(1 for cid in retail.cards if project.card_changed(cid))
+    report.append(f"cards: {changed_cards} changed")
+    if spaced:
+        report.append(f"cards: {spaced} names or texts differ from retail only by spaces at the end of a line; "
+                      "kept as retail")
+    report.append(f"fusions: {sum(1 for p in set(retail.fusions) | set(modded.fusions) if retail.fusions.get(p) != modded.fusions.get(p))} pairs differ")
+    report.append(f"equips: {sum(1 for e in set(retail.equips) | set(modded.equips) if set(retail.equips.get(e, [])) != set(modded.equips.get(e, [])))} equip cards differ")
+    report.append(f"rituals: {sum(1 for r in set(retail.rituals) | set(modded.rituals) if retail.rituals.get(r) != modded.rituals.get(r))} differ")
+    pools_changed = sum(1 for d in range(len(retail.pools)) for p in g.POOLS if retail.pools[d][p] != modded.pools[d][p])
+    report.append(f"pools: {pools_changed} of {len(retail.pools) * len(g.POOLS)} differ")
+    report += drop_notes
+    off_total = []
+    for d in range(len(modded.pools)):
+        for p in g.POOLS:
+            total = sum(modded.pools[d][p].values())
+            if modded.pools[d][p] != retail.pools[d][p] and total != g.POOL_TOTAL:
+                off_total.append(f"{g.DUELIST_NAMES[d]} {p}: {total}")
+                project.pools[d][p] = normalize(project.pools[d][p])
+    if off_total:
+        report.append(f"pools: {len(off_total)} pools do not add up to 2048 in the modified game (for example "
+                      f"{'; '.join(off_total[:3])}), which the game's draw needs; the mod likely changes the draw "
+                      "in its code. They are scaled to 2048, keeping each card's share")
+
+    # Text.
+    text = text_changes(retail_files.slus, modded_files.slus, report)
+    if text:
+        project.files["text.txt"] = text.encode("utf-8")
+        project.other["text"] = "text.txt"
+
+    # The rest of the executable.
+    slus_runs = _runs(retail_files.slus, modded_files.slus, 0, max(len(retail_files.slus), len(modded_files.slus)), 0)
+    if len(retail_files.slus) != len(modded_files.slus):
+        report.append(f"executable: its size differs ({len(modded_files.slus)} bytes); only the tables were read")
+        result.unhandled += 1
+    text_read = text_spans(modded_files.slus) or []      # what text.txt carries; nothing when unreadable
+    handled = [(g.slus_offset(a), g.slus_offset(b)) for a, b in SLUS_HANDLED + text_read]
+    named = [(g.slus_offset(a), g.slus_offset(b), label) for a, b, label in SLUS_REGIONS]
+    for low, high, label in named:
+        count = sum(min(e, high) - max(s, low) for s, e in slus_runs if s < high and e > low)
+        if count:
+            report.append(f"executable: {label} changed ({count} bytes); the port reads the executable's code "
+                          "and tables natively, so this cannot be imported")
+            result.unhandled += 1
+    other = _subtract(slus_runs, handled + [(low, high) for low, high, _ in named])
+    # Bytes the retail text used that the modified text no longer reads:
+    # left-over text of a repacked bank, or the mod's code written over it.
+    old_text = [(g.slus_offset(a), g.slus_offset(b)) for a, b in text_spans(retail_files.slus) or []]
+    code = _subtract(other, old_text)
+    leftover = _subtract(other, code)
+    if code:
+        report.append(f"executable: {sum(e - s for s, e in code)} other bytes changed: code patches, or the mod's "
+                      "own code and data, which the native port cannot take:")
+        report += describe_places(retail_files.slus, modded_files.slus, code)
+        result.unhandled += 1
+    if leftover:
+        report.append(f"executable: {sum(e - s for s, e in leftover)} bytes where the retail text was changed, and "
+                      "the modified text does not read them (text left over, or code):")
+        report += describe_places(retail_files.slus, modded_files.slus, leftover)
+        result.unhandled += 1
+
+    # The rest of WA_MRG.MRG.
+    wa_old, wa_new = retail_files.wa, modded_files.wa
+    data = []
+    if len(wa_new) != len(wa_old):
+        report.append(f"WA_MRG.MRG: its size differs ({len(wa_new)} bytes, retail {len(wa_old)}); "
+                      "the whole file is replaced")
+        project.files["WA_MRG.MRG"] = wa_new
+        data.append({"file": WA_FILE, "replace": "WA_MRG.MRG"})
+    else:
+        runs = _trim(wa_old, wa_new, _subtract(_runs(wa_old, wa_new, 0, len(wa_old)), wa_structured_regions()))
+        patches, places = [], {}
+        for start, end in runs:
+            count, runs_there = places.get(describe_wa(start), (0, 0))
+            places[describe_wa(start)] = (count + end - start, runs_there + 1)
+            if end - start <= PATCH_LIMIT:
+                patches.append({"at": f"0x{start:X}", "bytes": wa_new[start:end].hex(" ").upper()})
+                continue
+            first, last = start // 2048, (end + 2047) // 2048
+            path = f"data/wa_{first:05X}.bin"
+            project.files[path] = wa_new[first * 2048:last * 2048]
+            data.append({"lba": modded_files.wa_lba + first, "sectors": last - first, "replace": path})
+        if patches:
+            data.insert(0, {"file": WA_FILE, "patch": patches})
+        for place, (count, runs_there) in sorted(places.items()):
+            report.append(f"WA_MRG.MRG: {place}: {count} bytes in {runs_there} places changed, carried as data")
+    if data:
+        project.other["data"] = data
+    if result.unhandled:
+        report.append(f"{result.unhandled} kind(s) of change could not be imported (above)")
+    project.files["import-report.txt"] = ("\n".join(report) + "\n").encode("utf-8")
+    return result
+
+
+def save(result: ImportResult, folder) -> None:
+    """Write the imported mod: mod.json and the files it names."""
+    folder = Path(folder)
+    manifest.save_mod(result.project, folder)
