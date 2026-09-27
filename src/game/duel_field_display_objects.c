@@ -113,7 +113,7 @@ void func_80023144(DuelFieldDisplaySource *source, s32 index)
             }
             value = index >= DUEL_CARD_SIDE_RECORD_COUNT;
             if (value == D_8009B1D5 &&
-                D_8009B1C8->card_view_mode == 0) {
+                DUEL_CARD_VIEW_MODE(D_8009B1C8) == 0) {
                 D_8009B34E = 2;
             }
         } else {

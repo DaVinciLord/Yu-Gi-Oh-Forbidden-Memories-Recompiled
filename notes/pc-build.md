@@ -399,15 +399,10 @@ move, Enter activates, Esc closes (Esc quits only when no menu is open).
 | File | Save/load state, slots 1-4, screenshot, reload settings, exit |
 | Audio | Master/music/SFX sliders, mute and focus-loss mute, Gaussian (console) or cubic (sharper) voice interpolation (`audio_interpolation`) |
 | View | Window scale and Menu size submenus, window mode, scaling/aspect/filter/VSync choices |
-| Game | Game speed, Frame rate and Cheats submenus (Give 3 of every card; Unlock all Free Duel CPU duelists), Japanese buttons |
+| Game | Game speed, Frame rate and Cheats submenus (see [Cheats](#cheats)), Japanese buttons |
 | Mods | opens the mods window, which lists every mod found in `mods/` beside the executable and in the user directory (`notes/modding.md`) |
 | Debug | HUD levels, pause/step, frame and VRAM dumps |
 | Trace | Live frames, disc, SPU, input and state log-channel switches |
-
-After starting or loading a game, **Game > Cheats > Unlock all Free Duel CPU
-duelists** unlocks the full CPU roster without changing story progress or
-win/loss records. If Free Duel is already open, leave and reopen it to refresh
-the portraits and selection grid. Save normally to keep the unlocks.
 
 `MEMORIES_TRACE_MENU=1` logs menu clicks and keys. The menu never reaches the pad:
 a click on the bar or in an open menu, and the wheel there, are the menu's.
@@ -435,6 +430,81 @@ window, which is how the menus are checked. `frame:key:name` presses and
 releases a key at once, which the game never sees; `frame:keydown:name` and
 `frame:keyup:name` hold it between two frames (`s` is Circle and `x` Cross by
 default), which is how Japanese buttons was checked through the keyboard.
+
+### Cheats
+
+**Game > Cheats** (`src/pc/debug/cheats.c`). Every row is off, or at the
+console's value, until the player picks it; nothing changes on screen before.
+
+The rows that change the save (Give, Unlock and Set StarChips) do nothing
+until a game is started or loaded, and say **Load a save first** instead
+(`Cheats_SaveLoaded`: the save workspace holds a deck, the same test as
+Deck slots and `MEMORIES_DEBUG_CHEST`). Before that the workspace is scratch,
+and on a new game it becomes the save when the name entry closes. The settings
+rows (LP, free spending, the CPU's hand) change nothing in the save and work
+at any time.
+
+- **Give 1 / 2 / 3 of every card** raises every card in the trunk to at least
+  that many copies, the mods' cards included (`Cheats_GiveAllCards`). A card
+  held more times keeps its count. Open BUILD DECK to see it, and save
+  normally to keep it.
+- **Unlock all Free Duel CPU duelists** unlocks the full CPU roster without
+  changing story progress or win/loss records. If Free Duel is already open,
+  leave and reopen it to refresh the portraits and selection grid. Save
+  normally to keep the unlocks.
+- **Set StarChips to 999999** sets the balance (`gLibrary_dwStarchips`,
+  `SaveDataState.starchips`), capped at 999999 as the duel's reward caps it.
+  It is save data, so it is an action, not a setting: nothing is stored or
+  reapplied at start; save normally to keep it. The Password screen copies the
+  balance for display when it opens and at each payment step, so a change
+  made while that screen is open shows from the next of those.
+- **Free spending (Password)** (`cheat_free_spending`,
+  `MEMORIES_CHEAT_FREE_SPENDING`): a card bought on the Password screen costs
+  nothing. The payment step (`Password_UpdateShopScreen` state 3,
+  `overlays/password/shop.c`) still counts the price down and refreshes the
+  display, but one `#ifdef MEMORIES_PC` skips the subtraction from the balance
+  while `Cheats_FreeSpending` says so. The screen's own check still refuses a
+  card the balance does not cover (message 228); Set StarChips covers that.
+  Checked by buying Orion the Battle King (02971090, 290 StarChips) from 999999
+  after a new game: 999709 with it off, 999999 with it on, and the two final
+  frames differ only in those digits.
+
+**Proposal, not built: Force face up.** The old static recomp had a row that
+made the CPU play every card face up and turned its face-down cards over.
+That is game state, not display: `DUEL_CARD_FLAG_FACE_DOWN` (0x1000) on a
+card record is what the AI scripts read (`ai_script_*.c`, `ai_turn_action.c`),
+what battle checks before flipping a set monster, and what counts towards
+the CPU's rank statistics (`face_down_plays`), so clearing it changes how
+the duel plays, not only what it shows. If it is wanted, the place is the C
+that sets the bit when the CPU places a card (one `#ifdef MEMORIES_PC` in the
+placement, CPU side only, against a CPU only), never a per-frame pass that
+clears the bit on cards already on the field, and it needs its own check of
+battle, the AI's choices and the rank before it ships.
+- **Starting LP 1000 / 4000 / 8000 (console) / 9999** (`cheat_life_points`,
+  `MEMORIES_CHEAT_LIFE_POINTS`, 1-9999, default 8000) is what both sides start
+  a duel against the CPU with, from the next duel on. `Duel_InitSideStates`
+  asks `Cheats_StartingLifePoints` in place of `DUEL_STARTING_LIFE_POINTS`
+  (one `#ifdef MEMORIES_PC` in `duel_state_init.c`), so it is both the
+  starting and the maximum LP, as the console's 8000 is: recovery stops there.
+  Other values can be typed into the settings file. Two-player duels keep the
+  values their own setup screen chose (`D_8009B234`/`D_8009B236`, 1 to 8000 in
+  steps of 500): that screen draws its bar as a fraction of 8000, so the
+  cheat does not seed it.
+- **Show CPU's hand** (`cheat_show_hand`, `MEMORIES_CHEAT_SHOW_HAND`) draws
+  the hand the CPU plays from face up on its turn, as the player's is: art,
+  name, ATK/DEF and the stars. `Duel_InitSideStates` gives the CPU's side
+  record `card_view_mode` (+0x1F) = -1, and the three places the card display
+  reads it (`func_80017DB4`, `func_80018004`, `func_80023144`) draw card
+  backs and dim them for a negative value. They read it through
+  `DUEL_CARD_VIEW_MODE` (`game/duel_side_state.h`), which is the plain field
+  in the console build and `Cheats_CardViewMode` on the PC, answering 0 for
+  the CPU's record while the cheat is on. The byte in RAM is never written, so
+  nothing the game does with it changes, and turning the cheat off shows backs
+  again at once. Two-player duels (a negative opponent id) keep their own
+  setting. Checked at the same frame of the CPU's first turn: with the cheat
+  off the picture is identical to a build without it; with it on only the
+  hand and the card name bar change, and a later frame of the duel is identical,
+  so the CPU played the same.
 
 ### Back to the title screen
 
