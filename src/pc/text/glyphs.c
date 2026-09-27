@@ -284,7 +284,7 @@ static int retail_cell(unsigned sjis, int large, int *u, int *v)
             *u = i * (large ? 16 : 8);
             *v = large ? 0x48 : 0;
         } else {
-            *u = large ? i * 16 - 0x160 : i * 8 - 0x30;
+            *u = large ? i * 16 - 0x60 : i * 8 - 0x30;
             *v = large ? 0x58 : 0xC;
         }
         return 1;
@@ -611,7 +611,21 @@ uint32_t Glyphs_CellCharacter(int in_bank, int page, int large, int u, int v)
     for (character = '!'; character <= '~'; character++) {
         if (retail_cell(character_sjis(character), large, &cu, &cv) && cu == u && cv == v) return character;
     }
+    /* The large font's arrows, where ASCII has { and | (0x827B and 0x827C,
+     * after z): the name entry's left and right. */
+    if (large && v == 0x78 && (u == 0xB0 || u == 0xC0)) return u == 0xB0 ? 0x2190 : 0x2192;
     return 0;
+}
+
+const char *Glyphs_CellWord(int in_bank, int page, int large, int u, int v, int *first_u, int *cells)
+{
+    (void)page;
+    /* The large font's END, drawn across the two cells where ASCII has ~
+     * and DEL (0x827E and 0x827F): the name entry's. */
+    if (in_bank || !large || v != 0x78 || (u != 0xE0 && u != 0xF0)) return NULL;
+    *first_u = 0xE0;
+    *cells = 2;
+    return "END";
 }
 
 int Glyphs_RetailCell(uint32_t character, int large, int *u, int *v)
