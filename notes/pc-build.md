@@ -379,15 +379,10 @@ move, Enter activates, Esc closes (Esc quits only when no menu is open).
 | File | Save/load state, slots 1-4, screenshot, reload settings, exit |
 | Audio | Master/music/SFX sliders, mute and focus-loss mute, Gaussian (console) or cubic (sharper) voice interpolation (`audio_interpolation`) |
 | View | Window scale and Menu size submenus, window mode, scaling/aspect/filter/VSync choices |
-| Game | Game speed, Frame rate and Cheats submenus (Give 3 of every card; Unlock all Free Duel CPU duelists) |
+| Game | Game speed, Frame rate and Cheats submenus (see [Cheats](#cheats)) |
 | Mods | opens the mods window, which lists every mod found in `mods/` beside the executable and in the user directory (`notes/modding.md`) |
 | Debug | HUD levels, pause/step, frame and VRAM dumps |
 | Trace | Live frames, disc, SPU, input and state log-channel switches |
-
-After starting or loading a game, **Game > Cheats > Unlock all Free Duel CPU
-duelists** unlocks the full CPU roster without changing story progress or
-win/loss records. If Free Duel is already open, leave and reopen it to refresh
-the portraits and selection grid. Save normally to keep the unlocks.
 
 `MEMORIES_TRACE_MENU=1` logs menu clicks and keys. The menu never reaches the pad:
 a click on the bar or in an open menu, and the wheel there, are the menu's.
@@ -412,6 +407,20 @@ and above (including a 4K display). This is one step smaller than the original
 automatic size, with a minimum of 1; explicit 1x–4x choices are unchanged.
 `MEMORIES_SDL_SCRIPT` accepts `frame:shot` to save the composed
 window, which is how the menus are checked.
+
+### Cheats
+
+**Game > Cheats** (`src/pc/debug/cheats.c`). Every row is off, or at the
+console's value, until the player picks it; nothing changes on screen before.
+
+- **Give 1 / 2 / 3 of every card** sets the trunk to that many copies of every
+  card, the mods' cards included (`Cheats_GiveAllCards`). It sets, not adds:
+  Give 1 also lowers a card held three times to one. Open BUILD DECK to see it,
+  and save normally to keep it.
+- **Unlock all Free Duel CPU duelists** unlocks the full CPU roster without
+  changing story progress or win/loss records. If Free Duel is already open,
+  leave and reopen it to refresh the portraits and selection grid. Save
+  normally to keep the unlocks.
 
 ### Back to the title screen
 
