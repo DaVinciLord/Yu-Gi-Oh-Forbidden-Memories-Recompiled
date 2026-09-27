@@ -1361,6 +1361,49 @@ picture pass ("needs OpenGL 3 or 1x").
 
 Not covered yet: the sword and shield icons (pictures, not lettering).
 
+### Library: show every card
+
+View > Library: show every card (`library_all_cards`,
+`MEMORIES_LIBRARY_ALL_CARDS=1`, off by default) makes the Library show every
+card the player has never seen. Each one has its art, name, stats, Guardian
+Stars and text. Nothing is given and nothing is saved, and it lasts only
+while the Library is open.
+
+The Library works out what it shows once, as it opens (`func_8002BFCC`).
+It first marks every trunk and deck card as seen (`Library_MarkOwnedCards`,
+unchanged). It then fills one byte per card in its screen state at
+`D_800EA1E8`: 0x80 for a seen card, plus 1 when the player owns none. On
+the port the seen test was already `Cards_Seen` inside a `MEMORIES_PC`
+block. One `else if` under that block, still in PC-only code, gives a card
+that fails the test the same byte a seen card nobody owns gets
+(`Cards_LibraryPlaceholder`, `src/pc/cards/cards.c`). The grid, the name
+line and the card view read only that byte, so they show the card as seen.
+The seen flags (`0x120 + id`, `Cards_MarkSeen`), the trunk and the rest of
+the save are never written. The heading's "seen/total" still counts only the
+cards really seen. With the option off, the added branch never runs and the
+Library is the retail one. Matched code is untouched: the retail
+`Campaign_TestStoryFlag` arm is as it was.
+
+Checked in a window (`MEMORIES_DETERMINISTIC=1`, `MEMORIES_SDL_SCRIPT`
+clicking View at x 242, y 13 and the item at x 310, y 70). The route was a
+New Game (the duel-hand-camera case's input up to the name),
+`MEMORIES_MODE_AT=1940:4,3000:0` to open the Library in place of the story
+and, once it closes, the debug menu. There, TITLE with the value 10 opens the
+loaded menu on SAVE, and the game is saved to slot 1.
+
+- Option off, the Library showed 35/722 (the starter deck). Option on,
+  every cell was filled, the heading still read 35/722, and card 001's view
+  (Blue-eyes White Dragon, never seen) showed art, stats, stars and text.
+- The two saves, one from each run, are identical over `[0, 0xF00)`: the
+  header, both state copies, the deck, the trunk and the seen flags. They
+  differ only in the 4 bytes of the slot token at 0xF08, which is drawn
+  afresh on every save (`save_slots.h`).
+- In the second run the option was then switched off and the Library
+  opened again from the loaded menu. It showed the same 35 cards as the
+  first run.
+
+The option is read when the Library opens: switching it while the Library
+is open takes effect the next time it opens.
 ### Card passwords (View)
 
 View > Card passwords (`card_passwords`, `MEMORIES_CARD_PASSWORDS=1`, off by

@@ -80,6 +80,12 @@ unsigned char *Cards_ChestSlot(void *state, int id);
  * cards, this module's bits past them). */
 int Cards_Seen(int id);
 void Cards_MarkSeen(int id);
+/* View > Library: show every card (SET_LIBRARY_ALL_CARDS): nonzero when the
+ * Library, as it opens, should lay `id` out as a seen card although it has
+ * never been seen. The Library shows it with its art, name, stats and text,
+ * but does not count it in its "seen/total" heading, and no seen mark, trunk
+ * byte or other save byte is written for it (func_8002BFCC). */
+int Cards_LibraryPlaceholder(int id);
 
 /* A card's own name, in the game's glyph codes and ending in 0xFF, or NULL
  * when it has the name of its base (for a retail card: its disc name). */
