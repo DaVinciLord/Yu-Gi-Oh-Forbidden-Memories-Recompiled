@@ -91,6 +91,21 @@ class YgomodsTest(unittest.TestCase):
                 self.assertIn(0xF55000 + 10 * 0x980, [e["offset"] for e in entries])
                 self.assertIn((2, "art"), [art.entry_card(e) for e in entries])
 
+    def test_thumbnail_keeps_imported_art(self):
+        """The package's card art is the Art tab's: a thumbnail imported
+        after it moves it to the pack instead of dropping it."""
+        project, _ = ygomods.import_package(self.retail, self.f.wa, self.path, "pkg")
+        imported = pngio.decode(project.files["images/001-art.png"])
+        self.assertEqual(art.shown_image(project, self.f.wa, 1, "art")[1], "the mod")
+        art.set_image(project, 1, "thumbnail", pngio.Image(40, 32, b"\x10\x20\x30\xff" * (40 * 32)))
+        with tempfile.TemporaryDirectory() as out:
+            manifest.save_mod(project, out)
+            entries = json.loads((Path(out) / "textures" / "manifest.json").read_text(encoding="utf-8"))
+            files = {art.entry_card(e): e["file"] for e in entries if art.entry_card(e)}
+            self.assertEqual(pngio.read(Path(out) / "textures" / files[(1, "art")]), art.normalize(imported, "art")[0])
+            written = json.loads((Path(out) / "mod.json").read_text(encoding="utf-8"))
+            self.assertNotIn("art", next(e for e in written["cards"] if e.get("replace") == 1))
+
     def write(self, files: dict) -> Path:
         path = Path(self.tmp.name) / "case.ygomods"
         path.write_bytes(package({"manifest.ini": "format = YGOFM-MOD-PACKAGE\n", **files}))

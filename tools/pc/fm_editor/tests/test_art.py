@@ -93,6 +93,25 @@ class PngTest(unittest.TestCase):
         with self.assertRaises(pngio.PngError):
             pngio.decode(b"GIF89a")
 
+    def test_damaged(self):
+        good = png(2, 2, 2, 8, [b"\x00" + bytes(6)] * 2)
+        at = good.index(b"IDAT") + 6
+        cases = {
+            "CRC": good[:at] + bytes([good[at] ^ 1]) + good[at + 1:],
+            "short IHDR": pngio.SIGNATURE + chunk(b"IHDR", b"\x00\x00\x00\x02") + chunk(b"IEND", b""),
+            "cut chunk": good[:at + 4],
+            "rows end on a boundary": png(2, 2, 2, 8, [b"\x00" + bytes(6)]),
+            "RGB at 4 bits": png(2, 1, 2, 4, [b"\x00\x12\x34\x56"]),
+            "interlace 2": png(2, 2, 2, 8, [b"\x00" + bytes(6)] * 2, interlace=2),
+        }
+        for name, data in cases.items():
+            with self.subTest(name), self.assertRaises(pngio.PngError):
+                pngio.decode(data)
+        # Decompression stops at what the rows can hold.
+        bomb = (pngio.SIGNATURE + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 0, 0, 0, 0)) +
+                chunk(b"IDAT", zlib.compress(bytes(50_000_000))) + chunk(b"IEND", b""))
+        self.assertEqual(pngio.decode(bomb).size, (1, 1))
+
 
 class DiscArtTest(unittest.TestCase):
     def test_pictures(self):
@@ -285,6 +304,69 @@ class ArtModTest(unittest.TestCase):
         written = json.loads((folder / "mod.json").read_text(encoding="utf-8"))
         self.assertEqual(written["textures"], "images")
         self.assertEqual(validate.errors(validate.validate(project)), [])
+
+    def test_a_picture_a_setting_switches(self):
+        """assets-hd's card entries each name a setting: an imported picture
+        goes before the card's entry, which the port would draw first."""
+        folder = self.root / "hd"
+        pack = folder / "textures"
+        pack.mkdir(parents=True)
+        pngio.write(pack / "card-005.png", gradient(204, 192))
+        gated = [dict(art.pack_entry(5, "art", "card-005.png"), setting="card_art"),
+                 dict(art.pack_entry(5, "thumbnail", "card-005.png"), setting="thumbnails")]
+        (pack / "manifest.json").write_text(json.dumps(gated), encoding="utf-8")
+        (folder / "mod.json").write_text(json.dumps({"id": "hd", "name": "HD", "textures": "textures", "settings": [
+            {"key": "card_art", "label": "Art", "type": "bool", "default": 1},
+            {"key": "thumbnails", "label": "Thumbs", "type": "bool", "default": 1}]}), encoding="utf-8")
+        project, messages = self.reopen(folder)
+        self.assertEqual(messages, [])
+        image, where = art.shown_image(project, fixture().wa, 5, "art")
+        self.assertEqual((image, "card_art" in where), (gradient(204, 192), True))
+        self.assertIn("card_art", art.describe(project, 5, "art"))
+        art.set_image(project, 5, "art", gradient(102, 96, alpha=255))
+        manifest.save_mod(project, folder)
+        entries = json.loads((pack / "manifest.json").read_text(encoding="utf-8"))
+        arts = [e for e in entries if art.entry_card(e) == (5, "art")]
+        thumbs = [e for e in entries if art.entry_card(e) == (5, "thumbnail")]
+        self.assertEqual([e.get("setting") for e in arts], [None, "card_art"])
+        self.assertEqual([e.get("setting") for e in thumbs], [None, "thumbnails"])
+        self.assertEqual(pngio.read(pack / arts[0]["file"]), gradient(102, 96))
+        # Saved again, the order holds.
+        again, _ = self.reopen(folder)
+        manifest.save_mod(again, folder)
+        self.assertEqual(json.loads((pack / "manifest.json").read_text(encoding="utf-8")), entries)
+
+    def test_a_shared_key_file_is_not_overwritten(self):
+        folder = self.root / "mod"
+        (folder / "images").mkdir(parents=True)
+        pngio.write(folder / "images" / "shared.png", gradient(102, 96))
+        (folder / "mod.json").write_text(json.dumps({"id": "m", "name": "M", "cards": [
+            {"copy": 3, "id": "a", "name": "A", "art": "images/shared.png"},
+            {"copy": 3, "id": "b", "name": "B", "art": "images/shared.png"}]}), encoding="utf-8")
+        project, _ = self.reopen(folder)
+        first = next(c for c, a in project.added.items() if a.key == "a")
+        art.set_image(project, first, "art", gradient(51, 48))
+        manifest.save_mod(project, folder)
+        written = json.loads((folder / "mod.json").read_text(encoding="utf-8"))
+        self.assertEqual([e["art"] for e in written["cards"]], ["art/a.png", "images/shared.png"])
+        self.assertEqual(pngio.read(folder / "images" / "shared.png"), gradient(102, 96))
+        self.assertEqual(pngio.read(folder / "art" / "a.png"), gradient(51, 48))
+        # Its own file now: a second import writes over it.
+        again, _ = self.reopen(folder)
+        first = next(c for c, a in again.added.items() if a.key == "a")
+        art.set_image(again, first, "art", gradient(60, 56))
+        self.assertEqual(art.state(again).images[(first, "art")].file, "art/a.png")
+
+    def test_an_unreadable_art_key_stops_the_import(self):
+        folder = self.root / "mod"
+        folder.mkdir()
+        (folder / "mod.json").write_text(json.dumps({"id": "m", "name": "M", "cards": [
+            {"replace": 1, "art": "images/missing.png"}]}), encoding="utf-8")
+        project, _ = self.reopen(folder)
+        with self.assertRaises(ValueError):
+            art.set_image(project, 1, "thumbnail", gradient(40, 32))
+        self.assertEqual(project.card_extra[1], {"art": "images/missing.png"})
+        self.assertNotIn((1, "thumbnail"), art.state(project).images)
 
     def test_checks(self):
         folder = self.root / "mod"

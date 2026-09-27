@@ -269,16 +269,21 @@ class ArtState:
         self.problem = ""              # why the pack's manifest.json could not be read
         self.folder = None             # the mod folder the pack and PNGs were read from
         self.images = {}               # (card, part) -> Replacement
+        self.gated = {}                # (card, part) -> the first entry for it a setting switches (assets-hd)
         self.changed = False           # the manifest needs writing
 
     def adopt(self, entries: list):
         """Take `entries` as the pack on disk: the first plain entry for a
-        card part (no "setting") is that part's replacement."""
-        self.entries, self.owned = entries, {}
+        card part (no "setting") is that part's replacement; one a setting
+        switches is shown, and a replacement goes before it."""
+        self.entries, self.owned, self.gated = entries, {}, {}
         for entry in entries:
             found = entry_card(entry)
-            if found and found not in self.owned.values() and isinstance(entry.get("file"), str) and \
-                    not entry.get("setting"):
+            if not found or not isinstance(entry.get("file"), str):
+                continue
+            if entry.get("setting"):
+                self.gated.setdefault(found, entry)
+            elif found not in self.owned.values():
                 self.owned[id(entry)] = found
 
 
@@ -298,10 +303,16 @@ def _extra_keys(project, cid: int) -> dict:
 
 def _sync(project, st: ArtState):
     """A key replacement lasts while the card's entry names its file: a
-    card taken out, or reverted in the Cards tab, drops it."""
+    card taken out, or reverted in the Cards tab, drops it; one an importer
+    wrote (a .ygomods card's art.png) is taken in."""
     for (cid, part), rep in list(st.images.items()):
         if rep.kind == "key" and (cid not in project.cards or _extra_keys(project, cid).get(part) != rep.file):
             del st.images[(cid, part)]
+    for cid in set(project.card_extra) | set(project.added):
+        for part in PARTS:
+            file = _extra_keys(project, cid).get(part)
+            if isinstance(file, str) and file and (cid, part) not in st.images and cid in project.cards:
+                st.images[(cid, part)] = Replacement("key", file)
 
 
 def _set_extra(project, cid: int, key: str, value):
@@ -353,7 +364,7 @@ def read_mod(project, folder, messages: list = None):
         for part in PARTS:
             file = extra.get(part)
             if isinstance(file, str) and file:
-                if (cid, part) in st.images:
+                if getattr(st.images.get((cid, part)), "kind", None) == "pack":
                     # The key wins in the game; the pack's entry is kept as written.
                     messages.append(f"card {cid}: its \"{part}\" hides the texture pack's picture of it")
                     st.owned = {k: v for k, v in st.owned.items() if v != (cid, part)}
@@ -375,11 +386,28 @@ def replacement_image(project, cid: int, part: str):
     if rep is None:
         return None
     if rep.image is None:
+        blob = project.files.get(rep.file) if rep.kind == "key" else None
+        if blob is not None:            # an importer's, not written yet
+            rep.image = pngio.decode(blob)
+            return rep.image
         path = _file_path(project, rep)
         if path is None:
             return None
         rep.image = pngio.read(path)
     return rep.image
+
+
+def gated_image(project, cid: int, part: str):
+    """(image, setting) of the pack's entry a setting switches for a card
+    part, or None."""
+    entry = state(project).gated.get((cid, part))
+    folder = state(project).folder or project.source_dir
+    if entry is None or folder is None:
+        return None
+    try:
+        return pngio.read(Path(folder) / pack_dir(project) / entry["file"]), entry.get("setting")
+    except (OSError, pngio.PngError):
+        return None
 
 
 def _editor_file(project, cid: int, part: str) -> str:
@@ -390,6 +418,23 @@ def _editor_file(project, cid: int, part: str) -> str:
     return f"{KEY_DIR}/{stem}{suffix}.png"
 
 
+def _key_shared(project, owner, file: str) -> bool:
+    """Another card part's "art"/"thumbnail"/"title" names `file`."""
+    for cid in set(project.card_extra) | set(project.added):
+        for part in PARTS:
+            if (cid, part) != owner and _extra_keys(project, cid).get(part) == file:
+                return True
+    return False
+
+
+def _free_key_file(project, owner) -> str:
+    stem = _editor_file(project, *owner)[:-4]
+    name, n = stem + ".png", 2
+    while _key_shared(project, owner, name):
+        name, n = f"{stem}-{n}.png", n + 1
+    return name
+
+
 def set_image(project, cid: int, part: str, image: Image) -> list:
     """Use `image` as the card part (normalized first); notes on what was
     done to it. The PNGs are written to the mod folder on save."""
@@ -398,27 +443,38 @@ def set_image(project, cid: int, part: str, image: Image) -> list:
     if kind == "pack" and st.problem:
         raise ValueError(f"the mod's texture pack cannot be read ({st.problem}); correct it first")
     image, notes = normalize(image, part)
+    moved = {}
+    if kind == "pack":
+        # A retail card's own "art" or "thumbnail" is drawn over the record
+        # and reported written, which would hide the pack's: the pack has
+        # them now, the one not being replaced moved there as it is. One
+        # that cannot be read stops the import rather than being lost.
+        for key in ("art", "thumbnail"):
+            file = _extra_keys(project, cid).get(key)
+            if key == part or not isinstance(file, str):
+                continue
+            try:
+                own = replacement_image(project, cid, key)
+            except (OSError, pngio.PngError) as problem:
+                raise ValueError(f"its \"{key}\" ({file}) cannot be read ({problem}); revert or correct it first")
+            if own is None:
+                raise ValueError(f"its \"{key}\" ({file}) is not saved anywhere; save the mod first")
+            moved[key] = normalize(own, key)[0]
     old = st.images.get((cid, part))
-    file = old.file if old is not None and old.kind == kind else _editor_file(project, cid, part)
+    if old is not None and old.kind == kind and not (kind == "key" and _key_shared(project, (cid, part), old.file)):
+        file = old.file
+    else:
+        file = _free_key_file(project, (cid, part)) if kind == "key" else _editor_file(project, cid, part)
     st.images[(cid, part)] = Replacement(kind, file, image, pending=True)
     if kind == "key":
         _set_extra(project, cid, part, file)
         return notes
     st.changed = True
     for key in ("art", "thumbnail"):
-        # A retail card's own "art" or "thumbnail" is drawn over the record
-        # and reported written, which would hide the pack's: the pack has
-        # them now, the one not being replaced moved there as it is.
         if not isinstance(_extra_keys(project, cid).get(key), str):
             continue
-        if key != part:
-            try:
-                own = replacement_image(project, cid, key)
-            except (OSError, pngio.PngError):
-                own = None
-            if own is not None:
-                st.images[(cid, key)] = Replacement("pack", _editor_file(project, cid, key),
-                                                    normalize(own, key)[0], pending=True)
+        if key in moved:
+            st.images[(cid, key)] = Replacement("pack", _editor_file(project, cid, key), moved[key], pending=True)
         _set_extra(project, cid, key, None)
         notes.append(f"its \"{key}\" in mod.json moves to the texture pack")
     _sync(project, st)
@@ -480,6 +536,9 @@ def shown_image(project, wa: bytes, cid: int, part: str):
             image = plate_image(plate_inks(image), background=GOLD)
         return image, "the mod"
     base = project.base_of(cid)
+    gated = gated_image(project, cid, part) if part != "title" and base == cid else None
+    if gated is not None:
+        return gated[0], f"the mod's texture pack, while its \"{gated[1]}\" setting is on"
     if part == "thumbnail" and _baked(project, cid, part):
         return port_thumbnail(project, cid), "a thumbnail made from its own picture when the game starts"
     if part == "title" and own_name(project, cid):
@@ -539,6 +598,10 @@ def describe(project, cid: int, part: str) -> str:
         if part == "title" and own_name(project, cid):
             return ("The card has a name of its own: the game sets it in Times at the plate's size (not shown "
                     "here). Import a PNG to draw the plate yourself.")
+        if part != "title" and (cid, part) in state(project).gated:
+            setting = state(project).gated[(cid, part)].get("setting")
+            return (f"The texture pack's, while the \"{setting}\" setting is on (the disc's when it is off). "
+                    "An imported PNG is used whatever the setting.")
         return "As the disc has it."
     try:
         image = replacement_image(project, cid, part)
@@ -585,6 +648,15 @@ def entries_now(project) -> list:
         rep = st.images[key]
         if rep.kind == "pack" and key not in placed:
             out.append(pack_entry(key[0], key[1], rep.file, rep.derived))
+    # The first entry for the same words is the one drawn (texture_pack.c
+    # compare): a replacement goes before one a setting switches.
+    for key, rep in st.images.items():
+        if rep.kind != "pack":
+            continue
+        same = [i for i, e in enumerate(out) if entry_card(e) == key]
+        mine = next((i for i in same if out[i].get("file") == rep.file and not out[i].get("setting")), None)
+        if mine is not None and same[0] < mine:
+            out.insert(same[0], out.pop(mine))
     return out
 
 

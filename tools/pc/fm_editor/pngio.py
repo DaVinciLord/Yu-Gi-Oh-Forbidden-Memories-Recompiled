@@ -63,6 +63,8 @@ def _unfilter(data: bytes, width: int, height: int, bits: int, channels: int, st
     stride = (width * bits * channels + 7) // 8
     rows, previous, at = [], bytearray(stride), start
     for _ in range(height):
+        if at >= len(data):
+            raise PngError("the image data ends early")
         kind = data[at]
         line = bytearray(data[at + 1:at + 1 + stride])
         if len(line) != stride:
@@ -106,17 +108,34 @@ def _samples(line: bytes, width: int, bits: int, channels: int):
     return out
 
 
+# The depths each colour type may have (the PNG spec, table 11.1).
+DEPTHS = {0: (1, 2, 4, 8, 16), 2: (8, 16), 3: (1, 2, 4, 8), 4: (8, 16), 6: (8, 16)}
+
+
 def decode(data: bytes) -> Image:
     """A PNG file's bytes as RGBA: every colour type and depth, tRNS,
-    interlaced or not."""
+    interlaced or not. A damaged file is a PngError, as libpng refuses it."""
+    try:
+        return _decode(data)
+    except (struct.error, IndexError) as problem:
+        raise PngError(f"a damaged PNG ({problem})")
+
+
+def _decode(data: bytes) -> Image:
     if not data.startswith(SIGNATURE):
         raise PngError("not a PNG file")
     at, header, palette, trns, idat = 8, None, None, None, []
     while at + 8 <= len(data):
         length, kind = struct.unpack_from(">I4s", data, at)
         body = data[at + 8:at + 8 + length]
+        if len(body) != length or at + 12 + length > len(data):
+            raise PngError(f"the {kind!r} chunk ends early")
+        if struct.unpack_from(">I", data, at + 8 + length)[0] != zlib.crc32(kind + body) & 0xFFFFFFFF:
+            raise PngError(f"the {kind!r} chunk is damaged (CRC)")
         at += 12 + length
         if kind == b"IHDR":
+            if length != 13:
+                raise PngError("a damaged IHDR")
             header = struct.unpack(">IIBBBBB", body)
         elif kind == b"PLTE":
             palette = [tuple(body[i:i + 3]) for i in range(0, len(body) - 2, 3)]
@@ -130,14 +149,17 @@ def decode(data: bytes) -> Image:
         raise PngError("no IHDR")
     width, height, bits, colour, _, _, interlace = header
     channels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}.get(colour)
-    if channels is None or bits not in (1, 2, 4, 8, 16) or not width or not height:
+    if channels is None or bits not in DEPTHS[colour] or not width or not height or interlace > 1:
         raise PngError("an unsupported PNG layout")
     if colour == 3 and not palette:
         raise PngError("a palette PNG without a palette")
     if width * height > 64_000_000:
         raise PngError("too large")
     try:
-        raw = zlib.decompress(b"".join(idat))
+        # No more than the rows can hold (an interlaced image's passes add
+        # a filter byte a row each): a bomb stops there.
+        most = (height + 7) * (1 + (width * bits * channels + 7) // 8) * 2
+        raw = zlib.decompressobj().decompress(b"".join(idat), most)
     except zlib.error as problem:
         raise PngError(f"damaged image data ({problem})")
     out = bytearray(width * height * 4)

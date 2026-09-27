@@ -98,8 +98,11 @@ record are shown as retail fusions and marked.
   imported. A retail card's own `art` in mod.json would hide the pack's
   picture, so importing one moves it to the pack. An opened mod's pack is
   kept entry by entry: only a card part's plain entry (no `setting`) is
-  the editor's, a PNG another entry shares is left to it, and the
-  PNGs are written on save.
+  the editor's. One a setting switches (assets-hd's) is shown until a PNG
+  is imported, which goes before it in the pack so the game draws the
+  import. A PNG another entry or card shares is left to it, and the PNGs
+  are written on save. A card's `art` that can't be read stops the import
+  that would move it, instead of losing it.
 * Every other key of an opened mod (`data`, `text`, `textures`, `audio`,
   `requires`...) is kept as written, and the folder's other files are
   copied when the mod is saved somewhere new.
