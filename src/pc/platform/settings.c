@@ -35,6 +35,9 @@ static const SettingInfo info[SET_COUNT] = {
      * and count pre-releases as newer. */
     [SET_UPDATE_CHECK] = {"check_for_updates", NULL, "MEMORIES_CHECK_FOR_UPDATES", NULL, 1, 0, 1},
     [SET_UPDATE_PRERELEASES] = {"update_prereleases", NULL, "MEMORIES_UPDATE_PRERELEASES", NULL, 0, 0, 1},
+    /* View > Duel rank (src/pc/cards/rank_meter.h): 0 off, 1 the rank,
+     * 2 the rank and the score. */
+    [SET_RANK_METER] = {"rank_meter", NULL, "MEMORIES_RANK_METER", NULL, 0, 0, 2},
     [SET_MASTER_VOLUME] = {"master_volume", "volume", "MEMORIES_MASTER_VOLUME", "MEMORIES_VOLUME", 100, 0, 100},
     [SET_MUSIC_VOLUME] = {"music_volume", NULL, "MEMORIES_MUSIC_VOLUME", NULL, 100, 0, 100},
     [SET_SFX_VOLUME] = {"sfx_volume", NULL, "MEMORIES_SFX_VOLUME", NULL, 100, 0, 100},
