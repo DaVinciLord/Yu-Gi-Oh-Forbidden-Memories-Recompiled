@@ -768,7 +768,8 @@ notes/translation.md, "The official languages" (src/pc/text/language.c,
 pal_text.c; the spacing hook in text_box_build_step.c). Tested: CTest
 `pc_pal_text` (a made-up pack), and in the game with Spanish the name
 entry, Simon's talk and his choice, the duel's hand, the card viewer and
-RESULTS; French with a long line of its own; an empty folder with Spanish
+RESULTS (whose pages stay
+English in phase 1); French with a long line of its own; an empty folder with Spanish
 chosen (the game in English, the log saying no disc has it). The six smoke
 cases are unchanged with English (US).
 

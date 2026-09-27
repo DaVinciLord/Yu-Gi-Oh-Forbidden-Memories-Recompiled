@@ -38,6 +38,8 @@ typedef struct {
 } Disc;
 
 static Disc discs[MAX_DISCS];
+/* scanned: the folders beside the US disc were looked in (its place may
+ * not be known yet on the first launch, before the player picks it). */
 static int disc_count, scanned, current;
 
 /* Tried in turn for a language: its own disc first, then the Italian and
@@ -187,9 +189,9 @@ static void scan(void)
     char folder[PATH_SIZE], base[PATH_SIZE], why[256];
     const char *disc, *slash;
     if (scanned) return;
-    scanned = 1;
     if (named && *named) {
         scan_folder(named);
+        scanned = 1;
         return;
     }
     /* Beside the US disc, then in the usual game folders. */
@@ -203,6 +205,7 @@ static void scan(void)
         scan_folder(folder);
         snprintf(folder, sizeof(folder), "%s/pal", base);
         scan_folder(folder);
+        scanned = 1;
     }
     if (!Paths_Program(folder, sizeof(folder), "game/languages")) scan_folder(folder);
     if (!Paths_Program(folder, sizeof(folder), "game/pal")) scan_folder(folder);
@@ -216,7 +219,7 @@ static const Disc *disc_for(int language)
     static signed char found[LANGUAGE_COUNT], asked[LANGUAGE_COUNT];
     int i, j;
     if (language <= LANGUAGE_US || language >= LANGUAGE_COUNT) return NULL;
-    if (!asked[language]) {
+    if (!asked[language] || (found[language] < 0 && !scanned)) {
         asked[language] = 1;
         found[language] = -1;
         scan();
@@ -231,9 +234,60 @@ static const Disc *disc_for(int language)
     return found[language] >= 0 ? &discs[found[language]] : NULL;
 }
 
+/* A disc's pack, as a listing (pal_text.h). */
+static char *disc_listing(int language, size_t *length, char *origin, size_t origin_size)
+{
+    const Disc *disc = disc_for(language);
+    int slot = language - 1, problems = 0;
+    unsigned char *pack;
+    unsigned wa_pack;
+    char *listing = NULL;
+    FILE *file;
+    if (!disc) return NULL;
+    pack = malloc(PAL_FILE_A_SIZE + PAL_FILE_B_SIZE + PAL_FILE_C_SIZE + PAL_GLYPH_TABLE_SIZE);
+    if (!pack || !(file = fopen(disc->path, "rb"))) {
+        free(pack);
+        return NULL;
+    }
+    wa_pack = disc->wa_lba + PACK_FIRST + PACK_SECTORS * (unsigned)slot;
+    if (read_bytes(file, wa_pack + FILE_A_SECTOR, pack, PAL_FILE_A_SIZE) &&
+        read_bytes(file, wa_pack + FILE_B_SECTOR, pack + PAL_FILE_A_SIZE, PAL_FILE_B_SIZE) &&
+        read_bytes(file, wa_pack + FILE_C_SECTOR, pack + PAL_FILE_A_SIZE + PAL_FILE_B_SIZE, PAL_FILE_C_SIZE) &&
+        read_bytes(file, disc->exe_lba + GLYPH_TABLE_AT / SECTOR,
+                   pack + PAL_FILE_A_SIZE + PAL_FILE_B_SIZE + PAL_FILE_C_SIZE, PAL_GLYPH_TABLE_SIZE)) {
+        PalTextPack text = {pack, pack + PAL_FILE_A_SIZE, pack + PAL_FILE_A_SIZE + PAL_FILE_B_SIZE,
+                            pack + PAL_FILE_A_SIZE + PAL_FILE_B_SIZE + PAL_FILE_C_SIZE};
+        listing = PalText_Listing(&text, slot, length, &problems);
+    }
+    fclose(file);
+    free(pack);
+    snprintf(origin, origin_size, "%s, %d problems", disc->path, problems);
+    return listing;
+}
+
+static int disc_available(int language) { return disc_for(language) != NULL; }
+
+/* Where a language's text can come from, tried in order: the seam for a
+ * pack the release ships (a listing a tool writes with PalText_Listing,
+ * read before the discs; the discs stay a source). Each says whether it
+ * has the language, and gives its listing (malloc'd) and where it came
+ * from. */
+typedef struct {
+    int (*available)(int language);
+    char *(*listing)(int language, size_t *length, char *origin, size_t origin_size);
+} Source;
+static const Source sources[] = {{disc_available, disc_listing}};
+#define SOURCE_COUNT ((int)(sizeof(sources) / sizeof(sources[0])))
+
 int Language_Available(int language)
 {
-    return language == LANGUAGE_US || disc_for(language) != NULL;
+    int i;
+    if (language == LANGUAGE_US) return 1;
+    if (language < 0 || language >= LANGUAGE_COUNT) return 0;
+    for (i = 0; i < SOURCE_COUNT; i++) {
+        if (sources[i].available(language)) return 1;
+    }
+    return 0;
 }
 
 int Language_Current(void) { return current; }
@@ -253,35 +307,17 @@ static const char *const own_words[LANGUAGE_COUNT] = {
 
 char *Language_Listing(size_t *length)
 {
-    int language = Settings_Get(SET_LANGUAGE), slot = language - 1, problems = 0;
-    const Disc *disc = disc_for(language);
-    unsigned char *pack;
-    unsigned wa_pack;
-    char *listing = NULL;
-    FILE *file;
-    if (language == LANGUAGE_US) return NULL;
-    if (!disc) {
+    int language = Settings_Get(SET_LANGUAGE), i;
+    char *listing = NULL, origin[PATH_SIZE + 64] = "";
+    if (language <= LANGUAGE_US || language >= LANGUAGE_COUNT) return NULL;
+    for (i = 0; i < SOURCE_COUNT && !listing; i++) {
+        if (sources[i].available(language)) listing = sources[i].listing(language, length, origin, sizeof(origin));
+    }
+    if (!listing) {
         LOG(LOG_MODS, "language: no PAL disc with %s; English (US)", Language_Label(language));
         return NULL;
     }
-    pack = malloc(PAL_FILE_A_SIZE + PAL_FILE_B_SIZE + PAL_FILE_C_SIZE + PAL_GLYPH_TABLE_SIZE);
-    if (!pack || !(file = fopen(disc->path, "rb"))) {
-        free(pack);
-        return NULL;
-    }
-    wa_pack = disc->wa_lba + PACK_FIRST + PACK_SECTORS * (unsigned)slot;
-    if (read_bytes(file, wa_pack + FILE_A_SECTOR, pack, PAL_FILE_A_SIZE) &&
-        read_bytes(file, wa_pack + FILE_B_SECTOR, pack + PAL_FILE_A_SIZE, PAL_FILE_B_SIZE) &&
-        read_bytes(file, wa_pack + FILE_C_SECTOR, pack + PAL_FILE_A_SIZE + PAL_FILE_B_SIZE, PAL_FILE_C_SIZE) &&
-        read_bytes(file, disc->exe_lba + GLYPH_TABLE_AT / SECTOR,
-                   pack + PAL_FILE_A_SIZE + PAL_FILE_B_SIZE + PAL_FILE_C_SIZE, PAL_GLYPH_TABLE_SIZE)) {
-        PalTextPack text = {pack, pack + PAL_FILE_A_SIZE, pack + PAL_FILE_A_SIZE + PAL_FILE_B_SIZE,
-                            pack + PAL_FILE_A_SIZE + PAL_FILE_B_SIZE + PAL_FILE_C_SIZE};
-        listing = PalText_Listing(&text, slot, length, &problems);
-    }
-    fclose(file);
-    free(pack);
-    if (listing && own_words[language]) {
+    if (own_words[language]) {
         size_t extra = strlen(own_words[language]);
         char *longer = realloc(listing, *length + extra + 1);
         if (longer) {
@@ -290,9 +326,8 @@ char *Language_Listing(size_t *length)
             listing = longer;
         }
     }
-    if (listing) current = language;
-    LOG(LOG_MODS, "language: %s from %s: %s, %d problems", Language_Label(language), disc->path,
-        listing ? "read" : "not read", problems);
+    current = language;
+    LOG(LOG_MODS, "language: %s from %s", Language_Label(language), origin);
     return listing;
 }
 

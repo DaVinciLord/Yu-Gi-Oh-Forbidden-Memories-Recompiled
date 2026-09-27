@@ -471,7 +471,8 @@ all four); the English one only English.
 codes are the US text's, decoded as tools/pc/text_listing.py does, into a
 listing in memory with the US ids that `TextListing_Compile` compiles; the
 listing is, byte for byte, the one the research extractor wrote for each
-of the five discs. What differs from the US text:
+of the five discs, but for the two points marked below. What differs from
+the US text:
 
 - `F8 1B` (no operand) is the player's name: `{call L125A}`;
 - the name buffers are at A+`F800`, `F814` and `F848`: the US `122B`,
@@ -479,15 +480,23 @@ of the five discs. What differs from the US text:
 - `F8 03` reads its number 0x15D7C lower in RAM: moved to the US address;
 - menus `06`, `10` (the debug menu with ENDING and LANGUAGE), `18`, `19`,
   `50`, `EE`-`F1` (the PAL name keyboard), `F3` and `F7` mean something
-  else, or nothing, on PAL: they keep the US string; `40` and `44`, the
-  result pages, are swapped;
+  else, or nothing, on PAL: they keep the US string; so do the result
+  pages, `40`-`45` (below; the extractor swapped `40` and `44`);
 - the menus' labels are renamed from `LF000` up, as the story's text in the
   same bank uses the offsets;
 - `F8 1C`, which only the two-player results use, is left out: the US
-  engine reads it as a glyph (phase 2);
+  engine reads it as a glyph (phase 2; the extractor kept it);
 - the glyph codes are the PAL executable's (its Shift-JIS table, read off
   the same disc), and the accented letters sit on placeholder codes that
   each language's font draws its own way (the tables in pal_text.c).
+
+**Sources.** Where the text comes from is one table in language.c
+(`sources`: whether a source has the language, and its listing): today
+only the PAL discs. A pack the release ships (phase 1b: a tool writes
+each language's listing with `PalText_Listing`, from the discs) goes in
+that table ahead of the discs, which stay a source; the rest (the port's
+own strings, the compiling, the spacing) does not change. Images with
+words stay disc-only.
 
 **Under the mods.** The language is compiled first and a mod's string
 stands over it, string by string, so pt-BR over Spanish is pt-BR where it
@@ -524,16 +533,19 @@ line heights of 16 (US 12) in boxes 0x40 high (US 0x30), four lines
 either way: the port keeps the US heights. A menu line that would still
 pass its box is cut there (Text_CutsMenuGlyph), as a mod's.
 
-Known in phase 1: RESULTS' first page shows the PAL string 40's first
-words (ESTADÍS. DEFENSIVAS in Spanish) where US has the win condition
-TOTAL ANNIHILATION, which no PAL text has, and its second page's first
-row sits a little high: the PAL result pages are laid out by their own
-code (func_80020EAC). The images with words (main menu, game over, the
-results' headings) stay English. Six German card texts have more than
+Known in phase 1: RESULTS keeps the US pages (strings `40`-`45`, in
+English, beside the language's YOU and COM columns). The PAL pages are laid
+out by code of their own (func_80020EAC and the pages in reverse order):
+their `40` begins with DEFENSE STATISTICS where the US has the win
+condition, no PAL string says TOTAL ANNIHILATION, and `41`/`42` jump into
+`40`'s tail, so under the US screens an attrition or Exodia win would show
+one page twice and never the statistics. The images with words (main menu,
+game over, the results' headings) stay English. Six German card texts have more than
 the 8 lines the duel's card viewer shows (untested; the text box waits for
 a button past its height rather than stopping, as with the dialogue).
 
-**Phase 2.** The PAL result pages' layout and the other modes of the
+**Phase 2.** The PAL result pages (func_80020EAC's layout, then their
+strings) and the other modes of the
 spacing (2 and 3: the Library's title and a few menus); the images per
 language, from SU.MRG (the main menu, sector 136 per language) and WA_MRG
 (game over, sector 10135 + 41 per language) as a texture pack made at

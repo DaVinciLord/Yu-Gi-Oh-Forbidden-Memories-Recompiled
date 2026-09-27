@@ -52,7 +52,7 @@ int main(void)
     memcpy(a + 0x0200, e, sizeof(e));
     put16(a + 4 + 0x10 * 2, 0x1040);   /* the debug menu: the US one stays */
     memcpy(a + 0x1040, e, sizeof(e));
-    put16(a + 4 + 0x40 * 2, 0x1050);   /* the result pages, swapped */
+    put16(a + 4 + 0x40 * 2, 0x1050);   /* the result pages: the US ones stay */
     memcpy(a + 0x1050, i, sizeof(i));
     put16(a + 4 + 0x44 * 2, 0x1060);
     memcpy(a + 0x1060, e, sizeof(e));
@@ -76,8 +76,8 @@ int main(void)
     expect(listing, "[0003]\n{jump LF000}", 1);
     expect(listing, "{:LF000}\nE{end}", 1);
     expect(listing, "[0010]", 0);
-    expect(listing, "[0040]\nE{end}", 1);
-    expect(listing, "[0044]\ni{end}", 1);
+    expect(listing, "[0040]", 0);
+    expect(listing, "[0044]", 0);
     expect(listing, "[D100]\nE{end}", 1);
     expect(listing, "@bank descriptions", 1);
     expect(listing, "[0500]\n\xC3\xA1{end}", 1);

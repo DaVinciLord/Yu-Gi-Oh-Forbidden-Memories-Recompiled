@@ -2,7 +2,7 @@
  *
  * The decoding is tools/pc/text_listing.py's, and the listing the one the
  * Language research's extractor wrote (the same text, byte for byte, for
- * the five discs): every string the tables reach, the jumps as labels, the
+ * the five discs, but for the result pages and F8 1C): every string the tables reach, the jumps as labels, the
  * menus' labels renamed into names the story's text does not use, since
  * both end up in the US dialogue bank. What is ours here is knowledge, not
  * the game's: which letter each language's font draws on a placeholder
@@ -27,9 +27,12 @@
 /* Menu ids whose PAL string is another screen's (checked against the US
  * text with the English PAL disc): the debug menu with ENDING and LANGUAGE,
  * the PAL name keyboard's rows and prompt, the movie notice PAL has not,
- * and the ids US leaves empty. They keep the US string. The two result
- * pages, 0x40 and 0x44, come the other way round. */
-static const int keep_us[] = {0x06, 0x10, 0x18, 0x19, 0x50, 0xEE, 0xEF, 0xF0, 0xF1, 0xF3, 0xF7};
+ * and the ids US leaves empty. They keep the US string. So do the result
+ * pages, 0x40-0x45: PAL lays them out with code of its own (its 0x40 and
+ * 0x44 trade places, and no string names a total annihilation), which the
+ * US screens cannot show right (phase 2). */
+static const int keep_us[] = {0x06, 0x10, 0x18, 0x19, 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x50,
+                              0xEE, 0xEF, 0xF0, 0xF1, 0xF3, 0xF7};
 
 /* The PAL name buffers (file A offsets) and the US ones they stand for. */
 static const struct { unsigned pal, us; } name_buffers[] = {{0xF800, 0x122B}, {0xF814, 0x1238}, {0xF848, 0x125A}};
@@ -601,11 +604,6 @@ char *PalText_Listing(const PalTextPack *pack, int language, size_t *length, int
     banks[3]->name = "names", banks[3]->memory = names_memory;
     for (index = 0; index < MENU_IDS; index++) banks[0]->ids[index] = (int)u16(pack->a + FILE_TABLE + index * 2);
     for (i = 0; i < (int)(sizeof(keep_us) / sizeof(keep_us[0])); i++) banks[0]->ids[keep_us[i]] = 0;
-    {
-        int swap = banks[0]->ids[0x40];
-        banks[0]->ids[0x40] = banks[0]->ids[0x44];
-        banks[0]->ids[0x44] = swap;
-    }
     for (index = DIALOG_FIRST; index <= DIALOG_LAST; index++) {
         banks[1]->ids[index + 0x100] = (int)u16(pack->a + FILE_TABLE + index * 2);
     }

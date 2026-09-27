@@ -6,7 +6,9 @@
  * there when a PAL disc that has it is in `game/languages` or `game/pal`
  * (any .bin or .cue; MEMORIES_LANGUAGES_DIR names another folder), found by
  * what is on it, not by its name. The setting takes effect at the next
- * launch; a mod's translation stands over it, string by string. */
+ * launch; a mod's translation stands over it, string by string. Where the
+ * text comes from is language.c's `sources` table (the discs; a pack the
+ * release ships goes there too). */
 #include <stddef.h>
 
 enum { LANGUAGE_US, LANGUAGE_EN_EU, LANGUAGE_FR, LANGUAGE_DE, LANGUAGE_IT, LANGUAGE_ES, LANGUAGE_COUNT };
