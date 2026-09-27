@@ -220,8 +220,12 @@ static const unsigned char *side_name(int id)
     if (!name) return NULL;
     out = texts[id == TEXT_COM];
     for (i = 0; name[i] && n < (int)sizeof(texts[0]) - 1; i++) {
-        /* An accented letter as its plain one: the small font has none. */
-        int code = Glyphs_Base(Glyphs_Code((unsigned char)name[i]));
+        /* An accented letter as its plain one: the small font has none.
+         * A letter made whole (ß, æ, þ...) has no plain one (its base is
+         * 0, the space): the screen keeps COM. */
+        int code = Glyphs_Code((unsigned char)name[i]), base = Glyphs_Base(code);
+        if (code >= GLYPHS_EXTENDED_FIRST && base == 0) return NULL;
+        code = base;
         if (code < 0 || code >= 0xF0) return NULL;
         out[n++] = (unsigned char)code;
     }

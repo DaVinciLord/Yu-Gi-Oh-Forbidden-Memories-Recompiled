@@ -274,9 +274,10 @@ static int own_text(Out *out, int id, const char *english, int a, int b, int *gl
     int percent = Glyphs_Code('%'), letter_d = Glyphs_Code('d');
     char buffer[48];
     if (text && !plain(text)) {
-        static int said;
-        if (!said) LOG(LOG_MODS, "text: string %04X has codes other than letters; the port's own is used", id);
-        said = 1;
+        static unsigned char said[TEXT_OWN_LAST - TEXT_OWN_FIRST + 1]; /* once per string */
+        if (!said[id - TEXT_OWN_FIRST])
+            LOG(LOG_MODS, "text: string %04X has codes other than letters; the port's own is used", id);
+        said[id - TEXT_OWN_FIRST] = 1;
         text = NULL;
     }
     if (!text) {
