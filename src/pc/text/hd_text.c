@@ -25,6 +25,7 @@
  * finer. */
 #include "hd_text.h"
 #include "glyphs.h"
+#include "text.h"
 #include "pc/platform/settings.h"
 #include "pc/render/soft_gpu.h"
 #include "pc/cards/art.h"
@@ -1600,7 +1601,7 @@ int HdText_NameBox(int wanted, int which, int *atlas_u, int *atlas_v, int *x, in
 {
     const uint16_t *words = SoftGpu_Vram();
     int duelist = Tables_OpponentId();
-    const char *name = Tables_DuelistShortName(duelist);
+    const char *name = Text_OpponentName(duelist);
     if (!name || which < 0 || which > 1 || wanted < 1 || wanted > MAX_FACTOR || !words ||
         panel_sum(words) != PANEL_SUM) {
         return 0;
