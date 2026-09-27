@@ -8,6 +8,9 @@
 #include "duel_selection_layout.h"
 #include "duel_card.h"
 #include "../unmatched.h"
+#ifdef MEMORIES_PC
+#include "pc/debug/cheats.h"
+#endif
 
 #define DUEL_SELECTION_RECORDS(address) ((DuelSelectionRecord *)(address))
 
@@ -26,8 +29,13 @@ void Duel_InitSideStates(void) {
         sp[0] = D_8009B234;
         sp[1] = D_8009B236;
     } else {
+#ifdef MEMORIES_PC
+        /* Game > Cheats > Starting LP; 8000 unless the player picks another. */
+        sp[1] = sp[0] = (u16)Cheats_StartingLifePoints();
+#else
         sp[1] = DUEL_STARTING_LIFE_POINTS;
         sp[0] = DUEL_STARTING_LIFE_POINTS;
+#endif
     }
 
     for (k = 0; k < DUEL_SIDE_COUNT; k++, e++) {

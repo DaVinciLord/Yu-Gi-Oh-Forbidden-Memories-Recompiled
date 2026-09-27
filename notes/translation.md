@@ -77,9 +77,21 @@ wind of your activities...
   the next line. Card `n`'s name is `8000 + n` and its text `D100 + n`
   (`[8001]` and `[D101]` are Blue-eyes White Dragon's); the descriptions
   carry the card's name as a comment.
-* A line break is a line break in the game's text box. The text box does
-  not wrap by itself: break the lines where they fit. Card texts have
-  lines of 20 letters and room for 8 lines.
+* A line break is a line break in the game's text box. Break the lines
+  where they fit: a line wider than its box goes on at the start of the
+  next row, which pushes the rest of the text down a row. Card texts have
+  lines of 20 letters and room for 8 lines. A letter is 8 pixels wide, so
+  a box has as many columns as its width in pixels over 8, and the width is
+  the box's, not the string's: `[0021]`, the guardian star choice, has 22
+  columns, and `[0022]`, the two-player duel's quit box, 10.
+* In a menu with choices (`{choice ...}` then `{choose ...}`) that row is
+  worse: when it pushes the choices past the bottom of the box, the console
+  stops for good, with no frame after (the menu is laid out in one go and
+  waits for a button nothing reads). The port cuts that line at the box's
+  edge instead, and says so in `MEMORIES_TRACE=mods`; a menu that fits is
+  drawn as the console draws it. Keep menu lines within their box. A line
+  break of your own in a menu does not stop the game, but it counts as one
+  of the choices' lines, so the last choice is lost.
 * A text box has room for so many letters at once: 254 in the dialogue
   box and some menus, 159 in most menus. What is past that on a page is
   left out, and a page with more than 254 is reported. A menu writes its
@@ -116,17 +128,118 @@ retail glyphs can be typed as themselves: letters, digits, `! " # $ % & '
 ( ) * + , - . / : ; < = > ?`, `«` `»`, `·`, `α β γ`, `← →`, `♂ ♀`; typographic
 quotes and dashes are taken as their plain ones.
 
+## The port's own strings
+
+A few words the port adds to the game's screens are drawn in the game's
+letters, inside the game's picture, and a translation gives them in the
+same listing, in the dialogue bank, with ids no retail string has
+(`FE00`-`FEFF`, `TEXT_OWN_*` in `src/pc/text/text.h`). They are not in the
+extracted listing; add them:
+
+```text
+@bank dialog
+
+[FE00]
+NEW{end}
+
+[FE01]
+%d MORE CARD{end}
+
+[FE02]
+%d MORE CARDS{end}
+
+[FE03]
+PAGE %d OF %d{end}
+
+[FE10]
+DECK SLOTS{end}
+
+[FE41]
+Simon Muran{end}
+```
+
+| Id | Where | Room |
+|---|---|---|
+| `FE00` | Card drops' added result pages: after a card the player had none of | ends at the plate's end; each letter past 3 takes one from the card's name |
+| `FE01`, `FE02` | the same pages' heading, left: one card past the first, or more | with `FE03` right-aligned on the same line: 33 letters for both, numbers and spaces included |
+| `FE03` | the heading, right, when there is more than one page | as above |
+| `FE10` | the card shop's menu (string `0011`): the entry under BUILD DECK | the menu's box shows 44 letters in all (spaces are none); retail's four lines have 35, so 9; a line is 15 wide |
+| `FE41`-`FE67` | the opponent's name in place of COM (Video > Opponent's name for COM): `FE40` + the duelist's id, 1-39 (the names bank's `8328` + id is the same duelist) | 14 letters, spaces and full stops (H.M. Anubisius, the longest English one); past that, the first 14 |
+
+Letters and spaces only: a string with other codes is not used (the port's
+English is). `%d` is where the port puts a number, in the order above
+(`FE03`: the page, then how many). The headings are in the small letters,
+which have no accents: an accented letter is drawn as its plain one.
+
+The shop's menu with the entry is rebuilt from the translation's string
+`0011` when it has one: its four lines as they are, `FE10` (or the English)
+added under the second, centred as the others are, and its `{choice}` given
+the fifth entry. A `0011` that is not four lines of letters, spaces,
+`{f8 02}` steps and `{f8 0A}` colours, or five lines past the box's 44
+letters, leaves the menu the translation's four entries, and the log
+(`MEMORIES_TRACE=mods`) says so. A translation whose own four lines have
+more letters than retail's has less room for `FE10`: the pt-BR menu has 38,
+so 6.
+
+The opponent's name in place of COM (`FE41`-`FE67`) is set in the text's
+font, not the game's letters, so it may have accents (Simão): letters,
+spaces and full stops of Latin-1; a string with anything else is not used
+(the log says so). Without it, a translation that renames the duelist in
+the names bank (`8329`-`834F`, as pt-BR's does) has that name shown, made
+short as the English ones are (`Tables_ShortenName`): up to its first
+character that is not a letter, a space or a full stop (Jono 2º Duelo:
+Jono), whole up to 14; longer, its first words as initials when every word
+starts with a capital (Sumo Mago Martis: S.M. Martis), else its last word
+(Mago da Montanha: Montanha). A name the translation gives as the English
+(Weevil Underwood) keeps the English short one (Weevil). Without either,
+the English. The result screens show the same name over COM's column,
+an accented letter as its plain one (their small letters have none).
+
+| Id | Duelist | Id | Duelist | Id | Duelist |
+|---|---|---|---|---|---|
+| `FE41` | Simon Muran | `FE4E` | Yami Bakura | `FE5B` | Desert Mage |
+| `FE42` | Teana | `FE4F` | Pegasus | `FE5C` | High Mage Martis |
+| `FE43` | Jono | `FE50` | Isis | `FE5D` | Meadow Mage |
+| `FE44` | Villager 1 | `FE51` | Kaiba | `FE5E` | High Mage Kepura |
+| `FE45` | Villager 2 | `FE52` | Mage Soldier | `FE5F` | Labyrinth Mage |
+| `FE46` | Villager 3 | `FE53` | Jono 2nd | `FE60` | Seto 2nd |
+| `FE47` | Seto | `FE54` | Teana 2nd | `FE61` | Guardian Sebek |
+| `FE48` | Heishin | `FE55` | Ocean Mage | `FE62` | Guardian Neku |
+| `FE49` | Rex Raptor | `FE56` | High Mage Secmeton | `FE63` | Heishin 2nd |
+| `FE4A` | Weevil Underwood | `FE57` | Forest Mage | `FE64` | Seto 3rd |
+| `FE4B` | Mai Valentine | `FE58` | High Mage Anubisius | `FE65` | DarkNite |
+| `FE4C` | Bandit Keith | `FE59` | Mountain Mage | `FE66` | Nitemare |
+| `FE4D` | Shadi | `FE5A` | High Mage Atenza | `FE67` | Duel Master K |
+
+The port's other words (the save slot and deck slot menus, the host
+window's menus) are drawn in the host's font over the game, not in the
+game's letters, and are not part of a translation's text.
+
 ## Letters
 
 The game's font has 91 letters, none accented. The port draws more,
 the first time a text uses them:
 
 * **An accented letter** is the retail letter with its mark drawn on, in
-  both text sizes: acute, grave, circumflex, diaeresis, tilde, ring,
-  cedilla, caron, macron, breve, dot, double acute and ogonek, on any letter
-  Unicode combines them with (251 of them: á, Ž, ő, ę, ǎ, ẽ...). A
-  capital with a mark above is set a little shorter so the mark fits the
-  line. Also ¿ ¡ ı ø Ø ł Ł đ Đ ħ Ħ.
+  all three text sizes (16x16, 8x12 and the 8x8 of the duel results'
+  headings): acute, grave, circumflex, diaeresis, tilde, ring, cedilla,
+  caron, macron, breve, dot, double acute and ogonek, on any letter Unicode
+  combines them with (251 of them: á, Ž, ő, ę, ǎ, ẽ...). Also
+  ¿ ¡ ı ø Ø ł Ł đ Đ ħ Ħ, and `:` in the 8x8 font, which has none (two of its
+  `·`, in the letters' colours).
+* **How a mark fits** a cell with no room above the letter. In the 16x16
+  font a capital is squeezed down to leave the mark its rows. The small
+  fonts have none to spare: an 8x12 capital's outline is on the cell's top
+  row (body 9 rows, a small letter's 7), an 8x8 capital's too (body 6, small
+  4), so squeezing would leave a small letter. There the capital gives up
+  **one** row of its body, the inner row most like a neighbour, nearer the
+  middle on a tie (a thick stroke thins, a thin one stays), and the mark's
+  two rows go on the cell's top two, its lower row where the letter's top
+  outline was, touching the letter: É, Ê, Ã, Õ read as capitals, a row
+  shorter than the others. A small letter whose outline row is where the
+  mark's outline goes below it (é, ã, ô in 8x12, all of them in 8x8)
+  shares that row instead of being squeezed. The 8x8 font's cedilla is one
+  pixel on its bottom row, under the letter.
 * **ß ẞ æ Æ œ Œ ð Ð þ Þ º ª ° €** are built in, drawn from Noto Sans Bold
   (SIL Open Font License) and given the retail letters' outline and
   shading.
@@ -170,14 +283,31 @@ channels). The console's text always fits; the port's
 full, rather than writing into the next channel's (or past the table), and
 `func_80039A14`/`func_80039A60`, which build a menu's text in one go, stop
 at a page that waits for a button (state 4) instead of looping forever.
-The Library's heading (string `F8`, "<seen/722>") is rewritten for the
+A menu with choices has the same loop in `func_80039794`, which steps the
+text unbounded while `flags_34 & 0x1000` (the choices' layout) is up; there
+`TextBox_BuildStep` drops a letter past the box's right edge when its wrap
+would leave the choices' last line below the box, the one case that ends
+in state 4 inside that loop (`Text_CutsMenuGlyph`). The Library's heading (string `F8`, "<seen/722>") is rewritten for the
 number of cards there are, by its id, whether the text is the disc's or a
 translation's (`Cards_Text`).
 
 Glyph codes above the retail ones (`0x100` on, written `F1`-`F5` and a low
 byte, which the game already reads as a glyph) have words of their own
 (`Glyphs_Word`), and `func_80035E20` draws them from bank 15
-(`Glyphs_Cell`). If a translation renames cards, their alphabetical order
+(`Glyphs_Cell`). The 8x8 font is another path: `DuelEffect_AppendEntry`
+keeps only the glyph's index in that font (bits 20-27 of its word, the
+retail letter's for an accented one, 0 for `:`, which the retail game then
+drops), so on the port it also writes the glyph's Shift-JIS into the entry
+(`code_00`, which the retail 8x8 path leaves stale) and gives `:` a stand-in
+index (`Glyphs_TinyIndex`); the draw asks `Glyphs_TinyCell`, which makes the
+8x8 picture from the font at (704, 0) and puts it on page 4 of the bank,
+with the 8x8 palettes (row `0xFA`, from x 656) copied beside the others.
+Retail text never has an accented letter or `:` in the 8x8 font (its only
+8x8 strings are the results' headings, YOU/COM and the ♂/♀ marks), so its
+pictures are the same as before, byte for byte. The built-in letters (ß,
+æ...) and characters set in a font (Greek...) still have no 8x8 picture and
+are left out there, as before.
+If a translation renames cards, their alphabetical order
 (`gCard_asNameSortKey`) is worked out again from the new names, accents
 sorting as their plain letters. The names and texts of cards a mod adds
 ([more cards](more-cards.md)) are UTF-8 too and take the same letters.

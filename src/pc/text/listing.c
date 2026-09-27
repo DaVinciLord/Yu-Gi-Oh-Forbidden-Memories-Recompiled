@@ -13,7 +13,8 @@ static const char *const bank_names[TEXT_BANK_COUNT] = {"dialog", "descriptions"
 
 int TextListing_Bank(unsigned id)
 {
-    if (id <= 0xFF || (id >= 0x500 && id <= 0x5F9)) return TEXT_BANK_DIALOG;
+    /* 0xFE00-0xFEFF: the port's own strings (text.h, TEXT_OWN_FIRST). */
+    if (id <= 0xFF || (id >= 0x500 && id <= 0x5F9) || (id >= 0xFE00 && id <= 0xFEFF)) return TEXT_BANK_DIALOG;
     if (id >= 0xD000 && id <= 0xD3FF) return TEXT_BANK_DESCRIPTIONS;
     if (id >= 0x8000 && id <= 0x835F) return TEXT_BANK_NAMES;
     return -1;

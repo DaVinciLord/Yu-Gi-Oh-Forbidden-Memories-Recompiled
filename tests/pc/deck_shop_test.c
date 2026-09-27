@@ -1,6 +1,8 @@
 #include "pc/saves/deck_menu.h"
 #include "pc/platform/settings.h"
 #include "pc/guest/state.h"
+#include "pc/text/text.h"
+#include "pc/debug/log.h"
 #include "types.h"
 #include <assert.h>
 #include <string.h>
@@ -8,11 +10,59 @@
 u8 D_8009B26C, gDialog_bChoiceEnabled;
 u16 D_8009B27C;
 s8 gDialog_bChoiceCount, gDialog_bChoice;
-static int enabled = 1, translated, remapped;
+static int enabled = 1, remapped;
 static unsigned char text[128];
 
 int Settings_Get(SettingId id) { assert(id == SET_DECK_SLOTS); return enabled; }
-int Text_Overridden(int id) { assert(id == 0x11); return translated; }
+const unsigned char *Text_Own(int id)
+{
+    assert(id == 0x11 || id == TEXT_OWN_DECK_SLOTS);
+    return NULL;
+}
+int Log_Wanted(LogChannel channel) { (void)channel; return 0; }
+void Log_Printf(LogChannel channel, const char *format, ...) { (void)channel; (void)format; }
+
+/* DeckMenu_ShopListing over a translation's menu: the pt-BR one's shape
+ * (SALVAR, MONTAR DECK, VOLTAR AO MENU, SAIR DA LOJA) in made-up letters,
+ * with spaces (glyph 0) and an added letter (F1 23). */
+static void check_listings(void)
+{
+    static const char retail[] = "@bank dialog\n\n[0011]\n{choice 4D 9F}{f8 02 2C}SAVE\n{f8 02 14}BUILD DECK\n"
+                                 "{f8 02 14}DECK SLOTS\nRETURN TO TITLE\n{f8 02 14}LEAVE SHOP\n"
+                                 "{choose 80 0 0 0 0 0}\n";
+    static const unsigned char menu[] = {
+        0xFB, 0x4C, 0x8F, 0xF8, 0x02, 0x24, 1, 2, 3, 4, 5, 6, 0xFE,     /* 6 letters */
+        0xF8, 0x02, 0x10, 1, 2, 3, 4, 5, 6, 0, 7, 8, 9, 10, 0xFE,       /* 11 */
+        1, 2, 3, 4, 5, 6, 0, 7, 8, 0, 9, 10, 0xF1, 0x23, 11, 0xFE,     /* 15 */
+        0xF8, 0x02, 0x0C, 1, 2, 3, 4, 0, 5, 6, 0, 7, 8, 9, 10, 0xFE,    /* 12 */
+        0xFB, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF};
+    static const unsigned char label[] = {0x2A, 0x1F, 0, 0xF1, 0x23, 0xFF}; /* 3 letters and a space */
+    /* 6 more: the menu's 38 and these are the box's 44; 7 are too many. */
+    static const unsigned char fits[] = {1, 2, 3, 4, 5, 6, 0xFF}, too_long[] = {1, 2, 3, 4, 5, 6, 7, 0xFF};
+    static const unsigned char coded[] = {0xFB, 0x4C, 0x8F, 0xF8, 0x17, 0, 0, 0xFE, 0xFF};
+    static const unsigned char two_lines[] = {0x2A, 0xFE, 0x2A, 0xFF};
+    char out[2400];
+    assert(DeckMenu_ShopListing(out, sizeof(out), NULL, NULL) && !strcmp(out, retail));
+    /* The translation's lines as {g}, the entry under the second, centred
+     * on the widest line's middle (0x24 + 6 * 4 = 60): 60 - 4 * 4 = 0x2C. */
+    assert(DeckMenu_ShopListing(out, sizeof(out), menu, label));
+    assert(strstr(out, "[0011]\n{choice 4D 9F}{f8 02 24}{g 1}{g 2}{g 3}{g 4}{g 5}{g 6}\n"));
+    assert(strstr(out, "{g A}\n{f8 02 2C}{g 2A}{g 1F}{g 0}{g 123}\n{g 1}"));
+    assert(strstr(out, "{g 123}{g B}\n{f8 02 0C}{g 1}"));
+    assert(strstr(out, "{g A}\n{choose 80 0 0 0 0 0}\n"));
+    /* The box's letters: the English entry (9) does not fit over this
+     * menu (38); one of 6 does. */
+    assert(DeckMenu_ShopListing(out, sizeof(out), menu, fits));
+    assert(!DeckMenu_ShopListing(out, sizeof(out), menu, too_long));
+    assert(!DeckMenu_ShopListing(out, sizeof(out), menu, NULL));
+    /* The translation's entry over retail's menu. */
+    assert(DeckMenu_ShopListing(out, sizeof(out), NULL, label) && strstr(out, "BUILD DECK\n{f8 02 2C}{g 2A}"));
+    /* A menu with codes a line has no use for, an entry of two lines, or
+     * no room: no entry. */
+    assert(!DeckMenu_ShopListing(out, sizeof(out), coded, NULL));
+    assert(!DeckMenu_ShopListing(out, sizeof(out), NULL, two_lines));
+    assert(!DeckMenu_ShopListing(out, 64, NULL, NULL));
+}
 const unsigned char *Text_CompileOwn(const char *listing, int id, size_t *size)
 {
     assert(id == 0x11 && strstr(listing, "DECK SLOTS"));
@@ -76,7 +126,6 @@ int main(void)
     assert(DeckMenu_ShopMenu());
     DeckMenu_ShopState(&old);
     assert(DeckMenu_ShopChoice(2) == 2);
-    translated = 1;
-    assert(!DeckMenu_ShopMenu());
+    check_listings();
     return 0;
 }

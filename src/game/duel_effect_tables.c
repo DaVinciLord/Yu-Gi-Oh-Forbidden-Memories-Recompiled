@@ -11,6 +11,9 @@
 #include "duel_swords_effect.h"
 #include "duel_effect_dialog_state.h"
 #include "duel_effect_card_viewer_state.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/passwords.h"
+#endif
 
 /* Initialized data at 0x80090A5C: two handlers per effect group, in group
    order. */
@@ -99,7 +102,11 @@ DuelEffectHandler
     gDuelEffect_apfnStateHandler[DUEL_EFFECT_STATE_HANDLER_COUNT] = {
     DuelEffect_UpdateDialogState,
     DuelEffect_UpdateDialogState,
+#ifdef MEMORIES_PC
+    CardPassword_UpdateViewer, /* the viewer, then View > Card passwords (passwords.h) */
+#else
     DuelEffect_UpdateCardViewerState,
+#endif
     func_800289AC,
     func_800289B4,
 };

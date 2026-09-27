@@ -1292,6 +1292,9 @@ static void pump(void)
         if(event.type==SDL_EVENT_GAMEPAD_ADDED){open_gamepad(event.gdevice.which);continue;}
         if(event.type==SDL_EVENT_GAMEPAD_REMOVED){close_gamepad(event.gdevice.which);continue;}
         if(event.type==SDL_EVENT_KEY_UP)ControlsRuntime_Key(controls_key(event.key.scancode),0);
+        /* F8's release too, before a menu can take it: else the rewind
+         * would run on after the menu closes. */
+        if(event.type==SDL_EVENT_KEY_UP&&event.key.key==SDLK_F8)Memories_RewindHold(0);
         if(dispatch_controls(&event, &menu_event))continue;
         if (mods_window && SDL_GetWindowFromEvent(&event) == mods_window) {
             if (event.type == SDL_EVENT_WINDOW_RESIZED) resize_mods(event.window.data1, event.window.data2);
@@ -1351,6 +1354,7 @@ static void pump(void)
             break;
         case SDL_EVENT_WINDOW_FOCUS_LOST:
             if(!controls_window)ControlsRuntime_ResetKeys(); mouse_bits=wheel_now=0;wheel_frames=0;
+            Memories_RewindHold(0); /* the key-up may never come */
             if (Settings_Get(SET_MUTE_ON_FOCUS_LOSS)) Spu_SetOutputVolume(0);
             if (Settings_Get(SET_PAUSE_ON_FOCUS_LOSS) && Platform_ClockRate() != 0) {
                 focus_clock_rate = Platform_ClockRate();
@@ -1386,10 +1390,20 @@ static void pump(void)
         case SDL_EVENT_KEY_DOWN: case SDL_EVENT_KEY_UP: {
             SDL_Keycode key = event.key.key;
             int down = event.type == SDL_EVENT_KEY_DOWN;
+            /* Keypad +/-: master volume, repeating while held; a keypad
+             * key the bindings use stays the pad's (Platform_VolumeKey). */
+            if (Platform_VolumeKey(controls_key(event.key.scancode), down)) {
+                if (down) menu_dirty = 1;
+                break;
+            }
             if (event.key.repeat) {
                 break;
             }
-            if (down && (key == SDLK_F11 || (key == SDLK_RETURN && (event.key.mod & SDL_KMOD_ALT)))) {
+            /* F11 or Alt+Enter (either Enter). The press stops here, so the
+             * Enter under Alt never reaches the pad as Start; Alt itself is a
+             * reserved modifier that cannot be bound (controls.c). */
+            if (down && (key == SDLK_F11 || ((key == SDLK_RETURN || key == SDLK_KP_ENTER) &&
+                                             (event.key.mod & SDL_KMOD_ALT)))) {
                 int on = covers_screen();
                 Settings_Set(SET_FULLSCREEN, !on);
                 if (on) Settings_Set(SET_BORDERLESS, 0);
@@ -1431,6 +1445,7 @@ static void pump(void)
                 DeckMenu_Request();
                 break;
             }
+            if (key == SDLK_F8 && Memories_RewindHold(down)) break; /* Game > Rewind on */
             if (down && key == SDLK_ESCAPE) {
                 if (covers_screen()) {
                     /* Out of fullscreen first, then out of borderless. */
@@ -1826,11 +1841,18 @@ uint16_t Platform_Pad(int port)
                      : (uint16_t)(Gamepad_Bits(1) | scripted_bits2);
 }
 
+uint16_t Platform_PadFixedBits(int port)
+{
+    return port == 0 ? (uint16_t)((ControlsRuntime_Blocked()?0:(mouse_bits | wheel_now)) | scripted_bits) : scripted_bits2;
+}
+
 int Platform_PadConnected(int port) { return port == 0 || Gamepad_Connected(port) || Platform_ScriptedPad2(); }
 
 /* MEMORIES_SDL_SCRIPT="200:click:20:13,260:move:60:69,420:key:escape": events
  * pushed into SDL's queue at presented frames, for testing the menu without
  * a pointer (external synthetic X input does not reach SDL correctly).
+ * "key" presses and releases at once; "keydown" and "keyup" hold a key
+ * between two frames, so the game sees it ("600:keydown:s,606:keyup:s").
  * "300:shot" saves the composed window (menu included) like Shift+F12. */
 static void run_event_script(unsigned frame)
 {
@@ -1856,14 +1878,28 @@ static void run_event_script(unsigned frame)
         memset(&event, 0, sizeof(event));
         if (strcmp(kind, "shot") == 0) {
             Platform_Screenshot(1);
-        } else if (strcmp(kind, "key") == 0) {
+        } else if (strcmp(kind, "key") == 0 || strcmp(kind, "keydown") == 0 || strcmp(kind, "keyup") == 0 ||
+                   strcmp(kind, "down") == 0 || strcmp(kind, "up") == 0) {
+            /* "key" presses and releases in one go; "keydown"/"keyup" (or
+             * "down"/"up") hold a key across frames, as the game only sees
+             * what is held when it reads the pad. */
+            const int press = strcmp(kind, "keyup") != 0 && strcmp(kind, "up") != 0;
+            const int release = strcmp(kind, "keydown") != 0 && strcmp(kind, "down") != 0;
             const char *name = script + 1;
             n = strcspn(name, ",");
             event.type = SDL_EVENT_KEY_DOWN;
             event.key.down = true;
+            /* "alt+<name>": the same key with Left Alt held. */
+            if (n > 4 && strncmp(name, "alt+", 4) == 0) {
+                event.key.mod = SDL_KMOD_LALT;
+                name += 4;
+                n -= 4;
+            }
             event.key.key = strncmp(name, "escape", n) == 0 ? SDLK_ESCAPE : strncmp(name, "f10", n) == 0 ? SDLK_F10
                           : strncmp(name, "f3", n) == 0 ? SDLK_F3
+                          : strncmp(name, "f5", n) == 0 ? SDLK_F5
                           : strncmp(name, "f6", n) == 0 ? SDLK_F6
+                          : strncmp(name, "f8", n) == 0 ? SDLK_F8
                           : strncmp(name, "f11", n) == 0 ? SDLK_F11
                           : strncmp(name, "f12", n) == 0 ? SDLK_F12
                           : strncmp(name, "left", n) == 0 ? SDLK_LEFT : strncmp(name, "right", n) == 0 ? SDLK_RIGHT
@@ -1872,13 +1908,17 @@ static void run_event_script(unsigned frame)
                           : strncmp(name, "tab", n) == 0 ? SDLK_TAB : strncmp(name, "p", n) == 0 ? SDLK_P
                           : strncmp(name, "m", n) == 0 ? SDLK_M
                           : strncmp(name, "period", n) == 0 ? SDLK_PERIOD
+                          : strncmp(name, "kp_plus", n) == 0 ? SDLK_KP_PLUS
+                          : strncmp(name, "kp_minus", n) == 0 ? SDLK_KP_MINUS
+                          : strncmp(name, "s", n) == 0 ? SDLK_S /* Circle */
+                          : strncmp(name, "x", n) == 0 ? SDLK_X /* Cross */
                           : SDLK_UNKNOWN;
             event.key.scancode = SDL_GetScancodeFromKey(event.key.key, NULL);
             event.key.windowID = SDL_GetWindowID(window);
-            SDL_PushEvent(&event);
+            if (press) SDL_PushEvent(&event);
             event.type = SDL_EVENT_KEY_UP;
             event.key.down = false;
-            SDL_PushEvent(&event);
+            if (release) SDL_PushEvent(&event);
             script = name + n;
         } else {
             x = (int)strtol(script + 1, &end, 10);
