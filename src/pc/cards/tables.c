@@ -187,6 +187,7 @@ static short terrain_bonus[TERRAINS][CARD_TYPE_MAGIC];
 static unsigned char terrain_listed[TERRAINS][CARD_TYPE_MAGIC];
 static long trap_threshold[DUEL_ATTACK_TRAP_COUNT];   /* House of Adhesive Tape to Widespread Ruin */
 static unsigned char trap_listed[DUEL_ATTACK_TRAP_COUNT];
+static const char *trap_from[DUEL_ATTACK_TRAP_COUNT];      /* the mod that set it */
 static unsigned char edited[TABLES_DUELIST_COUNT][TABLES_POOL_COUNT];
 static unsigned order_counter;
 static int fusions_sorted;
@@ -1057,6 +1058,8 @@ int Tables_TerrainBonus(int terrain, int type, int *bonus)
 static const long retail_thresholds[DUEL_ATTACK_TRAP_COUNT] = {
     DUEL_HOUSE_OF_ADHESIVE_TAPE_ATTACK_THRESHOLD, DUEL_EATGABOON_ATTACK_THRESHOLD, DUEL_BEAR_TRAP_ATTACK_THRESHOLD,
     DUEL_INVISIBLE_WIRE_ATTACK_THRESHOLD, DUEL_ACID_TRAP_HOLE_ATTACK_THRESHOLD, DUEL_WIDESPREAD_RUIN_ATTACK_THRESHOLD};
+static const char *const trap_names[DUEL_ATTACK_TRAP_COUNT] = {
+    "House of Adhesive Tape", "Eatgaboon", "Bear Trap", "Invisible Wire", "Acid Trap Hole", "Widespread Ruin"};
 
 /* "trap_thresholds": { trap: points }, the attack at or under which each of
  * the six attack traps springs, in place of the disc's 500 to 3000. */
@@ -1087,14 +1090,20 @@ static void read_trap_thresholds(const char *mod, const JsonValue *table)
         }
         trap_threshold[trap] = points;
         trap_listed[trap] = 1;
+        trap_from[trap] = mod;
     }
     for (i = 1; i < DUEL_ATTACK_TRAP_COUNT; i++) {
         /* The duel looks from the strongest trap down and stops at the first
          * set one the attack is over: out of order, a weaker trap behind it
-         * is never reached. */
-        if (Tables_TrapThreshold(i, retail_thresholds[i]) < Tables_TrapThreshold(i - 1, retail_thresholds[i - 1])) {
-            Mods_Note(mod, "trap_thresholds: out of order (House of Adhesive Tape to Widespread Ruin, each at "
-                      "least the one before); a trap behind a lower threshold never springs");
+         * is never reached. The values may come from other mods, which the
+         * note names. */
+        int before = Tables_TrapThreshold(i - 1, retail_thresholds[i - 1]);
+        int here = Tables_TrapThreshold(i, retail_thresholds[i]);
+        if (here < before) {
+            Mods_Note(mod, "trap_thresholds: out of order: %s at %d (%s) is under %s at %d (%s), the trap before it; "
+                      "a trap behind a lower threshold never springs", trap_names[i], here,
+                      trap_from[i] ? trap_from[i] : "the disc", trap_names[i - 1], before,
+                      trap_from[i - 1] ? trap_from[i - 1] : "the disc");
             break;
         }
     }
@@ -1198,6 +1207,7 @@ void Tables_Clear(void)
     memset(terrain_bonus, 0, sizeof(terrain_bonus));
     memset(terrain_listed, 0, sizeof(terrain_listed));
     memset(trap_listed, 0, sizeof(trap_listed));
+    memset(trap_from, 0, sizeof(trap_from));
     if (removed_results) memset(removed_results, 0, (size_t)removed_room);
     memset(edited, 0, sizeof(edited));
     forget_pools();

@@ -260,7 +260,8 @@ duel looks at the attacked side's set attack traps from Widespread Ruin
 down and stops at the first whose threshold is under the attack; the last
 trap it passed springs, which, with the thresholds in order, is the weakest
 trap that stops the attacker. Keep the six in that order (each at least the
-one before it): the Mods window warns when they are not, since a trap behind
+one before it): the Mods window warns when they are not, naming the two
+thresholds and the mod that set each (or the disc), since a trap behind
 a lower threshold would never spring. Values are whole points, 0 to 65535;
 a trap no mod names keeps the disc's threshold. A copy of a trap springs as
 its base. Which cards are attack traps, and what they do, is the disc's.
