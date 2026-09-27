@@ -1393,7 +1393,8 @@ a presented frame.
 - It is drawn over the panel whatever drew the panel: the retail panel, HD
   numbers and labels, or a texture pack's image.
 - A 2P duel (no opponent id) and a panel other than the retail one keep COM.
-- YOU's box shows You, in the name's case, made the same way.
+- YOU's box shows the name the player gave at name entry (the save's,
+  `SaveSlots_StateName`), made the same way; You when the save has none.
 - The result screens name the sides too (You, and the opponent over COM's
   column). They call the dialogue bank's YOU and COM labels by their place,
   which `Text_Retarget` points at the names. Their small font has no full
