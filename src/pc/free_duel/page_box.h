@@ -13,7 +13,11 @@
  */
 #include "types.h"
 
-#define FREE_DUEL_PAGE_TEXT_ID 0xFFFE
+/* The composed string ids are handed out from the top down, one per screen
+ * that makes a line of its own: 0xFFFF the results screen's added pages
+ * (cards/drops.h), 0xFFFE the Password screen's label (cards/passwords.h),
+ * and this. */
+#define FREE_DUEL_PAGE_TEXT_ID 0xFFFD
 #define FREE_DUEL_PAGE_TEXT_SIZE 96
 
 /* The box spans the picture, 4 in from each edge, so that the page can be
