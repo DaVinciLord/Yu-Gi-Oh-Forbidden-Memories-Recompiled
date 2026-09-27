@@ -15,7 +15,7 @@
 #define USER_DATA 24
 #define SECTOR 2048
 #define PATH_MAX_ 1024
-#define EXECUTABLE "SLUS_014.11;1"
+#define EXECUTABLE "SLUS_014.11"
 #ifdef _WIN32
 #define SEPARATOR '\\'
 #else
@@ -29,7 +29,7 @@ static unsigned le32(const unsigned char *bytes)
     return bytes[0] | (unsigned)bytes[1] << 8 | (unsigned)bytes[2] << 16 | (unsigned)bytes[3] << 24;
 }
 
-static int read_sector(FILE *file, unsigned lba, unsigned char *out)
+int GameFiles_ReadSector(FILE *file, unsigned lba, unsigned char *out)
 {
     unsigned char raw[RAW_SECTOR];
     if ((unsigned long long)lba * RAW_SECTOR > LONG_MAX) return 0;
@@ -37,33 +37,66 @@ static int read_sector(FILE *file, unsigned lba, unsigned char *out)
     memcpy(out, raw + USER_DATA, SECTOR);
     return 1;
 }
+#define read_sector GameFiles_ReadSector
 
-/* Where SLUS_014.11 is on the image, or 0 when the image is not that disc
- * (not raw, not ISO 9660, or another game). */
-static int find_executable(FILE *file, unsigned *lba, unsigned *size)
+/* The directory record called `name` (ISO 9660's ";1" left off) in the
+ * directory at `lba`, `size` bytes: 1 with its place and size. */
+static int find_record(FILE *file, unsigned lba, unsigned size, const char *name, size_t length, unsigned *at,
+                       unsigned *record_size, int *directory)
 {
     unsigned char sector[SECTOR];
-    unsigned root, root_size, at;
-    if (!read_sector(file, 16, sector) || sector[0] != 1 || memcmp(sector + 1, "CD001", 5)) return 0;
-    root = le32(sector + 156 + 2);
-    root_size = le32(sector + 156 + 10);
-    if (root_size > 64 * SECTOR) return 0;
-    for (at = 0; at < root_size; at += SECTOR) {
+    unsigned done;
+    if (size > 64 * SECTOR) return 0;
+    for (done = 0; done < size; done += SECTOR) {
         unsigned offset = 0;
-        if (!read_sector(file, root + at / SECTOR, sector)) return 0;
+        if (!read_sector(file, lba + done / SECTOR, sector)) return 0;
         while (offset < SECTOR && sector[offset]) {
             const unsigned char *record = sector + offset;
+            size_t n;
             if (record[0] < 34 || offset + record[0] > SECTOR) break;
-            if (33u + record[32] <= record[0] && record[32] == strlen(EXECUTABLE) &&
-                !memcmp(record + 33, EXECUTABLE, record[32])) {
-                *lba = le32(record + 2);
-                *size = le32(record + 10);
-                return *size > SECTOR && *size < (4u << 20);
+            n = record[32];
+            if (33u + n <= record[0]) {
+                const char *id = (const char *)record + 33;
+                size_t stem = 0;
+                while (stem < n && id[stem] != ';') stem++;
+                if (stem == length && !memcmp(id, name, length)) {
+                    *at = le32(record + 2);
+                    *record_size = le32(record + 10);
+                    *directory = (record[25] & 2) != 0;
+                    return 1;
+                }
             }
             offset += record[0];
         }
     }
     return 0;
+}
+
+int GameFiles_FindFile(FILE *file, const char *path, unsigned *lba, unsigned *size)
+{
+    unsigned char sector[SECTOR];
+    unsigned at, length;
+    int directory = 1;
+    if (!read_sector(file, 16, sector) || sector[0] != 1 || memcmp(sector + 1, "CD001", 5)) return 0;
+    at = le32(sector + 156 + 2);
+    length = le32(sector + 156 + 10);
+    while (*path) {
+        const char *slash = strchr(path, '/');
+        size_t n = slash ? (size_t)(slash - path) : strlen(path);
+        if (!directory || !find_record(file, at, length, path, n, &at, &length, &directory)) return 0;
+        path += n + (slash != NULL);
+    }
+    if (directory) return 0;
+    *lba = at;
+    *size = length;
+    return 1;
+}
+
+/* Where SLUS_014.11 is on the image, or 0 when the image is not that disc
+ * (not raw, not ISO 9660, or another game). */
+static int find_executable(FILE *file, unsigned *lba, unsigned *size)
+{
+    return GameFiles_FindFile(file, EXECUTABLE, lba, size) && *size > SECTOR && *size < (4u << 20);
 }
 
 static int is_the_disc(const char *path)

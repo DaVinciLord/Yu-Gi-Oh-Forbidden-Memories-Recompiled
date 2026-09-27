@@ -741,6 +741,37 @@ save loaded through the save slot menu:
 - the setting off: Build Deck from the main menu and from the shop
   pixel-identical to master.
 
+### Language (Game > Language)
+
+Game > Language puts the game's own European translations in the US game:
+English (US), the default, English (Europe), French, German, Italian and
+Spanish (the menu writes Francais and Espanol until its font has accents).
+The text comes from the player's own PAL disc at startup; nothing of it is in
+the repository or the release. A language can be picked when a PAL disc that
+has it is in `game/languages` or `game/pal`, beside the US disc (also
+`game/languages` and `game/pal` beside the program or in the current
+directory; `MEMORIES_LANGUAGES_DIR` names one folder instead of all
+those). Any `.bin`, or the `.bin` a `.cue` names, is read for what it is,
+never by its name: SYSTEM.CNF's SLES-03947 to 03951, and the language
+pack's three file ids in WA_MRG. One disc of France, Germany, Italy or
+Spain has all four of those languages; the port takes the language's own
+disc first, then the Italian or Spanish one (which carry the final text of
+all four), then the others. English (Europe) comes only from SLES-03947.
+Without a disc the entry is grey and a last row says to put the PAL disc in
+`game/languages`.
+
+The choice is the `language` setting (0-5, `MEMORIES_LANGUAGE`), saved at
+once and taken up at the next launch, as a translation mod is: the menu
+offers Restart now, Later or Cancel. A mod's translation stands over it
+string by string. What the text is and how it is read and spaced is in
+notes/translation.md, "The official languages" (src/pc/text/language.c,
+pal_text.c; the spacing hook in text_box_build_step.c). Tested: CTest
+`pc_pal_text` (a made-up pack), and in the game with Spanish the name
+entry, Simon's talk and his choice, the duel's hand, the card viewer and
+RESULTS; French with a long line of its own; an empty folder with Spanish
+chosen (the game in English, the log saying no disc has it). The six smoke
+cases are unchanged with English (US).
+
 ### Present pass (Video > Color)
 
 The OpenGL presenter can draw the game picture through one fragment program
