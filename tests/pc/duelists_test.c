@@ -58,6 +58,8 @@ unsigned short gFreeDuel_aExtraRecords[DUELIST_TABLE_COUNT][2];
 unsigned char gFreeDuel_abExtraAvailable[DUELIST_TABLE_COUNT];
 unsigned char gFreeDuel_abGridAvailable[DUELIST_TABLE_COUNT];
 int gFreeDuel_nExtraOwner;
+/* The running save, which Duelists_Frame reads the duelist code out of. */
+unsigned short gDuel_awPlayerDeck[0x600];
 
 static int story_flag;          /* the one flag the cases test */
 static int cards_named;         /* what Cards_Named answers */
@@ -412,6 +414,47 @@ int main(void)
     /* Two entries cannot share an identity: the second is left out. */
     build("{\"duelists\":[{\"id\":\"same\",\"copy\":\"Heishin\"},{\"id\":\"same\",\"copy\":\"Teana\"}]}", NULL);
     assert(Duelists_Count() == 41 && notes == 1);
+
+    /* The string that names a duelist. A stock one, replaced or not, keeps the
+     * disc's id; an added one has a private id, because 0x8328 + 40 onwards
+     * are the campaign's location names. */
+    build("{\"duelists\":[{\"id\":\"x\",\"copy\":\"Heishin\",\"name\":\"Ex\"},"
+          "{\"id\":\"o\",\"replace\":\"Teana\",\"name\":\"Oh\"}]}", NULL);
+    assert(Duelists_NameTextId(8) == 0x8328 + 8);
+    assert(Duelists_NameTextId(2) == 0x8328 + 2);
+    assert(Duelists_NameTextId(40) == 0xFF00);
+    assert(Duelists_NameTextId(41) == 0xFF01);
+    {
+        static const unsigned char stock[] = {'A', 0xFF};
+        /* The replacement answers on the stock id; the added one does not. */
+        assert(Duelists_Text(Duelists_NameTextId(2), stock) != stock);
+        assert(Duelists_Text(Duelists_NameTextId(40), stock) != stock);
+        /* A location name is left alone: 0x8350 is Metropolis, not duelist 40. */
+        assert(Duelists_Text(0x8328 + DUELISTS_RETAIL_COUNT, stock) == stock);
+        assert(Duelists_Text(0x8328 + DUELISTS_RETAIL_COUNT + 7, stock) == stock);
+        /* Nor is a composed line (page_box.h, passwords.h, drops.h). */
+        assert(Duelists_Text(0xFFFD, stock) == stock);
+        assert(Duelists_Text(0xFFFF, stock) == stock);
+        /* An added duelist with no name of its own is still named: its
+         * base's, since no string on the disc answers its private id. */
+        build("{\"duelists\":[{\"id\":\"x\",\"copy\":\"Heishin\"}]}", NULL);
+        assert(!strcmp(Duelists_Name(40), "Heishin"));
+        assert(Duelists_Text(Duelists_NameTextId(40), stock) != stock);
+    }
+
+    /* NEW GAME writes a new duelist code into the running save without
+     * loading one: the records of the save before it must not stand. */
+    build("{\"duelists\":[{\"id\":\"x\",\"copy\":\"Heishin\"}]}", NULL);
+    memset(gDuel_awPlayerDeck, 0, sizeof gDuel_awPlayerDeck);
+    gFreeDuel_nExtraOwner = 0;
+    Duelists_RecordSlot(save, 40)[0] = 3;
+    assert(Duelists_RecordSlot(save, 40)[0] == 3);
+    memcpy((unsigned char *)gDuel_awPlayerDeck + 0x334, "\xEF\xBE\xAD\xDE", 4);
+    Duelists_Frame();
+    assert(Duelists_RecordSlot(save, 40)[0] == 0);
+    Duelists_RecordSlot(save, 40)[1] = 5;
+    Duelists_Frame();                    /* the same save: nothing is cleared */
+    assert(Duelists_RecordSlot(save, 40)[1] == 5);
 
     Duelists_Clear();
     puts("duelists: places, replacements, borrowed rows and unlock conditions passed");

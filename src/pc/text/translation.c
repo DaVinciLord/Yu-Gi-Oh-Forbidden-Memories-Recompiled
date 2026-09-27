@@ -10,6 +10,7 @@
 #include "pc/cards/tables.h"
 #include "pc/cards/drops.h"
 #include "pc/cards/passwords.h"
+#include "pc/free_duel/duelists.h"
 #include "pc/free_duel/page_box.h"
 #include "pc/saves/deck_menu.h"
 #include "pc/debug/log.h"
@@ -289,12 +290,14 @@ static int latin_text(int id, char *out, size_t size)
 const char *Text_OpponentName(int duelist)
 {
     static char name[TABLES_SHORT_NAME_LIMIT + 1];
-    static int said[TABLES_DUELIST_COUNT];
+    /* By duelist, the added ones too: Tables_DuelistShortName answers for
+       any duelist this run has (duelists.h). */
+    static int said[DUELIST_TABLE_COUNT];
     const char *english = Tables_DuelistShortName(duelist);
     char text[64];
     const unsigned char *c;
     int got;
-    if (!english) return NULL;
+    if (!english || duelist < 0 || duelist >= DUELIST_TABLE_COUNT) return NULL;
     /* A translation's own: letters, spaces and full stops, cut to the
      * limit. */
     got = latin_text(TEXT_OWN_OPPONENT + duelist, text, sizeof(text));
@@ -323,8 +326,9 @@ const char *Text_OpponentName(int duelist)
             TEXT_OWN_OPPONENT + duelist);
     }
     /* The translation's full name, when it changed the English. */
-    if (latin_text(TEXT_DUELIST_NAMES + duelist, text, sizeof(text)) > 0 &&
-        strcmp(text, Tables_DuelistNames[duelist]) && Tables_ShortenName(text, name)) {
+    if (duelist < TABLES_DUELIST_COUNT &&
+        latin_text(TEXT_DUELIST_NAMES + duelist, text, sizeof(text)) > 0 &&
+        strcmp(text, Duelists_Name(duelist)) && Tables_ShortenName(text, name)) {
         return name;
     }
     return english;

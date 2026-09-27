@@ -113,6 +113,10 @@ int Duelists_HasUnlock(int duelist);
  * has what the newest earlier one held. */
 void Duelists_SaveLoaded(const void *state);
 void Duelists_SaveWritten(const void *state, unsigned sequence);
+/* Once a frame, beside Cards_Frame: NEW GAME writes a new duelist code into
+ * the running save without loading one, so the records read for the save
+ * before it would otherwise stand in the new game. */
+void Duelists_Frame(void);
 
 /* A duelist's own face for the Free Duel grid -- a whole portrait record,
  * image then palette -- or NULL for its base's.
@@ -153,9 +157,20 @@ const signed char *Duelists_AiRow(int duelist);
  * one of the searches uses. */
 int Duelists_HidesFaceDown(int duelist, int script);
 
-/* The game's text for string `id`, found at `text`, or an added duelist's own
- * name where the string is the one the Free Duel screen names it by. The shape
- * Cards_Text has, and hung off the same calls. */
+/* --- a duelist's name as a string id --------------------------------------
+ *
+ * The disc names its duelists by string 0x8328 + id, which is what the Free
+ * Duel screen and the duel both ask for. That range stops at duelist 39: the
+ * strings after it are the campaign's locations, so an added duelist named
+ * that way would rename Metropolis. An added one is named through a private
+ * range of this module's instead, which nothing on the disc answers.
+ *
+ * Both screens ask through this, so neither has to know which kind it has.
+ */
+int Duelists_NameTextId(int duelist);
+/* The game's text for string `id`, found at `text`, or a duelist's own name
+ * where `id` is one of the two ranges above. The shape Cards_Text has, and
+ * hung off the same calls. */
 const unsigned char *Duelists_Text(int id, const unsigned char *text);
 
 #endif

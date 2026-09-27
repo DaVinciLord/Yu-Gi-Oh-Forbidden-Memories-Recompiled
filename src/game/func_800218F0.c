@@ -32,6 +32,7 @@
 #include "display_object_config.h"
 #ifdef MEMORIES_PC
 #include "pc/cards/drops.h"
+#include "pc/free_duel/duelists.h"
 #endif
 
 void DuelScene_UpdateResultRewards(void)
@@ -67,10 +68,13 @@ void DuelScene_UpdateResultRewards(void)
             opponent = (u8)gDuel_bOpponentID;
             D_8009B355 = 1;
 #ifdef MEMORIES_PC
-            /* Not truncated to a signed byte: a duelist a mod added can have
-               an id past 127, and the string that names it is worked out from
-               the id (duelists.h). */
-            D_8009B32E = opponent - 31960;
+            /* Not the disc's arithmetic: an added duelist is named through a
+               range of this port's own, because 0x8328 + its id is a location
+               name (duelists.h). A negative id is no opponent at all -- a
+               two-player duel -- and keeps what the disc makes of it. */
+            D_8009B32E = gDuel_bOpponentID >= 0
+                             ? (u16)Duelists_NameTextId(gDuel_bOpponentID)
+                             : (u16)((s8)opponent - 31960);
 #else
             D_8009B32E = (s8)opponent - 31960;
 #endif

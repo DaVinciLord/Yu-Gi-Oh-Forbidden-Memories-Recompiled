@@ -132,8 +132,10 @@ void FreeDuel_PlaceCursor(DisplayObject *w, s32 arm)
     slot = &D_8009B32E;
 #ifdef MEMORIES_PC
     /* The string that names the duelist, which is the duelist's and not the
-     * cell's: on a later page they are not the same. */
-    trunc = cell_duelist(index) - 31960;
+     * cell's: on a later page they are not the same. An added duelist is named
+     * through a range of its own, since 0x8328 + its id is a location name
+     * (duelists.h). */
+    trunc = (s16)Duelists_NameTextId(cell_duelist(index));
 #else
     trunc = index - 31960;
 #endif

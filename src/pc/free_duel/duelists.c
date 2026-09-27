@@ -213,16 +213,42 @@ int Duelists_PortraitKey(int duelist)
     return one && one->art ? one->art_key : -1;
 }
 
-/* The text id the Free Duel screen names a duelist by: FreeDuel_PlaceCursor
- * puts `index - 31960` in D_8009B32E, which for duelist 1 is 0x8329. */
+/* The text id the disc names a duelist by: FreeDuel_PlaceCursor and the duel's
+ * reward step both put `id - 31960` in D_8009B32E, which for duelist 1 reads
+ * back as 0x8329. Only the disc's own thirty-nine are in it -- 0x8350 onwards
+ * are the campaign's location names. */
 #define DUELIST_NAME_TEXT_BASE 0x8328
+/* An added duelist's, which nothing on the disc answers for: one id each from
+ * 0xFF00 up, clear of the disc's strings, of the port's own block
+ * (TEXT_OWN_FIRST to TEXT_OWN_LAST, text.h) and of the composed ids handed out
+ * from 0xFFFF down (cards/drops.h, cards/passwords.h, page_box.h). The last
+ * duelist an id can name, 127, lands at 0xFF57. */
+#define DUELIST_NAME_TEXT_ADDED 0xFF00
+
+int Duelists_NameTextId(int duelist)
+{
+    if (duelist < 0 || duelist >= DUELIST_ID_LIMIT) return 0;
+    if (duelist < DUELISTS_RETAIL_COUNT) return DUELIST_NAME_TEXT_BASE + duelist;
+    return DUELIST_NAME_TEXT_ADDED + (duelist - DUELISTS_RETAIL_COUNT);
+}
 
 const unsigned char *Duelists_Text(int id, const unsigned char *text)
 {
-    /* A stock duelist a mod took over answers here too, which is what makes
-     * its new name the one the screen and the duel both show. */
-    const Duelist *one = entry_at(id - DUELIST_NAME_TEXT_BASE);
-    return one && one->glyphs ? one->glyphs : text;
+    int duelist;
+
+    /* A stock duelist a mod took over answers on the disc's own id, which is
+     * what makes its new name the one the screen and the duel both show. */
+    if (id > DUELIST_NAME_TEXT_BASE && id < DUELIST_NAME_TEXT_BASE + DUELISTS_RETAIL_COUNT)
+        duelist = id - DUELIST_NAME_TEXT_BASE;
+    else if (id >= DUELIST_NAME_TEXT_ADDED &&
+             id < DUELIST_NAME_TEXT_ADDED + DUELIST_ID_LIMIT - DUELISTS_RETAIL_COUNT)
+        duelist = id - DUELIST_NAME_TEXT_ADDED + DUELISTS_RETAIL_COUNT;
+    else
+        return text;                 /* not a name: the game's string stands */
+    {
+        const Duelist *one = entry_at(duelist);
+        return one && one->glyphs ? one->glyphs : text;
+    }
 }
 
 /* A name in the game's own glyph codes, ending 0xFF, as cards.c makes one for
@@ -389,6 +415,8 @@ int Duelists_Unlocked(const void *state, int duelist)
 #define SAVE_DUELIST_CODE 0x334
 #define SAVE_SEQUENCE 0x404
 
+extern unsigned short gDuel_awPlayerDeck[];   /* the running save's SaveDataState */
+
 static int state_word(const void *state, int offset)
 {
     int value;
@@ -475,6 +503,20 @@ void Duelists_SaveLoaded(const void *state)
     fclose(file);
     if (read) LOG(LOG_MODS, "duelists: %d records of duelist %08X save %u (from save %u)",
                   read, (unsigned)code, sequence, chosen);
+}
+
+void Duelists_Frame(void)
+{
+    /* NEW GAME writes a new duelist code into the running save, and loads
+       nothing, so this is where the change shows: the records belong to the
+       save that code came from. The cards' trunk is cleared the same way
+       (cards.c's Cards_Frame). */
+    const int code = state_word(gDuel_awPlayerDeck, SAVE_DUELIST_CODE);
+
+    if (code != gFreeDuel_nExtraOwner) {
+        clear_extra();
+        gFreeDuel_nExtraOwner = code;
+    }
 }
 
 void Duelists_SaveWritten(const void *state, unsigned sequence)
@@ -642,6 +684,13 @@ static void read_one_duelist(const char *mod, const char *mod_directory, const J
     if (name) {
         snprintf(one.name, sizeof one.name, "%s", name);
         one.glyphs = name_glyphs(mod, name);
+    } else if (target < 0) {
+        /* An added duelist without a name of its own: its base's, made here
+         * rather than left to the string id, which for an added duelist is a
+         * private one nothing on the disc answers. A replacement needs none --
+         * it keeps answering on the stock duelist's id, whose string is the
+         * name it is taking over. */
+        one.glyphs = name_glyphs(mod, Tables_DuelistNames[base]);
     }
     {   /* What the save must meet before the grid shows it (duelists.h).
          * Every member is a requirement and all of them must hold; an
