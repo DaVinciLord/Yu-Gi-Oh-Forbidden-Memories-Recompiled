@@ -29,6 +29,10 @@ from .pools import normalize
 WA_FILE = "\\DATA\\WA_MRG.MRG;1"
 MERGE_GAP = 32              # changed runs closer than this are one patch
 PATCH_LIMIT = 4096          # longer runs become sector replacements
+# The port holds 1024 patched runs and 64 replaced regions for all the mods
+# together (src/pc/mods/mods.c); past these a mod replaces the whole file.
+WA_PATCHES_MOST = 256
+WA_REGIONS_MOST = 16
 
 # Executable regions the port has no data key for, by RAM address.
 SLUS_REGIONS = [
@@ -153,7 +157,7 @@ def describe_wa(offset: int) -> str:
         return "the cards' small pictures"
     if 0xFB9800 <= offset < 0xFB9800 + 8 * 723:
         return "the cards' passwords and starchip costs"
-    if 0xF92BD4 <= offset < 0xF92BD4 + 7 * (2 + 2 * g.CARD_COUNT):
+    if g.STARTER_BASE <= offset < g.STARTER_BASE + g.STARTER_LENGTH:
         return "the starter deck pools"
     if 0xF55000 <= offset < 0xF55000 + 40 * 2432:
         return "the duelists' portraits"
@@ -400,6 +404,79 @@ def decode_drop_pools(retail, modded, retail_files, modded_files) -> list:
     return notes
 
 
+def _starter_sums(wa: bytes) -> list:
+    stride = g.STARTER_LENGTH // 7
+    return [sum(struct.unpack_from("<%dH" % g.CARD_COUNT, wa, g.STARTER_BASE + k * stride + 2)) for k in range(7)]
+
+
+def port_wa(retail_wa: bytes, modded_wa: bytes, keep_retail) -> bytes:
+    """The modified archive with `keep_retail` ([start, end) regions: the
+    tables mod.json carries, and what the port cannot read the mod's way)
+    put back to the retail bytes."""
+    out = bytearray(modded_wa)
+    for start, end in keep_retail:
+        end = min(end, len(retail_wa), len(out))
+        if start < end:
+            out[start:end] = retail_wa[start:end]
+    return bytes(out)
+
+
+def wa_data(project: Project, retail_files, modded_files, report: list) -> list:
+    """The "data" entries that carry the rest of WA_MRG.MRG: patches and
+    sector replacements at the retail disc's sectors when they are few, the
+    whole file otherwise. Either way the structured tables (mod.json's
+    fusions, equips, rituals and pools) stay retail's, so the port's rules
+    apply over the disc's own tables."""
+    wa_old, wa_new = retail_files.wa, modded_files.wa
+    keep = wa_structured_regions()
+    starters = _starter_sums(wa_new) if len(wa_new) >= g.STARTER_BASE + g.STARTER_LENGTH else []
+    if starters and min(starters) < g.POOL_TOTAL // 2 and wa_new[g.STARTER_BASE:g.STARTER_BASE + g.STARTER_LENGTH] != \
+            wa_old[g.STARTER_BASE:g.STARTER_BASE + g.STARTER_LENGTH]:
+        keep.append((g.STARTER_BASE, g.STARTER_BASE + g.STARTER_LENGTH))
+        report.append(f"WA_MRG.MRG: the starter decks are counts of cards (they add up to {', '.join(map(str, starters))}"
+                      "), not weights of 2048; the port has no rule for a counted starter deck, so they stay retail's")
+    runs = _trim(wa_old, wa_new, _subtract(_runs(wa_old, wa_new, 0, min(len(wa_old), len(wa_new))), keep))
+    patches, regions, places = [], [], {}
+    for start, end in runs:
+        count, runs_there = places.get(describe_wa(start), (0, 0))
+        places[describe_wa(start)] = (count + end - start, runs_there + 1)
+        if end - start <= PATCH_LIMIT:
+            patches.append((start, end))
+            continue
+        first, last = start // 2048, (end + 2047) // 2048
+        if regions and first <= regions[-1][1]:
+            regions[-1][1] = max(last, regions[-1][1])
+        else:
+            regions.append([first, last])
+    whole = None
+    if len(wa_new) != len(wa_old):
+        whole = f"its size differs ({len(wa_new)} bytes, retail {len(wa_old)})"
+    elif len(patches) > WA_PATCHES_MOST or len(regions) > WA_REGIONS_MOST:
+        whole = (f"{len(patches)} patches and {len(regions)} sector runs would be more than the port holds for every "
+                 f"mod together (1024 and 64, src/pc/mods/mods.c PATCHES_MAX and REGIONS_MAX)")
+    if whole:
+        project.files["WA_MRG.MRG"] = port_wa(wa_old, wa_new, keep)
+        report.append(f"WA_MRG.MRG: {whole}; the whole file is replaced, with the tables mod.json carries kept as "
+                      "retail's")
+        data = [{"file": WA_FILE, "replace": "WA_MRG.MRG"}]
+    else:
+        data = [{"file": WA_FILE, "patch": [{"at": f"0x{s:X}", "bytes": wa_new[s:e].hex(" ").upper()}
+                                            for s, e in patches]}] if patches else []
+        clean = None
+        for first, last in regions:
+            path = f"data/wa_{first:05X}.bin"
+            if any(s < last * 2048 and e > first * 2048 for s, e in keep):
+                clean = clean or port_wa(wa_old, wa_new, keep)
+                project.files[path] = clean[first * 2048:last * 2048]
+            else:
+                project.files[path] = wa_new[first * 2048:last * 2048]
+            # "lba" is a sector of the disc the port runs, the retail one.
+            data.append({"lba": retail_files.wa_lba + first, "sectors": last - first, "replace": path})
+    for place, (count, runs_there) in sorted(places.items()):
+        report.append(f"WA_MRG.MRG: {place}: {count} bytes in {runs_there} places changed, carried as data")
+    return data
+
+
 def import_modded(retail_files, modded_files, mod_id: str = "imported-mod", name: str = None) -> ImportResult:
     retail = g.load_game(retail_files)
     report = []
@@ -493,30 +570,7 @@ def import_modded(retail_files, modded_files, mod_id: str = "imported-mod", name
         result.unhandled += 1
 
     # The rest of WA_MRG.MRG.
-    wa_old, wa_new = retail_files.wa, modded_files.wa
-    data = []
-    if len(wa_new) != len(wa_old):
-        report.append(f"WA_MRG.MRG: its size differs ({len(wa_new)} bytes, retail {len(wa_old)}); "
-                      "the whole file is replaced")
-        project.files["WA_MRG.MRG"] = wa_new
-        data.append({"file": WA_FILE, "replace": "WA_MRG.MRG"})
-    else:
-        runs = _trim(wa_old, wa_new, _subtract(_runs(wa_old, wa_new, 0, len(wa_old)), wa_structured_regions()))
-        patches, places = [], {}
-        for start, end in runs:
-            count, runs_there = places.get(describe_wa(start), (0, 0))
-            places[describe_wa(start)] = (count + end - start, runs_there + 1)
-            if end - start <= PATCH_LIMIT:
-                patches.append({"at": f"0x{start:X}", "bytes": wa_new[start:end].hex(" ").upper()})
-                continue
-            first, last = start // 2048, (end + 2047) // 2048
-            path = f"data/wa_{first:05X}.bin"
-            project.files[path] = wa_new[first * 2048:last * 2048]
-            data.append({"lba": modded_files.wa_lba + first, "sectors": last - first, "replace": path})
-        if patches:
-            data.insert(0, {"file": WA_FILE, "patch": patches})
-        for place, (count, runs_there) in sorted(places.items()):
-            report.append(f"WA_MRG.MRG: {place}: {count} bytes in {runs_there} places changed, carried as data")
+    data = wa_data(project, retail_files, modded_files, report)
     if data:
         project.other["data"] = data
     if result.unhandled:

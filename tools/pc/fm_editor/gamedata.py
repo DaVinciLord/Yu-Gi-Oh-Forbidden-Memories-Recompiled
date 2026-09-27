@@ -73,6 +73,8 @@ RITUAL_OFFSET, RITUAL_LENGTH = 0x34800, 0x800
 DUELIST_BASE = 0xE99800
 DUELIST_STRIDE = 0x1800
 POOL_OFFSETS = {"deck": 0x000, "pow": 0x5B4, "bcd": 0xB68, "tec": 0x111C}
+STARTER_BASE = 0xF92BD4             # the seven starter deck pools the name entry deals from
+STARTER_LENGTH = 7 * (2 + 2 * CARD_COUNT)
 
 
 def slus_offset(address: int) -> int:
