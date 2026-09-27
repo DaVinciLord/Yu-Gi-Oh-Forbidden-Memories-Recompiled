@@ -126,11 +126,17 @@ imported mod's `README.txt`, in the game's terms.
     python tools/pc/fm_editor import <modified .bin, folder or SLUS_014.11> -o <mod folder>
         [--wa <modified WA_MRG.MRG>] [--game <retail>] [--id <mod id>]
 
-## Importing a .ygomods package
+## Converting an old recomp's .ygomods package (one way)
 
 The old static recompilation's in-game editor exported `.ygomods` packages
-(a ZIP of INI and text files and PNGs). **File > Import a .ygomods package**
-(or `import <file>.ygomods -o <mod folder>`) reads one over retail:
+(a ZIP of INI and text files and PNGs). The port does not read them, and
+they are not a mod format of the port: its mods are folders with a
+`mod.json`. The editor can only convert one, once, into such a folder, so
+that a mod made for the old recomp has a starting point here. The
+conversion is best effort: what the port has no key for is left out and
+listed in the report, so check the result in the game before sharing it.
+**File > Convert an old recomp's .ygomods package (one way)** (or
+`import <file>.ygomods -o <mod folder>`) reads one over retail:
 
 | In the package | Becomes |
 |---|---|

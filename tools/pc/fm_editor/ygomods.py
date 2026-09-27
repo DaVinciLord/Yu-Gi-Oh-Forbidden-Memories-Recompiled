@@ -146,8 +146,8 @@ def _import(package, retail, retail_wa, mod_id, name):
     project = Project(retail)
     project.info.id = mod_id
     project.info.name = name or mod_id
-    project.info.description = "Imported from a .ygomods package by the FM Editor."
-    report = []
+    project.info.description = "Converted by the FM Editor from an old recomp's .ygomods package."
+    report = ["a one-way conversion: the port does not read .ygomods, and what it has no key for is listed below"]
     unsupported = {}
 
     def unhandled(what, count=1):
