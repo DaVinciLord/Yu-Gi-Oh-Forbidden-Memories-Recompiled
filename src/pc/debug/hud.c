@@ -1,6 +1,7 @@
 #include "hud.h"
 #include "log.h"
 #include "pc/cards/fusion_helper.h"
+#include "pc/cards/rank_meter.h"
 #include "pc/audio/spu.h"
 #include "pc/mods/mods.h"
 #include "pc/guest/state.h"
@@ -118,12 +119,15 @@ static void cover(int x, int y, int w, int h)
     bounds.x = x; bounds.y = y; bounds.w = w; bounds.h = h;
 }
 
-/* The statistics, the mods' overlays, then the save slot or deck menu over them. */
+/* The statistics, the fusion helper and duel rank, the mods' overlays, then
+ * the save slot or deck menu over them. */
 void Hud_Draw(MenuCanvas *canvas)
 {
     int x, y, w, h;
     draw_stats(canvas);
     FusionHelper_Draw(canvas, &x, &y, &w, &h);
+    cover(x, y, w, h);
+    RankMeter_Draw(canvas, &x, &y, &w, &h);
     cover(x, y, w, h);
     Mods_DrawOverlay(canvas, Menu_Scale(), Menu_DrawTextScaled, Menu_TextWidthScaled, &x, &y, &w, &h);
     cover(x, y, w, h);
@@ -144,7 +148,8 @@ static unsigned stats_signature(void)
 unsigned Hud_Signature(void)
 {
     return stats_signature() ^ SaveMenu_Signature() * 2654435761u ^ DeckMenu_Signature() * 40503u ^
-           FusionHelper_Signature() * 16777619u ^ Mods_OverlaySignature(Memories_PresentedFrames()) * 2246822519u;
+           FusionHelper_Signature() * 16777619u ^ RankMeter_Signature() * 3266489917u ^
+           Mods_OverlaySignature(Memories_PresentedFrames()) * 2246822519u;
 }
 
 void Hud_Bounds(int *x, int *y, int *w, int *h)

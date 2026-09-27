@@ -40,6 +40,9 @@ static const SettingInfo info[SET_COUNT] = {
      * and count pre-releases as newer. */
     [SET_UPDATE_CHECK] = {"check_for_updates", NULL, "MEMORIES_CHECK_FOR_UPDATES", NULL, 1, 0, 1},
     [SET_UPDATE_PRERELEASES] = {"update_prereleases", NULL, "MEMORIES_UPDATE_PRERELEASES", NULL, 0, 0, 1},
+    /* View > Duel rank (src/pc/cards/rank_meter.h): 0 off, 1 the rank,
+     * 2 the rank and the score. */
+    [SET_RANK_METER] = {"rank_meter", NULL, "MEMORIES_RANK_METER", NULL, 0, 0, 2},
     /* 1: states kept in memory every few frames, and holding F8 goes back
      * through them (src/pc/guest/state.c, rewind.h). Off by default: it
      * costs memory and a little time per frame. */

@@ -98,7 +98,7 @@ typedef struct {
 typedef struct { const char *label; Item items[20]; int count; int x, w; } Menu;
 
 enum { MENU_FILE, MENU_VIDEO, MENU_AUDIO, MENU_GAME, MENU_VIEW, MENU_DEBUG, MENU_HELP, MENU_COUNT };
-enum { SUB_SCALE, SUB_MENU_SIZE, SUB_SPEED, SUB_FPS, SUB_CHEATS, SUB_TRACE, SUB_SCALING, SUB_ASPECT, SUB_RESOLUTION, SUB_COLOR, SUB_EFFECTS, SUB_JUMP, SUB_ANTIALIAS, SUB_FILTER, SUB_COUNT };
+enum { SUB_SCALE, SUB_MENU_SIZE, SUB_SPEED, SUB_FPS, SUB_CHEATS, SUB_TRACE, SUB_SCALING, SUB_ASPECT, SUB_RESOLUTION, SUB_COLOR, SUB_EFFECTS, SUB_JUMP, SUB_ANTIALIAS, SUB_FILTER, SUB_RANK, SUB_COUNT };
 static Menu menus[MENU_COUNT] = {
     {"File", {{"Save state", "F5", ITEM_ACTION, ACT_SAVE_STATE, -1},
               {"Load state", "F7", ITEM_ACTION, ACT_LOAD_STATE, -1},
@@ -150,7 +150,8 @@ static Menu menus[MENU_COUNT] = {
               {"Restart game...", 0, ITEM_ACTION, MENU_ITEM_RESTART, -1, 0, ITEM_GROUP_BREAK | ITEM_DISABLED}}, 14},
     {"View", {{"Fusion helper", 0, ITEM_CHECK, 0, SET_FUSION_HELPER},
               {"Card passwords", 0, ITEM_CHECK, 0, SET_CARD_PASSWORDS},
-              {"Library: show every card", 0, ITEM_CHECK, 0, SET_LIBRARY_ALL_CARDS}}, 3},
+              {"Library: show every card", 0, ITEM_CHECK, 0, SET_LIBRARY_ALL_CARDS},
+              {"Duel rank", 0, ITEM_SUBMENU, 0, -1, SUB_RANK}}, 4},
     {"Debug", {{"Jump to", 0, ITEM_SUBMENU, 0, -1, SUB_JUMP},
                {"Show HUD", "F3", ITEM_CHECK, CHECK_HUD, -1, 0, ITEM_GROUP_BREAK},
                {"Full stats", 0, ITEM_CHECK, CHECK_HUD_FULL, -1},
@@ -236,6 +237,10 @@ static Menu submenus[SUB_COUNT] = {
     {"Filtering", {{"Nearest", 0, ITEM_RADIO, MENU_ITEM_FILTER_NEAREST, SET_FILTER, 0},
                    {"Smooth (bilinear)", 0, ITEM_RADIO, MENU_ITEM_FILTER_LINEAR, SET_FILTER, 1},
                    {"Sharp bilinear", 0, ITEM_RADIO, MENU_ITEM_FILTER_SHARP, SET_FILTER, 2}}, 3},
+    /* The rank a duel against the computer is heading for (rank_meter.h). */
+    {"Duel rank", {{"Off", 0, ITEM_RADIO, 0, SET_RANK_METER, 0},
+                   {"Rank", 0, ITEM_RADIO, 0, SET_RANK_METER, 1},
+                   {"Rank and score", 0, ITEM_RADIO, 0, SET_RANK_METER, 2}}, 3},
 };
 
 static int open_menu = -1, hot_item = -1, hover_bar = -1, grabbed, ready, visible = 1;
