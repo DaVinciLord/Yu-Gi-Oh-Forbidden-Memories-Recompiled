@@ -104,7 +104,7 @@ including first-run selection, invalid selection, cancellation, moving the
 ROM, restart with the remembered path, sound, controller input, and an in-game
 save/load. Wine checks help but do not replace native Windows validation.
 Upgrade by extracting into a fresh folder. A build packaged with a `vX.Y.Z`
-version can check the releases at start (off by default) and tell the player
+version checks the releases at start (Help menu turns it off) and tells the player
 a newer one is out; it never installs it itself ([updates](updates.md)). `--version` is the
 version the build compares with (`MEMORIES_VERSION`); CI passes the tag, so
 tag builds check and `dev-*` builds do not. User settings and memory-card

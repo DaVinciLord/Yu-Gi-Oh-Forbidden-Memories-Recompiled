@@ -21,7 +21,7 @@ included.
 Download the latest build from [Releases](https://github.com/Unchiga/Yu-Gi-Oh-Forbidden-Memories-Recompiled/releases),
 extract it and run `memories-pc.exe` (Windows) or `./memories-pc` (Linux). On first
 launch, pick your USA disc's `.bin`. The game can tell you when a newer release is out
-(off by default: **Help > Check for updates at start**; see [Updates](notes/updates.md)).
+(**Help > Check for updates at start** turns it off; see [Updates](notes/updates.md)).
 
 ### HD pack
 

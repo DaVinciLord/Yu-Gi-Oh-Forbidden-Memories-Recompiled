@@ -22,14 +22,15 @@ start fails silently.
 ## Settings
 
 **Help** on the menu bar. Both are in `settings.txt` and, as every setting,
-have an environment override. The check at start is **off by default**, as
-every new feature is: turn on **Check for updates at start** in the Help
-menu, or set `check_for_updates=1` in `settings.txt` or
-`MEMORIES_CHECK_FOR_UPDATES=1` in the environment.
+have an environment override. The check at start is **on by default**:
+it only reads the list of releases once per start and tells the player,
+so a release reaches players who would not look for it. Turn it off with
+**Check for updates at start** in the Help menu, `check_for_updates=0` in
+`settings.txt` or `MEMORIES_CHECK_FOR_UPDATES=0` in the environment.
 
 | Menu | Key | Default | Environment |
 |---|---|---|---|
-| Check for updates at start | `check_for_updates` | 0 | `MEMORIES_CHECK_FOR_UPDATES` |
+| Check for updates at start | `check_for_updates` | 1 | `MEMORIES_CHECK_FOR_UPDATES` |
 | Include pre-releases | `update_prereleases` | 0 | `MEMORIES_UPDATE_PRERELEASES` |
 
 **Check for updates now** works whether the check at start is on or not. It

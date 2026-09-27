@@ -60,9 +60,9 @@ in your user folder, not next to the program:
 Updates
 -------
 
-The game can tell you when a new version is released. This is off by
-default: turn on "Check for updates at start" in Help on the menu bar (F10).
-A few seconds after the game starts it then asks GitHub for the list of
+The game tells you when a new version is released. "Check for updates at
+start" in Help on the menu bar (F10) turns this off. A few seconds after the
+game starts it asks GitHub for the list of
 releases (without a connection it stays silent), and a newer one shows a
 notice with three choices:
 
