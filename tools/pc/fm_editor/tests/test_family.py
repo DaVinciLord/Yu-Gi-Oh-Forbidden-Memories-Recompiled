@@ -175,6 +175,11 @@ class EquipTest(unittest.TestCase):
         self.assertEqual(result.project.rituals, {})
         self.assertIn({"card": "Card 681", "result": None}, manifest.build(result.project)["rituals"])
         self.assertIn("the rituals were imported as removed", report)
+        # A ritual the mod made a monster: no rule names it (the port would refuse one).
+        cards = {cid: card.copy() for cid, card in f.cards.items()}
+        cards[682].type = 3
+        result, report = imported(f, slus=fixtures.make_slus(cards, f.other_names), wa=bytes(wa))
+        self.assertEqual(manifest.build(result.project)["rituals"], [{"card": "Card 681", "result": None}])
         # Code whose bytes happen to spell one recipe among the rest: still code.
         for k in range(g.TERRAIN_COPIES):
             at = g.TERRAIN_BASE + k * g.TERRAIN_STRIDE + g.RITUAL_OFFSET

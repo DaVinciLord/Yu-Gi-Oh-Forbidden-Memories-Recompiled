@@ -556,15 +556,21 @@ def check_rituals(project: Project, modded) -> list:
     valid = {r: rec for r, rec in project.rituals.items()
              if r in cards and cards[r].type == g.TYPE_RITUAL and all(1 <= c <= g.CARD_COUNT for c in rec)}
     bad = len(project.rituals) - len(valid)
-    if not bad:
-        return []
-    if len(valid) * 2 < len(project.rituals):
+    if bad and len(valid) * 2 < len(project.rituals):
         valid = {}      # mostly not recipes: the few that look like one are the code's bytes by chance
-    project.rituals = valid
+    # A retail ritual the mod made another kind of card: nothing to say (the
+    # port refuses a rituals entry for a card that is not a ritual).
+    other = {r: rec for r, rec in project.retail.rituals.items()
+             if r not in valid and cards.get(r) and cards[r].type != g.TYPE_RITUAL}
+    project.rituals = {**valid, **other}
+    notes = [f"rituals: {len(other)} retail ritual cards are other cards in the mod; no rule names them"] if other else []
+    if not bad:
+        return notes
     if valid:
-        return [f"rituals: {bad} records of the modified ritual table name no ritual card or no card at all; left out"]
-    return [f"rituals: the modified ritual table holds no recipe ({bad} records naming no ritual card or no card: "
-            "code, or another format); the rituals were imported as removed, as the game finds none there"]
+        return notes + [f"rituals: {bad} records of the modified ritual table name no ritual card or no card at all; "
+                        "left out"]
+    return notes + [f"rituals: the modified ritual table holds no recipe ({bad} records naming no ritual card or no "
+                    "card: code, or another format); the rituals were imported as removed, as the game finds none there"]
 
 
 def _starter_sums(wa: bytes) -> list:
