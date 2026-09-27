@@ -1232,6 +1232,16 @@ static void open_submenu(int index)
 static int active_level(void) { return open_sub >= 0 ? 1 : 0; }
 static int *active_hot(void) { return open_sub >= 0 ? &hot_sub : &hot_item; }
 
+/* The cheats that change the save refuse before a game is loaded. */
+static void need_save(int done)
+{
+    static const char *const ok[] = {"OK"};
+    if (!done) {
+        Menu_ShowNotice("Load a save first", "This cheat changes the game in progress. "
+                        "Start a new game or load a save, then choose it again.", ok, 1, 0, NULL);
+    }
+}
+
 static void activate(const Item *item, int *quit)
 {
     if (item->flags & ITEM_DISABLED) return;
@@ -1242,9 +1252,9 @@ static void activate(const Item *item, int *quit)
     case ACT_LOAD_STATE: Memories_StateRequest(2, Platform_StateSlot()); break;
     case ACT_SCREENSHOT: Platform_Screenshot(0); break;
     case ACT_EXIT: *quit = 1; break;
-    case ACT_GIVE_CARDS: Cheats_GiveAllCards(item->value); break;
-    case ACT_UNLOCK_FREE_DUELISTS: Cheats_UnlockAllFreeDuelists(); break;
-    case ACT_SET_STARCHIPS: Cheats_SetStarchips((unsigned)item->value); break;
+    case ACT_GIVE_CARDS: need_save(Cheats_GiveAllCards(item->value)); break;
+    case ACT_UNLOCK_FREE_DUELISTS: need_save(Cheats_UnlockAllFreeDuelists()); break;
+    case ACT_SET_STARCHIPS: need_save(Cheats_SetStarchips((unsigned)item->value)); break;
     case ACT_RESET_COLOR:
         Settings_Set(SET_BRIGHTNESS, 100);
         Settings_Set(SET_CONTRAST, 100);

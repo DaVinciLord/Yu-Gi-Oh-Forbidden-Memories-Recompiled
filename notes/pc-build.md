@@ -413,6 +413,14 @@ window, which is how the menus are checked.
 **Game > Cheats** (`src/pc/debug/cheats.c`). Every row is off, or at the
 console's value, until the player picks it; nothing changes on screen before.
 
+The rows that change the save (Give, Unlock and Set StarChips) do nothing
+until a game is started or loaded, and say **Load a save first** instead
+(`Cheats_SaveLoaded`: the save workspace holds a deck, the same test as
+Deck slots and `MEMORIES_DEBUG_CHEST`). Before that the workspace is scratch,
+and on a new game it becomes the save when the name entry closes. The settings
+rows (LP, free spending, the CPU's hand) change nothing in the save and work
+at any time.
+
 - **Give 1 / 2 / 3 of every card** sets the trunk to that many copies of every
   card, the mods' cards included (`Cheats_GiveAllCards`). It sets, not adds:
   Give 1 also lowers a card held three times to one. Open BUILD DECK to see it,

@@ -12,12 +12,22 @@
 /* The duel's reward stops the balance here (func_800218F0). */
 #define CHEATS_STARCHIPS_MAX 999999u
 
+/* A game is started or loaded: the save workspace holds a deck. Before
+ * that it is scratch (the port's one test, as deck_menu.c's game_loaded). */
+int Cheats_SaveLoaded(void)
+{
+    return ((const SaveDataWorkspace *)D_801D0000)->state.player_deck[0] != 0;
+}
+
 /* The chest lives in the persistent save state at 0x801D0250: one byte per
  * card, ids 1..722, read by the Library, BUILD DECK and the duel's deck
  * checks, and written out whole by SAVE. */
-void Cheats_GiveAllCards(int count)
+int Cheats_GiveAllCards(int count)
 {
     int id;
+    if (!Cheats_SaveLoaded()) {
+        return 0;
+    }
     if (count < 0) {
         count = 0;
     }
@@ -32,16 +42,14 @@ void Cheats_GiveAllCards(int count)
         *Cards_ChestSlot(gDuel_awPlayerDeck, id) = (u8)count;
     }
     fprintf(stderr, "memories-pc: chest now holds %d of every card\n", count);
+    return 1;
 }
 
-void Cheats_UnlockAllFreeDuelists(void)
+int Cheats_UnlockAllFreeDuelists(void)
 {
-    const SaveDataWorkspace *save = (const SaveDataWorkspace *)D_801D0000;
     int opponent;
-    /* Before a game is started or loaded, this workspace is scratch. */
-    if (save->state.player_deck[0] == 0) {
-        fprintf(stderr, "memories-pc: start or load a game before unlocking Free Duel opponents\n");
-        return;
+    if (!Cheats_SaveLoaded()) {
+        return 0;
     }
     /* Match FreeDuel_Init's locked range. The other grid entries (including
      * Master K) are already available; these flags do not mark story wins. */
@@ -50,17 +58,22 @@ void Cheats_UnlockAllFreeDuelists(void)
         Library_UpdateCardUsedFlag(FREE_DUEL_UNLOCK_FLAG_BASE + opponent);
     }
     fprintf(stderr, "memories-pc: all CPU duelists unlocked; reopen Free Duel to refresh the roster, then save to keep them\n");
+    return 1;
 }
 
 /* SaveDataState.starchips (0x801D07E0), which the duel's reward caps at
  * 999999 (func_800218F0) and the Password screen spends. That screen copies
  * the balance for display when it opens and at each payment step, so a
  * change made while it is open shows from the next of those. */
-void Cheats_SetStarchips(unsigned value)
+int Cheats_SetStarchips(unsigned value)
 {
+    if (!Cheats_SaveLoaded()) {
+        return 0;
+    }
     if (value > CHEATS_STARCHIPS_MAX) value = CHEATS_STARCHIPS_MAX;
     gLibrary_dwStarchips = value;
     fprintf(stderr, "memories-pc: StarChips now %u\n", value);
+    return 1;
 }
 
 int Cheats_StartingLifePoints(void)
@@ -116,7 +129,6 @@ void Cheats_Frame(void)
 {
     static int wanted = -2; /* -2 unread, -1 off, else pending count */
     static const char *deck;
-    const SaveDataWorkspace *save = (const SaveDataWorkspace *)D_801D0000;
     if (wanted == -2) {
         const char *value = getenv("MEMORIES_DEBUG_CHEST");
         wanted = value && *value ? atoi(value) : -1;
@@ -126,8 +138,7 @@ void Cheats_Frame(void)
     if (wanted < 0 && !deck) {
         return;
     }
-    /* A live save has a deck; before that the workspace is scratch. */
-    if (save->state.player_deck[0] != 0) {
+    if (Cheats_SaveLoaded()) {
         if (wanted >= 0) Cheats_GiveAllCards(wanted);
         if (deck) set_deck(deck);
         wanted = -1;

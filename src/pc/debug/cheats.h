@@ -1,16 +1,21 @@
 #ifndef MEMORIES_PC_DEBUG_CHEATS_H
 #define MEMORIES_PC_DEBUG_CHEATS_H
 /* Development helpers behind the window's Game > Cheats menu. They write the game's
- * own save workspace, so a save made afterwards keeps the result. */
+ * own save workspace, so a save made afterwards keeps the result. The ones
+ * that write it return 0, and do nothing, until a game is started or loaded
+ * (Cheats_SaveLoaded); the menu then says "Load a save first". */
+
+/* Nonzero once a game is started or loaded (the workspace holds a deck). */
+int Cheats_SaveLoaded(void);
 
 /* Put `count` copies of every card in the chest (the trunk), capped at
  * the game's own limit. Takes effect at once; open BUILD DECK to see it. */
-void Cheats_GiveAllCards(int count);
+int Cheats_GiveAllCards(int count);
 /* Unlock every CPU opponent in the live save. Reopen Free Duel to refresh
  * its portraits and selection grid; save normally to keep the unlocks. */
-void Cheats_UnlockAllFreeDuelists(void);
+int Cheats_UnlockAllFreeDuelists(void);
 /* Set the StarChips balance, capped at the game's own 999999. */
-void Cheats_SetStarchips(unsigned value);
+int Cheats_SetStarchips(unsigned value);
 /* The life points both sides start a duel against the CPU with
  * (SET_CHEAT_LIFE_POINTS, 1-9999, 8000 the console's), read by
  * Duel_InitSideStates. Two-player duels keep the values their own setup
