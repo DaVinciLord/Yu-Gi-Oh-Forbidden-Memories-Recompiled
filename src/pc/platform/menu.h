@@ -10,7 +10,8 @@
  * File  > Save state, Load state, Exit
  * Audio > Volume slider over the whole mix (src/pc/audio/spu.c)
  * View  > Scale 1x-4x
- * Game  > Mods opens the searchable mod manager
+ * Game  > Mods opens the searchable mod manager; Restart game goes back to
+ *         the title screen once confirmed (title_jump.h)
  * Debug > development helpers (src/pc/debug)
  * Help  > update checks and this build's version (update_check.h) */
 
@@ -72,7 +73,8 @@ typedef enum {
     MENU_ITEM_FILTER_SHARP,
     MENU_ITEM_HD_TEXT, /* Video > HD text, HD numbers and labels, Opponent's name for COM: */
     MENU_ITEM_HD_HUD,  /* drawn by the OpenGL picture pass at Internal 2x and up (Menu_SetHdPicture); */
-    MENU_ITEM_OPPONENT_NAME /* the name by the software GPU at 1x too */
+    MENU_ITEM_OPPONENT_NAME, /* the name by the software GPU at 1x too */
+    MENU_ITEM_RESTART /* Game > Restart game: asks, then goes back as MENU_ITEM_TITLE does */
 } MenuItemId;
 
 /* The stored settings (settings.txt in the user directory, see paths.h;
