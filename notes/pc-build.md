@@ -557,8 +557,11 @@ the title confirm) `DeckMenu_ShopRestore` moves the cursor and enables all
 five entries. It does not reuse a nested prompt's enabled mask. The
 `deck-shop` save-state chunk keeps whether the menu has the extra entry
 and rebases pointers into its compiled text before restoring game memory,
-so loading a shop state also works in a fresh process. With the setting off, or a translation that rewrites
-string 0x11, the menu is the game's. Checked on a save in the tournament's
+so loading a shop state also works in a fresh process. With the setting off the menu is the game's. A
+translation's string 0x11 gets the entry too, in the translation's words
+(string `FE10`, [translations](translation.md#the-ports-own-strings)), when
+its menu is four plain lines and the five fit the box's 44 letters; else it
+keeps the translation's four. Checked on a save in the tournament's
 shop: the setting off is pixel-identical to master (the menu, and the cursor
 on LEAVE SHOP); DECK SLOTS opens the screen, and Circle brings the menu back
 with the cursor on it; LEAVE SHOP has its normal highlight and leaves;

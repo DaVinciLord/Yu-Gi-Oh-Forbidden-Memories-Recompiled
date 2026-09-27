@@ -259,6 +259,8 @@ static const unsigned char *results_copy(const unsigned char *retail)
 
 int Text_Overridden(int id) { return overrides && id >= 0 && id <= 0xFFFF && overrides[id]; }
 
+const unsigned char *Text_Own(int id) { return Text_Overridden(id) ? overrides[id] : NULL; }
+
 static void report_own(void *context, int line, const char *message)
 {
     (void)context;

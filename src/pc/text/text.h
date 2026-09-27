@@ -23,6 +23,24 @@ const unsigned char *Text_Resolve(int id, const unsigned char *retail);
 
 /* Whether an applied mod's text rewrites string `id`. */
 int Text_Overridden(int id);
+/* The port's own strings, which it draws in the game's letters inside the
+ * game's picture: ids no retail string has, in the dialogue bank, which a
+ * translation may define as it does the game's (notes/translation.md lists
+ * them). `%d` stands for a number the port puts in. */
+#define TEXT_OWN_FIRST 0xFE00
+#define TEXT_OWN_LAST 0xFEFF
+enum {
+    TEXT_OWN_NEW = 0xFE00,          /* card drops: a card the player had none of */
+    TEXT_OWN_MORE_CARD = 0xFE01,    /* card drops: the heading, one card past the first */
+    TEXT_OWN_MORE_CARDS = 0xFE02,   /* card drops: the heading, more */
+    TEXT_OWN_PAGE_OF = 0xFE03,      /* card drops: which page of how many */
+    TEXT_OWN_DECK_SLOTS = 0xFE10    /* the card shop's added menu entry */
+};
+/* The compiled text an applied mod gives string `id` (glyph codes and
+ * codes, ending in {end}), or NULL: for the port's own strings, and for a
+ * retail string the port adds to. */
+const unsigned char *Text_Own(int id);
+
 /* String `id` of a listing the port writes itself (a menu it adds an entry
  * to), compiled as a mod's text is, so that its jumps land (Text_Retarget);
  * it stands in for nothing by itself. NULL if it does not compile. */

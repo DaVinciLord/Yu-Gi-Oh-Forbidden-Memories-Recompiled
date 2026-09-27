@@ -116,6 +116,60 @@ retail glyphs can be typed as themselves: letters, digits, `! " # $ % & '
 ( ) * + , - . / : ; < = > ?`, `«` `»`, `·`, `α β γ`, `← →`, `♂ ♀`; typographic
 quotes and dashes are taken as their plain ones.
 
+## The port's own strings
+
+A few words the port adds to the game's screens are drawn in the game's
+letters, inside the game's picture, and a translation gives them in the
+same listing, in the dialogue bank, with ids no retail string has
+(`FE00`-`FEFF`, `TEXT_OWN_*` in `src/pc/text/text.h`). They are not in the
+extracted listing; add them:
+
+```text
+@bank dialog
+
+[FE00]
+NEW{end}
+
+[FE01]
+%d MORE CARD{end}
+
+[FE02]
+%d MORE CARDS{end}
+
+[FE03]
+PAGE %d OF %d{end}
+
+[FE10]
+DECK SLOTS{end}
+```
+
+| Id | Where | Room |
+|---|---|---|
+| `FE00` | Card drops' added result pages: after a card the player had none of | ends at the plate's end; each letter past 3 takes one from the card's name |
+| `FE01`, `FE02` | the same pages' heading, left: one card past the first, or more | with `FE03` right-aligned on the same line: 33 letters for both, numbers and spaces included |
+| `FE03` | the heading, right, when there is more than one page | as above |
+| `FE10` | the card shop's menu (string `0011`): the entry under BUILD DECK | the menu's box shows 44 letters in all (spaces are none); retail's four lines have 35, so 9; a line is 15 wide |
+
+Letters and spaces only: a string with other codes is not used (the port's
+English is). `%d` is where the port puts a number, in the order above
+(`FE03`: the page, then how many). The headings are in the small letters,
+which have no accents: an accented letter is drawn as its plain one.
+
+The shop's menu with the entry is rebuilt from the translation's string
+`0011` when it has one: its four lines as they are, `FE10` (or the English)
+added under the second, centred as the others are, and its `{choice}` given
+the fifth entry. A `0011` that is not four lines of letters, spaces,
+`{f8 02}` steps and `{f8 0A}` colours, or five lines past the box's 44
+letters, leaves the menu the translation's four entries, and the log
+(`MEMORIES_TRACE=mods`) says so. A translation whose own four lines have
+more letters than retail's has less room for `FE10`: the pt-BR menu has 38,
+so 6.
+
+The port's other words (the save slot and deck slot menus, the host
+window's menus, HD text's name panel) are drawn in the host's font over
+the game, not in the game's letters, and are not part of a translation's
+text.
+
 ## Letters
 
 The game's font has 91 letters, none accented. The port draws more,
