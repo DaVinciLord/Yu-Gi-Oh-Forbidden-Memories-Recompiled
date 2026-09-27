@@ -217,9 +217,11 @@ plates follow the settings the
 project measured against window captures (its `psx_card_packs.c`,
 `render_title`): Times
 regular at 13 pixels, the baseline under row 11, whole-pixel advances,
-coverage in hard steps (150 and up ink 1, 96 an edge at 3, 40 a halo at 6),
 and a name wider than 90 pixels squeezed into columns 3 to 93 and brought
-back up to full ink. The name is read as UTF-8, as its glyphs are, so an
+back up to full ink. Each texel takes the ink of the nearest tone, from
+what each ink was measured to take from the gold in the game (`ink_of`);
+a retail card a translation renames gets its plate the same way
+([translations](translation.md#how-the-port-does-it)). The name is read as UTF-8, as its glyphs are, so an
 accented letter is one character on the plate too; one the font lacks is
 left out. An entry's cards share one plate unless the name has `{n}` or
 `{id}` in it. A patched picture and thumbnail are reported written

@@ -4,9 +4,10 @@ A mod can put the game in another language: every line of dialogue, every
 menu string, every card's name and text, the monster types, the guardian
 stars and the duelists' names. Accented letters work (é, ñ, ç, ü, ø, ß,
 ¿, ¡ and the rest of the Latin alphabets), and a mod can bring a font for
-anything else. Text drawn as pictures (the main menu's words, the results
-screen's headings, the name plates on card art) is not text to the game;
-a [texture pack](modding.md) repaints those.
+anything else. A renamed card's name plate, the name drawn into the top of
+its art, is set anew from the new name at every scale (below). Other text
+drawn as pictures (the main menu's words, the results screen's headings) is
+not text to the game; a [texture pack](modding.md) repaints those.
 
 ## Making one
 
@@ -351,6 +352,32 @@ If a translation renames cards, their alphabetical order
 (`gCard_asNameSortKey`) is worked out again from the new names, accents
 sorting as their plain letters. The names and texts of cards a mod adds
 ([more cards](more-cards.md)) are UTF-8 too and take the same letters.
+
+The name on the top of a card's big picture (Triangle in a duel, the
+Library, Build Deck) is not text either: it is a 96x14 4-bit plate in the
+card's art record on the disc (`+0x2840`, [art.c](../src/pc/cards/art.c)),
+drawn subtractively over the gold frame, and `func_800289BC` uploads it with
+the picture. So when a translation rewrites a card's name (string
+`0x8000 + id`, `Text_Overridden`), `Cards_PatchArtRecord`, which that loader
+already calls before its uploads, puts a plate set from the new name in
+place of the English one (`translated_plate` in `cards.c`, made once per
+card by `CardArt_TitleFromName`, as the plate of a mod card with a name of
+its own is). There is no background to keep: index 0 is clear and is the
+whole of every retail plate's border, the gold showing through. The name is
+set in the same serif face and layout HD text uses for titles (Times at 13
+pixels, baseline under row 11, squeezed into columns 3 to 93 when longer
+than 90 pixels), and each texel takes the plate ink of the nearest tone:
+what inks 1 to 7 take from the gold was measured on a retail plate in the
+game (1 all, 7 about a fifth), so stems land at 1 and edges at 6 and 7, as
+the retail plates have them. This is the plate at 1x and at any internal
+scale without HD text; with HD text at scale 2 and up, the title is set
+from the name at that size over it, as before (`HdText_Title`). A card
+whose translated name is the retail one, a card a mod's `cards[]` names
+(its own plate wins), and a system with no serif face keep the plate they
+had; with no mod renaming cards the art is the disc's, byte for byte.
+`tests/pc/card_plate_test.c` (ctest `pc_card_plate`, where FreeType is
+found) checks the plates: inks 0 to 7 only, clear edges, a long name
+squeezed inside, accents inside the plate.
 
 Running the recorded smoke cases with the untranslated listing installed
 as a mod gives the same pictures as without it, byte for byte, jumps into

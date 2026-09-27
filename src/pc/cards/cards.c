@@ -898,8 +898,62 @@ static int art_of(int id, int part)
     return art_parts[Cards_BaseId(id)] & part ? Cards_BaseId(id) : 0;
 }
 
+/* The plate of a retail card a translation renames (its name, string
+ * 0x8000 + id, rewritten by a mod's "text"): the retail plate is the English
+ * name drawn into the art, so it is set anew from the translated name, as a
+ * mod's own name is (above), once per card. A translation that keeps the
+ * name, or a system with no serif face, leaves the retail plate as it is:
+ * the English name beats a blank one when the name reads right everywhere
+ * else. HD text still sets the title from the name at its own size
+ * (hd_text.h) over this plate. */
+static unsigned char *text_plates[CARD_ID_END];
+static unsigned char text_plate_tried[CARD_ID_END];
+
+/* The next character of a name's glyph codes (0 at its end), advancing. */
+static uint32_t name_character(const unsigned char **at)
+{
+    int code = *(*at)++;
+    if (code >= 0xF6) return 0;
+    if (code >= 0xF0) code = ((code - 0xF0) << 8) | *(*at)++;
+    return code ? Glyphs_Character(code) : ' ';
+}
+
+/* Whether the name the text gives is the disc's, character for character
+ * (a translation lists every name, the ones it keeps too). Compared as
+ * characters, not as retail_name's ASCII, which spells a glyph outside
+ * it as '?', nor as codes, which differ for a glyph the port added. */
+static int retail_name_kept(int id)
+{
+    const unsigned short *offsets = (const unsigned short *)(uintptr_t)RETAIL_NAME_OFFSETS;
+    const unsigned char *retail = (const unsigned char *)(uintptr_t)(TEXT_BANK + offsets[id]);
+    const unsigned char *name = Cards_NameCodes(id);
+    uint32_t a, b;
+    if (!name) return 1;
+    do {
+        a = name_character(&name);
+        b = name_character(&retail);
+    } while (a == b && a);
+    return a == b;
+}
+
+static const unsigned char *translated_plate(int id)
+{
+    char name[128];
+    if (id < CARD_ID_FIRST || id > CARD_COUNT || names[id] || !Text_Overridden(0x8000 + id)) return NULL;
+    if (!text_plate_tried[id]) {
+        text_plate_tried[id] = 1;
+        if (!retail_name_kept(id) && Cards_NameUtf8(id, name, sizeof(name)) &&
+            (text_plates[id] = malloc(CARD_TITLE_BYTES)) != NULL && !CardArt_TitleFromName(name, text_plates[id])) {
+            free(text_plates[id]);
+            text_plates[id] = NULL;
+        }
+    }
+    return text_plates[id];
+}
+
 void Cards_PatchArtRecord(int id, unsigned char *record)
 {
+    const unsigned char *translated;
     int from;
     if (!Cards_Valid(id)) return;
     if ((from = art_of(id, ART_PICTURE)) != 0) patch(record, art_records[from], CARD_TITLE_PIXELS);
@@ -910,6 +964,8 @@ void Cards_PatchArtRecord(int id, unsigned char *record)
      * the base's are the same inks, so its pack picture there is no harm. */
     if (plates[id] || plates[Cards_BaseId(id)]) {
         memcpy(record + CARD_TITLE_PIXELS, plates[id] ? plates[id] : plates[Cards_BaseId(id)], CARD_TITLE_BYTES);
+    } else if (!names[id] && (translated = translated_plate(Cards_BaseId(id))) != NULL) {
+        memcpy(record + CARD_TITLE_PIXELS, translated, CARD_TITLE_BYTES);
     }
     if ((from = art_of(id, ART_THUMBNAIL)) != 0) {
         patch(record + CARD_THUMB_PIXELS, art_records[from] + CARD_THUMB_PIXELS, CARD_THUMB_BLOCK);
