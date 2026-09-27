@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-/* Game > Japanese buttons (SET_JP_BUTTONS, `jp_buttons`). The port runs the
+/* View > Japanese buttons (SET_JP_BUTTONS, `jp_buttons`). The port runs the
  * USA release, which confirms with Cross (or Square) and cancels with
  * Circle. The Japanese release confirms with Circle (or Square) and cancels
  * with Cross: on every screen matched in both, its button checks are the

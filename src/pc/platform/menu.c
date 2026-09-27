@@ -119,14 +119,11 @@ static Menu menus[MENU_COUNT] = {
               {"Scaling", 0, ITEM_SUBMENU, 0, -1, SUB_SCALING, ITEM_GROUP_BREAK},
               {"Aspect Ratio", 0, ITEM_SUBMENU, 0, -1, SUB_ASPECT},
               {"Resolution", 0, ITEM_SUBMENU, 0, -1, SUB_RESOLUTION},
-              {"HD text", 0, ITEM_CHECK, MENU_ITEM_HD_TEXT, SET_HD_TEXT},
-              {"HD numbers and labels", 0, ITEM_CHECK, MENU_ITEM_HD_HUD, SET_HD_HUD},
-              {"Opponent's name for COM", 0, ITEM_CHECK, MENU_ITEM_OPPONENT_NAME, SET_OPPONENT_NAME},
               {"Anti-aliasing", 0, ITEM_SUBMENU, 0, -1, SUB_ANTIALIAS},
               {"Filtering", 0, ITEM_SUBMENU, MENU_ITEM_FILTER, -1, SUB_FILTER, ITEM_GROUP_BREAK},
               {"VSync", 0, ITEM_CHECK, MENU_ITEM_VSYNC, SET_VSYNC},
               {"Color", 0, ITEM_SUBMENU, 0, -1, SUB_COLOR, ITEM_GROUP_BREAK},
-              {"Effects", 0, ITEM_SUBMENU, 0, -1, SUB_EFFECTS}}, 15},
+              {"Effects", 0, ITEM_SUBMENU, 0, -1, SUB_EFFECTS}}, 12},
     {"Audio", {{"Master", 0, ITEM_SLIDER, SLIDER_MASTER, SET_MASTER_VOLUME},
                {"Music", 0, ITEM_SLIDER, SLIDER_MUSIC, SET_MUSIC_VOLUME},
                {"Sound FX", 0, ITEM_SLIDER, SLIDER_SFX, SET_SFX_VOLUME},
@@ -141,21 +138,19 @@ static Menu menus[MENU_COUNT] = {
               {"Mods", 0, ITEM_ACTION, ACT_MODS, -1},
               {"Game speed", 0, ITEM_SUBMENU, 0, -1, SUB_SPEED},
               {"Frame rate", 0, ITEM_SUBMENU, 0, -1, SUB_FPS},
-              {"Title screen after the credits", 0, ITEM_CHECK, 0, SET_RETURN_AFTER_CREDITS, 0, ITEM_GROUP_BREAK},
-              {"Card drops", 0, ITEM_SLIDER, 0, SET_CARD_DROPS, 1},
-              {"Smart drops", 0, ITEM_CHECK, 0, SET_SMART_DROPS},
+              {"Card drops", 0, ITEM_SLIDER, 0, SET_CARD_DROPS, 1, ITEM_GROUP_BREAK},
               {"Deck slots...", "F6", ITEM_ACTION, MENU_ITEM_DECKS, -1, 0, ITEM_GROUP_BREAK | ITEM_DISABLED},
               {"Use deck slots", 0, ITEM_CHECK, 0, SET_DECK_SLOTS},
-              {"Japanese buttons (Circle confirms)", 0, ITEM_CHECK, 0, SET_JP_BUTTONS, 0, ITEM_GROUP_BREAK},
-              {"Browse cards with Up/Down", 0, ITEM_CHECK, 0, SET_CARD_BROWSE},
-              {"Rewind (hold F8)", 0, ITEM_CHECK, 0, SET_REWIND, 0, ITEM_GROUP_BREAK},
+              {"Browse cards with Up/Down", 0, ITEM_CHECK, 0, SET_CARD_BROWSE, 0, ITEM_GROUP_BREAK},
               {"Cheats", 0, ITEM_SUBMENU, 0, -1, SUB_CHEATS, ITEM_GROUP_BREAK},
-              {"Restart game...", 0, ITEM_ACTION, MENU_ITEM_RESTART, -1, 0, ITEM_GROUP_BREAK | ITEM_DISABLED}}, 14},
+              {"Restart game...", 0, ITEM_ACTION, MENU_ITEM_RESTART, -1, 0, ITEM_GROUP_BREAK | ITEM_DISABLED}}, 10},
     {"View", {{"Fusion helper", 0, ITEM_CHECK, 0, SET_FUSION_HELPER},
               {"Card passwords", 0, ITEM_CHECK, 0, SET_CARD_PASSWORDS},
               {"Library: show every card", 0, ITEM_CHECK, 0, SET_LIBRARY_ALL_CARDS},
               {"Free Duel progress", 0, ITEM_CHECK, 0, SET_FREE_DUEL_PROGRESS},
-              {"Duel rank", 0, ITEM_SUBMENU, 0, -1, SUB_RANK}}, 5},
+              {"Duel rank", 0, ITEM_SUBMENU, 0, -1, SUB_RANK},
+              {"Opponent's name for COM", 0, ITEM_CHECK, MENU_ITEM_OPPONENT_NAME, SET_OPPONENT_NAME, 0, ITEM_GROUP_BREAK},
+              {"Japanese buttons (Circle confirms)", 0, ITEM_CHECK, 0, SET_JP_BUTTONS}}, 7},
     {"Debug", {{"Jump to", 0, ITEM_SUBMENU, 0, -1, SUB_JUMP},
                {"Show HUD", "F3", ITEM_CHECK, CHECK_HUD, -1, 0, ITEM_GROUP_BREAK},
                {"Full stats", 0, ITEM_CHECK, CHECK_HUD_FULL, -1},
@@ -734,26 +729,18 @@ void Menu_SetItemEnabled(int id, int enabled)
 
 static int hd_picture;
 
-/* The HD items take effect in the OpenGL pass at Internal 2x and up; the
- * opponent's name also at 1x, where the software GPU draws it. */
+/* The opponent's name is drawn by the OpenGL pass at Internal 2x and up,
+ * and by the software GPU at 1x. (HD text is the Forbidden Memories HD
+ * mod's setting now, hd_text.h.) */
 static void update_hd_items(void)
 {
-    static const int ids[] = {MENU_ITEM_HD_TEXT, MENU_ITEM_HD_HUD, MENU_ITEM_OPPONENT_NAME};
     int console = Settings_Get(SET_INTERNAL_SCALE) < 2;
-    const char *hd_why = !hd_picture ? "needs OpenGL 3" : console ? "needs Internal 2x" : NULL;
     const char *name_why = !hd_picture && !console ? "needs OpenGL 3 or 1x" : NULL;
     int menu, item;
-    unsigned i;
-    for (i = 0; i < sizeof(ids) / sizeof(ids[0]); i++) {
-        Menu_SetItemEnabled(ids[i], !(ids[i] == MENU_ITEM_OPPONENT_NAME ? name_why : hd_why));
-    }
+    Menu_SetItemEnabled(MENU_ITEM_OPPONENT_NAME, !name_why);
     for (menu = 0; menu < MENU_COUNT; menu++) {
         for (item = 0; item < menus[menu].count; item++) {
-            for (i = 0; i < sizeof(ids) / sizeof(ids[0]); i++) {
-                if (menus[menu].items[item].id == ids[i]) {
-                    menus[menu].items[item].shortcut = ids[i] == MENU_ITEM_OPPONENT_NAME ? name_why : hd_why;
-                }
-            }
+            if (menus[menu].items[item].id == MENU_ITEM_OPPONENT_NAME) menus[menu].items[item].shortcut = name_why;
         }
     }
 }

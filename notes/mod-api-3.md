@@ -98,7 +98,7 @@ input before managed input hooks, so inspecting it cannot recurse into a hook.
 
 | Event | Fields and operation |
 |---|---|
-| `INPUT` | `a` pad port, `b` button bits; before can edit `b`, or replace with `result`; after receives the bits passed to the game. With Game > Japanese buttons on, Cross and Circle are exchanged between the two (`button_layout.h`): before sees the controller's bits, and a Cross a before-hook adds reaches the game as Circle |
+| `INPUT` | `a` pad port, `b` button bits; before can edit `b`, or replace with `result`; after receives the bits passed to the game. With View > Japanese buttons on, Cross and Circle are exchanged between the two (`button_layout.h`): before sees the controller's bits, and a Cross a before-hook adds reaches the game as Circle |
 | `DAMAGE` | `a` affected side, `b` damage, `c` 0 battle / 1 spell or reflected recovery; initial `result` is current LP; handled replaces remaining LP; after observes clamped remaining LP before the caller stores it |
 | `REWARD` | `a` awarded card ID; edit it to replace the reward, or handle to cancel; invalid IDs are rejected |
 | `FUSION` | `a`, `b` input card IDs before base-card mapping; handled `result` is the resulting card, or zero to forbid a fusion. Unhandled, the mods' `fusions` rules ([gameplay tables](gameplay-tables.md)) come next |

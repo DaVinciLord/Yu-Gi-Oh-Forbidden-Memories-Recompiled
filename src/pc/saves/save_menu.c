@@ -451,7 +451,7 @@ void SaveMenu_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
     }
     if (menu.top > 0) draw_text(canvas, px + pw - 30 * s, py + 20 * s, "^", COLOUR_DIM);
     if (menu.top + rows < SAVE_SLOT_COUNT) draw_text(canvas, px + pw - 18 * s, py + 20 * s, "v", COLOUR_DIM);
-    /* The menu reads the game's pad state, so Game > Japanese buttons
+    /* The menu reads the game's pad state, so View > Japanese buttons
      * (button_layout.h) exchanges its buttons too. */
     if (Settings_Get(SET_JP_BUTTONS))
         draw_text(canvas, px + 14 * s, py + ph - 16 * s,
