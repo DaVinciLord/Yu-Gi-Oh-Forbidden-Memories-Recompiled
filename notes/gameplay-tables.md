@@ -283,9 +283,12 @@ The Wicked Gods keeps the 250 and pays 1 starchip (`{"starchips": 1}`); the
 Remaster keeps 3 and pays 3. The balance stops at 999999, as the game's own
 prize does. It holds wherever the game gives the player a card
 (`Duel_AwardCard`): a duel's drop, the extra drops of Game > Card drops, and
-a card bought in the password shop. A chest that already held more than
-`limit` of a card (a save from before the mod) keeps them; only new copies
-are turned away. The latest mod that sets it wins.
+a card bought in the password shop. The shop sells no copy the chest has no
+room for: EXCHANGE is red and only QUIT can be chosen, as when the starchips
+fall short, and neither the price nor the password is spent. A chest that
+already held more than `limit` of a card (a save from before the mod) keeps
+them; only new copies are turned away. The latest mod that sets it wins.
+Without the key the chest is the disc's in every case.
 
 ## Where two mods disagree
 
@@ -318,7 +321,8 @@ it first:
 | `Duel_SelectCardDrop` (`duel_result_runtime.c`) | drop pools, `0x8017878C` | `Tables_Pool(TABLES_POOL_POW + pool)` |
 | `Duel_GetTerrainBoost` (`duel_card_record_lifecycle.c`) | terrain table, `0x800909D4` | `Tables_TerrainBonus` |
 | `Duel_SelectAttackTrap` (`duel_trap_resolution.c`) | trap thresholds, `0x8009AF24` (bytes, x100) | `Tables_TrapThreshold` |
-| `Duel_AwardCard` (`duel_result_runtime.c`) | chest, `0x801D0250`; starchips, `0x801D07E0` | `Tables_ChestOverflow` before the card is counted, `Tables_ChestLimit` after |
+| `Duel_AwardCard` (`duel_result_runtime.c`) | chest, `0x801D0250`; starchips, `0x801D07E0` | `Tables_ChestOverflow` before the card is counted, `Tables_ChestFull` after |
+| `Password_UpdateShopScreen` (`overlays/password/shop.c`) | chest, `0x801D0250` | `Duel_ChestFull` (`Tables_ChestFull`) before EXCHANGE is offered |
 
 A pool is worked out from the opponent's loaded pool and every edit of it
 when the game draws from it, and kept until the opponent or the loaded pool

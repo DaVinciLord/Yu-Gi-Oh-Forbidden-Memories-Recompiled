@@ -1133,6 +1133,11 @@ int Tables_ChestLimit(void)
     return chest_limit ? chest_limit : CARD_CHEST_QUANTITY_MAX;
 }
 
+int Tables_ChestFull(unsigned quantity)
+{
+    return chest_limit && quantity >= (unsigned)chest_limit;
+}
+
 int Tables_ChestOverflow(unsigned quantity, unsigned *starchips)
 {
     unsigned long long total;

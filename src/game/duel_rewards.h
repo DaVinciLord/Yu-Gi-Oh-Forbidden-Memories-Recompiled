@@ -17,5 +17,10 @@ void Duel_ShowResultPage(s32 page);
 void Duel_CalcRankScore(void);
 s32 Duel_SelectCardDrop(s32 pool_index);
 void Duel_AwardCard(s32 card_id);
+#ifdef MEMORIES_PC
+/* 1 when a mod's "chest_overflow" leaves no room for another copy
+   (Tables_ChestFull); always 0 without one. */
+s32 Duel_ChestFull(s32 card_id);
+#endif
 
 #endif

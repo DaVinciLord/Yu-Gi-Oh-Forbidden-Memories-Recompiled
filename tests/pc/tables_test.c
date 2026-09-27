@@ -239,20 +239,24 @@ int main(void)
 
     /* The chest: without the rule it keeps 250 and a card past that is lost,
      * as on the disc; with it, it keeps "limit" and each card past that is
-     * worth its starchips, up to 999999; the later mod wins. */
+     * worth its starchips, up to 999999; the later mod wins. The chest is
+     * full only under a mod's rule: without one, a save past 250 is the
+     * disc's business. */
     {
         unsigned starchips = 100;
         assert(Tables_ChestLimit() == 250 && Tables_ChestOverflow(250, &starchips) == 0 && starchips == 100);
+        assert(!Tables_ChestFull(250) && !Tables_ChestFull(255));
         notes = 0;
         add("i", "{\"chest_overflow\": {\"starchips\": 3}}");
         add("j", "{\"chest_overflow\": {\"limit\": 0, \"starchips\": 9}}");
         add("k", "{\"chest_overflow\": {\"limit\": 3, \"starchips\": \"many\"}}");
         add("k2", "{\"chest_overflow\": 3}");
         assert(notes == 3 && Tables_ChestLimit() == 250);
+        assert(!Tables_ChestFull(249) && Tables_ChestFull(250));
         assert(Tables_ChestOverflow(249, &starchips) == 0 && starchips == 100);
         assert(Tables_ChestOverflow(250, &starchips) == 3 && starchips == 103);
         add("l", "{\"chest_overflow\": {\"limit\": 3, \"starchips\": 999999}}");
-        assert(Tables_ChestLimit() == 3);
+        assert(Tables_ChestLimit() == 3 && Tables_ChestFull(3) && !Tables_ChestFull(2));
         assert(Tables_ChestOverflow(2, &starchips) == 0 && starchips == 103);
         assert(Tables_ChestOverflow(3, &starchips) == 999999 && starchips == 999999);
         assert(Tables_ChestOverflow(40, &starchips) == 999999 && starchips == 999999);
@@ -335,6 +339,7 @@ int main(void)
     {
         unsigned starchips = 7;
         assert(Tables_ChestLimit() == 250 && Tables_ChestOverflow(250, &starchips) == 0 && starchips == 7);
+        assert(!Tables_ChestFull(255));
     }
     assert(fusion(10, 11) == -1 && Tables_Equip(20, 12) == -1 && Tables_Ritual(21, own) == -1);
     assert(!Tables_PoolFor(15, TABLES_POOL_DECK, retail));
