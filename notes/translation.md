@@ -133,6 +133,14 @@ wind of your activities...
   drawn as the console draws it. Keep menu lines within their box. A line
   break of your own in a menu does not stop the game, but it counts as one
   of the choices' lines, so the last choice is lost.
+* A menu with more lines than its box has rows under where it starts (four
+  choices in the three rows left in the name box, or a menu that goes on
+  from the rows of an earlier one) stops the console the same way. The port
+  leaves the lines past the box out and offers only the choices in it
+  (`{choose}` then takes the first targets), and says so in
+  `MEMORIES_TRACE=mods`. Start a menu on a fresh box (after a `{page}`, or
+  `{f8 1A}` as the name screen's own text does) and give it no more lines
+  than the box has rows.
 * A text box has room for so many letters at once: 254 in the dialogue
   box and some menus, 159 in most menus. What is past that on a page is
   left out, and a page with more than 254 is reported. A menu writes its
@@ -327,8 +335,17 @@ at a page that waits for a button (state 4) instead of looping forever.
 A menu with choices has the same loop in `func_80039794`, which steps the
 text unbounded while `flags_34 & 0x1000` (the choices' layout) is up; there
 `TextBox_BuildStep` drops a letter past the box's right edge when its wrap
-would leave the choices' last line below the box, the one case that ends
-in state 4 inside that loop (`Text_CutsMenuGlyph`). The Library's heading (string `F8`, "<seen/722>") is rewritten for the
+would leave the choices' last line below the box (`Text_CutsMenuGlyph`).
+The other way into state 4 inside that loop is `Text_NewLine`: a new line
+whose row is past the box before the menu's last line (`field_56 <
+gDialog_bChoiceCount`, so `Text_TryCompleteChoiceLayout` does not take
+over). There the port skips the wait and cuts the menu
+(`src/pc/text/menu_cut.c`, by text channel `index_57`): the letters of the
+lines after it are dropped in `TextBox_BuildStep`, and once the layout
+completes `gDialog_bChoiceCount` is cut to the lines that were down less the
+heading rows (`D_8009B34C & 0x30`), at least one. A menu that fits never
+takes either path, so the console's frames are unchanged
+(`tests/pc/menu_cut_test.c`). The Library's heading (string `F8`, "<seen/722>") is rewritten for the
 number of cards there are, by its id, whether the text is the disc's or a
 translation's (`Cards_Text`).
 
