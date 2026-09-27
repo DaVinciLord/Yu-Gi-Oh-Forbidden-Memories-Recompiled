@@ -15,6 +15,7 @@
 #include "pc/mods/mods.h"
 #include "pc/mods/json.h"
 #include "pc/platform/paths.h"
+#include "pc/platform/settings.h"
 #include "pc/debug/log.h"
 #include "pc/render/texture_dump.h"
 #include "pc/rng.h"
@@ -99,6 +100,10 @@ int Cards_Fusion(int a, int b, int *result)
 
 static unsigned char *names[CARD_TABLE_ID_END];     /* own names, glyph codes */
 static unsigned char *descriptions[CARD_TABLE_ID_END];  /* own card text, glyph codes */
+/* An entry's "password": its eight digits, a nibble each, or
+ * CARD_PASSWORD_NONE ("" or null); `own_password` says the entry gave one. */
+static unsigned passwords[CARD_TABLE_ID_END];
+static unsigned char own_password[CARD_TABLE_ID_END];
 /* Own artwork: an art record (art.h) shared by an entry's cards, which of its
  * parts are the card's own, and the card's own title plate. */
 #define ART_PICTURE 1
@@ -487,6 +492,33 @@ static void replace_model_effect(const char *mod, int index, const JsonValue *en
     }
 }
 
+/* "password": up to eight digits as a string ("08124921", leading zeros
+ * kept) or a whole number, "" or null for none. 0 and a note if it is
+ * neither. */
+static int read_password(const char *mod, int index, const JsonValue *value, unsigned *out)
+{
+    char digits[16];
+    const char *text;
+    size_t length, i;
+    *out = CARD_PASSWORD_NONE;
+    if (Json_TypeOf(value) == JSON_NULL) return 1;
+    if (Json_TypeOf(value) == JSON_NUMBER && Json_Number(value, -1) >= 0 && Json_Number(value, -1) <= 99999999) {
+        snprintf(digits, sizeof(digits), "%ld", Json_Number(value, 0));
+        text = digits;
+    } else {
+        text = Json_String(value, NULL);
+    }
+    length = text ? strlen(text) : 9;
+    if (length > 8 || strspn(text, "0123456789") != length) {
+        Mods_Note(mod, "cards[%d]: \"password\" must be up to 8 digits", index);
+        return 0;
+    }
+    if (!length) return 1;
+    *out = 0;
+    for (i = 0; i < length; i++) *out = (*out << 4) | (unsigned)(text[i] - '0');
+    return 1;
+}
+
 static void add_entry(const char *mod, const char *directory, int index, const JsonValue *entry, BuildContext *context)
 {
     const JsonValue *replace = Json_Member(entry, "replace");
@@ -495,10 +527,11 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     const char *name = Json_String(Json_Member(entry, "name"), NULL);
     const char *setting = Json_String(Json_Member(entry, "count_setting"), NULL);
     const char *description = Json_String(Json_Member(entry, "description"), NULL);
+    const JsonValue *password_value = Json_Member(entry, "password");
     unsigned char *record = NULL, *title = NULL, *named_plate = NULL;
     int parts = 0;
-    int base = 0, count, n, value;
-    unsigned stats;
+    int base = 0, count, n, value, has_password;
+    unsigned stats, password = CARD_PASSWORD_NONE;
     unsigned char level_attr;
     if (Json_TypeOf(entry) != JSON_OBJECT) {
         Mods_Note(mod, "cards[%d] is not an object", index);
@@ -563,6 +596,9 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     if ((value = choice(Json_Member(entry, "attribute"), attribute_names, 6)) >= 0) {
         level_attr = (unsigned char)((level_attr & 0x0F) | (clamp(value, 0, 15) << 4));
     }
+    /* What View > Card passwords shows (passwords.h): a copy has none
+     * unless it says, a replaced card keeps the disc's. */
+    has_password = password_value && read_password(mod, index, password_value, &password);
     /* Artwork: PNGs relative to the mod's directory, shared by the entry's
      * cards; a card with a name of its own gets a title plate that says it. */
     {
@@ -628,6 +664,10 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         gDuel_abCardLevelAttr[id] = level_attr;
         names[id] = name && *name ? encode_name(mod, name, n, id) : NULL;
         descriptions[id] = description && *description ? encode_description(mod, description, id) : NULL;
+        /* Reset as names and descriptions are, so a later mod's entry for
+         * the same card without one does not keep an earlier mod's. */
+        own_password[id] = (unsigned char)(has_password != 0);
+        if (has_password) passwords[id] = password;
         art_records[id] = parts ? record : NULL;
         art_parts[id] = (unsigned char)parts;
         if (title) {
@@ -763,6 +803,11 @@ int Cards_Seen(int id)
     return (gCard_abExtraSeen[id >> 3] >> (id & 7)) & 1;
 }
 
+int Cards_LibraryPlaceholder(int id)
+{
+    return Settings_Get(SET_LIBRARY_ALL_CARDS) && Cards_Valid(id) && !Cards_Seen(id);
+}
+
 void Cards_MarkSeen(int id)
 {
     if (id >= CARD_ID_FIRST && id <= CARD_COUNT) {
@@ -826,6 +871,13 @@ int Cards_NameUtf8(int id, char *out, size_t size)
 const unsigned char *Cards_DescriptionText(int id)
 {
     return Cards_Valid(id) ? descriptions[id] : NULL;
+}
+
+int Cards_OwnPassword(int id, unsigned *password)
+{
+    if (!Cards_Valid(id) || !own_password[id]) return 0;
+    *password = passwords[id];
+    return 1;
 }
 
 /* The bytes written over the base's are no longer the disc's: a texture

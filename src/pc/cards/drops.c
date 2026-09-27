@@ -9,6 +9,7 @@
  * pages are ordinary strings for the game's text box. */
 #include "drops.h"
 #include "cards.h"
+#include "tables.h"
 #include "pc/platform/settings.h"
 #include "pc/rng.h"
 #include "pc/text/glyphs.h"
@@ -35,28 +36,103 @@ static int owned(int id)
     return count;
 }
 
+/* --- Game > Smart drops --------------------------------------------------- */
+
+/* Copies of `id` the player will have: deck, chest, and the cards this duel
+ * already dealt (awarded later, when the player leaves the screen). */
+static int copies(int id)
+{
+    int count = owned(id), i;
+    for (i = 0; i < gCardDrops.count; i++) count += gCardDrops.cards[i] == id;
+    return count;
+}
+
+static unsigned *smart_weights;
+static unsigned char *smart_keep;
+static int smart_room;
+
+static int smart_grow(int count)
+{
+    if (count + 1 > smart_room) {
+        unsigned *weights = realloc(smart_weights, (size_t)(count + 1) * sizeof(*weights));
+        unsigned char *keep;
+        if (!weights) return 0;
+        smart_weights = weights;
+        keep = realloc(smart_keep, (size_t)(count + 1));
+        if (!keep) return 0;
+        smart_keep = keep;
+        smart_room = count + 1;
+    }
+    return 1;
+}
+
+int CardDrops_SmartPool(unsigned *weights, int count)
+{
+    int id, cut = 0, kept = 0;
+    if (!smart_grow(count)) return 0;
+    for (id = 1; id <= count; id++) {
+        smart_keep[id] = weights[id] && copies(id) < DECK_CARD_COPY_LIMIT;
+        cut += weights[id] && !smart_keep[id];
+        kept += smart_keep[id];
+    }
+    /* Nothing to leave out, or nothing left: the pool as it is. */
+    if (!cut || !kept) return 0;
+    for (id = 1; id <= count; id++) {
+        if (!smart_keep[id]) weights[id] = 0;
+    }
+    return Tables_Scale(weights, smart_keep, count, DUEL_DROP_WEIGHT_TOTAL) ? cut : 0;
+}
+
+/* Duel_SelectCardDrop over the pool CardDrops_SmartPool leaves: the same
+ * pool (a mod's edit of it included), the same one draw for the threshold,
+ * the same walk by card id, and the same variant pick for a retail card. */
+static int select_drop(int pool)
+{
+    const unsigned short *edited;
+    unsigned sum = 0;
+    int count = CARD_COUNT, id, threshold;
+    if (!Settings_Get(SET_SMART_DROPS) || pool < 0 || pool >= TABLES_POOL_COUNT - TABLES_POOL_POW) {
+        return Duel_SelectCardDrop(pool);
+    }
+    edited = Tables_Pool(TABLES_POOL_POW + pool, gDuel_awSaPowCardDrops[pool].weights);
+    if (edited) count = gCard_nCount;
+    if (!smart_grow(count)) return Duel_SelectCardDrop(pool);
+    smart_weights[0] = 0;
+    for (id = 1; id <= count; id++) {
+        smart_weights[id] = edited ? edited[id] : gDuel_awSaPowCardDrops[pool].weights[id - 1];
+    }
+    if (!CardDrops_SmartPool(smart_weights, count)) return Duel_SelectCardDrop(pool);
+    threshold = (Memories_Rand() & (DUEL_DROP_WEIGHT_TOTAL - 1)) + 1;
+    for (id = 1; id <= count; id++) {
+        sum += smart_weights[id];
+        if (sum >= (unsigned)threshold) return id <= CARD_COUNT ? Cards_PickVariant(id, CARDS_USE_DROP) : id;
+    }
+    return 0;
+}
+
 /* Several cards are dealt in the community drop mod's order, so a seed
  * gives the same cards here as on its patched discs (the static recomp
  * matched it too): one draw the mod throws away, then for each card six
  * more and the roll, 1 + 7N draws in all. The last roll is the game's own
- * card for SPOILS. One card is the console's single roll. */
+ * card for SPOILS. One card is the console's single roll. Smart drops
+ * changes which card a roll gives, never how many draws it takes. */
 int CardDrops_Roll(int pool)
 {
     int wanted = Settings_Get(SET_CARD_DROPS), i;
     CardDrops_Begin();
-    if (wanted <= 1) return Duel_SelectCardDrop(pool);
+    if (wanted <= 1) return select_drop(pool);
     if (wanted > CARD_DROPS_MAX) wanted = CARD_DROPS_MAX;
     Memories_Rand();
     for (i = 1; i < wanted; i++) {
         int burn, card;
         for (burn = 0; burn < 6; burn++) Memories_Rand();
-        card = Duel_SelectCardDrop(pool);
+        card = select_drop(pool);
         if (!Cards_Valid(card)) continue; /* an empty table */
         gCardDrops.fresh[gCardDrops.count] = owned(card) == 0;
         gCardDrops.cards[gCardDrops.count++] = (u16)card;
     }
     for (i = 0; i < 6; i++) Memories_Rand();
-    return Duel_SelectCardDrop(pool);
+    return select_drop(pool);
 }
 
 void CardDrops_Award(void)

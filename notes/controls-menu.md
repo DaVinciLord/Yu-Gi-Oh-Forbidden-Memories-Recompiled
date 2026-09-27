@@ -15,7 +15,8 @@ then press the new key, controller button, D-pad direction, trigger or stick
 direction. Escape cancels; capture also cancels on focus loss, disconnection or
 a ten-second timeout. Repeated keyboard events do not create bindings. Existing
 host shortcuts and modifier chords are reserved. Right Shift alone remains
-available for Select. If the input belongs to another action, choose Move binding
+available for Select. The keypad's + and - (master volume) are not reserved:
+binding one gives it to the pad and turns that volume step off. If the input belongs to another action, choose Move binding
 or Cancel. Clear unbinds the selected slot. Controller rows have two slots so
 D-pad and stick directions can both control the same PS1 direction.
 
