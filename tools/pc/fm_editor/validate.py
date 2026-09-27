@@ -213,5 +213,11 @@ def validate(project: Project) -> list:
     return out
 
 
+def validate_card(project: Project, cid: int) -> list:
+    out = []
+    _check_card(project, cid, out)
+    return out
+
+
 def errors(issues) -> list:
     return [i for i in issues if i.level == "error"]

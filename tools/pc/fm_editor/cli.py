@@ -1,5 +1,8 @@
 """The editor's command line.
 
+    python tools/pc/fm_editor [--game <folder or .bin>] [--mod <mod folder>]
+        the editor's window (the game is found where the port looks for it)
+
     python tools/pc/fm_editor check <mod folder> [--game <folder or .bin>]
         open the mod over the retail tables, list what the loader would
         complain about, and print the mod.json the editor would save
@@ -36,6 +39,8 @@ def command_check(arguments) -> int:
 
 def build_parser():
     parser = argparse.ArgumentParser(prog="fm_editor", description="FM Editor: mods for the Forbidden Memories port")
+    parser.add_argument("--game", help="the game: a folder with SLUS_014.11 and DATA/WA_MRG.MRG, or the .bin")
+    parser.add_argument("--mod", help="a mod folder to open")
     commands = parser.add_subparsers(dest="command")
     check = commands.add_parser("check", help="validate a mod folder against the retail tables")
     check.add_argument("mod")
@@ -49,5 +54,5 @@ def main(argv=None) -> int:
     arguments = parser.parse_args(argv)
     if arguments.command == "check":
         return command_check(arguments)
-    parser.print_help()
-    return 0
+    from .app import main as window
+    return window(arguments.game, arguments.mod)

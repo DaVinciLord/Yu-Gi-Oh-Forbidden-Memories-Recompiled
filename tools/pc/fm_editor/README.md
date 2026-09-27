@@ -12,6 +12,29 @@ reads ([modding](../../../notes/modding.md), [more cards](../../../notes/more-ca
 lays its `mod.json` over retail, so a saved mod can be opened and edited
 again. It writes mod folders only: never the disc, never `game/`.
 
+## Running it
+
+    python tools/pc/fm_editor [--game <folder or .bin>] [--mod <mod folder>]
+
+The window has a tab per table:
+
+| Tab | What you edit |
+|---|---|
+| Cards | search and filter the 722 cards; name, card text (with the game's 20-letter, 8-line wrapping counted), ATK/DEF, type, attribute, level, guardian stars; the retail value beside each field. **Add a card** copies the selected one as a new card with a stable id |
+| Fusions | every pair and its result (search by a card, or show the changed ones); add, change, remove (the pair no longer fuses) or revert |
+| Equips | per equip card, the monsters it may equip; add one, add or remove a whole type, remove, revert |
+| Rituals | per ritual card, its three tributes and the monster it summons |
+| Duelists | per opponent, the deck pool and the S/A-POW, B/C/D and S/A-TEC drop pools: weights, their chance, the retail weight, and the total against 2048 (**Normalize** scales a pool back to 2048 the way the port does) |
+| Mod info | id, name, version, author, description, `settings`, and the other `mod.json` keys, kept as written |
+| Problems | the loader's checks; double-click a line to go to it |
+
+**File > Save** writes the mod folder (Ctrl+S); the first save asks where
+(an empty folder, or a parent where a folder named after the mod id is
+made; the port's player mods are in `Documents\My Games\YFM Re-Decomp\mods`).
+Enable the mod in the game under **Game > Mods** and restart. **File > Open
+mod folder** opens a mod over retail. Save refuses nothing, but lists what
+the loader would refuse first.
+
 ## Game files
 
 The editor looks for the game where the port does: `MEMORIES_DISC`, the disc
