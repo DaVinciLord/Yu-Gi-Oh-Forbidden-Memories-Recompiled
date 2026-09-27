@@ -369,7 +369,10 @@ included, is about 1.6 ms a frame at 4x with no missed VBlanks.
 
 Menu text (both backends) is FreeType through fontconfig's `sans-serif` face at 13 px, cached
 once as coverage bitmaps and blended into the frame; a machine without a face
-falls back to a built-in 5x7 font at double size. The bar is dark with an
+falls back to a built-in 5x7 font at double size. Host UI text (menus, notices, Mods, Controls,
+HUD) is UTF-8: ASCII is rendered at start, any other character the first time it is drawn, and
+one the face lacks (or a byte that is not UTF-8) shows as "?"; code that cuts such text to fit
+uses `Menu_TextBack`/`Menu_TextFit`/`Menu_TextTrim` (menu.h) so no character is split. The bar is dark with an
 accent highlight; menus have hover rows, separators, shortcut hints, check
 and radio marks, and a shadow. Keyboard: F10 opens the first menu, arrows
 move, Enter activates, Esc closes (Esc quits only when no menu is open).

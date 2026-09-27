@@ -40,10 +40,32 @@ static int input(MenuEventType type, int x, int y, MenuKey key, const char *text
     return ModsWindow_Event(&e);
 }
 static int click(int x, int y) { return input(MENU_EVENT_BUTTON_DOWN, x, y, MENU_KEY_OTHER, NULL); }
+/* menu.h's UTF-8 cuts: never inside a character. */
+static void test_text_cuts(void)
+{
+    const char *word = "Portugu\xC3\xAAs"; /* "Português": ê is bytes 7-8 */
+    char cut[16];
+    assert(Menu_TextBack(word, 9) == 7);
+    assert(Menu_TextBack(word, 7) == 6);
+    assert(Menu_TextBack(word, 0) == 0);
+    assert(Menu_TextFit(word, 8) == 7);
+    assert(Menu_TextFit(word, 9) == 9);
+    assert(Menu_TextFit(word, 50) == 10);
+    snprintf(cut, 9, "%s", word); /* snprintf leaves the first byte of ê */
+    Menu_TextTrim(cut);
+    assert(strcmp(cut, "Portugu") == 0);
+    snprintf(cut, sizeof(cut), "%s", word);
+    Menu_TextTrim(cut);
+    assert(strcmp(cut, word) == 0);
+    snprintf(cut, sizeof(cut), "a\xE2\x80");  /* a cut-short U+2014 */
+    Menu_TextTrim(cut);
+    assert(strcmp(cut, "a") == 0);
+}
 int main(void)
 {
     char path[1024];
     int w, h;
+    test_text_cuts();
     scratch_template(root, sizeof(root), "memories-mod-window");
     assert(mkdtemp(root));
     make_dir("mods");
