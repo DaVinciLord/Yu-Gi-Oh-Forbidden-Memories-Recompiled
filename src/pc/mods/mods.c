@@ -1440,6 +1440,8 @@ int Mods_File(int index, const char *key, int entry_index, char *path, size_t si
         if (!*wanted || !setting_value(index, wanted, &current)) {
             warn(&mods[index], 0, "\"%s\": %s names a setting the mod does not declare (%s); used", key, *name,
                  *wanted ? wanted : "not a key");
+        } else if (only && Json_TypeOf(only) != JSON_NUMBER) {
+            warn(&mods[index], 0, "\"%s\": %s's \"value\" is not a number; used", key, *name);
         } else if (only ? current != (int)Json_Number(only, 0) : !current) {
             say("%s: \"%s\": %s left out, setting %s is %d", Mods_Id(index), key, *name, wanted, current);
             return 1;
