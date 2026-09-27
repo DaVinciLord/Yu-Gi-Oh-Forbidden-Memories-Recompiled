@@ -91,7 +91,16 @@ typedef struct SoftGpuRecorder {
     /* PGXP (pc/compat/pgxp.h): the precise vertices of the batch recorded
      * next, by their word's index in it. May be NULL. */
     void (*precise)(const PgxpVertex *vertices, size_t count);
+    /* SoftGpu_Capture: dx,dy was just loaded with what sx,sy shows. May be
+     * NULL. */
+    void (*capture)(int sx, int sy, int dx, int dy, int w, int h);
 } SoftGpuRecorder;
+/* The game read w x h of the picture at sx,sy (StoreImage) and loaded it,
+ * as good as unchanged, at dx,dy to draw with (LoadImage): the recorder
+ * keeps that part of its scaled picture for primitives textured from
+ * dx,dy, which VRAM only has at the console's resolution. Colour only: a
+ * texel's transparency and semi-transparency bit stay VRAM's. */
+void SoftGpu_Capture(int sx, int sy, int dx, int dy, int w, int h);
 void SoftGpu_SetRecorder(const SoftGpuRecorder *recorder);
 /* The precise vertices of the next SoftGpu_Gp0's words (PGXP), handed to
  * the recorder with them; the software GPU itself draws as ever. */

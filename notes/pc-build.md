@@ -966,7 +966,17 @@ VRAM. VRAM itself stays exactly what the console's would be: the game reads
 it back and states hold it, and the 1x frame the smoke fixtures hash is
 byte-identical at any scale. No dithering in the picture; the mask bits
 are VRAM's; a texture pack's image is sampled at its own resolution there,
-VRAM's own texels otherwise. A line is the console's one-pixel line made N
+VRAM's own texels otherwise. One exception: when a card burns after a
+battle, `DuelCard_CaptureRoundedTexture` reads the card back from the screen
+(StoreImage), marks it semi-transparent, rounds its corners and loads it at
+320,256, where the burn draws it from. VRAM only has that copy at the
+console's resolution, so the burn showed the card without its pack image or
+HD text. The function now also calls `Memories_PictureCapture` (under
+`MEMORIES_PC`): the OpenGL picture copies that part of its scaled picture
+when the record reaches it, and 16-bit texels in the rect take their colour
+from the copy while their word still decides transparency and
+semi-transparency. A load, copy or fill over the rect, a resync or a new
+scale drops the copy. The software picture and 1x keep VRAM's texels there. A line is the console's one-pixel line made N
 times thicker, one quad covering each picture pixel once (`line_quad` in
 both renderers), so a semi-transparent line blends once per pixel as on the
 console. Drawing it as an N x N block per picture step blended the Library's

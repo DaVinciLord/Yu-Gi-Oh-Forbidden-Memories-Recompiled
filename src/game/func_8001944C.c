@@ -8,6 +8,9 @@
 #include "duel_card_staging.h"
 #include "func_8001944C.h"
 #include "graphics_frame.h"
+#ifdef MEMORIES_PC
+#include "pc/sdk/display.h"
+#endif
 
 #define DUEL_CARD_READBACK_HALFWORDS(buffer) ((u16 *)(buffer))
 #define DUEL_CARD_READBACK_WORDS(buffer) ((u32 *)(buffer))
@@ -33,6 +36,10 @@ void DuelCard_CaptureRoundedTexture(DisplayObject *o)
     D_800E9D70[0].w = DUEL_CARD_READBACK_WIDTH_WORDS;
     D_800E9D70[0].h = DUEL_CARD_READBACK_HEIGHT;
     StoreImage2(&D_800E9D70[0], DUEL_CARD_READBACK_WORDS(buf));
+#ifdef MEMORIES_PC
+    /* Where the card was read from: the RECT is reused for the load. */
+    s32 source_x = D_800E9D70[0].x, source_y = D_800E9D70[0].y;
+#endif
 
     p = DUEL_CARD_READBACK_HALFWORDS(buf);
     xoff = DUEL_CARD_READBACK_WORD_COUNT;
@@ -65,4 +72,11 @@ void DuelCard_CaptureRoundedTexture(DisplayObject *o)
     D_800E9D70[0].w = DUEL_CARD_READBACK_WIDTH_WORDS;
     D_800E9D70[0].h = DUEL_CARD_READBACK_HEIGHT;
     LoadImage2(&D_800E9D70[0], DUEL_CARD_READBACK_WORDS(D_8015C424));
+#ifdef MEMORIES_PC
+    /* The burn draws the card from this copy: the port's scaled picture
+     * keeps the card as it was drawn there (a texture pack, HD text), where
+     * VRAM only has it at the console's resolution. */
+    Memories_PictureCapture(source_x, source_y, D_800E9D70[0].x, D_800E9D70[0].y, DUEL_CARD_READBACK_WIDTH_WORDS,
+                            DUEL_CARD_READBACK_HEIGHT);
+#endif
 }

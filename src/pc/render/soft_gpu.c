@@ -512,6 +512,11 @@ void SoftGpu_Move(int sx, int sy, int dx, int dy, int w, int h)
     move_words(sx, sy, dx, dy, w, h);
 }
 
+void SoftGpu_Capture(int sx, int sy, int dx, int dy, int w, int h)
+{
+    if (recorder && scale > 1 && recorder->capture) recorder->capture(sx, sy, dx, dy, w, h);
+}
+
 void SoftGpu_Fill(int x, int y, int w, int h, uint32_t rgb24)
 {
     if (recorder && scale > 1) recorder->fill(x, y, w, h, rgb24);

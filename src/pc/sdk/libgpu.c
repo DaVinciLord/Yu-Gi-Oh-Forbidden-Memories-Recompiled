@@ -526,6 +526,12 @@ int MoveImage(RECT *rect, int x, int y)
     return 0;
 }
 
+void Memories_PictureCapture(int sx, int sy, int dx, int dy, int w, int h)
+{
+    flush_drawing();
+    SoftGpu_Capture(sx, sy, dx, dy, w, h);
+}
+
 int LoadImage2(RECT *rect, u32 *pixels) { return LoadImage(rect, pixels); }
 int StoreImage2(RECT *rect, u32 *pixels) { return StoreImage(rect, pixels); }
 int MoveImage2(RECT *rect, int x, int y) { return MoveImage(rect, x, y); }
