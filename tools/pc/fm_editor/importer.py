@@ -598,6 +598,14 @@ def wa_data(project: Project, retail_files, modded_files, report: list) -> list:
         keep.append((g.STARTER_BASE, g.STARTER_BASE + g.STARTER_LENGTH))
         report.append(f"WA_MRG.MRG: the starter decks are counts of cards (they add up to {', '.join(map(str, starters))}"
                       "), not weights of 2048; the port has no rule for a counted starter deck, so they stay retail's")
+    for sector, sectors, what in g.PROGRAMS:
+        start, end = sector * 2048, (sector + sectors) * 2048
+        changed = sum(1 for a, b in zip(wa_old[start:end], wa_new[start:end]) if a != b)
+        if changed:
+            keep.append((start, end))
+            report.append(f"WA_MRG.MRG: {what} (sector {sector}) differs in {changed} bytes: the mod's own code and "
+                          "data there; the port runs its own code for that program over its data, so it stays "
+                          "retail's")
     runs = _trim(wa_old, wa_new, _subtract(_runs(wa_old, wa_new, 0, min(len(wa_old), len(wa_new))), keep))
     patches, regions, places = [], [], {}
     for start, end in runs:

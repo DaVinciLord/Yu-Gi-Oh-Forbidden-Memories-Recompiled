@@ -75,6 +75,12 @@ DUELIST_STRIDE = 0x1800
 POOL_OFFSETS = {"deck": 0x000, "pow": 0x5B4, "bcd": 0xB68, "tec": 0x111C}
 STARTER_BASE = 0xF92BD4             # the seven starter deck pools the name entry deals from
 STARTER_LENGTH = 7 * (2 + 2 * CARD_COUNT)
+# Program images the game loads at 0x80168000 (sector, sectors, what): the
+# port runs its own code for them, over their data in guest memory, so a
+# mod's code or data there cannot work (src/pc/guest/modules.c).
+PROGRAMS = [(7898, 5, "the Free Duel program"), (7968, 15, "the name entry's program"),
+            (8054, 15, "the password program"), (8153, 16, "the overworld program"),
+            (8311, 16, "the overworld program (after the coup)")]
 
 
 def slus_offset(address: int) -> int:

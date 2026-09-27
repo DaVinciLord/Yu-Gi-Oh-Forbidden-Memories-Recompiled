@@ -55,6 +55,17 @@ class ArchiveTest(unittest.TestCase):
         self.assertEqual(whole[pool:pool + 4], f.wa[pool:pool + 4])
         self.assertIn("its size differs", report)
 
+    def test_the_programs_the_port_runs_stay_retail(self):
+        f = fixture()
+        wa = bytearray(f.wa)
+        sector, sectors, what = g.PROGRAMS[0]
+        wa[sector * 2048 + 100] ^= 0xFF                       # the mod's code in a program the port runs itself
+        wa[0x300] = 9
+        result, report = imported(f, wa=bytes(wa))
+        data = manifest.build(result.project)["data"]
+        self.assertEqual(data, [{"file": importer.WA_FILE, "patch": [{"at": "0x300", "bytes": "09"}]}])
+        self.assertIn(f"{what} (sector {sector}) differs in 1 bytes", report)
+
     def test_few_changes_stay_patches_at_retail_sectors(self):
         f = fixture()
         wa = bytearray(f.wa)
