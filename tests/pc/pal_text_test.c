@@ -31,6 +31,21 @@ int main(void)
     static const unsigned char jump[] = {0xFD, 0x00, 0x02};
     /* The PAL's F8 07 takes a byte; its F8 00 03 is the US F8 00 01. */
     static const unsigned char limit[] = {0xF8, 0x00, 0x03, 0xF8, 0x07, 0x1C, 3, 0xFF};
+    /* The PAL's text sizes: 2 (12x16) is the US letters on lines of 16, 0
+     * back to normal the US 2; the card text's lines of 13 the US 12. */
+    static const unsigned char sizes[] = {0xF8, 0x04, 0x02, 3, 0xF8, 0x04, 0x00, 0xF8, 0x05, 0x08, 0x0D, 0xFF};
+    /* The star chips' heading, 11 letters: wider in the US box's cells of 16
+     * than its 160 pixels, so in cells of 14. */
+    static const unsigned char chips[] = {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 0xFE, 0xF8, 0x04, 0x03, 2, 0xFF};
+    /* Card texts longer than the US view's 8 lines: laid out again in its
+     * width, a hyphen at a line's end before a lowercase word made whole;
+     * nine lines that stay nine (20 letters each) are 11 pixels apart, from
+     * 3 higher. */
+    static unsigned char nine[9 * 21];
+    static const unsigned char ten[] = {3, 0x30, 0xFE, 2, 0xFE, 3, 0xFE, 3, 0xFE, 3, 0xFE, 3, 0xFE,
+                                        3, 0xFE, 3, 0xFE, 3, 0xFE, 3, 0xFF};
+    char expected[512];
+    int n;
     static const unsigned char e[] = {3, 0xFF}, i[] = {2, 0xFF}, accent[] = {0x3F, 0xFF}, name[] = {3, 2, 0xFF};
     PalTextPack pack = {a, b, c, glyphs};
     size_t length = 0;
@@ -53,6 +68,18 @@ int main(void)
     memcpy(a + 0x1030, jump, sizeof(jump));
     put16(a + 4 + 0x04 * 2, 0x1080);
     memcpy(a + 0x1080, limit, sizeof(limit));
+    put16(a + 4 + 0x05 * 2, 0x1040);   /* no words, laid out for the PAL's frames: the US one stays */
+    put16(a + 4 + 0xE1 * 2, 0x1200);   /* the star chips */
+    memcpy(a + 0x1200, chips, sizeof(chips));
+    put16(a + 4 + 0x07 * 2, 0x1090);
+    memcpy(a + 0x1090, sizes, sizeof(sizes));
+    put16(glyphs + 0x30 * 4, 0x817C);   /* - */
+    memset(nine, 3, sizeof(nine));
+    for (n = 1; n <= 9; n++) nine[n * 21 - 1] = n < 9 ? 0xFE : 0xFF;
+    put16(a + 4 + 0x101 * 2, 0x1100);  /* card text 0x101: US D101 */
+    memcpy(a + 0x1100, nine, sizeof(nine));
+    put16(a + 4 + 0x102 * 2, 0x10A0);
+    memcpy(a + 0x10A0, ten, sizeof(ten));
     memcpy(a + 0x0200, e, sizeof(e));
     put16(a + 4 + 0x10 * 2, 0x1040);   /* the debug menu: the US one stays */
     memcpy(a + 0x1040, e, sizeof(e));
@@ -84,6 +111,13 @@ int main(void)
     expect(listing, "[0040]", 0);
     expect(listing, "[0044]", 0);
     expect(listing, "[D100]\nE{end}", 1);
+    expect(listing, "[0005]", 0);
+    expect(listing, "[00E1]\n{f8 05 0E 10}EEEEEEEEEEE\n{f8 04 03}i{end}", 1);
+    expect(listing, "[0007]\n{f8 04 02}{f8 05 08 10}E{f8 04 02}{f8 05 08 0C}{end}", 1);
+    strcpy(expected, "[D101]\n{f8 01 FD}{f8 05 08 0B}");
+    for (n = 0; n < 9; n++) strcat(expected, n < 8 ? "EEEEEEEEEEEEEEEEEEEE\n" : "EEEEEEEEEEEEEEEEEEEE{end}");
+    expect(listing, expected, 1);
+    expect(listing, "[D102]\nEi E E E E E E E E{end}", 1);
     expect(listing, "@bank descriptions", 1);
     expect(listing, "[0500]\n\xC3\xA1{end}", 1);
     expect(listing, "[8001]\nEi{end}", 1);

@@ -21,17 +21,14 @@ botón{end}
 NOMBRE:{call L125A}{f8 16}{end}
 
 [0003]  {:LF004}
-{f8 04 02}{f8 00 00}{f8 02 04}{f8 00 80}{f8 01 18}{f8 0A 05}ESTRELLA GUAR.
+{f8 04 02}{f8 05 08 10}{f8 00 00}{f8 02 04}{f8 00 80}{f8 01 18}{f8 0A 05}ESTRELLA GUAR.
 {f8 0A 00} {f8 00 01} {f8 00 81}
  {f8 00 02} {f8 00 82}{f8 01 18}{cont}
 {:LF005}
-{f8 04 00}{f8 05 08 0D}{f8 00 40}{end}
+{f8 04 02}{f8 05 08 0C}{f8 00 40}{end}
 
 [0004]  {:LF006}
-{f8 04 02}{f8 00 00}{f8 02 04}{f8 00 80}{f8 01 50}{jump LF005}
-
-[0005]
-{f8 0A 05}{f8 03 08 56 1D 80 C3}{f8 01 12}{f8 00 10}{f8 00 20}{end}
+{f8 04 02}{f8 05 08 10}{f8 00 00}{f8 02 04}{f8 00 80}{f8 01 50}{jump LF005}
 
 {:LF007}
 {f8 06 00 00}{f8 07 10 00}{f8 00 20}{end}
@@ -75,12 +72,9 @@ NOMBRE:{call L125A}{f8 16}{end}
 [000D]
   ¡Elige oponente!{end}
 
-[000E]
-{f8 06 00 00}{f8 03 08 56 1D 80 06}{f8 06 2E 02}{f8 03 0C 56 1D 80 02}{f8 01 01}{f8 06 36 01}{f8 03 08 56 1D 80 86}{f8 01 01}{f8 06 06 01}{f8 03 0C 56 1D 80 82}{end}
-
 [000F]
 {f8 0A 05}{f8 01 F0}Spanish
-{f8 0A 00}{f8 04 02}3D{f8 06 80 00}NOMBRE
+{f8 0A 00}{f8 04 02}{f8 05 08 10}3D{f8 06 80 00}NOMBRE
 Campaña{f8 06 80 00}Contraseña
 DUELO{f8 06 80 00}PELÍCULA
 Detalle{f8 06 80 00}Cargar
@@ -107,7 +101,7 @@ SALIR DE TIENDA
 {f8 0A 05}{f8 03 08 56 1D 80 C3}{f8 0A 84}{f8 04 01}{f8 06 1C 00}♂
 {f8 06 1C 00}♀{f8 01 F8}{f8 06 49 00}{f8 00 00}{f8 02 04}{f8 00 01}{f8 02 04}{f8 00 02}{cont}
 {:LF00B}
-{f8 04 00}{f8 06 83 00}{f8 03 0C 56 1D 80 83}{end}
+{f8 04 02}{f8 06 83 00}{f8 03 0C 56 1D 80 83}{end}
 
 [001B]
 {f8 0A 05}{f8 03 08 56 1D 80 C3}{f8 0A 84}{f8 06 49 00}{f8 00 00}{f8 02 04}{f8 00 01}{jump LF00B}
@@ -195,7 +189,7 @@ ORD{end}
 {:LF013}
 {f8 07 18 00}{cont}
 {:LF014}
-{f8 04 00}{f8 06 00 00}{f8 00 20}{cont}
+{f8 04 02}{f8 06 00 00}{f8 00 20}{cont}
 {:LF015}
 {end}
 
@@ -215,7 +209,7 @@ ORD{end}
 {f8 18 LF01E LF01B LF01C LF01D}
 
 {:LF01B}
-{f8 01 0C}{f8 06 4C 00}Espadas de Luz reveladora {f8 04 02}{f8 0A 05}{f8 03 10 56 1D 80 01}{f8 0A 00}{f8 04 00}{end}
+{f8 01 0C}{f8 06 4C 00}Espadas de Luz reveladora {f8 04 02}{f8 05 08 10}{f8 0A 05}{f8 03 10 56 1D 80 01}{f8 0A 00}{f8 04 02}{end}
 
 {:LF01C}
 {f8 06 A8 00}{f8 00 10}ESTRELLA GUAR.{f8 0A 00}{end}
@@ -468,7 +462,7 @@ Equipo de localización
 {f8 0A 00}  Motoyuki YOSHIOKA{end}
 
 [00AD]
-{f8 01 30}{f8 0A 00}{f8 04 00} Creado por
+{f8 01 30}{f8 0A 00}{f8 04 02} Creado por
 
  Konami Computer Entertainment {f8 0A 06}J{f8 0A 00}apan{end}
 
@@ -731,7 +725,7 @@ wxyz
 {f8 16}{end}
 
 {:LF02C}
-{f8 1A}{f8 04 00}Tu código de duelista
+{f8 1A}{f8 04 02}Tu código de duelista
 ha sido registrado.{page}No es posible realizar DUELOS ni
 CAMBIAR con el mismo CÓDIGO DE
 DUELISTA.{end}
