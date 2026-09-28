@@ -67,7 +67,7 @@ NAME:{call L125A}{f8 16}{end}
 
 [000C]
 {f8 09}
-{f8 06 00 00}{f8 0A 02}Sieg {f8 03 08 56 1D 80 03}{f8 06 80 00}{f8 0A 06}Niederlage {f8 03 0C 56 1D 80 03}{end}
+{f8 01 04}{f8 06 00 00}{f8 0A 02}Sieg {f8 03 08 56 1D 80 03}{f8 06 80 00}{f8 0A 06}Niederlage {f8 03 0C 56 1D 80 03}{end}
 
 [000D]
      Gegner wählen!{end}

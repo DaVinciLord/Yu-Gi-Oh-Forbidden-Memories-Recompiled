@@ -7,10 +7,12 @@ import json
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from . import manifest, pools as poolmath, validate
+from . import bulk_dialog, manifest, pools as poolmath, validate
 from .gamedata import (ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, DUELIST_NAMES, POOL_LABELS,
                        POOL_TOTAL, POOLS, STAR_NAMES, STARTER_WEIGHT_LIMIT, TYPE_EQUIP, TYPE_NAMES, TYPE_RITUAL,
                        exodia_piece)
+from . import fixed_decks
+from .fixed_deck_view import FixedDeckView
 from .model import KEY_RE, StarterDeck
 from .widgets import CardField, FormDialog, card_matches, pick_card, px, scrolled_tree, show_text
 
@@ -106,7 +108,7 @@ class CardsTab(Tab):
         self.hints = {}
 
         def hint(key):
-            self.hints[key] = ttk.Label(form, foreground="#777")
+            self.hints[key] = ttk.Label(form, style="Hint.TLabel")
             return self.hints[key]
 
         line("Name", ttk.Entry(form, textvariable=self.vars["name"], width=32), hint("name"))
@@ -128,7 +130,7 @@ class CardsTab(Tab):
         self.text = tk.Text(form, width=21, height=9, wrap="word", font=("Consolas", 10))
         self.text.grid(row=row, column=1, columnspan=2, sticky="w", pady=2)
         row += 1
-        self.lines = ttk.Label(form, foreground="#777")
+        self.lines = ttk.Label(form, style="Hint.TLabel")
         self.lines.grid(row=row, column=1, columnspan=2, sticky="w")
         row += 1
         self.text.bind("<KeyRelease>", lambda e: self.count_lines())
@@ -147,14 +149,14 @@ class CardsTab(Tab):
                         variable=self.opponents).grid(row=3, column=0, columnspan=2, sticky="w")
         ttk.Button(self.added_frame, text="Remove this card", command=self.remove_card).grid(
             row=4, column=0, columnspan=2, sticky="w", pady=(4, 0))
-        self.extra = ttk.Label(form, foreground="#777", wraplength=px(form, 320), justify="left")
+        self.extra = ttk.Label(form, style="Hint.TLabel", wraplength=px(form, 320), justify="left")
         self.extra.grid(row=row, column=0, columnspan=3, sticky="w")
         row += 1
         buttons = ttk.Frame(form)
         buttons.grid(row=row, column=0, columnspan=3, sticky="we", pady=(8, 0))
         ttk.Button(buttons, text="Apply", command=self.apply).pack(side="left")
         ttk.Button(buttons, text="Revert to retail", command=self.revert).pack(side="left", padx=4)
-        self.status = ttk.Label(form, foreground="#c01c28", wraplength=px(form, 320), justify="left")
+        self.status = ttk.Label(form, style="Error.TLabel", wraplength=px(form, 320), justify="left")
         self.status.grid(row=row + 1, column=0, columnspan=3, sticky="w", pady=(6, 0))
         for child in form.winfo_children():
             if isinstance(child, (ttk.Entry, ttk.Spinbox)):
@@ -291,7 +293,7 @@ class CardsTab(Tab):
         text = self.text.get("1.0", "end-1c")
         lines = validate.text_lines(text)
         self.lines.configure(text=f"{lines} of 8 lines (20 letters a line, as the game wraps it)",
-                             foreground="#c01c28" if lines > 8 else "#777")
+                             style="Error.TLabel" if lines > 8 else "Hint.TLabel")
         if self.app.text_preview is not None:
             self.app.text_preview.later()
 
@@ -421,8 +423,9 @@ class FusionsTab(Tab):
         ttk.Button(buttons, text="Change result...", command=self.edit).pack(side="left", padx=4)
         ttk.Button(buttons, text="Remove (no fusion)", command=self.remove).pack(side="left")
         ttk.Button(buttons, text="Revert to retail", command=self.revert).pack(side="left", padx=4)
+        ttk.Button(buttons, text="Bulk...", command=lambda: bulk_dialog.open_bulk(self)).pack(side="left")
         ttk.Label(buttons, text="A pair fuses the same in either order. Brown rows are the retail table's "
-                                "\"glitch\" fusions.", foreground="#777").pack(side="right")
+                                "\"glitch\" fusions.", style="Hint.TLabel").pack(side="right")
 
     def refresh(self):
         self.fill()
@@ -642,7 +645,7 @@ class RitualsTab(Tab):
         ttk.Button(buttons, text="Remove recipe", command=self.remove).pack(side="left", padx=4)
         ttk.Button(buttons, text="Revert to retail", command=self.revert).pack(side="left")
         ttk.Label(buttons, text="A ritual is one of the disc's ritual cards; the three tributes are monsters on "
-                                "the field.", foreground="#777").pack(side="right")
+                                "the field.", style="Hint.TLabel").pack(side="right")
 
     def refresh(self):
         self.fill()
@@ -741,6 +744,7 @@ class DuelistsTab(Tab):
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.pick_row())
         edit = ttk.Frame(right)
         edit.pack(fill="x")
+        self.fixed = FixedDeckView(self, right, top)     # the deck pool may be forty cards written down
         ttk.Button(edit, text="Add a card...", command=self.add).pack(side="left")
         ttk.Label(edit, text="Weight").pack(side="left", padx=(10, 2))
         self.weight = tk.StringVar()
@@ -752,7 +756,7 @@ class DuelistsTab(Tab):
         ttk.Button(edit, text="Normalize to 2048", command=self.normalize).pack(side="left", padx=4)
         ttk.Button(edit, text="Revert pool", command=self.revert).pack(side="left")
         ttk.Label(right, text="Weights are chances out of 2048. A deck is 40 cards dealt from at least 14; "
-                              "a drop pool needs one card left.", foreground="#777").pack(anchor="w", pady=(4, 0))
+                              "a drop pool needs one card left.", style="Hint.TLabel").pack(anchor="w", pady=(4, 0))
 
     def refresh(self):
         self.fill_list()
@@ -765,8 +769,8 @@ class DuelistsTab(Tab):
         for d, name in enumerate(DUELIST_NAMES[:len(self.project.pools)]):
             changed = any({c: w for c, w in self.project.pools[d][p].items() if w} != self.project.retail.pools[d][p]
                           for p in POOLS)
-            self.list.insert("", "end", iid=str(d), values=(d, name, "changed" if changed else ""),
-                             tags=("changed",) if changed else ())
+            state = "fixed" if fixed_decks.deck_of(self.project, d) else "changed" if changed else ""
+            self.list.insert("", "end", iid=str(d), values=(d, name, state), tags=("changed",) if state else ())
         if self.list.exists(str(self.duelist)):
             self.list.selection_set(str(self.duelist))
 
@@ -780,7 +784,7 @@ class DuelistsTab(Tab):
         return self.project.pools[self.duelist][self.pool.get()]
 
     def fill(self):
-        if self.project is None:
+        if self.project is None or self.fixed.fill():
             return
         p = self.project
         self.tree.delete(*self.tree.get_children())
@@ -798,7 +802,7 @@ class DuelistsTab(Tab):
         total = sum(pool.values())
         cards = sum(1 for w in pool.values() if w)
         self.total.configure(text=f"{DUELIST_NAMES[self.duelist]}: {cards} cards, total {total} / {POOL_TOTAL}",
-                             foreground="#26a269" if total == POOL_TOTAL else "#c01c28")
+                             style="Ok.TLabel" if total == POOL_TOTAL else "Error.TLabel")
 
     def pick_row(self):
         selection = self.tree.selection()
@@ -917,7 +921,7 @@ class StarterTab(Tab):
         ttk.Label(right, text=f"A deck is exactly {DECK_SIZE} cards written down, so it may hold a card the mod "
                               f"adds. More than {DECK_COPY_LIMIT} copies, or more than one Exodia piece, is dealt "
                               "as written but Build Deck will not take it back.",
-                  foreground="#777", wraplength=px(self, 520), justify="left").pack(anchor="w", pady=(4, 0))
+                  style="Hint.TLabel", wraplength=px(self, 520), justify="left").pack(anchor="w", pady=(4, 0))
 
     # --- the list ----------------------------------------------------------
 
@@ -957,7 +961,7 @@ class StarterTab(Tab):
         self.tree.delete(*self.tree.get_children())
         if deck is None:
             self.title.configure(text="No starter deck")
-            self.total.configure(text="", foreground="")
+            self.total.configure(text="", style="TLabel")
             return
         p = self.project
         for cid in sorted(deck.cards):
@@ -978,7 +982,7 @@ class StarterTab(Tab):
         self.title.configure(text=deck.name or "(unnamed)")
         total = deck.total()
         self.total.configure(text=f"{total} / {DECK_SIZE} cards",
-                             foreground="#26a269" if total == DECK_SIZE else "#c01c28")
+                             style="Ok.TLabel" if total == DECK_SIZE else "Error.TLabel")
 
     def pick_row(self):
         selection = self.tree.selection()
@@ -1009,7 +1013,7 @@ class StarterTab(Tab):
             ttk.Entry(body, textvariable=fields["weight"], width=10).grid(row=1, column=1, sticky="w", pady=2)
             ttk.Label(body, text=f"How often this deck is the one picked, against the other decks\n"
                                  f"offered. 0 is a deck that is kept but never picked.",
-                      foreground="#777").grid(row=2, column=0, columnspan=2, sticky="w", pady=(6, 0))
+                      style="Hint.TLabel").grid(row=2, column=0, columnspan=2, sticky="w", pady=(6, 0))
 
         def ok(dialog):
             text = fields["weight"].get().strip()
@@ -1127,7 +1131,7 @@ class ModInfoTab(Tab):
         ttk.Label(form, text="Description").grid(row=4, column=0, sticky="nw", pady=2)
         self.description = tk.Text(form, width=70, height=4, wrap="word")
         self.description.grid(row=4, column=1, sticky="w", pady=2)
-        self.folder = ttk.Label(form, foreground="#777")
+        self.folder = ttk.Label(form, style="Hint.TLabel")
         self.folder.grid(row=5, column=1, sticky="w")
         boxes = ttk.Frame(self)
         boxes.pack(fill="both", expand=True, pady=(8, 0))
@@ -1140,7 +1144,7 @@ class ModInfoTab(Tab):
         right.pack(side="left", fill="both", expand=True, padx=(8, 0))
         self.other = tk.Text(right, width=60, height=14, wrap="none", font=("Consolas", 10))
         self.other.pack(fill="both", expand=True)
-        self.status = ttk.Label(self, foreground="#c01c28")
+        self.status = ttk.Label(self, style="Error.TLabel")
         self.status.pack(anchor="w")
         buttons = ttk.Frame(self)
         buttons.pack(fill="x")
@@ -1212,7 +1216,7 @@ class ProblemsTab(Tab):
         ttk.Button(top, text="Check now", command=self.run).pack(side="left")
         self.summary = ttk.Label(top)
         self.summary.pack(side="left", padx=8)
-        ttk.Label(top, text="Double-click a line to go to it.", foreground="#777").pack(side="right")
+        ttk.Label(top, text="Double-click a line to go to it.", style="Hint.TLabel").pack(side="right")
         frame, self.tree = scrolled_tree(self, [("level", "Level"), ("area", "Where"), ("what", "What"),
                                                 ("message", "Problem")], [70, 90, 260, 560], 26)
         frame.pack(fill="both", expand=True, pady=4)
@@ -1233,7 +1237,7 @@ class ProblemsTab(Tab):
                              tags=(issue.level,))
         errors = len(validate.errors(self.issues))
         self.summary.configure(text=f"{errors} errors, {len(self.issues) - errors} warnings",
-                               foreground="#c01c28" if errors else "#26a269")
+                               style="Error.TLabel" if errors else "Ok.TLabel")
         return self.issues
 
     def go(self):

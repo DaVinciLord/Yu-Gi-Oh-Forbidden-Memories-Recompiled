@@ -1,13 +1,11 @@
 """The FM Editor window."""
 from __future__ import annotations
 
-import os
 import tkinter as tk
-import tkinter.font as tkfont
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from . import disc, gamedata, manifest, validate
+from . import disc, gamedata, manifest, settings, theme, validate
 from .model import KEY_RE, Project
 from .art_tab import ArtTab
 from .tabs import (CardsTab, DuelistsTab, EquipsTab, FusionsTab, ModInfoTab, ProblemsTab, RitualsTab,
@@ -21,22 +19,18 @@ class App(tk.Tk):
     def __init__(self, game=None, mod=None, ask=True, autostart=True):
         super().__init__()
         self.title(APP_TITLE)
-        style = ttk.Style(self)
-        try:
-            style.theme_use("vista" if os.name == "nt" else "clam")
-        except tk.TclError:
-            pass
+        self.theme = theme.Theme(self)
         # Sizes for 96 dpi, grown with the desktop's font (widgets.ui_scale)
         # but kept on the screen; a row as tall as a line of text.
         width, height = self.winfo_screenwidth() * 9 // 10, self.winfo_screenheight() * 9 // 10
         self.geometry(f"{min(px(self, 1280), width)}x{min(px(self, 800), height)}")
         self.minsize(min(px(self, 1000), width), min(px(self, 640), height))
-        style.configure("Treeview", rowheight=tkfont.nametofont("TkDefaultFont", root=self).metrics("linespace") + 4)
         self.retail = None
         self.files = None
         self.project = None
         self.dirty = False
         self.hooks = []            # extra menu entries (importers) add themselves here
+        self.dark = tk.BooleanVar(self, value=settings.load().get("dark") is True)
         self.text_preview = None   # Tools > Card text preview, while open
         self.build_menu()
         self.notebook = ttk.Notebook(self)
@@ -54,6 +48,8 @@ class App(tk.Tk):
                      self.info, self.problems]
         self.status = ttk.Label(self, relief="sunken", anchor="w", padding=(6, 2))
         self.status.pack(fill="x", side="bottom")
+        if self.dark.get():
+            self.theme.use(True)
         self.notebook.bind("<<NotebookTabChanged>>", lambda e: self.tab_changed())
         self.protocol("WM_DELETE_WINDOW", self.quit_app)
         # On the window, not bind_all: a dialog's keys stay its own. Text's
@@ -89,10 +85,21 @@ class App(tk.Tk):
         tools.add_command(label="Preview mod.json", command=lambda: self.info.preview())
         tools.add_command(label="Card text preview", command=self.show_text_preview)
         bar.add_cascade(label="Tools", menu=tools)
+        view = tk.Menu(bar, tearoff=False)
+        view.add_checkbutton(label="Dark mode", variable=self.dark, command=self.toggle_dark)
+        bar.add_cascade(label="View", menu=view)
         helps = tk.Menu(bar, tearoff=False)
         helps.add_command(label="About", command=self.about)
         bar.add_cascade(label="Help", menu=helps)
         self.config(menu=bar)
+
+    def toggle_dark(self):
+        """View > Dark mode: the whole window and its dialogs at once, and
+        remembered for the next start (settings.py)."""
+        self.theme.use(self.dark.get())
+        problem = settings.save("dark", self.dark.get())
+        if problem:
+            self.say(f"Could not remember the dark mode: {problem}")
 
     def show_text_preview(self):
         """The selected card's text as the card view draws it (preview.py)."""

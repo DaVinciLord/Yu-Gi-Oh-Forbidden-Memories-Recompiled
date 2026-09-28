@@ -65,7 +65,7 @@ touche {f8 0B 24}  SÉLECTION RÉUSSIE !
 
 [000C]
 {f8 09}
-{f8 06 10 00}{f8 0A 02}Victoire {f8 03 08 56 1D 80 03}{f8 06 A0 00}{f8 0A 06}Défaite {f8 03 0C 56 1D 80 03}{end}
+{f8 01 04}{f8 06 10 00}{f8 0A 02}Victoire {f8 03 08 56 1D 80 03}{f8 06 A0 00}{f8 0A 06}Défaite {f8 03 0C 56 1D 80 03}{end}
 
 [000D]
   Choisir Adversaire !{end}

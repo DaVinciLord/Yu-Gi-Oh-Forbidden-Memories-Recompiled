@@ -224,7 +224,12 @@ settings file), `MEMORIES_HEADLESS=1`,
 `MEMORIES_WINDOW_SHOT=N` (save the window as shown at frame N, as the
 screenshot key does, into `MEMORIES_SCREENSHOT_DIR` or the user folder),
 `MEMORIES_SCALE_AT=N:S` (change the internal resolution to S at frame N, as
-the View menu would), `MEMORIES_MODE_AT=N:M[,N:M...]` (from frame N on, the
+the View menu would), `MEMORIES_RESTART_ENV="NAME=value;NAME=;..."` (the
+environment a restart of the game, `Platform_RestartGame`, starts the next
+one with, an empty value removing the name, so a check can drive the game
+past the restart instead of replaying its `MEMORIES_INPUT`; applied by the
+game itself, so on Windows only with `MEMORIES_NO_MONITOR=1`),
+`MEMORIES_MODE_AT=N:M[,N:M...]` (from frame N on, the
 next main mode a screen publishes becomes M, `main_modes.h`; M 0 is the
 game's debug menu, reached with the options case's input; see
 `notes/image-remaster.md`),
@@ -329,13 +334,21 @@ address. Checked from a state at the ending's last dialogue, mashing Cross
 The retail game never leaves the credits: `Main_RunCredits` runs the scene in
 its last phase, after the save and the secret number, and drops the answer of
 `Model_IsCreditsPresentationComplete`, so the screen stays on the last credit
-until the console is reset. The port publishes the main menu's mode three
-seconds after the presentation is complete (`platform/credits.c`), so the
-game always goes back to the title; the game's code is unchanged. (It was a
-setting, `return_after_credits`, on by default, until the Game menu was
-trimmed; the key is ignored now.) Checked by entering the ending with `MEMORIES_MODE_AT=1000:15`,
-declining the save and running 60,000 frames: the main menu with the
-setting, the last credit without it.
+until the console is reset. The port resets it three seconds after the
+presentation is complete (`platform/credits.c`, `Platform_RestartGame`):
+the game starts again with the logos, as the console would; the game's code
+is unchanged. (It was a setting, `return_after_credits`, on by default,
+until the Game menu was trimmed; the key is ignored now.) It used to publish
+the main menu's mode instead, which still happens if the restart fails. That
+went back to the title with the credits' VRAM in place: the presentation
+uploads over palettes the boot uploads once (y 240-248 from x 512, y 248
+from x 0, x 480-511 from y 256), and the Build Deck trunk before a Free
+Duel came out green. Game > Restart game in the credits restarts the game
+too (see "Back to the title screen"). Checked by entering the ending with
+`MEMORIES_MODE_AT=1000:15`, declining the save and letting it end (the
+presentation is complete at frame 7308 with the options-case input): the
+game boots again and a loaded save's Build Deck trunk before a Free Duel is
+blue, as without the credits.
 
 ### Where the player's files go
 
@@ -503,6 +516,23 @@ dropped. It does not boot the game again (logos and intro): that would mean
 resetting the whole guest (RAM, VRAM, SPU, disc) under the running C code,
 while the title is what a player restarting wants.
 
+The credits are the exception: from them both items restart the program
+(`Platform_RestartGame`, the language change's restart), and the game boots
+again. Retail never leaves the credits but by a reset, and their
+presentation takes over what only the boot before `Main_Init`'s `setjmp`
+sets up. Its first step moves the music buffer into its own area
+(`SD_SetMusicTrackBuffer(D_80010034)`, `model_intro_controller.c`) and only
+its last step moves it back, so a jump during the credits left the sound
+driver's VAB header (`D_8009B458` + 0x4A8, the buffer + 0x50) in memory
+that the next screens load over. The first duel's music then read a program
+table out of it: a player's Free Duel after Restart game in the credits
+crashed in `func_8004ADE8` reading 0x80549544, and the minidump holds the
+header pointer 0x80185D24, `D_80010034` (0x80185CD4) + 0x50. The
+presentation also uploads over resident VRAM palettes, the Build Deck
+trunk's among them (green instead of blue), which only the boot puts there.
+A restart keeps the settings file and the saves; what is not saved is lost,
+as with a reset, and the credits come after their save.
+
 Debug > Jump to > Title Screen leaves whatever is running for the title, the
 way the retail game leaves a campaign loss. `Main_RunGameOver` fades the
 music and the screen out, asks for the title menu (`D_8009B268 = 1`,
@@ -538,8 +568,16 @@ eleven screens reached with `MEMORIES_MODE_AT` from the options case: debug
 menu, campaign, Library, map, Free Duel, Build Deck, name entry, Password,
 Options, game over and Trade. After each one, the title and then the main
 menu on Start come back pixel-identical. In the credits, a request made while
-their save slot menu was open waited, and the jump came once Cross had saved
-to a slot. By mouse (`MEMORIES_SDL_SCRIPT`), the item jumps from a duel and
+their save slot menu was open waited, and the jump (now the restart) came
+once Cross had saved to a slot. The restart from the credits was checked
+headless with the options-case input, `MEMORIES_MODE_AT=1000:15`, the save
+declined, `MEMORIES_TITLE_AT=2000` in the credits scene and
+`MEMORIES_RESTART_ENV` driving the new game: Load, Free Duel, Simon Muran,
+the Build Deck trunk and the duel. Before, the trunk was green and the duel
+crashed as the player's did (`func_8004ADE8` reading 0x80549544, with and
+without the player's mods); after, the restarted game's frames at the trunk
+and in the duel are byte-identical to a fresh launch's, and so are they
+after the credits' own end. By mouse (`MEMORIES_SDL_SCRIPT`), the item jumps from a duel and
 is disabled at the title. Restart game was checked the same way in a
 campaign conversation reached with the `duel-hand-camera` smoke input: No
 closed the question and the game went on, Yes brought the title back with
@@ -1295,6 +1333,18 @@ Each buffer is resolved into its texture wherever the texture is read: a
 move's source, a target's centre, and the end of each replay, for
 presenting and frame dumps. A GPU cannot copy into a multisampled buffer,
 so the pass draws what it copies in as a quad.
+
+Without anti-aliasing a polygon's vertices move half a picture pixel
+right and down, so GL, which tests pixel centres, draws the pixels whose
+corners the software pass tests. With it, a pixel is drawn as much as its
+area is covered, and that move left half of every pixel along an edge on a
+word boundary uncovered: a dark column at x 192 of the duel's stone bar,
+where the left half's rectangles meet its mirrored right half, a quad (and
+a line along the quad's top and right). Into a multisampled buffer the
+vertices stay where they are and the fragment shader takes the attributes
+half a pixel up and left, at the pixel's corner, the same values
+(gl_picture.c, triangle()). In the bar the picture is then identical to
+anti-aliasing off, but for the field's slanted edges at its corners.
 
 The buffers cover all of VRAM at the scale. With 8 samples that is about
 256 MB of video memory at 4x and 1 GB at 8x. Where the driver has no room,
@@ -2177,14 +2227,21 @@ is written: `crash-<pid>.txt` or `hang-<pid>.txt` in `Crash_ReportDir`,
 with a message box naming it (not when headless or scripted;
 `MEMORIES_CRASH_DIALOG=0/1` decides). The two share a block of memory the
 game writes and the monitor reads, so what the game knew survives however
-it ended: facts (build and commit, OS or Wine version, CPU, memory, GPU and
-driver, SDL video and audio drivers, every setting, the applied mods), the
+it ended: facts (build and commit, OS or Wine version, CPU, memory, on
+Windows whether DEP is on for the game and the system's DEP policy, GPU and
+driver, SDL video and audio drivers, every setting but the retired ones, the
+applied mods), the
 runtime module last loaded, the frame and VBlank counts, and the last 128
 lines of the log. The mods, state, memory card and duel model channels are
 kept there even when not traced (`Log_Wanted`). The game's console output
 passes through the monitor into `last-session.log` (the run before in
 `previous-session.log`) and its last 200 lines into the report. The home
 folder is written `~` in the monitor's part of a report.
+
+Help > System info for bug reports shows the same facts with the build's
+version (all but the settings line), puts them all on the clipboard (the X11
+backend has none) and writes them to `system-info.txt` in the user folder,
+for a report that has no crash behind it (`Monitor_Facts`, `menu.c`).
 
 - A crash the game's handlers see (`crash.c`) is reported by them first,
   in the same file; the monitor adds its section after it. What they cannot

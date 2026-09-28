@@ -146,6 +146,13 @@ void Platform_AudioStats(int *queued_frames, unsigned *underruns)
     if (underruns) *underruns = 0;
 }
 
+/* No clipboard owner here: Help > System info falls back to its file. */
+int Platform_CopyText(const char *text)
+{
+    (void)text;
+    return 0;
+}
+
 void Platform_Screenshot(int window_image)
 {
     const char *directory = getenv("MEMORIES_SCREENSHOT_DIR");

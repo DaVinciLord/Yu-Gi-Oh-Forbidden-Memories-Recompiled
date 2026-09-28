@@ -24,10 +24,10 @@ The window has a tab per table:
 |---|---|
 | Cards | search and filter the 722 cards; name, card text (with the game's 20-letter, 8-line wrapping counted, and **Tools > Card text preview** to see it as the card view draws it, below), ATK/DEF, type, attribute, level, guardian stars; the retail value beside each field. **Add a card** copies the selected one as a new card with a stable id |
 | Art | a card's picture (102x96), thumbnail (40x32, the hand and the field) and name plate (96x14) as the disc has them, beside what the game will draw at the console's resolution and at Internal 2x/4x; **Import PNG**, **Export** the disc's or the mod's (to paint over), **Revert** |
-| Fusions | every pair and its result (search by a card, or show the changed ones); add, change, remove (the pair no longer fuses) or revert |
+| Fusions | every pair and its result (search by a card, or show the changed ones); add, change, remove (the pair no longer fuses) or revert; **Bulk...** adds or takes away the fusions of every card of one filtered set with every card of another (below) |
 | Equips | per equip card, the monsters it may equip; add one, add or remove a whole type, remove, revert |
 | Rituals | per ritual card, its three tributes and the monster it summons |
-| Duelists | per opponent, the deck pool and the S/A-POW, B/C/D and S/A-TEC drop pools: weights, their chance, the retail weight, and the total against 2048 (**Normalize** scales a pool back to 2048 the way the port does) |
+| Duelists | per opponent, the deck pool and the S/A-POW, B/C/D and S/A-TEC drop pools: weights, their chance, the retail weight, and the total against 2048 (**Normalize** scales a pool back to 2048 the way the port does). The deck is either the **Weighted deck (retail)** or a **Fixed deck (40 cards)**: forty specific cards by their copies, counted against 40, each beside its weighted chance; **Copy the weighted deck's most likely 40**, **Clear**, **Revert to retail** |
 | Starter decks | the decks a new game may be dealt in place of the disc's weighted pools: a deck's name, its weight against the other decks offered, and its cards by their copies, counted against the forty a deck holds |
 | Mod info | id, name, version, author, description, `settings`, and the other `mod.json` keys, kept as written |
 | Problems | the loader's checks; double-click a line to go to it |
@@ -38,6 +38,58 @@ made; the port's player mods are in `Documents\My Games\YFM Re-Decomp\mods`).
 Enable the mod in the game under **Game > Mods** and restart. **File > Open
 mod folder** opens a mod over retail. Save refuses nothing, but lists what
 the loader would refuse first.
+
+**View > Dark mode** switches the window, its dialogs and the text boxes,
+lists and menus to a dark look at once, and back (no restart); the editor
+remembers it in its own settings file, `%APPDATA%\FM Editor\settings.json`
+on Windows (`~/.config/fm-editor/settings.json`, or under
+`XDG_CONFIG_HOME`, elsewhere), never in the mod or the game's folders. Off,
+the editor looks as it always has (the desktop's "vista" theme on Windows,
+"clam" elsewhere). The dark look is a clam theme recolored (`theme.py`;
+text at least 4.5:1 against its background); the Art tab's pictures keep
+their pixels. On Windows the title bar turns dark too (Windows 10 1809 and
+later), and since Windows draws a menu bar light whatever it is asked, a
+strip of menu buttons with the same menus stands in for it (Alt+letter and
+F10 open them). Left light: the thin frame Windows draws around an open
+menu, and the system's own dialogs (message boxes, choosing a file or
+folder).
+
+### Bulk fusions
+
+**Bulk...** in the Fusions tab (`bulk_dialog.py`, the rules in
+`bulk_fusions.py`) pairs every card of **Material A** with every card of
+**Material B**. Each side is chosen by filters that must all hold, empty
+meaning any card: kind (monster, magic, trap, ritual, equip), monster type,
+attribute, guardian star (either of the two), ATK, DEF and level ranges,
+words of the name or of the card text as the editor shows them (any case),
+a list of cards (numbers, ranges such as `10-20`, names) and "only cards a
+fusion makes". **A → B** copies one side's filters to the other.
+
+* **Result**: one card, or "the weakest of these that beats both materials"
+  (a list of monsters; each pair gets the one with the least ATK above both
+  materials', the way the disc's type fusions climb). "Only when the
+  result's ATK beats both materials'" skips the pairs it would not; a card
+  with itself is left out unless allowed.
+* **A pair that already fuses** keeps its result, or has it replaced. What
+  "already fuses" means is the port's reading: the pair's rule, or for a
+  card the mod adds, its base's (`Tables_Fusion`); a pair a rule forbids
+  (`null`) fuses with nothing and is free. A pair already making the chosen
+  card is left alone.
+* **Take fusions away** uses the same filters, optionally only the fusions
+  that make one card.
+* A+B and B+A are one pair, as in the game: a pair both sets make twice is
+  counted once.
+
+The preview says, as the filters change, how many pairs are added,
+replaced, kept or skipped and why, lists the first 300, and counts the
+fusion rules the mod would carry. **Apply** asks first; **Undo last batch**
+puts back the pairs the batch changed (not those edited since). The mod
+writes rules, not the disc's 64 KB table, so neither that table's size nor
+its count byte per card limits a batch: every pair of the 722 cards is
+261,003 rules, a 24 MB `mod.json` the port reads in about 3 s. A batch that
+would leave the mod past 300,000 rules is refused. Ports built before the
+bulk fusions read a long `fusions` list in quadratic time (20,000 rules took
+about a minute); use a current build.
 
 ## Game files
 
@@ -78,8 +130,29 @@ record are shown as retail fusions and marked.
 * `drops` and `decks`: per opponent and pool, the fewest listed weights that
   make the port's arithmetic (`tables.c`, mirrored in `pools.py`) come out
   at exactly the edited pool; an edit every opponent shares is written once
-  as `"all"`. A fixed deck (`"fixed": true`) is kept as written; the
-  Duelists tab shows the weighted deck under it.
+  as `"all"`.
+* Fixed decks (`"decks": {"Simon Muran": {"fixed": true, "Kuriboh": 4, ...}}`,
+  `fixed_decks.py`, read by `tables.c` `read_fixed_deck`): an opponent's deck
+  as forty specific cards, in place of its weighted pool, shuffled for each
+  duel. A card has 0 to 40 copies (no limit of three: the weighted deal's
+  limit does not apply to cards written down), and they add up to exactly 40;
+  a card the port cannot name is left out uncounted, so a deck naming one, or
+  one that is not 40, is left out and the weighted deck is dealt. The
+  Problems tab says so before saving, and warns when one duelist has two
+  entries (the port deals the later) or weighted edits a fixed deck hides.
+  Choosing **Fixed deck** starts from the forty the weighted deck most likely
+  deals: its weights apportioned to 40 cards (largest remainder, ties to the
+  heavier card and then the lower id), at most three of a card as the retail
+  deal allows. Choosing **Weighted deck** again keeps the fixed one aside
+  until the mod is closed; **Revert to retail** takes it out and puts the
+  weighted deck back to the disc's. The weighted pool's own edits stay in the
+  project while a deck is fixed, but a fixed deck written under the same key
+  takes their place. A deck the editor read is written back exactly as it
+  was while it is untouched (and still names the same cards: a card named by
+  an added card's identity follows a new mod id); a changed or new one is
+  written as `"fixed": true`, the cards in id order, then any name it could
+  not place. An entry for `"all"`, or for a duelist a mod adds, is kept as
+  written. Drops and the other duelist data are not touched by any of this.
 * `starter`: the decks a new game may be dealt
   ([the starter deck](../../../notes/starter-deck.md)), each written down as
   its cards and their copies rather than as weights — which is what lets one
@@ -208,7 +281,8 @@ recomp is used.
 Before saving, the editor runs the loader's checks (`validate.py`): the mod
 id, settings, ATK/DEF in tens up to 5110, levels, a copy staying on its
 base's side, equip and ritual cards of the right type, a deck pool of at
-least 14 cards, a drop pool with a card left, and pools adding up to 2048.
+least 14 cards, a drop pool with a card left, pools adding up to 2048, and a
+fixed deck of exactly 40 cards the editor can name.
 For the art, the texture pack loader's (`texture_pack.c`): `textures` inside
 the mod and its `manifest.json` an array; each entry's `file` and `archive`,
 the file inside the pack and there, its measures (offset, words 1-1024,
@@ -300,6 +374,7 @@ the source as above works too.
 
 (ctest `pc_fm_editor`). The tests build synthetic game files at the retail
 offsets (`tests/fixtures.py`), art records included, and their PNGs in code;
-they need no game data. PNGs are read and written by `pngio.py`, in plain
-Python like the rest; the card-text preview's tests build their font page
-and a TrueType file in code as well (`tests/test_card_text.py`).
+they need no game data (the bulk fusion tests time a 722 x 722 preview). PNGs are
+read and written by `pngio.py`, in plain Python like the rest; the card-text
+preview's tests build their font page and a TrueType file in code as well
+(`tests/test_card_text.py`).

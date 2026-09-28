@@ -41,6 +41,10 @@ int main(void)
      * width, a hyphen at a line's end before a lowercase word made whole;
      * nine lines that stay nine (20 letters each) are 11 pixels apart, from
      * 3 higher. */
+    /* Free Duel's record, the name and a line below it: that line 16 pixels
+     * under the first, as the PAL's lines are, not the US 12 (the first
+     * break only). */
+    static const unsigned char record[] = {0xF8, 0x09, 0xFE, 3, 0xFE, 3, 0xFF};
     static unsigned char nine[9 * 21];
     static const unsigned char ten[] = {3, 0x30, 0xFE, 2, 0xFE, 3, 0xFE, 3, 0xFE, 3, 0xFE, 3, 0xFE,
                                         3, 0xFE, 3, 0xFE, 3, 0xFE, 3, 0xFF};
@@ -71,6 +75,8 @@ int main(void)
     put16(a + 4 + 0x05 * 2, 0x1040);   /* no words, laid out for the PAL's frames: the US one stays */
     put16(a + 4 + 0xE1 * 2, 0x1200);   /* the star chips */
     memcpy(a + 0x1200, chips, sizeof(chips));
+    put16(a + 4 + 0x0C * 2, 0x1300);   /* Free Duel's record */
+    memcpy(a + 0x1300, record, sizeof(record));
     put16(a + 4 + 0x07 * 2, 0x1090);
     memcpy(a + 0x1090, sizes, sizeof(sizes));
     put16(glyphs + 0x30 * 4, 0x817C);   /* - */
@@ -114,6 +120,7 @@ int main(void)
     expect(listing, "[D100]\nE{end}", 1);
     expect(listing, "[0005]", 0);
     expect(listing, "[00E1]\n{f8 05 0D 10}EEEEEEEEEE E\n{f8 04 03}i{end}", 1);
+    expect(listing, "[000C]\n{f8 09}\n{f8 01 04}E\nE{end}", 1);
     expect(listing, "[0007]\n{f8 04 02}{f8 05 08 10}E{f8 04 02}{f8 05 08 0C}{end}", 1);
     strcpy(expected, "[D101]\n{f8 01 FD}{f8 05 08 0B}");
     for (n = 0; n < 9; n++) strcat(expected, n < 8 ? "EEEEEEEEEEEEEEEEEEEE\n" : "EEEEEEEEEEEEEEEEEEEE{end}");

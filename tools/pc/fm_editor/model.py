@@ -134,7 +134,7 @@ class Project:
         self.other = {}                 # top-level keys the editor keeps as written (data, text, audio...)
         self.kept = {"fusions": [], "equips": [], "rituals": []}   # rules naming cards it cannot place
         self.kept_pools = {}            # (duelist or "all", pool) -> {name: weight} it cannot place
-        self.kept_fixed = {}            # opponent's name -> a fixed deck ("fixed": true), kept as written
+        self.fixed = {}                 # key as written -> fixed_decks.FixedDeck ("fixed": true), in order
         self.starter = []               # StarterDeck: the decks a new game may be dealt
         self.starter_file = None        # "starter" naming a file of the mod's, kept as written
         self.kept_opponents = {}        # "decks"/"drops" -> {name: entry} naming a duelist it cannot place
