@@ -44,9 +44,10 @@ static char *read_pack(size_t *length)
 {
     FILE *file = fopen(LANGUAGE_PACK, "rb");
     char *text;
-    long size;
+    long size = -1;
     assert(file);
-    assert(!fseek(file, 0, SEEK_END) && (size = ftell(file)) > 0 && !fseek(file, 0, SEEK_SET));
+    if (!fseek(file, 0, SEEK_END)) size = ftell(file);
+    assert(size > 0 && !fseek(file, 0, SEEK_SET));
     text = malloc((size_t)size + 1);
     assert(text && fread(text, 1, (size_t)size, file) == (size_t)size);
     fclose(file);
