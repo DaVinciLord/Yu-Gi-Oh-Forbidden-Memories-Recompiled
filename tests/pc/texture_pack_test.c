@@ -206,8 +206,7 @@ static void made_image(void)
 int main(void)
 {
     char path[1024], problems[256];
-    scratch_template(root, sizeof(root), "memories-texture-pack");
-    assert(mkdtemp(root));
+    assert(scratch_dir(root, sizeof(root), "memories-texture-pack"));
     make_dir("pack");
     write_text("pack/a.png", "\x89PNG\r\n\x1a\n");
     write_text("pack/manifest.json",

@@ -11,8 +11,7 @@
 int main(void)
 {
     char dir[SCRATCH_MAX], path[SCRATCH_MAX + 64], error[256] = {0};
-    scratch_template(dir, sizeof(dir), "memories-controls");
-    assert(mkdtemp(dir));
+    assert(scratch_dir(dir, sizeof(dir), "memories-controls"));
     snprintf(path, sizeof(path), "%s/controls.txt", dir);
     assert(!setenv("MEMORIES_CONTROLS", path, 1));
     ControlsConfig a, b;

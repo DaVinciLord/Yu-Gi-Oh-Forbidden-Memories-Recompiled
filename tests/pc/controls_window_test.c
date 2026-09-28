@@ -25,8 +25,7 @@ void Menu_DrawTextScaled(MenuCanvas *c, int x, int y, const char *s, uint32_t co
 int main(void)
 {
     char dir[SCRATCH_MAX], path[SCRATCH_MAX + 64];
-    scratch_template(dir, sizeof(dir), "memories-window");
-    assert(mkdtemp(dir));
+    assert(scratch_dir(dir, sizeof(dir), "memories-window"));
     snprintf(path, sizeof(path), "%s/controls.txt", dir);
     setenv("MEMORIES_CONTROLS", path, 1);
     MenuCanvas c = {0};

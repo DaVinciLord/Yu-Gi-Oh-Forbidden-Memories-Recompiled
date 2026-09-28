@@ -83,8 +83,7 @@ int main(int argc, char **argv)
     size_t length;
     unsigned char *exe;
     assert(argc == 2);
-    scratch_template(root, sizeof(root), "memories-rom");
-    assert(mkdtemp(root));
+    assert(scratch_dir(root, sizeof(root), "memories-rom"));
     assert(!change_dir(root));
     assert(!unsetenv("MEMORIES_DISC"));
     assert(!unsetenv("MEMORIES_HEADLESS"));

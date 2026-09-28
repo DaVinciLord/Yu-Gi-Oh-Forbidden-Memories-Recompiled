@@ -414,8 +414,7 @@ int main(void)
     test_ids();
     test_decode();
     test_vorbis();
-    scratch_template(root, sizeof(root), "memories-audio");
-    made = mkdtemp(root);
+    made = scratch_dir(root, sizeof(root), "memories-audio");
     assert(made);
     test_manifest();
     printf("audio replacement: ok\n");

@@ -22,13 +22,11 @@ static int contains(const char *path, const char *wanted)
 
 int main(void)
 {
-    char path[SCRATCH_MAX];
-    int fd;
+    char directory[SCRATCH_MAX], path[SCRATCH_MAX + 16];
     FILE *file;
-    scratch_template(path, sizeof(path), "memories-settings");
-    fd = mkstemp(path);
-    assert(fd >= 0);
-    file = fdopen(fd, "w");
+    assert(scratch_dir(directory, sizeof(directory), "memories-settings"));
+    snprintf(path, sizeof(path), "%s/settings.txt", directory);
+    file = fopen(path, "wb");
     assert(file);
     fputs("volume=40\nmusic_volume=70\nunknown=7\npgxp=2\nhd_hud=1\n", file);
     assert(!fclose(file));

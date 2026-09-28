@@ -42,12 +42,30 @@ static int record(unsigned char *p, const char *name, unsigned lba, unsigned siz
     p[32] = (unsigned char)length; memcpy(p + 33, name, (size_t)length);
     return bytes;
 }
+#ifdef _WIN32
+/* Declared here: <windows.h> clashes with the game's headers. */
+__declspec(dllimport) int __stdcall DeviceIoControl(void *, unsigned long, void *, unsigned long, void *, unsigned long,
+                                                    unsigned long *, void *);
+#endif
+/* The capacity case is a 1 GB image of which 40 sectors are written: a hole
+ * on Linux, but NTFS allocates the whole of it unless it is marked sparse. */
+static void sparse(FILE *image)
+{
+#ifdef _WIN32
+    unsigned long bytes;
+    DeviceIoControl((void *)_get_osfhandle(_fileno(image)), 0x000900C4 /* FSCTL_SET_SPARSE */, NULL, 0, NULL, 0,
+                    &bytes, NULL);
+#else
+    (void)image;
+#endif
+}
 static void fixture(int sectors)
 {
     unsigned char raw[2352];
     FILE *image;
     snprintf(image_path, sizeof(image_path), "%s/disc.bin", root);
     image = fopen(image_path, "wb"); assert(image);
+    sparse(image);
     for (int lba = 0; lba < 40; lba++) {
         memset(raw, 0, sizeof(raw)); raw[15] = 2; raw[18] = raw[22] = 8;
         if (lba == 16) { le(raw + 24 + 156 + 2, 17); le(raw + 24 + 156 + 10, 2048); }
@@ -100,7 +118,7 @@ int main(int argc, char **argv)
     int failed_code = argc > 1 && !strcmp(argv[1], "failed-code");
     DslFILE file;
     DslLOC loc;
-    scratch_template(root, sizeof(root), "memories-disc"); assert(mkdtemp(root)); make_dir("mods");
+    assert(scratch_dir(root, sizeof(root), "memories-disc")); make_dir("mods");
     fixture(capacity ? MEMORIES_DISC_MAX_LBA - 2 : 40);
     for (size_t i = 0; i < sizeof(replacement); i++) replacement[i] = (unsigned char)(i * 13 + 7);
     memset(lower, 0xCC, sizeof(lower));

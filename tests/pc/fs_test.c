@@ -57,8 +57,7 @@ int main(int argc, char **argv)
         executable[bytes] = 0;
         exact_file(executable);
     }
-    scratch_template(root, sizeof(root), "memories-fs");
-    assert(mkdtemp(root));
+    assert(scratch_dir(root, sizeof(root), "memories-fs"));
     snprintf(directory, sizeof(directory), "%s/%s", root, NAME);
     assert(!Paths_MakeDirs(directory));
     exact_file(directory);

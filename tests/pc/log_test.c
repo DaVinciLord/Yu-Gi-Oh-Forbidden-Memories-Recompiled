@@ -16,13 +16,11 @@ MonitorShared *Monitor_Shared(void) { return &block; }
 
 int main(void)
 {
-    char path[SCRATCH_MAX], line[1024];
-    int fd, count = 0, dropped = 0, i;
+    char directory[SCRATCH_MAX], path[SCRATCH_MAX + 16], line[1024];
+    int count = 0, dropped = 0, i;
     FILE *file;
-    scratch_template(path, sizeof(path), "memories-log");
-    fd = mkstemp(path);
-    assert(fd >= 0);
-    close(fd);
+    assert(scratch_dir(directory, sizeof(directory), "memories-log"));
+    snprintf(path, sizeof(path), "%s/log.txt", directory); /* log.c keeps it open: removed at exit or by the sweep */
     assert(!setenv("MEMORIES_LOG", path, 1));
     Log_Init();
     Log_Enable(LOG_DISC, 1);

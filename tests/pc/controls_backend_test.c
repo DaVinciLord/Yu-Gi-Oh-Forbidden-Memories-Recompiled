@@ -72,8 +72,7 @@ static void controls_press(SDL_Scancode code, int down)
 int main(void)
 {
     char dir[SCRATCH_MAX], path[SCRATCH_MAX + 64], error[256];
-    scratch_template(dir, sizeof(dir), "memories-backend");
-    assert(mkdtemp(dir));
+    assert(scratch_dir(dir, sizeof(dir), "memories-backend"));
     snprintf(path, sizeof(path), "%s/controls.txt", dir);
     setenv("MEMORIES_CONTROLS", path, 1);
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");

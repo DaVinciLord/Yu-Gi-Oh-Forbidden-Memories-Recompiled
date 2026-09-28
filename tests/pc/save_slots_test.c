@@ -67,8 +67,7 @@ int main(void)
     SaveSlotInfo slots[SAVE_SLOT_COUNT];
     char directory[SCRATCH_MAX], card[SCRATCH_MAX + 32], path[1024];
     int i;
-    scratch_template(directory, sizeof(directory), "memories-save-slots");
-    assert(mkdtemp(directory));
+    assert(scratch_dir(directory, sizeof(directory), "memories-save-slots"));
     assert(!setenv("MEMORIES_USER_DIR", directory, 1));
     assert(!unsetenv("MEMORIES_MEMCARD1"));
     assert(!unsetenv("MEMORIES_MEMCARD2"));

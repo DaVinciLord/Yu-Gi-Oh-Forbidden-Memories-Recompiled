@@ -77,8 +77,7 @@ int main(void)
     SaveSlotInfo slots[SAVE_SLOT_COUNT];
     char directory[SCRATCH_MAX], path[1024];
     int i;
-    scratch_template(directory, sizeof(directory), "memories-save-menu");
-    assert(mkdtemp(directory));
+    assert(scratch_dir(directory, sizeof(directory), "memories-save-menu"));
     assert(!setenv("MEMORIES_USER_DIR", directory, 1));
     /* Keep a developer's configured legacy cards out of this test. */
     snprintf(path, sizeof(path), "%s/missing.mcd", directory);

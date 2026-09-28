@@ -34,6 +34,9 @@ int Memories_Setenv(const char *name, const char *value, int overwrite);
 int Memories_Unsetenv(const char *name);
 int Memories_Mkstemp(char *pattern);
 char *Memories_Mkdtemp(char *pattern);
+/* Nonzero unless process `pid` is known to be gone (a refused query counts
+ * as there). The tests' scratch sweep (tests/pc/scratch.h) asks it. */
+int Memories_ProcessAlive(unsigned long pid);
 /* UTF-8 argv from the original Unicode command line, owned for process life. */
 char **Memories_Argv(int *argc);
 

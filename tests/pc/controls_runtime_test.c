@@ -10,8 +10,7 @@
 int main(void)
 {
     char dir[SCRATCH_MAX], path[SCRATCH_MAX + 64], error[256];
-    scratch_template(dir, sizeof(dir), "memories-runtime");
-    assert(mkdtemp(dir));
+    assert(scratch_dir(dir, sizeof(dir), "memories-runtime"));
     snprintf(path, sizeof(path), "%s/controls.txt", dir);
     setenv("MEMORIES_CONTROLS", path, 1);
     ControlsConfig cfg = *ControlsRuntime_Config();

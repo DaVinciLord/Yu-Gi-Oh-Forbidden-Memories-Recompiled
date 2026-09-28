@@ -1894,6 +1894,17 @@ frame that took longer to compute got more ticks, so more disc sectors, and the
 Linux and Windows builds dealt different hands in the first duel. It is also
 fast: frame 1100 in about 3 s on Linux.
 
+Tests that need files make them with `scratch_dir()` (`tests/pc/scratch.h`):
+`memories-<kind>-p<pid>-XXXXXX` in TMPDIR/TEMP, removed at exit, on a failed
+`assert` and on SIGINT/SIGTERM. What a test cannot remove itself (killed by a
+timeout, or a file it still holds open, which Windows will not delete: the
+disc image, the log) is removed by the next `scratch_dir()` of the same kind
+and by `pc_scratch_sweep`, a CTest cleanup fixture every test requires, so it
+runs after them even under `-R`. A sweep takes only those names whose process
+has exited, and the untagged `memories-<kind>-XXXXXX` of older builds once
+they are a day old. The disc test's 1 GB capacity image is sparse on NTFS as
+it is on Linux. The game itself makes nothing in the temporary folder.
+
 ### AI thinking time
 
 The opponent's interpreter (`AiScript_Run`) yields to the next frame once
