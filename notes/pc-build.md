@@ -1053,9 +1053,15 @@ cards side by side, big, over the faded field. With the `battle` setting on
 (the default) each monster stands on its card there too, the attacker on
 the left turned right and the defender turned left, both a little towards
 the camera, and the cards are drawn darker under them. The pass projects
-through a camera of its own, looking straight at the cards, and sizes each
-monster the way the field does, from its packets: a middling one
-`battle_pixels` (140) high, the rest in proportion. Three things it has to
+through a camera of its own, looking straight at the cards, and fits each
+monster to its card from its packets: into a box 150 pixels wide and
+`battle_pixels` (160) high, whichever it meets first, so a dragon's wings
+count as much as its height, with small monsters down to 70% of the box
+as they are smaller on the field. It is placed by its outline, middle over
+the card's middle and lowest point near the card's foot, not by its body,
+which put winged and armed monsters off to one side.
+`MEMORIES_MOD_3D_MONSTERS_BATTLE_TEST=<card>` (undeclared, like `test`)
+puts that card and the next on the two cards, for measuring. Three things it has to
 respect:
 
 - the big cards are sprites in ordering table 1, the interface's, and once

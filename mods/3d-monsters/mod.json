@@ -66,13 +66,13 @@
         },
         {
             "key": "battle_pixels",
-            "label": "Attack card monster height",
+            "label": "Attack card monster size",
             "type": "int",
-            "default": 140,
+            "default": 160,
             "min": 40,
-            "max": 200,
+            "max": 220,
             "step": 10,
-            "description": "A middling monster's height on its card, in game pixels; bigger and smaller monsters stay in proportion."
+            "description": "The tallest a monster stands on its card, in game pixels. Each is fitted to the card by its height or its width, whichever it reaches first."
         },
         {
             "key": "battle_dim",

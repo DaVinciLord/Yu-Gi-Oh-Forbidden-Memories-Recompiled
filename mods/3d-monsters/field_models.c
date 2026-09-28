@@ -162,6 +162,7 @@ typedef struct {
     /* How it stands on a card of the battle presentation (battle_pose). */
     int battle_scale, battle_yaw, battle_pixels;
     int battle_x, battle_y, battle_z;
+    int battle_ox, battle_oy; /* its outline's middle and foot on the screen */
 } Monster;
 
 static const MemoriesModHost *host;
@@ -650,9 +651,13 @@ static int sort_aside(void)
  * thing that answers "how big is this monster": a model's parts say where its
  * joints are, not how far its skin reaches, and Korogashi is one big ball
  * around a single joint. */
+static struct {
+    int left, top, right, bottom;
+} bounds; /* what packet_height last covered, in screen pixels */
+
 static int packet_height(const u32 *from, const u32 *to)
 {
-    int top = 0x7fff, bottom = -0x7fff;
+    int top = 0x7fff, bottom = -0x7fff, left = 0x7fff, right = -0x7fff;
     while (from < to) {
         unsigned words = *from >> 24, at = 1;
         while (at <= words) {
@@ -664,11 +669,14 @@ static int packet_height(const u32 *from, const u32 *to)
             if (op >= 0x20 && op <= 0x3f) {
                 unsigned corners = (op & 8) ? 4 : 3, index = at + 1;
                 for (corner = 0; corner < corners; corner++) {
-                    int y;
+                    int x, y;
                     if ((op & 0x10) && corner) {
                         index++; /* every further corner of a shaded polygon */
                     }
+                    x = (short)(from[index] & 0xffff);
                     y = (short)(from[index] >> 16);
+                    left = x < left ? x : left;
+                    right = x > right ? x : right;
                     top = y < top ? y : top;
                     bottom = y > bottom ? y : bottom;
                     index++;
@@ -681,7 +689,11 @@ static int packet_height(const u32 *from, const u32 *to)
         }
         from += words + 1;
     }
-    return bottom > top ? bottom - top : 0;
+    bounds.left = left;
+    bounds.top = top;
+    bounds.right = right;
+    bounds.bottom = bottom;
+    return bottom > top && right > left ? bottom - top : 0;
 }
 
 /* Where the body sits around the model's own origin. A duel model is built
@@ -867,10 +879,11 @@ typedef struct {
 #define BATTLE_STEP_TO_ARENA 5    /* fading out to the 3D battle in the arena */
 #define BATTLE_STEP_DESTROY 10    /* the losing card burns */
 #define BATTLE_CARD_WIDTH 0x8C
-#define BATTLE_CARD_FEET 0xA8     /* the feet, down from the card's top edge */
+#define BATTLE_CARD_FEET 0xB8     /* the feet, down from the card's top edge */
+#define BATTLE_BOX_WIDTH 0x96     /* the widest a monster stands on its card */
+#define BATTLE_SMALLEST 0.7       /* the least share of that box it gets */
 #define BATTLE_DEPTH_STEPS 2
-#define BATTLE_PIXELS 140         /* a middling monster's height on its card */
-#define BATTLE_TALLEST 210
+#define BATTLE_PIXELS 160         /* the tallest a monster stands on its card */
 #define BATTLE_DIM 50             /* percent */
 #define CARD_COLOUR 0x808080u
 /* The screen the pass projects through: a camera looking straight at the
@@ -983,38 +996,45 @@ static void measure_turned(Monster *monster, int yaw, int *x, int *y, int *z)
     *z = parts ? sum_z / parts : 0;
 }
 
-/* The scale a monster stands on its big card at, once per facing: as tall as
- * it stands on the field relative to a middling monster, which is
- * BATTLE_PIXELS high. Measured as fit() measures, from the packets. */
+/* The scale a monster stands on its big card at, once per facing, and where
+ * its outline sits: it is fitted into a box the size of the card's picture
+ * and print, BATTLE_BOX_WIDTH wide and `battle_pixels` high, whichever of the
+ * two it meets first -- a dragon's wings or a vine's reach count as much as
+ * its height, which is what kept them on the card. Small monsters are drawn
+ * a little smaller, as they are on the field (monster->natural), down to
+ * BATTLE_SMALLEST of the box. Measured as fit() measures, from the packets,
+ * and then placed by the outline rather than by the body: its middle over
+ * the card's middle, its lowest point on the card's feet line. */
 static void battle_pose(Monster *monster, int yaw)
 {
     ModelSlot *slot = &D_800F2C40[0];
-    int pixels = tunable("battle_pixels", BATTLE_PIXELS), raw_x, raw_y, raw_z, want, scale = monster->scale,
-        attempt, wide, wx, wy;
+    int pixels = tunable("battle_pixels", BATTLE_PIXELS), raw_x, raw_y, raw_z, scale = monster->scale,
+        attempt, wx, wy, box_w, box_h;
+    double share = sqrt((double)monster->natural / MIDDLING_PIXELS);
 
     if (monster->battle_scale && monster->battle_yaw == yaw && monster->battle_pixels == pixels) {
         return;
     }
-    want = (int)(pixels * sqrt((double)monster->natural / MIDDLING_PIXELS));
-    for (wide = 0; wide < (int)(sizeof(WIDE_MONSTERS) / sizeof(WIDE_MONSTERS[0])); wide++) {
-        if (WIDE_MONSTERS[wide].card == monster->card) {
-            want = want * WIDE_MONSTERS[wide].share / MODEL_FIXED_ONE;
-        }
-    }
-    want = want < 8 ? 8 : want > BATTLE_TALLEST ? BATTLE_TALLEST : want;
+    share = share < BATTLE_SMALLEST ? BATTLE_SMALLEST : share > 1 ? 1 : share;
+    box_w = (int)(BATTLE_BOX_WIDTH * share);
+    box_h = (int)(pixels * share);
     measure_turned(monster, yaw, &raw_x, &raw_y, &raw_z);
-    screen_to_world(0xA0, 0xD0, &wx, &wy);
-    for (attempt = 0; attempt < 5; attempt++) {
-        int height, wanted;
+    screen_to_world(0xA0, 0x78, &wx, &wy);
+    for (attempt = 0; attempt < 6; attempt++) {
+        int height, width, wanted;
         *slot = monster->slot;
         place(slot, wx - raw_x * scale / MODEL_FIXED_ONE, wy - raw_y * scale / MODEL_FIXED_ONE,
               -raw_z * scale / MODEL_FIXED_ONE, yaw, scale);
         height = sort_aside();
+        width = bounds.right - bounds.left;
         if (height <= 0) {
             break;
         }
-        wanted = scale * want / height;
-        if (wanted > scale * 15 / 16 && wanted < scale * 17 / 16) {
+        wanted = scale * box_h / height;
+        if (scale * box_w / width < wanted) {
+            wanted = scale * box_w / width;
+        }
+        if (wanted > scale * 31 / 32 && wanted < scale * 33 / 32) {
             break;
         }
         scale = wanted < SCALE_SMALLEST ? SCALE_SMALLEST
@@ -1026,7 +1046,11 @@ static void battle_pose(Monster *monster, int yaw)
     monster->battle_x = raw_x * scale / MODEL_FIXED_ONE;
     monster->battle_y = raw_y * scale / MODEL_FIXED_ONE;
     monster->battle_z = raw_z * scale / MODEL_FIXED_ONE;
-    say("card %d stands %d pixels on its battle card at %d/4096\n", monster->card, want, scale);
+    /* Where the outline's foot and middle came out, from the point placed. */
+    monster->battle_ox = (bounds.left + bounds.right) / 2 - 0xA0;
+    monster->battle_oy = bounds.bottom - 0x78;
+    say("card %d fits %dx%d on its battle card at %d/4096\n", monster->card,
+        bounds.right - bounds.left, bounds.bottom - bounds.top, scale);
 }
 
 /* The monster a big card shows, or NULL: the card the presentation loaded
@@ -1034,6 +1058,10 @@ static void battle_pose(Monster *monster, int yaw)
 static Monster *battle_monster(int side)
 {
     int id = (s16)D_800EA0E8[side].field_30;
+    /* For measuring, as `test` is on the field: any two monsters. */
+    if (tunable("battle_test", 0)) {
+        return acquire(tunable("battle_test", 0) + side * tunable("battle_test_step", 1), 0);
+    }
     if (id <= 0 || ((gDuel_adwCardStats[id - 1] >> 0x1A) & 0x1F) >= 0x14) {
         return NULL;
     }
@@ -1101,14 +1129,14 @@ static int draw_battle(void)
         Monster *monster = monsters[side];
         ModelSlot *slot = &D_800F2C40[0];
         /* The attacker is on the left and turns right; the defender turns left. */
-        int yaw = side == 0 ? BATTLE_TURN : MODEL_ANGLE_FULL_TURN - BATTLE_TURN, wx, wy, at;
+        int yaw = side == 0 ? MODEL_ANGLE_FULL_TURN - BATTLE_TURN : BATTLE_TURN, wx, wy, at;
         GsOT *table = D_800E9D90[cards[side]->ot_index];
         if (!monster) {
             continue;
         }
         battle_pose(monster, yaw);
-        screen_to_world(cards[side]->field_30.h.field_30 + BATTLE_CARD_WIDTH / 2,
-                        cards[side]->field_30.h.field_32 + BATTLE_CARD_FEET, &wx, &wy);
+        screen_to_world(cards[side]->field_30.h.field_30 + BATTLE_CARD_WIDTH / 2 - monster->battle_ox,
+                        cards[side]->field_30.h.field_32 + BATTLE_CARD_FEET - monster->battle_oy, &wx, &wy);
         *slot = monster->slot;
         place(slot, wx - monster->battle_x, wy - monster->battle_y, -monster->battle_z, yaw,
               monster->battle_scale);
