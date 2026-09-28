@@ -34,10 +34,10 @@ NOMBRE:{call L125A}{f8 16}{end}
 {f8 0A 05}{f8 03 08 56 1D 80 C3}{f8 01 12}{f8 00 10}{f8 00 20}{end}
 
 {:LF007}
-{f8 06 00 00}{f8 07 10 F8} z{end}
+{f8 06 00 00}{f8 07 10 00}{f8 00 20}{end}
 
 [0007]
-{f8 06 AF 00}{f8 00 00}{f8 02 04}{f8 00 03}{jump LF007}
+{f8 06 AF 00}{f8 00 00}{f8 02 04}{f8 00 01}{jump LF007}
 
 [0008]  {:LF008}
 {f8 0A 01} ¡TU MAZO NO ESTÁ LISTO!{end}
@@ -110,7 +110,7 @@ SALIR DE TIENDA
 {f8 04 00}{f8 06 83 00}{f8 03 0C 56 1D 80 83}{end}
 
 [001B]
-{f8 0A 05}{f8 03 08 56 1D 80 C3}{f8 0A 84}{f8 06 49 00}{f8 00 00}{f8 02 04}{f8 00 03}{jump LF00B}
+{f8 0A 05}{f8 03 08 56 1D 80 C3}{f8 0A 84}{f8 06 49 00}{f8 00 00}{f8 02 04}{f8 00 01}{jump LF00B}
 
 [001C]
 {f8 0A 01}{f8 02 24}¡DEBES PREPARAR UN MAZO
@@ -188,59 +188,62 @@ ORD{end}
 {f8 06 C3 00}♀{f8 03 0C 56 1D 80 84}{f8 01 F8}{f8 06 ED 00}{f8 00 00}{end}
 
 {:LF011}
-{f8 17 LF014 LF012 LF016 LF015}
+{f8 17 LF015 LF012 LF017 LF016}
 
 {:LF012}
 {call LF010}{f8 02 02}{f8 00 01}{f8 02 02}{f8 00 02}{cont}
 {:LF013}
-{f8 07 18 F8}n {f8 06 00 00}{f8 00 20}{cont}
+{f8 07 18 00}{cont}
 {:LF014}
+{f8 04 00}{f8 06 00 00}{f8 00 20}{cont}
+{:LF015}
 {end}
 
-{:LF015}
+{:LF016}
 {f8 06 07 01}{f8 08}{end}
 
-{:LF016}
+{:LF017}
 {call LF010}{f8 02 0A}{f8 08}{jump LF013}
 
-[0051]  {:LF017}
-{f8 17 LF014 LF018 LF018 LF014}
+[0051]  {:LF018}
+{f8 17 LF015 LF019 LF019 LF015}
 
-{:LF018}
-{f8 06 ED 00}{f8 00 00}{f8 02 02}{f8 00 03}{f8 07 1C FD}bv{cont}
 {:LF019}
-{f8 18 LF01D LF01A LF01B LF01C}
+{f8 06 ED 00}{f8 00 00}{f8 02 02}{f8 00 01}{f8 07 1C 00}{jump LF014}
 
 {:LF01A}
-{f8 01 0C}{f8 06 4C 00}Espadas de Luz reveladora {f8 04 02}{f8 0A 05}{f8 03 10 56 1D 80 01}{f8 0A 00}{f8 04 00}{end}
+{f8 18 LF01E LF01B LF01C LF01D}
 
 {:LF01B}
-{f8 06 A8 00}{f8 00 10}ESTRELLA GUAR.{f8 0A 00}{end}
+{f8 01 0C}{f8 06 4C 00}Espadas de Luz reveladora {f8 04 02}{f8 0A 05}{f8 03 10 56 1D 80 01}{f8 0A 00}{f8 04 00}{end}
 
 {:LF01C}
-{call LF01B}{call LF01A}{cont}
+{f8 06 A8 00}{f8 00 10}ESTRELLA GUAR.{f8 0A 00}{end}
+
 {:LF01D}
+{call LF01C}{call LF01B}{cont}
+{:LF01E}
 {end}
 
 [0052]
-{f8 01 DD}{call LF019} {jump LF011}
+{f8 01 DD}{call LF01A} {jump LF011}
 
 [0053]
-{f8 01 DD}{call LF019} {jump LF017}
+{f8 01 DD}{call LF01A} {jump LF018}
 
 [0054]
-{f8 01 16}{call LF019} {jump LF011}
+{f8 01 16}{call LF01A} {jump LF011}
 
 [0055]
-{f8 01 16}{call LF019} {jump LF017}
+{f8 01 16}{call LF01A} {jump LF018}
 
 [0060]
 {call LF004}{cont}
-{:LF01E}
+{:LF01F}
 {f8 06 78 FF} {f8 0A 05}{f8 03 08 56 1D 80 C3}{f8 01 12}{f8 0A 00}{f8 06 78 FF}{f8 00 20}{end}
 
 [0061]
-{call LF006}{jump LF01E}
+{call LF006}{jump LF01F}
 
 [0090]
 {f8 01 20}Diseño original personajes
@@ -471,11 +474,11 @@ Equipo de localización
 
 [00AE 00AF 00B0]
 2{cont}
-{:LF01F}
+{:LF020}
 Gráficos D{end}
 
 [00B1]
-3{jump LF01F}
+3{jump LF020}
 
 [00B2]
 Agradecimientos especiales{end}
@@ -487,10 +490,10 @@ Agradecimientos especiales{end}
 {end}
 
 [00BA]
-{jump LF025}
+{jump LF026}
 
 [00BB]
-{jump LF024}
+{jump LF025}
 
 [00BC]
 {choice 53}¿CARGAR DATOS DE SEGURIDAD?
@@ -504,11 +507,11 @@ Agradecimientos especiales{end}
 
 [00BE]
 {f8 02 5E}FORMATEANDO...
-{jump LF025}
+{jump LF026}
 
 [00BF]
 
-{f8 02 48}FORMATEAR{jump LF023}
+{f8 02 48}FORMATEAR{jump LF024}
 
 [00B7]
 {f8 02 2C}{f8 0A 01}ACCEDIENDO A MEMORY CARD...
@@ -549,19 +552,19 @@ Agradecimientos especiales{end}
 
 [00C7]
 
-{f8 02 4A}CARGAR{jump LF021}
+{f8 02 4A}CARGAR{jump LF022}
 
 [00C8]
 {choice 53}{f8 0A 01}CARGAR{cont}
-{:LF020}
+{:LF021}
 {f8 0A 00}?
-{jump LF022}
+{jump LF023}
 
 [00C9]
-{choice 53}{f8 0A 01}GUARDAR{jump LF020}
+{choice 53}{f8 0A 01}GUARDAR{jump LF021}
 
 [00CA]
-{choice 53}{f8 0A 01}DESCARGAR{jump LF020}
+{choice 53}{f8 0A 01}DESCARGAR{jump LF021}
 
 [00CB]
 
@@ -569,12 +572,12 @@ Agradecimientos especiales{end}
 
 [00CC]
 
-{f8 02 48}DESCARGAR{jump LF023}
+{f8 02 48}DESCARGAR{jump LF024}
 
 [00CD]
 
 {f8 02 48}GUARDAR{cont}
-{:LF021}
+{:LF022}
  ¡INCOMPLETO!{end}
 
 [00CE]
@@ -585,7 +588,7 @@ Agradecimientos especiales{end}
 [00CF]
 {choice 53}{f8 0A 01}¿SOBRESCRIBIR?
 {f8 0A 00}{cont}
-{:LF022}
+{:LF023}
  SÍ
  NO
 {choose 80 LF000 LF000}
@@ -593,18 +596,18 @@ Agradecimientos especiales{end}
 [00D0]
 
 {f8 02 52}CARGAR{cont}
-{:LF023}
+{:LF024}
  ¡COMPLETO!{end}
 
 [00D1]
 
-{f8 02 4E}GUARDAR{jump LF023}
+{f8 02 4E}GUARDAR{jump LF024}
 
 [00D2]
 {f8 02 38}¡SE NECESITA MEMORY CARD
 en ranura para MEMORY CARD {f8 03 48 56 1D 80 01}!{end}
 
-{:LF024}
+{:LF025}
 {end}
 
 [00D3]
@@ -614,33 +617,33 @@ en ranura para MEMORY CARD {f8 03 48 56 1D 80 01}!{end}
 [00D4]
 {f8 02 38}{f8 0A 01}ACCEDIENDO A MEMORY CARD
 {f8 0A 00}{cont}
-{:LF025}
+{:LF026}
 {f8 02 2C}NO DES/CONECTAR MEMORY CARD
 {f8 02 28}en ranuras para MEMORY CARD {f8 03 48 56 1D 80 01}{end}
 
 [00D5]
 {f8 02 6A}{f8 0A 01}CARGANDO...
-{f8 0A 00}{jump LF025}
+{f8 0A 00}{jump LF026}
 
 [00D6]
 {f8 02 66}{f8 0A 01}GUARDANDO...
-{f8 0A 00}{jump LF025}
+{f8 0A 00}{jump LF026}
 
 [00D7]
 {f8 02 5E}{f8 0A 01}DESCARGANDO...
-{f8 0A 00}{jump LF025}
+{f8 0A 00}{jump LF026}
 
 [00D8]
 
 {f8 02 4A}CARGAR{cont}
-{:LF026}
- ¡IN{cont}
 {:LF027}
+ ¡IN{cont}
+{:LF028}
 COMPLETO!{end}
 
 [00D9]
 
-{f8 02 48}GUARDAR{jump LF026}
+{f8 02 48}GUARDAR{jump LF027}
 
 [00DA]
 {f8 02 40}¡NO SE PUEDE ACCEDER A
@@ -653,11 +656,11 @@ COMPLETO!{end}
 
 [00DC]
 
-{f8 02 48}DESCARGAR{jump LF026}
+{f8 02 48}DESCARGAR{jump LF027}
 
 [00DD]
 
-{f8 02 48}FORMATEAR{jump LF026}
+{f8 02 48}FORMATEAR{jump LF027}
 
 [00DE]
 
@@ -682,21 +685,21 @@ Introduce
 
     {f8 0B 22}OK {f8 0B 25}END{end}
 
-{:LF028}
+{:LF029}
 NÚMERO DE CARTA {f8 03 0C 56 1D 80 C3}
 {f8 0B 26}x{f8 03 08 56 1D 80 06}{end}
 
 [00E3]
-{choice 64}{call LF028}{cont}
-{:LF029}
+{choice 64}{call LF029}{cont}
+{:LF02A}
 
  CAMBIAR
 {f8 0A 00} SALIR{nl}{cont}
 [00E4]
-{choice 6C 02}{call LF028}{f8 0A 04}{jump LF029}
+{choice 6C 02}{call LF029}{f8 0A 04}{jump LF02A}
 
 [00E5]
-{call LF028}
+{call LF029}
 {f8 0A 01} ¡Esta 'CONTRASEÑA'
      ya ha sido
     introducida!{end}
@@ -722,12 +725,12 @@ wxyz
 {choice 53}Tu NOMBRE es {f8 0A 01}{call L125A}{f8 0A 00}-
  SÍ
  NO
-{choose 80 LF02B LF02A}
-
-{:LF02A}
-{f8 16}{end}
+{choose 80 LF02C LF02B}
 
 {:LF02B}
+{f8 16}{end}
+
+{:LF02C}
 {f8 1A}{f8 04 00}Tu código de duelista
 ha sido registrado.{page}No es posible realizar DUELOS ni
 CAMBIAR con el mismo CÓDIGO DE
@@ -737,7 +740,7 @@ DUELISTA.{end}
 {choice 53}RESULTADOS DEL DUELO
 VICTORIA
 DERROTA
-{choose 80 LF000 LF000 LF027}
+{choose 80 LF000 LF000 LF028}
 
 [00F8]
 <{f8 03 08 56 1D 80 83}/722>{end}

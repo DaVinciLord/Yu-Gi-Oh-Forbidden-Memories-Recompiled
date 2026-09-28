@@ -32,10 +32,10 @@ NOM:{call L125A}{f8 16}{end}
 {f8 0A 05}{f8 03 08 56 1D 80 C3}{f8 01 12}{f8 00 10}{f8 00 20}{end}
 
 {:LF006}
-{f8 06 00 00}{f8 07 10 F8} z{end}
+{f8 06 00 00}{f8 07 10 00}{f8 00 20}{end}
 
 [0007]
-{f8 06 AF 00}{f8 00 00}{f8 02 04}{f8 00 03}{jump LF006}
+{f8 06 AF 00}{f8 00 00}{f8 02 04}{f8 00 01}{jump LF006}
 
 [0008]  {:LF007}
 {f8 0A 01} TON JEU N'EST PAS PRÊT !{end}
@@ -98,7 +98,7 @@ OUI
 {f8 04 00}{f8 06 83 00}{f8 03 0C 56 1D 80 83}{end}
 
 [001B]
-{f8 0A 05}{f8 03 08 56 1D 80 C3}{f8 0A 84}{f8 06 49 00}{f8 00 00}{f8 02 04}{f8 00 03}{jump LF00A}
+{f8 0A 05}{f8 03 08 56 1D 80 C3}{f8 0A 84}{f8 06 49 00}{f8 00 00}{f8 02 04}{f8 00 01}{jump LF00A}
 
 [001C]
 {f8 0A 01}TU DOIS PRÉPARER UN JEU
@@ -175,59 +175,62 @@ COM{end}
 {f8 06 C3 00}♀{f8 03 0C 56 1D 80 84}{f8 01 F8}{f8 06 ED 00}{f8 00 00}{end}
 
 {:LF010}
-{f8 17 LF013 LF011 LF015 LF014}
+{f8 17 LF014 LF011 LF016 LF015}
 
 {:LF011}
 {call LF00F}{f8 02 02}{f8 00 01}{f8 02 02}{f8 00 02}{cont}
 {:LF012}
-{f8 07 18 F8}n {f8 06 00 00}{f8 00 20}{cont}
+{f8 07 18 00}{cont}
 {:LF013}
+{f8 04 00}{f8 06 00 00}{f8 00 20}{cont}
+{:LF014}
 {end}
 
-{:LF014}
+{:LF015}
 {f8 06 07 01}{f8 08}{end}
 
-{:LF015}
+{:LF016}
 {call LF00F}{f8 02 0A}{f8 08}{jump LF012}
 
-[0051]  {:LF016}
-{f8 17 LF013 LF017 LF017 LF013}
+[0051]  {:LF017}
+{f8 17 LF014 LF018 LF018 LF014}
 
-{:LF017}
-{f8 06 ED 00}{f8 00 00}{f8 02 02}{f8 00 03}{f8 07 1C FD}/b{cont}
 {:LF018}
-{f8 18 LF01C LF019 LF01A LF01B}
+{f8 06 ED 00}{f8 00 00}{f8 02 02}{f8 00 01}{f8 07 1C 00}{jump LF013}
 
 {:LF019}
-{f8 01 0C}{f8 06 32 00}Epées de Lumière Révélatrice  {f8 04 02}{f8 0A 05}{f8 03 10 56 1D 80 01}{f8 0A 00}{f8 04 00}{end}
+{f8 18 LF01D LF01A LF01B LF01C}
 
 {:LF01A}
-{f8 06 B8 00}{f8 00 10}ÉTOILE GARDIEN{f8 0A 00}{end}
+{f8 01 0C}{f8 06 32 00}Epées de Lumière Révélatrice  {f8 04 02}{f8 0A 05}{f8 03 10 56 1D 80 01}{f8 0A 00}{f8 04 00}{end}
 
 {:LF01B}
-{call LF01A}{call LF019}{cont}
+{f8 06 B8 00}{f8 00 10}ÉTOILE GARDIEN{f8 0A 00}{end}
+
 {:LF01C}
+{call LF01B}{call LF01A}{cont}
+{:LF01D}
 {end}
 
 [0052]
-{f8 01 DD}{call LF018} {jump LF010}
+{f8 01 DD}{call LF019} {jump LF010}
 
 [0053]
-{f8 01 DD}{call LF018} {jump LF016}
+{f8 01 DD}{call LF019} {jump LF017}
 
 [0054]
-{f8 01 16}{call LF018} {jump LF010}
+{f8 01 16}{call LF019} {jump LF010}
 
 [0055]
-{f8 01 16}{call LF018} {jump LF016}
+{f8 01 16}{call LF019} {jump LF017}
 
 [0060]
 {call LF003}{cont}
-{:LF01D}
+{:LF01E}
 {f8 06 78 FF} {f8 0A 05}{f8 03 08 56 1D 80 C3}{f8 01 12}{f8 0A 00}{f8 06 78 FF}{f8 00 20}{end}
 
 [0061]
-{call LF005}{jump LF01D}
+{call LF005}{jump LF01E}
 
 [0090]
 {f8 01 20}Conception des Personnages
@@ -458,11 +461,11 @@ COM{end}
 
 [00AE 00AF 00B0]
 2{cont}
-{:LF01E}
+{:LF01F}
 Graphismes D{end}
 
 [00B1]
-3{jump LF01E}
+3{jump LF01F}
 
 [00B2]
 Remerciements Spéciaux{end}
@@ -474,10 +477,10 @@ Remerciements Spéciaux{end}
 {end}
 
 [00BA]
-{jump LF024}
+{jump LF025}
 
 [00BB]
-{jump LF023}
+{jump LF024}
 
 [00BC]
 {choice 53}COPIER DONNÉES CHARGÉES?
@@ -491,11 +494,11 @@ Remerciements Spéciaux{end}
 
 [00BE]
 {f8 02 30}INITIALISATION EN COURS...
-{jump LF024}
+{jump LF025}
 
 [00BF]
 
-{f8 02 48}INITIALISER{jump LF022}
+{f8 02 48}INITIALISER{jump LF023}
 
 [00B7]
 {f8 02 20}{f8 0A 01}ACCÈS MEMORY CARD EN COURS...
@@ -536,19 +539,19 @@ Remerciements Spéciaux{end}
 
 [00C7]
 
-{f8 02 44}CHARGEMENT{jump LF020}
+{f8 02 44}CHARGEMENT{jump LF021}
 
 [00C8]
 {choice 53}{f8 0A 01}CHARGEMENT{cont}
-{:LF01F}
+{:LF020}
 {f8 0A 00}?
-{jump LF021}
+{jump LF022}
 
 [00C9]
-{choice 53}{f8 0A 01}ENREGISTREMENT{jump LF01F}
+{choice 53}{f8 0A 01}ENREGISTREMENT{jump LF020}
 
 [00CA]
-{choice 53}{f8 0A 01}TÉLÉCHARGEMENT{jump LF01F}
+{choice 53}{f8 0A 01}TÉLÉCHARGEMENT{jump LF020}
 
 [00CB]
 
@@ -556,12 +559,12 @@ DOWNLOAD INCOMPLETE!{end}
 
 [00CC]
 
-{f8 02 4A}DOWNLOAD{jump LF022}
+{f8 02 4A}DOWNLOAD{jump LF023}
 
 [00CD]
 
 {f8 02 40}ENREGISTREMENT{cont}
-{:LF020}
+{:LF021}
  INCOMPLET!{end}
 
 [00CE]
@@ -572,7 +575,7 @@ DOWNLOAD INCOMPLETE!{end}
 [00CF]
 {choice 53}{f8 0A 01}ÉCRASER?
 {f8 0A 00}{cont}
-{:LF021}
+{:LF022}
  OUI
  NON
 {choose 80 LF000 LF000}
@@ -580,18 +583,18 @@ DOWNLOAD INCOMPLETE!{end}
 [00D0]
 
 {f8 02 50}CHARGEMENT{cont}
-{:LF022}
+{:LF023}
  RÉUSSI!{end}
 
 [00D1]
 
-{f8 02 40}ENREGISTREMENT {jump LF022}
+{f8 02 40}ENREGISTREMENT {jump LF023}
 
 [00D2]
 {f8 02 4C}MEMORY CARD REQUISE
 {f8 02 10}DANS la fente pour MEMORY CARD n°{f8 03 48 56 1D 80 01}!{end}
 
-{:LF023}
+{:LF024}
 {end}
 
 [00D3]
@@ -601,31 +604,31 @@ DOWNLOAD INCOMPLETE!{end}
 [00D4]
 {f8 02 24}{f8 0A 01}ACCÈS MEMORY CARD EN COURS...
 {f8 0A 00}{cont}
-{:LF024}
+{:LF025}
 {f8 02 04}NE PAS INSÉRER/RETIRER DE MEMORY CARD
 {f8 02 10}DANS la fente pour MEMORY CARD n°{f8 03 48 56 1D 80 01}{end}
 
 [00D5]
 {f8 02 62}{f8 0A 01}CHARGEMENT...
-{f8 0A 00}{jump LF024}
+{f8 0A 00}{jump LF025}
 
 [00D6]
 {f8 02 5E}{f8 0A 01}ENREGISTREMENT
-{f8 0A 00}{jump LF024}
+{f8 0A 00}{jump LF025}
 
 [00D7]
 {f8 02 52}{f8 0A 01}TÉLÉCHARGEMENT...
-{f8 0A 00}{jump LF024}
+{f8 0A 00}{jump LF025}
 
 [00D8]
 
 {f8 02 44}CHARGEMENT{cont}
-{:LF025}
+{:LF026}
  INCOMPLET!{end}
 
 [00D9]
 
-{f8 02 30}ENREGISTREMENT{jump LF025}
+{f8 02 30}ENREGISTREMENT{jump LF026}
 
 [00DA]
 {f8 02 40}IMPOSSIBLE D'ACCÉDER À
@@ -638,11 +641,11 @@ DOWNLOAD INCOMPLETE!{end}
 
 [00DC]
 
-{f8 02 40}TÉLÉCHARGER{jump LF025}
+{f8 02 40}TÉLÉCHARGER{jump LF026}
 
 [00DD]
 
-{f8 02 40}INITIALISER{jump LF025}
+{f8 02 40}INITIALISER{jump LF026}
 
 [00DE]
 
@@ -667,21 +670,21 @@ Veuille entrer un
 
     {f8 0B 22}OK {f8 0B 25}FIN{end}
 
-{:LF026}
+{:LF027}
 NUMÉRO DE CARTE {f8 03 0C 56 1D 80 C3}
 {f8 0B 26}x{f8 03 08 56 1D 80 06}{end}
 
 [00E3]
-{choice 64}{call LF026}{cont}
-{:LF027}
+{choice 64}{call LF027}{cont}
+{:LF028}
 
  ÉCHANGER
 {f8 0A 00} QUITTER{nl}{cont}
 [00E4]
-{choice 6C 02}{call LF026}{f8 0A 04}{jump LF027}
+{choice 6C 02}{call LF027}{f8 0A 04}{jump LF028}
 
 [00E5]
-{call LF026}
+{call LF027}
 {f8 0A 01} Ce 'MOT DE PASSE'
    a déjà été
   entré !{end}
@@ -707,12 +710,12 @@ wxyz
 {choice 53}Ton NOM est {f8 0A 01}{call L125A}{f8 0A 00}-
  OUI
  NON
-{choose 80 LF029 LF028}
-
-{:LF028}
-{f8 16}{end}
+{choose 80 LF02A LF029}
 
 {:LF029}
+{f8 16}{end}
+
+{:LF02A}
 {f8 1A}{f8 04 00}Ton code de duelliste
 a été enregistré.{page}Tu ne peux faire de DUEL ou d'ÉCHANGE
 avec le même CODE DE DUELLISTE.{end}
