@@ -364,6 +364,12 @@ int Language_Available(int language)
 
 int Language_Current(void) { return current; }
 
+const char *Language_Code(int language)
+{
+    if (language == LANGUAGE_US) return "en-us";
+    return language > LANGUAGE_US && language < LANGUAGE_COUNT ? pack_names[language] : "";
+}
+
 void Language_Drop(void)
 {
     current = LANGUAGE_US;
@@ -405,6 +411,43 @@ static const char *const own_words[LANGUAGE_COUNT] = {
                     "[FE10]\nMAZOS{end}\n",
 };
 
+/* The opponents' short names (TEXT_OWN_OPPONENT + id), only where
+ * shortening the PAL name (Tables_ShortenName) loses who it is: the French
+ * put the name before the title ("Sébek le Gardien" would be "Gardien",
+ * like Néku), and Duel Master K would be "Duels" or "K". The rest shorten
+ * as the English do. Added after own_words. */
+static const char *const own_names[LANGUAGE_COUNT] = {
+    [LANGUAGE_FR] = "\n@bank dialog\n\n"
+                    "[FE56]\nSekmeton{end}\n\n"
+                    "[FE58]\nAnubis{end}\n\n"
+                    "[FE5A]\nAtenza{end}\n\n"
+                    "[FE5C]\nMarthis{end}\n\n"
+                    "[FE5E]\nKépurah{end}\n\n"
+                    "[FE61]\nSébek{end}\n\n"
+                    "[FE62]\nNéku{end}\n\n"
+                    "[FE67]\nMaître K{end}\n",
+    [LANGUAGE_IT] = "\n@bank dialog\n\n"
+                    "[FE55]\nOceano{end}\n\n"
+                    "[FE67]\nMaestro K{end}\n",
+    [LANGUAGE_ES] = "\n@bank dialog\n\n"
+                    "[FE67]\nMaestro K{end}\n",
+};
+
+/* `listing` (`*length` bytes, malloc'd) with `extra` after it, if it can
+ * grow. */
+static char *append(char *listing, size_t *length, const char *extra)
+{
+    size_t size;
+    char *longer;
+    if (!extra) return listing;
+    size = strlen(extra);
+    longer = realloc(listing, *length + size + 1);
+    if (!longer) return listing;
+    memcpy(longer + *length, extra, size + 1);
+    *length += size;
+    return longer;
+}
+
 char *Language_Listing(size_t *length)
 {
     int language = Settings_Get(SET_LANGUAGE);
@@ -425,6 +468,7 @@ char *Language_Listing(size_t *length)
             listing = longer;
         }
     }
+    listing = append(listing, length, own_names[language]);
     current = language;
     TextEntries_UseLayout(1); /* the PAL game's text entries (entry_layout.h) */
     /* Its narrow letters as the PAL font has them (glyphs.h). */

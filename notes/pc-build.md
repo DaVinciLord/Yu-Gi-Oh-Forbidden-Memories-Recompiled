@@ -1941,7 +1941,41 @@ bit-identical. How (details in `src/pc/guest/state.h`):
   LIBETC, LIBGPU, LIBGTE, MDEC, VBlank count). A chunk whose layout changed is
   reported and skipped, leaving that subsystem as it is. Nothing native is
   stored by address; timers, the disc file, the window and the audio device
-  belong to the process.
+  belong to the process. The exception is text the port compiles (a
+  language, a translation mod, the shop's menu): the game's text boxes keep
+  pointers into it in guest RAM, so it lives at a fixed address, `0x9C000000`
+  (`translation.c`, `arena_take`), laid out in compile order, and the same
+  language and mods lay it out the same at every launch. On the heap it
+  moved with anything that changed the heap (the length of a folder name),
+  and a state saved in a dialogue crashed in `TextBox_BuildStep` on some
+  loads (FR→FR 3/10, pt-BR 3/10); 10/10 now. States saved before that with
+  a language or translation on keep the old heap addresses and may still
+  crash; English (US) states never held any.
+- **A state loads only in the language it was made in** (Game > Language),
+  **and only with the same compiled text at the same place.** The
+  `language` chunk (32 bytes, `LanguageChunk` in `state.c`) holds the
+  language's code (`en-us`, `fr`...), a version (1), and the text's layout
+  as `Text_Layout` gives it after `Text_Build`: the region's address (0
+  when the text stayed on the heap), the bytes the startup text takes, and
+  a CRC-32 of it unit by unit (the shop's menu, compiled later from that
+  text, is left out). Another language, other text (a pack, a mod's `.txt`
+  or the port's own words edited, none of which the `mod-set` signature
+  covers: 23 letters added to one pt-BR string made a state reopen on
+  another line) or text that was on the heap is refused. A later version
+  appends to the chunk. No chunk is English (US); the language is not in
+  the `mod-set` signature, which would refuse every state saved before it.
+  A state with no layout (no chunk, or a chunk of the code alone: 16
+  bytes, version 0, from the build just before the layout) loads only
+  while no text is compiled now (English US with no translation mod), so
+  English states from older versions load as before. With text compiled
+  it is refused: a 0.1.2 state made with a translation mod points into
+  that version's heap, and French, Spanish and Italian version-0 states
+  from a build whose PAL text differed reopened on the wrong lines.
+- **A refused load says why on screen**: every refusal in `load()` (other
+  language or text, other mods, another build, another system, not a state,
+  no such slot) goes to stderr and to a notice over the picture
+  (`Menu_ShowNotice`, "Save state not loaded"); F7 used to do nothing
+  visible on Windows.
 - Game data words the linker relocated (pointers to native functions) are
   taken from the running build when the game never changed them; the file
   keeps the startup image of that data to tell.

@@ -74,4 +74,15 @@ const unsigned char *Text_CompileOwn(const char *listing, int id, size_t *size);
  * game's own text, `target` in the cursor's 64 KB bank. */
 unsigned char *Text_Retarget(unsigned char *cursor, unsigned target);
 
+/* Where the text compiled at startup lies, which the game's text boxes
+ * point into and a save state keeps (state.c): the fixed region's address
+ * (0 when the text had to stay on the heap), how many of its bytes the
+ * startup text takes (on the heap, how many it has), and a CRC-32 of that
+ * text unit by unit. All 0 with no text compiled. Text_Build fixes it; the
+ * shop's menu, compiled later from that text, is not in it. */
+typedef struct {
+    unsigned base, used, crc;
+} TextLayout;
+TextLayout Text_Layout(void);
+
 #endif

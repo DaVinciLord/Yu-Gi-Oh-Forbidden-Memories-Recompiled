@@ -1,4 +1,5 @@
 /* Translations (text.h, notes/translation.md). */
+#define _DEFAULT_SOURCE /* MAP_ANONYMOUS, MAP_FIXED_NOREPLACE */
 #include "text.h"
 #include "glyphs.h"
 #include "hd_text.h"
@@ -18,6 +19,7 @@
 #include "pc/debug/log.h"
 #include "game/card_constants.h"
 #include "game/duel_side_state.h"
+#include "pc/compat/mman.h"
 #include <ctype.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -35,6 +37,112 @@ static int unit_count;
  * among the units a mod's labels are looked for in, since its labels are
  * the PAL banks' offsets, not the US ones a mod means. */
 static TextUnit *language_unit;
+
+/* Where the compiled text lives. The game keeps pointers into it in its
+ * own memory (a text box's cursor, the streams it jumps between), and a
+ * save state keeps them as they were: on the heap they would name another
+ * place at the next launch, which the heap lays out differently (the
+ * folder names alone move it), and a state loaded mid-dialogue read
+ * garbage. So the text is copied into one region at a fixed address, unit
+ * after unit in the order they are compiled, which a launch with the same
+ * language and mods repeats (a state with another language or other mods
+ * is refused: state.c). The card shop's menu, compiled on first use, comes
+ * after the others either way. 3D Monsters' arenas sit at 0x90000000 for
+ * the same reason; the interpreter's stack at 0x9FF00000. If the region
+ * cannot be had, the text stays on the heap, as before. */
+#define ARENA_BASE 0x9C000000u
+#define ARENA_SIZE 0x01000000u
+#define ARENA_ALIGN 16u
+static unsigned char *arena;
+static size_t arena_used;
+static int unpinned; /* a unit stayed on the heap */
+
+static unsigned char *arena_take(size_t size)
+{
+    static int tried;
+    unsigned char *at;
+    if (!tried) {
+        void *wanted = (void *)(uintptr_t)ARENA_BASE, *got;
+        tried = 1;
+        got = mmap(wanted, ARENA_SIZE, PROT_READ | PROT_WRITE, MAP_FIXED_NOREPLACE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (got != MAP_FAILED && got != wanted) munmap(got, ARENA_SIZE); /* taken as a hint */
+        if (got == wanted) {
+            arena = got;
+        } else {
+            fprintf(stderr, "memories-pc: no room for the text at 0x%08x; save states made in a dialogue with a "
+                            "translation may not load\n", ARENA_BASE);
+        }
+    }
+    /* One byte more than asked: Text_Retarget takes a unit's end as its
+     * own, so the next unit must not start there. */
+    if (!arena || size >= ARENA_SIZE - arena_used) return NULL;
+    at = arena + arena_used;
+    arena_used += (size + 1 + ARENA_ALIGN - 1) & ~(size_t)(ARENA_ALIGN - 1);
+    return at;
+}
+
+/* A unit just compiled, into the region (above); its jumps within itself
+ * follow it. Jumps into an earlier unit are into the region already, and
+ * the retail text stays where it is. */
+static void pin(TextUnit *unit)
+{
+    unsigned char *old = unit->data, *moved;
+    int i;
+    if (!unit->size) return;
+    if (!(moved = arena_take(unit->size))) {
+        unpinned = 1;
+        return;
+    }
+    memcpy(moved, old, unit->size);
+    for (i = 0; i < unit->target_count; i++) {
+        uintptr_t target = (uintptr_t)unit->targets[i];
+        if (target >= (uintptr_t)old && target - (uintptr_t)old <= unit->size) {
+            unit->targets[i] = moved + (target - (uintptr_t)old);
+        }
+    }
+    free(old);
+    unit->data = moved; /* not freed again: a unit, once added, stays */
+}
+
+/* The startup text's layout (Text_Layout), once Text_Build is done. A
+ * state holds addresses inside it: the same language and mods give the
+ * same layout, but a pack, a mod's text file or the port's own strings
+ * changed since (none of them in the mods' signature) move them. */
+static TextLayout layout;
+
+static unsigned crc32_update(unsigned crc, const unsigned char *data, size_t length)
+{
+    size_t i;
+    int bit;
+    crc = ~crc;
+    for (i = 0; i < length; i++) {
+        crc ^= data[i];
+        for (bit = 0; bit < 8; bit++) crc = (crc >> 1) ^ (0xEDB88320u & (0u - (crc & 1u)));
+    }
+    return ~crc;
+}
+
+static void measure_layout(void)
+{
+    size_t bytes = 0;
+    int i;
+    layout.crc = 0;
+    for (i = -1; i < unit_count; i++) {
+        TextUnit *unit = i < 0 ? language_unit : units[i];
+        unsigned size;
+        if (!unit || !unit->size) continue;
+        size = (unsigned)unit->size;
+        layout.crc = crc32_update(layout.crc, (const unsigned char *)&size, sizeof(size));
+        layout.crc = crc32_update(layout.crc, unit->data, unit->size);
+        bytes += unit->size;
+    }
+    layout.base = arena && arena_used && !unpinned ? ARENA_BASE : 0;
+    layout.used = (unsigned)(layout.base ? arena_used : bytes);
+    if (layout.used) {
+        LOG(LOG_MODS, "text: %u bytes %s, CRC-32 %08x", layout.used,
+            layout.base ? "in the region at 0x9C000000" : "on the heap", layout.crc);
+    }
+}
 
 typedef struct {
     const char *mod, *file;
@@ -106,10 +214,11 @@ static void add_unit(int mod, const char *path, const char *name)
     }
     units = bigger;
     units[unit_count++] = unit;
+    pin(unit);
     /* A later file, or a later mod, has the last word on a string. */
     for (i = 0; i < unit->string_count; i++) overrides[unit->strings[i].id] = unit->data + unit->strings[i].offset;
-    LOG(LOG_MODS, "text: %s: %s: %d strings, %lu bytes, %d jumps", Mods_Id(mod), name, unit->string_count,
-        (unsigned long)unit->size, unit->target_count);
+    LOG(LOG_MODS, "text: %s: %s: %d strings, %lu bytes, %d jumps, at %p", Mods_Id(mod), name, unit->string_count,
+        (unsigned long)unit->size, unit->target_count, (void *)unit->data);
 }
 
 static void report_language(void *context, int line, const char *message)
@@ -133,11 +242,13 @@ static void add_language(void)
         Language_Drop();
         return;
     }
+    pin(language_unit);
     for (i = 0; i < language_unit->string_count; i++) {
         overrides[language_unit->strings[i].id] = language_unit->data + language_unit->strings[i].offset;
     }
-    LOG(LOG_MODS, "text: %s: %d strings, %lu bytes, %d jumps", Language_Label(Language_Current()),
-        language_unit->string_count, (unsigned long)language_unit->size, language_unit->target_count);
+    LOG(LOG_MODS, "text: %s: %d strings, %lu bytes, %d jumps, at %p", Language_Label(Language_Current()),
+        language_unit->string_count, (unsigned long)language_unit->size, language_unit->target_count,
+        (void *)language_unit->data);
 }
 
 void Text_Build(void)
@@ -166,7 +277,10 @@ void Text_Build(void)
             if (path[0]) add_unit(mod, path, name);
         }
     }
+    measure_layout();
 }
+
+TextLayout Text_Layout(void) { return layout; }
 
 /* View > Opponent's name for COM (hd_text.h) names the sides after the
  * duel too: strings 0x3E (YOU, or 1P in a 2P duel) and 0x3F (COM, or 2P)
@@ -469,6 +583,9 @@ const unsigned char *Text_CompileOwn(const char *listing, int id, size_t *size)
     }
     units = bigger;
     units[unit_count++] = unit;
+    pin(unit);
+    LOG(LOG_MODS, "text: the port's own listing: %d strings, %lu bytes, at %p", unit->string_count,
+        (unsigned long)unit->size, (void *)unit->data);
     for (i = 0; i < unit->string_count; i++) {
         if (unit->strings[i].id == id) {
             *size = unit->size - unit->strings[i].offset;

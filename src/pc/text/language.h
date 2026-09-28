@@ -25,6 +25,10 @@ int Language_Available(int language);
 char *Language_Listing(size_t *length);
 /* The language this launch's text is in. */
 int Language_Current(void);
+/* A short name for the language that does not change with the menu's order
+ * ("en-us", or its pack's: "en-eu", "fr", "de", "it", "es"); a save state
+ * keeps it (state.c). "" for no language. */
+const char *Language_Code(int language);
 /* Back to English (US) for this launch: the listing did not compile. */
 void Language_Drop(void);
 
