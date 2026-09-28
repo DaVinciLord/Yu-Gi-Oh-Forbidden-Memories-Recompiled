@@ -50,6 +50,14 @@ static const int keep_us[] = {0x06, 0x10, 0x18, 0x19, 0x40, 0x41, 0x42, 0x43, 0x
  * rest keep the US look. */
 static const struct { int id, width, cell, line; } fitted[] = {{0xE1, 0xA0, 0x10, 0x10}};
 
+/* The duel's card bar (0x52-0x55): a line up or down to what shows by the
+ * bar (the Swords' turns, GUARDIAN STAR), then the bar itself (0x50/0x51).
+ * The US goes back down before the bar; the PAL does not (a space where
+ * the US has its line back), since its box is lower, so in the US box the
+ * name, ATK/DEF and icons sat 35 pixels up, on the stone. The US's lines,
+ * there and back, around the PAL's own words. */
+static const struct { int id; unsigned char dy; } bar_lines[] = {{0x52, 0xE4}, {0x53, 0x1C}, {0x54, 0x1C}, {0x55, 0x1C}};
+
 /* The PAL name buffers (file A offsets) and the US ones they stand for. */
 static const struct { unsigned pal, us; } name_buffers[] = {{0xF800, 0x122B}, {0xF814, 0x1238}, {0xF848, 0x125A}};
 
@@ -631,6 +639,7 @@ static void write_bank(Out *out, Bank *bank, const char *out_bank, const uint32_
 {
     int offset, inside = 0, previous_end = -1, is_menus = !strcmp(bank->name, "menus"), id, id_count = 0;
     int is_descriptions = !strcmp(bank->name, "descriptions");
+    int bar = -1, bar_at = -1;   /* the card bar's line (bar_lines) the string at bar_at is */
     /* The bank's ids in order, to name each string's. */
     static uint16_t ids[0x10000];
     static unsigned char plan[BANK_SIZE];   /* reflow: what to write at each offset */
@@ -671,6 +680,10 @@ static void write_bank(Out *out, Bank *bank, const char *out_bank, const uint32_
             LINE(out, "");
             inside = 1;
             if (header && is_menus) {
+                bar = -1;
+                for (i = 0; i < (int)(sizeof(bar_lines) / sizeof(bar_lines[0])); i++) {
+                    if (bank->ids[bar_lines[i].id] == offset) bar = i, bar_at = offset;
+                }
                 for (i = 0; i < (int)(sizeof(fitted) / sizeof(fitted[0])); i++) {
                     int letters = first_line_letters(bank, offset);
                     if (bank->ids[fitted[i].id] == offset && letters * fitted[i].cell > fitted[i].width)
@@ -688,7 +701,14 @@ static void write_bank(Out *out, Bank *bank, const char *out_bank, const uint32_
                 else if ((lines < 1 || lines > CARD_VIEW_LINES) && problems) ++*problems;
             }
         }
-        if (plan[offset] == DROP) {
+        if (bar >= 0 && offset == bar_at && op->kind == OP_CODE && !strncmp(op->text, "f8 01 ", 6)) {
+            addf(out, "{f8 01 %02X}", bar_lines[bar].dy);
+        } else if (bar >= 0 && op->kind == OP_GLYPH && op->value < 0x100 && glyphs[op->value] == ' ' &&
+                   offset + 1 < BANK_SIZE && bank->op_at[offset + 1] >= 0 &&
+                   !strcmp(bank->ops[bank->op_at[offset + 1]].text, "jump")) {
+            addf(out, "{f8 01 %02X}", (unsigned)(-bar_lines[bar].dy & 0xFF));
+            bar = -1;
+        } else if (plan[offset] == DROP) {
             /* a hyphen, or the break after it, of a word made whole (reflow) */
         } else if (plan[offset] == AS_LINE) {
             LINE(out, "");

@@ -207,16 +207,16 @@ COM{end}
 {end}
 
 [0052]
-{f8 01 DD}{call LF019} {jump LF010}
+{f8 01 E4}{call LF019}{f8 01 1C}{jump LF010}
 
 [0053]
-{f8 01 DD}{call LF019} {jump LF017}
+{f8 01 1C}{call LF019}{f8 01 E4}{jump LF017}
 
 [0054]
-{f8 01 16}{call LF019} {jump LF010}
+{f8 01 1C}{call LF019}{f8 01 E4}{jump LF010}
 
 [0055]
-{f8 01 16}{call LF019} {jump LF017}
+{f8 01 1C}{call LF019}{f8 01 E4}{jump LF017}
 
 [0060]
 {call LF003}{cont}

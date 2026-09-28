@@ -625,8 +625,13 @@ eighth line does. The Password screen's star chips are in a box the US
 code sizes to big letters in cells of 16 (shop.c) and the EU code leaves
 at its 8x16: a heading wider than the box in those cells, the French ÉCLAT
 D'ÉTOILE, has its letters as close as it needs (11 pixels) instead of
-wrapping onto the count. Menus with no words that the PAL lays out for its
-frames keep the US string (above).
+wrapping onto the count. The duel's card bar on the field (`52`-`55`: a
+line to the Swords' turns or GUARDIAN STAR, then the bar) goes 35 pixels
+up in the PAL (`F8 01 DD`) and never back, its box being lower, so in the
+US box the name, ATK/DEF and icons sat on the stone above the bar: it gets
+the US lines there and back (`F8 01 E4` ... `F8 01 1C`) around the PAL's
+words. Menus with no words that the PAL lays out for its frames keep the
+US string (above).
 
 Known in phase 1: RESULTS keeps the US pages (strings `40`-`45`, in
 English, beside the language's YOU and COM columns). The PAL pages are laid
