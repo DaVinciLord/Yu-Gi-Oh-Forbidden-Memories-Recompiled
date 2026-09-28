@@ -45,10 +45,6 @@ static const SettingInfo info[SET_COUNT] = {
     /* View > Duel rank (src/pc/cards/rank_meter.h): 0 off, 1 the rank,
      * 2 the rank and the score. */
     [SET_RANK_METER] = {"rank_meter", NULL, "MEMORIES_RANK_METER", NULL, 0, 0, 2},
-    /* 1: states kept in memory every few frames, and holding F8 goes back
-     * through them (src/pc/guest/state.c, rewind.h). Off by default: it
-     * costs memory and a little time per frame. */
-    [SET_REWIND] = {"rewind", NULL, "MEMORIES_REWIND", NULL, 0, 0, 1},
     /* Game > Cheats (src/pc/debug/cheats.h): the life points both sides
      * start a duel against the CPU with; 8000 is the console's. */
     [SET_CHEAT_LIFE_POINTS] = {"cheat_life_points", NULL, "MEMORIES_CHEAT_LIFE_POINTS", NULL, 8000, 1, 9999},

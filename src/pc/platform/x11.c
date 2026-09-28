@@ -647,9 +647,6 @@ static void pump(void)
             if(next.type==KeyPress && next.xkey.time==event.xkey.time && next.xkey.keycode==event.xkey.keycode){XNextEvent(display,&next);continue;}
         }
         if(event.type==KeyRelease)ControlsRuntime_Key(physical_keys[event.xkey.keycode&255],0);
-        /* F8's release too, before a menu can take it: else the rewind
-         * would run on after the menu closes. */
-        if(event.type==KeyRelease&&XLookupKeysym(&event.xkey,0)==XK_F8)Memories_RewindHold(0);
         if(controls_window && event.xany.window==controls_window) {
             if(event.type==KeyPress || event.type==KeyRelease) {
                 int key=physical_keys[event.xkey.keycode&255],down=event.type==KeyPress;
@@ -667,7 +664,7 @@ static void pump(void)
             continue;
         }
         if(controls_window && (event.type==KeyPress||event.type==KeyRelease||event.type==ButtonPress||event.type==ButtonRelease))continue;
-        if(event.type==FocusOut){Memories_RewindHold(0);if(!controls_window)ControlsRuntime_ResetKeys();mouse_bits=wheel_now=0;wheel_frames=0;}
+        if(event.type==FocusOut){if(!controls_window)ControlsRuntime_ResetKeys();mouse_bits=wheel_now=0;wheel_frames=0;}
 
         if (mods_window && event.xany.window == mods_window) {
             MenuEvent input = *translate(&event);
@@ -727,7 +724,6 @@ static void pump(void)
                 DeckMenu_Request();
                 continue;
             }
-            if (key == XK_F8 && Memories_RewindHold(event.type == KeyPress)) continue; /* the rewind setting on */
             if (key == XK_Escape && event.type == KeyPress) {
                 quit = 1;
             }
