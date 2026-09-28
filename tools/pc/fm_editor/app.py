@@ -3,12 +3,15 @@ from __future__ import annotations
 
 import os
 import tkinter as tk
+import tkinter.font as tkfont
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from . import disc, gamedata, manifest, validate
 from .model import KEY_RE, Project
+from .art_tab import ArtTab
 from .tabs import CardsTab, DuelistsTab, EquipsTab, FusionsTab, ModInfoTab, ProblemsTab, RitualsTab
+from .widgets import px
 
 APP_TITLE = "FM Editor"
 
@@ -17,12 +20,17 @@ class App(tk.Tk):
     def __init__(self, game=None, mod=None, ask=True, autostart=True):
         super().__init__()
         self.title(APP_TITLE)
-        self.geometry("1280x800")
-        self.minsize(1000, 640)
+        style = ttk.Style(self)
         try:
-            ttk.Style(self).theme_use("vista" if os.name == "nt" else "clam")
+            style.theme_use("vista" if os.name == "nt" else "clam")
         except tk.TclError:
             pass
+        # Sizes for 96 dpi, grown with the desktop's font (widgets.ui_scale)
+        # but kept on the screen; a row as tall as a line of text.
+        width, height = self.winfo_screenwidth() * 9 // 10, self.winfo_screenheight() * 9 // 10
+        self.geometry(f"{min(px(self, 1280), width)}x{min(px(self, 800), height)}")
+        self.minsize(min(px(self, 1000), width), min(px(self, 640), height))
+        style.configure("Treeview", rowheight=tkfont.nametofont("TkDefaultFont", root=self).metrics("linespace") + 4)
         self.retail = None
         self.files = None
         self.project = None
@@ -32,13 +40,14 @@ class App(tk.Tk):
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(fill="both", expand=True)
         self.cards = CardsTab(self.notebook, self)
+        self.art = ArtTab(self.notebook, self)
         self.fusions = FusionsTab(self.notebook, self)
         self.equips = EquipsTab(self.notebook, self)
         self.rituals = RitualsTab(self.notebook, self)
         self.duelists = DuelistsTab(self.notebook, self)
         self.info = ModInfoTab(self.notebook, self)
         self.problems = ProblemsTab(self.notebook, self)
-        self.tabs = [self.cards, self.fusions, self.equips, self.rituals, self.duelists, self.info, self.problems]
+        self.tabs = [self.cards, self.art, self.fusions, self.equips, self.rituals, self.duelists, self.info, self.problems]
         self.status = ttk.Label(self, relief="sunken", anchor="w", padding=(6, 2))
         self.status.pack(fill="x", side="bottom")
         self.notebook.bind("<<NotebookTabChanged>>", lambda e: self.tab_changed())
@@ -194,6 +203,9 @@ class App(tk.Tk):
             current.fill()
         elif current in (self.fusions, self.rituals, self.cards):
             current.fill()
+        elif current is self.art:
+            current.fill()
+            current.show(current.current)
 
     def need_game(self):
         if self.retail is None:
@@ -301,6 +313,10 @@ class App(tk.Tk):
         if issue.area == "Cards" and target:
             self.notebook.select(self.cards)
             self.cards.goto(target)
+        elif issue.area == "Art":
+            self.notebook.select(self.art)
+            if target:
+                self.art.goto(target)
         elif issue.area == "Fusions" and target:
             self.notebook.select(self.fusions)
             self.fusions.search.set(str(target[0]))

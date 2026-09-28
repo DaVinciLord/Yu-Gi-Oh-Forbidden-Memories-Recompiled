@@ -44,8 +44,8 @@ The release ships no card mod; the checks below were made with test mods
 | `count_setting` | read `count` from one of the mod's settings instead, so `MEMORIES_MOD_<ID>_COUNT=5000` or `mod.<id>.count=5000` in the settings file changes it without editing the manifest |
 | `name` | the cards' own name; `{n}` is the card's number within the entry and `{id}` its card id. Without one a card has its base's name. Letters, digits, spaces and ``!"#$%&'()*+,-./:<>?`` are what the game's font has; accented letters and others the port adds ([translations](translation.md)) work too |
 | `description` | the card's own text (UTF-8: accented letters work, [translations](translation.md)), wrapped as the retail texts are (lines of up to twenty letters, broken at spaces; `\n` breaks a line where it stands). Eight lines is the most any retail text has. Without one a card has its base's text |
-| `art` | a PNG in the mod (a path relative to its directory): the card's picture and, made from the same image, the small one the hand and field show. Any size: the middle of it at the card's shape is taken and scaled to 102x96 and 40x32, and its colours reduced to the 255 and 63 each has. 102x96 or a multiple looks best |
-| `thumbnail` | a PNG for the small picture alone, when the scaled-down `art` does not read well at 40x32 |
+| `art` | a PNG in the mod (a path relative to its directory): the card's picture and, made from the same image, the small one the hand and field show. Any size: the middle of it at the card's shape is taken and scaled to 102x96 and 40x32, and its colours reduced to the 255 and 63 each has. An image bigger than that is also drawn at its own resolution when View > Console resolution is set above 1x (Internal 2x, 4x), as a texture pack's image is ([HD pictures](#hd-pictures)), so 408x384 (4x) or 816x768 (8x) looks best |
+| `thumbnail` | a PNG for the small picture alone, when the scaled-down `art` does not read well at 40x32; bigger than 40x32, it is drawn at its own resolution too |
 | `title` | a PNG for the name plate at the top of the card's picture (96x14; dark ink on white, or on a transparent background). Without one, a card with its own name gets a plate with that name set in Times at the retail plates' size (Times New Roman on Windows, fontconfig's match for `Times` elsewhere, Liberation Serif on most Linux systems), or a blank plate when there is none |
 | `attack`, `defense` | 0 to 5110, in tens, as the game stores them |
 | `type` | a number or a name (`"Dragon"`, `"Winged Beast"`). A copy of a monster stays a monster, since it has its base's 3D model; a copy of a magic, trap, ritual or equip card keeps its type, since it has its base's effect |
@@ -232,6 +232,30 @@ not show through on the copy in words that happen to match it; the plate
 is not, since that write would drop the delivery of the sector that also
 ends the base's palette. Card text goes in beside the name, at the text
 engine's insert command (`duel_effect_command.c`, op 0x40).
+
+<a id="hd-pictures"></a>**HD pictures.** A texture pack finds its images by where their
+bytes came from on the disc, and a mod card's picture comes from no place on
+the disc, so the port registers the PNG itself: for an `art` or `thumbnail`
+bigger than the console's picture, `Cards_Build` hands the record's made
+bytes (the picture, 51 words by 96 rows at 8 bits, and its 256-entry CLUT;
+the thumbnail, 20 by 32, and its 64 entries) and the PNG's crop (the same
+middle `resample` takes, `CardArt_Crop`) to `TexturePack_AddMade`. Each
+distinct block of bytes gets a place of its own from `TEXTURE_MADE_BASE`
+(0xC0000000, past any CD) up, and the pack's recall index knows it by its
+bytes: the upload of a patched record has no disc provenance (the patch
+reported it written), so `TextureDump_Loaded` asks `recall`, which checks
+the whole block, and the words are tagged with the made place. From there
+it is a pack entry like any other: painted into the shadow, resampled at
+1x, sampled at its own resolution above it by both renderers, found again
+after a state load (`rediscover` compares against the made bytes). A made
+block's first 32 bytes may be one value (a plain sky); only a block of one
+value throughout is left out, as a fill would match it anywhere. Made
+entries are kept apart from the packs' and joined to them again whenever
+the packs are unloaded or reloaded, so enabling or disabling a texture pack
+in the Mods window keeps them. Entries with the same art share one entry;
+two pictures with the same palette share the palette's place. Nothing in the
+mod's manifest changes: a mod written for 0.1.2 gets HD pictures from the
+PNGs it already has, and one at 102x96 draws as before.
 
 **What spells out 722.** The Library's heading string (`"<seen/722>"`,
 0x801B121D, text 0xF8) is replaced by the port's own for the real total, in a

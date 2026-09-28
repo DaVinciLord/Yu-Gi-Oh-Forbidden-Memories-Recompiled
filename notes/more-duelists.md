@@ -1153,29 +1153,13 @@ A duelist's face becomes a whole portrait record through
 resampling and palette reduction, which `FreeDuel_ShowPage` uploads in the
 base's place.
 
-The full-size half needed a way for the texture pack to key an image the disc
-never carried. The pack matches on one value — `TextureDump_Tags[word]`, the
-disc byte offset the bytes in that VRAM word came from — and a record built in
-memory has none, which is exactly what stopped an added duelist wearing the
-pack's picture of whoever it copies.
-
-So there is a space above every disc offset, `TEXTURE_MOD_OFFSET_BASE`, that
-the port keys its own images in:
-
-- `TextureDump_ModImage(bytes, n, offset)` tags an upload in that space. It is
-  `TextureDump_Delivered` with a made-up place instead of a sector, and reuses
-  the delivery machinery whole — the copy it keeps, and the comparison that
-  drops the tag when the words are written over since.
-- `TexturePack_AddImage(file, offset, words, rows, bpp, clut_offset, entries)`
-  registers the picture at the same place. These entries are the port's and
-  not a pack directory's, so they outlive a pack being loaded or unloaded and
-  a mod carrying one picture needs no pack at all.
-- A duelist's place is its id's: a stride of 4,096, the picture at the start
-  and its palette at + 2,304, which is where `prepare` looks for it — the
-  palette is matched by the tag on the CLUT's own first word.
-
-Nothing downstream of the tag knows the difference: `locate`, the sibling
-runs, the maps and the scaled sampling are offset arithmetic and unchanged.
+The full-size half is registered the way an added card's picture is
+(`cards.c`, `add_full_picture`): `TexturePack_AddMade` is given the record's
+image and palette bytes and the PNG, and the pack knows the grid's upload by
+those bytes (`recall`), since a record built in memory has no disc offset to
+be tagged with. A PNG at 48x48 or under has nothing more to show and is not
+registered. Made images are kept across a pack's loads and unloads, so a mod
+carrying one picture needs no pack at all.
 
 A duelist with no picture of its own uploads its base's record and gets the
 pack's picture of the base, which is what it should get.

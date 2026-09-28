@@ -2,6 +2,7 @@
 #include "text.h"
 #include "glyphs.h"
 #include "listing.h"
+#include "language.h"
 #include "pc/cards/cards.h"
 #include "pc/mods/mods.h"
 #include "pc/mods/json.h"
@@ -28,6 +29,10 @@ static const uint32_t bases[TEXT_BANK_COUNT] = {0x801B0000u, 0x801C0000u, 0x801D
 static const unsigned char **overrides;   /* by string id */
 static TextUnit **units;
 static int unit_count;
+/* Game > Language's text (language.h): under the mods' strings, and not
+ * among the units a mod's labels are looked for in, since its labels are
+ * the PAL banks' offsets, not the US ones a mod means. */
+static TextUnit *language_unit;
 
 typedef struct {
     const char *mod, *file;
@@ -105,6 +110,34 @@ static void add_unit(int mod, const char *path, const char *name)
         (unsigned long)unit->size, unit->target_count);
 }
 
+static void report_language(void *context, int line, const char *message)
+{
+    (void)context;
+    LOG(LOG_MODS, "text: the language's listing, line %d: %s", line, message);
+}
+
+static void add_language(void)
+{
+    size_t length = 0;
+    char *listing = Language_Listing(&length);
+    int i;
+    if (!listing) return;
+    language_unit = TextListing_Compile(listing, length, bases, NULL, 0, Glyphs_Code, report_language, NULL);
+    free(listing);
+    if (!overrides) overrides = calloc(0x10000, sizeof(*overrides));
+    if (!language_unit || !overrides) {
+        TextListing_Free(language_unit);
+        language_unit = NULL;
+        Language_Drop();
+        return;
+    }
+    for (i = 0; i < language_unit->string_count; i++) {
+        overrides[language_unit->strings[i].id] = language_unit->data + language_unit->strings[i].offset;
+    }
+    LOG(LOG_MODS, "text: %s: %d strings, %lu bytes, %d jumps", Language_Label(Language_Current()),
+        language_unit->string_count, (unsigned long)language_unit->size, language_unit->target_count);
+}
+
 void Text_Build(void)
 {
     static int built;
@@ -121,6 +154,8 @@ void Text_Build(void)
             if (path[0]) Glyphs_AddFont(path);
         }
     }
+    /* The official language first: a mod's string stands over its. */
+    add_language();
     for (i = 0; i < Mods_LoadedCount(); i++) {
         int mod = Mods_Loaded(i);
         const char *name;
@@ -427,9 +462,9 @@ unsigned char *Text_Retarget(unsigned char *cursor, unsigned target)
             return (unsigned char *)(uintptr_t)(bases[TEXT_BANK_DIALOG] | place);
         }
     }
-    for (i = 0; i < unit_count; i++) {
-        TextUnit *unit = units[i];
-        if (cursor >= unit->data && cursor <= unit->data + unit->size) {
+    for (i = -1; i < unit_count; i++) {
+        TextUnit *unit = i < 0 ? language_unit : units[i];
+        if (unit && cursor >= unit->data && cursor <= unit->data + unit->size) {
             /* An operand past the unit's targets (a hand-edited byte) ends
              * the stream rather than jumping anywhere. */
             return target < (unsigned)unit->target_count ? unit->targets[target] : unit->data + unit->size - 1;

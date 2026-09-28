@@ -2,7 +2,7 @@
 
 **Yu-Gi-Oh! Forbidden Memories** (PS1, USA) rebuilt from its decompiled source as a
 native PC game for Windows and Linux. Bring your own disc image; no game data is
-included.
+included but the text of the European translations (below).
 
 ![Your field at 4x resolution with 3D Monsters](docs/screenshots/field.jpg)
 
@@ -13,6 +13,7 @@ included.
 - Optional **Forbidden Memories HD** pack: redrawn cards, frames and portraits
 - Mods: framework for new cards past the original 722, fusions, textures, music, gameplay tables
 - Save slots, fusion helper, card drop rates, rebindable controls
+- **Game > Language**: the European releases' own English, French, German, Italian and Spanish
 
 ![HD Free Duel portraits](docs/screenshots/portraits.jpg)
 
@@ -30,11 +31,15 @@ launch, pick your USA disc's `.bin`. The game can tell you when a newer release 
    or `memories-pc`. You should end up with `mods/assets-hd` beside the other mods.
 3. Start the game. The pack is on by default: press **F10** for the menu bar and open
    **Game > Mods** to check it, or to turn it or any of its parts off.
-4. For the best look, pick **Video > Resolution > Internal 4x**. The pack's **HD text** setting
-   (on by default, in **Game > Mods**) sets the text, numbers and labels in a font at that resolution.
+4. For the best look, pick **Video > Resolution > Internal 4x** and turn on **Video > HD text**.
 
 **From source:** put the `.bin` in `game/` and run `play.bat` or `./play.sh`. The first
 run builds everything (Linux needs `gcc` and `python3`). See [PC build](notes/pc-build.md).
+
+**Languages:** `languages/*.txt` is the text of the five European releases, read off the
+PAL discs by the port itself. With the discs in `game/pal`, `python3 tools/pc/export_languages.py`
+writes them again, and `--check` compares them ([Translations](notes/translation.md),
+"The official languages"). They are the only game data in the repository: text, no pictures.
 
 ## Decompilation
 
@@ -80,7 +85,7 @@ _Generated from `config/slus_01411/functions.csv` and `config/slus_01411/overlay
 ## Docs
 
 [Modding](notes/modding.md) · [More cards](notes/more-cards.md) · [Fusion helper](notes/fusion-helper.md) ·
-[Card drops](notes/card-drops.md) · [Updates](notes/updates.md) · [Setup](notes/setup.md) · [Build](notes/build.md) ·
+[Card drops](notes/card-drops.md) · [Translations](notes/translation.md) · [Updates](notes/updates.md) · [Setup](notes/setup.md) · [Build](notes/build.md) ·
 [Releases](notes/pc-release.md)
 
 ## Community

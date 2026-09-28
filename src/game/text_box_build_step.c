@@ -22,6 +22,8 @@
 #include "pc/cards/cards.h"
 #include "pc/free_duel/duelists.h"
 #include "pc/text/glyphs.h"
+#include "pc/text/menu_cut.h"
+#include "pc/text/language.h"
 #include "pc/text/text.h"
 #endif
 
@@ -43,6 +45,9 @@ void TextBox_BuildStep(DuelEffectChannel *object)
     DuelEffectEntry *entry;
     s32 op;
     void (**handlers)(u8 *);
+#ifdef MEMORIES_PC
+    int pal_shift, pal_advance;
+#endif
 
     flags = object->flags_34;
     if ((flags & TEXT_BOX_FLAG_BUILD_ACTIVE) == 0) {
@@ -142,10 +147,12 @@ next_opcode:
     }
 #ifdef MEMORIES_PC
     /* 0x1000: a menu's choices are being laid out. A line too wide for
-       the box is cut where its wrap would stop the game (text.h). */
+       the box is cut where its wrap would stop the game (text.h), and so
+       are the letters of the lines past its box (menu_cut.h). */
     if ((object->flags_34 & 0x1000) &&
-        Text_CutsMenuGlyph(object->field_36, (s16)object->field_38, object->field_3E, (s16)object->field_3A,
-                           object->field_5B, object->field_42, gDialog_bChoiceCount - object->field_56)) {
+        (TextMenu_Cutting(object->index_57) ||
+         Text_CutsMenuGlyph(object->field_36, (s16)object->field_38, object->field_3E, (s16)object->field_3A,
+                            object->field_5B, object->field_42, gDialog_bChoiceCount - object->field_56))) {
         return;
     }
 #endif
@@ -155,8 +162,14 @@ next_opcode:
     }
     D_8009B35A = D_8009B33A;
 #ifdef MEMORIES_PC
+    /* Game > Language's European text is spaced as the PAL font is: a few
+       letters narrower, drawn a little left in their cell (language.h). It
+       was written to wrap at the box's edge with that spacing. */
+    pal_advance = Language_Advance(object->flags_34, (s16)D_8009B33A, &pal_shift);
+    object->field_38 = object->field_38 + pal_shift;
     /* Glyphs past the retail font's have words of their own (glyphs.h). */
     func_80036C14(object, Glyphs_Word((s16)D_8009B33A) & 0x8FF0FFFF);
+    object->field_38 = object->field_38 - pal_shift;
 #else
     func_80036C14(object, D_801D9000[(s16)D_8009B33A] & 0x8FF0FFFF);
 #endif
@@ -165,4 +178,7 @@ next_opcode:
         object->flags_34 = object->flags_34 | TEXT_BOX_FLAG_DONE;
     }
     object->field_38 = object->field_38 + object->field_5A;
+#ifdef MEMORIES_PC
+    object->field_38 = object->field_38 + pal_advance;
+#endif
 }

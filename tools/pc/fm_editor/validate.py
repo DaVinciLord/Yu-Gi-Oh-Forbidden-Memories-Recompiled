@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from .gamedata import (CARD_COUNT, DECK_POOL_MIN_CARDS, DUELIST_NAMES, POOLS, POOL_LABELS, POOL_TOTAL,
                        TYPE_MAGIC, TYPE_EQUIP, TYPE_RITUAL)
+from . import art
 from .model import KEY_RE, Project
 
 MOD_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,63}$")
@@ -25,7 +26,7 @@ HOST_API = 4
 @dataclass
 class Issue:
     level: str          # "error" or "warning"
-    area: str           # "Mod info", "Cards", "Fusions", "Equips", "Rituals", "Duelists"
+    area: str           # "Mod info", "Cards", "Art", "Fusions", "Equips", "Rituals", "Duelists"
     where: str
     message: str
     target: object = None   # what the GUI selects to show it (a card id, a pair, (duelist, pool)...)
@@ -231,6 +232,7 @@ def validate(project: Project) -> list:
         if project.card_changed(cid):
             _check_card(project, cid, out)
     _check_tables(project, out)
+    art.check(project, out)
     return out
 
 

@@ -27,6 +27,10 @@ static uint16_t *texture_source;
 
 static uint16_t *banks[SOFT_GPU_BANKS];
 
+/* How far the polygon being drawn fades into what is under it, 0 (not at
+ * all) to 255 (SoftGpu_FadeWord, soft_gpu.h). */
+static int fade;
+
 /* Where plot writes: VRAM, or a widescreen target while a primitive is drawn
  * a second time into it. Dithering keeps VRAM's phase in a shifted target. */
 static uint16_t *target = vram;
@@ -626,6 +630,12 @@ static inline __attribute__((always_inline)) void plot(int x, int y, int r, int 
         g = g < 0 ? 0 : g > 31 ? 31 : g;
         b = b < 0 ? 0 : b > 31 ? 31 : b;
     }
+    if (fade) {
+        int br = *target & 0x1f, bg = (*target >> 5) & 0x1f, bb = (*target >> 10) & 0x1f;
+        r = (r * (255 - fade) + br * fade) / 255;
+        g = (g * (255 - fade) + bg * fade) / 255;
+        b = (b * (255 - fade) + bb * fade) / 255;
+    }
     *target = (uint16_t)(r | (g << 5) | (b << 10) | (source & 0x8000) |
                          (gpu.mask_set ? 0x8000 : 0));
 }
@@ -644,8 +654,9 @@ static inline __attribute__((always_inline)) int picture_texel(int u, int v, uin
     if (shadow_on && TextureDump_Sample) {
         int got = TextureDump_Sample(gpu.page_x, gpu.page_y, gpu.depth, u, v, rgb);
         if (got == 1) {
-            /* The pack's colour; the texel's own semi-transparency bit. */
-            *rgb = (*rgb & 0xffffffu) | ((uint32_t)(texel(u >> 16, v >> 16) & 0x8000) << 16);
+            /* The pack's colour and how much it covers; the texel's own
+             * semi-transparency bit. */
+            *rgb = (*rgb & 0x7fffffffu) | ((uint32_t)(texel(u >> 16, v >> 16) & 0x8000) << 16);
             return 1;
         }
         if (got == 2) return 0;
@@ -691,6 +702,21 @@ static inline __attribute__((always_inline)) void picture_plot_in(int hx, int hy
         r = clamp8(r);
         g = clamp8(g);
         b = clamp8(b);
+    }
+    if ((flags & 4) && (rgb & 0x7f000000u)) {
+        /* A pack pixel that covers part of its place: the result mixed over
+         * what was there. */
+        int cover = 127 - (int)((rgb >> 24) & 0x7f);
+        int br = (int)((*target >> 16) & 0xff), bg = (int)((*target >> 8) & 0xff), bb = (int)(*target & 0xff);
+        r = br + (r - br) * cover / 127;
+        g = bg + (g - bg) * cover / 127;
+        b = bb + (b - bb) * cover / 127;
+    }
+    if (fade) {
+        int br = (int)((*target >> 16) & 0xff), bg = (int)((*target >> 8) & 0xff), bb = (int)(*target & 0xff);
+        r = (r * (255 - fade) + br * fade) / 255;
+        g = (g * (255 - fade) + bg * fade) / 255;
+        b = (b * (255 - fade) + bb * fade) / 255;
     }
     *target = ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)b;
 }
@@ -1002,9 +1028,13 @@ static size_t polygon(const uint32_t *words, size_t count)
                 gpu.clut_y = (word >> 22) & 0x1ff;
             } else if (i == 1) {
                 set_page(word >> 16);
+            } else if (i == 2) {
+                fade = (int)(word >> 16);
             }
         }
     }
+    /* Only a primitive sampling a bank can fade: retail never names one. */
+    fade = textured && texture_source != vram ? SoftGpu_FadeOf((uint32_t)fade) : 0;
     shadow_on = textured && TextureDump_Prepare && texture_source == vram
                     ? TextureDump_Prepare(gpu.page_x, gpu.page_y, gpu.depth, gpu.clut_x, gpu.clut_y, v[0].u, v[0].v)
                     : 0;
@@ -1030,6 +1060,7 @@ static size_t polygon(const uint32_t *words, size_t count)
     if (quad) {
         triangle(v[1], v[2], v[3], flags);
     }
+    fade = 0;
     return need;
 }
 

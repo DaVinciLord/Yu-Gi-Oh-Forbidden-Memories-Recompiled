@@ -24,7 +24,6 @@
 #include "../../game/display_object_helpers.h"
 #ifdef MEMORIES_PC
 #include "pc/free_duel/duelists.h"
-#include "pc/render/texture_dump.h"
 #include "pc/free_duel/page_box.h"
 
 /* Which page of forty the grid shows, and the duelist a cell stands for on it.
@@ -269,9 +268,9 @@ void FreeDuel_ShowPage(int page)
         if (!shown || !gFreeDuel_pPortraits) continue;
 
         /* Its own face when it has one, its base's otherwise. A record a mod
-         * made has no disc offset behind it, so the texture pack has nothing
-         * to put over it -- which is what stops an added duelist wearing the
-         * pack's picture of whoever it copies. */
+         * made is not the disc's bytes, so the texture pack knows it by those
+         * bytes alone (Duelists_Portrait) and never puts the pack's picture of
+         * whoever it copies over it. */
         record = Duelists_Portrait(duelist);
         if (!record) {
             record = (const u8 *)gFreeDuel_pPortraits +
@@ -285,19 +284,6 @@ void FreeDuel_ShowPage(int page)
                               FREE_DUEL_GRID_COLUMN_COUNT) * 48);
         slot.w = 24;
         slot.h = 48;
-        {
-            /* A picture a mod gave is tagged as its own before it goes up, so
-             * the texture pack knows these words are that file's and the
-             * scaled picture draws it at its own size (duelists.h). A face
-             * from the disc is tagged by the read that brought it. */
-            const int key = Duelists_PortraitKey(duelist);
-            if (key >= 0) {
-                TextureDump_ModImage(record, FREE_DUEL_PORTRAIT_IMAGE_SIZE, (unsigned)key);
-                TextureDump_ModImage(record + FREE_DUEL_PORTRAIT_IMAGE_SIZE,
-                                     FREE_DUEL_PORTRAIT_RECORD_SIZE - FREE_DUEL_PORTRAIT_IMAGE_SIZE,
-                                     (unsigned)key + FREE_DUEL_PORTRAIT_IMAGE_SIZE);
-            }
-        }
         LoadImage2(&slot, (u32 *)record);
         slot.x = (s16)((cell / 16) * 64 + 128);
         slot.y = (s16)((cell & 15) + 496);

@@ -45,7 +45,6 @@ typedef struct {
     unsigned char has_ai;          /* else its base's row */
     unsigned char *portrait;       /* PORTRAIT_RECORD bytes, or NULL for its base's */
     char *art;                     /* the PNG it was made from, for the scaled picture */
-    int art_key;                   /* where the pack has it, or -1 */
     /* "ranks": how a duel against it is scored, five threshold/change pairs
      * per rule over what its block holds. Given to the tables once the
      * duelist has an id (tables.h). */
@@ -205,12 +204,6 @@ const unsigned char *Duelists_Portrait(int duelist)
 {
     const Duelist *one = entry_at(duelist);
     return one ? one->portrait : NULL;
-}
-
-int Duelists_PortraitKey(int duelist)
-{
-    const Duelist *one = entry_at(duelist);
-    return one && one->art ? one->art_key : -1;
 }
 
 /* The text id the disc names a duelist by: FreeDuel_PlaceCursor and the duel's
@@ -1069,15 +1062,6 @@ static void settle_ai(Duelist *one)
         if (!one->ai_given[field]) one->ai[field] = row[field];
 }
 
-/* A duelist's picture, for the scaled picture to draw at its own size.
- *
- * Its place in the pack's mod space is its id's: a stride of PORTRAIT_SPACE,
- * comfortably over the record, so the picture and the palette after it each
- * have a place of their own and an id always lands where it landed before.
- * The screen tags the two uploads with the same places, and from there the
- * pack treats them as it treats a picture from the disc (texture_pack.h). */
-#define PORTRAIT_SPACE 4096
-
 /* Its rank rules, once it has an id to give the tables (tables.h). */
 static void register_ranks(const Duelist *one, int duelist)
 {
@@ -1088,18 +1072,20 @@ static void register_ranks(const Duelist *one, int duelist)
     }
 }
 
-static void register_art(Duelist *one, int duelist)
+/* A duelist's picture, for the scaled picture to draw at its own size: the
+ * record's bytes find the PNG as a texture pack's image is found
+ * (TexturePack_AddMade), as an added card's picture does (cards.c). A PNG at
+ * the console's size or under has no more to show. */
+static void register_art(const Duelist *one)
 {
-    const int key = duelist * PORTRAIT_SPACE;
-    one->art_key = -1;
-    if (!one->art) return;
-    /* The console's slot: 24 words across and 48 rows of 8-bit texels, with
-     * the 64 colours it reads them through. */
-    if (!TexturePack_AddImage(one->art, (unsigned)key, 24, 48, 8, (unsigned)key + PORTRAIT_PIXELS, 64)) {
-        Mods_Note(one->mod, "duelists[%d]: its portrait cannot be drawn at the picture's own size", one->index);
+    int x, y, cw, ch, width, height;
+    if (!one->art || !one->portrait) return;
+    if (!CardArt_Crop(one->art, PORTRAIT_SIDE, PORTRAIT_SIDE, &x, &y, &cw, &ch, &width, &height) ||
+        (cw <= PORTRAIT_SIDE && ch <= PORTRAIT_SIDE))
         return;
-    }
-    one->art_key = key;
+    if (!TexturePack_AddMade(one->portrait, PORTRAIT_SIDE / 2, PORTRAIT_SIDE, 8, one->portrait + PORTRAIT_PIXELS, 64,
+                             one->art, x, y, cw, ch))
+        Mods_Note(one->mod, "duelists[%d]: its portrait is drawn at the console's size only", one->index);
 }
 
 static void place_pending(void)
@@ -1161,10 +1147,10 @@ static void place_pending(void)
     for (i = 0; i < added_top; i++)
         if (added[i].used) settle_ai(&added[i]);
     for (i = 0; i < DUELISTS_RETAIL_COUNT; i++)
-        if (replaced[i].used) { register_art(&replaced[i], i); register_ranks(&replaced[i], i); }
+        if (replaced[i].used) { register_art(&replaced[i]); register_ranks(&replaced[i], i); }
     for (i = 0; i < added_top; i++)
         if (added[i].used) {
-            register_art(&added[i], DUELISTS_RETAIL_COUNT + i);
+            register_art(&added[i]);
             register_ranks(&added[i], DUELISTS_RETAIL_COUNT + i);
         }
 }
@@ -1175,10 +1161,6 @@ void Duelists_Clear(void)
     /* Built again after this: the list is the applied mods', so it is made
        afresh when they change, and by each of the tests' cases. */
     built = 0;
-    /* The pack keyed each duelist's full-size picture by its id, so the
-       pictures go with the list: another mod's duelist could take that id
-       next, and would otherwise wear this one's face. */
-    TexturePack_DropImages();
     for (i = 0; i < added_top; i++) release(&added[i]);
     free(added);
     added = NULL;

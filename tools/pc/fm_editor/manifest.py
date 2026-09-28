@@ -24,7 +24,7 @@ from pathlib import Path
 from .gamedata import (ATTRIBUTE_NAMES, CARD_COUNT, DUELIST_NAMES, POOLS, STAR_NAMES, TYPE_NAMES, TYPE_MAGIC,
                        GameData)
 from .model import AddedCard, ModInfo, Project, duelist_named, type_named, KEY_RE
-from . import pools as poolmath
+from . import art, pools as poolmath
 
 INFO_KEYS = ("id", "name", "version", "author", "description")
 TABLE_KEYS = ("settings", "cards", "fusions", "equips", "rituals", "drops", "decks")
@@ -833,6 +833,7 @@ def open_mod(retail: GameData, folder) -> tuple:
     messages = apply(project, read_json(folder / "mod.json"), default_id=folder.name)
     read_text_cards(project, folder, messages)
     project.source_dir = folder
+    art.read_mod(project, folder, messages)
     return project, messages
 
 
@@ -862,6 +863,7 @@ def save_mod(project: Project, folder, manifest: dict = None) -> Path:
         target = folder / name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(blob)
+    art.write_mod(project, folder)     # the art's PNGs and texture pack, and "textures" in mod.json
     manifest = build(project) if manifest is None else manifest
     path = folder / "mod.json"
     temporary = folder / "mod.json.tmp"

@@ -4,7 +4,13 @@
 /* The port's stored settings (settings.txt in the user directory, see
  * paths.h; MEMORIES_SETTINGS names another file). Every key has a default, a
  * range and an environment override MEMORIES_<KEY IN UPPER CASE> (legacy
- * names are also honoured). Settings are never part of save states. */
+ * names are also honoured). Settings are never part of save states.
+ *
+ * Code mods are built against these numbers (Settings_Get(SET_PGXP)), so an
+ * id keeps its number from release to release: a new one goes at the end,
+ * before SET_COUNT, and one no longer used stays, retired, with no key
+ * (Settings_Key is NULL, Settings_Get 0). tools/pc/check_mod_abi.py fails
+ * the build otherwise. */
 typedef enum {
     SET_MASTER_VOLUME,
     SET_MUSIC_VOLUME,
@@ -29,6 +35,7 @@ typedef enum {
     SET_WINDOW_Y,
     SET_AUDIO_INTERPOLATION,
     SET_INTERNAL_SCALE,
+    SET_RETURN_AFTER_CREDITS,   /* retired: no key, always 0 */
     SET_DECK_SLOTS,
     SET_BRIGHTNESS,
     SET_CONTRAST,
@@ -37,12 +44,15 @@ typedef enum {
     SET_CRT,
     SET_FLASH,
     SET_XBR,
+    SET_HD_TEXT,
     SET_FUSION_HELPER,
-    SET_FREE_DUEL_PROGRESS,
     SET_MSAA,
+    SET_HD_HUD,                 /* retired: part of SET_HD_TEXT */
     SET_OPPONENT_NAME,
     SET_PGXP,
     SET_CARD_DROPS,
+    /* Everything up to here is where release v0.1.2 had it. */
+    SET_FREE_DUEL_PROGRESS,
     SET_UPDATE_CHECK,
     SET_UPDATE_PRERELEASES,
     SET_RANK_METER,
@@ -54,6 +64,7 @@ typedef enum {
     SET_CARD_PASSWORDS,
     SET_JP_BUTTONS,
     SET_CARD_BROWSE,
+    SET_LANGUAGE,
     SET_COUNT
 } SettingId;
 

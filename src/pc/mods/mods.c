@@ -1838,21 +1838,6 @@ const char *Mods_Metadata(int index, const char *key) { return Json_String(Json_
 const char *Mods_Directory(int index) { return at(index) ? mods[index].directory : ""; }
 const char *Mods_Origin(int index) { return at(index) ? mods[index].origin : ""; }
 int Mods_Active(int index) { return at(index) && mods[index].active; }
-
-int Mods_FeatureOn(const char *key)
-{
-    int index, option;
-    for (index = 0; index < Mods_Count(); index++) {
-        if (!Mods_Active(index)) continue;
-        for (option = 0; option < Mods_OptionCount(index); option++) {
-            if (!strcmp(Json_String(Json_Member(Mods_Option(index, option), "key"), ""), key) &&
-                Mods_OptionValue(index, option)) {
-                return 1;
-            }
-        }
-    }
-    return 0;
-}
 int Mods_Failed(int index) { return at(index) && (mods[index].broken || mods[index].failed); }
 
 unsigned Mods_CodeHash(int index) { return at(index) ? mods[index].code_hash : 0; }

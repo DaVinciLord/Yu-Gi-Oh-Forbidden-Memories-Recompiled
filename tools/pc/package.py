@@ -5,9 +5,10 @@
 
 Each archive is a folder a player unpacks and runs: the executable, the mods
 the release ships (the same object files for both systems), the mod SDK,
-the symbol table save states and crash reports use, an empty "game" folder
-for the player's own disc image, and README.txt (tools/pc/release). Nothing
-from the game's disc is included.
+the official European languages' text (languages/, Game > Language), the
+symbol table save states and crash reports use, an empty "game" folder for
+the player's own disc image, and README.txt (tools/pc/release). Nothing else
+from the game's discs is included.
 
 The Linux executable is built against Debian 11's libraries
 (tools/pc/build_linux_sysroot.py), as every Linux build is, so it runs on
@@ -55,7 +56,7 @@ def stage(system, label):
     os.makedirs(os.path.join(folder, "game"))
     for name in [executable, "buildid", "commit"] + extras:
         shutil.copy2(os.path.join(build_dir, name), folder)
-    for name in ("mods", "sdk"):
+    for name in ("mods", "sdk", "languages"):
         shutil.copytree(os.path.join(build_dir, name), os.path.join(folder, name))
     # This build's symbol table, under its build id and under the game
     # fingerprint (the same table): not the ones earlier builds left there.

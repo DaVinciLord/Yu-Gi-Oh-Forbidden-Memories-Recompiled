@@ -13,14 +13,60 @@ static const uint32_t bases[TEXT_BANK_COUNT] = {0x801B0000u, 0x801C0000u, 0x801D
 static int reports;
 
 /* Lower-case letters are 1-26, a space 0; an e with an acute accent is an
- * added glyph, 0x123. */
+ * added glyph, 0x123; e with ^ and an acute (U+1EBF) 0x124, a with a dot
+ * below and a breve (U+1EB7) 0x125, a lone combining acute 0x126. */
 static int encode(uint32_t character)
 {
     if (character == ' ') return 0;
     if (character >= 'a' && character <= 'z') return (int)(character - 'a' + 1);
     if (character == 0xE9) return 0x123;
+    if (character == 0x1EBF) return 0x124;
+    if (character == 0x1EB7) return 0x125;
+    if (character == 0x301) return 0x126;
     return -1;
 }
+
+/* The 134 Vietnamese letters past ASCII, decomposed (NFD), and composed. */
+static const char vietnamese_nfd[] =
+    "\x61\xCC\x80\x61\xCC\x81\x61\xCC\x89\x61\xCC\x83\x61\xCC\xA3\x61\xCC\x86\x61\xCC\x86\xCC\x80\x61"
+    "\xCC\x86\xCC\x81\x61\xCC\x86\xCC\x89\x61\xCC\x86\xCC\x83\x61\xCC\xA3\xCC\x86\x61\xCC\x82\x61\xCC"
+    "\x82\xCC\x80\x61\xCC\x82\xCC\x81\x61\xCC\x82\xCC\x89\x61\xCC\x82\xCC\x83\x61\xCC\xA3\xCC\x82\x65"
+    "\xCC\x80\x65\xCC\x81\x65\xCC\x89\x65\xCC\x83\x65\xCC\xA3\x65\xCC\x82\x65\xCC\x82\xCC\x80\x65\xCC"
+    "\x82\xCC\x81\x65\xCC\x82\xCC\x89\x65\xCC\x82\xCC\x83\x65\xCC\xA3\xCC\x82\x69\xCC\x80\x69\xCC\x81"
+    "\x69\xCC\x89\x69\xCC\x83\x69\xCC\xA3\x6F\xCC\x80\x6F\xCC\x81\x6F\xCC\x89\x6F\xCC\x83\x6F\xCC\xA3"
+    "\x6F\xCC\x82\x6F\xCC\x82\xCC\x80\x6F\xCC\x82\xCC\x81\x6F\xCC\x82\xCC\x89\x6F\xCC\x82\xCC\x83\x6F"
+    "\xCC\xA3\xCC\x82\x6F\xCC\x9B\x6F\xCC\x9B\xCC\x80\x6F\xCC\x9B\xCC\x81\x6F\xCC\x9B\xCC\x89\x6F\xCC"
+    "\x9B\xCC\x83\x6F\xCC\x9B\xCC\xA3\x75\xCC\x80\x75\xCC\x81\x75\xCC\x89\x75\xCC\x83\x75\xCC\xA3\x75"
+    "\xCC\x9B\x75\xCC\x9B\xCC\x80\x75\xCC\x9B\xCC\x81\x75\xCC\x9B\xCC\x89\x75\xCC\x9B\xCC\x83\x75\xCC"
+    "\x9B\xCC\xA3\x79\xCC\x80\x79\xCC\x81\x79\xCC\x89\x79\xCC\x83\x79\xCC\xA3\xC4\x91\x41\xCC\x80\x41"
+    "\xCC\x81\x41\xCC\x89\x41\xCC\x83\x41\xCC\xA3\x41\xCC\x86\x41\xCC\x86\xCC\x80\x41\xCC\x86\xCC\x81"
+    "\x41\xCC\x86\xCC\x89\x41\xCC\x86\xCC\x83\x41\xCC\xA3\xCC\x86\x41\xCC\x82\x41\xCC\x82\xCC\x80\x41"
+    "\xCC\x82\xCC\x81\x41\xCC\x82\xCC\x89\x41\xCC\x82\xCC\x83\x41\xCC\xA3\xCC\x82\x45\xCC\x80\x45\xCC"
+    "\x81\x45\xCC\x89\x45\xCC\x83\x45\xCC\xA3\x45\xCC\x82\x45\xCC\x82\xCC\x80\x45\xCC\x82\xCC\x81\x45"
+    "\xCC\x82\xCC\x89\x45\xCC\x82\xCC\x83\x45\xCC\xA3\xCC\x82\x49\xCC\x80\x49\xCC\x81\x49\xCC\x89\x49"
+    "\xCC\x83\x49\xCC\xA3\x4F\xCC\x80\x4F\xCC\x81\x4F\xCC\x89\x4F\xCC\x83\x4F\xCC\xA3\x4F\xCC\x82\x4F"
+    "\xCC\x82\xCC\x80\x4F\xCC\x82\xCC\x81\x4F\xCC\x82\xCC\x89\x4F\xCC\x82\xCC\x83\x4F\xCC\xA3\xCC\x82"
+    "\x4F\xCC\x9B\x4F\xCC\x9B\xCC\x80\x4F\xCC\x9B\xCC\x81\x4F\xCC\x9B\xCC\x89\x4F\xCC\x9B\xCC\x83\x4F"
+    "\xCC\x9B\xCC\xA3\x55\xCC\x80\x55\xCC\x81\x55\xCC\x89\x55\xCC\x83\x55\xCC\xA3\x55\xCC\x9B\x55\xCC"
+    "\x9B\xCC\x80\x55\xCC\x9B\xCC\x81\x55\xCC\x9B\xCC\x89\x55\xCC\x9B\xCC\x83\x55\xCC\x9B\xCC\xA3\x59"
+    "\xCC\x80\x59\xCC\x81\x59\xCC\x89\x59\xCC\x83\x59\xCC\xA3\xC4\x90";
+static const uint16_t vietnamese[134] = {
+    0x00E0, 0x00E1, 0x1EA3, 0x00E3, 0x1EA1, 0x0103, 0x1EB1, 0x1EAF, 0x1EB3, 0x1EB5,
+    0x1EB7, 0x00E2, 0x1EA7, 0x1EA5, 0x1EA9, 0x1EAB, 0x1EAD, 0x00E8, 0x00E9, 0x1EBB,
+    0x1EBD, 0x1EB9, 0x00EA, 0x1EC1, 0x1EBF, 0x1EC3, 0x1EC5, 0x1EC7, 0x00EC, 0x00ED,
+    0x1EC9, 0x0129, 0x1ECB, 0x00F2, 0x00F3, 0x1ECF, 0x00F5, 0x1ECD, 0x00F4, 0x1ED3,
+    0x1ED1, 0x1ED5, 0x1ED7, 0x1ED9, 0x01A1, 0x1EDD, 0x1EDB, 0x1EDF, 0x1EE1, 0x1EE3,
+    0x00F9, 0x00FA, 0x1EE7, 0x0169, 0x1EE5, 0x01B0, 0x1EEB, 0x1EE9, 0x1EED, 0x1EEF,
+    0x1EF1, 0x1EF3, 0x00FD, 0x1EF7, 0x1EF9, 0x1EF5, 0x0111, 0x00C0, 0x00C1, 0x1EA2,
+    0x00C3, 0x1EA0, 0x0102, 0x1EB0, 0x1EAE, 0x1EB2, 0x1EB4, 0x1EB6, 0x00C2, 0x1EA6,
+    0x1EA4, 0x1EA8, 0x1EAA, 0x1EAC, 0x00C8, 0x00C9, 0x1EBA, 0x1EBC, 0x1EB8, 0x00CA,
+    0x1EC0, 0x1EBE, 0x1EC2, 0x1EC4, 0x1EC6, 0x00CC, 0x00CD, 0x1EC8, 0x0128, 0x1ECA,
+    0x00D2, 0x00D3, 0x1ECE, 0x00D5, 0x1ECC, 0x00D4, 0x1ED2, 0x1ED0, 0x1ED4, 0x1ED6,
+    0x1ED8, 0x01A0, 0x1EDC, 0x1EDA, 0x1EDE, 0x1EE0, 0x1EE2, 0x00D9, 0x00DA, 0x1EE6,
+    0x0168, 0x1EE4, 0x01AF, 0x1EEA, 0x1EE8, 0x1EEC, 0x1EEE, 0x1EF0, 0x1EF2, 0x00DD,
+    0x1EF6, 0x1EF8, 0x1EF4, 0x0110,
+};
+
 
 static void report(void *context, int line, const char *message)
 {
@@ -170,6 +216,36 @@ int main(void)
         unit = compile(text);
         assert(unit && reports == 0);
         TextListing_Free(unit);
+    }
+
+    /* Text in NFD (an editor's decomposed letters) is composed (NFC): one
+     * glyph a letter, not one a mark; marks in either order; a mark with
+     * nothing to compose with stays a character of its own after it. */
+    unit = compile("@bank names\n[8001]\ne\xCC\x82\xCC\x81 \xE1\xBA\xBF a\xCC\xA3\xCC\x86 a\xCC\x86\xCC\xA3 "
+                   "e\xCC\x81 q\xCC\x81{end}\n");
+    assert(unit && reports == 0);
+    assert(!memcmp(string(unit, 0x8001), "\xF1\x24\x00\xF1\x24\x00\xF1\x25\x00\xF1\x25\x00\xF1\x23\x00\x11\xF1\x26\xFF",
+                   19));
+    TextListing_Free(unit);
+    {
+        /* Every Vietnamese letter, decomposed, composes back; marks that do
+         * not compose come back in their canonical order. */
+        const char *at = vietnamese_nfd;
+        uint32_t left[GLYPHS_MARKS_MAX];
+        int i, left_count;
+        for (i = 0; i < 134; i++) {
+            uint32_t letter = Glyphs_NextComposed(&at, left, &left_count);
+            if (letter != vietnamese[i] || left_count) fprintf(stderr, "letter %d: U+%04X\n", i, (unsigned)letter);
+            assert(letter == vietnamese[i] && left_count == 0);
+        }
+        assert(*at == '\0');
+        at = "e\xCC\xA3\xCC\x82";                      /* e, dot below, ^: U+1EC7 */
+        assert(Glyphs_NextComposed(&at, left, &left_count) == 0x1EC7 && left_count == 0 && !*at);
+        at = "q\xCC\x81\xCC\xA3x";                     /* q composes with neither */
+        assert(Glyphs_NextComposed(&at, left, &left_count) == 'q' && left_count == 2 && left[0] == 0x323 &&
+               left[1] == 0x301 && *at == 'x');
+        at = "\xCC\x81" "a";                             /* a mark with no letter is itself */
+        assert(Glyphs_NextComposed(&at, left, &left_count) == 0x301 && left_count == 0 && *at == 'a');
     }
 
     puts("text listing: ok");

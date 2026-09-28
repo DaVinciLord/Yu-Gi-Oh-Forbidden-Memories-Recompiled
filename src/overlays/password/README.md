@@ -228,9 +228,12 @@ on every payment update, including the last. There is no confirmation/cancel
 poll or disk-save request in this state.
 
 The literal zero-price case would subtract 1 from unsigned zero remaining
-cost and from the balance. No reachable zero-price record was established
-here; that arithmetic is preserved, not silently repaired or claimed as a
-runtime reproduction. Allocation and cursor/preview dereferences likewise
+cost and from the balance, wrap, and count on through four billion
+starchips. The disc has no zero-price record, and the matching build keeps
+that arithmetic. The PC port can load one (a mod's `"passwords"` price of 0,
+or a `data` patch of the table), so under `MEMORIES_PC` state 3 goes straight
+to 4 when the price it starts from is 0: the card was already awarded in
+state 2 and nothing is charged. Allocation and cursor/preview dereferences likewise
 retain their existing unchecked behavior.
 
 ## Name-entry finalization translation unit

@@ -415,6 +415,22 @@ def build_mods(build, release=False):
         print(f"{out_root}: " + ", ".join(built))
 
 
+def copy_languages(build, release=False):
+    """languages/*.txt, the official European languages' text (Game >
+    Language, src/pc/text/language.h), into <build>/languages beside the
+    game. A release takes only the packs git tracks."""
+    out_root = f"{build}/languages"
+    packs = sorted(glob.glob("languages/*.txt"))
+    if release:
+        tracked = set(subprocess.check_output(["git", "ls-files", "-z", "languages"], text=True).split("\0"))
+        packs = [path for path in packs if path.replace(os.sep, "/") in tracked]
+        shutil.rmtree(out_root, ignore_errors=True)
+    for path in packs:
+        copy_if_newer(path, os.path.join(out_root, os.path.basename(path)))
+    if packs:
+        print(f"{out_root}: " + ", ".join(os.path.splitext(os.path.basename(path))[0] for path in packs))
+
+
 def copy_if_newer(source, destination):
     os.makedirs(os.path.dirname(destination), exist_ok=True)
     if not os.path.exists(destination) or os.path.getmtime(destination) < os.path.getmtime(source):
@@ -758,6 +774,7 @@ def main():
              f"{options.build}/stubs.o", f"{options.build}/mod_exports.o", version, f"{options.build}/guest_symbols.ld", *(libraries if options.backend == "sdl"
                else ["-lm", *fonts, "-lX11", "-lXext", "-lasound", *system]), *build_linux_sysroot.endfiles()])
     build_mods(options.build, options.release)
+    copy_languages(options.build, options.release)
     # Save states are carried between builds with these tables
     # (src/pc/guest/state.c): every function in the executable, because the
     # game keeps pointers to native routines as well as its own (HMD

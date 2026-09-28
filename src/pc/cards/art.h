@@ -30,6 +30,11 @@
 /* 1 on success; `why` says what went wrong otherwise. */
 int CardArt_FromImage(const char *path, unsigned char *record, char *why, size_t why_size);
 int CardArt_ThumbnailFromImage(const char *path, unsigned char *record, char *why, size_t why_size);
+/* The rectangle of the PNG those take a w x h picture from (the middle at
+ * that shape), and the PNG's size: for the full-resolution picture a
+ * texture pack draws above the console's resolution (cards.c). 0 when the
+ * file is not a PNG. */
+int CardArt_Crop(const char *path, int w, int h, int *x, int *y, int *cw, int *ch, int *width, int *height);
 /* The title plate alone, CARD_TITLE_BYTES, what a record holds at
  * CARD_TITLE_PIXELS. */
 int CardArt_TitleFromImage(const char *path, unsigned char *plate, char *why, size_t why_size);

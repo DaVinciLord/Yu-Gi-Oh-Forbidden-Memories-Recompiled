@@ -30,6 +30,9 @@ void TextureDump_Primitive(const uint16_t *source, int page_x, int page_y, int d
  * primitive whose texels and palette are all tagged adds a line to
  * assets.txt beside the PNGs, which tools/pc/extract_images.py replays. */
 extern uint32_t *TextureDump_Tags; /* per VRAM word, disc byte offset + 1; NULL when off */
+/* Tags from here up are not the disc's: images the port makes (a mod card's
+ * art, texture_pack.h, TexturePack_AddMade) get places past any CD's bytes. */
+#define TEXTURE_MADE_BASE 0xC0000000u
 /* Provenance without the dump: a texture pack needs the tags too. */
 int TextureDump_EnableTags(void);
 
@@ -59,6 +62,9 @@ int TextureDump_EnableShadow(void);
  * are texel coordinates within the page in 16.16, page_x/page_y/depth the
  * primitive's page. Returns 0 when the texel is not replaced, 1 with the
  * colour as 0x00RRGGBB, 2 when it is painted transparent. NULL: no pack. */
+/* Below this alpha a pack pixel is clear in the scaled picture; above it,
+ * it is mixed over what lies beneath as much as it covers (texture_pack.c). */
+#define PACK_ALPHA_CLEAR 8
 extern int (*TextureDump_Sample)(int page_x, int page_y, int depth, int u, int v, uint32_t *rgb);
 /* The pack's own record of what it painted where, kept in step with the
  * words: cleared (a fill, a state load, an upload not from the disc) and
@@ -84,23 +90,6 @@ int TextureDump_DiscFile(const char *path, int *lba, unsigned *size);
 void TextureDump_Delivered(const void *destination, unsigned bytes, int lba, unsigned offset_in_sector);
 /* Bytes of game memory written by anything but a delivery (Memories_GuestWritten). */
 void TextureDump_Written(const void *destination, unsigned bytes);
-/* An image the port supplies rather than the disc -- a mod's own picture for
- * something the disc does not carry. It is tagged in a space of its own above
- * every disc offset, so a pack image can be keyed to it exactly as to a disc
- * image and nothing downstream of the tag knows the difference
- * (texture_pack.h). `offset` is that space's; the caller keeps it apart.
- * One call per upload, so a picture and its palette are registered
- * separately, as they are delivered separately.
- *
- * Everything from TEXTURE_MOD_OFFSET_BASE up is reserved for that space and no
- * disc offset reaches it: a disc is under 700MB and a pack manifest's own
- * entries are under 1e9, so a tag at or above it is the port's own picture and
- * never a place on the disc. Who holds which part of it is settled by the
- * callers -- the Free Duel portraits take a stride of 4,096 per duelist id
- * (free_duel/duelists.h) -- so a new user of the space picks a range clear of
- * theirs. */
-#define TEXTURE_MOD_OFFSET_BASE 0xF0000000u
-void TextureDump_ModImage(const void *destination, unsigned bytes, unsigned offset);
 void TextureDump_Loaded(int x, int y, int w, int h, const uint16_t *pixels);
 void TextureDump_Moved(int sx, int sy, int dx, int dy, int w, int h);
 void TextureDump_Cleared(int x, int y, int w, int h);

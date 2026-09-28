@@ -450,6 +450,7 @@ static const char *fragment_source =
     "    st += back * (1.0 - 1.0 / float(scale));\n"
     "    vec2 half_step = 0.5 * (dFdx(st) + dFdy(st));\n"
     "    float spread = max(fwidth(st.x), fwidth(st.y));\n"
+    "    float cover = 1.0;\n"
     "    if ((flags & 4) != 0) {\n"
     "        float ub = st.x + 1.0 / 256.0, vb = st.y + 1.0 / 256.0;\n"
     /* Only the primitive's own texels: a pixel drawn for a sample it
@@ -471,7 +472,10 @@ static const char *fragment_source =
     "                    int px = int(floor((float(texel_x) + fract(ub)) * float(pack_size.x) / float(pack_entry.z)));\n"
     "                    int py = int(floor((float(row) + fract(vb)) * float(pack_size.y) / float(pack_entry.w)));\n"
     "                    vec4 p = texelFetch(pack, ivec2(clamp(px, 0, pack_size.x - 1), clamp(py, 0, pack_size.y - 1)), 0);\n"
-    "                    if (p.a < 0.5) discard;\n"
+    /* A partly clear pixel (a letter's smoothed edge) is mixed over what
+     * lies beneath as much as it covers (texture_pack.c, sample). */
+    "                    if (p.a < 8.0 / 255.0) discard;\n"
+    "                    cover = p.a;\n"
     "                    t = floor(p.rgb * 255.0 + 0.5);\n"
     "                    replaced = true;\n"
     "                }\n"
@@ -527,6 +531,17 @@ static const char *fragment_source =
     "        if (mode.y == 0) { c *= 0.5; alpha = 0.5; }\n"
     "        else if (mode.y == 3) { c = floor(c * 0.25); alpha = 1.0; }\n"
     "        else alpha = 1.0;\n"
+    "    }\n"
+    /* With the blend (one, source alpha): the result over the picture as
+     * much as the pixel covers; the subtracting pass takes it as it is. */
+    "    c *= cover;\n"
+    "    if (!semi) alpha = 1.0 - cover;\n"
+    "    else if (mode.y == 0) alpha = 1.0 - 0.5 * cover;\n"
+    /* A fading polygon (soft_gpu.h): the result mixed with what is under it. */
+    "    if (mode.w != 0) {\n"
+    "        float f = float(mode.w) / 255.0;\n"
+    "        c *= 1.0 - f;\n"
+    "        alpha = 1.0 - (1.0 - alpha) * (1.0 - f);\n"
     "    }\n"
     "    fragment = vec4(c / 255.0, alpha);\n"
     "}\n";
@@ -781,6 +796,7 @@ static struct {
     int clut_x, clut_y;
     int pack; /* the pack entry the primitive being read samples, 0 none */
     int glyph; /* the page word has HD text's mark (hd_text.h) */
+    int fade;  /* the polygon being read fades (soft_gpu.h), 0 to 255 */
 } state;
 
 typedef struct Vertex {
@@ -891,6 +907,7 @@ static void set_vertex(GlVertex *out, float x, float y, float u, float v, const 
     out->depth = (uint16_t)state.depth;
     out->blend = (uint16_t)state.blend;
     out->bank = (uint16_t)state.bank;
+    out->unused = (uint16_t)state.fade;
     out->q = (flags & 32) ? from->q : 1.0f;
     out->bounds[0] = (uint16_t)bounds_now[0];
     out->bounds[1] = (uint16_t)bounds_now[1];
@@ -1024,9 +1041,13 @@ static size_t polygon(const uint32_t *words, size_t count)
                 state.clut_y = (word >> 22) & 0x1ff;
             } else if (i == 1) {
                 set_page(word >> 16);
+            } else if (i == 2) {
+                state.fade = (int)(word >> 16);
             }
         }
     }
+    /* Only a primitive sampling a bank can fade: retail never names one. */
+    state.fade = textured && state.bank ? SoftGpu_FadeOf((uint32_t)state.fade) : 0;
     state.pack = textured && !state.bank
                      ? TexturePack_EntryFor(state.page_x, state.page_y, state.depth, state.clut_x, state.clut_y,
                                             v[0].u, v[0].v)
@@ -1092,6 +1113,7 @@ static size_t polygon(const uint32_t *words, size_t count)
     if (textured && v[0].precise && v[1].precise && v[2].precise && (!quad || v[3].precise)) flags |= 32;
     triangle(&v[0], &v[1], &v[2], flags);
     if (quad) triangle(&v[1], &v[2], &v[3], flags);
+    state.fade = 0;
     return need;
 }
 

@@ -11,7 +11,7 @@ from . import manifest, pools as poolmath, validate
 from .gamedata import (ATTRIBUTE_NAMES, CARD_COUNT, DUELIST_NAMES, POOL_LABELS, POOL_TOTAL, POOLS, STAR_NAMES,
                        TYPE_EQUIP, TYPE_NAMES, TYPE_RITUAL)
 from .model import KEY_RE
-from .widgets import CardField, FormDialog, card_matches, pick_card, scrolled_tree, show_text
+from .widgets import CardField, FormDialog, card_matches, pick_card, px, scrolled_tree, show_text
 
 ATTRIBUTE_CHOICES = ATTRIBUTE_NAMES + ["6 (magic)", "7 (trap)"]
 STAR_CHOICES = ["(none)"] + STAR_NAMES[1:]
@@ -146,14 +146,14 @@ class CardsTab(Tab):
                         variable=self.opponents).grid(row=3, column=0, columnspan=2, sticky="w")
         ttk.Button(self.added_frame, text="Remove this card", command=self.remove_card).grid(
             row=4, column=0, columnspan=2, sticky="w", pady=(4, 0))
-        self.extra = ttk.Label(form, foreground="#777", wraplength=320, justify="left")
+        self.extra = ttk.Label(form, foreground="#777", wraplength=px(form, 320), justify="left")
         self.extra.grid(row=row, column=0, columnspan=3, sticky="w")
         row += 1
         buttons = ttk.Frame(form)
         buttons.grid(row=row, column=0, columnspan=3, sticky="we", pady=(8, 0))
         ttk.Button(buttons, text="Apply", command=self.apply).pack(side="left")
         ttk.Button(buttons, text="Revert to retail", command=self.revert).pack(side="left", padx=4)
-        self.status = ttk.Label(form, foreground="#c01c28", wraplength=320, justify="left")
+        self.status = ttk.Label(form, foreground="#c01c28", wraplength=px(form, 320), justify="left")
         self.status.grid(row=row + 1, column=0, columnspan=3, sticky="w", pady=(6, 0))
         for child in form.winfo_children():
             if isinstance(child, (ttk.Entry, ttk.Spinbox)):

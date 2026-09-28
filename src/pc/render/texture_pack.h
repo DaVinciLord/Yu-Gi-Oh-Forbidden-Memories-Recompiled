@@ -24,26 +24,21 @@
 int TexturePack_Load(const char *directory, unsigned rank, int (*part)(const char *setting, void *context),
                      void *context, char *problems, size_t problems_size);
 void TexturePack_Unload(void);
-
-/* An image the port supplies rather than a pack: a mod's own picture for
- * something the disc does not carry, keyed in the reserved space
- * TEXTURE_MOD_OFFSET_BASE names (texture_dump.h) and drawn once
- * TextureDump_ModImage has tagged the upload with the same `offset`. The
- * geometry is the texture's, as a manifest entry gives it: `words` 16-bit
- * words across, `rows` down, `bpp` 4, 8 or 16, and the palette's own offset
- * in that space with how many entries it has (0 for none). Registered
- * images are the port's and outlive a pack being loaded or unloaded, so a
- * mod need not carry a pack for one. Returns 0 when it could not be added;
- * naming the same offset twice replaces it. */
-int TexturePack_AddImage(const char *file, unsigned offset, int words, int rows, int bpp, unsigned clut_offset,
-                         int clut_entries);
-/* Forget every image registered that way. The list of them is rebuilt from
- * whatever registers again, so a mod being removed does not leave its picture
- * keyed where another mod's duelist could land on it. */
-void TexturePack_DropImages(void);
 /* Once a frame, on the main thread: reads what uploads asked for (an
  * upload can come from the interrupt tick, where reading is not safe). */
 void TexturePack_Service(void);
+
+/* An image the port makes instead of reading it from the disc: a mod
+ * card's art (cards.c), whose bytes art.c makes from the mod's PNG at the
+ * console's size. An upload of exactly `pixels` (words x rows at bpp) or of
+ * `clut` (clut_entries) is known by its bytes (texture_dump.h, recall), and
+ * texels read through that palette take the PNG at `file`, cut to the
+ * rectangle x, y, w, h of it, as a pack's image does: resampled at 1x, at
+ * its own resolution above. Identical blocks share one place (from
+ * TEXTURE_MADE_BASE up); the same picture twice is kept once. Made images
+ * are kept across the packs' loads and unloads. 1 added, 0 not. */
+int TexturePack_AddMade(const void *pixels, int words, int rows, int bpp, const void *clut, int clut_entries,
+                        const char *file, int x, int y, int w, int h);
 
 /* For a renderer that samples the pack's images itself, at their own
  * resolution (gl_picture.c). The entry (its index + 1) whose image replaces

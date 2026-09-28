@@ -3,7 +3,7 @@
     "name": "3D Monsters",
     "version": "1.0",
     "author": "DecompRecomp",
-    "description": "Face-up monsters stand on their cards as the models the battle presentation uses, animating on the spot. The console had neither the RAM nor the VRAM for it.",
+    "description": "Face-up monsters stand on their cards as the models the battle presentation uses, animating on the spot, and can stand on the big cards facing each other when one attacks another. The console had neither the RAM nor the VRAM for it.",
     "library": "3d-monsters",
     "enabled": true,
     "legacy_setting": "3d_monsters",
@@ -56,6 +56,33 @@
             "min": 0,
             "max": 64,
             "step": 1
+        },
+        {
+            "key": "battle",
+            "label": "Monsters on attack cards",
+            "type": "bool",
+            "default": 0,
+            "description": "When one monster attacks another, the two stand on their big cards facing each other, and the cards are dimmed under them."
+        },
+        {
+            "key": "battle_pixels",
+            "label": "Attack card monster size",
+            "type": "int",
+            "default": 160,
+            "min": 40,
+            "max": 200,
+            "step": 10,
+            "description": "A middling monster's height on its card, in game pixels; bigger monsters stand taller and smaller ones shorter. Each is fitted by its height or its width, whichever it reaches first."
+        },
+        {
+            "key": "battle_dim",
+            "label": "Attack card dimming",
+            "type": "int",
+            "default": 50,
+            "min": 0,
+            "max": 90,
+            "step": 10,
+            "description": "How much darker the cards are drawn under the monsters, in percent."
         }
     ]
 }

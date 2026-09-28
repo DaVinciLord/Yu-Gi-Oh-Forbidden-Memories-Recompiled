@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Run deterministic native-game screenshots, the mod export check and the portable PC CTests."""
+"""Run deterministic native-game screenshots, the mod export check, the check
+that earlier releases' mods still work (check_mod_abi.py --run) and the
+portable PC CTests."""
 
 from __future__ import annotations
 
@@ -143,6 +145,14 @@ def run_ctests(build: Path) -> bool:
     return result.returncode == 0
 
 
+def check_mod_compat(executable: Path) -> bool:
+    """The mods of the releases in mod_compat.txt still load and draw alike
+    in this build (check_mod_abi.py --run)."""
+    result = subprocess.run([sys.executable, str(ROOT / "tools/pc/check_mod_abi.py"), "--run",
+                             "--build", str(executable.parent), "--executable", str(executable)], cwd=ROOT, check=False)
+    return result.returncode == 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--record", action="store_true", help="replace fixture hashes with current output")
@@ -158,9 +168,12 @@ def main() -> int:
                                    cwd=ROOT, check=False).returncode == 0
         lifecycle_ok = subprocess.run([sys.executable, str(ROOT / "tools/pc/test_mods_lifecycle.py"), "--target", "windows"],
                                       cwd=ROOT, check=False).returncode == 0
-        return 0 if run_smoke(WINDOWS_EXECUTABLE, arguments.record) and exports_ok and loader_ok and lifecycle_ok else 1
+        compat_ok = check_mod_compat(WINDOWS_EXECUTABLE)
+        return 0 if (run_smoke(WINDOWS_EXECUTABLE, arguments.record) and exports_ok and loader_ok and lifecycle_ok
+                     and compat_ok) else 1
     exports_ok = check_mod_exports(arguments.executable.resolve())
-    screenshots_ok = run_smoke(arguments.executable.resolve(), arguments.record) and exports_ok
+    compat_ok = check_mod_compat(arguments.executable.resolve())
+    screenshots_ok = run_smoke(arguments.executable.resolve(), arguments.record) and exports_ok and compat_ok
     tests_ok = run_ctests(arguments.build.resolve())
     return 0 if screenshots_ok and tests_ok else 1
 

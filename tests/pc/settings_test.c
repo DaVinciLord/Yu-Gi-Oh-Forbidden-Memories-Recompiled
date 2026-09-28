@@ -30,7 +30,7 @@ int main(void)
     assert(fd >= 0);
     file = fdopen(fd, "w");
     assert(file);
-    fputs("volume=40\nmusic_volume=70\nunknown=7\npgxp=2\n", file);
+    fputs("volume=40\nmusic_volume=70\nunknown=7\npgxp=2\nhd_hud=1\n", file);
     assert(!fclose(file));
     assert(!setenv("MEMORIES_SETTINGS", path, 1));
     Settings_Load();
@@ -67,6 +67,12 @@ int main(void)
     assert(contains(path, "sfx_volume=65\n"));
     assert(contains(path, "unknown=7\n"));
     assert(contains(path, "pgxp=0\n"));
+    /* A retired id keeps its number for code mods (settings.h), but has no
+     * key: its old line is carried through as any other unknown one. */
+    assert(SET_HD_TEXT == 32 && SET_CARD_DROPS == 38 && Settings_Key(SET_HD_HUD) == NULL);
+    Settings_Set(SET_HD_HUD, 1);
+    assert(Settings_Get(SET_HD_HUD) == 0 && Settings_GetNamed("hd_hud", -1) == 1);
+    assert(contains(path, "hd_hud=1\n"));
     for (int i = 0; i < 1024; i++) {
         char key[200]; snprintf(key, sizeof(key), "mod.a_very_long_mod_id_that_used_to_exceed_the_old_key_limit.option_%d", i);
         Settings_SetNamed(key, i);

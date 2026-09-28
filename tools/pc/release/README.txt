@@ -4,7 +4,8 @@ YFM Re-Decomp
 A native PC version of Yu-Gi-Oh! Forbidden Memories (PlayStation, USA),
 rebuilt from the decompiled game. It is a work in progress.
 
-No part of the game's disc comes with it. You need your own copy.
+You need your own copy of the game: no part of its disc comes with it,
+apart from the text of the European releases' translations (below).
 
 
 Getting started
@@ -102,6 +103,16 @@ user folder. A mod that contains code runs as part of the game, so only
 install mods from people you trust. Mod authors: see sdk/notes/modding.md,
 sdk/examples/mods and sdk/tools (build_mod.py builds a code mod;
 extract_images.py and upscale_pack.py make texture packs).
+
+
+Languages
+---------
+
+Game > Language plays the game in the European releases' own text:
+English (Europe), French, German, Italian or Spanish, from the "languages"
+folder beside the program. It takes effect when the game starts again.
+Pictures with words in them (the main menu, the results screen) stay in
+English.
 
 
 Linux

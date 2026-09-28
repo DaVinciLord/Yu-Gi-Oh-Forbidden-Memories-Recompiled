@@ -26,6 +26,8 @@ typedef struct Entry {
     int absolute; /* offset and clut_offset are the disc's (resolve) */
     unsigned rank; /* the pack's place in the mods' load order: a later pack's reading of the same words wins */
     int position;  /* and the entry's in its manifest, so the order never rests on qsort's */
+    int made;      /* the port made the words (TexturePack_AddMade): the image is this rectangle of the PNG */
+    int source_x, source_y, source_w, source_h;
 } Entry;
 
 static Entry *entries;
@@ -52,6 +54,20 @@ static unsigned generation, map_generation; /* of the entries, of the maps (text
 static int chosen_head = -1, chosen = -1;
 
 static int per_word(int bpp) { return bpp == 4 ? 4 : bpp == 8 ? 2 : 1; }
+
+/* Images the port makes (TexturePack_AddMade): the entries, kept apart so
+ * that every reload of the packs gets them back, and the blocks of bytes
+ * their uploads are known by, each at its own place from TEXTURE_MADE_BASE
+ * up. Identical blocks are one block. */
+typedef struct Block {
+    uint32_t offset, bytes;
+    unsigned char *data;
+} Block;
+static Entry *made;
+static int made_count;
+static Block *blocks;
+static int block_count;
+static uint32_t made_next = TEXTURE_MADE_BASE;
 
 /* Readings of the same words: entries of one geometry, differing in depth
  * or palette (a sheet the game draws with several palettes). Sorted by
@@ -122,6 +138,7 @@ static int load_pixels(Entry *entry)
     unsigned char *rgba;
     char path[1200];
     int width = entry->words * per_word(entry->bpp), height = entry->rows, x, y;
+    unsigned image_width, image_height;
     if (entry->pixels || entry->failed) return entry->pixels != NULL;
     entry->wanted = 0;
     snprintf(path, sizeof(path), "%s", entry->file);
@@ -145,27 +162,57 @@ static int load_pixels(Entry *entry)
         return 0;
     }
     fclose(file);
+    image_width = image.width;
+    image_height = image.height;
+    png_image_free(&image);
+    if (entry->made) {
+        /* The part of the mod's picture its card shows, opaque over black
+         * as the card's own art is made (art.c). */
+        unsigned char *cut = NULL;
+        size_t i, j;
+        if (entry->source_x + entry->source_w <= (int)image_width && entry->source_y + entry->source_h <= (int)image_height)
+            cut = malloc((size_t)entry->source_w * entry->source_h * 4);
+        if (!cut) {
+            fprintf(stderr, "memories-pc: texture pack: %s changed since the card was made, or out of memory\n", path);
+            free(rgba);
+            entry->failed = 1;
+            return 0;
+        }
+        for (j = 0; j < (size_t)entry->source_h; j++) {
+            for (i = 0; i < (size_t)entry->source_w; i++) {
+                const unsigned char *p = rgba + (((entry->source_y + j) * image_width) + entry->source_x + i) * 4;
+                unsigned char *q = cut + (j * entry->source_w + i) * 4;
+                q[0] = (unsigned char)(p[0] * p[3] / 255);
+                q[1] = (unsigned char)(p[1] * p[3] / 255);
+                q[2] = (unsigned char)(p[2] * p[3] / 255);
+                q[3] = 255;
+            }
+        }
+        free(rgba);
+        rgba = cut;
+        image_width = (unsigned)entry->source_w;
+        image_height = (unsigned)entry->source_h;
+    }
     entry->pixels = calloc((size_t)width * height, sizeof(uint16_t));
     if (!entry->pixels) {
         fprintf(stderr, "memories-pc: texture pack: %s: out of memory\n", path);
         free(rgba);
-        png_image_free(&image);
         entry->failed = 1;
         return 0;
     }
     for (y = 0; y < height; y++) {
-        int sy0 = (int)((long long)y * image.height / height), sy1 = (int)((long long)(y + 1) * image.height / height);
+        int sy0 = (int)((long long)y * image_height / height), sy1 = (int)((long long)(y + 1) * image_height / height);
         if (sy1 <= sy0) sy1 = sy0 + 1;
         for (x = entry->crop_left; x < entry->crop_left + entry->crop_width && x < width; x++) {
             int px = x - entry->crop_left;
-            int sx0 = (int)((long long)px * image.width / entry->crop_width);
-            int sx1 = (int)((long long)(px + 1) * image.width / entry->crop_width);
+            int sx0 = (int)((long long)px * image_width / entry->crop_width);
+            int sx1 = (int)((long long)(px + 1) * image_width / entry->crop_width);
             unsigned long r = 0, g = 0, b = 0, a = 0, n = 0;
             int sx, sy;
             if (sx1 <= sx0) sx1 = sx0 + 1;
-            for (sy = sy0; sy < sy1 && sy < (int)image.height; sy++) {
-                for (sx = sx0; sx < sx1 && sx < (int)image.width; sx++) {
-                    const unsigned char *p = rgba + ((size_t)sy * image.width + sx) * 4;
+            for (sy = sy0; sy < sy1 && sy < (int)image_height; sy++) {
+                for (sx = sx0; sx < sx1 && sx < (int)image_width; sx++) {
+                    const unsigned char *p = rgba + ((size_t)sy * image_width + sx) * 4;
                     r += p[0]; g += p[1]; b += p[2]; a += p[3]; n++;
                 }
             }
@@ -179,15 +226,16 @@ static int load_pixels(Entry *entry)
         }
     }
     entry->image = rgba;
-    entry->image_width = (int)image.width;
-    entry->image_height = (int)image.height;
-    png_image_free(&image);
+    entry->image_width = (int)image_width;
+    entry->image_height = (int)image_height;
     return 1;
 }
 
 /* The pack's image at its own resolution for the scaled picture: u and v
  * are 16.16 texels within the page. 0 not replaced, 1 a colour, 2 painted
- * transparent. */
+ * transparent. A colour's pixel may be partly transparent (a letter's
+ * smoothed edge): bits 24-30 say how much, 0 opaque to 127 all but clear,
+ * and the picture mixes it over what lies beneath. */
 static int sample(int page_x, int page_y, int depth, int u, int v, uint32_t *rgb)
 {
     int per = depth == 0 ? 4 : depth == 1 ? 2 : 1;
@@ -215,8 +263,8 @@ static int sample(int page_x, int page_y, int depth, int u, int v, uint32_t *rgb
     if (px >= entry->image_width) px = entry->image_width - 1;
     if (py >= entry->image_height) py = entry->image_height - 1;
     p = entry->image + ((size_t)py * entry->image_width + (size_t)px) * 4;
-    if (p[3] < 128) return 2;
-    *rgb = ((uint32_t)p[0] << 16) | ((uint32_t)p[1] << 8) | p[2];
+    if (p[3] < PACK_ALPHA_CLEAR) return 2;
+    *rgb = ((uint32_t)p[0] << 16) | ((uint32_t)p[1] << 8) | p[2] | ((uint32_t)(255 - p[3]) >> 1 << 24);
     return 1;
 }
 
@@ -274,6 +322,7 @@ typedef struct {
     uint32_t disc;
     uint32_t bytes;  /* the block's size */
     uint32_t hash;   /* of the whole block */
+    const unsigned char *data; /* a made block's bytes (not on the disc), else NULL */
 } Recalled;
 static Recalled *recalled;
 static int recalled_count;
@@ -318,11 +367,13 @@ static void recall_heads(void)
     int i, n = 0;
     free(recalled);
     recalled_count = 0;
-    recalled = malloc(sizeof(*recalled) * (size_t)entry_count * 2 + 1);
+    recalled = malloc(sizeof(*recalled) * ((size_t)entry_count * 2 + (size_t)block_count + 1));
     if (!recalled) return;
     for (i = 0; i < entry_count; i++) {
         const Entry *entry = &entries[i];
-        int whole = !entry->row_offsets && (entry->stride == (uint32_t)entry->words || entry->rows == 1);
+        int whole;
+        if (entry->made) continue; /* its blocks, below */
+        whole = !entry->row_offsets && (entry->stride == (uint32_t)entry->words || entry->rows == 1);
         if (whole && entry->words * entry->rows * 2 >= RECALL_BYTES && (i == 0 || entry->offset != entries[i - 1].offset) &&
             read_head(entry->offset, recalled[n].head)) {
             recalled[n].disc = entry->offset;
@@ -333,8 +384,23 @@ static void recall_heads(void)
             recalled[n++].bytes = (uint32_t)(entry->clut_entries * 2);
         }
     }
+    for (i = 0; i < n; i++) recalled[i].data = NULL;
+    for (i = 0; i < block_count; i++) {
+        const Block *block = &blocks[i];
+        uint32_t k;
+        /* A head of one value is fine (a picture's plain sky): recall
+         * checks the whole block. One value throughout would be a fill. */
+        for (k = 1; k < block->bytes && block->data[k] == block->data[0]; k++) {}
+        if (block->bytes < RECALL_BYTES || k == block->bytes) continue;
+        memcpy(recalled[n].head, block->data, RECALL_BYTES);
+        recalled[n].disc = block->offset;
+        recalled[n].bytes = block->bytes;
+        recalled[n].hash = hash_bytes(block->data, block->bytes);
+        recalled[n++].data = block->data;
+    }
     qsort(recalled, (size_t)n, sizeof(*recalled), compare_recalled);
-    for (i = 0; i < n; i++) recalled[i].hash = hash_disc(recalled[i].disc, recalled[i].bytes);
+    for (i = 0; i < n; i++)
+        if (!recalled[i].data) recalled[i].hash = hash_disc(recalled[i].disc, recalled[i].bytes);
     recalled_count = n;
 }
 
@@ -616,12 +682,21 @@ static int block_at(uint32_t disc, int *words, int *rows)
     return 0;
 }
 
-/* Whether VRAM's block at x,y holds the disc's bytes from `disc` on. */
-static int holds_disc(const uint16_t *vram, uint32_t disc, int x, int y, int words, int rows)
+/* Whether VRAM's block at x,y holds the disc's bytes from `disc` on, or a
+ * made block's (`made_data`). */
+static int holds_disc(const uint16_t *vram, uint32_t disc, const unsigned char *made_data, int x, int y, int words,
+                      int rows)
 {
     size_t bytes = (size_t)words * rows * 2, first = disc % 2048;
     int sectors = (int)((first + bytes + 2047) / 2048), j, same = 1;
-    unsigned char *data = malloc((size_t)sectors * 2048);
+    unsigned char *data;
+    if (made_data) {
+        for (j = 0; same && j < rows; j++)
+            same = memcmp(vram + (size_t)(y + j) * SOFT_GPU_WIDTH + x, made_data + (size_t)j * words * 2,
+                          (size_t)words * 2) == 0;
+        return same;
+    }
+    data = malloc((size_t)sectors * 2048);
     if (!data) return 0;
     if (Memories_DiscReadSectors((int)(disc / 2048), sectors, data) != sectors) same = 0;
     for (j = 0; same && j < rows; j++)
@@ -649,7 +724,7 @@ static void rediscover(void)
             /* The one place sharing the head whose bytes the block holds. */
             for (; k < recalled_count && !memcmp(at, recalled[k].head, RECALL_BYTES); k++) {
                 if (recalled[k].disc == disc || !block_at(recalled[k].disc, &w, &r) || x + w > SOFT_GPU_WIDTH ||
-                    y + r > SOFT_GPU_HEIGHT || !holds_disc(vram, recalled[k].disc, x, y, w, r))
+                    y + r > SOFT_GPU_HEIGHT || !holds_disc(vram, recalled[k].disc, recalled[k].data, x, y, w, r))
                     continue;
                 disc = recalled[k].disc;
                 words = w;
@@ -668,130 +743,10 @@ static void rediscover(void)
 
 static void restored(void) { wanted_rediscover = 1; }
 
-/* --- images the port supplies (texture_pack.h) ----------------------------
- *
- * A mod's own picture for something the disc does not carry. These belong to
- * the port and not to any pack directory, so they are kept here and their
- * entries made again whenever the entry list is built: a pack loading or
- * unloading must not lose them, and a mod carrying one picture need not carry
- * a pack at all.
- */
-typedef struct {
-    char *file;
-    uint32_t offset, clut_offset;
-    int words, rows, bpp, clut_entries;
-} PortImage;
-
-static PortImage *port_images;
-static int port_count, port_room;
-
-/* Entries in the mod space, told apart by their offset: no archive reaches
- * that far, the manifest holding an entry below 1e9 and a disc below 700MB. */
-static void drop_port_entries(void)
+/* The hooks, the shadow and the maps, once there are entries: the new ones
+ * are sorted in with the others between frames (TexturePack_Service). */
+static int install(void)
 {
-    int i, kept = 0;
-    for (i = 0; i < entry_count; i++) {
-        if (entries[i].offset >= TEXTURE_MOD_OFFSET_BASE) {
-            free(entries[i].file);
-            free(entries[i].row_offsets);
-            free(entries[i].pixels);
-            free(entries[i].image);
-            continue;
-        }
-        entries[kept++] = entries[i];
-    }
-    entry_count = kept;
-}
-
-/* The offsets are already in the mod space, so the entries are absolute and
- * resolve passes over them; it still sorts them in with the rest. */
-static int add_port_entries(void)
-{
-    Entry *more;
-    int i;
-    if (!port_count) return 1;
-    more = realloc(entries, (size_t)(entry_count + port_count) * sizeof(*entries));
-    if (!more) return 0;
-    entries = more;
-    for (i = 0; i < port_count; i++) {
-        const PortImage *image = &port_images[i];
-        Entry *entry = &entries[entry_count];
-        char *file = malloc(strlen(image->file) + 1);
-        if (!file) continue;
-        strcpy(file, image->file);
-        memset(entry, 0, sizeof(*entry));
-        entry->file = file;
-        entry->offset = image->offset;
-        entry->clut_offset = image->clut_offset;
-        entry->clut_entries = image->clut_entries;
-        entry->words = image->words;
-        entry->rows = image->rows;
-        entry->bpp = image->bpp;
-        entry->stride = (uint32_t)image->words;
-        entry->crop_width = image->words * per_word(image->bpp);
-        entry->absolute = 1;
-        entry->position = i;
-        entry_count++;
-    }
-    return 1;
-}
-
-void TexturePack_DropImages(void)
-{
-    int i;
-    if (!port_count) return;
-    for (i = 0; i < port_count; i++) free(port_images[i].file);
-    free(port_images);
-    port_images = NULL;
-    port_count = port_room = 0;
-    drop_port_entries();
-    /* The entries' order changes, and the maps name them by index. */
-    if (entry_of) memset(entry_of, 0, (size_t)SOFT_GPU_WIDTH * SOFT_GPU_HEIGHT * sizeof(*entry_of));
-    resolved = 0;
-    wanted_resolve = 1;
-    generation++;
-    map_generation++;
-}
-
-int TexturePack_AddImage(const char *file, unsigned offset, int words, int rows, int bpp, unsigned clut_offset,
-                         int clut_entries)
-{
-    PortImage *image = NULL;
-    char *copy;
-    int i;
-
-    if (!file || !*file) return 0;
-    if (words < 1 || words > SOFT_GPU_WIDTH || rows < 1 || rows > SOFT_GPU_HEIGHT) return 0;
-    if (bpp != 4 && bpp != 8 && bpp != 16) return 0;
-    /* The same place twice is the same picture named again. */
-    for (i = 0; i < port_count; i++) {
-        if (port_images[i].offset == TEXTURE_MOD_OFFSET_BASE + offset) image = &port_images[i];
-    }
-    if (!image) {
-        if (port_count == port_room) {
-            const int room = port_room ? port_room * 2 : 8;
-            PortImage *bigger = realloc(port_images, (size_t)room * sizeof(*bigger));
-            if (!bigger) return 0;
-            port_images = bigger;
-            port_room = room;
-        }
-        image = &port_images[port_count];
-        memset(image, 0, sizeof(*image));
-        port_count++;
-    }
-    copy = malloc(strlen(file) + 1);
-    if (!copy) return 0;
-    strcpy(copy, file);
-    free(image->file);
-    image->file = copy;
-    image->offset = TEXTURE_MOD_OFFSET_BASE + offset;
-    image->clut_offset = clut_entries ? TEXTURE_MOD_OFFSET_BASE + clut_offset : 0;
-    image->clut_entries = clut_entries;
-    image->words = words;
-    image->rows = rows;
-    image->bpp = bpp;
-
-    /* What a pack would have brought up, so one picture needs no pack. */
     if (!TextureDump_EnableShadow()) return 0;
     if (!entry_of) entry_of = calloc((size_t)SOFT_GPU_WIDTH * SOFT_GPU_HEIGHT, sizeof(*entry_of));
     if (!place_of) place_of = calloc((size_t)SOFT_GPU_WIDTH * SOFT_GPU_HEIGHT, sizeof(*place_of));
@@ -803,15 +758,96 @@ int TexturePack_AddImage(const char *file, unsigned offset, int words, int rows,
     TextureDump_Follow = follow;
     TextureDump_Recall = recall;
     TextureDump_Restored = restored;
-
-    drop_port_entries();
-    if (!add_port_entries()) return 0;
-    /* The entries' order changes, and the maps name them by index. */
-    memset(entry_of, 0, (size_t)SOFT_GPU_WIDTH * SOFT_GPU_HEIGHT * sizeof(*entry_of));
-    resolved = 0;
+    /* The disc's directory and the images wait for TexturePack_Service,
+     * between frames: a mod is applied while the game starts, before the
+     * disc is open, and an upload can ask for an image from the interrupt
+     * tick. Until then paint only notes what it needs and sample sees no
+     * image. */
+    resolved = 0; /* the new entries, and the order, with the others */
     wanted_resolve = 1;
     generation++;
-    map_generation++;
+    return 1;
+}
+
+/* Made entries `first` on joined to the entries, each with its own copy of
+ * the file's path (free_entries frees it). 0 out of memory. */
+static int add_made(int first)
+{
+    Entry *more;
+    int i;
+    if (first >= made_count) return 1;
+    more = realloc(entries, (size_t)(entry_count + made_count - first) * sizeof(*entries));
+    if (!more) return 0;
+    entries = more;
+    for (i = first; i < made_count; i++) {
+        Entry *entry = &entries[entry_count];
+        *entry = made[i];
+        entry->file = strdup(made[i].file);
+        if (!entry->file) return 0;
+        entry_count++;
+    }
+    return 1;
+}
+
+/* The place of a block of bytes: an identical one's, else a new one. 0
+ * when there is no room. */
+static uint32_t block_place(const void *data, uint32_t bytes)
+{
+    Block *more;
+    int i;
+    for (i = 0; i < block_count; i++) {
+        if (blocks[i].bytes == bytes && !memcmp(blocks[i].data, data, bytes)) return blocks[i].offset;
+    }
+    if (made_next - TEXTURE_MADE_BASE > 0x3FFFFFFFu - bytes) return 0;
+    more = realloc(blocks, (size_t)(block_count + 1) * sizeof(*blocks));
+    if (!more) return 0;
+    blocks = more;
+    blocks[block_count].data = malloc(bytes);
+    if (!blocks[block_count].data) return 0;
+    memcpy(blocks[block_count].data, data, bytes);
+    blocks[block_count].bytes = bytes;
+    blocks[block_count].offset = made_next;
+    made_next += (bytes + 0xFFFu) & ~0xFFFu;
+    return blocks[block_count++].offset;
+}
+
+int TexturePack_AddMade(const void *pixels, int words, int rows, int bpp, const void *clut, int clut_entries,
+                        const char *file, int x, int y, int w, int h)
+{
+    Entry *more, entry;
+    int i;
+    if (!pixels || !file || words < 1 || words > SOFT_GPU_WIDTH || rows < 1 || rows > SOFT_GPU_HEIGHT ||
+        (bpp != 4 && bpp != 8 && bpp != 16) || clut_entries < 0 || (clut_entries && !clut) || x < 0 || y < 0 || w < 1 ||
+        h < 1 || entry_count >= 65535)
+        return 0;
+    memset(&entry, 0, sizeof(entry));
+    entry.offset = block_place(pixels, (uint32_t)words * (uint32_t)rows * 2);
+    entry.clut_offset = clut_entries ? block_place(clut, (uint32_t)clut_entries * 2) : 0;
+    if (!entry.offset || (clut_entries && !entry.clut_offset)) return 0;
+    for (i = 0; i < made_count; i++) {
+        if (made[i].offset == entry.offset && made[i].clut_offset == entry.clut_offset && made[i].bpp == bpp)
+            return 1; /* the same picture: the first file is the one drawn */
+    }
+    entry.words = words;
+    entry.rows = rows;
+    entry.bpp = bpp;
+    entry.stride = (uint32_t)words;
+    entry.clut_entries = clut_entries;
+    entry.crop_width = words * per_word(bpp);
+    entry.absolute = 1;
+    entry.made = 1;
+    entry.source_x = x;
+    entry.source_y = y;
+    entry.source_w = w;
+    entry.source_h = h;
+    entry.position = made_count;
+    more = realloc(made, (size_t)(made_count + 1) * sizeof(*made));
+    if (!more) return 0;
+    made = more;
+    entry.file = strdup(file);
+    if (!entry.file) return 0;
+    made[made_count++] = entry;
+    if (!add_made(made_count - 1) || !install()) return 0;
     return 1;
 }
 
@@ -962,33 +998,10 @@ int TexturePack_Load(const char *from, unsigned rank, int (*part)(const char *se
         fprintf(stderr, "memories-pc: texture pack %s: no image is addressed on the disc\n", from);
         return -1;
     }
-    if (!TextureDump_EnableShadow()) {
+    if (!install()) {
         free_entries();
         return -1;
     }
-    if (!entry_of) entry_of = calloc((size_t)SOFT_GPU_WIDTH * SOFT_GPU_HEIGHT, sizeof(*entry_of));
-    if (!place_of) place_of = calloc((size_t)SOFT_GPU_WIDTH * SOFT_GPU_HEIGHT, sizeof(*place_of));
-    if (!entry_of || !place_of) {
-        free_entries();
-        return -1;
-    }
-    TextureDump_Paint = paint;
-    TextureDump_Prepare = prepare;
-    TextureDump_Sample = sample;
-    TextureDump_Forget = forget;
-    TextureDump_Follow = follow;
-    TextureDump_Recall = recall;
-    TextureDump_Restored = restored;
-    /* The disc's directory and the images wait for TexturePack_Service,
-     * between frames: a mod is applied while the game starts, before the
-     * disc is open, and an upload can ask for an image from the interrupt
-     * tick. Until then paint only notes what it needs and sample sees no
-     * image. */
-    drop_port_entries();
-    add_port_entries(); /* the port's own, which a pack unloading took with it */
-    resolved = 0; /* the new entries, and the order, with the others */
-    wanted_resolve = 1;
-    generation++;
     fprintf(stderr, "memories-pc: texture pack %s: %d images\n", from, entry_count - before);
     return entry_count - before;
 }
@@ -1055,6 +1068,8 @@ void TexturePack_Unload(void)
     waiting_count = 0;
     generation++;
     map_generation++;
+    /* The images the port made stay: they are no pack's. */
+    if (made_count && (!add_made(0) || !install())) free_entries();
 }
 
 int TexturePack_EntryFor(int page_x, int page_y, int depth, int clut_x, int clut_y, int u, int v)

@@ -138,15 +138,10 @@ void Duelists_Frame(void);
  * for anything that does not suit. The one file serves both pictures: it is
  * reduced to the 48x48 of 64 colours the console's slot holds, and kept whole
  * for the scaled picture, which draws it at its own size through the texture
- * pack (texture_pack.h). So a portrait is as sharp as the file is, and
- * nothing more is asked of the mod.
- *
- * Where in the pack's mod space this duelist's picture is registered, or -1
- * for a duelist with none: the screen tags the upload with it so the pack
- * knows the words are that picture's (TextureDump_ModImage). The palette
- * follows the image, at + FREE_DUEL_PORTRAIT_IMAGE_SIZE. */
+ * pack (TexturePack_AddMade), which knows the upload by the record's bytes.
+ * So a portrait is as sharp as the file is, and nothing more is asked of the
+ * mod. */
 const unsigned char *Duelists_Portrait(int duelist);
-int Duelists_PortraitKey(int duelist);
 /* The nine AI parameters a duelist plays by: its own when a mod gave it any,
  * its base's otherwise. Never NULL for a valid id, so a caller can index it
  * straight. Byte 0 is how deep into its deck the AI may look for a card to

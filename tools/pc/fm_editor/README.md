@@ -1,6 +1,6 @@
 # FM Editor
 
-A standalone editor for mods of the PC port: cards, fusions, equips, rituals
+A standalone editor for mods of the PC port: cards and their art, fusions, equips, rituals
 and the opponents' deck and drop pools. It is a program of its own, not part
 of the game, and needs nothing but Python 3 and Tkinter (part of Python on
 Windows and macOS; on Linux maybe a package of its own: `python3-tk`, or `tk`
@@ -23,6 +23,7 @@ The window has a tab per table:
 | Tab | What you edit |
 |---|---|
 | Cards | search and filter the 722 cards; name, card text (with the game's 20-letter, 8-line wrapping counted), ATK/DEF, type, attribute, level, guardian stars; the retail value beside each field. **Add a card** copies the selected one as a new card with a stable id |
+| Art | a card's picture (102x96), thumbnail (40x32, the hand and the field) and name plate (96x14) as the disc has them, beside what the game will draw at the console's resolution and at Internal 2x/4x; **Import PNG**, **Export** the disc's or the mod's (to paint over), **Revert** |
 | Fusions | every pair and its result (search by a card, or show the changed ones); add, change, remove (the pair no longer fuses) or revert |
 | Equips | per equip card, the monsters it may equip; add one, add or remove a whole type, remove, revert |
 | Rituals | per ritual card, its three tributes and the monster it summons |
@@ -61,8 +62,8 @@ record are shown as retail fusions and marked.
 
 * `cards`: a `replace` entry per changed retail card with only the changed
   keys, and a `copy` entry per added card with a stable `id`. Keys the editor
-  does not show (`art`, `title`, `model`, `count`, `password`...) are kept
-  as written. A copy with no `name` shows its base's name from the disc.
+  does not show (`model`, `count`, `password`...) are kept as written; `art`,
+  `thumbnail` and `title` are the Art tab's (below). A copy with no `name` shows its base's name from the disc.
 * `fusions`: one rule per pair whose result changed (`"result": null` for a
   fusion taken away). An added card fuses as its base until a rule names it,
   so taking away its pair's fusion writes a `null` rule for it.
@@ -85,6 +86,31 @@ record are shown as retail fusions and marked.
   given as the name of a file (`"decks": "tables/decks.json"`), which the
   editor does not read. A roster's `duelists/`, `decks/`, `drops/` and
   `portraits/` folders are copied with the mod's other files.
+* Art (the Art tab, `art.py`): a retail card's picture and thumbnail go in
+  a texture pack, `textures/manifest.json` with PNGs under
+  `textures/cards/`, one entry each addressed as `extract_images.py` and
+  `hd_assets_pack.py` address them (the picture at the art record, WA
+  sector `(n-1)*7 + 722`, 8-bit through its 256-entry palette; the
+  thumbnail at sector `n-1`, through its 64 entries), and mod.json gets
+  `"textures"`. A pack image may be up to 4x: the console's resolution
+  averages it down, Internal 2x and 4x draw its detail. A card the mod
+  adds has its base's place on the disc, so a pack cannot tell the two
+  apart: its picture and thumbnail are the entry's `art` and `thumbnail`
+  PNGs (under `art/`), made into 102x96 and 40x32 at 255 and 63 colours when
+  the game starts, the same at every resolution. The name plate of any
+  card is the entry's `title` PNG (dark ink on white; a retail card gets a
+  `replace` entry for it). An imported PNG is cut to the part's shape from
+  the middle (a warning says so), made opaque over black, and kept at most
+  4x; a new picture for a retail card makes its thumbnail too, cut where the
+  game cuts its own (`tools/pc/hd_recipes/thumb_crops.json`) until one is
+  imported. A retail card's own `art` in mod.json would hide the pack's
+  picture, so importing one moves it to the pack. An opened mod's pack is
+  kept entry by entry: only a card part's plain entry (no `setting`) is
+  the editor's. One a setting switches (assets-hd's) is shown until a PNG
+  is imported, which goes before it in the pack so the game draws the
+  import. A PNG another entry or card shares is left to it, and the PNGs
+  are written on save. A card's `art` that can't be read stops the import
+  that would move it, instead of losing it.
 * Every other key of an opened mod (`data`, `text`, `textures`, `audio`,
   `requires`, `duelists`...) is kept as written, and the folder's other files
   are copied when the mod is saved somewhere new.
@@ -171,6 +197,12 @@ Before saving, the editor runs the loader's checks (`validate.py`): the mod
 id, settings, ATK/DEF in tens up to 5110, levels, a copy staying on its
 base's side, equip and ritual cards of the right type, a deck pool of at
 least 14 cards, a drop pool with a card left, and pools adding up to 2048.
+For the art, the texture pack loader's (`texture_pack.c`): `textures` inside
+the mod and its `manifest.json` an array; each entry's `file` and `archive`,
+the file inside the pack and there, its measures (offset, words 1-1024,
+rows 1-512, depth 4/8/16, stride, `crop_left` and `width` within the row),
+`row_offsets` as long as `rows`, and a `setting` the mod declares; and the
+cards' `art`, `thumbnail` and `title`: inside the mod, there, and PNGs.
 
 ## Command line
 
@@ -188,9 +220,18 @@ builds `tmp/pc/fm-editor/fm-editor.exe` (one file, about 11 MB, no Python
 needed to run it). Put it beside `memories-pc.exe` and it finds the game's
 `game/` folder there. Build outputs never go in git.
 
+Each release carries it as `fm-editor-<version>-windows.zip` and
+`fm-editor-<version>-linux.tar.gz` (`.github/workflows/pc-release.yml`):
+unpack it where the game's archive was unpacked, and `fm-editor.exe` (or
+`fm-editor`) lands beside the game's program. The Linux one is built on
+Debian 11, like the game, and brings its own Python and Tk. Running it from
+the source as above works too.
+
 ## Tests
 
     python -m unittest discover -s tools/pc/fm_editor/tests -t tools/pc
 
 (ctest `pc_fm_editor`). The tests build synthetic game files at the retail
-offsets (`tests/fixtures.py`); they need no game data.
+offsets (`tests/fixtures.py`), art records included, and their PNGs in code;
+they need no game data. PNGs are read and written by `pngio.py`, in plain
+Python like the rest.

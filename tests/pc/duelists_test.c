@@ -98,15 +98,18 @@ int Tables_RankNamed(const char *name)
     return -1;
 }
 
-static int pack_images;         /* how many pictures the pack is holding */
-int TexturePack_AddImage(const char *file, unsigned offset, int words, int rows, int bpp, unsigned clut_offset,
-                         int clut_entries)
+int CardArt_Crop(const char *path, int w, int h, int *x, int *y, int *cw, int *ch, int *width, int *height)
 {
-    (void)file; (void)offset; (void)words; (void)rows; (void)bpp; (void)clut_offset; (void)clut_entries;
-    pack_images++;
+    (void)path; (void)w; (void)h; (void)x; (void)y; (void)cw; (void)ch; (void)width; (void)height;
+    return 0;
+}
+int TexturePack_AddMade(const void *pixels, int words, int rows, int bpp, const void *clut, int clut_entries,
+                        const char *file, int x, int y, int w, int h)
+{
+    (void)pixels; (void)words; (void)rows; (void)bpp; (void)clut; (void)clut_entries; (void)file;
+    (void)x; (void)y; (void)w; (void)h;
     return 1;
 }
-void TexturePack_DropImages(void) { pack_images = 0; }
 int Glyphs_Code(uint32_t character) { return (int)character; }
 uint32_t Glyphs_NextCharacter(const char **at) { return (unsigned char)*(*at)++; }
 int Paths_Contained(const char *path) { return path && strncmp(path, "..", 2) != 0; }

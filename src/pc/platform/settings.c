@@ -30,6 +30,9 @@ static const SettingInfo info[SET_COUNT] = {
     /* 1: the opponent's name in place of COM (hd_text.h). */
     [SET_OPPONENT_NAME] = {"opponent_name", NULL, "MEMORIES_OPPONENT_NAME", NULL, 0, 0, 1},
     /* Cards a won duel deals; 1 is the console's (src/pc/cards/drops.h). */
+    /* Game > Language (src/pc/text/language.h): 0 English (US), 1 English (Europe), 2 French, 3 German,
+     * 4 Italian, 5 Spanish, from the player's PAL disc; at the next launch. */
+    [SET_LANGUAGE] = {"language", NULL, "MEMORIES_LANGUAGE", NULL, 0, 0, 5},
     [SET_CARD_DROPS] = {"card_drops", NULL, "MEMORIES_CARD_DROPS", NULL, 1, 1, 99},
     /* 1: the Library lays out every card never seen as a seen one, while it
      * is open; nothing is given or saved (Cards_LibraryPlaceholder, cards.h). */
@@ -104,6 +107,9 @@ static const SettingInfo info[SET_COUNT] = {
     [SET_FLASH] = {"reduce_flashes", NULL, "MEMORIES_REDUCE_FLASHES", NULL, 0, 0, 1},
     /* 1: xBR smoothing of the picture's pixel art (present_pass.c). */
     [SET_XBR] = {"xbr", NULL, "MEMORIES_XBR", NULL, 0, 0, 1},
+    /* 1: text, and the duel's numbers and labels, set in a font at the
+     * internal resolution (src/pc/text/hd_text.h). */
+    [SET_HD_TEXT] = {"hd_text", NULL, "MEMORIES_HD_TEXT", NULL, 0, 0, 1},
     /* Samples a pixel of the OpenGL picture is drawn with: 0 (off), 2, 4, 8
      * (gl_picture.c). */
     [SET_MSAA] = {"msaa", NULL, "MEMORIES_MSAA", NULL, 0, 0, 8},
@@ -149,6 +155,7 @@ static int find_key(const char *key)
 {
     int id;
     for (id = 0; id < SET_COUNT; id++) {
+        if (!info[id].key) continue;   /* retired (settings.h) */
         if (!strcmp(key, info[id].key) ||
             (info[id].legacy_key && !strcmp(key, info[id].legacy_key))) {
             return id;
@@ -239,7 +246,7 @@ void Settings_Load(void)
         fclose(file);
     }
     for (id = 0; id < SET_COUNT; id++) {
-        const char *text = getenv(info[id].env);
+        const char *text = info[id].env ? getenv(info[id].env) : NULL;
         int value;
         if ((!text || !*text) && info[id].legacy_env) text = getenv(info[id].legacy_env);
         if (text && *text && parse_value(text, &value)) values[id] = clamp((SettingId)id, value);
@@ -258,6 +265,7 @@ int Settings_Save(void)
     file = fopen(temporary, "w");
     if (!file) return 0;
     for (id = 0; id < SET_COUNT; id++) {
+        if (!info[id].key) continue;
         fprintf(file, "%s=%d\n", info[id].key, stored[id]);
         /* TODO remove legacy keys after one compatibility release. */
         if (info[id].legacy_key && strcmp(info[id].legacy_key, info[id].key)) {

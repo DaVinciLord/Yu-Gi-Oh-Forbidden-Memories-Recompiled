@@ -190,7 +190,9 @@ primitive uses is the one drawn; at the console's resolution only the first
 of them shows, the scaled picture shows all. The packs of every enabled
 mod add up. The extracted images themselves are the game's, so a pack
 ships painted images or a way to make them from the player's own disc,
-never the originals.
+never the originals. The FM Editor's Art tab
+([tools/pc/fm_editor](../tools/pc/fm_editor/README.md)) writes such a pack
+for card pictures and thumbnails, a PNG at a time.
 
 A pack image does not need the extracted image's shape either: it is
 stretched to the texture's width and rows (the crop's width, below), so a
@@ -200,8 +202,12 @@ wider or taller than the driver's largest texture (`GL_MAX_TEXTURE_SIZE`,
 16384 or 32768 on most) is averaged down to that size, with a line on the
 console, rather than drawn black.
 
-A pixel with alpha below half is transparent; every other pixel is drawn,
-black included. At the console's resolution a replaced texel keeps the
+In the scaled picture (Internal 2x and up) a pixel's alpha is how much it
+covers: below 8 it is transparent, and anything less than opaque is mixed
+over what lies beneath (after the game's own blending), so letters and
+outlines can have smooth edges. At the console's resolution a pixel with
+alpha below half is transparent and every other pixel is drawn, black
+included; there a replaced texel keeps the
 game's semi-transparency bit, as on the PS1, so opaque black is the word
 0x8000 where the game's texel has that bit and the darkest red, 0x0001,
 where it has not (0x0000 is the PS1's transparent colour).
@@ -312,6 +318,9 @@ its own:
 
 The cards take the ids after 722, in the order the mods are found, and work
 in the Library, Build Deck, duels, rewards, trades and saves.
+An `art` PNG bigger than the card's 102x96 picture (408x384 is 4x) is also
+drawn at its own resolution when the internal resolution is above 1x, with
+no texture pack needed.
 [More cards](more-cards.md) has every key, how a new card is won, where what
 the save holds of them is kept, and how the port does it. Like data
 overrides, a mod with cards needs a restart.
@@ -713,6 +722,19 @@ destructors (do that work in `MemoriesModInit`), and a name the game does
 not provide. A crash inside a mod names the function it was in
 (`3d-monsters:draw_frame+0x40`).
 
+### Later releases
+
+A code mod built against one release keeps working in the later ones,
+without being rebuilt. Every name that release's `sdk/exports.txt` lists
+stays exported, with the type its SDK declared. Every structure those
+names reach keeps its layout, and every enumerator (`SET_PGXP`,
+`MENU_ITEM_OPPONENT_NAME`) keeps its value. New settings, menu items and
+fields go at the end, and retired ones keep their place. Each pull request
+is checked against the releases in `tools/pc/mod_compat.txt`, and those
+releases' own mods are run in each new release before it goes out
+([pc-release.md](pc-release.md)). A mod that uses something newer sets
+`min_api`, and checks `host->api` as `modapi.h` describes.
+
 ## What a mod may and may not do
 
 The host table has no network call in it, and no way to name a file outside
@@ -741,7 +763,8 @@ the reason beside any that failed to load.
 
 The first two were part of the executable until they became mods; they are the worked
 examples of a code mod that reaches deep into the game. 3D Monsters' knobs
-are its declared settings `scale`, `pixels`, `lift`, `pitch` and `depth`, in
+are its declared settings `scale`, `pixels`, `lift`, `pitch`, `depth`,
+`battle`, `battle_pixels` and `battle_dim`, in
 the Mods window (`MEMORIES_MOD_3D_MONSTERS_SCALE=5000` for one run; they were
 `MEMORIES_MODS_SCALE` and so on before it became one object for both systems).
 One more, `test`, is read but not declared, so the window does not show it:
