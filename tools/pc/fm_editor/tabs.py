@@ -88,7 +88,7 @@ class CardsTab(Tab):
         form.pack(side="left", fill="y", padx=(8, 0))
         self.form = form
         self.vars = {k: tk.StringVar() for k in ("name", "attack", "defense", "type", "attribute", "level",
-                                                  "star1", "star2", "key")}
+                                                  "star1", "star2", "password", "key")}
         row = 0
 
         def line(label, widget, hint=None):
@@ -123,6 +123,7 @@ class CardsTab(Tab):
                                              state="readonly", width=18), hint("star1"))
         line("Guardian star 2", ttk.Combobox(form, textvariable=self.vars["star2"], values=STAR_CHOICES,
                                              state="readonly", width=18), hint("star2"))
+        line("Password", ttk.Entry(form, textvariable=self.vars["password"], width=12), hint("password"))
         ttk.Label(form, text="Card text").grid(row=row, column=0, sticky="nw", pady=2)
         # 21 columns: the game's 20 letters a line and room for the cursor.
         self.text = tk.Text(form, width=21, height=9, wrap="word", font=("Consolas", 10))
@@ -145,8 +146,13 @@ class CardsTab(Tab):
             row=2, column=0, columnspan=2, sticky="w")
         ttk.Checkbutton(self.added_frame, text="Opponents' decks can deal it in its base's place",
                         variable=self.opponents).grid(row=3, column=0, columnspan=2, sticky="w")
-        ttk.Button(self.added_frame, text="Remove this card", command=self.remove_card).grid(
+        ttk.Label(self.added_frame, foreground="#777", wraplength=px(form, 320), justify="left",
+                  text="A new card starts in nobody's chest. Players win it in its base's place (above), "
+                       "from a starter deck (Starter decks tab) or with Game > Cheats > Give. Its password "
+                       "is shown in View > Card passwords only: the Password screen sells the disc's cards.").grid(
             row=4, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        ttk.Button(self.added_frame, text="Remove this card", command=self.remove_card).grid(
+            row=5, column=0, columnspan=2, sticky="w", pady=(4, 0))
         self.extra = ttk.Label(form, foreground="#777", wraplength=px(form, 320), justify="left")
         self.extra.grid(row=row, column=0, columnspan=3, sticky="w")
         row += 1
@@ -262,6 +268,7 @@ class CardsTab(Tab):
         self.vars["level"].set(card.level)
         self.vars["star1"].set(star_label(card.star1))
         self.vars["star2"].set(star_label(card.star2))
+        self.vars["password"].set(self.project.password(cid))
         self.text.insert("1.0", card.description)
         self.count_lines()
         reference = self.project.retail.cards.get(cid) or self.project.cards.get(self.project.base_of(cid))
@@ -271,6 +278,10 @@ class CardsTab(Tab):
                            ("attack", reference.attack), ("defense", reference.defense),
                            ("star1", star_label(reference.star1)), ("star2", star_label(reference.star2))):
             self.hints[key].configure(text=f"{what}: {label}" if key != "name" or len(str(label)) < 28 else what)
+        if cid in self.project.retail.cards:
+            self.hints["password"].configure(text=f"Retail: {self.project.retail.passwords.get(cid) or 'none'}")
+        else:
+            self.hints["password"].configure(text="Card view only")
         if cid in self.project.added:
             added = self.project.added[cid]
             self.vars["key"].set(added.key)
@@ -319,7 +330,16 @@ class CardsTab(Tab):
         if isinstance(card, str):
             self.status.configure(text=card)
             return False
+        password = self.vars["password"].get().strip()
+        if password and not (len(password) <= 8 and password.isdigit() and password.isascii()):
+            self.status.configure(text="a password is up to 8 digits, or empty for none")
+            return False
+        password = password.zfill(8) if password else ""
         changed = not card.same(self.project.cards[cid])
+        if password != self.project.password(cid):
+            self.project.set_password(cid, password)
+            self.vars["password"].set(password)
+            changed = True
         if cid in self.project.added:
             added = self.project.added[cid]
             key = self.vars["key"].get().strip()
@@ -350,6 +370,7 @@ class CardsTab(Tab):
         if cid in self.project.added:
             base = self.project.cards[self.project.added[cid].base]
             self.project.cards[cid] = base.copy(id=cid)
+            self.project.passwords.pop(cid, None)
         else:
             self.project.revert_card(cid)
         self.app.changed()

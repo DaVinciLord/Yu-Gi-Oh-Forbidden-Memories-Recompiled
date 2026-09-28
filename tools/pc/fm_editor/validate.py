@@ -151,6 +151,7 @@ def _check_card(project: Project, cid: int, out: list):
         add("warning", f"its text runs to {lines} lines; the card view shows 8")
     if any(ord(c) < 32 and c != "\n" for c in card.name + card.description):
         add("error", "a control character in its name or text")
+    _check_password(project, cid, add)
     if cid in project.added:
         added = project.added[cid]
         base = project.cards.get(added.base)
@@ -169,6 +170,24 @@ def _check_card(project: Project, cid: int, out: list):
             add("warning", "a monster made a non-monster does nothing when played unless \"effect\" names a card")
         if not retail.is_monster() and card.is_monster() and "model" not in extra:
             add("warning", "a card made a monster fights without a 3D model unless \"model\" names one")
+
+
+def _check_password(project: Project, cid: int, add):
+    """A password the mod sets: 8 digits (tables.c read_shop_password), and
+    no other card's. The Password screen gives the lower card number of two
+    with the same password, and View > Card passwords would show both."""
+    if not project.password_changed(cid):
+        return
+    value = project.passwords[cid]
+    if not value:
+        return
+    if not re.fullmatch(r"\d{8}", value):
+        add("error", "a password is up to 8 digits")
+        return
+    others = [other for other in sorted(project.cards) if other != cid and project.password(other) == value]
+    if others:
+        named = ", ".join(project.card_label(o) for o in others[:3]) + (" and more" if len(others) > 3 else "")
+        add("error", f"password {value} is also {named}'s: the Password screen gives the lower card number")
 
 
 def _check_tables(project: Project, out: list):

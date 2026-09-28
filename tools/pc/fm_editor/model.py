@@ -142,6 +142,12 @@ class Project:
         self.source_dir = None
         self.files = {}                 # path in the mod folder -> bytes to write with it (an import's)
         self.text_cards = {}            # card id -> {field: value} its "text" file carries while unchanged
+        # Passwords the mod sets, 8 digits or "" for none: a disc card's goes in
+        # "passwords" (the Password screen's), an added card's is its entry's
+        # "password" (View > Card passwords alone). password_keys: how
+        # "passwords" named a disc card, so the entry is written back there.
+        self.passwords = {}
+        self.password_keys = {}
 
     # --- cards -------------------------------------------------------------
 
@@ -154,6 +160,25 @@ class Project:
     def card_label(self, cid: int) -> str:
         card = self.cards.get(cid)
         return f"{cid} {card.name}" if card else str(cid)
+
+    def password(self, cid: int) -> str:
+        """The card's password as the mod leaves it: 8 digits, or "" for none
+        (an added card has none of its own unless the mod gives it one)."""
+        if cid in self.passwords:
+            return self.passwords[cid]
+        return self.retail.passwords.get(cid, "") if cid in self.retail.cards else ""
+
+    def set_password(self, cid: int, value: str):
+        """Set it; a disc card back at the disc's password, or an added card
+        with none, sets nothing."""
+        retail = self.retail.passwords.get(cid, "") if cid in self.retail.cards else ""
+        if value == retail:
+            self.passwords.pop(cid, None)
+        else:
+            self.passwords[cid] = value
+
+    def password_changed(self, cid: int) -> bool:
+        return cid in self.passwords
 
     def identity(self, cid: int) -> str:
         return f"{self.info.id}:{self.added[cid].key}:1"
@@ -212,6 +237,7 @@ class Project:
             raise ValueError("only a card the mod adds can be removed")
         del self.added[cid]
         del self.cards[cid]
+        self.passwords.pop(cid, None)
         self.fusions = {p: r for p, r in self.fusions.items() if cid not in p and r != cid}
         self.equips.pop(cid, None)
         for monsters in self.equips.values():
@@ -225,11 +251,13 @@ class Project:
         if cid in self.retail.cards:
             self.cards[cid] = self.retail.cards[cid].copy()
             self.card_extra.pop(cid, None)
+            self.passwords.pop(cid, None)
 
     def card_changed(self, cid: int) -> bool:
         if cid in self.added:
             return True
-        return not self.cards[cid].same(self.retail.cards[cid]) or bool(self.card_extra.get(cid))
+        return (not self.cards[cid].same(self.retail.cards[cid]) or bool(self.card_extra.get(cid))
+                or self.password_changed(cid))
 
     # --- tables ------------------------------------------------------------
 
