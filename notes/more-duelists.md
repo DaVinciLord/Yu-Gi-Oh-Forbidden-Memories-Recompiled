@@ -1227,9 +1227,11 @@ would reach nothing but byte 0.
 under `-Wall -Wextra`, and `screen_runtime.c` under the build's own flags. The
 retail path is untouched: its preprocessor sees no reference to any of this.
 
-`pc_tables` and `pc_fm_editor` cover what the rest of the port does with a
-roster it cannot see: the tables stub the list as a run with no duelist mod,
-and the FM Editor keeps a `decks` or `drops` entry naming an added duelist, or
+What the rest of the port does with a roster it cannot see is covered too.
+`pc_tables`, `pc_free_duel_progress`, `pc_card_drops` and `pc_rank` link units
+this touches, and share `tests/pc/duelists_stubs.c`: the list as a run with no
+duelist mod, the disc's forty, which is what their cases are written against.
+`pc_fm_editor` keeps a `decks` or `drops` entry naming an added duelist, or
 either table named as a file, exactly as the mod wrote it.
 
 `tests/pc/duelists_test.c` (`ctest -R pc_duelists`) covers what is settled

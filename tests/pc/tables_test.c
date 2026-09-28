@@ -74,30 +74,8 @@ int Mods_Loaded(int index) { return index; }
 int Mods_Active(int mod) { return mod >= 0; }
 const char *Mods_Id(int mod) { (void)mod; return ""; }
 const JsonValue *Mods_Manifest(int mod) { (void)mod; return NULL; }
-/* No duelist mod here: the list is the disc's forty (pc/free_duel/duelists.h),
+/* The duelist list is duelists_stubs.c: no duelist mod, the disc's forty,
  * which is what these cases are written against. */
-const char *Mods_Directory(int mod) { (void)mod; return NULL; }
-int Duelists_Count(void) { return TABLES_DUELIST_COUNT; }
-int Duelists_Valid(int duelist) { return duelist >= 0 && duelist < TABLES_DUELIST_COUNT; }
-const char *Duelists_Name(int duelist)
-{
-    return Duelists_Valid(duelist) ? Tables_DuelistNames[duelist] : Tables_DuelistNames[0];
-}
-int Duelists_Find(const char *identity) { (void)identity; return -1; }
-int Duelists_Named(const char *text)
-{
-    int id;
-    if (!text || !*text) return -1;
-    if (strspn(text, "0123456789") == strlen(text)) return Duelists_Valid(id = atoi(text)) ? id : -1;
-    for (id = 0; id < TABLES_DUELIST_COUNT; id++) {
-        if (same_letters(text, Tables_DuelistNames[id])) return id;
-    }
-    return -1;
-}
-/* The pool folders are not read here -- no mod has a directory -- so these
- * only have to exist. */
-int Paths_Contained(const char *path) { (void)path; return 1; }
-const char *Paths_UserDir(void) { return NULL; }
 
 static JsonDocument *documents[64];
 static int document_count;

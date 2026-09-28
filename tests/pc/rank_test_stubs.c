@@ -4,6 +4,15 @@
 #include <stdlib.h>
 
 #define STUB(name) void name(void); void name(void) { abort(); }
+
+/* These two the unit really calls, so they answer rather than abort: no
+ * duelist mod, which is what the cases compare the game's own arithmetic
+ * against (pc/free_duel/duelists.h, pc/cards/tables.h). */
+int Duelists_BaseId(int duelist);
+int Duelists_BaseId(int duelist) { return duelist; }
+const short *Tables_Rank(int rule);
+const short *Tables_Rank(int rule) { (void)rule; return 0; }   /* the disc's own row stands */
+
 STUB(CardDrops_ComposePage) STUB(Cards_ChestSlot) STUB(Cards_PickVariant) STUB(Cards_Valid)
 STUB(DisplayObject_AcquireSlot) STUB(DisplayObject_ConfigureSpriteAtPositionWithResource)
 STUB(DisplayObject_FadeBrightnessAndRelease) STUB(DisplayObject_FindAllocatedByTag)
