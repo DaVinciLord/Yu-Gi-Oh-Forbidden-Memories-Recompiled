@@ -77,9 +77,17 @@ record are shown as retail fusions and marked.
   at exactly the edited pool; an edit every opponent shares is written once
   as `"all"`. A fixed deck (`"fixed": true`) is kept as written; the
   Duelists tab shows the weighted deck under it.
+* The duelists the editor knows are the forty the disc lays out, since it
+  reads the game's own files. A mod may add its own
+  ([more duelists](../../../notes/more-duelists.md)), and which of those exist
+  depends on the mods applied at run time, so an entry of `drops` or `decks`
+  naming one is kept as written rather than resolved — as is either table
+  given as the name of a file (`"decks": "tables/decks.json"`), which the
+  editor does not read. A roster's `duelists/`, `decks/`, `drops/` and
+  `portraits/` folders are copied with the mod's other files.
 * Every other key of an opened mod (`data`, `text`, `textures`, `audio`,
-  `requires`...) is kept as written, and the folder's other files are
-  copied when the mod is saved somewhere new.
+  `requires`, `duelists`...) is kept as written, and the folder's other files
+  are copied when the mod is saved somewhere new.
 
 Cards are named by their retail name when that finds the card again in the
 port (`retail_by_name`), by number otherwise, and added cards by their
