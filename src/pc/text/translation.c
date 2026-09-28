@@ -297,10 +297,12 @@ const char *Text_OpponentName(int duelist)
     char text[64];
     const unsigned char *c;
     int got;
-    if (!english || duelist < 0 || duelist >= DUELIST_TABLE_COUNT) return NULL;
-    /* A translation's own: letters, spaces and full stops, cut to the
-     * limit. */
-    got = latin_text(TEXT_OWN_OPPONENT + duelist, text, sizeof(text));
+    if (!english || duelist < 1 || duelist >= DUELIST_TABLE_COUNT) return NULL;
+    /* A translation's own: letters, spaces and full stops, cut to the limit.
+     * Only for the disc's own thirty-nine -- TEXT_OWN_OPPONENT holds one id
+     * each for those and no more (text.h), and a duelist a mod added is named
+     * by the mod rather than by a translation. */
+    got = duelist < TABLES_DUELIST_COUNT ? latin_text(TEXT_OWN_OPPONENT + duelist, text, sizeof(text)) : 0;
     for (c = (const unsigned char *)text; got > 0 && *c; c++) {
         if (!latin_letter(*c) && *c != ' ' && *c != '.') got = -1;
     }
