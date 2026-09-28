@@ -102,6 +102,11 @@ int Tables_ShortenName(const char *name, char *out)
     int capitals = 1, words = 0;
     out[0] = '\0';
     while (*in && n < sizeof(whole) - 1 && (name_letter(*in) || *in == ' ' || *in == '.')) whole[n++] = (char)*in++;
+    /* Up to an elided article ("Sekmeton l'Archimage", "Mago dell'Oceano"):
+     * the words before it, not the article's letters. */
+    if (*in == '\'') {
+        while (n && whole[n - 1] != ' ') n--;
+    }
     while (n && whole[n - 1] == ' ') n--;
     whole[n] = '\0';
     if (!n) return 0;

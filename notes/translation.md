@@ -241,7 +241,8 @@ spaces and full stops of Latin-1; a string with anything else is not used
 the names bank (`8329`-`834F`, as pt-BR's does) has that name shown, made
 short as the English ones are (`Tables_ShortenName`): up to its first
 character that is not a letter, a space or a full stop (Jono 2º Duelo:
-Jono), whole up to 14; longer, its first words as initials when every word
+Jono; an elided article before an apostrophe goes too, Sekmeton
+l'Archimage: Sekmeton), whole up to 14; longer, its first words as initials when every word
 starts with a capital (Sumo Mago Martis: S.M. Martis), else its last word
 (Mago da Montanha: Montanha). A name the translation gives as the English
 (Weevil Underwood) keeps the English short one (Weevil). Without either,
@@ -538,8 +539,15 @@ CREAR MAZO); the French NEW is cut short as the PAL text cuts words
 name. The small letters of the headings draw the accented
 capitals, so MÁS, PÁGINA and PIÙ show their accents. The shop's menu
 fits the entry in every language because a PAL language also has the PAL
-game's text entries (below). The opponent's name over COM needs no
-string: the names bank's names are shortened as a translation's are.
+game's text entries (below). The opponent's name over COM is the names
+bank's, shortened as a translation's is, except where that loses who it
+is: French puts the name before the title, so the High Mages and the
+Guardians have their names alone (Sekmeton, Anubis, Atenza, Marthis,
+Képurah, Sébek, Néku, where shortening gave "Sekmeton l" and "Gardien"
+twice), and Duel Master K is Maître K / Maestro K in French, Italian and
+Spanish ("Duels", "K"); the Italian Ocean Mage is Oceano, as its other
+mages are their places. These are `FE55`-`FE67` strings in language.c's
+`own_names`, added after `own_words`.
 
 **Text entries.** The PAL executables keep a text box's letters in 800
 entries, sliced 280, 220, 220 and 80 for the four text channels (the
@@ -566,6 +574,11 @@ changed). So a state goes on with the entries its boxes point into,
 whichever language the game was launched in (checked: French to US,
 saved again, and US to French). With English (US) nothing changes: the
 table, its place and its slices are retail's.
+
+**Save states** keep pointers into the language's compiled text, so a
+state loads only in the language it was made in (pc-build.md, "Save
+states"); the text sits at a fixed address, so the same language finds it
+again at the next launch.
 
 **Widths.** The PAL text is longer than the US (French has about a hundred
 dialogue lines past the US 36 columns) and still fits on the console:

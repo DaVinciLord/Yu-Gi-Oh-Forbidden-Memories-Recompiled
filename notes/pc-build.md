@@ -1934,7 +1934,21 @@ bit-identical. How (details in `src/pc/guest/state.h`):
   LIBETC, LIBGPU, LIBGTE, MDEC, VBlank count). A chunk whose layout changed is
   reported and skipped, leaving that subsystem as it is. Nothing native is
   stored by address; timers, the disc file, the window and the audio device
-  belong to the process.
+  belong to the process. The exception is text the port compiles (a
+  language, a translation mod, the shop's menu): the game's text boxes keep
+  pointers into it in guest RAM, so it lives at a fixed address, `0x9C000000`
+  (`translation.c`, `arena_take`), laid out in compile order, and the same
+  language and mods lay it out the same at every launch. On the heap it
+  moved with anything that changed the heap (the length of a folder name),
+  and a state saved in a dialogue crashed in `TextBox_BuildStep` on some
+  loads (FR→FR 3/10, pt-BR 3/10); 10/10 now. States saved before that with
+  a language or translation on keep the old heap addresses and may still
+  crash; English (US) states never held any.
+- **A state loads only in the language it was made in** (Game > Language):
+  the `language` chunk holds its code (`en-us`, `fr`...; none is English
+  US, so older states load as before), and another language is refused
+  with the two names, as other mods are. The language is not in the
+  `mod-set` signature, which would refuse every state saved before it.
 - Game data words the linker relocated (pointers to native functions) are
   taken from the running build when the game never changed them; the file
   keeps the startup image of that data to tell.

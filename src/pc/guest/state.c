@@ -12,6 +12,7 @@
 #include "pc/render/soft_gpu.h"
 #include "pc/render/texture_dump.h"
 #include "pc/saves/deck_menu.h"
+#include "pc/text/language.h"
 #include "pc/debug/crash.h"
 #include "pc/debug/log.h"
 #include "pc/compat/signal.h"
@@ -248,12 +249,56 @@ static int compatible_mods(MemoriesState *state)
     return check.valid;
 }
 
+/* The language the game's text is in (Game > Language). The game holds
+ * pointers into that language's compiled text (translation.c), which
+ * another language lays out otherwise, so a state loads only in the
+ * language it was made in. A state without this chunk predates it and is
+ * English (US), which has no compiled text. Kept apart from "mod-set" so
+ * that states made before it keep loading. */
+#define LANGUAGE_CODE_SIZE 16
+static void state_language(const MemoriesState *state, char *code)
+{
+    size_t size = 0;
+    const uint8_t *chunk = find_chunk(state, "language", &size);
+    memset(code, 0, LANGUAGE_CODE_SIZE);
+    if (chunk && size == LANGUAGE_CODE_SIZE) memcpy(code, chunk, LANGUAGE_CODE_SIZE - 1);
+    else snprintf(code, LANGUAGE_CODE_SIZE, "%s", Language_Code(LANGUAGE_US));
+}
+
+static const char *language_label(const char *code)
+{
+    int language;
+    for (language = 0; language < LANGUAGE_COUNT; language++) {
+        if (!strcmp(code, Language_Code(language))) return Language_Label(language);
+    }
+    return code;
+}
+
+static int compatible_language(const MemoriesState *state, const char *path)
+{
+    char saved[LANGUAGE_CODE_SIZE];
+    const char *current = Language_Code(Language_Current());
+    state_language(state, saved);
+    if (!strcmp(saved, current)) return 1;
+    fprintf(stderr, "memories-pc: %s: save state was made with the game in %s, and the game is in %s now; "
+                    "choose %s in Game > Language and restart to load it\n",
+            path, language_label(saved), Language_Label(Language_Current()), language_label(saved));
+    return 0;
+}
+
 static void subsystems(MemoriesState *state)
 {
     unsigned signature = Mods_Signature();
     MemoriesStateField mod_set = {&signature, sizeof(signature)};
     MemoriesStateField gpu[2], gte[1];
-    if (!Memories_StateLoading(state)) Memories_StateChunk(state, "mod-set", &mod_set, 1);
+    char language[LANGUAGE_CODE_SIZE];
+    MemoriesStateField language_field = {language, sizeof(language)};
+    if (!Memories_StateLoading(state)) {
+        Memories_StateChunk(state, "mod-set", &mod_set, 1);
+        memset(language, 0, sizeof(language));
+        snprintf(language, sizeof(language), "%s", Language_Code(Language_Current()));
+        Memories_StateChunk(state, "language", &language_field, 1);
+    }
     Mods_VisitState(mod_state_visit, state);
     unsigned gte_size;
     gpu[0].data = SoftGpu_StateData(0, &gpu[0].size);
@@ -724,6 +769,10 @@ static int load(const char *path)
     if (!compatible_mods(&state)) {
         fprintf(stderr, "memories-pc: save state uses different mods, card definitions or mod state layouts; restore its mod profile first\n");
         free(image); return -1;
+    }
+    if (!compatible_language(&state, path)) {
+        free(image);
+        return -1;
     }
     pending_image = image;
     pending_size = (size_t)length;

@@ -123,6 +123,10 @@ int main(void)
     assert(Tables_ShortenName("Abcdefghijklmnopq", name) && !strcmp(name, "Abcdefghijklmn"));
     assert(Tables_ShortenName("A B C D E F G H Ijklmnopq", name) && !strcmp(name, "Ijklmnopq"));
     assert(!Tables_ShortenName("2P", name) && !name[0]);
+    /* An elided article ends the name before it, not in it. */
+    assert(Tables_ShortenName("Sekmeton l'Archimage", name) && !strcmp(name, "Sekmeton"));
+    assert(Tables_ShortenName("Mago dell'Oceano", name) && !strcmp(name, "Mago"));
+    assert(!Tables_ShortenName("l'Archimage", name) && !name[0]);
 
     /* Fusions: added, changed by a later mod, forbidden, and removed by
      * result; either order; a copy fuses as its base. */
