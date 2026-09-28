@@ -886,7 +886,7 @@ typedef struct {
 #define BATTLE_LARGEST 1.6        /* and the most */
 #define BATTLE_TALLEST 188        /* from the card's feet line to the top of the screen */
 #define BATTLE_DEPTH_STEPS 2
-#define BATTLE_PIXELS 150         /* a middling monster's height on its card */
+#define BATTLE_PIXELS 160         /* a middling monster's height on its card */
 #define BATTLE_DIM 50             /* percent */
 #define CARD_COLOUR 0x808080u
 /* The screen the pass projects through: a camera looking straight at the
@@ -1109,7 +1109,7 @@ static int draw_battle(void)
     int side, count = 0;
 
     for (side = 0; side < DUEL_SIDE_COUNT; side++) {
-        cards[side] = tunable("battle", 1) ? battle_card(side) : NULL;
+        cards[side] = tunable("battle", 0) ? battle_card(side) : NULL;
         monsters[side] = NULL;
         if (!cards[side]) {
             undim(side);

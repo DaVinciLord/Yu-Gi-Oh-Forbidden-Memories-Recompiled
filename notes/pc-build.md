@@ -1050,12 +1050,12 @@ the camera on the opponent's turn.
 **On the attack cards.** When one monster attacks another without going to
 the arena, the battle presentation (`DuelScene_UpdateBattle`) lays the two
 cards side by side, big, over the faded field. With the `battle` setting on
-(the default) each monster stands on its card there too, the attacker on
+(off by default) each monster stands on its card there too, the attacker on
 the left turned right and the defender turned left, both a little towards
 the camera, and the cards are drawn darker under them. The pass projects
 through a camera of its own, looking straight at the cards, and fits each
 monster to its card from its packets: into a box 150 pixels wide and
-`battle_pixels` (150) high, whichever it meets first, so a dragon's wings
+`battle_pixels` (160) high, whichever it meets first, so a dragon's wings
 count as much as its height. The box grows and shrinks with the monster's
 size on the field (the square root of it against a middling monster, from
 70% to 160%), so Blue-Eyes stands taller than Mystical Elf, and no monster
