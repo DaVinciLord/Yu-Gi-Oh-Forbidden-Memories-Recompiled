@@ -747,8 +747,10 @@ save loaded through the save slot menu:
 
 Game > Language puts the game's own European translations in the US game:
 English (US), the default, English (Europe), Français, Deutsch, Italiano and
-Español. Their text ships with the port, one listing a language in
-`languages/` (`en-eu.txt`, `fr.txt`, `de.txt`, `it.txt`, `es.txt`), which
+Español; and Português (Brasil), the fan translation of the US game
+(notes/translation.md, "Português (Brasil)"), which has only its pack. Their
+text ships with the port, one listing a language in `languages/`
+(`en-eu.txt`, `fr.txt`, `de.txt`, `it.txt`, `es.txt`, `pt-br.txt`), which
 the build copies beside the program and the release packs; no PAL disc is
 needed. The packs are the port's own reading of the PAL discs, written by
 `tools/pc/export_languages.py` (below); they are the one exception to
@@ -764,7 +766,7 @@ names one folder to look in for both packs and discs, instead of all
 those. A language with neither is greyed in the menu and named in the log
 (`MEMORIES_TRACE=menu`).
 
-The choice is the `language` setting (0-5, `MEMORIES_LANGUAGE`), saved at
+The choice is the `language` setting (0-6, `MEMORIES_LANGUAGE`), saved at
 once and taken up at the next launch, as a translation mod is: the menu
 offers Restart now, Later or Cancel. A mod's translation stands over it
 string by string. What the text is and how it is read and spaced is in
