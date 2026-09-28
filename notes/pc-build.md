@@ -2073,9 +2073,10 @@ bit-identical. How (details in `src/pc/guest/state.h`):
   grew). Every build files all of its functions and the game objects'
   variables in `tmp/pc/game32/symbols/<build id>.txt`, the id being the
   table's hash (also written to `tmp/pc/game32/buildid`, which the runtime
-  reads); the state header carries the id (format version 2; version 1
-  carried the game-source fingerprint and its tables list game code only).
-  A state from another build a state from another build is
+  reads); the state header carries the id (format version 3; version 1
+  carried the game-source fingerprint, version 2 the build id of a game
+  compiled without the indirect-branch thunks).
+  A state from another build is
   rewritten by name when loaded: function starts wherever callbacks live
   (guest RAM, game variables, the callback part of the LIBDS/LIBETC/MDEC
   chunks) and any address inside a function on the stack. The load is refused,
@@ -2086,6 +2087,18 @@ bit-identical. How (details in `src/pc/guest/state.h`):
   before the pointer-sign fix below load in the fixed build (about 425
   addresses moved each). A new native static that the game depends on still
   needs a field in its subsystem's `*_State`.
+- **States from before the indirect-branch thunks are refused** ("made by an
+  older version of the game; save states don't carry over across this
+  update", on screen). The thunk flags changed the code of every game
+  function (a call through a pointer became a call to a thunk, clang's
+  switch tables compare trees), so the return addresses on a saved stack
+  point into code that is no longer there. The relocation above could not
+  see it: PE symbols carry no sizes (a function runs to the next symbol), a
+  function whose extent stayed the same passed for unchanged, and a state
+  from the build before resumed a byte off, in the middle of an instruction
+  (`Graphics_SyncFrame`'s call to `VSync` returns at `+0xd2` now, not
+  `+0xd1`). Such states carry format version 1 or 2; this build writes 3.
+  Memory card saves are not affected.
 
 ### Saves
 
