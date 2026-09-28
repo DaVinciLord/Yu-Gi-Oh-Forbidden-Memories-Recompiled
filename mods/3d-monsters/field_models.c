@@ -164,6 +164,7 @@ typedef struct {
     int battle_x, battle_y, battle_z;
     int battle_ox, battle_oy; /* its outline's middle and foot on the screen */
     int fade;      /* 0 opaque to 255 gone, as it is drawn now */
+    u32 packet_bytes; /* the most its packets have taken in one sort */
 } Monster;
 
 static const MemoriesModHost *host;
@@ -479,6 +480,7 @@ static Monster *acquire(int card, int position)
     monster->bank = (int)(monster - cache) + 1;
     monster->card = 0;
     monster->battle_scale = 0;
+    monster->packet_bytes = 0;
     if (!load_monster(monster, card, position)) {
         return NULL;
     }
@@ -581,6 +583,39 @@ static u8 *scratch;
 #define LINK_END LINK_MASK
 #define GUEST_LINK(link) ((u32 *)(uintptr_t)(0x80000000u | (link)))
 
+/* A monster's packets go at the end of the game's own packet buffer for the
+ * frame, and nothing stops them at its end: the second buffer is followed by
+ * the display environment, the ordering-table pointers and the frame service
+ * callbacks, so writing past it crashes the next frame. Ten monsters on the
+ * field under Raigeki's lightning came to 584 bytes too many. A monster is
+ * left out of a frame that has no room for the most its packets have taken
+ * yet (measured first by fit()), a quarter as much again, and PACKET_SLACK.
+ * The models here take 4 to 11 KB each. */
+#define PACKET_SLACK 0x400u
+#define PACKET_FLOOR 0x1000u
+
+static u32 packet_room(void)
+{
+    u32 base = (u32)(uintptr_t)D_800A5768, at = D_800FE240;
+    u32 end = base + (at < base + GRAPHICS_PACKET_BUFFER_SIZE ? 1 : 2) * GRAPHICS_PACKET_BUFFER_SIZE;
+    return at < base || at >= end ? 0 : end - at;
+}
+
+static int packets_fit(const Monster *monster)
+{
+    static unsigned said = ~0u;
+    u32 need = monster->packet_bytes > PACKET_FLOOR ? monster->packet_bytes : PACKET_FLOOR;
+    need += need / 4 + PACKET_SLACK;
+    if (packet_room() >= need) {
+        return 1;
+    }
+    if (said != frame) {
+        said = frame;
+        say("card %d left out: %u bytes of packets left, it needs %u\n", monster->card, packet_room(), need);
+    }
+    return 0;
+}
+
 static void sort_monster(Monster *monster, GsOT *into, int at)
 {
     const u32 *from = (const u32 *)(uintptr_t)D_800FE240;
@@ -589,6 +624,9 @@ static void sort_monster(Monster *monster, GsOT *into, int at)
     u32 *tags = (u32 *)scratch, *entry, *last = NULL, first = LINK_END, end;
     int entries, nearest = 0, i;
 
+    if (!packets_fit(monster)) {
+        return;
+    }
     table->length = 14;
     table->org = (GsOT_TAG *)scratch;
     table->offset = 0;
@@ -598,6 +636,9 @@ static void sort_monster(Monster *monster, GsOT *into, int at)
     D_800E9D98[0] = table;
     func_800540B4(0);
     D_800E9D98[0] = live;
+    if (D_800FE240 - (u32)(uintptr_t)from > monster->packet_bytes) {
+        monster->packet_bytes = D_800FE240 - (u32)(uintptr_t)from;
+    }
     entries = TAGS_BYTES / 4; /* func_800540B4 leaves the length at 12 */
 
     /* The table's entries run from the far end down to entry 0; chain the
@@ -633,7 +674,7 @@ static void sort_monster(Monster *monster, GsOT *into, int at)
 
 static int packet_height(const u32 *from, const u32 *to);
 
-static int sort_aside(void)
+static int sort_aside(Monster *monster)
 {
     GsOT *table = (GsOT *)(scratch + TABLE_AT);
     void *live = D_800E9D98[0];
@@ -648,6 +689,9 @@ static int sort_aside(void)
     D_800E9D98[0] = table;
     func_800540B4(0);
     height = packet_height((const u32 *)(scratch + PACKETS_AT), (const u32 *)(uintptr_t)D_800FE240);
+    if (D_800FE240 - (u32)(uintptr_t)(scratch + PACKETS_AT) > monster->packet_bytes) {
+        monster->packet_bytes = D_800FE240 - (u32)(uintptr_t)(scratch + PACKETS_AT);
+    }
     D_800E9D98[0] = live;
     D_800FE240 = base;
     return height;
@@ -762,7 +806,7 @@ static void fit(Monster *monster)
         scale_body(monster);
         *slot = monster->slot;
         place(slot, -monster->body_x, -monster->body_y, -monster->body_z, 0, monster->scale);
-        height = sort_aside();
+        height = sort_aside(monster);
         if (height <= 0) {
             break;
         }
@@ -792,8 +836,8 @@ static void fit(Monster *monster)
     }
     monster->scale = monster->scale * tunable("scale", MODEL_FIXED_ONE) / MODEL_FIXED_ONE;
     scale_body(monster);
-    say("card %d fits %d pixels at %d/4096, body at %d,%d,%d\n", monster->card, height, monster->scale,
-        monster->body_x, monster->body_y, monster->body_z);
+    say("card %d fits %d pixels at %d/4096, body at %d,%d,%d, %u bytes of packets\n", monster->card, height,
+        monster->scale, monster->body_x, monster->body_y, monster->body_z, (unsigned)monster->packet_bytes);
 }
 
 /* How far above its card a monster floats, in field units (y is down).
@@ -1038,7 +1082,7 @@ static void battle_pose(Monster *monster, int yaw)
         *slot = monster->slot;
         place(slot, wx - raw_x * scale / MODEL_FIXED_ONE, wy - raw_y * scale / MODEL_FIXED_ONE,
               -raw_z * scale / MODEL_FIXED_ONE, yaw, scale);
-        height = sort_aside();
+        height = sort_aside(monster);
         width = bounds.right - bounds.left;
         if (height <= 0) {
             break;
