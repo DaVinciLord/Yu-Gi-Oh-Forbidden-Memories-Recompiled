@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import re
 from bisect import bisect_right
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace as dc_replace
 
 from .gamedata import TYPE_EQUIP, TYPE_MAGIC, TYPE_RITUAL, TYPE_TRAP
 
@@ -99,7 +99,9 @@ class CardFilter:
     results_only: bool = False                     # only cards some fusion makes
 
     def empty(self) -> bool:
-        return self == CardFilter()
+        """No filter at all (a field of spaces is none)."""
+        return (dc_replace(self, name="", text="", cards="") == CardFilter()
+                and not (self.name.strip() or self.text.strip() or self.cards.strip()))
 
     def select(self, project, results=None):
         """(card ids, in order; list words it cannot place)."""
@@ -107,7 +109,7 @@ class CardFilter:
         pool = sorted(set(listed)) if listed is not None else sorted(project.cards)
         if self.results_only and results is None:
             results = fusion_results(project)
-        name, text = self.name.strip().lower(), self.text.strip().lower()
+        name, text = self.name.strip().lower(), " ".join(self.text.split()).lower()
         chosen = []
         for cid in pool:
             card = project.cards[cid]
@@ -155,9 +157,12 @@ def effective(project, a: int, b: int):
     if not project.added or (a not in project.added and b not in project.added):
         return None
     base_a, base_b = project.base_of(a), project.base_of(b)
-    for other in ((a, base_b) if base_b != b else None, (base_a, b) if base_a != a else None):
-        if other and project.pair(*other) in fusions:
-            return fusions[project.pair(*other)]
+    # A copy with its partner's base; of two such, the later rule, which in
+    # the mod the editor writes (pairs in order) is the pair that sorts last.
+    found = [project.pair(*other) for other in ((a, base_b), (base_a, b)) if other != (a, b)]
+    found = [pair for pair in found if pair in fusions]
+    if found:
+        return fusions[max(found)]
     if base_a != a and base_b != b:
         return fusions.get(project.pair(base_a, base_b))
     return None
@@ -186,6 +191,7 @@ class Plan:
     weaker: int = 0          # the result would not beat both materials
     no_result: int = 0       # no card of the ladder beats both materials
     not_fusing: int = 0      # remove: the pair fuses with nothing (or makes another card)
+    only_result: int = 0     # remove: only fusions making this card
     self_pairs: int = 0      # a card with itself, not allowed
     duplicates: int = 0      # B+A of a pair A+B already counted
     pairs: int = 0           # distinct pairs looked at
@@ -222,7 +228,7 @@ class Plan:
         else:
             parts = [f"{self.removed} to take away"]
             if self.not_fusing:
-                parts.append(f"{self.not_fusing} do not fuse into it")
+                parts.append(f"{self.not_fusing} do not " + ("make that card" if self.only_result else "fuse"))
         for count, label in ((self.same, "already make that card"), (self.weaker, "result not stronger"),
                              (self.no_result, "no card of the list beats both"),
                              (self.self_pairs, "card with itself"),
@@ -233,8 +239,9 @@ class Plan:
 
     def budget_line(self) -> str:
         size = self.rules_after * BYTES_PER_RULE
+        size = f"{size / 1e6:.1f} MB" if size >= 1e6 else f"{round(size / 1e3)} KB"
         return (f"The mod's fusion rules: {self.rules_before} now, {self.rules_after} after "
-                f"(about {size / 1e6:.1f} MB of mod.json; at most {RULE_BUDGET}).")
+                f"(about {size} of mod.json; at most {RULE_BUDGET}).")
 
 
 def rule_count(project) -> int:
@@ -251,7 +258,7 @@ def _differs(project, pair, value) -> bool:
 
 
 def plan(project, spec: BulkSpec) -> Plan:
-    out = Plan(mode=spec.mode)
+    out = Plan(mode=spec.mode, only_result=spec.result if spec.mode == "remove" else 0)
     results = fusion_results(project) if (spec.a.results_only or spec.b.results_only) else None
     side_a, unknown_a = spec.a.select(project, results)
     side_b, unknown_b = spec.b.select(project, results)
@@ -281,6 +288,8 @@ def plan(project, spec: BulkSpec) -> Plan:
             out.errors.append(f"no card {spec.result}")
         elif not project.cards[spec.result].is_monster():
             out.errors.append(f"{project.card_label(spec.result)} is not a monster: a fusion makes a monster")
+    elif spec.result and (spec.result not in project.cards or not project.cards[spec.result].is_monster()):
+        out.errors.append(f"no fusion makes {project.card_label(spec.result)}: it is not a monster card")
     if out.errors:
         return out
 

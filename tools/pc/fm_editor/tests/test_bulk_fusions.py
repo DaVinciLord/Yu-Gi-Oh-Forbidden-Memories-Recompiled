@@ -148,12 +148,28 @@ class PlanTest(unittest.TestCase):
         self.assertEqual(plan.changes, [((2, copy), 0, 500)])
         self.assertEqual(plan.added, 1)
 
+    def test_two_copies_either_order(self):
+        # Tables_Fusion: a copy with its partner's base, the later of two such rules
+        ten, eleven = self.p.add_card(10), self.p.add_card(11)
+        self.p.set_fusion(10, eleven, 100)
+        self.p.set_fusion(11, ten, 200)
+        self.assertEqual(bulk.effective(self.p, ten, eleven), 200)
+        self.assertEqual(bulk.effective(self.p, eleven, ten), 200)
+
+    def test_blank_fields_are_no_filter(self):
+        self.assertTrue(bulk.CardFilter(name="  ", text=" ", cards="\n").empty())
+        self.assertFalse(bulk.CardFilter(name="x").empty())
+        self.assertTrue(bulk.plan(self.p, bulk.BulkSpec(a=bulk.CardFilter(name=" "), result=500)).errors)
+        self.assertEqual(ids(self.p, text="card  5.   second")[0], [5])
+
     def test_remove(self):
         self.p.set_fusion(5, 6, 400)
         spec = pairs_spec("1, 5", "2, 6", mode="remove")
         plan = bulk.plan(self.p, spec)
         self.assertEqual(sorted(pair for pair, _, _ in plan.changes), [(1, 2), (5, 6)])
         self.assertEqual(plan.not_fusing, 2)
+        spec.result = 610                                    # a magic card: no fusion makes it
+        self.assertTrue(bulk.plan(self.p, spec).errors)
         spec.result = 3                                      # only those making Kuriboh
         plan = bulk.plan(self.p, spec)
         self.assertEqual([pair for pair, _, _ in plan.changes], [(1, 2)])

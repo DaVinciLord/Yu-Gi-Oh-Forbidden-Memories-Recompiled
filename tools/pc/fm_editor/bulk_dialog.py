@@ -136,8 +136,9 @@ class FilterPanel(ttk.LabelFrame):
             var.set(False)
         for var in self.texts.values():
             var.set("")
-        self.types.selection_clear(0, "end")
-        self.stars.selection_clear(0, "end")
+        for box in (self.types, self.stars):
+            box.selection_clear(0, "end")
+            box.see(0)
         self.on_change()
 
     def show_count(self, project, chosen):
@@ -193,13 +194,13 @@ class BulkFusionsDialog(tk.Toplevel):
         self.outcome = ttk.LabelFrame(self, text="Result", padding=6)
         self.outcome.pack(fill="x", padx=10)
         self.card_choice = ttk.Radiobutton(self.outcome, text="This card", value="card", variable=self.result_mode,
-                                           command=self.schedule)
+                                           command=self.mode_changed)
         self.card_choice.grid(row=0, column=0, sticky="w")
         self.result = CardField(self.outcome, lambda: self.tab.project, width=34)
         self.result.grid(row=0, column=1, sticky="we", padx=4)
         self.result.var.trace_add("write", lambda *_: self.schedule())
         self.ladder_choice = ttk.Radiobutton(self.outcome, text="The weakest of these that beats both materials",
-                                             value="ladder", variable=self.result_mode, command=self.schedule)
+                                             value="ladder", variable=self.result_mode, command=self.mode_changed)
         self.ladder_choice.grid(row=1, column=0, sticky="w")
         self.ladder_entry = ttk.Entry(self.outcome, textvariable=self.ladder, width=40)
         self.ladder_entry.grid(row=1, column=1, sticky="we", padx=4)
@@ -270,8 +271,10 @@ class BulkFusionsDialog(tk.Toplevel):
     def mode_changed(self):
         adding = self.mode.get() == "add"
         self.outcome.configure(text="Result" if adding else "Only fusions that make (empty: any)")
-        for widget in (self.ladder_choice, self.ladder_entry, self.stronger_box):
+        for widget in (self.ladder_choice, self.ladder_entry):
             widget.configure(state="normal" if adding else "disabled")
+        # the list's choice beats both materials already
+        self.stronger_box.configure(state="normal" if adding and self.result_mode.get() == "card" else "disabled")
         self.card_choice.configure(state="normal" if adding else "disabled")
         if adding:
             self.policy.grid()
