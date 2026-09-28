@@ -64,6 +64,9 @@ int HdText_NameBox(int factor, int which, int *atlas_u, int *atlas_v, int *x, in
  * draw at x, y from the panel; NULL when there is none. Makes the atlas
  * 1x, so only while the OpenGL picture is not drawing (at 1x). */
 const uint8_t *HdText_NamePixels(int which, int *x, int *y, int *width, int *height, int *stride);
+/* The player's name as YOU's box and the result screens show it: the
+ * save's, in ASCII (SaveSlots_StateName), or You when it has none. */
+const char *HdText_PlayerName(void);
 
 /* The atlas: 8-bit indices, *side x *side pixels (0 before the first
  * cell). The rows from *first to *last have changed since the last call

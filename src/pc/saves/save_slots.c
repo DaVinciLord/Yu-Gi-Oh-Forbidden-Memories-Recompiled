@@ -43,14 +43,15 @@ int SaveSlots_Path(int slot, char *out, size_t size)
     return Paths_User(out, size, relative);
 }
 
-/* Full-width Shift-JIS (stored as little-endian halfwords) to ASCII. */
+/* Full-width Shift-JIS (stored as little-endian halfwords) to ASCII. Every
+ * key of the name entry's keyboard has its character here (save_slots_test). */
 static char ascii(unsigned code)
 {
     static const struct { unsigned short sjis; char ascii; } marks[] = {
         {0x8140, ' '}, {0x8143, ','}, {0x8144, '.'}, {0x8145, '.'}, {0x8146, ':'}, {0x8147, ';'},
         {0x8148, '?'}, {0x8149, '!'}, {0x815B, '-'}, {0x815E, '/'}, {0x8166, '\''}, {0x8168, '"'},
-        {0x8169, '('}, {0x816A, ')'}, {0x817B, '+'}, {0x817C, '-'}, {0x8181, '='}, {0x8193, '%'},
-        {0x8194, '#'}, {0x8195, '&'}, {0x8196, '*'}, {0x8197, '@'}, {0x83BF, 'a'} /* alpha */};
+        {0x8169, '('}, {0x816A, ')'}, {0x817B, '+'}, {0x817C, '-'}, {0x8181, '='}, {0x8190, '$'},
+        {0x8193, '%'}, {0x8194, '#'}, {0x8195, '&'}, {0x8196, '*'}, {0x8197, '@'}, {0x83BF, 'a'} /* alpha */};
     size_t i;
     if (code >= 0x20 && code < 0x7F) return (char)code;
     if (code >= 0x8260 && code <= 0x8279) return (char)('A' + code - 0x8260);

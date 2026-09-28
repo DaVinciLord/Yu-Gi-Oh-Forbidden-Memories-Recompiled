@@ -1066,10 +1066,10 @@ static size_t polygon(const uint32_t *words, size_t count)
 
 const uint8_t *(*SoftGpu_PanelName)(int which, int *x, int *y, int *width, int *height, int *stride);
 
-/* The opponent's name over the life-point panel just drawn, and You for
- * YOU, at the console's resolution (the OpenGL picture draws them above
- * it): the boxes' palette indices through the panel's CLUT, as the panel's
- * own texels would be, so the inactive side's dimming applies. */
+/* The opponent's name over the life-point panel just drawn, and the
+ * player's for YOU, at the console's resolution (the OpenGL picture draws
+ * them above it): the boxes' palette indices through the panel's CLUT, as
+ * the panel's own texels would be, so the inactive side's dimming applies. */
 static void name_over_panel(const Vertex *base, int flags)
 {
     int which, x, y, width, height, stride, i, j;

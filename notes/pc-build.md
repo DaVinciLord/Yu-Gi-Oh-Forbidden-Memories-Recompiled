@@ -1504,13 +1504,21 @@ and up without the picture pass ("needs OpenGL 3 or 1x").
 - A 2P duel (no opponent id) and a panel other than the retail one keep COM.
 - YOU's box shows the name the player gave at name entry (the save's,
   `SaveSlots_StateName`), made the same way; You when the save has none.
-- The result screens name the sides too (You, and the opponent over COM's
-  column). They call the dialogue bank's YOU and COM labels by their place,
-  which `Text_Retarget` points at the names. Their small font has no full
-  stop and odd digits, so there the name is the panel's when it is letters
-  only and at most 9 of them, else its longest word of letters (G. Sebek:
-  Sebek, Teana 2nd: Teana, Simon Muran: Simon). A copy of the result
-  strings steps less before COM, so the name ends where COM did.
+- The result screens name the sides too (the player over YOU's column,
+  the opponent over COM's). They call the dialogue bank's YOU and COM
+  labels by their place, which `Text_Retarget` points at the names. Their
+  small font has no full stop and odd digits, so there the name is the
+  panel's when it is letters only and at most 9 of them, else its longest
+  word of letters (G. Sebek: Sebek, Teana 2nd: Teana, Simon Muran: Simon).
+  A copy of the result strings steps less before COM, so the name ends
+  where COM did. The player's name is YOU's box's when it is letters,
+  digits, spaces and `:` alone, else You (the font has no `. ! ? $ & * %
+  @` and draws `- / +` in the blue of its own dots); the copy steps less
+  before each YOU (more for a name shorter than three), so it ends where
+  YOU did, over its numbers. `WINNER ···` names the winner
+  (`gDuel_bWinnerSide`): the player's name, or the opponent's when the
+  computer won, ending where the game's YOU or COM would; a name that
+  cannot stay You, or the game's own COM. 2P duels keep 1P and 2P.
 
 Not covered yet: the sword and shield icons (pictures, not lettering).
 

@@ -1,6 +1,7 @@
 /* Translations (text.h, notes/translation.md). */
 #include "text.h"
 #include "glyphs.h"
+#include "hd_text.h"
 #include "listing.h"
 #include "language.h"
 #include "pc/cards/cards.h"
@@ -16,6 +17,7 @@
 #include "pc/saves/deck_menu.h"
 #include "pc/debug/log.h"
 #include "game/card_constants.h"
+#include "game/duel_side_state.h"
 #include <ctype.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -167,13 +169,16 @@ void Text_Build(void)
 }
 
 /* View > Opponent's name for COM (hd_text.h) names the sides after the
- * duel too: strings 0x3D and 0x3E (YOU, or 1P in a 2P duel) and 0x3F (COM,
- * or 2P) become You and the opponent's short name, as the life-point panel
- * has them. The result screens call them by their place in the dialogue
- * bank (TEXT_*_AT, Text_Retarget) rather than by id. Only against the
- * computer (an opponent id), and only when every letter has a glyph of one
- * byte; else the game's own. */
+ * duel too: strings 0x3E (YOU, or 1P in a 2P duel) and 0x3F (COM, or 2P)
+ * become the player's name and the opponent's short name, as the
+ * life-point panel has them, and 0x3D, which picks the winner's of the four
+ * ({f8 18}), becomes the winner's name (gDuel_bWinnerSide). The result
+ * screens call them by their place in the dialogue bank (TEXT_*_AT,
+ * Text_Retarget) rather than by id. Only against the computer (an opponent
+ * id), and only when every letter has a glyph of one byte; else the game's
+ * own. */
 #define TEXT_YOU_FIRST 0x3D
+#define TEXT_YOU 0x3E
 #define TEXT_COM 0x3F
 #define TEXT_YOU_FIRST_AT 0x0504
 #define TEXT_YOU_AT 0x050E
@@ -187,6 +192,10 @@ void Text_Build(void)
 #define TEXT_RESULTS_FROM 0x0500
 #define TEXT_RESULTS_SIZE 0x0500
 #define TEXT_RESULTS_LETTER 7
+/* The cell every letter of that font takes ({f8 04 01}), whatever the
+ * letter: the player's name moves by whole cells, so it ends exactly where
+ * YOU did, over its column of numbers. */
+#define TEXT_RESULTS_CELL 8
 
 /* The opponent's name as the result screens' small font can show it in
  * COM's column: the panel's name when it is letters and spaces only and at
@@ -229,17 +238,27 @@ static int side_letters(void)
     return name ? (int)strlen(name) : 0;
 }
 
-static const unsigned char *side_name(int id)
+/* The player's name (HdText_PlayerName, as YOU's box has it) when it is
+ * letters, digits, spaces and ':' alone; else You. The result screens'
+ * small font has no . ! ? $ & * % @, and draws - / + in the blue of the
+ * game's own dots. */
+static const char *results_player(void)
+{
+    const char *name = HdText_PlayerName(), *c;
+    for (c = name; *c; c++) {
+        if (!isalnum((unsigned char)*c) && *c != ' ' && *c != ':') return "You";
+    }
+    return name;
+}
+
+/* `name` in glyph codes, ended by 0xFF, in texts[which]; NULL when a letter
+ * has none of one byte. */
+static const unsigned char *side_text(const char *name, int which)
 {
     static unsigned char texts[2][40];
-    const char *name;
-    unsigned char *out;
+    unsigned char *out = texts[which];
     int i, n = 0;
-    if (id < TEXT_YOU_FIRST || id > TEXT_COM || !Settings_Get(SET_OPPONENT_NAME)) return NULL;
-    if (!Text_OpponentName(Tables_OpponentId())) return NULL;
-    name = id == TEXT_COM ? results_name() : "You";
     if (!name) return NULL;
-    out = texts[id == TEXT_COM];
     for (i = 0; name[i] && n < (int)sizeof(texts[0]) - 1; i++) {
         /* An accented letter as its plain one: the small font has none.
          * A letter made whole (ß, æ, þ...) has no plain one (its base is
@@ -254,12 +273,59 @@ static const unsigned char *side_name(int id)
     return out;
 }
 
+static const unsigned char *side_name(int id)
+{
+    if (id < TEXT_YOU_FIRST || id > TEXT_COM || !Settings_Get(SET_OPPONENT_NAME)) return NULL;
+    if (!Text_OpponentName(Tables_OpponentId())) return NULL;
+    if (id == TEXT_COM || (id == TEXT_YOU_FIRST && gDuel_bWinnerSide)) return side_text(results_name(), 1);
+    return side_text(results_player(), 0);
+}
+
+/* How far side_name(id) runs past the three letters of YOU or COM, in
+ * pixels of the result screens (less than 0 for a shorter one). */
+static int side_shift(int id)
+{
+    const unsigned char *name = side_name(id);
+    int n = 0;
+    if (!name) return 0;
+    while (name[n] != 0xFF) n++;
+    return (n - 3) * TEXT_RESULTS_CELL;
+}
+
 /* The result screens set COM's column with {f8 02 NN}, a step right from
  * the end of YOU's, then call COM. For a longer name the copy of the
  * strings steps that much less, so the name ends where COM did; a name the
- * step cannot make room for stays COM (results_room). */
+ * step cannot make room for stays COM (results_room). The player's name
+ * ends where YOU did: the copy steps less (more for a shorter name) before
+ * each call to YOU (results_you), and the winner's where YOU or COM did,
+ * before WINNER on the line that calls it (results_won). A name whose step
+ * cannot change stays You, and a computer's win COM. */
 static unsigned char results[TEXT_RESULTS_SIZE];
-static int results_room = 0x7FFF;
+static int results_room = 0x7FFF, results_you = 0, results_won = 0;
+
+/* Moves what the copy draws before the call at `at` on its line `shift`
+ * pixels left: the nearest {f8 02 NN} before it with only letters and
+ * spaces between steps that much less; else, after four spaces, the last
+ * three become such a step. 0 if neither can. */
+static int step_before(unsigned char *copy, int at, int shift)
+{
+    int i, step;
+    for (i = at - 3; i >= 0; i--) {
+        if (copy[i] == 0xF8 && copy[i + 1] == 0x02) {
+            step = copy[i + 2] - shift;
+            if (step < 0 || step > 0xFF) return 0;
+            copy[i + 2] = (unsigned char)step;
+            return 1;
+        }
+        if (copy[i + 2] >= 0xF0) break; /* a control byte */
+    }
+    step = 3 * TEXT_RESULTS_CELL - shift;
+    if (at < 4 || copy[at - 4] || copy[at - 3] || copy[at - 2] || copy[at - 1] || step < 0 || step > 0xFF) return 0;
+    copy[at - 3] = 0xF8;
+    copy[at - 2] = 0x02;
+    copy[at - 1] = (unsigned char)step;
+    return 1;
+}
 
 /* Where the string at `retail` starts in the copy, or NULL. */
 static const unsigned char *results_copy(const unsigned char *retail)
@@ -267,9 +333,12 @@ static const unsigned char *results_copy(const unsigned char *retail)
     unsigned char *copy = results;
     uintptr_t offset = (uintptr_t)retail & 0xFFFF;
     int shift = (side_letters() - 3) * TEXT_RESULTS_LETTER, i, room = 0x7FFF;
-    if (!side_name(TEXT_COM) || shift <= 0 || ((uintptr_t)retail & 0xFFFF0000u) != bases[TEXT_BANK_DIALOG] ||
+    int you = side_shift(TEXT_YOU), won = side_shift(TEXT_YOU_FIRST);
+    results_room = 0x7FFF;
+    results_you = results_won = 0;
+    if (!side_name(TEXT_COM) || (shift <= 0 && !you && !won) ||
+        ((uintptr_t)retail & 0xFFFF0000u) != bases[TEXT_BANK_DIALOG] ||
         offset < TEXT_RESULTS_FROM || offset >= TEXT_RESULTS_FROM + TEXT_RESULTS_SIZE) {
-        results_room = 0x7FFF;
         return NULL;
     }
     memcpy(copy, (const unsigned char *)(uintptr_t)(bases[TEXT_BANK_DIALOG] + TEXT_RESULTS_FROM), TEXT_RESULTS_SIZE);
@@ -285,7 +354,15 @@ static const unsigned char *results_copy(const unsigned char *retail)
         }
         if (!calls) continue;
         if (copy[i + 2] < room) room = copy[i + 2];
-        copy[i + 2] = (unsigned char)(copy[i + 2] > shift ? copy[i + 2] - shift : 0);
+        if (shift > 0) copy[i + 2] = (unsigned char)(copy[i + 2] > shift ? copy[i + 2] - shift : 0);
+    }
+    /* A call ({fc}) or jump ({fd}) to YOU, or to the winner's name. */
+    results_you = results_won = 1;
+    for (i = 0; i + 2 < TEXT_RESULTS_SIZE; i++) {
+        unsigned target = copy[i + 1] | copy[i + 2] << 8;
+        if (copy[i] != 0xFC && copy[i] != 0xFD) continue;
+        if (target == TEXT_YOU_AT && you) results_you &= step_before(copy, i, you);
+        if (target == TEXT_YOU_FIRST_AT && won) results_won &= step_before(copy, i, won);
     }
     results_room = room;
     return room >= shift ? copy + (offset - TEXT_RESULTS_FROM) : NULL;
@@ -444,11 +521,18 @@ unsigned char *Text_Retarget(unsigned char *cursor, unsigned target)
     int i;
     int copied = cursor >= results && cursor < results + sizeof(results);
     if (copied || ((uintptr_t)cursor & 0xFFFF0000u) == bases[TEXT_BANK_DIALOG]) {
-        /* The retail result screens calling YOU or COM (COM only when its
-         * column made room for the name). */
-        const unsigned char *side = side_name(target == TEXT_COM_AT ? TEXT_COM
-                                              : target == TEXT_YOU_AT || target == TEXT_YOU_FIRST_AT ? TEXT_YOU_FIRST
-                                                                                                    : -1);
+        /* The retail result screens calling YOU, COM or the winner (COM
+         * only when its column made room for the name). */
+        int id = target == TEXT_COM_AT ? TEXT_COM
+               : target == TEXT_YOU_AT ? TEXT_YOU
+               : target == TEXT_YOU_FIRST_AT ? TEXT_YOU_FIRST : -1;
+        const unsigned char *side = side_name(id);
+        /* The player's or the winner's name only where the copy moved it to
+         * end where YOU did; else You, or for the computer's win the
+         * game's own pick ({f8 18}: COM). */
+        if (side && id != TEXT_COM && side_shift(id) && !(copied && (id == TEXT_YOU ? results_you : results_won))) {
+            side = id == TEXT_YOU_FIRST && gDuel_bWinnerSide ? NULL : side_text("You", 0);
+        }
         if (side && (target != TEXT_COM_AT || side_letters() <= 3 ||
                      results_room >= (side_letters() - 3) * TEXT_RESULTS_LETTER)) {
             return (unsigned char *)side;
