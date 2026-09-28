@@ -2,6 +2,7 @@
  * discs they are written from (read too, when a pack is not there). */
 #include "pc/compat/fs.h"
 #include "language.h"
+#include "entry_layout.h"
 #include "pal_text.h"
 #include "glyphs.h"
 #include "pc/debug/log.h"
@@ -363,17 +364,44 @@ int Language_Available(int language)
 
 int Language_Current(void) { return current; }
 
-void Language_Drop(void) { current = LANGUAGE_US; }
+void Language_Drop(void)
+{
+    current = LANGUAGE_US;
+    TextEntries_UseLayout(0);
+}
 
 /* The port's own words (text.h, TEXT_OWN_*), in the languages that have
- * them written; the rest keep the port's English. */
+ * them written; the rest keep the port's English, which English (EU) says
+ * as it is. The deck in the card shop's menu (FE10) is the game's own word
+ * for it (CONSTRUIRE JEU, STAPEL ZUSAMMENSTELLEN, CREA MAZZO, CREAR MAZO);
+ * the small letters of the card drops' headings draw the accented capitals.
+ * The French NEW is cut short with a full stop, as the PAL text cuts words
+ * (ESCI DAL NEGO.): past three letters it takes room from the card's name. */
 static const char *const own_words[LANGUAGE_COUNT] = {
+    [LANGUAGE_FR] = "\n@bank dialog\n\n"
+                    "[FE00]\nNOUV.{end}\n\n"
+                    "[FE01]\n%d CARTE DE PLUS{end}\n\n"
+                    "[FE02]\n%d CARTES DE PLUS{end}\n\n"
+                    "[FE03]\nPAGE %d SUR %d{end}\n\n"
+                    "[FE10]\nJEUX{end}\n",
+    [LANGUAGE_DE] = "\n@bank dialog\n\n"
+                    "[FE00]\nNEU{end}\n\n"
+                    "[FE01]\n%d WEITERE KARTE{end}\n\n"
+                    "[FE02]\n%d WEITERE KARTEN{end}\n\n"
+                    "[FE03]\nSEITE %d VON %d{end}\n\n"
+                    "[FE10]\nSTAPEL{end}\n",
+    [LANGUAGE_IT] = "\n@bank dialog\n\n"
+                    "[FE00]\nNUOVA{end}\n\n"
+                    "[FE01]\n%d CARTA IN PIÙ{end}\n\n"
+                    "[FE02]\n%d CARTE IN PIÙ{end}\n\n"
+                    "[FE03]\nPAGINA %d DI %d{end}\n\n"
+                    "[FE10]\nMAZZI{end}\n",
     [LANGUAGE_ES] = "\n@bank dialog\n\n"
                     "[FE00]\nNUEVA{end}\n\n"
                     "[FE01]\n%d CARTA MÁS{end}\n\n"
                     "[FE02]\n%d CARTAS MÁS{end}\n\n"
                     "[FE03]\nPÁGINA %d DE %d{end}\n\n"
-                    "[FE10]\nRANURAS{end}\n",
+                    "[FE10]\nMAZOS{end}\n",
 };
 
 char *Language_Listing(size_t *length)
@@ -397,6 +425,7 @@ char *Language_Listing(size_t *length)
         }
     }
     current = language;
+    TextEntries_UseLayout(1); /* the PAL game's text entries (entry_layout.h) */
     LOG(LOG_MODS, "language: %s from %s", Language_Label(language), origin);
     return listing;
 }
@@ -408,6 +437,19 @@ int Language_Advance(unsigned flags, int code, int *shift)
      * own paths, which PAL does not space either. */
     if (current == LANGUAGE_US || (flags & 0x180)) return 0;
     return PalText_Advance(Glyphs_Character(code), shift);
+}
+
+int Language_PastWidth(unsigned flags, int channel, int count, int step, int cell, int limit)
+{
+    /* The width each text channel has drawn since its count was last reset
+     * (F8 07 and the box's start set it to 0, so the first letter after is
+     * count 1). */
+    static int width[16];
+    if (current == LANGUAGE_US || channel < 0 || channel >= 16) return -1;
+    /* Reset first: a small letter can be the first after an F8 07. */
+    if (count == 1) width[channel] = 0;
+    if (flags & 0x180) return -1;
+    return PalText_PastWidth(&width[channel], step, cell, limit);
 }
 
 int Language_Export(const char *folder)

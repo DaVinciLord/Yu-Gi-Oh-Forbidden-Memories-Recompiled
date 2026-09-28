@@ -46,7 +46,7 @@ void TextBox_BuildStep(DuelEffectChannel *object)
     s32 op;
     void (**handlers)(u8 *);
 #ifdef MEMORIES_PC
-    int pal_shift, pal_advance;
+    int pal_shift, pal_advance, pal_done;
 #endif
 
     flags = object->flags_34;
@@ -174,7 +174,15 @@ next_opcode:
     func_80036C14(object, D_801D9000[(s16)D_8009B33A] & 0x8FF0FFFF);
 #endif
     object->field_60 = object->field_60 + 1;
+#ifdef MEMORIES_PC
+    /* F8 07's limit: with the European text, pixels at the PAL's spacing
+       (language.h), as the PAL measures a name; else a count of letters. */
+    pal_done = Language_PastWidth(object->flags_34, object->index_57, object->field_60,
+                                  object->field_5A + pal_advance, object->field_5A, object->field_61);
+    if (object->field_61 != 0 && (pal_done >= 0 ? pal_done : object->field_60 >= object->field_61)) {
+#else
     if (object->field_61 != 0 && object->field_60 >= object->field_61) {
+#endif
         object->flags_34 = object->flags_34 | TEXT_BOX_FLAG_DONE;
     }
     object->field_38 = object->field_38 + object->field_5A;

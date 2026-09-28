@@ -12,6 +12,9 @@
 static const uint32_t bases[TEXT_BANK_COUNT] = {0x801B0000u, 0x801C0000u, 0x801D0000u};
 static int reports;
 
+/* The US layout's pages (src/pc/text/entry_layout.c): 254 letters, menus 159. */
+int TextEntries_PageLetters(int channel) { return channel == 0 ? 254 : 159; }
+
 /* Lower-case letters are 1-26, a space 0; an e with an acute accent is an
  * added glyph, 0x123; e with ^ and an acute (U+1EBF) 0x124, a with a dot
  * below and a breve (U+1EB7) 0x125, a lone combining acute 0x126. */
