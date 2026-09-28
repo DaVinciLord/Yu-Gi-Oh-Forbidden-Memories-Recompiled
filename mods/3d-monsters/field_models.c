@@ -879,12 +879,14 @@ typedef struct {
 #define BATTLE_STEP_TO_ARENA 5    /* fading out to the 3D battle in the arena */
 #define BATTLE_STEP_DESTROY 10    /* the losing card burns */
 #define BATTLE_CARD_WIDTH 0x8C
-#define BATTLE_CARD_FEET 0xB8     /* the feet, down from the card's top edge */
+#define BATTLE_CARD_FEET 0xAC     /* the feet, down from the card's top edge */
 #define BATTLE_BOX_WIDTH 0x96     /* the widest a monster stands on its card */
 #define BATTLE_BACK 8             /* each stands this far back from the middle of its card */
 #define BATTLE_SMALLEST 0.7       /* the least share of that box it gets */
+#define BATTLE_LARGEST 1.6        /* and the most */
+#define BATTLE_TALLEST 188        /* from the card's feet line to the top of the screen */
 #define BATTLE_DEPTH_STEPS 2
-#define BATTLE_PIXELS 160         /* the tallest a monster stands on its card */
+#define BATTLE_PIXELS 150         /* a middling monster's height on its card */
 #define BATTLE_DIM 50             /* percent */
 #define CARD_COLOUR 0x808080u
 /* The screen the pass projects through: a camera looking straight at the
@@ -1001,9 +1003,10 @@ static void measure_turned(Monster *monster, int yaw, int *x, int *y, int *z)
  * its outline sits: it is fitted into a box the size of the card's picture
  * and print, BATTLE_BOX_WIDTH wide and `battle_pixels` high, whichever of the
  * two it meets first -- a dragon's wings or a vine's reach count as much as
- * its height, which is what kept them on the card. Small monsters are drawn
- * a little smaller, as they are on the field (monster->natural), down to
- * BATTLE_SMALLEST of the box. Measured as fit() measures, from the packets,
+ * its height, which is what kept them on the card. The box follows the
+ * monster's size on the field (monster->natural), from BATTLE_SMALLEST to
+ * BATTLE_LARGEST of it and never taller than BATTLE_TALLEST, so a dragon
+ * still towers over an elf. Measured as fit() measures, from the packets,
  * and then placed by the outline rather than by the body: its middle over
  * the card's middle, its lowest point on the card's feet line. */
 static void battle_pose(Monster *monster, int yaw)
@@ -1016,9 +1019,10 @@ static void battle_pose(Monster *monster, int yaw)
     if (monster->battle_scale && monster->battle_yaw == yaw && monster->battle_pixels == pixels) {
         return;
     }
-    share = share < BATTLE_SMALLEST ? BATTLE_SMALLEST : share > 1 ? 1 : share;
+    share = share < BATTLE_SMALLEST ? BATTLE_SMALLEST : share > BATTLE_LARGEST ? BATTLE_LARGEST : share;
     box_w = (int)(BATTLE_BOX_WIDTH * share);
     box_h = (int)(pixels * share);
+    box_h = box_h > BATTLE_TALLEST ? BATTLE_TALLEST : box_h;
     measure_turned(monster, yaw, &raw_x, &raw_y, &raw_z);
     screen_to_world(0xA0, 0x78, &wx, &wy);
     for (attempt = 0; attempt < 6; attempt++) {
@@ -1050,7 +1054,7 @@ static void battle_pose(Monster *monster, int yaw)
     /* Where the outline's foot and middle came out, from the point placed. */
     monster->battle_ox = (bounds.left + bounds.right) / 2 - 0xA0;
     monster->battle_oy = bounds.bottom - 0x78;
-    say("card %d fits %dx%d on its battle card at %d/4096\n", monster->card,
+    say("card %d (natural %d) fits %dx%d on its battle card at %d/4096\n", monster->card, monster->natural,
         bounds.right - bounds.left, bounds.bottom - bounds.top, scale);
 }
 

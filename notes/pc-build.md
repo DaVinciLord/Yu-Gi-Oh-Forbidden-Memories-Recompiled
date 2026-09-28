@@ -1055,10 +1055,14 @@ the left turned right and the defender turned left, both a little towards
 the camera, and the cards are drawn darker under them. The pass projects
 through a camera of its own, looking straight at the cards, and fits each
 monster to its card from its packets: into a box 150 pixels wide and
-`battle_pixels` (160) high, whichever it meets first, so a dragon's wings
-count as much as its height, with small monsters down to 70% of the box
-as they are smaller on the field. It is placed by its outline, middle over
-the card's middle and lowest point near the card's foot, not by its body,
+`battle_pixels` (150) high, whichever it meets first, so a dragon's wings
+count as much as its height. The box grows and shrinks with the monster's
+size on the field (the square root of it against a middling monster, from
+70% to 160%), so Blue-Eyes stands taller than Mystical Elf, and no monster
+is taller than the space between the card's foot and the top of the screen.
+The first version capped every monster at the middling size, which drew
+Blue-Eyes no bigger than an elf. It is placed by its outline, middle over
+the card's middle and lowest point on a line across the card's print, not by its body,
 which put winged and armed monsters off to one side.
 `MEMORIES_MOD_3D_MONSTERS_BATTLE_TEST=<card>` (undeclared, like `test`)
 puts that card and the next on the two cards, for measuring. Three things it has to
