@@ -9,7 +9,9 @@
  * and not as something drawn over the top.
  *
  * The string is composed here and answered for one reserved id, which
- * Text_Resolve asks about.
+ * Text_Resolve asks about. The words in the middle are the port's own string
+ * TEXT_OWN_FREE_DUEL_PAGE (text.h), so a translation writes them as it writes
+ * the rest; "L1" and "R1" are the buttons' own names and stay as they are.
  */
 #include "types.h"
 

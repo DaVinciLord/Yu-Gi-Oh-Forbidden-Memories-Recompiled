@@ -21,7 +21,10 @@
  */
 #include "page_box.h"
 #include "pc/text/glyphs.h"
+#include "pc/text/text.h"
+#include "pc/debug/log.h"
 #include <stdio.h>
+#include <string.h>
 
 /* Columns from the box's own left edge, which is 4 across the picture. A
  * glyph and a space are both eight wide, and the box begins at 4. The arrows
@@ -75,18 +78,31 @@ static void at_x(Out *out, int x)
     put(out, (x >> 8) & 0xFF);
 }
 
+static void glyph(Out *out, int code)
+{
+    if (code < 0) return;
+    if (code >= 0xF0) put(out, 0xF0 + (code >> 8));
+    put(out, code & 0xFF);
+}
+
 /* ASCII in the game's letters; a space is a step, not a glyph. */
 static void words(Out *out, const char *text)
 {
     for (; *text; text++) {
         if (*text == ' ') command(out, 0x02, 8);
-        else {
-            const int code = Glyphs_Code((unsigned char)*text);
-            if (code < 0) continue;
-            if (code >= 0xF0) put(out, 0xF0 + (code >> 8));
-            put(out, code & 0xFF);
-        }
+        else glyph(out, Glyphs_Code((unsigned char)*text));
     }
+}
+
+/* Whether a translation's string is letters and spaces alone, which is all
+ * this line can take: a command of its own would move the run. */
+static int plain(const u8 *text)
+{
+    for (; *text != 0xFF; text++) {
+        if (*text >= 0xF6) return 0;
+        if (*text >= 0xF0 && *++text == 0xFF) return 0;
+    }
+    return 1;
 }
 
 /* How wide a string comes out: a glyph steps the channel's cell width and a
@@ -98,17 +114,56 @@ static int text_width(const char *text)
     return width;
 }
 
+/* The page line as a translation gives it (TEXT_OWN_FREE_DUEL_PAGE), else the
+ * English, with each %d the next number. Written to `out` unless that is NULL;
+ * returns how wide it comes out, which is what centres it. */
+static int page_text(Out *out, int page, int pages)
+{
+    const u8 *text = Text_Own(TEXT_OWN_FREE_DUEL_PAGE);
+    const int percent = Glyphs_Code('%'), letter_d = Glyphs_Code('d');
+    int numbers[2] = {page, pages}, used = 0, width = 0;
+    char buffer[32];
+
+    if (text && !plain(text)) {
+        static int said;             /* once, however many pages are turned */
+        if (!said++)
+            LOG(LOG_MODS, "text: string %04X has codes other than letters; the port's own is used",
+                TEXT_OWN_FREE_DUEL_PAGE);
+        text = NULL;
+    }
+    if (!text) {
+        snprintf(buffer, sizeof buffer, "PAGE %d/%d", page, pages);
+        if (out) words(out, buffer);
+        return text_width(buffer);
+    }
+    while (*text != 0xFF) {
+        int code = *text++;
+        if (code >= 0xF0) code = ((code - 0xF0) << 8) | *text++;
+        if (code == percent && *text == letter_d && used < 2) {
+            text++;
+            snprintf(buffer, sizeof buffer, "%d", numbers[used++]);
+            if (out) words(out, buffer);
+            width += FREE_DUEL_PAGE_ADVANCE * (int)strlen(buffer);
+            continue;
+        }
+        if (out) {
+            if (code) glyph(out, code);
+            else command(out, 0x02, 8);   /* a space, as words() has it */
+        }
+        width += FREE_DUEL_PAGE_ADVANCE;
+    }
+    return width;
+}
+
 void FreeDuelPage_Compose(int page, int pages)
 {
     Out out = {line, line + sizeof line - 1};
-    char text[32];
 
     /* One page is the screen the disc has; it says nothing. */
     if (pages <= 1) {
         FreeDuelPage_Clear();
         return;
     }
-    snprintf(text, sizeof text, "PAGE %d/%d", page + 1, pages);
 
     /* The font's letters, not the counts' 8x8 sheet: the size is what decides
      * whether the box is drawn from the font at all, and so whether HD text
@@ -122,9 +177,9 @@ void FreeDuelPage_Compose(int page, int pages)
     command(&out, COMMAND_COLOUR, WHITE);
     words(&out, "L1");
 
-    at_x(&out, (FREE_DUEL_PAGE_BOX_WIDTH - text_width(text)) / 2 - PAGE_NUDGE);
+    at_x(&out, (FREE_DUEL_PAGE_BOX_WIDTH - page_text(NULL, page + 1, pages)) / 2 - PAGE_NUDGE);
     command(&out, COMMAND_COLOUR, GOLD);
-    words(&out, text);
+    page_text(&out, page + 1, pages);
 
     at_x(&out, RIGHT_COLUMN);
     command(&out, COMMAND_COLOUR, WHITE);

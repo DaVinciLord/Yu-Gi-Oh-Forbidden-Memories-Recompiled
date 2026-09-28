@@ -45,6 +45,7 @@ enum {
     TEXT_OWN_MORE_CARDS = 0xFE02,   /* card drops: the heading, more */
     TEXT_OWN_PAGE_OF = 0xFE03,      /* card drops: which page of how many */
     TEXT_OWN_DECK_SLOTS = 0xFE10,   /* the card shop's added menu entry */
+    TEXT_OWN_FREE_DUEL_PAGE = 0xFE11, /* the Free Duel grid's page line */
     TEXT_OWN_OPPONENT = 0xFE40      /* + duelist id (1-39, FE41-FE67): the name in place of COM */
 };
 /* Ids above the block, which the port composes rather than a translation
