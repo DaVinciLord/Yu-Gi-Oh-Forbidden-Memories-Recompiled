@@ -231,7 +231,9 @@ into the mod. `card_text.py` does the work:
   box, so a word past 21 letters is cut where the box ends, and the rest of
   its line takes a row of its own. The card view shows 8 rows clear of its
   panel's frame, draws a 9th over the frame, and stops before a 10th (seen
-  in the game with a test text). The preview marks each: the 9th row on the
+  in the game with a test text, in Build Deck's card view, whose box has
+  255 glyph sprites; the duel's viewer has 160, so a long text may stop
+  sooner there). The preview marks each: the 9th row on the
   frame's colour, the rows the game never shows dimmed on grey, a red tick
   right of a row the box cut mid-word, and a red box for a character with
   no retail letter (the port sets those from a font); an accented letter is
@@ -265,6 +267,9 @@ into the mod. `card_text.py` does the work:
   same colour and 96-97% within one or two steps of the palette. A face
   whose lines cannot be measured (no x-height, no descenders) is not used by
   the port, which keeps the retail letters; the preview says so and does too.
+
+  The first HD picture of a face at a scale takes a second or so (the
+  window shows a busy cursor); glyphs are kept, so typing redraws at once.
 
 ## Command line
 
