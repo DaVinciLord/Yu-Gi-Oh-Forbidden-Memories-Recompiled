@@ -336,6 +336,16 @@ if(BUILD_TESTING)
         target_compile_options(memories_card_drops_test PRIVATE -mno-ms-bitfields)
     endif()
     add_test(NAME pc_card_drops COMMAND memories_card_drops_test)
+    # The decks a mod offers a new game (src/pc/cards/starter.c). It reads
+    # manifests and its own records only, with none of the game's 32-bit
+    # layouts, so this one builds at the host's own width.
+    add_executable(memories_starter_deck_test tests/pc/starter_deck_test.c src/pc/mods/json.c)
+    target_include_directories(memories_starter_deck_test PRIVATE src)
+    target_compile_definitions(memories_starter_deck_test PRIVATE MEMORIES_PC)
+    if(NOT MSVC)
+        target_compile_options(memories_starter_deck_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(NAME pc_starter_deck COMMAND memories_starter_deck_test)
     add_executable(memories_text_listing_test tests/pc/text_listing_test.c src/pc/text/listing.c src/pc/text/utf8.c)
     target_include_directories(memories_text_listing_test PRIVATE src)
     if(NOT MSVC)

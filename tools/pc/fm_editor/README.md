@@ -28,6 +28,7 @@ The window has a tab per table:
 | Equips | per equip card, the monsters it may equip; add one, add or remove a whole type, remove, revert |
 | Rituals | per ritual card, its three tributes and the monster it summons |
 | Duelists | per opponent, the deck pool and the S/A-POW, B/C/D and S/A-TEC drop pools: weights, their chance, the retail weight, and the total against 2048 (**Normalize** scales a pool back to 2048 the way the port does) |
+| Starter decks | the decks a new game may be dealt in place of the disc's weighted pools: a deck's name, its weight against the other decks offered, and its cards by their copies, counted against the forty a deck holds |
 | Mod info | id, name, version, author, description, `settings`, and the other `mod.json` keys, kept as written |
 | Problems | the loader's checks; double-click a line to go to it |
 
@@ -78,6 +79,16 @@ record are shown as retail fusions and marked.
   at exactly the edited pool; an edit every opponent shares is written once
   as `"all"`. A fixed deck (`"fixed": true`) is kept as written; the
   Duelists tab shows the weighted deck under it.
+* `starter`: the decks a new game may be dealt
+  ([the starter deck](../../../notes/starter-deck.md)), each written down as
+  its cards and their copies rather than as weights — which is what lets one
+  hold a card the mod adds. One deck is written as the object itself, several
+  as a list. A deck is exactly 40 cards, and the Problems tab says so while it
+  is not; more than three copies of a card, or more than one Exodia piece, is
+  dealt as written but is a warning, because Build Deck will not take it back.
+  A card the editor cannot place keeps its row and its copies, under the name
+  it was written with, and `"starter"` given as the name of a file stays that
+  filename.
 * The duelists the editor knows are the forty the disc lays out, since it
   reads the game's own files. A mod may add its own
   ([more duelists](../../../notes/more-duelists.md)), and which of those exist

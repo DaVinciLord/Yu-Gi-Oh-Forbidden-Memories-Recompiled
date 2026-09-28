@@ -8,9 +8,10 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from . import manifest, pools as poolmath, validate
-from .gamedata import (ATTRIBUTE_NAMES, CARD_COUNT, DUELIST_NAMES, POOL_LABELS, POOL_TOTAL, POOLS, STAR_NAMES,
-                       TYPE_EQUIP, TYPE_NAMES, TYPE_RITUAL)
-from .model import KEY_RE
+from .gamedata import (ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, DUELIST_NAMES, POOL_LABELS,
+                       POOL_TOTAL, POOLS, STAR_NAMES, STARTER_WEIGHT_LIMIT, TYPE_EQUIP, TYPE_NAMES, TYPE_RITUAL,
+                       exodia_piece)
+from .model import KEY_RE, StarterDeck
 from .widgets import CardField, FormDialog, card_matches, pick_card, px, scrolled_tree, show_text
 
 ATTRIBUTE_CHOICES = ATTRIBUTE_NAMES + ["6 (magic)", "7 (trap)"]
@@ -861,6 +862,247 @@ class DuelistsTab(Tab):
         self.pool.set(pool)
         self.fill_list()
         self.list.see(str(d))
+        self.fill()
+
+
+# --- Starter decks ---------------------------------------------------------------
+
+class StarterTab(Tab):
+    """The decks a new game may be dealt in place of the disc's weighted
+    pools ("starter", notes/starter-deck.md). The disc has none of these, so
+    every deck here is the mod's own: the list is what it offers, and one of
+    them is picked for each new game, by their weights."""
+
+    def __init__(self, notebook, app):
+        super().__init__(notebook, app, "Starter decks")
+        self.deck = 0
+        left = ttk.Frame(self)
+        left.pack(side="left", fill="y")
+        frame, self.list = scrolled_tree(left, [("n", "#"), ("name", "Deck"), ("w", "Weight"), ("cards", "Cards")],
+                                         [30, 150, 55, 60], 22)
+        frame.pack(fill="y", expand=True)
+        self.list.bind("<<TreeviewSelect>>", lambda e: self.select())
+        buttons = ttk.Frame(left)
+        buttons.pack(fill="x", pady=(4, 0))
+        ttk.Button(buttons, text="Add deck", command=self.add_deck).pack(side="left")
+        ttk.Button(buttons, text="Edit...", command=self.edit_deck).pack(side="left", padx=2)
+        ttk.Button(buttons, text="Remove", command=self.remove_deck).pack(side="left")
+        right = ttk.Frame(self)
+        right.pack(side="left", fill="both", expand=True, padx=(8, 0))
+        top = ttk.Frame(right)
+        top.pack(fill="x")
+        self.title = ttk.Label(top, font=("TkDefaultFont", 10, "bold"))
+        self.title.pack(side="left")
+        self.total = ttk.Label(top, font=("TkDefaultFont", 10, "bold"))
+        self.total.pack(side="right")
+        frame, self.tree = scrolled_tree(right, [("id", "#"), ("name", "Card"), ("type", "Type"),
+                                                 ("copies", "Copies"), ("state", "")],
+                                         [50, 260, 110, 60, 150], 20, selectmode="extended")
+        frame.pack(fill="both", expand=True, pady=4)
+        self.tree.bind("<<TreeviewSelect>>", lambda e: self.pick_row())
+        edit = ttk.Frame(right)
+        edit.pack(fill="x")
+        ttk.Button(edit, text="Add a card...", command=self.add_card).pack(side="left")
+        ttk.Label(edit, text="Copies").pack(side="left", padx=(10, 2))
+        self.copies = tk.StringVar()
+        entry = ttk.Entry(edit, textvariable=self.copies, width=5)
+        entry.pack(side="left")
+        entry.bind("<Return>", lambda e: self.set_copies())
+        ttk.Button(edit, text="Set", command=self.set_copies).pack(side="left", padx=2)
+        ttk.Button(edit, text="Remove selected", command=self.remove_card).pack(side="left", padx=(8, 0))
+        ttk.Label(right, text=f"A deck is exactly {DECK_SIZE} cards written down, so it may hold a card the mod "
+                              f"adds. More than {DECK_COPY_LIMIT} copies, or more than one Exodia piece, is dealt "
+                              "as written but Build Deck will not take it back.",
+                  foreground="#777", wraplength=px(self, 520), justify="left").pack(anchor="w", pady=(4, 0))
+
+    # --- the list ----------------------------------------------------------
+
+    def decks(self):
+        return self.project.starter if self.project else []
+
+    def current(self):
+        decks = self.decks()
+        return decks[self.deck] if 0 <= self.deck < len(decks) else None
+
+    def refresh(self):
+        self.fill_list()
+        self.fill()
+
+    def fill_list(self):
+        if self.project is None:
+            return
+        self.list.delete(*self.list.get_children())
+        for i, deck in enumerate(self.decks()):
+            self.list.insert("", "end", iid=str(i), tags=() if deck.complete() else ("error",),
+                             values=(i + 1, deck.name or "(unnamed)", deck.weight, f"{deck.total()}/{DECK_SIZE}"))
+        if self.decks():
+            self.deck = min(self.deck, len(self.decks()) - 1)
+            if self.list.exists(str(self.deck)):
+                self.list.selection_set(str(self.deck))
+
+    def select(self):
+        selection = self.list.selection()
+        if selection:
+            self.deck = int(selection[0])
+            self.fill()
+
+    def fill(self):
+        if self.project is None:
+            return
+        deck = self.current()
+        self.tree.delete(*self.tree.get_children())
+        if deck is None:
+            self.title.configure(text="No starter deck")
+            self.total.configure(text="", foreground="")
+            return
+        p = self.project
+        for cid in sorted(deck.cards):
+            copies = deck.cards[cid]
+            card = p.cards.get(cid)
+            notes = []
+            if copies > DECK_COPY_LIMIT:
+                notes.append(f"over {DECK_COPY_LIMIT}")
+            if exodia_piece(cid) and copies > 1:
+                notes.append("Exodia piece")
+            self.tree.insert("", "end", iid=str(cid), tags=("warning",) if notes else (), values=(
+                cid, card.name if card else "?", type_label(card.type) if card else "", copies, ", ".join(notes)))
+        # A card the editor could not place keeps its place in the deck, and
+        # its row, so its copies are not quietly lost.
+        for name, copies in deck.kept.items():
+            self.tree.insert("", "end", iid=f"kept:{name}", tags=("removed",),
+                             values=("", name, "", copies, "no such card; kept as written"))
+        self.title.configure(text=deck.name or "(unnamed)")
+        total = deck.total()
+        self.total.configure(text=f"{total} / {DECK_SIZE} cards",
+                             foreground="#26a269" if total == DECK_SIZE else "#c01c28")
+
+    def pick_row(self):
+        selection = self.tree.selection()
+        deck = self.current()
+        if len(selection) == 1 and deck and not selection[0].startswith("kept:"):
+            self.copies.set(str(deck.cards.get(int(selection[0]), 0)))
+
+    def edited(self):
+        deck = self.current()
+        if deck:
+            for cid in [c for c, n in deck.cards.items() if not n]:
+                del deck.cards[cid]
+        self.app.changed()
+        self.fill()
+        self.fill_list()
+
+    # --- decks -------------------------------------------------------------
+
+    def deck_dialog(self, title, deck):
+        fields = {}
+
+        def build(dialog, body):
+            ttk.Label(body, text="Name").grid(row=0, column=0, sticky="w", pady=2)
+            fields["name"] = tk.StringVar(value=deck.name)
+            ttk.Entry(body, textvariable=fields["name"], width=32).grid(row=0, column=1, sticky="we", pady=2)
+            ttk.Label(body, text="Weight").grid(row=1, column=0, sticky="w", pady=2)
+            fields["weight"] = tk.StringVar(value=str(deck.weight))
+            ttk.Entry(body, textvariable=fields["weight"], width=10).grid(row=1, column=1, sticky="w", pady=2)
+            ttk.Label(body, text=f"How often this deck is the one picked, against the other decks\n"
+                                 f"offered. 0 is a deck that is kept but never picked.",
+                      foreground="#777").grid(row=2, column=0, columnspan=2, sticky="w", pady=(6, 0))
+
+        def ok(dialog):
+            text = fields["weight"].get().strip()
+            if not text.isdigit() or int(text) > STARTER_WEIGHT_LIMIT:
+                return f"a weight is a whole number, 0 to {STARTER_WEIGHT_LIMIT}"
+            deck.name = fields["name"].get().strip()
+            deck.weight = int(text)
+            self.app.changed()
+            self.fill()
+            self.fill_list()
+            return None
+
+        FormDialog(self, title, build, ok)
+
+    def add_deck(self):
+        if self.project is None:
+            return
+        deck = StarterDeck(name=f"Deck {len(self.decks()) + 1}")
+        self.project.starter.append(deck)
+        self.deck = len(self.decks()) - 1
+        self.edited()
+        if self.list.exists(str(self.deck)):
+            self.list.selection_set(str(self.deck))
+        self.deck_dialog("Add starter deck", deck)
+
+    def edit_deck(self):
+        deck = self.current()
+        if deck:
+            self.deck_dialog("Starter deck", deck)
+
+    def remove_deck(self):
+        deck = self.current()
+        if deck is None:
+            return
+        if not messagebox.askyesno("Remove deck", f"Remove {deck.name or 'this deck'} and its "
+                                                  f"{deck.total()} cards?", parent=self):
+            return
+        self.project.starter.pop(self.deck)
+        self.deck = max(0, self.deck - 1)
+        self.edited()
+
+    # --- cards -------------------------------------------------------------
+
+    def add_card(self):
+        deck = self.current()
+        if deck is None:
+            messagebox.showinfo("Starter decks", "Add a deck first.", parent=self)
+            return
+        cid = pick_card(self, self.project, "Card to add to the deck")
+        if not cid:
+            return
+        try:
+            copies = int(self.copies.get() or "0")
+        except ValueError:
+            copies = 0
+        deck.cards[cid] = copies if 0 < copies <= DECK_SIZE else 1
+        self.edited()
+        if self.tree.exists(str(cid)):
+            self.tree.selection_set(str(cid))
+            self.tree.see(str(cid))
+
+    def set_copies(self):
+        deck = self.current()
+        if deck is None:
+            return
+        try:
+            copies = int(self.copies.get())
+        except ValueError:
+            messagebox.showerror("Copies", "Copies are a whole number.", parent=self)
+            return
+        if not 0 <= copies <= DECK_SIZE:
+            messagebox.showerror("Copies", f"A card's copies are 0 to {DECK_SIZE}.", parent=self)
+            return
+        chosen = [i for i in self.tree.selection() if not i.startswith("kept:")]
+        for iid in chosen:
+            deck.cards[int(iid)] = copies
+        self.edited()
+        for iid in chosen:
+            if self.tree.exists(iid):
+                self.tree.selection_add(iid)
+
+    def remove_card(self):
+        deck = self.current()
+        if deck is None:
+            return
+        for iid in self.tree.selection():
+            if iid.startswith("kept:"):
+                deck.kept.pop(iid[5:], None)
+            else:
+                deck.cards.pop(int(iid), None)
+        self.edited()
+
+    def goto(self, target):
+        self.deck = target if isinstance(target, int) else 0
+        self.fill_list()
+        if self.list.exists(str(self.deck)):
+            self.list.see(str(self.deck))
         self.fill()
 
 

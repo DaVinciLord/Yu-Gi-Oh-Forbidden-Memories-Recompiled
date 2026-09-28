@@ -1178,7 +1178,7 @@ static const char *const manifest_keys[] = {
     "id", "name", "version", "author", "description", "library", "enabled", "restart", "legacy_setting",
     "data", "textures", "cards", "audio", "min_api", "game", "requires", "after", "conflicts", "priority",
     "settings", "fusions", "equips", "rituals", "drops", "decks", "duelists", "text", "font",
-    "chest_overflow", "terrain_bonus", "trap_thresholds", "equip_bonus_default", "passwords",
+    "chest_overflow", "terrain_bonus", "trap_thresholds", "equip_bonus_default", "passwords", "starter",
 };
 
 /* How many letters to add, remove or change to turn one word into the
@@ -1305,11 +1305,12 @@ static int read_manifest(Mod *mod, const char *directory, const char *origin)
         if (Json_Member(entry, "file") && Json_Member(entry, "replace")) mod->restart = 1;
     }
     if (Json_Count(mod->cards)) mod->restart = 1;
-    {   /* So are the rule tables (src/pc/cards/tables.c) and a translation
-         * (src/pc/text): both are read once, at startup. */
+    {   /* So are the rule tables (src/pc/cards/tables.c), the starter decks
+         * (src/pc/cards/starter.c) and a translation (src/pc/text): all are
+         * read once, at startup. */
         static const char *const tables[] = {"fusions", "equips", "rituals", "drops", "decks", "duelists",
                                              "text", "font", "terrain_bonus", "trap_thresholds",
-                                             "chest_overflow", "passwords"};
+                                             "chest_overflow", "passwords", "starter"};
         for (size_t t = 0; t < sizeof(tables) / sizeof(tables[0]); t++) {
             const JsonValue *value = Json_Member(root, tables[t]);
             /* "text": "text.txt" is one file named as a string. */
