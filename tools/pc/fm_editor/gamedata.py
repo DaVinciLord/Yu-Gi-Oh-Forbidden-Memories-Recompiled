@@ -39,7 +39,7 @@ POOL_TOTAL = 2048
 DECK_POOL_MIN_CARDS = 14            # 40 cards at most 3 of each
 DECK_SIZE = 40                      # the cards in a deck (save_data.h player_deck)
 DECK_COPY_LIMIT = 3                 # copies of one card Build Deck takes back
-STARTER_WEIGHT_LIMIT = 1000000      # a starter deck's "weight" (src/pc/cards/starter.c)
+STARTER_WEIGHT_LIMIT = 32767        # a starter deck's "weight" (src/pc/cards/starter.c)
 EXODIA_FIRST_CARD_ID = 0x11         # the five pieces, at ids 17-21 (card_constants.h)
 EXODIA_PIECE_COUNT = 5
 

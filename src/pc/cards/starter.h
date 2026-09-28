@@ -37,6 +37,10 @@ int Starter_Count(void);
  * 0 when no deck is offered. A deck's "weight" is 1 unless it says. */
 unsigned Starter_WeightTotal(void);
 
+/* A roll for Starter_Deck from one of the game's random numbers (rand(), 0
+ * to 0x7FFF), spread over the whole weight total however large it is. */
+unsigned Starter_Roll(unsigned random);
+
 /* The deck a roll of `roll` (0 to Starter_WeightTotal() - 1) picks: its forty
  * cards, in id order, in `cards`, and its name in *name when `name` is not
  * NULL. 1 when a deck was written there, 0 when no mod offers one (leaving

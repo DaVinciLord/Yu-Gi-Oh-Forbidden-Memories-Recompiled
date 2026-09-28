@@ -62,7 +62,7 @@ new game spends stay where the game spends them:
 
 ```c
 total = Starter_WeightTotal();
-if (total && Starter_Deck(rand() % total, cards, 0)) { /* deal them */ }
+if (total && Starter_Deck(Starter_Roll(rand()), cards, 0)) { /* deal them */ }
 ```
 
 One random number picks the deck, where the pools would have drawn one for
@@ -91,8 +91,9 @@ remembers the cards a mod added beside the flags instead
   their back. What Build Deck would not take back afterwards — more than
   three copies of a card, or more than one of an Exodia piece — is said in
   the Mods window, and the deck is dealt as written.
-* A weight is 0 to 1,000,000, so the weights of every offered deck still add
-  up in an `unsigned`.
+* A weight is 0 to 32767. The game's `rand()` gives 0 to 32767, and
+  `Starter_Roll` spreads that one number over the weights of every offered
+  deck, so a deck past the 32768th weight is still reachable.
 * Every offered deck weighing nothing leaves the disc's pools to it.
 * The player does not choose: the deck is picked for them. A screen to choose
   one would read the same decks, and is not here.

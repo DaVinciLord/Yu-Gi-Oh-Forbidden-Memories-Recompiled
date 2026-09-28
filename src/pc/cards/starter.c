@@ -60,9 +60,9 @@ static int control_key(const char *name)
     return !strcmp(name, "name") || !strcmp(name, "weight");
 }
 
-/* The most a weight may be: enough for any mix a mod wants, and far enough
- * from an unsigned's end that the weights of every deck still add up. */
-#define STARTER_WEIGHT_LIMIT 1000000
+/* The most a weight may be: the game's rand() tops out at 0x7FFF, and
+ * Starter_Roll spreads one of its numbers over every deck's weight. */
+#define STARTER_WEIGHT_LIMIT 32767
 
 /* One deck: { "name": ..., "weight": ..., card: copies, ... }, the copies
  * adding up to the forty cards of a deck. */
@@ -72,7 +72,7 @@ static void read_deck(const char *mod, const char *where, const JsonValue *entry
     StarterDeck deck, *slot;
     const JsonValue *weight_value;
     long weight;
-    int i, n = 0, dealt = 0, total = 0, pieces = 0, over = 0;
+    int i, n = 0, named, dealt = 0, total = 0, pieces = 0, over = 0;
     if (Json_TypeOf(entry) != JSON_OBJECT) {
         Mods_Note(mod, "%s: a starter deck is an object of cards and their copies", where);
         return;
@@ -105,10 +105,6 @@ static void read_deck(const char *mod, const char *where, const JsonValue *entry
         }
         total += (int)copies;
         if (!copies) continue;
-        /* What Build Deck would not let the player put back, once they take
-         * the deck apart: its three-copy limit, and one Exodia piece each. */
-        if (copies > DECK_CARD_COPY_LIMIT) over++;
-        if (Cards_ExodiaPiece(id) && copies > 1) pieces++;
         list[n].id = id;
         list[n++].copies = (int)copies;
     }
@@ -120,6 +116,19 @@ static void read_deck(const char *mod, const char *where, const JsonValue *entry
         free(list);
         return;
     }
+    /* In id order, as the disc's own pools are read; a card named twice (by
+     * name and by number) is one card with both counts. */
+    qsort(list, (size_t)n, sizeof(*list), by_id);
+    for (i = 0, named = n, n = 0; i < named; i++) {
+        if (n && list[n - 1].id == list[i].id) list[n - 1].copies += list[i].copies;
+        else list[n++] = list[i];
+    }
+    /* What Build Deck would not let the player put back, once they take the
+     * deck apart: its three-copy limit, and one Exodia piece each. */
+    for (i = 0; i < n; i++) {
+        if (list[i].copies > DECK_CARD_COPY_LIMIT) over++;
+        if (Cards_ExodiaPiece(list[i].id) && list[i].copies > 1) pieces++;
+    }
     if (over) {
         Mods_Note(mod, "%s: %d card%s with more than %d copies; dealt as written, and Build Deck will not take "
                        "them back", where, over, over == 1 ? "" : "s", DECK_CARD_COPY_LIMIT);
@@ -128,8 +137,6 @@ static void read_deck(const char *mod, const char *where, const JsonValue *entry
         Mods_Note(mod, "%s: %d Exodia piece%s with more than one copy; dealt as written, and Build Deck will not "
                        "take them back", where, pieces, pieces == 1 ? "" : "s");
     }
-    /* In id order, as the disc's own pools are read. */
-    qsort(list, (size_t)n, sizeof(*list), by_id);
     memset(&deck, 0, sizeof(deck));
     deck.mod = mod;
     deck.name = Json_String(Json_Member(entry, "name"), NULL);
@@ -204,6 +211,14 @@ unsigned Starter_WeightTotal(void)
     int i;
     for (i = 0; i < deck_count; i++) total += decks[i].weight;
     return total;
+}
+
+unsigned Starter_Roll(unsigned random)
+{
+    unsigned long long total = Starter_WeightTotal();
+    /* The game's rand() is 0 to 0x7FFF, which a plain `% total` would leave
+     * short of any deck past its 32768th weight. */
+    return total ? (unsigned)((random & 0x7FFFu) * total / 0x8000u) : 0;
 }
 
 static int write_deck(const StarterDeck *deck, unsigned short cards[STARTER_DECK_SIZE], const char **name)

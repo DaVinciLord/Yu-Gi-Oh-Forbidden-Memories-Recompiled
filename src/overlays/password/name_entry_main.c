@@ -31,7 +31,7 @@ static s32 NameEntry_DealModStarterDeck(void)
     if (total == 0) {
         return 0;
     }
-    if (!Starter_Deck((unsigned)rand() % total, cards, 0)) {
+    if (!Starter_Deck(Starter_Roll((unsigned)rand()), cards, 0)) {
         return 0;
     }
     out = (s16 *)gDuel_awPlayerDeck;

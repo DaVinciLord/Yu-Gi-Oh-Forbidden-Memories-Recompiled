@@ -175,6 +175,10 @@ int main(void)
     snprintf(text, sizeof(text), "{\"starter\":{\"17\":2%s}}", filler(2));
     one(text);
     CHECK(Starter_Count() == 1 && notes == 1 && strstr(note, "Exodia"));
+    /* A card named twice is one card, and its copies add up. */
+    snprintf(text, sizeof(text), "{\"starter\":{\"5\":2,\"05\":2%s}}", filler(4));
+    one(text);
+    CHECK(Starter_Count() == 1 && notes == 1 && strstr(note, "1 card with more than 3 copies"));
     /* One piece each raises nothing. */
     snprintf(text, sizeof(text), "{\"starter\":{\"17\":1,\"18\":1,\"19\":1,\"20\":1,\"21\":1%s}}", filler(5));
     one(text);
@@ -190,6 +194,20 @@ int main(void)
         CHECK(Starter_Deck((unsigned)i, cards, &name) && !strcmp(name, "a"));
     }
     CHECK(Starter_Deck(3, cards, &name) && !strcmp(name, "b"));
+
+    /* One of the game's random numbers (0 to 0x7FFF) reaches every deck,
+     * however far past 32768 the weights add up. */
+    snprintf(text, sizeof(text), "{\"starter\":[{\"name\":\"a\",\"weight\":32767,\"3\":3%s},"
+                                 "{\"name\":\"b\",\"weight\":32767,\"4\":3%s}]}", filler(3), filler(3));
+    one(text);
+    CHECK(Starter_WeightTotal() == 65534);
+    CHECK(Starter_Deck(Starter_Roll(0), cards, &name) && !strcmp(name, "a"));
+    CHECK(Starter_Deck(Starter_Roll(0x3FFF), cards, &name) && !strcmp(name, "a"));
+    CHECK(Starter_Deck(Starter_Roll(0x4000), cards, &name) && !strcmp(name, "b"));
+    CHECK(Starter_Deck(Starter_Roll(0x7FFF), cards, &name) && !strcmp(name, "b"));
+    snprintf(text, sizeof(text), "{\"starter\":{\"weight\":32768%s}}", filler(0));
+    one(text);
+    CHECK(Starter_Count() == 0 && notes == 1 && strstr(note, "weight"));
 
     /* A weight of nothing is a deck that is never picked. */
     snprintf(text, sizeof(text), "{\"starter\":[{\"name\":\"never\",\"weight\":0,\"3\":3%s},"
