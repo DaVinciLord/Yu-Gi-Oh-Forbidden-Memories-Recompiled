@@ -1,6 +1,6 @@
 #ifndef MEMORIES_MOD_TYPES_H
 #define MEMORIES_MOD_TYPES_H
-#define MEMORIES_MOD_API 5
+#define MEMORIES_MOD_API 6
 /* API 3: before hooks may alter arguments/result, or set handled to replace
  * the operation (including cancellation). Highest priority runs first;
  * equal priorities follow registration/load order. After hooks observe the
@@ -17,6 +17,11 @@ enum {
      * loaded it (the same). What a mod keeps per save goes in its own file
      * named after the token (open_data), so each slot has its own. */
     MEMORIES_EVENT_SLOT_SAVE, MEMORIES_EVENT_SLOT_LOAD,
+    /* API 6: end-of-duel StarChip prize about to be added to the save
+     * (Mods_AwardStarchips). a is the retail prize (rank tier + 1); edit it
+     * to change the award, or handle to skip adding. After observes result
+     * as the amount actually credited. On-screen star icons stay retail. */
+    MEMORIES_EVENT_STARCHIP,
     MEMORIES_EVENT_COUNT
 };
 typedef struct {

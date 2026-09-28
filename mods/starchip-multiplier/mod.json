@@ -1,0 +1,24 @@
+{
+    "id": "starchip-multiplier",
+    "name": "StarChip multiplier",
+    "version": "1.0",
+    "author": "DecompRecomp",
+    "description": "Multiplies the StarChips awarded after a won Free Duel or campaign duel. The stars on the results screen stay at the retail count; only the balance added to the save is scaled (still capped at 999999).",
+    "min_api": 6,
+    "game": "slus_01411",
+    "library": "starchip-multiplier",
+    "enabled": false,
+    "settings": [
+        {
+            "key": "multiplier",
+            "label": "Multiplier",
+            "type": "int",
+            "default": 5,
+            "min": 1,
+            "max": 100,
+            "step": 1,
+            "suffix": "x",
+            "description": "How many times the retail prize (1 to 5 StarChips from the duel rank) is added to the save."
+        }
+    ]
+}
