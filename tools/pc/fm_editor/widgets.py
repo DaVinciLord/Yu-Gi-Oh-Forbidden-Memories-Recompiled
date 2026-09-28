@@ -6,6 +6,7 @@ import tkinter as tk
 import tkinter.font as tkfont
 from tkinter import ttk
 
+from . import theme
 from .gamedata import TYPE_NAMES
 
 
@@ -25,21 +26,20 @@ def scrolled_tree(parent, columns, widths, height=20, selectmode="browse"):
     """A Treeview with a vertical scrollbar, in a frame of its own."""
     frame = ttk.Frame(parent)
     tree = ttk.Treeview(frame, columns=[c for c, _ in columns], show="headings", height=height, selectmode=selectmode)
+    # The widths as made: a theme change (theme.py) asks the tree's size
+    # again from its columns, which stretching has widened by then.
+    tree.widths = {key: px(frame, width) for (key, _), width in zip(columns, widths)}
     for (key, label), width in zip(columns, widths):
         tree.heading(key, text=label)
-        tree.column(key, width=px(frame, width), stretch=width > 120, anchor="w")
+        tree.column(key, width=tree.widths[key], stretch=width > 120, anchor="w")
     bar = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
     tree.configure(yscrollcommand=bar.set)
     tree.grid(row=0, column=0, sticky="nsew")
     bar.grid(row=0, column=1, sticky="ns")
     frame.rowconfigure(0, weight=1)
     frame.columnconfigure(0, weight=1)
-    tree.tag_configure("changed", foreground="#1a5fb4")
-    tree.tag_configure("added", foreground="#26a269")
-    tree.tag_configure("removed", foreground="#c01c28")
-    tree.tag_configure("glitch", foreground="#865e3c")
-    tree.tag_configure("error", foreground="#c01c28")
-    tree.tag_configure("warning", foreground="#9c6500")
+    for tag in theme.TAGS:
+        tree.tag_configure(tag, foreground=theme.tag_color(tree, tag))
     return frame, tree
 
 
@@ -180,7 +180,7 @@ class FormDialog(tk.Toplevel):
         body = ttk.Frame(self, padding=10)
         body.pack(fill="both", expand=True)
         build(self, body)
-        self.error = ttk.Label(self, foreground="#c01c28")
+        self.error = ttk.Label(self, style="Error.TLabel")
         self.error.pack(fill="x", padx=10)
         buttons = ttk.Frame(self, padding=(10, 0, 10, 10))
         buttons.pack(fill="x")
