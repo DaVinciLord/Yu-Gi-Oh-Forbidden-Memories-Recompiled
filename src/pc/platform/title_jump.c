@@ -21,6 +21,18 @@
  * so it is never left drawn over the title. Progress not saved is lost, as
  * with a reset.
  *
+ * From the credits the jump is a real restart (Platform_RestartGame, in
+ * src/pc/overrides/title_jump.c): retail never leaves them but by a reset,
+ * and their presentation takes over what only the boot before Main_Init's
+ * setjmp sets up. Its first step moves the music buffer into its own area
+ * (SD_SetMusicTrackBuffer(D_80010034)) and only its last step puts it back,
+ * so a jump in between left the sound driver's VAB header in memory the
+ * next screens load over: the first Free Duel after it crashed in
+ * func_8004ADE8. It also uploads over resident VRAM palettes the boot
+ * uploaded once (y 240-248 from x 512, y 248 from x 0, x 480-511 from y 256),
+ * and the Build Deck trunk came out green. The game starts again instead,
+ * with the settings file and the saves as they are.
+ *
  * MEMORIES_TITLE_AT=N[,N...] requests it at presented frames N (checks). */
 #include "pc/compat/fs.h"
 #include "pc/platform/title_jump.h"

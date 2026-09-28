@@ -18,13 +18,46 @@
 #include "pc/text/text.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
+
+/* MEMORIES_RESTART_ENV="NAME=value;NAME=;...": what a scripted check changes
+ * in the environment the restarted game starts with (an empty value removes
+ * the name), so that it can drive the game past a restart instead of the
+ * new game replaying the old one's MEMORIES_INPUT. Applied once, by the
+ * game that restarts; on Windows the monitor starts the game again with its
+ * own environment, so it needs MEMORIES_NO_MONITOR=1 there. */
+static void restart_environment(void)
+{
+    const char *script = getenv("MEMORIES_RESTART_ENV");
+    size_t length;
+    char *copy, *item, *next;
+    if (!script || !*script) return;
+    length = strlen(script);
+    copy = malloc(length + 1);
+    if (!copy) return;
+    memcpy(copy, script, length + 1);
+    unsetenv("MEMORIES_RESTART_ENV");
+    for (item = copy; item; item = next) {
+        char *equals;
+        next = strchr(item, ';');
+        if (next) *next++ = '\0';
+        equals = strchr(item, '=');
+        if (!equals || equals == item) continue;
+        *equals = '\0';
+        if (equals[1]) setenv(item, equals + 1, 1);
+        else unsetenv(item);
+    }
+    free(copy);
+}
+
 #ifdef _WIN32
 #include "pc/platform/win32.h"
 #include <fcntl.h>
 
 int Platform_RestartGame(void)
 {
+    restart_environment();
     return Win32_Restart();
 }
 #else
@@ -43,6 +76,7 @@ int Platform_RestartGame(void)
     sigemptyset(&ignored.sa_mask);
     sigaction(SIGALRM, &ignored, &old_action);
     setitimer(ITIMER_REAL, &stopped, &previous);
+    restart_environment();
     /* A restart must boot the game, not auto-load an old launch state. */
     unsetenv("MEMORIES_LOAD_STATE");
     execv("/proc/self/exe", launch_argv);
