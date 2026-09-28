@@ -881,6 +881,7 @@ typedef struct {
 #define BATTLE_CARD_WIDTH 0x8C
 #define BATTLE_CARD_FEET 0xB8     /* the feet, down from the card's top edge */
 #define BATTLE_BOX_WIDTH 0x96     /* the widest a monster stands on its card */
+#define BATTLE_BACK 8             /* each stands this far back from the middle of its card */
 #define BATTLE_SMALLEST 0.7       /* the least share of that box it gets */
 #define BATTLE_DEPTH_STEPS 2
 #define BATTLE_PIXELS 160         /* the tallest a monster stands on its card */
@@ -1080,11 +1081,18 @@ static DisplayObject *battle_card(int side)
     }
     /* When the battle goes on to the arena the cards are up only a few
      * frames before the fade, and the arena has the monsters anyway. */
-    if (D_8009B229 || step < 3 || step == BATTLE_STEP_TO_ARENA || step > BATTLE_STEP_DESTROY ||
-        (step == BATTLE_STEP_DESTROY && D_8009B1B9 == side)) {
+    if (D_8009B229 || step < 3 || step == BATTLE_STEP_TO_ARENA || step > BATTLE_STEP_DESTROY) {
         return NULL;
     }
     return card;
+}
+
+/* Whether the monster on a side's big card has gone: its card is burning.
+ * The card stays dimmed until it is released, or it would light up for the
+ * frames before the flames cover it. */
+static int battle_lost(int side)
+{
+    return (D_8009B174 & 0xF) == BATTLE_STEP_DESTROY && D_8009B1B9 == side;
 }
 
 /* The pass for the battle presentation; 0 when it is not up. */
@@ -1118,7 +1126,9 @@ static int draw_battle(void)
 
     count = 0;
     for (side = 0; side < DUEL_SIDE_COUNT; side++) {
-        if (cards[side] && (monsters[side] = battle_monster(side)) != NULL) {
+        if (cards[side] && battle_lost(side)) {
+            dim(side, cards[side]);
+        } else if (cards[side] && (monsters[side] = battle_monster(side)) != NULL) {
             monsters[side]->stepped = 0;
             dim(side, cards[side]);
         } else {
@@ -1135,7 +1145,8 @@ static int draw_battle(void)
             continue;
         }
         battle_pose(monster, yaw);
-        screen_to_world(cards[side]->field_30.h.field_30 + BATTLE_CARD_WIDTH / 2 - monster->battle_ox,
+        screen_to_world(cards[side]->field_30.h.field_30 + BATTLE_CARD_WIDTH / 2 - monster->battle_ox +
+                            (side == 0 ? -BATTLE_BACK : BATTLE_BACK),
                         cards[side]->field_30.h.field_32 + BATTLE_CARD_FEET - monster->battle_oy, &wx, &wy);
         *slot = monster->slot;
         place(slot, wx - monster->battle_x, wy - monster->battle_y, -monster->battle_z, yaw,

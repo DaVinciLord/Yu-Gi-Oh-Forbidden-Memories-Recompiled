@@ -1079,8 +1079,10 @@ respect:
   colour goes back to retail's whenever the pass lets go of a card that is
   still up.
 
-The monsters appear once the cards have faded in, the loser's goes as its
-card starts to burn, and none appear when the attack goes on to the 3D arena
+Each stands 8 pixels back from the middle of its card, away from the
+other. The monsters appear once the cards have faded in, the loser's goes
+as its card starts to burn (the card stays dimmed until the game releases
+it, or it lit up for the frames before the flames covered it), and none appear when the attack goes on to the 3D arena
 (the cards are up only a few frames before the fade there). Checked with the
 opponent's first attack and the player's quick and arena attacks after the
 `duel-3d-monsters` smoke input, frame by frame against the same frames with
