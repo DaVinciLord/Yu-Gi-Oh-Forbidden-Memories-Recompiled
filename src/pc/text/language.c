@@ -410,6 +410,18 @@ int Language_Advance(unsigned flags, int code, int *shift)
     return PalText_Advance(Glyphs_Character(code), shift);
 }
 
+int Language_PastWidth(unsigned flags, int channel, int count, int step, int cell, int limit)
+{
+    /* The width each text channel has drawn since its count was last reset
+     * (F8 07 and the box's start set it to 0, so the first letter after is
+     * count 1). */
+    static int width[16];
+    if (current == LANGUAGE_US || (flags & 0x180) || channel < 0 || channel >= 16) return -1;
+    if (count == 1) width[channel] = 0;
+    width[channel] += step;
+    return limit * 8 < width[channel] + cell;
+}
+
 int Language_Export(const char *folder)
 {
     int language, missing = 0;

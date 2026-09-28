@@ -43,7 +43,8 @@ char *PalText_Listing(const PalTextPack *pack, int language, size_t *length, int
 /* The PAL font's spacing, in the dialogue boxes' mode (EU func_80036A78,
  * which returns it and TextBox_BuildStep adds to the 8 pixels a letter
  * takes): pixels to add to the step past `character`, and in `shift` how far
- * left of the cell the letter itself is drawn. 0 for the rest. */
+ * left of the cell the US letter is drawn so that its ink is where the PAL
+ * font has the same letter's. 0 for the rest. */
 int PalText_Advance(uint32_t character, int *shift);
 
 #endif

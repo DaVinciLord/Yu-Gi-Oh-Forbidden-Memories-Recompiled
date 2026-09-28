@@ -93,6 +93,9 @@ int main(void)
     if (PalText_Advance(' ', &shift) != -1 || shift) failures++;
     if (PalText_Advance('i', &shift) != -2 || shift != -1) failures++;
     if (PalText_Advance('\'', &shift) != -6 || shift != -3) failures++;
+    if (PalText_Advance('.', &shift) != -2 || shift) failures++;
+    if (PalText_Advance(',', &shift) != -2 || shift) failures++;
+    if (PalText_Advance('l', &shift) != -2 || shift != -1) failures++;
     if (PalText_Advance('m', &shift) != 0 || shift) failures++;
     if (failures) fprintf(stderr, "%d failures\n", failures);
     return failures != 0;

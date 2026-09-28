@@ -680,7 +680,12 @@ int PalText_Advance(uint32_t character, int *shift)
     switch (character) {
     case ' ': return -1;
     case '\'': *shift = -3; return -6;
-    case 'f': case 'i': case 'l': case '.': case ',': *shift = -1; return -2;
+    /* The PAL moves its own letter a pixel left; the US letters are drawn
+     * where its ink is (its centre within a quarter pixel), which is the
+     * same pixel for f, i and l. The PAL's full stop and comma sit a pixel
+     * further right in their cell than the US ones, so these stay put. */
+    case 'f': case 'i': case 'l': *shift = -1; return -2;
+    case '.': case ',': return -2;
     default: return 0;
     }
 }

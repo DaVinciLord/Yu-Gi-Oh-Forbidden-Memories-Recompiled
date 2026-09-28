@@ -535,9 +535,19 @@ dialogue lines past the US 36 columns) and still fits on the console:
 the PAL font is spaced by letter. The EU executable's glyph routine
 (func_80036A78, the US func_80036C14) returns an adjustment that
 TextBox_BuildStep adds to the 8 pixels of a cell (0x5A): in the dialogue
-boxes' mode a space takes 7 pixels, `f`, `i`, `l`, `.` and `,` take 6 and
-are drawn a pixel left, and the apostrophe takes 2, drawn 3 left (the
-same code is in the French/German/Italian/Spanish executable). The boxes
+boxes' mode a space takes 7 pixels, `f`, `i`, `l`, `.` and `,` take 6
+(the PAL draws them a pixel left), and the apostrophe takes 2, drawn 3
+left (the same code is in the French/German/Italian/Spanish executable).
+The port draws the US letters where the PAL font has its own: `f`, `i`
+and `l` a pixel left, as the PAL, the apostrophe 3, but `.` and `,` where
+they are, since the PAL's sit a pixel further right in their cell. The
+PAL's `i` and `l` have serifs that fill their 6 pixels; the US ones are a
+2-pixel stem, so two of them side by side leave a wider gap than other
+letters. The PAL cuts a name by pixels (its `F8 07` counts 8 per unit,
+the US one letters); with a PAL language on, the port reads the US
+templates' limits the same way (`Language_PastWidth`): the duel bar's 24
+are 192 pixels, and a German name like Doppelköpfiger Donnerdrache stops
+after "Donnerdra", as on the console. The boxes
 are as wide as the US ones and wrap the same way (TextBox_WrapLineIfNeeded,
 unchanged), so the text was written for that spacing: many PAL lines lean
 on the box's edge to wrap. With a PAL language on, the port spaces
