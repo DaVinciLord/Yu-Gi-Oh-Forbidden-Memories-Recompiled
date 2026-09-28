@@ -52,6 +52,17 @@ uint32_t Glyphs_SortCharacter(int code);
  * the first time. Returns 0 for a retail glyph. */
 int Glyphs_Cell(uint32_t sjis, int large, int font_page, int *tpage, int *u, int *v);
 
+/* Game > Language's European text (language.h) is set as the PAL font sets
+ * its narrow letters: with `on`, the retail i and l are drawn with the
+ * PAL's serifs (serif.h) and so are the accented letters made of them
+ * (their acute a column left, over the stem), in the 8x12 and 16x16 fonts;
+ * the 8x8 font's stay as they are. Before the first glyph is drawn. */
+void Glyphs_SetEuropean(int on);
+/* The letter ('i' or 'l') a character is drawn with those serifs as now
+ * (HD text sets them too): i, l and the letters made of them with marks
+ * over them; 0 for any other, and for all with English (US). */
+char Glyphs_SerifLetter(uint32_t character);
+
 /* A font file (a mod's) to set characters in before the system's. */
 void Glyphs_AddFont(const char *path);
 

@@ -1,5 +1,6 @@
 /* The letters text can be written in (glyphs.h, notes/translation.md). */
 #include "glyphs.h"
+#include "serif.h"
 #include "pc/render/soft_gpu.h"
 #include "pc/debug/log.h"
 #include <ft2build.h>
@@ -147,6 +148,7 @@ typedef struct {
 
 static Added added[ADDED_MAX];
 static int added_count, tiny_colon_made;
+static int european;   /* Glyphs_SetEuropean */
 
 uint32_t Glyphs_Character(int code)
 {
@@ -525,10 +527,40 @@ static int mark_rows(char grid[8][16], int at, int column, const char *const *ro
     return at + y;
 }
 
+/* With a European language, whether a letter made of `letter` and these
+ * marks gets the PAL's serifs (serif.h): an i or l, dotless or with marks
+ * over it; one with a mark below or through it (whose stem is not the
+ * lowest ink) stays as the US letter is. */
+static int serifed(char letter, int mark, int tone)
+{
+    int i, marks[2];
+    if (!european || (letter != 'i' && letter != 'l')) return 0;
+    marks[0] = mark;
+    marks[1] = tone;
+    for (i = 0; i < 2; i++) {
+        switch (marks[i]) {
+        case MARK_CEDILLA: case MARK_OGONEK: case MARK_DOT_BELOW: case MARK_HORN: case MARK_FLIP: case MARK_SLASH:
+        case MARK_BAR:
+            return 0;
+        default:
+            break;
+        }
+    }
+    return 1;
+}
+
+static void add_serifs(Cell *cell, int large)
+{
+    Serif_Add(&cell->pixels[0][0], 16, cell->width, cell->height, SERIF_REACH(large), 1);
+}
+
 static void compose(const Added *glyph, int font_page, int size, Cell *cell)
 {
     int top, bottom, left, right, fill, outline = 1, count = 0, x, y, large = size == FONT_LARGE;
     int points[64][2];
+    /* The PAL's serifs, which the 8x8 font's letters do not get (the PAL
+     * has only digits in its 8x8 font). */
+    int serifs = size != FONT_TINY && serifed(glyph->letter, glyph->mark, glyph->tone);
     read_cell(font_page, glyph->letter, size, cell);
     if (!ink(cell, &top, &bottom, &left, &right)) return;
     if (size == FONT_TINY) tiny_colours(cell, &fill, &outline);
@@ -544,7 +576,20 @@ static void compose(const Added *glyph, int font_page, int size, Cell *cell)
             ink(cell, &top, &bottom, &left, &right);
         }
     }
-    if (glyph->mark == MARK_DOTLESS) return;
+    if (serifs) {
+        /* What is left above the stem's top outline goes too: the small
+         * font's i has its dot's lower row where the n starts. The mark
+         * then stands clear of the stem, a row between, as the PAL's do. */
+        SerifStem stem;
+        if (Serif_Stem(&cell->pixels[0][0], 16, cell->width, cell->height, &stem)) {
+            for (y = 0; y < stem.top - 1; y++) memset(cell->pixels[y], 0, sizeof(cell->pixels[y]));
+            ink(cell, &top, &bottom, &left, &right);
+        }
+    }
+    if (glyph->mark == MARK_DOTLESS) {
+        if (serifs) add_serifs(cell, large);
+        return;
+    }
     if (glyph->mark == MARK_FLIP) {
         /* Turned upside down within its ink, as an inverted ? and ! are. */
         Cell source = *cell;
@@ -641,6 +686,10 @@ static void compose(const Added *glyph, int font_page, int size, Cell *cell)
             y0 = top - 1 - height;
         }
         x0 = (left + right + 1) / 2 - width / 2;
+        /* The PAL's acute over a narrow letter is a column left of where
+         * it goes over the rest, on the stem (its grave is where this one
+         * is): the small font's two pixels, which otherwise lean right. */
+        if (serifs && !large && above_count == 1 && above[0] == MARK_ACUTE) x0--;
         /* Two: the shape mark over the letter's middle, the tone beside. */
         if (above_count == 2) x0 = (left + right + 1) / 2 - mark_width(large ? large_marks[above[0]] : side_marks[above[0]]) / 2;
         if (above_count == 2 && x0 + width > cell->width) x0 = cell->width - width;
@@ -706,6 +755,9 @@ static void compose(const Added *glyph, int font_page, int size, Cell *cell)
             }
         }
         stamp(cell, (const int (*)[2])points, count, fill, outline);
+        /* Last, so that the mark goes where it goes over the US letter:
+         * the serif on the left would move it. */
+        if (serifs) add_serifs(cell, large);
     }
 }
 
@@ -803,10 +855,9 @@ static void place(int n, int size, int *page, int *u, int *v)
     }
 }
 
-static void store(uint16_t *bank, int n, int size, const Cell *cell)
+static void store_at(uint16_t *bank, int page, int u, int v, const Cell *cell)
 {
-    int page, u, v, x, y;
-    place(n, size, &page, &u, &v);
+    int x, y;
     for (y = 0; y < cell->height; y++) {
         for (x = 0; x < cell->width; x++) {
             int tu = u + x;
@@ -815,6 +866,13 @@ static void store(uint16_t *bank, int n, int size, const Cell *cell)
             *word = (uint16_t)((*word & ~(0xF << shift)) | (cell->pixels[y][x] << shift));
         }
     }
+}
+
+static void store(uint16_t *bank, int n, int size, const Cell *cell)
+{
+    int page, u, v;
+    place(n, size, &page, &u, &v);
+    store_at(bank, page, u, v, cell);
 }
 
 /* The text palettes, where the glyphs' primitives read them: the bank is
@@ -886,12 +944,69 @@ static void write_sheet(int font_page)
     free(rgb);
 }
 
+/* --- the European narrow letters (serif.h) ------------------------------- */
+
+/* The retail i and l with the PAL's serifs, on a page of the bank of their
+ * own (place() leaves it alone): i then l across, the small ones at v 0,
+ * the large at v 16. Made again when the retail letter they are made from
+ * is another (a font loaded over the page). */
+#define SERIF_PAGE 5
+static const char serif_letters[2] = {'i', 'l'};
+static uint32_t serif_sum[2][2];
+static unsigned char serif_made[2][2];
+
+void Glyphs_SetEuropean(int on)
+{
+    european = on != 0;
+}
+
+char Glyphs_SerifLetter(uint32_t character)
+{
+    size_t a;
+    if (!european) return 0;
+    if (character == 'i' || character == 'l') return (char)character;
+    for (a = 0; a < sizeof(accents) / sizeof(accents[0]); a++) {
+        if (accents[a].character == character)
+            return serifed(accents[a].base, accents[a].mark, accents[a].tone) ? accents[a].base : 0;
+    }
+    return 0;
+}
+
+static void serif_place(int which, int large, int *u, int *v)
+{
+    *u = which * (large ? 16 : 8);
+    *v = large ? 16 : 0;
+}
+
+static int serif_cell(uint32_t sjis, int large, int font_page, int *tpage, int *u, int *v)
+{
+    uint16_t *bank;
+    Cell cell;
+    uint32_t sum = 2166136261u;
+    int which = character_sjis('i') == sjis ? 0 : character_sjis('l') == sjis ? 1 : -1, x, y;
+    if (which < 0 || !(bank = SoftGpu_Bank(GLYPHS_BANK))) return 0;
+    read_cell(font_page, serif_letters[which], large ? FONT_LARGE : FONT_SMALL, &cell);
+    for (y = 0; y < cell.height; y++) {
+        for (x = 0; x < cell.width; x++) sum = (sum ^ cell.pixels[y][x]) * 16777619u;
+    }
+    serif_place(which, large, u, v);
+    if (!serif_made[which][large] || serif_sum[which][large] != sum) {
+        add_serifs(&cell, large);
+        store_at(bank, SERIF_PAGE, *u, *v, &cell);
+        serif_made[which][large] = 1;
+        serif_sum[which][large] = sum;
+    }
+    copy_palettes(bank);
+    *tpage = SERIF_PAGE | (GLYPHS_BANK << 11);
+    return 1;
+}
+
 int Glyphs_Cell(uint32_t sjis, int large, int font_page, int *tpage, int *u, int *v)
 {
     uint16_t *bank;
     Added *glyph;
     int n = (int)sjis - (int)ADDED_SJIS, page;
-    if (n < 0 || n >= added_count) return 0;
+    if (n < 0 || n >= added_count) return european ? serif_cell(sjis, large != 0, font_page, tpage, u, v) : 0;
     write_sheet(font_page);
     bank = SoftGpu_Bank(GLYPHS_BANK);
     if (!bank) return 0;
@@ -975,6 +1090,11 @@ uint32_t Glyphs_CellCharacter(int in_bank, int page, int large, int u, int v)
 {
     uint32_t character;
     int n, cu, cv;
+    if (in_bank && page == SERIF_PAGE) {
+        /* serif_place(), backwards. */
+        n = u / (large ? 16 : 8);
+        return european && n < 2 && u % (large ? 16 : 8) == 0 && v == (large ? 16 : 0) ? (uint32_t)serif_letters[n] : 0;
+    }
     if (in_bank) {
         /* place(), backwards. */
         if (large) {

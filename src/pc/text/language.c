@@ -368,6 +368,7 @@ void Language_Drop(void)
 {
     current = LANGUAGE_US;
     TextEntries_UseLayout(0);
+    Glyphs_SetEuropean(0);
 }
 
 /* The port's own words (text.h, TEXT_OWN_*), in the languages that have
@@ -426,6 +427,8 @@ char *Language_Listing(size_t *length)
     }
     current = language;
     TextEntries_UseLayout(1); /* the PAL game's text entries (entry_layout.h) */
+    /* Its narrow letters as the PAL font has them (glyphs.h). */
+    Glyphs_SetEuropean(1);
     LOG(LOG_MODS, "language: %s from %s", Language_Label(language), origin);
     return listing;
 }
