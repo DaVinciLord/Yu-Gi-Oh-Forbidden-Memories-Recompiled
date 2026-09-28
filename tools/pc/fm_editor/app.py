@@ -37,6 +37,7 @@ class App(tk.Tk):
         self.project = None
         self.dirty = False
         self.hooks = []            # extra menu entries (importers) add themselves here
+        self.text_preview = None   # Tools > Card text preview, while open
         self.build_menu()
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(fill="both", expand=True)
@@ -86,11 +87,21 @@ class App(tk.Tk):
         tools = tk.Menu(bar, tearoff=False)
         tools.add_command(label="Check the mod", command=self.show_problems)
         tools.add_command(label="Preview mod.json", command=lambda: self.info.preview())
+        tools.add_command(label="Card text preview", command=self.show_text_preview)
         bar.add_cascade(label="Tools", menu=tools)
         helps = tk.Menu(bar, tearoff=False)
         helps.add_command(label="About", command=self.about)
         bar.add_cascade(label="Help", menu=helps)
         self.config(menu=bar)
+
+    def show_text_preview(self):
+        """The selected card's text as the card view draws it (preview.py)."""
+        if self.text_preview is None:
+            from .preview import CardTextPreview
+            self.text_preview = CardTextPreview(self)
+        else:
+            self.text_preview.refresh()
+            self.text_preview.lift()
 
     def add_import(self, label, command):
         """An importer's menu entry, above "Game files..."."""

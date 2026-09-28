@@ -119,6 +119,33 @@ class GuiTest(unittest.TestCase):
         app.art.revert("art")
         self.assertEqual(art.changed_cards(app.project), set())
 
+    def test_text_preview(self):
+        import dataclasses
+        from fm_editor import card_text
+        from fm_editor.tests.test_card_text import synthetic_wa
+        app = self.app
+        app.show_text_preview()
+        preview = app.text_preview
+        app.update()
+        self.assertIn("Choose a card", preview.notes.cget("text"))
+        app.cards.tree.selection_set("1")
+        app.cards.select()
+        preview.refresh()
+        self.assertIn("no font", preview.notes.cget("text"))      # the synthetic disc has none
+        wa = bytearray(app.files.wa)
+        start, end = card_text.BOOT_SECTOR * 2048, (card_text.RAMP_SECTOR + 1) * 2048
+        wa[start:end] = synthetic_wa()[start:end]
+        app.files = dataclasses.replace(app.files, wa=bytes(wa), source="with a font")
+        app.cards.text.delete("1.0", "end")
+        app.cards.text.insert("1.0", "A " * 100)
+        app.cards.count_lines()
+        preview.refresh()
+        self.assertIsNotNone(preview.image)
+        self.assertEqual(preview.image.width(), (card_text.COLUMNS * 8 + card_text.GUTTER) * 2)
+        self.assertIn("will not show in the game", preview.notes.cget("text"))
+        preview.close()
+        self.assertIsNone(app.text_preview)
+
     def test_tabs_fill(self):
         app = self.app
         for tab in app.tabs:
