@@ -12,6 +12,7 @@
 #ifdef MEMORIES_PC
 #include "pc/cards/cards.h"
 #include "pc/cards/starter.h"
+#include "pc/platform/title_jump.h"
 
 /* A starter deck a mod wrote down (starter.h): its forty cards as they are,
    in place of the seven weighted pools below. One random number picks which
@@ -111,6 +112,12 @@ void NameEntry_Main(void)
     NameEntry_Init();
     do {
         Main_AdvanceFrame();
+#ifdef MEMORIES_PC
+        /* A new game's name entry is a frame loop of its own, before
+           Main_Loop's: Game > Restart game is taken here too (title_jump.h),
+           or it would wait for the name and stay off after a restart. */
+        TitleJump_Poll();
+#endif
         rand();
     } while (NameEntry_PollCompletion() == 0);
     NameEntry_BuildStarterDeck();

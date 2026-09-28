@@ -43,14 +43,14 @@ class ArtTab(Tab):
                                          [50, 200, 100, 110], 28)
         frame.pack(fill="both", expand=True, pady=4)
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.select())
-        self.count = ttk.Label(left, foreground="#777")
+        self.count = ttk.Label(left, style="Hint.TLabel")
         self.count.pack(anchor="w")
 
         right = ttk.Frame(self, padding=(10, 0, 0, 0))
         right.pack(side="left", fill="both", expand=True)
         self.heading = ttk.Label(right, font=("TkDefaultFont", 11, "bold"))
         self.heading.pack(anchor="w")
-        self.how = ttk.Label(right, foreground="#555", wraplength=px(right, 720), justify="left")
+        self.how = ttk.Label(right, style="Note.TLabel", wraplength=px(right, 720), justify="left")
         self.how.pack(anchor="w", pady=(0, 4))
         self.rows = {}
         for part in art.PARTS:
@@ -61,7 +61,7 @@ class ArtTab(Tab):
             titles = ["Disc", "In game (1x)"] + ([f"Internal {INTERNAL[part]}x"] if part in INTERNAL else [])
             labels = []
             for column, title in enumerate(titles):
-                ttk.Label(views, text=title, foreground="#555").grid(row=0, column=column, padx=4)
+                ttk.Label(views, text=title, style="Note.TLabel").grid(row=0, column=column, padx=4)
                 label = ttk.Label(views, relief="sunken")
                 label.grid(row=1, column=column, padx=4)
                 labels.append(label)
@@ -69,7 +69,7 @@ class ArtTab(Tab):
             side.pack(side="left", fill="both", expand=True)
             info = ttk.Label(side, wraplength=px(side, 330), justify="left")
             info.pack(anchor="w")
-            where = ttk.Label(side, foreground="#777", wraplength=px(side, 330), justify="left")
+            where = ttk.Label(side, style="Hint.TLabel", wraplength=px(side, 330), justify="left")
             where.pack(anchor="w", pady=(2, 4))
             buttons = ttk.Frame(side)
             buttons.pack(anchor="w")
@@ -81,7 +81,7 @@ class ArtTab(Tab):
             revert = ttk.Button(buttons, text="Revert", command=lambda p=part: self.revert(p))
             revert.pack(side="left", padx=4)
             self.rows[part] = {"labels": labels, "info": info, "where": where, "export": export_mod, "revert": revert}
-        self.status = ttk.Label(right, foreground="#9c6500", wraplength=px(right, 720), justify="left")
+        self.status = ttk.Label(right, style="Warning.TLabel", wraplength=px(right, 720), justify="left")
         self.status.pack(anchor="w", pady=4)
         self.fill()
 

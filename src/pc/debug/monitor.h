@@ -15,6 +15,7 @@
  * <Crash_ReportDir>/last-session.log (the one before in previous-session.log).
  *
  * MEMORIES_NO_MONITOR=1 runs the game alone, as does a debugger. */
+#include <stddef.h>
 #include <stdint.h>
 
 #define MONITOR_TAIL_LINES 128
@@ -53,6 +54,9 @@ int Monitor_Active(void);
 void Monitor_Fact(const char *key, const char *format, ...) __attribute__((format(printf, 2, 3)));
 /* The build, the operating system, the CPU and the memory, as facts. */
 void Monitor_NoteSystem(void);
+/* The facts as the reports print them ("key: value" lines), for Help >
+ * System info; the length written. */
+size_t Monitor_Facts(char *out, size_t size);
 /* Around a message box or anything else that holds up the game's thread on
  * purpose: the monitor does not count it as a freeze. */
 void Monitor_Modal(int on);

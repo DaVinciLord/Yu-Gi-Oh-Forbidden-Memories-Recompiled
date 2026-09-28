@@ -433,12 +433,24 @@ static const char *fragment_source =
     "        fragment = vec4(texelFetch(scratch, ivec2(gl_FragCoord.xy) - copy_offset, 0).rgb, 0.0);\n"
     "        return;\n"
     "    }\n"
-    "    vec3 c = floor(rgb + 1.0 / 256.0);\n"
+    /* An anti-aliased triangle (flag 64, triangle()) stands half a pixel up
+     * and left of the others: its attributes are taken at the pixel's
+     * top-left corner, which is where the others' are at its centre. They
+     * vary linearly across the screen, so the step is exact. Taken before
+     * any discard. */
+    "    bool corner = (flags & 64) != 0;\n"
+    "    vec2 uv_step = dFdx(uv) + dFdy(uv);\n"
+    "    float q_step = dFdx(q) + dFdy(q);\n"
+    "    vec3 rgb_step = dFdx(rgb) + dFdy(rgb);\n"
+    "    vec2 uv_at = corner ? uv - 0.5 * uv_step : uv;\n"
+    "    float q_at = corner ? q - 0.5 * q_step : q;\n"
+    "    vec3 rgb_at = corner ? rgb - 0.5 * rgb_step : rgb;\n"
+    "    vec3 c = floor(rgb_at + 1.0 / 256.0);\n"
     "    bool semi = (flags & 2) != 0;\n"
     /* PGXP's perspective triangles (flag 32) carry uv / w; st is the texel.
      * Taken before any discard: where in its texel the pixel's centre lies,
      * and how many texels a pixel spans (texture xBR). */
-    "    vec2 st = (flags & 32) != 0 ? uv / q : uv;\n"
+    "    vec2 st = (flags & 32) != 0 ? uv_at / q_at : uv_at;\n"
     /* The console takes a pixel's texel at its top-left corner. Where the
      * texels run backwards across the screen, the rest of the pixel lies
      * below that texel: moved back up (by at most one), a mirrored sprite
@@ -915,11 +927,20 @@ static void set_vertex(GlVertex *out, float x, float y, float u, float v, const 
     out->bounds[3] = (uint16_t)bounds_now[3];
 }
 
+static int drawn_multisampled(void); /* the target of the primitive being read (below) */
+
 /* A triangle as the software pass rasterizes it: its edges are tested at
  * the picture pixels' integer corners, GL tests at their centres, so the
- * vertices move by half a pixel. Attributes move with them. */
+ * vertices move by half a pixel. Attributes move with them.
+ * With anti-aliasing a pixel is drawn as much as its area is covered, and
+ * that move would leave half of every pixel along an edge on a pixel
+ * boundary uncovered (a column of what lies beneath between a quad and a
+ * rectangle beside it: the duel's stone bar at x 192). There the vertices
+ * stay where they are, and the fragment shader takes the attributes half a
+ * pixel up and left (flag 64): at the pixel's corner, the same values. */
 static void triangle(const Vertex *a, const Vertex *b, const Vertex *c, int flags)
 {
+    float shift;
     const Vertex *v[3] = {a, b, c};
     int min_x, max_x, min_y, max_y, i;
     GlVertex *out;
@@ -935,9 +956,14 @@ static void triangle(const Vertex *a, const Vertex *b, const Vertex *c, int flag
     /* PGXP: a textured polygon with all its depths is drawn in perspective
      * (flag 32, set by polygon()); a precise vertex stands where it really is. */
     if (!(a->precise && b->precise && c->precise)) flags &= ~32;
+    shift = 0.5f;
+    if (drawn_multisampled()) {
+        shift = 0.0f;
+        flags |= 64;
+    }
     for (i = 0; i < 3; i++) {
-        float x = v[i]->precise ? v[i]->fx * (float)scale + 0.5f : (float)(v[i]->x * scale) + 0.5f;
-        float y = v[i]->precise ? v[i]->fy * (float)scale + 0.5f : (float)(v[i]->y * scale) + 0.5f;
+        float x = v[i]->precise ? v[i]->fx * (float)scale + shift : (float)(v[i]->x * scale) + shift;
+        float y = v[i]->precise ? v[i]->fy * (float)scale + shift : (float)(v[i]->y * scale) + shift;
         set_vertex(&out[i], x, y, (float)v[i]->u, (float)v[i]->v, v[i], flags);
     }
 }
@@ -1292,6 +1318,11 @@ typedef struct GlWide {
 } GlWide;
 static GlWide wide[WIDE_TARGETS];
 static unsigned wide_clock;
+
+static int drawn_multisampled(void)
+{
+    return wide_now >= 0 ? wide[wide_now].ms_fbo != 0 : picture_ms_fbo != 0;
+}
 
 static void wide_free(void)
 {
