@@ -151,6 +151,21 @@ class GuiTest(unittest.TestCase):
         self.assertIsNotNone(preview.image)
         self.assertEqual(preview.image.width(), (card_text.COLUMNS * 8 + card_text.GUTTER) * 2)
         self.assertIn("will not show in the game", preview.notes.cget("text"))
+        # A font file cut short says so and keeps the retail picture.
+        from fm_editor import preview as preview_module
+        from fm_editor.tests.test_card_text import tiny_font
+        with tempfile.TemporaryDirectory() as tmp:
+            whole = Path(tmp) / "whole.ttf"
+            tiny_font(whole)
+            for size in (40, 100, len(whole.read_bytes()) // 2):
+                cut = Path(tmp) / f"cut{size}.ttf"
+                cut.write_bytes(whole.read_bytes()[:size])
+                preview.font_path = str(cut)
+                preview.mode.set(preview_module.FILE)
+                preview.refresh()
+                self.assertTrue(preview.face_label.cget("text"), size)
+                self.assertEqual(str(preview.cget("cursor")), "")
+        preview.mode.set(preview_module.RETAIL)
         preview.close()
         self.assertIsNone(app.text_preview)
 

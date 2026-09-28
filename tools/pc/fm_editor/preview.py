@@ -4,10 +4,15 @@ lays it out, drawn in the retail font or set as the port's HD text sets it
 itself is as it was."""
 from __future__ import annotations
 
+import struct
 import tkinter as tk
 from tkinter import filedialog, ttk
 
 from . import card_text, pngio, ttf
+from .widgets import px
+
+# A font file cut short or damaged: ttf reads it with struct.
+BAD_FONT = (ttf.FontError, OSError, ValueError, IndexError, KeyError, struct.error)
 
 RETAIL = "Retail font (the disc's 8x12)"
 PORT = "HD text: the port's face"
@@ -36,11 +41,12 @@ class CardTextPreview(tk.Toplevel):
         ttk.Combobox(top, textvariable=self.scale, values=["1", "2", "3", "4"], state="readonly", width=3).pack(
             side="left", padx=4)
         ttk.Button(top, text="Font file...", command=self.choose_font).pack(side="left", padx=(8, 0))
-        self.face_label = ttk.Label(self, padding=(6, 0), foreground="#555")
+        self.face_label = ttk.Label(self, padding=(6, 0), style="Note.TLabel", justify="left",
+                                    wraplength=px(self, 420))
         self.face_label.pack(fill="x")
         self.picture = ttk.Label(self, padding=6)
         self.picture.pack()
-        self.notes = ttk.Label(self, padding=(6, 0, 6, 6), justify="left")
+        self.notes = ttk.Label(self, padding=(6, 0, 6, 6), justify="left", wraplength=px(self, 420))
         self.notes.pack(fill="x")
         self.mode.trace_add("write", lambda *_: self.refresh())
         self.scale.trace_add("write", lambda *_: self.refresh())
@@ -67,7 +73,7 @@ class CardTextPreview(tk.Toplevel):
         if path not in self.faces:
             try:
                 self.faces[path] = ttf.Font(path)
-            except (ttf.FontError, OSError, ValueError, IndexError) as problem:
+            except BAD_FONT as problem:
                 self.faces[path] = str(problem) or f"{path} could not be read"
         return self.faces[path]
 
@@ -118,16 +124,23 @@ class CardTextPreview(tk.Toplevel):
         if renderer is None:
             renderer = self.renderers[key] = card_text.Renderer(retail, face)
         notes = []
-        if face is not None and scale > 1:
-            self.config(cursor="watch")
-            self.update_idletasks()
-            if not renderer.face_ok:
-                notes.append("The port cannot measure this face's lines (a baseline, x-height, capitals, "
-                             "ascenders and descenders), so it keeps the retail letters, as below.")
-        if face is not None and scale == 1:
-            notes.append("HD text starts at Internal 2x; at 1x the game draws the retail font.")
-        image, lay = renderer.render(text, scale)
-        self.config(cursor="")
+        try:
+            if face is not None and scale > 1:
+                self.config(cursor="watch")
+                self.update_idletasks()
+                if not renderer.face_ok:
+                    notes.append("The port cannot measure this face's lines (a baseline, x-height, capitals, "
+                                 "ascenders and descenders), so it keeps the retail letters, as below.")
+            if face is not None and scale == 1:
+                notes.append("HD text starts at Internal 2x; at 1x the game draws the retail font.")
+            image, lay = renderer.render(text, scale)
+        except BAD_FONT as problem:
+            # A face whose tables read but whose glyphs do not.
+            self.face_label.configure(text=about)
+            self.show(None, f"This font could not be drawn: {problem or type(problem).__name__}")
+            return
+        finally:
+            self.config(cursor="")
         notes += describe(lay)
         self.face_label.configure(text=about)
         self.show(image, "\n".join(notes))
@@ -139,7 +152,10 @@ class CardTextPreview(tk.Toplevel):
         else:
             self.image = tk.PhotoImage(master=self, data=pngio.ppm(image), format="PPM")
             self.picture.configure(image=self.image)
-        self.notes.configure(text=notes)
+        # Wrap the words to the picture, so a long note does not widen the window.
+        wrap = max(px(self, 420), self.image.width() if self.image else 0)
+        self.face_label.configure(wraplength=wrap)
+        self.notes.configure(text=notes, wraplength=wrap)
 
 
 def describe(lay: card_text.Layout) -> list:
