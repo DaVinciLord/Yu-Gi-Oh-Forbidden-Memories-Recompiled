@@ -273,14 +273,18 @@ static unsigned s_sig;
 static int s_wait_release;
 /* Set by update_frontend, cleared by the frame callback: the mode-select
  * screen's own update ran this frame, so that screen is still the one up.
- * The mode byte is not read for this -- the mod's own hook running is the
- * fact we need, and it cannot disagree with itself. */
+ * The mode byte (D_8009B26C) is not read for this: the first wheel after
+ * boot runs from Main_RunFrontendLoop before Main_Loop sets mode 8, so the
+ * byte is still 0 there. The mod's own hook running is the fact we need,
+ * and it cannot disagree with itself. */
 static int s_saw_update;
 /* Frames left in which a leave still counts as one of the port's own
  * overlays closing. The Circle that shuts the save menu shuts it before
  * the wheel's update reads the same press, so by the time the leave
  * starts the overlay is already gone and port_ui_open() says nothing was
- * up. Held a frame past the close, it still does. */
+ * up. Held two frames past the close (the count runs down before the leave
+ * reads it, and a late frame can replay the press once more), it still
+ * does. */
 static int s_ui_recent;
 
 /* ---- drawing ------------------------------------------------------------ */
@@ -589,17 +593,16 @@ static void prompt_close_because(const char *why)
     }
 }
 
-static void prompt_close(void)
-{
-    prompt_close_because("unspecified");
-}
-
 static void prompt_open(void)
 {
     load_art();
     upload_art();
     s_open = 1;
     s_wait_release = 1;
+    /* A press Input_UpdatePads is still holding back would be replayed after
+     * the latch has seen the button let go, and read as the answer. */
+    gInput_dwDeferredPressed &= ~(u32)PAD_BUTTON_CANCEL;
+    gInput_dwDeferredRepeat &= ~(u32)PAD_BUTTON_CANCEL;
     s_sel = host->setting(host, "default_answer", SEL_NO) == SEL_YES ? SEL_YES : SEL_NO;
     s_sig++;
 }
@@ -670,7 +673,7 @@ static s32 update_frontend(void)
     s32 result;
 
     if (port_ui_open()) {
-        s_ui_recent = 2;
+        s_ui_recent = 3;
     } else if (s_ui_recent > 0) {
         s_ui_recent--;
     }
