@@ -1317,6 +1317,19 @@ static int read_manifest(Mod *mod, const char *directory, const char *origin)
         }
         if (Json_Member(root, "equip_bonus_default")) mod->restart = 1;   /* a number */
     }
+    {   /* A roster need not be in the manifest at all: four folders beside it,
+         * a file to a duelist (pc/free_duel/duelists.h). They are read once at
+         * startup like the keys above, so a mod that carries only folders needs
+         * a restart just the same -- and, having no key, would otherwise look
+         * like a mod that changes nothing. */
+        static const char *const folders[] = {"duelists", "decks", "drops", "portraits"};
+        for (size_t f = 0; f < sizeof(folders) / sizeof(folders[0]); f++) {
+            char folder[PATH_MAX_];
+            if (snprintf(folder, sizeof(folder), "%s/%s", mod->directory, folders[f]) >= (int)sizeof(folder))
+                continue;
+            if (!access(folder, R_OK)) mod->restart = 1;
+        }
+    }
     {   /* The key this mod's choice was stored under before it was a mod. */
         const char *legacy = Json_String(Json_Member(root, "legacy_setting"), NULL);
         char key[256];
