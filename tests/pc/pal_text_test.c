@@ -34,9 +34,9 @@ int main(void)
     /* The PAL's text sizes: 2 (12x16) is the US letters on lines of 16, 0
      * back to normal the US 2; the card text's lines of 13 the US 12. */
     static const unsigned char sizes[] = {0xF8, 0x04, 0x02, 3, 0xF8, 0x04, 0x00, 0xF8, 0x05, 0x08, 0x0D, 0xFF};
-    /* The star chips' heading, 11 letters: wider in the US box's cells of 16
-     * than its 160 pixels, so in cells of 14. */
-    static const unsigned char chips[] = {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 0xFE, 0xF8, 0x04, 0x03, 2, 0xFF};
+    /* The star chips' heading, 12 cells with its space: wider in the US
+     * box's cells of 16 than its 160 pixels, so in cells of 13. */
+    static const unsigned char chips[] = {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 0x31, 3, 0xFE, 0xF8, 0x04, 0x03, 2, 0xFF};
     /* Card texts longer than the US view's 8 lines: laid out again in its
      * width, a hyphen at a line's end before a lowercase word made whole;
      * nine lines that stay nine (20 letters each) are 11 pixels apart, from
@@ -74,6 +74,7 @@ int main(void)
     put16(a + 4 + 0x07 * 2, 0x1090);
     memcpy(a + 0x1090, sizes, sizeof(sizes));
     put16(glyphs + 0x30 * 4, 0x817C);   /* - */
+    put16(glyphs + 0x31 * 4, 0x8140);   /* a space */
     memset(nine, 3, sizeof(nine));
     for (n = 1; n <= 9; n++) nine[n * 21 - 1] = n < 9 ? 0xFE : 0xFF;
     put16(a + 4 + 0x101 * 2, 0x1100);  /* card text 0x101: US D101 */
@@ -112,7 +113,7 @@ int main(void)
     expect(listing, "[0044]", 0);
     expect(listing, "[D100]\nE{end}", 1);
     expect(listing, "[0005]", 0);
-    expect(listing, "[00E1]\n{f8 05 0E 10}EEEEEEEEEEE\n{f8 04 03}i{end}", 1);
+    expect(listing, "[00E1]\n{f8 05 0D 10}EEEEEEEEEE E\n{f8 04 03}i{end}", 1);
     expect(listing, "[0007]\n{f8 04 02}{f8 05 08 10}E{f8 04 02}{f8 05 08 0C}{end}", 1);
     strcpy(expected, "[D101]\n{f8 01 FD}{f8 05 08 0B}");
     for (n = 0; n < 9; n++) strcat(expected, n < 8 ? "EEEEEEEEEEEEEEEEEEEE\n" : "EEEEEEEEEEEEEEEEEEEE{end}");
