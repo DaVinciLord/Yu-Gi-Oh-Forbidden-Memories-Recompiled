@@ -119,11 +119,12 @@ static Menu menus[MENU_COUNT] = {
               {"Scaling", 0, ITEM_SUBMENU, 0, -1, SUB_SCALING, ITEM_GROUP_BREAK},
               {"Aspect Ratio", 0, ITEM_SUBMENU, 0, -1, SUB_ASPECT},
               {"Resolution", 0, ITEM_SUBMENU, 0, -1, SUB_RESOLUTION},
+              {"HD text", 0, ITEM_CHECK, MENU_ITEM_HD_TEXT, SET_HD_TEXT},
               {"Anti-aliasing", 0, ITEM_SUBMENU, 0, -1, SUB_ANTIALIAS},
               {"Filtering", 0, ITEM_SUBMENU, MENU_ITEM_FILTER, -1, SUB_FILTER, ITEM_GROUP_BREAK},
               {"VSync", 0, ITEM_CHECK, MENU_ITEM_VSYNC, SET_VSYNC},
               {"Color", 0, ITEM_SUBMENU, 0, -1, SUB_COLOR, ITEM_GROUP_BREAK},
-              {"Effects", 0, ITEM_SUBMENU, 0, -1, SUB_EFFECTS}}, 12},
+              {"Effects", 0, ITEM_SUBMENU, 0, -1, SUB_EFFECTS}}, 13},
     {"Audio", {{"Master", 0, ITEM_SLIDER, SLIDER_MASTER, SET_MASTER_VOLUME},
                {"Music", 0, ITEM_SLIDER, SLIDER_MUSIC, SET_MUSIC_VOLUME},
                {"Sound FX", 0, ITEM_SLIDER, SLIDER_SFX, SET_SFX_VOLUME},
@@ -729,18 +730,26 @@ void Menu_SetItemEnabled(int id, int enabled)
 
 static int hd_picture;
 
-/* The opponent's name is drawn by the OpenGL pass at Internal 2x and up,
- * and by the software GPU at 1x. (HD text is the Forbidden Memories HD
- * mod's setting now, hd_text.h.) */
+/* HD text takes effect in the OpenGL pass at Internal 2x and up; the
+ * opponent's name also at 1x, where the software GPU draws it. */
 static void update_hd_items(void)
 {
+    static const int ids[] = {MENU_ITEM_HD_TEXT, MENU_ITEM_OPPONENT_NAME};
     int console = Settings_Get(SET_INTERNAL_SCALE) < 2;
+    const char *hd_why = !hd_picture ? "needs OpenGL 3" : console ? "needs Internal 2x" : NULL;
     const char *name_why = !hd_picture && !console ? "needs OpenGL 3 or 1x" : NULL;
     int menu, item;
-    Menu_SetItemEnabled(MENU_ITEM_OPPONENT_NAME, !name_why);
+    unsigned i;
+    for (i = 0; i < sizeof(ids) / sizeof(ids[0]); i++) {
+        Menu_SetItemEnabled(ids[i], !(ids[i] == MENU_ITEM_OPPONENT_NAME ? name_why : hd_why));
+    }
     for (menu = 0; menu < MENU_COUNT; menu++) {
         for (item = 0; item < menus[menu].count; item++) {
-            if (menus[menu].items[item].id == MENU_ITEM_OPPONENT_NAME) menus[menu].items[item].shortcut = name_why;
+            for (i = 0; i < sizeof(ids) / sizeof(ids[0]); i++) {
+                if (menus[menu].items[item].id == ids[i]) {
+                    menus[menu].items[item].shortcut = ids[i] == MENU_ITEM_OPPONENT_NAME ? name_why : hd_why;
+                }
+            }
         }
     }
 }
@@ -1328,7 +1337,7 @@ static void activate(const Item *item, int *quit)
     case ACT_LOAD_STATE: Memories_StateRequest(2, Platform_StateSlot()); break;
     case ACT_SCREENSHOT: Platform_Screenshot(0); break;
     case ACT_EXIT: *quit = 1; break;
-    case ACT_GIVE_CARDS: need_save(Cheats_GiveAllCards(item->value, 1)); break;
+    case ACT_GIVE_CARDS: need_save(Cheats_TopUpAllCards(item->value)); break;
     case ACT_UNLOCK_FREE_DUELISTS: need_save(Cheats_UnlockAllFreeDuelists()); break;
     case ACT_SET_STARCHIPS: need_save(Cheats_SetStarchips((unsigned)item->value)); break;
     case ACT_RESET_COLOR:

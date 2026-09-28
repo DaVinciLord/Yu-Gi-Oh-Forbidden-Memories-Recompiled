@@ -30,8 +30,7 @@ launch, pick your USA disc's `.bin`. The game can tell you when a newer release 
    or `memories-pc`. You should end up with `mods/assets-hd` beside the other mods.
 3. Start the game. The pack is on by default: press **F10** for the menu bar and open
    **Game > Mods** to check it, or to turn it or any of its parts off.
-4. For the best look, pick **Video > Resolution > Internal 4x**. The pack's **HD text** setting
-   (on by default, in **Game > Mods**) sets the text, numbers and labels in a font at that resolution.
+4. For the best look, pick **Video > Resolution > Internal 4x** and turn on **Video > HD text**.
 
 **From source:** put the `.bin` in `game/` and run `play.bat` or `./play.sh`. The first
 run builds everything (Linux needs `gcc` and `python3`). See [PC build](notes/pc-build.md).

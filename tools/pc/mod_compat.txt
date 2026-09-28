@@ -1,0 +1,15 @@
+# The releases whose mods this build must still run, and the differences
+# from them that were looked at and accepted (tools/pc/check_mod_abi.py).
+#
+#   baseline TAG                  check this build against release TAG
+#   accept TAG KIND NAME reason   a difference that breaks no mod in use
+baseline v0.1.2
+
+# The Cheats menu's functions now say whether they did anything (0 before a
+# game is loaded); a caller built against v0.1.2's void ignores eax.
+accept v0.1.2 function Cheats_GiveAllCards returns int where it returned void
+accept v0.1.2 function Cheats_UnlockAllFreeDuelists returns int where it returned void
+# PR #105 (the burning card keeps its HD pack image): the recorder gained
+# `capture` at its end. Only the port's own OpenGL picture installs a
+# recorder; none of v0.1.2's mods calls SoftGpu_SetRecorder.
+accept v0.1.2 record SoftGpuRecorder grew by one callback at its end

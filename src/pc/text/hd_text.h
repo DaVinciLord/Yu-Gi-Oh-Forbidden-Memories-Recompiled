@@ -1,6 +1,6 @@
 #ifndef MEMORIES_PC_HD_TEXT_H
 #define MEMORIES_PC_HD_TEXT_H
-/* HD text (the Forbidden Memories HD mod's "HD text" setting): at an internal resolution above the console's,
+/* HD text (Video > HD text, SET_HD_TEXT): at an internal resolution above the console's,
  * the OpenGL picture (gl_picture.c) draws the text's glyphs from pictures
  * set in a font at that resolution instead of the retail 8x12 and 16x16
  * cells. The pictures are 4-bit indices like the cells, with the cells'
