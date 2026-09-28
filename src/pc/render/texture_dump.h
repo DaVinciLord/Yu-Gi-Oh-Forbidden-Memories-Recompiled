@@ -30,6 +30,9 @@ void TextureDump_Primitive(const uint16_t *source, int page_x, int page_y, int d
  * primitive whose texels and palette are all tagged adds a line to
  * assets.txt beside the PNGs, which tools/pc/extract_images.py replays. */
 extern uint32_t *TextureDump_Tags; /* per VRAM word, disc byte offset + 1; NULL when off */
+/* Tags from here up are not the disc's: images the port makes (a mod card's
+ * art, texture_pack.h, TexturePack_AddMade) get places past any CD's bytes. */
+#define TEXTURE_MADE_BASE 0xC0000000u
 /* Provenance without the dump: a texture pack needs the tags too. */
 int TextureDump_EnableTags(void);
 

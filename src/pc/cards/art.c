@@ -245,6 +245,35 @@ int CardArt_ThumbnailFromImage(const char *path, unsigned char *record, char *wh
     return image_into(path, record, 1, why, why_size);
 }
 
+/* Where resample takes a `w` by `h` picture from: the middle of the image
+ * at that shape, in whole pixels, and the image's size. Only the PNG's
+ * header is read. */
+int CardArt_Crop(const char *path, int w, int h, int *x, int *y, int *cw, int *ch, int *width, int *height)
+{
+    png_image image;
+    FILE *file;
+    double sw, sh, fw, fh;
+    memset(&image, 0, sizeof(image));
+    image.version = PNG_IMAGE_VERSION;
+    file = fopen(path, "rb");
+    if (!file) return 0;
+    if (!png_image_begin_read_from_stdio(&image, file)) { fclose(file); return 0; }
+    sw = fw = image.width;
+    sh = fh = image.height;
+    png_image_free(&image);
+    fclose(file);
+    if (fw * h > fh * w) fw = fh * w / h; else fh = fw * h / w;
+    *cw = (int)(fw + 0.5);
+    *ch = (int)(fh + 0.5);
+    if (*cw < 1) *cw = 1;
+    if (*ch < 1) *ch = 1;
+    *x = (int)((sw - *cw) / 2 + 0.5);
+    *y = (int)((sh - *ch) / 2 + 0.5);
+    *width = (int)sw;
+    *height = (int)sh;
+    return 1;
+}
+
 /* --- the title plate --------------------------------------------------- */
 
 static void put_ink(unsigned char *plate, int x, int y, int ink)

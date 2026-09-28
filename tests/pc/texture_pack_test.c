@@ -2,7 +2,8 @@
  * (src/pc/render/texture_pack.c): an entry whose setting is on is used, one
  * whose setting is off is left out, and one naming a setting the mod does
  * not declare is a problem and used. Also exercise field-thumbnail uploads
- * after a duplicate from a battle/effect's full-art record was delivered. */
+ * after a duplicate from a battle/effect's full-art record was delivered,
+ * and images the port makes (a mod card's art), known by their bytes. */
 #include "pc/compat/fs.h"
 #include "pc/render/texture_pack.h"
 #include "pc/render/texture_dump.h"
@@ -142,6 +143,66 @@ static void field_thumbnail(void)
     assert(TexturePack_EntryFor(896, 0, 1, 896, 224, 0, 0) == 0);
 }
 
+/* A mod card's thumbnail made from an 8x4 PNG whose middle four columns
+ * are its picture: red, then blue, black cut off at each side. */
+static void made_image(void)
+{
+    static const unsigned char rgba[4][8][4] = {
+        {{0, 0, 0, 255}, {0, 0, 0, 255}, {255, 0, 0, 255}, {255, 0, 0, 255}, {0, 0, 255, 255}, {0, 0, 255, 255}, {0, 0, 0, 255}, {0, 0, 0, 255}},
+        {{0, 0, 0, 255}, {0, 0, 0, 255}, {255, 0, 0, 255}, {255, 0, 0, 255}, {0, 0, 255, 255}, {0, 0, 255, 255}, {0, 0, 0, 255}, {0, 0, 0, 255}},
+        {{0, 0, 0, 255}, {0, 0, 0, 255}, {255, 0, 0, 255}, {255, 0, 0, 255}, {0, 0, 255, 255}, {0, 0, 255, 255}, {0, 0, 0, 255}, {0, 0, 0, 255}},
+        {{0, 0, 0, 255}, {0, 0, 0, 255}, {255, 0, 0, 255}, {255, 0, 0, 255}, {0, 0, 255, 255}, {0, 0, 255, 255}, {0, 0, 0, 255}, {0, 0, 0, 255}},
+    };
+    uint16_t pixels[640], clut[64], upload[640];
+    unsigned char encoded[512];
+    png_alloc_size_t size;
+    FILE *file;
+    png_image png = {0};
+    char path[1024];
+    uint32_t rgb;
+    int i, entry;
+    /* The first rows one colour (a plain sky): the whole block tells it apart. */
+    for (i = 0; i < 640; i++) pixels[i] = i < 60 ? 0x0505 : (uint16_t)((i * 7 + 3) % 63 + 1) * 0x101;
+    for (i = 0; i < 64; i++) clut[i] = (uint16_t)(0x4000 + i * 3);
+    make_dir("made");
+    snprintf(path, sizeof(path), "%s/made/art.png", root);
+    png.version = PNG_IMAGE_VERSION;
+    png.width = 8;
+    png.height = 4;
+    png.format = PNG_FORMAT_RGBA;
+    size = sizeof(encoded); /* through fopen, as field_thumbnail writes its PNG */
+    assert(png_image_write_to_memory(&png, encoded, &size, 0, rgba, 0, NULL) && size <= sizeof(encoded));
+    file = fopen(path, "wb");
+    assert(file);
+    assert(fwrite(encoded, 1, size, file) == size);
+    assert(!fclose(file));
+    assert(TexturePack_AddMade(pixels, 20, 32, 8, clut, 64, path, 2, 0, 4, 4) == 1);
+    assert(TexturePack_AddMade(pixels, 20, 32, 8, clut, 64, path, 2, 0, 4, 4) == 1); /* kept once */
+    TexturePack_Service();
+    /* Bytes no delivery wrote: known by their content. */
+    assert(TextureDump_Recall(pixels, 640) >= TEXTURE_MADE_BASE);
+    assert(TextureDump_Recall(clut, 64) >= TEXTURE_MADE_BASE);
+    memcpy(upload, pixels, sizeof(upload));
+    upload[639] ^= 1;
+    assert(TextureDump_Recall(upload, 640) == 0);
+    SoftGpu_Load(640, 0, 20, 32, pixels);
+    SoftGpu_Load(640, 300, 64, 1, clut);
+    TexturePack_Service(); /* reads the PNG the upload asked for */
+    entry = TexturePack_EntryFor(640, 0, 1, 640, 300, 0, 0);
+    assert(entry != 0);
+    assert(TextureDump_Sample(640, 0, 1, 5 << 16, 5 << 16, &rgb) == 1 && rgb == 0xff0000);
+    assert(TextureDump_Sample(640, 0, 1, 30 << 16, 5 << 16, &rgb) == 1 && rgb == 0x0000ff);
+    /* Another palette over the same words is not the made picture. */
+    SoftGpu_Load(640, 301, 64, 1, pixels);
+    assert(TexturePack_EntryFor(640, 0, 1, 640, 301, 0, 0) == 0);
+    /* Unloading the packs keeps what the port made. */
+    TexturePack_Unload();
+    TexturePack_Service(); /* sorted in again, the words painted: they ask for the PNG */
+    TexturePack_Service(); /* read again */
+    assert(TexturePack_EntryFor(640, 0, 1, 640, 300, 0, 0) != 0);
+    assert(TextureDump_Sample(640, 0, 1, 30 << 16, 5 << 16, &rgb) == 1 && rgb == 0x0000ff);
+}
+
 int main(void)
 {
     char path[1024], problems[256];
@@ -171,6 +232,7 @@ int main(void)
     assert(TexturePack_Load(path, 1, part, root, problems, sizeof(problems)) == -1);
     TexturePack_Unload();
     field_thumbnail();
+    made_image();
     puts("texture pack tests passed");
     return 0;
 }
