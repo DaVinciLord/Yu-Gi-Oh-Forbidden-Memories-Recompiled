@@ -90,7 +90,15 @@ void TextureDump_Written(const void *destination, unsigned bytes);
  * image and nothing downstream of the tag knows the difference
  * (texture_pack.h). `offset` is that space's; the caller keeps it apart.
  * One call per upload, so a picture and its palette are registered
- * separately, as they are delivered separately. */
+ * separately, as they are delivered separately.
+ *
+ * Everything from TEXTURE_MOD_OFFSET_BASE up is reserved for that space and no
+ * disc offset reaches it: a disc is under 700MB and a pack manifest's own
+ * entries are under 1e9, so a tag at or above it is the port's own picture and
+ * never a place on the disc. Who holds which part of it is settled by the
+ * callers -- the Free Duel portraits take a stride of 4,096 per duelist id
+ * (free_duel/duelists.h) -- so a new user of the space picks a range clear of
+ * theirs. */
 #define TEXTURE_MOD_OFFSET_BASE 0xF0000000u
 void TextureDump_ModImage(const void *destination, unsigned bytes, unsigned offset);
 void TextureDump_Loaded(int x, int y, int w, int h, const uint16_t *pixels);

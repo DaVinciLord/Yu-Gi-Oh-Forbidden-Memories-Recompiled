@@ -995,6 +995,13 @@ NEW GAME writes a new duelist code into the running save without loading one,
 so `Duelists_Frame` watches that code and clears the added records when it
 changes, as `Cards_Frame` does the trunk.
 
+A line of the file is `record <wins> <losses> <identity>`, the identity last
+because it may hold spaces: `duelists/Dark Simon.json` is `<mod>:Dark Simon`.
+
+A roster in folders is read once at startup like a manifest's keys are, so a
+mod carrying only folders asks for a restart the same way — it has no key that
+would otherwise say so.
+
 ### Pages
 
 The grid holds forty cells whatever the roster is, and shows a page of forty
@@ -1002,7 +1009,10 @@ duelists in them. Page 0 is the disc's own — Deck Build and the thirty-nine
 opponents; a page past it shows what a mod added. `cell_duelist(cell)` turns
 the cursor's cell into the duelist it stands for, and everything that means a
 duelist goes through it: the win/loss record, whether the grid shows the cell,
-and the opponent the duel starts with.
+and the opponent the duel starts with. The arithmetic is `Duelists_AtCell`, in
+the list rather than in the screen, because the port's own screens draw over
+the grid too and must reach the same answer — View > Free Duel progress counts
+the duelist under the cursor, not the cell.
 
 Pages rather than a taller grid because only one page's portraits need to be
 in video memory at a time. The screen's palette strip holds 48 CLUTs, which
@@ -1050,6 +1060,12 @@ Deck's and the Library's, and a box either left there is what this screen would
 find; the screen's own boxes are 0 (the duelist's name) and 1 (the "no deck"
 message), which leaves 2.
 
+The words in the middle are the port's own string `TEXT_OWN_FREE_DUEL_PAGE`
+(`FE11`, `pc/text/text.h`), so a translation writes them as it writes the
+results screen's `PAGE %d OF %d`: letters and spaces, with `%d` where each
+number goes, and the English when a translation gives anything else. "L1" and
+"R1" are the buttons' own names and stay as they are.
+
 **The size command decides whether a box is drawn from the font.** `0xF8 0x04`
 is the cell size, not the colour — the colour is `0x0A`. Size 1 is the 8x8
 sheet the card counts are drawn in and it sets `flags_34`'s `0x100`, after
@@ -1083,6 +1099,12 @@ place that decides:
 
 Nothing on the disc answers a private id, so an added duelist with no `"name"`
 is given its base's rather than whatever that id happens to read.
+
+Going the other way — a name in a manifest to the duelist it reaches — is
+`Duelists_Named`, and the rule tables ask it rather than keeping their own
+idea: a stock duelist a mod renamed still answers to the name the disc gave it,
+so another mod's `decks` keeps naming it, and a slot nothing was placed in
+answers to nothing.
 
 ### The disc's own rank rows
 
@@ -1205,10 +1227,16 @@ would reach nothing but byte 0.
 under `-Wall -Wextra`, and `screen_runtime.c` under the build's own flags. The
 retail path is untouched: its preprocessor sees no reference to any of this.
 
+`pc_tables` and `pc_fm_editor` cover what the rest of the port does with a
+roster it cannot see: the tables stub the list as a run with no duelist mod,
+and the FM Editor keeps a `decks` or `drops` entry naming an added duelist, or
+either table named as a file, exactly as the mod wrote it.
+
 `tests/pc/duelists_test.c` (`ctest -R pc_duelists`) covers what is settled
 without a screen: slots and their collisions, replacement precedence, the AI
 row's layering, face-down sight, every unlock condition, the rank rules, the
-folder reader, the mod API's resolver, which string id names a duelist, and
-NEW GAME clearing the added records. It runs real manifests through the real
+folder reader, the mod API's resolver, which string id names a duelist, what a
+name in a manifest reaches, a record round-tripped through the sidecar by an
+identity with a space in it, and NEW GAME clearing the added records. It runs real manifests through the real
 JSON reader, and is checked by mutation — better than twenty deliberate
 breaks, each of which fails it.

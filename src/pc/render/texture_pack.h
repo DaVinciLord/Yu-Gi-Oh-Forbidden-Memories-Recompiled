@@ -26,7 +26,7 @@ int TexturePack_Load(const char *directory, unsigned rank, int (*part)(const cha
 void TexturePack_Unload(void);
 
 /* An image the port supplies rather than a pack: a mod's own picture for
- * something the disc does not carry, keyed in the space
+ * something the disc does not carry, keyed in the reserved space
  * TEXTURE_MOD_OFFSET_BASE names (texture_dump.h) and drawn once
  * TextureDump_ModImage has tagged the upload with the same `offset`. The
  * geometry is the texture's, as a manifest entry gives it: `words` 16-bit
