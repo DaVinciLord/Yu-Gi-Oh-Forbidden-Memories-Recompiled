@@ -3,6 +3,7 @@ where there is no Tk or no display (Tk cannot start)."""
 import json
 import tempfile
 import unittest
+from unittest import mock
 
 try:
     import tkinter as tk
@@ -130,6 +131,52 @@ class GuiTest(unittest.TestCase):
         app.equips.select()
         self.assertEqual(len(app.equips.monsters.get_children()), 30)
         self.assertEqual(len(app.rituals.tree.get_children()), 20)   # every ritual card, with or without a recipe
+
+    def test_dark_mode(self):
+        from fm_editor import settings, theme
+        from fm_editor.app import App
+        app = self.app
+        text = app.info.description
+        light = text.cget("background")
+        path = Path(self.tmp.name) / "config" / "settings.json"
+        with mock.patch.object(settings, "path", lambda: path):
+            app.dark.set(True)
+            app.toggle_dark()
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), {"dark": True})
+            self.assertEqual(app.theme.style.theme_use(), theme.DARK_THEME)
+            self.assertEqual(text.cget("background"), theme.FIELD)
+            self.assertEqual(str(app.cards.tree.tag_configure("changed", "foreground")), theme.TAGS["changed"][1])
+            dialog = tk.Toplevel(app)       # made after the switch: the option database
+            self.assertEqual(dialog.cget("background"), theme.BG)
+            dialog.destroy()
+            # remembered at the next start
+            other = App(ask=False, autostart=False)
+            other.withdraw()
+            self.assertTrue(other.dark.get())
+            self.assertEqual(other.theme.style.theme_use(), theme.DARK_THEME)
+            other.destroy()
+            app.dark.set(False)
+            app.toggle_dark()
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), {"dark": False})
+        self.assertEqual(app.theme.style.theme_use(), app.theme.light)
+        self.assertEqual(text.cget("background"), light)
+        self.assertEqual(str(app.cards.tree.tag_configure("changed", "foreground")), theme.TAGS["changed"][0])
+        self.assertTrue(app.cget("menu"))       # the window's own menu bar is back
+
+
+class SettingsTest(unittest.TestCase):
+    def test_missing_or_broken(self):
+        from fm_editor import settings
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "sub" / "settings.json"
+            with mock.patch.object(settings, "path", lambda: path):
+                self.assertEqual(settings.load(), {})
+                self.assertIsNone(settings.save("dark", True))
+                self.assertEqual(settings.load(), {"dark": True})
+                path.write_text("[not json", encoding="utf-8")
+                self.assertEqual(settings.load(), {})
+                path.write_text("[1, 2]", encoding="utf-8")
+                self.assertEqual(settings.load(), {})
 
 
 if __name__ == "__main__":

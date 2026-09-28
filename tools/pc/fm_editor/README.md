@@ -39,6 +39,21 @@ Enable the mod in the game under **Game > Mods** and restart. **File > Open
 mod folder** opens a mod over retail. Save refuses nothing, but lists what
 the loader would refuse first.
 
+**View > Dark mode** switches the window, its dialogs and the text boxes,
+lists and menus to a dark look at once, and back (no restart); the editor
+remembers it in its own settings file, `%APPDATA%\FM Editor\settings.json`
+on Windows (`~/.config/fm-editor/settings.json`, or under
+`XDG_CONFIG_HOME`, elsewhere), never in the mod or the game's folders. Off,
+the editor looks as it always has (the desktop's "vista" theme on Windows,
+"clam" elsewhere). The dark look is a clam theme recolored (`theme.py`;
+text at least 4.5:1 against its background); the Art tab's pictures keep
+their pixels. On Windows the title bar turns dark too (Windows 10 20H1 and
+later), and since Windows draws a menu bar light whatever it is asked, a
+strip of menu buttons with the same menus stands in for it (Alt+letter and
+F10 open them). Left light: the thin frame Windows draws around an open
+menu, and the system's own dialogs (message boxes, choosing a file or
+folder).
+
 ## Game files
 
 The editor looks for the game where the port does: `MEMORIES_DISC`, the disc
