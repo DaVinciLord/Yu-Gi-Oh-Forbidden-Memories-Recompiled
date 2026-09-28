@@ -29,7 +29,10 @@ void Main_RunPasswordMenu(void)
         D_8009B26C = flags | 0x40;
         File_RequestPasswordPackage();
 #ifdef MEMORIES_PC
-        {   /* The mods' "passwords" (tables.h) over the table just loaded. */
+        {   /* The mods' "passwords" (tables.h) over the table just loaded,
+               then, once a run, two cards with one password noted. */
+            static int checked;
+            static unsigned passwords[CARD_COUNT + 1];
             int id;
             for (id = 1; id <= CARD_COUNT; id++) {
                 unsigned price = D_801A8000[id].price, password = (unsigned)D_801A8000[id].password;
@@ -37,6 +40,11 @@ void Main_RunPasswordMenu(void)
                     D_801A8000[id].price = price;
                     D_801A8000[id].password = (s32)password;
                 }
+                passwords[id] = password;
+            }
+            if (!checked) {
+                checked = 1;
+                Tables_CheckPasswords(passwords);
             }
         }
 #endif

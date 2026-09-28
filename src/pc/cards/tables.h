@@ -101,6 +101,13 @@ int Tables_TrapThreshold(int trap, int retail);
  * either. Main_RunPasswordMenu runs every record through it once the
  * screen's table is loaded, and View > Card passwords the password. */
 int Tables_PasswordShop(int id, unsigned *price, unsigned *password);
+/* Two cards with one password in the Password screen's table as loaded
+ * (`passwords[id]`, 1-722, a `data` patch and the mods' "passwords" in):
+ * the screen gives the lower card number, so the other cannot be had.
+ * Each such card is noted in the Mods window beside the mod that set its
+ * password (else the one that set the winner's), or only logged when no
+ * "passwords" entry made it. Returns how many cards were shadowed. */
+int Tables_CheckPasswords(const unsigned *passwords);
 
 /* The opponent names a manifest may use, by duelist id; "all" means every
  * one of them. */
