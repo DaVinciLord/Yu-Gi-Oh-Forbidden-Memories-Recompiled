@@ -65,7 +65,7 @@ tasto {f8 0B 24}  SCELTA COMPLETATA
 
 [000C]
 {f8 09}
-{f8 06 00 00}{f8 0A 02}Vittoria {f8 03 08 56 1D 80 03}{f8 06 90 00}{f8 0A 06}Sconfitta {f8 03 0C 56 1D 80 03}{end}
+{f8 01 04}{f8 06 00 00}{f8 0A 02}Vittoria {f8 03 08 56 1D 80 03}{f8 06 90 00}{f8 0A 06}Sconfitta {f8 03 0C 56 1D 80 03}{end}
 
 [000D]
   Scegli avversario!{end}

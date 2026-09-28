@@ -46,6 +46,15 @@ completion. Confirmation and duel-record updates use the committed position.
 committed row when forming the record index; naming must not collapse the
 two storage locations merely because they agree after a completed tween.
 
+`FreeDuel_PlaceCursor` shows the duelist under the cursor in text box 0 at
+(16, 204), 288x16: string 12 (name, then WIN/LOSS at x 0xA0 on the same
+line), or the bare name for Deck Build. The PAL discs put the record on a
+second line and create that box 320x32 (`TextBox_CreateFlagged(0, id, 16,
+204, 320, 32, 2)`, Spanish disc); under `MEMORIES_PC`, with a PAL language
+on (Game > Language), the box is 32 high so that line shows
+([notes/translation.md](../../../notes/translation.md), "Frames"). English
+(US) keeps 16.
+
 The committed names retain their live-trace evidence. The target names are
 corroborated by the matching input/tween/init bodies and recorded with high
 confidence in
