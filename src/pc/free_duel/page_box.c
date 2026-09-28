@@ -184,7 +184,7 @@ void FreeDuelPage_Compose(int page, int pages)
     at_x(&out, RIGHT_COLUMN);
     command(&out, COMMAND_COLOUR, WHITE);
     words(&out, "R1");
-    put(&out, 0xFF);
+    *out.at = 0xFF; /* in the byte kept for it, however long the line ran */
     showing = 1;
 }
 

@@ -49,14 +49,38 @@ const char *Tables_DuelistShortName(int duelist)
     } shorter[] = {{10, "Weevil"},   {11, "Mai"},       {12, "Keith"},    {18, "Soldier"},  {22, "H.M. Secmeton"},
                    {24, "H.M. Anubisius"}, {25, "Mountain"},  {26, "H.M. Atenza"},   {28, "H.M. Martis"},   {30, "H.M. Kepura"},
                    {31, "Labyrinth"}, {33, "G. Sebek"},     {34, "G. Neku"},     {39, "Master K"}};
+    static char latin[64], name[TABLES_SHORT_NAME_LIMIT + 1];
+    const unsigned char *in;
+    size_t n = 0;
     unsigned i;
     if (duelist < 1 || !Duelists_Valid(duelist)) return NULL;
-    for (i = 0; i < sizeof(shorter) / sizeof(shorter[0]); i++) {
-        if (shorter[i].duelist == duelist) return shorter[i].name;
+    if (!Tables_DuelistRenamed(duelist)) {
+        for (i = 0; i < sizeof(shorter) / sizeof(shorter[0]); i++) {
+            if (shorter[i].duelist == duelist) return shorter[i].name;
+        }
+        return Duelists_Name(duelist);
     }
-    /* A duelist a mod added is shown by its own name; the shortenings above
-     * are of the retail ones, the only names known in advance. */
-    return Duelists_Name(duelist);
+    /* A mod's name, which is UTF-8, in the Latin-1 the name box draws: a
+     * letter past Latin-1 ends it, as any other letter the box lacks ends a
+     * translated name (Tables_ShortenName). */
+    for (in = (const unsigned char *)Duelists_Name(duelist); *in && n < sizeof(latin) - 1; in++) {
+        if (*in < 0x80) {
+            latin[n++] = (char)*in;
+        } else if ((*in == 0xC2 || *in == 0xC3) && (in[1] & 0xC0) == 0x80) {
+            latin[n++] = (char)(((*in & 0x1F) << 6) | (in[1] & 0x3F));
+            in++;
+        } else {
+            break;
+        }
+    }
+    latin[n] = '\0';
+    return Tables_ShortenName(latin, name) ? name : NULL;
+}
+
+int Tables_DuelistRenamed(int duelist)
+{
+    return Duelists_Valid(duelist) &&
+           (duelist >= TABLES_DUELIST_COUNT || strcmp(Duelists_Name(duelist), Tables_DuelistNames[duelist]));
 }
 
 /* A letter of Latin-1: A-Z, a-z, or an accented one (not × or ÷). */

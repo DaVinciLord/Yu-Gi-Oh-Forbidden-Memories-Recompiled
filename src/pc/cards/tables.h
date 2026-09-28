@@ -147,6 +147,10 @@ extern const char *const Tables_DuelistNames[TABLES_DUELIST_COUNT];
  * them apart (High Mage Anubisius: H.M. Anubisius). NULL for no opponent
  * (a 2P duel). A translation's is Text_OpponentName's (text.h). */
 const char *Tables_DuelistShortName(int duelist);
+/* Whether a mod names the duelist: one it added, or one it replaced and gave
+ * a "name" (notes/more-duelists.md). Such a name is the mod's, shortened as a
+ * translation's is, and a translation does not change it. */
+int Tables_DuelistRenamed(int duelist);
 /* The most letters (spaces and full stops too) a name in place of COM
  * has: H.M. Anubisius, the longest English one, still fits the box. */
 #define TABLES_SHORT_NAME_LIMIT 14

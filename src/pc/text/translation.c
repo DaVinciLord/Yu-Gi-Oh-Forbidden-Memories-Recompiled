@@ -333,6 +333,7 @@ const char *Text_OpponentName(int duelist)
     const unsigned char *c;
     int got;
     if (!english || duelist < 1 || duelist >= DUELIST_TABLE_COUNT) return NULL;
+    if (Tables_DuelistRenamed(duelist)) return english;
     /* A translation's own: letters, spaces and full stops, cut to the limit.
      * Only for the disc's own thirty-nine -- TEXT_OWN_OPPONENT holds one id
      * each for those and no more (text.h), and a duelist a mod added is named

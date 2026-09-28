@@ -30,7 +30,11 @@
 #include <string.h>
 
 #define DUELIST_NAME_MAX 32
-#define IDENTITY_MAX 64
+/* An entry's key -- its "id", or its file's name in "duelists/" -- is under
+ * KEY_MAX, as a pool file's in "decks/" and "drops/" is (tables.c); its
+ * identity is "<mod>:<key>", and a mod id is under 64 too. */
+#define KEY_MAX 64
+#define IDENTITY_MAX (64 + KEY_MAX)
 /* A condition names a duelist or a card the way a manifest does anywhere
  * else: an id, a name or an identity, so it wants room for the longest of
  * those rather than for a duelist's name. */
@@ -669,6 +673,11 @@ static void read_one_duelist(const char *mod, const char *mod_directory, const J
         Mods_Note(mod, "duelists[%d]: an object, with a copy and a name", index);
         return;
     }
+    /* Cut short, it would be another duelist's, or no pool file's. */
+    if (key && strlen(key) >= KEY_MAX) {
+        Mods_Note(mod, "duelists[%d]: id %.20s... is longer than %d letters", index, key, KEY_MAX - 1);
+        return;
+    }
     /* "replace" takes over one of the disc's own instead of adding a
      * duelist: it is the entry's base as well, since a replacement still
      * reads the disc where that duelist does. */
@@ -716,10 +725,12 @@ static void read_one_duelist(const char *mod, const char *mod_directory, const J
     if (name) {
         snprintf(one.name, sizeof one.name, "%s", name);
         one.glyphs = name_glyphs(mod, name);
-    } else if (target < 0) {
+    }
+    if (!one.glyphs && target < 0) {
         /* An added duelist without a name of its own: its base's, made here
          * rather than left to the string id, which for an added duelist is a
-         * private one nothing on the disc answers. A replacement needs none --
+         * private one nothing on the disc answers; so too when its name had
+         * no letter the font draws. A replacement needs none --
          * it keeps answering on the stock duelist's id, whose string is the
          * name it is taking over. */
         one.glyphs = name_glyphs(mod, Tables_DuelistNames[base]);
@@ -901,7 +912,7 @@ static void read_one_duelist(const char *mod, const char *mod_directory, const J
 #define ROSTER_NAMES 256
 
 typedef struct {
-    char name[IDENTITY_MAX];
+    char name[KEY_MAX];
 } RosterName;
 
 static int by_name(const void *a, const void *b)
