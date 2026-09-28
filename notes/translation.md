@@ -215,7 +215,7 @@ Simon Muran{end}
 | `FE00` | Card drops' added result pages: after a card the player had none of | ends at the plate's end; each letter past 3 takes one from the card's name |
 | `FE01`, `FE02` | the same pages' heading, left: one card past the first, or more | with `FE03` right-aligned on the same line: 33 letters for both, numbers and spaces included |
 | `FE03` | the heading, right, when there is more than one page | as above |
-| `FE10` | the card shop's menu (string `0011`): the entry under BUILD DECK | the menu's box shows 44 letters in all (spaces are none); retail's four lines have 35, so 9; a line is 15 wide |
+| `FE10` | the card shop's menu (string `0011`): the entry under BUILD DECK | the menu's box shows 44 letters in all (spaces are none; 79 with a PAL language on, whose text entries are the PAL game's); retail's four lines have 35, so 9; a line is 15 wide |
 | `FE11` | the Free Duel grid's page line, between the L1 and R1 hints, when a duelist mod gives the grid more than one page (`notes/more-duelists.md`) | centred on the picture between the two hints: 30 letters, numbers and spaces included, before it reaches them |
 | `FE41`-`FE67` | the opponent's name in place of COM (View > Opponent's name for COM): `FE40` + the duelist's id, 1-39 (the names bank's `8328` + id is the same duelist) | 14 letters, spaces and full stops (H.M. Anubisius, the longest English one); past that, the first 14 |
 
@@ -368,7 +368,8 @@ before it falls back to the retail text.
 
 The game keeps a text box's letters in a slice of the entry table
 `D_800EB288` (620 entries: 255, 160, 160 and 45 for the four text
-channels). The console's text always fits; the port's
+channels; with a PAL language the PAL game's 800, see the official
+languages below). The console's text always fits; the port's
 `DuelEffect_AppendEntry` stops adding letters when the channel's slice is
 full, rather than writing into the next channel's (or past the table), and
 `func_80039A14`/`func_80039A60`, which build a menu's text in one go, stop
@@ -520,24 +521,73 @@ on, the port's features that look for a translated string (the shop's menu
 with DECK SLOTS, the opponent's name over COM on the results) behave as
 with a full translation mod.
 
-**The port's own strings** (FE00-FE10 above) come with the language where
-written: Spanish has them (NUEVA, `%d CARTA MÁS`, `%d CARTAS MÁS`,
-`PÁGINA %d DE %d`, RANURAS; the small letters draw the accented
-capitals, so MÁS and PÁGINA show their accents). The
-Spanish shop menu's four lines have 43 letters of the box's 44, so DECK
-SLOTS stays out of it (F6 still opens the slots). French, German and
-Italian keep the port's English for now: phase 2, for a speaker to write.
-The opponent's name over COM needs no string: the names bank's Spanish
-names are shortened as a translation's are.
+**The port's own strings** (FE00-FE10 above) come with the language
+(`own_words` in `src/pc/text/language.c`, added after the pack or disc):
+
+| | FE00 | FE01 / FE02 | FE03 | FE10 |
+|---|---|---|---|---|
+| French | NOUV. | `%d CARTE(S) DE PLUS` | `PAGE %d SUR %d` | JEUX |
+| German | NEU | `%d WEITERE KARTE(N)` | `SEITE %d VON %d` | STAPEL |
+| Italian | NUOVA | `%d CARTA/CARTE IN PIÙ` | `PAGINA %d DI %d` | MAZZI |
+| Spanish | NUEVA | `%d CARTA(S) MÁS` | `PÁGINA %d DE %d` | MAZOS |
+
+English (EU) says what the port's English says. FE10 is the game's own
+word for the deck (CONSTRUIRE JEU, STAPEL ZUSAMMENSTELLEN, CREA MAZZO,
+CREAR MAZO); the French NEW is cut short as the PAL text cuts words
+(ESCI DAL NEGO.), since past three letters it takes room from the card's
+name. The small letters of the headings draw the accented
+capitals, so MÁS, PÁGINA and PIÙ show their accents. The shop's menu
+fits the entry in every language because a PAL language also has the PAL
+game's text entries (below). The opponent's name over COM needs no
+string: the names bank's names are shortened as a translation's are.
+
+**Text entries.** The PAL executables keep a text box's letters in 800
+entries, sliced 280, 220, 220 and 80 for the four text channels (the
+boundaries at file offset 0x82650 of SLES_039.47, 0x82A64 of the other
+four), where the US has 620 (255, 160, 160, 45): the PAL text needs
+them. The French card shop's menu alone has 54 letters, past the US
+channel 3's 44, and its last line (QUITTER MAGASIN) was cut to QUIT. With
+a PAL language on, the port lays the entries out as the PAL game does
+(`src/pc/text/entry_layout.c`): the boundaries become the PAL ones and the
+table is 800 entries at 0x801F8000-0x801FD780, guest RAM the US game
+leaves free (the console's stack; the port's game runs on a stack of its
+own, and the sound driver's music package at 0x801EA800 ends by
+0x801F4800). The game reaches the table through `D_800EB288`, which
+`duel_effect.h` makes the one in use for the port, and its scans of every
+entry take the table's size; the listing compiler's page warning takes
+the layout's pages (279 letters, menus 219). Which table is in use
+follows the boundaries, and they travel with a save state: the port
+writes the PAL ones as the game starts (`TextEntries_Start`, the entry
+`main.c` gives `Memories_StateRunGame`), after its startup picture of
+the game data, which is therefore the US one in every launch. A state
+with the PAL boundaries keeps them when loaded; one with the US ones
+takes this build's US ones (the state's rule for words the game never
+changed). So a state goes on with the entries its boxes point into,
+whichever language the game was launched in (checked: French to US,
+saved again, and US to French). With English (US) nothing changes: the
+table, its place and its slices are retail's.
 
 **Widths.** The PAL text is longer than the US (French has about a hundred
 dialogue lines past the US 36 columns) and still fits on the console:
 the PAL font is spaced by letter. The EU executable's glyph routine
 (func_80036A78, the US func_80036C14) returns an adjustment that
 TextBox_BuildStep adds to the 8 pixels of a cell (0x5A): in the dialogue
-boxes' mode a space takes 7 pixels, `f`, `i`, `l`, `.` and `,` take 6 and
-are drawn a pixel left, and the apostrophe takes 2, drawn 3 left (the
-same code is in the French/German/Italian/Spanish executable). The boxes
+boxes' mode a space takes 7 pixels, `f`, `i`, `l`, `.` and `,` take 6
+(the PAL draws them a pixel left), and the apostrophe takes 2, drawn 3
+left (the same code is in the French/German/Italian/Spanish executable).
+The port draws the US letters where the PAL font has its own: `f`, `i`
+and `l` a pixel left, as the PAL, the apostrophe 3, but `.` and `,` where
+they are, since the PAL's sit a pixel further right in their cell. The
+PAL's `i` and `l` have serifs that fill their 6 pixels; the US ones are a
+2-pixel stem, so two of them side by side leave a wider gap than other
+letters. The PAL cuts a name by pixels (its `F8 07` counts 8 per unit,
+the US one letters); with a PAL language on, the port reads the
+limits the same way (`Language_PastWidth`): the card lists' 16 are 128
+pixels, the duel bar's 24 are 192 (a German name like Doppelköpfiger
+Donnerdrache stops after "Donnerdra", as on the console) and a magic
+card's bar, `[0051]`, 28 are 224. The PAL text's own `F8 07` has one
+operand byte; `pal_text.c` writes it as the US u16 (`{f8 07 1C 00}`),
+and the PAL's `F8 00 03` (a card's type as a label) as the US `F8 00 01`. The boxes
 are as wide as the US ones and wrap the same way (TextBox_WrapLineIfNeeded,
 unchanged), so the text was written for that spacing: many PAL lines lean
 on the box's edge to wrap. With a PAL language on, the port spaces
@@ -569,3 +619,106 @@ language, from SU.MRG (the main menu, sector 136 per language) and WA_MRG
 (game over, sector 10135 + 41 per language) as a texture pack made at
 startup; `F8 1C` in the two-player results; and the port's own strings in
 French, German and Italian, reviewed by speakers.
+
+## Português (Brasil)
+
+Game > Language's seventh entry is Brazilian Portuguese: the fan
+translation of the US game (a PPF patch, v1.02, for SLUS-01411), its text
+shipped as `languages/pt-br.txt` beside the official packs. No disc
+of Konami's has it, so the pack is its only source (`preference` in
+language.c has no disc for it) and the exporter leaves it alone.
+
+**How the pack was made.** The patch applied to the US `.bin`, then
+`tools/pc/text_listing.py extract` over it: the patch keeps the US layout
+(ids, labels, the name buffers), so the listing is a US one, byte for byte
+what the patched disc holds (`text_listing.py check`: 0 differ). The patch
+has no accented letters of its own: it redrew symbols of the retail font
+(WA_MRG boot package, sector 0x1690) as them, so the listing read them as
+the symbols, and the pack writes the letters instead, which the port draws
+itself (Letters, above):
+
+| Listing | `#` `;` | `$` | `%` | `&` | `'` | `*` | `+` | `/` | `<` | `>` | `α` | `⊂` | `X` |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Letter | á | é | ê | õ | ó | ã | ô | â | í | ú | ç | É | Ã |
+
+Where the game means the symbol, it stays: the name grid (`00F2`, the
+letters the player types, and so the name's bytes in a save), its arrows
+and markers (`00F3`), the movie counter `<n/722>` (`00F8`), and AUXILIAR's
+X (the patch drew those as accented letters on the console). Strings the
+patch left in English keep their apostrophes.
+
+The patch had to fit each string in the retail bytes; the pack does not,
+so it undoes what that cost: the spaces (and `{sp}`) it padded names and
+card texts with before `{end}` are gone, as the European packs have none,
+and so are the cuts it made: Yug for Yugi in `0551`, H. Mage Kpura for
+G. Mago Kepura (`8346`). The duelists it left in English, Jono 2nd,
+Teana 2nd, Seto 2nd and 3rd and Heishin 2nd, are Jono 2º and so on, as the
+Spanish pack writes 2.º.
+
+To find room, the patch also emptied strings and shared bytes between
+them; the pack gives each its text again, checked against the US one:
+
+- emptied: Simon's words when the prince beats him (`0503`), the card
+  texts `D2A1`-`D2A8` (Blast Juggler to Sky Dragon; translated from the
+  US, as the TCG's Portuguese texts are the cards' effects), the two-player
+  results' 1P and 2P (`L0518`, `L0526`) and SAVE in `00CD`;
+- run into another string with `{cont}`: Flame Swordsman's name into the
+  empty `8000` (which every unused id then read as "m das Chamas"), and
+  Dragon into `8322`-`8327` (which read "o");
+- pointers a character late: the card texts `D2DC`-`D2F1` lost their first
+  letter (ma aranha, m besouro), and `0597` its N;
+- mistranslated or left in English: Trap Master's name was "A warrior
+  that", SAVE/FORMAT INCOMPLETE! read "carregado!" (`L0EE3`), the memory
+  card's LOAD, SAVE, FORMAT and DOWNLOADING..., the type Trap and the star
+  Uranus; the memory card lines are centred again by their `{f8 02}` x, as
+  the patch centres its own;
+- spelling: missing accents (Agua, Aguia, Arida, forca, laminas...), and
+  O 13st Túmulo, Azúis, Rhaiumundos, Ventríloco, Eléctrica, Escuteiro,
+  Runa for Ruína, Sugado for Sogen.
+
+Checked against Konami's card database in Portuguese (each card found by
+its password, WA_MRG 0xFB9800, through Yugipedia's database ids): 436 of
+the 722 cards have a Portuguese name there, and the duelists none (the
+game never came out in Portuguese). The pack keeps the patch's names,
+which Brazilian players know (Rei Caveira, not the official Caveira
+Invocada), and takes the official name only where the patch left the
+English (Pinguim Voador, Bico de Escavação) or broke the name. Konami's
+Portuguese has Portugal's words in it (Alforreca, Escaravelho-Hércules),
+so Jellyfish is Água-viva. The duel's name bar shows 23 letters and cuts
+the rest (it does not scroll; retail's 36-letter names are cut too), which
+is why the patch abbreviated (Dragão B. de Olhos Azuis).
+
+The card texts quote cards by the official names (the patch took many
+texts from the TCG, and swapped fusion monsters' texts for their
+materials, "Caveira Invocada" e "D. Negro de Olhos Vermelhos"): each quote
+names the card as the game does (Rei Caveira). The 24 ritual cards' texts
+list the tributes, and the patch's lists were wrong in places (Contrato da
+Máscara summoning Chakra, Perseguidor for Espadachim Sorrateiro, Cavaleiro
+do Lustro Negro for Soldado): they are written again from the game's
+ritual table (WA_MRG 0xB63000 + 0x34800, tools/pc/fm_editor/gamedata.py),
+"Sacrifique A, B e C para invocar D.", with the game's names.
+
+Numbers are written as the Spanish pack writes them, "nº 2" (Ovelha
+Mística nº 2, Jinzo nº 7), where the patch had n.2 or none (Dragão
+Alado, Ogro de Rocha da Gruta) or a slip (Herói Oscillofrfr n.2).
+Card texts have 20 letters a line and 8 lines: thirteen of the patch's
+had a line of 21, which the card view wraps, two of them (D26A, D3B3)
+past the eighth line; they are wrapped again within 20. The patch's pictures with
+words (FIELD, Magic, the main menu) are not in the pack: the port draws the
+US disc's.
+
+The text is the US engine's, laid out for its fixed 8-pixel cells, so
+pt-BR takes no PAL spacing (`Language_Advance`), nor any of the PAL
+reading's changes. The duelists keep the game's names, as every official
+language does: Jono and Teana (not the anime's Joey and Téa), Simon Muran,
+Heishin; the mages are the patch's (Mago do Oceano, G. Mago Secmeton). The
+opponent's name over COM comes from them (Jono 2º: Jono). The port's own strings are written (NOVA, `MAIS %d CARTA`,
+`MAIS %d CARTAS`, `PÁGINA %d DE %d`, and SLOTS DE DECK in the shop's menu,
+whose four lines have 32 letters).
+
+Tested: CTest `pc_language_pack` (the pack compiles with no report, in
+letters the port can draw, Dragão's ã an added glyph, no fan-font symbol
+left outside those strings; the listing without the letters fails it);
+the duel smoke input with `language=6` reaches the same duel, with the
+name screen (Escolha um NOME!), Heishin's É isso... and Elfa Dançarina on
+the way.

@@ -148,7 +148,9 @@ static const struct {
  * different monsters missed on every draw: all of them were loaded again from
  * the disc every frame (about 40 ms at ten), and each came back at the first
  * frame of its animation, standing still. Each entry has its own texture bank
- * (bank = index + 1, below SOFT_GPU_BANKS) and arena. */
+ * (bank = index + 1, below SOFT_GPU_BANKS) and arena. acquire() marks an
+ * entry used the moment a zone takes it, so every model a frame asks for (ten
+ * at most) stays put until that frame is drawn. */
 #define CACHE 12
 
 typedef struct {
@@ -462,6 +464,7 @@ static Monster *acquire(int card, int position)
     int i;
     for (i = 0; i < CACHE; i++) {
         if (cache[i].card == card && cache[i].position == position) {
+            cache[i].used = frame;
             return &cache[i];
         }
     }
@@ -491,6 +494,9 @@ static Monster *acquire(int card, int position)
         return NULL;
     }
     fit(monster);
+    /* Taken for this frame: another zone missing before the draws must not
+     * pick this entry again and leave the first zone the later monster. */
+    monster->used = frame;
     return monster;
 }
 

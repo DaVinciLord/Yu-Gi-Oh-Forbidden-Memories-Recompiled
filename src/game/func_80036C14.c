@@ -48,7 +48,8 @@ void DuelEffect_AppendEntry(DuelEffectChannel *p, s32 a)
     q = p->entry_end_20;
 #ifdef MEMORIES_PC
     /* The channel's slice of D_800EB288 (range_count_5E entries from
-       range_start_5C: 255, 160, 160 and 45) holds the page's entries and the
+       range_start_5C: 255, 160, 160 and 45; with a PAL language 280, 220,
+       220 and 80, as on the PAL console) holds the page's entries and the
        one after the last, whose cleared flags end the list. The console's
        own text always fits; a translation's page may not, and the entries
        past the slice are the next channel's, and past the last channel's
@@ -57,7 +58,7 @@ void DuelEffect_AppendEntry(DuelEffectChannel *p, s32 a)
         q >= &D_800EB288[p->range_start_5C + p->range_count_5E - 1]) {
         return;
     }
-    if (q >= &D_800EB288[DUEL_EFFECT_ENTRY_COUNT - 1]) {
+    if (q >= &D_800EB288[DUEL_EFFECT_ENTRY_TOTAL - 1]) {
         return;
     }
 #endif

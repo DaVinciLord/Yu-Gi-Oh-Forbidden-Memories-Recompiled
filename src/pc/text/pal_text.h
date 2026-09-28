@@ -43,7 +43,14 @@ char *PalText_Listing(const PalTextPack *pack, int language, size_t *length, int
 /* The PAL font's spacing, in the dialogue boxes' mode (EU func_80036A78,
  * which returns it and TextBox_BuildStep adds to the 8 pixels a letter
  * takes): pixels to add to the step past `character`, and in `shift` how far
- * left of the cell the letter itself is drawn. 0 for the rest. */
+ * left of the cell the US letter is drawn so that its ink is where the PAL
+ * font has the same letter's. 0 for the rest. */
 int PalText_Advance(uint32_t character, int *shift);
+
+/* The PAL's F8 07 limit (EU 0x80038190 sets it, one byte times 8 pixels;
+ * TextBox_BuildStep checks it at 0x80039508-0x80039558): adds `step`, the
+ * pixels a letter took, to `*width` and says whether the box is done, which
+ * is when the next cell of `cell` pixels would pass `limit` * 8. */
+int PalText_PastWidth(int *width, int step, int cell, int limit);
 
 #endif

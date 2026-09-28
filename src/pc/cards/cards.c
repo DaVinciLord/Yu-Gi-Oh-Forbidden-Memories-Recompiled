@@ -10,6 +10,7 @@
 #include "cards.h"
 #include "art.h"
 #include "tables.h"
+#include "starter.h"
 #include "pc/free_duel/duelists.h"
 #include "pc/text/glyphs.h"
 #include "pc/text/text.h"
@@ -806,6 +807,8 @@ void Cards_Build(void)
      * them, so they have to exist by the time those are read. */
     Duelists_Build();
     Tables_Build();
+    /* And so do the starter decks a new game may be dealt (starter.h). */
+    Starter_Build();
 }
 
 /* --- what the game asks -------------------------------------------- */

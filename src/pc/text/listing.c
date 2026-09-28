@@ -2,6 +2,7 @@
  * The grammar is tools/pc/text_listing.py's, which writes the listings and
  * checks them against the retail bytes; notes/translation.md describes it. */
 #include "listing.h"
+#include "entry_layout.h"
 #include "glyphs.h"
 #include <ctype.h>
 #include <stdarg.h>

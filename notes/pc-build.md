@@ -474,8 +474,8 @@ it into a ring, about 2 ms on the game's thread each time; at 200% speed a
 frame has 8.3 ms, and those frames were the ones that ran over (a duel at
 4x with 3D Monsters showed 104-118 frames/s instead of 120). `SET_REWIND`
 stays in settings.h, retired, so mods keep their setting numbers; a
-`rewind=` line left in `settings.txt` is ignored. `serialize` still writes
-the stack chunk last.
+`rewind=` line left in `settings.txt` does nothing (it is kept in the file as `serialize` still writes
+an unknown line). `serialize` still writes the stack chunk last.
 
 ### Cheats
 
@@ -651,7 +651,9 @@ and rebases pointers into its compiled text before restoring game memory,
 so loading a shop state also works in a fresh process. With the setting off the menu is the game's. A
 translation's string 0x11 gets the entry too, in the translation's words
 (string `FE10`, [translations](translation.md#the-ports-own-strings)), when
-its menu is four plain lines and the five fit the box's 44 letters; else it
+its menu is four plain lines and the five fit the box's 44 letters (79 with
+a PAL language on, whose text entries are the PAL game's 800,
+[translations](translation.md#the-official-languages)); else it
 keeps the translation's four. Checked on a save in the tournament's
 shop: the setting off is pixel-identical to master (the menu, and the cursor
 on LEAVE SHOP); DECK SLOTS opens the screen, and Circle brings the menu back
@@ -694,8 +696,10 @@ save loaded through the save slot menu:
 
 Game > Language puts the game's own European translations in the US game:
 English (US), the default, English (Europe), Français, Deutsch, Italiano and
-Español. Their text ships with the port, one listing a language in
-`languages/` (`en-eu.txt`, `fr.txt`, `de.txt`, `it.txt`, `es.txt`), which
+Español; and Português (Brasil), the fan translation of the US game
+(notes/translation.md, "Português (Brasil)"), which has only its pack. Their
+text ships with the port, one listing a language in `languages/`
+(`en-eu.txt`, `fr.txt`, `de.txt`, `it.txt`, `es.txt`, `pt-br.txt`), which
 the build copies beside the program and the release packs; no PAL disc is
 needed. The packs are the port's own reading of the PAL discs, written by
 `tools/pc/export_languages.py` (below); they are the one exception to
@@ -711,7 +715,7 @@ names one folder to look in for both packs and discs, instead of all
 those. A language with neither is greyed in the menu and named in the log
 (`MEMORIES_TRACE=menu`).
 
-The choice is the `language` setting (0-5, `MEMORIES_LANGUAGE`), saved at
+The choice is the `language` setting (0-6, `MEMORIES_LANGUAGE`), saved at
 once and taken up at the next launch, as a translation mod is: the menu
 offers Restart now, Later or Cancel. A mod's translation stands over it
 string by string. What the text is and how it is read and spaced is in
@@ -1722,7 +1726,8 @@ starchips show theirs.
 - Nothing is kept that a loaded state could contradict: which layout the
   box has is its string id, and the retail one comes from the card's type.
   Off, nothing is made and nothing changes.
-- The box's channel has a slice of the text entries (255, 160, 160 or 45).
+- The box's channel has a slice of the text entries (255, 160, 160 or 45;
+  with a PAL language 280, 220, 220 or 80).
   If the card's text and the digits do not fit together, the retail box is
   made again and that card shows no password: in the duel the viewer's box
   is on a 160-entry channel, where Right Leg, Left Leg and Right Arm of the

@@ -10,7 +10,7 @@ import copy
 import re
 from dataclasses import dataclass, field
 
-from .gamedata import (CARD_COUNT, DUELIST_COUNT, DUELIST_NAMES, POOLS, TYPE_NAMES, Card, GameData)
+from .gamedata import (CARD_COUNT, DECK_SIZE, DUELIST_COUNT, DUELIST_NAMES, POOLS, TYPE_NAMES, Card, GameData)
 
 KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
@@ -86,6 +86,30 @@ class AddedCard:
 
 
 @dataclass
+class StarterDeck:
+    """A deck a new game may be dealt ("starter", notes/starter-deck.md): its
+    own name, how often it is picked against the other offered decks, and its
+    cards by their copies. `kept` holds a card the editor cannot place, under
+    the name it was written with, so somebody else's deck is not thrown away;
+    `extra` keeps the entry's other keys as written."""
+    name: str = ""
+    weight: int = 1
+    cards: dict = field(default_factory=dict)   # card id -> copies
+    kept: dict = field(default_factory=dict)    # name as written -> copies
+    extra: dict = field(default_factory=dict)
+
+    def total(self) -> int:
+        return sum(self.cards.values()) + sum(self.kept.values())
+
+    def complete(self) -> bool:
+        """A deck the port will deal: the save holds exactly forty."""
+        return self.total() == DECK_SIZE
+
+    def copy(self) -> "StarterDeck":
+        return StarterDeck(self.name, self.weight, dict(self.cards), dict(self.kept), copy.deepcopy(self.extra))
+
+
+@dataclass
 class ModInfo:
     id: str = "my-mod"
     name: str = "My mod"
@@ -111,6 +135,8 @@ class Project:
         self.kept = {"fusions": [], "equips": [], "rituals": []}   # rules naming cards it cannot place
         self.kept_pools = {}            # (duelist or "all", pool) -> {name: weight} it cannot place
         self.kept_fixed = {}            # opponent's name -> a fixed deck ("fixed": true), kept as written
+        self.starter = []               # StarterDeck: the decks a new game may be dealt
+        self.starter_file = None        # "starter" naming a file of the mod's, kept as written
         self.kept_opponents = {}        # "decks"/"drops" -> {name: entry} naming a duelist it cannot place
         self.pool_files = {}            # "decks"/"drops" -> the file the mod names in place of the table
         self.source_dir = None

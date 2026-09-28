@@ -64,6 +64,7 @@ editors write, is fine):
 | `equip_bonus_default` | what an equip adds when no `equips` entry sets its bonus, below |
 | `trap_thresholds` | the attack each of the six attack traps stops, below |
 | `passwords` | each card's password and starchip price on the Password screen, below |
+| `starter` | the forty cards a new game begins with, one deck or a list of them, below |
 | `text`, `font` | a translation of the game's text, and fonts for letters it has none of, below |
 
 `version`, `author` and `description` are displayed in the manager. Version
@@ -510,6 +511,34 @@ so a character can be added without touching a mod.
 [More duelists](more-duelists.md) has every property, what each folder holds,
 how weights, unlocks, the AI row and the rank score work, and the disc layouts
 the whole thing rests on.
+## Starter decks: what a new game begins with
+
+A mod may write down the forty cards a new game starts with, in place of the
+seven weighted pools the disc draws them from. `starter` is one deck, or a
+list of them, and one is picked for each new game:
+
+```json
+"starter": [
+    { "name": "Spellbinder", "weight": 3, "Mystical Elf": 3, "Time Wizard": 3, "Yami": 3 },
+    { "name": "Stone Wall", "Battle Warrior": 3, "Hard Armor": 3 }
+]
+```
+
+A deck is its cards and their copies, adding up to forty, with cards named as
+`decks` and `drops` name them. `"name"` is the deck's own, for the Mods window
+and the log; `"weight"` is how often it is the deck picked, against every other
+offered deck (1 without one, and 0 for a deck kept in the manifest but never
+picked). The decks of every applied mod add up.
+
+Writing the cards down, rather than weighting a pool, is what lets a starting
+deck hold a card a mod added: the disc's pools are a fixed 722 weights whose
+generator reads only the first 720, so no weight can name one. The copies are
+the deck, so the three-copy limit does not apply here any more than it does to
+a fixed opponent deck — but a deck Build Deck would refuse to take back, with
+more than three copies of a card or more than one Exodia piece, says so in the
+Mods window and is dealt as written. A deck that is not forty cards is left
+out. [The starter deck](starter-deck.md) has the rest, including what it costs
+the game's random numbers; `examples/mods/starter-deck` is a working one.
 
 ## Translations
 
