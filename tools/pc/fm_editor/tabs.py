@@ -7,11 +7,12 @@ import json
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from . import fixed_decks, manifest, pools as poolmath, validate
-from .fixed_deck_view import FixedDeckView
+from . import manifest, pools as poolmath, validate
 from .gamedata import (ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, DUELIST_NAMES, POOL_LABELS,
                        POOL_TOTAL, POOLS, STAR_NAMES, STARTER_WEIGHT_LIMIT, TYPE_EQUIP, TYPE_NAMES, TYPE_RITUAL,
                        exodia_piece)
+from . import fixed_decks
+from .fixed_deck_view import FixedDeckView
 from .model import KEY_RE, StarterDeck
 from .widgets import CardField, FormDialog, card_matches, pick_card, px, scrolled_tree, show_text
 
