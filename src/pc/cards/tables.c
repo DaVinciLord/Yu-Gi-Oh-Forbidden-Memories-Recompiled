@@ -1022,8 +1022,9 @@ static void read_pool_folder(const char *mod, const char *directory, int decks)
          * so the four folders are keyed alike; failing that, a name as any
          * other entry names an opponent, which is how a stock duelist or
          * another mod's is reached. */
-        snprintf(identity, sizeof identity, "%s:%s", mod, names[i].name);
-        duelist = Duelists_Find(identity);
+        duelist = snprintf(identity, sizeof identity, "%s:%s", mod, names[i].name) < (int)sizeof identity
+                      ? Duelists_Find(identity)
+                      : -1;
         if (duelist < 0) duelist = same_letters(names[i].name, "all") ? -1 : Duelists_Named(names[i].name);
         if (duelist == -1 && !same_letters(names[i].name, "all")) {
             Mods_Note(mod, "%s/%s.json: no opponent of that name", key, names[i].name);
@@ -1036,7 +1037,7 @@ static void read_pool_folder(const char *mod, const char *directory, int decks)
             continue;
         }
         root = Json_Root(document);
-        snprintf(where, sizeof where, "%s/%s.json", key, names[i].name);
+        if (snprintf(where, sizeof where, "%s/%s.json", key, names[i].name) < 0) where[0] = '\0';
         if (decks) {
             read_deck_entry(mod, where, duelist, root);
         } else if (Json_TypeOf(root) != JSON_OBJECT) {
