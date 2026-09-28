@@ -1907,8 +1907,11 @@ counts as alive), and the untagged `memories-<kind>-XXXXXX` of older builds
 once they are a day old. It never goes through a link: a symbolic link or
 junction is unlinked, or left if that fails (a read-only junction), and never
 entered; `pc_scratch_rules` checks all of this on decoys, junctions included.
-PIDs are only meaningful on one host: do not share one temporary folder
-between containers, or between Wine and Windows, while tests run. The disc
+Off Windows it only sweeps entries the current user owns. PIDs are only
+meaningful on one host, and the checks and the removal are not atomic: use a
+temporary folder of your own (the default TEMP on Windows, a private TMPDIR
+rather than a shared /tmp elsewhere), and do not share one between
+containers, or between Wine and Windows, while tests run. The disc
 test's 1 GB capacity image is sparse on NTFS as it is on Linux. The game
 itself makes nothing in the temporary folder.
 

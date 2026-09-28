@@ -279,6 +279,14 @@ static inline int scratch_sweep(const char *name, FILE *report)
         if (name) stale = scratch_stale(entry->d_name, path, name, now);
         for (i = 0; !name && !stale && i < count; i++) stale = scratch_stale(entry->d_name, path, kinds[i], now);
         if (!stale) continue;
+#ifndef _WIN32
+        /* Only our own: in a shared /tmp another user could swap an entry
+         * of theirs for a link between the checks and the removal. */
+        {
+            struct stat own;
+            if (lstat(path, &own) || own.st_uid != geteuid()) continue;
+        }
+#endif
         scratch_remove(path, 0);
         if (scratch_entry(path) == SCRATCH_NONE) {
             removed++;
