@@ -122,7 +122,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cmake -S . -B tmp/release-tests -DCMAKE_BUILD_TYPE=Release
-          cmake --build tmp/release-tests --target memories_game_files_test
+          cmake --build tmp/release-tests --target memories_game_files_test memories_scratch_sweep_test
           ctest --test-dir tmp/release-tests -R '^pc_game_files_' --output-on-failure
       - name: Upload installable archives
         uses: actions/upload-artifact@v4

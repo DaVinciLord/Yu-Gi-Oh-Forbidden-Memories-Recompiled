@@ -168,6 +168,7 @@ typedef struct {
     char roots[SCRATCH_ROOTS][SCRATCH_MAX];
     char base[SCRATCH_MAX]; /* read once: no getenv in a signal handler */
     int count, hooked;
+    unsigned long owner; /* the process that made them: a fork's child leaves them be */
 } ScratchState;
 
 static inline ScratchState *scratch_state(void)
@@ -180,6 +181,7 @@ static inline void scratch_cleanup(void)
 {
     ScratchState *state = scratch_state();
     int i, moved = 0;
+    if (state->owner != scratch_pid()) return;
     for (i = state->count - 1; i >= 0; i--) {
         scratch_remove(state->roots[i], 0);
         if (scratch_entry(state->roots[i]) != SCRATCH_NONE && !moved) {
@@ -319,6 +321,7 @@ static inline char *scratch_dir(char *out, size_t size, const char *name)
 #endif
         size_t i;
         state->hooked = 1;
+        state->owner = scratch_pid();
         snprintf(state->base, sizeof(state->base), "%s", scratch_base());
         atexit(scratch_cleanup);
         /* Only where the test has no handler of its own. */

@@ -22,7 +22,8 @@ static const char *in(const char *folder, const char *name)
     static char paths[8][2 * SCRATCH_MAX];
     static int next;
     char *path = paths[next++ % 8];
-    snprintf(path, sizeof(paths[0]), "%s/%s", folder, name);
+    int length = snprintf(path, sizeof(paths[0]), "%s/%s", folder, name);
+    assert(length > 0 && length < (int)sizeof(paths[0]));
     return path;
 }
 
@@ -210,6 +211,19 @@ int main(void)
     assert(!present(kind_link) && present(other_kind));
     snprintf(name, sizeof(name), "%s/e", outside);
     assert(present(in(name, "SENTINEL.txt")));
+
+#ifndef _WIN32
+    /* A forked child that exits normally runs the parent's atexit cleanup,
+     * which must leave the parent's folders alone. */
+    {
+        pid_t child = fork();
+        int status;
+        assert(child >= 0);
+        if (!child) exit(0);
+        assert(waitpid(child, &status, 0) == child && WIFEXITED(status));
+        assert(present(root));
+    }
+#endif
 
     /* Undo the stuck junctions; the rest goes with this test's folder. */
     clear_stuck();
