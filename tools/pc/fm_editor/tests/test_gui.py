@@ -37,7 +37,14 @@ class GuiTest(unittest.TestCase):
         cls.tmp.cleanup()
 
     def setUp(self):
+        from fm_editor import settings
         from fm_editor.app import App
+        # Never the user's own settings (a dark mode they chose, say).
+        self.settings = Path(self.tmp.name) / "config" / "settings.json"
+        self.settings.unlink(missing_ok=True)
+        patcher = mock.patch.object(settings, "path", lambda: self.settings)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.app = App(ask=False, autostart=False)
         self.app.withdraw()
         self.app.update()
@@ -133,31 +140,35 @@ class GuiTest(unittest.TestCase):
         self.assertEqual(len(app.rituals.tree.get_children()), 20)   # every ritual card, with or without a recipe
 
     def test_dark_mode(self):
-        from fm_editor import settings, theme
+        from fm_editor import theme
         from fm_editor.app import App
         app = self.app
         text = app.info.description
         light = text.cget("background")
-        path = Path(self.tmp.name) / "config" / "settings.json"
-        with mock.patch.object(settings, "path", lambda: path):
-            app.dark.set(True)
-            app.toggle_dark()
-            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), {"dark": True})
-            self.assertEqual(app.theme.style.theme_use(), theme.DARK_THEME)
-            self.assertEqual(text.cget("background"), theme.FIELD)
-            self.assertEqual(str(app.cards.tree.tag_configure("changed", "foreground")), theme.TAGS["changed"][1])
-            dialog = tk.Toplevel(app)       # made after the switch: the option database
-            self.assertEqual(dialog.cget("background"), theme.BG)
-            dialog.destroy()
-            # remembered at the next start
-            other = App(ask=False, autostart=False)
-            other.withdraw()
-            self.assertTrue(other.dark.get())
-            self.assertEqual(other.theme.style.theme_use(), theme.DARK_THEME)
-            other.destroy()
-            app.dark.set(False)
-            app.toggle_dark()
-            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), {"dark": False})
+        app.dark.set(True)
+        app.toggle_dark()
+        self.assertEqual(json.loads(self.settings.read_text(encoding="utf-8")), {"dark": True})
+        self.assertEqual(app.theme.style.theme_use(), theme.DARK_THEME)
+        self.assertEqual(text.cget("background"), theme.FIELD)
+        self.assertEqual(str(app.cards.tree.tag_configure("changed", "foreground")), theme.TAGS["changed"][1])
+        dialog = tk.Toplevel(app)       # made after the switch: the option database
+        self.assertEqual(dialog.cget("background"), theme.BG)
+        dialog.destroy()
+        # remembered at the next start, where an importer adds its menu entry
+        # after the window (and, on Windows, the strip's clone of File) is made
+        other = App(ask=False, autostart=False)
+        other.withdraw()
+        self.assertTrue(other.dark.get())
+        self.assertEqual(other.theme.style.theme_use(), theme.DARK_THEME)
+        other.add_import("Probe...", lambda: None)
+        if other.theme.strip is not None:
+            clone = other.theme.strip.winfo_children()[0].cget("menu")      # a Tcl-made menu
+            self.assertEqual(other.tk.call(clone, "index", "end"), other.file_menu.index("end"))
+            self.assertEqual(other.tk.call(clone, "entrycget", other.import_index - 1, "-label"), "Probe...")
+        other.destroy()
+        app.dark.set(False)
+        app.toggle_dark()
+        self.assertEqual(json.loads(self.settings.read_text(encoding="utf-8")), {"dark": False})
         self.assertEqual(app.theme.style.theme_use(), app.theme.light)
         self.assertEqual(text.cget("background"), light)
         self.assertEqual(str(app.cards.tree.tag_configure("changed", "foreground")), theme.TAGS["changed"][0])

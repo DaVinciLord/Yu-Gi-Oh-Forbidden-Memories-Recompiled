@@ -153,7 +153,7 @@ class Theme:
             yield from self.walk(child)
 
     def title_bar(self, window):
-        """Windows 10 (20H1) and 11 draw a window's title bar dark when
+        """Windows 10 (1809 on) and 11 draw a window's title bar dark when
         asked; elsewhere the window manager's own is kept."""
         if sys.platform != "win32" or (not self.dark and not getattr(window, "dark_title", False)):
             return

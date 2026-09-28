@@ -47,7 +47,7 @@ on Windows (`~/.config/fm-editor/settings.json`, or under
 the editor looks as it always has (the desktop's "vista" theme on Windows,
 "clam" elsewhere). The dark look is a clam theme recolored (`theme.py`;
 text at least 4.5:1 against its background); the Art tab's pictures keep
-their pixels. On Windows the title bar turns dark too (Windows 10 20H1 and
+their pixels. On Windows the title bar turns dark too (Windows 10 1809 and
 later), and since Windows draws a menu bar light whatever it is asked, a
 strip of menu buttons with the same menus stands in for it (Alt+letter and
 F10 open them). Left light: the thin frame Windows draws around an open
