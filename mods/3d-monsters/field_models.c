@@ -143,7 +143,13 @@ static const struct {
 
 #define SECTOR 2048
 #define RECORD_SECTORS MODEL_MRG_SECTOR_COUNT
-#define CACHE 8
+/* Models kept loaded, least recently drawn replaced first. The field has
+ * ten monster zones, and with fewer entries than that a field of nine or ten
+ * different monsters missed on every draw: all of them were loaded again from
+ * the disc every frame (about 40 ms at ten), and each came back at the first
+ * frame of its animation, standing still. Each entry has its own texture bank
+ * (bank = index + 1, below SOFT_GPU_BANKS) and arena. */
+#define CACHE 12
 
 typedef struct {
     int card;      /* one-based card id; 0 when the entry is free */
