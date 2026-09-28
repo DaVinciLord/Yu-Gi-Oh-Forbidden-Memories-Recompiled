@@ -544,10 +544,13 @@ they are, since the PAL's sit a pixel further right in their cell. The
 PAL's `i` and `l` have serifs that fill their 6 pixels; the US ones are a
 2-pixel stem, so two of them side by side leave a wider gap than other
 letters. The PAL cuts a name by pixels (its `F8 07` counts 8 per unit,
-the US one letters); with a PAL language on, the port reads the US
-templates' limits the same way (`Language_PastWidth`): the duel bar's 24
-are 192 pixels, and a German name like Doppelköpfiger Donnerdrache stops
-after "Donnerdra", as on the console. The boxes
+the US one letters); with a PAL language on, the port reads the
+limits the same way (`Language_PastWidth`): the card lists' 16 are 128
+pixels, the duel bar's 24 are 192 (a German name like Doppelköpfiger
+Donnerdrache stops after "Donnerdra", as on the console) and a magic
+card's bar, `[0051]`, 28 are 224. The PAL text's own `F8 07` has one
+operand byte; `pal_text.c` writes it as the US u16 (`{f8 07 1C 00}`),
+and the PAL's `F8 00 03` (a card's type as a label) as the US `F8 00 01`. The boxes
 are as wide as the US ones and wrap the same way (TextBox_WrapLineIfNeeded,
 unchanged), so the text was written for that spacing: many PAL lines lean
 on the box's edge to wrap. With a PAL language on, the port spaces

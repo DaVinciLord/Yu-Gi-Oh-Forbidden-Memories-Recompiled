@@ -47,4 +47,10 @@ char *PalText_Listing(const PalTextPack *pack, int language, size_t *length, int
  * font has the same letter's. 0 for the rest. */
 int PalText_Advance(uint32_t character, int *shift);
 
+/* The PAL's F8 07 limit (EU 0x80038190 sets it, one byte times 8 pixels;
+ * TextBox_BuildStep checks it at 0x80039508-0x80039558): adds `step`, the
+ * pixels a letter took, to `*width` and says whether the box is done, which
+ * is when the next cell of `cell` pixels would pass `limit` * 8. */
+int PalText_PastWidth(int *width, int step, int cell, int limit);
+
 #endif

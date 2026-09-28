@@ -172,7 +172,8 @@ static void operands(Op *op, const Bank *bank, int at, int count, int *failed)
 static int decode_secondary(const Bank *bank, int at, Op *op, int *failed)
 {
     static const signed char counts[0x2B] = {
-        1, 1, 1, 5, 1, 2, 2, 2, 0, 0, 1, 1, 1, 6, 2, -1, -1, 1, 0, 0, 1, 1, 0, -1, -1, 1, 0,
+        1, 1, 1, 5, 1, 2, 2, 1 /* 07: a byte in the PAL */, 0, 0, 1, 1, 1, 6, 2, -1, -1, 1, 0, 0, 1, 1, 0, -1, -1,
+        1, 0,
         0 /* 1B: PAL's player name */, 1, 1, 1, 1, 1, 2, 1, -1, -1, 0, -1, 2, 2, 0, 0};
     int index = byte_at(bank, at + 1, failed), count;
     op->kind = OP_CODE;
@@ -201,6 +202,18 @@ static int decode_secondary(const Bank *bank, int at, Op *op, int *failed)
     op->length = (unsigned char)(2 + count);
     words(op, "f8 %02X", index);
     operands(op, bank, at + 2, count, failed);
+    /* The PAL's F8 07 takes a byte (EU 0x80038190: that times 8 pixels); the
+     * US one, which the port runs, a u16. The byte goes as its low half:
+     * TextBox_BuildStep reads it as the PAL does with a language on. */
+    if (index == 0x07) {
+        size_t used = strlen(op->text);
+        snprintf(op->text + used, sizeof(op->text) - used, " 00");
+    }
+    /* F8 00 03, the PAL's own (EU 0x80037B3C): the card's type as a label,
+     * which the magic cards' rows and bar show. The US code has no kind 3
+     * (it would draw the dragon's icon); its rows draw that label from kind
+     * 1, the first guardian star's, as the US [0007] and [0051] do. */
+    if (index == 0x00 && byte_at(bank, at + 2, failed) == 0x03) words(op, "f8 00 01");
     return index != 0x2A;
 }
 
@@ -688,4 +701,10 @@ int PalText_Advance(uint32_t character, int *shift)
     case '.': case ',': return -2;
     default: return 0;
     }
+}
+
+int PalText_PastWidth(int *width, int step, int cell, int limit)
+{
+    *width += step;
+    return limit * 8 < *width + cell;
 }
