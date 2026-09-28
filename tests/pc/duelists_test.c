@@ -174,6 +174,8 @@ static void roster_drop(const char *const *names, int count)
 static void build(const char *a, const char *b)
 {
     char error[256];
+    int i;
+    for (i = 0; i < mod_count; i++) Json_Free(manifests[i]);
     mod_count = 0;
     notes = 0;
     Duelists_Clear();
