@@ -1293,9 +1293,6 @@ static void pump(void)
         if(event.type==SDL_EVENT_GAMEPAD_ADDED){open_gamepad(event.gdevice.which);continue;}
         if(event.type==SDL_EVENT_GAMEPAD_REMOVED){close_gamepad(event.gdevice.which);continue;}
         if(event.type==SDL_EVENT_KEY_UP)ControlsRuntime_Key(controls_key(event.key.scancode),0);
-        /* F8's release too, before a menu can take it: else the rewind
-         * would run on after the menu closes. */
-        if(event.type==SDL_EVENT_KEY_UP&&event.key.key==SDLK_F8)Memories_RewindHold(0);
         if(dispatch_controls(&event, &menu_event))continue;
         if (mods_window && SDL_GetWindowFromEvent(&event) == mods_window) {
             if (event.type == SDL_EVENT_WINDOW_RESIZED) resize_mods(event.window.data1, event.window.data2);
@@ -1355,7 +1352,6 @@ static void pump(void)
             break;
         case SDL_EVENT_WINDOW_FOCUS_LOST:
             if(!controls_window)ControlsRuntime_ResetKeys(); mouse_bits=wheel_now=0;wheel_frames=0;
-            Memories_RewindHold(0); /* the key-up may never come */
             if (Settings_Get(SET_MUTE_ON_FOCUS_LOSS)) Spu_SetOutputVolume(0);
             if (Settings_Get(SET_PAUSE_ON_FOCUS_LOSS) && Platform_ClockRate() != 0) {
                 focus_clock_rate = Platform_ClockRate();
@@ -1446,7 +1442,6 @@ static void pump(void)
                 DeckMenu_Request();
                 break;
             }
-            if (key == SDLK_F8 && Memories_RewindHold(down)) break; /* the rewind setting on */
             if (down && key == SDLK_ESCAPE) {
                 if (covers_screen()) {
                     /* Out of fullscreen first, then out of borderless. */

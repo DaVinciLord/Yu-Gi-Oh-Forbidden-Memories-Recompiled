@@ -185,8 +185,7 @@ after-hook sees what the game gets ([mod API](mod-api-3.md)).
 
 Esc quits (it closes an open menu first); F1, F2 and F4 select those state
 slots, F5 saves, and F7 loads. F3 cycles the debug HUD; slot 3 is selectable
-from File. F8, held, rewinds when the `rewind` setting is on (see Rewind
-below; it has no menu item). F11 or Alt+Enter (the main Enter or the keypad's) switches between
+from File. F11 or Alt+Enter (the main Enter or the keypad's) switches between
 the window and desktop fullscreen and saves `fullscreen`; in fullscreen Esc
 first returns to the window. The Enter pressed under Alt stops there, so it
 never presses Start, and Alt is a reserved modifier no binding can use. While
@@ -467,66 +466,16 @@ key across frames (a `key` is pressed and released in one pump, before the
 game reads the pad; `s` is Circle and `x` Cross by default), which is how
 Japanese buttons was checked through the keyboard; `f8` is one of the names.
 
-### Rewind
+### Rewind (removed)
 
-Rewind (`rewind=1` in `settings.txt`, or `MEMORIES_REWIND=1`; off by
-default, and taken out of the Game menu, so only those turn it on) keeps
-the last seconds of play in memory; holding F8 walks back through
-them, like an emulator's rewind, and letting go plays on from the moment
-shown. F8 is the rewind key only while the setting is on: then it is taken
-before the controls (a binding to F8 does nothing); with the setting off it
-is an ordinary key, bound or not, as before.
-
-It is the save-state mechanism (`src/pc/guest/state.c`) pointed at memory.
-`serialize` writes a state either to the file or to a growing buffer
-(`MemoriesState.buffer`); the chunks are the same and in the same order,
-with the stack chunk last so that its size, which follows the depth of the
-VSync caller, does not move every other chunk between two states. At the
-state point of `VSync(0)` (the only place a state is taken or applied),
-with the setting on, one state in every 10 presented frames goes into the
-ring (`src/pc/guest/rewind.c`): it keeps the newest state whole and, for
-each older one, the XOR against the state that followed it, stored as runs
-of zero words and the words between them. Stepping back XORs the newest
-difference into the whole copy and drops it; when the ring is over 120
-states (20 s at 60 frames) or 96 MiB of differences the oldest go first.
-While F8 is held, every state point applies the newest state through the
-state loader's own path (`apply`: the same subsystems, `Spu_Hold`, the
-mods' reset and load event, `AudioReplace_StateLoaded`), and every third
-one first steps a state back, so the game never runs on while held and
-the rewind goes about three times faster than play. The copy applied is
-separate from the ring's (a load may remap its image in place). A state is
-only applied when the mods still match it (`compatible_mods`); if they
-changed since, the ring is emptied. The memory card is a file and is not
-rewound, as with state loads.
-
-Off, `rewind_point` reads the setting and returns: no state is taken,
-nothing is allocated, and a ring left from when it was on is freed.
-Holding F8 then does nothing. Audio follows the loader: each applied state
-restores the SPU and restarts streamed and replacement audio where that
-state has them, so a held rewind is heard as short repeats.
-
-`MEMORIES_TRACE=state` logs each state taken (bytes, time to take and to
-store, states, bytes of differences and bytes held in all) and each step.
-Measured on the duel smoke input run in a window at 100% (3D monsters and
-hand camera on, 7.5 MB states), two runs: a state takes about 1.2-1.3 ms to
-write and 1.5-1.7 ms to store (median; 95th percentile under 2.7 and 3.8
-ms), about 0.3 ms per frame on average; the mean game time per frame went
-from 3.2 ms (off) to 3.3-3.5 ms (on). A difference averages 27-49 KB in the
-duel (3-4 MiB for the ring) and the boot's loading screens peak at 25 MiB;
-with the fixed buffers (the whole copy, the write buffer, the work buffer
-and, once F8 was held, the copy applied: about 30 MiB) the rewind held 34
-MiB after the duel and 48 MiB at most. A step back takes about 1 ms to
-prepare and 1.2-1.4 ms to apply. `pc_rewind_ring`
-(`tests/pc/rewind_ring_test.c`) pushes images of changing sizes, steps back
-through them and compares them byte for byte, including eviction by count
-and by size, branching after a rewind and scattered changes. Checked in a
-window with `MEMORIES_SDL_SCRIPT` (`6810:down:f8`, `6960:up:f8`): held F8
-went back from the hand through the draw to the field view before it, and
-after release the duel played on from there (the camera came round and
-the hand was dealt again). With
-the setting off the same script left the game where it was, the log had no
-rewind line, and the six smoke cases are unchanged; with it on the duel
-smoke frame is still the same.
+Rewind (hold F8, `rewind=1`) was taken out on 2026-09-28. It wrote the
+whole 7.5 MB save state to memory every 10 presented frames and XOR-encoded
+it into a ring, about 2 ms on the game's thread each time; at 200% speed a
+frame has 8.3 ms, and those frames were the ones that ran over (a duel at
+4x with 3D Monsters showed 104-118 frames/s instead of 120). `SET_REWIND`
+stays in settings.h, retired, so mods keep their setting numbers; a
+`rewind=` line left in `settings.txt` does nothing (it is kept in the file as
+an unknown line). `serialize` still writes the stack chunk last.
 
 ### Cheats
 
