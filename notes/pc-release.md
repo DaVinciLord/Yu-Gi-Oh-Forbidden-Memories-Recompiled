@@ -74,7 +74,8 @@ on both platforms; it also includes the new ROM setup tests.
 
 Public runners do not receive a disc or need a ROM secret. They compile the
 full game and check archive structure; they skip ROM-dependent gameplay smoke
-tests explicitly. Run those locally before publishing a draft.
+tests explicitly. Run those locally before publishing a draft. Workflow events
+follow [GitHub's trigger documentation](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow).
 
 ### Mods made for earlier releases
 
@@ -97,8 +98,7 @@ A difference that fails the check is fixed, not waved through. Keep the old
 number, argument list or layout, and add beside it. Only a difference
 that provably breaks no mod goes in `mod_compat.txt` as `accept`, with the
 reason. After publishing a release, add `baseline <tag>` for it to
-`mod_compat.txt`. Workflow events
-follow [GitHub's trigger documentation](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow).
+`mod_compat.txt`.
 
 ## Local commands
 
