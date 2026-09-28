@@ -32,12 +32,13 @@
  * own -- Deck Build and the thirty-nine opponents -- and a page past it shows
  * the duelists a mod added (notes/more-duelists.md). Every index the screen
  * takes from the cursor is a cell; everything that means a duelist goes
- * through here. */
+ * through here, and the arithmetic is the list's so that the port's own
+ * screens reach the same answer (Duelists_AtCell). */
 extern int gFreeDuel_nPage;
 
 static int cell_duelist(int cell)
 {
-    return gFreeDuel_nPage * FREE_DUEL_GRID_ENTRY_COUNT + cell;
+    return Duelists_AtCell(cell);
 }
 
 /* How many pages the roster fills, always at least the disc's own. */

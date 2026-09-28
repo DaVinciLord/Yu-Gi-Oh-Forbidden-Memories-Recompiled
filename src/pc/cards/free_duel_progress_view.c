@@ -3,6 +3,7 @@
  * as the fusion helper is, in the game's own font (font_art.c). The numbers
  * come from free_duel_progress.c. */
 #include "free_duel_progress.h"
+#include "pc/free_duel/duelists.h"
 #include "fusion_helper.h"
 #include "pc/platform/settings.h"
 #include "pc/platform/platform.h"
@@ -26,7 +27,7 @@ static struct { int visible, duelist, owned, obtainable, x, y, w, h; } view;
 
 static void update(void)
 {
-    int column, row, cell;
+    int column, row, cell, duelist;
     view.visible = 0;
     if (!Settings_Get(SET_FREE_DUEL_PROGRESS)) return;
     if ((D_8009B26C & MODE_MASK) != MAIN_MODE_FREE_DUEL || !(D_8009B26C & MODE_ENTERED)) return;
@@ -36,15 +37,18 @@ static void update(void)
     if ((D_8009B0F4 & FILE_TRANSFER_REQUEST_BLOCKED_MASK) | D_8009B134) return;
     if (gFade_State.flags & FADE_FLAG_ACTIVE) return;
     if (gFreeDuel_bScreenFlags & (SCREEN_DIALOG | SCREEN_LEAVING)) return;
-    /* The pending cell the pad moves at once; the cursor glides after it.
-     * Its index is the opponent's id (func_80024DC8); 0 is Build Deck. */
+    /* The pending cell the pad moves at once; the cursor glides after it. The
+     * cell is not the duelist: the grid shows a page of forty, so the duelist
+     * it stands for is the page's (Duelists_AtCell, free_duel/duelists.h), and
+     * on a page past the first even cell 0 is somebody to duel. */
     column = gFreeDuel_bTargetColumn;
     row = gFreeDuel_bTargetRow;
     if (column < 0 || column >= FREE_DUEL_GRID_COLUMN_COUNT || row < 0 || row >= FREE_DUEL_GRID_ROW_COUNT) return;
     cell = row * FREE_DUEL_GRID_COLUMN_COUNT + column;
-    if (cell < FREE_DUEL_STORY_OPPONENT_FIRST_INDEX || !gFreeDuel_abGridAvailable[cell]) return;
-    if (!FreeDuelProgress_Count(cell, &view.owned, &view.obtainable)) return;
-    view.duelist = cell;
+    duelist = Duelists_AtCell(cell);
+    if (duelist < FREE_DUEL_STORY_OPPONENT_FIRST_INDEX || !Duelists_Available(duelist)) return;
+    if (!FreeDuelProgress_Count(duelist, &view.owned, &view.obtainable)) return;
+    view.duelist = duelist;
     view.visible = 1;
 }
 
