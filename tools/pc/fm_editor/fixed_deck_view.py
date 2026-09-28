@@ -15,10 +15,12 @@ STYLES = (("Hint.TLabel", "#777"), ("Ok.TLabel", "#26a269"), ("Error.TLabel", "#
 
 
 def ensure_styles(widget):
-    """The label styles the tabs name; left alone when a theme set them."""
+    """The label styles the tabs name; left alone when a theme set them.
+    (lookup() would answer with the colour TLabel inherits, so ask the
+    style for what it sets itself.)"""
     style = ttk.Style(widget)
     for name, colour in STYLES:
-        if not style.lookup(name, "foreground"):
+        if not (style.configure(name) or {}).get("foreground"):
             style.configure(name, foreground=colour)
 
 

@@ -10,6 +10,7 @@ from pathlib import Path
 
 try:
     import tkinter as tk
+    from tkinter import ttk
 except ImportError:     # a Python built without Tk
     tk = None
 
@@ -269,6 +270,7 @@ class GuiTest(unittest.TestCase):
         view.clear()
         self.assertIn("0 / 40", tab.total.cget("text"))
         self.assertEqual(str(tab.total.cget("style")), "Error.TLabel")
+        self.assertEqual(ttk.Style(app).configure("Error.TLabel")["foreground"], "#c01c28")
         view.copies.set("37")
         deck.cards[3] = 37
         view.edited()
