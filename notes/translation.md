@@ -592,7 +592,14 @@ has only digits), `f` keeps its own (its crossbar already fills the 6
 pixels; the PAL's is another shape, with a tail), and `j`, `t` and `I`,
 which the PAL narrows only in a mode the port does not use, stay as
 they are. HD text sets the same serifs on the font's letters. English
-(US), and a translation mod over it, draw nothing differently. The PAL
+(US), and a translation mod over it, draw nothing differently. Two
+places keep the US `i` and `l`: the name entry's own sprites (the letter
+under the cursor, the ones flying to and standing in the name box, which
+`name_entry_runtime.c` draws straight from the font's page, not through
+func_80035E20), and a texture pack that replaces the font: the serifed
+letters are drawn from texture bank 15, as the accented ones are, and a
+pack does not reach the bank, so with a PAL language a font pack's `i`
+and `l` are the port's. The PAL
 cuts a name by pixels (its `F8 07` counts 8 per unit,
 the US one letters); with a PAL language on, the port reads the
 limits the same way (`Language_PastWidth`): the card lists' 16 are 128
