@@ -1523,7 +1523,7 @@ static unsigned name_made[2];
 static char name_player[16];
 
 /* The player's name as the save has it (SaveSlots_StateName), else You. */
-static const char *player_name(void)
+const char *HdText_PlayerName(void)
 {
     static char name[sizeof(name_player)];
     SaveSlots_StateName((const unsigned char *)&((SaveDataWorkspace *)D_801D0000)->state, name, sizeof(name));
@@ -1627,7 +1627,7 @@ int HdText_NameBox(int wanted, int which, int *atlas_u, int *atlas_v, int *x, in
         name_made[0] = name_made[1] = 0;
     }
     if (which) {
-        const char *player = player_name();
+        const char *player = HdText_PlayerName();
         if (strcmp(name_player, player)) {
             strcpy(name_player, player);
             name_made[1] = 0;
