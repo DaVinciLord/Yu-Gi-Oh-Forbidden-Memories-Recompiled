@@ -103,7 +103,9 @@ static void note_settings(SettingId changed, int value)
     (void)value;
     text[0] = '\0';
     for (id = 0; id < SET_COUNT && used < sizeof(text); id++) {
-        used += (size_t)snprintf(text + used, sizeof(text) - used, "%s%s=%d", id ? " " : "", Settings_Key((SettingId)id),
+        const char *key = Settings_Key((SettingId)id);
+        if (!key) continue; /* a retired setting (settings.c): no key, not saved */
+        used += (size_t)snprintf(text + used, sizeof(text) - used, "%s%s=%d", used ? " " : "", key,
                                  Settings_Get((SettingId)id));
     }
     Monitor_Fact("settings", "%s", text);

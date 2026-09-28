@@ -406,6 +406,8 @@ static void save_window_image(void)
     save_surface(surface, path);
 }
 
+int Platform_CopyText(const char *text) { return SDL_SetClipboardText(text); }
+
 void Platform_Screenshot(int window_image)
 {
     SDL_Surface *surface;

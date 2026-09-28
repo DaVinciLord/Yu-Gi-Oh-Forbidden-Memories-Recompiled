@@ -27,6 +27,7 @@
 #include "pc/sdk/display.h"
 #include "title_jump.h"
 #include "update_check.h"
+#include "pc/debug/monitor.h"
 #include "pc/saves/deck_menu.h"
 #include "pc/text/language.h"
 #ifdef _WIN32
@@ -86,7 +87,7 @@ enum {
     ACT_MODS, ACT_CONTROLS, ACT_RELOAD_SETTINGS, ACT_PAUSE, ACT_FRAME_STEP, ACT_DUMP_FRAME, ACT_DUMP_VRAM,
     SLIDER_MASTER, SLIDER_MUSIC, SLIDER_SFX, CHECK_MUTE,
     CHECK_HUD, CHECK_HUD_FULL, RADIO_STATE_SLOT, ACT_UNLOCK_FREE_DUELISTS, ACT_RESET_COLOR,
-    ACT_CHECK_UPDATES, ACT_RELEASES, ACT_VERSION, ACT_SET_STARCHIPS, RADIO_LANGUAGE,
+    ACT_CHECK_UPDATES, ACT_RELEASES, ACT_VERSION, ACT_SET_STARCHIPS, RADIO_LANGUAGE, ACT_SYSTEM_INFO,
     CHECK_TRACE = 300  /* value is a LogChannel */
 };
 
@@ -168,7 +169,8 @@ static Menu menus[MENU_COUNT] = {
               {"Include pre-releases", 0, ITEM_CHECK, 0, SET_UPDATE_PRERELEASES},
               {"Check for updates now", 0, ITEM_ACTION, ACT_CHECK_UPDATES, -1, 0, ITEM_GROUP_BREAK},
               {"Releases page", 0, ITEM_ACTION, ACT_RELEASES, -1},
-              {"Version", 0, ITEM_ACTION, ACT_VERSION, -1, 0, ITEM_GROUP_BREAK | ITEM_DISABLED}}, 5},
+              {"System info for bug reports...", 0, ITEM_ACTION, ACT_SYSTEM_INFO, -1, 0, ITEM_GROUP_BREAK},
+              {"Version", 0, ITEM_ACTION, ACT_VERSION, -1, 0, ITEM_GROUP_BREAK | ITEM_DISABLED}}, 6},
 };
 static Menu submenus[SUB_COUNT] = {
     {"Window scale", {{"1x", 0, ITEM_RADIO, MENU_ITEM_SCALE_1, SET_SCALE, 1},
@@ -1381,6 +1383,45 @@ static int active_level(void) { return open_sub >= 0 ? 1 : 0; }
 static int *active_hot(void) { return open_sub >= 0 ? &hot_sub : &hot_item; }
 
 /* The cheats that change the save refuse before a game is loaded. */
+/* Help > System info for bug reports: this build's version and what a crash
+ * report starts with (monitor.h: the build, the system, the GPU, DEP, the
+ * settings, the mods), put on the clipboard and in system-info.txt in the
+ * user folder, so a report carries them without a crash. The notice shows
+ * it but for the settings, a long line. */
+static void show_system_info(void)
+{
+    static const char *const ok[] = {"OK"};
+    static char facts[MONITOR_FACTS_SIZE], text[MONITOR_FACTS_SIZE + 128];
+    char shown[sizeof(notice.text)], path[1100];
+    const char *at;
+    size_t used;
+    int copied, saved = 0;
+    FILE *file;
+    Monitor_Facts(facts, sizeof(facts));
+    snprintf(text, sizeof(text), "YFM Re-Decomp %s\n%s", Update_VersionLabel(), facts);
+    copied = Platform_CopyText(text);
+    snprintf(path, sizeof(path), "%s/system-info.txt", Paths_UserDir());
+    if ((file = fopen(path, "w"))) {
+        saved = fputs(text, file) >= 0;
+        saved = !fclose(file) && saved;
+    }
+    used = (size_t)snprintf(shown, sizeof(shown), "%s\n", Update_VersionLabel());
+    for (at = facts; *at && used < sizeof(shown);) {
+        const char *end = strchr(at, '\n');
+        size_t length = end ? (size_t)(end - at) + 1 : strlen(at);
+        if (strncmp(at, "settings:", 9) && strncmp(at, "started:", 8))
+            used += (size_t)snprintf(shown + used, sizeof(shown) - used, "%.*s", (int)length, at);
+        at += length;
+    }
+    if (used < sizeof(shown)) {
+        snprintf(shown + used, sizeof(shown) - used, "\n%s%s%s%s",
+                 copied ? "Copied to the clipboard: paste it into your bug report." : "",
+                 copied && saved ? " Also in " : saved ? "Attach this file to your bug report: " : "",
+                 saved ? path : "", saved ? "." : "");
+    }
+    Menu_ShowNotice("System info", shown, ok, 1, 0, NULL);
+}
+
 static void need_save(int done)
 {
     static const char *const ok[] = {"OK"};
@@ -1412,6 +1453,7 @@ static void activate(const Item *item, int *quit)
         break;
     case ACT_CHECK_UPDATES: Update_CheckNow(); break;
     case ACT_RELEASES: Update_OpenReleases(); break;
+    case ACT_SYSTEM_INFO: show_system_info(); break;
     case MENU_ITEM_TITLE: TitleJump_Request(); break;
     case MENU_ITEM_RESTART: TitleJump_Confirm(); break;
     case MENU_ITEM_DECKS: DeckMenu_Request(); break;

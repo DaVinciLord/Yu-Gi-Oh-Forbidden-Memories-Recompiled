@@ -2189,14 +2189,21 @@ is written: `crash-<pid>.txt` or `hang-<pid>.txt` in `Crash_ReportDir`,
 with a message box naming it (not when headless or scripted;
 `MEMORIES_CRASH_DIALOG=0/1` decides). The two share a block of memory the
 game writes and the monitor reads, so what the game knew survives however
-it ended: facts (build and commit, OS or Wine version, CPU, memory, GPU and
-driver, SDL video and audio drivers, every setting, the applied mods), the
+it ended: facts (build and commit, OS or Wine version, CPU, memory, on
+Windows whether DEP is on for the game and the system's DEP policy, GPU and
+driver, SDL video and audio drivers, every setting but the retired ones, the
+applied mods), the
 runtime module last loaded, the frame and VBlank counts, and the last 128
 lines of the log. The mods, state, memory card and duel model channels are
 kept there even when not traced (`Log_Wanted`). The game's console output
 passes through the monitor into `last-session.log` (the run before in
 `previous-session.log`) and its last 200 lines into the report. The home
 folder is written `~` in the monitor's part of a report.
+
+Help > System info for bug reports shows the same facts with the build's
+version (all but the settings line), puts them all on the clipboard (the X11
+backend has none) and writes them to `system-info.txt` in the user folder,
+for a report that has no crash behind it (`Monitor_Facts`, `menu.c`).
 
 - A crash the game's handlers see (`crash.c`) is reported by them first,
   in the same file; the monitor adds its section after it. What they cannot
