@@ -169,7 +169,13 @@ void Pgxp_Stored(uint32_t word, const float *xyw)
     if (xyw) memcpy(entry->xyw, xyw, sizeof(entry->xyw));
 }
 
-void Pgxp_AddPrim(const void *packet)
+/* A stored word moved by (dx, dy), as GsSortPoly moves it. */
+static uint32_t moved(uint32_t word, int dx, int dy)
+{
+    return ((word + (uint32_t)dx) & 0xffffu) | ((((word >> 16) + (uint32_t)dy) & 0xffffu) << 16);
+}
+
+void Pgxp_AddPrimMoved(const void *packet, int dx, int dy)
 {
     const uint32_t *words = (const uint32_t *)packet;
     uint32_t base = (uint32_t)(uintptr_t)packet & 0x00ffffffu; /* physical, as packets link */
@@ -181,11 +187,12 @@ void Pgxp_AddPrim(const void *packet)
     length = words[0] >> 24;
     for (i = 1; i <= length; i++) {
         int found = -1, clash = 0;
+        float xyw[3];
         /* Packet buffers are reused for projected and unprojected drawing.
          * Even an unchanged word is no longer the old address's vertex. */
         forget_at(base + i * 4);
         for (k = stored_count; k-- > 0;) {
-            if (stored[k].word != words[i]) continue;
+            if (moved(stored[k].word, dx, dy) != words[i]) continue;
             if (found < 0) {
                 found = (int)k;
             } else if (stored[k].known != stored[found].known ||
@@ -194,9 +201,17 @@ void Pgxp_AddPrim(const void *packet)
             }
         }
         if (found < 0) continue;
-        Pgxp_StoreAt(base + i * 4, words[i], stored[found].known && !clash ? stored[found].xyw : 0);
+        xyw[0] = stored[found].xyw[0] + (float)dx;
+        xyw[1] = stored[found].xyw[1] + (float)dy;
+        xyw[2] = stored[found].xyw[2];
+        Pgxp_StoreAt(base + i * 4, words[i], stored[found].known && !clash ? xyw : 0);
     }
     stored_count = 0;
+}
+
+void Pgxp_AddPrim(const void *packet)
+{
+    Pgxp_AddPrimMoved(packet, 0, 0);
 }
 
 void Pgxp_NextFrame(void)

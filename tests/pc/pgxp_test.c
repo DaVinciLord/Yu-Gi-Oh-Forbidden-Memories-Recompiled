@@ -31,6 +31,13 @@ int main(void)
     Pgxp_NextFrame();
     assert(Pgxp_FindAt(address, packet[2], &x, &y, &w) == 0);
 
+    /* GsSortPoly copies the stored word moved by its offset: the packet's
+     * word is (15, 17), and the precise position moves with it. */
+    Pgxp_Stored(0x0014000a, a);
+    packet[2] = 0x0011000f;
+    Pgxp_AddPrimMoved(packet, 5, -3);
+    assert(Pgxp_FindAt(address, packet[2], &x, &y, &w) == 1 && x == a[0] + 5 && y == a[1] - 3 && w == a[2]);
+
     /* Close to the camera: R11 = R33 = 0.5 put the vertex at view x -150.5,
      * z 160.5, which the GTE truncates to IR1 = -151 and SZ3 = 160 before
      * it divides. The word is -284, the vertex really at -281.3: outside the

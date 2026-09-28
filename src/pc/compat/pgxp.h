@@ -50,6 +50,9 @@ int Pgxp_FindAt(uint32_t address, uint32_t word, float *x, float *y, float *w);
  * them (Pgxp_AddPrim, from the game units' addPrim: pgxp_game.h). */
 void Pgxp_Stored(uint32_t word, const float *xyw);
 void Pgxp_AddPrim(const void *packet);
+/* The same for a packet whose vertex words were copied from the stored ones
+ * moved by (dx, dy) (LIBGS GsSortPoly adds its buffer offset). */
+void Pgxp_AddPrimMoved(const void *packet, int dx, int dy);
 /* The projections so far were collected: those of the next frame follow. */
 void Pgxp_NextFrame(void);
 
