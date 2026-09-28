@@ -160,6 +160,28 @@ int main(void)
     }
 #endif
 
+    /* Every key of the name entry's keyboard (string 0xF2: letters, digits
+     * and the last row's symbols), as the game stores it, reads back as
+     * the key: none is a '?'. */
+    {
+        static const unsigned short symbols[] = {0x817B, 0x817C, 0x8196, 0x815E, 0x8195, 0x8190,
+                                                 0x8193, 0x8149, 0x8148, 0x8144, 0x8146};
+        static const char keys[] = "+-*/&$%!?.:";
+        char name[16];
+        for (i = 0; i < 26; i++) {
+            assert(SaveSlots_Ascii(0x8260u + i) == 'A' + i);
+            assert(SaveSlots_Ascii(0x8281u + i) == 'a' + i);
+        }
+        for (i = 0; i < 10; i++) assert(SaveSlots_Ascii(0x824Fu + i) == '0' + i);
+        for (i = 0; i < (int)(sizeof(symbols) / sizeof(symbols[0])); i++) assert(SaveSlots_Ascii(symbols[i]) == keys[i]);
+        memset(state, 0, SAVE_SLOT_STATE_SIZE);
+        state[0x40C] = 0x90; state[0x40D] = 0x81; /* $ */
+        state[0x40E] = 0x62; state[0x40F] = 0x82; /* C */
+        state[0x410] = 0x8F; state[0x411] = 0x82; /* o */
+        SaveSlots_StateName(state, name, sizeof(name));
+        assert(!strcmp(name, "$Co"));
+    }
+
     for (i = 0; i < SAVE_SLOT_COUNT; i++) {
         assert(!SaveSlots_Path(i, path, sizeof(path)));
         remove(path);
