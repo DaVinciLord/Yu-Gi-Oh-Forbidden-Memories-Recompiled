@@ -25,6 +25,7 @@
 #ifdef MEMORIES_PC
 #include "pc/free_duel/duelists.h"
 #include "pc/free_duel/page_box.h"
+#include "pc/text/language.h"
 
 /* Which page of forty the grid shows, and the duelist a cell stands for on it.
  * The grid holds forty at a time whatever the roster is: page 0 is the disc's
@@ -165,7 +166,16 @@ void FreeDuel_PlaceCursor(DisplayObject *w, s32 arm)
             (s16)base->state.duelist_records[index].result.losses;
 #endif
     }
+#ifdef MEMORIES_PC
+    /* Game > Language's European text has the record on a line of its own
+     * under the name (string 12, notes/translation.md "Frames"): no language
+     * fits its words and the longest names on the US line. The PAL's box is
+     * as high as two of its lines, 32, from the same corner; the US one's
+     * height stays for English (US) and its one line. */
+    TextBox_Create(0, param, 16, 204, 288, Language_Current() != LANGUAGE_US ? 32 : 16);
+#else
     TextBox_Create(0, param, 16, 204, 288, 16);
+#endif
     func_80039A60((struct DuelEffectChannel *)panel);
 }
 
