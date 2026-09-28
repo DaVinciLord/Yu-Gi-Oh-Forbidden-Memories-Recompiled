@@ -27,7 +27,7 @@ The window has a tab per table:
 | Fusions | every pair and its result (search by a card, or show the changed ones); add, change, remove (the pair no longer fuses) or revert; **Bulk...** adds or takes away the fusions of every card of one filtered set with every card of another (below) |
 | Equips | per equip card, the monsters it may equip; add one, add or remove a whole type, remove, revert |
 | Rituals | per ritual card, its three tributes and the monster it summons |
-| Duelists | per opponent, the deck pool and the S/A-POW, B/C/D and S/A-TEC drop pools: weights, their chance, the retail weight, and the total against 2048 (**Normalize** scales a pool back to 2048 the way the port does) |
+| Duelists | per opponent, the deck pool and the S/A-POW, B/C/D and S/A-TEC drop pools: weights, their chance, the retail weight, and the total against 2048 (**Normalize** scales a pool back to 2048 the way the port does). The deck is either the **Weighted deck (retail)** or a **Fixed deck (40 cards)**: forty specific cards by their copies, counted against 40, each beside its weighted chance; **Copy the weighted deck's most likely 40**, **Clear**, **Revert to retail** |
 | Starter decks | the decks a new game may be dealt in place of the disc's weighted pools: a deck's name, its weight against the other decks offered, and its cards by their copies, counted against the forty a deck holds |
 | Mod info | id, name, version, author, description, `settings`, and the other `mod.json` keys, kept as written |
 | Problems | the loader's checks; double-click a line to go to it |
@@ -129,8 +129,29 @@ record are shown as retail fusions and marked.
 * `drops` and `decks`: per opponent and pool, the fewest listed weights that
   make the port's arithmetic (`tables.c`, mirrored in `pools.py`) come out
   at exactly the edited pool; an edit every opponent shares is written once
-  as `"all"`. A fixed deck (`"fixed": true`) is kept as written; the
-  Duelists tab shows the weighted deck under it.
+  as `"all"`.
+* Fixed decks (`"decks": {"Simon Muran": {"fixed": true, "Kuriboh": 4, ...}}`,
+  `fixed_decks.py`, read by `tables.c` `read_fixed_deck`): an opponent's deck
+  as forty specific cards, in place of its weighted pool, shuffled for each
+  duel. A card has 0 to 40 copies (no limit of three: the weighted deal's
+  limit does not apply to cards written down), and they add up to exactly 40;
+  a card the port cannot name is left out uncounted, so a deck naming one, or
+  one that is not 40, is left out and the weighted deck is dealt. The
+  Problems tab says so before saving, and warns when one duelist has two
+  entries (the port deals the later) or weighted edits a fixed deck hides.
+  Choosing **Fixed deck** starts from the forty the weighted deck most likely
+  deals: its weights apportioned to 40 cards (largest remainder, ties to the
+  heavier card and then the lower id), at most three of a card as the retail
+  deal allows. Choosing **Weighted deck** again keeps the fixed one aside
+  until the mod is closed; **Revert to retail** takes it out and puts the
+  weighted deck back to the disc's. The weighted pool's own edits stay in the
+  project while a deck is fixed, but a fixed deck written under the same key
+  takes their place. A deck the editor read is written back exactly as it
+  was while it is untouched (and still names the same cards: a card named by
+  an added card's identity follows a new mod id); a changed or new one is
+  written as `"fixed": true`, the cards in id order, then any name it could
+  not place. An entry for `"all"`, or for a duelist a mod adds, is kept as
+  written. Drops and the other duelist data are not touched by any of this.
 * `starter`: the decks a new game may be dealt
   ([the starter deck](../../../notes/starter-deck.md)), each written down as
   its cards and their copies rather than as weights — which is what lets one
@@ -259,7 +280,8 @@ recomp is used.
 Before saving, the editor runs the loader's checks (`validate.py`): the mod
 id, settings, ATK/DEF in tens up to 5110, levels, a copy staying on its
 base's side, equip and ritual cards of the right type, a deck pool of at
-least 14 cards, a drop pool with a card left, and pools adding up to 2048.
+least 14 cards, a drop pool with a card left, pools adding up to 2048, and a
+fixed deck of exactly 40 cards the editor can name.
 For the art, the texture pack loader's (`texture_pack.c`): `textures` inside
 the mod and its `manifest.json` an array; each entry's `file` and `archive`,
 the file inside the pack and there, its measures (offset, words 1-1024,

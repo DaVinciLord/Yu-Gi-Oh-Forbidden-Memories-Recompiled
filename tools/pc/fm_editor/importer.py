@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import gamedata as g, kit, manifest
+from .fixed_decks import set_deck as set_fixed_deck
 from .model import Project
 from .pools import normalize
 
@@ -678,14 +679,11 @@ def fixed_decks(project: Project, retail, modded, retail_files, modded_files) ->
             continue
         if sum(pool.values()) != kit.DECK_SIZE:
             walked.append(g.DUELIST_NAMES[d])
-        body = {"fixed": True}      # kept as written: the editor shows the weighted deck, the port deals this
-        for cid, count in sorted(deck.items()):
-            body[str(project.ref(cid))] = count
-        project.kept_fixed[manifest._duelist_key(d)] = body
+        set_fixed_deck(project, d, deck)      # the port deals this; the weighted pool stays retail's
         project.pools[d]["deck"] = dict(retail.pools[d]["deck"])
         modded.pools[d]["deck"] = dict(retail.pools[d]["deck"])       # nothing left to scale
     notes = [f"decks: the mod's Duel_ShuffleDeck deals each deck pool as counts of copies, in card order up to "
-             f"{kit.DECK_SIZE}, with no limit of three (signature A4); {len(project.kept_fixed)} decks written as "
+             f"{kit.DECK_SIZE}, with no limit of three (signature A4); {len(project.fixed)} decks written as "
              "fixed decks"]
     if walked:
         notes.append(f"decks: {len(walked)} pools do not add up to {kit.DECK_SIZE} ({', '.join(walked[:4])}"

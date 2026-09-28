@@ -11,6 +11,8 @@ from . import bulk_dialog, manifest, pools as poolmath, validate
 from .gamedata import (ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, DUELIST_NAMES, POOL_LABELS,
                        POOL_TOTAL, POOLS, STAR_NAMES, STARTER_WEIGHT_LIMIT, TYPE_EQUIP, TYPE_NAMES, TYPE_RITUAL,
                        exodia_piece)
+from . import fixed_decks
+from .fixed_deck_view import FixedDeckView
 from .model import KEY_RE, StarterDeck
 from .widgets import CardField, FormDialog, card_matches, pick_card, px, scrolled_tree, show_text
 
@@ -738,6 +740,7 @@ class DuelistsTab(Tab):
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.pick_row())
         edit = ttk.Frame(right)
         edit.pack(fill="x")
+        self.fixed = FixedDeckView(self, right, top)     # the deck pool may be forty cards written down
         ttk.Button(edit, text="Add a card...", command=self.add).pack(side="left")
         ttk.Label(edit, text="Weight").pack(side="left", padx=(10, 2))
         self.weight = tk.StringVar()
@@ -762,8 +765,8 @@ class DuelistsTab(Tab):
         for d, name in enumerate(DUELIST_NAMES[:len(self.project.pools)]):
             changed = any({c: w for c, w in self.project.pools[d][p].items() if w} != self.project.retail.pools[d][p]
                           for p in POOLS)
-            self.list.insert("", "end", iid=str(d), values=(d, name, "changed" if changed else ""),
-                             tags=("changed",) if changed else ())
+            state = "fixed" if fixed_decks.deck_of(self.project, d) else "changed" if changed else ""
+            self.list.insert("", "end", iid=str(d), values=(d, name, state), tags=("changed",) if state else ())
         if self.list.exists(str(self.duelist)):
             self.list.selection_set(str(self.duelist))
 
@@ -777,7 +780,7 @@ class DuelistsTab(Tab):
         return self.project.pools[self.duelist][self.pool.get()]
 
     def fill(self):
-        if self.project is None:
+        if self.project is None or self.fixed.fill():
             return
         p = self.project
         self.tree.delete(*self.tree.get_children())

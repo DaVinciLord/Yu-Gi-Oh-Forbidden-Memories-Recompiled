@@ -321,7 +321,10 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(list(built["drops"])[0], "all")
         self.assertEqual(built["drops"]["all"]["pow"]["Nobody At All"], 5)
         self.assertFalse(any("Nobody At All" in str(v) for k, v in built["drops"].items() if k != "all"))
-        self.assertTrue(any("fixed deck" in m for m in messages))
+        # A fixed deck is now edited in the Duelists tab, not kept aside; the name it
+        # cannot place is kept under the name it was written with.
+        self.assertEqual(p.fixed["Simon Muran"].duelist, 1)
+        self.assertEqual(p.fixed["Simon Muran"].kept, {"Card 1": 40})
 
     def test_a_mods_own_duelists_are_kept_as_written(self):
         """The editor knows the forty the disc lays out; a duelist a mod added
