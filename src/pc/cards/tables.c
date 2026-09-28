@@ -1324,7 +1324,13 @@ static void read_passwords(const char *mod, const JsonValue *table)
 
 int Tables_CheckPasswords(const unsigned *passwords)
 {
-    int a, b, clashes = 0;
+    /* One note a mod: the first clash, and how many more ("all" giving
+     * every card one password would otherwise make 721); the rest go to
+     * the trace. */
+    enum { NOTED_MAX = 64 };
+    const char *noted[NOTED_MAX];
+    int first_a[NOTED_MAX], first_b[NOTED_MAX], more[NOTED_MAX];
+    int a, b, i, count = 0, clashes = 0;
     for (b = 2; b <= CARD_COUNT; b++) {
         if (passwords[b] == CARD_PASSWORD_NONE) continue;
         for (a = 1; a < b; a++) {
@@ -1333,15 +1339,31 @@ int Tables_CheckPasswords(const unsigned *passwords)
             /* The note goes beside the mod that set the card left out,
              * else beside the one that set the card that wins. */
             mod = shop_from[b] ? shop_from[b] : shop_from[a];
+            LOG(LOG_MODS, "tables: cards %d and %d both have password %08X; the screen gives card %d", a, b,
+                passwords[b], a);
             if (mod) {
-                Mods_Note(mod, "passwords: cards %d and %d both have password %08X; the Password screen gives card %d", a,
-                          b, passwords[b], a);
-            } else {
-                LOG(LOG_MODS, "tables: cards %d and %d both have password %08X; the screen gives card %d", a, b,
-                    passwords[b], a);
+                for (i = 0; i < count && noted[i] != mod; i++) {}
+                if (i < count) {
+                    more[i]++;
+                } else if (count < NOTED_MAX) {
+                    noted[count] = mod;
+                    first_a[count] = a;
+                    first_b[count] = b;
+                    more[count++] = 0;
+                }
             }
             clashes++;
             break;
+        }
+    }
+    for (i = 0; i < count; i++) {
+        if (more[i]) {
+            Mods_Note(noted[i], "passwords: cards %d and %d both have password %08X, and %d more cards share one; "
+                      "the Password screen gives the lower card", first_a[i], first_b[i], passwords[first_b[i]],
+                      more[i]);
+        } else {
+            Mods_Note(noted[i], "passwords: cards %d and %d both have password %08X; the Password screen gives card %d",
+                      first_a[i], first_b[i], passwords[first_b[i]], first_a[i]);
         }
     }
     return clashes;

@@ -425,6 +425,14 @@ int main(void)
         passwords[30] = passwords[31];         /* a data patch's: no mod to note */
         notes = 0;
         assert(Tables_CheckPasswords(passwords) == 3 && notes == 2);
+
+        /* "all" giving every card one password: one note, not 719. */
+        Tables_Clear();
+        add("flood", "{\"passwords\": {\"all\": {\"password\": \"12345678\"}}}");
+        for (id = 1; id <= CARD_COUNT; id++) passwords[id] = 0x12345678u;
+        passwords[5] = passwords[6] = CARD_PASSWORD_NONE;
+        notes = 0;
+        assert(Tables_CheckPasswords(passwords) == CARD_COUNT - 3 && notes == 1 && !strcmp(noted, "flood"));
     }
 
     Tables_Clear();
