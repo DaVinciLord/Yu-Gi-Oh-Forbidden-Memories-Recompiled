@@ -10,6 +10,7 @@
  * (paths.h), and `game` in the current directory. Any file name will do; a
  * .bin that is not that disc is passed over. */
 #include <stddef.h>
+#include <stdio.h>
 
 /* The image's path, or NULL with the reason (for the player) in `why`. */
 const char *GameFiles_Disc(char *why, size_t why_size);
@@ -21,5 +22,12 @@ int GameFiles_SelectDisc(const char *path, char *why, size_t why_size);
 /* The game's executable, SLUS_014.11, read out of the disc image into a
  * fresh buffer (free it). NULL when it cannot be read. */
 unsigned char *GameFiles_ReadExecutable(const char *disc, size_t *size);
+
+/* Plain reads of a raw (2352) image, for other discs of the game too (the
+ * PAL discs of Game > Language, language.h): the 2048 bytes of user data of
+ * sector `lba`, and where the ISO 9660 file `path` is ("DATA/WA_MRG.MRG",
+ * names without ";1"). 1 on success. */
+int GameFiles_ReadSector(FILE *file, unsigned lba, unsigned char *out);
+int GameFiles_FindFile(FILE *file, const char *path, unsigned *lba, unsigned *size);
 
 #endif

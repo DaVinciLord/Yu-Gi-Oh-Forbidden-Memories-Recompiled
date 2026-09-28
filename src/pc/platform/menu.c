@@ -28,6 +28,7 @@
 #include "title_jump.h"
 #include "update_check.h"
 #include "pc/saves/deck_menu.h"
+#include "pc/text/language.h"
 #ifdef _WIN32
 #include "win32.h"
 #else
@@ -85,7 +86,7 @@ enum {
     ACT_MODS, ACT_CONTROLS, ACT_RELOAD_SETTINGS, ACT_PAUSE, ACT_FRAME_STEP, ACT_DUMP_FRAME, ACT_DUMP_VRAM,
     SLIDER_MASTER, SLIDER_MUSIC, SLIDER_SFX, CHECK_MUTE,
     CHECK_HUD, CHECK_HUD_FULL, RADIO_STATE_SLOT, ACT_UNLOCK_FREE_DUELISTS, ACT_RESET_COLOR,
-    ACT_CHECK_UPDATES, ACT_RELEASES, ACT_VERSION, ACT_SET_STARCHIPS,
+    ACT_CHECK_UPDATES, ACT_RELEASES, ACT_VERSION, ACT_SET_STARCHIPS, RADIO_LANGUAGE,
     CHECK_TRACE = 300  /* value is a LogChannel */
 };
 
@@ -101,7 +102,7 @@ typedef struct {
 typedef struct { const char *label; Item items[20]; int count; int x, w; } Menu;
 
 enum { MENU_FILE, MENU_VIDEO, MENU_AUDIO, MENU_GAME, MENU_VIEW, MENU_DEBUG, MENU_HELP, MENU_COUNT };
-enum { SUB_SCALE, SUB_MENU_SIZE, SUB_SPEED, SUB_FPS, SUB_CHEATS, SUB_TRACE, SUB_SCALING, SUB_ASPECT, SUB_RESOLUTION, SUB_COLOR, SUB_EFFECTS, SUB_JUMP, SUB_ANTIALIAS, SUB_FILTER, SUB_RANK, SUB_COUNT };
+enum { SUB_SCALE, SUB_MENU_SIZE, SUB_SPEED, SUB_FPS, SUB_CHEATS, SUB_TRACE, SUB_SCALING, SUB_ASPECT, SUB_RESOLUTION, SUB_COLOR, SUB_EFFECTS, SUB_JUMP, SUB_ANTIALIAS, SUB_FILTER, SUB_RANK, SUB_LANGUAGE, SUB_COUNT };
 static Menu menus[MENU_COUNT] = {
     {"File", {{"Save state", "F5", ITEM_ACTION, ACT_SAVE_STATE, -1},
               {"Load state", "F7", ITEM_ACTION, ACT_LOAD_STATE, -1},
@@ -144,7 +145,8 @@ static Menu menus[MENU_COUNT] = {
               {"Use deck slots", 0, ITEM_CHECK, 0, SET_DECK_SLOTS},
               {"Browse cards with Up/Down", 0, ITEM_CHECK, 0, SET_CARD_BROWSE, 0, ITEM_GROUP_BREAK},
               {"Cheats", 0, ITEM_SUBMENU, 0, -1, SUB_CHEATS, ITEM_GROUP_BREAK},
-              {"Restart game...", 0, ITEM_ACTION, MENU_ITEM_RESTART, -1, 0, ITEM_GROUP_BREAK | ITEM_DISABLED}}, 10},
+              {"Language", 0, ITEM_SUBMENU, 0, -1, SUB_LANGUAGE},
+              {"Restart game...", 0, ITEM_ACTION, MENU_ITEM_RESTART, -1, 0, ITEM_GROUP_BREAK | ITEM_DISABLED}}, 11},
     {"View", {{"Fusion helper", 0, ITEM_CHECK, 0, SET_FUSION_HELPER},
               {"Card passwords", 0, ITEM_CHECK, 0, SET_CARD_PASSWORDS},
               {"Library: show every card", 0, ITEM_CHECK, 0, SET_LIBRARY_ALL_CARDS},
@@ -241,6 +243,14 @@ static Menu submenus[SUB_COUNT] = {
     {"Duel rank", {{"Off", 0, ITEM_RADIO, 0, SET_RANK_METER, 0},
                    {"Rank", 0, ITEM_RADIO, 0, SET_RANK_METER, 1},
                    {"Rank and score", 0, ITEM_RADIO, 0, SET_RANK_METER, 2}}, 3},
+    /* The game's own translations (language.h); labels and states set by
+     * update_language_items. */
+    {"Language", {{"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_US},
+                  {"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_EN_EU, ITEM_GROUP_BREAK},
+                  {"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_FR},
+                  {"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_DE},
+                  {"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_IT},
+                  {"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_ES}}, 6},
 };
 
 static int open_menu = -1, hot_item = -1, hover_bar = -1, grabbed, ready, visible = 1;
@@ -702,6 +712,58 @@ static void layout_bar(void)
     }
 }
 
+/* A language whose text is not there (language.h) cannot be chosen. */
+static void update_language_items(void)
+{
+    Menu *menu = &submenus[SUB_LANGUAGE];
+    int i;
+    for (i = 0; i < LANGUAGE_COUNT; i++) {
+        Item *item = &menu->items[i];
+        int available = Language_Available(item->value);
+        item->label = Language_Label(item->value);
+        item->flags = (item->flags & ~ITEM_DISABLED) | (available ? 0 : ITEM_DISABLED);
+        if (!available) LOG(LOG_MENU, "menu: no text for %s; its Language entry is off", item->label);
+    }
+}
+
+static int language_before;
+
+static void language_chosen(int button, int *quit)
+{
+    static const char *const ok[] = {"OK"};
+    (void)quit;
+    if (button == 0 && Platform_RestartGame() < 0) {
+        Menu_ShowNotice("Language", "The game could not restart itself. The language is saved; start the game "
+                        "again to change it.", ok, 1, 0, NULL);
+    } else if (button == 2) {
+        Settings_Set(SET_LANGUAGE, language_before);
+        Settings_Save();
+    }
+}
+
+/* Saved at once, taken up at the next launch (the text is compiled at
+ * startup, as a mod's translation is): restart now, later, or cancel. */
+static void choose_language(int language)
+{
+    static const char *const buttons[] = {"Restart now", "Later", "Cancel"};
+    static const char *const ok[] = {"OK"};
+    char text[400];
+    if (language == Settings_Get(SET_LANGUAGE)) return;
+    language_before = Settings_Get(SET_LANGUAGE);
+    Settings_Set(SET_LANGUAGE, language);
+    if (!Settings_Save()) {
+        Settings_Set(SET_LANGUAGE, language_before);
+        Menu_ShowNotice("Language", "The settings file could not be written; the language stays as it was.", ok, 1,
+                        0, NULL);
+        return;
+    }
+    if (language == Language_Current()) return; /* back to the one this launch has */
+    snprintf(text, sizeof(text),
+             "%s takes effect when the game starts again. Restart now? Progress since your last save is lost.",
+             Language_Label(language));
+    Menu_ShowNotice("Language", text, buttons, 3, 0, language_chosen);
+}
+
 void Menu_Init(void)
 {
     int i;
@@ -711,6 +773,7 @@ void Menu_Init(void)
     layout_bar();
     Settings_Observe(setting_changed);
     update_hd_items(); /* until the backend says its picture pass is on */
+    update_language_items();
     ready = 1;
 }
 
@@ -1376,6 +1439,7 @@ static void activate(const Item *item, int *quit)
         Settings_Save();
         break;
     case RADIO_STATE_SLOT: Platform_SetStateSlot(item->value); break;
+    case RADIO_LANGUAGE: choose_language(item->value); break;
     case CHECK_TRACE: Log_Enable((LogChannel)item->value, !Log_Enabled((LogChannel)item->value)); break;
     default:
         if (item->setting >= 0 && item->kind == ITEM_CHECK) {

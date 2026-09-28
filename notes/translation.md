@@ -438,3 +438,130 @@ as a mod gives the same pictures as without it, byte for byte, jumps into
 the listing's own text and to the player's name included.
 `tests/pc/text_listing_test.c` (ctest `pc_text_listing`) covers the
 compiler.
+
+## The official languages
+
+Game > Language (notes/pc-build.md, "Language") puts in the game the
+European releases' own translations, English (Europe), French, German,
+Italian and Spanish, handed at startup to the same machinery as a mod's
+text. Their text ships with the port: `languages/en-eu.txt`, `fr.txt`,
+`de.txt`, `it.txt` and `es.txt`, one listing a language in this file's
+format, which the build copies beside the program. This is the one
+exception to "never commit game data", agreed by the team: the text
+only, as a transcription; the pictures with words and everything else on
+the discs stay out. The packs are not written by hand: they are the port's
+own reading of the PAL discs (`tools/pc/export_languages.py --discs
+game/pal` writes them again; `--check` compares), so a fix to the reading
+below is a fix to the packs once they are exported again. A PAL disc is
+still read when a pack is not there.
+
+**Where the text is.** Unlike the US disc, the PAL discs keep no text in
+the executable. DATA/WA_MRG.MRG has a pack per language (English, French,
+German, Italian, Spanish) from sector 6498, 110 sectors apart; after the
+language's font and interface textures come three files, each a u16 id
+(0x0F, 0x10 and 0x11, plus 3 a language) and a u16 0:
+
+- A, 0xF000 bytes: a table of u16 offsets at +4, the menus (0x000-0x0FF),
+  the card texts (0x100-0x3FF, the US `D100`+) and the story's lines
+  (0x400-0x4F9, the US `0500`-`05F9`, into file B), then the menus and the
+  card texts;
+- B, 0x10000 bytes: the story's lines;
+- C, 0x7180 bytes: the names (0x360, the US `8000`+), offsets as the US
+  names bank's.
+
+The string ids are the US ones. A disc of France, Germany, Italy or Spain
+has all four languages (the Italian and Spanish ones the final text of
+all four); the English one only English.
+
+**How it is read** (src/pc/text/pal_text.c, src/pc/text/language.c). The
+codes are the US text's, decoded as tools/pc/text_listing.py does, into a
+listing in memory with the US ids that `TextListing_Compile` compiles; the
+listing is, byte for byte, the one the research extractor wrote for each
+of the five discs, but for the two points marked below. What differs from
+the US text:
+
+- `F8 1B` (no operand) is the player's name: `{call L125A}`;
+- the name buffers are at A+`F800`, `F814` and `F848`: the US `122B`,
+  `1238` and `125A`;
+- `F8 03` reads its number 0x15D7C lower in RAM: moved to the US address;
+- menus `06`, `10` (the debug menu with ENDING and LANGUAGE), `18`, `19`,
+  `50`, `EE`-`F1` (the PAL name keyboard), `F3` and `F7` mean something
+  else, or nothing, on PAL: they keep the US string; so do the result
+  pages, `40`-`45` (below; the extractor swapped `40` and `44`);
+- the menus' labels are renamed from `LF000` up, as the story's text in the
+  same bank uses the offsets;
+- `F8 1C`, which only the two-player results use, is left out: the US
+  engine reads it as a glyph (phase 2; the extractor kept it);
+- the glyph codes are the PAL executable's (its Shift-JIS table, read off
+  the same disc), and the accented letters sit on placeholder codes that
+  each language's font draws its own way (the tables in pal_text.c).
+
+**Sources.** Where the text comes from is one table in language.c
+(`sources`: whether a source has the language, and its listing): the pack
+first, then the disc. `MEMORIES_EXPORT_LANGUAGES=<folder>` makes the game
+write each language's listing from the first source that has it and exit;
+the exporter runs it with `MEMORIES_LANGUAGES_DIR` on the discs, so a pack
+is byte for byte the disc's listing, and pointed at the packs it shows they
+read back unchanged. Each language is read off its own country's disc
+(SLES-03947 to 03951); English (Europe) has one glyph with no character,
+`{g 9C}` in the debug menu `51`. The port's own strings (below) are not in
+the packs: they are added after either source. Images with words stay
+disc-only, and English.
+
+**Under the mods.** The language is compiled first and a mod's string
+stands over it, string by string, so pt-BR over Spanish is pt-BR where it
+has a string. Its labels are the PAL banks' offsets, so a mod's undefined
+label still means the US text there, never the language's. With a language
+on, the port's features that look for a translated string (the shop's menu
+with DECK SLOTS, the opponent's name over COM on the results) behave as
+with a full translation mod.
+
+**The port's own strings** (FE00-FE10 above) come with the language where
+written: Spanish has them (NUEVA, `%d CARTA MÁS`, `%d CARTAS MÁS`,
+`PÁGINA %d DE %d`, RANURAS; the small letters draw the accented
+capitals, so MÁS and PÁGINA show their accents). The
+Spanish shop menu's four lines have 43 letters of the box's 44, so DECK
+SLOTS stays out of it (F6 still opens the slots). French, German and
+Italian keep the port's English for now: phase 2, for a speaker to write.
+The opponent's name over COM needs no string: the names bank's Spanish
+names are shortened as a translation's are.
+
+**Widths.** The PAL text is longer than the US (French has about a hundred
+dialogue lines past the US 36 columns) and still fits on the console:
+the PAL font is spaced by letter. The EU executable's glyph routine
+(func_80036A78, the US func_80036C14) returns an adjustment that
+TextBox_BuildStep adds to the 8 pixels of a cell (0x5A): in the dialogue
+boxes' mode a space takes 7 pixels, `f`, `i`, `l`, `.` and `,` take 6 and
+are drawn a pixel left, and the apostrophe takes 2, drawn 3 left (the
+same code is in the French/German/Italian/Spanish executable). The boxes
+are as wide as the US ones and wrap the same way (TextBox_WrapLineIfNeeded,
+unchanged), so the text was written for that spacing: many PAL lines lean
+on the box's edge to wrap. With a PAL language on, the port spaces
+letters the same (`Language_Advance`, a hook in TextBox_BuildStep; not the
+small letters of flag 0x100, nor 0x80), and a line breaks where the
+console breaks it; with English (US) nothing changes. The PAL also has
+line heights of 16 (US 12) in boxes 0x40 high (US 0x30), four lines
+either way: the port keeps the US heights. A menu line that would still
+pass its box is cut there (Text_CutsMenuGlyph), as a mod's.
+
+Known in phase 1: RESULTS keeps the US pages (strings `40`-`45`, in
+English, beside the language's YOU and COM columns). The PAL pages are laid
+out by code of their own (func_80020EAC and the pages in reverse order):
+their `40` begins with DEFENSE STATISTICS where the US has the win
+condition, no PAL string says TOTAL ANNIHILATION, and `41`/`42` jump into
+`40`'s tail, so under the US screens an attrition or Exodia win would show
+one page twice and never the statistics. The images with words (main menu,
+game over, the results' headings) stay English. Six German card texts have more than
+the 8 lines of the US card view (D10C, D111-D114 with 10, D1DA with 9).
+Seen in the Library with 012 (Barbar Nr. 2): the ninth line is drawn on the
+box's lower edge and the tenth is on a second page, which the view never
+turns to (Cross goes on to the 3D model); nothing stops. The PAL view's
+box is laid out by code of its own (phase 2).
+
+**Phase 2.** The PAL result pages (func_80020EAC's layout, then their
+strings) and the other modes of the
+spacing (2 and 3: the Library's title and a few menus); the images per
+language, from SU.MRG (the main menu, sector 136 per language) and WA_MRG
+(game over, sector 10135 + 41 per language) as a texture pack made at
+startup; `F8 1C` in the two-player results; and the port's own strings in
+French, German and Italian, reviewed by speakers.
