@@ -5453,11 +5453,27 @@
    ]
   },
   {
-   "what": "life points panel",
+   "what": "life points panel (your turn)",
    "archive": "WA_MRG.MRG",
    "offset": "0xb50000",
    "bpp": 4,
    "palette": "0xb609c0",
+   "method": "pixel",
+   "rects": [
+    [
+     128,
+     128,
+     64,
+     40
+    ]
+   ]
+  },
+  {
+   "what": "life points panel (opponent's turn)",
+   "archive": "WA_MRG.MRG",
+   "offset": "0xb50000",
+   "bpp": 4,
+   "palette": "0xb609e0",
    "method": "pixel",
    "rects": [
     [
@@ -7586,7 +7602,8 @@
    "offset": "0xb50000",
    "what": "LP (COM)",
    "palettes": [
-    "0xb609c0"
+    "0xb609c0",
+    "0xb609e0"
    ],
    "style": "shadow",
    "text": "LP",
@@ -7607,7 +7624,8 @@
    "offset": "0xb50000",
    "what": "COM",
    "palettes": [
-    "0xb609c0"
+    "0xb609c0",
+    "0xb609e0"
    ],
    "style": "shadow",
    "text": "COM",
@@ -7629,7 +7647,8 @@
    "offset": "0xb50000",
    "what": "YOU",
    "palettes": [
-    "0xb609c0"
+    "0xb609c0",
+    "0xb609e0"
    ],
    "style": "shadow",
    "text": "YOU",
@@ -7651,7 +7670,8 @@
    "offset": "0xb50000",
    "what": "LP (YOU)",
    "palettes": [
-    "0xb609c0"
+    "0xb609c0",
+    "0xb609e0"
    ],
    "style": "shadow",
    "text": "LP",
