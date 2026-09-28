@@ -253,6 +253,8 @@ class CardsTab(Tab):
                 label.configure(text="")
             self.lines.configure(text="")
             self.text.configure(state="disabled")
+            if self.app.text_preview is not None:
+                self.app.text_preview.later()
             return
         card = self.project.cards[cid]
         self.title.configure(text=f"#{cid}" + ("  (added by the mod)" if cid in self.project.added else ""))
@@ -292,6 +294,8 @@ class CardsTab(Tab):
         lines = validate.text_lines(text)
         self.lines.configure(text=f"{lines} of 8 lines (20 letters a line, as the game wraps it)",
                              style="Error.TLabel" if lines > 8 else "Hint.TLabel")
+        if self.app.text_preview is not None:
+            self.app.text_preview.later()
 
     def read_form(self, cid):
         """The card as the form has it, or an error text."""

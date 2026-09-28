@@ -22,7 +22,7 @@ The window has a tab per table:
 
 | Tab | What you edit |
 |---|---|
-| Cards | search and filter the 722 cards; name, card text (with the game's 20-letter, 8-line wrapping counted), ATK/DEF, type, attribute, level, guardian stars; the retail value beside each field. **Add a card** copies the selected one as a new card with a stable id |
+| Cards | search and filter the 722 cards; name, card text (with the game's 20-letter, 8-line wrapping counted, and **Tools > Card text preview** to see it as the card view draws it, below), ATK/DEF, type, attribute, level, guardian stars; the retail value beside each field. **Add a card** copies the selected one as a new card with a stable id |
 | Art | a card's picture (102x96), thumbnail (40x32, the hand and the field) and name plate (96x14) as the disc has them, beside what the game will draw at the console's resolution and at Internal 2x/4x; **Import PNG**, **Export** the disc's or the mod's (to paint over), **Revert** |
 | Fusions | every pair and its result (search by a card, or show the changed ones); add, change, remove (the pair no longer fuses) or revert; **Bulk...** adds or takes away the fusions of every card of one filtered set with every card of another (below) |
 | Equips | per equip card, the monsters it may equip; add one, add or remove a whole type, remove, revert |
@@ -107,6 +107,7 @@ What it reads (layouts in `gamedata.py`):
 | card names and texts | the executable's text banks, through `tools/pc/text_listing.py` |
 | equips, fusions, rituals | `WA_MRG.MRG`, the duel package at `0xB63000` (+0x22000, +0x24800, +0x34800) |
 | deck and drop pools | `WA_MRG.MRG` `0xE99800 + 0x1800 * opponent` |
+| the text font and its colours (the card-text preview only) | `WA_MRG.MRG` sector `0x1690` (16 sectors, the 8x12 font's page) and the first 32 bytes of sector `0x16C2`, as `src/pc/cards/font_art.c` reads them |
 
 The 15 "glitch" fusions the game's table reader makes by reading past an odd
 record are shown as retail fusions and marked.
@@ -289,6 +290,61 @@ rows 1-512, depth 4/8/16, stride, `crop_left` and `width` within the row),
 `row_offsets` as long as `rows`, and a `setting` the mod declares; and the
 cards' `art`, `thumbnail` and `title`: inside the mod, there, and PNGs.
 
+## Card text preview
+
+**Tools > Card text preview** opens a window of its own that follows the
+Cards tab: the selected card's text as the card view lays it out and draws
+it, redrawn as you type. The tab itself is unchanged, and nothing of it goes
+into the mod. `card_text.py` does the work:
+
+* **Layout**, in the two steps the port and the game take: the port's
+  wrapping (`cards.c` `encode_description`: lines of up to 20 letters,
+  broken at spaces, `
+` where it stands, a longer word left whole), then the
+  text box (`TextBox_WrapLineIfNeeded`): 8 pixels a glyph and 21 to the
+  box, so a word past 21 letters is cut where the box ends, and the rest of
+  its line takes a row of its own. The card view shows 8 rows clear of its
+  panel's frame, draws a 9th over the frame, and stops before a 10th (seen
+  in the game with a test text, in Build Deck's card view, whose box has
+  255 glyph sprites; the duel's viewer has 160, so a long text may stop
+  sooner there). The preview marks each: the 9th row on the
+  frame's colour, the rows the game never shows dimmed on grey, a red tick
+  right of a row the box cut mid-word, and a red box for a character with
+  no retail letter (the port sets those from a font); an accented letter is
+  drawn plain (the port draws its mark on).
+* **Font**, at 1x to 4x:
+  * *Retail font*: the game's own 8x12 font and text colours, read off the
+    player's disc each time (nothing of it is kept or saved), each texel
+    made `scale` pixels square. At 1x the letters are the game's pixel for
+    pixel (the panel behind them is a flat colour, not the game's stone).
+  * *HD text: the port's face*: what Video > HD text draws at Internal 2x-4x,
+    set in the face the port uses when no mod gives one (on Windows the
+    first of Segoe UI, Arial and Tahoma in the Fonts folder; elsewhere
+    fontconfig's `sans-serif:bold`). A mod's own `"font"` comes first in
+    the game; choose that file in the next mode to see it.
+  * *HD text: a font file*: any TrueType file you have (**Font file...**,
+    which opens in the system's fonts folder), such as your own copy of Matrix,
+    the face of the paper cards' names, if you have a licence for it. The file is only read: the
+    editor never copies it into the mod. OpenType fonts with PostScript
+    (CFF) outlines, most `.otf` files, are refused with a message; their
+    `.ttf` version works.
+
+  HD text is drawn as `src/pc/text/hd_text.c` sets it: each glyph stays in
+  its retail cell, the face's baseline, x-height, capitals, ascenders and
+  descenders are set onto the retail font's lines, the glyph is made as
+  wide as the cell's letter (so a small-caps face's l stays as narrow as the
+  retail l), its stems as heavy, with the dark outline and each row's
+  shading through the text's palette. `ttf.py` reads the TrueType outlines
+  and fills them in plain Python (non-zero winding, 4 sub-rows a pixel),
+  in place of FreeType, so the result is close to the game's, not identical:
+  against the game's own 4x picture about half the text's pixels are the
+  same colour and 96-97% within one or two steps of the palette. A face
+  whose lines cannot be measured (no x-height, no descenders) is not used by
+  the port, which keeps the retail letters; the preview says so and does too.
+
+  The first HD picture of a face at a scale takes a second or so (the
+  window shows a busy cursor); glyphs are kept, so typing redraws at once.
+
 ## Command line
 
     python tools/pc/fm_editor check <mod folder> [--game <folder or .bin>] [--print]
@@ -318,5 +374,7 @@ the source as above works too.
 
 (ctest `pc_fm_editor`). The tests build synthetic game files at the retail
 offsets (`tests/fixtures.py`), art records included, and their PNGs in code;
-they need no game data (the bulk fusion tests time a 722 x 722 preview). PNGs are read and written by `pngio.py`, in plain
-Python like the rest.
+they need no game data (the bulk fusion tests time a 722 x 722 preview). PNGs are
+read and written by `pngio.py`, in plain Python like the rest; the card-text
+preview's tests build their font page and a TrueType file in code as well
+(`tests/test_card_text.py`).
