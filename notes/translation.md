@@ -665,8 +665,22 @@ line to the Swords' turns or GUARDIAN STAR, then the bar) goes 35 pixels
 up in the PAL (`F8 01 DD`) and never back, its box being lower, so in the
 US box the name, ATK/DEF and icons sat on the stone above the bar: it gets
 the US lines there and back (`F8 01 E4` ... `F8 01 1C`) around the PAL's
-words. Menus with no words that the PAL lays out for its frames keep the
-US string (above).
+words. Free Duel's record (`0C`) is, in every PAL language, the duelist's
+name and, a line below, the wins and losses (Victoria/Derrota, Sieg/
+Niederlage...) in colours at their own x, where the US has WIN and LOSS on
+the name's line at x 0xA0: in the US box, one line high, they never showed.
+They do not fit on the US line: the longest names take 144 to 162 pixels
+at the PAL's spacing (Magier des Labyrinths, K le Maître des Duels) and
+the words with three digits 123 to 199 of the box's 288. So with a PAL
+language on, the box is the PAL's height, 32 from the same corner (the
+PAL's own is 16, 204, 320x32; free_duel screen_runtime.c), and the second
+line goes 4 pixels further down (`F8 01 04` after the break, `lower_lines`),
+16 under the name as the PAL's lines are: at the US 12 it would sit on the
+name plate's lower edge, at 16 it is on the stone under it, inside the
+picture (ink y 222-234). The PAL's number format (`03`, the digits alone)
+stays: on its own line nothing comes after it but the second word, at its
+fixed x. English (US) keeps its box and line, pixel for pixel. Menus with
+no words that the PAL lays out for its frames keep the US string (above).
 
 Known in phase 1: RESULTS keeps the US pages (strings `40`-`45`, in
 English, beside the language's YOU and COM columns). The PAL pages are laid

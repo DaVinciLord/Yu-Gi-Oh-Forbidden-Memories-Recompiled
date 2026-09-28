@@ -324,13 +324,16 @@ static void add_fusion(int a, int b, int result)
 static void read_fusions(const char *mod, const JsonValue *list)
 {
     int i;
+    const JsonValue *rule;
     char where[64];
     if (list && Json_TypeOf(list) != JSON_ARRAY) {
         Mods_Note(mod, "\"fusions\" is not an array");
         return;
     }
-    for (i = 0; i < Json_Count(list); i++) {
-        const JsonValue *rule = Json_At(list, i);
+    /* One pass down the list: Json_Count and Json_At each walk it from the
+     * start, which made a mod of every pair (261,003 rules, the editor's
+     * bulk fusions) take minutes to read. */
+    for (i = 0, rule = Json_At(list, 0); rule; i++, rule = Json_Next(rule)) {
         const JsonValue *with = Json_Member(rule, "with");
         const JsonValue *result = Json_Member(rule, "result");
         const JsonValue *removed = Json_Member(rule, "remove");

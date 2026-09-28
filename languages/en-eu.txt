@@ -67,7 +67,7 @@ SETTLED!{end}
 
 [000C]
 {f8 09}
-{f8 06 68 00}{f8 0A 02}Win {f8 03 08 56 1D 80 03}{f8 06 C8 00}{f8 0A 06}Loss {f8 03 0C 56 1D 80 03}{end}
+{f8 01 04}{f8 06 68 00}{f8 0A 02}Win {f8 03 08 56 1D 80 03}{f8 06 C8 00}{f8 0A 06}Loss {f8 03 0C 56 1D 80 03}{end}
 
 [000D]
   Select Opponent!{end}

@@ -182,7 +182,26 @@ DuelEffectEntry *TextBox_GetGlyphAt(s32 index, s32 x, s32 y)
     node = base[index].entry_head_24;
     for (;;) {
         if (!(node->flags_11 & 0x80)) {
+#ifdef MEMORIES_PC
+            /* Game > Language's European text spaces f, i, l, '.' and ','
+               narrower (language.h), so on the keyboard and in the name the
+               letters past one sit a few pixels left of their cell, and none
+               is where the cursor asks: the nearest on the row, within half
+               a cell (the name's letters are 16 apart), stands in. */
+            DuelEffectEntry *nearest = (DuelEffectEntry *)0;
+            s32 distance = 8;
+            for (node = base[index].entry_head_24; node->flags_11 & 0x80; node++) {
+                s32 dx = node->x_0C - x;
+                if (dx < 0) dx = -dx;
+                if (node->y_0E == y && dx < distance) {
+                    nearest = node;
+                    distance = dx;
+                }
+            }
+            return nearest;
+#else
             return (DuelEffectEntry *)0;
+#endif
         }
         if (node->x_0C == x && node->y_0E == y) {
             return node;
