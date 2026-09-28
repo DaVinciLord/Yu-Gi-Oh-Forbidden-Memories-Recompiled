@@ -691,6 +691,19 @@ destructors (do that work in `MemoriesModInit`), and a name the game does
 not provide. A crash inside a mod names the function it was in
 (`3d-monsters:draw_frame+0x40`).
 
+### Later releases
+
+A code mod built against one release keeps working in the later ones,
+without being rebuilt. Every name that release's `sdk/exports.txt` lists
+stays exported, with the type its SDK declared. Every structure those
+names reach keeps its layout, and every enumerator (`SET_PGXP`,
+`MENU_ITEM_OPPONENT_NAME`) keeps its value. New settings, menu items and
+fields go at the end, and retired ones keep their place. Each pull request
+is checked against the releases in `tools/pc/mod_compat.txt`, and those
+releases' own mods are run in each new release before it goes out
+([pc-release.md](pc-release.md)). A mod that uses something newer sets
+`min_api`, and checks `host->api` as `modapi.h` describes.
+
 ## What a mod may and may not do
 
 The host table has no network call in it, and no way to name a file outside

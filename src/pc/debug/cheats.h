@@ -9,10 +9,13 @@
 int Cheats_SaveLoaded(void);
 
 /* Put `count` copies of every card in the chest (the trunk), capped at
- * the game's own limit. With `top_up` (the menu's rows) a card held more
- * times keeps its count; without (MEMORIES_DEBUG_CHEST) every card is set
- * to exactly `count`. Takes effect at once; open BUILD DECK to see it. */
-int Cheats_GiveAllCards(int count, int top_up);
+ * the game's own limit: exactly `count` of each (MEMORIES_DEBUG_CHEST), or
+ * with Cheats_TopUpAllCards (the menu's rows) at least `count`, a card held
+ * more times keeping its count. Takes effect at once; open BUILD DECK to see
+ * it. (Cheats_GiveAllCards kept its one argument from release v0.1.2: code
+ * mods are built against it.) */
+int Cheats_GiveAllCards(int count);
+int Cheats_TopUpAllCards(int count);
 /* Unlock every CPU opponent in the live save. Reopen Free Duel to refresh
  * its portraits and selection grid; save normally to keep the unlocks. */
 int Cheats_UnlockAllFreeDuelists(void);

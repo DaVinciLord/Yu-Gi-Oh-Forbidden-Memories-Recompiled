@@ -1250,9 +1250,7 @@ It changes nothing at 1x, and nothing in the software picture.
 
 ### HD text
 
-HD text is a setting of the Forbidden Memories HD mod (its `hd_text`, on by
-default; Game > Mods, or `mod.forbidden-memories-hd.hd_text` in
-`settings.txt`): while that mod is applied with it on, the port sets the
+Video > HD text (`hd_text`, `MEMORIES_HD_TEXT=1`, off by default) sets the
 text's letters in a font at the internal resolution instead of drawing the
 retail 8x12 and 16x16 cells texel by texel (`src/pc/text/hd_text.c`). It is
 a change to the OpenGL picture above, so it shows at internal 2x and up,
@@ -1318,8 +1316,8 @@ carry names, and a card a mod adds reads like the rest.
 
 ### HD numbers and labels
 
-HD numbers and labels come with HD text (the same mod setting; they were
-two items of the Video menu before). They do for the duel's numbers and
+HD numbers and labels come with HD text (the same item; they had one of
+their own, `hd_hud`, until v0.1.2). They do for the duel's numbers and
 labels what HD text does for the text. They are sprites from sheets of their own, not the font's cells, so
 HD text never reached them. It works in the OpenGL picture at 2x and up; 1x
 and the software picture never change.
@@ -1368,14 +1366,12 @@ at 1x (`HdText_NamePixels`), through the panel's CLUT, so the inactive
 side's dimming applies and whatever the game draws over the panel stays
 over it. With the option off nothing is drawn.
 
-HD text shows only in the OpenGL picture pass (not with no OpenGL 3, the
-SDL renderer fallback, `MEMORIES_GL_PICTURE=0` or the X11 backend) at
-Internal 2x and up; elsewhere its mod setting changes nothing. The
-opponent's name works at 1x with or without OpenGL, so its View item is
-dimmed only at 2x and up without the picture pass ("needs OpenGL 3 or 1x",
-`Menu_SetHdPicture`, `menu.c`). `Mods_FeatureOn` (`mods.h`) is how a mod's
-setting switches on a feature of the port; `HdText_Enabled` reads it once
-a presented frame.
+Video > HD text is dimmed when it could not show: "needs OpenGL 3" when
+the picture pass is off (no OpenGL 3, the SDL renderer fallback,
+`MEMORIES_GL_PICTURE=0`, the X11 backend) and "needs Internal 2x" at
+console resolution (`Menu_SetHdPicture`, `menu.c`). The opponent's name
+works at 1x with or without OpenGL, so its View item is dimmed only at 2x
+and up without the picture pass ("needs OpenGL 3 or 1x").
 
 - The name comes from the opponent id (`gDuel_bOpponentID`, 1-39) through
   `Tables_DuelistShortName`. A name of up to 11 letters is shown whole.

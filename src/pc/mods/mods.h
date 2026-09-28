@@ -115,10 +115,6 @@ int Mods_ConflictText(int mod, char *out, size_t size);
 int Mods_OptionCount(int mod);
 const struct JsonValue *Mods_Option(int mod, int option);
 int Mods_OptionValue(int mod, int option);
-/* Whether an applied mod declares the setting `key` and has it on: how a
- * mod switches on one of the port's own features (the Forbidden Memories
- * HD mod's "hd_text", hd_text.h). 0 with no such mod. */
-int Mods_FeatureOn(const char *key);
 int Mods_OptionValid(int mod, int option, int value);
 /* A key a mod's settings may use (mod.<id>.<key>): letters, digits, '_' and
  * '-', and not one the manager keeps for itself ("order"). */

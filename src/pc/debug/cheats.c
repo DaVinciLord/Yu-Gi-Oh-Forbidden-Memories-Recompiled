@@ -22,7 +22,7 @@ int Cheats_SaveLoaded(void)
 /* The chest lives in the persistent save state at 0x801D0250: one byte per
  * card, ids 1..722, read by the Library, BUILD DECK and the duel's deck
  * checks, and written out whole by SAVE. */
-int Cheats_GiveAllCards(int count, int top_up)
+static int fill_chest(int count, int top_up)
 {
     int id;
     if (!Cheats_SaveLoaded()) {
@@ -45,6 +45,9 @@ int Cheats_GiveAllCards(int count, int top_up)
     fprintf(stderr, "memories-pc: chest now holds %s%d of every card\n", top_up ? "at least " : "", count);
     return 1;
 }
+
+int Cheats_GiveAllCards(int count) { return fill_chest(count, 0); }
+int Cheats_TopUpAllCards(int count) { return fill_chest(count, 1); }
 
 int Cheats_UnlockAllFreeDuelists(void)
 {
@@ -140,7 +143,7 @@ void Cheats_Frame(void)
         return;
     }
     if (Cheats_SaveLoaded()) {
-        if (wanted >= 0) Cheats_GiveAllCards(wanted, 0);
+        if (wanted >= 0) Cheats_GiveAllCards(wanted);
         if (deck) set_deck(deck);
         wanted = -1;
         deck = NULL;
