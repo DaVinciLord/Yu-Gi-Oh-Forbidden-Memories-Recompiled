@@ -6,8 +6,12 @@
 #include "pc/cards/cards.h"
 #include "pc/platform/settings.h"
 #include "game/duel_side_state.h"
+#include "game/main_modes.h"
 #include <stdio.h>
 #include <stdlib.h>
+
+extern u8 D_8009B26C; /* the active mode (main_mode_state.h, main_modes.h) */
+extern u8 D_8009B26E; /* main_run_duel.c: Main_RunDuel's step, 0x80 once set up */
 
 /* The duel's reward stops the balance here (func_800218F0). */
 #define CHEATS_STARCHIPS_MAX 999999u
@@ -19,15 +23,31 @@ int Cheats_SaveLoaded(void)
     return ((const SaveDataWorkspace *)D_801D0000)->state.player_deck[0] != 0;
 }
 
+/* Build Deck, and its screen before a duel (Main_RunDuel's first step,
+ * 0x80 once set up, as deck_menu.c's duel_chest), copy the trunk into their
+ * workspace as they open (func_800323F8) and write that copy back over it
+ * as they close (func_800339D0): cards given in between are not listed,
+ * and leaving takes them back. */
+int Cheats_ChestOnScreen(void)
+{
+    int mode = D_8009B26C & 0x1F;
+    return mode == MAIN_MODE_BUILD_DECK || (mode == MAIN_MODE_DUEL && D_8009B26E == 0x80);
+}
+
 /* The chest lives in the persistent save state at 0x801D0250: one byte per
  * card, ids 1..722, read by the Library, BUILD DECK and the duel's deck
  * checks, and written out whole by SAVE. */
 static int fill_chest(int count, int top_up)
 {
     int id;
-    if (!Cheats_SaveLoaded()) {
+    if (!Cheats_SaveLoaded() || Cheats_ChestOnScreen()) {
         return 0;
     }
+    /* The added cards' trunk belongs to the save's duelist code, and
+     * Cards_Frame empties it when the code changes: on the frame a NEW GAME
+     * goes live that would come after this fill (MEMORIES_DEBUG_CHEST), so
+     * let it take the new code first. */
+    Cards_Frame();
     if (count < 0) {
         count = 0;
     }
@@ -142,7 +162,8 @@ void Cheats_Frame(void)
     if (wanted < 0 && !deck) {
         return;
     }
-    if (Cheats_SaveLoaded()) {
+    /* Not while Build Deck holds its copy of the chest and deck. */
+    if (Cheats_SaveLoaded() && !Cheats_ChestOnScreen()) {
         if (wanted >= 0) Cheats_GiveAllCards(wanted);
         if (deck) set_deck(deck);
         wanted = -1;
