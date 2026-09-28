@@ -2,7 +2,9 @@
  * face-up monsters on the duel field stand on their
  * cards as the models the battle presentation uses, animating on the spot,
  * floating just above them, the player's turned to face the opponent and the
- * opponent's to face the player, whichever way the camera is round.
+ * opponent's to face the player, whichever way the camera is round. When one
+ * monster attacks another, the two also stand on the big cards of the battle
+ * presentation, turned towards each other (draw_battle).
  *
  * The console could not do this: one monster's MODEL.MRG record is a quarter
  * of its RAM and a quarter of its VRAM, and the duel already has both. The
@@ -71,6 +73,10 @@
 #include "game/duel_display.h"
 #include "game/duel_scene_state.h"
 #include "game/high_memory_addresses.h"
+#include "game/display_object.h"
+#include "game/display_object_layout.h"
+#include "game/display_object_work_slots.h"
+#include "game/duel_effect_resource_record.h"
 #include "pc/compat/gte.h"
 #include "pc/render/packets.h"
 #include "pc/render/soft_gpu.h"
@@ -85,6 +91,7 @@
 
 extern u8 D_8009B1D5;          /* the side the view belongs to */
 extern void *D_800E9D98[];     /* D_800E9D90[2]: func_800540B4's table */
+extern GsOT *D_800E9D90[4];    /* the four ordering tables of the frame */
 extern void (*D_800E9DB0[4])(void); /* the frame service callbacks */
 extern u32 D_800FE240;         /* GsSetWorkBase */
 
@@ -151,6 +158,10 @@ typedef struct {
     int raw_x, raw_y, raw_z;    /* where its body sits around its origin */
     int body_x, body_y, body_z; /* the same, at the scale it is drawn */
     int scale;
+    int natural;   /* its height in pixels at 1:1 in the middle of the field */
+    /* How it stands on a card of the battle presentation (battle_pose). */
+    int battle_scale, battle_yaw, battle_pixels;
+    int battle_x, battle_y, battle_z;
 } Monster;
 
 static const MemoriesModHost *host;
@@ -159,6 +170,7 @@ static u8 *record;             /* one MODEL.MRG record, read whole */
 static int mrg_start = -2;
 static unsigned frame;
 static int inside;
+static DisplayObject *dimmed[DUEL_SIDE_COUNT]; /* the big cards draw_battle dimmed */
 
 static void reset(void)
 {
@@ -166,6 +178,7 @@ static void reset(void)
     for (i = 0; i < CACHE; i++) {
         cache[i].card = 0;
     }
+    dimmed[0] = dimmed[1] = NULL; /* a state was loaded over them */
 }
 
 static void say(const char *format, ...)
@@ -463,6 +476,7 @@ static Monster *acquire(int card, int position)
     }
     monster->bank = (int)(monster - cache) + 1;
     monster->card = 0;
+    monster->battle_scale = 0;
     if (!load_monster(monster, card, position)) {
         return NULL;
     }
@@ -552,18 +566,21 @@ static u8 *scratch;
  * GTE's Z factors instead, as the first version did, put a monster's parts
  * four to an entry, and parts sharing an entry draw in the order they were
  * sorted rather than by depth: limbs and cloth showed through the body and
- * flickered as the animation carried them across entries. */
+ * flickered as the animation carried them across entries.
+ *
+ * The run goes into `into` at entry `at`, or, when `at` is negative, at the
+ * depth just described; draw_battle puts it over a big card that way. */
 #define LINK_MASK 0xFFFFFFu
 #define LINK_END LINK_MASK
 #define GUEST_LINK(link) ((u32 *)(uintptr_t)(0x80000000u | (link)))
 
-static void sort_monster(Monster *monster)
+static void sort_monster(Monster *monster, GsOT *into, int at)
 {
     const u32 *from = (const u32 *)(uintptr_t)D_800FE240;
     GsOT *live = (GsOT *)D_800E9D98[0];
     GsOT *table = (GsOT *)(scratch + TABLE_AT);
     u32 *tags = (u32 *)scratch, *entry, *last = NULL, first = LINK_END, end;
-    int entries, nearest = 0, at, i;
+    int entries, nearest = 0, i;
 
     table->length = 14;
     table->org = (GsOT_TAG *)scratch;
@@ -596,9 +613,11 @@ static void sort_monster(Monster *monster)
     if (!last) {
         return;
     }
-    at = nearest / 4 - tunable("depth", DEPTH_STEPS);
-    at = at < 0 ? 0 : at >= (1 << live->length) ? (1 << live->length) - 1 : at;
-    entry = (u32 *)live->org + at;
+    if (at < 0) {
+        at = nearest / 4 - tunable("depth", DEPTH_STEPS);
+    }
+    at = at < 0 ? 0 : at >= (1 << into->length) ? (1 << into->length) - 1 : at;
+    entry = (u32 *)into->org + at;
     *last = (*last & ~LINK_MASK) | (*entry & LINK_MASK);
     *entry = (*entry & ~LINK_MASK) | first;
     stamp_bank(from, (const u32 *)(uintptr_t)D_800FE240, monster->bank);
@@ -718,6 +737,7 @@ static void fit(Monster *monster)
     int target = tunable("pixels", TALL_PIXELS), attempt, wide, height = 0;
 
     monster->scale = MODEL_FIXED_ONE / 2;
+    monster->natural = MIDDLING_PIXELS;
     measure_body(monster);
     for (attempt = 0; attempt < 5; attempt++) {
         int wanted;
@@ -742,6 +762,7 @@ static void fit(Monster *monster)
          * Sangan -- while bringing a sevenfold range down to about two and a
          * half. */
         double natural = (double)target * MODEL_FIXED_ONE / monster->scale;
+        monster->natural = (int)natural;
         monster->scale = (int)(MODEL_FIXED_ONE * target / sqrt(natural * MIDDLING_PIXELS));
         monster->scale = monster->scale < SCALE_SMALLEST ? SCALE_SMALLEST
                        : monster->scale > SCALE_LARGEST ? SCALE_LARGEST : monster->scale;
@@ -777,7 +798,7 @@ static void draw_monster(Monster *monster, int x, int z, int yaw)
      * monster turns it too. */
     place(slot, turned ? x + monster->body_x : x - monster->body_x, -monster->body_y - lift(),
           turned ? z + monster->body_z : z - monster->body_z, yaw, monster->scale);
-    sort_monster(monster);
+    sort_monster(monster, (GsOT *)D_800E9D98[0], -1);
     if (!monster->stepped) {
         func_800556E8(0);
         monster->stepped = 1;
@@ -823,6 +844,302 @@ typedef struct {
 /* Records 0-14 are the player's, whose view is the quarter-turn camera. */
 #define DUEL_SIDE_PLAYER 0
 
+/* The battle presentation (DuelScene_UpdateBattle, scene state 9) lays the
+ * attacker's card and the defender's side by side, big, over the faded field:
+ * D_800E9EF0[2] on the left and [3] on the right, made from the field cards
+ * D_800E9EF0[0] and [1]. Each monster stands on its big card here, the two
+ * turned towards each other, and the cards are dimmed under them.
+ *
+ * The big cards are sprites in ordering table 1, the interface's, sorted
+ * DisplayObject_SetDepthOffset(-10) behind its usual depth, with the picture
+ * and the print one entry nearer (func_80028B08). The model table is not
+ * drawn at all once the field has faded out behind them
+ * (Fade_StartOutKeepOverlayAndHideSecondaryTables), so a monster goes into
+ * table 1 whole, BATTLE_DEPTH_STEPS nearer than its card: over the picture,
+ * under the damage numbers and the flashes.
+ *
+ * The dimming is the card's own colour word, the one the battle's last step
+ * turns down to fade the cards out: the card and everything printed on it go
+ * darker together, and that fade simply starts from where the dimming left
+ * it. The colour goes back to retail's whenever this lets go of a card that is
+ * still up. */
+#define DUEL_SCENE_BATTLE 9
+#define BATTLE_STEP_TO_ARENA 5    /* fading out to the 3D battle in the arena */
+#define BATTLE_STEP_DESTROY 10    /* the losing card burns */
+#define BATTLE_CARD_WIDTH 0x8C
+#define BATTLE_CARD_FEET 0xA8     /* the feet, down from the card's top edge */
+#define BATTLE_DEPTH_STEPS 2
+#define BATTLE_PIXELS 140         /* a middling monster's height on its card */
+#define BATTLE_TALLEST 210
+#define BATTLE_DIM 50             /* percent */
+#define CARD_COLOUR 0x808080u
+/* The screen the pass projects through: a camera looking straight at the
+ * cards, BATTLE_DISTANCE units in front of them. */
+#define BATTLE_PROJECTION 0x200
+#define BATTLE_DISTANCE 0x800
+#define BATTLE_SCALE_LARGEST 0x6000
+/* How far each monster is turned from facing the camera towards the other
+ * card: a little short of a quarter turn, so the two face each other and the
+ * camera still sees their faces. */
+#define BATTLE_TURN (MODEL_ANGLE_QUARTER_TURN * 2 / 3)
+
+extern u8 D_8009B174;          /* the battle's step, in the low nibble */
+extern u16 D_8009B178[2];      /* the two cards' saved flags */
+extern s8 D_8009B1B9;          /* the side whose card is destroyed */
+extern u8 D_8009B229;          /* the battle goes on to the 3D arena */
+extern MATRIX D_800FE128, D_800FE148; /* GsLIGHTWSMATRIX, GsWSMATRIX */
+
+/* The battle sets up its projection once and draws its damage numbers and
+ * glows through it for the rest of the presentation, so this pass puts the
+ * GTE and the world-screen matrices back as it found them. */
+static u8 saved_gte[512];
+static MATRIX saved_world_screen, saved_light_world;
+
+static void keep_geometry(int restore)
+{
+    unsigned size;
+    void *registers = Gte_StateData(&size);
+    size = size < sizeof(saved_gte) ? size : sizeof(saved_gte);
+    if (restore) {
+        memcpy(registers, saved_gte, size);
+        D_800FE148 = saved_world_screen;
+        D_800FE128 = saved_light_world;
+    } else {
+        memcpy(saved_gte, registers, size);
+        saved_world_screen = D_800FE148;
+        saved_light_world = D_800FE128;
+    }
+}
+
+static u32 dim_colour(void)
+{
+    int dim = tunable("battle_dim", BATTLE_DIM), level;
+    dim = dim < 0 ? 0 : dim > 100 ? 100 : dim;
+    level = 0x80 * (100 - dim) / 100;
+    return (u32)level * 0x010101u;
+}
+
+static void undim(int side)
+{
+    DisplayObject *card = dimmed[side];
+    dimmed[side] = NULL;
+    if (card && D_800E9EF0[side + 2] == card && (card->field_0C & 0xFFFFFFu) == dim_colour()) {
+        card->field_0C = (card->field_0C & ~0xFFFFFFu) | CARD_COLOUR;
+    }
+}
+
+static void dim(int side, DisplayObject *card)
+{
+    if (dimmed[side] != card) {
+        undim(side);
+    }
+    dimmed[side] = card;
+    card->field_0C = (card->field_0C & ~0xFFFFFFu) | dim_colour();
+}
+
+static void screen_to_world(int x, int y, int *wx, int *wy)
+{
+    *wx = (x - 0xA0) * BATTLE_DISTANCE / BATTLE_PROJECTION;
+    *wy = (y - 0x78) * BATTLE_DISTANCE / BATTLE_PROJECTION;
+}
+
+static void battle_camera(void)
+{
+    GsRVIEW2 view;
+    memset(&view, 0, sizeof(view));
+    view.vpz = -BATTLE_DISTANCE;
+    view.super = WORLD;
+    GsSetRefView2(&view);
+    SetGeomScreen(BATTLE_PROJECTION);
+    SetGeomOffset(0xA0, 0x78);
+    SetFarColor(0, 0, 0);
+    SetFogNearFar(BATTLE_DISTANCE * 4, BATTLE_DISTANCE * 5, BATTLE_PROJECTION);
+}
+
+/* Where the body sits around the origin turned by `yaw`, at 1:1: the x and z
+ * of its parts on average, and its feet. */
+static void measure_turned(Monster *monster, int yaw, int *x, int *y, int *z)
+{
+    ModelSlot *slot = &D_800F2C40[0];
+    s32 feet = -0x7fffffff, sum_x = 0, sum_z = 0;
+    int parts = 0, i;
+
+    *slot = monster->slot;
+    place(slot, 0, 0, 0, yaw, MODEL_FIXED_ONE);
+    for (i = 0; i < slot->field_E1A; i++) {
+        GsCOORDUNIT *unit = (GsCOORDUNIT *)(uintptr_t)slot->field_000[i].field_00;
+        MATRIX world;
+        if (!unit) {
+            continue;
+        }
+        GsGetLwUnit(unit, &world);
+        feet = world.t[1] > feet ? world.t[1] : feet;
+        sum_x += world.t[0];
+        sum_z += world.t[2];
+        parts++;
+    }
+    *x = parts ? sum_x / parts : 0;
+    *y = parts ? feet : 0;
+    *z = parts ? sum_z / parts : 0;
+}
+
+/* The scale a monster stands on its big card at, once per facing: as tall as
+ * it stands on the field relative to a middling monster, which is
+ * BATTLE_PIXELS high. Measured as fit() measures, from the packets. */
+static void battle_pose(Monster *monster, int yaw)
+{
+    ModelSlot *slot = &D_800F2C40[0];
+    int pixels = tunable("battle_pixels", BATTLE_PIXELS), raw_x, raw_y, raw_z, want, scale = monster->scale,
+        attempt, wide, wx, wy;
+
+    if (monster->battle_scale && monster->battle_yaw == yaw && monster->battle_pixels == pixels) {
+        return;
+    }
+    want = (int)(pixels * sqrt((double)monster->natural / MIDDLING_PIXELS));
+    for (wide = 0; wide < (int)(sizeof(WIDE_MONSTERS) / sizeof(WIDE_MONSTERS[0])); wide++) {
+        if (WIDE_MONSTERS[wide].card == monster->card) {
+            want = want * WIDE_MONSTERS[wide].share / MODEL_FIXED_ONE;
+        }
+    }
+    want = want < 8 ? 8 : want > BATTLE_TALLEST ? BATTLE_TALLEST : want;
+    measure_turned(monster, yaw, &raw_x, &raw_y, &raw_z);
+    screen_to_world(0xA0, 0xD0, &wx, &wy);
+    for (attempt = 0; attempt < 5; attempt++) {
+        int height, wanted;
+        *slot = monster->slot;
+        place(slot, wx - raw_x * scale / MODEL_FIXED_ONE, wy - raw_y * scale / MODEL_FIXED_ONE,
+              -raw_z * scale / MODEL_FIXED_ONE, yaw, scale);
+        height = sort_aside();
+        if (height <= 0) {
+            break;
+        }
+        wanted = scale * want / height;
+        if (wanted > scale * 15 / 16 && wanted < scale * 17 / 16) {
+            break;
+        }
+        scale = wanted < SCALE_SMALLEST ? SCALE_SMALLEST
+              : wanted > BATTLE_SCALE_LARGEST ? BATTLE_SCALE_LARGEST : wanted;
+    }
+    monster->battle_scale = scale;
+    monster->battle_yaw = yaw;
+    monster->battle_pixels = pixels;
+    monster->battle_x = raw_x * scale / MODEL_FIXED_ONE;
+    monster->battle_y = raw_y * scale / MODEL_FIXED_ONE;
+    monster->battle_z = raw_z * scale / MODEL_FIXED_ONE;
+    say("card %d stands %d pixels on its battle card at %d/4096\n", monster->card, want, scale);
+}
+
+/* The monster a big card shows, or NULL: the card the presentation loaded
+ * for it, in the stance its field card was in. */
+static Monster *battle_monster(int side)
+{
+    int id = (s16)D_800EA0E8[side].field_30;
+    if (id <= 0 || ((gDuel_adwCardStats[id - 1] >> 0x1A) & 0x1F) >= 0x14) {
+        return NULL;
+    }
+    return acquire(Cards_ModelId(id), (D_8009B178[side] & DUEL_CARD_FLAG_DEFENSE_POSITION) ? 1 : 0);
+}
+
+/* Whether a side's big card is up, settled and showing a monster. */
+static DisplayObject *battle_card(int side)
+{
+    DisplayObject *card = D_800E9EF0[side + 2];
+    int step = D_8009B174 & 0xF;
+    if ((gDuel_wSceneStateFlags & DUEL_SCENE_PHASE_MASK) != DUEL_SCENE_BATTLE || !D_800E9EF0[side] ||
+        !card || (card->flags & DISPLAY_OBJECT_RENDERABLE_MASK) != DISPLAY_OBJECT_RENDERABLE_MASK ||
+        (card->flags & 4)) {
+        return NULL; /* not the battle, no such card, or still fading in */
+    }
+    /* When the battle goes on to the arena the cards are up only a few
+     * frames before the fade, and the arena has the monsters anyway. */
+    if (D_8009B229 || step < 3 || step == BATTLE_STEP_TO_ARENA || step > BATTLE_STEP_DESTROY ||
+        (step == BATTLE_STEP_DESTROY && D_8009B1B9 == side)) {
+        return NULL;
+    }
+    return card;
+}
+
+/* The pass for the battle presentation; 0 when it is not up. */
+static int draw_battle(void)
+{
+    static ModelSlot borrowed;
+    DisplayObject *cards[DUEL_SIDE_COUNT];
+    Monster *monsters[DUEL_SIDE_COUNT];
+    u32 work_base;
+    int side, count = 0;
+
+    for (side = 0; side < DUEL_SIDE_COUNT; side++) {
+        cards[side] = tunable("battle", 1) ? battle_card(side) : NULL;
+        monsters[side] = NULL;
+        if (!cards[side]) {
+            undim(side);
+        } else {
+            count++;
+        }
+    }
+    if (!count) {
+        return 0;
+    }
+    frame++;
+    inside = 1;
+    borrowed = D_800F2C40[0];
+    work_base = D_800FE240;
+    scratch = &D_800A5768[GsGetActiveBuff() * GRAPHICS_PACKET_BUFFER_SIZE];
+    keep_geometry(0);
+    battle_camera();
+
+    count = 0;
+    for (side = 0; side < DUEL_SIDE_COUNT; side++) {
+        if (cards[side] && (monsters[side] = battle_monster(side)) != NULL) {
+            monsters[side]->stepped = 0;
+            dim(side, cards[side]);
+        } else {
+            undim(side);
+        }
+    }
+    for (side = 0; side < DUEL_SIDE_COUNT; side++) {
+        Monster *monster = monsters[side];
+        ModelSlot *slot = &D_800F2C40[0];
+        /* The attacker is on the left and turns right; the defender turns left. */
+        int yaw = side == 0 ? BATTLE_TURN : MODEL_ANGLE_FULL_TURN - BATTLE_TURN, wx, wy, at;
+        GsOT *table = D_800E9D90[cards[side]->ot_index];
+        if (!monster) {
+            continue;
+        }
+        battle_pose(monster, yaw);
+        screen_to_world(cards[side]->field_30.h.field_30 + BATTLE_CARD_WIDTH / 2,
+                        cards[side]->field_30.h.field_32 + BATTLE_CARD_FEET, &wx, &wy);
+        *slot = monster->slot;
+        place(slot, wx - monster->battle_x, wy - monster->battle_y, -monster->battle_z, yaw,
+              monster->battle_scale);
+        at = cards[side]->field_14 - (int)table->offset - BATTLE_DEPTH_STEPS;
+        sort_monster(monster, table, at < 0 ? 0 : at);
+        if (!monster->stepped) {
+            func_800556E8(0);
+            monster->stepped = 1;
+        }
+        monster->slot = *slot;
+        monster->used = frame;
+        count++;
+    }
+
+    D_800F2C40[0] = borrowed;
+    if (!count) {
+        D_800FE240 = work_base;
+    }
+    keep_geometry(1);
+    inside = 0;
+    return 1;
+}
+
+static void applied(int on)
+{
+    if (!on) {
+        undim(0);
+        undim(1);
+    }
+}
+
 static void draw_frame(void)
 {
     static ModelSlot borrowed;
@@ -830,7 +1147,7 @@ static void draw_frame(void)
     u32 work_base;
     int count = 0, i, side, zone;
 
-    if (inside || !duel_field_up()) {
+    if (inside || draw_battle() || !duel_field_up()) {
         return;
     }
     frame++;
@@ -915,5 +1232,6 @@ int MemoriesModInit(const MemoriesModHost *from, MemoriesMod *mod)
     mod->api = MEMORIES_MOD_API;
     mod->frame = draw_frame;
     mod->reset = reset;
+    mod->applied = applied;
     return 1;
 }
