@@ -3,9 +3,22 @@ a scrolled tree, and dialogs."""
 from __future__ import annotations
 
 import tkinter as tk
+import tkinter.font as tkfont
 from tkinter import ttk
 
 from .gamedata import TYPE_NAMES
+
+
+def ui_scale(widget) -> float:
+    """How much bigger than at 96 dpi the default font is drawn: a desktop
+    set to 144 dpi (Xft.dpi) enlarges the text but not Tk's pixel sizes, so
+    widths, wrap lengths and row heights given in pixels grow by this."""
+    return max(1.0, tkfont.nametofont("TkDefaultFont", root=widget).metrics("linespace") / 19)
+
+
+def px(widget, pixels: int) -> int:
+    """`pixels` at 96 dpi, at the desktop's size (ui_scale)."""
+    return round(pixels * ui_scale(widget))
 
 
 def scrolled_tree(parent, columns, widths, height=20, selectmode="browse"):
@@ -14,7 +27,7 @@ def scrolled_tree(parent, columns, widths, height=20, selectmode="browse"):
     tree = ttk.Treeview(frame, columns=[c for c, _ in columns], show="headings", height=height, selectmode=selectmode)
     for (key, label), width in zip(columns, widths):
         tree.heading(key, text=label)
-        tree.column(key, width=width, stretch=width > 120, anchor="w")
+        tree.column(key, width=px(frame, width), stretch=width > 120, anchor="w")
     bar = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
     tree.configure(yscrollcommand=bar.set)
     tree.grid(row=0, column=0, sticky="nsew")

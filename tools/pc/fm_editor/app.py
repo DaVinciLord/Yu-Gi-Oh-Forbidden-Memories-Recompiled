@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import tkinter as tk
+import tkinter.font as tkfont
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
@@ -10,6 +11,7 @@ from . import disc, gamedata, manifest, validate
 from .model import KEY_RE, Project
 from .art_tab import ArtTab
 from .tabs import CardsTab, DuelistsTab, EquipsTab, FusionsTab, ModInfoTab, ProblemsTab, RitualsTab
+from .widgets import px
 
 APP_TITLE = "FM Editor"
 
@@ -18,12 +20,17 @@ class App(tk.Tk):
     def __init__(self, game=None, mod=None, ask=True, autostart=True):
         super().__init__()
         self.title(APP_TITLE)
-        self.geometry("1280x800")
-        self.minsize(1000, 640)
+        style = ttk.Style(self)
         try:
-            ttk.Style(self).theme_use("vista" if os.name == "nt" else "clam")
+            style.theme_use("vista" if os.name == "nt" else "clam")
         except tk.TclError:
             pass
+        # Sizes for 96 dpi, grown with the desktop's font (widgets.ui_scale)
+        # but kept on the screen; a row as tall as a line of text.
+        width, height = self.winfo_screenwidth() * 9 // 10, self.winfo_screenheight() * 9 // 10
+        self.geometry(f"{min(px(self, 1280), width)}x{min(px(self, 800), height)}")
+        self.minsize(min(px(self, 1000), width), min(px(self, 640), height))
+        style.configure("Treeview", rowheight=tkfont.nametofont("TkDefaultFont", root=self).metrics("linespace") + 4)
         self.retail = None
         self.files = None
         self.project = None
