@@ -25,6 +25,7 @@
  * finer. */
 #include "hd_text.h"
 #include "glyphs.h"
+#include "serif.h"
 #include "text.h"
 #include "pc/platform/settings.h"
 #include "pc/render/soft_gpu.h"
@@ -427,6 +428,63 @@ static void changed(int y0, int y1)
     if (y1 > last_dirty) last_dirty = y1;
 }
 
+/* With a European language, an i or l (or a letter made of one) has the
+ * PAL's serifs, as its cell has (glyphs.h, serif.h): the font's stem is
+ * found in the picture (the run of ink nearest `centre` a texel above its
+ * lowest row, up to the gap under its dot or mark), and gets a foot across
+ * its last rows and a serif left of its first, `reach` texels past it and
+ * `bar` pixels thick. */
+static void add_serifs(unsigned char cover[CELL * MAX_FACTOR][CELL * MAX_FACTOR * SPAN_MAX], int width, int height,
+                       double centre, int reach, double bar, int cell_top)
+{
+    int f = factor, x, y, bottom = -1, top, left = -1, right = -1, best = width, mid, x0;
+    for (y = height - 1; y >= 0 && bottom < 0; y--) {
+        for (x = 0; x < width; x++) {
+            if (cover[y][x] >= 128) {
+                bottom = y;
+                break;
+            }
+        }
+    }
+    y = bottom - f;
+    if (bottom < 0 || y < 0) return;
+    for (x = 0; x < width; x++) {
+        int from = x, distance;
+        if (cover[y][x] < 128) continue;
+        while (x + 1 < width && cover[y][x + 1] >= 128) x++;
+        distance = from > centre ? (int)(from - centre) : x < centre ? (int)(centre - x) : 0;
+        if (distance < best) {
+            best = distance;
+            left = from;
+            right = x;
+        }
+    }
+    if (left < 0) return;
+    mid = (left + right) / 2;
+    top = y;
+    while (top > 0 && cover[top - 1][mid] >= 128) top--;
+    if (cell_top > 0 && top < cell_top - f / 2) {
+        /* The stem ran into its mark (an acute set this small comes down
+         * onto it): they part where the cell's stem starts, a texel clear,
+         * as the cell's mark stands a row over its stem. */
+        for (y = cell_top - f > 0 ? cell_top - f : 0; y < cell_top && y < height; y++) {
+            memset(cover[y], 0, (size_t)width);
+        }
+        top = cell_top;
+    }
+    fill(cover, left - reach * f, bottom + 1 - bar, right + 1 + reach * f, bottom + 1, width, height);
+    /* The top serif stops a texel short of a mark's ink left of the stem
+     * (an acute's foot comes down there at some sizes), as the cells keep
+     * a row between the mark and the stem; none when that leaves no room. */
+    x0 = left - reach * f;
+    for (y = top - f > 0 ? top - f : 0; y < top + bar + f && y < height; y++) {
+        for (x = x0 - f > 0 ? x0 - f : 0; x < left - 1; x++) {
+            if (cover[y][x] >= 128 && x + f + 1 > x0) x0 = x + f + 1;
+        }
+    }
+    if (x0 < left) fill(cover, x0, top, (left + right + 1) / 2.0, top + bar, width, height);
+}
+
 /* The picture of the `count` characters of `text`, set across the `span`
  * cells side by side of `texels` (CELL * span across, `cells_high` high),
  * as one letter is in its cell; the part in cell `slice` goes into the
@@ -440,6 +498,8 @@ static int render_span(int at_column, int at_row, const unsigned char *texels, i
     static unsigned short distance[CELL * MAX_FACTOR][CELL * MAX_FACTOR * SPAN_MAX];
     int f = factor, pitch = CELL * span, width = pitch * f, height = cells_high * f, at_x = slice * CELL * f;
     int x, y, i, k, n = 0, main = 0, pass, upper = 1, lower = 1;
+    char serif = 0;
+    int serif_top = -1;   /* the cell's stem's first row, in pixels */
     uint8_t *origin = atlas + (size_t)at_row * CELL * f * side + (size_t)at_column * CELL * f;
     FT_Face face = count > 0 ? (FT_Face)Glyphs_Face(text[0]) : NULL;
     const Font *font = face ? measure_font(face) : NULL;
@@ -519,6 +579,27 @@ static int render_span(int at_column, int at_row, const unsigned char *texels, i
         sx = sv;
         if (width_f * sx + r->stem - stem_f * sx > room) sx = room / width_f;
     }
+    if (count == 1 && (serif = Glyphs_SerifLetter(text[0])) != 0) {
+        /* A narrow letter with the PAL's serifs (glyphs.h): its stem where
+         * the cell's stem is, not its ink's middle where the cell's is (an
+         * acute's reach, or the serifs, would move it), and the font's own
+         * proportions, as a bare stem keeps them. The stem's middle in the
+         * font is its dotless i's (an accented i is one with the mark over
+         * it), or the l's. */
+        SerifStem stem;
+        FT_BBox stem_box;
+        int found = Serif_Stem(texels, pitch, pitch, cells_high, &stem);
+        /* (The l's own top is where the font's ascender is: nothing over
+         * it to part from.) */
+        if (found && text[0] != 'l') serif_top = stem.top * f;
+        if (found &&
+            ((serif == 'i' && load(face, 0x131)) || load(face, (unsigned char)serif))) {
+            FT_Outline_Get_BBox(&face->glyph->outline, &stem_box);
+            centre_f = (stem_box.xMin + stem_box.xMax) / 128.0;
+            centre_r = (stem.left + stem.right + 1) / 2.0;
+            sx = sv;
+        }
+    }
     ex = r->stem - stem_f * sx;
     if (ex < -stem_f * sx / 2) ex = -stem_f * sx / 2;
     /* Into the cells' pixels: across about the centre, down along the
@@ -558,6 +639,9 @@ static int render_span(int at_column, int at_row, const unsigned char *texels, i
          * stem gets them. */
         fill(cover, box.left * f, box.top * f, box.right * f, (box.top + r->bar) * f, width, height);
         fill(cover, box.left * f, (box.bottom - r->bar) * f, box.right * f, box.bottom * f, width, height);
+    }
+    if (serif) {
+        add_serifs(cover, width, height, centre_r * f, SERIF_REACH(cells_high > 12), r->bar * f, serif_top);
     }
     /* The outline: pixels within a texel of the letter's half-covered ones
      * (chamfer distance, 3 across and 4 diagonally). */

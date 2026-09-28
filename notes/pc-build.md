@@ -1341,7 +1341,14 @@ letter is made the same way at N pixels per texel:
   an l keeps them);
 - stems and bars are thickened or thinned to the retail weights. Where the
   font's I is a bare stem and the retail one has serifs, it gets serifs,
-  so it is not taken for an l;
+  so it is not taken for an l. With a PAL language (Game > Language), the
+  i and l and the letters made of them (í, ì, î, ï) get the serifs their
+  cells have (`serif.c`; notes/translation.md, "Widths"): the font's stem
+  (its dotless i's, or the l's) stands where the cell's stem is, at the
+  font's proportions, and gets a foot across its last rows and a serif
+  left of its top, which stops a texel short of a mark over it. Those
+  cells are in texture bank 15, which a texture pack does not reach, so a
+  pack that replaces the font leaves the i and l the port's then;
 - each pixel's coverage goes onto the run from the outline's index to the
   row's shading (half-way from its average stroke to its brightest, so the
   colour is the cell's), and the outline's index goes in a band a texel

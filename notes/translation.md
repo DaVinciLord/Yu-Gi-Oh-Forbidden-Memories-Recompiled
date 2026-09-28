@@ -582,8 +582,28 @@ The port draws the US letters where the PAL font has its own: `f`, `i`
 and `l` a pixel left, as the PAL, the apostrophe 3, but `.` and `,` where
 they are, since the PAL's sit a pixel further right in their cell. The
 PAL's `i` and `l` have serifs that fill their 6 pixels; the US ones are a
-2-pixel stem, so two of them side by side leave a wider gap than other
-letters. The PAL cuts a name by pixels (its `F8 07` counts 8 per unit,
+2-pixel stem, so two of them side by side ("li", "il") left a wider gap
+than other letters. With a PAL language on, the port draws its `i` and
+`l` with the PAL's serifs (`src/pc/text/serif.c`, made from the US
+letters when first drawn, as the accented letters are; nothing of either
+font is in the source): a foot a pixel past the stem either side and a
+serif a pixel left of its top (two in the 16x16 font, as in the PAL's
+12x16), and so the accented letters made of them (`í`, `ì`, `î`, `ï`);
+the acute over them sits a column left, on the stem, where the PAL has
+it, clear of the stem by a row. The 8x8 font keeps its letters (the PAL's
+has only digits), `f` keeps its own (its crossbar already fills the 6
+pixels; the PAL's is another shape, with a tail), and `j`, `t` and `I`,
+which the PAL narrows only in a mode the port does not use, stay as
+they are. HD text sets the same serifs on the font's letters. English
+(US), and a translation mod over it, draw nothing differently. Two
+places keep the US `i` and `l`: the name entry's own sprites (the letter
+under the cursor, the ones flying to and standing in the name box, which
+`name_entry_runtime.c` draws straight from the font's page, not through
+func_80035E20), and a texture pack that replaces the font: the serifed
+letters are drawn from texture bank 15, as the accented ones are, and a
+pack does not reach the bank, so with a PAL language a font pack's `i`
+and `l` are the port's. The PAL
+cuts a name by pixels (its `F8 07` counts 8 per unit,
 the US one letters); with a PAL language on, the port reads the
 limits the same way (`Language_PastWidth`): the card lists' 16 are 128
 pixels, the duel bar's 24 are 192 (a German name like Doppelköpfiger
