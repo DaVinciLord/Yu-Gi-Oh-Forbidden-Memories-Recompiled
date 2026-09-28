@@ -37,6 +37,19 @@ CARD_ID_LIMIT = 32766
 DUELIST_COUNT = 40
 POOL_TOTAL = 2048
 DECK_POOL_MIN_CARDS = 14            # 40 cards at most 3 of each
+DECK_SIZE = 40                      # the cards in a deck (save_data.h player_deck)
+DECK_COPY_LIMIT = 3                 # copies of one card Build Deck takes back
+STARTER_WEIGHT_LIMIT = 1000000      # a starter deck's "weight" (src/pc/cards/starter.c)
+EXODIA_FIRST_CARD_ID = 0x11         # the five pieces, at ids 17-21 (card_constants.h)
+EXODIA_PIECE_COUNT = 5
+
+
+def exodia_piece(cid: int) -> bool:
+    """One of the five pieces, which Build Deck takes only one of
+    (build_deck_pane_input.c). A copy a mod adds is another card, so only the
+    disc's own ids count."""
+    return EXODIA_FIRST_CARD_ID <= cid < EXODIA_FIRST_CARD_ID + EXODIA_PIECE_COUNT
+
 
 TYPE_NAMES = ["Dragon", "Spellcaster", "Zombie", "Warrior", "Beast-Warrior", "Beast", "Winged Beast", "Fiend",
               "Fairy", "Insect", "Dinosaur", "Reptile", "Fish", "Sea Serpent", "Machine", "Thunder", "Aqua",

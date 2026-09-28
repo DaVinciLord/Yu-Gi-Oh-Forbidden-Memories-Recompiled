@@ -9,8 +9,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from .gamedata import (CARD_COUNT, DECK_POOL_MIN_CARDS, DUELIST_NAMES, POOLS, POOL_LABELS, POOL_TOTAL,
-                       TYPE_MAGIC, TYPE_EQUIP, TYPE_RITUAL)
+from .gamedata import (CARD_COUNT, DECK_COPY_LIMIT, DECK_POOL_MIN_CARDS, DECK_SIZE, DUELIST_NAMES, POOLS,
+                       POOL_LABELS, POOL_TOTAL, TYPE_MAGIC, TYPE_EQUIP, TYPE_RITUAL, exodia_piece)
 from . import art
 from .model import KEY_RE, Project
 
@@ -19,7 +19,8 @@ SETTING_TYPES = ("int", "bool", "choice", "key")
 MANIFEST_KEYS = ("id", "name", "version", "author", "description", "library", "enabled", "restart",
                  "legacy_setting", "data", "textures", "cards", "audio", "min_api", "game", "requires", "after",
                  "conflicts", "priority", "settings", "fusions", "equips", "rituals", "drops", "decks", "text", "font",
-                 "chest_overflow", "terrain_bonus", "trap_thresholds", "equip_bonus_default", "passwords")
+                 "chest_overflow", "terrain_bonus", "trap_thresholds", "equip_bonus_default", "passwords",
+                 "starter")
 HOST_API = 4
 
 
@@ -225,6 +226,35 @@ def _check_tables(project: Project, out: list):
                                  f"the weights add up to {total}, not {POOL_TOTAL} (Normalize fixes it)", target))
 
 
+def _check_starter(project: Project, out: list):
+    """The decks a new game may be dealt. The port deals a deck only when it
+    is exactly DECK_SIZE cards, so anything else is an error here rather than
+    a line in the Mods window after the fact."""
+    decks = project.starter
+    for i, deck in enumerate(decks):
+        where = deck.name or f"deck {i + 1}"
+        total = deck.total()
+        if total != DECK_SIZE:
+            out.append(Issue("error", "Starter decks", where,
+                             f"a starter deck is {DECK_SIZE} cards, and this one has {total}", i))
+        for name in deck.kept:
+            out.append(Issue("error", "Starter decks", where, f"\"{name}\" is no card the editor knows", i))
+        for cid, copies in sorted(deck.cards.items()):
+            if cid not in project.cards:
+                out.append(Issue("error", "Starter decks", where, f"no card {cid}", i))
+            elif copies > DECK_COPY_LIMIT:
+                out.append(Issue("warning", "Starter decks", where,
+                                 f"{copies} copies of {project.card_label(cid)}: dealt as written, but Build Deck "
+                                 f"takes back only {DECK_COPY_LIMIT}", i))
+            elif exodia_piece(cid) and copies > 1:
+                out.append(Issue("warning", "Starter decks", where,
+                                 f"{copies} copies of {project.card_label(cid)}: Build Deck takes back only one "
+                                 "of each Exodia piece", i))
+    if decks and not any(deck.weight for deck in decks):
+        out.append(Issue("warning", "Starter decks", "every deck",
+                         "every deck weighs 0, so none is ever picked and the disc's own pools deal the deck", 0))
+
+
 def validate(project: Project) -> list:
     out = []
     _check_info(project, out)
@@ -232,6 +262,7 @@ def validate(project: Project) -> list:
         if project.card_changed(cid):
             _check_card(project, cid, out)
     _check_tables(project, out)
+    _check_starter(project, out)
     art.check(project, out)
     return out
 
