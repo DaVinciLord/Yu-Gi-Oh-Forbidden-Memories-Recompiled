@@ -37,6 +37,10 @@ void TexturePack_Unload(void);
  * naming the same offset twice replaces it. */
 int TexturePack_AddImage(const char *file, unsigned offset, int words, int rows, int bpp, unsigned clut_offset,
                          int clut_entries);
+/* Forget every image registered that way. The list of them is rebuilt from
+ * whatever registers again, so a mod being removed does not leave its picture
+ * keyed where another mod's duelist could land on it. */
+void TexturePack_DropImages(void);
 /* Once a frame, on the main thread: reads what uploads asked for (an
  * upload can come from the interrupt tick, where reading is not safe). */
 void TexturePack_Service(void);

@@ -736,6 +736,23 @@ static int add_port_entries(void)
     return 1;
 }
 
+void TexturePack_DropImages(void)
+{
+    int i;
+    if (!port_count) return;
+    for (i = 0; i < port_count; i++) free(port_images[i].file);
+    free(port_images);
+    port_images = NULL;
+    port_count = port_room = 0;
+    drop_port_entries();
+    /* The entries' order changes, and the maps name them by index. */
+    if (entry_of) memset(entry_of, 0, (size_t)SOFT_GPU_WIDTH * SOFT_GPU_HEIGHT * sizeof(*entry_of));
+    resolved = 0;
+    wanted_resolve = 1;
+    generation++;
+    map_generation++;
+}
+
 int TexturePack_AddImage(const char *file, unsigned offset, int words, int rows, int bpp, unsigned clut_offset,
                          int clut_entries)
 {
