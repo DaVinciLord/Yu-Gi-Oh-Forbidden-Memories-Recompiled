@@ -32,7 +32,31 @@
  * 0x44 trade places, and no string names a total annihilation), which the
  * US screens cannot show right (phase 2). */
 static const int keep_us[] = {0x06, 0x10, 0x18, 0x19, 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x50,
-                              0xEE, 0xEF, 0xF0, 0xF1, 0xF3, 0xF7};
+                              0xEE, 0xEF, 0xF0, 0xF1, 0xF3, 0xF7,
+/* And menus of no words, only numbers and names from elsewhere, which the
+ * PAL lays out for its own frames: the Library's card number and name (the
+ * PAL's number is in the big letters, over the US plate, and the name 4
+ * pixels lower, on the bar's edge) and Build Deck's counts (the chest's
+ * over its CHEST). The US ones are laid out for the frames the port draws. */
+                              0x05, 0x0E};
+
+/* Menus whose box the US code sizes where the EU code leaves its own 8x16:
+ * the Password screen's star chips, big letters in cells of 16 (shop.c),
+ * where the PAL has its heading in its normal letters and the count in
+ * cells of 16. The US box draws its letters big whatever the cells, so a
+ * heading whose first line is wider in them than the box (the French
+ * ECLAT D'ETOILE, 14 letters in 160 pixels, which would wrap onto the
+ * count) has its letters closer, as close as its line needs to fit; the
+ * rest keep the US look. */
+static const struct { int id, width, cell, line; } fitted[] = {{0xE1, 0xA0, 0x10, 0x10}};
+
+/* The duel's card bar (0x52-0x55): a line up or down to what shows by the
+ * bar (the Swords' turns, GUARDIAN STAR), then the bar itself (0x50/0x51).
+ * The US goes back down before the bar; the PAL does not (a space where
+ * the US has its line back), since its box is lower, so in the US box the
+ * name, ATK/DEF and icons sat 35 pixels up, on the stone. The US's lines,
+ * there and back, around the PAL's own words. */
+static const struct { int id; unsigned char dy; } bar_lines[] = {{0x52, 0xE4}, {0x53, 0x1C}, {0x54, 0x1C}, {0x55, 0x1C}};
 
 /* The PAL name buffers (file A offsets) and the US ones they stand for. */
 static const struct { unsigned pal, us; } name_buffers[] = {{0xF800, 0x122B}, {0xF814, 0x1238}, {0xF848, 0x125A}};
@@ -451,13 +475,39 @@ static int is_name_buffer(unsigned offset, unsigned *us)
     return 0;
 }
 
-/* A code's words as the US text has them. */
-static void us_code(const Op *op, char *text, size_t size)
+/* The US card view's description: 8 lines of 12 pixels fill its panel, from
+ * the box's +80 to the stone (rows 114-210 in the Build Deck viewer). */
+#define CARD_VIEW_LINES 8
+#define CARD_VIEW_PITCH 12
+
+/* A code's words as the US text has them; the words of a second code to
+ * write after it, or NULL.
+ *
+ * F8 04 and F8 05 are laid out for the PAL's boxes, which the port does not
+ * draw (notes/translation.md, "Widths"). The PAL's F8 04 (EU 0x80038018)
+ * has four sizes: 0 the letters of an 8x16 cell, its boxes' own, 1 the
+ * small ones (8x8), 2 a 12x16 cell and 3 a 16x16 one; the US one, 1 the
+ * small letters and 2 back to the 8x12 cell, its boxes' own. So the PAL's
+ * back-to-normal 0 is the US 2; its 2, which the card view's name and
+ * guardian stars are in (a line of 16 between them), is the US letters in
+ * cells of 8 with lines of 16, which puts the stars and the text below them
+ * where the US view has them (its 3, the star chips' count in cells of 16,
+ * is fitted's). The card text's 13-pixel lines (the PAL's panel is 16
+ * pixels taller) are the US 12. */
+static const char *us_code(const Op *op, char *text, size_t size)
 {
     unsigned b[5];
     if (!strcmp(op->text, "f8 1B")) {
         snprintf(text, size, "call L125A");
-        return;
+        return NULL;
+    }
+    if (!strcmp(op->text, "f8 04 00") || !strcmp(op->text, "f8 04 02")) {
+        snprintf(text, size, "f8 04 02");
+        return op->text[7] == '2' ? "f8 05 08 10" : NULL;
+    }
+    if (!strcmp(op->text, "f8 05 08 0D")) {
+        snprintf(text, size, "f8 05 08 %02X", CARD_VIEW_PITCH);
+        return NULL;
     }
     if (!strncmp(op->text, "f8 03 ", 6) &&
         sscanf(op->text + 6, "%x %x %x %x %x", &b[0], &b[1], &b[2], &b[3], &b[4]) == 5) {
@@ -466,18 +516,134 @@ static void us_code(const Op *op, char *text, size_t size)
             address += NUMBER_DELTA;
             snprintf(text, size, "f8 03 %02X %02X %02X %02X %02X", address & 0xFF, address >> 8 & 0xFF,
                      address >> 16 & 0xFF, address >> 24, b[4]);
-            return;
+            return NULL;
         }
     }
     snprintf(text, size, "%s", op->text);
+    return NULL;
+}
+
+/* The lines of the string from `offset` to its end. */
+static int string_lines(const Bank *bank, int offset)
+{
+    int lines = 1;
+    while (offset < BANK_SIZE && bank->op_at[offset] >= 0) {
+        const Op *op = &bank->ops[bank->op_at[offset]];
+        if (op->kind == OP_END) break;
+        if (op->kind == OP_NL) lines++;
+        offset += op->length;
+    }
+    return lines;
+}
+
+/* The letters of the first line of the string at `offset`. */
+static int first_line_letters(const Bank *bank, int offset)
+{
+    int letters = 0;
+    while (offset < BANK_SIZE && bank->op_at[offset] >= 0) {
+        const Op *op = &bank->ops[bank->op_at[offset]];
+        if (op->kind == OP_END || op->kind == OP_NL) break;
+        if (op->kind == OP_GLYPH) letters++;
+        offset += op->length;
+    }
+    return letters;
+}
+
+/* A card text with more lines than the US view has (six German ones, of 9
+ * and 10: the PAL's panel holds 9 of 13 pixels, and its tenth is on a page
+ * its view never turns to) is laid out again in the US box's width, as a
+ * translation of the US text would be: its words, all of them, with the
+ * breaks where they fit, and a word the PAL cut with a hyphen at a line's
+ * end whole again. Lines closer than 11 pixels would draw over the accents
+ * of the line below, so what is still 9 lines takes lines of 11 from 3
+ * pixels higher, which ends where the US eighth line does. */
+enum { KEEP, AS_SPACE, AS_LINE, DROP };
+#define CARD_VIEW_WIDTH 0xA8           /* the box, which every letter's cell is inside of (the US texts' are) */
+#define CARD_VIEW_CLOSE_LINES 9
+#define CARD_VIEW_CLOSE "{f8 01 FD}{f8 05 08 0B}"
+#define MAX_WORDS 128
+
+static int advance_of(uint32_t character)
+{
+    int shift;
+    return 8 + PalText_Advance(character, &shift);
+}
+
+static int is_lower(uint32_t c) { return (c >= 'a' && c <= 'z') || (c >= 0xDF && c <= 0xFF && c != 0xF7); }
+
+/* The lines of the string at `offset` laid out again, with what to write for
+ * each of its offsets in `plan` (KEEP for the rest); 0, and `plan` as it
+ * was, if the string is not letters in words, one space or line apart. */
+static int reflow(const Bank *bank, int offset, const uint32_t *glyphs, unsigned char *plan)
+{
+    struct { int width, separator, last_at; uint32_t first, last; } words[MAX_WORDS];
+    unsigned char kinds[MAX_WORDS];   /* the separator after each word: AS_SPACE, AS_LINE, or KEEP at the end */
+    unsigned char changes[3 * MAX_WORDS];
+    int at[3 * MAX_WORDS];            /* the offsets of `changes` */
+    int count = 0, i, n = 0, lines = 1, x = 0, in_word = 0, previous = -1;
+    for (;;) {
+        const Op *op = offset < BANK_SIZE && bank->op_at[offset] >= 0 ? &bank->ops[bank->op_at[offset]] : NULL;
+        uint32_t c;
+        if (!op || op->kind == OP_CODE) return 0;
+        c = op->kind == OP_GLYPH && op->value < 0x100 ? glyphs[op->value] : 0;
+        if (op->kind == OP_GLYPH && !c) return 0;
+        if (op->kind == OP_GLYPH && c != ' ') {
+            if (!in_word) {
+                if (count == MAX_WORDS) return 0;
+                words[count].width = 0, words[count].first = c, words[count].separator = -1;
+                count++, in_word = 1;
+            }
+            words[count - 1].width += advance_of(c);
+            words[count - 1].last = c;
+            words[count - 1].last_at = offset;
+        } else {
+            if (!in_word) return 0;   /* two spaces or breaks in a row, or none before one */
+            in_word = 0;
+            words[count - 1].separator = offset;
+            kinds[count - 1] = op->kind == OP_END ? KEEP : op->kind == OP_NL ? AS_LINE : AS_SPACE;
+            if (op->kind == OP_END) break;
+        }
+        offset += op->length;
+    }
+    /* Lay the words out; `plan` only once the whole text is. */
+    for (i = 0; i < count; i++) {
+        int width = words[i].width;
+        /* the PAL's hyphen at a line's end, a lowercase word after it: one word */
+        while (i + 1 < count && words[i].last == '-' && kinds[i] == AS_LINE && is_lower(words[i + 1].first)) {
+            at[n] = words[i].last_at, changes[n++] = DROP;
+            at[n] = words[i].separator, changes[n++] = DROP;
+            width += words[i + 1].width - advance_of('-');
+            i++;
+        }
+        if (width > CARD_VIEW_WIDTH) return 0;
+        if (previous >= 0) {
+            int with = x + advance_of(' ') + width;
+            if (with <= CARD_VIEW_WIDTH) {
+                x = with;
+                if (kinds[previous] == AS_LINE) at[n] = words[previous].separator, changes[n++] = AS_SPACE;
+                previous = i;
+                continue;
+            }
+            if (kinds[previous] == AS_SPACE) at[n] = words[previous].separator, changes[n++] = AS_LINE;
+            lines++;
+        }
+        x = width;
+        previous = i;
+    }
+    for (i = 0; i < n; i++) plan[at[i]] = changes[i];
+    return lines;
 }
 
 static void write_bank(Out *out, Bank *bank, const char *out_bank, const uint32_t *glyphs, const uint16_t *rename,
                        int *problems)
 {
     int offset, inside = 0, previous_end = -1, is_menus = !strcmp(bank->name, "menus"), id, id_count = 0;
+    int is_descriptions = !strcmp(bank->name, "descriptions");
+    int bar = -1, bar_at = -1;   /* the card bar's line (bar_lines) the string at bar_at is */
     /* The bank's ids in order, to name each string's. */
     static uint16_t ids[0x10000];
+    static unsigned char plan[BANK_SIZE];   /* reflow: what to write at each offset */
+    memset(plan, KEEP, sizeof(plan));
     for (id = 0; id < 0x10000; id++) {
         if (bank->ids[id] >= 0) ids[id_count++] = (uint16_t)id;
     }
@@ -513,8 +679,42 @@ static void write_bank(Out *out, Bank *bank, const char *out_bank, const uint32_
             }
             LINE(out, "");
             inside = 1;
+            if (header && is_menus) {
+                bar = -1;
+                for (i = 0; i < (int)(sizeof(bar_lines) / sizeof(bar_lines[0])); i++) {
+                    if (bank->ids[bar_lines[i].id] == offset) bar = i, bar_at = offset;
+                }
+                for (i = 0; i < (int)(sizeof(fitted) / sizeof(fitted[0])); i++) {
+                    int letters = first_line_letters(bank, offset);
+                    if (bank->ids[fitted[i].id] == offset && letters * fitted[i].cell > fitted[i].width)
+                        addf(out, "{f8 05 %02X %02X}", fitted[i].width / letters, fitted[i].line);
+                }
+            }
+            /* A card text longer than the US view (reflow): its words laid
+             * out again, and 9 lines closer. */
+            if (header && is_descriptions && string_lines(bank, offset) > CARD_VIEW_LINES) {
+                int lines = reflow(bank, offset, glyphs, plan);
+                const Op *first = bank->op_at[offset] >= 0 ? &bank->ops[bank->op_at[offset]] : NULL;
+                uint32_t c = first && first->kind == OP_GLYPH && first->value < 0x100 ? glyphs[first->value] : 0;
+                /* an accented capital first would have its accent on the stone */
+                if (lines == CARD_VIEW_CLOSE_LINES && !(c >= 0xC0 && c <= 0xDE)) add(out, CARD_VIEW_CLOSE);
+                else if ((lines < 1 || lines > CARD_VIEW_LINES) && problems) ++*problems;
+            }
         }
-        if (op->kind == OP_GLYPH) {
+        if (bar >= 0 && offset == bar_at && op->kind == OP_CODE && !strncmp(op->text, "f8 01 ", 6)) {
+            addf(out, "{f8 01 %02X}", bar_lines[bar].dy);
+        } else if (bar >= 0 && op->kind == OP_GLYPH && op->value < 0x100 && glyphs[op->value] == ' ' &&
+                   offset + 1 < BANK_SIZE && bank->op_at[offset + 1] >= 0 &&
+                   !strcmp(bank->ops[bank->op_at[offset + 1]].text, "jump")) {
+            addf(out, "{f8 01 %02X}", (unsigned)(-bar_lines[bar].dy & 0xFF));
+            bar = -1;
+        } else if (plan[offset] == DROP) {
+            /* a hyphen, or the break after it, of a word made whole (reflow) */
+        } else if (plan[offset] == AS_LINE) {
+            LINE(out, "");
+        } else if (plan[offset] == AS_SPACE) {
+            add(out, " ");
+        } else if (op->kind == OP_GLYPH) {
             uint32_t character = op->value < 0x100 ? glyphs[op->value] : 0;
             if (!character) {
                 addf(out, "{g %X}", op->value);
@@ -537,8 +737,9 @@ static void write_bank(Out *out, Bank *bank, const char *out_bank, const uint32_
             inside = 0;
         } else {
             char text[64];
+            const char *then;
             int k;
-            us_code(op, text, sizeof(text));
+            then = us_code(op, text, sizeof(text));
             /* F8 1C: the 2P results' command the US text never uses; the
              * US engine reads it as a glyph of the added font (phase 2). */
             if (strncmp(text, "f8 1C", 5)) {
@@ -554,6 +755,7 @@ static void write_bank(Out *out, Bank *bank, const char *out_bank, const uint32_
                     } else addf(out, " L%04X", is_menus && rename[target] ? rename[target] : target);
                 }
                 add(out, "}");
+                if (then) addf(out, "{%s}", then);
             }
             if (!strcmp(op->text, "jump") || !strncmp(op->text, "choose", 6) || !strncmp(op->text, "f8 17", 5) ||
                 !strncmp(op->text, "f8 18", 5) || !strcmp(op->text, "f8 28")) {

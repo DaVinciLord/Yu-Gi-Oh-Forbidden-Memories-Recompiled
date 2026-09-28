@@ -16,7 +16,9 @@
  *      0x5800 before the file's start, as the US names bank's
  * The codes are the US text's but for three: F8 1B, with no operand, is the
  * player's name; the name buffers sit at A+0xF800/F814/F848; and F8 03's
- * numbers are 0x15D7C lower in RAM. The glyph codes are the PAL
+ * numbers are 0x15D7C lower in RAM. The sizes of F8 04 and F8 05 are laid
+ * out for the PAL's frames, and are written for the US ones the port draws
+ * (notes/translation.md, "Frames"). The glyph codes are the PAL
  * executable's (a Shift-JIS table at 0x801D9000, 0x400 bytes), with the
  * accented letters on placeholder codes each language's font draws its own
  * way (the tables in pal_text.c). */

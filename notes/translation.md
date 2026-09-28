@@ -492,7 +492,10 @@ the US text:
 - menus `06`, `10` (the debug menu with ENDING and LANGUAGE), `18`, `19`,
   `50`, `EE`-`F1` (the PAL name keyboard), `F3` and `F7` mean something
   else, or nothing, on PAL: they keep the US string; so do the result
-  pages, `40`-`45` (below; the extractor swapped `40` and `44`);
+  pages, `40`-`45` (below; the extractor swapped `40` and `44`), and `05`
+  and `0E`, which have no words (the Library's card number and name, Build
+  Deck's counts) and are laid out for the PAL's frames, not the US ones the
+  port draws (below, "Frames");
 - the menus' labels are renamed from `LF000` up, as the story's text in the
   same bank uses the offsets;
 - `F8 1C`, which only the two-player results use, is left out: the US
@@ -618,6 +621,38 @@ line heights of 16 (US 12) in boxes 0x40 high (US 0x30), four lines
 either way: the port keeps the US heights. A menu line that would still
 pass its box is cut there (Text_CutsMenuGlyph), as a mod's.
 
+**Frames.** The port draws the US screens, so the PAL text has to sit in
+the US frames; `pal_text.c` writes the few codes that lay it out for the
+PAL's own (checked screen by screen against English (US), the sweep in the
+pull request that brought this). The PAL's `F8 04` has four sizes (EU
+0x80038018: 0 the letters of its 8x16 cell, 1 the small ones, 2 a 12x16
+cell, 3 a 16x16 one), the US one two (1 the small letters, 2 back to the
+8x12 cell): the PAL's back-to-normal `0` is the US `2`, and its `2`,
+which the card view's type and guardian stars are in, is the US letters
+in cells of 8 with lines of 16, which puts the stars at +40 and +56 and
+the card text at +80, where the US view has them (before, the text was 8
+pixels higher, on the stone above it). The card text's own `F8 05 08 0D`
+(13-pixel lines: the PAL's panel, box 0xD0 at y 6, is 16 pixels taller)
+is the US 12, which fills the US panel with 8 lines. Six German card texts
+have more than 8 (D10C, D111-D114 with 10, D1DA with 9; the PAL's panel
+shows 9 and its tenth line is on a page the view never turns to): they
+are laid out again in the US box's width, every word kept and each
+letter's cell inside the box, a word the PAL cut with a hyphen at a line's
+end made whole (Hochspannungs-/blitze), so D10C and D1DA take 8 lines;
+the Exodia limbs still take 9, which are 11 pixels apart from 3 higher
+(10 would draw over the accents of the line below), ending where the US
+eighth line does. The Password screen's star chips are in a box the US
+code sizes to big letters in cells of 16 (shop.c) and the EU code leaves
+at its 8x16: a heading wider than the box in those cells, the French ÉCLAT
+D'ÉTOILE, has its letters as close as it needs (11 pixels) instead of
+wrapping onto the count. The duel's card bar on the field (`52`-`55`: a
+line to the Swords' turns or GUARDIAN STAR, then the bar) goes 35 pixels
+up in the PAL (`F8 01 DD`) and never back, its box being lower, so in the
+US box the name, ATK/DEF and icons sat on the stone above the bar: it gets
+the US lines there and back (`F8 01 E4` ... `F8 01 1C`) around the PAL's
+words. Menus with no words that the PAL lays out for its frames keep the
+US string (above).
+
 Known in phase 1: RESULTS keeps the US pages (strings `40`-`45`, in
 English, beside the language's YOU and COM columns). The PAL pages are laid
 out by code of their own (func_80020EAC and the pages in reverse order):
@@ -625,12 +660,9 @@ their `40` begins with DEFENSE STATISTICS where the US has the win
 condition, no PAL string says TOTAL ANNIHILATION, and `41`/`42` jump into
 `40`'s tail, so under the US screens an attrition or Exodia win would show
 one page twice and never the statistics. The images with words (main menu,
-game over, the results' headings) stay English. Six German card texts have more than
-the 8 lines of the US card view (D10C, D111-D114 with 10, D1DA with 9).
-Seen in the Library with 012 (Barbar Nr. 2): the ninth line is drawn on the
-box's lower edge and the tenth is on a second page, which the view never
-turns to (Cross goes on to the 3D model); nothing stops. The PAL view's
-box is laid out by code of its own (phase 2).
+game over, the results' headings) stay English. The German Exodia limbs
+(D111-D114), laid out again (above, "Frames"), read "Glied Wer das Siegel":
+the PAL text has no full stop there, which its line break hid.
 
 **Phase 2.** The PAL result pages (func_80020EAC's layout, then their
 strings) and the other modes of the
