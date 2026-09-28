@@ -24,7 +24,7 @@ The window has a tab per table:
 |---|---|
 | Cards | search and filter the 722 cards; name, card text (with the game's 20-letter, 8-line wrapping counted), ATK/DEF, type, attribute, level, guardian stars; the retail value beside each field. **Add a card** copies the selected one as a new card with a stable id |
 | Art | a card's picture (102x96), thumbnail (40x32, the hand and the field) and name plate (96x14) as the disc has them, beside what the game will draw at the console's resolution and at Internal 2x/4x; **Import PNG**, **Export** the disc's or the mod's (to paint over), **Revert** |
-| Fusions | every pair and its result (search by a card, or show the changed ones); add, change, remove (the pair no longer fuses) or revert |
+| Fusions | every pair and its result (search by a card, or show the changed ones); add, change, remove (the pair no longer fuses) or revert; **Bulk...** adds or takes away the fusions of every card of one filtered set with every card of another (below) |
 | Equips | per equip card, the monsters it may equip; add one, add or remove a whole type, remove, revert |
 | Rituals | per ritual card, its three tributes and the monster it summons |
 | Duelists | per opponent, the deck pool and the S/A-POW, B/C/D and S/A-TEC drop pools: weights, their chance, the retail weight, and the total against 2048 (**Normalize** scales a pool back to 2048 the way the port does) |
@@ -38,6 +38,43 @@ made; the port's player mods are in `Documents\My Games\YFM Re-Decomp\mods`).
 Enable the mod in the game under **Game > Mods** and restart. **File > Open
 mod folder** opens a mod over retail. Save refuses nothing, but lists what
 the loader would refuse first.
+
+### Bulk fusions
+
+**Bulk...** in the Fusions tab (`bulk_dialog.py`, the rules in
+`bulk_fusions.py`) pairs every card of **Material A** with every card of
+**Material B**. Each side is chosen by filters that must all hold, empty
+meaning any card: kind (monster, magic, trap, ritual, equip), monster type,
+attribute, guardian star (either of the two), ATK, DEF and level ranges,
+words of the name or of the card text as the editor shows them (any case),
+a list of cards (numbers, ranges such as `10-20`, names) and "only cards a
+fusion makes". **A → B** copies one side's filters to the other.
+
+* **Result**: one card, or "the weakest of these that beats both materials"
+  (a list of monsters; each pair gets the one with the least ATK above both
+  materials', the way the disc's type fusions climb). "Only when the
+  result's ATK beats both materials'" skips the pairs it would not; a card
+  with itself is left out unless allowed.
+* **A pair that already fuses** keeps its result, or has it replaced. What
+  "already fuses" means is the port's reading: the pair's rule, or for a
+  card the mod adds, its base's (`Tables_Fusion`); a pair a rule forbids
+  (`null`) fuses with nothing and is free. A pair already making the chosen
+  card is left alone.
+* **Take fusions away** uses the same filters, optionally only the fusions
+  that make one card.
+* A+B and B+A are one pair, as in the game: a pair both sets make twice is
+  counted once.
+
+The preview says, as the filters change, how many pairs are added,
+replaced, kept or skipped and why, lists the first 300, and counts the
+fusion rules the mod would carry. **Apply** asks first; **Undo last batch**
+puts back the pairs the batch changed (not those edited since). The mod
+writes rules, not the disc's 64 KB table, so neither that table's size nor
+its count byte per card limits a batch: every pair of the 722 cards is
+261,003 rules, a 24 MB `mod.json` the port reads in about 3 s. A batch that
+would leave the mod past 300,000 rules is refused. Ports built before the
+bulk fusions read a long `fusions` list in quadratic time (20,000 rules took
+about a minute); use a current build.
 
 ## Game files
 
@@ -244,5 +281,5 @@ the source as above works too.
 
 (ctest `pc_fm_editor`). The tests build synthetic game files at the retail
 offsets (`tests/fixtures.py`), art records included, and their PNGs in code;
-they need no game data. PNGs are read and written by `pngio.py`, in plain
+they need no game data (the bulk fusion tests time a 722 x 722 preview). PNGs are read and written by `pngio.py`, in plain
 Python like the rest.
