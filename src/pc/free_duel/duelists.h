@@ -57,6 +57,12 @@ const char *Duelists_Name(int duelist);
 const char *Duelists_Identity(int duelist);
 /* The id an identity has this run, or -1. */
 int Duelists_Find(const char *identity);
+/* The duelist a mod names in a manifest or a filename, or -1: an id, a name
+ * from the list, the name the disc gave a duelist a mod has since renamed, or
+ * the "mod-id:key" identity of one a mod added. The rule tables name a duelist
+ * the same way (cards/tables.h), so both ask here rather than each keeping its
+ * own idea of what a name reaches. */
+int Duelists_Named(const char *text);
 
 /* --- what a save holds of a duelist ---------------------------------------
  *
@@ -70,6 +76,12 @@ int Duelists_Find(const char *identity);
  * holds for `duelist`. Never NULL: an id with nowhere to live gets a slot
  * that reads zero and forgets what is written to it. */
 unsigned short *Duelists_RecordSlot(void *state, int duelist);
+
+/* The duelist the Free Duel grid's cell stands for on the page it is showing:
+ * page * DUELISTS_RETAIL_COUNT + cell. The grid holds forty cells whatever the
+ * roster is, and every index the screen takes from its cursor is a cell, never
+ * a duelist, so everything that means a duelist asks here. */
+int Duelists_AtCell(int cell);
 
 /* Whether the Free Duel grid shows a duelist, and setting it: the grid's own
  * array for the first forty, this module's past them. */

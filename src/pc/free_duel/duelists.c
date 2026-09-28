@@ -322,6 +322,15 @@ unsigned short *Duelists_RecordSlot(void *state, int duelist)
     return gFreeDuel_aExtraRecords[duelist];
 }
 
+/* Which page of forty the grid is showing (free_duel_storage.c: a game unit,
+ * so a save state carries it). */
+extern int gFreeDuel_nPage;
+
+int Duelists_AtCell(int cell)
+{
+    return gFreeDuel_nPage * DUELISTS_RETAIL_COUNT + cell;
+}
+
 int Duelists_Available(int duelist)
 {
     if (!Duelists_Valid(duelist)) return 0;
@@ -340,7 +349,6 @@ void Duelists_SetAvailable(int duelist, int shown)
 
 /* Defined with the manifest reading below, and used here: a condition names a
  * duelist the same way an entry names its base. */
-static int duelist_named(const char *text);
 
 /* Wins the save at `state` has against one duelist, or against all of them
  * when `duelist` is negative. Duelist 0 is Deck Build, never an opponent. */
@@ -386,7 +394,7 @@ int Duelists_Unlocked(const void *state, int duelist)
         /* A duelist that is not here this run -- its mod was turned off, or
          * the name is a misspelling -- leaves the condition unmet rather than
          * met, so a roster never opens up by accident. */
-        const int against = duelist_named(one->beat);
+        const int against = Duelists_Named(one->beat);
         if (against < 0 || wins_against(state, against) < (one->wins > 0 ? one->wins : 1)) return 0;
     } else if (one->wins > 0 && wins_against(state, -1) < one->wins) {
         return 0;
@@ -434,6 +442,17 @@ static int sidecar_path(char *out, size_t size, int code)
 static int section_header(const char *line, unsigned *sequence)
 {
     return sscanf(line, "save %u", sequence) == 1;
+}
+
+/* The rest of a line, without its newline: an identity may hold spaces, so it
+ * is written last and read whole rather than by a scanf field. */
+static void copy_line(char *out, size_t size, const char *text)
+{
+    size_t n = 0;
+    while (text[n] && text[n] != '\n' && text[n] != '\r' && n + 1 < size) n++;
+    memcpy(out, text, n);
+    while (n && out[n - 1] == ' ') n--;
+    out[n] = '\0';
 }
 
 /* Which section a save of `sequence` reads: its own, else the newest no later
@@ -487,10 +506,14 @@ void Duelists_SaveLoaded(const void *state)
         while (fgets(line, sizeof line, file)) {
             char identity[IDENTITY_MAX];
             unsigned value;
-            int wins, losses, id;
+            int wins, losses, id, at = 0;
             if (section_header(line, &value)) { inside = value == chosen; continue; }
             if (!inside) continue;
-            if (sscanf(line, "record %63s %d %d", identity, &wins, &losses) != 3) continue;
+            /* The identity is last on the line because it may hold spaces:
+               duelists/Dark Simon.json is "<mod>:Dark Simon". */
+            if (sscanf(line, "record %d %d %n", &wins, &losses, &at) < 2 || at <= 0) continue;
+            copy_line(identity, sizeof identity, line + at);
+            if (!*identity) continue;
             /* A record whose duelist is not here this run is dropped: the mod
              * that had it may come back, but its id would be another's. */
             id = Duelists_Find(identity);
@@ -573,8 +596,8 @@ void Duelists_SaveWritten(const void *state, unsigned sequence)
     for (id = DUELISTS_RETAIL_COUNT; id < Duelists_Count() && id < DUELIST_TABLE_COUNT; id++) {
         const char *identity = Duelists_Identity(id);
         if (!identity || (!gFreeDuel_aExtraRecords[id][0] && !gFreeDuel_aExtraRecords[id][1])) continue;
-        fprintf(out, "record %s %u %u\n", identity,
-                gFreeDuel_aExtraRecords[id][0], gFreeDuel_aExtraRecords[id][1]);
+        fprintf(out, "record %u %u %s\n", gFreeDuel_aExtraRecords[id][0],
+                gFreeDuel_aExtraRecords[id][1], identity);
     }
     if (in) fclose(in);
     {
@@ -588,8 +611,10 @@ void Duelists_SaveWritten(const void *state, unsigned sequence)
 }
 
 /* A duelist a manifest names: an id, a name from the list, or the identity of
- * one this or an earlier mod added. */
-static int duelist_named(const char *text)
+ * one this or an earlier mod added. The tables name a duelist the same way, so
+ * this is the list's own answer and not a second copy of the rules
+ * (duelists.h). */
+int Duelists_Named(const char *text)
 {
     int id;
     if (!text || !*text) return -1;
@@ -605,6 +630,20 @@ static int duelist_named(const char *text)
         if (id < DUELISTS_RETAIL_COUNT && same_letters(text, Tables_DuelistNames[id])) return id;
     }
     return -1;
+}
+
+/* Everything an entry owns. Every path that drops one -- a rejected entry, a
+ * replacement taken over by a later mod, an entry with nowhere to go, and
+ * Duelists_Clear -- comes through here, so a field added to the record cannot
+ * be forgotten by one of them. */
+static void release(Duelist *one)
+{
+    free(one->portrait);
+    free(one->glyphs);
+    free(one->art);
+    one->portrait = NULL;
+    one->glyphs = NULL;
+    one->art = NULL;
 }
 
 /* Whether an identity is spoken for, by a duelist already placed or by an
@@ -641,7 +680,7 @@ static void read_one_duelist(const char *mod, const char *mod_directory, const J
      * duelist: it is the entry's base as well, since a replacement still
      * reads the disc where that duelist does. */
     if (over) {
-        target = duelist_named(Json_String(over, NULL));
+        target = Duelists_Named(Json_String(over, NULL));
         if (target <= 0 || target >= DUELISTS_RETAIL_COUNT) {
             Mods_Note(mod, "duelists[%d]: replace names no stock duelist (1-%d)",
                       index, DUELISTS_RETAIL_COUNT - 1);
@@ -651,7 +690,7 @@ static void read_one_duelist(const char *mod, const char *mod_directory, const J
     }
     /* The base is what the disc answers for: without one there is no
      * portrait, no deck and no AI to fall back on. */
-    base = over ? target : duelist_named(copy);
+    base = over ? target : Duelists_Named(copy);
     if (base <= 0 || base >= DUELISTS_RETAIL_COUNT) {
         Mods_Note(mod, "duelists[%d]: copy names no retail duelist (1-%d)",
                   index, DUELISTS_RETAIL_COUNT - 1);
@@ -837,8 +876,7 @@ static void read_one_duelist(const char *mod, const char *mod_directory, const J
     else snprintf(one.identity, sizeof one.identity, "%s:#%d", mod, index);
     if (taken_identity(one.identity)) {
         Mods_Note(mod, "duelists[%d]: %s is already taken", index, one.identity);
-        free(one.portrait);
-        free(one.glyphs);
+        release(&one);
         return;
     }
 
@@ -847,9 +885,7 @@ static void read_one_duelist(const char *mod, const char *mod_directory, const J
         Duelist *bigger = realloc(pending, (size_t)room * sizeof(*pending));
         if (!bigger) {
             Mods_Note(mod, "duelists[%d]: out of memory", index);
-            free(one.portrait);
-            free(one.glyphs);
-
+            release(&one);
             return;
         }
         pending = bigger;
@@ -1025,7 +1061,7 @@ static void settle_ai(Duelist *one)
     int borrowed = -1, field;
     if (!one->has_ai) return;
     if (one->ai_copy[0]) {
-        borrowed = duelist_named(one->ai_copy);
+        borrowed = Duelists_Named(one->ai_copy);
         if (borrowed < 0) Mods_Note(one->mod, "duelists[%d]: ai copy names no duelist", one->index);
     }
     row = borrowed >= 0 ? Duelists_AiRow(borrowed) : gDuel_aOpponentData[one->base];
@@ -1077,8 +1113,7 @@ static void place_pending(void)
         if (replaced[one->replace].used) {
             Mods_Note(one->mod, "duelists[%d]: %s was already replaced; this one has it instead",
                       one->index, Tables_DuelistNames[one->replace]);
-            free(replaced[one->replace].portrait);
-            free(replaced[one->replace].glyphs);
+            release(&replaced[one->replace]);
         }
         replaced[one->replace] = *one;
         one->used = 0;   /* its portrait and name belong to the list now */
@@ -1105,8 +1140,7 @@ static void place_pending(void)
         if (slot >= DUELIST_TABLE_COUNT) {
             Mods_Note(one->mod, "duelists[%d]: no room left; the grid holds %d duelists",
                       one->index, DUELIST_TABLE_COUNT);
-            free(one->portrait);
-            free(one->glyphs);
+            release(one);
             one->used = 0;
             continue;
         }
@@ -1116,8 +1150,7 @@ static void place_pending(void)
     /* Anything still standing found no room. */
     for (i = 0; i < pending_count; i++) {
         if (!pending[i].used) continue;
-        free(pending[i].portrait);
-        free(pending[i].glyphs);
+        release(&pending[i]);
     }
     free(pending);
     pending = NULL;
@@ -1142,19 +1175,15 @@ void Duelists_Clear(void)
     /* Built again after this: the list is the applied mods', so it is made
        afresh when they change, and by each of the tests' cases. */
     built = 0;
-    for (i = 0; i < added_top; i++) {
-        free(added[i].portrait);
-        free(added[i].glyphs);
-        free(added[i].art);
-    }
+    /* The pack keyed each duelist's full-size picture by its id, so the
+       pictures go with the list: another mod's duelist could take that id
+       next, and would otherwise wear this one's face. */
+    TexturePack_DropImages();
+    for (i = 0; i < added_top; i++) release(&added[i]);
     free(added);
     added = NULL;
     added_top = added_room = 0;
-    for (i = 0; i < DUELISTS_RETAIL_COUNT; i++) {
-        free(replaced[i].portrait);
-        free(replaced[i].glyphs);
-        free(replaced[i].art);
-    }
+    for (i = 0; i < DUELISTS_RETAIL_COUNT; i++) release(&replaced[i]);
     memset(replaced, 0, sizeof replaced);
 }
 

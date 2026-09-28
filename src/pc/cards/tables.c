@@ -21,6 +21,7 @@
 #include "pc/mods/json.h"
 #include "pc/debug/log.h"
 #include "pc/platform/paths.h"
+#include "pc/compat/fs.h"
 #include "game/card_constants.h"
 #include <ctype.h>
 #include <stdio.h>
@@ -619,21 +620,6 @@ int Tables_Ritual(int ritual, unsigned short recipe[6])
 
 /* --- drops and decks ------------------------------------------------- */
 
-/* A duelist a manifest names: an id, a name, or the "mod-id:key" identity of
- * one a mod added. The list is the extended one, so "drops" and "decks" reach
- * an added duelist as readily as a retail one. */
-static int duelist_named(const char *text)
-{
-    int id;
-    if (!text || !*text) return -1;
-    if (strspn(text, "0123456789") == strlen(text)) return Duelists_Valid(id = atoi(text)) ? id : -1;
-    if ((id = Duelists_Find(text)) >= 0) return id;
-    for (id = 0; id < Duelists_Count(); id++) {
-        if (same_letters(text, Duelists_Name(id))) return id;
-    }
-    return -1;
-}
-
 /* --- the rank score (tables.h) --------------------------------------------
  *
  * One row of five threshold/change pairs per rule per duelist, over what the
@@ -881,6 +867,21 @@ int Tables_FixedDeck(int duelist, unsigned short cards[TABLES_DECK_SIZE])
     return 1;
 }
 
+/* A "decks" entry: a pool of weights, unless "fixed" says it is the whole deck.
+ * Both ways of writing a roster come through here, so decks/<id>.json reads
+ * exactly as the same object written into the manifest does. */
+static void read_deck_entry(const char *mod, const char *where, int duelist, const JsonValue *entry)
+{
+    const JsonValue *fixed = Json_Member(entry, "fixed");
+    if (fixed && Json_TypeOf(fixed) != JSON_BOOL && Json_TypeOf(fixed) != JSON_NUMBER) {
+        /* "true" in quotes: neither deck is what the mod meant. */
+        Mods_Note(mod, "%s: \"fixed\" is true or false, without quotes; left out", where);
+        return;
+    }
+    if (Json_Bool(fixed, 0)) read_fixed_deck(mod, where, duelist, entry);
+    else read_pool(mod, where, duelist, TABLES_POOL_DECK, entry);
+}
+
 /* "drops": { opponent: { pool: { card: weight } } }, and
  * "decks": { opponent: { card: weight } } or { "fixed": true, card: copies }. */
 static void read_pool_table(const char *mod, const JsonValue *table, int decks)
@@ -894,21 +895,14 @@ static void read_pool_table(const char *mod, const JsonValue *table, int decks)
     for (i = 0; i < Json_Count(table); i++) {
         const JsonValue *entry = Json_At(table, i);
         const char *name = Json_Name(entry);
-        int duelist = same_letters(name, "all") ? -1 : duelist_named(name);
+        int duelist = same_letters(name, "all") ? -1 : Duelists_Named(name);
         if (duelist == -1 && !same_letters(name, "all")) {
             Mods_Note(mod, "%s: no opponent \"%s\"", decks ? "decks" : "drops", name);
             continue;
         }
         if (decks) {
-            const JsonValue *fixed = Json_Member(entry, "fixed");
             snprintf(where, sizeof(where), "decks \"%s\"", name);
-            if (fixed && Json_TypeOf(fixed) != JSON_BOOL && Json_TypeOf(fixed) != JSON_NUMBER) {
-                /* "true" in quotes: neither deck is what the mod meant. */
-                Mods_Note(mod, "%s: \"fixed\" is true or false, without quotes; left out", where);
-                continue;
-            }
-            if (Json_Bool(fixed, 0)) read_fixed_deck(mod, where, duelist, entry);
-            else read_pool(mod, where, duelist, TABLES_POOL_DECK, entry);
+            read_deck_entry(mod, where, duelist, entry);
             continue;
         }
         if (Json_TypeOf(entry) != JSON_OBJECT) {
@@ -1030,7 +1024,7 @@ static void read_pool_folder(const char *mod, const char *directory, int decks)
          * another mod's is reached. */
         snprintf(identity, sizeof identity, "%s:%s", mod, names[i].name);
         duelist = Duelists_Find(identity);
-        if (duelist < 0) duelist = same_letters(names[i].name, "all") ? -1 : duelist_named(names[i].name);
+        if (duelist < 0) duelist = same_letters(names[i].name, "all") ? -1 : Duelists_Named(names[i].name);
         if (duelist == -1 && !same_letters(names[i].name, "all")) {
             Mods_Note(mod, "%s/%s.json: no opponent of that name", key, names[i].name);
             continue;
@@ -1044,7 +1038,7 @@ static void read_pool_folder(const char *mod, const char *directory, int decks)
         root = Json_Root(document);
         snprintf(where, sizeof where, "%s/%s.json", key, names[i].name);
         if (decks) {
-            read_pool(mod, where, duelist, TABLES_POOL_DECK, root);
+            read_deck_entry(mod, where, duelist, root);
         } else if (Json_TypeOf(root) != JSON_OBJECT) {
             Mods_Note(mod, "%s: an object of pools (pow, bcd, tec)", where);
         } else {

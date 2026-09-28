@@ -60,6 +60,8 @@ unsigned char gFreeDuel_abGridAvailable[DUELIST_TABLE_COUNT];
 int gFreeDuel_nExtraOwner;
 /* The running save, which Duelists_Frame reads the duelist code out of. */
 unsigned short gDuel_awPlayerDeck[0x600];
+/* Which page of forty the grid is showing, for Duelists_AtCell. */
+int gFreeDuel_nPage;
 
 static int story_flag;          /* the one flag the cases test */
 static int cards_named;         /* what Cards_Named answers */
@@ -96,18 +98,28 @@ int Tables_RankNamed(const char *name)
     return -1;
 }
 
+static int pack_images;         /* how many pictures the pack is holding */
 int TexturePack_AddImage(const char *file, unsigned offset, int words, int rows, int bpp, unsigned clut_offset,
                          int clut_entries)
 {
     (void)file; (void)offset; (void)words; (void)rows; (void)bpp; (void)clut_offset; (void)clut_entries;
+    pack_images++;
     return 1;
 }
+void TexturePack_DropImages(void) { pack_images = 0; }
 int Glyphs_Code(uint32_t character) { return (int)character; }
 uint32_t Glyphs_NextCharacter(const char **at) { return (unsigned char)*(*at)++; }
 int Paths_Contained(const char *path) { return path && strncmp(path, "..", 2) != 0; }
-int Paths_User(char *out, size_t size, const char *relative) { (void)out; (void)size; (void)relative; return 1; }
+/* Off by default, so a case that is not about the sidecar never writes one;
+ * the round-trip case turns it on. */
+static int sidecars;
+int Paths_User(char *out, size_t size, const char *relative)
+{
+    if (!sidecars) return 1;
+    return snprintf(out, size, "duelists_test_user/%s", relative) >= (int)size;
+}
 const char *Paths_UserDir(void) { return NULL; }  /* no roster folder in the cases */
-int Paths_MakeDirs(const char *path) { (void)path; return 0; }
+int Paths_MakeDirs(const char *path) { mkdir(path, 0777); return 0; }
 int Log_Wanted(LogChannel channel) { (void)channel; return 0; }
 void Log_Printf(LogChannel channel, const char *format, ...) { (void)channel; (void)format; }
 
@@ -441,6 +453,47 @@ int main(void)
         assert(!strcmp(Duelists_Name(40), "Heishin"));
         assert(Duelists_Text(Duelists_NameTextId(40), stock) != stock);
     }
+
+    /* The name a mod may use for a duelist, which the rule tables ask for too
+     * (Duelists_Named). A stock duelist a mod renamed still answers to the
+     * name the disc gave it, so another mod's "decks" keeps naming it; an
+     * empty slot is nobody and answers to nothing. */
+    build("{\"duelists\":[{\"id\":\"o\",\"replace\":\"Simon Muran\",\"name\":\"Dark Simon\"},"
+          "{\"id\":\"x\",\"copy\":\"Heishin\",\"name\":\"Ex\",\"slot\":42}]}", NULL);
+    assert(Duelists_Named("Dark Simon") == 1);      /* the name it has now */
+    assert(Duelists_Named("Simon Muran") == 1);     /* and the disc's, still */
+    assert(Duelists_Named("a:o") == 1);             /* and the identity */
+    assert(Duelists_Named("Ex") == 42 && Duelists_Named("42") == 42);
+    assert(Duelists_Named("40") < 0);               /* the gap before slot 42 */
+    assert(Duelists_Named("Deck Build") == 0);      /* but not through a gap */
+    assert(Duelists_Named("nobody at all") < 0);
+
+    /* The records beside the save, round-tripped by identity. An identity may
+     * hold spaces -- duelists/Dark Simon.json is "a:Dark Simon" -- so it is
+     * written last on the line and read whole. */
+    build("{\"duelists\":[{\"id\":\"Dark Simon\",\"copy\":\"Heishin\"},"
+          "{\"id\":\"plain\",\"copy\":\"Teana\"}]}", NULL);
+    sidecars = 1;
+    mkdir("duelists_test_user", 0777);
+    memset(save, 0, sizeof save);
+    memcpy(save + 0x334, "\x01\x00\x00\x00", 4);       /* the duelist code */
+    memcpy(save + 0x404, "\x07\x00\x00\x00", 4);       /* the save sequence */
+    assert(!strcmp(Duelists_Identity(40), "a:Dark Simon"));
+    Duelists_RecordSlot(save, 40)[0] = 9;
+    Duelists_RecordSlot(save, 40)[1] = 4;
+    Duelists_RecordSlot(save, 41)[0] = 2;
+    Duelists_SaveWritten(save, 7);
+    Duelists_RecordSlot(save, 40)[0] = 0;
+    Duelists_RecordSlot(save, 40)[1] = 0;
+    Duelists_RecordSlot(save, 41)[0] = 0;
+    Duelists_SaveLoaded(save);
+    assert(Duelists_RecordSlot(save, 40)[0] == 9);      /* the spaced identity */
+    assert(Duelists_RecordSlot(save, 40)[1] == 4);
+    assert(Duelists_RecordSlot(save, 41)[0] == 2);
+    remove("duelists_test_user/duelists/00000001.txt");
+    rmdir("duelists_test_user/duelists");
+    rmdir("duelists_test_user");
+    sidecars = 0;
 
     /* NEW GAME writes a new duelist code into the running save without
      * loading one: the records of the save before it must not stand. */
