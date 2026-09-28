@@ -474,7 +474,7 @@ it into a ring, about 2 ms on the game's thread each time; at 200% speed a
 frame has 8.3 ms, and those frames were the ones that ran over (a duel at
 4x with 3D Monsters showed 104-118 frames/s instead of 120). `SET_REWIND`
 stays in settings.h, retired, so mods keep their setting numbers; a
-`rewind=` line left in `settings.txt` does nothing (it is kept in the file as `serialize` still writes
+`rewind=` line left in `settings.txt` does nothing (it is kept in the file as
 an unknown line). `serialize` still writes the stack chunk last.
 
 ### Cheats
