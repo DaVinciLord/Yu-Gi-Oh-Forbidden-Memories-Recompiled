@@ -30,5 +30,27 @@ int main(void)
     assert(Pgxp_FindAt(address, packet[2], &x, &y, &w) == 1);
     Pgxp_NextFrame();
     assert(Pgxp_FindAt(address, packet[2], &x, &y, &w) == 0);
+
+    /* Close to the camera: R11 = R33 = 0.5 put the vertex at view x -150.5,
+     * z 160.5, which the GTE truncates to IR1 = -151 and SZ3 = 160 before
+     * it divides. The word is -284, the vertex really at -281.3: outside the
+     * (-1, +2) window, but that is the truncation, so the precise position
+     * is kept. */
+    Memories_GteReset();
+    Memories_GteWriteControl(0, 0x0800);
+    Memories_GteWriteControl(2, 0x1000);
+    Memories_GteWriteControl(4, 0x0800);
+    Memories_GteWriteControl(26, 300);
+    Memories_GteWriteData(0, (uint16_t)-301);
+    Memories_GteWriteData(1, 321);
+    Memories_GteCommand(0x0180001); /* RTPS, sf */
+    assert((int16_t)Memories_GteReadData(14) == -284);
+    assert(Memories_GtePrecise(2, &x, &y, &w) && x > -281.32f && x < -281.30f && w == 160.5f);
+
+    /* A view x IR1 saturates is not the word's vertex: rejected. */
+    Memories_GteWriteControl(0, 0x7fff);
+    Memories_GteWriteData(0, 0x7fff);
+    Memories_GteCommand(0x0180001);
+    assert(!Memories_GtePrecise(2, &x, &y, &w));
     return 0;
 }
