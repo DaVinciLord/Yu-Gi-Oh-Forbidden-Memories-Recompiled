@@ -43,4 +43,12 @@ int Language_Export(const char *folder);
  * and in `shift` how far left the letter is drawn (pal_text.h). */
 int Language_Advance(unsigned flags, int code, int *shift);
 
+/* TextBox_BuildStep, after each letter: with a PAL language in use (and not
+ * the small letters), whether text channel `channel` is past its F8 07
+ * limit, which the PAL reads as `limit` * 8 pixels (pal_text.h); `count` is
+ * the letter's number since
+ * the limit was set, `step` the pixels it took and `cell` the box's cell.
+ * -1 otherwise: the US count of letters holds. */
+int Language_PastWidth(unsigned flags, int channel, int count, int step, int cell, int limit);
+
 #endif

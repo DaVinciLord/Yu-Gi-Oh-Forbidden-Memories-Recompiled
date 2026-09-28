@@ -15,6 +15,9 @@
 static const uint32_t bases[TEXT_BANK_COUNT] = {0x801B0000u, 0x801C0000u, 0x801D0000u};
 static int reports;
 
+/* pt-BR keeps the US layout's pages (src/pc/text/entry_layout.c): 254 letters, menus 159. */
+int TextEntries_PageLetters(int channel) { return channel == 0 ? 254 : 159; }
+
 /* The retail glyphs past ASCII (glyphs.c's table), and the letters pt-BR
  * writes with a mark and the º of Jono 2º, each an added glyph from 0x100
  * on. */

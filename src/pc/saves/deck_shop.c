@@ -2,6 +2,7 @@
 #include "deck_menu.h"
 #include "pc/platform/settings.h"
 #include "pc/text/text.h"
+#include "pc/text/entry_layout.h"
 #include "pc/guest/state.h"
 #include "pc/debug/log.h"
 #include "types.h"
@@ -37,9 +38,10 @@ static size_t shop_text_size;
 /* --- the menu over a translation's ------------------------------------ */
 
 /* The menu is text channel 3's, whose slice of the game's glyph entries
- * holds 45: 44 letters (a space is none) and the end. Retail's with DECK
- * SLOTS has exactly 44; past them the last line is cut short. */
-#define SHOP_MENU_LETTERS 44
+ * holds 45: 44 letters (a space is none) and the end; with a PAL language
+ * 80, as on the PAL console (entry_layout.h). Retail's with DECK SLOTS has
+ * exactly 44; past them the last line is cut short. */
+#define SHOP_MENU_CHANNEL 3
 
 /* A menu line as the listing writes it, where its middle is, and its
  * letters. */
@@ -87,7 +89,7 @@ static const unsigned char *shop_line(const unsigned char *text, ShopLine *line,
 int DeckMenu_ShopListing(char *out, size_t size, const unsigned char *menu, const unsigned char *label)
 {
     ShopLine lines[4], added;
-    int control, mask = -1, count = 0, middle = 0, i, at, letters;
+    int control, mask = -1, count = 0, middle = 0, i, at, letters, room = TextEntries_PageLetters(SHOP_MENU_CHANNEL);
     char head[32];
     /* The DECK SLOTS entry's words. */
     memset(&added, 0, sizeof(added));
@@ -135,9 +137,9 @@ int DeckMenu_ShopListing(char *out, size_t size, const unsigned char *menu, cons
         if (m > middle) middle = m;
         letters += lines[i].letters;
     }
-    if (letters > SHOP_MENU_LETTERS) {
+    if (letters > room) {
         LOG(LOG_MODS, "text: the card shop's menu with DECK SLOTS (%04X) would have %d letters; its box shows %d, "
-                      "so it keeps its four entries", TEXT_OWN_DECK_SLOTS, letters, SHOP_MENU_LETTERS);
+                      "so it keeps its four entries", TEXT_OWN_DECK_SLOTS, letters, room);
         return 0;
     }
     at = middle - added.width / 2;

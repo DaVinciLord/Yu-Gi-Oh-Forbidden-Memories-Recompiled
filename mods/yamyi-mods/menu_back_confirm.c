@@ -32,13 +32,20 @@
  * clearing the flag cancels it outright: no transition begins, nothing to snap
  * back from, and the wheel is left exactly where it stood.
  *
- * Three of upstream's load-bearing rules are then absent. It must never clear
- * held state (the repeat engine derives new-press from it), must hold a
- * release latch, and must eat Circle while the prompt is up -- all because it
- * edits the pad upstream of the repeat engine. We mask the derived words
- * around one call to one consumer and put them back immediately, so the
- * engine's own history never sees an edit. Its bounded 90-frame YES drive is
- * not needed either: on YES we do what the stock branch does, in its order.
+ * Two of upstream's load-bearing rules are then absent: it must never clear
+ * held state (the repeat engine derives new-press from it), and it must eat
+ * Circle while the prompt is up -- both because it edits the pad upstream of
+ * that engine. We mask the derived words around one call to one consumer and
+ * put them back immediately, so the engine's own history never sees an edit.
+ * Its bounded 90-frame YES drive is not needed either: on YES we do what the
+ * stock branch does, in its order.
+ *
+ * Its release latch we do need, for a reason of our own. Input_UpdatePads
+ * stashes a press in gInput_dwDeferredPressed whenever the vblank counter it
+ * tests has run past 0, and replays it on a later frame. The frame that opens
+ * the prompt reads the disc and uploads a sheet, so it overruns by definition
+ * and the opening Circle arrives a second time. The latch swallows that, and
+ * holds the answer again while the port's menu bar has the input.
  *
  * HOW IT IS DRAWN
  *
@@ -172,6 +179,15 @@ typedef struct {
 #define SRC_FIELD_H 66   /* rows 66..71 carry nothing */
 
 
+/* The mark the port's renderer reads to know a primitive is a glyph
+ * (src/pc/text/hd_text.h, HD_TEXT_MARK): bit 15 of the texture-page word,
+ * which the hardware leaves unused -- bits 11-14 are the texture bank. The
+ * game's own text sets it in func_80035E20, and gl_picture.c offers only
+ * marked primitives to HdText_Cell. Without it the prompt's letters are
+ * drawn as plain textured quads and Video > HD text passes them by; the box
+ * furniture is not marked, because it is not the charset. */
+#define HD_TEXT_MARK 0x8000u
+
 /* The charset, as measured above. */
 #define FONT_TPAGE   10
 #define FONT_CLUT_X  640
@@ -246,9 +262,30 @@ static int s_open;
 static int s_art;        /* 0 not tried, 1 loaded, -1 failed: flat quads */
 static u32 *s_sheet;     /* the sheet and both palettes, kept in RAM */
 static int s_sel;
-extern u8 D_8009B26C[];
 int DeckMenu_Active(void);
 static unsigned s_sig;
+/* The press that opened the prompt, still to be let go of. The frame that
+ * opens one reads the disc and uploads the sheet, so it overruns; the vblank
+ * counter Input_UpdatePads tests (D_8009B0C8) is then past 0, which both
+ * delivers Circle and stashes it in gInput_dwDeferredPressed, and the next
+ * frame replays it. Without this latch that replay is read as the answer and
+ * shuts the prompt the frame after it opened. */
+static int s_wait_release;
+/* Set by update_frontend, cleared by the frame callback: the mode-select
+ * screen's own update ran this frame, so that screen is still the one up.
+ * The mode byte (D_8009B26C) is not read for this: the first wheel after
+ * boot runs from Main_RunFrontendLoop before Main_Loop sets mode 8, so the
+ * byte is still 0 there. The mod's own hook running is the fact we need,
+ * and it cannot disagree with itself. */
+static int s_saw_update;
+/* Frames left in which a leave still counts as one of the port's own
+ * overlays closing. The Circle that shuts the save menu shuts it before
+ * the wheel's update reads the same press, so by the time the leave
+ * starts the overlay is already gone and port_ui_open() says nothing was
+ * up. Held two frames past the close (the count runs down before the leave
+ * reads it, and a late frame can replay the press once more), it still
+ * does. */
+static int s_ui_recent;
 
 /* ---- drawing ------------------------------------------------------------ */
 
@@ -291,7 +328,7 @@ static void glyph(int x, int y, int cell, int tint, unsigned pri)
     p.r0 = 0x80; p.g0 = 0x80; p.b0 = 0x80;
     if (tint < 0 || tint > 6) tint = 0;
     p.clut = CLUT_WORD(tint);
-    p.tpage = FONT_TPAGE;
+    p.tpage = (u16)(FONT_TPAGE | HD_TEXT_MARK);
     p.pad1 = 0;
     p.pad2 = 0;
     p.x0 = (s16)x;                   p.y0 = (s16)y;
@@ -543,13 +580,17 @@ static void draw_prompt(void)
 
 /* ---- the prompt --------------------------------------------------------- */
 
-static void prompt_close(void)
+static void prompt_close_because(const char *why)
 {
     if (!s_open) {
         return;
     }
     s_open = 0;
+    s_wait_release = 0;
     s_sig++;
+    if (host->log_enabled(host)) {
+        host->log(host, "menu-back-confirm: closed (%s)", why);
+    }
 }
 
 static void prompt_open(void)
@@ -557,6 +598,11 @@ static void prompt_open(void)
     load_art();
     upload_art();
     s_open = 1;
+    s_wait_release = 1;
+    /* A press Input_UpdatePads is still holding back would be replayed after
+     * the latch has seen the button let go, and read as the answer. */
+    gInput_dwDeferredPressed &= ~(u32)PAD_BUTTON_CANCEL;
+    gInput_dwDeferredRepeat &= ~(u32)PAD_BUTTON_CANCEL;
     s_sel = host->setting(host, "default_answer", SEL_NO) == SEL_YES ? SEL_YES : SEL_NO;
     s_sig++;
 }
@@ -571,6 +617,16 @@ static void leave_to_title(void)
 static int port_ui_open(void)
 {
     return SaveMenu_Active() || Menu_IsOpen() || DeckMenu_Active();
+}
+
+/* One of the port's screens, as against its menu bar: these stand in front of
+ * the game and their own Circle is what closed them, so a prompt has no place
+ * under one. The bar (File, Video, Game...) is the window's own furniture --
+ * it takes the input while it is down, but the question underneath it is
+ * still the player's to answer, so the prompt waits rather than going away. */
+static int port_screen_open(void)
+{
+    return SaveMenu_Active() || DeckMenu_Active();
 }
 
 /* MainMenu_StartFrontendEntryTransition. Mode 1 with the leave flag set and
@@ -588,7 +644,7 @@ static void transition(s32 mode)
         ((void (*)(s32))orig_transition)(mode);
         return;
     }
-    if (leaving && port_ui_open()) {
+    if (leaving && (port_ui_open() || s_ui_recent > 0)) {
         D_80184595 = 0;
         return;
     }
@@ -616,31 +672,53 @@ static s32 update_frontend(void)
     int leave = 0;
     s32 result;
 
-    /* An overlay opening over the prompt takes the input with it. */
-    if (s_open && (port_ui_open() || !host->setting(host, "confirm_exit", 1))) {
-        prompt_close();
+    if (port_ui_open()) {
+        s_ui_recent = 3;
+    } else if (s_ui_recent > 0) {
+        s_ui_recent--;
+    }
+
+    /* One of the port's screens opening over the prompt takes it with them. */
+    if (s_open && (port_screen_open() || !host->setting(host, "confirm_exit", 1))) {
+        prompt_close_because("port screen / setting off");
     }
 
     if (s_open) {
 
-        if ((pressed & PAD_DIRECTION_LEFT) != 0 && s_sel != SEL_YES) {
-            s_sel = SEL_YES;
-            SD_SEPlay(SE_MOVE, 0xFF, 0);
-            s_sig++;
-        } else if ((pressed & PAD_DIRECTION_RIGHT) != 0 && s_sel != SEL_NO) {
-            s_sel = SEL_NO;
-            SD_SEPlay(SE_MOVE, 0xFF, 0);
-            s_sig++;
-        }
+        if (Menu_IsOpen()) {
+            /* The bar has the pointer and the keys; nothing here is the
+             * player answering. The press that closes it is not one either,
+             * so the latch is re-armed for when the bar goes away. */
+            s_wait_release = 1;
+        } else if (s_wait_release) {
+            /* Neither still down nor arriving again: the press that opened
+             * the prompt is spent, and the next one is the player's answer.
+             * Nothing is read until then -- not the answer, not the choice --
+             * and the pad is still taken below, so the screen underneath sees
+             * no buttons while this holds. */
+            if ((held & PAD_BUTTON_CANCEL) == 0 && (pressed & PAD_BUTTON_CANCEL) == 0) {
+                s_wait_release = 0;
+            }
+        } else {
+            if ((pressed & PAD_DIRECTION_LEFT) != 0 && s_sel != SEL_YES) {
+                s_sel = SEL_YES;
+                SD_SEPlay(SE_MOVE, 0xFF, 0);
+                s_sig++;
+            } else if ((pressed & PAD_DIRECTION_RIGHT) != 0 && s_sel != SEL_NO) {
+                s_sel = SEL_NO;
+                SD_SEPlay(SE_MOVE, 0xFF, 0);
+                s_sig++;
+            }
 
-        if ((pressed & PAD_BUTTON_CANCEL) != 0) {
-            prompt_close();
-            SD_SEPlay(SE_REFUSED, 0xFF, 0);
-        } else if ((pressed & PAD_BUTTON_CONFIRM_MASK) != 0) {
-            leave = s_sel == SEL_YES;
-            prompt_close();
-            if (!leave) {
+            if ((pressed & PAD_BUTTON_CANCEL) != 0) {
+                prompt_close_because("circle");
                 SD_SEPlay(SE_REFUSED, 0xFF, 0);
+            } else if ((pressed & PAD_BUTTON_CONFIRM_MASK) != 0) {
+                leave = s_sel == SEL_YES;
+                prompt_close_because("cross");
+                if (!leave) {
+                    SD_SEPlay(SE_REFUSED, 0xFF, 0);
+                }
             }
         }
 
@@ -648,6 +726,8 @@ static s32 update_frontend(void)
         gInput_wPad1Held = 0;
         gInput_wPad1Repeat = 0;
     }
+
+    s_saw_update = 1;
 
     result = ((s32 (*)(void))orig_update)();
 
@@ -673,22 +753,22 @@ static s32 update_frontend(void)
 
 static void frame(void)
 {
-    if (s_open && ((D_8009B26C[0] & 0x1f) != 8 ||
-                   !host->setting(host, "confirm_exit", 1))) {
-        prompt_close();
+    if (s_open && (!s_saw_update || !host->setting(host, "confirm_exit", 1))) {
+        prompt_close_because("left the mode-select screen");
     }
+    s_saw_update = 0;
 }
 
 static void applied(int on)
 {
     if (!on) {
-        prompt_close();
+        prompt_close_because("unapplied");
     }
 }
 
 static void reset(void)
 {
-    prompt_close();
+    prompt_close_because("reset");
 }
 
 int YamyiConfirm_Init(const MemoriesModHost *from, MemoriesMod *mod)

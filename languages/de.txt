@@ -34,10 +34,10 @@ NAME:{call L125A}{f8 16}{end}
 {f8 0A 05}{f8 03 08 56 1D 80 C3}{f8 01 12}{f8 00 10}{f8 00 20}{end}
 
 {:LF007}
-{f8 06 00 00}{f8 07 10 F8} z{end}
+{f8 06 00 00}{f8 07 10 00}{f8 00 20}{end}
 
 [0007]
-{f8 06 AF 00}{f8 00 00}{f8 02 04}{f8 00 03}{jump LF007}
+{f8 06 AF 00}{f8 00 00}{f8 02 04}{f8 00 01}{jump LF007}
 
 [0008]  {:LF008}
 {f8 0A 01} STAPEL IST NICHT BEREIT!{end}
@@ -110,7 +110,7 @@ LADEN VERLASSEN
 {f8 04 00}{f8 06 83 00}{f8 03 0C 56 1D 80 83}{end}
 
 [001B]
-{f8 0A 05}{f8 03 08 56 1D 80 C3}{f8 0A 84}{f8 06 49 00}{f8 00 00}{f8 02 04}{f8 00 03}{jump LF00B}
+{f8 0A 05}{f8 03 08 56 1D 80 C3}{f8 0A 84}{f8 06 49 00}{f8 00 00}{f8 02 04}{f8 00 01}{jump LF00B}
 
 [001C]
 {f8 0A 01}{f8 02 0C}DU MUSST EINEN STAPEL VORBEREITEN,
@@ -188,59 +188,62 @@ COM{end}
 {f8 06 C3 00}♀{f8 03 0C 56 1D 80 84}{f8 01 F8}{f8 06 ED 00}{f8 00 00}{end}
 
 {:LF011}
-{f8 17 LF014 LF012 LF016 LF015}
+{f8 17 LF015 LF012 LF017 LF016}
 
 {:LF012}
 {call LF010}{f8 02 02}{f8 00 01}{f8 02 02}{f8 00 02}{cont}
 {:LF013}
-{f8 07 18 F8}n {f8 06 00 00}{f8 00 20}{cont}
+{f8 07 18 00}{cont}
 {:LF014}
+{f8 04 00}{f8 06 00 00}{f8 00 20}{cont}
+{:LF015}
 {end}
 
-{:LF015}
+{:LF016}
 {f8 06 07 01}{f8 08}{end}
 
-{:LF016}
+{:LF017}
 {call LF010}{f8 02 0A}{f8 08}{jump LF013}
 
-[0051]  {:LF017}
-{f8 17 LF014 LF018 LF018 LF014}
+[0051]  {:LF018}
+{f8 17 LF015 LF019 LF019 LF015}
 
-{:LF018}
-{f8 06 ED 00}{f8 00 00}{f8 02 02}{f8 00 03}{f8 07 1C FD}Ev{cont}
 {:LF019}
-{f8 18 LF01D LF01A LF01B LF01C}
+{f8 06 ED 00}{f8 00 00}{f8 02 02}{f8 00 01}{f8 07 1C 00}{jump LF014}
 
 {:LF01A}
-{f8 01 0C}{f8 06 4C 00}Schwerter des Lichts {f8 04 02}{f8 0A 05}{f8 03 10 56 1D 80 01}{f8 0A 00}{f8 04 00}{end}
+{f8 18 LF01E LF01B LF01C LF01D}
 
 {:LF01B}
-{f8 06 B8 00}{f8 00 10}SCHUTZSTERN{f8 0A 00}{end}
+{f8 01 0C}{f8 06 4C 00}Schwerter des Lichts {f8 04 02}{f8 0A 05}{f8 03 10 56 1D 80 01}{f8 0A 00}{f8 04 00}{end}
 
 {:LF01C}
-{call LF01B}{call LF01A}{cont}
+{f8 06 B8 00}{f8 00 10}SCHUTZSTERN{f8 0A 00}{end}
+
 {:LF01D}
+{call LF01C}{call LF01B}{cont}
+{:LF01E}
 {end}
 
 [0052]
-{f8 01 DD}{call LF019} {jump LF011}
+{f8 01 DD}{call LF01A} {jump LF011}
 
 [0053]
-{f8 01 DD}{call LF019} {jump LF017}
+{f8 01 DD}{call LF01A} {jump LF018}
 
 [0054]
-{f8 01 16}{call LF019} {jump LF011}
+{f8 01 16}{call LF01A} {jump LF011}
 
 [0055]
-{f8 01 16}{call LF019} {jump LF017}
+{f8 01 16}{call LF01A} {jump LF018}
 
 [0060]
 {call LF004}{cont}
-{:LF01E}
+{:LF01F}
 {f8 06 78 FF} {f8 0A 05}{f8 03 08 56 1D 80 C3}{f8 01 12}{f8 0A 00}{f8 06 78 FF}{f8 00 20}{end}
 
 [0061]
-{call LF006}{jump LF01E}
+{call LF006}{jump LF01F}
 
 [0090]
 {f8 01 20}Original Character Design
@@ -471,11 +474,11 @@ Localization Team
 
 [00AE 00AF 00B0]
 2{cont}
-{:LF01F}
+{:LF020}
 D Graphics{end}
 
 [00B1]
-3{jump LF01F}
+3{jump LF020}
 
 [00B2]
 Special Thanks{end}
@@ -487,10 +490,10 @@ Special Thanks{end}
 {end}
 
 [00BA]
-{jump LF025}
+{jump LF026}
 
 [00BB]
-{jump LF024}
+{jump LF025}
 
 [00BC]
 {choice 53}BACKUPDATEN LADEN?
@@ -504,11 +507,11 @@ Special Thanks{end}
 
 [00BE]
 {f8 02 60}FORMATIERE ...
-{jump LF025}
+{jump LF026}
 
 [00BF]
 
-{f8 02 6C}FORMATIEREN{jump LF023}
+{f8 02 6C}FORMATIEREN{jump LF024}
 
 [00B7]
 {f8 02 28}{f8 0A 01}GREIFE AUF MEMORY CARD ZU ...
@@ -549,19 +552,19 @@ Special Thanks{end}
 
 [00C7]
 
-{f8 02 40}LADEN{jump LF021}
+{f8 02 40}LADEN{jump LF022}
 
 [00C8]
 {choice 53}{f8 0A 01}LADEN{cont}
-{:LF020}
+{:LF021}
 {f8 0A 00}?
-{jump LF022}
+{jump LF023}
 
 [00C9]
-{choice 53}{f8 0A 01}SPEICHERN{jump LF020}
+{choice 53}{f8 0A 01}SPEICHERN{jump LF021}
 
 [00CA]
-{choice 53}{f8 0A 01}HERUNTERLADEN{jump LF020}
+{choice 53}{f8 0A 01}HERUNTERLADEN{jump LF021}
 
 [00CB]
 
@@ -569,12 +572,12 @@ HERUNTERLADEN UNVOLLSTÄNDIG!{end}
 
 [00CC]
 
-{f8 02 18}HERUNTERLADEN{jump LF023}
+{f8 02 18}HERUNTERLADEN{jump LF024}
 
 [00CD]
 
 {f8 02 40}SPEICHERN{cont}
-{:LF021}
+{:LF022}
  UNVOLLSTÄNDIG!{end}
 
 [00CE]
@@ -585,7 +588,7 @@ HERUNTERLADEN UNVOLLSTÄNDIG!{end}
 [00CF]
 {choice 53}{f8 0A 01}ÜBERSCHREIBEN?
 {f8 0A 00}{cont}
-{:LF022}
+{:LF023}
  JA
  NEIN
 {choose 80 LF000 LF000}
@@ -593,18 +596,18 @@ HERUNTERLADEN UNVOLLSTÄNDIG!{end}
 [00D0]
 
 {f8 02 60}LADEN{cont}
-{:LF023}
+{:LF024}
  FERTIG!{end}
 
 [00D1]
 
-{f8 02 48}SPEICHERN{jump LF023}
+{f8 02 48}SPEICHERN{jump LF024}
 
 [00D2]
 {f8 02 30}MEMORY CARD IN MEMORY CARD
 {f8 02 40}STECKPLATZ EINSTECKEN {f8 03 48 56 1D 80 01}!{end}
 
-{:LF024}
+{:LF025}
 {end}
 
 [00D3]
@@ -614,31 +617,31 @@ HERUNTERLADEN UNVOLLSTÄNDIG!{end}
 [00D4]
 {f8 02 28}{f8 0A 01}GREIFE AUF MEMORY CARD ZU ...
 {f8 0A 00}{cont}
-{:LF025}
+{:LF026}
 {f8 02 18}KEINE MEMORY CARD IN MEMORY CARD
 {f8 02 38}STECKPLATZ EINSTECKEN {f8 03 48 56 1D 80 01}{end}
 
 [00D5]
 {f8 02 78}{f8 0A 01}LADE ...
-{f8 0A 00}{jump LF025}
+{f8 0A 00}{jump LF026}
 
 [00D6]
 {f8 02 64}{f8 0A 01}SPEICHERE ...
-{f8 0A 00}{jump LF025}
+{f8 0A 00}{jump LF026}
 
 [00D7]
 {f8 02 54}{f8 0A 01}DOWNLOAD LÄUFT...
-{f8 0A 00}{jump LF025}
+{f8 0A 00}{jump LF026}
 
 [00D8]
 
 {f8 02 40}LADEN{cont}
-{:LF026}
+{:LF027}
  UNVOLLSTÄNDIG!{end}
 
 [00D9]
 
-{f8 02 40}SPEICHERN{jump LF026}
+{f8 02 40}SPEICHERN{jump LF027}
 
 [00DA]
 {f8 02 44}ZUGRIFF NICHT MÖGLICH
@@ -646,18 +649,18 @@ HERUNTERLADEN UNVOLLSTÄNDIG!{end}
 
 [00DB]
 {f8 0A 01}ZU WENIGE FREIE SPEICHERB{cont}
-{:LF027}
+{:LF028}
 LÖCKE!
 {f8 0A 00}{f8 02 4C}{f8 03 08 56 1D 80 82} VERWENDETE BLÖCKE
 {f8 02 48}{f8 03 0C 56 1D 80 02} BLOCK ERFORDERLICH{end}
 
 [00DC]
 
-{f8 02 28}HERUNTERLADEN{jump LF026}
+{f8 02 28}HERUNTERLADEN{jump LF027}
 
 [00DD]
 
-{f8 02 30}FORMATIEREN{jump LF026}
+{f8 02 30}FORMATIEREN{jump LF027}
 
 [00DE]
 
@@ -682,21 +685,21 @@ PASSWORT ein.
 
     {f8 0B 22}OK {f8 0B 25}END{end}
 
-{:LF028}
+{:LF029}
 KARTENNUMMER {f8 03 0C 56 1D 80 C3}
 {f8 0B 26}x{f8 03 08 56 1D 80 06}{end}
 
 [00E3]
-{choice 64}{call LF028}{cont}
-{:LF029}
+{choice 64}{call LF029}{cont}
+{:LF02A}
 
  AUSTAUSCHEN
 {f8 0A 00} BEENDEN{nl}{cont}
 [00E4]
-{choice 6C 02}{call LF028}{f8 0A 04}{jump LF029}
+{choice 6C 02}{call LF029}{f8 0A 04}{jump LF02A}
 
 [00E5]
-{call LF028}
+{call LF029}
 {f8 0A 01} Dieses PASSWORT
   wurde bereits
    eingegeben!{end}
@@ -722,12 +725,12 @@ wxyz
 {choice 53}Dein NAME lautet {f8 0A 01}{call L125A}{f8 0A 00}-
  JA
  NEIN
-{choose 80 LF02B LF02A}
-
-{:LF02A}
-{f8 16}{end}
+{choose 80 LF02C LF02B}
 
 {:LF02B}
+{f8 16}{end}
+
+{:LF02C}
 {f8 1A}{f8 04 00}Dein Duellantencode
 wurde gespeichert.{page}Du kannst nicht mit demselben
 DUELLANTENCODE SPIELEN oder TAUSCHEN!{end}
@@ -736,7 +739,7 @@ DUELLANTENCODE SPIELEN oder TAUSCHEN!{end}
 {choice 53}DUEL RESULTS
 SIEG
 NIEDERLAGE
-{choose 80 LF000 LF000 LF027}
+{choose 80 LF000 LF000 LF028}
 
 [00F8]
 <{f8 03 08 56 1D 80 83}/722>{end}

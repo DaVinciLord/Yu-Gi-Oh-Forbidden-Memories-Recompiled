@@ -8491,7 +8491,7 @@ Perseguidor de Crâneos{end}
 Hitodenchak{end}
 
 [80E4]
-Restos de Arvore{end}
+Restos de Árvore{end}
 
 [80E5]
 Ampulheta da vida{end}
@@ -8626,7 +8626,7 @@ Luz Megirus{end}
 Mavelus{end}
 
 [8111]
-Arvore Anciã do Esclarecimento{end}
+Árvore Anciã do Esclarecimento{end}
 
 [8112]
 Rei Fantasma Verde{end}
@@ -10150,7 +10150,7 @@ Armadilha de Inversão{end}
 Armadilha Falsa{end}
 
 [82B3]
-Ressureição do Dragão-Serpente{end}
+Ressurreição do Dragão-Serpente{end}
 
 [82B4]
 Juramento da Tartaruga{end}

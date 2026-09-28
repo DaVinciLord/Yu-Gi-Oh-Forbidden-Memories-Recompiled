@@ -56,7 +56,8 @@ const unsigned char *DeckMenu_Text(int id);
  * translation's compiled DECK SLOTS (NULL: the English), centred as the
  * other lines are. 0 when `menu` is not a menu of four lines of letters,
  * steps and colours, `label` not letters and spaces, or the five lines have
- * more letters than the menu's box shows (44). */
+ * more letters than the menu's box shows (44; 79 with a PAL language,
+ * TextEntries_PageLetters). */
 int DeckMenu_ShopListing(char *out, size_t size, const unsigned char *menu, const unsigned char *label);
 
 /* The decks are a draft kept with the save: written to the file when the

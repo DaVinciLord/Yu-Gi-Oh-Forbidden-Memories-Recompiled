@@ -2,10 +2,10 @@
 
 The schema is the one the port reads (notes/modding.md, notes/more-cards.md,
 notes/gameplay-tables.md; src/pc/mods/mods.c, src/pc/cards/cards.c and
-tables.c): "cards" (replace and copy), "fusions", "equips", "rituals",
-"drops" and "decks". Every other top-level key a mod has (data, text,
-textures, audio, library, requires..., and "duelists") is kept as it was
-written.
+tables.c and starter.c): "cards" (replace and copy), "fusions", "equips",
+"rituals", "drops", "decks" and "starter". Every other top-level key a mod
+has (data, text, textures, audio, library, requires..., and "duelists") is
+kept as it was written.
 
 The duelists the editor knows are the forty the disc lays out, because it
 reads the game's own files; a mod's own duelists (notes/more-duelists.md) are
@@ -21,13 +21,13 @@ import re
 import shutil
 from pathlib import Path
 
-from .gamedata import (ATTRIBUTE_NAMES, CARD_COUNT, DUELIST_NAMES, POOLS, STAR_NAMES, TYPE_NAMES, TYPE_MAGIC,
-                       GameData)
-from .model import AddedCard, ModInfo, Project, duelist_named, type_named, KEY_RE
+from .gamedata import (ATTRIBUTE_NAMES, CARD_COUNT, DECK_SIZE, DUELIST_NAMES, POOLS, STAR_NAMES,
+                       STARTER_WEIGHT_LIMIT, TYPE_NAMES, TYPE_MAGIC, GameData)
+from .model import AddedCard, ModInfo, Project, StarterDeck, duelist_named, type_named, KEY_RE
 from . import art, pools as poolmath
 
 INFO_KEYS = ("id", "name", "version", "author", "description")
-TABLE_KEYS = ("settings", "cards", "fusions", "equips", "rituals", "drops", "decks")
+TABLE_KEYS = ("settings", "cards", "fusions", "equips", "rituals", "drops", "decks", "starter")
 REPLACE_EXTRA = ("art", "thumbnail", "title", "model", "effect", "exodia")
 POOL_ALIASES = {"deck": "deck", "pow": "pow", "sapow": "pow", "bcd": "bcd", "tec": "tec", "satec": "tec"}
 
@@ -286,6 +286,29 @@ def build_pools(project: Project):
     return project.pool_files.get("drops", drops), project.pool_files.get("decks", decks)
 
 
+def build_starter(project: Project):
+    """"starter": the decks a new game may be dealt, cards named as the rules
+    name them. One deck is written as the object itself, as the port reads it;
+    a deck's cards go in id order, and a card the editor could not place goes
+    back after them, under the name it was written with."""
+    if project.starter_file is not None:
+        return project.starter_file
+    out = []
+    for deck in project.starter:
+        entry = {}
+        if deck.name:
+            entry["name"] = deck.name
+        if deck.weight != 1:
+            entry["weight"] = deck.weight
+        entry.update(deck.extra)
+        for cid in sorted(deck.cards):
+            if deck.cards[cid]:
+                entry[str(project.ref(cid))] = deck.cards[cid]
+        entry.update(deck.kept)
+        out.append(entry)
+    return out[0] if len(out) == 1 else out
+
+
 def build(project: Project) -> dict:
     """The mod.json object: the mod's own keys, then only what differs."""
     info = project.info
@@ -308,6 +331,9 @@ def build(project: Project) -> dict:
         manifest["drops"] = drops
     if decks:
         manifest["decks"] = decks
+    starter = build_starter(project)
+    if starter:
+        manifest["starter"] = starter
     return manifest
 
 
@@ -788,6 +814,75 @@ def read_pools(project: Project, table, decks: bool, messages: list):
             _read_pool(project, f"drops \"{name}\" \"{pool_name}\"", duelists, pool, body, messages)
 
 
+def _read_starter_deck(project: Project, where, entry, messages) -> StarterDeck:
+    """One deck of "starter": its name, its weight and its cards by their
+    copies. None when the port would refuse the entry outright."""
+    if not isinstance(entry, dict):
+        messages.append(f"{where}: a starter deck is an object of cards and their copies; left out")
+        return None
+    deck = StarterDeck()
+    name = entry.get("name")
+    if isinstance(name, str):
+        deck.name = name
+    elif name is not None:
+        messages.append(f"{where} \"name\": a deck's name is text; left out")
+    weight = entry.get("weight")
+    if weight is not None:
+        if (isinstance(weight, bool) or not isinstance(weight, (int, float))
+                or not 0 <= _number(weight) <= STARTER_WEIGHT_LIMIT):
+            messages.append(f"{where} \"weight\": a whole number, 0 to {STARTER_WEIGHT_LIMIT}; "
+                            "the port leaves the deck out")
+            return None
+        deck.weight = _number(weight)
+    for key, copies in entry.items():
+        if key in ("name", "weight"):
+            continue
+        if isinstance(copies, bool) or not isinstance(copies, (int, float)) or not 0 <= _number(copies) <= DECK_SIZE:
+            messages.append(f"{where} \"{key}\": copies are a whole number, 0 to {DECK_SIZE}; left out")
+            continue
+        copies = _number(copies)
+        if not copies:
+            continue
+        cid = project.resolve(key)
+        if not cid:
+            messages.append(f"{where} \"{key}\": no such card; kept as written")
+            deck.kept[key] = deck.kept.get(key, 0) + copies
+            continue
+        # Two names for one card (its number and its name) are its copies
+        # added up, as the port adds them up.
+        deck.cards[cid] = deck.cards.get(cid, 0) + copies
+    return deck
+
+
+def read_starter(project: Project, value, messages: list):
+    """"starter": one deck, or a list of them (notes/starter-deck.md)."""
+    if value is None:
+        return
+    if isinstance(value, str):
+        # A file of the mod's holding what the key would have held; the editor
+        # does not read it, so it stays that filename.
+        project.starter_file = value
+        messages.append(f"\"starter\" names the file {value}; kept as written (the editor does not read it)")
+        return
+    if isinstance(value, dict):
+        entries = [("starter", value)]
+    elif isinstance(value, list):
+        entries = [(f"starter {i + 1}", entry) for i, entry in enumerate(value)]
+    else:
+        messages.append("\"starter\" is a deck, or a list of decks; left out")
+        return
+    for where, entry in entries:
+        deck = _read_starter_deck(project, where, entry, messages)
+        if deck is None:
+            continue
+        if not deck.complete():
+            # Kept anyway: the editor is where a deck is put together, and the
+            # Problems tab says what is still wrong with it.
+            messages.append(f"{where}: a starter deck is {DECK_SIZE} cards, and this one has {deck.total()}; "
+                            "the port leaves it out until it is")
+        project.starter.append(deck)
+
+
 def same_all(name: str) -> bool:
     return "".join(c for c in name.lower() if c.isalnum()) == "all"
 
@@ -816,6 +911,7 @@ def apply(project: Project, manifest: dict, messages: list = None, default_id: s
     read_rituals(project, manifest.get("rituals"), messages)
     read_pools(project, manifest.get("drops"), False, messages)
     read_pools(project, manifest.get("decks"), True, messages)
+    read_starter(project, manifest.get("starter"), messages)
     return messages
 
 
