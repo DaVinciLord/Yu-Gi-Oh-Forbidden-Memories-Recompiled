@@ -243,15 +243,14 @@ static Menu submenus[SUB_COUNT] = {
     {"Duel rank", {{"Off", 0, ITEM_RADIO, 0, SET_RANK_METER, 0},
                    {"Rank", 0, ITEM_RADIO, 0, SET_RANK_METER, 1},
                    {"Rank and score", 0, ITEM_RADIO, 0, SET_RANK_METER, 2}}, 3},
-    /* The game's own translations and pt-BR's (language.h); labels and states set by
+    /* The game's own translations (language.h); labels and states set by
      * update_language_items. */
     {"Language", {{"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_US},
                   {"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_EN_EU, ITEM_GROUP_BREAK},
                   {"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_FR},
                   {"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_DE},
                   {"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_IT},
-                  {"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_ES},
-                  {"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_PT_BR}}, 7},
+                  {"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_ES}}, 6},
 };
 
 static int open_menu = -1, hot_item = -1, hover_bar = -1, grabbed, ready, visible = 1;
