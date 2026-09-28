@@ -702,7 +702,9 @@ and rebases pointers into its compiled text before restoring game memory,
 so loading a shop state also works in a fresh process. With the setting off the menu is the game's. A
 translation's string 0x11 gets the entry too, in the translation's words
 (string `FE10`, [translations](translation.md#the-ports-own-strings)), when
-its menu is four plain lines and the five fit the box's 44 letters; else it
+its menu is four plain lines and the five fit the box's 44 letters (79 with
+a PAL language on, whose text entries are the PAL game's 800,
+[translations](translation.md#the-official-languages)); else it
 keeps the translation's four. Checked on a save in the tournament's
 shop: the setting off is pixel-identical to master (the menu, and the cursor
 on LEAVE SHOP); DECK SLOTS opens the screen, and Circle brings the menu back
@@ -1773,7 +1775,8 @@ starchips show theirs.
 - Nothing is kept that a loaded state could contradict: which layout the
   box has is its string id, and the retail one comes from the card's type.
   Off, nothing is made and nothing changes.
-- The box's channel has a slice of the text entries (255, 160, 160 or 45).
+- The box's channel has a slice of the text entries (255, 160, 160 or 45;
+  with a PAL language 280, 220, 220 or 80).
   If the card's text and the digits do not fit together, the retail box is
   made again and that card shows no password: in the duel the viewer's box
   is on a 160-entry channel, where Right Leg, Left Leg and Right Arm of the

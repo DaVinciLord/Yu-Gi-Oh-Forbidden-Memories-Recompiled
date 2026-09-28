@@ -78,6 +78,19 @@ extern u32 D_800EB12C __attribute__((section(".data")));
 extern u32 D_800EB12C;
 #endif
 extern DuelEffectEntry D_800EB288[DUEL_EFFECT_ENTRY_COUNT];
+#ifdef MEMORIES_PC
+/* With a PAL language the entries are the PAL executable's 800, elsewhere
+ * in guest RAM (pc/text/entry_layout.h); the game's code reaches whichever
+ * table is in use by this name, and scans all of its entries. */
+#include "pc/text/entry_layout.h"
+typedef char TextEntries_entry_size_must_match[sizeof(DuelEffectEntry) == TEXT_ENTRY_SIZE ? 1 : -1];
+typedef char TextEntries_us_count_must_match[DUEL_EFFECT_ENTRY_COUNT == TEXT_ENTRY_US_COUNT ? 1 : -1];
+typedef char TextEntries_channels_must_match[DUEL_EFFECT_CHANNEL_COUNT == TEXT_ENTRY_CHANNELS ? 1 : -1];
+#define D_800EB288 ((DuelEffectEntry *)TextEntries_Pool())
+#define DUEL_EFFECT_ENTRY_TOTAL (TextEntries_Total())
+#else
+#define DUEL_EFFECT_ENTRY_TOTAL DUEL_EFFECT_ENTRY_COUNT
+#endif
 
 /* The selected card's guardian-star text id. func_80023144 stores guardian
  * star 1 or 2 plus 0x17 while it prepares the field-card display, and
