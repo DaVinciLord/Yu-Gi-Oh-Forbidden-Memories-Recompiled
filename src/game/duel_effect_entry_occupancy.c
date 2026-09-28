@@ -66,12 +66,12 @@ s32 func_80035D10(void)
 }
 
 /* Clears field17 on the first (only) entry whose field18 equals a0+1,
-   scanning 620 entries. */
+   scanning 620 entries (the port's PAL layout: 800, duel_effect.h). */
 void DuelEffect_ClearMatchingMarker(int a0) {
     DuelEffectEntry *v1;
     int a1;
     u8 v0;
-    a1 = DUEL_EFFECT_ENTRY_COUNT;
+    a1 = DUEL_EFFECT_ENTRY_TOTAL;
     a0 = a0 + 1;
     v1 = D_800EB288;
     do {
@@ -84,12 +84,12 @@ void DuelEffect_ClearMatchingMarker(int a0) {
     } while (a1 != 0);
 }
 
-/* Clears field17 and the byte at struct-relative offset 7 on all 620
+/* Clears field17 and the byte at struct-relative offset 7 on all 620 (PAL: 800)
    stride-28 entries. */
 void DuelEffect_ResetEntryMarkers(void) {
     DuelEffectEntry *v0;
     int v1;
-    v1 = DUEL_EFFECT_ENTRY_COUNT;
+    v1 = DUEL_EFFECT_ENTRY_TOTAL;
     v0 = D_800EB288;
     for (; v1 != 0; v1 = v1 - 1) {
         v0->flags_11 = 0;

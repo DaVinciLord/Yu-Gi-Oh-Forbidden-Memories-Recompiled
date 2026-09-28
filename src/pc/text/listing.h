@@ -55,14 +55,16 @@ TextUnit *TextListing_Compile(const char *text, size_t length, const uint32_t ba
                               TextGlyphEncoder encode, TextReport report, void *context);
 
 /* The most letters one page of a text box has room for: its channel's slice
- * of the game's glyph entries (255, 160, 160 and 45 of them), less the one
+ * of the game's glyph entries (255, 160, 160 and 45 of them; with a PAL
+ * language 280, 220, 220 and 80, pc/text/entry_layout.h), less the one
  * that ends the list. Which channel a string is shown on is the game's
  * choice, not the string's: the dialogue box and a few menus have the 255,
  * most menus 160 (and a retail menu string has 224 letters), so the
  * compiler can only warn past the largest. The game leaves out what does
- * not fit (DuelEffect_AppendEntry). */
-#define TEXT_PAGE_LETTERS 254
-#define TEXT_MENU_LETTERS 159
+ * not fit (DuelEffect_AppendEntry). Those of the layout this launch has
+ * (TextEntries_PageLetters: 254 and 159, or 279 and 219). */
+#define TEXT_PAGE_LETTERS (TextEntries_PageLetters(0))
+#define TEXT_MENU_LETTERS (TextEntries_PageLetters(1))
 void TextListing_Free(TextUnit *unit);
 
 /* The bank a string id belongs in, or -1 for an id no bank has. */

@@ -19,6 +19,9 @@ const unsigned char *Text_Own(int id)
     assert(id == 0x11 || id == TEXT_OWN_DECK_SLOTS);
     return NULL;
 }
+/* The menu's channel: 44 letters with US English, 79 with a PAL language. */
+static int page_letters = 44;
+int TextEntries_PageLetters(int channel) { assert(channel == 3); return page_letters; }
 int Log_Wanted(LogChannel channel) { (void)channel; return 0; }
 void Log_Printf(LogChannel channel, const char *format, ...) { (void)channel; (void)format; }
 
@@ -62,6 +65,12 @@ static void check_listings(void)
     assert(!DeckMenu_ShopListing(out, sizeof(out), coded, NULL));
     assert(!DeckMenu_ShopListing(out, sizeof(out), NULL, two_lines));
     assert(!DeckMenu_ShopListing(out, 64, NULL, NULL));
+    /* With a PAL language the channel has the PAL game's room: the English
+     * entry over this menu (47), and 41 letters more (79). */
+    page_letters = 79;
+    assert(DeckMenu_ShopListing(out, sizeof(out), menu, NULL) && strstr(out, "{g A}\n{f8 02 14}DECK SLOTS\n{g 1}"));
+    assert(DeckMenu_ShopListing(out, sizeof(out), menu, too_long));
+    page_letters = 44;
 }
 const unsigned char *Text_CompileOwn(const char *listing, int id, size_t *size)
 {
