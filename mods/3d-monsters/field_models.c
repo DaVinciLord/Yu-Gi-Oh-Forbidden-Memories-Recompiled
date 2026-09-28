@@ -163,6 +163,7 @@ typedef struct {
     int battle_scale, battle_yaw, battle_pixels;
     int battle_x, battle_y, battle_z;
     int battle_ox, battle_oy; /* its outline's middle and foot on the screen */
+    int fade;      /* 0 opaque to 255 gone, as it is drawn now */
 } Monster;
 
 static const MemoriesModHost *host;
@@ -514,7 +515,7 @@ static void place(ModelSlot *slot, int x, int y, int z, int yaw, int scale)
  * retail always leaves zero. The page word is the second corner's texture
  * word; the palette word beside it needs nothing, because a bank holds the
  * palettes at their own coordinates too. */
-static void stamp_bank(const u32 *from, const u32 *to, int bank)
+static void stamp_bank(const u32 *from, const u32 *to, int bank, int fade)
 {
     while (from < to) {
         unsigned words = *from >> 24, at = 1;
@@ -533,6 +534,11 @@ static void stamp_bank(const u32 *from, const u32 *to, int bank)
                     index++;
                     if (corner == 1) {
                         ((u32 *)from)[index] |= (u32)bank << 27;
+                    } else if (corner == 2) {
+                        /* The spare half beside the third corner's texels:
+                         * how far the polygon fades (soft_gpu.h). */
+                        ((u32 *)from)[index] = (from[index] & 0xffffu) |
+                                               ((fade ? SOFT_GPU_FADE | (u32)fade : 0u) << 16);
                     }
                     index++;
                 }
@@ -621,7 +627,7 @@ static void sort_monster(Monster *monster, GsOT *into, int at)
     entry = (u32 *)into->org + at;
     *last = (*last & ~LINK_MASK) | (*entry & LINK_MASK);
     *entry = (*entry & ~LINK_MASK) | first;
-    stamp_bank(from, (const u32 *)(uintptr_t)D_800FE240, monster->bank);
+    stamp_bank(from, (const u32 *)(uintptr_t)D_800FE240, monster->bank, monster->fade);
 }
 
 
@@ -878,6 +884,8 @@ typedef struct {
 #define DUEL_SCENE_BATTLE 9
 #define BATTLE_STEP_TO_ARENA 5    /* fading out to the 3D battle in the arena */
 #define BATTLE_STEP_DESTROY 10    /* the losing card burns */
+#define BATTLE_STEP_END 11        /* the cards fade out */
+#define BATTLE_OUTRO 16           /* frames the monsters fade out and the cards light up over */
 #define BATTLE_CARD_WIDTH 0x8C
 #define BATTLE_CARD_FEET 0xAC     /* the feet, down from the card's top edge */
 #define BATTLE_BOX_WIDTH 0x96     /* the widest a monster stands on its card */
@@ -1078,14 +1086,17 @@ static DisplayObject *battle_card(int side)
 {
     DisplayObject *card = D_800E9EF0[side + 2];
     int step = D_8009B174 & 0xF;
-    if ((gDuel_wSceneStateFlags & DUEL_SCENE_PHASE_MASK) != DUEL_SCENE_BATTLE || !D_800E9EF0[side] ||
+    /* The last step releases the field cards first thing; the big ones stay
+     * until they have faded out. */
+    if ((gDuel_wSceneStateFlags & DUEL_SCENE_PHASE_MASK) != DUEL_SCENE_BATTLE ||
+        (!D_800E9EF0[side] && step != BATTLE_STEP_END) ||
         !card || (card->flags & DISPLAY_OBJECT_RENDERABLE_MASK) != DISPLAY_OBJECT_RENDERABLE_MASK ||
         (card->flags & 4)) {
         return NULL; /* not the battle, no such card, or still fading in */
     }
     /* When the battle goes on to the arena the cards are up only a few
      * frames before the fade, and the arena has the monsters anyway. */
-    if (D_8009B229 || step < 3 || step == BATTLE_STEP_TO_ARENA || step > BATTLE_STEP_DESTROY) {
+    if (D_8009B229 || step < 3 || step == BATTLE_STEP_TO_ARENA || step > BATTLE_STEP_END) {
         return NULL;
     }
     return card;
@@ -1105,8 +1116,31 @@ static int draw_battle(void)
     static ModelSlot borrowed;
     DisplayObject *cards[DUEL_SIDE_COUNT];
     Monster *monsters[DUEL_SIDE_COUNT];
+    static int outro = -1; /* frames into the last step */
     u32 work_base;
-    int side, count = 0;
+    int side, count = 0, fade = 0;
+
+    /* The battle's last step fades the cards out, each from its colour, by 8
+     * a frame (DuelScene_UpdateBattle, case 11). Before that the monsters
+     * fade out over BATTLE_OUTRO frames and the cards light up again: the
+     * pass sets the colour the step will take 8 off next frame, which holds
+     * the cards up that long, then lets the step fade them from full. */
+    if ((D_8009B174 & 0xF) != BATTLE_STEP_END || !tunable("battle", 0)) {
+        outro = -1;
+    } else if (++outro >= BATTLE_OUTRO) {
+        return 0;
+    } else {
+        int from = (int)(dim_colour() & 0xFF), level;
+        dimmed[0] = dimmed[1] = NULL; /* the colour is the outro's now */
+        level = from + (0x80 - from) * (outro + 1) / BATTLE_OUTRO;
+        fade = 255 * (outro + 1) / BATTLE_OUTRO;
+        for (side = 0; side < DUEL_SIDE_COUNT; side++) {
+            DisplayObject *card = battle_card(side);
+            if (card) {
+                card->field_0C = (card->field_0C & ~0xFFFFFFu) | (u32)(level + 8) * 0x010101u;
+            }
+        }
+    }
 
     for (side = 0; side < DUEL_SIDE_COUNT; side++) {
         cards[side] = tunable("battle", 0) ? battle_card(side) : NULL;
@@ -1134,8 +1168,10 @@ static int draw_battle(void)
             dim(side, cards[side]);
         } else if (cards[side] && (monsters[side] = battle_monster(side)) != NULL) {
             monsters[side]->stepped = 0;
-            dim(side, cards[side]);
-        } else {
+            if (outro < 0) {
+                dim(side, cards[side]);
+            }
+        } else if (outro < 0) {
             undim(side);
         }
     }
@@ -1156,7 +1192,9 @@ static int draw_battle(void)
         place(slot, wx - monster->battle_x, wy - monster->battle_y, -monster->battle_z, yaw,
               monster->battle_scale);
         at = cards[side]->field_14 - (int)table->offset - BATTLE_DEPTH_STEPS;
+        monster->fade = fade;
         sort_monster(monster, table, at < 0 ? 0 : at);
+        monster->fade = 0;
         if (!monster->stepped) {
             func_800556E8(0);
             monster->stepped = 1;

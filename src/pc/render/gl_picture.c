@@ -528,6 +528,12 @@ static const char *fragment_source =
     "        else if (mode.y == 3) { c = floor(c * 0.25); alpha = 1.0; }\n"
     "        else alpha = 1.0;\n"
     "    }\n"
+    /* A fading polygon (soft_gpu.h): the result mixed with what is under it. */
+    "    if (mode.w != 0) {\n"
+    "        float f = float(mode.w) / 255.0;\n"
+    "        c *= 1.0 - f;\n"
+    "        alpha = 1.0 - (1.0 - alpha) * (1.0 - f);\n"
+    "    }\n"
     "    fragment = vec4(c / 255.0, alpha);\n"
     "}\n";
 
@@ -781,6 +787,7 @@ static struct {
     int clut_x, clut_y;
     int pack; /* the pack entry the primitive being read samples, 0 none */
     int glyph; /* the page word has HD text's mark (hd_text.h) */
+    int fade;  /* the polygon being read fades (soft_gpu.h), 0 to 255 */
 } state;
 
 typedef struct Vertex {
@@ -891,6 +898,7 @@ static void set_vertex(GlVertex *out, float x, float y, float u, float v, const 
     out->depth = (uint16_t)state.depth;
     out->blend = (uint16_t)state.blend;
     out->bank = (uint16_t)state.bank;
+    out->unused = (uint16_t)state.fade;
     out->q = (flags & 32) ? from->q : 1.0f;
     out->bounds[0] = (uint16_t)bounds_now[0];
     out->bounds[1] = (uint16_t)bounds_now[1];
@@ -1024,9 +1032,13 @@ static size_t polygon(const uint32_t *words, size_t count)
                 state.clut_y = (word >> 22) & 0x1ff;
             } else if (i == 1) {
                 set_page(word >> 16);
+            } else if (i == 2) {
+                state.fade = (int)(word >> 16);
             }
         }
     }
+    /* Only a primitive sampling a bank can fade: retail never names one. */
+    state.fade = textured && state.bank ? SoftGpu_FadeOf((uint32_t)state.fade) : 0;
     state.pack = textured && !state.bank
                      ? TexturePack_EntryFor(state.page_x, state.page_y, state.depth, state.clut_x, state.clut_y,
                                             v[0].u, v[0].v)
@@ -1092,6 +1104,7 @@ static size_t polygon(const uint32_t *words, size_t count)
     if (textured && v[0].precise && v[1].precise && v[2].precise && (!quad || v[3].precise)) flags |= 32;
     triangle(&v[0], &v[1], &v[2], flags);
     if (quad) triangle(&v[1], &v[2], &v[3], flags);
+    state.fade = 0;
     return need;
 }
 
