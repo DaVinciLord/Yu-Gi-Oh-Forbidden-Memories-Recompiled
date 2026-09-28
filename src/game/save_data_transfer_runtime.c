@@ -21,6 +21,7 @@
 #include "text_box_runtime.h"
 #ifdef MEMORIES_PC
 #include "pc/cards/cards.h"
+#include "pc/free_duel/duelists.h"
 #include "pc/saves/save_cards.h"
 #endif
 
@@ -50,9 +51,10 @@ s32 SaveData_PollLoad(void) {
             Util_CopyWords(p, gSaveData_aTransferBuffer, SAVE_DATA_STATE_SIZE);
             SaveData_ApplyRuntimeState((SaveDataState *)p);
 #ifdef MEMORIES_PC
-            /* What the save holds of the cards past the disc's; then the
-               mods hear of the load (save_cards.h). */
+            /* What the save holds of the cards and duelists past the disc's;
+               then the mods hear of the load (save_cards.h). */
             Cards_SaveLoaded(p);
+            Duelists_SaveLoaded(p);
             SaveCards_Applied(p);
 #endif
         }

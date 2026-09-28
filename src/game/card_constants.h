@@ -56,6 +56,22 @@ extern int gCard_nCount;
 #define FREE_DUEL_UNLOCK_FLAG_BASE 0x6E0
 #define FREE_DUEL_GRID_RECORD_SIZE 4
 #define FREE_DUEL_RECORD_MAX 999
+/* The PC port can have more duelists than the disc: a mod's "duelists" adds
+ * copies of retail ones at ids FREE_DUEL_GRID_ENTRY_COUNT onwards
+ * (notes/more-duelists.md). FREE_DUEL_GRID_ENTRY_COUNT stays what the disc
+ * and the save block are laid out by; DUELIST_TABLE_COUNT is what the port's
+ * own arrays hold. On the console they are the same.
+ *
+ * The limit is 128 rather than what a byte holds because gDuel_bOpponentID is
+ * signed: an id of 128 or over reads back negative, which Duel_InitScene takes
+ * for a two-player duel, the results screen takes for no opponent, and every
+ * table lookup misses. */
+#ifdef MEMORIES_PC
+#define DUELIST_ID_LIMIT 128
+#define DUELIST_TABLE_COUNT DUELIST_ID_LIMIT
+#else
+#define DUELIST_TABLE_COUNT FREE_DUEL_GRID_ENTRY_COUNT
+#endif
 /* Each duelist portrait record is a 48x48 8-bit image followed by its CLUT. */
 #define FREE_DUEL_PORTRAIT_IMAGE_SIZE 2304
 #define FREE_DUEL_PORTRAIT_RECORD_SIZE 2432

@@ -45,8 +45,14 @@ enum {
     TEXT_OWN_MORE_CARDS = 0xFE02,   /* card drops: the heading, more */
     TEXT_OWN_PAGE_OF = 0xFE03,      /* card drops: which page of how many */
     TEXT_OWN_DECK_SLOTS = 0xFE10,   /* the card shop's added menu entry */
+    TEXT_OWN_FREE_DUEL_PAGE = 0xFE11, /* the Free Duel grid's page line */
     TEXT_OWN_OPPONENT = 0xFE40      /* + duelist id (1-39, FE41-FE67): the name in place of COM */
 };
+/* Ids above the block, which the port composes rather than a translation
+ * writing them: FF00-FF57 the name of a duelist a mod added, one each
+ * (free_duel/duelists.h), and FFFD-FFFF one line apiece for the Free Duel
+ * grid's page, the Password screen's label and the results screen's added
+ * pages (free_duel/page_box.h, cards/passwords.h, cards/drops.h). */
 /* The compiled text an applied mod gives string `id` (glyph codes and
  * codes, ending in {end}), or NULL: for the port's own strings, and for a
  * retail string the port adds to. */

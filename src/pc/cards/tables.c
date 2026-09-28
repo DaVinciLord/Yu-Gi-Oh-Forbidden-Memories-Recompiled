@@ -16,13 +16,17 @@
  * on top of it. */
 #include "tables.h"
 #include "cards.h"
+#include "pc/free_duel/duelists.h"
 #include "pc/mods/mods.h"
 #include "pc/mods/json.h"
 #include "pc/debug/log.h"
+#include "pc/platform/paths.h"
+#include "pc/compat/fs.h"
 #include "game/card_constants.h"
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <dirent.h>
 #include <string.h>
 
 extern signed char gDuel_bOpponentID;
@@ -45,12 +49,38 @@ const char *Tables_DuelistShortName(int duelist)
     } shorter[] = {{10, "Weevil"},   {11, "Mai"},       {12, "Keith"},    {18, "Soldier"},  {22, "H.M. Secmeton"},
                    {24, "H.M. Anubisius"}, {25, "Mountain"},  {26, "H.M. Atenza"},   {28, "H.M. Martis"},   {30, "H.M. Kepura"},
                    {31, "Labyrinth"}, {33, "G. Sebek"},     {34, "G. Neku"},     {39, "Master K"}};
+    static char latin[64], name[TABLES_SHORT_NAME_LIMIT + 1];
+    const unsigned char *in;
+    size_t n = 0;
     unsigned i;
-    if (duelist < 1 || duelist >= TABLES_DUELIST_COUNT) return NULL;
-    for (i = 0; i < sizeof(shorter) / sizeof(shorter[0]); i++) {
-        if (shorter[i].duelist == duelist) return shorter[i].name;
+    if (duelist < 1 || !Duelists_Valid(duelist)) return NULL;
+    if (!Tables_DuelistRenamed(duelist)) {
+        for (i = 0; i < sizeof(shorter) / sizeof(shorter[0]); i++) {
+            if (shorter[i].duelist == duelist) return shorter[i].name;
+        }
+        return Duelists_Name(duelist);
     }
-    return Tables_DuelistNames[duelist];
+    /* A mod's name, which is UTF-8, in the Latin-1 the name box draws: a
+     * letter past Latin-1 ends it, as any other letter the box lacks ends a
+     * translated name (Tables_ShortenName). */
+    for (in = (const unsigned char *)Duelists_Name(duelist); *in && n < sizeof(latin) - 1; in++) {
+        if (*in < 0x80) {
+            latin[n++] = (char)*in;
+        } else if ((*in == 0xC2 || *in == 0xC3) && (in[1] & 0xC0) == 0x80) {
+            latin[n++] = (char)(((*in & 0x1F) << 6) | (in[1] & 0x3F));
+            in++;
+        } else {
+            break;
+        }
+    }
+    latin[n] = '\0';
+    return Tables_ShortenName(latin, name) ? name : NULL;
+}
+
+int Tables_DuelistRenamed(int duelist)
+{
+    return Duelists_Valid(duelist) &&
+           (duelist >= TABLES_DUELIST_COUNT || strcmp(Duelists_Name(duelist), Tables_DuelistNames[duelist]));
 }
 
 /* A letter of Latin-1: A-Z, a-z, or an accented one (not × or ÷). */
@@ -146,7 +176,10 @@ typedef struct {
 
 typedef struct {
     const char *mod;
-    unsigned char duelist, pool, replace;
+    /* `duelist` is an int: it indexes the extended list, which a mod can take
+     * past what a byte holds. */
+    int duelist;
+    unsigned char pool, replace;
     unsigned char warned, waiting;   /* told it failed; told a fixed deck wins */
     int count;
     unsigned short *cards, *weights;
@@ -177,7 +210,7 @@ static PoolEdit *edits;
 static int edit_count, edit_room;
 typedef struct {
     const char *mod;
-    unsigned char duelist;
+    int duelist;                       /* an added duelist's id outgrows a byte */
     unsigned short cards[DECK_SIZE];   /* in id order */
 } FixedDeck;
 static FixedDeck *fixed_decks;
@@ -190,7 +223,33 @@ static unsigned char terrain_listed[TERRAINS][CARD_TYPE_MAGIC];
 static long trap_threshold[DUEL_ATTACK_TRAP_COUNT];   /* House of Adhesive Tape to Widespread Ruin */
 static unsigned char trap_listed[DUEL_ATTACK_TRAP_COUNT];
 static const char *trap_from[DUEL_ATTACK_TRAP_COUNT];      /* the mod that set it */
-static unsigned char edited[TABLES_DUELIST_COUNT][TABLES_POOL_COUNT];
+/* Which pools have an edit, per duelist. It grows with the duelist list
+ * (pc/free_duel/duelists.h), so a duelist a mod added is named by "drops" and
+ * "decks" exactly as a retail one is. */
+static unsigned char *edited;
+static int edited_room;
+
+static void mark_edited(int duelist, int pool)
+{
+    if (duelist < 0 || pool < 0 || pool >= TABLES_POOL_COUNT) return;
+    if (duelist >= edited_room) {
+        const int room = Duelists_Count() > duelist + 1 ? Duelists_Count() : duelist + 1;
+        unsigned char *bigger = realloc(edited, (size_t)room * TABLES_POOL_COUNT);
+        if (!bigger) return;
+        memset(bigger + (size_t)edited_room * TABLES_POOL_COUNT, 0,
+               (size_t)(room - edited_room) * TABLES_POOL_COUNT);
+        edited = bigger;
+        edited_room = room;
+    }
+    edited[(size_t)duelist * TABLES_POOL_COUNT + pool] = 1;
+}
+
+static int is_edited(int duelist, int pool)
+{
+    if (!edited || duelist < 0 || duelist >= edited_room) return 0;
+    if (pool < 0 || pool >= TABLES_POOL_COUNT) return 0;
+    return edited[(size_t)duelist * TABLES_POOL_COUNT + pool];
+}
 static unsigned order_counter;
 static int fusions_sorted;
 
@@ -585,15 +644,76 @@ int Tables_Ritual(int ritual, unsigned short recipe[6])
 
 /* --- drops and decks ------------------------------------------------- */
 
-static int duelist_named(const char *text)
+/* --- the rank score (tables.h) --------------------------------------------
+ *
+ * One row of five threshold/change pairs per rule per duelist, over what the
+ * disc's block holds. Kept flat and grown with the duelist list, as `edited`
+ * is, so a duelist a mod added is named exactly as a retail one.
+ */
+static const char *const rank_rule_names[TABLES_RANK_RULE_COUNT] = {
+    "turns", "effective attacks", "defensive wins", "face-down plays", "pure magic",
+    "traps triggered", "cards used", "remaining lp", "initiate fusion", "equip magic",
+};
+
+#define RANK_ROW_VALUES (TABLES_RANK_STEPS * 2)
+
+static short *rank_rows;              /* [duelist][rule][step][threshold, change] */
+static unsigned char *rank_given;     /* [duelist][rule]: this row was written */
+static int rank_room;
+
+static int rank_room_for(int duelist)
 {
-    int id;
-    if (!text || !*text) return -1;
-    if (strspn(text, "0123456789") == strlen(text)) return (id = atoi(text)) < TABLES_DUELIST_COUNT ? id : -1;
-    for (id = 0; id < TABLES_DUELIST_COUNT; id++) {
-        if (same_letters(text, Tables_DuelistNames[id])) return id;
+    if (duelist < 0) return 0;
+    if (duelist >= rank_room) {
+        const int room = Duelists_Count() > duelist + 1 ? Duelists_Count() : duelist + 1;
+        short *rows = realloc(rank_rows, (size_t)room * TABLES_RANK_RULE_COUNT * RANK_ROW_VALUES * sizeof(*rows));
+        unsigned char *given = realloc(rank_given, (size_t)room * TABLES_RANK_RULE_COUNT);
+        if (rows) rank_rows = rows;
+        if (given) rank_given = given;
+        if (!rows || !given) return 0;
+        memset(rank_rows + (size_t)rank_room * TABLES_RANK_RULE_COUNT * RANK_ROW_VALUES, 0,
+               (size_t)(room - rank_room) * TABLES_RANK_RULE_COUNT * RANK_ROW_VALUES * sizeof(*rank_rows));
+        memset(rank_given + (size_t)rank_room * TABLES_RANK_RULE_COUNT, 0,
+               (size_t)(room - rank_room) * TABLES_RANK_RULE_COUNT);
+        rank_room = room;
+    }
+    return 1;
+}
+
+int Tables_RankNamed(const char *text)
+{
+    int rule;
+    if (!text) return -1;
+    for (rule = 0; rule < TABLES_RANK_RULE_COUNT; rule++) {
+        if (same_letters(text, rank_rule_names[rule])) return rule;
     }
     return -1;
+}
+
+
+
+void Tables_SetRank(int duelist, int rule, const short *row)
+{
+    short *at;
+    if (duelist < 0 || rule < 0 || rule >= TABLES_RANK_RULE_COUNT || !row) return;
+    if (!rank_room_for(duelist)) return;
+    at = rank_rows + ((size_t)duelist * TABLES_RANK_RULE_COUNT + rule) * RANK_ROW_VALUES;
+    memcpy(at, row, RANK_ROW_VALUES * sizeof(*at));
+    at[(TABLES_RANK_STEPS - 1) * 2] = 0x7FFF;
+    rank_given[(size_t)duelist * TABLES_RANK_RULE_COUNT + rule] = 1;
+}
+
+const short *Tables_RankFor(int duelist, int rule)
+{
+    if (!Duelists_Valid(duelist) || rule < 0 || rule >= TABLES_RANK_RULE_COUNT) return NULL;
+    if (!rank_rows || duelist >= rank_room) return NULL;
+    if (!rank_given[(size_t)duelist * TABLES_RANK_RULE_COUNT + rule]) return NULL;
+    return rank_rows + ((size_t)duelist * TABLES_RANK_RULE_COUNT + rule) * RANK_ROW_VALUES;
+}
+
+const short *Tables_Rank(int rule)
+{
+    return Tables_RankFor(Tables_OpponentId(), rule);
 }
 
 static int pool_named(const char *text)
@@ -653,14 +773,14 @@ static void read_pool(const char *mod, const char *where, int duelist, int pool,
         return;
     }
     first = duelist < 0 ? 0 : duelist;
-    last = duelist < 0 ? TABLES_DUELIST_COUNT - 1 : duelist;
+    last = duelist < 0 ? Duelists_Count() - 1 : duelist;
     for (i = first; i <= last; i++) {
         PoolEdit *slot = grow(&edits, &edit_room, edit_count, sizeof(*edits));
         if (!slot) break;
         *slot = edit;
-        slot->duelist = (unsigned char)i;
+        slot->duelist = i;
         edit_count++;
-        edited[i][pool] = 1;
+        mark_edited(i, pool);
     }
     /* The edit's lists are shared by the opponents it names, and live on. */
 }
@@ -726,13 +846,17 @@ static void read_fixed_deck(const char *mod, const char *where, int duelist, con
         for (copy = 0; copy < list[i].copies; copy++) deck.cards[dealt++] = (unsigned short)list[i].id;
     }
     free(list);
+    /* "all" is every duelist this run has, the added ones included; a slot
+     * nothing was placed in is no duelist and is passed over. */
     first = duelist < 0 ? 0 : duelist;
-    last = duelist < 0 ? TABLES_DUELIST_COUNT - 1 : duelist;
+    last = duelist < 0 ? Duelists_Count() - 1 : duelist;
     for (i = first; i <= last; i++) {
-        FixedDeck *slot = grow(&fixed_decks, &fixed_room, fixed_count, sizeof(*fixed_decks));
+        FixedDeck *slot;
+        if (duelist < 0 && !Duelists_Valid(i)) continue;
+        slot = grow(&fixed_decks, &fixed_room, fixed_count, sizeof(*fixed_decks));
         if (!slot) break;
         *slot = deck;
-        slot->duelist = (unsigned char)i;
+        slot->duelist = i;
         fixed_count++;
     }
 }
@@ -741,7 +865,7 @@ int Tables_FixedDeck(int duelist, unsigned short cards[TABLES_DECK_SIZE])
 {
     const FixedDeck *deck = NULL;
     int i;
-    if (duelist < 0 || duelist >= TABLES_DUELIST_COUNT) return 0;
+    if (!Duelists_Valid(duelist)) return 0;
     for (i = fixed_count - 1; i >= 0 && !deck; i--) {   /* the latest */
         if (fixed_decks[i].duelist == duelist) deck = &fixed_decks[i];
     }
@@ -751,7 +875,7 @@ int Tables_FixedDeck(int duelist, unsigned short cards[TABLES_DECK_SIZE])
         PoolEdit *edit = &edits[i];
         if (edit->duelist != duelist || edit->pool != TABLES_POOL_DECK || edit->waiting) continue;
         edit->waiting = 1;
-        Mods_Note(edit->mod, "%s's deck: left as it is; %s fixes it", Tables_DuelistNames[duelist], deck->mod);
+        Mods_Note(edit->mod, "%s's deck: left as it is; %s fixes it", Duelists_Name(duelist), deck->mod);
     }
     memcpy(cards, deck->cards, sizeof(deck->cards));
     if (Log_Wanted(LOG_MODS)) {
@@ -762,14 +886,29 @@ int Tables_FixedDeck(int duelist, unsigned short cards[TABLES_DECK_SIZE])
             while (i + 1 < DECK_SIZE && deck->cards[i + 1] == deck->cards[i]) i++, copies++;
             at += snprintf(text + at, sizeof(text) - (size_t)at, " %dx%d", copies, deck->cards[i]);
         }
-        LOG(LOG_MODS, "tables: %s's deck fixed by %s (copies x card):%s", Tables_DuelistNames[duelist], deck->mod, text);
+        LOG(LOG_MODS, "tables: %s's deck fixed by %s (copies x card):%s", Duelists_Name(duelist), deck->mod, text);
     }
     return 1;
 }
 
+/* A "decks" entry: a pool of weights, unless "fixed" says it is the whole deck.
+ * Both ways of writing a roster come through here, so decks/<id>.json reads
+ * exactly as the same object written into the manifest does. */
+static void read_deck_entry(const char *mod, const char *where, int duelist, const JsonValue *entry)
+{
+    const JsonValue *fixed = Json_Member(entry, "fixed");
+    if (fixed && Json_TypeOf(fixed) != JSON_BOOL && Json_TypeOf(fixed) != JSON_NUMBER) {
+        /* "true" in quotes: neither deck is what the mod meant. */
+        Mods_Note(mod, "%s: \"fixed\" is true or false, without quotes; left out", where);
+        return;
+    }
+    if (Json_Bool(fixed, 0)) read_fixed_deck(mod, where, duelist, entry);
+    else read_pool(mod, where, duelist, TABLES_POOL_DECK, entry);
+}
+
 /* "drops": { opponent: { pool: { card: weight } } }, and
  * "decks": { opponent: { card: weight } } or { "fixed": true, card: copies }. */
-static void read_pools(const char *mod, const JsonValue *table, int decks)
+static void read_pool_table(const char *mod, const JsonValue *table, int decks)
 {
     int i, j;
     char where[128];
@@ -780,21 +919,14 @@ static void read_pools(const char *mod, const JsonValue *table, int decks)
     for (i = 0; i < Json_Count(table); i++) {
         const JsonValue *entry = Json_At(table, i);
         const char *name = Json_Name(entry);
-        int duelist = same_letters(name, "all") ? -1 : duelist_named(name);
+        int duelist = same_letters(name, "all") ? -1 : Duelists_Named(name);
         if (duelist == -1 && !same_letters(name, "all")) {
             Mods_Note(mod, "%s: no opponent \"%s\"", decks ? "decks" : "drops", name);
             continue;
         }
         if (decks) {
-            const JsonValue *fixed = Json_Member(entry, "fixed");
             snprintf(where, sizeof(where), "decks \"%s\"", name);
-            if (fixed && Json_TypeOf(fixed) != JSON_BOOL && Json_TypeOf(fixed) != JSON_NUMBER) {
-                /* "true" in quotes: neither deck is what the mod meant. */
-                Mods_Note(mod, "%s: \"fixed\" is true or false, without quotes; left out", where);
-                continue;
-            }
-            if (Json_Bool(fixed, 0)) read_fixed_deck(mod, where, duelist, entry);
-            else read_pool(mod, where, duelist, TABLES_POOL_DECK, entry);
+            read_deck_entry(mod, where, duelist, entry);
             continue;
         }
         if (Json_TypeOf(entry) != JSON_OBJECT) {
@@ -821,6 +953,133 @@ typedef struct {
     unsigned remainder;
     int id;
 } Share;
+
+/* "drops" and "decks" may be a file of the mod's instead of an object written
+ * out in the manifest: a roster of any size puts its pools in files beside it
+ * rather than in one manifest nobody can read. The file holds exactly what the
+ * key would have held. */
+static const char *pool_directory;
+
+static void read_pools(const char *mod, const JsonValue *table, int decks)
+{
+    const char *key = decks ? "decks" : "drops";
+    JsonDocument *document = NULL;
+
+    if (Json_TypeOf(table) == JSON_STRING) {
+        const char *relative = Json_String(table, NULL);
+        char path[1024], error[256];
+        if (!pool_directory) {
+            Mods_Note(mod, "\"%s\": a file cannot be read from here", key);
+            return;
+        }
+        if (!relative || !Paths_Contained(relative)) {
+            Mods_Note(mod, "\"%s\": %s is not a path inside the mod", key,
+                      relative ? relative : "(nothing)");
+            return;
+        }
+        if (snprintf(path, sizeof path, "%s/%s", pool_directory, relative) >= (int)sizeof path) {
+            Mods_Note(mod, "\"%s\": %s is too long a path", key, relative);
+            return;
+        }
+        document = Json_ParseFile(path, error, sizeof error);
+        if (!document) {
+            Mods_Note(mod, "\"%s\": %s: %s", key, relative, error);
+            return;
+        }
+        table = Json_Root(document);
+    }
+    read_pool_table(mod, table, decks);
+    /* Everything read is copied into the edits, so the document goes now. */
+    Json_Free(document);
+}
+
+/* --- a folder of pools ----------------------------------------------------
+ *
+ * One duelist to a file, the file's own name naming the duelist, beside the
+ * folder of duelists (pc/free_duel/duelists.h): "decks/<id>.json" holds what
+ * a "decks" entry for it holds, "drops/<id>.json" what a "drops" entry does.
+ * A duelist with no file of either keeps what it copies, which is what having
+ * no edit already meant.
+ *
+ * Sorted, so two pools read in the same order on every machine.
+ */
+#define POOL_NAMES 256
+
+typedef struct {
+    char name[64];
+} PoolName;
+
+static int pool_name_order(const void *a, const void *b)
+{
+    return strcmp(((const PoolName *)a)->name, ((const PoolName *)b)->name);
+}
+
+static void read_pool_folder(const char *mod, const char *directory, int decks)
+{
+    const char *key = decks ? "decks" : "drops";
+    PoolName names[POOL_NAMES];
+    char path[1024];
+    int count = 0, i, j;
+    DIR *folder;
+    struct dirent *item;
+
+    if (!directory || snprintf(path, sizeof path, "%s/%s", directory, key) >= (int)sizeof path) return;
+    folder = opendir(path);
+    if (!folder) return;
+    while ((item = readdir(folder)) != NULL && count < POOL_NAMES) {
+        const size_t length = strlen(item->d_name);
+        if (length < 6 || strcmp(item->d_name + length - 5, ".json") || length - 5 >= sizeof names[0].name) continue;
+        memcpy(names[count].name, item->d_name, length - 5);
+        names[count].name[length - 5] = '\0';
+        count++;
+    }
+    closedir(folder);
+    qsort(names, (size_t)count, sizeof *names, pool_name_order);
+
+    for (i = 0; i < count; i++) {
+        char file[1200], error[256], where[192];
+        JsonDocument *document;
+        const JsonValue *root;
+        char identity[192];
+        int duelist;
+        /* The file's name is the id the mod's own duelists/<id>.json gave it,
+         * so the four folders are keyed alike; failing that, a name as any
+         * other entry names an opponent, which is how a stock duelist or
+         * another mod's is reached. */
+        duelist = snprintf(identity, sizeof identity, "%s:%s", mod, names[i].name) < (int)sizeof identity
+                      ? Duelists_Find(identity)
+                      : -1;
+        if (duelist < 0) duelist = same_letters(names[i].name, "all") ? -1 : Duelists_Named(names[i].name);
+        if (duelist == -1 && !same_letters(names[i].name, "all")) {
+            Mods_Note(mod, "%s/%s.json: no opponent of that name", key, names[i].name);
+            continue;
+        }
+        if (snprintf(file, sizeof file, "%s/%s.json", path, names[i].name) >= (int)sizeof file) continue;
+        document = Json_ParseFile(file, error, sizeof error);
+        if (!document) {
+            Mods_Note(mod, "%s/%s.json: %s", key, names[i].name, error);
+            continue;
+        }
+        root = Json_Root(document);
+        if (snprintf(where, sizeof where, "%s/%s.json", key, names[i].name) < 0) where[0] = '\0';
+        if (decks) {
+            read_deck_entry(mod, where, duelist, root);
+        } else if (Json_TypeOf(root) != JSON_OBJECT) {
+            Mods_Note(mod, "%s: an object of pools (pow, bcd, tec)", where);
+        } else {
+            for (j = 0; j < Json_Count(root); j++) {
+                const JsonValue *pool = Json_At(root, j);
+                const int which = pool_named(Json_Name(pool));
+                char at[224];
+                snprintf(at, sizeof at, "%s \"%s\"", where, Json_Name(pool));
+                if (which < 0) Mods_Note(mod, "%s: the pools are pow, bcd and tec", at);
+                else read_pool(mod, at, duelist, which, pool);
+            }
+        }
+        Json_Free(document);
+    }
+}
+
 
 static int by_remainder(const void *left, const void *right)
 {
@@ -911,8 +1170,8 @@ const unsigned short *Tables_PoolFor(int duelist, int pool, const unsigned short
     PoolCache *cache;
     unsigned checksum = 2166136261u;
     int count = gCard_nCount, id, i;
-    if (duelist < 0 || duelist >= TABLES_DUELIST_COUNT || pool < 0 || pool >= TABLES_POOL_COUNT) return NULL;
-    if (!edited[duelist][pool] || !retail) return NULL;
+    if (!Duelists_Valid(duelist) || pool < 0 || pool >= TABLES_POOL_COUNT) return NULL;
+    if (!is_edited(duelist, pool) || !retail) return NULL;
     for (id = 0; id < CARD_COUNT; id++) checksum = (checksum ^ retail[id]) * 16777619u;
     cache = &caches[pool];
     if (cache->weights && cache->duelist == duelist && cache->count == count && cache->checksum == checksum)
@@ -940,9 +1199,9 @@ const unsigned short *Tables_PoolFor(int duelist, int pool, const unsigned short
         if (!apply(edit, work, spare, marks, count) && !edit->warned) {
             edit->warned = 1;
             if (pool) Mods_Note(edit->mod, "%s's %s drops: left as they were; no card would be left to win",
-                                Tables_DuelistNames[duelist], pool_names[pool]);
+                                Duelists_Name(duelist), pool_names[pool]);
             else Mods_Note(edit->mod, "%s's deck: left as it was; a deck is dealt from at least %d cards",
-                           Tables_DuelistNames[duelist], DECK_POOL_MIN_CARDS);
+                           Duelists_Name(duelist), DECK_POOL_MIN_CARDS);
         }
     }
     {
@@ -960,7 +1219,7 @@ const unsigned short *Tables_PoolFor(int duelist, int pool, const unsigned short
             if (work[id] > work[heaviest]) heaviest = id;
         }
         LOG(LOG_MODS, "tables: %s's %s as the mods have it: %d cards, the likeliest %d (%u/%d)",
-            Tables_DuelistNames[duelist], pool_names[pool], cards, heaviest, work[heaviest], POOL_TOTAL);
+            Duelists_Name(duelist), pool_names[pool], cards, heaviest, work[heaviest], POOL_TOTAL);
     }
     cache->duelist = duelist;
     cache->count = count;
@@ -1401,9 +1660,10 @@ static void forget_pools(void)
     for (pool = 0; pool < TABLES_POOL_COUNT; pool++) caches[pool].count = -1;
 }
 
-void Tables_Add(const char *mod, const JsonValue *manifest)
+void Tables_AddFrom(const char *mod, const char *directory, const JsonValue *manifest)
 {
     forget_pools();
+    pool_directory = directory;
     read_fusions(mod, Json_Member(manifest, "fusions"));
     read_equips(mod, Json_Member(manifest, "equips"));
     read_equip_default(mod, Json_Member(manifest, "equip_bonus_default"));
@@ -1414,6 +1674,17 @@ void Tables_Add(const char *mod, const JsonValue *manifest)
     read_terrain_bonus(mod, Json_Member(manifest, "terrain_bonus"));
     read_trap_thresholds(mod, Json_Member(manifest, "trap_thresholds"));
     read_passwords(mod, Json_Member(manifest, "passwords"));
+    /* And a file to a duelist, beside the folder of duelists. */
+    read_pool_folder(mod, directory, 0);
+    read_pool_folder(mod, directory, 1);
+    pool_directory = NULL;
+}
+
+/* Without a directory: a manifest whose pools are written out in it, which is
+ * what the tests hand over. */
+void Tables_Add(const char *mod, const JsonValue *manifest)
+{
+    Tables_AddFrom(mod, NULL, manifest);
 }
 
 void Tables_Clear(void)
@@ -1440,7 +1711,8 @@ void Tables_Clear(void)
     memset(trap_listed, 0, sizeof(trap_listed));
     memset(trap_from, 0, sizeof(trap_from));
     if (removed_results) memset(removed_results, 0, (size_t)removed_room);
-    memset(edited, 0, sizeof(edited));
+    if (edited) memset(edited, 0, (size_t)edited_room * TABLES_POOL_COUNT);
+    if (rank_given) memset(rank_given, 0, (size_t)rank_room * TABLES_RANK_RULE_COUNT);
     forget_pools();
 }
 
@@ -1452,7 +1724,13 @@ void Tables_Build(void)
     built = 1;
     for (i = 0; i < Mods_LoadedCount(); i++) {
         int mod = Mods_Loaded(i);
-        if (Mods_Active(mod)) Tables_Add(Mods_Id(mod), Mods_Manifest(mod));
+        if (Mods_Active(mod)) Tables_AddFrom(Mods_Id(mod), Mods_Directory(mod), Mods_Manifest(mod));
+    }
+    /* The player's own folders, read last so their edits sit over the mods'
+     * -- the same order two mods are settled in (pc/free_duel/duelists.h). */
+    if (Paths_UserDir()) {
+        read_pool_folder("user", Paths_UserDir(), 0);
+        read_pool_folder("user", Paths_UserDir(), 1);
     }
     if (fusion_count || equip_count || bonus_count || equip_default_set || ritual_count || edit_count || fixed_count || overflow_starchips || chest_limit)
         LOG(LOG_MODS, "tables: %d fusion rules, %d equip rules, %d equip bonuses, %d rituals, %d pool edits, "

@@ -203,6 +203,9 @@ PAGE %d OF %d{end}
 [FE10]
 DECK SLOTS{end}
 
+[FE11]
+PAGE %d/%d{end}
+
 [FE41]
 Simon Muran{end}
 ```
@@ -213,11 +216,12 @@ Simon Muran{end}
 | `FE01`, `FE02` | the same pages' heading, left: one card past the first, or more | with `FE03` right-aligned on the same line: 33 letters for both, numbers and spaces included |
 | `FE03` | the heading, right, when there is more than one page | as above |
 | `FE10` | the card shop's menu (string `0011`): the entry under BUILD DECK | the menu's box shows 44 letters in all (spaces are none); retail's four lines have 35, so 9; a line is 15 wide |
+| `FE11` | the Free Duel grid's page line, between the L1 and R1 hints, when a duelist mod gives the grid more than one page (`notes/more-duelists.md`) | centred on the picture between the two hints: 30 letters, numbers and spaces included, before it reaches them |
 | `FE41`-`FE67` | the opponent's name in place of COM (View > Opponent's name for COM): `FE40` + the duelist's id, 1-39 (the names bank's `8328` + id is the same duelist) | 14 letters, spaces and full stops (H.M. Anubisius, the longest English one); past that, the first 14 |
 
 Letters and spaces only: a string with other codes is not used (the port's
 English is). `%d` is where the port puts a number, in the order above
-(`FE03`: the page, then how many). The headings are in the small letters,
+(`FE03` and `FE11`: the page, then how many). The headings are in the small letters,
 which have no accents: an accented letter is drawn as its plain one.
 
 The shop's menu with the entry is rebuilt from the translation's string

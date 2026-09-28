@@ -20,6 +20,7 @@
 #include "pc/audio/spu.h"
 #include "pc/debug/cheats.h"
 #include "pc/cards/cards.h"
+#include "pc/free_duel/duelists.h"
 #include "pc/cards/fusion_helper.h"
 #include "update_check.h"
 #include "pc/debug/log.h"
@@ -1994,6 +1995,7 @@ void Platform_Frame(unsigned frame)
     Gamepad_Poll(frame);
     Cheats_Frame();
     Cards_Frame();
+    Duelists_Frame();
     Update_Frame();
     if (Menu_TakeChanged()) menu_dirty = 1;
     if (window) {

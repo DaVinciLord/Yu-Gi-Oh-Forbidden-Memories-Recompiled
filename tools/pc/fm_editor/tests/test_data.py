@@ -323,6 +323,32 @@ class ManifestTest(unittest.TestCase):
         self.assertFalse(any("Nobody At All" in str(v) for k, v in built["drops"].items() if k != "all"))
         self.assertTrue(any("fixed deck" in m for m in messages))
 
+    def test_a_mods_own_duelists_are_kept_as_written(self):
+        """The editor knows the forty the disc lays out; a duelist a mod added
+        exists only at run time (notes/more-duelists.md), so an entry naming
+        one survives a round trip untouched rather than being dropped."""
+        p = Project(self.retail)
+        data = {"id": "t", "duelists": [{"id": "dark-simon", "copy": "Heishin", "slot": 45}],
+                "decks": {"t:dark-simon": {"replace": True, "Card 1": 200},
+                          "Heishin": {"Card 2": 100}},
+                "drops": {"45": {"tec": {"replace": True, "Card 1": 1}}}}
+        messages = manifest.apply(p, data)
+        built = manifest.build(p)
+        self.assertEqual(built["duelists"], data["duelists"])          # an unknown key, kept
+        self.assertEqual(built["decks"]["t:dark-simon"], data["decks"]["t:dark-simon"])
+        self.assertEqual(built["drops"]["45"], data["drops"]["45"])
+        self.assertIn("Card 2", str(built["decks"]["Heishin"]))        # and the disc's own is edited
+        self.assertTrue(any("t:dark-simon" in m for m in messages))
+
+    def test_a_table_named_as_a_file_stays_that_file(self):
+        """"decks": "tables/decks.json" is a file the editor does not read, so
+        it must not be replaced by the pools the editor holds."""
+        p = Project(self.retail)
+        manifest.apply(p, {"id": "t", "decks": "tables/decks.json", "drops": {"Heishin": {"pow": {"Card 1": 50}}}})
+        built = manifest.build(p)
+        self.assertEqual(built["decks"], "tables/decks.json")
+        self.assertIn("Heishin", built["drops"])
+
     def test_settings_the_port_refuses(self):
         p = Project(self.retail)
         p.info.settings = [{"key": "a", "min": 5, "max": 1}, {"key": "b", "step": 0},

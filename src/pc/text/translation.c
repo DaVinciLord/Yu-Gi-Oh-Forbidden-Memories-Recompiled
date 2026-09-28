@@ -11,6 +11,8 @@
 #include "pc/cards/tables.h"
 #include "pc/cards/drops.h"
 #include "pc/cards/passwords.h"
+#include "pc/free_duel/duelists.h"
+#include "pc/free_duel/page_box.h"
 #include "pc/saves/deck_menu.h"
 #include "pc/debug/log.h"
 #include "game/card_constants.h"
@@ -323,15 +325,20 @@ static int latin_text(int id, char *out, size_t size)
 const char *Text_OpponentName(int duelist)
 {
     static char name[TABLES_SHORT_NAME_LIMIT + 1];
-    static int said[TABLES_DUELIST_COUNT];
+    /* By duelist, the added ones too: Tables_DuelistShortName answers for
+       any duelist this run has (duelists.h). */
+    static int said[DUELIST_TABLE_COUNT];
     const char *english = Tables_DuelistShortName(duelist);
     char text[64];
     const unsigned char *c;
     int got;
-    if (!english) return NULL;
-    /* A translation's own: letters, spaces and full stops, cut to the
-     * limit. */
-    got = latin_text(TEXT_OWN_OPPONENT + duelist, text, sizeof(text));
+    if (!english || duelist < 1 || duelist >= DUELIST_TABLE_COUNT) return NULL;
+    if (Tables_DuelistRenamed(duelist)) return english;
+    /* A translation's own: letters, spaces and full stops, cut to the limit.
+     * Only for the disc's own thirty-nine -- TEXT_OWN_OPPONENT holds one id
+     * each for those and no more (text.h), and a duelist a mod added is named
+     * by the mod rather than by a translation. */
+    got = duelist < TABLES_DUELIST_COUNT ? latin_text(TEXT_OWN_OPPONENT + duelist, text, sizeof(text)) : 0;
     for (c = (const unsigned char *)text; got > 0 && *c; c++) {
         if (!latin_letter(*c) && *c != ' ' && *c != '.') got = -1;
     }
@@ -357,8 +364,9 @@ const char *Text_OpponentName(int duelist)
             TEXT_OWN_OPPONENT + duelist);
     }
     /* The translation's full name, when it changed the English. */
-    if (latin_text(TEXT_DUELIST_NAMES + duelist, text, sizeof(text)) > 0 &&
-        strcmp(text, Tables_DuelistNames[duelist]) && Tables_ShortenName(text, name)) {
+    if (duelist < TABLES_DUELIST_COUNT &&
+        latin_text(TEXT_DUELIST_NAMES + duelist, text, sizeof(text)) > 0 &&
+        strcmp(text, Duelists_Name(duelist)) && Tables_ShortenName(text, name)) {
         return name;
     }
     return english;
@@ -397,6 +405,8 @@ const unsigned char *Text_Resolve(int id, const unsigned char *retail)
 {
     const unsigned char *own = overrides && id >= 0 && id <= 0xFFFF ? overrides[id] : NULL;
     const unsigned char *card = NULL, *side = side_name(id), *drops = CardDrops_Text(id), *shop = DeckMenu_Text(id);
+    const unsigned char *page = FreeDuelPage_Text(id);
+    if (page) return page;   /* the Free Duel grid's page (free_duel/page_box.h) */
     if (drops) return drops; /* the results screen's added pages (drops.h) */
     if (shop) return shop;   /* the card shop's menu with DECK SLOTS (deck_menu.h) */
     if (CardPassword_Text(id)) return CardPassword_Text(id); /* View > Card passwords (passwords.h) */

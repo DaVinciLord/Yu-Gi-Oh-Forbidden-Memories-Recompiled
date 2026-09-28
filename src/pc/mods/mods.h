@@ -138,6 +138,9 @@ int Mods_ProfileRead(const char *name, int *enabled);
 void Mods_SetCardSignature(unsigned signature);
 unsigned Mods_CardSignature(void);
 void Mods_SetCardResolver(int (*resolve)(const char *));
+/* The same for a duelist identity (pc/free_duel/duelists.h), which the free
+   duel list injects once it is built. */
+void Mods_SetDuelistResolver(int (*resolve)(const char *));
 void Mods_Dispatch(MemoriesModEvent *event);
 int Mods_Notify(unsigned type, int a, int b, int c);
 unsigned Mods_Sequence(int mod);

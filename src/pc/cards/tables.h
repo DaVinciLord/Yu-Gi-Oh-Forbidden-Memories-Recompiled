@@ -23,6 +23,9 @@ void Tables_Build(void);
 /* Tables_Add without a mod list: one manifest's tables, for the tests. */
 struct JsonValue;
 void Tables_Add(const char *mod, const struct JsonValue *manifest);
+/* The same with the mod's directory, so "drops" and "decks" may name a file
+ * of the mod's instead of being written out in the manifest. */
+void Tables_AddFrom(const char *mod, const char *directory, const struct JsonValue *manifest);
 void Tables_Clear(void);
 
 /* A fusion rule for these two cards (in either order, or for their retail
@@ -109,6 +112,32 @@ int Tables_PasswordShop(int id, unsigned *price, unsigned *password);
  * "passwords" entry made it. Returns how many cards were shadowed. */
 int Tables_CheckPasswords(const unsigned *passwords);
 
+/* --- the rank score (notes/more-duelists.md) -------------------------------
+ *
+ * How well a duel was played is scored from ten rules, each a row of five
+ * threshold/change pairs: the first threshold strictly above the measured
+ * value gives the change, and the changes move a score that starts at 50 and
+ * settles the S to D letter -- which in turn picks the drop pool. The row
+ * comes from the duelist's own block on the disc, so it is per duelist, but
+ * every one of the forty carries the same forty copies. "ranks" is what makes
+ * them differ.
+ *
+ * A row is TABLES_RANK_STEPS pairs, threshold then change, as the game's
+ * DuelRankScoreChangeEntry lays them out. NULL comes back when no mod edits
+ * this rule and the game reads its own.
+ */
+#define TABLES_RANK_RULE_COUNT 10
+#define TABLES_RANK_STEPS 5
+const short *Tables_Rank(int rule);
+/* The same for a given opponent, for the tests and tools. */
+const short *Tables_RankFor(int duelist, int rule);
+/* A duelist's own rule, from its file (pc/free_duel/duelists.h): `row` is
+ * TABLES_RANK_STEPS pairs, threshold then change. The last threshold ends the
+ * walk however the value compares, as the disc's 32767 does. */
+void Tables_SetRank(int duelist, int rule, const short *row);
+/* The rule a name means, in the game's order (duel_rank.h), or -1. */
+int Tables_RankNamed(const char *name);
+
 /* The opponent names a manifest may use, by duelist id; "all" means every
  * one of them. */
 #define TABLES_DUELIST_COUNT 40
@@ -118,6 +147,10 @@ extern const char *const Tables_DuelistNames[TABLES_DUELIST_COUNT];
  * them apart (High Mage Anubisius: H.M. Anubisius). NULL for no opponent
  * (a 2P duel). A translation's is Text_OpponentName's (text.h). */
 const char *Tables_DuelistShortName(int duelist);
+/* Whether a mod names the duelist: one it added, or one it replaced and gave
+ * a "name" (notes/more-duelists.md). Such a name is the mod's, shortened as a
+ * translation's is, and a translation does not change it. */
+int Tables_DuelistRenamed(int duelist);
 /* The most letters (spaces and full stops too) a name in place of COM
  * has: H.M. Anubisius, the longest English one, still fits the box. */
 #define TABLES_SHORT_NAME_LIMIT 14

@@ -18,12 +18,16 @@
 #include "types.h"
 #include "game/ai_opponent_data.h"
 #include "game/mem_card_directory.h"
+#include "pc/free_duel/duelists.h"
 
 /* This replaces a game function and must retain API 4's hook entry layout. */
 __attribute__((patchable_function_entry(8, 6), noinline))
 s32 Ai_GetHandSize(void)
 {
-    return (s8)gDuel_aOpponentData[gDuel_bOpponentID].values[0];
+    /* Its own row when a mod gave it one, its base's otherwise: the game's
+       table has an entry per duelist the disc has, and a duelist a mod added
+       is past the end of it (duelists.h). */
+    return (s8)Duelists_AiRow(gDuel_bOpponentID)[0];
 }
 
 s32 MemCard_FindLoadedEntry(u8 *name)

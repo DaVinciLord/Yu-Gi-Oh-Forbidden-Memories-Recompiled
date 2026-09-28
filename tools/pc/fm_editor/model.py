@@ -53,7 +53,11 @@ class RetailNames:
 
 
 def duelist_named(text) -> int:
-    """tables.c duelist_named: a number 0-39, or a name by its letters; -1."""
+    """Duelists_Named for the duelists the disc has: a number 0-39, or a name
+    by its letters; -1. A mod's own duelists are not here -- which of them
+    exists depends on the mods applied at run time, and the editor reads the
+    game's files -- so an entry naming one is kept as it was written rather
+    than resolved (manifest.read_pools)."""
     text = str(text)
     if text.isdigit():
         return int(text) if int(text) < DUELIST_COUNT else -1
@@ -107,6 +111,8 @@ class Project:
         self.kept = {"fusions": [], "equips": [], "rituals": []}   # rules naming cards it cannot place
         self.kept_pools = {}            # (duelist or "all", pool) -> {name: weight} it cannot place
         self.kept_fixed = {}            # opponent's name -> a fixed deck ("fixed": true), kept as written
+        self.kept_opponents = {}        # "decks"/"drops" -> {name: entry} naming a duelist it cannot place
+        self.pool_files = {}            # "decks"/"drops" -> the file the mod names in place of the table
         self.source_dir = None
         self.files = {}                 # path in the mod folder -> bytes to write with it (an import's)
         self.text_cards = {}            # card id -> {field: value} its "text" file carries while unchanged

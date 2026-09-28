@@ -76,6 +76,8 @@ int Mods_Loaded(int index) { return index; }
 int Mods_Active(int mod) { return mod >= 0; }
 const char *Mods_Id(int mod) { (void)mod; return ""; }
 const JsonValue *Mods_Manifest(int mod) { (void)mod; return NULL; }
+/* The duelist list is duelists_stubs.c: no duelist mod, the disc's forty,
+ * which is what these cases are written against. */
 
 static JsonDocument *documents[64];
 static int document_count;

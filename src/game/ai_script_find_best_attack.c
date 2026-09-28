@@ -5,6 +5,10 @@
 #include "duel_card_layout.h"
 #include "duel_grid.h"
 #include "ai_script_commands.h"
+#ifdef MEMORIES_PC
+#include "ai_opponent_data.h"   /* gDuel_bOpponentID */
+#include "pc/free_duel/duelists.h"
+#endif
 #include "ai_script_read_byte.h"
 void AiScript_FindBestAttack(void) {
     AiActiveCard *t;
@@ -18,6 +22,11 @@ void AiScript_FindBestAttack(void) {
     u16 f;
 
     want = gAiScript_aMemory[AiScript_ReadByte()];
+#ifdef MEMORIES_PC
+    /* "sight" in the duelist's "ai" over what the script asked for
+       (pc/free_duel/duelists.h); its own answer when it says nothing. */
+    want = Duelists_HidesFaceDown(gDuel_bOpponentID, want);
+#endif
     out = AiScript_ReadByte();
     i = 1;
     t = gDuel_aActiveCards;

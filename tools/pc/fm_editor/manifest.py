@@ -4,7 +4,15 @@ The schema is the one the port reads (notes/modding.md, notes/more-cards.md,
 notes/gameplay-tables.md; src/pc/mods/mods.c, src/pc/cards/cards.c and
 tables.c): "cards" (replace and copy), "fusions", "equips", "rituals",
 "drops" and "decks". Every other top-level key a mod has (data, text,
-textures, audio, library, requires...) is kept as it was written.
+textures, audio, library, requires..., and "duelists") is kept as it was
+written.
+
+The duelists the editor knows are the forty the disc lays out, because it
+reads the game's own files; a mod's own duelists (notes/more-duelists.md) are
+made at run time, from whichever mods are applied. So a "decks" or "drops"
+entry naming one of those, or either table given as the name of a file, is
+kept as it was written rather than resolved -- and the four roster folders
+beside the manifest are copied with the rest of the mod's files (save_mod).
 """
 from __future__ import annotations
 
@@ -269,7 +277,13 @@ def build_pools(project: Project):
             drops.setdefault(name, {})[pool] = body
     if "all" in drops:     # "all" first, so the opponents' own edits go over it
         drops = {"all": drops.pop("all"), **drops}
-    return drops, decks
+    # Entries naming a duelist the editor could not place -- one a mod added --
+    # go back after the ones it wrote, where the mod had them.
+    decks.update(project.kept_opponents.get("decks", {}))
+    drops.update(project.kept_opponents.get("drops", {}))
+    # A table the mod gave as a filename stays that filename: the editor read
+    # nothing from it, so it has nothing of its own to write in its place.
+    return project.pool_files.get("drops", drops), project.pool_files.get("decks", decks)
 
 
 def build(project: Project) -> dict:
@@ -733,6 +747,13 @@ def read_pools(project: Project, table, decks: bool, messages: list):
     if table is None:
         return
     label = "decks" if decks else "drops"
+    if isinstance(table, str):
+        # A file of the mod's holding what the key would have held. The editor
+        # does not read it, so it is kept as written and the pools stay retail's
+        # rather than the file being replaced by them.
+        project.pool_files[label] = table
+        messages.append(f"\"{label}\" names the file {table}; kept as written (the editor does not read it)")
+        return
     if not isinstance(table, dict):
         messages.append(f"\"{label}\" is an object of opponents; left out")
         return
@@ -746,7 +767,11 @@ def read_pools(project: Project, table, decks: bool, messages: list):
         else:
             d = duelist_named(name)
             if d < 0:
-                messages.append(f"{label}: no opponent \"{name}\"; left out")
+                # A duelist a mod added, or a misspelling: either way the
+                # editor cannot place it, and dropping it would throw away
+                # somebody else's roster. Kept exactly as written.
+                project.kept_opponents.setdefault(label, {})[name] = entry
+                messages.append(f"{label}: \"{name}\" is no duelist the disc has; kept as written")
                 continue
             duelists = [d]
         if decks:
