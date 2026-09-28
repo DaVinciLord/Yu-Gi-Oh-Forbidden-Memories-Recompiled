@@ -32,6 +32,15 @@ uint16_t *SoftGpu_Bank(int bank);
 /* The bank's pixels if it has been made, NULL otherwise (a primitive naming
  * a bank that was never made samples VRAM). */
 const uint16_t *SoftGpu_BankPixels(int bank);
+/* A textured polygon that samples a bank can also fade into what is under
+ * it: the upper half of its third texture-coordinate word, which the hardware
+ * ignores, is SOFT_GPU_FADE | amount, amount 0 (opaque) to 255 (gone). Both
+ * renderers honour it; src/pc/mods (3D Monsters) uses it. */
+#define SOFT_GPU_FADE 0x8000u
+static inline int SoftGpu_FadeOf(uint32_t half)
+{
+    return (half & SOFT_GPU_FADE) ? (int)(half & 0xff) : 0;
+}
 /* Widescreen: full-screen drawing areas get a companion buffer 4/3 as wide
  * (see soft_gpu.c). Turning it off frees them. */
 void SoftGpu_SetWidescreen(int on);

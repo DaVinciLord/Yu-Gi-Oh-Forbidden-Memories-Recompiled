@@ -735,7 +735,8 @@ the reason beside any that failed to load.
 
 The first two were part of the executable until they became mods; they are the worked
 examples of a code mod that reaches deep into the game. 3D Monsters' knobs
-are its declared settings `scale`, `pixels`, `lift`, `pitch` and `depth`, in
+are its declared settings `scale`, `pixels`, `lift`, `pitch`, `depth`,
+`battle`, `battle_pixels` and `battle_dim`, in
 the Mods window (`MEMORIES_MOD_3D_MONSTERS_SCALE=5000` for one run; they were
 `MEMORIES_MODS_SCALE` and so on before it became one object for both systems).
 One more, `test`, is read but not declared, so the window does not show it:

@@ -1084,7 +1084,8 @@ Switches: `MEMORIES_MOD_3D_MONSTERS=0/1`, and the mod's settings (the
 `mod.3d-monsters.<key>` lines in the settings file, or
 `MEMORIES_MOD_3D_MONSTERS_<KEY>` for one run): `SCALE` (4096 = as
 measured), `PIXELS`, `DEPTH`, `PITCH`, `LIFT` (field units above the card, 2
-per pixel from the duel's view), and `TEST=<card id>`, which stands a
+per pixel from the duel's view), `BATTLE`, `BATTLE_PIXELS` and `BATTLE_DIM`
+(the attack cards, above), and `TEST=<card id>`, which stands a
 different monster in all ten zones; that is how the cache, the arenas and the
 banks were measured together. `MEMORIES_TRACE=mods` logs it.
 
@@ -1096,8 +1097,68 @@ and the return to the field all behave as they did. The turn switch was
 watched frame by frame with `tmp/pc/mods/turn/cap.sh` (plays the first hand
 card from slot 1, ends the turn with Start, dumps the frames it is given and
 tiles them): the monster keeps its facing through the swing and ends facing
-the camera on the opponent's turn. A battle presentation with the mod on has
-not been watched yet.
+the camera on the opponent's turn.
+
+**Fading a model.** The console's semi-transparency cannot fade a
+textured model: it only blends texels whose own semi-transparency bit is set,
+and only by fixed amounts. So both renderers take one more unused field, for
+a polygon that samples a texture bank (which retail never does): the upper
+half of its third texture-coordinate word, `SOFT_GPU_FADE | amount`
+(`soft_gpu.h`), mixes the polygon with what is under it by `amount`/255, in
+the software GPU's two plotters and in the OpenGL picture's shader through the
+same blend function its semi-transparency uses. The mod writes that half on
+every polygon it stamps with a bank, zero when it does not fade, so nothing
+a model's own code leaves there can fade it. An older game ignores the field
+and the monsters simply vanish at the end.
+
+**On the attack cards.** When one monster attacks another without going to
+the arena, the battle presentation (`DuelScene_UpdateBattle`) lays the two
+cards side by side, big, over the faded field. With the `battle` setting on
+(off by default) each monster stands on its card there too, the attacker on
+the left turned right and the defender turned left, both a little towards
+the camera, and the cards are drawn darker under them. The pass projects
+through a camera of its own, looking straight at the cards, and fits each
+monster to its card from its packets: into a box 150 pixels wide and
+`battle_pixels` (160) high, whichever it meets first, so a dragon's wings
+count as much as its height. The box grows and shrinks with the monster's
+size on the field (the square root of it against a middling monster, from
+70% to 160%), so Blue-Eyes stands taller than Mystical Elf, and no monster
+is taller than the space between the card's foot and the top of the screen.
+The first version capped every monster at the middling size, which drew
+Blue-Eyes no bigger than an elf. It is placed by its outline, middle over
+the card's middle and lowest point on a line across the card's print, not by its body,
+which put winged and armed monsters off to one side.
+`MEMORIES_MOD_3D_MONSTERS_BATTLE_TEST=<card>` (undeclared, like `test`)
+puts that card and the next on the two cards, for measuring. Three things it has to
+respect:
+
+- the big cards are sprites in ordering table 1, the interface's, and once
+  the field has faded out the model table is not drawn at all
+  (`Fade_StartOutKeepOverlayAndHideSecondaryTables`), so each monster goes
+  into table 1, two entries nearer than its card: over the picture and the
+  print, under the hit flash, the glow and the damage numbers;
+- the battle sets its projection up once and draws those numbers and glows
+  through it for the rest of the presentation, so the pass puts the GTE
+  registers and the world-screen matrices back as it found them (without
+  that the numbers were never seen);
+- the dimming is the card's own colour word, which the presentation's last
+  step turns down to fade the cards out: everything printed on the card goes
+  darker with it (`battle_dim`, 50%), the fade starts from there, and the
+  colour goes back to retail's whenever the pass lets go of a card that is
+  still up.
+
+Each stands 8 pixels back from the middle of its card, away from the
+other. The monsters appear once the cards have faded in, the loser's goes
+as its card starts to burn (the card stays dimmed until the game releases
+it, or it lit up for the frames before the flames covered it), when the attack is over the monsters fade out over 16 frames while
+the surviving cards light up to their full colour again, and only then does
+the game's own fade take the cards away (the pass sets each card's colour to
+what the step will take 8 off the next frame, which holds the cards up that
+long), and none appear when the attack goes on to the 3D arena
+(the cards are up only a few frames before the fade there). Checked with the
+opponent's first attack and the player's quick and arena attacks after the
+`duel-3d-monsters` smoke input, frame by frame against the same frames with
+`MEMORIES_MOD_3D_MONSTERS_BATTLE=0`.
 
 ### Images from the disc
 
