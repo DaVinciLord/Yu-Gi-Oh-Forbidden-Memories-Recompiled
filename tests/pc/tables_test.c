@@ -8,6 +8,7 @@
 int gCard_nCount = 800;
 signed char gDuel_bOpponentID;
 static int notes;
+static const char *noted;   /* the mod of the latest note */
 
 /* Cards 1-722 are the disc's, 723-800 copies of card (id - 722). Card 10
  * is "Kuriboh", 11 "Thunder Dragon", 12 "Blue-Eyes White Dragon", 20 an
@@ -52,6 +53,7 @@ int Cards_Reference(const JsonValue *value)
 void Mods_Note(const char *id, const char *format, ...)
 {
     va_list arguments;
+    noted = id;
     va_start(arguments, format);
     fprintf(stderr, "note %s: ", id);
     vfprintf(stderr, format, arguments);
@@ -375,6 +377,62 @@ int main(void)
         assert(Tables_PasswordShop(10, &price, &password) && price == 3 && password == 0x12345678u);
         add("z", "{\"passwords\": [1]}");
         assert(notes == 1);
+    }
+
+    /* A price of 0 is a free card, by "starchips" or a percent of 0; a
+     * bad "all" is noted once and counts no entries. */
+    Tables_Clear();
+    {
+        unsigned price, password;
+        notes = 0;
+        add("free", "{\"passwords\": {\"Kuriboh\": {\"starchips\": 0}, \"11\": {\"starchips_percent\": 0},"
+                    " \"12\": {\"starchips_percent\": 1}}}");
+        assert(notes == 0 && shop_count == 3);
+        price = 999999, password = 0x1u;
+        assert(Tables_PasswordShop(10, &price, &password) && price == 0 && password == 0x1u);
+        price = 999999, password = 0x1u;
+        assert(Tables_PasswordShop(11, &price, &password) && price == 0);
+        price = 40, password = 0x1u;           /* 1% of 40 rounds to 0: still one */
+        assert(Tables_PasswordShop(12, &price, &password) && price == 1);
+        add("bad", "{\"passwords\": {\"all\": {\"password\": \"x\"}}}");
+        assert(notes == 1 && shop_count == 3);
+        price = 70, password = 0x1u;
+        assert(!Tables_PasswordShop(3, &price, &password) && price == 70 && password == 0x1u);
+        add("both", "{\"passwords\": {\"all\": {\"starchips\": 5, \"starchips_percent\": 10}}}");
+        assert(notes == 2 && shop_count == 3 + CARD_COUNT);
+        price = 70, password = 0x1u;
+        assert(Tables_PasswordShop(3, &price, &password) && price == 5 && password == 0x1u);
+    }
+
+    /* Two cards with one password in the loaded table: each card the
+     * screen cannot give is noted once, beside the mod that set a
+     * password; a clash no mod's "passwords" made is only logged, and
+     * cards with no password never clash. */
+    Tables_Clear();
+    {
+        static unsigned passwords[CARD_COUNT + 1];
+        for (id = 1; id <= CARD_COUNT; id++) passwords[id] = password_digits(10000000UL + (unsigned long)id);
+        passwords[5] = passwords[6] = CARD_PASSWORD_NONE;
+        notes = 0;
+        assert(Tables_CheckPasswords(passwords) == 0 && notes == 0);
+        add("retail", "{\"passwords\": {\"Thunder Dragon\": {\"password\": \"10000012\"}}}");
+        passwords[11] = 0x10000012u;           /* card 12's: the screen gives 11 */
+        assert(Tables_CheckPasswords(passwords) == 1 && notes == 1 && !strcmp(noted, "retail"));
+        add("twin", "{\"passwords\": {\"20\": {\"password\": 10000012}}}");
+        passwords[20] = 0x10000012u;           /* 11, 12 and 20: two left out */
+        notes = 0;
+        assert(Tables_CheckPasswords(passwords) == 2 && notes == 2 && !strcmp(noted, "twin"));
+        passwords[30] = passwords[31];         /* a data patch's: no mod to note */
+        notes = 0;
+        assert(Tables_CheckPasswords(passwords) == 3 && notes == 2);
+
+        /* "all" giving every card one password: one note, not 719. */
+        Tables_Clear();
+        add("flood", "{\"passwords\": {\"all\": {\"password\": \"12345678\"}}}");
+        for (id = 1; id <= CARD_COUNT; id++) passwords[id] = 0x12345678u;
+        passwords[5] = passwords[6] = CARD_PASSWORD_NONE;
+        notes = 0;
+        assert(Tables_CheckPasswords(passwords) == CARD_COUNT - 3 && notes == 1 && !strcmp(noted, "flood"));
     }
 
     Tables_Clear();

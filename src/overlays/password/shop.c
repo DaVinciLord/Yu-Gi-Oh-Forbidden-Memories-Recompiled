@@ -436,6 +436,15 @@ void Password_UpdateShopScreen(void)
             card = D_8016D4DC;
             D_8016D438 = D_801A8000[card].price;
         }
+#ifdef MEMORIES_PC
+        /* A free card (a mod's price of 0): nothing to count. The count
+           below would take its step of 1 from 0, wrap and run through
+           four billion starchips; the disc has no free card. */
+        if (D_8016D438 == 0) {
+            D_8016D424 = 4;
+            return;
+        }
+#endif
         count = D_8016D438;
         step = 1;
         if (count >= 10) {
