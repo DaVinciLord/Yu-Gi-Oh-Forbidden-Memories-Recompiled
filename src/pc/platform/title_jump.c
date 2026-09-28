@@ -12,8 +12,10 @@
  *
  * A request is only taken between two mode runners, from the Main_Loop in
  * src/game/main_loop.c: no runner is half way through a step and no
- * nested frame loop (a fade, a disc wait, name entry) is on the stack, the
- * state the retail longjmp leaves from. The disc is left idle first, so no
+ * nested frame loop (a fade, a disc wait) is on the stack, the state the
+ * retail longjmp leaves from. A new game's name entry is a frame loop of its
+ * own before Main_Loop (NameEntry_Main), which polls too: nothing there is
+ * half done between its frames. The disc is left idle first, so no
  * transfer the old mode asked for lands on the title's package. While the
  * save slot menu (src/pc/saves) is open the request waits for it to close,
  * so it is never left drawn over the title. Progress not saved is lost, as
