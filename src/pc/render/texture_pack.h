@@ -28,6 +28,18 @@ void TexturePack_Unload(void);
  * upload can come from the interrupt tick, where reading is not safe). */
 void TexturePack_Service(void);
 
+/* An image the port makes instead of reading it from the disc: a mod
+ * card's art (cards.c), whose bytes art.c makes from the mod's PNG at the
+ * console's size. An upload of exactly `pixels` (words x rows at bpp) or of
+ * `clut` (clut_entries) is known by its bytes (texture_dump.h, recall), and
+ * texels read through that palette take the PNG at `file`, cut to the
+ * rectangle x, y, w, h of it, as a pack's image does: resampled at 1x, at
+ * its own resolution above. Identical blocks share one place (from
+ * TEXTURE_MADE_BASE up); the same picture twice is kept once. Made images
+ * are kept across the packs' loads and unloads. 1 added, 0 not. */
+int TexturePack_AddMade(const void *pixels, int words, int rows, int bpp, const void *clut, int clut_entries,
+                        const char *file, int x, int y, int w, int h);
+
 /* For a renderer that samples the pack's images itself, at their own
  * resolution (gl_picture.c). The entry (its index + 1) whose image replaces
  * the texel a primitive starts at, as the software pass decides it, when

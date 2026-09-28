@@ -314,6 +314,9 @@ its own:
 
 The cards take the ids after 722, in the order the mods are found, and work
 in the Library, Build Deck, duels, rewards, trades and saves.
+An `art` PNG bigger than the card's 102x96 picture (408x384 is 4x) is also
+drawn at its own resolution when the internal resolution is above 1x, with
+no texture pack needed.
 [More cards](more-cards.md) has every key, how a new card is won, where what
 the save holds of them is kept, and how the port does it. Like data
 overrides, a mod with cards needs a restart.

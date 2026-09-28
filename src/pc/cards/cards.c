@@ -18,6 +18,7 @@
 #include "pc/platform/settings.h"
 #include "pc/debug/log.h"
 #include "pc/render/texture_dump.h"
+#include "pc/render/texture_pack.h"
 #include "pc/rng.h"
 #include "pc/compat/posix.h"
 #include "game/card_constants.h"
@@ -506,6 +507,22 @@ static void replace_model_effect(const char *mod, int index, const JsonValue *en
     }
 }
 
+/* A card's picture from a PNG bigger than the console's is drawn from the
+ * PNG itself above the console's resolution: the made bytes of the record
+ * (art.c) find it as a texture pack's image is found (texture_pack.h,
+ * TexturePack_AddMade). A picture at the console's size or under has no
+ * more to show. */
+static void add_full_picture(const char *path, const unsigned char *record, int thumbnail)
+{
+    int w = thumbnail ? CARD_THUMB_WIDTH : CARD_ART_WIDTH, h = thumbnail ? CARD_THUMB_HEIGHT : CARD_ART_HEIGHT;
+    int x, y, cw, ch, width, height;
+    if (!CardArt_Crop(path, w, h, &x, &y, &cw, &ch, &width, &height) || (cw <= w && ch <= h)) return;
+    if (!TexturePack_AddMade(record + (thumbnail ? CARD_THUMB_PIXELS : CARD_ART_PIXELS), w / 2, h, 8,
+                             record + (thumbnail ? CARD_THUMB_CLUT : CARD_ART_CLUT), thumbnail ? 64 : 256, path, x, y, cw,
+                             ch))
+        fprintf(stderr, "memories-pc: cards: %s is drawn at the console's size only\n", path);
+}
+
 /* "password": up to eight digits as a string ("08124921", leading zeros
  * kept) or a whole number, "" or null for none. 0 and a note if it is
  * neither. */
@@ -617,6 +634,7 @@ static void add_entry(const char *mod, const char *directory, int index, const J
      * cards; a card with a name of its own gets a title plate that says it. */
     {
         static const char *const keys[] = {"art", "thumbnail", "title"};
+        char full[2][1200] = {"", ""}; /* the art's and the thumbnail's PNGs, as used */
         int k;
         for (k = 0; k < 3 && count; k++) {
             const char *file = Json_String(Json_Member(entry, keys[k]), NULL);
@@ -635,9 +653,12 @@ static void add_entry(const char *mod, const char *directory, int index, const J
                 ok = record && (k == 0 ? CardArt_FromImage(path, record, why, sizeof(why))
                                        : CardArt_ThumbnailFromImage(path, record, why, sizeof(why)));
                 if (ok) parts |= k == 0 ? ART_PICTURE | ART_THUMBNAIL : ART_THUMBNAIL;
+                if (ok) snprintf(full[k], sizeof(full[k]), "%s", path);
             }
             if (!ok) Mods_Note(mod, "cards[%d]: \"%s\": %s", index, keys[k], why);
         }
+        if (parts & ART_PICTURE) add_full_picture(full[0], record, 0);
+        if (parts & ART_THUMBNAIL) add_full_picture(full[1][0] ? full[1] : full[0], record, 1);
     }
     for (n = 1; n <= count; n++) {
         char identity[192], fallback[32];

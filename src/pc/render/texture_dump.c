@@ -383,6 +383,7 @@ static void note_asset(int page_x, int page_y, int depth, int clut_x, int clut_y
     first = *tag_at(x, y);
     palette = entries ? *tag_at(clut_x, clut_y) : 0;
     if (!first || (entries && !palette)) return;
+    if (first - 1 >= TEXTURE_MADE_BASE || (entries && palette - 1 >= TEXTURE_MADE_BASE)) return; /* not on the disc */
     /* Each row must be one run of consecutive bytes, and so must the palette;
      * the rows themselves may lie anywhere (the sector streamer places 64x16
      * blocks in columns or side by side). Every word is checked, not just the
