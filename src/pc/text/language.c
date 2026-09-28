@@ -1,5 +1,6 @@
 /* Game > Language (language.h): the text packs in languages/, and the PAL
- * discs they are written from (read too, when a pack is not there). */
+ * discs the European ones are written from (read too, when a pack is not
+ * there). */
 #include "pc/compat/fs.h"
 #include "language.h"
 #include "entry_layout.h"
@@ -43,16 +44,22 @@ static Disc discs[MAX_DISCS];
  * not be known yet on the first launch, before the player picks it). */
 static int disc_count, scanned, current;
 
+/* A European language: the PAL game's spacing, widths and text entries.
+ * pt-BR is the US game's text and takes none of them. */
+static int pal_language(void) { return current > LANGUAGE_US && current <= LANGUAGE_PAL_LAST; }
+
 /* Tried in turn for a language: its own disc first, then the Italian and
  * Spanish ones (which carry the final text of all four), then the French and
- * German (an earlier German and Spanish). English only from its own. */
+ * German (an earlier German and Spanish). English only from its own;
+ * Brazilian Portuguese from none. */
 static const int preference[LANGUAGE_COUNT][SERIALS] = {
-    {-1}, {0, -1}, {1, 3, 4, 2, -1}, {2, 3, 4, 1, -1}, {3, 4, 1, 2, -1}, {4, 3, 1, 2, -1}};
+    {-1}, {0, -1}, {1, 3, 4, 2, -1}, {2, 3, 4, 1, -1}, {3, 4, 1, 2, -1}, {4, 3, 1, 2, -1}, {-1}};
 
 const char *Language_Label(int language)
 {
     static const char *const labels[LANGUAGE_COUNT] = {"English (US)", "English (Europe)", "Français",
-                                                       "Deutsch",      "Italiano",         "Español"};
+                                                       "Deutsch",      "Italiano",         "Español",
+                                                       "Português (Brasil)"};
     return language >= 0 && language < LANGUAGE_COUNT ? labels[language] : "";
 }
 
@@ -272,7 +279,7 @@ static int disc_available(int language) { return disc_for(language) != NULL; }
  * working folder, or in MEMORIES_LANGUAGES_DIR), each the listing
  * disc_listing gives for the language, written by
  * tools/pc/export_languages.py. */
-static const char *const pack_names[LANGUAGE_COUNT] = {NULL, "en-eu", "fr", "de", "it", "es"};
+static const char *const pack_names[LANGUAGE_COUNT] = {NULL, "en-eu", "fr", "de", "it", "es", "pt-br"};
 #define PACK_LIMIT (16u << 20)
 
 static FILE *open_pack(int language, char *path, size_t size)
@@ -402,6 +409,13 @@ static const char *const own_words[LANGUAGE_COUNT] = {
                     "[FE02]\n%d CARTAS MÁS{end}\n\n"
                     "[FE03]\nPÁGINA %d DE %d{end}\n\n"
                     "[FE10]\nMAZOS{end}\n",
+    /* The shop menu's four lines have 32 letters, so FE10 may have 12 (the box's 44). */
+    [LANGUAGE_PT_BR] = "\n@bank dialog\n\n"
+                       "[FE00]\nNOVA{end}\n\n"
+                       "[FE01]\nMAIS %d CARTA{end}\n\n"
+                       "[FE02]\nMAIS %d CARTAS{end}\n\n"
+                       "[FE03]\nPÁGINA %d DE %d{end}\n\n"
+                       "[FE10]\nSLOTS DE DECK{end}\n",
 };
 
 char *Language_Listing(size_t *length)
@@ -425,7 +439,8 @@ char *Language_Listing(size_t *length)
         }
     }
     current = language;
-    TextEntries_UseLayout(1); /* the PAL game's text entries (entry_layout.h) */
+    /* The PAL game's text entries (entry_layout.h); pt-BR is the US game's text. */
+    TextEntries_UseLayout(pal_language());
     LOG(LOG_MODS, "language: %s from %s", Language_Label(language), origin);
     return listing;
 }
@@ -434,8 +449,9 @@ int Language_Advance(unsigned flags, int code, int *shift)
 {
     *shift = 0;
     /* The small letters (0x100) and the entries of 0x80 are the US code's
-     * own paths, which PAL does not space either. */
-    if (current == LANGUAGE_US || (flags & 0x180)) return 0;
+     * own paths, which PAL does not space either. pt-BR is the US game's
+     * text, laid out for its spacing. */
+    if (!pal_language() || (flags & 0x180)) return 0;
     return PalText_Advance(Glyphs_Character(code), shift);
 }
 
@@ -445,7 +461,7 @@ int Language_PastWidth(unsigned flags, int channel, int count, int step, int cel
      * (F8 07 and the box's start set it to 0, so the first letter after is
      * count 1). */
     static int width[16];
-    if (current == LANGUAGE_US || channel < 0 || channel >= 16) return -1;
+    if (!pal_language() || channel < 0 || channel >= 16) return -1;
     /* Reset first: a small letter can be the first after an F8 07. */
     if (count == 1) width[channel] = 0;
     if (flags & 0x180) return -1;
@@ -455,7 +471,7 @@ int Language_PastWidth(unsigned flags, int channel, int count, int step, int cel
 int Language_Export(const char *folder)
 {
     int language, missing = 0;
-    for (language = LANGUAGE_US + 1; language < LANGUAGE_COUNT; language++) {
+    for (language = LANGUAGE_US + 1; language <= LANGUAGE_PAL_LAST; language++) {
         char path[PATH_SIZE], origin[PATH_SIZE + 64] = "";
         size_t length = 0;
         char *listing = source_listing(language, &length, origin, sizeof(origin));

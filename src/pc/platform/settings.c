@@ -31,8 +31,9 @@ static const SettingInfo info[SET_COUNT] = {
     [SET_OPPONENT_NAME] = {"opponent_name", NULL, "MEMORIES_OPPONENT_NAME", NULL, 0, 0, 1},
     /* Cards a won duel deals; 1 is the console's (src/pc/cards/drops.h). */
     /* Game > Language (src/pc/text/language.h): 0 English (US), 1 English (Europe), 2 French, 3 German,
-     * 4 Italian, 5 Spanish, from the player's PAL disc; at the next launch. */
-    [SET_LANGUAGE] = {"language", NULL, "MEMORIES_LANGUAGE", NULL, 0, 0, 5},
+     * 4 Italian, 5 Spanish (the text packs in languages/, written from the PAL discs), 6 Portuguese
+     * (Brazil) (a pack of its own); at the next launch. */
+    [SET_LANGUAGE] = {"language", NULL, "MEMORIES_LANGUAGE", NULL, 0, 0, 6},
     [SET_CARD_DROPS] = {"card_drops", NULL, "MEMORIES_CARD_DROPS", NULL, 1, 1, 99},
     /* 1: the Library lays out every card never seen as a seen one, while it
      * is open; nothing is given or saved (Cards_LibraryPlaceholder, cards.h). */
@@ -45,10 +46,6 @@ static const SettingInfo info[SET_COUNT] = {
     /* View > Duel rank (src/pc/cards/rank_meter.h): 0 off, 1 the rank,
      * 2 the rank and the score. */
     [SET_RANK_METER] = {"rank_meter", NULL, "MEMORIES_RANK_METER", NULL, 0, 0, 2},
-    /* 1: states kept in memory every few frames, and holding F8 goes back
-     * through them (src/pc/guest/state.c, rewind.h). Off by default: it
-     * costs memory and a little time per frame. */
-    [SET_REWIND] = {"rewind", NULL, "MEMORIES_REWIND", NULL, 0, 0, 1},
     /* Game > Cheats (src/pc/debug/cheats.h): the life points both sides
      * start a duel against the CPU with; 8000 is the console's. */
     [SET_CHEAT_LIFE_POINTS] = {"cheat_life_points", NULL, "MEMORIES_CHEAT_LIFE_POINTS", NULL, 8000, 1, 9999},

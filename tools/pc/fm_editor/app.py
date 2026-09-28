@@ -10,7 +10,8 @@ from tkinter import filedialog, messagebox, ttk
 from . import disc, gamedata, manifest, validate
 from .model import KEY_RE, Project
 from .art_tab import ArtTab
-from .tabs import CardsTab, DuelistsTab, EquipsTab, FusionsTab, ModInfoTab, ProblemsTab, RitualsTab
+from .tabs import (CardsTab, DuelistsTab, EquipsTab, FusionsTab, ModInfoTab, ProblemsTab, RitualsTab,
+                   StarterTab)
 from .widgets import px
 
 APP_TITLE = "FM Editor"
@@ -45,9 +46,11 @@ class App(tk.Tk):
         self.equips = EquipsTab(self.notebook, self)
         self.rituals = RitualsTab(self.notebook, self)
         self.duelists = DuelistsTab(self.notebook, self)
+        self.starter = StarterTab(self.notebook, self)
         self.info = ModInfoTab(self.notebook, self)
         self.problems = ProblemsTab(self.notebook, self)
-        self.tabs = [self.cards, self.art, self.fusions, self.equips, self.rituals, self.duelists, self.info, self.problems]
+        self.tabs = [self.cards, self.art, self.fusions, self.equips, self.rituals, self.duelists, self.starter,
+                     self.info, self.problems]
         self.status = ttk.Label(self, relief="sunken", anchor="w", padding=(6, 2))
         self.status.pack(fill="x", side="bottom")
         self.notebook.bind("<<NotebookTabChanged>>", lambda e: self.tab_changed())
@@ -331,6 +334,9 @@ class App(tk.Tk):
         elif issue.area == "Duelists" and target:
             self.notebook.select(self.duelists)
             self.duelists.goto(target)
+        elif issue.area == "Starter decks":
+            self.notebook.select(self.starter)
+            self.starter.goto(target)
         elif issue.area == "Mod info":
             self.notebook.select(self.info)
 

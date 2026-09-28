@@ -56,7 +56,7 @@ typedef enum {
     SET_UPDATE_CHECK,
     SET_UPDATE_PRERELEASES,
     SET_RANK_METER,
-    SET_REWIND,
+    SET_REWIND,                 /* retired: rewind was removed */
     SET_LIBRARY_ALL_CARDS,
     SET_CHEAT_LIFE_POINTS,
     SET_CHEAT_SHOW_HAND,
