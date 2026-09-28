@@ -743,6 +743,20 @@ covered by a test (`tools/pc/test_object_loader.py`):
 | `-mstackrealign` | Windows only promises a 4-byte-aligned stack on the way in, and the Linux game (SSE2) needs 16 on the way out |
 | `-fstack-clash-protection` | a frame over 4 KiB touches each page, as Windows' stack guard page requires |
 | `-ffreestanding -nostdinc` | no system C library, as above |
+| `-mretpoline-external-thunk` (clang), `-mindirect-branch=thunk-extern -mindirect-branch-register` (GCC) | every indirect call goes through the game's `__x86_indirect_thunk_*`, which the C library list lends, so a call through a function pointer read from a game table (a MIPS address) reaches the native function without DEP, as in the game's own code. See below the table |
+
+The thunk flags came with the change that lets the game run without DEP
+(Windows' Data Execution Prevention). Two consequences for mods:
+
+- A mod built with an earlier SDK has no thunks: it still loads and runs,
+  but a call it makes through a function pointer that holds a MIPS address
+  (one read from a game table) reaches the native function only where DEP is
+  on, through the game's fault handler. With DEP off, that call runs the
+  MIPS bytes and crashes. Rebuild the mod with the current SDK to lift this.
+  Calls to the mod API and to game functions by name are not affected.
+- A mod built with the current SDK needs `__x86_indirect_thunk_*` from the
+  game, so it loads only in a game from that change on; an earlier game
+  refuses it in the Mods window.
 
 The loader refuses anything it does not handle, with the reason in the Mods
 window: position-independent code, relocations other than plain absolute
