@@ -474,6 +474,13 @@ if(BUILD_TESTING)
     endif()
     add_test(NAME pc_scratch_sweep COMMAND memories_scratch_sweep_test)
     set_tests_properties(pc_scratch_sweep PROPERTIES FIXTURES_CLEANUP memories_scratch)
+    # What the sweep removes and keeps, links (junctions) included.
+    add_executable(memories_scratch_rules_test tests/pc/scratch_rules_test.c)
+    target_include_directories(memories_scratch_rules_test PRIVATE src)
+    if(NOT MSVC)
+        target_compile_options(memories_scratch_rules_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(NAME pc_scratch_rules COMMAND memories_scratch_rules_test)
 
     # The tests state every expectation with assert(). A Release configuration
     # defines NDEBUG, which would leave them running and checking nothing;

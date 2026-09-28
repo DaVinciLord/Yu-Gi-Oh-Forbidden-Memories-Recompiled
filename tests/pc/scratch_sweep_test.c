@@ -6,6 +6,7 @@
 
 int main(void)
 {
-    printf("scratch sweep: removed %d in %s\n", scratch_sweep(NULL), scratch_base());
+    int removed = scratch_sweep(NULL, stdout);
+    printf("scratch sweep: removed %d in %s\n", removed, scratch_base());
     return 0;
 }

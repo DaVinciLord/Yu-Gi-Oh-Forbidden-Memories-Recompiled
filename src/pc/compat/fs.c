@@ -218,20 +218,6 @@ static int temporary(char *pattern, int directory)
 int Memories_Mkstemp(char *pattern) { return temporary(pattern, 0); }
 char *Memories_Mkdtemp(char *pattern) { return temporary(pattern, 1) == 0 ? pattern : NULL; }
 
-int Memories_ProcessAlive(unsigned long pid)
-{
-    HANDLE process;
-    DWORD code;
-    int alive;
-    if (!pid) return 1;
-    process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, (DWORD)pid);
-    /* Only "no such process" counts as gone; a refusal means it is there. */
-    if (!process) return GetLastError() != ERROR_INVALID_PARAMETER;
-    alive = !GetExitCodeProcess(process, &code) || code == STILL_ACTIVE;
-    CloseHandle(process);
-    return alive;
-}
-
 struct MemoriesDir { _WDIR *wide; struct MemoriesDirent entry; };
 MemoriesDir *Memories_Opendir(const char *path)
 {

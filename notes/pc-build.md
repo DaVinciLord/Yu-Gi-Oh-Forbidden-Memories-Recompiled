@@ -1895,15 +1895,22 @@ Linux and Windows builds dealt different hands in the first duel. It is also
 fast: frame 1100 in about 3 s on Linux.
 
 Tests that need files make them with `scratch_dir()` (`tests/pc/scratch.h`):
-`memories-<kind>-p<pid>-XXXXXX` in TMPDIR/TEMP, removed at exit, on a failed
-`assert` and on SIGINT/SIGTERM. What a test cannot remove itself (killed by a
-timeout, or a file it still holds open, which Windows will not delete: the
-disc image, the log) is removed by the next `scratch_dir()` of the same kind
-and by `pc_scratch_sweep`, a CTest cleanup fixture every test requires, so it
-runs after them even under `-R`. A sweep takes only those names whose process
-has exited, and the untagged `memories-<kind>-XXXXXX` of older builds once
-they are a day old. The disc test's 1 GB capacity image is sparse on NTFS as
-it is on Linux. The game itself makes nothing in the temporary folder.
+`memories-<kind>-p<pid>-XXXXXX` in TMPDIR/TEMP, removed at exit and on a
+failed `assert` (and on SIGINT/SIGTERM off Windows). What a test cannot remove
+itself (killed by a timeout, or a file it still holds open, which Windows will
+not delete: the disc image, the log) is removed by the next `scratch_dir()` of
+the same kind and by `pc_scratch_sweep`, a CTest cleanup fixture every test
+requires, so it runs after them even under `-R`; it lists what it removed.
+The sweep takes only a kind listed in `scratch_kinds()` (a new kind goes
+there) whose process has exited (a PID that does not fit or cannot be queried
+counts as alive), and the untagged `memories-<kind>-XXXXXX` of older builds
+once they are a day old. It never goes through a link: a symbolic link or
+junction is unlinked, or left if that fails (a read-only junction), and never
+entered; `pc_scratch_rules` checks all of this on decoys, junctions included.
+PIDs are only meaningful on one host: do not share one temporary folder
+between containers, or between Wine and Windows, while tests run. The disc
+test's 1 GB capacity image is sparse on NTFS as it is on Linux. The game
+itself makes nothing in the temporary folder.
 
 ### AI thinking time
 

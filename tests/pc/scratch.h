@@ -6,13 +6,18 @@
  * have (Wine maps it, which hid this).
  *
  * scratch_dir() makes memories-<kind>-p<pid>-XXXXXX and removes it again
- * when the test exits, fails an assert() or is interrupted. What a test
- * cannot remove itself (killed by a timeout, or a file it still holds open,
- * which Windows will not delete) is swept later: by the next scratch_dir()
- * of the same kind, and by pc_scratch_sweep, which CTest runs after the
- * tests (scratch_sweep_test.c). A sweep removes only our names whose
- * process is gone, and folders from before the process tag (the exact
- * memories-<kind>-XXXXXX of an earlier build) once they are a day old. */
+ * when the test exits or fails an assert() (and on SIGINT/SIGTERM off
+ * Windows). What a test cannot remove itself (killed by a timeout, or a file
+ * it still holds open, which Windows will not delete) is swept later: by the
+ * next scratch_dir() of the same kind, and by pc_scratch_sweep, which CTest
+ * runs after the tests (scratch_sweep_test.c). The sweep takes only a kind
+ * in scratch_kinds() whose process is gone (a PID it cannot read counts as
+ * alive), and the untagged memories-<kind>-XXXXXX of an earlier build once
+ * it is a day old. A new kind goes into scratch_kinds().
+ *
+ * Removal never goes through a link: a symbolic link, junction or other
+ * reparse point is unlinked, or left where it is if that fails, and never
+ * entered (scratch_rules_test.c). */
 #include <ctype.h>
 #include <errno.h>
 #include <signal.h>
@@ -25,6 +30,15 @@
 #ifdef _WIN32
 #include <process.h>
 #include "pc/compat/fs.h" /* UTF-8 opendir/stat/rmdir/remove/getenv/mkdtemp */
+/* Declared here rather than from <windows.h>, whose types clash with the
+ * game's headers; the declarations match it, so a test may include both. */
+__declspec(dllimport) unsigned long __stdcall GetFileAttributesW(const wchar_t *);
+__declspec(dllimport) int __stdcall RemoveDirectoryW(const wchar_t *);
+__declspec(dllimport) int __stdcall DeleteFileW(const wchar_t *);
+__declspec(dllimport) void *__stdcall OpenProcess(unsigned long, int, unsigned long);
+__declspec(dllimport) int __stdcall GetExitCodeProcess(void *, unsigned long *);
+__declspec(dllimport) int __stdcall CloseHandle(void *);
+__declspec(dllimport) unsigned long __stdcall GetLastError(void);
 #else
 #include <dirent.h>
 #include <unistd.h>
@@ -48,6 +62,19 @@ static inline void scratch_template(char *out, size_t size, const char *name)
     snprintf(out, size, "%s/%s-XXXXXX", scratch_base(), name);
 }
 
+/* Every kind the tests make, the only ones the global sweep touches. */
+static inline const char *const *scratch_kinds(size_t *count)
+{
+    static const char *const kinds[] = {
+        "memories-audio", "memories-backend", "memories-card-identities", "memories-controls",
+        "memories-decks", "memories-disc", "memories-fs", "memories-lifecycle", "memories-log",
+        "memories-manager", "memories-mod-window", "memories-mods", "memories-rom", "memories-runtime",
+        "memories-save-menu", "memories-save-slots", "memories-scratch-rules", "memories-settings",
+        "memories-texture-pack", "memories-window"};
+    *count = sizeof(kinds) / sizeof(kinds[0]);
+    return kinds;
+}
+
 static inline unsigned long scratch_pid(void)
 {
 #ifdef _WIN32
@@ -57,32 +84,73 @@ static inline unsigned long scratch_pid(void)
 #endif
 }
 
+/* Nonzero unless process `pid` is known to be gone. */
 static inline int scratch_alive(unsigned long pid)
 {
 #ifdef _WIN32
-    return Memories_ProcessAlive(pid);
+    void *process;
+    unsigned long code;
+    int alive;
+    if (!pid) return 1;
+    process = OpenProcess(0x1000 /* PROCESS_QUERY_LIMITED_INFORMATION */, 0, pid);
+    /* Only "no such process" counts as gone; a refusal means it is there. */
+    if (!process) return GetLastError() != 87 /* ERROR_INVALID_PARAMETER */;
+    alive = !GetExitCodeProcess(process, &code) || code == 259 /* STILL_ACTIVE */;
+    CloseHandle(process);
+    return alive;
 #else
     if (!pid || pid > 0x7FFFFFFFul) return 1; /* not a process of ours: leave it */
     return !kill((pid_t)pid, 0) || errno == EPERM;
 #endif
 }
 
-/* Remove a file or a whole tree. A missing path is fine. rmdir comes first,
- * so a link to a folder is unlinked rather than emptied. */
+enum { SCRATCH_NONE, SCRATCH_FILE, SCRATCH_FOLDER, SCRATCH_LINK };
+
+/* What is at `path`, without following a link (lstat). */
+static inline int scratch_entry(const char *path)
+{
+#ifdef _WIN32
+    wchar_t *wide = Memories_Utf8ToWide(path);
+    unsigned long attributes = wide ? GetFileAttributesW(wide) : 0xFFFFFFFFul;
+    free(wide);
+    if (attributes == 0xFFFFFFFFul) return SCRATCH_NONE;
+    if (attributes & 0x400 /* FILE_ATTRIBUTE_REPARSE_POINT */) return SCRATCH_LINK;
+    return attributes & 0x10 /* FILE_ATTRIBUTE_DIRECTORY */ ? SCRATCH_FOLDER : SCRATCH_FILE;
+#else
+    struct stat info;
+    if (lstat(path, &info)) return SCRATCH_NONE;
+    if (S_ISLNK(info.st_mode)) return SCRATCH_LINK;
+    return S_ISDIR(info.st_mode) ? SCRATCH_FOLDER : SCRATCH_FILE;
+#endif
+}
+
+/* Remove the link itself; its target is not touched. If that fails, it stays. */
+static inline void scratch_unlink(const char *path)
+{
+#ifdef _WIN32
+    wchar_t *wide = Memories_Utf8ToWide(path);
+    unsigned long attributes = wide ? GetFileAttributesW(wide) : 0xFFFFFFFFul;
+    if (attributes != 0xFFFFFFFFul) {
+        if (attributes & 0x10) RemoveDirectoryW(wide);
+        else DeleteFileW(wide);
+    }
+    free(wide);
+#else
+    unlink(path);
+#endif
+}
+
+/* Remove a file or a whole tree. A missing path is fine. */
 static inline void scratch_remove(const char *path, int depth)
 {
-    struct stat info;
     DIR *dir;
     struct dirent *entry;
     char child[2 * SCRATCH_MAX];
-#ifdef _WIN32
-    if (stat(path, &info)) return;
-#else
-    if (lstat(path, &info)) return;
-#endif
-    if (!S_ISDIR(info.st_mode)) {
-        remove(path);
-        return;
+    switch (scratch_entry(path)) {
+    case SCRATCH_NONE: return;
+    case SCRATCH_LINK: scratch_unlink(path); return;
+    case SCRATCH_FILE: remove(path); return;
+    default: break;
     }
     if (!rmdir(path) || depth > 32) return;
     dir = opendir(path);
@@ -98,6 +166,7 @@ static inline void scratch_remove(const char *path, int depth)
 
 typedef struct {
     char roots[SCRATCH_ROOTS][SCRATCH_MAX];
+    char base[SCRATCH_MAX]; /* read once: no getenv in a signal handler */
     int count, hooked;
 } ScratchState;
 
@@ -107,30 +176,24 @@ static inline ScratchState *scratch_state(void)
     return &state;
 }
 
-static inline int scratch_exists(const char *path)
-{
-    struct stat info;
-    return !stat(path, &info);
-}
-
 static inline void scratch_cleanup(void)
 {
     ScratchState *state = scratch_state();
     int i, moved = 0;
     for (i = state->count - 1; i >= 0; i--) {
         scratch_remove(state->roots[i], 0);
-        if (scratch_exists(state->roots[i]) && !moved) {
+        if (scratch_entry(state->roots[i]) != SCRATCH_NONE && !moved) {
             /* The test may still be inside it (game_files_test chdirs in),
              * and Windows will not remove the current folder. */
             moved = 1;
 #ifdef _WIN32
             {
-                wchar_t *wide = Memories_Utf8ToWide(scratch_base());
+                wchar_t *wide = Memories_Utf8ToWide(state->base);
                 if (wide) _wchdir(wide);
                 free(wide);
             }
 #else
-            if (chdir(scratch_base())) {}
+            if (chdir(state->base)) {}
 #endif
             scratch_remove(state->roots[i], 0);
         }
@@ -156,26 +219,26 @@ static inline int scratch_suffix(const char *text)
     return !text[6];
 }
 
-/* memories-<kind>-p<pid>-XXXXXX, with <kind> equal to `name` when given. */
-static inline int scratch_tagged(const char *entry, const char *name, unsigned long *pid)
+/* <kind>-p<pid>-XXXXXX for exactly this kind. A PID that does not fit
+ * reads as 0, which counts as alive. */
+static inline int scratch_tagged(const char *entry, const char *kind, unsigned long *pid)
 {
-    size_t length = strlen(entry), head;
-    const char *tail, *digits;
-    if (length < 9 + 3 + 7 || strncmp(entry, "memories-", 9)) return 0;
-    tail = entry + length - 7;
-    if (*tail != '-' || !scratch_suffix(tail + 1)) return 0;
-    for (digits = tail; digits > entry && isdigit((unsigned char)digits[-1]); digits--) {}
-    if (digits == tail || digits - entry < 11 || digits[-1] != 'p' || digits[-2] != '-') return 0;
-    head = (size_t)(digits - 2 - entry);
-    if (name && (strlen(name) != head || strncmp(entry, name, head))) return 0;
-    *pid = strtoul(digits, NULL, 10);
+    size_t length = strlen(kind), digits = 0;
+    unsigned long long value = 0;
+    const char *at = entry + length;
+    if (!length || strncmp(entry, kind, length) || at[0] != '-' || at[1] != 'p') return 0;
+    for (at += 2; isdigit((unsigned char)*at); at++, digits++)
+        if (digits < 11) value = value * 10 + (unsigned long long)(*at - '0');
+    if (!digits || *at != '-' || !scratch_suffix(at + 1)) return 0;
+    *pid = digits > 10 || value > 0xFFFFFFFFull ? 0 : (unsigned long)value;
     return 1;
 }
 
-static inline int scratch_legacy(const char *entry, const char *name)
+/* <kind>-XXXXXX, as builds before the process tag named them. */
+static inline int scratch_legacy(const char *entry, const char *kind)
 {
-    size_t length = strlen(name);
-    return !strncmp(entry, name, length) && entry[length] == '-' && scratch_suffix(entry + length + 1);
+    size_t length = strlen(kind);
+    return length && !strncmp(entry, kind, length) && entry[length] == '-' && scratch_suffix(entry + length + 1);
 }
 
 static inline int scratch_registered(const char *path)
@@ -186,42 +249,42 @@ static inline int scratch_registered(const char *path)
     return 0;
 }
 
-/* Remove what earlier runs left in the temporary folder: every kind when
- * `name` is NULL, else that kind only. Returns how many were removed. */
-static inline int scratch_sweep(const char *name)
+/* Is this entry of the temporary folder a leftover of `kind`? */
+static inline int scratch_stale(const char *entry, const char *path, const char *kind, time_t now)
 {
-    /* Every kind the tests have made, for the sweep of untagged leftovers. */
-    static const char *const kinds[] = {
-        "memories-audio", "memories-backend", "memories-card-identities", "memories-controls",
-        "memories-decks", "memories-disc", "memories-fs", "memories-lifecycle", "memories-log",
-        "memories-manager", "memories-mod-window", "memories-mods", "memories-rom", "memories-runtime",
-        "memories-save-menu", "memories-save-slots", "memories-settings", "memories-texture-pack",
-        "memories-window"};
+    unsigned long pid;
+    struct stat info;
+    if (scratch_tagged(entry, kind, &pid)) return !scratch_registered(path) && !scratch_alive(pid);
+    return scratch_legacy(entry, kind) && !stat(path, &info) && now - info.st_mtime > SCRATCH_LEGACY_AGE;
+}
+
+/* Remove what earlier runs left in the temporary folder: every known kind
+ * when `name` is NULL, else that kind only. Each removal is written to
+ * `report` when given. Returns how many were removed. */
+static inline int scratch_sweep(const char *name, FILE *report)
+{
     const char *base = scratch_base();
     char path[2 * SCRATCH_MAX];
     DIR *dir = opendir(base);
     struct dirent *entry;
     time_t now = time(NULL);
+    size_t count, i;
+    const char *const *kinds = scratch_kinds(&count);
     int removed = 0;
     if (!dir) return 0;
     while ((entry = readdir(dir))) {
-        unsigned long pid;
-        size_t i;
         int stale = 0;
         if (strncmp(entry->d_name, "memories-", 9)) continue;
         if (snprintf(path, sizeof(path), "%s/%s", base, entry->d_name) >= (int)sizeof(path)) continue;
-        if (scratch_tagged(entry->d_name, name, &pid)) {
-            stale = !scratch_registered(path) && !scratch_alive(pid);
-        } else {
-            struct stat info;
-            int legacy = name && scratch_legacy(entry->d_name, name);
-            for (i = 0; !name && !legacy && i < sizeof(kinds) / sizeof(kinds[0]); i++)
-                legacy = scratch_legacy(entry->d_name, kinds[i]);
-            stale = legacy && !stat(path, &info) && now - info.st_mtime > SCRATCH_LEGACY_AGE;
-        }
-        if (stale) {
-            scratch_remove(path, 0);
-            removed += !scratch_exists(path);
+        if (name) stale = scratch_stale(entry->d_name, path, name, now);
+        for (i = 0; !name && !stale && i < count; i++) stale = scratch_stale(entry->d_name, path, kinds[i], now);
+        if (!stale) continue;
+        scratch_remove(path, 0);
+        if (scratch_entry(path) == SCRATCH_NONE) {
+            removed++;
+            if (report) fprintf(report, "scratch sweep: removed %s\n", path);
+        } else if (report) {
+            fprintf(report, "scratch sweep: could not remove all of %s\n", path);
         }
     }
     closedir(dir);
@@ -233,15 +296,22 @@ static inline int scratch_sweep(const char *name)
 static inline char *scratch_dir(char *out, size_t size, const char *name)
 {
     ScratchState *state = scratch_state();
-    scratch_sweep(name);
-    if (state->count >= SCRATCH_ROOTS) return NULL;
+    scratch_sweep(name, NULL);
+    if (state->count >= SCRATCH_ROOTS || !*name) return NULL;
     if (snprintf(out, size, "%s/%s-p%lu-XXXXXX", scratch_base(), name, scratch_pid()) >= (int)size) return NULL;
     if (strlen(out) >= SCRATCH_MAX || !mkdtemp(out)) return NULL;
     strcpy(state->roots[state->count++], out);
     if (!state->hooked) {
+#ifdef _WIN32
+        /* Windows never raises SIGTERM, and runs a SIGINT handler on another
+         * thread while the test goes on; what those leave, the sweep takes. */
+        const int numbers[] = {SIGABRT};
+#else
         const int numbers[] = {SIGABRT, SIGINT, SIGTERM};
+#endif
         size_t i;
         state->hooked = 1;
+        snprintf(state->base, sizeof(state->base), "%s", scratch_base());
         atexit(scratch_cleanup);
         /* Only where the test has no handler of its own. */
         for (i = 0; i < sizeof(numbers) / sizeof(numbers[0]); i++) {
