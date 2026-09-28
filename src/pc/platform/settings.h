@@ -44,10 +44,10 @@ typedef enum {
     SET_CRT,
     SET_FLASH,
     SET_XBR,
-    SET_HD_TEXT,                /* retired: the Forbidden Memories HD mod's "hd_text" (hd_text.h) */
+    SET_HD_TEXT,
     SET_FUSION_HELPER,
     SET_MSAA,
-    SET_HD_HUD,                 /* retired: part of HD text */
+    SET_HD_HUD,                 /* retired: part of SET_HD_TEXT */
     SET_OPPONENT_NAME,
     SET_PGXP,
     SET_CARD_DROPS,

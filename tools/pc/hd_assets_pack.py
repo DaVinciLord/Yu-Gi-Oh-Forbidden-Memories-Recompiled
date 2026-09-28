@@ -82,11 +82,6 @@ PARTS = {
     "duel": ("Duel arena and HUD", "The platform of all seven fields, the cards' frames in the hand, their labels "
              "and numbers, the FIELD box and the life points."),
 }
-# The port's HD text (and the duel's numbers and labels with it), which
-# this mod's setting switches on (Mods_FeatureOn in src/pc/mods/mods.h).
-HD_TEXT = {"key": "hd_text", "label": "HD text", "type": "bool", "default": 1,
-           "description": "The game's text, and the duel's numbers and labels, set in a font at the internal "
-                          "resolution (Internal 2x and up, with OpenGL)."}
 FRAMES = {8: "frame_monster.png", 9: "frame_magic.png", 10: "frame_trap.png", 11: "frame_ritual.png"}
 ATTRIBUTES = ("light", "dark", "earth", "water", "fire", "wind", "magic", "trap")
 # The game's ball has a one-texel rim it subtracts from the name bar (a
@@ -490,11 +485,9 @@ def main():
     manifest = {"id": args.id, "name": args.name, "version": "1.0", "author": args.author,
                 "description": "HD card art, thumbnails, frames, card back, attribute balls, the "
                                "Build Deck screen and the duel (arena, hand, FIELD box, life points); the Free "
-                               "Duel portraits; and HD text. Shows best at Video > Resolution > Internal 4x.",
+                               "Duel portraits. Shows best at Video > Resolution > Internal 4x with Video > HD text on.",
                 "enabled": True, "textures": "textures",
-                # HD text is the port's own (src/pc/text/hd_text.h); this setting
-                # is what switches it on (Mods_FeatureOn("hd_text")).
-                "settings": [HD_TEXT] + [
+                "settings": [
                     {"key": key, "label": label, "type": "bool", "default": 1, "description": help}
                     for key, (label, help) in sorted(pack.parts.items(), key=lambda part: (
                         list(PARTS).index(part[0]) if part[0] in PARTS else len(PARTS)))]}
