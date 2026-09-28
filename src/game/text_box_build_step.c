@@ -22,6 +22,7 @@
 #include "pc/cards/cards.h"
 #include "pc/text/glyphs.h"
 #include "pc/text/menu_cut.h"
+#include "pc/text/language.h"
 #include "pc/text/text.h"
 #endif
 
@@ -43,6 +44,9 @@ void TextBox_BuildStep(DuelEffectChannel *object)
     DuelEffectEntry *entry;
     s32 op;
     void (**handlers)(u8 *);
+#ifdef MEMORIES_PC
+    int pal_shift, pal_advance;
+#endif
 
     flags = object->flags_34;
     if ((flags & TEXT_BOX_FLAG_BUILD_ACTIVE) == 0) {
@@ -156,8 +160,14 @@ next_opcode:
     }
     D_8009B35A = D_8009B33A;
 #ifdef MEMORIES_PC
+    /* Game > Language's European text is spaced as the PAL font is: a few
+       letters narrower, drawn a little left in their cell (language.h). It
+       was written to wrap at the box's edge with that spacing. */
+    pal_advance = Language_Advance(object->flags_34, (s16)D_8009B33A, &pal_shift);
+    object->field_38 = object->field_38 + pal_shift;
     /* Glyphs past the retail font's have words of their own (glyphs.h). */
     func_80036C14(object, Glyphs_Word((s16)D_8009B33A) & 0x8FF0FFFF);
+    object->field_38 = object->field_38 - pal_shift;
 #else
     func_80036C14(object, D_801D9000[(s16)D_8009B33A] & 0x8FF0FFFF);
 #endif
@@ -166,4 +176,7 @@ next_opcode:
         object->flags_34 = object->flags_34 | TEXT_BOX_FLAG_DONE;
     }
     object->field_38 = object->field_38 + object->field_5A;
+#ifdef MEMORIES_PC
+    object->field_38 = object->field_38 + pal_advance;
+#endif
 }

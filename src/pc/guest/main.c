@@ -13,6 +13,7 @@
 #include "pc/platform/game_files.h"
 #include "pc/platform/update_check.h"
 #include "pc/cards/cards.h"
+#include "pc/text/language.h"
 #include "pc/text/text.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -124,6 +125,9 @@ int main(int argc, char **argv)
 #ifdef _WIN32
     _set_fmode(_O_BINARY); /* disc images and states: no newline translation */
 #endif
+    if (getenv("MEMORIES_EXPORT_LANGUAGES")) {
+        return Language_Export(getenv("MEMORIES_EXPORT_LANGUAGES"));   /* tools/pc/export_languages.py */
+    }
     {
         /* This process may become the crash monitor, with the game its child. */
         int status;
