@@ -1511,10 +1511,14 @@ and up without the picture pass ("needs OpenGL 3 or 1x").
   panel's when it is letters only and at most 9 of them, else its longest
   word of letters (G. Sebek: Sebek, Teana 2nd: Teana, Simon Muran: Simon).
   A copy of the result strings steps less before COM, so the name ends
-  where COM did. The player's name is YOU's box's when that font has every
-  character of it (letters, digits, spaces and `- / + :`), else You; the
-  copy steps less before each YOU and before WINNER (more for a name
-  shorter than three), so it ends where YOU did, over its numbers.
+  where COM did. The player's name is YOU's box's when it is letters,
+  digits, spaces and `:` alone, else You (the font has no `. ! ? $ & * %
+  @` and draws `- / +` in the blue of its own dots); the copy steps less
+  before each YOU (more for a name shorter than three), so it ends where
+  YOU did, over its numbers. `WINNER ···` names the winner
+  (`gDuel_bWinnerSide`): the player's name, or the opponent's when the
+  computer won, ending where the game's YOU or COM would; a name that
+  cannot stay You, or the game's own COM. 2P duels keep 1P and 2P.
 
 Not covered yet: the sword and shield icons (pictures, not lettering).
 
