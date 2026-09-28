@@ -68,9 +68,19 @@ def compile_header(compiler, include, header, extra):
     return None
 
 
+def place(path, include):
+    """`path` from the SDK's include directory. A compiler header on another
+    Windows drive has no relative path: it is spelled whole, the same for
+    every SDK, since they all use one compiler."""
+    try:
+        return os.path.relpath(path, include)
+    except ValueError:
+        return path.replace("\\", "/")
+
+
 def spot(text, include):
     """An unnamed type's place, spelled the same whichever SDK it is in."""
-    return UNNAMED.sub(lambda m: f"(unnamed at {os.path.relpath(m.group(1), include)}:{m.group(2)})", text)
+    return UNNAMED.sub(lambda m: f"(unnamed at {place(m.group(1), include)}:{m.group(2)})", text)
 
 
 def unnamed_places(tree, include):
@@ -89,7 +99,7 @@ def unnamed_places(tree, include):
     def walk(node):
         location(node.get("loc"))
         if node.get("kind") == "RecordDecl" and not node.get("name") and where["file"]:
-            places[node["id"]] = f"(unnamed at {os.path.relpath(where['file'], include)}:{where['line']})"
+            places[node["id"]] = f"(unnamed at {place(where['file'], include)}:{where['line']})"
         location(node.get("range"))
         for child in node.get("inner", []):
             walk(child)
