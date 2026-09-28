@@ -46,7 +46,6 @@ static int page_count(void)
     return (Duelists_Count() + FREE_DUEL_GRID_ENTRY_COUNT - 1) / FREE_DUEL_GRID_ENTRY_COUNT;
 }
 
-void FreeDuel_ShowPage(int page);
 extern void *gFreeDuel_apCells[FREE_DUEL_GRID_ENTRY_COUNT];
 extern void *gFreeDuel_pPageBox;
 extern void *gFreeDuel_apPageArrows[2];
@@ -195,7 +194,7 @@ DisplayObject *FreeDuel_SpawnSparkle(void)
  * The portraits come from the forty records the screen was opened with, taken
  * by base: a duelist a mod added has its base's face until it is given one.
  */
-void FreeDuel_ShowPage(int page)
+static void FreeDuel_ShowPage(int page)
 {
     RECT slot;
     int cell;
