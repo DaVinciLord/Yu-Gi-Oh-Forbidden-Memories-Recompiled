@@ -9,6 +9,39 @@
 #include "../../psyq/stdio.h"
 #include "../../game/campaign_flags.h"
 #include "../../game/util_memory.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/cards.h"
+#include "pc/cards/starter.h"
+
+/* A starter deck a mod wrote down (starter.h): its forty cards as they are,
+   in place of the seven weighted pools below. One random number picks which
+   deck, where the pools would have drawn one for each card and one for every
+   weight they walked past; a new game that takes a mod's deck therefore
+   leaves the stream somewhere the disc would not have, which is what letting
+   a mod name the cards costs. Cards_MarkSeen rather than the Library's flag
+   directly: a card a mod added sits past the range those flags cover, and is
+   remembered beside them (cards.c). */
+static s32 NameEntry_DealModStarterDeck(void)
+{
+    unsigned short cards[STARTER_DECK_SIZE];
+    unsigned total = Starter_WeightTotal();
+    s16 *out;
+    s32 i;
+
+    if (total == 0) {
+        return 0;
+    }
+    if (!Starter_Deck(Starter_Roll((unsigned)rand()), cards, 0)) {
+        return 0;
+    }
+    out = (s16 *)gDuel_awPlayerDeck;
+    for (i = 0; i < STARTER_DECK_SIZE; i++) {
+        out[i] = (s16)cards[i];
+        Cards_MarkSeen((int)cards[i]);
+    }
+    return 1;
+}
+#endif
 
 void NameEntry_BuildStarterDeck(void)
 {
@@ -22,6 +55,11 @@ void NameEntry_BuildStarterDeck(void)
     s32 threshold;
     s32 i;
 
+#ifdef MEMORIES_PC
+    if (NameEntry_DealModStarterDeck()) {
+        return;
+    }
+#endif
     for (i = CARD_COUNT - 1; i >= 0; i--) {
         counts[i] = 0;
     }

@@ -13,6 +13,7 @@
 #include "pc/platform/game_files.h"
 #include "pc/platform/update_check.h"
 #include "pc/cards/cards.h"
+#include "pc/text/entry_layout.h"
 #include "pc/text/language.h"
 #include "pc/text/text.h"
 #include <stdio.h>
@@ -53,6 +54,15 @@ int Platform_RestartGame(void)
 #endif
 
 extern int Main_Init(void);
+
+/* The game, once the port has its startup picture of the game data (a save
+ * state's words the game never changed are told by it): a PAL language's
+ * text entries come after it, so a state keeps its own (entry_layout.h). */
+static int start_game(void)
+{
+    TextEntries_Start();
+    return Main_Init();
+}
 
 /* The game's executable: the file named on the command line (development),
  * or SLUS_014.11 read out of the player's disc image. */
@@ -162,5 +172,5 @@ int main(int argc, char **argv)
     setvbuf(stdout, NULL, _IOLBF, 0);
 #endif
     /* The game runs on a stack at a fixed address; see state.h. */
-    return Memories_StateRunGame(Main_Init);
+    return Memories_StateRunGame(start_game);
 }

@@ -29,6 +29,8 @@ int main(void)
     static const unsigned char codes[] = {0xF8, 0x1B, 0xFC, 0x48, 0xF8, 0xF8, 0x03, 0x8C, 0xF8, 0x1B, 0x80, 0x00,
                                           0xF8, 0x1C, 0x00, 0xFF};
     static const unsigned char jump[] = {0xFD, 0x00, 0x02};
+    /* The PAL's F8 07 takes a byte; its F8 00 03 is the US F8 00 01. */
+    static const unsigned char limit[] = {0xF8, 0x00, 0x03, 0xF8, 0x07, 0x1C, 3, 0xFF};
     static const unsigned char e[] = {3, 0xFF}, i[] = {2, 0xFF}, accent[] = {0x3F, 0xFF}, name[] = {3, 2, 0xFF};
     PalTextPack pack = {a, b, c, glyphs};
     size_t length = 0;
@@ -49,6 +51,8 @@ int main(void)
     memcpy(a + 0x1010, codes, sizeof(codes));
     put16(a + 4 + 0x03 * 2, 0x1030);
     memcpy(a + 0x1030, jump, sizeof(jump));
+    put16(a + 4 + 0x04 * 2, 0x1080);
+    memcpy(a + 0x1080, limit, sizeof(limit));
     memcpy(a + 0x0200, e, sizeof(e));
     put16(a + 4 + 0x10 * 2, 0x1040);   /* the debug menu: the US one stays */
     memcpy(a + 0x1040, e, sizeof(e));
@@ -74,6 +78,7 @@ int main(void)
     expect(listing, "[0002]\n{call L125A}{call L125A}{f8 03 08 56 1D 80 00}{end}", 1);
     expect(listing, "f8 1C", 0);
     expect(listing, "[0003]\n{jump LF000}", 1);
+    expect(listing, "{f8 00 01}{f8 07 1C 00}E{end}", 1);
     expect(listing, "{:LF000}\nE{end}", 1);
     expect(listing, "[0010]", 0);
     expect(listing, "[0040]", 0);
@@ -93,6 +98,24 @@ int main(void)
     if (PalText_Advance(' ', &shift) != -1 || shift) failures++;
     if (PalText_Advance('i', &shift) != -2 || shift != -1) failures++;
     if (PalText_Advance('\'', &shift) != -6 || shift != -3) failures++;
+    if (PalText_Advance('.', &shift) != -2 || shift) failures++;
+    if (PalText_Advance(',', &shift) != -2 || shift) failures++;
+    if (PalText_Advance('l', &shift) != -2 || shift != -1) failures++;
+
+    /* F8 07's limit in pixels: the duel bar's 0x18 is 192; "Doppelkopfiger
+     * Donnerdra" (20 letters of 8, three of 6, a space of 7) is 193 with
+     * the next cell, so it is done there and not a letter before. */
+    {
+        int width = 0, n, done = 0;
+        static const int steps[24] = {8, 8, 8, 8, 8, 6, 8, 8, 8, 6, 6, 8, 8, 8, 7, 8, 8, 8, 8, 8, 8, 8, 8, 8};
+        for (n = 0; n < 24; n++) {
+            done = PalText_PastWidth(&width, steps[n], 8, 0x18);
+            if (n < 23 && done) failures++;
+        }
+        if (!done || width != 185) failures++;
+        width = 0;
+        if (PalText_PastWidth(&width, 8, 8, 2) != 0 || PalText_PastWidth(&width, 8, 8, 2) != 1) failures++;
+    }
     if (PalText_Advance('m', &shift) != 0 || shift) failures++;
     if (failures) fprintf(stderr, "%d failures\n", failures);
     return failures != 0;

@@ -215,7 +215,7 @@ Simon Muran{end}
 | `FE00` | Card drops' added result pages: after a card the player had none of | ends at the plate's end; each letter past 3 takes one from the card's name |
 | `FE01`, `FE02` | the same pages' heading, left: one card past the first, or more | with `FE03` right-aligned on the same line: 33 letters for both, numbers and spaces included |
 | `FE03` | the heading, right, when there is more than one page | as above |
-| `FE10` | the card shop's menu (string `0011`): the entry under BUILD DECK | the menu's box shows 44 letters in all (spaces are none); retail's four lines have 35, so 9; a line is 15 wide |
+| `FE10` | the card shop's menu (string `0011`): the entry under BUILD DECK | the menu's box shows 44 letters in all (spaces are none; 79 with a PAL language on, whose text entries are the PAL game's); retail's four lines have 35, so 9; a line is 15 wide |
 | `FE11` | the Free Duel grid's page line, between the L1 and R1 hints, when a duelist mod gives the grid more than one page (`notes/more-duelists.md`) | centred on the picture between the two hints: 30 letters, numbers and spaces included, before it reaches them |
 | `FE41`-`FE67` | the opponent's name in place of COM (View > Opponent's name for COM): `FE40` + the duelist's id, 1-39 (the names bank's `8328` + id is the same duelist) | 14 letters, spaces and full stops (H.M. Anubisius, the longest English one); past that, the first 14 |
 
@@ -368,7 +368,8 @@ before it falls back to the retail text.
 
 The game keeps a text box's letters in a slice of the entry table
 `D_800EB288` (620 entries: 255, 160, 160 and 45 for the four text
-channels). The console's text always fits; the port's
+channels; with a PAL language the PAL game's 800, see the official
+languages below). The console's text always fits; the port's
 `DuelEffect_AppendEntry` stops adding letters when the channel's slice is
 full, rather than writing into the next channel's (or past the table), and
 `func_80039A14`/`func_80039A60`, which build a menu's text in one go, stop
@@ -520,24 +521,73 @@ on, the port's features that look for a translated string (the shop's menu
 with DECK SLOTS, the opponent's name over COM on the results) behave as
 with a full translation mod.
 
-**The port's own strings** (FE00-FE10 above) come with the language where
-written: Spanish has them (NUEVA, `%d CARTA MÁS`, `%d CARTAS MÁS`,
-`PÁGINA %d DE %d`, RANURAS; the small letters draw the accented
-capitals, so MÁS and PÁGINA show their accents). The
-Spanish shop menu's four lines have 43 letters of the box's 44, so DECK
-SLOTS stays out of it (F6 still opens the slots). French, German and
-Italian keep the port's English for now: phase 2, for a speaker to write.
-The opponent's name over COM needs no string: the names bank's Spanish
-names are shortened as a translation's are.
+**The port's own strings** (FE00-FE10 above) come with the language
+(`own_words` in `src/pc/text/language.c`, added after the pack or disc):
+
+| | FE00 | FE01 / FE02 | FE03 | FE10 |
+|---|---|---|---|---|
+| French | NOUV. | `%d CARTE(S) DE PLUS` | `PAGE %d SUR %d` | JEUX |
+| German | NEU | `%d WEITERE KARTE(N)` | `SEITE %d VON %d` | STAPEL |
+| Italian | NUOVA | `%d CARTA/CARTE IN PIÙ` | `PAGINA %d DI %d` | MAZZI |
+| Spanish | NUEVA | `%d CARTA(S) MÁS` | `PÁGINA %d DE %d` | MAZOS |
+
+English (EU) says what the port's English says. FE10 is the game's own
+word for the deck (CONSTRUIRE JEU, STAPEL ZUSAMMENSTELLEN, CREA MAZZO,
+CREAR MAZO); the French NEW is cut short as the PAL text cuts words
+(ESCI DAL NEGO.), since past three letters it takes room from the card's
+name. The small letters of the headings draw the accented
+capitals, so MÁS, PÁGINA and PIÙ show their accents. The shop's menu
+fits the entry in every language because a PAL language also has the PAL
+game's text entries (below). The opponent's name over COM needs no
+string: the names bank's names are shortened as a translation's are.
+
+**Text entries.** The PAL executables keep a text box's letters in 800
+entries, sliced 280, 220, 220 and 80 for the four text channels (the
+boundaries at file offset 0x82650 of SLES_039.47, 0x82A64 of the other
+four), where the US has 620 (255, 160, 160, 45): the PAL text needs
+them. The French card shop's menu alone has 54 letters, past the US
+channel 3's 44, and its last line (QUITTER MAGASIN) was cut to QUIT. With
+a PAL language on, the port lays the entries out as the PAL game does
+(`src/pc/text/entry_layout.c`): the boundaries become the PAL ones and the
+table is 800 entries at 0x801F8000-0x801FD780, guest RAM the US game
+leaves free (the console's stack; the port's game runs on a stack of its
+own, and the sound driver's music package at 0x801EA800 ends by
+0x801F4800). The game reaches the table through `D_800EB288`, which
+`duel_effect.h` makes the one in use for the port, and its scans of every
+entry take the table's size; the listing compiler's page warning takes
+the layout's pages (279 letters, menus 219). Which table is in use
+follows the boundaries, and they travel with a save state: the port
+writes the PAL ones as the game starts (`TextEntries_Start`, the entry
+`main.c` gives `Memories_StateRunGame`), after its startup picture of
+the game data, which is therefore the US one in every launch. A state
+with the PAL boundaries keeps them when loaded; one with the US ones
+takes this build's US ones (the state's rule for words the game never
+changed). So a state goes on with the entries its boxes point into,
+whichever language the game was launched in (checked: French to US,
+saved again, and US to French). With English (US) nothing changes: the
+table, its place and its slices are retail's.
 
 **Widths.** The PAL text is longer than the US (French has about a hundred
 dialogue lines past the US 36 columns) and still fits on the console:
 the PAL font is spaced by letter. The EU executable's glyph routine
 (func_80036A78, the US func_80036C14) returns an adjustment that
 TextBox_BuildStep adds to the 8 pixels of a cell (0x5A): in the dialogue
-boxes' mode a space takes 7 pixels, `f`, `i`, `l`, `.` and `,` take 6 and
-are drawn a pixel left, and the apostrophe takes 2, drawn 3 left (the
-same code is in the French/German/Italian/Spanish executable). The boxes
+boxes' mode a space takes 7 pixels, `f`, `i`, `l`, `.` and `,` take 6
+(the PAL draws them a pixel left), and the apostrophe takes 2, drawn 3
+left (the same code is in the French/German/Italian/Spanish executable).
+The port draws the US letters where the PAL font has its own: `f`, `i`
+and `l` a pixel left, as the PAL, the apostrophe 3, but `.` and `,` where
+they are, since the PAL's sit a pixel further right in their cell. The
+PAL's `i` and `l` have serifs that fill their 6 pixels; the US ones are a
+2-pixel stem, so two of them side by side leave a wider gap than other
+letters. The PAL cuts a name by pixels (its `F8 07` counts 8 per unit,
+the US one letters); with a PAL language on, the port reads the
+limits the same way (`Language_PastWidth`): the card lists' 16 are 128
+pixels, the duel bar's 24 are 192 (a German name like Doppelköpfiger
+Donnerdrache stops after "Donnerdra", as on the console) and a magic
+card's bar, `[0051]`, 28 are 224. The PAL text's own `F8 07` has one
+operand byte; `pal_text.c` writes it as the US u16 (`{f8 07 1C 00}`),
+and the PAL's `F8 00 03` (a card's type as a label) as the US `F8 00 01`. The boxes
 are as wide as the US ones and wrap the same way (TextBox_WrapLineIfNeeded,
 unchanged), so the text was written for that spacing: many PAL lines lean
 on the box's edge to wrap. With a PAL language on, the port spaces
