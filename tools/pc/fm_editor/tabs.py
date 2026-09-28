@@ -7,7 +7,7 @@ import json
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from . import manifest, pools as poolmath, validate
+from . import bulk_dialog, manifest, pools as poolmath, validate
 from .gamedata import (ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, DUELIST_NAMES, POOL_LABELS,
                        POOL_TOTAL, POOLS, STAR_NAMES, STARTER_WEIGHT_LIMIT, TYPE_EQUIP, TYPE_NAMES, TYPE_RITUAL,
                        exodia_piece)
@@ -417,6 +417,7 @@ class FusionsTab(Tab):
         ttk.Button(buttons, text="Change result...", command=self.edit).pack(side="left", padx=4)
         ttk.Button(buttons, text="Remove (no fusion)", command=self.remove).pack(side="left")
         ttk.Button(buttons, text="Revert to retail", command=self.revert).pack(side="left", padx=4)
+        ttk.Button(buttons, text="Bulk...", command=lambda: bulk_dialog.open_bulk(self)).pack(side="left")
         ttk.Label(buttons, text="A pair fuses the same in either order. Brown rows are the retail table's "
                                 "\"glitch\" fusions.", style="Hint.TLabel").pack(side="right")
 

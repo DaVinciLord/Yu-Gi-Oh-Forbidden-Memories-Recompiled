@@ -165,6 +165,29 @@ int main(void)
     assert(fusion(739, 18) == 62);                            /* only the bases' */
     assert(fusion(732, 740) == 63);                           /* 732 + 18 */
 
+    /* Many rules, as the editor's bulk fusions write them (every pair of
+     * two sets of cards): read in one pass, each pair found in either
+     * order, the later of two rules for a pair the one that counts. */
+    {
+        enum { FIRST = 100, LAST = 299 };
+        size_t size = (size_t)(LAST - FIRST + 1) * (LAST - FIRST + 2) / 2 * 48 + 64, used;
+        char *text = malloc(size);
+        int x, y;
+        assert(text);
+        used = (size_t)sprintf(text, "{\"fusions\": [");
+        for (x = FIRST; x <= LAST; x++)
+            for (y = x; y <= LAST; y++)
+                used += (size_t)sprintf(text + used, "{\"with\": [%d, %d], \"result\": %d},", y, x, 300 + (x + y) % 100);
+        sprintf(text + used, "{\"with\": [%d, %d], \"result\": 1}]}", FIRST, LAST);
+        add("bulk", text);
+        free(text);
+        assert(fusion(FIRST, FIRST) == 300 + (2 * FIRST) % 100);
+        assert(fusion(150, 222) == 372 && fusion(222, 150) == 372);
+        assert(fusion(LAST, LAST) == 300 + (2 * LAST) % 100);
+        assert(fusion(FIRST, LAST) == 1);                     /* the later rule */
+        assert(fusion(10, 11) == 12);                         /* the other mods' rules stay */
+    }
+
     /* Equips: every dragon, less one; a replaced list; a copy of the equip. */
     add("a", "{\"equips\": [{\"card\": \"Legendary Sword\", \"add\": [\"Dragon\", 5], \"remove\": [13]},"
              "{\"card\": \"Kuriboh\", \"add\": [1]}]}");
