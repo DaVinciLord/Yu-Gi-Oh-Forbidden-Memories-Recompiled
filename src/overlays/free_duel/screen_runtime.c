@@ -332,9 +332,16 @@ void FreeDuel_Init(u8 *src)
 #endif
     if (gFreeDuel_bReturnFlags & 0x80) {
 #ifdef MEMORIES_PC
-        rec = Duelists_RecordSlot(&((SaveDataWorkspace *)D_801D0000)->state,
-                                  cell_duelist(gFreeDuel_bCursorRow * FREE_DUEL_GRID_COLUMN_COUNT +
-                                               gFreeDuel_bCursorColumn));
+        {
+            /* The disc's forty through the game's own table, the save block's
+             * records at 0x51C (and a name code mods bind to); an added
+             * duelist's beside the save (duelists.h). */
+            const int duelist = cell_duelist(gFreeDuel_bCursorRow * FREE_DUEL_GRID_COLUMN_COUNT +
+                                             gFreeDuel_bCursorColumn);
+            rec = duelist < FREE_DUEL_GRID_ENTRY_COUNT
+                      ? gFreeDuel_aDuelistRecords[duelist].counts
+                      : Duelists_RecordSlot(&((SaveDataWorkspace *)D_801D0000)->state, duelist);
+        }
 #else
         rec = gFreeDuel_aDuelistRecords[
             gFreeDuel_bCursorRow * FREE_DUEL_GRID_COLUMN_COUNT +
