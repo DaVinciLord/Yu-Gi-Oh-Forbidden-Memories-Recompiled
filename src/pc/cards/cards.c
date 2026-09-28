@@ -507,9 +507,6 @@ static void replace_model_effect(const char *mod, int index, const JsonValue *en
     }
 }
 
-/* "password": up to eight digits as a string ("08124921", leading zeros
- * kept) or a whole number, "" or null for none. 0 and a note if it is
- * neither. */
 /* A card's picture from a PNG bigger than the console's is drawn from the
  * PNG itself above the console's resolution: the made bytes of the record
  * (art.c) find it as a texture pack's image is found (texture_pack.h,
@@ -526,6 +523,9 @@ static void add_full_picture(const char *path, const unsigned char *record, int 
         fprintf(stderr, "memories-pc: cards: %s is drawn at the console's size only\n", path);
 }
 
+/* "password": up to eight digits as a string ("08124921", leading zeros
+ * kept) or a whole number, "" or null for none. 0 and a note if it is
+ * neither. */
 static int read_password(const char *mod, int index, const JsonValue *value, unsigned *out)
 {
     char digits[16];
