@@ -1296,6 +1296,18 @@ move's source, a target's centre, and the end of each replay, for
 presenting and frame dumps. A GPU cannot copy into a multisampled buffer,
 so the pass draws what it copies in as a quad.
 
+Without anti-aliasing a polygon's vertices move half a picture pixel
+right and down, so GL, which tests pixel centres, draws the pixels whose
+corners the software pass tests. With it, a pixel is drawn as much as its
+area is covered, and that move left half of every pixel along an edge on a
+word boundary uncovered: a dark column at x 192 of the duel's stone bar,
+where the left half's rectangles meet its mirrored right half, a quad (and
+a line along the quad's top and right). Into a multisampled buffer the
+vertices stay where they are and the fragment shader takes the attributes
+half a pixel up and left, at the pixel's corner, the same values
+(gl_picture.c, triangle()). In the bar the picture is then identical to
+anti-aliasing off, but for the field's slanted edges at its corners.
+
 The buffers cover all of VRAM at the scale. With 8 samples that is about
 256 MB of video memory at 4x and 1 GB at 8x. Where the driver has no room,
 it says so once, and the picture is drawn without until the setting or the
