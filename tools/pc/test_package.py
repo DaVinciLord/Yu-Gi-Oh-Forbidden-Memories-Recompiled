@@ -30,8 +30,8 @@ def check(path):
     assert required <= contents, f"missing files: {required - contents}"
     for directory in ("mods/", "sdk/", "symbols/"):
         assert any(name.startswith(directory) for name in contents), f"missing {directory}"
-    languages = {f"languages/{name}.txt" for name in ("en-eu", "fr", "de", "it", "es", "pt-br")}
-    assert {name for name in contents if name.startswith("languages/")} == languages, "languages/ needs the six packs"
+    languages = {f"languages/{name}.txt" for name in ("en-eu", "fr", "de", "it", "es")}
+    assert {name for name in contents if name.startswith("languages/")} == languages, "languages/ needs the five packs"
     assert {name for name in contents if name.startswith("game/")} == {"game/README.txt"}
     assert not any(name.startswith(("saves/", "reports/", "tmp/", "mods/assets-hd/")) or
                    name in {"disc-path.txt", "settings.ini", "controls.ini"} or
