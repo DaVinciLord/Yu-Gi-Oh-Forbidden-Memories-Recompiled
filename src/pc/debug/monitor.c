@@ -177,6 +177,17 @@ void Monitor_NoteSystem(void)
         }
         GetNativeSystemInfo(&system);
         Monitor_Fact("cpu", "%s, %lu threads", cpu, system.dwNumberOfProcessors);
+        /* Data Execution Prevention: calls into guest code are caught by it
+         * (image.c), and a player with it off crashed where no one else did. */
+        {
+            static const char *const policies[] = {"always off", "always on", "opt-in", "opt-out"};
+            DWORD flags = 0;
+            BOOL permanent = FALSE;
+            unsigned policy = (unsigned)GetSystemDEPPolicy();
+            int on = GetProcessDEPPolicy(GetCurrentProcess(), &flags, &permanent) && (flags & PROCESS_DEP_ENABLE);
+            Monitor_Fact("dep", "%s for the game (system: %s)", on ? "on" : "off",
+                         policy < 4 ? policies[policy] : "unknown");
+        }
         memory.dwLength = sizeof(memory);
         if (GlobalMemoryStatusEx(&memory)) {
             Monitor_Fact("memory", "%llu MB, %llu MB free", (unsigned long long)(memory.ullTotalPhys >> 20),
@@ -770,7 +781,7 @@ static int write_minidump(const char *path)
 
 /* The report -------------------------------------------------------------- */
 
-static void put_facts(void)
+size_t Monitor_Facts(char *out, size_t size)
 {
     char copy[MONITOR_FACTS_SIZE];
     int tries;
@@ -780,6 +791,15 @@ static void put_facts(void)
         if (!(before & 1) && before == __atomic_load_n(&shared->facts_sequence, __ATOMIC_SEQ_CST)) break;
     }
     copy[sizeof(copy) - 1] = '\0';
+    if (!size) return 0;
+    snprintf(out, size, "%s", copy);
+    return strlen(out);
+}
+
+static void put_facts(void)
+{
+    char copy[MONITOR_FACTS_SIZE];
+    Monitor_Facts(copy, sizeof(copy));
     put("%s", copy[0] ? copy : "(the game had not described the system yet)\n");
 }
 

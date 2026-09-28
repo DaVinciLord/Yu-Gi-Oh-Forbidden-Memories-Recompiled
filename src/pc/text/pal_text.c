@@ -58,6 +58,16 @@ static const struct { int id, width, cell, line; } fitted[] = {{0xE1, 0xA0, 0x10
  * there and back, around the PAL's own words. */
 static const struct { int id; unsigned char dy; } bar_lines[] = {{0x52, 0xE4}, {0x53, 0x1C}, {0x54, 0x1C}, {0x55, 0x1C}};
 
+/* Menus whose second line the PAL has 16 pixels under the first, its line
+ * height, where the port's US lines of 12 would put it higher: Free Duel's
+ * record (0x0C), the duelist's name and, a line below, the wins and losses,
+ * which the PAL words make too wide for the US line after the name. The
+ * screen's box is the PAL's height with a PAL language on (free_duel
+ * screen_runtime.c), and at 12 the record would sit on the name plate's
+ * lower edge; the PAL's 16 put it on the stone under the plate. The pixels
+ * down, after the string's first line break. */
+static const struct { int id; unsigned char dy; } lower_lines[] = {{0x0C, 0x04}};
+
 /* The PAL name buffers (file A offsets) and the US ones they stand for. */
 static const struct { unsigned pal, us; } name_buffers[] = {{0xF800, 0x122B}, {0xF814, 0x1238}, {0xF848, 0x125A}};
 
@@ -640,6 +650,7 @@ static void write_bank(Out *out, Bank *bank, const char *out_bank, const uint32_
     int offset, inside = 0, previous_end = -1, is_menus = !strcmp(bank->name, "menus"), id, id_count = 0;
     int is_descriptions = !strcmp(bank->name, "descriptions");
     int bar = -1, bar_at = -1;   /* the card bar's line (bar_lines) the string at bar_at is */
+    int lower = -1;              /* the string's lower_lines entry, until its first line break */
     /* The bank's ids in order, to name each string's. */
     static uint16_t ids[0x10000];
     static unsigned char plan[BANK_SIZE];   /* reflow: what to write at each offset */
@@ -683,6 +694,10 @@ static void write_bank(Out *out, Bank *bank, const char *out_bank, const uint32_
                 bar = -1;
                 for (i = 0; i < (int)(sizeof(bar_lines) / sizeof(bar_lines[0])); i++) {
                     if (bank->ids[bar_lines[i].id] == offset) bar = i, bar_at = offset;
+                }
+                lower = -1;
+                for (i = 0; i < (int)(sizeof(lower_lines) / sizeof(lower_lines[0])); i++) {
+                    if (bank->ids[lower_lines[i].id] == offset) lower = i;
                 }
                 for (i = 0; i < (int)(sizeof(fitted) / sizeof(fitted[0])); i++) {
                     int letters = first_line_letters(bank, offset);
@@ -731,6 +746,10 @@ static void write_bank(Out *out, Bank *bank, const char *out_bank, const uint32_
             int next = offset + 1;
             if (next >= BANK_SIZE || bank->start[next] || bank->target[next] || bank->op_at[next] < 0) add(out, "{nl}");
             else LINE(out, "");
+            if (lower >= 0) {
+                addf(out, "{f8 01 %02X}", lower_lines[lower].dy);
+                lower = -1;
+            }
         } else if (op->kind == OP_END) {
             add(out, "{end}");
             LINE(out, "");

@@ -53,6 +53,9 @@ void Platform_ApplyDisplaySettings(void);
 int Platform_HasWindowModes(void);
 /* Save the source picture, or the composed window when `window_image` is set. */
 void Platform_Screenshot(int window_image);
+/* Help > System info: puts `text` on the system clipboard; 0 where the
+ * backend cannot. */
+int Platform_CopyText(const char *text);
 /* PS1 digital pad bits, active high (Select 0x0001 ... Square 0x8000).
  * Async-signal-safe: it only reads a word written by Platform_Present. */
 uint16_t Platform_Pad(int port);
