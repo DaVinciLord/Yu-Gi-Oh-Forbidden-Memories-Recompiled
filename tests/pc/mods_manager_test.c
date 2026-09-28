@@ -42,8 +42,7 @@ int main(void)
     int enabled[MODS_MAX] = {0}, order[MODS_MAX], a, b, partial;
     unsigned char sector[2048] = {0};
     MemoriesModEvent event = {MEMORIES_EVENT_DAMAGE, MEMORIES_BEFORE, 0, 4, 0, 0, 0};
-    scratch_template(root, sizeof(root), "memories-manager");
-    assert(mkdtemp(root));
+    assert(scratch_dir(root, sizeof(root), "memories-manager"));
     make_dir("mods");
     make_dir("mods/a");
     write_text(

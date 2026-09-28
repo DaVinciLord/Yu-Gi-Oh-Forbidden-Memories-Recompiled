@@ -108,8 +108,7 @@ static void test_file(void)
     DeckSlot slots[DECK_SLOT_COUNT], back[DECK_SLOT_COUNT];
     FILE *file;
     int skipped;
-    scratch_template(dir, sizeof(dir), "memories-decks");
-    assert(mkdtemp(dir));
+    assert(scratch_dir(dir, sizeof(dir), "memories-decks"));
     snprintf(path, sizeof(path), "%s/decks.txt", dir);
     assert(DeckSlots_Read(path, back, find, &skipped) == 0 && skipped == 0); /* no file yet */
     memset(slots, 0, sizeof(slots));

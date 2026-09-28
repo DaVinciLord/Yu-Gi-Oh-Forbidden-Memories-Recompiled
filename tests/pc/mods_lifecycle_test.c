@@ -35,8 +35,7 @@ int main(int argc, char **argv)
     char path[1024];
     int no_api;
     assert(argc == 3);
-    scratch_template(root, sizeof(root), "memories-lifecycle");
-    assert(mkdtemp(root));
+    assert(scratch_dir(root, sizeof(root), "memories-lifecycle"));
     make_dir("mods");
     make_dir("mods/reject");
     install(argv[1], "mods/reject/reject.o");

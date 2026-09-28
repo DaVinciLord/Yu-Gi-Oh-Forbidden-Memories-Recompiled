@@ -72,8 +72,7 @@ int main(void)
     char path[1024];
     int w, h;
     test_text_cuts();
-    scratch_template(root, sizeof(root), "memories-mod-window");
-    assert(mkdtemp(root));
+    assert(scratch_dir(root, sizeof(root), "memories-mod-window"));
     make_dir("mods");
     for (int i = 0; i < 80; i++) {
         snprintf(path, sizeof(path), "mods/mod%02d", i);

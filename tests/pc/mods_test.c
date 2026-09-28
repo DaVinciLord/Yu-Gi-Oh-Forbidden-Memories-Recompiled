@@ -151,8 +151,7 @@ int main(void)
     assert(Mods_Lookup("vsnprintf") && Mods_Lookup("strtol"));
     assert(!Mods_Lookup("fopen") && !Mods_Lookup("system") && !Mods_Lookup("getenv"));
 
-    scratch_template(root, sizeof(root), "memories-mods");
-    assert(mkdtemp(root));
+    assert(scratch_dir(root, sizeof(root), "memories-mods"));
     make_dir("mods");
     /* A patch mod: bytes at a file offset, which crosses a sector boundary. */
     make_dir("mods/patcher");

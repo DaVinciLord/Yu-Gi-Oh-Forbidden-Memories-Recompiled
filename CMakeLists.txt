@@ -481,6 +481,22 @@ if(BUILD_TESTING)
         target_compile_options(memories_log_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
     endif()
     add_test(NAME pc_log COMMAND memories_log_test)
+    # Runs after every test (the fixture at the end of this file) and removes
+    # the scratch folders a test could not: killed, or holding a file open.
+    add_executable(memories_scratch_sweep_test tests/pc/scratch_sweep_test.c)
+    target_include_directories(memories_scratch_sweep_test PRIVATE src)
+    if(NOT MSVC)
+        target_compile_options(memories_scratch_sweep_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(NAME pc_scratch_sweep COMMAND memories_scratch_sweep_test)
+    set_tests_properties(pc_scratch_sweep PROPERTIES FIXTURES_CLEANUP memories_scratch)
+    # What the sweep removes and keeps, links (junctions) included.
+    add_executable(memories_scratch_rules_test tests/pc/scratch_rules_test.c)
+    target_include_directories(memories_scratch_rules_test PRIVATE src)
+    if(NOT MSVC)
+        target_compile_options(memories_scratch_rules_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(NAME pc_scratch_rules COMMAND memories_scratch_rules_test)
 
     # The tests state every expectation with assert(). A Release configuration
     # defines NDEBUG, which would leave them running and checking nothing;
@@ -575,4 +591,13 @@ if(MEMORIES_PSYZ_ROOT)
     if(BUILD_TESTING AND MEMORIES_RENDER_TESTS)
         add_test(NAME pc_render COMMAND memories_render_smoke)
     endif()
+endif()
+
+# Every test leaves the scratch sweep to run after it (tests/pc/scratch.h).
+if(BUILD_TESTING)
+    get_property(memories_all_tests DIRECTORY PROPERTY TESTS)
+    list(REMOVE_ITEM memories_all_tests pc_scratch_sweep)
+    foreach(test IN LISTS memories_all_tests)
+        set_property(TEST ${test} APPEND PROPERTY FIXTURES_REQUIRED memories_scratch)
+    endforeach()
 endif()

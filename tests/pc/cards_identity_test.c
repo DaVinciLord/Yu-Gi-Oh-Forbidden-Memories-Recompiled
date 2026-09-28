@@ -24,8 +24,7 @@ int main(void)
     unsigned char state[2048] = {0};
     int code = 123;
     unsigned sequence = 1;
-    scratch_template(directory, sizeof(directory), "memories-card-identities");
-    assert(mkdtemp(directory));
+    assert(scratch_dir(directory, sizeof(directory), "memories-card-identities"));
     setenv("MEMORIES_USER_DIR", directory, 1);
     memcpy(state + SAVE_DUELIST_CODE, &code, 4);
     memcpy(state + SAVE_SEQUENCE, &sequence, 4);
