@@ -13,9 +13,13 @@
 #include "pc/render/texture_dump.h"
 #include "pc/saves/deck_menu.h"
 #include "pc/text/language.h"
+#include "pc/text/text.h"
+#include "pc/platform/menu.h"
 #include "pc/debug/crash.h"
 #include "pc/debug/log.h"
 #include "pc/compat/signal.h"
+#include <errno.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -249,20 +253,60 @@ static int compatible_mods(MemoriesState *state)
     return check.valid;
 }
 
-/* The language the game's text is in (Game > Language). The game holds
- * pointers into that language's compiled text (translation.c), which
- * another language lays out otherwise, so a state loads only in the
- * language it was made in. A state without this chunk predates it and is
- * English (US), which has no compiled text. Kept apart from "mod-set" so
- * that states made before it keep loading. */
+/* Why a state was not loaded: on stderr, and in a notice over the picture
+ * (Menu_ShowNotice), since F7 is otherwise silent where there is no
+ * console. load() runs in the game's thread, which is the window's. */
+static void refuse(const char *format, ...)
+{
+    static const char *const ok[] = {"OK"};
+    char text[900];
+    va_list arguments;
+    va_start(arguments, format);
+    vsnprintf(text, sizeof(text), format, arguments);
+    va_end(arguments);
+    fprintf(stderr, "memories-pc: %s\n", text);
+    Menu_ShowNotice("Save state not loaded", text, ok, 1, 0, NULL);
+}
+
+/* The language the game's text is in (Game > Language), and where that
+ * text lay. The game holds pointers into the text the port compiled (a
+ * language, a translation mod: translation.c), so a state loads only with
+ * the same language and the same compiled text at the same place. The mods'
+ * signature ("mod-set") does not cover their text files, nor the language's
+ * pack or the port's own strings; the layout does. A state without this
+ * chunk predates it and is English (US), whose layout is not checked; kept
+ * apart from "mod-set" so that such states keep loading.
+ *
+ * The chunk: the language's code (16 bytes, NUL-padded), then a version and
+ * the layout (Text_Layout). A later version appends to it, so the code and
+ * the layout stay where they are. */
 #define LANGUAGE_CODE_SIZE 16
-static void state_language(const MemoriesState *state, char *code)
+#define LANGUAGE_CHUNK_VERSION 1u
+typedef struct {
+    char code[LANGUAGE_CODE_SIZE];
+    uint32_t version;
+    uint32_t base, used, crc; /* TextLayout */
+} LanguageChunk;
+/* Written as it lies in memory, in the machine's byte order like the rest
+ * of the state (which loads only on the system that saved it): 32 bytes,
+ * no padding between the fields. */
+_Static_assert(sizeof(LanguageChunk) == LANGUAGE_CODE_SIZE + 4 * sizeof(uint32_t), "LanguageChunk is padded");
+
+/* The state's chunk: 1 with the layout, 0 with the code only, -1 with no
+ * chunk (English US). */
+static int state_language(const MemoriesState *state, LanguageChunk *saved)
 {
     size_t size = 0;
     const uint8_t *chunk = find_chunk(state, "language", &size);
-    memset(code, 0, LANGUAGE_CODE_SIZE);
-    if (chunk && size == LANGUAGE_CODE_SIZE) memcpy(code, chunk, LANGUAGE_CODE_SIZE - 1);
-    else snprintf(code, LANGUAGE_CODE_SIZE, "%s", Language_Code(LANGUAGE_US));
+    memset(saved, 0, sizeof(*saved));
+    if (!chunk || size < LANGUAGE_CODE_SIZE) {
+        snprintf(saved->code, sizeof(saved->code), "%s", Language_Code(LANGUAGE_US));
+        return -1;
+    }
+    memcpy(saved->code, chunk, LANGUAGE_CODE_SIZE - 1);
+    if (size < sizeof(*saved)) return 0;
+    memcpy(&saved->version, chunk + LANGUAGE_CODE_SIZE, sizeof(*saved) - LANGUAGE_CODE_SIZE);
+    return saved->version >= 1;
 }
 
 static const char *language_label(const char *code)
@@ -276,14 +320,42 @@ static const char *language_label(const char *code)
 
 static int compatible_language(const MemoriesState *state, const char *path)
 {
-    char saved[LANGUAGE_CODE_SIZE];
-    const char *current = Language_Code(Language_Current());
-    state_language(state, saved);
-    if (!strcmp(saved, current)) return 1;
-    fprintf(stderr, "memories-pc: %s: save state was made with the game in %s, and the game is in %s now; "
-                    "choose %s in Game > Language and restart to load it\n",
-            path, language_label(saved), Language_Label(Language_Current()), language_label(saved));
-    return 0;
+    LanguageChunk saved;
+    int found = state_language(state, &saved);
+    TextLayout now = Text_Layout();
+    const char *name = path, *at;
+    for (at = path; *at; at++) {
+        if (*at == '/' || *at == '\\') name = at + 1; /* MEMORIES_LOAD_STATE may give a Windows path */
+    }
+    if (strcmp(saved.code, Language_Code(Language_Current()))) {
+        refuse("%s was made with the game in %s%s, and the game is in %s now. Choose %s in Game > Language, "
+               "restart, and load it again.", name, language_label(saved.code),
+               found < 0 ? " (it is older than the language setting)" : "", Language_Label(Language_Current()),
+               language_label(saved.code));
+        return 0;
+    }
+    if (found < 1) {
+        /* No layout to check: only the game's own text (English US, no
+         * translation mod) is where it was. */
+        if (!now.used) return 1;
+        refuse("%s is older than this version's text check, and the game has text of its own compiled now (a "
+               "language or a translation mod), which the state cannot be checked against. Loading it could show "
+               "the wrong lines or crash.", name);
+        return 0;
+    }
+    if (saved.used && !saved.base) {
+        refuse("%s was made while the game's text could not be placed at its fixed address, so the text it "
+               "points into is gone.", name);
+        return 0;
+    }
+    if (saved.base != now.base || saved.used != now.used || saved.crc != now.crc) {
+        refuse("%s was made with other game text: a language pack, a translation mod's text or this version's "
+               "own words changed since (%u bytes at 0x%08X, CRC %08X then; %u bytes at 0x%08X, CRC %08X now). "
+               "Loading it would show the wrong lines or crash.",
+               name, (unsigned)saved.used, (unsigned)saved.base, (unsigned)saved.crc, now.used, now.base, now.crc);
+        return 0;
+    }
+    return 1;
 }
 
 static void subsystems(MemoriesState *state)
@@ -291,12 +363,17 @@ static void subsystems(MemoriesState *state)
     unsigned signature = Mods_Signature();
     MemoriesStateField mod_set = {&signature, sizeof(signature)};
     MemoriesStateField gpu[2], gte[1];
-    char language[LANGUAGE_CODE_SIZE];
-    MemoriesStateField language_field = {language, sizeof(language)};
+    LanguageChunk language;
+    MemoriesStateField language_field = {&language, sizeof(language)};
     if (!Memories_StateLoading(state)) {
+        TextLayout layout = Text_Layout();
         Memories_StateChunk(state, "mod-set", &mod_set, 1);
-        memset(language, 0, sizeof(language));
-        snprintf(language, sizeof(language), "%s", Language_Code(Language_Current()));
+        memset(&language, 0, sizeof(language));
+        snprintf(language.code, sizeof(language.code), "%s", Language_Code(Language_Current()));
+        language.version = LANGUAGE_CHUNK_VERSION;
+        language.base = layout.base;
+        language.used = layout.used;
+        language.crc = layout.crc;
         Memories_StateChunk(state, "language", &language_field, 1);
     }
     Mods_VisitState(mod_state_visit, state);
@@ -711,7 +788,7 @@ static int load(const char *path)
     size_t size;
     long length;
     if (!file) {
-        perror(path);
+        refuse("%s: %s", path, strerror(errno));
         return -1;
     }
     fseek(file, 0, SEEK_END);
@@ -720,7 +797,7 @@ static int load(const char *path)
     image = malloc(length > 0 ? (size_t)length : 1);
     if (!image || length < 16 || fread(image, 1, (size_t)length, file) != (size_t)length ||
         memcmp(image, "YFMSTATE", 8)) {
-        fprintf(stderr, "memories-pc: %s is not a save state\n", path);
+        refuse("%s is not a save state", path);
         fclose(file);
         free(image);
         return -1;
@@ -731,7 +808,7 @@ static int load(const char *path)
     state.image_size = (size_t)length;
     chunk = find_chunk(&state, "entry", &size);
     if ((header[0] != 1 && header[0] != VERSION) || !chunk || size != sizeof(entry)) {
-        fprintf(stderr, "memories-pc: %s: unsupported state version\n", path);
+        refuse("%s: unsupported state version", path);
         free(image);
         return -1;
     }
@@ -739,15 +816,15 @@ static int load(const char *path)
     if (entry.esp >= OTHER_STACK_BASE && entry.esp < OTHER_STACK_BASE + STACK_SIZE) {
         /* The state holds the game stack, return addresses into the game code
          * as the other system's compiler laid it out: nothing here to resume. */
-        fprintf(stderr, "memories-pc: %s was saved by the %s build; a state loads only in a build for the "
-                        "system that saved it\n", path, OTHER_SYSTEM);
+        refuse("%s was saved by the %s build; a state loads only in a build for the system that saved it", path,
+               OTHER_SYSTEM);
         free(image);
         return -1;
     }
     chunk = find_chunk(&state, "stack", &size);
     if (!chunk || entry.esp < STACK_BASE || entry.esp >= STACK_TOP || size != STACK_TOP - entry.esp ||
         !find_chunk(&state, "memory", &size) || size != MEMORIES_GUEST_RAM_SIZE + SCRATCHPAD_SIZE) {
-        fprintf(stderr, "memories-pc: %s: damaged state\n", path);
+        refuse("%s: damaged state", path);
         free(image);
         return -1;
     }
@@ -762,12 +839,12 @@ static int load(const char *path)
         }
     }
     if (header[1] != build_id && relocate(image, (size_t)length, header[1]) != 0) {
-        fprintf(stderr, "memories-pc: %s was saved by another build and was not loaded\n", path);
+        refuse("%s was saved by another build and was not loaded", path);
         free(image);
         return -1;
     }
     if (!compatible_mods(&state)) {
-        fprintf(stderr, "memories-pc: save state uses different mods, card definitions or mod state layouts; restore its mod profile first\n");
+        refuse("save state uses different mods, card definitions or mod state layouts; restore its mod profile first");
         free(image); return -1;
     }
     if (!compatible_language(&state, path)) {

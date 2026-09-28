@@ -576,9 +576,11 @@ saved again, and US to French). With English (US) nothing changes: the
 table, its place and its slices are retail's.
 
 **Save states** keep pointers into the language's compiled text, so a
-state loads only in the language it was made in (pc-build.md, "Save
-states"); the text sits at a fixed address, so the same language finds it
-again at the next launch.
+state loads only in the language it was made in, and only while that text
+(with the mods' text over it) is byte for byte what it was (pc-build.md,
+"Save states"); the text sits at a fixed address, so the same language
+finds it again at the next launch. Editing a mod's text or a pack makes
+the states made before refuse to load, with a notice saying so.
 
 **Widths.** The PAL text is longer than the US (French has about a hundred
 dialogue lines past the US 36 columns) and still fits on the console:

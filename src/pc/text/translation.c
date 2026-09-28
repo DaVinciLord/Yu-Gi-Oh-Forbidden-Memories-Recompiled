@@ -55,6 +55,7 @@ static TextUnit *language_unit;
 #define ARENA_ALIGN 16u
 static unsigned char *arena;
 static size_t arena_used;
+static int unpinned; /* a unit stayed on the heap */
 
 static unsigned char *arena_take(size_t size)
 {
@@ -87,7 +88,11 @@ static void pin(TextUnit *unit)
 {
     unsigned char *old = unit->data, *moved;
     int i;
-    if (!unit->size || !(moved = arena_take(unit->size))) return;
+    if (!unit->size) return;
+    if (!(moved = arena_take(unit->size))) {
+        unpinned = 1;
+        return;
+    }
     memcpy(moved, old, unit->size);
     for (i = 0; i < unit->target_count; i++) {
         uintptr_t target = (uintptr_t)unit->targets[i];
@@ -97,6 +102,46 @@ static void pin(TextUnit *unit)
     }
     free(old);
     unit->data = moved; /* not freed again: a unit, once added, stays */
+}
+
+/* The startup text's layout (Text_Layout), once Text_Build is done. A
+ * state holds addresses inside it: the same language and mods give the
+ * same layout, but a pack, a mod's text file or the port's own strings
+ * changed since (none of them in the mods' signature) move them. */
+static TextLayout layout;
+
+static unsigned crc32_update(unsigned crc, const unsigned char *data, size_t length)
+{
+    size_t i;
+    int bit;
+    crc = ~crc;
+    for (i = 0; i < length; i++) {
+        crc ^= data[i];
+        for (bit = 0; bit < 8; bit++) crc = (crc >> 1) ^ (0xEDB88320u & (0u - (crc & 1u)));
+    }
+    return ~crc;
+}
+
+static void measure_layout(void)
+{
+    size_t bytes = 0;
+    int i;
+    layout.crc = 0;
+    for (i = -1; i < unit_count; i++) {
+        TextUnit *unit = i < 0 ? language_unit : units[i];
+        unsigned size;
+        if (!unit || !unit->size) continue;
+        size = (unsigned)unit->size;
+        layout.crc = crc32_update(layout.crc, (const unsigned char *)&size, sizeof(size));
+        layout.crc = crc32_update(layout.crc, unit->data, unit->size);
+        bytes += unit->size;
+    }
+    layout.base = arena && arena_used && !unpinned ? ARENA_BASE : 0;
+    layout.used = (unsigned)(layout.base ? arena_used : bytes);
+    if (layout.used) {
+        LOG(LOG_MODS, "text: %u bytes %s, CRC-32 %08x", layout.used,
+            layout.base ? "in the region at 0x9C000000" : "on the heap", layout.crc);
+    }
 }
 
 typedef struct {
@@ -232,7 +277,10 @@ void Text_Build(void)
             if (path[0]) add_unit(mod, path, name);
         }
     }
+    measure_layout();
 }
+
+TextLayout Text_Layout(void) { return layout; }
 
 /* View > Opponent's name for COM (hd_text.h) names the sides after the
  * duel too: strings 0x3E (YOU, or 1P in a 2P duel) and 0x3F (COM, or 2P)
