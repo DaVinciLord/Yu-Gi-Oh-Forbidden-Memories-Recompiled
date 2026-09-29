@@ -15,6 +15,10 @@
  *    has no saves but saves/ beside the game does (where the port keeps
  *    everything when it cannot make the folder), what is there is copied
  *    in, and used where it is only when it cannot be.
+ *
+ * MEMORIES_PROGRAM_DIR names the program directory where there is no
+ * executable to find it by (an Android app is the system's app_process;
+ * android.c points it at the build's files it unpacks).
  */
 #include <stddef.h>
 

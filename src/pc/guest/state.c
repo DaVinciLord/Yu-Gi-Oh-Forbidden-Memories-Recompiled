@@ -761,17 +761,14 @@ typedef struct Symbol {
     char name[72];
 } Symbol;
 
+/* The program directory (paths.h), where the build keeps buildid and
+ * symbols/ beside the executable. */
 static int executable_directory(char *out, size_t size)
 {
-    ssize_t length;
-    char *slash;
-    if (!size) return -1;
-    length = readlink("/proc/self/exe", out, size - 1);
-    if (length <= 0 || (size_t)length >= size) return -1;
-    out[length] = 0;
-    slash = strrchr(out, '/');
-    if (!slash) return -1;
-    *slash = 0;
+    const char *directory = Paths_ProgramDir();
+    size_t length = strlen(directory);
+    if (length >= size) return -1;
+    memcpy(out, directory, length + 1);
     return 0;
 }
 
