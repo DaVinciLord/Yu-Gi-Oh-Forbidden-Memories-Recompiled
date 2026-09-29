@@ -4,6 +4,7 @@
 #include "../unmatched.h"
 #ifdef MEMORIES_PC
 #include "pc/text/glyphs.h"
+#include "pc/cards/stars.h"
 #endif
 
 /* D_801D9174: a lookup table of 0x1E-byte records, each prefixed by a
@@ -44,6 +45,11 @@ void DuelEffect_AppendEntry(DuelEffectChannel *p, s32 a)
     s32 v;
     s32 b;
     s32 c;
+#ifdef MEMORIES_PC
+    /* The guardian star func_80037DA4 said this icon stands for, taken now
+       so it never passes to a later entry (stars.h). */
+    u16 star_icon = Stars_TakeIconMark();
+#endif
 
     q = p->entry_end_20;
 #ifdef MEMORIES_PC
@@ -72,6 +78,11 @@ void DuelEffect_AppendEntry(DuelEffectChannel *p, s32 a)
         b = p->field_62;
         q->flags_11 = 0xA0;
         q->field_17 = b;
+#ifdef MEMORIES_PC
+        /* Retail leaves an icon's code as the entry had it; func_80035E20
+           reads a star's there, so every icon says whether it is one. */
+        q->code_00 = star_icon;
+#endif
     } else if (f & 0x100) {
 #ifdef MEMORIES_PC
         /* The 8x8 font: an added letter and ':' are the port's to draw

@@ -35,6 +35,9 @@
 #include "../psyq/libgpu.h"
 #include "file_transfer.h"
 #include "duel_ritual_effect.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/stars.h"
+#endif
 #include "duel_effect_resource_setup.h"
 #include "../unmatched.h"
 
@@ -218,8 +221,29 @@ void DuelEffect_ApplyRitual(void)
             card->flags &= ~0x200;
             if (rand() & 1)
                 card->flags |= 0x200;
+#ifdef MEMORIES_PC
+            /* A card with one star has nothing to choose (stars.h). */
+            if (Stars_CardSingle(card->card_id)) {
+                card->flags &= ~0x200;
+            }
+#endif
             goto state_five;
         }
+#ifdef MEMORIES_PC
+        /* No box for a card with one star, nor when a mod's
+           "guardian_stars" picks the player's star (stars.h). */
+        {
+            s32 pick = Stars_PickForCard(card->card_id);
+
+            if (pick >= 0) {
+                card->flags &= ~0x200;
+                if (pick) {
+                    card->flags |= 0x200;
+                }
+                goto state_five;
+            }
+        }
+#endif
         D_800E9EF0.slots[1] = (DisplayObject *)func_80017F04(card, 134, 240);
         D_8009B210 = 4;
     }

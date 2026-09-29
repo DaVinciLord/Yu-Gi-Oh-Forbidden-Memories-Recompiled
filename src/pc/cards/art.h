@@ -47,6 +47,13 @@ int CardArt_IndexedImage(const char *path, int w, int h, unsigned char *indices,
 int CardArt_ImageSize(const char *path, int *width, int *height);
 /* PORTRAIT_RECORD bytes: a duelist's face for the Free Duel grid. */
 int CardArt_PortraitFromImage(const char *path, unsigned char *record, char *why, size_t why_size);
+/* A guardian star's icon, CARD_ICON_SIDE square at 4 bits a pixel (128
+ * bytes, the low nibble first), from a PNG (stars.h): with `palette` its 16
+ * colours (the disc's stars'), else the PNG's own 15 in `clut` (entry 0
+ * transparent). */
+#define CARD_ICON_SIDE 16
+int CardArt_IconFromImage(const char *path, const unsigned short *palette, unsigned char *pixels,
+                          unsigned short *clut, char *why, size_t why_size);
 /* `name` in UTF-8. 0 when no serif font could be found; the plate is left
  * as it was. */
 int CardArt_TitleFromName(const char *name, unsigned char *plate);
