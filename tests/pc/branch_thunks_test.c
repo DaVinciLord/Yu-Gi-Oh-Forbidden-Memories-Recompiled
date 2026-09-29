@@ -185,6 +185,12 @@ int main(void)
     volatile Add through;
     unsigned i, before;
     int failures = 0;
+    if (!((uintptr_t)record_registers & 0x5fe00000u) || !((uintptr_t)add3 & 0x5fe00000u)) {
+        /* The checks below tell a host target by its taking the fast path. */
+        printf("FAIL the test's code at 0x%08x lies where the thunks' fast path takes it for guest memory; "
+               "link it at a fixed base (--disable-dynamicbase)\n", (unsigned)(uintptr_t)record_registers);
+        return 1;
+    }
     Memories_GuestBranchResolver = resolve;
     for (i = 0; i < sizeof(drivers) / sizeof(drivers[0]); i++) {
         before = resolved;

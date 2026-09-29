@@ -267,6 +267,12 @@ if(BUILD_TESTING)
                 -mindirect-branch-register)
         endif()
         target_compile_options(memories_branch_thunks_test PRIVATE -Wall -Wextra -Werror)
+        # A fixed base, as the game has: a randomized one can put the test's
+        # own code where the thunks' one-test fast path takes it for guest
+        # memory (below 2 MiB on a CI runner).
+        if(WIN32)
+            target_link_options(memories_branch_thunks_test PRIVATE -Wl,--disable-dynamicbase)
+        endif()
         add_test(NAME pc_branch_thunks COMMAND memories_branch_thunks_test)
     endif()
     # mod_libc.c lends mods the indirect-branch thunks (src/pc/guest/branch_thunks.c).

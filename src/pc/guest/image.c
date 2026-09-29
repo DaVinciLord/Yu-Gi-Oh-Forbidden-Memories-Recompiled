@@ -182,6 +182,18 @@ static void *guest_branch_target(unsigned address)
     _exit(70);
 }
 
+/* The thunks let a host target through after one test of its address
+ * bits (branch_thunks.c). The executable has a fixed base where that test
+ * passes; were its code somewhere the test fails, calls would still work,
+ * through the resolver, only slower: say so. */
+static void check_code_address(void)
+{
+    if (!((uintptr_t)check_code_address & 0x5fe00000u)) {
+        fprintf(stderr, "memories-pc: the executable's code (0x%08x) is where the branch thunks take the slow path\n",
+                (unsigned)(uintptr_t)check_code_address);
+    }
+}
+
 /* Guest RAM mapped executable (MEMORIES_TEST_EXEC_GUEST=1), as it is where
  * DEP is off: then only the thunks keep a guest call from running MIPS bytes,
  * which makes "the game works without DEP" testable on any machine. */
@@ -317,13 +329,14 @@ static int view_at(HANDLE section, uint32_t address, size_t length, DWORD offset
     return 0;
 }
 
-/* Calls into guest code go through the branch thunks, which need nothing
- * from Windows. DEP is only the second net: with it, a call that escaped
- * them faults into on_guest_exception instead of running MIPS bytes. The
- * executable asks for it (--nxcompat), enough where Windows applies DEP to
- * programs that do (OptIn, the default); under OptOut with the program
- * excepted it is turned on here if Windows allows. Under AlwaysOff it
- * cannot be, and the thunks carry every guest call on their own. */
+/* Calls into guest code go through the branch thunks: the game works
+ * without DEP. DEP is a second safety net, turned on here where Windows
+ * lets a program: with it, a call that escaped the thunks faults into
+ * on_guest_exception instead of running MIPS bytes. The game is a 32-bit
+ * process, which follows the system's DEP policy (only 64-bit processes
+ * always have DEP): under OptIn, the default, the executable's --nxcompat
+ * turns it on; under OptOut with the program excepted, SetProcessDEPPolicy
+ * does; under AlwaysOff nothing can. */
 static void ask_for_dep(void)
 {
     DWORD flags = 0;
@@ -338,6 +351,7 @@ int Memories_GuestMap(void)
     int result, executable = guest_ram_executable();
     ask_for_dep();
     Memories_GuestBranchResolver = guest_branch_target;
+    check_code_address();
     if (executable) view_access = FILE_MAP_ALL_ACCESS | FILE_MAP_EXECUTE;
     section = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, executable ? PAGE_EXECUTE_READWRITE : PAGE_READWRITE, 0,
                                  MEMORIES_GUEST_RAM_SIZE, NULL);
@@ -445,6 +459,7 @@ int Memories_GuestMap(void)
     int fd, result;
     if (guest_ram_executable()) view_protection |= PROT_EXEC;
     Memories_GuestBranchResolver = guest_branch_target;
+    check_code_address();
     memset(&action, 0, sizeof(action));
     action.sa_sigaction = on_fault;
     action.sa_flags = SA_SIGINFO | SA_ONSTACK;
