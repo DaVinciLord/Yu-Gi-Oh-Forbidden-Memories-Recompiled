@@ -311,7 +311,9 @@ static void log_to_logcat(void)
 /* An app gets no environment of its own: environment.txt in the player's
  * folder, NAME=value per line, stands in for the MEMORIES_* variables the
  * desktop builds read (tracing, scripted input, frame dumps). For testing;
- * adb can put the file there. */
+ * adb can put the file there on an image with root, and run-as puts one in
+ * the internal files folder (read after it) of a debuggable build on an
+ * image without. */
 static void read_environment(const char *folder)
 {
     char path[1024], line[1024];
@@ -434,6 +436,7 @@ int Memories_AndroidMain(int argc, char **argv)
     } else {
         fprintf(stderr, "memories-pc: no external files folder (%s)\n", SDL_GetError());
     }
+    if (SDL_GetAndroidInternalStoragePath()) read_environment(SDL_GetAndroidInternalStoragePath());
     unpack_program();
     check_load_bias();
     /* The window is resizable, which SDL takes for "any orientation";
