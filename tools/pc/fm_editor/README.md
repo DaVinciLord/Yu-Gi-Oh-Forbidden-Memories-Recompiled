@@ -367,14 +367,17 @@ with `--print` shows the `mod.json` the editor would write for it.
     python -m pip install pyinstaller
     python tools/pc/fm_editor/build_exe.py [--dist tmp/pc/fm-editor]
 
-builds `tmp/pc/fm-editor/fm-editor.exe` (one file, about 11 MB, no Python
-needed to run it). Put it beside `memories-pc.exe` and it finds the game's
-`game/` folder there. Build outputs never go in git.
+builds the editor with no Python needed to run it. On Windows that is
+`tmp/pc/fm-editor/fm-editor/`: `fm-editor.exe`, `fm-editor.pkg` and the
+`fm-editor-files/` folder, which stay together. Elsewhere it is one file,
+`tmp/pc/fm-editor/fm-editor`. Put them beside `memories-pc.exe` and the
+editor finds the game's `game/` folder there. Build outputs never go in git.
+Windows gets no one-file build because virus scanners took it for a dropper.
 
 Each release carries it as `fm-editor-<version>-windows.zip` and
 `fm-editor-<version>-linux.tar.gz` (`.github/workflows/pc-release.yml`):
-unpack it where the game's archive was unpacked, and `fm-editor.exe` (or
-`fm-editor`) lands beside the game's program. The Linux one is built on
+unpack it where the game's archive was unpacked, and `fm-editor.exe` with
+its files (or `fm-editor`) lands beside the game's program. The Linux one is built on
 Debian 11, like the game, and brings its own Python and Tk. Running it from
 the source as above works too.
 
