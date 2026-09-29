@@ -731,6 +731,7 @@ static void open_gamepad(SDL_JoystickID id)
             d->threshold = 1.0f / 3;
             const char *name = SDL_GetGamepadName(pads[i]);
             snprintf(d->name, sizeof(d->name), "%s", name ? name : "Controller");
+            LOG(LOG_INPUT, "controller %u opened: %s", (unsigned)id, d->name);
             const char *serial = SDL_GetGamepadSerial(pads[i]);
             if (!ControlsLinux_Identity(SDL_GetGamepadPath(pads[i]), d->identity, sizeof(d->identity))) {
                 snprintf(d->identity, sizeof(d->identity), "pad:%04x:%04x:%s", SDL_GetGamepadVendor(pads[i]),
@@ -1389,6 +1390,10 @@ static void pump(void)
         if (event.type == SDL_EVENT_MOUSE_MOTION && event.motion.which == SDL_TOUCH_MOUSEID &&
             (touch_mouse_on_pad || TouchPad_Covers((int)event.motion.x, (int)event.motion.y)))
             continue;
+        if ((event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) && !event.key.repeat)
+            LOG(LOG_INPUT, "key %s %s (scancode %d), input %s", SDL_GetScancodeName(event.key.scancode),
+                event.type == SDL_EVENT_KEY_DOWN ? "down" : "up", (int)event.key.scancode,
+                ControlsRuntime_Blocked() ? "held back" : "open");
         /* A key or a controller's button: Automatic hides the pad again. */
         if (((event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat && event.key.key != SDLK_AC_BACK) ||
              event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) && TouchPad_OtherInput())
