@@ -362,7 +362,10 @@ each string found by its id through a table. Their bytecode is described in
 [the text control codes](text-control-bytecode.md); `text_listing.py`
 decodes all of it, following every jump from every string, and `check`
 assembles the listing again and compares it with the retail bytes (all
-128,166 of them match).
+128,172 of them match). Each item is compared from its start, so an item
+cut short by an op the decoder never read would still match: `check` also
+reports a text written to run on (`{cont}`) where the next item does not
+begin, which is how `[00E3]`'s lost jump would have shown.
 
 At startup `src/pc/text/translation.c` compiles each mod's listing
 (`listing.c`) into a buffer of its own. The game turns a string id into

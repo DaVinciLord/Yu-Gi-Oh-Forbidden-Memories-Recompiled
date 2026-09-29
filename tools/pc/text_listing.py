@@ -9,7 +9,8 @@
 UTF-8 text with the control codes spelled out, which is the file a
 translation mod edits and ships (`"text"` in mod.json). `check` extracts,
 assembles the listing again at the retail addresses and compares the bytes
-with the executable's, which is what shows the listing loses nothing.
+with the executable's, and reports any text that runs on ({cont}) into bytes
+no item starts at, which is what shows the listing loses nothing.
 
 The grammar is the one src/pc/text/listing.c compiles; notes/translation.md
 describes it for translators.
@@ -343,9 +344,13 @@ def card_names(image: Image, glyphs: dict[int, str]) -> dict[int, str]:
     return names
 
 
-def write_listing(image: Image, bank_list: list[Bank] | None = None, names: dict[int, str] | None = None) -> str:
+def write_listing(image: Image, bank_list: list[Bank] | None = None, names: dict[int, str] | None = None,
+                  run_ons: list[tuple[str, int, int]] | None = None) -> str:
     """The listing of `bank_list` (every bank of the image when None), with
-    `names` (card id -> name) in the descriptions' comments."""
+    `names` (card id -> name) in the descriptions' comments. Into `run_ons`,
+    when given: (bank, offset, next item's offset) for each text that runs on
+    into bytes nothing decoded, written {cont} although the next item does
+    not start there (a decoder that lost an op, as [00E3]'s jump was)."""
     glyphs = glyph_characters(image)
     if names is None:
         names = card_names(image, glyphs)
@@ -372,6 +377,8 @@ def write_listing(image: Image, bank_list: list[Bank] | None = None, names: dict
             marker = offset in targets and not header
             if header or marker or (previous_end is not None and offset != previous_end):
                 if inside:
+                    if run_ons is not None and previous_end != offset:
+                        run_ons.append((bank.name, previous_end, offset))
                     out[-1] += "{cont}"   # the text runs on into the next item
                 ids = " ".join(f"{i:04X}" for i in starts.get(offset, []))
                 if header:
@@ -618,11 +625,19 @@ def glyph_encoder(image: Image):
 
 
 def check(image: Image) -> int:
-    listing = write_listing(image)
+    run_ons: list[tuple[str, int, int]] = []
+    listing = write_listing(image, run_ons=run_ons)
     items = parse(listing, glyph_encoder(image))
     memory = {bank.name: (bank, image.bytes(bank.base, 0x10000)) for bank in banks(image)}
     problems = 0
     compared = 0
+    # An item's bytes are compared from its start, so one that stops short
+    # (an op the decoder never read) still matches: what gives it away is
+    # that its text runs on ({cont}) where the next item does not begin.
+    for name, end, following in run_ons:
+        problems += 1
+        print(f"{name} {end:#06x}: the text runs on into bytes the listing leaves out "
+              f"(the next item starts at {following:#06x})")
     for item in items:
         bank, retail = memory[item["bank"]]
         if item["ids"]:
