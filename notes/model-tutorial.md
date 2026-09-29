@@ -57,17 +57,22 @@ average and 1764 at most, and the tools take up to 1500. Shrink the model
 with Blender:
 
 ```sh
-blender -b --python tools/pc/model_prepare.py -- "Pot of Greed/M04844_Model.fbx" pot.obj 1590 body
+blender -b --python tools/pc/model_prepare.py -- "Pot of Greed/M04844_Model.fbx" pot.obj 1630 body --symmetric
 ```
 
 - `pot.obj` is the file it writes.
-- `1590` is how many triangles to keep. A little over 1500 is fine: the
+- `1630` is how many triangles to keep. A little over 1500 is fine: the
   next step leaves out the ones that can never be seen (the inside of the
-  mouth, here about a hundred), and says so if too many are left.
+  mouth, here about 130), and says so if too many are left.
 - `body` names the meshes to keep, separated by commas. Leave it out to
   keep them all.
+- `--symmetric` shrinks the left and right halves alike, so both eyes come
+  out the same. Leave it out for a model that is not symmetric.
 
-It prints something like `pot.obj: 1590 triangles from 6972`.
+It prints something like `pot.obj: 1630 triangles from 6972`. It also
+joins up the model's surface where the file split it along its texture
+seams first; without that, shrinking tears small parts like eyes and
+teeth.
 
 ## 4. Pick a template
 
@@ -208,7 +213,8 @@ model can leave the picture.
 |---|---|
 | The model faces the wrong way | `"yaw": 180` in the entry, or `--yaw 180` when making it |
 | Too big or too small | `"scale"` in the entry, or `--height` when making it |
-| Parts are missing, or you can see through it | run `model_import.py` without `--keep-hidden`; make sure the model's faces point outwards (Blender: Mesh > Normals > Recalculate Outside) |
+| Parts are missing, or you can see through it | make the model with `model_prepare.py` (it joins the surface before shrinking it); run `model_import.py` without `--keep-hidden`; make sure the model's faces point outwards (Blender: Mesh > Normals > Recalculate Outside) |
+| Small details (eyes, lettering) are blurry blocks | at Internal 1x a model only has three small 8-bit pages of texture; add the `"hd"` line and play at Internal 2x or 4x |
 | The texture is on the wrong parts | the wrong PNG was given to `--texture`; use the colour one |
 | Blocky textures at Internal 4x | add the `"hd"` line, and keep `pot-hd.png` in the mod |
 | The Mods window says the file is not a model record | copy `pot.bin` again; the file must be exactly 565,248 bytes |

@@ -50,15 +50,20 @@ and sounds (its *template*) and replaces all of its geometry and textures:
 
 ```sh
 # A big model (FBX, glTF) to about 1500 triangles, with Blender:
-blender -b --python tools/pc/model_prepare.py -- "Pot of Greed/M04844_Model.fbx" pot.obj 1590 body
+blender -b --python tools/pc/model_prepare.py -- "Pot of Greed/M04844_Model.fbx" pot.obj 1630 body --symmetric
 # On Morphing Jar's skeleton, with its texture:
 python3 tools/pc/model_import.py pot.obj pot.bin --template 591 \
     --texture "Pot of Greed/M04844_tex.png" --preview pot.png
 ```
 
 `model_prepare.py` keeps the named meshes (here `body`, leaving the pot's
-companion creature out) in their rest pose, decimates them together and
-writes a triangulated OBJ, +Z its front and +Y up. `model_import.py` then:
+companion creature out) in their rest pose, welds the vertices an export
+split along its UV seams (decimation takes every such split for an opening,
+and shrinks small parts such as eyes and teeth away from it, leaving holes),
+shades them smooth with edges over 60 degrees kept sharp, decimates them
+together (`--symmetric`: both halves of a model symmetric about X alike)
+and writes a triangulated OBJ, +Z its front and +Y up. `model_import.py`
+then:
 
 1. leaves out the triangles no view from outside the model shows (the
    inside of a mouth or a neck; `--keep-hidden` keeps them). The console
@@ -73,12 +78,13 @@ writes a triangulated OBJ, +Z its front and +Y up. `model_import.py` then:
    writes the whole mesh as shared-vertex polygons over those bones: each
    bone projects and lights its run of vertices, and the triangles join
    them, so the mesh bends with the template's animations without cracks;
-5. cuts the textures onto the three 8-bit texture pages (128x256 texels, a
-   256-colour palette each). One texture is split in halves over two pages
-   (overlapping a little), with the third holding its middle for the
-   triangles that cross it; two textures get one and a half pages and one
-   page; three get a page each. The same pages at 4x, from the full-size
-   texture, go to `OUT-hd.png`, for the entry's `hd`;
+5. packs the textures' UV islands onto the three 8-bit texture pages
+   (128x256 texels, a 256-colour palette each), each island with texels in
+   proportion to the surface it covers on the model, so a face that is a
+   small corner of its texture is not starved by what fills the rest, and
+   parts of a texture the model does not use take no room. Islands keep a
+   margin and never cross a page. The same layout at 4x, from the full-size
+   textures, goes to `OUT-hd.png`, for the entry's `hd`;
 6. writes the template's record with the new model data, textures and
    palettes, and keeps everything else of it byte for byte;
 7. with `--preview`, draws the record it wrote, from the front and from
@@ -201,6 +207,10 @@ slots' cards are saved with a state.
   work first ([the larger-file plan](larger-disc-files-plan.md)).
 - `scale` does not move the camera: the battle frames a model as big as
   the record's own, so a large scale can leave the picture.
+- Three 8-bit pages are all the texels a record has: small details are a
+  few texels wide at 1x. `hd` draws them from the full-size texture in the
+  battle and the Library at Internal 2x and up; the 3D Monsters mod draws
+  from texture banks of its own, which `hd` does not reach yet.
 - The console draws triangles in depth order, without a depth buffer.
   Close, concave parts (lips over a pot's side) can still show a sliver
   through each other from some angles, as on the console.

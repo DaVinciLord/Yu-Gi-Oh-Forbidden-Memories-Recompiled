@@ -21,10 +21,11 @@ voices and sounds, and replaces its geometry and textures with the mesh's:
   nearest, and the whole mesh is written as shared-vertex HMD polygons
   over those bones, so it bends with the template's animations the way the
   template's skin does, without cracks;
-- the textures are cut into up to three 128x256 texture pages of 8-bit
-  texels, a 256-colour palette each, and written again at 4x beside the
-  record (OUT-hd.png), which an entry's "hd" draws at an internal
-  resolution above the console's.
+- the textures' UV islands are packed onto three 128x256 texture pages of
+  8-bit texels (a 256-colour palette each), each with texels in proportion
+  to the surface it covers, and written again at 4x beside the record
+  (OUT-hd.png), which an entry's "hd" draws at an internal resolution above
+  the console's.
 
 --preview draws the result the way the record will be read, before any game
 does, which is a check of the conversion itself.
@@ -247,50 +248,115 @@ def read_obj(path: Path, texture: Path | None):
 
 # --- the textures ---------------------------------------------------------------
 
-def pages_for(images: dict[str, Image.Image], triangles_uv: list[tuple[str, np.ndarray]], hd_scale: int = HD_SCALE):
-    """Lay the textures out on three 8-bit pages: one texture a page while
-    they fit, else the first texture is split in two halves (with a third
-    page for triangles crossing the middle). Returns, per triangle, its page
-    and its texel coordinates, and the page images."""
-    names = list(images)
-    if len(names) > PAGES:
-        raise SystemExit(f"{len(names)} textures; a model has room for {PAGES} pages")
-    layout = {}   # texture -> list of (page, u0, u1) windows in texture u
-    # Halves overlap by a margin, so a triangle by the middle lies inside one
-    # of them rather than on its edge, where filtering reads the next page.
-    margin = 1 / 32
-    if len(names) == 1:
-        layout[names[0]] = [(0, 0.0, 0.5 + margin), (1, 0.5 - margin, 1.0), (2, 0.25, 0.75)]
-    elif len(names) == 2:
-        layout[names[0]] = [(0, 0.0, 0.5 + margin), (1, 0.5 - margin, 1.0)]
-        layout[names[1]] = [(2, 0.0, 1.0)]
-    else:
-        for page, name in enumerate(names):
-            layout[name] = [(page, 0.0, 1.0)]
-    page_images = [Image.new("RGBA", (PAGE_W, PAGE_H)) for _ in range(PAGES)]
-    hd_images = [Image.new("RGBA", (PAGE_W * hd_scale, PAGE_H * hd_scale)) for _ in range(PAGES)]
-    for name, windows in layout.items():
-        image = images[name]
-        for page, u0, u1 in windows:
-            w = image.width
-            crop = image.crop((round(u0 * w), 0, round(u1 * w), image.height))
-            page_images[page] = crop.resize((PAGE_W, PAGE_H), Image.LANCZOS)
-            hd_images[page] = crop.resize((PAGE_W * hd_scale, PAGE_H * hd_scale), Image.LANCZOS)
-    placed = []
-    for name, uv in triangles_uv:
-        windows = layout[name]
-        u = uv[:, 0] - math.floor(uv[:, 0].min() + 1e-9)   # a tiling triangle, into [0, 1]
-        v = uv[:, 1] - math.floor(uv[:, 1].min() + 1e-9)
-        best = None
-        for page, u0, u1 in windows:
-            inside = min(u.min() - u0, u1 - u.max())
-            if best is None or inside > best[0]:
-                best = (inside, page, u0, u1)
-        _, page, u0, u1 = best
-        tu = np.clip((u - u0) / (u1 - u0) * PAGE_W, 0, PAGE_W - 1)
-        tv = np.clip((1 - v) * PAGE_H, 0, PAGE_H - 1)
-        placed.append((page, np.stack([tu, tv], 1)))
-    return placed, page_images, hd_images
+def atlas(images: dict[str, Image.Image], triangles: list[dict], hd_scale: int = HD_SCALE):
+    """Pack the textures' UV islands onto the three 8-bit pages.
+
+    An island (triangles joined by shared UVs) gets texels in proportion to
+    the surface it covers on the model, so a face that is a small corner of
+    its texture but a large part of the model is not starved by the parts
+    that fill the texture; unused parts of a texture take no room at all.
+    Islands are packed in shelves with a margin round each (so filtering
+    never reads a neighbour), never across a page, and as large as the
+    three pages allow. Returns, per triangle, its page and its texel
+    coordinates, and the page images at 1x and at `hd_scale`."""
+    count = len(triangles)
+    parent = list(range(count))
+
+    def root(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    owner = {}
+    for index, triangle in enumerate(triangles):
+        for uv_id in triangle["uv_ids"]:
+            key = (triangle["image"], uv_id)
+            if key in owner:
+                a, b = root(owner[key]), root(index)
+                if a != b:
+                    parent[a] = b
+            else:
+                owner[key] = index
+    islands: dict[int, list[int]] = {}
+    for index in range(count):
+        islands.setdefault(root(index), []).append(index)
+
+    pad = 2
+    boxes = []
+    for members in islands.values():
+        image = images[triangles[members[0]]["image"]]
+        uv = np.concatenate([triangles[m]["uv"] for m in members])
+        shift = np.floor(uv.min(0) + 1e-9)            # a tiling island, into [0, 1]
+        x = (uv[:, 0] - shift[0]) * image.width
+        y = (1 - (uv[:, 1] - shift[1])) * image.height
+        x0, x1 = max(0.0, x.min()), min(float(image.width), x.max())
+        y0, y1 = max(0.0, y.min()), min(float(image.height), y.max())
+        width, height = max(x1 - x0, 1.0), max(y1 - y0, 1.0)
+        area = sum(triangles[m]["area"] for m in members) or 1e-9
+        # Texels a unit of the model's surface: its triangles' own area in the
+        # texture, not the island's box, which can be mostly other things.
+        corners = np.stack([x, y], 1).reshape(-1, 3, 2)
+        e1, e2 = corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0]
+        drawn = float(np.abs(e1[:, 0] * e2[:, 1] - e1[:, 1] * e2[:, 0]).sum()) / 2
+        boxes.append({"members": members, "image": image, "shift": shift, "x0": x0, "y0": y0,
+                      "w": width, "h": height, "density": math.sqrt(area / max(drawn, 1.0))})
+
+    def pack(scale):
+        """Shelves on three pages at `scale` texels per unit of density; None
+        when they do not fit."""
+        sized = []
+        for box in boxes:
+            k = scale * box["density"]
+            k = min(k, (PAGE_W - 2 * pad) / box["w"], (PAGE_H - 2 * pad) / box["h"])
+            sized.append((box, k, math.ceil(box["w"] * k) + 2 * pad, math.ceil(box["h"] * k) + 2 * pad))
+        sized.sort(key=lambda item: -item[3])
+        places, page, x, y, shelf = [], 0, 0, 0, 0
+        for box, k, w, h in sized:
+            if x + w > PAGE_W:
+                x, y, shelf = 0, y + shelf, 0
+            if y + h > PAGE_H:
+                page, x, y, shelf = page + 1, 0, 0, 0
+                if page == PAGES:
+                    return None
+            places.append((box, k, page, x, y, w, h))
+            x += w
+            shelf = max(shelf, h)
+        return places
+
+    low, high = 0.0, 1.0
+    while pack(high) is not None and high < 1e9:
+        low, high = high, high * 2
+    for _ in range(40):
+        middle = (low + high) / 2
+        if pack(middle) is not None:
+            low = middle
+        else:
+            high = middle
+    places = pack(low)
+    if places is None:
+        raise SystemExit("the textures' islands do not fit on three pages")
+
+    backgrounds = [Image.new("RGBA", (PAGE_W, PAGE_H), (0, 0, 0, 255)) for _ in range(PAGES)]
+    hd_pages = [Image.new("RGBA", (PAGE_W * hd_scale, PAGE_H * hd_scale), (0, 0, 0, 255)) for _ in range(PAGES)]
+    placed = [None] * count
+    for box, k, page, px, py, w, h in places:
+        image = box["image"]
+        # The island's crop with the margin's worth of the texture round it.
+        margin = pad / k
+        crop = (box["x0"] - margin, box["y0"] - margin, box["x0"] + box["w"] + margin, box["y0"] + box["h"] + margin)
+        piece = image.transform((w, h), Image.EXTENT, crop, Image.BILINEAR)
+        backgrounds[page].paste(piece, (px, py))
+        big = image.transform((w * hd_scale, h * hd_scale), Image.EXTENT, crop, Image.BICUBIC)
+        hd_pages[page].paste(big, (px * hd_scale, py * hd_scale))
+        for m in box["members"]:
+            uv = triangles[m]["uv"]
+            x = (uv[:, 0] - box["shift"][0]) * image.width
+            y = (1 - (uv[:, 1] - box["shift"][1])) * image.height
+            tu = np.clip(px + pad + (x - box["x0"]) * k, px, px + w - 1)
+            tv = np.clip(py + pad + (y - box["y0"]) * k, py, py + h - 1)
+            placed[m] = (page, np.stack([np.clip(tu, 0, PAGE_W - 1), np.clip(tv, 0, PAGE_H - 1)], 1))
+    return placed, backgrounds, hd_pages
 
 
 def colour15(rgb) -> int:
@@ -482,9 +548,18 @@ def convert(obj: Path, template_record: bytes, texture: Path | None, yaw: float,
         path = texture or materials[name]
         sources.setdefault(str(path), Image.open(path).convert("RGBA"))
         image_of[name] = str(path)
-    triangle_uvs = [(image_of[m], np.array([uvs[a[1]], uvs[b[1]], uvs[c[1]]]) if a[1] >= 0 else np.zeros((3, 2)))
-                    for a, b, c, m in triangles]
-    placed, page_images, hd_images = pages_for(sources, triangle_uvs)
+    if len({image_of[m] for _, _, _, m in triangles}) > PAGES * 4:
+        raise SystemExit("too many textures for one model")
+    atlas_triangles = []
+    for a, b, c, m in triangles:
+        corners = [a, b, c]
+        atlas_triangles.append({
+            "image": image_of[m],
+            "uv": np.array([uvs[k[1]] for k in corners]) if a[1] >= 0 else np.zeros((3, 2)),
+            "uv_ids": [k[1] if k[1] >= 0 else -1 - k[0] for k in corners],
+            "area": float(np.linalg.norm(np.cross(game[b[0]] - game[a[0]], game[c[0]] - game[a[0]]))) / 2,
+        })
+    placed, page_images, hd_images = atlas(sources, atlas_triangles)
     pages = quantise(page_images)
 
     # An OBJ's faces run anticlockwise seen from outside, and the turn to the
