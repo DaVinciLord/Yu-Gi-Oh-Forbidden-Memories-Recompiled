@@ -11,6 +11,8 @@ from . import bulk_dialog, manifest, pools as poolmath, validate
 from .gamedata import (ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, DUELIST_NAMES, POOL_LABELS,
                        POOL_TOTAL, POOLS, STAR_NAMES, STARTER_WEIGHT_LIMIT, TYPE_EQUIP, TYPE_NAMES, TYPE_RITUAL,
                        exodia_piece)
+from . import fixed_decks
+from .fixed_deck_view import FixedDeckView
 from .model import KEY_RE, StarterDeck
 from .widgets import CardField, FormDialog, card_matches, pick_card, px, scrolled_tree, show_text
 
@@ -88,7 +90,7 @@ class CardsTab(Tab):
         form.pack(side="left", fill="y", padx=(8, 0))
         self.form = form
         self.vars = {k: tk.StringVar() for k in ("name", "attack", "defense", "type", "attribute", "level",
-                                                  "star1", "star2", "key")}
+                                                  "star1", "star2", "password", "key")}
         row = 0
 
         def line(label, widget, hint=None):
@@ -123,6 +125,7 @@ class CardsTab(Tab):
                                              state="readonly", width=18), hint("star1"))
         line("Guardian star 2", ttk.Combobox(form, textvariable=self.vars["star2"], values=STAR_CHOICES,
                                              state="readonly", width=18), hint("star2"))
+        line("Password", ttk.Entry(form, textvariable=self.vars["password"], width=12), hint("password"))
         ttk.Label(form, text="Card text").grid(row=row, column=0, sticky="nw", pady=2)
         # 21 columns: the game's 20 letters a line and room for the cursor.
         self.text = tk.Text(form, width=21, height=9, wrap="word", font=("Consolas", 10))
@@ -145,8 +148,13 @@ class CardsTab(Tab):
             row=2, column=0, columnspan=2, sticky="w")
         ttk.Checkbutton(self.added_frame, text="Opponents' decks can deal it in its base's place",
                         variable=self.opponents).grid(row=3, column=0, columnspan=2, sticky="w")
-        ttk.Button(self.added_frame, text="Remove this card", command=self.remove_card).grid(
+        ttk.Label(self.added_frame, style="Hint.TLabel", wraplength=px(form, 320), justify="left",
+                  text="A new card starts in nobody's chest. Players win it in its base's place (above), "
+                       "from a starter deck (Starter decks tab) or with Game > Cheats > Give. Its password "
+                       "is shown in View > Card passwords only: the Password screen sells the disc's cards.").grid(
             row=4, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        ttk.Button(self.added_frame, text="Remove this card", command=self.remove_card).grid(
+            row=5, column=0, columnspan=2, sticky="w", pady=(4, 0))
         self.extra = ttk.Label(form, style="Hint.TLabel", wraplength=px(form, 320), justify="left")
         self.extra.grid(row=row, column=0, columnspan=3, sticky="w")
         row += 1
@@ -251,6 +259,8 @@ class CardsTab(Tab):
                 label.configure(text="")
             self.lines.configure(text="")
             self.text.configure(state="disabled")
+            if self.app.text_preview is not None:
+                self.app.text_preview.later()
             return
         card = self.project.cards[cid]
         self.title.configure(text=f"#{cid}" + ("  (added by the mod)" if cid in self.project.added else ""))
@@ -262,6 +272,7 @@ class CardsTab(Tab):
         self.vars["level"].set(card.level)
         self.vars["star1"].set(star_label(card.star1))
         self.vars["star2"].set(star_label(card.star2))
+        self.vars["password"].set(self.project.password(cid))
         self.text.insert("1.0", card.description)
         self.count_lines()
         reference = self.project.retail.cards.get(cid) or self.project.cards.get(self.project.base_of(cid))
@@ -271,6 +282,10 @@ class CardsTab(Tab):
                            ("attack", reference.attack), ("defense", reference.defense),
                            ("star1", star_label(reference.star1)), ("star2", star_label(reference.star2))):
             self.hints[key].configure(text=f"{what}: {label}" if key != "name" or len(str(label)) < 28 else what)
+        if cid in self.project.retail.cards:
+            self.hints["password"].configure(text=f"Retail: {self.project.retail.passwords.get(cid) or 'none'}")
+        else:
+            self.hints["password"].configure(text="Card view only")
         if cid in self.project.added:
             added = self.project.added[cid]
             self.vars["key"].set(added.key)
@@ -290,6 +305,8 @@ class CardsTab(Tab):
         lines = validate.text_lines(text)
         self.lines.configure(text=f"{lines} of 8 lines (20 letters a line, as the game wraps it)",
                              style="Error.TLabel" if lines > 8 else "Hint.TLabel")
+        if self.app.text_preview is not None:
+            self.app.text_preview.later()
 
     def read_form(self, cid):
         """The card as the form has it, or an error text."""
@@ -319,6 +336,11 @@ class CardsTab(Tab):
         if isinstance(card, str):
             self.status.configure(text=card)
             return False
+        password = self.vars["password"].get().strip()
+        if password and not (len(password) <= 8 and password.isdigit() and password.isascii()):
+            self.status.configure(text="a password is up to 8 digits, or empty for none")
+            return False
+        password = password.zfill(8) if password else ""
         changed = not card.same(self.project.cards[cid])
         if cid in self.project.added:
             added = self.project.added[cid]
@@ -332,6 +354,11 @@ class CardsTab(Tab):
             if (added.drops, added.opponents) != (self.drops.get(), self.opponents.get()):
                 added.drops, added.opponents = self.drops.get(), self.opponents.get()
                 changed = True
+        # Stored with the rest, once the form has passed every check.
+        if password != self.project.password(cid):
+            self.project.set_password(cid, password)
+            self.vars["password"].set(password)
+            changed = True
         if changed:
             self.project.cards[cid] = card
             self.app.changed()
@@ -350,6 +377,7 @@ class CardsTab(Tab):
         if cid in self.project.added:
             base = self.project.cards[self.project.added[cid].base]
             self.project.cards[cid] = base.copy(id=cid)
+            self.project.passwords.pop(cid, None)
         else:
             self.project.revert_card(cid)
         self.app.changed()
@@ -738,6 +766,7 @@ class DuelistsTab(Tab):
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.pick_row())
         edit = ttk.Frame(right)
         edit.pack(fill="x")
+        self.fixed = FixedDeckView(self, right, top)     # the deck pool may be forty cards written down
         ttk.Button(edit, text="Add a card...", command=self.add).pack(side="left")
         ttk.Label(edit, text="Weight").pack(side="left", padx=(10, 2))
         self.weight = tk.StringVar()
@@ -762,8 +791,8 @@ class DuelistsTab(Tab):
         for d, name in enumerate(DUELIST_NAMES[:len(self.project.pools)]):
             changed = any({c: w for c, w in self.project.pools[d][p].items() if w} != self.project.retail.pools[d][p]
                           for p in POOLS)
-            self.list.insert("", "end", iid=str(d), values=(d, name, "changed" if changed else ""),
-                             tags=("changed",) if changed else ())
+            state = "fixed" if fixed_decks.deck_of(self.project, d) else "changed" if changed else ""
+            self.list.insert("", "end", iid=str(d), values=(d, name, state), tags=("changed",) if state else ())
         if self.list.exists(str(self.duelist)):
             self.list.selection_set(str(self.duelist))
 
@@ -777,7 +806,7 @@ class DuelistsTab(Tab):
         return self.project.pools[self.duelist][self.pool.get()]
 
     def fill(self):
-        if self.project is None:
+        if self.project is None or self.fixed.fill():
             return
         p = self.project
         self.tree.delete(*self.tree.get_children())

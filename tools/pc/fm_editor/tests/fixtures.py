@@ -135,7 +135,16 @@ def make_wa(fusions, equips, rituals, pools) -> bytes:
             data[start:start + len(blob)] = blob
     for cid in ART_CARDS:
         paint_art(data, cid)
+    for cid in range(1, g.CARD_COUNT + 1):
+        code = int(password_of(cid), 16) if password_of(cid) else g.PASSWORD_NONE
+        struct.pack_into("<II", data, g.PASSWORD_TABLE + 8 * cid, cid * 10, code)
     return bytes(data)
+
+
+def password_of(cid: int) -> str:
+    """The synthetic disc's password of a card: its number times 7919, in
+    8 digits; the last two cards have none, as the disc's 721 and 722."""
+    return "" if cid > g.CARD_COUNT - 2 else f"{cid * 7919:08d}"
 
 
 ART_CARDS = (1, 2, 3, 5)

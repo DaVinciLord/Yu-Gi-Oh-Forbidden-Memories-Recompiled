@@ -321,7 +321,10 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(list(built["drops"])[0], "all")
         self.assertEqual(built["drops"]["all"]["pow"]["Nobody At All"], 5)
         self.assertFalse(any("Nobody At All" in str(v) for k, v in built["drops"].items() if k != "all"))
-        self.assertTrue(any("fixed deck" in m for m in messages))
+        # A fixed deck is now edited in the Duelists tab, not kept aside; the name it
+        # cannot place is kept under the name it was written with.
+        self.assertEqual(p.fixed["Simon Muran"].duelist, 1)
+        self.assertEqual(p.fixed["Simon Muran"].kept, {"Card 1": 40})
 
     def test_a_mods_own_duelists_are_kept_as_written(self):
         """The editor knows the forty the disc lays out; a duelist a mod added
@@ -387,6 +390,107 @@ class ValidateTest(unittest.TestCase):
         self.assertEqual(validate.text_lines("a b"), 1)
         self.assertEqual(validate.text_lines("x" * 20 + " y"), 2)
         self.assertEqual(validate.text_lines("a\nb\nc"), 3)
+
+
+
+class PasswordTest(unittest.TestCase):
+    """A card's password in the Cards tab: a disc card's goes in "passwords"
+    (the Password screen's), an added card's in its entry (the card view's)."""
+
+    def setUp(self):
+        self.retail = fixture().game()
+
+    def project(self) -> Project:
+        p = Project(self.retail)
+        p.info.id = "pw"
+        return p
+
+    def test_disc_table(self):
+        from fm_editor.tests.fixtures import password_of
+        self.assertEqual(self.retail.passwords[1], password_of(1))
+        self.assertEqual(self.retail.passwords[g.CARD_COUNT], "")
+        self.assertEqual(g.read_passwords(b"short"), {})
+
+    def test_port_spellings(self):
+        self.assertEqual(manifest.password_text("8124921"), "08124921")
+        self.assertEqual(manifest.password_text(1), "00000001")
+        self.assertEqual(manifest.password_text(""), "")
+        self.assertEqual(manifest.password_text(None), "")
+        for kept in ("card number", "123456789", "12a", True, -1, 100000000):
+            self.assertIsNone(manifest.password_text(kept), kept)
+
+    def test_added_card_round_trip(self):
+        p = self.project()
+        cid = p.add_card(3, "mine")
+        p.set_password(cid, "00001234")
+        data = manifest.build(p)
+        self.assertEqual(data["cards"][0]["password"], "00001234")
+        self.assertNotIn("passwords", data)
+        again = self.project()
+        self.assertEqual(manifest.apply(again, json.loads(manifest.dumps(data))), [])
+        self.assertEqual(again.password(cid), "00001234")
+        self.assertEqual(again.added[cid].extra, {})
+        self.assertEqual(manifest.build(again), data)
+        fresh = again.add_card(3, "other")
+        self.assertEqual(again.password(fresh), "")     # a copy has none of its own
+
+    def test_disc_card_round_trip(self):
+        p = self.project()
+        p.set_password(1, "00000001")
+        p.set_password(2, "")                       # the screen cannot give it
+        p.set_password(4, self.retail.passwords[4])  # the disc's: nothing to write
+        data = manifest.build(p)
+        self.assertEqual(data["passwords"], {"Blue Dragon": {"password": "00000001"},
+                                             "Mystic Elf": {"password": ""}})
+        again = self.project()
+        self.assertEqual(manifest.apply(again, data), [])
+        self.assertEqual((again.password(1), again.password(2)), ("00000001", ""))
+        self.assertTrue(again.card_changed(1))
+        self.assertFalse(again.card_changed(4))
+        self.assertEqual(manifest.build(again), data)
+        again.revert_card(1)
+        self.assertEqual(manifest.build(again)["passwords"], {"Mystic Elf": {"password": ""}})
+
+    def test_kept_as_written(self):
+        from fm_editor.tests.fixtures import password_of
+        written = {"id": "pw", "name": "pw", "passwords": {
+            "all": {"password": "card number", "starchips_percent": 10},
+            "Kuriboh": {"password": 77, "starchips": 5},
+            "Card 5": {"password": "card number"},
+            "Blue Dragon": {"password": password_of(1)},    # its own, out of "all"
+            "pw:mine:1": {"password": "00000009"}},
+            "cards": [{"copy": 3, "id": "mine", "password": "letters"}]}
+        p = self.project()
+        messages = manifest.apply(p, json.loads(json.dumps(written)))
+        self.assertTrue(any("\"password\" is up to 8 digits" in m for m in messages), messages)
+        self.assertEqual(p.password(3), "00000077")
+        cid = next(iter(p.added))
+        self.assertEqual(p.added[cid].extra, {"password": "letters"})
+        p.set_password(3, "00000078")
+        data = manifest.build(p)
+        self.assertEqual(data["passwords"], {"all": {"password": "card number", "starchips_percent": 10},
+                                             "Kuriboh": {"starchips": 5, "password": "00000078"},
+                                             "Card 5": {"password": "card number"},
+                                             "Blue Dragon": {"password": password_of(1)},
+                                             "pw:mine:1": {"password": "00000009"}})
+        self.assertEqual(data["cards"][0]["password"], "letters")
+
+    def test_validation(self):
+        p = self.project()
+        a, b = p.add_card(3, "a"), p.add_card(3, "b")
+        p.set_password(a, self.retail.passwords[10])     # a disc card's
+        p.set_password(b, "00000042")
+        p.set_password(1, "00000042")                    # an added card's
+        p.set_password(2, "12x")
+        found = {(i.target, i.message) for i in validate.validate(p) if i.level == "error"}
+        text = "\n".join(m for _, m in found)
+        self.assertIn(f"password {self.retail.passwords[10]} is also 10 Card 10's", text)
+        self.assertIn(f"password 00000042 is also {b} Kuriboh's", text)
+        self.assertIn("a password is up to 8 digits", text)
+        p.set_password(a, "00000043")
+        p.set_password(b, "")
+        p.set_password(2, self.retail.passwords[1])      # swapped with card 1, which moved away
+        self.assertEqual(validate.errors(validate.validate(p)), [])
 
 
 if __name__ == "__main__":

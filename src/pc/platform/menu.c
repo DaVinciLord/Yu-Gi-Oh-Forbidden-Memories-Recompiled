@@ -1431,6 +1431,20 @@ static void need_save(int done)
     }
 }
 
+/* Build Deck lists its own copy of the chest and puts it back on leaving,
+ * so cards given while it is open would be taken away again. */
+static void give_cards(int count)
+{
+    static const char *const ok[] = {"OK"};
+    if (Cheats_SaveLoaded() && Cheats_ChestOnScreen()) {
+        Menu_ShowNotice("Leave Build Deck first", "Build Deck works on its own copy of the chest and "
+                        "puts it back when you leave, so cards given now would be lost. "
+                        "Leave Build Deck, then choose this again.", ok, 1, 0, NULL);
+        return;
+    }
+    need_save(Cheats_TopUpAllCards(count));
+}
+
 static void activate(const Item *item, int *quit)
 {
     if (item->flags & ITEM_DISABLED) return;
@@ -1441,7 +1455,7 @@ static void activate(const Item *item, int *quit)
     case ACT_LOAD_STATE: Memories_StateRequest(2, Platform_StateSlot()); break;
     case ACT_SCREENSHOT: Platform_Screenshot(0); break;
     case ACT_EXIT: *quit = 1; break;
-    case ACT_GIVE_CARDS: need_save(Cheats_TopUpAllCards(item->value)); break;
+    case ACT_GIVE_CARDS: give_cards(item->value); break;
     case ACT_UNLOCK_FREE_DUELISTS: need_save(Cheats_UnlockAllFreeDuelists()); break;
     case ACT_SET_STARCHIPS: need_save(Cheats_SetStarchips((unsigned)item->value)); break;
     case ACT_RESET_COLOR:
