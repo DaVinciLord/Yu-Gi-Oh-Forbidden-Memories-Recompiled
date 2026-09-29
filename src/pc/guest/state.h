@@ -42,10 +42,27 @@ int Memories_StateLoading(const MemoriesState *state);
  * and entry registers are scanned; native chunks keep their own formats. */
 void Memories_StateRemapRange(MemoriesState *state, uint32_t from, uint32_t to, uint32_t size);
 
-/* Registers on entry to VSync, written by the assembly entry (state_i386.S). */
+/* Registers on entry to VSync, written by the assembly entry (state_i386.S,
+ * state_arm.S): what the game caller expects back. The stack pointer as the
+ * caller left it (MEMORIES_STATE_ENTRY_SP), and where VSync returns to
+ * (MEMORIES_STATE_ENTRY_CALLER): on i386 the word the stack pointer points
+ * at, on ARM the link register. The layout is the "entry" chunk of a state,
+ * and a state loads only in a build for the system that saved it. */
+#if defined(__arm__)
+typedef struct MemoriesStateEntry {
+    uint32_t r4, r5, r6, r7, r8, r9, r10, r11; /* offsets 0..28 */
+    uint32_t sp, lr;                           /* 32, 36 */
+    uint64_t d8_d15[8];                        /* 40: the callee-saved VFP registers */
+} MemoriesStateEntry;
+#define MEMORIES_STATE_ENTRY_SP(entry) ((entry).sp)
+#define MEMORIES_STATE_ENTRY_CALLER(entry) ((entry).lr)
+#else
 typedef struct MemoriesStateEntry {
     uint32_t ebx, esi, edi, ebp, esp; /* esp points at the return address */
 } MemoriesStateEntry;
+#define MEMORIES_STATE_ENTRY_SP(entry) ((entry).esp)
+#define MEMORIES_STATE_ENTRY_CALLER(entry) (*(const uint32_t *)(uintptr_t)(entry).esp)
+#endif
 extern MemoriesStateEntry Memories_StateEntry;
 
 /* main(): run `entry` on the fixed game stack. Does not return. */
