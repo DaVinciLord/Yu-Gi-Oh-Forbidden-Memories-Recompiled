@@ -2,8 +2,9 @@
 
 The schema is the one the port reads (notes/modding.md, notes/more-cards.md,
 notes/gameplay-tables.md; src/pc/mods/mods.c, src/pc/cards/cards.c and
-tables.c and starter.c): "cards" (replace and copy), "fusions", "equips",
-"rituals", "drops", "decks" and "starter". Every other top-level key a mod
+tables.c, starter.c and packs.c): "cards" (replace and copy), "fusions",
+"equips", "rituals", "drops", "decks", "starter", "packs" and "pack_shop".
+Every other top-level key a mod
 has (data, text, textures, audio, library, requires..., and "duelists") is
 kept as it was written.
 
@@ -26,10 +27,10 @@ from pathlib import Path
 from .gamedata import (FUSION_GROUPS, RITUAL_REQUIREMENT_KEYS, fusion_group_named, ATTRIBUTE_NAMES, CARD_COUNT, DECK_SIZE, DUELIST_NAMES, FRAME_NAMES, POOLS, STAR_NAMES,
                        STARTER_WEIGHT_LIMIT, TYPE_NAMES, TYPE_MAGIC, GameData)
 from .model import AddedCard, ModInfo, Project, StarterDeck, duelist_named, type_named, KEY_RE
-from . import art, campaign_map, fixed_decks, guardian_stars, pools as poolmath
+from . import art, campaign_map, fixed_decks, guardian_stars, packs as packmath, pools as poolmath
 
 INFO_KEYS = ("id", "name", "version", "author", "description")
-TABLE_KEYS = ("settings", "cards", "fusions", "equips", "rituals", "drops", "decks", "starter")
+TABLE_KEYS = ("settings", "cards", "fusions", "equips", "rituals", "drops", "decks", "starter", "packs", "pack_shop")
 REPLACE_EXTRA = ("art", "thumbnail", "title", "model", "effect", "exodia")
 POOL_ALIASES = {"deck": "deck", "pow": "pow", "sapow": "pow", "bcd": "bcd", "tec": "tec", "satec": "tec"}
 
@@ -351,6 +352,14 @@ def build_starter(project: Project):
     return out[0] if len(out) == 1 else out
 
 
+def build_packs(project: Project):
+    """"packs": the file the mod names, or each pack with only what differs
+    from the defaults (packs.minimize); None for no packs."""
+    if project.packs_file is not None:
+        return project.packs_file
+    return [packmath.minimize(entry) for entry in project.packs] or None
+
+
 def build_passwords(project: Project):
     """"passwords" (gameplay-tables.md): the entries the mod had, with the
     disc cards' passwords the editor changed written into them. None when
@@ -401,6 +410,12 @@ def build(project: Project) -> dict:
     if starter:
         manifest["starter"] = starter
     campaign_map.build_into(project, manifest)
+    packs = build_packs(project)
+    if packs:
+        manifest["packs"] = packs
+    rules = packmath.minimize_rules(project.pack_shop) if project.pack_shop is not None else None
+    if rules:
+        manifest["pack_shop"] = rules
     return manifest
 
 
@@ -1063,6 +1078,27 @@ def read_starter(project: Project, value, messages: list):
         project.starter.append(deck)
 
 
+def read_packs(project: Project, manifest: dict, messages: list):
+    """"packs" and "pack_shop" (notes/card-packs.md): each pack kept as the
+    object the mod wrote, for the Packs tab to edit; "packs" naming a file of
+    the mod is kept as that name."""
+    value = manifest.get("packs")
+    project.packs, project.packs_file = [], None
+    if isinstance(value, str):
+        project.packs_file = value
+        messages.append(f"\"packs\" names the file {value}; kept as written (the editor does not read it)")
+    elif isinstance(value, list):
+        project.packs = copy.deepcopy(value)
+    elif value is not None:
+        messages.append("\"packs\" is a list of packs, or the name of a file that holds them; left out")
+    rules = manifest.get("pack_shop")
+    if rules is None or isinstance(rules, dict):
+        project.pack_shop = copy.deepcopy(rules)
+    else:
+        messages.append("\"pack_shop\" is an object of the shop's rules; left out")
+        project.pack_shop = None
+
+
 def read_passwords(project: Project, messages: list):
     """The "password" of each "passwords" entry that names a disc card (the
     Password screen's; gameplay-tables.md) becomes the card's in the editor.
@@ -1127,6 +1163,7 @@ def apply(project: Project, manifest: dict, messages: list = None, default_id: s
     read_pools(project, manifest.get("drops"), False, messages)
     read_pools(project, manifest.get("decks"), True, messages)
     read_starter(project, manifest.get("starter"), messages)
+    read_packs(project, manifest, messages)
     read_passwords(project, messages)
     campaign_map.read_mod(project, messages)
     return messages

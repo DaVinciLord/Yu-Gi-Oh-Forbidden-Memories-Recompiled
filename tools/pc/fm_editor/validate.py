@@ -11,8 +11,10 @@ from dataclasses import dataclass
 
 from .gamedata import (CARD_COUNT, DECK_COPY_LIMIT, DECK_POOL_MIN_CARDS, DECK_SIZE, DUELIST_NAMES, POOLS,
                        POOL_LABELS, POOL_TOTAL, TYPE_MAGIC, TYPE_EQUIP, TYPE_RITUAL, exodia_piece)
-from . import art, campaign_map, fixed_decks, guardian_stars, limits
-from .model import KEY_RE, Project
+from pathlib import Path
+
+from . import art, campaign_map, fixed_decks, guardian_stars, limits, packs as packmath
+from .model import KEY_RE, Project, duelist_named
 
 MOD_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,63}$")
 SETTING_TYPES = ("int", "bool", "choice", "key")
@@ -20,7 +22,7 @@ MANIFEST_KEYS = ("id", "name", "version", "author", "description", "library", "e
                  "legacy_setting", "data", "textures", "cards", "audio", "min_api", "game", "requires", "after",
                  "conflicts", "priority", "settings", "fusions", "equips", "rituals", "drops", "decks", "text", "font",
                  "chest_overflow", "terrain_bonus", "trap_thresholds", "equip_bonus_default", "passwords",
-                 "starter", "limits", "guardian_stars")
+                 "starter", "limits", "guardian_stars", "packs", "pack_shop")
 HOST_API = 8
 
 
@@ -292,6 +294,72 @@ def _check_starter(project: Project, out: list):
                          "every deck weighs 0, so none is ever picked and the disc's own pools deal the deck", 0))
 
 
+def pack_resolver(project: Project):
+    """How the packs' cards are named for the checks and Simulate: as the
+    game's Cards_Reference, the cards this project knows (a mod's own by its
+    identity)."""
+    def resolve(value):
+        cid = project.resolve(value)
+        return cid if cid else -1
+    return resolve
+
+
+def _check_packs(project: Project, out: list):
+    """What the port's reader says of "packs" and "pack_shop" (packs.c), in
+    its words: an error is a pack the game leaves out."""
+    for level, message in packmath.check_rules(project.pack_shop):
+        out.append(Issue(level, "Packs", "pack_shop", message, None))
+    if project.packs_file is not None:
+        return
+    resolve = pack_resolver(project)
+    ids, passwords = set(), {}
+    card_passwords = {}
+    for cid in project.cards:
+        text = project.password(cid)
+        if text:
+            card_passwords.setdefault(int(text, 16) if text.isdigit() else None, cid)
+    names = {packmath.pack_id(e) for e in project.packs}
+    for i, entry in enumerate(project.packs):
+        pack, notes = packmath.read_pack(entry, resolve, project.info.id, i, ids)
+        where = packmath.pack_id(entry) if isinstance(entry, dict) else f"packs[{i}]"
+        for level, message in notes:
+            out.append(Issue(level, "Packs", where, message, i))
+        if pack is None:
+            continue
+        ids.add(pack.id)
+        image = entry.get("image")
+        if isinstance(image, str) and image and image not in project.files and not (
+                project.source_dir and (Path(project.source_dir) / image).is_file()):
+            out.append(Issue("warning", "Packs", where, f"\"image\" {image} cannot be read; its cover is shown "
+                                                         "instead", i))
+        if pack.password is not None:
+            if pack.password in passwords:
+                out.append(Issue("warning", "Packs", where, f"its password is pack \"{passwords[pack.password]}\"'s "
+                                                             "too; that one is sold", i))
+            passwords.setdefault(pack.password, pack.id)
+            if pack.password in card_passwords:
+                out.append(Issue("warning", "Packs", where,
+                                 f"its password is {project.card_label(card_passwords[pack.password])}'s: the card's "
+                                 "comes first on the Password screen", i))
+        unlock = entry.get("unlock") if isinstance(entry.get("unlock"), dict) else {}
+        if "beat" in unlock and duelist_named(unlock["beat"]) < 0:
+            out.append(Issue("warning", "Packs", where, f"\"unlock\" \"beat\" names no duelist of the disc "
+                                                         f"(\"{unlock['beat']}\"); a mod's own, if it is not "
+                                                         "applied, keeps the pack locked", i))
+        if "card" in unlock and resolve(unlock["card"]) <= 0:
+            out.append(Issue("warning", "Packs", where, f"\"unlock\" \"card\" names no card the editor knows "
+                                                         f"(\"{unlock['card']}\"); the pack stays locked", i))
+        opened = unlock.get("opened") if isinstance(unlock.get("opened"), dict) else {}
+        for name in opened:
+            if name not in names and name.split(":", 1)[-1] not in names:
+                out.append(Issue("warning", "Packs", where, f"\"unlock\" \"opened\" names no pack of this mod "
+                                                             f"(\"{name}\"); another mod's, if it is not applied, "
+                                                             "keeps the pack locked", i))
+    if len(project.packs) > packmath.PACKS_MAX:
+        out.append(Issue("error", "Packs", "packs", f"at most {packmath.PACKS_MAX} packs; the rest are left out",
+                         packmath.PACKS_MAX))
+
+
 def validate(project: Project) -> list:
     out = []
     _check_info(project, out)
@@ -314,6 +382,7 @@ def validate(project: Project) -> list:
     for level, where, message in guardian_stars.check(project.other.get("guardian_stars"), stat_cap=cap,
                                                       card_stars=stars):
         out.append(Issue(level, "Guardian Stars", where, message))
+    _check_packs(project, out)
     fixed_decks.check(project, out)
     art.check(project, out)
     campaign_map.check(project, out)

@@ -136,6 +136,60 @@ class GuiTest(unittest.TestCase):
         app.art.revert("art")
         self.assertEqual(art.changed_cards(app.project), set())
 
+    def test_packs(self):
+        from fm_editor import pngio
+        from fm_editor.packs_tab import SimulateDialog
+        from fm_editor.tests.test_art import gradient
+        app = self.app
+        tab = app.packs
+        app.notebook.select(tab)
+        app.update()
+        tab.add_pack()
+        self.assertEqual(len(app.project.packs), 1)
+        tab.vars["name"].set("Dragons")
+        tab.vars["price"].set("50")
+        self.assertTrue(tab.commit())
+        tab.add_cards([1, 2, 3])
+        self.assertEqual(len(tab.tree.get_children()), 3)
+        tab.tree.selection_set("0:2")
+        tab.weight.set("5")
+        tab.set_weight()
+        self.assertEqual(str(tab.tree.item("0:2", "values")[3]), "5")
+        self.assertTrue(tab.tree.item("0:0", "values")[4].endswith("%"))
+        # Advanced: a guarantee needs a tier of that name.
+        tab.toggle_advanced()
+        tab.adv["guarantee"].set("rare=1")
+        self.assertTrue(tab.commit())
+        self.assertTrue(any("not a tier of the pack" in i.message for i in app.conflicts.run() if i.area == "Packs"))
+        tab.adv["guarantee"].set("")
+        tab.adv["stock"].set("3")
+        self.assertTrue(tab.commit())
+        picture = Path(self.tmp.name) / "pack.png"
+        pngio.write(picture, gradient(204, 192))
+        tab.use_file(str(picture))
+        self.assertEqual(app.project.packs[0]["image"], "packs/pack-1.png")
+        for zoom in (1, 2, 4):
+            tab.zoom.set(zoom)
+            tab.show_picture()
+        dialog = SimulateDialog(tab, tab.parsed()[0])
+        self.assertEqual(dialog.result.draws, 1000 * 5 * 4)
+        dialog.destroy()
+        self.assertFalse([i for i in app.conflicts.run() if i.area == "Packs" and i.level == "error"])
+        out = Path(self.tmp.name) / "saved-packs"
+        app.project.info.id = "packs-test"
+        app.project.source_dir = out
+        self.assertTrue(app.save())
+        data = json.loads((out / "mod.json").read_text(encoding="utf-8"))
+        self.assertEqual(data["packs"], [{"id": "pack-1", "name": "Dragons", "price": 50,
+                                          "cards": {str(app.project.ref(1)): 1, str(app.project.ref(2)): 1,
+                                                    str(app.project.ref(3)): 5},
+                                          "stock": 3, "image": "packs/pack-1.png"}])
+        self.assertTrue((out / "packs" / "pack-1.png").is_file())
+        app.load_mod(out)
+        app.notebook.select(tab)
+        app.update()
+        self.assertEqual(tab.vars["name"].get(), "Dragons")
+
     def test_text_preview(self):
         import dataclasses
         from fm_editor import card_text

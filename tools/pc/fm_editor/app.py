@@ -11,6 +11,7 @@ from .art_tab import ArtTab
 from .map_tab import MapTab
 from .limits_tab import LimitsTab
 from .guardian_stars_tab import GuardianStarsTab
+from .packs_tab import PacksTab
 from .tabs import (CardsTab, DuelistsTab, EquipsTab, FusionsTab, ModInfoTab, ConflictsTab, RitualsTab,
                    StarterTab)
 from .widgets import px
@@ -49,10 +50,11 @@ class App(tk.Tk):
         self.map = MapTab(self.notebook, self)
         self.limits = LimitsTab(self.notebook, self)
         self.stars = GuardianStarsTab(self.notebook, self)
+        self.packs = PacksTab(self.notebook, self)
         self.info = ModInfoTab(self.notebook, self)
         self.conflicts = ConflictsTab(self.notebook, self)
         self.tabs = [self.cards, self.art, self.fusions, self.equips, self.rituals, self.duelists, self.starter,
-                     self.map, self.limits, self.stars, self.info, self.conflicts]
+                     self.map, self.limits, self.stars, self.packs, self.info, self.conflicts]
         self.status = ttk.Label(self, relief="sunken", anchor="w", padding=(6, 2))
         self.status.pack(fill="x", side="bottom")
         if self.dark.get():
@@ -229,6 +231,9 @@ class App(tk.Tk):
         elif current is self.duelists:
             current.fill_list()
             current.fill()
+        elif current is self.packs:
+            current.fill_list()
+            current.fill()
         elif current in (self.fusions, self.rituals, self.cards):
             current.fill()
         elif current is self.art:
@@ -368,6 +373,9 @@ class App(tk.Tk):
         elif issue.area == "Map":
             self.notebook.select(self.map)
             self.map.goto(target)
+        elif issue.area == "Packs":
+            self.notebook.select(self.packs)
+            self.packs.goto(target)
         elif issue.area == "Mod info":
             self.notebook.select(self.info)
         elif issue.area == "Limits":
