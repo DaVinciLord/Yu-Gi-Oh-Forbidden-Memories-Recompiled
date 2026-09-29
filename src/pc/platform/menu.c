@@ -26,6 +26,8 @@
 #include "paths.h"
 #include "pc/sdk/display.h"
 #include "title_jump.h"
+#include "quit_prompt.h"
+#include "button_layout.h"
 #include "update_check.h"
 #include "pc/debug/monitor.h"
 #include "pc/saves/deck_menu.h"
@@ -113,7 +115,8 @@ static Menu menus[MENU_COUNT] = {
               {"State slot 4", 0, ITEM_RADIO, RADIO_STATE_SLOT, -1, 4},
               {"Screenshot", "F12", ITEM_ACTION, ACT_SCREENSHOT, -1, 0, ITEM_GROUP_BREAK},
               {"Reload settings", 0, ITEM_ACTION, ACT_RELOAD_SETTINGS, -1},
-              {"Exit", "Esc", ITEM_ACTION, ACT_EXIT, -1, 0, ITEM_GROUP_BREAK}}, 9},
+              {"Confirm before quitting", 0, ITEM_CHECK, 0, SET_CONFIRM_QUIT, 0, ITEM_GROUP_BREAK},
+              {"Exit", "Esc", ITEM_ACTION, ACT_EXIT, -1}}, 10},
     {"Video", {{"Window scale", 0, ITEM_SUBMENU, 0, -1, SUB_SCALE},
               {"Menu size", 0, ITEM_SUBMENU, 0, -1, SUB_MENU_SIZE},
               {"Fullscreen", "F11", ITEM_CHECK, MENU_ITEM_FULLSCREEN, SET_FULLSCREEN, 0, ITEM_GROUP_BREAK},
@@ -1168,6 +1171,25 @@ void Menu_ShowNotice(const char *title, const char *text, const char *const *but
     LOG(LOG_MENU, "notice \"%s\" with %d buttons", notice.title, count);
 }
 
+static void choose_notice(int button, int *quit);
+
+int Menu_NoticeShown(void) { return ready && notice.shown; }
+
+int Menu_NoticePad(uint16_t pressed, int *quit)
+{
+    if (!Menu_NoticeShown() || !pressed) return 0;
+    /* In the game's own layout: Cross confirms and Circle backs out, or the
+     * other way round with View > Japanese buttons. */
+    pressed = ButtonLayout_Apply(pressed, 0, Settings_Get(SET_JP_BUTTONS));
+    if (pressed & BUTTON_LAYOUT_CROSS) choose_notice(notice.focus, quit);
+    else if (pressed & BUTTON_LAYOUT_CIRCLE) choose_notice(notice.count - 1, quit);
+    else if (pressed & 0x0090) notice.focus = (notice.focus + notice.count - 1) % notice.count; /* Up, Left */
+    else if (pressed & 0x0060) notice.focus = (notice.focus + 1) % notice.count;               /* Right, Down */
+    else return 0;
+    changed = 1;
+    return 1;
+}
+
 void Menu_CloseNotice(void)
 {
     if (!notice.shown) return;
@@ -1454,7 +1476,7 @@ static void activate(const Item *item, int *quit)
     case ACT_SAVE_STATE: Memories_StateRequest(1, Platform_StateSlot()); break;
     case ACT_LOAD_STATE: Memories_StateRequest(2, Platform_StateSlot()); break;
     case ACT_SCREENSHOT: Platform_Screenshot(0); break;
-    case ACT_EXIT: *quit = 1; break;
+    case ACT_EXIT: QuitPrompt_Request(quit); break;
     case ACT_GIVE_CARDS: give_cards(item->value); break;
     case ACT_UNLOCK_FREE_DUELISTS: need_save(Cheats_UnlockAllFreeDuelists()); break;
     case ACT_SET_STARCHIPS: need_save(Cheats_SetStarchips((unsigned)item->value)); break;

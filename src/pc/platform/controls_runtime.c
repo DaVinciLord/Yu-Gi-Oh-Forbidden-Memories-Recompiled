@@ -9,12 +9,15 @@
 static ControlsConfig active;
 static ControllerDevice devices[CONTROLS_DEVICES];
 static int initialized, assigned[2] = {-1, -1};
-static volatile sig_atomic_t blocked, gate = 1;
+static volatile sig_atomic_t blocked, held, gate = 1;
 static unsigned char keys[CTRL_KEY_COUNT];
 static ControlsEvaluator evaluators[2];
 static volatile uint16_t keyboard_bits, pad_bits[2];
 static volatile int connected[2];
 static char load_error[256];
+/* Main thread only: the controllers' pad presses, which a notice reads
+ * while the game cannot. */
+static uint16_t raw_pads, pad_presses;
 uint64_t ControlsRuntime_Now(void)
 {
     struct timespec ts;
@@ -166,7 +169,20 @@ void ControlsRuntime_Block(int b)
     blocked = b;
     ControlsRuntime_Gate();
 }
-int ControlsRuntime_Blocked(void) { return blocked || gate; }
+void ControlsRuntime_Hold(int h)
+{
+    if (!h == !held)
+        return;
+    held = h != 0;
+    ControlsRuntime_Gate();
+}
+int ControlsRuntime_Blocked(void) { return blocked || held || gate; }
+uint16_t ControlsRuntime_TakePadPresses(void)
+{
+    uint16_t out = pad_presses;
+    pad_presses = 0;
+    return out;
+}
 uint16_t ControlsRuntime_Keyboard(void) { return keyboard_bits; }
 uint16_t ControlsRuntime_Pad(int p) { return p >= 0 && p < 2 ? pad_bits[p] : 0; }
 int ControlsRuntime_Connected(int p) { return p >= 0 && p < 2 ? connected[p] : 0; }
@@ -203,14 +219,14 @@ int ControlsRuntime_Sources(const ControllerDevice *d, ControlSource *out, int c
 }
 void ControlsRuntime_Update(void)
 {
-    ControlSource held[CTRL_KEY_COUNT], sources[64];
+    ControlSource down[CTRL_KEY_COUNT], sources[64];
     uint16_t kb, pads[2] = {0};
-    int conn[2], neutral;
+    int conn[2], neutral, stopped;
     sigset_t all, previous;
     ControlsRuntime_Reconcile();
-    int n = ControlsRuntime_Keys(held);
+    int n = ControlsRuntime_Keys(down);
     neutral = n == 0;
-    kb = Controls_EvalKeyboard(&active.kb, held, n);
+    kb = Controls_EvalKeyboard(&active.kb, down, n);
     for (int p = 0; p < 2; p++) {
         int i = assigned[p];
         conn[p] = i >= 0;
@@ -222,13 +238,16 @@ void ControlsRuntime_Update(void)
         pads[p] = Controls_EvalController(ControlsRuntime_Profile(&active, p, 0), &devices[i].snapshot,
                                           &evaluators[p]);
     }
-    if (gate && neutral && !blocked)
+    if (gate && neutral && !blocked && !held)
         gate = 0;
+    stopped = blocked || held || gate;
+    pad_presses |= (uint16_t)(pads[0] | pads[1]) & ~raw_pads;
+    raw_pads = pads[0] | pads[1];
     sigfillset(&all);
     sigprocmask(SIG_BLOCK, &all, &previous);
-    keyboard_bits = blocked || gate ? 0 : kb;
+    keyboard_bits = stopped ? 0 : kb;
     for (int p = 0; p < 2; p++) {
-        pad_bits[p] = blocked || gate ? 0 : pads[p];
+        pad_bits[p] = stopped ? 0 : pads[p];
         connected[p] = conn[p];
     }
     sigprocmask(SIG_SETMASK, &previous, NULL);

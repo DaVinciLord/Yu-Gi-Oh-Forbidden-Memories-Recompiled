@@ -77,6 +77,25 @@ int main(void)
     d->snapshot.buttons_down = 1u << (CTRL_BTN_GUIDE - 1);
     ControlsRuntime_Update();
     assert(ControlsRuntime_Pad(0) == CTRL_DEST_CROSS);
+
+    /* While held (a notice is up) the game sees nothing, but the pad's
+     * presses are there for the notice. Release waits for neutral. */
+    d->snapshot.buttons_down = 0;
+    ControlsRuntime_Update();
+    ControlsRuntime_TakePadPresses();
+    ControlsRuntime_Hold(1);
+    d->snapshot.buttons_down = 1u << (CTRL_BTN_GUIDE - 1);
+    ControlsRuntime_Update();
+    assert(ControlsRuntime_Blocked() && !ControlsRuntime_Pad(0));
+    assert(ControlsRuntime_TakePadPresses() == CTRL_DEST_CROSS && !ControlsRuntime_TakePadPresses());
+    ControlsRuntime_Hold(0);
+    ControlsRuntime_Update();
+    assert(!ControlsRuntime_Pad(0));
+    d->snapshot.buttons_down = 0;
+    ControlsRuntime_Update();
+    d->snapshot.buttons_down = 1u << (CTRL_BTN_GUIDE - 1);
+    ControlsRuntime_Update();
+    assert(!ControlsRuntime_Blocked() && ControlsRuntime_Pad(0) == CTRL_DEST_CROSS);
     unlink(path);
     rmdir(dir);
     puts("controls runtime: selection, hotplug, profiles and release gate passed");
