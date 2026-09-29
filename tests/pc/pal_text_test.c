@@ -48,6 +48,13 @@ int main(void)
     static unsigned char nine[9 * 21];
     static const unsigned char ten[] = {3, 0x30, 0xFE, 2, 0xFE, 3, 0xFE, 3, 0xFE, 3, 0xFE, 3, 0xFE,
                                         3, 0xFE, 3, 0xFE, 3, 0xFE, 3, 0xFF};
+    /* The password shop's menu, as the discs have it: [00E3] lays out two
+     * lines and jumps for the answer ({choose 80 0 0}); [00E4], after it,
+     * lays out its own choice and jumps into [00E3]'s lines. Read from
+     * [00E4] first, those lines meet the jump before any choice: it is read
+     * again once the choices are known, and kept. */
+    static const unsigned char menu[] = {0xFB, 0x62, 3, 0xFE, 3, 0xFE, 0xFB, 0x80, 0x00, 0x00, 0x00, 0x00,
+                                         0xFB, 0x6A, 0x02, 0xFD, 0x02, 0x14};
     char expected[512];
     int n;
     static const unsigned char e[] = {3, 0xFF}, i[] = {2, 0xFF}, accent[] = {0x3F, 0xFF}, name[] = {3, 2, 0xFF};
@@ -77,6 +84,9 @@ int main(void)
     memcpy(a + 0x1200, chips, sizeof(chips));
     put16(a + 4 + 0x0C * 2, 0x1300);   /* Free Duel's record */
     memcpy(a + 0x1300, record, sizeof(record));
+    put16(a + 4 + 0xE3 * 2, 0x1400);
+    put16(a + 4 + 0xE4 * 2, 0x140C);
+    memcpy(a + 0x1400, menu, sizeof(menu));
     put16(a + 4 + 0x07 * 2, 0x1090);
     memcpy(a + 0x1090, sizes, sizeof(sizes));
     put16(glyphs + 0x30 * 4, 0x817C);   /* - */
@@ -129,6 +139,8 @@ int main(void)
     expect(listing, "@bank descriptions", 1);
     expect(listing, "[0500]\n\xC3\xA1{end}", 1);
     expect(listing, "[8001]\nEi{end}", 1);
+    expect(listing, "\nE\nE\n{choose 80 0 0}\n", 1);
+    expect(listing, "{nl}{cont}\n[00E4]", 0);
     if (problems) {
         fprintf(stderr, "%d problems\n", problems);
         failures++;

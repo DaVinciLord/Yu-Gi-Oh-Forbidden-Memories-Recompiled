@@ -186,7 +186,6 @@ def decode_bank(image: Image, bank: Bank, glyphs: dict[int, str]) -> tuple[dict[
                                   + ", ".join(f"{e:#x}" for e in deferred))
             continue
         at = work.pop()
-        entry = at
         choices = None
         while at not in ops:
             if bank.base + at in BUFFERS:
@@ -231,7 +230,12 @@ def decode_bank(image: Image, bank: Bank, glyphs: dict[int, str]) -> tuple[dict[
                     if choices is None:
                         before = [offset for offset in setups if offset < at]
                         if not before:
-                            deferred.append(entry)
+                            # Again from the jump itself: the ops before it
+                            # are read, and a walk stops at the first op it
+                            # has already read, so from the path's start the
+                            # jump would never be ([00E3]'s, the password
+                            # shop's answer, was lost that way).
+                            deferred.append(here)
                             break
                         choices = setups[max(before)]
                     table = jump_table(memory, at + length, choices, starts)
