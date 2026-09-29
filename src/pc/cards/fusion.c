@@ -1,9 +1,17 @@
 #include "fusion.h"
 #include <string.h>
 
-static int clamp(int value) { return value < 0 ? 0 : value > 9999 ? 9999 : value; }
-int Fusion_Attack(FusionCard card) { return clamp(card.attack + card.modifier + card.terrain); }
-int Fusion_Defense(FusionCard card) { return clamp(card.defense + card.modifier + card.terrain); }
+/* The duel's ATK and DEF caps (Duel_CalcCardStats): 9999 unless a mod's
+ * "limits" moved them (Fusion_SetCaps). */
+static int caps[2] = {9999, 9999};
+void Fusion_SetCaps(int attack, int defense)
+{
+    caps[0] = attack;
+    caps[1] = defense;
+}
+static int clamp(int value, int cap) { return value < 0 ? 0 : value > cap ? cap : value; }
+int Fusion_Attack(FusionCard card) { return clamp(card.attack + card.modifier + card.terrain, caps[0]); }
+int Fusion_Defense(FusionCard card) { return clamp(card.defense + card.modifier + card.terrain, caps[1]); }
 
 int Fusion_Step(const FusionRules *rules, FusionCard a, FusionCard b, FusionCard *out)
 {

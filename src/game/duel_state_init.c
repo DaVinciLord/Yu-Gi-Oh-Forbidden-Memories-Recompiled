@@ -10,6 +10,7 @@
 #include "../unmatched.h"
 #ifdef MEMORIES_PC
 #include "pc/debug/cheats.h"
+#include "pc/cards/tables.h"
 #endif
 
 #define DUEL_SELECTION_RECORDS(address) ((DuelSelectionRecord *)(address))
@@ -30,8 +31,15 @@ void Duel_InitSideStates(void) {
         sp[1] = D_8009B236;
     } else {
 #ifdef MEMORIES_PC
-        /* Game > Cheats > Starting LP; 8000 unless the player picks another. */
-        sp[1] = sp[0] = (u16)Cheats_StartingLifePoints();
+        /* Game > Cheats > Starting LP when the player picked one; else a
+           mod's "limits" (per side, per duelist), else the console's 8000
+           (tables.h). */
+        if (Cheats_StartingLifePoints() != DUEL_STARTING_LIFE_POINTS) {
+            sp[1] = sp[0] = (u16)Cheats_StartingLifePoints();
+        } else {
+            sp[0] = (u16)Tables_StartingLifePoints(0, gDuel_bOpponentID, DUEL_STARTING_LIFE_POINTS);
+            sp[1] = (u16)Tables_StartingLifePoints(1, gDuel_bOpponentID, DUEL_STARTING_LIFE_POINTS);
+        }
 #else
         sp[1] = DUEL_STARTING_LIFE_POINTS;
         sp[0] = DUEL_STARTING_LIFE_POINTS;
@@ -51,7 +59,13 @@ void Duel_InitSideStates(void) {
         e->displayed_life_points = 0;
         e->swords_turns_remaining = 0;
         e->life_points.signed_value = t;
+#ifdef MEMORIES_PC
+        /* Healing stops at the start, unless a mod's "limits" set a
+           "max" (tables.h). */
+        e->max_life_points = (s16)Tables_MaxLifePoints(t);
+#else
         e->max_life_points = t;
+#endif
         e->card_view_mode = 0;
         for (m = 0; m < sizeof(DuelRankStatistics); m++) {
             *q = 0;

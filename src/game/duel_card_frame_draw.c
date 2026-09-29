@@ -55,6 +55,9 @@ void func_80016784(DisplayObject *object, s32 arg1, s32 arg2, s32 arg3) {
     s32 t;
     SpritePrim *z;
     POLY_FT4 *y;
+#ifdef MEMORIES_PC
+    s32 wide;
+#endif
 
     if ((u32)(arg2 + 0x33) < 0x173) {
         if (arg3 >= -0x3B) {
@@ -138,15 +141,52 @@ void func_80016784(DisplayObject *object, s32 arg1, s32 arg2, s32 arg3) {
                         k->cxcy.h.cy = k->cxcy.h.cy + 3;
                         break;
                     default:
+#ifdef MEMORIES_PC
+                        /* ATK or DEF past 9999 (a mod's "limits",
+                           pc/cards/tables.h): five digits a row, seven
+                           pixels apart from two further left, and the
+                           sword and shield two to the left, all inside the
+                           card. Under 10000 nothing moves. */
+                        d = Duel_CalcCardStats(card);
+                        wide = (d & 0xFFFF) >= 10000 || ((u32)d >> 16) >= 10000;
+#endif
                         k->extent.word = 0x100008;
                         k->uv.word = 0x7078;
                         k->xy.h.x = o->pos.h.x + 5;
+#ifdef MEMORIES_PC
+                        if (wide) {
+                            k->xy.h.x = o->pos.h.x + 3;
+                        }
+#endif
                         DisplayObject_SubmitPacket(
                             k, POLY_FT4_BYTES(y), arg1, fl,
                             CARD_FRAME_SCRATCH_BYTES(o));
                         k->uv.b.hi = 0x58;
                         k->extent.wh.h = 8;
                         k->xy.h.x = o->pos.h.x + 0xE;
+#ifdef MEMORIES_PC
+                        if (wide) {
+                            k->xy.h.x = o->pos.h.x + 0xB;
+                            Text_EncodeDecimalDigits(d & 0xFFFF, 5, sp18);
+                            Text_EncodeDecimalDigits((u32)d >> 16, 5, sp20);
+                            i = 4;
+                            do {
+                                k->uv.b.lo = sp18[i] * 8;
+                                DisplayObject_SubmitPacket(
+                                    k, POLY_FT4_BYTES(y), arg1, fl,
+                                    CARD_FRAME_SCRATCH_BYTES(o));
+                                k->xy.h.y = k->xy.h.y + 8;
+                                k->uv.b.lo = sp20[i] * 8;
+                                DisplayObject_SubmitPacket(
+                                    k, POLY_FT4_BYTES(y), arg1, fl,
+                                    CARD_FRAME_SCRATCH_BYTES(o));
+                                i--;
+                                k->xy.h.x = k->xy.h.x + 7;
+                                k->xy.h.y = k->xy.h.y - 8;
+                            } while (i >= 0);
+                            break;
+                        }
+#endif
                         d = Duel_CalcCardStats(card);
                         Text_EncodeDecimalDigits((s16)d, 4, sp18);
                         Text_EncodeDecimalDigits(d >> 0x10, 4, sp20);

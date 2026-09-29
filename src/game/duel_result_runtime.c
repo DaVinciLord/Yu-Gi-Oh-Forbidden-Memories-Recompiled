@@ -580,6 +580,10 @@ void Duel_AwardCard(s32 card_id)
         Duel_AwardCardRetail(event.a);
         if (Tables_ChestFull(before)) {
             *quantity = before;
+        } else if (before >= CARD_CHEST_QUANTITY_MAX && before < Tables_ChestRoom()) {
+            /* The disc's award stops at 250; a mod's chest past it
+               ("limits") takes the copy. */
+            *quantity = before + 1;
         }
     }
     event.phase = MEMORIES_AFTER; Mods_Dispatch(&event);

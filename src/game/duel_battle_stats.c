@@ -4,6 +4,9 @@
 #include "duel_battle_stats.h"
 #include "duel_calc_guardian_star_matchup.h"
 #include "duel_card.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/tables.h"
+#endif
 
 /* Battle arithmetic between two duel cards, built up in address order.
 
@@ -51,9 +54,15 @@ s32 Duel_CalcBattleAttack(DuelCardRecord *card, DuelCardRecord *opponent)
     s32 value = (u16)Duel_CalcCardStats(card)
         + Duel_CalcGuardianStarBonus(card, opponent);
 
+#ifdef MEMORIES_PC
+    if (value > Tables_StatCap(0)) {
+        value = Tables_StatCap(0);
+    }
+#else
     if (value > CARD_STAT_MAX) {
         value = CARD_STAT_MAX;
     }
+#endif
     return value;
 }
 
@@ -62,9 +71,15 @@ s32 Duel_CalcBattleDefense(DuelCardRecord *card, DuelCardRecord *opponent)
     s32 value = (Duel_CalcCardStats(card) >> 16)
         + Duel_CalcGuardianStarBonus(card, opponent);
 
+#ifdef MEMORIES_PC
+    if (value > Tables_StatCap(1)) {
+        value = Tables_StatCap(1);
+    }
+#else
     if (value > CARD_STAT_MAX) {
         value = CARD_STAT_MAX;
     }
+#endif
     return value;
 }
 

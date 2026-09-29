@@ -4,6 +4,7 @@
 #include "game/card_constants.h"
 #include "game/save_data.h"
 #include "pc/cards/cards.h"
+#include "pc/cards/tables.h"
 #include "pc/platform/settings.h"
 #include "game/duel_side_state.h"
 #include "game/main_modes.h"
@@ -12,9 +13,6 @@
 
 extern u8 D_8009B26C; /* the active mode (main_mode_state.h, main_modes.h) */
 extern u8 D_8009B26E; /* main_run_duel.c: Main_RunDuel's step, 0x80 once set up */
-
-/* The duel's reward stops the balance here (func_800218F0). */
-#define CHEATS_STARCHIPS_MAX 999999u
 
 /* A game is started or loaded: the save workspace holds a deck. Before
  * that it is scratch (the port's one test, as deck_menu.c's game_loaded). */
@@ -51,8 +49,8 @@ static int fill_chest(int count, int top_up)
     if (count < 0) {
         count = 0;
     }
-    if (count > CARD_CHEST_QUANTITY_MAX) {
-        count = CARD_CHEST_QUANTITY_MAX;
+    if (count > Tables_ChestRoom()) {
+        count = Tables_ChestRoom();   /* 250, or a mod's chest past it */
     }
     for (id = 0; id < CARD_COUNT; id++) {
         if (!top_up || gLibrary_abCardChest[id] < count) gLibrary_abCardChest[id] = (u8)count;
@@ -94,7 +92,7 @@ int Cheats_SetStarchips(unsigned value)
     if (!Cheats_SaveLoaded()) {
         return 0;
     }
-    if (value > CHEATS_STARCHIPS_MAX) value = CHEATS_STARCHIPS_MAX;
+    if (value > Tables_StarchipCap()) value = Tables_StarchipCap();   /* 999999, or a mod's "limits" */
     gLibrary_dwStarchips = value;
     fprintf(stderr, "memories-pc: StarChips now %u\n", value);
     return 1;
@@ -152,21 +150,27 @@ static void set_deck(const char *list)
 void Cheats_Frame(void)
 {
     static int wanted = -2; /* -2 unread, -1 off, else pending count */
+    static long starchips = -1;
     static const char *deck;
     if (wanted == -2) {
         const char *value = getenv("MEMORIES_DEBUG_CHEST");
         wanted = value && *value ? atoi(value) : -1;
         deck = getenv("MEMORIES_DEBUG_DECK");
         if (deck && !*deck) deck = NULL;
+        /* The balance, as Set StarChips puts it (capped the same way). */
+        value = getenv("MEMORIES_DEBUG_STARCHIPS");
+        starchips = value && *value ? strtol(value, NULL, 10) : -1;
     }
-    if (wanted < 0 && !deck) {
+    if (wanted < 0 && !deck && starchips < 0) {
         return;
     }
     /* Not while Build Deck holds its copy of the chest and deck. */
     if (Cheats_SaveLoaded() && !Cheats_ChestOnScreen()) {
         if (wanted >= 0) Cheats_GiveAllCards(wanted);
         if (deck) set_deck(deck);
+        if (starchips >= 0) Cheats_SetStarchips((unsigned)starchips);
         wanted = -1;
+        starchips = -1;
         deck = NULL;
     }
 }

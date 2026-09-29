@@ -417,8 +417,11 @@ request_combination:
                                                               (s16)PLACEMENT_TY(object));
                                 /* stat_modifier is 16-bit: past twice the
                                    stat cap changes nothing, and several big
-                                   bonuses would wrap it negative. */
-                                s32 room = 2 * CARD_STAT_MAX;
+                                   bonuses would wrap it negative. The cap
+                                   is a mod's "limits" too, and twice a
+                                   raised one is past what 16 bits hold. */
+                                s32 room = 2 * Tables_StatCapEither();
+                                if (room > TABLES_LIMIT_STAT_MAX) room = TABLES_LIMIT_STAT_MAX;
                                 if (card->stat_modifier + bonus > room) bonus = room - card->stat_modifier;
                                 if (card->stat_modifier + bonus < -room) bonus = -room - card->stat_modifier;
                                 D_8009B154 += bonus - (s16)PLACEMENT_TY(object);

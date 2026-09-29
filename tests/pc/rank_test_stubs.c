@@ -19,7 +19,7 @@ STUB(DisplayObject_FadeBrightnessAndRelease) STUB(DisplayObject_FindAllocatedByT
 STUB(DisplayObject_FindFreeGeneralSlot) STUB(DisplayObject_MarkInitialized) STUB(DisplayObject_ReleaseIfPresent)
 STUB(DisplayObject_SelectOrderingTable1) STUB(DisplayObject_SetDepthOffset) STUB(DisplayObject_SetResourceVariant)
 STUB(File_RequestAsyncTransfer) STUB(Mods_Dispatch) STUB(Rand_GetInterval) STUB(SD_BGMFadeOut) STUB(SD_BGMPlay)
-STUB(SD_GetStatusFlags) STUB(Tables_ChestFull) STUB(Tables_ChestLimit) STUB(Tables_ChestOverflow) STUB(Tables_Pool) STUB(TextBox_Create) STUB(func_8001EC70) STUB(func_80020BE4)
+STUB(SD_GetStatusFlags) STUB(Tables_ChestFull) STUB(Tables_ChestLimit) STUB(Tables_ChestOverflow) STUB(Tables_ChestRoom) STUB(Tables_Pool) STUB(TextBox_Create) STUB(func_8001EC70) STUB(func_80020BE4)
 STUB(func_80039A14) STUB(func_800472A8) STUB(rcos) STUB(rsin)
 
 /* Sized generously: only their names are used. */

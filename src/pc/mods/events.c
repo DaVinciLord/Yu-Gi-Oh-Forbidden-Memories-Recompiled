@@ -194,7 +194,9 @@ int Mods_AwardStarchips(unsigned *balance, int prize)
         if (event.a < 0)
             event.a = 0;
         total = (unsigned long long)*balance + (unsigned long long)event.a;
-        *balance = total > 999999u ? 999999u : (unsigned)total;
+        /* 999999, or a mod's "limits" (pc/cards/tables.h). */
+        unsigned long long cap = (unsigned long long)Mods_Limit("starchips", 999999);
+        *balance = total > cap ? (unsigned)cap : (unsigned)total;
     }
     event.result = (int)(*balance - before);
     event.phase = MEMORIES_AFTER;

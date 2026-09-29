@@ -13,6 +13,12 @@ int Mods_SettingKeyValid(const char *key)
     return 1;
 }
 void Hooks_Clear(int owner) { (void)owner; }
+/* No mod's "limits": the game's own 999999. */
+long Mods_Limit(const char *name, long fallback)
+{
+    (void)name;
+    return fallback;
+}
 
 static void scale(MemoriesModEvent *e)
 {

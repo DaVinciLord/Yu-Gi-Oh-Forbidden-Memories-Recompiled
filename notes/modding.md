@@ -64,6 +64,7 @@ editors write, is fine):
 | `equip_bonus_default` | what an equip adds when no `equips` entry sets its bonus, below |
 | `trap_thresholds` | the attack each of the six attack traps stops, below |
 | `passwords` | each card's password and starchip price on the Password screen, below |
+| `limits` | the numbers the game caps (ATK and DEF, life points, starchips, the chest, the records), below |
 | `starter` | the forty cards a new game begins with, one deck or a list of them, below |
 | `text`, `font` | a translation of the game's text, and fonts for letters it has none of, below |
 
@@ -491,11 +492,17 @@ set what it adds, in place of the disc's +500, and a top-level
 the attack each attack trap springs on.
 `"passwords": {"Blue-eyes White Dragon": {"password": "00000001", "starchips": 100}}`
 sets what the Password screen takes for a card and what it costs;
-`"all": {"password": "card number", "starchips_percent": 10}` does every card. These are the rules a community mod
+`"all": {"password": "card number", "starchips_percent": 10}` does every card.
+`"limits": {"stats": 30000, "life_points": 16000}` raises the ATK and DEF cap
+and the life points a duel starts with; `limits` also sets how far healing
+goes, each side's and each duelist's LP, the two-player LP choice, the most
+starchips, the chest and the Free Duel record, up to what the game keeps
+them in (32767 for ATK, DEF and LP), and the duel's numbers take a fifth
+digit where they need one. These are the rules a community mod
 such as The Wicked Gods changes in its code; with them it plays close to its
 own rules without C. The Wicked Gods also makes a monster's attribute count on
-a terrain, lets monsters be equips and raises the stat cap to 30000: those
-need a code mod or the port itself. Several mods' edits of the same opponent add up rather than
+a terrain and lets monsters be equips: those need a code mod or the port
+itself. Several mods' edits of the same opponent add up rather than
 replace each other. [Gameplay tables](gameplay-tables.md) has every key, the
 opponents' names, and how the rules combine. Like cards, they need a restart.
 
@@ -622,7 +629,7 @@ the player's settings file as `mod.<id>.<key>`, and read from
 `MEMORIES_MOD_<ID>_<KEY>` first when that is set; a key is letters, digits,
 `_` and `-`, and `order` is the manager's), `disc_file_start`/
 `disc_read`, `pad`, and from mod API 2 `now_us` (a clock) and `map_fixed`
-(memory at an address the mod chooses, as 3D Monsters' model arenas need). API 4 adds `hook`/`unhook`/`symbol`, below; API 5 adds `duelist_id`, which resolves an added duelist's identity to the id it has this run as `card_id` does for a card. API 7 adds `card_notes` and `card_tag`, a card's [notes](more-cards.md#notes-on-a-card) and the `<tag: value>` tags in them.
+(memory at an address the mod chooses, as 3D Monsters' model arenas need). API 4 adds `hook`/`unhook`/`symbol`, below; API 5 adds `duelist_id`, which resolves an added duelist's identity to the id it has this run as `card_id` does for a card. API 7 adds `card_notes` and `card_tag`, a card's [notes](more-cards.md#notes-on-a-card) and the `<tag: value>` tags in them. API 8 adds `limit`, the numbers the game caps as the mods' `limits` set them ([Gameplay tables](gameplay-tables.md#limits-atk-def-lp-starchips-and-more)): `host->limit(host, "attack")` is 9999 without such a mod.
 A mod that uses an entry newer than API 1 should refuse to start when
 `host->api` is older.
 

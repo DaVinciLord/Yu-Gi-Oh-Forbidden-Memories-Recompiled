@@ -22,6 +22,7 @@
 #include "pc/cards/cards.h"
 #include "pc/free_duel/duelists.h"
 #include "pc/text/glyphs.h"
+#include "pc/text/number_width.h"
 #include "pc/text/menu_cut.h"
 #include "text_control_commands.h"
 #include "pc/text/language.h"
@@ -203,5 +204,8 @@ next_opcode:
     object->field_38 = object->field_38 + object->field_5A;
 #ifdef MEMORIES_PC
     object->field_38 = object->field_38 + pal_advance;
+    /* A digit of a number wider than its field steps less, so the field
+       keeps its width (func_80038148, number_width.h). */
+    object->field_38 = object->field_38 - NumberWidth_Take(object->index_57);
 #endif
 }

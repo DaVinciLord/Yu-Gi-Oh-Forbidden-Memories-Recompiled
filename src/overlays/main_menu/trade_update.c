@@ -26,6 +26,7 @@
 #include "../../unmatched.h"
 #ifdef MEMORIES_PC
 #include "pc/cards/cards.h"
+#include "pc/cards/tables.h"
 #endif
 
 void MainMenu_InitTradeScreen(void)
@@ -248,7 +249,12 @@ s32 MainMenu_UpdateTradeScreen(void)
 #else
                 to = counts[i ^ 1] + id;
 #endif
+#ifdef MEMORIES_PC
+                /* 250, or a mod's chest past it (tables.h). */
+                if (*to < Tables_ChestRoom()) {
+#else
                 if (*to < CARD_CHEST_QUANTITY_MAX) {
+#endif
                     *to = *to + 1;
                 }
             }
