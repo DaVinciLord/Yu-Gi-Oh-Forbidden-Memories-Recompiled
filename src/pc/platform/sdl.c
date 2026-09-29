@@ -1853,9 +1853,9 @@ static void run_event_script(unsigned frame)
             Platform_Screenshot(1);
         } else if (strcmp(kind, "key") == 0 || strcmp(kind, "keydown") == 0 || strcmp(kind, "keyup") == 0 ||
                    strcmp(kind, "down") == 0 || strcmp(kind, "up") == 0) {
-            /* "key" presses and releases in one go; "keydown"/"keyup" (or
-             * "down"/"up") hold a key across frames, as the game only sees
-             * what is held when it reads the pad. */
+            /* "key" presses and releases in one go, a tap the game sees for
+             * one pad update (controls_runtime.c); "keydown"/"keyup" (or
+             * "down"/"up") hold a key across frames. */
             const int press = strcmp(kind, "keyup") != 0 && strcmp(kind, "up") != 0;
             const int release = strcmp(kind, "keydown") != 0 && strcmp(kind, "down") != 0;
             const char *name = script + 1;
