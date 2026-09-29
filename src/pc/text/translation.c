@@ -14,6 +14,7 @@
 #include "pc/cards/tables.h"
 #include "pc/cards/drops.h"
 #include "pc/cards/passwords.h"
+#include "pc/cards/stars.h"
 #include "pc/free_duel/duelists.h"
 #include "pc/free_duel/page_box.h"
 #include "pc/saves/deck_menu.h"
@@ -611,6 +612,12 @@ const unsigned char *Text_Resolve(int id, const unsigned char *retail)
     if (id > 0x8000 && id <= 0x8000 + CARD_COUNT) card = Cards_NameText(id - 0x8000);
     if (id > 0xD100 && id <= 0xD100 + CARD_COUNT) card = Cards_DescriptionText(id - 0xD100);
     if (card) return card;
+    /* A guardian star a mod names (stars.h): its "name" over a translation's;
+     * a new star with none, a translation's, else "Star N" in place of the
+     * Dragon the names bank has at 11-15's places. */
+    if (id > STARS_NAME_TEXT && id <= STARS_NAME_TEXT + STARS_MAX && Stars_NameText(id - STARS_NAME_TEXT) &&
+        (!own || Stars_Named(id - STARS_NAME_TEXT)))
+        return Stars_NameText(id - STARS_NAME_TEXT);
     if (!own && id >= TEXT_RESULTS_FIRST && id <= TEXT_RESULTS_LAST) {
         const unsigned char *copy = results_copy(retail);
         if (copy) return copy;

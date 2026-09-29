@@ -90,6 +90,7 @@
 #include "../unmatched.h"
 #ifdef MEMORIES_PC
 #include "pc/cards/cards.h"
+#include "pc/cards/stars.h"
 #endif
 
 #define H(p, o) (*(u16 *)((u8 *)(p) + (o)))
@@ -450,11 +451,37 @@ void DuelScene_UpdateBattle(void)
             }
             f = D_8009B174;
             if (f & 0x40) {
+#ifdef MEMORIES_PC
+                /* The modifier climbs to the pair's own adjustment, not the
+                   disc's 500 (stars.h): a +1000 pair shows +1000. It is
+                   worked out again each update rather than kept, so a save
+                   state taken mid-climb holds nothing new. */
+                s32 shown = 0;
+
+                if (D_800E9EF0[0] != 0 && D_800E9EF0[1] != 0) {
+                    shown = Duel_CalcGuardianStarBonus(&D_801A7AD8[D_800E9EF0[0]->field_6A],
+                                                       &D_801A7AD8[D_800E9EF0[1]->field_6A]);
+                }
+                if (shown < 0) {
+                    shown = -shown;
+                }
+                if (shown == 0) {
+                    shown = 0x1F4;
+                }
+                /* Summed wide: near 32767 a 16-bit sum would wrap. */
+                if ((s16)D_8009B1D0 + Stars_DisplayStep(shown) >= shown) {
+                    D_8009B174 = f & 0xBF;
+                    D_8009B1D0 = shown;
+                } else {
+                    D_8009B1D0 += Stars_DisplayStep(shown);
+                }
+#else
                 D_8009B1D0 += 0x10;
                 if ((s16)D_8009B1D0 >= 0x1F4) {
                     D_8009B174 = f & 0xBF;
                     D_8009B1D0 = 0x1F4;
                 }
+#endif
                 view = (u8 *)&D_800EA0E8[D_8009B1B9];
                 arg = D_8009B1D0;
                 H(view, 0x36) = arg;

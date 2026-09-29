@@ -1,5 +1,8 @@
 #include "../types.h"
 #include "duel_calc_guardian_star_matchup.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/stars.h"
+#endif
 
 #define DUEL_GUARDIAN_STAR_BONUS 500
 #define DUEL_GUARDIAN_STAR_FIRST_CYCLE_START 1
@@ -12,6 +15,15 @@
 /* IDs 1-6 and 7-10 form separate cycles; adjacent matchups return +/-500. */
 s32 Duel_CalcGuardianStarMatchup(s32 a0, s32 a1) {
     s32 v1;
+#ifdef MEMORIES_PC
+    /* A mod's "guardian_stars" (stars.h): the pair's adjustment, stars
+       11-15 included. Without one the disc's arithmetic below decides. */
+    s32 bonus;
+
+    if (Stars_Matchup(a0, a1, &bonus)) {
+        return bonus;
+    }
+#endif
 
     a0 -= DUEL_GUARDIAN_STAR_SECOND_CYCLE_START;
     if (a0 >= 0) {
