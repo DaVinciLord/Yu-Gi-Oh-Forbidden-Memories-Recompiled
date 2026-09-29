@@ -69,9 +69,20 @@ def main() -> int:
         assert hmd.size == len(model_data) <= model_import.MODEL_DATA_BUDGET
         assert hmd.coordinates == original.coordinates, "the skeleton moved"
         assert [u[2] for u in hmd.units] == [u[2] for u in original.units]
-        # Block 0, the animations, points at the same sections as before.
+        # Block 0, the animations, points at sections with the same contents
+        # as before, wherever the old geometry's removal moved them.
         for kept, was in zip(hmd.chain(0), original.chain(0)):
-            assert hmd.header(kept["header"]) == original.header(was["header"])
+            now, before = hmd.header(kept["header"]), original.header(was["header"])
+            assert len(now) == len(before)
+            for a, b in zip(now, before):
+                if not b & 0x80000000:
+                    assert a == b
+                elif (b & 0x7FFFFFFF) * 4 >= original.size:
+                    assert a == b, "a section past the model data moved"
+                else:
+                    x, y = hmd.section(a), original.section(b)
+                    assert record[x:x + 64] == template[y:y + 64], "an animation section's contents changed"
+        assert hmd.size < original.size + len(model_data), "the old geometry was not left out"
         # One projection run a bone, the vertex runs back to back, and the
         # triangles all in the last block, reaching only vertices a run owns.
         runs, owned = [], set()

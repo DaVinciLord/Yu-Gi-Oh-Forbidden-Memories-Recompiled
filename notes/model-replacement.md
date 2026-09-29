@@ -74,10 +74,14 @@ then:
 3. turns the mesh to the game's axes (y down, its front where a disc
    model's front is; `--yaw` turns it first), scales it to the template's
    height (`--height` in percent) and stands it where the template stands;
-4. binds every vertex to the bone of the nearest template vertex, and
-   writes the whole mesh as shared-vertex polygons over those bones: each
-   bone projects and lights its run of vertices, and the triangles join
-   them, so the mesh bends with the template's animations without cracks;
+4. binds every vertex to the bone of the nearest template vertex, then to
+   the bone most of its mesh neighbours have (a lone vertex bound to
+   another limb would stretch a spike across the model when that limb
+   moves; exporting the disc's own models and binding them again, this
+   halves the wrong bindings or better), and writes the whole mesh as
+   shared-vertex polygons over those bones: each bone projects and lights
+   its run of vertices, and the triangles join them, so the mesh bends
+   with the template's animations without cracks;
 5. packs the textures' UV islands onto the three 8-bit texture pages
    (128x256 texels, a 256-colour palette each), each island with texels in
    proportion to the surface it covers on the model, so a face that is a
@@ -86,7 +90,11 @@ then:
    margin and never cross a page. The same layout at 4x, from the full-size
    textures, goes to `OUT-hd.png`, for the entry's `hd`;
 6. writes the template's record with the new model data, textures and
-   palettes, and keeps everything else of it byte for byte;
+   palettes, and keeps everything else of it byte for byte. The template's
+   model data keeps only its coordinates, primitive headers and animation
+   sections, moved together (every offset naming them moved with them);
+   its old geometry is left out, so a large template such as Blue-Eyes
+   (124 KB, 75 KB without its geometry) still leaves room;
 7. with `--preview`, draws the record it wrote, from the front and from
    its right, straight from its bytes.
 

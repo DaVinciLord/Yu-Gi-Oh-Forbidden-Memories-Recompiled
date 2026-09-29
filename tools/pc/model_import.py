@@ -18,7 +18,8 @@ voices and sounds, and replaces its geometry and textures with the mesh's:
   turned to where a disc model's front is), scaled to the template's height
   and stood where the template stands;
 - each vertex is bound to the template bone whose own vertices are
-  nearest, and the whole mesh is written as shared-vertex HMD polygons
+  nearest, then to the bone most of its mesh neighbours have, and the
+  whole mesh is written as shared-vertex HMD polygons
   over those bones, so it bends with the template's animations the way the
   template's skin does, without cracks;
 - the textures' UV islands are packed onto three 128x256 texture pages of
@@ -460,6 +461,36 @@ def weld_normals(positions: np.ndarray, normals: np.ndarray, triangles) -> np.nd
     return out
 
 
+def smooth_binding(binding: np.ndarray, triangles, count: int, rounds: int = 4) -> np.ndarray:
+    """Each vertex takes the bone most of its mesh neighbours have, when more
+    of them have it than have its own. The nearest template vertex is often
+    another bone's near a joint; a lone vertex bound to a bone its
+    neighbours are not stretches a spike across the model when that bone
+    moves. Measured on the disc's own models (each exported and bound
+    again), this halves the vertices bound to the wrong bone or better."""
+    neighbours = [set() for _ in range(count)]
+    for a, b, c, _ in triangles:
+        a, b, c = a[0], b[0], c[0]
+        neighbours[a] |= {b, c}
+        neighbours[b] |= {a, c}
+        neighbours[c] |= {a, b}
+    for _ in range(rounds):
+        changed = binding.copy()
+        for vertex in range(count):
+            if not neighbours[vertex]:
+                continue
+            votes: dict[int, int] = {int(binding[vertex]): 1}
+            for other in neighbours[vertex]:
+                votes[int(binding[other])] = votes.get(int(binding[other]), 0) + 1
+            bone, most = max(votes.items(), key=lambda item: (item[1], item[0] == binding[vertex]))
+            if most > votes[int(binding[vertex])]:
+                changed[vertex] = bone
+        if (changed == binding).all():
+            break
+        binding = changed
+    return binding
+
+
 # --- the conversion -------------------------------------------------------------
 
 def convert(obj: Path, template_record: bytes, texture: Path | None, yaw: float, height: float,
@@ -517,6 +548,7 @@ def convert(obj: Path, template_record: bytes, texture: Path | None, yaw: float,
         chunk = game[start:start + 256]
         distance = ((chunk[:, None, :] - bone_at[None, :, :]) ** 2).sum(2)
         binding[start:start + 256] = bone_of[distance.argmin(1)]
+    binding = smooth_binding(binding, triangles, len(game))
 
     # Vertices and normals, each run grouped by bone, each in its bone's space.
     vertex_keys: dict[int, dict[int, None]] = {}
@@ -587,14 +619,104 @@ def convert(obj: Path, template_record: bytes, texture: Path | None, yaw: float,
     return build_hmd(hmd, runs, vertex_data, normal_data, polygon_data, len(triangles)), pages, hd
 
 
+def compact(hmd: Hmd) -> tuple[bytearray, dict, list[int]]:
+    """The template's model data without its geometry.
+
+    What the new model keeps of the template -- the header words, the
+    coordinates, the primitive headers, the animation block's chain and its
+    sections -- is copied in order, and what only the old geometry used (its
+    vertex, normal and polygon sections and its blocks' chains) is left
+    out, so a large template (Blue-Eyes' is 124 KB) leaves room for the new
+    geometry. Every word offset that names something kept is moved with it:
+    the header section's place, the block pointers, the chains' next and
+    header words, the primitive headers' section entries and the
+    coordinates' parents. A section entry past the model data (the battle
+    modules' areas of the slot's arena) is left as it is.
+
+    Returns the data, the old-to-new offset map as a function, and the old
+    offsets of the kept primitive headers."""
+    w = hmd.w
+    size = hmd.size // 4
+
+    def masked(value: int) -> int:
+        return value & 0x7FFFFFFF
+
+    # Every thing with a start: ranges run from one start to the next.
+    kept_sections = {hmd.coordinates}
+    for element in hmd.chain(0):
+        kept_sections.update(masked(e) for e in hmd.header(element["header"]) if e & UNMAPPED)
+    all_sections = {masked(e) for _, entries in hmd.headers for e in entries if e & UNMAPPED}
+    chains_kept = {e["at"] for e in hmd.chain(0)}
+    chains_all = {e["at"] for b in range(hmd.block_count) for e in hmd.chain(b)}
+    header_words = hmd.header_section
+    header_end = header_words + 1 + sum(1 + len(entries) for _, entries in hmd.headers)
+    starts = sorted({s for s in all_sections | chains_all | {header_words, 4 + hmd.block_count} if s < size})
+    live = [(0, starts[0])]                 # the header words and the block pointers
+    for index, start in enumerate(starts):
+        end = starts[index + 1] if index + 1 < len(starts) else size
+        if start == header_words:
+            end = max(end, header_end)
+        keep = (start in kept_sections or start in chains_kept or start == header_words or
+                (start not in all_sections and start not in chains_all))
+        if keep:
+            live.append((start, end))
+    # Merge and build the map.
+    live.sort()
+    merged = []
+    for start, end in live:
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    out = bytearray()
+    places = []
+    for start, end in merged:
+        places.append((start, end, len(out) // 4))
+        out += hmd.data[start * 4:end * 4]
+
+    def moved(old: int, dead_ok: bool = False) -> int:
+        if old >= size:
+            return old
+        for start, end, new in places:
+            if start <= old < end:
+                return new + old - start
+        if dead_ok:
+            return 0   # a section of the old geometry: named by nothing that is drawn
+        raise SystemExit(f"model data word {old} is used but was left out")
+
+    def put_word(at_old: int, value: int) -> None:
+        struct.pack_into("<I", out, moved(at_old) * 4, value)
+
+    put_word(2, moved(header_words))
+    for block in range(hmd.block_count):
+        if block == 0 and hmd.blocks[0]:
+            put_word(4 + block, moved(hmd.blocks[0]))
+        else:
+            put_word(4 + block, 0)
+    for element in hmd.chain(0):
+        following = int(w[element["at"]])
+        if following != 0xFFFFFFFF:
+            put_word(element["at"], (following & UNMAPPED) | moved(following & 0x7FFFFFFF))
+        header = int(w[element["at"] + 1])
+        put_word(element["at"] + 1, moved(header))
+    for position, entries in hmd.headers:
+        for index, entry in enumerate(entries):
+            if entry & UNMAPPED:
+                put_word(position + 1 + index, UNMAPPED | moved(masked(entry), True))
+    c = hmd.coordinates
+    for unit in range(int(w[c])):
+        at = c + 1 + unit * 20 + 19
+        parent = int(w[at])
+        if parent:
+            put_word(at, moved(parent))
+    return out, moved, [position for position, _ in hmd.headers]
+
+
 def build_hmd(hmd: Hmd, runs, vertex_data: bytes, normal_data: bytes, polygon_data: bytes, triangles: int) -> bytes:
-    """The template's model data with its geometry replaced: its sections
-    stay where they are (the animations and coordinates among them), and
-    the new sections, a new primitive header section and new block chains
-    for every bone follow them."""
-    out = bytearray(hmd.data[:hmd.size])
-    while len(out) % 4:
-        out += b"\0"
+    """The template's model data without its geometry (compact), then the new
+    sections, a new primitive header section (the template's headers and
+    one for the new geometry) and new block chains for every bone."""
+    out, moved, header_positions = compact(hmd)
 
     def here() -> int:
         return len(out) // 4
@@ -612,24 +734,26 @@ def build_hmd(hmd: Hmd, runs, vertex_data: bytes, normal_data: bytes, polygon_da
     normals = put(normal_data)
     normal_results = put(bytes(len(normal_data)))
 
-    # The primitive headers again, the template's and one for the new geometry,
-    # whose last section is the coordinate section it maps.
+    # The primitive headers again, the template's (with their sections moved)
+    # and one for the new geometry, whose last section is the coordinate
+    # section it maps.
     section = here()
-    moved = {}
+    new_header = {}
     out += struct.pack("<I", len(hmd.headers) + 1)
     for position, entries in hmd.headers:
-        moved[position] = here()
-        out += struct.pack("<I", len(entries)) + b"".join(struct.pack("<I", e) for e in entries)
+        new_header[position] = here()
+        out += struct.pack("<I", len(entries))
+        for entry in entries:
+            out += struct.pack("<I", UNMAPPED | moved(entry & 0x7FFFFFFF, True) if entry & UNMAPPED else entry)
     shared = here()
     out += struct.pack("<7I", 6, polygons | UNMAPPED, vertices | UNMAPPED, vertex_results | UNMAPPED,
-                       normals | UNMAPPED, normal_results | UNMAPPED, hmd.coordinates | UNMAPPED)
+                       normals | UNMAPPED, normal_results | UNMAPPED, moved(hmd.coordinates) | UNMAPPED)
     struct.pack_into("<I", out, 8, section)
 
-    # The template's blocks keep only what is not geometry: the animation
-    # block (0) is kept with its headers moved; each bone gets its
-    # projection run, and the last block the triangles.
+    # The animation block (0) points at its headers' new copies; each bone
+    # gets its projection run, and the last block the triangles.
     for element in hmd.chain(0):
-        struct.pack_into("<I", out, element["at"] * 4 + 4, moved[element["header"]])
+        struct.pack_into("<I", out, moved(element["at"]) * 4 + 4, new_header[element["header"]])
     first = True
     by_bone = {bone: (fv, vc, fn, nc) for bone, fv, vc, fn, nc in runs}
     for block in range(1, hmd.block_count - 1):
