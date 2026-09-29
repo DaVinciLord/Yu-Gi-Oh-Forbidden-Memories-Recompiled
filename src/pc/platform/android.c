@@ -239,6 +239,45 @@ int Platform_SelectDisc(char *path, size_t size, char *why, size_t why_size)
     return result;
 }
 
+/* The game's memory sits at fixed addresses up to 0xB0800000 (image.c).
+ * A 32-bit process has 4 GB to place them in on a 64-bit kernel (phones
+ * that still run 32-bit apps), and only 3 GB on a 32-bit kernel, where the
+ * system's libraries already fill the top of it before the game runs. The
+ * failed mapping is what counts; the process's own stack, which the
+ * kernel puts at the top of that space, only tells which it was: past
+ * 0xC0000000 there is room for 4 GB. (uname is no help: a 32-bit process
+ * on a 64-bit x86 kernel is told "i686".) */
+static int four_gigabytes(void)
+{
+    char line[512];
+    FILE *maps = fopen("/proc/self/maps", "r");
+    unsigned long start, end;
+    int yes = -1;
+    if (!maps) return -1;
+    while (fgets(line, sizeof(line), maps)) {
+        if (strstr(line, "[stack]") && sscanf(line, "%lx-%lx", &start, &end) == 2) {
+            yes = end > 0xC0000000ul;
+            break;
+        }
+    }
+    fclose(maps);
+    return yes;
+}
+
+int Platform_GuestMemoryHelp(char *why, size_t size)
+{
+    if (four_gigabytes() == 0) {
+        fprintf(stderr, "memories-pc: this is a 32-bit kernel (3 GB for the app): the guest memory cannot be placed\n");
+        snprintf(why, size, "This Android is 32-bit.\n\n"
+                 "The game needs a 64-bit Android that can still run 32-bit apps: on a 32-bit system there is no "
+                 "room for the memory the game runs in.");
+    } else {
+        snprintf(why, size, "The game could not reserve the memory it runs in at its fixed addresses on this "
+                 "device.\n\nPlease report it with the app's log (adb logcat -s memories).");
+    }
+    return 1;
+}
+
 int Platform_RestartGame(void)
 {
     fprintf(stderr, "memories-pc: restarting is not available on Android yet; close the app and open it again\n");
