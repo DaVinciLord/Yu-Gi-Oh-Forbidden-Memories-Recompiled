@@ -2548,9 +2548,12 @@ What differs from Linux, and why:
 Milestone M1 (2026-09-28): the same code as Windows and Linux, built for
 Android x86 (32-bit), boots on the API 30 x86 emulator through the intro
 (Konami logo, the opening movie) to the title screen, and on to the main menu
-and New Game's name entry. The design and the probe behind it are in
-`tmp/research/android_feasibility.md` (not in the repository); this section is
-what exists.
+and New Game's name entry. Milestone M2 (2026-09-29): the same code builds for
+32-bit ARM (`android-armeabi-v7a`), and the ARM build reaches the title, the
+main menu, Options and a duel with frames byte-identical to the Windows build
+(on the API 25 ARM system image, as a plain process; "32-bit ARM" below). The
+design and the probe behind it are in `tmp/research/android_feasibility.md`
+(not in the repository); this section is what exists.
 
 ### Build, install, run
 
@@ -2580,8 +2583,9 @@ adb install -r tmp/pc/android-x86/memories-x86.apk
   creates under `tmp/pc/android-deps/debug.keystore` (never in the
   repository). The package is `org.yfmredecomp.game`; the activity is SDL's
   own `SDLActivity`, with no Java of ours.
-- `--target android-armeabi-v7a` is refused with the list of what it still
-  needs (below).
+- `--target android-armeabi-v7a` builds the 32-bit ARM APK
+  (`tmp/pc/android-armeabi-v7a/memories-armeabi-v7a.apk`) the same way, as
+  A32 code (`-marm`); see "32-bit ARM" below for what it runs on.
 
 The disc image goes in the app's external files folder,
 `/sdcard/Android/data/org.yfmredecomp.game/files/game/` (any `*.bin`, as in
@@ -2619,7 +2623,8 @@ Screenshots of the device, never the host: `adb exec-out screencap -p`.
   the update check, asks SDL for landscape, and runs the port's `main`.
   `Platform_HasDesktopGL` answers 0: the window takes the SDL renderer path
   (GLES2 underneath) that shows the software GPU's picture. It also stands
-  in for `bzero` and, below API 30, `memfd_create` (the system call).
+  in for `bzero` and, below API 30, `memfd_create` (the system call), with
+  the ashmem device where the kernel has no memfd.
 - `src/pc/compat/android/`: `android_compat.h`, force-included in every
   native unit (below-API fallbacks, no system headers), and a header-only
   `fontconfig/fontconfig.h` answering the port's few fontconfig calls with
@@ -2661,31 +2666,119 @@ Screenshots of the device, never the host: `adb exec-out screencap -p`.
   options), no restart from the menu, no update check, no lifecycle handling
   (pause/resume, surface loss, back button).
 
+### 32-bit ARM (armeabi-v7a)
+
+The ARM build runs the same code; what is ARM's own is beside the i386
+version, in the shared files, so a Linux armhf build would take the same
+pieces (not built: it would need clang 12 or later for `-mharden-sls`, an
+armhf sysroot and SDL for it; on Ubuntu 20.04 the armhf GCC cross compiler
+also uninstalls `gcc-multilib`, which the i386 build needs):
+
+- **Branch thunks** (`branch_thunks.c`): clang's `-mharden-sls=blr` turns
+  every `blx rN` into `bl __llvm_slsblr_thunk_arm_rN` and emits those as weak
+  functions in every unit (for r0-r11, and for sp and pc, which it never
+  calls); the port defines r0-r12 strongly, with the x86 contract (R12 is
+  the one register a thunk changes: AAPCS lets a call's veneer change it).
+  `-fno-optimize-sibling-calls` and `-fno-jump-tables` remove the other
+  indirect branches. `build_game32.py` checks the objects (`check_arm_branches`):
+  a call to a thunk the port does not define, or any other indirect branch,
+  stops the build. Two things it caught on the way: the shared-bank modules'
+  clash renaming had renamed the weak thunks (each module then called its
+  own copy, past the resolver), and ARM's division helpers (`__aeabi_idiv`)
+  had become "unimplemented" stubs.
+- **Fault handler** (`image.c`): a guest call sets the PC (and the T bit for
+  a Thumb target); a null-pointer or retail-scratchpad access runs its one
+  A32 instruction out of line with the base register moved to KSEG0 (ARM
+  has no single step). Game units are A32 (`-marm`), the only instruction set
+  it decodes.
+- **Assembly**: `setjmp_arm.S` (D8-D15 in a side table: the Psy-Q buffer is
+  48 bytes), `state_arm.S` (VSync entry, `Memories_StateReturn`,
+  `Memories_ContextSwitch`); `state.h` has the ARM entry layout (LR is the
+  return address). `build_game32.py` assembles `*_arm.S` or `*_i386.S` by
+  target.
+- **Register names** for crash and hang reports, the clock and the monitor:
+  `src/pc/platform/signal_context.h`; the CPU name from `/proc/cpuinfo`.
+- **Guest RAM before memfd** (Linux 3.17: Android 7 and 8 devices, the API
+  25 image's 3.10 kernel): the ashmem device (`android.c`).
+- **Mods:** clang has no `-fpatchable-function-entry` for 32-bit ARM, so the
+  ARM game has no hook entries (M4).
+
+**Where it runs.** On a phone with a 64-bit kernel and 32-bit userspace
+(the Xiaomi 11T Pro class), the app process leaves every guest range free,
+as on the x86 image: shown by the probe APK translated on the API 34 TV x86
+image (64-bit kernel). On a **32-bit ARM kernel** (the API 25 ARM image, old
+armv7-only phones) it does not start as an app: with a 3G/1G split, ART and
+the system libraries fill `0x8C000000`-`0xBF000000` top down before
+`libmain.so` runs (the JIT cache over `0x90000000`, `libart-compiler.so`
+over `0x9F800000`, ART's live stack over `0x9FF00000`-`0xA0000000`), and the
+port stops at "cannot map guest memory at 0xa0000000". Supporting that needs
+a design decision (32-bit ARM kernels out of scope, or the game in an exec'd
+child process with its own address space); nothing works around it.
+
+**Tests for the ARM pieces** (NDK clang, static, run under `qemu-arm` in
+WSL or on a device over adb):
+
+```sh
+CC="$NDK/toolchains/llvm/prebuilt/<host>/bin/clang --target=armv7a-linux-androideabi24 -marm -static -O2 -Isrc \
+    -mharden-sls=blr -fno-optimize-sibling-calls -fno-jump-tables -Wl,--image-base=0x40000000"
+$CC tests/pc/branch_thunks_test.c src/pc/guest/branch_thunks.c -o branch_thunks_test
+$CC -Isrc/pc/compat/android -include src/pc/compat/android/android_compat.h tests/pc/guest_arm_test.c \
+    src/pc/guest/branch_thunks.c src/pc/guest/state_arm.S src/pc/guest/setjmp_arm.S -o guest_arm_test
+qemu-arm-static ./branch_thunks_test; qemu-arm-static ./guest_arm_test    # or adb push and run
+```
+
+`guest_arm_test call` also calls into guest RAM past the thunks: that needs
+a kernel that honours `PROT_EXEC`, which qemu 4.2 user mode does not (it
+runs the bytes).
+
+**Test ladder, as found in M2:**
+
+1. The x86 emulator (API 30) for platform and gameplay work.
+2. `qemu-arm` user mode (`qemu-user-static` 4.2 from Ubuntu 20.04's apt):
+   signals with the full ARM context, every fixed guest range, the thunks,
+   the low-access fix-up, setjmp and the stack switch all behave; it does
+   not honour `PROT_EXEC`, so the guest-call fault is not testable there.
+3. The API 25 `armeabi-v7a` image: the current emulator (37.x) refuses
+   32-bit ARM AVDs ("CPU Architecture 'arm' is not supported by the QEMU2
+   emulator"), but the `qemu-system-armel` it ships starts the AVD directly
+   (`emulator/qemu/<host>/qemu-system-armel-headless -avd <name> -no-window`,
+   with `emulator/lib64` on the library path), and boots in about 2 minutes.
+   The ARM tests pass there, `call` included (a real ARM kernel). The APK
+   cannot run on it (the 32-bit kernel, above), but the game can, as a
+   plain process: a small loader that `dlopen`s `libmain.so` and calls
+   `main` headless with the smoke tests' environment (kept outside the
+   repository). The title, main menu and Options frames and a duel's frame
+   6200 are byte-identical to the Windows build's (the smoke fixtures'
+   hashes, and the Windows build's frame for the duel); the title, Options
+   (whose text handlers are guest addresses called through pointers) and the
+   duel also with executable guest RAM (`MEMORIES_TEST_EXEC_GUEST=1`), where
+   only the thunks keep guest calls off the MIPS bytes. The duel's two
+   null-pointer reads went through the out-of-line fix-up. About 7 frames a
+   second under emulation. On the 32-bit kernel even this plain process
+   sometimes finds `0xB0000000` taken by a library (the game stack cannot be
+   mapped); the loader holds the guest ranges while libraries load, and a
+   rerun gets through.
+4. The 32-bit x86 TV images (API 34 tested) carry `libndk_translation` for
+   armeabi-v7a, with a 64-bit kernel, so their app processes have the phone
+   layout; the thunks work, and the title, main menu and Options match
+   there too, in seconds. But the translator does not replace (3): it
+   ignores a signal handler's new PC after an instruction fetch fault (the
+   guest-call fallback), aborts on faults it cannot map back to the ARM
+   state ("Cannot process signal 11": a post-indexed load's in
+   `guest_arm_test`, and the duel's null read inside `memmove`, a C library
+   function it runs natively), and a process sometimes faults at exit. No root
+   on the production TV image, so the APK cannot be given a disc there yet.
+5. The device (Xiaomi 11T Pro) is the real gate for the APK.
+
 ### Next milestones
 
 | M | Goal |
 |---|---|
-| M2 | `android-armeabi-v7a`: `-mharden-sls=blr` thunks, the ARM fault handler (register rebase or emulation, PC redirect), setjmp and the stack switch in A32 assembly, `-fsigned-char -marm` |
-| M3 | Playable: input latching, touch pad overlay drawn with the game's art, menu bar and Mods/Controls as in-window overlays, lifecycle, the fixed-base loader (save states, crash symbols), SAF import, performance |
+| M2 | Done, with the 32-bit-kernel limit above |
+| M3 | Playable: input latching, touch pad overlay drawn with the game's art, menu bar and Mods/Controls as in-window overlays, lifecycle, the fixed-base loader (save states, crash symbols), SAF import, performance; first the decision on 32-bit ARM kernels, and the device check of the ARM APK |
 | M4 | Mods on Android: content-only mods first; then per-ABI objects for code mods (bundled mods built by `build_game32.py`, third-party ones by the SDK's `build_mod.py` per target), ARM relocations in the object loader, `__aeabi_*` helpers, hook trampolines for armv7 |
 | M5 | Release: signing, CI for both ABIs, emulator smoke |
 | M6 | (optional) 64-bit everywhere |
-
-ARM32 test ladder for M2 on, since the API 30 x86 image translates ARM code
-with a translator that mishandles the fault path, and API 31+ phone images
-run no 32-bit apps:
-
-1. the x86 emulator for all platform and gameplay work;
-2. qemu-arm user mode in WSL (`qemu-user-static` from the distribution's
-   apt repository, plus an armv7 sysroot) for the three ARM-specific pieces:
-   the `-mharden-sls=blr` thunks, the SIGSEGV/ucontext fix-up, the asm stack
-   switch. M2's first task: check that qemu-user reproduces those behaviours.
-   It tests the instruction set, not bionic's allocator or ART's layout (the
-   probe checked those on the real images);
-3. the API 25 `armeabi-v7a` system image (real ARM under QEMU, slow) as the
-   once-per-milestone gate;
-4. to check: whether the 32-bit x86 TV images (up to API 36) carry an
-   ndk_translation that handles the fault path; if so they replace (3).
 
 ## Launch the local graphics preview
 
