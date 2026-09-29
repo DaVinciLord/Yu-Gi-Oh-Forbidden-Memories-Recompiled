@@ -1,4 +1,5 @@
 /* Game > Deck slots. See deck_menu.h. */
+#include "pc/compat/fs.h"
 #include "deck_menu.h"
 #include "pc/platform/button_layout.h"
 #include "pc/platform/menu.h"

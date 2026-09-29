@@ -1,5 +1,6 @@
 /* Translations (text.h, notes/translation.md). */
 #define _DEFAULT_SOURCE /* MAP_ANONYMOUS, MAP_FIXED_NOREPLACE */
+#include "pc/compat/fs.h" /* a mod's text under a folder named with accents */
 #include "text.h"
 #include "glyphs.h"
 #include "hd_text.h"
