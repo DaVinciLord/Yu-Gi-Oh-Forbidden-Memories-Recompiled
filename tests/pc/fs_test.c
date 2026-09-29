@@ -34,6 +34,26 @@ static void exact_file(const char *path)
 #endif
 }
 
+/* rmdir, given a moment on Windows: a file is removed only when the last
+ * handle on it closes, and a virus scanner or the search indexer may still
+ * be reading the one just written and removed. Until it lets go, its name
+ * stays and the folder is not empty (ENOTEMPTY), so the test failed now and
+ * then on a machine with a scanner, alone as much as beside other tests. */
+static int remove_folder(const char *path)
+{
+    int tries;
+    for (tries = 0; rmdir(path) != 0; tries++) {
+#ifdef _WIN32
+        if (tries < 100 && (errno == ENOTEMPTY || errno == EACCES)) {
+            Sleep(20);
+            continue;
+        }
+#endif
+        return -1;
+    }
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     char root[SCRATCH_MAX], directory[1024], path[1200], other[1200], temp[1200];
@@ -99,13 +119,13 @@ int main(int argc, char **argv)
     assert(!SaveSlots_ReadState(0, state, sound) && state[0x50] == 7);
     SaveSlots_Scan(slots, sound); assert(slots[0].status == SAVE_SLOT_USED && slots[0].cards == 7);
     assert(!remove(other));
-    snprintf(other, sizeof(other), "%s/saves", directory); assert(!rmdir(other));
+    snprintf(other, sizeof(other), "%s/saves", directory); assert(!remove_folder(other));
 #ifdef _WIN32
     errno = 0;
     assert(!fopen("invalid-\xff", "wb") && errno == EILSEQ);
     assert(!Memories_Utf8ToWide("\xed\xa0\x80") && errno == EILSEQ); /* unpaired surrogate */
 #endif
-    assert(!remove(path)); assert(!rmdir(directory)); assert(!rmdir(root));
+    assert(!remove(path)); assert(!remove_folder(directory)); assert(!remove_folder(root));
     puts("UTF-8 paths: ok");
     return 0;
 }
