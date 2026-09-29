@@ -28,8 +28,8 @@
 void func_80031874(DisplayObject *obj, GsOT *ot)
 {
     u8 *text;
-    GsSPRITE *sprite = (GsSPRITE *)0x1F800020;
-    GsSPRITE *header = (GsSPRITE *)0x1F800060;
+    GsSPRITE *sprite = (GsSPRITE *)SCRATCHPAD_ADDR(0x1F800020);
+    GsSPRITE *header = (GsSPRITE *)SCRATCHPAD_ADDR(0x1F800060);
     CardList *list;
     u8 *row;
     s32 kind;
@@ -64,7 +64,7 @@ void func_80031874(DisplayObject *obj, GsOT *ot)
     } while (0);
     list = &gBuildDeck_pState->lists[kind];
     row = (u8 *)&list->entries[list->first];
-    text = (u8 *)0x1F800000;
+    text = (u8 *)SCRATCHPAD_ADDR(0x1F800000);
     if (kind == 0) {
         header->x = x + 0x88;
         header->y = y + 0xF;

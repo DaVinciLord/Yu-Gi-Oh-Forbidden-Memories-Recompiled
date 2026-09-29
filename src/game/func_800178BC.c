@@ -26,7 +26,7 @@ void func_800178BC(void)
     ViewState_ApplyOrbit();
     GsSetLsMatrix(&D_800FE148);
     {
-        SVECTOR *scratch = (SVECTOR *)0x1F8003E0;
+        SVECTOR *scratch = (SVECTOR *)SCRATCHPAD_ADDR(0x1F8003E0);
 
         scratch->vx = 0x3E8;
         scratch->vy = 0;

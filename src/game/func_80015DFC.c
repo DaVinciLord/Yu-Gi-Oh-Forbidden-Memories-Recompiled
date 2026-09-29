@@ -28,7 +28,7 @@ void func_80015DFC(DisplayProjectionTrackedObject *object)
     GsSetLsMatrix(&D_800FE148);
     {
         u16 x = object->record->field_30.h.field_30;
-        volatile SVECTOR *scratch = (volatile SVECTOR *)0x1F8003E0;
+        volatile SVECTOR *scratch = (volatile SVECTOR *)SCRATCHPAD_ADDR(0x1F8003E0);
 
         scratch->vy = 0;
         scratch->vx = x;

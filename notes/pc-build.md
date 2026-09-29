@@ -75,7 +75,19 @@ How it works:
 - `src/pc/guest/image.c` maps 2 MiB at `0x80000000`, mirrors the same pages at
   `0xA0000000` and at physical `0x10000..0x200000` (hosts reserve the first
   64 KiB; 24-bit packet links use these addresses), maps the scratchpad at
-  `0x1F800000`, and copies the user's PS-X EXE image to its load address.
+  `0x9F800000`, and copies the user's PS-X EXE image to its load address.
+  `0x9F800000` is the console's own second view of the scratchpad (KSEG0);
+  the retail code uses `0x1F800000`, where an Android app has its Java heap.
+  Game C writes a scratchpad address as `SCRATCHPAD_ADDR(0x1F8003C0)`
+  (`src/types.h`): the literal itself for the console build (every unit
+  preprocesses to the same tokens, so matching is unchanged), the `0x9F80xxxx`
+  view natively; the two pinned scratchpad variables (`D_1F800008`,
+  `D_1F800018`) are pinned there too. `0x1F800000` is mapped as a second view
+  of the same page where the host allows it (Windows, Linux), for retail MIPS
+  code and the pointers it hands to native code; the interpreter (`mips.c`)
+  translates its own accesses, and where the view cannot be mapped (Android)
+  a native access through it takes the null-page register rebase onto
+  `0x9F800000`, reported once per site.
   Guest pointers are therefore host pointers, and structure layouts, packet
   words and the `ygo_types.h` size assertions hold unchanged. Linux only so
   far; Windows needs the equivalent `VirtualAlloc`/`MapViewOfFileEx` calls.

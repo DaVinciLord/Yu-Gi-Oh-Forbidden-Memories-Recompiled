@@ -35,7 +35,7 @@ void CardList_RenderDeckBoxStats(DisplayObject *obj, GsOT *ot) {
     u8 d;
 
     tbl = D_80090DD8;
-    sp = (GsSPRITE *)0x1F800320;
+    sp = (GsSPRITE *)SCRATCHPAD_ADDR(0x1F800320);
     rec = &D_801A8000[obj->field_6A];
     pri = *(s16 *)&obj->field_14;
     sp->attribute = obj->attribute;

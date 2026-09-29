@@ -75,7 +75,7 @@ void Library_DrawCardGrid(void)
     /* The panels behind section rows the disc's cards do not reach. */
     Cards_DrawLibraryPanels();
 #endif
-    p = (GsSPRITE *)0x1F800320;
+    p = (GsSPRITE *)SCRATCHPAD_ADDR(0x1F800320);
     n = (gGraphics_sViewportY - 8) / 178;
     ot = D_800E9D90[3];
     if (n < 0) {
@@ -158,7 +158,7 @@ void Library_DrawCardGrid(void)
     } while (n < CARD_GRID_SECTION_ROW_COUNT);
 
 done:
-    q = (GsGLINE *)0x1F800000;
+    q = (GsGLINE *)SCRATCHPAD_ADDR(0x1F800000);
     v = D_8009B09C & 0x7F;
     q->attribute = 0x50000000;
     q->b0 = 0;

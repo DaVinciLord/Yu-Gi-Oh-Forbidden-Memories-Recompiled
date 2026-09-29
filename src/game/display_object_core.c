@@ -275,9 +275,9 @@ void DisplayObject_RenderSpriteList(void) {
 
     i = D_800EFE3A[0];
     if (i >= 0) {
-        g = (POLY_FT4 *)0x1F800344;
-        p = (SpritePrim *)0x1F800320;
-        h = (ClipState *)0x1F800378;
+        g = (POLY_FT4 *)SCRATCHPAD_ADDR(0x1F800344);
+        p = (SpritePrim *)SCRATCHPAD_ADDR(0x1F800320);
+        h = (ClipState *)SCRATCHPAD_ADDR(0x1F800378);
         tb = D_800E9D90;
 
         do {

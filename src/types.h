@@ -19,4 +19,17 @@ typedef signed long long s64;
 typedef unsigned long long u64;
 #endif
 
+/* A scratchpad address, written with its retail value (0x1F800000 to
+ * 0x1F8003FF, the 1 KiB of data cache the game uses as fast RAM). The
+ * console shows the same RAM at 0x9F800000 too (KSEG0), and that is where
+ * the native port maps it: an Android app process has its Java heap at
+ * 0x1F800000 (notes/pc-build.md, "Android"). For the console build the
+ * macro is the literal itself, token for token, so the matching build is
+ * unchanged. */
+#ifdef MEMORIES_PC
+#define SCRATCHPAD_ADDR(address) ((address) | 0x80000000u)
+#else
+#define SCRATCHPAD_ADDR(address) address
+#endif
+
 #endif
