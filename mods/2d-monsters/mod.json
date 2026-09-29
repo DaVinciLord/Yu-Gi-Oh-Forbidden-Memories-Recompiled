@@ -1,0 +1,49 @@
+{
+    "id": "2d-monsters",
+    "name": "2D Monsters",
+    "version": "1.0",
+    "author": "DecompRecomp",
+    "description": "Face-up monsters stand on their cards as an enlarged, flat cutout of their own card art, floating just above them and always facing the camera -- the 3D Monsters mod's presentation without loading a single model.",
+    "library": "2d-monsters",
+    "enabled": false,
+    "conflicts": ["3d-monsters"],
+    "settings": [
+        {
+            "key": "pixels",
+            "label": "Target height",
+            "type": "int",
+            "default": 32,
+            "min": 8,
+            "max": 160,
+            "step": 4,
+            "description": "Cutout height in game pixels, at the middle of the field."
+        },
+        {
+            "key": "lift",
+            "label": "Vertical lift",
+            "type": "int",
+            "default": 16,
+            "min": -4096,
+            "max": 4096,
+            "step": 128
+        },
+        {
+            "key": "pitch",
+            "label": "Field pitch threshold",
+            "type": "int",
+            "default": 512,
+            "min": 0,
+            "max": 4096,
+            "step": 64
+        },
+        {
+            "key": "depth",
+            "label": "Depth offset",
+            "type": "int",
+            "default": 3,
+            "min": 0,
+            "max": 64,
+            "step": 1
+        }
+    ]
+}
