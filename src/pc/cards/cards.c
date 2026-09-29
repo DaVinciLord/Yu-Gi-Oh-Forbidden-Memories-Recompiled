@@ -9,6 +9,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "cards.h"
 #include "art.h"
+#include "card_notes.h"
 #include "tables.h"
 #include "starter.h"
 #include "pc/free_duel/duelists.h"
@@ -103,6 +104,9 @@ int Cards_Fusion(int a, int b, int *result)
 
 static unsigned char *names[CARD_TABLE_ID_END];     /* own names, glyph codes */
 static unsigned char *descriptions[CARD_TABLE_ID_END];  /* own card text, glyph codes */
+/* The "notes" of every entry for the card, in load order, a line between
+ * two (card_notes.h). Nothing the game draws or plays by. */
+static char *card_notes[CARD_TABLE_ID_END];
 /* An entry's "password": its eight digits, a nibble each, or
  * CARD_PASSWORD_NONE ("" or null); `own_password` says the entry gave one. */
 static unsigned passwords[CARD_TABLE_ID_END];
@@ -552,6 +556,40 @@ static int read_password(const char *mod, int index, const JsonValue *value, uns
     return 1;
 }
 
+/* An entry's "notes" go after what earlier entries wrote for the card: a
+ * later entry that replaces the card again does not take them away. */
+static void add_notes(const char *mod, int index, int id, const JsonValue *value)
+{
+    const char *text = Json_String(value, NULL);
+    size_t had, length;
+    char *joined;
+    if (!value) return;
+    if (!text) {
+        Mods_Note(mod, "cards[%d]: \"notes\" must be text", index);
+        return;
+    }
+    if (!*text) return;
+    had = card_notes[id] ? strlen(card_notes[id]) : 0;
+    length = strlen(text);
+    joined = realloc(card_notes[id], had + (had ? 1 : 0) + length + 1);
+    if (!joined) return;
+    if (had) joined[had++] = '\n';
+    memcpy(joined + had, text, length + 1);
+    card_notes[id] = joined;
+}
+
+/* A "replace" entry with nothing but "notes" (and an "id") only adds its
+ * notes: the card stays as the disc or an earlier mod left it. */
+static int notes_only(const JsonValue *entry)
+{
+    const JsonValue *member;
+    for (member = Json_At(entry, 0); member; member = Json_Next(member)) {
+        const char *key = Json_Name(member);
+        if (strcmp(key, "replace") && strcmp(key, "notes") && strcmp(key, "id")) return 0;
+    }
+    return Json_Member(entry, "notes") != NULL;
+}
+
 static void add_entry(const char *mod, const char *directory, int index, const JsonValue *entry, BuildContext *context)
 {
     const JsonValue *replace = Json_Member(entry, "replace");
@@ -578,6 +616,10 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     if (base < 1 || base > CARD_COUNT) {
         Mods_Note(mod, "cards[%d]: \"%s\" must name a card of the disc, 1 to %d", index, replace ? "replace" : "copy",
                   CARD_COUNT);
+        return;
+    }
+    if (replace && notes_only(entry)) {
+        add_notes(mod, index, base, Json_Member(entry, "notes"));
         return;
     }
     /* "replace" changes the retail card itself, in place: one card, no new
@@ -701,6 +743,7 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         gDuel_abCardLevelAttr[id] = level_attr;
         names[id] = name && *name ? encode_name(mod, name, n, id) : NULL;
         descriptions[id] = description && *description ? encode_description(mod, description, id) : NULL;
+        add_notes(mod, index, id, Json_Member(entry, "notes"));
         /* Reset as names and descriptions are, so a later mod's entry for
          * the same card without one does not keep an earlier mod's. */
         own_password[id] = (unsigned char)(has_password != 0);
@@ -769,6 +812,7 @@ void Cards_Build(void)
     if (!context) return;
     Mods_VisitCards(add_mod, context);
     Mods_SetCardResolver(Cards_FindIdentity);
+    Mods_SetCardNotes(Cards_Notes, Cards_NoteTag);
     {
         unsigned signature = 0;
         if (gCard_nCount > CARD_COUNT) {
@@ -913,6 +957,16 @@ int Cards_NameUtf8(int id, char *out, size_t size)
 const unsigned char *Cards_DescriptionText(int id)
 {
     return Cards_Valid(id) ? descriptions[id] : NULL;
+}
+
+const char *Cards_Notes(int id)
+{
+    return Cards_Valid(id) ? card_notes[id] : NULL;
+}
+
+int Cards_NoteTag(int id, const char *key, char *out, size_t size)
+{
+    return CardNotes_Tag(Cards_Notes(id), key, out, size);
 }
 
 int Cards_OwnPassword(int id, unsigned *password)

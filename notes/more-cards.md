@@ -57,6 +57,7 @@ The release ships no card mod; the checks below were made with test mods
 | `password` | what View > Card passwords shows for it ([PC build](pc-build.md#card-passwords-view)): up to eight digits as a string (`"08124921"`, leading zeros kept) or a number, `""` or `null` for none. It is only shown: the Password screen does not know it (a disc card's
 password and price there are the [gameplay tables'](gameplay-tables.md#passwords-and-prices-on-the-password-screen)
 `passwords`, which win over this one in the view). A copy without one shows none (its base's would give the base) |
+| `notes` | text of the modder's own, which the game shows and plays by none of ([below](#notes-on-a-card)) |
 
 What an entry leaves out is its base's. Give entries explicit stable `id` keys. Saves use these identities; runtime
 IDs are remapped when mods change. Legacy numeric sidecars require explicit
@@ -111,6 +112,50 @@ own show the replaced ones.
 When two entries (or two mods) replace the same card, the later one goes over
 the earlier: what the later entry leaves out stays as the earlier one set it.
 The Mods window notes it.
+
+## Notes on a card
+
+`"notes"` is the modder's: what was changed and why, what is still planned.
+The game draws none of it and plays by none of it. The
+[FM Editor](../tools/pc/fm_editor/README.md) shows it as the card's **Notes**
+box. A `replace` entry with nothing but `notes` (and an `id`) only notes the
+card, so a mod can tag the disc's cards, or another mod's changes, without
+changing them:
+
+```json
+{ "replace": "Dark Magician", "notes": "The main boss card. <burn: 300> <no-fusion>" }
+```
+
+A card's notes add up: every entry that gives the card `notes`, in every
+applied mod, in load order, a line between two. A later entry that replaces
+the card again does not take an earlier one's notes away.
+
+A [code mod](modding.md#code-mods) reads them, from mod API 7, with
+`host->card_notes(host, id)` (the whole text, or `NULL`) and
+`host->card_tag(host, id, key, out, size)`, which reads tags the way RPG
+Maker reads its note boxes:
+
+| Written | `card_tag` of it |
+|---|---|
+| `<burn: 300>` | `"burn"` gives `"300"` (returns 3, its length) |
+| `<no-fusion>` | `"no-fusion"` gives `""` (returns 0) |
+| no such tag | returns -1, `out` is `""` |
+
+A tag's name is anything but `<`, `>` and `:`, and any case matches; the
+value runs from the first colon to the `>`. Spaces around either do not
+count. Of two tags with one name the last counts. Everything outside the
+brackets is comment. `out` is cut to fit `size` and always ended; the return
+is the value's whole length, as `snprintf`'s, so a longer one can be asked
+for again. What the value means (a number, a card name, an identity) is up
+to the mod that reads it:
+
+```c
+char value[16];
+if (host->api >= 7 && host->card_tag(host, card, "burn", value, sizeof(value)) > 0)
+    burn = atoi(value);
+```
+
+The notes are known once the card tables are built, before the title screen.
 
 ## Where a card comes from
 

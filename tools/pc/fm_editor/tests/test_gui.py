@@ -63,8 +63,16 @@ class GuiTest(unittest.TestCase):
         cards.vars["name"].set("Bulbasaur")
         cards.vars["attack"].set("1180")
         cards.vars["star1"].set("Venus")
+        cards.notes.insert("1.0", "Buffed for the early game. <burn: 300>")
         self.assertTrue(cards.apply())
         self.assertEqual(app.project.cards[1].name, "Bulbasaur")
+        self.assertEqual(app.project.notes[1], "Buffed for the early game. <burn: 300>")
+        cards.search.set("early game")
+        self.assertEqual(cards.tree.get_children(), ("1",))
+        cards.search.set("")
+        cards.filter.set("With notes")
+        self.assertEqual(cards.tree.get_children(), ("1",))
+        cards.filter.set(cards.FILTERS[0])
         self.assertTrue(app.dirty)
         cards.add_card()
         new = max(app.project.added)
@@ -91,7 +99,8 @@ class GuiTest(unittest.TestCase):
         data = json.loads((out / "mod.json").read_text(encoding="utf-8"))
         self.assertEqual(data["id"], "gui-test")
         self.assertEqual(data["cards"][0], {"replace": 1, "name": "Bulbasaur", "attack": 1180,
-                                            "stars": ["Venus", data["cards"][0]["stars"][1]]})
+                                            "stars": ["Venus", data["cards"][0]["stars"][1]],
+                                            "notes": "Buffed for the early game. <burn: 300>"})
         self.assertEqual(data["cards"][1]["copy"], 1)
         self.assertIn("Teana", data["drops"])
         # and back

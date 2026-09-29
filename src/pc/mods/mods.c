@@ -369,6 +369,21 @@ static int host_duelist_id(const MemoriesModHost *host, const char *identity)
     id = duelist_resolver(identity);
     return id > 0 ? id : 0;
 }
+static const char *(*notes_source)(int);
+static int (*tag_source)(int, const char *, char *, size_t);
+void Mods_SetCardNotes(const char *(*notes)(int), int (*tag)(int, const char *, char *, size_t))
+{
+    notes_source = notes;
+    tag_source = tag;
+}
+static const char *host_card_notes(const MemoriesModHost *host, int id)
+{ (void)host; return notes_source ? notes_source(id) : NULL; }
+static int host_card_tag(const MemoriesModHost *host, int id, const char *key, char *out, size_t size)
+{
+    (void)host;
+    if (out && size) *out = '\0';
+    return tag_source ? tag_source(id, key, out, size) : -1;
+}
 static int host_subscribe(const MemoriesModHost *host, unsigned event, int priority, MemoriesModCallback callback)
 { return owner(host) ? Mods_Subscribe((int)(owner(host) - mods), event, priority, callback) : 0; }
 static void host_unsubscribe(const MemoriesModHost *host, int token)
@@ -502,6 +517,8 @@ static void fill_host(Mod *mod)
     mod->host.register_state = host_register_state;
     mod->host.card_id = host_card_id;
     mod->host.duelist_id = host_duelist_id;
+    mod->host.card_notes = host_card_notes;
+    mod->host.card_tag = host_card_tag;
     mod->host.api = MEMORIES_MOD_API;
     mod->host.id = mod->id;
     mod->host.directory = mod->directory;
