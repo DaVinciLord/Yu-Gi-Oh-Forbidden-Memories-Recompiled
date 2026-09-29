@@ -777,8 +777,13 @@ def main():
                 handle.write(f'.section {section}$a,"{flags}"\n.globl ___start_{section}\n___start_{section}:\n')
                 handle.write(f'.section {section}$z,"{flags}"\n.globl ___stop_{section}\n___stop_{section}:\n')
     else:
+        # HIDDEN: in a shared object (Android's libmain.so) the dynamic
+        # loader adds the load bias to an absolute symbol of default
+        # visibility, as bionic does on every ABI; a hidden one is resolved
+        # at link time. In an executable it only keeps the pins out of the
+        # dynamic symbol table (nm shows them as local).
         with open(f"{options.build}/guest_symbols.ld", "w") as handle:
-            handle.writelines(f"{name} = 0x{address:08X};\n" for name, address in pinned.items())
+            handle.writelines(f"HIDDEN({name} = 0x{address:08X});\n" for name, address in pinned.items())
             handle.writelines(f"{name} = {target};\n" for name, target in aliases.items())
     with open(f"{options.build}/stubs.c", "w") as handle:
         handle.write('#include "pc/guest/image.h"\n')
