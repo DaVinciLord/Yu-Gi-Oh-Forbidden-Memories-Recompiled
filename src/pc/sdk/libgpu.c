@@ -447,13 +447,8 @@ void DrawOTag(u32 *list)
         size_t i;
         for (i = 0; i < count && pending_precise < MAX_FRAME_PRECISE; i++) {
             PgxpVertex *vertex = &frame_precise[pending_precise];
-            int16_t px = (int16_t)(frame_words[i] & 0xffffu), py = (int16_t)(frame_words[i] >> 16);
             int at;
-            /* The GTE clamps a projected vertex to -1024..1023 (and LIBGS
-             * adds at most a screen's offset): colours, texture and command
-             * words lie far outside, and skipping them spares two table
-             * lookups each. */
-            if (px < -2048 || px >= 2048 || py < -2048 || py >= 2048) continue;
+            if (!Pgxp_MaybeVertexWord(frame_words[i])) continue;
             at = Pgxp_FindAt(frame_addresses[i], frame_words[i], &vertex->x, &vertex->y, &vertex->w);
             if (at > 0) {
                 placed++;

@@ -13,6 +13,10 @@
 #define TABLE_SIZE 65536
 #define PROBES 64
 
+/* The probe sequences below wrap with `& (TABLE_SIZE - 1)`, a fast modulo
+ * that only wraps correctly when TABLE_SIZE is a power of two. */
+typedef char TABLE_SIZE_must_be_a_power_of_two[(TABLE_SIZE & (TABLE_SIZE - 1)) == 0 ? 1 : -1];
+
 typedef struct {
     uint32_t word;
     unsigned frame;
