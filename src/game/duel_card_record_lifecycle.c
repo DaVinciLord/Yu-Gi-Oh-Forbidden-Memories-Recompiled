@@ -18,6 +18,9 @@
 #include "duel_terrain_boost.h"
 #include "func_80016778.h"
 #include "util_memory.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/cards.h"
+#endif
 #define D_80177EA4_VISIBLE
 #include "../unmatched.h"
 #ifdef MEMORIES_PC
@@ -245,6 +248,13 @@ DuelCardDisplayObject *func_80024C1C(s32 cardId, s32 x, s32 y) {
     obj->icon_variant = val;
 
 end:
+#ifdef MEMORIES_PC
+    /* A mod's frame colour (Cards_FrameColor): the palette row
+     * func_80015EF4 draws the field card through. */
+    if (Cards_FrameColor(cardId) >= 0) {
+        obj->icon_variant = Cards_FrameColor(cardId);
+    }
+#endif
     return obj;
 }
 

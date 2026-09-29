@@ -8,9 +8,9 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from . import bulk_dialog, manifest, pools as poolmath, validate
-from .gamedata import (ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, DUELIST_NAMES, POOL_LABELS,
-                       POOL_TOTAL, POOLS, STAR_NAMES, STARTER_WEIGHT_LIMIT, TYPE_EQUIP, TYPE_NAMES, TYPE_RITUAL,
-                       exodia_piece)
+from .gamedata import (ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, DUELIST_NAMES, FRAME_NAMES,
+                       POOL_LABELS, POOL_TOTAL, POOLS, STAR_NAMES, STARTER_WEIGHT_LIMIT, TYPE_EQUIP, TYPE_NAMES, TYPE_RITUAL,
+                       exodia_piece, type_frame)
 from . import fixed_decks
 from .fixed_deck_view import FixedDeckView
 from .model import KEY_RE, StarterDeck
@@ -18,6 +18,9 @@ from .widgets import CardField, FormDialog, card_matches, pick_card, px, scrolle
 
 ATTRIBUTE_CHOICES = ATTRIBUTE_NAMES + ["6 (magic)", "7 (trap)"]
 STAR_CHOICES = ["(none)"] + STAR_NAMES[1:]
+FRAME_CHOICES = ["By type"] + FRAME_NAMES
+# Each frame's colour, as the hand's frames have it (the duel's palette rows 1-6).
+FRAME_COLOURS = ["#e0a838", "#409830", "#b040a0", "#2848b0", "#8868d8", "#e07000"]
 
 
 def type_label(t: int) -> str:
@@ -26,6 +29,10 @@ def type_label(t: int) -> str:
 
 def attribute_label(a: int) -> str:
     return ATTRIBUTE_CHOICES[a] if 0 <= a < len(ATTRIBUTE_CHOICES) else str(a)
+
+
+def frame_label(f: int) -> str:
+    return FRAME_CHOICES[f + 1] if -1 <= f < len(FRAME_NAMES) else str(f)
 
 
 def star_label(s: int) -> str:
@@ -90,7 +97,7 @@ class CardsTab(Tab):
         form.pack(side="left", fill="y", padx=(8, 0))
         self.form = form
         self.vars = {k: tk.StringVar() for k in ("name", "attack", "defense", "type", "attribute", "level",
-                                                  "star1", "star2", "password", "key")}
+                                                  "star1", "star2", "password", "key", "frame")}
         row = 0
 
         def line(label, widget, hint=None):
@@ -135,6 +142,20 @@ class CardsTab(Tab):
         self.lines.grid(row=row, column=1, columnspan=2, sticky="w")
         row += 1
         self.text.bind("<KeyRelease>", lambda e: self.count_lines())
+        # The frame the card view, the Library and the duel draw it in: its
+        # type's unless the mod picks one (cards.c "frame").
+        ttk.Label(form, text="Frame").grid(row=row, column=0, sticky="w", pady=2)
+        ttk.Combobox(form, textvariable=self.vars["frame"], values=FRAME_CHOICES, state="readonly",
+                     width=18).grid(row=row, column=1, sticky="we", pady=2)
+        beside = ttk.Frame(form)
+        beside.grid(row=row, column=2, sticky="w", padx=6)
+        self.swatch = tk.Label(beside, width=2, relief="solid", borderwidth=1)
+        self.swatch.pack(side="left")
+        self.hints["frame"] = ttk.Label(beside, style="Hint.TLabel")
+        self.hints["frame"].pack(side="left", padx=(6, 0))
+        row += 1
+        self.vars["frame"].trace_add("write", lambda *_: self.show_swatch())
+        self.vars["type"].trace_add("write", lambda *_: self.show_swatch())
         ttk.Label(form, text="Notes").grid(row=row, column=0, sticky="nw", pady=2)
         self.notes = tk.Text(form, width=36, height=4, wrap="word", undo=True)
         self.notes.grid(row=row, column=1, columnspan=2, sticky="we", pady=2)
@@ -285,6 +306,7 @@ class CardsTab(Tab):
         self.vars["level"].set(card.level)
         self.vars["star1"].set(star_label(card.star1))
         self.vars["star2"].set(star_label(card.star2))
+        self.vars["frame"].set(frame_label(card.frame))
         self.vars["password"].set(self.project.password(cid))
         self.text.insert("1.0", card.description)
         self.notes.insert("1.0", self.project.notes.get(cid, ""))
@@ -295,7 +317,8 @@ class CardsTab(Tab):
         for key, label in (("name", reference.name), ("type", type_label(reference.type)),
                            ("attribute", attribute_label(reference.attribute)), ("level", reference.level),
                            ("attack", reference.attack), ("defense", reference.defense),
-                           ("star1", star_label(reference.star1)), ("star2", star_label(reference.star2))):
+                           ("star1", star_label(reference.star1)), ("star2", star_label(reference.star2)),
+                           ("frame", frame_label(reference.frame).lower())):
             self.hints[key].configure(text=f"{what}: {label}" if key != "name" or len(str(label)) < 28 else what)
         if cid in self.project.retail.cards:
             self.hints["password"].configure(text=f"Retail: {self.project.retail.passwords.get(cid) or 'none'}")
@@ -314,6 +337,17 @@ class CardsTab(Tab):
             self.added_frame.grid_remove()
             extra = self.project.card_extra.get(cid, {})
         self.extra.configure(text=("Kept as written in mod.json: " + ", ".join(sorted(extra))) if extra else "")
+
+    def show_swatch(self):
+        """The colour the frame will be: the chosen one, or the type's."""
+        frame = parse_choice(self.vars["frame"].get(), FRAME_CHOICES) - 1
+        kind = parse_choice(self.vars["type"].get(), TYPE_NAMES)
+        if frame < 0 and kind >= 0:
+            frame = type_frame(kind)
+        if 0 <= frame < len(FRAME_COLOURS):
+            self.swatch.configure(background=FRAME_COLOURS[frame])
+        else:
+            self.swatch.configure(background=self.swatch.master.winfo_toplevel().cget("background"))
 
     def count_lines(self):
         text = self.text.get("1.0", "end-1c")
@@ -341,6 +375,7 @@ class CardsTab(Tab):
         if min(values) < 0:
             return "choose a type, an attribute and two stars"
         card.type, card.attribute, card.star1, card.star2 = values
+        card.frame = max(-1, parse_choice(self.vars["frame"].get(), FRAME_CHOICES) - 1)
         return card
 
     def apply(self, quiet=False):

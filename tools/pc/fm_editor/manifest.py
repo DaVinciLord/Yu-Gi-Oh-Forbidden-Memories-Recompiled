@@ -23,7 +23,7 @@ import re
 import shutil
 from pathlib import Path
 
-from .gamedata import (ATTRIBUTE_NAMES, CARD_COUNT, DECK_SIZE, DUELIST_NAMES, POOLS, STAR_NAMES,
+from .gamedata import (ATTRIBUTE_NAMES, CARD_COUNT, DECK_SIZE, DUELIST_NAMES, FRAME_NAMES, POOLS, STAR_NAMES,
                        STARTER_WEIGHT_LIMIT, TYPE_NAMES, TYPE_MAGIC, GameData)
 from .model import AddedCard, ModInfo, Project, StarterDeck, duelist_named, type_named, KEY_RE
 from . import art, fixed_decks, pools as poolmath
@@ -84,6 +84,8 @@ def _card_fields(card, base, everything=False) -> dict:
         out["level"] = card.level
     if everything or (card.star1, card.star2) != (base.star1, base.star2):
         out["stars"] = [_star_value(card.star1), _star_value(card.star2)]
+    if card.frame != base.frame:
+        out["frame"] = FRAME_NAMES[card.frame] if 0 <= card.frame < len(FRAME_NAMES) else "Type"
     return out
 
 
@@ -564,6 +566,12 @@ def _apply_fields(card, entry: dict, is_replace: bool, messages: list, where: st
         value = _choice(entry["attribute"], ATTRIBUTE_NAMES)
         if value >= 0:
             card.attribute = _clamp(value, 0, 15)
+    if "frame" in entry:
+        value = _choice(entry["frame"], FRAME_NAMES + ["Type"])
+        if 0 <= value <= len(FRAME_NAMES):
+            card.frame = -1 if value == len(FRAME_NAMES) else value
+        else:
+            messages.append(f"{where}: \"frame\" is Monster, Magic, Trap, Ritual, Purple, Orange or Type; left out")
 
 
 def _base_id(project: Project, value) -> int:
@@ -606,7 +614,8 @@ def read_cards(project: Project, entries, messages: list):
                 had = project.notes.get(base)
                 project.set_notes(base, f"{had}\n{notes}" if had else notes)
             # What the editor does not show (art, password...) is kept as written.
-            shown = ("replace", "name", "description", "attack", "defense", "type", "attribute", "level", "stars")
+            shown = ("replace", "name", "description", "attack", "defense", "type", "attribute", "level", "stars",
+                     "frame")
             if notes is not None:
                 shown += ("notes",)
             extra = {k: v for k, v in entry.items() if k not in shown}
@@ -631,7 +640,7 @@ def read_cards(project: Project, entries, messages: list):
         added.drops = _json_bool(entry.get("drops"), True)
         added.opponents = _json_bool(entry.get("opponents"), False)
         skip = ("copy", "id", "name", "description", "attack", "defense", "type", "attribute", "level", "stars",
-                "drops", "opponents")
+                "frame", "drops", "opponents")
         if notes is not None:
             skip += ("notes",)
             project.set_notes(cid, notes)
