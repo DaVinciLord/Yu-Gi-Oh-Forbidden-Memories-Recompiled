@@ -41,17 +41,16 @@ static void exact_file(const char *path)
  * then on a machine with a scanner, alone as much as beside other tests. */
 static int remove_folder(const char *path)
 {
+#ifdef _WIN32
     int tries;
     for (tries = 0; rmdir(path) != 0; tries++) {
-#ifdef _WIN32
-        if (tries < 100 && (errno == ENOTEMPTY || errno == EACCES)) {
-            Sleep(20);
-            continue;
-        }
-#endif
-        return -1;
+        if (tries >= 100 || (errno != ENOTEMPTY && errno != EACCES)) return -1;
+        Sleep(20);
     }
     return 0;
+#else
+    return rmdir(path);
+#endif
 }
 
 int main(int argc, char **argv)
