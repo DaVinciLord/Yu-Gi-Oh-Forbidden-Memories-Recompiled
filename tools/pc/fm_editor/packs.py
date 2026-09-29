@@ -378,7 +378,7 @@ def read_pack(entry, resolve, mod: str = "mod", index: int = 0, taken_ids=()) ->
     default = len(slots) if isinstance(slots, list) else DEFAULT_COUNT
     pack.count, bad = number(entry.get("count"), 1, COUNT_MAX, default)
     bad_count |= bad
-    if bad_count or pack.count < 1:
+    if bad_count or not 1 <= pack.count <= COUNT_MAX:  # "slots" of more, and no "count"
         notes.append(("error", f"{where}: \"count\" is 1 to {COUNT_MAX} cards and \"max_copies\" 1 to 250; the pack is "
                                "left out"))
         return None, notes

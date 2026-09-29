@@ -151,6 +151,13 @@ static void test_errors(void)
     /* Each leaves the pack out, and says why. */
     CHECK(one("{\"packs\": [{\"cards\": [1], \"count\": 0}]}") == 0 && noted("\"count\" is 1 to 40"));
     CHECK(one("{\"packs\": [{\"cards\": [1], \"count\": 41}]}") == 0);
+    {   /* 41 slots and no "count": the count the slots give is held to 40 too. */
+        char text[1024];
+        int n = snprintf(text, sizeof(text), "{\"packs\": [{\"cards\": [1], \"slots\": ["), i;
+        for (i = 0; i < PACK_COUNT_MAX + 1; i++) n += snprintf(text + n, sizeof(text) - (size_t)n, "%s{\"card\": 1}", i ? ", " : "");
+        snprintf(text + n, sizeof(text) - (size_t)n, "]}]}");
+        CHECK(one(text) == 0 && noted("\"count\" is 1 to 40"));
+    }
     CHECK(one("{\"packs\": [{\"tiers\": {\"a\": {\"cards\": [1]}}, \"count\": 3, \"slots\": [\"a\", \"a\"]}]}") == 0 &&
           noted("\"slots\" is a list of 3"));
     CHECK(one("{\"packs\": [{\"tiers\": {\"a\": {\"cards\": [1]}}, \"slots\": [\"a\", \"b\"]}]}") == 0 && noted("no tier \"b\""));
@@ -307,6 +314,24 @@ static void test_rules_while_dealing(void)
         int seen[5] = {0};
         Packs_Deal(0, NULL, NULL, NULL, counting_random, &counting, &result);
         for (s = 0; s < 4; s++) CHECK(result.cards[s] >= 1 && result.cards[s] <= 4 && !seen[result.cards[s]]++);
+    }
+    /* ...nor when a full pack of different cards is dealt again for a
+     * guarantee: forty dealt, forty more taken in their place. */
+    {
+        char text[1024];
+        int n = snprintf(text, sizeof(text), "{\"packs\": [{\"count\": 40, \"duplicates\": \"unique_in_pack\", \"tiers\": "
+                                             "{\"c\": {\"odds\": 1, \"cards\": [");
+        for (i = 0; i < 40; i++) n += snprintf(text + n, sizeof(text) - (size_t)n, "%s%d", i ? "," : "", i + 1);
+        n += snprintf(text + n, sizeof(text) - (size_t)n, "]}, \"r\": {\"odds\": 0, \"cards\": [");
+        for (i = 0; i < 40; i++) n += snprintf(text + n, sizeof(text) - (size_t)n, "%s%d", i ? "," : "", i + 101);
+        snprintf(text + n, sizeof(text) - (size_t)n, "]}}, \"guarantee\": {\"r\": 40}}]}");
+        CHECK(one(text) == 1);
+        for (seed = 1; seed < 50; seed++) {
+            Counting counting = {seed, 0};
+            int seen[141] = {0};
+            Packs_Deal(0, NULL, NULL, NULL, counting_random, &counting, &result);
+            for (s = 0; s < 40; s++) CHECK(result.cards[s] >= 101 && result.cards[s] <= 140 && !seen[result.cards[s]]++);
+        }
     }
 
     /* max_copies: a card held twice is not dealt; one held once, once more at most. */

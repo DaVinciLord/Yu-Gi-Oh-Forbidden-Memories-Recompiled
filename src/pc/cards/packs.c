@@ -718,7 +718,7 @@ static void read_pack(const char *mod, const char *directory, int index, const J
     }
     pack->count = (int)number_in(Json_Member(entry, "count"), 1, PACK_COUNT_MAX,
                                  Json_TypeOf(slots) == JSON_ARRAY ? Json_Count(slots) : PACK_DEFAULT_COUNT, &bad);
-    if (bad || pack->count < 1) {
+    if (bad || pack->count < 1 || pack->count > PACK_COUNT_MAX) {   /* "slots" of more, and no "count" */
         Mods_Note(mod, "%s: \"count\" is 1 to %d cards and \"max_copies\" 1 to 250; the pack is left out", where,
                   PACK_COUNT_MAX);
         free_pack(pack);
@@ -1125,8 +1125,10 @@ typedef struct {
     PackHeld held;
     void *held_context;
     int taken_count;
-    unsigned short taken_card[PACK_COUNT_MAX];
-    unsigned char taken_times[PACK_COUNT_MAX];
+    /* The cards the slots dealt, and one more for each slot redone for a
+     * guarantee or the pity (a slot is redone once at most). */
+    unsigned short taken_card[2 * PACK_COUNT_MAX];
+    unsigned char taken_times[2 * PACK_COUNT_MAX];
 } Dealing;
 
 static int taken(const Dealing *d, int card)
@@ -1146,7 +1148,7 @@ static void take(Dealing *d, int card, int step)
             return;
         }
     }
-    if (step > 0 && d->taken_count < PACK_COUNT_MAX) {
+    if (step > 0 && d->taken_count < 2 * PACK_COUNT_MAX) {
         d->taken_card[d->taken_count] = (unsigned short)card;
         d->taken_times[d->taken_count++] = (unsigned char)step;
     }

@@ -106,6 +106,7 @@ class ReaderTest(unittest.TestCase):
         for entry, words in (
                 ({"cards": [1], "count": 0}, "\"count\" is 1 to 40"),
                 ({"cards": [1], "count": 41}, "\"count\" is 1 to 40"),
+                ({"cards": [1], "slots": [{"card": 1}] * 41}, "\"count\" is 1 to 40"),
                 ({"tiers": {"a": {"cards": [1]}}, "count": 3, "slots": ["a", "a"]}, "a list of 3"),
                 ({"tiers": {"a": {"cards": [1]}}, "slots": ["a", "b"]}, "no tier \"b\""),
                 ({"cards": {"1": -2}}, "a weight is a whole number"),
