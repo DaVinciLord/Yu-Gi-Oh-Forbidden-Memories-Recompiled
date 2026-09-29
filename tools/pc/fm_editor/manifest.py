@@ -26,7 +26,7 @@ from pathlib import Path
 from .gamedata import (ATTRIBUTE_NAMES, CARD_COUNT, DECK_SIZE, DUELIST_NAMES, FRAME_NAMES, POOLS, STAR_NAMES,
                        STARTER_WEIGHT_LIMIT, TYPE_NAMES, TYPE_MAGIC, GameData)
 from .model import AddedCard, ModInfo, Project, StarterDeck, duelist_named, type_named, KEY_RE
-from . import art, fixed_decks, pools as poolmath
+from . import art, campaign_map, fixed_decks, pools as poolmath
 
 INFO_KEYS = ("id", "name", "version", "author", "description")
 TABLE_KEYS = ("settings", "cards", "fusions", "equips", "rituals", "drops", "decks", "starter")
@@ -388,6 +388,7 @@ def build(project: Project) -> dict:
     starter = build_starter(project)
     if starter:
         manifest["starter"] = starter
+    campaign_map.build_into(project, manifest)
     return manifest
 
 
@@ -1052,6 +1053,7 @@ def open_mod(retail: GameData, folder) -> tuple:
     read_text_cards(project, folder, messages)
     project.source_dir = folder
     art.read_mod(project, folder, messages)
+    campaign_map.read_mod(project, messages)
     return project, messages
 
 

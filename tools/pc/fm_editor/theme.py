@@ -282,6 +282,11 @@ class Theme:
                             lowerbordercolor=BORDER, indicatormargin=(1, 1, 4, 1), padding=2)
             style.map(toggle, indicatorbackground=[("pressed", BG), ("disabled", BG)],
                       background=[("active", BG)])
+        # A toggle drawn as a button (the Map tab's D-pad): pressed shows.
+        style.configure("Toolbutton", background=BG, lightcolor=BG, darkcolor=BG, bordercolor=BORDER, padding=2,
+                        relief="flat")
+        style.map("Toolbutton", background=[("disabled", BG), ("selected", SELECT), ("active", HOVER)],
+                  relief=[("selected", "sunken")], foreground=[("disabled", DISABLED)])
         for name, (_, dark) in INKS.items():
             style.configure(f"{name}.TLabel", foreground=dark)
         style.theme_use(current)

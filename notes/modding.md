@@ -128,6 +128,16 @@ path (`"\\DATA\\CARD.MRG;1"`, as the game asks for it) or a raw sector
   hex-editor tutorials are written in, so their offsets carry over directly
   (`modding-tutorial-gameplay-patches.md`).
 
+Most of what the game's overlays hold is compiled into the port, so a patch
+of an overlay's bytes on the disc reaches the port only where the port reads
+them from memory as the console does. The campaign map's table of places,
+exits, marker positions and cameras is one: it is read where the overworld
+package puts it (`src/overlays/overworld/README.md`), so a patch of
+`WA_MRG.MRG` at `0xFEC800 + 0x11A8` and `0x103B800 + 0x11A8` (before and after
+the coup, 16 records of 66 bytes, `notes/overlays/campaign-map-records.md`)
+changes the map. The FM Editor's Map tab writes those patches
+([tools/pc/fm_editor](../tools/pc/fm_editor/README.md)).
+
 Named patches may address the expanded tail. They are checked against the
 final selected replacement; a shorter replacement still allows patches
 within the original file's byte length. Reads and raw patches at original
