@@ -144,6 +144,11 @@ int Menu_Event(const MenuEvent *event, int *quit);
 /* Enable or disable an item by its backend-independent id. Disabled items
  * are dimmed, cannot be selected with the keyboard and ignore clicks. */
 void Menu_SetItemEnabled(int id, int enabled);
+/* What the platform lacks, dimmed once after Menu_Init: 0 for `windows`
+ * dims Game > Controls... and Mods (second windows), for `window_modes`
+ * Video > Window scale, Fullscreen and Borderless, for `update_check` Help's
+ * update check rows. The SDL backend on Android passes all three 0. */
+void Menu_SetPlatformItems(int windows, int window_modes, int update_check);
 /* Whether the backend runs the OpenGL picture pass (gl_picture.h). Without
  * it, or at console resolution, the Video menu's HD items could show
  * nothing: they are dimmed with the reason beside them. */

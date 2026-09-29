@@ -802,6 +802,26 @@ void Menu_SetItemEnabled(int id, int enabled)
     }
 }
 
+void Menu_SetPlatformItems(int windows, int window_modes, int update_check)
+{
+    int menu, item;
+    for (menu = 0; menu < MENU_COUNT + SUB_COUNT; menu++) {
+        Menu *m = menu < MENU_COUNT ? &menus[menu] : &submenus[menu - MENU_COUNT];
+        for (item = 0; item < m->count; item++) {
+            Item *it = &m->items[item];
+            int keep = 1;
+            if (it->kind == ITEM_ACTION && (it->id == ACT_CONTROLS || it->id == ACT_MODS)) keep = windows;
+            if ((it->kind == ITEM_SUBMENU && it->value == SUB_SCALE) || it->id == MENU_ITEM_FULLSCREEN ||
+                it->id == MENU_ITEM_BORDERLESS)
+                keep = keep && window_modes;
+            if ((it->kind == ITEM_ACTION && it->id == ACT_CHECK_UPDATES) || it->setting == SET_UPDATE_CHECK ||
+                it->setting == SET_UPDATE_PRERELEASES)
+                keep = keep && update_check;
+            if (!keep) it->flags |= ITEM_DISABLED;
+        }
+    }
+}
+
 static int hd_picture;
 
 /* HD text takes effect in the OpenGL pass at Internal 2x and up; the
