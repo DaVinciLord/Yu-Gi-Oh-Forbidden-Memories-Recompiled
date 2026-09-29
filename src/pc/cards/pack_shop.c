@@ -1671,6 +1671,27 @@ int PackShop_Password(void)
     return 1;
 }
 
+/* A pack whose password a card has too: the card is what the digits sell
+ * (Password_LookupCardID first). Said once, with the table loaded. */
+static void check_passwords(void)
+{
+    static int checked;
+    int i, id;
+    if (checked) return;
+    checked = 1;
+    for (i = 0; i < Packs_Count(); i++) {
+        const Pack *pack = Packs_At(i);
+        if (!pack->has_password) continue;
+        for (id = 1; id <= CARD_COUNT; id++) {
+            if ((unsigned)D_801A8000[id].password == pack->password) {
+                Mods_Note(pack->mod, "pack \"%s\": its password is card %d's too; the digits sell the card", pack->id,
+                          id);
+                break;
+            }
+        }
+    }
+}
+
 void PackShop_Enter(void)
 {
     if (!PackShop_Available()) return;
@@ -1678,6 +1699,7 @@ void PackShop_Enter(void)
     s.card_phase = CARD_IDLE;
     own_progress();
     build_art();
+    check_passwords();
     if (rules()->music != 29520) SD_BGMPlay((u32)rules()->music);
     if (rules()->password == PACK_SHOP_PACKS_ONLY) list_open();
 }
@@ -1776,8 +1798,11 @@ void PackShop_State(MemoriesState *state)
                 s.open = 0;
                 return;
             }
-            if (base != (uint32_t)(uintptr_t)s.arena)
+            if (base != (uint32_t)(uintptr_t)s.arena) {
+                LOG(LOG_MODS, "packs: the screen's text moved from %08X to %08X since the state was saved",
+                    (unsigned)base, (unsigned)(uintptr_t)s.arena);
                 Memories_StateRemapRange(state, base, (uint32_t)(uintptr_t)s.arena, ARENA_SIZE);
+            }
             hint_ready = 0;
         }
         return;
