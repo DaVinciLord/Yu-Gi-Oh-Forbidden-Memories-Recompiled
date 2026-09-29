@@ -12,6 +12,7 @@
  * and told so (MEMORIES_ANDROID_LOAD_BIAS): it runs, but its save states
  * cannot be carried to another launch (notes/pc-build.md, "Android"). */
 #ifdef __ANDROID__
+#include "pc/compat/fs.h" /* setenv, as every unit that names a file or a variable */
 #include <android/dlext.h>
 #include <android/log.h>
 #include <dlfcn.h>
@@ -86,6 +87,10 @@ int SDL_main(int argc, char **argv)
     }
     snprintf(line, sizeof(line), "%ld", bias);
     setenv("MEMORIES_ANDROID_LOAD_BIAS", line, 1);
-    return run(argc, argv);
+    /* When the port's main returns (a problem before the game started, as
+     * a desktop program's would), the process ends with it, so the next
+     * launch starts afresh instead of SDL's Java shell finding a finished
+     * main in a live process. The game's own quit ends it with exit too. */
+    exit(run(argc, argv));
 }
 #endif
