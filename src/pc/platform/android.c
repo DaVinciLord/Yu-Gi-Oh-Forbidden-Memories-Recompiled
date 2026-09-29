@@ -3,9 +3,10 @@
  * guest image, the fault handler, the clock and the SDL window (sdl.c).
  *
  * The app is SDL's Java shell (org.libsdl.app.SDLActivity, packaged by
- * tools/pc/package_android.py). It loads libSDL3.so and libmain.so, this
- * game, and calls SDL_main on a thread of its own; SDL_main sets up what an
- * app process differs in and runs the port's main.
+ * tools/pc/package_android.py). It loads libSDL3.so and libmain.so (the
+ * loader, android_loader.c) and calls SDL_main on a thread of its own; that
+ * loads this game, libgame.so, and runs Memories_AndroidMain, which sets up
+ * what an app process differs in and runs the port's main.
  *
  * - The player's folder is the app's external files folder
  *   (/sdcard/Android/data/<package>/files): the disc image goes in its
@@ -15,12 +16,21 @@
  *   are forwarded to the system log (adb logcat -s memories).
  * - No crash monitor process and no restart: both re-execute the program,
  *   and an app process is the zygote's, not a program of its own.
- * - No update check yet, and no desktop OpenGL (platform.h). */
+ * - No update check yet, and no desktop OpenGL (platform.h).
+ * - SDL_main itself is the loader's (android_loader.c, libmain.so), which
+ *   loads this game, libgame.so, at the address it was linked at and calls
+ *   Memories_AndroidMain.
+ * - The build's own files (buildid, commit, symbols/: save states and crash
+ *   reports read them beside the executable) are APK assets under build/,
+ *   unpacked into the app's internal files folder, program/, which becomes
+ *   the program directory (MEMORIES_PROGRAM_DIR, paths.h). */
 #ifdef __ANDROID__
 #include "pc/compat/fs.h"
 #include "platform.h"
+#include "paths.h"
 #include <SDL3/SDL.h>
 #include <android/log.h>
+#include <dirent.h>
 #include <dlfcn.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -117,7 +127,98 @@ static void read_environment(const char *folder)
     fclose(file);
 }
 
-int SDL_main(int argc, char **argv)
+/* An APK asset (a path under assets/) copied to `to`; 1 when it was. */
+static int copy_asset(const char *asset, const char *to)
+{
+    size_t size = 0;
+    void *data = SDL_LoadFile(asset, &size); /* relative: the internal folder, then the assets */
+    char temporary[1100];
+    FILE *file;
+    int written;
+    if (!data) return 0;
+    snprintf(temporary, sizeof(temporary), "%s.tmp", to);
+    written = (file = fopen(temporary, "wb")) != NULL && fwrite(data, 1, size, file) == size;
+    if (file && fclose(file)) written = 0;
+    SDL_free(data);
+    if (!written || rename(temporary, to)) {
+        remove(temporary);
+        return 0;
+    }
+    return 1;
+}
+
+/* The build's files out of the APK into <internal>/program, when this build
+ * has not unpacked them yet (its buildid differs). Symbol tables of earlier
+ * builds stay: a state saved by one of them is carried over by name
+ * (state.c). The asset paths (build/...) are not the unpacked ones, since
+ * SDL looks in the internal folder before the assets. */
+static void unpack_program(void)
+{
+    const char *internal = SDL_GetAndroidInternalStoragePath();
+    char directory[900], path[1100], asset[200], id[32] = "", have[32] = "";
+    size_t size = 0;
+    char *text;
+    FILE *file;
+    int ok;
+    if (!internal || !*internal) return;
+    snprintf(directory, sizeof(directory), "%s/program", internal);
+    if ((text = SDL_LoadFile("build/buildid", &size)) != NULL) {
+        snprintf(id, sizeof(id), "%.*s", (int)(size < sizeof(id) ? size : sizeof(id) - 1), text);
+        id[strcspn(id, "\r\n")] = '\0';
+        SDL_free(text);
+    }
+    snprintf(path, sizeof(path), "%s/buildid", directory);
+    if ((file = fopen(path, "r")) != NULL) {
+        if (fgets(have, sizeof(have), file)) have[strcspn(have, "\r\n")] = '\0';
+        fclose(file);
+    }
+    if (!id[0]) {
+        fprintf(stderr, "memories-pc: the APK has no build/buildid; save states cannot tell builds apart\n");
+    } else if (strcmp(id, have)) {
+        snprintf(path, sizeof(path), "%s/symbols", directory);
+        Paths_MakeDirs(path);
+        snprintf(asset, sizeof(asset), "build/symbols/%s.txt", id);
+        snprintf(path, sizeof(path), "%s/symbols/%s.txt", directory, id);
+        ok = copy_asset(asset, path);
+        snprintf(path, sizeof(path), "%s/commit", directory);
+        copy_asset("build/commit", path);
+        snprintf(path, sizeof(path), "%s/buildid", directory);
+        ok = ok && copy_asset("build/buildid", path); /* last: it marks the rest as there */
+        fprintf(stderr, "memories-pc: build %s %s %s\n", id, ok ? "unpacked into" : "could not be unpacked into",
+                directory);
+    }
+    setenv("MEMORIES_PROGRAM_DIR", directory, 0);
+}
+
+/* The loader could not put the game where it was linked (android_loader.c):
+ * the addresses in a state saved now would not hold in the next launch, nor
+ * those of the states saved before in this one. States then go to a folder
+ * of this launch alone, emptied at the start. */
+static void check_load_bias(void)
+{
+    const char *bias = getenv("MEMORIES_ANDROID_LOAD_BIAS");
+    const char *cache = SDL_GetAndroidCachePath();
+    char directory[900], path[1100];
+    DIR *folder;
+    struct dirent *entry;
+    if (!bias || !strcmp(bias, "0") || !cache) return;
+    snprintf(directory, sizeof(directory), "%s/states-this-launch", cache);
+    if ((folder = opendir(directory)) != NULL) {
+        while ((entry = readdir(folder)) != NULL) {
+            if (entry->d_name[0] == '.') continue;
+            snprintf(path, sizeof(path), "%s/%s", directory, entry->d_name);
+            remove(path);
+        }
+        closedir(folder);
+    }
+    Paths_MakeDirs(directory);
+    setenv("MEMORIES_STATE_DIR", directory, 1);
+    fprintf(stderr, "memories-pc: the game is loaded %s bytes from its link address; save states are kept for "
+                    "this launch only (%s)\n", bias, directory);
+}
+
+/* Called by the loader (android_loader.c) in place of SDL_main. */
+int Memories_AndroidMain(int argc, char **argv)
 {
     static char name[] = "memories-pc";
     char *args[] = {name, NULL};
@@ -131,18 +232,21 @@ int SDL_main(int argc, char **argv)
     } else {
         fprintf(stderr, "memories-pc: no external files folder (%s)\n", SDL_GetError());
     }
+    unpack_program();
+    check_load_bias();
     /* The window is resizable, which SDL takes for "any orientation";
      * the game is a landscape picture. */
     SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
     setenv("MEMORIES_NO_MONITOR", "1", 0);
     setenv("MEMORIES_NO_UPDATE_CHECK", "1", 0);
     {
-        /* Where the system loaded this library: crash addresses minus this
-         * are the offsets llvm-symbolizer and the build's symbols take. */
+        /* Where the game is: its link address when the loader's range held
+         * (load bias 0), so crash addresses are the build's symbols' own. */
         Dl_info info;
-        fprintf(stderr, "memories-pc: Android, user folder %s, libmain.so at %p\n",
+        fprintf(stderr, "memories-pc: Android, user folder %s, libgame.so at %p (load bias %s)\n",
                 getenv("MEMORIES_USER_DIR") ? getenv("MEMORIES_USER_DIR") : "?",
-                dladdr((void *)SDL_main, &info) ? info.dli_fbase : NULL);
+                dladdr((void *)Memories_AndroidMain, &info) ? info.dli_fbase : NULL,
+                getenv("MEMORIES_ANDROID_LOAD_BIAS") ? getenv("MEMORIES_ANDROID_LOAD_BIAS") : "?");
     }
     return main(1, args);
 }
