@@ -508,6 +508,11 @@ static void golden(void)
         length = fread(expected, 1, sizeof(expected) - 1, file);
         expected[length] = 0;
         fclose(file);
+        {   /* A checkout may have given the file CRLF line ends. */
+            size_t from, to = 0;
+            for (from = 0; from < length; from++) if (expected[from] != 13) expected[to++] = expected[from];
+            expected[to] = 0;
+        }
         if (strcmp(expected, out)) {
             fprintf(stderr, "packs: the deals differ from %s; this build deals:\n%s", path, out);
             exit(1);
