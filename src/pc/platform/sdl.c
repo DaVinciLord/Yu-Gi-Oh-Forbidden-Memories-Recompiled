@@ -1531,6 +1531,7 @@ static int software_gl_renderer(void)
                     strstr(name, "Software Rasterizer"));
 }
 
+#ifndef SDL_PLATFORM_ANDROID /* android.c: the picker copies the image into the app */
 typedef struct DiscSelection {
     SDL_AtomicInt done;
     char *path;
@@ -1604,6 +1605,7 @@ int Platform_SelectDisc(char *path, size_t size, char *why, size_t why_size)
     Monitor_Modal(0);
     return selection.result;
 }
+#endif
 
 void Platform_ShowError(const char *title, const char *message)
 {
