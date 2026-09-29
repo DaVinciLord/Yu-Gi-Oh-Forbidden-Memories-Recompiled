@@ -283,7 +283,7 @@ def link_android_loader(build, game):
     if low != ANDROID_GAME_BASE or high - low > ANDROID_GAME_SPAN:
         sys.exit(f"{game}: loads at 0x{low or 0:08X}-0x{high:08X}; the loader reserves "
                  f"0x{ANDROID_GAME_BASE:08X}-0x{ANDROID_GAME_BASE + ANDROID_GAME_SPAN:08X}")
-    run([CC, *ANDROID_FLAGS, "-O2", "-Wall", "-Werror", "-shared", "-o", f"{build}/libmain.so", "-Wl,--no-undefined",
+    run([CC, *ANDROID_FLAGS, "-O2", "-Wall", "-Werror", "-Isrc", "-shared", "-o", f"{build}/libmain.so", "-Wl,--no-undefined",
          "-Wl,-z,noexecstack", f"-DMEMORIES_ANDROID_GAME_BASE=0x{ANDROID_GAME_BASE:08X}u",
          f"-DMEMORIES_ANDROID_GAME_SPAN=0x{ANDROID_GAME_SPAN:08X}u", ANDROID_LOADER, "-llog", "-ldl"])
 
