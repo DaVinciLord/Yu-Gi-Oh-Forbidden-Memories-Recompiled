@@ -20,7 +20,7 @@ fixed game sections (save states across rebuilds) are not available; the
 section renames edit the COFF headers directly (rename_coff_sections) and
 __start_/__stop_ come from grouped marker sections; overrides win by link order instead of weakened symbols.
 
-On Android (--target android-x86; android-armeabi-v7a is not ready yet) the
+On Android (--target android-x86, android-armeabi-v7a: 32-bit ARM, A32) the
 toolchain is the NDK's clang and LLVM tools, and the libraries come from
 tools/pc/build_android_deps.py. The game is a position-independent shared
 object, libmain.so, which SDL's Java shell loads and whose SDL_main
@@ -662,8 +662,8 @@ def main():
     parser.add_argument("--backend", choices=list(BACKENDS), default=os.environ.get("MEMORIES_BACKEND") or
                         "sdl")
     parser.add_argument("--target", default=TARGET,
-                        help="linux, windows, or android-<abi>: android-x86 (the emulator); android-armeabi-v7a "
-                             "is refused until the ARM pieces exist (notes/pc-build.md, \"Android\")")
+                        help="linux, windows, or android-<abi>: android-x86 (the emulator) or android-armeabi-v7a "
+                             "(32-bit ARM phones; notes/pc-build.md, \"Android\")")
     parser.add_argument("--release", action="store_true",
                         help="Windows GUI executable; omit the optional disc-derived executable icon")
     # A Windows build made on Linux gets a directory of its own, so both

@@ -29,11 +29,15 @@ API = 24
 TRIPLES = {"x86": "i686-linux-android", "armeabi-v7a": "armv7a-linux-androideabi"}
 # The ABIs the game builds for, with their own compiler flags: the indirect
 # branch thunks (src/pc/guest/branch_thunks.c) and the rest. x86 reuses every
-# i386 piece of the desktop port.
-READY = {"x86": {"thunks": ["-mretpoline-external-thunk"], "flags": ["-fsigned-char"]}}
+# i386 piece of the desktop port. armeabi-v7a is A32 code (-marm: the ARM
+# fault handler decodes A32 only), with clang's -mharden-sls=blr thunks as
+# the indirect-branch thunks, and no indirect tail calls or jump tables,
+# which those would miss (src/pc/guest/branch_thunks.c).
+READY = {"x86": {"thunks": ["-mretpoline-external-thunk"], "flags": ["-fsigned-char"]},
+         "armeabi-v7a": {"thunks": ["-mharden-sls=blr", "-fno-optimize-sibling-calls", "-fno-jump-tables"],
+                         "flags": ["-fsigned-char", "-marm"]}}
 # What an ABI still needs before it builds (notes/pc-build.md, "Android").
-NOT_READY = {"armeabi-v7a": "not yet: needs the ARM branch thunks (-mharden-sls=blr), the ARM fault handler, "
-                            "setjmp and the stack switch in ARM assembly (milestone M2)"}
+NOT_READY = {}
 
 
 def ndk():
