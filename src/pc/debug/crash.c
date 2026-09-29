@@ -20,7 +20,7 @@
 #ifdef _WIN32
 #include "pc/platform/win32.h"
 #else
-#include <ucontext.h>
+#include "pc/platform/signal_context.h"
 #endif
 
 #define GAME_STACK_LOW 0xB0000000u /* state.c, on every system */
@@ -213,8 +213,8 @@ void Crash_HandleSignal(int number, siginfo_t *info, void *context)
     struct sigaction action;
     if (reporting++) _exit(128 + number);
     report_fatal("signal", (unsigned long)number, info ? (uintptr_t)info->si_addr : 0,
-                 (uintptr_t)user->uc_mcontext.gregs[REG_EIP], (uintptr_t)user->uc_mcontext.gregs[REG_ESP],
-                 (uintptr_t)user->uc_mcontext.gregs[REG_EBP]);
+                 (uintptr_t)SIGNAL_CONTEXT_PC(user), (uintptr_t)SIGNAL_CONTEXT_SP(user),
+                 (uintptr_t)SIGNAL_CONTEXT_FP(user));
     memset(&action, 0, sizeof(action));
     action.sa_handler = SIG_DFL;
     sigemptyset(&action.sa_mask);
@@ -297,9 +297,9 @@ void Crash_ReportHang(void *context_pointer)
     Win32_ContextRegisters(context_pointer, &eip, &esp, &ebp);
 #else
     ucontext_t *user = context_pointer;
-    eip = (uintptr_t)user->uc_mcontext.gregs[REG_EIP];
-    esp = (uintptr_t)user->uc_mcontext.gregs[REG_ESP];
-    ebp = (uintptr_t)user->uc_mcontext.gregs[REG_EBP];
+    eip = (uintptr_t)SIGNAL_CONTEXT_PC(user);
+    esp = (uintptr_t)SIGNAL_CONTEXT_SP(user);
+    ebp = (uintptr_t)SIGNAL_CONTEXT_FP(user);
 #endif
     report_fd = -1;
     snprintf(path, sizeof(path), "%s/hang-%ld.txt", Crash_ReportDir, (long)getpid());
