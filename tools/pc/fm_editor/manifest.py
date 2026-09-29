@@ -954,7 +954,7 @@ def read_starter(project: Project, value, messages: list):
             continue
         if not deck.complete():
             # Kept anyway: the editor is where a deck is put together, and the
-            # Problems tab says what is still wrong with it.
+            # Conflicts tab says what is still wrong with it.
             messages.append(f"{where}: a starter deck is {DECK_SIZE} cards, and this one has {deck.total()}; "
                             "the port leaves it out until it is")
         project.starter.append(deck)

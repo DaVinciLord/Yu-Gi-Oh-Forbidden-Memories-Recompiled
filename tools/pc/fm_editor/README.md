@@ -30,7 +30,7 @@ The window has a tab per table:
 | Duelists | per opponent, the deck pool and the S/A-POW, B/C/D and S/A-TEC drop pools: weights, their chance, the retail weight, and the total against 2048 (**Normalize** scales a pool back to 2048 the way the port does). The deck is either the **Weighted deck (retail)** or a **Fixed deck (40 cards)**: forty specific cards by their copies, counted against 40, each beside its weighted chance; **Copy the weighted deck's most likely 40**, **Clear**, **Revert to retail** |
 | Starter decks | the decks a new game may be dealt in place of the disc's weighted pools: a deck's name, its weight against the other decks offered, and its cards by their copies, counted against the forty a deck holds |
 | Mod info | id, name, version, author, description, `settings`, and the other `mod.json` keys, kept as written |
-| Problems | the loader's checks; double-click a line to go to it |
+| Conflicts | the loader's checks; double-click a line to go to it |
 
 **File > Save** writes the mod folder (Ctrl+S); the first save asks where
 (an empty folder, or a parent where a folder named after the mod id is
@@ -126,7 +126,7 @@ record are shown as retail fusions and marked.
 * `passwords`: a retail card whose password changed gets `{"password": "…"}`
   (`""` for none) under its name, merged into the mod's own entries, whose
   `starchips`, `all` and `"card number"` stay as written. A password is up to
-  8 digits, and no other card's: the Problems tab says when two cards share
+  8 digits, and no other card's: the Conflicts tab says when two cards share
   one, since the Password screen then gives the lower card number.
 * `fusions`: one rule per pair whose result changed (`"result": null` for a
   fusion taken away). An added card fuses as its base until a rule names it,
@@ -148,7 +148,7 @@ record are shown as retail fusions and marked.
   limit does not apply to cards written down), and they add up to exactly 40;
   a card the port cannot name is left out uncounted, so a deck naming one, or
   one that is not 40, is left out and the weighted deck is dealt. The
-  Problems tab says so before saving, and warns when one duelist has two
+  Conflicts tab says so before saving, and warns when one duelist has two
   entries (the port deals the later) or weighted edits a fixed deck hides.
   Choosing **Fixed deck** starts from the forty the weighted deck most likely
   deals: its weights apportioned to 40 cards (largest remainder, ties to the
@@ -167,7 +167,7 @@ record are shown as retail fusions and marked.
   ([the starter deck](../../../notes/starter-deck.md)), each written down as
   its cards and their copies rather than as weights — which is what lets one
   hold a card the mod adds. One deck is written as the object itself, several
-  as a list. A deck is exactly 40 cards, and the Problems tab says so while it
+  as a list. A deck is exactly 40 cards, and the Conflicts tab says so while it
   is not; more than three copies of a card, or more than one Exodia piece, is
   dealt as written but is a warning, because Build Deck will not take it back.
   A card the editor cannot place keeps its row and its copies, under the name

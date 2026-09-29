@@ -8,7 +8,7 @@ from tkinter import filedialog, messagebox, ttk
 from . import disc, gamedata, manifest, settings, theme, validate
 from .model import KEY_RE, Project
 from .art_tab import ArtTab
-from .tabs import (CardsTab, DuelistsTab, EquipsTab, FusionsTab, ModInfoTab, ProblemsTab, RitualsTab,
+from .tabs import (CardsTab, DuelistsTab, EquipsTab, FusionsTab, ModInfoTab, ConflictsTab, RitualsTab,
                    StarterTab)
 from .widgets import px
 
@@ -43,9 +43,9 @@ class App(tk.Tk):
         self.duelists = DuelistsTab(self.notebook, self)
         self.starter = StarterTab(self.notebook, self)
         self.info = ModInfoTab(self.notebook, self)
-        self.problems = ProblemsTab(self.notebook, self)
+        self.conflicts = ConflictsTab(self.notebook, self)
         self.tabs = [self.cards, self.art, self.fusions, self.equips, self.rituals, self.duelists, self.starter,
-                     self.info, self.problems]
+                     self.info, self.conflicts]
         self.status = ttk.Label(self, relief="sunken", anchor="w", padding=(6, 2))
         self.status.pack(fill="x", side="bottom")
         if self.dark.get():
@@ -81,7 +81,7 @@ class App(tk.Tk):
         self.file_menu.add_command(label="Exit", command=self.quit_app)
         bar.add_cascade(label="File", menu=self.file_menu)
         tools = tk.Menu(bar, tearoff=False)
-        tools.add_command(label="Check the mod", command=self.show_problems)
+        tools.add_command(label="Check the mod", command=self.show_conflicts)
         tools.add_command(label="Preview mod.json", command=lambda: self.info.preview())
         tools.add_command(label="Card text preview", command=self.show_text_preview)
         bar.add_cascade(label="Tools", menu=tools)
@@ -214,7 +214,7 @@ class App(tk.Tk):
         current = self.notebook.nametowidget(self.notebook.select())
         # Other tabs may have changed what this one shows (a card's name or
         # type): fill it again, keeping its selection.
-        if current is self.problems:
+        if current is self.conflicts:
             current.run()
         elif current is self.equips:
             current.fill_equips()
@@ -287,10 +287,10 @@ class App(tk.Tk):
         issues = validate.validate(self.project)
         errors = validate.errors(issues)
         if errors:
-            self.problems.run()
-            self.notebook.select(self.problems)
+            self.conflicts.run()
+            self.notebook.select(self.conflicts)
             if not messagebox.askyesno(APP_TITLE, f"The loader would refuse {len(errors)} thing(s) in this mod "
-                                       f"(see Problems), for example:\n\n{errors[0]}\n\nSave anyway?",
+                                       f"(see Conflicts), for example:\n\n{errors[0]}\n\nSave anyway?",
                                        icon="warning", default="no", parent=self):
                 return False
         folder = self.project.source_dir
@@ -326,9 +326,9 @@ class App(tk.Tk):
         self.say(f"Saved {path}. Enable it in the game under Game > Mods and restart the game.")
         return True
 
-    def show_problems(self):
-        self.notebook.select(self.problems)
-        self.problems.run()
+    def show_conflicts(self):
+        self.notebook.select(self.conflicts)
+        self.conflicts.run()
 
     def go_to(self, issue):
         target = issue.target
