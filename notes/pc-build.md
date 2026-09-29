@@ -94,6 +94,9 @@ How it works:
 - The driver reads symbol addresses from `tmp/project-build/SLUS_014.11.elf`
   and writes a linker script pinning every data symbol that game C leaves
   undefined or tentative (`-fcommon`) to its retail address: 612 symbols.
+  The pins are `HIDDEN(name = address)`: in a shared object (the Android
+  build's `libmain.so`) bionic adds the load bias to a default-visibility
+  absolute symbol; a hidden one is resolved at link time.
   Initialized data defined in C stays in host `.data`, which keeps function
   pointers in C tables native.
 - Guest-image tables do hold MIPS function addresses (the text opcode
