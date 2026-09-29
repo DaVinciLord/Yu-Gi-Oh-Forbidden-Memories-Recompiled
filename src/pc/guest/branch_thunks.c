@@ -77,7 +77,17 @@ __asm__(".text\n"
          * eax, ecx, edx. */
         ".p2align 4\n"
         "memories_branch_resolve:\n"
+#if defined(__PIC__) && defined(__ELF__)
+        /* Position-independent (Android's shared object): the resolver's
+         * address from the GOT; the flags are saved already. */
+        "    call 3f\n"
+        "3:  popl %ecx\n"
+        "    addl $_GLOBAL_OFFSET_TABLE_+(.-3b), %ecx\n"
+        "    movl " SYMBOL(Memories_GuestBranchResolver) "@GOT(%ecx), %ecx\n"
+        "    movl (%ecx), %ecx\n"
+#else
         "    movl " SYMBOL(Memories_GuestBranchResolver) ", %ecx\n"
+#endif
         "    testl %ecx, %ecx\n"
         "    jz 2f\n"
         "    andl $-16, %esp\n"
