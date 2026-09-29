@@ -30,6 +30,8 @@
 #include "pc/debug/hud.h"
 #include "pc/guest/state.h"
 #include "save_icon.h"
+#include "touch_pad.h"
+#include "touch_pad_art.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_opengl.h>
 #include "pc/render/gl_picture.h"
@@ -70,6 +72,11 @@ static volatile uint16_t scripted_bits2, scripted_bits, mouse_bits;
 static uint16_t wheel_bits;
 static int wheel_frames;
 static volatile uint16_t wheel_now;
+/* The on-screen controller's bits (touch_pad.h), and whether the mouse
+ * button SDL made of a touch went down on the pad (its events are the pad's
+ * until it comes up). */
+static volatile uint16_t touch_bits;
+static int touch_mouse_on_pad;
 static int pointer_x, pointer_y, pointer_inside, cursor_hidden;
 static unsigned last_pointer_motion, current_frame;
 static int focus_clock_rate = 100, focus_paused;
@@ -858,6 +865,7 @@ static void relayout(void)
     if (area_h < 1) area_h = 1;
     layout.win_w = window_w;
     layout.win_h = window_h;
+    if (TouchPad_Layout(window_w, window_h, menu)) menu_dirty = 1;
     layout.pixel_x = (float)output_w / (float)window_w;
     layout.pixel_y = (float)output_h / (float)window_h;
     if (window_w != logged_window_w || window_h != logged_window_h ||
@@ -1065,8 +1073,9 @@ static void gl_quad(GLuint texture, float x, float y, float w, float h)
 
 static void draw_overlay(int *x, int *y, int *w, int *h)
 {
-    int hx, hy, hw, hh;
+    int hx, hy, hw, hh, tx, ty, tw, th;
     FusionHelper_Viewport((int)layout.dst.x, (int)layout.dst.y, (int)layout.dst.w, (int)layout.dst.h);
+    TouchPadArt_Draw(&canvas, &tx, &ty, &tw, &th); /* under the menu and the HUD */
     if (Settings_Get(SET_SHOW_HUD) == 2 || Menu_IsOpen()) {
         Hud_Draw(&canvas);
         Menu_Draw(&canvas); /* dropdowns stay above the full statistics panel */
@@ -1076,6 +1085,16 @@ static void draw_overlay(int *x, int *y, int *w, int *h)
     }
     Menu_Bounds(x, y, w, h);
     Hud_Bounds(&hx, &hy, &hw, &hh);
+    if (tw && th) {
+        if (!hw || !hh) { hx = tx; hy = ty; hw = tw; hh = th; }
+        else {
+            int x1 = hx + hw > tx + tw ? hx + hw : tx + tw, y1 = hy + hh > ty + th ? hy + hh : ty + th;
+            hx = hx < tx ? hx : tx;
+            hy = hy < ty ? hy : ty;
+            hw = x1 - hx;
+            hh = y1 - hy;
+        }
+    }
     if (!*w || !*h) { *x = hx; *y = hy; *w = hw; *h = hh; return; }
     if (hw && hh) {
         int x1 = *x + *w > hx + hw ? *x + *w : hx + hw;
@@ -1333,6 +1352,38 @@ static void pump(void)
         MenuEvent menu_event;
         translate(&event, &menu_event);
         if(event.type==SDL_EVENT_KEYMAP_CHANGED){controls_key_labels();continue;}
+        if (event.type == SDL_EVENT_FINGER_DOWN || event.type == SDL_EVENT_FINGER_MOTION ||
+            event.type == SDL_EVENT_FINGER_UP || event.type == SDL_EVENT_FINGER_CANCELED) {
+            int kind = event.type == SDL_EVENT_FINGER_DOWN     ? TOUCH_FINGER_DOWN
+                       : event.type == SDL_EVENT_FINGER_MOTION ? TOUCH_FINGER_MOVE
+                                                               : TOUCH_FINGER_UP;
+            int fx = (int)(event.tfinger.x * (float)layout.win_w), fy = (int)(event.tfinger.y * (float)layout.win_h);
+            if (SDL_GetWindowFromEvent(&event) == window &&
+                TouchPad_Finger(kind, (uint64_t)event.tfinger.fingerID, fx, fy))
+                menu_dirty = 1;
+            if (kind != TOUCH_FINGER_MOVE)
+                LOG(LOG_INPUT, "finger %d %s at %d,%d: touch pad %s", (int)event.tfinger.fingerID,
+                    kind == TOUCH_FINGER_DOWN ? "down" : "up", fx, fy, TouchPad_Shown() ? "shown" : "hidden");
+            continue;
+        }
+        /* The mouse events SDL makes of a touch: on the pad they are the
+         * pad's, not the menu's (from the button going down to it coming
+         * up, and a hover over it). */
+        if ((event.type == SDL_EVENT_MOUSE_BUTTON_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_UP) &&
+            event.button.which == SDL_TOUCH_MOUSEID) {
+            int on_pad = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN
+                             ? (touch_mouse_on_pad = TouchPad_Covers((int)event.button.x, (int)event.button.y))
+                             : touch_mouse_on_pad;
+            if (event.type == SDL_EVENT_MOUSE_BUTTON_UP) touch_mouse_on_pad = 0;
+            if (on_pad) continue;
+        }
+        if (event.type == SDL_EVENT_MOUSE_MOTION && event.motion.which == SDL_TOUCH_MOUSEID &&
+            (touch_mouse_on_pad || TouchPad_Covers((int)event.motion.x, (int)event.motion.y)))
+            continue;
+        /* A key or a controller's button: Automatic hides the pad again. */
+        if (((event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat && event.key.key != SDLK_AC_BACK) ||
+             event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) && TouchPad_OtherInput())
+            menu_dirty = 1;
         if(event.type==SDL_EVENT_GAMEPAD_ADDED){open_gamepad(event.gdevice.which);continue;}
         if(event.type==SDL_EVENT_GAMEPAD_REMOVED){close_gamepad(event.gdevice.which);continue;}
         /* Every release, before a menu can take it: else a held action
@@ -1484,11 +1535,13 @@ static void pump(void)
     }
     if (mods_window && mods_dirty) draw_mods();
     mods_dirty = 0;
+    if (TouchPad_SetMode(Settings_Get(SET_TOUCH_PAD))) menu_dirty = 1;
+    touch_bits = TouchPad_Update();
     Gamepad_Poll(current_frame);
     if (HostActions_Run(&quit)) menu_dirty = 1;
     /* A notice answers a controller and keeps the game's input at rest. */
     ControlsRuntime_Hold(Menu_NoticeShown());
-    if (Menu_NoticePad(ControlsRuntime_TakePadPresses(), &quit)) menu_dirty = 1;
+    if (Menu_NoticePad(ControlsRuntime_TakePadPresses() | TouchPad_TakePresses(), &quit)) menu_dirty = 1;
     if(controls_window) {
         static uint64_t last_draw;
         ControlsWindow_Tick();
@@ -1862,13 +1915,13 @@ void Platform_PumpEvents(void)
 
 uint16_t Platform_Pad(int port)
 {
-    return port == 0 ? (uint16_t)(ControlsRuntime_Keyboard() | (ControlsRuntime_Blocked()?0:(mouse_bits | wheel_now)) | scripted_bits | Gamepad_Bits(0))
+    return port == 0 ? (uint16_t)(ControlsRuntime_Keyboard() | (ControlsRuntime_Blocked()?0:(mouse_bits | wheel_now | touch_bits)) | scripted_bits | Gamepad_Bits(0))
                      : (uint16_t)(Gamepad_Bits(1) | scripted_bits2);
 }
 
 uint16_t Platform_PadFixedBits(int port)
 {
-    return port == 0 ? (uint16_t)((ControlsRuntime_Blocked()?0:(mouse_bits | wheel_now)) | scripted_bits) : scripted_bits2;
+    return port == 0 ? (uint16_t)((ControlsRuntime_Blocked()?0:(mouse_bits | wheel_now | touch_bits)) | scripted_bits) : scripted_bits2;
 }
 
 int Platform_PadConnected(int port) { return port == 0 || Gamepad_Connected(port) || Platform_ScriptedPad2(); }
