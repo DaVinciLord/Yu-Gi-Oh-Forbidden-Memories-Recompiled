@@ -106,7 +106,7 @@ typedef struct {
 typedef struct { const char *label; Item items[20]; int count; int x, w; } Menu;
 
 enum { MENU_FILE, MENU_VIDEO, MENU_AUDIO, MENU_GAME, MENU_VIEW, MENU_DEBUG, MENU_HELP, MENU_COUNT };
-enum { SUB_SCALE, SUB_MENU_SIZE, SUB_SPEED, SUB_FPS, SUB_CHEATS, SUB_TRACE, SUB_SCALING, SUB_ASPECT, SUB_RESOLUTION, SUB_COLOR, SUB_EFFECTS, SUB_JUMP, SUB_ANTIALIAS, SUB_FILTER, SUB_RANK, SUB_LANGUAGE, SUB_COUNT };
+enum { SUB_SCALE, SUB_MENU_SIZE, SUB_SPEED, SUB_FPS, SUB_CHEATS, SUB_TRACE, SUB_SCALING, SUB_ASPECT, SUB_RESOLUTION, SUB_COLOR, SUB_EFFECTS, SUB_JUMP, SUB_ANTIALIAS, SUB_FILTER, SUB_RANK, SUB_LANGUAGE, SUB_TOUCH, SUB_COUNT };
 static Menu menus[MENU_COUNT] = {
     {"File", {{"Save state", "F5", ITEM_ACTION, ACT_SAVE_STATE, -1},
               {"Load state", "F7", ITEM_ACTION, ACT_LOAD_STATE, -1},
@@ -158,7 +158,8 @@ static Menu menus[MENU_COUNT] = {
               {"Free Duel progress", 0, ITEM_CHECK, 0, SET_FREE_DUEL_PROGRESS},
               {"Duel rank", 0, ITEM_SUBMENU, 0, -1, SUB_RANK},
               {"Opponent's name for COM", 0, ITEM_CHECK, MENU_ITEM_OPPONENT_NAME, SET_OPPONENT_NAME, 0, ITEM_GROUP_BREAK},
-              {"Japanese buttons (Circle confirms)", 0, ITEM_CHECK, 0, SET_JP_BUTTONS}}, 7},
+              {"Japanese buttons (Circle confirms)", 0, ITEM_CHECK, 0, SET_JP_BUTTONS},
+              {"Touch controls", 0, ITEM_SUBMENU, 0, -1, SUB_TOUCH}}, 8},
     {"Debug", {{"Jump to", 0, ITEM_SUBMENU, 0, -1, SUB_JUMP},
                {"Show HUD", "F3", ITEM_CHECK, CHECK_HUD, -1, 0, ITEM_GROUP_BREAK},
                {"Full stats", 0, ITEM_CHECK, CHECK_HUD_FULL, -1},
@@ -257,6 +258,10 @@ static Menu submenus[SUB_COUNT] = {
                   {"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_DE},
                   {"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_IT},
                   {"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_ES}}, 6},
+    /* The on-screen controller for touch screens (touch_pad.h). */
+    {"Touch controls", {{"Automatic (after a touch)", 0, ITEM_RADIO, 0, SET_TOUCH_PAD, 0},
+                        {"Show", 0, ITEM_RADIO, 0, SET_TOUCH_PAD, 1},
+                        {"Hide", 0, ITEM_RADIO, 0, SET_TOUCH_PAD, 2}}, 3},
 };
 
 static int open_menu = -1, hot_item = -1, hover_bar = -1, grabbed, ready, visible = 1;
