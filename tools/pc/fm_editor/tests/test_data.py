@@ -6,6 +6,7 @@ mod.json, reading it back, and the port's pool arithmetic.
 import json
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from fm_editor import disc, gamedata as g, manifest, pools, validate
@@ -217,6 +218,47 @@ class ManifestTest(unittest.TestCase):
             (game / "SLUS_014.11").write_bytes(b"x")
             with self.assertRaises(ValueError):
                 manifest.save_mod(opened, game)
+
+    def test_save_as_inside_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "original"
+            p = Project(self.retail)
+            manifest.save_mod(p, source)
+            (source / "text.txt").write_bytes(b"source text")
+            destination = source / "copies" / "second"
+            destination.mkdir(parents=True)
+            (destination / "destination-only.txt").write_bytes(b"keep")
+            copy_file = manifest.shutil.copy2
+
+            def bounded_copy(item, target):
+                # Fail promptly on the old recursive copy, without filling
+                # the temporary folder to the OS's path-length limit.
+                self.assertLess(len(target.relative_to(source).parts), 8)
+                return copy_file(item, target)
+
+            with mock.patch.object(manifest.shutil, "copy2", side_effect=bounded_copy):
+                manifest.save_mod(p, destination)
+            self.assertEqual((destination / "text.txt").read_bytes(), b"source text")
+            self.assertEqual((destination / "destination-only.txt").read_bytes(), b"keep")
+            self.assertFalse((destination / "copies").exists())
+            self.assertEqual(p.source_dir, destination)
+
+    def test_save_as_replaces_assets_with_source_versions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source, destination = Path(tmp) / "source", Path(tmp) / "destination"
+            p = Project(self.retail)
+            p.other["text"] = "text.txt"
+            manifest.save_mod(p, source)
+            (source / "text.txt").write_bytes(b"new text")
+            destination.mkdir()
+            (destination / "mod.json").write_text('{"id":"old"}')
+            (destination / "text.txt").write_bytes(b"old text")
+            manifest.save_mod(p, destination)
+            self.assertEqual((destination / "text.txt").read_bytes(), b"new text")
+            self.assertEqual((source / "text.txt").read_bytes(), b"new text")
+            # Saving in place must not try to copy an asset onto itself.
+            manifest.save_mod(p, destination)
+            self.assertEqual((destination / "text.txt").read_bytes(), b"new text")
 
     def test_reads_what_people_write(self):
         p = Project(self.retail)

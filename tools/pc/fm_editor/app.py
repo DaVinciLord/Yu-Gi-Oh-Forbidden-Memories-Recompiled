@@ -311,7 +311,8 @@ class App(tk.Tk):
                 chosen = chosen / self.project.info.id
             folder = chosen
             if (folder / "mod.json").exists() and folder != self.project.source_dir:
-                if not messagebox.askyesno(APP_TITLE, f"{folder} already holds a mod. Replace its mod.json?",
+                if not messagebox.askyesno(APP_TITLE, f"{folder} already holds a mod. Replace its mod.json "
+                                           "and matching asset files?",
                                            parent=self):
                     return False
         try:

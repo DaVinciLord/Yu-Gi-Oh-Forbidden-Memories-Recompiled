@@ -55,8 +55,14 @@ class CardTextPreview(tk.Toplevel):
         self.refresh()
 
     def close(self):
-        self.app.text_preview = None
         self.destroy()
+
+    def destroy(self):
+        if self.pending is not None:
+            self.after_cancel(self.pending)
+            self.pending = None
+        self.app.text_preview = None
+        super().destroy()
 
     def choose_font(self):
         path = filedialog.askopenfilename(parent=self, title="A TrueType font file (your own copy; never saved in the mod)",
@@ -90,6 +96,8 @@ class CardTextPreview(tk.Toplevel):
         return cards.text.get("1.0", "end-1c")
 
     def refresh(self):
+        if self.pending is not None:
+            self.after_cancel(self.pending)
         self.pending = None
         files = self.app.files
         text = self.text()

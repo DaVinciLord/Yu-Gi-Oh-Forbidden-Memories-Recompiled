@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import re
 import shutil
 from pathlib import Path
@@ -1035,10 +1036,16 @@ def save_mod(project: Project, folder, manifest: dict = None) -> Path:
     folder.mkdir(parents=True, exist_ok=True)
     source = project.source_dir
     if source and Path(source).resolve() != folder.resolve() and Path(source).is_dir():
-        for item in Path(source).rglob("*"):
-            if item.is_file() and item.name != "mod.json":
-                target = folder / item.relative_to(source)
-                if not target.exists():
+        destination = folder.resolve()
+        for directory, subdirs, files in os.walk(source):
+            directory = Path(directory)
+            # Save As may put the new mod inside the old one. Never walk
+            # into the destination, including files a previous save left.
+            subdirs[:] = [name for name in subdirs if (directory / name).resolve() != destination]
+            for name in files:
+                item = directory / name
+                if item.is_file() and item.name != "mod.json":
+                    target = folder / item.relative_to(source)
                     target.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(item, target)
     for name, blob in project.files.items():
