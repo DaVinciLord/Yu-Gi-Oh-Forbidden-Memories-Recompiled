@@ -86,7 +86,7 @@ class GuiTest(unittest.TestCase):
         app.duelists.weight.set("0")
         app.duelists.set_weight()
         self.assertNotIn(int(first), app.project.pools[2]["pow"])
-        issues = app.problems.run()
+        issues = app.conflicts.run()
         self.assertTrue(any("add up to" in i.message for i in issues))
         app.duelists.normalize()
         self.assertEqual(sum(app.project.pools[2]["pow"].values()), 2048)

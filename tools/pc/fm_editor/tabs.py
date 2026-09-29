@@ -1,5 +1,5 @@
 """The editor's tabs: Cards, Fusions, Equips, Rituals, Duelists, Mod info
-and Problems. Each works on app.project and calls app.changed() after an
+and Conflicts. Each works on app.project and calls app.changed() after an
 edit."""
 from __future__ import annotations
 
@@ -1247,11 +1247,11 @@ class ModInfoTab(Tab):
             show_text(self, "mod.json preview", manifest.dumps(manifest.build(self.project)))
 
 
-# --- Problems -------------------------------------------------------------------
+# --- Conflicts ------------------------------------------------------------------
 
-class ProblemsTab(Tab):
+class ConflictsTab(Tab):
     def __init__(self, notebook, app):
-        super().__init__(notebook, app, "Problems")
+        super().__init__(notebook, app, "Conflicts")
         top = ttk.Frame(self)
         top.pack(fill="x")
         ttk.Button(top, text="Check now", command=self.run).pack(side="left")
@@ -1259,7 +1259,7 @@ class ProblemsTab(Tab):
         self.summary.pack(side="left", padx=8)
         ttk.Label(top, text="Double-click a line to go to it.", style="Hint.TLabel").pack(side="right")
         frame, self.tree = scrolled_tree(self, [("level", "Level"), ("area", "Where"), ("what", "What"),
-                                                ("message", "Problem")], [70, 90, 260, 560], 26)
+                                                ("message", "Conflict")], [70, 90, 260, 560], 26)
         frame.pack(fill="both", expand=True, pady=4)
         self.tree.bind("<Double-1>", lambda e: self.go())
         self.issues = []
