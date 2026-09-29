@@ -203,7 +203,9 @@ mod add up. The extracted images themselves are the game's, so a pack
 ships painted images or a way to make them from the player's own disc,
 never the originals. The FM Editor's Art tab
 ([tools/pc/fm_editor](../tools/pc/fm_editor/README.md)) writes such a pack
-for card pictures and thumbnails, a PNG at a time.
+for card pictures and thumbnails, a PNG at a time, and its Map tab for the
+campaign map's sprites (the marker, the arrows, the name panel) and the
+textures of its terrain.
 
 A pack image does not need the extracted image's shape either: it is
 stretched to the texture's width and rows (the crop's width, below), so a

@@ -13,7 +13,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from . import campaign_map as cm
-from . import pngio
+from . import map_art, pngio
 from .tabs import Tab
 from .widgets import px, scrolled_tree
 
@@ -62,6 +62,7 @@ class MapTab(Tab):
         ttk.Radiobutton(top, text="Screen", value="screen", variable=self.view, command=self.draw).pack(side="left")
         ttk.Radiobutton(top, text="Overview", value="overview", variable=self.view,
                         command=self.draw).pack(side="left", padx=6)
+        ttk.Button(top, text="Pictures...", command=self.show_pictures).pack(side="right", padx=(4, 0))
         ttk.Button(top, text="Reference picture...", command=self.choose_reference).pack(side="right")
         self.package = tk.StringVar(value=cm.PACKAGE_LABELS["before"])
         ttk.Combobox(top, textvariable=self.package, state="readonly", width=16,
@@ -176,6 +177,8 @@ class MapTab(Tab):
 
     def refresh(self):
         self.backgrounds = {}
+        if getattr(self, "pictures", None) is not None:
+            self.pictures.refresh()
         self.fill_list()
         state = "normal" if self.project is not None and cm.available(self.project) else "disabled"
         self.set_enabled(state == "normal")
@@ -406,7 +409,20 @@ class MapTab(Tab):
         if found is None:
             return None
         image, left, top = found
-        return self.image(key, lambda: photo(self, image, ZOOM)), left, top
+        return self.image((key, self.version()), lambda: photo(self, image, ZOOM)), left, top
+
+    def version(self):
+        return map_art.state(self.project).version
+
+    def strips(self):
+        return {p: image for p in map_art.STRIP_PALETTES
+                if (image := map_art.strip_override(self.project, p)) is not None}
+
+    def package_name(self):
+        return next(name for name, sector in cm.PACKAGES if sector == self.package_sector())
+
+    def overrides(self):
+        return map_art.texture_overrides(self.project, self.package_name())
 
     def camera(self, index):
         loc = self.map.locations[index]
@@ -439,14 +455,18 @@ class MapTab(Tab):
         if files is None:
             return None
         sector = self.package_sector()
-        picture = self.picture(("view", sector, camera, index < cm.TOWN_FIRST), lambda: map_view.render(
-            map_view.model(files.wa, sector), camera, spotlight=index < cm.TOWN_FIRST))
+        picture = self.picture(("view", sector, camera, index < cm.TOWN_FIRST, self.version()),
+                               lambda: map_view.render(map_view.model(files.wa, sector), camera,
+                                                       spotlight=index < cm.TOWN_FIRST, overrides=self.overrides()))
         if picture is None:
             return None
         return picture, f"drawn from the disc's map model, {self.package.get()}"
 
     def draw(self):
         self.canvas.delete("all")
+        if self.project is not None and getattr(self, "drawn_version", None) != (id(self.project), self.version()):
+            self.photos.clear()         # the pictures of another mod, or before an import
+            self.drawn_version = (id(self.project), self.version())
         if self.project is None or not cm.available(self.project):
             return
         if self.view.get() == "overview":
@@ -470,7 +490,8 @@ class MapTab(Tab):
                 self.canvas.create_line(x, 0, x, CANVAS[1], fill="#1c2430")
             for y in range(0, CANVAS[1], 40):
                 self.canvas.create_line(0, y, CANVAS[0], y, fill="#1c2430")
-        panel = self.sprite("panel", cm.sprite_image(data, *cm.PANEL))
+        strips = self.strips()
+        panel = self.sprite("panel", cm.sprite_image(data, *cm.PANEL, strips))
         if panel:
             self.canvas.create_image((cm.PANEL_AT[0] + panel[1]) * ZOOM, (cm.PANEL_AT[1] + panel[2]) * ZOOM,
                                      anchor="nw", image=panel[0])
@@ -488,8 +509,8 @@ class MapTab(Tab):
         for n, e in enumerate(loc.exits):
             if not e.used:
                 continue
-            arrow = self.sprite(("arrow", e.arrow), cm.arrow_image(data, e.arrow)) if e.arrow < 8 else None
-            tag = ("exit", f"exit{n}")
+            arrow = self.sprite(("arrow", e.arrow), cm.arrow_image(data, e.arrow, strips)) if e.arrow < 8 else None
+            tag = ("exit", f"exit{n}", f"arrow{n}")
             if arrow:
                 self.canvas.create_image((e.x + arrow[1]) * ZOOM, (e.y + arrow[2]) * ZOOM, anchor="nw",
                                          image=arrow[0], tags=tag)
@@ -507,7 +528,7 @@ class MapTab(Tab):
             self.canvas.create_text(e.x * ZOOM + dx, e.y * ZOOM + dy, text=text, anchor=anchor, fill="#ffffff",
                                     font=("TkDefaultFont", 9), tags=tag)
         if self.index >= cm.TOWN_FIRST:
-            marker = self.sprite("marker", cm.sprite_image(data, *cm.MARKER))
+            marker = self.sprite("marker", cm.sprite_image(data, *cm.MARKER, strips))
             if marker:
                 self.canvas.create_image((loc.marker_x + marker[1]) * ZOOM, (loc.marker_y + marker[2]) * ZOOM,
                                          anchor="nw", image=marker[0], tags=("marker",))
@@ -543,19 +564,22 @@ class MapTab(Tab):
         sector = self.package_sector()
         x0, y0, x1, y1 = self.WORLD_BOX
         if files is not None:
-            top = self.picture(("top", sector), lambda: map_view.render_top(
-                map_view.model(files.wa, sector), self.WORLD_CENTRE, self.WORLD_SPAN, (x1 - x0, y1 - y0)))
+            version = self.version()
+            top = self.picture(("top", sector, version), lambda: map_view.render_top(
+                map_view.model(files.wa, sector), self.WORLD_CENTRE, self.WORLD_SPAN, (x1 - x0, y1 - y0),
+                overrides=self.overrides()))
             if top is not None:
-                c.create_image(x0, y0, anchor="nw", image=self.image(("top", sector), lambda: photo(self, top)))
+                c.create_image(x0, y0, anchor="nw", image=self.image(("top", sector, version),
+                                                                     lambda: photo(self, top)))
             town = self.map.locations[cm.TOWN_FIRST]
             if town:
                 tx0, ty0, tx1, ty1 = self.TOWN_BOX
                 camera = self.camera(cm.TOWN_FIRST)
-                view = self.picture(("view", sector, camera, False), lambda: map_view.render(
-                    map_view.model(files.wa, sector), camera))
+                view = self.picture(("view", sector, camera, False, version), lambda: map_view.render(
+                    map_view.model(files.wa, sector), camera, overrides=self.overrides()))
                 if view is not None:
                     small = pngio.resample(view, tx1 - tx0, ty1 - ty0)
-                    c.create_image(tx0, ty0, anchor="nw", image=self.image(("town", sector, camera),
+                    c.create_image(tx0, ty0, anchor="nw", image=self.image(("town", sector, camera, version),
                                                                             lambda: photo(self, small)))
         tx0, ty0, tx1, ty1 = self.TOWN_BOX
         c.create_rectangle(tx0, ty0, tx1, ty1, outline="#3b4b5e")
@@ -649,9 +673,10 @@ class MapTab(Tab):
         kind, n = found
         loc = self.map.locations[self.index].copy()
         if kind == "exit":
-            items = self.canvas.find_withtag(f"exit{n}")
+            items = self.canvas.find_withtag(f"arrow{n}")
             left, top = self.canvas.coords(items[0])[:2]
-            arrow = cm.arrow_image(self.map.retail, loc.exits[n].arrow) if loc.exits[n].arrow < 8 else None
+            arrow = cm.arrow_image(self.map.retail, loc.exits[n].arrow, self.strips()) \
+                if loc.exits[n].arrow < 8 else None
             ox, oy = (arrow[1], arrow[2]) if arrow else (0, 0)
             if not arrow:
                 left, top = left + 10, top + 10
@@ -659,7 +684,7 @@ class MapTab(Tab):
             loc.exits[n].y = round(top / ZOOM) - oy
         elif kind == "marker":
             left, top = self.canvas.coords(self.canvas.find_withtag("marker")[0])[:2]
-            marker = cm.sprite_image(self.map.retail, *cm.MARKER)
+            marker = cm.sprite_image(self.map.retail, *cm.MARKER, self.strips())
             loc.marker_x = round(left / ZOOM) - marker[1]
             loc.marker_y = round(top / ZOOM) - marker[2]
         elif kind == "place":
@@ -694,3 +719,175 @@ class MapTab(Tab):
             return
         self.references[self.camera(self.index)] = picture
         self.draw()
+
+    # --- the map's pictures (map_art) ------------------------------------------------------------
+
+    def show_pictures(self):
+        if self.project is None or not cm.available(self.project):
+            return
+        if getattr(self, "pictures", None) is None or not self.pictures.winfo_exists():
+            self.pictures = MapPictures(self)
+        else:
+            self.pictures.refresh()
+            self.pictures.lift()
+
+    def art_changed(self):
+        self.app.changed()
+        self.draw()
+
+
+class MapPictures(tk.Toplevel):
+    """The map's sprites and terrain textures in the mod's texture pack."""
+
+    def __init__(self, tab):
+        super().__init__(tab)
+        self.tab = tab
+        self.title("Map pictures")
+        self.photos = {}
+        body = ttk.Frame(self, padding=8)
+        body.pack(fill="both", expand=True)
+        sprites = ttk.LabelFrame(body, text="Sprites (the map's strip: name panel, marker, arrows)", padding=6)
+        sprites.pack(fill="x")
+        self.previews = ttk.Frame(sprites)
+        self.previews.pack(anchor="w")
+        row = ttk.Frame(sprites)
+        row.pack(anchor="w", pady=(6, 0))
+        self.sprite = tk.StringVar(value=map_art.SPRITES[0][0])
+        ttk.Combobox(row, textvariable=self.sprite, values=[s[0] for s in map_art.SPRITES], state="readonly",
+                     width=30).pack(side="left")
+        ttk.Button(row, text="Import picture...", command=self.import_sprite).pack(side="left", padx=4)
+        row = ttk.Frame(sprites)
+        row.pack(anchor="w", pady=(4, 0))
+        ttk.Button(row, text="Export sprites...", command=self.export_sprites).pack(side="left")
+        ttk.Button(row, text="Import sprites...", command=self.import_sprites).pack(side="left", padx=4)
+        ttk.Button(row, text="Revert sprites", command=self.revert_sprites).pack(side="left")
+        ttk.Label(sprites, style="Hint.TLabel", wraplength=px(self, 620), justify="left",
+                  text="A picture of one sprite goes into every frame of its animation (the marker's 16, an "
+                       "arrow's 10), so it keeps its motion; an arrow and its mirror share their cells. Export "
+                       "sprites writes the strip through each palette (sprites-p0.png to p3.png, 256x256, or the "
+                       "mod's at its size) to paint over; Import sprites takes those files back. Up to 4x: "
+                       "Internal 2x and 4x draw the detail, the console's resolution averages it down.").pack(
+            anchor="w", pady=(6, 0))
+        terrain = ttk.LabelFrame(body, text="Terrain textures", padding=6)
+        terrain.pack(fill="x", pady=(8, 0))
+        row = ttk.Frame(terrain)
+        row.pack(anchor="w")
+        ttk.Label(row, text="Map").pack(side="left")
+        self.package = tk.StringVar(value=cm.PACKAGE_LABELS["before"])
+        box = ttk.Combobox(row, textvariable=self.package, state="readonly", width=16,
+                           values=[cm.PACKAGE_LABELS[name] for name, _ in cm.PACKAGES])
+        box.pack(side="left", padx=4)
+        self.package.trace_add("write", lambda *_: self.refresh())
+        self.count = ttk.Label(row)
+        self.count.pack(side="left", padx=8)
+        row = ttk.Frame(terrain)
+        row.pack(anchor="w", pady=(4, 0))
+        ttk.Button(row, text="Export textures...", command=self.export_textures).pack(side="left")
+        ttk.Button(row, text="Import textures...", command=self.import_textures).pack(side="left", padx=4)
+        ttk.Button(row, text="Revert textures", command=self.revert_textures).pack(side="left")
+        ttk.Label(terrain, style="Hint.TLabel", wraplength=px(self, 620), justify="left",
+                  text="The terrain is a 3D model with tiled textures (most are drawn in many places), so it is "
+                       "repainted a texture at a time: Export writes each texture as the map draws it "
+                       "(textureNN-PPPP.png, one per palette it is drawn with), Import takes the files of a "
+                       "folder with those names. The map before the coup and the one after are two models with "
+                       "textures of their own.").pack(anchor="w", pady=(6, 0))
+        self.status = ttk.Label(body, style="Note.TLabel", wraplength=px(self, 620), justify="left")
+        self.status.pack(anchor="w", pady=(8, 0))
+        ttk.Button(body, text="Close", command=self.destroy).pack(anchor="e", pady=(8, 0))
+        self.refresh()
+
+    @property
+    def project(self):
+        return self.tab.project
+
+    def package_name(self):
+        return next(name for name, _ in cm.PACKAGES if cm.PACKAGE_LABELS[name] == self.package.get())
+
+    def refresh(self):
+        if self.project is None or not cm.available(self.project):
+            self.destroy()
+            return
+        for child in self.previews.winfo_children():
+            child.destroy()
+        self.photos = {}
+        data = cm.state(self.project).retail
+        strips = {p: image for p in map_art.STRIP_PALETTES
+                  if (image := map_art.strip_override(self.project, p)) is not None}
+        shown = [("Marker", cm.MARKER), ("Name panel", cm.PANEL)] + \
+            [(name, (2, i)) for i, name in enumerate(cm.ARROWS) if name in ("right", "down", "up", "up-right")]
+        for column, (label, (animation, variant)) in enumerate(shown):
+            found = cm.sprite_image(data, animation, variant, strips)
+            if found is None:
+                continue
+            image = found[0]
+            zoom = 1 if image.width > 64 else 2
+            self.photos[label] = photo(self, image, zoom)
+            ttk.Label(self.previews, text=label, style="Note.TLabel").grid(row=0, column=column, padx=4)
+            ttk.Label(self.previews, image=self.photos[label]).grid(row=1, column=column, padx=4)
+        st = map_art.state(self.project)
+        package = self.package_name()
+        total = len(map_art.package_textures(data, package))
+        mine = sum(1 for t in st.textures if t.package == package)
+        self.count.configure(text=f"{total} textures, {mine} replaced by the mod" if total else
+                             "the disc's map model could not be read")
+
+    def done(self, notes, what):
+        self.tab.art_changed()
+        self.refresh()
+        self.status.configure(text=what + ("\n" + "\n".join(notes[:8]) if notes else ""))
+
+    def import_sprite(self, path=None):
+        label = self.sprite.get()
+        _, animation, variant = next(s for s in map_art.SPRITES if s[0] == label)
+        path = path or filedialog.askopenfilename(parent=self, title=f"A picture for the {label.lower()}",
+                                                  filetypes=[("PNG", "*.png"), ("All files", "*.*")])
+        if not path:
+            return
+        try:
+            notes = map_art.set_sprite(self.project, animation, variant, pngio.read(path))
+        except (OSError, pngio.PngError, ValueError) as problem:
+            messagebox.showerror("Map pictures", f"Could not use {path}: {problem}", parent=self)
+            return
+        self.done(notes, f"{label}: {path}")
+
+    def export_sprites(self, folder=None):
+        folder = folder or filedialog.askdirectory(parent=self, title="A folder for the sprites")
+        if folder:
+            written = map_art.export_sprites(self.project, folder)
+            self.status.configure(text=f"Wrote {len(written)} files to {folder}")
+
+    def import_sprites(self, folder=None):
+        folder = folder or filedialog.askdirectory(parent=self, title="The folder with sprites-p0.png to p3.png")
+        if not folder:
+            return
+        try:
+            notes = map_art.import_sprites(self.project, folder)
+        except (OSError, pngio.PngError) as problem:
+            messagebox.showerror("Map pictures", str(problem), parent=self)
+            return
+        self.done(notes, "Nothing named sprites-p0.png to p3.png there." if not notes else "Imported:")
+
+    def revert_sprites(self):
+        map_art.revert_sprites(self.project)
+        self.done([], "The sprites are the disc's again.")
+
+    def export_textures(self, folder=None):
+        folder = folder or filedialog.askdirectory(parent=self, title="A folder for the textures")
+        if folder:
+            written = map_art.export_textures(self.project, self.package_name(), folder)
+            self.status.configure(text=f"Wrote {len(written)} textures to {folder}")
+
+    def import_textures(self, folder=None):
+        folder = folder or filedialog.askdirectory(parent=self, title="The folder with the textures")
+        if not folder:
+            return
+        try:
+            notes = map_art.import_textures(self.project, self.package_name(), folder)
+        except (OSError, pngio.PngError) as problem:
+            messagebox.showerror("Map pictures", str(problem), parent=self)
+            return
+        self.done(notes, "No texture of this map is named there." if not notes else "Imported:")
+
+    def revert_textures(self):
+        map_art.revert_textures(self.project, self.package_name())
+        self.done([], f"The textures of the map {self.package.get()} are the disc's again.")

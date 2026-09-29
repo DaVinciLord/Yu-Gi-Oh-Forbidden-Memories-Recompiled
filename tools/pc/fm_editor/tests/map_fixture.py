@@ -41,13 +41,14 @@ def resource_bank() -> bytes:
     struct.pack_into("<H", bank, 8, streams)          # panel
     struct.pack_into("<H", bank, 10, streams + 3)     # marker
     for variant in range(8):
-        struct.pack_into("<H", bank, 12 + variant * 2, streams + (9 if variant == 4 else 6))
+        struct.pack_into("<H", bank, 12 + variant * 2, streams + (10 if variant == 4 else 6))
     frames = 128
     # streams: (duration, u16 frame)
     bank[streams:streams + 3] = bytes([0]) + struct.pack("<H", frames)
     bank[streams + 3:streams + 6] = bytes([0]) + struct.pack("<H", frames + 10)
     bank[streams + 6:streams + 9] = bytes([4]) + struct.pack("<H", frames + 20)
-    bank[streams + 9:streams + 12] = bytes([0xFB]) + struct.pack("<H", streams + 6)
+    bank[streams + 9] = 0xFE                                  # loop
+    bank[streams + 10:streams + 13] = bytes([0xFB]) + struct.pack("<H", streams + 6)
     # frames: count, flags, page, palette step; parts dx, dy, cell, size
     def frame(at, dx, dy, u, v, w, h):
         bank[at:at + 4] = bytes([1, 0, 0, 0])

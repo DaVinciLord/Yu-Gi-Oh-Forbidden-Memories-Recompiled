@@ -188,6 +188,7 @@ class MapData:
     strip: bytes = b""      # the sprite strip, 256x256 at four bits
     palettes: bytes = b""   # 256x4 colours
     notes: list = field(default_factory=list)
+    wa: bytes = field(default=b"", repr=False, compare=False)   # the archive, for the map's model and pictures
 
     @property
     def locations(self) -> list:
@@ -266,7 +267,7 @@ def read(slus: bytes, wa: bytes):
     return MapData(tables=tables, raw=raw, names=place_names(slus),
                    resource=bytes(wa[base + 140 * SECTOR:base + 141 * SECTOR]),
                    strip=bytes(wa[base + 141 * SECTOR:base + 157 * SECTOR]),
-                   palettes=bytes(wa[base + 157 * SECTOR:base + 158 * SECTOR]), notes=notes)
+                   palettes=bytes(wa[base + 157 * SECTOR:base + 158 * SECTOR]), notes=notes, wa=wa)
 
 
 # --- the mod's map -------------------------------------------------------------------
@@ -622,10 +623,11 @@ def palette_colours(palettes: bytes, palette: int) -> list:
     return [colour(_u16(palettes, (base + i) * 2)) for i in range(16)]
 
 
-def sprite_image(data: MapData, animation: int, variant: int = 0):
+def sprite_image(data: MapData, animation: int, variant: int = 0, strips=None):
     """(image, left, top): the sprite as the game draws its first frame,
     and where its top-left corner is from the object's position; None when
-    the bank has no such sprite."""
+    the bank has no such sprite. strips: {palette: picture} a mod draws in
+    place of the strip through that palette (map_art)."""
     found = sprite_frame(data.resource, animation, variant)
     if not found or not data.strip:
         return None
@@ -639,9 +641,17 @@ def sprite_image(data: MapData, animation: int, variant: int = 0):
     out = bytearray(width * height * 4)
     for p in parts:
         colours = palette_colours(data.palettes, p.palette)
+        own = (strips or {}).get(p.palette)
+        scale = own.width // 256 if own is not None and own.width >= 256 else 0
         for j in range(p.height):
             for i in range(p.width):
-                c = colours[strip_index(data.strip, p.u + (p.width - 1 - i if p.mirror else i), p.v + j)]
+                u, v = p.u + (p.width - 1 - i if p.mirror else i), p.v + j
+                if scale:
+                    at = ((v * scale + scale // 2) * own.width + u * scale + scale // 2) * 4
+                    c = tuple(own.rgba[at:at + 4])
+                    c = c if c[3] >= 128 else (0, 0, 0, 0)
+                else:
+                    c = colours[strip_index(data.strip, u, v)]
                 if c[3]:
                     at = ((p.dy - top + j) * width + (p.dx - left + i)) * 4
                     out[at:at + 4] = bytes(c)
@@ -652,5 +662,5 @@ MARKER = (1, 0)
 PANEL = (0, 0)
 
 
-def arrow_image(data: MapData, arrow: int):
-    return sprite_image(data, 2, arrow)
+def arrow_image(data: MapData, arrow: int, strips=None):
+    return sprite_image(data, 2, arrow, strips)

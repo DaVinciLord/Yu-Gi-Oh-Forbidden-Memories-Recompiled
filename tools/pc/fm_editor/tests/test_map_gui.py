@@ -123,6 +123,31 @@ class MapGuiTest(unittest.TestCase):
         tab.select(12)
         self.assertTrue(tab.canvas.find_withtag("marker"))
 
+    def test_pictures(self):
+        from fm_editor import map_art, pngio
+        tab = self.app.map
+        tab.select(12)
+        tab.show_pictures()
+        dialog = tab.pictures
+        self.app.update()
+        self.assertIn("1 textures, 0 replaced", dialog.count.cget("text"))
+        picture = Path(self.tmp.name) / "marker.png"
+        pngio.write(picture, pngio.Image(64, 64, bytes((255, 0, 255, 255)) * 4096))
+        dialog.sprite.set(map_art.SPRITES[0][0])
+        dialog.import_sprite(str(picture))
+        self.assertEqual(set(map_art.state(self.app.project).strips), {0})
+        self.assertTrue(self.app.dirty)
+        folder = Path(self.tmp.name) / "textures-out"
+        dialog.export_textures(str(folder))
+        dialog.import_textures(str(folder))
+        self.assertIn("1 replaced", dialog.count.cget("text"))
+        tab.draw()
+        self.assertTrue(tab.canvas.find_withtag("marker"))
+        dialog.revert_textures()
+        dialog.revert_sprites()
+        self.assertEqual(map_art.state(self.app.project).strips, {})
+        dialog.destroy()
+
     def test_dark(self):
         self.app.theme.use(True)
         self.app.map.draw()

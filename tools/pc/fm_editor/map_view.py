@@ -131,6 +131,28 @@ class MapModel:
             else:
                 self.polygons.append(((r[0], r[2], r[4]), r[1], r[3], (r[7], r[9], r[11]), (r[6], r[8], r[10])))
 
+    def polygon_blocks(self) -> list:
+        """The image upload each polygon's texture lies in (the last one to
+        cover it, as VRAM keeps it), or None."""
+        if getattr(self, "_blocks", None) is None:
+            blocks = []
+            for uvs, clut, tpage, _, _ in self.polygons:
+                depth = (tpage >> 7) & 3
+                per = 4 if depth == 0 else 2 if depth == 1 else 1
+                px, py = (tpage & 15) * 64, ((tpage >> 4) & 1) * 256
+                us, vs = [u & 255 for u in uvs], [u >> 8 for u in uvs]
+                left, right = px + min(us) // per, px + max(us) // per
+                top, bottom = py + min(vs), py + max(vs)
+                found = None
+                for index in range(len(self.images) - 1, -1, -1):
+                    x, y, w, h, _ = self.images[index][0]
+                    if x <= left and right < x + w and y <= top and bottom < y + h:
+                        found = index
+                        break
+                blocks.append(found)
+            self._blocks = blocks
+        return self._blocks
+
     def world(self, v):
         m, t = self.matrix, self.translation
         return tuple(sum(m[i][j] * v[j] for j in range(3)) * SCALE + t[i] for i in range(3))
@@ -206,7 +228,7 @@ def _rasterize(size, faces, vram, out, depth):
     """Draw faces: ((x, y, z, u, v, shade) * 3, tpage, clut), nearest z first
     kept; shade multiplies the texel."""
     width, height = size
-    for corners, tpage, clut in faces:
+    for corners, tpage, clut, override in faces:
         (x0, y0, z0, u0, v0, s0), (x1, y1, z1, u1, v1, s1), (x2, y2, z2, u2, v2, s2) = corners
         area = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)
         if area == 0:
@@ -227,20 +249,50 @@ def _rasterize(size, faces, vram, out, depth):
                 at = y * width + x
                 if z >= depth[at]:
                     continue
-                word = _texel(vram, tpage, clut, int(a * u0 + b * u1 + c * u2) & 255, int(a * v0 + b * v1 + c * v2) & 255)
-                if word is None:
-                    continue
+                tu, tv = int(a * u0 + b * u1 + c * u2) & 255, int(a * v0 + b * v1 + c * v2) & 255
+                if override is not None:
+                    rgba, iw, ih, ox, oy, tw, th = override
+                    ix = min(iw - 1, max(0, (tu - ox) * iw // tw))
+                    iy = min(ih - 1, max(0, (tv - oy) * ih // th))
+                    p = (iy * iw + ix) * 4
+                    if rgba[p + 3] < 128:
+                        continue
+                    red, green, blue = rgba[p], rgba[p + 1], rgba[p + 2]
+                else:
+                    word = _texel(vram, tpage, clut, tu, tv)
+                    if word is None:
+                        continue
+                    red, green, blue = (word & 31) * 8, ((word >> 5) & 31) * 8, ((word >> 10) & 31) * 8
                 depth[at] = z
                 shade = a * s0 + b * s1 + c * s2
                 o = at * 4
-                out[o] = min(255, int((word & 31) * 8 * shade))
-                out[o + 1] = min(255, int(((word >> 5) & 31) * 8 * shade))
-                out[o + 2] = min(255, int(((word >> 10) & 31) * 8 * shade))
+                out[o] = min(255, int(red * shade))
+                out[o + 1] = min(255, int(green * shade))
+                out[o + 2] = min(255, int(blue * shade))
                 out[o + 3] = 255
 
 
-def render(mdl: MapModel, camera, spotlight: bool = False, size=(320, 240)) -> pngio.Image:
-    """The place's screen as its camera sees the map (320x240)."""
+def _override(mdl: MapModel, index: int, overrides):
+    """The rasterizer's view of a mod's picture for a polygon's texture:
+    (pixels, width, height, texture origin u, v in its page, texture size)."""
+    if not overrides:
+        return None
+    block = mdl.polygon_blocks()[index]
+    uvs, clut, tpage, _, _ = mdl.polygons[index]
+    image = overrides.get((block, clut)) if block is not None else None
+    if image is None:
+        return None
+    x, y, w, h, _ = mdl.images[block][0]
+    depth = (tpage >> 7) & 3
+    per = 4 if depth == 0 else 2 if depth == 1 else 1
+    px, py = (tpage & 15) * 64, ((tpage >> 4) & 1) * 256
+    return image.rgba, image.width, image.height, (x - px) * per, y - py, w * per, h
+
+
+def render(mdl: MapModel, camera, spotlight: bool = False, size=(320, 240), overrides=None) -> pngio.Image:
+    """The place's screen as its camera sees the map (320x240); overrides:
+    {(image upload, palette word): picture} drawn in place of those
+    textures (a mod's texture pack)."""
     vp, vr = eye(camera)
     f = [vr[i] - vp[i] for i in range(3)]
     length = math.sqrt(sum(a * a for a in f)) or 1.0
@@ -266,7 +318,7 @@ def render(mdl: MapModel, camera, spotlight: bool = False, size=(320, 240)) -> p
                           height / 2 + PROJECTION * k * (p[0] * u[0] + p[1] * u[1] + p[2] * u[2]) / z, z, 1.0 - fog))
     shades = mdl.shades()
     faces = []
-    for uvs, clut, tpage, vertices, normals in mdl.polygons:
+    for index, (uvs, clut, tpage, vertices, normals) in enumerate(mdl.polygons):
         points = [projected[i] if i < len(projected) else None for i in vertices]
         if any(p is None for p in points):
             continue
@@ -279,7 +331,7 @@ def render(mdl: MapModel, camera, spotlight: bool = False, size=(320, 240)) -> p
             (xa, ya, _, _, _, _), (xb, yb, _, _, _, _), (xc, yc, _, _, _, _) = corners
             if (xb - xa) * (yc - ya) - (xc - xa) * (yb - ya) <= 0:
                 continue            # a back face (NCLIP)
-            faces.append((corners, tpage, clut))
+            faces.append((corners, tpage, clut, _override(mdl, index, overrides)))
     out = bytearray(width * height * 4)
     for i in range(3, len(out), 4):
         out[i] = 255
@@ -298,7 +350,7 @@ def render(mdl: MapModel, camera, spotlight: bool = False, size=(320, 240)) -> p
     return pngio.Image(width, height, bytes(out))
 
 
-def render_top(mdl: MapModel, centre, span: float, size) -> pngio.Image:
+def render_top(mdl: MapModel, centre, span: float, size, overrides=None) -> pngio.Image:
     """The map from straight above, turned as the world's cameras mostly
     look: +z to the right, -x up; `span` world units across the picture's
     shorter side, `centre` its middle (x, z)."""
@@ -311,13 +363,13 @@ def render_top(mdl: MapModel, centre, span: float, size) -> pngio.Image:
         w = mdl.world(v)
         points.append((width / 2 + (w[2] - cz) * scale, height / 2 + (w[0] - cx) * scale, w[1]))
     faces = []
-    for uvs, clut, tpage, vertices, normals in mdl.polygons:
+    for index, (uvs, clut, tpage, vertices, normals) in enumerate(mdl.polygons):
         if any(i >= len(points) for i in vertices):
             continue
         for tri in ((0, 1, 2),) if len(vertices) == 3 else ((0, 1, 2), (1, 3, 2)):
             corners = [(points[vertices[i]][0], points[vertices[i]][1], points[vertices[i]][2], uvs[i] & 255,
                         uvs[i] >> 8, shades[normals[i]] if normals[i] < len(shades) else 1.0) for i in tri]
-            faces.append((corners, tpage, clut))
+            faces.append((corners, tpage, clut, _override(mdl, index, overrides)))
     out = bytearray(width * height * 4)
     for i in range(3, len(out), 4):
         out[i] = 255

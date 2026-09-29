@@ -29,7 +29,7 @@ The window has a tab per table:
 | Rituals | per ritual card, its three tributes and the monster it summons |
 | Duelists | per opponent, the deck pool and the S/A-POW, B/C/D and S/A-TEC drop pools: weights, their chance, the retail weight, and the total against 2048 (**Normalize** scales a pool back to 2048 the way the port does). The deck is either the **Weighted deck (retail)** or a **Fixed deck (40 cards)**: forty specific cards by their copies, counted against 40, each beside its weighted chance; **Copy the weighted deck's most likely 40**, **Clear**, **Revert to retail** |
 | Starter decks | the decks a new game may be dealt in place of the disc's weighted pools: a deck's name, its weight against the other decks offered, and its cards by their copies, counted against the forty a deck holds |
-| Map | the campaign map's sixteen places (below): each exit's destination, direction, story-flag condition, length and arrow on the screen, the Millennium Puzzle marker's place in the town, Confirm's destination and each place's camera, over pictures of the map drawn from your disc; **Reset place**, **Reset all** |
+| Map | the campaign map's sixteen places (below): each exit's destination, direction, story-flag condition, length and arrow on the screen, the Millennium Puzzle marker's place in the town, Confirm's destination and each place's camera, over pictures of the map drawn from your disc; **Reset place**, **Reset all**; **Pictures...**: the marker, arrows and name panel, and the terrain's textures |
 | Mod info | id, name, version, author, description, `settings`, and the other `mod.json` keys, kept as written |
 | Conflicts | the loader's checks; double-click a line to go to it |
 
@@ -140,6 +140,43 @@ holds, so two exits may share a direction under opposite conditions (the
 disc does that); Cancel in the town, once the tournament is over
 (flag `0x47`), always leads back to the world map at Metropolis.
 
+**Pictures...** (`map_art.py`) replaces the map's own pictures, as
+texture pack entries in the mod's pack (the Art tab's pack, `textures/`,
+the map's PNGs under `textures/map/`); the Screen and Overview draw them
+at once:
+
+* **Sprites**: the map's one strip of sprites (WA sector `+141` of each
+  package, 256x256 at four bits, drawn through four 16-colour palettes:
+  0 and 1 the name panel, 2 the marker, 3 the arrows). **Import picture...**
+  for one sprite (the marker, the name panel, an arrow) pastes it into every
+  cell of that sprite's animation (the marker turns through 16 frames, an
+  arrow pulses through 10, the panel slides in over 11), so the new picture
+  keeps the sprite's motion but not the differences between its frames; an
+  arrow and its mirror share their cells (right and left, the diagonals).
+  The picture is the sprite's first frame as the preview shows it (the
+  marker 32x32, an arrow 16x24, 24x16 or, on a diagonal, 16x16, the panel
+  256x32); a bigger one is
+  kept at up to 4x. **Export sprites...** writes the strip through each
+  palette (`sprites-p0.png` to `p3.png`) to paint every frame yourself, and
+  **Import sprites...** takes those files back, any size up to 4x. The
+  mod's entry names the strip as the game reads it through one palette, in
+  both packages (the strips are the same, and share the PNG).
+* **Terrain textures**: the map is a 3D model whose textures are tiles
+  (86 in 100 of the texels of its upward faces are drawn more than once,
+  one up to 51 times), so there is no single picture of the map to swap:
+  its textures are replaced one by one. **Export textures...** writes each
+  texture of the chosen map (before or after the coup: two models, 60 and
+  61 textures, 4 or 8 bits) as the terrain draws it, one PNG per palette it
+  is drawn with (`textureNN-PPPP.png`: the upload's number and the palette
+  word), and **Import textures...** takes the files of a folder with those
+  names; a texture whose file is not there stays the disc's. A picture of
+  another shape is stretched to the texture's, and kept at up to 4x.
+
+At the console's resolution a bigger picture is averaged down to the
+texture (the game's 4 or 8 bits are gone: any colour goes); Internal 2x
+and 4x draw it at its own resolution. The game reads a pack at start, like
+the table, so the mod needs a restart.
+
 ## Game files
 
 The editor looks for the game where the port does: `MEMORIES_DISC`, the disc
@@ -242,7 +279,17 @@ record are shown as retail fusions and marked.
   takes its patches of the two tables back into the map (a run across a
   table's edge stays as written, with a note), and a mod whose two tables
   differ opens with the one before the coup and saves both alike.
-* Art (the Art tab, `art.py`): a retail card's picture and thumbnail go in
+* The map's pictures (the Map tab's **Pictures...**, `map_art.py`): texture
+  pack entries in the same `textures/manifest.json`, after the Art tab's,
+  PNGs under `textures/map/`: the sprite strip as one entry per palette and
+  package (`archive` `WA_MRG.MRG`, `offset` the strip's sector `+141`,
+  64 words x 256 rows at 4 bits, `clut_offset` the palette in sector
+  `+157`), and a terrain texture as one entry per palette it is drawn with
+  (the image's place in the model's image section, its words and rows, 4
+  or 8 bits, and the palette the polygons name, as the last upload to that
+  place in VRAM leaves it). Opening a mod takes such entries back into the
+  map; the pack's other entries are kept as written.
+ a retail card's picture and thumbnail go in
   a texture pack, `textures/manifest.json` with PNGs under
   `textures/cards/`, one entry each addressed as `extract_images.py` and
   `hd_assets_pack.py` address them (the picture at the art record, WA
