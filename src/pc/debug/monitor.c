@@ -23,7 +23,9 @@
 #include "crash.h"
 #include "symbols.h"
 #include "pc/platform/paths.h"
+#if defined(__i386__) || defined(__x86_64__)
 #include <cpuid.h>
+#endif
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -125,6 +127,7 @@ static void read_file_line(const char *relative, char *out, size_t size)
     fclose(file);
 }
 
+#if defined(__i386__) || defined(__x86_64__)
 static void cpu_name(char *out, size_t size)
 {
     unsigned words[12], highest = 0, unused, i;
@@ -137,6 +140,27 @@ static void cpu_name(char *out, size_t size)
     while (*start == ' ') start++;
     snprintf(out, size, "%s", start);
 }
+#else
+/* ARM has no instruction that names the processor: the kernel's
+ * /proc/cpuinfo does, as "Hardware" (the SoC, on Android) or "model name". */
+static void cpu_name(char *out, size_t size)
+{
+    char text[256];
+    FILE *file = fopen("/proc/cpuinfo", "r");
+    snprintf(out, size, "unknown");
+    if (!file) return;
+    while (fgets(text, sizeof(text), file)) {
+        char *value = strchr(text, ':');
+        int hardware = !strncmp(text, "Hardware", 8);
+        if (!value || (!hardware && strncmp(text, "model name", 10))) continue;
+        for (value++; *value == ' ' || *value == '\t'; value++) {}
+        value[strcspn(value, "\r\n")] = '\0';
+        if (*value) snprintf(out, size, "%s", value);
+        if (hardware) break;
+    }
+    fclose(file);
+}
+#endif
 
 void Monitor_NoteSystem(void)
 {
@@ -586,6 +610,9 @@ static void walk_remote(uintptr_t eip, uintptr_t esp, uintptr_t ebp)
 #ifndef _WIN32
 static const char *syscall_name(long number)
 {
+#ifndef __i386__
+    if (number >= 0) return ""; /* the numbers below are i386's */
+#endif
     switch (number) { /* i386 */
     case 3: return "read";
     case 4: return "write";
@@ -611,7 +638,11 @@ static const char *syscall_name(long number)
 
 static int thread_registers(pid_t tid, uintptr_t *eip, uintptr_t *esp, uintptr_t *ebp)
 {
+#if defined(__arm__)
+    struct user_regs registers; /* uregs[11] fp, [13] sp, [15] pc */
+#else
     struct user_regs_struct registers;
+#endif
     int status;
     if (ptrace(PTRACE_SEIZE, tid, 0, 0)) return -1;
     if (ptrace(PTRACE_INTERRUPT, tid, 0, 0)) {
@@ -638,9 +669,15 @@ static int thread_registers(pid_t tid, uintptr_t *eip, uintptr_t *esp, uintptr_t
             int result = ptrace(PTRACE_GETREGS, tid, 0, &registers) ? -1 : 0;
             ptrace(PTRACE_DETACH, tid, 0, (void *)(uintptr_t)inject);
             if (result) return -1;
+#if defined(__arm__)
+            *eip = (uintptr_t)registers.uregs[15];
+            *esp = (uintptr_t)registers.uregs[13];
+            *ebp = (uintptr_t)registers.uregs[11];
+#else
             *eip = (uintptr_t)registers.eip;
             *esp = (uintptr_t)registers.esp;
             *ebp = (uintptr_t)registers.ebp;
+#endif
             return 0;
         }
     }
