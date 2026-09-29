@@ -147,10 +147,11 @@ at once:
 
 * **Sprites**: the map's one strip of sprites (WA sector `+141` of each
   package, 256x256 at four bits, drawn through four 16-colour palettes:
-  0 and 1 the name panel, 2 the marker, 3 the arrows). **Import picture...**
+  0 the name panel, 2 the marker, 3 the arrows; a dump shows palette 1
+  read too). **Import picture...**
   for one sprite (the marker, the name panel, an arrow) pastes it into every
   cell of that sprite's animation (the marker turns through 16 frames, an
-  arrow pulses through 10, the panel slides in over 11), so the new picture
+  arrow pulses through 10; the name panel is one frame), so the new picture
   keeps the sprite's motion but not the differences between its frames; an
   arrow and its mirror share their cells (right and left, the diagonals).
   The picture is the sprite's first frame as the preview shows it (the

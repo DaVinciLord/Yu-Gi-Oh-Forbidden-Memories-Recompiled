@@ -177,7 +177,7 @@ class MapTab(Tab):
 
     def refresh(self):
         self.backgrounds = {}
-        if getattr(self, "pictures", None) is not None:
+        if getattr(self, "pictures", None) is not None and self.pictures.winfo_exists():
             self.pictures.refresh()
         self.fill_list()
         state = "normal" if self.project is not None and cm.available(self.project) else "disabled"

@@ -141,6 +141,8 @@ class SpriteTest(unittest.TestCase):
 
     def test_cells_follow_the_stream(self):
         data = mf.map_fixture().game().campaign_map
+        # The panel's frame is held for good (duration 0): the marker's stream after it is not the panel's.
+        self.assertEqual(len(ma.sprite_cells(data, 0, 0)), 1)
         self.assertEqual(len(ma.sprite_cells(data, 2, 0)), 1)
         mirrored = ma.sprite_cells(data, 2, 4)
         self.assertEqual(len(mirrored), 1)

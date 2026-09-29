@@ -6,8 +6,9 @@ owns the map's entries in it).
 
 * The sprites are one 256x256 four-bit strip in each overworld package
   (sector +141, uploaded to VRAM 448,256), drawn through four 16-colour
-  palettes of the package's sector +157: 0 and 1 the name panel, 2 the
-  marker, 3 the arrows (campaign_map.sprite_parts). The mod replaces the
+  palettes of the package's sector +157: 0 the name panel, 2 the marker, 3
+  the arrows (campaign_map.sprite_parts); a texture dump of the map shows
+  the strip read through palette 1 as well. The mod replaces the
   strip as the game reads it through one palette: an entry per palette
   and package, both packages' entries naming one PNG (the strips are the
   same). A picture for one sprite is pasted into every cell of its
@@ -42,7 +43,7 @@ PALETTE_SECTOR = 157
 STRIP_SIZE = 256
 STRIP_WORDS = 64
 STRIP_PALETTES = (0, 1, 2, 3)
-PALETTE_LABELS = {0: "name panel", 1: "name panel (2)", 2: "marker", 3: "arrows"}
+PALETTE_LABELS = {0: "name panel", 1: "a second reading the map draws", 2: "marker", 3: "arrows"}
 MAX_SCALE = 4
 DIR = "map"
 
@@ -285,7 +286,9 @@ def set_texture(project, texture: Texture, image: Image) -> list:
 
 def sprite_cells(data: cm.MapData, animation: int, variant: int) -> list:
     """Every part of every frame of a sprite's animation, with the frame's
-    offset from the object's place, until the stream loops or stops."""
+    offset from the object's place, until the stream loops or stops, or
+    holds a frame for good (duration 0: DisplayObject_UpdateCommandStream
+    counts a nonzero duration down, so the next entry is never read)."""
     res = data.resource
     try:
         level1 = cm._u16(res, 0)
@@ -300,6 +303,8 @@ def sprite_cells(data: cm.MapData, animation: int, variant: int) -> list:
         op = res[at]
         if op < 0xF0:
             parts.extend(cm.sprite_parts(res, cm._u16(res, at + 1), mirror))
+            if op == 0:
+                break       # a frame held for good: the stream is never read on (the name panel)
             at += 3
             continue
         if op in (0xFB, 0xFC) and at not in seen:

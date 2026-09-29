@@ -95,7 +95,7 @@ class MapGuiTest(unittest.TestCase):
         self.assertNotEqual(loc.target_z, target[1])
         # A problem goes to its place.
         cm.state(app.project).locations[6].exits[0].steps = 0
-        issue = next(i for i in app.problems.run() if i.area == "Map")
+        issue = next(i for i in app.conflicts.run() if i.area == "Map")
         app.go_to(issue)
         self.assertEqual(tab.index, 6)
         cm.state(app.project).locations[6].exits[0].steps = 16
@@ -147,6 +147,12 @@ class MapGuiTest(unittest.TestCase):
         dialog.revert_sprites()
         self.assertEqual(map_art.state(self.app.project).strips, {})
         dialog.destroy()
+        # A new project after the dialog was closed: the tab fills again.
+        from fm_editor.model import Project
+        self.app.dirty = False
+        self.app.set_project(Project(self.app.retail))
+        self.assertEqual(len(tab.tree.get_children()), cm.COUNT)
+        self.assertEqual(tab.heading.cget("text").split(":")[0], str(tab.index))
 
     def test_dark(self):
         self.app.theme.use(True)
