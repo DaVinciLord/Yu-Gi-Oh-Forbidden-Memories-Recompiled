@@ -16,6 +16,7 @@ beside the manifest are copied with the rest of the mod's files (save_mod).
 """
 from __future__ import annotations
 
+import copy
 import json
 import re
 import shutil
@@ -33,6 +34,24 @@ POOL_ALIASES = {"deck": "deck", "pow": "pow", "sapow": "pow", "bcd": "bcd", "tec
 
 
 # --- writing ----------------------------------------------------------------
+
+def password_text(value):
+    """A "password" as the port reads it (cards.c read_password, tables.c
+    read_shop_password): up to eight digits as a string or a number, "" or
+    null for none. Its 8 digits, "" for none, or None for anything else
+    ("card number", a letter...), which the editor keeps as written."""
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return f"{value:08d}" if 0 <= value <= 99999999 else None
+    if isinstance(value, str):
+        if not value:
+            return ""
+        return value.zfill(8) if len(value) <= 8 and value.isdigit() and value.isascii() else None
+    return None
+
 
 def _type_value(t: int):
     return TYPE_NAMES[t] if 0 <= t < len(TYPE_NAMES) else t
@@ -91,6 +110,8 @@ def build_cards(project: Project) -> list:
         if card.is_monster() != base.is_monster() or (not base.is_monster() and card.type != base.type):
             fields.pop("type", None)        # the port keeps the base's side; validation says so
         entry.update(fields)
+        if project.passwords.get(cid):
+            entry["password"] = project.passwords[cid]
         if not added.drops:
             entry["drops"] = False
         if added.opponents:
@@ -309,6 +330,25 @@ def build_starter(project: Project):
     return out[0] if len(out) == 1 else out
 
 
+def build_passwords(project: Project):
+    """"passwords" (gameplay-tables.md): the entries the mod had, with the
+    disc cards' passwords the editor changed written into them. None when
+    there is nothing to write, or when the mod's "passwords" is not an object
+    (kept as written)."""
+    kept = project.other.get("passwords")
+    if kept is not None and not isinstance(kept, dict):
+        return None
+    table = copy.deepcopy(kept) if kept else {}
+    for cid in sorted(project.passwords):
+        if cid not in project.retail.cards:
+            continue
+        key = project.password_keys.get(cid) or str(project.ref(cid))
+        if not isinstance(table.get(key), dict):
+            table[key] = {}
+        table[key]["password"] = project.passwords[cid]
+    return table or None
+
+
 def build(project: Project) -> dict:
     """The mod.json object: the mod's own keys, then only what differs."""
     info = project.info
@@ -317,6 +357,11 @@ def build(project: Project) -> dict:
         if getattr(info, key):
             manifest[key] = getattr(info, key)
     manifest.update(project.other)
+    passwords = build_passwords(project)
+    if passwords:
+        manifest["passwords"] = passwords
+    elif isinstance(manifest.get("passwords"), dict):
+        del manifest["passwords"]
     if info.settings:
         manifest["settings"] = info.settings
     cards = build_cards(project)
@@ -561,9 +606,15 @@ def read_cards(project: Project, entries, messages: list):
         added = project.added[cid]
         added.drops = _json_bool(entry.get("drops"), True)
         added.opponents = _json_bool(entry.get("opponents"), False)
-        added.extra = {k: v for k, v in entry.items() if k not in (
-            "copy", "id", "name", "description", "attack", "defense", "type", "attribute", "level", "stars",
-            "drops", "opponents")}
+        skip = ("copy", "id", "name", "description", "attack", "defense", "type", "attribute", "level", "stars",
+                "drops", "opponents")
+        password = password_text(entry.get("password")) if "password" in entry else None
+        if password is not None:
+            skip += ("password",)
+            project.set_password(cid, password)
+        elif "password" in entry:
+            messages.append(f"{where}: \"password\" is up to 8 digits, or \"\" for none; kept as written")
+        added.extra = {k: v for k, v in entry.items() if k not in skip}
         if _number(entry.get("count"), 1) != 1 or entry.get("count_setting"):
             messages.append(f"{where}: adds several cards (\"count\"); the editor shows the first and keeps the count")
 
@@ -882,6 +933,41 @@ def read_starter(project: Project, value, messages: list):
         project.starter.append(deck)
 
 
+def read_passwords(project: Project, messages: list):
+    """The "password" of each "passwords" entry that names a disc card (the
+    Password screen's; gameplay-tables.md) becomes the card's in the editor.
+    Everything else ("all", "starchips", "card number", an added card, which
+    the screen does not know) stays as written in project.other."""
+    table = project.other.get("passwords")
+    if table is None:
+        return
+    if not isinstance(table, dict):
+        messages.append("\"passwords\" is not an object; kept as written")
+        return
+    kept = {}
+    # With an "all" that sets passwords, a card's own entry keeps it out of
+    # "all" even when it names the disc's password: kept as an edit.
+    every = any(same_all(key) and isinstance(entry, dict) and "password" in entry for key, entry in table.items())
+    for key, entry in table.items():
+        cid = 0 if same_all(key) else project.resolve(key)
+        password = password_text(entry.get("password")) if isinstance(entry, dict) and "password" in entry else None
+        if cid in project.retail.cards and password is not None and cid not in project.password_keys:
+            if every:
+                project.passwords[cid] = password
+            else:
+                project.set_password(cid, password)
+            project.password_keys[cid] = key
+            rest = {k: v for k, v in entry.items() if k != "password"}
+            if rest:
+                kept[key] = rest
+            continue
+        kept[key] = entry
+    if kept:
+        project.other["passwords"] = kept
+    else:
+        del project.other["passwords"]
+
+
 def same_all(name: str) -> bool:
     return "".join(c for c in name.lower() if c.isalnum()) == "all"
 
@@ -911,6 +997,7 @@ def apply(project: Project, manifest: dict, messages: list = None, default_id: s
     read_pools(project, manifest.get("drops"), False, messages)
     read_pools(project, manifest.get("decks"), True, messages)
     read_starter(project, manifest.get("starter"), messages)
+    read_passwords(project, messages)
     return messages
 
 

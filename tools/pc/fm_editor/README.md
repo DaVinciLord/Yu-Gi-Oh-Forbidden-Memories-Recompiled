@@ -22,7 +22,7 @@ The window has a tab per table:
 
 | Tab | What you edit |
 |---|---|
-| Cards | search and filter the 722 cards; name, card text (with the game's 20-letter, 8-line wrapping counted, and **Tools > Card text preview** to see it as the card view draws it, below), ATK/DEF, type, attribute, level, guardian stars; the retail value beside each field. **Add a card** copies the selected one as a new card with a stable id |
+| Cards | search and filter the 722 cards; name, card text (with the game's 20-letter, 8-line wrapping counted, and **Tools > Card text preview** to see it as the card view draws it, below), ATK/DEF, type, attribute, level, guardian stars, password; the retail value beside each field. **Add a card** copies the selected one as a new card with a stable id; a new card starts in nobody's chest (it is won in its base's place, dealt in a starter deck, or given by Game > Cheats), and its password is only shown in the card view: the Password screen sells the disc's 722 |
 | Art | a card's picture (102x96), thumbnail (40x32, the hand and the field) and name plate (96x14) as the disc has them, beside what the game will draw at the console's resolution and at Internal 2x/4x; **Import PNG**, **Export** the disc's or the mod's (to paint over), **Revert** |
 | Fusions | every pair and its result (search by a card, or show the changed ones); add, change, remove (the pair no longer fuses) or revert; **Bulk...** adds or takes away the fusions of every card of one filtered set with every card of another (below) |
 | Equips | per equip card, the monsters it may equip; add one, add or remove a whole type, remove, revert |
@@ -107,6 +107,7 @@ What it reads (layouts in `gamedata.py`):
 | card names and texts | the executable's text banks, through `tools/pc/text_listing.py` |
 | equips, fusions, rituals | `WA_MRG.MRG`, the duel package at `0xB63000` (+0x22000, +0x24800, +0x34800) |
 | deck and drop pools | `WA_MRG.MRG` `0xE99800 + 0x1800 * opponent` |
+| the Password screen's passwords | `WA_MRG.MRG` `0xFB9800 + 8 * card`: price, then the password as BCD digits (`0xFFFFFFFE` for none) |
 | the text font and its colours (the card-text preview only) | `WA_MRG.MRG` sector `0x1690` (16 sectors, the 8x12 font's page) and the first 32 bytes of sector `0x16C2`, as `src/pc/cards/font_art.c` reads them |
 
 The 15 "glitch" fusions the game's table reader makes by reading past an odd
@@ -115,9 +116,16 @@ record are shown as retail fusions and marked.
 ## What it writes
 
 * `cards`: a `replace` entry per changed retail card with only the changed
-  keys, and a `copy` entry per added card with a stable `id`. Keys the editor
-  does not show (`model`, `count`, `password`...) are kept as written; `art`,
+  keys, and a `copy` entry per added card with a stable `id`. An added
+  card's password is its entry's `password` (8 digits, shown by View > Card
+  passwords). Keys the editor does not show (`model`, `count`...) are kept as
+  written; `art`,
   `thumbnail` and `title` are the Art tab's (below). A copy with no `name` shows its base's name from the disc.
+* `passwords`: a retail card whose password changed gets `{"password": "…"}`
+  (`""` for none) under its name, merged into the mod's own entries, whose
+  `starchips`, `all` and `"card number"` stay as written. A password is up to
+  8 digits, and no other card's: the Problems tab says when two cards share
+  one, since the Password screen then gives the lower card number.
 * `fusions`: one rule per pair whose result changed (`"result": null` for a
   fusion taken away). An added card fuses as its base until a rule names it,
   so taking away its pair's fusion writes a `null` rule for it.

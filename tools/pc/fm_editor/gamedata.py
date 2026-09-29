@@ -88,6 +88,11 @@ DUELIST_STRIDE = 0x1800
 POOL_OFFSETS = {"deck": 0x000, "pow": 0x5B4, "bcd": 0xB68, "tec": 0x111C}
 STARTER_BASE = 0xF92BD4             # the seven starter deck pools the name entry deals from
 STARTER_LENGTH = 7 * (2 + 2 * CARD_COUNT)
+# The Password screen's table (src/pc/cards/passwords.c): a record per card
+# id from 0, the price in starchips and the password, a BCD nibble per digit,
+# both little-endian words. PASSWORD_NONE is a card the screen cannot give.
+PASSWORD_TABLE = 0xFB9800
+PASSWORD_NONE = 0xFFFFFFFE
 # Program images the game loads at 0x80168000 (sector, sectors, what): the
 # port runs its own code for them, over their data in guest memory, so a
 # mod's code or data there cannot work (src/pc/guest/modules.c).
@@ -134,6 +139,7 @@ class GameData:
     equips: dict = field(default_factory=dict)         # equip id -> [monster ids]
     rituals: dict = field(default_factory=dict)        # ritual id -> (t1, t2, t3, result)
     pools: list = field(default_factory=list)          # [duelist][pool] -> {card id: weight}
+    passwords: dict = field(default_factory=dict)      # id -> the Password screen's 8 digits, "" for none
     notes: list = field(default_factory=list)          # oddities found while reading
 
 
@@ -359,9 +365,26 @@ def read_archive(wa: bytes, data: GameData):
         data.pools.append({pool: decode_pool(record, off) for pool, off in POOL_OFFSETS.items()})
 
 
+def _bcd(value: int) -> bool:
+    return all(((value >> (4 * i)) & 0xF) <= 9 for i in range(8))
+
+
+def read_passwords(wa: bytes) -> dict:
+    """{card id: its password as 8 digits, or "" for none}, as the port reads
+    the Password screen's table; {} when the archive stops short of it."""
+    if len(wa) < PASSWORD_TABLE + 8 * (CARD_COUNT + 1):
+        return {}
+    out = {}
+    for cid in range(1, CARD_COUNT + 1):
+        value = struct.unpack_from("<I", wa, PASSWORD_TABLE + 8 * cid + 4)[0]
+        out[cid] = f"{value:08x}" if value != PASSWORD_NONE and _bcd(value) else ""
+    return out
+
+
 def read_game(slus: bytes, wa: bytes) -> GameData:
     data = GameData(cards=read_cards(slus, wa))
     read_archive(wa, data)
+    data.passwords = read_passwords(wa)
     return data
 
 

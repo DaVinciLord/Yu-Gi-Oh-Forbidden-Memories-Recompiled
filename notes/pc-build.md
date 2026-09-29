@@ -499,7 +499,13 @@ The rows that change the save (Give, Unlock and Set StarChips) do nothing
 until a game is started or loaded, and say **Load a save first** instead
 (`Cheats_SaveLoaded`: the save workspace holds a deck, the same test as
 Deck slots and `MEMORIES_DEBUG_CHEST`). Before that the workspace is scratch,
-and on a new game it becomes the save when the name entry closes. The settings
+and on a new game it becomes the save when the name entry closes.
+Give also covers the cards mods added (their trunk is kept beside the save,
+[More cards](more-cards.md)). It refuses while Build Deck, or its screen
+before a duel, is open, and says **Leave Build Deck first**
+(`Cheats_ChestOnScreen`): that screen lists its own copy of the chest and
+writes it back over the save as it closes, so cards given meanwhile were
+neither listed nor kept. `MEMORIES_DEBUG_CHEST` waits for the same. The settings
 rows (LP, free spending, the CPU's hand) change nothing in the save and work
 at any time.
 
