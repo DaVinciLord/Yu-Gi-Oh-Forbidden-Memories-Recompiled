@@ -78,9 +78,9 @@ void func_80028B08(DisplayObject *obj, s32 arg1) {
     if ((flags & 0x40) == 0) {
         return;
     }
-    EXT = (Func80028B08Extra *)0x1F800398;
-    PRM = (SpritePrim *)0x1F800320;
-    CTX = (Func80028B08Ctx *)0x1F800344;
+    EXT = (Func80028B08Extra *)SCRATCHPAD_ADDR(0x1F800398);
+    PRM = (SpritePrim *)SCRATCHPAD_ADDR(0x1F800320);
+    CTX = (Func80028B08Ctx *)SCRATCHPAD_ADDR(0x1F800344);
     arg = (((s16)win->field_14 - 1) & 0xFFFF) | 0x10000;
     if (flags & 0x4) {
         obj->field_20.word = win->field_20.word;

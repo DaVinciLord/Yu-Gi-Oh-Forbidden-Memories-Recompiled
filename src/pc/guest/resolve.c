@@ -20,9 +20,11 @@ void *Memories_Resolve(MemoriesMemory *memory, uint32_t address,
 #endif
         return length <= MEMORIES_GUEST_RAM_SIZE - physical ? (void *)(uintptr_t)address : NULL;
     }
-    if (physical >= UINT32_C(0x1f800000) && physical < UINT32_C(0x1f800400) &&
-        address < UINT32_C(0xa0000000)) {
-        return length <= UINT32_C(0x1f800400) - physical ? (void *)(uintptr_t)address : NULL;
+    if (physical >= MEMORIES_GUEST_SCRATCHPAD_RETAIL &&
+        physical < MEMORIES_GUEST_SCRATCHPAD_RETAIL + MEMORIES_GUEST_SCRATCHPAD_SIZE && address < UINT32_C(0xa0000000)) {
+        /* Either view of the scratchpad: the port's, which every host maps (image.h). */
+        return length <= MEMORIES_GUEST_SCRATCHPAD_RETAIL + MEMORIES_GUEST_SCRATCHPAD_SIZE - physical
+                   ? (void *)(uintptr_t)(physical | UINT32_C(0x80000000)) : NULL;
     }
     return NULL;
 }

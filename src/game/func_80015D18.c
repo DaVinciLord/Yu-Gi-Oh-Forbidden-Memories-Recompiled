@@ -20,7 +20,7 @@ void func_80015D18(DisplayObject *object)
     SetGeomOffset(0xA0, 0x6C);
     GsSetLsMatrix(&D_800FE148);
     {
-        SVECTOR *scratch = (SVECTOR *)0x1F8003E0;
+        SVECTOR *scratch = (SVECTOR *)SCRATCHPAD_ADDR(0x1F8003E0);
         u16 x = object->position.h.field_28;
 
         scratch->vy = 0;

@@ -36,18 +36,18 @@ void func_80029934(void)
     angle = 0;
     SetGeomOffset(0xD0, 0x60);
     SetGeomScreen(MODEL_DEFAULT_PROJECTION);
-    vec = (SVECTOR *)0x1F800038;
-    ctl = (long *)0x1F800060;
-    par = (SVECTOR *)0x1F800200;
+    vec = (SVECTOR *)SCRATCHPAD_ADDR(0x1F800038);
+    ctl = (long *)SCRATCHPAD_ADDR(0x1F800060);
+    par = (SVECTOR *)SCRATCHPAD_ADDR(0x1F800200);
     ot = D_800E9D90[3];
     GsSetLsMatrix(&D_800FE148);
 
     {
         u32 marker = 0x55555555;
-        vec1 = (SVECTOR *)0x1F800040;
-        vec2 = (SVECTOR *)0x1F800048;
-        vec3 = (SVECTOR *)0x1F800050;
-        prim = (LINE_G3 *)0x1F800000;
+        vec1 = (SVECTOR *)SCRATCHPAD_ADDR(0x1F800040);
+        vec2 = (SVECTOR *)SCRATCHPAD_ADDR(0x1F800048);
+        vec3 = (SVECTOR *)SCRATCHPAD_ADDR(0x1F800050);
+        prim = (LINE_G3 *)SCRATCHPAD_ADDR(0x1F800000);
 
         /* Retail materializes this fixed view buffer with literal lui/ori. */
         *par = *(SVECTOR *)0x80181000;
@@ -60,9 +60,9 @@ void func_80029934(void)
         /* vec3->vy, vec2->vy and vec1->vy, stored through their absolute
          * addresses; a member store through the SVECTOR pointers reorders
          * the whole setup. */
-        *(s16 *)0x1F800052 = 0;
-        *(s16 *)0x1F80004A = 0;
-        *(s16 *)0x1F800042 = 0;
+        *(s16 *)SCRATCHPAD_ADDR(0x1F800052) = 0;
+        *(s16 *)SCRATCHPAD_ADDR(0x1F80004A) = 0;
+        *(s16 *)SCRATCHPAD_ADDR(0x1F800042) = 0;
         vec->vy = 0;
     }
 

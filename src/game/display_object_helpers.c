@@ -14,7 +14,7 @@
  * RotAverageNclip4 depth/flag results at 0x1F8002E0, and the DivideFT4
  * inputs - its DIVPOLYGON4 at 0x1F800000, the colour at 0x1F800280 and the
  * four texture coordinates from 0x1F800290. */
-#define SCRATCH_VERTEX(i) ((SVECTOR *)0x1F800300 + (i))
+#define SCRATCH_VERTEX(i) ((SVECTOR *)SCRATCHPAD_ADDR(0x1F800300) + (i))
 #define GS_SPRITE_VIEW(sprite) ((GsSPRITE *)(sprite))
 #define GS_OT_VIEW(ordering_table) ((GsOT *)(ordering_table))
 #define POLY_G4_VIEW(packet) ((POLY_G4 *)(packet))
@@ -46,7 +46,7 @@ void DisplayObject_SubmitPacket(SpritePrim *sprite, u8 *packet, s32 ot, s32 mode
         return;
     case 4: {
         if ((u32)sprite & 0x04000000) {
-            otz = (long *)0x1F8002E0;
+            otz = (long *)SCRATCHPAD_ADDR(0x1F8002E0);
             v = SCRATCH_VERTEX(0);
             v[0].vx = POLY_G4_VIEW(packet)->x0 - origin->x;
             v[0].vy = POLY_G4_VIEW(packet)->y0 - origin->y;
@@ -76,7 +76,7 @@ void DisplayObject_SubmitPacket(SpritePrim *sprite, u8 *packet, s32 ot, s32 mode
     }
     case 5: {
         if ((u32)sprite & 0x04000000) {
-            otz = (long *)0x1F8002E0;
+            otz = (long *)SCRATCHPAD_ADDR(0x1F8002E0);
             v = SCRATCH_VERTEX(0);
             v[0].vx = POLY_GT4_VIEW(packet)->x0 - origin->x;
             v[0].vy = POLY_GT4_VIEW(packet)->y0 - origin->y;
@@ -112,7 +112,7 @@ void DisplayObject_SubmitPacket(SpritePrim *sprite, u8 *packet, s32 ot, s32 mode
         SVECTOR *v1;
         u32 attribute;
 
-        otz = (long *)0x1F8002E0;
+        otz = (long *)SCRATCHPAD_ADDR(0x1F8002E0);
         v = SCRATCH_VERTEX(0);
         attribute = sprite->attribute;
 
@@ -167,9 +167,9 @@ void DisplayObject_SubmitPacket(SpritePrim *sprite, u8 *packet, s32 ot, s32 mode
                 return;
             }
             {
-                u32 *rgbc = (u32 *)0x1F800280;
-                u32 *uv = (u32 *)0x1F800290;
-                DIVPOLYGON4 *divp = (DIVPOLYGON4 *)0x1F800000;
+                u32 *rgbc = (u32 *)SCRATCHPAD_ADDR(0x1F800280);
+                u32 *uv = (u32 *)SCRATCHPAD_ADDR(0x1F800290);
+                DIVPOLYGON4 *divp = (DIVPOLYGON4 *)SCRATCHPAD_ADDR(0x1F800000);
 
                 divp->ndiv = origin->divisions;
                 divp->pih = 320;
@@ -180,7 +180,7 @@ void DisplayObject_SubmitPacket(SpritePrim *sprite, u8 *packet, s32 ot, s32 mode
                 uv[2] = *(u32 *)&POLY_FT4_VIEW(packet)->u2;
                 uv[3] = *(u32 *)&POLY_FT4_VIEW(packet)->u3;
                 D_800FE240 = (u32 *)DivideFT4(v, v1, v2, v3,
-                                             uv, (u32 *)0x1F800294, (u32 *)0x1F800298, (u32 *)0x1F80029C,
+                                             uv, (u32 *)SCRATCHPAD_ADDR(0x1F800294), (u32 *)SCRATCHPAD_ADDR(0x1F800298), (u32 *)SCRATCHPAD_ADDR(0x1F80029C),
                                              (CVECTOR *)rgbc, (POLY_FT4 *)D_800FE240,
                                              (u32 *)GS_OT_VIEW(ot)->org + pri, divp);
             }
