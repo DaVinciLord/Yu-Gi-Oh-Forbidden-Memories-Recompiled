@@ -12,6 +12,10 @@
  *    (~/.local/share/YFM Re-Decomp). A file named portable.txt in the
  *    program directory makes it user/ there instead (portable mode).
  *    MEMORIES_USER_DIR names another and wins over both.
+ *
+ * MEMORIES_PROGRAM_DIR names the program directory where there is no
+ * executable to find it by (an Android app is the system's app_process;
+ * android.c points it at the build's files it unpacks).
  */
 #include <stddef.h>
 
