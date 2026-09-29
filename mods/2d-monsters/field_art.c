@@ -47,6 +47,7 @@
 #include "pc/mods/modapi.h"
 #include "pc/cards/cards.h"
 #include "pc/cards/art.h"
+#include <math.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -284,6 +285,139 @@ static int duel_field_up(void)
 #define SIDE_ZONE(side, zone) ((side) ? 20 + (zone) : 5 + (zone))
 #define DEPTH_STEPS 3
 
+/* A pulsing glow diffusing outward from the cutout's own rectangle ("glow"
+ * setting; on by default): one continuous, soft gradient -- bright right at
+ * the card's edge, fading smoothly out with distance, rounded at the
+ * corners rather than four strips meeting at a seam (which is what the
+ * first attempt at this did: visible double-bright overlaps at the
+ * corners, and banding read as "on/off" rather than a smooth breathing
+ * glow). A bank of its own past the per-card cache (CACHE banks 1..CACHE,
+ * so GLOW_BANK is always free) holds one square texture, GLOW_SIZE across,
+ * generated once: at each texel, in coordinates normalised to [-1, 1]
+ * across the texture, INNER_HALF is the half-width of a middle square left
+ * untouched (it sits under the cutout itself, which draws over it, so its
+ * exact brightness there does not matter); outside it, the texel's index is
+ * the Euclidean distance to the middle square's nearest edge or corner,
+ * scaled so it reaches 0 -- fully transparent, the same hardware rule as
+ * the earlier attempts relied on -- at the texture's own edge along x or y,
+ * and clamps there before the actual corners, which is what rounds them off
+ * rather than squaring them like the first attempt's strips did. A
+ * 256-entry CLUT turns every other index into that much white, STP set
+ * (BGR555's bit 15, the semi-transparency flag the renderer reads alongside
+ * the primitive's own setSemiTrans -- both must be on, or it draws opaque,
+ * gl_picture.c). The glow's own colour is entirely the primitive's
+ * r0/g0/b0 modulation (settings glow_r/g/b), scaled each frame by a sine
+ * wave (glow_period, frames per full pulse) between a floor and full
+ * brightness -- never down to fully off, which is what read as "on/off"
+ * rather than a breathing pulse -- for the "shining" look; abr 1 (GetTPage's
+ * second argument) is the additive blend equation, so the glow brightens
+ * whatever is under it instead of covering it. One quad, its middle square
+ * scaled to match the cutout's own rectangle exactly (so the diffusing part
+ * sits outside it) and its overall size then scaled again by glow_reach, at
+ * the cutout's own depth so it sorts with it. */
+#define GLOW_BANK (CACHE + 1)
+#define GLOW_SIZE 48
+#define GLOW_PIXELS_X 0
+#define GLOW_PIXELS_Y 0
+#define GLOW_CLUT_X 0
+#define GLOW_CLUT_Y GLOW_SIZE
+#define GLOW_INNER_HALF 0.30 /* the middle square's half-width, normalised */
+#define GLOW_REACH_DEFAULT 100
+#define GLOW_PERIOD_DEFAULT 30
+#define GLOW_FLOOR 0.35 /* the pulse's dimmest point: never fully off */
+#define GLOW_R_DEFAULT 60
+#define GLOW_G_DEFAULT 255
+#define GLOW_B_DEFAULT 90
+
+static int glow_ready;
+
+static void glow_init(void)
+{
+    u16 *bank;
+    u16 pixels[GLOW_SIZE * GLOW_SIZE / 2], clut[256];
+    double middle = (GLOW_SIZE - 1) / 2.0, max_distance = 1.0 - GLOW_INNER_HALF;
+    int x, y, i;
+
+    if (glow_ready) return;
+    bank = SoftGpu_Bank(GLOW_BANK);
+    if (!bank) return;
+
+    for (y = 0; y < GLOW_SIZE; y++) {
+        double ny = (y - middle) / middle, dy = fabs(ny) > GLOW_INNER_HALF ? fabs(ny) - GLOW_INNER_HALF : 0.0;
+        for (x = 0; x < GLOW_SIZE; x++) {
+            double nx = (x - middle) / middle, dx = fabs(nx) > GLOW_INNER_HALF ? fabs(nx) - GLOW_INNER_HALF : 0.0;
+            double distance = sqrt(dx * dx + dy * dy) / max_distance;
+            /* Squared falloff, softer near the card and steeper further
+             * out, than a linear ramp would read. */
+            double level = distance >= 1.0 ? 0.0 : (1.0 - distance) * (1.0 - distance);
+            int index = (int)(level * 255.0 + 0.5), word = x / 2;
+            u16 texel = (u16)(index & 0xff) << ((x & 1) * 8);
+            if (x & 1) pixels[y * (GLOW_SIZE / 2) + word] |= texel;
+            else pixels[y * (GLOW_SIZE / 2) + word] = texel;
+        }
+    }
+    clut[0] = 0; /* never sampled: index 0 is always transparent */
+    for (i = 1; i < 256; i++) {
+        int component = i * 31 / 255;
+        clut[i] = (u16)(0x8000 | (component << 10) | (component << 5) | component); /* white, STP set */
+    }
+    bank_put(bank, GLOW_PIXELS_X, GLOW_PIXELS_Y, GLOW_SIZE / 2, GLOW_SIZE, pixels);
+    bank_put(bank, GLOW_CLUT_X, GLOW_CLUT_Y, 256, 1, clut);
+    glow_ready = 1;
+}
+
+static void draw_glow(GsOT *table, unsigned short depth, int cx, int cy, int width_px, int height_px)
+{
+    POLY_FT4 prim;
+    int reach, period, phase, half_w, half_h, r, g, b;
+    double level;
+
+    if (!tunable("glow", 1)) return;
+    reach = tunable("glow_reach", GLOW_REACH_DEFAULT);
+    period = tunable("glow_period", GLOW_PERIOD_DEFAULT);
+    if (reach < 1 || period < 1) return;
+    glow_init();
+    if (!glow_ready) return;
+
+    /* The quad's half-size such that its middle GLOW_INNER_HALF fraction
+     * matches the cutout's own half-size exactly, then scaled again by the
+     * user's reach. */
+    half_w = (int)(width_px / (2.0 * GLOW_INNER_HALF) * reach / 100.0);
+    half_h = (int)(height_px / (2.0 * GLOW_INNER_HALF) * reach / 100.0);
+    if (half_w < 1 || half_h < 1) return;
+
+    phase = (int)(frame % (unsigned)period);
+    level = GLOW_FLOOR + (1.0 - GLOW_FLOOR) * (sin(2.0 * 3.14159265358979323846 * phase / period) * 0.5 + 0.5);
+    r = (int)(tunable("glow_r", GLOW_R_DEFAULT) * level);
+    g = (int)(tunable("glow_g", GLOW_G_DEFAULT) * level);
+    b = (int)(tunable("glow_b", GLOW_B_DEFAULT) * level);
+
+    setPolyFT4(&prim);
+    setSemiTrans(&prim, 1);
+    prim.r0 = (u8)r;
+    prim.g0 = (u8)g;
+    prim.b0 = (u8)b;
+    prim.tpage = GetTPage(1, 1, GLOW_PIXELS_X, GLOW_PIXELS_Y) | (u16)(GLOW_BANK << 11);
+    prim.clut = GetClut(GLOW_CLUT_X, GLOW_CLUT_Y);
+    prim.x0 = (short)(cx - half_w);
+    prim.y0 = (short)(cy - half_h);
+    prim.u0 = 0;
+    prim.v0 = 0;
+    prim.x1 = (short)(cx + half_w);
+    prim.y1 = (short)(cy - half_h);
+    prim.u1 = GLOW_SIZE - 1;
+    prim.v1 = 0;
+    prim.x2 = (short)(cx - half_w);
+    prim.y2 = (short)(cy + half_h);
+    prim.u2 = 0;
+    prim.v2 = GLOW_SIZE - 1;
+    prim.x3 = (short)(cx + half_w);
+    prim.y3 = (short)(cy + half_h);
+    prim.u3 = GLOW_SIZE - 1;
+    prim.v3 = GLOW_SIZE - 1;
+    GsSortPoly(&prim, table, depth);
+}
+
 static void draw_one(int index, int world_height)
 {
     DuelCardRecord *card = &D_801A7AD8[index];
@@ -354,6 +488,7 @@ static void draw_one(int index, int world_height)
     depth = depth / 4 - tunable("depth", DEPTH_STEPS);
     depth = depth < 0 ? 0 : depth >= (1 << table->length) ? (1 << table->length) - 1 : depth;
     GsSortPoly(&prim, table, (unsigned short)depth);
+    draw_glow(table, (unsigned short)depth, cx, (top_sy + base_sy) / 2, width_px, height_px);
 }
 
 static void draw_frame(void)
