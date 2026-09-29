@@ -290,7 +290,7 @@ record are shown as retail fusions and marked.
   or 8 bits, and the palette the polygons name, as the last upload to that
   place in VRAM leaves it). Opening a mod takes such entries back into the
   map; the pack's other entries are kept as written.
- a retail card's picture and thumbnail go in
+* Art (the Art tab, `art.py`): a retail card's picture and thumbnail go in
   a texture pack, `textures/manifest.json` with PNGs under
   `textures/cards/`, one entry each addressed as `extract_images.py` and
   `hd_assets_pack.py` address them (the picture at the art record, WA
