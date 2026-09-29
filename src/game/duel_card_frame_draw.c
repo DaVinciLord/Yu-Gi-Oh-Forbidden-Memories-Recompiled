@@ -12,6 +12,9 @@
 #include "display_object_packet_submit.h"
 #include "func_80016784.h"
 #include "duel_draw_card_output_position.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/cards.h"
+#endif
 
 #define POLY_FT4_BYTES(packet) ((u8 *)(packet))
 #define CARD_FRAME_SCRATCH_BYTES(scratch) ((u8 *)(scratch))
@@ -164,6 +167,13 @@ void func_80016784(DisplayObject *object, s32 arg1, s32 arg2, s32 arg3) {
                         } while (i >= 0);
                         break;
                     }
+#ifdef MEMORIES_PC
+                    /* A mod's frame colour (Cards_FrameColor): the face's
+                     * palette row, after the type's kind word or stats. */
+                    if (Cards_FrameColor(card->card_id) >= 0) {
+                        k->cxcy.h.cy = 0xF1 + Cards_FrameColor(card->card_id);
+                    }
+#endif
                     z->tpage = 0xE;
                     z->rgb = object->field_0C;
                     z->xy.h.x = o->pos.h.x + 6;

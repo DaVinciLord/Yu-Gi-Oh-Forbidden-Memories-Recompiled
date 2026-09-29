@@ -358,6 +358,30 @@ class ManifestTest(unittest.TestCase):
         p.remove_card(max(p.added))
         self.assertEqual(set(p.notes), set())
 
+    def test_frame(self):
+        p = Project(self.retail)
+        p.cards[1].frame = 4
+        copy = p.add_card(2, "c1")
+        p.cards[copy].frame = 5
+        cards = manifest.build(p)["cards"]
+        self.assertIn({"replace": 1, "frame": "Purple"}, cards)
+        self.assertEqual(cards[-1]["frame"], "Orange")
+        self.assertTrue(p.card_changed(1))
+        again = self.reopen(p)
+        self.assertEqual((again.cards[1].frame, again.cards[max(again.added)].frame), (4, 5))
+        self.assertEqual(again.cards[1].shown_frame(), 4)
+        self.assertEqual(again.cards[2].shown_frame(), g.type_frame(again.cards[2].type))
+        again.revert_card(1)
+        self.assertEqual(again.cards[1].frame, -1)
+        # As cards.c reads it: names in any case, numbers, "Type" back to the type's.
+        other = Project(self.retail)
+        messages = manifest.apply(other, {"id": "t", "cards": [
+            {"replace": 3, "frame": "ritual"}, {"replace": 4, "frame": 1}, {"replace": 4, "frame": "Type"},
+            {"replace": 5, "frame": "Gold"}]})
+        self.assertEqual([other.cards[c].frame for c in (3, 4, 5)], [3, -1, -1])
+        self.assertEqual(messages, ["cards[3]: \"frame\" is Monster, Magic, Trap, Ritual, Purple, Orange or Type; "
+                                    "left out"])
+
     def test_unnamed_copy_keeps_the_disc_name(self):
         p = Project(self.retail)
         data = {"id": "t", "cards": [{"replace": 3, "name": "New Three"}, {"copy": 3, "id": "c3"}]}

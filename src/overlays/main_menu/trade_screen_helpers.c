@@ -10,6 +10,9 @@
 #include "../../game/card_list_rows.h"
 #include "card_tables.h"
 #include "ordering_tables.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/cards.h"
+#endif
 
 /* Three Trade screen helpers: the card-type icon (0x80184344) and the column
    dimming overlay (0x80184454) that the offer draw calls for each entry, and
@@ -46,6 +49,13 @@ void MainMenu_DrawCardTypeIcon(s32 x, s32 y, s32 cardID)
     } else {
         palette = 0x270;
     }
+#ifdef MEMORIES_PC
+    /* As Build Deck's icon (duel_card_type_icon.c): orange after ritual,
+     * no purple. */
+    if (Cards_FrameColor(cardID) >= 0 && Cards_FrameColor(cardID) != CARD_FRAME_PURPLE) {
+        palette = 0x260 + (Cards_FrameColor(cardID) - (Cards_FrameColor(cardID) == CARD_FRAME_ORANGE)) * 0x10;
+    }
+#endif
     setPolyFT4(&sprite);
     sprite.r0 = 0x80;
     sprite.g0 = 0x80;

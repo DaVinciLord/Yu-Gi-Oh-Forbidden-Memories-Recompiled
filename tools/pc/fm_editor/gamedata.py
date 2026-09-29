@@ -55,6 +55,14 @@ TYPE_NAMES = ["Dragon", "Spellcaster", "Zombie", "Warrior", "Beast-Warrior", "Be
               "Fairy", "Insect", "Dinosaur", "Reptile", "Fish", "Sea Serpent", "Machine", "Thunder", "Aqua",
               "Pyro", "Rock", "Plant", "Magic", "Trap", "Ritual", "Equip"]
 TYPE_MAGIC, TYPE_TRAP, TYPE_RITUAL, TYPE_EQUIP = 20, 21, 22, 23
+# A card's "frame" (cards.c frame_names): the palette rows the game draws a
+# card through. Retail picks one by type; purple and orange it never uses.
+FRAME_NAMES = ["Monster", "Magic", "Trap", "Ritual", "Purple", "Orange"]
+
+
+def type_frame(t: int) -> int:
+    """The frame the game gives type `t`: equip draws as magic."""
+    return {TYPE_MAGIC: 1, TYPE_EQUIP: 1, TYPE_TRAP: 2, TYPE_RITUAL: 3}.get(t, 0)
 ATTRIBUTE_NAMES = ["Light", "Dark", "Earth", "Water", "Fire", "Wind"]
 STAR_NAMES = ["", "Mars", "Jupiter", "Saturn", "Uranus", "Pluto", "Neptune", "Mercury", "Sun", "Moon", "Venus"]
 DUELIST_NAMES = [
@@ -117,14 +125,19 @@ class Card:
     level: int = 0
     star1: int = 0
     star2: int = 0
+    frame: int = -1         # FRAME_NAMES index, or -1 for its type's
 
-    FIELDS = ("name", "description", "attack", "defense", "type", "attribute", "level", "star1", "star2")
+    FIELDS = ("name", "description", "attack", "defense", "type", "attribute", "level", "star1", "star2", "frame")
 
     def copy(self, **changes) -> "Card":
         return dc_replace(self, **changes)
 
     def is_monster(self) -> bool:
         return self.type < TYPE_MAGIC
+
+    def shown_frame(self) -> int:
+        """The frame the game draws it in."""
+        return self.frame if self.frame >= 0 else type_frame(self.type)
 
     def same(self, other: "Card") -> bool:
         return all(getattr(self, f) == getattr(other, f) for f in self.FIELDS)

@@ -52,6 +52,14 @@ int Cards_HasModel(int id);
  * each in a deck, all five in hand win): a piece a mod replaced is not,
  * unless its entry says "exodia": true. */
 int Cards_ExodiaPiece(int id);
+/* The frame a mod's "frame" gives `id`, whatever its type: CARD_FRAME_*, or
+ * -1 for its type's (monster, magic and equip, trap, ritual). The card view,
+ * the duel's hand and field cards and the Library's grid draw it through
+ * that frame's palette row; the disc has purple and orange rows it never
+ * uses. */
+enum { CARD_FRAME_MONSTER, CARD_FRAME_MAGIC, CARD_FRAME_TRAP, CARD_FRAME_RITUAL, CARD_FRAME_PURPLE,
+       CARD_FRAME_ORANGE, CARD_FRAME_COUNT };
+int Cards_FrameColor(int id);
 int Cards_Fusion(int a, int b, int *result);
 
 /* A card a manifest names: its id, a stable identity ("mod:entry:n"), or a

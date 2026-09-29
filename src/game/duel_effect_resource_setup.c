@@ -152,6 +152,13 @@ shared_tail:
     entry->object_04 = object;
 
     object = DisplayObject_AcquireSlot(DisplayObject_FindFreeGeneralSlot(), 2);
+#ifdef MEMORIES_PC
+    /* A mod's frame colour (Cards_FrameColor) is the frame's palette row;
+     * the layout stays the type's. */
+    if (Cards_FrameColor(card_id) >= 0) {
+        setup = 0x100 + Cards_FrameColor(card_id);
+    }
+#endif
     DisplayObject_ConfigureSpriteAtPosition(object, 2, 4, 1, 0, variant, 0x1C, setup + 8);
 
     object->field_18 = 0x46;

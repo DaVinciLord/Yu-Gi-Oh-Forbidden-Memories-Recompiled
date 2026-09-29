@@ -62,6 +62,9 @@ static char *identities[CARD_TABLE_ID_END];
 static const JsonValue *definitions[CARD_TABLE_ID_END];
 static unsigned short model_ids[CARD_TABLE_ID_END], effect_ids[CARD_TABLE_ID_END];
 static unsigned char not_exodia[EXODIA_PIECE_COUNT];  /* a replaced piece without Exodia's rules */
+/* The frame a card is drawn in when its entry says ("frame"), plus one: 0
+ * is its type's (cards.h Cards_FrameColor). */
+static unsigned char frames[CARD_TABLE_ID_END];
 const char *Cards_Identity(int id) { return id > CARD_COUNT && Cards_Valid(id) && identities[id] ? identities[id] : ""; }
 int Cards_FindIdentity(const char *identity)
 {
@@ -74,6 +77,7 @@ int Cards_ModelId(int id) { return Cards_Valid(id) && model_ids[id] ? model_ids[
 int Cards_EffectId(int id) { return Cards_Valid(id) && effect_ids[id] ? effect_ids[id] : Cards_BaseId(id); }
 static int retail_monster(int id);
 int Cards_HasModel(int id) { return Cards_Valid(id) && retail_monster(Cards_ModelId(id)); }
+int Cards_FrameColor(int id) { return Cards_Valid(id) ? frames[id] - 1 : -1; }
 int Cards_ExodiaPiece(int id)
 {
     return (unsigned)(id - EXODIA_FIRST_CARD_ID) < EXODIA_PIECE_COUNT && !not_exodia[id - EXODIA_FIRST_CARD_ID];
@@ -354,6 +358,9 @@ static const char *const type_names[] = {"Dragon", "Spellcaster", "Zombie", "War
                                          "Fish", "Sea Serpent", "Machine", "Thunder", "Aqua", "Pyro", "Rock",
                                          "Plant", "Magic", "Trap", "Ritual", "Equip"};
 static const char *const attribute_names[] = {"Light", "Dark", "Earth", "Water", "Fire", "Wind"};
+/* The frames, in the order of their palettes (CARD_FRAME_*); "type" is the
+ * card's own type's again. */
+static const char *const frame_names[] = {"Monster", "Magic", "Trap", "Ritual", "Purple", "Orange", "Type"};
 static const char *const star_names[] = {"", "Mars", "Jupiter", "Saturn", "Uranus", "Pluto",
                                          "Neptune", "Mercury", "Sun", "Moon", "Venus"};
 
@@ -603,7 +610,7 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     int parts = 0;
     int base = 0, count, n, value, has_password;
     unsigned stats, password = CARD_PASSWORD_NONE;
-    unsigned char level_attr;
+    unsigned char level_attr, frame;
     if (Json_TypeOf(entry) != JSON_OBJECT) {
         Mods_Note(mod, "cards[%d] is not an object", index);
         return;
@@ -670,6 +677,18 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     }
     if ((value = choice(Json_Member(entry, "attribute"), attribute_names, 6)) >= 0) {
         level_attr = (unsigned char)((level_attr & 0x0F) | (clamp(value, 0, 15) << 4));
+    }
+    /* Left out, the frame is the base's (its type's unless an earlier entry
+     * chose one); "type" goes back to the type's. */
+    frame = frames[base];
+    if (Json_Member(entry, "frame")) {
+        value = choice(Json_Member(entry, "frame"), frame_names, CARD_FRAME_COUNT + 1);
+        if (value < 0 || value > CARD_FRAME_COUNT) {
+            Mods_Note(mod, "cards[%d]: \"frame\" is Monster, Magic, Trap, Ritual, Purple, Orange or Type; left out",
+                      index);
+        } else {
+            frame = (unsigned char)(value == CARD_FRAME_COUNT ? 0 : value + 1);
+        }
     }
     /* What View > Card passwords shows (passwords.h): a copy has none
      * unless it says, a replaced card keeps the disc's. */
@@ -741,6 +760,7 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     own:
         gDuel_adwCardStats[id - 1] = (int)stats;
         gDuel_abCardLevelAttr[id] = level_attr;
+        frames[id] = frame;
         names[id] = name && *name ? encode_name(mod, name, n, id) : NULL;
         descriptions[id] = description && *description ? encode_description(mod, description, id) : NULL;
         add_notes(mod, index, id, Json_Member(entry, "notes"));

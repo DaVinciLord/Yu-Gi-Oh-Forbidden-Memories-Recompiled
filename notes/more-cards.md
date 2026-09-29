@@ -52,6 +52,7 @@ The release ships no card mod; the checks below were made with test mods
 | `attribute` | a number or a name (`"Light"` to `"Wind"`) |
 | `level` | 0 to 12 |
 | `stars` | the two guardian stars, as numbers or names (`"Mars"` to `"Venus"`) |
+| `frame` | the colour of the card's frame, whatever its type: `"Monster"` (gold), `"Magic"` (green), `"Trap"` (pink), `"Ritual"` (blue), `"Purple"` or `"Orange"`, or a number 0-5 in that order; `"Type"` goes back to its type's ([below](#frame-colour)) |
 | `drops` | whether the card can be won in its base's place (default `true`, below) |
 | `opponents` | whether an opponent's deck can be dealt it in its base's place (default `false`) |
 | `password` | what View > Card passwords shows for it ([PC build](pc-build.md#card-passwords-view)): up to eight digits as a string (`"08124921"`, leading zeros kept) or a number, `""` or `null` for none. It is only shown: the Password screen does not know it (a disc card's
@@ -82,7 +83,7 @@ so a mod can rework the existing cards without adding any:
 
 It takes the keys above that change what a player reads off the card:
 `name`, `description`, `art`, `thumbnail`, `title`, `attack`, `defense`,
-`type`, `attribute`, `level`, `stars` and `password` (without one it shows
+`type`, `attribute`, `level`, `stars`, `frame` and `password` (without one it shows
 the disc's). It gets no id of its own, so `id`,
 `count`, `count_setting`, `drops`, `opponents` and `fusions` do not apply:
 the card keeps its place in the disc's tables, and the
@@ -112,6 +113,38 @@ own show the replaced ones.
 When two entries (or two mods) replace the same card, the later one goes over
 the earlier: what the later entry leaves out stays as the earlier one set it.
 The Mods window notes it.
+
+## Frame colour
+
+The game draws a card's frame through a palette its type picks: gold for a
+monster, green for magic and equip, pink for a trap, blue for a ritual.
+`"frame"` picks one of those for the card whatever its type, or one of the
+two the disc has and never uses, purple and orange:
+
+```json
+{ "replace": "Blue-Eyes White Dragon", "frame": "Purple" }
+```
+
+Only the colour changes: a monster keeps its ATK/DEF and a magic card its
+MAGIC word. Left out, a replaced card keeps the frame an earlier mod gave
+it and a copy takes its base's; `"Type"` goes back to the type's
+(`Cards_FrameColor`, `src/pc/cards/cards.c`). It shows everywhere the game
+colours a card by its type:
+
+- the card view (Library, Build Deck, Trade, Password, the duel's card view,
+  fusions, rituals and cards being played): `func_800291E0`, palette rows
+  8-13 of each package's card-frame sheet;
+- the duel's hand and its 2D field cards (`func_80016784`) and the 3D field
+  cards (`func_80024C1C`, drawn by `func_80015EF4`): rows 1-6 of the duel's
+  hand-frame palette;
+- the Library's grid (`library_runtime.c`), whose small cards have a
+  palette per frame at x 0x160-0x1B0;
+- the 16x16 card icon in Build Deck (`func_80031574`) and Trade
+  (`MainMenu_DrawCardTypeIcon`): its package has orange (x 0x2A0) but no
+  purple, so a purple card keeps its type's icon there.
+
+The Forbidden Memories HD mod's frames cover purple and orange too
+(`tools/pc/hd_assets_pack.py` recolours the monster frame into them).
 
 ## Notes on a card
 
