@@ -1488,8 +1488,11 @@ static void pump(void)
 static void create_window(const char *title)
 {
     update_menu_scale(240 * scale + 26 * Menu_AutoScale(240 * scale));
-    window = SDL_CreateWindow(title, 320 * scale, 240 * scale + Menu_Height(),
-                              SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_OPENGL);
+    /* Desktop GL where the system has it (platform.h); else, or without a
+     * context, the SDL renderer. */
+    window = Platform_HasDesktopGL() ? SDL_CreateWindow(title, 320 * scale, 240 * scale + Menu_Height(),
+                                                        SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY |
+                                                        SDL_WINDOW_OPENGL) : NULL;
     gl_context = window ? SDL_GL_CreateContext(window) : NULL;
     use_gl = gl_context != NULL;
     if (!use_gl) {
