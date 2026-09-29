@@ -15,6 +15,11 @@
 int memories_memfd_create(const char *name, unsigned flags);
 #define memfd_create memories_memfd_create
 #endif
+/* Where the kernel predates memfd (Linux 3.17: Android 7 and 8 devices, the
+ * API 25 emulator's 3.10), shared memory of `size` bytes from the ashmem
+ * device, which takes its size from an ioctl instead of ftruncate. -1 when
+ * that fails too. android.c; image.c uses it for guest RAM. */
+int memories_ashmem_create(const char *name, unsigned size);
 
 #if __ANDROID_API__ < 28
 /* No iconv before API 28, and bionic's has no Shift-JIS anyway: the one user

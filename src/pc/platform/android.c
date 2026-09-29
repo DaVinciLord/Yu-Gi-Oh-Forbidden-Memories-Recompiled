@@ -21,10 +21,13 @@
 #include <SDL3/SDL.h>
 #include <android/log.h>
 #include <dlfcn.h>
+#include <fcntl.h>
+#include <linux/ashmem.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/syscall.h>
 #include <unistd.h>
 
@@ -36,6 +39,19 @@ int memories_memfd_create(const char *name, unsigned flags) /* android_compat.h 
     return (int)syscall(__NR_memfd_create, name, flags);
 }
 #endif
+
+int memories_ashmem_create(const char *name, unsigned size) /* android_compat.h */
+{
+    char label[ASHMEM_NAME_LEN];
+    int fd = open("/dev/ashmem", O_RDWR | O_CLOEXEC);
+    if (fd < 0) return -1;
+    snprintf(label, sizeof(label), "%s", name);
+    if (ioctl(fd, ASHMEM_SET_NAME, label) || ioctl(fd, ASHMEM_SET_SIZE, (size_t)size)) {
+        close(fd);
+        return -1;
+    }
+    return fd;
+}
 
 int main(int argc, char **argv); /* src/pc/guest/main.c */
 
