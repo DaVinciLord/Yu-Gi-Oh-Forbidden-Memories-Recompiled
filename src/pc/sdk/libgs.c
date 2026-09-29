@@ -7,6 +7,7 @@
 #include "pc/compat/libgs_ot.h"
 #include "pc/guest/image.h"
 #include "pc/debug/crash.h"
+#include "pc/compat/pgxp.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -419,6 +420,9 @@ void GsSortPoly(u32 *primitive, u32 *ot, unsigned short pri)
         }
     }
     D_800FE240 = (u32)(uintptr_t)make_packet(packet, ot, pri, words);
+    /* PGXP (pgxp.h): the vertices the game stored into the primitive, moved
+     * by the offset, are this packet's (the 3D duel cards). */
+    Pgxp_AddPrimMoved(packet, (s16)D_800FE0BC, (s16)D_800FE0BE);
 }
 
 /* Unscaled sprite as a textured quad so either axis can be mirrored. Mirrored

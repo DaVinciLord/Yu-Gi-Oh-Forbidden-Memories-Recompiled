@@ -447,7 +447,9 @@ void DrawOTag(u32 *list)
         size_t i;
         for (i = 0; i < count && pending_precise < MAX_FRAME_PRECISE; i++) {
             PgxpVertex *vertex = &frame_precise[pending_precise];
-            int at = Pgxp_FindAt(frame_addresses[i], frame_words[i], &vertex->x, &vertex->y, &vertex->w);
+            int at;
+            if (!Pgxp_MaybeVertexWord(frame_words[i])) continue;
+            at = Pgxp_FindAt(frame_addresses[i], frame_words[i], &vertex->x, &vertex->y, &vertex->w);
             if (at > 0) {
                 placed++;
             } else if (at < 0) {
@@ -472,7 +474,9 @@ void DrawOTag(u32 *list)
         }
     }
     Pgxp_NextFrame();
-    Pgxp_Active = Settings_Get(SET_PGXP) && SoftGpu_Scale() > 1;
+    /* Only the OpenGL picture draws the precise vertices (SoftGpu_Gp0 hands
+     * them to its recorder): without one at 2x and up, nothing is tracked. */
+    Pgxp_Active = Settings_Get(SET_PGXP) && !SoftGpu_WideRastered();
 }
 
 void GsDrawOt(void *descriptor)

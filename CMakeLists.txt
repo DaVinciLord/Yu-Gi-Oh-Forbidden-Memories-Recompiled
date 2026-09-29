@@ -197,6 +197,12 @@ if(BUILD_TESTING)
     add_executable(memories_gte_test tests/pc/gte_test.c)
     target_link_libraries(memories_gte_test PRIVATE memories_pc_core)
     add_test(NAME pc_gte COMMAND memories_gte_test)
+    # Pgxp_MaybeVertexWord is `static inline` in the header itself (pure,
+    # no dependency on libgpu.c or anything it pulls in), so this test needs
+    # no library, just the include path.
+    add_executable(memories_libgpu_test tests/pc/libgpu_test.c)
+    target_include_directories(memories_libgpu_test PRIVATE src)
+    add_test(NAME pc_libgpu COMMAND memories_libgpu_test)
     add_executable(memories_soft_gpu_test tests/pc/soft_gpu_test.c)
     target_link_libraries(memories_soft_gpu_test PRIVATE memories_pc_core)
     add_test(NAME pc_soft_gpu COMMAND memories_soft_gpu_test)
