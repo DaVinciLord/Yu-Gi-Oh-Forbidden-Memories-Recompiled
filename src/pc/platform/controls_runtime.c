@@ -11,6 +11,11 @@ static ControllerDevice devices[CONTROLS_DEVICES];
 static int initialized, assigned[2] = {-1, -1};
 static volatile sig_atomic_t blocked, held, gate = 1;
 static unsigned char keys[CTRL_KEY_COUNT];
+/* Main thread only: keys pressed since the last update. A press released
+ * before the update (a tap shorter than a frame, or a key event injected
+ * with its release in the same millisecond) still counts as held for that
+ * one update, so the game sees it at least once. */
+static unsigned char tapped[CTRL_KEY_COUNT];
 static ControlsEvaluator evaluators[2];
 static volatile uint16_t keyboard_bits, pad_bits[2];
 static volatile int connected[2];
@@ -144,11 +149,14 @@ void ControlsRuntime_Key(int key, int down)
             host_taps |= 1u << h;
     if (down && !keys[key] && key == CTRL_KEY_ESCAPE)
         host_taps |= 1u << CTRL_HOST_EXIT;
+    if (down)
+        tapped[key] = 1;
     keys[key] = down != 0;
 }
 void ControlsRuntime_ResetKeys(void)
 {
     memset(keys, 0, sizeof(keys));
+    memset(tapped, 0, sizeof(tapped));
     ControlsRuntime_Gate();
 }
 int ControlsRuntime_Keys(ControlSource *out)
@@ -243,13 +251,18 @@ void ControlsRuntime_Update(void)
     sigset_t all, previous;
     ControlsRuntime_Reconcile();
     int n = ControlsRuntime_Keys(down);
+    for (int k = 1; k < CTRL_KEY_COUNT; k++)
+        if (tapped[k] && !keys[k])
+            down[n++] = (ControlSource){CTRL_SRC_KEY, (uint16_t)k, 0};
+    memset(tapped, 0, sizeof(tapped));
     neutral = n == 0;
     kb = Controls_EvalKeyboardRows(&active.kb, down, n);
     /* Esc in a window is always Exit game, bound or not (the backends keep
      * it for fullscreen and menus first), so clearing or moving Exit's key
      * never loses the way out; a key bound to Exit adds to it. */
-    if (keys[CTRL_KEY_ESCAPE])
-        kb |= (uint64_t)1 << (CTRL_DEST_COUNT + CTRL_HOST_EXIT);
+    for (int i = 0; i < n; i++)
+        if (down[i].code == CTRL_KEY_ESCAPE)
+            kb |= (uint64_t)1 << (CTRL_DEST_COUNT + CTRL_HOST_EXIT);
     for (int p = 0; p < 2; p++) {
         int i = assigned[p];
         conn[p] = i >= 0;
