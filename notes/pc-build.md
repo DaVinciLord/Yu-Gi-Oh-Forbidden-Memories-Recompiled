@@ -447,6 +447,12 @@ writable (not under `Program Files`); if `user/` cannot be made the port
 falls back to `./saves` as for any user directory. Without the file nothing
 changes.
 
+The program directory (the release's `mods/`, `languages/`, the build's
+`buildid` and `symbols/` for save states, `game/`) is the executable's
+folder; `MEMORIES_PROGRAM_DIR` names another, for a process that is not the
+port's own executable (the Android app, which unpacks those files; see
+"Android").
+
 What an older build left in `./saves` is carried over on the first launch
 that finds the destination missing (`Paths_MigrateLegacySaves`), so an
 existing card, settings and bindings survive the move. The game's own files
