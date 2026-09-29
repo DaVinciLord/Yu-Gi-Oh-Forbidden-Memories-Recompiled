@@ -276,6 +276,10 @@ void Platform_SetClockRate(int percent)
 }
 
 int Platform_ClockRate(void) { return rate; }
+
+#ifndef __ANDROID__ /* android.c: GLES only */
+int Platform_HasDesktopGL(void) { return 1; }
+#endif
 void Platform_StepFrame(void) { step_pending = 1; }
 
 float Platform_GameHz(void)
