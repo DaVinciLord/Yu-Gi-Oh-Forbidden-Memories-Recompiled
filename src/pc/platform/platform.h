@@ -51,6 +51,11 @@ void Platform_SetStateSlot(int slot);
  * resizable/window-mode controls; legacy X11 deliberately reports no support. */
 void Platform_ApplyDisplaySettings(void);
 int Platform_HasWindowModes(void);
+/* Whether the window may use the desktop OpenGL renderer (gl_picture.c and
+ * present_pass.c: desktop GL, #version 130 shaders). 0 where the system's
+ * GL is GLES (Android), whose context SDL would hand over all the same; the
+ * SDL renderer then shows the software GPU's picture instead. */
+int Platform_HasDesktopGL(void);
 /* Save the source picture, or the composed window when `window_image` is set. */
 void Platform_Screenshot(int window_image);
 /* Help > System info: puts `text` on the system clipboard; 0 where the
