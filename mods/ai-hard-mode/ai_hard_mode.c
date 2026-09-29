@@ -15,6 +15,7 @@
 #define DUEL_TERRAIN_SCALAR_IN_DATA
 #include "game/duel_terrain_boost.h"
 #include "game/duel_check_ritual.h"
+#include "game/duel_calc_guardian_star_matchup.h"
 #define DUEL_PACKAGE_STAGE_RAW_ARENAS
 #include "game/duel_load_package_stage.h"
 #include "game/func_8001B938.h"
@@ -125,6 +126,7 @@ static int terrain(int type, int field)
         gDuel_aTerrainBoost[type][field - 1] * CARD_STAT_SCALE : 0;
 }
 static int ritual(int id) { return Duel_CheckRitual(0, id); }
+static int star_matchup(int attacker, int defender) { return Duel_CalcGuardianStarMatchup(attacker, defender); }
 static const HmRules rules = {card_info, Duel_CheckFusion, Duel_CheckEquip, terrain, ritual};
 
 static HmCard snapshot(int index, int effective, int secret)
@@ -289,6 +291,7 @@ int MemoriesModInit(const MemoriesModHost *from, MemoriesMod *mod)
 {
     if (from->api < 4) return 0;
     host = from; mod->api = 4;
+    Hm_StarMatchup = star_matchup;
     return host->hook(host, (void *)AiScript_Init, (void *)initialize, &original_init) &&
         host->hook(host, (void *)AiScript_Run, (void *)run, &original_run) &&
         host->hook(host, (void *)Ai_GetHandSize, (void *)window, &original_window) &&

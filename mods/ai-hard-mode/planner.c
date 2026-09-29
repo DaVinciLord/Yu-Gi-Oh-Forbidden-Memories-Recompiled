@@ -12,13 +12,24 @@ static int occupied(const HmCard *row)
     return n;
 }
 
-int Hm_StarBonus(int a, int b)
+/* The disc's two cycles, for the fixtures, which run without the game. */
+static int retail_star_bonus(int a, int b)
 {
     int start = a >= 7 ? 7 : 1, size = a >= 7 ? 4 : 6;
     if (a < 1 || a > 10 || b < start || b >= start + size) return 0;
     if ((a - start + 1) % size == b - start) return 500;
     if ((a - start + size - 1) % size == b - start) return -500;
     return 0;
+}
+
+int (*Hm_StarMatchup)(int attacker, int defender);
+
+int Hm_StarBonus(int a, int b)
+{
+    /* In the game, the game's own matchup, which follows a mod's
+       "guardian_stars" (stars 11-15 included); no star is no bonus. */
+    if (Hm_StarMatchup) return a >= 1 && a <= 15 && b >= 1 && b <= 15 ? Hm_StarMatchup(a, b) : 0;
+    return retail_star_bonus(a, b);
 }
 
 int Hm_KeepValue(HmCard c)
@@ -50,6 +61,8 @@ int Hm_ChooseStar(const HmBoard *b, HmCard c, int pinned)
     for (choice = 0; choice < 2; choice++) {
         HmCard current = c;
         int score = 0;
+        /* A card with one star (no second, or the same twice) has no choice. */
+        if (choice && (!c.star2 || c.star2 == c.star)) break;
         current.star = choice ? c.star2 : c.star;
         score -= min(safety(b, current, 0), safety(b, current, 1));
         if (!pinned) for (i = 0; i < 5; i++) if (b->enemy[i].id > 0) {
