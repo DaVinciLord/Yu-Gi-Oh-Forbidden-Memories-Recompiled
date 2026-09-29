@@ -686,7 +686,9 @@ NUMERO CARTA {f8 03 0C 56 1D 80 C3}
 {:LF02A}
 
  SCAMBIO
-{f8 0A 00} ESCI{nl}{cont}
+{f8 0A 00} ESCI
+{choose 80 LF000 LF000}
+
 [00E4]
 {choice 6C 02}{call LF029}{f8 0A 04}{jump LF02A}
 

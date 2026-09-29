@@ -26,4 +26,18 @@ int TextMenu_Cutting(int channel);
  * player picks from, cut to the choices in the box (at least one). */
 int TextMenu_Finish(int id, int channel, int heading, int count);
 
+/* After its last line a menu's text goes on with the jump that takes the
+ * answer somewhere ({choose 80 ...}, FB with bit 7): every menu of the
+ * game's text has it, and once the player answers, the text goes on from
+ * there. A menu without it (a translation written from a listing that had
+ * lost it, [00E3], the password shop's EXCHANGE/QUIT) would go on into
+ * whatever text follows, the next string's menu, and never end: the screen
+ * waits for the text to end and the game stops. The menu on `channel` is
+ * laid out, and its text goes on at `next`. */
+void TextMenu_LaidOut(int channel, const unsigned char *next);
+/* The text of string `id` on `channel` goes on at `at`, after its menu is
+ * answered: 1 when that menu has no jump there, and the text ends instead,
+ * as the jump's null target would end it (said once per string); else 0. */
+int TextMenu_Unanswered(int id, int channel, const unsigned char *at);
+
 #endif

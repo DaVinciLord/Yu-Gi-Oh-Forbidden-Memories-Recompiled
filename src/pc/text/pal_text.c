@@ -280,7 +280,7 @@ static int decode_bank(Bank *bank)
         if (bank->start[offset] && !push(&work, offset)) failed = 1;
     }
     while (!failed && (work.count || deferred.count)) {
-        int at, entry, choices = -1;
+        int at, choices = -1;
         if (!work.count) {
             /* Paths that met a choice jump before any setup: its setup is
              * the nearest one before it, now that everything else is read. */
@@ -301,7 +301,7 @@ static int decode_bank(Bank *bank)
             if (!progress) failed = 1;
             continue;
         }
-        at = entry = work.items[--work.count];
+        at = work.items[--work.count];
         while (!failed && bank->op_at[at] < 0) {
             int op = byte_at(bank, at, &failed), here = at, follow = 1, i;
             Op item;
@@ -362,7 +362,11 @@ static int decode_bank(Bank *bank)
                         int s;
                         for (s = at - 1; s >= 0 && setups[s] < 0; s--) {}
                         if (s < 0) {
-                            failed = !push(&deferred, entry);
+                            /* Again from the jump itself: the ops before it
+                             * are read, and a walk stops at the first op it
+                             * has already read, so from the path's start
+                             * the jump would never be. */
+                            failed = !push(&deferred, here);
                             break;
                         }
                         choices = setups[s];
