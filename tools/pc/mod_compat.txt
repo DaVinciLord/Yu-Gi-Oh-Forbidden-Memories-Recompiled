@@ -13,3 +13,11 @@ accept v0.1.2 function Cheats_UnlockAllFreeDuelists returns int where it returne
 # `capture` at its end. Only the port's own OpenGL picture installs a
 # recorder; none of v0.1.2's mods calls SoftGpu_SetRecorder.
 accept v0.1.2 record SoftGpuRecorder grew by one callback at its end
+# The Game list (host actions: Exit game, save states, the other shortcuts):
+# every controls profile gained its host bindings at its end, which moves
+# what follows a profile. No v0.1.2 mod imports a Controls or
+# ControlsRuntime name; the controls file is the port's own and has its own
+# version (controls.txt 2).
+accept v0.1.2 record ControlsProfile grew by the host action bindings at its end
+accept v0.1.2 record ControlsDeviceProfile holds the larger ControlsProfile
+accept v0.1.2 record ControlsConfig holds the larger ControlsProfile

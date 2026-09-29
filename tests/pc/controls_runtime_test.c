@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "pc/compat/posix.h"
 #include "scratch.h"
 #include <unistd.h>
@@ -96,8 +97,85 @@ int main(void)
     d->snapshot.buttons_down = 1u << (CTRL_BTN_GUIDE - 1);
     ControlsRuntime_Update();
     assert(!ControlsRuntime_Blocked() && ControlsRuntime_Pad(0) == CTRL_DEST_CROSS);
+    /* Exit game (Esc by default) fires once per press, from a tap too short
+     * for any update to see it held, and never for a press made while the
+     * input is blocked or held. */
+    d->snapshot.buttons_down = 0;
+    ControlsRuntime_Update();
+    ControlsRuntime_TakeHost();
+    ControlsRuntime_Key(CTRL_KEY_ESCAPE, 1);
+    ControlsRuntime_Update();
+    assert(ControlsRuntime_TakeHost() == 1u << CTRL_HOST_EXIT);
+    ControlsRuntime_Update();
+    assert(!ControlsRuntime_TakeHost() && !ControlsRuntime_Keyboard());
+    ControlsRuntime_Key(CTRL_KEY_ESCAPE, 0);
+    ControlsRuntime_Key(CTRL_KEY_ESCAPE, 1);
+    ControlsRuntime_Key(CTRL_KEY_ESCAPE, 0);
+    ControlsRuntime_Update();
+    assert(ControlsRuntime_TakeHost() == 1u << CTRL_HOST_EXIT);
+    ControlsRuntime_Block(1);
+    ControlsRuntime_Key(CTRL_KEY_ESCAPE, 1);
+    ControlsRuntime_Update();
+    ControlsRuntime_Block(0);
+    ControlsRuntime_Update();
+    assert(!ControlsRuntime_TakeHost()); /* still the same press */
+    ControlsRuntime_Key(CTRL_KEY_ESCAPE, 0);
+    ControlsRuntime_Update();
+
+    /* Turbo (Tab) is a hold action: held while the key is, and not while
+     * input is blocked. Volume up (keypad +) fires on the press, then again
+     * once held past the repeat delay. */
+    ControlsRuntime_TakeHost();
+    ControlsRuntime_Key(CTRL_KEY_TAB, 1);
+    ControlsRuntime_Update();
+    assert(ControlsRuntime_HostHeld() == 1u << CTRL_HOST_TURBO && ControlsRuntime_KeyDown(CTRL_KEY_TAB));
+    ControlsRuntime_Block(1);
+    ControlsRuntime_Update();
+    assert(!ControlsRuntime_HostHeld());
+    ControlsRuntime_Key(CTRL_KEY_TAB, 0);
+    ControlsRuntime_Block(0);
+    ControlsRuntime_Update();
+    ControlsRuntime_Update();
+    ControlsRuntime_TakeHost();
+    ControlsRuntime_Key(CTRL_KEY_KP_PLUS, 1);
+    ControlsRuntime_Update();
+    assert(ControlsRuntime_TakeHost() == 1u << CTRL_HOST_VOLUME_UP);
+    ControlsRuntime_Update();
+    assert(!ControlsRuntime_TakeHost());
+    nanosleep(&(struct timespec){0, 450000000}, NULL);
+    ControlsRuntime_Update();
+    assert(ControlsRuntime_TakeHost() == 1u << CTRL_HOST_VOLUME_UP);
+    ControlsRuntime_Key(CTRL_KEY_KP_PLUS, 0);
+    ControlsRuntime_Update();
+
+    /* The controller's own Exit binding, kept out of the pad bits. */
+    cfg = *ControlsRuntime_Config();
+    ControlsRuntime_Profile(&cfg, 0, 1)->host[CTRL_HOST_EXIT][0] = (ControlSource){CTRL_SRC_BUTTON, CTRL_BTN_BACK, 0};
+    ControlsRuntime_Profile(&cfg, 0, 1)->src[0][0] = (ControlSource){0};
+    assert(ControlsRuntime_Apply(&cfg, error, sizeof(error)));
+    ControlsRuntime_Update();
+    d->snapshot.buttons_down = 1u << (CTRL_BTN_BACK - 1);
+    ControlsRuntime_Update();
+    assert(ControlsRuntime_TakeHost() == 1u << CTRL_HOST_EXIT && !ControlsRuntime_Pad(0));
+    d->snapshot.buttons_down = 0;
+    ControlsRuntime_Update();
+
+    /* With Exit game's key cleared, Esc (held or tapped) is still Exit. */
+    cfg = *ControlsRuntime_Config();
+    cfg.kb.host[CTRL_HOST_EXIT][0] = (ControlSource){0};
+    assert(ControlsRuntime_Apply(&cfg, error, sizeof(error)));
+    ControlsRuntime_Update();
+    ControlsRuntime_TakeHost();
+    ControlsRuntime_Key(CTRL_KEY_ESCAPE, 1);
+    ControlsRuntime_Update();
+    assert(ControlsRuntime_TakeHost() == 1u << CTRL_HOST_EXIT);
+    ControlsRuntime_Key(CTRL_KEY_ESCAPE, 0);
+    ControlsRuntime_Key(CTRL_KEY_ESCAPE, 1);
+    ControlsRuntime_Key(CTRL_KEY_ESCAPE, 0);
+    ControlsRuntime_Update();
+    assert(ControlsRuntime_TakeHost() == 1u << CTRL_HOST_EXIT);
     unlink(path);
     rmdir(dir);
-    puts("controls runtime: selection, hotplug, profiles and release gate passed");
+    puts("controls runtime: selection, hotplug, profiles, release gate, host actions, hold, held and repeating actions passed");
     return 0;
 }

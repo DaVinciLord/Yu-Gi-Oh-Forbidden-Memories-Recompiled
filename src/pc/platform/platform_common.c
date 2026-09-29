@@ -278,22 +278,6 @@ void Platform_SetClockRate(int percent)
 int Platform_ClockRate(void) { return rate; }
 void Platform_StepFrame(void) { step_pending = 1; }
 
-int Platform_VolumeKey(int key, int down)
-{
-    int volume, lowest = Settings_Min(SET_MASTER_VOLUME), highest = Settings_Max(SET_MASTER_VOLUME);
-    if ((key != CTRL_KEY_KP_PLUS && key != CTRL_KEY_KP_MINUS) || ControlsRuntime_KeyBound(key))
-        return 0;
-    if (!down) return 1;
-    volume = Settings_Get(SET_MASTER_VOLUME) + (key == CTRL_KEY_KP_PLUS ? 5 : -5);
-    volume = volume < lowest ? lowest : volume > highest ? highest : volume;
-    if (volume != Settings_Get(SET_MASTER_VOLUME)) {
-        Settings_Set(SET_MASTER_VOLUME, volume); /* the observer applies it (menu.c) */
-        Settings_Save();
-    }
-    LOG(LOG_MENU, "master volume %d%s", volume, Spu_Muted() ? " (muted)" : "");
-    return 1;
-}
-
 float Platform_GameHz(void)
 {
     return rate > 0 ? 1000000.0f / (float)vblank_period * (float)rate / 100.0f : 0.0f;

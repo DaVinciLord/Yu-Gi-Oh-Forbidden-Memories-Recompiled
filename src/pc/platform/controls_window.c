@@ -12,8 +12,11 @@
  *
  * The table lists the 16 PlayStation pad destinations in a reading order
  * (D-pad, face buttons, shoulders, stick clicks, system) with group headings;
- * that order is presentation only. Destination indices, the stored file and
- * every id below still use the wire-bit order of Controls_Actions.
+ * the port's own actions (Exit game, save states, the other shortcuts) are a
+ * second list, Game, under the pad picture, with the keys that cannot be
+ * bound listed below it for reference. The order is presentation only: row
+ * indices, the stored file and every id below still use the wire-bit order
+ * of Controls_Actions, host actions (CTRL_HOST_*) after it.
  * Main thread only. */
 #include "pc/compat/fs.h"
 #include "controls_window.h"
@@ -38,7 +41,7 @@ enum {
     YES = CONTROLS_UI_YES,
     NO = CONTROLS_UI_NO,
     KEEP = CONTROLS_UI_KEEP,
-    ROW = CONTROLS_UI_BINDING,  /* ROW + destination * 2 + slot */
+    ROW = CONTROLS_UI_BINDING,  /* ROW + row * 2 + slot */
     DIAGRAM = CONTROLS_UI_PAD,  /* DIAGRAM + destination */
     CHOICE = CONTROLS_UI_CHOICE /* CHOICE + device-list entry */
 };
@@ -62,7 +65,8 @@ enum {
     MIN_W = 560,
     MIN_H = 440,
     SIZE_W = 940,
-    SIZE_H = 780
+    SIZE_H = 900,
+    FIXED_LINES = 3 /* the fixed keys' text, under its heading */
 };
 
 /* Status severity: picks the colour of the message line. */
@@ -79,6 +83,7 @@ static struct {
     ControlsConfig draft;
     int player, tab, row, slot, scroll, scroll_max, lines_shown, focus, hover, close, modal, popup,
         popup_scroll, popup_max, width, height;
+    int host_scroll, host_scroll_max, host_lines_shown, pointer_x, pointer_y; /* the Game list's view */
     int count, mods, selected_device, draw_scale, say;
     int click_id, click_x, click_y;
     uint64_t click_time;
@@ -92,6 +97,7 @@ static int scale;
 /* Where the last draw put each pad button (the drawn shape, not its larger
  * mouse target); ControlsWindow_Locate reports these for the picture. */
 static Rect pad_rect[CTRL_DEST_COUNT];
+static Rect list_rect[2]; /* where the last draw put the pad list and the Game list */
 static Rect device_drop; /* set while drawing; the device list hangs off it */
 
 static const uint32_t bg = 0xff1e1f22, panel = 0xff27282c, raised = 0xff34363b, hot = 0xff42454d,
@@ -108,39 +114,62 @@ static const uint32_t bg = 0xff1e1f22, panel = 0xff27282c, raised = 0xff34363b, 
 /*  Reading order for the table                                        */
 /* ------------------------------------------------------------------ */
 
-static const int order[CTRL_DEST_COUNT] = {4,  6,  7,  5,  /* Up Down Left Right */
-                                           12, 13, 14, 15, /* Triangle Circle Cross Square */
-                                           10, 11, 8,  9,  /* L1 R1 L2 R2 */
-                                           1,  2,          /* L3 R3 */
-                                           3,  0};         /* Start Select */
-static const struct {
+typedef struct {
     const char *title;
     int first, count;
-} groups[] = {{"D-pad", 0, 4},
-              {"Face buttons", 4, 4},
-              {"Shoulders and triggers", 8, 4},
-              {"Stick clicks", 12, 2},
-              {"System", 14, 2}};
-#define GROUP_COUNT ((int)(sizeof(groups) / sizeof(groups[0])))
-#define LINE_COUNT (CTRL_DEST_COUNT + GROUP_COUNT)
+} Group;
+typedef struct {
+    const char *title; /* the name column's heading */
+    const int *order;
+    const Group *groups;
+    int group_count, row_count;
+} List;
+static const int pad_order[CTRL_DEST_COUNT] = {4,  6,  7,  5,  /* Up Down Left Right */
+                                               12, 13, 14, 15, /* Triangle Circle Cross Square */
+                                               10, 11, 8,  9,  /* L1 R1 L2 R2 */
+                                               1,  2,          /* L3 R3 */
+                                               3,  0};         /* Start Select */
+static const Group pad_groups[] = {{"D-pad", 0, 4},
+                                   {"Face buttons", 4, 4},
+                                   {"Shoulders and triggers", 8, 4},
+                                   {"Stick clicks", 12, 2},
+                                   {"System", 14, 2}};
+#define H(action) (CTRL_DEST_COUNT + CTRL_HOST_##action)
+static const int host_order[CTRL_HOST_COUNT] = {H(EXIT),       H(FULLSCREEN), H(SCREENSHOT), H(MUTE),
+                                                H(VOLUME_UP),  H(VOLUME_DOWN), H(SAVE_STATE), H(LOAD_STATE),
+                                                H(SLOT_1),     H(SLOT_2),     H(SLOT_3),     H(SLOT_4),
+                                                H(PAUSE),      H(FRAME_STEP), H(TURBO),      H(HUD),
+                                                H(DECK_SLOTS)};
+#undef H
+static const Group host_groups[] = {{"Program", 0, 6}, {"Save states", 6, 6}, {"Speed", 12, 3}, {"Tools", 15, 2}};
+static const List lists[2] = {{"PS1 BUTTON", pad_order, pad_groups, 5, CTRL_DEST_COUNT},
+                              {"GAME", host_order, host_groups, 4, CTRL_HOST_COUNT}};
+/* The pad keys, then the Game list's (list_rect, lists). */
+static int list_of(int row) { return row >= CTRL_DEST_COUNT; }
+static int list_lines(int list) { return lists[list].row_count + lists[list].group_count; }
 
-/* Table line -> destination, or -1 for a group heading. */
-static int line_action(int line, int *group_out)
+/* What the backends keep for themselves, shown under the Game list. */
+static const char fixed_keys[] = "F10: menu bar.  Alt+Enter: fullscreen.  Shift + Screenshot: whole window.  "
+                                 "Esc: quit (asking first), leave fullscreen, close menus, dialogs and this window.";
+
+/* Table line -> row, or -1 for a group heading. */
+static int line_action(int list, int line, int *group_out)
 {
+    const List *l = &lists[list];
     int at = 0;
-    for (int g = 0; g < GROUP_COUNT; g++) {
+    for (int g = 0; g < l->group_count; g++) {
         if (line == at) {
             if (group_out)
                 *group_out = g;
             return -1;
         }
         at++;
-        if (line < at + groups[g].count) {
+        if (line < at + l->groups[g].count) {
             if (group_out)
                 *group_out = g;
-            return order[groups[g].first + line - at];
+            return l->order[l->groups[g].first + line - at];
         }
-        at += groups[g].count;
+        at += l->groups[g].count;
     }
     if (group_out)
         *group_out = 0;
@@ -148,16 +177,16 @@ static int line_action(int line, int *group_out)
 }
 static int action_line(int action)
 {
-    for (int line = 0; line < LINE_COUNT; line++)
-        if (line_action(line, NULL) == action)
+    for (int line = 0; line < list_lines(list_of(action)); line++)
+        if (line_action(list_of(action), line, NULL) == action)
             return line;
     return 0;
 }
 static const char *action_group(int action)
 {
     int group = 0;
-    line_action(action_line(action), &group);
-    return groups[group].title;
+    line_action(list_of(action), action_line(action), &group);
+    return lists[list_of(action)].groups[group].title;
 }
 
 /* ------------------------------------------------------------------ */
@@ -391,7 +420,7 @@ void ControlsWindow_Init(void)
     memset(&ui, 0, sizeof(ui));
     ui.draft = *ControlsRuntime_Config();
     ui.focus = KEYBOARD;
-    ui.row = order[0];
+    ui.row = pad_order[0];
     ui.selected_device = -1;
     /* The message line starts empty: it reports what happened, and the hint
      * line above it already says how to edit a binding. */
@@ -464,16 +493,18 @@ static void start_capture(void)
     Controls_CaptureBegin(&ui.capture, ui.row, ui.slot, ControlsRuntime_Now());
     say(SAY_BUSY, "Release everything you are holding, then press the input you want.");
 }
-/* Keep the selected line, and its heading where possible, inside the view. */
+/* Keep the selected line, and its heading where possible, inside its list's
+ * view. */
 static void reveal_row(void)
 {
-    int line = action_line(ui.row);
-    if (!ui.lines_shown)
+    int line = action_line(ui.row), host = list_of(ui.row);
+    int *scroll = host ? &ui.host_scroll : &ui.scroll, shown = host ? ui.host_lines_shown : ui.lines_shown;
+    if (!shown)
         return;
-    if (line - 1 < ui.scroll)
-        ui.scroll = line - 1 < 0 ? 0 : line - 1;
-    if (line >= ui.scroll + ui.lines_shown)
-        ui.scroll = line - ui.lines_shown + 1;
+    if (line - 1 < *scroll)
+        *scroll = line - 1 < 0 ? 0 : line - 1;
+    if (line >= *scroll + shown)
+        *scroll = line - shown + 1;
 }
 static void select_row(int action, int slot)
 {
@@ -482,13 +513,15 @@ static void select_row(int action, int slot)
     ui.focus = ROW + action * 2 + slot;
     reveal_row();
 }
+/* Arrows stay in the selected row's list; Tab goes from one to the other. */
 static void move_row(int delta)
 {
+    const List *l = &lists[list_of(ui.row)];
     int at = 0;
-    for (int i = 0; i < CTRL_DEST_COUNT; i++)
-        if (order[i] == ui.row)
+    for (int i = 0; i < l->row_count; i++)
+        if (l->order[i] == ui.row)
             at = i;
-    select_row(order[(at + delta + CTRL_DEST_COUNT) % CTRL_DEST_COUNT], ui.slot);
+    select_row(l->order[(at + delta + l->row_count) % l->row_count], ui.slot);
 }
 static void activate(int id)
 {
@@ -568,12 +601,15 @@ static void activate(int id)
             start_capture();
         break;
     case CLEAR:
-        if (profile(0)->src[ui.row][ui.slot].kind == CTRL_SRC_UNBOUND) {
+        if (Controls_Row(profile(0), ui.row)[ui.slot].kind == CTRL_SRC_UNBOUND) {
             say(SAY_INFO, "That slot is already empty.");
             break;
         }
         Controls_ClearSlot(profile(1), ui.row, ui.slot);
-        say(SAY_INFO, "Binding cleared. Apply to save.");
+        /* Esc cancels a capture, so it cannot be pressed back in. */
+        say(SAY_INFO, ui.row == CTRL_ROW_EXIT && !ui.tab
+                          ? "Exit game cleared; Esc still quits. Apply to save."
+                          : "Binding cleared. Apply to save.");
         break;
     case DEFAULTS:
         ui.modal = 2;
@@ -647,13 +683,19 @@ void ControlsWindow_Event(const MenuEvent *e)
     }
     if (e->type == MENU_EVENT_MOTION) {
         int at = hit_at(e->x / sc, e->y / sc);
+        ui.pointer_x = e->x / sc;
+        ui.pointer_y = e->y / sc;
         ui.hover = at < 0 ? 0 : ui.hits[at].id;
         return;
     }
     if (e->type == MENU_EVENT_WHEEL) {
         ui.click_id = 0;
-        int *offset = ui.popup ? &ui.popup_scroll : &ui.scroll;
-        int maximum = ui.popup ? ui.popup_max : ui.scroll_max;
+        /* The wheel scrolls the list under the pointer. */
+        Rect g = list_rect[1];
+        int host = !ui.popup && ui.pointer_x >= g.x && ui.pointer_x < g.x + g.w && ui.pointer_y >= g.y &&
+                   ui.pointer_y < g.y + g.h;
+        int *offset = ui.popup ? &ui.popup_scroll : host ? &ui.host_scroll : &ui.scroll;
+        int maximum = ui.popup ? ui.popup_max : host ? ui.host_scroll_max : ui.scroll_max;
         *offset -= e->wheel;
         if (*offset > maximum)
             *offset = maximum;
@@ -946,7 +988,7 @@ static void held_summary(char *out, size_t size, uint16_t bits)
     size_t at = 0;
     out[0] = 0;
     for (int i = 0; i < CTRL_DEST_COUNT && at + 1 < size; i++) {
-        int action = order[i];
+        int action = pad_order[i];
         if (!(bits & Controls_Actions[action].bit))
             continue;
         int wrote = snprintf(out + at, size - at, "%s%s", at ? ", " : "", Controls_Actions[action].name);
@@ -993,65 +1035,68 @@ static void draw_diagram(Rect r, uint16_t bits)
                   r.w - 24, faint);
 }
 
-/* How many table lines a panel of this height shows, and the height that
- * exactly holds them: both panels are sized from this so they end level. */
-static int table_lines(int height)
+/* How many lines of a list a panel of this height shows, and the height
+ * that exactly holds them: the panels are sized from this so they end level. */
+static int table_lines(int height, int list)
 {
     int shown = (height - HEAD_H - 11) / ROW_H;
     if (shown < 1)
         shown = 1;
-    return shown > LINE_COUNT ? LINE_COUNT : shown;
+    return shown > list_lines(list) ? list_lines(list) : shown;
 }
-static int table_height(int height) { return HEAD_H + 11 + table_lines(height) * ROW_H; }
+static int table_height(int height, int list) { return HEAD_H + 11 + table_lines(height, list) * ROW_H; }
 
-static void draw_table(Rect r, uint16_t bits)
+static void draw_table(Rect r, uint64_t rows, int list)
 {
     const ControlsProfile *p = profile(0);
-    int slots = ui.tab ? 2 : 1;
+    int slots = ui.tab ? 2 : 1, lines = list_lines(list);
+    int *scroll = list ? &ui.host_scroll : &ui.scroll, *scroll_max = list ? &ui.host_scroll_max : &ui.scroll_max;
+    list_rect[list] = r;
     frame(r, panel, edge);
     fill(r.x + 1, r.y + 1, r.w - 2, HEAD_H - 1, raised);
     fill(r.x + 1, r.y + HEAD_H, r.w - 2, 1, edge);
 
     int top = r.y + HEAD_H + 5;
-    int shown = table_lines(r.h);
-    ui.lines_shown = shown;
-    ui.scroll_max = LINE_COUNT - shown;
-    if (ui.scroll > ui.scroll_max)
-        ui.scroll = ui.scroll_max;
-    if (ui.scroll < 0)
-        ui.scroll = 0;
+    int shown = table_lines(r.h, list);
+    *(list ? &ui.host_lines_shown : &ui.lines_shown) = shown;
+    *scroll_max = lines - shown;
+    if (*scroll > *scroll_max)
+        *scroll = *scroll_max;
+    if (*scroll < 0)
+        *scroll = 0;
 
-    int bar = ui.scroll_max ? 10 : 0;
+    int bar = *scroll_max ? 10 : 0;
     int x = r.x + 8, inner = r.w - 16 - bar;
     int slot_w = (inner - NAME_W - (slots - 1) * 6) / slots;
     int head_mid = r.y + HEAD_H / 2;
-    text_clip(x + 10, head_mid, "PS1 BUTTON", NAME_W - 14, faint);
+    text_clip(x + 10, head_mid, lists[list].title, NAME_W - 14, faint);
     text_clip(x + NAME_W + 7, head_mid, ui.tab ? "BINDING" : "KEYBOARD KEY", slot_w - 14, faint);
     if (slots > 1)
         text_clip(x + NAME_W + slot_w + 13, head_mid, "ALTERNATE", slot_w - 14, faint);
 
     for (int i = 0; i < shown; i++) {
-        int line = ui.scroll + i, group = 0;
-        int action = line_action(line, &group);
+        int line = *scroll + i, group = 0;
+        int action = line_action(list, line, &group);
         int y = top + i * ROW_H, mid = y + (ROW_H - 2) / 2;
         if (action < 0) {
-            int tw = text_w(groups[group].title);
-            text_at(x + 6, mid, groups[group].title, faint);
+            const char *title = lists[list].groups[group].title;
+            int tw = text_w(title);
+            text_at(x + 6, mid, title, faint);
             fill(x + 12 + tw, mid, inner - tw - 18, 1, edge);
             continue;
         }
-        int down = (bits & Controls_Actions[action].bit) != 0;
+        int down = rows >> action & 1;
         int chosen = action == ui.row;
         int over = ui.hover == ROW + action * 2 || ui.hover == ROW + action * 2 + 1;
         uint32_t row_face = down ? held : chosen ? hot : over ? raised : panel;
         fill(x, y, inner, ROW_H - 2, row_face);
         if (chosen)
             fill(x, y, 3, ROW_H - 2, accent);
-        text_clip(x + 10, mid, Controls_Actions[action].name, NAME_W - 16, down ? on_held : text);
+        text_clip(x + 10, mid, Controls_RowName(action), NAME_W - 16, down ? on_held : text);
         hit(ROW + action * 2, rect(x, y, NAME_W, ROW_H - 2));
         for (int slot = 0; slot < slots; slot++) {
             Rect cell = rect(x + NAME_W + slot * (slot_w + 6), y, slot_w, ROW_H - 2);
-            const ControlSource *src = &p->src[action][slot];
+            const ControlSource *src = &Controls_RowConst(p, action)[slot];
             int bound = src->kind != CTRL_SRC_UNBOUND;
             int target = chosen && slot == ui.slot;
             frame(cell, down ? held_cell : bg,
@@ -1063,14 +1108,23 @@ static void draw_table(Rect r, uint16_t bits)
             hit(ROW + action * 2 + slot, cell);
         }
     }
-    if (ui.scroll_max) {
+    if (*scroll_max) {
         int track = shown * ROW_H - 2, tx = r.x + r.w - 12;
-        int knob = track * shown / LINE_COUNT;
+        int knob = track * shown / lines;
         if (knob < 20)
             knob = 20;
         fill(tx, top, 5, track, bg);
-        fill(tx, top + (track - knob) * ui.scroll / ui.scroll_max, 5, knob, edge);
+        fill(tx, top + (track - knob) * *scroll / *scroll_max, 5, knob, edge);
     }
+}
+
+/* The fixed keys, for reference: text only, nothing to select. */
+static int fixed_height(int width) { return 26 + text_wrap(0, 0, fixed_keys, width - 24, dim, FIXED_LINES, 0) * 18 + 6; }
+static void draw_fixed(Rect r)
+{
+    frame(r, panel, edge);
+    text_clip(r.x + 12, r.y + 14, "FIXED KEYS (not bindable)", r.w - 24, faint);
+    text_wrap(r.x + 12, r.y + 34, fixed_keys, r.w - 24, dim, FIXED_LINES, 1);
 }
 
 /* The device list, drawn over everything else and owning every hit. */
@@ -1161,8 +1215,8 @@ static void draw_modal(void)
         int other = ui.capture.conflict_dest;
         snprintf(body, sizeof(body), "%s is already bound to %s. Move it to %s instead?",
                  source_label(&ui.capture.pending),
-                 other >= 0 && other < CTRL_DEST_COUNT ? Controls_Actions[other].name : "another button",
-                 Controls_Actions[ui.row].name);
+                 other >= 0 && other < CTRL_ROW_COUNT ? Controls_RowName(other) : "another button",
+                 Controls_RowName(ui.row));
         title = "Input already in use";
         message = body;
     }
@@ -1297,16 +1351,17 @@ void ControlsWindow_Draw(MenuCanvas *c)
 
     int device = current_device();
     ControllerDevice *d = ControlsRuntime_Device(device);
-    uint16_t bits = 0;
+    uint64_t rows = 0;
     if (ui.tab) {
         if (d) {
             ui.preview.activation = d->threshold;
-            bits = Controls_EvalController(profile(0), &d->snapshot, &ui.preview);
+            rows = Controls_EvalControllerRows(profile(0), &d->snapshot, &ui.preview);
         }
     } else {
         int n = ControlsRuntime_Keys(sources);
-        bits = Controls_EvalKeyboard(profile(0), sources, n);
+        rows = Controls_EvalKeyboardRows(profile(0), sources, n);
     }
+    uint16_t bits = (uint16_t)rows;
 
     draw_header();
     Rect device_row = rect(PAD, HEADER_H + 12, w - 2 * PAD, BTN_H);
@@ -1321,7 +1376,6 @@ void ControlsWindow_Draw(MenuCanvas *c)
                         action_y - 12 - (device_row.y + device_row.h + 14));
     if (content.h < 120)
         content.h = 120;
-    content.h = table_height(content.h);
 
     int slots = ui.tab ? 2 : 1;
     int table_w = NAME_W + slots * (ui.tab ? SLOT_W : KEY_W) + (slots - 1) * 6 + 16;
@@ -1332,20 +1386,44 @@ void ControlsWindow_Draw(MenuCanvas *c)
         table_w += diagram_w - DIAGRAM_MAX;
         diagram_w = DIAGRAM_MAX;
     }
-    int show_diagram = diagram_w >= DIAGRAM_MIN && content.h >= 210;
-    Rect table;
+    /* The pad list fills the right; the left column stacks the picture, the
+     * Game list and the fixed keys. The picture takes two fifths (at least
+     * 200, at most its own size) and whatever the Game list leaves. Too
+     * narrow or too short for that, the picture drops out and the Game list
+     * goes under the pad list. The fixed keys go first when room runs out. */
+    int min_game = HEAD_H + 11 + 3 * ROW_H;
+    int picture_h = content.h * 2 / 5, natural = 34 + ControlsArt_Height(diagram_w - 24) + 64;
+    picture_h = picture_h > natural ? natural : picture_h < 200 ? 200 : picture_h;
+    int show_diagram = diagram_w >= DIAGRAM_MIN && content.h - picture_h - GAP >= min_game;
+    Rect left = content;
     if (show_diagram) {
-        draw_diagram(rect(content.x, content.y, diagram_w, content.h), bits);
-        table = rect(content.x + diagram_w + GAP, content.y, table_w, content.h);
+        draw_table(rect(content.x + diagram_w + GAP, content.y, table_w, table_height(content.h, 0)), rows, 0);
+        left = rect(content.x, content.y + picture_h + GAP, diagram_w, content.h - picture_h - GAP);
     } else {
         int width = table_w + 160 < content.w ? table_w + 160 : content.w;
-        table = rect(content.x + (content.w - width) / 2, content.y, width, content.h);
+        Rect pad = rect(content.x + (content.w - width) / 2, content.y, width,
+                        table_height(content.h * 11 / 20, 0));
+        draw_table(pad, rows, 0);
+        left = rect(pad.x, pad.y + pad.h + GAP, pad.w, content.h - pad.h - GAP);
     }
-    draw_table(table, bits);
+    int fixed_h = fixed_height(left.w);
+    if (left.h - fixed_h - GAP < min_game)
+        fixed_h = 0;
+    int game_h = table_height(left.h - (fixed_h ? fixed_h + GAP : 0), 1);
+    if (show_diagram)
+        draw_diagram(rect(content.x, content.y, diagram_w,
+                          content.h - game_h - (fixed_h ? fixed_h + GAP : 0) - GAP), bits);
+    Rect game = rect(left.x, left.y + left.h - game_h - (fixed_h ? fixed_h + GAP : 0), left.w, game_h);
+    if (left.h >= HEAD_H + 11 + ROW_H)
+        draw_table(game, rows, 1);
+    else
+        list_rect[1] = rect(0, 0, 0, 0);
+    if (fixed_h)
+        draw_fixed(rect(left.x, game.y + game.h + GAP, left.w, fixed_h));
 
     /* Selection and the two buttons that act on it. */
-    const ControlSource *src = &profile(0)->src[ui.row][ui.slot];
-    snprintf(line, sizeof(line), "%s / %s%s: %s", action_group(ui.row), Controls_Actions[ui.row].name,
+    const ControlSource *src = &Controls_Row(profile(0), ui.row)[ui.slot];
+    snprintf(line, sizeof(line), "%s / %s%s: %s", action_group(ui.row), Controls_RowName(ui.row),
              ui.tab ? (ui.slot ? " (alternate)" : " (main)") : "",
              src->kind != CTRL_SRC_UNBOUND ? source_label(src) : "Unbound");
     int rebind_w = button_w("Rebind"), clear_w = button_w("Clear");
@@ -1360,15 +1438,18 @@ void ControlsWindow_Draw(MenuCanvas *c)
     if (ui.capture.state) {
         uint64_t now = ControlsRuntime_Now();
         int left = ui.capture.deadline_us > now ? (int)((ui.capture.deadline_us - now + 999999) / 1000000) : 0;
-        snprintf(line, sizeof(line), "Listening for %s%s - %d second%s left. Escape cancels.",
-                 Controls_Actions[ui.row].name, ui.tab && ui.slot ? " (alternate)" : "", left,
-                 left == 1 ? "" : "s");
+        snprintf(line, sizeof(line), "Listening for %s%s - %d second%s left. Escape cancels%s.",
+                 Controls_RowName(ui.row), ui.tab && ui.slot ? " (alternate)" : "", left, left == 1 ? "" : "s",
+                 ui.row == CTRL_ROW_EXIT && !ui.tab ? "; Esc quits whatever is bound here" : "");
         hint = line;
     } else if (ui.hover >= DIAGRAM && ui.hover < CHOICE) {
         snprintf(line, sizeof(line), "%s - click to select it, double-click to rebind it.",
                  Controls_Actions[ui.hover - DIAGRAM].name);
         hint = line;
-    } else
+    } else if (ui.row == CTRL_ROW_EXIT)
+        hint = ui.tab ? "Double-click a binding, or select one and press Enter, to change it. Delete clears it."
+                      : "Esc always quits; bind a key or button here to quit with it too.";
+    else
         hint = "Double-click a binding, or select one and press Enter, to change it. Delete clears it.";
     if (!squat)
         text_clip(PAD, hint_mid, hint, w - 2 * PAD, ui.capture.state ? accent : faint);

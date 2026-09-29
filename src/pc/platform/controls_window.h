@@ -5,7 +5,7 @@
 /* Widget identifiers. The window uses them internally for hit-testing and
  * keyboard focus; tests and scripted input use them to address a control
  * without knowing the layout. Binding cells are
- * CONTROLS_UI_BINDING + destination * 2 + slot, pad picture buttons are
+ * CONTROLS_UI_BINDING + row * 2 + slot (controls.h rows), pad picture buttons are
  * CONTROLS_UI_PAD + destination, and device-list entries are
  * CONTROLS_UI_CHOICE + entry (0 automatic, 1 none, 2 + device index). */
 enum {

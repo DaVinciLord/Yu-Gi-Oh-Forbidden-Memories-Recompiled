@@ -13,10 +13,10 @@ Double-click a binding cell or a PS1 diagram button to start the 10-second rebin
 You can also select a binding cell and choose Rebind (or press Enter). Release held inputs,
 then press the new key, controller button, D-pad direction, trigger or stick
 direction. Escape cancels; capture also cancels on focus loss, disconnection or
-a ten-second timeout. Repeated keyboard events do not create bindings. Existing
-host shortcuts and modifier chords are reserved. Right Shift alone remains
-available for Select. The keypad's + and - (master volume) are not reserved:
-binding one gives it to the pad and turns that volume step off. If the input belongs to another action, choose Move binding
+a ten-second timeout. Repeated keyboard events do not create bindings. Esc,
+F10 and modifier chords are reserved. Right Shift alone remains
+available for Select. If the input belongs to another action (a pad button
+or a Game list row, such as F5 for Save state), choose Move binding
 or Cancel. Clear unbinds the selected slot. Controller rows have two slots so
 D-pad and stick directions can both control the same PS1 direction.
 
@@ -45,7 +45,40 @@ The table lists the 16 destinations in reading order under group headings
 column headings above them; the keyboard tab has one binding column, the
 controller tab a main and an alternate column. That order is presentation only:
 the stored file, the destination indices and the wire bits keep the order of
-`Controls_Actions`. Below the table the selected binding is named in full, with
+`Controls_Actions`.
+
+### The Game list
+
+The port's own actions are a second list, **Game**, under the pad picture
+(under the pad list when the window is too small for the picture), with the
+same columns: Exit game, Fullscreen, Screenshot, Mute, Volume up and down
+(Program); Save state, Load state, State slot 1 to 4 (Save states); Pause,
+Frame step and Turbo (Speed); Debug HUD and Deck slots (Tools). They
+default to the keys the port always had (Esc, F11, F12, M, keypad + and -,
+F5, F7, F1, F2, none, F4, P, `.`, Tab, F3, F6) and to nothing on
+controllers, where either slot takes any button, trigger, stick or D-pad
+direction. They are kept out of the pad bits the game reads
+(`Controls_HostActions`, rows 16 onward, `CTRL_ROW_*`), and the menus show
+the keys bound now. A source still belongs to one row per profile, pad and
+Game alike, so moving X to Exit game takes it off Cross and moving F5 to
+Cross leaves Save state unbound. Most fire once per press; Turbo lasts
+while held and the volume repeats while held (`host_actions.c`). The
+arrows stay in the list that has the selection; Tab moves between the two,
+and the wheel scrolls the one under the pointer.
+
+Exit game quits, as File > Exit does, asking first while **File > Confirm
+before quitting** is on (`quit_prompt.c`). Esc is always Exit game in a
+window, whatever the row holds: it is reserved everywhere else, and in this
+window it cancels a capture, so it cannot be pressed in, but clearing or
+replacing the row only adds or drops the other key, never Esc's way out.
+The window says so when the slot is cleared, while the row is selected and
+while it listens for that row.
+
+Below the Game list, **Fixed keys** lists for reference what no binding
+changes: F10 opens the menu bar, Alt+Enter switches fullscreen, Shift with
+the Screenshot key saves the whole window, and Esc leaves fullscreen and
+closes menus, dialogs and this window. It is text only and drops out first
+when the window is short. Below the table the selected binding is named in full, with
 Clear and Rebind beside it, then a hint line (or the capture countdown) and the
 message line.
 
@@ -127,17 +160,19 @@ Controls live outside guest saves and save states. The default file is
 `controls.txt` in the user directory (`src/pc/platform/paths.h`).
 `MEMORIES_CONTROLS` overrides it; otherwise an explicit `MEMORIES_SETTINGS`
 places `controls.txt` beside that settings file. Apply writes a temporary
-file in the same directory, checks flush/close and atomically renames it. Missing files use defaults. Invalid version-1 files fall back to defaults
+file in the same directory, checks flush/close and atomically renames it. Missing files use defaults. Invalid files fall back to defaults
 with a diagnostic. Unsupported versions are preserved and cannot be overwritten
-by Apply.
+by Apply: a release from before version 2 plays with default controls beside a
+version 2 file and leaves it as it is.
 
-Version 1 is ASCII with newline-terminated records:
+Version 2 is ASCII with newline-terminated records:
 
 ```text
-controls 1 <device-profile-count>
+controls 2 <device-profile-count>
 port <0|1> <mode> <icon-style> <hex-identity-or-dash>
 device <profile-index> <icon-style> <hex-identity>
 bind <map-index> <slot-index> <source-token>
+host <map-index> <action-token> <slot> <source-token>
 ```
 
 Both port records are required. Mode 0 means None, 1 Automatic, 2 explicit.
@@ -146,8 +181,15 @@ by the fixed PS1 diagram. Identities
 are hex-encoded bytes; `-` is the empty identity. Profile indices start at zero.
 Map 0 is the keyboard, maps 1 and 2 are per-port controller defaults, and maps
 3 onward are stored device profiles. Each map has exactly 32 binding records:
-slot index = PS1 bit index × 2 + binding slot. The keyboard's second slots are
-always `unbound`. An entire default file is produced by Apply; the example above
+slot index = PS1 bit index × 2 + binding slot, and a host record per Game list
+action and binding slot, named by the action's token (`host 0 exit 0 key.esc`
+is the default Exit game, `host 1 save_state 1 button.guide` a controller's
+alternate Save state). Host records are optional: a missing one is its
+default, left unbound when the file gave that key to another row, and a token
+this build does not know (a later build's action) is skipped. The keyboard's
+second slots are always `unbound`. `key.esc` is valid only as the keyboard's
+Exit game. Version 1 is the same without host records; it still loads, with
+the Game list at its defaults, and the next Apply writes version 2. An entire default file is produced by Apply; the example above
 is a grammar, not a complete usable configuration.
 
 Source examples: `key.x`, `key.rshift`, `button.south`, `button.l-shoulder`,

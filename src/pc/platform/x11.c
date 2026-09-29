@@ -17,6 +17,7 @@
 #include "mods_window.h"
 #include "controls_window.h"
 #include "quit_prompt.h"
+#include "host_actions.h"
 #include <X11/XKBlib.h>
 #include "settings.h"
 #include <X11/Xlib.h>
@@ -654,6 +655,8 @@ static void pump(void)
             XEvent next;XPeekEvent(display,&next);
             if(next.type==KeyPress && next.xkey.time==event.xkey.time && next.xkey.keycode==event.xkey.keycode){XNextEvent(display,&next);continue;}
         }
+        /* Every release, before a menu can take it: else a held action
+         * (turbo) would run on after the menu closes. */
         if(event.type==KeyRelease)ControlsRuntime_Key(physical_keys[event.xkey.keycode&255],0);
         if(controls_window && event.xany.window==controls_window) {
             if(event.type==KeyPress || event.type==KeyRelease) {
@@ -720,50 +723,11 @@ static void pump(void)
                     continue;
                 }
             }
-            /* Keypad +/-: master volume, unless the bindings use the key. */
-            if (Platform_VolumeKey(physical_keys[event.xkey.keycode & 255], event.type == KeyPress)) {
-                if (event.type == KeyPress) repaint_menu();
-                continue;
-            }
+            /* The shortcuts are the Game list's bindings (host_actions.c,
+             * after this loop), as in sdl.c. */
             if (key == XK_Escape && event.type == KeyPress && DeckMenu_Active()) {
                 DeckMenu_Close(); /* the deck slot screen, not the game */
                 continue;
-            }
-            if (key == XK_F6 && event.type == KeyPress) {
-                DeckMenu_Request();
-                continue;
-            }
-            if (key == XK_Escape && event.type == KeyPress) {
-                QuitPrompt_Request(&quit);
-                repaint_menu();
-            }
-            if (key == XK_Tab) {
-                Platform_SetClockRate(event.type == KeyPress ? 400 : Settings_Get(SET_SPEED));
-                continue;
-            }
-            if (event.type == KeyPress && key == XK_F3) {
-                Settings_Set(SET_SHOW_HUD, (Settings_Get(SET_SHOW_HUD) + 1) % 3);
-                Settings_Save();
-                repaint_menu();
-                continue;
-            }
-            if (event.type == KeyPress && (key == XK_p || key == XK_P)) {
-                Platform_SetClockRate(Platform_ClockRate() == 0 ? Settings_Get(SET_SPEED) : 0);
-                continue;
-            }
-            if (event.type == KeyPress && key == XK_period && Platform_ClockRate() == 0) {
-                Platform_StepFrame();
-                continue;
-            }
-            if (event.type == KeyPress && (key == XK_m || key == XK_M)) {
-                Spu_SetMuted(!Spu_Muted());
-                continue;
-            }
-            /* F3 belongs to the HUD; slot 3 remains available from File. */
-            if (event.type == KeyPress && key >= XK_F1 && key <= XK_F4) {
-                if (key != XK_F3) Platform_SetStateSlot((int)(key - XK_F1) + 1);
-            } else if (event.type == KeyPress && (key == XK_F5 || key == XK_F7)) {
-                Memories_StateRequest(key == XK_F5 ? 1 : 2, state_slot);
             }
             ControlsRuntime_Key(physical_keys[event.xkey.keycode&255],event.type==KeyPress);
 
@@ -772,6 +736,8 @@ static void pump(void)
     if (mods_window && mods_dirty) draw_mods();
     mods_dirty = 0;
     Gamepad_Poll(current_frame);
+    /* The Game list's actions, as in sdl.c. */
+    if (HostActions_Run(&quit)) repaint_menu();
     /* As in sdl.c: a notice answers a controller and holds the game's input. */
     ControlsRuntime_Hold(Menu_NoticeShown());
     if (Menu_NoticePad(ControlsRuntime_TakePadPresses(), &quit)) repaint_menu();
