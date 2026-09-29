@@ -13,6 +13,7 @@
 #include "tables.h"
 #include "starter.h"
 #include "stars.h"
+#include "packs.h"
 #include "pc/free_duel/duelists.h"
 #include "pc/text/glyphs.h"
 #include "pc/text/text.h"
@@ -1316,6 +1317,10 @@ void Cards_Build(void)
     Stars_Check();
     /* And so do the starter decks a new game may be dealt (starter.h). */
     Starter_Build();
+    /* And the card packs (packs.h), whose files and pictures a state's
+     * mod signature covers. */
+    Packs_Build();
+    Mods_SetPackSignature(Packs_Signature());
 }
 
 /* --- what the game asks -------------------------------------------- */
