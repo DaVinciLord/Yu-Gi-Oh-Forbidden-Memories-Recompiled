@@ -3104,9 +3104,26 @@ the other width.
 Milestone M1 (2026-09-28): the same code as Windows and Linux, built for
 Android x86 (32-bit), boots on the API 30 x86 emulator through the intro
 (Konami logo, the opening movie) to the title screen, and on to the main menu
-and New Game's name entry. The design and the probe behind it are in
-`tmp/research/android_feasibility.md` (not in the repository); this section is
-what exists.
+and New Game's name entry. Milestone M2 (2026-09-29): the same code builds for
+32-bit ARM (`android-armeabi-v7a`), and the ARM build reaches the title, the
+main menu, Options and a duel with frames byte-identical to the Windows build
+(on the API 25 ARM system image, as a plain process; "32-bit ARM" below).
+Milestone M3 (2026-09-29): playable. The disc image comes in through the
+system's file picker, touch controls are drawn with the game's own button
+pictures, taps shorter than a frame count, the app pauses in the
+background, Back asks before quitting, save states survive a relaunch (the
+game is loaded at its link address), and the desktop-only menu rows are
+dimmed. The design and the probe behind it are in
+`tmp/research/android_feasibility.md` (not in the repository); this section
+is what exists.
+
+**Supported:** a 64-bit kernel that runs 32-bit apps (most arm64 phones up
+to about 2023, the Xiaomi 11T Pro class; the x86 emulator images). A 32-bit
+process there has the whole 4 GB address space, and every fixed guest range
+is free. **Not supported yet:** a 32-bit kernel (old armv7-only phones: 3 GB
+for an app, and the system fills the top of it; the app says so, see "Where
+it runs" below) and arm64-only phones (no 32-bit apps at all). Both come
+with the relocatable-guest / 64-bit work (the milestone table below).
 
 ### Build, install, run
 
@@ -3117,7 +3134,7 @@ Nothing else: no Gradle, no Android Studio.
 ```sh
 export ANDROID_SDK_ROOT=/path/to/sdk          # the NDK: newest under sdk/ndk, or ANDROID_NDK_ROOT
 python3 tools/pc/build_game32.py --target android-x86
-# -> tmp/pc/android-x86/libmain.so and tmp/pc/android-x86/memories-x86.apk
+# -> tmp/pc/android-x86/libgame.so, libmain.so and tmp/pc/android-x86/memories-x86.apk
 adb install -r tmp/pc/android-x86/memories-x86.apk
 ```
 
@@ -3127,23 +3144,56 @@ adb install -r tmp/pc/android-x86/memories-x86.apk
   `tmp/pc/android-deps/<abi>`, and keeps SDL's Java shell (`org.libsdl.app`)
   from the same SDL release. zlib is the system's.
 - `build_game32.py --target android-<abi>` compiles every unit with NDK clang
-  for the ABI at API 24, `-fPIC`, and links the shared object `libmain.so`
-  (`-Bsymbolic`, `--no-undefined`; pins `HIDDEN`, no fixed sections, as on
-  Windows). `tools/pc/package_android.py` then compiles SDL's Java with
-  `javac` against the SDK's `android.jar`, dexes it with `d8`, links the
-  manifest with `aapt2`, adds `lib/<abi>/libmain.so` and `libSDL3.so`, and
-  aligns and signs the APK (`zipalign`, `apksigner`) with a debug key it
-  creates under `tmp/pc/android-deps/debug.keystore` (never in the
-  repository). The package is `org.yfmredecomp.game`; the activity is SDL's
-  own `SDLActivity`, with no Java of ours.
-- `--target android-armeabi-v7a` is refused with the list of what it still
-  needs (below).
+  for the ABI at API 24, `-fPIC`, and links the game as the shared object
+  `libgame.so` (`-Bsymbolic`, `--no-undefined`; pins `HIDDEN`, no fixed
+  sections, as on Windows) at a fixed base, `0x08000000` (`--image-base`;
+  the build checks that its load span fits the `0x02000000` the loader
+  reserves). `libmain.so`, the library SDL's Java shell loads, is only a
+  loader (`src/pc/platform/android_loader.c`): it reserves that range and
+  loads `libgame.so` into it with
+  `android_dlopen_ext(ANDROID_DLEXT_RESERVED_ADDRESS)`, so the load bias is
+  0 on every launch, then runs `Memories_AndroidMain` (android.c); when the
+  port's `main` returns, the process ends with it. If the range cannot be
+  had, the game loads where the system puts it and keeps save states for
+  that launch only. `tools/pc/package_android.py` then compiles SDL's Java
+  with `javac` against the SDK's `android.jar`, dexes it with `d8`, links
+  the manifest with `aapt2`, adds `lib/<abi>/libmain.so`, `libgame.so` and
+  `libSDL3.so` and the build's `buildid`, `commit` and symbol table as
+  assets (`assets/build/`), and aligns and signs the APK (`zipalign`,
+  `apksigner`) with a debug key it creates under
+  `tmp/pc/android-deps/debug.keystore` (never in the repository). The
+  package is `org.yfmredecomp.game`; the activity is SDL's own
+  `SDLActivity`, with no Java of ours.
+- `--target android-armeabi-v7a` builds the 32-bit ARM APK
+  (`tmp/pc/android-armeabi-v7a/memories-armeabi-v7a.apk`) the same way, as
+  A32 code (`-marm`); see "32-bit ARM" below for what it runs on.
 
-The disc image goes in the app's external files folder,
-`/sdcard/Android/data/org.yfmredecomp.game/files/game/` (any `*.bin`, as in
-`game/` beside the desktop executable). Start the app once so that Android
-creates the folder. Since Android 11, `adb` as the shell user cannot write
-there; on an emulator image with root (`userdebug`, e.g. `google_apis`):
+**The disc image.** On the first run the game finds no image and shows its
+welcome box; "Choose disc image..." opens the system's document picker
+(SDL's file dialog: the Storage Access Framework), so the image can be
+anywhere the phone reaches (Downloads, an SD card, a cloud drive), with no
+adb and no root. Any document is offered (the system knows no type for a
+`.bin`); the chosen one is checked where it is (`SLUS_014.11` on a raw
+image, as `game_files.c` checks) before anything is copied, and a file that
+is not the disc gets the desktop's "Unable to use this ROM" and the welcome
+box again. A good image is copied (about 25 s for 494 MB on the emulator)
+into the app's external files folder, `game/rpg-yfm.bin` under
+`/sdcard/Android/data/org.yfmredecomp.game/files/`, since the right to read
+a picked document does not outlast the app, and is remembered as on the
+desktop. Only raw `.bin` images: `game_files.c` reads nothing else (no
+`.cue`, `.iso` or `.chd`). The Android TV images have no document picker
+(the intent resolves to a stub that returns at once, and the welcome box
+comes back): there the image has to be put in place by other means.
+
+Testing aids: `environment.txt`, `NAME=value` per line, in the external
+files folder (or, for a debuggable build, the internal one, which `run-as`
+reaches on an image without root) sets environment variables before the
+port starts (the app has no environment of its own): `MEMORIES_TRACE`,
+`MEMORIES_INPUT` (scripted pad), `MEMORIES_DUMP_FRAME`, and so on. The
+game's load address and load bias are logged at start (`adb logcat -s
+memories`); with bias 0 a crash's addresses are the build's own, for
+`llvm-symbolizer --obj=libgame.so`. On an emulator image with root the disc
+can also be pushed straight into the game folder:
 
 ```sh
 adb root
@@ -3151,48 +3201,78 @@ F=/data/media/0/Android/data/org.yfmredecomp.game/files
 adb shell mkdir -p $F/game && adb push rpg-yfm.bin $F/game/
 adb shell chown -R "$(adb shell stat -c %U $F)":ext_data_rw $F/game
 adb shell chcon -R "$(adb shell ls -dZ $F/reports | cut -d' ' -f1)" $F/game   # the app's SELinux categories
-adb shell am start -n org.yfmredecomp.game/org.libsdl.app.SDLActivity
-adb logcat -s memories        # stdout and stderr of the port
 ```
 
-Without the `chcon`, the file keeps `storage_file` and the app is denied
-(`avc: denied { read }` in logcat), and the port asks for a ROM. A file
-picker (SAF) that copies the image in is for later.
-
-Testing aids: `environment.txt` in the files folder, `NAME=value` per line,
-sets environment variables before the port starts (the app has no
-environment of its own): `MEMORIES_TRACE`, `MEMORIES_INPUT` (scripted pad),
-`MEMORIES_DUMP_FRAME`, and so on. `libmain.so`'s load address is logged at
-start; a crash's addresses minus it go to `llvm-symbolizer --obj=libmain.so`.
+(without the `chcon` the file keeps `storage_file` and the app is denied).
+On an image without root, a debuggable build's `run-as` can copy it into
+the program directory's `game/` (`files/program/game/` in the internal
+files folder), which `game_files.c` searches first.
 Screenshots of the device, never the host: `adb exec-out screencap -p`.
 
 ### How it differs (and what is shared)
 
-- `src/pc/platform/android.c` is the whole platform layer: `SDL_main` sets
-  the player's folder (`MEMORIES_USER_DIR` = the external files folder),
-  forwards stdout/stderr to logcat, reads `environment.txt`, turns off what
+- `src/pc/platform/android.c` is the whole platform layer:
+  `Memories_AndroidMain` (called by the loader) sets the player's folder
+  (`MEMORIES_USER_DIR` = the external files folder), forwards stdout/stderr
+  to logcat, reads `environment.txt`, unpacks the build's files into the
+  internal files folder's `program/` and names it the program directory
+  (`MEMORIES_PROGRAM_DIR`, `paths.h`: save states and crash reports read
+  `buildid` and `symbols/` there; the symbol tables of earlier builds stay,
+  so a state from an earlier APK is carried over by name), turns off what
   re-executes the program (the crash monitor, `Platform_RestartGame`) and
-  the update check, asks SDL for landscape, and runs the port's `main`.
-  `Platform_HasDesktopGL` answers 0: the window takes the SDL renderer path
-  (GLES2 underneath) that shows the software GPU's picture. It also stands
-  in for `bzero` and, below API 30, `memfd_create` (the system call).
+  the update check, asks SDL for landscape, a fullscreen (immersive) window
+  and Back for the game, and runs the port's `main`. It has the disc picker
+  (`Platform_SelectDisc`) and says what a failed guest mapping means
+  (`Platform_GuestMemoryHelp`). `Platform_HasDesktopGL` answers 0: the
+  window takes the SDL renderer path (GLES2 underneath) that shows the
+  software GPU's picture. It also stands in for `bzero` and, below API 30,
+  `memfd_create` (the system call), with the ashmem device where the kernel
+  has no memfd.
 - `src/pc/compat/android/`: `android_compat.h`, force-included in every
   native unit (below-API fallbacks, no system headers), and a header-only
   `fontconfig/fontconfig.h` answering the port's few fontconfig calls with
   `/system/fonts`. `src/pc/render/gl_desktop_none.c` replaces
   `present_pass.c`: desktop GL's fixed function does not exist in GLES and
   is never reached there.
+- In the SDL backend (`sdl.c`), under `SDL_PLATFORM_ANDROID`: Back closes
+  a menu or answers a notice as Esc does, closes the deck slot screen, and
+  otherwise asks before quitting (the quit prompt); the rows for second
+  windows (Controls..., Mods), the window's size and mode, and the update
+  check are dimmed (`Menu_SetPlatformItems`), `Platform_HasWindowModes`
+  answers 0 (F11, Alt+Enter and Esc keep the whole screen), and Automatic
+  menu size is the largest the window allows. Everything else there is the
+  desktop's.
 - Shared changes this needed, one commit each: the game stack at
   `0xB0000000` on every system; the scratchpad at `0x9F800000`
   (`SCRATCHPAD_ADDR`, "How it works" above); `HIDDEN` pins; the asm stack
   switch for Android (bionic has no ucontext) and its 16-byte-aligned entry
   frames; position-independent paths in the i386 assembly; the desktop-GL
-  capability.
+  capability (M1); the ARM pieces (M2); and for M3: a key tapped between
+  two pad updates still reaches the game (`controls_runtime.c`; `adb shell
+  input keyevent` sends down and up in one millisecond); `MEMORIES_PROGRAM_DIR`;
+  the clock stopping while an app is in the background (SDL's application
+  events, which reach only event watchers); touch controls (View > Touch
+  controls); `Platform_GuestMemoryHelp`; `Menu_SetPlatformItems`.
 
 ### What works on the emulator (API 30 x86)
 
 - Boot, intro logos, the opening movie (MDEC), title, main menu, New Game to
-  the name entry; the menu bar draws. Sound through SDL (AAudio).
+  the name entry, Options; the menu bar draws and is tapped. Sound through
+  SDL (AAudio).
+- **Input:** the touch controls (View > Touch controls, several fingers at
+  once), a keyboard (a hardware one, or `adb shell input keyevent`: a tap
+  counts once), and SDL's gamepads. The emulators' own keyboards show up as
+  gamepads too (on the TV image "qwerty2" and "virtual-search"); they press
+  nothing and take nothing from the keyboard.
+- **Lifecycle:** to the background (Home), the game clock stops (SDL holds
+  its event loop and the audio); back, it resumes where it was with no rush
+  to catch up (the VBlank count is the same before and after 30 s away),
+  and the picture comes back. Rotation is landscape only. Back asks "Quit
+  the game?" (a second Back keeps playing); Quit ends the process, and the
+  next launch starts afresh.
+- **Save states:** `libgame.so` sits at `0x08000000` with load bias 0 on
+  every launch; F5 on the Options screen, the app force-stopped and started
+  again, F7 at the title brings the Options screen back, live.
 - The app process's layout: `0x1F800000` is taken (ART's heap), the port
   says so once and uses `0x9F800000`; guest RAM, its mirrors, the game stack
   and the interpreter stack map where they do on the desktop.
@@ -3202,30 +3282,151 @@ Screenshots of the device, never the host: `adb exec-out screencap -p`.
 
 ### Not yet
 
-- **Input:** keyboard only (a hardware keyboard, or `adb shell sendevent`
-  with a real hold). `adb shell input keyevent` sends key down and up in the
-  same millisecond, and the pad is sampled once per present, so the press is
-  lost; a short press needs latching for at least one sample (also needed
-  for touch). Touch reaches SDL as mouse events (menu bar); no on-screen pad.
-- **Save states:** off in practice: the symbol tables are for addresses in
-  `libmain.so`, which Android loads at a different address each launch. A
-  loader that reserves a fixed range and loads the game with
-  `android_dlopen_ext` at its link base fixes that.
 - **Mods:** none. Code mods are i386 objects; the build packages no mods and
-  no language packs.
-- No SAF/file picker, no GLES renderer (Video > Color and the other GL-only
-  options), no restart from the menu, no update check, no lifecycle handling
-  (pause/resume, surface loss, back button).
+  no language packs (M4). Game > Mods and Controls... are dimmed (second
+  windows; an in-window version of both is for later).
+- **Restart:** an app cannot re-execute itself; where the port restarts
+  (the end of the credits, Game > Language), it falls back as when a
+  restart fails (back to the title; "start the game again").
+- No GLES renderer (Video > Color and the other GL-only options), no update
+  check, no performance work (the soft GPU at internal scale above 1).
+- The disc picker on Android TV (there is no document picker there).
+
+### 32-bit ARM (armeabi-v7a)
+
+The ARM build runs the same code; what is ARM's own is beside the i386
+version, in the shared files, so a Linux armhf build would take the same
+pieces (not built: it would need clang 12 or later for `-mharden-sls`, an
+armhf sysroot and SDL for it; on Ubuntu 20.04 the armhf GCC cross compiler
+also uninstalls `gcc-multilib`, which the i386 build needs):
+
+- **Branch thunks** (`branch_thunks.c`): clang's `-mharden-sls=blr` turns
+  every `blx rN` into `bl __llvm_slsblr_thunk_arm_rN` and emits those as weak
+  functions in every unit (for r0-r11, and for sp and pc, which it never
+  calls); the port defines r0-r12 strongly, with the x86 contract (R12 is
+  the one register a thunk changes: AAPCS lets a call's veneer change it).
+  `-fno-optimize-sibling-calls` and `-fno-jump-tables` remove the other
+  indirect branches. `build_game32.py` checks the objects (`check_arm_branches`):
+  a call to a thunk the port does not define, or any other indirect branch,
+  stops the build. Two things it caught on the way: the shared-bank modules'
+  clash renaming had renamed the weak thunks (each module then called its
+  own copy, past the resolver), and ARM's division helpers (`__aeabi_idiv`)
+  had become "unimplemented" stubs.
+- **Fault handler** (`image.c`): a guest call sets the PC (and the T bit for
+  a Thumb target); a null-pointer or retail-scratchpad access runs its one
+  A32 instruction out of line with the base register moved to KSEG0 (ARM
+  has no single step). Game units are A32 (`-marm`), the only instruction set
+  it decodes.
+- **Assembly**: `setjmp_arm.S` (D8-D15 in a side table: the Psy-Q buffer is
+  48 bytes), `state_arm.S` (VSync entry, `Memories_StateReturn`,
+  `Memories_ContextSwitch`); `state.h` has the ARM entry layout (LR is the
+  return address). `build_game32.py` assembles `*_arm.S` or `*_i386.S` by
+  target.
+- **Register names** for crash and hang reports, the clock and the monitor:
+  `src/pc/platform/signal_context.h`; the CPU name from `/proc/cpuinfo`.
+- **Guest RAM before memfd** (Linux 3.17: Android 7 and 8 devices, the API
+  25 image's 3.10 kernel): the ashmem device (`android.c`).
+- **Mods:** clang has no `-fpatchable-function-entry` for 32-bit ARM, so the
+  ARM game has no hook entries (M4).
+
+**Where it runs.** On a phone with a 64-bit kernel and 32-bit userspace
+(the Xiaomi 11T Pro class), the app process leaves every guest range free,
+as on the x86 image: shown by the probe APK translated on the API 34 TV x86
+image (64-bit kernel). On a **32-bit ARM kernel** (the API 25 ARM image, old
+armv7-only phones) it does not start as an app: with a 3G/1G split, ART and
+the system libraries fill `0x8C000000`-`0xBF000000` top down before
+`libmain.so` runs (the JIT cache over `0x90000000`, `libart-compiler.so`
+over `0x9F800000`, ART's live stack over `0x9FF00000`-`0xA0000000`), and the
+guest memory cannot be mapped ("cannot map guest memory at 0xa0000000" on
+stderr). Decided (2026-09-29): 32-bit kernels are not supported for now; the
+relocatable-guest / 64-bit work brings them back. The app says so before
+any guest work: when the fixed mapping fails, `Platform_GuestMemoryHelp`
+(android.c) tells the two cases apart by the process's own `[stack]` (the
+kernel puts it at the top of the address space: past `0xC0000000` only with
+4 GB) and shows "This Android is 32-bit. The game needs a 64-bit Android
+that can still run 32-bit apps..." (on the API 25 ARM image: the stack
+ends near `0xbe800000`, `uname -m` armv7l); anything else asks for a report with the
+log. `uname` cannot tell: a 32-bit process on the 64-bit x86 emulator kernel
+is told "i686" (`PER_LINUX32`), its stack at `0xffef0000`. The mapping
+failure stays what decides; the check only picks the words. (The fixed-base
+loader's range, `0x08000000`, assumes nothing about the split: it was free
+on the 32-bit kernel too.)
+
+**Tests for the ARM pieces** (NDK clang, static, run under `qemu-arm` in
+WSL or on a device over adb):
+
+```sh
+CC="$NDK/toolchains/llvm/prebuilt/<host>/bin/clang --target=armv7a-linux-androideabi24 -marm -static -O2 -Isrc \
+    -mharden-sls=blr -fno-optimize-sibling-calls -fno-jump-tables -Wl,--image-base=0x40000000"
+$CC tests/pc/branch_thunks_test.c src/pc/guest/branch_thunks.c -o branch_thunks_test
+$CC -Isrc/pc/compat/android -include src/pc/compat/android/android_compat.h tests/pc/guest_arm_test.c \
+    src/pc/guest/branch_thunks.c src/pc/guest/state_arm.S src/pc/guest/setjmp_arm.S -o guest_arm_test
+qemu-arm-static ./branch_thunks_test; qemu-arm-static ./guest_arm_test    # or adb push and run
+```
+
+`guest_arm_test call` also calls into guest RAM past the thunks: that needs
+a kernel that honours `PROT_EXEC`, which qemu 4.2 user mode does not (it
+runs the bytes).
+
+**Test ladder, as found in M2:**
+
+1. The x86 emulator (API 30) for platform and gameplay work.
+2. `qemu-arm` user mode (`qemu-user-static` 4.2 from Ubuntu 20.04's apt):
+   signals with the full ARM context, every fixed guest range, the thunks,
+   the low-access fix-up, setjmp and the stack switch all behave; it does
+   not honour `PROT_EXEC`, so the guest-call fault is not testable there.
+3. The API 25 `armeabi-v7a` image: the current emulator (37.x) refuses
+   32-bit ARM AVDs ("CPU Architecture 'arm' is not supported by the QEMU2
+   emulator"), but the `qemu-system-armel` it ships starts the AVD directly
+   (`emulator/qemu/<host>/qemu-system-armel-headless -avd <name> -no-window`,
+   with `emulator/lib64` on the library path), and boots in about 2 minutes.
+   The ARM tests pass there, `call` included (a real ARM kernel). The APK
+   cannot run on it (the 32-bit kernel, above), but the game can, as a
+   plain process: a small loader that `dlopen`s the game (`libmain.so` then,
+   `libgame.so` since M3) and calls `main` headless with the smoke tests' environment (kept outside the
+   repository). The title, main menu and Options frames and a duel's frame
+   6200 are byte-identical to the Windows build's (the smoke fixtures'
+   hashes, and the Windows build's frame for the duel); the title, Options
+   (whose text handlers are guest addresses called through pointers) and the
+   duel also with executable guest RAM (`MEMORIES_TEST_EXEC_GUEST=1`), where
+   only the thunks keep guest calls off the MIPS bytes. The duel's two
+   null-pointer reads went through the out-of-line fix-up. About 7 frames a
+   second under emulation. On the 32-bit kernel even this plain process
+   sometimes finds `0xB0000000` taken by a library (the game stack cannot be
+   mapped); the loader holds the guest ranges while libraries load, and a
+   rerun gets through.
+4. The 32-bit x86 TV images (API 34 tested) carry `libndk_translation` for
+   armeabi-v7a, with a 64-bit kernel, so their app processes have the phone
+   layout; the thunks work, and the title, main menu and Options match
+   there too, in seconds. But the translator does not replace (3): it
+   ignores a signal handler's new PC after an instruction fetch fault (the
+   guest-call fallback), aborts on faults it cannot map back to the ARM
+   state ("Cannot process signal 11": a post-indexed load's in
+   `guest_arm_test`, and the duel's null read inside `memmove`, a C library
+   function it runs natively), and a process sometimes faults at exit. The
+   TV image has no document picker and no root: a debuggable build's
+   `run-as` copies the disc into `files/program/game/` and `environment.txt`
+   into `files/` (M3). There the ARM APK loads `libgame.so` at its link
+   address (load bias 0 under the translator too), boots through the intro
+   and title to the main menu at about 9 frames a second, and takes key
+   presses (the emulator's keyboards show up as controllers, harmlessly);
+   the smoke duel's script hangs in the duel (no frame after frame 3860 for
+   29 s), then the process exits and aborts in the emulator's EGL
+   destructor (`FORTIFY: pthread_mutex_lock called on a destroyed mutex`,
+   from `exit`'s `__cxa_finalize`), the fault paths above again. So the
+   translator is no stand-in for a device: before M5, a real arm64 phone
+   that runs 32-bit apps must play a duel.
+5. The device (Xiaomi 11T Pro) is the real gate for the APK.
 
 ### Next milestones
 
 | M | Goal |
 |---|---|
-| M2 | `android-armeabi-v7a`: `-mharden-sls=blr` thunks, the ARM fault handler (register rebase or emulation, PC redirect), setjmp and the stack switch in A32 assembly, `-fsigned-char -marm` |
-| M3 | Playable: input latching, touch pad overlay drawn with the game's art, menu bar and Mods/Controls as in-window overlays, lifecycle, the fixed-base loader (save states, crash symbols), SAF import, performance |
+| M2 | Done, with the 32-bit-kernel limit above |
+| M3 | Done: disc import through the file picker, the input latch, touch controls with the game's art, lifecycle (background, Back, landscape), the fixed-base loader (save states, crash symbols), desktop-only menu rows dimmed, the 32-bit-kernel message. Left: Mods/Controls as in-window overlays, performance (internal scale above 1), a real restart, the disc on Android TV |
 | M4 | Mods on Android: content-only mods first; then per-ABI objects for code mods (bundled mods built by `build_game32.py`, third-party ones by the SDK's `build_mod.py` per target), ARM relocations in the object loader, `__aeabi_*` helpers, hook trampolines for armv7 |
-| M5 | Release: signing, CI for both ABIs, emulator smoke |
-| M6 | (optional) 64-bit everywhere |
+| M5 | Release: signing, CI for both ABIs, emulator smoke; before it, a duel played on a real arm64 phone that runs 32-bit apps (the TV translator mishandles the fault paths) |
+| M6 | The relocatable guest / 64-bit everywhere: closes both gaps left, arm64-only phones (no 32-bit apps) and 32-bit kernels (3 GB, the top taken), since the guest then needs no fixed addresses; Windows and Linux move with it |
 
 ARM32 test ladder for M2 on, since the API 30 x86 image translates ARM code
 with a translator that mishandles the fault path, and API 31+ phone images
