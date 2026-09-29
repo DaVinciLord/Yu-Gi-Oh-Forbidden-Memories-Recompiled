@@ -31,7 +31,7 @@ extern u8 D_800EA1E8[];
 #define PANEL_LEFT 8
 #define PANEL_COLUMN 160         /* the second panel of a row is at x 168 */
 #define RETAIL_SECTIONS 7        /* 0-6 are numbered right at any count */
-#define PARTS_MAX 24
+#define PARTS_MAX 32
 
 typedef struct {
     SpriteSheetHeader header;
@@ -54,15 +54,19 @@ static void add_part(int dx, int dy, int u, int v, int w, int h, int page)
 
 static void build_sheet(void)
 {
-    int band;
+    int y;
     memset(&sheet, 0, sizeof(sheet));
     sheet.header.flags = 0x90;
-    /* Where the numbers were: the stone band from between them, five times,
-     * with stone from its left end over the ":" in its middle (u 53-67). */
-    for (band = 0; band < 5; band++) {
-        add_part(8, 16 + band * 24, 0, 32, 48, 24, 0);
-        add_part(56, 16 + band * 24, 0, 32, 24, 24, 0);
-        add_part(80, 16 + band * 24, 72, 32, 56, 24, 0);
+    /* Where the numbers were: the top of the stone band from between them,
+     * one cell row (16 pixels) at a time, so its lines keep the grid's
+     * phase (the retail panels draw it at y 64 from v 32). Over the ":" in
+     * its middle (u 53-67) goes the band from 56 pixels on, four cells of
+     * 14, so the columns line up too. */
+    for (y = 16; y < 136; y += 16) {
+        int h = y + 16 > 136 ? 136 - y : 16;
+        add_part(8, y, 0, 32, 48, h, 0);
+        add_part(56, y, 104, 32, 24, h, 0);
+        add_part(80, y, 72, 32, 56, h, 0);
     }
     /* The frame, as every numbered panel has it. */
     add_part(8, -8, 0, 56, 128, 24, 0);
