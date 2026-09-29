@@ -147,11 +147,11 @@ void func_8004CB0C(s32 index, u8 *hmd, s32 size, s32 flags)
             if (cmd != 0) {
                 GsScanUnit((u32 *)cmd, 0, 0, 0);
             evloop:
-                if (GsScanUnit(0, &ev, table, (u32 *)0x1F800000) != 0) {
+                if (GsScanUnit(0, &ev, table, (u32 *)SCRATCHPAD_ADDR(0x1F800000)) != 0) {
                     u8 *scratch;
 
                     tag = (u32)ev.type >> 24;
-                    scratch = (u8 *)0x1F800000;
+                    scratch = (u8 *)SCRATCHPAD_ADDR(0x1F800000);
                     if (ev.type == 0) {
                         goto evloop;
                     }

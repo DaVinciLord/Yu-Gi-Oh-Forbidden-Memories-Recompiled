@@ -68,7 +68,8 @@ static const char *region(uintptr_t address)
 #endif
     if ((address >= 0x80000000u && address < 0x80200000u) ||
         (address >= 0xa0000000u && address < 0xa0200000u) || address < 0x00200000u) return "guest RAM";
-    if (address >= 0x1f800000u && address < 0x1f801000u) return "scratchpad";
+    if ((address >= 0x1f800000u && address < 0x1f801000u) || (address >= 0x9f800000u && address < 0x9f801000u))
+        return "scratchpad";
     if (address >= 0x01000000u && address < 0x0a000000u) return "game section";
     if (address >= GAME_STACK_LOW && address < GAME_STACK_HIGH) return "game stack";
     if (address >= image_low && address < image_high) return "native text";

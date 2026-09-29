@@ -145,7 +145,37 @@ How it works:
 - `src/pc/guest/image.c` maps 2 MiB at `0x80000000`, mirrors the same pages at
   `0xA0000000` and at physical `0x10000..0x200000` (hosts reserve the first
   64 KiB; 24-bit packet links use these addresses), maps the scratchpad at
-  `0x1F800000`, and copies the user's PS-X EXE image to its load address.
+  `0x9F800000`, and copies the user's PS-X EXE image to its load address.
+  `0x9F800000` is the console's own second view of the scratchpad (KSEG0);
+  the retail code uses `0x1F800000`, where an Android app has its Java heap.
+  Game C writes a scratchpad address as `SCRATCHPAD_ADDR(0x1F8003C0)`
+  (`src/types.h`): the literal itself for the console build (every unit
+  preprocesses to the same tokens, so matching is unchanged), the `0x9F80xxxx`
+  view natively. No game unit leaves a scratchpad variable undefined, so
+  neither symbol script pins one; `build_game32.py`'s `host_address` would
+  pin such a variable at the view. Every native path that takes a retail
+  address translates it (`MEMORIES_SCRATCHPAD_VIEW`, `image.h`): the
+  interpreter (`mips.c`) for its own loads and stores, the GTE loads and
+  stores and the string routines; the GPU's address resolver (`resolve.c`),
+  save states and the control channel's peek and poke. The words the
+  interpreter hands to native code (arguments and results) are translated
+  only where the retail view is not mapped (`Memories_ScratchpadRetailView`
+  0, an Android app): which of them are pointers is not known, so an integer
+  in that 1 KiB would be changed too. On the desktops, where both views
+  reach the same page, they go over unchanged, as on master. `0x1F800000` is also mapped as a second
+  view of the same page where the host allows it (Windows, Linux). Where it
+  cannot be mapped and nothing holds it, a native access through it faults
+  and takes the null-page register rebase onto `0x9F800000`, reported once
+  per site. That redirect needs a fault: where something readable holds
+  the range (an Android app's Java heap) an untranslated access would reach
+  the holder, which is why the translation is explicit everywhere.
+  `MEMORIES_TEST_HOLD_SCRATCHPAD=rw` or `none` (not in a release) holds a
+  page there before the guest is mapped, read-write or with no access, and
+  at exit says whether anything wrote the read-write page (smoke case
+  `options-hold-scratchpad`; a Windows build has no such hook and skips
+  it, as Windows maps the retail view itself). On Windows each
+  view is a 64 KiB section view of which only the first page is accessible,
+  so the I/O registers from `0x1F801000` still fault.
   Guest pointers are therefore host pointers, and structure layouts, packet
   words and the `ygo_types.h` size assertions hold unchanged. Linux only so
   far; Windows needs the equivalent `VirtualAlloc`/`MapViewOfFileEx` calls.

@@ -136,7 +136,7 @@ def run_cases(command: list[str], extra: dict[str, str], fixtures: list[Path], o
         # never passed by a build without it: that build skips it, saying so.
         missing = test_only_variables(executable, case)
         if missing:
-            print(f"smoke: {name} skipped: {executable.name} does not read {', '.join(missing)} (a release build)")
+            print(f"smoke: {name} skipped: {executable.name} does not read {', '.join(missing)} (a release build, or a system without that hook)")
             continue
         refused = refused_code_mods(executable, case)
         if refused:

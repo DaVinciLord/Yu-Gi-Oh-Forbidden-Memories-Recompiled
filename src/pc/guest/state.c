@@ -54,8 +54,8 @@
 #endif
 #define STACK_SIZE MEMORIES_GAME_STACK_SIZE
 #define STACK_TOP (STACK_BASE + STACK_SIZE)
-#define SCRATCHPAD 0x1f800000u
-#define SCRATCHPAD_SIZE 0x400u
+#define SCRATCHPAD MEMORIES_GUEST_SCRATCHPAD
+#define SCRATCHPAD_SIZE MEMORIES_GUEST_SCRATCHPAD_SIZE
 /* 1: the header word was the game-source fingerprint; 2: the build id;
  * 3: the game compiled with the indirect-branch thunks (branch_thunks.c).
  * Every function's code changed shape with them, and a return address on a

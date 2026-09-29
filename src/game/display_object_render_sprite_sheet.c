@@ -46,17 +46,17 @@ void DisplayObject_RenderSpriteSheet(DisplayObject *object, s32 ot, s32 depth)
     s32 tpage;
     u16 cx;
 
-    state = (SpriteSheetState *)0x1F8003A4;
+    state = (SpriteSheetState *)SCRATCHPAD_ADDR(0x1F8003A4);
     x = (s16)object->field_30.h.field_30;
     y = (s16)object->field_30.h.field_32;
     if ((object->flags & DISPLAY_OBJECT_FLAG_SCREEN_SPACE) == 0) {
         x -= gGraphics_sViewportX;
         y -= gGraphics_sViewportY;
     }
-    work = (SpriteSheetWork *)0x1F800378;
+    work = (SpriteSheetWork *)SCRATCHPAD_ADDR(0x1F800378);
     work->mx = object->field_48.h.field_48;
     work->my = object->field_48.h.field_4A;
-    sprite = (SpritePrim *)0x1F800320;
+    sprite = (SpritePrim *)SCRATCHPAD_ADDR(0x1F800320);
     work->clip = object->flags & DISPLAY_OBJECT_FLAG_CLIP_TEST;
 retry:
     work->attribute = object->attribute;
@@ -107,7 +107,7 @@ retry:
     quad = 0;
     work->mode = 0;
     if (work->clip != 0) {
-        quad = (u8 *)0x1F800344;
+        quad = (u8 *)SCRATCHPAD_ADDR(0x1F800344);
         *(u32 *)&((POLY_FT4 *)quad)->r0 = sprite->rgb;
         setlen(quad, 9);
         setcode(quad, 0x2C);

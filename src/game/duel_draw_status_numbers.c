@@ -95,7 +95,7 @@ void Duel_UpdateLifePointDisplay(DuelSideState *side)
    of the corresponding D_800E9FF0 entry. */
 
 #define GS_SPRITE_VIEW(sprite) ((GsSPRITE *)(sprite))
-#define SCRATCH ((DuelStatusDigitPacket *)0x1F800320)
+#define SCRATCH ((DuelStatusDigitPacket *)SCRATCHPAD_ADDR(0x1F800320))
 
 #ifdef MEMORIES_PC
 /* Life points past 9999: a mod's "limits" (pc/cards/tables.h) may start a
@@ -136,7 +136,7 @@ static s32 Duel_LifePointDigits(void)
 
 static void Duel_DrawWideLifePointPanel(DisplayObject *panel)
 {
-    SpritePrim *sprite = (SpritePrim *)0x1F800320;
+    SpritePrim *sprite = (SpritePrim *)SCRATCHPAD_ADDR(0x1F800320);
     SpritePrim part;
     s32 ot = (s32)D_800E9D90[panel->ot_index];
     s32 depth = (s16)panel->field_14;

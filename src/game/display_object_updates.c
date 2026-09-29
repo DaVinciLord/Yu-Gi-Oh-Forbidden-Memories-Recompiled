@@ -34,9 +34,9 @@ void DisplayObject_RenderSpriteStrips(DisplayObject *e, s32 tex, s32 mode_arg) {
     s32 tag;
     s32 fl;
 
-    c = (ClipState *)0x1F800378;
-    p = (SpritePrim *)0x1F800320;
-    g = (POLY_FT4 *)0x1F800344;
+    c = (ClipState *)SCRATCHPAD_ADDR(0x1F800378);
+    p = (SpritePrim *)SCRATCHPAD_ADDR(0x1F800320);
+    g = (POLY_FT4 *)SCRATCHPAD_ADDR(0x1F800344);
     step = 1;
 
     tag = e->attribute;

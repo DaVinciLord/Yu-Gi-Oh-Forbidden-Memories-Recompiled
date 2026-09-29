@@ -161,7 +161,7 @@ state_four:
                 break;
             }
             D_8009B174 |= 0x40;
-            scratch = (DuelCardRecord *)0x1F800000;
+            scratch = (DuelCardRecord *)SCRATCHPAD_ADDR(0x1F800000);
             *scratch = D_801A7AD8[object->field_6A];
             func_80024D34(D_8009B19C, object->field_6B);
             card = &D_801A7AD8[D_8009B19C];
