@@ -26,6 +26,7 @@
 #include "paths.h"
 #include "pc/sdk/display.h"
 #include "title_jump.h"
+#include "controls_runtime.h"
 #include "update_check.h"
 #include "pc/debug/monitor.h"
 #include "pc/saves/deck_menu.h"
@@ -1525,8 +1526,44 @@ static int step_item(int level, int from, int direction)
     return -1;
 }
 
+/* The Game list action an item does, or -1: its shortcut hint is that
+ * action's keyboard binding (Game > Controls), or none while unbound. */
+static int item_action(const Item *item)
+{
+    switch (item->id) {
+    case ACT_EXIT: return CTRL_HOST_EXIT;
+    case ACT_SAVE_STATE: return CTRL_HOST_SAVE_STATE;
+    case ACT_LOAD_STATE: return CTRL_HOST_LOAD_STATE;
+    case RADIO_STATE_SLOT: return CTRL_HOST_SLOT_1 + item->value - 1;
+    case ACT_SCREENSHOT: return CTRL_HOST_SCREENSHOT;
+    case MENU_ITEM_FULLSCREEN: return CTRL_HOST_FULLSCREEN;
+    case CHECK_MUTE: return CTRL_HOST_MUTE;
+    case MENU_ITEM_DECKS: return CTRL_HOST_DECK_SLOTS;
+    case CHECK_HUD: return CTRL_HOST_HUD;
+    case ACT_PAUSE: return CTRL_HOST_PAUSE;
+    case ACT_FRAME_STEP: return CTRL_HOST_FRAME_STEP;
+    default: return -1;
+    }
+}
+static void update_shortcuts(void)
+{
+    static char labels[CTRL_HOST_COUNT][32];
+    const ControlsProfile *kb = &ControlsRuntime_Config()->kb;
+    for (int h = 0; h < CTRL_HOST_COUNT; h++) {
+        snprintf(labels[h], sizeof(labels[h]), "%s",
+                 kb->host[h][0].kind == CTRL_SRC_KEY ? Controls_SourceName(&kb->host[h][0]) : "");
+        if (labels[h][0] >= 'a' && labels[h][0] <= 'z' && !labels[h][1]) labels[h][0] -= 'a' - 'A'; /* "M", as it was */
+    }
+    for (int m = 0; m < MENU_COUNT; m++)
+        for (int i = 0; i < menus[m].count; i++) {
+            int h = item_action(&menus[m].items[i]);
+            if (h >= 0) menus[m].items[i].shortcut = labels[h][0] ? labels[h] : NULL;
+        }
+}
+
 int Menu_Event(const MenuEvent *event, int *quit)
 {
+    update_shortcuts();
     if (ready && notice.shown) {
         return notice_event(event, quit);
     }

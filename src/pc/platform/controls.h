@@ -56,6 +56,39 @@ enum {
     CTRL_AXIS_REL_DEN = 15
 };
 
+/* Actions of the port rather than the PS1 pad (the Controls window's Game
+ * list), bound like the pad rows. controls.txt names them by token, so this
+ * order is only the list's; a mod built against it sees the numbers, so a
+ * new one goes before CTRL_HOST_COUNT. */
+typedef enum {
+    CTRL_HOST_EXIT,
+    CTRL_HOST_FULLSCREEN,
+    CTRL_HOST_SCREENSHOT,
+    CTRL_HOST_MUTE,
+    CTRL_HOST_VOLUME_UP,
+    CTRL_HOST_VOLUME_DOWN,
+    CTRL_HOST_SAVE_STATE,
+    CTRL_HOST_LOAD_STATE,
+    CTRL_HOST_SLOT_1,
+    CTRL_HOST_SLOT_2,
+    CTRL_HOST_SLOT_3,
+    CTRL_HOST_SLOT_4,
+    CTRL_HOST_PAUSE,
+    CTRL_HOST_FRAME_STEP,
+    CTRL_HOST_TURBO,
+    CTRL_HOST_HUD,
+    CTRL_HOST_DECK_SLOTS,
+    CTRL_HOST_COUNT
+} CtrlHostAction;
+/* Press actions fire once per press, hold actions last while held, repeat
+ * actions fire again while held (controls_runtime.h). */
+typedef enum { CTRL_HOST_PRESS, CTRL_HOST_HOLD, CTRL_HOST_REPEAT } CtrlHostMode;
+/* Table rows: the pad destinations, then the host actions. */
+enum {
+    CTRL_ROW_COUNT = CTRL_DEST_COUNT + CTRL_HOST_COUNT,
+    CTRL_ROW_EXIT = CTRL_DEST_COUNT + CTRL_HOST_EXIT
+};
+
 /* Icon style: changes only the controller face/shoulder visual labels. */
 typedef enum {
     CTRL_ICON_AUTOMATIC = 0,
@@ -270,11 +303,34 @@ typedef struct {
     char name[CTRL_NAME_MAX];
 } ControlsAction;
 extern const ControlsAction Controls_Actions[CTRL_DEST_COUNT];
+typedef struct {
+    const char *name;  /* the Game list's label */
+    const char *token; /* its name in controls.txt */
+    CtrlHostMode mode;
+    int key;           /* the keyboard default (CTRL_KEY_*), 0 for none */
+} ControlsHostAction;
+extern const ControlsHostAction Controls_HostActions[CTRL_HOST_COUNT];
 
-/* One device+port profile: destination -> up to two sources. */
+/* One device+port profile: destination -> up to two sources, and the same
+ * for each host action. The pad table stays the PS1 pad's 16 bits. */
 typedef struct {
     ControlSource src[CTRL_DEST_COUNT][CTRL_SLOT_COUNT];
+    ControlSource host[CTRL_HOST_COUNT][CTRL_SLOT_COUNT];
 } ControlsProfile;
+
+/* A table row's slots (0..CTRL_ROW_COUNT-1) and its name. */
+static inline ControlSource *Controls_Row(ControlsProfile *profile, int row)
+{
+    return row < CTRL_DEST_COUNT ? profile->src[row] : profile->host[row - CTRL_DEST_COUNT];
+}
+static inline const ControlSource *Controls_RowConst(const ControlsProfile *profile, int row)
+{
+    return row < CTRL_DEST_COUNT ? profile->src[row] : profile->host[row - CTRL_DEST_COUNT];
+}
+static inline const char *Controls_RowName(int row)
+{
+    return row < CTRL_DEST_COUNT ? Controls_Actions[row].name : Controls_HostActions[row - CTRL_DEST_COUNT].name;
+}
 
 typedef struct {
     int port;                         /* 0 = Player 1, 1 = Player 2 */
@@ -298,7 +354,8 @@ typedef struct {
     int profile_count;
     ControlsDeviceProfile profiles[CTRL_PROFILE_MAX];
 } ControlsConfig;
-#define CTRL_CONFIG_VERSION 1
+/* 2 added the host actions; version 1 files still load. */
+#define CTRL_CONFIG_VERSION 2
 
 /* Capture UI state machine (the window drives this frame by frame). */
 typedef enum { CAP_IDLE = 0, CAP_WAIT_NEUTRAL, CAP_AWAIT_INPUT, CAP_CONFLICT } CaptureState;
@@ -308,10 +365,10 @@ typedef enum { CAP_IDLE = 0, CAP_WAIT_NEUTRAL, CAP_AWAIT_INPUT, CAP_CONFLICT } C
  * when the selected controller is still connected. */
 typedef struct {
     CaptureState state;
-    int target; /* destination index */
+    int target; /* table row */
     int slot;
     ControlSource pending; /* the source being considered (valid at DONE/CONFLICT) */
-    int conflict_dest;     /* destination already owning `pending` (CONFLICT only) */
+    int conflict_dest;     /* row already owning `pending` (CONFLICT only) */
     int result;            /* result of the last step (CAPTURE_* codes) */
     uint64_t deadline_us;  /* 0 = no timeout active */
 } ControlCapture;
@@ -345,6 +402,8 @@ void Controls_Clear(ControlsConfig *cfg);
 int Controls_Equal(const ControlsConfig *a, const ControlsConfig *b);
 int Controls_ProfileValid(const ControlsProfile *profile, int controller);
 int Controls_SourceValid(int controller, const ControlSource *src);
+/* SourceValid for one row: Esc, reserved elsewhere, is the keyboard's Exit. */
+int Controls_RowSourceValid(int controller, int row, const ControlSource *src);
 int Controls_ConfigValid(const ControlsConfig *cfg);
 
 const char *Controls_KeyName(CtrlKeyCode code);  /* canonical storage name */
@@ -369,17 +428,21 @@ const char *Controls_ReservedReason(int key, int is_modifier);
 uint16_t Controls_EvalKeyboard(const ControlsProfile *kb, const ControlSource *keys_down, int n_keys_down);
 uint16_t Controls_EvalController(const ControlsProfile *ctrl, const ControllerSnapshot *snap,
                                  ControlsEvaluator *eval);
+/* Every row: bit `row` set while it is held (the pad bits, then host actions). */
+uint64_t Controls_EvalKeyboardRows(const ControlsProfile *kb, const ControlSource *keys_down, int n_keys_down);
+uint64_t Controls_EvalControllerRows(const ControlsProfile *ctrl, const ControllerSnapshot *snap,
+                                     ControlsEvaluator *eval);
 
-/* Bind / move. Returns 1 on success, 0 on out-of-range arguments.
- * Set overwrites `dest`'s `slot`; if `src` already owned another destination
- * in the same profile (any slot) it is moved there (the old slot clears).
- * Move removes `src` from any destination in the profile and binds it to
- * `new_dest`'s `slot`. */
+/* Bind / move. `dest` is a table row. Returns 1 on success, 0 on out-of-range
+ * arguments. Set overwrites `dest`'s `slot`; if `src` already owned another
+ * row in the same profile (any slot) it is moved there (the old slot clears).
+ * Move removes `src` from any row in the profile and binds it to `new_dest`'s
+ * `slot`. */
 int Controls_SetSource(ControlsProfile *profile, int dest, int slot, const ControlSource *src);
 int Controls_MoveSource(ControlsProfile *profile, int dest, int slot, const ControlSource *src);
 int Controls_ClearSlot(ControlsProfile *profile, int dest, int slot);
-/* Returns the destination index (0..CTRL_DEST_COUNT-1) that currently owns
- * `src` in this profile, or -1 if none. Checks all slots. */
+/* Returns the row (0..CTRL_ROW_COUNT-1) that currently owns `src` in this
+ * profile, or -1 if none. Checks all slots. */
 int Controls_ConflictDest(const ControlsProfile *profile, const ControlSource *src);
 
 /* Capture step machine. `profile` is the profile being edited; `slot` in the

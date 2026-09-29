@@ -223,25 +223,29 @@ buttons. Mods: an
 `INPUT` before-hook sees the controller's bits, as `host->pad` does; the
 after-hook sees what the game gets ([mod API](mod-api-3.md)).
 
-Esc quits (it closes an open menu first); F1, F2 and F4 select those state
-slots, F5 saves, and F7 loads. F3 cycles the debug HUD; slot 3 is selectable
-from File. F11 or Alt+Enter (the main Enter or the keypad's) switches between
+Esc quits (it closes an open menu first): it is the default key of Game >
+Controls' **Exit game**. Every shortcut below is a row of Game > Controls' **Game** list, like
+Exit game: the keys named are the defaults, each can be rebound, cleared or
+given a controller button too, and the File, Debug and Game menus show the
+key bound now ([Controls](controls-menu.md), `host_actions.c`). F1, F2 and F4
+select those state slots, F5 saves, and F7 loads; State slot 3 has no key by
+default (F3 cycles the debug HUD) and is selectable from File. F6 opens the
+deck slots. F11 or Alt+Enter (the main Enter or the keypad's) switches between
 the window and desktop fullscreen and saves `fullscreen`; in fullscreen Esc
-first returns to the window. The Enter pressed under Alt stops there, so it
-never presses Start, and Alt is a reserved modifier no binding can use. While
-a menu or a notice is open it takes the keys first, F11 and Alt+Enter
-included. Both are SDL only: the X11 backend has a fixed window with no
-fullscreen (`Platform_HasWindowModes` is 0 there).
+first returns to the window. Alt+Enter, F10 and Esc's own uses stay fixed
+(the Controls window lists them under Fixed keys). The Enter pressed under
+Alt stops there, so it never presses Start, and Alt is a reserved modifier
+no binding can use. While a menu or a notice is open it takes the keys
+first, Alt+Enter included. Fullscreen is SDL only: the X11 backend has a
+fixed window (`Platform_HasWindowModes` is 0 there).
 
-The keypad's + and - raise and lower the master volume by 5 (0-100, held
-keys repeat on SDL), which is the Audio menu's Master slider and the saved
-`master_volume`; M's mute stays on or off as it was, so a change while muted
-is heard when M unmutes. There is no on-screen notice: an open Audio menu
-shows the slider move, and `MEMORIES_TRACE=menu` logs each step. The
-keypad keys are not reserved, so **Game > Controls...** may bind them: a
-keypad + or - the keyboard bindings use (`controls.txt`) goes to the pad as
-before and that half of the shortcut is off (`Platform_VolumeKey`,
-`ControlsRuntime_KeyBound`). Both backends (SDL and X11). Controllers
+The keypad's + and - (Volume up and Volume down) raise and lower the master
+volume by 5 (0-100, repeating while held), which is the Audio menu's Master
+slider and the saved `master_volume`; M's mute stays on or off as it was, so
+a change while muted is heard when M unmutes. There is no on-screen notice:
+an open Audio menu shows the slider move, and `MEMORIES_TRACE=menu` logs each
+step. Binding a keypad key to a pad button takes it off the volume, as any
+move of a key between rows does. Both backends (SDL and X11). Controllers
 (`platform/gamepad_evdev.c`) are read through evdev, which names controls by
 meaning, so the one table covers Xbox pads on xpad, xone and xpadneo and most
 other pads. `/dev/input` is rescanned about once a second while a port is
@@ -479,7 +483,7 @@ one the face lacks (or a byte that is not UTF-8) shows as "?"; code that cuts su
 uses `Menu_TextBack`/`Menu_TextFit`/`Menu_TextTrim` (menu.h) so no character is split. The bar is dark with an
 accent highlight; menus have hover rows, separators, shortcut hints, check
 and radio marks, and a shadow. Keyboard: F10 opens the first menu, arrows
-move, Enter activates, Esc closes (Esc quits only when no menu is open).
+move, Enter activates, Esc closes (with no menu open it is Exit game).
 
 | Menu | Items |
 |---|---|

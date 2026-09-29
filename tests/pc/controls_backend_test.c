@@ -202,8 +202,8 @@ int main(void)
     Platform_OpenControls();
     controls_click_id(CONTROLS_UI_BINDING + 14 * 2); /* the Cross binding */
     controls_click_id(CONTROLS_UI_REBIND);
-    controls_press(SDL_SCANCODE_F5, 1);
-    controls_press(SDL_SCANCODE_F5, 0); /* reserved; cannot escape UI */
+    controls_press(SDL_SCANCODE_F10, 1);
+    controls_press(SDL_SCANCODE_F10, 0); /* reserved; cannot escape UI */
     assert(ControlsRuntime_Config()->kb.src[14][0].code == CTRL_KEY_X);
     controls_press(SDL_SCANCODE_B, 1);
     controls_press(SDL_SCANCODE_B, 0);

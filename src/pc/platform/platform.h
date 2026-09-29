@@ -122,12 +122,6 @@ int Platform_ClockRate(void);
 /* Game frames per second at the current speed; 0 when paused or uncapped. */
 float Platform_GameHz(void);
 void Platform_StepFrame(void);
-/* The keypad's + and - (CTRL_KEY_KP_PLUS / CTRL_KEY_KP_MINUS) step the
- * master volume by 5, the Audio menu's Master slider, and save it; the mute
- * (M) stays as it is. Returns nonzero when the key is the shortcut's: never
- * for other keys, nor for a keypad key the keyboard bindings use, which then
- * goes to the pad as before. `down` is 0 for a release (consumed, no step). */
-int Platform_VolumeKey(int key, int down);
 void Platform_SetPresentCap(int fps);
 int Platform_PresentCap(void);
 /* Present period from the cap and the display refresh, in microseconds; 0 for every frame. */

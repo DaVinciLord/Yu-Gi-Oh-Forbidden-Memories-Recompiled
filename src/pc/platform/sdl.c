@@ -16,6 +16,7 @@
 #include "mods_window.h"
 #include "controls_window.h"
 #include "controls_linux.h"
+#include "host_actions.h"
 #include "settings.h"
 #include "pc/audio/spu.h"
 #include "pc/debug/cheats.h"
@@ -1294,6 +1295,8 @@ static void pump(void)
         if(event.type==SDL_EVENT_KEYMAP_CHANGED){controls_key_labels();continue;}
         if(event.type==SDL_EVENT_GAMEPAD_ADDED){open_gamepad(event.gdevice.which);continue;}
         if(event.type==SDL_EVENT_GAMEPAD_REMOVED){close_gamepad(event.gdevice.which);continue;}
+        /* Every release, before a menu can take it: else a held action
+         * (turbo) would run on after the menu closes. */
         if(event.type==SDL_EVENT_KEY_UP)ControlsRuntime_Key(controls_key(event.key.scancode),0);
         if(dispatch_controls(&event, &menu_event))continue;
         if (mods_window && SDL_GetWindowFromEvent(&event) == mods_window) {
@@ -1389,20 +1392,15 @@ static void pump(void)
         case SDL_EVENT_KEY_DOWN: case SDL_EVENT_KEY_UP: {
             SDL_Keycode key = event.key.key;
             int down = event.type == SDL_EVENT_KEY_DOWN;
-            /* Keypad +/-: master volume, repeating while held; a keypad
-             * key the bindings use stays the pad's (Platform_VolumeKey). */
-            if (Platform_VolumeKey(controls_key(event.key.scancode), down)) {
-                if (down) menu_dirty = 1;
-                break;
-            }
+            /* The shortcuts are the Game list's bindings (host_actions.c,
+             * after this loop); only these keys stay fixed. */
             if (event.key.repeat) {
                 break;
             }
-            /* F11 or Alt+Enter (either Enter). The press stops here, so the
-             * Enter under Alt never reaches the pad as Start; Alt itself is a
-             * reserved modifier that cannot be bound (controls.c). */
-            if (down && (key == SDLK_F11 || ((key == SDLK_RETURN || key == SDLK_KP_ENTER) &&
-                                             (event.key.mod & SDL_KMOD_ALT)))) {
+            /* Alt+Enter (either Enter), beside the Fullscreen binding. The
+             * press stops here, so the Enter under Alt never reaches the pad
+             * as Start; Alt itself is a reserved modifier (controls.c). */
+            if (down && (key == SDLK_RETURN || key == SDLK_KP_ENTER) && (event.key.mod & SDL_KMOD_ALT)) {
                 int on = covers_screen();
                 Settings_Set(SET_FULLSCREEN, !on);
                 if (on) Settings_Set(SET_BORDERLESS, 0);
@@ -1410,55 +1408,17 @@ static void pump(void)
                 Platform_ApplyDisplaySettings();
                 break;
             }
-            if (down && key == SDLK_F12) {
-                Platform_Screenshot((event.key.mod & SDL_KMOD_SHIFT) != 0);
-                break;
-            }
-            if (down && key == SDLK_F3) {
-                Settings_Set(SET_SHOW_HUD, (Settings_Get(SET_SHOW_HUD) + 1) % 3);
-                Settings_Save();
-                menu_dirty = 1;
-                break;
-            }
-            if (key == SDLK_TAB) {
-                Platform_SetClockRate(down ? 400 : Settings_Get(SET_SPEED));
-                break;
-            }
-            if (down && key == SDLK_P) {
-                Platform_SetClockRate(Platform_ClockRate() == 0 ? Settings_Get(SET_SPEED) : 0);
-                break;
-            }
-            if (down && key == SDLK_PERIOD && Platform_ClockRate() == 0) {
-                Platform_StepFrame();
-                break;
-            }
-            if (down && key == SDLK_M) {
-                Spu_SetMuted(!Spu_Muted());
-                break;
-            }
             if (down && key == SDLK_ESCAPE && DeckMenu_Active()) {
                 DeckMenu_Close(); /* the deck slot screen, not the game */
                 break;
             }
-            if (down && key == SDLK_F6) {
-                DeckMenu_Request();
+            /* Esc leaves fullscreen first, then borderless; in a window it is
+             * only the Exit game control's default key. */
+            if (down && key == SDLK_ESCAPE && covers_screen()) {
+                Settings_Set(Settings_Get(SET_FULLSCREEN) ? SET_FULLSCREEN : SET_BORDERLESS, 0);
+                Settings_Save();
+                Platform_ApplyDisplaySettings();
                 break;
-            }
-            if (down && key == SDLK_ESCAPE) {
-                if (covers_screen()) {
-                    /* Out of fullscreen first, then out of borderless. */
-                    Settings_Set(Settings_Get(SET_FULLSCREEN) ? SET_FULLSCREEN : SET_BORDERLESS, 0);
-                    Settings_Save();
-                    Platform_ApplyDisplaySettings();
-                } else {
-                    quit = 1;
-                }
-            }
-            /* F3 belongs to the HUD; slot 3 remains available from File. */
-            if (down && key >= SDLK_F1 && key <= SDLK_F4) {
-                if (key != SDLK_F3) Platform_SetStateSlot((int)(key - SDLK_F1) + 1);
-            } else if (down && (key == SDLK_F5 || key == SDLK_F7)) {
-                Memories_StateRequest(key == SDLK_F5 ? 1 : 2, state_slot);
             }
             ControlsRuntime_Key(controls_key(event.key.scancode),down);
             break;
@@ -1469,6 +1429,7 @@ static void pump(void)
     if (mods_window && mods_dirty) draw_mods();
     mods_dirty = 0;
     Gamepad_Poll(current_frame);
+    if (HostActions_Run(&quit)) menu_dirty = 1;
     if(controls_window) {
         static uint64_t last_draw;
         ControlsWindow_Tick();

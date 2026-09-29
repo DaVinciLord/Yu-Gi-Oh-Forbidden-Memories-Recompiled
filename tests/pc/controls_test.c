@@ -228,22 +228,14 @@ static int test_axis_hysteresis(void)
 
 static int test_reserved_keys(void)
 {
-    /* Reserved (per spec lines 155-160): Escape, Tab, F1-F5, F7, F10-F12, P, M, period,
-     * and lone modifiers except Right Shift. */
+    /* Reserved: Escape and F10, which the backends keep, and lone modifiers
+     * except Right Shift. The other shortcuts are Game list bindings. */
     CHECK(Controls_IsReservedKey(CTRL_KEY_ESCAPE, 0));
-    CHECK(Controls_IsReservedKey(CTRL_KEY_TAB, 0));
-    CHECK(Controls_IsReservedKey(CTRL_KEY_F1, 0));
-    CHECK(Controls_IsReservedKey(CTRL_KEY_F5, 0));
-    CHECK(Controls_IsReservedKey(CTRL_KEY_F7, 0));
     CHECK(Controls_IsReservedKey(CTRL_KEY_F10, 0));
-    CHECK(Controls_IsReservedKey(CTRL_KEY_F12, 0));
-    CHECK(Controls_IsReservedKey(CTRL_KEY_P, 0));
-    CHECK(Controls_IsReservedKey(CTRL_KEY_M, 0));
-    CHECK(Controls_IsReservedKey(CTRL_KEY_PERIOD, 0));
-    /* F6/F8/F9 are NOT in the reserved set. */
-    CHECK(!Controls_IsReservedKey(CTRL_KEY_F6, 0));
-    CHECK(!Controls_IsReservedKey(CTRL_KEY_F8, 0));
-    CHECK(!Controls_IsReservedKey(CTRL_KEY_F9, 0));
+    int bindable[] = {CTRL_KEY_TAB, CTRL_KEY_F1, CTRL_KEY_F3, CTRL_KEY_F5, CTRL_KEY_F6, CTRL_KEY_F7,
+                      CTRL_KEY_F8, CTRL_KEY_F9, CTRL_KEY_F11, CTRL_KEY_F12, CTRL_KEY_P, CTRL_KEY_M, CTRL_KEY_PERIOD};
+    for (unsigned i = 0; i < sizeof(bindable) / sizeof(bindable[0]); i++)
+        CHECK(!Controls_IsReservedKey(bindable[i], 0));
     /* Modifiers are reserved, except Right Shift. */
     CHECK(Controls_IsReservedKey(CTRL_KEY_LEFT_SHIFT, 1));
     CHECK(Controls_IsReservedKey(CTRL_KEY_LEFT_CTRL, 1));
@@ -258,7 +250,8 @@ static int test_reserved_keys(void)
     CHECK(!Controls_IsReservedKey(CTRL_KEY_A, 0));
     /* Reasons are non-empty for the reserved ones. */
     CHECK(Controls_ReservedReason(CTRL_KEY_ESCAPE, 0)[0] != 0);
-    CHECK(Controls_ReservedReason(CTRL_KEY_TAB, 0)[0] != 0);
+    CHECK(Controls_ReservedReason(CTRL_KEY_F10, 0)[0] != 0);
+    CHECK(Controls_ReservedReason(CTRL_KEY_TAB, 0)[0] == 0);
     CHECK(Controls_ReservedReason(CTRL_KEY_LEFT_SHIFT, 1)[0] != 0);
     CHECK(Controls_ReservedReason(CTRL_KEY_RIGHT_SHIFT, 1)[0] == 0); /* exception -> no reason */
     return 0;
@@ -423,6 +416,59 @@ static int test_config_valid_and_equality(void)
 
 /* ---- hat bitmask semantics --------------------------------------------- */
 
+/* Exit game, the first host action: Esc on the keyboard by default and
+ * nowhere else, bound and moved like a pad row, evaluated past the pad bits. */
+static int test_host_actions(void)
+{
+    ControlsConfig cfg;
+    ControlSource esc = {CTRL_SRC_KEY, CTRL_KEY_ESCAPE, 0}, x = {CTRL_SRC_KEY, CTRL_KEY_X, 0};
+    ControlSource guide = {CTRL_SRC_BUTTON, CTRL_BTN_GUIDE, 0}, south = {CTRL_SRC_BUTTON, CTRL_BTN_SOUTH, 0};
+    ControllerSnapshot snap = {0};
+    Controls_InitDefaults(&cfg);
+    CHECK(!strcmp(Controls_RowName(CTRL_ROW_EXIT), "Exit game") && !strcmp(Controls_RowName(14), "Cross"));
+    CHECK(Controls_SourceEquals(&cfg.kb.host[CTRL_HOST_EXIT][0], &esc));
+    CHECK(Controls_Row(&cfg.kb, CTRL_ROW_EXIT) == cfg.kb.host[CTRL_HOST_EXIT]);
+    for (int p = 0; p < CTRL_PORT_COUNT; p++)
+        CHECK(!cfg.ctrl[p].host[CTRL_HOST_EXIT][0].kind && !cfg.ctrl[p].host[CTRL_HOST_EXIT][1].kind);
+    CHECK(Controls_ConfigValid(&cfg));
+    /* The other shortcuts keep their keys; State slot 3 has none (F3 is the
+     * HUD's); every host action has a distinct name and file token. */
+    CHECK(cfg.kb.host[CTRL_HOST_SAVE_STATE][0].code == CTRL_KEY_F5 && cfg.kb.host[CTRL_HOST_TURBO][0].code == CTRL_KEY_TAB);
+    CHECK(!cfg.kb.host[CTRL_HOST_SLOT_3][0].kind && cfg.kb.host[CTRL_HOST_HUD][0].code == CTRL_KEY_F3);
+    for (int a = 0; a < CTRL_HOST_COUNT; a++)
+        for (int b = 0; b < a; b++)
+            CHECK(strcmp(Controls_HostActions[a].name, Controls_HostActions[b].name) &&
+                  strcmp(Controls_HostActions[a].token, Controls_HostActions[b].token));
+    /* Esc stays reserved for every other row. */
+    CHECK(Controls_RowSourceValid(0, CTRL_ROW_EXIT, &esc) && !Controls_RowSourceValid(0, 14, &esc));
+    CHECK(!Controls_RowSourceValid(1, CTRL_ROW_EXIT, &esc));
+    cfg.kb.src[14][0] = esc;
+    CHECK(!Controls_ProfileValid(&cfg.kb, 0));
+    Controls_InitDefaults(&cfg);
+    /* The Exit row's bit follows the 16 pad bits; the pad mask ignores it. */
+    CHECK(Controls_EvalKeyboardRows(&cfg.kb, &esc, 1) == (uint64_t)1 << CTRL_ROW_EXIT);
+    CHECK(Controls_EvalKeyboard(&cfg.kb, &esc, 1) == 0);
+    /* One source, one row, across both tiers: X moves from Cross to Exit. */
+    CHECK(Controls_SetSource(&cfg.kb, CTRL_ROW_EXIT, 0, &x));
+    CHECK(!cfg.kb.src[14][0].kind && Controls_ConflictDest(&cfg.kb, &x) == CTRL_ROW_EXIT);
+    CHECK(Controls_ProfileValid(&cfg.kb, 0));
+    CHECK(Controls_ClearSlot(&cfg.kb, CTRL_ROW_EXIT, 0) && !cfg.kb.host[CTRL_HOST_EXIT][0].kind);
+    CHECK(!Controls_SetSource(&cfg.kb, CTRL_ROW_COUNT, 0, &x));
+    /* A controller binds it in either slot; South stays Cross. */
+    CHECK(Controls_SetSource(&cfg.ctrl[0], CTRL_ROW_EXIT, 1, &guide));
+    snap.buttons_down = 1u << (CTRL_BTN_GUIDE - 1) | 1u << (CTRL_BTN_SOUTH - 1);
+    CHECK(Controls_EvalControllerRows(&cfg.ctrl[0], &snap, NULL) == ((uint64_t)1 << CTRL_ROW_EXIT | CTRL_DEST_CROSS));
+    /* The last row's bit is past 32. */
+    ControlSource f6 = {CTRL_SRC_KEY, CTRL_KEY_F6, 0};
+    CHECK(Controls_EvalKeyboardRows(&cfg.kb, &f6, 1) == (uint64_t)1 << (CTRL_DEST_COUNT + CTRL_HOST_DECK_SLOTS));
+    CHECK(Controls_EvalController(&cfg.ctrl[0], &snap, NULL) == CTRL_DEST_CROSS);
+    CHECK(Controls_ConflictDest(&cfg.ctrl[0], &south) == 14);
+    ControlsConfig other;
+    Controls_InitDefaults(&other);
+    CHECK(!Controls_Equal(&cfg, &other));
+    return 0;
+}
+
 static int test_hat_semantics(void)
 {
     ControlsConfig cfg;
@@ -504,6 +550,9 @@ int main(void)
     if (r)
         return r;
     r = test_capture_fsm();
+    if (r)
+        return r;
+    r = test_host_actions();
     if (r)
         return r;
     r = test_hat_semantics();

@@ -30,7 +30,7 @@ int main(void)
     setenv("MEMORIES_CONTROLS", path, 1);
     MenuCanvas c = {0};
     c.width = 900;
-    c.height = 650;
+    c.height = 900; /* SIZE_H, the default window */
     c.stride = c.width;
     c.pixels = calloc((size_t)c.width * c.height, 4);
     assert(c.pixels);
@@ -212,6 +212,46 @@ int main(void)
     ControlsWindow_Key(CTRL_KEY_DELETE, 1, 0, 0);
     assert(ui.draft.kb.src[0][0].kind == CTRL_SRC_UNBOUND);
     assert(ControlsRuntime_Config()->kb.src[0][0].kind != CTRL_SRC_UNBOUND);
+
+    /* The Game list is a list of its own, drawn apart from the pad's, and
+     * the arrows stay in it: Exit game is first, Deck slots last. */
+    select_row(CTRL_ROW_EXIT, 0);
+    ControlsWindow_Draw(&c);
+    assert(list_rect[1].w && list_rect[1].y != list_rect[0].y);
+    assert(!strcmp(action_group(CTRL_ROW_EXIT), "Program"));
+    ControlsWindow_Key(CTRL_KEY_ARROW_DOWN, 1, 0, 0);
+    assert(ui.row == CTRL_DEST_COUNT + CTRL_HOST_FULLSCREEN);
+    ControlsWindow_Key(CTRL_KEY_ARROW_UP, 1, 0, 0);
+    ControlsWindow_Key(CTRL_KEY_ARROW_UP, 1, 0, 0);
+    assert(ui.row == CTRL_DEST_COUNT + CTRL_HOST_DECK_SLOTS && ui.host_scroll == ui.host_scroll_max);
+    /* The wheel scrolls the list under the pointer. */
+    MenuEvent over = {.type = MENU_EVENT_MOTION, .x = list_rect[1].x + 20, .y = list_rect[1].y + 40};
+    MenuEvent up = {.type = MENU_EVENT_WHEEL, .wheel = 1};
+    int pad_scroll = ui.scroll;
+    ControlsWindow_Event(&over);
+    for (int i = 0; i < 30; i++)
+        ControlsWindow_Event(&up);
+    assert(ui.host_scroll == 0 && ui.scroll == pad_scroll);
+    /* Esc cancels a capture, so clearing Exit game says only Restore
+     * keyboard defaults gives Esc back; any other key captures, and Restore
+     * does give Esc back. */
+    select_row(CTRL_ROW_EXIT, 0);
+    ControlsWindow_Draw(&c);
+    assert(ui.draft.kb.host[CTRL_HOST_EXIT][0].code == CTRL_KEY_ESCAPE);
+    ControlsWindow_Key(CTRL_KEY_DELETE, 1, 0, 0);
+    assert(ui.draft.kb.host[CTRL_HOST_EXIT][0].kind == CTRL_SRC_UNBOUND);
+    assert(strstr(ui.status, "Restore keyboard defaults"));
+    start_capture();
+    ControlsWindow_Tick();
+    ControlsRuntime_Key(CTRL_KEY_F9, 1);
+    ControlsWindow_Tick();
+    ControlsRuntime_Key(CTRL_KEY_F9, 0);
+    ControlsWindow_Tick();
+    assert(ui.capture.state == CAP_IDLE && ui.draft.kb.host[CTRL_HOST_EXIT][0].code == CTRL_KEY_F9);
+    ControlsWindow_Draw(&c);
+    activate(DEFAULTS);
+    activate(YES);
+    assert(ui.draft.kb.host[CTRL_HOST_EXIT][0].code == CTRL_KEY_ESCAPE);
     activate(CANCEL);
 
     /* The pointer lights up whatever it is over, and nothing when it misses. */

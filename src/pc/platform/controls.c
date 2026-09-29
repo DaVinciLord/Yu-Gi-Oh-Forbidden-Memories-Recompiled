@@ -28,6 +28,24 @@ const ControlsAction Controls_Actions[CTRL_DEST_COUNT] = {{CTRL_DEST_SELECT, "Se
                                                           {CTRL_DEST_CIRCLE, "Circle"},
                                                           {CTRL_DEST_CROSS, "Cross"},
                                                           {CTRL_DEST_SQUARE, "Square"}};
+const ControlsHostAction Controls_HostActions[CTRL_HOST_COUNT] = {
+    [CTRL_HOST_EXIT] = {"Exit game", "exit", CTRL_HOST_PRESS, CTRL_KEY_ESCAPE},
+    [CTRL_HOST_FULLSCREEN] = {"Fullscreen", "fullscreen", CTRL_HOST_PRESS, CTRL_KEY_F11},
+    [CTRL_HOST_SCREENSHOT] = {"Screenshot", "screenshot", CTRL_HOST_PRESS, CTRL_KEY_F12},
+    [CTRL_HOST_MUTE] = {"Mute", "mute", CTRL_HOST_PRESS, CTRL_KEY_M},
+    [CTRL_HOST_VOLUME_UP] = {"Volume up", "volume_up", CTRL_HOST_REPEAT, CTRL_KEY_KP_PLUS},
+    [CTRL_HOST_VOLUME_DOWN] = {"Volume down", "volume_down", CTRL_HOST_REPEAT, CTRL_KEY_KP_MINUS},
+    [CTRL_HOST_SAVE_STATE] = {"Save state", "save_state", CTRL_HOST_PRESS, CTRL_KEY_F5},
+    [CTRL_HOST_LOAD_STATE] = {"Load state", "load_state", CTRL_HOST_PRESS, CTRL_KEY_F7},
+    [CTRL_HOST_SLOT_1] = {"State slot 1", "slot_1", CTRL_HOST_PRESS, CTRL_KEY_F1},
+    [CTRL_HOST_SLOT_2] = {"State slot 2", "slot_2", CTRL_HOST_PRESS, CTRL_KEY_F2},
+    [CTRL_HOST_SLOT_3] = {"State slot 3", "slot_3", CTRL_HOST_PRESS, 0}, /* F3 is the HUD's */
+    [CTRL_HOST_SLOT_4] = {"State slot 4", "slot_4", CTRL_HOST_PRESS, CTRL_KEY_F4},
+    [CTRL_HOST_PAUSE] = {"Pause", "pause", CTRL_HOST_PRESS, CTRL_KEY_P},
+    [CTRL_HOST_FRAME_STEP] = {"Frame step", "frame_step", CTRL_HOST_PRESS, CTRL_KEY_PERIOD},
+    [CTRL_HOST_TURBO] = {"Turbo (hold)", "turbo", CTRL_HOST_HOLD, CTRL_KEY_TAB},
+    [CTRL_HOST_HUD] = {"Debug HUD", "hud", CTRL_HOST_PRESS, CTRL_KEY_F3},
+    [CTRL_HOST_DECK_SLOTS] = {"Deck slots", "deck_slots", CTRL_HOST_PRESS, CTRL_KEY_F6}};
 /* CTRL_DEST_COUNT is 16 because the PS1 digital pad has 16 active bits
  * (0x0001 .. 0x8000, 0x0000 carries no action). The list above must always
  * line up with that; the test suite asserts the match. */
@@ -156,28 +174,9 @@ uint32_t Controls_SourceIdentity(const ControlSource *src)
 /*  Reserved-key and modifier policy (centralized per the spec)      */
 /* ------------------------------------------------------------------ */
 
-static int host_shortcut(int key)
-{
-    switch (key) {
-    case CTRL_KEY_ESCAPE:
-    case CTRL_KEY_TAB:
-    case CTRL_KEY_F1:
-    case CTRL_KEY_F2:
-    case CTRL_KEY_F3:
-    case CTRL_KEY_F4:
-    case CTRL_KEY_F5:
-    case CTRL_KEY_F7:
-    case CTRL_KEY_F10:
-    case CTRL_KEY_F11:
-    case CTRL_KEY_F12:
-    case CTRL_KEY_P:
-    case CTRL_KEY_M:
-    case CTRL_KEY_PERIOD: /* pause/mute/reset */
-        return 1;
-    default:
-        return 0;
-    }
-}
+/* The keys the backends keep for themselves. Every other shortcut is a
+ * host action (the Game list), bound like any row. */
+static int host_shortcut(int key) { return key == CTRL_KEY_ESCAPE || key == CTRL_KEY_F10; }
 
 int Controls_IsModifier(int key)
 {
@@ -211,20 +210,8 @@ int Controls_IsReservedKey(int key, int is_modifier)
 
 const char *Controls_ReservedReason(int key, int is_modifier)
 {
-    static const char *reasons[CTRL_KEY_COUNT] = {[CTRL_KEY_ESCAPE] = "Reserved: close window",
-                                                  [CTRL_KEY_TAB] = "Reserved: menu focus",
-                                                  [CTRL_KEY_F1] = "Reserved: state slot 1 / shortcut",
-                                                  [CTRL_KEY_F2] = "Reserved: state slot 2 / shortcut",
-                                                  [CTRL_KEY_F3] = "Reserved: debug HUD",
-                                                  [CTRL_KEY_F4] = "Reserved: state slot 4 / shortcut",
-                                                  [CTRL_KEY_F5] = "Reserved: save state",
-                                                  [CTRL_KEY_F7] = "Reserved: shortcut",
-                                                  [CTRL_KEY_F10] = "Reserved: shortcut",
-                                                  [CTRL_KEY_F11] = "Reserved: shortcut",
-                                                  [CTRL_KEY_F12] = "Reserved: shortcut",
-                                                  [CTRL_KEY_P] = "Reserved: pause",
-                                                  [CTRL_KEY_M] = "Reserved: mute",
-                                                  [CTRL_KEY_PERIOD] = "Reserved: frame step"};
+    static const char *reasons[CTRL_KEY_COUNT] = {[CTRL_KEY_ESCAPE] = "Reserved: cancels, closes and leaves fullscreen",
+                                                  [CTRL_KEY_F10] = "Reserved: opens the menu bar"};
     (void)is_modifier;
     if (key <= CTRL_KEY_NONE || key >= CTRL_KEY_COUNT)
         return "";
@@ -320,6 +307,12 @@ void Controls_InitDefaults(ControlsConfig *cfg)
     cfg->kb.src[14][0] = s; /* Cross          */
     ksrc(&s, CTRL_KEY_Z);
     cfg->kb.src[15][0] = s; /* Square          */
+    /* The Game list: today's shortcut keys. Controllers leave it unbound. */
+    for (int h = 0; h < CTRL_HOST_COUNT; h++)
+        if (Controls_HostActions[h].key) {
+            ksrc(&s, Controls_HostActions[h].key);
+            cfg->kb.host[h][0] = s;
+        }
 
     /* Controllers, both ports share the layout; each gets an independent
      * copy so a rebinding in one port never leaks into the other. */
@@ -382,9 +375,9 @@ void Controls_InitDefaults(ControlsConfig *cfg)
 
 static int profile_equal(const ControlsProfile *a, const ControlsProfile *b)
 {
-    for (int d = 0; d < CTRL_DEST_COUNT; d++)
+    for (int d = 0; d < CTRL_ROW_COUNT; d++)
         for (int k = 0; k < CTRL_SLOT_COUNT; k++)
-            if (!Controls_SourceEquals(&a->src[d][k], &b->src[d][k]))
+            if (!Controls_SourceEquals(&Controls_RowConst(a, d)[k], &Controls_RowConst(b, d)[k]))
                 return 0;
     return 1;
 }
@@ -423,17 +416,23 @@ int Controls_SourceValid(int controller, const ControlSource *s)
         return s->code == 1 || s->code == 2 || s->code == 4 || s->code == 8;
     return 0;
 }
+int Controls_RowSourceValid(int controller, int row, const ControlSource *s)
+{
+    return (!controller && row == CTRL_ROW_EXIT && s->kind == CTRL_SRC_KEY && s->code == CTRL_KEY_ESCAPE &&
+            !s->sign) ||
+           Controls_SourceValid(controller, s);
+}
 int Controls_ProfileValid(const ControlsProfile *profile, int controller)
 {
-    for (int d = 0; d < CTRL_DEST_COUNT; d++)
+    for (int d = 0; d < CTRL_ROW_COUNT; d++)
         for (int k = 0; k < CTRL_SLOT_COUNT; k++) {
-            const ControlSource *s = &profile->src[d][k];
-            if (!Controls_SourceValid(controller, s) || (!controller && k && s->kind))
+            const ControlSource *s = &Controls_RowConst(profile, d)[k];
+            if (!Controls_RowSourceValid(controller, d, s) || (!controller && k && s->kind))
                 return 0;
             if (!s->kind)
                 continue;
             for (int i = 0; i < d * 2 + k; i++)
-                if (Controls_SourceEquals(s, &profile->src[i / 2][i % 2]))
+                if (Controls_SourceEquals(s, &Controls_RowConst(profile, i / 2)[i % 2]))
                     return 0;
         }
     return 1;
@@ -479,36 +478,42 @@ static int hysteresis(int *active, float mag, float act)
     return next;
 }
 
-uint16_t Controls_EvalKeyboard(const ControlsProfile *kb, const ControlSource *keys_down, int n)
+/* Row d's bit is 1 << d: for the pad rows that is Controls_Actions[d].bit
+ * (the test suite asserts it), so the low 16 bits are the pad mask. */
+uint64_t Controls_EvalKeyboardRows(const ControlsProfile *kb, const ControlSource *keys_down, int n)
 {
     if (!kb)
         return 0;
-    uint16_t out = 0;
-    for (int d = 0; d < CTRL_DEST_COUNT; d++) {
+    uint64_t out = 0;
+    for (int d = 0; d < CTRL_ROW_COUNT; d++) {
         for (int k = 0; k < CTRL_SLOT_COUNT; k++) {
-            const ControlSource *s = &kb->src[d][k];
+            const ControlSource *s = &Controls_RowConst(kb, d)[k];
             if (s->kind != CTRL_SRC_KEY)
                 continue;
             for (int i = 0; i < n; i++)
                 if (keys_down[i].kind == CTRL_SRC_KEY && keys_down[i].code == s->code) {
-                    out |= Controls_Actions[d].bit;
+                    out |= (uint64_t)1 << d;
                     break;
                 }
         }
     }
     return out;
 }
+uint16_t Controls_EvalKeyboard(const ControlsProfile *kb, const ControlSource *keys_down, int n)
+{
+    return (uint16_t)Controls_EvalKeyboardRows(kb, keys_down, n);
+}
 
-uint16_t Controls_EvalController(const ControlsProfile *ctrl, const ControllerSnapshot *snap,
-                                 ControlsEvaluator *eval)
+uint64_t Controls_EvalControllerRows(const ControlsProfile *ctrl, const ControllerSnapshot *snap,
+                                     ControlsEvaluator *eval)
 {
     if (!ctrl || !snap)
         return 0;
-    uint16_t out = 0;
-    for (int d = 0; d < CTRL_DEST_COUNT; d++) {
-        uint16_t bit = Controls_Actions[d].bit;
+    uint64_t out = 0;
+    for (int d = 0; d < CTRL_ROW_COUNT; d++) {
+        uint64_t bit = (uint64_t)1 << d;
         for (int k = 0; k < CTRL_SLOT_COUNT; k++) {
-            const ControlSource *s = &ctrl->src[d][k];
+            const ControlSource *s = &Controls_RowConst(ctrl, d)[k];
             int held = 0;
             if (!Controls_SourceValid(1, s))
                 continue;
@@ -550,6 +555,11 @@ uint16_t Controls_EvalController(const ControlsProfile *ctrl, const ControllerSn
     }
     return out;
 }
+uint16_t Controls_EvalController(const ControlsProfile *ctrl, const ControllerSnapshot *snap,
+                                 ControlsEvaluator *eval)
+{
+    return (uint16_t)Controls_EvalControllerRows(ctrl, snap, eval);
+}
 
 /* ------------------------------------------------------------------ */
 /*  Bind / move / conflict                                           */
@@ -559,10 +569,10 @@ int Controls_ConflictDest(const ControlsProfile *profile, const ControlSource *s
 {
     if (!src || !src->kind)
         return -1;
-    for (int d = 0; d < CTRL_DEST_COUNT; d++) {
+    for (int d = 0; d < CTRL_ROW_COUNT; d++) {
         int hit = 0;
         for (int k = 0; k < CTRL_SLOT_COUNT; k++) {
-            if (Controls_SourceEquals(&profile->src[d][k], src)) {
+            if (Controls_SourceEquals(&Controls_RowConst(profile, d)[k], src)) {
                 hit = 1;
                 break;
             }
@@ -575,16 +585,17 @@ int Controls_ConflictDest(const ControlsProfile *profile, const ControlSource *s
 
 int Controls_SetSource(ControlsProfile *profile, int dest, int slot, const ControlSource *src)
 {
-    if (!profile || dest < 0 || dest >= CTRL_DEST_COUNT || slot < 0 || slot >= CTRL_SLOT_COUNT || !src)
+    if (!profile || dest < 0 || dest >= CTRL_ROW_COUNT || slot < 0 || slot >= CTRL_SLOT_COUNT || !src)
         return 0;
     if (src->kind == CTRL_SRC_UNBOUND)
         return Controls_ClearSlot(profile, dest, slot);
-    /* A source has one slot per profile. Clear its previous slot before moving it. */
-    for (int d = 0; d < CTRL_DEST_COUNT; d++)
+    /* A source has one slot per profile, pad and host rows alike. Clear its
+     * previous slot before moving it. */
+    for (int d = 0; d < CTRL_ROW_COUNT; d++)
         for (int k = 0; k < CTRL_SLOT_COUNT; k++)
-            if ((d != dest || k != slot) && Controls_SourceEquals(&profile->src[d][k], src))
-                memset(&profile->src[d][k], 0, sizeof(*src));
-    profile->src[dest][slot] = *src;
+            if ((d != dest || k != slot) && Controls_SourceEquals(&Controls_Row(profile, d)[k], src))
+                memset(&Controls_Row(profile, d)[k], 0, sizeof(*src));
+    Controls_Row(profile, dest)[slot] = *src;
     return 1;
 }
 
@@ -598,9 +609,9 @@ int Controls_MoveSource(ControlsProfile *profile, int dest, int slot, const Cont
 
 int Controls_ClearSlot(ControlsProfile *profile, int dest, int slot)
 {
-    if (!profile || dest < 0 || dest >= CTRL_DEST_COUNT || slot < 0 || slot >= CTRL_SLOT_COUNT)
+    if (!profile || dest < 0 || dest >= CTRL_ROW_COUNT || slot < 0 || slot >= CTRL_SLOT_COUNT)
         return 0;
-    memset(&profile->src[dest][slot], 0, sizeof(profile->src[dest][slot]));
+    memset(&Controls_Row(profile, dest)[slot], 0, sizeof(ControlSource));
     return 1;
 }
 

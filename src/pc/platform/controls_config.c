@@ -40,6 +40,7 @@ void ControlsConfig_Token(ControlSource s, char *out, unsigned size)
             *p = (char)tolower((unsigned char)*p);
     }
 }
+/* Any well-formed token; which row may hold it is Controls_ConfigValid's. */
 static int source(const char *token, ControlSource *out)
 {
     char name[80];
@@ -47,7 +48,7 @@ static int source(const char *token, ControlSource *out)
         for (int code = 0; code < CTRL_KEY_COUNT; code++)
             for (int sign = -1; sign <= 1; sign++) {
                 ControlSource s = {(CtrlSourceKind)kind, (uint16_t)code, (int8_t)sign};
-                if (!Controls_SourceValid(kind != CTRL_SRC_KEY, &s))
+                if (!(kind == CTRL_SRC_KEY && code && !sign) && !Controls_SourceValid(kind != CTRL_SRC_KEY, &s))
                     continue;
                 ControlsConfig_Token(s, name, sizeof(name));
                 if (!strcmp(token, name)) {
@@ -56,6 +57,28 @@ static int source(const char *token, ControlSource *out)
                 }
             }
     return 0;
+}
+static int host_action(const char *token)
+{
+    for (int h = 0; h < CTRL_HOST_COUNT; h++)
+        if (!strcmp(token, Controls_HostActions[h].token))
+            return h;
+    return -1;
+}
+/* A default host binding a file did not mention, whose source the file
+ * gave another row (keypad + on a pad button, say), stays unbound. */
+static void settle_defaults(ControlsProfile *profile, const unsigned char *seen)
+{
+    for (int h = 0; h < CTRL_HOST_COUNT; h++)
+        for (int k = 0; k < CTRL_SLOT_COUNT; k++) {
+            ControlSource *s = &profile->host[h][k];
+            if (seen[h * 2 + k] || !s->kind)
+                continue;
+            for (int d = 0; d < CTRL_ROW_COUNT; d++)
+                for (int j = 0; j < CTRL_SLOT_COUNT; j++)
+                    if ((d != CTRL_DEST_COUNT + h || j != k) && Controls_SourceEquals(s, &Controls_Row(profile, d)[j]))
+                        *s = (ControlSource){0};
+        }
 }
 static void hex(const char *in, char *out)
 {
@@ -92,9 +115,10 @@ static int unhex(const char *in, char *out)
 }
 int ControlsConfig_Load(ControlsConfig *cfg, char *error, unsigned capacity)
 {
-    char file[4096], line[1024], id[CTRL_IDENTITY_MAX * 2], token[80], extra;
+    char file[4096], line[1024], id[CTRL_IDENTITY_MAX * 2], token[80], name[32], extra;
     ControlsConfig next;
-    unsigned char seen[3 + CTRL_PROFILE_MAX][32] = {{0}}, ports[2] = {0}, devices[CTRL_PROFILE_MAX] = {0};
+    unsigned char seen[3 + CTRL_PROFILE_MAX][CTRL_ROW_COUNT * 2] = {{0}}, ports[2] = {0},
+                  devices[CTRL_PROFILE_MAX] = {0};
     int version, count, bad = 0, lines = 0;
     FILE *f;
     Controls_InitDefaults(cfg);
@@ -113,7 +137,10 @@ int ControlsConfig_Load(ControlsConfig *cfg, char *error, unsigned capacity)
         fclose(f);
         goto malformed;
     }
-    if (version != CTRL_CONFIG_VERSION) {
+    /* Version 1 has no host lines: they keep their defaults (Esc exits). In
+     * version 2 each is optional, and a name this build does not know (a
+     * later build's action) is skipped. */
+    if (version < 1 || version > CTRL_CONFIG_VERSION) {
         fclose(f);
         snprintf(error, capacity, "Unsupported controls version %d; file preserved", version);
         return -2;
@@ -126,7 +153,7 @@ int ControlsConfig_Load(ControlsConfig *cfg, char *error, unsigned capacity)
     next.profile_count = count;
     while (fgets(line, sizeof(line), f)) {
         int a, b, mode, icon;
-        if (++lines > 1024 || !strchr(line, '\n')) {
+        if (++lines > 4096 || !strchr(line, '\n')) {
             bad = 1;
             break;
         }
@@ -156,6 +183,24 @@ int ControlsConfig_Load(ControlsConfig *cfg, char *error, unsigned capacity)
                 bad = 1;
                 break;
             }
+        } else if (version > 1 && sscanf(line, "host %d %31s %d %79s %c", &a, name, &b, token, &extra) == 4) {
+            ControlsProfile *profile;
+            int h = host_action(name);
+            if (a < 0 || a >= 3 + count || b < 0 || b >= CTRL_SLOT_COUNT) {
+                bad = 1;
+                break;
+            }
+            if (h < 0)
+                continue;
+            if (seen[a][CTRL_DEST_COUNT * 2 + h * 2 + b]++) {
+                bad = 1;
+                break;
+            }
+            profile = a == 0 ? &next.kb : a < 3 ? &next.ctrl[a - 1] : &next.profiles[a - 3].bindings;
+            if (!source(token, &profile->host[h][b])) {
+                bad = 1;
+                break;
+            }
         } else {
             bad = 1;
             break;
@@ -170,10 +215,13 @@ int ControlsConfig_Load(ControlsConfig *cfg, char *error, unsigned capacity)
     for (int i = 0; i < count; i++)
         if (!devices[i])
             bad = 1;
-    for (int a = 0; a < 3 + count; a++)
-        for (int b = 0; b < 32; b++)
+    for (int a = 0; a < 3 + count; a++) {
+        for (int b = 0; b < CTRL_DEST_COUNT * 2; b++)
             if (!seen[a][b])
                 bad = 1;
+        settle_defaults(a == 0 ? &next.kb : a < 3 ? &next.ctrl[a - 1] : &next.profiles[a - 3].bindings,
+                        &seen[a][CTRL_DEST_COUNT * 2]);
+    }
     if (bad || !Controls_ConfigValid(&next))
         goto malformed;
     *cfg = next;
@@ -197,7 +245,7 @@ int ControlsConfig_Save(const ControlsConfig *cfg, char *error, unsigned capacit
     }
     f = fopen(file, "r");
     if (f) {
-        if (fscanf(f, "controls %d", &version) == 1 && version != CTRL_CONFIG_VERSION) {
+        if (fscanf(f, "controls %d", &version) == 1 && (version < 1 || version > CTRL_CONFIG_VERSION)) {
             fclose(f);
             snprintf(error, capacity, "Unsupported controls version; file preserved");
             return 0;
@@ -233,6 +281,11 @@ int ControlsConfig_Save(const ControlsConfig *cfg, char *error, unsigned capacit
         for (int b = 0; b < 32; b++) {
             ControlsConfig_Token(profile->src[b / 2][b % 2], token, sizeof(token));
             if (fprintf(f, "bind %d %d %s\n", a, b, token) < 0)
+                ok = 0;
+        }
+        for (int b = 0; b < CTRL_HOST_COUNT * 2; b++) {
+            ControlsConfig_Token(profile->host[b / 2][b % 2], token, sizeof(token));
+            if (fprintf(f, "host %d %s %d %s\n", a, Controls_HostActions[b / 2].token, b % 2, token) < 0)
                 ok = 0;
         }
     }
