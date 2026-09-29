@@ -1936,14 +1936,17 @@ when enabled in the code, they affect the OpenGL picture at 2x and up.
 main menu after one cursor move (4:3 and widescreen), Options, and the first
 campaign duel with both code mods on (a 3D Monsters model standing on a
 face-up card at frame 6760; the field turned by the hand camera's L1 at 6560).
-Failures retain the differing image beneath `tmp/pc/smoke/`. After an
+Each run works in a folder of its own, `tmp/pc/smoke/run-XXXXXXXX` (printed
+at the start), removed when every case passes and kept with the differing
+image when one fails: worktrees share `tmp/` through a junction, and two runs
+at once used to overwrite each other's `tmp/pc/smoke/<case>.ppm`. After an
 intentional rendering change, inspect those images and update the fixtures
 with `python3 tools/pc/smoke.py --record`; immediately run the normal command
 twice before committing new hashes.
 
 The smoke runner clears other `MEMORIES_*` switches (except a caller-supplied
-`MEMORIES_DISC`) and gives each case its own settings file and an emptied user
-folder (`tmp/pc/smoke/<case>.user`, so the player's memory cards take no part),
+`MEMORIES_DISC`) and gives each case its own settings file and a new user
+folder (`<case>.user` in the run's folder, so the player's memory cards take no part),
 no gamepad and no audio device. A case's `settings` fill that file
 (`"aspect": 2`, `"mod.3d-monsters": 1`). It still requires the private disc
 image and the native build prerequisites described above. Each boot gets

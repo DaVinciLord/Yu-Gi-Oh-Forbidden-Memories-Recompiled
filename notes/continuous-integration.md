@@ -5,7 +5,8 @@
 `make check-pc` is the local native-port gate. It builds the 32-bit game and
 the CMake test tree, runs every `pc_*` CTest, and compares three deterministic
 headless frame dumps with `tests/pc/smoke/*.json`. A mismatch exits nonzero
-and leaves the actual PPM beneath `tmp/pc/smoke/` for inspection. Running the
+and leaves the actual PPM beneath `tmp/pc/smoke/run-XXXXXXXX/` (a folder per
+run, removed when every case passes) for inspection. Running the
 gate twice checks repeatability; `python3 tools/pc/smoke.py --record` is only
 for accepting an intentional rendering change after reviewing those images.
 
