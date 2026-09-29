@@ -179,6 +179,8 @@ void Text_NewLine(DuelEffectChannel *record)
     if (menu && !(record->flags_34 & 0x1000)) {
         gDialog_bChoiceCount = TextMenu_Finish(record->field_36, record->index_57,
                                                (D_8009B34C & 0x30) >> 4, gDialog_bChoiceCount);
+        /* What the text goes on with once the player answers (menu_cut.h). */
+        TextMenu_LaidOut(record->index_57, TEXT_STREAM_OWNER_VIEW(record)->streams[record->stream_58]);
     }
 #endif
 }

@@ -141,6 +141,17 @@ wind of your activities...
   `MEMORIES_TRACE=mods`. Start a menu on a fresh box (after a `{page}`, or
   `{f8 1A}` as the name screen's own text does) and give it no more lines
   than the box has rows.
+* Every menu's last choice line is followed by its `{choose 80 ...}`: once
+  the player answers, the text goes on there, and the jump ends it (a `0`
+  target lands on an `{end}`). Keep it. Without it the text runs on into
+  whatever follows, and the screen that waits for the text to end waits
+  forever: listings extracted before the fix of 2026-09-29 lacked
+  `[00E3]`'s `{choose 80 0 0}` after QUIT (the password shop's
+  EXCHANGE/QUIT: `text_listing.py` lost it, and `pal_text.c` the same jump
+  in the European packs), and a translation written from one stops the game
+  there once the player answers. The
+  port ends such a menu's text where its jump should be, and says so in
+  `MEMORIES_TRACE=mods`.
 * A text box has room for so many letters at once: 254 in the dialogue
   box and some menus, 159 in most menus. What is past that on a page is
   left out, and a page with more than 254 is reported. A menu writes its
@@ -388,7 +399,12 @@ lines after it are dropped in `TextBox_BuildStep`, and once the layout
 completes `gDialog_bChoiceCount` is cut to the lines that were down less the
 heading rows (`D_8009B34C & 0x30`), at least one. A menu that fits never
 takes either path, so the console's frames are unchanged
-(`tests/pc/menu_cut_test.c`). The Library's heading (string `F8`, "<seen/722>") is rewritten for the
+(`tests/pc/menu_cut_test.c`). When the layout completes, `Text_NewLine` also
+notes whether the text goes on with the menu's `{choose}` (`FB` with bit 7),
+as all 127 of the game's menus do; if not, the first op `TextBox_BuildStep`
+reads there after the answer ends the stream as `{end}` would
+(`TextMenu_Unanswered`), rather than running on into the next string's menu
+forever (a translation missing `[00E3]`'s jump). The Library's heading (string `F8`, "<seen/722>") is rewritten for the
 number of cards there are, by its id, whether the text is the disc's or a
 translation's (`Cards_Text`).
 

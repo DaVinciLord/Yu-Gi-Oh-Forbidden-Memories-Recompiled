@@ -23,6 +23,7 @@
 #include "pc/free_duel/duelists.h"
 #include "pc/text/glyphs.h"
 #include "pc/text/menu_cut.h"
+#include "text_control_commands.h"
 #include "pc/text/language.h"
 #include "pc/text/text.h"
 #endif
@@ -132,6 +133,20 @@ void TextBox_BuildStep(DuelEffectChannel *object)
 next_opcode:
     slot = &((TextStreamOwner *)object)->streams[object->stream_58];
     script = *slot;
+#ifdef MEMORIES_PC
+    /* A menu answered with no jump after it for the answer (a translation
+       that lost it): the text ends here, as the jump's null target ends
+       it, rather than running on into the next string's menu forever
+       (menu_cut.h). */
+    if (TextMenu_Unanswered(object->field_36, object->index_57, script)) {
+        D_8009B350 = 0;
+        Text_EndStream(object);
+        if (D_8009B350 == 1) {
+            return;
+        }
+        goto next_opcode;
+    }
+#endif
     D_8009B33A = script[0];
     op = (s16)D_8009B33A;
     *slot = script + 1;

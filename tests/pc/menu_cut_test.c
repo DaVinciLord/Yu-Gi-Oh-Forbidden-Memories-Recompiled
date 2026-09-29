@@ -71,5 +71,35 @@ int main(void)
     assert(!TextMenu_CutsLine(0, 4, 4) && !TextMenu_Cutting(0));
     /* Other channels are left as the console runs them. */
     assert(!TextMenu_CutsLine(4, 1, 4) && !TextMenu_CutsLine(-1, 1, 4) && !TextMenu_Cutting(4));
+
+    /* A menu whose jump for the answer follows its last line, as all of
+       the game's do ([00E3]: QUIT, then {choose 80 0 0}): nothing ends. */
+    {
+        static const unsigned char retail[] = {0xFE, 0xFB, 0x80, 0x00, 0x00, 0x00, 0x00, 0xFB, 0x6C, 0x02};
+        static const unsigned char lost[] = {0xFE, 0xFB, 0x6C, 0x02, 0xFC, 0x14, 0x10};
+        logged = 0;
+        TextMenu_Begin(1);
+        TextMenu_LaidOut(1, retail + 1);
+        assert(!TextMenu_Unanswered(0xE3, 1, retail + 1));
+        assert(logged == 0);
+        /* Without it the text would go on into [00E4]'s menu: it ends
+           there instead, once, and is said once per string. */
+        TextMenu_Begin(1);
+        TextMenu_LaidOut(1, lost + 1);
+        assert(!TextMenu_Unanswered(0xE3, 0, lost + 1));   /* another channel's text */
+        assert(!TextMenu_Unanswered(0xE3, 1, lost));       /* not where the menu left off */
+        assert(TextMenu_Unanswered(0xE3, 1, lost + 1));
+        assert(logged == 1 && strstr(last, "no {choose}"));
+        assert(!TextMenu_Unanswered(0xE3, 1, lost + 1));   /* the text goes on as it may */
+        TextMenu_LaidOut(1, lost + 1);
+        assert(TextMenu_Unanswered(0xE3, 1, lost + 1) && logged == 1);
+        /* A new menu forgets the last one's. */
+        TextMenu_LaidOut(1, lost + 1);
+        TextMenu_Begin(1);
+        assert(!TextMenu_Unanswered(0xE3, 1, lost + 1));
+        TextMenu_LaidOut(-1, lost + 1);
+        TextMenu_LaidOut(4, lost + 1);
+        assert(!TextMenu_Unanswered(0xE3, 4, lost + 1));
+    }
     return 0;
 }
