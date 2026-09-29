@@ -521,7 +521,7 @@ class MapTab(Tab):
             if not group or group[0][0] != n:
                 continue        # one label for the exits that share a place
             text = chr(10).join(t for _, t in group)
-            tag = ("exit", f"exit{n}") + tuple(f"exit{m}" for m, _ in group[1:])
+            tag = ("exit", "label", f"exit{n}") + tuple(f"exit{m}" for m, _ in group[1:])
             anchor = "e" if e.x > 200 else "w" if e.x < 120 else "n"
             dx = -16 if anchor == "e" else 16 if anchor == "w" else 0
             dy = 16 if anchor == "n" else 0
@@ -532,6 +532,7 @@ class MapTab(Tab):
             if marker:
                 self.canvas.create_image((loc.marker_x + marker[1]) * ZOOM, (loc.marker_y + marker[2]) * ZOOM,
                                          anchor="nw", image=marker[0], tags=("marker",))
+        self.canvas.tag_raise("label")      # the exits' names over the marker
         self.caption.configure(text=f"The screen at this place, 2x ({where}). Arrows are drawn with the exit's "
                                     "picture at its x, y; the conditions shown are the flags each needs.")
 
