@@ -3113,7 +3113,10 @@ system's file picker, touch controls are drawn with the game's own button
 pictures, taps shorter than a frame count, the app pauses in the
 background, Back asks before quitting, save states survive a relaunch (the
 game is loaded at its link address), and the desktop-only menu rows are
-dimmed. The design and the probe behind it are in
+dimmed. M4 (2026-09-29) was started and then paused: **the Android port
+waits for the 64-bit (relocatable guest) work**, and picks up from the state
+in "M4, where it stopped" below. Android TV is out of scope. The design and
+the probe behind it are in
 `tmp/research/android_feasibility.md` (not in the repository); this section
 is what exists.
 
@@ -3280,17 +3283,62 @@ Screenshots of the device, never the host: `adb exec-out screencap -p`.
   (`-gpu host`), 40-80 ms with SwiftShader; the game clock keeps time and
   presents drop frames.
 
+### M4, where it stopped
+
+Paused on 2026-09-29 until the 64-bit (relocatable guest) work is done.
+
+- **Done:** the history of the Android branches is folded for review (the
+  mod SDK's `signal_context.h` fix is part of the M2 commit that added the
+  header). The APK carries what the desktop games have beside them: the
+  shipped mods (`mods/`, their objects checked against the Android build's
+  own export table) and the language packs (`languages/`), as assets under
+  `build/files/` listed in `build/files.txt` (`package_android.py`);
+  `android.c` unpacks them into the program directory with the rest of the
+  build's files, removing an earlier build's `mods/` and `languages/` first.
+  Checked on the API 30 x86 emulator: 15 files unpacked
+  (`program/mods/<mod>/`, `program/languages/*.txt`).
+- **Found:** the i386 mod objects are the same code for Android x86: the
+  objects built for the Android build differ from the Windows build's only
+  in their debugging information (source paths); stripped of it they are
+  byte-identical. Every record under `src/` has the same layout for
+  `i686-linux-android` as for `i386-pc-linux-gnu` (`check_layouts.py` with
+  the Android triple in place of the Windows one: 667 headers, 0 differ), so
+  one `.o` serves Linux, Windows and Android x86. The player's mods folder
+  is `mods/` in the external files folder (the user directory); on Android
+  11 and later `adb shell` without root cannot list
+  `/sdcard/Android/data/<package>`, so tests there need root (the M3
+  `chcon` recipe above) or a debuggable build's `run-as`.
+- **Not started / half-done:**
+  - Applying mods in the app: Game > Mods is still dimmed, so only mods
+    whose manifest says `"enabled": true` are applied; not yet checked in a
+    game on Android (code mods that hook game functions write to
+    `libgame.so`'s text: watch for SELinux denials on the first apply).
+  - ARM (`armeabi-v7a`): the build ships the ARM APK's mods as data only
+    (their C is not built). Needed: `build_mod.py` for ARM (A32, the game's
+    SLS flags), `EM_ARM` in `object_loader.c` (ABS32, REL32, CALL with BLX
+    for Thumb targets and a veneer past 32 MB, MOVW/MOVT; `.ARM.exidx` is
+    not loaded), the `__aeabi_*` helpers and the thirteen
+    `__llvm_slsblr_thunk_arm_r*` in `mod_libc.c` (the mod's own weak
+    copies bound to the host's), per-ABI objects in a mod
+    (`<mod>/armeabi-v7a/<library>.o` looked for first), and hooks: NDK r29's
+    clang still refuses `-fpatchable-function-entry` for 32-bit ARM, so
+    `ai-hard-mode` and `yamyi-mods` need entry-patching trampolines.
+  - A mod `.zip` through the system's file picker; Mods and Controls as
+    panels inside the game window (the game's font, as the other overlays);
+    the menu bar hiding in play (`covers_screen()` is already true there;
+    what keeps it shown is to be found on the emulator first).
+
 ### Not yet
 
-- **Mods:** none. Code mods are i386 objects; the build packages no mods and
-  no language packs (M4). Game > Mods and Controls... are dimmed (second
-  windows; an in-window version of both is for later).
+- **Mods:** see "M4, where it stopped". Game > Mods and Controls... are
+  dimmed (second windows; an in-window version of both is for later).
 - **Restart:** an app cannot re-execute itself; where the port restarts
   (the end of the credits, Game > Language), it falls back as when a
   restart fails (back to the title; "start the game again").
 - No GLES renderer (Video > Color and the other GL-only options), no update
   check, no performance work (the soft GPU at internal scale above 1).
-- The disc picker on Android TV (there is no document picker there).
+- Android TV: out of scope (no document picker there; M3's notes on the TV
+  image stay as test findings).
 
 ### 32-bit ARM (armeabi-v7a)
 
@@ -3424,7 +3472,7 @@ runs the bytes).
 |---|---|
 | M2 | Done, with the 32-bit-kernel limit above |
 | M3 | Done: disc import through the file picker, the input latch, touch controls with the game's art, lifecycle (background, Back, landscape), the fixed-base loader (save states, crash symbols), desktop-only menu rows dimmed, the 32-bit-kernel message. Left: Mods/Controls as in-window overlays, performance (internal scale above 1), a real restart, the disc on Android TV |
-| M4 | Mods on Android: content-only mods first; then per-ABI objects for code mods (bundled mods built by `build_game32.py`, third-party ones by the SDK's `build_mod.py` per target), ARM relocations in the object loader, `__aeabi_*` helpers, hook trampolines for armv7 |
+| M4 | Paused (above), waits for M6's 64-bit work. Mods on Android: content-only mods first; then per-ABI objects for code mods (bundled mods built by `build_game32.py`, third-party ones by the SDK's `build_mod.py` per target), ARM relocations in the object loader, `__aeabi_*` helpers, hook trampolines for armv7 |
 | M5 | Release: signing, CI for both ABIs, emulator smoke; before it, a duel played on a real arm64 phone that runs 32-bit apps (the TV translator mishandles the fault paths) |
 | M6 | The relocatable guest / 64-bit everywhere: closes both gaps left, arm64-only phones (no 32-bit apps) and 32-bit kernels (3 GB, the top taken), since the guest then needs no fixed addresses; Windows and Linux move with it |
 
