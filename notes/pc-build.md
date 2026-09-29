@@ -337,6 +337,25 @@ buttons. Mods: an
 `INPUT` before-hook sees the controller's bits, as `host->pad` does; the
 after-hook sees what the game gets ([mod API](mod-api-3.md)).
 
+**View > Touch controls** (`touch_controls`, `MEMORIES_TOUCH_CONTROLS`: 0
+Automatic, the default; 1 Show; 2 Hide) is an on-screen controller for touch
+screens (phones, tablets, touch laptops): a D-pad and the four face buttons
+at the middle of the left and right sides, L2/L1 and R1/R2 above them,
+SELECT and START below (`platform/touch_pad.c`). It is drawn with the game's
+own pictures, cut off the disc from the boot package the game keeps in VRAM
+(`touch_pad_art.c`, `cards/disc_art.h`): the round Cross, Circle, Triangle and
+Square, START, the L1/L2/R1/R2 tabs and the boxed arrows (Left is Right's,
+turned round); SELECT is set in the game's text font. A button let go is
+see-through; held, it is solid and a little smaller. Automatic shows it once
+the screen is touched (that touch presses nothing) and hides it when a key or
+a controller button is pressed. Several fingers work at once; a finger that
+lands on the pad stays the pad's while it slides (the D-pad goes by the angle
+from its middle, so between two arrows presses both), and one that lands
+elsewhere is the mouse SDL makes of it (the menu bar). It presses the button
+it shows: its bits join the pad state beside the mouse's, which View >
+Japanese buttons does not exchange, and a tap shorter than a frame counts
+once. Hidden, it draws nothing and takes no touch.
+
 Esc quits (it closes an open menu first): it is the default key of Game >
 Controls' **Exit game**. With **File > Confirm before quitting** on (the
 default) it asks "Quit the game?" first: Quit or Keep playing, Keep playing

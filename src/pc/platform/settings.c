@@ -64,6 +64,9 @@ static const SettingInfo info[SET_COUNT] = {
     /* 1: every way out (Esc, File > Exit, closing the window) asks first
      * (quit_prompt.c). */
     [SET_CONFIRM_QUIT] = {"confirm_quit", NULL, "MEMORIES_CONFIRM_QUIT", NULL, 1, 0, 1},
+    /* View > Touch controls: 0 shown once the screen is touched (hidden
+     * again by a key or a controller), 1 always, 2 never (touch_pad.h). */
+    [SET_TOUCH_PAD] = {"touch_controls", NULL, "MEMORIES_TOUCH_CONTROLS", NULL, 0, 0, 2},
     [SET_MASTER_VOLUME] = {"master_volume", "volume", "MEMORIES_MASTER_VOLUME", "MEMORIES_VOLUME", 100, 0, 100},
     [SET_MUSIC_VOLUME] = {"music_volume", NULL, "MEMORIES_MUSIC_VOLUME", NULL, 100, 0, 100},
     [SET_SFX_VOLUME] = {"sfx_volume", NULL, "MEMORIES_SFX_VOLUME", NULL, 100, 0, 100},

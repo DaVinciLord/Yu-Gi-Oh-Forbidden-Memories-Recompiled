@@ -66,6 +66,7 @@ typedef enum {
     SET_CARD_BROWSE,
     SET_LANGUAGE,
     SET_CONFIRM_QUIT,
+    SET_TOUCH_PAD,
     SET_COUNT
 } SettingId;
 
