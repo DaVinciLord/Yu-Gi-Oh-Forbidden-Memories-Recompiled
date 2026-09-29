@@ -327,7 +327,10 @@ each of them:
 Everything is optional; each key's latest mod wins, and two mods' entries
 for different duelists add up. A save that holds more than 250 copies of a
 card (from a mod's `chest` past 250) keeps them when played without it: a
-copy won then is turned away, as at 250, rather than wrap the byte to none. Game > Cheats > Starting LP, when set to
+copy won then is turned away, as at 250, rather than wrap the byte to none;
+in the same way a starchip balance past the cap in force (a mod's `starchips`
+that is off now, or lowered) is kept, and a prize adds nothing to it rather
+than cut it back. Game > Cheats > Starting LP, when set to
 anything but the console's 8000, still comes first.
 
 **What the numbers are kept in.** ATK, DEF and LP are 16-bit numbers in the

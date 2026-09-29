@@ -1439,10 +1439,13 @@ int Tables_ChestFull(unsigned quantity)
 
 int Tables_ChestOverflow(unsigned quantity, unsigned *starchips)
 {
-    unsigned long long total;
+    unsigned long long total, cap = Tables_StarchipCap();
     if (!overflow_starchips || quantity < (unsigned)Tables_ChestLimit()) return 0;
     total = (unsigned long long)*starchips + (unsigned long long)overflow_starchips;
-    if (total > Tables_StarchipCap()) total = Tables_StarchipCap();
+    /* Never below the balance: one past the cap (a mod's "limits" that is
+       off now) stays. */
+    if (cap < *starchips) cap = *starchips;
+    if (total > cap) total = cap;
     LOG(LOG_MODS, "tables: a card past the chest's %d: %ld starchips, %u -> %u", Tables_ChestLimit(),
         overflow_starchips, *starchips, (unsigned)total);
     *starchips = (unsigned)total;

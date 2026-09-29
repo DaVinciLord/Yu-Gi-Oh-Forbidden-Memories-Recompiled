@@ -300,6 +300,10 @@ int main(void)
         assert(Tables_ChestOverflow(2, &starchips) == 0 && starchips == 103);
         assert(Tables_ChestOverflow(3, &starchips) == 999999 && starchips == 999999);
         assert(Tables_ChestOverflow(40, &starchips) == 999999 && starchips == 999999);
+        /* A balance past the cap is kept, not cut back to it. */
+        starchips = 2000000;
+        assert(Tables_ChestOverflow(40, &starchips) == 999999 && starchips == 2000000);
+        starchips = 103;
         add("m", "{\"chest_overflow\": {\"limit\": 10}}");
         starchips = 5;
         assert(Tables_ChestLimit() == 10 && Tables_ChestOverflow(10, &starchips) == 0 && starchips == 5);
