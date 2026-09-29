@@ -311,7 +311,8 @@ def direct_branches(objects, names):
     """The names in `names` the objects call or jump to by name (a
     pc-relative relocation, the only kind -fno-pie code has for a branch). One
     that is also used as a value ends the build."""
-    relative = {"IMAGE_REL_I386_REL32"} if WINDOWS else {"R_386_PC32", "R_386_PLT32"}
+    relative = ({"IMAGE_REL_I386_REL32"} if WINDOWS else {"R_ARM_CALL", "R_ARM_JUMP24", "R_ARM_THM_CALL"} if ARM
+                else {"R_386_PC32", "R_386_PLT32"})
     called, used = set(), set()
     for line in run([OBJDUMP, "-r", *objects]).splitlines():
         parts = line.split()
@@ -326,14 +327,60 @@ def direct_branches(objects, names):
                  "a name of its own)")
     return called
 
+# The thunks src/pc/guest/branch_thunks.c defines for 32-bit ARM. clang
+# emits weak copies of its own in every unit (and of names it never calls),
+# so a call to one the port does not define would link silently and skip the
+# resolver.
+ARM_THUNKS = {f"__llvm_slsblr_thunk_arm_r{n}" for n in range(13)}
+ARM_BRANCH_EXEMPT = ("src_pc_guest_branch_thunks.c.o",)   # the thunks themselves
+
+
+def check_arm_branches(objects):
+    """32-bit ARM: every indirect call of the compiled code goes through a
+    thunk the port defines, and no other indirect branch is left (the x86
+    compilers' flags guarantee that; -mharden-sls=blr covers calls only, and
+    -fno-optimize-sibling-calls and -fno-jump-tables the rest). Returns (bx
+    lr) and pops into the PC are not indirect branches to worry about."""
+    called = set()
+    for line in run([OBJDUMP, "-r", *objects]).splitlines():
+        parts = line.split()
+        if len(parts) == 3 and parts[1].startswith(("R_ARM_CALL", "R_ARM_JUMP24", "R_ARM_THM_")) and \
+                "__llvm_slsblr_thunk_" in parts[2]:
+            called.add(parts[2])
+    unknown = sorted(called - ARM_THUNKS)
+    if unknown:
+        sys.exit("calls to branch thunks src/pc/guest/branch_thunks.c does not define (Thumb code, or a renamed copy): " +
+                 ", ".join(unknown))
+    branch = re.compile(r"\t(blx|bx)(eq|ne|cs|hs|cc|lo|mi|pl|vs|vc|hi|ls|ge|lt|gt|le|al)?\t(r\d+|sb|sl|fp|ip|sp)\b|"
+                        r"\t(mov|ldr|add|sub)\w*\tpc,|\tldm\w*\t(?!sp)\w+!?, \{[^}]*\bpc\}")
+    found, checked = [], [path for path in objects if os.path.basename(path) not in ARM_BRANCH_EXEMPT]
+    for start in range(0, len(checked), 64):
+        unit = where = None
+        for line in run([OBJDUMP, "-d", "--no-show-raw-insn", *checked[start:start + 64]]).splitlines():
+            if "file format" in line:
+                unit = os.path.basename(line.split(":", 1)[0] if not line[1:3] == ":/" else line.rsplit(":", 1)[0])
+            elif line.endswith(">:"):
+                where = line.split("<", 1)[-1][:-2]
+            elif branch.search(line) and not where.startswith("__llvm_slsblr_thunk_"):   # clang's weak copies
+                found.append(f"{unit}: {where}: {line.strip()}")
+    if found:
+        sys.exit("indirect branches that bypass the branch thunks:\n  " + "\n  ".join(found[:20]))
+
+
 def write_guest_branches(build, branches):
     """guest_branches.o: a host entry for each pinned module function that
     code calls by name (see main), which hands its guest address to the
     branch thunks' resolver (src/pc/guest/branch_thunks.c)."""
     with open(f"{build}/guest_branches.c", "w") as handle:
         handle.write("/* Written by tools/pc/build_game32.py. */\nextern void Memories_GuestBranchDirect(void);\n")
-        handle.writelines(f'__asm__(".text\\n.globl {PREFIX}{name}\\n{PREFIX}{name}:\\n    pushl $0x{address:08X}\\n'
-                          f'    jmp {PREFIX}Memories_GuestBranchDirect\\n");\n' for name, address in sorted(branches.items()))
+        if ARM:
+            # The address in R12 (IP), which a call may change (AAPCS).
+            handle.writelines(f'__asm__(".text\\n.arm\\n.p2align 2\\n.globl {name}\\n.type {name}, %function\\n{name}:\\n'
+                              f'    movw r12, #0x{address & 0xFFFF:04X}\\n    movt r12, #0x{address >> 16:04X}\\n'
+                              f'    b Memories_GuestBranchDirect\\n");\n' for name, address in sorted(branches.items()))
+        else:
+            handle.writelines(f'__asm__(".text\\n.globl {PREFIX}{name}\\n{PREFIX}{name}:\\n    pushl $0x{address:08X}\\n'
+                              f'    jmp {PREFIX}Memories_GuestBranchDirect\\n");\n' for name, address in sorted(branches.items()))
     run([CC, *NATIVE_CFLAGS, "-c", f"{build}/guest_branches.c", "-o", f"{build}/guest_branches.o"])
     return f"{build}/guest_branches.o"
 
@@ -722,7 +769,10 @@ def main():
                   if symbol in module_elf[name] and symbol not in resident_defined and any(
                       places.get(symbol, module_elf[name][symbol]) != module_elf[name][symbol]
                       for places in [resident_elf] + [module_elf[o] for o in others])}
-        renamed[name] = {symbol: f"{name}__{symbol}" for symbol in clash if not symbol.startswith(f"{name}__")}
+        # clang's weak copies of the ARM branch thunks are in every object and must stay the one name the
+        # port's strong thunks replace (check_arm_branches).
+        renamed[name] = {symbol: f"{name}__{symbol}" for symbol in clash
+                         if not symbol.startswith(f"{name}__") and not symbol.startswith("__llvm_slsblr_thunk_")}
         for source in module_sources[name]:
             command = [OBJCOPY]
             for old, new in sorted(renamed[name].items()):
@@ -812,7 +862,10 @@ def main():
                 run([OBJCOPY, *[f"--weaken-symbol={name}" for name in hits], obj(source)])
     # Position-independent i386 code (Android) names the GOT, which the
     # linker defines.
-    wanted = (undefined | tentative) - game_defined - native_defined - HOST_LIBC - {"_GLOBAL_OFFSET_TABLE_"}
+    # ARM's run-time ABI helpers (__aeabi_idiv: armv7-a has no divide instruction) come from the compiler's
+    # own library, as the C library's functions above come from the host's.
+    wanted = {name for name in (undefined | tentative) - game_defined - native_defined - HOST_LIBC - {"_GLOBAL_OFFSET_TABLE_"}
+              if not (ARM and name.startswith("__aeabi_"))}
     pinned, stubs, unknown, aliases = {}, [], [], {}
     for name in sorted(wanted):
         address = addresses.get(name)
@@ -921,6 +974,8 @@ def main():
             handle.write(f'    {{"{name}", 0x{bank:08X}u, 0x{identifier:X}u, {", ".join(ranges)}}},\n')
         handle.write(f"}};\nconst unsigned Memories_ModuleCount = {len(shared)};\n")
     run([CC, *NATIVE_CFLAGS, "-c", f"{options.build}/stubs.c", "-o", f"{options.build}/stubs.o"])
+    if ARM:
+        check_arm_branches([obj(s) for s in game + NATIVE] + [guest_branches])
     write_mod_exports(options.build, game_defined | native_defined | tentative | set(pinned) | set(branches) | set(stubs),
                       aliases)
     version = write_version(options.build)

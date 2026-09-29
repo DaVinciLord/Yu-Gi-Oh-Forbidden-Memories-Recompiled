@@ -125,4 +125,80 @@ __asm__(".text\n"
         THUNK(esi, "%esi")
         THUNK(edi, "%edi")
         THUNK(ebp, "(%ebp)"));
+#elif defined(__arm__)
+/* 32-bit ARM (A32). No compiler routes indirect calls through named thunks
+ * for Spectre as the x86 ones do, but clang's -mharden-sls=blr turns every
+ * `blx rN` into `bl __llvm_slsblr_thunk_arm_rN`, and emits those thunks as
+ * weak definitions of its own, which the strong ones below replace at link.
+ * With -fno-optimize-sibling-calls (an indirect tail call would be a `bx rN`)
+ * and -fno-jump-tables, no other indirect branch is left in a unit
+ * (tools/pc/build_game32.py checks the objects). The contract is the x86
+ * one, in AAPCS terms: the thunk is reached by `bl`, so LR is already the
+ * caller's return address; every register is kept but R12 (IP), which AAPCS
+ * lets a call's veneer change, and which carries the resolved target; the
+ * stack is as the caller left it. VFP registers D0-D7 are kept too, which a
+ * hard-float ABI (Linux armhf) passes arguments in.
+ *
+ * Fast path: bits 21-28 and 30 of the target clear, as on x86, tested in
+ * two parts (an A32 immediate is 8 bits rotated). Slow path: R0-R3, R12, LR
+ * and D0-D7 are saved (88 bytes: the stack stays 8-byte aligned), the
+ * resolver is called with the target, and everything but R12 is restored. */
+#define THUNK(n)                                                                          \
+    ".p2align 2\n"                                                                        \
+    ".globl __llvm_slsblr_thunk_arm_r" #n "\n"                                            \
+    ".type __llvm_slsblr_thunk_arm_r" #n ", %function\n"                                  \
+    "__llvm_slsblr_thunk_arm_r" #n ":\n"                                                  \
+    "    tst r" #n ", #0x0fe00000\n"                                                      \
+    "    tsteq r" #n ", #0x50000000\n"                                                    \
+    "    bxne r" #n "\n"                                                                  \
+    "    push {r0-r3, r12, lr}\n"                                                         \
+    "    mov r0, r" #n "\n"                                                               \
+    "    b memories_branch_resolve\n"                                                     \
+    ".size __llvm_slsblr_thunk_arm_r" #n ", . - __llvm_slsblr_thunk_arm_r" #n "\n"
+
+#if defined(__ARM_FP)
+#define SAVE_VFP "    vpush {d0-d7}\n"
+#define RESTORE_VFP "    vpop {d0-d7}\n"
+#else
+#define SAVE_VFP "    sub sp, sp, #64\n"
+#define RESTORE_VFP "    add sp, sp, #64\n"
+#endif
+
+__asm__(".syntax unified\n"
+        ".arm\n"
+        ".text\n"
+        /* R0: the target; R0-R3, R12, LR saved below the caller's stack. */
+        ".p2align 2\n"
+        "memories_branch_resolve:\n"
+        SAVE_VFP
+        "    ldr r1, 2f\n"
+        "1:  ldr r1, [pc, r1]\n"       /* &Memories_GuestBranchResolver, from the GOT */
+        "    ldr r1, [r1]\n"
+        "    cmp r1, #0\n"
+        "    beq 3f\n"
+        "    blx r1\n"
+        "3:  mov r12, r0\n"
+        RESTORE_VFP
+        "    pop {r0-r3}\n"
+        "    add sp, sp, #4\n"          /* the saved R12 */
+        "    pop {lr}\n"
+        "    bx r12\n"
+        "2:  .word Memories_GuestBranchResolver(GOT_PREL) - ((1b + 8) - 2b)\n"
+        /* The entry of a host stub the build writes for a module function
+         * that C calls by name (tools/pc/build_game32.py, guest_branches.c):
+         * the stub leaves the guest address in R12. */
+        ".p2align 2\n"
+        ".globl Memories_GuestBranchDirect\n"
+        ".type Memories_GuestBranchDirect, %function\n"
+        "Memories_GuestBranchDirect:\n"
+        "    push {r0-r3, r12, lr}\n"
+        "    mov r0, r12\n"
+        "    b memories_branch_resolve\n"
+        ".size Memories_GuestBranchDirect, . - Memories_GuestBranchDirect\n"
+        THUNK(0) THUNK(1) THUNK(2) THUNK(3) THUNK(4) THUNK(5) THUNK(6) THUNK(7) THUNK(8) THUNK(9)
+        THUNK(10) THUNK(11) THUNK(12)
+#if defined(__thumb__)
+        ".thumb\n" /* the compiler's own code follows */
+#endif
+        );
 #endif
