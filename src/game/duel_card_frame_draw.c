@@ -56,10 +56,10 @@ void func_80016784(DisplayObject *object, s32 arg1, s32 arg2, s32 arg3) {
     if ((u32)(arg2 + 0x33) < 0x173) {
         if (arg3 >= -0x3B) {
             if (arg3 < 0xF0) {
-                o = (CardFrameScratch *)0x1F8003E0;
-                k = (SpritePrim *)0x1F800320;
-                y = (POLY_FT4 *)0x1F800344;
-                z = (SpritePrim *)0x1F800000;
+                o = (CardFrameScratch *)SCRATCHPAD_ADDR(0x1F8003E0);
+                k = (SpritePrim *)SCRATCHPAD_ADDR(0x1F800320);
+                y = (POLY_FT4 *)SCRATCHPAD_ADDR(0x1F800344);
+                z = (SpritePrim *)SCRATCHPAD_ADDR(0x1F800000);
                 card = &D_801A7AD8[object->field_6A];
                 o->pos.h.x = arg2;
                 o->pos.h.y = arg3;
@@ -73,7 +73,7 @@ void func_80016784(DisplayObject *object, s32 arg1, s32 arg2, s32 arg3) {
                     if (func_80041F90(object,
                                       (s16)o->pos.h.x + 0x1A,
                                       (s16)o->pos.h.y + 0x1E,
-                                      (struct ProjectionOut *)0x1F8003E0) < 0) {
+                                      (struct ProjectionOut *)SCRATCHPAD_ADDR(0x1F8003E0)) < 0) {
                         return;
                     }
                     g1 = object->field_0C;

@@ -182,7 +182,7 @@ def region(dump, symbols, address, stacks):
         return f"game executable code ({symbols.lookup(address)})"
     if 0x80000000 <= address < 0x80200000 or 0xA0000000 <= address < 0xA0200000:
         return "guest RAM"
-    if 0x1F800000 <= address < 0x1F801000:
+    if 0x1F800000 <= address < 0x1F801000 or 0x9F800000 <= address < 0x9F801000:  # both views (image.h)
         return "scratchpad"
     if GAME_STACK[0] <= address < GAME_STACK[1]:
         return "game stack"

@@ -134,6 +134,16 @@ FIXED_SECTIONS = {"game_text": 0x01000000, "game_rodata": 0x03000000, "game_data
                   "game_bss": 0x05000000}
 MODULE_SECTIONS = 0x06000000  # then 0x00400000 per module: data, and bss 0x00200000 above it
 
+# The scratchpad's retail address, and the console's other view of it where
+# the port maps it (src/pc/guest/image.h): an Android app has its Java heap
+# at the retail one.
+SCRATCHPAD_RETAIL, SCRATCHPAD_SIZE = 0x1F800000, 0x400
+
+def host_address(address):
+    """Where a pinned guest variable is natively: its retail address, or for
+    a scratchpad variable the port's view of the scratchpad."""
+    return address | 0x80000000 if SCRATCHPAD_RETAIL <= address < SCRATCHPAD_RETAIL + SCRATCHPAD_SIZE else address
+
 HOST_LIBC = {"printf", "sprintf", "strcmp", "strcpy", "bzero", "qsort", "memcpy", "memset",
              "memmove", "strlen", "strcat", "strncmp", "strncpy", "memcmp"}
 
@@ -745,13 +755,13 @@ def main():
         if name in functions or (address is not None and text[0] <= address < text[1]):
             stubs.append(name)
         elif address is not None:
-            pinned[name] = address
+            pinned[name] = host_address(address)
         else:
             unknown.append(name)
     # SDK globals that native library ports share with game code.
     for name in native_undefined - game_defined - native_defined:
         if name.startswith("D_8") and name in addresses:
-            pinned[name] = addresses[name]
+            pinned[name] = host_address(addresses[name])
     # Overlay entry points and data live outside the resident image.
     stubs += [name for name in unknown if name in undefined]
     # Some pinned names are functions of a loadable module that the C calls

@@ -89,7 +89,7 @@ void Duel_UpdateLifePointDisplay(DuelSideState *side)
    of the corresponding D_800E9FF0 entry. */
 
 #define GS_SPRITE_VIEW(sprite) ((GsSPRITE *)(sprite))
-#define SCRATCH ((DuelStatusDigitPacket *)0x1F800320)
+#define SCRATCH ((DuelStatusDigitPacket *)SCRATCHPAD_ADDR(0x1F800320))
 
 void Duel_DrawLifePointsAndDeckCounts(DisplayObject *arg0)
 {

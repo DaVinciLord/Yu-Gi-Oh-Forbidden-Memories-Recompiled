@@ -144,7 +144,7 @@ step:
 /* The GsBOXF descriptor lives in scratchpad RAM, not in a GPU packet. */
 #define FADEBOX_Y(p) (*(u16 *)&(p)->y)
 #define FADEBOX_H(p) (*(s16 *)&(p)->h)
-#define FADEBOX ((GsBOXF *)0x1F8003C0)
+#define FADEBOX ((GsBOXF *)SCRATCHPAD_ADDR(0x1F8003C0))
 
 void Fade_DrawOverlay(void) {
     GsBOXF *p;

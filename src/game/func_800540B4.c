@@ -362,7 +362,7 @@ void func_800540B4(s32 index)
                 }
                 GsSetLsMatrix(&ls);
             }
-            GsSortUnit((GsUNIT *)e, ot, (u32 *)0x1F800000);
+            GsSortUnit((GsUNIT *)e, ot, (u32 *)SCRATCHPAD_ADDR(0x1F800000));
         }
     }
 

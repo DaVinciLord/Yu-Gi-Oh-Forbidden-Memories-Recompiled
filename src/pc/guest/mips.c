@@ -45,12 +45,15 @@ static uint32_t stack_top;   /* 0 until the stack is mapped */
 static uint32_t current_sp;  /* the innermost interpreted frame, or 0 */
 uint32_t Memories_MipsThunkTarget;
 
-static uint32_t l32(uint32_t a) { return *(uint32_t *)(uintptr_t)a; }
-static uint16_t l16(uint32_t a) { return *(uint16_t *)(uintptr_t)a; }
-static uint8_t l8(uint32_t a) { return *(uint8_t *)(uintptr_t)a; }
-static void s32(uint32_t a, uint32_t v) { *(uint32_t *)(uintptr_t)a = v; }
-static void s16(uint32_t a, uint16_t v) { *(uint16_t *)(uintptr_t)a = v; }
-static void s8(uint32_t a, uint8_t v) { *(uint8_t *)(uintptr_t)a = v; }
+/* Retail code reaches the scratchpad at 0x1F800000, which the host may not
+ * let the port map; the port's view of it is 0x9F800000 (image.h). */
+#define AT(a) ((uintptr_t)MEMORIES_SCRATCHPAD_VIEW(a))
+static uint32_t l32(uint32_t a) { return *(uint32_t *)AT(a); }
+static uint16_t l16(uint32_t a) { return *(uint16_t *)AT(a); }
+static uint8_t l8(uint32_t a) { return *(uint8_t *)AT(a); }
+static void s32(uint32_t a, uint32_t v) { *(uint32_t *)AT(a) = v; }
+static void s16(uint32_t a, uint16_t v) { *(uint16_t *)AT(a) = v; }
+static void s8(uint32_t a, uint8_t v) { *(uint8_t *)AT(a) = v; }
 
 /* The bank at 0x80180000 holds the natively linked main-menu overlay, but
  * the credits (func_800507D0) load 16 SU sectors of MIPS there and call
@@ -129,15 +132,15 @@ static uint32_t call_native(State *s, uint32_t address)
     /* libc and libmath routines linked as SDK assembly in the original and
      * therefore absent from the generated native function map. */
     switch (address) {
-    case 0x8008E360u: memset((void *)(uintptr_t)s->r[4], 0, s->r[5]); return s->r[4];
-    case 0x8008E3D0u: memset((void *)(uintptr_t)s->r[4], s->r[5], s->r[6]); return s->r[4];
+    case 0x8008E360u: memset((void *)AT(s->r[4]), 0, s->r[5]); return s->r[4];
+    case 0x8008E3D0u: memset((void *)AT(s->r[4]), s->r[5], s->r[6]); return s->r[4];
     case 0x800866A0u: return (uint32_t)rsin((int)s->r[4]);
     case 0x80086770u: return (uint32_t)rcos((int)s->r[4]);
     case 0x80086920u: return (uint32_t)Psx_ccos((int)s->r[4]);
     case 0x80086BB0u: return (uint32_t)Psx_csin((int)s->r[4]);
     case 0x8008E590u: return Memories_Rand();
     /* The string routines, on guest pointers (guest RAM is mapped at its own address). */
-#define G(reg) ((void *)(uintptr_t)s->r[reg])
+#define G(reg) ((void *)AT(s->r[reg]))
 #define GS(reg) ((const char *)(uintptr_t)s->r[reg])
     case 0x8008E320u: memmove(G(5), G(4), s->r[6]); return 0; /* bcopy(src, dst, n) */
     case 0x8008E390u: memcpy(G(4), G(5), s->r[6]); return s->r[4];

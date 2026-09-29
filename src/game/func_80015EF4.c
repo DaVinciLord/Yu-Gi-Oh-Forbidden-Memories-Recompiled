@@ -62,12 +62,12 @@ void func_80015EF4(void *record, POLY_GT4 *prim, POLY_FT4 *sprite, s32 *color)
         return;
     }
 
-    lm = (MATRIX *)0x1F8002C0;
-    q = (SVECTOR *)0x1F800300;
-    scale = (VECTOR *)0x1F800320;
-    up = (SVECTOR *)0x1F800380;
-    rot = (SVECTOR *)0x1F8003A0;
-    depth = (s32 *)0x1F8003E0;
+    lm = (MATRIX *)SCRATCHPAD_ADDR(0x1F8002C0);
+    q = (SVECTOR *)SCRATCHPAD_ADDR(0x1F800300);
+    scale = (VECTOR *)SCRATCHPAD_ADDR(0x1F800320);
+    up = (SVECTOR *)SCRATCHPAD_ADDR(0x1F800380);
+    rot = (SVECTOR *)SCRATCHPAD_ADDR(0x1F8003A0);
+    depth = (s32 *)SCRATCHPAD_ADDR(0x1F8003E0);
     up->vx = 0;
     up->vy = 0x1000;
     up->vz = 0;
@@ -99,9 +99,9 @@ void func_80015EF4(void *record, POLY_GT4 *prim, POLY_FT4 *sprite, s32 *color)
         ScaleMatrix(lm, scale);
     }
 
-    q2 = (SVECTOR *)0x1F800310;
-    q3 = (SVECTOR *)0x1F800318;
-    q1 = (SVECTOR *)0x1F800308;
+    q2 = (SVECTOR *)SCRATCHPAD_ADDR(0x1F800310);
+    q3 = (SVECTOR *)SCRATCHPAD_ADDR(0x1F800318);
+    q1 = (SVECTOR *)SCRATCHPAD_ADDR(0x1F800308);
     q[0].vx = q2->vx = -0x19;
     q[1].vx = q3->vx = 0x1A;
     q[0].vz = q1->vz = 0x1D;
@@ -114,9 +114,9 @@ void func_80015EF4(void *record, POLY_GT4 *prim, POLY_FT4 *sprite, s32 *color)
     RotTransSV(&q[2], &rot[2], (long *)depth);
     RotTransSV(&q[3], &rot[3], (long *)depth);
 
-    c1 = (SVECTOR *)0x1F8003C8;
-    c2 = (SVECTOR *)0x1F8003D0;
-    c3 = (SVECTOR *)0x1F8003D8;
+    c1 = (SVECTOR *)SCRATCHPAD_ADDR(0x1F8003C8);
+    c2 = (SVECTOR *)SCRATCHPAD_ADDR(0x1F8003D0);
+    c3 = (SVECTOR *)SCRATCHPAD_ADDR(0x1F8003D8);
     *(Bytes8 *)&rot[4] = *(Bytes8 *)&rot[0];
     *(Bytes8 *)c1 = *(Bytes8 *)&rot[1];
     *(Bytes8 *)c2 = *(Bytes8 *)&rot[2];
@@ -181,16 +181,16 @@ void func_80015EF4(void *record, POLY_GT4 *prim, POLY_FT4 *sprite, s32 *color)
     c2->vy = 0;
     c1->vy = 0;
     rot[4].vy = 0;
-    gte_ldv0((SVECTOR *)0x1F8003C0);
+    gte_ldv0((SVECTOR *)SCRATCHPAD_ADDR(0x1F8003C0));
     gte_rtps();
     gte_stsxy(&sprite->x0);
-    gte_ldv0((SVECTOR *)0x1F8003C8);
+    gte_ldv0((SVECTOR *)SCRATCHPAD_ADDR(0x1F8003C8));
     gte_rtps();
     gte_stsxy(&sprite->x1);
-    gte_ldv0((SVECTOR *)0x1F8003D0);
+    gte_ldv0((SVECTOR *)SCRATCHPAD_ADDR(0x1F8003D0));
     gte_rtps();
     gte_stsxy(&sprite->x2);
-    gte_ldv0((SVECTOR *)0x1F8003D8);
+    gte_ldv0((SVECTOR *)SCRATCHPAD_ADDR(0x1F8003D8));
     gte_rtps();
     gte_stsxy(&sprite->x3);
     GsSortPoly(sprite, tab[2], 0xFFF);

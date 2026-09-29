@@ -69,8 +69,8 @@ void DisplayObject_RenderGouraudQuadList(void) {
     s32 x1;
     s32 x2;
 
-    g = (POLY_G4 *)0x1F800344;
-    h = (u8 *)0x1F800398;
+    g = (POLY_G4 *)SCRATCHPAD_ADDR(0x1F800344);
+    h = (u8 *)SCRATCHPAD_ADDR(0x1F800398);
     i = D_800EFE38[4];
 
     if (i >= 0) {
@@ -182,8 +182,8 @@ void DisplayObject_RenderTexturedGouraudQuadList(void) {
     s32 x1;
     s32 x2;
 
-    g = (POLY_GT4 *)0x1F800344;
-    h = (u8 *)0x1F800398;
+    g = (POLY_GT4 *)SCRATCHPAD_ADDR(0x1F800344);
+    h = (u8 *)SCRATCHPAD_ADDR(0x1F800398);
     i = D_800EFE38[5];
 
     if (i >= 0) {
