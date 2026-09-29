@@ -9,6 +9,7 @@ from . import disc, gamedata, manifest, settings, theme, validate
 from .model import KEY_RE, Project
 from .art_tab import ArtTab
 from .map_tab import MapTab
+from .limits_tab import LimitsTab
 from .tabs import (CardsTab, DuelistsTab, EquipsTab, FusionsTab, ModInfoTab, ConflictsTab, RitualsTab,
                    StarterTab)
 from .widgets import px
@@ -44,10 +45,11 @@ class App(tk.Tk):
         self.duelists = DuelistsTab(self.notebook, self)
         self.starter = StarterTab(self.notebook, self)
         self.map = MapTab(self.notebook, self)
+        self.limits = LimitsTab(self.notebook, self)
         self.info = ModInfoTab(self.notebook, self)
         self.conflicts = ConflictsTab(self.notebook, self)
         self.tabs = [self.cards, self.art, self.fusions, self.equips, self.rituals, self.duelists, self.starter,
-                     self.map, self.info, self.conflicts]
+                     self.map, self.limits, self.info, self.conflicts]
         self.status = ttk.Label(self, relief="sunken", anchor="w", padding=(6, 2))
         self.status.pack(fill="x", side="bottom")
         if self.dark.get():
@@ -363,6 +365,8 @@ class App(tk.Tk):
             self.map.goto(target)
         elif issue.area == "Mod info":
             self.notebook.select(self.info)
+        elif issue.area == "Limits":
+            self.notebook.select(self.limits)
 
     def about(self):
         messagebox.showinfo(APP_TITLE, "FM Editor\n\nMakes mods for the PC port of Yu-Gi-Oh! Forbidden Memories. "
