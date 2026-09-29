@@ -73,6 +73,9 @@ static volatile uint16_t wheel_now;
 static int pointer_x, pointer_y, pointer_inside, cursor_hidden;
 static unsigned last_pointer_motion, current_frame;
 static int focus_clock_rate = 100, focus_paused;
+/* A phone or tablet app sent to the background (SDL's application events,
+ * which desktops never send): the game clock stops until it comes back. */
+static int background_clock_rate, background_paused;
 static float known_refresh; /* what the wayland driver reported before a fallback to x11 */
 
 static void show(void);
@@ -1201,6 +1204,9 @@ static MenuKey menu_key(SDL_Keycode key)
 {
     switch (key) {
     case SDLK_ESCAPE: return MENU_KEY_ESCAPE;
+#ifdef SDL_PLATFORM_ANDROID
+    case SDLK_AC_BACK: return MENU_KEY_ESCAPE; /* a phone's Back closes a menu or answers a notice as Esc does */
+#endif
     case SDLK_F10: return MENU_KEY_F10;
     case SDLK_TAB: return MENU_KEY_TAB;
     case SDLK_BACKSPACE: return MENU_KEY_BACKSPACE;
@@ -1285,6 +1291,39 @@ static int dispatch_controls(const SDL_Event *event, const MenuEvent *menu_event
         return 1;
 
     return 0;
+}
+
+/* The application events SDL sends only to event watchers, from inside
+ * the pump (SDL_PollEvent) on this thread: a phone or tablet app going to
+ * the background and coming back; desktops never send them. SDL stops its
+ * event loop (and so the game) and the audio until the app is back;
+ * stopping the clock too keeps the game from running to catch up the time
+ * it was away. */
+static bool SDLCALL app_event(void *userdata, SDL_Event *event)
+{
+    (void)userdata;
+    switch (event->type) {
+    case SDL_EVENT_WILL_ENTER_BACKGROUND: case SDL_EVENT_DID_ENTER_BACKGROUND:
+        if (!background_paused) {
+            background_paused = 1;
+            background_clock_rate = Platform_ClockRate();
+            if (background_clock_rate) Platform_SetClockRate(0);
+            ControlsRuntime_ResetKeys();
+            LOG(LOG_WINDOW, "app in the background: clock stopped (was %d%%)", background_clock_rate);
+        }
+        break;
+    case SDL_EVENT_DID_ENTER_FOREGROUND:
+        if (background_paused) {
+            background_paused = 0;
+            if (background_clock_rate && Platform_ClockRate() == 0) Platform_SetClockRate(background_clock_rate);
+            menu_dirty = 1;
+            LOG(LOG_WINDOW, "app in the foreground: clock at %d%%", Platform_ClockRate());
+        }
+        break;
+    default:
+        break;
+    }
+    return true;
 }
 
 static void pump(void)
@@ -1415,6 +1454,16 @@ static void pump(void)
                 Platform_ApplyDisplaySettings();
                 break;
             }
+#ifdef SDL_PLATFORM_ANDROID
+            /* Back (android.c traps it): the deck slot screen closes, else
+             * the game asks before it quits, as closing a window does. An
+             * open menu or a notice took it above, as Esc. */
+            if (key == SDLK_AC_BACK) {
+                if (down && DeckMenu_Active()) DeckMenu_Close();
+                else if (down) QuitPrompt_Request(&quit);
+                break;
+            }
+#endif
             if (down && key == SDLK_ESCAPE && DeckMenu_Active()) {
                 DeckMenu_Close(); /* the deck slot screen, not the game */
                 break;
@@ -1587,6 +1636,7 @@ int Platform_Open(const char *title)
         fprintf(stderr, "memories-pc: SDL: %s; set MEMORIES_HEADLESS=1 to run without a window\n", SDL_GetError());
         return -1;
     }
+    SDL_AddEventWatch(app_event, NULL);
     create_window(title);
     /* A software GL renderer cannot present a scaled 4K frame in the 4 ms a
      * 400% game frame allows. The 32-bit build on an NVIDIA Wayland desktop
