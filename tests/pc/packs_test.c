@@ -426,8 +426,10 @@ static void test_progress_file(void)
     Packs_ReadProgress(file, &again);
     fclose(file);
     CHECK(!memcmp(&again, &progress, sizeof(progress)));
+    CHECK(!Packs_ProgressEmpty(&again));
     Packs_ForgetProgress(&again);
     CHECK(again.packs_opened == 0 && !foreign);
+    CHECK(Packs_ProgressEmpty(&again));
     /* The save's seed: the same for the same save, pack and count. */
     CHECK(Packs_SaveSeed(0x12345678, "test:a", 3) == Packs_SaveSeed(0x12345678, "test:a", 3));
     CHECK(Packs_SaveSeed(0x12345678, "test:a", 3) != Packs_SaveSeed(0x12345678, "test:a", 4));

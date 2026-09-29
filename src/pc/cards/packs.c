@@ -1395,6 +1395,12 @@ void Packs_ForgetProgress(PacksProgress *progress)
     foreign_size = 0;
 }
 
+int Packs_ProgressEmpty(const PacksProgress *progress)
+{
+    static const PacksProgress none;
+    return !foreign && !memcmp(progress, &none, sizeof(none));
+}
+
 static void keep_foreign(const char *line)
 {
     size_t length = strlen(line);

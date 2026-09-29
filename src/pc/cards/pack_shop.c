@@ -40,6 +40,7 @@
 #include "ygo_types.h"
 #include "game/input.h"
 #include "game/campaign_flags.h"
+#include "game/display_object.h"
 #include "game/display_object_layout.h"
 #include "game/file_transfer.h"
 #include "game/duel_rewards.h"
@@ -342,6 +343,7 @@ static void build_art(void)
 typedef struct {
     u8 *at, *end;
     int x;                    /* pixels into the line */
+    int limit;                /* the line's width: what would go past it is left out */
 } Out;
 
 static void put(Out *out, int byte)
@@ -376,20 +378,25 @@ static void at_x(Out *out, int x)
 
 static void space(Out *out)
 {
+    if (out->x + 8 > out->limit) return;
     command(out, 0x02, 8);
     out->x += 8;
 }
 
 static void icon(Out *out, int which)
 {
+    if (out->x + ICON_WIDTH > out->limit) return;
     command(out, 0x0B, which);
     out->x += ICON_WIDTH;
 }
 
+/* A letter; one that would run past the line's end is left out, since the
+ * box would wrap it onto a line of its own. */
 static void glyph(Out *out, int code)
 {
     if (code < 0 || out->end - out->at < 3) return;
     if (code == 0) { space(out); return; }
+    if (out->x + 8 > out->limit) return;
     if (code >= 0xF0) put(out, 0xF0 + (code >> 8));
     put(out, code & 0xFF);
     out->x += 8;
@@ -449,20 +456,13 @@ static int plain(const u8 *text)
 /* One of the port's own strings (text.h): a translation's, else `english`;
  * each %d the next number, each %s the next codes. Returns its width in
  * pixels; written to `out` unless it is NULL. */
-static int own(Out *out, int id, const char *english, const unsigned *numbers, const unsigned char *const *names)
+/* One pass of own(): each %s given `room` letters. */
+static int own_pass(Out *to, int id, const char *english, const unsigned *numbers,
+                    const unsigned char *const *names, int room)
 {
-    Out scratch, *to = out;
-    u8 dummy[512];
     const u8 *text = Text_Own(id);
     int percent = Glyphs_Code('%'), letter_d = Glyphs_Code('d'), letter_s = Glyphs_Code('s');
-    int used_numbers = 0, used_names = 0, start;
-    if (!to) {
-        scratch.at = dummy;
-        scratch.end = dummy + sizeof(dummy);
-        scratch.x = 0;
-        to = &scratch;
-    }
-    start = to->x;
+    int used_numbers = 0, used_names = 0, start = to->x;
     if (text && !plain(text)) {
         static unsigned char said[TEXT_OWN_LAST - TEXT_OWN_FIRST + 1];
         if (!said[id - TEXT_OWN_FIRST])
@@ -474,7 +474,7 @@ static int own(Out *out, int id, const char *english, const unsigned *numbers, c
         const char *c;
         for (c = english; *c; c++) {
             if (c[0] == '%' && c[1] == 'd') { number(to, numbers ? numbers[used_numbers++] : 0); c++; }
-            else if (c[0] == '%' && c[1] == 's') { codes(to, names ? names[used_names++] : NULL, BOX_LETTERS); c++; }
+            else if (c[0] == '%' && c[1] == 's') { codes(to, names ? names[used_names++] : NULL, room); c++; }
             else glyph(to, *c == ' ' ? 0 : Glyphs_Code((unsigned char)*c));
         }
         return to->x - start;
@@ -487,12 +487,36 @@ static int own(Out *out, int id, const char *english, const unsigned *numbers, c
             number(to, numbers ? numbers[used_numbers++] : 0);
         } else if (code == percent && *text == letter_s) {
             text++;
-            codes(to, names ? names[used_names++] : NULL, BOX_LETTERS);
+            codes(to, names ? names[used_names++] : NULL, room);
         } else {
             glyph(to, code);
         }
     }
     return to->x - start;
+}
+
+/* One of the port's own strings (text.h): a translation's, else `english`;
+ * each %d the next number, each %s the next codes, cut ("...") to what the
+ * line has room for past the rest. Returns its width in pixels; written to
+ * `out` unless it is NULL. */
+static int own(Out *out, int id, const char *english, const unsigned *numbers, const unsigned char *const *names)
+{
+    Out scratch;
+    u8 dummy[512];
+    int fixed, room, x = out ? out->x : 0;
+    scratch.at = dummy;
+    scratch.end = dummy + sizeof(dummy);
+    scratch.x = 0;
+    scratch.limit = 0x7FFF;
+    fixed = own_pass(&scratch, id, english, numbers, names, 0);
+    room = ((out ? out->limit : BOX_WIDTH) - x - fixed) / 8;
+    if (room < 4) room = 4;
+    if (!out) {
+        scratch.at = dummy;
+        scratch.x = 0;
+        return own_pass(&scratch, id, english, numbers, names, room);
+    }
+    return own_pass(out, id, english, numbers, names, room);
 }
 
 static Out begin(int which)
@@ -503,6 +527,7 @@ static Out begin(int which)
     out.at = s.arena + text_at[which];
     out.end = s.arena + text_at[which] + text_room[which] - 8;
     out.x = 0;
+    out.limit = which == TEXT_NAME ? NAME_WIDTH : BOX_WIDTH;
     return out;
 }
 
@@ -534,6 +559,13 @@ static void count_at_right(Out *out, unsigned a, unsigned b)
     words(out, text);
 }
 
+/* "5 CARDS", or "1 CARD". */
+static void cards_words(Out *out, unsigned count)
+{
+    if (count == 1) own(out, TEXT_OWN_PACK_CARD, "%d CARD", &count, NULL);
+    else own(out, TEXT_OWN_PACK_CARDS, "%d CARDS", &count, NULL);
+}
+
 static void price_line(Out *out, int pack)
 {
     const Pack *one = Packs_At(pack);
@@ -545,7 +577,7 @@ static void price_line(Out *out, int pack)
         int i;
         for (i = 0; i < one->cost_cards; i++) copies += one->cost_copies[i];
         words(out, " +");
-        own(out, TEXT_OWN_PACK_CARDS, "%d CARDS", &copies, NULL);
+        cards_words(out, copies);
     }
 }
 
@@ -816,7 +848,7 @@ static void compose_list(void)
         if (!n) {
             unsigned count = (unsigned)pack->count;
             if (written++) newline(&out);
-            own(&out, TEXT_OWN_PACK_CARDS, "%d CARDS", &count, NULL);
+            cards_words(&out, count);
         }
         while (written < 2) { newline(&out); written++; }
         newline(&out);
@@ -1012,6 +1044,7 @@ static Out info_line(void)
     out.at = info[info_count];
     out.end = info[info_count] + INFO_LINE_BYTES - 8;
     out.x = 0;
+    out.limit = BOX_WIDTH;
     return out;
 }
 
@@ -1038,8 +1071,7 @@ static void build_info(void)
         info_done(&out);
     }
     out = info_line();
-    numbers[0] = (unsigned)pack->count;
-    own(&out, TEXT_OWN_PACK_CARDS, "%d CARDS", numbers, NULL);
+    cards_words(&out, (unsigned)pack->count);
     info_done(&out);
     out = info_line();
     icon(&out, ICON_STAR);
@@ -1108,6 +1140,7 @@ static void build_info(void)
             all.at = buffer;
             all.end = buffer + sizeof(buffer) - 8;
             all.x = 0;
+            all.limit = BOX_WIDTH;
             n = condition_lines(&pack->unlock, &all, 8, 1);
             *all.at = 0xFF;
             for (p = buffer; line < n && *p != 0xFF; line++) {
@@ -1569,10 +1602,16 @@ static void update_pages(int info_page)
 
 static void update_leave(void)
 {
+    int i;
     if (card_busy()) return;
     s.open = 0;
     s.from_password = 0;
     set_cursor_shown(1);
+    /* The digit cursor's arrows as the game left them: the game shows or
+       hides ◄ and ► by the digit each frame, and never touches ▲ and ▼. */
+    for (i = 0; i < 4; i++) {
+        if (D_8016D440[i]) D_8016D440[i]->flags |= DISPLAY_OBJECT_FLAG_RENDERABLE;
+    }
     Password_RefreshDigitDisplay();
     Password_CreateMessageBox(MESSAGE_ID, 0);
     D_8016D424 = 0;
@@ -1690,6 +1729,8 @@ void PackShop_SaveWritten(const void *state)
         s.owner = code;
         s.owner_set = 1;
     }
+    s.token = token;
+    if (Packs_ProgressEmpty(&s.progress)) goto forget_old;   /* nothing bought: no file */
     if (progress_path(path, sizeof(path), token)) return;
     snprintf(directory, sizeof(directory), "%s", path);
     slash = strrchr(directory, '/');
@@ -1710,7 +1751,7 @@ void PackShop_SaveWritten(const void *state)
             return;
         }
     }
-    s.token = token;
+forget_old:
     /* The file of the token the slot held before, once no slot holds it. */
     if (old && old != token) {
         for (slot = 0; slot < SAVE_SLOT_COUNT; slot++) still |= SaveSlots_Token(slot) == old;

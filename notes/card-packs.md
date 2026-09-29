@@ -39,7 +39,7 @@ the game starts, like the other tables: changing them needs a restart.
 | `id` | the name, lower case, hyphens for the rest (`"Legend of B.E.W.D."` is `legend-of-b-e-w-d`) | the pack's key: 1-63 letters, digits, `_` or `-`. With the mod's id it is the pack's identity, `mod-id:id`, which the save's progress, `unlock` `opened` and other packs use |
 | `name` | the `id` | up to 16 letters, the room between the list's ◄ and ► arrows; longer is cut, with a note. UTF-8: letters the game lacks come from the mods' fonts, as card names do |
 | `description` | none | the first two lines (20 letters each) show under the name; □ shows it all |
-| `image` | none | a PNG inside the mod: the big card's picture (below) |
+| `image` | none | a PNG inside the mod: the big card's picture ("The screen", below); any size, cut to 102:96 from the middle |
 | `cover` | the first card of the rarest tier that has cards | the card whose art stands in when there is no `image` |
 | `shop` | every shop | a shop's id or a list of them (`pack_shop` `shops`); `"*"` for all |
 | `order` | the place it is declared in, across all mods | the list is sorted by it, ties by declaration |
@@ -60,7 +60,7 @@ the game starts, like the other tables: changing them needs a restart.
 | `password` | none | up to eight digits: typed on the Password screen they sell this pack (with the same confirmation). A card's password comes first. A pack with a password is not in the list unless `"listed": true` |
 | `once` | `false` | a password pack a save may buy once |
 | `listed` | `true`, `false` with a `password` | whether the list shows it |
-| `reveal` | `"flip"` | `"flip"`: each card turned over, one at a time, ✕ for the next and □ to skip; `"quick"`: turned over at twice the speed, one after the other; `"list"`: straight to the list of what came |
+| `reveal` | `"flip"` | `"flip"`: each card turned over, one at a time, ✕ for the next and □ to skip to the list; `"quick"`: turned over at twice the speed, each shown half a second and the next turned by itself (□ still skips); `"list"`: straight to the list of what came |
 | `sounds` | the Password screen's | sound effect ids of the game's bank: `move` (47), `buy` (48), `refuse` (9), `reveal` (12), `back` (8). [Finding the ids](modding.md#finding-the-ids); an `audio` mod can make any of them a WAV or Ogg |
 
 A tier:
@@ -72,7 +72,7 @@ A tier:
 | `label` | none | what the card's line says when one of this tier turns over (`"ULTRA RARE!"`) |
 | `color` | white | the label's colour, the game's text colours `{f8 0A n}`: 0 white, 1 yellow, 2 blue, and so on to 15 |
 | `sound` | the pack's `reveal` | the sound a card of this tier turns over with |
-| `reveal` | the pack's | `flip`, `quick` or `list` for the pack once it holds a card of this tier |
+| `reveal` | the pack's | how a card of this tier turns over: `flip` waits for ✕ even in a quick pack (an ultra rare worth stopping for), `quick` (or `list`) turns it and goes on |
 
 Cards are named as `decks` and `drops` name them: a name, an id, or the
 `mod-id:key` identity of a card a mod added.
@@ -168,6 +168,56 @@ and both are tested against the file.
 The Password screen draws no random numbers of its own each frame, and
 nothing is drawn until a pack is bought.
 
+## The screen
+
+The Password screen's own, with nothing drawn by the port over it:
+
+* **The digits.** The message box says `✕OK ○END △PACKS`: the game's string
+  226 (or a translation's) with the triangle's icon and word after END, the
+  line moved left by what it needs (on the blank line above when a
+  translation's last line has no room). `password_only` leaves the string as
+  it is; `packs_only` never shows it.
+* **The list** (△). The digits' panel shows the pack's name, centred, in the
+  panel's own letters, between the digit cursor's ◄ and ► (shown when there
+  is more than one pack; ▲ and ▼ when there is more than one shop); the red
+  cursor is hidden. The big card turns to the pack. The message box has the
+  shop's name in blue (with more than one shop), the description's first
+  lines (or how many cards), the price as the game writes a card's
+  (`★x50`, `+2 CARDS` for a price in cards), `LEFT n`, `SOLD OUT` or which
+  pack of how many at the right, and `✕BUY ○BACK □INFO`. A locked pack shown
+  is face down, named `??????`, with LOCKED and what opens it.
+* **BUY / QUIT** (✕): the game's EXCHANGE / QUIT question, word for word in
+  its layout (strings 227 and 228): the name, the price, then the choice,
+  BUY red and not to be chosen when the starchips, the stock, a `once` or the
+  cards of the price fall short.
+* **Paying**: the starchip count runs down as a password's does.
+* **The reveal**: the big card turns over each card as it turns over a
+  password's, with the tier's sound; the message box has the card's name,
+  the tier's label in its colour, `2/5`, NEW (gold, as card drops has it)
+  when the player had no copy in the chest or the deck, and `✕NEXT □SKIP`.
+* **The list of what came**: three cards to a page with NEW, ←/→ between
+  pages, `✕OK`.
+* **Details** (□): the whole description, cards a pack, the price and each
+  card of it, each tier's chance of a slot dealt by the odds, the guarantee
+  and the pity, the stock left, and every condition still unmet.
+
+A pack's password typed on the digits turns the big card to the pack and
+asks BUY / QUIT the same way, and afterwards the screen is the digits again.
+
+**The pack's picture.** The big card is the game's card view, which draws the
+art record of a card: its picture (102x96, 256 colours), the title plate
+with its name, and the frame of its kind. A pack is shown as a card of the
+first Magic card's kind, so its frame has no ATK or DEF, whose record the
+load gives the pack's own picture — the PNG made the way a mod card's art is
+made (`CardArt_FromImage`), with the pack's name set on the plate as a mod
+card's name is (`CardArt_TitleFromName`), and drawn from the PNG itself above
+the console's resolution (`TexturePack_AddMade`) — or, with no `image`, its
+cover card's art with the pack's name on the plate. The override is armed for
+one load at a time (`Cards_OverrideArt`); HD text leaves that plate as it is
+rather than setting the Magic card's name over it. A picture larger than the
+card's art area, or one of its own shape, would need a sprite and VRAM of its
+own and is not built.
+
 ## The save
 
 The memory card's save is not changed. The cards go into the chest by
@@ -197,4 +247,40 @@ kept and written back, so turning a mod off and on again loses nothing. NEW
 GAME starts from nothing too.
 
 A save state carries all of it, and where the screen was, in a chunk of its
-own (`pack-shop`); a state without the chunk loads with the packs closed.
+own (`pack-shop`, versioned): the state of the list, the pack dealt and which
+card is turning, the progress, and the screen's text, which the game's text
+boxes point into and the load remaps to where this build keeps it. A state
+without the chunk loads with the packs closed. With no pack declared there is
+no chunk, so such a state is what it was.
+
+## For a code mod
+
+The data needs no new mod API: `packs` and `pack_shop` are manifest keys, as
+`starter` and `passwords` are. The cards of a pack go through
+`Duel_AwardCard`, so a code mod hears each one as `MEMORIES_EVENT_REWARD`
+(before and after), as it hears a password's card. An event of its own for
+each slot dealt (`MEMORIES_EVENT_PACK`, letting a mod change the card), and a
+way to name a pack from code, would be the mod API's next version, and are
+not built.
+
+## Verification
+
+`tests/pc/packs_test.c` (CTest `pc_packs`) checks every rule of the reader,
+that a pack spends four numbers a slot whatever it holds, the guarantee, the
+pity, `unique_in_pack`, `max_copies`, the fall to a commoner tier, the unlock
+conditions, the progress file (lines of packs not here kept) and the deals of
+`packs_fixture.json` against `packs_golden.txt`; the FM Editor's
+`tests/test_packs.py` holds its Simulate to the same file.
+
+With the disc in `game/` and the game built, `python3 tools/pc/test_packs.py`
+makes a pack mod of its own (the PNG drawn by the script), opens the Password
+screen of a fresh game, gives it starchips in a saved state and buys a pack
+with △, ✕, ✕ and □, and checks that:
+
+- the starchips drop by the price, the chest gains exactly the pack's cards,
+  and they are the cards last awarded (the chest's NEW);
+- the guarantee gives its rare, and the same input deals the same pack;
+- a state saved while the cards turn over, resumed in a new process, ends
+  with the same chest and the price paid once;
+- without the mod, △ changes nothing on the screen, and a state has no
+  `pack-shop` chunk.

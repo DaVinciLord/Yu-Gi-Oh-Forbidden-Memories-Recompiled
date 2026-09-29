@@ -236,5 +236,8 @@ unsigned Packs_TierChance(int pack, int tier);
 void Packs_ReadProgress(FILE *file, PacksProgress *progress);
 void Packs_WriteProgress(FILE *file, const PacksProgress *progress);
 void Packs_ForgetProgress(PacksProgress *progress);
+/* Whether there is nothing to write: no pack bought, and no line kept of a
+ * pack not here this run. */
+int Packs_ProgressEmpty(const PacksProgress *progress);
 
 #endif
