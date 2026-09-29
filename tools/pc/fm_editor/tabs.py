@@ -336,10 +336,6 @@ class CardsTab(Tab):
             return False
         password = password.zfill(8) if password else ""
         changed = not card.same(self.project.cards[cid])
-        if password != self.project.password(cid):
-            self.project.set_password(cid, password)
-            self.vars["password"].set(password)
-            changed = True
         if cid in self.project.added:
             added = self.project.added[cid]
             key = self.vars["key"].get().strip()
@@ -352,6 +348,11 @@ class CardsTab(Tab):
             if (added.drops, added.opponents) != (self.drops.get(), self.opponents.get()):
                 added.drops, added.opponents = self.drops.get(), self.opponents.get()
                 changed = True
+        # Stored with the rest, once the form has passed every check.
+        if password != self.project.password(cid):
+            self.project.set_password(cid, password)
+            self.vars["password"].set(password)
+            changed = True
         if changed:
             self.project.cards[cid] = card
             self.app.changed()

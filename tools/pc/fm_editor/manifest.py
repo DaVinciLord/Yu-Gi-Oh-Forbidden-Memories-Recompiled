@@ -946,11 +946,17 @@ def read_passwords(project: Project, messages: list):
         messages.append("\"passwords\" is not an object; kept as written")
         return
     kept = {}
+    # With an "all" that sets passwords, a card's own entry keeps it out of
+    # "all" even when it names the disc's password: kept as an edit.
+    every = any(same_all(key) and isinstance(entry, dict) and "password" in entry for key, entry in table.items())
     for key, entry in table.items():
         cid = 0 if same_all(key) else project.resolve(key)
         password = password_text(entry.get("password")) if isinstance(entry, dict) and "password" in entry else None
         if cid in project.retail.cards and password is not None and cid not in project.password_keys:
-            project.set_password(cid, password)
+            if every:
+                project.passwords[cid] = password
+            else:
+                project.set_password(cid, password)
             project.password_keys[cid] = key
             rest = {k: v for k, v in entry.items() if k != "password"}
             if rest:

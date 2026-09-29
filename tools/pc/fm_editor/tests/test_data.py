@@ -449,10 +449,12 @@ class PasswordTest(unittest.TestCase):
         self.assertEqual(manifest.build(again)["passwords"], {"Mystic Elf": {"password": ""}})
 
     def test_kept_as_written(self):
+        from fm_editor.tests.fixtures import password_of
         written = {"id": "pw", "name": "pw", "passwords": {
             "all": {"password": "card number", "starchips_percent": 10},
             "Kuriboh": {"password": 77, "starchips": 5},
             "Card 5": {"password": "card number"},
+            "Blue Dragon": {"password": password_of(1)},    # its own, out of "all"
             "pw:mine:1": {"password": "00000009"}},
             "cards": [{"copy": 3, "id": "mine", "password": "letters"}]}
         p = self.project()
@@ -466,6 +468,7 @@ class PasswordTest(unittest.TestCase):
         self.assertEqual(data["passwords"], {"all": {"password": "card number", "starchips_percent": 10},
                                              "Kuriboh": {"starchips": 5, "password": "00000078"},
                                              "Card 5": {"password": "card number"},
+                                             "Blue Dragon": {"password": password_of(1)},
                                              "pw:mine:1": {"password": "00000009"}})
         self.assertEqual(data["cards"][0]["password"], "letters")
 
