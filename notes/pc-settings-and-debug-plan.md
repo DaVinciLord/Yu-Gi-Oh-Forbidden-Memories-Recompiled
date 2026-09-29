@@ -613,7 +613,7 @@ static buffer, and `Symbols_Lookup`:
 1. Prints the signal, the fault address (`si_addr`), and classifies it:
    guest RAM (`0x80000000`+2 MiB, `0xA0000000` mirror, physical mirror,
    scratchpad `0x1F800000`), game section (`game_text` 0x01000000 ...,
-   from `FIXED_SECTIONS`), game stack (`0x70000000`), or native.
+   from `FIXED_SECTIONS`), game stack (`0xB0000000`), or native.
 2. Prints `EIP`, `ESP`, `EBP` from `ucontext_t.uc_mcontext.gregs[REG_EIP]`
    etc. (i386), with `Symbols_Lookup` for `EIP`.
 3. Walks the frame chain from `EBP` (game units are `-O0` so frame pointers
