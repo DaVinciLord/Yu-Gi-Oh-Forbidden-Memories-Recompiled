@@ -48,6 +48,18 @@ def build(system, label, skip_smoke=False):
         sys.exit(f"package: the {system} build failed its smoke test; nothing was packed")
 
 
+def strip(executable):
+    """Drop the COFF symbol table and DWARF from the shipped .exe. The build
+    keeps the table only to write symbols/<id>.txt, which save states and
+    crash reports read; memories-pc.pdb serves debuggers. Left in, it is
+    some 350 KB after the last section, where scanners' heuristics expect a
+    dropper's payload (Bitdefender flagged v0.1.2 as Gen:Variant.Yogi)."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import build_win32_deps
+    build_win32_deps.use_toolchain()
+    subprocess.run(["llvm-strip", "--strip-all", executable], check=True)
+
+
 def stage(system, label):
     build_dir, executable, extras = BUILDS[system]
     build_dir = os.path.join(ROOT, build_dir)
@@ -56,6 +68,8 @@ def stage(system, label):
     os.makedirs(os.path.join(folder, "game"))
     for name in [executable, "buildid", "commit"] + extras:
         shutil.copy2(os.path.join(build_dir, name), folder)
+    if system == "windows":
+        strip(os.path.join(folder, executable))
     for name in ("mods", "sdk", "languages"):
         shutil.copytree(os.path.join(build_dir, name), os.path.join(folder, name))
     # This build's symbol table, under its build id and under the game

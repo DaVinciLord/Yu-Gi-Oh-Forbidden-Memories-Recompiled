@@ -18,7 +18,7 @@ leading underscore; sections cannot be placed at chosen addresses, so the
 fixed game sections (save states across rebuilds) are not available; the
 section renames edit the COFF headers directly (rename_coff_sections) and
 __start_/__stop_ come from grouped marker sections; overrides win by link order instead of weakened symbols."""
-import argparse, concurrent.futures, csv, glob, hashlib, json, os, shutil, struct, subprocess, sys
+import argparse, concurrent.futures, csv, glob, hashlib, json, os, re, shutil, struct, subprocess, sys
 import build_process
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -356,12 +356,11 @@ def guest_addresses():
     return tables["SLUS_014.11"], {name: tables[name] for name, _, _, _ in MODULES}, text
 
 
-def exe_icon(build):
+def exe_icon(build, windres):
     """The executable's icon on Windows: the game's memory card icon (the
     save header template, src/pc/platform/save_icon.h), made here from the
-    game's own game/SLUS_014.11 and never kept in the repository. [] (no
-    icon) without the game, the template, or a resource compiler."""
-    windres = shutil.which(CC.replace("clang", "windres"))
+    game's own game/SLUS_014.11 and never kept in the repository. The .ico's
+    path, or None without the game, the template, or a resource compiler."""
     try:
         with open("config/pc/guest_addresses.txt") as table:
             address = next(int(line.split()[1], 16) for line in table
@@ -369,12 +368,12 @@ def exe_icon(build):
         with open("game/SLUS_014.11", "rb") as executable:
             image = executable.read()
     except (OSError, StopIteration, ValueError, IndexError):
-        return []
+        return None
     # A PS-X EXE: its text loads at t_addr (+0x18) from file offset 0x800.
     at = address - struct.unpack_from("<I", image, 0x18)[0] + 0x800
     header = image[at:at + 0x200] if 0x800 <= at <= len(image) - 0x200 else b""
     if not windres or header[:2] != b"SC" or not 0x11 <= header[2] <= 0x13:
-        return []
+        return None
     clut = [struct.unpack_from("<H", header, 0x60 + 2 * i)[0] for i in range(16)]
 
     def bgra(x, y):  # frame 0, 16x16 at 4 bits, the low nibble first
@@ -398,11 +397,42 @@ def exe_icon(build):
     ico = os.path.abspath(f"{build}/icon.ico").replace("\\", "/")
     with open(ico, "wb") as out:
         out.write(icon + b"".join(entries))
-    with open(f"{build}/icon.rc", "w") as rc:
-        rc.write(f'1 ICON "{ico}"\n')
-    if subprocess.run([windres, f"{build}/icon.rc", "-O", "coff", "-o", f"{build}/icon.o"]).returncode:
+    return ico
+
+
+def exe_resources(build, release):
+    """The Windows executable's resources: version information (product,
+    description, version), which virus scanners' heuristics hold against a
+    program that has none, and outside releases the icon above. A release
+    fails without a resource compiler; other builds go without."""
+    windres = shutil.which(CC.replace("clang", "windres"))
+    if not windres:
+        if release:
+            sys.exit(f"{CC.replace('clang', 'windres')} not found: a release carries version information")
         return []
-    return [f"{build}/icon.o"]
+    ico = None if release else exe_icon(build, windres)
+    label = release_version()
+    numbers = [int(n) for n in re.match(r"v(\d+)\.(\d+)\.(\d+)", label).groups()] if label else [0, 0, 0]
+    number = ",".join(str(n) for n in numbers + [0])
+    text = label or "development build"
+    strings = {"CompanyName": "Yu-Gi-Oh! Forbidden Memories Recompiled",
+               "FileDescription": "Yu-Gi-Oh! Forbidden Memories Recompiled",
+               "FileVersion": text, "InternalName": "memories-pc", "OriginalFilename": "memories-pc.exe",
+               "ProductName": "Yu-Gi-Oh! Forbidden Memories Recompiled", "ProductVersion": text,
+               "Comments": "https://github.com/Unchiga/Yu-Gi-Oh-Forbidden-Memories-Recompiled"}
+    rc = [f'1 ICON "{ico}"'] if ico else []
+    rc += ["1 VERSIONINFO", f"FILEVERSION {number}", f"PRODUCTVERSION {number}", "FILEOS 0x40004", "FILETYPE 0x1",
+           "BEGIN", '  BLOCK "StringFileInfo"', "  BEGIN", '    BLOCK "040904B0"', "    BEGIN",
+           *[f'      VALUE "{key}", "{value}"' for key, value in strings.items()],
+           "    END", "  END", '  BLOCK "VarFileInfo"', "  BEGIN", '    VALUE "Translation", 0x409, 1200', "  END",
+           "END"]
+    with open(f"{build}/resources.rc", "w") as handle:
+        handle.write("\n".join(rc) + "\n")
+    if subprocess.run([windres, f"{build}/resources.rc", "-O", "coff", "-o", f"{build}/resources.o"]).returncode:
+        if release:
+            sys.exit(f"{build}/resources.rc: the resource compiler failed")
+        return []
+    return [f"{build}/resources.o"]
 
 
 def build_mods(build, release=False):
@@ -811,7 +841,7 @@ def main():
     output = f"{options.build}/memories-pc"
     if WINDOWS:
         output += ".exe"
-        icon = [] if options.release else exe_icon(options.build)
+        resources = exe_resources(options.build, options.release)
         for name in ("guest_symbols", "section_markers"):
             run([CC, "-c", f"{options.build}/{name}.s", "-o", f"{options.build}/{name}.o"])
         # The pins first: a game unit's tentative definition of a pinned
@@ -829,7 +859,7 @@ def main():
              "-Wl,--large-address-aware", "-Wl,--disable-dynamicbase", "-Wl,--nxcompat",
              "-Wl,--allow-multiple-definition", f"{options.build}/guest_symbols.o",
              *[obj(s) for s in NATIVE + game], f"{options.build}/stubs.o", guest_branches, f"{options.build}/mod_exports.o",
-             version, f"{options.build}/section_markers.o", *icon,
+             version, f"{options.build}/section_markers.o", *resources,
              f"{WIN32_DEPS}/sdl/lib/libSDL3.dll.a", "-lopengl32", f"{WIN32_DEPS}/lib/libfreetype.a",
              f"{WIN32_DEPS}/lib/libpng16.a", f"{WIN32_DEPS}/lib/libzs.a", "-ldbghelp", "-lwinhttp", "-static", "-lpthread"])
         shutil.copy(f"{WIN32_DEPS}/sdl/bin/SDL3.dll", options.build)

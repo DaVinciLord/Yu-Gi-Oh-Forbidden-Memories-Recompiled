@@ -1,9 +1,28 @@
 #!/usr/bin/env python3
 """Check release archives without a ROM: layout, modes, no user data."""
 import argparse
+import struct
 from pathlib import Path, PurePosixPath
 import tarfile
 import zipfile
+
+
+def check_exe(image):
+    """The shipped .exe: stripped (tools/pc/package.py strip) and with a
+    resource section (version information), since virus scanners flag data
+    after the last section and programs that say nothing about themselves."""
+    header = struct.unpack_from("<I", image, 0x3C)[0]
+    sections, _, symbols, symbol_count, optional = struct.unpack_from("<HIIIH", image, header + 6)
+    table = header + 24 + optional
+    names, end = set(), 0
+    for index in range(sections):
+        at = table + 40 * index
+        names.add(image[at:at + 8].rstrip(b"\0"))
+        size, offset = struct.unpack_from("<II", image, at + 16)
+        end = max(end, offset + size)
+    assert symbols == 0 and symbol_count == 0, "memories-pc.exe keeps its COFF symbol table"
+    assert len(image) == end, f"memories-pc.exe has {len(image) - end} bytes after its last section"
+    assert b".rsrc" in names, "memories-pc.exe has no resources (version information)"
 
 
 def check(path):
@@ -12,6 +31,7 @@ def check(path):
         with zipfile.ZipFile(path) as archive:
             assert archive.testzip() is None
             names = archive.namelist()
+            check_exe(archive.read(next(name for name in names if name.endswith("/memories-pc.exe"))))
     else:
         with tarfile.open(path) as archive:
             members = archive.getmembers()
