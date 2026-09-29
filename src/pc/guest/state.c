@@ -46,13 +46,19 @@
 #define STACK_TOP (STACK_BASE + STACK_SIZE)
 #define SCRATCHPAD 0x1f800000u
 #define SCRATCHPAD_SIZE 0x400u
-#define VERSION 2u /* 1: the header word was the game-source fingerprint; 2: the build id */
+/* 1: the header word was the game-source fingerprint; 2: the build id;
+ * 3: the game compiled with the indirect-branch thunks (branch_thunks.c).
+ * Every function's code changed shape with them, and a return address on a
+ * saved stack cannot be carried into it: on Windows, where symbols have no
+ * sizes, a function whose extent stayed the same passed for unchanged and
+ * the state resumed a byte off (Graphics_SyncFrame's call to VSync). So
+ * states from before 3 are refused. */
+#define VERSION 3u
 
 /* Provided by the link: the fixed-address sections of the game objects. */
 extern char __start_game_text[], __stop_game_text[];
 extern char __start_game_data[], __stop_game_data[];
 extern char __start_game_bss[] __attribute__((weak)), __stop_game_bss[] __attribute__((weak));
-extern const unsigned Memories_GameFingerprint; /* generated: hash of the game sources */
 void Memories_StateReturn(const MemoriesStateEntry *entry, int value) __attribute__((noreturn));
 
 MemoriesStateEntry Memories_StateEntry;
@@ -807,7 +813,13 @@ static int load(const char *path)
     state.image = image;
     state.image_size = (size_t)length;
     chunk = find_chunk(&state, "entry", &size);
-    if ((header[0] != 1 && header[0] != VERSION) || !chunk || size != sizeof(entry)) {
+    if (header[0] < VERSION) {
+        refuse("%s was made by an older version of the game; save states don't carry over across this update "
+               "(memory card saves do)", path);
+        free(image);
+        return -1;
+    }
+    if (header[0] != VERSION || !chunk || size != sizeof(entry)) {
         refuse("%s: unsupported state version", path);
         free(image);
         return -1;
@@ -827,16 +839,6 @@ static int load(const char *path)
         refuse("%s: damaged state", path);
         free(image);
         return -1;
-    }
-    if (header[0] == 1) {
-        /* Tables from before build ids list game code only: pointers to
-         * native routines held by the game (the town map's HMD drivers) are
-         * not carried over, and such a state can fail where it uses them. */
-        if (header[1] == Memories_GameFingerprint) {
-            header[1] = build_id; /* same game code: nothing to move */
-        } else {
-            fprintf(stderr, "memories-pc: %s predates build ids; only game code addresses can be carried over\n", path);
-        }
     }
     if (header[1] != build_id && relocate(image, (size_t)length, header[1]) != 0) {
         refuse("%s was saved by another build and was not loaded", path);

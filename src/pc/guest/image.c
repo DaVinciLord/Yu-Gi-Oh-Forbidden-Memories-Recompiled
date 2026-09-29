@@ -31,6 +31,10 @@ _Static_assert(sizeof(void *) == 4, "the guest image model requires an ILP32 bui
  * replaced it. Each site is reported once. */
 #ifndef _WIN32
 static unsigned char *low_memory;
+#else
+/* Which 64 KiB pieces of the physical mirror Memories_GuestMap could map;
+ * Windows holds the others (see there). */
+static unsigned char low_piece_mapped[MEMORIES_GUEST_RAM_SIZE / 0x10000u];
 #endif
 static struct {
     int active, reg; /* reg: the ModRM register number, 0 (EAX) to 7 (EDI) */
@@ -90,16 +94,30 @@ static int low_access_register(const unsigned char *code, uint32_t esi)
     return (int)base;
 }
 
-/* Guest RAM is mapped without execute permission, so a call through a MIPS
- * address faults with EIP equal to that address. Tables in the retail data
- * image hold such addresses; the build generates Memories_FunctionMap (guest
- * address -> native function, sorted) and the handler resumes in the native
- * function. The caller's return address and cdecl arguments are already on
- * the stack, so the redirect is transparent. Anything else is fatal.
+/* Tables in the retail data image hold MIPS function addresses, and native
+ * code calls through them. The build generates Memories_FunctionMap (guest
+ * address -> native function, sorted); a call to such an address resumes in
+ * the native function. The caller's return address and cdecl arguments are
+ * already on the stack, so the redirect is transparent. Two ways lead here:
+ * the indirect-branch thunks every unit is compiled to use (branch_thunks.c,
+ * through guest_branch_target below), and, as the second net, the fault of
+ * executing guest RAM, which is mapped without execute permission
+ * (on_guest_exception, on_fault). Anything else is fatal.
  * Returns where to resume, or NULL. */
+static int in_guest_ram(uint32_t address)
+{
+    return (address >= 0x10000u && address < MEMORIES_GUEST_RAM_SIZE) ||
+           address - MEMORIES_GUEST_RAM < MEMORIES_GUEST_RAM_SIZE || address - 0xa0000000u < MEMORIES_GUEST_RAM_SIZE;
+}
+
 static void *guest_call_target(uint32_t address)
 {
     size_t low = 0, high = Memories_FunctionMapCount;
+    /* Through KSEG1 or the physical address, the console runs the same
+     * code; the map and the overlay slots are keyed by KSEG0. */
+    if (in_guest_ram(address)) {
+        address = MEMORIES_GUEST_RAM | (address & (MEMORIES_GUEST_RAM_SIZE - 1u));
+    }
     while (low < high) {
         size_t middle = (low + high) / 2;
         if (Memories_FunctionMap[middle].guest < address) {
@@ -134,6 +152,45 @@ static void report_guest_fault(uint32_t address, uint32_t eip)
                           (unsigned)address, (unsigned)eip);
     }
     (void)!write(2, text, (size_t)length);
+}
+
+/* Memories_GuestBranchResolver: where an indirect call or jump the thunks
+ * caught goes. Outside guest RAM and its mirrors (and below 0x10000, so that
+ * a call through a null pointer still faults as one; on Windows also in the
+ * pieces of the physical mirror that Windows holds, which are not guest
+ * RAM), the address itself. A guest address with no native function is
+ * never jumped to: with DEP off its MIPS bytes would run as x86 code. */
+static void *guest_branch_target(unsigned address)
+{
+    char text[64];
+    void *target;
+    if (!in_guest_ram(address)) {
+        return (void *)(uintptr_t)address;
+    }
+#ifdef _WIN32
+    if (address < MEMORIES_GUEST_RAM_SIZE && !low_piece_mapped[address >> 16]) {
+        return (void *)(uintptr_t)address;
+    }
+#endif
+    if ((target = guest_call_target(address)) != NULL) {
+        return target;
+    }
+    report_guest_fault(address, address);
+    snprintf(text, sizeof(text), "0x%08x has no native function", address);
+    Crash_ReportFatal("call into guest code", text);
+    Profile_Flush();
+    _exit(70);
+}
+
+/* Guest RAM mapped executable (MEMORIES_TEST_EXEC_GUEST=1), as it is where
+ * DEP is off: then only the thunks keep a guest call from running MIPS bytes,
+ * which makes "the game works without DEP" testable on any machine. */
+static int guest_ram_executable(void)
+{
+    const char *value = getenv("MEMORIES_TEST_EXEC_GUEST");
+    if (!value || !*value || !strcmp(value, "0")) return 0;
+    fprintf(stderr, "memories-pc: guest RAM is mapped executable (MEMORIES_TEST_EXEC_GUEST)\n");
+    return 1;
 }
 
 #ifdef _WIN32
@@ -247,10 +304,12 @@ static LONG CALLBACK on_guest_exception(EXCEPTION_POINTERS *pointers)
  * access to a piece Windows holds faults and goes through guest RAM
  * instead (on_guest_exception). Such accesses into pages Windows has
  * mapped readable would not fault; the sites that fault are reported. */
+static DWORD view_access = FILE_MAP_ALL_ACCESS;
+
 static int view_at(HANDLE section, uint32_t address, size_t length, DWORD offset)
 {
     void *wanted = (void *)(uintptr_t)address;
-    if (MapViewOfFileEx(section, FILE_MAP_ALL_ACCESS, 0, offset, length, wanted) != wanted) {
+    if (MapViewOfFileEx(section, view_access, 0, offset, length, wanted) != wanted) {
         fprintf(stderr, "cannot map guest memory at 0x%08x (error %lu)\n", (unsigned)address,
                 GetLastError());
         return -1;
@@ -258,11 +317,30 @@ static int view_at(HANDLE section, uint32_t address, size_t length, DWORD offset
     return 0;
 }
 
+/* Calls into guest code go through the branch thunks, which need nothing
+ * from Windows. DEP is only the second net: with it, a call that escaped
+ * them faults into on_guest_exception instead of running MIPS bytes. The
+ * executable asks for it (--nxcompat), enough where Windows applies DEP to
+ * programs that do (OptIn, the default); under OptOut with the program
+ * excepted it is turned on here if Windows allows. Under AlwaysOff it
+ * cannot be, and the thunks carry every guest call on their own. */
+static void ask_for_dep(void)
+{
+    DWORD flags = 0;
+    BOOL permanent = FALSE;
+    if (GetProcessDEPPolicy(GetCurrentProcess(), &flags, &permanent) && (flags & PROCESS_DEP_ENABLE)) return;
+    SetProcessDEPPolicy(PROCESS_DEP_ENABLE);
+}
+
 int Memories_GuestMap(void)
 {
-    HANDLE section = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0,
-                                        MEMORIES_GUEST_RAM_SIZE, NULL);
-    int result;
+    HANDLE section;
+    int result, executable = guest_ram_executable();
+    ask_for_dep();
+    Memories_GuestBranchResolver = guest_branch_target;
+    if (executable) view_access = FILE_MAP_ALL_ACCESS | FILE_MAP_EXECUTE;
+    section = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, executable ? PAGE_EXECUTE_READWRITE : PAGE_READWRITE, 0,
+                                 MEMORIES_GUEST_RAM_SIZE, NULL);
     AddVectoredExceptionHandler(1, on_guest_exception);
     if (section == NULL) {
         fprintf(stderr, "guest RAM: CreateFileMapping failed (error %lu)\n", GetLastError());
@@ -273,8 +351,10 @@ int Memories_GuestMap(void)
     {
         uint32_t piece, held = 0;
         for (piece = 0x10000u; piece < MEMORIES_GUEST_RAM_SIZE; piece += 0x10000u) {
-            if (MapViewOfFileEx(section, FILE_MAP_ALL_ACCESS, 0, piece, 0x10000u, (void *)(uintptr_t)piece) == NULL) {
+            if (MapViewOfFileEx(section, view_access, 0, piece, 0x10000u, (void *)(uintptr_t)piece) == NULL) {
                 held += 0x10000u;
+            } else {
+                low_piece_mapped[piece >> 16] = 1;
             }
         }
         if (held) {
@@ -294,11 +374,13 @@ int Memories_GuestMap(void)
     return result ? -1 : 0;
 }
 #else
+static int view_protection = PROT_READ | PROT_WRITE;
+
 static int map_at(uint32_t address, size_t length, int fd, off_t offset)
 {
     void *wanted = (void *)(uintptr_t)address;
     int flags = MAP_FIXED_NOREPLACE | (fd < 0 ? MAP_PRIVATE | MAP_ANONYMOUS : MAP_SHARED);
-    if (mmap(wanted, length, PROT_READ | PROT_WRITE, flags, fd, offset) != wanted) {
+    if (mmap(wanted, length, fd < 0 ? PROT_READ | PROT_WRITE : view_protection, flags, fd, offset) != wanted) {
         fprintf(stderr, "cannot map guest memory at 0x%08x\n", (unsigned)address);
         return -1;
     }
@@ -361,6 +443,8 @@ int Memories_GuestMap(void)
 {
     struct sigaction action;
     int fd, result;
+    if (guest_ram_executable()) view_protection |= PROT_EXEC;
+    Memories_GuestBranchResolver = guest_branch_target;
     memset(&action, 0, sizeof(action));
     action.sa_sigaction = on_fault;
     action.sa_flags = SA_SIGINFO | SA_ONSTACK;
