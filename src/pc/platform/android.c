@@ -17,6 +17,7 @@
  *   and an app process is the zygote's, not a program of its own.
  * - No update check yet, and no desktop OpenGL (platform.h). */
 #ifdef __ANDROID__
+#include "pc/compat/fs.h"
 #include "platform.h"
 #include <SDL3/SDL.h>
 #include <android/log.h>
