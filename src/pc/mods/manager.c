@@ -4,6 +4,7 @@
 #include "json.h"
 #include "mods.h"
 #include "pc/platform/paths.h"
+#include "pc/cards/models.h"
 #include "pc/platform/settings.h"
 #include "pc/compat/posix.h" /* rename() that replaces, on Windows too */
 #include <limits.h>
@@ -422,7 +423,7 @@ unsigned Mods_Signature(void)
         Settings_VisitNamed(hash_setting, &settings_hash);
         hash ^= settings_hash;
     }
-    return hash ^ Mods_CardSignature() ^ Mods_DiscSignature();
+    return hash ^ Mods_CardSignature() ^ Mods_DiscSignature() ^ Models_Signature();
 }
 
 /* An "audio" id as replace.c reads it: 0x-prefixed hexadecimal, else decimal. */

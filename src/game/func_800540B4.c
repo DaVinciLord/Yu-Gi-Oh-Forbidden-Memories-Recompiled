@@ -60,6 +60,15 @@
 #include "../game/screen_projection.h"
 #include "../game/model_handler_registry.h"
 #include "../game/func_800540B4.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/models.h"
+#include "../game/model_has_insufficient_buffer_space.h"
+/* The retail draw is the body; func_800540B4 below puts back what
+   Model_ShapeAfterAnimation changes in it (models.h). */
+#define func_800540B4 func_800540B4_unshaped
+void func_800540B4_unshaped(s32 index);
+static void Model_ShapeAfterAnimation(s32 index);
+#endif
 
 #define B(p, o) (*((u8 *)(p) + (o)))
 #define S(p, o) (*(s16 *)((u8 *)(p) + (o)))
@@ -268,6 +277,27 @@ void func_800540B4(s32 index)
         D_8009AFD4 = 0xE1000220;
     }
 
+#ifdef MEMORIES_PC
+    /* A mod's "tint" for the card (models.h), over whatever colour the
+       battle gave the slot. The templates are the polygons' base colour,
+       which the lighting multiplies, so the cached colours of mode 0 are
+       given up for a lit pass as a coloured slot has. */
+    if (index < 2 && D_8009AFE4 != 1 && Models_SlotTinted(index)) {
+        D_8009AFAC = Models_SlotTint(index, D_8009AFAC);
+        D_8009AFB0 = Models_SlotTint(index, D_8009AFB0);
+        D_8009AFB4 = Models_SlotTint(index, D_8009AFB4);
+        D_8009AFB8 = Models_SlotTint(index, D_8009AFB8);
+        D_8009AFCC = Models_SlotTint(index, D_8009AFCC);
+        D_8009AFD0 = Models_SlotTint(index, D_8009AFD0);
+        D_8009AFBC = Models_SlotTint(index, D_8009AFBC);
+        D_8009AFC0 = Models_SlotTint(index, D_8009AFC0);
+        D_8009AFC4 = Models_SlotTint(index, D_8009AFC4);
+        D_8009AFC8 = Models_SlotTint(index, D_8009AFC8);
+        if (D_8009AFE4 == 0) {
+            D_8009AFE4 = 3;
+        }
+    }
+#endif
     e = slot->field_000;
     if (D_8009AFE4 >= 3) {
         D_8009AFE0 = 0;
@@ -363,6 +393,12 @@ void func_800540B4(s32 index)
                 GsSetLsMatrix(&ls);
             }
             GsSortUnit((GsUNIT *)e, ot, (u32 *)0x1F800000);
+#ifdef MEMORIES_PC
+            /* Block 0 is the animation: sorting it posed the parts. */
+            if (i == 0) {
+                Model_ShapeAfterAnimation(index);
+            }
+#endif
         }
     }
 
@@ -724,3 +760,69 @@ void func_800540B4(s32 index)
         ot->length = 0xC;
     }
 }
+
+#ifdef MEMORIES_PC
+#undef func_800540B4
+/* Every coordinate unit of the slot recomputes its world matrix at its next
+   use: they are cached against the frame counter. */
+static void Model_ForgetSlotCoordinates(ModelSlot *slot)
+{
+    GsCOORDUNIT *unit = (GsCOORDUNIT *)slot->entries;
+    s32 count, i;
+    if (unit == 0) {
+        return;
+    }
+    count = ((s32 *)unit)[-1];
+    for (i = 0; i < count; i++) {
+        unit[i].flg = 0;
+    }
+}
+
+/* A mod's "yaw" and "scale" for the card a duellist slot shows (models.h):
+   the body's anchor (field_D1C, else the root) is turned and sized about
+   its own origin -- the point the model stands on, which the root is not: a
+   duel model hangs a few hundred units from it. It has to happen inside the
+   draw, once the animation block has posed the parts (sorting block 0 does
+   that), and the anchor is put back after the draw, so nothing else sees
+   the change and a part the animation does not move does not turn twice. */
+static GsCOORDUNIT *Model_ShapedAnchor[2];
+static MATRIX Model_ShapedKept[2];
+
+static void Model_ShapeAfterAnimation(s32 index)
+{
+    ModelSlot *slot;
+    GsCOORDUNIT *anchor;
+
+    if (index >= 2 || Model_ShapedAnchor[index] != 0 || !Models_SlotShaped(index)) {
+        return;
+    }
+    slot = &D_800F2C40[index];
+    anchor = slot->field_D1C != 0 ? slot->field_D1C : slot->field_D18;
+    if (anchor == 0) {
+        return;
+    }
+    Model_ShapedAnchor[index] = anchor;
+    Model_ShapedKept[index] = anchor->matrix;
+    Models_ShapeSlotRoot(index, &anchor->matrix);
+    Model_ForgetSlotCoordinates(slot);
+}
+
+void func_800540B4(s32 index)
+{
+    GsCOORDUNIT *anchor;
+
+    /* A mod's model the frame's packet buffer has no room left for is left
+       out of this frame, rather than overflow into what follows the buffer.
+       The disc's models are drawn as they always were. */
+    if (index < 2 && Models_SlotOwnRecord(index) && D_800F2C40[index].field_E1F != 0 &&
+        Model_HasInsufficientBufferSpace(index, -1)) {
+        return;
+    }
+    func_800540B4_unshaped(index);
+    if (index < 2 && (anchor = Model_ShapedAnchor[index]) != 0) {
+        anchor->matrix = Model_ShapedKept[index];
+        Model_ShapedAnchor[index] = 0;
+        Model_ForgetSlotCoordinates(&D_800F2C40[index]);
+    }
+}
+#endif

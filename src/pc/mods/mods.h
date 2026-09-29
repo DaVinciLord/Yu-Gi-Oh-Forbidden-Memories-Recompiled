@@ -99,6 +99,9 @@ int Mods_DiscSector(int lba, void *user_data);
 int Mods_DiscFileInfo(int retail_lba, int *lba, unsigned *size);
 int Mods_DiscSource(int lba, int *physical_lba);
 int Mods_DiscOrigin(int lba);
+/* The first sector past the disc and every virtual file the mods' larger
+ * replacements were given, once startup has laid them out. */
+int Mods_DiscEnd(void);
 unsigned Mods_DiscSignature(void);
 
 /* Manager metadata and configuration. Borrowed strings live until exit. */

@@ -28,7 +28,9 @@
  * streaming (Memories_DiscReadSectors), so the duel's own transfers are not
  * disturbed:
  *
- * - `Model_LoadMonsterMerge`'s id arithmetic picks the MODEL.MRG record;
+ * - `Models_RecordLba` picks the record: a mod's own for the card
+ *   (pc/cards/models.h), else the MODEL.MRG record `Model_LoadMonsterMerge`'s
+ *   id arithmetic picks;
  * - the record's seventeen phases are what `func_80056D7C` programs, so its
  *   copies are replayed here against this monster's arena instead of the two
  *   fixed duel arenas. The phases that a slot flagged `0x80` skips (the
@@ -82,6 +84,7 @@
 #include "pc/render/soft_gpu.h"
 #include "pc/mods/modapi.h"
 #include "pc/cards/cards.h"
+#include "pc/cards/models.h"
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -178,7 +181,6 @@ typedef struct {
 static const MemoriesModHost *host;
 static Monster cache[CACHE];
 static u8 *record;             /* one MODEL.MRG record, read whole */
-static int mrg_start = -2;
 static unsigned frame;
 static int inside;
 static DisplayObject *dimmed[DUEL_SIDE_COUNT]; /* the big cards draw_battle dimmed */
@@ -209,28 +211,6 @@ static void say(const char *format, ...)
 static int tunable(const char *key, int fallback)
 {
     return host->setting(host, key, fallback);
-}
-
-/* Model_LoadMonsterMerge's own arithmetic: the three id ranges with no record
- * are rejected and every id above one is biased down. */
-static int mrg_record(int model)
-{
-    if (model < 0 || model >= MODEL_MRG_ID_END ||
-        (model >= MODEL_MRG_FIRST_GAP_START && model < MODEL_MRG_FIRST_GAP_END) ||
-        (model >= MODEL_MRG_SECOND_GAP_START && model < MODEL_MRG_SECOND_GAP_END) ||
-        model == MODEL_MRG_SINGLE_GAP_ID) {
-        return -1;
-    }
-    if (model >= MODEL_MRG_LAST_ID) {
-        model--;
-    }
-    if (model >= MODEL_MRG_SECOND_GAP_END) {
-        model -= MODEL_MRG_GAP_SIZE;
-    }
-    if (model >= MODEL_MRG_FIRST_GAP_END) {
-        model -= MODEL_MRG_GAP_SIZE;
-    }
-    return model;
 }
 
 static u16 scratch_pixels[BLOCK_W * BLOCK_H];
@@ -388,23 +368,18 @@ static int load_monster(Monster *monster, int card, int position)
     ModelSlot *slot = &D_800F2C40[0];
     static u8 staging[0x2000]; /* the loader's own scratch, put back after */
     u8 *payload_base;
-    int model = mrg_record(card - 1), sectors;
+    int lba = Models_RecordLba(card), sectors;
 
-    if (model < 0) {
-        return 0;
-    }
-    if (mrg_start == -2) {
-        mrg_start = host->disc_file_start(host, "\\DATA\\MODEL.MRG;1");
-        say("MODEL.MRG starts at sector %d\n", mrg_start);
-    }
-    if (mrg_start < 0) {
+    /* The card's record: a mod's own (pc/cards/models.h), else its model's
+     * on the disc, found with Model_LoadMonsterMerge's arithmetic. */
+    if (lba < 0) {
         return 0;
     }
     started = host->now_us(host);
     if (!record && !(record = malloc(RECORD_SECTORS * SECTOR))) {
         return 0;
     }
-    sectors = host->disc_read(host, mrg_start + model * RECORD_SECTORS, RECORD_SECTORS, record);
+    sectors = host->disc_read(host, lba, RECORD_SECTORS, record);
     if (sectors != RECORD_SECTORS) {
         say("card %d: read %d of %d sectors\n", card, sectors, RECORD_SECTORS);
         return 0;
@@ -414,7 +389,7 @@ static int load_monster(Monster *monster, int card, int position)
      * flag that skips the sound bank and leaves the three control-module
      * command words at -1 so no module is ever called. */
     func_8004CB0C(0, 0, 0, 4);
-    slot->field_DF8 = (u16)(card - 1);
+    slot->field_DF8 = (u16)(Cards_ModelId(card) - 1);
     slot->field_E1D = 0x80;
     slot->field_DFA = 0;
     slot->field_DFC = 0;
@@ -628,6 +603,23 @@ static int packets_fit(const Monster *monster)
     return 0;
 }
 
+/* Slot 0's draw and animation step with this monster's card's settings (a
+ * mod's "tint" and "speed", models.h; its "scale" is in the size fit()
+ * gives it and its "yaw" in place()'s turn), then the slot's own card back. */
+static void draw_slot(Monster *monster)
+{
+    int was = Models_UseCard(0, monster->card);
+    func_800540B4(0);
+    Models_UseCard(0, was);
+}
+
+static void step_slot(Monster *monster)
+{
+    int was = Models_UseCard(0, monster->card);
+    func_800556E8(0);
+    Models_UseCard(0, was);
+}
+
 static void sort_monster(Monster *monster, GsOT *into, int at)
 {
     const u32 *from = (const u32 *)(uintptr_t)D_800FE240;
@@ -646,7 +638,7 @@ static void sort_monster(Monster *monster, GsOT *into, int at)
     GsClearOt(0, 0, table);
     end = tags[0] & LINK_MASK; /* what entry 0 leads to: the table's tail */
     D_800E9D98[0] = table;
-    func_800540B4(0);
+    draw_slot(monster);
     D_800E9D98[0] = live;
     if (D_800FE240 - (u32)(uintptr_t)from > monster->packet_bytes) {
         monster->packet_bytes = D_800FE240 - (u32)(uintptr_t)from;
@@ -699,7 +691,7 @@ static int sort_aside(Monster *monster)
     GsClearOt(0, 0, table);
     GsSetWorkBase((PACKET *)(scratch + PACKETS_AT));
     D_800E9D98[0] = table;
-    func_800540B4(0);
+    draw_slot(monster);
     height = packet_height((const u32 *)(scratch + PACKETS_AT), (const u32 *)(uintptr_t)D_800FE240);
     if (D_800FE240 - (u32)(uintptr_t)(scratch + PACKETS_AT) > monster->packet_bytes) {
         monster->packet_bytes = D_800FE240 - (u32)(uintptr_t)(scratch + PACKETS_AT);
@@ -847,6 +839,8 @@ static void fit(Monster *monster)
         }
     }
     monster->scale = monster->scale * tunable("scale", MODEL_FIXED_ONE) / MODEL_FIXED_ONE;
+    /* A mod's "scale" for the card, over the fitted size (models.h). */
+    monster->scale = monster->scale * Models_Scale(monster->card) / 100;
     scale_body(monster);
     say("card %d fits %d pixels at %d/4096, body at %d,%d,%d, %u bytes of packets\n", monster->card, height,
         monster->scale, monster->body_x, monster->body_y, monster->body_z, (unsigned)monster->packet_bytes);
@@ -865,16 +859,26 @@ static int lift(void)
 static void draw_monster(Monster *monster, int x, int z, int yaw)
 {
     ModelSlot *slot = &D_800F2C40[0];
-    int turned = yaw == MODEL_ANGLE_HALF_TURN;
+    int turned = yaw == MODEL_ANGLE_HALF_TURN, extra = Models_Yaw(monster->card);
 
     *slot = monster->slot;
     /* The body offset was measured facing up the field, so turning the
      * monster turns it too. */
-    place(slot, turned ? x + monster->body_x : x - monster->body_x, -monster->body_y - lift(),
-          turned ? z + monster->body_z : z - monster->body_z, yaw, monster->scale);
+    if (extra) {
+        /* A mod's "yaw" for the card (pc/cards/models.h), about the body:
+         * the offset turns with it, as func_8005A4C4's rotation turns it. */
+        double angle = (yaw + extra) * (2.0 * 3.14159265358979323846 / MODEL_ANGLE_FULL_TURN);
+        int bx = (int)floor(cos(angle) * monster->body_x + sin(angle) * monster->body_z + 0.5);
+        int bz = (int)floor(-sin(angle) * monster->body_x + cos(angle) * monster->body_z + 0.5);
+        place(slot, x - bx, -monster->body_y - lift(), z - bz, (yaw + extra) & (MODEL_ANGLE_FULL_TURN - 1),
+              monster->scale);
+    } else {
+        place(slot, turned ? x + monster->body_x : x - monster->body_x, -monster->body_y - lift(),
+              turned ? z + monster->body_z : z - monster->body_z, yaw, monster->scale);
+    }
     sort_monster(monster, (GsOT *)D_800E9D98[0], -1);
     if (!monster->stepped) {
-        func_800556E8(0);
+        step_slot(monster);
         monster->stepped = 1;
     }
     monster->slot = *slot;
@@ -1109,6 +1113,7 @@ static void battle_pose(Monster *monster, int yaw)
         scale = wanted < SCALE_SMALLEST ? SCALE_SMALLEST
               : wanted > BATTLE_SCALE_LARGEST ? BATTLE_SCALE_LARGEST : wanted;
     }
+    scale = scale * Models_Scale(monster->card) / 100;
     monster->battle_scale = scale;
     monster->battle_yaw = yaw;
     monster->battle_pixels = pixels;
@@ -1116,8 +1121,8 @@ static void battle_pose(Monster *monster, int yaw)
     monster->battle_y = raw_y * scale / MODEL_FIXED_ONE;
     monster->battle_z = raw_z * scale / MODEL_FIXED_ONE;
     /* Where the outline's foot and middle came out, from the point placed. */
-    monster->battle_ox = (bounds.left + bounds.right) / 2 - 0xA0;
-    monster->battle_oy = bounds.bottom - 0x78;
+    monster->battle_ox = ((bounds.left + bounds.right) / 2 - 0xA0) * Models_Scale(monster->card) / 100;
+    monster->battle_oy = (bounds.bottom - 0x78) * Models_Scale(monster->card) / 100;
     say("card %d (natural %d) fits %dx%d on its battle card at %d/4096\n", monster->card, monster->natural,
         bounds.right - bounds.left, bounds.bottom - bounds.top, scale);
 }
@@ -1134,7 +1139,7 @@ static Monster *battle_monster(int side)
     if (id <= 0 || ((gDuel_adwCardStats[id - 1] >> 0x1A) & 0x1F) >= 0x14) {
         return NULL;
     }
-    return acquire(Cards_ModelId(id), (D_8009B178[side] & DUEL_CARD_FLAG_DEFENSE_POSITION) ? 1 : 0);
+    return acquire(Models_Look(id), (D_8009B178[side] & DUEL_CARD_FLAG_DEFENSE_POSITION) ? 1 : 0);
 }
 
 /* Whether a side's big card is up, settled and showing a monster. */
@@ -1240,6 +1245,9 @@ static int draw_battle(void)
         if (!monster) {
             continue;
         }
+        /* A mod's "yaw" for the card (pc/cards/models.h); battle_pose
+         * measures the body at whatever turn it is given. */
+        yaw = (yaw + Models_Yaw(monster->card)) & (MODEL_ANGLE_FULL_TURN - 1);
         battle_pose(monster, yaw);
         screen_to_world(cards[side]->field_30.h.field_30 + BATTLE_CARD_WIDTH / 2 - monster->battle_ox +
                             (side == 0 ? -BATTLE_BACK : BATTLE_BACK),
@@ -1252,7 +1260,7 @@ static int draw_battle(void)
         sort_monster(monster, table, at < 0 ? 0 : at);
         monster->fade = 0;
         if (!monster->stepped) {
-            func_800556E8(0);
+            step_slot(monster);
             monster->stepped = 1;
         }
         monster->slot = *slot;
@@ -1318,9 +1326,9 @@ static void draw_frame(void)
                 continue; /* empty, face down, or a magic or trap card */
             }
             /* A card a card mod added stands as the retail card it is a
-             * copy of: MODEL.MRG has the disc's monsters only. */
+             * copy of, unless a mod gave it a model of its own. */
             if (!tunable("test", 0)) {
-                id = Cards_ModelId(id);
+                id = Models_Look(id);
             }
             /* The record carries a stance of its own for a monster in
              * defence, which is the one the battle presentation would use. */

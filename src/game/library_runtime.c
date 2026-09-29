@@ -65,6 +65,7 @@
 #include "../psyq/libgs.h"
 #ifdef MEMORIES_PC
 #include "pc/cards/cards.h"
+#include "pc/cards/models.h"
 #endif
 
 /* The seven contiguous functions of the Library screen: the card-view state
@@ -162,6 +163,7 @@ void func_8002ACA4(u8 *state)
 #ifdef MEMORIES_PC
             /* A card past the disc's stands as its base's model, and a card
                a mod made a monster may have none to load. */
+            Models_SetSlotCard(0, id + 1);
             id = Cards_HasModel(id + 1) ? Cards_ModelId(id + 1) - 1 : -1;
             if (id >= 0 && ((gDuel_adwCardStats[id] >> 0x1A) & 0x1F) < 0x14) {
 #else

@@ -7,6 +7,9 @@
 #include "model_control_slot_animation.h"
 #include "model_effect_state.h"
 #include "func_800556E8.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/models.h"
+#endif
 
 /* Per-frame animation tick for a model slot. When the slot is active and
    has an animation loaded it takes the current animation's length and this
@@ -35,6 +38,10 @@ void func_800556E8(s32 index) {
         anim = m->field_BF5;
         length = m->field_750[anim].max << 4;
         speed = m->field_E0D * Model_GetFrameStep();
+#ifdef MEMORIES_PC
+        /* A mod's "speed" for the card (models.h). */
+        speed = Models_SlotStep(index, speed);
+#endif
         if (anim == 6) {
             lim = length - speed;
             if ((m->field_E16 == 0x3E && m->field_E06 >= lim) ||

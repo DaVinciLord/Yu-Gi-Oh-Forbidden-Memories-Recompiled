@@ -15,6 +15,7 @@
 #include "pc/debug/crash.h"
 #include "pc/debug/log.h"
 #include "pc/mods/mods.h"
+#include "pc/cards/models.h"
 #include "pc/guest/state.h"
 #include <fcntl.h>
 #include <stdio.h>
@@ -85,24 +86,36 @@ static int read_physical(int lba, u8 *out)
     return ok;
 }
 
+/* MODE2/Form1 data framing used by the port's callbacks and raw read modes,
+ * around user data that is already in place. EDC/ECC are not consumed by the
+ * software drive. */
+static void frame_sector(int lba, u8 *out)
+{
+    DslLOC loc;
+    memset(out, 0, USER_DATA);
+    memset(out + 1, 0xff, 10);
+    lba_to_loc(lba, &loc);
+    out[12] = loc.minute; out[13] = loc.second; out[14] = loc.sector;
+    out[15] = 2;
+    out[18] = out[22] = 0x08;
+    memset(out + USER_DATA + 2048, 0, RAW_SECTOR - USER_DATA - 2048);
+}
+
 static int read_raw(int lba, u8 *out)
 {
     int source;
+    /* A mod's model records, past the disc and the virtual files. */
+    if (Models_DiscSector(lba, out + USER_DATA)) {
+        frame_sector(lba, out);
+        disc_bytes_total += RAW_SECTOR;
+        return 1;
+    }
     if (Mods_DiscSource(lba, &source)) {
-        DslLOC loc;
         if (source >= 0) {
             if (!read_physical(source, out)) return 0;
         } else memset(out, 0, RAW_SECTOR);
         if (!Mods_DiscSector(lba, out + USER_DATA) && source < 0) return 0;
-        /* MODE2/Form1 data framing used by the port's callbacks and raw
-         * read modes. EDC/ECC are not consumed by the software drive. */
-        memset(out, 0, USER_DATA);
-        memset(out + 1, 0xff, 10);
-        lba_to_loc(lba, &loc);
-        out[12] = loc.minute; out[13] = loc.second; out[14] = loc.sector;
-        out[15] = 2;
-        out[18] = out[22] = 0x08;
-        memset(out + USER_DATA + 2048, 0, RAW_SECTOR - USER_DATA - 2048);
+        frame_sector(lba, out);
         if (source < 0) disc_bytes_total += RAW_SECTOR;
         return 1;
     }

@@ -602,6 +602,16 @@ int Mods_DiscFileInfo(int retail_lba, int *lba, unsigned *size)
     return 0;
 }
 
+int Mods_DiscEnd(void)
+{
+    int end = Memories_DiscSectorCount();
+    for (int i = 0; i < disc_file_count; i++) {
+        const DiscFile *file = &disc_files[i];
+        if (file->reserved && file->lba + file->reserved + 1 > end) end = file->lba + file->reserved + 1;
+    }
+    return end;
+}
+
 static int virtual_file(int lba)
 {
     if (!overrides_live) return -1;
@@ -1195,7 +1205,7 @@ static const char *const manifest_keys[] = {
     "id", "name", "version", "author", "description", "library", "enabled", "restart", "legacy_setting",
     "data", "textures", "cards", "audio", "min_api", "game", "requires", "after", "conflicts", "priority",
     "settings", "fusions", "equips", "rituals", "drops", "decks", "duelists", "text", "font",
-    "chest_overflow", "terrain_bonus", "trap_thresholds", "equip_bonus_default", "passwords", "starter",
+    "chest_overflow", "terrain_bonus", "trap_thresholds", "equip_bonus_default", "passwords", "starter", "models",
 };
 
 /* How many letters to add, remove or change to turn one word into the
@@ -1327,7 +1337,7 @@ static int read_manifest(Mod *mod, const char *directory, const char *origin)
          * read once, at startup. */
         static const char *const tables[] = {"fusions", "equips", "rituals", "drops", "decks", "duelists",
                                              "text", "font", "terrain_bonus", "trap_thresholds",
-                                             "chest_overflow", "passwords", "starter"};
+                                             "chest_overflow", "passwords", "starter", "models"};
         for (size_t t = 0; t < sizeof(tables) / sizeof(tables[0]); t++) {
             const JsonValue *value = Json_Member(root, tables[t]);
             /* "text": "text.txt" is one file named as a string. */

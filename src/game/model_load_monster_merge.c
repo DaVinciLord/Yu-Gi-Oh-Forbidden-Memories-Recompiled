@@ -8,6 +8,9 @@
 #include "file_transfer_steps.h"
 #define MODEL_SLOT_SETUP_EXPLICIT_TRANSFER_ARGS
 #include "model_slot_setup.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/models.h"
+#endif
 
 /* Starts the asynchronous transfer that fills one model slot with a monster
  * merge record, and records the slot's display properties while the request is
@@ -38,6 +41,9 @@ s32 Model_LoadMonsterMerge(s32 slot, s32 model, s32 p2, s32 p3, s32 p4,
     FileTransferDescriptor *transfer;
     s32 flags;
     s32 result;
+#ifdef MEMORIES_PC
+    int sector;
+#endif
 
     result = 0;
     flags = slot & 0x80;
@@ -65,6 +71,13 @@ s32 Model_LoadMonsterMerge(s32 slot, s32 model, s32 p2, s32 p3, s32 p4,
             D_800F2C40[slot].field_E14 = 0;
             return 0;
         }
+#ifdef MEMORIES_PC
+        /* A mod's record for the card this slot was set up for
+           (pc/cards/models.h), past the disc; it has no gap to skip. */
+        if (Models_SlotRecord(slot, model, &sector)) {
+            goto request;
+        }
+#endif
         if (model < 0 || model >= MODEL_MRG_ID_END
             || (model >= MODEL_MRG_FIRST_GAP_START
                 && model < MODEL_MRG_FIRST_GAP_END)
@@ -82,11 +95,21 @@ s32 Model_LoadMonsterMerge(s32 slot, s32 model, s32 p2, s32 p3, s32 p4,
             if (model >= MODEL_MRG_FIRST_GAP_END) {
                 model -= MODEL_MRG_GAP_SIZE;
             }
+#ifdef MEMORIES_PC
+            sector = model * MODEL_MRG_SECTOR_COUNT;
+        request:
+            transfer = File_TryRequestAsyncTransfer(
+                2, gFile_szModelMrgPath, sector,
+                MODEL_MRG_SECTOR_COUNT, func_80056D7C,
+                0, 0
+            );
+#else
             transfer = File_TryRequestAsyncTransfer(
                 2, gFile_szModelMrgPath, model * MODEL_MRG_SECTOR_COUNT,
                 MODEL_MRG_SECTOR_COUNT, func_80056D7C,
                 0, 0
             );
+#endif
             if (p2 >= 0) {
                 D_800F2C40[slot].field_DFA = p2;
             }

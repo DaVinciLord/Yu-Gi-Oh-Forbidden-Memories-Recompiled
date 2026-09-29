@@ -25,6 +25,7 @@
 #include "pc/rng.h"
 #include "pc/compat/posix.h"
 #include "game/card_constants.h"
+#include "models.h"
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -76,7 +77,7 @@ int Cards_FindIdentity(const char *identity)
 int Cards_ModelId(int id) { return Cards_Valid(id) && model_ids[id] ? model_ids[id] : Cards_BaseId(id); }
 int Cards_EffectId(int id) { return Cards_Valid(id) && effect_ids[id] ? effect_ids[id] : Cards_BaseId(id); }
 static int retail_monster(int id);
-int Cards_HasModel(int id) { return Cards_Valid(id) && retail_monster(Cards_ModelId(id)); }
+int Cards_HasModel(int id) { return Cards_Valid(id) && (retail_monster(Cards_ModelId(id)) || Models_HasRecord(id)); }
 int Cards_FrameColor(int id) { return Cards_Valid(id) ? frames[id] - 1 : -1; }
 int Cards_ExodiaPiece(int id)
 {
@@ -871,6 +872,8 @@ void Cards_Build(void)
      * them, so they have to exist by the time those are read. */
     Duelists_Build();
     Tables_Build();
+    /* A mod's 3D models for cards, new ones included (models.h). */
+    Models_Build();
     /* And so do the starter decks a new game may be dealt (starter.h). */
     Starter_Build();
 }

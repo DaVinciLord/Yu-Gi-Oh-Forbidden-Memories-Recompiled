@@ -22,6 +22,9 @@
 #define MODEL_HANDLER_OFFSET_ABSOLUTE
 #define MODEL_GRAPHICS_STATE_SCENE_BYTES
 #include "../types.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/models.h"
+#endif
 #include "../psyq/libgte.h"
 #include "../psyq/libgpu.h"
 #include "func_8004EB00.h"
@@ -875,6 +878,10 @@ void func_80050584(s32 arg0) {
                           && v < MODEL_MRG_SECOND_GAP_END) ||
                          v == MODEL_MRG_SINGLE_GAP_ID);
                 m1 = -1;
+#ifdef MEMORIES_PC
+                /* A random disc model, for no card. */
+                Models_SetSlotCard(arg0, 0);
+#endif
                 Model_LoadMonsterMerge(arg0 | 0x80, v, m1, m1, m1, m1, 0);
             }
         } else {

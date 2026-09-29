@@ -90,6 +90,7 @@
 #include "../unmatched.h"
 #ifdef MEMORIES_PC
 #include "pc/cards/cards.h"
+#include "pc/cards/models.h"
 #endif
 
 #define H(p, o) (*(u16 *)((u8 *)(p) + (o)))
@@ -498,6 +499,9 @@ void DuelScene_UpdateBattle(void)
             /* The 3D models are the base cards': a card past the disc's has
                none, and its id could be MODEL_SPECIAL_BATTLE_ID (Exodia). */
             models[0].model_id = Cards_ModelId((s16)H(left, 0xC));
+            /* A mod may give either card its own record (models.h). */
+            Models_SetSlotCard(0, (s16)H(left, 0xC));
+            Models_SetSlotCard(1, right->card_id);
 #else
             models[0].model_id = H(left, 0xC);
 #endif

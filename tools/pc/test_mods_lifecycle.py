@@ -12,7 +12,8 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "tmp/pc/mods-lifecycle"
 SOURCES = ["src/pc/compat/fs.c", "tests/pc/mods_lifecycle_test.c", "src/pc/mods/mods.c", "src/pc/mods/events.c", "src/pc/mods/hooks.c",
            "src/pc/mods/manager.c", "src/pc/mods/mod_libc.c", "src/pc/mods/object_loader.c", "src/pc/guest/branch_thunks.c",
-           "src/pc/mods/json.c", "src/pc/platform/settings.c", "src/pc/platform/paths.c"]
+           "src/pc/mods/json.c", "src/pc/platform/settings.c", "src/pc/platform/paths.c",
+           "tests/pc/models_stubs.c"]
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)

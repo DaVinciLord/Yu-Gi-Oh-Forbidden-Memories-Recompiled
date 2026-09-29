@@ -21,6 +21,7 @@
  * -1 when the mod declares no such setting (a problem; the entry is used).
  * `part` may be NULL. */
 #include <stddef.h>
+#include <stdint.h>
 int TexturePack_Load(const char *directory, unsigned rank, int (*part)(const char *setting, void *context),
                      void *context, char *problems, size_t problems_size);
 void TexturePack_Unload(void);
@@ -38,6 +39,12 @@ void TexturePack_Service(void);
  * TEXTURE_MADE_BASE up); the same picture twice is kept once. Made images
  * are kept across the packs' loads and unloads. 1 added, 0 not. */
 int TexturePack_AddMade(const void *pixels, int words, int rows, int bpp, const void *clut, int clut_entries,
+                        const char *file, int x, int y, int w, int h);
+
+/* The same for words the disc (or a mod's virtual sectors) delivers, known
+ * by their disc byte offsets rather than by their bytes: a mod model's
+ * texture page (pc/cards/models.c), its palette at `clut_offset`. */
+int TexturePack_AddDisc(uint32_t offset, int words, int rows, int bpp, uint32_t clut_offset, int clut_entries,
                         const char *file, int x, int y, int w, int h);
 
 /* For a renderer that samples the pack's images itself, at their own

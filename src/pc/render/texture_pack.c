@@ -851,6 +851,44 @@ int TexturePack_AddMade(const void *pixels, int words, int rows, int bpp, const 
     return 1;
 }
 
+int TexturePack_AddDisc(uint32_t offset, int words, int rows, int bpp, uint32_t clut_offset, int clut_entries,
+                        const char *file, int x, int y, int w, int h)
+{
+    Entry *more, entry;
+    int i;
+    if (!file || !offset || words < 1 || words > SOFT_GPU_WIDTH || rows < 1 || rows > SOFT_GPU_HEIGHT ||
+        (bpp != 4 && bpp != 8 && bpp != 16) || clut_entries < 0 || (clut_entries && !clut_offset) || x < 0 ||
+        y < 0 || w < 1 || h < 1 || entry_count >= 65535)
+        return 0;
+    for (i = 0; i < made_count; i++) {
+        if (made[i].offset == offset && made[i].clut_offset == clut_offset && made[i].bpp == bpp) return 1;
+    }
+    memset(&entry, 0, sizeof(entry));
+    entry.offset = offset;
+    entry.clut_offset = clut_offset;
+    entry.words = words;
+    entry.rows = rows;
+    entry.bpp = bpp;
+    entry.stride = (uint32_t)words;
+    entry.clut_entries = clut_entries;
+    entry.crop_width = words * per_word(bpp);
+    entry.absolute = 1;
+    entry.made = 1;   /* kept across the packs' loads, and cut from its PNG */
+    entry.source_x = x;
+    entry.source_y = y;
+    entry.source_w = w;
+    entry.source_h = h;
+    entry.position = made_count;
+    more = realloc(made, (size_t)(made_count + 1) * sizeof(*made));
+    if (!more) return 0;
+    made = more;
+    entry.file = strdup(file);
+    if (!entry.file) return 0;
+    made[made_count++] = entry;
+    if (!add_made(made_count - 1) || !install()) return 0;
+    return 1;
+}
+
 int TexturePack_Load(const char *from, unsigned rank, int (*part)(const char *setting, void *context), void *context,
                      char *problems, size_t problems_size)
 {

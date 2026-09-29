@@ -297,7 +297,7 @@ if(BUILD_TESTING)
     # mod_libc.c lends mods the indirect-branch thunks (src/pc/guest/branch_thunks.c).
     add_executable(memories_mods_test tests/pc/mods_test.c src/pc/mods/mods.c src/pc/mods/events.c src/pc/mods/hooks.c src/pc/mods/manager.c src/pc/mods/mod_libc.c
         src/pc/mods/object_loader.c src/pc/mods/json.c src/pc/guest/branch_thunks.c
-        src/pc/platform/paths.c src/pc/platform/settings.c)
+        src/pc/platform/paths.c src/pc/platform/settings.c tests/pc/models_stubs.c)
     target_include_directories(memories_mods_test PRIVATE src)
     # The mod C library hands mods the maths functions and reads the monotonic
     # clock, which on Windows (clock_gettime) comes from the threads library.
@@ -309,7 +309,7 @@ if(BUILD_TESTING)
     add_test(NAME pc_mods COMMAND memories_mods_test)
     set(MOD_TEST_SOURCES src/pc/mods/mods.c src/pc/mods/manager.c src/pc/mods/events.c src/pc/mods/hooks.c
         src/pc/mods/mod_libc.c src/pc/mods/object_loader.c src/pc/mods/json.c src/pc/guest/branch_thunks.c
-        src/pc/platform/paths.c src/pc/platform/settings.c)
+        src/pc/platform/paths.c src/pc/platform/settings.c tests/pc/models_stubs.c)
     add_executable(memories_mods_manager_test tests/pc/mods_manager_test.c ${MOD_TEST_SOURCES})
     target_include_directories(memories_mods_manager_test PRIVATE src)
     target_link_libraries(memories_mods_manager_test PRIVATE m Threads::Threads)
@@ -598,6 +598,12 @@ if(Python3_Interpreter_FOUND)
         add_test(NAME pc_fm_editor
             COMMAND "${Python3_EXECUTABLE}" -m unittest discover -s tools/pc/fm_editor/tests -t tools/pc
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+        # A mesh made into a model record on a disc model's skeleton
+        # (tools/pc/model_import.py); skipped without the disc.
+        add_test(NAME pc_model_import
+            COMMAND "${Python3_EXECUTABLE}" tools/pc/test_model_import.py
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+        set_tests_properties(pc_model_import PROPERTIES SKIP_RETURN_CODE 77)
         # Native units that name files reach compat/fs.h (notes/pc-build.md).
         add_test(NAME pc_utf8_paths
             COMMAND "${Python3_EXECUTABLE}" tools/pc/check_utf8_paths.py

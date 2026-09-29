@@ -4,6 +4,7 @@
 #include "pc/platform/settings.h"
 #include "pc/platform/paths.h"
 #include "pc/mods/mods.h"
+#include "pc/cards/models.h"
 #include "pc/mods/events.h"
 #include "image.h"
 #include "pc/audio/spu.h"
@@ -395,6 +396,7 @@ static void subsystems(MemoriesState *state)
         SoftGpu_PictureFromVram();
     }
     Memories_StateChunk(state, "gte", gte, 1);
+    Models_State(state);
     Spu_State(state);
     LibSpu_State(state);
     LibDs_State(state);

@@ -58,6 +58,7 @@ editors write, is fine):
 | `textures` | a directory inside the mod holding a texture pack, below |
 | `cards` | cards the mod adds after the disc's 722, and changes to the disc's own cards, below |
 | `audio` | songs, XA clips and sound effects the mod replaces with WAV or Ogg files, below |
+| `models` | a card's 3D model from a record in the mod, and its size, tint and animation speed, below |
 | `fusions`, `equips`, `rituals`, `drops`, `decks` | changes to the duel's rule tables, below |
 | `chest_overflow` | how many copies of a card the chest keeps, and the starchips each one past that is worth, below |
 | `terrain_bonus` | what each terrain gives each monster type, in place of the disc's +500 and -500, below |
@@ -339,6 +340,28 @@ place: the same keys, without `count`, and no new id.
 
 The name plate on the card's picture is set from the new name, as for an
 added card, unless the entry has a `title` PNG.
+
+## Models: a card's 3D model
+
+A `models` list gives a card a 3D model of its own and draws its model
+turned, sized, coloured or animated its own way, no code needed:
+
+```json
+"models": [
+    { "card": "Mushroom Man", "file": "models/pot.bin", "hd": "models/pot-hd.png",
+      "yaw": 180, "scale": 120, "tint": "#FFE0E0", "speed": 150 }
+]
+```
+
+The battle's 3D fight, the Library's model view and the 3D Monsters mod
+all use it, for disc cards and added cards alike; it needs a restart.
+`tools/pc/model_import.py` makes a record from a model of your own (an
+OBJ, or an FBX or glTF through Blender and `tools/pc/model_prepare.py`) on a
+disc monster's skeleton and animations, with HD textures for Internal 2x
+and up; `tools/pc/model_record.py` extracts a card's record from the disc
+and recolours it. [The model tutorial](model-tutorial.md) goes through it
+step by step, and [model replacement](model-replacement.md) has every key,
+the record's layout and how the port does it.
 
 ## Audio: songs, voices and sounds from files
 
