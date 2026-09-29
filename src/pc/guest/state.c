@@ -29,7 +29,7 @@
 #include "pc/compat/posix.h"
 #ifdef _WIN32
 #include "pc/platform/win32.h"
-#else
+#elif !defined(__ANDROID__)
 #include <ucontext.h>
 #endif
 
@@ -85,10 +85,16 @@ struct MemoriesState {
 
 static Region *regions;
 static unsigned region_count;
-#ifdef _WIN32
-/* Windows has no ucontext. A context is the stack pointer of a suspended
+#if defined(_WIN32) || defined(__ANDROID__)
+/* Windows has no ucontext, and neither has Android's C library (bionic).
+ * A context there is the stack pointer of a suspended
  * Memories_ContextSwitch (state_i386.S), which keeps the callee-saved
- * registers on that stack. The thread's stack bounds and exception-handler
+ * registers on that stack. */
+#define ASM_CONTEXT_SWITCH 1
+void Memories_ContextSwitch(uint32_t *from_esp, const uint32_t *to_esp);
+static uint32_t service_context, game_context;
+#ifdef _WIN32
+/* On Windows the thread's stack bounds and exception-handler
  * chain live in its TEB and must follow the stack, as fibers do: exceptions
  * raised on a stack outside those bounds cannot be dispatched. Bounds are
  * the TEB's first three words (handler chain, stack base, stack limit) and
@@ -103,8 +109,6 @@ static unsigned region_count;
  * of the stack instead leaves no room to deliver the exception, and the
  * process just ends. */
 #define GUARD_ROOM 0x10000u
-void Memories_ContextSwitch(uint32_t *from_esp, const uint32_t *to_esp);
-static uint32_t service_context, game_context;
 static uint32_t process_bounds[4];
 static const uint32_t game_bounds[4] = {0xffffffffu, STACK_TOP, STACK_BASE, /* no handlers */
                                         STACK_BASE + GUARD_ROOM + 0x1000u};
@@ -122,6 +126,11 @@ static void set_stack_bounds(const uint32_t *bounds)
                      : "r"(bounds[0]), "r"(bounds[1]), "r"(bounds[2]), "r"(bounds[3])
                      : "memory");
 }
+#else
+/* Elsewhere nothing but the stack pointer says which stack a thread is on. */
+#define save_stack_bounds(bounds) ((void)0)
+#define set_stack_bounds(bounds) ((void)0)
+#endif
 
 static void leave_game_stack(void)
 {
@@ -564,7 +573,7 @@ static void apply(void)
     }
     fprintf(stderr, "memories-pc: state loaded\n");
     hold_signals(0);
-#ifdef _WIN32
+#ifdef ASM_CONTEXT_SWITCH
     set_stack_bounds(game_bounds);
     {
         /* Into the game through a context switch, as its first run went, so
@@ -882,7 +891,7 @@ static int load(const char *path)
     pending_image = image;
     pending_size = (size_t)length;
     /* Leave the game stack; the service context applies the state. */
-#ifdef _WIN32
+#ifdef ASM_CONTEXT_SWITCH
     leave_game_stack();
 #else
     swapcontext(&game_context, &service_context);
@@ -982,7 +991,7 @@ void Memories_StatePoint(unsigned presented_frames)
 static void run_game(void)
 {
     game_result = game_entry();
-#ifdef _WIN32
+#ifdef ASM_CONTEXT_SWITCH
     leave_game_stack(); /* what uc_link does on Linux */
 #endif
 }
@@ -1025,7 +1034,7 @@ int Memories_StateRunGame(int (*entry)(void))
         }
     }
     game_entry = entry;
-#ifdef _WIN32
+#ifdef ASM_CONTEXT_SWITCH
     {
         /* What Memories_ContextSwitch pops: EDI ESI EBX EBP, then the return
          * into run_game, whose own return address is never used. */
@@ -1034,7 +1043,9 @@ int Memories_StateRunGame(int (*entry)(void))
         top[4] = (uint32_t)(uintptr_t)run_game;
         top[5] = 0;
         game_context = (uint32_t)(uintptr_t)top;
+#ifdef _WIN32
         Win32_GuardStack(STACK_BASE, GUARD_ROOM);
+#endif
         save_stack_bounds(process_bounds);
         set_stack_bounds(game_bounds);
         /* Every load request re-enters here, on the process stack. */
@@ -1049,8 +1060,8 @@ int Memories_StateRunGame(int (*entry)(void))
     /* Every load request re-enters here, on the process stack. */
     swapcontext(&service_context, &game_context);
 #endif
-    /* On Windows apply returns once the game leaves its stack again: for
-     * the next load, or at its end (run_game). */
+    /* With the asm switch (Windows, Android) apply returns once the game
+     * leaves its stack again: for the next load, or at its end (run_game). */
     while (pending_image) {
         apply();
     }
