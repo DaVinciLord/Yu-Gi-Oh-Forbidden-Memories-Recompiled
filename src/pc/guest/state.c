@@ -33,7 +33,7 @@
 #include "pc/compat/posix.h"
 #ifdef _WIN32
 #include "pc/platform/win32.h"
-#else
+#elif !defined(__ANDROID__)
 #include <ucontext.h>
 #endif
 
@@ -88,10 +88,16 @@ struct MemoriesState {
 
 static Region *regions;
 static unsigned region_count;
+#if defined(_WIN32) || defined(__ANDROID__)
+/* Windows has no ucontext, and neither has Android's C library (bionic).
+ * A context there is the stack pointer of a suspended
+ * Memories_ContextSwitch (state_i386.S, state_x86_64.S), which keeps the
+ * callee-saved registers on that stack. */
+#define ASM_CONTEXT_SWITCH 1
+void Memories_ContextSwitch(uintptr_t *from_sp, const uintptr_t *to_sp);
+static uintptr_t service_context, game_context;
 #ifdef _WIN32
-/* Windows has no ucontext. A context is the stack pointer of a suspended
- * Memories_ContextSwitch (state_i386.S), which keeps the callee-saved
- * registers on that stack. The thread's stack bounds and exception-handler
+/* On Windows the thread's stack bounds and exception-handler
  * chain live in its TEB and must follow the stack, as fibers do: exceptions
  * raised on a stack outside those bounds cannot be dispatched. Bounds are
  * the TEB's first three words (handler chain, stack base, stack limit) and
@@ -111,8 +117,6 @@ static unsigned region_count;
  * %gs, whose stack base, limit and DeallocationStack are at 0x08, 0x10 and
  * 0x1478. x86-64 exceptions are dispatched from unwind tables, not a
  * handler chain, so word 0 is not switched. */
-void Memories_ContextSwitch(uintptr_t *from_sp, const uintptr_t *to_sp);
-static uintptr_t service_context, game_context;
 static uintptr_t process_bounds[4];
 static const uintptr_t game_bounds[4] = {0, STACK_TOP, STACK_BASE, STACK_BASE + GUARD_ROOM + 0x1000u};
 
@@ -130,7 +134,32 @@ static void set_stack_bounds(const uintptr_t *bounds)
                      : "r"(bounds[1]), "r"(bounds[2]), "r"(bounds[3])
                      : "memory");
 }
+#else
+static uint32_t process_bounds[4];
+static const uint32_t game_bounds[4] = {0xffffffffu, STACK_TOP, STACK_BASE, /* no handlers */
+                                        STACK_BASE + GUARD_ROOM + 0x1000u};
 
+static void save_stack_bounds(uint32_t *bounds)
+{
+    __asm__ volatile("movl %%fs:0, %0\n\tmovl %%fs:4, %1\n\tmovl %%fs:8, %2\n\tmovl %%fs:0xe0c, %3"
+                     : "=r"(bounds[0]), "=r"(bounds[1]), "=r"(bounds[2]), "=r"(bounds[3]));
+}
+
+static void set_stack_bounds(const uint32_t *bounds)
+{
+    __asm__ volatile("movl %0, %%fs:0\n\tmovl %1, %%fs:4\n\tmovl %2, %%fs:8\n\tmovl %3, %%fs:0xe0c"
+                     :
+                     : "r"(bounds[0]), "r"(bounds[1]), "r"(bounds[2]), "r"(bounds[3])
+                     : "memory");
+}
+#endif
+#else
+/* Elsewhere nothing but the stack pointer says which stack a thread is on. */
+#define save_stack_bounds(bounds) ((void)0)
+#define set_stack_bounds(bounds) ((void)0)
+#endif
+
+#if defined(__x86_64__)
 /* setjmp_x86_64.S: where the registers for a game jmp_buf are kept. The
  * game's buffer (the Psy-Q int[12] at 0x800E9DC0) is too small for them, so
  * each buffer address gets a host slot of 240 bytes. The game uses one. */
@@ -151,26 +180,6 @@ void *Memories_JumpSlot(void *buffer)
     }
     jump_slots[i].buffer = buffer;
     return jump_slots[i].words;
-}
-#else
-void Memories_ContextSwitch(uint32_t *from_esp, const uint32_t *to_esp);
-static uint32_t service_context, game_context;
-static uint32_t process_bounds[4];
-static const uint32_t game_bounds[4] = {0xffffffffu, STACK_TOP, STACK_BASE, /* no handlers */
-                                        STACK_BASE + GUARD_ROOM + 0x1000u};
-
-static void save_stack_bounds(uint32_t *bounds)
-{
-    __asm__ volatile("movl %%fs:0, %0\n\tmovl %%fs:4, %1\n\tmovl %%fs:8, %2\n\tmovl %%fs:0xe0c, %3"
-                     : "=r"(bounds[0]), "=r"(bounds[1]), "=r"(bounds[2]), "=r"(bounds[3]));
-}
-
-static void set_stack_bounds(const uint32_t *bounds)
-{
-    __asm__ volatile("movl %0, %%fs:0\n\tmovl %1, %%fs:4\n\tmovl %2, %%fs:8\n\tmovl %3, %%fs:0xe0c"
-                     :
-                     : "r"(bounds[0]), "r"(bounds[1]), "r"(bounds[2]), "r"(bounds[3])
-                     : "memory");
 }
 #endif
 
@@ -720,7 +729,7 @@ static void apply(void)
     fprintf(stderr, "memories-pc: state loaded\n");
     const int value = LibEtc_StateResumed(); /* the fields VSync(0) reports, as for the game that saved it */
     hold_signals(0);
-#ifdef _WIN32
+#ifdef ASM_CONTEXT_SWITCH
     set_stack_bounds(game_bounds);
     {
         /* Into the game through a context switch, as its first run went, so
@@ -1044,7 +1053,7 @@ static int load(const char *path)
     pending_image = image;
     pending_size = (size_t)length;
     /* Leave the game stack; the service context applies the state. */
-#ifdef _WIN32
+#ifdef ASM_CONTEXT_SWITCH
     leave_game_stack();
 #else
     swapcontext(&game_context, &service_context);
@@ -1178,7 +1187,7 @@ uint32_t Memories_StateBuildId(void)
 static void run_game(void)
 {
     game_result = game_entry();
-#ifdef _WIN32
+#ifdef ASM_CONTEXT_SWITCH
     leave_game_stack(); /* what uc_link does on Linux */
 #endif
 }
@@ -1231,10 +1240,12 @@ int Memories_StateRunGame(int (*entry)(void))
         }
     }
     game_entry = entry;
-#ifdef _WIN32
+#ifdef ASM_CONTEXT_SWITCH
     {
         game_context = switch_frame(STACK_TOP, run_game);
+#ifdef _WIN32
         Win32_GuardStack(STACK_BASE, GUARD_ROOM);
+#endif
         save_stack_bounds(process_bounds);
         set_stack_bounds(game_bounds);
         /* Every load request re-enters here, on the process stack. */
@@ -1249,8 +1260,8 @@ int Memories_StateRunGame(int (*entry)(void))
     /* Every load request re-enters here, on the process stack. */
     swapcontext(&service_context, &game_context);
 #endif
-    /* On Windows apply returns once the game leaves its stack again: for
-     * the next load, or at its end (run_game). */
+    /* With the asm switch (Windows, Android) apply returns once the game
+     * leaves its stack again: for the next load, or at its end (run_game). */
     while (pending_image) {
         apply();
     }

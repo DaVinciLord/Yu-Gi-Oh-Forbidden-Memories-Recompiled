@@ -2830,7 +2830,9 @@ What differs from Linux, and why:
   any other access there through guest RAM (each site reported once).
 - **Stacks.** The game stack is at `0xB0000000`, as on every system (32-bit
   Windows loads system DLLs around `0x70000000`; the mods keep `0x90000000`). `state.c` switches stacks with
-  `Memories_ContextSwitch` (`state_i386.S`) and moves the TEB's stack bounds,
+  `Memories_ContextSwitch` (`state_i386.S`; Android uses it too, since bionic
+  has no ucontext functions, while Linux keeps `swapcontext`) and moves the
+  TEB's stack bounds,
   `DeallocationStack` and exception chain with it, as fibers do. A guard
   page 64 KiB above the game stack's bottom, below `DeallocationStack` so
   that Windows and Wine take it for a plain guard page and not stack growth,

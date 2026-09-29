@@ -51,11 +51,13 @@ SYMBOL(Memories_StateReturn):
     ret
     END(Memories_StateReturn)
 
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__ANDROID__)
 /* void Memories_ContextSwitch(uint32_t *from_esp, const uint32_t *to_esp):
- * the ucontext stand-in (state.c). Keeps the callee-saved registers on the
- * stack being left and resumes the one whose stack pointer `to_esp` holds. */
+ * the ucontext stand-in (state.c) where the C library has none (Windows,
+ * Android's bionic). Keeps the callee-saved registers on the stack being
+ * left and resumes the one whose stack pointer `to_esp` holds. */
     .globl SYMBOL(Memories_ContextSwitch)
+    FUNCTION(Memories_ContextSwitch)
 SYMBOL(Memories_ContextSwitch):
     movl 4(%esp), %eax
     movl 8(%esp), %edx
@@ -70,6 +72,8 @@ SYMBOL(Memories_ContextSwitch):
     popl %ebx
     popl %ebp
     ret
-#else
+    END(Memories_ContextSwitch)
+#endif
+#ifndef _WIN32
     .section .note.GNU-stack, "", @progbits
 #endif
