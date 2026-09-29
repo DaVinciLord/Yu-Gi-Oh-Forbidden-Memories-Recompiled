@@ -100,6 +100,11 @@ static int window_shot_pending;
 static void update_menu_scale(int window_h)
 {
     int wanted = Settings_Get(SET_MENU_SCALE);
+#ifdef SDL_PLATFORM_ANDROID
+    /* A phone's pixels are small and the menu is tapped: Automatic is the
+     * largest size the window height allows. */
+    if (!wanted) wanted = window_h >= 900 ? 3 : window_h >= 600 ? 2 : 1;
+#endif
     Menu_SetScale(wanted ? wanted : Menu_AutoScale(window_h));
 }
 static void relayout(void);
@@ -715,7 +720,11 @@ static void block_signals(sigset_t *previous)
 static void restore_signals(const sigset_t *previous) { pthread_sigmask(SIG_SETMASK, previous, NULL); }
 
 int Platform_Scale(void) { return scale; }
+#ifdef SDL_PLATFORM_ANDROID
+int Platform_HasWindowModes(void) { return 0; } /* the whole screen, always (android.c) */
+#else
 int Platform_HasWindowModes(void) { return 1; }
+#endif
 
 void Platform_ApplyDisplaySettings(void)
 {
@@ -1533,7 +1542,8 @@ static void pump(void)
             /* Alt+Enter (either Enter), beside the Fullscreen binding. The
              * press stops here, so the Enter under Alt never reaches the pad
              * as Start; Alt itself is a reserved modifier (controls.c). */
-            if (down && (key == SDLK_RETURN || key == SDLK_KP_ENTER) && (event.key.mod & SDL_KMOD_ALT)) {
+            if (down && (key == SDLK_RETURN || key == SDLK_KP_ENTER) && (event.key.mod & SDL_KMOD_ALT) &&
+                Platform_HasWindowModes()) {
                 int on = covers_screen();
                 Settings_Set(SET_FULLSCREEN, !on);
                 if (on) Settings_Set(SET_BORDERLESS, 0);
@@ -1557,7 +1567,7 @@ static void pump(void)
             }
             /* Esc leaves fullscreen first, then borderless; in a window it is
              * only the Exit game control's default key. */
-            if (down && key == SDLK_ESCAPE && covers_screen()) {
+            if (down && key == SDLK_ESCAPE && covers_screen() && Platform_HasWindowModes()) {
                 Settings_Set(Settings_Get(SET_FULLSCREEN) ? SET_FULLSCREEN : SET_BORDERLESS, 0);
                 Settings_Save();
                 Platform_ApplyDisplaySettings();
@@ -1774,6 +1784,12 @@ int Platform_Open(const char *title)
         LOG(LOG_WINDOW, "SDL fallback renderer %s, video %s", SDL_GetRendererName(renderer), SDL_GetCurrentVideoDriver());
     }
     Menu_Init();
+#ifdef SDL_PLATFORM_ANDROID
+    /* One window, always the whole screen, no update check (android.c):
+     * the rows for a second window, the window's size and mode, and the
+     * update check are dimmed. */
+    Menu_SetPlatformItems(0, 0, 0);
+#endif
     apply_display_settings();
     menu_visible = !covers_screen() || Settings_Get(SET_SHOW_MENU_FULLSCREEN);
     Menu_SetVisible(menu_visible);
