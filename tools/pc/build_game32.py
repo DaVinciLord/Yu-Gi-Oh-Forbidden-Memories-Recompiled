@@ -684,6 +684,8 @@ def write_sdk(build):
     sdk = f"{build}/sdk"
     for header in glob.glob("src/**/*.h", recursive=True):
         relative = os.path.relpath(header, "src")
+        if relative.startswith(os.path.join("pc", "compat", "android")):
+            continue   # the Android build's own stand-ins for system headers, not the game's
         if relative.startswith(os.path.join("pc", "mods", "sdk")):
             relative = os.path.join("libc", os.path.relpath(header, "src/pc/mods/sdk"))
         copy_if_changed(header, os.path.join(sdk, "include", relative))
