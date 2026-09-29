@@ -1522,6 +1522,7 @@ static const unsigned char *override_record, *override_plate;
 
 void Cards_OverrideArt(int id, const unsigned char *record, const unsigned char *plate)
 {
+    override_fired = 0;
     override_id = id;
     override_record = record;
     override_plate = plate;

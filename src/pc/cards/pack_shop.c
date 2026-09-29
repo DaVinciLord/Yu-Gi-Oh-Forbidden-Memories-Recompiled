@@ -1359,6 +1359,7 @@ static void leave_to_digits(void)
 
 static void quit_screen(void)
 {
+    Cards_OverrideArt(0, NULL, NULL);
     SD_SEPlayFull((u32)sound(PACK_SOUND_BACK));
     SD_BGMFadeOut();
     Fade_WaitOut();
@@ -1604,6 +1605,7 @@ static void update_leave(void)
 {
     int i;
     if (card_busy()) return;
+    Cards_OverrideArt(0, NULL, NULL);
     s.open = 0;
     s.from_password = 0;
     set_cursor_shown(1);
@@ -1695,6 +1697,9 @@ static void check_passwords(void)
 void PackShop_Enter(void)
 {
     if (!PackShop_Available()) return;
+    /* A pack's picture armed for a load the screen never saw (a state
+       loaded, a jump to the title) is not the next Magic card's. */
+    Cards_OverrideArt(0, NULL, NULL);
     s.open = 0;
     s.card_phase = CARD_IDLE;
     own_progress();
@@ -1791,12 +1796,21 @@ void PackShop_State(MemoriesState *state)
     if (!Packs_Count()) return;
     if (Memories_StateLoading(state)) {
         Screen before = s;
+        Cards_OverrideArt(0, NULL, NULL);   /* this session's, not the state's */
         s.open = 0;   /* a state without the chunk: the packs closed */
         if (Memories_StateChunk(state, "pack-shop", fields, 3)) {
             if (s.version != STATE_VERSION || size != ARENA_SIZE) {
                 s = before;
                 s.open = 0;
                 return;
+            }
+            /* Saved while a pack's picture was loading: the load goes on
+               after this one, and is the pack's again. */
+            if (s.open && s.card_phase == CARD_WAITING && !s.card_goal && s.card_pack_art >= 0 &&
+                s.card_pack_art < Packs_Count()) {
+                build_art();
+                if (art_records[s.card_pack_art]) Cards_OverrideArt(s.card_cover, art_records[s.card_pack_art], NULL);
+                else if (plates[s.card_pack_art]) Cards_OverrideArt(s.card_cover, NULL, plates[s.card_pack_art]);
             }
             if (base != (uint32_t)(uintptr_t)s.arena) {
                 LOG(LOG_MODS, "packs: the screen's text moved from %08X to %08X since the state was saved",

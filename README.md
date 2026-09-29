@@ -85,7 +85,7 @@ _Generated from `config/slus_01411/functions.csv` and `config/slus_01411/overlay
 ## Docs
 
 [Modding](notes/modding.md) · [More cards](notes/more-cards.md) · [Fusion helper](notes/fusion-helper.md) ·
-[Card drops](notes/card-drops.md) · [Translations](notes/translation.md) · [Updates](notes/updates.md) · [Setup](notes/setup.md) · [Build](notes/build.md) ·
+[Card drops](notes/card-drops.md) · [Card packs](notes/card-packs.md) · [Translations](notes/translation.md) · [Updates](notes/updates.md) · [Setup](notes/setup.md) · [Build](notes/build.md) ·
 [Releases](notes/pc-release.md)
 
 ## Community

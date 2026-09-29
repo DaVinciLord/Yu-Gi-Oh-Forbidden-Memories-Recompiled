@@ -166,7 +166,7 @@ void Cards_PatchArtRecord(int id, unsigned char *record);
  * palette and plate (the bytes before the thumbnail), or, with `record`
  * NULL, `plate` (CARD_TITLE_BYTES) over the card's own plate. Once. Whether
  * the last record loaded was so changed, asked once (HD text then leaves
- * its title alone). */
+ * its title alone). An id of 0 disarms it. */
 void Cards_OverrideArt(int id, const unsigned char *record, const unsigned char *plate);
 int Cards_ArtOverridden(void);
 void Cards_PatchThumbnail(int id, unsigned char *block);

@@ -212,8 +212,10 @@ load gives the pack's own picture — the PNG made the way a mod card's art is
 made (`CardArt_FromImage`), with the pack's name set on the plate as a mod
 card's name is (`CardArt_TitleFromName`), and drawn from the PNG itself above
 the console's resolution (`TexturePack_AddMade`) — or, with no `image`, its
-cover card's art with the pack's name on the plate. The override is armed for
-one load at a time (`Cards_OverrideArt`); HD text leaves that plate as it is
+cover card's art with the pack's name on the plate (without a serif font to
+set the name in, the cover card's own plate stays). The override is armed for
+one load at a time (`Cards_OverrideArt`) and disarmed whenever the screen
+opens or closes and when a state loads; HD text leaves that plate as it is
 rather than setting the Magic card's name over it. A picture larger than the
 card's art area, or one of its own shape, would need a sprite and VRAM of its
 own and is not built.
