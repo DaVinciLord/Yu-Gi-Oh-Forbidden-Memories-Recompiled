@@ -169,6 +169,31 @@ class GuiTest(unittest.TestCase):
         preview.close()
         self.assertIsNone(app.text_preview)
 
+    def test_preview_cancels_pending_refresh(self):
+        app = self.app
+        app.show_text_preview()
+        preview = app.text_preview
+        preview.later()
+        pending = preview.pending
+        self.assertIn(pending, app.tk.call("after", "info"))
+        # Changing a preview option redraws immediately, while a typing
+        # refresh may still be scheduled.
+        preview.refresh()
+        self.assertNotIn(pending, app.tk.call("after", "info"))
+        preview.later()
+        pending = preview.pending
+        preview.close()
+        self.assertNotIn(pending, app.tk.call("after", "info"))
+        self.assertIsNone(app.text_preview)
+        # Tk destroys child windows directly when the editor closes.
+        app.show_text_preview()
+        preview = app.text_preview
+        preview.later()
+        pending = preview.pending
+        preview.destroy()
+        self.assertNotIn(pending, app.tk.call("after", "info"))
+        self.assertIsNone(app.text_preview)
+
     def test_tabs_fill(self):
         app = self.app
         for tab in app.tabs:

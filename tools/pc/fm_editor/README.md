@@ -37,7 +37,9 @@ The window has a tab per table:
 made; the port's player mods are in `Documents\My Games\YFM Re-Decomp\mods`).
 Enable the mod in the game under **Game > Mods** and restart. **File > Open
 mod folder** opens a mod over retail. Save refuses nothing, but lists what
-the loader would refuse first.
+the loader would refuse first. **Save as** copies the mod's assets too,
+replacing matching files when overwriting another mod. Its destination may
+be inside the source mod; the destination itself is excluded from the copy.
 
 **View > Dark mode** switches the window, its dialogs and the text boxes,
 lists and menus to a dark look at once, and back (no restart); the editor
