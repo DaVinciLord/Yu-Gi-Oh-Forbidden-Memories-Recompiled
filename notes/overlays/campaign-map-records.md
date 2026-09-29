@@ -152,3 +152,13 @@ The following aligned 80-byte live-state prefix is now C-owned as well;
 definitions and the nonzero boundary word retained at `0x80169618`.
 That later mapping marks `D_801695C8` and the other state exports defined in
 the project-owned build map rather than leaving them on the raw-tail path.
+
+## The PC build reads the delivered bytes
+
+The initializer above is compiled for the console build only. Under
+`MEMORIES_PC` the table is a tentative definition: the port's build pins it
+to `0x801691A8`, where the overworld package's first six sectors put the
+module image, so the native code reads the disc's bytes (or a mod's patch of
+them) instead of a host copy. Without a mod the map's frames are unchanged,
+pixel for pixel. The FM Editor's Map tab writes such patches, at
+`WA_MRG.MRG` `0xFEC800 + 0x11A8` and `0x103B800 + 0x11A8` (both packages).
