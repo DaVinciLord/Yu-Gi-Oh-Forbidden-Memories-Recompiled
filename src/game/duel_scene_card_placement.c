@@ -437,9 +437,18 @@ request_combination:
                         /* A mod's bonus past Megamorph's 1000 climbs in
                            about the frames 1000 takes, not 31 a frame
                            (+9999 took five seconds). */
-                        if ((s16)PLACEMENT_TY(object) > 1000)
-                            PLACEMENT_TX(object) += (s16)PLACEMENT_TY(object) / 32;
-                        else
+                        if ((s16)PLACEMENT_TY(object) > 1000) {
+                            /* Stopped at the bonus, in 32 bits: with a
+                               mod's "limits" one equip may give up to
+                               32767, and from 31777 the 33rd step went
+                               past what the 16-bit count holds, wrapped
+                               negative and climbed round again, up to
+                               33793 frames with the stat going wild. */
+                            s32 next = (s16)PLACEMENT_TX(object) + (s16)PLACEMENT_TY(object) / 32;
+                            if (next > (s16)PLACEMENT_TY(object))
+                                next = (s16)PLACEMENT_TY(object);
+                            PLACEMENT_TX(object) = next;
+                        } else
 #endif
                         PLACEMENT_TX(object) += 31;
                         below = (s16)PLACEMENT_TX(object) < (s16)PLACEMENT_TY(object);
