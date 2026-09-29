@@ -139,11 +139,6 @@ class CardsTab(Tab):
         self.notes = tk.Text(form, width=36, height=4, wrap="word", undo=True)
         self.notes.grid(row=row, column=1, columnspan=2, sticky="we", pady=2)
         row += 1
-        ttk.Label(form, style="Hint.TLabel", wraplength=px(form, 320), justify="left",
-                  text="Yours alone: the game shows and plays by none of it. A code mod can read tags "
-                       "written here, such as <burn: 300> or <no-fusion> (mod API 7, card_tag).").grid(
-            row=row, column=1, columnspan=2, sticky="w")
-        row += 1
         self.added_frame = ttk.LabelFrame(form, text="Added card", padding=6)
         self.added_frame.grid(row=row, column=0, columnspan=3, sticky="we", pady=6)
         row += 1
