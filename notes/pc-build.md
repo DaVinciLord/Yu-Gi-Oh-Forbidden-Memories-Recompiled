@@ -2534,6 +2534,150 @@ What differs from Linux, and why:
   (`Win32_FontPath`), iconv by code page 932, and the few POSIX calls by
   `pc/compat/posix.h` and `pc/compat/mman.h`.
 
+## Android
+
+Milestone M1 (2026-09-28): the same code as Windows and Linux, built for
+Android x86 (32-bit), boots on the API 30 x86 emulator through the intro
+(Konami logo, the opening movie) to the title screen, and on to the main menu
+and New Game's name entry. The design and the probe behind it are in
+`tmp/research/android_feasibility.md` (not in the repository); this section is
+what exists.
+
+### Build, install, run
+
+Needs the Android SDK with the NDK (r29 tested), a platform (android-35) and
+build-tools (35), a JDK (17 or later: `javac`, `keytool`), cmake and ninja.
+Nothing else: no Gradle, no Android Studio.
+
+```sh
+export ANDROID_SDK_ROOT=/path/to/sdk          # the NDK: newest under sdk/ndk, or ANDROID_NDK_ROOT
+python3 tools/pc/build_game32.py --target android-x86
+# -> tmp/pc/android-x86/libmain.so and tmp/pc/android-x86/memories-x86.apk
+adb install -r tmp/pc/android-x86/memories-x86.apk
+```
+
+- `tools/pc/build_android_deps.py <abi>` (run by the build the first time)
+  builds SDL3 (shared), libpng and FreeType (static) with the NDK from the
+  same pinned archives as the Linux and Windows builds, into
+  `tmp/pc/android-deps/<abi>`, and keeps SDL's Java shell (`org.libsdl.app`)
+  from the same SDL release. zlib is the system's.
+- `build_game32.py --target android-<abi>` compiles every unit with NDK clang
+  for the ABI at API 24, `-fPIC`, and links the shared object `libmain.so`
+  (`-Bsymbolic`, `--no-undefined`; pins `HIDDEN`, no fixed sections, as on
+  Windows). `tools/pc/package_android.py` then compiles SDL's Java with
+  `javac` against the SDK's `android.jar`, dexes it with `d8`, links the
+  manifest with `aapt2`, adds `lib/<abi>/libmain.so` and `libSDL3.so`, and
+  aligns and signs the APK (`zipalign`, `apksigner`) with a debug key it
+  creates under `tmp/pc/android-deps/debug.keystore` (never in the
+  repository). The package is `org.yfmredecomp.game`; the activity is SDL's
+  own `SDLActivity`, with no Java of ours.
+- `--target android-armeabi-v7a` is refused with the list of what it still
+  needs (below).
+
+The disc image goes in the app's external files folder,
+`/sdcard/Android/data/org.yfmredecomp.game/files/game/` (any `*.bin`, as in
+`game/` beside the desktop executable). Start the app once so that Android
+creates the folder. Since Android 11, `adb` as the shell user cannot write
+there; on an emulator image with root (`userdebug`, e.g. `google_apis`):
+
+```sh
+adb root
+F=/data/media/0/Android/data/org.yfmredecomp.game/files
+adb shell mkdir -p $F/game && adb push rpg-yfm.bin $F/game/
+adb shell chown -R "$(adb shell stat -c %U $F)":ext_data_rw $F/game
+adb shell chcon -R "$(adb shell ls -dZ $F/reports | cut -d' ' -f1)" $F/game   # the app's SELinux categories
+adb shell am start -n org.yfmredecomp.game/org.libsdl.app.SDLActivity
+adb logcat -s memories        # stdout and stderr of the port
+```
+
+Without the `chcon`, the file keeps `storage_file` and the app is denied
+(`avc: denied { read }` in logcat), and the port asks for a ROM. A file
+picker (SAF) that copies the image in is for later.
+
+Testing aids: `environment.txt` in the files folder, `NAME=value` per line,
+sets environment variables before the port starts (the app has no
+environment of its own): `MEMORIES_TRACE`, `MEMORIES_INPUT` (scripted pad),
+`MEMORIES_DUMP_FRAME`, and so on. `libmain.so`'s load address is logged at
+start; a crash's addresses minus it go to `llvm-symbolizer --obj=libmain.so`.
+Screenshots of the device, never the host: `adb exec-out screencap -p`.
+
+### How it differs (and what is shared)
+
+- `src/pc/platform/android.c` is the whole platform layer: `SDL_main` sets
+  the player's folder (`MEMORIES_USER_DIR` = the external files folder),
+  forwards stdout/stderr to logcat, reads `environment.txt`, turns off what
+  re-executes the program (the crash monitor, `Platform_RestartGame`) and
+  the update check, asks SDL for landscape, and runs the port's `main`.
+  `Platform_HasDesktopGL` answers 0: the window takes the SDL renderer path
+  (GLES2 underneath) that shows the software GPU's picture. It also stands
+  in for `bzero` and, below API 30, `memfd_create` (the system call).
+- `src/pc/compat/android/`: `android_compat.h`, force-included in every
+  native unit (below-API fallbacks, no system headers), and a header-only
+  `fontconfig/fontconfig.h` answering the port's few fontconfig calls with
+  `/system/fonts`. `src/pc/render/gl_desktop_none.c` replaces
+  `present_pass.c`: desktop GL's fixed function does not exist in GLES and
+  is never reached there.
+- Shared changes this needed, one commit each: the game stack at
+  `0xB0000000` on every system; the scratchpad at `0x9F800000`
+  (`SCRATCHPAD_ADDR`, "How it works" above); `HIDDEN` pins; the asm stack
+  switch for Android (bionic has no ucontext) and its 16-byte-aligned entry
+  frames; position-independent paths in the i386 assembly; the desktop-GL
+  capability.
+
+### What works on the emulator (API 30 x86)
+
+- Boot, intro logos, the opening movie (MDEC), title, main menu, New Game to
+  the name entry; the menu bar draws. Sound through SDL (AAudio).
+- The app process's layout: `0x1F800000` is taken (ART's heap), the port
+  says so once and uses `0x9F800000`; guest RAM, its mirrors, the game stack
+  and the interpreter stack map where they do on the desktop.
+- Presents take 20-40 ms at 2280x1080 with the emulator's host GPU
+  (`-gpu host`), 40-80 ms with SwiftShader; the game clock keeps time and
+  presents drop frames.
+
+### Not yet
+
+- **Input:** keyboard only (a hardware keyboard, or `adb shell sendevent`
+  with a real hold). `adb shell input keyevent` sends key down and up in the
+  same millisecond, and the pad is sampled once per present, so the press is
+  lost; a short press needs latching for at least one sample (also needed
+  for touch). Touch reaches SDL as mouse events (menu bar); no on-screen pad.
+- **Save states:** off in practice: the symbol tables are for addresses in
+  `libmain.so`, which Android loads at a different address each launch. A
+  loader that reserves a fixed range and loads the game with
+  `android_dlopen_ext` at its link base fixes that.
+- **Mods:** none. Code mods are i386 objects; the build packages no mods and
+  no language packs.
+- No SAF/file picker, no GLES renderer (Video > Color and the other GL-only
+  options), no restart from the menu, no update check, no lifecycle handling
+  (pause/resume, surface loss, back button).
+
+### Next milestones
+
+| M | Goal |
+|---|---|
+| M2 | `android-armeabi-v7a`: `-mharden-sls=blr` thunks, the ARM fault handler (register rebase or emulation, PC redirect), setjmp and the stack switch in A32 assembly, `-fsigned-char -marm` |
+| M3 | Playable: input latching, touch pad overlay drawn with the game's art, menu bar and Mods/Controls as in-window overlays, lifecycle, the fixed-base loader (save states, crash symbols), SAF import, performance |
+| M4 | Mods on Android: content-only mods first; then per-ABI objects for code mods (bundled mods built by `build_game32.py`, third-party ones by the SDK's `build_mod.py` per target), ARM relocations in the object loader, `__aeabi_*` helpers, hook trampolines for armv7 |
+| M5 | Release: signing, CI for both ABIs, emulator smoke |
+| M6 | (optional) 64-bit everywhere |
+
+ARM32 test ladder for M2 on, since the API 30 x86 image translates ARM code
+with a translator that mishandles the fault path, and API 31+ phone images
+run no 32-bit apps:
+
+1. the x86 emulator for all platform and gameplay work;
+2. qemu-arm user mode in WSL (`qemu-user-static` from the distribution's
+   apt repository, plus an armv7 sysroot) for the three ARM-specific pieces:
+   the `-mharden-sls=blr` thunks, the SIGSEGV/ucontext fix-up, the asm stack
+   switch. M2's first task: check that qemu-user reproduces those behaviours.
+   It tests the instruction set, not bionic's allocator or ART's layout (the
+   probe checked those on the real images);
+3. the API 25 `armeabi-v7a` system image (real ARM under QEMU, slow) as the
+   once-per-milestone gate;
+4. to check: whether the 32-bit x86 TV images (up to API 36) carry an
+   ndk_translation that handles the fault path; if so they replace (3).
+
 ## Launch the local graphics preview
 
 ```sh
