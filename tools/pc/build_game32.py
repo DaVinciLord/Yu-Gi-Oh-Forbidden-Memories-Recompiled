@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Compile and link the resident game C as a 32-bit Linux or Windows executable,
-or as the Android app's libmain.so (--target android-<abi>).
+or as the Android app's libgame.so (--target android-<abi>).
 
 Bring-up driver for the fixed-address memory model (src/pc/guest/image.h):
   * every game unit is compiled with the host GCC as ILP32;
@@ -23,10 +23,11 @@ __start_/__stop_ come from grouped marker sections; overrides win by link order 
 On Android (--target android-x86, android-armeabi-v7a: 32-bit ARM, A32) the
 toolchain is the NDK's clang and LLVM tools, and the libraries come from
 tools/pc/build_android_deps.py. The game is a position-independent shared
-object, libmain.so, which SDL's Java shell loads and whose SDL_main
-(src/pc/platform/android.c) starts the port's main; it is ELF, so the Linux
-steps apply, except that sections cannot be placed at chosen addresses (as on
-Windows). The APK is packaged beside it (<build>/memories-<abi>.apk, by
+object, libgame.so, linked at a fixed base; libmain.so, which SDL's Java shell
+loads and whose SDL_main it runs, is a loader that puts the game at that base
+(src/pc/platform/android_loader.c) and starts the port's main through
+src/pc/platform/android.c. It is ELF, so the Linux steps apply, except that
+sections cannot be placed at chosen addresses (as on Windows). The APK is packaged beside it (<build>/memories-<abi>.apk, by
 package_android.py) with the SDK's build tools; notes/pc-build.md, "Android"."""
 import argparse, concurrent.futures, csv, glob, hashlib, json, os, re, shutil, struct, subprocess, sys
 import build_process
@@ -160,8 +161,17 @@ BACKENDS = {"sdl": ["src/pc/platform/sdl.c", "src/pc/render/gl_picture.c", "src/
             "x11": ["src/pc/platform/x11.c", "src/pc/platform/audio_alsa.c", "src/pc/platform/gamepad_evdev.c"]}
 BACKEND_SOURCES = sorted(sum(BACKENDS.values(), []))
 ANDROID_BACKEND = {"src/pc/render/present_pass.c": "src/pc/render/gl_desktop_none.c"}
+# Android's libmain.so is only a loader (src/pc/platform/android_loader.c)
+# that puts the game, libgame.so, at the address it is linked at: save
+# states and crash symbols then hold from one launch to the next. The range
+# is free in every app process seen (below ART's heap at 0x12C00000, above
+# the fixed game sections the Linux build places from 0x01000000, clear of
+# the guest's own ranges); the span is checked after the link.
+ANDROID_LOADER = "src/pc/platform/android_loader.c"
+ANDROID_GAME_BASE = 0x08000000
+ANDROID_GAME_SPAN = 0x02000000
 NATIVE = sorted([f for f in glob.glob("src/pc/guest/*.[cS]") if not f.endswith("_i386.S" if ARM else "_arm.S")] + glob.glob("src/pc/sdk/*.c") +
-                [f for f in glob.glob("src/pc/platform/*.c") if f not in BACKEND_SOURCES] + glob.glob("src/pc/overlays/*.c") + glob.glob("src/pc/overrides/*.c") + glob.glob("src/pc/audio/*.c") + glob.glob("src/pc/mods/*.c") + glob.glob("src/pc/debug/*.c") + glob.glob("src/pc/cards/*.c") + glob.glob("src/pc/free_duel/*.c") + glob.glob("src/pc/saves/*.c") + glob.glob("src/pc/text/*.c") + ["src/pc/render/soft_gpu.c", "src/pc/render/texture_dump.c", "src/pc/render/texture_pack.c"]) + [
+                [f for f in glob.glob("src/pc/platform/*.c") if f not in BACKEND_SOURCES and os.path.basename(f) != "android_loader.c"] + glob.glob("src/pc/overlays/*.c") + glob.glob("src/pc/overrides/*.c") + glob.glob("src/pc/audio/*.c") + glob.glob("src/pc/mods/*.c") + glob.glob("src/pc/debug/*.c") + glob.glob("src/pc/cards/*.c") + glob.glob("src/pc/free_duel/*.c") + glob.glob("src/pc/saves/*.c") + glob.glob("src/pc/text/*.c") + ["src/pc/render/soft_gpu.c", "src/pc/render/texture_dump.c", "src/pc/render/texture_pack.c"]) + [
     "src/pc/rng.c", "src/pc/compat/fs.c", "src/pc/compat/gte.c", "src/pc/compat/pgxp.c", "src/pc/compat/libgs_ot.c", "src/pc/render/packets.c"]
 # Same contract as the host C library, so the host's version is used directly.
 # Runtime-loaded modules linked into the executable: name, sources, identifier
@@ -209,6 +219,23 @@ def run(command):
     if result.returncode:
         sys.exit(f"{' '.join(command[:6])} ...\n{result.stderr}")
     return result.stdout
+
+def link_android_loader(build, game):
+    """libmain.so, the loader SDL's Java shell runs (ANDROID_LOADER), once
+    the game's load span is known to fit the range it reserves."""
+    low, high = None, 0
+    for line in run([READELF, "-lW", game]).splitlines():
+        parts = line.split()
+        if parts and parts[0] == "LOAD":
+            address, size = int(parts[2], 16), int(parts[5], 16)
+            low = address if low is None else min(low, address)
+            high = max(high, address + size)
+    if low != ANDROID_GAME_BASE or high - low > ANDROID_GAME_SPAN:
+        sys.exit(f"{game}: loads at 0x{low or 0:08X}-0x{high:08X}; the loader reserves "
+                 f"0x{ANDROID_GAME_BASE:08X}-0x{ANDROID_GAME_BASE + ANDROID_GAME_SPAN:08X}")
+    run([CC, *ANDROID_FLAGS, "-O2", "-Wall", "-Werror", "-shared", "-o", f"{build}/libmain.so", "-Wl,--no-undefined",
+         "-Wl,-z,noexecstack", f"-DMEMORIES_ANDROID_GAME_BASE=0x{ANDROID_GAME_BASE:08X}u",
+         f"-DMEMORIES_ANDROID_GAME_SPAN=0x{ANDROID_GAME_SPAN:08X}u", ANDROID_LOADER, "-llog", "-ldl"])
 
 def compile_unit(job):
     source, obj, flags, renames = job
@@ -931,7 +958,7 @@ def main():
                 handle.write(f'.section {section}$a,"{flags}"\n.globl ___start_{section}\n___start_{section}:\n')
                 handle.write(f'.section {section}$z,"{flags}"\n.globl ___stop_{section}\n___stop_{section}:\n')
     else:
-        # HIDDEN: in a shared object (Android's libmain.so) the dynamic
+        # HIDDEN: in a shared object (Android's libgame.so) the dynamic
         # loader adds the load bias to an absolute symbol of default
         # visibility, as bionic does on every ABI; a hidden one is resolved
         # at link time. In an executable it only keeps the pins out of the
@@ -1005,17 +1032,19 @@ def main():
              f"{WIN32_DEPS}/lib/libpng16.a", f"{WIN32_DEPS}/lib/libzs.a", "-ldbghelp", "-lwinhttp", "-static", "-lpthread"])
         shutil.copy(f"{WIN32_DEPS}/sdl/bin/SDL3.dll", options.build)
     elif ANDROID:
-        # libmain.so, the name SDL's Java shell loads. -Bsymbolic: every
-        # reference to the object's own globals binds inside it, so the
-        # hand-written assembly and the generated stubs reach them without
-        # a PLT (whose i386 form needs EBX to hold the GOT), and a system
-        # library of the same name cannot take them over. Everything the
-        # link leaves undefined is an error, as in an executable. The
-        # libraries: SDL3's shared object (packaged beside it), libpng and
-        # FreeType linked in, the system's zlib, GLES (sdl.c's glGetString),
-        # the log and the NDK's native window.
-        output = f"{options.build}/libmain.so"
+        # The game is libgame.so, linked at ANDROID_GAME_BASE; libmain.so,
+        # the name SDL's Java shell loads, is the loader that puts it there
+        # (ANDROID_LOADER). -Bsymbolic: every reference to the object's own
+        # globals binds inside it, so the hand-written assembly and the
+        # generated stubs reach them without a PLT (whose i386 form needs
+        # EBX to hold the GOT), and a system library of the same name cannot
+        # take them over. Everything the link leaves undefined is an error,
+        # as in an executable. The libraries: SDL3's shared object (packaged
+        # beside it), libpng and FreeType linked in, the system's zlib, GLES
+        # (sdl.c's glGetString), the log and the NDK's native window.
+        output = f"{options.build}/libgame.so"
         run([CC, *ANDROID_FLAGS, "-shared", "-o", output, "-Wl,-Bsymbolic", "-Wl,--no-undefined",
+             f"-Wl,--image-base=0x{ANDROID_GAME_BASE:08X}", "-Wl,-soname,libgame.so",
              "-Wl,-z,noexecstack", *[obj(s) for s in game + NATIVE],
              f"{options.build}/stubs.o", guest_branches, f"{options.build}/mod_exports.o", version,
              f"{options.build}/guest_symbols.ld", f"-L{ANDROID_DEPS}/lib", "-lSDL3", f"{ANDROID_DEPS}/lib/libfreetype.a",
@@ -1035,11 +1064,7 @@ def main():
              f"{options.build}/stubs.o", guest_branches, f"{options.build}/mod_exports.o", version, f"{options.build}/guest_symbols.ld", *(libraries if options.backend == "sdl"
                else ["-lm", *fonts, "-lX11", "-lXext", "-lasound", *system]), *build_linux_sysroot.endfiles()])
     if ANDROID:
-        # Code mods are i386 objects built for the desktop games' export
-        # tables, and the APK carries no files beside the game yet: no mods
-        # and no language packs on Android for now (notes/pc-build.md).
-        import package_android
-        package_android.package(options.build, ANDROID_ABI, output)
+        link_android_loader(options.build, output)
     else:
         build_mods(options.build, options.release)
         copy_languages(options.build, options.release)
@@ -1087,6 +1112,16 @@ def main():
         commit = "unknown"
     with open(f"{options.build}/commit", "w") as handle:
         handle.write(commit + "\n")
+    if ANDROID:
+        # Code mods are i386 objects built for the desktop games' export
+        # tables, and the APK carries no files beside the game yet: no mods
+        # and no language packs on Android for now (notes/pc-build.md). It
+        # does carry this build's id, commit and symbol table (assets/build/),
+        # which android.c unpacks for save states and crash reports.
+        import package_android
+        package_android.package(options.build, ANDROID_ABI, f"{options.build}/libmain.so", output,
+                                {"build/buildid": f"{options.build}/buildid", "build/commit": f"{options.build}/commit",
+                                 f"build/symbols/{build_id}.txt": f"{options.build}/symbols/{build_id}.txt"})
     kinds = {name: functions.get(name, "outside_resident_image") for name in stubs}
     report = {"game_units": len(game), "pinned_data_symbols": len(pinned),
               "stubbed": {kind: sorted(n for n in stubs if kinds[n] == kind)
