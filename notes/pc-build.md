@@ -49,7 +49,11 @@ On Windows, `src/pc/compat/fs.h` converts file operations to the wide Windows
 APIs, independent of the user's system code page. Include it (or `posix.h`)
 in native units that use filenames or environment variables. Library calls
 need the same care: PNGs are read from an already-open file, and FreeType
-faces from memory through `compat/font.h`.
+faces from memory through `compat/font.h`. There is no wide `freopen` or
+`_mkdir`: close and `fopen`, and `mkdir(path, 0777)`. A unit that misses the
+header still builds and runs, and only fails under such a folder (mod text
+and fonts once did), so the `pc_utf8_paths` test
+(`tools/pc/check_utf8_paths.py`) checks every unit in `src/pc` reaches it.
 
 The PC test workflow runs with Unicode temporary directories and relocates
 an executable into a folder containing accents, combining characters, CJK,

@@ -5,12 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#ifdef _WIN32
-#include <direct.h>
-#define make_directory(path) _mkdir(path)
-#else
+/* mkdir, fopen: the wide (UTF-8) ones on Windows too (fs.h). */
 #define make_directory(path) mkdir(path, 0777)
-#endif
 
 int TextureDump_Enabled;
 uint32_t *TextureDump_Tags;
@@ -111,9 +107,10 @@ void TextureDump_Restart(void)
     seen_count = 0;
     archives_written = 0;
     snprintf(name, sizeof(name), "%s/textures.txt", directory);
-    if (index_file) index_file = freopen(name, "w", index_file);
+    /* fclose and fopen, not freopen: fopen is the one that takes UTF-8. */
+    if (index_file) { fclose(index_file); index_file = fopen(name, "w"); }
     snprintf(name, sizeof(name), "%s/assets.txt", directory);
-    if (assets_file) assets_file = freopen(name, "w", assets_file);
+    if (assets_file) { fclose(assets_file); assets_file = fopen(name, "w"); }
     if (!index_file) { /* the directory went away, say */
         fprintf(stderr, "memories-pc: texture dump could not restart; stopped\n");
         TextureDump_Enabled = 0;

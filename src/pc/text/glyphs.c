@@ -1,4 +1,5 @@
 /* The letters text can be written in (glyphs.h, notes/translation.md). */
+#include "pc/compat/font.h" /* a mod's font under a folder named with accents */
 #include "glyphs.h"
 #include "serif.h"
 #include "pc/render/soft_gpu.h"
