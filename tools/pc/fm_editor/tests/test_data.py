@@ -29,7 +29,7 @@ def state(project: Project):
             {cid: (a.key, a.base, a.drops, a.opponents, a.extra) for cid, a in project.added.items()},
             project.fusions, {e: m for e, m in project.equips.items() if m or e in project.retail.equips},
             project.rituals, [{k: {c: w for c, w in v.items() if w} for k, v in d.items()} for d in project.pools],
-            project.card_extra)
+            project.card_extra, project.notes)
 
 
 class ReadTest(unittest.TestCase):
@@ -151,6 +151,8 @@ class ManifestTest(unittest.TestCase):
         p.cards[new].name = "Dingus Shmingus"
         p.cards[new].attack = 2500
         p.added[new].opponents = True
+        p.set_notes(5, "Untouched; tagged. <burn: 300>")
+        p.set_notes(new, "Plan: a stronger Dingus later.")
         # fusions: change, forbid, add, and one with the new card
         pairs = sorted(self.retail.fusions)
         p.set_fusion(*pairs[0], 3)
@@ -332,6 +334,29 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(again.fusions.get((2, copy)), 0)
         again.revert_fusion((2, copy))
         self.assertNotIn((2, copy), again.fusions)
+
+    def test_notes(self):
+        p = self.edited()
+        cards = manifest.build(p)["cards"]
+        # A card with nothing but notes is noted, not changed (cards.c notes_only).
+        self.assertIn({"replace": 5, "notes": "Untouched; tagged. <burn: 300>"}, cards)
+        self.assertEqual(cards[-1]["notes"], "Plan: a stronger Dingus later.")
+        self.assertFalse(p.card_changed(5))
+        p.revert_card(5)
+        self.assertIn(5, p.notes)                      # the modder's, not the disc's
+        p.set_notes(5, "  \n")
+        self.assertNotIn(5, p.notes)
+        again = Project(self.retail)
+        messages = manifest.apply(again, {"id": "t", "cards": [
+            {"replace": 7, "notes": "one <a: 1>"}, {"replace": 7, "attack": 100, "notes": "two"},
+            {"replace": 8, "notes": 12}]})
+        self.assertEqual(again.notes[7], "one <a: 1>\ntwo")    # as the game joins them
+        self.assertEqual(again.card_extra[8], {"notes": 12})
+        self.assertEqual(messages, ["cards[2]: \"notes\" must be text; kept as written"])
+        built = manifest.build(again)["cards"]
+        self.assertEqual(built[0], {"replace": 7, "attack": 100, "notes": "one <a: 1>\ntwo"})
+        p.remove_card(max(p.added))
+        self.assertEqual(set(p.notes), set())
 
     def test_unnamed_copy_keeps_the_disc_name(self):
         p = Project(self.retail)

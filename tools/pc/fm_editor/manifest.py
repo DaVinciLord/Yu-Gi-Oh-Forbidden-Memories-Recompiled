@@ -96,10 +96,14 @@ def build_cards(project: Project) -> list:
             if fields.get(name) == value:
                 del fields[name]        # the mod's text file carries it, codes and all
         extra = project.card_extra.get(cid, {})
-        if fields or extra:
+        notes = project.notes.get(cid)
+        if fields or extra or notes:
+            # With "notes" alone the entry only notes the card (cards.c).
             entry = {"replace": cid}
             entry.update(fields)
             entry.update(extra)
+            if notes:
+                entry["notes"] = notes
             entries.append(entry)
     for cid in sorted(project.added):
         added = project.added[cid]
@@ -118,6 +122,8 @@ def build_cards(project: Project) -> list:
         if added.opponents:
             entry["opponents"] = True
         entry.update(added.extra)
+        if project.notes.get(cid):
+            entry["notes"] = project.notes[cid]
         entries.append(entry)
     return entries
 
@@ -566,6 +572,17 @@ def _base_id(project: Project, value) -> int:
     return _number(value, 0)
 
 
+def _read_notes(entry: dict, messages: list, where: str):
+    """An entry's "notes": its text, or None when it has none the editor
+    shows (not text: kept as written, as the game leaves it out)."""
+    if "notes" not in entry:
+        return None
+    if isinstance(entry["notes"], str):
+        return entry["notes"]
+    messages.append(f"{where}: \"notes\" must be text; kept as written")
+    return None
+
+
 def read_cards(project: Project, entries, messages: list):
     if entries is None:
         return
@@ -582,11 +599,17 @@ def read_cards(project: Project, entries, messages: list):
         if not 1 <= base <= CARD_COUNT:
             messages.append(f"{where}: \"{'replace' if is_replace else 'copy'}\" must name a card of the disc, 1 to 722")
             continue
+        notes = _read_notes(entry, messages, where)
         if is_replace:
             _apply_fields(project.cards[base], entry, True, messages, where)
+            if notes:
+                had = project.notes.get(base)
+                project.set_notes(base, f"{had}\n{notes}" if had else notes)
             # What the editor does not show (art, password...) is kept as written.
-            extra = {k: v for k, v in entry.items() if k not in (
-                "replace", "name", "description", "attack", "defense", "type", "attribute", "level", "stars")}
+            shown = ("replace", "name", "description", "attack", "defense", "type", "attribute", "level", "stars")
+            if notes is not None:
+                shown += ("notes",)
+            extra = {k: v for k, v in entry.items() if k not in shown}
             if extra:
                 project.card_extra.setdefault(base, {}).update(extra)
             continue
@@ -609,6 +632,9 @@ def read_cards(project: Project, entries, messages: list):
         added.opponents = _json_bool(entry.get("opponents"), False)
         skip = ("copy", "id", "name", "description", "attack", "defense", "type", "attribute", "level", "stars",
                 "drops", "opponents")
+        if notes is not None:
+            skip += ("notes",)
+            project.set_notes(cid, notes)
         password = password_text(entry.get("password")) if "password" in entry else None
         if password is not None:
             skip += ("password",)

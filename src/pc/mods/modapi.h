@@ -37,7 +37,10 @@
  *   3  managed events, registered state and stable card lookup
  *   4  hook/unhook any game function; symbol looks a name up at run time;
  *      provide/find share functions between mods; draw over the picture
- *      (MemoriesMod.overlay); save slot events; more of the C library */
+ *      (MemoriesMod.overlay); save slot events; more of the C library
+ *   5  duelist_id
+ *   6  the STARCHIP event
+ *   7  card_notes, card_tag: a card's notes and the tags in them */
 #include "mod_types.h"
 
 typedef struct MemoriesModHost MemoriesModHost;
@@ -178,6 +181,24 @@ struct MemoriesModHost {
      * No new host entries. MEMORIES_EVENT_STARCHIP (mod_types.h) fires when
      * an end-of-duel StarChip prize is about to be added to the save
      * (Mods_AwardStarchips). */
+
+    /* --- API 7 ---
+     * A card's notes: the "notes" its "cards" entries gave
+     * (notes/more-cards.md), every applied mod's in load order with a line
+     * between two, or NULL. The game itself plays by none of it; it is there
+     * for the modder, and for a mod that reads tags from it, as RPG Maker's
+     * note boxes are read:
+     *
+     *     "notes": "Burns the opponent when it lands. <burn: 300> <no-fusion>"
+     *
+     * card_tag writes the value of tag `key` ("burn" gives "300",
+     * "no-fusion" gives "") to `out`, cut to fit and ended with a '\0', and
+     * returns its whole length, as snprintf does; -1 when the card's notes
+     * have no such tag. Names match in any case, spaces around a name or a
+     * value do not count, and the last of two tags of one name counts.
+     * Answers once the card tables are built, which is before the title. */
+    const char *(*card_notes)(const MemoriesModHost *, int id);
+    int (*card_tag)(const MemoriesModHost *, int id, const char *key, char *out, size_t size);
 };
 
 /* The symbol a mod's object defines, and its type. */

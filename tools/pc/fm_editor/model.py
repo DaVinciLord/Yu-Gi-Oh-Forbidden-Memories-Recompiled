@@ -148,6 +148,9 @@ class Project:
         # "passwords" named a disc card, so the entry is written back there.
         self.passwords = {}
         self.password_keys = {}
+        # card id -> the card's "notes": the modder's own text, which the game
+        # plays by none of; a code mod may read <tag: value> from it (API 7).
+        self.notes = {}
 
     # --- cards -------------------------------------------------------------
 
@@ -238,6 +241,7 @@ class Project:
         del self.added[cid]
         del self.cards[cid]
         self.passwords.pop(cid, None)
+        self.notes.pop(cid, None)
         self.fusions = {p: r for p, r in self.fusions.items() if cid not in p and r != cid}
         self.equips.pop(cid, None)
         for monsters in self.equips.values():
@@ -247,7 +251,14 @@ class Project:
             for pool in pools.values():
                 pool.pop(cid, None)
 
+    def set_notes(self, cid: int, text: str):
+        if text.strip():
+            self.notes[cid] = text
+        else:
+            self.notes.pop(cid, None)
+
     def revert_card(self, cid: int):
+        """Back to the disc's card; its notes stay, as they are the modder's."""
         if cid in self.retail.cards:
             self.cards[cid] = self.retail.cards[cid].copy()
             self.card_extra.pop(cid, None)

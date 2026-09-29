@@ -104,6 +104,14 @@ int Cards_NameUtf8(int id, char *out, size_t size);
  * NULL when it has its base's. */
 const unsigned char *Cards_DescriptionText(int id);
 
+/* A card's notes (card_notes.h): every "notes" its entries gave, in load
+ * order, a line between two; NULL for none. The game plays by none of it:
+ * it is the modder's, and a code mod's through the host's card_notes and
+ * card_tag (API 7). */
+const char *Cards_Notes(int id);
+/* The value of tag `key` in the card's notes, as CardNotes_Tag; -1 for none. */
+int Cards_NoteTag(int id, const char *key, char *out, size_t size);
+
 /* A card's password, eight BCD digits as the disc's password table has
  * them (0x89631139 is 89631139), or CARD_PASSWORD_NONE for a card no
  * password gives (the disc's value for them). */

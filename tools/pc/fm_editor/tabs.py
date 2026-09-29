@@ -60,7 +60,7 @@ class Tab(ttk.Frame):
 # --- Cards --------------------------------------------------------------------
 
 class CardsTab(Tab):
-    FILTERS = ["All cards", "Changed", "Added by the mod", "Monsters", "Non-monsters"] + TYPE_NAMES
+    FILTERS = ["All cards", "Changed", "Added by the mod", "With notes", "Monsters", "Non-monsters"] + TYPE_NAMES
 
     def __init__(self, notebook, app):
         super().__init__(notebook, app, "Cards")
@@ -135,6 +135,15 @@ class CardsTab(Tab):
         self.lines.grid(row=row, column=1, columnspan=2, sticky="w")
         row += 1
         self.text.bind("<KeyRelease>", lambda e: self.count_lines())
+        ttk.Label(form, text="Notes").grid(row=row, column=0, sticky="nw", pady=2)
+        self.notes = tk.Text(form, width=36, height=4, wrap="word", undo=True)
+        self.notes.grid(row=row, column=1, columnspan=2, sticky="we", pady=2)
+        row += 1
+        ttk.Label(form, style="Hint.TLabel", wraplength=px(form, 320), justify="left",
+                  text="Yours alone: the game shows and plays by none of it. A code mod can read tags "
+                       "written here, such as <burn: 300> or <no-fusion> (mod API 7, card_tag).").grid(
+            row=row, column=1, columnspan=2, sticky="w")
+        row += 1
         self.added_frame = ttk.LabelFrame(form, text="Added card", padding=6)
         self.added_frame.grid(row=row, column=0, columnspan=3, sticky="we", pady=6)
         row += 1
@@ -178,17 +187,22 @@ class CardsTab(Tab):
             return False
         if f == "Added by the mod" and cid not in self.project.added:
             return False
+        if f == "With notes" and cid not in self.project.notes:
+            return False
         if f == "Monsters" and not card.is_monster():
             return False
         if f == "Non-monsters" and card.is_monster():
             return False
         if f in TYPE_NAMES and card.type != TYPE_NAMES.index(f):
             return False
-        return card_matches(self.project, cid, self.search.get())
+        search = self.search.get()
+        return card_matches(self.project, cid, search) or (
+            bool(search.strip()) and search.lower().strip() in self.project.notes.get(cid, "").lower())
 
     def row(self, cid):
         card = self.project.cards[cid]
-        state = "added" if cid in self.project.added else "changed" if self.project.card_changed(cid) else ""
+        state = ("added" if cid in self.project.added else "changed" if self.project.card_changed(cid)
+                 else "notes" if cid in self.project.notes else "")
         return (cid, card.name, type_label(card.type), card.attack, card.defense, state), (state,) if state else ()
 
     def fill(self):
@@ -249,6 +263,9 @@ class CardsTab(Tab):
                 pass
         self.text.configure(state="normal")
         self.text.delete("1.0", "end")
+        self.notes.configure(state="normal")
+        self.notes.delete("1.0", "end")
+        self.notes.edit_reset()
         if not cid:
             self.title.configure(text="Select a card")
             for var in self.vars.values():
@@ -259,6 +276,7 @@ class CardsTab(Tab):
                 label.configure(text="")
             self.lines.configure(text="")
             self.text.configure(state="disabled")
+            self.notes.configure(state="disabled")
             if self.app.text_preview is not None:
                 self.app.text_preview.later()
             return
@@ -274,6 +292,8 @@ class CardsTab(Tab):
         self.vars["star2"].set(star_label(card.star2))
         self.vars["password"].set(self.project.password(cid))
         self.text.insert("1.0", card.description)
+        self.notes.insert("1.0", self.project.notes.get(cid, ""))
+        self.notes.edit_reset()
         self.count_lines()
         reference = self.project.retail.cards.get(cid) or self.project.cards.get(self.project.base_of(cid))
         what = "Retail" if cid in self.project.retail.cards else "Base"
@@ -355,6 +375,10 @@ class CardsTab(Tab):
                 added.drops, added.opponents = self.drops.get(), self.opponents.get()
                 changed = True
         # Stored with the rest, once the form has passed every check.
+        notes = self.notes.get("1.0", "end-1c")
+        if notes != self.project.notes.get(cid, "") and (notes.strip() or cid in self.project.notes):
+            self.project.set_notes(cid, notes)
+            changed = True
         if password != self.project.password(cid):
             self.project.set_password(cid, password)
             self.vars["password"].set(password)

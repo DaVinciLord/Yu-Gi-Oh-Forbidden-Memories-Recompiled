@@ -141,6 +141,9 @@ void Mods_SetCardResolver(int (*resolve)(const char *));
 /* The same for a duelist identity (pc/free_duel/duelists.h), which the free
    duel list injects once it is built. */
 void Mods_SetDuelistResolver(int (*resolve)(const char *));
+/* A card's notes and a tag's value in them (pc/cards/cards.h Cards_Notes,
+   Cards_NoteTag), for the host's card_notes and card_tag. */
+void Mods_SetCardNotes(const char *(*notes)(int id), int (*tag)(int id, const char *key, char *out, size_t size));
 void Mods_Dispatch(MemoriesModEvent *event);
 int Mods_Notify(unsigned type, int a, int b, int c);
 unsigned Mods_Sequence(int mod);
