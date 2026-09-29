@@ -5,10 +5,13 @@
  * same for a Linux armhf build: glibc and bionic share the kernel's
  * sigcontext names). An ARM frame built with -fno-omit-frame-pointer in A32
  * keeps the caller's frame pointer at [fp] and the return address at [fp+4],
- * as i386's EBP chain does, so a walk reads both the same way. */
+ * as i386's EBP chain does, so a walk reads both the same way. The mod SDK
+ * (MEMORIES_MOD) has no system headers and no use for these: there the
+ * header is empty, and compiles on its own as every SDK header must
+ * (tools/pc/check_mod_abi.py). */
 #ifndef MEMORIES_PC_PLATFORM_SIGNAL_CONTEXT_H
 #define MEMORIES_PC_PLATFORM_SIGNAL_CONTEXT_H
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(MEMORIES_MOD)
 #include <ucontext.h>
 
 #if defined(__i386__)
