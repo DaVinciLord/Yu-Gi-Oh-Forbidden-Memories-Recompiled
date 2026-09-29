@@ -325,7 +325,9 @@ each of them:
 | `two_player_record` | the same for the wins and losses two-player duels add to a save | 9999 | 1-65535 |
 
 Everything is optional; each key's latest mod wins, and two mods' entries
-for different duelists add up. Game > Cheats > Starting LP, when set to
+for different duelists add up. A save that holds more than 250 copies of a
+card (from a mod's `chest` past 250) keeps them when played without it: a
+copy won then is turned away, as at 250, rather than wrap the byte to none. Game > Cheats > Starting LP, when set to
 anything but the console's 8000, still comes first.
 
 **What the numbers are kept in.** ATK, DEF and LP are 16-bit numbers in the
