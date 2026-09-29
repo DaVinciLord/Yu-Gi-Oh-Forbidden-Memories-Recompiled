@@ -474,7 +474,9 @@ void DrawOTag(u32 *list)
         }
     }
     Pgxp_NextFrame();
-    Pgxp_Active = Settings_Get(SET_PGXP) && SoftGpu_Scale() > 1;
+    /* Only the OpenGL picture draws the precise vertices (SoftGpu_Gp0 hands
+     * them to its recorder): without one at 2x and up, nothing is tracked. */
+    Pgxp_Active = Settings_Get(SET_PGXP) && !SoftGpu_WideRastered();
 }
 
 void GsDrawOt(void *descriptor)

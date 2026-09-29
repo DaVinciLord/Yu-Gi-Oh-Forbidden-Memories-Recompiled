@@ -259,8 +259,8 @@ static Menu submenus[SUB_COUNT] = {
                   {"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_IT},
                   {"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_ES}}, 6},
     /* PGXP recovers the GTE's discarded depth to fix affine texture warping
-     * on tilted polygons (pgxp.h). "Textures and positions" also draws at
-     * the precise, non-rounded vertex position, removing PS1-era wobble. */
+     * on tilted polygons (pgxp.h). Level 2, precise positions, is not
+     * offered yet (settings.c clamps it). */
     {"Precise geometry", {{"Off", 0, ITEM_RADIO, 0, SET_PGXP, 0},
                           {"Textures", 0, ITEM_RADIO, 0, SET_PGXP, 1}}, 2},
 };
