@@ -16,6 +16,7 @@
 #include "mods_window.h"
 #include "controls_window.h"
 #include "controls_linux.h"
+#include "quit_prompt.h"
 #include "host_actions.h"
 #include "settings.h"
 #include "pc/audio/spu.h"
@@ -1339,6 +1340,9 @@ static void pump(void)
             continue;
         }
         switch (event.type) {
+        /* Closing the main window (its button, Alt+F4) asks, like File >
+         * Exit; SDL_EVENT_QUIT is left to signals and the session ending. */
+        case SDL_EVENT_WINDOW_CLOSE_REQUESTED: QuitPrompt_Request(&quit); break;
         case SDL_EVENT_QUIT: quit = 1; break;
         case SDL_EVENT_WINDOW_EXPOSED: show(); break;
         case SDL_EVENT_WINDOW_RESIZED: case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
@@ -1359,7 +1363,10 @@ static void pump(void)
             if(!controls_window)ControlsRuntime_ResetKeys(); mouse_bits=wheel_now=0;wheel_frames=0;
             if (Settings_Get(SET_MUTE_ON_FOCUS_LOSS)) Spu_SetOutputVolume(0);
             if (Settings_Get(SET_PAUSE_ON_FOCUS_LOSS) && Platform_ClockRate() != 0) {
-                focus_clock_rate = Platform_ClockRate();
+                /* Turbo ends with the focus (the keys are let go), so
+                 * coming back resumes the chosen speed, not 400%. */
+                focus_clock_rate = ControlsRuntime_HostHeld() >> CTRL_HOST_TURBO & 1 ? Settings_Get(SET_SPEED)
+                                                                                     : Platform_ClockRate();
                 focus_paused = 1;
                 Platform_SetClockRate(0);
             }
@@ -1430,6 +1437,9 @@ static void pump(void)
     mods_dirty = 0;
     Gamepad_Poll(current_frame);
     if (HostActions_Run(&quit)) menu_dirty = 1;
+    /* A notice answers a controller and keeps the game's input at rest. */
+    ControlsRuntime_Hold(Menu_NoticeShown());
+    if (Menu_NoticePad(ControlsRuntime_TakePadPresses(), &quit)) menu_dirty = 1;
     if(controls_window) {
         static uint64_t last_draw;
         ControlsWindow_Tick();
@@ -1568,6 +1578,7 @@ int Platform_Open(const char *title)
      * cursor/DPI scale from the rest of the desktop. SDL_VIDEODRIVER remains
      * available for diagnostics and compatibility overrides. */
     block_signals(&previous);
+    SDL_SetHint(SDL_HINT_QUIT_ON_LAST_WINDOW_CLOSE, "0"); /* pump asks first */
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_GAMEPAD | SDL_INIT_AUDIO)) {
         restore_signals(&previous);
         fprintf(stderr, "memories-pc: SDL: %s; set MEMORIES_HEADLESS=1 to run without a window\n", SDL_GetError());

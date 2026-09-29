@@ -33,6 +33,7 @@
 #ifdef MEMORIES_PC
 #include "pc/cards/drops.h"
 #include "pc/free_duel/duelists.h"
+#include "pc/mods/mods.h"
 #endif
 
 void DuelScene_UpdateResultRewards(void)
@@ -187,12 +188,15 @@ side_result:
                 D_8009B16C |= 0x2000;
                 if (save) {
                     if (D_8009B360[0] < 0 && gDuel_bOpponentID >= 0) {
+#ifdef MEMORIES_PC
+                        Mods_AwardStarchips(&D_8009B1D8[0]->starchips,
+                                            D_8009B1E8->starchip_prize);
+                        CardDrops_Award();
+#else
                         D_8009B1D8[0]->starchips +=
                             D_8009B1E8->starchip_prize;
                         if (D_8009B1D8[0]->starchips > 999999)
                             D_8009B1D8[0]->starchips = 999999;
-#ifdef MEMORIES_PC
-                        CardDrops_Award();
 #endif
                         Duel_AwardCard(D_8009B1E8->dropped_card_id);
                     } else {

@@ -224,7 +224,11 @@ buttons. Mods: an
 after-hook sees what the game gets ([mod API](mod-api-3.md)).
 
 Esc quits (it closes an open menu first): it is the default key of Game >
-Controls' **Exit game**. Every shortcut below is a row of Game > Controls' **Game** list, like
+Controls' **Exit game**. With **File > Confirm before quitting** on (the
+default) it asks "Quit the game?" first: Quit or Keep playing, Keep playing
+focused and last, so Enter and Escape stay in the game. Closing the window
+(its button, Alt+F4) and File > Exit ask the same (`quit_prompt.c`); with the
+setting off all three quit at once. Every shortcut below is a row of Game > Controls' **Game** list, like
 Exit game: the keys named are the defaults, each can be rebound, cleared or
 given a controller button too, and the File, Debug and Game menus show the
 key bound now ([Controls](controls-menu.md), `host_actions.c`). F1, F2 and F4
@@ -483,11 +487,11 @@ one the face lacks (or a byte that is not UTF-8) shows as "?"; code that cuts su
 uses `Menu_TextBack`/`Menu_TextFit`/`Menu_TextTrim` (menu.h) so no character is split. The bar is dark with an
 accent highlight; menus have hover rows, separators, shortcut hints, check
 and radio marks, and a shadow. Keyboard: F10 opens the first menu, arrows
-move, Enter activates, Esc closes (with no menu open it is Exit game).
+move, Enter activates, Esc closes (with no menu open it is Exit game, asking first).
 
 | Menu | Items |
 |---|---|
-| File | Save/load state, slots 1-4, screenshot, reload settings, exit |
+| File | Save/load state, slots 1-4, screenshot, reload settings, confirm before quitting, exit |
 | Audio | Master/music/SFX sliders, mute and focus-loss mute, Gaussian (console) or cubic (sharper) voice interpolation (`audio_interpolation`) |
 | Video | Window scale and Menu size submenus, window mode, scaling/aspect/filter/VSync choices |
 | View | Fusion helper (`fusion_helper`, [notes/fusion-helper.md](fusion-helper.md)), Card passwords, Library: show every card, Free Duel progress (see [View > Free Duel progress](#view--free-duel-progress)); Duel rank submenu: Off, Rank, Rank and score (`rank_meter` 0/1/2, see [Duel rank](#duel-rank)); Opponent's name for COM; Japanese buttons |
@@ -562,7 +566,11 @@ at any time.
 closing the program, like a console's soft reset. It first asks "Restart the
 game? Unsaved progress is lost." with Yes and No. No is focused and last, so
 Enter and Escape both keep playing; the game keeps running behind the
-question. Yes makes the same request as Debug > Jump to > Title Screen
+question. Every notice also answers a controller: the D-pad moves the focus,
+Cross presses the focused button and Circle the last one (the other way round
+with View > Japanese buttons), and while one is up the game gets no pad input,
+getting it back once everything is released (`Menu_NoticePad`,
+`ControlsRuntime_Hold`). Yes makes the same request as Debug > Jump to > Title Screen
 (`TitleJump_Confirm` in `title_jump.c`), and both items are enabled and
 dimmed together. A Yes given after the game reached the title by itself is
 dropped. It does not boot the game again (logos and intro): that would mean

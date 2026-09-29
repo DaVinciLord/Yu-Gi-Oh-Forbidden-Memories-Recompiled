@@ -177,6 +177,31 @@ int Mods_DamageLife(int side, int life, int damage, int kind)
     return event.result;
 }
 
+/* End-of-duel StarChip award (func_800218F0). Before hooks may edit a or
+ * handle to skip; after sees result as the amount actually credited. */
+int Mods_AwardStarchips(unsigned *balance, int prize)
+{
+    MemoriesModEvent event = {MEMORIES_EVENT_STARCHIP, MEMORIES_BEFORE, prize, 0, 0, 0, 0};
+    unsigned before;
+
+    if (!balance)
+        return 0;
+    before = *balance;
+    Mods_Dispatch(&event);
+    if (!event.handled) {
+        unsigned long long total;
+
+        if (event.a < 0)
+            event.a = 0;
+        total = (unsigned long long)*balance + (unsigned long long)event.a;
+        *balance = total > 999999u ? 999999u : (unsigned)total;
+    }
+    event.result = (int)(*balance - before);
+    event.phase = MEMORIES_AFTER;
+    Mods_Dispatch(&event);
+    return (int)*balance;
+}
+
 int Mods_HasSubscribers(unsigned event)
 {
     int i;

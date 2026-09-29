@@ -150,7 +150,7 @@ static int list_lines(int list) { return lists[list].row_count + lists[list].gro
 
 /* What the backends keep for themselves, shown under the Game list. */
 static const char fixed_keys[] = "F10: menu bar.  Alt+Enter: fullscreen.  Shift + Screenshot: whole window.  "
-                                 "Esc: leave fullscreen, close menus, dialogs and this window.";
+                                 "Esc: quit (asking first), leave fullscreen, close menus, dialogs and this window.";
 
 /* Table line -> row, or -1 for a group heading. */
 static int line_action(int list, int line, int *group_out)
@@ -608,7 +608,7 @@ static void activate(int id)
         Controls_ClearSlot(profile(1), ui.row, ui.slot);
         /* Esc cancels a capture, so it cannot be pressed back in. */
         say(SAY_INFO, ui.row == CTRL_ROW_EXIT && !ui.tab
-                          ? "Exit game cleared. Only Restore keyboard defaults gives it Esc again. Apply to save."
+                          ? "Exit game cleared; Esc still quits. Apply to save."
                           : "Binding cleared. Apply to save.");
         break;
     case DEFAULTS:
@@ -1440,7 +1440,7 @@ void ControlsWindow_Draw(MenuCanvas *c)
         int left = ui.capture.deadline_us > now ? (int)((ui.capture.deadline_us - now + 999999) / 1000000) : 0;
         snprintf(line, sizeof(line), "Listening for %s%s - %d second%s left. Escape cancels%s.",
                  Controls_RowName(ui.row), ui.tab && ui.slot ? " (alternate)" : "", left, left == 1 ? "" : "s",
-                 ui.row == CTRL_ROW_EXIT && !ui.tab ? "; Restore keyboard defaults gives Esc back" : "");
+                 ui.row == CTRL_ROW_EXIT && !ui.tab ? "; Esc quits whatever is bound here" : "");
         hint = line;
     } else if (ui.hover >= DIAGRAM && ui.hover < CHOICE) {
         snprintf(line, sizeof(line), "%s - click to select it, double-click to rebind it.",
@@ -1448,7 +1448,7 @@ void ControlsWindow_Draw(MenuCanvas *c)
         hint = line;
     } else if (ui.row == CTRL_ROW_EXIT)
         hint = ui.tab ? "Double-click a binding, or select one and press Enter, to change it. Delete clears it."
-                      : "Esc cannot be pressed in here: once cleared, only Restore keyboard defaults gives it back.";
+                      : "Esc always quits; bind a key or button here to quit with it too.";
     else
         hint = "Double-click a binding, or select one and press Enter, to change it. Delete clears it.";
     if (!squat)

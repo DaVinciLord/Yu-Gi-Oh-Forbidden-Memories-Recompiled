@@ -232,15 +232,15 @@ int main(void)
     for (int i = 0; i < 30; i++)
         ControlsWindow_Event(&up);
     assert(ui.host_scroll == 0 && ui.scroll == pad_scroll);
-    /* Esc cancels a capture, so clearing Exit game says only Restore
-     * keyboard defaults gives Esc back; any other key captures, and Restore
-     * does give Esc back. */
+    /* Esc cancels a capture, so clearing Exit game says Esc still quits
+     * (controls_runtime.c keeps it); any other key captures, and Restore
+     * gives Esc back to the row. */
     select_row(CTRL_ROW_EXIT, 0);
     ControlsWindow_Draw(&c);
     assert(ui.draft.kb.host[CTRL_HOST_EXIT][0].code == CTRL_KEY_ESCAPE);
     ControlsWindow_Key(CTRL_KEY_DELETE, 1, 0, 0);
     assert(ui.draft.kb.host[CTRL_HOST_EXIT][0].kind == CTRL_SRC_UNBOUND);
-    assert(strstr(ui.status, "Restore keyboard defaults"));
+    assert(strstr(ui.status, "Esc still quits"));
     start_capture();
     ControlsWindow_Tick();
     ControlsRuntime_Key(CTRL_KEY_F9, 1);

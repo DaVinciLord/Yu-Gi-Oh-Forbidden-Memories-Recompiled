@@ -66,12 +66,13 @@ while held and the volume repeats while held (`host_actions.c`). The
 arrows stay in the list that has the selection; Tab moves between the two,
 and the wheel scrolls the one under the pointer.
 
-Exit game quits, as File > Exit does. Esc stays reserved
-everywhere else, and in this window it cancels a capture, so it cannot be
-pressed in: once Exit game's Esc is cleared or replaced, only **Restore
-keyboard defaults** gives it back. The window says so when the slot is
-cleared, while the row is selected and while it listens for that row. With
-no binding at all the game is closed from File > Exit or the window.
+Exit game quits, as File > Exit does, asking first while **File > Confirm
+before quitting** is on (`quit_prompt.c`). Esc is always Exit game in a
+window, whatever the row holds: it is reserved everywhere else, and in this
+window it cancels a capture, so it cannot be pressed in, but clearing or
+replacing the row only adds or drops the other key, never Esc's way out.
+The window says so when the slot is cleared, while the row is selected and
+while it listens for that row.
 
 Below the Game list, **Fixed keys** lists for reference what no binding
 changes: F10 opens the menu bar, Alt+Enter switches fullscreen, Shift with

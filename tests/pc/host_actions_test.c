@@ -1,6 +1,7 @@
 /* The Game list's actions do what their keys did (host_actions.c). */
 #include "pc/platform/host_actions.h"
 #include "pc/platform/controls_runtime.h"
+#include "pc/platform/menu.h"
 #include "pc/platform/platform.h"
 #include "pc/platform/settings.h"
 #include "pc/audio/spu.h"
@@ -42,6 +43,15 @@ void Memories_StateRequest(int what, int value)
     state_slot = value;
 }
 void DeckMenu_Request(void) { deck++; }
+static int notices;
+static void (*notice_answer)(int, int *);
+void Menu_ShowNotice(const char *title, const char *text, const char *const *buttons, int count, int focus,
+                     void (*answer)(int button, int *quit))
+{
+    (void)title, (void)text, (void)buttons, (void)count, (void)focus;
+    notices++;
+    notice_answer = answer;
+}
 int Log_Wanted(LogChannel channel)
 {
     (void)channel;
@@ -68,6 +78,16 @@ int main(void)
     assert(!HostActions_Run(&quit)); /* nothing pressed, nothing to repaint */
     presses = 1u << CTRL_HOST_EXIT;
     assert(HostActions_Run(&quit) && quit); /* as File > Exit */
+    /* With Confirm before quitting on, Exit asks; only Quit (button 0) quits. */
+    quit = 0;
+    settings[SET_CONFIRM_QUIT] = 1;
+    presses = 1u << CTRL_HOST_EXIT;
+    assert(HostActions_Run(&quit) && !quit && notices == 1);
+    notice_answer(1, &quit);
+    assert(!quit);
+    notice_answer(0, &quit);
+    assert(quit);
+    settings[SET_CONFIRM_QUIT] = 0;
     run(CTRL_HOST_SLOT_3);
     run(CTRL_HOST_SAVE_STATE);
     assert(slot == 3 && state_what == 1 && state_slot == 3);
@@ -115,6 +135,14 @@ int main(void)
     held = 0;
     HostActions_Run(&quit);
     assert(rate == 100);
+    /* Letting go of Turbo while paused (the window lost focus) keeps the pause. */
+    held = 1u << CTRL_HOST_TURBO;
+    HostActions_Run(&quit);
+    rate = 0;
+    held = 0;
+    HostActions_Run(&quit);
+    assert(rate == 0);
+    rate = 100;
     puts("host actions: every action does what its key did, holds follow the hold passed");
     return 0;
 }

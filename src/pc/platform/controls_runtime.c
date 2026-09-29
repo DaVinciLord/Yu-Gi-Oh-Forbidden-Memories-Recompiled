@@ -9,12 +9,15 @@
 static ControlsConfig active;
 static ControllerDevice devices[CONTROLS_DEVICES];
 static int initialized, assigned[2] = {-1, -1};
-static volatile sig_atomic_t blocked, gate = 1;
+static volatile sig_atomic_t blocked, held, gate = 1;
 static unsigned char keys[CTRL_KEY_COUNT];
 static ControlsEvaluator evaluators[2];
 static volatile uint16_t keyboard_bits, pad_bits[2];
 static volatile int connected[2];
 static char load_error[256];
+/* Main thread only: the controllers' pad presses, which a notice reads
+ * while the game cannot. */
+static uint16_t raw_pads, pad_presses;
 /* Main thread only: host rows held last update (and so while input runs),
  * pressed since taken, tapped between two updates, and when a repeating one
  * fires next. */
@@ -139,6 +142,8 @@ void ControlsRuntime_Key(int key, int down)
     for (int h = 0; h < CTRL_HOST_COUNT; h++)
         if (down && !keys[key] && active.kb.host[h][0].kind == CTRL_SRC_KEY && active.kb.host[h][0].code == key)
             host_taps |= 1u << h;
+    if (down && !keys[key] && key == CTRL_KEY_ESCAPE)
+        host_taps |= 1u << CTRL_HOST_EXIT;
     keys[key] = down != 0;
 }
 void ControlsRuntime_ResetKeys(void)
@@ -169,7 +174,23 @@ void ControlsRuntime_Block(int b)
     blocked = b;
     ControlsRuntime_Gate();
 }
-int ControlsRuntime_Blocked(void) { return blocked || gate; }
+void ControlsRuntime_Hold(int h)
+{
+    if (!h == !held)
+        return;
+    held = h != 0;
+    /* A press from before the notice came up does not answer it. */
+    if (held)
+        pad_presses = 0;
+    ControlsRuntime_Gate();
+}
+uint16_t ControlsRuntime_TakePadPresses(void)
+{
+    uint16_t out = pad_presses;
+    pad_presses = 0;
+    return out;
+}
+int ControlsRuntime_Blocked(void) { return blocked || held || gate; }
 uint32_t ControlsRuntime_TakeHost(void)
 {
     uint32_t out = host_presses;
@@ -224,6 +245,11 @@ void ControlsRuntime_Update(void)
     int n = ControlsRuntime_Keys(down);
     neutral = n == 0;
     kb = Controls_EvalKeyboardRows(&active.kb, down, n);
+    /* Esc in a window is always Exit game, bound or not (the backends keep
+     * it for fullscreen and menus first), so clearing or moving Exit's key
+     * never loses the way out; a key bound to Exit adds to it. */
+    if (keys[CTRL_KEY_ESCAPE])
+        kb |= (uint64_t)1 << (CTRL_DEST_COUNT + CTRL_HOST_EXIT);
     for (int p = 0; p < 2; p++) {
         int i = assigned[p];
         conn[p] = i >= 0;
@@ -235,9 +261,11 @@ void ControlsRuntime_Update(void)
         pads[p] = Controls_EvalControllerRows(ControlsRuntime_Profile(&active, p, 0), &devices[i].snapshot,
                                               &evaluators[p]);
     }
-    if (gate && neutral && !blocked)
+    if (gate && neutral && !blocked && !held)
         gate = 0;
-    stopped = blocked || gate;
+    stopped = blocked || held || gate;
+    pad_presses |= (uint16_t)(pads[0] | pads[1]) & ~raw_pads;
+    raw_pads = (uint16_t)(pads[0] | pads[1]);
     /* A host action fires once per press, never for a press begun while
      * input was stopped (the key that closed a window, a held button). */
     host = (uint32_t)((kb | pads[0] | pads[1]) >> CTRL_DEST_COUNT);

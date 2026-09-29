@@ -4,6 +4,7 @@
 #include "host_actions.h"
 #include "controls_runtime.h"
 #include "platform.h"
+#include "quit_prompt.h"
 #include "settings.h"
 #include "pc/audio/spu.h"
 #include "pc/debug/log.h"
@@ -25,7 +26,7 @@ void HostActions_StepVolume(int up)
 static void press(int action, int *quit)
 {
     switch (action) {
-    case CTRL_HOST_EXIT: *quit = 1; break;
+    case CTRL_HOST_EXIT: QuitPrompt_Request(quit); break; /* asks first, as File > Exit */
     case CTRL_HOST_FULLSCREEN:
         if (Platform_HasWindowModes()) {
             int on = Settings_Get(SET_FULLSCREEN) || Settings_Get(SET_BORDERLESS);
@@ -65,8 +66,9 @@ int HostActions_Run(int *quit)
     static uint32_t was;
     uint32_t pressed = ControlsRuntime_TakeHost(), held = ControlsRuntime_HostHeld(), changed = held ^ was;
     was = held;
-    /* Turbo runs the game at 400% while held. */
-    if (changed >> CTRL_HOST_TURBO & 1)
+    /* Turbo runs the game at 400% while held. Letting go while paused (P,
+     * or the window losing focus) leaves the pause alone. */
+    if (changed >> CTRL_HOST_TURBO & 1 && (held >> CTRL_HOST_TURBO & 1 || Platform_ClockRate() != 0))
         Platform_SetClockRate(held >> CTRL_HOST_TURBO & 1 ? 400 : Settings_Get(SET_SPEED));
     for (int h = 0; h < CTRL_HOST_COUNT; h++)
         if (pressed >> h & 1 && Controls_HostActions[h].mode != CTRL_HOST_HOLD) press(h, quit);

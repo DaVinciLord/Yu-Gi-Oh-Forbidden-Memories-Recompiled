@@ -79,6 +79,24 @@ int main(void)
     ControlsRuntime_Update();
     assert(ControlsRuntime_Pad(0) == CTRL_DEST_CROSS);
 
+    /* While held (a notice is up) the game sees nothing, but the pad's
+     * presses are there for the notice. Release waits for neutral. */
+    d->snapshot.buttons_down = 0;
+    ControlsRuntime_Update();
+    ControlsRuntime_TakePadPresses();
+    ControlsRuntime_Hold(1);
+    d->snapshot.buttons_down = 1u << (CTRL_BTN_GUIDE - 1);
+    ControlsRuntime_Update();
+    assert(ControlsRuntime_Blocked() && !ControlsRuntime_Pad(0));
+    assert(ControlsRuntime_TakePadPresses() == CTRL_DEST_CROSS && !ControlsRuntime_TakePadPresses());
+    ControlsRuntime_Hold(0);
+    ControlsRuntime_Update();
+    assert(!ControlsRuntime_Pad(0));
+    d->snapshot.buttons_down = 0;
+    ControlsRuntime_Update();
+    d->snapshot.buttons_down = 1u << (CTRL_BTN_GUIDE - 1);
+    ControlsRuntime_Update();
+    assert(!ControlsRuntime_Blocked() && ControlsRuntime_Pad(0) == CTRL_DEST_CROSS);
     /* Exit game (Esc by default) fires once per press, from a tap too short
      * for any update to see it held, and never for a press made while the
      * input is blocked or held. */
@@ -139,6 +157,23 @@ int main(void)
     d->snapshot.buttons_down = 1u << (CTRL_BTN_BACK - 1);
     ControlsRuntime_Update();
     assert(ControlsRuntime_TakeHost() == 1u << CTRL_HOST_EXIT && !ControlsRuntime_Pad(0));
+    d->snapshot.buttons_down = 0;
+    ControlsRuntime_Update();
+
+    /* With Exit game's key cleared, Esc (held or tapped) is still Exit. */
+    cfg = *ControlsRuntime_Config();
+    cfg.kb.host[CTRL_HOST_EXIT][0] = (ControlSource){0};
+    assert(ControlsRuntime_Apply(&cfg, error, sizeof(error)));
+    ControlsRuntime_Update();
+    ControlsRuntime_TakeHost();
+    ControlsRuntime_Key(CTRL_KEY_ESCAPE, 1);
+    ControlsRuntime_Update();
+    assert(ControlsRuntime_TakeHost() == 1u << CTRL_HOST_EXIT);
+    ControlsRuntime_Key(CTRL_KEY_ESCAPE, 0);
+    ControlsRuntime_Key(CTRL_KEY_ESCAPE, 1);
+    ControlsRuntime_Key(CTRL_KEY_ESCAPE, 0);
+    ControlsRuntime_Update();
+    assert(ControlsRuntime_TakeHost() == 1u << CTRL_HOST_EXIT);
     unlink(path);
     rmdir(dir);
     puts("controls runtime: selection, hotplug, profiles, release gate, host actions, hold, held and repeating actions passed");

@@ -410,7 +410,12 @@ pictures are the same as before, byte for byte. The built-in letters (ß,
 are left out there, as before.
 If a translation renames cards, their alphabetical order
 (`gCard_asNameSortKey`) is worked out again from the new names, accents
-sorting as their plain letters. The names and texts of cards a mod adds
+sorting as their plain letters. A name listed as the disc has it, letter
+for letter, renames nothing: when every card keeps its US name (a mod that
+puts the English names back over a PAL language, say), the disc's own order
+stays, which passes over hyphens (M-warrior #1 after Mushroom Man) where the
+worked-out one would not. English (EU) is such a case: its pack renames no
+card, and the PAL executables carry the US order table byte for byte. The names and texts of cards a mod adds
 ([more cards](more-cards.md)) are UTF-8 too and take the same letters.
 
 The name on the top of a card's big picture (Triangle in a duel, the
