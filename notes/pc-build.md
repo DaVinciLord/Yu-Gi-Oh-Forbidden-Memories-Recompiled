@@ -1248,8 +1248,13 @@ out pixel-identical to the sheets' crops, and a pack of the sheets as they
 are draws the same frame as no pack at 1x, 2x, in software and in GL. A
 mod with `"textures"` in its manifest replaces the images at draw time
 from such a directory (`notes/modding.md`, "Texture packs"). Not yet: the
-monster textures (`MODEL.MRG`) and the campaign map's own pictures, which
-its overlay uploads from a 134-sector block.
+monster textures (`MODEL.MRG`). The campaign map's own pictures (the
+terrain model's textures, uploaded from its 134-sector block) have no
+extractor family and a dump's `assets.txt` leaves them out: their palettes
+reach VRAM from memory with the semi-transparency bit set on every entry but
+the first, and an asset wants every entry traced. A pack replaces them all
+the same, since its palette rule keys on the first entry; the FM Editor's
+Map tab writes such entries (`tools/pc/fm_editor/map_art.py`).
 
 ### Texture dump (what is on screen)
 

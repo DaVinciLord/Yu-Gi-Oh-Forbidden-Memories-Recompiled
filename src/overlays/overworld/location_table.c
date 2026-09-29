@@ -1,6 +1,15 @@
 #include "../../types.h"
 #include "location_table.h"
 
+#ifdef MEMORIES_PC
+/* The port reads the table where the module's image puts it, as the console
+ * does: a tentative definition is pinned to its guest address, 0x801691A8
+ * (tools/pc/build_game32.py), so the bytes the overworld package delivers
+ * from the disc are the ones read, and a mod's patch of them (the FM
+ * Editor's Map tab) reaches the game. Without a mod they are the bytes
+ * below. */
+MapLocation gCampaignMap_aLocationTable[CAMPAIGN_MAP_LOCATION_COUNT];
+#else
 MapLocation gCampaignMap_aLocationTable[CAMPAIGN_MAP_LOCATION_COUNT] = {
     {
         0, 486, 2040, 1596, 492, -548, 0, 0, 13, 0,
@@ -147,3 +156,4 @@ MapLocation gCampaignMap_aLocationTable[CAMPAIGN_MAP_LOCATION_COUNT] = {
         },
     },
 };
+#endif
