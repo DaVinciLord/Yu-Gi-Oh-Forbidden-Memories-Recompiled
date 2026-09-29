@@ -748,10 +748,14 @@ def main():
                 # The rename is in place, so the object no longer shows the
                 # names: .aliased keeps them for the next build's alias list
                 # (and so the mod exports), until the object is recompiled.
-                hits = sorted(set(run([NM, "-u", obj(source)]).split()) & {"_" + name for name in aliases})
+                # An object renamed before keeps its earlier names too.
+                hits = {name[1:] for name in run([NM, "-u", obj(source)]).split()} & set(aliases)
                 if hits:
+                    if os.path.exists(obj(source) + ".aliased"):
+                        with open(obj(source) + ".aliased") as handle:
+                            hits.update(handle.read().split())
                     with open(obj(source) + ".aliased", "w") as handle:
-                        handle.writelines(f"{name[1:]}\n" for name in hits)
+                        handle.writelines(f"{name}\n" for name in sorted(hits))
                     run([OBJCOPY, f"--redefine-syms={options.build}/aliases.txt", obj(source)])
         # __start_/__stop_ for the sections state.c and the module registry
         # walk: marker sections that sort before and after the contents.
