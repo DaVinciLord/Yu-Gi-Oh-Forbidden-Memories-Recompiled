@@ -5,8 +5,8 @@
     python tools/pc/fm_editor/build_exe.py [--dist tmp/pc/fm-editor] [--version v0.1.3]
 
 Writes <dist>/fm-editor, a program that needs no Python on the player's
-machine. On Windows that is a folder, fm-editor.exe beside fm-editor-files/;
-elsewhere one file. The build files stay under <dist>; nothing it writes
+machine. On Windows that is fm-editor.exe, fm-editor.pkg and
+fm-editor-files/, which stay together; elsewhere one file. The build files stay under <dist>; nothing it writes
 belongs in git.
 
 Windows gets no one-file build: that is a small loader with the whole
@@ -69,22 +69,26 @@ def main() -> int:
     if not arguments.console:
         program.append("--windowed")
     program.append(str(HERE / "__main__.py"))
-    command = [sys.executable, "-m", "PyInstaller", *build, *program]
+    makespec = [sys.executable, "-m", "PyInstaller.utils.cliutils.makespec", *program]
+    print(" ".join(makespec))
+    if subprocess.run(makespec, cwd=str(ROOT)).returncode != 0:
+        return 1
+    spec = work / "fm-editor.spec"
+    text = spec.read_text()
     if sys.platform.startswith("linux"):
         # Tk draws text through fontconfig. The build machine's is older
         # than the player's and chokes on its config files; every desktop
         # has fontconfig and FreeType, so the player's are used.
-        makespec = [sys.executable, "-m", "PyInstaller.utils.cliutils.makespec", *program]
-        print(" ".join(makespec))
-        if subprocess.run(makespec, cwd=str(ROOT)).returncode != 0:
-            return 1
-        spec = work / "fm-editor.spec"
-        text = spec.read_text()
         assert "\npyz = " in text, "unexpected PyInstaller spec"
         text = text.replace("\npyz = ", "\na.binaries = [b for b in a.binaries\n"
                             "              if not b[0].startswith(('libfontconfig', 'libfreetype'))]\npyz = ", 1)
-        spec.write_text(text)
-        command = [sys.executable, "-m", "PyInstaller", *build, str(spec)]
+    if sys.platform == "win32":
+        # The Python archive as fm-editor.pkg beside the .exe: a folder
+        # build still appends it to the loader by default.
+        assert "    exclude_binaries=True,\n" in text, "unexpected PyInstaller spec"
+        text = text.replace("    exclude_binaries=True,\n", "    exclude_binaries=True,\n    append_pkg=False,\n", 1)
+    spec.write_text(text)
+    command = [sys.executable, "-m", "PyInstaller", *build, str(spec)]
     print(" ".join(command))
     result = subprocess.run(command, cwd=str(ROOT))
     if result.returncode == 0:
