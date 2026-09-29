@@ -13,6 +13,7 @@ import shutil
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -21,6 +22,11 @@ WINDOWS_EXECUTABLE = ROOT / "tmp/pc/win32/memories-pc.exe"  # build_game32.py --
 WINE_PREFIX = ROOT / "tmp/pc/wine-prefix"
 DEFAULT_BUILD = ROOT / "tmp/pc/cmake-test"
 FIXTURES = ROOT / "tests/pc/smoke"
+# Each run's frames, settings and user folders go in a folder of its own,
+# tmp/pc/smoke/run-XXXXXXXX, kept when a case failed and removed when all
+# passed: worktrees share tmp/ (a junction to the main checkout's), and two
+# runs at once in two of them overwrote each other's frames when they shared
+# tmp/pc/smoke/<case>.ppm.
 OUTPUT = ROOT / "tmp/pc/smoke"
 
 
@@ -77,19 +83,27 @@ def run_smoke(executable: Path, record: bool) -> bool:
     if not executable.is_file():
         print(f"smoke: executable is missing: {executable}", file=sys.stderr)
         return False
-    OUTPUT.mkdir(parents=True, exist_ok=True)
     command, extra = launcher(executable)
     fixtures = sorted(FIXTURES.glob("*.json"))
     if not fixtures:
         print(f"smoke: no fixtures in {FIXTURES}", file=sys.stderr)
         return False
+    OUTPUT.mkdir(parents=True, exist_ok=True)
+    output = Path(tempfile.mkdtemp(prefix="run-", dir=OUTPUT))
+    print(f"smoke: frames in {output}", flush=True)
+    passed = run_cases(command, extra, fixtures, output, record)
+    if passed:
+        shutil.rmtree(output, ignore_errors=True)
+    return passed
+
+
+def run_cases(command: list[str], extra: dict[str, str], fixtures: list[Path], output: Path, record: bool) -> bool:
     for fixture in fixtures:
         case = json.loads(fixture.read_text(encoding="utf-8"))
         name = str(case["name"])
-        image = OUTPUT / f"{name}.ppm"
-        settings = OUTPUT / f"{name}.settings"
-        user = OUTPUT / f"{name}.user"
-        shutil.rmtree(user, ignore_errors=True)
+        image = output / f"{name}.ppm"
+        settings = output / f"{name}.settings"
+        user = output / f"{name}.user"
         user.mkdir()
         # A case may set some of the player's settings ("aspect=2" for
         # widescreen, "mod.3d-monsters=1"); everything else is the defaults.

@@ -25,8 +25,13 @@ disc is needed), and plays each smoke case that turns mods on
 build's: every code mod must load, and the frames must be the same.
 
 The releases checked, and the differences reviewed and accepted, are in
-tools/pc/mod_compat.txt. A release is downloaded once into tmp/pc/mod-compat."""
-import argparse, concurrent.futures, glob, json, os, re, shutil, subprocess, sys, tarfile, urllib.request, zipfile
+tools/pc/mod_compat.txt. A release is downloaded once into tmp/pc/mod-compat.
+Each --run plays in a folder of its own beside it, tmp/pc/mod-compat/run/
+TAG-XXXXXXXX, kept when the run found a difference not accepted in
+mod_compat.txt (or stopped) and removed otherwise: worktrees
+share tmp/ (a junction to the main checkout's), so two checks running at once
+in two of them took each other's frames and folders when they shared one."""
+import argparse, concurrent.futures, glob, json, os, re, shutil, subprocess, sys, tarfile, tempfile, urllib.request, zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 REPOSITORY = "Unchiga/Yu-Gi-Oh-Forbidden-Memories-Recompiled"   # src/pc/platform/update_check.c
@@ -307,18 +312,28 @@ def fetch(tag, system):
     name = f"yfm-redecomp-{tag}-{system}." + ("zip" if system == "windows" else "tar.gz")
     url = f"https://github.com/{os.environ.get('GITHUB_REPOSITORY', REPOSITORY)}/releases/download/{tag}/{name}"
     print(f"check_mod_abi: downloading {url}", flush=True)
-    archive = os.path.join(folder, name)
-    with urllib.request.urlopen(url, timeout=300) as response, open(archive + ".part", "wb") as handle:
-        shutil.copyfileobj(response, handle)
-    os.replace(archive + ".part", archive)
-    if system == "windows":
-        with zipfile.ZipFile(archive) as package:
-            package.extractall(folder)
-    else:
-        with tarfile.open(archive) as package:
-            package.extractall(folder, filter="data")
-    if not os.path.isdir(unpacked):
-        sys.exit(f"check_mod_abi: {name} has no yfm-redecomp-{tag} folder")
+    # Downloaded and unpacked in a folder of this run's, then moved in whole:
+    # a check in another worktree may be fetching the same release.
+    staging = tempfile.mkdtemp(prefix="fetch-", dir=folder)
+    try:
+        archive = os.path.join(staging, name)
+        with urllib.request.urlopen(url, timeout=300) as response, open(archive, "wb") as handle:
+            shutil.copyfileobj(response, handle)
+        if system == "windows":
+            with zipfile.ZipFile(archive) as package:
+                package.extractall(staging)
+        else:
+            with tarfile.open(archive) as package:
+                package.extractall(staging, filter="data")
+        if not os.path.isdir(os.path.join(staging, f"yfm-redecomp-{tag}")):
+            sys.exit(f"check_mod_abi: {name} has no yfm-redecomp-{tag} folder")
+        try:
+            os.rename(os.path.join(staging, f"yfm-redecomp-{tag}"), unpacked)
+        except OSError:
+            if not os.path.isdir(unpacked):  # not another run's copy that got there first
+                raise
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
     return unpacked
 
 
@@ -346,19 +361,25 @@ def manifest(directory):
 
 
 def run_mods(tag, release, executable, build):
-    """Every mod the baseline shipped, all on, in this build: (kind, name, what)."""
-    work = os.path.join(CACHE, "run", tag)
-    shutil.rmtree(work, ignore_errors=True)
+    """Every mod the baseline shipped, all on, in this build: ([(kind, name, what)],
+    the run's folder). main() removes the folder unless a finding in it was
+    not accepted in mod_compat.txt."""
+    os.makedirs(os.path.join(CACHE, "run"), exist_ok=True)
+    work = tempfile.mkdtemp(prefix=f"{tag}-", dir=os.path.join(CACHE, "run"))
     mods, user = os.path.join(work, "mods"), os.path.join(work, "user")
     shutil.copytree(os.path.join(release, "mods"), mods)
     os.makedirs(user)
     # The SDK's examples stand for a mod someone else made with that release:
     # the code ones are built by its own build_mod.py, against its headers.
+    # A copy of its SDK is run, as that script keeps its objects in
+    # tmp/pc/mod-objects beside the SDK, where another run would be writing.
+    sdk = os.path.join(work, "sdk")
+    shutil.copytree(os.path.join(release, "sdk"), sdk, ignore=shutil.ignore_patterns("examples"))
     for example in sorted(glob.glob(os.path.join(release, "sdk", "examples", "mods", "*"))):
         target = os.path.join(mods, "example-" + os.path.basename(example))
         shutil.copytree(example, target)
         if glob.glob(os.path.join(target, "*.c")):
-            subprocess.run([sys.executable, os.path.join(release, "sdk", "tools", "build_mod.py"), "--game", release,
+            subprocess.run([sys.executable, os.path.join(sdk, "tools", "build_mod.py"), "--game", release,
                             target], check=True, capture_output=True)
     ids = {}
     for directory in sorted(glob.glob(os.path.join(mods, "*", "mod.json"))):
@@ -408,7 +429,7 @@ def run_mods(tag, release, executable, build):
                           f"build's (see {work}/{case['name']}-*/frame.ppm)"))
         else:
             print(f"check_mod_abi: {tag}: {case['name']} is the same frame with {tag}'s {', '.join(wanted)}")
-    return found
+    return found, work
 
 
 def main():
@@ -438,10 +459,12 @@ def main():
             exports_old = set(handle.read().split())
         old = sdk_surface(os.path.join(release, "sdk"), compiler)
         found = compare(old, current, exports_old, exports_new)
+        work = None
         if options.run:
             executable = options.executable or os.path.join(options.build, "memories-pc" + (".exe" if system == "windows" else ""))
-            found += run_mods(tag, release, os.path.abspath(executable), options.build)
-        used = set()
+            ran, work = run_mods(tag, release, os.path.abspath(executable), options.build)
+            found += ran
+        used, keep = set(), False
         for kind, name, what in found:
             key = (tag, kind, name)
             if key in accepted:
@@ -449,7 +472,12 @@ def main():
                 print(f"  accepted: {kind} {name}: {what} ({accepted[key]})")
             else:
                 failed = True
+                keep = keep or kind in ("run", "frame")
                 print(f"check_mod_abi: {tag}: {kind} {name}: {what}", file=sys.stderr)
+        # The run's folder is kept for a difference still to be looked at;
+        # an accepted one would leave a folder behind on every passing run.
+        if work and not keep:
+            shutil.rmtree(work, ignore_errors=True)
         for key in sorted(k for k in accepted if k[0] == tag and k not in used and (options.run or k[1] not in ("run", "frame"))):
             print(f"check_mod_abi: {tag}: `accept {' '.join(key)}` in mod_compat.txt no longer matches anything; "
                   "remove it", file=sys.stderr)
