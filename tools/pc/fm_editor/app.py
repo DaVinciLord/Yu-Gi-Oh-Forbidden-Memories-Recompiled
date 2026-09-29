@@ -31,6 +31,7 @@ class App(tk.Tk):
         self.dirty = False
         self.hooks = []            # extra menu entries (importers) add themselves here
         self.dark = tk.BooleanVar(self, value=settings.load().get("dark") is True)
+        self.text_preview = None   # Tools > Card text preview, while open
         self.build_menu()
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(fill="both", expand=True)
@@ -82,6 +83,7 @@ class App(tk.Tk):
         tools = tk.Menu(bar, tearoff=False)
         tools.add_command(label="Check the mod", command=self.show_problems)
         tools.add_command(label="Preview mod.json", command=lambda: self.info.preview())
+        tools.add_command(label="Card text preview", command=self.show_text_preview)
         bar.add_cascade(label="Tools", menu=tools)
         view = tk.Menu(bar, tearoff=False)
         view.add_checkbutton(label="Dark mode", variable=self.dark, command=self.toggle_dark)
@@ -98,6 +100,15 @@ class App(tk.Tk):
         problem = settings.save("dark", self.dark.get())
         if problem:
             self.say(f"Could not remember the dark mode: {problem}")
+
+    def show_text_preview(self):
+        """The selected card's text as the card view draws it (preview.py)."""
+        if self.text_preview is None:
+            from .preview import CardTextPreview
+            self.text_preview = CardTextPreview(self)
+        else:
+            self.text_preview.refresh()
+            self.text_preview.lift()
 
     def add_import(self, label, command):
         """An importer's menu entry, above "Game files..."."""

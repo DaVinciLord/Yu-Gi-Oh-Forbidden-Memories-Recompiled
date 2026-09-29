@@ -22,12 +22,12 @@ The window has a tab per table:
 
 | Tab | What you edit |
 |---|---|
-| Cards | search and filter the 722 cards; name, card text (with the game's 20-letter, 8-line wrapping counted), ATK/DEF, type, attribute, level, guardian stars, password; the retail value beside each field. **Add a card** copies the selected one as a new card with a stable id; a new card starts in nobody's chest (it is won in its base's place, dealt in a starter deck, or given by Game > Cheats), and its password is only shown in the card view: the Password screen sells the disc's 722 |
+| Cards | search and filter the 722 cards; name, card text (with the game's 20-letter, 8-line wrapping counted, and **Tools > Card text preview** to see it as the card view draws it, below), ATK/DEF, type, attribute, level, guardian stars, password; the retail value beside each field. **Add a card** copies the selected one as a new card with a stable id; a new card starts in nobody's chest (it is won in its base's place, dealt in a starter deck, or given by Game > Cheats), and its password is only shown in the card view: the Password screen sells the disc's 722 |
 | Art | a card's picture (102x96), thumbnail (40x32, the hand and the field) and name plate (96x14) as the disc has them, beside what the game will draw at the console's resolution and at Internal 2x/4x; **Import PNG**, **Export** the disc's or the mod's (to paint over), **Revert** |
 | Fusions | every pair and its result (search by a card, or show the changed ones); add, change, remove (the pair no longer fuses) or revert; **Bulk...** adds or takes away the fusions of every card of one filtered set with every card of another (below) |
 | Equips | per equip card, the monsters it may equip; add one, add or remove a whole type, remove, revert |
 | Rituals | per ritual card, its three tributes and the monster it summons |
-| Duelists | per opponent, the deck pool and the S/A-POW, B/C/D and S/A-TEC drop pools: weights, their chance, the retail weight, and the total against 2048 (**Normalize** scales a pool back to 2048 the way the port does) |
+| Duelists | per opponent, the deck pool and the S/A-POW, B/C/D and S/A-TEC drop pools: weights, their chance, the retail weight, and the total against 2048 (**Normalize** scales a pool back to 2048 the way the port does). The deck is either the **Weighted deck (retail)** or a **Fixed deck (40 cards)**: forty specific cards by their copies, counted against 40, each beside its weighted chance; **Copy the weighted deck's most likely 40**, **Clear**, **Revert to retail** |
 | Starter decks | the decks a new game may be dealt in place of the disc's weighted pools: a deck's name, its weight against the other decks offered, and its cards by their copies, counted against the forty a deck holds |
 | Mod info | id, name, version, author, description, `settings`, and the other `mod.json` keys, kept as written |
 | Problems | the loader's checks; double-click a line to go to it |
@@ -108,6 +108,7 @@ What it reads (layouts in `gamedata.py`):
 | equips, fusions, rituals | `WA_MRG.MRG`, the duel package at `0xB63000` (+0x22000, +0x24800, +0x34800) |
 | deck and drop pools | `WA_MRG.MRG` `0xE99800 + 0x1800 * opponent` |
 | the Password screen's passwords | `WA_MRG.MRG` `0xFB9800 + 8 * card`: price, then the password as BCD digits (`0xFFFFFFFE` for none) |
+| the text font and its colours (the card-text preview only) | `WA_MRG.MRG` sector `0x1690` (16 sectors, the 8x12 font's page) and the first 32 bytes of sector `0x16C2`, as `src/pc/cards/font_art.c` reads them |
 
 The 15 "glitch" fusions the game's table reader makes by reading past an odd
 record are shown as retail fusions and marked.
@@ -137,8 +138,29 @@ record are shown as retail fusions and marked.
 * `drops` and `decks`: per opponent and pool, the fewest listed weights that
   make the port's arithmetic (`tables.c`, mirrored in `pools.py`) come out
   at exactly the edited pool; an edit every opponent shares is written once
-  as `"all"`. A fixed deck (`"fixed": true`) is kept as written; the
-  Duelists tab shows the weighted deck under it.
+  as `"all"`.
+* Fixed decks (`"decks": {"Simon Muran": {"fixed": true, "Kuriboh": 4, ...}}`,
+  `fixed_decks.py`, read by `tables.c` `read_fixed_deck`): an opponent's deck
+  as forty specific cards, in place of its weighted pool, shuffled for each
+  duel. A card has 0 to 40 copies (no limit of three: the weighted deal's
+  limit does not apply to cards written down), and they add up to exactly 40;
+  a card the port cannot name is left out uncounted, so a deck naming one, or
+  one that is not 40, is left out and the weighted deck is dealt. The
+  Problems tab says so before saving, and warns when one duelist has two
+  entries (the port deals the later) or weighted edits a fixed deck hides.
+  Choosing **Fixed deck** starts from the forty the weighted deck most likely
+  deals: its weights apportioned to 40 cards (largest remainder, ties to the
+  heavier card and then the lower id), at most three of a card as the retail
+  deal allows. Choosing **Weighted deck** again keeps the fixed one aside
+  until the mod is closed; **Revert to retail** takes it out and puts the
+  weighted deck back to the disc's. The weighted pool's own edits stay in the
+  project while a deck is fixed, but a fixed deck written under the same key
+  takes their place. A deck the editor read is written back exactly as it
+  was while it is untouched (and still names the same cards: a card named by
+  an added card's identity follows a new mod id); a changed or new one is
+  written as `"fixed": true`, the cards in id order, then any name it could
+  not place. An entry for `"all"`, or for a duelist a mod adds, is kept as
+  written. Drops and the other duelist data are not touched by any of this.
 * `starter`: the decks a new game may be dealt
   ([the starter deck](../../../notes/starter-deck.md)), each written down as
   its cards and their copies rather than as weights — which is what lets one
@@ -267,13 +289,69 @@ recomp is used.
 Before saving, the editor runs the loader's checks (`validate.py`): the mod
 id, settings, ATK/DEF in tens up to 5110, levels, a copy staying on its
 base's side, equip and ritual cards of the right type, a deck pool of at
-least 14 cards, a drop pool with a card left, and pools adding up to 2048.
+least 14 cards, a drop pool with a card left, pools adding up to 2048, and a
+fixed deck of exactly 40 cards the editor can name.
 For the art, the texture pack loader's (`texture_pack.c`): `textures` inside
 the mod and its `manifest.json` an array; each entry's `file` and `archive`,
 the file inside the pack and there, its measures (offset, words 1-1024,
 rows 1-512, depth 4/8/16, stride, `crop_left` and `width` within the row),
 `row_offsets` as long as `rows`, and a `setting` the mod declares; and the
 cards' `art`, `thumbnail` and `title`: inside the mod, there, and PNGs.
+
+## Card text preview
+
+**Tools > Card text preview** opens a window of its own that follows the
+Cards tab: the selected card's text as the card view lays it out and draws
+it, redrawn as you type. The tab itself is unchanged, and nothing of it goes
+into the mod. `card_text.py` does the work:
+
+* **Layout**, in the two steps the port and the game take: the port's
+  wrapping (`cards.c` `encode_description`: lines of up to 20 letters,
+  broken at spaces, `
+` where it stands, a longer word left whole), then the
+  text box (`TextBox_WrapLineIfNeeded`): 8 pixels a glyph and 21 to the
+  box, so a word past 21 letters is cut where the box ends, and the rest of
+  its line takes a row of its own. The card view shows 8 rows clear of its
+  panel's frame, draws a 9th over the frame, and stops before a 10th (seen
+  in the game with a test text, in Build Deck's card view, whose box has
+  255 glyph sprites; the duel's viewer has 160, so a long text may stop
+  sooner there). The preview marks each: the 9th row on the
+  frame's colour, the rows the game never shows dimmed on grey, a red tick
+  right of a row the box cut mid-word, and a red box for a character with
+  no retail letter (the port sets those from a font); an accented letter is
+  drawn plain (the port draws its mark on).
+* **Font**, at 1x to 4x:
+  * *Retail font*: the game's own 8x12 font and text colours, read off the
+    player's disc each time (nothing of it is kept or saved), each texel
+    made `scale` pixels square. At 1x the letters are the game's pixel for
+    pixel (the panel behind them is a flat colour, not the game's stone).
+  * *HD text: the port's face*: what Video > HD text draws at Internal 2x-4x,
+    set in the face the port uses when no mod gives one (on Windows the
+    first of Segoe UI, Arial and Tahoma in the Fonts folder; elsewhere
+    fontconfig's `sans-serif:bold`). A mod's own `"font"` comes first in
+    the game; choose that file in the next mode to see it.
+  * *HD text: a font file*: any TrueType file you have (**Font file...**,
+    which opens in the system's fonts folder), such as your own copy of Matrix,
+    the face of the paper cards' names, if you have a licence for it. The file is only read: the
+    editor never copies it into the mod. OpenType fonts with PostScript
+    (CFF) outlines, most `.otf` files, are refused with a message; their
+    `.ttf` version works.
+
+  HD text is drawn as `src/pc/text/hd_text.c` sets it: each glyph stays in
+  its retail cell, the face's baseline, x-height, capitals, ascenders and
+  descenders are set onto the retail font's lines, the glyph is made as
+  wide as the cell's letter (so a small-caps face's l stays as narrow as the
+  retail l), its stems as heavy, with the dark outline and each row's
+  shading through the text's palette. `ttf.py` reads the TrueType outlines
+  and fills them in plain Python (non-zero winding, 4 sub-rows a pixel),
+  in place of FreeType, so the result is close to the game's, not identical:
+  against the game's own 4x picture about half the text's pixels are the
+  same colour and 96-97% within one or two steps of the palette. A face
+  whose lines cannot be measured (no x-height, no descenders) is not used by
+  the port, which keeps the retail letters; the preview says so and does too.
+
+  The first HD picture of a face at a scale takes a second or so (the
+  window shows a busy cursor); glyphs are kept, so typing redraws at once.
 
 ## Command line
 
@@ -304,5 +382,7 @@ the source as above works too.
 
 (ctest `pc_fm_editor`). The tests build synthetic game files at the retail
 offsets (`tests/fixtures.py`), art records included, and their PNGs in code;
-they need no game data (the bulk fusion tests time a 722 x 722 preview). PNGs are read and written by `pngio.py`, in plain
-Python like the rest.
+they need no game data (the bulk fusion tests time a 722 x 722 preview). PNGs are
+read and written by `pngio.py`, in plain Python like the rest; the card-text
+preview's tests build their font page and a TrueType file in code as well
+(`tests/test_card_text.py`).

@@ -25,7 +25,7 @@ from pathlib import Path
 from .gamedata import (ATTRIBUTE_NAMES, CARD_COUNT, DECK_SIZE, DUELIST_NAMES, POOLS, STAR_NAMES,
                        STARTER_WEIGHT_LIMIT, TYPE_NAMES, TYPE_MAGIC, GameData)
 from .model import AddedCard, ModInfo, Project, StarterDeck, duelist_named, type_named, KEY_RE
-from . import art, pools as poolmath
+from . import art, fixed_decks, pools as poolmath
 
 INFO_KEYS = ("id", "name", "version", "author", "description")
 TABLE_KEYS = ("settings", "cards", "fusions", "equips", "rituals", "drops", "decks", "starter")
@@ -289,7 +289,7 @@ def _pool_edits(project: Project, pool: str):
 
 def build_pools(project: Project):
     decks = _pool_edits(project, "deck")
-    decks.update(project.kept_fixed)     # a fixed deck wins over weighted edits of it anyway
+    decks.update(fixed_decks.build(project))     # a fixed deck wins over weighted edits of it anyway
     if "all" in decks:
         decks = {"all": decks.pop("all"), **decks}
     drops = {}
@@ -836,8 +836,7 @@ def read_pools(project: Project, table, decks: bool, messages: list):
         return
     for name, entry in table.items():
         if decks and isinstance(entry, dict) and _json_bool(entry.get("fixed"), False):
-            messages.append(f"decks \"{name}\": a fixed deck; kept as written (the editor shows the weighted deck)")
-            project.kept_fixed[name] = entry
+            fixed_decks.read_entry(project, name, entry, messages)
             continue
         if same_all(name):
             duelists = list(range(len(project.pools)))
