@@ -67,6 +67,20 @@ int main(void)
     ControlsRuntime_Key(CTRL_KEY_X, 0);
     ControlsRuntime_Update();
     assert(!ControlsRuntime_Keyboard());
+    /* A tap released before the update (Android's injected key events come
+     * down and up in one millisecond) is seen by that one update. */
+    ControlsRuntime_Key(CTRL_KEY_X, 1);
+    ControlsRuntime_Key(CTRL_KEY_X, 0);
+    ControlsRuntime_Update();
+    assert(ControlsRuntime_Keyboard() == CTRL_DEST_CROSS);
+    ControlsRuntime_Update();
+    assert(!ControlsRuntime_Keyboard());
+    ControlsRuntime_Key(CTRL_KEY_X, 1);
+    ControlsRuntime_Key(CTRL_KEY_X, 0);
+    ControlsRuntime_ResetKeys();
+    ControlsRuntime_Update();
+    assert(!ControlsRuntime_Keyboard());
+    ControlsRuntime_Update();
     cfg = *ControlsRuntime_Config();
     cfg.port[0].mode = 2;
     strcpy(cfg.port[0].identity, "test:2");
