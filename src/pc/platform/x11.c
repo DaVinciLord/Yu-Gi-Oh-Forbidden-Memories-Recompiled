@@ -16,6 +16,7 @@
 #include "pc/saves/deck_menu.h"
 #include "mods_window.h"
 #include "controls_window.h"
+#include "quit_prompt.h"
 #include <X11/XKBlib.h>
 #include "settings.h"
 #include <X11/Xlib.h>
@@ -689,7 +690,8 @@ static void pump(void)
             continue;
         }
         if (event.type == ClientMessage && (Atom)event.xclient.data.l[0] == close_atom) {
-            quit = 1;
+            QuitPrompt_Request(&quit);
+            repaint_menu();
         } else if (event.type == Expose) {
             if (image) {
                 show(event.xexpose.x, event.xexpose.y, event.xexpose.width, event.xexpose.height);
@@ -732,7 +734,8 @@ static void pump(void)
                 continue;
             }
             if (key == XK_Escape && event.type == KeyPress) {
-                quit = 1;
+                QuitPrompt_Request(&quit);
+                repaint_menu();
             }
             if (key == XK_Tab) {
                 Platform_SetClockRate(event.type == KeyPress ? 400 : Settings_Get(SET_SPEED));
@@ -769,6 +772,9 @@ static void pump(void)
     if (mods_window && mods_dirty) draw_mods();
     mods_dirty = 0;
     Gamepad_Poll(current_frame);
+    /* As in sdl.c: a notice answers a controller and holds the game's input. */
+    ControlsRuntime_Hold(Menu_NoticeShown());
+    if (Menu_NoticePad(ControlsRuntime_TakePadPresses(), &quit)) repaint_menu();
     if(controls_window) {
         static uint64_t last_draw;ControlsWindow_Tick();
         if(ControlsWindow_ShouldClose())close_controls();

@@ -29,6 +29,12 @@ int ControlsRuntime_Keys(ControlSource *out);
 void ControlsRuntime_Block(int block);
 void ControlsRuntime_Gate(void);
 int ControlsRuntime_Blocked(void);
+/* Keep the game's input at rest (the menu's notice has it) without touching
+ * the Controls window's block; releasing waits for neutral, like a block. */
+void ControlsRuntime_Hold(int hold);
+/* Pad buttons newly pressed on either controller since the last call, also
+ * while input is held: what answers a notice from a controller. */
+uint16_t ControlsRuntime_TakePadPresses(void);
 uint16_t ControlsRuntime_Keyboard(void);
 uint16_t ControlsRuntime_Pad(int port);
 int ControlsRuntime_Connected(int port);

@@ -16,6 +16,7 @@
 #include "mods_window.h"
 #include "controls_window.h"
 #include "controls_linux.h"
+#include "quit_prompt.h"
 #include "settings.h"
 #include "pc/audio/spu.h"
 #include "pc/debug/cheats.h"
@@ -1336,6 +1337,9 @@ static void pump(void)
             continue;
         }
         switch (event.type) {
+        /* Closing the main window (its button, Alt+F4) asks, like File >
+         * Exit; SDL_EVENT_QUIT is left to signals and the session ending. */
+        case SDL_EVENT_WINDOW_CLOSE_REQUESTED: QuitPrompt_Request(&quit); break;
         case SDL_EVENT_QUIT: quit = 1; break;
         case SDL_EVENT_WINDOW_EXPOSED: show(); break;
         case SDL_EVENT_WINDOW_RESIZED: case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
@@ -1451,7 +1455,8 @@ static void pump(void)
                     Settings_Save();
                     Platform_ApplyDisplaySettings();
                 } else {
-                    quit = 1;
+                    QuitPrompt_Request(&quit);
+                    menu_dirty = 1;
                 }
             }
             /* F3 belongs to the HUD; slot 3 remains available from File. */
@@ -1469,6 +1474,9 @@ static void pump(void)
     if (mods_window && mods_dirty) draw_mods();
     mods_dirty = 0;
     Gamepad_Poll(current_frame);
+    /* A notice answers a controller and keeps the game's input at rest. */
+    ControlsRuntime_Hold(Menu_NoticeShown());
+    if (Menu_NoticePad(ControlsRuntime_TakePadPresses(), &quit)) menu_dirty = 1;
     if(controls_window) {
         static uint64_t last_draw;
         ControlsWindow_Tick();
@@ -1607,6 +1615,7 @@ int Platform_Open(const char *title)
      * cursor/DPI scale from the rest of the desktop. SDL_VIDEODRIVER remains
      * available for diagnostics and compatibility overrides. */
     block_signals(&previous);
+    SDL_SetHint(SDL_HINT_QUIT_ON_LAST_WINDOW_CLOSE, "0"); /* pump asks first */
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_GAMEPAD | SDL_INIT_AUDIO)) {
         restore_signals(&previous);
         fprintf(stderr, "memories-pc: SDL: %s; set MEMORIES_HEADLESS=1 to run without a window\n", SDL_GetError());

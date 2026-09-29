@@ -161,6 +161,12 @@ void Menu_SetHdPicture(int on);
 void Menu_ShowNotice(const char *title, const char *text, const char *const *buttons, int count, int focus,
                      void (*chosen)(int button, int *quit));
 void Menu_CloseNotice(void);
+int Menu_NoticeShown(void);
+/* A controller's newly pressed pad buttons (PS1 bits) for the notice shown:
+ * the D-pad moves the focus, Cross presses the focused button and Circle the
+ * last one, exchanged with View > Japanese buttons. Returns 1 when the
+ * notice took them. */
+int Menu_NoticePad(uint16_t pressed, int *quit);
 /* Nonzero once after a notice appeared, changed or closed other than by an
  * event: the backend repaints the menu then. */
 int Menu_TakeChanged(void);
