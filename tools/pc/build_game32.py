@@ -155,6 +155,8 @@ def compile_unit(job):
             os.path.getmtime(obj) >= os.path.getmtime(source):
         return
     run([CC, *flags, "-c", source, "-o", obj])
+    if os.path.exists(obj + ".aliased"):
+        os.remove(obj + ".aliased")  # the fresh object names them itself (see main)
     if WINDOWS:
         # asm("name") labels in the sources name C symbols, which COFF spells
         # with a leading underscore; everything else from C already has one.
@@ -648,6 +650,12 @@ def main():
     digest.update(" ".join(CFLAGS).encode() + repr(sorted(fixed.items())).encode())
 
     game_defined, tentative, undefined = symbols([obj(s) for s in game])
+    for source in game:
+        # Names an earlier build renamed away in this object (below): still
+        # wanted, or the rebuilt table loses them (func_8001352C, for one).
+        if os.path.exists(obj(source) + ".aliased"):
+            with open(obj(source) + ".aliased") as handle:
+                undefined.update(handle.read().split())
     native_defined, _, native_undefined = symbols([obj(s) for s in NATIVE])
     with open("config/slus_01411/functions.csv") as handle:
         rows = list(csv.DictReader(handle))
@@ -737,7 +745,17 @@ def main():
             with open(f"{options.build}/aliases.txt", "w") as handle:
                 handle.writelines(f"_{name} _{target}\n" for name, target in sorted(aliases.items()))
             for source in game:
-                if set(run([NM, "-u", obj(source)]).split()) & {"_" + name for name in aliases}:
+                # The rename is in place, so the object no longer shows the
+                # names: .aliased keeps them for the next build's alias list
+                # (and so the mod exports), until the object is recompiled.
+                # An object renamed before keeps its earlier names too.
+                hits = {name[1:] for name in run([NM, "-u", obj(source)]).split()} & set(aliases)
+                if hits:
+                    if os.path.exists(obj(source) + ".aliased"):
+                        with open(obj(source) + ".aliased") as handle:
+                            hits.update(handle.read().split())
+                    with open(obj(source) + ".aliased", "w") as handle:
+                        handle.writelines(f"{name}\n" for name in sorted(hits))
                     run([OBJCOPY, f"--redefine-syms={options.build}/aliases.txt", obj(source)])
         # __start_/__stop_ for the sections state.c and the module registry
         # walk: marker sections that sort before and after the contents.
