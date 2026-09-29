@@ -43,6 +43,10 @@ WINDOWS = TARGET == "windows"
 # android-<abi>: the ABI is a parameter of everything Android below.
 ANDROID_ABI = TARGET[len("android-"):] if TARGET.startswith("android-") else None
 ANDROID = ANDROID_ABI is not None
+# 32-bit ARM (A32): the Android armeabi-v7a build. Its own assembly
+# (src/pc/guest/*_arm.S), branch thunks and relocations below; everything
+# else is 32-bit x86 (*_i386.S).
+ARM = ANDROID_ABI == "armeabi-v7a"
 if TARGET not in ("linux", "windows") and not ANDROID:
     sys.exit(f"--target {TARGET}: linux, windows or android-<abi>")
 WIN32_DEPS = "tmp/pc/win32-deps"  # tools/pc/build_win32_deps.py
@@ -137,6 +141,10 @@ if ANDROID:
         # Fontconfig's few calls, answered from the system fonts, and what
         # bionic lacks below the API level (memfd_create, iconv).
         "-Isrc/pc/compat/android", "-include", ANDROID_COMPAT]
+if ARM:
+    # clang has no patchable function entries for 32-bit ARM: game functions
+    # cannot be hooked there yet (src/pc/mods/hooks.c hooks only i386).
+    CFLAGS = [f for f in CFLAGS if not f.startswith("-fpatchable-function-entry")]
 CFLAGS = CFLAGS + BRANCH_THUNKS
 NATIVE_CFLAGS = NATIVE_CFLAGS + BRANCH_THUNKS
 if PORTABLE:
@@ -152,7 +160,7 @@ BACKENDS = {"sdl": ["src/pc/platform/sdl.c", "src/pc/render/gl_picture.c", "src/
             "x11": ["src/pc/platform/x11.c", "src/pc/platform/audio_alsa.c", "src/pc/platform/gamepad_evdev.c"]}
 BACKEND_SOURCES = sorted(sum(BACKENDS.values(), []))
 ANDROID_BACKEND = {"src/pc/render/present_pass.c": "src/pc/render/gl_desktop_none.c"}
-NATIVE = sorted(glob.glob("src/pc/guest/*.[cS]") + glob.glob("src/pc/sdk/*.c") +
+NATIVE = sorted([f for f in glob.glob("src/pc/guest/*.[cS]") if not f.endswith("_i386.S" if ARM else "_arm.S")] + glob.glob("src/pc/sdk/*.c") +
                 [f for f in glob.glob("src/pc/platform/*.c") if f not in BACKEND_SOURCES] + glob.glob("src/pc/overlays/*.c") + glob.glob("src/pc/overrides/*.c") + glob.glob("src/pc/audio/*.c") + glob.glob("src/pc/mods/*.c") + glob.glob("src/pc/debug/*.c") + glob.glob("src/pc/cards/*.c") + glob.glob("src/pc/free_duel/*.c") + glob.glob("src/pc/saves/*.c") + glob.glob("src/pc/text/*.c") + ["src/pc/render/soft_gpu.c", "src/pc/render/texture_dump.c", "src/pc/render/texture_pack.c"]) + [
     "src/pc/rng.c", "src/pc/compat/fs.c", "src/pc/compat/gte.c", "src/pc/compat/pgxp.c", "src/pc/compat/libgs_ot.c", "src/pc/render/packets.c"]
 # Same contract as the host C library, so the host's version is used directly.

@@ -138,6 +138,21 @@ static void leave_game_stack(void)
     Memories_ContextSwitch(&game_context, &service_context);
 }
 
+#if defined(__arm__)
+/* A frame for Memories_ContextSwitch (state_arm.S) to resume `function`
+ * from, below `limit`: what it pops (D8-D15, then R4-R12), then LR, which it
+ * branches to. `function` never returns (it would start over). It starts
+ * with the stack 8-byte aligned, as AAPCS has it at every call, and a zero
+ * frame pointer, where a stack walk ends. Returns the context. */
+static uint32_t switch_frame(uint32_t limit, void (*function)(void))
+{
+    uint32_t start = (limit - 32u) & ~15u; /* the stack pointer `function` starts with */
+    uint32_t *frame = (uint32_t *)(uintptr_t)(start - 104u);
+    memset(frame, 0, 104u);
+    frame[25] = (uint32_t)(uintptr_t)function;
+    return (uint32_t)(uintptr_t)frame;
+}
+#else
 /* A frame for Memories_ContextSwitch to resume `function` from, below
  * `limit`: what it pops (EDI ESI EBX EBP), then the return into `function`,
  * whose own return address is never used. `function` starts with the stack
@@ -153,6 +168,7 @@ static uint32_t switch_frame(uint32_t limit, void (*function)(void))
     frame[5] = 0;
     return (uint32_t)(uintptr_t)frame;
 }
+#endif
 
 /* The VSync a loaded state resumes in (apply). */
 static MemoriesStateEntry resume_entry;
@@ -510,7 +526,7 @@ static void serialize(MemoriesState *state)
     }
     subsystems(state);
     {
-        MemoriesStateField fields[] = {{(void *)(uintptr_t)entry.esp, STACK_TOP - entry.esp}};
+        MemoriesStateField fields[] = {{(void *)(uintptr_t)MEMORIES_STATE_ENTRY_SP(entry), STACK_TOP - MEMORIES_STATE_ENTRY_SP(entry)}};
         Memories_StateChunk(state, "stack", fields, 1);
     }
     Spu_Hold(0);
@@ -577,7 +593,7 @@ static void apply(void)
     chunk = find_chunk(&state, "entry", &size);
     memcpy(&entry, chunk, sizeof(entry));
     chunk = find_chunk(&state, "stack", &size);
-    memcpy((void *)(uintptr_t)entry.esp, chunk, size);
+    memcpy((void *)(uintptr_t)MEMORIES_STATE_ENTRY_SP(entry), chunk, size);
     free(pending_image);
     pending_image = NULL;
     Spu_Hold(0);
@@ -599,7 +615,7 @@ static void apply(void)
          * middle of Memories_StateRunGame). The switch lands in resume_game
          * on the game stack, below what the state restored there. */
         resume_entry = entry;
-        game_context = switch_frame(entry.esp - 64u, resume_game);
+        game_context = switch_frame(MEMORIES_STATE_ENTRY_SP(entry) - 64u, resume_game);
         Memories_ContextSwitch(&service_context, &game_context);
     }
 #else
@@ -794,6 +810,12 @@ static int relocate(uint8_t *image, size_t image_size, uint32_t saved_fingerprin
         }
         if (!strcmp(tag, "stack")) {
             changed = relocate_words(image + at + 20, length, 4, 1, old, old_count, new, new_count);
+#if defined(__arm__)
+        } else if (!strcmp(tag, "entry") && length == sizeof(MemoriesStateEntry)) {
+            /* The return address is in LR, not on the stack. */
+            changed = relocate_words(image + at + 20 + offsetof(MemoriesStateEntry, lr), 4, 4, 1, old, old_count, new,
+                                     new_count);
+#endif
         } else if (!strcmp(tag, "memory") || !strncmp(tag, "data:", 5) || !strncmp(tag, "bss:", 4)) {
             changed = relocate_words(image + at + 20, length, 4, 0, old, old_count, new, new_count);
         } else if (!strcmp(tag, "libetc") || !strcmp(tag, "libpress") || !strcmp(tag, "libds")) {
@@ -865,7 +887,8 @@ static int load(const char *path)
         const uint8_t *system = find_chunk(&state, "system", &size);
         if (system && size == sizeof(saved_by)) {
             memcpy(saved_by, system, sizeof(saved_by) - 1);
-        } else if (entry.esp >= OLD_LINUX_STACK_BASE && entry.esp < OLD_LINUX_STACK_BASE + STACK_SIZE) {
+        } else if (MEMORIES_STATE_ENTRY_SP(entry) >= OLD_LINUX_STACK_BASE &&
+                   MEMORIES_STATE_ENTRY_SP(entry) < OLD_LINUX_STACK_BASE + STACK_SIZE) {
             refuse("%s was saved by an older Linux build, whose game stack was elsewhere; save states don't carry "
                    "over across this update (memory card saves do)", path);
             free(image);
@@ -881,7 +904,8 @@ static int load(const char *path)
         }
     }
     chunk = find_chunk(&state, "stack", &size);
-    if (!chunk || entry.esp < STACK_BASE || entry.esp >= STACK_TOP || size != STACK_TOP - entry.esp ||
+    if (!chunk || MEMORIES_STATE_ENTRY_SP(entry) < STACK_BASE || MEMORIES_STATE_ENTRY_SP(entry) >= STACK_TOP ||
+        size != STACK_TOP - MEMORIES_STATE_ENTRY_SP(entry) ||
         !find_chunk(&state, "memory", &size) || size != MEMORIES_GUEST_RAM_SIZE + SCRATCHPAD_SIZE) {
         refuse("%s: damaged state", path);
         free(image);
@@ -914,10 +938,11 @@ static int load(const char *path)
 static int from_game_code(void)
 {
     uint32_t caller;
-    if (Memories_StateEntry.esp < STACK_BASE || Memories_StateEntry.esp >= STACK_TOP) {
+    if (MEMORIES_STATE_ENTRY_SP(Memories_StateEntry) < STACK_BASE ||
+        MEMORIES_STATE_ENTRY_SP(Memories_StateEntry) >= STACK_TOP) {
         return 0;
     }
-    caller = *(const uint32_t *)(uintptr_t)Memories_StateEntry.esp;
+    caller = MEMORIES_STATE_ENTRY_CALLER(Memories_StateEntry);
     return caller >= (uintptr_t)__start_game_text && caller < (uintptr_t)__stop_game_text;
 }
 
