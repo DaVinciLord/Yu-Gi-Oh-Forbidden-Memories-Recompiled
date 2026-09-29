@@ -302,6 +302,12 @@ int Platform_ClockRate(void) { return rate; }
 
 #ifndef __ANDROID__ /* android.c: GLES only */
 int Platform_HasDesktopGL(void) { return 1; }
+int Platform_GuestMemoryHelp(char *why, size_t size)
+{
+    (void)why;
+    (void)size;
+    return 0;
+}
 #endif
 void Platform_StepFrame(void) { step_pending = 1; }
 
