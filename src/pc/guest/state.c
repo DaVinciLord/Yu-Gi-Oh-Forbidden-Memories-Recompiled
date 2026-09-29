@@ -12,6 +12,7 @@
 #include "pc/render/soft_gpu.h"
 #include "pc/render/texture_dump.h"
 #include "pc/saves/deck_menu.h"
+#include "pc/cards/pack_shop.h"
 #include "pc/text/language.h"
 #include "pc/text/text.h"
 #include "pc/platform/menu.h"
@@ -406,6 +407,7 @@ static void subsystems(MemoriesState *state)
     LibMcrd_State(state);
     SaveMenu_State(state);
     if (!Memories_StateLoading(state)) DeckMenu_ShopState(state);
+    if (!Memories_StateLoading(state)) PackShop_State(state);
     TitleJump_State(state);
     TitleScreen_State(state);
     Platform_State(state);
@@ -529,6 +531,7 @@ static void apply(void)
     hold_signals(1);
     Spu_Hold(1);
     DeckMenu_ShopState(&state);
+    PackShop_State(&state); /* its text, like the shop's menu, remapped first */
     chunk = find_chunk(&state, "memory", &size);
     memcpy((void *)(uintptr_t)MEMORIES_GUEST_RAM, chunk, MEMORIES_GUEST_RAM_SIZE);
     memcpy((void *)(uintptr_t)SCRATCHPAD, chunk + MEMORIES_GUEST_RAM_SIZE, SCRATCHPAD_SIZE);

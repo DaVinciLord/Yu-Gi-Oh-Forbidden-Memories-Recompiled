@@ -40,7 +40,7 @@
 #define PACK_DRAWS_PER_SLOT 4
 #define PACK_DEFAULT_COUNT 5
 #define PACK_DEFAULT_PRICE 100
-#define PACK_NAME_LETTERS 20       /* the name's room on the screen */
+#define PACK_NAME_LETTERS 16       /* the name's room between the list's arrows */
 
 enum { PACK_REVEAL_FLIP, PACK_REVEAL_QUICK, PACK_REVEAL_LIST };
 enum { PACK_SOUND_MOVE, PACK_SOUND_BUY, PACK_SOUND_REFUSE, PACK_SOUND_REVEAL, PACK_SOUND_BACK, PACK_SOUNDS };

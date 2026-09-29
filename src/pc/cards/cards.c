@@ -1515,11 +1515,37 @@ static const unsigned char *translated_plate(int id)
     return text_plates[id];
 }
 
+/* The Password screen's card packs (pack_shop.c): the next record loaded
+ * for card `override_id` takes a pack's picture and plate, or its plate. */
+static int override_id, override_fired;
+static const unsigned char *override_record, *override_plate;
+
+void Cards_OverrideArt(int id, const unsigned char *record, const unsigned char *plate)
+{
+    override_id = id;
+    override_record = record;
+    override_plate = plate;
+}
+
+int Cards_ArtOverridden(void)
+{
+    int fired = override_fired;
+    override_fired = 0;
+    return fired;
+}
+
 void Cards_PatchArtRecord(int id, unsigned char *record)
 {
     const unsigned char *translated;
     int from;
     if (!Cards_Valid(id)) return;
+    if (override_id && id == override_id && override_record) {
+        /* A pack's own picture, whole: the art, its palette and the plate. */
+        override_id = 0;
+        override_fired = 1;
+        patch(record, override_record, CARD_THUMB_PIXELS);
+        return;
+    }
     if ((from = art_of(id, ART_PICTURE)) != 0) patch(record, art_records[from], CARD_TITLE_PIXELS);
     /* The plate is not reported: it sits in the middle of the sector that
      * also ends the base's palette, and a write inside a delivery drops all
@@ -1533,6 +1559,12 @@ void Cards_PatchArtRecord(int id, unsigned char *record)
     }
     if ((from = art_of(id, ART_THUMBNAIL)) != 0) {
         patch(record + CARD_THUMB_PIXELS, art_records[from] + CARD_THUMB_PIXELS, CARD_THUMB_BLOCK);
+    }
+    if (override_id && id == override_id && override_plate) {
+        /* A pack shown by its cover card's art: the pack's name on the plate. */
+        override_id = 0;
+        override_fired = 1;
+        memcpy(record + CARD_TITLE_PIXELS, override_plate, CARD_TITLE_BYTES);
     }
 }
 

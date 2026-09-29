@@ -37,7 +37,7 @@ the game starts, like the other tables: changing them needs a restart.
 | Key | Default | What it does |
 |---|---|---|
 | `id` | the name, lower case, hyphens for the rest (`"Legend of B.E.W.D."` is `legend-of-b-e-w-d`) | the pack's key: 1-63 letters, digits, `_` or `-`. With the mod's id it is the pack's identity, `mod-id:id`, which the save's progress, `unlock` `opened` and other packs use |
-| `name` | the `id` | up to 20 letters (the line has room for that); longer is cut, with a note. UTF-8: letters the game lacks come from the mods' fonts, as card names do |
+| `name` | the `id` | up to 16 letters, the room between the list's ◄ and ► arrows; longer is cut, with a note. UTF-8: letters the game lacks come from the mods' fonts, as card names do |
 | `description` | none | the first two lines (20 letters each) show under the name; □ shows it all |
 | `image` | none | a PNG inside the mod: the big card's picture (below) |
 | `cover` | the first card of the rarest tier that has cards | the card whose art stands in when there is no `image` |
@@ -128,7 +128,7 @@ same mod; a `guarantee` or `pity` naming no tier of the pack, or less than 1;
 `tiers`; every tier at odds 0 with a slot dealt by the odds.
 
 Anything else is a note and the pack stays: an unknown card is left out of its
-pool; an unreadable `image` shows the cover; a name past 20 letters is cut; an
+pool; an unreadable `image` shows the cover; a name past 16 letters is cut; an
 unknown key gets the likeliest meant ("did you mean"); an `unlock` naming
 something absent stays locked; two packs with one password sell the first.
 

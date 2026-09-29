@@ -182,7 +182,7 @@ static void test_warnings(void)
     /* An unknown card is dropped, the pack stays. */
     CHECK(one("{\"packs\": [{\"cards\": [1, 9999, \"Nobody\"]}]}") == 1 && noted("no card \"9999\"") && noted("Nobody"));
     CHECK(Packs_At(0)->tiers[0].pool.count == 1);
-    /* A long name is cut at twenty letters. */
+    /* A long name is cut at sixteen letters, the room between the arrows. */
     CHECK(one("{\"packs\": [{\"name\": \"A Very Long Pack Name Indeed\", \"cards\": [1]}]}") == 1 && noted("cut there"));
     CHECK(strlen(Packs_At(0)->name) == PACK_NAME_LETTERS);
     CHECK(!strcmp(Packs_At(0)->id, "a-very-long-pack-name-indeed"));
