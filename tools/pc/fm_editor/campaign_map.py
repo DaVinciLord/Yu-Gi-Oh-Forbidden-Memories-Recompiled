@@ -29,8 +29,8 @@ Heishin's coup (WA_MRG.MRG sector 8153) and in the one after it (8311, story
 flag 0x47), each with the table 0x11A8 bytes into it. A mod changes both
 with "data" patches (notes/modding.md); the PC port reads the table where
 the package puts it (location_table.c), as the console does. The module's
-second, alternate copy of the table (+0x1E54) has no live caller and is
-left alone.
+second, alternate copy of the table (+0x1E54) has no reader found on the
+map's paths and is left alone.
 
 The same package holds the map's pictures: a display resource bank (the
 sprites' layout, sector +140), a 256x256 four-bit strip of sprites (+141,

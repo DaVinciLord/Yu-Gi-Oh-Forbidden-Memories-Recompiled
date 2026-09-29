@@ -275,7 +275,7 @@ record are shown as retail fusions and marked.
   (`src/overlays/overworld/location_table.c`), as the console does, so the
   patch works on either; the game reads it when the map loads, and data
   mods need a restart. The module's alternate copy of the table
-  (`+0x1E54`) has no live caller and is not written. The mod's other
+  (`+0x1E54`) has no reader found on the map's paths and is not written. The mod's other
   `data` entries are kept as written, before the map's; opening a mod
   takes its patches of the two tables back into the map (a run across a
   table's edge stays as written, with a note), and a mod whose two tables

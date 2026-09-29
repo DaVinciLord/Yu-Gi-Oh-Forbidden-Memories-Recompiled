@@ -54,8 +54,8 @@ same, pixel for pixel); a mod's `data` patch of them (the FM Editor's Map tab,
 [`tools/pc/fm_editor`](../../../tools/pc/fm_editor/README.md)) changes the
 map. The package is `WA_MRG.MRG` sectors `8153` (before the coup) or `8311`
 (after, flag `0x47`), and the table starts `0x11A8` bytes into either. The
-alternate table at `0x1E54` holds the same bytes and has no live caller; the
-port leaves it initialized in C.
+alternate table at `0x1E54` holds the same bytes; no reader of it has been
+found on the paths the map takes, so the port leaves it initialized in C.
 
 ## Active location lifecycle translation unit
 

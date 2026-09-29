@@ -136,7 +136,10 @@ package puts it (`src/overlays/overworld/README.md`), so a patch of
 `WA_MRG.MRG` at `0xFEC800 + 0x11A8` and `0x103B800 + 0x11A8` (before and after
 the coup, 16 records of 66 bytes, `notes/overlays/campaign-map-records.md`)
 changes the map. The FM Editor's Map tab writes those patches
-([tools/pc/fm_editor](../tools/pc/fm_editor/README.md)).
+([tools/pc/fm_editor](../tools/pc/fm_editor/README.md)). A save state holds the
+table as it was in memory, so a state made without the map mod shows the
+disc's map after loading, even with the mod on, until the game enters the map
+again (`Main_RunCampaignMap` reads the overworld package each time it does).
 
 Named patches may address the expanded tail. They are checked against the
 final selected replacement; a shorter replacement still allows patches
