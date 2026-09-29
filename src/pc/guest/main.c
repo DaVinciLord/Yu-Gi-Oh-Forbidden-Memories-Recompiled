@@ -67,7 +67,7 @@ int Platform_RestartGame(void)
 
 static char **launch_argv;
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__ANDROID__) /* android.c: an app cannot re-execute itself */
 int Platform_RestartGame(void)
 {
     struct itimerval stopped = {0}, previous;
