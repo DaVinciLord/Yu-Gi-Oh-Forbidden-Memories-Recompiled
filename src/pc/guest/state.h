@@ -25,12 +25,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* The game stack: the fixed range the game's own code runs on (state.c). */
-#ifdef _WIN32
-#define MEMORIES_GAME_STACK_BASE 0xB0000000u /* 32-bit Windows loads system DLLs around 0x70000000; mods use 0x90000000 */
-#else
-#define MEMORIES_GAME_STACK_BASE 0x70000000u
-#endif
+/* The game stack: the fixed range the game's own code runs on (state.c),
+ * at one address on every system. 32-bit Windows loads system DLLs around
+ * 0x70000000, and an Android app process has ART's boot image there; mods
+ * use 0x90000000. */
+#define MEMORIES_GAME_STACK_BASE 0xB0000000u
 #define MEMORIES_GAME_STACK_SIZE 0x00800000u
 
 typedef struct MemoriesState MemoriesState;

@@ -2275,8 +2275,17 @@ bit-identical. How (details in `src/pc/guest/state.h`):
 - The build collects every game object's code and variables into
   `game_text/rodata/data/bss` (and the `ovl_<module>_*` sections) and links
   them at fixed addresses (`FIXED_SECTIONS` in `tools/pc/build_game32.py`);
-  the game runs on a stack mapped at `0x70000000`. Return addresses and
-  pointers inside a state therefore mean the same in the next build.
+  the game runs on a stack mapped at `0xB0000000` on every system (Linux
+  used `0x70000000` up to v0.2.0; an Android app has ART's boot image
+  there). Return addresses and pointers inside a state therefore mean the
+  same in the next build. A `system` chunk names the system whose build
+  made the state (the code's layout is that compiler's), and a state from
+  another system is refused; states from before the chunk tell by their
+  stack, and an old Linux state (stack at `0x70000000`) is refused with its
+  own message. No format version bump: a Windows state from v0.2.0 still
+  loads (its stack was already there) with v0.2.0's `symbols/<build id>.txt`
+  beside the new executable, as any state from another build needs, and an
+  older Linux one is refused.
 - Stored: guest RAM, scratchpad, those sections, the game stack above the
   call, and one self-described chunk per native subsystem (`*_State`
   functions: soft GPU, SPU, LIBSPU, LIBDS including buffered movie frames,
@@ -2731,8 +2740,8 @@ What differs from Linux, and why:
   so the mirror cannot be mapped; `Memories_Resolve` returns the
   `0x80000000` alias for physical RAM addresses, and the fault handler sends
   any other access there through guest RAM (each site reported once).
-- **Stacks.** The game stack is at `0xB0000000` (32-bit Windows loads system
-  DLLs around `0x70000000`; the mods keep `0x90000000`). `state.c` switches stacks with
+- **Stacks.** The game stack is at `0xB0000000`, as on every system (32-bit
+  Windows loads system DLLs around `0x70000000`; the mods keep `0x90000000`). `state.c` switches stacks with
   `Memories_ContextSwitch` (`state_i386.S`) and moves the TEB's stack bounds,
   `DeallocationStack` and exception chain with it, as fibers do. A guard
   page 64 KiB above the game stack's bottom, below `DeallocationStack` so
