@@ -23,13 +23,8 @@
 #include <ucontext.h>
 #endif
 
-#ifdef _WIN32
-#define GAME_STACK_LOW 0xB0000000u /* state.c */
+#define GAME_STACK_LOW 0xB0000000u /* state.c, on every system */
 #define GAME_STACK_HIGH 0xB0800000u
-#else
-#define GAME_STACK_LOW 0x70000000u
-#define GAME_STACK_HIGH 0x70800000u
-#endif
 
 static unsigned char alternate_stack[64 * 1024];
 static uintptr_t main_stack_low, main_stack_high;
