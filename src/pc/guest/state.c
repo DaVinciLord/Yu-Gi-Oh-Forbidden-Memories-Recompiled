@@ -138,6 +138,22 @@ static void leave_game_stack(void)
     Memories_ContextSwitch(&game_context, &service_context);
 }
 
+/* A frame for Memories_ContextSwitch to resume `function` from, below
+ * `limit`: what it pops (EDI ESI EBX EBP), then the return into `function`,
+ * whose own return address is never used. `function` starts with the stack
+ * as a call leaves it when the stack was 16-byte aligned at the call: the
+ * i386 System V ABI (Android) keeps SSE values on the stack at that
+ * alignment; Windows needs 4. Returns the context. */
+static uint32_t switch_frame(uint32_t limit, void (*function)(void))
+{
+    uint32_t start = ((limit - 32u) & ~15u) - 4u; /* the stack pointer `function` starts with */
+    uint32_t *frame = (uint32_t *)(uintptr_t)(start - 20u);
+    frame[0] = frame[1] = frame[2] = frame[3] = 0;
+    frame[4] = (uint32_t)(uintptr_t)function;
+    frame[5] = 0;
+    return (uint32_t)(uintptr_t)frame;
+}
+
 /* The VSync a loaded state resumes in (apply). */
 static MemoriesStateEntry resume_entry;
 
@@ -582,12 +598,8 @@ static void apply(void)
          * the next load would resume from those (EBP 0, a return into the
          * middle of Memories_StateRunGame). The switch lands in resume_game
          * on the game stack, below what the state restored there. */
-        uint32_t *frame = (uint32_t *)(uintptr_t)(entry.esp - 64);
-        frame[0] = frame[1] = frame[2] = frame[3] = 0;
-        frame[4] = (uint32_t)(uintptr_t)resume_game;
-        frame[5] = 0;
         resume_entry = entry;
-        game_context = (uint32_t)(uintptr_t)frame;
+        game_context = switch_frame(entry.esp - 64u, resume_game);
         Memories_ContextSwitch(&service_context, &game_context);
     }
 #else
@@ -1036,13 +1048,7 @@ int Memories_StateRunGame(int (*entry)(void))
     game_entry = entry;
 #ifdef ASM_CONTEXT_SWITCH
     {
-        /* What Memories_ContextSwitch pops: EDI ESI EBX EBP, then the return
-         * into run_game, whose own return address is never used. */
-        uint32_t *top = (uint32_t *)(uintptr_t)(STACK_TOP - 64);
-        top[0] = top[1] = top[2] = top[3] = 0;
-        top[4] = (uint32_t)(uintptr_t)run_game;
-        top[5] = 0;
-        game_context = (uint32_t)(uintptr_t)top;
+        game_context = switch_frame(STACK_TOP, run_game);
 #ifdef _WIN32
         Win32_GuardStack(STACK_BASE, GUARD_ROOM);
 #endif
