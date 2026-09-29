@@ -33,14 +33,21 @@
 #include <ucontext.h>
 #endif
 
+/* One game stack address on every system. 32-bit Windows loads system DLLs
+ * around 0x70000000, and an Android app process has ART's boot image there;
+ * mods use 0x90000000. Linux builds before 2026-09-28 used 0x70000000: their
+ * states hold that stack, and cannot resume on this one. */
+#define STACK_BASE 0xB0000000u
+#define OLD_LINUX_STACK_BASE 0x70000000u
+/* Which system's build made a state ("system" chunk): the game code's
+ * layout, which the stack's return addresses point into, is the compiler's
+ * for that system. States from before the chunk tell by the stack. */
 #ifdef _WIN32
-#define STACK_BASE 0xB0000000u /* 32-bit Windows loads system DLLs around 0x70000000; mods use 0x90000000 */
-#define OTHER_STACK_BASE 0x70000000u
-#define OTHER_SYSTEM "Linux"
+#define SYSTEM "Windows"
+#elif defined(__ANDROID__)
+#define SYSTEM "Android"
 #else
-#define STACK_BASE 0x70000000u
-#define OTHER_STACK_BASE 0xB0000000u
-#define OTHER_SYSTEM "Windows"
+#define SYSTEM "Linux"
 #endif
 #define STACK_SIZE 0x00800000u
 #define STACK_TOP (STACK_BASE + STACK_SIZE)
@@ -453,6 +460,11 @@ static void serialize(MemoriesState *state)
         Memories_StateChunk(state, "entry", fields, 1);
     }
     {
+        char system[16] = SYSTEM;
+        MemoriesStateField fields[] = {{system, sizeof(system)}};
+        Memories_StateChunk(state, "system", fields, 1);
+    }
+    {
         MemoriesStateField fields[] = {{(void *)(uintptr_t)MEMORIES_GUEST_RAM, MEMORIES_GUEST_RAM_SIZE},
                                        {(void *)(uintptr_t)SCRATCHPAD, SCRATCHPAD_SIZE}};
         Memories_StateChunk(state, "memory", fields, 2);
@@ -825,13 +837,27 @@ static int load(const char *path)
         return -1;
     }
     memcpy(&entry, chunk, sizeof(entry));
-    if (entry.esp >= OTHER_STACK_BASE && entry.esp < OTHER_STACK_BASE + STACK_SIZE) {
+    {
         /* The state holds the game stack, return addresses into the game code
          * as the other system's compiler laid it out: nothing here to resume. */
-        refuse("%s was saved by the %s build; a state loads only in a build for the system that saved it", path,
-               OTHER_SYSTEM);
-        free(image);
-        return -1;
+        char saved_by[16] = "";
+        const uint8_t *system = find_chunk(&state, "system", &size);
+        if (system && size == sizeof(saved_by)) {
+            memcpy(saved_by, system, sizeof(saved_by) - 1);
+        } else if (entry.esp >= OLD_LINUX_STACK_BASE && entry.esp < OLD_LINUX_STACK_BASE + STACK_SIZE) {
+            refuse("%s was saved by an older Linux build, whose game stack was elsewhere; save states don't carry "
+                   "over across this update (memory card saves do)", path);
+            free(image);
+            return -1;
+        } else {
+            strcpy(saved_by, "Windows"); /* before the chunk, only Windows had this stack */
+        }
+        if (strcmp(saved_by, SYSTEM)) {
+            refuse("%s was saved by the %s build; a state loads only in a build for the system that saved it", path,
+                   saved_by);
+            free(image);
+            return -1;
+        }
     }
     chunk = find_chunk(&state, "stack", &size);
     if (!chunk || entry.esp < STACK_BASE || entry.esp >= STACK_TOP || size != STACK_TOP - entry.esp ||
