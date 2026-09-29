@@ -120,37 +120,51 @@ static int load_art(Art *art, int card)
 {
     int base, sectors;
     u16 *bank;
+    const unsigned char *field_art;
+    const u16 *pixels, *clut;
 
-    if (mrg_start == -2) {
-        mrg_start = host->disc_file_start(host, "\\DATA\\WA_MRG.MRG;1");
-        say("WA_MRG.MRG starts at sector %d\n", mrg_start);
+    /* A mod's own picture for the cutout alone ("field_art",
+     * notes/more-cards.md): never patched into the card's own record, so
+     * nothing else the card's art shows is touched by it, and none of the
+     * disc reading below is needed. */
+    field_art = Cards_FieldArtRecord(card);
+    if (!field_art) {
+        if (mrg_start == -2) {
+            mrg_start = host->disc_file_start(host, "\\DATA\\WA_MRG.MRG;1");
+            say("WA_MRG.MRG starts at sector %d\n", mrg_start);
+        }
+        if (mrg_start < 0) {
+            return 0;
+        }
+        if (!record && !(record = malloc(ART_SECTORS * SECTOR))) {
+            return 0;
+        }
+        /* A card past the disc's 722 has no record of its own; it stands as
+         * the retail card it is a copy of, exactly as func_80029164 reads it
+         * for the card-detail panel. */
+        base = Cards_BaseId(card);
+        sectors = host->disc_read(host, mrg_start + (base - 1) * ART_SECTORS + CARD_COUNT, ART_SECTORS, record);
+        if (sectors != ART_SECTORS) {
+            say("card %d: read %d of %d sectors\n", card, sectors, ART_SECTORS);
+            return 0;
+        }
+        /* A mod's own "art" artwork over the base's, exactly as the
+         * card-detail panel gets it (func_800289BC). */
+        Cards_PatchArtRecord(card, record);
+        pixels = (const u16 *)(record + CARD_ART_PIXELS);
+        clut = (const u16 *)(record + CARD_ART_CLUT);
+    } else {
+        pixels = (const u16 *)(field_art + CARD_ART_PIXELS);
+        clut = (const u16 *)(field_art + CARD_ART_CLUT);
     }
-    if (mrg_start < 0) {
-        return 0;
-    }
-    if (!record && !(record = malloc(ART_SECTORS * SECTOR))) {
-        return 0;
-    }
-    /* A card past the disc's 722 has no record of its own; it stands as the
-     * retail card it is a copy of, exactly as func_80029164 reads it for the
-     * card-detail panel. */
-    base = Cards_BaseId(card);
-    sectors = host->disc_read(host, mrg_start + (base - 1) * ART_SECTORS + CARD_COUNT, ART_SECTORS, record);
-    if (sectors != ART_SECTORS) {
-        say("card %d: read %d of %d sectors\n", card, sectors, ART_SECTORS);
-        return 0;
-    }
-    /* A mod's own artwork over the base's, exactly as the card-detail panel
-     * gets it (func_800289BC). */
-    Cards_PatchArtRecord(card, record);
 
     bank = SoftGpu_Bank(art->bank);
     if (!bank) {
         say("no bank %d\n", art->bank);
         return 0;
     }
-    bank_put(bank, PIXELS_X, PIXELS_Y, CARD_ART_WIDTH / 2, CARD_ART_HEIGHT, (const u16 *)(record + CARD_ART_PIXELS));
-    bank_put(bank, CLUT_X, CLUT_Y, 256, 1, (const u16 *)(record + CARD_ART_CLUT));
+    bank_put(bank, PIXELS_X, PIXELS_Y, CARD_ART_WIDTH / 2, CARD_ART_HEIGHT, pixels);
+    bank_put(bank, CLUT_X, CLUT_Y, 256, 1, clut);
     art->card = card;
     return 1;
 }

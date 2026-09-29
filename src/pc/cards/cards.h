@@ -163,6 +163,14 @@ int Cards_OwnPassword(int id, unsigned *password);
 void Cards_PatchArtRecord(int id, unsigned char *record);
 void Cards_PatchThumbnail(int id, unsigned char *block);
 
+/* "field_art" (notes/more-cards.md): a card's picture for its cutout on the
+ * duel field alone (mods/2d-monsters/field_art.c), art.h's CARD_ART_PIXELS +
+ * CARD_ART_CLUT layout, or NULL when the card (and its base) have none, in
+ * which case the cutout uses the card's own art as Cards_PatchArtRecord
+ * would. Never applied by Cards_PatchArtRecord itself, so nowhere else the
+ * card's art shows is affected. */
+const unsigned char *Cards_FieldArtRecord(int id);
+
 /* The game's text for string `id`, found at `text` (a translation's or the
  * disc's), or the port's own version of it where the string counts the
  * disc's 722 cards (the Library's "<seen/722>", string F8). */

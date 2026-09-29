@@ -126,6 +126,12 @@ static unsigned char own_password[CARD_TABLE_ID_END];
 static unsigned char *art_records[CARD_TABLE_ID_END];
 static unsigned char art_parts[CARD_TABLE_ID_END];
 static unsigned char *plates[CARD_TABLE_ID_END];
+/* Field-only artwork ("field_art"): a card's picture and CLUT (art.h's
+ * CARD_ART_PIXELS/CARD_ART_CLUT layout) for its cutout on the duel field
+ * alone (mods/2d-monsters/field_art.c). Never patched into a card's own
+ * record, so nothing else the card's art shows (Library, hand, trade, the
+ * detail panel) is touched by it. NULL: the cutout uses the card's own art. */
+static unsigned char *field_art_records[CARD_TABLE_ID_END];
 static const char *replaced[CARD_ID_END];          /* the mod that replaced a retail card */
 static unsigned short *variants[2];                 /* per use: copies, grouped by base */
 static unsigned short variant_start[2][CARD_ID_END + 1];
@@ -997,7 +1003,7 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     const char *setting = Json_String(Json_Member(entry, "count_setting"), NULL);
     const char *description = Json_String(Json_Member(entry, "description"), NULL);
     const JsonValue *password_value = Json_Member(entry, "password");
-    unsigned char *record = NULL, *title = NULL, *named_plate = NULL;
+    unsigned char *record = NULL, *title = NULL, *named_plate = NULL, *field_art_record = NULL;
     int parts = 0;
     int base = 0, count, n, value, has_password;
     unsigned stats, password = CARD_PASSWORD_NONE, entry_fusion_groups = 0;
@@ -1160,6 +1166,27 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         if (parts & ART_PICTURE) add_full_picture(full[0], record, 0);
         if (parts & ART_THUMBNAIL) add_full_picture(full[1][0] ? full[1] : full[0], record, 1);
     }
+    /* Field-only artwork: its own PNG, never shared with "art" and never
+     * patched into the card's own record, so only the field cutout ever
+     * shows it. */
+    {
+        const char *file = Json_String(Json_Member(entry, "field_art"), NULL);
+        char path[1200], why[1300];
+        if (file && *file && count) {
+            if (!Paths_Contained(file) || snprintf(path, sizeof(path), "%s/%s", directory, file) >= (int)sizeof(path)) {
+                Mods_Note(mod, "cards[%d]: \"field_art\": %s is outside the mod", index, file);
+            } else {
+                field_art_record = calloc(1, CARD_ART_RECORD);
+                if (!field_art_record) {
+                    Mods_Note(mod, "cards[%d]: \"field_art\": out of memory", index);
+                } else if (!CardArt_FromImage(path, field_art_record, why, sizeof(why))) {
+                    Mods_Note(mod, "cards[%d]: \"field_art\": %s", index, why);
+                    free(field_art_record);
+                    field_art_record = NULL;
+                }
+            }
+        }
+    }
     for (n = 1; n <= count; n++) {
         char identity[192], fallback[32];
         const char *key = Json_String(Json_Member(entry, "id"), "");
@@ -1209,6 +1236,7 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         if (has_password) passwords[id] = password;
         art_records[id] = parts ? record : NULL;
         art_parts[id] = (unsigned char)parts;
+        field_art_records[id] = field_art_record;
         if (title) {
             plates[id] = title;
         } else if (name && *name && (!named_plate || strstr(name, "{n}") || strstr(name, "{id}"))) {
@@ -1535,6 +1563,16 @@ void Cards_PatchThumbnail(int id, unsigned char *block)
 {
     int from = art_of(id, ART_THUMBNAIL);
     if (from) patch(block, art_records[from] + CARD_THUMB_PIXELS, CARD_THUMB_BLOCK);
+}
+
+/* The card's own field_art record (picture at CARD_ART_PIXELS, CLUT at
+ * CARD_ART_CLUT), or its base's, or NULL when neither has one: the cutout
+ * then falls back to the card's own art, as before. */
+const unsigned char *Cards_FieldArtRecord(int id)
+{
+    if (!Cards_Valid(id)) return NULL;
+    if (field_art_records[id]) return field_art_records[id];
+    return field_art_records[Cards_BaseId(id)];
 }
 
 int Cards_PickVariant(int id, int use)

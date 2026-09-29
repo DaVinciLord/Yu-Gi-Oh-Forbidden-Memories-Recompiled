@@ -46,6 +46,7 @@ The release ships no card mod; the checks below were made with test mods
 | `description` | the card's own text (UTF-8: accented letters work, [translations](translation.md)), wrapped as the retail texts are (lines of up to twenty letters, broken at spaces; `\n` breaks a line where it stands). Eight lines is the most any retail text has. Without one a card has its base's text |
 | `art` | a PNG in the mod (a path relative to its directory): the card's picture and, made from the same image, the small one the hand and field show. Any size: the middle of it at the card's shape is taken and scaled to 102x96 and 40x32, and its colours reduced to the 255 and 63 each has. An image bigger than that is also drawn at its own resolution when View > Console resolution is set above 1x (Internal 2x, 4x), as a texture pack's image is ([HD pictures](#hd-pictures)), so 408x384 (4x) or 816x768 (8x) looks best |
 | `thumbnail` | a PNG for the small picture alone, when the scaled-down `art` does not read well at 40x32; bigger than 40x32, it is drawn at its own resolution too |
+| `field_art` | a PNG (same sizing rule as `art`) for the 2D Monsters mod's cutout alone, on top of the card on the duel field: never patched into the card's own record, so the Library, hand, trade screen and detail panel keep showing `art` (or the base's own picture) untouched. Without one the cutout shows the same picture everything else does |
 | `title` | a PNG for the name plate at the top of the card's picture (96x14; dark ink on white, or on a transparent background). Without one, a card with its own name gets a plate with that name set in Times at the retail plates' size (Times New Roman on Windows, fontconfig's match for `Times` elsewhere, Liberation Serif on most Linux systems), or a blank plate when there is none |
 | `attack`, `defense` | 0 to 5110, in tens, as the game stores them |
 | `type` | a number or a name (`"Dragon"`, `"Winged Beast"`). A copy of a monster stays a monster, since it has its base's 3D model; a copy of a magic, trap, ritual or equip card keeps its type, since it has its base's effect |
@@ -83,7 +84,7 @@ so a mod can rework the existing cards without adding any:
 ```
 
 It takes the keys above that change what a player reads off the card:
-`name`, `description`, `art`, `thumbnail`, `title`, `attack`, `defense`,
+`name`, `description`, `art`, `thumbnail`, `title`, `field_art`, `attack`, `defense`,
 `type`, `attribute`, `level`, `stars`, `frame` and `password` (without one it shows
 the disc's). It gets no id of its own, so `id`,
 `count`, `count_setting`, `drops`, `opponents` and `fusions` do not apply:
