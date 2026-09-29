@@ -22,9 +22,11 @@
  *   loads this game, libgame.so, at the address it was linked at and calls
  *   Memories_AndroidMain.
  * - The build's own files (buildid, commit, symbols/: save states and crash
- *   reports read them beside the executable) are APK assets under build/,
- *   unpacked into the app's internal files folder, program/, which becomes
- *   the program directory (MEMORIES_PROGRAM_DIR, paths.h). */
+ *   reports read them beside the executable), the shipped mods and the
+ *   language packs are APK assets under build/, unpacked into the app's
+ *   internal files folder, program/, which becomes the program directory
+ *   (MEMORIES_PROGRAM_DIR, paths.h). The player's own mods go in mods/ in
+ *   the external files folder, as in the user directory on the desktop. */
 #ifdef __ANDROID__
 #include "pc/compat/fs.h"
 #include "platform.h"
@@ -351,6 +353,60 @@ static int copy_asset(const char *asset, const char *to)
     return 1;
 }
 
+/* A folder and everything in it (the unpacked mods of an earlier build). */
+static void remove_tree(const char *path)
+{
+    DIR *folder = opendir(path);
+    struct dirent *entry;
+    char inner[1100];
+    if (!folder) {
+        remove(path);
+        return;
+    }
+    while ((entry = readdir(folder)) != NULL) {
+        if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, "..")) continue;
+        snprintf(inner, sizeof(inner), "%s/%s", path, entry->d_name);
+        remove_tree(inner);
+    }
+    closedir(folder);
+    rmdir(path);
+}
+
+/* The files the desktop games have beside them (the shipped mods, the
+ * language packs), listed in build/files.txt and packed under build/files/
+ * (package_android.py): the folders of an earlier build go first, so a mod
+ * the new build no longer ships does not linger. 1 when every one was. */
+static int unpack_files(const char *directory)
+{
+    static const char *const folders[] = {"mods", "languages"};
+    char path[1100], asset[1100], *list, *line, *next, *slash;
+    size_t size = 0, i;
+    int ok = 1, count = 0;
+    for (i = 0; i < sizeof(folders) / sizeof(folders[0]); i++) {
+        snprintf(path, sizeof(path), "%s/%s", directory, folders[i]);
+        remove_tree(path);
+    }
+    if (!(list = SDL_LoadFile("build/files.txt", &size))) return 1; /* an APK from before: nothing to unpack */
+    for (line = list; line && *line; line = next) {
+        next = strchr(line, '\n');
+        if (next) *next++ = '\0';
+        line[strcspn(line, "\r")] = '\0';
+        if (!*line || !Paths_Contained(line)) continue;
+        snprintf(path, sizeof(path), "%s/%s", directory, line);
+        if ((slash = strrchr(path, '/')) != NULL) {
+            *slash = '\0';
+            Paths_MakeDirs(path);
+            *slash = '/';
+        }
+        snprintf(asset, sizeof(asset), "build/files/%s", line);
+        if (copy_asset(asset, path)) count++;
+        else ok = 0;
+    }
+    SDL_free(list);
+    fprintf(stderr, "memories-pc: %d shipped files (mods, languages) unpacked\n", count);
+    return ok;
+}
+
 /* The build's files out of the APK into <internal>/program, when this build
  * has not unpacked them yet (its buildid differs). Symbol tables of earlier
  * builds stay: a state saved by one of them is carried over by name
@@ -384,6 +440,7 @@ static void unpack_program(void)
         snprintf(asset, sizeof(asset), "build/symbols/%s.txt", id);
         snprintf(path, sizeof(path), "%s/symbols/%s.txt", directory, id);
         ok = copy_asset(asset, path);
+        ok = unpack_files(directory) && ok;
         snprintf(path, sizeof(path), "%s/commit", directory);
         copy_asset("build/commit", path);
         snprintf(path, sizeof(path), "%s/buildid", directory);

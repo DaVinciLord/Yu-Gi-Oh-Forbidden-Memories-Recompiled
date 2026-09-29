@@ -12,7 +12,9 @@ manifest, the native libraries go in lib/<abi>/, and the APK is aligned
 the repository. The activity is SDL's own SDLActivity: it loads libSDL3.so
 and libmain.so and calls SDL_main (src/pc/platform/android_loader.c), which
 loads libgame.so at its link address. The build's id, commit and symbol
-table go in assets/build/ (src/pc/platform/android.c unpacks them).
+table go in assets/build/, and the shipped mods and language packs under
+assets/build/files/ with their list in build/files.txt
+(src/pc/platform/android.c unpacks them).
 
 Output: <build>/memories-<abi>.apk. notes/pc-build.md, "Android"."""
 import glob, os, shutil, subprocess, sys, zipfile
@@ -79,6 +81,25 @@ def run(command):
     return result.stdout
 
 
+def program_files(build, folders):
+    """The files under <build>/<folder> for each of `folders`, as assets
+    under build/files/, and build/files.txt listing them (one relative path
+    a line): an app cannot list its own assets, and android.c unpacks each
+    one listed into the program directory."""
+    assets, names = {}, []
+    for folder in folders:
+        for path in sorted(glob.glob(os.path.join(build, folder, "**", "*"), recursive=True)):
+            if os.path.isfile(path):
+                relative = os.path.relpath(path, build).replace(os.sep, "/")
+                assets[f"build/files/{relative}"] = path
+                names.append(relative)
+    index = os.path.join(build, "files.txt")
+    with open(index, "w", encoding="utf-8", newline="\n") as handle:
+        handle.writelines(name + "\n" for name in names)
+    assets["build/files.txt"] = index
+    return assets
+
+
 def package(build, abi, library, game, assets):
     build_tools = newest(os.path.join(sdk(), "build-tools", "*"))
     android_jar = os.path.join(newest(os.path.join(sdk(), "platforms", "android-*")), "android.jar")
@@ -128,6 +149,7 @@ if __name__ == "__main__":
     build = sys.argv[1]
     with open(os.path.join(build, "buildid")) as handle:
         build_id = handle.read().strip()
-    package(build, sys.argv[2], os.path.join(build, "libmain.so"), os.path.join(build, "libgame.so"),
-            {"build/buildid": os.path.join(build, "buildid"), "build/commit": os.path.join(build, "commit"),
-             f"build/symbols/{build_id}.txt": os.path.join(build, "symbols", f"{build_id}.txt")})
+    assets = {"build/buildid": os.path.join(build, "buildid"), "build/commit": os.path.join(build, "commit"),
+              f"build/symbols/{build_id}.txt": os.path.join(build, "symbols", f"{build_id}.txt")}
+    assets.update(program_files(build, ("mods", "languages")))
+    package(build, sys.argv[2], os.path.join(build, "libmain.so"), os.path.join(build, "libgame.so"), assets)

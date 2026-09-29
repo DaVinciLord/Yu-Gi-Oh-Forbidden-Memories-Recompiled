@@ -1215,11 +1215,10 @@ def main():
                else ["-lm", *fonts, "-lX11", "-lXext", "-lasound", *system]), *build_linux_sysroot.endfiles()])
     if ANDROID:
         link_android_loader(options.build, output)
-    else:
-        # Code mods are 32-bit objects: the 64-bit game takes the data mods and
-        # refuses the others by name (MEMORIES_NO_CODE_MODS, src/pc/mods/mods.c).
-        build_mods(options.build, options.release, code=not X64)
-        copy_languages(options.build, options.release)
+    # Code mods are 32-bit x86 objects: the 64-bit game takes the data mods
+    # and refuses the others by name (MEMORIES_NO_CODE_MODS, src/pc/mods/mods.c).
+    build_mods(options.build, options.release, code=not X64)
+    copy_languages(options.build, options.release)
     # Save states are carried between builds with these tables
     # (src/pc/guest/state.c): every function in the executable, because the
     # game keeps pointers to native routines as well as its own (HMD
@@ -1265,15 +1264,16 @@ def main():
     with open(f"{options.build}/commit", "w") as handle:
         handle.write(commit + "\n")
     if ANDROID:
-        # Code mods are i386 objects built for the desktop games' export
-        # tables, and the APK carries no files beside the game yet: no mods
-        # and no language packs on Android for now (notes/pc-build.md). It
-        # does carry this build's id, commit and symbol table (assets/build/),
-        # which android.c unpacks for save states and crash reports.
+        # The APK carries this build's id, commit and symbol table (save
+        # states, crash reports) and what the desktop games have beside
+        # them: the shipped mods (their objects checked against this build's
+        # own export table) and the language packs, all under assets/build/,
+        # which android.c unpacks into the program directory.
         import package_android
-        package_android.package(options.build, ANDROID_ABI, f"{options.build}/libmain.so", output,
-                                {"build/buildid": f"{options.build}/buildid", "build/commit": f"{options.build}/commit",
-                                 f"build/symbols/{build_id}.txt": f"{options.build}/symbols/{build_id}.txt"})
+        assets = {"build/buildid": f"{options.build}/buildid", "build/commit": f"{options.build}/commit",
+                  f"build/symbols/{build_id}.txt": f"{options.build}/symbols/{build_id}.txt"}
+        assets.update(package_android.program_files(options.build, ("mods", "languages")))
+        package_android.package(options.build, ANDROID_ABI, f"{options.build}/libmain.so", output, assets)
     kinds = {name: functions.get(name, "outside_resident_image") for name in stubs}
     report = {"game_units": len(game), "pinned_data_symbols": len(pinned),
               "stubbed": {kind: sorted(n for n in stubs if kinds[n] == kind)
