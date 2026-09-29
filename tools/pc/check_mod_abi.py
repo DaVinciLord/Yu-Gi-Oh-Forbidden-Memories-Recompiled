@@ -27,7 +27,8 @@ build's: every code mod must load, and the frames must be the same.
 The releases checked, and the differences reviewed and accepted, are in
 tools/pc/mod_compat.txt. A release is downloaded once into tmp/pc/mod-compat.
 Each --run plays in a folder of its own beside it, tmp/pc/mod-compat/run/
-TAG-XXXXXXXX, kept when something was found and removed otherwise: worktrees
+TAG-XXXXXXXX, kept when the run found a difference not accepted in
+mod_compat.txt (or stopped) and removed otherwise: worktrees
 share tmp/ (a junction to the main checkout's), so two checks running at once
 in two of them took each other's frames and folders when they shared one."""
 import argparse, concurrent.futures, glob, json, os, re, shutil, subprocess, sys, tarfile, tempfile, urllib.request, zipfile
@@ -360,7 +361,9 @@ def manifest(directory):
 
 
 def run_mods(tag, release, executable, build):
-    """Every mod the baseline shipped, all on, in this build: (kind, name, what)."""
+    """Every mod the baseline shipped, all on, in this build: ([(kind, name, what)],
+    the run's folder). main() removes the folder unless a finding in it was
+    not accepted in mod_compat.txt."""
     os.makedirs(os.path.join(CACHE, "run"), exist_ok=True)
     work = tempfile.mkdtemp(prefix=f"{tag}-", dir=os.path.join(CACHE, "run"))
     mods, user = os.path.join(work, "mods"), os.path.join(work, "user")
@@ -426,9 +429,7 @@ def run_mods(tag, release, executable, build):
                           f"build's (see {work}/{case['name']}-*/frame.ppm)"))
         else:
             print(f"check_mod_abi: {tag}: {case['name']} is the same frame with {tag}'s {', '.join(wanted)}")
-    if not found:
-        shutil.rmtree(work, ignore_errors=True)
-    return found
+    return found, work
 
 
 def main():
@@ -458,10 +459,12 @@ def main():
             exports_old = set(handle.read().split())
         old = sdk_surface(os.path.join(release, "sdk"), compiler)
         found = compare(old, current, exports_old, exports_new)
+        work = None
         if options.run:
             executable = options.executable or os.path.join(options.build, "memories-pc" + (".exe" if system == "windows" else ""))
-            found += run_mods(tag, release, os.path.abspath(executable), options.build)
-        used = set()
+            ran, work = run_mods(tag, release, os.path.abspath(executable), options.build)
+            found += ran
+        used, keep = set(), False
         for kind, name, what in found:
             key = (tag, kind, name)
             if key in accepted:
@@ -469,7 +472,12 @@ def main():
                 print(f"  accepted: {kind} {name}: {what} ({accepted[key]})")
             else:
                 failed = True
+                keep = keep or kind in ("run", "frame")
                 print(f"check_mod_abi: {tag}: {kind} {name}: {what}", file=sys.stderr)
+        # The run's folder is kept for a difference still to be looked at;
+        # an accepted one would leave a folder behind on every passing run.
+        if work and not keep:
+            shutil.rmtree(work, ignore_errors=True)
         for key in sorted(k for k in accepted if k[0] == tag and k not in used and (options.run or k[1] not in ("run", "frame"))):
             print(f"check_mod_abi: {tag}: `accept {' '.join(key)}` in mod_compat.txt no longer matches anything; "
                   "remove it", file=sys.stderr)

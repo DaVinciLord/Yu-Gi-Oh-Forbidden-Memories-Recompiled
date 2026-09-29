@@ -94,7 +94,7 @@ A mod made for one release has to keep working in the later ones.
   Each smoke case that turns mods on must draw the same frame with the old
   release's copies of those mods as with this build's. Each run plays in a
   folder of its own, `tmp/pc/mod-compat/run/<tag>-XXXXXXXX`, kept when it
-  found something: worktrees share `tmp/`, and two checks at once used to
+  found a difference not accepted in `mod_compat.txt`: worktrees share `tmp/`, and two checks at once used to
   take each other's frames.
 
 A difference that fails the check is fixed, not waved through. Keep the old
