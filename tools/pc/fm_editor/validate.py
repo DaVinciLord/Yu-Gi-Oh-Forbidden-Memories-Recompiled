@@ -21,7 +21,7 @@ MANIFEST_KEYS = ("id", "name", "version", "author", "description", "library", "e
                  "conflicts", "priority", "settings", "fusions", "equips", "rituals", "drops", "decks", "text", "font",
                  "chest_overflow", "terrain_bonus", "trap_thresholds", "equip_bonus_default", "passwords",
                  "starter")
-HOST_API = 4
+HOST_API = 6
 
 
 @dataclass

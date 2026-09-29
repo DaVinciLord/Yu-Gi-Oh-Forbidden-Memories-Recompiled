@@ -173,6 +173,11 @@ struct MemoriesModHost {
      * (pc/free_duel/duelists.h). Answers once the duelist list is built,
      * which is before any screen shows it. */
     int (*duelist_id)(const MemoriesModHost *, const char *identity);
+
+    /* --- API 6 ---
+     * No new host entries. MEMORIES_EVENT_STARCHIP (mod_types.h) fires when
+     * an end-of-duel StarChip prize is about to be added to the save
+     * (Mods_AwardStarchips). */
 };
 
 /* The symbol a mod's object defines, and its type. */

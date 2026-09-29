@@ -151,4 +151,7 @@ void Mods_OptionChanged(int mod, int option);
 unsigned Mods_CodeHash(int mod);
 unsigned Mods_Signature(void);
 int Mods_DamageLife(int side, int life, int damage, int kind);
+/* Add a duel StarChip prize to *balance (cap 999999). Dispatches
+ * MEMORIES_EVENT_STARCHIP; returns the resulting balance. */
+int Mods_AwardStarchips(unsigned *balance, int prize);
 #endif
