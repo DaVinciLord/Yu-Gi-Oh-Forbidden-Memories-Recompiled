@@ -699,11 +699,40 @@ static int by_name(const void *left, const void *right)
     return a->id - b->id;
 }
 
+/* The next character of a name's glyph codes (0 at its end), advancing. */
+static uint32_t name_character(const unsigned char **at)
+{
+    int code = *(*at)++;
+    if (code >= 0xF6) return 0;
+    if (code >= 0xF0) code = ((code - 0xF0) << 8) | *(*at)++;
+    return Glyphs_Character(code);
+}
+
+/* Whether the text gives retail card `id` a name other than the disc's,
+ * character for character: a translation that lists a name as it was (the
+ * English cards over a PAL language, say) renames nothing. */
+static int text_renames(int id)
+{
+    const unsigned char *name = overrides ? overrides[0x8000 + id] : NULL;
+    const unsigned char *retail = (const unsigned char *)(uintptr_t)(
+        NAME_BANK + ((const uint16_t *)(uintptr_t)NAME_OFFSETS)[id]);
+    uint32_t a, b;
+    if (!name) return 0;
+    do {
+        a = name_character(&name);
+        b = name_character(&retail);
+    } while (a == b && a);
+    return a != b;
+}
+
 void Text_SortCards(void)
 {
     Sorted *cards;
     int id, renamed = 0;
-    for (id = 1; id <= CARD_COUNT; id++) renamed |= (overrides && overrides[0x8000 + id]) || Cards_NameText(id);
+    /* Only when a name changed: the disc's order (gCard_asNameSortKey) is
+     * not quite the one by_name gives (it passes over hyphens: M-warrior #1
+     * after Mushroom Man), so the names as they were keep it. */
+    for (id = 1; id <= CARD_COUNT; id++) renamed |= text_renames(id) || Cards_NameText(id);
     if (!renamed) return;
     cards = calloc((size_t)gCard_nCount, sizeof(*cards));
     if (!cards) return;
