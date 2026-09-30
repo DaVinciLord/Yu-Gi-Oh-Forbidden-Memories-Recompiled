@@ -64,6 +64,15 @@ CLASSIC = {
              "disabledforeground": DISABLED, "selectcolor": FG},
     "Toplevel": {"background": BG},
 }
+if sys.platform == "win32":
+    # Windows draws a classic widget's sunken border with a white bevel,
+    # glaring on the dark fields: a flat one-pixel line instead, in the ttk
+    # fields' border color (the focus color when focused). Same width.
+    # Not a Combobox's drop-down list (use): its frame is its border.
+    for _cls in ("Text", "Listbox"):
+        CLASSIC[_cls].update(relief="flat", borderwidth=1, highlightthickness=1, highlightbackground=BORDER,
+                             highlightcolor=FOCUS)
+BORDERS = ("relief", "borderwidth", "highlightthickness")
 
 
 def dpi_awareness():
@@ -171,6 +180,11 @@ class Theme:
             values = options if dark else self.defaults[cls]
             for option, value in values.items():
                 self.root.option_add(f"*{cls}.{self.dbnames[cls][option]}", value)
+        if "relief" in CLASSIC["Listbox"]:
+            # ttk's own for a Combobox's list (combobox.tcl), after the above
+            # to come first for the lists made from now on.
+            self.root.option_add("*TCombobox*Listbox.relief", "flat")
+            self.root.option_add("*TCombobox*Listbox.highlightThickness", 0)
         # The widgets that exist, Tcl's own included (tkinter's
         # winfo_children skips the Combobox's drop-down list).
         call = self.root.tk.call
@@ -179,6 +193,8 @@ class Theme:
             cls = "Toplevel" if cls == "Tk" else cls
             if cls in CLASSIC:
                 values = CLASSIC[cls] if dark else self.defaults[cls]
+                if ".popdown." in path:     # a Combobox's list keeps the borders ttk gave it
+                    values = {option: value for option, value in values.items() if option not in BORDERS}
                 call(path, "configure", *[item for option, value in values.items()
                                           for item in (f"-{option}", value)])
             elif cls == "Treeview":
