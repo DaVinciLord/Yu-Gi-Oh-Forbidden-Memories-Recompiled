@@ -138,11 +138,15 @@ class Theme:
         self.style.configure("Treeview", rowheight=self.row_height)
         for name, (light, _) in INKS.items():
             self.style.configure(f"{name}.TLabel", foreground=light)
-        # Tk's own defaults for the classic widgets, to go back to.
+        # Tk's own defaults for the classic widgets, to go back to, and each
+        # option's name in the option database (highlightBackground for
+        # -highlightbackground: the database is case sensitive).
         self.defaults = {}
+        self.dbnames = {}
         for cls, options in CLASSIC.items():
             sample = root if cls == "Toplevel" else getattr(tk, cls)(root)
             self.defaults[cls] = {option: str(sample.configure(option)[3]) for option in options}
+            self.dbnames[cls] = {option: sample.configure(option)[1] for option in options}
             if sample is not root:
                 sample.destroy()
         root.bind_class("Toplevel", "<Map>", lambda e: self.title_bar(e.widget), add="+")
@@ -166,7 +170,7 @@ class Theme:
         for cls, options in CLASSIC.items():
             values = options if dark else self.defaults[cls]
             for option, value in values.items():
-                self.root.option_add(f"*{cls}.{option}", value)
+                self.root.option_add(f"*{cls}.{self.dbnames[cls][option]}", value)
         # The widgets that exist, Tcl's own included (tkinter's
         # winfo_children skips the Combobox's drop-down list).
         call = self.root.tk.call
