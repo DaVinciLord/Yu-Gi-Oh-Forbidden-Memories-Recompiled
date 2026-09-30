@@ -128,8 +128,11 @@ MODULES = [("main_menu", "src/overlays/main_menu/*.c", 0x0F, 0),
            ("duel_effects", "src/overlays/duel_effects/*.c", 0x18, 0x80146000)]
 MODULE_CONFIG = {"overworld": "overworld_before_coup"}
 # Modules entered only through a native gate that checks the delivered bytes
-# first (src/pc/overlays/duel_effects.c): their guest addresses stay out of
-# Memories_FunctionMap, so a call into a modded image is interpreted instead.
+# first (src/pc/overlays/duel_effects.c): their guest addresses
+# stay out of Memories_FunctionMap, so a call into a modded image is
+# interpreted instead. They must have no variables of their own (theirs stay
+# in guest memory), so they are left out of the module registry too, which
+# would otherwise tell the interpreter their range holds native code.
 GATED_MODULES = {"duel_effects"}
 
 # Save states outlive native rebuilds because everything a state can point at
@@ -671,6 +674,10 @@ def main():
                   if symbol in module_elf[name] and symbol not in resident_defined and any(
                       places.get(symbol, module_elf[name][symbol]) != module_elf[name][symbol]
                       for places in [resident_elf] + [module_elf[o] for o in others])}
+        if name in GATED_MODULES:
+            # Everything it defines: a resident call by the retail name (the
+            # credits' func_801807B0) must still reach the gate at that address.
+            clash |= defined | common
         renamed[name] = {symbol: f"{name}__{symbol}" for symbol in clash if not symbol.startswith(f"{name}__")}
         for source in module_sources[name]:
             command = [OBJCOPY]
@@ -687,6 +694,10 @@ def main():
                 run(command + [obj(source)])
         headers_text = run([OBJDUMP, "-h", *[obj(s) for s in module_sources[name]]])
         sections[name] = [kind for kind in ("data", "bss") if f"ovl_{name}_{kind}" in headers_text]
+        if name in GATED_MODULES and any(
+                len(parts) > 2 and parts[1].startswith(f"ovl_{name}_") and int(parts[2], 16)
+                for parts in (line.split() for line in headers_text.splitlines())):
+            sys.exit(f"{name}: a gated module with variables of its own")
 
     for source in game if WINDOWS else []:
         rename_coff_sections(obj(source), {".text": "game_text$m", ".rdata": "game_rodata$m",
@@ -851,7 +862,8 @@ def main():
         handle.writelines(f"    {{0x{address:08X}u, {name}, 0x{bank:08X}u, 0x{identifier:X}u}},\n"
                           for address, name, bank, identifier in mapped)
         handle.write(f"}};\nconst unsigned Memories_FunctionMapCount = {len(mapped)};\n")
-        shared = [(name, identifier, bank) for name, _, identifier, bank in MODULES if bank]
+        shared = [(name, identifier, bank) for name, _, identifier, bank in MODULES
+                  if bank and name not in GATED_MODULES]
         for name, _, _ in shared:
             for kind in sections[name]:
                 handle.write(f"extern char __start_ovl_{name}_{kind}[], __stop_ovl_{name}_{kind}[];\n")

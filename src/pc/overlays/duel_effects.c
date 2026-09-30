@@ -13,8 +13,9 @@ extern unsigned char D_8009B261;
 extern unsigned Memories_PresentedFrames(void);
 
 /* The bank's entry, src/overlays/duel_effects/dispatch.c (the decomp names
- * its functions by their PAL addresses; this one is at 0x801462B0 here). */
-extern void func_80146258(int effect, int phase, void *buffer, DuelEffectRequest *context);
+ * its functions by their PAL addresses; this one is at 0x801462B0 here).
+ * The build prefixes every name the module defines (GATED_MODULES). */
+extern void duel_effects__func_80146258(int effect, int phase, void *buffer, DuelEffectRequest *context);
 
 enum { MODE_AUTO, MODE_INTERPRETER, MODE_SKIP };
 
@@ -54,7 +55,7 @@ void Memories_DuelEffectControl(short id, short state, int buffer, DuelEffectReq
     LOG(LOG_DUEL_EFFECTS, "id=%d state=%d buffer=%08x payload=%d,%d,%d damage=%d",
         id, state, (unsigned)buffer, request->field_00, request->field_02, request->field_04, request->field_12);
     if (mode == MODE_AUTO && RetailImage_Verified(RETAIL_IMAGE_DUEL_EFFECTS)) {
-        func_80146258(id, state, (void *)(uintptr_t)(unsigned)buffer, request);
+        duel_effects__func_80146258(id, state, (void *)(uintptr_t)(unsigned)buffer, request);
         return;
     }
     if ((mode == MODE_SKIP && !(id >= 1 && id <= 3)) || index >= 256 || (failed[index >> 5] & (1u << (index & 31)))) {
