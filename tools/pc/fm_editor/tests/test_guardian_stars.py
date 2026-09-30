@@ -159,16 +159,40 @@ class ManifestTest(unittest.TestCase):
         self.assertFalse(past())
 
     def test_star_choices(self):
-        from fm_editor.tabs import star_choices, star_label
-        p = project()
-        self.assertEqual(len(star_choices(p)), 11)
-        p.other["guardian_stars"] = {"stars": [{"id": 12, "name": "Water"}, {"id": 1, "name": "Ares"}]}
-        choices = star_choices(p)
+        """The Cards tab's star lists (tabs.star_choices is this, by project)."""
+        self.assertEqual(len(gs.choices(None)), 11)
+        choices = gs.choices({"stars": [{"id": 12, "name": "Water"}, {"id": 1, "name": "Ares"}]})
         self.assertEqual(len(choices), 13)
         self.assertEqual(choices[1], "Ares (Mars)")
         self.assertEqual(choices[11], "11 Star 11")
         self.assertEqual(choices[12], "12 Water")
-        self.assertEqual(star_label(12, p), "12 Water")
+
+
+class ReviewTest(unittest.TestCase):
+    def test_names_without_ascii_letters(self):
+        """As stars.c: bytes past ASCII tell names apart."""
+        section = {"stars": [{"id": 11, "name": "\u706b", "beats": ["\u6c34"]}, {"id": 12, "name": "\u6c34"}]}
+        self.assertEqual(gs.find("\u6c34", section), 12)
+        grid = gs.table(section)
+        self.assertEqual((grid[11][12], grid[12][11], grid[11][11]), (500, -500, 0))
+
+    def test_malformed_sections(self):
+        self.assertEqual(gs.star_number("--5"), -1)
+        self.assertEqual(gs.star_number("\u00b2"), -1)
+        self.assertEqual(gs.find("--5"), -1)
+        for section in ({"stars": 5}, [1], {"stars": [{"id": "\u00b2"}]}):
+            self.assertEqual(len(gs.choices(section)), 11)
+            gs.read(section)
+            gs.table(section)
+
+    def test_remove_star_under_replace(self):
+        model = gs.read({"replace": True, "stars": [{"id": 11, "name": "Fire"}]})
+        model.remove_star(11)
+        built = model.build() or {}
+        self.assertFalse(built.get("matchups"))
+
+    def test_palette_any_case(self):
+        self.assertEqual(gs.read({"stars": [{"id": 11, "palette": "Own"}]}).stars[11].palette, "own")
 
 
 class RulesTest(unittest.TestCase):

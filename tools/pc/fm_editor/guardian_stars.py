@@ -25,10 +25,26 @@ the rest of the section already gives.
 from __future__ import annotations
 
 import copy
+import re
 from dataclasses import dataclass, field
 
 from .gamedata import STAR_NAMES
-from .model import same_letters
+
+
+def _letters(text: str) -> str:
+    return "".join(c.lower() if c.isascii() else c for c in text if not c.isascii() or c.isalnum())
+
+
+def same_letters(a: str, b: str) -> bool:
+    """stars.c's same_letters: ASCII letters and digits, case apart, and
+    every byte past ASCII as it is (model.same_letters drops those, which
+    made every name without an ASCII letter the same name)."""
+    return _letters(a) == _letters(b)
+
+
+def _whole(text: str):
+    """The whole number a string holds, or None ("--5" and "²" hold none)."""
+    return int(text) if re.fullmatch(r"-?[0-9]+", text.strip()) else None
 
 RETAIL_COUNT = 10           # Mars .. Venus
 MAX_STARS = 15              # the card record's 4-bit star fields
@@ -83,8 +99,8 @@ def star_number(value) -> int:
     that holds one; -1 for anything else."""
     if _is_int(value):
         return value
-    if isinstance(value, str) and value.strip().lstrip("-").isdigit():
-        return int(value)
+    if isinstance(value, str) and _whole(value) is not None:
+        return _whole(value)
     return -1
 
 
@@ -132,8 +148,8 @@ def find(name, section=None) -> int:
     if not isinstance(name, str) or not name:
         return -1
     text = name.strip()
-    if text.lstrip("-").isdigit():
-        number = int(text)
+    if _whole(text) is not None:
+        number = _whole(text)
         return number if 0 <= number <= MAX_STARS else -1
     for star in range(1, RETAIL_COUNT + 1):
         if same_letters(text, STAR_NAMES[star]):
@@ -297,7 +313,8 @@ def check(section, stat_cap: int = STAT_CAP, card_stars=None) -> list:
 
 
 def _name_of(section, star):
-    for entry in section.get("stars") or []:
+    stars = section.get("stars") if isinstance(section, dict) else None
+    for entry in stars if isinstance(stars, list) else []:
         if isinstance(entry, dict) and star_number(entry.get("id")) == star and "name" in entry:
             return entry["name"]
     return None
@@ -420,15 +437,17 @@ class Stars:
         return 0
 
     def remove_star(self, star: int):
-        """A new star gone (its pairs back to the disc's arithmetic); a disc
-        star just loses its name and icon."""
+        """A new star gone (its pairs back to what an undeclared star has:
+        base(), so nothing of it is written); a disc star just loses its
+        name and icon."""
         if star not in self.stars:
             return
         del self.stars[star]
         if star > RETAIL_COUNT:
+            base = self.base()
             for o in range(IDS):
-                self.grid[star][o] = retail_matchup(star, o)
-                self.grid[o][star] = retail_matchup(o, star)
+                self.grid[star][o] = base[star][o]
+                self.grid[o][star] = base[o][star]
 
 
 def read(section) -> Stars:
@@ -443,7 +462,7 @@ def read(section) -> Stars:
         model.choice = next((c for c in CHOICES if same_letters(section["choice"], c)), None)
     if _bonus_ok(section.get("default_bonus")):
         model.default_bonus = section["default_bonus"]
-    for entry in section.get("stars") or []:
+    for entry in section["stars"] if isinstance(section.get("stars"), list) else []:
         if isinstance(entry, dict) and 1 <= star_number(entry.get("id")) <= MAX_STARS:
             number = star_number(entry["id"])
             star = model.stars.setdefault(number, Star(number))
@@ -451,8 +470,8 @@ def read(section) -> Stars:
                 star.name = copy.deepcopy(entry["name"])
             if isinstance(entry.get("icon"), str):
                 star.icon = entry["icon"]
-            if entry.get("palette") in PALETTES:
-                star.palette = entry["palette"]
+            if isinstance(entry.get("palette"), str):
+                star.palette = next((p for p in PALETTES if same_letters(entry["palette"], p)), star.palette)
             star.extra.update({k: copy.deepcopy(v) for k, v in entry.items() if k not in STAR_KEYS})
     model.grid = table(section)
     return model
