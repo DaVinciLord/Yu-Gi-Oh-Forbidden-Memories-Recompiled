@@ -196,7 +196,12 @@ static void check_code_address(void)
 
 /* Guest RAM mapped executable (MEMORIES_TEST_EXEC_GUEST=1), as it is where
  * DEP is off: then only the thunks keep a guest call from running MIPS bytes,
- * which makes "the game works without DEP" testable on any machine. */
+ * which makes "the game works without DEP" testable on any machine. Only
+ * builds that are not releases have it (MEMORIES_TEST_HOOKS, set by
+ * tools/pc/build_game32.py without --release): a shipped executable that
+ * can map memory writable and executable is one more thing virus scanners'
+ * heuristics hold against it. */
+#ifdef MEMORIES_TEST_HOOKS
 static int guest_ram_executable(void)
 {
     const char *value = getenv("MEMORIES_TEST_EXEC_GUEST");
@@ -204,6 +209,7 @@ static int guest_ram_executable(void)
     fprintf(stderr, "memories-pc: guest RAM is mapped executable (MEMORIES_TEST_EXEC_GUEST)\n");
     return 1;
 }
+#endif
 
 #ifdef _WIN32
 static DWORD *context_register(CONTEXT *context, int number)
@@ -340,12 +346,17 @@ static int view_at(HANDLE section, uint32_t address, size_t length, DWORD offset
 int Memories_GuestMap(void)
 {
     HANDLE section;
-    int result, executable = guest_ram_executable();
+    DWORD protection = PAGE_READWRITE;
+    int result;
+#ifdef MEMORIES_TEST_HOOKS
+    if (guest_ram_executable()) {
+        protection = PAGE_EXECUTE_READWRITE;
+        view_access = FILE_MAP_ALL_ACCESS | FILE_MAP_EXECUTE;
+    }
+#endif
     Memories_GuestBranchResolver = guest_branch_target;
     check_code_address();
-    if (executable) view_access = FILE_MAP_ALL_ACCESS | FILE_MAP_EXECUTE;
-    section = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, executable ? PAGE_EXECUTE_READWRITE : PAGE_READWRITE, 0,
-                                 MEMORIES_GUEST_RAM_SIZE, NULL);
+    section = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, protection, 0, MEMORIES_GUEST_RAM_SIZE, NULL);
     AddVectoredExceptionHandler(1, on_guest_exception);
     if (section == NULL) {
         fprintf(stderr, "guest RAM: CreateFileMapping failed (error %lu)\n", GetLastError());
@@ -448,7 +459,9 @@ int Memories_GuestMap(void)
 {
     struct sigaction action;
     int fd, result;
+#ifdef MEMORIES_TEST_HOOKS
     if (guest_ram_executable()) view_protection |= PROT_EXEC;
+#endif
     Memories_GuestBranchResolver = guest_branch_target;
     check_code_address();
     memset(&action, 0, sizeof(action));

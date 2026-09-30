@@ -122,7 +122,8 @@ How it works:
   crashed on the title's Options: the handler at `0x80038b4c` ran its MIPS
   bytes as x86. `MEMORIES_TEST_EXEC_GUEST=1` maps guest RAM executable, as it
   is without DEP, on any machine: with it, only the thunks stand between a
-  guest call and the MIPS bytes. `pc_branch_thunks` (CTest) checks all seven
+  guest call and the MIPS bytes (builds that are not releases only; the smoke
+  case `options-exec-guest` uses it). `pc_branch_thunks` (CTest) checks all seven
   thunks' register and stack contract. clang also turns switch jump tables
   into compare trees; GCC sends them through a thunk too.
 - Undefined functions become stubs calling `Memories_Unimplemented`. Current
@@ -292,7 +293,8 @@ it, capped at 999999 or a mod's `limits`), all once a save is live
 `MEMORIES_NO_AUDIO=1`, `MEMORIES_DUMP_AUDIO=path` (raw s16le stereo 44.1 kHz
 instead of a device),
 `MEMORIES_TEST_EXEC_GUEST=1` (guest RAM mapped executable, as without DEP,
-to check that the branch thunks carry every guest call; see "How it works"),
+to check that the branch thunks carry every guest call; see "How it works";
+not in release builds),
 and `MEMORIES_STUB_TRACE=1`. Traces on stderr: `MEMORIES_TRACE_SPU=1` (every
 `SpuSetKeyOnWithAttr`), `MEMORIES_TRACE_INPUT=1` (scripted pad changes with
 frame and VBlank numbers; script frames are presented frames, which run
@@ -1952,6 +1954,14 @@ at 2x and up.
 main menu after one cursor move (4:3 and widescreen), Options, and the first
 campaign duel with both code mods on (a 3D Monsters model standing on a
 face-up card at frame 6760; the field turned by the hand camera's L1 at 6560).
+Options is played again with guest RAM executable (`options-exec-guest`,
+`MEMORIES_TEST_EXEC_GUEST=1`, as a machine without DEP): the same frame, so
+the branch thunks carried every guest call. A case's `environment` sets
+variables for it alone, and its `expect_output` must appear in the game's
+output. That variable is read only by builds that are not releases
+(`MEMORIES_TEST_HOOKS`, which `build_game32.py` defines without
+`--release`): the runner skips the case, saying so, for an executable that
+does not contain the variable's name, such as the release `package.py` smokes.
 Each run works in a folder of its own, `tmp/pc/smoke/run-XXXXXXXX` (printed
 at the start), removed when every case passes and kept with the differing
 image when one fails: worktrees share `tmp/` through a junction, and two runs
