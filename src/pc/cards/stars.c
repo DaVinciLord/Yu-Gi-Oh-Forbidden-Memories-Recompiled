@@ -47,7 +47,6 @@ typedef struct {
 static short bonus_of[IDS][IDS];
 static unsigned char decided[IDS][IDS];
 static Star stars[IDS];
-static int default_bonus = RETAIL_BONUS;
 static int choice_mode = STARS_CHOICE_ASK;
 static int built;
 static int any;          /* whether any mod has a "guardian_stars" */
@@ -322,6 +321,10 @@ static void read_choice(const char *mod, const JsonValue *value)
 void Stars_AddFrom(const char *mod, const char *directory, const JsonValue *manifest)
 {
     const JsonValue *section = Json_Member(manifest, "guardian_stars"), *member, *value;
+    /* This section's own: a later mod's "beats" and bonus-less matchups do
+     * not take an earlier mod's "default_bonus" (the FM Editor's table
+     * reads each section alone too). */
+    int default_bonus = RETAIL_BONUS;
     int a, d;
     if (!section) return;
     if (Json_TypeOf(section) != JSON_OBJECT) {
@@ -382,7 +385,6 @@ void Stars_Clear(void)
     memset(stars, 0, sizeof(stars));
     memset(bonus_of, 0, sizeof(bonus_of));
     memset(decided, 0, sizeof(decided));
-    default_bonus = RETAIL_BONUS;
     choice_mode = STARS_CHOICE_ASK;
     any = 0;
     built = 1;   /* the tests add their own */

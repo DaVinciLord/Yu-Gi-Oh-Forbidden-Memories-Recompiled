@@ -166,6 +166,22 @@ int main(void)
     assert(!strcmp(name_of(15), "Star 15") && !Stars_Named(15) && Stars_Count() == 15);
     Json_Free(document);
 
+    /* "default_bonus" is its own section's: a later mod's "beats" and
+       bonus-less matchups give the disc's 500, as the FM Editor reads it. */
+    {
+        JsonDocument *first = Json_Parse("{\"guardian_stars\": {\"default_bonus\": 1000}}", NULL, 0);
+        JsonDocument *second = Json_Parse("{\"guardian_stars\": {\"stars\": [{\"id\": 11, \"beats\": [\"Mars\"]}],"
+                                          " \"matchups\": [{\"attacker\": 8, \"defender\": 1}]}}", NULL, 0);
+        Stars_Clear();
+        Stars_Add("first", Json_Root(first));
+        Stars_Add("second", Json_Root(second));
+        assert(Duel_CalcGuardianStarMatchup(1, 2) == 1000);
+        assert(Duel_CalcGuardianStarMatchup(11, 1) == 500 && Duel_CalcGuardianStarMatchup(1, 11) == -500);
+        assert(Duel_CalcGuardianStarMatchup(8, 1) == 500);
+        Json_Free(first);
+        Json_Free(second);
+    }
+
     /* What is refused, each with a note and nothing decided. */
     document = Json_Parse("{\"guardian_stars\": {\"stars\": [{\"id\": 16}, {\"id\": 0}, {\"name\": \"x\"}],"
                           " \"matchups\": [{\"attacker\": 1, \"defender\": 2, \"bonus\": 40000},"
