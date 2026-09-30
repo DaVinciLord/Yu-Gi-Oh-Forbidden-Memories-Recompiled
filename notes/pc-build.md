@@ -379,7 +379,8 @@ module (`src/overlays/duel_effects/`, bank `0x80146000`, identifier word
 (`src/pc/overlays/duel_effects.c`, the function map's entry for
 `0x801462B0`) calls the decomp's dispatcher instead of interpreting, under
 one rule: **the native C runs only for the retail bytes.** A disc delivery
-touching `0x80146000-0x8015C000` marks the bank pending; the next effect call
+that writes the bank's first word (`0x80146000`, a new copy of it) marks it
+pending; the next effect call
 hashes all `0x16000` bytes (SHA-256, before the bank has written its own
 variables) and compares them with the image `config/slus_01411/overlays.json`
 records (`baa203b9...`, the same at all seven WA_MRG copies). A mod or disc

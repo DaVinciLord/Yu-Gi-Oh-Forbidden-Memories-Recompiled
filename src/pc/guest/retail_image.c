@@ -45,7 +45,10 @@ void RetailImage_Written(uintptr_t destination, size_t length)
 {
     unsigned i;
     for (i = 0; i < RETAIL_IMAGE_COUNT; i++) {
-        if (destination < (uintptr_t)images[i].base + images[i].size && images[i].base < destination + length) {
+        /* A new copy of the image starts with its first sector. The game
+         * also streams other data into an image's tail while it runs (the
+         * credits load 20 sectors at 0x80185CD4); that is not a new image. */
+        if (destination <= (uintptr_t)images[i].base && images[i].base < destination + length) {
             verdicts[i] = PENDING;
         }
     }

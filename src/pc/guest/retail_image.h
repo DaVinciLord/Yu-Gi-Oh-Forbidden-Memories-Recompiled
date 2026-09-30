@@ -9,7 +9,8 @@
  * its bytes gets the delivered code run by the interpreter instead.
  *
  * The check hashes the whole image (SHA-256) once, at the first call after
- * a delivery touched its range, before any of its code has run and written
+ * a delivery wrote its first word (a new copy of it), before any of its
+ * code has run and written
  * to its own variables. The verdict is kept in save states. */
 typedef enum RetailImageId {
     RETAIL_IMAGE_DUEL_EFFECTS, /* the WA duel-effect bank at 0x80146000 */
