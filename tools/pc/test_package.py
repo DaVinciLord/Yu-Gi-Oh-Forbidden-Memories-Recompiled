@@ -29,6 +29,20 @@ def check_exe(image):
     assert marker >= 0, "memories-pc.exe has no CodeView record"
     pdb = image[marker + 24:image.index(b"\0", marker + 24)]
     assert pdb == b"memories-pc.pdb", f"memories-pc.exe names its PDB {pdb!r}, not by bare name"
+    # What v0.1.4-preview.1 gained and 11 engines' models held against it
+    # (notes/pc-release.md): DEP-policy imports and the executable-guest-RAM
+    # test path, which a release leaves out (MEMORIES_TEST_HOOKS).
+    for name in (b"SetProcessDEPPolicy", b"GetProcessDEPPolicy", b"GetSystemDEPPolicy", b"MEMORIES_TEST_EXEC_GUEST"):
+        assert name not in image, f"memories-pc.exe contains {name.decode()}"
+    # The PE checksum package.py fills in after the strip: ImageHlp's sum
+    # of the file's 16-bit words (its own field as 0), folded, plus the length.
+    field = header + 24 + 64
+    stored = struct.unpack_from("<I", image, field)[0]
+    padded = image[:field] + bytes(4) + image[field + 4:] + bytes(len(image) % 2)
+    total = sum(struct.unpack(f"<{len(padded) // 2}H", padded))
+    while total >> 16:
+        total = (total & 0xFFFF) + (total >> 16)
+    assert stored == total + len(image), f"memories-pc.exe's PE checksum is {stored:#x}, not {total + len(image):#x}"
 
 
 def check(path):
