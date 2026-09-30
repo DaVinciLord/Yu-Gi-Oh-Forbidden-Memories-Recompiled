@@ -694,9 +694,11 @@ def main():
                 run(command + [obj(source)])
         headers_text = run([OBJDUMP, "-h", *[obj(s) for s in module_sources[name]]])
         sections[name] = [kind for kind in ("data", "bss") if f"ovl_{name}_{kind}" in headers_text]
-        if name in GATED_MODULES and any(
+        # A tentative definition (-fcommon) is in no section yet: it would
+        # become host data the image never sees, so it counts too.
+        if name in GATED_MODULES and (common or any(
                 len(parts) > 2 and parts[1].startswith(f"ovl_{name}_") and int(parts[2], 16)
-                for parts in (line.split() for line in headers_text.splitlines())):
+                for parts in (line.split() for line in headers_text.splitlines()))):
             sys.exit(f"{name}: a gated module with variables of its own")
 
     for source in game if WINDOWS else []:
