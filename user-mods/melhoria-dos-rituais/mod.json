@@ -1,0 +1,11 @@
+{
+  "id": "melhoria-dos-rituais",
+  "name": "Melhoria dos Rituais",
+  "version": "1.1.0-test",
+  "description": "Permite usar 3 materiais entre campo e mao, com pelo menos 1 no campo. Respeita receitas editadas e, em builds compativeis, tributos por condicoes. Funciona independentemente do mod de receitas.",
+  "author": "Otavio",
+  "enabled": true,
+  "min_api": 4,
+  "game": "slus_01411",
+  "library": "rituals"
+}

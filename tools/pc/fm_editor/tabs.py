@@ -866,7 +866,10 @@ class RitualsTab(Tab):
                         key, limit = "min_level", 12
                     else:
                         key, limit = "max_level", 12
-                    value = tk.StringVar(value=str(req[key]))
+                    # Keep pending edits when changing panels or adding another
+                    # condition rebuilds the widgets. Save validates the text.
+                    previous = numeric_inputs[index].get(key)
+                    value = previous[0] if previous else tk.StringVar(value=str(req[key]))
                     entry = ttk.Entry(row, textvariable=value, width=10)
                     entry.pack(side="left")
                     numeric_inputs[index][key] = (value, limit)
@@ -881,6 +884,7 @@ class RitualsTab(Tab):
                     if len(describe(r)) <= 1:
                         return
                     r.pop(keys[k], None)
+                    numeric_inputs[n].pop(keys[k], None)
                     render(n)
                 ttk.Button(row, text="Remove", command=delete,
                            state="normal" if len(kinds) > 1 else "disabled").pack(side="right", padx=(6, 0))

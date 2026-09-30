@@ -586,6 +586,9 @@ if(Python3_Interpreter_FOUND)
     # The code mod loader runs in a 32-bit process, so it is built and run by
     # its own script (gcc -m32 here; smoke.py --windows runs the Windows half).
     if(BUILD_TESTING AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        add_test(NAME pc_ritual_hand_mod
+            COMMAND "${Python3_EXECUTABLE}" tools/pc/test_ritual_hand_mod.py
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
         add_test(NAME pc_mods_lifecycle
             COMMAND "${Python3_EXECUTABLE}" tools/pc/test_mods_lifecycle.py --target linux
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
