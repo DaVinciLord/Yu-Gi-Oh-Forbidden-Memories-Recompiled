@@ -268,7 +268,7 @@ static void program_name(char *out, size_t size)
  * Paths_WatchUserDir): -1 before any, then the last one's outcome. */
 static void (*user_dir_watch)(int writable, const char *why);
 static int user_dir_writable = -1;
-static char user_dir_why[600];
+static char user_dir_why[1024];
 
 /* Whether `path` names the user directory or something in it. */
 static int in_user_dir(const char *path)
