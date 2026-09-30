@@ -8,13 +8,13 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from . import bulk_dialog, manifest, pools as poolmath, validate
-from .gamedata import (ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, DUELIST_NAMES, FRAME_NAMES,
+from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, DUELIST_NAMES, FRAME_NAMES,
                        POOL_LABELS, POOL_TOTAL, POOLS, STAR_NAMES, STARTER_WEIGHT_LIMIT, TYPE_EQUIP, TYPE_NAMES, TYPE_RITUAL,
                        exodia_piece, type_frame)
 from . import fixed_decks
 from .fixed_deck_view import FixedDeckView
 from .model import KEY_RE, StarterDeck
-from .widgets import CardField, FormDialog, card_matches, pick_card, px, scrolled_tree, show_text, ui_font
+from .widgets import CardField, FormDialog, card_matches, card_named, pick_card, px, scrolled_tree, show_text, ui_font
 
 ATTRIBUTE_CHOICES = ATTRIBUTE_NAMES + ["6 (magic)", "7 (trap)"]
 STAR_CHOICES = ["(none)"] + STAR_NAMES[1:]
@@ -669,7 +669,7 @@ class EquipsTab(Tab):
     def add(self):
         if not self.current:
             return
-        cid = pick_card(self, self.project, "Monster it may equip", only=lambda c: self.project.cards[c].is_monster())
+        cid = pick_card(self, self.project, "Monster it may equip", only=lambda c: 0 <= self.project.cards[c].type < 20)
         if cid:
             self.project.equips.setdefault(self.current, set()).add(cid)
             self.edited()
@@ -716,7 +716,7 @@ class RitualsTab(Tab):
         ttk.Button(buttons, text="Remove recipe", command=self.remove).pack(side="left", padx=4)
         ttk.Button(buttons, text="Revert to retail", command=self.revert).pack(side="left")
         ttk.Label(buttons, text="A ritual is one of the disc's ritual cards; the three tributes are monsters on "
-                                "the field.", style="Hint.TLabel").pack(side="right")
+                                "the field; custom recipes may use conditions.", style="Hint.TLabel").pack(side="right")
 
     def refresh(self):
         self.fill()
@@ -729,9 +729,34 @@ class RitualsTab(Tab):
         for ritual in sorted(set(p.ritual_cards()) | set(p.rituals) | set(p.retail.rituals)):
             if ritual not in p.cards:
                 continue
+            conditional = ritual in p.ritual_requirements
             state = p.ritual_status(ritual)
             recipe = p.rituals.get(ritual) or (None, None, None, None)
             labels = [p.card_label(c) if c else "-" for c in recipe]
+            if conditional:
+                for i, req in enumerate(p.ritual_requirements[ritual]):
+                    parts = []
+                    if req.get("card"):
+                        parts.append(p.card_label(req["card"]))
+                    if req.get("type") is not None:
+                        parts.append(str(req["type"]))
+                    if req.get("fusion_group") is not None:
+                        parts.append(f'Group: {req["fusion_group"]}')
+                    if req.get("min_attack") is not None:
+                        parts.append(f'ATK ≥ {req["min_attack"]}')
+                    if req.get("min_defense") is not None:
+                        parts.append(f'DEF ≥ {req["min_defense"]}')
+                    if req.get("max_attack") is not None:
+                        parts.append(f'ATK ≤ {req["max_attack"]}')
+                    if req.get("max_defense") is not None:
+                        parts.append(f'DEF ≤ {req["max_defense"]}')
+                    if req.get("min_level") is not None:
+                        parts.append(f'Level ≥ {req["min_level"]}')
+                    if req.get("max_level") is not None:
+                        parts.append(f'Level ≤ {req["max_level"]}')
+                    if req.get("defense_gt_attack"):
+                        parts.append("DEF > ATK")
+                    labels[i] = " & ".join(parts) or "-"
             self.tree.insert("", "end", iid=str(ritual), values=[p.card_label(ritual)] + labels + [state],
                              tags=(state,) if state else ())
 
@@ -743,35 +768,244 @@ class RitualsTab(Tab):
         ritual = self.selected()
         if not ritual:
             return
-        fields = []
         recipe = self.project.rituals.get(ritual) or self.project.retail.rituals.get(ritual) or (0, 0, 0, 0)
+        saved = self.project.ritual_requirements.get(ritual)
+        requirements = [dict(r) for r in saved] if saved else [{"card": recipe[i]} if recipe[i] else {} for i in range(3)]
 
-        def build(dialog, body):
-            ttk.Label(body, text=self.project.card_label(ritual), font=ui_font(10)).grid(
-                row=0, column=0, columnspan=2, sticky="w", pady=(0, 6))
-            for i, label in enumerate(("Tribute 1", "Tribute 2", "Tribute 3", "Summons")):
-                ttk.Label(body, text=label).grid(row=i + 1, column=0, sticky="w", pady=2)
-                field = CardField(body, lambda: self.project, width=36)
-                field.grid(row=i + 1, column=1, pady=2)
-                if recipe[i]:
-                    field.set(recipe[i])
-                fields.append(field)
+        dialog = tk.Toplevel(self)
+        dialog.title("Ritual recipe")
+        dialog.transient(self)
+        dialog.resizable(True, False)
+        dialog.minsize(px(dialog, 620), 0)
+        dialog.grab_set()
+        dialog.bind("<Escape>", lambda e: dialog.destroy())
+        dialog.protocol("WM_DELETE_WINDOW", dialog.destroy)
+        body = ttk.Frame(dialog, padding=12)
+        body.pack(fill="both", expand=True)
+        ttk.Label(body, text=self.project.card_label(ritual), font=ui_font(10)).pack(
+            anchor="w", pady=(0, 8))
 
-        def ok(dialog):
-            ids = [f.get() for f in fields]
-            if not all(ids):
-                return "name three tributes and the monster it summons"
-            self.project.rituals[ritual] = tuple(ids)
+        panels = []
+        numeric_inputs = [dict(), dict(), dict()]
+        card_inputs = [None, None, None]   # a Specific Card's text, read on Save
+        open_index = tk.IntVar(value=0)
+
+        def describe(req):
+            parts = []
+            if req.get("card"):
+                parts.append("Specific Card")
+            if req.get("type") is not None:
+                parts.append("Monster Type")
+            if req.get("fusion_group") is not None:
+                parts.append("Fusion Group")
+            if req.get("min_attack") is not None:
+                parts.append("Minimum ATK")
+            if req.get("min_defense") is not None:
+                parts.append("Minimum DEF")
+            if req.get("max_attack") is not None:
+                parts.append("Maximum ATK")
+            if req.get("max_defense") is not None:
+                parts.append("Maximum DEF")
+            if req.get("min_level") is not None:
+                parts.append("Minimum Level")
+            if req.get("max_level") is not None:
+                parts.append("Maximum Level")
+            if req.get("defense_gt_attack"):
+                parts.append("DEF > ATK")
+            return parts
+
+        def render(index):
+            panel = panels[index][1]
+            for child in panel.winfo_children():
+                child.destroy()
+            req = requirements[index]
+            kinds = describe(req)
+            for kind in kinds:
+                row = ttk.Frame(panel)
+                row.pack(fill="x", pady=2)
+                ttk.Label(row, text=kind, width=18).pack(side="left")
+                if kind == "Specific Card":
+                    field = CardField(row, lambda: self.project, width=36,
+                                      only=lambda c: 0 <= self.project.cards[c].type < 20)
+                    field.pack(side="left", fill="x", expand=True)
+                    # Typed text survives a redraw, as the numbers' does.
+                    if card_inputs[index] is not None:
+                        field.var.set(card_inputs[index].get())
+                    else:
+                        field.set(req["card"])
+                    card_inputs[index] = field.var
+                elif kind == "Monster Type":
+                    value = tk.StringVar(value=req["type"])
+                    combo = ttk.Combobox(row, textvariable=value, values=TYPE_NAMES[:20], state="readonly", width=22)
+                    combo.pack(side="left")
+                    combo.bind("<<ComboboxSelected>>", lambda e, v=value, r=req: r.__setitem__("type", v.get()))
+                elif kind == "Fusion Group":
+                    value = tk.StringVar(value=req["fusion_group"])
+                    combo = ttk.Combobox(row, textvariable=value, values=FUSION_GROUPS, state="readonly", width=22)
+                    combo.pack(side="left")
+                    combo.bind("<<ComboboxSelected>>",
+                               lambda e, v=value, r=req: r.__setitem__("fusion_group", v.get()))
+                elif kind in ("Minimum ATK", "Minimum DEF", "Maximum ATK", "Maximum DEF", "Minimum Level", "Maximum Level"):
+                    if kind == "Minimum ATK":
+                        key, limit = "min_attack", 9999
+                    elif kind == "Minimum DEF":
+                        key, limit = "min_defense", 9999
+                    elif kind == "Maximum ATK":
+                        key, limit = "max_attack", 9999
+                    elif kind == "Maximum DEF":
+                        key, limit = "max_defense", 9999
+                    elif kind == "Minimum Level":
+                        key, limit = "min_level", 12
+                    else:
+                        key, limit = "max_level", 12
+                    # Keep pending edits when changing panels or adding another
+                    # condition rebuilds the widgets. Save validates the text.
+                    previous = numeric_inputs[index].get(key)
+                    value = previous[0] if previous else tk.StringVar(value=str(req[key]))
+                    entry = ttk.Entry(row, textvariable=value, width=10)
+                    entry.pack(side="left")
+                    numeric_inputs[index][key] = (value, limit)
+                else:
+                    ttk.Label(row, text="Required").pack(side="left")
+                def delete(k=kind, r=req, n=index):
+                    keys = {"Specific Card": "card", "Monster Type": "type", "Fusion Group": "fusion_group",
+                            "Minimum ATK": "min_attack", "Minimum DEF": "min_defense",
+                            "Maximum ATK": "max_attack", "Maximum DEF": "max_defense",
+                            "Minimum Level": "min_level", "Maximum Level": "max_level",
+                            "DEF > ATK": "defense_gt_attack"}
+                    if len(describe(r)) <= 1:
+                        return
+                    r.pop(keys[k], None)
+                    numeric_inputs[n].pop(keys[k], None)
+                    if keys[k] == "card":
+                        card_inputs[n] = None
+                    render(n)
+                ttk.Button(row, text="Remove", command=delete,
+                           state="normal" if len(kinds) > 1 else "disabled").pack(side="right", padx=(6, 0))
+            ttk.Button(panel, text="+ Add requirement", command=lambda n=index: add_requirement(n)).pack(
+                anchor="w", pady=(6, 0))
+
+        def add_requirement(index):
+            req = requirements[index]
+            menu = tk.Menu(dialog, tearoff=False)
+            choices = [("Specific Card", "card"), ("Monster Type", "type"), ("Fusion Group", "fusion_group"),
+                       ("Minimum ATK", "min_attack"), ("Minimum DEF", "min_defense"),
+                       ("Maximum ATK", "max_attack"), ("Maximum DEF", "max_defense"),
+                       ("Minimum Level", "min_level"), ("Maximum Level", "max_level"),
+                       ("DEF > ATK", "defense_gt_attack")]
+            def add(key):
+                if key in req:
+                    return
+                if key == "card":
+                    cid = pick_card(dialog, self.project, "Specific ritual tribute",
+                                    only=lambda c: 0 <= self.project.cards[c].type < 20)
+                    if not cid: return
+                    req[key] = cid
+                elif key == "type":
+                    req[key] = TYPE_NAMES[0]
+                elif key == "fusion_group":
+                    req[key] = "Elf"
+                elif key in ("min_attack", "min_defense", "max_attack", "max_defense"):
+                    req[key] = 1000
+                elif key == "min_level":
+                    req[key] = 1
+                elif key == "max_level":
+                    req[key] = 12
+                else:
+                    req[key] = True
+                render(index)
+            for label, key in choices:
+                menu.add_command(label=label, state="disabled" if key in req else "normal",
+                                 command=lambda k=key: add(k))
+            widget = panels[index][1].winfo_children()[-1]
+            menu.tk_popup(widget.winfo_rootx(), widget.winfo_rooty() + widget.winfo_height())
+
+        def show_panel(index):
+            open_index.set(index)
+            for i, (button, panel) in enumerate(panels):
+                button.configure(text=("▼ " if i == index else "▶ ") + f"TRIBUTE {i + 1}")
+                if i == index:
+                    panel.pack(fill="x", padx=(18, 0), pady=(2, 8))
+                    render(i)
+                else:
+                    panel.pack_forget()
+
+        for i in range(3):
+            section = ttk.Frame(body)
+            section.pack(fill="x")
+            header = ttk.Button(section, command=lambda n=i: show_panel(n))
+            header.pack(fill="x")
+            panel = ttk.Frame(section, padding=(4, 4))
+            panels.append((header, panel))
+        show_panel(0)
+
+        ttk.Separator(body).pack(fill="x", pady=(4, 8))
+        summon = ttk.Frame(body)
+        summon.pack(fill="x")
+        ttk.Label(summon, text="Summons", width=18).pack(side="left")
+        result = CardField(summon, lambda: self.project, width=38, only=lambda c: 0 <= self.project.cards[c].type < 20)
+        result.pack(side="left", fill="x", expand=True)
+        if recipe[3]:
+            result.set(recipe[3])
+        error = ttk.Label(body, style="Error.TLabel")
+        error.pack(fill="x", pady=(6, 0))
+        buttons = ttk.Frame(body)
+        buttons.pack(fill="x", pady=(8, 0))
+
+        def fail(index, text):
+            error.configure(text=f"Tribute {index + 1}: {text}")
+            show_panel(index)
+
+        def save():
+            for index, req in enumerate(requirements):
+                if "card" in req and card_inputs[index] is not None:
+                    text = card_inputs[index].get().strip()
+                    cid = card_named(self.project, text)
+                    if text and not cid:
+                        return fail(index, f"no card \"{text}\".")
+                    if cid:
+                        req["card"] = cid
+                    else:
+                        req.pop("card")
+                for key, (value, limit) in numeric_inputs[index].items():
+                    try:
+                        number = int(value.get())
+                    except ValueError:
+                        return fail(index, "ATK, DEF and Level requirements must be whole numbers.")
+                    if not 0 <= number <= limit:
+                        return fail(index, f"{key.replace('_', ' ').title()} must be between 0 and {limit}.")
+                    req[key] = number
+            result_id = result.get()
+            for index, req in enumerate(requirements):
+                for low, high, what in (("min_attack", "max_attack", "ATK"), ("min_defense", "max_defense", "DEF"),
+                                        ("min_level", "max_level", "Level")):
+                    if req.get(low) is not None and req.get(high) is not None and req[low] > req[high]:
+                        return fail(index, f"Minimum {what} cannot be greater than Maximum {what}.")
+                if not req:
+                    return fail(index, "needs at least one requirement.")
+            if not result_id:
+                error.configure(text="Summons must name a monster.")
+                return
+            display = [req.get("card", 0) for req in requirements]
+            self.project.rituals[ritual] = tuple(display + [result_id])
+            traditional = all(set(req) == {"card"} for req in requirements)
+            if traditional:
+                self.project.ritual_requirements.pop(ritual, None)
+            else:
+                self.project.ritual_requirements[ritual] = [dict(req) for req in requirements]
             self.app.changed()
             self.fill()
-            return None
+            dialog.destroy()
 
-        FormDialog(self, "Ritual recipe", build, ok)
+        ttk.Button(buttons, text="Save", command=save).pack(side="right")
+        ttk.Button(buttons, text="Cancel", command=dialog.destroy).pack(side="right", padx=4)
+        dialog.bind("<Control-s>", lambda e: save())
 
     def remove(self):
         ritual = self.selected()
         if ritual:
             self.project.rituals.pop(ritual, None)
+            self.project.ritual_requirements.pop(ritual, None)
             self.app.changed()
             self.fill()
 

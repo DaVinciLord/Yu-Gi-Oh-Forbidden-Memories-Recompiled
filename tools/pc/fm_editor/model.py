@@ -141,6 +141,9 @@ class Project:
         self.fusions = dict(retail.fusions)
         self.equips = {e: set(m) for e, m in retail.equips.items()}
         self.rituals = dict(retail.rituals)
+        # ritual id -> three requirement dictionaries. Empty means the traditional
+        # three-specific-card recipe represented by self.rituals.
+        self.ritual_requirements = {}
         self.pools = [{p: dict(retail.pools[d][p]) for p in POOLS} for d in range(len(retail.pools))]
         self.info = ModInfo()
         self.other = {}                 # top-level keys the editor keeps as written (data, text, audio...)
@@ -259,6 +262,10 @@ class Project:
         for monsters in self.equips.values():
             monsters.discard(cid)
         self.rituals = {r: rec for r, rec in self.rituals.items() if cid not in rec}
+        self.ritual_requirements.pop(cid, None)
+        for ritual, slots in list(self.ritual_requirements.items()):
+            if ritual not in self.rituals or any(req.get("card") == cid for req in slots):
+                self.ritual_requirements.pop(ritual, None)
         for pools in self.pools:
             for pool in pools.values():
                 pool.pop(cid, None)
@@ -327,9 +334,12 @@ class Project:
         """The recipe against the disc's: "" the same, or "added", "removed" or
         "changed"."""
         now, retail = self.rituals.get(ritual), self.retail.rituals.get(ritual)
+        if ritual in self.ritual_requirements:
+            return "added" if retail is None else "changed"
         return "" if now == retail else "added" if retail is None else "removed" if now is None else "changed"
 
     def revert_ritual(self, ritual: int):
+        self.ritual_requirements.pop(ritual, None)
         if ritual in self.retail.rituals:
             self.rituals[ritual] = self.retail.rituals[ritual]
         else:

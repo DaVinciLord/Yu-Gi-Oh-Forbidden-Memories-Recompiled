@@ -53,6 +53,7 @@ The release ships no card mod; the checks below were made with test mods
 | `level` | 0 to 12 |
 | `stars` | the two guardian stars, as numbers or names (`"Mars"` to `"Venus"`) |
 | `frame` | the colour of the card's frame, whatever its type: `"Monster"` (gold), `"Magic"` (green), `"Trap"` (pink), `"Ritual"` (blue), `"Purple"` or `"Orange"`, or a number 0-5 in that order; `"Type"` goes back to its type's ([below](#frame-colour)) |
+| `fusion_groups` | the fusion guides' groups the card is in, for a ritual's `fusion_group` condition ([Gameplay tables](gameplay-tables.md#rituals)): a list such as `["Elf", "Female"]`, `[]` for none; without it, its base's |
 | `drops` | whether the card can be won in its base's place (default `true`, below) |
 | `opponents` | whether an opponent's deck can be dealt it in its base's place (default `false`) |
 | `password` | what View > Card passwords shows for it ([PC build](pc-build.md#card-passwords-view)): up to eight digits as a string (`"08124921"`, leading zeros kept) or a number, `""` or `null` for none. It is only shown: the Password screen does not know it (a disc card's

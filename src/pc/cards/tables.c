@@ -177,7 +177,8 @@ typedef struct {
 
 typedef struct {
     unsigned short recipe[6];   /* ritual, three tributes, result, 0 */
-    unsigned char removed;
+    TablesRitualRequirement requirements[DUEL_RITUAL_TRIBUTE_COUNT];
+    unsigned char removed, conditional;
 } RitualRule;
 
 typedef struct {
@@ -599,6 +600,131 @@ int Tables_EquipBonus(int equip, int monster, int retail)
 
 /* --- rituals --------------------------------------------------------- */
 
+static int ritual_requirement(const char *mod, const char *where, const JsonValue *value,
+                              TablesRitualRequirement *out)
+{
+    const JsonValue *v;
+    int id, type;
+    memset(out, 0, sizeof(*out));
+    out->type = -1;
+    out->max_attack = -1;
+    out->max_defense = -1;
+    out->min_level = -1;
+    out->max_level = -1;
+    if (Json_TypeOf(value) != JSON_OBJECT) {
+        id = card(mod, where, value);
+        if (!id) return 0;
+        out->card = (unsigned short)id;
+        return 1;
+    }
+    v = Json_Member(value, "card");
+    if (v) {
+        id = card(mod, where, v);
+        if (!id) return 0;
+        out->card = (unsigned short)id;
+    }
+    v = Json_Member(value, "type");
+    if (v) {
+        if (Json_TypeOf(v) != JSON_STRING || (type = Cards_TypeNamed(Json_String(v, ""))) < 0 ||
+            type >= CARD_TYPE_MAGIC) {
+            Mods_Note(mod, "%s: ritual tribute \"type\" is a monster type", where);
+            return 0;
+        }
+        out->type = (signed char)type;
+    }
+    v = Json_Member(value, "fusion_group");
+    if (v) {
+        int group = Cards_FusionGroupNamed(Json_String(v, ""));
+        if (group == CARD_FUSION_GROUP_NONE) {
+            Mods_Note(mod, "%s: \"fusion_group\" is a known secondary fusion group", where); return 0;
+        }
+        out->fusion_group = (unsigned char)group;
+    }
+    v = Json_Member(value, "min_attack");
+    if (v) {
+        long n = Json_Number(v, -1);
+        if (n < 0 || n > CARD_STAT_MAX) {
+            Mods_Note(mod, "%s: \"min_attack\" is 0 to %d", where, CARD_STAT_MAX); return 0;
+        }
+        out->min_attack = (short)n;
+    }
+    v = Json_Member(value, "min_defense");
+    if (v) {
+        long n = Json_Number(v, -1);
+        if (n < 0 || n > CARD_STAT_MAX) {
+            Mods_Note(mod, "%s: \"min_defense\" is 0 to %d", where, CARD_STAT_MAX); return 0;
+        }
+        out->min_defense = (short)n;
+    }
+    v = Json_Member(value, "max_attack");
+    if (v) {
+        long n = Json_Number(v, -1);
+        if (n < 0 || n > CARD_STAT_MAX) {
+            Mods_Note(mod, "%s: \"max_attack\" is 0 to %d", where, CARD_STAT_MAX); return 0;
+        }
+        out->max_attack = (short)n;
+    }
+    v = Json_Member(value, "max_defense");
+    if (v) {
+        long n = Json_Number(v, -1);
+        if (n < 0 || n > CARD_STAT_MAX) {
+            Mods_Note(mod, "%s: \"max_defense\" is 0 to %d", where, CARD_STAT_MAX); return 0;
+        }
+        out->max_defense = (short)n;
+    }
+    if (out->max_attack >= 0 && out->min_attack > out->max_attack) {
+        Mods_Note(mod, "%s: ritual tribute minimum ATK is above maximum ATK", where); return 0;
+    }
+    if (out->max_defense >= 0 && out->min_defense > out->max_defense) {
+        Mods_Note(mod, "%s: ritual tribute minimum DEF is above maximum DEF", where); return 0;
+    }
+    v = Json_Member(value, "min_level");
+    if (v) {
+        long n = Json_Number(v, -1);
+        if (n < 0 || n > 12) {
+            Mods_Note(mod, "%s: \"min_level\" is 0 to 12", where); return 0;
+        }
+        out->min_level = (signed char)n;
+    }
+    v = Json_Member(value, "max_level");
+    if (v) {
+        long n = Json_Number(v, -1);
+        if (n < 0 || n > 12) {
+            Mods_Note(mod, "%s: \"max_level\" is 0 to 12", where); return 0;
+        }
+        out->max_level = (signed char)n;
+    }
+    if (out->min_level >= 0 && out->max_level >= 0 && out->min_level > out->max_level) {
+        Mods_Note(mod, "%s: ritual tribute minimum level is above maximum level", where); return 0;
+    }
+    v = Json_Member(value, "defense_gt_attack");
+    if (v) {
+        if (Json_TypeOf(v) != JSON_BOOL) {
+            Mods_Note(mod, "%s: \"defense_gt_attack\" is true or false", where);
+            return 0;
+        }
+        out->defense_gt_attack = Json_Bool(v, 0) != 0;
+    }
+    /* Any key counts, "min_attack": 0 too: that tribute is any monster. */
+    {
+        static const char *const known[] = {"card", "type", "fusion_group", "min_attack", "min_defense", "max_attack",
+                                            "max_defense", "min_level", "max_level", "defense_gt_attack"};
+        const JsonValue *member;
+        int keys = 0;
+        size_t k;
+        for (member = Json_At(value, 0); member; member = Json_Next(member)) {
+            for (k = 0; k < sizeof(known) / sizeof(known[0]) && strcmp(Json_Name(member), known[k]); k++) {}
+            if (k < sizeof(known) / sizeof(known[0])) keys++;
+            else Mods_Note(mod, "%s: a ritual tribute has no \"%s\" key; left out", where, Json_Name(member));
+        }
+        if (!keys) {
+            Mods_Note(mod, "%s: ritual tribute has no requirement", where);
+            return 0;
+        }
+    }
+    return 1;
+}
+
 static void read_rituals(const char *mod, const JsonValue *list)
 {
     int i, j;
@@ -611,13 +737,14 @@ static void read_rituals(const char *mod, const JsonValue *list)
         const JsonValue *entry = Json_At(list, i);
         const JsonValue *tributes = Json_Member(entry, "tributes");
         const JsonValue *result = Json_Member(entry, "result");
-        RitualRule rule = {{0}, 0}, *slot;
+        RitualRule rule;
+        RitualRule *slot;
         int ritual, ok = 1;
+        memset(&rule, 0, sizeof(rule));
         snprintf(where, sizeof(where), "rituals[%d]", i);
         ritual = card(mod, where, Json_Member(entry, "card"));
         if (!ritual) continue;
         if (ritual > CARD_COUNT || Cards_Type(ritual) != CARD_TYPE_RITUAL) {
-            /* The duel asks for a ritual by the retail card whose effect it is. */
             Mods_Note(mod, "%s: \"card\" must be one of the disc's ritual cards", where);
             continue;
         }
@@ -626,15 +753,22 @@ static void read_rituals(const char *mod, const JsonValue *list)
             rule.removed = 1;
         } else {
             if (Json_Count(tributes) != DUEL_RITUAL_TRIBUTE_COUNT) {
-                Mods_Note(mod, "%s: \"tributes\" names three monsters", where);
+                Mods_Note(mod, "%s: \"tributes\" names three monsters or requirement objects", where);
                 continue;
             }
             for (j = 0; j < DUEL_RITUAL_TRIBUTE_COUNT && ok; j++) {
-                rule.recipe[1 + j] = (unsigned short)card(mod, where, Json_At(tributes, j));
-                ok = rule.recipe[1 + j] != 0;
+                const JsonValue *tribute = Json_At(tributes, j);
+                ok = ritual_requirement(mod, where, tribute, &rule.requirements[j]);
+                if (Json_TypeOf(tribute) == JSON_OBJECT) rule.conditional = 1;
+                if (rule.requirements[j].card) rule.recipe[1 + j] = rule.requirements[j].card;
             }
             rule.recipe[4] = (unsigned short)(ok ? card(mod, where, result) : 0);
             if (!ok || !rule.recipe[4]) continue;
+            if (!rule.conditional) {
+                for (j = 0; j < DUEL_RITUAL_TRIBUTE_COUNT; j++)
+                    if (!rule.recipe[1 + j]) ok = 0;
+                if (!ok) continue;
+            }
         }
         slot = grow(&rituals, &ritual_room, ritual_count, sizeof(*rituals));
         if (!slot) continue;
@@ -646,13 +780,27 @@ static void read_rituals(const char *mod, const JsonValue *list)
 int Tables_Ritual(int ritual, unsigned short recipe[6])
 {
     int i;
-    for (i = ritual_count - 1; i >= 0; i--) {   /* the latest */
+    for (i = ritual_count - 1; i >= 0; i--) {
         if (rituals[i].recipe[0] != ritual) continue;
         if (rituals[i].removed) return 0;
+        if (rituals[i].conditional) return -1;
         memcpy(recipe, rituals[i].recipe, sizeof(rituals[i].recipe));
         return 1;
     }
     return -1;
+}
+
+int Tables_RitualRequirements(int ritual, TablesRitualRequirement requirements[3], unsigned short *result)
+{
+    int i;
+    for (i = ritual_count - 1; i >= 0; i--) {
+        if (rituals[i].recipe[0] != ritual) continue;
+        if (rituals[i].removed || !rituals[i].conditional) return 0;
+        memcpy(requirements, rituals[i].requirements, sizeof(rituals[i].requirements));
+        if (result) *result = rituals[i].recipe[4];
+        return 1;
+    }
+    return 0;
 }
 
 /* --- drops and decks ------------------------------------------------- */
