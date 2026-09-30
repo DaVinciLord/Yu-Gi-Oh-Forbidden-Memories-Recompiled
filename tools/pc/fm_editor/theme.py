@@ -105,6 +105,13 @@ class Theme:
 
     def __init__(self, root: tk.Tk):
         self.root = root
+        # fm-dark's elements sized in pixels (arrows, check boxes), grown
+        # with the dpi on Windows (widgets.ui_scale); kept elsewhere.
+        if sys.platform == "win32":
+            from .widgets import ui_scale
+            self.scale = ui_scale(root)
+        else:
+            self.scale = 1.0
         self.style = ttk.Style(root)
         try:
             self.style.theme_use("vista" if os.name == "nt" else "clam")
@@ -129,6 +136,12 @@ class Theme:
         self.strip = None
         root.bind("<Alt-KeyPress>", self.alt_key, add="+")
         root.bind("<F10>", self.alt_key, add="+")
+
+    def px(self, *pixels):
+        """Pixel sizes at 96 dpi, at the desktop's (self.scale): one, or a
+        tuple of them. Unchanged where the scale is 1."""
+        sized = tuple(round(value * self.scale) for value in pixels)
+        return sized[0] if len(sized) == 1 else sized
 
     def use(self, dark: bool):
         if dark and DARK_THEME not in self.style.theme_names():
@@ -235,7 +248,7 @@ class Theme:
                 continue
             button = tk.Menubutton(strip, text=bar.entrycget(index, "label"), underline=0, background=BG,
                                    foreground=FG, activebackground=HOVER, activeforeground=FG, borderwidth=0,
-                                   highlightthickness=0, padx=7, pady=2)
+                                   highlightthickness=0, padx=self.px(7), pady=self.px(2))
             clone = f"{button}.menu"
             self.root.tk.call(bar.entrycget(index, "menu"), "clone", clone, "normal")
             button.configure(menu=clone)
@@ -268,7 +281,7 @@ class Theme:
         style.map(".", background=[("disabled", BG), ("active", HOVER)], foreground=[("disabled", DISABLED)],
                   arrowcolor=[("disabled", DISABLED)])
         style.configure("TButton", background=RAISED, lightcolor=HOVER, darkcolor=RAISED, anchor="center",
-                        width=-11, padding=5, relief="raised")
+                        width=-11, padding=self.px(5), relief="raised")
         style.map("TButton", background=[("disabled", BG), ("pressed", PRESSED), ("active", HOVER)],
                   lightcolor=[("pressed", PRESSED)], darkcolor=[("pressed", PRESSED)],
                   bordercolor=[("focus", FOCUS)])
@@ -283,11 +296,11 @@ class Theme:
         style.configure("TCombobox", padding=(1, 1, 1, 1))
         style.configure("ComboboxPopdownFrame", background=FIELD, bordercolor=BORDER, relief="solid")
         style.configure("TNotebook", background=BG, bordercolor=BORDER, lightcolor=BG, darkcolor=BG,
-                        tabmargins=(2, 2, 2, 0))
+                        tabmargins=self.px(2, 2, 2, 0))
         style.configure("TNotebook.Tab", background=RAISED, foreground=FG, lightcolor=RAISED, darkcolor=BG,
-                        bordercolor=BORDER, padding=(6, 2, 6, 2))
+                        bordercolor=BORDER, padding=self.px(6, 2, 6, 2))
         style.map("TNotebook.Tab", background=[("selected", BG), ("active", HOVER)],
-                  padding=[("selected", (6, 4, 6, 2))], lightcolor=[("selected", BG)])
+                  padding=[("selected", self.px(6, 4, 6, 2))], lightcolor=[("selected", BG)])
         style.configure("Treeview", background=FIELD, fieldbackground=FIELD, foreground=FG, bordercolor=BORDER,
                         lightcolor=FIELD, darkcolor=FIELD, rowheight=self.row_height)
         style.map("Treeview", background=[("disabled", BG), ("selected", SELECT)],
@@ -299,19 +312,28 @@ class Theme:
                         lightcolor=RAISED, darkcolor=RAISED, arrowcolor=FG, gripcount=0)
         style.map("TScrollbar", background=[("pressed", BORDER), ("active", HOVER)])
         style.configure("TLabelframe", background=BG, bordercolor=BORDER, lightcolor=BG, darkcolor=BG, relief="solid",
-                        borderwidth=1, labelmargins=(6, 0, 6, 2))
+                        borderwidth=1, labelmargins=self.px(6, 0, 6, 2))
         style.configure("TLabelframe.Label", background=BG, foreground=FG)
         style.configure("TSeparator", background=BORDER)
         for toggle in ("TCheckbutton", "TRadiobutton"):
             style.configure(toggle, indicatorbackground=FIELD, indicatorforeground=FG, upperbordercolor=BORDER,
-                            lowerbordercolor=BORDER, indicatormargin=(1, 1, 4, 1), padding=2)
+                            lowerbordercolor=BORDER, indicatormargin=self.px(1, 1, 4, 1), padding=self.px(2))
             style.map(toggle, indicatorbackground=[("pressed", BG), ("disabled", BG)],
                       background=[("active", BG)])
         # A toggle drawn as a button (the Map tab's D-pad): pressed shows.
-        style.configure("Toolbutton", background=BG, lightcolor=BG, darkcolor=BG, bordercolor=BORDER, padding=2,
-                        relief="flat")
+        style.configure("Toolbutton", background=BG, lightcolor=BG, darkcolor=BG, bordercolor=BORDER,
+                        padding=self.px(2), relief="flat")
         style.map("Toolbutton", background=[("disabled", BG), ("selected", SELECT), ("active", HOVER)],
                   relief=[("selected", "sunken")], foreground=[("disabled", DISABLED)])
+        if self.scale != 1.0:
+            # clam's own sizes (its check boxes 10, scrollbar and drop-down
+            # arrows 14, spin arrows 10, sashes 6), at the dpi.
+            for toggle in ("TCheckbutton", "TRadiobutton"):
+                style.configure(toggle, indicatorsize=self.px(10))
+            style.configure("TScrollbar", arrowsize=self.px(14))
+            style.configure("TCombobox", arrowsize=self.px(14))
+            style.configure("TSpinbox", arrowsize=self.px(10))
+            style.configure("Sash", sashthickness=self.px(6))
         for name, (_, dark) in INKS.items():
             style.configure(f"{name}.TLabel", foreground=dark)
         style.theme_use(current)
