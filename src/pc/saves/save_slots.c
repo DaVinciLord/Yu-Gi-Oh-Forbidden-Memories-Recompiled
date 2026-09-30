@@ -153,16 +153,27 @@ int SaveSlots_ReadState(int slot, unsigned char state[SAVE_SLOT_STATE_SIZE], Sav
     return 0;
 }
 
+static char last_error[1200];
+const char *SaveSlots_LastError(void) { return last_error; }
+
 static int store(int slot, const unsigned char image[SAVE_SLOT_FILE_SIZE])
 {
     char path[1024], partial[1100];
     FILE *file;
     int failed;
-    if (SaveSlots_Path(slot, path, sizeof(path))) return -1;
+    last_error[0] = '\0';
+    Paths_WriteBegin();
+    if (SaveSlots_Path(slot, path, sizeof(path))) { /* the saves folder could not be made */
+        snprintf(partial, sizeof(partial), "%s/saves", Paths_UserDir());
+        Paths_WriteError(last_error, sizeof(last_error), partial);
+        fprintf(stderr, "memories-pc: cannot write save slot %s\n", last_error);
+        return -1;
+    }
     snprintf(partial, sizeof(partial), "%s.partial", path);
     file = fopen(partial, "wb");
     if (!file) {
-        fprintf(stderr, "memories-pc: cannot write save slot %s\n", partial);
+        Paths_WriteError(last_error, sizeof(last_error), path);
+        fprintf(stderr, "memories-pc: cannot write save slot %s\n", last_error);
         return -1;
     }
     failed = fwrite(image, 1, SAVE_SLOT_FILE_SIZE, file) != SAVE_SLOT_FILE_SIZE;
@@ -172,7 +183,8 @@ static int store(int slot, const unsigned char image[SAVE_SLOT_FILE_SIZE])
     /* Always close, including after a short write (e.g. a full disk). */
     if (fclose(file) != 0) failed = 1;
     if (failed || rename(partial, path) != 0) {
-        fprintf(stderr, "memories-pc: cannot write save slot %s\n", path);
+        Paths_WriteError(last_error, sizeof(last_error), path); /* before remove() changes the reason */
+        fprintf(stderr, "memories-pc: cannot write save slot %s\n", last_error);
         remove(partial);
         return -1;
     }

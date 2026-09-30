@@ -573,10 +573,13 @@ void Duelists_SaveWritten(const void *state, unsigned sequence)
     slash = strrchr(directory, '/');
     if (slash) { *slash = '\0'; Paths_MakeDirs(directory); }
     snprintf(temporary, sizeof temporary, "%s.tmp", path);
+    Paths_WriteBegin();
     out = fopen(temporary, "w");
     if (!out) {
+        char why[1200];
+        Paths_WriteError(why, sizeof why, path);
         if (in) fclose(in);
-        fprintf(stderr, "memories-pc: cannot write %s\n", temporary);
+        fprintf(stderr, "memories-pc: cannot write %s\n", why);
         return;
     }
 
@@ -601,8 +604,10 @@ void Duelists_SaveWritten(const void *state, unsigned sequence)
         int failed = ferror(out);
         if (fclose(out)) failed = 1;
         if (failed || rename(temporary, path)) {
+            char why[1200];
+            Paths_WriteError(why, sizeof why, path); /* before remove() changes the reason */
             remove(temporary);
-            fprintf(stderr, "memories-pc: cannot replace %s\n", path);
+            fprintf(stderr, "memories-pc: cannot replace %s\n", why);
         }
     }
 }

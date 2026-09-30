@@ -72,6 +72,14 @@ typedef enum {
 void Settings_Load(void);
 /* Returns nonzero after settings were successfully written. */
 int Settings_Save(void);
+/* Why the last save failed, "Could not save settings to <path>: <reason>."
+ * (paths.h, Paths_WriteError), or "" once one has succeeded. */
+const char *Settings_LastError(void);
+/* That text the first time it is asked for after saves began failing, or
+ * failing for another reason; NULL otherwise. Whoever tells the player takes
+ * it (a notice, menu.c; the Mods window's status, manager.c), so a failure
+ * is told once and not on every save a moved window makes. */
+const char *Settings_TakeNewError(void);
 int Settings_Get(SettingId id);
 void Settings_Set(SettingId id, int value);
 const char *Settings_Key(SettingId id);

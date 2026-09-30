@@ -194,16 +194,21 @@ int GameFiles_SelectDisc(const char *path, char *why, size_t why_size)
                  "Choose the raw .bin file from your .bin/.cue pair, rather than the .cue file.");
         return -1;
     }
+    Paths_WriteBegin();
     if (Paths_User(saved, sizeof(saved), "disc-path.txt") ||
         Paths_User(temporary, sizeof(temporary), "disc-path.txt.tmp") || !(file = fopen(temporary, "wb"))) {
-        snprintf(why, why_size, "Could not save your ROM location in %s. Check that this folder is writable.", Paths_UserDir());
+        char reason[1200];
+        snprintf(saved, sizeof(saved), "%s/disc-path.txt", Paths_UserDir());
+        snprintf(why, why_size, "Could not save your ROM location to %s", Paths_WriteError(reason, sizeof(reason), saved));
         return -1;
     }
     written = fwrite(path, 1, length, file) == length;
     if (fclose(file)) written = 0;
     if (!written || rename(temporary, saved)) {
+        char reason[1200];
+        Paths_WriteError(reason, sizeof(reason), saved); /* before remove() changes the reason */
         remove(temporary);
-        snprintf(why, why_size, "Could not save your ROM location in %s. Check that this folder is writable.", Paths_UserDir());
+        snprintf(why, why_size, "Could not save your ROM location to %s", reason);
         return -1;
     }
     snprintf(found, sizeof(found), "%s", path);

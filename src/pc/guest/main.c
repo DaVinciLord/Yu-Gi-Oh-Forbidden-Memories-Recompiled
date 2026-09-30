@@ -8,6 +8,7 @@
 #include "pc/debug/monitor.h"
 #include "pc/debug/crash_test.h"
 #include "pc/platform/settings.h"
+#include "pc/platform/paths.h"
 #include "pc/mods/mods.h"
 #include "pc/mods/exports.h"
 #include "pc/platform/game_files.h"
@@ -183,6 +184,18 @@ int main(int argc, char **argv)
     Symbols_Load();
     Crash_Init();
     Monitor_NoteSystem();
+    {
+        /* Whether the player's files can be saved at all: an antivirus or
+         * Controlled folder access that blocks Documents says so here, in
+         * every report and in Help > System info (menu.c keeps it current). */
+        char why[600];
+        if (Paths_UserDirWritable(why, sizeof(why)))
+            Monitor_Fact("user dir", "%s; writable: yes", Paths_UserDir());
+        else {
+            Monitor_Fact("user dir", "%s; writable: no: %s", Paths_UserDir(), why);
+            fprintf(stderr, "memories-pc: the user folder %s is not writable: %s\n", Paths_UserDir(), why);
+        }
+    }
     CrashTest_Init();
     /* Guest globals are linked at fixed addresses: map before touching any. */
     if (Memories_GuestMap() != 0) return 1;

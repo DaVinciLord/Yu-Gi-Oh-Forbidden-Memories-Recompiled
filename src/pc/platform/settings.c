@@ -130,6 +130,10 @@ static Named *named;
 static int named_count, named_capacity, named_error;
 static void (*observers[MAX_OBSERVERS])(SettingId, int);
 static int observer_count;
+/* Why the last save failed ("" after one succeeded), and whether that is
+ * news: a first failure, or another reason (Settings_TakeNewError). */
+static char last_error[1400];
+static int error_is_new;
 
 static const char *settings_path(void)
 {
@@ -252,6 +256,26 @@ void Settings_Load(void)
     }
 }
 
+/* Keeps why a save failed, and says it on stderr (the crash reports' console
+ * lines) when it is news -- not again on every save a moved window makes. */
+static int save_failed(const char *text)
+{
+    if (strcmp(text, last_error)) {
+        snprintf(last_error, sizeof(last_error), "%s", text);
+        error_is_new = 1;
+        fprintf(stderr, "memories-pc: %s\n", last_error);
+    }
+    return 0;
+}
+
+static int save_failed_writing(const char *path)
+{
+    char why[1200], text[sizeof(last_error)];
+    Paths_WriteError(why, sizeof(why), path);
+    snprintf(text, sizeof(text), "Could not save settings to %s", why);
+    return save_failed(text);
+}
+
 int Settings_Save(void)
 {
     const char *path = settings_path();
@@ -259,10 +283,13 @@ int Settings_Save(void)
     FILE *file;
     int id, i;
 
-    if (named_error) return 0; /* Never report success after dropping a setting. */
-    if (snprintf(temporary, sizeof(temporary), "%s.tmp", path) >= (int)sizeof(temporary)) return 0;
+    /* Never report success after dropping a setting. */
+    if (named_error) return save_failed("Could not save settings: a mod's setting could not be kept.");
+    if (snprintf(temporary, sizeof(temporary), "%s.tmp", path) >= (int)sizeof(temporary))
+        return save_failed("Could not save settings: the settings file's path is too long.");
+    Paths_WriteBegin();
     file = fopen(temporary, "w");
-    if (!file) return 0;
+    if (!file) return save_failed_writing(path);
     for (id = 0; id < SET_COUNT; id++) {
         if (!info[id].key) continue;
         fprintf(file, "%s=%d\n", info[id].key, stored[id]);
@@ -276,9 +303,24 @@ int Settings_Save(void)
     {
         int failed = ferror(file);
         if (fclose(file)) failed = 1;
-        if (failed || rename(temporary, path)) { remove(temporary); return 0; }
+        if (failed || rename(temporary, path)) {
+            save_failed_writing(path); /* before remove() changes the reason */
+            remove(temporary);
+            return 0;
+        }
     }
+    last_error[0] = '\0';
+    error_is_new = 0;
     return 1;
+}
+
+const char *Settings_LastError(void) { return last_error; }
+
+const char *Settings_TakeNewError(void)
+{
+    if (!error_is_new || !last_error[0]) return NULL;
+    error_is_new = 0;
+    return last_error;
 }
 
 int Settings_Get(SettingId id)

@@ -109,10 +109,12 @@ static int store(Card *card)
     char partial[600];
     FILE *file;
     snprintf(partial, sizeof(partial), "%s.partial", card->path);
+    Paths_WriteBegin();
     file = fopen(partial, "wb");
     if (!file || fwrite(card->image, 1, CARD_SIZE, file) != CARD_SIZE || fclose(file) != 0 ||
         rename(partial, card->path) != 0) {
-        fprintf(stderr, "memories-pc: cannot write memory card %s\n", card->path);
+        char why[1200];
+        fprintf(stderr, "memories-pc: cannot write memory card %s\n", Paths_WriteError(why, sizeof(why), card->path));
         return -1;
     }
     return 0;

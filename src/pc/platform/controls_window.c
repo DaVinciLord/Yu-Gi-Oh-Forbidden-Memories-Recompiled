@@ -90,7 +90,7 @@ static struct {
     Hit hits[320];
     ControlCapture capture;
     ControlsEvaluator preview;
-    char status[256];
+    char status[1200];
 } ui;
 static MenuCanvas *canvas;
 static int scale;
@@ -1451,11 +1451,16 @@ void ControlsWindow_Draw(MenuCanvas *c)
                       : "Esc always quits; bind a key or button here to quit with it too.";
     else
         hint = "Double-click a binding, or select one and press Enter, to change it. Delete clears it.";
-    if (!squat)
+    /* A warning too long for its line (a failed save's path and reason)
+     * takes the hint's line too. */
+    int long_warning = !squat && !ui.capture.state && ui.say == SAY_WARN && text_w(ui.status) > w - 2 * PAD;
+    if (long_warning)
+        text_wrap(PAD, hint_mid, ui.status, w - 2 * PAD, warn, 2, 1);
+    else if (!squat)
         text_clip(PAD, hint_mid, hint, w - 2 * PAD, ui.capture.state ? accent : faint);
     if (squat && ui.capture.state)
         text_clip(PAD, status_mid, hint, w - 2 * PAD, accent);
-    else
+    else if (!long_warning)
         text_clip(PAD, status_mid, ui.status, w - 2 * PAD,
                   ui.say == SAY_WARN ? warn : ui.say == SAY_DONE ? good : ui.say == SAY_BUSY ? accent : dim);
 

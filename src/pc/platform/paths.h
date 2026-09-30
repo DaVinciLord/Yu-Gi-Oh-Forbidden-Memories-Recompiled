@@ -31,4 +31,23 @@ int Paths_Contained(const char *relative);
  * file only when the destination is missing, so it is safe to call always. */
 void Paths_MigrateLegacySaves(void);
 
+/* Why writing `path` just failed, in words for the player:
+ * "<path>: <reason>." The path is written as the system shows it (in full,
+ * with backslashes, on Windows) and the reason is the operating system's own
+ * (FormatMessage, in the user's language, on Windows; strerror elsewhere).
+ * When Windows denied access inside Documents a short hint follows: an
+ * antivirus's ransomware protection or Controlled folder access is what
+ * usually does that. Call it straight after the failing call, before
+ * anything else (removing the partial file) changes errno or the last error;
+ * Paths_WriteBegin before the write's first call keeps an older failure from
+ * being taken for this one. Returns `out`. */
+void Paths_WriteBegin(void);
+const char *Paths_WriteError(char *out, size_t size, const char *path);
+/* The same without the path: "<reason>." and the hint, if any. */
+const char *Paths_WriteReason(char *out, size_t size, const char *path);
+/* Whether a file can be made in the user directory (one is made and removed);
+ * when not, `why` gets Paths_WriteReason's text. For the crash reports'
+ * facts ("user dir"). */
+int Paths_UserDirWritable(char *why, size_t size);
+
 #endif
