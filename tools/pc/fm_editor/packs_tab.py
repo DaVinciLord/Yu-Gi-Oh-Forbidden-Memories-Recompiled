@@ -120,8 +120,10 @@ class PacksTab(Tab):
             ttk.Button(buttons, text=text, command=command, width=len(text) + 1).pack(side="left", padx=(0, 2))
         more = ttk.Frame(left)
         more.pack(fill="x", pady=(4, 0))
-        ttk.Button(more, text="Shop settings...", command=self.shop_settings).pack(side="left")
+        self.shop_button = ttk.Button(more, text="Shop settings...", command=self.shop_settings)
+        self.shop_button.pack(side="left")
         ttk.Button(more, text="Simulate...", command=self.simulate).pack(side="left", padx=4)
+        self.list_buttons = left
         self.file_note = ttk.Label(left, style="Hint.TLabel", wraplength=px(self, 330), justify="left")
         self.file_note.pack(anchor="w", pady=(4, 0))
 
@@ -372,14 +374,28 @@ class PacksTab(Tab):
             self.index = min(self.index, len(self.entries()) - 1)
             if self.list.exists(str(self.index)):
                 self.list.selection_set(str(self.index))
-        state = ["disabled"] if self.project.packs_file is not None else ["!disabled"]
+        in_file = self.project.packs_file is not None
         self.file_note.configure(text=f"\"packs\" names the file {self.project.packs_file}: the editor keeps it as "
-                                      "written and does not edit it." if self.project.packs_file is not None else "")
-        for child in self.right.winfo_children():
-            if isinstance(child, ttk.Frame):
-                for widget in child.winfo_children():
-                    if isinstance(widget, (ttk.Button, ttk.Entry)):
-                        widget.state(state)
+                                      "written and does not edit it." if in_file else "")
+        self.set_editable(not in_file)
+
+    # What does nothing while "packs" names a file: every field and button of
+    # a pack, and the list's own but Shop settings ("pack_shop" stays the
+    # manifest's).
+    EDITABLE = (ttk.Button, ttk.Entry, ttk.Spinbox, ttk.Combobox, ttk.Checkbutton, ttk.Radiobutton)
+
+    def set_editable(self, editable: bool):
+        def walk(widget):
+            for child in widget.winfo_children():
+                if isinstance(child, self.EDITABLE) and child not in keep:
+                    if not editable:
+                        child.state(["disabled"])
+                    elif child not in (self.export_button, self.revert_button):   # show_picture's to set
+                        child.state(["!disabled"])
+                walk(child)
+        keep = {self.shop_button}
+        walk(self.right)
+        walk(self.list_buttons)
 
     def select(self):
         selection = self.list.selection()

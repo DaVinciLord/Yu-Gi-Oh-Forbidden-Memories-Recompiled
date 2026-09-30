@@ -599,7 +599,9 @@ A field of the pack left as the tab showed it keeps the key as the mod wrote
 it: opening a mod and moving through its packs changes nothing of it (a
 `"cover": 2` stays a number), and **Apply** writes only the fields changed.
 **Duplicate** gives the copy a picture of its own, so importing one for
-either pack leaves the other's.
+either pack leaves the other's. When `packs` names a file of the mod, the
+tab keeps it as written: a pack's fields and buttons are grey, and only
+**Shop settings...** (the manifest's `pack_shop`) is offered.
 
 ## Tests
 

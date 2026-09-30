@@ -269,6 +269,41 @@ class GuiTest(unittest.TestCase):
                                                            "extra": 1}, {"id": "b"}])
         self.assertEqual(manifest.build(app.project)["pack_shop"]["shops"][0]["where"], "password")
 
+    def test_packs_file_greys_the_tab(self):
+        """"packs" naming a file: the editor does not edit it, so nothing of a
+        pack is offered, but Shop settings (the manifest's) is."""
+        from fm_editor.packs_tab import PacksTab
+        app, tab = self.app, self.app.packs
+
+        def enabled():
+            out = []
+
+            def walk(widget):
+                for child in widget.winfo_children():
+                    if isinstance(child, PacksTab.EDITABLE) and not child.instate(["disabled"]):
+                        out.append(child)
+                    walk(child)
+            walk(tab)
+            return out
+
+        mod = Path(self.tmp.name) / "packs-in-a-file"
+        mod.mkdir(exist_ok=True)
+        (mod / "mod.json").write_text(json.dumps({"id": "pf", "name": "PF", "packs": "packs.json"}), encoding="utf-8")
+        (mod / "packs.json").write_text(json.dumps([{"name": "Z", "cards": [1]}]), encoding="utf-8")
+        app.load_mod(mod)
+        app.notebook.select(tab)
+        app.update()
+        self.assertEqual(enabled(), [tab.shop_button])
+        mod = Path(self.tmp.name) / "packs-in-the-manifest"
+        mod.mkdir(exist_ok=True)
+        (mod / "mod.json").write_text(json.dumps({"id": "pm", "name": "PM", "packs": [{"name": "Z", "cards": [1]}]}),
+                                      encoding="utf-8")
+        app.load_mod(mod)
+        app.update()
+        texts = {str(w.cget("text")) for w in enabled() if isinstance(w, tk.ttk.Button)}
+        self.assertTrue({"Add pack", "Simulate...", "Apply", "Import PNG...", "Add tier"} <= texts, texts)
+        self.assertNotIn("Export...", texts)     # no picture of its own to export
+
     def test_text_preview(self):
         import dataclasses
         from fm_editor import card_text
