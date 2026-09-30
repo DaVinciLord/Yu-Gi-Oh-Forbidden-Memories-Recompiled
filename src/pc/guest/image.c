@@ -285,22 +285,19 @@ static int low_access_register64(const unsigned char *code, uint64_t rsi)
 }
 
 /* MEMORIES_X64_HIGH_HEAP=1 (a check for the 64-bit build): every address
- * range below 4 GB that is still free once the guest's fixed regions are
- * mapped is reserved, so that the host heap, and everything else Windows
- * hands out later, lands above 4 GB. A host pointer that reaches a 4-byte
- * guest slot then loses its upper half, and the access through what is left
- * lands in one of these reservations: the fault is reported as that. The
- * fixed regions mapped after Memories_GuestMap (the game stack, the text
- * arena, the interpreter's stack, mod arenas) are left out. */
+ * range below 4 GB that is still free once guest RAM is mapped is reserved,
+ * so that the host heap, and everything else Windows hands out later, lands
+ * above 4 GB. A host pointer that reaches a 4-byte guest slot then loses its
+ * upper half, and the access through what is left lands in one of these
+ * reservations: the fault is reported as that. The fixed regions mapped
+ * later (the game stack, the text arena, the interpreter's stack, mod
+ * arenas) take their range back out of a reservation as they are mapped
+ * (Memories_ReleaseLowPlaceholder, from compat/mman.h's mmap). The process
+ * heap's own segments predate this and would go on serving small blocks
+ * from below 4 GB, so they are filled up first, and the blocks kept. */
 typedef struct HighHeapRange { uintptr_t low, high; } HighHeapRange;
-static HighHeapRange high_heap[256];
+static HighHeapRange high_heap[512];
 static unsigned high_heap_count;
-static const HighHeapRange high_heap_keep[] = {
-    {0x90000000u, 0x91000000u},  /* mod arenas (src/pc/mods/mods.c) */
-    {0x9C000000u, 0x9D000000u},  /* the text arena (src/pc/text/translation.c) */
-    {0x9FF00000u, 0x9FF40000u},  /* the interpreter's stack (mips.c) */
-    {0xB0000000u, 0xB0800000u},  /* the game stack (state.c) */
-};
 
 static void reserve_free(uintptr_t low, uintptr_t high)
 {
@@ -310,6 +307,41 @@ static void reserve_free(uintptr_t low, uintptr_t high)
     if (VirtualAlloc((void *)low, high - low, MEM_RESERVE, PAGE_NOACCESS) == (void *)low) {
         high_heap[high_heap_count].low = low;
         high_heap[high_heap_count++].high = high;
+    }
+}
+
+void Memories_ReleaseLowPlaceholder(void *address, size_t length)
+{
+    uintptr_t low = (uintptr_t)address & ~(uintptr_t)0xffffu, high = (uintptr_t)address + length;
+    unsigned i;
+    for (i = 0; i < high_heap_count; i++) {
+        HighHeapRange range = high_heap[i];
+        if (high <= range.low || low >= range.high) continue;
+        /* One reservation is freed whole: give it back, then keep its
+         * parts on either side. */
+        VirtualFree((void *)range.low, 0, MEM_RELEASE);
+        high_heap[i] = high_heap[--high_heap_count];
+        if (range.low < low) reserve_free(range.low, low);
+        if (high < range.high) reserve_free((high + 0xffffu) & ~(uintptr_t)0xffffu, range.high);
+        i = (unsigned)-1; /* the table changed: look again */
+    }
+}
+
+static void fill_low_heap(void)
+{
+    static const size_t sizes[] = {0x10000, 16, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 2048, 4096,
+                                   8192, 16384};
+    unsigned i, count;
+    for (i = 0; i < sizeof(sizes) / sizeof(sizes[0]); i++) {
+        for (count = 0; count < 1000000u; count++) {
+            void *block = malloc(sizes[i]);
+            if (!block) break;
+            if ((uintptr_t)block >= 0x100000000ull) {
+                free(block);
+                break;
+            }
+            /* kept: the low block must not be handed out again */
+        }
     }
 }
 
@@ -325,21 +357,18 @@ static void reserve_low_memory(void)
         if (!VirtualQuery((void *)at, &info, sizeof(info))) break;
         end = (uintptr_t)info.BaseAddress + info.RegionSize;
         if (end > 0x100000000ull) end = 0x100000000ull;
-        if (info.State == MEM_FREE) {
-            uintptr_t from = at;
-            for (i = 0; i < sizeof(high_heap_keep) / sizeof(high_heap_keep[0]); i++) {
-                const HighHeapRange *keep = &high_heap_keep[i];
-                if (keep->high <= from || keep->low >= end) continue;
-                reserve_free(from, keep->low);
-                from = keep->high;
-            }
-            if (from < end) reserve_free(from, end);
-        }
+        if (info.State == MEM_FREE) reserve_free(at, end);
         at = end;
     }
+    fill_low_heap();
     for (i = 0; i < high_heap_count; i++) reserved += high_heap[i].high - high_heap[i].low;
-    fprintf(stderr, "memories-pc: MEMORIES_X64_HIGH_HEAP: %u MiB below 4 GB reserved in %u ranges; host memory "
-                    "now comes from above 4 GB\n", (unsigned)(reserved >> 20), high_heap_count);
+    {
+        void *small = malloc(64), *large = malloc(1u << 20);
+        fprintf(stderr, "memories-pc: MEMORIES_X64_HIGH_HEAP: %u MiB below 4 GB reserved in %u ranges; malloc(64) "
+                        "%p, malloc(1 MiB) %p\n", (unsigned)(reserved >> 20), high_heap_count, small, large);
+        free(small);
+        free(large);
+    }
 }
 
 static int in_high_heap_reservation(uintptr_t address)
