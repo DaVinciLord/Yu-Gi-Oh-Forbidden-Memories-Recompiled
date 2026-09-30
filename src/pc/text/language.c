@@ -503,7 +503,7 @@ static const char *const own_words[LANGUAGE_COUNT] = {
                     "[FE2B]\n%d CARTAS{end}\n\n"
                     "[FE2C]\nBLOQUEADO{end}\n\n"
                     "[FE2D]\nVENCE A %s{end}\n\n"
-                    "[FE2E]\nVENCE A %s %d VECES{end}\n\n"
+                    "[FE2E]\nVENCE A %s x%d{end}\n\n"
                     "[FE2F]\nGANA %d DUELOS{end}\n\n"
                     "[FE30]\nAVANZA LA HISTORIA{end}\n\n"
                     "[FE31]\nTEN %s{end}\n\n"
