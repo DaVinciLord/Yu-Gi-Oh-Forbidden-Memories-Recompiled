@@ -213,12 +213,25 @@ def _check_tables(project: Project, out: list):
             elif not project.cards[m].is_monster():
                 out.append(Issue("warning", "Equips", where, f"{project.card_label(m)} is not a monster", equip))
     for ritual, recipe in project.rituals.items():
-        if project.retail.rituals.get(ritual) == recipe:
+        conditional = project.ritual_requirements.get(ritual)
+        if project.retail.rituals.get(ritual) == recipe and not conditional:
             continue
         where = project.card_label(ritual)
         if ritual > CARD_COUNT or not valid(ritual) or project.cards[ritual].type != TYPE_RITUAL:
             out.append(Issue("error", "Rituals", where, "\"card\" must be one of the disc's ritual cards", ritual))
-        if len(recipe) != 4 or not all(valid(c) for c in recipe):
+        if len(recipe) != 4 or not valid(recipe[3]):
+            out.append(Issue("error", "Rituals", where, "a valid result card is required", ritual))
+            continue
+        if conditional:
+            if len(conditional) != 3 or any(not req for req in conditional):
+                out.append(Issue("error", "Rituals", where, "three nonempty tribute requirements are required", ritual))
+            for req in conditional:
+                cid = req.get("card")
+                if cid and not valid(cid):
+                    out.append(Issue("error", "Rituals", where, f"no card {cid}", ritual))
+            if not project.cards[recipe[3]].is_monster():
+                out.append(Issue("warning", "Rituals", where, "the result should be a monster", ritual))
+        elif not all(valid(c) for c in recipe):
             out.append(Issue("error", "Rituals", where, "three tributes and a result, all cards", ritual))
         elif not all(project.cards[c].is_monster() for c in recipe):
             out.append(Issue("warning", "Rituals", where, "tributes and result should be monsters", ritual))
