@@ -43,9 +43,17 @@ int Memories_StateLoading(const MemoriesState *state);
 void Memories_StateRemapRange(MemoriesState *state, uint32_t from, uint32_t to, uint32_t size);
 
 /* Registers on entry to VSync, written by the assembly entry (state_i386.S). */
+#if defined(__x86_64__)
+/* state_x86_64.S. The stack pointer keeps the i386 name, so the state code
+ * reads one name on both. */
+typedef struct MemoriesStateEntry {
+    uint64_t rbx, rbp, rdi, rsi, r12, r13, r14, r15, esp; /* esp: rsp, at the return address */
+} MemoriesStateEntry;
+#else
 typedef struct MemoriesStateEntry {
     uint32_t ebx, esi, edi, ebp, esp; /* esp points at the return address */
 } MemoriesStateEntry;
+#endif
 extern MemoriesStateEntry Memories_StateEntry;
 
 /* main(): run `entry` on the fixed game stack. Does not return. */

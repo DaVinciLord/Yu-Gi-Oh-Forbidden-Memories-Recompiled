@@ -100,6 +100,65 @@ static unsigned region_count;
  * of the stack instead leaves no room to deliver the exception, and the
  * process just ends. */
 #define GUARD_ROOM 0x10000u
+#if defined(__x86_64__)
+/* The 64-bit build (state_x86_64.S): the same, through the 64-bit TEB at
+ * %gs, whose stack base, limit and DeallocationStack are at 0x08, 0x10 and
+ * 0x1478. x86-64 exceptions are dispatched from unwind tables, not a
+ * handler chain, so word 0 is not switched. */
+void Memories_ContextSwitch(uintptr_t *from_sp, const uintptr_t *to_sp);
+static uintptr_t service_context, game_context;
+static uintptr_t process_bounds[4];
+static const uintptr_t game_bounds[4] = {0, STACK_TOP, STACK_BASE, STACK_BASE + GUARD_ROOM + 0x1000u};
+
+static void save_stack_bounds(uintptr_t *bounds)
+{
+    bounds[0] = 0;
+    __asm__ volatile("movq %%gs:8, %0\n\tmovq %%gs:0x10, %1\n\tmovq %%gs:0x1478, %2"
+                     : "=r"(bounds[1]), "=r"(bounds[2]), "=r"(bounds[3]));
+}
+
+static void set_stack_bounds(const uintptr_t *bounds)
+{
+    __asm__ volatile("movq %0, %%gs:8\n\tmovq %1, %%gs:0x10\n\tmovq %2, %%gs:0x1478"
+                     :
+                     : "r"(bounds[1]), "r"(bounds[2]), "r"(bounds[3])
+                     : "memory");
+}
+
+/* What Memories_ContextSwitch pops to start `entry` on a stack whose top
+ * is `top`: xmm6-xmm15 (20 words), eight registers, then the return into
+ * `entry`, 16-byte aligned so that `entry` starts as a called function
+ * does, with room above it for the shadow space a Win64 callee may write. */
+static uintptr_t initial_frame(uintptr_t top, void (*entry)(void))
+{
+    uintptr_t *slot = (uintptr_t *)((top - 64) & ~(uintptr_t)15);
+    uintptr_t *frame = slot - 8 - 20;
+    memset(frame, 0, (size_t)((char *)(slot + 8) - (char *)frame));
+    *slot = (uintptr_t)entry;
+    return (uintptr_t)frame;
+}
+
+/* setjmp_x86_64.S: where the registers for a game jmp_buf are kept. The
+ * game's buffer (the Psy-Q int[12] at 0x800E9DC0) is too small for them, so
+ * each buffer address gets a host slot of 240 bytes. The game uses one. */
+void *Memories_JumpSlot(void *buffer)
+{
+    static struct {
+        void *buffer;
+        uint64_t words[30];
+    } slots[16];
+    unsigned i;
+    for (i = 0; i < sizeof(slots) / sizeof(slots[0]) && slots[i].buffer; i++) {
+        if (slots[i].buffer == buffer) return slots[i].words;
+    }
+    if (i == sizeof(slots) / sizeof(slots[0])) {
+        Crash_ReportFatal("setjmp", "more than 16 jmp_buf addresses");
+        _exit(70);
+    }
+    slots[i].buffer = buffer;
+    return slots[i].words;
+}
+#else
 void Memories_ContextSwitch(uint32_t *from_esp, const uint32_t *to_esp);
 static uint32_t service_context, game_context;
 static uint32_t process_bounds[4];
@@ -119,6 +178,7 @@ static void set_stack_bounds(const uint32_t *bounds)
                      : "r"(bounds[0]), "r"(bounds[1]), "r"(bounds[2]), "r"(bounds[3])
                      : "memory");
 }
+#endif
 
 static void leave_game_stack(void)
 {
@@ -536,6 +596,11 @@ static int save(const char *path, int tell)
     MemoriesState state = {0, NULL, NULL, 0};
     char partial[600];
     int failed;
+#if defined(__x86_64__)
+    /* The 64-bit state format (a wider entry, xmm registers) is milestone X3. */
+    refuse("%s: save states are not in the 64-bit build yet", path);
+    return -1;
+#endif
     snprintf(partial, sizeof(partial), "%s.partial", path);
     Paths_WriteBegin();
     state.file = fopen(partial, "wb");
@@ -629,6 +694,11 @@ static void apply(void)
          * the next load would resume from those (EBP 0, a return into the
          * middle of Memories_StateRunGame). The switch lands in resume_game
          * on the game stack, below what the state restored there. */
+#if defined(__x86_64__)
+        resume_entry = entry;
+        resume_value = value;
+        game_context = initial_frame((uintptr_t)entry.esp - 64, resume_game);
+#else
         uint32_t *frame = (uint32_t *)(uintptr_t)(entry.esp - 64);
         frame[0] = frame[1] = frame[2] = frame[3] = 0;
         frame[4] = (uint32_t)(uintptr_t)resume_game;
@@ -636,6 +706,7 @@ static void apply(void)
         resume_entry = entry;
         resume_value = value;
         game_context = (uint32_t)(uintptr_t)frame;
+#endif
         Memories_ContextSwitch(&service_context, &game_context);
     }
 #else
@@ -862,6 +933,11 @@ static int load(const char *path)
     uint32_t header[2];
     size_t size;
     long length;
+#if defined(__x86_64__)
+    if (file) fclose(file);
+    refuse("%s: save states are not in the 64-bit build yet", path);
+    return -1;
+#endif
     if (!file) {
         refuse("%s: %s", path, strerror(errno));
         return -1;
@@ -1104,6 +1180,9 @@ int Memories_StateRunGame(int (*entry)(void))
     game_entry = entry;
 #ifdef _WIN32
     {
+#if defined(__x86_64__)
+        game_context = initial_frame(STACK_TOP, run_game);
+#else
         /* What Memories_ContextSwitch pops: EDI ESI EBX EBP, then the return
          * into run_game, whose own return address is never used. */
         uint32_t *top = (uint32_t *)(uintptr_t)(STACK_TOP - 64);
@@ -1111,6 +1190,7 @@ int Memories_StateRunGame(int (*entry)(void))
         top[4] = (uint32_t)(uintptr_t)run_game;
         top[5] = 0;
         game_context = (uint32_t)(uintptr_t)top;
+#endif
         Win32_GuardStack(STACK_BASE, GUARD_ROOM);
         save_stack_bounds(process_bounds);
         set_stack_bounds(game_bounds);
