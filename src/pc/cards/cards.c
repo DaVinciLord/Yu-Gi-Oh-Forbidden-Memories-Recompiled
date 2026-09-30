@@ -65,6 +65,9 @@ static unsigned char not_exodia[EXODIA_PIECE_COUNT];  /* a replaced piece withou
 /* The frame a card is drawn in when its entry says ("frame"), plus one: 0
  * is its type's (cards.h Cards_FrameColor). */
 static unsigned char frames[CARD_TABLE_ID_END];
+/* Explicit secondary fusion groups for modded/replaced cards. Zero means inherit the retail base. */
+static unsigned int fusion_groups[CARD_TABLE_ID_END];
+static unsigned char has_fusion_groups[CARD_TABLE_ID_END];
 const char *Cards_Identity(int id) { return id > CARD_COUNT && Cards_Valid(id) && identities[id] ? identities[id] : ""; }
 int Cards_FindIdentity(const char *identity)
 {
@@ -399,6 +402,36 @@ static int same_letters(const char *a, const char *b)
     }
 }
 
+int Cards_FusionGroupNamed(const char *text)
+{
+    static const struct { const char *name; int group; } groups[] = {
+        {"AngelWinged", CARD_FUSION_GROUP_ANGEL_WINGED},
+        {"Bugrothian", CARD_FUSION_GROUP_BUGROTHIAN},
+        {"Egg", CARD_FUSION_GROUP_EGG},
+        {"Elf", CARD_FUSION_GROUP_ELF},
+        {"FeatherFromBear", CARD_FUSION_GROUP_FEATHER_FROM_BEAR},
+        {"FeatherFromHarpie", CARD_FUSION_GROUP_FEATHER_FROM_HARPIE},
+        {"FeatherFromMachine", CARD_FUSION_GROUP_FEATHER_FROM_MACHINE},
+        {"Female", CARD_FUSION_GROUP_FEMALE},
+        {"Jar", CARD_FUSION_GROUP_JAR},
+        {"Koumorian", CARD_FUSION_GROUP_KOUMORIAN},
+        {"MercuryMagicUser", CARD_FUSION_GROUP_MERCURY_MAGIC_USER},
+        {"MercurySpellcaster", CARD_FUSION_GROUP_MERCURY_SPELLCASTER},
+        {"Mirror", CARD_FUSION_GROUP_MIRROR},
+        {"MusKingian", CARD_FUSION_GROUP_MUS_KINGIAN},
+        {"MystElfian", CARD_FUSION_GROUP_MYST_ELFIAN},
+        {"Rainbow", CARD_FUSION_GROUP_RAINBOW},
+        {"Sheepian", CARD_FUSION_GROUP_SHEEPIAN},
+        {"Thronian", CARD_FUSION_GROUP_THRONIAN},
+        {"Turtle", CARD_FUSION_GROUP_TURTLE},
+        {"UsableBeast", CARD_FUSION_GROUP_USABLE_BEAST},
+    };
+    size_t i;
+    for (i = 0; i < sizeof(groups) / sizeof(groups[0]); i++)
+        if (same_letters(text, groups[i].name)) return groups[i].group;
+    return CARD_FUSION_GROUP_NONE;
+}
+
 /* The retail names, decoded once: a manifest may name hundreds of cards. */
 static char (*retail_names)[48];
 
@@ -467,6 +500,352 @@ int Cards_AttributeNamed(const char *text)
 int Cards_Attribute(int id)
 {
     return Cards_Valid(id) ? gDuel_abCardLevelAttr[id] >> 4 : -1;
+}
+
+int Cards_Level(int id)
+{
+    return Cards_Valid(id) ? gDuel_abCardLevelAttr[id] & 0x0F : -1;
+}
+
+
+
+int Cards_InFusionGroup(int id, int group)
+{
+    unsigned int explicit_groups;
+    if (!Cards_Valid(id) || group <= CARD_FUSION_GROUP_NONE || group > CARD_FUSION_GROUP_USABLE_BEAST) return 0;
+    explicit_groups = fusion_groups[id];
+    if (has_fusion_groups[id]) return !!(explicit_groups & (1u << group));
+    /* Membership is the canonical "secondary card types by card" table from
+     * Marcelo Silvarolla's programmatically validated Forbidden Memories
+     * fusion guide.  Keep this explicit: several groups have conflict-driven
+     * exceptions which are not safely reconstructed from names or appearance. */
+    static const struct { const char *name; unsigned int groups; } cards[] = {
+        {"30,000-Year White Turtle", (1u << CARD_FUSION_GROUP_BUGROTHIAN) | (1u << CARD_FUSION_GROUP_TURTLE)},
+        {"7 Colored Fish", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Air Marmot of Nefariousness", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_USABLE_BEAST)},
+        {"Akakieisu", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_MERCURY_SPELLCASTER)},
+        {"Akihiron", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Amazon of the Seas", (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Ameba", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Ancient Brain", (1u << CARD_FUSION_GROUP_ANGEL_WINGED) | (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Ancient Elf", (1u << CARD_FUSION_GROUP_ELF) | (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Ancient Jar", (1u << CARD_FUSION_GROUP_JAR)},
+        {"Ancient Lizard Warrior", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Ancient One of the Deep Forest", (1u << CARD_FUSION_GROUP_USABLE_BEAST)},
+        {"Ancient Sorcerer", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_MERCURY_SPELLCASTER)},
+        {"Angelwitch", (1u << CARD_FUSION_GROUP_ANGEL_WINGED) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_BEAR) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE) | (1u << CARD_FUSION_GROUP_FEMALE) | (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_MERCURY_SPELLCASTER)},
+        {"Ansatsu", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER)},
+        {"Aqua Madoor", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Aqua Snake", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Arlownay", (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Arma Knight", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Armed Ninja", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Armored Lizard", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Armored Rat", (1u << CARD_FUSION_GROUP_USABLE_BEAST)},
+        {"Armored Starfish", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Beaked Snake", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Bear Trap", (1u << CARD_FUSION_GROUP_FEATHER_FROM_HARPIE)},
+        {"Beastking of the Swamps", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Beautiful Beast Trainer", (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Beautiful Headhuntress", (1u << CARD_FUSION_GROUP_FEMALE) | (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER)},
+        {"Behegon", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Big Eye", (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Binding Chain", (1u << CARD_FUSION_GROUP_MUS_KINGIAN)},
+        {"Bio Plant", (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Blackland Fire Dragon", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER)},
+        {"Blue-eyed Silver Zombie", (1u << CARD_FUSION_GROUP_SHEEPIAN)},
+        {"Blue-winged Crown", (1u << CARD_FUSION_GROUP_FEATHER_FROM_BEAR) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE)},
+        {"Bone Mouse", (1u << CARD_FUSION_GROUP_SHEEPIAN)},
+        {"Boo Koo", (1u << CARD_FUSION_GROUP_MUS_KINGIAN) | (1u << CARD_FUSION_GROUP_MYST_ELFIAN)},
+        {"Bottom Dweller", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Boulder Tortoise", (1u << CARD_FUSION_GROUP_BUGROTHIAN) | (1u << CARD_FUSION_GROUP_TURTLE)},
+        {"Burglar", (1u << CARD_FUSION_GROUP_USABLE_BEAST)},
+        {"Castle of Dark Illusions", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Catapult Turtle", (1u << CARD_FUSION_GROUP_BUGROTHIAN) | (1u << CARD_FUSION_GROUP_TURTLE)},
+        {"Celtic Guardian", (1u << CARD_FUSION_GROUP_ELF)},
+        {"Change Slime", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Claw Reacher", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Corroding Shark", (1u << CARD_FUSION_GROUP_SHEEPIAN)},
+        {"Crab Turtle", (1u << CARD_FUSION_GROUP_TURTLE)},
+        {"Crazy Fish", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Crimson Sunbird", (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE)},
+        {"Curtain of the Dark Ones", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_MERCURY_SPELLCASTER)},
+        {"Dancing Elf", (1u << CARD_FUSION_GROUP_ANGEL_WINGED) | (1u << CARD_FUSION_GROUP_ELF) | (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Dark Artist", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Dark Elf", (1u << CARD_FUSION_GROUP_FEMALE) | (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_MERCURY_SPELLCASTER)},
+        {"Dark Gray", (1u << CARD_FUSION_GROUP_USABLE_BEAST)},
+        {"Dark King of the Abyss", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Dark Prisoner", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Dark Rabbit", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Dark Shade", (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Dark Titan of Terror", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Dark Witch", (1u << CARD_FUSION_GROUP_ANGEL_WINGED) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE) | (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Dokuroizo the Grim Reaper", (1u << CARD_FUSION_GROUP_SHEEPIAN)},
+        {"Doma The Angel of Silence", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER)},
+        {"Doron", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Dorover", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Dragon Piper", (1u << CARD_FUSION_GROUP_JAR)},
+        {"Drooling Lizard", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Dryad", (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Eatgaboon", (1u << CARD_FUSION_GROUP_FEATHER_FROM_HARPIE)},
+        {"Eldeen", (1u << CARD_FUSION_GROUP_FEMALE) | (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_MERCURY_SPELLCASTER)},
+        {"Embryonic Beast", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Emperor of the Land and Sea", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Enchanting Mermaid", (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Exodia the Forbidden", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_MERCURY_SPELLCASTER)},
+        {"Fairy of the Fountain", (1u << CARD_FUSION_GROUP_BUGROTHIAN) | (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Fairy's Gift", (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Faith Bird", (1u << CARD_FUSION_GROUP_FEATHER_FROM_BEAR) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE) | (1u << CARD_FUSION_GROUP_MUS_KINGIAN)},
+        {"Feral Imp", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Fiend Kraken", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Fiend Refrection #1", (1u << CARD_FUSION_GROUP_MIRROR)},
+        {"Fiend Refrection #2", (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE) | (1u << CARD_FUSION_GROUP_MIRROR)},
+        {"Fiend's Hand", (1u << CARD_FUSION_GROUP_SHEEPIAN)},
+        {"Fiend's Mirror", (1u << CARD_FUSION_GROUP_MIRROR)},
+        {"Fire Kraken", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Flower Wolf", (1u << CARD_FUSION_GROUP_USABLE_BEAST)},
+        {"Flying Penguin", (1u << CARD_FUSION_GROUP_BUGROTHIAN) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE)},
+        {"Follow Wind", (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE)},
+        {"Frenzied Panda", (1u << CARD_FUSION_GROUP_USABLE_BEAST)},
+        {"Frog The Jam", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Fungi of the Musk", (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Fusionist", (1u << CARD_FUSION_GROUP_ANGEL_WINGED) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_BEAR) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE) | (1u << CARD_FUSION_GROUP_USABLE_BEAST)},
+        {"Garvas", (1u << CARD_FUSION_GROUP_USABLE_BEAST)},
+        {"Gate Deeg", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Gatekeeper", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER)},
+        {"Gemini Elf", (1u << CARD_FUSION_GROUP_ELF) | (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Giant Red Seasnake", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Giant Turtle Who Feeds on Flames", (1u << CARD_FUSION_GROUP_BUGROTHIAN) | (1u << CARD_FUSION_GROUP_TURTLE)},
+        {"Goddess of Whim", (1u << CARD_FUSION_GROUP_FEMALE) | (1u << CARD_FUSION_GROUP_MUS_KINGIAN)},
+        {"Goddess with the Third Eye", (1u << CARD_FUSION_GROUP_FEMALE) | (1u << CARD_FUSION_GROUP_MUS_KINGIAN)},
+        {"Gorgon Egg", (1u << CARD_FUSION_GROUP_EGG) | (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Grappler", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Graveyard and the Hand of Invitation", (1u << CARD_FUSION_GROUP_SHEEPIAN)},
+        {"Great White", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Greenkappa", (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Griffore", (1u << CARD_FUSION_GROUP_USABLE_BEAST)},
+        {"Gruesome Goo", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Guardian of the Labyrinth", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER)},
+        {"Guardian of the Sea", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Guardian of the Throne Room", (1u << CARD_FUSION_GROUP_MUS_KINGIAN)},
+        {"Gyakutenno Megami", (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Hane-Hane", (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE)},
+        {"Happy Lover", (1u << CARD_FUSION_GROUP_ANGEL_WINGED) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_BEAR) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE) | (1u << CARD_FUSION_GROUP_MUS_KINGIAN)},
+        {"Harpie Lady", (1u << CARD_FUSION_GROUP_FEATHER_FROM_BEAR) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_HARPIE) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE) | (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Harpie Lady Sisters", (1u << CARD_FUSION_GROUP_FEATHER_FROM_BEAR) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_HARPIE) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE) | (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Hibikime", (1u << CARD_FUSION_GROUP_FEMALE) | (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER)},
+        {"High Tide Gyojin", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Hiro's Shadow Scout", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Hitodenchak", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Hitotsu-me Giant", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Horn Imp", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Hoshiningen", (1u << CARD_FUSION_GROUP_MUS_KINGIAN) | (1u << CARD_FUSION_GROUP_MYST_ELFIAN) | (1u << CARD_FUSION_GROUP_RAINBOW)},
+        {"Hourglass of Courage", (1u << CARD_FUSION_GROUP_ANGEL_WINGED) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE) | (1u << CARD_FUSION_GROUP_MUS_KINGIAN)},
+        {"Hourglass of Life", (1u << CARD_FUSION_GROUP_ANGEL_WINGED) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_BEAR) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE) | (1u << CARD_FUSION_GROUP_MUS_KINGIAN) | (1u << CARD_FUSION_GROUP_MYST_ELFIAN)},
+        {"House of Adhesive Tape", (1u << CARD_FUSION_GROUP_FEATHER_FROM_HARPIE)},
+        {"Hyo", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Hyosube", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Ice Water", (1u << CARD_FUSION_GROUP_BUGROTHIAN) | (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Ill Witch", (1u << CARD_FUSION_GROUP_FEMALE) | (1u << CARD_FUSION_GROUP_MUS_KINGIAN)},
+        {"Invader from Another Dimension", (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Invader of the Throne", (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Invisible Wire", (1u << CARD_FUSION_GROUP_FEATHER_FROM_HARPIE)},
+        {"Jellyfish", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Job-change Mirror", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_MIRROR) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Kageningen", (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Kamion Wizard", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_MERCURY_SPELLCASTER)},
+        {"Kanan the Swordmistress", (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Kanikabuto", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Kappa Avenger", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Key Mace", (1u << CARD_FUSION_GROUP_FEMALE) | (1u << CARD_FUSION_GROUP_MUS_KINGIAN) | (1u << CARD_FUSION_GROUP_MYST_ELFIAN)},
+        {"Key Mace #2", (1u << CARD_FUSION_GROUP_FEMALE) | (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"King Fog", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Krokodilus", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Kuriboh", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"La Jinn the Mystical Genie", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER)},
+        {"LaMoon", (1u << CARD_FUSION_GROUP_ANGEL_WINGED) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_BEAR)},
+        {"Lady of Faith", (1u << CARD_FUSION_GROUP_FEMALE) | (1u << CARD_FUSION_GROUP_MUS_KINGIAN)},
+        {"Lava Battleguard", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER)},
+        {"Left Arm of the Forbidden One", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_MERCURY_SPELLCASTER)},
+        {"Left Leg of the Forbidden One", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_MERCURY_SPELLCASTER)},
+        {"Leo Wizard", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_MERCURY_SPELLCASTER)},
+        {"Leogun", (1u << CARD_FUSION_GROUP_USABLE_BEAST)},
+        {"Lesser Dragon", (1u << CARD_FUSION_GROUP_KOUMORIAN)},
+        {"Liquid Beast", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Lisark", (1u << CARD_FUSION_GROUP_FEATHER_FROM_BEAR) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE)},
+        {"Little Chimera", (1u << CARD_FUSION_GROUP_USABLE_BEAST)},
+        {"Lord of Zemia", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Lord of the Lamp", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER)},
+        {"Lucky Trinket", (1u << CARD_FUSION_GROUP_MUS_KINGIAN) | (1u << CARD_FUSION_GROUP_MYST_ELFIAN)},
+        {"Lunar Queen Elzaim", (1u << CARD_FUSION_GROUP_ANGEL_WINGED) | (1u << CARD_FUSION_GROUP_FEMALE) | (1u << CARD_FUSION_GROUP_MUS_KINGIAN) | (1u << CARD_FUSION_GROUP_MYST_ELFIAN)},
+        {"Machine Conversion Factory", (1u << CARD_FUSION_GROUP_FEATHER_FROM_HARPIE)},
+        {"Madjinn Gunn", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Magical Labyrinth", (1u << CARD_FUSION_GROUP_FEATHER_FROM_HARPIE)},
+        {"Magician of Faith", (1u << CARD_FUSION_GROUP_FEMALE) | (1u << CARD_FUSION_GROUP_MUS_KINGIAN) | (1u << CARD_FUSION_GROUP_MYST_ELFIAN)},
+        {"Maha Vailo", (1u << CARD_FUSION_GROUP_MUS_KINGIAN)},
+        {"Maiden of the Moonlight", (1u << CARD_FUSION_GROUP_ANGEL_WINGED) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE) | (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Mammoth Graveyard", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Marine Beast", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Masaki the Legendary Swordsman", (1u << CARD_FUSION_GROUP_MUS_KINGIAN)},
+        {"Mask of Darkness", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Masked Clown", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER)},
+        {"Masked Sorcerer", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_MERCURY_SPELLCASTER)},
+        {"Master & Expert", (1u << CARD_FUSION_GROUP_USABLE_BEAST)},
+        {"Mavelus", (1u << CARD_FUSION_GROUP_FEATHER_FROM_BEAR) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE)},
+        {"Mech Bass", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Mech Mole Zombie", (1u << CARD_FUSION_GROUP_SHEEPIAN)},
+        {"Mechaleon", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Meda Bat", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Megirus Light", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Meotoko", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Metal Fish", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Metal Guardian", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Midnight Fiend", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Milus Radiant", (1u << CARD_FUSION_GROUP_USABLE_BEAST)},
+        {"Minar", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Monster Egg", (1u << CARD_FUSION_GROUP_EGG)},
+        {"Monster Eye", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Monstrous Bird", (1u << CARD_FUSION_GROUP_FEATHER_FROM_BEAR) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE)},
+        {"Monsturtle", (1u << CARD_FUSION_GROUP_BUGROTHIAN) | (1u << CARD_FUSION_GROUP_TURTLE)},
+        {"Moon Envoy", (1u << CARD_FUSION_GROUP_MUS_KINGIAN)},
+        {"Morphing Jar", (1u << CARD_FUSION_GROUP_JAR)},
+        {"Muse-A", (1u << CARD_FUSION_GROUP_FEMALE) | (1u << CARD_FUSION_GROUP_MUS_KINGIAN)},
+        {"Mystery Hand", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Mystic Clown", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER)},
+        {"Mystic Horseman", (1u << CARD_FUSION_GROUP_USABLE_BEAST)},
+        {"Mystic Lamp", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_MERCURY_SPELLCASTER)},
+        {"Mystical Capture Chain", (1u << CARD_FUSION_GROUP_MUS_KINGIAN) | (1u << CARD_FUSION_GROUP_MYST_ELFIAN)},
+        {"Mystical Elf", (1u << CARD_FUSION_GROUP_ELF) | (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Mystical Sheep #1", (1u << CARD_FUSION_GROUP_USABLE_BEAST)},
+        {"Mystical Sheep #2", (1u << CARD_FUSION_GROUP_USABLE_BEAST)},
+        {"Needle Ball", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Nekogal #1", (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Nekogal #2", (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Nemuriko", (1u << CARD_FUSION_GROUP_FEMALE) | (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_MERCURY_SPELLCASTER)},
+        {"Night Lizard", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Obese Marmot of Nefariousness", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_USABLE_BEAST)},
+        {"Octoberser", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Ocubeam", (1u << CARD_FUSION_GROUP_ANGEL_WINGED)},
+        {"Ogre of the Black Shadow", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"One Who Hunts Souls", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Ooguchi", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Pale Beast", (1u << CARD_FUSION_GROUP_USABLE_BEAST)},
+        {"Peacock", (1u << CARD_FUSION_GROUP_FEATHER_FROM_BEAR) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE)},
+        {"Pendulum Machine", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER)},
+        {"Penguin Knight", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Penguin Soldier", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Petit Angel", (1u << CARD_FUSION_GROUP_ANGEL_WINGED) | (1u << CARD_FUSION_GROUP_MUS_KINGIAN) | (1u << CARD_FUSION_GROUP_MYST_ELFIAN)},
+        {"Phantom Dewan", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_MERCURY_SPELLCASTER)},
+        {"Phantom Ghost", (1u << CARD_FUSION_GROUP_SHEEPIAN)},
+        {"Pot the Trick", (1u << CARD_FUSION_GROUP_JAR) | (1u << CARD_FUSION_GROUP_SHEEPIAN)},
+        {"Prevent Rat", (1u << CARD_FUSION_GROUP_USABLE_BEAST)},
+        {"Princess of Tsurugi", (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Protector of the Throne", (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Psychic Kappa", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Punished Eagle", (1u << CARD_FUSION_GROUP_FEATHER_FROM_BEAR) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE)},
+        {"Queen Bird", (1u << CARD_FUSION_GROUP_FEATHER_FROM_BEAR) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE)},
+        {"Queen of Autumn Leaves", (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Queen's Double", (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Rainbow Flower", (1u << CARD_FUSION_GROUP_RAINBOW)},
+        {"Rainbow Marine Mermaid", (1u << CARD_FUSION_GROUP_FEMALE) | (1u << CARD_FUSION_GROUP_RAINBOW)},
+        {"Reaper of the Cards", (1u << CARD_FUSION_GROUP_KOUMORIAN)},
+        {"Rhaimundos of the Red Sword", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Right Arm of the Forbidden One", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_MERCURY_SPELLCASTER)},
+        {"Right Leg of the Forbidden One", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_MERCURY_SPELLCASTER)},
+        {"Rogue Doll", (1u << CARD_FUSION_GROUP_MUS_KINGIAN)},
+        {"Rose Spectre of Dunn", (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Ryu-kishin", (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Saggi the Dark Clown", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_MERCURY_SPELLCASTER)},
+        {"Sangan", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Sea Kamen", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Sectarian of Secrets", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_MERCURY_SPELLCASTER)},
+        {"Serpent Marauder", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Shadow Specter", (1u << CARD_FUSION_GROUP_SHEEPIAN)},
+        {"Shining Friendship", (1u << CARD_FUSION_GROUP_ANGEL_WINGED) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE) | (1u << CARD_FUSION_GROUP_MUS_KINGIAN)},
+        {"Silver Fang", (1u << CARD_FUSION_GROUP_USABLE_BEAST)},
+        {"Sinister Serpent", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Skelengel", (1u << CARD_FUSION_GROUP_ANGEL_WINGED) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE) | (1u << CARD_FUSION_GROUP_MUS_KINGIAN)},
+        {"Skull Red Bird", (1u << CARD_FUSION_GROUP_FEATHER_FROM_BEAR) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE)},
+        {"Skull Servant", (1u << CARD_FUSION_GROUP_SHEEPIAN)},
+        {"Skull Stalker", (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Sky Dragon", (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE)},
+        {"Sleeping Lion", (1u << CARD_FUSION_GROUP_USABLE_BEAST)},
+        {"Solitude", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Sonic Maid", (1u << CARD_FUSION_GROUP_FEMALE) | (1u << CARD_FUSION_GROUP_MUS_KINGIAN)},
+        {"Spiked Snail", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Spirit of the Harp", (1u << CARD_FUSION_GROUP_MUS_KINGIAN)},
+        {"Star Boy", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Stuffed Animal", (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Succubus Knight", (1u << CARD_FUSION_GROUP_FEMALE) | (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER)},
+        {"Swamp Battleguard", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER)},
+        {"Synchar", (1u << CARD_FUSION_GROUP_USABLE_BEAST)},
+        {"Tainted Wisdom", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Takuhee", (1u << CARD_FUSION_GROUP_FEATHER_FROM_BEAR) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE)},
+        {"Tatsunootoshigo", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Temple of Skulls", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER)},
+        {"Tenderness", (1u << CARD_FUSION_GROUP_ANGEL_WINGED) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE) | (1u << CARD_FUSION_GROUP_MUS_KINGIAN) | (1u << CARD_FUSION_GROUP_MYST_ELFIAN)},
+        {"Terra the Terrible", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"That Which Feeds on Life", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"The Drdek", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"The Furious Sea King", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"The Judgement Hand", (1u << CARD_FUSION_GROUP_MUS_KINGIAN)},
+        {"The Little Swordsman of Aile", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"The Melting Red Shadow", (1u << CARD_FUSION_GROUP_BUGROTHIAN) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"The Shadow Who Controls the Dark", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"The Wandering Doomed", (1u << CARD_FUSION_GROUP_SHEEPIAN)},
+        {"Three-legged Zombies", (1u << CARD_FUSION_GROUP_SHEEPIAN)},
+        {"Toad Master", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Togex", (1u << CARD_FUSION_GROUP_USABLE_BEAST)},
+        {"Toon Alligator", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Torike", (1u << CARD_FUSION_GROUP_USABLE_BEAST)},
+        {"Trap Master", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER)},
+        {"Trial of Nightmares", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Turtle Bird", (1u << CARD_FUSION_GROUP_TURTLE)},
+        {"Turtle Raccoon", (1u << CARD_FUSION_GROUP_BUGROTHIAN) | (1u << CARD_FUSION_GROUP_TURTLE)},
+        {"Turtle Tiger", (1u << CARD_FUSION_GROUP_BUGROTHIAN) | (1u << CARD_FUSION_GROUP_TURTLE)},
+        {"Turu-Purun", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Twin Long Rods #1", (1u << CARD_FUSION_GROUP_BUGROTHIAN) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Twin Long Rods #2", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Two-mouth Darkruler", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Unknown Warrior of Fiend", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER)},
+        {"Versago the Destroyer", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Violent Rain", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Vishwar Randi", (1u << CARD_FUSION_GROUP_FEMALE) | (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER)},
+        {"Warrior of Tradition", (1u << CARD_FUSION_GROUP_FEMALE) | (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER)},
+        {"Water Element", (1u << CARD_FUSION_GROUP_BUGROTHIAN) | (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Water Girl", (1u << CARD_FUSION_GROUP_BUGROTHIAN) | (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Water Magician", (1u << CARD_FUSION_GROUP_BUGROTHIAN) | (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Water Omotics", (1u << CARD_FUSION_GROUP_BUGROTHIAN) | (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Waterdragon Fairy", (1u << CARD_FUSION_GROUP_BUGROTHIAN) | (1u << CARD_FUSION_GROUP_FEMALE)},
+        {"Weather Control", (1u << CARD_FUSION_GROUP_MUS_KINGIAN) | (1u << CARD_FUSION_GROUP_MYST_ELFIAN)},
+        {"Weather Report", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Wetha", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"White Magical Hat", (1u << CARD_FUSION_GROUP_MUS_KINGIAN)},
+        {"Wicked Dragon with the Ersatz Head", (1u << CARD_FUSION_GROUP_KOUMORIAN) | (1u << CARD_FUSION_GROUP_SHEEPIAN)},
+        {"Wicked Mirror", (1u << CARD_FUSION_GROUP_MIRROR) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Wing Eagle", (1u << CARD_FUSION_GROUP_FEATHER_FROM_BEAR) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE)},
+        {"Wing Egg Elf", (1u << CARD_FUSION_GROUP_ANGEL_WINGED) | (1u << CARD_FUSION_GROUP_EGG) | (1u << CARD_FUSION_GROUP_ELF) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_BEAR) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE) | (1u << CARD_FUSION_GROUP_MYST_ELFIAN)},
+        {"Winged Egg of New Life", (1u << CARD_FUSION_GROUP_ANGEL_WINGED) | (1u << CARD_FUSION_GROUP_EGG) | (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE) | (1u << CARD_FUSION_GROUP_MUS_KINGIAN)},
+        {"Winged Trumpeter", (1u << CARD_FUSION_GROUP_FEATHER_FROM_MACHINE)},
+        {"Witch of the Black Forest", (1u << CARD_FUSION_GROUP_FEMALE) | (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_MERCURY_SPELLCASTER)},
+        {"Witch's Apprentice", (1u << CARD_FUSION_GROUP_ANGEL_WINGED) | (1u << CARD_FUSION_GROUP_FEMALE) | (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_MERCURY_SPELLCASTER)},
+        {"Witty Phantom", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER)},
+        {"Wolf", (1u << CARD_FUSION_GROUP_USABLE_BEAST)},
+        {"Wood Clown", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER)},
+        {"Wretched Ghost of the Attic", (1u << CARD_FUSION_GROUP_MERCURY_MAGIC_USER) | (1u << CARD_FUSION_GROUP_SHEEPIAN) | (1u << CARD_FUSION_GROUP_THRONIAN)},
+        {"Yado Karu", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Yormungarde", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Zarigun", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+        {"Zone Eater", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
+    };
+    size_t i;
+    unsigned int bit, found = 0;
+    int base = Cards_BaseId(id);
+    if (!base) return 0;
+    bit = 1u << group;
+    for (i = 0; i < sizeof(cards) / sizeof(cards[0]); i++)
+        if (Cards_Named(cards[i].name) == base) found |= cards[i].groups;
+    return !!(found & bit);
 }
 
 typedef struct {
@@ -609,7 +988,8 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     unsigned char *record = NULL, *title = NULL, *named_plate = NULL;
     int parts = 0;
     int base = 0, count, n, value, has_password;
-    unsigned stats, password = CARD_PASSWORD_NONE;
+    unsigned stats, password = CARD_PASSWORD_NONE, entry_fusion_groups = 0;
+    int entry_has_fusion_groups = 0;
     unsigned char level_attr, frame;
     if (Json_TypeOf(entry) != JSON_OBJECT) {
         Mods_Note(mod, "cards[%d] is not an object", index);
@@ -677,6 +1057,22 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     }
     if ((value = choice(Json_Member(entry, "attribute"), attribute_names, 6)) >= 0) {
         level_attr = (unsigned char)((level_attr & 0x0F) | (clamp(value, 0, 15) << 4));
+    }
+    /* Optional secondary fusion groups. A new card inherits its retail base when omitted.
+     * Supplying fusion_groups gives the card its own membership instead. */
+    {
+        const JsonValue *groups = Json_Member(entry, "fusion_groups");
+        if (groups) {
+            const JsonValue *g;
+            entry_has_fusion_groups = 1;
+            for (g = Json_At(groups, 0); g; g = Json_Next(g)) {
+                int group = Cards_FusionGroupNamed(Json_String(g, NULL));
+                if (group > CARD_FUSION_GROUP_NONE && group <= CARD_FUSION_GROUP_USABLE_BEAST)
+                    entry_fusion_groups |= 1u << group;
+                else
+                    Mods_Note(mod, "cards[%d]: unknown fusion_groups entry", index);
+            }
+        }
     }
     /* Left out, the frame is the base's (its type's unless an earlier entry
      * chose one); "type" goes back to the type's. */
@@ -758,6 +1154,8 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         gCard_awBaseId[id] = (unsigned short)base;
         gCard_asNameSortKey[id - 1] = gCard_asNameSortKey[base - 1];
     own:
+        fusion_groups[id] = entry_fusion_groups;
+        has_fusion_groups[id] = (unsigned char)entry_has_fusion_groups;
         gDuel_adwCardStats[id - 1] = (int)stats;
         gDuel_abCardLevelAttr[id] = level_attr;
         frames[id] = frame;
