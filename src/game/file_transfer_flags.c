@@ -21,7 +21,7 @@ FileTransferDescriptor *File_RequestAsyncTransfer(
             goto out;
         }
     } else {
-        D_8009B10C();
+        CALL32(void (*)(void), D_8009B10C)();
     }
     File_InitTransferDescriptor(
         &gFile_PrimaryTransferDescriptor,
@@ -50,7 +50,7 @@ FileTransferDescriptor *File_TryRequestAsyncTransfer(
             return (FileTransferDescriptor *)0;
         }
     } else {
-        D_8009B10C();
+        CALL32(void (*)(void), D_8009B10C)();
     }
     File_InitTransferDescriptor(
         &gFile_PrimaryTransferDescriptor,
@@ -127,7 +127,7 @@ void func_8001513C(FileTransferDescriptor *object)
         if (object->phase_callback != 0) {
             s32 count = object->result++;
 
-            object->phase_callback(object, count);
+            CALL32(FileTransferCallback, object->phase_callback)(object, count);
         }
         object->phase_remaining = object->phase_size;
     }

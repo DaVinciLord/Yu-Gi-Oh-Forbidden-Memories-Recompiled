@@ -69,8 +69,8 @@ void DuelScene_UpdateCardPlacement(void)
     s32 x;
 
     if (!(gDuel_wSceneStateFlags & 0x8000)) {
-        DisplayObject **slots;
-        DisplayObject **cursor;
+        DisplayObject *G32 *slots;
+        DisplayObject *G32 *cursor;
         DuelHandSlot *hand;
         s16 y;
         x = 260;
@@ -134,9 +134,9 @@ void DuelScene_UpdateCardPlacement(void)
     switch (D_8009B174 & 15) {
     case 1:
         {
-            DisplayObject **slots;
+            DisplayObject *G32 *slots;
             {
-                DisplayObject **cursor;
+                DisplayObject *G32 *cursor;
                 DuelCardRecord *cards;
                 DisplayObjectCallback callback;
                 s32 active;
@@ -168,11 +168,11 @@ void DuelScene_UpdateCardPlacement(void)
         }
     case 2:
         {
-            DisplayObject **slots;
+            DisplayObject *G32 *slots;
             {
-                DisplayObject **cursor;
+                DisplayObject *G32 *cursor;
                 if (!(D_8009B174 & 0x80)) {
-                    DisplayObject **cursor;
+                    DisplayObject *G32 *cursor;
                     s32 active;
                     D_8009B174 |= 0x80;
                     n = 5;
@@ -229,7 +229,7 @@ void DuelScene_UpdateCardPlacement(void)
         }
     case 3:
         {
-            DisplayObject **slots;
+            DisplayObject *G32 *slots;
             if (!(D_8009B174 & 0x80)) {
                 D_8009B174 |= 0x80;
                 D_8009B1B9++;
@@ -318,7 +318,7 @@ request_combination:
             switch (D_8009B210 & 15) {
             case 0:
                 {
-                    DisplayObject **slots;
+                    DisplayObject *G32 *slots;
                     {
                         s32 card_index = D_800E9EF0[0]->field_6A;
                         DuelEffectResourceRecord *resource = D_800EA0E8;
@@ -366,7 +366,7 @@ request_combination:
                 }
             case 1:
                 {
-                    DisplayObject **slots;
+                    DisplayObject *G32 *slots;
                     s32 alpha;
                     if (DisplayObject_FindAllocatedByTag(1))
                     return;
@@ -393,7 +393,7 @@ request_combination:
                 }
             case 2:
                 {
-                    DisplayObject **slots;
+                    DisplayObject *G32 *slots;
                     card = &D_801A7AD8[D_800E9EF0[0]->field_6A];
                     object = D_8009B1C0;
                     if (!(D_8009B210 & 0x80)) {
@@ -529,7 +529,7 @@ request_combination:
         {
             DisplayObject **slots;
             if (!(D_8009B174 & 0x80)) {
-                DisplayObject **slots;
+                DisplayObject *G32 *slots;
                 slots = D_800E9EF0;
                 slots[0]->flags &= ~0x40;
                 D_8009B174 |= 0xC0;
@@ -552,7 +552,7 @@ request_combination:
                     }
                 }
                 {
-                    DisplayObject **release_slots = D_800E9EF0;
+                    DisplayObject *G32 *release_slots = D_800E9EF0;
                     D_8009B174 |= 0x20;
                     if (release_slots[1]->field_68 < 20) {
                         DisplayObject_ReleaseIfPresent(D_800E9EF0[0]);
@@ -562,7 +562,7 @@ request_combination:
                     }
                 }
                 {
-                    DisplayObject **publish_slots = D_800E9EF0;
+                    DisplayObject *G32 *publish_slots = D_800E9EF0;
                     publish_slots[1] = 0;
                     D_800E9EF0[0]->flags |= 0x40;
                     func_80019BA0(D_800E9EF0[0], 192, 0, 8);
@@ -590,9 +590,9 @@ request_combination:
         }
     case 6:
         {
-            DisplayObject **slots;
+            DisplayObject *G32 *slots;
             if (!(D_8009B174 & 0x80)) {
-                DisplayObject **slots;
+                DisplayObject *G32 *slots;
                 D_8009B174 |= 0xC0;
                 func_80019CC8((void *)(u32)(D_8009B150 & CARD_ID_FIELD_MASK));
                 slots = D_800E9EF0;
@@ -600,7 +600,7 @@ request_combination:
                 func_80019BA0(slots[1], 0, 64, 8);
             }
             if (D_8009B174 & 0x40) {
-                DisplayObject **slots;
+                DisplayObject *G32 *slots;
                 if (DisplayObject_FindAllocatedByTag(1))
                 return;
                 {
@@ -622,7 +622,7 @@ finish_effect_step:
                 return;
             }
             if (!(D_8009B174 & 0x20)) {
-                DisplayObject **slots;
+                DisplayObject *G32 *slots;
                 D_800E9EF0[0]->field_60 = 0;
                 PLACEMENT_TX(D_800E9EF0[0]) = 1;
                 PLACEMENT_TY(D_800E9EF0[0]) = 0x2680;
@@ -643,7 +643,7 @@ finish_effect_step:
                 return;
             }
             if (DUEL_EFFECT_REQUEST_VIEW(D_8009B17C)->field_1D) {
-                DisplayObject **slots;
+                DisplayObject *G32 *slots;
                 slots = D_800E9EF0;
                 slots[0]->flags &= ~0x40;
                 slots[1]->flags &= ~0x40;
@@ -667,7 +667,7 @@ finish_effect_step:
         }
     case 7:
         {
-            DisplayObject **slots;
+            DisplayObject *G32 *slots;
             slots = D_800E9EF0;
             object = slots[0];
             if (!(D_8009B174 & 0x80)) {

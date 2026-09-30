@@ -41,7 +41,7 @@ s32 MemCard_ProcessRequest(s32 mode, s32 *request, s32 *result);
    `long` rather than s32; that spelling is preserved rather than normalised,
    because DeliverEvent/OpenEvent hand these back as long and nothing here has
    measured the difference. */
-extern long gMemCard_aIOEventHandles[];
+extern PSXLONG gMemCard_aIOEventHandles[];
 
 #ifdef GMEMCARD_NIORESULT_IS_VOLATILE
 
@@ -100,7 +100,7 @@ extern u16 gMemCard_wDialogFlags;
  * one already include this header and already spell the element `long`. That
  * spelling is preserved here for the same reason it is above: the event API
  * hands these back as long and nothing has measured the difference. */
-extern long gMemCard_aHwIOEventHandles[];
+extern PSXLONG gMemCard_aHwIOEventHandles[];
 
 /* The request state machines' shared state. Every symbol below was declared
  * identically by each of its users, all of which already include this header.
@@ -231,9 +231,9 @@ extern u8 D_8009B3C0;
  */
 extern u8 D_8009B3EE;
 extern u8 D_8009B3C6;
-extern DisplayObject *gMemCard_pDialogObject;
-extern u8 *gMemCard_pPrimaryTransferCursor;
-extern u8 *gMemCard_pSecondaryTransferCursor;
+extern DisplayObject *G32 gMemCard_pDialogObject;
+extern u8 *G32 gMemCard_pPrimaryTransferCursor;
+extern u8 *G32 gMemCard_pSecondaryTransferCursor;
 extern u8 D_8009B3DC;
 extern u8 D_8009B3DE;
 extern u8 D_8009B3EC;

@@ -142,6 +142,19 @@ How it works:
   remaining colour commands). `pc_gte` holds hand-computed known answers;
   it has **not** been compared against hardware or an emulator yet.
 
+### Guest-width pointers (G32, CALL32, PSXLONG)
+
+Game declarations carry upstream's annotations for a native 64-bit build
+(`src/port_ptr.h`, cherry-picked from memories-decomp #6623 and #6637, since
+the port does not merge upstream): `T *G32 p` for a pointer the game stores
+in memory (a structure member or a global pinned to a retail address),
+`T *G32 *p` for a local that walks such storage, `CALL32(type, f)(args)` for
+a call through a stored function pointer, and `PSXLONG` for the Psy-Q
+32-bit `long`. On the console and in this 32-bit build all three expand to
+what they replace, so the objects do not change. `make check-g32`
+(`tools/project/check_g32.py`, run by the metadata workflow) rejects game code
+under `src/` without them; `src/pc`, the port's own host code, is exempt.
+
 ### What runs (2026-09-20)
 
 `./build-pc.sh run` opens a 960x720 window and boots from the user's disc

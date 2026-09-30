@@ -385,9 +385,9 @@ extern GraphicsFrameBuffer gGraphics_aFrameBuffers[];
  * it in graphics_frame_buffer.h, after the layout. */
 
 #ifdef GRAPHICS_ACTIVE_FRAME_BUFFER_IS_VOLATILE
-extern GraphicsFrameBuffer *volatile gGraphics_pActiveFrameBuffer;
+extern GraphicsFrameBuffer *G32 volatile gGraphics_pActiveFrameBuffer;
 #else
-extern GraphicsFrameBuffer *gGraphics_pActiveFrameBuffer;
+extern GraphicsFrameBuffer *G32 gGraphics_pActiveFrameBuffer;
 #endif
 
 /* The other half of that pair, the one the comment above refers to:

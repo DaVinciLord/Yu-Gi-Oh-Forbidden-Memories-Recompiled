@@ -30,7 +30,7 @@
 void DisplayObject_SubmitPacket(SpritePrim *sprite, u8 *packet, s32 ot, s32 mode, u8 *extra)
 {
     SVECTOR *v;
-    long *otz;
+    PSXLONG *otz;
     DisplayObjectPacketOrigin *origin = (DisplayObjectPacketOrigin *)extra;
     s32 pri = (s16)mode;
 
@@ -46,7 +46,7 @@ void DisplayObject_SubmitPacket(SpritePrim *sprite, u8 *packet, s32 ot, s32 mode
         return;
     case 4: {
         if ((u32)sprite & 0x04000000) {
-            otz = (long *)0x1F8002E0;
+            otz = (PSXLONG *)0x1F8002E0;
             v = SCRATCH_VERTEX(0);
             v[0].vx = POLY_G4_VIEW(packet)->x0 - origin->x;
             v[0].vy = POLY_G4_VIEW(packet)->y0 - origin->y;
@@ -61,8 +61,8 @@ void DisplayObject_SubmitPacket(SpritePrim *sprite, u8 *packet, s32 ot, s32 mode
             SCRATCH_VERTEX(1)->vz = 0;
             v[0].vz = 0;
             if (RotAverageNclip4(SCRATCH_VERTEX(0), SCRATCH_VERTEX(1), SCRATCH_VERTEX(2), SCRATCH_VERTEX(3),
-                                 (long *)&POLY_G4_VIEW(packet)->x0, (long *)&POLY_G4_VIEW(packet)->x1,
-                                 (long *)&POLY_G4_VIEW(packet)->x2, (long *)&POLY_G4_VIEW(packet)->x3,
+                                 (PSXLONG *)&POLY_G4_VIEW(packet)->x0, (PSXLONG *)&POLY_G4_VIEW(packet)->x1,
+                                 (PSXLONG *)&POLY_G4_VIEW(packet)->x2, (PSXLONG *)&POLY_G4_VIEW(packet)->x3,
                                  otz, otz + 1, otz + 2) <= 0) {
                 return;
             }
@@ -76,7 +76,7 @@ void DisplayObject_SubmitPacket(SpritePrim *sprite, u8 *packet, s32 ot, s32 mode
     }
     case 5: {
         if ((u32)sprite & 0x04000000) {
-            otz = (long *)0x1F8002E0;
+            otz = (PSXLONG *)0x1F8002E0;
             v = SCRATCH_VERTEX(0);
             v[0].vx = POLY_GT4_VIEW(packet)->x0 - origin->x;
             v[0].vy = POLY_GT4_VIEW(packet)->y0 - origin->y;
@@ -91,8 +91,8 @@ void DisplayObject_SubmitPacket(SpritePrim *sprite, u8 *packet, s32 ot, s32 mode
             SCRATCH_VERTEX(1)->vz = 0;
             v[0].vz = 0;
             if (RotAverageNclip4(SCRATCH_VERTEX(0), SCRATCH_VERTEX(1), SCRATCH_VERTEX(2), SCRATCH_VERTEX(3),
-                                 (long *)&POLY_GT4_VIEW(packet)->x0, (long *)&POLY_GT4_VIEW(packet)->x1,
-                                 (long *)&POLY_GT4_VIEW(packet)->x2, (long *)&POLY_GT4_VIEW(packet)->x3,
+                                 (PSXLONG *)&POLY_GT4_VIEW(packet)->x0, (PSXLONG *)&POLY_GT4_VIEW(packet)->x1,
+                                 (PSXLONG *)&POLY_GT4_VIEW(packet)->x2, (PSXLONG *)&POLY_GT4_VIEW(packet)->x3,
                                  otz, otz + 1, otz + 2) <= 0) {
                 return;
             }
@@ -112,7 +112,7 @@ void DisplayObject_SubmitPacket(SpritePrim *sprite, u8 *packet, s32 ot, s32 mode
         SVECTOR *v1;
         u32 attribute;
 
-        otz = (long *)0x1F8002E0;
+        otz = (PSXLONG *)0x1F8002E0;
         v = SCRATCH_VERTEX(0);
         attribute = sprite->attribute;
 
@@ -159,8 +159,8 @@ void DisplayObject_SubmitPacket(SpritePrim *sprite, u8 *packet, s32 ot, s32 mode
         v1->vz = 0;
         v->vz = 0;
         if (RotAverageNclip4(v, v1, v2, v3,
-                             (long *)&POLY_FT4_VIEW(packet)->x0, (long *)&POLY_FT4_VIEW(packet)->x1,
-                             (long *)&POLY_FT4_VIEW(packet)->x2, (long *)&POLY_FT4_VIEW(packet)->x3,
+                             (PSXLONG *)&POLY_FT4_VIEW(packet)->x0, (PSXLONG *)&POLY_FT4_VIEW(packet)->x1,
+                             (PSXLONG *)&POLY_FT4_VIEW(packet)->x2, (PSXLONG *)&POLY_FT4_VIEW(packet)->x3,
                              otz, otz + 1, otz + 2) > 0) {
             if (origin->divisions == 0) {
                 GsSortPoly(packet, GS_OT_VIEW(ot), pri);

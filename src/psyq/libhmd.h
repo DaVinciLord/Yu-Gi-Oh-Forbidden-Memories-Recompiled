@@ -23,41 +23,41 @@
 #define GsUNIT_DIV5	(5<<24)		/* 32 x 32 divide */
 
 typedef struct _GsCOORDUNIT {
-	unsigned long		flg;
+	unsigned PSXLONG		flg;
 	MATRIX			matrix;
 	MATRIX			workm;
 	SVECTOR			rot;
-	struct _GsCOORDUNIT	*super;
+	struct _GsCOORDUNIT	*G32 super;
 }	GsCOORDUNIT;
 
 typedef struct {
 	MATRIX  	view;
-	GsCOORDUNIT	*super;
+	GsCOORDUNIT	*G32 super;
 }       GsVIEWUNIT;
 
 typedef struct {
-	long    	vpx, vpy, vpz;
-	long    	vrx, vry, vrz;
-	long    	rz;
-	GsCOORDUNIT 	*super;
+	PSXLONG    	vpx, vpy, vpz;
+	PSXLONG    	vrx, vry, vrz;
+	PSXLONG    	rz;
+	GsCOORDUNIT 	*G32 super;
 }       GsRVIEWUNIT;
 
 typedef struct {
-	GsCOORDUNIT	*coord;	/* local dmatrix */
-	unsigned long	*primtop;
+	GsCOORDUNIT	*G32 coord;	/* local dmatrix */
+	unsigned PSXLONG	*G32 primtop;
 }       GsUNIT;
 
 typedef struct {
-	unsigned long	type;
-	unsigned long	*ptr;
+	unsigned PSXLONG	type;
+	unsigned PSXLONG	*G32 ptr;
 }	GsTYPEUNIT;
 
 typedef struct {
-	unsigned long	*primp;
-	GsOT 		*tagp;
+	unsigned PSXLONG	*G32 primp;
+	GsOT 		*G32 tagp;
 	int		shift;
 	int		offset;
-	PACKET		*out_packetp;
+	PACKET		*G32 out_packetp;
 }	GsARGUNIT;
 
 typedef struct {
@@ -67,149 +67,149 @@ typedef struct {
 }       GsWORKUNIT;
 
 typedef struct {
-	unsigned long	*primp;
-	GsOT		*tagp;
+	unsigned PSXLONG	*G32 primp;
+	GsOT		*G32 tagp;
 	int		shift;
 	int		offset;
-	PACKET		*out_packetp;
-	unsigned long	*primtop;
-	SVECTOR		*vertop;
-	SVECTOR		*nortop;
+	PACKET		*G32 out_packetp;
+	unsigned PSXLONG	*G32 primtop;
+	SVECTOR		*G32 vertop;
+	SVECTOR		*G32 nortop;
 }	GsARGUNIT_NORMAL;
 
 typedef struct {
-	unsigned long	*primp;
-	GsOT		*tagp;
+	unsigned PSXLONG	*G32 primp;
+	GsOT		*G32 tagp;
 	int		shift;
 	int		offset;
-	PACKET		*out_packetp;
-	unsigned long	*primtop;
-	SVECTOR		*vertop;
-	GsWORKUNIT	*vertop2;
-	SVECTOR		*nortop;
-	SVECTOR		*nortop2;
+	PACKET		*G32 out_packetp;
+	unsigned PSXLONG	*G32 primtop;
+	SVECTOR		*G32 vertop;
+	GsWORKUNIT	*G32 vertop2;
+	SVECTOR		*G32 nortop;
+	SVECTOR		*G32 nortop2;
 }	GsARGUNIT_SHARED;
 
 typedef struct {
-	unsigned long	*primp;
-	GsOT		*tagp;
+	unsigned PSXLONG	*G32 primp;
+	GsOT		*G32 tagp;
 	int		shift;
 	int		offset;
-	PACKET		*out_packetp;
-	unsigned long	*imagetop;
-	unsigned long	*cluttop;
+	PACKET		*G32 out_packetp;
+	unsigned PSXLONG	*G32 imagetop;
+	unsigned PSXLONG	*G32 cluttop;
 }	GsARGUNIT_IMAGE;
 
 typedef struct {
-	unsigned long	*primp;
-	GsOT		*tagp;
+	unsigned PSXLONG	*G32 primp;
+	GsOT		*G32 tagp;
 	int		shift;
 	int		offset;
-	PACKET		*out_packetp;
-	unsigned long	*polytop;
-	unsigned long	*boxtop;
-	unsigned long	*pointtop;
-	SVECTOR		*nortop;
+	PACKET		*G32 out_packetp;
+	unsigned PSXLONG	*G32 polytop;
+	unsigned PSXLONG	*G32 boxtop;
+	unsigned PSXLONG	*G32 pointtop;
+	SVECTOR		*G32 nortop;
 }	GsARGUNIT_GND;
 
 typedef struct {
-	unsigned long	*primp;
-	GsOT		*tagp;
+	unsigned PSXLONG	*G32 primp;
+	GsOT		*G32 tagp;
 	int		shift;
 	int		offset;
-	PACKET		*out_packetp;
-	unsigned long	*polytop;
-	unsigned long	*boxtop;
-	unsigned long	*pointtop;
-	SVECTOR		*nortop;
-	unsigned long	*uvtop;
+	PACKET		*G32 out_packetp;
+	unsigned PSXLONG	*G32 polytop;
+	unsigned PSXLONG	*G32 boxtop;
+	unsigned PSXLONG	*G32 pointtop;
+	SVECTOR		*G32 nortop;
+	unsigned PSXLONG	*G32 uvtop;
 }	GsARGUNIT_GNDT;
 
 typedef struct {
-	unsigned long	*primp;
-	GsOT		*tagp;
+	unsigned PSXLONG	*G32 primp;
+	GsOT		*G32 tagp;
 	int		shift;
 	int		offset;
-	PACKET		*out_packetp;
-	unsigned long	*cparam;
-	GsCOORDUNIT	*coord;
-	GsCOORDUNIT	*rcoord;
+	PACKET		*G32 out_packetp;
+	unsigned PSXLONG	*G32 cparam;
+	GsCOORDUNIT	*G32 coord;
+	GsCOORDUNIT	*G32 rcoord;
 }	GsARGUNIT_CAMERA;
 
 typedef struct {
-	unsigned long	*primp;
-	GsOT		*tagp;
+	unsigned PSXLONG	*G32 primp;
+	GsOT		*G32 tagp;
 	int		shift;
 	int		offset;
-	PACKET		*out_packetp;
-	unsigned long	*lparam;
-	GsCOORDUNIT	*coord;
-	GsCOORDUNIT	*rcoord;
+	PACKET		*G32 out_packetp;
+	unsigned PSXLONG	*G32 lparam;
+	GsCOORDUNIT	*G32 coord;
+	GsCOORDUNIT	*G32 rcoord;
 }	GsARGUNIT_LIGHT;
 
 typedef struct {
-	unsigned long	*primp;
-	GsOT		*tagp;
+	unsigned PSXLONG	*G32 primp;
+	GsOT		*G32 tagp;
 	int		shift;
 	int		offset;
-	PACKET		*out_packetp;
-	u32		*coord_sect;
-	long		*mimepr;
+	PACKET		*G32 out_packetp;
+	u32		*G32 coord_sect;
+	PSXLONG		*G32 mimepr;
 	u32		mimenum;
 	u16		mimeid, reserved;
-	u32		*mime_diff_sect;
+	u32		*G32 mime_diff_sect;
 }	GsARGUNIT_JntMIMe;
 
 
 typedef struct {
-	unsigned long	*primp;
-	GsOT		*tagp;
+	unsigned PSXLONG	*G32 primp;
+	GsOT		*G32 tagp;
 	int		shift;
 	int		offset;
-	PACKET		*out_packetp;
-	u32		*coord_sect;
+	PACKET		*G32 out_packetp;
+	u32		*G32 coord_sect;
 	u16		mimeid, reserved;
-	u32		*mime_diff_sect;
+	u32		*G32 mime_diff_sect;
 }	GsARGUNIT_RstJntMIMe;
 
 typedef struct {
-	unsigned long	*primp;
-	GsOT		*tagp;
+	unsigned PSXLONG	*G32 primp;
+	GsOT		*G32 tagp;
 	int		shift;
 	int		offset;
-	PACKET		*out_packetp;
-	long		*mimepr;
+	PACKET		*G32 out_packetp;
+	PSXLONG		*G32 mimepr;
 	u32		mimenum;
 	u16		mimeid, reserved;
-	u32		*mime_diff_sect;
-	SVECTOR		*orgs_vn_sect;
-	SVECTOR		*vert_sect;
-	SVECTOR		*norm_sect;
+	u32		*G32 mime_diff_sect;
+	SVECTOR		*G32 orgs_vn_sect;
+	SVECTOR		*G32 vert_sect;
+	SVECTOR		*G32 norm_sect;
 }	GsARGUNIT_VNMIMe;
 
 typedef struct {
-	unsigned long	*primp;
-	GsOT		*tagp;
+	unsigned PSXLONG	*G32 primp;
+	GsOT		*G32 tagp;
 	int		shift;
 	int		offset;
-	PACKET		*out_packetp;
+	PACKET		*G32 out_packetp;
 	u16		mimeid, reserved;
-	u32		*mime_diff_sect;
-	SVECTOR		*orgs_vn_sect;
-	SVECTOR		*vert_sect;
-	SVECTOR		*norm_sect;
+	u32		*G32 mime_diff_sect;
+	SVECTOR		*G32 orgs_vn_sect;
+	SVECTOR		*G32 vert_sect;
+	SVECTOR		*G32 norm_sect;
 }	GsARGUNIT_RstVNMIMe;
 
 typedef struct {
-	unsigned long	*primp;
-	GsOT		*tagp;
+	unsigned PSXLONG	*G32 primp;
+	GsOT		*G32 tagp;
 	int		shift;
 	int		offset;
-	PACKET		*out_packetp;
-	long		header_size;
-	unsigned long	*htop;
-	unsigned long	*ctop;
-	unsigned long	*ptop;
+	PACKET		*G32 out_packetp;
+	PSXLONG		header_size;
+	unsigned PSXLONG	*G32 htop;
+	unsigned PSXLONG	*G32 ctop;
+	unsigned PSXLONG	*G32 ptop;
 } GsARGUNIT_ANIM;
 
 typedef struct {
@@ -1110,7 +1110,7 @@ extern  "C" {
 	extern int GsSetRefViewUnit(GsRVIEWUNIT *);
 	extern int GsSetRefViewLUnit(GsRVIEWUNIT *);
 	extern u32 *GsScanAnim(u32 *,GsTYPEUNIT *);
-	extern long GsLinkAnim(GsSEQ **,u32 *);
+	extern PSXLONG GsLinkAnim(GsSEQ **,u32 *);
 
 	/* for MIMe */
 	extern void	GsInitRstVtxMIMe(u32 *primtop, u32 *hp);

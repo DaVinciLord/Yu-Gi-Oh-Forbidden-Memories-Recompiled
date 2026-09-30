@@ -46,7 +46,7 @@ void func_80037DA4(DuelEffectChannel *object)
     s32 type;
     u8 *text;
     u8 *current;
-    u8 **slot;
+    u8 *G32 *slot;
 #ifdef MEMORIES_PC
     s32 star = 0;   /* the guardian star an icon stands for (stars.h) */
 #endif
@@ -197,7 +197,7 @@ void func_80038070(DuelEffectChannel *object)
 
 void func_80038094(DuelEffectChannel *object)
 {
-    u8 **stream =
+    u8 *G32 *stream =
         &TEXT_STREAM_OWNER(object)->streams[object->stream_58];
 
     func_80038024(object, *(*stream)++);
@@ -205,7 +205,7 @@ void func_80038094(DuelEffectChannel *object)
 
 void func_800380D4(DuelEffectChannel *object)
 {
-    register u8 **stream;
+    register u8 *G32 *stream;
     register u8 *current;
     register u32 value;
 
@@ -221,9 +221,9 @@ void func_800380D4(DuelEffectChannel *object)
 
 void func_80038110(DuelEffectChannel *object)
 {
-    u8 **stream =
+    u8 *G32 *stream =
         &TEXT_STREAM_OWNER(object)->streams[object->stream_58];
-    register u8 **slot = stream;
+    register u8 *G32 *slot = stream;
     register u8 *current = *slot;
     register u32 value = current[0];
 
@@ -352,7 +352,7 @@ write:
 /* Inlining keeps the stream value and channel in independent live ranges. */
 static __inline__ u32 read_operand(DuelEffectChannel *object)
 {
-    u8 **stream =
+    u8 *G32 *stream =
         &TEXT_STREAM_OWNER(object)->streams[object->stream_58];
     u8 *cursor = *stream;
     u32 value = *cursor++;
@@ -385,7 +385,7 @@ void func_80038334(DuelEffectChannel *object)
 {
     /* Separate lifetimes preserve allocation across the two stream reads. */
     {
-        u8 **stream =
+        u8 *G32 *stream =
             &TEXT_STREAM_OWNER(object)->streams[object->stream_58];
         u8 *current = *stream;
         u8 value = *current++;
@@ -394,7 +394,7 @@ void func_80038334(DuelEffectChannel *object)
         object->field_5A = value;
     }
     {
-        u8 **stream =
+        u8 *G32 *stream =
             &TEXT_STREAM_OWNER(object)->streams[object->stream_58];
         u8 *current = *stream;
         u8 value = *current++;
@@ -451,7 +451,7 @@ u32 *func_800383DC(DuelEffectChannel *a0) {
 
 void func_80038498(DuelEffectChannel *object)
 {
-    u8 **slot =
+    u8 *G32 *slot =
         &TEXT_STREAM_OWNER(object)->streams[object->stream_58];
     u8 *q = *slot;
     s32 v = *q;
