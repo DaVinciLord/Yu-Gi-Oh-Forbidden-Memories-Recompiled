@@ -15,7 +15,7 @@ from tkinter import filedialog, messagebox, ttk
 from . import campaign_map as cm
 from . import map_art, pngio
 from .tabs import Tab
-from .widgets import px, scrolled_tree
+from .widgets import px, scrolled_tree, ui_font
 
 ZOOM = 2
 CANVAS = (cm.SCREEN[0] * ZOOM, cm.SCREEN[1] * ZOOM)
@@ -98,7 +98,7 @@ class MapTab(Tab):
             v.trace_add("write", lambda *_: self.edited())
             self.vars[key] = v
             return v
-        self.heading = ttk.Label(parent, font=("TkDefaultFont", 11, "bold"))
+        self.heading = ttk.Label(parent, font=ui_font(11))
         self.heading.pack(anchor="w")
         camera = ttk.LabelFrame(parent, text="Camera", padding=4)
         camera.pack(fill="x", pady=2)
@@ -496,7 +496,7 @@ class MapTab(Tab):
             self.canvas.create_image((cm.PANEL_AT[0] + panel[1]) * ZOOM, (cm.PANEL_AT[1] + panel[2]) * ZOOM,
                                      anchor="nw", image=panel[0])
         self.canvas.create_text(160 * ZOOM, 30 * ZOOM, text=cm.name(self.project, self.index).split(" / ")[0],
-                                fill="#ffffff", font=("TkDefaultFont", 12, "bold"))
+                                fill="#ffffff", font=ui_font(12))
         labels = {}
         for n, e in enumerate(loc.exits):
             if e.used:
@@ -526,7 +526,7 @@ class MapTab(Tab):
             dx = -16 if anchor == "e" else 16 if anchor == "w" else 0
             dy = 16 if anchor == "n" else 0
             self.canvas.create_text(e.x * ZOOM + dx, e.y * ZOOM + dy, text=text, anchor=anchor, fill="#ffffff",
-                                    font=("TkDefaultFont", 9), tags=tag)
+                                    font=ui_font(9, "normal"), tags=tag)
         if self.index >= cm.TOWN_FIRST:
             marker = self.sprite("marker", cm.sprite_image(data, *cm.MARKER, strips))
             if marker:
@@ -585,16 +585,16 @@ class MapTab(Tab):
         tx0, ty0, tx1, ty1 = self.TOWN_BOX
         c.create_rectangle(tx0, ty0, tx1, ty1, outline="#3b4b5e")
         c.create_text(tx0, ty0 - 4, text="The town (place 10's camera)", anchor="sw", fill="#c4c8cd",
-                      font=("TkDefaultFont", 9))
-        c.create_text(x0 + 4, y0 - 4, anchor="sw", fill="#c4c8cd", font=("TkDefaultFont", 9),
+                      font=ui_font(9, "normal"))
+        c.create_text(x0 + 4, y0 - 4, anchor="sw", fill="#c4c8cd", font=ui_font(9, "normal"),
                       text="The world map from above: each site where its camera looks")
         legend = [("always", "always"), ("set", "while a flag is set"), ("clear", "while a flag is clear")]
         for k, (kind, text) in enumerate(legend):
             y = 204 + k * 16
             c.create_line(tx0, y, tx0 + 24, y, fill=EDGE_COLOURS[kind], width=2, arrow="last")
-            c.create_text(tx0 + 30, y, text=text, anchor="w", fill="#c4c8cd", font=("TkDefaultFont", 9))
+            c.create_text(tx0 + 30, y, text=text, anchor="w", fill="#c4c8cd", font=ui_font(9, "normal"))
         c.create_line(tx0, 204 + 48, tx0 + 24, 204 + 48, fill="#c4c8cd", width=2, arrow="last", dash=(4, 3))
-        c.create_text(tx0 + 30, 204 + 48, text="Confirm", anchor="w", fill="#c4c8cd", font=("TkDefaultFont", 9))
+        c.create_text(tx0 + 30, 204 + 48, text="Confirm", anchor="w", fill="#c4c8cd", font=ui_font(9, "normal"))
         locations = self.map.locations
         for index in range(cm.COUNT):
             ax, ay = self.node(index)
@@ -619,14 +619,14 @@ class MapTab(Tab):
             name = cm.name(self.project, index).split(" / ")[0] if index < cm.TOWN_FIRST else ""
             if index >= cm.TOWN_FIRST:
                 c.create_text(tx0, 284 + (index - cm.TOWN_FIRST) * 15, anchor="w", fill="#c4c8cd",
-                              font=("TkDefaultFont", 9, "bold" if selected else "normal"),
+                              font=ui_font(9, "bold" if selected else "normal"),
                               text=f"{index} {cm.name(self.project, index).split(' / ')[0]}")
             for ox, oy in ((1, 1), (-1, -1), (1, -1), (-1, 1)):
                 c.create_text(x + (-9 if right else 9) + ox, y + oy, text=f"{index} {name}".strip(), fill="#000000",
-                              anchor="e" if right else "w", font=("TkDefaultFont", 9, "bold" if selected else "normal"),
+                              anchor="e" if right else "w", font=ui_font(9, "bold" if selected else "normal"),
                               tags=("place", f"place{index}"))
             c.create_text(x + (-9 if right else 9), y, text=f"{index} {name}".strip(), anchor="e" if right else "w",
-                          fill="#ffffff", font=("TkDefaultFont", 9, "bold" if selected else "normal"),
+                          fill="#ffffff", font=ui_font(9, "bold" if selected else "normal"),
                           tags=("place", f"place{index}"))
         self.caption.configure(text="Every place and where its exits lead (thicker: to and from the selected one). "
                                     "Drag a world site to move where its camera looks, a town place to move its "

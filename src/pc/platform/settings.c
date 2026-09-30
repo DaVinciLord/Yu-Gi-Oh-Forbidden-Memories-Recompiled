@@ -46,8 +46,9 @@ static const SettingInfo info[SET_COUNT] = {
      * 2 the rank and the score. */
     [SET_RANK_METER] = {"rank_meter", NULL, "MEMORIES_RANK_METER", NULL, 0, 0, 2},
     /* Game > Cheats (src/pc/debug/cheats.h): the life points both sides
-     * start a duel against the CPU with; 8000 is the console's. */
-    [SET_CHEAT_LIFE_POINTS] = {"cheat_life_points", NULL, "MEMORIES_CHEAT_LIFE_POINTS", NULL, 8000, 1, 9999},
+     * start a duel against the CPU with; 8000 is the console's. Up to the
+     * 16 bits a side's LP is kept in, for a mod whose "limits" go past 9999. */
+    [SET_CHEAT_LIFE_POINTS] = {"cheat_life_points", NULL, "MEMORIES_CHEAT_LIFE_POINTS", NULL, 8000, 1, 32767},
     /* 1: the CPU's hand drawn face up, as the player's is. */
     [SET_CHEAT_SHOW_HAND] = {"cheat_show_hand", NULL, "MEMORIES_CHEAT_SHOW_HAND", NULL, 0, 0, 1},
     /* 1: the Password screen's purchases leave the StarChips alone. */

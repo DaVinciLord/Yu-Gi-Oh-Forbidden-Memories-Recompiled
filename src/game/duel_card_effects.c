@@ -82,6 +82,19 @@ void DuelEffect_ApplyLifePointRecovery(void) {
         gDuel_wCardEffectFlags = flag | 0x60;
         if (D_8009B22A == 0) {
             u8 *p = &gDuel_abLifePointRecoveryUnits[s1];
+#ifdef MEMORIES_PC
+            {
+                /* In 32 bits: a mod's "limits" may let LP near 32767,
+                   where the 16-bit sum would wrap negative and pass the
+                   test below. Healing never takes LP down to the cap. */
+                s32 life = D_8009B1C8->life_points.signed_value;
+                s32 healed = life + (*p) * DUEL_LIFE_POINT_RECOVERY_SCALE;
+                s32 ceiling = D_8009B1C8->max_life_points;
+                if (ceiling < life) ceiling = life;
+                if (healed > ceiling) healed = ceiling;
+                D_8009B1C8->life_points.unsigned_value = (u16)healed;
+            }
+#else
             v1 = D_8009B1C8->life_points.unsigned_value +
                  (*p) * DUEL_LIFE_POINT_RECOVERY_SCALE;
             D_8009B1C8->life_points.unsigned_value = v1;
@@ -89,6 +102,7 @@ void DuelEffect_ApplyLifePointRecovery(void) {
                 D_8009B1C8->life_points.unsigned_value =
                     (u16) D_8009B1C8->max_life_points;
             }
+#endif
             goto block_14;
         }
         D_8009B210 = 0;

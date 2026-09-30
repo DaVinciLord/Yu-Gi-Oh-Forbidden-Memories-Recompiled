@@ -34,6 +34,7 @@
 #include "pc/cards/drops.h"
 #include "pc/free_duel/duelists.h"
 #include "pc/mods/mods.h"
+#include "pc/cards/tables.h"
 #endif
 
 void DuelScene_UpdateResultRewards(void)
@@ -45,7 +46,9 @@ void DuelScene_UpdateResultRewards(void)
     s32 offset;
     s32 x;
     s16 dropped_card;
+#ifndef MEMORIES_PC
     u16 value;
+#endif
     s8 page;
     u8 opponent;
 
@@ -200,6 +203,18 @@ side_result:
 #endif
                         Duel_AwardCard(D_8009B1E8->dropped_card_id);
                     } else {
+#ifdef MEMORIES_PC
+                        /* 9999 each, or a mod's "limits" (tables.h), in
+                           32 bits so a cap of 65535 cannot wrap. */
+                        s32 record = D_8009B1D8[gDuel_bWinnerSide]->duel_wins + 1;
+                        if (record > Tables_TwoPlayerRecordCap())
+                            record = Tables_TwoPlayerRecordCap();
+                        D_8009B1D8[gDuel_bWinnerSide]->duel_wins = (u16)record;
+                        record = D_8009B1D8[gDuel_bWinnerSide ^ 1]->duel_losses + 1;
+                        if (record > Tables_TwoPlayerRecordCap())
+                            record = Tables_TwoPlayerRecordCap();
+                        D_8009B1D8[gDuel_bWinnerSide ^ 1]->duel_losses = (u16)record;
+#else
                         value = D_8009B1D8[gDuel_bWinnerSide]->duel_wins + 1;
                         D_8009B1D8[gDuel_bWinnerSide]->duel_wins = value;
                         if (value >= 10000)
@@ -210,6 +225,7 @@ side_result:
                         if (value >= 10000)
                             D_8009B1D8[gDuel_bWinnerSide ^ 1]
                                 ->duel_losses = 9999;
+#endif
                     }
                 }
             }

@@ -7,6 +7,9 @@
 #include "duel_grid.h"
 #include "ai_script_commands.h"
 #include "ai_script_read_byte.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/tables.h"
+#endif
 
 /* -fno-strength-reduce, fourth user. The record walk reads card_id, attack,
  * flags and guardian_star (+0, +2, +6, +9) and gcc builds a SECOND giv
@@ -32,6 +35,12 @@ void AiScript_FindKiller(void) {
 
     a = gAiScript_aMemory[AiScript_ReadByte()];
     best = CARD_STAT_MAX;
+#ifdef MEMORIES_PC
+    /* The lowest attack that still wins, from the attack cap down: a mod's
+       "limits" may raise it (tables.h). A lowered cap keeps the disc's bar,
+       or a card at the cap would tie it and never be picked. */
+    if (Tables_StatCap(0) > best) best = Tables_StatCap(0);
+#endif
     m = gAiScript_aMemory[AiScript_ReadByte()];
     k = 0;
     w = AiScript_ReadByte();

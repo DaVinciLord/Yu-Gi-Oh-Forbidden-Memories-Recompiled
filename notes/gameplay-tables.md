@@ -279,12 +279,12 @@ room for worth starchips instead:
 
 | Key | Meaning |
 |---|---|
-| `limit` | the copies of a card the chest keeps, 1 to 250 (250 when left out) |
+| `limit` | the copies of a card the chest keeps, 1 to 255 (250 when left out); past 250 is the same as `"limits": {"chest": n}` below |
 | `starchips` | what each card won past `limit` is worth, 0 to 999999 (0 when left out) |
 
 The Wicked Gods keeps the 250 and pays 1 starchip (`{"starchips": 1}`); the
 Remaster keeps 3 and pays 3. The balance stops at 999999, as the game's own
-prize does. It holds wherever the game gives the player a card
+prize does (or at a mod's `"limits": {"starchips": n}`). It holds wherever the game gives the player a card
 (`Duel_AwardCard`): a duel's drop, the extra drops of Game > Card drops, and
 a card bought in the password shop. The shop sells no copy the chest has no
 room for: EXCHANGE is red and only QUIT can be chosen, as when the starchips
@@ -292,6 +292,86 @@ fall short, and neither the price nor the password is spent. A chest that
 already held more than `limit` of a card (a save from before the mod) keeps
 them; only new copies are turned away. The latest mod that sets it wins.
 Without the key the chest is the disc's in every case.
+
+## Limits: ATK, DEF, LP, starchips and more
+
+The game caps some numbers: a monster's ATK and DEF at 9999, whatever its
+bonuses; a duel's life points at 8000 to start and, when healing, at what
+they started with; the starchips at 999999; a card's copies in the chest at
+250; a Free Duel record at 999 wins and losses. A mod may raise or lower
+each of them:
+
+```json
+"limits": {
+    "stats": 30000,
+    "life_points": {"start": 16000, "max": 30000, "duelists": {"Heishin": 20000}},
+    "starchips": 5000000
+}
+```
+
+| Key | Meaning | The game's | Range |
+|---|---|---|---|
+| `stats` | the most ATK and DEF a monster has, with its equips, terrain and guardian star | 9999 | 0-32767 |
+| `attack`, `defense` | the same for one of the two (after `stats`) | 9999 | 0-32767 |
+| `life_points` | a number: both sides' LP at the start of a duel against the CPU; or an object of the keys below | 8000 | 1-32767 |
+| `life_points` `start` | both sides' start | 8000 | 1-32767 |
+| `life_points` `player`, `opponent` | one side's start (after `start`) | 8000 | 1-32767 |
+| `life_points` `max` | how far healing (the recovery cards) takes LP; a side that starts past it keeps its LP and is not healed | the side's start | 1-32767 |
+| `life_points` `duelists` | an object of duelists (their names as in `drops`, or `"all"`) and a number, that duelist's own LP, or `{"player": n, "opponent": n}`: the LP each side starts with against that duelist, before `player`, `opponent` and `start` | | 1-32767 |
+| `two_player` | the two-player duel's LP choice: `start` (where both begin), `max` (the most to pick) and `step` (each press) | 8000, 8000, 500 | 1-32767 |
+| `starchips` | the most starchips the save holds, from a duel's prize, a full chest or Game > Cheats | 999999 | 0-99999999 |
+| `chest` | the copies of a card the chest keeps (the same as `chest_overflow`'s `limit`) | 250 | 1-255 |
+| `free_duel_record` | the most wins, and losses, a Free Duel opponent's record counts | 999 | 1-32767 |
+| `two_player_record` | the same for the wins and losses two-player duels add to a save | 9999 | 1-65535 |
+
+Everything is optional; each key's latest mod wins, and two mods' entries
+for different duelists add up. A save that holds more than 250 copies of a
+card (from a mod's `chest` past 250) keeps them when played without it: a
+copy won then is turned away, as at 250, rather than wrap the byte to none;
+in the same way a starchip balance past the cap in force (a mod's `starchips`
+that is off now, or lowered) is kept, and a prize adds nothing to it rather
+than cut it back. Game > Cheats > Starting LP, when set to
+anything but the console's 8000, still comes first.
+
+**What the numbers are kept in.** ATK, DEF and LP are 16-bit numbers in the
+duel's own records (`DuelCardRecord`, `AiActiveCard`, `DuelSideState`), so
+32767 is as high as they go; the chest is a byte a card in the memory
+card's save (255), and the records are 16-bit numbers in the save. A value
+past that is noted in the Mods window and held at the most the game keeps,
+never cut short without a word. Going further would mean widening those
+records, which the whole duel, the AI and the save format read at fixed
+offsets: not a table change. A card's own printed ATK and DEF are nine bits
+of tens in the card table (0 to 5110; `cards` notes a value past that, or
+one between tens): the limits raise what a monster reaches with bonuses,
+equips, fusions into it and the terrain, not what it is printed with. Every
+bonus a mod sets (`equips`, `equip_bonus_default`, `terrain_bonus`) may be
+up to 32767 either way; the cap decides what the sum comes to.
+
+**On screen.** Nothing moves while every number fits in the digits the game
+gives it. Past them:
+
+- the life-point panel is one digit wider on the left when either side may
+  reach 10000 (its start, its healing `max`, or its LP), drawn from its own
+  picture, with the labels (and the opponent's name for COM) moved with it;
+- a card on the field or in the hand with ATK or DEF past 9999 shows five
+  digits a row, seven pixels apart, the sword and shield two to the left;
+- the card view (and the battle's close-ups) shows five digits five pixels
+  apart where four go six apart, so they touch but stay clear of the ATK
+  and DFD labels and the plate's edge;
+- a number in the game's text (the card bar under the field, the results'
+  REMAINING LP, the Password screen's starchips) keeps all its digits, drawn
+  closer together in the field's own width, so nothing after it moves;
+- the two-player setup's LP choice draws five digits in its box when its
+  `max` has five (the box holds them, a pixel or two from each side), and its
+  bar runs from 0 to that `max`.
+
+**The AI.** Scripts that look for the weakest monster, or the weakest that
+still wins, start from the cap of the stat they rank by rather than from
+9999, so they go on finding one when monsters pass 9999; at the disc's cap
+they are the disc's.
+
+**Code mods** read the limits in force with the mod API's `limit` (API 8):
+`host->limit(host, "attack")`.
 
 ## Passwords and prices on the Password screen
 
@@ -368,6 +448,16 @@ each table ask it first:
 | `Duel_AwardCard` (`duel_result_runtime.c`) | chest, `0x801D0250`; starchips, `0x801D07E0` | `Tables_ChestOverflow` before the card is counted, `Tables_ChestFull` after |
 | `Password_UpdateShopScreen` (`overlays/password/shop.c`) | chest, `0x801D0250`; price countdown | `Duel_ChestFull` (`Tables_ChestFull`) before EXCHANGE is offered; a price of 0 skips the countdown |
 | `Main_RunPasswordMenu` (`main_run_password_menu.c`) | price and password table, `0x801A8000` | `Tables_PasswordShop` for each card once the table is loaded, written into it; then `Tables_CheckPasswords` once a run |
+| `Duel_CalcCardStats`, `Duel_CalcBattleAttack`/`Defense`, `Duel_GetBaseCardStat` | the 9999 cap | `Tables_StatCap` |
+| `AiScript_FindWeakest` (`ai_script_combo.c`), `AiScript_FindKiller` | the 9999 starting bar | `Tables_StatCap`, `Tables_StatCapEither` |
+| `DuelScene_UpdateCardPlacement` | an equip's room, twice the cap | `Tables_StatCapEither`, at most 32767 |
+| `Duel_InitSideStates` (`duel_state_init.c`) | 8000 LP, healing up to the start | `Tables_StartingLifePoints`, `Tables_MaxLifePoints` |
+| `DuelEffect_ApplyLifePointRecovery` (`duel_card_effects.c`) | the heal, a 16-bit sum | added in 32 bits, never past the cap nor down to it |
+| `Main_RunTwoPlayerDuelSetup`, the setup screen (`overlays/main_menu/value_setup.c`) | 8000, by 500 | `Tables_TwoPlayerLifePoints` |
+| `func_800218F0` (the duel's end), `Mods_AwardStarchips`, `Cheats_SetStarchips` | 999999 starchips; 9999 two-player wins | `Tables_StarchipCap` (`Mods_Limit`), `Tables_TwoPlayerRecordCap` |
+| the Free Duel screen (`overlays/free_duel/screen_runtime.c`) | 999 wins or losses | `Tables_FreeDuelRecordCap` |
+| `Duel_AwardCard`, `BuildDeck_ReturnCardToChest`, the trade screen | 250 copies | `Tables_ChestRoom` |
+| `Duel_DrawLifePointsAndDeckCounts`, `func_80016784`, `func_80028B08`, `func_80038148` | four digits | the layouts above (`pc/text/number_width.h` for the text) |
 
 A pool is worked out from the opponent's loaded pool and every edit of it
 when the game draws from it, and kept until the opponent or the loaded pool
@@ -378,4 +468,4 @@ mods the random sequence, and every recorded run, is unchanged. The console
 build has none of this (`#ifdef MEMORIES_PC`).
 
 `tests/pc/tables_test.c` (ctest `pc_tables`) covers the rules, their order
-between mods, the weights and the refusals.
+between mods, the weights, the limits and the refusals.

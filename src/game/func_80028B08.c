@@ -10,6 +10,9 @@
 #include "display_object_packet_submit.h"
 #include "card_constants.h"
 #include "../ygo_types.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/tables.h"
+#endif
 /*
  * Duel card-detail panel: builds the scratchpad sprite parameters for the
  * panel frame, the card image, the ATK/DEF digit rows, the repeated level
@@ -148,6 +151,55 @@ void func_80028B08(DisplayObject *obj, s32 arg1) {
         DisplayObject_SubmitPacket(PRM, CTX, arg1, arg, EXT);
         PRM->cxcy.h.cy = white;
 
+#ifdef MEMORIES_PC
+        {
+            /* The caps are a mod's "limits" (pc/cards/tables.h). Past 9999
+               the numbers take five digits, five pixels apart (the digits'
+               own width, so they touch), where four six apart go: the ATK
+               and DFD labels on the left and the plate's edge on the right
+               leave no room for more. */
+            s32 attack = rec->field_32 + rec->field_36;
+            s32 defense = rec->field_34 + rec->field_38;
+            s32 digits, step, left;
+
+            if (attack > Tables_StatCap(0)) {
+                attack = Tables_StatCap(0);
+            }
+            if (defense > Tables_StatCap(1)) {
+                defense = Tables_StatCap(1);
+            }
+            digits = attack >= 10000 || defense >= 10000 ? 5 : 4;
+            step = digits == 5 ? 5 : 6;
+            left = digits == 5 ? 0x61 - 1 : 0x61;
+            Text_EncodeDecimalDigits(attack, digits, buf1);
+            Text_EncodeDecimalDigits(defense, digits, buf2);
+
+            PRM->uv.b.hi = (PRM->uv.b.hi & 0x80) + 0x10;
+            PRM->xy.h.x = win->field_30.h.field_30 + left;
+            PRM->xy.h.y = win->field_30.h.field_32 + 0x9D;
+            *(u32 *)&PRM->extent = 0x000D0006;
+            if (rec->field_3C & 0x80) {
+                PRM->cxcy.h.cy = 0xF9;
+            }
+            for (i = digits - 1; i >= 0; i--) {
+                PRM->uv.b.lo = buf1[i] * 6 + 0x10;
+                DisplayObject_SubmitPacket(PRM, CTX, arg1, arg, EXT);
+                PRM->xy.h.x = PRM->xy.h.x + step;
+            }
+
+            PRM->xy.h.x = win->field_30.h.field_30 + left;
+            PRM->xy.h.y = win->field_30.h.field_32 + 0xAB;
+            PRM->cxcy.h.cy = 0xF8;
+            if (rec->field_3C & 0x40) {
+                PRM->cxcy.h.cy = 0xF9;
+            }
+            for (i = digits - 1; i >= 0; i--) {
+                PRM->uv.b.lo = buf2[i] * 6 + 0x10;
+                DisplayObject_SubmitPacket(PRM, CTX, arg1, arg, EXT);
+                PRM->xy.h.x = PRM->xy.h.x + step;
+            }
+        }
+#else
         i = rec->field_32 + rec->field_36;
         if (i > 9999) {
             PRM->cxcy.h.cy = white;
@@ -190,6 +242,7 @@ void func_80028B08(DisplayObject *obj, s32 arg1) {
             PRM->xy.h.x = PRM->xy.h.x + 6;
             i--;
         } while (i >= 0);
+#endif
 
         sa = win->field_30.h.field_30;
         do { sb = 0x00090009; } while (0);

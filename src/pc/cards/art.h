@@ -38,6 +38,13 @@ int CardArt_Crop(const char *path, int w, int h, int *x, int *y, int *cw, int *c
 /* The title plate alone, CARD_TITLE_BYTES, what a record holds at
  * CARD_TITLE_PIXELS. */
 int CardArt_TitleFromImage(const char *path, unsigned char *plate, char *why, size_t why_size);
+/* A picture of any size with see-through parts, for the title screen
+ * (title_images.c): the PNG stretched to w x h, one byte a texel, entry 0
+ * clear and 1-255 its colours in `clut` (256 BGR555 entries). */
+int CardArt_IndexedImage(const char *path, int w, int h, unsigned char *indices, unsigned short *clut, char *why,
+                         size_t why_size);
+/* The PNG's size; 0 when it is not one. */
+int CardArt_ImageSize(const char *path, int *width, int *height);
 /* PORTRAIT_RECORD bytes: a duelist's face for the Free Duel grid. */
 int CardArt_PortraitFromImage(const char *path, unsigned char *record, char *why, size_t why_size);
 /* `name` in UTF-8. 0 when no serif font could be found; the plate is left

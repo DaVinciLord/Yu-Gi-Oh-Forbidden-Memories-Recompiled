@@ -369,6 +369,15 @@ static int host_duelist_id(const MemoriesModHost *host, const char *identity)
     id = duelist_resolver(identity);
     return id > 0 ? id : 0;
 }
+static long (*limit_source)(const char *);
+void Mods_SetLimitSource(long (*source)(const char *)) { limit_source = source; }
+long Mods_Limit(const char *name, long fallback)
+{
+    long value = limit_source && name ? limit_source(name) : -1;
+    return value < 0 ? fallback : value;
+}
+static long host_limit(const MemoriesModHost *host, const char *name)
+{ (void)host; return limit_source && name ? limit_source(name) : -1; }
 static const char *(*notes_source)(int);
 static int (*tag_source)(int, const char *, char *, size_t);
 void Mods_SetCardNotes(const char *(*notes)(int), int (*tag)(int, const char *, char *, size_t))
@@ -519,6 +528,7 @@ static void fill_host(Mod *mod)
     mod->host.duelist_id = host_duelist_id;
     mod->host.card_notes = host_card_notes;
     mod->host.card_tag = host_card_tag;
+    mod->host.limit = host_limit;
     mod->host.api = MEMORIES_MOD_API;
     mod->host.id = mod->id;
     mod->host.directory = mod->directory;
@@ -1196,6 +1206,7 @@ static const char *const manifest_keys[] = {
     "data", "textures", "cards", "audio", "min_api", "game", "requires", "after", "conflicts", "priority",
     "settings", "fusions", "equips", "rituals", "drops", "decks", "duelists", "text", "font",
     "chest_overflow", "terrain_bonus", "trap_thresholds", "equip_bonus_default", "passwords", "starter",
+    "title", "limits",
 };
 
 /* How many letters to add, remove or change to turn one word into the
@@ -1327,7 +1338,7 @@ static int read_manifest(Mod *mod, const char *directory, const char *origin)
          * read once, at startup. */
         static const char *const tables[] = {"fusions", "equips", "rituals", "drops", "decks", "duelists",
                                              "text", "font", "terrain_bonus", "trap_thresholds",
-                                             "chest_overflow", "passwords", "starter"};
+                                             "chest_overflow", "passwords", "starter", "limits"};
         for (size_t t = 0; t < sizeof(tables) / sizeof(tables[0]); t++) {
             const JsonValue *value = Json_Member(root, tables[t]);
             /* "text": "text.txt" is one file named as a string. */

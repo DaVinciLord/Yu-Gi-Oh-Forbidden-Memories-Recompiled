@@ -64,6 +64,7 @@ editors write, is fine):
 | `equip_bonus_default` | what an equip adds when no `equips` entry sets its bonus, below |
 | `trap_thresholds` | the attack each of the six attack traps stops, below |
 | `passwords` | each card's password and starchip price on the Password screen, below |
+| `limits` | the numbers the game caps (ATK and DEF, life points, starchips, the chest, the records), below |
 | `starter` | the forty cards a new game begins with, one deck or a list of them, below |
 | `text`, `font` | a translation of the game's text, and fonts for letters it has none of, below |
 
@@ -399,7 +400,8 @@ audio: music 0x10 starts
 audio: xa 0x8020 starts
 ```
 
-Songs known so far: `0x000` is the title screen, `0x010` the main menu.
+Songs known so far: `0x000` is the title screen and both its menus, `0x010`
+name entry after NEW GAME (`NameEntry_Init`).
 A sound effect the game starts every frame is logged every 60th time.
 
 * **music** is the sound driver's song number, `SD_BGMPlay(0x2D0)` is song
@@ -463,6 +465,94 @@ MEMORIES_INPUT="700:0008,706:0000" tmp/pc/game32/memories-pc
 
 `out.raw` is s16le stereo at 44.1 kHz. How it is done:
 [`src/pc/audio/replace.h`](../src/pc/audio/replace.h).
+## The title screen
+
+A mod may change the title screen with a `"title"` object: its song, the
+intro before it, its background, its pictures -- the logo, PUSH START
+BUTTON and the copyright line, moved, coloured or replaced with the mod's
+own -- which menu entries it offers, and lines of text of the mod's own.
+
+```json
+"title": {
+    "music": "0x010",
+    "skip_intro": true,
+    "idle_seconds": 0,
+    "background": {"image": "art/background.png", "dim": 64},
+    "logo": {"image": "art/logo.png"},
+    "prompt": {"image": "art/press-start.png", "y": -4},
+    "copyright": {"tint": "#FFD060"},
+    "entries": {"duel": {"hide": true}, "trade": {"hide": true},
+                "options": {"tint": "#FF8080"}},
+    "text": [{"text": "My mod 1.2", "x": 316, "y": 232, "align": "right"},
+             {"text": "Press START", "y": 12, "show": "press_start", "color": "#FFE040"}]
+}
+```
+
+Nothing on the title is text: the logo, PUSH START BUTTON, the copyright
+line and every menu entry are pictures from `SU.MRG`. The background and
+the three pictures take an `"image"` of the mod's own (below); the menu
+entries' words are changed by a texture pack of the `sheets/menu` images
+(above). Places are in the game's 320 x 240 picture, which grows with the
+window and stays centred in widescreen.
+
+| Key | Meaning |
+|---|---|
+| `music` | the song the title plays (retail `0x000`); an `audio` entry replaces a song's sound, this picks another song |
+| `skip_intro` | `true`: go past the intro movie to the title at start-up and after a title jump |
+| `press_start` | `false`: open on the menu, without PUSH START BUTTON |
+| `idle_seconds` | seconds at PUSH START BUTTON before the intro plays again, `0` never (retail a little under a minute) |
+| `background` | `image` (a PNG drawn over the whole screen instead of the hieroglyph wall), `picture` and `shade` (`false` leaves out the wall, or the mod's image, and the dark-to-light shade over it), `tint` (the wall's colour, `#FFFFFF` as it is), `color` (a solid colour under them, seen where they are left out or see-through), `dim` (how far the menu darkens the screen, `0` to `128`, retail `128`) |
+| `logo`, `copyright`, `prompt` | the three pictures: the logo, the (c) 1996 line and PUSH START BUTTON. `image` a PNG drawn instead, `width` and `height` its size, `x`, `y` move one from its place, `tint` colours it, `hide` leaves it out (hiding `prompt` is `"press_start": false`) |
+| `entries` | the menu entries by name: `new_game`, `load`, `duel`, `trade`, `options` before a game is loaded; `campaign`, `free_duel`, `build_deck`, `library`, `password`, `save` after (or their numbers, 0 to 10). Each may have `hide`, `x` (moved from the middle), `y` (its place) and `tint` |
+| `spacing` | how far apart the entries stand (retail 32) |
+| `text` | lines drawn over the title, each `{"text", "x", "y", "align", "color", "size", "show"}`: `x` and `y` its place (default 160, 220, `y` the line's middle), `align` `left`, `center` or `right` of `x`, `size` 1 to 8 (1 about the game's own letters), `show` `always`, `press_start` or `menu`; at most 16 |
+
+A hidden entry is left out of its menu and the cursor steps over it; the
+others close up, `spacing` apart around the middle of the retail menu,
+unless given their own `y`. A menu with every entry hidden shows them all.
+Hiding `load` hides the way to the second menu too, since loading a save is
+what opens it. The tints multiply the picture's colours, so `#FFFFFF` leaves
+one as it is and a colour can only darken what is there; on PUSH START
+BUTTON the tint goes over its pulse.
+
+Every applied mod's `title` is read in load order each time the title
+opens, a later mod's value winning key by key and the `text` lines of all of
+them shown, so applying or removing a mod shows the next time the title
+opens, with no restart. A key the title does not know, a colour that is not
+`#RRGGBB` or an entry that does not exist is noted beside the mod in the
+Mods window. How it is done: [`src/pc/platform/title_screen.c`](../src/pc/platform/title_screen.c),
+the pictures in `title_images.c`; the manifest is read by `title_config.c`,
+checked by `tests/pc/title_config_test.c`. A code mod that wants more hooks the game's
+own functions (`MainMenu_InitFrontendMenu`, `MainMenu_UpdateFrontendMenu`,
+`MainMenu_DrawFrontendBackground`, API 4).
+
+### The title's pictures
+
+An `image` is a PNG in the mod, named relative to its directory. The
+background's is stretched over the whole 320 x 240 screen, so draw it at
+that shape: 1280 x 960 is four times the console's size. A picture's is
+drawn with its middle where the game's picture has its middle (the logo's
+at 162, 90, PUSH START BUTTON's at 160, 185, the copyright line's at 163,
+207), moved by `x` and `y`. Its size is `width` by `height`, or one of them
+and the PNG's shape; without either, the PNG's own size divided by the
+smallest whole number that makes it fit -- 320 x 240 for the logo, 320 x
+120 for the other two. That guess is right for a picture drawn at the
+console's size, or one as wide as the screen at any multiple of it; for
+anything else, say the size: a PUSH START BUTTON drawn at 4x, 800 x 64,
+wants `"width": 200`. A see-through part of the PNG shows what is under
+it.
+
+At the console's resolution the picture is made into the game's own kind
+of texture, 256 colours with anything under half covered clear, at the size
+it is drawn; at an internal resolution above it (View > Internal 2x, 4x)
+the PNG itself is drawn, at its own resolution and with soft edges, as a
+mod card's art is. It is drawn where the game draws its own, so the menu
+still goes over the logo and dims it, and PUSH START BUTTON still pulses
+(its colour is the game's pulse times its `tint`) and goes when START is
+pressed. A PNG that cannot be read is noted beside the mod, and the game's
+own picture shows. The pictures take VRAM the intro movie uses and the
+title does not, uploaded again each time the title opens.
+
 ## Rules: fusions, equips, rituals, drops, decks and more
 
 A mod may change what fuses into what, what an equip card may equip, what a
@@ -491,11 +581,17 @@ set what it adds, in place of the disc's +500, and a top-level
 the attack each attack trap springs on.
 `"passwords": {"Blue-eyes White Dragon": {"password": "00000001", "starchips": 100}}`
 sets what the Password screen takes for a card and what it costs;
-`"all": {"password": "card number", "starchips_percent": 10}` does every card. These are the rules a community mod
+`"all": {"password": "card number", "starchips_percent": 10}` does every card.
+`"limits": {"stats": 30000, "life_points": 16000}` raises the ATK and DEF cap
+and the life points a duel starts with; `limits` also sets how far healing
+goes, each side's and each duelist's LP, the two-player LP choice, the most
+starchips, the chest and the Free Duel record, up to what the game keeps
+them in (32767 for ATK, DEF and LP), and the duel's numbers take a fifth
+digit where they need one. These are the rules a community mod
 such as The Wicked Gods changes in its code; with them it plays close to its
 own rules without C. The Wicked Gods also makes a monster's attribute count on
-a terrain, lets monsters be equips and raises the stat cap to 30000: those
-need a code mod or the port itself. Several mods' edits of the same opponent add up rather than
+a terrain and lets monsters be equips: those need a code mod or the port
+itself. Several mods' edits of the same opponent add up rather than
 replace each other. [Gameplay tables](gameplay-tables.md) has every key, the
 opponents' names, and how the rules combine. Like cards, they need a restart.
 
@@ -622,7 +718,7 @@ the player's settings file as `mod.<id>.<key>`, and read from
 `MEMORIES_MOD_<ID>_<KEY>` first when that is set; a key is letters, digits,
 `_` and `-`, and `order` is the manager's), `disc_file_start`/
 `disc_read`, `pad`, and from mod API 2 `now_us` (a clock) and `map_fixed`
-(memory at an address the mod chooses, as 3D Monsters' model arenas need). API 4 adds `hook`/`unhook`/`symbol`, below; API 5 adds `duelist_id`, which resolves an added duelist's identity to the id it has this run as `card_id` does for a card. API 7 adds `card_notes` and `card_tag`, a card's [notes](more-cards.md#notes-on-a-card) and the `<tag: value>` tags in them.
+(memory at an address the mod chooses, as 3D Monsters' model arenas need). API 4 adds `hook`/`unhook`/`symbol`, below; API 5 adds `duelist_id`, which resolves an added duelist's identity to the id it has this run as `card_id` does for a card. API 7 adds `card_notes` and `card_tag`, a card's [notes](more-cards.md#notes-on-a-card) and the `<tag: value>` tags in them. API 8 adds `limit`, the numbers the game caps as the mods' `limits` set them ([Gameplay tables](gameplay-tables.md#limits-atk-def-lp-starchips-and-more)): `host->limit(host, "attack")` is 9999 without such a mod.
 A mod that uses an entry newer than API 1 should refuse to start when
 `host->api` is older.
 

@@ -14,7 +14,7 @@ from .gamedata import (ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, 
 from . import fixed_decks
 from .fixed_deck_view import FixedDeckView
 from .model import KEY_RE, StarterDeck
-from .widgets import CardField, FormDialog, card_matches, pick_card, px, scrolled_tree, show_text
+from .widgets import CardField, FormDialog, card_matches, pick_card, px, scrolled_tree, show_text, ui_font
 
 ATTRIBUTE_CHOICES = ATTRIBUTE_NAMES + ["6 (magic)", "7 (trap)"]
 STAR_CHOICES = ["(none)"] + STAR_NAMES[1:]
@@ -109,7 +109,7 @@ class CardsTab(Tab):
             row += 1
             return widget
 
-        self.title = ttk.Label(form, font=("TkDefaultFont", 11, "bold"))
+        self.title = ttk.Label(form, font=ui_font(11))
         self.title.grid(row=row, column=0, columnspan=3, sticky="w", pady=(0, 6))
         row += 1
         self.hints = {}
@@ -428,12 +428,7 @@ class CardsTab(Tab):
         cid = self.current
         if not cid:
             return
-        if cid in self.project.added:
-            base = self.project.cards[self.project.added[cid].base]
-            self.project.cards[cid] = base.copy(id=cid)
-            self.project.passwords.pop(cid, None)
-        else:
-            self.project.revert_card(cid)
+        self.project.revert_card(cid)
         self.app.changed()
         self.update_row(cid)
         self.show(cid)
@@ -606,7 +601,7 @@ class EquipsTab(Tab):
         self.equips.bind("<<TreeviewSelect>>", lambda e: self.select())
         right = ttk.Frame(self)
         right.pack(side="left", fill="both", expand=True, padx=(8, 0))
-        self.heading = ttk.Label(right, font=("TkDefaultFont", 11, "bold"))
+        self.heading = ttk.Label(right, font=ui_font(11))
         self.heading.pack(anchor="w")
         frame, self.monsters = scrolled_tree(right, [("id", "#"), ("name", "Monster"), ("type", "Type"),
                                                      ("state", "")], [50, 260, 110, 80], 22, selectmode="extended")
@@ -734,11 +729,9 @@ class RitualsTab(Tab):
         for ritual in sorted(set(p.ritual_cards()) | set(p.rituals) | set(p.retail.rituals)):
             if ritual not in p.cards:
                 continue
-            now, retail = p.rituals.get(ritual), p.retail.rituals.get(ritual)
             conditional = ritual in p.ritual_requirements
-            state = "changed" if conditional and retail is not None else "added" if conditional else (
-                "" if now == retail else "added" if retail is None else "removed" if now is None else "changed")
-            recipe = now or (None, None, None, None)
+            state = p.ritual_status(ritual)
+            recipe = p.rituals.get(ritual) or (None, None, None, None)
             labels = [p.card_label(c) if c else "-" for c in recipe]
             if conditional:
                 for i, req in enumerate(p.ritual_requirements[ritual]):
@@ -789,7 +782,7 @@ class RitualsTab(Tab):
         dialog.protocol("WM_DELETE_WINDOW", dialog.destroy)
         body = ttk.Frame(dialog, padding=12)
         body.pack(fill="both", expand=True)
-        ttk.Label(body, text=self.project.card_label(ritual), font=("TkDefaultFont", 11, "bold")).pack(
+        ttk.Label(body, text=self.project.card_label(ritual), font=ui_font(10)).pack(
             anchor="w", pady=(0, 8))
 
         panels = []
@@ -1012,11 +1005,7 @@ class RitualsTab(Tab):
     def revert(self):
         ritual = self.selected()
         if ritual:
-            self.project.ritual_requirements.pop(ritual, None)
-            if ritual in self.project.retail.rituals:
-                self.project.rituals[ritual] = self.project.retail.rituals[ritual]
-            else:
-                self.project.rituals.pop(ritual, None)
+            self.project.revert_ritual(ritual)
             self.app.changed()
             self.fill()
 
@@ -1040,7 +1029,7 @@ class DuelistsTab(Tab):
         for pool in POOLS:
             ttk.Radiobutton(top, text=POOL_LABELS[pool], value=pool, variable=self.pool,
                             command=self.fill).pack(side="left", padx=(0, 8))
-        self.total = ttk.Label(top, font=("TkDefaultFont", 10, "bold"))
+        self.total = ttk.Label(top, font=ui_font(10))
         self.total.pack(side="right")
         frame, self.tree = scrolled_tree(right, [("id", "#"), ("name", "Card"), ("type", "Type"), ("w", "Weight"),
                                                  ("pct", "Chance"), ("retail", "Retail"), ("state", "")],
@@ -1165,8 +1154,7 @@ class DuelistsTab(Tab):
         self.edited()
 
     def revert(self):
-        self.project.pools[self.duelist][self.pool.get()] = dict(
-            self.project.retail.pools[self.duelist][self.pool.get()])
+        self.project.revert_pool(self.duelist, self.pool.get())
         self.edited()
 
     def goto(self, target):
@@ -1204,9 +1192,9 @@ class StarterTab(Tab):
         right.pack(side="left", fill="both", expand=True, padx=(8, 0))
         top = ttk.Frame(right)
         top.pack(fill="x")
-        self.title = ttk.Label(top, font=("TkDefaultFont", 10, "bold"))
+        self.title = ttk.Label(top, font=ui_font(10))
         self.title.pack(side="left")
-        self.total = ttk.Label(top, font=("TkDefaultFont", 10, "bold"))
+        self.total = ttk.Label(top, font=ui_font(10))
         self.total.pack(side="right")
         frame, self.tree = scrolled_tree(right, [("id", "#"), ("name", "Card"), ("type", "Type"),
                                                  ("copies", "Copies"), ("state", "")],
@@ -1464,8 +1452,8 @@ class ModInfoTab(Tab):
             var.set(getattr(info, key))
         for box, value in ((self.description, info.description),
                            (self.settings, json.dumps(info.settings, indent=2, ensure_ascii=False) if info.settings else ""),
-                           (self.other, json.dumps(self.project.other, indent=2, ensure_ascii=False)
-                            if self.project.other else "")):
+                           (self.other, json.dumps(self.shown_other(), indent=2, ensure_ascii=False)
+                            if self.shown_other() else "")):
             box.delete("1.0", "end")
             box.insert("1.0", value)
         source = self.project.source_dir
@@ -1487,7 +1475,7 @@ class ModInfoTab(Tab):
             if not isinstance(other, dict):
                 raise ValueError("the other keys are a JSON object")
             reserved = set(other) & {"id", "name", "version", "author", "description", "settings", "cards",
-                                     "fusions", "equips", "rituals", "drops", "decks"}
+                                     "fusions", "equips", "rituals", "drops", "decks", "limits"}
             if reserved:
                 raise ValueError(f"edit {', '.join(sorted(reserved))} in the editor's own tabs")
         except ValueError as problem:
@@ -1499,12 +1487,19 @@ class ModInfoTab(Tab):
         info.author = self.vars["author"].get()
         info.description = self.description.get("1.0", "end-1c")
         info.settings = settings
+        # "limits" is the Limits tab's (limits_tab.py), not this box's.
+        if "limits" in self.project.other:
+            other["limits"] = self.project.other["limits"]
         self.project.other = other
         self.status.configure(text="")
         after = (info.id, info.name, info.version, info.author, info.description, info.settings, self.project.other)
         if after != before:
             self.app.changed()
         return True
+
+    def shown_other(self) -> dict:
+        """The other keys this box shows: all but the Limits tab's."""
+        return {key: value for key, value in self.project.other.items() if key != "limits"}
 
     def preview(self):
         if self.app.commit_all():

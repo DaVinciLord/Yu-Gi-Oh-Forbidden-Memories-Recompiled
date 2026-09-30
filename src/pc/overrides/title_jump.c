@@ -1,5 +1,6 @@
 /* The retail game-over return sequence, called only between mode runners. */
 #include "pc/platform/title_jump.h"
+#include "pc/platform/title_screen.h"
 #include "pc/platform/platform.h"
 #include "types.h"
 #include "game/display_object_core.h"
@@ -31,6 +32,8 @@ void TitleJump_Execute(void)
     Fade_WaitOut();
     DisplayObject_Reset();
     func_80035A64();
+    /* Out past MainMenu_DestroyFrontendMenu, if it is the title we leave. */
+    TitleScreen_Closed();
     D_8009B268 = 1;
     D_8009B26D = 0;
     D_8009B26C = MAIN_MODE_MENU;
