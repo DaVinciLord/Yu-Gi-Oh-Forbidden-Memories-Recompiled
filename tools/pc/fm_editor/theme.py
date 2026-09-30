@@ -91,6 +91,19 @@ def dpi_awareness():
         pass
 
 
+def windows_fonts(root):
+    """Windows 11's own UI face where there is one (Segoe UI Variable, the
+    Text cut; Tk's default Segoe UI before), at Tk's sizes; the fixed font
+    as the editor's text boxes (Consolas). Elsewhere nothing."""
+    if sys.platform != "win32":
+        return
+    if "Segoe UI Variable Text" in tkfont.families(root):
+        for name in ("TkDefaultFont", "TkTextFont", "TkHeadingFont", "TkMenuFont", "TkCaptionFont",
+                     "TkSmallCaptionFont", "TkIconFont", "TkTooltipFont"):
+            tkfont.nametofont(name, root=root).configure(family="Segoe UI Variable Text")
+    tkfont.nametofont("TkFixedFont", root=root).configure(family="Consolas", size=10)
+
+
 def is_dark(widget) -> bool:
     return ttk.Style(widget).theme_use() == DARK_THEME
 
@@ -105,6 +118,7 @@ class Theme:
 
     def __init__(self, root: tk.Tk):
         self.root = root
+        windows_fonts(root)       # before the row height is measured
         # fm-dark's elements sized in pixels (arrows, check boxes), grown
         # with the dpi on Windows (widgets.ui_scale); kept elsewhere.
         if sys.platform == "win32":
