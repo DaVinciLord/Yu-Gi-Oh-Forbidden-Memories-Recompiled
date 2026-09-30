@@ -22,7 +22,7 @@ enum { MODE_AUTO, MODE_INTERPRETER, MODE_SKIP };
 /* The common WA overlay dispatcher at 0x801462B0, the entry of the bank the
  * game's loader places at 0x80146000 with every duel package. It holds all
  * the field and card effects (fusion, battle damage, destruction, magic,
- * trap, ritual, terrain, and the rest: ids 0-23).
+ * trap, ritual, terrain, and the rest: ids 0-24).
  *
  * The decomp matched the whole North American bank, and its C
  * (src/overlays/duel_effects) is linked in: that runs whenever the bytes the
