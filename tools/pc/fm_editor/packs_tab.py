@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import copy
 import json
+import time
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -27,6 +28,9 @@ from .widgets import CardField, FormDialog, pick_card, px, scrolled_tree, show_t
 ZOOMS = (1, 2, 4)
 LISTED = ("(default)", "yes", "no")
 SHOPS_RULE = "(shop's)"                  # "when_nothing_left" left to "pack_shop"
+SIMULATE_MAX = 1000000                   # packs Simulate opens at most
+SIMULATE_CARDS = 5000000                 # ...and cards in all: about a minute of dealing
+SIMULATE_SLICE = 0.05                    # seconds of dealing between two looks at the window
 _FONT = {}
 
 
@@ -1330,11 +1334,15 @@ class PacksTab(Tab):
 
 
 class SimulateDialog(tk.Toplevel):
-    """Open N packs with the game's dealer (packs.py) and show what came."""
+    """Open N packs with the game's dealer (packs.py) and show what came.
+    The packs are opened a slice at a time between the window's own work, so
+    a million of them neither freezes the editor nor has to be waited out:
+    Stop shows what came so far."""
 
     def __init__(self, tab, pack):
         super().__init__(tab)
         self.tab, self.pack = tab, pack
+        self.simulator, self.total, self.job, self.result = None, 0, None, None
         self.title(f"Simulate {pack.name}")
         self.transient(tab)
         top = ttk.Frame(self, padding=8)
@@ -1345,7 +1353,12 @@ class SimulateDialog(tk.Toplevel):
         ttk.Entry(top, textvariable=self.count, width=8).pack(side="left", padx=4)
         ttk.Label(top, text="Seed").pack(side="left", padx=(8, 0))
         ttk.Entry(top, textvariable=self.seed, width=12).pack(side="left", padx=4)
-        ttk.Button(top, text="Open them", command=self.run).pack(side="left", padx=8)
+        self.open_button = ttk.Button(top, text="Open them", command=self.run)
+        self.open_button.pack(side="left", padx=8)
+        self.stop_button = ttk.Button(top, text="Stop", command=self.stop, state="disabled")
+        self.stop_button.pack(side="left")
+        self.progress = ttk.Progressbar(top, length=px(self, 140), maximum=1.0)
+        self.progress.pack(side="left", padx=8)
         self.summary = ttk.Label(self, padding=(8, 0), wraplength=px(self, 620), justify="left")
         self.summary.pack(fill="x")
         body = ttk.Frame(self, padding=8)
@@ -1356,20 +1369,68 @@ class SimulateDialog(tk.Toplevel):
                                           [50, 240, 70, 80], 16)
         frame.pack(side="left", fill="both", expand=True, padx=(8, 0))
         ttk.Label(self, text="The game's own dealer and generator (Psy-Q rand from the seed, four numbers a card), "
-                             "the pity counted from one pack to the next as a save counts it. Cards the player "
-                             "holds are taken as none.", style="Hint.TLabel", wraplength=px(self, 620),
-                  justify="left", padding=8).pack(fill="x")
+                             f"the pity counted from one pack to the next as a save counts it, up to "
+                             f"{max(1, min(SIMULATE_MAX, SIMULATE_CARDS // pack.count))} packs of this one. Cards the player holds are taken as none.", style="Hint.TLabel",
+                  wraplength=px(self, 620), justify="left", padding=8).pack(fill="x")
+        self.bind("<Destroy>", lambda e: self.cancel() if e.widget is self else None)
         self.run()
+
+    @property
+    def running(self) -> bool:
+        return self.simulator is not None
 
     def run(self):
         try:
-            count = whole(self.count.get(), "Packs", 1, 1000000, 1000)
+            most = max(1, min(SIMULATE_MAX, SIMULATE_CARDS // self.pack.count))
+            count = whole(self.count.get(), "Packs", 1, most, 1000)
             seed = whole(self.seed.get(), "Seed", 0, 0xFFFFFFFF, 1)
         except ValueError as problem:
             self.summary.configure(text=str(problem))
             return
-        result = packmath.simulate(self.pack, count, seed)
+        self.cancel()
+        self.simulator, self.total = packmath.Simulator(self.pack, seed), count
+        self.open_button.state(["disabled"])
+        self.stop_button.state(["!disabled"])
+        self.job = self.after(0, self.work)
+
+    def work(self):
+        """Open packs for a slice of time, then give the window its turn."""
+        self.job = None
+        simulator = self.simulator
+        if simulator is None:
+            return
+        batch = max(1, 400 // max(1, self.pack.count))
+        start = time.monotonic()
+        while simulator.opened < self.total and time.monotonic() - start < SIMULATE_SLICE:
+            simulator.step(min(batch, self.total - simulator.opened))
+        self.progress["value"] = simulator.opened / self.total
+        if simulator.opened >= self.total:
+            self.finish()
+            return
+        self.summary.configure(text=f"Opening... {simulator.opened} of {self.total} packs.")
+        self.job = self.after(1, self.work)
+
+    def stop(self):
+        if self.simulator is not None:
+            self.finish(stopped=True)
+
+    def cancel(self):
+        if self.job is not None:
+            self.after_cancel(self.job)
+            self.job = None
+        self.simulator = None
+
+    def finish(self, stopped=False):
+        simulator = self.simulator
+        self.cancel()
+        self.open_button.state(["!disabled"])
+        self.stop_button.state(["disabled"])
+        if simulator is None or not simulator.opened:
+            self.summary.configure(text="Stopped before a pack was opened.")
+            return
+        result = simulator.result()
         self.result = result
+        count = result.packs
         dealt = sum(result.tiers.values()) or 1
         self.tiers.delete(*self.tiers.get_children())
         for name, n in sorted(result.tiers.items(), key=lambda kv: -kv[1]):
@@ -1379,7 +1440,8 @@ class SimulateDialog(tk.Toplevel):
         for cid, n in sorted(result.cards.items(), key=lambda kv: -kv[1]):
             card = project.cards.get(cid)
             self.cards.insert("", "end", values=(cid, card.name if card else "?", n, f"{n / count:.3f}"))
-        parts = [f"{count} packs, {dealt} cards, {result.draws} random numbers ({result.draws // count} a pack)."]
+        parts = [f"Stopped after {count} of {self.total} packs:" if stopped else f"{count} packs,",
+                 f"{dealt} cards, {result.draws} random numbers ({result.draws // count} a pack)."]
         for name, average in result.pity_waits.items():
             parts.append(f"{name}: one every {average:.1f} packs on average; the pity dealt it "
                          f"{result.pity_fired.get(name, 0)} times.")

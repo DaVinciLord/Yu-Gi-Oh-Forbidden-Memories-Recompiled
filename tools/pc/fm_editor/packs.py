@@ -14,6 +14,7 @@ the game makes, with the notes the game's Mods window would show, and
 """
 from __future__ import annotations
 
+import bisect
 import copy
 import re
 from dataclasses import dataclass, field
@@ -819,6 +820,21 @@ class _Dealing:
         return weight
 
     def pick(self, pool, roll):
+        if not self.pack.unique and not self.pack.max_copies:
+            # Every weight stands as written: the same walk down the pool,
+            # by its running totals (Simulate opens many).
+            cache = self.pack.__dict__.setdefault("_running", {})
+            running = cache.get(id(pool))
+            if running is None or running[0] is not pool:
+                sums, total = [], 0
+                for _, weight in pool:
+                    total += weight
+                    sums.append(total)
+                running = cache[id(pool)] = (pool, sums)
+            sums = running[1]
+            if not sums or not sums[-1]:
+                return 0
+            return pool[bisect.bisect_right(sums, roll % sums[-1])][0]
         weights = [self.weight_now(c, w) for c, w in pool]
         total = sum(weights)
         if not total:
@@ -984,39 +1000,56 @@ class Simulation:
     draws: int
 
 
+class Simulator:
+    """Packs opened one after another from the game's generator at `seed`,
+    the pity counts carried from one to the next as a save's are: `step(n)`
+    opens n more, so a window can open many without stopping (Simulate)."""
+
+    def __init__(self, pack: Pack, seed: int = 1, held=None):
+        self.pack, self.held = pack, held
+        self.random = Lcg(seed)
+        self.draws = self.opened = 0
+        self.pity = [0] * TIERS_MAX
+        self.cards, self.tiers, self.fired, self.waits, self.since = {}, {}, {}, {}, {}
+
+    def _draw(self):
+        self.draws += 1
+        return self.random()
+
+    def step(self, packs: int):
+        pack = self.pack
+        for _ in range(max(0, packs)):
+            before = list(self.pity)
+            result = deal(pack, self._draw, self.pity, self.held)
+            for card, tier in zip(result.cards, result.tiers):
+                name = pack.tiers[tier].name if tier >= 0 else ("(own)" if card else "(none)")
+                self.tiers[name] = self.tiers.get(name, 0) + 1
+                if card:
+                    self.cards[card] = self.cards.get(card, 0) + 1
+            for t, tier in enumerate(pack.tiers):
+                if not pack.pity[t]:
+                    continue
+                had = any(x >= t for x in result.tiers)
+                if before[t] + 1 >= pack.pity[t] and any(r and x >= t for r, x in zip(result.redone, result.tiers)):
+                    self.fired[tier.name] = self.fired.get(tier.name, 0) + 1
+                self.since[tier.name] = self.since.get(tier.name, 0) + 1
+                if had:
+                    self.waits.setdefault(tier.name, []).append(self.since[tier.name])
+                    self.since[tier.name] = 0
+            record(pack, result, self.pity)
+            self.opened += 1
+
+    def result(self) -> Simulation:
+        average = {k: sum(v) / len(v) for k, v in self.waits.items() if v}
+        return Simulation(self.opened, dict(self.cards), dict(self.tiers), dict(self.fired), average, self.draws)
+
+
 def simulate(pack: Pack, packs: int = 1000, seed: int = 1, held=None) -> Simulation:
     """Open `packs` packs one after another from the game's generator at
     `seed`, the pity counts carried from one to the next as a save's are."""
-    random = Lcg(seed)
-    counter = {"n": 0}
-
-    def draw():
-        counter["n"] += 1
-        return random()
-
-    pity = [0] * TIERS_MAX
-    cards, tiers, fired, waits, since = {}, {}, {}, {}, {}
-    for _ in range(max(0, packs)):
-        before = list(pity)
-        result = deal(pack, draw, pity, held)
-        for s, (card, tier) in enumerate(zip(result.cards, result.tiers)):
-            name = pack.tiers[tier].name if tier >= 0 else ("(own)" if card else "(none)")
-            tiers[name] = tiers.get(name, 0) + 1
-            if card:
-                cards[card] = cards.get(card, 0) + 1
-        for t, tier in enumerate(pack.tiers):
-            if not pack.pity[t]:
-                continue
-            had = any(x >= t for x in result.tiers)
-            if before[t] + 1 >= pack.pity[t] and any(r and x >= t for r, x in zip(result.redone, result.tiers)):
-                fired[tier.name] = fired.get(tier.name, 0) + 1
-            since[tier.name] = since.get(tier.name, 0) + 1
-            if had:
-                waits.setdefault(tier.name, []).append(since[tier.name])
-                since[tier.name] = 0
-        record(pack, result, pity)
-    average = {k: sum(v) / len(v) for k, v in waits.items() if v}
-    return Simulation(packs, cards, tiers, fired, average, counter["n"])
+    simulator = Simulator(pack, seed, held)
+    simulator.step(packs)
+    return simulator.result()
 
 
 def golden_line(pack: Pack, seed: int, pity=None, held=None) -> str:

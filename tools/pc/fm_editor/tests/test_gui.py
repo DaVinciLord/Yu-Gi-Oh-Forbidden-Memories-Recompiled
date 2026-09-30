@@ -172,7 +172,18 @@ class GuiTest(unittest.TestCase):
             tab.zoom.set(zoom)
             tab.show_picture()
         dialog = SimulateDialog(tab, tab.parsed()[0])
+        while dialog.running:            # opened a slice at a time, the window answering between
+            app.update()
         self.assertEqual(dialog.result.draws, 1000 * 5 * 4)
+        # Stop shows what came so far; the window never waits for all of them.
+        dialog.count.set("1000000")   # 5 cards a pack: within the cap
+        dialog.run()
+        app.update()
+        self.assertTrue(dialog.running)
+        dialog.stop()
+        self.assertFalse(dialog.running)
+        self.assertLess(dialog.result.packs, 1000000)
+        self.assertEqual(dialog.result.draws, dialog.result.packs * 5 * 4)
         dialog.destroy()
         self.assertFalse([i for i in app.conflicts.run() if i.area == "Packs" and i.level == "error"])
         out = Path(self.tmp.name) / "saved-packs"

@@ -589,7 +589,10 @@ random numbers a card, the guarantee and the pity redealing the last slots,
 `unique_in_pack` and `max_copies` shrinking the pools), the pity counted from
 one pack to the next as a save counts it, and lists the cards dealt by tier
 and by card, how often a tier with a pity came on average and how often the
-pity dealt it. The tests hold the Python dealer to the C one's deals
+pity dealt it. The packs are opened a slice at a time, so the editor stays
+free meanwhile: a bar shows how far it is and **Stop** shows what came so far
+(at most a million packs, and five million cards in all, about a minute).
+The tests hold the Python dealer to the C one's deals
 (`tests/pc/packs_golden.txt`), line for line.
 
 A field of the pack left as the tab showed it keeps the key as the mod wrote
