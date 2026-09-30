@@ -617,6 +617,21 @@ int Memories_GuestMap(void)
     /* The views keep the section alive. */
     CloseHandle(section);
 #if defined(__x86_64__)
+    {
+        /* Native function addresses go into 4-byte guest slots: the image
+         * must be where it was linked (0x40000000, no ASLR), below 4 GB. */
+        uintptr_t base = (uintptr_t)GetModuleHandleW(NULL);
+        const char *report = getenv("MEMORIES_X64_MAP_REPORT");
+        if (base >= 0x100000000ull || (uintptr_t)Memories_GuestMap >= 0x100000000ull) {
+            fprintf(stderr, "memories-pc: the executable was loaded at %p, above 4 GB; the 64-bit game needs it at "
+                            "its link address, 0x40000000\n", (void *)base);
+            result = -1;
+        }
+        if (report && *report && strcmp(report, "0")) {
+            fprintf(stderr, "memories-pc: image %p; guest RAM 0x80000000 and 0xA0000000 %s; scratchpad 0x1F800000\n",
+                    (void *)base, result ? "NOT mapped" : "mapped");
+        }
+    }
     if (!result) reserve_low_memory();
 #endif
     return result ? -1 : 0;
