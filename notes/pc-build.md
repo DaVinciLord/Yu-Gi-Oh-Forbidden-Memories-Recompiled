@@ -2807,6 +2807,58 @@ What differs from Linux, and why:
   (`Win32_FontPath`), iconv by code page 932, and the few POSIX calls by
   `pc/compat/posix.h` and `pc/compat/mman.h`.
 
+### 64-bit Windows (milestone X1, in progress)
+
+```sh
+python tools/pc/build_win32_deps.py --arch x86_64   # once; build_game32.py does it too
+python tools/pc/build_game32.py --target windows-x64  # tmp/pc/win64/memories-pc.exe
+```
+
+A native x86-64 executable from the same sources, with the guest at its
+fixed addresses and 32-bit guest pointers. It boots through the logos and the movie
+to the title, the main menu and Options, and the smoke fixtures `title`,
+`main-menu-cursor`, `main-menu-widescreen` and `options` give the 32-bit
+hashes (PGXP and HD off, as the fixtures run). What makes it work:
+
+- **Guest pointers stay 4 bytes.** The game's stored pointers are clang's
+  `__ptr32 __uptr` through `G32` (`src/port_ptr.h`, "Guest-width pointers"
+  above), with `-fms-extensions`; `CALL32` casts before a call through one.
+  Casts that make a pointer from a signed int or walk a guest table carry
+  `G32` as well; `python tools/pc/check_x64_casts.py` finds the ones that
+  do not (two minutes; `--fix` edits them).
+- **Toolchain.** `x86_64-w64-mingw32-clang`, clang 21 or later: the build
+  first runs `tools/pc/x64_compiler_gate.c`, which refuses clang 12's
+  silent miscompile of `__ptr32` function-pointer arrays. `-fno-jump-tables`.
+  `src/pc/compat/ptr32.h` is included first into every unit: mingw's
+  `_mingw.h` defines `__ptr32` as nothing, and Psy-Q's `size_t` must be
+  the host's.
+- **Everything the game can reach is below 4 GB.** The image is linked at
+  0x40000000 without ASLR (`--disable-dynamicbase
+  --disable-high-entropy-va`): native function addresses go into 4-byte
+  guest slots, and game code reaches the pinned variables RIP-relative
+  within 2 GB. Guest RAM, its mirrors, the scratchpad, the game stack
+  (0xB0000000) and the arenas keep their 32-bit addresses. The game stops
+  with a message if Windows ever loads it above 4 GB.
+  `MEMORIES_X64_MAP_REPORT=1` prints the image base; 200 launches in a row
+  all mapped (2026-09-30).
+- **Arch code.** One branch thunk (`__x86_indirect_thunk_r11`, the only
+  one clang's x86-64 retpoline uses), `state_x86_64.S` (VSync entry and
+  the game-stack switch, TEB bounds through `%gs`), `setjmp_x86_64.S`
+  (the Win64 state does not fit the game's 48-byte `jmp_buf`: it goes in a
+  host slot keyed by the buffer), and the fault handler's `Rip`/REX decoding
+  for the null-page fix-up.
+- **Truncation check.** `MEMORIES_X64_HIGH_HEAP=1` reserves every free range
+  below 4 GB and fills the process heap's low segments, so host memory comes
+  from above 4 GB; a host pointer stored into a guest slot then faults, and
+  is reported as "truncated host pointer". The title, the menus and a duel
+  run with it clean.
+
+Not in the 64-bit build yet: save states (X3; refused with a message), code
+mods (X3; none are built or loaded), the crash monitor process (X3), the
+interrupt clock (the cooperative one is the default anyway), and a check of
+the MIPS interpreter's paths, the credits and duels against the 32-bit
+frames (X2).
+
 ## Launch the local graphics preview
 
 ```sh
