@@ -5,38 +5,59 @@
 
 #include "game/duel_effect_request.h"
 #include "pc/guest/mips.h"
+#include "pc/guest/retail_image.h"
 #include "pc/debug/log.h"
 #include "pc/cards/stars.h"
 
 extern unsigned char D_8009B261;
 extern unsigned Memories_PresentedFrames(void);
 
+/* The bank's entry, src/overlays/duel_effects/dispatch.c (the decomp names
+ * its functions by their PAL addresses; this one is at 0x801462B0 here). */
+extern void func_80146258(int effect, int phase, void *buffer, DuelEffectRequest *context);
+
+enum { MODE_AUTO, MODE_INTERPRETER, MODE_SKIP };
+
 /* The common WA overlay dispatcher at 0x801462B0, the entry of the bank the
  * game's loader places at 0x80146000 with every duel package. It holds all
  * the field and card effects (fusion, battle damage, destruction, magic,
- * trap, ritual, terrain, and the rest: ids 0-23) as retail MIPS code with
- * no C source, so the default runs the original routine through the
- * interpreter, which bridges its resident SDK and game calls to the native
- * port. That keeps each effect's own timing, colours and particles.
+ * trap, ritual, terrain, and the rest: ids 0-23).
  *
- * MEMORIES_DUEL_EFFECTS=native restores the bring-up behaviour: fusion (1),
- * battle damage (2) and destruction (3) interpreted, everything else
- * reported complete on its first update. An effect the interpreter cannot
- * run is reported once and completed the same way from then on. */
+ * The decomp matched the whole North American bank, and its C
+ * (src/overlays/duel_effects) is linked in: that runs whenever the bytes the
+ * disc delivered are the retail bank (src/pc/guest/retail_image.c). A mod or
+ * disc patch that changed any of them gets the delivered MIPS run by the
+ * interpreter instead, which bridges its resident SDK and game calls to the
+ * native port. MEMORIES_TRACE=mods reports which of the two each delivery
+ * got.
+ *
+ * MEMORIES_DUEL_EFFECTS=interpreter interprets the bank even when it is
+ * retail (the reference for comparing the two). MEMORIES_DUEL_EFFECTS=skip
+ * (formerly `native`) restores the bring-up behaviour: fusion (1), battle
+ * damage (2) and destruction (3) interpreted, everything else reported
+ * complete on its first update. An effect the interpreter cannot run is
+ * reported once and completed the same way from then on. */
 void Memories_DuelEffectControl(short id, short state, int buffer, DuelEffectRequest *request)
 {
-    static int native = -1;
+    static int mode = -1;
     static unsigned failed[8];
     uint32_t args[4], result;
     unsigned index = (unsigned)(unsigned short)id;
 
-    if (native < 0) {
-        const char *mode = getenv("MEMORIES_DUEL_EFFECTS");
-        native = mode && strcmp(mode, "native") == 0;
+    if (mode < 0) {
+        const char *setting = getenv("MEMORIES_DUEL_EFFECTS");
+        mode = !setting ? MODE_AUTO
+             : strcmp(setting, "interpreter") == 0 ? MODE_INTERPRETER
+             : strcmp(setting, "skip") == 0 || strcmp(setting, "native") == 0 ? MODE_SKIP
+             : MODE_AUTO;
     }
     LOG(LOG_DUEL_EFFECTS, "id=%d state=%d buffer=%08x payload=%d,%d,%d damage=%d",
         id, state, (unsigned)buffer, request->field_00, request->field_02, request->field_04, request->field_12);
-    if ((native && !(id >= 1 && id <= 3)) || index >= 256 || (failed[index >> 5] & (1u << (index & 31)))) {
+    if (mode == MODE_AUTO && RetailImage_Verified(RETAIL_IMAGE_DUEL_EFFECTS)) {
+        func_80146258(id, state, (void *)(uintptr_t)(unsigned)buffer, request);
+        return;
+    }
+    if ((mode == MODE_SKIP && !(id >= 1 && id <= 3)) || index >= 256 || (failed[index >> 5] & (1u << (index & 31)))) {
         D_8009B261 = 1;
         return;
     }

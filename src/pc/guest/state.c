@@ -6,6 +6,7 @@
 #include "pc/mods/mods.h"
 #include "pc/mods/events.h"
 #include "image.h"
+#include "retail_image.h"
 #include "pc/audio/spu.h"
 #include "pc/audio/replace.h"
 #include "pc/compat/gte.h"
@@ -396,6 +397,7 @@ static void subsystems(MemoriesState *state)
         SoftGpu_PictureFromVram();
     }
     Memories_StateChunk(state, "gte", gte, 1);
+    RetailImage_State(state);
     Spu_State(state);
     LibSpu_State(state);
     LibDs_State(state);
