@@ -14,7 +14,7 @@ from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIM
 from . import fixed_decks
 from .fixed_deck_view import FixedDeckView
 from .model import KEY_RE, StarterDeck
-from .widgets import CardField, FormDialog, card_matches, card_named, pick_card, px, scrolled_tree, show_text, ui_font
+from .widgets import CardField, FormDialog, card_matches, card_named, grab, pick_card, px, scrolled_tree, show_text, ui_font
 
 ATTRIBUTE_CHOICES = ATTRIBUTE_NAMES + ["6 (magic)", "7 (trap)"]
 STAR_CHOICES = ["(none)"] + STAR_NAMES[1:]
@@ -777,7 +777,7 @@ class RitualsTab(Tab):
         dialog.transient(self)
         dialog.resizable(True, False)
         dialog.minsize(px(dialog, 620), 0)
-        dialog.grab_set()
+        grab(dialog)
         dialog.bind("<Escape>", lambda e: dialog.destroy())
         dialog.protocol("WM_DELETE_WINDOW", dialog.destroy)
         body = ttk.Frame(dialog, padding=12)

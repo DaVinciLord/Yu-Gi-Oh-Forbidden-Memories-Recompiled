@@ -86,7 +86,7 @@ class CardPicker(tk.Toplevel):
         self.bind("<Escape>", lambda e: self.destroy())
         self.fill()
         entry.focus_set()
-        self.grab_set()
+        grab(self)
 
     def _select_first(self):
         children = self.tree.get_children()
@@ -124,8 +124,18 @@ def pick_card(master, project, title="Choose a card", only=None, initial=""):
     # The picker took the grab: a dialog it was opened from gets it back.
     top = master.winfo_toplevel()
     if isinstance(top, tk.Toplevel) and top.winfo_exists():
-        top.grab_set()
+        grab(top)
     return dialog.result
+
+
+def grab(window):
+    """window.grab_set(), once the window is on screen: a dialog opened by a
+    double-click is often not mapped yet, and Tk refuses the grab ("window
+    not viewable")."""
+    try:
+        window.grab_set()
+    except tk.TclError:
+        window.after(20, lambda: window.winfo_exists() and grab(window))
 
 
 def card_named(project, text: str) -> int:
@@ -197,7 +207,7 @@ class FormDialog(tk.Toplevel):
         ttk.Button(buttons, text="OK", command=self.ok).pack(side="right")
         ttk.Button(buttons, text="Cancel", command=self.destroy).pack(side="right", padx=4)
         self.bind("<Escape>", lambda e: self.destroy())
-        self.grab_set()
+        grab(self)
 
     def ok(self):
         problem = self.on_ok(self)

@@ -8,7 +8,7 @@ from tkinter import messagebox, ttk
 
 from . import bulk_fusions as bulk
 from .gamedata import ATTRIBUTE_NAMES, STAR_NAMES, TYPE_NAMES
-from .widgets import CardField, px, scrolled_tree, show_text
+from .widgets import CardField, grab, px, scrolled_tree, show_text
 
 MONSTER_TYPES = TYPE_NAMES[:20]
 DELAY = 300          # ms of quiet before the preview is worked out again
@@ -250,7 +250,7 @@ class BulkFusionsDialog(tk.Toplevel):
         self.minsize(px(self, 900), px(self, 640))
         self.mode_changed()
         self.show_undo()
-        self.grab_set()
+        grab(self)
 
     def destroy(self):
         if self.pending:
