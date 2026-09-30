@@ -232,13 +232,23 @@ def build_rituals(project: Project) -> list:
     retail = project.retail.rituals
     for ritual in sorted(set(retail) | set(project.rituals)):
         now = project.rituals.get(ritual)
-        if retail.get(ritual) == now:
+        if retail.get(ritual) == now and ritual not in project.ritual_requirements:
             continue
         if now is None:
             entries.append({"card": project.ref(ritual), "result": None})
         else:
-            entries.append({"card": project.ref(ritual), "tributes": [project.ref(t) for t in now[:3]],
-                            "result": project.ref(now[3])})
+            requirements = project.ritual_requirements.get(ritual)
+            if requirements:
+                tributes = []
+                for req in requirements:
+                    body = dict(req)
+                    if body.get("card"):
+                        body["card"] = project.ref(body["card"])
+                    tributes.append(body)
+                entries.append({"card": project.ref(ritual), "tributes": tributes, "result": project.ref(now[3])})
+            else:
+                entries.append({"card": project.ref(ritual), "tributes": [project.ref(t) for t in now[:3]],
+                                "result": project.ref(now[3])})
     return entries + project.kept["rituals"]
 
 
@@ -810,17 +820,91 @@ def read_rituals(project: Project, entries, messages: list):
             continue
         if "result" in entry and entry["result"] is None:
             project.rituals.pop(ritual, None)
+            project.ritual_requirements.pop(ritual, None)
             continue
         tributes = entry.get("tributes")
         if not isinstance(tributes, list) or len(tributes) != 3:
             messages.append(f"{where}: \"tributes\" names three monsters; left out")
             continue
-        ids = [project.resolve(t) for t in tributes] + [project.resolve(entry.get("result"))]
-        if not all(ids):
-            messages.append(f"{where}: names a card the editor cannot place; kept as written")
-            project.kept["rituals"].append(entry)
-            continue
-        project.rituals[ritual] = tuple(ids)
+        result = project.resolve(entry.get("result"))
+        conditional = any(isinstance(t, dict) for t in tributes)
+        if conditional:
+            requirements, display_ids, valid = [], [], bool(result)
+            for tribute in tributes:
+                if isinstance(tribute, dict):
+                    req = {}
+                    if "card" in tribute:
+                        cid = project.resolve(tribute.get("card"))
+                        if not cid:
+                            valid = False
+                        else:
+                            req["card"] = cid
+                    if "type" in tribute:
+                        value = tribute["type"]
+                        named = type_named(value) if isinstance(value, str) else -1
+                        if named < 0 or named >= TYPE_MAGIC:
+                            valid = False
+                        else:
+                            req["type"] = TYPE_NAMES[named]
+                    if "fusion_group" in tribute:
+                        value = tribute["fusion_group"]
+                        if value not in ("AngelWinged", "Bugrothian", "Egg", "Elf", "FeatherFromBear", "FeatherFromHarpie",
+                                             "FeatherFromMachine", "Female", "Jar", "Koumorian", "MercuryMagicUser",
+                                             "MercurySpellcaster", "Mirror", "MusKingian", "MystElfian", "Rainbow",
+                                             "Sheepian", "Thronian", "Turtle", "UsableBeast"):
+                            valid = False
+                        else:
+                            req["fusion_group"] = value
+                    for key in ("min_attack", "min_defense", "max_attack", "max_defense"):
+                        if key in tribute:
+                            value = tribute[key]
+                            if isinstance(value, bool) or not isinstance(value, (int, float)) or int(value) != value or not 0 <= int(value) <= 9999:
+                                valid = False
+                            else:
+                                req[key] = int(value)
+                    if (req.get("min_attack") is not None and req.get("max_attack") is not None
+                            and req["min_attack"] > req["max_attack"]):
+                        valid = False
+                    if (req.get("min_defense") is not None and req.get("max_defense") is not None
+                            and req["min_defense"] > req["max_defense"]):
+                        valid = False
+                    for key in ("min_level", "max_level"):
+                        if key in tribute:
+                            value = tribute[key]
+                            if isinstance(value, bool) or not isinstance(value, (int, float)) or int(value) != value or not 0 <= int(value) <= 12:
+                                valid = False
+                            else:
+                                req[key] = int(value)
+                    if (req.get("min_level") is not None and req.get("max_level") is not None
+                            and req["min_level"] > req["max_level"]):
+                        valid = False
+                    if "defense_gt_attack" in tribute:
+                        if not isinstance(tribute["defense_gt_attack"], bool):
+                            valid = False
+                        elif tribute["defense_gt_attack"]:
+                            req["defense_gt_attack"] = True
+                    if not req:
+                        valid = False
+                    requirements.append(req)
+                    display_ids.append(req.get("card", 0))
+                else:
+                    cid = project.resolve(tribute)
+                    valid &= bool(cid)
+                    requirements.append({"card": cid} if cid else {})
+                    display_ids.append(cid)
+            if not valid:
+                messages.append(f"{where}: has a ritual requirement the editor cannot place; kept as written")
+                project.kept["rituals"].append(entry)
+                continue
+            project.ritual_requirements[ritual] = requirements
+            project.rituals[ritual] = tuple(display_ids + [result])
+        else:
+            ids = [project.resolve(t) for t in tributes] + [result]
+            if not all(ids):
+                messages.append(f"{where}: names a card the editor cannot place; kept as written")
+                project.kept["rituals"].append(entry)
+                continue
+            project.rituals[ritual] = tuple(ids)
 
 
 def _read_pool(project: Project, where, duelists, pool, body, messages):
@@ -1035,6 +1119,7 @@ def apply(project: Project, manifest: dict, messages: list = None, default_id: s
     read_pools(project, manifest.get("decks"), True, messages)
     read_starter(project, manifest.get("starter"), messages)
     read_passwords(project, messages)
+    campaign_map.read_mod(project, messages)
     return messages
 
 
@@ -1053,7 +1138,6 @@ def open_mod(retail: GameData, folder) -> tuple:
     read_text_cards(project, folder, messages)
     project.source_dir = folder
     art.read_mod(project, folder, messages)
-    campaign_map.read_mod(project, messages)
     return project, messages
 
 
