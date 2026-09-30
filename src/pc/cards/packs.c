@@ -352,7 +352,7 @@ static int read_unlock(const char *mod, const char *where, const JsonValue *valu
 static const char *const pack_keys[] = {
     "id", "name", "description", "image", "cover", "shop", "order", "price", "cost", "count", "cards", "tiers",
     "slots", "guarantee", "pity", "duplicates", "max_copies", "include_added_cards", "stock", "unlock", "locked",
-    "password", "once", "listed", "reveal", "sounds", NULL};
+    "password", "once", "listed", "reveal", "sounds", "when_nothing_left", NULL};
 static const char *const pack_reserved[] = {"restock", NULL};
 static const char *const tier_keys[] = {"odds", "cards", "label", "color", "sound", "reveal", NULL};
 static const char *const cost_keys[] = {"starchips", "cards", NULL};
@@ -367,6 +367,13 @@ static int reveal_named(const char *text)
     if (!strcmp(text, "quick")) return PACK_REVEAL_QUICK;
     if (!strcmp(text, "list")) return PACK_REVEAL_LIST;
     return -2;
+}
+
+static int nothing_left_named(const char *text)
+{
+    if (!strcmp(text, "refuse")) return PACK_NOTHING_REFUSE;
+    if (!strcmp(text, "sell")) return PACK_NOTHING_SELL;
+    return PACK_NOTHING_SHOPS;
 }
 
 static int tier_named(const Pack *pack, const char *name)
@@ -830,6 +837,13 @@ static void read_pack(const char *mod, const char *directory, int index, const J
         }
     }
 
+    pack->when_nothing_left = PACK_NOTHING_SHOPS;
+    if ((value = Json_Member(entry, "when_nothing_left")) != NULL) {
+        pack->when_nothing_left = nothing_left_named(Json_String(value, ""));
+        if (pack->when_nothing_left == PACK_NOTHING_SHOPS)
+            Mods_Note(mod, "%s: \"when_nothing_left\" is \"refuse\" or \"sell\"; the shop's is used", where);
+    }
+
     /* Where and when it is sold. */
     pack->stock = (int)number_in(Json_Member(entry, "stock"), 1, 999999, -1, &bad);
     if (bad) {
@@ -870,8 +884,8 @@ static void read_pack(const char *mod, const char *directory, int index, const J
 
 /* --- the shop's rules ------------------------------------------------------ */
 
-static const char *const rules_keys[] = {"password", "shops", "rng", "music", "campaign_shop", "main_menu",
-                                         "sell_added_cards", "autosave", NULL};
+static const char *const rules_keys[] = {"password", "shops", "rng", "music", "when_nothing_left", "campaign_shop",
+                                         "main_menu", "sell_added_cards", "autosave", NULL};
 static const char *const rules_reserved[] = {"currency", "earn", NULL};
 static const char *const shop_keys[] = {"id", "name", "unlock", "where", NULL};
 
@@ -884,6 +898,7 @@ static void default_rules(void)
     rules.password = PACK_SHOP_BOTH;
     rules.rng = PACK_RNG_GAME;
     rules.music = DEFAULT_MUSIC;
+    rules.when_nothing_left = PACK_NOTHING_REFUSE;
 }
 
 static void read_rules(const char *mod, const JsonValue *value)
@@ -905,6 +920,7 @@ static void read_rules(const char *mod, const JsonValue *value)
     rules.password = PACK_SHOP_BOTH;
     rules.rng = PACK_RNG_GAME;
     rules.music = DEFAULT_MUSIC;
+    rules.when_nothing_left = PACK_NOTHING_REFUSE;
     if ((text = Json_String(Json_Member(value, "password"), NULL)) != NULL) {
         if (!strcmp(text, "packs_only")) rules.password = PACK_SHOP_PACKS_ONLY;
         else if (!strcmp(text, "password_only")) rules.password = PACK_SHOP_PASSWORD_ONLY;
@@ -914,6 +930,12 @@ static void read_rules(const char *mod, const JsonValue *value)
     if ((text = Json_String(Json_Member(value, "rng"), NULL)) != NULL) {
         if (!strcmp(text, "save")) rules.rng = PACK_RNG_SAVE;
         else if (strcmp(text, "game")) Mods_Note(mod, "pack_shop: \"rng\" is \"game\" or \"save\"; \"game\" is used");
+    }
+    if ((item = Json_Member(value, "when_nothing_left")) != NULL) {
+        int named = nothing_left_named(Json_String(item, ""));
+        if (named == PACK_NOTHING_SHOPS)
+            Mods_Note(mod, "pack_shop: \"when_nothing_left\" is \"refuse\" or \"sell\"; \"refuse\" is used");
+        else rules.when_nothing_left = named;
     }
     rules.music = (int)number_in(Json_Member(value, "music"), 0, 0xFFFF, DEFAULT_MUSIC, &bad);
     if (bad) Mods_Note(mod, "pack_shop: \"music\" is a song id; the screen's own is used");
@@ -1370,6 +1392,35 @@ int Packs_StockLeft(int index, const PacksProgress *progress)
     if (!pack || pack->stock < 0) return -1;
     bought = progress ? progress->packs[index].bought : 0;
     return bought >= (unsigned)pack->stock ? 0 : pack->stock - (int)bought;
+}
+
+int Packs_NothingLeft(int index, PackHeld held, void *held_context)
+{
+    const Pack *pack = Packs_At(index);
+    const PackPool *pools[PACK_TIERS_MAX + PACK_COUNT_MAX];
+    int count = 0, i, k;
+    if (!pack || !pack->max_copies) return 0;
+    for (i = 0; i < pack->tier_count; i++) pools[count++] = &pack->tiers[i].pool;
+    for (i = 0; pack->slots && i < pack->count; i++) {
+        if (pack->slots[i].kind == PACK_SLOT_CARD) return 0;   /* dealt whatever the player holds */
+        if (pack->slots[i].kind == PACK_SLOT_POOL) pools[count++] = &pack->slots[i].pool;
+    }
+    for (i = 0; i < count; i++) {
+        for (k = 0; k < pools[i]->count; k++) {
+            const PackEntry *entry = &pools[i]->entries[k];
+            if (entry->weight && (held ? held(entry->card, held_context) : 0) < pack->max_copies) return 0;
+        }
+    }
+    return 1;
+}
+
+int Packs_RefusesWhenNothingLeft(int index)
+{
+    const Pack *pack = Packs_At(index);
+    int rule;
+    if (!pack) return 0;
+    rule = pack->when_nothing_left != PACK_NOTHING_SHOPS ? pack->when_nothing_left : Packs_Rules()->when_nothing_left;
+    return rule == PACK_NOTHING_REFUSE;
 }
 
 unsigned Packs_TierChance(int index, int tier)

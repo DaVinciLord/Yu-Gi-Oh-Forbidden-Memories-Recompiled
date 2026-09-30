@@ -2,9 +2,10 @@
  * through the real JSON reader, over a made-up card table where a card is
  * named by its id. What is checked without a screen: every rule the reader
  * enforces, the numbers a pack spends (always four a slot), the guarantee,
- * the pity, "unique_in_pack", "max_copies", the fall to a commoner tier, the
- * unlock conditions, the progress file, and the golden deals the FM Editor's
- * Simulate must match (packs_fixture.json, packs_golden.txt).
+ * the pity, "unique_in_pack", "max_copies", the fall to a commoner tier,
+ * "when_nothing_left", the unlock conditions, the progress file, and the
+ * golden deals the FM Editor's Simulate must match (packs_fixture.json,
+ * packs_golden.txt).
  *
  * PACKS_GOLDEN_WRITE=1 writes packs_golden.txt anew from this build. */
 #include "../../src/pc/cards/packs.c"
@@ -216,6 +217,51 @@ static void test_warnings(void)
     CHECK(Packs_At(0)->password == 0x1234 && !Packs_At(0)->listed && Packs_At(1)->listed);
     CHECK(noted("its password is pack"));
     CHECK(Packs_WithPassword(0x1234) == 0 && Packs_WithPassword(0x4321) == -1);
+}
+
+/* "when_nothing_left": a pack of "max_copies" whose every card the player
+ * holds that many of is refused by default; "sell" sells it anyway. */
+static void test_when_nothing_left(void)
+{
+    Held none = {{0}, {0}, 0}, all = {{1, 2}, {1, 1}, 2}, some = {{1}, {1}, 1}, over = {{1, 2}, {3, 1}, 2};
+    CHECK(one("{\"packs\": [{\"cards\": [1, 2], \"max_copies\": 1}]}") == 1);
+    CHECK(!Packs_NothingLeft(0, held_copies, &none) && !Packs_NothingLeft(0, held_copies, &some));
+    CHECK(Packs_NothingLeft(0, held_copies, &all) && Packs_NothingLeft(0, held_copies, &over));
+    CHECK(Packs_RefusesWhenNothingLeft(0));
+    {   /* Nothing left: every slot of the deal is empty, and it still spends four numbers a slot. */
+        Counting counting = {7, 0};
+        PackResult result;
+        int s;
+        Packs_Deal(0, NULL, held_copies, &all, counting_random, &counting, &result);
+        for (s = 0; s < result.count; s++) CHECK(result.cards[s] == 0);
+        CHECK(counting.draws == PACK_DRAWS_PER_SLOT * 5);
+    }
+    /* Without "max_copies" there is always something left. */
+    CHECK(one("{\"packs\": [{\"cards\": [1, 2]}]}") == 1 && !Packs_NothingLeft(0, held_copies, &all));
+    /* A fixed card is dealt whatever the player holds. */
+    CHECK(one("{\"packs\": [{\"cards\": [1, 2], \"slots\": [\"cards\", {\"card\": 1}], \"max_copies\": 1}]}") == 1);
+    CHECK(!Packs_NothingLeft(0, held_copies, &all));
+    /* A slot's own pool counts; a card of weight 0 does not. */
+    CHECK(one("{\"packs\": [{\"cards\": {\"1\": 1, \"3\": 0}, \"slots\": [\"cards\", {\"cards\": [2]}], "
+              "\"max_copies\": 1}]}") == 1);
+    CHECK(Packs_NothingLeft(0, held_copies, &all) && !Packs_NothingLeft(0, held_copies, &some));
+    /* The pack's word, the shop's, and the pack's over the shop's. */
+    CHECK(one("{\"packs\": [{\"cards\": [1], \"max_copies\": 1, \"when_nothing_left\": \"sell\"}]}") == 1);
+    CHECK(!Packs_RefusesWhenNothingLeft(0) && Packs_At(0)->when_nothing_left == PACK_NOTHING_SELL);
+    fresh();
+    add("test", "{\"packs\": [{\"id\": \"a\", \"cards\": [1]}, {\"id\": \"b\", \"cards\": [1], "
+                "\"when_nothing_left\": \"refuse\"}], \"pack_shop\": {\"when_nothing_left\": \"sell\"}}");
+    Packs_Finish();
+    CHECK(!Packs_RefusesWhenNothingLeft(0) && Packs_RefusesWhenNothingLeft(1) && notes == 0);
+    /* A shop's rules given again by a later mod start from "refuse". */
+    add("later", "{\"pack_shop\": {\"rng\": \"save\"}}");
+    CHECK(Packs_RefusesWhenNothingLeft(0));
+    /* Written wrong: said, and the default kept. */
+    CHECK(one("{\"packs\": [{\"cards\": [1], \"when_nothing_left\": \"give\"}], \"pack_shop\": "
+              "{\"when_nothing_left\": 1}}") == 1);
+    CHECK(noted("\"when_nothing_left\" is \"refuse\" or \"sell\"; the shop's is used") &&
+          noted("\"when_nothing_left\" is \"refuse\" or \"sell\"; \"refuse\" is used"));
+    CHECK(Packs_At(0)->when_nothing_left == PACK_NOTHING_SHOPS && Packs_RefusesWhenNothingLeft(0));
 }
 
 static void test_order_and_shops(void)
@@ -467,8 +513,8 @@ static void test_file_and_signature(void)
     CHECK(one("{\"packs\": [{\"cards\": [1]}]}") == 1);
     inline_signature = Packs_Signature();
     /* "packs": a file of the mod's, with rules of its own. */
-    if (one("{\"packs\": \"packs_fixture.json\"}") != 7) fprintf(stderr, "%d packs, notes:\n%s", Packs_Count(), all_notes);
-    CHECK(Packs_Count() == 7);
+    if (one("{\"packs\": \"packs_fixture.json\"}") != 8) fprintf(stderr, "%d packs, notes:\n%s", Packs_Count(), all_notes);
+    CHECK(Packs_Count() == 8);
     CHECK(Packs_Signature() != inline_signature);
     CHECK(one("{\"packs\": \"missing.json\"}") == 0 && noted("missing.json"));
     CHECK(one("{\"packs\": \"../escape.json\"}") == 0 && noted("not a file inside the mod"));
@@ -518,7 +564,8 @@ static void golden(void)
             for (s = 0; s < result.count; s++)
                 used += snprintf(line + used, sizeof(line) - (size_t)used, " %u/%d%s", result.cards[s], result.tiers[s],
                                  result.redone[s] ? "*" : "");
-            length += (size_t)snprintf(out + length, 65536 - length, "%s | seed %08X\n", line, counting.seed);
+            length += (size_t)snprintf(out + length, 65536 - length, "%s | seed %08X%s\n", line, counting.seed,
+                                       Packs_NothingLeft(pack, held_copies, &held) ? " | nothing left" : "");
             lines++;
         }
     }
@@ -557,6 +604,7 @@ int main(void)
     test_order_and_shops();
     test_draw_count();
     test_rules_while_dealing();
+    test_when_nothing_left();
     test_unlock_and_stock();
     test_progress_file();
     test_file_and_signature();

@@ -47,6 +47,10 @@ enum { PACK_SOUND_MOVE, PACK_SOUND_BUY, PACK_SOUND_REFUSE, PACK_SOUND_REVEAL, PA
 /* "pack_shop": {"password": ...}: where the Password screen stands. */
 enum { PACK_SHOP_BOTH, PACK_SHOP_PACKS_ONLY, PACK_SHOP_PASSWORD_ONLY };
 enum { PACK_RNG_GAME, PACK_RNG_SAVE };
+/* "when_nothing_left": a pack every card of which the player already holds
+ * "max_copies" of. PACK_NOTHING_SHOPS: the pack says nothing, the shop's
+ * rule is used. */
+enum { PACK_NOTHING_SHOPS = -1, PACK_NOTHING_REFUSE, PACK_NOTHING_SELL };
 
 typedef struct {
     unsigned short card;
@@ -117,6 +121,7 @@ typedef struct {
     int pity[PACK_TIERS_MAX];      /* the n-th opening in a row without it has one; 0 for none */
     int unique;                    /* "duplicates": "unique_in_pack" */
     int max_copies;                /* 0 for no limit */
+    int when_nothing_left;         /* PACK_NOTHING_*: -1 for the shop's */
     int include_added;
     int stock;                     /* purchases a save may make; -1 for no limit */
     int has_unlock;
@@ -141,6 +146,7 @@ typedef struct {
     int password;                  /* PACK_SHOP_* */
     int rng;                       /* PACK_RNG_* */
     int music;                     /* the screen's song while it sells packs */
+    int when_nothing_left;         /* PACK_NOTHING_REFUSE or _SELL: for a pack that says nothing */
     PackShop shops[PACK_SHOPS_MAX];
     int shop_count;
     char from[PACK_KEY_MAX];       /* the mod whose rules these are; "" for the defaults */
@@ -223,6 +229,14 @@ int Packs_UnlockMet(const PackUnlock *unlock, const PacksProgress *progress, Pac
 int Packs_Unlocked(int pack, const PacksProgress *progress, PackSaveCondition save, void *context);
 /* Purchases left, or -1 for no limit. */
 int Packs_StockLeft(int pack, const PacksProgress *progress);
+/* Whether the pack has nothing left to deal the player: it has "max_copies",
+ * no slot of a fixed card (always dealt), and the player holds that many of
+ * every card of every pool (`held`, as for Packs_Deal). A pack with some
+ * cards left is not: it may still deal empty slots. */
+int Packs_NothingLeft(int pack, PackHeld held, void *held_context);
+/* Whether such a pack is refused rather than sold ("when_nothing_left": the
+ * pack's, else the shop's; "refuse" by default). */
+int Packs_RefusesWhenNothingLeft(int pack);
 /* The chance, in millionths, that one slot dealt by the tiers' odds is of
  * tier `tier`, and that a card of a tier's pool is `card` (the pack's
  * details page and the editor's Chance column). */

@@ -812,6 +812,26 @@ static int condition_lines(const PackUnlock *unlock, Out *out, int max, int firs
     return n;
 }
 
+/* A pack the player holds "max_copies" of every card of, which the shop
+ * will not sell ("when_nothing_left": "refuse"). */
+static int nothing_left(int pack)
+{
+    return Packs_RefusesWhenNothingLeft(pack) && Packs_NothingLeft(pack, held, NULL);
+}
+
+/* ALL OWNED, grey, at the right of the price's line: why BUY is refused. A
+ * translation too long for the line after a long price loses its last
+ * letters rather than running over the price. */
+static void nothing_left_note(Out *out)
+{
+    int width = own(NULL, TEXT_OWN_PACK_ALL_OWNED, "ALL OWNED", NULL, NULL), x = BOX_WIDTH - width;
+    if (x < out->x + 8) x = out->x + 8;
+    at_x(out, x);
+    colour(out, GREY);
+    own(out, TEXT_OWN_PACK_ALL_OWNED, "ALL OWNED", NULL, NULL);
+    colour(out, WHITE);
+}
+
 /* The pack as the list shows it: 1-2 lines (the shop, the description or
  * how many cards), the price, then what the buttons do. */
 static void compose_list(void)
@@ -861,6 +881,8 @@ static void compose_list(void)
             colour(&out, GREY);
             own(&out, TEXT_OWN_PACK_SOLD_OUT, "SOLD OUT", NULL, NULL);
             colour(&out, WHITE);
+        } else if (nothing_left(s.pack)) {
+            nothing_left_note(&out);
         } else if (stock > 0) {
             unsigned left = (unsigned)stock;
             int width = own(NULL, TEXT_OWN_PACK_LEFT, "LEFT %d", &left, NULL);
@@ -905,6 +927,7 @@ static int affordable(int pack)
     if (!one || !unlocked(pack)) return 0;
     if (Packs_StockLeft(pack, &s.progress) == 0) return 0;
     if (one->once && s.progress.packs[pack].used) return 0;
+    if (nothing_left(pack)) return 0;
     if (gLibrary_dwStarchips < one->price) return 0;
     for (i = 0; i < one->cost_cards; i++) {
         if (*Cards_ChestSlot(gDuel_awPlayerDeck, one->cost_card[i]) < one->cost_copies[i]) return 0;
@@ -928,6 +951,7 @@ static void compose_confirm(int pack)
     codes(&out, pack_name(pack), BOX_LETTERS);
     newline(&out);
     price_line(&out, pack);
+    if (nothing_left(pack)) nothing_left_note(&out);
     if (!can) colour(&out, GREY);
     newline(&out);
     space(&out);

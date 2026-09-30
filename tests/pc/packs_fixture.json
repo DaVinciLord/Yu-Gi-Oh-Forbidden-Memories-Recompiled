@@ -38,7 +38,8 @@
             "id": "added", "count": 3,
             "tiers": {"low": {"odds": 3, "cards": [1, 800, 801]}, "high": {"odds": 1, "cards": [802]}},
             "pity": {"high": 2}
-        }
+        },
+        {"id": "owned", "count": 3, "cards": [90, 91], "max_copies": 1, "when_nothing_left": "sell"}
     ],
     "cases": [
         {"pack": "basic", "seeds": [1, 2, 3, 12345, 2147483647]},
@@ -52,6 +53,9 @@
         {"pack": "fallback", "seeds": [1, 2, 3, 4]},
         {"pack": "fallback", "seeds": [1, 2], "held": {"83": 1}},
         {"pack": "added", "seeds": [1, 2, 3, 8, 13]},
-        {"pack": "added", "seeds": [1, 2, 3, 8], "pity": {"high": 1}}
+        {"pack": "added", "seeds": [1, 2, 3, 8], "pity": {"high": 1}},
+        {"pack": "owned", "seeds": [1, 2]},
+        {"pack": "owned", "seeds": [1, 2], "held": {"90": 1}},
+        {"pack": "owned", "seeds": [1, 2], "held": {"90": 1, "91": 1}}
     ]
 }

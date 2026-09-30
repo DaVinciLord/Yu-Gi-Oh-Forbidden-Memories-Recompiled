@@ -53,6 +53,7 @@ the game starts, like the other tables: changing them needs a restart.
 | `pity` | none | `{tier: n}`: the n-th pack in a row without that tier (or rarer) has one. Counted per save |
 | `duplicates` | `"allow"` | `"unique_in_pack"`: no card twice in one pack |
 | `max_copies` | none | a card the player already holds this many of (chest and deck, and what this pack dealt) is not dealt |
+| `when_nothing_left` | the shop's (`pack_shop`), `"refuse"` | with `max_copies`, when the player holds that many of every card of the pack ([Nothing left](#nothing-left)): `"refuse"`: BUY is refused and the screen says ALL OWNED, so no starchips, stock or pity are spent on a pack of empty slots; `"sell"`: sold anyway, every slot empty |
 | `include_added_cards` | `true` | `false`: a card a mod added, in any pool, is left out with a note (for packs of the disc's cards only) |
 | `stock` | no limit | purchases one save may make, 1 to 999999. Sold out shows SOLD OUT |
 | `unlock` | open | conditions the save must meet, all of them (below) |
@@ -76,6 +77,24 @@ A tier:
 
 Cards are named as `decks` and `drops` name them: a name, an id, or the
 `mod-id:key` identity of a card a mod added.
+
+### Nothing left
+
+A pack with `max_copies` has **nothing left** when the player (chest and
+deck) holds `max_copies` of every card with a weight in every one of its
+pools, tiers and slots' own alike, and it has no `{"card": X}` slot (a fixed
+card is dealt whatever the player holds). Bought then, every slot would come
+empty. By default (`"when_nothing_left": "refuse"`) such a pack is not sold:
+the list shows ALL OWNED, grey, where SOLD OUT would be, and ✕ asks BUY /
+QUIT with BUY grey and ALL OWNED beside the price, as it does when the
+starchips fall short; nothing is paid, and the stock, the pity and the
+save's counts stay as they were. `"sell"` sells it anyway, as a mod may want
+(a pack bought for the count, say).
+
+A pack with **some** cards left sells either way: its slots deal what is
+left and a slot with nothing left in reach comes empty (a slot of a tier
+whose cards, and the commoner tiers' below it, are all held). What came
+shows only the cards dealt, and the pack counts as opened.
 
 ### Unlock
 
@@ -105,6 +124,7 @@ opens by mistake.
 | `shops` | one, `main`, CARD SHOP | `[{"id", "name", "unlock"}]`: ↑/↓ on the list moves between them; a shop that is locked is skipped. Shops add up by id across mods |
 | `rng` | `"game"` | `"save"`: a pack is dealt from numbers of its own, seeded by the save's duelist code, the pack and how often the save opened it, so reloading a save to buy again deals the same cards. The game's random numbers are not touched |
 | `music` | 29520 | the song while the screen sells packs |
+| `when_nothing_left` | `"refuse"` | what a pack that does not say does when there is nothing left in it for the player (`"refuse"` or `"sell"`, as the pack's key above); a pack's own word wins |
 
 `pack_shop` is one mod's: the last in the load order, with a note beside it
 when another mod gave one too. Its `shops` add up by id.
@@ -189,7 +209,8 @@ The Password screen's own, with nothing drawn by the port over it:
 * **BUY / QUIT** (✕): the game's EXCHANGE / QUIT question, word for word in
   its layout (strings 227 and 228): the name, the price, then the choice,
   BUY red and not to be chosen when the starchips, the stock, a `once` or the
-  cards of the price fall short.
+  cards of the price fall short, or the pack has nothing left for the player
+  (ALL OWNED beside the price, [Nothing left](#nothing-left)).
 * **Paying**: the starchip count runs down as a password's does.
 * **The reveal**: the big card turns over each card as it turns over a
   password's, with the tier's sound; the message box has the card's name,
@@ -269,10 +290,11 @@ not built.
 
 `tests/pc/packs_test.c` (CTest `pc_packs`) checks every rule of the reader,
 that a pack spends four numbers a slot whatever it holds, the guarantee, the
-pity, `unique_in_pack`, `max_copies`, the fall to a commoner tier, the unlock
-conditions, the progress file (lines of packs not here kept) and the deals of
-`packs_fixture.json` against `packs_golden.txt`; the FM Editor's
-`tests/test_packs.py` holds its Simulate to the same file.
+pity, `unique_in_pack`, `max_copies`, the fall to a commoner tier, `when_nothing_left`, the unlock conditions, the progress file
+(lines of packs not here kept) and the deals of `packs_fixture.json` against
+`packs_golden.txt` (a line ends `| nothing left` for a pack with nothing left
+for the player); the FM Editor's `tests/test_packs.py` holds its Simulate
+to the same file.
 
 With the disc in `game/` and the game built, `python3 tools/pc/test_packs.py`
 makes a pack mod of its own (the PNG drawn by the script), opens the Password
@@ -284,5 +306,8 @@ with △, ✕, ✕ and □, and checks that:
 - the guarantee gives its rare, and the same input deals the same pack;
 - a state saved while the cards turn over, resumed in a new process, ends
   with the same chest and the price paid once;
+- a pack of `max_copies` 1 whose cards the save holds is refused (nothing
+  paid, no card), and one that says `"when_nothing_left": "sell"` is sold,
+  every slot empty;
 - without the mod, △ changes nothing on the screen, and a state has no
   `pack-shop` chunk.

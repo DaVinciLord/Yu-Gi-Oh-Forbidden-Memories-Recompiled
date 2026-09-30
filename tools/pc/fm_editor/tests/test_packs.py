@@ -148,6 +148,30 @@ class ReaderTest(unittest.TestCase):
         found, notes = packs.read_packs([{"id": "a", "cards": [1]}, {"id": "b", "cards": [1], "order": -5}], by_id)
         self.assertEqual([p.id for p in found], ["b", "a"])
 
+    def test_when_nothing_left(self):
+        pack, notes = self.one({"cards": [1, 2], "max_copies": 1})
+        self.assertEqual(notes, [])
+        self.assertFalse(packs.nothing_left(pack))
+        self.assertFalse(packs.nothing_left(pack, lambda c: c == 1))
+        self.assertTrue(packs.nothing_left(pack, lambda c: 1))
+        self.assertTrue(packs.refuses_when_nothing_left(pack))
+        self.assertFalse(packs.refuses_when_nothing_left(pack, {"when_nothing_left": "sell"}))
+        pack, _ = self.one({"cards": [1], "max_copies": 1, "when_nothing_left": "refuse"})
+        self.assertTrue(packs.refuses_when_nothing_left(pack, {"when_nothing_left": "sell"}))
+        # A fixed card is always dealt; no "max_copies", always something.
+        pack, _ = self.one({"cards": [1, 2], "slots": ["cards", {"card": 1}], "max_copies": 1})
+        self.assertFalse(packs.nothing_left(pack, lambda c: 9))
+        self.assertFalse(packs.nothing_left(self.one({"cards": [1]})[0], lambda c: 9))
+        pack, notes = self.one({"cards": [1], "when_nothing_left": "give"})
+        self.assertIsNone(pack.when_nothing_left)
+        self.assertIn("the shop's is used", notes[0][1])
+        self.assertIn("\"refuse\" is used", packs.check_rules({"when_nothing_left": 1})[0][1])
+        # The pack's word is written even when it is the default: the shop's may differ.
+        self.assertEqual(packs.minimize({"name": "A", "cards": [1], "when_nothing_left": "refuse"})["when_nothing_left"],
+                         "refuse")
+        self.assertIsNone(packs.minimize_rules({"when_nothing_left": "refuse"}))
+        self.assertEqual(packs.minimize_rules({"when_nothing_left": "sell"}), {"when_nothing_left": "sell"})
+
 
 class ManifestTest(unittest.TestCase):
     def test_round_trip_writes_only_what_differs(self):

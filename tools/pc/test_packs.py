@@ -8,7 +8,9 @@ checks that the starchips drop by the price, that the chest gains exactly
 the cards the pack dealt and the cards last awarded are they, that a second
 run deals the same (the same input, the same numbers), that a state saved
 while the cards turn over, resumed in a new process, ends with the same
-chest, and that without the mod the triangle does nothing. Artifacts stay
+chest, that a pack whose every card the player holds "max_copies" of is
+refused (ALL OWNED, nothing paid) unless it says "when_nothing_left":
+"sell", and that without the mod the triangle does nothing. Artifacts stay
 in tmp/pc/packs-test (or --out); no player saves are touched.
 
     python3 tools/pc/test_packs.py [--windows | --executable PATH] [--out DIR]
@@ -34,13 +36,14 @@ WINE_PREFIX = ROOT / "tmp/pc/wine-prefix"
 OPENING = "910:0008,916:0000,1000:0040,1006:0000,1020:0040,1026:0000,1040:0040,1046:0000,1060:0040,1066:0000," \
           "1100:4000,1106:0000"
 SCREEN = 1400
-TRIANGLE, CROSS, SQUARE = "1000", "4000", "8000"
+TRIANGLE, CROSS, SQUARE, RIGHT = "1000", "4000", "8000", "0020"
 
 STARCHIPS = 0x801D07E0          # SaveDataState.starchips
 CHEST = 0x801D0250 - 1          # gLibrary_abCardChest, by card id
 RECENT = 0x801D07BC             # the cards last awarded, newest first
 PRICE, COUNT = 120, 5
 CARDS = [2, 3, 4, 5, 6, 7, 8, 9]
+OWNED, OWNED_SOLD, OWNED_PRICE = [10, 11], [12, 13], 50   # held once each: packs of "max_copies": 1
 
 
 def png(width, height):
@@ -65,7 +68,11 @@ def make_mod(mods):
                 "packs": [{"id": "test", "name": "Test Pack", "image": "packs/test.png", "price": PRICE,
                            "count": COUNT, "tiers": {"common": {"odds": 9, "cards": CARDS[:6]},
                                                      "rare": {"odds": 1, "cards": CARDS[6:], "label": "RARE!"}},
-                           "guarantee": {"rare": 1}}]}
+                           "guarantee": {"rare": 1}},
+                          {"id": "owned", "name": "Owned", "price": OWNED_PRICE, "count": 3, "cards": OWNED,
+                           "max_copies": 1},
+                          {"id": "owned-sold", "name": "Owned Sold", "price": OWNED_PRICE, "count": 3,
+                           "cards": OWNED_SOLD, "max_copies": 1, "when_nothing_left": "sell"}]}
     (folder / "mod.json").write_text(json.dumps(manifest, indent=4), encoding="utf-8")
 
 
@@ -149,6 +156,8 @@ def main():
     screen = run(executable, "screen", SCREEN, OPENING, mods)
     data, found = chunks(screen)
     struct.pack_into("<I", data, found["memory"] + STARCHIPS - 0x80000000, 1000)
+    for card in OWNED + OWNED_SOLD:
+        data[found["memory"] + CHEST - 0x80000000 + card] = 1
     rich = OUT / "rich.state"
     rich.write_bytes(bytes(data))
     before = chest(rich)
@@ -177,6 +186,19 @@ def main():
     resumed = run(executable, "resumed", 200, presses(60, [SQUARE]), mods, state=turning, mode_at=False)
     check(chest(resumed) == after, "a state saved mid-reveal keeps the cards, once, in a new process")
     check(peek(resumed, STARCHIPS, "I") == 1000 - PRICE, "and the starchips paid, once")
+
+    # Every card held "max_copies" times: refused by default (the list, then
+    # BUY / QUIT with BUY grey, ✕ taking QUIT), sold with "sell".
+    refusing = presses(60, [TRIANGLE, RIGHT, CROSS, CROSS])
+    run(executable, "owned-list", 60 + 70 + 150, refusing, mods, state=rich, mode_at=False)
+    run(executable, "owned-question", 60 + 140 + 110, refusing, mods, state=rich, mode_at=False)
+    refused = run(executable, "owned", 520, refusing, mods, state=rich, mode_at=False)
+    check(peek(refused, STARCHIPS, "I") == 1000 and chest(refused) == before,
+          "a pack with nothing left for the player is refused: no starchips, no cards")
+    sold = run(executable, "owned-sold", 520, presses(60, [TRIANGLE, RIGHT, RIGHT, CROSS, CROSS]), mods, state=rich,
+               mode_at=False)
+    check(peek(sold, STARCHIPS, "I") == 1000 - OWNED_PRICE and chest(sold) == before,
+          "\"when_nothing_left\": \"sell\" sells it: the price paid, every slot empty")
 
     # Without the mod, △ does nothing on the Password screen.
     plain = run(executable, "plain", SCREEN + 100, OPENING, mods, with_mod=False)

@@ -35,18 +35,20 @@ DEFAULT_MUSIC = 29520
 SOUND_KEYS = ("move", "buy", "refuse", "reveal", "back")
 DEFAULT_SOUNDS = {"move": 47, "buy": 48, "refuse": 9, "reveal": 12, "back": 8}
 REVEALS = ("flip", "quick", "list")
+NOTHING_LEFT = ("refuse", "sell")    # "when_nothing_left"; "refuse" is the shop's default
 KEY_RE = re.compile(r"^[A-Za-z0-9_-]{1,63}$")
 
 PACK_KEYS = ("id", "name", "description", "image", "cover", "shop", "order", "price", "cost", "count", "cards",
              "tiers", "slots", "guarantee", "pity", "duplicates", "max_copies", "include_added_cards", "stock",
-             "unlock", "locked", "password", "once", "listed", "reveal", "sounds")
+             "unlock", "locked", "password", "once", "listed", "reveal", "sounds", "when_nothing_left")
 PACK_RESERVED = ("restock",)
 TIER_KEYS = ("odds", "cards", "label", "color", "sound", "reveal")
 COST_KEYS = ("starchips", "cards")
 COST_RESERVED = ("currency",)
 SLOT_KEYS = ("tiers", "cards", "card")
 UNLOCK_KEYS = ("beat", "wins", "story", "card", "copies", "starchips_spent", "opened", "packs_opened")
-RULES_KEYS = ("password", "shops", "rng", "music", "campaign_shop", "main_menu", "sell_added_cards", "autosave")
+RULES_KEYS = ("password", "shops", "rng", "music", "when_nothing_left", "campaign_shop", "main_menu",
+              "sell_added_cards", "autosave")
 RULES_RESERVED = ("currency", "earn")
 RULES_LATER = ("campaign_shop", "main_menu", "sell_added_cards", "autosave")
 SHOP_KEYS = ("id", "name", "unlock", "where")
@@ -189,6 +191,7 @@ class Pack:
     password: int = None
     order: int = 0
     reveal: int = 0
+    when_nothing_left: str = None                    # "refuse", "sell", or None for the shop's
 
     def tier_named(self, name) -> int:
         for t, tier in enumerate(self.tiers):
@@ -464,6 +467,11 @@ def read_pack(entry, resolve, mod: str = "mod", index: int = 0, taken_ids=()) ->
             _, bad = number(sounds.get(key), 0, 0xFFFF, 0)
             if bad:
                 notes.append(("warning", f"{where}: \"sounds\" \"{key}\" is a sound effect id; the screen's own is used"))
+    if "when_nothing_left" in entry:
+        if entry["when_nothing_left"] in NOTHING_LEFT:
+            pack.when_nothing_left = entry["when_nothing_left"]
+        else:
+            notes.append(("warning", f"{where}: \"when_nothing_left\" is \"refuse\" or \"sell\"; the shop's is used"))
     pack.stock, bad = number(entry.get("stock"), 1, 999999, -1)
     if bad:
         notes.append(("warning", f"{where}: \"stock\" is 1 to 999999 purchases; no limit is kept"))
@@ -609,6 +617,8 @@ def check_rules(value) -> list:
         notes.append(("warning", "pack_shop: \"rng\" is \"game\" or \"save\"; \"game\" is used"))
     if number(value.get("music"), 0, 0xFFFF, 0)[1]:
         notes.append(("warning", "pack_shop: \"music\" is a song id; the screen's own is used"))
+    if "when_nothing_left" in value and value["when_nothing_left"] not in NOTHING_LEFT:
+        notes.append(("warning", "pack_shop: \"when_nothing_left\" is \"refuse\" or \"sell\"; \"refuse\" is used"))
     for key in RULES_LATER:
         if value.get(key) is True:
             notes.append(("warning", f"pack_shop: \"{key}\" is not built yet (notes/card-packs.md); ignored"))
@@ -788,6 +798,27 @@ def record(pack: Pack, result: Result, pity: list):
             pity[t] += 1
 
 
+def nothing_left(pack: Pack, held=None) -> bool:
+    """packs.c Packs_NothingLeft: the pack has "max_copies", no slot of a
+    fixed card (always dealt), and the player holds that many of every card
+    of every pool (`held(card)`). A pack with some cards left is not: it may
+    still deal empty slots."""
+    held = held or (lambda card: 0)
+    if not pack.max_copies or any(slot.kind == SLOT_CARD for slot in pack.slots or []):
+        return False
+    pools = [tier.pool for tier in pack.tiers] + [slot.pool for slot in pack.slots or [] if slot.kind == SLOT_POOL]
+    return all(not weight or held(card) >= pack.max_copies for pool in pools for card, weight in pool)
+
+
+def refuses_when_nothing_left(pack: Pack, rules=None) -> bool:
+    """packs.c Packs_RefusesWhenNothingLeft: the pack's "when_nothing_left",
+    else the shop's, else "refuse"."""
+    rule = pack.when_nothing_left
+    if rule is None and isinstance(rules, dict) and rules.get("when_nothing_left") in NOTHING_LEFT:
+        rule = rules["when_nothing_left"]
+    return (rule or "refuse") == "refuse"
+
+
 def tier_chance(pack: Pack, tier: int) -> float:
     """The share of a slot dealt by the tiers' odds that is of `tier`."""
     total = sum(t.odds for t in pack.tiers)
@@ -852,11 +883,13 @@ def simulate(pack: Pack, packs: int = 1000, seed: int = 1, held=None) -> Simulat
 
 
 def golden_line(pack: Pack, seed: int, pity=None, held=None) -> str:
-    """One line of tests/pc/packs_golden.txt: the pack dealt from `seed`."""
+    """One line of tests/pc/packs_golden.txt: the pack dealt from `seed`,
+    and whether it has nothing left for the player (Packs_NothingLeft)."""
     random = Lcg(seed)
     result = deal(pack, random, pity, held)
     slots = " ".join(f"{c}/{t}{'*' if r else ''}" for c, t, r in zip(result.cards, result.tiers, result.redone))
-    return f"{pack.id} {seed} {slots} | seed {random.seed:08X}"
+    left = " | nothing left" if nothing_left(pack, held) else ""
+    return f"{pack.id} {seed} {slots} | seed {random.seed:08X}{left}"
 
 
 # --- writing what differs --------------------------------------------------------
@@ -924,7 +957,7 @@ def minimize_rules(rules):
     if not isinstance(rules, dict):
         return copy.deepcopy(rules)
     out = copy.deepcopy(rules)
-    for key, value in (("password", "both"), ("rng", "game"), ("music", DEFAULT_MUSIC)):
+    for key, value in (("password", "both"), ("rng", "game"), ("music", DEFAULT_MUSIC), ("when_nothing_left", "refuse")):
         if out.get(key) == value:
             del out[key]
     for key in RULES_LATER:

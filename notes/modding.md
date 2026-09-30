@@ -756,8 +756,9 @@ go through them, ✕ buys one and the big card turns each card over, in the
 game's own card, boxes, letters and sounds. The starchips count down as a
 password's price does, and the cards go into the chest before the first turns
 over. Every option has a default: tiers with odds, a rule per slot, a
-guarantee, a pity count, no repeats in a pack, a limit on copies held, a
-stock, unlock conditions, a secret password, cards from the chest as part of
+guarantee, a pity count, no repeats in a pack, a limit on copies held (and
+whether a pack with nothing left for the player is still sold), a stock,
+unlock conditions, a secret password, cards from the chest as part of
 the price, an image of the pack's own, the reveal and the sounds; and
 `pack_shop` sets whether the screen sells passwords, packs or both, several
 shops, and whether a save can reroll a pack. The packs of every applied mod

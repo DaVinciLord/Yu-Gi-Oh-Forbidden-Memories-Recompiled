@@ -44,3 +44,9 @@ added 1 800/0 802/1 800/0 | seed 31DFF4F5
 added 2 801/0 802/1 802/1 | seed FA132526
 added 3 802/1 1/0 802/1 | seed C2465557
 added 8 801/0 800/0 802/1* | seed AB46464C
+owned 1 91/0 90/0 0/-1 | seed 31DFF4F5
+owned 2 90/0 91/0 0/-1 | seed FA132526
+owned 1 91/0 0/-1 0/-1 | seed 31DFF4F5
+owned 2 91/0 0/-1 0/-1 | seed FA132526
+owned 1 0/-1 0/-1 0/-1 | seed 31DFF4F5 | nothing left
+owned 2 0/-1 0/-1 0/-1 | seed FA132526 | nothing left

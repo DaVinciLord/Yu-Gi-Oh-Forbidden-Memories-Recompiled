@@ -72,6 +72,7 @@ enum {
     TEXT_OWN_PACK_AT_LEAST = 0xFE36,  /* the details: a guarantee, %s a tier */
     TEXT_OWN_PACK_PITY = 0xFE37,
     TEXT_OWN_PACK_CARD = 0xFE38,    /* one card */
+    TEXT_OWN_PACK_ALL_OWNED = 0xFE39, /* why BUY is refused: every card held "max_copies" times */
     TEXT_OWN_OPPONENT = 0xFE40      /* + duelist id (1-39, FE41-FE67): the name in place of COM */
 };
 /* Ids above the block, which the port composes rather than a translation
