@@ -632,7 +632,18 @@ int Memories_GuestMap(void)
                     (void *)base, result ? "NOT mapped" : "mapped");
         }
     }
-    if (!result) reserve_low_memory();
+    if (!result) {
+        /* The fixed regions mapped later (mod arenas, the text arena, the
+         * interpreter's stack, the game stack) are held from here: in a
+         * 64-bit process the window's GL driver and audio load below 4 GB
+         * too, and took the game stack's range before it was mapped. Each
+         * takes its range back as compat/mman.h's mmap maps it. */
+        reserve_free(0x90000000u, 0x91000000u);
+        reserve_free(0x9C000000u, 0x9D000000u);
+        reserve_free(0x9FF00000u, 0x9FF40000u);
+        reserve_free(0xB0000000u, 0xB0800000u);
+        reserve_low_memory();
+    }
 #endif
     return result ? -1 : 0;
 }
