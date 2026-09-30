@@ -190,6 +190,36 @@ int main(void)
     assert(notes == 1 && strstr(last_note, "cap"));
     Json_Free(document);
 
+    /* The summon choice: one-star cards never ask; "first", "best" and
+       "ask" (the default); a bad "choice" is a note and stays "ask". */
+    {
+        int enemy[2] = {3, 3};   /* two face-up Saturns */
+        Stars_Clear();
+        assert(Stars_ChoiceMode() == STARS_CHOICE_ASK);
+        assert(Stars_Single(5, 0) && Stars_Single(5, 5) && !Stars_Single(5, 6));
+        assert(Stars_SummonChoice(5, 0, enemy, 2) == 0 && Stars_SummonChoice(5, 6, enemy, 2) == -1);
+        document = Json_Parse("{\"guardian_stars\": {\"choice\": \"First\"}}", NULL, 0);
+        Stars_Add("c", Json_Root(document));
+        assert(Stars_ChoiceMode() == STARS_CHOICE_FIRST && Stars_SummonChoice(4, 2, enemy, 2) == 0);
+        Json_Free(document);
+        document = Json_Parse("{\"guardian_stars\": {\"choice\": \"best\"}}", NULL, 0);
+        Stars_Clear();
+        Stars_Add("c", Json_Root(document));
+        /* Uranus (4) against Saturn: -500 attacking, +500 attacked, so -2000
+           over two; Jupiter (2) against Saturn: +2000. The second wins. */
+        assert(Stars_SummonChoice(4, 2, enemy, 2) == 1);
+        assert(Stars_SummonChoice(2, 4, enemy, 2) == 0);
+        assert(Stars_SummonChoice(1, 7, enemy, 2) == 0);   /* a tie: the first */
+        assert(Stars_SummonChoice(4, 2, enemy, 0) == 0);   /* no one to face */
+        Json_Free(document);
+        document = Json_Parse("{\"guardian_stars\": {\"choice\": \"sometimes\"}}", NULL, 0);
+        Stars_Clear();
+        notes = 0;
+        Stars_Add("c", Json_Root(document));
+        assert(notes == 1 && Stars_ChoiceMode() == STARS_CHOICE_ASK);
+        Json_Free(document);
+    }
+
     puts("stars: ok");
     return 0;
 }
