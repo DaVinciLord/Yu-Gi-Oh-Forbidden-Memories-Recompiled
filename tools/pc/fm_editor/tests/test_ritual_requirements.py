@@ -126,6 +126,30 @@ class DialogTest(unittest.TestCase):
         self.assertEqual(p.rituals[681][0], 7)
         self.assertNotIn(681, p.ritual_requirements)
 
+    def test_a_grab_refused_at_first(self):
+        # A double-click opens the dialog before it is on screen, and Tk
+        # refuses the grab: the dialog is still built, and grabs later.
+        from unittest import mock
+        real, calls = tk.Toplevel.grab_set, []
+
+        def refuse_once(window):
+            calls.append(window)
+            if len(calls) == 1:
+                raise tk.TclError("grab failed: window not viewable")
+            return real(window)
+
+        with mock.patch.object(tk.Toplevel, "grab_set", refuse_once):
+            dialog, save, error = self.open(681)
+            self.app.after(50, lambda: None)
+            for _ in range(20):
+                self.app.update()
+                if len(calls) > 1:
+                    break
+                self.app.after(10)
+        self.assertGreater(len(calls), 1)
+        self.assertTrue(self.widgets(dialog, ttk.Entry))
+        dialog.destroy()
+
     def test_a_ritual_without_a_recipe_starts_empty(self):
         p = self.app.project
         ritual = next(r for r in p.ritual_cards() if r not in p.rituals)
