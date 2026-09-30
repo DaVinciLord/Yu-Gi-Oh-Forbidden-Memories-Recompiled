@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: pc-release-${{ github.ref }}
@@ -141,43 +141,6 @@ jobs:
             dist/*.tar.gz
           if-no-files-found: error
           retention-days: 14
-
-
-  ritual-editor-test-release:
-    needs: package
-    if: always() && github.event_name == 'pull_request' && github.head_ref == 'ritual-requirements-v014' && needs.package.result != 'cancelled'
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: yfm-redecomp-*
-          merge-multiple: true
-          path: artifacts
-      - name: Collect Ritual test packages
-        shell: bash
-        run: |
-          mkdir -p release
-          find artifacts -maxdepth 1 -type f \( -name 'fm-editor-*-windows.zip' -o -name 'fm-editor-*-linux.tar.gz' -o -name 'yfm-redecomp-*-windows.zip' \) -exec cp {} release/ \;
-          test "$(find release -maxdepth 1 -type f | wc -l)" -eq 3
-      - name: Publish Ritual Editor test release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          tag=ritual-editor-test
-          git tag -f "$tag" "${{ github.event.pull_request.head.sha }}"
-          git push -f origin "$tag"
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release delete "$tag" --yes
-          fi
-          gh release create "$tag" release/* --prerelease --title "Ritual Editor Test" --notes "Condition-based Ritual test build from PR #2 on v0.1.4-preview.1. Includes FM Editor for Windows/Linux and the Windows game build required to test the new runtime ritual rules."
-
 
   draft-release:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')

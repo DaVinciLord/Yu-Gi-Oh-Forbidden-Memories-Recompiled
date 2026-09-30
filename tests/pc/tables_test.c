@@ -24,6 +24,11 @@ int Cards_Type(int id)
     return id == 20 ? CARD_TYPE_EQUIP : id == 21 ? CARD_TYPE_RITUAL : id == 12 || id == 13 ? 0 : 3;
 }
 int Cards_TypeNamed(const char *text) { return same_letters(text, "Dragon") ? 0 : same_letters(text, "Warrior") ? 3 : -1; }
+int Cards_FusionGroupNamed(const char *text)
+{
+    return same_letters(text, "Female") ? CARD_FUSION_GROUP_FEMALE
+         : same_letters(text, "Bugrothian") ? CARD_FUSION_GROUP_BUGROTHIAN : CARD_FUSION_GROUP_NONE;
+}
 /* Card 12 is Light, 13 Dark, the rest Earth. */
 int Cards_AttributeNamed(const char *text)
 {
@@ -222,6 +227,19 @@ int main(void)
         assert(req[0].fusion_group == CARD_FUSION_GROUP_FEMALE && req[0].min_level == 4 && req[0].max_level == 6);
         assert(req[1].fusion_group == CARD_FUSION_GROUP_BUGROTHIAN);
         assert(req[2].card == 723); /* stable identity resolves to an added card, not a retail-only id */
+        /* A minimum of 0 is still a requirement (any monster), any case of a
+         * group's name is it, and a key the game does not know is noted. */
+        notes = 0;
+        add("condition-any", "{\"rituals\": [{\"card\": 21, \"tributes\": ["
+            "{\"min_attack\": 0}, {\"fusion_group\": \"female\"}, {\"card\": 11, \"colour\": 1}],"
+            " \"result\": 12}]}");
+        assert(notes == 1);
+        assert(Tables_RitualRequirements(21, req, &result) == 1 && result == 12);
+        assert(req[0].min_attack == 0 && req[0].card == 0 && req[0].type == -1);
+        assert(req[1].fusion_group == CARD_FUSION_GROUP_FEMALE && req[2].card == 11);
+        notes = 0;
+        add("condition-empty", "{\"rituals\": [{\"card\": 21, \"tributes\": [{}, 1, 2], \"result\": 12}]}");
+        assert(notes == 1);
     }
     add("b", "{\"rituals\": [{\"card\": 21, \"result\": null}]}");
     assert(Tables_Ritual(21, own) == 0);

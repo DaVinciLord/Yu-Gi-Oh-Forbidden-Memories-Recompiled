@@ -634,17 +634,8 @@ static int ritual_requirement(const char *mod, const char *where, const JsonValu
     }
     v = Json_Member(value, "fusion_group");
     if (v) {
-        static const char *const groups[] = {
-            "", "AngelWinged", "Bugrothian", "Egg", "Elf", "FeatherFromBear",
-            "FeatherFromHarpie", "FeatherFromMachine", "Female", "Jar", "Koumorian",
-            "MercuryMagicUser", "MercurySpellcaster", "Mirror", "MusKingian",
-            "MystElfian", "Rainbow", "Sheepian", "Thronian", "Turtle", "UsableBeast"
-        };
-        int group = -1, gi;
-        const char *group_name = Json_String(v, NULL);
-        for (gi = 1; group_name && gi < (int)(sizeof(groups) / sizeof(groups[0])); gi++)
-            if (!strcmp(group_name, groups[gi])) { group = gi; break; }
-        if (group <= CARD_FUSION_GROUP_NONE || group > CARD_FUSION_GROUP_USABLE_BEAST) {
+        int group = Cards_FusionGroupNamed(Json_String(v, ""));
+        if (group == CARD_FUSION_GROUP_NONE) {
             Mods_Note(mod, "%s: \"fusion_group\" is a known secondary fusion group", where); return 0;
         }
         out->fusion_group = (unsigned char)group;
@@ -714,9 +705,22 @@ static int ritual_requirement(const char *mod, const char *where, const JsonValu
         }
         out->defense_gt_attack = Json_Bool(v, 0) != 0;
     }
-    if (!out->card && out->type < 0 && !out->fusion_group && !out->min_attack && !out->min_defense && out->max_attack < 0 && out->max_defense < 0 &&
-        out->min_level < 0 && out->max_level < 0 && !out->defense_gt_attack) {
-        Mods_Note(mod, "%s: ritual tribute has no requirement", where); return 0;
+    /* Any key counts, "min_attack": 0 too: that tribute is any monster. */
+    {
+        static const char *const known[] = {"card", "type", "fusion_group", "min_attack", "min_defense", "max_attack",
+                                            "max_defense", "min_level", "max_level", "defense_gt_attack"};
+        const JsonValue *member;
+        int keys = 0;
+        size_t k;
+        for (member = Json_At(value, 0); member; member = Json_Next(member)) {
+            for (k = 0; k < sizeof(known) / sizeof(known[0]) && strcmp(Json_Name(member), known[k]); k++) {}
+            if (k < sizeof(known) / sizeof(known[0])) keys++;
+            else Mods_Note(mod, "%s: a ritual tribute has no \"%s\" key; left out", where, Json_Name(member));
+        }
+        if (!keys) {
+            Mods_Note(mod, "%s: ritual tribute has no requirement", where);
+            return 0;
+        }
     }
     return 1;
 }

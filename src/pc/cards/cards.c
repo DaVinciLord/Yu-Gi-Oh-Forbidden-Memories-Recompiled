@@ -511,10 +511,12 @@ int Cards_Level(int id)
 
 int Cards_InFusionGroup(int id, int group)
 {
-    unsigned int explicit_groups;
+    /* The retail cards' groups by id, looked up by name once. */
+    static unsigned int by_id[CARD_ID_END];
+    static int looked_up;
+    int base;
     if (!Cards_Valid(id) || group <= CARD_FUSION_GROUP_NONE || group > CARD_FUSION_GROUP_USABLE_BEAST) return 0;
-    explicit_groups = fusion_groups[id];
-    if (has_fusion_groups[id]) return !!(explicit_groups & (1u << group));
+    if (has_fusion_groups[id]) return !!(fusion_groups[id] & (1u << group));
     /* Membership is the canonical "secondary card types by card" table from
      * Marcelo Silvarolla's programmatically validated Forbidden Memories
      * fusion guide.  Keep this explicit: several groups have conflict-driven
@@ -838,14 +840,17 @@ int Cards_InFusionGroup(int id, int group)
         {"Zarigun", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
         {"Zone Eater", (1u << CARD_FUSION_GROUP_BUGROTHIAN)},
     };
-    size_t i;
-    unsigned int bit, found = 0;
-    int base = Cards_BaseId(id);
-    if (!base) return 0;
-    bit = 1u << group;
-    for (i = 0; i < sizeof(cards) / sizeof(cards[0]); i++)
-        if (Cards_Named(cards[i].name) == base) found |= cards[i].groups;
-    return !!(found & bit);
+    if (!looked_up) {
+        size_t i;
+        looked_up = 1;
+        for (i = 0; i < sizeof(cards) / sizeof(cards[0]); i++) {
+            int named = Cards_Named(cards[i].name);
+            if (named >= 1 && named <= CARD_COUNT) by_id[named] |= cards[i].groups;
+            else fprintf(stderr, "memories-pc: fusion groups: no retail card \"%s\"\n", cards[i].name);
+        }
+    }
+    base = Cards_BaseId(id);
+    return base >= 1 && base <= CARD_COUNT && (by_id[base] & (1u << group)) != 0;
 }
 
 typedef struct {

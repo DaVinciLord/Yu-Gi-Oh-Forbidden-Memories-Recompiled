@@ -127,6 +127,40 @@ Every tribute takes a monster that is exactly it before any takes a copy,
 so a recipe naming both a retail monster and a copy of it is met whatever
 order they stand in on the field.
 
+A tribute may also be an object of conditions, all of which the monster
+must meet:
+
+```json
+{"card": "Curse of Millennium Shield", "result": "Millennium Shield", "tributes": [
+    {"type": "Spellcaster"},
+    {"min_defense": 2000, "max_level": 4},
+    {"fusion_group": "Female", "defense_gt_attack": true}]}
+```
+
+| Key | The monster |
+|---|---|
+| `card` | is this card, or a copy of it |
+| `type` | is of this monster type (`"Dragon"`, `"Rock"`...) |
+| `fusion_group` | is in this group of the fusion guides: `AngelWinged`, `Bugrothian`, `Egg`, `Elf`, `FeatherFromBear`, `FeatherFromHarpie`, `FeatherFromMachine`, `Female`, `Jar`, `Koumorian`, `MercuryMagicUser`, `MercurySpellcaster`, `Mirror`, `MusKingian`, `MystElfian`, `Rainbow`, `Sheepian`, `Thronian`, `Turtle`, `UsableBeast` |
+| `min_attack`, `max_attack`, `min_defense`, `max_defense` | has at least or at most this printed ATK or DEF, 0 to 9999 |
+| `min_level`, `max_level` | has at least or at most this many stars, 0 to 12 |
+| `defense_gt_attack` | `true`: has more DEF than ATK |
+
+Printed means the card's own stats, a mod's `cards` edits included, not what
+equips or the terrain add in the duel. `{"min_attack": 0}` is any monster.
+The three tributes may be plain cards and objects mixed; they are three
+different monsters of the side's field, and the ritual takes place when any
+three of them meet the three tributes. When more monsters would do, it
+spends the weakest: tribute by tribute, the narrowest first (a `card`
+first), the lowest DEF when the result has more DEF than ATK, the lowest ATK
+otherwise. A key it does not know is noted in the Mods window and left out,
+and an object with no key it knows leaves the entry out.
+
+A card's groups are the disc card's, as the fusion guides list them (Marcelo
+Silvarolla's table). A card of a mod's
+own has its base's, or its own with `"fusion_groups": ["Elf", "Female"]` in
+its [`cards` entry](more-cards.md).
+
 ## Drops and decks
 
 Each opponent draws its deck, and the card it gives when it loses, from a
@@ -440,7 +474,7 @@ each table ask it first:
 | `Duel_CheckFusion` (`duel_card_checks.c`) | fusion table, `0x8017C2D8` | `Tables_Fusion`, then `Tables_FilterFusion` over the disc's answer |
 | `Duel_CheckEquip` (`duel_card_checks.c`) | equip table, `0x8017A1D8` | `Tables_Equip` |
 | `DuelScene_UpdateCardPlacement` (`duel_scene_card_placement.c`) | +500, +1000 for Megamorph | `Tables_EquipBonus` |
-| `Duel_CheckRitual` (`duel_check_ritual.c`) | ritual table, `0x801799D8` | `Tables_Ritual`, whose recipe is laid out like the disc's |
+| `Duel_CheckRitual` (`duel_check_ritual.c`) | ritual table, `0x801799D8` | `Tables_RitualRequirements` for conditions, else `Tables_Ritual`, whose recipe is laid out like the disc's |
 | `Duel_ShuffleDeck` (`duel_shuffle_deck.c`) | deck pool, `0x801781D8` | `Tables_FixedDeck`, then `Tables_Pool(TABLES_POOL_DECK)` |
 | `Duel_SelectCardDrop` (`duel_result_runtime.c`) | drop pools, `0x8017878C` | `Tables_Pool(TABLES_POOL_POW + pool)` |
 | `Duel_GetTerrainBoost` (`duel_card_record_lifecycle.c`) | terrain table, `0x800909D4` | `Tables_TerrainBonus` |

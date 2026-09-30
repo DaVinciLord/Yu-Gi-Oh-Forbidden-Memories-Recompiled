@@ -23,7 +23,7 @@ import re
 import shutil
 from pathlib import Path
 
-from .gamedata import (ATTRIBUTE_NAMES, CARD_COUNT, DECK_SIZE, DUELIST_NAMES, FRAME_NAMES, POOLS, STAR_NAMES,
+from .gamedata import (FUSION_GROUPS, RITUAL_REQUIREMENT_KEYS, fusion_group_named, ATTRIBUTE_NAMES, CARD_COUNT, DECK_SIZE, DUELIST_NAMES, FRAME_NAMES, POOLS, STAR_NAMES,
                        STARTER_WEIGHT_LIMIT, TYPE_NAMES, TYPE_MAGIC, GameData)
 from .model import AddedCard, ModInfo, Project, StarterDeck, duelist_named, type_named, KEY_RE
 from . import art, campaign_map, fixed_decks, pools as poolmath
@@ -244,6 +244,8 @@ def build_rituals(project: Project) -> list:
                     body = dict(req)
                     if body.get("card"):
                         body["card"] = project.ref(body["card"])
+                    else:
+                        body.pop("card", None)
                     tributes.append(body)
                 entries.append({"card": project.ref(ritual), "tributes": tributes, "result": project.ref(now[3])})
             else:
@@ -833,6 +835,8 @@ def read_rituals(project: Project, entries, messages: list):
             for tribute in tributes:
                 if isinstance(tribute, dict):
                     req = {}
+                    if any(key not in RITUAL_REQUIREMENT_KEYS for key in tribute):
+                        valid = False   # a key of a later build: kept as written, not dropped
                     if "card" in tribute:
                         cid = project.resolve(tribute.get("card"))
                         if not cid:
@@ -847,11 +851,8 @@ def read_rituals(project: Project, entries, messages: list):
                         else:
                             req["type"] = TYPE_NAMES[named]
                     if "fusion_group" in tribute:
-                        value = tribute["fusion_group"]
-                        if value not in ("AngelWinged", "Bugrothian", "Egg", "Elf", "FeatherFromBear", "FeatherFromHarpie",
-                                             "FeatherFromMachine", "Female", "Jar", "Koumorian", "MercuryMagicUser",
-                                             "MercurySpellcaster", "Mirror", "MusKingian", "MystElfian", "Rainbow",
-                                             "Sheepian", "Thronian", "Turtle", "UsableBeast"):
+                        value = fusion_group_named(tribute["fusion_group"])
+                        if not value:
                             valid = False
                         else:
                             req["fusion_group"] = value
@@ -905,6 +906,7 @@ def read_rituals(project: Project, entries, messages: list):
                 project.kept["rituals"].append(entry)
                 continue
             project.rituals[ritual] = tuple(ids)
+            project.ritual_requirements.pop(ritual, None)   # a later mod's plain recipe wins
 
 
 def _read_pool(project: Project, where, duelists, pool, body, messages):

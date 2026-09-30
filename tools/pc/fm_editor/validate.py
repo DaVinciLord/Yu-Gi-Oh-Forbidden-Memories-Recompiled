@@ -229,6 +229,8 @@ def _check_tables(project: Project, out: list):
                 cid = req.get("card")
                 if cid and not valid(cid):
                     out.append(Issue("error", "Rituals", where, f"no card {cid}", ritual))
+                elif cid and not project.cards[cid].is_monster():
+                    out.append(Issue("warning", "Rituals", where, f"{project.card_label(cid)} is not a monster", ritual))
             if not project.cards[recipe[3]].is_monster():
                 out.append(Issue("warning", "Rituals", where, "the result should be a monster", ritual))
         elif not all(valid(c) for c in recipe):

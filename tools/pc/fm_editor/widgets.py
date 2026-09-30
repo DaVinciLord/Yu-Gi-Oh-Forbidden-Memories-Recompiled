@@ -128,6 +128,27 @@ def pick_card(master, project, title="Choose a card", only=None, initial=""):
     return dialog.result
 
 
+def card_named(project, text: str) -> int:
+    """The card a CardField's text names, or 0."""
+    text = text.strip()
+    if not text:
+        return 0
+    # A number, or a card as CardField.set() shows it ("7 Name"); otherwise a
+    # name, which may start with a digit ("7 Colored Fish").
+    if text.isdigit() and int(text) in project.cards:
+        return int(text)
+    head = text.split(" ", 1)[0]
+    if head.isdigit() and int(head) in project.cards and project.card_label(int(head)) == text:
+        return int(head)
+    cid = project.resolve(text)
+    if cid:
+        return cid
+    for other, card in project.cards.items():
+        if card.name.lower() == text.lower():
+            return other
+    return 0
+
+
 class CardField(ttk.Frame):
     """An entry naming a card (number or name) with a "..." picker."""
 
@@ -152,24 +173,7 @@ class CardField(ttk.Frame):
 
     def get(self) -> int:
         """The card named, or 0."""
-        project = self.project_getter()
-        text = self.var.get().strip()
-        if not text:
-            return 0
-        # A number, or a card as set() shows it ("7 Name"); otherwise a name,
-        # which may start with a digit ("7 Colored Fish").
-        if text.isdigit() and int(text) in project.cards:
-            return int(text)
-        head = text.split(" ", 1)[0]
-        if head.isdigit() and int(head) in project.cards and project.card_label(int(head)) == text:
-            return int(head)
-        cid = project.resolve(text)
-        if cid:
-            return cid
-        for other, card in project.cards.items():
-            if card.name.lower() == text.lower():
-                return other
-        return 0
+        return card_named(self.project_getter(), self.var.get())
 
 
 class FormDialog(tk.Toplevel):

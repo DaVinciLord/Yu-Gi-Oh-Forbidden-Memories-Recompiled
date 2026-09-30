@@ -55,6 +55,22 @@ TYPE_NAMES = ["Dragon", "Spellcaster", "Zombie", "Warrior", "Beast-Warrior", "Be
               "Fairy", "Insect", "Dinosaur", "Reptile", "Fish", "Sea Serpent", "Machine", "Thunder", "Aqua",
               "Pyro", "Rock", "Plant", "Magic", "Trap", "Ritual", "Equip"]
 TYPE_MAGIC, TYPE_TRAP, TYPE_RITUAL, TYPE_EQUIP = 20, 21, 22, 23
+# The secondary fusion groups a ritual tribute may ask for (cards.h
+# CARD_FUSION_GROUP_*, in that order).
+FUSION_GROUPS = ("AngelWinged", "Bugrothian", "Egg", "Elf", "FeatherFromBear", "FeatherFromHarpie",
+                 "FeatherFromMachine", "Female", "Jar", "Koumorian", "MercuryMagicUser", "MercurySpellcaster",
+                 "Mirror", "MusKingian", "MystElfian", "Rainbow", "Sheepian", "Thronian", "Turtle", "UsableBeast")
+RITUAL_REQUIREMENT_KEYS = ("card", "type", "fusion_group", "min_attack", "min_defense", "max_attack", "max_defense",
+                           "min_level", "max_level", "defense_gt_attack")
+
+
+def fusion_group_named(text) -> str:
+    """The group's own spelling, found as the game finds it (letters only,
+    any case), or "" for none."""
+    if not isinstance(text, str):
+        return ""
+    key = "".join(c for c in text.lower() if c.isalnum())
+    return next((g for g in FUSION_GROUPS if g.lower() == key), "")
 # A card's "frame" (cards.c frame_names): the palette rows the game draws a
 # card through. Retail picks one by type; purple and orange it never uses.
 FRAME_NAMES = ["Monster", "Magic", "Trap", "Ritual", "Purple", "Orange"]

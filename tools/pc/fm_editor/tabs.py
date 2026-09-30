@@ -8,13 +8,13 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from . import bulk_dialog, manifest, pools as poolmath, validate
-from .gamedata import (ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, DUELIST_NAMES, FRAME_NAMES,
+from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, DUELIST_NAMES, FRAME_NAMES,
                        POOL_LABELS, POOL_TOTAL, POOLS, STAR_NAMES, STARTER_WEIGHT_LIMIT, TYPE_EQUIP, TYPE_NAMES, TYPE_RITUAL,
                        exodia_piece, type_frame)
 from . import fixed_decks
 from .fixed_deck_view import FixedDeckView
 from .model import KEY_RE, StarterDeck
-from .widgets import CardField, FormDialog, card_matches, pick_card, px, scrolled_tree, show_text, ui_font
+from .widgets import CardField, FormDialog, card_matches, card_named, pick_card, px, scrolled_tree, show_text, ui_font
 
 ATTRIBUTE_CHOICES = ATTRIBUTE_NAMES + ["6 (magic)", "7 (trap)"]
 STAR_CHOICES = ["(none)"] + STAR_NAMES[1:]
@@ -770,7 +770,7 @@ class RitualsTab(Tab):
             return
         recipe = self.project.rituals.get(ritual) or self.project.retail.rituals.get(ritual) or (0, 0, 0, 0)
         saved = self.project.ritual_requirements.get(ritual)
-        requirements = [dict(r) for r in saved] if saved else [{"card": recipe[i]} for i in range(3)]
+        requirements = [dict(r) for r in saved] if saved else [{"card": recipe[i]} if recipe[i] else {} for i in range(3)]
 
         dialog = tk.Toplevel(self)
         dialog.title("Ritual recipe")
@@ -787,6 +787,7 @@ class RitualsTab(Tab):
 
         panels = []
         numeric_inputs = [dict(), dict(), dict()]
+        card_inputs = [None, None, None]   # a Specific Card's text, read on Save
         open_index = tk.IntVar(value=0)
 
         def describe(req):
@@ -827,11 +828,12 @@ class RitualsTab(Tab):
                     field = CardField(row, lambda: self.project, width=36,
                                       only=lambda c: 0 <= self.project.cards[c].type < 20)
                     field.pack(side="left", fill="x", expand=True)
-                    field.set(req["card"])
-                    def changed(field=field, req=req):
-                        cid = field.get()
-                        if cid: req["card"] = cid
-                    field.var.trace_add("write", lambda *_args, fn=changed: fn())
+                    # Typed text survives a redraw, as the numbers' does.
+                    if card_inputs[index] is not None:
+                        field.var.set(card_inputs[index].get())
+                    else:
+                        field.set(req["card"])
+                    card_inputs[index] = field.var
                 elif kind == "Monster Type":
                     value = tk.StringVar(value=req["type"])
                     combo = ttk.Combobox(row, textvariable=value, values=TYPE_NAMES[:20], state="readonly", width=22)
@@ -839,10 +841,7 @@ class RitualsTab(Tab):
                     combo.bind("<<ComboboxSelected>>", lambda e, v=value, r=req: r.__setitem__("type", v.get()))
                 elif kind == "Fusion Group":
                     value = tk.StringVar(value=req["fusion_group"])
-                    combo = ttk.Combobox(row, textvariable=value, values=("AngelWinged", "Bugrothian", "Egg", "Elf", "FeatherFromBear", "FeatherFromHarpie",
-                                             "FeatherFromMachine", "Female", "Jar", "Koumorian", "MercuryMagicUser",
-                                             "MercurySpellcaster", "Mirror", "MusKingian", "MystElfian", "Rainbow",
-                                             "Sheepian", "Thronian", "Turtle", "UsableBeast"), state="readonly", width=22)
+                    combo = ttk.Combobox(row, textvariable=value, values=FUSION_GROUPS, state="readonly", width=22)
                     combo.pack(side="left")
                     combo.bind("<<ComboboxSelected>>",
                                lambda e, v=value, r=req: r.__setitem__("fusion_group", v.get()))
@@ -878,6 +877,8 @@ class RitualsTab(Tab):
                         return
                     r.pop(keys[k], None)
                     numeric_inputs[n].pop(keys[k], None)
+                    if keys[k] == "card":
+                        card_inputs[n] = None
                     render(n)
                 ttk.Button(row, text="Remove", command=delete,
                            state="normal" if len(kinds) > 1 else "disabled").pack(side="right", padx=(6, 0))
@@ -951,33 +952,39 @@ class RitualsTab(Tab):
         buttons = ttk.Frame(body)
         buttons.pack(fill="x", pady=(8, 0))
 
+        def fail(index, text):
+            error.configure(text=f"Tribute {index + 1}: {text}")
+            show_panel(index)
+
         def save():
             for index, req in enumerate(requirements):
+                if "card" in req and card_inputs[index] is not None:
+                    text = card_inputs[index].get().strip()
+                    cid = card_named(self.project, text)
+                    if text and not cid:
+                        return fail(index, f"no card \"{text}\".")
+                    if cid:
+                        req["card"] = cid
+                    else:
+                        req.pop("card")
                 for key, (value, limit) in numeric_inputs[index].items():
                     try:
                         number = int(value.get())
                     except ValueError:
-                        error.configure(text="ATK, DEF and Level requirements must be whole numbers.")
-                        return
+                        return fail(index, "ATK, DEF and Level requirements must be whole numbers.")
                     if not 0 <= number <= limit:
-                        error.configure(text=f"{key.replace('_', ' ').title()} must be between 0 and {limit}.")
-                        return
+                        return fail(index, f"{key.replace('_', ' ').title()} must be between 0 and {limit}.")
                     req[key] = number
             result_id = result.get()
-            if any(req.get("min_attack") is not None and req.get("max_attack") is not None
-                   and req["min_attack"] > req["max_attack"] for req in requirements):
-                error.configure(text="Minimum ATK cannot be greater than Maximum ATK.")
-                return
-            if any(req.get("min_defense") is not None and req.get("max_defense") is not None
-                   and req["min_defense"] > req["max_defense"] for req in requirements):
-                error.configure(text="Minimum DEF cannot be greater than Maximum DEF.")
-                return
-            if any(req.get("min_level") is not None and req.get("max_level") is not None
-                   and req["min_level"] > req["max_level"] for req in requirements):
-                error.configure(text="Minimum Level cannot be greater than Maximum Level.")
-                return
-            if not result_id or any(not req for req in requirements):
-                error.configure(text="Each tribute needs at least one requirement and Summons must name a monster.")
+            for index, req in enumerate(requirements):
+                for low, high, what in (("min_attack", "max_attack", "ATK"), ("min_defense", "max_defense", "DEF"),
+                                        ("min_level", "max_level", "Level")):
+                    if req.get(low) is not None and req.get(high) is not None and req[low] > req[high]:
+                        return fail(index, f"Minimum {what} cannot be greater than Maximum {what}.")
+                if not req:
+                    return fail(index, "needs at least one requirement.")
+            if not result_id:
+                error.configure(text="Summons must name a monster.")
                 return
             display = [req.get("card", 0) for req in requirements]
             self.project.rituals[ritual] = tuple(display + [result_id])
