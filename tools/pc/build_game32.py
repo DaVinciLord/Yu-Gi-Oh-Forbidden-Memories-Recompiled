@@ -17,7 +17,14 @@ differs from ELF in ways the link below works around: C symbols carry a
 leading underscore; sections cannot be placed at chosen addresses, so the
 fixed game sections (save states across rebuilds) are not available; the
 section renames edit the COFF headers directly (rename_coff_sections) and
-__start_/__stop_ come from grouped marker sections; overrides win by link order instead of weakened symbols."""
+__start_/__stop_ come from grouped marker sections; overrides win by link order instead of weakened symbols.
+
+--target windows-x64 is the native 64-bit Windows build (notes/pc-build.md,
+"64-bit Windows"): x86_64-w64-mingw32-clang, clang 21 or later, the game's
+stored pointers 4 bytes wide through G32 (src/port_ptr.h), and the image
+linked at 0x40000000 without ASLR so that host code stays below 4 GB and
+within reach of the pinned guest addresses. Its default build directory is
+tmp/pc/win64."""
 import argparse, concurrent.futures, csv, filecmp, glob, hashlib, json, os, re, shutil, struct, subprocess, sys
 import build_process
 
@@ -29,11 +36,14 @@ ADDRESSES = "config/pc/guest_addresses.txt"
 # before argparse because the flags and tools below depend on it.
 TARGET = next((sys.argv[i + 1] for i, word in enumerate(sys.argv[:-1]) if word == "--target"),
               os.environ.get("MEMORIES_TARGET") or ("windows" if sys.platform == "win32" else "linux"))
-WINDOWS = TARGET == "windows"
-WIN32_DEPS = "tmp/pc/win32-deps"  # tools/pc/build_win32_deps.py
-CC, OBJCOPY, NM, READELF, OBJDUMP = (("i686-w64-mingw32-clang", "llvm-objcopy", "llvm-nm", "llvm-readelf", "llvm-objdump")
+X64 = TARGET == "windows-x64"
+WINDOWS = TARGET in ("windows", "windows-x64")
+# tools/pc/build_win32_deps.py (--arch x86_64 for the 64-bit build)
+WIN32_DEPS = "tmp/pc/win64-deps" if X64 else "tmp/pc/win32-deps"
+CC, OBJCOPY, NM, READELF, OBJDUMP = (("x86_64-w64-mingw32-clang" if X64 else "i686-w64-mingw32-clang", "llvm-objcopy",
+                                      "llvm-nm", "llvm-readelf", "llvm-objdump")
                                      if WINDOWS else ("gcc", "objcopy", "nm", "readelf", "objdump"))
-PREFIX = "_" if WINDOWS else ""  # C symbol names in the object files
+PREFIX = "_" if WINDOWS and not X64 else ""  # C symbol names in the object files
 # Linux builds are made against Debian 11's libraries
 # (tools/pc/build_linux_sysroot.py fetches them), not this machine's: the
 # executable then asks for glibc 2.29 rather than whatever is installed here,
@@ -70,6 +80,15 @@ if WINDOWS:
     # (Visual Studio, WinDbg, Superluminal) read; they do not read DWARF.
     CFLAGS = [f for f in CFLAGS if f not in ("-m32", "-fno-pie")] + ["-Wno-incompatible-pointer-types", "-mno-ms-bitfields",
                                                                     "-gcodeview"]
+# The 64-bit build: -fms-extensions for clang's __ptr32 (G32 in
+# src/port_ptr.h), and src/pc/compat/ptr32.h first, which keeps mingw's
+# headers from defining __ptr32 away. -fno-jump-tables: LLVM can turn a
+# switch that stores guest addresses into a table of 32-bit pointers that it
+# cannot emit (upstream #6623); the 32-bit builds make compare trees under
+# the branch thunks anyway.
+X64_FLAGS = ["-include", "src/pc/compat/ptr32.h", "-fms-extensions", "-fno-jump-tables"]
+if X64:
+    CFLAGS = X64_FLAGS + CFLAGS
 # -O0 for game units: original busy-waits poll non-volatile globals that the
 # VBlank handler updates, and must not be hoisted out of their loops.
 NATIVE_CFLAGS = ["-m32", "-std=gnu11", "-O2", "-g", "-Wall", "-fno-pie", "-fno-omit-frame-pointer", "-fno-strict-aliasing",
@@ -87,6 +106,8 @@ if WINDOWS:
         f"-I{WIN32_DEPS}/sdl/include", f"-I{WIN32_DEPS}/include", f"-I{WIN32_DEPS}/include/freetype2",
         "-mno-ms-bitfields",  # the game's structures, shared with native code (see CFLAGS)
         "-gcodeview"]
+    if X64:
+        NATIVE_CFLAGS = X64_FLAGS + NATIVE_CFLAGS
 # Every unit's indirect calls and jumps go through __x86_indirect_thunk_<reg>
 # (src/pc/guest/branch_thunks.c), which sends a target in guest memory to its
 # native function: tables in the retail data image hold MIPS addresses, and
@@ -114,7 +135,9 @@ SDL_SOURCE = "tmp/pc/sdl-source/SDL3-3.4.16"
 BACKENDS = {"sdl": ["src/pc/platform/sdl.c", "src/pc/render/gl_picture.c", "src/pc/render/present_pass.c"],
             "x11": ["src/pc/platform/x11.c", "src/pc/platform/audio_alsa.c", "src/pc/platform/gamepad_evdev.c"]}
 BACKEND_SOURCES = sorted(sum(BACKENDS.values(), []))
-NATIVE = sorted(glob.glob("src/pc/guest/*.[cS]") + glob.glob("src/pc/sdk/*.c") +
+# Assembly comes per architecture: name_i386.S or name_x86_64.S.
+ARCH_SUFFIX = "_x86_64.S" if X64 else "_i386.S"
+NATIVE = sorted([f for f in glob.glob("src/pc/guest/*.[cS]") if not f.endswith(".S") or f.endswith(ARCH_SUFFIX)] + glob.glob("src/pc/sdk/*.c") +
                 [f for f in glob.glob("src/pc/platform/*.c") if f not in BACKEND_SOURCES] + glob.glob("src/pc/overlays/*.c") + glob.glob("src/pc/overrides/*.c") + glob.glob("src/pc/audio/*.c") + glob.glob("src/pc/mods/*.c") + glob.glob("src/pc/debug/*.c") + glob.glob("src/pc/cards/*.c") + glob.glob("src/pc/free_duel/*.c") + glob.glob("src/pc/saves/*.c") + glob.glob("src/pc/text/*.c") + ["src/pc/render/soft_gpu.c", "src/pc/render/texture_dump.c", "src/pc/render/texture_pack.c"]) + [
     "src/pc/rng.c", "src/pc/compat/fs.c", "src/pc/compat/gte.c", "src/pc/compat/pgxp.c", "src/pc/compat/libgs_ot.c", "src/pc/render/packets.c"]
 # Same contract as the host C library, so the host's version is used directly.
@@ -153,6 +176,9 @@ HOST_LIBC = {"printf", "sprintf", "strcmp", "strcpy", "bzero", "qsort", "memcpy"
 
 def c_name(symbol):
     """The C name of an object-file symbol, or None for toolchain symbols."""
+    if X64:
+        # No underscore; the toolchain's own are .refptr.*, __imp_* and such.
+        return None if symbol.startswith((".", "__imp_", "$")) else symbol
     if not WINDOWS:
         return symbol
     return symbol[1:] if symbol.startswith("_") else None
@@ -186,7 +212,7 @@ def compile_unit(job):
     run([CC, *flags, "-c", source, "-o", obj])
     if os.path.exists(obj + ".aliased"):
         os.remove(obj + ".aliased")  # the fresh object names them itself (see main)
-    if WINDOWS:
+    if WINDOWS and not X64:
         # asm("name") labels in the sources name C symbols, which COFF spells
         # with a leading underscore; everything else from C already has one.
         labels = {line.split()[-1] for line in run([NM, "-g", obj]).splitlines()
@@ -281,7 +307,20 @@ def direct_branches(objects, names):
     that is also used as a value ends the build."""
     relative = {"IMAGE_REL_I386_REL32"} if WINDOWS else {"R_386_PC32", "R_386_PLT32"}
     called, used = set(), set()
-    for line in run([OBJDUMP, "-r", *objects]).splitlines():
+    if X64:
+        # x86-64 reaches data pc-relative too, so a relocation is a branch
+        # only under a call or jmp: read each from the disassembly, where it
+        # follows its instruction.
+        instruction = ""
+        for line in run([OBJDUMP, "-dr", "--no-show-raw-insn", *objects]).splitlines():
+            parts = line.split()
+            if len(parts) == 3 and parts[1].startswith("IMAGE_REL_AMD64_"):
+                if c_name(parts[2]) in names:
+                    branch = parts[1] == "IMAGE_REL_AMD64_REL32" and instruction in ("callq", "call", "jmp", "jmpq")
+                    (called if branch else used).add(c_name(parts[2]))
+            elif len(parts) >= 2 and parts[0].endswith(":"):
+                instruction = parts[1]
+    for line in run([OBJDUMP, "-r", *objects]).splitlines() if not X64 else []:
         parts = line.split()
         if len(parts) == 3 and c_name(parts[2]) in names:
             (called if parts[1] in relative else used).add(c_name(parts[2]))
@@ -300,8 +339,11 @@ def write_guest_branches(build, branches):
     branch thunks' resolver (src/pc/guest/branch_thunks.c)."""
     with open(f"{build}/guest_branches.c", "w") as handle:
         handle.write("/* Written by tools/pc/build_game32.py. */\nextern void Memories_GuestBranchDirect(void);\n")
-        handle.writelines(f'__asm__(".text\\n.globl {PREFIX}{name}\\n{PREFIX}{name}:\\n    pushl $0x{address:08X}\\n'
-                          f'    jmp {PREFIX}Memories_GuestBranchDirect\\n");\n' for name, address in sorted(branches.items()))
+        # x86-64 has no push of a 32-bit unsigned immediate: the slot is
+        # made and its low half written (the resolver reads only that).
+        push = "subq $8, %rsp\\n    movl $0x{0:08X}, (%rsp)" if X64 else "pushl $0x{0:08X}"
+        handle.writelines(f'__asm__(".text\\n.globl {PREFIX}{name}\\n{PREFIX}{name}:\\n    ' + push.format(address) +
+                          f'\\n    jmp {PREFIX}Memories_GuestBranchDirect\\n");\n' for name, address in sorted(branches.items()))
     run([CC, *NATIVE_CFLAGS, "-c", f"{build}/guest_branches.c", "-o", f"{build}/guest_branches.o"])
     return f"{build}/guest_branches.o"
 
@@ -614,18 +656,45 @@ def write_version(build, force=False):
         run([CC, *NATIVE_CFLAGS, "-c", path, "-o", f"{build}/version.o"])
     return f"{build}/version.o"
 
+X64_GATE = "tools/pc/x64_compiler_gate.c"
+
+def check_x64_compiler(build):
+    """Refuse a clang that miscompiles G32: clang 12 indexes an array of
+    __ptr32 function pointers with an 8-byte stride although sizeof says 4
+    (x64 gate 1, 2026-09-29). The gate is built with the game's flags at
+    -O0 and -O2 and run, once per compiler; the version it passed with is
+    kept in the build directory."""
+    version = run([CC, "--version"]).splitlines()[0]
+    stamp = f"{build}/compiler-gate.txt"
+    if os.path.exists(stamp) and open(stamp).read() == version + "\n" and \
+            os.path.getmtime(stamp) >= os.path.getmtime(X64_GATE):
+        return
+    os.makedirs(build, exist_ok=True)
+    exe = f"{build}/x64_compiler_gate.exe"
+    for level in ("-O0", "-O2"):
+        result = build_process.run([CC, *X64_FLAGS, "-DMEMORIES_PC", "-Isrc", level, "-Wl,--image-base=0x40000000",
+                                    "-Wl,--disable-dynamicbase", "-Wl,--disable-high-entropy-va", X64_GATE, "-o", exe])
+        if result.returncode:
+            sys.exit(f"{CC} ({version}) cannot build the 64-bit game:\n{result.stderr}")
+        checked = subprocess.run([os.path.abspath(exe)], capture_output=True, text=True)
+        if checked.returncode:
+            sys.exit(f"{CC} ({version}) miscompiles 32-bit guest pointers at {level}; the 64-bit build needs "
+                     f"clang 21 or later:\n{checked.stdout}{checked.stderr}")
+    with open(stamp, "w") as handle:
+        handle.write(version + "\n")
+
 def main():
     global NEWEST_HEADER
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--backend", choices=list(BACKENDS), default=os.environ.get("MEMORIES_BACKEND") or
                         "sdl")
-    parser.add_argument("--target", choices=("linux", "windows"), default=TARGET)
+    parser.add_argument("--target", choices=("linux", "windows", "windows-x64"), default=TARGET)
     parser.add_argument("--release", action="store_true",
                         help="Windows GUI executable; omit the optional disc-derived executable icon")
     # A Windows build made on Linux gets a directory of its own, so both
     # executables and their objects sit side by side.
-    parser.add_argument("--build", default="tmp/pc/win32" if WINDOWS and sys.platform != "win32" else
-                        "tmp/pc/game32")
+    parser.add_argument("--build", default="tmp/pc/win64" if X64 else
+                        "tmp/pc/win32" if WINDOWS and sys.platform != "win32" else "tmp/pc/game32")
     options = parser.parse_args()
     NATIVE.extend(BACKENDS[options.backend])
     NATIVE.sort()
@@ -634,9 +703,13 @@ def main():
             sys.exit("Windows builds use the SDL backend")
         if not os.path.exists(f"{WIN32_DEPS}/lib/libfreetype.a") or not os.path.exists(f"{WIN32_DEPS}/sdl"):
             os.chdir(ROOT)
+            build_win32_deps.configure("x86_64" if X64 else "i686")
             build_win32_deps.main()   # the first build: the Windows libraries
         if not shutil.which(CC):
             sys.exit(f"{CC} is not on PATH (llvm-mingw)")
+        if X64:
+            os.chdir(ROOT)
+            check_x64_compiler(options.build)
     else:
         # The Debian libraries and SDL3, fetched and built the first time.
         build_linux_sysroot.main()
@@ -858,18 +931,19 @@ def main():
         # assembly file, and aliases rename the references in the objects
         # (lld does not resolve a symbol defined as another undefined one).
         with open(f"{options.build}/guest_symbols.s", "w") as handle:
-            handle.writelines(f".globl _{name}\n.set _{name}, 0x{address:08X}\n" for name, address in pinned.items())
+            handle.writelines(f".globl {PREFIX}{name}\n.set {PREFIX}{name}, 0x{address:08X}\n"
+                              for name, address in pinned.items())
         for source in game:
             unset_coff_commons(obj(source), set(pinned))
         if aliases:
             with open(f"{options.build}/aliases.txt", "w") as handle:
-                handle.writelines(f"_{name} _{target}\n" for name, target in sorted(aliases.items()))
+                handle.writelines(f"{PREFIX}{name} {PREFIX}{target}\n" for name, target in sorted(aliases.items()))
             for source in game:
                 # The rename is in place, so the object no longer shows the
                 # names: .aliased keeps them for the next build's alias list
                 # (and so the mod exports), until the object is recompiled.
                 # An object renamed before keeps its earlier names too.
-                hits = {name[1:] for name in run([NM, "-u", obj(source)]).split()} & set(aliases)
+                hits = {name[len(PREFIX):] for name in run([NM, "-u", obj(source)]).split()} & set(aliases)
                 if hits:
                     if os.path.exists(obj(source) + ".aliased"):
                         with open(obj(source) + ".aliased") as handle:
@@ -884,8 +958,9 @@ def main():
             marked += [(f"ovl_{name}_{kind}", "dw" if kind == "data" else "bw")
                        for name, _, _, bank in MODULES if bank for kind in sections[name]]
             for section, flags in marked:
-                handle.write(f'.section {section}$a,"{flags}"\n.globl ___start_{section}\n___start_{section}:\n')
-                handle.write(f'.section {section}$z,"{flags}"\n.globl ___stop_{section}\n___stop_{section}:\n')
+                start, stop = f"{PREFIX}__start_{section}", f"{PREFIX}__stop_{section}"
+                handle.write(f'.section {section}$a,"{flags}"\n.globl {start}\n{start}:\n')
+                handle.write(f'.section {section}$z,"{flags}"\n.globl {stop}\n{stop}:\n')
     else:
         with open(f"{options.build}/guest_symbols.ld", "w") as handle:
             handle.writelines(f"{name} = 0x{address:08X};\n" for name, address in pinned.items())
@@ -951,9 +1026,15 @@ def main():
         # -pdbaltpath records the PDB by bare name, not the builder's path:
         # the GitHub runner's D:/a/... path was enough for Bitdefender to
         # flag the CI builds (Gen:Variant.Yogi) when local ones passed.
+        # The 64-bit image goes at 0x40000000, without ASLR: game code keeps
+        # native function addresses in 4-byte guest slots, and reaches the
+        # pinned guest variables (0x80000000 up to the stack at 0xB0800000)
+        # RIP-relative, within 2 GB (notes/pc-build.md, "64-bit Windows").
+        layout = (["-Wl,--image-base=0x40000000", "-Wl,--disable-dynamicbase", "-Wl,--disable-high-entropy-va"]
+                  if X64 else ["-Wl,--large-address-aware", "-Wl,--disable-dynamicbase"])
         run([CC, *(["-mwindows"] if options.release else []), "-o", output, f"-Wl,--pdb={options.build}/memories-pc.pdb",
              "-Wl,-Xlink=-debug:symtab", "-Wl,-Xlink=-pdbaltpath:%_PDB%",
-             "-Wl,--large-address-aware", "-Wl,--disable-dynamicbase", "-Wl,--nxcompat",
+             *layout, "-Wl,--nxcompat",
              "-Wl,--allow-multiple-definition", f"{options.build}/guest_symbols.o",
              *[obj(s) for s in NATIVE + game], f"{options.build}/stubs.o", guest_branches, f"{options.build}/mod_exports.o",
              version, f"{options.build}/section_markers.o", *resources,
@@ -974,7 +1055,12 @@ def main():
              *[obj(s) for s in game + NATIVE],
              f"{options.build}/stubs.o", guest_branches, f"{options.build}/mod_exports.o", version, f"{options.build}/guest_symbols.ld", *(libraries if options.backend == "sdl"
                else ["-lm", *fonts, "-lX11", "-lXext", "-lasound", *system]), *build_linux_sysroot.endfiles()])
-    build_mods(options.build, options.release)
+    if X64:
+        # Code mods are i386 objects, and the 64-bit loader is not written
+        # yet (milestone X3): the 64-bit game loads none.
+        print(f"{options.build}: no mods in the 64-bit build yet")
+    else:
+        build_mods(options.build, options.release)
     copy_languages(options.build, options.release)
     # Save states are carried between builds with these tables
     # (src/pc/guest/state.c): every function in the executable, because the
