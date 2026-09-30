@@ -321,9 +321,13 @@ def _check_packs(project: Project, out: list):
         if text:
             card_passwords.setdefault(int(text, 16) if text.isdigit() else None, cid)
     names = {packmath.pack_id(e) for e in project.packs}
-    read = []
+    read, declared = [], 0
     for i, entry in enumerate(project.packs):
-        pack, notes = packmath.read_pack(entry, resolve, project.info.id, i, ids)
+        # A pack without "order" is ordered by its place among those past
+        # their id, as the game counts them (packs.read_packs).
+        place = declared if packmath.entry_id(entry, ids) is not None else None
+        declared += place is not None
+        pack, notes = packmath.read_pack(entry, resolve, project.info.id, i, ids, place)
         where = packmath.pack_id(entry) if isinstance(entry, dict) else f"packs[{i}]"
         for level, message in notes:
             out.append(Issue(level, "Packs", where, message, i))

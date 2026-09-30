@@ -303,12 +303,26 @@ def duplicate_keys(obj) -> tuple:
     return tuple(getattr(obj, "duplicates", ()))
 
 
-def read_pack(entry, resolve, mod: str = "mod", index: int = 0, taken_ids=()) -> tuple:
+def entry_id(entry, taken_ids=()):
+    """The id an entry of "packs" is read by, or None when the game leaves
+    it out before counting it among the packs declared: not an object, an
+    "id" that is not 1-63 of [A-Za-z0-9_-], or another pack's id."""
+    if not isinstance(entry, dict):
+        return None
+    pid = json_string(entry["id"], "") if "id" in entry else slug(json_string(entry.get("name"), "pack"))
+    if "id" in entry and not KEY_RE.match(pid):
+        return None
+    return None if pid in taken_ids else pid
+
+
+def read_pack(entry, resolve, mod: str = "mod", index: int = 0, taken_ids=(), declared=None) -> tuple:
     """(Pack or None, notes): what the game makes of one entry of "packs"
     (packs.c read_pack), notes as ("error"|"warning", text). `resolve`
     names a card: its id, or 0/negative for none (Cards_Reference). A key
     written null is a value of the wrong kind, as the game reads it; a key
-    left out takes its default."""
+    left out takes its default. `declared` is the entry's place among the
+    packs that got past their id (read_packs counts them), which a pack without
+    "order" is ordered by; `index` when not given."""
     notes = []
     where = f"packs[{index}]"
     if not isinstance(entry, dict):
@@ -339,9 +353,9 @@ def read_pack(entry, resolve, mod: str = "mod", index: int = 0, taken_ids=()) ->
                                  "there"))
         description = description.encode("utf-8")[:DESCRIPTION_BYTES].decode("utf-8", "ignore")
     pack.description = description
-    pack.order = index
+    pack.order = index if declared is None else declared
     if "order" in entry:
-        pack.order, bad = number(entry["order"], -1000000, 1000000, index)
+        pack.order, bad = number(entry["order"], -1000000, 1000000, pack.order)
         if bad:
             notes.append(("warning", f"{where}: \"order\" is a whole number; the pack keeps its place"))
 
@@ -676,14 +690,17 @@ def read_packs(value, resolve, mod="mod") -> tuple:
     """([Pack], notes) of a whole "packs" list, as Packs_Add and Packs_Finish
     read it: the list sorted by "order", then as declared; of two packs with
     one password, the first in that order is the one sold."""
-    notes, out, ids = [], [], set()
+    notes, out, ids, declared = [], [], set(), 0
     if not isinstance(value, list):
         return [], [("error", "\"packs\" is a list of packs, or the name of a file that holds them")]
     for i, entry in enumerate(value):
         if len(out) >= PACKS_MAX:
             notes.append(("error", f"packs[{i}]: there are {PACKS_MAX} packs already, the most there can be; left out"))
             break
-        pack, more = read_pack(entry, resolve, mod, i, ids)
+        # Counted as the game counts: once past the id, whatever comes after.
+        place = declared if entry_id(entry, ids) is not None else None
+        declared += place is not None
+        pack, more = read_pack(entry, resolve, mod, i, ids, place)
         notes += more
         if pack:
             out.append(pack)

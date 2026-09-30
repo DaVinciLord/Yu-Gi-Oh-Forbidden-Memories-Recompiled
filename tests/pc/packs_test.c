@@ -244,6 +244,13 @@ static void test_warnings(void)
     CHECK(Packs_At(0)->password == 0x1234 && !Packs_At(0)->listed && Packs_At(1)->listed);
     CHECK(noted("its password is pack"));
     CHECK(Packs_WithPassword(0x1234) == 0 && Packs_WithPassword(0x4321) == -1);
+    /* A pack without "order" is placed among the packs past their id (the
+       editor counts the same): "a" is 0, as "b" says it is, and is sold. */
+    CHECK(one("{\"packs\": [{\"id\": \"bad id!\", \"cards\": [1]}, {\"id\": \"a\", \"cards\": [1], \"password\": 7}, "
+              "{\"id\": \"b\", \"cards\": [1], \"password\": 7, \"order\": 0}]}") == 2);
+    CHECK(!strcmp(Packs_At(0)->id, "a") && noted("pack \"b\": its password is pack \"test:a\"'s too"));
+    CHECK(one("{\"packs\": [{\"id\": \"x\", \"cards\": [1], \"price\": -1}, {\"id\": \"a\", \"cards\": [1]}, "
+              "{\"id\": \"b\", \"cards\": [1], \"order\": 0}]}") == 2 && !strcmp(Packs_At(0)->id, "b"));
     /* "sounds" of the wrong kind (an array's items have no keys to check). */
     CHECK(one("{\"packs\": [{\"cards\": [1], \"sounds\": [1, 2]}]}") == 1 && noted("\"sounds\" is {"));
     CHECK(Packs_At(0)->sounds[PACK_SOUND_BUY] == 48);

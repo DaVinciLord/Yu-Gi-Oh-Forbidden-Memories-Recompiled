@@ -151,6 +151,16 @@ class ReaderTest(unittest.TestCase):
         found, notes = packs.read_packs([{"id": "a", "cards": [1], "password": 7},
                                          {"id": "b", "cards": [1], "password": "7", "order": -5}], by_id)
         self.assertEqual([m for _, m in notes], ["pack \"a\": its password is pack \"mod:b\"'s too; that one is sold"])
+        # A pack's place when it gives no "order" counts only the packs past
+        # their id, as the game's `declared`: "a" is 0, as "b" says it is.
+        found, notes = packs.read_packs([{"id": "bad id!", "cards": [1]}, {"id": "a", "cards": [1], "password": 7},
+                                         {"id": "b", "cards": [1], "password": 7, "order": 0}], by_id)
+        self.assertEqual([p.id for p in found], ["a", "b"])
+        self.assertIn("pack \"b\": its password is pack \"mod:a\"'s too; that one is sold", [m for _, m in notes])
+        # ...and one left out after its id is counted.
+        found, _ = packs.read_packs([{"id": "x", "cards": [1], "price": -1}, {"id": "a", "cards": [1]},
+                                     {"id": "b", "cards": [1], "order": 0}], by_id)
+        self.assertEqual([p.id for p in found], ["b", "a"])
 
     def test_null_is_a_value_of_the_wrong_kind(self):
         """As the game's reader (packs.c) takes a key written null: not a key
