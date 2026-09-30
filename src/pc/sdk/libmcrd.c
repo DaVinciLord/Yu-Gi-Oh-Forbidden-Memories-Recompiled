@@ -33,7 +33,7 @@ enum { McErrNone, McErrCardNotExist, McErrCardInvalid, McErrNewCard, McErrNotFor
 struct DIRENTRY {
     char name[20];
     long attr, size;
-    struct DIRENTRY *next;
+    struct DIRENTRY *G32 next;
     long head;
     char system[4];
 };

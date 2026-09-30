@@ -1,5 +1,6 @@
 /* LIBGTE register setup over the software coprocessor. */
 #include "pc/compat/gte.h"
+#include "port_ptr.h" /* G32: the records below live in guest memory */
 
 void InitGeom(void)
 {
@@ -603,15 +604,15 @@ typedef struct DivideVertex {
 
 typedef struct DivideLevel {
     DivideVertex r01, r02, r31, r32, centre;
-    DivideVertex *corner[4];
-    uint32_t *unused_return;
+    DivideVertex *G32 corner[4];
+    uint32_t *G32 unused_return;
 } DivideLevel;
 
 typedef struct DividePolygon4 {
     uint32_t ndiv, pih, piv;
     uint16_t clut, tpage;
     uint32_t rgbc;
-    uint32_t *ot;
+    uint32_t *G32 ot;
     DivideVertex r[4];
     DivideLevel level[5];
 } DividePolygon4;
@@ -646,7 +647,7 @@ static void store_screen(DivideVertex *vertex, unsigned sxy, unsigned sz)
 
 static uint32_t *divide_ft4(uint32_t *packet, DividePolygon4 *work, uint32_t depth, DivideLevel *level)
 {
-    DivideVertex **r = level->corner;
+    DivideVertex *G32 *r = level->corner;
     int32_t near_limit = (int32_t)Memories_GteReadControl(26) >> 1;
     int32_t centre_x = (int32_t)Memories_GteReadControl(24) >> 16, centre_y = (int32_t)Memories_GteReadControl(25) >> 16;
     int32_t half_w = (int32_t)(work->pih >> 1), half_h = (int32_t)(work->piv >> 1);

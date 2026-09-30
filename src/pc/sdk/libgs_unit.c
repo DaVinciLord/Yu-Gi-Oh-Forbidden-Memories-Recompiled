@@ -23,12 +23,12 @@ typedef struct CoordUnit {
     u32 flg;
     MATRIX coord, workm;
     SVECTOR rot;
-    struct CoordUnit *super;
+    struct CoordUnit *G32 super;
 } CoordUnit;
 
 typedef struct View2 {
     s32 vpx, vpy, vpz, vrx, vry, vrz, rz;
-    CoordUnit *super;
+    CoordUnit *G32 super;
 } View2;
 
 #define WORDS(p) ((u32 *)(uintptr_t)(p))
@@ -201,7 +201,7 @@ u32 *GsU_02000001(u32 *scratch) { return upload_images(scratch, 1); }
 
 /* Animation section: collect a pointer to each sequence (their lengths, in
  * words, are at +4), returning how many there are. */
-int GsLinkAnim(u32 **sequences, u32 *header)
+int GsLinkAnim(u32 *G32 *sequences, u32 *header)
 {
     u32 *sequence = header + 2;
     int count = ((u16 *)header)[3], i;
