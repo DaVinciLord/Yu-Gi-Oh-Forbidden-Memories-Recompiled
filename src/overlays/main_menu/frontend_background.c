@@ -96,6 +96,7 @@ void MainMenu_DrawFrontendBackground(void)
        colour, in the picture's slot after it, which puts it under the
        picture: a slot draws what was added to it last first. */
     TitleScreen_DrawImages(D_800E9D90[2]);
+    TitleScreen_DrawMenu();
     if (TitleScreen_BackgroundColour() >= 0) {
         PSXLONG colour = TitleScreen_BackgroundColour();
         setPolyF4(&flat);

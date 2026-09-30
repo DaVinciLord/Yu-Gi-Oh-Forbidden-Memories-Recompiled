@@ -1,6 +1,6 @@
 #ifndef MEMORIES_PC_PLATFORM_TITLE_SCREEN_H
 #define MEMORIES_PC_PLATFORM_TITLE_SCREEN_H
-/* The mods' "title" key: what the title screen plays, shows and offers
+/* The mods' "title" and "menu" keys: what the title screen plays, shows and offers
  * (notes/modding.md, "The title screen"). Every applied mod's "title" is read
  * again each time the title opens, in load order, a later mod's value winning
  * field by field, so applying or removing a mod shows the next time the
@@ -31,6 +31,9 @@ int TitleScreen_ShowPicture(void);
 /* The mods' pictures (title_images.h) into the background's ordering table. */
 void TitleScreen_DrawImages(void *ot);
 int TitleScreen_ShowShade(void);
+/* The menus' items the port draws (title_menu.h), into the entries'
+ * ordering table. */
+void TitleScreen_DrawMenu(void);
 long TitleScreen_BackgroundColour(void);
 int TitleScreen_Dim(int level);
 
