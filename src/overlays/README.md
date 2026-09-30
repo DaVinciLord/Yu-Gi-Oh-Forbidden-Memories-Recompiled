@@ -54,3 +54,5 @@ Initialized module directories:
   bank at `0x80146000` (effects 0-24, entry `0x801462B0`); the functions
   keep upstream's PAL-address names, so map them through
   `config/slus_01411/overlays/duel_effects_functions.csv`.
+- [`credits/`](credits/) holds the matched C of the SU credits module the
+  ending loads over the main menu at `0x80180000`.

@@ -427,6 +427,18 @@ address. Checked from a state at the ending's last dialogue, mashing Cross
 (`MEMORIES_INPUT`) at 400%: names and the wireframe monsters through
 "Created by Konami Computer Entertainment Japan" with no interpreter failure.
 
+Since 2026-09-30 the module runs as native C when the delivered bytes are the
+retail module: upstream matched it 6/6 (#6692), and `src/overlays/credits` is
+linked in as a gated module (identifier `0x10`, bank `0x80180000`, symbols
+prefixed `credits__`). The function map sends its three entries
+(`0x801807B0` set-up, `0x80180A24` update, `0x80181C4C` a group of lines) to
+`src/pc/overlays/credits.c`, which applies the duel-effect bank's rule (see
+[MIPS-only effects](#mips-only-effects)): SHA-256 of the `0x8000` bytes at the
+first call after a delivery against `f125a2a6...`, native C if equal, the
+interpreter above otherwise. `MEMORIES_CREDITS=interpreter` forces the
+interpreter. Gated modules are kept out of the module registry, so the
+interpreter still owns `0x80180000-0x80188000` whenever it runs a modded image.
+
 The retail game never leaves the credits: `Main_RunCredits` runs the scene in
 its last phase, after the save and the secret number, and drops the answer of
 `Model_IsCreditsPresentationComplete`, so the screen stays on the last credit
