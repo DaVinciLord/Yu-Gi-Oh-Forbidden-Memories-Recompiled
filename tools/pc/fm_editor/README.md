@@ -582,7 +582,8 @@ the engine keeps no undo (a front end may keep `project.clone()`s).
 
 * Cards: `project.cards[id]` is a `gamedata.Card` (name, description,
   attack, defense, type, attribute, level, star1, star2, frame); replace it
-  with `card.copy(field=value)`. `card_changed`, `revert_card`,
+  with `card.copy(field=value)`; a function's `card` argument below is the
+  number, not the `Card`. `card_changed`, `revert_card`,
   `add_card(base, key)` (an added card, id 723 and up, in
   `project.added`), `remove_card`, `password`/`set_password`,
   `set_notes`, `card_label`, `model.card_matches` (the search).
