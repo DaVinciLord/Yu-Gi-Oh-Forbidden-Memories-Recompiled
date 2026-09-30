@@ -190,6 +190,74 @@ class GuiTest(unittest.TestCase):
         app.update()
         self.assertEqual(tab.vars["name"].get(), "Dragons")
 
+    def test_packs_keep_what_is_written(self):
+        """Opening a mod and moving through its packs changes nothing of it;
+        a copy's picture is its own; Shop settings keep a shop's other keys."""
+        from fm_editor import manifest, packs as packmath, pngio
+        from fm_editor.tests.test_art import gradient
+        app, tab = self.app, self.app.packs
+        mod = Path(self.tmp.name) / "packs-as-written"
+        mod.mkdir(exist_ok=True)
+        source = {"id": "written", "name": "Written", "packs": [
+            {"name": "Alpha", "cards": [1, 2, 3], "cover": 2, "price": 100.0},
+            {"name": "Beta", "price": 100, "duplicates": "allow", "cards": {"4": 1, "5": 1}, "mystery": 1},
+            {"name": "Gamma", "cards": [6], "include_added_cards": "no", "stock": "5"}],
+            "pack_shop": {"rng": "game", "shops": [{"id": "a", "name": "A", "where": "password", "extra": 1}]}}
+        (mod / "mod.json").write_text(json.dumps(source), encoding="utf-8")
+        app.load_mod(mod)
+        app.notebook.select(tab)
+        app.update()
+        before = json.dumps(app.project.packs)
+        for i in (1, 2, 0, 2):
+            tab.list.selection_set(str(i))
+            app.update()
+        self.assertFalse(app.dirty)
+        self.assertEqual(json.dumps(app.project.packs), before)
+        # An edit changes what it edits, and leaves the rest as written.
+        tab.vars["description"].set("Three cards")
+        self.assertTrue(tab.commit())
+        self.assertTrue(app.dirty)
+        self.assertEqual(app.project.packs[2]["stock"], "5")
+        self.assertEqual(app.project.packs[2]["include_added_cards"], "no")
+        tab.list.selection_set("0")
+        app.update()
+        tab.adv["when_nothing_left"].set("sell")
+        self.assertTrue(tab.commit())
+        self.assertEqual(app.project.packs[0]["cover"], 2)
+        self.assertEqual(app.project.packs[0]["when_nothing_left"], "sell")
+        # A copy gets a picture of its own: importing on it leaves the first's.
+        picture = Path(self.tmp.name) / "packs-own.png"
+        pngio.write(picture, gradient(102, 96))
+        tab.use_file(str(picture))
+        first = app.project.packs[0]["image"]
+        tab.duplicate()
+        copy_image = app.project.packs[1]["image"]
+        self.assertNotEqual(copy_image, first)
+        self.assertEqual(app.project.files[copy_image], app.project.files[first])
+        tab.use_file(str(picture))
+        tab.revert_png()
+        self.assertIn(first, app.project.files)
+        self.assertNotIn(copy_image, app.project.files)
+        # Shop settings: OK with nothing typed changes nothing; a shop's other keys stay.
+        with mock.patch("fm_editor.packs_tab.FormDialog") as form:
+            tab.shop_settings()
+            build, ok = form.call_args[0][2], form.call_args[0][3]
+            body = tk.Frame(app)
+            build(None, body)
+            self.assertIsNone(ok(None))
+            self.assertEqual(app.project.pack_shop, packmath.minimize_rules(source["pack_shop"]))
+            tab.shop_settings()
+            build, ok = form.call_args[0][2], form.call_args[0][3]
+            body = tk.Frame(app)
+            build(None, body)
+            texts = [w for w in body.grid_slaves() if isinstance(w, tk.Text)]
+            texts[0].delete("1.0", "end")
+            texts[0].insert("1.0", "a | Shop A\nb\n")
+            self.assertIsNone(ok(None))
+        self.assertEqual(app.project.pack_shop["shops"], [{"id": "a", "name": "Shop A", "where": "password",
+                                                           "extra": 1}, {"id": "b"}])
+        self.assertEqual(manifest.build(app.project)["pack_shop"]["shops"][0]["where"], "password")
+
     def test_text_preview(self):
         import dataclasses
         from fm_editor import card_text

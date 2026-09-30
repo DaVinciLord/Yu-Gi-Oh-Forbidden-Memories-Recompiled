@@ -26,6 +26,7 @@ from .widgets import CardField, FormDialog, pick_card, px, scrolled_tree, show_t
 
 ZOOMS = (1, 2, 4)
 LISTED = ("(default)", "yes", "no")
+SHOPS_RULE = "(shop's)"                  # "when_nothing_left" left to "pack_shop"
 _FONT = {}
 
 
@@ -101,6 +102,7 @@ class PacksTab(Tab):
         self.photos = {}
         self.filling = False
         self.cover = 0
+        self.baseline = {}
         left = ttk.Frame(self)
         left.pack(side="left", fill="y")
         frame, self.list = scrolled_tree(left, [("n", "#"), ("name", "Pack"), ("price", "Price"), ("cards", "Cards"),
@@ -257,6 +259,13 @@ class PacksTab(Tab):
         v["include_added"] = tk.BooleanVar()
         ttk.Checkbutton(page, text="Include cards mods add", variable=v["include_added"]).grid(row=r + 2, column=1,
                                                                                                sticky="w")
+        v["when_nothing_left"] = tk.StringVar()
+        ttk.Label(page, text="All owned").grid(row=r + 3, column=0, sticky="w")
+        ttk.Combobox(page, textvariable=v["when_nothing_left"], values=(SHOPS_RULE,) + packmath.NOTHING_LEFT,
+                     state="readonly", width=16).grid(row=r + 3, column=1, sticky="w")
+        ttk.Label(page, text="with Max copies, when the player holds that many of every card: refuse (BUY is\n"
+                             "refused, ALL OWNED) or sell anyway (empty slots); (shop's): Shop settings' rule",
+                  style="Hint.TLabel").grid(row=r + 3, column=2, sticky="w", padx=6)
 
         page = ttk.Frame(book, padding=4)
         book.add(page, text="Unlock")
@@ -385,6 +394,15 @@ class PacksTab(Tab):
             self._fill()
         finally:
             self.filling = False
+            # What the form says of the pack as written: a field still saying
+            # it keeps the pack's value as the mod wrote it (store).
+            self.baseline = self.form_state()
+
+    def form_state(self) -> dict:
+        state = {key: var.get() for key, var in self.vars.items()}
+        state.update({key: var.get() for key, var in self.adv.items() if key != "use_slots"})
+        state["unlock_card"] = self.unlock_card.var.get()
+        return state
 
     def _fill(self):
         entry = self.current()
@@ -452,7 +470,9 @@ class PacksTab(Tab):
         v["cover"].set(str(entry.get("cover", "")))
         v["duplicates"].set(entry.get("duplicates", "allow"))
         v["reveal"].set(entry.get("reveal", "flip"))
-        v["include_added"].set(entry.get("include_added_cards", True) is not False)
+        v["include_added"].set(packmath.json_bool(entry.get("include_added_cards"), True))
+        rule = entry.get("when_nothing_left", SHOPS_RULE)
+        v["when_nothing_left"].set(rule if isinstance(rule, str) else json.dumps(rule))
         unlock = entry.get("unlock") if isinstance(entry.get("unlock"), dict) else {}
         v["beat"].set(str(unlock.get("beat", "")))
         for key in ("wins", "story", "copies", "starchips_spent", "packs_opened"):
@@ -465,7 +485,7 @@ class PacksTab(Tab):
         v["locked"].set(entry.get("locked", "hidden"))
         password = packmath.password_bits(entry.get("password")) if "password" in entry else None
         v["password"].set(f"{password:08X}" if password is not None else str(entry.get("password", "")))
-        v["once"].set(entry.get("once") is True)
+        v["once"].set(packmath.json_bool(entry.get("once"), False))
         listed = entry.get("listed")
         v["listed"].set(LISTED[0] if listed is None else LISTED[1] if listed else LISTED[2])
         sounds = entry.get("sounds") if isinstance(entry.get("sounds"), dict) else {}
@@ -489,6 +509,8 @@ class PacksTab(Tab):
     def commit(self):
         if self.project is None or self.current() is None or self.filling:
             return True
+        if self.project.packs_file is not None:
+            return True                  # the file's packs are kept as written
         try:
             self.store(self.current())
         except ValueError as problem:
@@ -502,28 +524,19 @@ class PacksTab(Tab):
 
     def store(self, entry):
         """The form into the pack; ValueError (and nothing stored) when a field
-        is not what the game reads."""
+        is not what the game reads. A field that still says what the form
+        showed of the pack leaves its key as the mod wrote it (`"cover": 2`
+        stays a number, a value the form cannot show stays), so opening a mod
+        and moving between packs changes nothing of it."""
+        now = self.form_state()
+        base = self.baseline
+        if now == base:
+            return
         new = copy.deepcopy(entry)
-        name = self.vars["name"].get().strip()
-        if not name:
-            raise ValueError("a pack has a name")
-        old_id = packmath.pack_id(entry)
-        new["name"] = name
-        if "id" not in entry and packmath.slug(name) != old_id:
-            new["id"] = old_id           # its identity stays: a save's progress is kept by it
-        description = self.vars["description"].get().strip()
-        if description:
-            new["description"] = description
-        else:
-            new.pop("description", None)
-        price = whole(self.vars["price"].get(), "Price", 0, packmath.PRICE_MAX, packmath.DEFAULT_PRICE)
-        if isinstance(new.get("cost"), dict) and "starchips" in new["cost"]:
-            new["cost"]["starchips"] = price
-        else:
-            new["price"] = price
-        count = whole(self.vars["count"].get(), "Cards a pack", 1, packmath.COUNT_MAX, packmath.default_count(new))
-        new["count"] = count
         v = self.adv
+
+        def changed(*keys):
+            return any(now.get(key) != base.get(key) for key in keys)
 
         def put(key, value, container=new):
             if value in (None, "", {}, []):
@@ -531,73 +544,121 @@ class PacksTab(Tab):
             else:
                 container[key] = value
 
-        put("guarantee", parse_pairs(v["guarantee"].get(), "Guarantee"))
-        put("pity", parse_pairs(v["pity"].get(), "Pity"))
-        put("max_copies", whole(v["max_copies"].get(), "Max copies", 1, 250))
-        put("stock", whole(v["stock"].get(), "Stock", 1, 999999))
-        put("order", whole(v["order"].get(), "Order", -1000000, 1000000))
-        cost_cards = parse_pairs(v["cost_cards"].get(), "Cost in cards")
-        cost = new.get("cost") if isinstance(new.get("cost"), dict) else {}
-        put("cards", cost_cards, cost)
-        put("cost", cost)
-        shops = [s.strip() for s in v["shop"].get().split(",") if s.strip()]
-        put("shop", shops[0] if len(shops) == 1 and isinstance(entry.get("shop"), str) else shops)
-        cover = v["cover"].get().strip()
-        if cover:
-            cid = self.project.resolve(cover) or (int(cover.split(" ", 1)[0]) if cover.split(" ", 1)[0].isdigit() else 0)
-            put("cover", self.project.ref(cid) if cid in self.project.cards else cover)
-        else:
-            new.pop("cover", None)
-        new["duplicates"] = v["duplicates"].get() or "allow"
-        new["reveal"] = v["reveal"].get() or "flip"
-        new["include_added_cards"] = bool(v["include_added"].get())
-        unlock = copy.deepcopy(entry.get("unlock")) if isinstance(entry.get("unlock"), dict) else {}
+        if changed("name"):
+            name = self.vars["name"].get().strip()
+            if not name:
+                raise ValueError("a pack has a name")
+            old_id = packmath.pack_id(entry)
+            new["name"] = name
+            if "id" not in entry and packmath.slug(name) != old_id:
+                new["id"] = old_id           # its identity stays: a save's progress is kept by it
+        if changed("description"):
+            put("description", self.vars["description"].get().strip())
+        if changed("price"):
+            price = whole(self.vars["price"].get(), "Price", 0, packmath.PRICE_MAX, packmath.DEFAULT_PRICE)
+            if isinstance(new.get("cost"), dict) and "starchips" in new["cost"]:
+                new["cost"]["starchips"] = price
+            else:
+                new["price"] = price
+        if changed("count"):
+            new["count"] = whole(self.vars["count"].get(), "Cards a pack", 1, packmath.COUNT_MAX,
+                                 packmath.default_count(new))
+        if changed("guarantee"):
+            put("guarantee", parse_pairs(v["guarantee"].get(), "Guarantee"))
+        if changed("pity"):
+            put("pity", parse_pairs(v["pity"].get(), "Pity"))
+        if changed("max_copies"):
+            put("max_copies", whole(v["max_copies"].get(), "Max copies", 1, 250))
+        if changed("stock"):
+            put("stock", whole(v["stock"].get(), "Stock", 1, 999999))
+        if changed("order"):
+            put("order", whole(v["order"].get(), "Order", -1000000, 1000000))
+        if changed("cost_cards"):
+            cost = new.get("cost") if isinstance(new.get("cost"), dict) else {}
+            put("cards", parse_pairs(v["cost_cards"].get(), "Cost in cards"), cost)
+            put("cost", cost)
+        if changed("shop"):
+            shops = [s.strip() for s in v["shop"].get().split(",") if s.strip()]
+            put("shop", shops[0] if len(shops) == 1 and isinstance(entry.get("shop"), str) else shops)
+        if changed("cover"):
+            cover = v["cover"].get().strip()
+            if cover:
+                cid = self.project.resolve(cover) or (int(cover.split(" ", 1)[0]) if cover.split(" ", 1)[0].isdigit()
+                                                      else 0)
+                put("cover", self.project.ref(cid) if cid in self.project.cards else cover)
+            else:
+                new.pop("cover", None)
+        if changed("duplicates"):
+            new["duplicates"] = v["duplicates"].get() or "allow"
+        if changed("reveal"):
+            new["reveal"] = v["reveal"].get() or "flip"
+        if changed("include_added"):
+            new["include_added_cards"] = bool(v["include_added"].get())
+        if changed("when_nothing_left"):
+            rule = v["when_nothing_left"].get()
+            put("when_nothing_left", rule if rule in packmath.NOTHING_LEFT else None)
+        unlock_keys = ("beat", "wins", "story", "copies", "starchips_spent", "packs_opened", "opened", "unlock_card")
+        if changed(*unlock_keys):
+            unlock = copy.deepcopy(entry.get("unlock")) if isinstance(entry.get("unlock"), dict) else {}
 
-        def as_written(key, text, container):
-            """The text, or the value as the mod wrote it when it reads the same."""
-            if key in container and str(container[key]) == text:
-                return container[key]
-            return text
+            def as_written(key, text, container):
+                """The text, or the value as the mod wrote it when it reads the same."""
+                if key in container and str(container[key]) == text:
+                    return container[key]
+                return text
 
-        put("beat", as_written("beat", v["beat"].get().strip(), unlock), unlock)
-        for key, low, high in (("wins", 0, 65535), ("story", 0, 0xFFFF), ("copies", 0, 250),
-                               ("starchips_spent", 0, 999999999), ("packs_opened", 0, 999999999)):
-            text = v[key].get().strip()
-            number = int(text, 16) if text.lower().startswith("0x") and key == "story" else None
-            put(key, number if number is not None else whole(text, key.replace("_", " ").capitalize(), low, high),
-                unlock)
-        put("opened", parse_pairs(v["opened"].get(), "Opened"), unlock)
-        card = self.unlock_card.get()
-        typed = self.unlock_card.var.get().strip()
-        if card and "card" in unlock and self.project.resolve(unlock["card"]) == card:
-            put("card", unlock["card"], unlock)
-        else:
-            put("card", self.project.ref(card) if card else typed, unlock)
-        put("unlock", unlock)
-        new["locked"] = v["locked"].get() or "hidden"
-        password = v["password"].get().strip()
-        if password and (not password.isdigit() or len(password) > 8):
-            raise ValueError("a password is up to 8 digits")
-        if password and "password" in entry and packmath.password_bits(entry["password"]) == int(password.zfill(8), 16):
-            put("password", entry["password"])
-        else:
-            put("password", password.zfill(8) if password else "")
-        new["once"] = bool(v["once"].get())
-        listed = v["listed"].get()
-        if listed == LISTED[0]:
-            new.pop("listed", None)
-        else:
-            new["listed"] = listed == LISTED[1]
-        sounds = copy.deepcopy(entry.get("sounds")) if isinstance(entry.get("sounds"), dict) else {}
-        for key in packmath.SOUND_KEYS:
-            put(key, whole(v["sound_" + key].get(), f"Sound {key}", 0, 0xFFFF), sounds)
-        put("sounds", sounds)
-        # Stored only when it says something else: opening a mod and moving
-        # between tabs changes nothing of it.
+            if changed("beat"):
+                put("beat", as_written("beat", v["beat"].get().strip(), unlock), unlock)
+            for key, low, high in (("wins", 0, 65535), ("story", 0, 0xFFFF), ("copies", 0, 250),
+                                   ("starchips_spent", 0, 999999999), ("packs_opened", 0, 999999999)):
+                if not changed(key):
+                    continue
+                text = v[key].get().strip()
+                number = int(text, 16) if text.lower().startswith("0x") and key == "story" else None
+                put(key, number if number is not None else whole(text, key.replace("_", " ").capitalize(), low, high),
+                    unlock)
+            if changed("opened"):
+                put("opened", parse_pairs(v["opened"].get(), "Opened"), unlock)
+            if changed("unlock_card"):
+                card = self.unlock_card.get()
+                typed = self.unlock_card.var.get().strip()
+                if card and "card" in unlock and self.project.resolve(unlock["card"]) == card:
+                    put("card", unlock["card"], unlock)
+                else:
+                    put("card", self.project.ref(card) if card else typed, unlock)
+            put("unlock", unlock)
+        if changed("locked"):
+            new["locked"] = v["locked"].get() or "hidden"
+        if changed("password"):
+            password = v["password"].get().strip()
+            if password and (not password.isdigit() or len(password) > 8):
+                raise ValueError("a password is up to 8 digits")
+            if password and "password" in entry and packmath.password_bits(entry["password"]) == int(password.zfill(8),
+                                                                                                    16):
+                put("password", entry["password"])
+            else:
+                put("password", password.zfill(8) if password else "")
+        if changed("once"):
+            new["once"] = bool(v["once"].get())
+        if changed("listed"):
+            listed = v["listed"].get()
+            if listed == LISTED[0]:
+                new.pop("listed", None)
+            else:
+                new["listed"] = listed == LISTED[1]
+        sound_keys = ["sound_" + key for key in packmath.SOUND_KEYS]
+        if changed(*sound_keys):
+            sounds = copy.deepcopy(entry.get("sounds")) if isinstance(entry.get("sounds"), dict) else {}
+            for key in packmath.SOUND_KEYS:
+                if changed("sound_" + key):
+                    put(key, whole(v["sound_" + key].get(), f"Sound {key}", 0, 0xFFFF), sounds)
+            put("sounds", sounds)
+        # Stored only when it says something else.
         if packmath.minimize(new) != packmath.minimize(entry):
             entry.clear()
             entry.update(packmath.minimize(new))
             self.app.changed()
+        self.baseline = now
 
     def edited(self):
         self.app.changed()
@@ -631,6 +692,13 @@ class PacksTab(Tab):
         copied.pop("id", None)
         if pid != packmath.slug(name):
             copied = {"id": pid, **copied}
+        # A picture of its own, so importing one for either pack, or taking
+        # one's away, leaves the other's as it is.
+        blob = self.image_bytes(entry)
+        if blob is not None:
+            picture = self.free_image_name(pid)
+            self.project.files[picture] = blob
+            copied["image"] = picture
         self.project.packs.insert(self.index + 1, copied)
         self.index += 1
         self.edited()
@@ -1109,9 +1177,10 @@ class PacksTab(Tab):
         except (OSError, pngio.PngError) as problem:
             messagebox.showerror("Picture", f"{Path(path).name}: {problem}", parent=self)
             return
-        name = f"packs/{packmath.pack_id(entry)}.png"
         old = entry.get("image")
-        if isinstance(old, str) and old != name:
+        name = old if isinstance(old, str) and old in self.project.files and not self.image_shared(old, entry) \
+            else self.free_image_name(packmath.pack_id(entry), entry)
+        if isinstance(old, str) and old != name and not self.image_shared(old, entry):
             self.project.files.pop(old, None)
         self.project.files[name] = pngio.encode(image)
         entry["image"] = name
@@ -1132,8 +1201,22 @@ class PacksTab(Tab):
         entry = self.current()
         if entry is None or not isinstance(entry.get("image"), str):
             return
-        self.project.files.pop(entry.pop("image"), None)
+        image = entry.pop("image")
+        if not self.image_shared(image, entry):
+            self.project.files.pop(image, None)
         self.edited()
+
+    def image_shared(self, image, entry) -> bool:
+        """Whether a pack other than `entry` names this picture too."""
+        return any(isinstance(other, dict) and other is not entry and other.get("image") == image
+                   for other in self.entries())
+
+    def free_image_name(self, pid, entry=None) -> str:
+        """packs/<id>.png, or -2, -3... when another pack names that already."""
+        name, n = f"packs/{pid}.png", 2
+        while self.image_shared(name, entry):
+            name, n = f"packs/{pid}-{n}.png", n + 1
+        return name
 
     # --- the shop and Simulate ---------------------------------------------------------
 
@@ -1143,10 +1226,19 @@ class PacksTab(Tab):
         rules = copy.deepcopy(self.project.pack_shop) if isinstance(self.project.pack_shop, dict) else {}
         fields = {}
 
+        shown = {}
+
         def build(dialog, body):
-            fields["password"] = tk.StringVar(value=rules.get("password", "both"))
-            fields["rng"] = tk.StringVar(value=rules.get("rng", "game"))
+            fields["password"] = tk.StringVar(value=str(rules.get("password", "both")))
+            fields["rng"] = tk.StringVar(value=str(rules.get("rng", "game")))
             fields["music"] = tk.StringVar(value=str(rules.get("music", packmath.DEFAULT_MUSIC)))
+            fields["when_nothing_left"] = tk.StringVar(value=str(rules.get("when_nothing_left", "refuse")))
+            ttk.Label(body, text="All owned").grid(row=8, column=0, sticky="w", pady=2)
+            ttk.Combobox(body, textvariable=fields["when_nothing_left"], values=packmath.NOTHING_LEFT,
+                         state="readonly", width=14).grid(row=8, column=1, sticky="w")
+            ttk.Label(body, text="for a pack of Max copies that says nothing: refuse it (ALL OWNED) or sell it with "
+                                 "empty slots\nwhen the player holds that many of every card",
+                      style="Hint.TLabel").grid(row=9, column=0, columnspan=2, sticky="w")
             ttk.Label(body, text="Password screen").grid(row=0, column=0, sticky="w", pady=2)
             ttk.Combobox(body, textvariable=fields["password"], values=packmath.SHOP_PASSWORD, state="readonly",
                          width=14).grid(row=0, column=1, sticky="w")
@@ -1171,33 +1263,54 @@ class PacksTab(Tab):
                         line += " | " + json.dumps(shop["unlock"], ensure_ascii=False)
                     fields["shops"].insert("end", line + "\n")
             ttk.Label(body, text="Needs a restart of the game. Not yet in the game (the keys are kept for them): "
-                                 + ", ".join(packmath.NOT_YET) + ".", style="Hint.TLabel",
+                                 + ", ".join(packmath.NOT_YET) + ". A shop's other keys (\"where\" and any the "
+                                 "editor has no field for) stay as written.", style="Hint.TLabel",
                       wraplength=px(self, 460), justify="left").grid(row=7, column=0, columnspan=2, sticky="w",
                                                                      pady=(6, 0))
+            shown.update({key: var.get() for key, var in fields.items() if key != "shops"})
+            shown["shops"] = fields["shops"].get("1.0", "end")
 
         def ok(dialog):
             new = dict(rules)
-            new["password"] = fields["password"].get()
-            new["rng"] = fields["rng"].get()
-            try:
-                new["music"] = whole(fields["music"].get(), "Music", 0, 0xFFFF, packmath.DEFAULT_MUSIC)
-            except ValueError as problem:
-                return str(problem)
-            shops = []
-            for n, line in enumerate(fields["shops"].get("1.0", "end").splitlines(), start=1):
-                if not line.strip():
-                    continue
-                parts = [p.strip() for p in line.split("|", 2)]
-                if not packmath.KEY_RE.match(parts[0]):
-                    return f"shop line {n}: an id is 1-63 letters, digits, '_' or '-'"
-                shop = {"id": parts[0], "name": parts[1] if len(parts) > 1 and parts[1] else parts[0]}
-                if len(parts) > 2 and parts[2]:
-                    try:
-                        shop["unlock"] = json.loads(parts[2])
-                    except json.JSONDecodeError as problem:
-                        return f"shop line {n}: the unlock is not JSON ({problem.msg})"
-                shops.append(shop)
-            new["shops"] = shops
+            # A field still showing what was written leaves the key as it was.
+            for key in ("password", "rng", "when_nothing_left"):
+                if fields[key].get() != shown[key]:
+                    new[key] = fields[key].get()
+            if fields["music"].get() != shown["music"]:
+                try:
+                    new["music"] = whole(fields["music"].get(), "Music", 0, 0xFFFF, packmath.DEFAULT_MUSIC)
+                except ValueError as problem:
+                    return str(problem)
+            if fields["shops"].get("1.0", "end") != shown["shops"]:
+                written = {}
+                for shop in rules.get("shops") if isinstance(rules.get("shops"), list) else []:
+                    if isinstance(shop, dict) and isinstance(shop.get("id"), str):
+                        written.setdefault(shop["id"], shop)
+                shops = []
+                for n, line in enumerate(fields["shops"].get("1.0", "end").splitlines(), start=1):
+                    if not line.strip():
+                        continue
+                    parts = [p.strip() for p in line.split("|", 2)]
+                    if not packmath.KEY_RE.match(parts[0]):
+                        return f"shop line {n}: an id is 1-63 letters, digits, '_' or '-'"
+                    # The shop as written, its "where" and unknown keys kept.
+                    shop = copy.deepcopy(written.get(parts[0], {}))
+                    shop["id"] = parts[0]
+                    if len(parts) > 1 and parts[1]:
+                        shop["name"] = parts[1]
+                    else:
+                        shop.pop("name", None)          # the game names it by its id
+                    if len(parts) > 2 and parts[2]:
+                        try:
+                            shop["unlock"] = json.loads(parts[2])
+                        except json.JSONDecodeError as problem:
+                            return f"shop line {n}: the unlock is not JSON ({problem.msg})"
+                    else:
+                        shop.pop("unlock", None)
+                    shops.append({"id": shop.pop("id"), **shop})
+                if len({shop["id"] for shop in shops}) > packmath.SHOPS_MAX:
+                    return f"at most {packmath.SHOPS_MAX} shops"
+                new["shops"] = shops
             self.project.pack_shop = packmath.minimize_rules(new)
             self.edited()
             return None

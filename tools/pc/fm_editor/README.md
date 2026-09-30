@@ -561,7 +561,10 @@ selected rows, **Weight**/**Set**, **Remove selected**.
 * **Dealing**: guarantee and pity (`tier=n`), max copies, stock, cost in
   cards (`card=copies` from the chest), order, shops, cover, duplicates
   (`unique_in_pack`), reveal (`flip`, `quick`, `list`), include the cards mods
-  add.
+  add, and **All owned** (`when_nothing_left`): with max copies, when the
+  player holds that many of every card, `refuse` the pack (ALL OWNED on the
+  screen, nothing paid) or `sell` it anyway, or `(shop's)` for Shop
+  settings' rule.
 * **Unlock**: beat (a duelist), wins, story flag (`0x6E0` + n is the n-th
   campaign duelist beaten), card and copies, starchips spent on packs, packs
   opened, opened (`pack=n`), and whether a locked pack is hidden or shown.
@@ -571,8 +574,10 @@ selected rows, **Weight**/**Set**, **Remove selected**.
 
 **Shop settings...** edits `pack_shop`: what the Password screen sells (both,
 packs only, passwords only), the random numbers (`game`, or `save` so a
-reloaded save deals the same pack), the music, and the shops, one a line (`id
-| name | unlock as JSON`). Not yet in the game, and so not offered (the keys
+reloaded save deals the same pack), the music, **All owned** (the rule for
+the packs that do not say, `refuse` by default), and the shops, one a line
+(`id | name | unlock as JSON`, sixteen at most); a shop's other keys (`where`,
+and any the editor has no field for) stay as written. Not yet in the game, and so not offered (the keys
 are kept free for them): a PACKS entry in the campaign's shop
 (`campaign_shop`), the main menu, saving after each purchase (`autosave`),
 selling mods' cards by their passwords (`sell_added_cards`), a currency of the
@@ -586,6 +591,12 @@ one pack to the next as a save counts it, and lists the cards dealt by tier
 and by card, how often a tier with a pity came on average and how often the
 pity dealt it. The tests hold the Python dealer to the C one's deals
 (`tests/pc/packs_golden.txt`), line for line.
+
+A field of the pack left as the tab showed it keeps the key as the mod wrote
+it: opening a mod and moving through its packs changes nothing of it (a
+`"cover": 2` stays a number), and **Apply** writes only the fields changed.
+**Duplicate** gives the copy a picture of its own, so importing one for
+either pack leaves the other's.
 
 ## Tests
 
