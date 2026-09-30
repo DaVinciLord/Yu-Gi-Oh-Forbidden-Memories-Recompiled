@@ -77,7 +77,7 @@ void MemCardDialog_UpdateTradeSave(void)
     case 1:
         D_801D5648[0] = (D_8009B3F9 >> 4) + 1;
         if (MemCardGetDirentry(D_8009B3F9, (char *)D_800EFE18,
-                               (struct DIRENTRY *)D_800EFBC0, (long *)&files, 0,
+                               (struct DIRENTRY *)D_800EFBC0, (PSXLONG *)&files, 0,
                                MEM_CARD_BLOCK_COUNT) != 0) {
             MemCardDialog_SetMessage(0xDA, 0x18);
             break;
@@ -99,7 +99,7 @@ void MemCardDialog_UpdateTradeSave(void)
             D_8009B3EC = 0;
             D_801D5648[0] = (D_8009B3F9 >> 4) + 1;
             MemCardReadFile(D_8009B3F9, (char *)D_800EFE18,
-                            (unsigned long *)gLibrary_aCardArtRecord,
+                            (unsigned PSXLONG *)gLibrary_aCardArtRecord,
                             D_8009B3C4, 0x480);
             goto io_pending;
         }
@@ -124,7 +124,7 @@ void MemCardDialog_UpdateTradeSave(void)
             D_8009B3EC++;
             D_8009B3EB &= ~MEM_CARD_DIALOG_FLAG_RESULT_CREATED;
             MemCardReadFile(D_8009B3F9, (char *)D_800EFE18,
-                            (unsigned long *)gLibrary_aCardArtRecord,
+                            (unsigned PSXLONG *)gLibrary_aCardArtRecord,
                             D_8009B3C4 + SAVE_DATA_STATE_SIZE, 0x480);
             goto io_pending;
         }
@@ -148,11 +148,11 @@ void MemCardDialog_UpdateTradeSave(void)
         D_8009B3EB &= ~MEM_CARD_DIALOG_FLAG_RESULT_CREATED;
         if (D_8009B3F9 != 0) {
             MemCardWriteFile(D_8009B3F9, (char *)D_800EFE18,
-                             (unsigned long *)gMemCard_pSecondaryTransferCursor,
+                             (unsigned PSXLONG *)gMemCard_pSecondaryTransferCursor,
                              D_8009B3C4, 0x80);
         } else {
             MemCardWriteFile(D_8009B3F9, (char *)D_800EFE18,
-                             (unsigned long *)gMemCard_pPrimaryTransferCursor,
+                             (unsigned PSXLONG *)gMemCard_pPrimaryTransferCursor,
                              D_8009B3C4, 0x80);
         }
     io_pending:
@@ -326,7 +326,7 @@ void MemCardDialog_Update(void)
     }
     if ((f & MEM_CARD_DIALOG_FLAG_IO_PENDING) != 0) {
         c = MemCardSync(
-            1, (long *)&D_8009B3F0, (long *)&D_8009B3F4
+            1, (PSXLONG *)&D_8009B3F0, (PSXLONG *)&D_8009B3F4
         );
         D_8009B3BC = c;
         if (c != 1) {

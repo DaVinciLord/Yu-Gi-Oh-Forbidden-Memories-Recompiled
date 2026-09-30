@@ -50,12 +50,12 @@ void Text_DispatchSecondaryCommand(DuelEffectChannel *object)
 void Text_SetCursorOffset(DuelEffectChannel *o)
 {
     int v = TextStream_ReadU16LE(o);
-    u8 **p = &TEXT_STREAM_OWNER_VIEW(o)->streams[o->stream_58];
+    u8 *G32 *p = &TEXT_STREAM_OWNER_VIEW(o)->streams[o->stream_58];
 
     *p = Text_Retarget(*p, v & 0xFFFF);
 }
 #else
-  void Text_SetCursorOffset(DuelEffectChannel *o){int v; u8 **p;v=TextStream_ReadU16LE(o);p=&TEXT_STREAM_OWNER_VIEW(o)->streams[o->stream_58];*p=(u8 *)(((u32)*p&0xFFFF0000)|(v&0xFFFF));}
+  void Text_SetCursorOffset(DuelEffectChannel *o){int v; u8 *G32 *p;v=TextStream_ReadU16LE(o);p=&TEXT_STREAM_OWNER_VIEW(o)->streams[o->stream_58];*p=(u8 *)(((u32)*p&0xFFFF0000)|(v&0xFFFF));}
 #endif
 
 void Text_HandleChoiceCommand(DuelEffectChannel *object)
