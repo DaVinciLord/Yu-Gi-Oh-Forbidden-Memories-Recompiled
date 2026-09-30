@@ -1,11 +1,14 @@
-/* The 2D Monsters mod (mod.json beside this file; notes/modding.md): where
- * the 3D Monsters mod stands a battle model on a face-up field card, this
- * stands an enlarged cutout of the card's own art instead, floating just
- * above it, always facing the camera. No model, no arena, no VRAM budget to
- * borrow: a card's art record is seven sectors of WA_MRG.MRG, the same disc
- * data the card-detail panel and the Library already draw large, held here
- * one bank per cached card in the software GPU (src/pc/render/soft_gpu.h),
- * exactly as the 3D Monsters mod holds a model's textures.
+/* The 3D Monsters mod's "Card art" style (mod.json beside this file, the
+ * "style" setting; notes/modding.md): where the "3D models" style stands a
+ * battle model on a face-up field card, this stands an enlarged cutout of
+ * the card's own art instead, floating just above it, always facing the
+ * camera. No model, no arena, no VRAM budget to borrow: a card's art record
+ * is seven sectors of WA_MRG.MRG, the same disc data the card-detail panel
+ * and the Library already draw large, held here one bank per cached card in
+ * the software GPU (src/pc/render/soft_gpu.h), exactly as field_models.c
+ * holds a model's textures. field_models.c's own draw_frame calls
+ * FieldArt_DrawFrame (below) instead of drawing a model, when the style
+ * setting says to; this file has no MemoriesModInit of its own.
  *
  * Unlike a model, a cutout has no size of its own to measure: every card's
  * art is the same 102x96 record, so one world-space height serves every
@@ -47,6 +50,7 @@
 #include "pc/mods/modapi.h"
 #include "pc/cards/cards.h"
 #include "pc/cards/art.h"
+#include "field_art.h"
 #include <math.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -75,7 +79,7 @@ static Art cache[CACHE];
 static u8 *record;             /* one card's WA_MRG.MRG art record, read whole */
 static int mrg_start = -2;
 
-static void reset(void)
+void FieldArt_Reset(void)
 {
     int i;
     for (i = 0; i < CACHE; i++) {
@@ -491,7 +495,12 @@ static void draw_one(int index, int world_height)
     draw_glow(table, (unsigned short)depth, cx, (top_sy + base_sy) / 2, width_px, height_px);
 }
 
-static void draw_frame(void)
+/* Called from field_models.c's own draw_frame when "style" (mod.json) is
+ * Card art, instead of registering its own MemoriesModInit: a mod has one
+ * entry point, and this file is compiled into the 3D Monsters mod's object
+ * alongside field_models.c (build_mod.py merges every .c in a mod's
+ * directory into one), not a mod of its own. */
+void FieldArt_DrawFrame(void)
 {
     int side, zone, world_height;
 
@@ -520,14 +529,7 @@ static void draw_frame(void)
     SetGeomOffset(0, 0);
 }
 
-int MemoriesModInit(const MemoriesModHost *from, MemoriesMod *mod)
+void FieldArt_Init(const MemoriesModHost *from)
 {
-    if (from->api < 2) {
-        return 0; /* disc_read and disc_file_start arrived in mod API 2 */
-    }
     host = from;
-    mod->api = MEMORIES_MOD_API;
-    mod->frame = draw_frame;
-    mod->reset = reset;
-    return 1;
 }

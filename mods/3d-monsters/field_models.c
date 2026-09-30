@@ -82,6 +82,7 @@
 #include "pc/render/soft_gpu.h"
 #include "pc/mods/modapi.h"
 #include "pc/cards/cards.h"
+#include "field_art.h"
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -190,6 +191,7 @@ static void reset(void)
         cache[i].card = 0;
     }
     dimmed[0] = dimmed[1] = NULL; /* a state was loaded over them */
+    FieldArt_Reset();
 }
 
 static void say(const char *format, ...)
@@ -1284,7 +1286,24 @@ static void draw_frame(void)
     u32 work_base;
     int count = 0, i, side, zone;
 
-    if (inside || draw_battle() || !duel_field_up()) {
+    if (inside) {
+        return;
+    }
+    /* Card art has no battle-presentation equivalent (draw_battle, the
+     * models standing on the attack cards): style gates it out here,
+     * before it can run at all, the same way every other 3D-only setting
+     * (scale, battle, battle_pixels, battle_dim) only ever gets read from
+     * inside 3D-only code below -- none of it should have any effect while
+     * Card art is showing, the same standard Card art's own settings are
+     * held to the other way round. */
+    if (tunable("style", 0)) {
+        FieldArt_DrawFrame();
+        return;
+    }
+    if (draw_battle()) {
+        return;
+    }
+    if (!duel_field_up()) {
         return;
     }
     frame++;
@@ -1370,5 +1389,6 @@ int MemoriesModInit(const MemoriesModHost *from, MemoriesMod *mod)
     mod->frame = draw_frame;
     mod->reset = reset;
     mod->applied = applied;
+    FieldArt_Init(from);
     return 1;
 }

@@ -3,14 +3,22 @@
     "name": "3D Monsters",
     "version": "1.0",
     "author": "DecompRecomp",
-    "description": "Face-up monsters stand on their cards as the models the battle presentation uses, animating on the spot, and can stand on the big cards facing each other when one attacks another. The console had neither the RAM nor the VRAM for it.",
+    "description": "Face-up monsters stand on their cards, either as the models the battle presentation uses (animating on the spot, and able to stand on the big cards facing each other when one attacks another -- the console had neither the RAM nor the VRAM for it), or, at no model-loading or VRAM cost at all, as an enlarged cutout of their own card art, always facing the camera.",
     "library": "3d-monsters",
     "enabled": true,
     "legacy_setting": "3d_monsters",
     "settings": [
         {
+            "key": "style",
+            "label": "Style",
+            "type": "choice",
+            "default": 0,
+            "choices": ["3D models", "Card art"],
+            "description": "3D models is the original presentation. Card art stands an enlarged cutout of the card's own art instead, with an optional glow (below); it never uses a model, an arena or a texture bank the way 3D models does, and the battle presentation (Monsters on attack cards, below) is 3D models only -- attack cards show plainly in the Card art style, the same as with the mod off."
+        },
+        {
             "key": "scale",
-            "label": "Model scale",
+            "label": "Model scale (3D models)",
             "type": "int",
             "default": 4096,
             "min": 512,
@@ -59,14 +67,14 @@
         },
         {
             "key": "battle",
-            "label": "Monsters on attack cards",
+            "label": "Monsters on attack cards (3D models)",
             "type": "bool",
             "default": 0,
-            "description": "When one monster attacks another, the two stand on their big cards facing each other, and the cards are dimmed under them."
+            "description": "When one monster attacks another, the two stand on their big cards facing each other, and the cards are dimmed under them. Only in the 3D models style; attack cards show plainly in Card art."
         },
         {
             "key": "battle_pixels",
-            "label": "Attack card monster size",
+            "label": "Attack card monster size (3D models)",
             "type": "int",
             "default": 160,
             "min": 40,
@@ -76,13 +84,67 @@
         },
         {
             "key": "battle_dim",
-            "label": "Attack card dimming",
+            "label": "Attack card dimming (3D models)",
             "type": "int",
             "default": 50,
             "min": 0,
             "max": 90,
             "step": 10,
             "description": "How much darker the cards are drawn under the monsters, in percent."
+        },
+        {
+            "key": "glow",
+            "label": "Glowing diffusion (Card art)",
+            "type": "bool",
+            "default": 1,
+            "description": "A soft, pulsing, additively-blended glow diffusing outward from each cutout. Only in the Card art style."
+        },
+        {
+            "key": "glow_r",
+            "label": "Glow colour: red (Card art)",
+            "type": "int",
+            "default": 255,
+            "min": 0,
+            "max": 255,
+            "step": 1
+        },
+        {
+            "key": "glow_g",
+            "label": "Glow colour: green (Card art)",
+            "type": "int",
+            "default": 255,
+            "min": 0,
+            "max": 255,
+            "step": 1
+        },
+        {
+            "key": "glow_b",
+            "label": "Glow colour: blue (Card art)",
+            "type": "int",
+            "default": 90,
+            "min": 0,
+            "max": 255,
+            "step": 1
+        },
+        {
+            "key": "glow_reach",
+            "label": "Glow reach (Card art)",
+            "type": "int",
+            "default": 50,
+            "min": 40,
+            "max": 300,
+            "step": 10,
+            "description": "Percent: how far the glow diffuses outward, scaled to the cutout's own size."
+        },
+        {
+            "key": "glow_period",
+            "label": "Glow pulse period (Card art)",
+            "type": "int",
+            "default": 90,
+            "min": 4,
+            "max": 240,
+            "step": 2,
+            "description": "Frames for one full dim-to-bright-to-dim cycle. Lower is faster."
         }
     ]
 }
