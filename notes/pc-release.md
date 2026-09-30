@@ -24,6 +24,14 @@ GitHub shows each release asset's SHA-256 itself, so there are no
 settings, saves, reports or personal HD packs belong in the archive. Release
 builds omit the optional executable icon extracted from a local disc.
 
+The Windows executable is what virus scanners' heuristics judge, so the
+release keeps it plain: `package.py` strips the symbol table and debug
+sections (`memories-pc.pdb` has them) and fills in the PE checksum the linker
+leaves 0; the build gives it version information and leaves test-only paths
+out (`MEMORIES_TEST_HOOKS`, [PC build](pc-build.md)); the game does not call
+`SetProcessDEPPolicy`. v0.1.4-preview.1 was flagged by 11 engines with generic
+machine-learning labels (a false positive) after gaining that import.
+
 ## Launch experience
 
 If a remembered or auto-detected disc is available, launch goes straight
