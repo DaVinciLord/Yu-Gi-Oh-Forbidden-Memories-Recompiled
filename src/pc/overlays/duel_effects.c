@@ -34,7 +34,8 @@ enum { MODE_AUTO, MODE_INTERPRETER, MODE_SKIP };
  *
  * MEMORIES_DUEL_EFFECTS=interpreter interprets the bank even when it is
  * retail (the reference for comparing the two). MEMORIES_DUEL_EFFECTS=skip
- * (formerly `native`) restores the bring-up behaviour: fusion (1), battle
+ * restores the bring-up behaviour (it was called `native` before the bank
+ * ran as native C; `native` now means the default): fusion (1), battle
  * damage (2) and destruction (3) interpreted, everything else reported
  * complete on its first update. An effect the interpreter cannot run is
  * reported once and completed the same way from then on. */
@@ -49,7 +50,7 @@ void Memories_DuelEffectControl(short id, short state, int buffer, DuelEffectReq
         const char *setting = getenv("MEMORIES_DUEL_EFFECTS");
         mode = !setting ? MODE_AUTO
              : strcmp(setting, "interpreter") == 0 ? MODE_INTERPRETER
-             : strcmp(setting, "skip") == 0 || strcmp(setting, "native") == 0 ? MODE_SKIP
+             : strcmp(setting, "skip") == 0 ? MODE_SKIP
              : MODE_AUTO;
     }
     LOG(LOG_DUEL_EFFECTS, "id=%d state=%d buffer=%08x payload=%d,%d,%d damage=%d",

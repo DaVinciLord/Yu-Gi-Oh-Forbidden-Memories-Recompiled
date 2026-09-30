@@ -397,7 +397,8 @@ upstream) are never loaded; the language packs take only text from PAL discs.
 
 Switches: `MEMORIES_DUEL_EFFECTS=interpreter` interprets the bank even when it
 is retail (the reference for comparisons); `MEMORIES_DUEL_EFFECTS=skip`
-(formerly `native`, still accepted) restores the bring-up behaviour
+(called `native` before the bank ran as native C; `native` now means the
+default) restores the bring-up behaviour
 (ids 1-3 interpreted, others complete at once); `MEMORIES_FRAME_HASHES=<file>`
 writes a hash of VRAM per presented frame for comparing two runs; `MEMORIES_MODEL_MODULES=native`
 uses the resident spark burst instead of the monster's module; an effect or
