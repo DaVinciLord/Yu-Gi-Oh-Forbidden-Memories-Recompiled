@@ -268,6 +268,30 @@ int Memories_SetInternalScale(int wanted)
     return done;
 }
 
+/* MEMORIES_FRAME_HASHES=<file>: one line per presented frame, the frame
+ * number and an FNV-1a hash of all of VRAM, for comparing two runs frame by
+ * frame (native against interpreted code, for one) without dumping them. */
+static void frame_hash(void)
+{
+    static FILE *out;
+    static int opened;
+    const uint16_t *vram;
+    uint64_t hash = 1469598103934665603ull;
+    unsigned i;
+    if (!opened) {
+        const char *path = getenv("MEMORIES_FRAME_HASHES");
+        opened = 1;
+        out = path && *path ? fopen(path, "w") : NULL;
+    }
+    if (!out) return;
+    vram = SoftGpu_Vram();
+    for (i = 0; i < 1024u * 512u; i++) {
+        hash = (hash ^ vram[i]) * 1099511628211ull;
+    }
+    fprintf(out, "%u %016llx\n", (unsigned)frames_presented, (unsigned long long)hash);
+    fflush(out);
+}
+
 void Memories_PresentDisplay(void)
 {
     const char *dump = getenv("MEMORIES_DUMP_FRAME");
@@ -278,6 +302,7 @@ void Memories_PresentDisplay(void)
     frames_presented++;
     Platform_Frame((unsigned)frames_presented);
     Credits_Frame();
+    frame_hash();
     {
         /* MEMORIES_WINDOW_SHOT=<frame>: the window as shown at that frame,
          * as the screenshot key would save it (checking the window itself
