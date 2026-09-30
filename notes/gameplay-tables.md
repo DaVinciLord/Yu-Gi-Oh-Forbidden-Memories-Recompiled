@@ -7,6 +7,8 @@ from. The rules sit in `mod.json` beside everything else, name cards the
 way a person would, and combine with other mods' rules instead of
 overwriting them. The worked example is
 [`examples/mods/rule-tables`](../examples/mods/rule-tables/mod.json).
+What each guardian star gets against each other, and the stars themselves,
+are `guardian_stars` ([Mods](modding.md#guardian-stars-names-icons-new-stars-and-matchups)).
 
 ```json
 {
