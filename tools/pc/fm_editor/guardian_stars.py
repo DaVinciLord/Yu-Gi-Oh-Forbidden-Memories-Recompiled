@@ -303,6 +303,20 @@ def _name_of(section, star):
     return None
 
 
+def choices(section) -> list:
+    """The stars a card may have with this section: "(none)", the disc's ten
+    (a renamed one as "Ares (Mars)") and the mod's own past them ("11 Fire"),
+    each at its number's place in the list."""
+    out = ["(none)"]
+    for star in range(1, count(section) + 1):
+        name = display_name(_name_of(section, star) if section else None, star)
+        if star <= RETAIL_COUNT:
+            out.append(name if name == STAR_NAMES[star] else f"{name} ({STAR_NAMES[star]})")
+        else:
+            out.append(f"{star} {name}")
+    return out
+
+
 @dataclass
 class Star:
     id: int

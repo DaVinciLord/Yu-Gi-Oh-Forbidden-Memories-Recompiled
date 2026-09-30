@@ -36,18 +36,8 @@ def frame_label(f: int) -> str:
 
 
 def star_choices(project=None) -> list:
-    """The stars a card may have in this mod: "(none)", the disc's ten (a
-    renamed one as "Ares (Mars)") and the mod's own past them ("11 Fire"),
-    each at its number's place in the list."""
-    section = project.other.get("guardian_stars") if project is not None else None
-    out = ["(none)"]
-    for star in range(1, guardian_stars.count(section) + 1):
-        name = guardian_stars.display_name(guardian_stars._name_of(section, star) if section else None, star)
-        if star <= guardian_stars.RETAIL_COUNT:
-            out.append(name if name == STAR_NAMES[star] else f"{name} ({STAR_NAMES[star]})")
-        else:
-            out.append(f"{star} {name}")
-    return out
+    """The stars a card may have in this mod (guardian_stars.choices)."""
+    return guardian_stars.choices(project.other.get("guardian_stars") if project is not None else None)
 
 
 def star_label(s: int, project=None) -> str:

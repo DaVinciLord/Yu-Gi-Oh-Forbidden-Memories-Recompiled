@@ -547,6 +547,7 @@ only the window; it does not rewrite the engine, whose rules are the port's
 | `validate.py` | the loader's checks: `validate(project)` → `Issue` list |
 | `pools.py`, `fixed_decks.py`, `bulk_fusions.py` | the port's pool arithmetic, fixed decks, bulk fusions |
 | `art.py`, `campaign_map.py`, `map_art.py`, `map_view.py` | card art, the campaign map's table and pictures, the map drawn from the disc's 3D model (`map_view.py` has no Tk despite its name) |
+| `guardian_stars.py`, `star_rules.py` | a mod's `guardian_stars` (the stars, the matchup grid, presets, checks) and setting many cards' stars by a rule |
 | `card_text.py`, `ttf.py`, `pngio.py` | the card-text layout and picture, TrueType outlines, PNGs and the `Image` type every picture is |
 | `importer.py`, `kit.py`, `ygomods.py` | importing a modified game, and converting a `.ygomods` package |
 | `cli.py` | `check` and `import` (the window only through a lazy import) |
@@ -554,7 +555,8 @@ only the window; it does not rewrite the engine, whose rules are the port's
 It needs `tools/pc/text_listing.py` beside the package (`gamedata.py`
 finds it). **The Tk front end** is `app.py`, `tabs.py`, `widgets.py`,
 `theme.py`, `art_tab.py`, `map_tab.py`, `fixed_deck_view.py`,
-`bulk_dialog.py`, `preview.py`, `importers.py` (the File menu's import
+`bulk_dialog.py`, `guardian_stars_tab.py`, `star_rules_dialog.py`,
+`preview.py`, `importers.py` (the File menu's import
 dialogs) and `settings.py` (the window's own settings, no Tk).
 
 **The whole round trip, with no Tk** (run from the source tree's root; it
@@ -618,6 +620,13 @@ the engine keeps no undo (a front end may keep `project.clone()`s).
   `fixed_decks.deck_of`, `set_deck(project, d, {card: copies})`,
   `most_likely`, `remove`.
 * Starter decks: `project.starter`, a list of `model.StarterDeck`.
+* Guardian Stars: `guardian_stars.read(project.other.get("guardian_stars"))`
+  → a `Stars` to edit (`add_star`, `remove_star`, `set_default`,
+  `preset_retail`, `preset_clear`), `.build()` back into
+  `project.other["guardian_stars"]` (`None` when it would change nothing);
+  `guardian_stars.choices(section)` names the stars a card may have.
+  Many cards' stars by a rule: `star_rules.plan(project, spec)`, `apply`,
+  `undo`.
 * Mod info: `project.info` (`ModInfo`); other `mod.json` keys, kept as
   written, in `project.other`.
 * Art: `art.set_image(project, card, part, image)` (part `"art"`,

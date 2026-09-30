@@ -12,7 +12,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from . import guardian_stars as gs, pngio, theme
 from .tabs import Tab
-from .widgets import px, scrolled_tree
+from .widgets import px, scrolled_tree, ui_font
 
 CELL = 44           # a grid cell's side at 96 dpi
 HEAD = 78           # the header row's and column's
@@ -416,7 +416,7 @@ class GuardianStarsTab(Tab):
                 if value:
                     changed = value != gs.retail_matchup(a, d)
                     canvas.create_text(x + cell // 2, y + cell // 2, text=_signed(value), fill=ink,
-                                       font=("TkDefaultFont", 9, "bold" if changed else "normal"))
+                                       font=ui_font(9, "bold" if changed else "normal"))
         if self.cell:
             a, d = self.cell
             x, y = head + cell * (d - 1), head + cell * (a - 1)
