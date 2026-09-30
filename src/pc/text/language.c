@@ -418,7 +418,7 @@ static const char *const own_words[LANGUAGE_COUNT] = {
                     "[FE36]\nAU MOINS %d %s{end}\n\n"
                     "[FE37]\n%s EN %d PAQUETS{end}\n\n"
                     "[FE38]\n%d CARTE{end}\n\n"
-                    "[FE39]\nTOUT OBTENU{end}\n",
+                    "[FE39]\nPLUS RIEN{end}\n",
     [LANGUAGE_DE] = "\n@bank dialog\n\n"
                     "[FE00]\nNEU{end}\n\n"
                     "[FE01]\n%d WEITERE KARTE{end}\n\n"

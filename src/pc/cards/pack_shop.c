@@ -822,18 +822,22 @@ static int nothing_left(int pack)
     return Packs_RefusesWhenNothingLeft(pack) && Packs_NothingLeft(pack, held, NULL);
 }
 
-/* ALL OWNED, grey, at the right of the price's line (a few pixels clear of
- * the box's frame, which a full last letter such as the U of TOUT OBTENU
- * would touch): why BUY is refused. A translation too long for the line
- * after a long price loses its last letters rather than running over it. */
+/* ALL OWNED, grey, at the right of the price's line, NOTE_MARGIN clear of
+ * the box's frame (which a full last letter would touch) and at least as
+ * far from the price: why BUY is refused. The six languages' words (ten
+ * letters at most) fit beside the longest price, 999999; a translation too
+ * long for the room left loses its last letters, never the margin. */
 static void nothing_left_note(Out *out)
 {
+    const int limit = out->limit;
     int width = own(NULL, TEXT_OWN_PACK_ALL_OWNED, "ALL OWNED", NULL, NULL), x = BOX_WIDTH - NOTE_MARGIN - width;
-    if (x < out->x + 8) x = out->x + 8;
+    if (x < out->x + NOTE_MARGIN) x = out->x + NOTE_MARGIN;
     at_x(out, x);
+    out->limit = BOX_WIDTH - NOTE_MARGIN;
     colour(out, GREY);
     own(out, TEXT_OWN_PACK_ALL_OWNED, "ALL OWNED", NULL, NULL);
     colour(out, WHITE);
+    out->limit = limit;
 }
 
 /* The pack as the list shows it: 1-2 lines (the shop, the description or
