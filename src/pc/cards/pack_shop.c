@@ -835,15 +835,21 @@ static void nothing_left_note(Out *out)
 }
 
 /* The pack as the list shows it: 1-2 lines (the shop, the description or
- * how many cards), the price, then what the buttons do. */
+ * how many cards), the price, then what the buttons do: ✕BUY ○BACK □INFO on
+ * one line, or, when a language's words do not fit the box's twenty letters
+ * (ACHETER, RETOUR and INFO are 17 with their icons), ✕BUY ○BACK on one and
+ * □INFO under it, the description one line shorter (□ shows it whole). */
 static void compose_list(void)
 {
     Out out = begin(TEXT_MESSAGE);
     const Pack *pack = Packs_At(s.pack);
-    int place = 0, total = listed_count(s.shop, &place, s.pack), lines_left = 2, stock;
     const int locked = !unlocked(s.pack);
     const int back_id = rules()->password == PACK_SHOP_PACKS_ONLY ? TEXT_OWN_PACK_END : TEXT_OWN_PACK_BACK;
     const char *back_english = rules()->password == PACK_SHOP_PACKS_ONLY ? "END" : "BACK";
+    const int one_row = (locked ? 0 : hint_width(TEXT_OWN_PACK_BUY, "BUY") + 8) + hint_width(back_id, back_english) + 8 +
+                        hint_width(TEXT_OWN_PACK_INFO, "INFO") <= BOX_WIDTH;
+    const int top = one_row ? 3 : 2;   /* the lines above the buttons */
+    int place = 0, total = listed_count(s.shop, &place, s.pack), lines_left = top - 1, stock;
     int written = 0;
     if (shops_open() > 1) {
         colour(&out, BLUE);
@@ -859,7 +865,10 @@ static void compose_list(void)
         colour(&out, WHITE);
         written++;
         lines_left--;
-        if (lines_left > 0) written += condition_lines(&pack->unlock, &out, lines_left + 1, 0);
+        /* Up to the line before the buttons (with two rows of them, the one
+           line LOCKED leaves). */
+        if (lines_left > 0 || (!one_row && lines_left == 0))
+            written += condition_lines(&pack->unlock, &out, lines_left + 1, 0);
     } else {
         const unsigned char *starts[2];
         int lengths[2], n = wrap(pack_description(s.pack), starts, lengths, lines_left), i;
@@ -867,12 +876,12 @@ static void compose_list(void)
             if (written++) newline(&out);
             put_letters(&out, starts[i], lengths[i]);
         }
-        if (!n) {
+        if (!n && lines_left > 0) {
             unsigned count = (unsigned)pack->count;
             if (written++) newline(&out);
             cards_words(&out, count);
         }
-        while (written < 2) { newline(&out); written++; }
+        while (written < top - 1) { newline(&out); written++; }
         newline(&out);
         written++;
         price_line(&out, s.pack);
@@ -894,10 +903,11 @@ static void compose_list(void)
             count_at_right(&out, (unsigned)place + 1, (unsigned)total);
         }
     }
-    while (written < 3) { newline(&out); written++; }
+    while (written < top) { newline(&out); written++; }
     newline(&out);
     if (!locked) hint(&out, ICON_CROSS, TEXT_OWN_PACK_BUY, "BUY");
     hint(&out, ICON_CIRCLE, back_id, back_english);
+    if (!one_row) newline(&out);
     hint(&out, ICON_SQUARE, TEXT_OWN_PACK_INFO, "INFO");
     finish(&out);
 }

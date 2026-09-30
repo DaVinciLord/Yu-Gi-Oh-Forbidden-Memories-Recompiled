@@ -222,8 +222,11 @@ The Password screen's own, with nothing drawn by the port over it:
   shop's name in blue (with more than one shop), the description's first
   lines (or how many cards), the price as the game writes a card's
   (`★x50`, `+2 CARDS` for a price in cards), `LEFT n`, `SOLD OUT` or which
-  pack of how many at the right, and `✕BUY ○BACK □INFO`. A locked pack shown
-  is face down, named `??????`, with LOCKED and what opens it.
+  pack of how many at the right, and `✕BUY ○BACK □INFO`. When a language's
+  words for them do not fit the box's twenty letters (the French, German,
+  Italian and Spanish do not), `✕BUY ○BACK` is one line and `□INFO` the next,
+  and the description has one line. A locked pack shown is face down, named
+  `??????`, with LOCKED and what opens it.
 * **BUY / QUIT** (✕): the game's EXCHANGE / QUIT question, word for word in
   its layout (strings 227 and 228): the name, the price, then the choice,
   BUY red and not to be chosen when the starchips, the stock, a `once` or the
