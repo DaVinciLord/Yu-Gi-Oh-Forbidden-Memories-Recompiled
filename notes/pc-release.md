@@ -189,8 +189,9 @@ check itself failed (no key, network, quota, `--timeout`).
 **In CI.** The release workflow's *VirusTotal* step (Windows job) runs the
 script on the shipped `memories-pc.exe` and `fm-editor.exe`, taken from
 the archives, and writes the table, the matrix and the links into the job
-summary. It warns above `VT_MAX_DETECTIONS` (2) and never fails the build:
-McAfee's reputation verdict (`ti!<hash>`) marks every file VirusTotal has
+summary. It warns above `VT_MAX_DETECTIONS` (2) and never fails the build;
+when VirusTotal is down or slow it warns too, after at most 10 minutes an
+analysis (`--timeout 600`) and 30 for the step. McAfeeD's reputation verdict (`ti!<hash>`) marks every file VirusTotal has
 just met, so 0 would warn on every release. It runs only on version tags and
 manual runs (*Run workflow*), so only those builds are uploaded; never on
 pull requests nor on pushes to `master`, and it is skipped when the

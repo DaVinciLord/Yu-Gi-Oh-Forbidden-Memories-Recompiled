@@ -115,7 +115,7 @@ jobs:
       # pull requests (whose builds are not public, and which may carry
       # anyone's code) nor every push to master (the free tier's quota).
       # Skipped without the VT_API_KEY secret (forks). Detections only warn;
-      # the table goes to the job summary. McAfee's reputation verdict
+      # the table goes to the job summary. McAfeeD's reputation verdict
       # (ti!<hash>) is on every new file, hence a threshold above 0.
       - name: VirusTotal
         if: runner.os == 'Windows' && (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && env.VT_ENABLED == 'true'
@@ -138,7 +138,11 @@ jobs:
                       handle.write(package.read(member))
           EOF
           status=0
-          python tools/pc/vt_check.py --max "$VT_MAX_DETECTIONS" --markdown "$RUNNER_TEMP/vt.md"             --label memories-pc.exe --label fm-editor.exe             "$RUNNER_TEMP/vt/memories-pc.exe" "$RUNNER_TEMP/vt/fm-editor.exe" || status=$?
+          # --timeout 600: two new files' analyses still leave the step's
+          # 30 minutes room to write the summary.
+          python tools/pc/vt_check.py --max "$VT_MAX_DETECTIONS" --timeout 600 \
+            --markdown "$RUNNER_TEMP/vt.md" --label memories-pc.exe --label fm-editor.exe \
+            "$RUNNER_TEMP/vt/memories-pc.exe" "$RUNNER_TEMP/vt/fm-editor.exe" || status=$?
           {
             echo "### VirusTotal ($PACKAGE_VERSION)"
             echo

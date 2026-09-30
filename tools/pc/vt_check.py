@@ -24,6 +24,7 @@ Exit status: 0 fine, 1 a file has more than --max detections, 2 an error
 """
 import argparse
 import hashlib
+import http.client
 import json
 import os
 import sys
@@ -46,17 +47,22 @@ class VTError(Exception):
 def load_key(environ=os.environ):
     """(key, where it came from). The key itself is never shown anywhere."""
     key = environ.get("VT_API_KEY", "").strip()
-    if key:
-        return key, "the VT_API_KEY environment variable"
-    path = os.path.expanduser(KEY_FILE)
-    try:
-        with open(path, encoding="utf-8") as handle:
-            key = handle.read().strip()
-    except OSError:
-        key = ""
-    if key:
-        return key, KEY_FILE.replace(os.sep, "/")
-    raise VTError(f"no API key: set VT_API_KEY or write it to {KEY_FILE}")
+    source = "the VT_API_KEY environment variable"
+    if not key:
+        path = os.path.expanduser(KEY_FILE)
+        try:
+            with open(path, encoding="utf-8") as handle:
+                key = handle.read().strip()
+        except (OSError, ValueError):
+            key = ""
+        source = KEY_FILE.replace(os.sep, "/")
+    if not key:
+        raise VTError(f"no API key: set VT_API_KEY or write it to {KEY_FILE}")
+    # A header value with a line break or a non-Latin-1 character makes
+    # http.client raise an error that quotes it: refuse such a key first.
+    if not (key.isascii() and key.isprintable()) or any(c.isspace() for c in key):
+        raise VTError(f"the API key in {source} has spaces, line breaks or other odd characters")
+    return key, source
 
 
 def urllib_transport(method, url, headers, body, timeout=300):
@@ -70,6 +76,9 @@ def urllib_transport(method, url, headers, body, timeout=300):
     except (urllib.error.URLError, OSError) as error:
         # Only the reason: the URL may be a signed upload URL.
         raise VTError(f"network error: {getattr(error, 'reason', error)}") from None
+    except (http.client.HTTPException, ValueError) as error:
+        # Only the kind: these may quote a header (the key) or the URL.
+        raise VTError(f"network error: {type(error).__name__}") from None
 
 
 class Client:
@@ -150,7 +159,9 @@ class Client:
         start = self.clock()
         while True:
             status, data = self.request("GET", f"/analyses/{analysis}", what="analysis")
-            if status == 200 and data["data"]["attributes"].get("status") == "completed":
+            if status == 404:
+                raise VTError(f"analysis {analysis} not found")
+            if data["data"]["attributes"].get("status") == "completed":
                 return data["data"]
             if self.clock() - start > timeout:
                 raise VTError(f"analysis not finished after {timeout} s")
@@ -296,6 +307,11 @@ def main(argv=None, client_factory=Client, environ=os.environ, stdout=sys.stdout
                    for path, label in zip(args.files, labels)]
     except (VTError, OSError) as error:
         print(f"vt_check: {error}", file=sys.stderr)
+        return 2
+    except (KeyError, TypeError, AttributeError, IndexError) as error:
+        # An answer shaped unlike the API's documentation. Not exit 1, which
+        # means "too many detections"; only the kind, never a request's parts.
+        print(f"vt_check: unexpected answer from VirusTotal ({type(error).__name__})", file=sys.stderr)
         return 2
     stdout.write(text_report(entries))
     if args.json:

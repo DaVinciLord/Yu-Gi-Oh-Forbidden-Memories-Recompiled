@@ -224,6 +224,36 @@ class VTCheckTest(unittest.TestCase):
         self.assertIn("| Bkav | - | W32.AIDetectMalware |", markdown)
         self.assertNotIn(KEY, text + markdown)
 
+    def test_unexpected_answer_exits_2(self):
+        # Not 1, which the release step reads as "too many detections".
+        path, sha = self.file("new.exe", b"odd")
+        self.vt.on("GET", f"/files/{sha}", NOT_FOUND)
+        self.vt.on("POST", "/files", (200, {"data": {"type": "analysis"}}))
+        status, _, err = self.run_main(path)
+        self.assertEqual(status, 2)
+        self.assertIn("unexpected answer", err)
+
+    def test_missing_analysis_exits_2(self):
+        path, sha = self.file("new.exe", b"lost")
+        self.vt.on("GET", f"/files/{sha}", NOT_FOUND)
+        self.vt.on("POST", "/files", (200, {"data": {"id": "lost"}}))
+        self.vt.on("GET", "/analyses/lost", NOT_FOUND)
+        status, _, err = self.run_main(path)
+        self.assertEqual(status, 2)
+        self.assertIn("not found", err)
+
+    def test_network_errors_do_not_quote_the_request(self):
+        # As http.client does for a header value it cannot send.
+        def urlopen(request, timeout):
+            raise ValueError(f"Invalid header value {request.get_header('X-apikey')!r}")
+        original = vt_check.urllib.request.urlopen
+        vt_check.urllib.request.urlopen = urlopen
+        self.addCleanup(setattr, vt_check.urllib.request, "urlopen", original)
+        with self.assertRaises(vt_check.VTError) as caught:
+            vt_check.urllib_transport("GET", vt_check.API + "/files/x", {"x-apikey": KEY}, None)
+        self.assertNotIn(KEY, str(caught.exception))
+        self.assertIsNone(caught.exception.__cause__)
+
     def test_too_many_labels(self):
         path, _ = self.file("a.exe", b"a")
         with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
@@ -252,6 +282,15 @@ class KeyTest(unittest.TestCase):
         key, source = vt_check.load_key({})
         self.assertEqual(key, KEY)
         self.assertNotIn(KEY, source)
+
+    def test_odd_key_is_refused_without_showing_it(self):
+        for key in ("abc\ndef-" + KEY, KEY + "é", "two " + KEY):
+            err = io.StringIO()
+            with redirect_stderr(err):
+                status = vt_check.main([__file__], environ={"VT_API_KEY": key}, stdout=io.StringIO())
+            self.assertEqual(status, 2)
+            self.assertIn("odd characters", err.getvalue())
+            self.assertNotIn(KEY, err.getvalue())
 
     def test_missing_key_exits_2(self):
         err = io.StringIO()
