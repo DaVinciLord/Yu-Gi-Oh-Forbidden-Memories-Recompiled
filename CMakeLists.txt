@@ -360,6 +360,18 @@ if(BUILD_TESTING)
         target_compile_options(memories_tables_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
     endif()
     add_test(NAME pc_tables COMMAND memories_tables_test)
+    # Guardian Stars: the matchup table a mod's "guardian_stars" gives, pair by
+    # pair against tests/pc/guardian_stars/*.expected, which the FM Editor's
+    # test checks its own arithmetic against too.
+    add_executable(memories_stars_test tests/pc/stars_test.c src/pc/mods/json.c
+                   src/game/duel_calc_guardian_star_matchup.c)
+    target_include_directories(memories_stars_test PRIVATE src)
+    target_compile_definitions(memories_stars_test PRIVATE MEMORIES_PC
+        MEMORIES_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    if(NOT MSVC)
+        target_compile_options(memories_stars_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(NAME pc_stars COMMAND memories_stars_test)
     add_executable(memories_free_duel_progress_test tests/pc/free_duel_progress_test.c tests/pc/duelists_stubs.c src/pc/mods/json.c)
     target_include_directories(memories_free_duel_progress_test PRIVATE src)
     target_compile_definitions(memories_free_duel_progress_test PRIVATE MEMORIES_PC)

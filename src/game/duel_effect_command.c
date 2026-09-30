@@ -14,6 +14,10 @@
 #include "pc/free_duel/duelists.h"
 #include "pc/text/text.h"
 #include "pc/text/number_width.h"
+#include "pc/cards/stars.h"
+
+/* A star's second name, left out: an empty string in the names bank. */
+static const u8 no_star_name[] = {0xFF};
 #endif
 
 #define TEXT_STREAM_OWNER(object) ((TextStreamOwner *)(object))
@@ -43,6 +47,9 @@ void func_80037DA4(DuelEffectChannel *object)
     u8 *text;
     u8 *current;
     u8 **slot;
+#ifdef MEMORIES_PC
+    s32 star = 0;   /* the guardian star an icon stands for (stars.h) */
+#endif
 
     text = (u8 *)(s32)object->stream_58;
     object->field_62 = 0;
@@ -98,6 +105,9 @@ void func_80037DA4(DuelEffectChannel *object)
             id = (stats >> CARD_STAT_GUARDIAN_STAR_1_SHIFT) &
                  CARD_STAT_GUARDIAN_STAR_MASK;
             type = (stats >> CARD_STAT_TYPE_SHIFT) & CARD_STAT_TYPE_MASK;
+#ifdef MEMORIES_PC
+            star = id;
+#endif
             id += 0x17;
             if ((u32)(type - CARD_TYPE_MAGIC) < CARD_NON_MONSTER_TYPE_COUNT) {
                 object->field_62 = type;
@@ -107,6 +117,20 @@ void func_80037DA4(DuelEffectChannel *object)
             id = (gDuel_adwCardStats[gDuel_wSelectedCardID - 1] >>
                   CARD_STAT_GUARDIAN_STAR_2_SHIFT) &
                  CARD_STAT_GUARDIAN_STAR_MASK;
+#ifdef MEMORIES_PC
+            /* A card with one star (the same one twice; none of the disc's)
+               shows it once, as the disc shows a card with no second. */
+            if (id != 0 && Stars_CardSingle(gDuel_wSelectedCardID)) {
+                id = 0;
+            }
+            star = id;
+            if (id == 0 && (op & 0x80)) {
+                /* Nor a name for the star it does not have. */
+                object->stream_58++;
+                text = (u8 *)no_star_name;
+                goto store;
+            }
+#endif
             id += 0x17;
             if (id == 0x17) {
                 n = 1;
@@ -142,6 +166,11 @@ store:
 plain:
     object->flags_34 |= 0x80;
     if ((u8)n == 0) {
+#ifdef MEMORIES_PC
+        /* Stars 11-15 are past the disc's icons, and a mod may give any
+           star its own: the entry says which star it is (stars.h). */
+        Stars_MarkIcon(star);
+#endif
         func_80036C14(object, id);
     }
     object->flags_34 &= 0xFF7F;
@@ -159,6 +188,10 @@ void func_80038024(DuelEffectChannel *object, s32 value)
 
 void func_80038070(DuelEffectChannel *object)
 {
+#ifdef MEMORIES_PC
+    /* The field bar's active star (func_80023144 keeps it + 0x17). */
+    Stars_MarkIcon(D_8009B344 - 0x17);
+#endif
     func_80038024(object, D_8009B344);
 }
 

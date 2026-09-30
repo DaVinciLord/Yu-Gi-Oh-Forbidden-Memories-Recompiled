@@ -12,6 +12,7 @@
 #include "card_notes.h"
 #include "tables.h"
 #include "starter.h"
+#include "stars.h"
 #include "pc/free_duel/duelists.h"
 #include "pc/text/glyphs.h"
 #include "pc/text/text.h"
@@ -364,8 +365,6 @@ static const char *const attribute_names[] = {"Light", "Dark", "Earth", "Water",
 /* The frames, in the order of their palettes (CARD_FRAME_*); "type" is the
  * card's own type's again. */
 static const char *const frame_names[] = {"Monster", "Magic", "Trap", "Ritual", "Purple", "Orange", "Type"};
-static const char *const star_names[] = {"", "Mars", "Jupiter", "Saturn", "Uranus", "Pluto",
-                                         "Neptune", "Mercury", "Sun", "Moon", "Venus"};
 
 static int same_words(const char *a, const char *b)
 {
@@ -388,6 +387,14 @@ static int choice(const JsonValue *value, const char *const *choices, int count)
         if (same_words(text, choices[i])) return i;
     }
     return (int)Json_Number(value, -1);
+}
+
+/* A guardian star: its number, or its name (stars.h). -1 for neither. */
+static int star_choice(const JsonValue *value)
+{
+    if (!value) return -1;
+    if (Json_TypeOf(value) == JSON_NUMBER) return (int)Json_Number(value, -1);
+    return Stars_Find(Json_String(value, ""));
 }
 
 /* Letters and digits only, lowercased: "Blue-Eyes White Dragon" finds the
@@ -1068,9 +1075,23 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         }
     }
     if (Json_Count(stars) == 2) {
-        int first = choice(Json_At(stars, 0), star_names, 11), second = choice(Json_At(stars, 1), star_names, 11);
-        if (first >= 0) stats = (stats & ~(0xFu << 22)) | ((unsigned)clamp(first, 0, 10) << 22);
-        if (second >= 0) stats = (stats & ~(0xFu << 18)) | ((unsigned)clamp(second, 0, 10) << 18);
+        /* A number, the disc's names, or a name a mod's "guardian_stars"
+         * gives (stars.h): up to 15, what the card's 4-bit fields hold. */
+        int first = star_choice(Json_At(stars, 0)), second = star_choice(Json_At(stars, 1));
+        /* No first star is no stars at all: the duel reads the first
+           unless the second is chosen, and a card with no second never
+           chooses it (stars.h). */
+        if (first == 0 && second > 0) {
+            Mods_Note(mod, "cards[%d]: \"stars\": the first star cannot be none when the second is not; left out",
+                      index);
+            first = second = -2;
+        }
+        if (first >= 0) stats = (stats & ~(0xFu << 22)) | ((unsigned)clamp(first, 0, STARS_MAX) << 22);
+        if (second >= 0) stats = (stats & ~(0xFu << 18)) | ((unsigned)clamp(second, 0, STARS_MAX) << 18);
+        if (first > STARS_MAX || second > STARS_MAX)
+            Mods_Note(mod, "cards[%d]: a card holds a guardian star in 4 bits: 15 at most", index);
+        if (first == -1 || second == -1)
+            Mods_Note(mod, "cards[%d]: \"stars\": not a guardian star; left out", index);
     }
     if ((value = (int)Json_Number(Json_Member(entry, "level"), -1)) >= 0) {
         level_attr = (unsigned char)((level_attr & 0xF0) | clamp(value, 0, 12));
@@ -1290,6 +1311,9 @@ void Cards_Build(void)
      * them, so they have to exist by the time those are read. */
     Duelists_Build();
     Tables_Build();
+    /* What the stars a mod adds are worth noting, now the cards have them
+     * and "limits" has set the stat cap (stars.h). */
+    Stars_Check();
     /* And so do the starter decks a new game may be dealt (starter.h). */
     Starter_Build();
 }

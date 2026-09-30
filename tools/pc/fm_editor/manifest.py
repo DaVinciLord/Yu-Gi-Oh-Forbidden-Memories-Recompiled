@@ -26,7 +26,7 @@ from pathlib import Path
 from .gamedata import (FUSION_GROUPS, RITUAL_REQUIREMENT_KEYS, fusion_group_named, ATTRIBUTE_NAMES, CARD_COUNT, DECK_SIZE, DUELIST_NAMES, FRAME_NAMES, POOLS, STAR_NAMES,
                        STARTER_WEIGHT_LIMIT, TYPE_NAMES, TYPE_MAGIC, GameData)
 from .model import AddedCard, ModInfo, Project, StarterDeck, duelist_named, type_named, KEY_RE
-from . import art, campaign_map, fixed_decks, pools as poolmath
+from . import art, campaign_map, fixed_decks, guardian_stars, pools as poolmath
 
 INFO_KEYS = ("id", "name", "version", "author", "description")
 TABLE_KEYS = ("settings", "cards", "fusions", "equips", "rituals", "drops", "decks", "starter")
@@ -543,7 +543,7 @@ def _clamp(value, low, high):
     return max(low, min(high, value))
 
 
-def _apply_fields(card, entry: dict, is_replace: bool, messages: list, where: str):
+def _apply_fields(card, entry: dict, is_replace: bool, messages: list, where: str, stars_section=None):
     name = entry.get("name")
     if isinstance(name, str) and name:
         card.name = name
@@ -567,11 +567,18 @@ def _apply_fields(card, entry: dict, is_replace: bool, messages: list, where: st
                 card.type = value
     stars = entry.get("stars")
     if isinstance(stars, list) and len(stars) == 2:
-        first, second = _choice(stars[0], STAR_NAMES), _choice(stars[1], STAR_NAMES)
+        # A number, the disc's names or a name the mod's "guardian_stars"
+        # gives, up to the card record's 15 (cards.c star_choice).
+        first, second = (guardian_stars.find(stars[0], stars_section), guardian_stars.find(stars[1], stars_section))
+        if first == 0 and second > 0:
+            messages.append(f"{where}: \"stars\": the first star cannot be none when the second is not; left out")
+            first = second = -2
+        elif first == -1 or second == -1:
+            messages.append(f"{where}: \"stars\": not a guardian star; left out")
         if first >= 0:
-            card.star1 = _clamp(first, 0, 10)
+            card.star1 = _clamp(first, 0, guardian_stars.MAX_STARS)
         if second >= 0:
-            card.star2 = _clamp(second, 0, 10)
+            card.star2 = _clamp(second, 0, guardian_stars.MAX_STARS)
     value = _number(entry.get("level"))
     if value >= 0:
         card.level = _clamp(value, 0, 12)
@@ -622,7 +629,7 @@ def read_cards(project: Project, entries, messages: list):
             continue
         notes = _read_notes(entry, messages, where)
         if is_replace:
-            _apply_fields(project.cards[base], entry, True, messages, where)
+            _apply_fields(project.cards[base], entry, True, messages, where, project.other.get("guardian_stars"))
             if notes:
                 had = project.notes.get(base)
                 project.set_notes(base, f"{had}\n{notes}" if had else notes)
@@ -648,7 +655,7 @@ def read_cards(project: Project, entries, messages: list):
         # A copy with no name of its own shows its base's name from the disc,
         # not the name a "replace" gave the base (cards.c Cards_NameCodes).
         project.cards[cid].name = project.retail.cards[base].name
-        _apply_fields(project.cards[cid], entry, False, messages, where)
+        _apply_fields(project.cards[cid], entry, False, messages, where, project.other.get("guardian_stars"))
         added = project.added[cid]
         added.drops = _json_bool(entry.get("drops"), True)
         added.opponents = _json_bool(entry.get("opponents"), False)

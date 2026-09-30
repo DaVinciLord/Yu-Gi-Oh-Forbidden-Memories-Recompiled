@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 from .gamedata import (CARD_COUNT, DECK_COPY_LIMIT, DECK_POOL_MIN_CARDS, DECK_SIZE, DUELIST_NAMES, POOLS,
                        POOL_LABELS, POOL_TOTAL, TYPE_MAGIC, TYPE_EQUIP, TYPE_RITUAL, exodia_piece)
-from . import art, campaign_map, fixed_decks, limits
+from . import art, campaign_map, fixed_decks, guardian_stars, limits
 from .model import KEY_RE, Project
 
 MOD_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,63}$")
@@ -20,7 +20,7 @@ MANIFEST_KEYS = ("id", "name", "version", "author", "description", "library", "e
                  "legacy_setting", "data", "textures", "cards", "audio", "min_api", "game", "requires", "after",
                  "conflicts", "priority", "settings", "fusions", "equips", "rituals", "drops", "decks", "text", "font",
                  "chest_overflow", "terrain_bonus", "trap_thresholds", "equip_bonus_default", "passwords",
-                 "starter", "limits")
+                 "starter", "limits", "guardian_stars")
 HOST_API = 8
 
 
@@ -138,10 +138,13 @@ def _check_card(project: Project, cid: int, out: list):
         add("error", "type is one of the 24 types")
     if not 0 <= card.attribute <= 15:
         add("error", "attribute is 0 to 15")
-    if not (0 <= card.star1 <= 10 and 0 <= card.star2 <= 10):
-        add("error", "guardian stars are Mars to Venus")
-    elif card.is_monster() and not (card.star1 and card.star2):
-        add("warning", "a monster without two guardian stars")
+    count = guardian_stars.count(project.other.get("guardian_stars"))
+    if not (0 <= card.star1 <= guardian_stars.MAX_STARS and 0 <= card.star2 <= guardian_stars.MAX_STARS):
+        add("error", f"guardian stars are 1 to {guardian_stars.MAX_STARS} (a card holds them in 4 bits)")
+    elif card.star1 > count or card.star2 > count:
+        add("warning", f"a guardian star past the {count} the mod has: declare it in the Guardian Stars tab")
+    elif card.is_monster() and not card.star1:
+        add("warning", "a monster without a first guardian star")
     if not card.name.strip():
         add("warning", "the card has no name")
     elif len(card.name) > 32:
@@ -299,6 +302,18 @@ def validate(project: Project) -> list:
     _check_starter(project, out)
     for level, where, message in limits.check(project.other.get("limits")):
         out.append(Issue(level, "Limits", where, message))
+    stars = {}
+    for card in project.cards.values():
+        if card.is_monster():
+            for star in (card.star1, card.star2):
+                stars[star] = stars.get(star, 0) + 1
+    # The ATK/DEF cap a bonus is measured against: the Limits tab's, else 9999.
+    flat = limits.flatten(project.other.get("limits"))
+    caps = [flat[key] for key in ("stats", "attack", "defense") if isinstance(flat.get(key), int)]
+    cap = max(caps) if caps else guardian_stars.STAT_CAP
+    for level, where, message in guardian_stars.check(project.other.get("guardian_stars"), stat_cap=cap,
+                                                      card_stars=stars):
+        out.append(Issue(level, "Guardian Stars", where, message))
     fixed_decks.check(project, out)
     art.check(project, out)
     campaign_map.check(project, out)

@@ -65,6 +65,7 @@ editors write, is fine):
 | `trap_thresholds` | the attack each of the six attack traps stops, below |
 | `passwords` | each card's password and starchip price on the Password screen, below |
 | `limits` | the numbers the game caps (ATK and DEF, life points, starchips, the chest, the records), below |
+| `guardian_stars` | the stars' names and icons, stars 11 to 15, and what each star gets against each other, below |
 | `starter` | the forty cards a new game begins with, one deck or a list of them, below |
 | `text`, `font` | a translation of the game's text, and fonts for letters it has none of, below |
 
@@ -598,6 +599,94 @@ opponents' names, and how the rules combine. Like cards, they need a restart.
 The [FM Editor](../tools/pc/fm_editor/README.md) (`python tools/pc/fm_editor`)
 reads these tables and the cards out of the player's own game files and
 writes a mod folder whose `mod.json` holds only what was changed.
+
+## Guardian Stars: names, icons, new stars and matchups
+
+The disc has ten stars in two cycles (Mars, Jupiter, Saturn, Uranus, Pluto,
+Neptune; Mercury, Sun, Moon, Venus), each strong against the next in its
+cycle. A mod may rename them, redraw their icons, add stars 11 to 15 and say
+what every star gets against every other, which makes Pokémon types,
+Digimon's Vaccine, Virus and Data, a pantheon or anything else:
+
+```json
+"guardian_stars": {
+    "stars": [
+        {"id": 11, "name": "Fire", "icon": "icons/fire.png", "beats": ["Grass"]},
+        {"id": 12, "name": {"en-us": "Water", "fr": "Eau"}, "icon": "icons/water.png", "beats": ["Fire"]},
+        {"id": 13, "name": "Grass", "icon": "icons/grass.png", "palette": "own", "beats": ["Water"]},
+        {"id": 1, "name": "Ares"}
+    ],
+    "matchups": [ {"attacker": "Water", "defender": "Fire", "bonus": 1000} ],
+    "default_bonus": 500,
+    "replace": false,
+    "choice": "ask"
+}
+```
+
+What a matchup is. For each ORDERED pair, the attacker's star and the
+defender's, the game has one signed number: what `Duel_CalcGuardianStarMatchup`
+returns, the disc's +500, -500 or 0. The battle adds it to the attacker's
+side of the comparison (capped at the ATK/DEF cap, a mod's
+[`limits`](gameplay-tables.md), 9999 without one; there is no lower clamp),
+as the disc adds its 500 ([the game](research/the-game.md), §5.8). So
+"super-effective" is a pair at +1000, "neutral" 0, and "immune" is 0 too:
+nothing here invents a battle rule the game does not have. The pair
+backwards is its own entry, so a matchup may be one-sided.
+
+| Key | Meaning |
+|---|---|
+| `matchups` | pairs: `attacker` and `defender` (a star's number or any of its names), `bonus` (points, -32767 to 32767; the default bonus when left out), `"mirror": true` to set the reverse pair to the opposite as well |
+| `default_bonus` | what the disc's two cycles give instead of 500 (both signs), and what `beats` and a matchup with no `bonus` give |
+| `replace` | `true`: every pair starts at 0, the disc's cycles gone |
+| `stars` | declares a star: `id` 1 to 15, `name` (a string, or one per language: `en-us`, `en-eu`, `fr`, `de`, `it`, `es`, and `default`), `icon` (a PNG in the mod), `palette` (`game`, the default: the disc's stars' own 16 colours, as the game draws them; `own`: the PNG's, up to 15), and `beats` (stars it is strong against: +default for it, -default for them) |
+| `choice` | at a summon: `ask` (the disc's SELECT A GUARDIAN STAR box), `first` (no box: the first star), `best` (no box: the star that does better against the opponent's face-up monsters, what it gains attacking them less what they gain attacking it; the first on a tie or with none) |
+
+A minimal mod is one matchup; everything left out is the disc's. Where two
+mods set the same pair the later one wins. Stars 11 to 15 are neutral against
+every star until something says otherwise. A new star without a `name` is
+"Star 11" (a translation's `[8322]` stands over that, since the names bank
+has star N's name at `0x8317 + N`), and without an `icon` a plain disc in
+the stars' colours. A card names them in its `stars` as it names the disc's
+(`"stars": ["Fire", "Sun"]`, or `[11, 8]`).
+
+One star. A card whose second star is none (`"stars": ["Fire", 0]`) or the
+same as its first has only that one: there is no choice when it is summoned,
+even with `ask`, and the card view shows one star. No card of the disc is
+either, so this changes nothing without a mod; a first star of none with a
+second is refused.
+
+The on-screen modifier climbs to the pair's own value, by 16 an update as on
+the disc up to 512 and faster past it, so it never takes longer than the
+disc's 32 updates; the yellow and red label goes by the sign, as before.
+
+Icons are made at the console's size (16x16, 4 bits) in a texture bank of the
+port's (`src/pc/cards/star_icons.c`) and drawn wherever the game draws a
+star: the SELECT A GUARDIAN STAR box, the card view, the field bar, the
+lists and the battle's star effect. The disc's ten are in the boot sheet
+(`sheets/boot/a-c1-4-pb60500.png` from `tools/pc/extract_images.py`), so a
+texture pack can also repaint them there at any resolution, one entry a
+star: `"archive": "WA_MRG.MRG"`, `"offset"` `0xB51840 + ((N-1) % 8) * 8 +
+((N-1) / 8) * 0x800` for star N, `"words": 4`, `"rows": 16`, `"stride": 64`,
+`"bpp": 4`, `"clut_offset": 0xB60500`, `"clut_entries": 16` (the stars have
+that palette to themselves, so nothing else changes). A mod's `icon` is not
+drawn above the console's resolution yet: texture packs follow what the game
+uploads to VRAM, and the bank the icons are made in has no such shadow.
+
+The Mods window notes a star no card has, a card whose star no mod declares,
+a declared star with no matchup, and a bonus past the stat cap. The
+[FM Editor](../tools/pc/fm_editor/README.md)'s Guardian Stars tab edits all of
+it, with the grid, and sets many cards' stars by attribute or type.
+
+Limits. The stars are 4-bit fields of every card's stat word
+(`gDuel_adwCardStats`, bits 18-21 and 22-25), so 15 is the most there can
+be; more would need a wider card record in every table that holds one.
+Every place that turns a star into a bonus, a name or an icon reads it from
+that word by the card's id (`Duel_CalcGuardianStarBonus`,
+`func_80023144`, `func_80037DA4`, and the AI's `func_80027DF8`), with the
+record's flag `0x200` choosing the second: a future card effect that changes
+a monster's star in a duel ("Terastalization") would give the duel record a
+star of its own (it has three spare bytes, `pad_19`) and have those reads
+take it first.
 
 ## Duelists: more than the disc has
 
