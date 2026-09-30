@@ -118,7 +118,8 @@ class GuardianStarsTab(Tab):
                                 height=px(self, HEAD + CELL * 10))
         self.canvas.pack(anchor="nw")
         self.canvas.bind("<Button-1>", self._click)
-        self.canvas.bind("<<ThemeChanged>>", lambda e: self.draw())
+        # A classic Canvas hears no theme change; the tab (a ttk widget) does.
+        self.bind("<<ThemeChanged>>", lambda e: self.draw(), add="+")
         edit = ttk.Frame(right)
         edit.pack(fill="x", pady=(6, 0))
         self.cell_label = ttk.Label(edit, text="Click a cell")

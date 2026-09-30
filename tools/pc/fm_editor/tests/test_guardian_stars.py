@@ -249,8 +249,24 @@ class GuardianStarsTabTest(unittest.TestCase):
         tab.choice.set("best")
         tab.set_choice()
         self.assertEqual(app.project.other["guardian_stars"]["choice"], "best")
-        tab.draw()                              # the grid, 11 by 11, in either theme
+        tab.draw()                              # the grid, 11 by 11
         self.assertGreater(len(tab.canvas.find_all()), 11 * 11)
+        # Dark mode: the grid redraws itself in the dark colours when the
+        # theme changes, and back.
+        from fm_editor import theme
+        from fm_editor.guardian_stars_tab import COLOURS
+        looks = theme.Theme(self.root)
+        looks.make_dark()
+        light = looks.style.theme_use()
+        fills = lambda: {tab.canvas.itemcget(item, "fill") for item in tab.canvas.find_all()
+                         if tab.canvas.type(item) == "rectangle"}
+        looks.style.theme_use(theme.DARK_THEME)
+        self.root.update()
+        self.assertIn(COLOURS["plus"][1], fills())
+        self.assertNotIn(COLOURS["plus"][0], fills())
+        looks.style.theme_use(light)
+        self.root.update()
+        self.assertIn(COLOURS["plus"][0], fills())
         tab.remove_icon()
         self.assertNotIn("icons/star-11.png", app.project.files)
         tab.preset_clear()
