@@ -439,6 +439,10 @@ TextUnit *TextListing_Compile(const char *text, size_t length, const uint32_t ba
             }
             continue;
         }
+        /* After {cont} the blank lines and comments up to the next item are
+         * the listing's, as after {end}: a listing written with a blank line
+         * between its items (the FM Editor's importer) adds no line break. */
+        if (c.cont && (!size || line[0] == '#')) continue;
         if (pending) emit(&c, 0xFE);
         pending = 0;
         c.cont = 0;

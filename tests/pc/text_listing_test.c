@@ -125,6 +125,15 @@ int main(void)
     assert(!memcmp(string(unit, 0x002), "\x03\xFE\x04\xFE\x05\xFF", 6));
     TextListing_Free(unit);
 
+    /* Blank lines and comments after {cont} are the listing's, not a line
+     * break of the string's (an imported mod's text has one after every
+     * item). */
+    unit = compile("@bank dialog\n[0001]\na{cont}\n\n# note\n\n{:L0010}\nb{end}\n\n[0002]\nc\n{cont}\n\n[0003]\nd{end}\n");
+    assert(unit && reports == 0);
+    assert(!memcmp(string(unit, 0x001), "\x01\x02\xFF", 3));
+    assert(!memcmp(string(unit, 0x002), "\x03\xFE\x04\xFF", 4));
+    TextListing_Free(unit);
+
     /* Jumps: a label the listing defines is in the unit, one it does not is
      * the retail address; the operand is an index into the targets. */
     unit = compile("@bank dialog\n[0010]\n{jump L0040}\n{:L0040}\na{call L125A}{if 006E L0040}{end}\n"
