@@ -24,6 +24,9 @@
 #include "../../game/mem_card.h"
 #include "ordering_tables.h"
 #include "../../game/sound.h"
+#ifdef MEMORIES_PC
+#include "pc/platform/title_screen.h"
+#endif
 
 void MainMenu_DrawFrontendBackground(void)
 {
@@ -36,6 +39,10 @@ void MainMenu_DrawFrontendBackground(void)
     s32 u;
 
     shadeLevel = D_80184597;
+#ifdef MEMORIES_PC
+    /* A mod's "title" background (pc/platform/title_screen.h). */
+    shadeLevel = TitleScreen_Dim(shadeLevel);
+#endif
     if (shadeLevel != 0) {
         setPolyF4(&flat);
         flat.r0 = shadeLevel;
@@ -55,8 +62,14 @@ void MainMenu_DrawFrontendBackground(void)
     sprite.r0 = 128;
     sprite.g0 = 128;
     sprite.b0 = 128;
+#ifdef MEMORIES_PC
+    TitleScreen_BackgroundTint(&sprite.r0, &sprite.g0, &sprite.b0);
+#endif
     sprite.tpage = 15;
     sprite.clut = getClut(0, 244);
+#ifdef MEMORIES_PC
+    if (TitleScreen_ShowPicture())
+#endif
     for (x = 0; x < GRAPHICS_DEFAULT_WIDTH; x = right) {
         u = x % 256;
         right = x + 64;
@@ -78,6 +91,28 @@ void MainMenu_DrawFrontendBackground(void)
         sprite.v3 = 239;
         GsSortPoly(&sprite, D_800E9D90[2], 4095);
     }
+#ifdef MEMORIES_PC
+    /* The mods' own pictures (pc/platform/title_screen.h), then the solid
+       colour, in the picture's slot after it, which puts it under the
+       picture: a slot draws what was added to it last first. */
+    TitleScreen_DrawImages(D_800E9D90[2]);
+    if (TitleScreen_BackgroundColour() >= 0) {
+        long colour = TitleScreen_BackgroundColour();
+        setPolyF4(&flat);
+        flat.r0 = colour >> 16 & 0xFF;
+        flat.g0 = colour >> 8 & 0xFF;
+        flat.b0 = colour & 0xFF;
+        flat.x0 = 0;
+        flat.y0 = 0;
+        flat.x1 = GRAPHICS_DEFAULT_WIDTH;
+        flat.y1 = 0;
+        flat.x2 = 0;
+        flat.y2 = GRAPHICS_DEFAULT_HEIGHT;
+        flat.x3 = GRAPHICS_DEFAULT_WIDTH;
+        flat.y3 = GRAPHICS_DEFAULT_HEIGHT;
+        GsSortPoly(&flat, D_800E9D90[2], 4095);
+    }
+#endif
     setPolyG4(&shade);
     shade.r2 = 255;
     shade.g2 = 255;
@@ -99,6 +134,11 @@ void MainMenu_DrawFrontendBackground(void)
     shade.y2 = GRAPHICS_DEFAULT_HEIGHT;
     shade.x3 = GRAPHICS_DEFAULT_WIDTH;
     shade.y3 = GRAPHICS_DEFAULT_HEIGHT;
+#ifdef MEMORIES_PC
+    if (!TitleScreen_ShowShade()) {
+        return;
+    }
+#endif
     func_8005B260((u32 *)&shade, (GsOT *)D_800E9D90[2], 4094, 2);
 }
 void MainMenu_StartFrontendEntryTransition(s32 mode)
@@ -148,6 +188,9 @@ void MainMenu_DestroyFrontendMenu(void)
         }
     }
     D_800E9DB0[0] = 0;
+#ifdef MEMORIES_PC
+    TitleScreen_Closed();
+#endif
 }
 void MainMenu_SpawnFrontendEntryAfterimage(DisplayObject *entry)
 {

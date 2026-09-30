@@ -17,9 +17,12 @@ typedef void (*MainMenuEntryEffectUpdate)(u8 *object);
  *                          the wheel has eleven positions.
  *   gMain_apMenuEntries    One object pointer per entry, cleared to 0 for
  *                          the slots that are not live.
- *   D_80184558             The three standing objects: background, title and
- *   D_8018455C             prompt. Made by MainMenu_InitFrontendMenu and
- *   D_80184560             released by MainMenu_DestroyFrontendMenu.
+ *   D_80184558             The three standing objects: the logo, the
+ *   D_8018455C             "(c) 1996 KAZUKI TAKAHASHI" line and PUSH START
+ *   D_80184560             BUTTON (hidden one at a time on the PC build,
+ *                          2026-09-29, pc/platform/title_screen.c). Made by
+ *                          MainMenu_InitFrontendMenu and released by
+ *                          MainMenu_DestroyFrontendMenu.
  *   D_80184596             The transition mode, taken straight from
  *                          MainMenu_StartFrontendEntryTransition's argument.
  *   D_80184598             The fade direction, and the reason it is signed:
