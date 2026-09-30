@@ -69,10 +69,12 @@ def make_mod(mods):
                            "count": COUNT, "tiers": {"common": {"odds": 9, "cards": CARDS[:6]},
                                                      "rare": {"odds": 1, "cards": CARDS[6:], "label": "RARE!"}},
                            "guarantee": {"rare": 1}},
-                          {"id": "owned", "name": "Owned", "price": OWNED_PRICE, "count": 3, "cards": OWNED,
-                           "max_copies": 1},
-                          {"id": "owned-sold", "name": "Owned Sold", "price": OWNED_PRICE, "count": 3,
-                           "cards": OWNED_SOLD, "max_copies": 1, "when_nothing_left": "sell"}]}
+                          {"id": "owned", "name": "Owned", "price": OWNED_PRICE, "count": 3, "max_copies": 1,
+                           "tiers": {"common": {"cards": OWNED[:1]}, "rare": {"odds": 0, "cards": OWNED[1:]}},
+                           "pity": {"rare": 2}, "stock": 3},
+                          {"id": "owned-sold", "name": "Owned Sold", "price": OWNED_PRICE, "count": 3, "max_copies": 1,
+                           "tiers": {"common": {"cards": OWNED_SOLD[:1]}, "rare": {"odds": 0, "cards": OWNED_SOLD[1:]}},
+                           "pity": {"rare": 2}, "stock": 3, "when_nothing_left": "sell"}]}
     (folder / "mod.json").write_text(json.dumps(manifest, indent=4), encoding="utf-8")
 
 
@@ -90,6 +92,25 @@ def chunks(path):
 def peek(path, address, form):
     data, found = chunks(path)
     return struct.unpack_from("<" + form, data, found["memory"] + address - 0x80000000)[0]
+
+
+# What the save's progress says, in the state's pack-shop chunk: pack_shop.c
+# Screen's own fields, then packs.h PacksProgress (starchips spent, packs
+# opened, and a PackProgress a pack: bought, opened, pity[16], used). The
+# purchase below checks the place against the counts it must have made.
+PROGRESS_AT = 280
+PACK_PROGRESS = 44
+
+
+def progress(path, pack):
+    """(starchips spent, packs opened, bought, opened, pity by tier) of a pack
+    by its place in the list."""
+    data, found = chunks(path)
+    at = found["pack-shop"] + PROGRESS_AT
+    spent, opened_all = struct.unpack_from("<II", data, at)
+    mine = at + 8 + PACK_PROGRESS * pack
+    bought, opened = struct.unpack_from("<II", data, mine)
+    return spent, opened_all, bought, opened, list(struct.unpack_from("<16H", data, mine + 8))
 
 
 def chest(path):
@@ -176,6 +197,8 @@ def main():
     check(sorted(recent) == sorted(card for card, n in gained.items() for _ in range(n)),
           f"the cards last awarded are the pack's: {recent}")
     check(any(card in CARDS[6:] for card in recent), "the guarantee gives a rare")
+    check(progress(bought, 0)[:4] == (PRICE, 1, 1, 1),
+          f"the save's progress counts it: {PRICE} starchips spent, one pack opened, bought once")
 
     again = run(executable, "buy-again", 520, buying, mods, state=rich, mode_at=False)
     check(chest(again) == after, "the same input deals the same pack")
@@ -195,10 +218,14 @@ def main():
     refused = run(executable, "owned", 520, refusing, mods, state=rich, mode_at=False)
     check(peek(refused, STARCHIPS, "I") == 1000 and chest(refused) == before,
           "a pack with nothing left for the player is refused: no starchips, no cards")
+    check(progress(refused, 1) == (0, 0, 0, 0, [0] * 16),
+          "and its stock, its openings, the pity and the save's counts are untouched")
     sold = run(executable, "owned-sold", 520, presses(60, [TRIANGLE, RIGHT, RIGHT, CROSS, CROSS]), mods, state=rich,
                mode_at=False)
     check(peek(sold, STARCHIPS, "I") == 1000 - OWNED_PRICE and chest(sold) == before,
           "\"when_nothing_left\": \"sell\" sells it: the price paid, every slot empty")
+    check(progress(sold, 2)[:4] == (OWNED_PRICE, 1, 1, 1) and progress(sold, 2)[4][1] == 1,
+          "and counts it: a purchase of the stock, an opening, a pack without its rare for the pity")
 
     # Without the mod, △ does nothing on the Password screen.
     plain = run(executable, "plain", SCREEN + 100, OPENING, mods, with_mod=False)
