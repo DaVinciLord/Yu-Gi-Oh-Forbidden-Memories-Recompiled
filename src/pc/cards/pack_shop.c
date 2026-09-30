@@ -85,6 +85,7 @@ enum {
 #define QUICK_STEP 16
 #define QUICK_WAIT 30                 /* frames a quick reveal shows a card */
 #define LINES_A_PAGE 3
+#define NOTE_MARGIN 4                 /* ALL OWNED's room from the box's right frame */
 
 enum { ICON_CROSS = 0x22, ICON_TRIANGLE = 0x23, ICON_SQUARE = 0x24, ICON_CIRCLE = 0x25, ICON_STAR = 0x26 };
 enum { WHITE = 0, GOLD = 1, BLUE = 2, GREY = 4 };
@@ -821,12 +822,13 @@ static int nothing_left(int pack)
     return Packs_RefusesWhenNothingLeft(pack) && Packs_NothingLeft(pack, held, NULL);
 }
 
-/* ALL OWNED, grey, at the right of the price's line: why BUY is refused. A
- * translation too long for the line after a long price loses its last
- * letters rather than running over the price. */
+/* ALL OWNED, grey, at the right of the price's line (a few pixels clear of
+ * the box's frame, which a full last letter such as the U of TOUT OBTENU
+ * would touch): why BUY is refused. A translation too long for the line
+ * after a long price loses its last letters rather than running over it. */
 static void nothing_left_note(Out *out)
 {
-    int width = own(NULL, TEXT_OWN_PACK_ALL_OWNED, "ALL OWNED", NULL, NULL), x = BOX_WIDTH - width;
+    int width = own(NULL, TEXT_OWN_PACK_ALL_OWNED, "ALL OWNED", NULL, NULL), x = BOX_WIDTH - NOTE_MARGIN - width;
     if (x < out->x + 8) x = out->x + 8;
     at_x(out, x);
     colour(out, GREY);
@@ -1160,6 +1162,13 @@ static void build_info(void)
         out = info_line();
         numbers[0] = (unsigned)Packs_StockLeft(s.pack, &s.progress);
         own(&out, TEXT_OWN_PACK_LEFT, "LEFT %d", numbers, NULL);
+        info_done(&out);
+    }
+    if (nothing_left(s.pack)) {   /* why BUY is refused */
+        out = info_line();
+        colour(&out, GREY);
+        own(&out, TEXT_OWN_PACK_ALL_OWNED, "ALL OWNED", NULL, NULL);
+        colour(&out, WHITE);
         info_done(&out);
     }
     if (!unlocked(s.pack)) {

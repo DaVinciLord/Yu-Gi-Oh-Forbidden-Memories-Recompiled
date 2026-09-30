@@ -87,7 +87,7 @@ card is dealt whatever the player holds). Bought then, every slot would come
 empty. By default (`"when_nothing_left": "refuse"`) such a pack is not sold:
 the list shows ALL OWNED, grey, where SOLD OUT would be, and ✕ asks BUY /
 QUIT with BUY grey and ALL OWNED beside the price, as it does when the
-starchips fall short; nothing is paid, and the stock, the pity and the
+starchips fall short (□'s details say it too); nothing is paid, and the stock, the pity and the
 save's counts stay as they were. `"sell"` sells it anyway, as a mod may want
 (a pack bought for the count, say).
 
@@ -241,7 +241,8 @@ The Password screen's own, with nothing drawn by the port over it:
   pages, `✕OK`.
 * **Details** (□): the whole description, cards a pack, the price and each
   card of it, each tier's chance of a slot dealt by the odds, the guarantee
-  and the pity, the stock left, and every condition still unmet.
+  and the pity, the stock left, ALL OWNED when the pack has nothing left for
+  the player, and every condition still unmet.
 
 A pack's password typed on the digits turns the big card to the pack and
 asks BUY / QUIT the same way, and afterwards the screen is the digits again.
