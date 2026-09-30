@@ -166,7 +166,8 @@ wind of your activities...
   choice's answer, a branch, a shared ending. Its text belongs with it; keep
   the line. The listing names each after its place in the game's own text.
 * `{cont}` marks a string that runs on into the next item without ending;
-  keep the two in that order.
+  keep the two in that order. Blank lines and `# comments` between it and
+  the next item are ignored, as after `{end}`.
 
 The codes:
 
