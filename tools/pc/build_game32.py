@@ -124,8 +124,13 @@ NATIVE = sorted(glob.glob("src/pc/guest/*.[cS]") + glob.glob("src/pc/sdk/*.c") +
 MODULES = [("main_menu", "src/overlays/main_menu/*.c", 0x0F, 0),
            ("password", "src/overlays/password/*.c", 0x15, 0x80168000),
            ("overworld", "src/overlays/overworld/*.c", 0x14, 0x80168000),
-           ("free_duel", "src/overlays/free_duel/*.c", 0x13, 0x80168000)]
+           ("free_duel", "src/overlays/free_duel/*.c", 0x13, 0x80168000),
+           ("duel_effects", "src/overlays/duel_effects/*.c", 0x18, 0x80146000)]
 MODULE_CONFIG = {"overworld": "overworld_before_coup"}
+# Modules entered only through a native gate that checks the delivered bytes
+# first (src/pc/overlays/duel_effects.c): their guest addresses stay out of
+# Memories_FunctionMap, so a call into a modded image is interpreted instead.
+GATED_MODULES = {"duel_effects"}
 
 # Save states outlive native rebuilds because everything a state can point at
 # in the game objects stays put (src/pc/guest/state.h): their code and
@@ -717,7 +722,8 @@ def main():
             for row in csv.DictReader(handle):
                 row["name"] = renamed.get(name, {}).get(row["name"], row["name"])
                 row["bank"], row["identifier"] = bank, identifier if bank else 0
-                overlay_rows.append(row)
+                if name not in GATED_MODULES:
+                    overlay_rows.append(row)
     by_address = {int(row["address"], 16): row["name"] for row in rows}
     addresses = dict(resident_elf)
     for name, _, _, _ in MODULES:
