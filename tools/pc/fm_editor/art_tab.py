@@ -9,7 +9,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from . import art, pngio
 from .tabs import Tab, type_label
-from .widgets import card_matches, px, scrolled_tree
+from .widgets import card_matches, px, scrolled_tree, ui_font
 
 # Each part shown at a zoom, and the internal resolution its third view draws.
 ZOOM = {"art": 2, "thumbnail": 4, "title": 2}
@@ -48,7 +48,7 @@ class ArtTab(Tab):
 
         right = ttk.Frame(self, padding=(10, 0, 0, 0))
         right.pack(side="left", fill="both", expand=True)
-        self.heading = ttk.Label(right, font=("TkDefaultFont", 11, "bold"))
+        self.heading = ttk.Label(right, font=ui_font(11))
         self.heading.pack(anchor="w")
         self.how = ttk.Label(right, style="Note.TLabel", wraplength=px(right, 720), justify="left")
         self.how.pack(anchor="w", pady=(0, 4))

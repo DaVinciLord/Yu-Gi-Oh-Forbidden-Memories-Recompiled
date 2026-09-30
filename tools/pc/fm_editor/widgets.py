@@ -2,6 +2,7 @@
 a scrolled tree, and dialogs."""
 from __future__ import annotations
 
+import sys
 import tkinter as tk
 import tkinter.font as tkfont
 from tkinter import ttk
@@ -13,13 +14,27 @@ from .gamedata import TYPE_NAMES
 def ui_scale(widget) -> float:
     """How much bigger than at 96 dpi the default font is drawn: a desktop
     set to 144 dpi (Xft.dpi) enlarges the text but not Tk's pixel sizes, so
-    widths, wrap lengths and row heights given in pixels grow by this."""
+    widths, wrap lengths and row heights given in pixels grow by this.
+    On Windows the program is dpi aware (theme.dpi_awareness): Tk's scaling
+    (pixels a point) is the dpi's, 4/3 at 100%, and the fonts in points
+    follow it, so the pixel sizes do too."""
+    if sys.platform == "win32":
+        return max(1.0, float(widget.tk.call("tk", "scaling")) * 72 / 96)
     return max(1.0, tkfont.nametofont("TkDefaultFont", root=widget).metrics("linespace") / 19)
 
 
 def px(widget, pixels: int) -> int:
     """`pixels` at 96 dpi, at the desktop's size (ui_scale)."""
     return round(pixels * ui_scale(widget))
+
+
+def ui_font(size: int, weight: str = "bold"):
+    """The default font's face at another size (a heading): ("TkDefaultFont",
+    size, weight) names no face, which X11 matches to its default sans but
+    Windows to Arial, so there the face is TkDefaultFont's own."""
+    if sys.platform == "win32":
+        return (tkfont.nametofont("TkDefaultFont").actual("family"), size, weight)
+    return ("TkDefaultFont", size, weight)
 
 
 def scrolled_tree(parent, columns, widths, height=20, selectmode="browse"):

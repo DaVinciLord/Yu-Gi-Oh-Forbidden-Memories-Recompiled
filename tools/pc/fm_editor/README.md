@@ -57,6 +57,14 @@ F10 open them). Left light: the thin frame Windows draws around an open
 menu, and the system's own dialogs (message boxes, choosing a file or
 folder).
 
+On Windows the editor tells the system it knows the screen's dpi (per
+monitor, `theme.dpi_awareness`, before the first window), so at 125% or
+150% it is drawn at that size itself instead of stretched and blurred: the
+fonts, in points, follow Tk's scaling, and so do the sizes the editor gives
+in pixels (`widgets.px`) and the dark theme's arrows and check boxes. Its
+face is Windows 11's Segoe UI Variable where there is one (Segoe UI before),
+Consolas for the fixed one. None of this runs elsewhere.
+
 ### Bulk fusions
 
 **Bulk...** in the Fusions tab (`bulk_dialog.py`, the rules in
