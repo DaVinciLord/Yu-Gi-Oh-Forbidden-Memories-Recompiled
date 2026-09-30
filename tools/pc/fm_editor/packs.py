@@ -418,6 +418,15 @@ def read_pack(entry, resolve, mod: str = "mod", index: int = 0, taken_ids=()) ->
                 return None, notes
             into[t] = n
     if pack.unique:
+        fixed = {}
+        for s, slot in enumerate(pack.slots or []):
+            if slot.kind != SLOT_CARD:
+                continue
+            if slot.card in fixed:
+                notes.append(("error", f"{where}: \"unique_in_pack\" and card {slot.card} fixed in slots "
+                                       f"{fixed[slot.card] + 1} and {s + 1}; the pack is left out"))
+                return None, notes
+            fixed[slot.card] = s
         distinct = len(distinct_cards(pack))
         if distinct < pack.count:
             notes.append(("error", f"{where}: \"unique_in_pack\" deals {pack.count} different cards and the pack has "
@@ -567,12 +576,16 @@ def check_unlock(where, value) -> list:
 
 
 def distinct_cards(pack) -> set:
+    """The different cards a pack can deal, its fixed cards too (packs.c
+    distinct_cards), for "unique_in_pack"."""
     out = set()
     for tier in pack.tiers:
         out |= {c for c, w in tier.pool if w}
     for slot in pack.slots or []:
         if slot.kind == SLOT_POOL:
             out |= {c for c, w in slot.pool if w}
+        elif slot.kind == SLOT_CARD:
+            out.add(slot.card)
     return out
 
 
@@ -736,6 +749,11 @@ def deal(pack: Pack, random, pity=None, held=None) -> Result:
     dealing = _Dealing(pack, held)
     odds = [t.odds for t in pack.tiers]
     cards, tiers, redone = [0] * pack.count, [-1] * pack.count, [False] * pack.count
+    # A fixed card is dealt whatever comes before it: counted from the start,
+    # so "unique_in_pack" and "max_copies" leave it to its slot.
+    for s in range(pack.count):
+        if pack.slot_kind(s) == SLOT_CARD:
+            dealing.take(pack.slots[s].card, 1)
     for s in range(pack.count):
         slot = pack.slots[s] if pack.slots else None
         kind = pack.slot_kind(s)
@@ -751,7 +769,8 @@ def deal(pack: Pack, random, pity=None, held=None) -> Result:
             if t >= 0:
                 card, used = dealing.pick_down(t, card_roll[s])
         cards[s], tiers[s] = card, used
-        dealing.take(card, 1)
+        if kind != SLOT_CARD:
+            dealing.take(card, 1)
     count = len(pack.tiers)
     need = []
     for t in range(count):

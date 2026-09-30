@@ -182,6 +182,14 @@ static void test_errors(void)
     CHECK(one("{\"packs\": [{\"tiers\": {\"a\": {\"cards\": [1]}}, \"slots\": [{\"card\": 5000}]}]}") == 0);
     CHECK(one("{\"packs\": [{\"tiers\": {\"a b\": {\"cards\": [1]}}}]}") == 0 && noted("a tier's name"));
     CHECK(one("{\"packs\": {\"cards\": [1]}}") == 0 && noted("\"packs\" is a list of packs"));
+    /* "unique_in_pack" with one card fixed in two slots cannot hold. */
+    CHECK(one("{\"packs\": [{\"cards\": [1, 2, 3], \"slots\": [{\"card\": 5}, \"cards\", {\"card\": 5}], "
+              "\"duplicates\": \"unique_in_pack\"}]}") == 0 && noted("fixed in slots 1 and 3"));
+    /* The fixed cards count among the different cards: 2 + 1 for 3 slots. */
+    CHECK(one("{\"packs\": [{\"cards\": [1, 2], \"slots\": [\"cards\", \"cards\", {\"card\": 5}], "
+              "\"duplicates\": \"unique_in_pack\"}]}") == 1);
+    CHECK(one("{\"packs\": [{\"cards\": [1, 5], \"slots\": [\"cards\", \"cards\", {\"card\": 5}], "
+              "\"duplicates\": \"unique_in_pack\"}]}") == 0 && noted("unique_in_pack"));
 }
 
 static void test_warnings(void)
@@ -262,6 +270,35 @@ static void test_when_nothing_left(void)
     CHECK(noted("\"when_nothing_left\" is \"refuse\" or \"sell\"; the shop's is used") &&
           noted("\"when_nothing_left\" is \"refuse\" or \"sell\"; \"refuse\" is used"));
     CHECK(Packs_At(0)->when_nothing_left == PACK_NOTHING_SHOPS && Packs_RefusesWhenNothingLeft(0));
+}
+
+/* A fixed card is counted from the start: "unique_in_pack" never deals it
+ * again before its slot, and "max_copies" counts it wherever it sits. */
+static void test_fixed_cards_first(void)
+{
+    unsigned seed;
+    CHECK(one("{\"packs\": [{\"cards\": [1, 2, 3, 4], \"slots\": [\"cards\", \"cards\", \"cards\", {\"card\": 2}], "
+              "\"duplicates\": \"unique_in_pack\"}]}") == 1);
+    for (seed = 0; seed < 300; seed++) {
+        Counting counting = {seed * 2654435761u, 0};
+        PackResult result;
+        int a, b;
+        Packs_Deal(0, NULL, NULL, NULL, counting_random, &counting, &result);
+        CHECK(result.cards[3] == 2);
+        for (a = 0; a < result.count; a++)
+            for (b = a + 1; b < result.count; b++) CHECK(!result.cards[a] || result.cards[a] != result.cards[b]);
+    }
+    CHECK(one("{\"packs\": [{\"cards\": [1, 2], \"slots\": [\"cards\", \"cards\", {\"card\": 2}], "
+              "\"max_copies\": 2}]}") == 1);
+    for (seed = 0; seed < 300; seed++) {
+        Counting counting = {seed * 2654435761u, 0};
+        PackResult result;
+        Held held = {{2}, {1}, 1};
+        int s, twos = 0;
+        Packs_Deal(0, NULL, held_copies, &held, counting_random, &counting, &result);
+        for (s = 0; s < result.count; s++) twos += result.cards[s] == 2;
+        CHECK(twos == 1 && result.cards[2] == 2);   /* one held and the fixed one make the two */
+    }
 }
 
 static void test_order_and_shops(void)
@@ -513,8 +550,8 @@ static void test_file_and_signature(void)
     CHECK(one("{\"packs\": [{\"cards\": [1]}]}") == 1);
     inline_signature = Packs_Signature();
     /* "packs": a file of the mod's, with rules of its own. */
-    if (one("{\"packs\": \"packs_fixture.json\"}") != 8) fprintf(stderr, "%d packs, notes:\n%s", Packs_Count(), all_notes);
-    CHECK(Packs_Count() == 8);
+    if (one("{\"packs\": \"packs_fixture.json\"}") != 10) fprintf(stderr, "%d packs, notes:\n%s", Packs_Count(), all_notes);
+    CHECK(Packs_Count() == 10);
     CHECK(Packs_Signature() != inline_signature);
     CHECK(one("{\"packs\": \"missing.json\"}") == 0 && noted("missing.json"));
     CHECK(one("{\"packs\": \"../escape.json\"}") == 0 && noted("not a file inside the mod"));
@@ -605,6 +642,7 @@ int main(void)
     test_draw_count();
     test_rules_while_dealing();
     test_when_nothing_left();
+    test_fixed_cards_first();
     test_unlock_and_stock();
     test_progress_file();
     test_file_and_signature();

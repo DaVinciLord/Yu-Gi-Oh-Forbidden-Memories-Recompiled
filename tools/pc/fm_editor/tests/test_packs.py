@@ -148,6 +148,17 @@ class ReaderTest(unittest.TestCase):
         found, notes = packs.read_packs([{"id": "a", "cards": [1]}, {"id": "b", "cards": [1], "order": -5}], by_id)
         self.assertEqual([p.id for p in found], ["b", "a"])
 
+    def test_fixed_cards_count_among_the_different(self):
+        # "unique_in_pack" counts fixed cards, and one card fixed twice cannot hold.
+        self.assertIsNotNone(self.one({"cards": [1, 2], "slots": ["cards", "cards", {"card": 5}],
+                                       "duplicates": "unique_in_pack"})[0])
+        self.assertIsNone(self.one({"cards": [1, 5], "slots": ["cards", "cards", {"card": 5}],
+                                    "duplicates": "unique_in_pack"})[0])
+        pack, errors = self.errors({"cards": [1, 2, 3], "slots": [{"card": 5}, "cards", {"card": 5}],
+                                    "duplicates": "unique_in_pack"})
+        self.assertIsNone(pack)
+        self.assertIn("fixed in slots 1 and 3", errors[0])
+
     def test_when_nothing_left(self):
         pack, notes = self.one({"cards": [1, 2], "max_copies": 1})
         self.assertEqual(notes, [])

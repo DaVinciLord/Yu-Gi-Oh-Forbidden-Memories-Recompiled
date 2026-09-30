@@ -51,8 +51,8 @@ the game starts, like the other tables: changing them needs a restart.
 | `slots` | every slot by the tiers' odds | a rule per slot: `"tier"`, `{"tiers": {tier: weight}}`, `{"cards": pool}` (a pool of the slot's own) or `{"card": X}` (always that card) |
 | `guarantee` | none | `{tier: n}`: at least n cards of that tier or rarer in every pack |
 | `pity` | none | `{tier: n}`: the n-th pack in a row without that tier (or rarer) has one. Counted per save |
-| `duplicates` | `"allow"` | `"unique_in_pack"`: no card twice in one pack |
-| `max_copies` | none | a card the player already holds this many of (chest and deck, and what this pack dealt) is not dealt |
+| `duplicates` | `"allow"` | `"unique_in_pack"`: no card twice in one pack, a `{"card": X}` slot's card included |
+| `max_copies` | none | a card the player already holds this many of (chest and deck, and what this pack dealt, its fixed cards first) is not dealt |
 | `when_nothing_left` | the shop's (`pack_shop`), `"refuse"` | with `max_copies`, when the player holds that many of every card of the pack ([Nothing left](#nothing-left)): `"refuse"`: BUY is refused and the screen says ALL OWNED, so no starchips, stock or pity are spent on a pack of empty slots; `"sell"`: sold anyway, every slot empty |
 | `include_added_cards` | `true` | `false`: a card a mod added, in any pool, is left out with a note (for packs of the disc's cards only) |
 | `stock` | no limit | purchases one save may make, 1 to 999999. Sold out shows SOLD OUT |
@@ -181,6 +181,10 @@ leaves the game's numbers where they would have been.
    A fixed card or a slot's own pool is never dealt again. The pity asks for
    one when the save's count of packs in a row without the tier reaches n - 1.
 
+A fixed card (`{"card": X}`) counts as dealt from the start, before slot 1:
+`unique_in_pack` never deals it from a pool, whatever slot it is fixed in,
+and `max_copies` counts it for every slot.
+
 `tests/pc/packs_fixture.json` and `packs_golden.txt` hold packs dealt this way;
 the FM Editor's Simulate deals them the same (`tools/pc/fm_editor/packs.py`),
 and both are tested against the file.
@@ -290,7 +294,8 @@ not built.
 
 `tests/pc/packs_test.c` (CTest `pc_packs`) checks every rule of the reader,
 that a pack spends four numbers a slot whatever it holds, the guarantee, the
-pity, `unique_in_pack`, `max_copies`, the fall to a commoner tier, `when_nothing_left`, the unlock conditions, the progress file
+pity, `unique_in_pack` and `max_copies` (fixed cards first), the fall to a
+commoner tier, `when_nothing_left`, the unlock conditions, the progress file
 (lines of packs not here kept) and the deals of `packs_fixture.json` against
 `packs_golden.txt` (a line ends `| nothing left` for a pack with nothing left
 for the player); the FM Editor's `tests/test_packs.py` holds its Simulate

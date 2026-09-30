@@ -44,6 +44,22 @@ added 1 800/0 802/1 800/0 | seed 31DFF4F5
 added 2 801/0 802/1 802/1 | seed FA132526
 added 3 802/1 1/0 802/1 | seed C2465557
 added 8 801/0 800/0 802/1* | seed AB46464C
+fixed-unique 1 152/0 153/0 150/0 151/-1 | seed C487EB71
+fixed-unique 2 153/0 152/0 154/1 151/-1 | seed 23FC6DB2
+fixed-unique 3 153/0 152/0 154/1 151/-1 | seed 8370EFF3
+fixed-unique 4 150/0 153/0 154/1 151/-1 | seed E2E57234
+fixed-unique 5 150/0 153/0 152/0 151/-1 | seed 4259F475
+fixed-unique 6 152/0 153/0 150/0 151/-1 | seed A1CE76B6
+fixed-unique 7 152/0 150/0 154/1 151/-1 | seed 0142F8F7
+fixed-unique 8 153/0 150/0 154/1 151/-1 | seed 60B77B38
+capped-fixed 1 161/0 163/-1 161/0 160/-1 | seed C487EB71
+capped-fixed 2 162/0 163/-1 162/0 160/-1 | seed 23FC6DB2
+capped-fixed 3 162/0 163/-1 162/0 160/-1 | seed 8370EFF3
+capped-fixed 4 160/0 163/-1 162/0 160/-1 | seed E2E57234
+capped-fixed 1 162/0 163/-1 162/0 160/-1 | seed C487EB71
+capped-fixed 2 161/0 163/-1 162/0 160/-1 | seed 23FC6DB2
+capped-fixed 3 161/0 163/-1 161/0 160/-1 | seed 8370EFF3
+capped-fixed 1 0/-1 0/-1 0/-1 160/-1 | seed C487EB71
 owned 1 91/0 90/0 0/-1 | seed 31DFF4F5
 owned 2 90/0 91/0 0/-1 | seed FA132526
 owned 1 91/0 0/-1 0/-1 | seed 31DFF4F5

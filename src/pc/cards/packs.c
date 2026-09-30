@@ -546,6 +546,18 @@ static int distinct_cards(const Pack *pack)
     for (s = 0; pack->slots && s < pack->count; s++) {
         if (pack->slots[s].kind == PACK_SLOT_POOL) pools[pool_count++] = &pack->slots[s].pool;
     }
+    /* A fixed card is one of them too. */
+    for (s = 0; pack->slots && s < pack->count; s++) {
+        int card = pack->slots[s].card, j, found = 0;
+        if (pack->slots[s].kind != PACK_SLOT_CARD) continue;
+        for (j = 0; j < seen_count; j++) found |= seen[j] == card;
+        if (!found) {
+            int *bigger = realloc(seen, (size_t)(seen_count + 1) * sizeof(*seen));
+            if (!bigger) break;
+            seen = bigger;
+            seen[seen_count++] = card;
+        }
+    }
     for (i = 0; i < pool_count; i++) {
         for (k = 0; k < pools[i]->count; k++) {
             int card = pools[i]->entries[k].card, j, found = 0;
@@ -764,6 +776,18 @@ static void read_pack(const char *mod, const char *directory, int index, const J
         !read_tier_counts(mod, where, "pity", Json_Member(entry, "pity"), pack, pack->pity)) {
         free_pack(pack);
         return;
+    }
+    for (i = 0; pack->unique && pack->slots && i < pack->count; i++) {
+        int k;
+        if (pack->slots[i].kind != PACK_SLOT_CARD) continue;
+        for (k = i + 1; k < pack->count; k++) {
+            if (pack->slots[k].kind == PACK_SLOT_CARD && pack->slots[k].card == pack->slots[i].card) {
+                Mods_Note(mod, "%s: \"unique_in_pack\" and card %d fixed in slots %d and %d; the pack is left out",
+                          where, pack->slots[i].card, i + 1, k + 1);
+                free_pack(pack);
+                return;
+            }
+        }
     }
     if (pack->unique && distinct_cards(pack) < pack->count) {
         Mods_Note(mod, "%s: \"unique_in_pack\" deals %d different cards and the pack has %d to deal from; the pack is "
@@ -1264,6 +1288,11 @@ int Packs_Deal(int index, const PacksProgress *progress, PackHeld held, void *he
     d.held_context = held_context;
     for (t = 0; t < pack->tier_count; t++) odds[t] = pack->tiers[t].odds;
     result->count = pack->count;
+    /* A fixed card is dealt whatever comes before it: counted from the
+       start, so "unique_in_pack" and "max_copies" leave it to its slot. */
+    for (s = 0; s < pack->count; s++) {
+        if (slot_kind(pack, s) == PACK_SLOT_CARD) take(&d, pack->slots[s].card, 1);
+    }
     for (s = 0; s < pack->count; s++) {
         const PackSlot *slot = pack->slots ? &pack->slots[s] : NULL;
         int card = 0, used = -1;
@@ -1288,7 +1317,7 @@ int Packs_Deal(int index, const PacksProgress *progress, PackHeld held, void *he
         }
         result->cards[s] = (unsigned short)card;
         result->tiers[s] = (signed char)used;
-        take(&d, card, 1);
+        if (slot_kind(pack, s) != PACK_SLOT_CARD) take(&d, card, 1);
     }
     /* What the guarantee and the pity ask for, the rarest first, so a slot
      * raised for it counts for the ones below. */
