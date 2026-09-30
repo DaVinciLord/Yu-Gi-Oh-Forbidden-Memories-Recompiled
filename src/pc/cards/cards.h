@@ -75,6 +75,35 @@ int Cards_Type(int id);
  * "Wind"), 0-5, or -1; and the attribute of a card. */
 int Cards_AttributeNamed(const char *text);
 int Cards_Attribute(int id);
+/* A monster's printed level (the number of stars), or -1 for no card. */
+int Cards_Level(int id);
+/* Forbidden Memories' secondary fusion groups used by general fusion rules.
+ * These are properties of the retail base card, not primary monster types. */
+enum {
+    CARD_FUSION_GROUP_NONE,
+    CARD_FUSION_GROUP_ANGEL_WINGED,
+    CARD_FUSION_GROUP_BUGROTHIAN,
+    CARD_FUSION_GROUP_EGG,
+    CARD_FUSION_GROUP_ELF,
+    CARD_FUSION_GROUP_FEATHER_FROM_BEAR,
+    CARD_FUSION_GROUP_FEATHER_FROM_HARPIE,
+    CARD_FUSION_GROUP_FEATHER_FROM_MACHINE,
+    CARD_FUSION_GROUP_FEMALE,
+    CARD_FUSION_GROUP_JAR,
+    CARD_FUSION_GROUP_KOUMORIAN,
+    CARD_FUSION_GROUP_MERCURY_MAGIC_USER,
+    CARD_FUSION_GROUP_MERCURY_SPELLCASTER,
+    CARD_FUSION_GROUP_MIRROR,
+    CARD_FUSION_GROUP_MUS_KINGIAN,
+    CARD_FUSION_GROUP_MYST_ELFIAN,
+    CARD_FUSION_GROUP_RAINBOW,
+    CARD_FUSION_GROUP_SHEEPIAN,
+    CARD_FUSION_GROUP_THRONIAN,
+    CARD_FUSION_GROUP_TURTLE,
+    CARD_FUSION_GROUP_USABLE_BEAST
+};
+int Cards_FusionGroupNamed(const char *text);
+int Cards_InFusionGroup(int id, int group);
 
 /* The retail card `id` is a copy of, or `id` itself; 0 for no card. */
 int Cards_BaseId(int id);
