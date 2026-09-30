@@ -15,6 +15,7 @@
 #include "pc/text/language.h"
 #include "pc/text/text.h"
 #include "pc/platform/menu.h"
+#include "pc/platform/title_screen.h"
 #include "pc/debug/crash.h"
 #include "pc/debug/log.h"
 #include "pc/compat/signal.h"
@@ -406,6 +407,7 @@ static void subsystems(MemoriesState *state)
     SaveMenu_State(state);
     if (!Memories_StateLoading(state)) DeckMenu_ShopState(state);
     TitleJump_State(state);
+    TitleScreen_State(state);
     Platform_State(state);
     DeckMenu_State(state); /* the decks' draft, kept with the save */
 }

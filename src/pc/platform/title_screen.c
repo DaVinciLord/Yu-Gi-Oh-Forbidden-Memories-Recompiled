@@ -14,6 +14,7 @@
 #include "title_images.h"
 #include "pc/saves/save_menu.h"
 #include "pc/saves/deck_menu.h"
+#include "pc/guest/state.h"
 #include "types.h"
 #include "game/display_object.h"
 #include "game/display_object_layout.h"
@@ -149,6 +150,20 @@ void TitleScreen_Opened(void)
 void TitleScreen_Closed(void)
 {
     open = 0;
+}
+
+void TitleScreen_State(MemoriesState *state)
+{
+    MemoriesStateField fields[] = {{&open, sizeof(open)}, {&idle, sizeof(idle)}, {&prompt_level, sizeof(prompt_level)}};
+    if (!Memories_StateLoading(state)) {
+        Memories_StateChunk(state, "title-screen", fields, 3);
+        return;
+    }
+    /* A state from before the chunk: the title is taken as closed. */
+    open = 0;
+    idle = 0;
+    prompt_level = 0x80;
+    if (Memories_StateChunk(state, "title-screen", fields, 3) && open) TitleImages_Prepare(TitleConfig_Load());
 }
 
 static int prompt_showing(void)

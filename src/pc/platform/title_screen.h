@@ -34,6 +34,12 @@ int TitleScreen_ShowShade(void);
 long TitleScreen_BackgroundColour(void);
 int TitleScreen_Dim(int level);
 
+/* Save states: whether the title is up, and its idle count and pulse, which
+ * live here and not in the game; a state loaded on the title puts the mods'
+ * pictures back in VRAM. */
+struct MemoriesState;
+void TitleScreen_State(struct MemoriesState *state);
+
 /* The "text" lines over the picture (hud.c). */
 void TitleScreen_Draw(struct MenuCanvas *canvas, int *x, int *y, int *w, int *h);
 unsigned TitleScreen_Signature(void);
