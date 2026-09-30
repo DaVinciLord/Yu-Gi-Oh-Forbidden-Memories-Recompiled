@@ -197,6 +197,20 @@ class PlanTest(unittest.TestCase):
             plan = bulk.plan(self.p, pairs_spec("1-30", "31-60", mode="remove"))
             self.assertEqual((plan.errors, plan.rules_after), ([], 0))
 
+    def test_rule_count_with_a_remove(self):
+        # {"remove": Kuriboh} takes (1, 2) away: one rule, whatever the recipes
+        self.p.remove_recipes(3)
+        self.assertEqual(bulk.rule_count(self.p), len(manifest.build_fusions(self.p)))
+        rules = bulk.rule_count(self.p)
+        plan = bulk.plan(self.p, pairs_spec("1", "2", result=599, stronger=False, overwrite=True))
+        self.assertEqual(plan.rules_after, rules + 1)       # the pair the remove took, made again
+        bulk.apply(self.p, plan)
+        self.assertEqual(bulk.rule_count(self.p), len(manifest.build_fusions(self.p)))
+        plan = bulk.plan(self.p, pairs_spec("1", "2", mode="remove"))
+        self.assertEqual(plan.rules_after, rules)           # back under the remove
+        bulk.apply(self.p, plan)
+        self.assertEqual(bulk.rule_count(self.p), rules)
+
     def test_apply_and_undo(self):
         before = dict(self.p.fusions)
         plan = bulk.plan(self.p, pairs_spec("1-10", "1-10", result=599, stronger=False, overwrite=True))

@@ -246,15 +246,20 @@ class Plan:
 
 def rule_count(project) -> int:
     """The fusion rules manifest.build_fusions writes."""
-    retail = project.retail.fusions
-    count = sum(1 for pair, now in project.fusions.items() if retail.get(pair) != now)
-    count += sum(1 for pair in retail if pair not in project.fusions)
-    return count + len(project.kept["fusions"])
+    active = project.active_removes()
+    removes = set(active)
+    fusions = project.fusions
+    count = sum(1 for pair, now in fusions.items() if project.fusion_rule(pair, now, removes))
+    count += sum(1 for pair in project.retail.fusions if pair not in fusions
+                 and project.fusion_rule(pair, None, removes))
+    return count + len(active) + len(project.kept["fusions"])
 
 
-def _differs(project, pair, value) -> bool:
-    """Whether a pair holding `value` (None: no entry) is a rule of the mod."""
-    return project.retail.fusions.get(pair) != value
+def _differs(project, pair, value, removes=frozenset()) -> bool:
+    """Whether a pair holding `value` (None: no entry) is a rule of the mod,
+    with the removes it has now (restoring every recipe of a removed card
+    drops its remove; the count leaves that to the next plan)."""
+    return project.fusion_rule(pair, value, removes)
 
 
 def plan(project, spec: BulkSpec) -> Plan:
@@ -298,6 +303,7 @@ def plan(project, spec: BulkSpec) -> Plan:
     set_a, set_b = set(side_a), set(side_b)
     simple = not project.added
     fusions = project.fusions
+    removes = set(project.active_removes())
     delta = 0
     for a in side_a:
         for b in side_b:
@@ -345,7 +351,7 @@ def plan(project, spec: BulkSpec) -> Plan:
             # The rule the pair leaves in the mod, as Project.set_fusion stores it.
             now = fusions.get(pair)
             stored = after if after else (0 if (pair[0] in project.added or pair[1] in project.added) else None)
-            delta += _differs(project, pair, stored) - _differs(project, pair, now)
+            delta += _differs(project, pair, stored, removes) - _differs(project, pair, now, removes)
     out.rules_after = out.rules_before + delta
     out.samples += out.kept_samples[:SAMPLE - len(out.samples)]
     if out.rules_after > RULE_BUDGET and out.rules_after > out.rules_before:

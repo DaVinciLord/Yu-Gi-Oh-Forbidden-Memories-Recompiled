@@ -139,6 +139,10 @@ class Project:
         self.added = {}                 # editor id (723+) -> AddedCard
         self.card_extra = {}            # retail id -> keys of its "replace" entry the editor keeps as written
         self.fusions = dict(retail.fusions)
+        # {"remove": C} rules, in the mod's order: no recipe on the disc makes
+        # C (tables.c Tables_FilterFusion); their pairs are out of `fusions`.
+        self.fusion_removes = []
+        self._recipes = None            # retail result -> the disc's pairs that make it
         self.equips = {e: set(m) for e, m in retail.equips.items()}
         self.rituals = dict(retail.rituals)
         # ritual id -> three requirement dictionaries. Empty means the traditional
@@ -258,6 +262,8 @@ class Project:
         self.passwords.pop(cid, None)
         self.notes.pop(cid, None)
         self.fusions = {p: r for p, r in self.fusions.items() if cid not in p and r != cid}
+        if cid in self.fusion_removes:
+            self.fusion_removes.remove(cid)
         self.equips.pop(cid, None)
         for monsters in self.equips.values():
             monsters.discard(cid)
@@ -318,6 +324,44 @@ class Project:
             self.fusions[pair] = retail
         else:
             self.fusions.pop(pair, None)
+
+    def retail_recipes(self, result: int) -> list:
+        """The disc's pairs that make `result`, in order."""
+        if self._recipes is None:
+            self._recipes = {}
+            for pair, made in sorted(self.retail.fusions.items()):
+                self._recipes.setdefault(made, []).append(pair)
+        return self._recipes.get(result, [])
+
+    def remove_recipes(self, result: int):
+        """{"remove": result}: no recipe on the disc makes it any more. A
+        mod's own rules still do, and so does an added card's "fusions"
+        list, which a "result": null rule for each pair would block."""
+        if result not in self.fusion_removes:
+            self.fusion_removes.append(result)
+        for pair in self.retail_recipes(result):
+            if self.fusions.get(pair) == result:
+                del self.fusions[pair]
+
+    def active_removes(self) -> list:
+        """The removes the mod still writes, in its order: all but those of
+        a card whose every disc recipe is back. One for a card no disc
+        recipe makes does nothing in the game, and stays as the mod wrote it."""
+        out = []
+        for result in self.fusion_removes:
+            recipes = self.retail_recipes(result)
+            if not recipes or any(self.fusions.get(pair) != result for pair in recipes):
+                out.append(result)
+        return out
+
+    def fusion_rule(self, pair, value, removes) -> bool:
+        """Whether the mod writes a rule for a pair holding `value` (None: no
+        entry); `removes` is a set of active_removes(). A disc recipe of a
+        removed card needs no rule to be gone, and one to stay."""
+        retail = self.retail.fusions.get(pair)
+        if retail and retail in removes:
+            return bool(value)
+        return retail != value
 
     def fusion_status(self, pair) -> str:
         retail = self.retail.fusions.get(pair)
