@@ -25,6 +25,9 @@
 #include "../../game/mem_card.h"
 #include "ordering_tables.h"
 #include "../../game/sound.h"
+#ifdef MEMORIES_PC
+#include "pc/platform/title_screen.h"
+#endif
 
 void MainMenu_InitFrontendMenu(s32 unused, s32 menu)
 {
@@ -112,5 +115,12 @@ void MainMenu_InitFrontendMenu(s32 unused, s32 menu)
     D_8018459D = 0;
     MainMenu_StartFrontendEntryTransition(0);
     D_800E9DB0[0] = MainMenu_DrawFrontendBackground;
+#ifdef MEMORIES_PC
+    /* A mod's "title" (pc/platform/title_screen.h): its song, then its
+       changes to the objects made above. */
+    func_80047314(0x7000 + TitleScreen_Song());
+    TitleScreen_Opened();
+#else
     func_80047314(0x7000);
+#endif
 }

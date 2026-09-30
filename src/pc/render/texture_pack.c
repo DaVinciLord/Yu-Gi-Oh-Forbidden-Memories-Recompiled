@@ -27,6 +27,7 @@ typedef struct Entry {
     unsigned rank; /* the pack's place in the mods' load order: a later pack's reading of the same words wins */
     int position;  /* and the entry's in its manifest, so the order never rests on qsort's */
     int made;      /* the port made the words (TexturePack_AddMade): the image is this rectangle of the PNG */
+    int see_through; /* a made image that keeps the PNG's alpha (TexturePack_AddMadeSeeThrough) */
     int source_x, source_y, source_w, source_h;
 } Entry;
 
@@ -167,7 +168,8 @@ static int load_pixels(Entry *entry)
     png_image_free(&image);
     if (entry->made) {
         /* The part of the mod's picture its card shows, opaque over black
-         * as the card's own art is made (art.c). */
+         * as the card's own art is made (art.c); or, for a picture with
+         * see-through parts (the title's), as it is. */
         unsigned char *cut = NULL;
         size_t i, j;
         if (entry->source_x + entry->source_w <= (int)image_width && entry->source_y + entry->source_h <= (int)image_height)
@@ -182,6 +184,10 @@ static int load_pixels(Entry *entry)
             for (i = 0; i < (size_t)entry->source_w; i++) {
                 const unsigned char *p = rgba + (((entry->source_y + j) * image_width) + entry->source_x + i) * 4;
                 unsigned char *q = cut + (j * entry->source_w + i) * 4;
+                if (entry->see_through) {
+                    memcpy(q, p, 4);
+                    continue;
+                }
                 q[0] = (unsigned char)(p[0] * p[3] / 255);
                 q[1] = (unsigned char)(p[1] * p[3] / 255);
                 q[2] = (unsigned char)(p[2] * p[3] / 255);
@@ -811,8 +817,8 @@ static uint32_t block_place(const void *data, uint32_t bytes)
     return blocks[block_count++].offset;
 }
 
-int TexturePack_AddMade(const void *pixels, int words, int rows, int bpp, const void *clut, int clut_entries,
-                        const char *file, int x, int y, int w, int h)
+static int add_made_entry(const void *pixels, int words, int rows, int bpp, const void *clut, int clut_entries,
+                          const char *file, int x, int y, int w, int h, int see_through)
 {
     Entry *more, entry;
     int i;
@@ -836,6 +842,7 @@ int TexturePack_AddMade(const void *pixels, int words, int rows, int bpp, const 
     entry.crop_width = words * per_word(bpp);
     entry.absolute = 1;
     entry.made = 1;
+    entry.see_through = see_through;
     entry.source_x = x;
     entry.source_y = y;
     entry.source_w = w;
@@ -849,6 +856,18 @@ int TexturePack_AddMade(const void *pixels, int words, int rows, int bpp, const 
     made[made_count++] = entry;
     if (!add_made(made_count - 1) || !install()) return 0;
     return 1;
+}
+
+int TexturePack_AddMade(const void *pixels, int words, int rows, int bpp, const void *clut, int clut_entries,
+                        const char *file, int x, int y, int w, int h)
+{
+    return add_made_entry(pixels, words, rows, bpp, clut, clut_entries, file, x, y, w, h, 0);
+}
+
+int TexturePack_AddMadeSeeThrough(const void *pixels, int words, int rows, int bpp, const void *clut, int clut_entries,
+                                  const char *file, int x, int y, int w, int h)
+{
+    return add_made_entry(pixels, words, rows, bpp, clut, clut_entries, file, x, y, w, h, 1);
 }
 
 int TexturePack_Load(const char *from, unsigned rank, int (*part)(const char *setting, void *context), void *context,
