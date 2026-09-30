@@ -14,6 +14,7 @@
  * to its own variables. The verdict is kept in save states. */
 typedef enum RetailImageId {
     RETAIL_IMAGE_DUEL_EFFECTS, /* the WA duel-effect bank at 0x80146000 */
+    RETAIL_IMAGE_CREDITS,      /* the SU credits module at 0x80180000 */
     RETAIL_IMAGE_COUNT
 } RetailImageId;
 

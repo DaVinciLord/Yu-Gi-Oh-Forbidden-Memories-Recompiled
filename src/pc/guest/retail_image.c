@@ -15,6 +15,7 @@ typedef struct Image {
 
 static const Image images[RETAIL_IMAGE_COUNT] = {
     {"duel_effects", 0x80146000u, 0x16000u, "baa203b937dc6bdf91b1826c5832f0f32e11ae5fe9d05193a4361bc08158b9e0"},
+    {"credits", 0x80180000u, 0x8000u, "f125a2a6a8b57d222df544a7a02bf8c639c1fdde5cf978f80a56ea3fba2b836a"},
 };
 
 static volatile unsigned char verdicts[RETAIL_IMAGE_COUNT];

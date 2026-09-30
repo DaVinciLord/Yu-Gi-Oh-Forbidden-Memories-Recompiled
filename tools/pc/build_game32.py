@@ -125,15 +125,16 @@ MODULES = [("main_menu", "src/overlays/main_menu/*.c", 0x0F, 0),
            ("password", "src/overlays/password/*.c", 0x15, 0x80168000),
            ("overworld", "src/overlays/overworld/*.c", 0x14, 0x80168000),
            ("free_duel", "src/overlays/free_duel/*.c", 0x13, 0x80168000),
-           ("duel_effects", "src/overlays/duel_effects/*.c", 0x18, 0x80146000)]
+           ("duel_effects", "src/overlays/duel_effects/*.c", 0x18, 0x80146000),
+           ("credits", "src/overlays/credits/*.c", 0x10, 0x80180000)]
 MODULE_CONFIG = {"overworld": "overworld_before_coup"}
 # Modules entered only through a native gate that checks the delivered bytes
-# first (src/pc/overlays/duel_effects.c): their guest addresses
+# first (src/pc/overlays/duel_effects.c, credits.c): their guest addresses
 # stay out of Memories_FunctionMap, so a call into a modded image is
 # interpreted instead. They must have no variables of their own (theirs stay
 # in guest memory), so they are left out of the module registry too, which
 # would otherwise tell the interpreter their range holds native code.
-GATED_MODULES = {"duel_effects"}
+GATED_MODULES = {"duel_effects", "credits"}
 
 # Save states outlive native rebuilds because everything a state can point at
 # in the game objects stays put (src/pc/guest/state.h): their code and
@@ -856,6 +857,9 @@ def main():
         mapped += [(0x8013A004, "Memories_ModelPrimaryControlA", 0, 0),
                    (0x8013B004, "Memories_ModelVariantControlA", 0, 0),
                    (0x801462B0, "Memories_DuelEffectControl", 0, 0),
+                   (0x801807B0, "Memories_CreditsInit", 0, 0),
+                   (0x80180A24, "Memories_CreditsUpdate", 0, 0),
+                   (0x80181C4C, "Memories_CreditsLines", 0, 0),
                    (0x8017A004, "Memories_ModelPrimaryControlB", 0, 0),
                    (0x8017B004, "Memories_ModelVariantControlB", 0, 0)]
         mapped.sort()
