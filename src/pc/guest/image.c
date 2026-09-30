@@ -330,26 +330,17 @@ static int view_at(HANDLE section, uint32_t address, size_t length, DWORD offset
 }
 
 /* Calls into guest code go through the branch thunks: the game works
- * without DEP. DEP is a second safety net, turned on here where Windows
- * lets a program: with it, a call that escaped the thunks faults into
+ * without DEP. Where DEP is on, guest RAM mapped without execute permission
+ * is a second safety net: a call that escaped the thunks faults into
  * on_guest_exception instead of running MIPS bytes. The game is a 32-bit
  * process, which follows the system's DEP policy (only 64-bit processes
  * always have DEP): under OptIn, the default, the executable's --nxcompat
- * turns it on; under OptOut with the program excepted, SetProcessDEPPolicy
- * does; under AlwaysOff nothing can. */
-static void ask_for_dep(void)
-{
-    DWORD flags = 0;
-    BOOL permanent = FALSE;
-    if (GetProcessDEPPolicy(GetCurrentProcess(), &flags, &permanent) && (flags & PROCESS_DEP_ENABLE)) return;
-    SetProcessDEPPolicy(PROCESS_DEP_ENABLE);
-}
-
+ * turns it on. The game does not change the policy itself: a program that
+ * calls SetProcessDEPPolicy is what virus scanners' heuristics look for. */
 int Memories_GuestMap(void)
 {
     HANDLE section;
     int result, executable = guest_ram_executable();
-    ask_for_dep();
     Memories_GuestBranchResolver = guest_branch_target;
     check_code_address();
     if (executable) view_access = FILE_MAP_ALL_ACCESS | FILE_MAP_EXECUTE;

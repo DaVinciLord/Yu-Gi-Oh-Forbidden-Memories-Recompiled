@@ -117,7 +117,7 @@ How it works:
   primary mechanism, and it needs nothing from the system: the game works
   without DEP. The fault of executing guest RAM (mapped without execute
   permission) is a second safety net, which works only where DEP is on; the
-  game turns DEP on where it can (see "Faults" in the Windows part). Before the
+  game leaves the system's DEP policy as it is (see "Faults" in the Windows part). Before the
   thunks it was the only one, and a player with DEP off (Windows `AlwaysOff`)
   crashed on the title's Options: the handler at `0x80038b4c` ran its MIPS
   bytes as x86. `MEMORIES_TEST_EXEC_GUEST=1` maps guest RAM executable, as it
@@ -2456,11 +2456,13 @@ What differs from Linux, and why:
 - **Faults.** A vectored exception handler in `image.c` does what the
   SIGSEGV/SIGTRAP handlers do (guest-call redirect, low-address fixup); the
   guest-call redirect is the second net behind the branch thunks, since it
-  needs DEP. The game works without DEP and turns it on where it can as a
-  second safety net: a 32-bit process follows the system's DEP policy (only
-  64-bit processes always have DEP), so under `OptIn`, the default,
-  `--nxcompat` turns it on, under `OptOut` with the game excepted
-  `SetProcessDEPPolicy` in `image.c` does, and under `AlwaysOff` nothing can;
+  needs DEP. The game works without DEP; where DEP is on it is a second
+  safety net. A 32-bit process follows the system's DEP policy (only 64-bit
+  processes always have DEP), so under `OptIn`, the default, `--nxcompat`
+  turns it on. The game does not call `SetProcessDEPPolicy` for `OptOut`
+  with the game excepted: a program switching its own DEP policy is what
+  virus scanners' heuristics look for (0.1.4 was flagged), and the thunks
+  make it unnecessary;
   32-bit processes on 64-bit Windows can report the single step as
   `STATUS_WX86_SINGLE_STEP`. Fatal exceptions raised in the executable are
   reported by `crash.c` through `Win32_SetCrashReporter`.
