@@ -9,6 +9,7 @@ tests/pc/guardian_stars/*.expected is the game's table for each manifest
 beside it, pair by pair: tests/pc/stars_test.c checks Duel_CalcGuardianStarMatchup
 against the same files, so the editor and the game agree on every pair.
 """
+import copy
 import json
 import unittest
 from pathlib import Path
@@ -285,6 +286,36 @@ class GuardianStarsTabTest(unittest.TestCase):
         app.project.other.pop("guardian_stars")
         tab.refresh()
         self.assertEqual(len(tab.tree.get_children()), 10)
+
+    def test_tab_keeps_what_it_did_not_change(self):
+        """A tab switch commits every tab: a section as the mod wrote it
+        (beats, mirror, stars by name) stays as it was, and the mod is not
+        marked changed, until the tab changes something."""
+        from tkinter import ttk
+        from fm_editor.guardian_stars_tab import GuardianStarsTab
+
+        class App:
+            def __init__(self):
+                self.project = project()
+                self.changes = 0
+
+            def changed(self):
+                self.changes += 1
+
+        for path in sorted(GOLDEN.glob("*.json")):
+            section = json.loads(path.read_text()).get("guardian_stars")
+            app = App()
+            app.project.other["guardian_stars"] = copy.deepcopy(section)
+            tab = GuardianStarsTab(ttk.Notebook(self.root), app)
+            tab.refresh()
+            tab.commit()
+            self.assertEqual(app.project.other.get("guardian_stars"), section, path.name)
+            self.assertEqual(app.changes, 0, path.name)
+        tab.pick_cell(1, 2)
+        tab.value.set("1234")
+        tab.set_cell()
+        self.assertGreater(app.changes, 0)
+        self.assertIn({"attacker": 1, "defender": 2, "bonus": 1234}, app.project.other["guardian_stars"]["matchups"])
 
 
 if __name__ == "__main__":

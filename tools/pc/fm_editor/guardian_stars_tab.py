@@ -183,6 +183,11 @@ class GuardianStarsTab(Tab):
             return True
         before = self.project.other.get("guardian_stars")
         after = self.model.build()
+        # Untouched, a section as the mod wrote it ("beats", "mirror", stars by
+        # name) stays so: every tab switch commits, and it would otherwise be
+        # rewritten as the model's matchups and the mod marked changed.
+        if after == gs.read(before).build():
+            after = before
         if after is None:
             self.project.other.pop("guardian_stars", None)
         else:
