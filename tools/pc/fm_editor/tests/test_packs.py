@@ -147,8 +147,68 @@ class ReaderTest(unittest.TestCase):
     def test_order_sorts_the_list(self):
         found, notes = packs.read_packs([{"id": "a", "cards": [1]}, {"id": "b", "cards": [1], "order": -5}], by_id)
         self.assertEqual([p.id for p in found], ["b", "a"])
+        # Of two packs with one password the first in that order is sold.
+        found, notes = packs.read_packs([{"id": "a", "cards": [1], "password": 7},
+                                         {"id": "b", "cards": [1], "password": "7", "order": -5}], by_id)
+        self.assertEqual([m for _, m in notes], ["pack \"a\": its password is pack \"mod:b\"'s too; that one is sold"])
 
-    def test_fixed_cards_count_among_the_different(self):
+    def test_null_is_a_value_of_the_wrong_kind(self):
+        """As the game's reader (packs.c) takes a key written null: not a key
+        left out (tests/pc/packs_test.c holds the game to the same)."""
+        for entry in ({"cards": [1], "price": None}, {"cards": [1], "cost": None}, {"cards": [1], "count": None},
+                      {"cards": [1], "guarantee": None}, {"cards": [1], "max_copies": None},
+                      {"cards": None}, {"tiers": {"a": {"odds": None, "cards": [1]}}},
+                      {"tiers": {"a": {"cards": [1]}}, "slots": None}, {"cards": [1], "tiers": None},
+                      {"cards": [1], "cost": {"starchips": None}}):
+            self.assertIsNone(self.one(entry)[0], entry)
+        for key, words in (("stock", "\"stock\" is 1 to 999999"), ("order", "\"order\" is a whole number"),
+                           ("unlock", "\"unlock\" is an object"), ("locked", "\"locked\" is \"hidden\""),
+                           ("image", "\"image\" is a PNG"), ("sounds", "\"sounds\" is {"),
+                           ("when_nothing_left", "\"when_nothing_left\" is"), ("shop", "\"shop\" is a shop's id")):
+            pack, notes = self.one({"cards": [1], key: None})
+            self.assertIsNotNone(pack, key)
+            self.assertTrue(any(words in m for _, m in notes), (key, notes))
+        # ...and what Json_Bool makes of null, and of a number.
+        self.assertTrue(self.one({"cards": [1], "include_added_cards": None})[0].include_added)
+        self.assertTrue(self.one({"cards": [1], "once": 1})[0].once)
+        notes = [m for _, m in packs.check_rules({"music": None, "shops": None, "password": None, "rng": 5})]
+        self.assertEqual(len(notes), 4, notes)
+
+    def test_numbers_as_the_game_reads_them(self):
+        pack, notes = self.one({"cards": {"1": 2.0}, "price": 100.0, "count": 3.0})
+        self.assertEqual((pack.price, pack.count, pack.tiers[0].pool), (100, 3, [(1, 2)]))
+        self.assertIsNone(self.one({"cards": [1], "price": True})[0])
+        self.assertEqual(packs.password_bits(1234.0), 0x1234)
+
+    def test_keys_and_shops(self):
+        self.assertIsNone(packs.KEY_RE.match("abc\n"))
+        self.assertIsNone(self.one({"cards": [1], "id": "abc\n"})[0])
+        notes = [m for _, m in packs.check_rules({"shops": [{"id": 5}, {"id": "abc\n"}]})]
+        self.assertEqual(sum("a shop is {" in m for m in notes), 2)
+        notes = [m for _, m in packs.check_rules({"shops": [{"id": f"s{i}"} for i in range(17)] + [{"id": "s0"}]})]
+        self.assertEqual(notes, ["pack_shop shop \"s16\": there are 16 shops already, the most there can be; left out"])
+        self.assertEqual(packs.shop_ids({"shops": [{"id": f"s{i}"} for i in range(17)]})[-1], "s15")
+        self.assertEqual(packs.shop_ids(None), ["main"])
+        # "where" of any other kind is said, as the game says it.
+        notes = [m for _, m in packs.check_rules({"shops": [{"id": "a", "where": None}]})]
+        self.assertTrue(any("only \"where\": \"password\"" in m for m in notes))
+        # The shops a pack names, against this mod's.
+        for shop, missing in (("main", []), ("*", []), (["main", "x"], ["x"]), ("a,b", ["a", "b"]), ("", []),
+                              (["", 5, "main"], [])):
+            pack, _ = self.one({"cards": [1], "shop": shop})
+            self.assertEqual([m.rsplit(" ", 1)[1].strip("\"") for _, m in packs.shop_notes(pack, None)], missing, shop)
+        pack, _ = self.one({"cards": [1], "shop": "black"})
+        self.assertEqual(packs.shop_notes(pack, {"shops": [{"id": "black"}]}), [])
+
+    def test_the_readers_other_checks(self):
+        # "cost" "cards" is an object; "sounds" too (the game notes it, keeps the pack).
+        self.assertIsNone(self.one({"cards": [1], "cost": {"cards": ["x"]}})[0])
+        pack, notes = self.one({"cards": [1], "sounds": [1, 2]})
+        self.assertTrue(pack and any("\"sounds\" is {" in m for _, m in notes))
+        # A description past 255 bytes is cut between two letters.
+        pack, notes = self.one({"cards": [1], "description": "x" + "é" * 200})
+        self.assertEqual(len(pack.description.encode("utf-8")), 255)
+        self.assertTrue(any("room for 255 bytes" in m for _, m in notes))
         # "unique_in_pack" counts fixed cards, and one card fixed twice cannot hold.
         self.assertIsNotNone(self.one({"cards": [1, 2], "slots": ["cards", "cards", {"card": 5}],
                                        "duplicates": "unique_in_pack"})[0])
@@ -158,6 +218,21 @@ class ReaderTest(unittest.TestCase):
                                     "duplicates": "unique_in_pack"})
         self.assertIsNone(pack)
         self.assertIn("fixed in slots 1 and 3", errors[0])
+
+    def test_tiers_named_twice(self):
+        """The file had a tier twice: Python keeps one, the game sees both and
+        leaves the pack out; the editor says so too (manifest.read_json)."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "mod.json"
+            path.write_text('{"packs": [{"tiers": {"a": {"cards": [1]}, "a": {"cards": [2]}}, "price": 5, '
+                            '"price": 6}]}', encoding="utf-8")
+            entry = manifest.read_json(path)["packs"][0]
+        pack, notes = self.one(entry)
+        self.assertIsNone(pack)
+        text = "\n".join(m for _, m in notes)
+        self.assertIn("tier \"a\": named twice", text)
+        self.assertIn("\"price\" is written twice", text)
 
     def test_when_nothing_left(self):
         pack, notes = self.one({"cards": [1, 2], "max_copies": 1})
@@ -182,6 +257,11 @@ class ReaderTest(unittest.TestCase):
                          "refuse")
         self.assertIsNone(packs.minimize_rules({"when_nothing_left": "refuse"}))
         self.assertEqual(packs.minimize_rules({"when_nothing_left": "sell"}), {"when_nothing_left": "sell"})
+
+    def test_minimize_keeps_listed_by_a_password_the_game_reads(self):
+        entry = {"name": "X", "cards": [1], "password": "12ab", "listed": False}
+        self.assertFalse(packs.minimize(entry)["listed"])
+        self.assertNotIn("listed", packs.minimize({"name": "X", "cards": [1], "password": "1234", "listed": False}))
 
 
 class ManifestTest(unittest.TestCase):

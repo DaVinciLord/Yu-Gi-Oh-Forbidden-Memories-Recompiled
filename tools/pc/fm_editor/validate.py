@@ -299,6 +299,8 @@ def pack_resolver(project: Project):
     game's Cards_Reference, the cards this project knows (a mod's own by its
     identity)."""
     def resolve(value):
+        if isinstance(value, float) and value.is_integer():
+            value = int(value)          # the game's JSON reads 5.0 as 5
         cid = project.resolve(value)
         return cid if cid else -1
     return resolve
@@ -319,6 +321,7 @@ def _check_packs(project: Project, out: list):
         if text:
             card_passwords.setdefault(int(text, 16) if text.isdigit() else None, cid)
     names = {packmath.pack_id(e) for e in project.packs}
+    read = []
     for i, entry in enumerate(project.packs):
         pack, notes = packmath.read_pack(entry, resolve, project.info.id, i, ids)
         where = packmath.pack_id(entry) if isinstance(entry, dict) else f"packs[{i}]"
@@ -327,16 +330,15 @@ def _check_packs(project: Project, out: list):
         if pack is None:
             continue
         ids.add(pack.id)
+        read.append((pack, i))
+        for level, message in packmath.shop_notes(pack, project.pack_shop):
+            out.append(Issue(level, "Packs", where, message + " in this mod's \"pack_shop\" (another mod may add it)", i))
         image = entry.get("image")
         if isinstance(image, str) and image and image not in project.files and not (
                 project.source_dir and (Path(project.source_dir) / image).is_file()):
             out.append(Issue("warning", "Packs", where, f"\"image\" {image} cannot be read; its cover is shown "
                                                          "instead", i))
         if pack.password is not None:
-            if pack.password in passwords:
-                out.append(Issue("warning", "Packs", where, f"its password is pack \"{passwords[pack.password]}\"'s "
-                                                             "too; that one is sold", i))
-            passwords.setdefault(pack.password, pack.id)
             if pack.password in card_passwords:
                 out.append(Issue("warning", "Packs", where,
                                  f"its password is {project.card_label(card_passwords[pack.password])}'s: the card's "
@@ -355,6 +357,16 @@ def _check_packs(project: Project, out: list):
                 out.append(Issue("warning", "Packs", where, f"\"unlock\" \"opened\" names no pack of this mod "
                                                              f"(\"{name}\"); another mod's, if it is not applied, "
                                                              "keeps the pack locked", i))
+    # Of two packs with one password the game sells the first in the list's
+    # order ("order", then as declared), as packs.c Packs_Finish says.
+    read.sort(key=lambda pair: pair[0].order)
+    for pack, i in read:
+        if pack.password is None:
+            continue
+        if pack.password in passwords:
+            out.append(Issue("warning", "Packs", pack.id, f"its password is pack \"{passwords[pack.password]}\"'s "
+                                                          "too; that one is sold", i))
+        passwords.setdefault(pack.password, pack.id)
     if len(project.packs) > packmath.PACKS_MAX:
         out.append(Issue("error", "Packs", "packs", f"at most {packmath.PACKS_MAX} packs; the rest are left out",
                          packmath.PACKS_MAX))

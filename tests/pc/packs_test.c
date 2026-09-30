@@ -83,6 +83,9 @@ static void add(const char *mod, const char *text)
 
 static void fresh(void)
 {
+    /* The reader copies what it keeps: the manifests can go (and the leak
+       check under ASan finds none of them). */
+    while (document_count) Json_Free(documents[--document_count]);
     Packs_Clear();
     notes = 0;
     note[0] = all_notes[0] = 0;
@@ -182,6 +185,22 @@ static void test_errors(void)
     CHECK(one("{\"packs\": [{\"tiers\": {\"a\": {\"cards\": [1]}}, \"slots\": [{\"card\": 5000}]}]}") == 0);
     CHECK(one("{\"packs\": [{\"tiers\": {\"a b\": {\"cards\": [1]}}}]}") == 0 && noted("a tier's name"));
     CHECK(one("{\"packs\": {\"cards\": [1]}}") == 0 && noted("\"packs\" is a list of packs"));
+    /* An id past 63 letters is left out, not cut to fit. */
+    CHECK(one("{\"packs\": [{\"cards\": [1], \"id\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}]}") == 0 &&
+          noted("\"id\" is 1-63"));
+    /* "cost" "cards" is an object of cards and copies, nothing else. */
+    CHECK(one("{\"packs\": [{\"cards\": [1], \"cost\": {\"cards\": [\"x\"]}}]}") == 0 && noted("{card: copies}"));
+    CHECK(one("{\"packs\": [{\"cards\": [1], \"cost\": {\"cards\": null}}]}") == 0);
+    /* A null is a value of the wrong kind, not a key left out. */
+    CHECK(one("{\"packs\": [{\"cards\": [1], \"price\": null}]}") == 0);
+    CHECK(one("{\"packs\": [{\"cards\": [1], \"guarantee\": null}]}") == 0);
+    CHECK(one("{\"packs\": [{\"tiers\": {\"a\": {\"odds\": null, \"cards\": [1]}}}]}") == 0);
+    /* A whole number written with a fraction of zeroes is that number. */
+    CHECK(one("{\"packs\": [{\"cards\": [1], \"price\": 100.0, \"count\": 2e0}]}") == 1);
+    CHECK(Packs_At(0)->price == 100 && Packs_At(0)->count == 2);
+    /* Tiers named twice. */
+    CHECK(one("{\"packs\": [{\"tiers\": {\"a\": {\"cards\": [1]}, \"a\": {\"cards\": [2]}}}]}") == 0 &&
+          noted("named twice"));
     /* "unique_in_pack" with one card fixed in two slots cannot hold. */
     CHECK(one("{\"packs\": [{\"cards\": [1, 2, 3], \"slots\": [{\"card\": 5}, \"cards\", {\"card\": 5}], "
               "\"duplicates\": \"unique_in_pack\"}]}") == 0 && noted("fixed in slots 1 and 3"));
@@ -225,6 +244,26 @@ static void test_warnings(void)
     CHECK(Packs_At(0)->password == 0x1234 && !Packs_At(0)->listed && Packs_At(1)->listed);
     CHECK(noted("its password is pack"));
     CHECK(Packs_WithPassword(0x1234) == 0 && Packs_WithPassword(0x4321) == -1);
+    /* "sounds" of the wrong kind (an array's items have no keys to check). */
+    CHECK(one("{\"packs\": [{\"cards\": [1], \"sounds\": [1, 2]}]}") == 1 && noted("\"sounds\" is {"));
+    CHECK(Packs_At(0)->sounds[PACK_SOUND_BUY] == 48);
+    CHECK(one("{\"packs\": [{\"cards\": [1], \"sounds\": {\"buy\": 60}}]}") == 1 && Packs_At(0)->sounds[PACK_SOUND_BUY] == 60);
+    /* A description past its room is cut between two letters, never inside one. */
+    {
+        char text[1024];
+        int n = snprintf(text, sizeof(text), "{\"packs\": [{\"cards\": [1], \"description\": \"x"), i;
+        for (i = 0; i < 200; i++) n += snprintf(text + n, sizeof(text) - (size_t)n, "\xC3\xA9");   /* e acute */
+        snprintf(text + n, sizeof(text) - (size_t)n, "\"}]}");
+        CHECK(one(text) == 1 && noted("the description has room for 255 bytes"));
+        CHECK(strlen(Packs_At(0)->description) == 255);   /* "x" and 127 whole letters */
+        CHECK(((unsigned char)Packs_At(0)->description[254] & 0xC0) == 0x80);
+    }
+    /* The shop's rules: a value of the wrong kind is said, and the default kept. */
+    CHECK(one("{\"packs\": [{\"cards\": [1]}], \"pack_shop\": {\"password\": 5, \"rng\": null, "
+              "\"shops\": [{\"id\": \"a\", \"where\": null}, {\"id\": 5}]}}") == 1);
+    CHECK(noted("\"password\" is \"both\"") && noted("\"rng\" is \"game\"") && noted("only \"where\": \"password\""));
+    CHECK(noted("a shop is {") && Packs_Rules()->shop_count == 1);
+    CHECK(Packs_Rules()->password == PACK_SHOP_BOTH && Packs_Rules()->rng == PACK_RNG_GAME);
 }
 
 /* "when_nothing_left": a pack of "max_copies" whose every card the player

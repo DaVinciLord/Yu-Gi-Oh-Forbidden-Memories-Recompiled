@@ -36,7 +36,9 @@ SOUND_KEYS = ("move", "buy", "refuse", "reveal", "back")
 DEFAULT_SOUNDS = {"move": 47, "buy": 48, "refuse": 9, "reveal": 12, "back": 8}
 REVEALS = ("flip", "quick", "list")
 NOTHING_LEFT = ("refuse", "sell")    # "when_nothing_left"; "refuse" is the shop's default
-KEY_RE = re.compile(r"^[A-Za-z0-9_-]{1,63}$")
+DESCRIPTION_BYTES = 255
+# \A and \Z: "$" would let a trailing newline through.
+KEY_RE = re.compile(r"\A[A-Za-z0-9_-]{1,63}\Z")
 
 PACK_KEYS = ("id", "name", "description", "image", "cover", "shop", "order", "price", "cost", "count", "cards",
              "tiers", "slots", "guarantee", "pity", "duplicates", "max_copies", "include_added_cards", "stock",
@@ -59,8 +61,46 @@ NOT_YET = ("campaign_shop", "main_menu", "autosave", "sell_added_cards", "curren
 SLOT_ODDS, SLOT_TIER, SLOT_MIX, SLOT_POOL, SLOT_CARD = range(5)
 
 
+class _Missing:
+    """A key left out, apart from a key written null: the game's reader
+    (packs.c) takes null for a value of the wrong kind."""
+
+    def __repr__(self):
+        return "MISSING"
+
+
+MISSING = _Missing()
+
+
 def is_int(value) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
+
+
+def whole(value):
+    """The whole number a JSON number is (the game's reader takes 100.0 and
+    1e2 for 100: json.c parse_number), or None for anything else."""
+    if is_int(value):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return None
+
+
+def json_bool(value, fallback):
+    """json.c Json_Bool: true/false, or a number (not 0 is true); anything
+    else, null too, is the fallback."""
+    if isinstance(value, bool):
+        return value
+    if whole(value) is not None:
+        return whole(value) != 0
+    if isinstance(value, float):
+        return value != 0
+    return fallback
+
+
+def json_string(value, fallback):
+    """json.c Json_String: the text, or the fallback for anything else."""
+    return value if isinstance(value, str) else fallback
 
 
 def slug(name: str) -> str:
@@ -112,18 +152,20 @@ def unknown_keys(where: str, obj: dict, known, reserved=()) -> list:
 
 def number(value, low, high, fallback):
     """(number, bad): the whole number in [low, high], or the fallback when
-    left out (packs.c number_in: a JSON number, not a string)."""
-    if value is None:
+    left out, MISSING (packs.c number_in: a JSON number, not a string; null
+    is bad)."""
+    if value is MISSING:
         return fallback, False
-    if not is_int(value) or not low <= value <= high:
+    n = whole(value)
+    if n is None or not low <= n <= high:
         return fallback, True
-    return value, False
+    return n, False
 
 
 def password_bits(value):
     """Up to eight digits, four bits each (packs.c read_password); None."""
-    if is_int(value) and 0 <= value <= 99999999:
-        value = f"{value:08d}"
+    if whole(value) is not None and 0 <= whole(value) <= 99999999:
+        value = f"{whole(value):08d}"
     if not isinstance(value, str) or not 1 <= len(value) <= 8 or not value.isdigit() or not value.isascii():
         return None
     return int(value.zfill(8), 16)
@@ -192,6 +234,7 @@ class Pack:
     order: int = 0
     reveal: int = 0
     when_nothing_left: str = None                    # "refuse", "sell", or None for the shop's
+    shops: list = None                               # the shop ids it names; None for every shop
 
     def tier_named(self, name) -> int:
         for t, tier in enumerate(self.tiers):
@@ -204,7 +247,10 @@ class Pack:
 
 
 def _card_shown(value) -> str:
-    return str(value)
+    """As packs.c pool_card shows a card it cannot find."""
+    if whole(value) is not None:
+        return str(whole(value))
+    return value if isinstance(value, str) else "?"
 
 
 def _pool_card(value, resolve, include_added, where, notes) -> int:
@@ -230,7 +276,8 @@ def read_pool(value, resolve, include_added, where, notes):
     elif isinstance(value, dict):
         for name, weight in value.items():
             at = f"{where} \"{name}\""
-            if not is_int(weight) or not 0 <= weight <= WEIGHT_TOTAL_MAX:
+            weight = whole(weight)
+            if weight is None or not 0 <= weight <= WEIGHT_TOTAL_MAX:
                 notes.append(("error", f"{at}: a weight is a whole number, 0 to {WEIGHT_TOTAL_MAX}; the pack is "
                                        "left out"))
                 return None
@@ -249,33 +296,48 @@ def read_pool(value, resolve, include_added, where, notes):
     return pool
 
 
+def duplicate_keys(obj) -> tuple:
+    """The keys an object had twice in its file (manifest.read_json marks
+    them): Python keeps one, the game's reader sees both."""
+    return tuple(getattr(obj, "duplicates", ()))
+
+
 def read_pack(entry, resolve, mod: str = "mod", index: int = 0, taken_ids=()) -> tuple:
     """(Pack or None, notes): what the game makes of one entry of "packs"
     (packs.c read_pack), notes as ("error"|"warning", text). `resolve`
-    names a card: its id, or 0/negative for none (Cards_Reference)."""
+    names a card: its id, or 0/negative for none (Cards_Reference). A key
+    written null is a value of the wrong kind, as the game reads it; a key
+    left out takes its default."""
     notes = []
     where = f"packs[{index}]"
     if not isinstance(entry, dict):
         return None, [("error", f"{where}: a pack is an object")]
     notes += unknown_keys(where, entry, PACK_KEYS, PACK_RESERVED)
+    for key in duplicate_keys(entry):
+        notes.append(("warning", f"{where}: \"{key}\" is written twice; the game reads the first, the editor the last"))
     if "id" in entry:
-        pid = entry["id"] if isinstance(entry["id"], str) else ""
+        pid = json_string(entry["id"], "")
         if not KEY_RE.match(pid):
             notes.append(("error", f"{where}: \"id\" is 1-63 letters, digits, '_' or '-'; the pack is left out"))
             return None, notes
     else:
-        pid = slug(entry.get("name") if isinstance(entry.get("name"), str) else "pack")
+        pid = slug(json_string(entry.get("name"), "pack"))
     if pid in taken_ids:
         notes.append(("error", f"{where}: the id \"{pid}\" is another pack's of this mod; the pack is left out"))
         return None, notes
     pack = Pack(mod=mod, id=pid, identity=f"{mod}:{pid}")
     where = f"pack \"{pid}\""
-    name = entry.get("name") if isinstance(entry.get("name"), str) else pid
+    name = json_string(entry.get("name"), pid)
     if len(name) > NAME_LETTERS:
         notes.append(("warning", f"{where}: the name has room for {NAME_LETTERS} letters; cut there"))
         name = name[:NAME_LETTERS]
     pack.name = name
-    pack.description = entry.get("description") if isinstance(entry.get("description"), str) else ""
+    description = json_string(entry.get("description"), "")
+    if len(description.encode("utf-8")) > DESCRIPTION_BYTES:
+        notes.append(("warning", f"{where}: the description has room for {DESCRIPTION_BYTES} bytes of UTF-8; cut "
+                                 "there"))
+        description = description.encode("utf-8")[:DESCRIPTION_BYTES].decode("utf-8", "ignore")
+    pack.description = description
     pack.order = index
     if "order" in entry:
         pack.order, bad = number(entry["order"], -1000000, 1000000, index)
@@ -283,10 +345,10 @@ def read_pack(entry, resolve, mod: str = "mod", index: int = 0, taken_ids=()) ->
             notes.append(("warning", f"{where}: \"order\" is a whole number; the pack keeps its place"))
 
     bad_price = False
-    price, bad = number(entry.get("price"), 0, PRICE_MAX, DEFAULT_PRICE)
+    price, bad = number(entry.get("price", MISSING), 0, PRICE_MAX, DEFAULT_PRICE)
     bad_price |= bad
-    cost = entry.get("cost")
-    if cost is not None:
+    if "cost" in entry:
+        cost = entry["cost"]
         if not isinstance(cost, dict):
             notes.append(("error", f"{where}: \"cost\" is {{\"starchips\": n, \"cards\": {{card: copies}}}}; the pack "
                                    "is left out"))
@@ -298,10 +360,14 @@ def read_pack(entry, resolve, mod: str = "mod", index: int = 0, taken_ids=()) ->
             if "price" in entry and starchips != price:
                 notes.append(("warning", f"{where}: \"price\" and \"cost\" differ; \"cost\" is used"))
             price = starchips
-        cards = cost.get("cards")
+        cards = cost.get("cards", MISSING)
+        if cards is not MISSING and not isinstance(cards, dict):
+            notes.append(("error", f"{where}: \"cost\" \"cards\" is {{card: copies}}; the pack is left out"))
+            return None, notes
         for name_, copies in (cards.items() if isinstance(cards, dict) else []):
             cid = resolve(name_)
-            if not is_int(copies) or not 1 <= copies <= 250:
+            copies = whole(copies)
+            if copies is None or not 1 <= copies <= 250:
                 notes.append(("error", f"{where}: \"cost\" takes 1 to 250 copies of a card; the pack is left out"))
                 return None, notes
             if not cid or cid <= 0:
@@ -318,27 +384,29 @@ def read_pack(entry, resolve, mod: str = "mod", index: int = 0, taken_ids=()) ->
         return None, notes
     pack.price = price
 
-    include = entry.get("include_added_cards", True)
-    pack.include_added = include if isinstance(include, bool) else True
+    pack.include_added = json_bool(entry.get("include_added_cards"), True)
     if "duplicates" in entry:
         if entry["duplicates"] == "unique_in_pack":
             pack.unique = True
         elif entry["duplicates"] != "allow":
             notes.append(("warning", f"{where}: \"duplicates\" is \"allow\" or \"unique_in_pack\"; allowed"))
     bad_count = False
-    pack.max_copies, bad = number(entry.get("max_copies"), 1, 250, 0)
+    pack.max_copies, bad = number(entry.get("max_copies", MISSING), 1, 250, 0)
     bad_count |= bad
     tiers, cards, slots = entry.get("tiers"), entry.get("cards"), entry.get("slots")
-    if tiers is not None and cards is not None:
+    if "tiers" in entry and "cards" in entry:
         notes.append(("error", f"{where}: \"cards\" is a pack of one tier and \"tiers\" is several; give one; the "
                                "pack is left out"))
         return None, notes
-    if cards is not None:
+    if "cards" in entry:
         pool = read_pool(cards, resolve, pack.include_added, f"{where} cards", notes)
         if pool is None:
             return None, notes
         pack.tiers.append(Tier("cards", 1, pool))
     elif isinstance(tiers, dict):
+        for tname in duplicate_keys(tiers):
+            notes.append(("error", f"{where} tier \"{tname}\": named twice; the pack is left out"))
+            return None, notes
         for tname, value in tiers.items():
             at = f"{where} tier \"{tname}\""
             if not KEY_RE.match(tname):
@@ -351,14 +419,14 @@ def read_pack(entry, resolve, mod: str = "mod", index: int = 0, taken_ids=()) ->
                 notes.append(("error", f"{at}: a tier is an object with \"odds\" and \"cards\"; the pack is left out"))
                 return None, notes
             notes += unknown_keys(at, value, TIER_KEYS)
-            odds, b1 = number(value.get("odds"), 0, WEIGHT_TOTAL_MAX, 1)
-            color, b2 = number(value.get("color"), 0, 15, -1)
-            sound, b3 = number(value.get("sound"), 0, 0xFFFF, -1)
+            odds, b1 = number(value.get("odds", MISSING), 0, WEIGHT_TOTAL_MAX, 1)
+            color, b2 = number(value.get("color", MISSING), 0, 15, -1)
+            sound, b3 = number(value.get("sound", MISSING), 0, 0xFFFF, -1)
             if b1 or b2 or b3:
                 notes.append(("error", f"{at}: \"odds\" is 0 to {WEIGHT_TOTAL_MAX}, \"color\" 0 to 15 and \"sound\" a "
                                        "sound id; the pack is left out"))
                 return None, notes
-            tier = Tier(tname, odds, [], value.get("label") if isinstance(value.get("label"), str) else "", color, sound)
+            tier = Tier(tname, odds, [], json_string(value.get("label"), ""), color, sound)
             if "reveal" in value:
                 if value["reveal"] in REVEALS:
                     tier.reveal = REVEALS.index(value["reveal"])
@@ -375,17 +443,17 @@ def read_pack(entry, resolve, mod: str = "mod", index: int = 0, taken_ids=()) ->
     else:
         notes.append(("error", f"{where}: no \"cards\" or \"tiers\" to deal from; the pack is left out"))
         return None, notes
-    if not any(t.pool for t in pack.tiers) and slots is None:
+    if not any(t.pool for t in pack.tiers) and "slots" not in entry:
         notes.append(("error", f"{where}: none of its cards are here; the pack is left out"))
         return None, notes
     default = len(slots) if isinstance(slots, list) else DEFAULT_COUNT
-    pack.count, bad = number(entry.get("count"), 1, COUNT_MAX, default)
+    pack.count, bad = number(entry.get("count", MISSING), 1, COUNT_MAX, default)
     bad_count |= bad
     if bad_count or not 1 <= pack.count <= COUNT_MAX:  # "slots" of more, and no "count"
         notes.append(("error", f"{where}: \"count\" is 1 to {COUNT_MAX} cards and \"max_copies\" 1 to 250; the pack is "
                                "left out"))
         return None, notes
-    if slots is not None:
+    if "slots" in entry:
         if not isinstance(slots, list) or len(slots) != pack.count:
             notes.append(("error", f"{where}: \"slots\" is a list of {pack.count}, one a card; the pack is left out"))
             return None, notes
@@ -404,15 +472,16 @@ def read_pack(entry, resolve, mod: str = "mod", index: int = 0, taken_ids=()) ->
             notes.append(("error", f"{where}: none of its cards are here; the pack is left out"))
             return None, notes
     for key, into in (("guarantee", pack.guarantee), ("pity", pack.pity)):
-        value = entry.get(key)
-        if value is None:
+        if key not in entry:
             continue
+        value = entry[key]
         if not isinstance(value, dict):
             notes.append(("error", f"{where}: \"{key}\" is {{tier: n}}; the pack is left out"))
             return None, notes
         for tname, n in value.items():
             t = pack.tier_named(tname)
-            if t < 0 or not is_int(n) or not 1 <= n <= 65535:
+            n = whole(n)
+            if t < 0 or n is None or not 1 <= n <= 65535:
                 notes.append(("error", f"{where}: \"{key}\": \"{tname}\" is not a tier of the pack with n of 1 or more; "
                                        "the pack is left out"))
                 return None, notes
@@ -442,10 +511,10 @@ def read_pack(entry, resolve, mod: str = "mod", index: int = 0, taken_ids=()) ->
                                "the pack is left out"))
         return None, notes
 
-    image = entry.get("image")
-    if image is not None and (not isinstance(image, str) or not image or image.startswith(("/", "\\"))
-                              or ".." in image or ":" in image):
-        notes.append(("warning", f"{where}: \"image\" is a PNG inside the mod; its cover is shown instead"))
+    if "image" in entry:
+        image = json_string(entry["image"], "")
+        if not image or image.startswith(("/", "\\")) or ".." in image or ":" in image:
+            notes.append(("warning", f"{where}: \"image\" is a PNG inside the mod; its cover is shown instead"))
     if "cover" in entry:
         cid = resolve(entry["cover"])
         pack.cover = cid if cid and cid > 0 else 0
@@ -469,33 +538,44 @@ def read_pack(entry, resolve, mod: str = "mod", index: int = 0, taken_ids=()) ->
             pack.reveal = REVEALS.index(entry["reveal"])
         else:
             notes.append(("warning", f"{where}: \"reveal\" is \"flip\", \"quick\" or \"list\"; \"flip\" is used"))
-    sounds = entry.get("sounds")
-    if isinstance(sounds, dict):
-        notes += unknown_keys(where, sounds, SOUND_KEYS)
-        for key in SOUND_KEYS:
-            _, bad = number(sounds.get(key), 0, 0xFFFF, 0)
-            if bad:
-                notes.append(("warning", f"{where}: \"sounds\" \"{key}\" is a sound effect id; the screen's own is used"))
+    if "sounds" in entry:
+        sounds = entry["sounds"]
+        if not isinstance(sounds, dict):
+            notes.append(("warning", f"{where}: \"sounds\" is {{\"move\": id, ...}}; the screen's own are used"))
+        else:
+            notes += unknown_keys(where, sounds, SOUND_KEYS)
+            for key in SOUND_KEYS:
+                _, bad = number(sounds.get(key, MISSING), 0, 0xFFFF, 0)
+                if bad:
+                    notes.append(("warning", f"{where}: \"sounds\" \"{key}\" is a sound effect id; the screen's own is "
+                                             "used"))
     if "when_nothing_left" in entry:
         if entry["when_nothing_left"] in NOTHING_LEFT:
             pack.when_nothing_left = entry["when_nothing_left"]
         else:
             notes.append(("warning", f"{where}: \"when_nothing_left\" is \"refuse\" or \"sell\"; the shop's is used"))
-    pack.stock, bad = number(entry.get("stock"), 1, 999999, -1)
+    pack.stock, bad = number(entry.get("stock", MISSING), 1, 999999, -1)
     if bad:
         notes.append(("warning", f"{where}: \"stock\" is 1 to 999999 purchases; no limit is kept"))
         pack.stock = -1
-    notes += check_unlock(where, entry.get("unlock"))
-    locked = entry.get("locked")
-    if locked is not None and locked not in ("shown", "hidden"):
+    notes += check_unlock(where, entry.get("unlock", MISSING))
+    if "locked" in entry and entry["locked"] not in ("shown", "hidden"):
         notes.append(("warning", f"{where}: \"locked\" is \"hidden\" or \"shown\"; hidden"))
     if "password" in entry:
         pack.password = password_bits(entry["password"])
         if pack.password is None:
             notes.append(("warning", f"{where}: \"password\" is up to 8 digits; the pack has none"))
-    pack.once = entry.get("once") is True
-    listed = entry.get("listed")
-    pack.listed = listed if isinstance(listed, bool) else pack.password is None
+    pack.once = json_bool(entry.get("once"), False)
+    pack.listed = json_bool(entry.get("listed"), pack.password is None)
+    if "shop" in entry:
+        shop = entry["shop"]
+        if isinstance(shop, (str, list)):
+            # As packs.c keeps them: the names joined by commas, "*" alone for
+            # every shop, an empty name skipped.
+            joined = shop if isinstance(shop, str) else ",".join(json_string(s, "") for s in shop)
+            pack.shops = [] if joined == "*" else [name for name in joined.split(",") if name]
+        else:
+            notes.append(("warning", f"{where}: \"shop\" is a shop's id, or a list of them; the pack is in every shop"))
     return pack, notes
 
 
@@ -528,7 +608,8 @@ def _read_slot(pack, value, resolve, where, notes):
             if t < 0:
                 notes.append(("error", f"{where}: no tier \"{tname}\"; the pack is left out"))
                 return None
-            if not is_int(weight) or not 0 <= weight <= WEIGHT_TOTAL_MAX:
+            weight = whole(weight)
+            if weight is None or not 0 <= weight <= WEIGHT_TOTAL_MAX:
                 notes.append(("error", f"{where}: a tier's weight is 0 to {WEIGHT_TOTAL_MAX}; the pack is left out"))
                 return None
             mix[t] = weight
@@ -542,8 +623,8 @@ def _read_slot(pack, value, resolve, where, notes):
 
 
 def check_unlock(where, value) -> list:
-    """packs.c read_unlock's notes."""
-    if value is None:
+    """packs.c read_unlock's notes; MISSING when there is no "unlock"."""
+    if value is MISSING:
         return []
     at = f"{where} unlock"
     if not isinstance(value, dict):
@@ -553,18 +634,19 @@ def check_unlock(where, value) -> list:
     any_ |= "beat" in value or "card" in value
     for key, low, high in (("wins", 0, 65535), ("copies", 0, 250), ("story", 0, 0xFFFF),
                            ("starchips_spent", 0, 999999999), ("packs_opened", 0, 999999999)):
-        n, b = number(value.get(key), low, high, None)
+        n, b = number(value.get(key, MISSING), low, high, None)
         bad |= b
         if n is not None and (n > 0 or key == "story"):
             any_ |= key != "copies"
-    opened = value.get("opened")
-    if opened is not None and not isinstance(opened, dict):
+    opened = value.get("opened", MISSING)
+    if opened is not MISSING and not isinstance(opened, dict):
         bad = True
-    for i, (name, times) in enumerate((opened or {}).items() if isinstance(opened, dict) else []):
+    for i, (name, times) in enumerate(opened.items() if isinstance(opened, dict) else []):
         if i >= OPENED_MAX:
             notes.append(("warning", f"{at}: \"opened\" names more than {OPENED_MAX} packs; the rest are left out"))
             break
-        if not is_int(times) or times < 1:
+        times = whole(times)
+        if times is None or times < 1:
             bad = True
             continue
         any_ = True
@@ -591,7 +673,8 @@ def distinct_cards(pack) -> set:
 
 def read_packs(value, resolve, mod="mod") -> tuple:
     """([Pack], notes) of a whole "packs" list, as Packs_Add and Packs_Finish
-    read it: the list sorted by "order", then as declared."""
+    read it: the list sorted by "order", then as declared; of two packs with
+    one password, the first in that order is the one sold."""
     notes, out, ids = [], [], set()
     if not isinstance(value, list):
         return [], [("error", "\"packs\" is a list of packs, or the name of a file that holds them")]
@@ -605,15 +688,42 @@ def read_packs(value, resolve, mod="mod") -> tuple:
             out.append(pack)
             ids.add(pack.id)
     out.sort(key=lambda p: p.order)       # stable: ties keep the declaration order
-    seen = {}
-    for pack in out:
-        if pack.password is not None:
-            if pack.password in seen:
-                notes.append(("warning", f"pack \"{pack.id}\": its password is pack \"{seen[pack.password]}\"'s too; "
-                                         "that one is sold"))
-            else:
-                seen[pack.password] = pack.identity
+    notes += password_notes(out)
     return out, notes
+
+
+def password_notes(packs_in_order) -> list:
+    """packs.c Packs_Finish: of two packs with one password, the first in
+    the list's order is sold; the other says so."""
+    notes, seen = [], {}
+    for pack in packs_in_order:
+        if pack.password is None:
+            continue
+        if pack.password in seen:
+            notes.append(("warning", f"pack \"{pack.id}\": its password is pack \"{seen[pack.password]}\"'s too; that "
+                                     "one is sold"))
+        else:
+            seen[pack.password] = pack.identity
+    return notes
+
+
+def shop_ids(rules) -> list:
+    """The shops "pack_shop" gives, as packs.c read_rules keeps them (the
+    first 16 ids), or the one it makes without: "main"."""
+    ids = []
+    shops = rules.get("shops") if isinstance(rules, dict) else None
+    for shop in shops if isinstance(shops, list) else []:
+        sid = json_string(shop.get("id"), "") if isinstance(shop, dict) else ""
+        if KEY_RE.match(sid) and sid not in ids and len(ids) < SHOPS_MAX:
+            ids.append(sid)
+    return ids or ["main"]
+
+
+def shop_notes(pack, rules) -> list:
+    """packs.c Packs_Finish's note for a shop a pack names that no "pack_shop"
+    has (of this mod: another mod may add it)."""
+    ids = shop_ids(rules)
+    return [("warning", f"pack \"{pack.id}\": no shop \"{name}\"") for name in pack.shops or [] if name not in ids]
 
 
 def check_rules(value) -> list:
@@ -623,32 +733,40 @@ def check_rules(value) -> list:
     if not isinstance(value, dict):
         return [("warning", "\"pack_shop\" is an object of the shop's rules; left out")]
     notes = unknown_keys("pack_shop", value, RULES_KEYS, RULES_RESERVED)
-    if value.get("password", "both") not in SHOP_PASSWORD:
+    if "password" in value and value["password"] not in SHOP_PASSWORD:
         notes.append(("warning", "pack_shop: \"password\" is \"both\", \"packs_only\" or \"password_only\"; \"both\" is "
                                  "used"))
-    if value.get("rng", "game") not in ("game", "save"):
+    if "rng" in value and value["rng"] not in ("game", "save"):
         notes.append(("warning", "pack_shop: \"rng\" is \"game\" or \"save\"; \"game\" is used"))
-    if number(value.get("music"), 0, 0xFFFF, 0)[1]:
+    if number(value.get("music", MISSING), 0, 0xFFFF, 0)[1]:
         notes.append(("warning", "pack_shop: \"music\" is a song id; the screen's own is used"))
     if "when_nothing_left" in value and value["when_nothing_left"] not in NOTHING_LEFT:
         notes.append(("warning", "pack_shop: \"when_nothing_left\" is \"refuse\" or \"sell\"; \"refuse\" is used"))
     for key in RULES_LATER:
-        if value.get(key) is True:
+        if json_bool(value.get(key), False):
             notes.append(("warning", f"pack_shop: \"{key}\" is not built yet (notes/card-packs.md); ignored"))
-    shops = value.get("shops")
-    if shops is not None and not isinstance(shops, list):
+    shops = value.get("shops", MISSING)
+    if shops is not MISSING and not isinstance(shops, list):
         notes.append(("warning", "pack_shop: \"shops\" is a list of shops; left out"))
+    ids = []
     for shop in shops if isinstance(shops, list) else []:
-        if not isinstance(shop, dict) or not KEY_RE.match(str(shop.get("id", ""))):
+        sid = json_string(shop.get("id"), "") if isinstance(shop, dict) else ""
+        if not KEY_RE.match(sid):
             notes.append(("warning", "pack_shop: a shop is {\"id\": ..., \"name\": ...}, its id 1-63 letters, digits, "
                                      "'_' or '-'; left out"))
             continue
-        where = f"pack_shop shop \"{shop['id']}\""
+        where = f"pack_shop shop \"{sid}\""
         notes += unknown_keys(where, shop, SHOP_KEYS)
-        if shop.get("where", "password") != "password":
+        if "where" in shop and shop["where"] != "password":
             notes.append(("warning", f"{where}: only \"where\": \"password\" is built yet; it is on the Password "
                                      "screen"))
-        notes += check_unlock(where, shop.get("unlock"))
+        if sid not in ids:
+            if len(ids) >= SHOPS_MAX:
+                notes.append(("warning", f"{where}: there are {SHOPS_MAX} shops already, the most there can be; left "
+                                         "out"))
+                continue
+            ids.append(sid)
+        notes += check_unlock(where, shop.get("unlock", MISSING))
     return notes
 
 
@@ -925,7 +1043,8 @@ def minimize(entry):
     if not isinstance(entry, dict):
         return copy.deepcopy(entry)
     out = copy.deepcopy(entry)
-    has_password = out.get("password") not in (None, "")
+    # The game lists a pack by default unless it has a password it can read.
+    has_password = password_bits(out["password"]) is not None if "password" in out else False
     defaults = {"price": DEFAULT_PRICE, "duplicates": "allow", "include_added_cards": True, "locked": "hidden",
                 "reveal": "flip", "once": False, "listed": not has_password, "count": default_count(out)}
     for key, value in defaults.items():

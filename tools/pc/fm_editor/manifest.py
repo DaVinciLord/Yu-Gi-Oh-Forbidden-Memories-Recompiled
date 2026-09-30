@@ -1171,9 +1171,30 @@ def apply(project: Project, manifest: dict, messages: list = None, default_id: s
 
 # --- folders ------------------------------------------------------------------
 
+class JsonObject(dict):
+    """An object that had a key twice in its file: Python keeps the last, as
+    json does; `duplicates` names them, since the game's reader sees both (a
+    pack's tier named twice leaves the pack out, packs.c)."""
+    duplicates = ()
+
+
+def _object(pairs):
+    out = dict(pairs)
+    if len(out) == len(pairs):
+        return out
+    seen, twice = set(), []
+    for key, _ in pairs:
+        if key in seen and key not in twice:
+            twice.append(key)
+        seen.add(key)
+    marked = JsonObject(out)
+    marked.duplicates = tuple(twice)
+    return marked
+
+
 def read_json(path: Path):
     text = Path(path).read_text(encoding="utf-8-sig")
-    return json.loads(text)
+    return json.loads(text, object_pairs_hook=_object)
 
 
 def open_mod(retail: GameData, folder) -> tuple:

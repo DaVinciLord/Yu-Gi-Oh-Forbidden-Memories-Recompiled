@@ -36,6 +36,22 @@ static void copy_text(char *out, size_t size, const char *text)
     snprintf(out, size, "%s", text ? text : "");
 }
 
+/* UTF-8 text into `size` bytes, cut before a letter that would not fit
+ * whole rather than inside it. 1 when it was cut. */
+static int copy_utf8(char *out, size_t size, const char *text)
+{
+    size_t length, keep;
+    if (!text) text = "";
+    length = keep = strlen(text);
+    if (keep >= size) {
+        keep = size - 1;
+        while (keep && ((unsigned char)text[keep] & 0xC0) == 0x80) keep--;
+    }
+    memcpy(out, text, keep);
+    out[keep] = '\0';
+    return keep < length;
+}
+
 /* An "id", a tier's or a shop's name: 1-63 letters, digits, '_' or '-'. */
 static int key_valid(const char *text)
 {
@@ -106,6 +122,8 @@ static void check_keys(const char *mod, const char *where, const JsonValue *obje
                        const char *const *reserved)
 {
     const JsonValue *member;
+    /* An array's items have no names: only an object has keys to check. */
+    if (Json_TypeOf(object) != JSON_OBJECT) return;
     for (member = Json_At(object, 0); member; member = Json_Next(member)) {
         const char *name = Json_Name(member), *closest = NULL;
         int best = 3, i, found = 0;
@@ -309,13 +327,13 @@ static int read_unlock(const char *mod, const char *where, const JsonValue *valu
     if (Json_Member(value, "beat")) {
         if (Json_TypeOf(Json_Member(value, "beat")) == JSON_NUMBER)
             snprintf(unlock->beat, sizeof(unlock->beat), "%ld", Json_Number(Json_Member(value, "beat"), 0));
-        else copy_text(unlock->beat, sizeof(unlock->beat), Json_String(Json_Member(value, "beat"), "?"));
+        else copy_utf8(unlock->beat, sizeof(unlock->beat), Json_String(Json_Member(value, "beat"), "?"));
         any = 1;
     }
     if (Json_Member(value, "card")) {
         if (Json_TypeOf(Json_Member(value, "card")) == JSON_NUMBER)
             snprintf(unlock->card, sizeof(unlock->card), "%ld", Json_Number(Json_Member(value, "card"), 0));
-        else copy_text(unlock->card, sizeof(unlock->card), Json_String(Json_Member(value, "card"), "?"));
+        else copy_utf8(unlock->card, sizeof(unlock->card), Json_String(Json_Member(value, "card"), "?"));
         any = 1;
     }
     unlock->wins = (int)number_in(Json_Member(value, "wins"), 0, 65535, 0, &bad);
@@ -326,14 +344,14 @@ static int read_unlock(const char *mod, const char *where, const JsonValue *valu
     any |= unlock->wins > 0 || unlock->story >= 0 || unlock->starchips_spent || unlock->packs_opened;
     opened = Json_Member(value, "opened");
     if (opened && Json_TypeOf(opened) != JSON_OBJECT) bad = 1;
-    for (item = Json_At(opened, 0); item; item = Json_Next(item)) {
+    for (item = Json_TypeOf(opened) == JSON_OBJECT ? Json_At(opened, 0) : NULL; item; item = Json_Next(item)) {
         long times = Json_Number(item, -1);
         if (unlock->opened_count >= PACK_OPENED_MAX) {
             Mods_Note(mod, "%s: \"opened\" names more than %d packs; the rest are left out", at, PACK_OPENED_MAX);
             break;
         }
         if (Json_TypeOf(item) != JSON_NUMBER || times < 1) { bad = 1; continue; }
-        copy_text(unlock->opened_name[unlock->opened_count], PACK_IDENTITY_MAX, Json_Name(item));
+        copy_utf8(unlock->opened_name[unlock->opened_count], PACK_IDENTITY_MAX, Json_Name(item));
         unlock->opened_pack[unlock->opened_count] = -1;
         unlock->opened_times[unlock->opened_count++] = (unsigned)times;
         any = 1;
@@ -431,7 +449,7 @@ static int read_tier(const char *mod, const char *where, const char *name, const
                   PACK_WEIGHT_TOTAL_MAX);
         return 0;
     }
-    copy_text(tier->label, sizeof(tier->label), Json_String(Json_Member(value, "label"), ""));
+    copy_utf8(tier->label, sizeof(tier->label), Json_String(Json_Member(value, "label"), ""));
     if (Json_Member(value, "reveal")) {
         tier->reveal = reveal_named(Json_String(Json_Member(value, "reveal"), NULL));
         if (tier->reveal < 0) {
@@ -617,11 +635,12 @@ static void read_pack(const char *mod, const char *directory, int index, const J
     /* The id, then everything is said of the pack by it. */
     value = Json_Member(entry, "id");
     if (value) {
-        copy_text(id, sizeof(id), Json_String(value, ""));
-        if (!key_valid(id)) {
+        /* Checked whole: a longer one is not cut to fit. */
+        if (!key_valid(Json_String(value, ""))) {
             Mods_Note(mod, "%s: \"id\" is 1-63 letters, digits, '_' or '-'; the pack is left out", where);
             return;
         }
+        copy_text(id, sizeof(id), Json_String(value, ""));
     } else {
         slug(id, sizeof(id), Json_String(Json_Member(entry, "name"), "pack"));
     }
@@ -635,7 +654,7 @@ static void read_pack(const char *mod, const char *directory, int index, const J
     snprintf(pack->identity, sizeof(pack->identity), "%s:%s", mod, id);
     snprintf(where, sizeof(where), "pack \"%s\"", id);
 
-    copy_text(pack->name, sizeof(pack->name), Json_String(Json_Member(entry, "name"), id));
+    copy_utf8(pack->name, sizeof(pack->name), Json_String(Json_Member(entry, "name"), id));
     {
         size_t keep = 0;
         if (utf8_letters(pack->name, &keep, PACK_NAME_LETTERS) > PACK_NAME_LETTERS) {
@@ -643,7 +662,8 @@ static void read_pack(const char *mod, const char *directory, int index, const J
             pack->name[keep] = '\0';
         }
     }
-    copy_text(pack->description, sizeof(pack->description), Json_String(Json_Member(entry, "description"), ""));
+    if (copy_utf8(pack->description, sizeof(pack->description), Json_String(Json_Member(entry, "description"), "")))
+        Mods_Note(mod, "%s: the description has room for %d bytes of UTF-8; cut there", where, PACK_DESCRIPTION_MAX - 1);
     pack->declared = declared++;
     pack->order = pack->declared;
     if ((value = Json_Member(entry, "order")) != NULL) {
@@ -667,7 +687,12 @@ static void read_pack(const char *mod, const char *directory, int index, const J
                 Mods_Note(mod, "%s: \"price\" and \"cost\" differ; \"cost\" is used", where);
             price = starchips;
         }
-        for (member = Json_At(Json_Member(value, "cards"), 0); member; member = Json_Next(member)) {
+        member = Json_Member(value, "cards");
+        if (member && Json_TypeOf(member) != JSON_OBJECT) {
+            Mods_Note(mod, "%s: \"cost\" \"cards\" is {card: copies}; the pack is left out", where);
+            return;
+        }
+        for (member = Json_At(member, 0); member; member = Json_Next(member)) {
             long copies = Json_Number(member, 0);
             int card = pool_card(mod, where, NULL, Json_Name(member), 1);
             if (Json_TypeOf(member) != JSON_NUMBER || copies < 1 || copies > 250) {
@@ -851,7 +876,9 @@ static void read_pack(const char *mod, const char *directory, int index, const J
         }
     }
     memcpy(pack->sounds, default_sounds, sizeof(pack->sounds));
-    if ((value = Json_Member(entry, "sounds")) != NULL) {
+    if ((value = Json_Member(entry, "sounds")) != NULL && Json_TypeOf(value) != JSON_OBJECT) {
+        Mods_Note(mod, "%s: \"sounds\" is {\"move\": id, ...}; the screen's own are used", where);
+    } else if (value) {
         check_keys(mod, where, value, sound_keys, NULL);
         for (i = 0; i < PACK_SOUNDS; i++) {
             int wrong = 0;
@@ -945,13 +972,15 @@ static void read_rules(const char *mod, const JsonValue *value)
     rules.rng = PACK_RNG_GAME;
     rules.music = DEFAULT_MUSIC;
     rules.when_nothing_left = PACK_NOTHING_REFUSE;
-    if ((text = Json_String(Json_Member(value, "password"), NULL)) != NULL) {
+    if ((item = Json_Member(value, "password")) != NULL) {
+        text = Json_String(item, "");
         if (!strcmp(text, "packs_only")) rules.password = PACK_SHOP_PACKS_ONLY;
         else if (!strcmp(text, "password_only")) rules.password = PACK_SHOP_PASSWORD_ONLY;
         else if (strcmp(text, "both"))
             Mods_Note(mod, "pack_shop: \"password\" is \"both\", \"packs_only\" or \"password_only\"; \"both\" is used");
     }
-    if ((text = Json_String(Json_Member(value, "rng"), NULL)) != NULL) {
+    if ((item = Json_Member(value, "rng")) != NULL) {
+        text = Json_String(item, "");
         if (!strcmp(text, "save")) rules.rng = PACK_RNG_SAVE;
         else if (strcmp(text, "game")) Mods_Note(mod, "pack_shop: \"rng\" is \"game\" or \"save\"; \"game\" is used");
     }
@@ -984,7 +1013,7 @@ static void read_rules(const char *mod, const JsonValue *value)
         }
         snprintf(where, sizeof(where), "pack_shop shop \"%s\"", id);
         check_keys(mod, where, item, shop_keys, NULL);
-        if ((text = Json_String(Json_Member(item, "where"), NULL)) != NULL && strcmp(text, "password"))
+        if (Json_Member(item, "where") && strcmp(Json_String(Json_Member(item, "where"), ""), "password"))
             Mods_Note(mod, "%s: only \"where\": \"password\" is built yet; it is on the Password screen", where);
         for (i = 0; i < rules.shop_count; i++) {
             if (!strcmp(rules.shops[i].id, id)) shop = &rules.shops[i];
@@ -998,7 +1027,7 @@ static void read_rules(const char *mod, const JsonValue *value)
             memset(shop, 0, sizeof(*shop));
             copy_text(shop->id, sizeof(shop->id), id);
         }
-        copy_text(shop->name, sizeof(shop->name), Json_String(Json_Member(item, "name"), id));
+        copy_utf8(shop->name, sizeof(shop->name), Json_String(Json_Member(item, "name"), id));
         shop->has_unlock = read_unlock(mod, where, Json_Member(item, "unlock"), &shop->unlock);
     }
 }
@@ -1070,6 +1099,7 @@ void Packs_Finish(void)
             next = strchr(name, ',');
             if (next) *next++ = '\0';
             else next = name + strlen(name);
+            if (!*name) continue;   /* an empty name, or one that is not a string */
             for (k = 0; k < rules.shop_count; k++) {
                 if (!strcmp(rules.shops[k].id, name)) { packs[i].shops |= 1u << k; found = 1; }
             }

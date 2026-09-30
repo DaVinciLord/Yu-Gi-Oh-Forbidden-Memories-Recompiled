@@ -143,14 +143,28 @@ why in the Mods window: no card of it here; `count` outside 1-40; `slots` not
 `count` long, or naming a tier the pack has not; a negative weight, or a
 pool's weights (or the tiers' odds) adding up past 1,000,000; a price past
 999999; an `id` that is not 1-63 of `[A-Za-z0-9_-]` or is another pack's of the
-same mod; a `guarantee` or `pity` naming no tier of the pack, or less than 1;
-`unique_in_pack` with fewer different cards than `count`; both `cards` and
-`tiers`; every tier at odds 0 with a slot dealt by the odds.
+same mod; a tier named twice; a `guarantee` or `pity` naming no tier of the
+pack, or less than 1; `cost` `cards` that is not `{card: copies}`;
+`unique_in_pack` with fewer different cards than `count` (fixed cards
+count), or with one card fixed in two slots; both `cards` and `tiers`; every
+tier at odds 0 with a slot dealt by the odds.
 
 Anything else is a note and the pack stays: an unknown card is left out of its
-pool; an unreadable `image` shows the cover; a name past 16 letters is cut; an
-unknown key gets the likeliest meant ("did you mean"); an `unlock` naming
-something absent stays locked; two packs with one password sell the first.
+pool; an unreadable `image` shows the cover; a name past 16 letters is cut, a
+description past 255 bytes too (between two letters, never inside one);
+`sounds` that is not an object, or a `when_nothing_left`, `locked`, `reveal`
+or `shop` of another kind, keeps the default; an unknown key gets the
+likeliest meant ("did you mean"); an `unlock` naming something absent stays
+locked; two packs with one password sell the first in the list's order; a
+`shop` naming no shop is said. In `pack_shop`, a `password`, `rng`,
+`when_nothing_left` or a shop's `where` that is not one of its words, a shop
+without a proper `id`, and shops past 16 are said and left out (or the
+default kept).
+
+A key written `null` is a value of the wrong kind, not a key left out: `"price":
+null` leaves the pack out as `"price": "x"` would. A whole number may be
+written with a fraction of zeroes (`100.0`, `1e2`); any other fraction makes
+the manifest unreadable.
 
 At most 255 packs in all, 16 tiers a pack and 16 shops.
 
@@ -298,8 +312,8 @@ pity, `unique_in_pack` and `max_copies` (fixed cards first), the fall to a
 commoner tier, `when_nothing_left`, the unlock conditions, the progress file
 (lines of packs not here kept) and the deals of `packs_fixture.json` against
 `packs_golden.txt` (a line ends `| nothing left` for a pack with nothing left
-for the player); the FM Editor's `tests/test_packs.py` holds its Simulate
-to the same file.
+for the player); the FM Editor's `tests/test_packs.py` holds its reader and
+Simulate to the same file and the same rules, null and all.
 
 With the disc in `game/` and the game built, `python3 tools/pc/test_packs.py`
 makes a pack mod of its own (the PNG drawn by the script), opens the Password
