@@ -513,6 +513,7 @@ static int save(const char *path, int tell)
         return -1;
     }
     fprintf(stderr, "memories-pc: state saved to %s\n", path);
+    Paths_WriteDone(path);
     return 0;
 }
 

@@ -404,6 +404,7 @@ static void save_surface(SDL_Surface *surface, const char *path)
             screenshot_not_saved(Paths_WriteError(why, sizeof(why), path));
         } else if (SDL_SaveBMP(surface, path)) {
             fprintf(stderr, "memories-pc: screenshot: %s\n", path);
+            Paths_WriteDone(path);
         } else {
             snprintf(why, sizeof(why), "%s: %s", path, SDL_GetError());
             remove(path);

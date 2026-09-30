@@ -1208,23 +1208,12 @@ void Menu_CloseNotice(void)
 
 /* A settings save that failed (settings.h), told once in a notice: most
  * saves (a menu item, a slider, a moved window, a hotkey) do not look at
- * the result themselves. Waits while another notice is up. When saves start
- * or stop failing, the user folder is tried again for the crash reports'
- * "user dir" fact (main.c sets it at start). */
+ * the result themselves. Waits while another notice is up. */
 static void tell_settings_error(void)
 {
     static const char *const ok[] = {"OK"};
-    static int failing;
     const char *error;
-    if (!*Settings_LastError() != !failing) {
-        char why[600];
-        failing = !failing;
-        if (Paths_UserDirWritable(why, sizeof(why)))
-            Monitor_Fact("user dir", "%s; writable: yes", Paths_UserDir());
-        else
-            Monitor_Fact("user dir", "%s; writable: no: %s", Paths_UserDir(), why);
-    }
-    if (!failing || Menu_NoticeShown() || !(error = Settings_TakeNewError())) return;
+    if (Menu_NoticeShown() || !(error = Settings_TakeNewError())) return;
     Menu_ShowNotice("Settings not saved", error, ok, 1, 0, NULL);
 }
 
@@ -1442,31 +1431,40 @@ static int *active_hot(void) { return open_sub >= 0 ? &hot_sub : &hot_item; }
  * report starts with (monitor.h: the build, the system, the GPU, DEP, the
  * settings, the mods), put on the clipboard and in system-info.txt in the
  * user folder, so a report carries them without a crash. The notice shows
- * it but for the settings, a long line. */
+ * it but for the settings, a long line. The file is opened before the facts
+ * are read, so their "user dir" line (paths.h) carries its outcome when
+ * nothing had been saved yet. */
 static void show_system_info(void)
 {
     static const char *const ok[] = {"OK"};
     static char facts[MONITOR_FACTS_SIZE], text[MONITOR_FACTS_SIZE + 128];
-    char shown[sizeof(notice.text)], path[1100], why[400] = "";
+    char shown[sizeof(notice.text)], path[1100], why[400] = "", full[1400];
     const char *at;
     size_t used;
     int copied, saved = 0;
     FILE *file;
-    Monitor_Facts(facts, sizeof(facts));
-    snprintf(text, sizeof(text), "YFM Re-Decomp %s\n%s", Update_VersionLabel(), facts);
-    copied = Platform_CopyText(text);
     snprintf(path, sizeof(path), "%s/system-info.txt", Paths_UserDir());
     Paths_WriteBegin();
-    if ((file = fopen(path, "w"))) {
+    file = fopen(path, "w");
+    if (file) {
+        Paths_WriteDone(path);
+    } else { /* before anything changes the reason */
+        Paths_WriteError(full, sizeof(full), path);
+        Paths_WriteReason(why, sizeof(why), path);
+    }
+    Monitor_Facts(facts, sizeof(facts));
+    snprintf(text, sizeof(text), "YFM Re-Decomp %s\n%s", Update_VersionLabel(), facts);
+    if (file) {
         saved = fputs(text, file) >= 0;
         saved = !fclose(file) && saved;
+        if (!saved) {
+            Paths_WriteError(full, sizeof(full), path);
+            Paths_WriteReason(why, sizeof(why), path);
+        }
     }
-    if (!saved) { /* the folder is the "user dir" fact's, just above it */
-        char full[1400];
-        Paths_WriteReason(why, sizeof(why), path);
-        fprintf(stderr, "memories-pc: could not write %s\n", Paths_WriteError(full, sizeof(full), path));
-    }
-    used = (size_t)snprintf(shown, sizeof(shown), "%s\n", Update_VersionLabel());
+    if (!saved) fprintf(stderr, "memories-pc: could not write %s\n", full); /* the folder is the "user dir" fact's */
+    copied = Platform_CopyText(text);
+    used =(size_t)snprintf(shown, sizeof(shown), "%s\n", Update_VersionLabel());
     for (at = facts; *at && used < sizeof(shown);) {
         const char *end = strchr(at, '\n');
         size_t length = end ? (size_t)(end - at) + 1 : strlen(at);

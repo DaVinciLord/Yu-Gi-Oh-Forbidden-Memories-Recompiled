@@ -217,6 +217,7 @@ void Platform_Screenshot(int window_image)
         return;
     }
     fprintf(stderr, "memories-pc: screenshot: %s\n", path);
+    Paths_WriteDone(path);
 }
 
 void Platform_SetScale(int wanted)

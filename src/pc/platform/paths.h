@@ -45,9 +45,14 @@ void Paths_WriteBegin(void);
 const char *Paths_WriteError(char *out, size_t size, const char *path);
 /* The same without the path: "<reason>." and the hint, if any. */
 const char *Paths_WriteReason(char *out, size_t size, const char *path);
-/* Whether a file can be made in the user directory (one is made and removed);
- * when not, `why` gets Paths_WriteReason's text. For the crash reports'
- * facts ("user dir"). */
-int Paths_UserDirWritable(char *why, size_t size);
+/* A write under the user directory succeeded: said after one did (the
+ * failures are known from Paths_WriteError and Paths_WriteReason). Leaves
+ * errno and the last error as they were. */
+void Paths_WriteDone(const char *path);
+/* `watch` hears what writes under the user directory show: writable (1), or
+ * not (0) with Paths_WriteReason's text, each time the last outcome changes.
+ * Nothing is written to find out: the crash reports' "user dir" fact says
+ * "not tried yet" until the game itself saves something (main.c). */
+void Paths_WatchUserDir(void (*watch)(int writable, const char *why));
 
 #endif

@@ -264,12 +264,54 @@ static void program_name(char *out, size_t size)
 }
 #endif
 
+/* What the writes to the user directory have shown so far (paths.h,
+ * Paths_WatchUserDir): -1 before any, then the last one's outcome. */
+static void (*user_dir_watch)(int writable, const char *why);
+static int user_dir_writable = -1;
+static char user_dir_why[600];
+
+/* Whether `path` names the user directory or something in it. */
+static int in_user_dir(const char *path)
+{
+    const char *dir = Paths_UserDir();
+    size_t n = dir ? strlen(dir) : 0;
+    while (n && (dir[n - 1] == '/' || dir[n - 1] == '\\')) n--;
+    return n && path && !strncmp(path, dir, n) && (path[n] == '/' || path[n] == '\\' || !path[n]);
+}
+
+/* A write's outcome under the user directory, told to the watcher only when
+ * it is news (a moved window saves the settings again and again). */
+static void note_user_dir(const char *path, int writable, const char *why)
+{
+    if (!in_user_dir(path)) return;
+    if (!why) why = "";
+    if (writable == user_dir_writable && !strcmp(why, user_dir_why)) return;
+    user_dir_writable = writable;
+    snprintf(user_dir_why, sizeof(user_dir_why), "%s", why);
+    if (user_dir_watch) user_dir_watch(writable, user_dir_why);
+}
+
+void Paths_WatchUserDir(void (*watch)(int writable, const char *why)) { user_dir_watch = watch; }
+
+void Paths_WriteDone(const char *path)
+{
+    int error = errno;
+#ifdef _WIN32
+    DWORD last = GetLastError();
+#endif
+    note_user_dir(path, 1, NULL);
+#ifdef _WIN32
+    SetLastError(last);
+#endif
+    errno = error;
+}
+
 /* Paths_WriteError and Paths_WriteReason: the reason, after the path when
  * `with_path` is set. */
 static const char *describe(char *out, size_t size, const char *path, int with_path)
 {
     int error = errno;
-    char reason[512] = "", *shown = NULL, program[128] = "";
+    char reason[512] = "", tail[1024], *shown = NULL, program[128] = "";
     size_t length;
     int hint = 0;
 #ifdef _WIN32
@@ -313,11 +355,13 @@ static const char *describe(char *out, size_t size, const char *path, int with_p
     if (!reason[0]) snprintf(reason, sizeof(reason), "%s", error ? strerror(error) : "the system gave no reason");
     length = strlen(reason);
     while (length && (isspace((unsigned char)reason[length - 1]) || reason[length - 1] == '.')) reason[--length] = '\0';
-    snprintf(out, size, "%s%s%s%s%s%s", with_path ? (shown ? shown : path) : "", with_path ? ": " : "", reason,
+    snprintf(tail, sizeof(tail), "%s%s%s%s", reason,
              hint ? " (an antivirus \"ransomware protection\" or Windows \"Controlled folder access\" may be blocking "
                     "the Documents folder; allow " : "",
              hint ? program : "", hint ? " there)." : ".");
+    snprintf(out, size, "%s%s%s", with_path ? (shown ? shown : path) : "", with_path ? ": " : "", tail);
     free(shown);
+    note_user_dir(path, 0, tail); /* the crash reports' "user dir" fact */
 #ifdef _WIN32
     SetLastError(last); /* free() may have changed it */
 #endif
@@ -327,27 +371,3 @@ static const char *describe(char *out, size_t size, const char *path, int with_p
 
 const char *Paths_WriteError(char *out, size_t size, const char *path) { return describe(out, size, path, 1); }
 const char *Paths_WriteReason(char *out, size_t size, const char *path) { return describe(out, size, path, 0); }
-
-int Paths_UserDirWritable(char *why, size_t size)
-{
-    char path[PATH_MAX_];
-    FILE *file;
-    if (size) why[0] = '\0';
-    if (Paths_User(path, sizeof(path), "write-test.tmp")) {
-        snprintf(why, size, "the path is too long.");
-        return 0;
-    }
-    Paths_WriteBegin();
-    file = fopen(path, "wb");
-    if (!file) {
-        Paths_WriteReason(why, size, path);
-        return 0;
-    }
-    if (fclose(file)) {
-        Paths_WriteReason(why, size, path);
-        remove(path);
-        return 0;
-    }
-    remove(path);
-    return 1;
-}

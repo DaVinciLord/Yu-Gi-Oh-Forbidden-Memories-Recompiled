@@ -464,10 +464,17 @@ reverted at the next launch, with nothing saying why). Where it is said:
   when `system-info.txt` cannot be written; the ROM location
   (`disc-path.txt`): the setup error.
 
-Nothing about where files go changes. At start the game makes and removes
-`write-test.tmp` in the user folder, and the crash reports' facts (and Help >
-System info) carry `user dir: <folder>; writable: yes` or `writable: no:
-<reason>`; the menu tries again when settings saves start or stop failing.
+Nothing about where files go changes. The crash reports' facts (and Help >
+System info) carry `user dir: <folder>; writable: not tried yet` until the
+game writes something there, then the last write's outcome: `writable: yes`
+or `writable: no: <reason>` (`Paths_WatchUserDir`; failures are seen in
+`Paths_WriteError`, successes said with `Paths_WriteDone` by the settings,
+save slots, states, screenshots and System info). Nothing is written only to
+find out: a test file made and removed at every start would raise Controlled
+folder access's notification on every launch and looks like ransomware to
+antivirus heuristics. Help > System info opens `system-info.txt` before it
+reads the facts, so what it shows answers the question when nothing had been
+saved yet.
 
 ### Window and menu bar
 

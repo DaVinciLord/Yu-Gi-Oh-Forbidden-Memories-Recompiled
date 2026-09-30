@@ -311,6 +311,7 @@ int Settings_Save(void)
     }
     last_error[0] = '\0';
     error_is_new = 0;
+    Paths_WriteDone(path);
     return 1;
 }
 

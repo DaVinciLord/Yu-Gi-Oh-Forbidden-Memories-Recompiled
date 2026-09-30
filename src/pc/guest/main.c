@@ -157,6 +157,13 @@ void Psx___main(void)
 {
 }
 
+/* Paths_WatchUserDir: the last write under the user folder, for the facts. */
+static void user_dir_fact(int writable, const char *why)
+{
+    if (writable) Monitor_Fact("user dir", "%s; writable: yes", Paths_UserDir());
+    else Monitor_Fact("user dir", "%s; writable: no: %s", Paths_UserDir(), why);
+}
+
 int main(int argc, char **argv)
 {
 #ifdef _WIN32
@@ -184,18 +191,12 @@ int main(int argc, char **argv)
     Symbols_Load();
     Crash_Init();
     Monitor_NoteSystem();
-    {
-        /* Whether the player's files can be saved at all: an antivirus or
-         * Controlled folder access that blocks Documents says so here, in
-         * every report and in Help > System info (menu.c keeps it current). */
-        char why[600];
-        if (Paths_UserDirWritable(why, sizeof(why)))
-            Monitor_Fact("user dir", "%s; writable: yes", Paths_UserDir());
-        else {
-            Monitor_Fact("user dir", "%s; writable: no: %s", Paths_UserDir(), why);
-            fprintf(stderr, "memories-pc: the user folder %s is not writable: %s\n", Paths_UserDir(), why);
-        }
-    }
+    /* Whether the player's files can be saved at all (an antivirus or
+     * Controlled folder access blocking Documents), in every report and in
+     * Help > System info: known from the game's own writes, never from a
+     * test file, which such guards notify about or take for ransomware. */
+    Monitor_Fact("user dir", "%s; writable: not tried yet", Paths_UserDir());
+    Paths_WatchUserDir(user_dir_fact);
     CrashTest_Init();
     /* Guest globals are linked at fixed addresses: map before touching any. */
     if (Memories_GuestMap() != 0) return 1;

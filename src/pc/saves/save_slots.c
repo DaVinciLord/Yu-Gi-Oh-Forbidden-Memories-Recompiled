@@ -162,7 +162,7 @@ static int store(int slot, const unsigned char image[SAVE_SLOT_FILE_SIZE])
     FILE *file;
     int failed;
     last_error[0] = '\0';
-    Paths_WriteBegin();
+    Paths_WriteBegin(); /* the reason below is mkdir's own (Paths_MakeDirs) */
     if (SaveSlots_Path(slot, path, sizeof(path))) { /* the saves folder could not be made */
         snprintf(partial, sizeof(partial), "%s/saves", Paths_UserDir());
         Paths_WriteError(last_error, sizeof(last_error), partial);
@@ -170,6 +170,7 @@ static int store(int slot, const unsigned char image[SAVE_SLOT_FILE_SIZE])
         return -1;
     }
     snprintf(partial, sizeof(partial), "%s.partial", path);
+    Paths_WriteBegin(); /* not the "already exists" the folder that was there left */
     file = fopen(partial, "wb");
     if (!file) {
         Paths_WriteError(last_error, sizeof(last_error), path);
@@ -188,6 +189,7 @@ static int store(int slot, const unsigned char image[SAVE_SLOT_FILE_SIZE])
         remove(partial);
         return -1;
     }
+    Paths_WriteDone(path);
     return 0;
 }
 
