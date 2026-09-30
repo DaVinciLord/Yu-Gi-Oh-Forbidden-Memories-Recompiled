@@ -215,6 +215,31 @@ class GuiTest(unittest.TestCase):
         self.assertEqual(len(app.equips.monsters.get_children()), 30)
         self.assertEqual(len(app.rituals.tree.get_children()), 20)   # every ritual card, with or without a recipe
 
+    def test_remove_disc_recipes(self):
+        from fm_editor import manifest
+        app = self.app
+        tab = app.fusions
+        p = tab.project
+        recipes = p.retail_recipes(3)
+        dialog = tab.remove_result()
+        dialog.fields["r"].set(610)                  # a magic card: no disc recipe makes it
+        dialog.ok()
+        self.assertIn("no recipe", dialog.error.cget("text"))
+        dialog.fields["r"].set(3)
+        dialog.ok()
+        self.assertEqual(p.fusion_removes, [3])
+        self.assertFalse([pair for pair in recipes if pair in p.fusions])
+        self.assertTrue(app.dirty)
+        self.assertEqual(manifest.build_fusions(p), [{"remove": "Kuriboh"}])
+        tab.search.set("Blue Dragon")
+        tab.tree.selection_set("1:2")
+        tab.revert()
+        self.assertEqual(p.fusions[(1, 2)], 3)
+        if len(recipes) > 1:
+            self.assertIn({"with": ["Blue Dragon", "Mystic Elf"], "result": "Kuriboh"}, manifest.build_fusions(p))
+        else:
+            self.assertEqual(manifest.build_fusions(p), [])
+
     def test_dark_mode(self):
         from fm_editor import theme
         from fm_editor.app import App

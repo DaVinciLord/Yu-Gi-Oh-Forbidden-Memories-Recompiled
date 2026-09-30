@@ -502,6 +502,7 @@ class FusionsTab(Tab):
         ttk.Button(buttons, text="Add fusion...", command=self.add).pack(side="left")
         ttk.Button(buttons, text="Change result...", command=self.edit).pack(side="left", padx=4)
         ttk.Button(buttons, text="Remove (no fusion)", command=self.remove).pack(side="left")
+        ttk.Button(buttons, text="Remove recipes of...", command=self.remove_result).pack(side="left", padx=(4, 0))
         ttk.Button(buttons, text="Revert to retail", command=self.revert).pack(side="left", padx=4)
         ttk.Button(buttons, text="Bulk...", command=lambda: bulk_dialog.open_bulk(self)).pack(side="left")
         ttk.Label(buttons, text="A pair fuses the same in either order. Brown rows are the retail table's "
@@ -593,6 +594,38 @@ class FusionsTab(Tab):
             self.project.revert_fusion(pair)
         self.app.changed()
         self.fill()
+
+    def remove_result(self):
+        """{"remove": card} (notes/gameplay-tables.md): one rule takes away
+        every disc recipe of the card; reverting one of them writes it back."""
+        fields = {}
+        chosen = self.selected()
+
+        def build(dialog, body):
+            ttk.Label(body, text="Result").grid(row=0, column=0, sticky="w", pady=2)
+            fields["r"] = CardField(body, lambda: self.project, width=36)
+            fields["r"].grid(row=0, column=1, sticky="we", pady=2)
+            if chosen:
+                fields["r"].set(self.project.fusions.get(chosen[0]) or self.project.retail.fusions.get(chosen[0]))
+            ttk.Label(body, text="No recipe on the disc makes this card any more: one \"remove\" rule in place of\n"
+                                 "a rule per pair. The mod's own fusions, and an added card's own recipes, still\n"
+                                 "make it. Revert a pair to bring that recipe back.",
+                      style="Hint.TLabel").grid(row=1, column=0, columnspan=2, sticky="w", pady=(6, 0))
+
+        def ok(dialog):
+            result = fields["r"].get()
+            if not result:
+                return "name the card (a number, a name, or pick one with ...)"
+            if not self.project.retail_recipes(result):
+                return f"no recipe on the disc makes {self.project.card_label(result)}"
+            self.project.remove_recipes(result)
+            self.app.changed()
+            self.fill()
+            return None
+
+        dialog = FormDialog(self, "Remove disc recipes", build, ok)
+        dialog.fields = fields
+        return dialog
 
 
 # --- Equips ---------------------------------------------------------------------
