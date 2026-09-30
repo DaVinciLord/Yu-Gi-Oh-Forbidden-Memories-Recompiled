@@ -2838,9 +2838,12 @@ hashes (PGXP and HD off, as the fixtures run). What makes it work:
   guest slots, and game code reaches the pinned variables RIP-relative
   within 2 GB. Guest RAM, its mirrors, the scratchpad, the game stack
   (0xB0000000) and the arenas keep their 32-bit addresses. The game stops
-  with a message if Windows ever loads it above 4 GB.
-  `MEMORIES_X64_MAP_REPORT=1` prints the image base; 200 launches in a row
-  all mapped (2026-09-30).
+  with a message if Windows ever loads it above 4 GB. The regions mapped
+  after guest RAM (arenas, the interpreter's and the game's stacks) are
+  reserved right after it: a 64-bit GL driver and audio also load below
+  4 GB, and once took the game stack's range. `MEMORIES_X64_MAP_REPORT=1`
+  prints the image base; 320 headless launches all mapped, and windowed runs
+  with GL and audio give the fixture frames (2026-09-30).
 - **Arch code.** One branch thunk (`__x86_indirect_thunk_r11`, the only
   one clang's x86-64 retpoline uses), `state_x86_64.S` (VSync entry and
   the game-stack switch, TEB bounds through `%gs`), `setjmp_x86_64.S`
