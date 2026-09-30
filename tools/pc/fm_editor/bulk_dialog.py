@@ -25,7 +25,7 @@ def _number(text: str):
 class FilterPanel(ttk.LabelFrame):
     """The filters of one side: all of them hold for a card to be chosen."""
 
-    def __init__(self, master, title, on_change):
+    def __init__(self, master, title, on_change, star_names=None):
         super().__init__(master, text=title, padding=6)
         self.on_change = on_change
         self.kinds = {k: tk.BooleanVar() for k in bulk.KINDS}
@@ -45,7 +45,8 @@ class FilterPanel(ttk.LabelFrame):
         row += 1
         self.types = self._listbox(MONSTER_TYPES, 7)
         self.types.master.grid(row=row, column=0, columnspan=2, sticky="nsew")
-        self.stars = self._listbox(STAR_NAMES[1:], 7)
+        # The mod's own stars too (tabs.star_choices), past the disc's ten.
+        self.stars = self._listbox(star_names or STAR_NAMES[1:], 7)
         self.stars.master.grid(row=row, column=2, columnspan=2, sticky="nsew", padx=(8, 0))
         row += 1
         ttk.Label(self, text="Attribute").grid(row=row, column=0, sticky="w", pady=(4, 0))
@@ -180,8 +181,10 @@ class BulkFusionsDialog(tk.Toplevel):
 
         sides = ttk.Frame(self, padding=(10, 6))
         sides.pack(fill="x")
-        self.a = FilterPanel(sides, "Material A", self.schedule)
-        self.b = FilterPanel(sides, "Material B", self.schedule)
+        from .tabs import star_choices
+        names = star_choices(tab.project)[1:]
+        self.a = FilterPanel(sides, "Material A", self.schedule, names)
+        self.b = FilterPanel(sides, "Material B", self.schedule, names)
         self.a.grid(row=0, column=0, sticky="nsew")
         middle = ttk.Frame(sides)
         middle.grid(row=0, column=1, padx=4)

@@ -7,7 +7,7 @@ import json
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from . import bulk_dialog, manifest, pools as poolmath, validate
+from . import bulk_dialog, guardian_stars, manifest, pools as poolmath, validate
 from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, DUELIST_NAMES, FRAME_NAMES,
                        POOL_LABELS, POOL_TOTAL, POOLS, STAR_NAMES, STARTER_WEIGHT_LIMIT, TYPE_EQUIP, TYPE_NAMES, TYPE_RITUAL,
                        exodia_piece, type_frame)
@@ -35,8 +35,24 @@ def frame_label(f: int) -> str:
     return FRAME_CHOICES[f + 1] if -1 <= f < len(FRAME_NAMES) else str(f)
 
 
-def star_label(s: int) -> str:
-    return STAR_CHOICES[s] if 0 <= s < len(STAR_CHOICES) else str(s)
+def star_choices(project=None) -> list:
+    """The stars a card may have in this mod: "(none)", the disc's ten (a
+    renamed one as "Ares (Mars)") and the mod's own past them ("11 Fire"),
+    each at its number's place in the list."""
+    section = project.other.get("guardian_stars") if project is not None else None
+    out = ["(none)"]
+    for star in range(1, guardian_stars.count(section) + 1):
+        name = guardian_stars.display_name(guardian_stars._name_of(section, star) if section else None, star)
+        if star <= guardian_stars.RETAIL_COUNT:
+            out.append(name if name == STAR_NAMES[star] else f"{name} ({STAR_NAMES[star]})")
+        else:
+            out.append(f"{star} {name}")
+    return out
+
+
+def star_label(s: int, project=None) -> str:
+    choices = star_choices(project)
+    return choices[s] if 0 <= s < len(choices) else str(s)
 
 
 def parse_choice(text: str, choices) -> int:
@@ -128,10 +144,10 @@ class CardsTab(Tab):
              hint("attack"))
         line("DEF", ttk.Spinbox(form, textvariable=self.vars["defense"], from_=0, to=5110, increment=10, width=8),
              hint("defense"))
-        line("Guardian star 1", ttk.Combobox(form, textvariable=self.vars["star1"], values=STAR_CHOICES,
-                                             state="readonly", width=18), hint("star1"))
-        line("Guardian star 2", ttk.Combobox(form, textvariable=self.vars["star2"], values=STAR_CHOICES,
-                                             state="readonly", width=18), hint("star2"))
+        self.star_boxes = [ttk.Combobox(form, textvariable=self.vars[key], values=STAR_CHOICES, state="readonly",
+                                        width=18) for key in ("star1", "star2")]
+        line("Guardian star 1", self.star_boxes[0], hint("star1"))
+        line("Guardian star 2", self.star_boxes[1], hint("star2"))
         line("Password", ttk.Entry(form, textvariable=self.vars["password"], width=12), hint("password"))
         ttk.Label(form, text="Card text").grid(row=row, column=0, sticky="nw", pady=2)
         # 21 columns: the game's 20 letters a line and room for the cursor.
@@ -304,8 +320,11 @@ class CardsTab(Tab):
         self.vars["type"].set(type_label(card.type))
         self.vars["attribute"].set(attribute_label(card.attribute))
         self.vars["level"].set(card.level)
-        self.vars["star1"].set(star_label(card.star1))
-        self.vars["star2"].set(star_label(card.star2))
+        # The mod's stars (the Guardian Stars tab) are in the lists too.
+        for box in self.star_boxes:
+            box.configure(values=star_choices(self.project))
+        self.vars["star1"].set(star_label(card.star1, self.project))
+        self.vars["star2"].set(star_label(card.star2, self.project))
         self.vars["frame"].set(frame_label(card.frame))
         self.vars["password"].set(self.project.password(cid))
         self.text.insert("1.0", card.description)
@@ -370,8 +389,8 @@ class CardsTab(Tab):
         card.description = self.text.get("1.0", "end-1c")
         values = [parse_choice(self.vars["type"].get(), TYPE_NAMES),
                   parse_choice(self.vars["attribute"].get(), ATTRIBUTE_CHOICES),
-                  parse_choice(self.vars["star1"].get(), STAR_CHOICES),
-                  parse_choice(self.vars["star2"].get(), STAR_CHOICES)]
+                  parse_choice(self.vars["star1"].get(), star_choices(self.project)),
+                  parse_choice(self.vars["star2"].get(), star_choices(self.project))]
         if min(values) < 0:
             return "choose a type, an attribute and two stars"
         card.type, card.attribute, card.star1, card.star2 = values
@@ -1482,7 +1501,7 @@ class ModInfoTab(Tab):
             if not isinstance(other, dict):
                 raise ValueError("the other keys are a JSON object")
             reserved = set(other) & {"id", "name", "version", "author", "description", "settings", "cards",
-                                     "fusions", "equips", "rituals", "drops", "decks", "limits"}
+                                     "fusions", "equips", "rituals", "drops", "decks", "limits", "guardian_stars"}
             if reserved:
                 raise ValueError(f"edit {', '.join(sorted(reserved))} in the editor's own tabs")
         except ValueError as problem:
@@ -1494,9 +1513,11 @@ class ModInfoTab(Tab):
         info.author = self.vars["author"].get()
         info.description = self.description.get("1.0", "end-1c")
         info.settings = settings
-        # "limits" is the Limits tab's (limits_tab.py), not this box's.
-        if "limits" in self.project.other:
-            other["limits"] = self.project.other["limits"]
+        # "limits" is the Limits tab's (limits_tab.py), "guardian_stars" the
+        # Guardian Stars tab's (guardian_stars_tab.py), not this box's.
+        for key in ("limits", "guardian_stars"):
+            if key in self.project.other:
+                other[key] = self.project.other[key]
         self.project.other = other
         self.status.configure(text="")
         after = (info.id, info.name, info.version, info.author, info.description, info.settings, self.project.other)
@@ -1505,8 +1526,8 @@ class ModInfoTab(Tab):
         return True
 
     def shown_other(self) -> dict:
-        """The other keys this box shows: all but the Limits tab's."""
-        return {key: value for key, value in self.project.other.items() if key != "limits"}
+        """The other keys this box shows: all but the Limits and Guardian Stars tabs'."""
+        return {key: value for key, value in self.project.other.items() if key not in ("limits", "guardian_stars")}
 
     def preview(self):
         if self.app.commit_all():
