@@ -764,9 +764,11 @@ static void choose_language(int language)
     language_before = Settings_Get(SET_LANGUAGE);
     Settings_Set(SET_LANGUAGE, language);
     if (!Settings_Save()) {
+        char why[sizeof(notice.text)];
         Settings_Set(SET_LANGUAGE, language_before);
-        Menu_ShowNotice("Language", "The settings file could not be written; the language stays as it was.", ok, 1,
-                        0, NULL);
+        snprintf(why, sizeof(why), "%s The language stays as it was.", Settings_LastError());
+        Settings_TakeNewError(); /* told here */
+        Menu_ShowNotice("Language", why, ok, 1, 0, NULL);
         return;
     }
     if (language == Language_Current()) return; /* back to the one this launch has */
@@ -1204,9 +1206,22 @@ void Menu_CloseNotice(void)
     changed = 1;
 }
 
+/* A settings save that failed (settings.h), told once in a notice: most
+ * saves (a menu item, a slider, a moved window, a hotkey) do not look at
+ * the result themselves. Waits while another notice is up. */
+static void tell_settings_error(void)
+{
+    static const char *const ok[] = {"OK"};
+    const char *error;
+    if (Menu_NoticeShown() || !(error = Settings_TakeNewError())) return;
+    Menu_ShowNotice("Settings not saved", error, ok, 1, 0, NULL);
+}
+
 int Menu_TakeChanged(void)
 {
-    int was = changed;
+    int was;
+    tell_settings_error();
+    was = changed;
     changed = 0;
     return was;
 }
@@ -1416,25 +1431,40 @@ static int *active_hot(void) { return open_sub >= 0 ? &hot_sub : &hot_item; }
  * report starts with (monitor.h: the build, the system, the GPU, DEP, the
  * settings, the mods), put on the clipboard and in system-info.txt in the
  * user folder, so a report carries them without a crash. The notice shows
- * it but for the settings, a long line. */
+ * it but for the settings, a long line. The file is opened before the facts
+ * are read, so their "user dir" line (paths.h) carries its outcome when
+ * nothing had been saved yet. */
 static void show_system_info(void)
 {
     static const char *const ok[] = {"OK"};
     static char facts[MONITOR_FACTS_SIZE], text[MONITOR_FACTS_SIZE + 128];
-    char shown[sizeof(notice.text)], path[1100];
+    char shown[sizeof(notice.text)], path[1100], why[400] = "", full[1400];
     const char *at;
     size_t used;
     int copied, saved = 0;
     FILE *file;
+    snprintf(path, sizeof(path), "%s/system-info.txt", Paths_UserDir());
+    Paths_WriteBegin();
+    file = fopen(path, "w");
+    if (file) {
+        Paths_WriteDone(path);
+    } else { /* before anything changes the reason */
+        Paths_WriteError(full, sizeof(full), path);
+        Paths_WriteReason(why, sizeof(why), path);
+    }
     Monitor_Facts(facts, sizeof(facts));
     snprintf(text, sizeof(text), "YFM Re-Decomp %s\n%s", Update_VersionLabel(), facts);
-    copied = Platform_CopyText(text);
-    snprintf(path, sizeof(path), "%s/system-info.txt", Paths_UserDir());
-    if ((file = fopen(path, "w"))) {
+    if (file) {
         saved = fputs(text, file) >= 0;
         saved = !fclose(file) && saved;
+        if (!saved) {
+            Paths_WriteError(full, sizeof(full), path);
+            Paths_WriteReason(why, sizeof(why), path);
+        }
     }
-    used = (size_t)snprintf(shown, sizeof(shown), "%s\n", Update_VersionLabel());
+    if (!saved) fprintf(stderr, "memories-pc: could not write %s\n", full); /* the folder is the "user dir" fact's */
+    copied = Platform_CopyText(text);
+    used =(size_t)snprintf(shown, sizeof(shown), "%s\n", Update_VersionLabel());
     for (at = facts; *at && used < sizeof(shown);) {
         const char *end = strchr(at, '\n');
         size_t length = end ? (size_t)(end - at) + 1 : strlen(at);
@@ -1443,10 +1473,12 @@ static void show_system_info(void)
         at += length;
     }
     if (used < sizeof(shown)) {
-        snprintf(shown + used, sizeof(shown) - used, "\n%s%s%s%s",
+        snprintf(shown + used, sizeof(shown) - used, "\n%s%s%s%s%s%s",
                  copied ? "Copied to the clipboard: paste it into your bug report." : "",
                  copied && saved ? " Also in " : saved ? "Attach this file to your bug report: " : "",
-                 saved ? path : "", saved ? "." : "");
+                 saved ? path : "", saved ? "." : "",
+                 saved ? "" : copied ? " Could not write system-info.txt: " : "Could not write system-info.txt: ",
+                 saved ? "" : why);
     }
     Menu_ShowNotice("System info", shown, ok, 1, 0, NULL);
 }

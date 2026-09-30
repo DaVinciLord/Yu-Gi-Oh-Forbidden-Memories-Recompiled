@@ -232,7 +232,7 @@ malformed:
 }
 int ControlsConfig_Save(const ControlsConfig *cfg, char *error, unsigned capacity)
 {
-    char file[4096], temp[4120], id[CTRL_IDENTITY_MAX * 2], token[80];
+    char file[4096], temp[4120], id[CTRL_IDENTITY_MAX * 2], token[80], why[1200] = "";
     int fd, ok = 1, version;
     FILE *f;
     if (!Controls_ConfigValid(cfg)) {
@@ -253,11 +253,13 @@ int ControlsConfig_Save(const ControlsConfig *cfg, char *error, unsigned capacit
         fclose(f);
     }
     snprintf(temp, sizeof(temp), "%s.tmp.XXXXXX", file);
+    Paths_WriteBegin();
     fd = mkstemp(temp);
     if (fd < 0)
         goto failure;
     f = fdopen(fd, "w");
     if (!f) {
+        Paths_WriteError(why, sizeof(why), file); /* before close() and unlink() change the reason */
         close(fd);
         unlink(temp);
         goto failure;
@@ -295,8 +297,12 @@ int ControlsConfig_Save(const ControlsConfig *cfg, char *error, unsigned capacit
         ok = 0;
     if (ok && rename(temp, file) == 0)
         return 1;
+    Paths_WriteError(why, sizeof(why), file);
     unlink(temp);
 failure:
-    snprintf(error, capacity, "Could not save controls: %s", strerror(errno));
+    if (!why[0])
+        Paths_WriteError(why, sizeof(why), file);
+    /* Where and why (paths.h): "Could not save controls to <path>: <reason>." */
+    snprintf(error, capacity, "Could not save controls to %s", why);
     return 0;
 }

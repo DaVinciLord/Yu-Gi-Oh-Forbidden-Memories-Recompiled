@@ -5,6 +5,8 @@
  * game's files. */
 #define _POSIX_C_SOURCE 200809L
 #include "paths.h"
+#include <ctype.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,6 +23,30 @@
 static char user_dir[PATH_MAX_];
 static char program_dir[PATH_MAX_];
 
+/* A folder made, or already there. When it is not, errno and the last error
+ * are mkdir's (Paths_WriteError), not those of the check after it. */
+static int make_dir(const char *path)
+{
+    int error;
+#ifdef _WIN32
+    DWORD code;
+    unsigned long dos;
+#endif
+    if (!mkdir(path, 0777)) return 0;
+    error = errno;
+#ifdef _WIN32
+    code = GetLastError();
+    dos = _doserrno;
+#endif
+    if (!access(path, X_OK)) return 0;
+    errno = error;
+#ifdef _WIN32
+    _doserrno = dos;
+    SetLastError(code);
+#endif
+    return -1;
+}
+
 int Paths_MakeDirs(const char *path)
 {
     char work[PATH_MAX_];
@@ -31,10 +57,10 @@ int Paths_MakeDirs(const char *path)
     for (i = 1; i < length; i++) {
         if (work[i] != '/') continue;
         work[i] = '\0';
-        if (mkdir(work, 0777) && access(work, X_OK)) return -1;
+        if (make_dir(work)) return -1;
         work[i] = '/';
     }
-    if (mkdir(work, 0777) && access(work, X_OK)) return -1;
+    if (make_dir(work)) return -1;
     return 0;
 }
 
@@ -199,3 +225,149 @@ void Paths_MigrateLegacySaves(void)
         carry(legacy, files[i]);
     }
 }
+
+void Paths_WriteBegin(void)
+{
+    errno = 0;
+#ifdef _WIN32
+    _doserrno = 0;
+    SetLastError(0);
+#endif
+}
+
+#ifdef _WIN32
+/* Whether a full path lies in the Documents folder, where an antivirus's
+ * ransomware protection and Windows' Controlled folder access guard it. */
+static int in_documents(const wchar_t *path)
+{
+    wchar_t documents[MAX_PATH];
+    size_t n;
+    if (SHGetFolderPathW(NULL, CSIDL_PERSONAL, NULL, 0, documents) != S_OK) return 0;
+    n = wcslen(documents);
+    while (n && documents[n - 1] == L'\\') n--;
+    return n && !_wcsnicmp(path, documents, n) && (path[n] == L'\\' || !path[n]);
+}
+
+/* The executable's file name, which the player allows in those settings. */
+static void program_name(char *out, size_t size)
+{
+    wchar_t module[MAX_PATH];
+    DWORD length = GetModuleFileNameW(NULL, module, MAX_PATH);
+    const wchar_t *base = module;
+    char *utf8;
+    snprintf(out, size, "memories-pc.exe");
+    if (!length || length >= MAX_PATH) return;
+    if (wcsrchr(module, L'\\')) base = wcsrchr(module, L'\\') + 1;
+    utf8 = Memories_WideToUtf8(base);
+    if (utf8 && *utf8) snprintf(out, size, "%s", utf8);
+    free(utf8);
+}
+#endif
+
+/* What the writes to the user directory have shown so far (paths.h,
+ * Paths_WatchUserDir): -1 before any, then the last one's outcome. */
+static void (*user_dir_watch)(int writable, const char *why);
+static int user_dir_writable = -1;
+static char user_dir_why[1024];
+
+/* Whether `path` names the user directory or something in it. */
+static int in_user_dir(const char *path)
+{
+    const char *dir = Paths_UserDir();
+    size_t n = dir ? strlen(dir) : 0;
+    while (n && (dir[n - 1] == '/' || dir[n - 1] == '\\')) n--;
+    return n && path && !strncmp(path, dir, n) && (path[n] == '/' || path[n] == '\\' || !path[n]);
+}
+
+/* A write's outcome under the user directory, told to the watcher only when
+ * it is news (a moved window saves the settings again and again). */
+static void note_user_dir(const char *path, int writable, const char *why)
+{
+    if (!in_user_dir(path)) return;
+    if (!why) why = "";
+    if (writable == user_dir_writable && !strcmp(why, user_dir_why)) return;
+    user_dir_writable = writable;
+    snprintf(user_dir_why, sizeof(user_dir_why), "%s", why);
+    if (user_dir_watch) user_dir_watch(writable, user_dir_why);
+}
+
+void Paths_WatchUserDir(void (*watch)(int writable, const char *why)) { user_dir_watch = watch; }
+
+void Paths_WriteDone(const char *path)
+{
+    int error = errno;
+#ifdef _WIN32
+    DWORD last = GetLastError();
+#endif
+    note_user_dir(path, 1, NULL);
+#ifdef _WIN32
+    SetLastError(last);
+#endif
+    errno = error;
+}
+
+/* Paths_WriteError and Paths_WriteReason: the reason, after the path when
+ * `with_path` is set. */
+static const char *describe(char *out, size_t size, const char *path, int with_path)
+{
+    int error = errno;
+    char reason[512] = "", tail[1024], *shown = NULL, program[128] = "";
+    size_t length;
+    int hint = 0;
+#ifdef _WIN32
+    /* What the system said: the last error of the call that failed, or the
+     * one the C runtime kept (_wfopen, fwrite and fclose go through it).
+     * ERROR_ALREADY_EXISTS is what a successful CREATE_ALWAYS over an old
+     * partial file leaves behind, not a failure. */
+    DWORD last = GetLastError(), code = last;
+    unsigned long dos = _doserrno;
+    wchar_t *wide;
+    if (!code || code == ERROR_ALREADY_EXISTS) code = (DWORD)dos;
+    if (code == ERROR_ALREADY_EXISTS) code = 0;
+    if (code) {
+        wchar_t *message = NULL;
+        if (FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                           NULL, code, 0, (LPWSTR)&message, 0, NULL) && message) {
+            char *utf8 = Memories_WideToUtf8(message);
+            if (utf8) snprintf(reason, sizeof(reason), "%s", utf8);
+            free(utf8);
+        }
+        if (message) LocalFree(message);
+        if (!reason[0]) snprintf(reason, sizeof(reason), "Windows error %lu", (unsigned long)code);
+    }
+    /* The whole path, as Explorer shows it. */
+    wide = Memories_Utf8ToWide(path);
+    if (wide) {
+        DWORD needed = GetFullPathNameW(wide, 0, NULL, NULL);
+        wchar_t *full = needed ? malloc((size_t)needed * sizeof(*full)) : NULL;
+        if (full && GetFullPathNameW(wide, needed, full, NULL) < needed) {
+            shown = Memories_WideToUtf8(full);
+            hint = code == ERROR_ACCESS_DENIED && in_documents(full);
+        }
+        free(full);
+        free(wide);
+    }
+    if (hint) program_name(program, sizeof(program));
+    /* Left as found, so a second description of the same failure agrees. */
+    SetLastError(last);
+    _doserrno = dos;
+#endif
+    if (!reason[0]) snprintf(reason, sizeof(reason), "%s", error ? strerror(error) : "the system gave no reason");
+    length = strlen(reason);
+    while (length && (isspace((unsigned char)reason[length - 1]) || reason[length - 1] == '.')) reason[--length] = '\0';
+    snprintf(tail, sizeof(tail), "%s%s%s%s", reason,
+             hint ? " (an antivirus \"ransomware protection\" or Windows \"Controlled folder access\" may be blocking "
+                    "the Documents folder; allow " : "",
+             hint ? program : "", hint ? " there)." : ".");
+    snprintf(out, size, "%s%s%s", with_path ? (shown ? shown : path) : "", with_path ? ": " : "", tail);
+    free(shown);
+    note_user_dir(path, 0, tail); /* the crash reports' "user dir" fact */
+#ifdef _WIN32
+    SetLastError(last); /* free() may have changed it */
+#endif
+    errno = error;
+    return out;
+}
+
+const char *Paths_WriteError(char *out, size_t size, const char *path) { return describe(out, size, path, 1); }
+const char *Paths_WriteReason(char *out, size_t size, const char *path) { return describe(out, size, path, 0); }

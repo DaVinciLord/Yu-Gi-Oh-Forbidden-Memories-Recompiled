@@ -155,6 +155,16 @@ int Platform_CopyText(const char *text)
     return 0;
 }
 
+/* Where and why a screenshot could not be written (paths.h), as sdl.c. */
+static void screenshot_not_saved(const char *why)
+{
+    static const char *const ok[] = {"OK"};
+    char text[1300];
+    snprintf(text, sizeof(text), "Could not save the screenshot to %s", why);
+    fprintf(stderr, "memories-pc: %s\n", text);
+    Menu_ShowNotice("Screenshot not saved", text, ok, 1, 0, NULL);
+}
+
 void Platform_Screenshot(int window_image)
 {
     const char *directory = getenv("MEMORIES_SCREENSHOT_DIR");
@@ -165,18 +175,26 @@ void Platform_Screenshot(int window_image)
     int i, j;
     (void)window_image;
     if (!last.vram || last.w <= 0 || last.h <= 0) return;
-    char user[1024];
+    char user[1024], why[1200];
     if (!directory || !*directory) {
         if (Paths_User(user, sizeof(user), "screenshots")) return;
         directory = user;
     }
-    mkdir(directory, 0777);
+    Paths_WriteBegin();
+    if (Paths_MakeDirs(directory)) { /* mkdir's own reason, not the file's "path not found" */
+        screenshot_not_saved(Paths_WriteError(why, sizeof(why), directory));
+        return;
+    }
     now = time(NULL);
     localtime_r(&now, &local);
     strftime(stamp, sizeof(stamp), "%Y-%m-%d-%H%M%S", &local);
     if (snprintf(path, sizeof(path), "%s/%s-%u.ppm", directory, stamp, current_frame) >= (int)sizeof(path)) return;
+    Paths_WriteBegin();
     file = fopen(path, "wb");
-    if (!file) return;
+    if (!file) {
+        screenshot_not_saved(Paths_WriteError(why, sizeof(why), path));
+        return;
+    }
     fprintf(file, "P6\n%d %d\n255\n", last.w, last.h);
     for (j = 0; j < last.h; j++) {
         const uint16_t *row = last.vram + ((last.y + j) & 511) * last.stride;
@@ -191,8 +209,15 @@ void Platform_Screenshot(int window_image)
             }
         }
     }
-    fclose(file);
+    int failed = ferror(file) != 0;
+    if (fclose(file)) failed = 1;
+    if (failed) {
+        screenshot_not_saved(Paths_WriteError(why, sizeof(why), path));
+        remove(path);
+        return;
+    }
     fprintf(stderr, "memories-pc: screenshot: %s\n", path);
+    Paths_WriteDone(path);
 }
 
 void Platform_SetScale(int wanted)

@@ -63,6 +63,8 @@ int SaveSlots_WriteAt(int slot, long offset, const unsigned char *data, size_t b
 /* Replace both state copies together, preserving the existing header and
  * padding. Used after a trade so backup recovery retains the traded cards. */
 int SaveSlots_WriteState(int slot, const unsigned char state[SAVE_SLOT_STATE_SIZE]);
+/* Why the last write failed, "<path>: <reason>." (Paths_WriteError). */
+const char *SaveSlots_LastError(void);
 /* The slot's token, or 0 when it has none (empty, or saved by an older
  * build). */
 unsigned SaveSlots_Token(int slot);

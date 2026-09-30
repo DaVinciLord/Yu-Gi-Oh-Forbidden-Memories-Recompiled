@@ -482,22 +482,38 @@ static void serialize(MemoriesState *state)
     hold_signals(0);
 }
 
-static int save(const char *path)
+/* Where and why a state was not saved: on stderr, and for the player's own
+ * request (`tell`) in a notice as well, since F5 is otherwise silent. */
+static int not_saved(const char *path, int tell)
+{
+    static const char *const ok[] = {"OK"};
+    char why[1200], text[1300];
+    Paths_WriteError(why, sizeof(why), path);
+    snprintf(text, sizeof(text), "Could not save the state to %s", why);
+    fprintf(stderr, "memories-pc: %s\n", text);
+    if (tell) Menu_ShowNotice("Save state not saved", text, ok, 1, 0, NULL);
+    return -1;
+}
+
+static int save(const char *path, int tell)
 {
     MemoriesState state = {0, NULL, NULL, 0};
     char partial[600];
+    int failed;
     snprintf(partial, sizeof(partial), "%s.partial", path);
+    Paths_WriteBegin();
     state.file = fopen(partial, "wb");
-    if (!state.file) {
-        perror(partial);
-        return -1;
-    }
+    if (!state.file) return not_saved(path, tell);
     serialize(&state);
-    if (fclose(state.file) != 0 || rename(partial, path) != 0) {
-        perror(path);
+    failed = ferror(state.file) != 0; /* a short write (a full disk) leaves fclose content */
+    if (fclose(state.file) != 0) failed = 1;
+    if (failed || rename(partial, path) != 0) {
+        not_saved(path, tell); /* before remove() changes the reason */
+        remove(partial);
         return -1;
     }
     fprintf(stderr, "memories-pc: state saved to %s\n", path);
+    Paths_WriteDone(path);
     return 0;
 }
 
@@ -910,7 +926,7 @@ void Memories_StatePoint(unsigned presented_frames)
     }
     if (scripted_path && !scripted_done && presented_frames >= scripted_frame) {
         scripted_done = 1;
-        save(scripted_path);
+        save(scripted_path, 0);
     }
     {
         /* MEMORIES_AUTOSAVE=<seconds>: a rolling state every so many seconds
@@ -940,14 +956,14 @@ void Memories_StatePoint(unsigned presented_frames)
             snprintf(path, sizeof(path), "%.*s/auto%u.state", slash ? (int)(slash - folder) : 1,
                      slash ? folder : ".", autosave_index % 3 + 1);
             autosave_index++;
-            if (!save(path)) LOG(LOG_STATE, "autosave %s at frame %u", path, presented_frames);
+            if (!save(path, 0)) LOG(LOG_STATE, "autosave %s at frame %u", path, presented_frames);
         }
     }
     what = __atomic_exchange_n(&requested, 0, __ATOMIC_SEQ_CST);
     if (what) {
         slot_path(path, sizeof(path), requested_slot);
         if (what == 1) {
-            save(path);
+            save(path, 1);
         } else {
             if (!load(path)) last_loaded_slot = requested_slot;
             else Crash_ReportSoft("state load failed", path);

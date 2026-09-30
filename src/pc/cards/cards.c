@@ -1769,10 +1769,13 @@ static void write_section(int code, unsigned sequence, unsigned token, const uns
         slash = strrchr(directory, '/');
         if (slash) { *slash = '\0'; Paths_MakeDirs(directory); }
     }
+    Paths_WriteBegin();
     out = fopen(temporary, "w");
     if (!out) {
+        char why[1200];
+        Paths_WriteError(why, sizeof(why), path);
         if (in) fclose(in);
-        fprintf(stderr, "memories-pc: cannot write %s\n", temporary);
+        fprintf(stderr, "memories-pc: cannot write %s\n", why);
         return;
     }
     fprintf(out, "# The cards mods added, as the saves of duelist %08X hold them.\n", (unsigned)code);
@@ -1821,7 +1824,8 @@ static void write_section(int code, unsigned sequence, unsigned token, const uns
     fprintf(out, "end\n");
     if (in) fclose(in);
     if (fclose(out) != 0 || rename(temporary, path) != 0) {
-        fprintf(stderr, "memories-pc: cannot write %s\n", path);
+        char why[1200];
+        fprintf(stderr, "memories-pc: cannot write %s\n", Paths_WriteError(why, sizeof(why), path));
         remove(temporary);
         return;
     }

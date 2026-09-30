@@ -86,8 +86,23 @@ int main(void)
     assert(Settings_GetNamed("mod.bad=name", -1) == -1 && Settings_GetNamed("mod.x\nvolume", -1) == -1);
     assert(Settings_Save()); Settings_Load();
     assert(Settings_Get(SET_MASTER_VOLUME) != 99 && !contains(path, "bad="));
+    assert(!*Settings_LastError() && !Settings_TakeNewError());
     unlink(path);
     assert(!setenv("MEMORIES_SETTINGS", "/dev/null/settings", 1));
     assert(!Settings_Save());
+    /* A failed save says where and why ("...settings: <the system's
+     * reason>."), told once until the reason changes or a save succeeds. */
+    {
+        const char *error = Settings_LastError(), *reason = strstr(error, "settings: ");
+        printf("%s\n", error);
+        assert(!strncmp(error, "Could not save settings to ", 27));
+        assert(strstr(error, "null") && reason && strlen(reason) > strlen("settings: ") + 1);
+        assert(error[strlen(error) - 1] == '.');
+        assert(Settings_TakeNewError() == error && !Settings_TakeNewError());
+        assert(!Settings_Save() && !Settings_TakeNewError()); /* the same reason: not news */
+    }
+    assert(!setenv("MEMORIES_SETTINGS", path, 1));
+    assert(Settings_Save() && !*Settings_LastError() && !Settings_TakeNewError());
+    unlink(path);
     return 0;
 }

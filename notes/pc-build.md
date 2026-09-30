@@ -440,6 +440,42 @@ existing card, settings and bindings survive the move. The game's own files
 (the disc image, `mods/` as shipped) stay where the release put them and are
 only read.
 
+When a write there fails, the player is told where and why, never only that
+it failed (`Paths_WriteError`, `paths.h`): the full path as Explorer shows it
+and the system's own reason (FormatMessage, in the user's language, on
+Windows; strerror elsewhere), e.g. `Could not save settings to
+C:\Users\...\Documents\My Games\YFM Re-Decomp\settings.txt: Access is
+denied.` When Windows denies access inside Documents, one sentence follows:
+an antivirus's "ransomware protection" or Windows' "Controlled folder access"
+may be blocking the Documents folder; allow `memories-pc.exe` there (Avast's
+Ransomware Shield did this to a player of v0.1.3-preview.1: every setting
+reverted at the next launch, with nothing saying why). Where it is said:
+
+- settings (`Settings_Save`, `Settings_LastError`): the Mods window's status
+  line (it grows to more lines for it), Game > Language's notice, and for
+  every other save (menu items, sliders, hotkeys, a moved window, which do
+  not look at the result) a "Settings not saved" notice, once until the
+  reason changes or a save succeeds (`Settings_TakeNewError`, `menu.c`);
+- game saves: the save slot menu's message, with the path and reason under
+  it (`SaveSlots_LastError`); deck slots, the mods' card and duelist records
+  and memory card images on stderr;
+- save states (F5), screenshots (F12) and a mod profile: a notice, or the
+  Mods window's status; Controls: its window's status; Help > System info
+  when `system-info.txt` cannot be written; the ROM location
+  (`disc-path.txt`): the setup error.
+
+Nothing about where files go changes. The crash reports' facts (and Help >
+System info) carry `user dir: <folder>; writable: not tried yet` until the
+game writes something there, then the last write's outcome: `writable: yes`
+or `writable: no: <reason>` (`Paths_WatchUserDir`; failures are seen in
+`Paths_WriteError`, successes said with `Paths_WriteDone` by the settings,
+save slots, states, screenshots and System info). Nothing is written only to
+find out: a test file made and removed at every start would raise Controlled
+folder access's notification on every launch and looks like ransomware to
+antivirus heuristics. Help > System info opens `system-info.txt` before it
+reads the facts, so what it shows answers the question when nothing had been
+saved yet.
+
 ### Window and menu bar
 
 Two window backends exist under `src/pc/platform`, chosen at build time
@@ -2323,7 +2359,8 @@ game writes and the monitor reads, so what the game knew survives however
 it ended: facts (build and commit, OS or Wine version, CPU, memory, on
 Windows whether DEP is on for the game and the system's DEP policy, GPU and
 driver, SDL video and audio drivers, every setting but the retired ones, the
-applied mods), the
+applied mods, the user folder and whether it can be written to, with the
+reason when not), the
 runtime module last loaded, the frame and VBlank counts, and the last 128
 lines of the log. The mods, state, memory card and duel model channels are
 kept there even when not traced (`Log_Wanted`). The game's console output

@@ -134,6 +134,9 @@ int Mods_ProfileValue(const char *name, const char *key, int fallback);
 int Mods_Validate(const int *enabled, char *error, size_t size);
 int Mods_Apply(const int *enabled, char *error, size_t size);
 int Mods_ProfileSave(const char *name);
+/* Why the last Mods_ProfileSave could not write its file ("<path>: <reason>.",
+ * Paths_WriteError), or "" when it failed on the name or succeeded. */
+const char *Mods_ProfileSaveError(void);
 int Mods_ProfileRead(const char *name, int *enabled);
 void Mods_SetCardSignature(unsigned signature);
 unsigned Mods_CardSignature(void);
