@@ -39,6 +39,12 @@ void TexturePack_Service(void);
  * are kept across the packs' loads and unloads. 1 added, 0 not. */
 int TexturePack_AddMade(const void *pixels, int words, int rows, int bpp, const void *clut, int clut_entries,
                         const char *file, int x, int y, int w, int h);
+/* The same for a picture with see-through parts (the title's,
+ * title_images.c): the PNG keeps its alpha instead of lying over black, so
+ * above the console's resolution its clear parts show what is under them
+ * and its edges are soft. */
+int TexturePack_AddMadeSeeThrough(const void *pixels, int words, int rows, int bpp, const void *clut,
+                                  int clut_entries, const char *file, int x, int y, int w, int h);
 
 /* For a renderer that samples the pack's images itself, at their own
  * resolution (gl_picture.c). The entry (its index + 1) whose image replaces

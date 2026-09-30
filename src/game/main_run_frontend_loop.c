@@ -17,6 +17,7 @@
 #ifdef MEMORIES_PC
 #include "pc/platform/title_jump.h"
 #include "pc/saves/deck_menu.h"
+#include "pc/platform/title_screen.h"
 #endif
 
 s32 Main_RunFrontendLoop(void) {
@@ -38,6 +39,13 @@ s32 Main_RunFrontendLoop(void) {
             f = D_8009B428;
             if ((f & 1) == 0) {
                 if ((f & 0x80) == 0) {
+#ifdef MEMORIES_PC
+                    /* A mod's "title" may go straight to the title. */
+                    if (TitleScreen_SkipMovie()) {
+                        D_8009B428 = 1;
+                        continue;
+                    }
+#endif
                     D_8009B428 = f | 0x80;
                     Main_ResetFrontendRuntime();
                     Movie_Play(0);
@@ -73,8 +81,10 @@ s32 Main_RunFrontendLoop(void) {
             }
 #ifdef MEMORIES_PC
             DeckMenu_Poll(DECK_MENU_TITLE_MENU);
-#endif
+            r = TitleScreen_Update();
+#else
             r = MainMenu_UpdateFrontendMenu();
+#endif
             if (r != -1) {
                 break;
             }

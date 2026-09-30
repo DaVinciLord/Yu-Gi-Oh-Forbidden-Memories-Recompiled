@@ -1206,7 +1206,7 @@ static const char *const manifest_keys[] = {
     "data", "textures", "cards", "audio", "min_api", "game", "requires", "after", "conflicts", "priority",
     "settings", "fusions", "equips", "rituals", "drops", "decks", "duelists", "text", "font",
     "chest_overflow", "terrain_bonus", "trap_thresholds", "equip_bonus_default", "passwords", "starter",
-    "limits",
+    "title", "limits",
 };
 
 /* How many letters to add, remove or change to turn one word into the
