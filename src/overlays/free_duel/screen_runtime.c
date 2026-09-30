@@ -25,6 +25,7 @@
 #ifdef MEMORIES_PC
 #include "pc/free_duel/duelists.h"
 #include "pc/free_duel/page_box.h"
+#include "pc/cards/tables.h"
 #include "pc/text/language.h"
 
 /* Which page of forty the grid shows, and the duelist a cell stands for on it.
@@ -360,10 +361,20 @@ void FreeDuel_Init(u8 *src)
         if (D_8009B362 == 1) {
             rec++;
         }
+#ifdef MEMORIES_PC
+        /* 999, or a mod's "limits" (tables.h); a cap of 32767 must not
+           wrap the halfword negative. */
+        if ((s16)*rec < Tables_FreeDuelRecordCap()) {
+            *rec = *rec + 1;
+        } else {
+            *rec = Tables_FreeDuelRecordCap();
+        }
+#else
         *rec = *rec + 1;
         if ((s16)*rec >= FREE_DUEL_RECORD_MAX + 1) {
             *rec = FREE_DUEL_RECORD_MAX;
         }
+#endif
     }
     gGraphics_sViewportY = 0;
     gGraphics_sViewportX = 0;

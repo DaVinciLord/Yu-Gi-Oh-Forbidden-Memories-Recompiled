@@ -1225,8 +1225,8 @@ class ModInfoTab(Tab):
             var.set(getattr(info, key))
         for box, value in ((self.description, info.description),
                            (self.settings, json.dumps(info.settings, indent=2, ensure_ascii=False) if info.settings else ""),
-                           (self.other, json.dumps(self.project.other, indent=2, ensure_ascii=False)
-                            if self.project.other else "")):
+                           (self.other, json.dumps(self.shown_other(), indent=2, ensure_ascii=False)
+                            if self.shown_other() else "")):
             box.delete("1.0", "end")
             box.insert("1.0", value)
         source = self.project.source_dir
@@ -1248,7 +1248,7 @@ class ModInfoTab(Tab):
             if not isinstance(other, dict):
                 raise ValueError("the other keys are a JSON object")
             reserved = set(other) & {"id", "name", "version", "author", "description", "settings", "cards",
-                                     "fusions", "equips", "rituals", "drops", "decks"}
+                                     "fusions", "equips", "rituals", "drops", "decks", "limits"}
             if reserved:
                 raise ValueError(f"edit {', '.join(sorted(reserved))} in the editor's own tabs")
         except ValueError as problem:
@@ -1260,12 +1260,19 @@ class ModInfoTab(Tab):
         info.author = self.vars["author"].get()
         info.description = self.description.get("1.0", "end-1c")
         info.settings = settings
+        # "limits" is the Limits tab's (limits_tab.py), not this box's.
+        if "limits" in self.project.other:
+            other["limits"] = self.project.other["limits"]
         self.project.other = other
         self.status.configure(text="")
         after = (info.id, info.name, info.version, info.author, info.description, info.settings, self.project.other)
         if after != before:
             self.app.changed()
         return True
+
+    def shown_other(self) -> dict:
+        """The other keys this box shows: all but the Limits tab's."""
+        return {key: value for key, value in self.project.other.items() if key != "limits"}
 
     def preview(self):
         if self.app.commit_all():

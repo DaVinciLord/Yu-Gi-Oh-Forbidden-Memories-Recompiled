@@ -647,11 +647,26 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     /* What the entry leaves out is the base's. */
     stats = (unsigned)gDuel_adwCardStats[base - 1];
     level_attr = gDuel_abCardLevelAttr[base];
-    if ((value = (int)Json_Number(Json_Member(entry, "attack"), -1)) >= 0) {
-        stats = (stats & ~0x1FFu) | (unsigned)clamp(value / 10, 0, 0x1FF);
-    }
-    if ((value = (int)Json_Number(Json_Member(entry, "defense"), -1)) >= 0) {
-        stats = (stats & ~(0x1FFu << 9)) | ((unsigned)clamp(value / 10, 0, 0x1FF) << 9);
+    /* A card's own ATK and DEF are nine bits of tens in its stats word
+     * (gDuel_adwCardStats): 0 to 5110 in steps of 10. A mod's "limits" raise
+     * what a monster may reach with its bonuses, not this; more would mean a
+     * wider card table, which every reader of the word would have to follow.
+     * So a value past it or between tens is said, not quietly changed. */
+    {
+        static const char *const stat_keys[2] = {"attack", "defense"};
+        int k;
+        for (k = 0; k < 2; k++) {
+            if ((value = (int)Json_Number(Json_Member(entry, stat_keys[k]), -1)) < 0) continue;
+            if (value > 0x1FF * 10) {
+                Mods_Note(mod, "cards[%d]: \"%s\" %d is past the %d a card's own stat can be (nine bits of tens); "
+                          "%d used, and \"limits\" or a bonus takes it higher in a duel", index, stat_keys[k], value,
+                          0x1FF * 10, 0x1FF * 10);
+            } else if (value % 10) {
+                Mods_Note(mod, "cards[%d]: \"%s\" %d is kept in tens; %d used", index, stat_keys[k], value,
+                          value / 10 * 10);
+            }
+            stats = (stats & ~(0x1FFu << (9 * k))) | ((unsigned)clamp(value / 10, 0, 0x1FF) << (9 * k));
+        }
     }
     if ((value = choice(Json_Member(entry, "type"), type_names, 24)) >= 0) {
         /* A monster has its base's 3D model and a magic, trap or equip card
@@ -833,6 +848,7 @@ void Cards_Build(void)
     Mods_VisitCards(add_mod, context);
     Mods_SetCardResolver(Cards_FindIdentity);
     Mods_SetCardNotes(Cards_Notes, Cards_NoteTag);
+    Mods_SetLimitSource(Tables_Limit);   /* read by Tables_Build below; asked later */
     {
         unsigned signature = 0;
         if (gCard_nCount > CARD_COUNT) {
@@ -1226,7 +1242,8 @@ static long read_section(int code, unsigned sequence, unsigned token, unsigned c
             continue;
         } else if (sscanf(line, "chest2 %191s %d", identity, &count) == 2) {
             id = Cards_FindIdentity(identity);
-            if (id) chest[id] = (unsigned char)clamp(count, 0, CARD_CHEST_QUANTITY_MAX);
+            /* A byte a card: a mod's "limits" may keep up to 255 (tables.h). */
+            if (id) chest[id] = (unsigned char)clamp(count, 0, TABLES_LIMIT_CHEST_MAX);
         } else if (sscanf(line, "seen2 %191s", identity) == 1) {
             id = Cards_FindIdentity(identity);
             if (seen && id) seen[id >> 3] |= (unsigned char)(1u << (id & 7));
@@ -1239,7 +1256,7 @@ static long read_section(int code, unsigned sequence, unsigned token, unsigned c
             }
         } else if (sscanf(line, "chest %d %d", &id, &count) == 2) {
             if (!migrate && !legacy_warning++) fprintf(stderr, "memories-pc: legacy card IDs have no identities; restore the original card mods and use MEMORIES_MIGRATE_CARD_IDS=1 to migrate\n");
-            if (migrate && id > CARD_COUNT && Cards_Valid(id)) chest[id] = (unsigned char)clamp(count, 0, CARD_CHEST_QUANTITY_MAX);
+            if (migrate && id > CARD_COUNT && Cards_Valid(id)) chest[id] = (unsigned char)clamp(count, 0, TABLES_LIMIT_CHEST_MAX);
         } else if (sscanf(line, "seen %d", &id) == 1) {
             if (migrate && seen && id > CARD_COUNT && Cards_Valid(id)) seen[id >> 3] |= (unsigned char)(1u << (id & 7));
         } else if (sscanf(line, "deck %d %d %d", &slot, &id, &base) == 3) {

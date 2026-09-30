@@ -10,7 +10,8 @@
  * starchips (Duel_AwardCard), and "terrain_bonus" sets what a terrain gives
  * each monster type (Duel_GetTerrainBoost), and "trap_thresholds" the attack
  * each attack trap stops (Duel_SelectAttackTrap), and "passwords" the
- * Password screen's passwords and prices (Main_RunPasswordMenu). A drop or
+ * Password screen's passwords and prices (Main_RunPasswordMenu), and
+ * "limits" the numbers the game caps (ATK/DEF, LP, starchips...). A drop or
  * deck pool is worked out from what the game loaded when it is drawn from,
  * so a data mod's patch of the same pool comes first and the edits here go
  * on top of it. */
@@ -457,8 +458,12 @@ static void add_bonus(int equip, int kind, int value, long bonus, unsigned order
 static int bonus_points(const char *mod, const char *where, const JsonValue *value, long *points)
 {
     *points = Json_Number(value, 0);
-    if (Json_TypeOf(value) == JSON_NUMBER && *points >= -CARD_STAT_MAX && *points <= CARD_STAT_MAX) return 1;
-    Mods_Note(mod, "%s: a bonus is a whole number of points, -%d to %d", where, CARD_STAT_MAX, CARD_STAT_MAX);
+    /* As far as a 16-bit stat goes, not the 9999 cap: a mod's "limits" may
+     * raise that, and the duel clamps the sum to whatever it is. */
+    if (Json_TypeOf(value) == JSON_NUMBER && *points >= -TABLES_LIMIT_STAT_MAX && *points <= TABLES_LIMIT_STAT_MAX)
+        return 1;
+    Mods_Note(mod, "%s: a bonus is a whole number of points, -%d to %d", where, TABLES_LIMIT_STAT_MAX,
+              TABLES_LIMIT_STAT_MAX);
     return 0;
 }
 
@@ -1301,9 +1306,11 @@ static void read_terrain_bonus(const char *mod, const JsonValue *table)
                 Mods_Note(mod, "%s \"%s\": not a monster type", where, Json_Name(member));
                 continue;
             }
-            if (Json_TypeOf(member) != JSON_NUMBER || points < -CARD_STAT_MAX || points > CARD_STAT_MAX) {
+            /* A 16-bit stat's range; "limits" decides the cap the sum meets. */
+            if (Json_TypeOf(member) != JSON_NUMBER || points < -TABLES_LIMIT_STAT_MAX ||
+                points > TABLES_LIMIT_STAT_MAX) {
                 Mods_Note(mod, "%s \"%s\": a bonus is a whole number of points, -%d to %d", where, Json_Name(member),
-                          CARD_STAT_MAX, CARD_STAT_MAX);
+                          TABLES_LIMIT_STAT_MAX, TABLES_LIMIT_STAT_MAX);
                 continue;
             }
             terrain_bonus[terrain - 1][type] = (short)points;
@@ -1389,9 +1396,10 @@ int Tables_TrapThreshold(int trap, int retail)
 #define STARCHIP_MAX 999999L   /* SAVE_DATA_STARCHIP_MAX */
 
 /* "chest_overflow": {"limit": n, "starchips": m}: the chest keeps at most n
- * copies of a card (1-250; the disc's 250 when left out), and a card won
- * when it already holds n is worth m starchips instead (0 when left out).
- * The latest mod that says wins. */
+ * copies of a card (1-255, a byte a card; the disc's 250 when left out), and
+ * a card won when it already holds n is worth m starchips instead (0 when
+ * left out). The latest mod that says wins; "limits": {"chest": n} sets the
+ * same n. */
 static void read_chest_overflow(const char *mod, const JsonValue *value)
 {
     const JsonValue *limit = Json_Member(value, "limit"), *starchips = Json_Member(value, "starchips");
@@ -1401,8 +1409,9 @@ static void read_chest_overflow(const char *mod, const JsonValue *value)
         Mods_Note(mod, "\"chest_overflow\" is an object: {\"limit\": copies, \"starchips\": per card past it}");
         return;
     }
-    if ((limit && Json_TypeOf(limit) != JSON_NUMBER) || n < 1 || n > CARD_CHEST_QUANTITY_MAX) {
-        Mods_Note(mod, "chest_overflow: \"limit\" is a whole number of copies, 1 to %d; left out", CARD_CHEST_QUANTITY_MAX);
+    if ((limit && Json_TypeOf(limit) != JSON_NUMBER) || n < 1 || n > TABLES_LIMIT_CHEST_MAX) {
+        Mods_Note(mod, "chest_overflow: \"limit\" is a whole number of copies, 1 to %d (the chest keeps a byte a card); "
+                  "left out", TABLES_LIMIT_CHEST_MAX);
         return;
     }
     if ((starchips && Json_TypeOf(starchips) != JSON_NUMBER) || m < 0 || m > STARCHIP_MAX) {
@@ -1418,6 +1427,11 @@ int Tables_ChestLimit(void)
     return chest_limit ? chest_limit : CARD_CHEST_QUANTITY_MAX;
 }
 
+int Tables_ChestRoom(void)
+{
+    return chest_limit > CARD_CHEST_QUANTITY_MAX ? chest_limit : CARD_CHEST_QUANTITY_MAX;
+}
+
 int Tables_ChestFull(unsigned quantity)
 {
     return chest_limit && quantity >= (unsigned)chest_limit;
@@ -1425,14 +1439,309 @@ int Tables_ChestFull(unsigned quantity)
 
 int Tables_ChestOverflow(unsigned quantity, unsigned *starchips)
 {
-    unsigned long long total;
+    unsigned long long total, cap = Tables_StarchipCap();
     if (!overflow_starchips || quantity < (unsigned)Tables_ChestLimit()) return 0;
     total = (unsigned long long)*starchips + (unsigned long long)overflow_starchips;
-    if (total > STARCHIP_MAX) total = STARCHIP_MAX;
+    /* Never below the balance: one past the cap (a mod's "limits" that is
+       off now) stays. */
+    if (cap < *starchips) cap = *starchips;
+    if (total > cap) total = cap;
     LOG(LOG_MODS, "tables: a card past the chest's %d: %ld starchips, %u -> %u", Tables_ChestLimit(),
         overflow_starchips, *starchips, (unsigned)total);
     *starchips = (unsigned)total;
     return (int)overflow_starchips;
+}
+
+/* --- limits ----------------------------------------------------------
+ *
+ * "limits": {
+ *     "stats": n, "attack": n, "defense": n,
+ *     "life_points": n or {"start": n, "player": n, "opponent": n, "max": n,
+ *                          "duelists": {duelist: n or {"player": n, "opponent": n}}},
+ *     "two_player": {"start": n, "max": n, "step": n},
+ *     "starchips": n, "chest": n, "free_duel_record": n
+ * }
+ *
+ * 0 in the variables below is "no mod said"; each key's latest mod wins, and a
+ * duelist's entries from two mods are kept side by side, the later one first
+ * found. */
+
+static int limit_stat[2];                  /* ATK, DEF */
+static int limit_life[2];                  /* the player's, the opponent's start */
+static int limit_life_max;
+static int limit_two_player[3];            /* TABLES_TWO_PLAYER_* */
+static long limit_starchips = -1;          /* -1: no mod said (0 is a cap of none) */
+static int limit_record, limit_two_player_record;
+
+typedef struct {
+    int duelist;
+    int life[2];                           /* 0: not given */
+} DuelistLife;
+static DuelistLife *duelist_lives;
+static int duelist_life_count, duelist_life_room;
+
+/* A whole number from `low` to `high` at `key` of `where`: 1 with it in *out.
+ * One past `high` but still a number is held at `high` with a note that says
+ * what keeping more would take; anything else is noted and left out. */
+static int limit_number(const char *mod, const char *where, const JsonValue *value, long low, long high,
+                        const char *storage, long *out)
+{
+    long number;
+    if (!value) return 0;
+    if (Json_TypeOf(value) != JSON_NUMBER) {
+        Mods_Note(mod, "limits: %s is a whole number, %ld to %ld, without quotes; left out", where, low, high);
+        return 0;
+    }
+    number = Json_Number(value, 0);
+    if (number < low) {
+        Mods_Note(mod, "limits: %s is at least %ld; left out", where, low);
+        return 0;
+    }
+    if (number > high) {
+        Mods_Note(mod, "limits: %s is %ld, past the %ld %s; %ld used", where, number, high, storage, high);
+        number = high;
+    }
+    *out = number;
+    return 1;
+}
+
+static DuelistLife *duelist_life(int duelist)
+{
+    DuelistLife *slot;
+    int i;
+    for (i = duelist_life_count - 1; i >= 0; i--) {
+        if (duelist_lives[i].duelist == duelist) return &duelist_lives[i];
+    }
+    slot = grow(&duelist_lives, &duelist_life_room, duelist_life_count, sizeof(*duelist_lives));
+    if (!slot) return NULL;
+    memset(slot, 0, sizeof(*slot));
+    slot->duelist = duelist;
+    duelist_life_count++;
+    return slot;
+}
+
+#define LIFE_STORAGE "the game keeps (a 16-bit number; more would mean widening each side's duel record)"
+
+static void read_life_points(const char *mod, const JsonValue *value)
+{
+    static const char *const sides[2] = {"player", "opponent"};
+    const JsonValue *duelists;
+    char where[160];
+    long n;
+    int side, i;
+    if (!value) return;
+    if (Json_TypeOf(value) == JSON_NUMBER) {
+        if (limit_number(mod, "life_points", value, 1, TABLES_LIMIT_LIFE_POINTS_MAX, LIFE_STORAGE, &n))
+            limit_life[0] = limit_life[1] = (int)n;
+        return;
+    }
+    if (Json_TypeOf(value) != JSON_OBJECT) {
+        Mods_Note(mod, "limits: \"life_points\" is a number (both sides' start) or an object: {\"start\": 8000, "
+                  "\"player\": 8000, \"opponent\": 8000, \"max\": 8000, \"duelists\": {\"Heishin\": 12000}}");
+        return;
+    }
+    for (i = 0; i < Json_Count(value); i++) {
+        const char *name = Json_Name(Json_At(value, i));
+        if (strcmp(name, "start") && strcmp(name, "player") && strcmp(name, "opponent") && strcmp(name, "max") &&
+            strcmp(name, "duelists"))
+            Mods_Note(mod, "limits: life_points has no \"%s\" (start, player, opponent, max, duelists)", name);
+    }
+    if (limit_number(mod, "life_points \"start\"", Json_Member(value, "start"), 1, TABLES_LIMIT_LIFE_POINTS_MAX,
+                     LIFE_STORAGE, &n))
+        limit_life[0] = limit_life[1] = (int)n;
+    for (side = 0; side < 2; side++) {
+        snprintf(where, sizeof(where), "life_points \"%s\"", sides[side]);
+        if (limit_number(mod, where, Json_Member(value, sides[side]), 1, TABLES_LIMIT_LIFE_POINTS_MAX, LIFE_STORAGE,
+                         &n))
+            limit_life[side] = (int)n;
+    }
+    if (limit_number(mod, "life_points \"max\"", Json_Member(value, "max"), 1, TABLES_LIMIT_LIFE_POINTS_MAX,
+                     LIFE_STORAGE, &n))
+        limit_life_max = (int)n;
+    duelists = Json_Member(value, "duelists");
+    if (duelists && Json_TypeOf(duelists) != JSON_OBJECT) {
+        Mods_Note(mod, "limits: life_points \"duelists\" is an object of duelists and their LP");
+        return;
+    }
+    for (i = 0; i < Json_Count(duelists); i++) {
+        const JsonValue *entry = Json_At(duelists, i);
+        const char *name = Json_Name(entry);
+        int all = same_letters(name, "all"), duelist = all ? -1 : Duelists_Named(name), life[2] = {0, 0};
+        if (!all && duelist < 0) {
+            Mods_Note(mod, "limits: life_points \"duelists\": no duelist \"%s\"", name);
+            continue;
+        }
+        if (Json_TypeOf(entry) == JSON_NUMBER) {
+            /* A number is the duelist's own LP: the opponent's side. */
+            snprintf(where, sizeof(where), "life_points \"duelists\" \"%s\"", name);
+            if (limit_number(mod, where, entry, 1, TABLES_LIMIT_LIFE_POINTS_MAX, LIFE_STORAGE, &n)) life[1] = (int)n;
+        } else if (Json_TypeOf(entry) == JSON_OBJECT) {
+            for (side = 0; side < 2; side++) {
+                snprintf(where, sizeof(where), "life_points \"duelists\" \"%s\" \"%s\"", name, sides[side]);
+                if (limit_number(mod, where, Json_Member(entry, sides[side]), 1, TABLES_LIMIT_LIFE_POINTS_MAX,
+                                 LIFE_STORAGE, &n))
+                    life[side] = (int)n;
+            }
+        } else {
+            Mods_Note(mod, "limits: life_points \"duelists\" \"%s\": a number (its LP) or {\"player\": n, "
+                      "\"opponent\": n}", name);
+            continue;
+        }
+        if (life[0] || life[1]) {
+            DuelistLife *slot = duelist_life(all ? -2 : duelist);
+            if (!slot) continue;
+            for (side = 0; side < 2; side++)
+                if (life[side]) slot->life[side] = life[side];
+        }
+    }
+}
+
+static void read_limits(const char *mod, const JsonValue *limits)
+{
+    static const char *const two_player_keys[3] = {"start", "max", "step"};
+    const JsonValue *two_player;
+    char where[64];
+    long n;
+    int i;
+    if (!limits) return;
+    if (Json_TypeOf(limits) != JSON_OBJECT) {
+        Mods_Note(mod, "\"limits\" is an object: {\"stats\": 30000, \"life_points\": 16000, ...}");
+        return;
+    }
+    for (i = 0; i < Json_Count(limits); i++) {
+        static const char *const keys[] = {"stats", "attack", "defense", "life_points", "two_player", "starchips",
+                                            "chest", "free_duel_record", "two_player_record"};
+        const char *name = Json_Name(Json_At(limits, i));
+        size_t k;
+        for (k = 0; k < sizeof(keys) / sizeof(keys[0]) && strcmp(name, keys[k]); k++) {}
+        if (k == sizeof(keys) / sizeof(keys[0]))
+            Mods_Note(mod, "limits: no limit \"%s\" (stats, attack, defense, life_points, two_player, starchips, chest, "
+                      "free_duel_record, two_player_record)", name);
+    }
+#define STAT_STORAGE "the game keeps (a 16-bit number; more would mean widening every card record)"
+    if (limit_number(mod, "\"stats\"", Json_Member(limits, "stats"), 0, TABLES_LIMIT_STAT_MAX, STAT_STORAGE, &n))
+        limit_stat[0] = limit_stat[1] = (int)n + 1;
+    if (limit_number(mod, "\"attack\"", Json_Member(limits, "attack"), 0, TABLES_LIMIT_STAT_MAX, STAT_STORAGE, &n))
+        limit_stat[0] = (int)n + 1;
+    if (limit_number(mod, "\"defense\"", Json_Member(limits, "defense"), 0, TABLES_LIMIT_STAT_MAX, STAT_STORAGE, &n))
+        limit_stat[1] = (int)n + 1;
+#undef STAT_STORAGE
+    read_life_points(mod, Json_Member(limits, "life_points"));
+    two_player = Json_Member(limits, "two_player");
+    if (two_player && Json_TypeOf(two_player) != JSON_OBJECT) {
+        Mods_Note(mod, "limits: \"two_player\" is an object: {\"start\": 8000, \"max\": 8000, \"step\": 500}");
+    } else {
+        for (i = 0; i < Json_Count(two_player); i++) {
+            const char *name = Json_Name(Json_At(two_player, i));
+            if (strcmp(name, "start") && strcmp(name, "max") && strcmp(name, "step"))
+                Mods_Note(mod, "limits: two_player has no \"%s\" (start, max, step)", name);
+        }
+        for (i = 0; i < 3; i++) {
+            snprintf(where, sizeof(where), "two_player \"%s\"", two_player_keys[i]);
+            if (limit_number(mod, where, Json_Member(two_player, two_player_keys[i]), 1, TABLES_LIMIT_LIFE_POINTS_MAX,
+                             LIFE_STORAGE, &n))
+                limit_two_player[i] = (int)n;
+        }
+    }
+    if (limit_number(mod, "\"starchips\"", Json_Member(limits, "starchips"), 0, TABLES_LIMIT_STARCHIPS_MAX,
+                     "the game shows (eight digits)", &n))
+        limit_starchips = n;
+    if (limit_number(mod, "\"chest\"", Json_Member(limits, "chest"), 1, TABLES_LIMIT_CHEST_MAX,
+                     "copies the chest keeps (a byte a card; more would change the memory card's save)", &n))
+        chest_limit = (int)n;
+    if (limit_number(mod, "\"free_duel_record\"", Json_Member(limits, "free_duel_record"), 1, TABLES_LIMIT_RECORD_MAX,
+                     "the save keeps (a 16-bit number)", &n))
+        limit_record = (int)n;
+    if (limit_number(mod, "\"two_player_record\"", Json_Member(limits, "two_player_record"), 1,
+                     TABLES_LIMIT_TWO_PLAYER_RECORD_MAX, "the save keeps (a 16-bit number)", &n))
+        limit_two_player_record = (int)n;
+}
+
+int Tables_StatCap(int defense)
+{
+    int set = limit_stat[defense ? 1 : 0];
+    return set ? set - 1 : CARD_STAT_MAX;
+}
+
+int Tables_StatCapEither(void)
+{
+    int attack = Tables_StatCap(0), defense = Tables_StatCap(1);
+    return attack > defense ? attack : defense;
+}
+
+int Tables_StartingLifePoints(int side, int duelist, int retail)
+{
+    int i, which = side ? 1 : 0;
+    /* The duelist's own entry, then "all" of them; a two-player duel has no
+     * duelist. */
+    for (i = duelist_life_count - 1; duelist >= 0 && i >= 0; i--) {
+        if (duelist_lives[i].duelist == duelist && duelist_lives[i].life[which]) return duelist_lives[i].life[which];
+    }
+    for (i = duelist_life_count - 1; duelist >= 0 && i >= 0; i--) {
+        if (duelist_lives[i].duelist == -2 && duelist_lives[i].life[which]) return duelist_lives[i].life[which];
+    }
+    return limit_life[which] ? limit_life[which] : retail;
+}
+
+int Tables_MaxLifePoints(int start)
+{
+    return limit_life_max ? limit_life_max : start;
+}
+
+int Tables_TwoPlayerLifePoints(int which, int retail)
+{
+    int value;
+    if (which < 0 || which > TABLES_TWO_PLAYER_STEP) return retail;
+    value = limit_two_player[which] ? limit_two_player[which] : retail;
+    if (which != TABLES_TWO_PLAYER_MAX) {
+        /* A start or a step past the choice's top is the top, the disc's
+         * start too when a mod only lowers the top. */
+        int top = Tables_TwoPlayerLifePoints(TABLES_TWO_PLAYER_MAX, DUEL_STARTING_LIFE_POINTS);
+        if (value > top) value = top;
+    }
+    return value;
+}
+
+unsigned Tables_StarchipCap(void)
+{
+    return limit_starchips >= 0 ? (unsigned)limit_starchips : (unsigned)STARCHIP_MAX;
+}
+
+int Tables_FreeDuelRecordCap(void)
+{
+    return limit_record ? limit_record : FREE_DUEL_RECORD_MAX;
+}
+
+int Tables_TwoPlayerRecordCap(void)
+{
+    return limit_two_player_record ? limit_two_player_record : 9999;   /* func_800218F0 */
+}
+
+long Tables_Limit(const char *name)
+{
+    if (!name) return -1;
+    if (same_letters(name, "attack")) return Tables_StatCap(0);
+    if (same_letters(name, "defense")) return Tables_StatCap(1);
+    if (same_letters(name, "life_points")) return Tables_StartingLifePoints(0, -1, DUEL_STARTING_LIFE_POINTS);
+    if (same_letters(name, "life_points_max")) return limit_life_max;
+    if (same_letters(name, "two_player_start"))
+        return Tables_TwoPlayerLifePoints(TABLES_TWO_PLAYER_START, DUEL_STARTING_LIFE_POINTS);
+    if (same_letters(name, "two_player_max"))
+        return Tables_TwoPlayerLifePoints(TABLES_TWO_PLAYER_MAX, DUEL_STARTING_LIFE_POINTS);
+    if (same_letters(name, "two_player_step"))
+        return Tables_TwoPlayerLifePoints(TABLES_TWO_PLAYER_STEP, DUEL_LIFE_POINT_SELECTION_STEP);
+    if (same_letters(name, "starchips")) return (long)Tables_StarchipCap();
+    if (same_letters(name, "chest")) return Tables_ChestLimit();
+    if (same_letters(name, "free_duel_record")) return Tables_FreeDuelRecordCap();
+    if (same_letters(name, "two_player_record")) return Tables_TwoPlayerRecordCap();
+    return -1;
+}
+
+static int limits_set(void)
+{
+    return limit_stat[0] || limit_stat[1] || limit_life[0] || limit_life[1] || limit_life_max ||
+           limit_two_player[0] || limit_two_player[1] || limit_two_player[2] || limit_starchips >= 0 ||
+           limit_record || limit_two_player_record || duelist_life_count;
 }
 
 /* --- the Password screen ------------------------------------------- */
@@ -1682,6 +1991,7 @@ void Tables_AddFrom(const char *mod, const char *directory, const JsonValue *man
     read_terrain_bonus(mod, Json_Member(manifest, "terrain_bonus"));
     read_trap_thresholds(mod, Json_Member(manifest, "trap_thresholds"));
     read_passwords(mod, Json_Member(manifest, "passwords"));
+    read_limits(mod, Json_Member(manifest, "limits"));
     /* And a file to a duelist, beside the folder of duelists. */
     read_pool_folder(mod, directory, 0);
     read_pool_folder(mod, directory, 1);
@@ -1714,6 +2024,11 @@ void Tables_Clear(void)
     shop_count = 0;
     equip_default = 0;
     equip_default_set = 0;
+    memset(limit_stat, 0, sizeof(limit_stat));
+    memset(limit_life, 0, sizeof(limit_life));
+    memset(limit_two_player, 0, sizeof(limit_two_player));
+    limit_life_max = limit_record = limit_two_player_record = duelist_life_count = 0;
+    limit_starchips = -1;
     memset(terrain_bonus, 0, sizeof(terrain_bonus));
     memset(terrain_listed, 0, sizeof(terrain_listed));
     memset(trap_listed, 0, sizeof(trap_listed));
@@ -1745,4 +2060,13 @@ void Tables_Build(void)
             "%d fixed decks, a chest of %d with %ld starchips a card past it", fusion_count, equip_count,
             bonus_count, ritual_count, edit_count, fixed_count, Tables_ChestLimit(), overflow_starchips);
     if (shop_count) LOG(LOG_MODS, "tables: %d Password screen entries", shop_count);
+    if (limits_set())
+        LOG(LOG_MODS, "tables: limits: ATK %d, DEF %d, LP %d/%d (max %d, %d duelists), two-player %d-%d by %d, "
+            "starchips %u, chest %d, Free Duel record %d", Tables_StatCap(0), Tables_StatCap(1),
+            Tables_StartingLifePoints(0, -1, DUEL_STARTING_LIFE_POINTS),
+            Tables_StartingLifePoints(1, -1, DUEL_STARTING_LIFE_POINTS), limit_life_max, duelist_life_count,
+            Tables_TwoPlayerLifePoints(TABLES_TWO_PLAYER_START, DUEL_STARTING_LIFE_POINTS),
+            Tables_TwoPlayerLifePoints(TABLES_TWO_PLAYER_MAX, DUEL_STARTING_LIFE_POINTS),
+            Tables_TwoPlayerLifePoints(TABLES_TWO_PLAYER_STEP, DUEL_LIFE_POINT_SELECTION_STEP), Tables_StarchipCap(),
+            Tables_ChestLimit(), Tables_FreeDuelRecordCap());
 }

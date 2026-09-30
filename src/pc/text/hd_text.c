@@ -1085,6 +1085,8 @@ static int measure_sheet(Sheet *s, const uint16_t *words)
 #define PANEL_W 64
 #define PANEL_H 40
 #define PANEL_SUM 0x14e82665u
+/* Where duel_draw_status_numbers.c cuts the panel to widen it. */
+#define PANEL_SPLIT 32
 
 /* Each label's box in the panel (first texel to one past the last): the
  * background round the retail letters, and the letters. */
@@ -1755,9 +1757,13 @@ int HdText_Hud(int depth, int page_x, int page_y, int clut_x, int clut_y, int u,
     const uint16_t *words = SoftGpu_Vram();
     unsigned i;
     if (wanted < 2 || wanted > MAX_FACTOR || !words || w < 1 || h < 1) return 0;
+    /* The whole panel, or its right half: a mod's "limits" past 9999 LP draw
+     * that half again beside a copy to widen it (duel_draw_status_numbers.c,
+     * LIFE_POINT_PANEL_SPLIT), and it must come from the same picture as the
+     * rest. Only that half: no other sprite of the panel's texels changes. */
     if (!depth && page_x == PANEL_PAGE_X && page_y == PANEL_PAGE_Y &&
-        (clut_x == PANEL_CLUT_X || clut_x == PANEL_CLUT_X_TURN) &&
-        clut_y == PANEL_CLUT_Y && u == PANEL_U && v == PANEL_V && w == PANEL_W && h == PANEL_H) {
+        (clut_x == PANEL_CLUT_X || clut_x == PANEL_CLUT_X_TURN) && clut_y == PANEL_CLUT_Y && v == PANEL_V &&
+        h == PANEL_H && ((u == PANEL_U && w == PANEL_W) || (u == PANEL_U + PANEL_SPLIT && w == PANEL_W - PANEL_SPLIT))) {
         if (panel_sum(words) != PANEL_SUM) return 0;
         if (wanted != factor && !make_atlas(wanted)) return 0;
         if (panel_made != generation) {
@@ -1765,8 +1771,8 @@ int HdText_Hud(int depth, int page_x, int page_y, int clut_x, int clut_y, int u,
             panel_ok = make_panel(words);
         }
         if (!panel_ok) return 0;
-        *atlas_u = 0;
-        *atlas_v = HUD_TOP * CELL;
+        *atlas_u = u - PANEL_U;
+        *atlas_v = HUD_TOP * CELL + (v - PANEL_V);
         return 1;
     }
     make_labels();

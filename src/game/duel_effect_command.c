@@ -13,6 +13,7 @@
 #include "pc/cards/cards.h"
 #include "pc/free_duel/duelists.h"
 #include "pc/text/text.h"
+#include "pc/text/number_width.h"
 #endif
 
 #define TEXT_STREAM_OWNER(object) ((TextStreamOwner *)(object))
@@ -215,13 +216,50 @@ void func_80038148(DuelEffectChannel *object)
     t = *TEXT_STREAM_OWNER(object)->streams[object->stream_58]++;
     c = t;
 #ifdef MEMORIES_PC
-    /* Three digits are how the retail strings print a card number; the PC
-       port's run to five (card_constants.h), so a wider one is not cut. */
-    if ((c & 0xF) == 3 && *(s32 *)r >= 1000) {
-        c = (c & 0xF0) | (*(s32 *)r >= 10000 ? 5 : 4);
+    {
+        /* A number wider than the field its string gives it keeps all of its
+           digits, up to eight, rather than lose the first: three are how the
+           retail strings print a card number, and the PC port's run to five
+           (card_constants.h); four print ATK, DEF and LP, and six the
+           starchips, which a mod's "limits" may take past 9999 and 999999
+           (pc/cards/tables.h). A number that fits is left as it was. */
+        s32 value = *(s32 *)r;
+        s32 need = 1;
+        s32 bound = 10;
+
+        while (need < 8 && value >= bound) {
+            need++;
+            bound *= 10;
+        }
+        /* Fields of three digits and more: card numbers, ATK, DEF, LP and
+           starchips. A one- or two-digit field prints what it always did. */
+        if ((c & 0xF) >= 3 && need > (c & 0xF)) {
+            /* The field keeps its width: the digits are drawn closer
+               together (number_width.h), so nothing after it moves and a
+               box sized for the field still holds it. A card number (three
+               digits) is not squeezed, as it never was. */
+            if ((c & 0xF) >= 4) {
+                NumberWidth_Squeeze(object->index_57, need, c & 0xF, object->field_5A);
+            }
+            c = (c & 0xF0) | need;
+        }
+        if ((c & 0xF) > 6) {
+            /* Past the six digits Text_EncodeDecimalDigits' table holds:
+               the same digits, lowest first, and blanks for leading zeros. */
+            for (i = 0; i < (c & 0xF); i++) {
+                buf[i] = value % TEXT_DECIMAL_RADIX;
+                value /= TEXT_DECIMAL_RADIX;
+            }
+            for (i = (c & 0xF) - 1; i > 0 && buf[i] == 0; i--) {
+                buf[i] = TEXT_DECIMAL_BLANK_DIGIT;
+            }
+        } else {
+            Text_EncodeDecimalDigits(*(s32 *)r, c & 0xF, buf);
+        }
     }
-#endif
+#else
     Text_EncodeDecimalDigits(*(s32 *)r, c & 0xF, buf);
+#endif
 
     h = 0;
 

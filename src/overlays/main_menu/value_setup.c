@@ -15,6 +15,16 @@
 #include "../../game/sound.h"
 #include "ordering_tables.h"
 #include "value_setup.h"
+#ifdef MEMORIES_PC
+#include "../../pc/cards/tables.h"
+/* The LP choice's top and step: 8000 by 500, or a mod's "limits"
+   (tables.h). */
+#define VALUE_SETUP_MAX Tables_TwoPlayerLifePoints(TABLES_TWO_PLAYER_MAX, DUEL_STARTING_LIFE_POINTS)
+#define VALUE_SETUP_STEP Tables_TwoPlayerLifePoints(TABLES_TWO_PLAYER_STEP, DUEL_LIFE_POINT_SELECTION_STEP)
+#else
+#define VALUE_SETUP_MAX DUEL_STARTING_LIFE_POINTS
+#define VALUE_SETUP_STEP DUEL_LIFE_POINT_SELECTION_STEP
+#endif
 
 /* The value-setup screen: the three lifecycle entry points
    main_run_two_player_duel_setup.c
@@ -203,17 +213,17 @@ s32 MainMenu_UpdateValueSetup(void)
                 value = D_801845C0[0].value;
                 SD_SEPlay(6, 0xFF, 0);
                 if (gInput_wPad1Repeat[0] & PAD_DIRECTION_LEFT) {
-                    value = (value - DUEL_LIFE_POINT_SELECTION_STEP > 0)
-                                ? (value - DUEL_LIFE_POINT_SELECTION_STEP)
+                    value = (value - VALUE_SETUP_STEP > 0)
+                                ? (value - VALUE_SETUP_STEP)
                                 : 1;
                 } else if (value < 2) {
-                    value = DUEL_LIFE_POINT_SELECTION_STEP;
+                    value = VALUE_SETUP_STEP;
                 } else {
                     value = (
-                        value + DUEL_LIFE_POINT_SELECTION_STEP <
-                        DUEL_STARTING_LIFE_POINTS + 1
-                    ) ? (value + DUEL_LIFE_POINT_SELECTION_STEP)
-                      : DUEL_STARTING_LIFE_POINTS;
+                        value + VALUE_SETUP_STEP <
+                        VALUE_SETUP_MAX + 1
+                    ) ? (value + VALUE_SETUP_STEP)
+                      : VALUE_SETUP_MAX;
                 }
                 D_801845C0[0].value = value;
             } else if (gInput_wPad1Repeat[0] & PAD_DIRECTION_UP) {
@@ -243,17 +253,17 @@ s32 MainMenu_UpdateValueSetup(void)
                 value = D_801845C0[1].value;
                 SD_SEPlay(6, 0xFF, 0);
                 if (gInput_wPad1Repeat[1] & PAD_DIRECTION_LEFT) {
-                    value = (value - DUEL_LIFE_POINT_SELECTION_STEP > 0)
-                                ? (value - DUEL_LIFE_POINT_SELECTION_STEP)
+                    value = (value - VALUE_SETUP_STEP > 0)
+                                ? (value - VALUE_SETUP_STEP)
                                 : 1;
                 } else if (value < 2) {
-                    value = DUEL_LIFE_POINT_SELECTION_STEP;
+                    value = VALUE_SETUP_STEP;
                 } else {
                     value = (
-                        value + DUEL_LIFE_POINT_SELECTION_STEP <
-                        DUEL_STARTING_LIFE_POINTS + 1
-                    ) ? (value + DUEL_LIFE_POINT_SELECTION_STEP)
-                      : DUEL_STARTING_LIFE_POINTS;
+                        value + VALUE_SETUP_STEP <
+                        VALUE_SETUP_MAX + 1
+                    ) ? (value + VALUE_SETUP_STEP)
+                      : VALUE_SETUP_MAX;
                 }
                 D_801845C0[1].value = value;
             } else if (gInput_wPad1Repeat[1] & PAD_DIRECTION_UP) {
@@ -277,6 +287,9 @@ void MainMenu_DrawValueSetup(void)
     s32 i;
     s32 count;
     s32 width;
+#ifdef MEMORIES_PC
+    s32 shift = 0;
+#endif
     s32 c106;
     s32 c114;
     s32 c112;
@@ -302,7 +315,7 @@ void MainMenu_DrawValueSetup(void)
         w->flags |= DISPLAY_OBJECT_FLAG_RENDERABLE;
         w = D_801845B0[0];
         if (w->update == 0) {
-            w->field_30.h.field_30 = first * 128 / DUEL_STARTING_LIFE_POINTS + 176;
+            w->field_30.h.field_30 = first * 128 / VALUE_SETUP_MAX + 176;
             D_801845B0[0]->field_30.h.field_32 = 111;
         }
     } else {
@@ -316,7 +329,7 @@ void MainMenu_DrawValueSetup(void)
         w->flags |= DISPLAY_OBJECT_FLAG_RENDERABLE;
         w = D_801845B0[1];
         if (w->update == 0) {
-            w->field_30.h.field_30 = second * 128 / DUEL_STARTING_LIFE_POINTS + 176;
+            w->field_30.h.field_30 = second * 128 / VALUE_SETUP_MAX + 176;
             D_801845B0[1]->field_30.h.field_32 = 139;
         }
     } else {
@@ -344,7 +357,7 @@ void MainMenu_DrawValueSetup(void)
     bar.y1 = 107;
     bar.y2 = 115;
     bar.y3 = 115;
-    bar.x1 = first * 128 / DUEL_STARTING_LIFE_POINTS + 176;
+    bar.x1 = first * 128 / VALUE_SETUP_MAX + 176;
     bar.x3 = bar.x1;
     GsSortPoly(&bar, D_800E9D90[2], 2048);
 
@@ -366,7 +379,7 @@ void MainMenu_DrawValueSetup(void)
     bar.y1 = 135;
     bar.y2 = 143;
     bar.y3 = 143;
-    bar.x1 = second * 128 / DUEL_STARTING_LIFE_POINTS + 176;
+    bar.x1 = second * 128 / VALUE_SETUP_MAX + 176;
     bar.x3 = bar.x1;
     GsSortPoly(&bar, D_800E9D90[2], 2048);
 
@@ -386,10 +399,23 @@ void MainMenu_DrawValueSetup(void)
     digit.g3 = 255;
     digit.b3 = 255;
 
-    width = MainMenu_CountDecimalDigits(DUEL_STARTING_LIFE_POINTS);
+    width = MainMenu_CountDecimalDigits(VALUE_SETUP_MAX);
+#ifdef MEMORIES_PC
+    /* Five digits (a mod's "limits", past 9999) fill the box drawn for
+       four, a pixel or two from each side, rather than a digit further
+       right, over its border. */
+    if (width > 4) {
+        width = 4;
+        shift = 4;
+    }
+#endif
     count = MainMenu_CountDecimalDigits(first);
     for (i = 0; i < count; i++) {
+#ifdef MEMORIES_PC
+        digit.x0 = width * 8 + 126 + shift - i * 8;
+#else
         digit.x0 = width * 8 + 126 - i * 8;
+#endif
         c106 = 106;
         c114 = 114;
         c112 = 112;
@@ -415,7 +441,11 @@ void MainMenu_DrawValueSetup(void)
 
     count = MainMenu_CountDecimalDigits(second);
     for (i = 0; i < count; i++) {
+#ifdef MEMORIES_PC
+        digit.x0 = width * 8 + 126 + shift - i * 8;
+#else
         digit.x0 = width * 8 + 126 - i * 8;
+#endif
         d134 = 134;
         d142 = 142;
         d112 = 112;
@@ -456,10 +486,10 @@ void MainMenu_UpdateValueWidgetTween(DisplayObject *o)
     valueB = D_801845C0[1].shown;
     if (o->field_6C == 2) {
         if (o->field_6B == 0) {
-            targetX = (valueA * 128) / DUEL_STARTING_LIFE_POINTS + 176;
+            targetX = (valueA * 128) / VALUE_SETUP_MAX + 176;
             targetY = 111;
         } else {
-            targetX = (valueB * 128) / DUEL_STARTING_LIFE_POINTS + 176;
+            targetX = (valueB * 128) / VALUE_SETUP_MAX + 176;
             targetY = 139;
         }
     }

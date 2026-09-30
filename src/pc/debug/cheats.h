@@ -25,12 +25,14 @@ int Cheats_ChestOnScreen(void);
 /* Unlock every CPU opponent in the live save. Reopen Free Duel to refresh
  * its portraits and selection grid; save normally to keep the unlocks. */
 int Cheats_UnlockAllFreeDuelists(void);
-/* Set the StarChips balance, capped at the game's own 999999. */
+/* Set the StarChips balance, capped at the game's own 999999 (or a mod's
+ * "limits", pc/cards/tables.h). */
 int Cheats_SetStarchips(unsigned value);
 /* The life points both sides start a duel against the CPU with
- * (SET_CHEAT_LIFE_POINTS, 1-9999, 8000 the console's), read by
- * Duel_InitSideStates. Two-player duels keep the values their own setup
- * screen chose. */
+ * (SET_CHEAT_LIFE_POINTS, 1-32767, 8000 the console's), read by
+ * Duel_InitSideStates. Another value than 8000 comes before a mod's
+ * "limits"; at 8000 the mod's start is used. Two-player duels keep the
+ * values their own setup screen chose. */
 int Cheats_StartingLifePoints(void);
 /* Nonzero while Free spending (SET_CHEAT_FREE_SPENDING) is on: the Password
  * screen's payment (overlays/password/shop.c) counts the price down without

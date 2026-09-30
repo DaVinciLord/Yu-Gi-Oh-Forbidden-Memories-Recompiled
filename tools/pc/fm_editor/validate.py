@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 from .gamedata import (CARD_COUNT, DECK_COPY_LIMIT, DECK_POOL_MIN_CARDS, DECK_SIZE, DUELIST_NAMES, POOLS,
                        POOL_LABELS, POOL_TOTAL, TYPE_MAGIC, TYPE_EQUIP, TYPE_RITUAL, exodia_piece)
-from . import art, campaign_map, fixed_decks
+from . import art, campaign_map, fixed_decks, limits
 from .model import KEY_RE, Project
 
 MOD_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,63}$")
@@ -20,8 +20,8 @@ MANIFEST_KEYS = ("id", "name", "version", "author", "description", "library", "e
                  "legacy_setting", "data", "textures", "cards", "audio", "min_api", "game", "requires", "after",
                  "conflicts", "priority", "settings", "fusions", "equips", "rituals", "drops", "decks", "text", "font",
                  "chest_overflow", "terrain_bonus", "trap_thresholds", "equip_bonus_default", "passwords",
-                 "starter")
-HOST_API = 6
+                 "starter", "limits")
+HOST_API = 8
 
 
 @dataclass
@@ -282,6 +282,8 @@ def validate(project: Project) -> list:
             _check_card(project, cid, out)
     _check_tables(project, out)
     _check_starter(project, out)
+    for level, where, message in limits.check(project.other.get("limits")):
+        out.append(Issue(level, "Limits", where, message))
     fixed_decks.check(project, out)
     art.check(project, out)
     campaign_map.check(project, out)

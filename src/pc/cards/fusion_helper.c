@@ -4,6 +4,7 @@
 #include "fusion.h"
 #include "cards.h"
 #include "rules.h"
+#include "tables.h"
 #include "pc/platform/settings.h"
 #include "pc/platform/platform.h"
 #include "pc/mods/events.h"
@@ -110,6 +111,7 @@ static void update(void)
     if (view.unsupported) return;
     {
         FusionLine none, ahead;
+        Fusion_SetCaps(Tables_StatCap(0), Tables_StatCap(1));
         Fusion_Plan(&rules, hand, NULL, 0, 0, &none, &view.target);
         Fusion_Plan(&rules, hand, prefix, picked, 0, &view.current, &ahead);
     }

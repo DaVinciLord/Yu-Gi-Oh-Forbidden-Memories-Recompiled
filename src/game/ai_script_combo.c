@@ -9,6 +9,7 @@
 #ifdef MEMORIES_PC
 #include "ai_opponent_data.h"   /* gDuel_bOpponentID */
 #include "pc/free_duel/duelists.h"
+#include "pc/cards/tables.h"
 #endif
 
 void AiScript_LoadDeckSize(void)
@@ -209,6 +210,16 @@ void AiScript_FindWeakest(void)
     best_slot = 0;
     type = table[AiScript_ReadByte()];
     best_power = CARD_STAT_MAX;
+#ifdef MEMORIES_PC
+    /* The bar is the cap of the stat ranked by when a mod's "limits" raise
+       it (tables.h), so a card at the cap still ties and is passed over as
+       at 9999. A lowered cap keeps the disc's bar: every strong card sits at
+       it, and none would be picked. */
+    {
+        s32 cap = mode == 0 ? Tables_StatCap(0) : mode == 1 ? Tables_StatCap(1) : Tables_StatCapEither();
+        if (cap > best_power) best_power = cap;
+    }
+#endif
     hide_face_down = table[AiScript_ReadByte()];
 #ifdef MEMORIES_PC
     /* "sight" in the duelist's "ai" over what the script asked for

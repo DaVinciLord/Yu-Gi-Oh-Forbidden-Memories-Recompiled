@@ -13,6 +13,12 @@ int Mods_SettingKeyValid(const char *key)
     return 1;
 }
 void Hooks_Clear(int owner) { (void)owner; }
+/* No mod's "limits": the game's own 999999. */
+long Mods_Limit(const char *name, long fallback)
+{
+    (void)name;
+    return fallback;
+}
 
 static void scale(MemoriesModEvent *e)
 {
@@ -44,6 +50,10 @@ int main(void)
 
     chips = 999997;
     assert(Mods_AwardStarchips(&chips, 5) == 999999 && chips == 999999);
+
+    /* A balance past the cap (a mod's "limits", off now) is kept, not cut. */
+    chips = 50000000;
+    assert(Mods_AwardStarchips(&chips, 5) == 50000000 && chips == 50000000);
 
     token = Mods_Subscribe(0, MEMORIES_EVENT_STARCHIP, 0, scale);
     assert(token);

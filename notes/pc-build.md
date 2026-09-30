@@ -284,9 +284,11 @@ game's debug menu, reached with the options case's input; see
 `MEMORIES_INPUT="700:0008,706:0000"` (scripted pad bits from a frame on;
 `MEMORIES_INPUT2` the same for the second pad, which then counts as
 connected: two-player trades and duels),
-`MEMORIES_DEBUG_CHEST=N` (N of every card in the trunk) and
+`MEMORIES_DEBUG_CHEST=N` (N of every card in the trunk),
 `MEMORIES_DEBUG_DECK="723-762"` (the deck, as ids and ranges repeated to
-forty), both once a save is live ([More cards](more-cards.md)),
+forty) and `MEMORIES_DEBUG_STARCHIPS=N` (the balance, as Set StarChips puts
+it, capped at 999999 or a mod's `limits`), all once a save is live
+([More cards](more-cards.md)),
 `MEMORIES_NO_AUDIO=1`, `MEMORIES_DUMP_AUDIO=path` (raw s16le stereo 44.1 kHz
 instead of a device),
 `MEMORIES_TEST_EXEC_GUEST=1` (guest RAM mapped executable, as without DEP,
@@ -558,7 +560,11 @@ before a duel, is open, and says **Leave Build Deck first**
 writes it back over the save as it closes, so cards given meanwhile were
 neither listed nor kept. `MEMORIES_DEBUG_CHEST` waits for the same. The settings
 rows (LP, free spending, the CPU's hand) change nothing in the save and work
-at any time.
+at any time. Starting LP is 1 to 32767 (`cheat_life_points`,
+`MEMORIES_CHEAT_LIFE_POINTS`; the menu offers 1000, 4000, 8000 and 9999); at
+the console's 8000 a mod's `limits` decide the start instead, and any other
+value comes first. Set StarChips and `MEMORIES_DEBUG_STARCHIPS` stop at the
+game's 999999, or at a mod's `limits` (notes/gameplay-tables.md).
 
 ### Back to the title screen
 
