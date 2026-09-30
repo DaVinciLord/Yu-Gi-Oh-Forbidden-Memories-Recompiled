@@ -13,7 +13,7 @@ from the game's discs is included.
 The Linux executable is built against Debian 11's libraries
 (tools/pc/build_linux_sysroot.py), as every Linux build is, so it runs on
 other people's Linux. Both builds are smoke tested before they are packed."""
-import argparse, datetime, os, re, shutil, subprocess, sys, tarfile, zipfile
+import argparse, datetime, os, re, shutil, struct, subprocess, sys, tarfile, zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DIST = os.path.join(ROOT, "dist")
@@ -58,6 +58,27 @@ def strip(executable):
     import build_win32_deps
     build_win32_deps.use_toolchain()
     subprocess.run(["llvm-strip", "--strip-all", executable], check=True)
+    set_pe_checksum(executable)
+
+
+def set_pe_checksum(executable):
+    """Fill in the PE header's CheckSum, which the linker leaves 0 (Windows
+    checks it only for drivers). Virus scanners' models read a zero or wrong
+    one as a sign of a hand-made or patched file; the Microsoft toolchain's
+    /RELEASE writes it. The algorithm is ImageHlp's CheckSumMappedFile."""
+    with open(executable, "rb") as handle:
+        data = bytearray(handle.read())
+    field = int.from_bytes(data[0x3C:0x40], "little") + 24 + 64   # e_lfanew, PE signature + COFF header, CheckSum
+    data[field:field + 4] = bytes(4)
+    padded = data + bytes(len(data) % 2)
+    total = 0
+    for (word,) in struct.iter_unpack("<H", padded):
+        total += word
+        total = (total & 0xFFFF) + (total >> 16)
+    total = (total & 0xFFFF) + (total >> 16)
+    data[field:field + 4] = (total + len(data)).to_bytes(4, "little")
+    with open(executable, "wb") as handle:
+        handle.write(data)
 
 
 def stage(system, label):

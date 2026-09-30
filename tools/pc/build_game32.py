@@ -149,9 +149,24 @@ def run(command):
         sys.exit(f"{' '.join(command[:6])} ...\n{result.stderr}")
     return result.stdout
 
+def flags_changed(path, flags):
+    """When these flags were last different: path keeps them, rewritten
+    only when they change, so its time is when they did (--release adds or
+    drops one, in the same build directory)."""
+    text = "\n".join(flags) + "\n"
+    try:
+        with open(path) as handle:
+            same = handle.read() == text
+    except OSError:
+        same = False
+    if not same:
+        with open(path, "w") as handle:
+            handle.write(text)
+    return os.path.getmtime(path)
+
 def compile_unit(job):
-    source, obj, flags, renames = job
-    if os.path.exists(obj) and os.path.getmtime(obj) >= NEWEST_HEADER and \
+    source, obj, flags, renames, newest = job
+    if os.path.exists(obj) and os.path.getmtime(obj) >= newest and \
             os.path.getmtime(obj) >= os.path.getmtime(source):
         return
     run([CC, *flags, "-c", source, "-o", obj])
@@ -621,8 +636,14 @@ def main():
                 if line.split():
                     out.write(" ".join(PREFIX + name for name in line.split()) + "\n")
         renames_file = f"{options.build}/host_symbol_renames.txt"
-    jobs = [(s, obj(s), CFLAGS, renames_file) for s in game]
-    jobs += [(s, obj(s), NATIVE_CFLAGS, None) for s in NATIVE]
+    # Test-only paths (MEMORIES_TEST_EXEC_GUEST, src/pc/guest/image.c) are
+    # left out of a release: virus scanners' heuristics hold executable
+    # memory against a program. smoke.py runs them in the other builds.
+    if not options.release:
+        NATIVE_CFLAGS.append("-DMEMORIES_TEST_HOOKS")
+    native_newest = max(NEWEST_HEADER, flags_changed(f"{options.build}/native-flags.txt", NATIVE_CFLAGS))
+    jobs = [(s, obj(s), CFLAGS, renames_file, NEWEST_HEADER) for s in game]
+    jobs += [(s, obj(s), NATIVE_CFLAGS, None, native_newest) for s in NATIVE]
     with concurrent.futures.ThreadPoolExecutor(os.cpu_count()) as pool:
         list(pool.map(compile_unit, jobs))
 

@@ -117,12 +117,13 @@ How it works:
   primary mechanism, and it needs nothing from the system: the game works
   without DEP. The fault of executing guest RAM (mapped without execute
   permission) is a second safety net, which works only where DEP is on; the
-  game turns DEP on where it can (see "Faults" in the Windows part). Before the
+  game leaves the system's DEP policy as it is (see "Faults" in the Windows part). Before the
   thunks it was the only one, and a player with DEP off (Windows `AlwaysOff`)
   crashed on the title's Options: the handler at `0x80038b4c` ran its MIPS
   bytes as x86. `MEMORIES_TEST_EXEC_GUEST=1` maps guest RAM executable, as it
   is without DEP, on any machine: with it, only the thunks stand between a
-  guest call and the MIPS bytes. `pc_branch_thunks` (CTest) checks all seven
+  guest call and the MIPS bytes (builds that are not releases only; the smoke
+  case `options-exec-guest` uses it). `pc_branch_thunks` (CTest) checks all seven
   thunks' register and stack contract. clang also turns switch jump tables
   into compare trees; GCC sends them through a thunk too.
 - Undefined functions become stubs calling `Memories_Unimplemented`. Current
@@ -292,7 +293,8 @@ it, capped at 999999 or a mod's `limits`), all once a save is live
 `MEMORIES_NO_AUDIO=1`, `MEMORIES_DUMP_AUDIO=path` (raw s16le stereo 44.1 kHz
 instead of a device),
 `MEMORIES_TEST_EXEC_GUEST=1` (guest RAM mapped executable, as without DEP,
-to check that the branch thunks carry every guest call; see "How it works"),
+to check that the branch thunks carry every guest call; see "How it works";
+not in release builds),
 and `MEMORIES_STUB_TRACE=1`. Traces on stderr: `MEMORIES_TRACE_SPU=1` (every
 `SpuSetKeyOnWithAttr`), `MEMORIES_TRACE_INPUT=1` (scripted pad changes with
 frame and VBlank numbers; script frames are presented frames, which run
@@ -1988,6 +1990,14 @@ at 2x and up.
 main menu after one cursor move (4:3 and widescreen), Options, and the first
 campaign duel with both code mods on (a 3D Monsters model standing on a
 face-up card at frame 6760; the field turned by the hand camera's L1 at 6560).
+Options is played again with guest RAM executable (`options-exec-guest`,
+`MEMORIES_TEST_EXEC_GUEST=1`, as a machine without DEP): the same frame, so
+the branch thunks carried every guest call. A case's `environment` sets
+variables for it alone, and its `expect_output` must appear in the game's
+output. That variable is read only by builds that are not releases
+(`MEMORIES_TEST_HOOKS`, which `build_game32.py` defines without
+`--release`): the runner skips the case, saying so, for an executable that
+does not contain the variable's name, such as the release `package.py` smokes.
 Each run works in a folder of its own, `tmp/pc/smoke/run-XXXXXXXX` (printed
 at the start), removed when every case passes and kept with the differing
 image when one fails: worktrees share `tmp/` through a junction, and two runs
@@ -2356,8 +2366,7 @@ is written: `crash-<pid>.txt` or `hang-<pid>.txt` in `Crash_ReportDir`,
 with a message box naming it (not when headless or scripted;
 `MEMORIES_CRASH_DIALOG=0/1` decides). The two share a block of memory the
 game writes and the monitor reads, so what the game knew survives however
-it ended: facts (build and commit, OS or Wine version, CPU, memory, on
-Windows whether DEP is on for the game and the system's DEP policy, GPU and
+it ended: facts (build and commit, OS or Wine version, CPU, memory, GPU and
 driver, SDL video and audio drivers, every setting but the retired ones, the
 applied mods, the user folder and whether it can be written to, with the
 reason when not), the
@@ -2493,11 +2502,13 @@ What differs from Linux, and why:
 - **Faults.** A vectored exception handler in `image.c` does what the
   SIGSEGV/SIGTRAP handlers do (guest-call redirect, low-address fixup); the
   guest-call redirect is the second net behind the branch thunks, since it
-  needs DEP. The game works without DEP and turns it on where it can as a
-  second safety net: a 32-bit process follows the system's DEP policy (only
-  64-bit processes always have DEP), so under `OptIn`, the default,
-  `--nxcompat` turns it on, under `OptOut` with the game excepted
-  `SetProcessDEPPolicy` in `image.c` does, and under `AlwaysOff` nothing can;
+  needs DEP. The game works without DEP; where DEP is on it is a second
+  safety net. A 32-bit process follows the system's DEP policy (only 64-bit
+  processes always have DEP), so under `OptIn`, the default, `--nxcompat`
+  turns it on. The game does not call `SetProcessDEPPolicy` for `OptOut`
+  with the game excepted: a program switching its own DEP policy is what
+  virus scanners' heuristics look for (0.1.4 was flagged), and the thunks
+  make it unnecessary;
   32-bit processes on 64-bit Windows can report the single step as
   `STATUS_WX86_SINGLE_STEP`. Fatal exceptions raised in the executable are
   reported by `crash.c` through `Win32_SetCrashReporter`.

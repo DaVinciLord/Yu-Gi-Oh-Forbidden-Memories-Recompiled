@@ -1428,7 +1428,7 @@ static int *active_hot(void) { return open_sub >= 0 ? &hot_sub : &hot_item; }
 
 /* The cheats that change the save refuse before a game is loaded. */
 /* Help > System info for bug reports: this build's version and what a crash
- * report starts with (monitor.h: the build, the system, the GPU, DEP, the
+ * report starts with (monitor.h: the build, the system, the GPU, the
  * settings, the mods), put on the clipboard and in system-info.txt in the
  * user folder, so a report carries them without a crash. The notice shows
  * it but for the settings, a long line. The file is opened before the facts
