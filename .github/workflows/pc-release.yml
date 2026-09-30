@@ -26,6 +26,10 @@ jobs:
             runner: windows-2022
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
+    env:
+      # Whether the repository has a VirusTotal key; the key itself is
+      # handed only to the step that uses it.
+      VT_ENABLED: ${{ secrets.VT_API_KEY != '' }}
     defaults:
       run:
         shell: bash
@@ -106,6 +110,49 @@ jobs:
                       archive.write(path, f"{folder}/{os.path.relpath(path, 'tmp/fm-editor/fm-editor')}".replace(os.sep, "/"))
               archive.write("tools/pc/fm_editor/README.md", f"{folder}/fm-editor-README.md")
           EOF
+      # The shipped programs on VirusTotal (notes/pc-release.md, "VirusTotal"):
+      # uploaded, so only for release builds: tags and manual runs, never
+      # pull requests (whose builds are not public, and which may carry
+      # anyone's code) nor every push to master (the free tier's quota).
+      # Skipped without the VT_API_KEY secret (forks). Detections only warn;
+      # the table goes to the job summary. McAfeeD's reputation verdict
+      # (ti!<hash>) is on every new file, hence a threshold above 0.
+      - name: VirusTotal
+        if: runner.os == 'Windows' && (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && env.VT_ENABLED == 'true'
+        continue-on-error: true
+        timeout-minutes: 30
+        env:
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+          VT_MAX_DETECTIONS: "2"
+        run: |
+          python - <<'EOF'
+          import os, zipfile
+          version = os.environ["PACKAGE_VERSION"]
+          target = os.path.join(os.environ["RUNNER_TEMP"], "vt")
+          os.makedirs(target, exist_ok=True)
+          for archive, name in ((f"dist/yfm-redecomp-{version}-windows.zip", "/memories-pc.exe"),
+                                (f"dist/fm-editor-{version}-windows.zip", "/fm-editor.exe")):
+              with zipfile.ZipFile(archive) as package:
+                  member = next(entry for entry in package.namelist() if entry.endswith(name))
+                  with open(os.path.join(target, name[1:]), "wb") as handle:
+                      handle.write(package.read(member))
+          EOF
+          status=0
+          # --timeout 600: two new files' analyses still leave the step's
+          # 30 minutes room to write the summary.
+          python tools/pc/vt_check.py --max "$VT_MAX_DETECTIONS" --timeout 600 \
+            --markdown "$RUNNER_TEMP/vt.md" --label memories-pc.exe --label fm-editor.exe \
+            "$RUNNER_TEMP/vt/memories-pc.exe" "$RUNNER_TEMP/vt/fm-editor.exe" || status=$?
+          {
+            echo "### VirusTotal ($PACKAGE_VERSION)"
+            echo
+            if [ -f "$RUNNER_TEMP/vt.md" ]; then cat "$RUNNER_TEMP/vt.md"; else echo "The check did not finish (exit $status); see the step log."; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          case $status in
+            0) ;;
+            1) echo "::warning title=VirusTotal::a shipped program has more than $VT_MAX_DETECTIONS detections (job summary)" ;;
+            *) echo "::warning title=VirusTotal::the check failed (exit $status); see the step log" ;;
+          esac
       # Built in Debian 11, like the game (tools/pc/build_linux_sysroot.py):
       # a program built on the runner would ask for Ubuntu 24.04's glibc.
       # The python image carries Tk, which PyInstaller bundles.
