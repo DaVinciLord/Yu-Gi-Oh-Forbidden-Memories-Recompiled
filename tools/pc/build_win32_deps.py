@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch and build the Windows game executable's libraries (i686, llvm-mingw).
+"""Fetch and build the Windows game executable's libraries (llvm-mingw).
 
 The Linux build takes its libraries from Debian 11 and builds SDL3 from source
 (tools/pc/build_linux_sysroot.py). On Windows this script provides them under
@@ -10,11 +10,18 @@ i686-w64-mingw32-clang: each from PATH when installed, else fetched
 (tools/pc/fetch_tools.py on Windows; on Linux this script fetches llvm-mingw's
 Linux release into tmp/pc/llvm-mingw, which build_game32.py then
 cross-compiles with). Nothing needs installing by hand (notes/pc-build.md,
-"Windows")."""
+"Windows").
+
+--arch x86_64 builds the same libraries for the 64-bit executable
+(build_game32.py --target windows-x64) into tmp/pc/win64-deps, from the same
+downloads."""
 import hashlib, os, shutil, subprocess, sys, tarfile, urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUT = os.path.join(ROOT, "tmp", "pc", "win32-deps")
+# The pinned archives, shared by both architectures' builds.
+DOWNLOADS = os.path.join(ROOT, "tmp", "pc", "win32-deps", "downloads")
+TRIPLE = "i686-w64-mingw32"
 ARCHIVES = {
     "zlib": ("https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.gz",
              "bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16"),
@@ -25,7 +32,7 @@ ARCHIVES = {
     "sdl": ("https://github.com/libsdl-org/SDL/releases/download/release-3.4.16/SDL3-devel-3.4.16-mingw.tar.gz",
             "c7ef65bd72eabac6e5b535411dbd8d5824d0aab24fd62ff8812666b336f18a9c"),
 }
-CC = "i686-w64-mingw32-clang"
+CC = TRIPLE + "-clang"
 # llvm-mingw for Linux hosts: the same toolchain the Windows build uses, so
 # a Linux checkout builds the Windows executable without a Windows machine.
 TOOLCHAIN = os.path.join(ROOT, "tmp", "pc", "llvm-mingw")
@@ -49,7 +56,7 @@ def use_toolchain():
 
 def fetch(name):
     url, digest = TOOLCHAIN_ARCHIVE if name == "llvm-mingw" else ARCHIVES[name]
-    path = os.path.join(OUT, "downloads", os.path.basename(url))
+    path = os.path.join(DOWNLOADS, os.path.basename(url))
     if not os.path.exists(path):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         print(f"fetch {url}")
@@ -83,6 +90,15 @@ def cmake(name, source, *options):
     subprocess.run(["cmake", "--build", build, "--target", "install"], check=True)
 
 
+def configure(arch):
+    """Build for `arch`: "i686" (the 32-bit game, tmp/pc/win32-deps) or
+    "x86_64" (the 64-bit game, tmp/pc/win64-deps)."""
+    global OUT, TRIPLE, CC
+    TRIPLE = f"{arch}-w64-mingw32"
+    CC = TRIPLE + "-clang"
+    OUT = os.path.join(ROOT, "tmp", "pc", "win32-deps" if arch == "i686" else "win64-deps")
+
+
 def main():
     if sys.platform != "win32" and not os.path.isdir(TOOLCHAIN):
         os.replace(fetch("llvm-mingw"), TOOLCHAIN)
@@ -100,9 +116,13 @@ def main():
     cmake("freetype", fetch("freetype"), "-DBUILD_SHARED_LIBS=OFF", "-DFT_DISABLE_ZLIB=ON", "-DFT_DISABLE_BZIP2=ON",
           "-DFT_DISABLE_PNG=ON", "-DFT_DISABLE_HARFBUZZ=ON", "-DFT_DISABLE_BROTLI=ON")
     sdl = fetch("sdl")
-    shutil.copytree(os.path.join(sdl, "i686-w64-mingw32"), os.path.join(OUT, "sdl"), dirs_exist_ok=True)
-    print(f"win32 deps: {OUT}")
+    shutil.copytree(os.path.join(sdl, TRIPLE), os.path.join(OUT, "sdl"), dirs_exist_ok=True)
+    print(f"{TRIPLE} deps: {OUT}")
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--arch", choices=("i686", "x86_64"), default="i686")
+    configure(parser.parse_args().arch)
     main()
