@@ -111,17 +111,19 @@ jobs:
               archive.write("tools/pc/fm_editor/README.md", f"{folder}/fm-editor-README.md")
           EOF
       # The shipped programs on VirusTotal (notes/pc-release.md, "VirusTotal"):
-      # uploaded, so only for builds that are public anyway, never for pull
-      # requests (whose builds are not, and which may carry anyone's code),
-      # and skipped without the VT_API_KEY secret (forks). Detections only
-      # warn; the table goes to the job summary.
+      # uploaded, so only for release builds: tags and manual runs, never
+      # pull requests (whose builds are not public, and which may carry
+      # anyone's code) nor every push to master (the free tier's quota).
+      # Skipped without the VT_API_KEY secret (forks). Detections only warn;
+      # the table goes to the job summary. McAfee's reputation verdict
+      # (ti!<hash>) is on every new file, hence a threshold above 0.
       - name: VirusTotal
-        if: runner.os == 'Windows' && github.event_name != 'pull_request' && env.VT_ENABLED == 'true'
+        if: runner.os == 'Windows' && (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && env.VT_ENABLED == 'true'
         continue-on-error: true
         timeout-minutes: 30
         env:
           VT_API_KEY: ${{ secrets.VT_API_KEY }}
-          VT_MAX_DETECTIONS: "0"
+          VT_MAX_DETECTIONS: "2"
         run: |
           python - <<'EOF'
           import os, zipfile

@@ -189,9 +189,11 @@ check itself failed (no key, network, quota, `--timeout`).
 **In CI.** The release workflow's *VirusTotal* step (Windows job) runs the
 script on the shipped `memories-pc.exe` and `fm-editor.exe`, taken from
 the archives, and writes the table, the matrix and the links into the job
-summary. It warns above `VT_MAX_DETECTIONS` (0) and never fails the build.
-It runs on pushes to `master`, tags and manual runs, so those builds are
-uploaded; never on pull requests, and it is skipped when the repository has
-no `VT_API_KEY` secret (forks). A repository admin adds the secret with
+summary. It warns above `VT_MAX_DETECTIONS` (2) and never fails the build:
+McAfee's reputation verdict (`ti!<hash>`) marks every file VirusTotal has
+just met, so 0 would warn on every release. It runs only on version tags and
+manual runs (*Run workflow*), so only those builds are uploaded; never on
+pull requests nor on pushes to `master`, and it is skipped when the
+repository has no `VT_API_KEY` secret (forks). A repository admin adds the secret with
 `gh secret set VT_API_KEY` (it prompts for the value, so it stays out of
 the shell history); removing it turns the step off.
