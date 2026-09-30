@@ -48,6 +48,8 @@ class LimitsTest(unittest.TestCase):
         self.assertEqual(found, {("warning", "stats"), ("error", "attack"), ("error", "life_points.start"),
                                  ("error", "life_points.strat"), ("warning", "life_points.duelists \"Nobody\""),
                                  ("warning", "two_player.start"), ("warning", "chest"), ("error", "lp")})
+        found = {where for _, where, _ in limits.check({"two_player": {"max": 4000, "step": 10000}})}
+        self.assertEqual(found, {"two_player.start", "two_player.step"})
         self.assertEqual(limits.check(5)[0][0], "error")
 
     def test_manifest_and_validate(self):

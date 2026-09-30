@@ -37,8 +37,9 @@ void AiScript_FindKiller(void) {
     best = CARD_STAT_MAX;
 #ifdef MEMORIES_PC
     /* The lowest attack that still wins, from the attack cap down: a mod's
-       "limits" may move it (tables.h). */
-    best = Tables_StatCap(0);
+       "limits" may raise it (tables.h). A lowered cap keeps the disc's bar,
+       or a card at the cap would tie it and never be picked. */
+    if (Tables_StatCap(0) > best) best = Tables_StatCap(0);
 #endif
     m = gAiScript_aMemory[AiScript_ReadByte()];
     k = 0;

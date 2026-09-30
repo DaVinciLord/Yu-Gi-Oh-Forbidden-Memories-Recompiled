@@ -522,6 +522,10 @@ int main(void)
     assert(Tables_StartingLifePoints(1, 9, 8000) == 32767 && Tables_MaxLifePoints(8000) == 32767);
     assert(Tables_ChestLimit() == 255 && Tables_StarchipCap() == 99999999u && Tables_FreeDuelRecordCap() == 9999);
     assert(Tables_TwoPlayerLifePoints(TABLES_TWO_PLAYER_START, 8000) == 25000);   /* held at the top */
+    /* A top under the disc's start or the step: both are held at it. */
+    add("lim3b", "{\"limits\": {\"two_player\": {\"max\": 4000, \"step\": 10000}}}");
+    assert(Tables_TwoPlayerLifePoints(TABLES_TWO_PLAYER_START, 8000) == 4000);
+    assert(Tables_TwoPlayerLifePoints(TABLES_TWO_PLAYER_STEP, 500) == 4000);
     notes = 0;
     add("lim4", "{\"limits\": {\"life_points\": {\"duelists\": {\"Nobody\": 5, \"Heishin\": [1]}},"
                 " \"two_player\": 3}}");

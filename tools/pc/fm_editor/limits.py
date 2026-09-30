@@ -165,9 +165,11 @@ def check(limits) -> list:
         for key in two:
             if key not in TWO_PLAYER_KEYS:
                 out.append(("error", f"two_player.{key}", f"no \"{key}\" (start, max, step)"))
-        start, top = two.get("start"), two.get("max", 8000)
+        start, top, step = two.get("start", 8000), two.get("max", 8000), two.get("step", 500)
         if isinstance(start, int) and isinstance(top, int) and start > top:
             out.append(("warning", "two_player.start", f"past the most to pick ({top}): the choice starts at {top}"))
+        if isinstance(step, int) and isinstance(top, int) and step > top:
+            out.append(("warning", "two_player.step", f"past the most to pick ({top}): a step is {top}"))
     return out
 
 

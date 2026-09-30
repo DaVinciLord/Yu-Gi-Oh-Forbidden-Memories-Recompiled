@@ -1692,13 +1692,14 @@ int Tables_TwoPlayerLifePoints(int which, int retail)
 {
     int value;
     if (which < 0 || which > TABLES_TWO_PLAYER_STEP) return retail;
-    value = limit_two_player[which];
-    if (which == TABLES_TWO_PLAYER_START && value) {
-        /* A start past the choice's top begins at the top. */
+    value = limit_two_player[which] ? limit_two_player[which] : retail;
+    if (which != TABLES_TWO_PLAYER_MAX) {
+        /* A start or a step past the choice's top is the top, the disc's
+         * start too when a mod only lowers the top. */
         int top = Tables_TwoPlayerLifePoints(TABLES_TWO_PLAYER_MAX, DUEL_STARTING_LIFE_POINTS);
         if (value > top) value = top;
     }
-    return value ? value : retail;
+    return value;
 }
 
 unsigned Tables_StarchipCap(void)
