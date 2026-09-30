@@ -55,6 +55,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 EXEMPT_RECORDS = {"MainMenuComparators"}
 MACRO_HEADER = "src/port_ptr.h"
+HOST_CODE = "src/pc/"
 
 KEYWORDS = {
     "auto", "break", "case", "char", "const", "continue", "default", "do",
@@ -1004,7 +1005,12 @@ def run(root: Path = ROOT):
             continue
         text = path.read_text(encoding="utf-8", errors="surrogateescape")
         units.append(parse(relative, text))
-    return check(units)
+    findings, counts, extra = check(units)
+    # The native port's own code (src/pc) is host code: its pointers are
+    # native ones, and its longs are the host's. It is still read above, so
+    # a name it initializes keeps its exemption in game code.
+    findings = [f for f in findings if not f[0].startswith(HOST_CODE)]
+    return findings, counts, extra
 
 
 # -- self-test --------------------------------------------------------------
