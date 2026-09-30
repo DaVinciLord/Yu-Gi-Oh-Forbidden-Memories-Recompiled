@@ -201,8 +201,34 @@ int main(void)
     add("a", "{\"rituals\": [{\"card\": \"Black Luster Ritual\", \"tributes\": [1, 2, \"test:copy:1\"], \"result\": 12}]}");
     assert(Tables_Ritual(21, own) == 1 && own[0] == 21 && own[3] == 723 && own[4] == 12 && own[5] == 0);
     assert(Tables_Ritual(22, own) == -1);
+    {
+        TablesRitualRequirement req[3];
+        unsigned short result = 0;
+        add("conditions", "{\"rituals\": [{\"card\": 21, \"tributes\": ["
+            "{\"min_defense\": 1000, \"max_defense\": 2999, \"defense_gt_attack\": true},"
+            "{\"card\": 11},"
+            "{\"type\": \"Dragon\", \"min_attack\": 500, \"max_attack\": 2500}], \"result\": 12}]}");
+        assert(Tables_Ritual(21, own) == -1);
+        assert(Tables_RitualRequirements(21, req, &result) == 1 && result == 12);
+        assert(req[0].card == 0 && req[0].min_defense == 1000 && req[0].max_defense == 2999 && req[0].defense_gt_attack == 1);
+        assert(req[1].card == 11 && req[1].type == -1);
+        assert(req[2].type == 0 && req[2].min_attack == 500 && req[2].max_attack == 2500);
+        add("condition-groups", "{\"rituals\": [{\"card\": 21, \"tributes\": ["
+            "{\"fusion_group\": \"Female\", \"min_level\": 4, \"max_level\": 6},"
+            "{\"fusion_group\": \"Bugrothian\"},"
+            "{\"card\": \"test:copy:1\"}], \"result\": \"test:copy:1\"}]}");
+        result = 0;
+        assert(Tables_RitualRequirements(21, req, &result) == 1 && result == 723);
+        assert(req[0].fusion_group == CARD_FUSION_GROUP_FEMALE && req[0].min_level == 4 && req[0].max_level == 6);
+        assert(req[1].fusion_group == CARD_FUSION_GROUP_BUGROTHIAN);
+        assert(req[2].card == 723); /* stable identity resolves to an added card, not a retail-only id */
+    }
     add("b", "{\"rituals\": [{\"card\": 21, \"result\": null}]}");
     assert(Tables_Ritual(21, own) == 0);
+    {
+        TablesRitualRequirement req[3];
+        assert(Tables_RitualRequirements(21, req, 0) == 0);
+    }
 
     /* Pools. The disc's: cards 101-116 at 128 each. */
     for (id = 101; id <= 116; id++) retail[id - 1] = 128;
