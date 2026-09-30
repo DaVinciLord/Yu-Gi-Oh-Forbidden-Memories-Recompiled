@@ -135,3 +135,63 @@ a newer one is out; it never installs it itself ([updates](updates.md)). `--vers
 version the build compares with (`MEMORIES_VERSION`); CI passes the tag, so
 tag builds check and `dev-*` builds do not. User settings and memory-card
 saves persist; cross-build save-state compatibility is not guaranteed.
+
+## VirusTotal
+
+Generic machine-learning and heuristic engines keep flagging the Windows
+`memories-pc.exe` (v0.1.4-preview.1: 11 of 71). `tools/pc/vt_check.py`
+measures that without uploading by hand on the website: it looks each file
+up by SHA-256 (API v3), uploads the ones VirusTotal has not seen, waits for
+the analysis and prints detections/total, the label of every engine that
+flagged the file, an engine × file matrix when there are several files, and
+each file's page (`https://www.virustotal.com/gui/file/<sha256>`). The
+count is the engines that said "malicious", out of those that gave any
+verdict, as the website counts; "suspicious" verdicts are listed apart.
+
+**Key.** Sign up at virustotal.com (a free community account); the key is
+under the profile menu, *API key*. Keep it out of the repository: the script
+reads `VT_API_KEY`, else `~/.config/yfm/vt_api_key` (on Windows
+`%USERPROFILE%\.config\yfm\vt_api_key`; make it readable only by you). It
+never prints the key, only where it came from.
+
+**Terms and limits.** The free public API is for non-commercial use only
+(this project qualifies; a commercial product or service needs VirusTotal's
+premium API). It allows 4 requests a minute, 500 a day and 15.5 thousand a
+month. The script spaces its requests 15 s apart (`--rate`), backs off on
+HTTP 429, and stops at `--daily` requests (500) in one run. A lookup is one
+request; an upload is one or two more, then one per 15 s until the analysis
+is done, usually a few minutes.
+
+**Uploads are public.** Every uploaded file is shared with the antivirus
+vendors and downloadable by VirusTotal's premium users. Upload only builds
+that are, or will be, public anyway: release candidates of our own
+executable. Never anything with game data (a disc image, extracted files,
+HD packs), nor builds nobody will ship. `--lookup-only` never uploads.
+
+**Bisecting locally.** Build the variants exactly like the release (as
+`package.py windows` does: `build_game32.py --target windows --backend sdl
+--release --build tmp/pc/<name>` with `MEMORIES_VERSION` set, then that
+commit's `package.strip()` on a copy, since the shipped exe is stripped; a
+build dir of its own, because worktrees share `tmp/`). Then:
+
+```sh
+python tools/pc/vt_check.py --lookup-only old-release.exe      # already public: no upload
+python tools/pc/vt_check.py --label master --label no-dep a.exe b.exe --json vt.json
+python tools/pc/vt_check.py --reanalyze --label v0.1.4 v0.1.4.exe   # rescan with today's engines
+```
+
+The same engine names down one column tell which change moved which
+engine. Engines' verdicts drift over days (a rescan can flag a file that
+was clean when it shipped), so compare variants scanned the same day.
+`--max N` exits 1 when a file has more than N detections; 2 means the
+check itself failed (no key, network, quota, `--timeout`).
+
+**In CI.** The release workflow's *VirusTotal* step (Windows job) runs the
+script on the shipped `memories-pc.exe` and `fm-editor.exe`, taken from
+the archives, and writes the table, the matrix and the links into the job
+summary. It warns above `VT_MAX_DETECTIONS` (0) and never fails the build.
+It runs on pushes to `master`, tags and manual runs, so those builds are
+uploaded; never on pull requests, and it is skipped when the repository has
+no `VT_API_KEY` secret (forks). A repository admin adds the secret with
+`gh secret set VT_API_KEY` (it prompts for the value, so it stays out of
+the shell history); removing it turns the step off.
