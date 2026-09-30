@@ -5,7 +5,6 @@
  * the first slot that is not this table's. */
 #include "pgxp.h"
 #include <math.h>
-#include <stdlib.h>
 #include <string.h>
 
 /* A power of two, four times a busy frame's vertices (a full duel field
@@ -25,10 +24,7 @@ typedef struct {
     float x, y, w;
 } Entry;
 
-/* Both kinds' tables are 6.5 MB, allocated on first use: as static arrays
- * they swelled the exe's zero-filled .data enough for antivirus heuristics
- * (Bitdefender's Gen:Variant.Yogi) to flag it. */
-static Entry (*table)[TABLE_SIZE];
+static Entry table[2][TABLE_SIZE];
 static unsigned frame = 2;
 int Pgxp_Active;
 
@@ -41,10 +37,8 @@ static unsigned first(uint32_t word)
  * (`age` 1), or NULL. */
 static Entry *lookup(uint32_t word, unsigned age, int make)
 {
-    Entry *slots;
+    Entry *slots = table[(frame - age) & 1];
     unsigned at = first(word), n;
-    if (!table && !(table = calloc(2, sizeof *table))) return 0;
-    slots = table[(frame - age) & 1];
     for (n = 0; n < PROBES; n++, at = (at + 1) & (TABLE_SIZE - 1)) {
         Entry *entry = &slots[at];
         if (entry->frame != frame - age) {
@@ -101,14 +95,12 @@ typedef struct {
     float x, y, w;
 } Placed;
 
-static Placed (*placed)[TABLE_SIZE];
+static Placed placed[2][TABLE_SIZE];
 
 static Placed *place(uint32_t address, unsigned age, int make)
 {
-    Placed *slots;
+    Placed *slots = placed[(frame - age) & 1];
     unsigned at = first(address), n;
-    if (!placed && !(placed = calloc(2, sizeof *placed))) return 0;
-    slots = placed[(frame - age) & 1];
     for (n = 0; n < PROBES; n++, at = (at + 1) & (TABLE_SIZE - 1)) {
         Placed *entry = &slots[at];
         if (entry->frame != frame - age) {
