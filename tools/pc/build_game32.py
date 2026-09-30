@@ -854,8 +854,11 @@ def main():
         # -debug:symtab keeps the COFF symbol table beside the PDB (--pdb
         # alone drops it): the save-state tables below are read from it
         # with nm, and an empty one gave every build the same id.
+        # -pdbaltpath records the PDB by bare name, not the builder's path:
+        # the GitHub runner's D:/a/... path was enough for Bitdefender to
+        # flag the CI builds (Gen:Variant.Yogi) when local ones passed.
         run([CC, *(["-mwindows"] if options.release else []), "-o", output, f"-Wl,--pdb={options.build}/memories-pc.pdb",
-             "-Wl,-Xlink=-debug:symtab",
+             "-Wl,-Xlink=-debug:symtab", "-Wl,-Xlink=-pdbaltpath:%_PDB%",
              "-Wl,--large-address-aware", "-Wl,--disable-dynamicbase", "-Wl,--nxcompat",
              "-Wl,--allow-multiple-definition", f"{options.build}/guest_symbols.o",
              *[obj(s) for s in NATIVE + game], f"{options.build}/stubs.o", guest_branches, f"{options.build}/mod_exports.o",
