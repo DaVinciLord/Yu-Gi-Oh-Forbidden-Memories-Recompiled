@@ -143,6 +143,14 @@ table as it was in memory, so a state made without the map mod shows the
 disc's map after loading, even with the mod on, until the game enters the map
 again (`Main_RunCampaignMap` reads the overworld package each time it does).
 
+The duel-effect bank is the other way round: it runs as native C only while
+its bytes are the disc's. A disc patch that changes it is seen when the
+package is read, and the delivered MIPS then runs in the interpreter, patch
+included (`notes/pc-build.md`). The check happens at that read only, so a
+code mod that writes into the bank's memory itself, after it is loaded, is
+not seen and the native C still runs; such a mod patches the disc instead,
+or sets `MEMORIES_DUEL_EFFECTS=interpreter` while it is developed.
+
 Named patches may address the expanded tail. They are checked against the
 final selected replacement; a shorter replacement still allows patches
 within the original file's byte length. Reads and raw patches at original
