@@ -231,9 +231,9 @@ extern u8 D_8009B3C0;
  */
 extern u8 D_8009B3EE;
 extern u8 D_8009B3C6;
-extern DisplayObject *gMemCard_pDialogObject;
-extern u8 *gMemCard_pPrimaryTransferCursor;
-extern u8 *gMemCard_pSecondaryTransferCursor;
+extern DisplayObject *G32 gMemCard_pDialogObject;
+extern u8 *G32 gMemCard_pPrimaryTransferCursor;
+extern u8 *G32 gMemCard_pSecondaryTransferCursor;
 extern u8 D_8009B3DC;
 extern u8 D_8009B3DE;
 extern u8 D_8009B3EC;

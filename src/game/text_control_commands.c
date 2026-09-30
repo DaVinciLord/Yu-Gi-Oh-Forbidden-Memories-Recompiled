@@ -36,7 +36,7 @@
 
 void Text_DispatchSecondaryCommand(DuelEffectChannel *object)
 {
-    u8 **pp = &TEXT_STREAM_OWNER_VIEW(object)->streams[object->stream_58];
+    u8 *G32 *pp = &TEXT_STREAM_OWNER_VIEW(object)->streams[object->stream_58];
     u8 *p = *pp;
     s32 op = *p;
 
@@ -172,7 +172,7 @@ void Text_NewLine(DuelEffectChannel *record)
     }
     D_8009B350 = 1;
     if (D_8009B340) {
-        D_8009B340(record);
+        CALL32(void (*)(volatile DuelEffectChannel *), D_8009B340)(record);
     }
 #ifdef MEMORIES_PC
     /* The menu is laid out: the player picks from the choices in the box. */

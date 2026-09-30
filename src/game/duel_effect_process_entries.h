@@ -3,7 +3,7 @@
 
 #include "duel_effect.h"
 
-extern void (*D_80090F58[])(DuelEffectEntry *, DuelEffectChannel *);
+extern void (*G32 D_80090F58[])(DuelEffectEntry *, DuelEffectChannel *);
 
 void DuelEffect_ProcessEntries(DuelEffectChannel *);
 
