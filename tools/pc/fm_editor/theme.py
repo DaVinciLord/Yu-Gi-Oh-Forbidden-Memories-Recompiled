@@ -66,6 +66,31 @@ CLASSIC = {
 }
 
 
+def dpi_awareness():
+    """Windows stretches the window of a program that does not say it
+    knows the screen's dpi: blurry at 125% or 150%. Said before the first
+    window: per-monitor (v2, Windows 10 1703 on), else per-monitor (8.1),
+    else system-wide (Vista). Tk then sizes the fonts, in points, for the
+    real dpi (tk scaling), and widgets.px the rest. Elsewhere nothing."""
+    if sys.platform != "win32":
+        return
+    import ctypes
+    try:
+        if ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+            return
+    except (AttributeError, OSError):
+        pass
+    try:
+        if ctypes.windll.shcore.SetProcessDpiAwareness(2) == 0:
+            return
+    except (AttributeError, OSError):
+        pass
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except (AttributeError, OSError):
+        pass
+
+
 def is_dark(widget) -> bool:
     return ttk.Style(widget).theme_use() == DARK_THEME
 

@@ -2,6 +2,7 @@
 a scrolled tree, and dialogs."""
 from __future__ import annotations
 
+import sys
 import tkinter as tk
 import tkinter.font as tkfont
 from tkinter import ttk
@@ -13,7 +14,12 @@ from .gamedata import TYPE_NAMES
 def ui_scale(widget) -> float:
     """How much bigger than at 96 dpi the default font is drawn: a desktop
     set to 144 dpi (Xft.dpi) enlarges the text but not Tk's pixel sizes, so
-    widths, wrap lengths and row heights given in pixels grow by this."""
+    widths, wrap lengths and row heights given in pixels grow by this.
+    On Windows the program is dpi aware (theme.dpi_awareness): Tk's scaling
+    (pixels a point) is the dpi's, 4/3 at 100%, and the fonts in points
+    follow it, so the pixel sizes do too."""
+    if sys.platform == "win32":
+        return max(1.0, float(widget.tk.call("tk", "scaling")) * 72 / 96)
     return max(1.0, tkfont.nametofont("TkDefaultFont", root=widget).metrics("linespace") / 19)
 
 

@@ -18,6 +18,7 @@ APP_TITLE = "FM Editor"
 
 class App(tk.Tk):
     def __init__(self, game=None, mod=None, ask=True, autostart=True):
+        theme.dpi_awareness()      # Windows: before the first window, or it is drawn stretched
         super().__init__()
         self.title(APP_TITLE)
         self.theme = theme.Theme(self)
