@@ -266,7 +266,9 @@ The memory card's save is not changed. The cards go into the chest by
 mod's cards beside it; `chest_overflow` applies, and the chest shows them as
 new), before the first one turns over: a state saved mid-reveal, or the game
 closed, never loses or doubles a card. The starchips come off the save's own
-count, with the Password screen's counting down (and *Free spending*).
+count, with the Password screen's counting down (and *Free spending*, which
+takes nothing: a purchase under it adds nothing to the starchips spent on
+packs, so `unlock` `starchips_spent` counts only what was paid).
 
 What a save holds of the packs — purchases for `stock`, how often each was
 opened, the pity counts, a `once` pack's password used, the starchips spent

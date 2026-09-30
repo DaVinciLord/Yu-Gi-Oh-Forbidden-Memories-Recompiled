@@ -1037,7 +1037,6 @@ static void read_rules(const char *mod, const JsonValue *value)
 void Packs_Add(const char *mod, const char *directory, const JsonValue *manifest)
 {
     const JsonValue *list = Json_Member(manifest, "packs"), *item;
-    if (!rules_ready) default_rules();
     JsonDocument *file = NULL;
     int i;
     if (!rules_ready) default_rules();

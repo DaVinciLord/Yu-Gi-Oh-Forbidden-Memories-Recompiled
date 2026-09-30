@@ -318,16 +318,18 @@ static void build_art(void)
     art_built = 1;
     for (i = 0; i < Packs_Count() && i < PACKS_MAX; i++) {
         const Pack *pack = Packs_At(i);
-        char why[160];
+        char why[PACK_PATH_MAX + 64];   /* the reason comes after the whole path */
         if (pack->image[0]) {
             unsigned char *record = calloc(1, CARD_ART_RECORD);
+            why[0] = '\0';
             if (record && CardArt_FromImage(pack->image, record, why, sizeof(why))) {
                 CardArt_TitleFromName(pack->name, record + CARD_TITLE_PIXELS);
                 add_full_picture(pack->image, record);
                 art_records[i] = record;
             } else {
                 free(record);
-                Mods_Note(pack->mod, "pack \"%s\": \"image\": %s; its cover is shown", pack->id, why);
+                Mods_Note(pack->mod, "pack \"%s\": its cover is shown, as its \"image\" cannot be used: %s", pack->id,
+                          why[0] ? why : "out of memory");
             }
         }
         if (!art_records[i]) {
@@ -1423,9 +1425,12 @@ static void buy(void)
     for (i = 0; i < s.result.count; i++) {
         if (s.result.cards[i]) Duel_AwardCard(s.result.cards[i]);
     }
-    Packs_Record(s.pack, &s.result, pack->price, &s.progress);
+    /* Free spending takes nothing from the save: nothing counts as spent. */
+    Packs_Record(s.pack, &s.result, Cheats_FreeSpending() ? 0 : pack->price, &s.progress);
     s.price_left = pack->price;
-    LOG(LOG_MODS, "packs: %s bought for %u starchips, %d cards", pack->identity, pack->price, s.result.count);
+    for (i = 0, k = 0; i < s.result.count; i++) k += s.result.cards[i] != 0;
+    LOG(LOG_MODS, "packs: %s bought for %u starchips, %d card%s of %d slots", pack->identity, pack->price, k,
+        k == 1 ? "" : "s", s.result.count);
 }
 
 static void reveal_next(int from)
