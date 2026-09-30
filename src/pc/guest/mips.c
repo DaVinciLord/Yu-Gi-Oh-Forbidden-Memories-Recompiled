@@ -122,8 +122,10 @@ static const MemoriesGuestFunction *find_native(uint32_t address)
 static uint32_t call_native(State *s, uint32_t address)
 {
     const MemoriesGuestFunction *e;
-    typedef uint32_t (*Call)(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t,
-                             uint32_t, uint32_t, uint32_t, uint32_t);
+    /* uintptr_t: a 64-bit callee reads whole registers, and a guest pointer
+     * argument must arrive zero-extended (the same types on i386). */
+    typedef uintptr_t (*Call)(uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t,
+                              uintptr_t, uintptr_t, uintptr_t, uintptr_t);
     uint32_t sp = s->r[29], keep, result;
 
     /* libc and libmath routines linked as SDK assembly in the original and
@@ -161,8 +163,8 @@ static uint32_t call_native(State *s, uint32_t address)
     }
     keep = current_sp;
     current_sp = sp;
-    result = ((Call)e->host)(s->r[4], s->r[5], s->r[6], s->r[7], l32(sp + 16), l32(sp + 20), l32(sp + 24),
-                             l32(sp + 28), l32(sp + 32), l32(sp + 36), l32(sp + 40), l32(sp + 44));
+    result = (uint32_t)((Call)e->host)(s->r[4], s->r[5], s->r[6], s->r[7], l32(sp + 16), l32(sp + 20), l32(sp + 24),
+                                       l32(sp + 28), l32(sp + 32), l32(sp + 36), l32(sp + 40), l32(sp + 44));
     current_sp = keep;
     return result;
 }
