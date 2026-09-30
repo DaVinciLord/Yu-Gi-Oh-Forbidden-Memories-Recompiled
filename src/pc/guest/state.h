@@ -25,6 +25,14 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* The game stack: the fixed range the game's own code runs on (state.c). */
+#ifdef _WIN32
+#define MEMORIES_GAME_STACK_BASE 0xB0000000u /* 32-bit Windows loads system DLLs around 0x70000000; mods use 0x90000000 */
+#else
+#define MEMORIES_GAME_STACK_BASE 0x70000000u
+#endif
+#define MEMORIES_GAME_STACK_SIZE 0x00800000u
+
 typedef struct MemoriesState MemoriesState;
 typedef struct MemoriesStateField {
     void *data;

@@ -37,16 +37,15 @@
 #include <ucontext.h>
 #endif
 
+#define STACK_BASE MEMORIES_GAME_STACK_BASE
 #ifdef _WIN32
-#define STACK_BASE 0xB0000000u /* 32-bit Windows loads system DLLs around 0x70000000; mods use 0x90000000 */
 #define OTHER_STACK_BASE 0x70000000u
 #define OTHER_SYSTEM "Linux"
 #else
-#define STACK_BASE 0x70000000u
 #define OTHER_STACK_BASE 0xB0000000u
 #define OTHER_SYSTEM "Windows"
 #endif
-#define STACK_SIZE 0x00800000u
+#define STACK_SIZE MEMORIES_GAME_STACK_SIZE
 #define STACK_TOP (STACK_BASE + STACK_SIZE)
 #define SCRATCHPAD 0x1f800000u
 #define SCRATCHPAD_SIZE 0x400u

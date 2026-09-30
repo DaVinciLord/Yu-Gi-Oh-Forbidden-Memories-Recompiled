@@ -238,6 +238,9 @@ static void begin_generation(void)
 static int wanted(void)
 {
     const char *off = getenv("MEMORIES_NO_MONITOR");
+#if defined(_WIN32) && defined(__x86_64__)
+    return 0; /* the 64-bit build runs without the crash monitor yet (its stack walk is i386) */
+#endif
     if (off && *off && strcmp(off, "0")) return 0;
 #ifdef _WIN32
     if (IsDebuggerPresent()) return 0;
@@ -741,9 +744,15 @@ static void dump_threads(void)
             first ? " (main: the game's)" : "");
         first = 0;
         if (got) {
+#if defined(__x86_64__)
+            put("    RIP=0x%llx RSP=0x%llx RBP=0x%llx\n", (unsigned long long)context.Rip,
+                (unsigned long long)context.Rsp, (unsigned long long)context.Rbp);
+            walk_remote(context.Rip, context.Rsp, context.Rbp);
+#else
             put("    EIP=0x%08lx ESP=0x%08lx EBP=0x%08lx\n", (unsigned long)context.Eip, (unsigned long)context.Esp,
                 (unsigned long)context.Ebp);
             walk_remote(context.Eip, context.Esp, context.Ebp);
+#endif
         } else {
             put("    (its registers could not be read: error %lu)\n", GetLastError());
         }
