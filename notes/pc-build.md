@@ -2330,8 +2330,7 @@ is written: `crash-<pid>.txt` or `hang-<pid>.txt` in `Crash_ReportDir`,
 with a message box naming it (not when headless or scripted;
 `MEMORIES_CRASH_DIALOG=0/1` decides). The two share a block of memory the
 game writes and the monitor reads, so what the game knew survives however
-it ended: facts (build and commit, OS or Wine version, CPU, memory, on
-Windows whether DEP is on for the game and the system's DEP policy, GPU and
+it ended: facts (build and commit, OS or Wine version, CPU, memory, GPU and
 driver, SDL video and audio drivers, every setting but the retired ones, the
 applied mods), the
 runtime module last loaded, the frame and VBlank counts, and the last 128
