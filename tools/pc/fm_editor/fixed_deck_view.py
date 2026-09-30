@@ -196,7 +196,7 @@ class FixedDeckView:
             return
         fixed_decks.remove(p, d)
         self.stash.pop(d, None)
-        p.pools[d]["deck"] = dict(p.retail.pools[d]["deck"])
+        p.revert_pool(d, "deck")
         self.edited()
 
     # --- cards -------------------------------------------------------------

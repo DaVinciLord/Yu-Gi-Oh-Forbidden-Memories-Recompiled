@@ -8,6 +8,7 @@ from tkinter import ttk
 
 from . import theme
 from .gamedata import TYPE_NAMES
+from .model import card_matches  # noqa: F401 (model.py's; tabs.py and art_tab.py import it from here)
 
 
 def ui_scale(widget) -> float:
@@ -41,16 +42,6 @@ def scrolled_tree(parent, columns, widths, height=20, selectmode="browse"):
     for tag in theme.TAGS:
         tree.tag_configure(tag, foreground=theme.tag_color(tree, tag))
     return frame, tree
-
-
-def card_matches(project, cid: int, text: str) -> bool:
-    if not text:
-        return True
-    text = text.lower().strip()
-    card = project.cards.get(cid)
-    if card is None:
-        return False
-    return text == str(cid) or text in card.name.lower()
 
 
 class CardPicker(tk.Toplevel):
