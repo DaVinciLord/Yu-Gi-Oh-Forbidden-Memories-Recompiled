@@ -30,6 +30,12 @@
 /* 1 on success; `why` says what went wrong otherwise. */
 int CardArt_FromImage(const char *path, unsigned char *record, char *why, size_t why_size);
 int CardArt_ThumbnailFromImage(const char *path, unsigned char *record, char *why, size_t why_size);
+/* Like CardArt_FromImage, but keeps the PNG's own transparency as a
+ * silhouette instead of flattening it to black: for "field_art"
+ * (notes/more-cards.md), the 2D Monsters mod's cutout alone, never a
+ * card's real record. A binary cutout (an alpha under 128 is fully out),
+ * not a softly feathered edge. */
+int CardArt_FieldArtFromImage(const char *path, unsigned char *record, char *why, size_t why_size);
 /* The rectangle of the PNG those take a w x h picture from (the middle at
  * that shape), and the PNG's size: for the full-resolution picture a
  * texture pack draws above the console's resolution (cards.c). 0 when the
