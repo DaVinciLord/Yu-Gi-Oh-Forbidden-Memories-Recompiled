@@ -22,6 +22,7 @@
 #include "game/func_80018004.h"
 #include "game/display_object_core.h"
 #include "pc/cards/cards.h"
+#include "pc/cards/tables.h"
 #include "pc/mods/modapi.h"
 #include <string.h>
 
@@ -122,6 +123,9 @@ static HmCard card_info(int id)
 }
 static int terrain(int type, int field)
 {
+    int bonus;
+    /* A mod's "terrain_bonus" first, as Duel_GetTerrainBoost asks it. */
+    if (type >= 0 && type < 20 && Tables_TerrainBonus(field, type, &bonus)) return bonus;
     return type >= 0 && type < 20 && field >= 1 && field <= 6 ?
         gDuel_aTerrainBoost[type][field - 1] * CARD_STAT_SCALE : 0;
 }
