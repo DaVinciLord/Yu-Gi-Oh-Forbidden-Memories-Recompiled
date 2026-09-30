@@ -28,6 +28,15 @@ def px(widget, pixels: int) -> int:
     return round(pixels * ui_scale(widget))
 
 
+def ui_font(size: int, weight: str = "bold"):
+    """The default font's face at another size (a heading): ("TkDefaultFont",
+    size, weight) names no face, which X11 matches to its default sans but
+    Windows to Arial, so there the face is TkDefaultFont's own."""
+    if sys.platform == "win32":
+        return (tkfont.nametofont("TkDefaultFont").actual("family"), size, weight)
+    return ("TkDefaultFont", size, weight)
+
+
 def scrolled_tree(parent, columns, widths, height=20, selectmode="browse"):
     """A Treeview with a vertical scrollbar, in a frame of its own."""
     frame = ttk.Frame(parent)
