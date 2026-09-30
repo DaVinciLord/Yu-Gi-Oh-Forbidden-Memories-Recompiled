@@ -428,12 +428,7 @@ class CardsTab(Tab):
         cid = self.current
         if not cid:
             return
-        if cid in self.project.added:
-            base = self.project.cards[self.project.added[cid].base]
-            self.project.cards[cid] = base.copy(id=cid)
-            self.project.passwords.pop(cid, None)
-        else:
-            self.project.revert_card(cid)
+        self.project.revert_card(cid)
         self.app.changed()
         self.update_row(cid)
         self.show(cid)
@@ -734,9 +729,8 @@ class RitualsTab(Tab):
         for ritual in sorted(set(p.ritual_cards()) | set(p.rituals) | set(p.retail.rituals)):
             if ritual not in p.cards:
                 continue
-            now, retail = p.rituals.get(ritual), p.retail.rituals.get(ritual)
-            state = "" if now == retail else "added" if retail is None else "removed" if now is None else "changed"
-            recipe = now or (None, None, None, None)
+            state = p.ritual_status(ritual)
+            recipe = p.rituals.get(ritual) or (None, None, None, None)
             labels = [p.card_label(c) if c else "-" for c in recipe]
             self.tree.insert("", "end", iid=str(ritual), values=[p.card_label(ritual)] + labels + [state],
                              tags=(state,) if state else ())
@@ -784,10 +778,7 @@ class RitualsTab(Tab):
     def revert(self):
         ritual = self.selected()
         if ritual:
-            if ritual in self.project.retail.rituals:
-                self.project.rituals[ritual] = self.project.retail.rituals[ritual]
-            else:
-                self.project.rituals.pop(ritual, None)
+            self.project.revert_ritual(ritual)
             self.app.changed()
             self.fill()
 
@@ -936,8 +927,7 @@ class DuelistsTab(Tab):
         self.edited()
 
     def revert(self):
-        self.project.pools[self.duelist][self.pool.get()] = dict(
-            self.project.retail.pools[self.duelist][self.pool.get()])
+        self.project.revert_pool(self.duelist, self.pool.get())
         self.edited()
 
     def goto(self, target):

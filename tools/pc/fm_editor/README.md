@@ -517,3 +517,180 @@ they need no game data (the bulk fusion tests time a 722 x 722 preview). PNGs ar
 read and written by `pngio.py`, in plain Python like the rest; the card-text
 preview's tests build their font page and a TrueType file in code as well
 (`tests/test_card_text.py`).
+
+## Building another front end
+
+The window is one front end over an engine that has no Tk in it. Another
+front end (Qt, a web page, a script) reuses the engine as it is and replaces
+only the window; it does not rewrite the engine, whose rules are the port's
+(`tables.c`, `cards.c`, the loaders) and are pinned by the tests below.
+
+**The engine** (no `tkinter` import; plain Python 3, nothing to install):
+
+| Module | What it does |
+|---|---|
+| `disc.py` | finds and reads the game files (`load`, `find_game`, `user_dir`) into `GameFiles(slus, wa, source)` |
+| `gamedata.py` | the retail tables from them: `load_game(files)` → `GameData`; the names of types, attributes, stars, duelists, pools |
+| `model.py` | `Project`: the retail tables with the edits on top, and the edits themselves (below) |
+| `manifest.py` | reading a mod folder (`open_mod`, `apply`) and writing one (`build`, `dumps`, `save_mod`) |
+| `validate.py` | the loader's checks: `validate(project)` → `Issue` list |
+| `pools.py`, `fixed_decks.py`, `bulk_fusions.py` | the port's pool arithmetic, fixed decks, bulk fusions |
+| `art.py`, `campaign_map.py`, `map_art.py`, `map_view.py` | card art, the campaign map's table and pictures, the map drawn from the disc's 3D model (`map_view.py` has no Tk despite its name) |
+| `card_text.py`, `ttf.py`, `pngio.py` | the card-text layout and picture, TrueType outlines, PNGs and the `Image` type every picture is |
+| `importer.py`, `kit.py`, `ygomods.py` | importing a modified game, and converting a `.ygomods` package |
+| `cli.py` | `check` and `import` (the window only through a lazy import) |
+
+It needs `tools/pc/text_listing.py` beside the package (`gamedata.py`
+finds it). **The Tk front end** is `app.py`, `tabs.py`, `widgets.py`,
+`theme.py`, `art_tab.py`, `map_tab.py`, `fixed_deck_view.py`,
+`bulk_dialog.py`, `preview.py`, `importers.py` (the File menu's import
+dialogs) and `settings.py` (the window's own settings, no Tk).
+
+**The whole round trip, with no Tk** (run from the source tree's root; it
+prints `{"replace": 1, "attack": 3500}` in the mod.json for Blue-Eyes):
+
+```python
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, "tools/pc")        # the folder holding fm_editor/ and text_listing.py
+from fm_editor import disc, gamedata, manifest, validate
+from fm_editor.model import Project
+
+files = disc.load("game")             # a folder, a .bin or an ISO; disc.find_game() looks where the port does
+retail = gamedata.load_game(files)    # the disc's tables, read once
+project = Project(retail)             # or: project, notes = manifest.open_mod(retail, "path/to/mod")
+project.info.id, project.info.name = "stronger-blue-eyes", "Stronger Blue-Eyes"
+
+card = project.cards[1]               # Blue-Eyes White Dragon
+project.cards[1] = card.copy(attack=card.attack + 500)
+
+issues = validate.validate(project)   # the loader's checks: Issue(level, area, where, message, target)
+for issue in issues:
+    print(issue)
+if not validate.errors(issues):
+    path = manifest.save_mod(project, Path(tempfile.mkdtemp()) / project.info.id)
+    print(path.read_text(encoding="utf-8"))
+
+assert "tkinter" not in sys.modules
+```
+
+**Opening.** `gamedata.load_game(files)` once per game; then either
+`Project(retail)` (a new mod, everything as retail) or
+`manifest.open_mod(retail, folder)` → `(project, messages)`: the folder's
+`mod.json` laid over retail, its texts, art and map taken back, and what
+could not be read said in `messages` (show them). `open_mod` raises
+`ValueError` or `OSError` for a `mod.json` that is not JSON or not there.
+`project.source_dir` is where it came from; `project.retail` stays the
+disc's, and every "changed" mark compares with it.
+
+**Reading and changing.** Change the project, then redraw what shows it;
+the engine keeps no undo (a front end may keep `project.clone()`s).
+
+* Cards: `project.cards[id]` is a `gamedata.Card` (name, description,
+  attack, defense, type, attribute, level, star1, star2, frame); replace it
+  with `card.copy(field=value)`; a function's `card` argument below is the
+  number, not the `Card`. `card_changed`, `revert_card`,
+  `add_card(base, key)` (an added card, id 723 and up, in
+  `project.added`), `remove_card`, `password`/`set_password`,
+  `set_notes`, `card_label`, `model.card_matches` (the search).
+* Fusions: `project.fusions[(low, high)] = result`, through
+  `set_fusion(a, b, result or None)`; `fusion_status`, `revert_fusion`.
+  Bulk: `bulk_fusions.plan(project, BulkSpec(...))`, then `apply` and `undo`.
+* Equips: `project.equips[equip]` is a set of monsters; `equip_baseline`
+  is what the disc gives it. Rituals: `project.rituals[ritual] = (t1, t2,
+  t3, result)`; `ritual_status`, `revert_ritual`.
+* Duelists: `project.pools[duelist][pool]` is `{card: weight}` for the
+  pools `gamedata.POOLS` (`"deck"`, `"pow"`, `"bcd"`, `"tec"`), out of
+  2048; `pools.normalize`, `revert_pool`. A fixed deck:
+  `fixed_decks.deck_of`, `set_deck(project, d, {card: copies})`,
+  `most_likely`, `remove`.
+* Starter decks: `project.starter`, a list of `model.StarterDeck`.
+* Mod info: `project.info` (`ModInfo`); other `mod.json` keys, kept as
+  written, in `project.other`.
+* Art: `art.set_image(project, card, part, image)` (part `"art"`,
+  `"thumbnail"` or `"title"`; returns notes), `art.revert`,
+  `art.changed_cards`.
+* The map: `campaign_map.state(project).locations`, a list of 16
+  `Location`s: store an edited `loc.copy()` back at its index;
+  `campaign_map.reset`, `reset_all`. Its pictures: `map_art.set_sprite`,
+  `set_texture`, `import_sprites`, `import_textures`, `revert_*`.
+* Importing: `importer.import_modded(retail_files, modded_files, id,
+  name)` → a result with `.project` and `.report` (saved with
+  `importer.save`); `ygomods.import_package(retail, files.wa, path, id,
+  name)` → `(project, report)`.
+
+**Checking.** `validate.validate(project)` is every check the window's
+Conflicts tab lists, `validate.errors(issues)` the ones the loader refuses,
+`validate.validate_card(project, card)` one card's. An `Issue` has `level`
+(`"error"`/`"warning"`), `area` (the tab: `"Cards"`, `"Fusions"`, `"Map"`...),
+`where`, `message`, and `target`, what to select to show it (a card id, a
+fusion pair, `(duelist, pool)`, a map place).
+
+**Saving.** `manifest.save_mod(project, folder)` writes the art's PNGs and
+texture pack first (that sets `"textures"`), then `mod.json`, holding only
+what differs from retail, and on a save somewhere new copies the source
+mod's other files. It refuses a folder that holds game files.
+`manifest.dumps(manifest.build(project))` is the text it would write, for a
+preview. **A front end never writes `mod.json`, the texture pack or the
+mod's PNGs itself**: only `manifest.save_mod` (or `importer.save`), so the
+diff, the order of the writes and what is kept as written stay the
+engine's.
+
+**Pictures.** Every picture is a `pngio.Image` (`width`, `height`,
+`rgba` bytes); `pngio.encode(image)` makes PNG bytes any toolkit reads.
+
+* Card text: `card_text.Renderer(card_text.RetailFont(files.wa), face).render(text,
+  scale)` → `(image, layout)`, with `face` `None` for the retail font or a
+  `ttf.Font(path)` (`card_text.port_face_path()` is the port's own);
+  `layout` has the rows, the cut rows and the glyphs to mark.
+* Art: `art.disc_image(files.wa, card, part)`, and `art.in_game(project,
+  files.wa, card, part, scale)` as the game draws the mod's at 1x, 2x, 4x.
+* The map: `map_view.render(map_view.model(files.wa, sector), camera,
+  spotlight=place < campaign_map.TOWN_FIRST,
+  overrides=map_art.texture_overrides(project, package))`, with `camera`
+  `(distance, heading, pitch, target_x, target_z)` of the place and
+  `(package, sector)` one of `campaign_map.PACKAGES`; `map_view.render_top`
+  the world from above. The sprites, as `(image, left, top)`:
+  `campaign_map.sprite_image(data, *campaign_map.PANEL, strips)` (or
+  `MARKER`) and `arrow_image(data, arrow, strips)`, with `data`
+  `campaign_map.state(project).retail` and `strips` the mod's strips,
+  `{p: map_art.strip_override(project, p)}` for the palettes that have one.
+
+**Still in the Tk layer** (a new front end redoes these, or they move to the
+engine first):
+
+* `App.save`: where a first save goes (an empty folder, or a folder named
+  after the mod id inside the chosen one; the id must be letters, digits,
+  `-` and `_`), and asking before replacing another mod's `mod.json`;
+  `App.load_mod` wants a `mod.json` in the folder.
+* Reading the forms: a password is up to 8 digits, padded with zeros
+  (`CardsTab.apply`); an added card's key is `model.KEY_RE` and unique; a
+  new card copies the selected card (not its base) and is named "... II";
+  a pool weight is 0-65535, a deck's copies 0-40, a starter deck's weight
+  0-`STARTER_WEIGHT_LIMIT`, and a card left at 0 is taken out of the pool
+  or deck; "Add every"/"Remove every" of a monster type (`EquipsTab.by_type`);
+  a card named by typing (`widgets.CardField.get`: a number, "7 Name",
+  `Project.resolve`, then the exact name).
+* `FixedDeckView.switch`: switching a duelist back to the weighted deck
+  keeps its fixed deck aside until the mod is closed.
+* `ModInfoTab.commit`: `settings` and the other keys parsed as JSON, and
+  the keys the tabs own refused there.
+* `MapTab`: the fields' ranges (-32768 to 32767, a flag up to `0x7FFF`,
+  frames up to 255), a new exit's 16 frames; the Screen put together from
+  the map picture, the name panel at `campaign_map.PANEL_AT`, the arrows
+  and the marker at their sprite offsets; the Overview's geometry, and
+  turning a drag into coordinates.
+* `importers.ask_modded_files`: a modified `SLUS_014.11`'s `WA_MRG.MRG`
+  looked for in `DATA/` beside it, then beside it.
+* `preview.describe`: the card-text layout's marks in words.
+
+**The tests a front end keeps passing** (the command above): `test_data`
+(tables, the diff to `mod.json` and back, the pools' arithmetic, the
+checks), `test_family` and `test_importer` (imports), `test_ygomods`,
+`test_art`, `test_card_text`, `test_campaign_map` and `test_map_art` need no
+Tk. `test_bulk_fusions`, `test_fixed_decks` and `test_starter` test the
+engine and then the Tk dialogs, and `test_gui` and `test_map_gui` drive the
+window; those Tk parts skip where Tk cannot start. A new front end adds its
+own tests beside them and leaves the engine's as they are.

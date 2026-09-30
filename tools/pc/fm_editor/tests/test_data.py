@@ -10,7 +10,7 @@ from unittest import mock
 from pathlib import Path
 
 from fm_editor import disc, gamedata as g, manifest, pools, validate
-from fm_editor.model import Project
+from fm_editor.model import Project, card_matches
 from fm_editor.tests.fixtures import Fixture, make_iso
 
 FIXTURE = None
@@ -334,6 +334,33 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(again.fusions.get((2, copy)), 0)
         again.revert_fusion((2, copy))
         self.assertNotIn((2, copy), again.fusions)
+
+    def test_reverts(self):
+        # What the tabs' Revert buttons do, in the model a front end calls.
+        p = Project(self.retail)
+        p.rituals[681] = (4, 5, 6, 500)
+        p.rituals.pop(682)
+        p.rituals[683] = (1, 2, 3, 502)
+        self.assertEqual([p.ritual_status(r) for r in (681, 682, 683, 684)], ["changed", "removed", "added", ""])
+        for r in (681, 682, 683):
+            p.revert_ritual(r)
+        self.assertEqual(p.rituals, self.retail.rituals)
+        p.pools[1]["pow"] = {1: 2048}
+        p.revert_pool(1, "pow")
+        self.assertEqual(p.pools[1]["pow"], self.retail.pools[1]["pow"])
+        self.assertIsNot(p.pools[1]["pow"], self.retail.pools[1]["pow"])
+        p.cards[1] = p.cards[1].copy(attack=1230)
+        copy = p.add_card(1, "c1")
+        p.cards[copy] = p.cards[copy].copy(name="Another", defense=10)
+        p.set_password(copy, "12345678")
+        p.set_notes(copy, "mine")
+        p.revert_card(copy)            # back to its base as the mod has it
+        self.assertTrue(p.cards[copy].same(p.cards[1].copy(id=copy)))
+        self.assertEqual((p.password(copy), p.notes[copy]), ("", "mine"))
+        self.assertTrue(card_matches(p, copy, str(copy)))
+        self.assertTrue(card_matches(p, copy, p.cards[1].name[1:4].upper()))
+        self.assertFalse(card_matches(p, 2, str(copy)))
+        self.assertTrue(card_matches(p, 2, ""))
 
     def test_notes(self):
         p = self.edited()

@@ -74,6 +74,18 @@ def type_named(text: str) -> int:
     return -1
 
 
+def card_matches(project, cid: int, text: str) -> bool:
+    """The editor's card search: the card's number, or a part of its name in
+    any case; no text finds every card."""
+    if not text:
+        return True
+    text = text.lower().strip()
+    card = project.cards.get(cid)
+    if card is None:
+        return False
+    return text == str(cid) or text in card.name.lower()
+
+
 @dataclass
 class AddedCard:
     """A card the mod adds ("copy"): its stable key, its base, and the entry
@@ -258,8 +270,12 @@ class Project:
             self.notes.pop(cid, None)
 
     def revert_card(self, cid: int):
-        """Back to the disc's card; its notes stay, as they are the modder's."""
-        if cid in self.retail.cards:
+        """Back to the disc's card, or an added card back to its base as the
+        mod has it; its notes stay, as they are the modder's."""
+        if cid in self.added:
+            self.cards[cid] = self.cards[self.added[cid].base].copy(id=cid)
+            self.passwords.pop(cid, None)
+        elif cid in self.retail.cards:
             self.cards[cid] = self.retail.cards[cid].copy()
             self.card_extra.pop(cid, None)
             self.passwords.pop(cid, None)
@@ -306,6 +322,23 @@ class Project:
         if retail is None:
             return "added"
         return "changed"
+
+    def ritual_status(self, ritual: int) -> str:
+        """The recipe against the disc's: "" the same, or "added", "removed" or
+        "changed"."""
+        now, retail = self.rituals.get(ritual), self.retail.rituals.get(ritual)
+        return "" if now == retail else "added" if retail is None else "removed" if now is None else "changed"
+
+    def revert_ritual(self, ritual: int):
+        if ritual in self.retail.rituals:
+            self.rituals[ritual] = self.retail.rituals[ritual]
+        else:
+            self.rituals.pop(ritual, None)
+
+    def revert_pool(self, d: int, pool: str):
+        """A duelist's pool ("deck", "pow", "bcd", "tec") back to the disc's
+        weights (a fixed deck is fixed_decks.py's, and stays)."""
+        self.pools[d][pool] = dict(self.retail.pools[d][pool])
 
     def monsters(self):
         return [cid for cid, card in self.cards.items() if card.is_monster()]
