@@ -307,7 +307,12 @@ def validate(project: Project) -> list:
         if card.is_monster():
             for star in (card.star1, card.star2):
                 stars[star] = stars.get(star, 0) + 1
-    for level, where, message in guardian_stars.check(project.other.get("guardian_stars"), card_stars=stars):
+    # The ATK/DEF cap a bonus is measured against: the Limits tab's, else 9999.
+    flat = limits.flatten(project.other.get("limits"))
+    caps = [flat[key] for key in ("stats", "attack", "defense") if isinstance(flat.get(key), int)]
+    cap = max(caps) if caps else guardian_stars.STAT_CAP
+    for level, where, message in guardian_stars.check(project.other.get("guardian_stars"), stat_cap=cap,
+                                                      card_stars=stars):
         out.append(Issue(level, "Guardian Stars", where, message))
     fixed_decks.check(project, out)
     art.check(project, out)

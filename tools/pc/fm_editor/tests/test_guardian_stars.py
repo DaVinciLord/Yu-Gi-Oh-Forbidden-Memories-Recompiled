@@ -148,6 +148,15 @@ class ManifestTest(unittest.TestCase):
         self.assertTrue(any("past the 11" in m for m in cards), cards)
         self.assertFalse([i for i in issues if i.area == "Mod info" and i.where == "guardian_stars"])
 
+    def test_cap_is_the_limits(self):
+        """A bonus past 9999 is warned about, unless "limits" raises the cap."""
+        p = project()
+        p.other["guardian_stars"] = {"matchups": [{"attacker": 1, "defender": 2, "bonus": 12000}]}
+        past = lambda: [i for i in validate.validate(p) if i.area == "Guardian Stars" and "cap" in i.message]
+        self.assertTrue(past())
+        p.other["limits"] = {"stats": 30000}
+        self.assertFalse(past())
+
     def test_star_choices(self):
         from fm_editor.tabs import star_choices, star_label
         p = project()
