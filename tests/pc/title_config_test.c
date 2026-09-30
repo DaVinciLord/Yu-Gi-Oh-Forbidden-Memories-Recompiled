@@ -298,6 +298,39 @@ static void menu_background(void)
     CHECK(notes == 1 && strstr(note, "prompt \"show\""));
 }
 
+static void widescreen(void)
+{
+    const TitleConfig *config = one(
+        "{\"title\": {\"background\": {\"wide\": true}, \"logo\": {\"wide_x\": -40},"
+        "             \"text\": [{\"text\": \"v1\", \"x\": 300, \"wide_x\": 360}]},"
+        " \"menu\": {\"background\": {\"image\": \"m.png\", \"wide_image\": \"m-wide.png\"},"
+        "          \"entries\": {\"load\": {\"wide_x\": -100, \"wide_y\": 30}},"
+        "          \"buttons\": [{\"id\": \"b\", \"label\": \"B\", \"x\": 10, \"wide_x\": 150}]}}");
+    const TitleItem *load = &config->items[1], *b = &config->items[TITLE_ENTRIES];
+    CHECK(notes == 0);
+    CHECK(config->background[0].wide && !config->background[0].wide_image.file[0]);
+    /* A picture for widescreen makes the background fill it. */
+    CHECK(config->background[1].wide && !strcmp(config->background[1].wide_image.file, "/mods/test/m-wide.png"));
+    CHECK(config->layers[0].wide.set_x && config->layers[0].wide.x == -40 && !config->layers[0].wide.set_y);
+    CHECK(config->line[0].wide.set_x && TitleWide_X(&config->line[0].wide, config->line[0].x, 1) == 360);
+    CHECK(TitleWide_X(&config->line[0].wide, config->line[0].x, 0) == 300);
+    CHECK(TitleWide_X(&load->wide, load->x, 1) == -100 && TitleWide_Y(&load->wide, load->y, 1) == 30);
+    /* 4:3 keeps the stacked place; widescreen without a wide_y does too. */
+    CHECK(TitleWide_Y(&load->wide, load->y, 0) == load->y && load->y != 30);
+    CHECK(TitleWide_X(&b->wide, b->x, 1) == 150 && TitleWide_X(&b->wide, b->x, 0) == 10);
+    CHECK(TitleWide_Y(&b->wide, b->y, 1) == b->y);
+    /* The menus' own 4:3 picture without a wide one: not the title's wide one. */
+    config = one("{\"title\": {\"background\": {\"wide_image\": \"t-wide.png\"}},"
+                 " \"menu\": {\"background\": {\"image\": \"m.png\"}}}");
+    CHECK(config->background[0].wide && !strcmp(config->background[0].wide_image.file, "/mods/test/t-wide.png"));
+    CHECK(!config->background[1].wide_image.file[0] && config->background[1].wide);
+    /* Nothing said: the menus' is the title's. */
+    config = one("{\"title\": {\"background\": {\"wide_image\": \"t-wide.png\"}}}");
+    CHECK(!strcmp(config->background[1].wide_image.file, "/mods/test/t-wide.png"));
+    one("{\"menu\": {\"background\": {\"wide_imag\": \"x.png\"}}}");
+    CHECK(notes == 1 && strstr(note, "unknown key \"wide_imag\""));
+}
+
 int main(void)
 {
     retail();
@@ -310,6 +343,7 @@ int main(void)
     button_mistakes();
     buttons_across_mods();
     menu_background();
+    widescreen();
     while (document_count) Json_Free(documents[--document_count]);
     printf("title config: ok\n");
     return 0;

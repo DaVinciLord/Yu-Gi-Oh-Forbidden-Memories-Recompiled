@@ -26,32 +26,41 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* The fixed places, in 16-bit VRAM words: each starts a texture page (a
- * multiple of 64 across, row 256), with the most it may measure in texels.
- * The menus' background shares the title's, and is put there when it is
- * drawn (TitleImages_Draw). */
+/* The fixed places, in 16-bit VRAM words (row 256 on), with the most each
+ * may measure in texels. The four backgrounds -- the title's and the
+ * menus', 4:3 and widescreen -- share one place, wide enough for a
+ * widescreen one, and the one drawn is put there then (TitleImages_Draw). */
 static const struct { int x, y, clut_y, max_w, max_h; } fixed[TITLE_IMAGE_ITEMS] = {
-    {0, 256, 500, 320, 240},     /* background, in the movie's picture */
-    {192, 256, 501, 320, 240},   /* logo, beside it */
-    {768, 256, 502, 320, 120},   /* copyright */
-    {768, 376, 503, 320, 120},   /* PUSH START BUTTON */
-    {0, 256, 504, 320, 240},     /* the menus' background, where the title's is */
+    {0, 256, 500, 320, 240},                   /* background, in the movie's picture */
+    {224, 256, 501, 320, 240},                 /* logo, beside it */
+    {768, 256, 502, 320, 120},                 /* copyright */
+    {768, 376, 503, 320, 120},                 /* PUSH START BUTTON */
+    {0, 256, 504, 320, 240},                   /* the menus' background */
+    {0, 256, 505, TITLE_WIDE_WIDTH, 240},      /* the title's, widescreen */
+    {0, 256, 506, TITLE_WIDE_WIDTH, 240},      /* the menus', widescreen */
 };
-enum { CLUT_X = 768, STRIP = 128, ITEM_MAX_W = 256, ITEM_MAX_H = 64, ITEM_GUESS_H = 32 };
+enum { CLUT_X = 768, STRIP = 128, ITEM_MAX_W = 256, ITEM_MAX_H = 64, ITEM_GUESS_H = 32, SHARED_WORDS = 224 };
 
 /* The items' pictures go where the others leave room: beside the logo in
  * the movie's picture, and right of the copyright line, and in the
- * background's and logo's places when the title has none of its own there
- * (in words, x0 to x1 across and rows 256 to 496). Their palettes go in the
- * rows under the movie's picture and around the fixed ones. */
+ * backgrounds' and logo's places when the title has none of its own there
+ * (in words, x0 to x1 across and rows 256 to 496; needs_free -1 always, 0
+ * without backgrounds, else without that picture). Their palettes go in
+ * the rows under the movie's picture and around the fixed ones. */
 static const struct { int x0, x1, needs_free; } regions[] = {
-    {352, 480, -1}, {928, 1024, -1}, {0, 192, TITLE_IMAGE_BACKGROUND}, {192, 352, TITLE_IMAGE_LOGO}};
+    {384, 480, -1}, {928, 1024, -1}, {0, SHARED_WORDS, TITLE_IMAGE_BACKGROUND}, {224, 384, TITLE_IMAGE_LOGO}};
 enum { REGION_TOP = 256, REGION_BOTTOM = 496, REGIONS = sizeof(regions) / sizeof(regions[0]) };
 static const struct { int x, y; } item_cluts[] = {
-    {768, 496}, {768, 497}, {768, 498}, {768, 499}, {768, 505}, {768, 506}, {768, 507}, {768, 508}, {768, 509},
+    {768, 496}, {768, 497}, {768, 498}, {768, 499}, {768, 507}, {768, 508}, {768, 509},
     {768, 510}, {768, 511}, {256, 496}, {256, 497}, {256, 498}, {256, 499}, {256, 500}, {256, 501}, {256, 502},
     {256, 503}, {256, 504}, {256, 505}, {256, 506}, {256, 507}, {256, 508}, {256, 509}, {256, 510}, {256, 511}};
 enum { ITEM_CLUTS = sizeof(item_cluts) / sizeof(item_cluts[0]) };
+
+int TitleImages_IsBackground(int which)
+{
+    return which == TITLE_IMAGE_BACKGROUND || which == TITLE_IMAGE_MENU_BACKGROUND ||
+           which == TITLE_IMAGE_WIDE_BACKGROUND || which == TITLE_IMAGE_WIDE_MENU_BACKGROUND;
+}
 
 typedef struct {
     char file[TITLE_PATH];
@@ -62,8 +71,7 @@ typedef struct {
 } Picture;
 
 static Picture pictures[TITLE_IMAGES];
-/* Which background is in the shared place: TITLE_IMAGE_BACKGROUND or
- * TITLE_IMAGE_MENU_BACKGROUND, -1 neither. */
+/* Which background is in the shared place, -1 none. */
 static int resident = -1;
 
 /* The size a PNG is drawn at: a background fills the screen; a sprite is
@@ -74,8 +82,8 @@ static void measure(int which, const TitleImage *image, int png_w, int png_h, in
 {
     int factor = 1, max_w = which < TITLE_IMAGE_ITEMS ? fixed[which].max_w : ITEM_MAX_W;
     int max_h = which < TITLE_IMAGE_ITEMS ? fixed[which].max_h : ITEM_MAX_H;
-    if (which == TITLE_IMAGE_BACKGROUND || which == TITLE_IMAGE_MENU_BACKGROUND) {
-        *w = 320;
+    if (TitleImages_IsBackground(which)) {
+        *w = max_w;
         *h = 240;
         return;
     }
@@ -196,9 +204,13 @@ void TitleImages_Prepare(const TitleConfig *config)
     for (which = 0; which < TITLE_IMAGE_ITEMS; which++) {
         const TitleImage *image = which == TITLE_IMAGE_BACKGROUND ? &config->background[0].image :
                                   which == TITLE_IMAGE_MENU_BACKGROUND ? &config->background[1].image :
+                                  which == TITLE_IMAGE_WIDE_BACKGROUND ? &config->background[0].wide_image :
+                                  which == TITLE_IMAGE_WIDE_MENU_BACKGROUND ? &config->background[1].wide_image :
                                   &config->layers[which - 1].image;
         /* The menus' background the title's own: drawn as the title's. */
         if (which == TITLE_IMAGE_MENU_BACKGROUND && !strcmp(image->file, config->background[0].image.file)) continue;
+        if (which == TITLE_IMAGE_WIDE_MENU_BACKGROUND && !strcmp(image->file, config->background[0].wide_image.file))
+            continue;
         pictures[which].ready = image->file[0] && make(which, image);
         pictures[which].x = fixed[which].x;
         pictures[which].y = fixed[which].y;
@@ -210,8 +222,11 @@ void TitleImages_Prepare(const TitleConfig *config)
         shelves[i].x = regions[i].x0;
         shelves[i].y = REGION_TOP;
         shelves[i].shelf = 0;
-        usable[i] = taken < 0 || (!pictures[taken].ready &&
-                                  (taken != TITLE_IMAGE_BACKGROUND || !pictures[TITLE_IMAGE_MENU_BACKGROUND].ready));
+        usable[i] = taken < 0 || (taken == TITLE_IMAGE_BACKGROUND
+                                      ? !pictures[TITLE_IMAGE_BACKGROUND].ready && !pictures[TITLE_IMAGE_MENU_BACKGROUND].ready &&
+                                            !pictures[TITLE_IMAGE_WIDE_BACKGROUND].ready &&
+                                            !pictures[TITLE_IMAGE_WIDE_MENU_BACKGROUND].ready
+                                      : !pictures[taken].ready);
     }
     for (i = 0; i < TITLE_ITEMS; i++) {
         const TitleItem *item = &config->items[i];
@@ -241,8 +256,8 @@ void TitleImages_Prepare(const TitleConfig *config)
         Picture *picture = &pictures[which];
         RECT rect;
         if (!picture->ready) continue;
-        /* The shared place gets the title's; the menus' goes there when it is drawn. */
-        if (which == TITLE_IMAGE_MENU_BACKGROUND) {
+        /* The shared place gets the title's; the others go there when drawn. */
+        if (TitleImages_IsBackground(which) && which != TITLE_IMAGE_BACKGROUND) {
             rect.x = CLUT_X;
             rect.y = (short)picture->clut_y;
             rect.w = 256;
@@ -281,7 +296,7 @@ void TitleImages_Draw(int which, void *ot, int depth, int x, int y, int r, int g
     int left;
     if (!TitleImages_Ready(which, NULL, NULL)) return;
     picture = &pictures[which];
-    if ((which == TITLE_IMAGE_BACKGROUND || which == TITLE_IMAGE_MENU_BACKGROUND) && resident != which) {
+    if (TitleImages_IsBackground(which) && resident != which) {
         RECT rect;
         rect.x = (short)picture->x;
         rect.y = (short)picture->y;

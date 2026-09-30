@@ -23,6 +23,10 @@ unsigned TitleMenu_Before(void);
 /* After it, with what it returned: what the title returns instead (a choice
  * made here), and the cursor and slides kept up with the game. */
 int TitleMenu_After(int result);
+/* Each frame, after the game's update: the game's entries at their places
+ * (hidden ones, and the ones drawn here, off the screen), the widescreen
+ * ones while View > Aspect is 16:9. */
+void TitleMenu_Place(void);
 /* The items drawn here, into the entries' ordering table
  * (MainMenu_DrawFrontendBackground). */
 void TitleMenu_Draw(void);

@@ -97,6 +97,19 @@ static void int_member(const JsonValue *object, const char *key, int *out)
     if (value) *out = (int)Json_Number(value, *out);
 }
 
+/* "wide_x", "wide_y": a place for widescreen. */
+static void read_wide(const JsonValue *object, TitleWide *wide)
+{
+    if (Json_Member(object, "wide_x")) {
+        int_member(object, "wide_x", &wide->x);
+        wide->set_x = 1;
+    }
+    if (Json_Member(object, "wide_y")) {
+        int_member(object, "wide_y", &wide->y);
+        wide->set_y = 1;
+    }
+}
+
 static void bool_member(const JsonValue *object, const char *key, int *out)
 {
     const JsonValue *value = Json_Member(object, key);
@@ -196,7 +209,7 @@ static int action_index(const char *name)
 
 /* The keys an entry and a button share. */
 static const char *const item_keys[] = {"hide", "x", "y", "tint", "image", "selected_image", "width", "height",
-                                        "label", "action", "value", "notice"};
+                                        "label", "action", "value", "notice", "wide_x", "wide_y"};
 
 static void read_item(const char *mod, const char *directory, const JsonValue *part, TitleItem *item)
 {
@@ -208,6 +221,7 @@ static void read_item(const char *mod, const char *directory, const JsonValue *p
         int_member(part, "y", &item->y);
         item->set_y = 1;
     }
+    read_wide(part, &item->wide);
     colour_member(mod, part, "tint", &item->tint);
     read_image(mod, directory, item->name, part, "image", &item->image);
     read_image(mod, directory, item->name, part, "selected_image", &item->selected);
@@ -287,7 +301,8 @@ static void read_buttons(const char *mod, const char *directory, const JsonValue
     }
     for (part = Json_At(list, 0); part; part = Json_Next(part)) {
         static const char *const button_keys[] = {"id", "menu", "hide", "x", "y", "tint", "image", "selected_image",
-                                                  "width", "height", "label", "action", "value", "notice"};
+                                                  "width", "height", "label", "action", "value", "notice", "wide_x",
+                                                  "wide_y"};
         const char *id = Json_String(Json_Member(part, "id"), ""), *menu = Json_String(Json_Member(part, "menu"), NULL);
         const char *colon = strchr(id, ':');
         int i = item_index(mod, id);
@@ -379,6 +394,7 @@ static void read_lines(const char *mod, const JsonValue *list)
         line->colour = 0xFFFFFF;
         int_member(item, "x", &line->x);
         int_member(item, "y", &line->y);
+        read_wide(item, &line->wide);
         int_member(item, "size", &line->size);
         if (line->size < 1) line->size = 1;
         if (line->size > 8) line->size = 8;
@@ -394,7 +410,7 @@ static void read_lines(const char *mod, const JsonValue *list)
 static void read_background(const char *mod, const char *directory, const JsonValue *part, TitleBackground *background,
                             unsigned *set)
 {
-    static const char *const known[] = {"picture", "shade", "tint", "color", "dim", "image"};
+    static const char *const known[] = {"picture", "shade", "tint", "color", "dim", "image", "wide", "wide_image"};
     if (Json_TypeOf(part) != JSON_OBJECT) {
         Mods_Note(mod, "%s: \"background\" is an object ({\"image\": \"art/bg.png\"})", reading);
         return;
@@ -403,6 +419,15 @@ static void read_background(const char *mod, const char *directory, const JsonVa
     if (Json_Member(part, "shade")) *set |= TITLE_BACKGROUND_SHADE;
     if (Json_Member(part, "tint")) *set |= TITLE_BACKGROUND_TINT;
     if (Json_Member(part, "image")) *set |= TITLE_BACKGROUND_IMAGE;
+    if (Json_Member(part, "wide")) *set |= TITLE_BACKGROUND_WIDE;
+    if (Json_Member(part, "wide_image")) *set |= TITLE_BACKGROUND_WIDE_IMAGE;
+    bool_member(part, "wide", &background->wide);
+    read_image(mod, directory, "background", part, "wide_image", &background->wide_image);
+    /* A picture for widescreen fills it. */
+    if (Json_Member(part, "wide_image") && background->wide_image.file[0] && !Json_Member(part, "wide")) {
+        background->wide = 1;
+        *set |= TITLE_BACKGROUND_WIDE;
+    }
     bool_member(part, "picture", &background->picture);
     bool_member(part, "shade", &background->shade);
     colour_member(mod, part, "tint", &background->tint);
@@ -426,7 +451,8 @@ static void read_title(const char *mod, const char *directory, const JsonValue *
 {
     static const char *const known[] = {"music", "skip_intro", "press_start", "idle_seconds", "background",
                                         "logo", "copyright", "prompt", "spacing", "entries", "text"};
-    static const char *const layer_keys[] = {"hide", "x", "y", "tint", "image", "width", "height", "show"};
+    static const char *const layer_keys[] = {"hide", "x", "y", "tint", "image", "width", "height", "show", "wide_x",
+                                             "wide_y"};
     const JsonValue *part;
     unsigned set = 0;
     int i;
@@ -450,6 +476,7 @@ static void read_title(const char *mod, const char *directory, const JsonValue *
         bool_member(part, "hide", &config.layers[i].hidden);
         int_member(part, "x", &config.layers[i].x);
         int_member(part, "y", &config.layers[i].y);
+        read_wide(part, &config.layers[i].wide);
         colour_member(mod, part, "tint", &config.layers[i].tint);
         read_image(mod, directory, TitleConfig_LayerNames[i], part, "image", &config.layers[i].image);
         if ((show = Json_String(Json_Member(part, "show"), NULL))) {
@@ -601,6 +628,10 @@ void TitleConfig_Finish(void)
     if (config.menu_set & TITLE_BACKGROUND_COLOUR) menu.colour = given->colour;
     if (config.menu_set & TITLE_BACKGROUND_TINT) menu.tint = given->tint;
     if (config.menu_set & TITLE_BACKGROUND_IMAGE) menu.image = given->image;
+    if (config.menu_set & TITLE_BACKGROUND_WIDE) menu.wide = given->wide;
+    if (config.menu_set & TITLE_BACKGROUND_WIDE_IMAGE) menu.wide_image = given->wide_image;
+    /* A menu picture of its own without a wide one: not the title's wide one. */
+    else if (config.menu_set & TITLE_BACKGROUND_IMAGE) menu.wide_image.file[0] = 0;
     config.background[1] = menu;
     config.menu_set = 0;
 }

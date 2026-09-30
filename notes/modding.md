@@ -503,11 +503,11 @@ window and stays centred in widescreen.
 | `skip_intro` | `true`: go past the intro movie to the title at start-up and after a title jump |
 | `press_start` | `false`: open on the menu, without PUSH START BUTTON |
 | `idle_seconds` | seconds at PUSH START BUTTON before the intro plays again, `0` never (retail a little under a minute) |
-| `background` | `image` (a PNG drawn over the whole screen instead of the hieroglyph wall), `picture` and `shade` (`false` leaves out the wall, or the mod's image, and the dark-to-light shade over it), `tint` (the wall's colour, `#FFFFFF` as it is), `color` (a solid colour under them, seen where they are left out or see-through), `dim` (how far the menu darkens the screen, `0` to `128`, retail `128`) |
-| `logo`, `copyright`, `prompt` | the three pictures: the logo, the (c) 1996 line and PUSH START BUTTON. `image` a PNG drawn instead, `width` and `height` its size, `x`, `y` move one from its place, `tint` colours it, `hide` leaves it out (hiding `prompt` is `"press_start": false`), `show` when: `always`, `press_start` (not while a menu is up) or, for the logo and the copyright line, `menu` (only while one is) |
+| `background` | `image` (a PNG drawn over the whole screen instead of the hieroglyph wall), `picture` and `shade` (`false` leaves out the wall, or the mod's image, and the dark-to-light shade over it), `tint` (the wall's colour, `#FFFFFF` as it is), `color` (a solid colour under them, seen where they are left out or see-through), `dim` (how far the menu darkens the screen, `0` to `128`, retail `128`), `wide` and `wide_image` (widescreen, [below](#widescreen)) |
+| `logo`, `copyright`, `prompt` | the three pictures: the logo, the (c) 1996 line and PUSH START BUTTON. `image` a PNG drawn instead, `width` and `height` its size, `x`, `y` move one from its place (`wide_x`, `wide_y` in widescreen), `tint` colours it, `hide` leaves it out (hiding `prompt` is `"press_start": false`), `show` when: `always`, `press_start` (not while a menu is up) or, for the logo and the copyright line, `menu` (only while one is) |
 | `entries` | the menu entries by name: `new_game`, `load`, `duel`, `trade`, `options` before a game is loaded; `campaign`, `free_duel`, `build_deck`, `library`, `password`, `save` after (or their numbers, 0 to 10). Each may have `hide`, `x` (moved from the middle), `y` (its place) and `tint`, and all the keys of [the menus](#the-titles-menus)' items |
 | `spacing` | how far apart the entries stand (retail 32) |
-| `text` | lines drawn over the title, each `{"text", "x", "y", "align", "color", "size", "show"}`: `x` and `y` its place (default 160, 220, `y` the line's middle), `align` `left`, `center` or `right` of `x`, `size` 1 to 8 (1 about the game's own letters), `show` `always`, `press_start` or `menu`; at most 16 |
+| `text` | lines drawn over the title, each `{"text", "x", "y", "align", "color", "size", "show"}`: `x` and `y` its place (default 160, 220, `y` the line's middle; `wide_x`, `wide_y` in widescreen), `align` `left`, `center` or `right` of `x`, `size` 1 to 8 (1 about the game's own letters), `show` `always`, `press_start` or `menu`; at most 16 |
 
 A hidden entry is left out of its menu and the cursor steps over it; the
 others close up, `spacing` apart around the middle of the retail menu,
@@ -596,6 +596,7 @@ Each item -- button or entry -- may have:
 | `notice` | the words of a `notice` action's box: text, or `{"title", "text"}` |
 | `value` | a number handed to a code mod with `event` |
 | `hide`, `x`, `y`, `tint` | as the title's entries: left out, moved from the middle (160), its middle's place, its colours multiplied |
+| `wide_x`, `wide_y` | its `x` and `y` in widescreen, [below](#widescreen) |
 
 The actions:
 
@@ -629,6 +630,42 @@ console's resolution as the game's own kind of texture and above it
 VRAM the title's pictures leave: about a dozen items with two pictures
 each, more when the title has no background or logo picture of the mod's
 own; one that finds no room is noted beside the mod.
+
+### Widescreen
+
+With View > Aspect at 16:9 the picture is 4/3 as wide: 54 of the game's
+pixels more on either side of its 320, from x -54 to 374. By default the
+title and its menus stay the game's 4:3 between black sides. A mod that
+wants the room says so:
+
+```json
+"title": {"background": {"wide": true}},
+"menu": {
+    "background": {"image": "art/menu.png", "wide_image": "art/menu-wide.png"},
+    "buttons": [{"id": "credits", "label": "CREDITS", "x": 0, "wide_x": 150}]
+}
+```
+
+- **`wide`** on a `background` fills the sides: the game's hieroglyph wall
+  tiles on into them, and the shade, the solid colour and the menu's
+  dimming widen with it. A 4:3 `image` is never stretched: it stays in the
+  middle with the background's `color` (or black) beside it.
+- **`wide_image`** is the background's picture for widescreen, drawn over
+  the whole 428 x 240 (draw it at 1712 x 960, four times that); giving one
+  turns `wide` on. The menus' background without one of its own uses the
+  title's, unless it has a 4:3 `image` of its own.
+- **`wide_x`, `wide_y`** are a second place, used instead of `x` and `y`
+  while widescreen is on: on the menus' items (an offset from the middle and
+  a middle, as `x` and `y` are), the logo, copyright and PUSH START BUTTON,
+  and the `text` lines. What is left out keeps its 4:3 place (an item
+  without `wide_y` its stacked one), so a mod can move only what it wants.
+
+Items drawn by the port (a `label` or an `image`) can go right into the
+sides. The game's own entries are sprites, which the widened picture clips
+to the middle 320, so move an entry into the sides by giving it a picture
+or a label. Turning widescreen on or off with the menu up moves the items
+at once; the logo, copyright and PUSH START BUTTON, when the title opens
+next.
 
 A code mod takes a choice with `MEMORIES_EVENT_MENU` (API 9, [the API 3
 guide](mod-api-3.md)): `a` the item (0 to 10 the entries, as

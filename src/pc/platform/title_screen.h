@@ -31,6 +31,9 @@ int TitleScreen_ShowPicture(void);
 /* The mods' pictures (title_images.h) into the background's ordering table. */
 void TitleScreen_DrawImages(void *ot);
 int TitleScreen_ShowShade(void);
+/* Widescreen with a background that fills it: how far past the game's 320
+ * the background goes on either side (TITLE_WIDE_MARGIN), else 0. */
+int TitleScreen_BackgroundMargin(void);
 /* The menus' items the port draws (title_menu.h), into the entries'
  * ordering table. */
 void TitleScreen_DrawMenu(void);

@@ -32,10 +32,23 @@ enum {
 extern const char *const TitleConfig_LayerNames[TITLE_LAYERS];
 extern const char *const TitleConfig_EntryNames[TITLE_ENTRIES];
 
+/* Widescreen (View > Aspect 16:9): the picture is 4/3 as wide, a margin of
+ * TITLE_WIDE_MARGIN of the game's pixels either side of its 320 (soft_gpu.c,
+ * SoftGpu_WideMargin), which polygons are drawn into and sprites are not.
+ * A place given for widescreen ("wide_x", "wide_y") is used instead of the
+ * other while it is on. */
+enum { TITLE_WIDE_MARGIN = 54, TITLE_WIDE_WIDTH = 320 + 2 * TITLE_WIDE_MARGIN };
+typedef struct {
+    int x, y, set_x, set_y;
+} TitleWide;
+static inline int TitleWide_X(const TitleWide *wide, int x, int on) { return on && wide->set_x ? wide->x : x; }
+static inline int TitleWide_Y(const TitleWide *wide, int y, int on) { return on && wide->set_y ? wide->y : y; }
+
 typedef struct {
     char text[TITLE_LINE_TEXT];
     int x, y, align, show, size;
     uint32_t colour;
+    TitleWide wide;
 } TitleLine;
 
 /* A picture of the mod's own in place of the game's: its PNG ("" for none),
@@ -54,10 +67,16 @@ typedef struct {
     long colour;               /* under the picture, or -1 */
     uint32_t tint;             /* 0xFFFFFF unchanged */
     TitleImage image;          /* the mod's picture, "" for the game's */
+    /* Widescreen: whether it fills the sides (the game's wall tiles on, the
+     * shade and colour widen; a 4:3 picture keeps its shape, with the colour
+     * beside it), and a picture 4/3 as wide drawn instead. */
+    int wide;
+    TitleImage wide_image;
 } TitleBackground;
 
 enum { TITLE_BACKGROUND_PICTURE = 1, TITLE_BACKGROUND_SHADE = 2, TITLE_BACKGROUND_COLOUR = 4,
-       TITLE_BACKGROUND_TINT = 8, TITLE_BACKGROUND_IMAGE = 16 };
+       TITLE_BACKGROUND_TINT = 8, TITLE_BACKGROUND_IMAGE = 16, TITLE_BACKGROUND_WIDE = 32,
+       TITLE_BACKGROUND_WIDE_IMAGE = 64 };
 
 /* One thing a menu offers: one of the eleven entries, or a button a mod
  * adds. An entry is the game's sprite unless it is given a picture or a
@@ -68,6 +87,7 @@ typedef struct {
     int used;                  /* a button slot in use (entries always are) */
     int menu;                  /* 0 the first menu, 1 the second */
     int hidden, x, y, set_y;   /* x added to the middle (160); y its middle */
+    TitleWide wide;            /* the same in widescreen; y worked out as y is when not given */
     uint32_t tint;
     TitleImage image, selected; /* its picture, and the picture while the cursor is on it */
     char label[TITLE_LABEL];   /* or its words, on a frame of the game's look */
@@ -85,7 +105,7 @@ typedef struct {
      * but for what a mod's "menu" "background" set (TITLE_BACKGROUND_*). */
     TitleBackground background[TITLE_MENUS];
     unsigned menu_set;
-    struct { int x, y, hidden, show; uint32_t tint; TitleImage image; } layers[TITLE_LAYERS]; /* x, y added to the game's */
+    struct { int x, y, hidden, show; uint32_t tint; TitleImage image; TitleWide wide; } layers[TITLE_LAYERS]; /* x, y added to the game's */
     TitleItem items[TITLE_ITEMS];
     int spacing, lines;
     TitleLine line[TITLE_MAX_LINES];

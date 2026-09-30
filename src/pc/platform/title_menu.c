@@ -25,6 +25,7 @@
 #include "title_config.h"
 #include "title_images.h"
 #include "menu.h"
+#include "platform.h"
 #include "pc/guest/state.h"
 #include "pc/mods/mods.h"
 #include "types.h"
@@ -64,6 +65,12 @@ static struct {
 } run = {0, {0, 0}, -1, -1, -1, 0, 1, {0}, {0}, {0}, {{{0, 0}}}};
 
 static const TitleConfig *config(void) { return TitleConfig_Get(); }
+/* An item's place, its widescreen one while View > Aspect is 16:9. */
+static int item_x(const TitleItem *it) { return TitleWide_X(&it->wide, it->x, Platform_Widescreen()); }
+static int item_y(const TitleItem *it)
+{
+    return it->hidden ? TITLE_PARKED_Y : TitleWide_Y(&it->wide, it->y, Platform_Widescreen());
+}
 static DisplayObject *entry(int i) { return (DisplayObject *)gMain_apMenuEntries[i]; }
 static int menu_of(int id) { return id >= TITLE_FIRST_MENU; }
 static int base_of(int menu) { return menu ? TITLE_FIRST_MENU : 0; }
@@ -146,7 +153,7 @@ static void begin_slide(int menu)
         /* Alternate sides down the menu, as the game's own entries go
          * by their number (the second menu's first from the right). */
         int item = config()->order[menu][row], side = ((row + base_of(menu)) & 1) ? RIGHT_OFF : LEFT_OFF;
-        int place = MIDDLE + config()->items[item].x;
+        int place = MIDDLE + item_x(&config()->items[item]);
         DisplayObject *object = item < TITLE_ENTRIES && !drawn_here(item) ? entry(item) : NULL;
         run.from[item] = D_80184596 ? place : side;
         run.to[item] = D_80184596 ? side : place;
@@ -167,10 +174,6 @@ void TitleMenu_Opened(void)
     run.leaving = -1;
     run.prompt = prompt_up();
     memset(run.ghosts, 0, sizeof(run.ghosts));
-    /* The entries drawn here stand off the screen, as hidden ones do. */
-    for (i = 0; i < TITLE_ENTRIES; i++) {
-        if (entry(i) && drawn_here(i)) entry(i)->field_30.h.field_32 = TITLE_PARKED_Y;
-    }
     for (i = 0; i < TITLE_ITEMS; i++) run.x[i] = run.from[i] = run.to[i] = LEFT_OFF;
     /* Back from a choice made here: on the item it was made on. */
     if (run.left_item >= 0 && run.left_menu == menu && row_of(menu, run.left_item) >= 0)
@@ -339,7 +342,10 @@ int TitleMenu_After(int result)
     }
     for (row = 0; row < config()->shown[menu]; row++) {
         int item = config()->order[menu][row];
-        run.x[item] = D_80184599 ? slide_x(item, timer) : run.to[item];
+        /* At rest after sliding in, its place now: widescreen may have
+         * been turned on or off since. */
+        run.x[item] = D_80184599 ? slide_x(item, timer)
+                      : D_80184596 ? run.to[item] : MIDDLE + item_x(&config()->items[item]);
         if (D_80184599 && ((TICKS - timer) & 1) && timer < TICKS) {
             int g, oldest = 0;
             for (g = 1; g < GHOSTS; g++) {
@@ -369,15 +375,30 @@ void TitleMenu_Draw(void)
         if (!selected || !TitleImages_Ready(which, NULL, NULL)) which = TITLE_IMAGE_ITEM(item, 0);
         level = selected || TitleImages_Ready(TITLE_IMAGE_ITEM(item, 1), NULL, NULL) ? FULL : UNSELECTED_LEVEL;
         TitleImages_Ready(which, &w, &h);
-        TitleImages_Draw(which, D_800E9D90[1], depth, run.x[item] - w / 2, it->y - h / 2,
+        TitleImages_Draw(which, D_800E9D90[1], depth, run.x[item] - w / 2, item_y(it) - h / 2,
                          level * (int)(it->tint >> 16 & 0xFF) / 0xFF, level * (int)(it->tint >> 8 & 0xFF) / 0xFF,
                          level * (int)(it->tint & 0xFF) / 0xFF, 0);
         for (g = 0; g < GHOSTS; g++) {
             const Ghost *ghost = &run.ghosts[item][g];
             if (ghost->level <= 0) continue;
-            TitleImages_Draw(which, D_800E9D90[1], depth + 1, ghost->x - w / 2, it->y - h / 2, ghost->level, ghost->level,
+            TitleImages_Draw(which, D_800E9D90[1], depth + 1, ghost->x - w / 2, item_y(it) - h / 2, ghost->level, ghost->level,
                              ghost->level, 1);
         }
+    }
+}
+
+void TitleMenu_Place(void)
+{
+    int i, menu = menu_of(gMain_bMenuID);
+    if (!run.open) return;
+    for (i = 0; i < TITLE_ENTRIES; i++) {
+        const TitleItem *it = &config()->items[i];
+        DisplayObject *object = entry(i);
+        if (!object) continue;
+        /* The entries drawn here stand off the screen, as hidden ones do. */
+        object->field_30.h.field_32 = (s16)(drawn_here(i) ? TITLE_PARKED_Y : item_y(it));
+        if (!D_80184599 && !D_80184596 && menu_of(i) == menu && !it->hidden && !drawn_here(i))
+            object->field_30.h.field_30 = (s16)(MIDDLE + item_x(it));
     }
 }
 
