@@ -647,12 +647,16 @@ static void adjust(int option, int direction)
             bit++;
         bit = (bit + direction + 17) % 17;
         value = bit == 16 ? 0 : 1 << bit;
+    } else if (!strcmp(type, "choice")) {
+        /* A closed, named set of options, the same as "key"'s pad buttons
+         * are: wraps around rather than clamping, so either arrow always
+         * does something, never leaving a press at either end with nothing
+         * to do but press the other way. Unlike a plain int (below), there
+         * is no meaningful "one past the end" to stop at. */
+        int count = Json_Count(Json_Member(spec, "choices"));
+        if (count > 0)
+            value = ((value + (direction > 0 ? 1 : -1)) % count + count) % count;
     } else {
-        if (!strcmp(type, "choice")) {
-            low = 0;
-            high = Json_Count(Json_Member(spec, "choices")) - 1;
-            step = 1;
-        }
         int64_t next = (int64_t)value + (direction > 0 ? step : -step);
         value = next > high ? high : next < low ? low : (int)next;
     }

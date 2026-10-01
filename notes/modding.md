@@ -1127,7 +1127,7 @@ the reason beside any that failed to load.
 
 | Mod | What it is |
 |---|---|
-| `mods/3d-monsters` | face-up monsters on the duel field stand on their cards as animated models (`notes/pc-build.md`) |
+| `mods/3d-monsters` | face-up monsters on the duel field stand on their cards, either as animated models (`notes/pc-build.md`) or, its `style` setting turned to "Card art", as an enlarged, glowing cutout of the card's own art instead |
 | `mods/hand-camera` | L1/R1 turn and L3/R3 zoom the duel camera while the hand is up |
 | `mods/ai-hard-mode` | optional stronger opponent decisions |
 | `mods/yamyi-mods` | return-to-title confirmation, rarity colours and Library drop odds, with independent switches |
@@ -1135,13 +1135,53 @@ the reason beside any that failed to load.
 
 The first two were part of the executable until they became mods; they are the worked
 examples of a code mod that reaches deep into the game. 3D Monsters' knobs
-are its declared settings `scale`, `pixels`, `lift`, `pitch`, `depth`,
-`battle`, `battle_pixels` and `battle_dim`, in
+are its declared settings `style`, `scale`, `pixels`, `lift`, `pitch`, `depth`,
+`battle`, `battle_pixels`, `battle_dim`, `glow`, `glow_r`, `glow_g`, `glow_b`,
+`glow_reach` and `glow_period`, in
 the Mods window (`MEMORIES_MOD_3D_MONSTERS_SCALE=5000` for one run; they were
 `MEMORIES_MODS_SCALE` and so on before it became one object for both systems).
-One more, `test`, is read but not declared, so the window does not show it:
-`MEMORIES_MOD_3D_MONSTERS_TEST=<card>` stands a different monster in every
-zone from that card on, for measuring the cache and the arenas.
+`style` picks the presentation (0 the original 3D models, 1 Card art).
+`pixels`, `lift`, `pitch` and `depth` are shared on purpose -- both styles
+fit and place their own cutout or model by the same target height, lift,
+field-pitch threshold and depth offset, so one setting means the same thing
+either way, and `field_art.c` simply reads the settings `field_models.c`
+already declares rather than repeating them. Everything else belongs to one
+style alone: `scale`, `battle`, `battle_pixels` and `battle_dim` are 3D
+models only (down to their own labels saying so in the manifest); `glow` and
+the rest are Card art only, the same way. One more, `test`, is read but not
+declared, so the window does not show it: `MEMORIES_MOD_3D_MONSTERS_TEST=<card>` stands a
+different monster in every zone from that card on, for measuring the cache
+and the arenas.
+
+**A mod with a "style"-like choice setting** (more than one whole presentation,
+picked by one setting, the way 3D Monsters' two styles are): a setting or a
+whole piece of behaviour that belongs to one style alone must have no effect
+in the other, not just be unlikely to matter there -- the settings window has
+no way to hide a setting only some styles use, so this cannot be enforced by
+the window; it has to be true of the code itself, checked at the one place
+that reads the style, not left to whichever function happens to read the
+setting. 3D Monsters got this wrong once during review: `battle` (the attack-
+card presentation) kept running under Card art, since it has no card-art
+equivalent and so seemed harmless to leave alone, but the two models it stood
+still showed while everything else on the field had switched to cutouts.
+Fixed by moving the style check ahead of it in `draw_frame`, so a style-
+exclusive function is never even called under the other style, the same way
+Card art's own drawing is never reached under 3D models. Where a setting is
+genuinely the same thing under either style (3D Monsters' `pixels`, `lift`,
+`pitch` and `depth`), share it rather than adding a second copy -- but where
+it belongs to one style, its label says so (`"(3D models)"`, `"(Card art)"`)
+even though the window shows it regardless, since that is the only signal a
+player has that it does nothing under the other choice.
+
+Building `style` surfaced a Mods window bug, since fixed for every mod's
+`choice` settings, not just this one: `adjust()` (`mods_window.c`) clamped a
+`choice` at its first and last option the way a plain `int` clamps at its
+`min`/`max`, so pressing the same arrow again at either end did nothing --
+confusing for a two-option choice especially, since one arrow would appear to
+stop working entirely and the player had to know to press the other one. A
+`choice` is a closed, named set the way a `key` setting's pad buttons are, not
+a range with a meaningful limit, so it now wraps around instead, the same way
+`key` already did.
 
 ## Testing a mod
 
