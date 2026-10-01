@@ -261,7 +261,7 @@ class Project:
         self.equips.pop(cid, None)
         for monsters in self.equips.values():
             monsters.discard(cid)
-        self.rituals = {r: rec for r, rec in self.rituals.items() if cid not in rec}
+        self.rituals = {r: rec for r, rec in self.rituals.items() if cid not in rec and r != cid}
         self.ritual_requirements.pop(cid, None)
         for ritual, slots in list(self.ritual_requirements.items()):
             if ritual not in self.rituals or any(req.get("card") == cid for req in slots):
@@ -366,7 +366,21 @@ class Project:
         return sorted(cid for cid, card in self.cards.items() if card.type == 23)
 
     def ritual_cards(self):
-        return sorted(cid for cid, card in self.cards.items() if cid <= CARD_COUNT and card.type == 22)
+        return sorted(cid for cid in self.cards if self.is_ritual(cid))
+
+    def effect_of(self, cid: int) -> int:
+        """The disc card whose effect this one has when played (cards.c
+        Cards_EffectId): the one "effect" names, else its base, else itself."""
+        extra = self.added[cid].extra if cid in self.added else self.card_extra.get(cid, {})
+        named = self.resolve(extra["effect"]) if "effect" in extra else None
+        return named if named and named <= CARD_COUNT else self.base_of(cid)
+
+    def is_ritual(self, cid: int) -> bool:
+        """A ritual card a recipe may be for: typed Ritual and played as a
+        disc ritual (tables.c): one of the disc's, a copy of one, or a card
+        whose "effect" names one. A card only typed Ritual does nothing."""
+        card, effect = self.cards.get(cid), self.retail.cards.get(self.effect_of(cid))
+        return bool(card and effect and card.type == 22 and effect.type == 22)
 
     def clone(self) -> "Project":
         return copy.deepcopy(self)

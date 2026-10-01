@@ -322,6 +322,21 @@ class ManifestTest(unittest.TestCase):
         for e in p.equip_cards():
             self.assertEqual(again.equips.get(e, again.equip_baseline(e)), want[e], e)
 
+    def test_rules_switched_by_a_setting_are_kept(self):
+        # The editor shows the disc's table, not a setting's: a rule with
+        # "setting" is written back as it came, and does not change the table.
+        p = Project(self.retail)
+        fusion = {"with": [1, 2], "result": 5, "setting": "thunder"}
+        equip = {"card": 652, "add": ["Dragon"], "setting": "thunder"}
+        ritual = {"card": 665, "tributes": [1, 2, 3], "result": 4, "setting": "pick", "value": 2}
+        data = {"id": "s", "settings": [{"key": "thunder", "type": "bool", "default": 1}],
+                "fusions": [fusion], "equips": [equip], "rituals": [ritual]}
+        messages = manifest.apply(p, data)
+        self.assertEqual(p.fusions.get((1, 2)), self.retail.fusions.get((1, 2)))
+        self.assertEqual(sum("switched by setting" in m for m in messages), 3)
+        built = json.loads(manifest.dumps(manifest.build(p)))
+        self.assertEqual((built["fusions"], built["equips"], built["rituals"]), ([fusion], [equip], [ritual]))
+
     def test_forbidden_copy_fusion(self):
         p = Project(self.retail)
         p.info.id = "t"
@@ -334,6 +349,44 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(again.fusions.get((2, copy)), 0)
         again.revert_fusion((2, copy))
         self.assertNotIn((2, copy), again.fusions)
+
+    def test_added_ritual(self):
+        # A copy of a ritual card is listed, has its base's recipe until it
+        # is given one, and its own recipe goes out and comes back by id.
+        p = Project(self.retail)
+        p.info.id = "t"
+        base = p.ritual_cards()[0]
+        copy = p.add_card(base, "r1")
+        monster = p.add_card(1, "m1")
+        self.assertIn(copy, p.ritual_cards())
+        self.assertNotIn(monster, p.ritual_cards())
+        self.assertNotIn("rituals", manifest.build(p))
+        p.rituals[copy] = (1, 2, 3, 4)
+        self.assertEqual(p.ritual_status(copy), "added")
+        self.assertIn({"card": "t:r1:1", "tributes": [p.ref(1), p.ref(2), p.ref(3)], "result": p.ref(4)},
+                      manifest.build(p)["rituals"])
+        self.assertFalse([i for i in validate.validate(p) if i.area == "Rituals"])
+        again = self.reopen(p)
+        self.assertEqual(again.rituals.get(copy), (1, 2, 3, 4))
+        self.assertEqual(again.rituals.get(base), p.rituals.get(base))
+        p.remove_card(copy)
+        self.assertNotIn(copy, p.rituals)
+
+    def test_card_made_a_ritual(self):
+        # A disc monster typed Ritual is a ritual only with "effect" naming
+        # one (it is played with that card's effect); its recipe round-trips.
+        p = Project(self.retail)
+        p.info.id = "t"
+        base = p.ritual_cards()[0]
+        p.cards[1] = p.cards[1].copy(type=g.TYPE_RITUAL)
+        self.assertNotIn(1, p.ritual_cards())
+        p.card_extra[1] = {"effect": base}
+        self.assertIn(1, p.ritual_cards())
+        p.rituals[1] = (2, 3, 4, 5)
+        self.assertFalse([i for i in validate.validate(p) if i.area == "Rituals"])
+        again = self.reopen(p)
+        self.assertIn(1, again.ritual_cards())
+        self.assertEqual(again.rituals.get(1), (2, 3, 4, 5))
 
     def test_reverts(self):
         # What the tabs' Revert buttons do, in the model a front end calls.
@@ -508,6 +561,10 @@ class ValidateTest(unittest.TestCase):
         self.assertEqual(validate.text_lines("a b"), 1)
         self.assertEqual(validate.text_lines("x" * 20 + " y"), 2)
         self.assertEqual(validate.text_lines("a\nb\nc"), 3)
+        # An icon is one letter of the line, a colour none (cards.c text_code).
+        self.assertEqual(validate.text_lines("x" * 16 + " {f8 0B 04} y"), 1)
+        self.assertEqual(validate.text_lines("x" * 17 + " {f8 0B 04} y"), 2)
+        self.assertEqual(validate.text_lines("{f8 0A 02}" + "x" * 18 + " y"), 1)
 
 
 

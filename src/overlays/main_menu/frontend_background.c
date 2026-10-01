@@ -56,6 +56,11 @@ void MainMenu_DrawFrontendBackground(void)
         flat.y2 = GRAPHICS_DEFAULT_HEIGHT;
         flat.x3 = GRAPHICS_DEFAULT_WIDTH;
         flat.y3 = GRAPHICS_DEFAULT_HEIGHT;
+#ifdef MEMORIES_PC
+        /* A mod's background filling widescreen: the dimming too. */
+        flat.x0 = flat.x2 = -TitleScreen_BackgroundMargin();
+        flat.x1 = flat.x3 = GRAPHICS_DEFAULT_WIDTH + TitleScreen_BackgroundMargin();
+#endif
         func_8005B260((u32 *)&flat, (GsOT *)D_800E9D90[2], 0, 2);
     }
     setPolyFT4(&sprite);
@@ -68,10 +73,16 @@ void MainMenu_DrawFrontendBackground(void)
     sprite.tpage = 15;
     sprite.clut = getClut(0, 244);
 #ifdef MEMORIES_PC
+    /* The wall tiles every 256, so in widescreen, filled, it runs on into
+       the sides (from a whole tile left of them). */
     if (TitleScreen_ShowPicture())
-#endif
+    for (x = TitleScreen_BackgroundMargin() ? -64 : 0; x < GRAPHICS_DEFAULT_WIDTH + TitleScreen_BackgroundMargin();
+         x = right) {
+        u = (x % 256 + 256) % 256;
+#else
     for (x = 0; x < GRAPHICS_DEFAULT_WIDTH; x = right) {
         u = x % 256;
+#endif
         right = x + 64;
         sprite.x0 = x;
         sprite.y0 = 0;
@@ -96,6 +107,7 @@ void MainMenu_DrawFrontendBackground(void)
        colour, in the picture's slot after it, which puts it under the
        picture: a slot draws what was added to it last first. */
     TitleScreen_DrawImages(D_800E9D90[2]);
+    TitleScreen_DrawMenu();
     if (TitleScreen_BackgroundColour() >= 0) {
         PSXLONG colour = TitleScreen_BackgroundColour();
         setPolyF4(&flat);
@@ -110,6 +122,8 @@ void MainMenu_DrawFrontendBackground(void)
         flat.y2 = GRAPHICS_DEFAULT_HEIGHT;
         flat.x3 = GRAPHICS_DEFAULT_WIDTH;
         flat.y3 = GRAPHICS_DEFAULT_HEIGHT;
+        flat.x0 = flat.x2 = -TitleScreen_BackgroundMargin();
+        flat.x1 = flat.x3 = GRAPHICS_DEFAULT_WIDTH + TitleScreen_BackgroundMargin();
         GsSortPoly(&flat, D_800E9D90[2], 4095);
     }
 #endif
@@ -138,6 +152,8 @@ void MainMenu_DrawFrontendBackground(void)
     if (!TitleScreen_ShowShade()) {
         return;
     }
+    shade.x0 = shade.x2 = -TitleScreen_BackgroundMargin();
+    shade.x1 = shade.x3 = GRAPHICS_DEFAULT_WIDTH + TitleScreen_BackgroundMargin();
 #endif
     func_8005B260((u32 *)&shade, (GsOT *)D_800E9D90[2], 4094, 2);
 }

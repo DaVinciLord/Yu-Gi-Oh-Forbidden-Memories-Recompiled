@@ -48,6 +48,9 @@ int Tables_EquipBonus(int equip, int monster, int retail);
  * and a 0 after them in `recipe` (the layout of the game's ritual table),
  * 0 when a mod removed the ritual, -1 when the disc's recipe stands. */
 int Tables_Ritual(int ritual, unsigned short recipe[6]);
+/* Whether any mod has a "rituals" entry for this card (a card past the
+ * disc's without one is its base's ritual). */
+int Tables_HasRitual(int ritual);
 
 /* A condition-based ritual tribute. A slot may require a specific card,
  * a monster type, secondary fusion group (Elf/Female), minimum/maximum printed

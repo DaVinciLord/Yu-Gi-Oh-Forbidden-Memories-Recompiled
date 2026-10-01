@@ -687,6 +687,10 @@ def read_fusions(project: Project, rules, messages: list):
         if not isinstance(rule, dict):
             messages.append(f"{where} is not an object; left out")
             continue
+        if "setting" in rule:     # switched by the mod's settings: the editor shows the disc's table
+            messages.append(f"{where}: switched by setting {rule['setting']!r}; kept as written")
+            project.kept["fusions"].append(rule)
+            continue
         if "remove" in rule:
             cid = project.resolve(rule["remove"])
             if cid:
@@ -738,6 +742,11 @@ def equip_rules(project: Project, entries, messages: list, kept: list = None) ->
         where = f"equips[{i}]"
         if not isinstance(entry, dict):
             messages.append(f"{where} is not an object; left out")
+            continue
+        if "setting" in entry:
+            messages.append(f"{where}: switched by setting {entry['setting']!r}; kept as written")
+            if kept is not None:
+                kept.append(entry)
             continue
         order = i + 1
         equip = project.resolve(entry.get("card"))
@@ -823,9 +832,14 @@ def read_rituals(project: Project, entries, messages: list):
         where = f"rituals[{i}]"
         if not isinstance(entry, dict):
             continue
+        if "setting" in entry:
+            messages.append(f"{where}: switched by setting {entry['setting']!r}; kept as written")
+            project.kept["rituals"].append(entry)
+            continue
         ritual = project.resolve(entry.get("card"))
-        if not ritual or ritual > CARD_COUNT or project.cards[ritual].type != 22:
-            messages.append(f"{where}: \"card\" must be one of the disc's ritual cards; left out")
+        if not ritual or not project.is_ritual(ritual):
+            messages.append(f"{where}: \"card\" must be a ritual card whose effect is a ritual's (a copy of one, "
+                            "or \"effect\" naming one); left out")
             continue
         if "result" in entry and entry["result"] is None:
             project.rituals.pop(ritual, None)
