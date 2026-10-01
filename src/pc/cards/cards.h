@@ -45,6 +45,8 @@ const char *Cards_Identity(int id);
 int Cards_FindIdentity(const char *identity);
 int Cards_ModelId(int id);
 int Cards_EffectId(int id);
+/* The type a card has on the disc, which is what its effect is; -1 past the disc. */
+int Cards_RetailType(int id);
 /* Whether the disc has a 3D model for `id` to stand as: a magic, trap, ritual
  * or equip card a mod made a monster has none unless it borrows one. */
 int Cards_HasModel(int id);

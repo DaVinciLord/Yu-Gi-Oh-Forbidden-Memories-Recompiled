@@ -724,8 +724,9 @@ class RitualsTab(Tab):
         ttk.Button(buttons, text="Edit recipe...", command=self.edit).pack(side="left")
         ttk.Button(buttons, text="Remove recipe", command=self.remove).pack(side="left", padx=4)
         ttk.Button(buttons, text="Revert to retail", command=self.revert).pack(side="left")
-        ttk.Label(buttons, text="A ritual is one of the disc's ritual cards; the three tributes are monsters on "
-                                "the field; custom recipes may use conditions.", style="Hint.TLabel").pack(side="right")
+        ttk.Label(buttons, text="A ritual is a ritual card (an added copy has its base's recipe until given its "
+                                "own); the three tributes are monsters on the field; custom recipes may use conditions.",
+                  style="Hint.TLabel").pack(side="right")
 
     def refresh(self):
         self.fill()
@@ -741,6 +742,10 @@ class RitualsTab(Tab):
             conditional = ritual in p.ritual_requirements
             state = p.ritual_status(ritual)
             recipe = p.rituals.get(ritual) or (None, None, None, None)
+            if ritual in p.added and ritual not in p.rituals and not conditional:
+                # Without a recipe of its own, a copy is its base's ritual.
+                recipe = p.rituals.get(p.base_of(ritual)) or recipe
+                state = state or "as base"
             labels = [p.card_label(c) if c else "-" for c in recipe]
             if conditional:
                 for i, req in enumerate(p.ritual_requirements[ritual]):
@@ -777,8 +782,10 @@ class RitualsTab(Tab):
         ritual = self.selected()
         if not ritual:
             return
-        recipe = self.project.rituals.get(ritual) or self.project.retail.rituals.get(ritual) or (0, 0, 0, 0)
-        saved = self.project.ritual_requirements.get(ritual)
+        p = self.project
+        recipe = (p.rituals.get(ritual) or p.retail.rituals.get(ritual) or p.rituals.get(p.base_of(ritual))
+                  or (0, 0, 0, 0))      # an added copy starts from its base's
+        saved = p.ritual_requirements.get(ritual)
         requirements = [dict(r) for r in saved] if saved else [{"card": recipe[i]} if recipe[i] else {} for i in range(3)]
 
         dialog = tk.Toplevel(self)

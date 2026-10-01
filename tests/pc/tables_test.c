@@ -18,11 +18,13 @@ static const char *const named[][2] = {{"Kuriboh", "10"}, {"Thunder Dragon", "11
                                        {"Legendary Sword", "20"}, {"Black Luster Ritual", "21"}};
 int Cards_Valid(int id) { return id >= 1 && id <= gCard_nCount; }
 int Cards_BaseId(int id) { return Cards_Valid(id) ? (id > CARD_COUNT ? id - CARD_COUNT : id) : 0; }
+int Cards_EffectId(int id) { return Cards_BaseId(id); }
 int Cards_Type(int id)
 {
     id = Cards_BaseId(id);
     return id == 20 ? CARD_TYPE_EQUIP : id == 21 ? CARD_TYPE_RITUAL : id == 12 || id == 13 ? 0 : 3;
 }
+int Cards_RetailType(int id) { return id >= 1 && id <= CARD_COUNT ? Cards_Type(id) : -1; }
 int Cards_TypeNamed(const char *text) { return same_letters(text, "Dragon") ? 0 : same_letters(text, "Warrior") ? 3 : -1; }
 int Cards_FusionGroupNamed(const char *text)
 {
@@ -95,7 +97,7 @@ const JsonValue *Mods_Manifest(int mod) { (void)mod; return NULL; }
 /* The duelist list is duelists_stubs.c: no duelist mod, the disc's forty,
  * which is what these cases are written against. */
 
-static JsonDocument *documents[80];
+static JsonDocument *documents[112];
 static int document_count;
 static void add(const char *mod, const char *text)
 {
@@ -264,6 +266,15 @@ int main(void)
     }
     add("b", "{\"rituals\": [{\"card\": 21, \"result\": null}]}");
     assert(Tables_Ritual(21, own) == 0);
+    /* A mod's own ritual card (a copy of one) takes a recipe of its own;
+     * a copy of a monster does not, and the base keeps its rule. */
+    assert(!Tables_HasRitual(CARD_COUNT + 21));
+    add("c", "{\"rituals\": [{\"card\": 743, \"tributes\": [1, 2, 3], \"result\": 13}]}");
+    assert(Tables_HasRitual(743) && Tables_Ritual(743, own) == 1 && own[0] == 743 && own[4] == 13);
+    assert(Tables_Ritual(21, own) == 0);
+    notes = 0;
+    add("c", "{\"rituals\": [{\"card\": 723, \"tributes\": [1, 2, 3], \"result\": 13}]}");
+    assert(notes == 1 && !Tables_HasRitual(723));
     {
         TablesRitualRequirement req[3];
         assert(Tables_RitualRequirements(21, req, 0) == 0);

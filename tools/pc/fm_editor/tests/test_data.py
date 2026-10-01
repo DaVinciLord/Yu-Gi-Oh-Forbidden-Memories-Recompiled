@@ -350,6 +350,44 @@ class ManifestTest(unittest.TestCase):
         again.revert_fusion((2, copy))
         self.assertNotIn((2, copy), again.fusions)
 
+    def test_added_ritual(self):
+        # A copy of a ritual card is listed, has its base's recipe until it
+        # is given one, and its own recipe goes out and comes back by id.
+        p = Project(self.retail)
+        p.info.id = "t"
+        base = p.ritual_cards()[0]
+        copy = p.add_card(base, "r1")
+        monster = p.add_card(1, "m1")
+        self.assertIn(copy, p.ritual_cards())
+        self.assertNotIn(monster, p.ritual_cards())
+        self.assertNotIn("rituals", manifest.build(p))
+        p.rituals[copy] = (1, 2, 3, 4)
+        self.assertEqual(p.ritual_status(copy), "added")
+        self.assertIn({"card": "t:r1:1", "tributes": [p.ref(1), p.ref(2), p.ref(3)], "result": p.ref(4)},
+                      manifest.build(p)["rituals"])
+        self.assertFalse([i for i in validate.validate(p) if i.area == "Rituals"])
+        again = self.reopen(p)
+        self.assertEqual(again.rituals.get(copy), (1, 2, 3, 4))
+        self.assertEqual(again.rituals.get(base), p.rituals.get(base))
+        p.remove_card(copy)
+        self.assertNotIn(copy, p.rituals)
+
+    def test_card_made_a_ritual(self):
+        # A disc monster typed Ritual is a ritual only with "effect" naming
+        # one (it is played with that card's effect); its recipe round-trips.
+        p = Project(self.retail)
+        p.info.id = "t"
+        base = p.ritual_cards()[0]
+        p.cards[1] = p.cards[1].copy(type=g.TYPE_RITUAL)
+        self.assertNotIn(1, p.ritual_cards())
+        p.card_extra[1] = {"effect": base}
+        self.assertIn(1, p.ritual_cards())
+        p.rituals[1] = (2, 3, 4, 5)
+        self.assertFalse([i for i in validate.validate(p) if i.area == "Rituals"])
+        again = self.reopen(p)
+        self.assertIn(1, again.ritual_cards())
+        self.assertEqual(again.rituals.get(1), (2, 3, 4, 5))
+
     def test_reverts(self):
         # What the tabs' Revert buttons do, in the model a front end calls.
         p = Project(self.retail)

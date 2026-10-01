@@ -9,6 +9,25 @@
 #ifdef MEMORIES_PC
 #include "pc/cards/cards.h"
 #include "pc/cards/tables.h"
+#include "duel_action_lock.h"
+#include "duel_scene_card_placement.h"
+
+s32 Duel_RitualPlayed(void)
+{
+    /* D_8009B150 is the card the effect scene plays (func_80019608). */
+    s32 played = D_8009B150 & CARD_ID_FIELD_MASK;
+    return played != gDuel_wEffectCardID && Cards_EffectId(played) == gDuel_wEffectCardID ? played
+                                                                                         : gDuel_wEffectCardID;
+}
+
+/* Whether the disc's ritual table has a recipe for this card. */
+static s32 disc_recipe(s32 id)
+{
+    u16 *q;
+    for (q = gDuel_awRitualData; q[0] != 0; q += DUEL_RITUAL_RECIPE_HALFWORD_COUNT)
+        if (q[0] == id) return 1;
+    return 0;
+}
 #endif
 
 s32 Duel_CheckRitual(DuelRitualResult *out, s32 ritualId)
@@ -31,6 +50,10 @@ s32 Duel_CheckRitual(DuelRitualResult *out, s32 ritualId)
 #ifdef MEMORIES_PC
     TablesRitualRequirement requirements[DUEL_RITUAL_TRIBUTE_COUNT];
     u16 conditional_result = 0;
+    /* A card played with another's effect (a copy, or "effect"), played or
+     * in the AI's hand, without a recipe of its own is that card's ritual. */
+    if (ritualId != Cards_EffectId(ritualId) && !Tables_HasRitual(ritualId) && !disc_recipe(ritualId))
+        ritualId = Cards_EffectId(ritualId);
     if (Tables_RitualRequirements(ritualId, requirements, &conditional_result)) {
         int match[DUEL_RITUAL_TRIBUTE_COUNT] = {-1, -1, -1};
         int order[DUEL_RITUAL_TRIBUTE_COUNT] = {0, 1, 2};
