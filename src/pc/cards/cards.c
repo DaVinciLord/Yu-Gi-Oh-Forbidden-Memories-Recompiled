@@ -34,13 +34,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Where the retail tables sit in the executable's image (notes/card-catalog.md). */
+/* Where the retail tables sit in the executable's image (notes/card-catalog.md).
+ * A test that includes this file may put them elsewhere first. */
+#ifndef RETAIL_STATS
 #define RETAIL_STATS 0x801D4244u        /* s32 [722], by id - 1 */
 #define RETAIL_SORT_KEYS 0x801D4D8Eu    /* s16 [722], by id - 1 */
 #define RETAIL_LEVEL_ATTR 0x801D5332u   /* u8 [723], by id */
 #define RETAIL_NAME_OFFSETS 0x801D5800u /* u16, by 0x8000 + id - 0x8000, from 0x801D0000 */
 #define TEXT_BANK 0x801D0000u
 #define GLYPH_TABLE 0x801D9000u         /* u32 per glyph code, the Shift-JIS code in the low half */
+#endif
 
 /* The save's layout (src/game/save_data.h). */
 #define SAVE_CHEST 0x50
