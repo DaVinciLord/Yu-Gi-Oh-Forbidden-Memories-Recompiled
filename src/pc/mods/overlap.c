@@ -387,6 +387,7 @@ static int switched_on(const ModsOverlaps *x, int mod, const JsonValue *entry)
     const JsonValue *only = Json_Member(entry, "value");
     int value;
     if (!key || !x->source.setting || (value = x->source.setting(mod, key, x->source.context)) < 0) return 1;
+    if (only && Json_TypeOf(only) != JSON_NUMBER) return 1; /* warned of, and used (mods.c entry_used) */
     return only ? value == (int)Json_Number(only, 0) : value != 0;
 }
 /* "textures": the pack's manifest.json, an image per entry; the same image

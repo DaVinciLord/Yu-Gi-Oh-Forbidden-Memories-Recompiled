@@ -193,7 +193,9 @@ class _Check:
         if value is None:
             return True
         if "value" in entry:
-            return value == _json_number(entry["value"], 0)
+            only = entry["value"]
+            # Not a number: warned of, and used (mods.c entry_used).
+            return value == only if isinstance(only, int) and not isinstance(only, bool) else True
         return value != 0
 
     def card_text(self, text):
