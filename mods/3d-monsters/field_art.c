@@ -326,10 +326,10 @@ static int duel_field_up(void)
 #define GLOW_CLUT_X 0
 #define GLOW_CLUT_Y GLOW_SIZE
 #define GLOW_INNER_HALF 0.30 /* the middle square's half-width, normalised */
-#define GLOW_REACH_DEFAULT 100
-#define GLOW_PERIOD_DEFAULT 30
+#define GLOW_REACH_DEFAULT 50
+#define GLOW_PERIOD_DEFAULT 90
 #define GLOW_FLOOR 0.35 /* the pulse's dimmest point: never fully off */
-#define GLOW_R_DEFAULT 60
+#define GLOW_R_DEFAULT 255
 #define GLOW_G_DEFAULT 255
 #define GLOW_B_DEFAULT 90
 
@@ -396,6 +396,8 @@ static void draw_glow(GsOT *table, unsigned short depth, int cx, int cy, int wid
     g = (int)(tunable("glow_g", GLOW_G_DEFAULT) * level);
     b = (int)(tunable("glow_b", GLOW_B_DEFAULT) * level);
 
+    /* Zeroed first: the port reads pad2 as the bank fade (SOFT_GPU_FADE). */
+    memset(&prim, 0, sizeof(prim));
     setPolyFT4(&prim);
     setSemiTrans(&prim, 1);
     prim.r0 = (u8)r;
@@ -453,6 +455,8 @@ static void draw_one(int index, int world_height)
     width_px = height_px * CARD_ART_WIDTH / CARD_ART_HEIGHT;
     cx = (base_sx + top_sx) / 2;
 
+    /* Zeroed first: the port reads pad2 as the bank fade (SOFT_GPU_FADE). */
+    memset(&prim, 0, sizeof(prim));
     setPolyFT4(&prim);
     prim.r0 = prim.g0 = prim.b0 = 0x80;
     prim.tpage = GetTPage(1, 0, PIXELS_X, PIXELS_Y) | (u16)(art->bank << 11);

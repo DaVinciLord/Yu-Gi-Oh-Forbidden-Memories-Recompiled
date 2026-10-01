@@ -128,7 +128,7 @@ static unsigned char art_parts[CARD_TABLE_ID_END];
 static unsigned char *plates[CARD_TABLE_ID_END];
 /* Field-only artwork ("field_art"): a card's picture and CLUT (art.h's
  * CARD_ART_PIXELS/CARD_ART_CLUT layout) for its cutout on the duel field
- * alone (mods/2d-monsters/field_art.c). Never patched into a card's own
+ * alone (mods/3d-monsters/field_art.c). Never patched into a card's own
  * record, so nothing else the card's art shows (Library, hand, trade, the
  * detail panel) is touched by it. NULL: the cutout uses the card's own art. */
 static unsigned char *field_art_records[CARD_TABLE_ID_END];

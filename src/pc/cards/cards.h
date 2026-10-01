@@ -164,7 +164,7 @@ void Cards_PatchArtRecord(int id, unsigned char *record);
 void Cards_PatchThumbnail(int id, unsigned char *block);
 
 /* "field_art" (notes/more-cards.md): a card's picture for its cutout on the
- * duel field alone (mods/2d-monsters/field_art.c), art.h's CARD_ART_PIXELS +
+ * duel field alone (mods/3d-monsters/field_art.c), art.h's CARD_ART_PIXELS +
  * CARD_ART_CLUT layout, or NULL when the card (and its base) have none, in
  * which case the cutout uses the card's own art as Cards_PatchArtRecord
  * would. Never applied by Cards_PatchArtRecord itself, so nowhere else the
