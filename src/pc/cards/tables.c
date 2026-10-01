@@ -744,11 +744,12 @@ static void read_rituals(const char *mod, const JsonValue *list)
         snprintf(where, sizeof(where), "rituals[%d]", i);
         ritual = card(mod, where, Json_Member(entry, "card"));
         if (!ritual) continue;
-        /* A card past the disc's is played with its base's effect, so it
-         * must be a ritual played as one (a copy of a ritual card). */
-        if (Cards_Type(ritual) != CARD_TYPE_RITUAL || Cards_Type(Cards_EffectId(ritual)) != CARD_TYPE_RITUAL ||
-            Cards_EffectId(ritual) > CARD_COUNT) {
-            Mods_Note(mod, "%s: \"card\" must be a ritual card, or a copy of one", where);
+        /* It must be a ritual played as one: its effect (its own, its
+         * base's for a copy, or the card "effect" names) a disc ritual's. A
+         * card only typed Ritual does nothing when played. */
+        if (Cards_Type(ritual) != CARD_TYPE_RITUAL || Cards_RetailType(Cards_EffectId(ritual)) != CARD_TYPE_RITUAL) {
+            Mods_Note(mod, "%s: \"card\" must be a ritual card whose effect is a ritual's (a copy of one, or "
+                           "\"effect\" naming one)", where);
             continue;
         }
         rule.recipe[0] = (unsigned short)ritual;

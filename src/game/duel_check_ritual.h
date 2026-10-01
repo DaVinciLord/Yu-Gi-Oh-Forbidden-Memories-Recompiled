@@ -44,9 +44,10 @@ extern u16 gDuel_awRitualData[];
 s32 Duel_CheckRitual(DuelRitualResult *out, s32 ritual_id);
 
 #ifdef MEMORIES_PC
-/* The ritual card a played ritual's effect checks: a card past the disc's
- * runs its base's effect (gDuel_wEffectCardID is the base), and its own
- * recipe, when a mod gave it one, is the one it summons by. */
+/* The ritual card a played ritual's effect checks: a card played with
+ * another's effect (a copy past the disc's, or a card whose "effect" names a
+ * ritual) leaves that card in gDuel_wEffectCardID, and its own recipe, when
+ * a mod gave it one, is the one it summons by. */
 s32 Duel_RitualPlayed(void);
 #endif
 

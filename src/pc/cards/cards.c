@@ -870,6 +870,12 @@ static int clamp(int value, int low, int high)
     return value < low ? low : value > high ? high : value;
 }
 
+/* The type a card has on the disc (-1 past it): what its effect is. */
+int Cards_RetailType(int id)
+{
+    return id >= 1 && id <= CARD_COUNT ? (int)((((const unsigned *)(uintptr_t)RETAIL_STATS)[id - 1] >> 26) & 0x1F) : -1;
+}
+
 static int retail_monster(int id)
 {
     return id >= 1 && id <= CARD_COUNT &&

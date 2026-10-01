@@ -368,11 +368,19 @@ class Project:
     def ritual_cards(self):
         return sorted(cid for cid in self.cards if self.is_ritual(cid))
 
+    def effect_of(self, cid: int) -> int:
+        """The disc card whose effect this one has when played (cards.c
+        Cards_EffectId): the one "effect" names, else its base, else itself."""
+        extra = self.added[cid].extra if cid in self.added else self.card_extra.get(cid, {})
+        named = self.resolve(extra["effect"]) if "effect" in extra else None
+        return named if named and named <= CARD_COUNT else self.base_of(cid)
+
     def is_ritual(self, cid: int) -> bool:
-        """A ritual card a recipe may be for: the disc's, or a mod's own
-        copy of one (the port plays it with its base's effect; tables.c)."""
-        card, base = self.cards.get(cid), self.cards.get(self.base_of(cid))
-        return bool(card and base and card.type == 22 and base.type == 22 and self.base_of(cid) <= CARD_COUNT)
+        """A ritual card a recipe may be for: typed Ritual and played as a
+        disc ritual (tables.c): one of the disc's, a copy of one, or a card
+        whose "effect" names one. A card only typed Ritual does nothing."""
+        card, effect = self.cards.get(cid), self.retail.cards.get(self.effect_of(cid))
+        return bool(card and effect and card.type == 22 and effect.type == 22)
 
     def clone(self) -> "Project":
         return copy.deepcopy(self)

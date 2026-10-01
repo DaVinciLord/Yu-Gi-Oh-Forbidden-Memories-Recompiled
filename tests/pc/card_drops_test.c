@@ -47,6 +47,7 @@ unsigned char *Cards_ChestSlot(void *state, int id)
 int Cards_Valid(int id) { return id >= 1 && id <= gCard_nCount; }
 int Cards_BaseId(int id) { return Cards_Valid(id) ? id : 0; }
 int Cards_EffectId(int id) { return Cards_BaseId(id); }
+int Cards_RetailType(int id) { (void)id; return -1; }
 int Cards_PickVariant(int id, int use) { (void)use; return id; }
 /* The game's roll (duel_result_runtime.c) over the retail rows. */
 s32 Duel_SelectCardDrop(s32 pool)

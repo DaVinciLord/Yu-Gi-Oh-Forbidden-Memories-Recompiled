@@ -24,6 +24,7 @@ int Cards_Type(int id)
     id = Cards_BaseId(id);
     return id == 20 ? CARD_TYPE_EQUIP : id == 21 ? CARD_TYPE_RITUAL : id == 12 || id == 13 ? 0 : 3;
 }
+int Cards_RetailType(int id) { return id >= 1 && id <= CARD_COUNT ? Cards_Type(id) : -1; }
 int Cards_TypeNamed(const char *text) { return same_letters(text, "Dragon") ? 0 : same_letters(text, "Warrior") ? 3 : -1; }
 int Cards_FusionGroupNamed(const char *text)
 {

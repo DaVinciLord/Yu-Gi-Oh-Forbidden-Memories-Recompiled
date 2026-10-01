@@ -825,7 +825,8 @@ def read_rituals(project: Project, entries, messages: list):
             continue
         ritual = project.resolve(entry.get("card"))
         if not ritual or not project.is_ritual(ritual):
-            messages.append(f"{where}: \"card\" must be a ritual card, or a copy of one; left out")
+            messages.append(f"{where}: \"card\" must be a ritual card whose effect is a ritual's (a copy of one, "
+                            "or \"effect\" naming one); left out")
             continue
         if "result" in entry and entry["result"] is None:
             project.rituals.pop(ritual, None)

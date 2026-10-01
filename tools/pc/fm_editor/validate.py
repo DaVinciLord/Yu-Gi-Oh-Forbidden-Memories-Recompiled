@@ -221,7 +221,8 @@ def _check_tables(project: Project, out: list):
             continue
         where = project.card_label(ritual)
         if not valid(ritual) or not project.is_ritual(ritual):
-            out.append(Issue("error", "Rituals", where, "\"card\" must be a ritual card, or a copy of one", ritual))
+            out.append(Issue("error", "Rituals", where, "\"card\" must be a ritual card whose effect is a ritual's "
+                             "(a copy of one, or \"effect\" naming one)", ritual))
         if len(recipe) != 4 or not valid(recipe[3]):
             out.append(Issue("error", "Rituals", where, "a valid result card is required", ritual))
             continue

@@ -357,6 +357,22 @@ class ManifestTest(unittest.TestCase):
         p.remove_card(copy)
         self.assertNotIn(copy, p.rituals)
 
+    def test_card_made_a_ritual(self):
+        # A disc monster typed Ritual is a ritual only with "effect" naming
+        # one (it is played with that card's effect); its recipe round-trips.
+        p = Project(self.retail)
+        p.info.id = "t"
+        base = p.ritual_cards()[0]
+        p.cards[1] = p.cards[1].copy(type=g.TYPE_RITUAL)
+        self.assertNotIn(1, p.ritual_cards())
+        p.card_extra[1] = {"effect": base}
+        self.assertIn(1, p.ritual_cards())
+        p.rituals[1] = (2, 3, 4, 5)
+        self.assertFalse([i for i in validate.validate(p) if i.area == "Rituals"])
+        again = self.reopen(p)
+        self.assertIn(1, again.ritual_cards())
+        self.assertEqual(again.rituals.get(1), (2, 3, 4, 5))
+
     def test_reverts(self):
         # What the tabs' Revert buttons do, in the model a front end calls.
         p = Project(self.retail)
