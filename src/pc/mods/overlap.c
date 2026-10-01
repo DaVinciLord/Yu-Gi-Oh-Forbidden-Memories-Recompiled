@@ -327,6 +327,7 @@ static void card_words(const ModsOverlaps *x, const JsonValue *value, char *out,
 static uint64_t duelist_key(ModsOverlaps *x, const char *name)
 {
     int id;
+    if (!name) name = "";
     if (same_letters(name, "all")) return ALL_DUELISTS;
     id = x->source.duelist ? x->source.duelist(name, x->source.context) : -1;
     if (id < 0 && strspn(name, "0123456789") == strlen(name) && *name) id = atoi(name);
@@ -536,11 +537,13 @@ static void pool_claim(ModsOverlaps *x, int mod, const char *duelist, int pool, 
 }
 static void pool_table(ModsOverlaps *x, int mod, const JsonValue *table, int decks)
 {
+    if (Json_TypeOf(table) != JSON_OBJECT) return; /* tables.c read_pool_table: an object of opponents */
     for (const JsonValue *entry = Json_At(table, 0); entry; entry = Json_Next(entry)) {
         if (decks) {
             pool_claim(x, mod, Json_Name(entry), 0, entry);
             continue;
         }
+        if (Json_TypeOf(entry) != JSON_OBJECT) continue;
         for (const JsonValue *pool = Json_At(entry, 0); pool; pool = Json_Next(pool)) {
             int which = pool_named(Json_Name(pool));
             if (which > 0) pool_claim(x, mod, Json_Name(entry), which, pool);
@@ -726,6 +729,7 @@ static void limit_tree(ModsOverlaps *x, int mod, const char *path, const JsonVal
 static void read_limits(ModsOverlaps *x, int mod)
 {
     const JsonValue *limits = member(x, mod, "limits"), *overflow = member(x, mod, "chest_overflow");
+    if (Json_TypeOf(limits) != JSON_OBJECT) limits = NULL; /* tables.c: "limits" is an object */
     for (const JsonValue *m = Json_At(limits, 0); m; m = Json_Next(m)) {
         if (!strcmp(Json_Name(m), "life_points") && Json_TypeOf(m) == JSON_NUMBER)
             limit_claim(x, mod, "life_points.start", m);
@@ -744,6 +748,7 @@ static int terrain_named(const char *name)
 {
     static const char *const names[][2] = {{"Forest", NULL},     {"Wasteland", NULL}, {"Mountain", NULL},
                                            {"Sogen", "Meadow"}, {"Umi", "Sea"},       {"Yami", "Dark"}};
+    if (!name) return -1;
     for (int i = 0; i < 6; i++)
         if (same_letters(name, names[i][0]) || (names[i][1] && same_letters(name, names[i][1]))) return i + 1;
     if (*name && strspn(name, "0123456789") == strlen(name)) return atoi(name);
@@ -753,6 +758,7 @@ static const char *const terrain_names[] = {"", "Forest", "Wasteland", "Mountain
 static void read_terrain(ModsOverlaps *x, int mod)
 {
     const JsonValue *table = member(x, mod, "terrain_bonus");
+    if (Json_TypeOf(table) != JSON_OBJECT) return; /* tables.c: an object of terrains */
     if (Json_Bool(Json_Member(table, "replace"), 0)) {
         Claim *c = claim(x, MODS_OVERLAP_TERRAIN, mod, SUB(RESET_SUB), SET, 0, Json_Member(table, "replace"));
         if (c) {
@@ -880,6 +886,9 @@ static void title_tree(ModsOverlaps *x, int mod, const char *path, const JsonVal
 static void read_title(ModsOverlaps *x, int mod)
 {
     const JsonValue *title = member(x, mod, "title"), *menu = member(x, mod, "menu");
+    /* title_config.c reads objects only; an array's entries have no names. */
+    if (Json_TypeOf(title) != JSON_OBJECT) title = NULL;
+    if (Json_TypeOf(menu) != JSON_OBJECT) menu = NULL;
     for (const JsonValue *m = Json_At(title, 0); m; m = Json_Next(m)) {
         char path[128];
         snprintf(path, sizeof(path), "title.%.60s", Json_Name(m));
