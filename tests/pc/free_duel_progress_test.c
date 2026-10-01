@@ -16,6 +16,8 @@ static unsigned char extra_chest[1024];
 int Cards_Valid(int id) { return id >= 1 && id <= gCard_nCount; }
 int Cards_BaseId(int id) { return Cards_Valid(id) ? (id > CARD_COUNT ? id - CARD_COUNT : id) : 0; }
 int Cards_Type(int id) { (void)id; return 3; }
+int Cards_EffectId(int id) { return Cards_BaseId(id); }
+int Cards_RetailType(int id) { (void)id; return -1; }
 int Cards_TypeNamed(const char *text) { (void)text; return -1; }
 int Cards_FusionGroupNamed(const char *text) { (void)text; return 0; }
 int Cards_Attribute(int id) { (void)id; return 0; }
