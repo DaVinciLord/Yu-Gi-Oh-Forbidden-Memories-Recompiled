@@ -1093,7 +1093,11 @@ release's `sdk/` also carries `extract_images.py` and `upscale_pack.py` in
 clang (on Windows, the llvm-mingw clang; it builds the Linux object format
 there too) or, on Linux, gcc with 32-bit support. `./build-pc.sh` builds
 every directory under `mods/` this way, once, and copies the same file into
-both games' `mods/` directories.
+both games' `mods/` directories. The script keeps what it builds in
+`tmp/pc/mod-build` (beside `sdk/`, or in the repository), under a key of the
+compiler, the flags and the sources with every header they include, and
+builds again only when one of those changed; the folder can be deleted at
+any time.
 
 A mod reaches the game directly. Its undefined names are bound when it is
 loaded, against a table compiled into the game (`mod_exports.c`, generated

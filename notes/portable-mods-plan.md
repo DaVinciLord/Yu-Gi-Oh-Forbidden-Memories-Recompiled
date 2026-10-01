@@ -129,7 +129,9 @@ What was ruled out, and why:
 - Phase 4: `tools/pc/build_mod.py`, SDK headers in `src/pc/mods/sdk`, and
   `<build>/sdk` (include/, include/libc, tools/build_mod.py, exports.txt)
   beside each game. Mods are built once into `tmp/pc/mod-build` and the
-  identical file (same sha256) is copied into both games' `mods/`.
+  identical file (same sha256) is copied into both games' `mods/`. (Since
+  kept there by a key of everything that goes into the object, as worktrees
+  share `tmp/`: `notes/pc-build.md`, "Mod objects".)
 - Phase 5: hand-camera needed nothing but dropping `<stdlib.h>`. For 3D
   Monsters: `now_us`, `map_fixed`, tunables moved to settings
   (`MEMORIES_MODS_DEPTH/PIXELS/SCALE/LIFT/PITCH/TEST` are now

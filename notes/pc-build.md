@@ -63,6 +63,45 @@ initially enabled. Run it with `python tools/pc/test_path_layout.py --build
 <cmake-build-directory>` after building the tests. Existing path-length
 limits and the operating system's filename restrictions still apply.
 
+### Mod objects (`tmp/pc/mod-build`)
+
+Every build compiles the code mods in `mods/` (`build_mods` in
+`tools/pc/build_game32.py`, through `tools/pc/build_mod.py`) and copies each
+object into `<build>/mods/<mod>/` when the copy there differs. Worktrees share
+`tmp/` through a junction, so the objects are kept by what goes into them,
+never by time: `tmp/pc/mod-build/<mod>-<key>/<library>`, where the key is a
+SHA-256 of the compiler and linker files (name, size, time, as ccache's
+`compiler_check=mtime`), the flags with the checkout's root spelled
+`<root>`, `build_mod.py` (line ends normalized) and each source after the
+preprocessor with the file names taken out of its line markers. So every
+header a source includes is in it, from wherever it comes, and two checkouts
+share an object exactly when they would build the same one (it then carries
+the debug paths of the checkout that built it). An object is built in a
+staging folder (`.<mod>-<key>-XXXX`), checked and renamed into place, so a
+folder there is always a whole object that passed, with the names it leaves
+undefined in `<library>.undefined`. It is checked against the game's exports
+on every build, reused or not, from that list: what a game lends comes from
+its own sources, which the key does not cover. A failed check removes the
+copy beside the game, not the shared object.
+
+Running the preprocessor costs a process start per source, which a virus
+scanner makes slow on Windows. `tmp/pc/mod-build/.memo/<mod>-<digest>/`
+holds memos (as ccache's direct mode): the key the preprocessor gave, with
+the SHA-256 of every file it read. The folder is named by the settings, the
+sources and the names of every header that could be included, so a new
+header found first also misses; a memo whose files are all unchanged gives
+the key with no process started. A memo is not written when a file it read
+changed while the preprocessor ran. It leads only to a key: a missing object
+is built, and a memo that does not hold sends the build to the preprocessor.
+
+Since the key covers the compiler, builds with different compilers (llvm-mingw
+on Windows and gcc under WSL, say) keep an object each, and either runs on
+both systems; `./build-pc.sh` builds both games with one compiler and so
+copies one object beside both. Old entries are a few hundred KB and are not
+pruned; `tmp/pc/mod-build` can be deleted at any time, and so can the
+folders from before the key (`<mod>/`, `e1e2eded/`) and
+`tmp/pc/mod-objects`, which nothing uses any more.
+
 ## 32-bit game executable (bring-up)
 
 The user chose a 32-bit (ILP32) host build as the bring-up memory model on
