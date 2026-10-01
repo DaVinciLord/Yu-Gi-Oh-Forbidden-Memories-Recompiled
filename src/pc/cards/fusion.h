@@ -9,6 +9,9 @@ typedef struct {
     FusionCard (*card)(int id);
     int (*fusion)(int a, int b);
     int (*equip)(int equipment, int monster);
+    /* What `equipment` adds to `monster`, which already carries `modifier`.
+     * NULL: the disc's +500 (+1000 for Megamorph, 657). */
+    int (*bonus)(int equipment, int monster, int modifier);
 } FusionRules;
 int Fusion_Step(const FusionRules *, FusionCard first, FusionCard second, FusionCard *out);
 int Fusion_Attack(FusionCard card);
