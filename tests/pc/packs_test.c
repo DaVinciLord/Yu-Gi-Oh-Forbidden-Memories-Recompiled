@@ -8,6 +8,8 @@
  * packs_golden.txt).
  *
  * PACKS_GOLDEN_WRITE=1 writes packs_golden.txt anew from this build. */
+#define _POSIX_C_SOURCE 200809L /* scratch.h: mkdtemp, lstat, kill */
+#include "scratch.h"
 #include "../../src/pc/cards/packs.c"
 #include <stdarg.h>
 
@@ -541,6 +543,18 @@ static void test_unlock_and_stock(void)
     CHECK(!Packs_Unlocked(4, &progress, save_says_yes, &yes));
 }
 
+/* tmpfile() makes its file in the drive's root on Windows, which a CI runner
+ * may not write to; a file in a scratch folder works everywhere. */
+static FILE *scratch_file(void)
+{
+    static char directory[SCRATCH_MAX];
+    static int files;
+    char path[SCRATCH_MAX + 32];
+    if (!*directory && !scratch_dir(directory, sizeof(directory), "memories-packs")) return NULL;
+    snprintf(path, sizeof(path), "%s/progress%d.txt", directory, files++);
+    return fopen(path, "w+b");
+}
+
 static void test_progress_file(void)
 {
     PacksProgress progress, again;
@@ -559,7 +573,7 @@ static void test_progress_file(void)
     progress.packs[0].pity[2] = 7;
     progress.packs[1].bought = progress.packs[1].opened = 1;
     progress.packs[1].used = 1;
-    file = tmpfile();
+    file = scratch_file();
     CHECK(file != NULL);
     /* A line of a pack another run had is kept, and written back. */
     fputs("spent 1\nopened 1\npack gone:old bought 4 opened 4 used 0\n", file);
@@ -568,7 +582,7 @@ static void test_progress_file(void)
     CHECK(again.starchips_spent == 1 && again.packs_opened == 1);
     CHECK(foreign && strstr(foreign, "gone:old"));
     fclose(file);
-    file = tmpfile();
+    file = scratch_file();
     Packs_WriteProgress(file, &progress);
     rewind(file);
     length = fread(text, 1, sizeof(text) - 1, file);
