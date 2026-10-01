@@ -517,13 +517,18 @@ class FusionsTab(Tab):
         self.tree.delete(*self.tree.get_children())
         p = self.project
         text = self.search.get().strip()
-        pairs = set(p.fusions) | set(p.retail.fusions) | p.fusion_explicit
+        named = {pair for pair in p.own_fusion_pairs()[0] if pair[0] in p.cards and pair[1] in p.cards}
+        pairs = set(p.fusions) | set(p.retail.fusions) | p.fusion_explicit | named
+        # A card's own "fusions" list makes what no rule of the mod decides
+        # first: the row shows what the game plays.
+        removes = set(p.active_removes()) if named else set()
+        own = {pair: p.own_fusion(pair, removes) for pair in named}
         rows = []
         for pair in pairs:
-            status = p.fusion_status(pair)
+            status = "own list" if own.get(pair) is not None else p.fusion_status(pair)
             if self.changed_only.get() and status in ("", "glitch"):
                 continue
-            result = p.fusions.get(pair) or p.retail.fusions.get(pair)
+            result = own.get(pair) if status == "own list" else p.fusions.get(pair) or p.retail.fusions.get(pair)
             if text and not (card_matches(p, pair[0], text) or card_matches(p, pair[1], text)
                              or card_matches(p, result, text)):
                 continue
@@ -532,9 +537,13 @@ class FusionsTab(Tab):
         for pair, status in rows[:self.LIMIT]:
             result = p.fusions.get(pair)
             retail = p.retail.fusions.get(pair)
-            shown = p.card_label(result) if result else \
-                f"(none; retail {p.card_label(retail)})" if retail else "(none: forbidden)"
-            self.tree.insert("", "end", iid=f"{pair[0]}:{pair[1]}", tags=(status,) if status else (),
+            if status == "own list":
+                shown = f"{p.card_label(own[pair]) if own[pair] else '(none)'} (a card's own fusions list)"
+            else:
+                shown = p.card_label(result) if result else \
+                    f"(none; retail {p.card_label(retail)})" if retail else "(none: forbidden)"
+            tag = "changed" if status == "own list" else status
+            self.tree.insert("", "end", iid=f"{pair[0]}:{pair[1]}", tags=(tag,) if tag else (),
                              values=(p.card_label(pair[0]), p.card_label(pair[1]), shown, status))
         more = f" (first {self.LIMIT} shown; search to narrow)" if len(rows) > self.LIMIT else ""
         self.count.configure(text=f"{len(rows)} fusions{more}")

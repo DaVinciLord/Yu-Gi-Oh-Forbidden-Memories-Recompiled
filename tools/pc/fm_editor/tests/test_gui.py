@@ -231,7 +231,16 @@ class GuiTest(unittest.TestCase):
         self.assertFalse([pair for pair in recipes if pair in p.fusions])
         self.assertTrue(app.dirty)
         self.assertEqual(manifest.build_fusions(p), [{"remove": "Kuriboh"}])
+        # An own "fusions" list naming the pair makes its card now: the row says so.
+        p.card_extra[1] = {"fusions": [{"with": 2, "result": 500}]}
+        p._own_pairs = None
         tab.search.set("Blue Dragon")
+        self.assertEqual(tab.tree.set("1:2", "state"), "own list")
+        self.assertIn("Card 500", tab.tree.set("1:2", "result"))
+        del p.card_extra[1]
+        p._own_pairs = None
+        tab.fill()
+        self.assertEqual(tab.tree.set("1:2", "state"), "removed")
         tab.tree.selection_set("1:2")
         tab.revert()
         self.assertEqual(p.fusions[(1, 2)], 3)

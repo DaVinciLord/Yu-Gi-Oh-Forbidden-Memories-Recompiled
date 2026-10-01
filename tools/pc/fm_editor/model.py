@@ -359,6 +359,31 @@ class Project:
             self._own_pairs = (named, under - named)
         return self._own_pairs
 
+    def own_fusion(self, pair, removes):
+        """What a card's own "fusions" list makes of the pair in the game,
+        0 for none, when no rule the mod writes decides it first (tables.c
+        Tables_Fusion, a copy falling back on its base's pair; `removes` is
+        a set of active_removes()); None when no list decides it."""
+        a, b = pair
+        base_a, base_b = self.base_of(a), self.base_of(b)
+        ask = [pair]
+        if base_b != b:
+            ask.append(self.pair(a, base_b))
+        if base_a != a:
+            ask.append(self.pair(base_a, b))
+        if base_a != a and base_b != b:
+            ask.append(self.pair(base_a, base_b))
+        if any(self.fusion_rule(q, self.fusions.get(q), removes) for q in ask):
+            return None
+        for x, y in ((a, b), (b, a)):           # cards.c Cards_Fusion
+            extra = self.added[x].extra if x in self.added else self.card_extra.get(x, {})
+            rules = extra.get("fusions")
+            for rule in rules if isinstance(rules, list) else ():
+                if isinstance(rule, dict) and self.resolve(rule.get("with")) == y:
+                    made = self.resolve(rule.get("result")) if rule.get("result") else 0
+                    return made if made in self.cards else 0
+        return None
+
     def explicit_after_edit(self, pair) -> bool:
         """Whether a pair the modder sets keeps a rule of its own: one an own
         list names, so the result shown is the one the game plays; one a

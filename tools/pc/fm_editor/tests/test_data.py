@@ -517,6 +517,16 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(bulk_fusions.rule_count(p), len(manifest.build(p)["fusions"]))
         p.fusion_explicit.discard((e, f))
         self.assertEqual(self.game_fusions(p, manifest.build(p)["fusions"])(copy, f), 597)
+        # "Remove recipes of...": the remove leaves the own lists their pairs,
+        # and own_fusion (the tab's "own list" rows) says what they make.
+        p.remove_recipes(c)
+        removes = set(p.active_removes())
+        game = self.game_fusions(p, manifest.build(p)["fusions"])
+        self.assertEqual((p.own_fusion((a, b), removes), game(a, b)), (600, 600))
+        for pair in p.own_fusion_pairs()[0]:
+            own = p.own_fusion(pair, removes)
+            self.assertEqual(game(*pair), own if own is not None else game(*pair), pair)
+        self.assertIsNone(p.own_fusion((d1, d2), removes))       # the mod's rule decides
 
     def reopen(self, p: Project) -> Project:
         again = Project(self.retail)
