@@ -31,9 +31,14 @@ static const int default_sounds[PACK_SOUNDS] = {47, 48, 9, 12, 8};
 
 /* --- small helpers ------------------------------------------------------- */
 
+/* Cut at `size` - 1 bytes, as snprintf would (which gcc 16 warns of). */
 static void copy_text(char *out, size_t size, const char *text)
 {
-    snprintf(out, size, "%s", text ? text : "");
+    size_t length = text ? strlen(text) : 0;
+    if (!size) return;
+    if (length >= size) length = size - 1;
+    if (length) memcpy(out, text, length);
+    out[length] = 0;
 }
 
 /* UTF-8 text into `size` bytes, cut before a letter that would not fit
