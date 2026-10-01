@@ -33,6 +33,13 @@ static int resolves_to(const char *game, const char *expected)
     assert(waitpid(child, &status, 0) == child);
     return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 }
+
+static int exists(const char *format, const char *dir)
+{
+    char path[SCRATCH_MAX + 128];
+    snprintf(path, sizeof(path), format, dir);
+    return !access(path, F_OK);
+}
 #endif
 
 int main(void)
@@ -51,32 +58,53 @@ int main(void)
     /* Nothing beside the game: the folder. */
     assert(!resolves_to(game, folder));
 
-    /* An older build's saves beside the game, the folder there but empty
-     * (made later, or by something else): the saves win. */
+    /* An older build's files beside the game; the folder there but holding
+     * only settings (made later, or by something else). */
     snprintf(path, sizeof(path), "%s/saves/saves", game);
     assert(!Paths_MakeDirs(path));
+    snprintf(path, sizeof(path), "%s/saves/cards", game);
+    assert(!Paths_MakeDirs(path));
+    snprintf(path, sizeof(path), "%s/saves/reports", game);
+    assert(!Paths_MakeDirs(path));
     snprintf(path, sizeof(path), "%s/saves/saves/slot03.sav", game);
     touch(path);
-    assert(!resolves_to(game, "saves"));
-
-    /* Only settings in the folder: still not saves. */
+    snprintf(path, sizeof(path), "%s/saves/cards/00000001.txt", game);
+    touch(path);
+    snprintf(path, sizeof(path), "%s/saves/reports/last-session.log", game);
+    touch(path);
     snprintf(path, sizeof(path), "%s/settings.txt", folder);
     touch(path);
-    assert(!resolves_to(game, "saves"));
 
-    /* The memory card image older builds kept beside the game counts too. */
-    snprintf(path, sizeof(path), "%s/saves/saves/slot03.sav", game);
-    assert(!remove(path));
-    snprintf(path, sizeof(path), "%s/saves/memcard1.mcd", game);
-    touch(path);
+    /* When the folder will not take them: used where they are. */
+    assert(!chmod(folder, 0555));
     assert(!resolves_to(game, "saves"));
+    assert(!exists("%s/saves/slot03.sav", folder));
+    assert(!chmod(folder, 0755));
 
-    /* Saves in the folder: the folder, whatever is beside the game. */
-    snprintf(path, sizeof(path), "%s/saves", folder);
-    assert(!Paths_MakeDirs(path));
-    snprintf(path, sizeof(path), "%s/saves/slot01.sav", folder);
+    /* When it will: copied in, folders and all, but not the reports; the
+     * originals stay. */
+    assert(!resolves_to(game, folder));
+    assert(exists("%s/saves/slot03.sav", folder) && exists("%s/cards/00000001.txt", folder));
+    assert(!exists("%s/reports", folder) && !exists("%s/saves/slot03.sav.copying", folder));
+    assert(exists("%s/saves/saves/slot03.sav", game));
+
+    /* Saves in the folder: the folder, and nothing copied over them. */
+    snprintf(path, sizeof(path), "%s/saves/saves/slot04.sav", game);
     touch(path);
     assert(!resolves_to(game, folder));
+    assert(!exists("%s/saves/slot04.sav", folder));
+
+    /* The memory card image older builds kept counts as saves too. */
+    snprintf(data, sizeof(data), "%s/data2", root);
+    snprintf(folder, sizeof(folder), "%s/YFM Re-Decomp", data);
+    snprintf(game, sizeof(game), "%s/game2", root);
+    snprintf(path, sizeof(path), "%s/saves", game);
+    assert(!Paths_MakeDirs(folder) && !Paths_MakeDirs(path));
+    snprintf(path, sizeof(path), "%s/saves/memcard1.mcd", game);
+    touch(path);
+    assert(!setenv("XDG_DATA_HOME", data, 1));
+    assert(!resolves_to(game, folder));
+    assert(exists("%s/memcard1.mcd", folder));
     puts("user dir: ok");
 #else
     puts("user dir: skipped (Documents is the machine's own)");

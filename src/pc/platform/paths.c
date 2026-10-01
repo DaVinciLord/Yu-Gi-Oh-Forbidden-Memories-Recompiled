@@ -6,6 +6,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "paths.h"
 #include <ctype.h>
+#include <dirent.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -132,6 +133,60 @@ static const char *legacy_saves(void)
     return NULL;
 }
 
+/* One file, unless `to` is already there: written beside it and renamed
+ * over, so a copy cut short is never taken for a save. 0 when it is there
+ * afterwards. */
+static int copy_file(const char *from, const char *to)
+{
+    char partial[PATH_MAX_ + 16], buffer[65536];
+    FILE *in, *out;
+    size_t got;
+    int failed = 0;
+    if (!access(to, F_OK)) return 0;
+    if (snprintf(partial, sizeof(partial), "%s.copying", to) >= (int)sizeof(partial)) return -1;
+    if (!(in = fopen(from, "rb"))) return -1;
+    if (!(out = fopen(partial, "wb"))) {
+        fclose(in);
+        return -1;
+    }
+    while (!failed && (got = fread(buffer, 1, sizeof(buffer), in)) > 0) failed = fwrite(buffer, 1, got, out) != got;
+    failed |= ferror(in);
+    fclose(in);
+    failed |= fclose(out) != 0;
+    if (failed || rename(partial, to)) {
+        remove(partial);
+        return -1;
+    }
+    return 0;
+}
+
+/* Everything in `from` that `to` lacks, folders and all; at the top, not
+ * the crash reports or the cache, which are the game's own. 0 when it all
+ * arrived. The originals stay. */
+static int copy_tree(const char *from, const char *to, int top)
+{
+    DIR *folder;
+    struct dirent *item;
+    int failed = 0;
+    if (Paths_MakeDirs(to) || !(folder = opendir(from))) return -1;
+    while ((item = readdir(folder)) != NULL) {
+        char source[PATH_MAX_], destination[PATH_MAX_];
+        struct stat info;
+        if (!strcmp(item->d_name, ".") || !strcmp(item->d_name, "..")) continue;
+        if (top && (!strcmp(item->d_name, "reports") || !strcmp(item->d_name, "cache"))) continue;
+        if (snprintf(source, sizeof(source), "%s/%s", from, item->d_name) >= (int)sizeof(source) ||
+            snprintf(destination, sizeof(destination), "%s/%s", to, item->d_name) >= (int)sizeof(destination) ||
+            stat(source, &info)) {
+            failed = 1;
+            continue;
+        }
+        if (S_ISDIR(info.st_mode)) failed |= copy_tree(source, destination, 0) != 0;
+        else failed |= copy_file(source, destination) != 0;
+    }
+    closedir(folder);
+    return failed ? -1 : 0;
+}
+
 const char *Paths_UserDir(void)
 {
     const char *named = getenv("MEMORIES_USER_DIR");
@@ -170,15 +225,19 @@ const char *Paths_UserDir(void)
             /* Bring the old folder along under the new name, once. */
             if (access(user_dir, F_OK) && !access(old, F_OK) && !rename(old, user_dir))
                 fprintf(stderr, "memories-pc: moved %s to %s\n", old, user_dir);
-            /* A player whose saves went beside the game (an antivirus or
+            /* A player whose files went beside the game (an antivirus or
              * Controlled folder access kept this folder from being made)
-             * goes on finding them there, though the folder is made later
-             * or by something else: a folder without saves never wins over
+             * has them copied here once this folder is there to take them;
+             * the originals stay. When they cannot be, the game goes on
+             * with them beside it: a folder without saves never wins over
              * one with them. */
             if (!has_saves(user_dir)) {
                 const char *legacy = legacy_saves();
-                if (legacy) {
-                    fprintf(stderr, "memories-pc: no saves in %s; using %s, which has them\n", user_dir, legacy);
+                if (legacy && !copy_tree(legacy, user_dir, 1) && has_saves(user_dir)) {
+                    fprintf(stderr, "memories-pc: copied the saves in %s to %s\n", legacy, user_dir);
+                } else if (legacy) {
+                    fprintf(stderr, "memories-pc: cannot copy the saves in %s to %s; using them there\n", legacy,
+                            user_dir);
                     snprintf(user_dir, sizeof(user_dir), "%s", legacy);
                 }
             }
