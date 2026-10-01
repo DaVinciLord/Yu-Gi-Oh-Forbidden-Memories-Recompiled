@@ -21,3 +21,7 @@ accept v0.1.2 record SoftGpuRecorder grew by one callback at its end
 accept v0.1.2 record ControlsProfile grew by the host action bindings at its end
 accept v0.1.2 record ControlsDeviceProfile holds the larger ControlsProfile
 accept v0.1.2 record ControlsConfig holds the larger ControlsProfile
+# PR #231 (the fusion helper asks a mod's equip bonus): the planner's rules
+# gained `bonus` at their end. Only the port's own fusion helper builds a
+# FusionRules; none of v0.1.2's mods calls a Fusion_ function.
+accept v0.1.2 record FusionRules grew by one callback at its end
