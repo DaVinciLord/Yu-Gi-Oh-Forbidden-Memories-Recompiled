@@ -133,9 +133,27 @@ static const char *legacy_saves(void)
     return NULL;
 }
 
-/* One file, unless `to` is already there: written beside it and renamed
- * over, so a copy cut short is never taken for a save. 0 when it is there
- * afterwards. */
+/* `from` moved to `to` only when nothing is there: never over a file, not
+ * even one that appeared since it was looked for. */
+static int move_new(const char *from, const char *to)
+{
+#ifdef _WIN32
+    wchar_t *a = Memories_Utf8ToWide(from), *b = Memories_Utf8ToWide(to);
+    int moved = a && b && MoveFileExW(a, b, MOVEFILE_WRITE_THROUGH); /* no MOVEFILE_REPLACE_EXISTING */
+    free(a);
+    free(b);
+    return moved ? 0 : -1;
+#else
+    if (!link(from, to)) return remove(from), 0;
+    if (errno == EEXIST) return -1;
+    /* A file system without links (FAT): checked, then renamed. */
+    return access(to, F_OK) && !rename(from, to) ? 0 : -1;
+#endif
+}
+
+/* One file, unless `to` is already there, which is never replaced: written
+ * beside it and moved in, so a copy cut short is never taken for a save.
+ * 0 when it is there afterwards. */
 static int copy_file(const char *from, const char *to)
 {
     char partial[PATH_MAX_ + 16], buffer[65536];
@@ -153,9 +171,9 @@ static int copy_file(const char *from, const char *to)
     failed |= ferror(in);
     fclose(in);
     failed |= fclose(out) != 0;
-    if (failed || rename(partial, to)) {
+    if (failed || move_new(partial, to)) {
         remove(partial);
-        return -1;
+        return access(to, F_OK) ? -1 : 0; /* someone else's file there is fine */
     }
     return 0;
 }

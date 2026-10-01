@@ -34,6 +34,22 @@ static int resolves_to(const char *game, const char *expected)
     return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 }
 
+static void write_text(const char *path, const char *text)
+{
+    FILE *file = fopen(path, "wb");
+    assert(file && fputs(text, file) >= 0 && !fclose(file));
+}
+
+static int holds(const char *path, const char *text)
+{
+    char got[64] = "";
+    FILE *file = fopen(path, "rb");
+    if (!file) return 0;
+    if (!fgets(got, sizeof(got), file)) got[0] = '\0';
+    fclose(file);
+    return !strcmp(got, text);
+}
+
 static int exists(const char *format, const char *dir)
 {
     char path[SCRATCH_MAX + 128];
@@ -70,10 +86,18 @@ int main(void)
     touch(path);
     snprintf(path, sizeof(path), "%s/saves/cards/00000001.txt", game);
     touch(path);
+    snprintf(path, sizeof(path), "%s/saves/cards/00000002.txt", game);
+    write_text(path, "beside the game");
+    snprintf(path, sizeof(path), "%s/saves/settings.txt", game);
+    write_text(path, "beside the game");
     snprintf(path, sizeof(path), "%s/saves/reports/last-session.log", game);
     touch(path);
     snprintf(path, sizeof(path), "%s/settings.txt", folder);
-    touch(path);
+    write_text(path, "the folder's own");
+    snprintf(path, sizeof(path), "%s/cards", folder);
+    assert(!Paths_MakeDirs(path));
+    snprintf(path, sizeof(path), "%s/cards/00000002.txt", folder);
+    write_text(path, "the folder's own");
 
     /* When the folder will not take them: used where they are. */
     assert(!chmod(folder, 0555));
@@ -87,12 +111,21 @@ int main(void)
     assert(exists("%s/saves/slot03.sav", folder) && exists("%s/cards/00000001.txt", folder));
     assert(!exists("%s/reports", folder) && !exists("%s/saves/slot03.sav.copying", folder));
     assert(exists("%s/saves/saves/slot03.sav", game));
+    /* What the folder had of its own is never written over. */
+    snprintf(path, sizeof(path), "%s/settings.txt", folder);
+    assert(holds(path, "the folder's own"));
+    snprintf(path, sizeof(path), "%s/cards/00000002.txt", folder);
+    assert(holds(path, "the folder's own"));
 
     /* Saves in the folder: the folder, and nothing copied over them. */
     snprintf(path, sizeof(path), "%s/saves/saves/slot04.sav", game);
     touch(path);
+    snprintf(path, sizeof(path), "%s/saves/saves/slot03.sav", game);
+    write_text(path, "beside the game");
     assert(!resolves_to(game, folder));
     assert(!exists("%s/saves/slot04.sav", folder));
+    snprintf(path, sizeof(path), "%s/saves/slot03.sav", folder);
+    assert(!holds(path, "beside the game"));
 
     /* The memory card image older builds kept counts as saves too. */
     snprintf(data, sizeof(data), "%s/data2", root);
