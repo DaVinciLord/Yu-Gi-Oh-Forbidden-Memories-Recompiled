@@ -1137,9 +1137,12 @@ static void show(void)
         if (gl_pass_shown) {
             int pw = gl_pass_size[0], ph = gl_pass_size[1], x = gl_pass_rect[0], y = gl_pass_rect[1];
             GLuint texture = gl_pass_texture ? gl_pass_texture : (GLuint)GlPicture_Texture(&pw, &ph), shown;
-            /* Bilinear reads the shown area alone: past its edges lies the
-             * rest of VRAM (gl_picture.h). */
-            if (!gl_pass_texture && Settings_Get(SET_FILTER) == 1 &&
+            /* Every filter reads the shown area alone: past its edges lies
+             * the rest of VRAM, which bilinear would blend in (gl_picture.h),
+             * and the area moves between the game's two buffers every frame,
+             * so nearest at a scale that is not whole would round its edge
+             * texels one way, then the other, and the picture would shake. */
+            if (!gl_pass_texture &&
                 (shown = (GLuint)GlPicture_ShownTexture(x, y, gl_pass_rect[2], gl_pass_rect[3]))) {
                 texture = shown;
                 pw = gl_pass_rect[2];
