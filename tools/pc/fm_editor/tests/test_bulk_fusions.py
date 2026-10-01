@@ -237,6 +237,30 @@ class PlanTest(unittest.TestCase):
         bulk.undo(self.p, batch)
         self.assertEqual((self.p.fusion_removes, manifest.build_fusions(self.p)), ([], []))
 
+    def test_undo_puts_back_removes_and_rules(self):
+        self.p.retail.fusions = {(1, 2): 3, (4, 5): 3, (6, 7): 8}
+        self.p.fusions = dict(self.p.retail.fusions)
+        self.p.card_extra[6] = {"fusions": [{"with": 7, "result": 500}]}     # an own list names (6, 7)
+        self.p.remove_recipes(3)
+        self.p.revert_fusion((1, 2))         # one recipe back: a rule of its own under the remove
+        before = manifest.build_fusions(self.p)
+        self.assertEqual(len(before), 2)
+        # the last recipe back drops the remove; the undo brings it back
+        plan = bulk.plan(self.p, pairs_spec("4", "5", result=3, stronger=False, overwrite=True))
+        batch = bulk.apply(self.p, plan)
+        self.assertEqual(self.p.fusion_removes, [])
+        self.assertEqual(plan.rules_after, bulk.rule_count(self.p))
+        bulk.undo(self.p, batch)
+        self.assertEqual((self.p.fusion_removes, manifest.build_fusions(self.p)), ([3], before))
+        # taking away a pair an own list names keeps a null rule; the undo takes it out
+        plan = bulk.plan(self.p, pairs_spec("6", "7", mode="remove"))
+        batch = bulk.apply(self.p, plan)
+        self.assertIn((6, 7), self.p.fusion_explicit)
+        self.assertEqual(plan.rules_after, bulk.rule_count(self.p))
+        bulk.undo(self.p, batch)
+        self.assertNotIn((6, 7), self.p.fusion_explicit)
+        self.assertEqual(manifest.build_fusions(self.p), before)
+
     def test_apply_and_undo(self):
         before = dict(self.p.fusions)
         plan = bulk.plan(self.p, pairs_spec("1-10", "1-10", result=599, stronger=False, overwrite=True))
