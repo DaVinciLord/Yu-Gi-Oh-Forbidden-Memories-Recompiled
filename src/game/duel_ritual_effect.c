@@ -41,10 +41,16 @@
 #include "duel_effect_resource_setup.h"
 #include "../unmatched.h"
 
+#ifdef MEMORIES_PC
+#define RITUAL_PLAYED Duel_RitualPlayed()
+#else
+#define RITUAL_PLAYED gDuel_wEffectCardID
+#endif
+
 void DuelEffect_StartRitual(void)
 {
     if (!DuelEffect_MarkInitialized()) {
-        D_8009B1A0 = Duel_CheckRitual(0, gDuel_wEffectCardID);
+        D_8009B1A0 = Duel_CheckRitual(0, RITUAL_PLAYED);
         if (D_8009B1A0) {
             DuelEffectRequest *request = DuelEffect_CreateRequest(0x12);
 
@@ -73,7 +79,7 @@ void DuelEffect_ApplyRitual(void)
 
     if (!DuelEffect_MarkInitialized()) {
         D_8009B1A0 = Duel_CheckRitual(
-            &D_800E9EF0.ritual.result, gDuel_wEffectCardID);
+            &D_800E9EF0.ritual.result, RITUAL_PLAYED);
         if (D_8009B1A0) {
             func_80019CC8((void *)(s32)D_8009B1A0);
             D_8009B17C = DuelEffect_AllocateRequest(22);

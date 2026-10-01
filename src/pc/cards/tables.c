@@ -744,8 +744,11 @@ static void read_rituals(const char *mod, const JsonValue *list)
         snprintf(where, sizeof(where), "rituals[%d]", i);
         ritual = card(mod, where, Json_Member(entry, "card"));
         if (!ritual) continue;
-        if (ritual > CARD_COUNT || Cards_Type(ritual) != CARD_TYPE_RITUAL) {
-            Mods_Note(mod, "%s: \"card\" must be one of the disc's ritual cards", where);
+        /* A card past the disc's is played with its base's effect, so it
+         * must be a ritual played as one (a copy of a ritual card). */
+        if (Cards_Type(ritual) != CARD_TYPE_RITUAL || Cards_Type(Cards_EffectId(ritual)) != CARD_TYPE_RITUAL ||
+            Cards_EffectId(ritual) > CARD_COUNT) {
+            Mods_Note(mod, "%s: \"card\" must be a ritual card, or a copy of one", where);
             continue;
         }
         rule.recipe[0] = (unsigned short)ritual;
@@ -775,6 +778,14 @@ static void read_rituals(const char *mod, const JsonValue *list)
         *slot = rule;
         ritual_count++;
     }
+}
+
+int Tables_HasRitual(int ritual)
+{
+    int i;
+    for (i = 0; i < ritual_count; i++)
+        if (rituals[i].recipe[0] == ritual) return 1;
+    return 0;
 }
 
 int Tables_Ritual(int ritual, unsigned short recipe[6])

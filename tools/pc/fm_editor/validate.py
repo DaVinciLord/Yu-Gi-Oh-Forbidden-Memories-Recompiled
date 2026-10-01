@@ -9,8 +9,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from .gamedata import (CARD_COUNT, DECK_COPY_LIMIT, DECK_POOL_MIN_CARDS, DECK_SIZE, DUELIST_NAMES, POOLS,
-                       POOL_LABELS, POOL_TOTAL, TYPE_MAGIC, TYPE_EQUIP, TYPE_RITUAL, exodia_piece)
+from .gamedata import (DECK_COPY_LIMIT, DECK_POOL_MIN_CARDS, DECK_SIZE, DUELIST_NAMES, POOLS,
+                       POOL_LABELS, POOL_TOTAL, TYPE_MAGIC, TYPE_EQUIP, exodia_piece)
 from . import art, campaign_map, fixed_decks, guardian_stars, limits
 from .model import KEY_RE, Project
 
@@ -220,8 +220,8 @@ def _check_tables(project: Project, out: list):
         if project.retail.rituals.get(ritual) == recipe and not conditional:
             continue
         where = project.card_label(ritual)
-        if ritual > CARD_COUNT or not valid(ritual) or project.cards[ritual].type != TYPE_RITUAL:
-            out.append(Issue("error", "Rituals", where, "\"card\" must be one of the disc's ritual cards", ritual))
+        if not valid(ritual) or not project.is_ritual(ritual):
+            out.append(Issue("error", "Rituals", where, "\"card\" must be a ritual card, or a copy of one", ritual))
         if len(recipe) != 4 or not valid(recipe[3]):
             out.append(Issue("error", "Rituals", where, "a valid result card is required", ritual))
             continue

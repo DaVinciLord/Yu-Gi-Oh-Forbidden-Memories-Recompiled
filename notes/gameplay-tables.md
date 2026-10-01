@@ -122,7 +122,9 @@ never counted the bonus.
 ## Rituals
 
 `"rituals"` is a list, one entry per ritual card. `card` is one of the
-disc's ritual cards; `tributes` names the three monsters it takes, and
+disc's ritual cards, or a mod's copy of one (`"copy"` of a ritual card,
+[more-cards.md](more-cards.md)); a copy without an entry of its own is
+summoned by its base's recipe. `tributes` names the three monsters it takes, and
 `result` what it summons. `"result": null` takes the ritual away. A tribute
 may be a copy a mod added; a retail tribute is also met by a copy of it.
 Every tribute takes a monster that is exactly it before any takes a copy,

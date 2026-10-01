@@ -824,8 +824,8 @@ def read_rituals(project: Project, entries, messages: list):
         if not isinstance(entry, dict):
             continue
         ritual = project.resolve(entry.get("card"))
-        if not ritual or ritual > CARD_COUNT or project.cards[ritual].type != 22:
-            messages.append(f"{where}: \"card\" must be one of the disc's ritual cards; left out")
+        if not ritual or not project.is_ritual(ritual):
+            messages.append(f"{where}: \"card\" must be a ritual card, or a copy of one; left out")
             continue
         if "result" in entry and entry["result"] is None:
             project.rituals.pop(ritual, None)

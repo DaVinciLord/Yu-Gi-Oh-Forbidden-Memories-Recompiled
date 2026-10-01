@@ -9,6 +9,15 @@
 #ifdef MEMORIES_PC
 #include "pc/cards/cards.h"
 #include "pc/cards/tables.h"
+#include "duel_action_lock.h"
+#include "duel_scene_card_placement.h"
+
+s32 Duel_RitualPlayed(void)
+{
+    /* D_8009B150 is the card the effect scene plays (func_80019608). */
+    s32 played = D_8009B150 & CARD_ID_FIELD_MASK;
+    return played > CARD_COUNT && Cards_EffectId(played) == gDuel_wEffectCardID ? played : gDuel_wEffectCardID;
+}
 #endif
 
 s32 Duel_CheckRitual(DuelRitualResult *out, s32 ritualId)
@@ -31,6 +40,9 @@ s32 Duel_CheckRitual(DuelRitualResult *out, s32 ritualId)
 #ifdef MEMORIES_PC
     TablesRitualRequirement requirements[DUEL_RITUAL_TRIBUTE_COUNT];
     u16 conditional_result = 0;
+    /* A card past the disc's (played, or in the AI's hand) without a
+     * recipe of its own is its base's ritual. */
+    if (ritualId > CARD_COUNT && !Tables_HasRitual(ritualId)) ritualId = Cards_EffectId(ritualId);
     if (Tables_RitualRequirements(ritualId, requirements, &conditional_result)) {
         int match[DUEL_RITUAL_TRIBUTE_COUNT] = {-1, -1, -1};
         int order[DUEL_RITUAL_TRIBUTE_COUNT] = {0, 1, 2};

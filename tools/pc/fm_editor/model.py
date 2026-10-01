@@ -261,7 +261,7 @@ class Project:
         self.equips.pop(cid, None)
         for monsters in self.equips.values():
             monsters.discard(cid)
-        self.rituals = {r: rec for r, rec in self.rituals.items() if cid not in rec}
+        self.rituals = {r: rec for r, rec in self.rituals.items() if cid not in rec and r != cid}
         self.ritual_requirements.pop(cid, None)
         for ritual, slots in list(self.ritual_requirements.items()):
             if ritual not in self.rituals or any(req.get("card") == cid for req in slots):
@@ -366,7 +366,13 @@ class Project:
         return sorted(cid for cid, card in self.cards.items() if card.type == 23)
 
     def ritual_cards(self):
-        return sorted(cid for cid, card in self.cards.items() if cid <= CARD_COUNT and card.type == 22)
+        return sorted(cid for cid in self.cards if self.is_ritual(cid))
+
+    def is_ritual(self, cid: int) -> bool:
+        """A ritual card a recipe may be for: the disc's, or a mod's own
+        copy of one (the port plays it with its base's effect; tables.c)."""
+        card, base = self.cards.get(cid), self.cards.get(self.base_of(cid))
+        return bool(card and base and card.type == 22 and base.type == 22 and self.base_of(cid) <= CARD_COUNT)
 
     def clone(self) -> "Project":
         return copy.deepcopy(self)
