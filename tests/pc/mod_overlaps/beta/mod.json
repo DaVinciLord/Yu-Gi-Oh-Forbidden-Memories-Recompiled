@@ -1,0 +1,154 @@
+{
+    "id": "beta",
+    "name": "Beta",
+    "priority": 1,
+    "data": [
+        {
+            "file": "\\data\\wa_mrg.mrg",
+            "replace": "wa2.mrg"
+        },
+        {
+            "file": "\\DATA\\SU.MRG;1",
+            "patch": [
+                {
+                    "at": "0x102",
+                    "bytes": "AA"
+                }
+            ]
+        },
+        {
+            "lba": 1234,
+            "patch": [
+                {
+                    "at": 8,
+                    "bytes": "00"
+                }
+            ]
+        }
+    ],
+    "audio": {
+        "music": {
+            "16": "b.ogg"
+        }
+    },
+    "textures": "pack",
+    "cards": [
+        {
+            "replace": 20,
+            "name": "Big Kuriboh",
+            "defense": 900
+        },
+        {
+            "replace": "Blue-eyes White Dragon",
+            "description": "Dull",
+            "attack": 3500
+        },
+        {
+            "replace": "alpha:tiny:1",
+            "name": "Tiny Changed"
+        }
+    ],
+    "fusions": [
+        {
+            "with": [
+                "Mystical Elf",
+                "Kuriboh"
+            ],
+            "result": "Hitotsu-me Giant"
+        },
+        {
+            "with": [
+                "Ryu-kishin",
+                "Baby Dragon"
+            ],
+            "result": 1
+        },
+        {
+            "remove": "Celtic Guardian"
+        }
+    ],
+    "equips": [
+        {
+            "card": "Legendary Sword",
+            "add": [
+                "Kuriboh"
+            ]
+        }
+    ],
+    "equip_bonus_default": 700,
+    "rituals": [
+        {
+            "card": "Black Luster Ritual",
+            "tributes": [
+                "Kuriboh",
+                "Mystical Elf",
+                "Baby Dragon"
+            ],
+            "result": "Black Luster Soldier"
+        }
+    ],
+    "drops": "drops.json",
+    "decks": {
+        "Heishin": {
+            "fixed": true,
+            "Kuriboh": 40
+        }
+    },
+    "starter": [
+        {
+            "name": "B",
+            "Mystical Elf": 40
+        }
+    ],
+    "passwords": {
+        "all": {
+            "starchips_percent": 50
+        }
+    },
+    "guardian_stars": {
+        "replace": true,
+        "stars": [
+            {
+                "id": 11,
+                "name": "Flame"
+            }
+        ]
+    },
+    "limits": {
+        "life_points": {
+            "start": 12000,
+            "duelists": {
+                "Heishin": 20000
+            }
+        },
+        "chest": 5
+    },
+    "terrain_bonus": {
+        "replace": true
+    },
+    "trap_thresholds": {
+        "600": 1600
+    },
+    "text": [
+        "text.txt"
+    ],
+    "title": {
+        "logo": {
+            "tint": "#00FF00"
+        },
+        "text": [
+            {
+                "text": "Beta"
+            }
+        ]
+    },
+    "menu": {
+        "buttons": [
+            {
+                "id": "alpha:credits",
+                "label": "THANKS"
+            }
+        ],
+        "spacing": 28
+    }
+}

@@ -1,0 +1,26 @@
+{
+    "about": "The mods in load order, and the cards and opponents the test's resolver knows (tests/pc/mods_overlap_test.c, tools/pc/fm_editor/tests/test_overlaps.py).",
+    "order": [
+        "alpha",
+        "beta",
+        "gamma"
+    ],
+    "cards": {
+        "1": "Blue-eyes White Dragon",
+        "2": "Mystical Elf",
+        "3": "Hitotsu-me Giant",
+        "4": "Baby Dragon",
+        "5": "Ryu-kishin",
+        "10": "Celtic Guardian",
+        "20": "Kuriboh",
+        "301": "Legendary Sword",
+        "600": "Bear Trap",
+        "660": "Black Luster Ritual",
+        "700": "Black Luster Soldier"
+    },
+    "duelists": {
+        "Simon Muran": 1,
+        "Seto": 7,
+        "Heishin": 8
+    }
+}

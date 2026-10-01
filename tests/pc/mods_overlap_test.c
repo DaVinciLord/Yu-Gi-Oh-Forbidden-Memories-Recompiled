@@ -1,0 +1,249 @@
+/* What two or more mods change in common (src/pc/mods/overlap.c), against
+ * the mods in tests/pc/mod_overlaps: every overlap they make, one line each
+ * as "kind|severity|outcome|mods|label", sorted, must be expected.txt there.
+ * The FM Editor's check (tools/pc/fm_editor/overlaps.py) reads the same
+ * fixture and must find the same lines. Then the cases a manifest cannot
+ * show: code hooks and events, one mod, and many thousands of rules. */
+#include "pc/mods/json.h"
+#include "pc/mods/overlap.h"
+#include <assert.h>
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+static const JsonValue *fixture;
+
+static int same_letters(const char *a, const char *b)
+{
+    for (;;) {
+        while (*a && !isalnum((unsigned char)*a)) a++;
+        while (*b && !isalnum((unsigned char)*b)) b++;
+        if (!*a || !*b) return !*a && !*b;
+        if (tolower((unsigned char)*a++) != tolower((unsigned char)*b++)) return 0;
+    }
+}
+/* The fixture's cards: by number, or by name letter for letter. */
+static int card(const char *text, long number, void *context)
+{
+    const JsonValue *cards = Json_Member(fixture, "cards");
+    (void)context;
+    for (const JsonValue *c = Json_At(cards, 0); c; c = Json_Next(c)) {
+        long id = atol(Json_Name(c));
+        if (text ? same_letters(text, Json_String(c, "")) || !strcmp(text, Json_Name(c)) : number == id) return (int)id;
+    }
+    return -1;
+}
+static int card_name(int id, char *out, size_t size, void *context)
+{
+    char key[16];
+    (void)context;
+    snprintf(key, sizeof(key), "%d", id);
+    if (!Json_Member(Json_Member(fixture, "cards"), key)) return 0;
+    snprintf(out, size, "%s", Json_String(Json_Member(Json_Member(fixture, "cards"), key), ""));
+    return 1;
+}
+static int duelist(const char *text, void *context)
+{
+    (void)context;
+    for (const JsonValue *d = Json_At(Json_Member(fixture, "duelists"), 0); d; d = Json_Next(d))
+        if (same_letters(text, Json_Name(d)) || atol(text) == Json_Number(d, -1)) return (int)Json_Number(d, -1);
+    return -1;
+}
+
+/* A mod's setting as a fresh install has it: its declared default. */
+static ModsOverlapMod list[8];
+static int setting(int mod, const char *key, void *context)
+{
+    (void)context;
+    for (const JsonValue *s = Json_At(Json_Member(list[mod].manifest, "settings"), 0); s; s = Json_Next(s))
+        if (!strcmp(Json_String(Json_Member(s, "key"), ""), key)) return (int)Json_Number(Json_Member(s, "default"), 0);
+    return -1;
+}
+
+/* Two hooks on one function and two subscriptions to one event, from the
+ * second and third mods. */
+static int hook(int index, int *mod, uint64_t *what, char *label, size_t size, void *context)
+{
+    (void)context;
+    if (index > 1) return 0;
+    *mod = index + 1;
+    *what = 0x1000;
+    snprintf(label, size, "DuelScene_UpdateResultRewards");
+    return 1;
+}
+static int event(int index, int *mod, uint64_t *what, char *label, size_t size, void *context)
+{
+    (void)context;
+    if (index > 1) return 0;
+    *mod = 2 - index;
+    *what = 3;
+    snprintf(label, size, "FUSION");
+    return 1;
+}
+
+static int by_text(const void *a, const void *b) { return strcmp(*(char *const *)a, *(char *const *)b); }
+
+static char *read_all(const char *path)
+{
+    FILE *f = fopen(path, "rb");
+    long n;
+    char *text;
+    assert(f);
+    fseek(f, 0, SEEK_END);
+    n = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    text = calloc(1, (size_t)n + 1);
+    assert(text && fread(text, 1, (size_t)n, f) == (size_t)n);
+    fclose(f);
+    return text;
+}
+
+int main(void)
+{
+    char path[1024], error[256], line[2048], label[512], mods[512];
+    JsonDocument *documents[8], *setup;
+    ModsOverlapSource source = {0};
+    ModsOverlaps *found;
+    char *lines[512], *expected, *at;
+    int count = 0, n = 0, failed = 0;
+
+    snprintf(path, sizeof(path), "%s/tests/pc/mod_overlaps/fixture.json", MEMORIES_SOURCE_DIR);
+    setup = Json_ParseFile(path, error, sizeof(error));
+    assert(setup);
+    fixture = Json_Root(setup);
+    for (const JsonValue *id = Json_At(Json_Member(fixture, "order"), 0); id; id = Json_Next(id), count++) {
+        char *directory = malloc(1024);
+        snprintf(directory, 1024, "%s/tests/pc/mod_overlaps/%s", MEMORIES_SOURCE_DIR, Json_String(id, ""));
+        snprintf(path, sizeof(path), "%s/mod.json", directory);
+        documents[count] = Json_ParseFile(path, error, sizeof(error));
+        assert(documents[count]);
+        list[count].id = Json_String(id, "");
+        list[count].name = Json_String(Json_Member(Json_Root(documents[count]), "name"), "");
+        list[count].directory = directory;
+        list[count].manifest = Json_Root(documents[count]);
+    }
+    source.card = card;
+    source.card_name = card_name;
+    source.duelist = duelist;
+    source.setting = setting;
+    found = Mods_OverlapCompute(list, count, &source);
+    assert(found);
+
+    /* The fixture: the lines the FM Editor finds too. */
+    for (int i = 0; i < Mods_OverlapCount(found); i++) {
+        Mods_OverlapLabel(found, i, label, sizeof(label));
+        Mods_OverlapMods(found, i, mods, sizeof(mods));
+        snprintf(line, sizeof(line), "%s|%s|%s|%s|%s", Mods_OverlapKindName(Mods_OverlapKind(found, i)),
+                 Mods_OverlapSeverity(found, i) ? "warning" : "info", Mods_OverlapOutcome(found, i), mods, label);
+        assert(n < 512);
+        lines[n++] = strdup(line);
+        Mods_OverlapText(found, i, line, sizeof(line));
+        printf("  %s\n", line);
+    }
+    qsort(lines, (size_t)n, sizeof(*lines), by_text);
+    snprintf(path, sizeof(path), "%s/tests/pc/mod_overlaps/expected.txt", MEMORIES_SOURCE_DIR);
+    expected = read_all(path);
+    at = expected;
+    for (int i = 0; i < n || *at; i++) {
+        char *end = strchr(at, '\n');
+        size_t length = end ? (size_t)(end - at) : strlen(at), advance = length + (end != NULL);
+        if (length && at[length - 1] == '\r') /* a checkout with CRLF */
+            length--;
+        if (i >= n || strlen(lines[i]) != length || strncmp(lines[i], at, length)) {
+            fprintf(stderr, "line %d: found   %s\n        expected %.*s\n", i + 1, i < n ? lines[i] : "(nothing)",
+                    (int)length, at);
+            failed = 1;
+            break;
+        }
+        at += advance;
+    }
+    if (failed) {
+        fprintf(stderr, "every line found:\n");
+        for (int i = 0; i < n; i++) fprintf(stderr, "%s\n", lines[i]);
+    }
+    assert(!failed);
+    Mods_OverlapFree(found);
+
+    /* Code: hooks chain, events are all called. */
+    source.hook = hook;
+    source.event = event;
+    found = Mods_OverlapCompute(list, count, &source);
+    assert(found);
+    {
+        int hooks = 0, events = 0;
+        for (int i = 0; i < Mods_OverlapCount(found); i++) {
+            Mods_OverlapText(found, i, line, sizeof(line));
+            if (Mods_OverlapKind(found, i) == MODS_OVERLAP_HOOKS) {
+                hooks++;
+                assert(!strcmp(Mods_OverlapOutcome(found, i), "chain"));
+                assert(Mods_OverlapSeverity(found, i) == MODS_OVERLAP_WARNING);
+                assert(strstr(line, "Function DuelScene_UpdateResultRewards (Beta, Gamma): Gamma's hook runs first"));
+                assert(!Mods_OverlapInvolves(found, i, 0) && Mods_OverlapInvolves(found, i, 2));
+            }
+            if (Mods_OverlapKind(found, i) == MODS_OVERLAP_EVENTS) {
+                events++;
+                assert(Mods_OverlapSeverity(found, i) == MODS_OVERLAP_INFO);
+                assert(strstr(line, "FUSION event (Beta, Gamma): each is called"));
+            }
+        }
+        assert(hooks == 1 && events == 1);
+    }
+    Mods_OverlapFree(found);
+
+    /* One mod, or none: nothing is read and nothing overlaps. */
+    found = Mods_OverlapCompute(list, 1, &source);
+    assert(found && Mods_OverlapCount(found) == 0);
+    Mods_OverlapFree(found);
+    found = Mods_OverlapCompute(list, 0, NULL);
+    assert(found && Mods_OverlapCount(found) == 0);
+    Mods_OverlapFree(found);
+
+    /* Two mods of every pair of 400 cards' fusions (79,800 rules each, as the
+     * FM Editor's bulk fusions writes) meet on every pair: worked out once,
+     * in well under a second. */
+    {
+        size_t room = 8u << 20, length = 0;
+        char *text = malloc(room);
+        JsonDocument *big[2];
+        ModsOverlapMod pair[2];
+        clock_t start;
+        double seconds;
+        for (int m = 0; m < 2; m++) {
+            length = (size_t)snprintf(text, room, "{\"id\": \"bulk%d\", \"fusions\": [", m);
+            for (int a = 1; a <= 400; a++)
+                for (int b = a + 1; b <= 400; b++)
+                    length += (size_t)snprintf(text + length, room - length, "%s{\"with\": [%d, %d], \"result\": %d}",
+                                               a == 1 && b == 2 ? "" : ",", a, b, m ? 700 : 1);
+            snprintf(text + length, room - length, "]}");
+            big[m] = Json_Parse(text, error, sizeof(error));
+            assert(big[m]);
+            pair[m].id = m ? "bulk1" : "bulk0";
+            pair[m].name = pair[m].id;
+            pair[m].directory = NULL;
+            pair[m].manifest = Json_Root(big[m]);
+        }
+        start = clock();
+        found = Mods_OverlapCompute(pair, 2, NULL);
+        seconds = (double)(clock() - start) / CLOCKS_PER_SEC;
+        assert(found && Mods_OverlapCount(found) == 79800);
+        Mods_OverlapText(found, 0, line, sizeof(line));
+        printf("bulk: %d overlaps in %.3f s, the first: %s\n", Mods_OverlapCount(found), seconds, line);
+        assert(seconds < 5.0);
+        Mods_OverlapFree(found);
+        Json_Free(big[0]);
+        Json_Free(big[1]);
+        free(text);
+    }
+
+    for (int i = 0; i < n; i++) free(lines[i]);
+    for (int i = 0; i < count; i++) {
+        free((void *)list[i].directory);
+        Json_Free(documents[i]);
+    }
+    free(expected);
+    Json_Free(setup);
+    printf("mods_overlap: %d lines as expected\n", n);
+    return 0;
+}
