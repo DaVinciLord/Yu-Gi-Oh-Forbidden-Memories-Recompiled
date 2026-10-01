@@ -44,6 +44,7 @@ void Memories_DuelEffectControl(short id, short state, int buffer, DuelEffectReq
     static int mode = -1;
     static unsigned failed[8];
     uint32_t args[4], result;
+    int native, tpage, u, v, clut;
     unsigned index = (unsigned)(unsigned short)id;
 
     if (mode < 0) {
@@ -55,7 +56,37 @@ void Memories_DuelEffectControl(short id, short state, int buffer, DuelEffectReq
     }
     LOG(LOG_DUEL_EFFECTS, "id=%d state=%d buffer=%08x payload=%d,%d,%d damage=%d",
         id, state, (unsigned)buffer, request->field_00, request->field_02, request->field_04, request->field_12);
-    if (mode == MODE_AUTO && RetailImage_Verified(RETAIL_IMAGE_DUEL_EFFECTS)) {
+    native = mode == MODE_AUTO && RetailImage_Verified(RETAIL_IMAGE_DUEL_EFFECTS);
+    /* The battle's guardian star (0xE): its first update gets the star
+       less one and picks the icon's cell, u at +0x8C4, v +0x8C6, page
+       +0x8C8, palette +0x8CA; past the disc's ten it draws an error cross.
+       A star with a mod's icon, or past ten, starts as the first star and
+       then takes its own cell (stars.h), native or interpreted. */
+    if (id == 0xE && state >= 0 && mode != MODE_SKIP && index < 256 && !(failed[index >> 5] & (1u << (index & 31))) &&
+        Stars_EffectCell(state + 1, &tpage, &u, &v, &clut)) {
+        uint16_t *cell = (uint16_t *)(uintptr_t)(unsigned)(buffer + 0x8C4);
+
+        if (native) {
+            duel_effects__func_80146258(id, 0, (void *)(uintptr_t)(unsigned)buffer, request);
+        } else {
+            args[0] = index;
+            args[1] = 0;
+            args[2] = (uint32_t)buffer;
+            args[3] = (uint32_t)(uintptr_t)request;
+            if (Memories_MipsTry(0x801462B0u, args, 4, &result)) {
+                fprintf(stderr, "memories-pc: duel effect %d cannot run; completing it at once from now on\n", id);
+                failed[index >> 5] |= 1u << (index & 31);
+                D_8009B261 = 1;
+                return;
+            }
+        }
+        cell[0] = (uint16_t)u;
+        cell[1] = (uint16_t)v;
+        cell[2] = (uint16_t)((cell[2] & 0x60) | tpage);
+        cell[3] = (uint16_t)clut;
+        return;
+    }
+    if (native) {
         duel_effects__func_80146258(id, state, (void *)(uintptr_t)(unsigned)buffer, request);
         return;
     }
@@ -67,31 +98,6 @@ void Memories_DuelEffectControl(short id, short state, int buffer, DuelEffectReq
     args[1] = (uint32_t)(int)state;
     args[2] = (uint32_t)buffer;
     args[3] = (uint32_t)(uintptr_t)request;
-    /* The battle's guardian star (0xE): its first update gets the star
-       less one and picks the icon's cell, u at +0x8C4, v +0x8C6, page
-       +0x8C8, palette +0x8CA; past the disc's ten it draws an error cross.
-       A star with a mod's icon, or past ten, starts as the first star and
-       then takes its own cell (stars.h). */
-    if (id == 0xE && state >= 0) {
-        int tpage, u, v, clut;
-
-        if (Stars_EffectCell(state + 1, &tpage, &u, &v, &clut)) {
-            uint16_t *cell = (uint16_t *)(uintptr_t)(unsigned)(buffer + 0x8C4);
-
-            args[1] = 0;
-            if (Memories_MipsTry(0x801462B0u, args, 4, &result)) {
-                fprintf(stderr, "memories-pc: duel effect %d cannot run; completing it at once from now on\n", id);
-                failed[index >> 5] |= 1u << (index & 31);
-                D_8009B261 = 1;
-                return;
-            }
-            cell[0] = (uint16_t)u;
-            cell[1] = (uint16_t)v;
-            cell[2] = (uint16_t)((cell[2] & 0x60) | tpage);
-            cell[3] = (uint16_t)clut;
-            return;
-        }
-    }
     if (Memories_MipsTry(0x801462B0u, args, 4, &result)) {
         fprintf(stderr, "memories-pc: duel effect %d cannot run; completing it at once from now on\n", id);
         failed[index >> 5] |= 1u << (index & 31);
