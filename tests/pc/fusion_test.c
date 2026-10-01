@@ -8,7 +8,15 @@ static int recipes[801][801];
 static FusionCard card(int id) { return cards[id]; }
 static int fusion(int a, int b) { return recipes[a][b]; }
 static int equip(int e, int m) { return (e == 657 || e == 301 || e == 800) && cards[m].type < 20 ? m : 0; }
-static const FusionRules rules = {card, fusion, equip};
+static const FusionRules rules = {card, fusion, equip, NULL};
+/* A mod's "bonus": card 800 gives +1000, kept under +2000 in all. */
+static int bonus(int e, int m, int modifier)
+{
+    int value = e == 800 ? 1000 : e == 657 ? 1000 : 500;
+    (void)m;
+    return modifier + value > 2000 ? 2000 - modifier : value;
+}
+static const FusionRules modded = {card, fusion, equip, bonus};
 static void recipe(int a, int b, int r) { recipes[a][b] = recipes[b][a] = r; }
 static void init(void)
 {
@@ -114,6 +122,13 @@ int main(void)
     assert(Fusion_Toward(&rules, hand, pick, 1, best.card, &route) == 1);
     pick[1] = 1;
     assert(Fusion_Toward(&rules, hand, pick, 2, best.card, &route) == 2);
+    /* A mod's bonus for an equip is what the planner adds, either order. */
+    assert(Fusion_Step(&modded, card(1), card(800), &out) && Fusion_Attack(out) == 2000);
+    assert(Fusion_Step(&modded, card(800), card(1), &out) && Fusion_Attack(out) == 2000);
+    assert(Fusion_Step(&modded, out, card(657), &out) && out.modifier == 2000);
+    init(); hand[0] = card(1); hand[1] = card(800); hand[2] = hand[3] = hand[4] = (FusionCard){0};
+    Fusion_Plan(&modded, hand, NULL, 0, 0, &selected, &best);
+    assert(best.card.id == 1 && Fusion_Attack(best.card) == 2000);
     puts("fusion planner: passed");
     return 0;
 }
