@@ -341,6 +341,7 @@ static void read_fusions(const char *mod, const JsonValue *list)
         const JsonValue *removed = Json_Member(rule, "remove");
         int a, b, made = 0;
         snprintf(where, sizeof(where), "fusions[%d]", i);
+        if (!Mods_EntryUsed(mod, rule, where)) continue;
         if (removed) {
             /* { "remove": card }: no recipe on the disc makes it any more. */
             int id = card(mod, where, removed);
@@ -524,6 +525,7 @@ static void read_equips(const char *mod, const JsonValue *list)
         unsigned order = ++order_counter;
         int equip;
         snprintf(where, sizeof(where), "equips[%d]", i);
+        if (!Mods_EntryUsed(mod, entry, where)) continue;
         equip = card(mod, where, Json_Member(entry, "card"));
         if (!equip) continue;
         if (Cards_Type(equip) != CARD_TYPE_EQUIP) {
@@ -742,6 +744,7 @@ static void read_rituals(const char *mod, const JsonValue *list)
         int ritual, ok = 1;
         memset(&rule, 0, sizeof(rule));
         snprintf(where, sizeof(where), "rituals[%d]", i);
+        if (!Mods_EntryUsed(mod, entry, where)) continue;
         ritual = card(mod, where, Json_Member(entry, "card"));
         if (!ritual) continue;
         if (ritual > CARD_COUNT || Cards_Type(ritual) != CARD_TYPE_RITUAL) {

@@ -67,6 +67,7 @@ int Cards_Attribute(int id) { (void)id; return 0; }
 int Cards_AttributeNamed(const char *text) { (void)text; return -1; }
 int Cards_Named(const char *text) { (void)text; return -1; }
 int Cards_Reference(const JsonValue *value) { (void)value; return -1; }
+int Mods_EntryUsed(const char *id, const JsonValue *entry, const char *where) { (void)id; (void)entry; (void)where; return 1; }
 void Mods_Note(const char *id, const char *format, ...) { (void)id; (void)format; }
 int Log_Wanted(LogChannel channel) { (void)channel; return 0; }
 void Log_Printf(LogChannel channel, const char *format, ...) { (void)channel; (void)format; }
