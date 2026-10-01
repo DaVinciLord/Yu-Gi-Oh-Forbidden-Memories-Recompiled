@@ -376,9 +376,12 @@ static int render_glyph(FT_Face face, FT_ULong character, Glyph *g)
 
 /* Forgets the characters past ASCII and closes the face (a new size renders
  * them again). */
+static void forget_big_glyphs(void);
+
 static void free_extra_glyphs(void)
 {
     unsigned i;
+    forget_big_glyphs();
     for (i = 0; extra_glyphs && i <= extra_mask; i++) free(extra_glyphs[i].glyph.coverage);
     free(extra_glyphs);
     extra_glyphs = NULL;
@@ -653,6 +656,47 @@ void Menu_DrawText(MenuCanvas *into, int x, int y, const char *text, uint32_t co
 int Menu_TextWidth(const char *text) { return text_width(text); }
 
 int Menu_TextWidthScaled(const char *text, int scale) { return text_width(text) * scale / ui; }
+/* Characters bigger than the menu's own (Menu_DrawTextScaled at a scale
+ * above it: the title's text lines, the side windows), rendered at their
+ * size rather than magnified, kept by character and scale until the table
+ * fills, when it starts again. */
+typedef struct { uint32_t code; int scale, missing; Glyph glyph; } BigGlyph;
+#define BIG_GLYPHS 1024
+static BigGlyph big_glyphs[BIG_GLYPHS];
+static int big_count;
+
+static void forget_big_glyphs(void)
+{
+    int i;
+    for (i = 0; i < BIG_GLYPHS; i++) free(big_glyphs[i].glyph.coverage);
+    memset(big_glyphs, 0, sizeof(big_glyphs));
+    big_count = 0;
+}
+
+static const Glyph *big_glyph_for(uint32_t character, int scale)
+{
+    unsigned slot = (character * 2654435761u + (unsigned)scale * 40503u) & (BIG_GLYPHS - 1);
+    BigGlyph *b;
+    for (b = &big_glyphs[slot]; b->code; slot = (slot + 1) & (BIG_GLYPHS - 1), b = &big_glyphs[slot]) {
+        if (b->code == character && b->scale == scale) return b->missing ? NULL : &b->glyph;
+    }
+    if (big_count * 2 >= BIG_GLYPHS) {
+        forget_big_glyphs();
+        slot = (character * 2654435761u + (unsigned)scale * 40503u) & (BIG_GLYPHS - 1);
+        b = &big_glyphs[slot];
+    }
+    b->code = character;
+    b->scale = scale;
+    big_count++;
+    /* The face is the menu's: at the character's size for this one, then
+     * back to the menu's for everything else. */
+    b->missing = FT_Set_Pixel_Sizes(font_face, 0, (FT_UInt)(13 * scale)) ||
+                 !FT_Get_Char_Index(font_face, (FT_ULong)character) ||
+                 !render_glyph(font_face, (FT_ULong)character, &b->glyph);
+    FT_Set_Pixel_Sizes(font_face, 0, FONT_PX);
+    return b->missing ? NULL : &b->glyph;
+}
+
 void Menu_DrawTextScaled(MenuCanvas *into, int x, int middle, const char *text, uint32_t colour, int scale)
 {
     canvas = into;
@@ -663,7 +707,18 @@ void Menu_DrawTextScaled(MenuCanvas *into, int x, int middle, const char *text, 
     int baseline = middle + (font_ascent - font_descent + 1) * scale / (2 * ui);
     int advance = 0;
     while (*text) {
-        const Glyph *g = glyph_for(Glyphs_NextCharacter(&text));
+        uint32_t character = Glyphs_NextCharacter(&text);
+        const Glyph *g = glyph_for(character), *big = scale > ui && font_face ? big_glyph_for(character, scale) : NULL;
+        /* Placed by the menu-size glyph's advance, so widths are what
+         * Menu_TextWidthScaled says; drawn from the one at its size. */
+        if (big) {
+            for (int row = 0; row < big->h && big->coverage; row++)
+                for (int col = 0; col < big->w; col++)
+                    put(x + advance * scale / ui + big->left + col, baseline - big->top + row, colour,
+                        big->coverage[row * big->w + col]);
+            advance += g->advance;
+            continue;
+        }
         for (int row = 0; row < g->h * scale / ui && g->coverage; row++)
             for (int col = 0; col < g->w * scale / ui; col++)
                 put(x + advance * scale / ui + g->left * scale / ui + col,

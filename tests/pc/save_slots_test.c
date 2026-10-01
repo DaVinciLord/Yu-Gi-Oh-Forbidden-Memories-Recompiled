@@ -130,13 +130,17 @@ int main(void)
     assert(SaveSlots_WriteAt(4, 1, state, SIZE_MAX) == -1);
     assert(SaveSlots_WriteAt(4, -1, state, 1) == -1);
 
-    /* An unreadable existing path is damaged, never an empty slot that can
-     * be overwritten without confirmation. Directories fail on both OSes. */
+    /* An unreadable existing path is unreadable, never an empty slot that
+     * can be overwritten without confirmation, and not called damaged: the
+     * save may be sound. Directories fail on both OSes. */
     assert(!SaveSlots_Path(9, path, sizeof(path)));
     assert(!mkdir(path, 0700));
     SaveSlots_Scan(slots, sound);
-    assert(slots[9].status == SAVE_SLOT_DAMAGED);
+    assert(slots[9].status == SAVE_SLOT_UNREADABLE);
+    assert(strstr(SaveSlots_ReadError(), "slot10.sav"));
     assert(!rmdir(path));
+    SaveSlots_Scan(slots, sound);
+    assert(!*SaveSlots_ReadError());
 
 #ifndef _WIN32
     /* Force a short write without filling a disk. The old save must survive
@@ -192,6 +196,17 @@ int main(void)
     remove(path);
     snprintf(path, sizeof(path), "%s/saves", directory);
     assert(!rmdir(path));
+
+    /* A saves folder that cannot be made (here a file is in its way; on the
+     * player's machine an antivirus): every slot unreadable, with why. */
+    {
+        FILE *blocker = fopen(path, "wb");
+        assert(blocker && !fclose(blocker));
+        SaveSlots_Scan(slots, sound);
+        for (i = 0; i < SAVE_SLOT_COUNT; i++) assert(slots[i].status == SAVE_SLOT_UNREADABLE);
+        assert(strstr(SaveSlots_ReadError(), "saves"));
+        assert(!remove(path));
+    }
     assert(!rmdir(directory));
     puts("save slots: ok");
     return 0;

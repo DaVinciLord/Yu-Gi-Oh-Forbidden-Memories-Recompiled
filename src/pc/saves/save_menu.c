@@ -150,7 +150,14 @@ static void start(int channel)
     keep_cursor_shown();
     menu.view = VIEW_LIST;
     changed();
-    if (!any) show_message(2, 1, "There are no saved games to load.", 0);
+    if (!any && *SaveSlots_ReadError()) {
+        /* Not "no saved games" when they could not be read: they may all be
+         * there, behind a folder the system refuses. */
+        show_message(2, 1, "Could not read your saved games.", 0);
+        snprintf(detail, sizeof(detail), "%s", SaveSlots_ReadError());
+    } else if (!any) {
+        show_message(2, 1, "There are no saved games to load.", 0);
+    }
 }
 
 /* Games saved and loaded through the menu (SaveMenu_SaveCount). */
@@ -484,11 +491,14 @@ void SaveMenu_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
             right = details;
         } else {
             snprintf(line, sizeof(line), "%2d", slot + 1);
-            right = info->status == SAVE_SLOT_EMPTY ? "Empty" : "Damaged save";
+            right = info->status == SAVE_SLOT_EMPTY        ? "Empty"
+                    : info->status == SAVE_SLOT_UNREADABLE ? "Cannot read"
+                                                           : "Damaged save";
         }
         draw_text(canvas, px + 16 * s, cy, line, colour);
         draw_text(canvas, px + pw - 16 * s - text_width(right), cy, right,
-                      info->status == SAVE_SLOT_DAMAGED ? COLOUR_WARN : colour);
+                      info->status == SAVE_SLOT_DAMAGED || info->status == SAVE_SLOT_UNREADABLE ? COLOUR_WARN
+                                                                                                : colour);
     }
     if (menu.top > 0) draw_text(canvas, px + pw - 30 * s, py + 20 * s, "^", COLOUR_DIM);
     if (menu.top + rows < SAVE_SLOT_COUNT) draw_text(canvas, px + pw - 18 * s, py + 20 * s, "v", COLOUR_DIM);

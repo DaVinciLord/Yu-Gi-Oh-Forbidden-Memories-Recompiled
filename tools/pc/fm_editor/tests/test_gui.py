@@ -383,6 +383,49 @@ class GuiTest(unittest.TestCase):
         self.assertEqual(len(app.equips.monsters.get_children()), 30)
         self.assertEqual(len(app.rituals.tree.get_children()), 20)   # every ritual card, with or without a recipe
 
+    def test_remove_disc_recipes(self):
+        from fm_editor import manifest
+        app = self.app
+        tab = app.fusions
+        p = tab.project
+        recipes = p.retail_recipes(3)
+        dialog = tab.remove_result()
+        dialog.fields["r"].set(610)                  # a magic card: no disc recipe makes it
+        dialog.ok()
+        self.assertIn("no recipe", dialog.error.cget("text"))
+        dialog.fields["r"].set(3)
+        dialog.ok()
+        self.assertEqual(p.fusion_removes, [3])
+        self.assertFalse([pair for pair in recipes if pair in p.fusions])
+        self.assertTrue(app.dirty)
+        self.assertEqual(manifest.build_fusions(p), [{"remove": "Kuriboh"}])
+        # An own "fusions" list naming the pair makes its card now: the row says so.
+        p.card_extra[1] = {"fusions": [{"with": 2, "result": 500}]}
+        p._own_pairs = None
+        tab.search.set("Blue Dragon")
+        self.assertEqual(tab.tree.set("1:2", "state"), "own list")
+        self.assertIn("Card 500", tab.tree.set("1:2", "result"))
+        del p.card_extra[1]
+        p._own_pairs = None
+        tab.fill()
+        self.assertEqual(tab.tree.set("1:2", "state"), "removed")
+        tab.tree.selection_set("1:2")
+        tab.revert()
+        self.assertEqual(p.fusions[(1, 2)], 3)
+        if len(recipes) > 1:
+            self.assertIn({"with": ["Blue Dragon", "Mystic Elf"], "result": "Kuriboh"}, manifest.build_fusions(p))
+        else:
+            self.assertEqual(manifest.build_fusions(p), [])
+        # A copy's own list that its base's rule answers first is no row of
+        # its own: it would read "forbidden" where the game plays the rule.
+        copy = p.add_card(1, "x")
+        p.added[copy].extra = {"fusions": [{"with": 2, "result": 500}]}
+        p.set_fusion(1, 2, 599)
+        p._own_pairs = None
+        tab.search.set("")
+        tab.fill()
+        self.assertFalse(tab.tree.exists(f"2:{copy}"))
+
     def test_dark_mode(self):
         from fm_editor import theme
         from fm_editor.app import App

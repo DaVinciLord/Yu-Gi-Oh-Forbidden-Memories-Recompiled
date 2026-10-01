@@ -50,3 +50,7 @@ Initialized module directories:
 - [`name_entry/`](name_entry/) records the verified WA package and entry
   points into the front-end image shared with `password/`; matching source is
   not duplicated under both directories.
+- [`duel_effects/`](duel_effects/) holds the matched C of the WA duel-effect
+  bank at `0x80146000` (effects 0-24, entry `0x801462B0`); the functions
+  keep upstream's PAL-address names, so map them through
+  `config/slus_01411/overlays/duel_effects_functions.csv`.

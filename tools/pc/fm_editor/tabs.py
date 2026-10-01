@@ -502,6 +502,7 @@ class FusionsTab(Tab):
         ttk.Button(buttons, text="Add fusion...", command=self.add).pack(side="left")
         ttk.Button(buttons, text="Change result...", command=self.edit).pack(side="left", padx=4)
         ttk.Button(buttons, text="Remove (no fusion)", command=self.remove).pack(side="left")
+        ttk.Button(buttons, text="Remove recipes of...", command=self.remove_result).pack(side="left", padx=(4, 0))
         ttk.Button(buttons, text="Revert to retail", command=self.revert).pack(side="left", padx=4)
         ttk.Button(buttons, text="Bulk...", command=lambda: bulk_dialog.open_bulk(self)).pack(side="left")
         ttk.Label(buttons, text="A pair fuses the same in either order. Brown rows are the retail table's "
@@ -516,13 +517,20 @@ class FusionsTab(Tab):
         self.tree.delete(*self.tree.get_children())
         p = self.project
         text = self.search.get().strip()
-        pairs = set(p.fusions) | set(p.retail.fusions)
+        named = {pair for pair in p.own_fusion_pairs()[0] if pair[0] in p.cards and pair[1] in p.cards}
+        # A card's own "fusions" list makes what no rule of the mod decides
+        # first: the row shows what the game plays. A copy's pair its base's
+        # rule decides is no row of its own (it would read "forbidden").
+        removes = set(p.active_removes()) if named else set()
+        own = {pair: p.own_fusion(pair, removes) for pair in named}
+        pairs = set(p.fusions) | set(p.retail.fusions) | p.fusion_explicit | \
+            {pair for pair, made in own.items() if made is not None}
         rows = []
         for pair in pairs:
-            status = p.fusion_status(pair)
+            status = "own list" if own.get(pair) is not None else p.fusion_status(pair)
             if self.changed_only.get() and status in ("", "glitch"):
                 continue
-            result = p.fusions.get(pair) or p.retail.fusions.get(pair)
+            result = own.get(pair) if status == "own list" else p.fusions.get(pair) or p.retail.fusions.get(pair)
             if text and not (card_matches(p, pair[0], text) or card_matches(p, pair[1], text)
                              or card_matches(p, result, text)):
                 continue
@@ -531,9 +539,13 @@ class FusionsTab(Tab):
         for pair, status in rows[:self.LIMIT]:
             result = p.fusions.get(pair)
             retail = p.retail.fusions.get(pair)
-            shown = p.card_label(result) if result else \
-                f"(none; retail {p.card_label(retail)})" if retail else "(none: forbidden)"
-            self.tree.insert("", "end", iid=f"{pair[0]}:{pair[1]}", tags=(status,) if status else (),
+            if status == "own list":
+                shown = f"{p.card_label(own[pair]) if own[pair] else '(none)'} (a card's own fusions list)"
+            else:
+                shown = p.card_label(result) if result else \
+                    f"(none; retail {p.card_label(retail)})" if retail else "(none: forbidden)"
+            tag = "changed" if status == "own list" else status
+            self.tree.insert("", "end", iid=f"{pair[0]}:{pair[1]}", tags=(tag,) if tag else (),
                              values=(p.card_label(pair[0]), p.card_label(pair[1]), shown, status))
         more = f" (first {self.LIMIT} shown; search to narrow)" if len(rows) > self.LIMIT else ""
         self.count.configure(text=f"{len(rows)} fusions{more}")
@@ -593,6 +605,38 @@ class FusionsTab(Tab):
             self.project.revert_fusion(pair)
         self.app.changed()
         self.fill()
+
+    def remove_result(self):
+        """{"remove": card} (notes/gameplay-tables.md): one rule takes away
+        every disc recipe of the card; reverting one of them writes it back."""
+        fields = {}
+        chosen = self.selected()
+
+        def build(dialog, body):
+            ttk.Label(body, text="Result").grid(row=0, column=0, sticky="w", pady=2)
+            fields["r"] = CardField(body, lambda: self.project, width=36)
+            fields["r"].grid(row=0, column=1, sticky="we", pady=2)
+            if chosen:
+                fields["r"].set(self.project.fusions.get(chosen[0]) or self.project.retail.fusions.get(chosen[0]))
+            ttk.Label(body, text="No recipe on the disc makes this card any more: one \"remove\" rule in place of\n"
+                                 "a rule per pair. The mod's own fusions, and an added card's own recipes, still\n"
+                                 "make it. Revert a pair to bring that recipe back.",
+                      style="Hint.TLabel").grid(row=1, column=0, columnspan=2, sticky="w", pady=(6, 0))
+
+        def ok(dialog):
+            result = fields["r"].get()
+            if not result:
+                return "name the card (a number, a name, or pick one with ...)"
+            if not self.project.retail_recipes(result):
+                return f"no recipe on the disc makes {self.project.card_label(result)}"
+            self.project.remove_recipes(result)
+            self.app.changed()
+            self.fill()
+            return None
+
+        dialog = FormDialog(self, "Remove disc recipes", build, ok)
+        dialog.fields = fields
+        return dialog
 
 
 # --- Equips ---------------------------------------------------------------------
@@ -724,8 +768,9 @@ class RitualsTab(Tab):
         ttk.Button(buttons, text="Edit recipe...", command=self.edit).pack(side="left")
         ttk.Button(buttons, text="Remove recipe", command=self.remove).pack(side="left", padx=4)
         ttk.Button(buttons, text="Revert to retail", command=self.revert).pack(side="left")
-        ttk.Label(buttons, text="A ritual is one of the disc's ritual cards; the three tributes are monsters on "
-                                "the field; custom recipes may use conditions.", style="Hint.TLabel").pack(side="right")
+        ttk.Label(buttons, text="A ritual is a ritual card (an added copy has its base's recipe until given its "
+                                "own); the three tributes are monsters on the field; custom recipes may use conditions.",
+                  style="Hint.TLabel").pack(side="right")
 
     def refresh(self):
         self.fill()
@@ -741,6 +786,10 @@ class RitualsTab(Tab):
             conditional = ritual in p.ritual_requirements
             state = p.ritual_status(ritual)
             recipe = p.rituals.get(ritual) or (None, None, None, None)
+            if ritual in p.added and ritual not in p.rituals and not conditional:
+                # Without a recipe of its own, a copy is its base's ritual.
+                recipe = p.rituals.get(p.base_of(ritual)) or recipe
+                state = state or "as base"
             labels = [p.card_label(c) if c else "-" for c in recipe]
             if conditional:
                 for i, req in enumerate(p.ritual_requirements[ritual]):
@@ -777,8 +826,10 @@ class RitualsTab(Tab):
         ritual = self.selected()
         if not ritual:
             return
-        recipe = self.project.rituals.get(ritual) or self.project.retail.rituals.get(ritual) or (0, 0, 0, 0)
-        saved = self.project.ritual_requirements.get(ritual)
+        p = self.project
+        recipe = (p.rituals.get(ritual) or p.retail.rituals.get(ritual) or p.rituals.get(p.base_of(ritual))
+                  or (0, 0, 0, 0))      # an added copy starts from its base's
+        saved = p.ritual_requirements.get(ritual)
         requirements = [dict(r) for r in saved] if saved else [{"card": recipe[i]} if recipe[i] else {} for i in range(3)]
 
         dialog = tk.Toplevel(self)

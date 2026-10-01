@@ -44,8 +44,15 @@ int Mods_Compatible(int mod, const int *enabled, char *error, size_t size)
     int i;
     long api = Json_Number(member(mod, "min_api"), 1);
     const char *game = Mods_Metadata(mod, "game");
-    if (api > MEMORIES_MOD_API || (*game && strcmp(game, "slus_01411"))) {
-        snprintf(error, size, "%s needs another game or mod API version", Mods_Name(mod));
+    /* Said apart: a mod for a newer release is the usual case, and the
+     * player can fix it by updating the game. */
+    if (*game && strcmp(game, "slus_01411")) {
+        snprintf(error, size, "%s is made for another game (%s)", Mods_Name(mod), game);
+        return 0;
+    }
+    if (api > MEMORIES_MOD_API) {
+        snprintf(error, size, "%s needs a newer game: mod API %ld, this one has %d. Update the game",
+                 Mods_Name(mod), api, MEMORIES_MOD_API);
         return 0;
     }
     for (i = 0; i < Json_Count(list); i++) {

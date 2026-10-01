@@ -212,6 +212,13 @@ struct MemoriesModHost {
      * built, which is before the title. A mod that deals damage or bonuses of
      * its own reads the caps here rather than assume 9999. */
     long (*limit)(const MemoriesModHost *, const char *name);
+
+    /* --- API 9 ---
+     * The name of item `index` of the title's menus, as MEMORIES_EVENT_MENU
+     * gives it: an entry's ("new_game" ... "save", 0 to 10) or a button's
+     * "mod-id:button-id" (11 on); NULL for none. A button's number depends
+     * on the mods applied, so a mod knows its own by name. */
+    const char *(*menu_item)(const MemoriesModHost *, int index);
 };
 
 /* The symbol a mod's object defines, and its type. */

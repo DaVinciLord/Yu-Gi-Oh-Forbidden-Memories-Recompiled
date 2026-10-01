@@ -127,6 +127,12 @@ static unsigned char own_password[CARD_TABLE_ID_END];
 static unsigned char *art_records[CARD_TABLE_ID_END];
 static unsigned char art_parts[CARD_TABLE_ID_END];
 static unsigned char *plates[CARD_TABLE_ID_END];
+/* Field-only artwork ("field_art"): a card's picture and CLUT (art.h's
+ * CARD_ART_PIXELS/CARD_ART_CLUT layout) for its cutout on the duel field
+ * alone (mods/3d-monsters/field_art.c). Never patched into a card's own
+ * record, so nothing else the card's art shows (Library, hand, trade, the
+ * detail panel) is touched by it. NULL: the cutout uses the card's own art. */
+static unsigned char *field_art_records[CARD_TABLE_ID_END];
 static const char *replaced[CARD_ID_END];          /* the mod that replaced a retail card */
 static unsigned short *variants[2];                 /* per use: copies, grouped by base */
 static unsigned short variant_start[2][CARD_ID_END + 1];
@@ -256,6 +262,27 @@ static unsigned char *encode_name(const char *mod, const char *pattern, int n, i
  * most, broken at spaces (0xFE between them); "\n" breaks where it stands. */
 #define TEXT_LINE_LETTERS 20
 #define TEXT_LINES 8
+
+/* A code in card text, spelled as the FM Editor and the text listing show
+ * it: "{f8 0B NN}" an icon (one letter wide), "{f8 0A NN}" a colour (none),
+ * "{g X}" a glyph by number. Returns the characters it takes, 0 when "at"
+ * starts none (and is then read as letters); its bytes go to out. */
+static size_t text_code(const char *at, unsigned char out[3], int *bytes, int *letters)
+{
+    unsigned kind, value;
+    int used = 0;
+    if (sscanf(at, "{f8 %2x %2x}%n", &kind, &value, &used) == 2 && used && (kind == 0x0A || kind == 0x0B)) {
+        out[0] = 0xF8; out[1] = (unsigned char)kind; out[2] = (unsigned char)value;
+        *bytes = 3; *letters = kind == 0x0B;
+        return (size_t)used;
+    }
+    used = 0;
+    if (sscanf(at, "{g %4x}%n", &value, &used) == 1 && used && value < GLYPHS_EXTENDED_LIMIT) {
+        *bytes = (int)put_glyph(out, (int)value); *letters = 1;
+        return (size_t)used;
+    }
+    return 0;
+}
 static unsigned char *encode_description(const char *mod, const char *text, int id)
 {
     size_t length = strlen(text), n = 0;
@@ -271,11 +298,13 @@ static unsigned char *encode_description(const char *mod, const char *text, int 
             continue;
         }
         if (*word == ' ') { word++; continue; }
-        while (*end && *end != ' ' && *end != '\n') end++;
         letters = 0;   /* characters, not bytes */
-        {
-            const char *at;
-            for (at = word; at < end; at++) letters += ((unsigned char)*at & 0xC0) != 0x80;
+        while (*end && *end != ' ' && *end != '\n') {
+            unsigned char code[3];
+            int bytes, wide;
+            size_t used = *end == '{' ? text_code(end, code, &bytes, &wide) : 0;
+            if (used) { end += used; letters += wide; }
+            else letters += ((unsigned char)*end++ & 0xC0) != 0x80;
         }
         if (column && column + 1 + letters > TEXT_LINE_LETTERS) {
             glyphs[n++] = 0xFE; lines++; column = 0;
@@ -284,8 +313,14 @@ static unsigned char *encode_description(const char *mod, const char *text, int 
         }
         while (word < end) {
             const char *letter = word;
-            uint32_t character = Glyphs_NextCharacter(&word);
-            int code;
+            uint32_t character;
+            int code, bytes, wide;
+            size_t used = *word == '{' ? text_code(word, glyphs + n, &bytes, &wide) : 0;
+            if (used) {
+                word += used; n += (size_t)bytes; column += wide;
+                continue;
+            }
+            character = Glyphs_NextCharacter(&word);
             if (character == GLYPHS_NOT_UTF8) {
                 if (!warned++) Mods_Note(mod, "card %d: its text is not UTF-8; save the file as UTF-8. Left out", id);
                 continue;
@@ -871,6 +906,12 @@ static int clamp(int value, int low, int high)
     return value < low ? low : value > high ? high : value;
 }
 
+/* The type a card has on the disc (-1 past it): what its effect is. */
+int Cards_RetailType(int id)
+{
+    return id >= 1 && id <= CARD_COUNT ? (int)((((const unsigned *)(uintptr_t)RETAIL_STATS)[id - 1] >> 26) & 0x1F) : -1;
+}
+
 static int retail_monster(int id)
 {
     return id >= 1 && id <= CARD_COUNT &&
@@ -998,7 +1039,7 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     const char *setting = Json_String(Json_Member(entry, "count_setting"), NULL);
     const char *description = Json_String(Json_Member(entry, "description"), NULL);
     const JsonValue *password_value = Json_Member(entry, "password");
-    unsigned char *record = NULL, *title = NULL, *named_plate = NULL;
+    unsigned char *record = NULL, *title = NULL, *named_plate = NULL, *field_art_record = NULL;
     int parts = 0;
     int base = 0, count, n, value, has_password;
     unsigned stats, password = CARD_PASSWORD_NONE, entry_fusion_groups = 0;
@@ -1161,6 +1202,27 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         if (parts & ART_PICTURE) add_full_picture(full[0], record, 0);
         if (parts & ART_THUMBNAIL) add_full_picture(full[1][0] ? full[1] : full[0], record, 1);
     }
+    /* Field-only artwork: its own PNG, never shared with "art" and never
+     * patched into the card's own record, so only the field cutout ever
+     * shows it. */
+    {
+        const char *file = Json_String(Json_Member(entry, "field_art"), NULL);
+        char path[1200], why[1300];
+        if (file && *file && count) {
+            if (!Paths_Contained(file) || snprintf(path, sizeof(path), "%s/%s", directory, file) >= (int)sizeof(path)) {
+                Mods_Note(mod, "cards[%d]: \"field_art\": %s is outside the mod", index, file);
+            } else {
+                field_art_record = calloc(1, CARD_ART_RECORD);
+                if (!field_art_record) {
+                    Mods_Note(mod, "cards[%d]: \"field_art\": out of memory", index);
+                } else if (!CardArt_FromImage(path, field_art_record, why, sizeof(why))) {
+                    Mods_Note(mod, "cards[%d]: \"field_art\": %s", index, why);
+                    free(field_art_record);
+                    field_art_record = NULL;
+                }
+            }
+        }
+    }
     for (n = 1; n <= count; n++) {
         char identity[192], fallback[32];
         const char *key = Json_String(Json_Member(entry, "id"), "");
@@ -1210,6 +1272,7 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         if (has_password) passwords[id] = password;
         art_records[id] = parts ? record : NULL;
         art_parts[id] = (unsigned char)parts;
+        field_art_records[id] = field_art_record;
         if (title) {
             plates[id] = title;
         } else if (name && *name && (!named_plate || strstr(name, "{n}") || strstr(name, "{id}"))) {
@@ -1573,6 +1636,16 @@ void Cards_PatchThumbnail(int id, unsigned char *block)
 {
     int from = art_of(id, ART_THUMBNAIL);
     if (from) patch(block, art_records[from] + CARD_THUMB_PIXELS, CARD_THUMB_BLOCK);
+}
+
+/* The card's own field_art record (picture at CARD_ART_PIXELS, CLUT at
+ * CARD_ART_CLUT), or its base's, or NULL when neither has one: the cutout
+ * then falls back to the card's own art, as before. */
+const unsigned char *Cards_FieldArtRecord(int id)
+{
+    if (!Cards_Valid(id)) return NULL;
+    if (field_art_records[id]) return field_art_records[id];
+    return field_art_records[Cards_BaseId(id)];
 }
 
 int Cards_PickVariant(int id, int use)

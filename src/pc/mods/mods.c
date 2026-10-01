@@ -381,6 +381,10 @@ long Mods_Limit(const char *name, long fallback)
 }
 static long host_limit(const MemoriesModHost *host, const char *name)
 { (void)host; return limit_source && name ? limit_source(name) : -1; }
+static const char *(*menu_item_source)(int);
+void Mods_SetMenuItemSource(const char *(*source)(int)) { menu_item_source = source; }
+static const char *host_menu_item(const MemoriesModHost *host, int index)
+{ (void)host; return menu_item_source ? menu_item_source(index) : NULL; }
 static const char *(*notes_source)(int);
 static int (*tag_source)(int, const char *, char *, size_t);
 void Mods_SetCardNotes(const char *(*notes)(int), int (*tag)(int, const char *, char *, size_t))
@@ -532,6 +536,7 @@ static void fill_host(Mod *mod)
     mod->host.card_notes = host_card_notes;
     mod->host.card_tag = host_card_tag;
     mod->host.limit = host_limit;
+    mod->host.menu_item = host_menu_item;
     mod->host.api = MEMORIES_MOD_API;
     mod->host.id = mod->id;
     mod->host.directory = mod->directory;
@@ -1209,7 +1214,7 @@ static const char *const manifest_keys[] = {
     "data", "textures", "cards", "audio", "min_api", "game", "requires", "after", "conflicts", "priority",
     "settings", "fusions", "equips", "rituals", "drops", "decks", "duelists", "text", "font",
     "chest_overflow", "terrain_bonus", "trap_thresholds", "equip_bonus_default", "passwords", "starter",
-    "title", "limits", "guardian_stars", "packs", "pack_shop",
+    "title", "menu", "limits", "guardian_stars", "packs", "pack_shop",
 };
 
 /* How many letters to add, remove or change to turn one word into the
@@ -1247,7 +1252,11 @@ static void check_keys(Mod *mod, const JsonValue *root)
             apart = distance(name, manifest_keys[i]);   /* letter case counts as no distance: "Name" */
             if (apart < best) { best = apart; closest = manifest_keys[i]; }
         }
-        if (i < sizeof(manifest_keys) / sizeof(manifest_keys[0])) continue;
+        if (i < sizeof(manifest_keys) / sizeof(manifest_keys[0])) {
+            /* Only the first of a key is read: two "fusions" lists lose the second. */
+            if (Json_Member(root, name) != member) warn(mod, 1, "key '%s' appears twice; only the first is read", name);
+            continue;
+        }
         if (closest) warn(mod, 1, "unknown key '%s' (did you mean '%s'?)", name, closest);
         else warn(mod, 1, "unknown key '%s'", name);
     }
@@ -1490,30 +1499,45 @@ static int texture_part(const char *setting, void *context)
     return setting_value((int)((Mod *)context - mods), setting, &value) ? value != 0 : -1;
 }
 
+/* An entry's "setting", with "value" for one choice of a "choice" setting:
+ * 0 when that declared setting leaves it out. A setting the mod lacks, or a
+ * "value" that is not a number, is warned of and the entry used. `key` and
+ * `name` say where the entry is. */
+static int entry_used(int index, const JsonValue *entry, const char *key, const char *name)
+{
+    const JsonValue *setting = Json_TypeOf(entry) == JSON_OBJECT ? Json_Member(entry, "setting") : NULL;
+    const JsonValue *only = setting ? Json_Member(entry, "value") : NULL;
+    const char *wanted = Json_String(setting, "");
+    int current = 0;
+    if (!setting) return 1;
+    if (!*wanted || !setting_value(index, wanted, &current)) {
+        warn(&mods[index], 0, "\"%s\": %s names a setting the mod does not declare (%s); used", key, name,
+             *wanted ? wanted : "not a key");
+    } else if (only && Json_TypeOf(only) != JSON_NUMBER) {
+        warn(&mods[index], 0, "\"%s\": %s's \"value\" is not a number; used", key, name);
+    } else if (only ? current != (int)Json_Number(only, 0) : !current) {
+        say("%s: \"%s\": %s left out, setting %s is %d", Mods_Id(index), key, name, wanted, current);
+        return 0;
+    }
+    return 1;
+}
+
+int Mods_EntryUsed(const char *id, const JsonValue *entry, const char *where)
+{
+    int index = by_id(id);
+    return index < 0 || entry_used(index, entry, where, "the entry");
+}
+
 int Mods_File(int index, const char *key, int entry_index, char *path, size_t size, const char **name)
 {
     const JsonValue *value = Json_Member(Mods_Manifest(index), key);
     const JsonValue *entry = Json_TypeOf(value) == JSON_ARRAY ? Json_At(value, entry_index) : entry_index ? NULL : value;
     int object = Json_TypeOf(entry) == JSON_OBJECT;
-    const JsonValue *setting = object ? Json_Member(entry, "setting") : NULL;
     const char *file = Json_String(object ? Json_Member(entry, "file") : entry, NULL);
     if (!entry) return 0;
     path[0] = '\0';
     *name = file ? file : "";
-    if (setting) {   /* a part the mod's settings switch off, or a setting it lacks: then used */
-        const char *wanted = Json_String(setting, "");
-        const JsonValue *only = Json_Member(entry, "value");   /* one choice of a "choice" setting */
-        int current = 0;
-        if (!*wanted || !setting_value(index, wanted, &current)) {
-            warn(&mods[index], 0, "\"%s\": %s names a setting the mod does not declare (%s); used", key, *name,
-                 *wanted ? wanted : "not a key");
-        } else if (only && Json_TypeOf(only) != JSON_NUMBER) {
-            warn(&mods[index], 0, "\"%s\": %s's \"value\" is not a number; used", key, *name);
-        } else if (only ? current != (int)Json_Number(only, 0) : !current) {
-            say("%s: \"%s\": %s left out, setting %s is %d", Mods_Id(index), key, *name, wanted, current);
-            return 1;
-        }
-    }
+    if (!entry_used(index, entry, key, *name)) return 1;
     if (!file || !*file || !Paths_Contained(file) ||
         snprintf(path, size, "%s/%s", Mods_Directory(index), file) >= (int)size) {
         Mods_Note(Mods_Id(index), "\"%s\": %s is not a file in the mod", key, *name);

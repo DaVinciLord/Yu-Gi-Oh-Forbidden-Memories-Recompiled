@@ -175,8 +175,9 @@ with hardware. The Free Duel `0x80168000` module is integrated; its opponent
 grid initializes from the save's unlock flags and accepts cursor input.
 The duel's 3D battle presentation loads and renders both monster models, the
 arena and camera sequence, then returns to the field. Per-monster MODEL
-control modules and the shared WA effect dispatcher are retail MIPS overlays
-with no C source, and by default (2026-09-21) they run as they are: see
+control modules are retail MIPS overlays with no C source, and by default
+(2026-09-21) they run as they are; the shared WA effect bank runs as the
+decomp's native C when the disc delivered the retail bytes, else as MIPS: see
 [MIPS-only effects](#mips-only-effects) below. Every duel effect id and every
 monster's own attack choreography therefore plays with its retail timing,
 colours and particles.
@@ -335,9 +336,9 @@ logs "replaces a key-on not yet mixed" whenever it still happens.
 
 ### MIPS-only effects
 
-Two kinds of duel code exist only as MIPS bytes inside the archives:
+Two kinds of duel code were loaded as MIPS bytes from the archives:
 
-- the shared WA effect bank that every duel package copies to `0x80146000`,
+- the shared WA effect bank (native C since 2026-09-30, below) that every duel package copies to `0x80146000`,
   entered at `0x801462B0` with an effect id: fusion (1), battle damage (2),
   destruction (3), the magic, trap, ritual, terrain and field effects up to
   id 23;
@@ -371,8 +372,35 @@ byte-swapped relative to the raw pad, so in `duel_scene_field_actions.c`
 `0xC0` is Cross or Square: either starts an attack, Square commits the
 target with the 3D presentation (`D_8009B229 = 1`), Cross without it.
 
-Switches: `MEMORIES_DUEL_EFFECTS=native` restores the bring-up behaviour
-(ids 1-3 interpreted, others complete at once); `MEMORIES_MODEL_MODULES=native`
+**The effect bank in native C.** Upstream matched the whole North American
+bank (85/85 functions, #6691), and its C is linked in as the `duel_effects`
+module (`src/overlays/duel_effects/`, bank `0x80146000`, identifier word
+`0x18`; `tools/pc/build_game32.py`). `Memories_DuelEffectControl`
+(`src/pc/overlays/duel_effects.c`, the function map's entry for
+`0x801462B0`) calls the decomp's dispatcher instead of interpreting, under
+one rule: **the native C runs only for the retail bytes.** A disc delivery
+that writes the bank's first word (`0x80146000`, a new copy of it) marks it
+pending; the next effect call
+hashes all `0x16000` bytes (SHA-256, before the bank has written its own
+variables) and compares them with the image `config/slus_01411/overlays.json`
+records (`baa203b9...`, the same at all seven WA_MRG copies). A mod or disc
+patch that changed any byte, code or tables, gets the delivered bank
+interpreted as before (`src/pc/guest/retail_image.c`). `MEMORIES_TRACE=mods`
+logs each verdict (`duel_effects: retail bytes ... native C` or `changed
+bytes ... interpreter`); save states carry it (chunk `retail-images`), and a
+state from before the check, whose bank can no longer be hashed, gets the
+interpreter until the next duel package. The bank's functions are kept out of
+`Memories_FunctionMap` (`GATED_MODULES`), so nothing else can reach the native
+C for a modded image. Only the NA executable runs here, so the regional
+banks (French matched 85/85, Spanish 84/85, European and Japanese 80/85
+upstream) are never loaded; the language packs take only text from PAL discs.
+
+Switches: `MEMORIES_DUEL_EFFECTS=interpreter` interprets the bank even when it
+is retail (the reference for comparisons); `MEMORIES_DUEL_EFFECTS=skip`
+(called `native` before the bank ran as native C; `native` now means the
+default) restores the bring-up behaviour
+(ids 1-3 interpreted, others complete at once); `MEMORIES_FRAME_HASHES=<file>`
+writes a hash of VRAM per presented frame for comparing two runs; `MEMORIES_MODEL_MODULES=native`
 uses the resident spark burst instead of the monster's module; an effect or
 module the interpreter cannot run is reported once on stderr and falls back
 the same way. `MEMORIES_TRACE_MIPS_PRINTF=1` prints the modules' own

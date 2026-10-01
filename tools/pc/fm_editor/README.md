@@ -24,7 +24,7 @@ The window has a tab per table:
 |---|---|
 | Cards | search and filter the 722 cards; name, card text (with the game's 20-letter, 8-line wrapping counted, and **Tools > Card text preview** to see it as the card view draws it, below), ATK/DEF, type, attribute, level, guardian stars, password; the retail value beside each field. **Frame**: the colour of the card's frame (by type, or monster, magic, trap, ritual, purple or orange whatever its type), with a swatch of it; the card view, the Library and the duel draw it ([frame colour](../../../notes/more-cards.md#frame-colour)). **Notes**: text of your own on the card (what you changed, what you plan), saved as its `"notes"`; the game shows none of it, and a code mod can read `<tag: value>` tags from it ([notes on a card](../../../notes/more-cards.md#notes-on-a-card)). **Revert to retail** keeps them; the **With notes** filter lists the cards that have some, and the search finds words of them too. **Add a card** copies the selected one as a new card with a stable id; a new card starts in nobody's chest (it is won in its base's place, dealt in a starter deck, or given by Game > Cheats), and its password is only shown in the card view: the Password screen sells the disc's 722 |
 | Art | a card's picture (102x96), thumbnail (40x32, the hand and the field) and name plate (96x14) as the disc has them, beside what the game will draw at the console's resolution and at Internal 2x/4x; **Import PNG**, **Export** the disc's or the mod's (to paint over), **Revert** |
-| Fusions | every pair and its result (search by a card, or show the changed ones); add, change, remove (the pair no longer fuses) or revert; **Bulk...** adds or takes away the fusions of every card of one filtered set with every card of another (below) |
+| Fusions | every pair and its result (search by a card, or show the changed ones); add, change, remove (the pair no longer fuses) or revert; **Remove recipes of...** takes away every disc recipe of a card in one `remove` rule; a pair a card's own `fusions` list makes (no rule of the mod deciding it first) shows that list's result, marked "own list"; **Bulk...** adds or takes away the fusions of every card of one filtered set with every card of another (below) |
 | Equips | per equip card, the monsters it may equip; add one, add or remove a whole type, remove, revert |
 | Rituals | per ritual card, its three tributes and the monster it summons |
 | Duelists | per opponent, the deck pool and the S/A-POW, B/C/D and S/A-TEC drop pools: weights, their chance, the retail weight, and the total against 2048 (**Normalize** scales a pool back to 2048 the way the port does). The deck is either the **Weighted deck (retail)** or a **Fixed deck (40 cards)**: forty specific cards by their copies, counted against 40, each beside its weighted chance; **Copy the weighted deck's most likely 40**, **Clear**, **Revert to retail** |
@@ -227,7 +227,21 @@ record are shown as retail fusions and marked.
   one, since the Password screen then gives the lower card number.
 * `fusions`: one rule per pair whose result changed (`"result": null` for a
   fusion taken away). An added card fuses as its base until a rule names it,
-  so taking away its pair's fusion writes a `null` rule for it.
+  so taking away its pair's fusion writes a `null` rule for it. A mod's
+  `{"remove": C}` rules are kept as written, first: the disc recipes of C
+  they take away write nothing, and one the mod keeps or changes (reverted
+  in the tab, say) is written as a rule of its own, which the remove would
+  otherwise take away too. When every disc recipe of C is back, the remove
+  is dropped; one for a card no disc recipe makes stays as it was. A
+  pair rule the mod wrote is kept even where the result alone needs none
+  (the disc's result, or a `null` on a recipe a remove takes away): the
+  game asks it before a card's own `fusions` list. So is one for a pair
+  such a list names once the modder edits it, so the game plays what the
+  tab shows. A remove leaves such a pair to the list, as in the game (mods'
+  recipes still make the card): the tab's row says "own list" and shows
+  what the list makes (`own_fusion`). Deleting an added card turns a kept
+  rule that made it into a null rule, shown as "removed"; one on a pair
+  with no disc fusion that no own list names is dropped instead.
 * `equips`: per equip card, `add` and `remove` (a whole monster type as its
   name), or `replace` when that is shorter. An added card is equipped (and
   equips) as its base, so what differs for it is written in later entries,
@@ -697,6 +711,11 @@ the engine keeps no undo (a front end may keep `project.clone()`s).
   `set_notes`, `card_label`, `model.card_matches` (the search).
 * Fusions: `project.fusions[(low, high)] = result`, through
   `set_fusion(a, b, result or None)`; `fusion_status`, `revert_fusion`.
+  `project.fusion_removes` lists the `{"remove": C}` cards in the mod's
+  order (`remove_recipes`, `retail_recipes`, `active_removes`,
+  `fusion_rule`: whether a pair is written, which the bulk count shares);
+  `project.fusion_explicit` the pairs written whatever their result
+  (`own_fusion_pairs`, `explicit_after_edit`).
   Bulk: `bulk_fusions.plan(project, BulkSpec(...))`, then `apply` and `undo`.
 * Equips: `project.equips[equip]` is a set of monsters; `equip_baseline`
   is what the disc gives it. Rituals: `project.rituals[ritual] = (t1, t2,
