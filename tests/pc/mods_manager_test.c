@@ -97,6 +97,11 @@ int main(void)
     /* Saved by a Windows editor, with a byte order mark. */
     make_dir("mods/bom");
     write_text("mods/bom/mod.json", "\xEF\xBB\xBF{\"id\":\"bom\",\"name\":\"Marked\"}");
+    /* One made for a later release, one for another game: told apart. */
+    make_dir("mods/newer");
+    write_text("mods/newer/mod.json", "{\"id\":\"newer\",\"name\":\"Newer\",\"min_api\":999}");
+    make_dir("mods/elsewhere");
+    write_text("mods/elsewhere/mod.json", "{\"id\":\"elsewhere\",\"name\":\"Elsewhere\",\"game\":\"slus_00000\"}");
     snprintf(path, sizeof(path), "%s/mods", root);
     assert(!setenv("MEMORIES_MODS_DIR", path, 1));
     snprintf(path, sizeof(path), "%s/settings.txt", root);
@@ -203,6 +208,10 @@ int main(void)
     assert(strstr(error, "requires a"));
     enabled[a] = 1;
     assert(Mods_Validate(enabled, error, sizeof(error)));
+    assert(!Mods_Compatible(find("newer"), enabled, error, sizeof(error)));
+    assert(strstr(error, "Newer needs a newer game: mod API 999, this one has") && strstr(error, "Update the game"));
+    assert(!Mods_Compatible(find("elsewhere"), enabled, error, sizeof(error)));
+    assert(!strcmp(error, "Elsewhere is made for another game (slus_00000)"));
     Settings_SetNamed("mod.b.order", -100);
     assert(Mods_Order(enabled, order, error, sizeof(error)) == 2 && order[0] == a && order[1] == b);
     /* The keys a mod may write with host->set_setting, as a declared one. */
