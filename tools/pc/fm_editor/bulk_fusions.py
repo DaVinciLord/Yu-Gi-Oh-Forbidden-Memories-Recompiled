@@ -361,7 +361,8 @@ def plan(project, spec: BulkSpec) -> Plan:
     # and with it the rules its recipes needed: those not kept for themselves.
     for result in removes if final else ():
         recipes = project.retail_recipes(result)
-        if any(pair in final for pair in recipes) and                 all(final.get(pair, fusions.get(pair)) == result for pair in recipes):
+        if any(pair in final for pair in recipes) and \
+                all(final.get(pair, fusions.get(pair)) == result for pair in recipes):
             delta -= 1
             for pair in recipes:
                 kept = project.explicit_after_edit(pair) if pair in final else pair in project.fusion_explicit
