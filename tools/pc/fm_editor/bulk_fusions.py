@@ -246,15 +246,21 @@ class Plan:
 
 def rule_count(project) -> int:
     """The fusion rules manifest.build_fusions writes."""
-    retail = project.retail.fusions
-    count = sum(1 for pair, now in project.fusions.items() if retail.get(pair) != now)
-    count += sum(1 for pair in retail if pair not in project.fusions)
-    return count + len(project.kept["fusions"])
+    active = project.active_removes()
+    removes = set(active)
+    fusions = project.fusions
+    count = sum(1 for pair, now in fusions.items() if project.fusion_rule(pair, now, removes))
+    count += sum(1 for pair in project.retail.fusions if pair not in fusions
+                 and project.fusion_rule(pair, None, removes))
+    count += sum(1 for pair in project.fusion_explicit if pair not in fusions and pair not in project.retail.fusions)
+    return count + len(active) + len(project.kept["fusions"])
 
 
-def _differs(project, pair, value) -> bool:
-    """Whether a pair holding `value` (None: no entry) is a rule of the mod."""
-    return project.retail.fusions.get(pair) != value
+def _differs(project, pair, value, removes=frozenset(), explicit=None) -> bool:
+    """Whether a pair holding `value` (None: no entry) is a rule of the mod,
+    with the removes it has now (restoring every recipe of a removed card
+    drops its remove; the count leaves that to the next plan)."""
+    return project.fusion_rule(pair, value, removes, explicit)
 
 
 def plan(project, spec: BulkSpec) -> Plan:
@@ -298,6 +304,8 @@ def plan(project, spec: BulkSpec) -> Plan:
     set_a, set_b = set(side_a), set(side_b)
     simple = not project.added
     fusions = project.fusions
+    removes = set(project.active_removes())
+    final = {}          # a recipe of a removed card -> what the plan leaves in it
     delta = 0
     for a in side_a:
         for b in side_b:
@@ -345,7 +353,20 @@ def plan(project, spec: BulkSpec) -> Plan:
             # The rule the pair leaves in the mod, as Project.set_fusion stores it.
             now = fusions.get(pair)
             stored = after if after else (0 if (pair[0] in project.added or pair[1] in project.added) else None)
-            delta += _differs(project, pair, stored) - _differs(project, pair, now)
+            delta += (_differs(project, pair, stored, removes, project.explicit_after_edit(pair))
+                      - _differs(project, pair, now, removes))
+            if removes and project.retail.fusions.get(pair) in removes:
+                final[pair] = stored
+    # A remove whose every recipe the plan puts back goes (Project.settle_removes),
+    # and with it the rules its recipes needed: those not kept for themselves.
+    for result in removes if final else ():
+        recipes = project.retail_recipes(result)
+        if any(pair in final for pair in recipes) and \
+                all(final.get(pair, fusions.get(pair)) == result for pair in recipes):
+            delta -= 1
+            for pair in recipes:
+                kept = project.explicit_after_edit(pair) if pair in final else pair in project.fusion_explicit
+                delta -= 0 if kept else 1
     out.rules_after = out.rules_before + delta
     out.samples += out.kept_samples[:SAMPLE - len(out.samples)]
     if out.rules_after > RULE_BUDGET and out.rules_after > out.rules_before:
@@ -364,9 +385,14 @@ MISSING = object()
 @dataclass
 class Batch:
     """What apply() changed: per pair, the entry before and the entry after
-    (MISSING: none), so undo() can put back the pairs nobody changed since."""
+    (MISSING: none) and whether the pair was written as a rule of its own
+    (Project.fusion_explicit) before and after; the removes before and
+    after. undo() puts back the pairs nobody changed since, and a remove
+    the batch dropped by putting the last of its recipes back."""
     project: object
     entries: dict = field(default_factory=dict)
+    explicit: dict = field(default_factory=dict)
+    removes: tuple = ((), ())
     description: str = ""
 
 
@@ -374,10 +400,15 @@ def apply(project, the_plan: Plan, description: str = "") -> Batch:
     if the_plan.errors:
         raise ValueError("; ".join(the_plan.errors))
     batch = Batch(project, description=description)
+    removes = list(project.fusion_removes)
+    explicit = project.fusion_explicit
     for pair, _, after in the_plan.changes:
-        before = project.fusions.get(pair, MISSING)
+        before, was = project.fusions.get(pair, MISSING), pair in explicit
         project.set_fusion(pair[0], pair[1], after)
         batch.entries[pair] = (before, project.fusions.get(pair, MISSING))
+        if was or pair in explicit:
+            batch.explicit[pair] = (was, pair in explicit)
+    batch.removes = (removes, list(project.fusion_removes))
     return batch
 
 
@@ -395,5 +426,14 @@ def undo(project, batch: Batch) -> tuple:
             project.fusions.pop(pair, None)
         else:
             project.fusions[pair] = before
+        was, now = batch.explicit.get(pair, (False, False))
+        if (pair in project.fusion_explicit) == now:
+            (project.fusion_explicit.add if was else project.fusion_explicit.discard)(pair)
         restored += 1
+    before, after = batch.removes
+    dropped = [result for result in before if result not in after and result not in project.fusion_removes]
+    if dropped:
+        now = project.fusion_removes
+        project.fusion_removes = [r for r in before if r in now or r in dropped] + [r for r in now if r not in before]
+    project.settle_removes()
     return restored, skipped
