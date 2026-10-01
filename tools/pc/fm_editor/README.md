@@ -238,7 +238,9 @@ record are shown as retail fusions and marked.
   such a list names once the modder edits it, so the game plays what the
   tab shows. A remove leaves such a pair to the list, as in the game (mods'
   recipes still make the card): the tab's row says "own list" and shows
-  what the list makes (`own_fusion`).
+  what the list makes (`own_fusion`). Deleting an added card turns a kept
+  rule that made it into a null rule, shown as "removed"; one on a pair
+  with no disc fusion that no own list names is dropped instead.
 * `equips`: per equip card, `add` and `remove` (a whole monster type as its
   name), or `replace` when that is shorter. An added card is equipped (and
   equips) as its base, so what differs for it is written in later entries,

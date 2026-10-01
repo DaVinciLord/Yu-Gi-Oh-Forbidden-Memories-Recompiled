@@ -267,9 +267,16 @@ class Project:
         del self.cards[cid]
         self.passwords.pop(cid, None)
         self.notes.pop(cid, None)
+        made = {p for p, r in self.fusions.items() if r == cid and cid not in p}
         self.fusions = {p: r for p, r in self.fusions.items() if cid not in p and r != cid}
         self.fusion_explicit = {p for p in self.fusion_explicit if cid not in p}
         self._own_pairs = None
+        # A kept rule that made the card is a null rule now: needless on a
+        # pair with no disc fusion, unless an own list would answer for it.
+        if made & self.fusion_explicit:
+            named, under = self.own_fusion_pairs()
+            self.fusion_explicit -= {p for p in made if p not in self.retail.fusions
+                                     and p not in named and p not in under}
         if cid in self.fusion_removes:
             self.fusion_removes.remove(cid)
         self.equips.pop(cid, None)
@@ -456,6 +463,8 @@ class Project:
         retail = self.retail.fusions.get(pair)
         now = self.fusions.get(pair)
         if retail == now:
+            if now is None and pair in self.fusion_explicit:
+                return "removed"            # a null rule kept for an own list's sake
             return "glitch" if pair in self.retail.glitch_fusions else ""
         if not now:
             return "removed"

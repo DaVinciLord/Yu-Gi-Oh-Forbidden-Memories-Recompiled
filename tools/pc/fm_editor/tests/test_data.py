@@ -528,6 +528,23 @@ class ManifestTest(unittest.TestCase):
             self.assertEqual(game(*pair), own if own is not None else game(*pair), pair)
         self.assertIsNone(p.own_fusion((d1, d2), removes))       # the mod's rule decides
 
+    def test_deleted_card_leaves_no_needless_null_rule(self):
+        p = Project(self.retail)
+        free = [(a, b) for a in range(1, 40) for b in range(a + 1, 40) if (a, b) not in self.retail.fusions]
+        (x, y), (u, v) = free[0], free[1]
+        disc = next(pair for pair in sorted(self.retail.fusions) if not {x, y, u, v} & set(pair))
+        mod = {"id": "d", "name": "Delete",
+               "cards": [{"copy": 5, "id": "c"}, {"replace": u, "fusions": [{"with": v, "result": 400}]}],
+               "fusions": [{"with": [p.ref(a), p.ref(b)], "result": "d:c:1"} for a, b in sorted([(x, y), (u, v), disc])]}
+        manifest.apply(p, mod)
+        p.remove_card(max(p.added))
+        built = manifest.build(p)["fusions"]
+        # the disc pair's rule forbids its disc fusion, and the own list's pair
+        # keeps its null rule (it decided the pair before the list); the other goes
+        self.assertEqual(built, [{"with": [p.ref(a), p.ref(b)], "result": None} for a, b in sorted([(u, v), disc])])
+        self.assertEqual((p.fusion_status((u, v)), p.fusion_status(disc)), ("removed", "removed"))
+        self.assertNotIn((x, y), p.fusion_explicit)
+
     def reopen(self, p: Project) -> Project:
         again = Project(self.retail)
         manifest.apply(again, json.loads(manifest.dumps(manifest.build(p))))
