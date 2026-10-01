@@ -363,7 +363,8 @@ A plain list is the same as `values`:
 #### The nine bytes
 
 **Byte 0 — deck search window, 5 to 20.** How many cards deep into its deck it
-may look for something to play. This is the biggest difficulty dial there is:
+may look for something to play (a value past either end is held there, with
+a note in the Mods window). This is the biggest difficulty dial there is:
 Simon Muran and the villagers see **5** and are effectively playing off the top
 of the deck, while Heishin sees **20** and finds his fusion material almost
 every turn whatever he drew.

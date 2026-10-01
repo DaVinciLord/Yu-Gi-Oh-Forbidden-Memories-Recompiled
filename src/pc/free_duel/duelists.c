@@ -1080,6 +1080,14 @@ static void settle_ai(Duelist *one)
     row = borrowed >= 0 ? Duelists_AiRow(borrowed) : gDuel_aOpponentData[one->base];
     for (field = 0; field < DUELIST_AI_FIELDS; field++)
         if (!one->ai_given[field]) one->ai[field] = row[field];
+    /* Byte 0 is how many cards from the hand on the AI looks through
+       (Ai_GetHandSize): the disc's run from 5 to 20, and its fusion search
+       keeps a flag per card for no more than that. A row it borrows is
+       one of those, or another mod's already held to them. */
+    if (one->ai_given[0] && (one->ai[0] < 5 || one->ai[0] > 20)) {
+        Mods_Note(one->mod, "duelists[%d]: ai search is 5 to 20 (%d asked)", one->index, one->ai[0]);
+        one->ai[0] = (signed char)(one->ai[0] < 5 ? 5 : 20);
+    }
 }
 
 /* Its rank rules, once it has an id to give the tables (tables.h). */
