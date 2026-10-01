@@ -29,6 +29,7 @@ static char program_dir[PATH_MAX_];
 static int make_dir(const char *path)
 {
     int error;
+    struct stat info;
 #ifdef _WIN32
     DWORD code;
     unsigned long dos;
@@ -39,7 +40,8 @@ static int make_dir(const char *path)
     code = GetLastError();
     dos = _doserrno;
 #endif
-    if (!access(path, X_OK)) return 0;
+    /* A folder, not a file in its way (Windows' access() passes any file for X_OK). */
+    if (!stat(path, &info) && S_ISDIR(info.st_mode)) return 0;
     errno = error;
 #ifdef _WIN32
     _doserrno = dos;
