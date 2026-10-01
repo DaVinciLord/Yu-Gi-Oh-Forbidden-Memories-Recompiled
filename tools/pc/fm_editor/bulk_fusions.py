@@ -404,4 +404,5 @@ def undo(project, batch: Batch) -> tuple:
         else:
             project.fusions[pair] = before
         restored += 1
+    project.settle_removes()
     return restored, skipped

@@ -371,6 +371,17 @@ class Project:
             self.fusion_explicit.add(pair)
         else:
             self.fusion_explicit.discard(pair)
+        if self.fusion_removes and self.retail.fusions.get(pair) in self.fusion_removes:
+            self.settle_removes([self.retail.fusions[pair]])
+
+    def settle_removes(self, results=None):
+        """Drop the removes whose every disc recipe is back (all of them, or
+        those of `results`): taking one away again then writes a rule for
+        that pair alone, as it would after saving and opening the mod."""
+        for result in list(self.fusion_removes if results is None else results):
+            recipes = self.retail_recipes(result)
+            if result in self.fusion_removes and recipes and all(self.fusions.get(p) == result for p in recipes):
+                self.fusion_removes.remove(result)
 
     def retail_recipes(self, result: int) -> list:
         """The disc's pairs that make `result`, in order."""

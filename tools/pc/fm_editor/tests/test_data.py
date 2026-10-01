@@ -404,11 +404,19 @@ class ManifestTest(unittest.TestCase):
         for pair in recipes:
             p.revert_fusion(pair)
         built = manifest.build(p)["fusions"]
-        self.assertEqual(p.active_removes(), [])
+        self.assertEqual((p.fusion_removes, p.active_removes()), ([], []))
         self.assertEqual(built, mod["fusions"][1:])
         self.assertEqual(bulk_fusions.rule_count(p), len(built))
         self.assert_same_game(p, built)
         self.assertEqual(state(self.reopen(p)), state(p))
+        # Taking one away again writes a rule for it alone, as it does in the
+        # mod saved and opened again: the remove does not come back.
+        again = self.reopen(p)
+        for project in (p, again):
+            project.set_fusion(*recipes[0], None)
+        self.assertEqual(manifest.build(p)["fusions"], manifest.build(again)["fusions"])
+        self.assertIn({"with": [p.ref(recipes[0][0]), p.ref(recipes[0][1])], "result": None},
+                      manifest.build(p)["fusions"])
 
     def test_fusion_remove_edge_cases(self):
         c, recipes = self.removed_result()

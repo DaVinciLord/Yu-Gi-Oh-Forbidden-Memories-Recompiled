@@ -211,6 +211,32 @@ class PlanTest(unittest.TestCase):
         bulk.apply(self.p, plan)
         self.assertEqual(bulk.rule_count(self.p), rules)
 
+    def test_rule_count_after_every_recipe_back(self):
+        self.p.retail.fusions = {(1, 2): 3, (4, 5): 3, (6, 7): 8}
+        self.p.fusions = dict(self.p.retail.fusions)
+        result, recipes = 3, [(1, 2), (4, 5)]
+        self.p.remove_recipes(result)
+        for pair in recipes:
+            self.p.revert_fusion(pair)
+        self.assertEqual(self.p.fusion_removes, [])          # every recipe back: no remove
+        a, b = recipes[0]
+        plan = bulk.plan(self.p, pairs_spec(str(a), str(b), mode="remove"))
+        bulk.apply(self.p, plan)
+        self.assertEqual(plan.rules_after, bulk.rule_count(self.p))
+        self.assertEqual(manifest.build_fusions(self.p),
+                         [{"with": [self.p.ref(a), self.p.ref(b)], "result": None}])
+        # an undo that puts the last recipe back drops the remove too
+        self.p.revert_fusion((a, b))
+        batch = bulk.apply(self.p, bulk.plan(self.p, pairs_spec(str(a), str(b), result=599, stronger=False,
+                                                                overwrite=True)))
+        self.p.remove_recipes(result)
+        for pair in recipes:
+            if pair != (a, b):
+                self.p.revert_fusion(pair)
+        self.assertEqual(self.p.fusion_removes, [result])
+        bulk.undo(self.p, batch)
+        self.assertEqual((self.p.fusion_removes, manifest.build_fusions(self.p)), ([], []))
+
     def test_apply_and_undo(self):
         before = dict(self.p.fusions)
         plan = bulk.plan(self.p, pairs_spec("1-10", "1-10", result=599, stronger=False, overwrite=True))
