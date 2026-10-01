@@ -145,6 +145,10 @@ const char *Mods_ProfileSaveError(void);
 int Mods_ProfileRead(const char *name, int *enabled);
 void Mods_SetCardSignature(unsigned signature);
 unsigned Mods_CardSignature(void);
+/* The card packs' files and pictures (pc/cards/packs.h): a "packs" file and
+ * its images are not in the manifest the signature hashes. 0 without packs. */
+void Mods_SetPackSignature(unsigned signature);
+unsigned Mods_PackSignature(void);
 void Mods_SetCardResolver(int (*resolve)(const char *));
 /* The same for a duelist identity (pc/free_duel/duelists.h), which the free
    duel list injects once it is built. */

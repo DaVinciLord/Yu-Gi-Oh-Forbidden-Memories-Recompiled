@@ -162,6 +162,13 @@ class Project:
         self.fixed = {}                 # key as written -> fixed_decks.FixedDeck ("fixed": true), in order
         self.starter = []               # StarterDeck: the decks a new game may be dealt
         self.starter_file = None        # "starter" naming a file of the mod's, kept as written
+        # Card packs (notes/card-packs.md): each pack the JSON object the mod
+        # writes, so a key the editor has no field for stays as written
+        # (packs.py reads them as the game does); "packs" naming a file is
+        # kept as that name; "pack_shop" the shop's rules, or None.
+        self.packs = []
+        self.packs_file = None
+        self.pack_shop = None
         self.kept_opponents = {}        # "decks"/"drops" -> {name: entry} naming a duelist it cannot place
         self.pool_files = {}            # "decks"/"drops" -> the file the mod names in place of the table
         self.source_dir = None

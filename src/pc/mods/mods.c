@@ -354,6 +354,9 @@ static int (*card_resolver)(const char *);
 static unsigned card_signature;
 void Mods_SetCardSignature(unsigned signature) { card_signature = signature; }
 unsigned Mods_CardSignature(void) { return card_signature; }
+static unsigned pack_signature;
+void Mods_SetPackSignature(unsigned signature) { pack_signature = signature; }
+unsigned Mods_PackSignature(void) { return pack_signature; }
 void Mods_SetCardResolver(int (*resolve_card)(const char *)) { card_resolver = resolve_card; }
 static int host_card_id(const MemoriesModHost *host, const char *identity)
 { (void)host; return card_resolver ? card_resolver(identity) : 0; }
@@ -1211,7 +1214,7 @@ static const char *const manifest_keys[] = {
     "data", "textures", "cards", "audio", "min_api", "game", "requires", "after", "conflicts", "priority",
     "settings", "fusions", "equips", "rituals", "drops", "decks", "duelists", "text", "font",
     "chest_overflow", "terrain_bonus", "trap_thresholds", "equip_bonus_default", "passwords", "starter",
-    "title", "menu", "limits", "guardian_stars",
+    "title", "menu", "limits", "guardian_stars", "packs", "pack_shop",
 };
 
 /* How many letters to add, remove or change to turn one word into the
@@ -1348,7 +1351,7 @@ static int read_manifest(Mod *mod, const char *directory, const char *origin)
         static const char *const tables[] = {"fusions", "equips", "rituals", "drops", "decks", "duelists",
                                              "text", "font", "terrain_bonus", "trap_thresholds",
                                              "chest_overflow", "passwords", "starter", "limits",
-                                             "guardian_stars"};
+                                             "guardian_stars", "packs", "pack_shop"};
         for (size_t t = 0; t < sizeof(tables) / sizeof(tables[0]); t++) {
             const JsonValue *value = Json_Member(root, tables[t]);
             /* "text": "text.txt" is one file named as a string. */

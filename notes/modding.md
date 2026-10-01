@@ -67,6 +67,7 @@ editors write, is fine):
 | `limits` | the numbers the game caps (ATK and DEF, life points, starchips, the chest, the records), below |
 | `guardian_stars` | the stars' names and icons, stars 11 to 15, and what each star gets against each other, below |
 | `starter` | the forty cards a new game begins with, one deck or a list of them, below |
+| `packs`, `pack_shop` | card packs sold for starchips on the Password screen, and the shop's rules, below |
 | `title`, `menu` | the title screen, and its two menus: their entries, buttons of the mod's own and their background, below |
 | `text`, `font` | a translation of the game's text, and fonts for letters it has none of, below |
 
@@ -879,6 +880,32 @@ more than three copies of a card or more than one Exodia piece, says so in the
 Mods window and is dealt as written. A deck that is not forty cards is left
 out. [The starter deck](starter-deck.md) has the rest, including what it costs
 the game's random numbers; `examples/mods/starter-deck` is a working one.
+
+## Card packs: booster packs for starchips
+
+A mod may sell packs of cards. The smallest is one line of a list:
+
+```json
+"packs": [
+    {"name": "Dragons", "price": 50, "cards": ["Blue-eyes White Dragon", "Baby Dragon", "Koumori Dragon"]}
+]
+```
+
+The Password screen then says △PACKS beside ✕OK ○END; △ opens the packs, ←/→
+go through them, ✕ buys one and the big card turns each card over, in the
+game's own card, boxes, letters and sounds. The starchips count down as a
+password's price does, and the cards go into the chest before the first turns
+over. Every option has a default: tiers with odds, a rule per slot, a
+guarantee, a pity count, no repeats in a pack, a limit on copies held (and
+whether a pack with nothing left for the player is still sold), a stock,
+unlock conditions, a secret password, cards from the chest as part of
+the price, an image of the pack's own, the reveal and the sounds; and
+`pack_shop` sets whether the screen sells passwords, packs or both, several
+shops, and whether a save can reroll a pack. The packs of every applied mod
+add up; they need a restart, like the tables.
+
+[Card packs](card-packs.md) has every key, how a pack is dealt (always four of
+the game's random numbers a card), and what the save keeps.
 
 ## Translations
 

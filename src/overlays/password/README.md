@@ -185,6 +185,14 @@ subflags are state-local bookkeeping, not shared campaign-flag modifiers.
 | 3 | Incrementally subtract price from RAM starchips; zero remaining enters 4 |
 | 4 | Advance preview hide phase, recreate message 226 and return to 0 without clearing digits or index |
 
+Under `MEMORIES_PC` the states from 5 on are the card packs a mod sells
+(`src/pc/cards/pack_shop.h`, [card packs](../../../notes/card-packs.md)):
+state 0 hands newly pressed Triangle, and a Cross whose lookup found no
+card, to `PackShop_Triangle` and `PackShop_Password`, the switch's `default`
+hands a higher state to `PackShop_Update`, and the cursor decoration asks
+`PackShop_Decoration` first. Each answers at once when no mod declares a
+pack, so the machine above is then the whole of it.
+
 State 0 gives held horizontal input priority, with Right winning over Left.
 Movement clamps at indices 0 and 7; an out-of-range request returns without
 sound or lower-priority input handling. Next comes repeat/new-press vertical

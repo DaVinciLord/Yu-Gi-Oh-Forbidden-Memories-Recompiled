@@ -15,6 +15,7 @@
 #include "pc/cards/drops.h"
 #include "pc/cards/passwords.h"
 #include "pc/cards/stars.h"
+#include "pc/cards/pack_shop.h"
 #include "pc/free_duel/duelists.h"
 #include "pc/free_duel/page_box.h"
 #include "pc/saves/deck_menu.h"
@@ -601,8 +602,9 @@ const unsigned char *Text_Resolve(int id, const unsigned char *retail)
 {
     const unsigned char *own = overrides && id >= 0 && id <= 0xFFFF ? overrides[id] : NULL;
     const unsigned char *card = NULL, *side = side_name(id), *drops = CardDrops_Text(id), *shop = DeckMenu_Text(id);
-    const unsigned char *page = FreeDuelPage_Text(id);
+    const unsigned char *page = FreeDuelPage_Text(id), *packs = PackShop_Text(id);
     if (page) return page;   /* the Free Duel grid's page (free_duel/page_box.h) */
+    if (packs) return packs; /* the card packs on the Password screen (cards/pack_shop.h) */
     if (drops) return drops; /* the results screen's added pages (drops.h) */
     if (shop) return shop;   /* the card shop's menu with DECK SLOTS (deck_menu.h) */
     if (CardPassword_Text(id)) return CardPassword_Text(id); /* View > Card passwords (passwords.h) */
@@ -644,6 +646,10 @@ int Text_CutsMenuGlyph(int id, int x, int width, int y, int line_height, int hei
 unsigned char *Text_Retarget(unsigned char *cursor, unsigned target)
 {
     int i;
+    {   /* The card packs' question: its answer ends the text (pack_shop.h). */
+        unsigned char *packs = PackShop_Retarget(cursor);
+        if (packs) return packs;
+    }
     int copied = cursor >= results && cursor < results + sizeof(results);
     if (copied || ((uintptr_t)cursor & 0xFFFF0000u) == bases[TEXT_BANK_DIALOG]) {
         /* The retail result screens calling YOU, COM or the winner (COM

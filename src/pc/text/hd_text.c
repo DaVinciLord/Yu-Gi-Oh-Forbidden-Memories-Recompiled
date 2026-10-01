@@ -841,6 +841,9 @@ void HdText_TitleUploaded(int card, int x, int y)
     const uint16_t *words = SoftGpu_Vram();
     TitleUpload *upload = NULL;
     unsigned i;
+    /* A card pack's plate (Cards_OverrideArt) is not the card's name: it
+       stays as its record draws it, and any title set there before goes. */
+    if (Cards_ArtOverridden()) card = 0;
     if (!words) return;
     for (i = 0; i < TITLE_UPLOADS; i++) {
         if (title_uploads[i].card && title_uploads[i].x == x && title_uploads[i].y == y) upload = &title_uploads[i];

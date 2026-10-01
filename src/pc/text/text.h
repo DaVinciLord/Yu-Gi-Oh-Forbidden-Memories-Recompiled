@@ -46,11 +46,39 @@ enum {
     TEXT_OWN_PAGE_OF = 0xFE03,      /* card drops: which page of how many */
     TEXT_OWN_DECK_SLOTS = 0xFE10,   /* the card shop's added menu entry */
     TEXT_OWN_FREE_DUEL_PAGE = 0xFE11, /* the Free Duel grid's page line */
+    /* The card packs on the Password screen (pc/cards/pack_shop.h). */
+    TEXT_OWN_PACK_PACKS = 0xFE20,   /* after "OK END": the triangle's word */
+    TEXT_OWN_PACK_BUY = 0xFE21,
+    TEXT_OWN_PACK_QUIT = 0xFE22,
+    TEXT_OWN_PACK_BACK = 0xFE23,
+    TEXT_OWN_PACK_INFO = 0xFE24,
+    TEXT_OWN_PACK_NEXT = 0xFE25,
+    TEXT_OWN_PACK_SKIP = 0xFE26,
+    TEXT_OWN_PACK_OK = 0xFE27,
+    TEXT_OWN_PACK_END = 0xFE28,
+    TEXT_OWN_PACK_SOLD_OUT = 0xFE29,
+    TEXT_OWN_PACK_LEFT = 0xFE2A,    /* purchases left of a pack's stock */
+    TEXT_OWN_PACK_CARDS = 0xFE2B,   /* cards a pack deals, or a price takes */
+    TEXT_OWN_PACK_LOCKED = 0xFE2C,
+    TEXT_OWN_PACK_BEAT = 0xFE2D,    /* what opens a locked pack: %s a duelist */
+    TEXT_OWN_PACK_BEAT_TIMES = 0xFE2E,
+    TEXT_OWN_PACK_WINS = 0xFE2F,
+    TEXT_OWN_PACK_STORY = 0xFE30,
+    TEXT_OWN_PACK_HOLD = 0xFE31,    /* %s a card */
+    TEXT_OWN_PACK_HOLD_COPIES = 0xFE32,
+    TEXT_OWN_PACK_SPEND = 0xFE33,
+    TEXT_OWN_PACK_OPEN_MORE = 0xFE34,
+    TEXT_OWN_PACK_OPEN_PACK = 0xFE35, /* %s a pack */
+    TEXT_OWN_PACK_AT_LEAST = 0xFE36,  /* the details: a guarantee, %s a tier */
+    TEXT_OWN_PACK_PITY = 0xFE37,
+    TEXT_OWN_PACK_CARD = 0xFE38,    /* one card */
+    TEXT_OWN_PACK_ALL_OWNED = 0xFE39, /* why BUY is refused: every card held "max_copies" times */
     TEXT_OWN_OPPONENT = 0xFE40      /* + duelist id (1-39, FE41-FE67): the name in place of COM */
 };
 /* Ids above the block, which the port composes rather than a translation
  * writing them: FF00-FF57 the name of a duelist a mod added, one each
- * (free_duel/duelists.h), and FFFD-FFFF one line apiece for the Free Duel
+ * (free_duel/duelists.h), FFF0-FFF2 the card packs' name, message and
+ * question (cards/pack_shop.h), and FFFD-FFFF one line apiece for the Free Duel
  * grid's page, the Password screen's label and the results screen's added
  * pages (free_duel/page_box.h, cards/passwords.h, cards/drops.h). */
 /* The compiled text an applied mod gives string `id` (glyph codes and

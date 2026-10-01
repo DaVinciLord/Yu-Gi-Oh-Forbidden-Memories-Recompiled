@@ -229,6 +229,7 @@ Simon Muran{end}
 | `FE03` | the heading, right, when there is more than one page | as above |
 | `FE10` | the card shop's menu (string `0011`): the entry under BUILD DECK | the menu's box shows 44 letters in all (spaces are none; 79 with a PAL language on, whose text entries are the PAL game's); retail's four lines have 35, so 9; a line is 15 wide |
 | `FE11` | the Free Duel grid's page line, between the L1 and R1 hints, when a duelist mod gives the grid more than one page (`notes/more-duelists.md`) | centred on the picture between the two hints: 30 letters, numbers and spaces included, before it reaches them |
+| `FE20`-`FE39` | the card packs on the Password screen ([card packs](card-packs.md)): `FE20` PACKS (after OK END), `FE21` BUY, `FE22` QUIT, `FE23` BACK, `FE24` INFO, `FE25` NEXT, `FE26` SKIP, `FE27` OK, `FE28` END, `FE29` SOLD OUT, `FE2A` LEFT %d, `FE2B` %d CARDS (`FE38` %d CARD for one), `FE2C` LOCKED; what opens a locked pack: `FE2D` BEAT %s, `FE2E` BEAT %s %d TIMES, `FE2F` WIN %d DUELS, `FE30` GO ON IN THE STORY, `FE31` HOLD %s, `FE32` HOLD %d %s, `FE33` SPEND %d MORE, `FE34` OPEN %d MORE PACKS, `FE35` OPEN %s x%d; the details: `FE36` AT LEAST %d %s, `FE37` %s IN %d PACKS; `FE39` ALL OWNED (why BUY is refused: every card of the pack held `max_copies` times) | the message box's line: 20 letters, a button's icon two; `%s` is a name (a duelist's, a card's, a pack's or a tier's), put in as the game writes it. Only shown when a mod sells packs |
 | `FE41`-`FE67` | the opponent's name in place of COM (View > Opponent's name for COM): `FE40` + the duelist's id, 1-39 (the names bank's `8328` + id is the same duelist) | 14 letters, spaces and full stops (H.M. Anubisius, the longest English one); past that, the first 14 |
 
 Letters and spaces only: a string with other codes is not used (the port's
@@ -559,6 +560,10 @@ with a full translation mod.
 | German | NEU | `%d WEITERE KARTE(N)` | `SEITE %d VON %d` | STAPEL |
 | Italian | NUOVA | `%d CARTA/CARTE IN PIÙ` | `PAGINA %d DI %d` | MAZZI |
 | Spanish | NUEVA | `%d CARTA(S) MÁS` | `PÁGINA %d DE %d` | MAZOS |
+
+The card packs' words (FE20-FE38) come in all four, the QUIT and END the
+Password screen's own (QUITTER and FIN, BEENDEN, ESCI, SALIR); the list is
+`own_words` in `language.c`.
 
 English (EU) says what the port's English says. FE10 is the game's own
 word for the deck (CONSTRUIRE JEU, STAPEL ZUSAMMENSTELLEN, CREA MAZZO,

@@ -163,6 +163,14 @@ int Cards_OwnPassword(int id, unsigned *password);
  * func_80029164 read (the picture, the title plate, the thumbnail), and the
  * 0x580-byte thumbnail block the duel copies for the hand and field. */
 void Cards_PatchArtRecord(int id, unsigned char *record);
+/* The Password screen's card packs (pack_shop.h) draw a pack on the big
+ * card: the next art record loaded for `id` takes `record`'s picture,
+ * palette and plate (the bytes before the thumbnail), or, with `record`
+ * NULL, `plate` (CARD_TITLE_BYTES) over the card's own plate. Once. Whether
+ * the last record loaded was so changed, asked once (HD text then leaves
+ * its title alone). An id of 0 disarms it. */
+void Cards_OverrideArt(int id, const unsigned char *record, const unsigned char *plate);
+int Cards_ArtOverridden(void);
 void Cards_PatchThumbnail(int id, unsigned char *block);
 
 /* "field_art" (notes/more-cards.md): a card's picture for its cutout on the

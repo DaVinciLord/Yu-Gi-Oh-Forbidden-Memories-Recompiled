@@ -32,6 +32,7 @@ The window has a tab per table:
 | Map | the campaign map's sixteen places (below): each exit's destination, direction, story-flag condition, length and arrow on the screen, the Millennium Puzzle marker's place in the town, Confirm's destination and each place's camera, over pictures of the map drawn from your disc; **Reset place**, **Reset all**; **Pictures...**: the marker, arrows and name panel, and the terrain's textures |
 | Limits | the numbers the game caps (`limits`, [gameplay tables](../../../notes/gameplay-tables.md#limits-atk-def-lp-starchips-and-more)). The simple part: the ATK and DEF cap, the LP a duel starts with, and how far healing goes. **Show advanced**: ATK and DEF apart, each side's starting LP, the two-player LP choice (start, most, step), the most starchips, the chest's copies, the Free Duel and two-player records, and a table of duelists with the LP each side starts with against them. An empty field is the game's own number (beside it, with the range the game keeps); a value past that range is warned about and held at the most the game keeps |
 | Guardian Stars | the stars (`guardian_stars`, [Guardian Stars](../../../notes/modding.md#guardian-stars-names-icons-new-stars-and-matchups)): the list of stars with a name and an icon each (**Import icon (PNG)...**, with a preview; the game makes it 16x16 in the disc's stars' colours), **Add star** for 11 to 15 (a card holds its stars in 4 bits, so fifteen at most), and the full grid of matchups: a row is the attacker's star, a column the defender's, a cell the bonus the attacker's side gets, green above 0 and red below; click a cell, type a bonus or use **+ default**, **- default** or **0** (with **Reverse pair gets the opposite** on, the reverse cell takes the opposite sign). **Default bonus** moves the disc's 500 in both cycles, **Retail cycles** and **Clear all** are presets, **Revert to retail** takes the whole key away. **Set stars by rule...** sets many cards' first or second star from their attribute or type through a table you fill in (a Fire monster's first star is Fire), or one star for all, over a filter of cards like Bulk fusions', with a preview and **Undo last batch**. **Show advanced**: a name per language (`fr=Feu, de=Feuer`), an icon's colours (`game` or its own), and what happens at a summon (`ask`, `first`, `best`). The Cards tab's star lists show the mod's stars as they are named here |
+| Packs | the card packs the mod sells for starchips on the Password screen: each pack's name, description, price, cards a pack and picture, its cards with their tier, weight and chance; an **Advanced** part for everything else; **Shop settings...** and **Simulate...** (below) |
 | Mod info | id, name, version, author, description, `settings`, and the other `mod.json` keys, kept as written (`limits` is the Limits tab's, `guardian_stars` the Guardian Stars tab's) |
 | Conflicts | the loader's checks; double-click a line to go to it |
 
@@ -292,6 +293,15 @@ record are shown as retail fusions and marked.
   A card the editor cannot place keeps its row and its copies, under the name
   it was written with, and `"starter"` given as the name of a file stays that
   filename.
+* `packs` and `pack_shop`: the card packs and the shop's rules
+  ([card packs](../../../notes/card-packs.md)). Each pack is kept as the
+  object the mod wrote, so a key the editor has no field for stays as
+  written, and is written back with only what differs from the game's
+  defaults: no `"count": 5`, `"price": 100`, `"duplicates": "allow"`,
+  `"reveal": "flip"`..., a pool of weights of 1 as a list, `"cost":
+  {"starchips": n}` alone as `"price"`. A pack's picture goes in the mod's
+  `packs/` folder. `"packs"` given as the name of a file stays that filename
+  (the tab then edits nothing).
 * The duelists the editor knows are the forty the disc lays out, since it
   reads the game's own files. A mod may add its own
   ([more duelists](../../../notes/more-duelists.md)), and which of those exist
@@ -529,6 +539,83 @@ unpack it where the game's archive was unpacked, and `fm-editor.exe` with
 its files (or `fm-editor`) lands beside the game's program. The Linux one is built on
 Debian 11, like the game, and brings its own Python and Tk. Running it from
 the source as above works too.
+
+### Packs
+
+The left list is the mod's packs in their order (`#`, name, price, cards a
+pack, stock): **Add pack**, **Duplicate**, **Remove**, **Up**/**Down** (the
+list's order is the order the game sells them in; `"order"` is written only
+when set under Advanced). A pack the game would leave out is red, one with a
+note amber; the Conflicts tab has the reader's words (packs.py says what the
+game's Mods window would).
+
+The simple view has what most packs need: **Name** (16 letters show; the
+identity `mod-id:id` beside it stays when the name changes, since a save's
+progress is kept by it), **Description**, **Price** in starchips and **Cards
+a pack**. The picture is what the big card on the Password screen shows:
+**Import PNG** (cut to 102:96 from the middle, kept at up to 4x; the console's
+resolution makes it 102x96, Internal 2x and 4x draw its own detail), **Export**,
+**Revert** (back to the cover card's art), with the name plate the game sets
+in its serif font under it, at 1x, 2x and 4x. The cards: `#`, card, tier,
+weight and **Chance**, the share of a slot dealt by the tiers' odds that is
+this card, before any is taken out. **Add a card...** (the mod's own cards
+too), **Add filtered...** (the Bulk fusions filters: every Dragon under 1500
+ATK, say) into the chosen tier at the weight typed, **Tier**/**Set** moves the
+selected rows, **Weight**/**Set**, **Remove selected**.
+
+**Advanced** (closed at first):
+
+* **Tiers**: name, odds (and their share), label (`"ULTRA RARE!"`), colour
+  (the game's text colours, 0-15), sound, reveal and how many cards; **Add
+  tier**, **Edit...**, **Remove**, **Up**/**Down**: the order is the rarity,
+  commonest first. A one-pool pack becomes a pack of tiers with its pool the
+  tier `cards`. A renamed tier is renamed in the slots, guarantee and pity.
+* **Slots**: every slot by the tiers' odds, or a rule for each: a tier, tiers
+  by weight, its own cards (`card=weight`), or always one card.
+* **Dealing**: guarantee and pity (`tier=n`), max copies, stock, cost in
+  cards (`card=copies` from the chest), order, shops, cover, duplicates
+  (`unique_in_pack`), reveal (`flip`, `quick`, `list`), include the cards mods
+  add, and **All owned** (`when_nothing_left`): with max copies, when the
+  player holds that many of every card, `refuse` the pack (ALL OWNED on the
+  screen, nothing paid) or `sell` it anyway, or `(shop's)` for Shop
+  settings' rule.
+* **Unlock**: beat (a duelist), wins, story flag (`0x6E0` + n is the n-th
+  campaign duelist beaten), card and copies, starchips spent on packs, packs
+  opened, opened (`pack=n`), and whether a locked pack is hidden or shown.
+* **Password and sounds**: a password (said when a card has it too: the card
+  comes first), once a save, in the list, and the five sound ids (empty for
+  the Password screen's own).
+
+**Shop settings...** edits `pack_shop`: what the Password screen sells (both,
+packs only, passwords only), the random numbers (`game`, or `save` so a
+reloaded save deals the same pack), the music, **All owned** (the rule for
+the packs that do not say, `refuse` by default), and the shops, one a line
+(`id | name | unlock as JSON`, sixteen at most); a shop's other keys (`where`,
+and any the editor has no field for) stay as written. Not yet in the game, and so not offered (the keys
+are kept free for them): a PACKS entry in the campaign's shop
+(`campaign_shop`), the main menu, saving after each purchase (`autosave`),
+selling mods' cards by their passwords (`sell_added_cards`), a currency of the
+mod's own (`currency`) and a stock that comes back (`restock`).
+
+**Simulate...** opens N packs (1000 at first) from a seed with the game's own
+dealer (`packs.py` is `src/pc/cards/packs.c` in Python: four of the game's
+random numbers a card, the guarantee and the pity redealing the last slots,
+`unique_in_pack` and `max_copies` shrinking the pools), the pity counted from
+one pack to the next as a save counts it, and lists the cards dealt by tier
+and by card, how often a tier with a pity came on average and how often the
+pity dealt it. The packs are opened a slice at a time, so the editor stays
+free meanwhile: a bar shows how far it is and **Stop** shows what came so far
+(at most a million packs, and five million cards in all, about a minute).
+The tests hold the Python dealer to the C one's deals
+(`tests/pc/packs_golden.txt`), line for line.
+
+A field of the pack left as the tab showed it keeps the key as the mod wrote
+it: opening a mod and moving through its packs changes nothing of it (a
+`"cover": 2` stays a number), and **Apply** writes only the fields changed.
+**Duplicate** gives the copy a picture of its own, so importing one for
+either pack leaves the other's. When `packs` names a file of the mod, the
+tab keeps it as written: a pack's fields and buttons are grey, and only
+**Shop settings...** (the manifest's `pack_shop`) is offered.
 
 ## Tests
 
