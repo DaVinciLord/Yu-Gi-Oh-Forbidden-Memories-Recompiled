@@ -277,7 +277,7 @@ static void test_warnings(void)
 
 /* The chest's room (Packs_SetChestRoom): Held lists the cards with less
  * than the disc's 250 left. */
-static int chest_room(int card, void *context)
+static int room_left(int card, void *context)
 {
     const Held *room = context;
     int i;
@@ -295,23 +295,23 @@ static void test_chest_room(void)
     PackResult result;
     int s, of2 = 0;
     CHECK(one("{\"packs\": [{\"cards\": [1, 2], \"count\": 5}]}") == 1);
-    Packs_SetChestRoom(chest_room, &full1);
+    Packs_SetChestRoom(room_left, &full1);
     Packs_Deal(0, NULL, NULL, NULL, counting_random, &counting, &result);
     for (s = 0; s < result.count; s++) CHECK(result.cards[s] == 2);
     CHECK(!Packs_NothingLeft(0, NULL, NULL) && Packs_FixedCardsFit(0));
     /* Room for two of card 2: two slots, then nothing. */
-    Packs_SetChestRoom(chest_room, &two_of_2);
+    Packs_SetChestRoom(room_left, &two_of_2);
     Packs_Deal(0, NULL, NULL, NULL, counting_random, &counting, &result);
     for (s = 0; s < result.count; s++) of2 += result.cards[s] == 2;
     CHECK(of2 == 2);
     for (s = 0; s < result.count; s++) CHECK(result.cards[s] == 2 || result.cards[s] == 0);
-    Packs_SetChestRoom(chest_room, &both);
+    Packs_SetChestRoom(room_left, &both);
     CHECK(Packs_NothingLeft(0, NULL, NULL));
     Packs_Deal(0, NULL, NULL, NULL, counting_random, &counting, &result);
     for (s = 0; s < result.count; s++) CHECK(result.cards[s] == 0);
     /* Fixed cards: dealt, and two of card 2 fit in a room of two, three do not. */
     CHECK(one("{\"packs\": [{\"cards\": [1], \"slots\": [{\"card\": 2}, {\"card\": 2}, \"cards\"]}]}") == 1);
-    Packs_SetChestRoom(chest_room, &two_of_2);
+    Packs_SetChestRoom(room_left, &two_of_2);
     CHECK(Packs_FixedCardsFit(0) && !Packs_NothingLeft(0, NULL, NULL));
     CHECK(one("{\"packs\": [{\"cards\": [1], \"slots\": [{\"card\": 2}, {\"card\": 2}, {\"card\": 2}]}]}") == 1);
     CHECK(!Packs_FixedCardsFit(0));
