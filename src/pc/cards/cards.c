@@ -255,6 +255,27 @@ static unsigned char *encode_name(const char *mod, const char *pattern, int n, i
  * most, broken at spaces (0xFE between them); "\n" breaks where it stands. */
 #define TEXT_LINE_LETTERS 20
 #define TEXT_LINES 8
+
+/* A code in card text, spelled as the FM Editor and the text listing show
+ * it: "{f8 0B NN}" an icon (one letter wide), "{f8 0A NN}" a colour (none),
+ * "{g X}" a glyph by number. Returns the characters it takes, 0 when "at"
+ * starts none (and is then read as letters); its bytes go to out. */
+static size_t text_code(const char *at, unsigned char out[3], int *bytes, int *letters)
+{
+    unsigned kind, value;
+    int used = 0;
+    if (sscanf(at, "{f8 %2x %2x}%n", &kind, &value, &used) == 2 && used && (kind == 0x0A || kind == 0x0B)) {
+        out[0] = 0xF8; out[1] = (unsigned char)kind; out[2] = (unsigned char)value;
+        *bytes = 3; *letters = kind == 0x0B;
+        return (size_t)used;
+    }
+    used = 0;
+    if (sscanf(at, "{g %4x}%n", &value, &used) == 1 && used && value < GLYPHS_EXTENDED_LIMIT) {
+        *bytes = (int)put_glyph(out, (int)value); *letters = 1;
+        return (size_t)used;
+    }
+    return 0;
+}
 static unsigned char *encode_description(const char *mod, const char *text, int id)
 {
     size_t length = strlen(text), n = 0;
@@ -270,11 +291,13 @@ static unsigned char *encode_description(const char *mod, const char *text, int 
             continue;
         }
         if (*word == ' ') { word++; continue; }
-        while (*end && *end != ' ' && *end != '\n') end++;
         letters = 0;   /* characters, not bytes */
-        {
-            const char *at;
-            for (at = word; at < end; at++) letters += ((unsigned char)*at & 0xC0) != 0x80;
+        while (*end && *end != ' ' && *end != '\n') {
+            unsigned char code[3];
+            int bytes, wide;
+            size_t used = *end == '{' ? text_code(end, code, &bytes, &wide) : 0;
+            if (used) { end += used; letters += wide; }
+            else letters += ((unsigned char)*end++ & 0xC0) != 0x80;
         }
         if (column && column + 1 + letters > TEXT_LINE_LETTERS) {
             glyphs[n++] = 0xFE; lines++; column = 0;
@@ -283,8 +306,14 @@ static unsigned char *encode_description(const char *mod, const char *text, int 
         }
         while (word < end) {
             const char *letter = word;
-            uint32_t character = Glyphs_NextCharacter(&word);
-            int code;
+            uint32_t character;
+            int code, bytes, wide;
+            size_t used = *word == '{' ? text_code(word, glyphs + n, &bytes, &wide) : 0;
+            if (used) {
+                word += used; n += (size_t)bytes; column += wide;
+                continue;
+            }
+            character = Glyphs_NextCharacter(&word);
             if (character == GLYPHS_NOT_UTF8) {
                 if (!warned++) Mods_Note(mod, "card %d: its text is not UTF-8; save the file as UTF-8. Left out", id);
                 continue;

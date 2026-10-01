@@ -508,6 +508,10 @@ class ValidateTest(unittest.TestCase):
         self.assertEqual(validate.text_lines("a b"), 1)
         self.assertEqual(validate.text_lines("x" * 20 + " y"), 2)
         self.assertEqual(validate.text_lines("a\nb\nc"), 3)
+        # An icon is one letter of the line, a colour none (cards.c text_code).
+        self.assertEqual(validate.text_lines("x" * 16 + " {f8 0B 04} y"), 1)
+        self.assertEqual(validate.text_lines("x" * 17 + " {f8 0B 04} y"), 2)
+        self.assertEqual(validate.text_lines("{f8 0A 02}" + "x" * 18 + " y"), 1)
 
 
 
