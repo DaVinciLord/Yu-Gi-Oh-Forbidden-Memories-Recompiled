@@ -22,6 +22,7 @@
 #include "pack_shop.h"
 #include "packs.h"
 #include "cards.h"
+#include "tables.h"
 #include "art.h"
 #include "pc/free_duel/duelists.h"
 #include "pc/text/glyphs.h"
@@ -58,6 +59,7 @@
 #include "game/main_mode_state.h"
 #include "overlays/password/shop.h"
 #include "overlays/password/module_state.h"
+#include <dirent.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -165,6 +167,15 @@ static int held(int card, void *context)
     (void)context;
     for (i = 0; i < DECK_SIZE; i++) count += gDuel_awPlayerDeck[i] == card;
     return count;
+}
+
+/* Copies of a card the chest still takes: Duel_AwardCard keeps none past
+ * Tables_ChestLimit (the disc's 250, or a mod's "chest_overflow" limit). */
+static int chest_room(int card, void *context)
+{
+    int room = Tables_ChestLimit() - *Cards_ChestSlot(gDuel_awPlayerDeck, card);
+    (void)context;
+    return room > 0 ? room : 0;
 }
 
 static int save_condition(const PackUnlock *unlock, void *context)
@@ -638,7 +649,10 @@ static void compose_hint(void)
     composing = 0;
     if (!text) return;
     for (p = text; *p != 0xFF; ) {
-        int length = plain_code(p);
+        int length = plain_code(p), k;
+        /* A code cut short by the string's end: the walks below would step
+           past the end marker. */
+        for (k = 1; k < length; k++) if (p[k] == 0xFF) length = 0;
         if (!length) {
             LOG(LOG_MODS, "packs: string 226 has a code other than plain words (%02X %02X %02X at %d); the Password "
                           "screen does not say \"PACKS\" (the triangle still opens them)", p[0], p[1], p[2],
@@ -819,6 +833,7 @@ static int condition_lines(const PackUnlock *unlock, Out *out, int max, int firs
  * will not sell ("when_nothing_left": "refuse"). */
 static int nothing_left(int pack)
 {
+    Packs_SetChestRoom(chest_room, NULL);
     return Packs_RefusesWhenNothingLeft(pack) && Packs_NothingLeft(pack, held, NULL);
 }
 
@@ -946,6 +961,9 @@ static int affordable(int pack)
     if (Packs_StockLeft(pack, &s.progress) == 0) return 0;
     if (one->once && s.progress.packs[pack].used) return 0;
     if (nothing_left(pack)) return 0;
+    /* As the password shop (shop.c, Duel_ChestFull): no price for a card
+       the chest would not keep. */
+    if (!Packs_FixedCardsFit(pack)) return 0;
     if (gLibrary_dwStarchips < one->price) return 0;
     for (i = 0; i < one->cost_cards; i++) {
         if (*Cards_ChestSlot(gDuel_awPlayerDeck, one->cost_card[i]) < one->cost_copies[i]) return 0;
@@ -1430,6 +1448,7 @@ static void buy(void)
     const Pack *pack = shown_pack();
     unsigned seed;
     int i, k;
+    Packs_SetChestRoom(chest_room, NULL);
     if (rules()->rng == PACK_RNG_SAVE) {
         seed = Packs_SaveSeed(running_code(), pack->identity, s.progress.packs[s.pack].opened);
         Packs_Deal(s.pack, &s.progress, held, NULL, Packs_LcgNext, &seed, &s.result);
@@ -1770,6 +1789,14 @@ static int progress_path(char *out, size_t size, unsigned token)
     return Paths_User(out, size, relative);
 }
 
+/* Whether `file` is a progress file, "XXXXXXXX.txt" (progress_path), and
+ * its token. */
+static int token_named(const char *file, unsigned *token, char tail[8])
+{
+    return strlen(file) == 12 && sscanf(file, "%8x%7s", token, tail) == 2 && !strcmp(tail, ".txt") &&
+           strspn(file, "0123456789ABCDEF") == 8;
+}
+
 static unsigned slot_token(void)
 {
     int slot = SaveMenu_CurrentSlot();
@@ -1794,13 +1821,39 @@ void PackShop_SaveLoaded(const void *state)
     LOG(LOG_MODS, "packs: progress read from %s (%u opened)", path, s.progress.packs_opened);
 }
 
+/* The progress files no slot's save goes with any more: the one the slot
+ * just written had before, and that of a slot saved over from another's
+ * load. None while a slot cannot be read (its token is not known). */
+static void forget_progress(unsigned written)
+{
+    unsigned live[SAVE_SLOT_COUNT], token;
+    char directory[1024], path[1024], *slash;
+    struct dirent *item;
+    DIR *folder;
+    int slot, i;
+    for (slot = 0; slot < SAVE_SLOT_COUNT; slot++) {
+        if (SaveSlots_ReadToken(slot, &live[slot])) return;
+    }
+    if (progress_path(directory, sizeof(directory), 1)) return;
+    slash = strrchr(directory, '/');
+    if (!slash) return;
+    *slash = '\0';
+    if (!(folder = opendir(directory))) return;
+    while ((item = readdir(folder)) != NULL) {
+        char tail[8];
+        int still = token_named(item->d_name, &token, tail) ? token == written : 1;
+        for (i = 0; i < SAVE_SLOT_COUNT && !still; i++) still = live[i] == token;
+        if (!still && !progress_path(path, sizeof(path), token)) remove(path);
+    }
+    closedir(folder);
+}
+
 void PackShop_SaveWritten(const void *state)
 {
     char path[1024], temporary[1040], directory[1024], *slash;
-    unsigned token = slot_token(), old = s.token;
+    unsigned token = slot_token();
     u32 code;
     FILE *file;
-    int slot, still = 0;
     if (!PackShop_Available() || !token) return;
     memcpy(&code, (const u8 *)state + SAVE_DUELIST_CODE, sizeof(code));
     if (!s.owner_set || s.owner != code) {
@@ -1831,14 +1884,39 @@ void PackShop_SaveWritten(const void *state)
         }
     }
 forget_old:
-    /* The file of the token the slot held before, once no slot holds it. */
-    if (old && old != token) {
-        for (slot = 0; slot < SAVE_SLOT_COUNT; slot++) still |= SaveSlots_Token(slot) == old;
-        if (!still && !progress_path(path, sizeof(path), old)) remove(path);
-    }
+    forget_progress(token);
 }
 
 /* --- save states -------------------------------------------------------------------------------------- */
+
+/* The progress lines of packs not here this run (Packs_ForeignLines) go
+ * with the state's progress, not stay those of the save loaded since: else
+ * a save written after the load would be given another save's lines. Their
+ * size first, then the lines. */
+static void foreign_state(MemoriesState *state)
+{
+    size_t size;
+    const char *lines = Packs_ForeignLines(&size);
+    uint32_t length = (uint32_t)size;
+    MemoriesStateField count = {&length, sizeof(length)};
+    if (!Memories_StateLoading(state)) {
+        MemoriesStateField text = {(void *)lines, size};
+        Memories_StateChunk(state, "pack-foreign-n", &count, 1);
+        Memories_StateChunk(state, "pack-foreign", &text, 1);
+        return;
+    }
+    if (Memories_StateChunk(state, "pack-foreign-n", &count, 1)) {
+        char *read = malloc(length + 1u);
+        MemoriesStateField text = {read, length};
+        if (read && Memories_StateChunk(state, "pack-foreign", &text, 1)) {
+            Packs_SetForeignLines(read, length);
+            free(read);
+            return;
+        }
+        free(read);
+    }
+    Packs_SetForeignLines(NULL, 0);
+}
 
 void PackShop_State(MemoriesState *state)
 {
@@ -1870,8 +1948,10 @@ void PackShop_State(MemoriesState *state)
                 Memories_StateRemapRange(state, base, (uint32_t)(uintptr_t)s.arena, ARENA_SIZE);
             }
             hint_ready = 0;
+            foreign_state(state);
         }
         return;
     }
     Memories_StateChunk(state, "pack-shop", fields, 3);
+    foreign_state(state);
 }

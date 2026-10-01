@@ -206,6 +206,13 @@ typedef struct {
     unsigned char redone[PACK_COUNT_MAX];      /* dealt again for a guarantee or the pity */
 } PackResult;
 
+/* Copies of a card the chest still takes (NULL for no limit, the start):
+ * a card with no room left for one more, with what the pack already dealt,
+ * is not dealt from a pool, as for "max_copies", so a purchase never pays
+ * for a card the chest would drop. A fixed card is dealt whatever the room
+ * (Packs_FixedCardsFit). */
+void Packs_SetChestRoom(PackHeld room, void *context);
+
 /* Deal pack `pack` from `random`: always PACK_DRAWS_PER_SLOT * count
  * numbers. `progress` gives the pity counters (NULL for none); `held` the
  * copies for "max_copies" (NULL for none). Returns the cards dealt. */
@@ -229,11 +236,15 @@ int Packs_UnlockMet(const PackUnlock *unlock, const PacksProgress *progress, Pac
 int Packs_Unlocked(int pack, const PacksProgress *progress, PackSaveCondition save, void *context);
 /* Purchases left, or -1 for no limit. */
 int Packs_StockLeft(int pack, const PacksProgress *progress);
-/* Whether the pack has nothing left to deal the player: it has "max_copies",
- * no slot of a fixed card (always dealt), and the player holds that many of
- * every card of every pool (`held`, as for Packs_Deal). A pack with some
- * cards left is not: it may still deal empty slots. */
+/* Whether the pack has nothing left to deal the player: it has no slot of
+ * a fixed card (always dealt), and every card of every pool is one the
+ * player holds "max_copies" of (`held`, as for Packs_Deal) or the chest has
+ * no room for (Packs_SetChestRoom). A pack with some cards left is not: it
+ * may still deal empty slots. */
 int Packs_NothingLeft(int pack, PackHeld held, void *held_context);
+/* Whether the chest has room for every fixed card ({"card": X} slots) the
+ * pack deals; 1 without a room (Packs_SetChestRoom). */
+int Packs_FixedCardsFit(int pack);
 /* Whether such a pack is refused rather than sold ("when_nothing_left": the
  * pack's, else the shop's; "refuse" by default). */
 int Packs_RefusesWhenNothingLeft(int pack);
@@ -253,5 +264,10 @@ void Packs_ForgetProgress(PacksProgress *progress);
 /* Whether there is nothing to write: no pack bought, and no line kept of a
  * pack not here this run. */
 int Packs_ProgressEmpty(const PacksProgress *progress);
+/* The lines kept of packs not here this run ("" for none, `size` their
+ * bytes), and setting them, for a save state (pack_shop.c PackShop_State):
+ * they go with the progress the state holds. */
+const char *Packs_ForeignLines(size_t *size);
+void Packs_SetForeignLines(const char *text, size_t size);
 
 #endif

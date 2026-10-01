@@ -275,6 +275,50 @@ static void test_warnings(void)
     CHECK(Packs_Rules()->password == PACK_SHOP_BOTH && Packs_Rules()->rng == PACK_RNG_GAME);
 }
 
+/* The chest's room (Packs_SetChestRoom): Held lists the cards with less
+ * than the disc's 250 left. */
+static int chest_room(int card, void *context)
+{
+    const Held *room = context;
+    int i;
+    for (i = 0; i < room->count; i++) if (room->cards[i] == card) return room->copies[i];
+    return 250;
+}
+
+/* A card the chest has no room for is not dealt, with or without
+ * "max_copies"; a pack of nothing else has nothing left, and a fixed card
+ * without room makes the pack not fit (the shop refuses it). */
+static void test_chest_room(void)
+{
+    Held full1 = {{1}, {0}, 1}, both = {{1, 2}, {0, 0}, 2}, two_of_2 = {{1, 2}, {0, 2}, 2};
+    Counting counting = {11, 0};
+    PackResult result;
+    int s, of2 = 0;
+    CHECK(one("{\"packs\": [{\"cards\": [1, 2], \"count\": 5}]}") == 1);
+    Packs_SetChestRoom(chest_room, &full1);
+    Packs_Deal(0, NULL, NULL, NULL, counting_random, &counting, &result);
+    for (s = 0; s < result.count; s++) CHECK(result.cards[s] == 2);
+    CHECK(!Packs_NothingLeft(0, NULL, NULL) && Packs_FixedCardsFit(0));
+    /* Room for two of card 2: two slots, then nothing. */
+    Packs_SetChestRoom(chest_room, &two_of_2);
+    Packs_Deal(0, NULL, NULL, NULL, counting_random, &counting, &result);
+    for (s = 0; s < result.count; s++) of2 += result.cards[s] == 2;
+    CHECK(of2 == 2);
+    for (s = 0; s < result.count; s++) CHECK(result.cards[s] == 2 || result.cards[s] == 0);
+    Packs_SetChestRoom(chest_room, &both);
+    CHECK(Packs_NothingLeft(0, NULL, NULL));
+    Packs_Deal(0, NULL, NULL, NULL, counting_random, &counting, &result);
+    for (s = 0; s < result.count; s++) CHECK(result.cards[s] == 0);
+    /* Fixed cards: dealt, and two of card 2 fit in a room of two, three do not. */
+    CHECK(one("{\"packs\": [{\"cards\": [1], \"slots\": [{\"card\": 2}, {\"card\": 2}, \"cards\"]}]}") == 1);
+    Packs_SetChestRoom(chest_room, &two_of_2);
+    CHECK(Packs_FixedCardsFit(0) && !Packs_NothingLeft(0, NULL, NULL));
+    CHECK(one("{\"packs\": [{\"cards\": [1], \"slots\": [{\"card\": 2}, {\"card\": 2}, {\"card\": 2}]}]}") == 1);
+    CHECK(!Packs_FixedCardsFit(0));
+    Packs_SetChestRoom(NULL, NULL);
+    CHECK(Packs_FixedCardsFit(0));
+}
+
 /* "when_nothing_left": a pack of "max_copies" whose every card the player
  * holds that many of is refused by default; "sell" sells it anyway. */
 static void test_when_nothing_left(void)
@@ -702,6 +746,7 @@ int main(void)
     test_draw_count();
     test_rules_while_dealing();
     test_when_nothing_left();
+    test_chest_room();
     test_fixed_cards_first();
     test_unlock_and_stock();
     test_progress_file();

@@ -96,6 +96,16 @@ left and a slot with nothing left in reach comes empty (a slot of a tier
 whose cards, and the commoner tiers' below it, are all held). What came
 shows only the cards dealt, and the pack counts as opened.
 
+### A full chest
+
+The chest keeps 250 copies of a card (or a mod's `chest_overflow` limit),
+and a copy past them is lost. A pack never deals one: a card the chest has
+no room for, counting what the pack dealt, is not dealt from a pool, with or
+without `max_copies` (a slot with nothing left in reach comes empty, as
+above), and a pack whose every card is such a card has nothing left. A fixed card (`{"card": X}`) is always dealt, so when the
+chest has no room for it BUY is refused, grey, as the password shop refuses
+a card the chest has no room for; nothing is paid.
+
 ### Unlock
 
 The duelists' conditions ([more duelists](more-duelists.md)) and three of the
@@ -186,6 +196,7 @@ leaves the game's numbers where they would have been.
    on; with none left the slot deals nothing.
 3. A pick in a pool: every card's weight as it stands (0 once
    `unique_in_pack` dealt it, 0 once the player holds `max_copies` counting
+   what this pack dealt, 0 once the chest has no room for another counting
    what this pack dealt), `roll % total`, then down the pool in the order it
    was written.
 4. The guarantee and the pity, rarest tier first: while the pack has fewer
@@ -315,7 +326,7 @@ not built.
 `tests/pc/packs_test.c` (CTest `pc_packs`) checks every rule of the reader,
 that a pack spends four numbers a slot whatever it holds, the guarantee, the
 pity, `unique_in_pack` and `max_copies` (fixed cards first), the fall to a
-commoner tier, `when_nothing_left`, the unlock conditions, the progress file
+commoner tier, `when_nothing_left`, the chest's room, the unlock conditions, the progress file
 (lines of packs not here kept) and the deals of `packs_fixture.json` against
 `packs_golden.txt` (a line ends `| nothing left` for a pack with nothing left
 for the player); the FM Editor's `tests/test_packs.py` holds its reader and

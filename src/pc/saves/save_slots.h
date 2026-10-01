@@ -74,6 +74,9 @@ const char *SaveSlots_ReadError(void);
 /* The slot's token, or 0 when it has none (empty, or saved by an older
  * build). */
 unsigned SaveSlots_Token(int slot);
+/* The same, -1 when the slot's file is there but cannot be read (its token
+ * is then not known), 0 otherwise. */
+int SaveSlots_ReadToken(int slot, unsigned *token);
 /* Copy the save named `name` off the memory card images into slots 1 and
  * 2, once: only when the saves directory does not exist yet. */
 void SaveSlots_ImportMemoryCards(const char *name);

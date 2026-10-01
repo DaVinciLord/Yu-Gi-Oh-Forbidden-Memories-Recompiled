@@ -10,7 +10,9 @@ run deals the same (the same input, the same numbers), that a state saved
 while the cards turn over, resumed in a new process, ends with the same
 chest, that a pack whose every card the player holds "max_copies" of is
 refused (ALL OWNED, nothing paid) unless it says "when_nothing_left":
-"sell", and that without the mod the triangle does nothing. Artifacts stay
+"sell", that a full chest is never sold a card it would drop (the pack
+deals only cards with room, a pack of none is refused, and so is one whose
+fixed card has no room), and that without the mod the triangle does nothing. Artifacts stay
 in tmp/pc/packs-test (or --out); no player saves are touched.
 
     python3 tools/pc/test_packs.py [--windows | --executable PATH] [--out DIR]
@@ -44,6 +46,8 @@ RECENT = 0x801D07BC             # the cards last awarded, newest first
 PRICE, COUNT = 120, 5
 CARDS = [2, 3, 4, 5, 6, 7, 8, 9]
 OWNED, OWNED_SOLD, OWNED_PRICE = [10, 11], [12, 13], 50   # held once each: packs of "max_copies": 1
+FIXED, FIXED_PRICE = 14, 30     # the fourth pack's one fixed card
+FULL = 250                      # copies of a card the disc's chest keeps
 
 
 def png(width, height):
@@ -74,7 +78,9 @@ def make_mod(mods):
                            "pity": {"rare": 2}, "stock": 3},
                           {"id": "owned-sold", "name": "Owned Sold", "price": OWNED_PRICE, "count": 3, "max_copies": 1,
                            "tiers": {"common": {"cards": OWNED_SOLD[:1]}, "rare": {"odds": 0, "cards": OWNED_SOLD[1:]}},
-                           "pity": {"rare": 2}, "stock": 3, "when_nothing_left": "sell"}]}
+                           "pity": {"rare": 2}, "stock": 3, "when_nothing_left": "sell"},
+                          {"id": "fixed", "name": "Fixed", "price": FIXED_PRICE, "count": 2,
+                           "cards": CARDS[:1], "slots": [{"card": FIXED}, "cards"]}]}
     (folder / "mod.json").write_text(json.dumps(manifest, indent=4), encoding="utf-8")
 
 
@@ -226,6 +232,37 @@ def main():
           "\"when_nothing_left\": \"sell\" sells it: the price paid, every slot empty")
     check(progress(sold, 2)[:4] == (OWNED_PRICE, 1, 1, 1) and progress(sold, 2)[4][1] == 1,
           "and counts it: a purchase of the stock, an opening, a pack without its rare for the pity")
+
+    # A full chest: the commons at 250, the pack deals none of them; every
+    # card at 250, it is refused; a fixed card at 250 refuses its pack.
+    def chest_with(name, cards):
+        data, found = chunks(rich)
+        for card in cards:
+            data[found["memory"] + CHEST - 0x80000000 + card] = FULL
+        path = OUT / name
+        path.write_bytes(bytes(data))
+        return path
+    commons_full = chest_with("commons-full.state", CARDS[:6])
+    held = chest(commons_full)
+    dealt = run(executable, "full-commons", 520, buying, mods, state=commons_full, mode_at=False)
+    gained = {card + 1: chest(dealt)[card] - held[card] for card in range(722) if chest(dealt)[card] != held[card]}
+    data, found = chunks(dealt)
+    recent = list(struct.unpack_from(f"<{COUNT}H", data, found["memory"] + RECENT - 0x80000000))
+    check(peek(dealt, STARCHIPS, "I") == 1000 - PRICE and gained and set(gained) <= set(CARDS[6:]) and
+          not set(recent) & set(CARDS[:6]),
+          f"a chest full of the commons is dealt none of them, only the rares (a common slot comes empty): {gained}")
+    all_full = chest_with("all-full.state", CARDS)
+    refused = run(executable, "full-all", 520, buying, mods, state=all_full, mode_at=False)
+    check(peek(refused, STARCHIPS, "I") == 1000 and chest(refused) == chest(all_full),
+          "a pack whose every card the chest is full of is refused: nothing paid")
+    fixed_full = chest_with("fixed-full.state", [FIXED])
+    fixed = presses(60, [TRIANGLE, RIGHT, RIGHT, RIGHT, CROSS, CROSS])
+    refused = run(executable, "full-fixed", 600, fixed, mods, state=fixed_full, mode_at=False)
+    check(peek(refused, STARCHIPS, "I") == 1000 and chest(refused) == chest(fixed_full),
+          "a pack whose fixed card the chest has no room for is refused")
+    sold = run(executable, "fixed", 600, fixed, mods, state=rich, mode_at=False)
+    check(peek(sold, STARCHIPS, "I") == 1000 - FIXED_PRICE and chest(sold)[FIXED - 1] == 1,
+          "and sold with room: the fixed card in the chest")
 
     # Without the mod, △ does nothing on the Password screen.
     plain = run(executable, "plain", SCREEN + 100, OPENING, mods, with_mod=False)

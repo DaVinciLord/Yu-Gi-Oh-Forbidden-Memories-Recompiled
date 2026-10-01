@@ -1211,6 +1211,15 @@ typedef struct {
     unsigned char taken_times[2 * PACK_COUNT_MAX];
 } Dealing;
 
+static PackHeld chest_room;
+static void *chest_room_context;
+
+void Packs_SetChestRoom(PackHeld room, void *context)
+{
+    chest_room = room;
+    chest_room_context = context;
+}
+
 static int taken(const Dealing *d, int card)
 {
     int i;
@@ -1234,8 +1243,9 @@ static void take(Dealing *d, int card, int step)
     }
 }
 
-/* A card's weight in a pool now: 0 once "unique_in_pack" dealt it, or once
- * the player holds "max_copies" of it with what this pack dealt. */
+/* A card's weight in a pool now: 0 once "unique_in_pack" dealt it, once
+ * the player holds "max_copies" of it with what this pack dealt, or once the
+ * chest has no room for another (Packs_SetChestRoom). */
 static unsigned weight_now(const Dealing *d, const PackEntry *entry)
 {
     int card = entry->card;
@@ -1245,6 +1255,7 @@ static unsigned weight_now(const Dealing *d, const PackEntry *entry)
         int held = d->held ? d->held(card, d->held_context) : 0;
         if (held + taken(d, card) >= d->pack->max_copies) return 0;
     }
+    if (chest_room && taken(d, card) >= chest_room(card, chest_room_context)) return 0;
     return entry->weight;
 }
 
@@ -1462,7 +1473,7 @@ int Packs_NothingLeft(int index, PackHeld held, void *held_context)
     const Pack *pack = Packs_At(index);
     const PackPool *pools[PACK_TIERS_MAX + PACK_COUNT_MAX];
     int count = 0, i, k;
-    if (!pack || !pack->max_copies) return 0;
+    if (!pack || (!pack->max_copies && !chest_room)) return 0;
     for (i = 0; i < pack->tier_count; i++) pools[count++] = &pack->tiers[i].pool;
     for (i = 0; pack->slots && i < pack->count; i++) {
         if (pack->slots[i].kind == PACK_SLOT_CARD) return 0;   /* dealt whatever the player holds */
@@ -1471,8 +1482,25 @@ int Packs_NothingLeft(int index, PackHeld held, void *held_context)
     for (i = 0; i < count; i++) {
         for (k = 0; k < pools[i]->count; k++) {
             const PackEntry *entry = &pools[i]->entries[k];
-            if (entry->weight && (held ? held(entry->card, held_context) : 0) < pack->max_copies) return 0;
+            if (!entry->weight) continue;
+            if (pack->max_copies && (held ? held(entry->card, held_context) : 0) >= pack->max_copies) continue;
+            if (chest_room && chest_room(entry->card, chest_room_context) <= 0) continue;
+            return 0;
         }
+    }
+    return 1;
+}
+
+int Packs_FixedCardsFit(int index)
+{
+    const Pack *pack = Packs_At(index);
+    int i, k;
+    if (!pack || !pack->slots || !chest_room) return 1;
+    for (i = 0; i < pack->count; i++) {
+        int card = pack->slots[i].card, copies = 0;
+        if (pack->slots[i].kind != PACK_SLOT_CARD) continue;
+        for (k = 0; k < pack->count; k++) copies += pack->slots[k].kind == PACK_SLOT_CARD && pack->slots[k].card == card;
+        if (copies > chest_room(card, chest_room_context)) return 0;
     }
     return 1;
 }
@@ -1515,6 +1543,25 @@ int Packs_ProgressEmpty(const PacksProgress *progress)
 {
     static const PacksProgress none;
     return !foreign && !memcmp(progress, &none, sizeof(none));
+}
+
+const char *Packs_ForeignLines(size_t *size)
+{
+    *size = foreign_size;
+    return foreign ? foreign : "";
+}
+
+void Packs_SetForeignLines(const char *text, size_t size)
+{
+    char *copy = size ? malloc(size + 1) : NULL;
+    if (size && !copy) return;
+    if (copy) {
+        memcpy(copy, text, size);
+        copy[size] = '\0';
+    }
+    free(foreign);
+    foreign = copy;
+    foreign_size = copy ? size : 0;
 }
 
 static void keep_foreign(const char *line)

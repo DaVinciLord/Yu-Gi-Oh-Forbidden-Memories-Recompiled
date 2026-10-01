@@ -239,12 +239,22 @@ int SaveSlots_WriteFile(int slot, const unsigned char *image, size_t bytes)
     return store(slot, block);
 }
 
-unsigned SaveSlots_Token(int slot)
+int SaveSlots_ReadToken(int slot, unsigned *token)
 {
     static unsigned char image[SAVE_SLOT_FILE_SIZE];
     const unsigned char *tag = image + SAVE_SLOT_TAG_OFFSET;
-    if (read_file(slot, image, NULL) < 0 || memcmp(tag, TAG, sizeof(TAG))) return 0;
-    return read_u32(tag + sizeof(TAG));
+    long got = read_file(slot, image, NULL);
+    *token = 0;
+    if (got == -2) return -1;
+    if (got >= 0 && !memcmp(tag, TAG, sizeof(TAG))) *token = read_u32(tag + sizeof(TAG));
+    return 0;
+}
+
+unsigned SaveSlots_Token(int slot)
+{
+    unsigned token;
+    SaveSlots_ReadToken(slot, &token);
+    return token;
 }
 
 int SaveSlots_WriteAt(int slot, long offset, const unsigned char *data, size_t bytes)
