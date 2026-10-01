@@ -497,7 +497,8 @@ def main():
     manifest = {"id": args.id, "name": args.name, "version": "1.0", "author": args.author,
                 "description": "HD card art, thumbnails, frames, card back, attribute balls, the "
                                "Build Deck screen and the duel (arena, hand, FIELD box, life points); the Free "
-                               "Duel portraits. Shows best at Video > Resolution > Internal 4x with Video > HD text on.",
+                               "Duel and campaign portraits. Shows best at Video > Resolution > Internal 4x "
+                               "with Video > HD text on.",
                 "enabled": True, "textures": "textures",
                 "settings": [
                     {"key": key, "label": label, "type": "bool", "default": 1, "description": help}
