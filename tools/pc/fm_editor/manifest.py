@@ -588,14 +588,18 @@ def _apply_fields(card, entry: dict, is_replace: bool, messages: list, where: st
             else:
                 card.type = value
     stars = entry.get("stars")
-    if isinstance(stars, list) and len(stars) == 2:
-        # A number, the disc's names or a name the mod's "guardian_stars"
-        # gives, up to the card record's 15 (cards.c star_choice).
-        first, second = (guardian_stars.find(stars[0], stars_section), guardian_stars.find(stars[1], stars_section))
-        if first == 0 and second > 0:
-            messages.append(f"{where}: \"stars\": the first star cannot be none when the second is not; left out")
-            first = second = -2
-        elif first == -1 or second == -1:
+    if "stars" in entry and not (isinstance(stars, list) and len(stars) == 2):
+        messages.append(f"{where}: \"stars\" is a list of two, [first, second] (none for no star); left out")
+    elif "stars" in entry:
+        # A number, the disc's names, a name the mod's "guardian_stars" gives
+        # or none (0, null, "none", "(none)"), up to the card record's 15
+        # (stars.c Stars_Value). [none, X] is kept as written: the game reads
+        # it as the one star X, which validate says.
+        first, second = (guardian_stars.card_star(stars[0], stars_section),
+                         guardian_stars.card_star(stars[1], stars_section))
+        if first > guardian_stars.MAX_STARS or second > guardian_stars.MAX_STARS:
+            messages.append(f"{where}: a card holds a guardian star in 4 bits: 15 at most")
+        if first == -1 or second == -1:
             messages.append(f"{where}: \"stars\": not a guardian star; left out")
         if first >= 0:
             card.star1 = _clamp(first, 0, guardian_stars.MAX_STARS)

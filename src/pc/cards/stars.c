@@ -50,6 +50,7 @@ static Star stars[IDS];
 static int choice_mode = STARS_CHOICE_ASK;
 static int built;
 static int any;          /* whether any mod has a "guardian_stars" */
+static int no_star;      /* whether a mod made a monster with no star */
 
 /* --- the disc's rule -------------------------------------------------- */
 
@@ -387,6 +388,7 @@ void Stars_Clear(void)
     memset(decided, 0, sizeof(decided));
     choice_mode = STARS_CHOICE_ASK;
     any = 0;
+    no_star = 0;
     built = 1;   /* the tests add their own */
 }
 
@@ -406,8 +408,16 @@ void Stars_Build(void)
 int Stars_Matchup(int attacker, int defender, int *bonus)
 {
     Stars_Build();
-    if (!any || attacker < 0 || attacker > STARS_MAX || defender < 0 || defender > STARS_MAX) return 0;
-    if (!decided[attacker][defender]) return 0;
+    if (attacker < 0 || attacker > STARS_MAX || defender < 0 || defender > STARS_MAX) return 0;
+    /* A monster with no star gives no bonus and takes none: star 0 is
+     * neutral both ways, which the disc's arithmetic is not (0 against Mars
+     * is +500 there). Only once a mod has such a card, so that nothing else
+     * reading star 0 changes. */
+    if (no_star && (attacker == 0 || defender == 0)) {
+        *bonus = 0;
+        return 1;
+    }
+    if (!any || !decided[attacker][defender]) return 0;
     *bonus = bonus_of[attacker][defender];
     return 1;
 }
@@ -427,6 +437,42 @@ int Stars_ChoiceMode(void)
 int Stars_Single(int first, int second)
 {
     return second == 0 || second == first;
+}
+
+int Stars_Value(const JsonValue *value)
+{
+    const char *text;
+    int star;
+    if (!value) return -1;
+    if (Json_TypeOf(value) == JSON_NULL) return 0;
+    if (Json_TypeOf(value) == JSON_NUMBER) {
+        star = (int)Json_Number(value, -1);
+        return star >= 0 ? star : -1;
+    }
+    if (Json_TypeOf(value) != JSON_STRING) return -1;
+    text = Json_String(value, "");
+    /* A star a mod names "None" is that star; otherwise "none" and the FM
+     * Editor's "(none)" are no star. */
+    if ((star = Stars_Find(text)) >= 0) return star;
+    return same_letters(text, "none") ? 0 : -1;
+}
+
+int Stars_Normalize(int *first, int *second)
+{
+    if (*first != 0 || *second <= 0) return 0;
+    *first = *second;
+    *second = 0;
+    return 1;
+}
+
+void Stars_NoteNoStar(void)
+{
+    no_star = 1;
+}
+
+int Stars_NoStarUsed(void)
+{
+    return no_star;
 }
 
 int Stars_SummonChoice(int first, int second, const int *enemy, int count)

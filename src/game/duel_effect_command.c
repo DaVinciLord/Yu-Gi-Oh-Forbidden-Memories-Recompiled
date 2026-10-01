@@ -107,6 +107,16 @@ void func_80037DA4(DuelEffectChannel *object)
             type = (stats >> CARD_STAT_TYPE_SHIFT) & CARD_STAT_TYPE_MASK;
 #ifdef MEMORIES_PC
             star = id;
+            /* A monster a mod gave no star (none of the disc's): no icon
+               and no name, as for a card with no second (stars.h). */
+            if (id == 0 && type < CARD_TYPE_MAGIC && Stars_NoStarUsed()) {
+                if (op & 0x80) {
+                    object->stream_58++;
+                    text = (u8 *)no_star_name;
+                    goto store;
+                }
+                n = 1;
+            }
 #endif
             id += 0x17;
             if ((u32)(type - CARD_TYPE_MAGIC) < CARD_NON_MONSTER_TYPE_COUNT) {
@@ -189,7 +199,14 @@ void func_80038024(DuelEffectChannel *object, s32 value)
 void func_80038070(DuelEffectChannel *object)
 {
 #ifdef MEMORIES_PC
-    /* The field bar's active star (func_80023144 keeps it + 0x17). */
+    /* The field bar's active star (func_80023144 keeps it + 0x17). A
+       monster a mod gave no star has none to draw: the place stays, as
+       func_80037DA4 leaves it for a card with no second star (stars.h). */
+    if (D_8009B344 == 0x17 && Stars_NoStarUsed()) {
+        object->flags_34 &= 0xFF7F;
+        object->field_38 += 0x10;
+        return;
+    }
     Stars_MarkIcon(D_8009B344 - 0x17);
 #endif
     func_80038024(object, D_8009B344);

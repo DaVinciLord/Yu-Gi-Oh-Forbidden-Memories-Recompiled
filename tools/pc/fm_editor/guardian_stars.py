@@ -160,6 +160,28 @@ def find(name, section=None) -> int:
     return -1
 
 
+def card_star(value, section=None) -> int:
+    """One of a card's "stars" as stars.c Stars_Value reads it: a number (0 is
+    none), a star's name, or none (null, "none", the Cards tab's "(none)"),
+    which a star the mod names "None" stands over; -1 for anything else."""
+    if value is None:
+        return 0
+    if _is_int(value):
+        return value if value >= 0 else -1
+    if not isinstance(value, str):
+        return -1
+    star = find(value, section)
+    if star >= 0:
+        return star
+    return 0 if same_letters(value, "none") else -1
+
+
+def normalized(first: int, second: int) -> tuple:
+    """The stars a card has in the game (stars.c Stars_Normalize): a first of
+    none with a second is that one star, [X, none]; anything else as it is."""
+    return (second, 0) if first == 0 and second > 0 else (first, second)
+
+
 def count(section) -> int:
     """How many stars there are: 10, or the highest one declared."""
     return max([RETAIL_COUNT] + list(declared_names_ids(section)))

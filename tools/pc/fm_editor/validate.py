@@ -128,11 +128,14 @@ def _check_card(project: Project, cid: int, out: list):
         add("error", "attribute is 0 to 15")
     count = guardian_stars.count(project.other.get("guardian_stars"))
     if not (0 <= card.star1 <= guardian_stars.MAX_STARS and 0 <= card.star2 <= guardian_stars.MAX_STARS):
-        add("error", f"guardian stars are 1 to {guardian_stars.MAX_STARS} (a card holds them in 4 bits)")
+        add("error", f"guardian stars are 1 to {guardian_stars.MAX_STARS}, or none (a card holds them in 4 bits)")
     elif card.star1 > count or card.star2 > count:
         add("warning", f"a guardian star past the {count} the mod has: declare it in the Guardian Stars tab")
-    elif card.is_monster() and not card.star1:
-        add("warning", "a monster without a first guardian star")
+    elif card.is_monster() and not card.star1 and card.star2:
+        # stars.c Stars_Normalize: the game reads [none, X] as [X, none].
+        name = guardian_stars.choices(project.other.get("guardian_stars"))[card.star2]
+        add("warning", f"no first guardian star with a second: the game gives the card the one star {name}, "
+                       "as if it were first (put it first, or both none for no star)")
     if not card.name.strip():
         add("warning", "the card has no name")
     elif len(card.name) > 32:
