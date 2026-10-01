@@ -458,16 +458,17 @@ class ManifestTest(unittest.TestCase):
         used = {a, b}
         others = []
         for pair, made in sorted(self.retail.fusions.items()):
-            if made != c and pair[0] != pair[1] and not used & set(pair) and len(others) < 3:
+            if made != c and pair[0] != pair[1] and not used & set(pair) and len(others) < 4:
                 others.append(pair)
                 used |= set(pair)
-        (d1, d2), (e, f), (g, h) = others
+        (d1, d2), (e, f), (g, h), (i, j) = others
         p = Project(self.retail)
         ref = p.ref
         mod = {"id": "own", "name": "Own lists",
                "cards": [{"replace": ref(a), "fusions": [{"with": ref(b), "result": ref(600)}]},
                          {"replace": ref(d1), "fusions": [{"with": ref(d2), "result": ref(599)},
                                                          {"with": ref(h), "result": ref(598)}]},
+                         {"replace": ref(g), "fusions": [{"with": ref(h), "result": ref(596)}]},
                          {"copy": e, "id": "k", "fusions": [{"with": ref(f), "result": ref(597)}]}]}
         rules = [{"remove": ref(c)}]
         for pair, result in sorted({(a, b): None, (d1, d2): self.retail.fusions[(d1, d2)],
@@ -478,36 +479,44 @@ class ManifestTest(unittest.TestCase):
         manifest.apply(p, json.loads(json.dumps(mod)))
         copy = max(p.added)
         game = self.game_fusions(p, rules)
-        self.assertEqual((game(a, b), game(d1, d2), game(copy, f)), (0, self.retail.fusions[(d1, d2)],
-                                                                      self.retail.fusions[(e, f)]))
+        self.assertEqual((game(a, b), game(d1, d2), game(copy, f), game(g, h)),
+                         (0, self.retail.fusions[(d1, d2)], self.retail.fusions[(e, f)], 596))
         built = manifest.build(p)
         self.assertEqual(manifest.dumps({"fusions": built["fusions"]}), manifest.dumps({"fusions": rules}))
         self.assert_same_game(p, built["fusions"], rules, cards=[copy])
         self.assertEqual(manifest.dumps(manifest.build(self.reopen(p))), manifest.dumps(built))
-        # The modder's edits of a pair an own list names keep a rule, so the
-        # game plays the result the tab shows: a recipe back under the remove...
+        # The modder's edits of a disc pair an own list names keep a rule, so
+        # the game plays the result the tab shows: a recipe back under the
+        # remove, and the disc's result where the list would otherwise win.
         p.revert_fusion((a, b))
-        self.assertEqual(self.game_fusions(p, manifest.build(p)["fusions"])(a, b), c)
-        # ... and the disc's result where an own list would otherwise win.
-        p.set_fusion(d1, h, self.retail.fusions.get((min(d1, h), max(d1, h))) or 5)
-        p.revert_fusion(p.pair(d1, h))
-        built = manifest.build(p)["fusions"]
-        game = self.game_fusions(p, built)
-        self.assertEqual(game(d1, h), self.retail.fusions.get(p.pair(d1, h), 0))
-        self.assertEqual(game(copy, f), self.retail.fusions[(e, f)])     # the base pair's rule stays
-        # A pair no own list names goes back to no rule at all.
         p.set_fusion(g, h, 5)
         p.revert_fusion((g, h))
-        self.assertNotIn((g, h), p.fusion_explicit)
-        self.assertNotIn([ref(g), ref(h)], [rule.get("with") for rule in manifest.build(p)["fusions"]])
+        game = self.game_fusions(p, manifest.build(p)["fusions"])
+        self.assertEqual((game(a, b), game(g, h)), (c, self.retail.fusions[(g, h)]))
+        # A pair with no disc result reverted is no rule at all: the list decides.
+        p.set_fusion(d1, h, 5)
+        p.revert_fusion(p.pair(d1, h))
+        self.assertNotIn(p.pair(d1, h), p.fusion_explicit)
+        self.assertEqual(self.game_fusions(p, manifest.build(p)["fusions"])(d1, h),
+                         self.retail.fusions.get(p.pair(d1, h)) or 598)
+        p.set_fusion(copy, f, 5)
+        p.revert_fusion(p.pair(copy, f))
+        self.assertNotIn(p.pair(copy, f), p.fusion_explicit)
+        # A pair no own list names goes back to no rule at all.
+        p.set_fusion(i, j, 5)
+        p.revert_fusion((i, j))
+        self.assertNotIn((i, j), p.fusion_explicit)
+        self.assertNotIn([ref(i), ref(j)], [rule.get("with") for rule in manifest.build(p)["fusions"]])
         # The file's rule for the base pair a copy's own list falls back on
         # stays through an edit: without it the copy's list would decide.
-        self.assertIn((e, f), p.fusion_explicit)
         p.set_fusion(e, f, 5)
         p.revert_fusion((e, f))
         self.assertIn((e, f), p.fusion_explicit)
+        self.assertEqual(self.game_fusions(p, manifest.build(p)["fusions"])(copy, f), self.retail.fusions[(e, f)])
         from fm_editor import bulk_fusions
         self.assertEqual(bulk_fusions.rule_count(p), len(manifest.build(p)["fusions"]))
+        p.fusion_explicit.discard((e, f))
+        self.assertEqual(self.game_fusions(p, manifest.build(p)["fusions"])(copy, f), 597)
 
     def reopen(self, p: Project) -> Project:
         again = Project(self.retail)

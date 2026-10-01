@@ -328,13 +328,15 @@ class Project:
         self._edited(pair)
 
     def revert_fusion(self, pair):
-        """Back to the disc's: an added card's pair to no rule at all."""
+        """Back to the disc's: an added card's pair to no rule at all (so
+        its own "fusions" list, or its base's recipe, decides)."""
         retail = self.retail.fusions.get(pair)
         if retail:
             self.fusions[pair] = retail
+            self._edited(pair)
         else:
             self.fusions.pop(pair, None)
-        self._edited(pair)
+            self.fusion_explicit.discard(pair)
 
     def own_fusion_pairs(self):
         """The pairs the cards' own "fusions" lists name (a "replace" entry's,
