@@ -143,6 +143,12 @@ class Project:
         # C (tables.c Tables_FilterFusion); their pairs are out of `fusions`.
         self.fusion_removes = []
         self._recipes = None            # retail result -> the disc's pairs that make it
+        # Pairs the mod writes a rule for even where the result alone needs
+        # none (the disc's own, or a recipe a remove takes away): the rules a
+        # mod.json names, and an edit of a pair a card's own "fusions" list
+        # names. Such a rule is asked before that list (cards.c Cards_Fusion).
+        self.fusion_explicit = set()
+        self._own_pairs = None          # (pairs own lists name, the pairs a rule for them falls back on)
         self.equips = {e: set(m) for e, m in retail.equips.items()}
         self.rituals = dict(retail.rituals)
         # ritual id -> three requirement dictionaries. Empty means the traditional
@@ -262,6 +268,8 @@ class Project:
         self.passwords.pop(cid, None)
         self.notes.pop(cid, None)
         self.fusions = {p: r for p, r in self.fusions.items() if cid not in p and r != cid}
+        self.fusion_explicit = {p for p in self.fusion_explicit if cid not in p}
+        self._own_pairs = None
         if cid in self.fusion_removes:
             self.fusion_removes.remove(cid)
         self.equips.pop(cid, None)
@@ -291,6 +299,7 @@ class Project:
         elif cid in self.retail.cards:
             self.cards[cid] = self.retail.cards[cid].copy()
             self.card_extra.pop(cid, None)
+            self._own_pairs = None
             self.passwords.pop(cid, None)
 
     def card_changed(self, cid: int) -> bool:
@@ -316,6 +325,7 @@ class Project:
             self.fusions[pair] = 0
         else:
             self.fusions.pop(pair, None)
+        self._edited(pair)
 
     def revert_fusion(self, pair):
         """Back to the disc's: an added card's pair to no rule at all."""
@@ -324,6 +334,43 @@ class Project:
             self.fusions[pair] = retail
         else:
             self.fusions.pop(pair, None)
+        self._edited(pair)
+
+    def own_fusion_pairs(self):
+        """The pairs the cards' own "fusions" lists name (a "replace" entry's,
+        an added card's), and those a rule for them falls back on (a copy as
+        its base, tables.c Tables_Fusion)."""
+        if self._own_pairs is None:
+            named, under = set(), set()
+            owners = [(cid, extra) for cid, extra in self.card_extra.items()]
+            owners += [(cid, added.extra) for cid, added in self.added.items()]
+            for cid, extra in owners:
+                rules = extra.get("fusions")
+                for rule in rules if isinstance(rules, list) else ():
+                    other = self.resolve(rule.get("with")) if isinstance(rule, dict) else 0
+                    if not other:
+                        continue
+                    named.add(self.pair(cid, other))
+                    for x, y in ((cid, self.base_of(other)), (self.base_of(cid), other),
+                                 (self.base_of(cid), self.base_of(other))):
+                        under.add(self.pair(x, y))
+            self._own_pairs = (named, under - named)
+        return self._own_pairs
+
+    def explicit_after_edit(self, pair) -> bool:
+        """Whether a pair the modder sets keeps a rule of its own: one an own
+        list names, so the result shown is the one the game plays; one a
+        rule of the mod's own for a copy falls back on keeps what it had."""
+        if not self.fusion_explicit and not self.card_extra and not self.added:
+            return False
+        named, under = self.own_fusion_pairs()
+        return pair in named or (pair in under and pair in self.fusion_explicit)
+
+    def _edited(self, pair):
+        if self.explicit_after_edit(pair):
+            self.fusion_explicit.add(pair)
+        else:
+            self.fusion_explicit.discard(pair)
 
     def retail_recipes(self, result: int) -> list:
         """The disc's pairs that make `result`, in order."""
@@ -342,6 +389,7 @@ class Project:
         for pair in self.retail_recipes(result):
             if self.fusions.get(pair) == result:
                 del self.fusions[pair]
+                self.fusion_explicit.discard(pair)
 
     def active_removes(self) -> list:
         """The removes the mod still writes, in its order: all but those of
@@ -354,10 +402,13 @@ class Project:
                 out.append(result)
         return out
 
-    def fusion_rule(self, pair, value, removes) -> bool:
+    def fusion_rule(self, pair, value, removes, explicit=None) -> bool:
         """Whether the mod writes a rule for a pair holding `value` (None: no
-        entry); `removes` is a set of active_removes(). A disc recipe of a
-        removed card needs no rule to be gone, and one to stay."""
+        entry); `removes` is a set of active_removes(), `explicit` whether
+        the pair is in fusion_explicit (None: as it is now). A disc recipe
+        of a removed card needs no rule to be gone, and one to stay."""
+        if pair in self.fusion_explicit if explicit is None else explicit:
+            return True
         retail = self.retail.fusions.get(pair)
         if retail and retail in removes:
             return bool(value)

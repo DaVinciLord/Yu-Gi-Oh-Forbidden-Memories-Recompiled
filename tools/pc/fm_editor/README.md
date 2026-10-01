@@ -231,7 +231,12 @@ record are shown as retail fusions and marked.
   they take away write nothing, and one the mod keeps or changes (reverted
   in the tab, say) is written as a rule of its own, which the remove would
   otherwise take away too. When every disc recipe of C is back, the remove
-  is dropped; one for a card no disc recipe makes stays as it was.
+  is dropped; one for a card no disc recipe makes stays as it was. A
+  pair rule the mod wrote is kept even where the result alone needs none
+  (the disc's result, or a `null` on a recipe a remove takes away): the
+  game asks it before a card's own `fusions` list. So is one for a pair
+  such a list names once the modder edits it, so the game plays what the
+  tab shows.
 * `equips`: per equip card, `add` and `remove` (a whole monster type as its
   name), or `replace` when that is shorter. An added card is equipped (and
   equips) as its base, so what differs for it is written in later entries,
@@ -617,7 +622,9 @@ the engine keeps no undo (a front end may keep `project.clone()`s).
   `set_fusion(a, b, result or None)`; `fusion_status`, `revert_fusion`.
   `project.fusion_removes` lists the `{"remove": C}` cards in the mod's
   order (`remove_recipes`, `retail_recipes`, `active_removes`,
-  `fusion_rule`: whether a pair is written, which the bulk count shares).
+  `fusion_rule`: whether a pair is written, which the bulk count shares);
+  `project.fusion_explicit` the pairs written whatever their result
+  (`own_fusion_pairs`, `explicit_after_edit`).
   Bulk: `bulk_fusions.plan(project, BulkSpec(...))`, then `apply` and `undo`.
 * Equips: `project.equips[equip]` is a set of monsters; `equip_baseline`
   is what the disc gives it. Rituals: `project.rituals[ritual] = (t1, t2,

@@ -517,7 +517,7 @@ class FusionsTab(Tab):
         self.tree.delete(*self.tree.get_children())
         p = self.project
         text = self.search.get().strip()
-        pairs = set(p.fusions) | set(p.retail.fusions)
+        pairs = set(p.fusions) | set(p.retail.fusions) | p.fusion_explicit
         rows = []
         for pair in pairs:
             status = p.fusion_status(pair)

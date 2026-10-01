@@ -252,14 +252,15 @@ def rule_count(project) -> int:
     count = sum(1 for pair, now in fusions.items() if project.fusion_rule(pair, now, removes))
     count += sum(1 for pair in project.retail.fusions if pair not in fusions
                  and project.fusion_rule(pair, None, removes))
+    count += sum(1 for pair in project.fusion_explicit if pair not in fusions and pair not in project.retail.fusions)
     return count + len(active) + len(project.kept["fusions"])
 
 
-def _differs(project, pair, value, removes=frozenset()) -> bool:
+def _differs(project, pair, value, removes=frozenset(), explicit=None) -> bool:
     """Whether a pair holding `value` (None: no entry) is a rule of the mod,
     with the removes it has now (restoring every recipe of a removed card
     drops its remove; the count leaves that to the next plan)."""
-    return project.fusion_rule(pair, value, removes)
+    return project.fusion_rule(pair, value, removes, explicit)
 
 
 def plan(project, spec: BulkSpec) -> Plan:
@@ -351,7 +352,8 @@ def plan(project, spec: BulkSpec) -> Plan:
             # The rule the pair leaves in the mod, as Project.set_fusion stores it.
             now = fusions.get(pair)
             stored = after if after else (0 if (pair[0] in project.added or pair[1] in project.added) else None)
-            delta += _differs(project, pair, stored, removes) - _differs(project, pair, now, removes)
+            delta += (_differs(project, pair, stored, removes, project.explicit_after_edit(pair))
+                      - _differs(project, pair, now, removes))
     out.rules_after = out.rules_before + delta
     out.samples += out.kept_samples[:SAMPLE - len(out.samples)]
     if out.rules_after > RULE_BUDGET and out.rules_after > out.rules_before:
