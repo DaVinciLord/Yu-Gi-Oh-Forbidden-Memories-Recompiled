@@ -801,8 +801,9 @@ names "None" is that star instead).
 No star. A monster with both none (`"stars": [0, 0]`) has no star at all:
 no SELECT A GUARDIAN STAR box at a summon, no star bonus given or taken (it
 meets every star at 0 both ways, the AI's sums too), and nothing where a star
-would be drawn: the card view, the field bar and the lists show no icon and
-no name, and its battles have no star effect. This is decided for star 0
+would be drawn: the field bar and the lists show no icon and no name, the
+card view (the duel's, the Library's) lays it out as it does a magic card,
+with no GUARDIAN STAR heading, and its battles have no star effect. This is decided for star 0
 only once a mod has made such a monster, since the disc's arithmetic gives
 star 0 a bonus against some stars (+500 against Mars, -500 against Pluto)
 and nothing of the disc has it on a monster. A `replace` entry that turns a

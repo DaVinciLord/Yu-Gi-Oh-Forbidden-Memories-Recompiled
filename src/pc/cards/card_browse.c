@@ -30,6 +30,7 @@
  * DuelEffect_UpdateState is). */
 #define GINPUT_PAD1_REPEAT_SIZED_VOLATILE /* both pads: [0] and [1] */
 #include "card_browse.h"
+#include "stars.h"
 #include "pc/platform/settings.h"
 #include "types.h"
 #include <stddef.h>
@@ -174,7 +175,9 @@ static void show(u16 id)
         int kind = 3;
         if (channel->flags_34 & DUEL_EFFECT_CHANNEL_FLAG_ACTIVE) continue;
         gDuel_wSelectedCardID = id;
-        if (((gDuel_adwCardStats[(s16)id - 1] >> CARD_STAT_TYPE_SHIFT) & CARD_STAT_TYPE_MASK) >= CARD_TYPE_MAGIC) {
+        /* A monster a mod gave no star has the magic cards' layout too (stars.h). */
+        if (((gDuel_adwCardStats[(s16)id - 1] >> CARD_STAT_TYPE_SHIFT) & CARD_STAT_TYPE_MASK) >= CARD_TYPE_MAGIC ||
+            Stars_NoStarCard(id)) {
             kind = 4;
         }
         box = TextBox_Create(i, kind, VIEWER_TEXT_X, VIEWER_TEXT_Y, VIEWER_TEXT_W, VIEWER_TEXT_H);

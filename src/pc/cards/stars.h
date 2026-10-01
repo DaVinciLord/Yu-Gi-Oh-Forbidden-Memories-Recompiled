@@ -75,8 +75,9 @@ int Stars_Single(int first, int second);
  * Once a mod has made a monster with no star (cards.c calls
  * Stars_NoteNoStar), star 0 meets every star at 0 both ways, where the
  * disc's arithmetic gives 0 against Mars +500 and against Pluto -500; the
- * card view and the field bar draw no icon and no name for it. Without such
- * a card nothing here changes anything. */
+ * lists and the field bar draw no icon and no name for it, and the card
+ * view has the magic cards' layout (Stars_NoStarCard). Without such a card
+ * nothing here changes anything. */
 /* A star as a card's "stars" gives it: its number (0 is none, up to 15 and
  * past it, which the caller says is too many), a name Stars_Find knows, or
  * none; -1 for anything else. */
@@ -89,6 +90,10 @@ int Stars_NoStarUsed(void);
  * is, against the duel's records (stars_duel.c). */
 int Stars_PickForCard(int card_id);
 int Stars_CardSingle(int card_id);
+/* Whether card `card_id` is a monster a mod gave no star (0 until a mod has
+ * made one, Stars_NoStarUsed): the card views lay it out as a magic card's,
+ * with no GUARDIAN STAR heading over nothing (stars_duel.c). */
+int Stars_NoStarCard(int card_id);
 
 /* How many stars there are: 10, or the highest a mod declares. */
 int Stars_Count(void);
