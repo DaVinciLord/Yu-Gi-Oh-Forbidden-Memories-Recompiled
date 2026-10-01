@@ -161,6 +161,8 @@ int Mods_DamageLife(int side, int life, int damage, int kind);
  * card tables hand over once they are built; `fallback` until then, and for
  * a name it does not know. Also the mod API's `limit` (API 8). */
 void Mods_SetLimitSource(long (*source)(const char *name));
+/* Where host->menu_item (API 9) finds the title menus' items (title_menu.c). */
+void Mods_SetMenuItemSource(const char *(*source)(int index));
 long Mods_Limit(const char *name, long fallback);
 /* Add a duel StarChip prize to *balance (cap 999999, or a mod's "limits"). Dispatches
  * MEMORIES_EVENT_STARCHIP; returns the resulting balance. */

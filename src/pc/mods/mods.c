@@ -378,6 +378,10 @@ long Mods_Limit(const char *name, long fallback)
 }
 static long host_limit(const MemoriesModHost *host, const char *name)
 { (void)host; return limit_source && name ? limit_source(name) : -1; }
+static const char *(*menu_item_source)(int);
+void Mods_SetMenuItemSource(const char *(*source)(int)) { menu_item_source = source; }
+static const char *host_menu_item(const MemoriesModHost *host, int index)
+{ (void)host; return menu_item_source ? menu_item_source(index) : NULL; }
 static const char *(*notes_source)(int);
 static int (*tag_source)(int, const char *, char *, size_t);
 void Mods_SetCardNotes(const char *(*notes)(int), int (*tag)(int, const char *, char *, size_t))
@@ -529,6 +533,7 @@ static void fill_host(Mod *mod)
     mod->host.card_notes = host_card_notes;
     mod->host.card_tag = host_card_tag;
     mod->host.limit = host_limit;
+    mod->host.menu_item = host_menu_item;
     mod->host.api = MEMORIES_MOD_API;
     mod->host.id = mod->id;
     mod->host.directory = mod->directory;
@@ -1206,7 +1211,7 @@ static const char *const manifest_keys[] = {
     "data", "textures", "cards", "audio", "min_api", "game", "requires", "after", "conflicts", "priority",
     "settings", "fusions", "equips", "rituals", "drops", "decks", "duelists", "text", "font",
     "chest_overflow", "terrain_bonus", "trap_thresholds", "equip_bonus_default", "passwords", "starter",
-    "title", "limits", "guardian_stars",
+    "title", "menu", "limits", "guardian_stars",
 };
 
 /* How many letters to add, remove or change to turn one word into the

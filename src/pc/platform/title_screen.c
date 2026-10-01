@@ -12,6 +12,8 @@
 #include "pc/cards/fusion_helper.h"
 #include "title_config.h"
 #include "title_images.h"
+#include "title_menu.h"
+#include "pc/mods/mods.h"
 #include "pc/saves/save_menu.h"
 #include "pc/saves/deck_menu.h"
 #include "pc/guest/state.h"
@@ -36,6 +38,9 @@ static const struct { int x, y; } middles[TITLE_LAYERS] = {{162, 90}, {163, 207}
 enum { OFF_SCREEN = -400 };
 
 static int open;                /* between TitleScreen_Opened and _Closed */
+/* View > Aspect 16:9: the picture has TITLE_WIDE_MARGIN more either side. */
+static int wide(void) { return Platform_Widescreen(); }
+static void show_layers(void);
 static int prompt_level = 0x80; /* PRESS START's own pulse, under its tint */
 static int idle;
 
@@ -73,21 +78,6 @@ static DisplayObject *entry(int i)
     return (DisplayObject *)gMain_apMenuEntries[i];
 }
 
-static int menu_base(int id) { return id < TITLE_FIRST_MENU ? 0 : TITLE_FIRST_MENU; }
-static int menu_count(int id) { return id < TITLE_FIRST_MENU ? TITLE_FIRST_MENU : TITLE_ENTRIES - TITLE_FIRST_MENU; }
-
-/* Off a hidden entry the way the pad went (down unless it went up), within
- * its menu, as the game wraps. */
-static void skip_hidden(int up)
-{
-    int id = gMain_bMenuID, from = id, base = menu_base(id), count = menu_count(id), tries = count;
-    if (id >= TITLE_ENTRIES || !TitleConfig_Get()->entries[id].hidden) return;
-    while (TitleConfig_Get()->entries[id].hidden && tries-- > 0) id = (id - base + count + (up ? -1 : 1)) % count + base;
-    if (entry(from)) DisplayObject_SetResourceVariant((DisplayObjectConfig *)entry(from), from << 1 | 1);
-    gMain_bMenuID = (u8)id;
-    if (entry(id)) DisplayObject_SetResourceVariant((DisplayObjectConfig *)entry(id), id << 1);
-}
-
 /* A slide MainMenu_StartFrontendEntryTransition has just begun (16 ticks
  * to go) runs to or from the entry's own x instead of the middle. */
 static void shift_slides(void)
@@ -95,7 +85,7 @@ static void shift_slides(void)
     int i;
     for (i = 0; i < TITLE_ENTRIES; i++) {
         DisplayObject *object = entry(i);
-        int dx = TitleConfig_Get()->entries[i].x;
+        int dx = TitleWide_X(&TitleConfig_Get()->items[i].wide, TitleConfig_Get()->items[i].x, wide());
         if (!object || object->field_60 != 0x10 || !dx) continue;
         if ((s16)object->field_38.h.field_38 == ENTRY_X) object->field_38.h.field_38 += dx;
         if ((s16)object->field_34.h.field_36 == ENTRY_X) {
@@ -109,7 +99,7 @@ static void tint_entries(void)
 {
     int i;
     for (i = 0; i < TITLE_ENTRIES; i++) {
-        if (entry(i) && TitleConfig_Get()->entries[i].tint != 0xFFFFFF) paint(entry(i), TitleConfig_Get()->entries[i].tint, 0x80);
+        if (entry(i) && TitleConfig_Get()->items[i].tint != 0xFFFFFF) paint(entry(i), TitleConfig_Get()->items[i].tint, 0x80);
     }
 }
 
@@ -127,13 +117,10 @@ void TitleScreen_Opened(void)
         /* A picture of the mod's own stands in: the game's goes off the
          * screen but keeps running, PUSH START BUTTON's pulse and all. */
         if (TitleImages_Ready(TITLE_IMAGE_LOGO + i, NULL, NULL)) object->field_30.h.field_32 = OFF_SCREEN;
-        object->field_30.h.field_30 += TitleConfig_Get()->layers[i].x;
-        object->field_30.h.field_32 += TitleConfig_Get()->layers[i].y;
+        object->field_30.h.field_30 += TitleWide_X(&TitleConfig_Get()->layers[i].wide, TitleConfig_Get()->layers[i].x, wide());
+        object->field_30.h.field_32 += TitleWide_Y(&TitleConfig_Get()->layers[i].wide, TitleConfig_Get()->layers[i].y, wide());
         if (TitleConfig_Get()->layers[i].hidden && i != 2) object->flags &= ~DISPLAY_OBJECT_FLAG_RENDERABLE;
         if (TitleConfig_Get()->layers[i].tint != 0xFFFFFF) paint(object, TitleConfig_Get()->layers[i].tint, 0x80);
-    }
-    for (i = 0; i < TITLE_ENTRIES; i++) {
-        if (entry(i)) entry(i)->field_30.h.field_32 = TitleConfig_Get()->entries[i].y;
     }
     /* PRESS START hidden or skipped: straight to the menu, as the game opens
      * it on any entry but the first (frontend.c). The entries' slide in is
@@ -142,19 +129,24 @@ void TitleScreen_Opened(void)
         prompt->flags &= ~DISPLAY_OBJECT_FLAG_RENDERABLE;
         D_80184597 = 0x80;
     }
-    skip_hidden(0);
+    Mods_SetMenuItemSource(TitleMenu_ItemName);
+    TitleMenu_Opened();
     shift_slides();
+    TitleMenu_Place();
     tint_entries();
+    show_layers();
 }
 
 void TitleScreen_Closed(void)
 {
     open = 0;
+    TitleMenu_Closed();
 }
 
 void TitleScreen_State(MemoriesState *state)
 {
     MemoriesStateField fields[] = {{&open, sizeof(open)}, {&idle, sizeof(idle)}, {&prompt_level, sizeof(prompt_level)}};
+    TitleMenu_State(state);
     if (!Memories_StateLoading(state)) {
         Memories_StateChunk(state, "title-screen", fields, 3);
         return;
@@ -176,7 +168,8 @@ int TitleScreen_Update(void)
     DisplayObject *prompt = D_80184560;
     int tinted = TitleConfig_Get()->layers[2].tint != 0xFFFFFF, prompting = prompt_showing(), result;
     u8 *colour;
-    unsigned short repeat = gInput_wPad1Repeat;
+    unsigned short repeat = gInput_wPad1Repeat, pressed = gInput_wPad1Pressed;
+    unsigned hidden;
 
     /* The pulse runs on the game's grey; the tint goes on after. */
     if (prompting && tinted) {
@@ -185,8 +178,18 @@ int TitleScreen_Update(void)
     }
     if (prompting && TitleConfig_Get()->idle_frames >= 0) prompt->field_34.h.field_36 = 0;
 
+    /* The menus' cursor and the choices the game would not make
+     * (title_menu.h): the pad bits it took are the port's, and the game
+     * does not see them. */
+    hidden = open ? TitleMenu_Before() : 0;
+    if (hidden) {
+        gInput_wPad1Repeat = (u16)(repeat & ~hidden);
+        gInput_wPad1Pressed = (u16)(pressed & ~hidden);
+    }
     result = MainMenu_UpdateFrontendMenu();
-    if (!open || result != -1) return result;
+    if (!open) return result;
+    result = TitleMenu_After(result);
+    if (result != -1) return result;
 
     if (prompt_showing() && tinted) {
         colour = (u8 *)&prompt->field_0C;
@@ -198,22 +201,70 @@ int TitleScreen_Update(void)
         return -2;
     }
     if (!prompt_showing()) idle = 0;
-    skip_hidden((repeat & PAD_DIRECTION_UP) != 0);
     shift_slides();
+    TitleMenu_Place();
     tint_entries();
+    show_layers();
     return result;
+}
+
+/* The background shown: the menus' while one is up, else the title's. */
+static int shown_background(void)
+{
+    return TitleMenu_Showing() >= 0;
+}
+
+static const TitleBackground *background(void)
+{
+    return &TitleConfig_Get()->background[shown_background()];
 }
 
 void TitleScreen_BackgroundTint(unsigned char *r, unsigned char *g, unsigned char *b)
 {
-    *r = (unsigned char)scale(TitleConfig_Get()->tint, 16, 128);
-    *g = (unsigned char)scale(TitleConfig_Get()->tint, 8, 128);
-    *b = (unsigned char)scale(TitleConfig_Get()->tint, 0, 128);
+    *r = (unsigned char)scale(background()->tint, 16, 128);
+    *g = (unsigned char)scale(background()->tint, 8, 128);
+    *b = (unsigned char)scale(background()->tint, 0, 128);
+}
+
+/* The mod's picture for the background shown: the menus' own, or the
+ * title's (which the menus' is when a mod gave them none). */
+static int background_image(void)
+{
+    /* In widescreen, filling it, the picture made for it if there is one. */
+    if (TitleScreen_BackgroundMargin() && background()->wide_image.file[0]) {
+        if (shown_background() && TitleImages_Ready(TITLE_IMAGE_WIDE_MENU_BACKGROUND, NULL, NULL))
+            return TITLE_IMAGE_WIDE_MENU_BACKGROUND;
+        if (TitleImages_Ready(TITLE_IMAGE_WIDE_BACKGROUND, NULL, NULL)) return TITLE_IMAGE_WIDE_BACKGROUND;
+    }
+    if (!background()->image.file[0]) return -1;
+    if (shown_background() && TitleImages_Ready(TITLE_IMAGE_MENU_BACKGROUND, NULL, NULL))
+        return TITLE_IMAGE_MENU_BACKGROUND;
+    return TitleImages_Ready(TITLE_IMAGE_BACKGROUND, NULL, NULL) ? TITLE_IMAGE_BACKGROUND : -1;
+}
+
+int TitleScreen_BackgroundMargin(void)
+{
+    return open && wide() && background()->wide ? TITLE_WIDE_MARGIN : 0;
 }
 
 int TitleScreen_ShowPicture(void)
 {
-    return TitleConfig_Get()->picture && !TitleImages_Ready(TITLE_IMAGE_BACKGROUND, NULL, NULL);
+    return background()->picture && background_image() < 0;
+}
+
+/* The logo and the copyright line, shown or not by their "show" (PUSH START
+ * BUTTON is the game's to show). */
+static void show_layers(void)
+{
+    int i;
+    for (i = 0; i < 2; i++) {
+        DisplayObject *object = layer(i);
+        int show = TitleConfig_Get()->layers[i].show, on;
+        if (!object || TitleConfig_Get()->layers[i].hidden || show == TITLE_SHOW_ALWAYS) continue;
+        on = (show == TITLE_SHOW_MENU) == shown_background();
+        if (on) object->flags |= DISPLAY_OBJECT_FLAG_RENDERABLE;
+        else object->flags &= ~DISPLAY_OBJECT_FLAG_RENDERABLE;
+    }
 }
 
 /* The mod's own pictures, in the background's ordering table: its
@@ -223,10 +274,12 @@ void TitleScreen_DrawImages(void *ot)
 {
     const TitleConfig *config = TitleConfig_Get();
     unsigned char r, g, b;
-    int i, w, h;
-    if (config->picture) {
+    int i, w, h, picture = background_image();
+    if (background()->picture && picture >= 0) {
+        int left = picture == TITLE_IMAGE_WIDE_BACKGROUND || picture == TITLE_IMAGE_WIDE_MENU_BACKGROUND
+                       ? -TITLE_WIDE_MARGIN : 0;
         TitleScreen_BackgroundTint(&r, &g, &b);
-        TitleImages_Draw(TITLE_IMAGE_BACKGROUND, ot, 4095, 0, 0, r, g, b);
+        TitleImages_Draw(picture, ot, 4095, left, 0, r, g, b, 0);
     }
     for (i = 0; i < TITLE_LAYERS; i++) {
         DisplayObject *object = layer(i);
@@ -235,12 +288,19 @@ void TitleScreen_DrawImages(void *ot)
         if (!(object->flags & DISPLAY_OBJECT_FLAG_RENDERABLE)) continue;
         /* The game's colour for it: the tint, and PUSH START BUTTON's pulse. */
         colour = (const u8 *)&object->field_0C;
-        TitleImages_Draw(TITLE_IMAGE_LOGO + i, ot, 4093, middles[i].x + config->layers[i].x - w / 2,
-                         middles[i].y + config->layers[i].y - h / 2, colour[0], colour[1], colour[2]);
+        TitleImages_Draw(TITLE_IMAGE_LOGO + i, ot, 4093,
+                         middles[i].x + TitleWide_X(&config->layers[i].wide, config->layers[i].x, wide()) - w / 2,
+                         middles[i].y + TitleWide_Y(&config->layers[i].wide, config->layers[i].y, wide()) - h / 2,
+                         colour[0], colour[1], colour[2], 0);
     }
 }
-int TitleScreen_ShowShade(void) { return TitleConfig_Get()->shade; }
-long TitleScreen_BackgroundColour(void) { return TitleConfig_Get()->colour; }
+
+void TitleScreen_DrawMenu(void)
+{
+    if (open) TitleMenu_Draw();
+}
+int TitleScreen_ShowShade(void) { return background()->shade; }
+long TitleScreen_BackgroundColour(void) { return background()->colour; }
 int TitleScreen_Dim(int level) { return level * TitleConfig_Get()->dim / 0x80; }
 
 /* --- the text lines ------------------------------------------------------ */
@@ -278,17 +338,17 @@ void TitleScreen_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
     if (!visible()) return;
     FusionHelper_GetViewport(&vx, &vy, &vw, &vh);
     if (vw <= 0 || vh <= 0) return;
-    width_2d = Platform_Widescreen() ? 426 : 320;
+    width_2d = wide() ? TITLE_WIDE_WIDTH : 320;
     for (i = 0; i < TitleConfig_Get()->lines; i++) {
         const TitleLine *line = &TitleConfig_Get()->line[i];
         int size = vh / 240 * line->size, left, middle, width;
         if (size < line->size) size = line->size;
         if (!line_shown(line)) continue;
         width = Menu_TextWidthScaled(line->text, size);
-        left = vx + vw / 2 + (line->x - 160) * vw / width_2d;
+        left = vx + vw / 2 + (TitleWide_X(&line->wide, line->x, wide()) - 160) * vw / width_2d;
         if (line->align == TITLE_ALIGN_CENTRE) left -= width / 2;
         else if (line->align == TITLE_ALIGN_RIGHT) left -= width;
-        middle = vy + line->y * vh / 240;
+        middle = vy + TitleWide_Y(&line->wide, line->y, wide()) * vh / 240;
         Menu_DrawTextScaled(canvas, left + size, middle + size, line->text, 0x000000, size);
         Menu_DrawTextScaled(canvas, left, middle, line->text, line->colour, size);
         if (x0 >= x1) { x0 = left; y0 = middle - 10 * size; x1 = left + width + size; y1 = middle + 11 * size; }
