@@ -1,0 +1,1040 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ArtsPage</class>
+ <widget class="QWidget" name="ArtsPage">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1473</width>
+    <height>720</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Art</string>
+  </property>
+  <layout class="QVBoxLayout" name="pageLayout">
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <item>
+    <widget class="QSplitter" name="artsSplitter">
+     <property name="orientation">
+      <enum>Qt::Orientation::Horizontal</enum>
+     </property>
+     <property name="childrenCollapsible">
+      <bool>false</bool>
+     </property>
+     <widget class="QFrame" name="artListPanel">
+      <property name="minimumSize">
+       <size>
+        <width>250</width>
+        <height>0</height>
+       </size>
+      </property>
+      <property name="frameShape">
+       <enum>QFrame::Shape::StyledPanel</enum>
+      </property>
+      <layout class="QVBoxLayout" name="artListLayout">
+       <property name="spacing">
+        <number>9</number>
+       </property>
+       <property name="leftMargin">
+        <number>14</number>
+       </property>
+       <property name="topMargin">
+        <number>12</number>
+       </property>
+       <property name="rightMargin">
+        <number>14</number>
+       </property>
+       <property name="bottomMargin">
+        <number>12</number>
+       </property>
+       <item>
+        <widget class="QLabel" name="artListTitle">
+         <property name="text">
+          <string>Card List</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLineEdit" name="artSearchEdit">
+         <property name="placeholderText">
+          <string>Search cards…</string>
+         </property>
+         <property name="clearButtonEnabled">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QComboBox" name="artFilterCombo">
+         <property name="toolTip">
+          <string>Filter by art replacement status</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QTableWidget" name="artCardTable">
+         <property name="editTriggers">
+          <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
+         </property>
+         <property name="alternatingRowColors">
+          <bool>true</bool>
+         </property>
+         <property name="selectionMode">
+          <enum>QAbstractItemView::SelectionMode::SingleSelection</enum>
+         </property>
+         <property name="selectionBehavior">
+          <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
+         </property>
+         <column>
+          <property name="text">
+           <string>ID</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Name</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Art status</string>
+          </property>
+         </column>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="artCountLabel">
+         <property name="text">
+          <string>0 cards</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="artDetailPage">
+      <property name="minimumSize">
+       <size>
+        <width>600</width>
+        <height>0</height>
+       </size>
+      </property>
+      <layout class="QVBoxLayout" name="artDetailLayout">
+       <property name="spacing">
+        <number>10</number>
+       </property>
+       <property name="leftMargin">
+        <number>14</number>
+       </property>
+       <property name="topMargin">
+        <number>12</number>
+       </property>
+       <property name="rightMargin">
+        <number>14</number>
+       </property>
+       <property name="bottomMargin">
+        <number>12</number>
+       </property>
+       <item>
+        <widget class="QLabel" name="artworkTitle">
+         <property name="text">
+          <string>Card Artwork</string>
+         </property>
+         <property name="wordWrap">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QScrollArea" name="artPartsScroll">
+         <property name="widgetResizable">
+          <bool>true</bool>
+         </property>
+         <widget class="QWidget" name="artPartsContent">
+          <property name="geometry">
+           <rect>
+            <x>0</x>
+            <y>-120</y>
+            <width>1019</width>
+            <height>752</height>
+           </rect>
+          </property>
+          <layout class="QVBoxLayout" name="artPartsLayout">
+           <property name="spacing">
+            <number>12</number>
+           </property>
+           <property name="leftMargin">
+            <number>4</number>
+           </property>
+           <property name="topMargin">
+            <number>4</number>
+           </property>
+           <property name="rightMargin">
+            <number>4</number>
+           </property>
+           <property name="bottomMargin">
+            <number>4</number>
+           </property>
+           <item>
+            <layout class="QVBoxLayout" name="pictureLayout">
+             <item>
+              <widget class="QLabel" name="pictureHelpLabel">
+               <property name="text">
+                <string>Card illustration · 102 × 96 pixels in the disc data</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <layout class="QHBoxLayout" name="picturePreviewsLayout">
+               <item>
+                <widget class="QGroupBox" name="pictureDiscGroup">
+                 <property name="title">
+                  <string>Disc image</string>
+                 </property>
+                 <layout class="QVBoxLayout" name="pictureDiscLayout">
+                  <item alignment="Qt::AlignmentFlag::AlignHCenter">
+                   <widget class="QLabel" name="pictureDiscPreview">
+                    <property name="minimumSize">
+                     <size>
+                      <width>1</width>
+                      <height>1</height>
+                     </size>
+                    </property>
+                    <property name="maximumSize">
+                     <size>
+                      <width>408</width>
+                      <height>384</height>
+                     </size>
+                    </property>
+                    <property name="text">
+                     <string>No card selected</string>
+                    </property>
+                    <property name="alignment">
+                     <set>Qt::AlignmentFlag::AlignCenter</set>
+                    </property>
+                   </widget>
+                  </item>
+                  <item alignment="Qt::AlignmentFlag::AlignHCenter">
+                   <widget class="QLabel" name="pictureDiscInfo">
+                    <property name="text">
+                     <string>Original image read from the game data</string>
+                    </property>
+                    <property name="alignment">
+                     <set>Qt::AlignmentFlag::AlignCenter</set>
+                    </property>
+                    <property name="wordWrap">
+                     <bool>true</bool>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <item>
+                <widget class="QGroupBox" name="pictureGameGroup">
+                 <property name="title">
+                  <string>In-game preview</string>
+                 </property>
+                 <layout class="QVBoxLayout" name="pictureGameLayout">
+                  <item alignment="Qt::AlignmentFlag::AlignHCenter">
+                   <widget class="QLabel" name="pictureGamePreview">
+                    <property name="minimumSize">
+                     <size>
+                      <width>1</width>
+                      <height>1</height>
+                     </size>
+                    </property>
+                    <property name="maximumSize">
+                     <size>
+                      <width>408</width>
+                      <height>384</height>
+                     </size>
+                    </property>
+                    <property name="text">
+                     <string>In-game rendering</string>
+                    </property>
+                    <property name="alignment">
+                     <set>Qt::AlignmentFlag::AlignCenter</set>
+                    </property>
+                   </widget>
+                  </item>
+                  <item alignment="Qt::AlignmentFlag::AlignHCenter">
+                   <widget class="QLabel" name="pictureGameInfo">
+                    <property name="text">
+                     <string>Rendered with the selected card frame</string>
+                    </property>
+                    <property name="alignment">
+                     <set>Qt::AlignmentFlag::AlignCenter</set>
+                    </property>
+                    <property name="wordWrap">
+                     <bool>true</bool>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <item>
+                <widget class="QGroupBox" name="pictureModGroup">
+                 <property name="title">
+                  <string>Mod replacement</string>
+                 </property>
+                 <layout class="QVBoxLayout" name="pictureModLayout">
+                  <item alignment="Qt::AlignmentFlag::AlignHCenter">
+                   <widget class="QLabel" name="pictureModPreview">
+                    <property name="minimumSize">
+                     <size>
+                      <width>1</width>
+                      <height>1</height>
+                     </size>
+                    </property>
+                    <property name="maximumSize">
+                     <size>
+                      <width>408</width>
+                      <height>384</height>
+                     </size>
+                    </property>
+                    <property name="text">
+                     <string>No replacement</string>
+                    </property>
+                    <property name="alignment">
+                     <set>Qt::AlignmentFlag::AlignCenter</set>
+                    </property>
+                   </widget>
+                  </item>
+                  <item alignment="Qt::AlignmentFlag::AlignHCenter">
+                   <widget class="QLabel" name="pictureModInfo">
+                    <property name="text">
+                     <string>Replacement image stored with this mod</string>
+                    </property>
+                    <property name="alignment">
+                     <set>Qt::AlignmentFlag::AlignCenter</set>
+                    </property>
+                    <property name="wordWrap">
+                     <bool>true</bool>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <item>
+                <layout class="QVBoxLayout" name="pictureActionsPanelLayout">
+                 <property name="spacing">
+                  <number>8</number>
+                 </property>
+                 <property name="leftMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="topMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="rightMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="bottomMargin">
+                  <number>0</number>
+                 </property>
+                 <item>
+                  <layout class="QHBoxLayout" name="pictureScaleControlLayout">
+                   <property name="spacing">
+                    <number>4</number>
+                   </property>
+                   <property name="leftMargin">
+                    <number>0</number>
+                   </property>
+                   <property name="topMargin">
+                    <number>0</number>
+                   </property>
+                   <property name="rightMargin">
+                    <number>0</number>
+                   </property>
+                   <property name="bottomMargin">
+                    <number>0</number>
+                   </property>
+                   <item>
+                    <widget class="QPushButton" name="pictureScale1Button">
+                     <property name="text">
+                      <string>1×</string>
+                     </property>
+                     <property name="checkable">
+                      <bool>true</bool>
+                     </property>
+                     <property name="checked">
+                      <bool>true</bool>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QPushButton" name="pictureScale2Button">
+                     <property name="text">
+                      <string>2×</string>
+                     </property>
+                     <property name="checkable">
+                      <bool>true</bool>
+                     </property>
+                     <property name="checked">
+                      <bool>false</bool>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QPushButton" name="pictureScale4Button">
+                     <property name="text">
+                      <string>4×</string>
+                     </property>
+                     <property name="checkable">
+                      <bool>true</bool>
+                     </property>
+                     <property name="checked">
+                      <bool>false</bool>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="importPictureButton">
+                   <property name="minimumSize">
+                    <size>
+                     <width>142</width>
+                     <height>36</height>
+                    </size>
+                   </property>
+                   <property name="text">
+                    <string>Import PNG…</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="exportPictureDiscButton">
+                   <property name="minimumSize">
+                    <size>
+                     <width>142</width>
+                     <height>36</height>
+                    </size>
+                   </property>
+                   <property name="text">
+                    <string>Export disc…</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="exportPictureModButton">
+                   <property name="minimumSize">
+                    <size>
+                     <width>142</width>
+                     <height>36</height>
+                    </size>
+                   </property>
+                   <property name="text">
+                    <string>Export replacement…</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="revertPictureButton">
+                   <property name="minimumSize">
+                    <size>
+                     <width>142</width>
+                     <height>36</height>
+                    </size>
+                   </property>
+                   <property name="text">
+                    <string>Revert</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+              </layout>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QVBoxLayout" name="thumbnailLayout">
+             <item>
+              <widget class="QLabel" name="thumbnailHelpLabel">
+               <property name="text">
+                <string>Small card image used in the hand and on the field · 40 × 32 pixels</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <layout class="QHBoxLayout" name="thumbnailPreviewsLayout">
+               <item>
+                <widget class="QGroupBox" name="thumbnailDiscGroup">
+                 <property name="title">
+                  <string>Disc image</string>
+                 </property>
+                 <layout class="QVBoxLayout" name="thumbnailDiscLayout">
+                  <item alignment="Qt::AlignmentFlag::AlignHCenter">
+                   <widget class="QLabel" name="thumbnailDiscPreview">
+                    <property name="minimumSize">
+                     <size>
+                      <width>1</width>
+                      <height>1</height>
+                     </size>
+                    </property>
+                    <property name="maximumSize">
+                     <size>
+                      <width>160</width>
+                      <height>128</height>
+                     </size>
+                    </property>
+                    <property name="text">
+                     <string>No card selected</string>
+                    </property>
+                    <property name="alignment">
+                     <set>Qt::AlignmentFlag::AlignCenter</set>
+                    </property>
+                   </widget>
+                  </item>
+                  <item alignment="Qt::AlignmentFlag::AlignHCenter">
+                   <widget class="QLabel" name="thumbnailDiscInfo">
+                    <property name="text">
+                     <string>Original thumbnail from the game data</string>
+                    </property>
+                    <property name="alignment">
+                     <set>Qt::AlignmentFlag::AlignCenter</set>
+                    </property>
+                    <property name="wordWrap">
+                     <bool>true</bool>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <item>
+                <widget class="QGroupBox" name="thumbnailGameGroup">
+                 <property name="title">
+                  <string>In-game preview</string>
+                 </property>
+                 <layout class="QVBoxLayout" name="thumbnailGameLayout">
+                  <item alignment="Qt::AlignmentFlag::AlignHCenter">
+                   <widget class="QLabel" name="thumbnailGamePreview">
+                    <property name="minimumSize">
+                     <size>
+                      <width>1</width>
+                      <height>1</height>
+                     </size>
+                    </property>
+                    <property name="maximumSize">
+                     <size>
+                      <width>160</width>
+                      <height>128</height>
+                     </size>
+                    </property>
+                    <property name="text">
+                     <string>In-game rendering</string>
+                    </property>
+                    <property name="alignment">
+                     <set>Qt::AlignmentFlag::AlignCenter</set>
+                    </property>
+                   </widget>
+                  </item>
+                  <item alignment="Qt::AlignmentFlag::AlignHCenter">
+                   <widget class="QLabel" name="thumbnailGameInfo">
+                    <property name="text">
+                     <string>Scaled as the game displays it</string>
+                    </property>
+                    <property name="alignment">
+                     <set>Qt::AlignmentFlag::AlignCenter</set>
+                    </property>
+                    <property name="wordWrap">
+                     <bool>true</bool>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <item>
+                <widget class="QGroupBox" name="thumbnailModGroup">
+                 <property name="title">
+                  <string>Mod replacement</string>
+                 </property>
+                 <layout class="QVBoxLayout" name="thumbnailModLayout">
+                  <item alignment="Qt::AlignmentFlag::AlignHCenter">
+                   <widget class="QLabel" name="thumbnailModPreview">
+                    <property name="minimumSize">
+                     <size>
+                      <width>1</width>
+                      <height>1</height>
+                     </size>
+                    </property>
+                    <property name="maximumSize">
+                     <size>
+                      <width>160</width>
+                      <height>128</height>
+                     </size>
+                    </property>
+                    <property name="text">
+                     <string>No replacement</string>
+                    </property>
+                    <property name="alignment">
+                     <set>Qt::AlignmentFlag::AlignCenter</set>
+                    </property>
+                   </widget>
+                  </item>
+                  <item alignment="Qt::AlignmentFlag::AlignHCenter">
+                   <widget class="QLabel" name="thumbnailModInfo">
+                    <property name="text">
+                     <string>Replacement thumbnail stored with this mod</string>
+                    </property>
+                    <property name="alignment">
+                     <set>Qt::AlignmentFlag::AlignCenter</set>
+                    </property>
+                    <property name="wordWrap">
+                     <bool>true</bool>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <item>
+                <layout class="QVBoxLayout" name="thumbnailActionsPanelLayout">
+                 <property name="spacing">
+                  <number>8</number>
+                 </property>
+                 <property name="leftMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="topMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="rightMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="bottomMargin">
+                  <number>0</number>
+                 </property>
+                 <item>
+                  <layout class="QHBoxLayout" name="thumbnailScaleControlLayout">
+                   <property name="spacing">
+                    <number>4</number>
+                   </property>
+                   <property name="leftMargin">
+                    <number>0</number>
+                   </property>
+                   <property name="topMargin">
+                    <number>0</number>
+                   </property>
+                   <property name="rightMargin">
+                    <number>0</number>
+                   </property>
+                   <property name="bottomMargin">
+                    <number>0</number>
+                   </property>
+                   <item>
+                    <widget class="QPushButton" name="thumbnailScale1Button">
+                     <property name="text">
+                      <string>1×</string>
+                     </property>
+                     <property name="checkable">
+                      <bool>true</bool>
+                     </property>
+                     <property name="checked">
+                      <bool>true</bool>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QPushButton" name="thumbnailScale2Button">
+                     <property name="text">
+                      <string>2×</string>
+                     </property>
+                     <property name="checkable">
+                      <bool>true</bool>
+                     </property>
+                     <property name="checked">
+                      <bool>false</bool>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QPushButton" name="thumbnailScale4Button">
+                     <property name="text">
+                      <string>4×</string>
+                     </property>
+                     <property name="checkable">
+                      <bool>true</bool>
+                     </property>
+                     <property name="checked">
+                      <bool>false</bool>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="importThumbnailButton">
+                   <property name="minimumSize">
+                    <size>
+                     <width>142</width>
+                     <height>36</height>
+                    </size>
+                   </property>
+                   <property name="text">
+                    <string>Import PNG…</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="exportThumbnailDiscButton">
+                   <property name="minimumSize">
+                    <size>
+                     <width>142</width>
+                     <height>36</height>
+                    </size>
+                   </property>
+                   <property name="text">
+                    <string>Export disc…</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="exportThumbnailModButton">
+                   <property name="minimumSize">
+                    <size>
+                     <width>142</width>
+                     <height>36</height>
+                    </size>
+                   </property>
+                   <property name="text">
+                    <string>Export replacement…</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="revertThumbnailButton">
+                   <property name="minimumSize">
+                    <size>
+                     <width>142</width>
+                     <height>36</height>
+                    </size>
+                   </property>
+                   <property name="text">
+                    <string>Revert</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+              </layout>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QVBoxLayout" name="titleLayout">
+             <item>
+              <widget class="QLabel" name="titleHelpLabel">
+               <property name="text">
+                <string>Card name plate overlay · 96 × 14 pixels</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <layout class="QHBoxLayout" name="titlePreviewsLayout">
+               <item>
+                <widget class="QGroupBox" name="titleDiscGroup">
+                 <property name="title">
+                  <string>Disc image</string>
+                 </property>
+                 <layout class="QVBoxLayout" name="titleDiscLayout">
+                  <item alignment="Qt::AlignmentFlag::AlignHCenter">
+                   <widget class="QLabel" name="titleDiscPreview">
+                    <property name="minimumSize">
+                     <size>
+                      <width>1</width>
+                      <height>1</height>
+                     </size>
+                    </property>
+                    <property name="maximumSize">
+                     <size>
+                      <width>384</width>
+                      <height>56</height>
+                     </size>
+                    </property>
+                    <property name="text">
+                     <string>No card selected</string>
+                    </property>
+                    <property name="alignment">
+                     <set>Qt::AlignmentFlag::AlignCenter</set>
+                    </property>
+                   </widget>
+                  </item>
+                  <item alignment="Qt::AlignmentFlag::AlignHCenter">
+                   <widget class="QLabel" name="titleDiscInfo">
+                    <property name="text">
+                     <string>Original title pixels from the game data</string>
+                    </property>
+                    <property name="alignment">
+                     <set>Qt::AlignmentFlag::AlignCenter</set>
+                    </property>
+                    <property name="wordWrap">
+                     <bool>true</bool>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <item>
+                <widget class="QGroupBox" name="titleGameGroup">
+                 <property name="title">
+                  <string>In-game preview</string>
+                 </property>
+                 <layout class="QVBoxLayout" name="titleGameLayout">
+                  <item alignment="Qt::AlignmentFlag::AlignHCenter">
+                   <widget class="QLabel" name="titleGamePreview">
+                    <property name="minimumSize">
+                     <size>
+                      <width>1</width>
+                      <height>1</height>
+                     </size>
+                    </property>
+                    <property name="maximumSize">
+                     <size>
+                      <width>384</width>
+                      <height>56</height>
+                     </size>
+                    </property>
+                    <property name="text">
+                     <string>In-game rendering</string>
+                    </property>
+                    <property name="alignment">
+                     <set>Qt::AlignmentFlag::AlignCenter</set>
+                    </property>
+                   </widget>
+                  </item>
+                  <item alignment="Qt::AlignmentFlag::AlignHCenter">
+                   <widget class="QLabel" name="titleGameInfo">
+                    <property name="text">
+                     <string>Composited over the card title area</string>
+                    </property>
+                    <property name="alignment">
+                     <set>Qt::AlignmentFlag::AlignCenter</set>
+                    </property>
+                    <property name="wordWrap">
+                     <bool>true</bool>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <item>
+                <widget class="QGroupBox" name="titleModGroup">
+                 <property name="title">
+                  <string>Mod replacement</string>
+                 </property>
+                 <layout class="QVBoxLayout" name="titleModLayout">
+                  <item alignment="Qt::AlignmentFlag::AlignHCenter">
+                   <widget class="QLabel" name="titleModPreview">
+                    <property name="minimumSize">
+                     <size>
+                      <width>1</width>
+                      <height>1</height>
+                     </size>
+                    </property>
+                    <property name="maximumSize">
+                     <size>
+                      <width>384</width>
+                      <height>56</height>
+                     </size>
+                    </property>
+                    <property name="text">
+                     <string>No replacement</string>
+                    </property>
+                    <property name="alignment">
+                     <set>Qt::AlignmentFlag::AlignCenter</set>
+                    </property>
+                   </widget>
+                  </item>
+                  <item alignment="Qt::AlignmentFlag::AlignHCenter">
+                   <widget class="QLabel" name="titleModInfo">
+                    <property name="text">
+                     <string>Replacement plate stored with this mod</string>
+                    </property>
+                    <property name="alignment">
+                     <set>Qt::AlignmentFlag::AlignCenter</set>
+                    </property>
+                    <property name="wordWrap">
+                     <bool>true</bool>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <item>
+                <layout class="QVBoxLayout" name="titleActionsPanelLayout">
+                 <property name="spacing">
+                  <number>8</number>
+                 </property>
+                 <property name="leftMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="topMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="rightMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="bottomMargin">
+                  <number>0</number>
+                 </property>
+                 <item>
+                  <layout class="QHBoxLayout" name="titleScaleControlLayout">
+                   <property name="spacing">
+                    <number>4</number>
+                   </property>
+                   <property name="leftMargin">
+                    <number>0</number>
+                   </property>
+                   <property name="topMargin">
+                    <number>0</number>
+                   </property>
+                   <property name="rightMargin">
+                    <number>0</number>
+                   </property>
+                   <property name="bottomMargin">
+                    <number>0</number>
+                   </property>
+                   <item>
+                    <widget class="QPushButton" name="titleScale1Button">
+                     <property name="text">
+                      <string>1×</string>
+                     </property>
+                     <property name="checkable">
+                      <bool>true</bool>
+                     </property>
+                     <property name="checked">
+                      <bool>true</bool>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QPushButton" name="titleScale2Button">
+                     <property name="text">
+                      <string>2×</string>
+                     </property>
+                     <property name="checkable">
+                      <bool>true</bool>
+                     </property>
+                     <property name="checked">
+                      <bool>false</bool>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QPushButton" name="titleScale4Button">
+                     <property name="text">
+                      <string>4×</string>
+                     </property>
+                     <property name="checkable">
+                      <bool>true</bool>
+                     </property>
+                     <property name="checked">
+                      <bool>false</bool>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="importTitleButton">
+                   <property name="minimumSize">
+                    <size>
+                     <width>142</width>
+                     <height>36</height>
+                    </size>
+                   </property>
+                   <property name="text">
+                    <string>Import PNG…</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="exportTitleDiscButton">
+                   <property name="minimumSize">
+                    <size>
+                     <width>142</width>
+                     <height>36</height>
+                    </size>
+                   </property>
+                   <property name="text">
+                    <string>Export disc…</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="exportTitleModButton">
+                   <property name="minimumSize">
+                    <size>
+                     <width>142</width>
+                     <height>36</height>
+                    </size>
+                   </property>
+                   <property name="text">
+                    <string>Export replacement…</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="revertTitleButton">
+                   <property name="minimumSize">
+                    <size>
+                     <width>142</width>
+                     <height>36</height>
+                    </size>
+                   </property>
+                   <property name="text">
+                    <string>Revert</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+              </layout>
+             </item>
+            </layout>
+           </item>
+          </layout>
+         </widget>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="artStatusLabel">
+         <property name="text">
+          <string>Choose a card to view its original art and mod replacements.</string>
+         </property>
+         <property name="wordWrap">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

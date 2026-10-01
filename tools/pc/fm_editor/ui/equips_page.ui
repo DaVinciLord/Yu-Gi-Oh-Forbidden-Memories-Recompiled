@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>WorkspacePage</class>
+ <widget class="QWidget" name="WorkspacePage">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1280</width>
+    <height>800</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Equips</string>
+  </property>
+  <layout class="QVBoxLayout" name="pageLayout">
+   <property name="spacing">
+    <number>10</number>
+   </property>
+   <item>
+    <widget class="QLabel" name="heading">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="text">
+      <string>Equips</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="muted">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="text">
+      <string>Choose which monsters each equip card can equip.</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QSplitter" name="equipSplit">
+     <property name="orientation">
+      <enum>Qt::Orientation::Horizontal</enum>
+     </property>
+     <widget class="QWidget" name="equipListPane">
+      <layout class="QVBoxLayout" name="equipListLayout">
+       <item>
+        <widget class="QLabel" name="equipListHeading">
+         <property name="text">
+          <string>Equip cards</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="equipCardPreview">
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>220</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>16777215</width>
+           <height>260</height>
+          </size>
+         </property>
+         <property name="frameShape">
+          <enum>QFrame::Shape::StyledPanel</enum>
+         </property>
+         <property name="text">
+          <string>Select an equip card</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignmentFlag::AlignCenter</set>
+         </property>
+       </widget>
+       </item>
+       <item>
+        <widget class="QLineEdit" name="equipSearchEdit">
+         <property name="placeholderText">
+          <string>Filter equip cards by name…</string>
+         </property>
+         <property name="clearButtonEnabled">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QTableWidget" name="equipTable">
+         <column>
+          <property name="text">
+           <string>ID</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Equip card</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Fits</string>
+          </property>
+         </column>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="equipDetailPane">
+      <layout class="QVBoxLayout" name="equipDetailLayout">
+       <item>
+       <widget class="QLabel" name="equipHeadingLabel">
+         <property name="text">
+          <string>Select an equip card</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLineEdit" name="equipMonsterSearchEdit">
+         <property name="placeholderText">
+          <string>Filter monsters by name…</string>
+         </property>
+         <property name="clearButtonEnabled">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QTableWidget" name="equipMonsterTable">
+         <column>
+          <property name="text">
+           <string>Use</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>ID</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Monster</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Type</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>State</string>
+          </property>
+         </column>
+        </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="equipActionsLayout">
+         <item>
+          <widget class="QPushButton" name="addMonsterButton">
+           <property name="text">
+            <string>Add monster…</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QComboBox" name="equipTypeCombo"/>
+         </item>
+         <item>
+          <widget class="QPushButton" name="addTypeButton">
+           <property name="text">
+            <string>Add every type</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="removeTypeButton">
+           <property name="text">
+            <string>Remove every type</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="removeMonsterButton">
+           <property name="text">
+            <string>Remove selected</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="revertEquipButton">
+           <property name="text">
+            <string>Revert to retail</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

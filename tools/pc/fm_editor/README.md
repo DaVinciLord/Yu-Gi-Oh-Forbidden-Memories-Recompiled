@@ -20,6 +20,11 @@ again. It writes mod folders only: never the disc, never `game/`.
 
 The window has a tab per table:
 
+The modern interface is being added one workspace at a time. Install its optional PySide6 dependency with
+`python -m pip install -r tools/pc/fm_editor/requirements-modern.txt`, then start it with
+`python tools/pc/fm_editor --modern`. The first modern workspace is Cards; the other workspaces remain in
+the original editor until their modern versions are ported.
+
 | Tab | What you edit |
 |---|---|
 | Cards | search and filter the 722 cards; name, card text (with the game's 20-letter, 8-line wrapping counted, and **Tools > Card text preview** to see it as the card view draws it, below), ATK/DEF, type, attribute, level, guardian stars, password; the retail value beside each field. **Frame**: the colour of the card's frame (by type, or monster, magic, trap, ritual, purple or orange whatever its type), with a swatch of it; the card view, the Library and the duel draw it ([frame colour](../../../notes/more-cards.md#frame-colour)). **Notes**: text of your own on the card (what you changed, what you plan), saved as its `"notes"`; the game shows none of it, and a code mod can read `<tag: value>` tags from it ([notes on a card](../../../notes/more-cards.md#notes-on-a-card)). **Revert to retail** keeps them; the **With notes** filter lists the cards that have some, and the search finds words of them too. **Add a card** copies the selected one as a new card with a stable id; a new card starts in nobody's chest (it is won in its base's place, dealt in a starter deck, or given by Game > Cheats), and its password is only shown in the card view: the Password screen sells the disc's 722 |

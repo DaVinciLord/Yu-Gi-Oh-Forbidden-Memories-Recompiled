@@ -1,0 +1,947 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>WorkspacePage</class>
+ <widget class="QWidget" name="WorkspacePage">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1427</width>
+    <height>1110</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Rituals</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">QWidget#WorkspacePage{background:#08131f;color:#dbe6f3;font:13px &quot;Segoe UI&quot;;} QFrame#topBar{background:#0d1927;border:1px solid #26384d;border-radius:7px;} QFrame#sidebar{background:#0a1624;border-right:1px solid #26384d;} QWidget#ritualListPane,QWidget#ritualRecipePane,QFrame#ritualTribute1Panel,QFrame#ritualTribute2Panel,QFrame#ritualTribute3Panel,QFrame#ritualSummonPanel{background:#101d2b;border:1px solid #263a50;border-radius:8px;} QLabel#ritualListHeading{font-size:20px;font-weight:700;color:#f2f6fc;} QLabel#pageTitle{font-size:19px;font-weight:700;color:#f2f6fc;} QLabel#ritualRecipeHeading{font-size:16px;font-weight:700;color:#eaf1fa;} QLabel#gameLoaded{color:#20c88a;font-weight:700;} QPushButton{min-height:30px;padding:0 12px;background:#152437;border:1px solid #3a4e67;border-radius:6px;color:#dce6f2;} QPushButton:hover{background:#1a2d44;} QPushButton#editRitualButton{background:#2276f5;border-color:#2f80ff;color:white;font-weight:700;} QLineEdit,QComboBox,QSpinBox{min-height:30px;background:#152437;border:1px solid #334a63;border-radius:5px;padding:0 8px;color:#e5ecf5;} QTableWidget{background:#0c1927;alternate-background-color:#122234;border:1px solid #263a50;gridline-color:#263a50;color:#d5dfeb;selection-background-color:#2276f5;selection-color:white;} QHeaderView::section{background:#16273a;color:#bfcddd;padding:7px;border:0;border-right:1px solid #263a50;font-weight:700;} QLabel[cardPreview=&quot;true&quot;]{background:#0b1725;border:1px solid #35506c;border-radius:6px;color:#8094aa;font-weight:600;} QLabel#ritualStateLabel{color:#20c88a;font-weight:700;} QLabel#ritualCardPreview,QLabel#ritualTribute1Image,QLabel#ritualTribute2Image,QLabel#ritualTribute3Image,QLabel#ritualSummonImage{background:#0b1725;border:1px solid #35506c;border-radius:6px;color:#8094aa;font-weight:600;} QComboBox#ritualTribute1Combo,QComboBox#ritualTribute2Combo,QComboBox#ritualTribute3Combo,QComboBox#ritualSummonCombo{min-height:34px;font-weight:600;} QFrame#ritualSpellPanel{background:#101d2b;border:1px solid #263a50;border-radius:8px;} </string>
+  </property>
+  <layout class="QVBoxLayout" name="pageLayout">
+   <property name="spacing">
+    <number>10</number>
+   </property>
+   <item>
+    <widget class="QSplitter" name="ritualSplit">
+     <property name="orientation">
+      <enum>Qt::Orientation::Horizontal</enum>
+     </property>
+     <widget class="QWidget" name="ritualListPane">
+      <property name="minimumSize">
+       <size>
+        <width>290</width>
+        <height>0</height>
+       </size>
+      </property>
+      <layout class="QVBoxLayout" name="ritualListLayout">
+       <item>
+        <widget class="QLabel" name="ritualListHeading">
+         <property name="text">
+          <string>Ritual cards</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="muted">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="text">
+          <string>Edit ritual tribute recipes and their summoned monsters.</string>
+         </property>
+         <property name="wordWrap">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLineEdit" name="ritualSearchEdit">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="placeholderText">
+          <string>Filter ritual cards by name…</string>
+         </property>
+         <property name="clearButtonEnabled">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QTableWidget" name="ritualCardTable">
+         <column>
+          <property name="text">
+           <string>ID</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Ritual card</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>State</string>
+          </property>
+         </column>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="ritualRecipePane">
+      <layout class="QVBoxLayout" name="ritualRecipeLayout">
+       <item>
+        <layout class="QHBoxLayout" name="ritualRecipeHeaderLayout">
+         <item>
+          <widget class="QLabel" name="ritualRecipeHeading">
+           <property name="text">
+            <string>Select a ritual card</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="ritualStateLabel">
+           <property name="text">
+            <string>State: —</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="ritualTopCardsLayout">
+         <item>
+          <widget class="QFrame" name="ritualSpellPanel">
+           <property name="frameShape">
+            <enum>QFrame::Shape::StyledPanel</enum>
+           </property>
+           <layout class="QVBoxLayout" name="ritualSpellLayout">
+            <item>
+             <widget class="QLabel" name="ritualSpellHeading">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="text">
+               <string>Ritual Spell</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignmentFlag::AlignCenter</set>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="ritualSelectedCardLayout">
+              <item>
+               <layout class="QGridLayout" name="ritualCardMetaLabelGrid">
+                <property name="horizontalSpacing">
+                 <number>6</number>
+                </property>
+                <property name="verticalSpacing">
+                 <number>3</number>
+                </property>
+                <item row="0" column="0" colspan="2" alignment="Qt::AlignmentFlag::AlignHCenter">
+                 <widget class="QLabel" name="ritualCardPreview">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>150</width>
+                    <height>210</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize">
+                   <size>
+                    <width>190</width>
+                    <height>266</height>
+                   </size>
+                  </property>
+                  <property name="frameShape">
+                   <enum>QFrame::Shape::StyledPanel</enum>
+                  </property>
+                  <property name="text">
+                   <string>Select a ritual card</string>
+                  </property>
+                  <property name="alignment">
+                   <set>Qt::AlignmentFlag::AlignCenter</set>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </item>
+             </layout>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="ritualArrow">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="text">
+            <string>→</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignmentFlag::AlignCenter</set>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QFrame" name="ritualSummonPanel">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+             <horstretch>1</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>360</width>
+             <height>540</height>
+            </size>
+           </property>
+           <property name="frameShape">
+            <enum>QFrame::Shape::StyledPanel</enum>
+           </property>
+           <layout class="QVBoxLayout" name="verticalLayout">
+            <item>
+             <widget class="QLabel" name="ritualSummonHeading">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="text">
+               <string>Summons</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignmentFlag::AlignCenter</set>
+              </property>
+             </widget>
+            </item>
+            <item alignment="Qt::AlignmentFlag::AlignHCenter">
+             <widget class="QLabel" name="ritualSummonImage">
+              <property name="minimumSize">
+               <size>
+                <width>140</width>
+                <height>196</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>140</width>
+                <height>196</height>
+               </size>
+              </property>
+              <property name="text">
+               <string>—</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignmentFlag::AlignCenter</set>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QComboBox" name="ritualSummonCombo">
+              <property name="sizeAdjustPolicy">
+               <enum>QComboBox::SizeAdjustPolicy::AdjustToMinimumContentsLengthWithIcon</enum>
+              </property>
+              <property name="minimumContentsLength">
+               <number>12</number>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <layout class="QGridLayout" name="ritualSummonDetailsGrid">
+              <property name="horizontalSpacing">
+               <number>6</number>
+              </property>
+              <property name="verticalSpacing">
+               <number>3</number>
+              </property>
+              <item row="0" column="0">
+               <widget class="QLabel" name="ritualSummonIdLabel">
+                <property name="text">
+                 <string>Card ID</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QLineEdit" name="ritualSummonId">
+                <property name="enabled">
+                 <bool>false</bool>
+                </property>
+                <property name="readOnly">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="0">
+               <widget class="QLabel" name="ritualSummonDisplayNameLabel">
+                <property name="text">
+                 <string>ATK</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1">
+               <widget class="QSpinBox" name="ritualSummonAtk">
+                <property name="enabled">
+                 <bool>false</bool>
+                </property>
+                <property name="readOnly">
+                 <bool>true</bool>
+                </property>
+                <property name="maximum">
+                 <number>9999</number>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="2">
+               <widget class="QLabel" name="ritualSummonTypeLabel">
+                <property name="text">
+                 <string>Type</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="3">
+               <widget class="QComboBox" name="ritualSummonType"/>
+              </item>
+              <item row="2" column="0">
+               <widget class="QLabel" name="ritualSummonAttributeLabel">
+                <property name="text">
+                 <string>Attribute</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="1">
+               <widget class="QComboBox" name="ritualSummonAttribute">
+                <property name="enabled">
+                 <bool>false</bool>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="2">
+               <widget class="QLabel" name="ritualSummonLevelLabel">
+                <property name="text">
+                 <string>Level (Stars)</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="3">
+               <widget class="QSpinBox" name="ritualSummonLevel">
+                <property name="enabled">
+                 <bool>false</bool>
+                </property>
+                <property name="maximum">
+                 <number>9999</number>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="2">
+               <widget class="QLabel" name="ritualSummonDefLabel">
+                <property name="text">
+                 <string>DEF</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="3">
+               <widget class="QSpinBox" name="ritualSummonDef">
+                <property name="maximum">
+                 <number>9999</number>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+           </layout>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="ritualMaterialsLayout">
+         <item>
+          <widget class="QFrame" name="ritualTribute1Panel">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+             <horstretch>1</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>360</width>
+             <height>540</height>
+            </size>
+           </property>
+           <property name="frameShape">
+            <enum>QFrame::Shape::StyledPanel</enum>
+           </property>
+           <layout class="QVBoxLayout" name="verticalLayout_2">
+            <item>
+             <widget class="QLabel" name="ritualTribute1Heading">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="text">
+               <string>Tribute 1</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignmentFlag::AlignCenter</set>
+              </property>
+             </widget>
+            </item>
+            <item alignment="Qt::AlignmentFlag::AlignHCenter">
+             <widget class="QLabel" name="ritualTribute1Image">
+              <property name="minimumSize">
+               <size>
+                <width>140</width>
+                <height>196</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>140</width>
+                <height>196</height>
+               </size>
+              </property>
+              <property name="text">
+               <string>—</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignmentFlag::AlignCenter</set>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QComboBox" name="ritualTribute1Combo">
+              <property name="sizeAdjustPolicy">
+               <enum>QComboBox::SizeAdjustPolicy::AdjustToMinimumContentsLengthWithIcon</enum>
+              </property>
+              <property name="minimumContentsLength">
+               <number>12</number>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <layout class="QGridLayout" name="ritualTribute1DetailsGrid">
+              <property name="horizontalSpacing">
+               <number>6</number>
+              </property>
+              <property name="verticalSpacing">
+               <number>3</number>
+              </property>
+              <item row="0" column="0">
+               <widget class="QLabel" name="ritualTribute1IdLabel">
+                <property name="text">
+                 <string>Card ID</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QLineEdit" name="ritualTribute1Id">
+                <property name="enabled">
+                 <bool>false</bool>
+                </property>
+                <property name="readOnly">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="0">
+               <widget class="QLabel" name="ritualTribute1DisplayNameLabel">
+                <property name="text">
+                 <string>ATK</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1">
+               <widget class="QSpinBox" name="ritualTribute1Atk">
+                <property name="enabled">
+                 <bool>false</bool>
+                </property>
+                <property name="readOnly">
+                 <bool>true</bool>
+                </property>
+                <property name="maximum">
+                 <number>9999</number>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="2">
+               <widget class="QLabel" name="ritualTribute1TypeLabel">
+                <property name="text">
+                 <string>Type</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="3">
+               <widget class="QComboBox" name="ritualTribute1Type"/>
+              </item>
+              <item row="2" column="0">
+               <widget class="QLabel" name="ritualTribute1AttributeLabel">
+                <property name="text">
+                 <string>Attribute</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="1">
+               <widget class="QComboBox" name="ritualTribute1Attribute">
+                <property name="enabled">
+                 <bool>false</bool>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="2">
+               <widget class="QLabel" name="ritualTribute1LevelLabel">
+                <property name="text">
+                 <string>Level (Stars)</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="3">
+               <widget class="QSpinBox" name="ritualTribute1Level">
+                <property name="enabled">
+                 <bool>false</bool>
+                </property>
+                <property name="maximum">
+                 <number>9999</number>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="2">
+               <widget class="QLabel" name="ritualTribute1DefLabel">
+                <property name="text">
+                 <string>DEF</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="3">
+               <widget class="QSpinBox" name="ritualTribute1Def">
+                <property name="maximum">
+                 <number>9999</number>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="ritualPlus1">
+           <property name="text">
+            <string>+</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignmentFlag::AlignCenter</set>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QFrame" name="ritualTribute2Panel">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+             <horstretch>1</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>360</width>
+             <height>540</height>
+            </size>
+           </property>
+           <property name="frameShape">
+            <enum>QFrame::Shape::StyledPanel</enum>
+           </property>
+           <layout class="QVBoxLayout" name="verticalLayout_3">
+            <item>
+             <widget class="QLabel" name="ritualTribute2Heading">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="text">
+               <string>Tribute 2</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignmentFlag::AlignCenter</set>
+              </property>
+             </widget>
+            </item>
+            <item alignment="Qt::AlignmentFlag::AlignHCenter">
+             <widget class="QLabel" name="ritualTribute2Image">
+              <property name="minimumSize">
+               <size>
+                <width>140</width>
+                <height>196</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>140</width>
+                <height>196</height>
+               </size>
+              </property>
+              <property name="text">
+               <string>—</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignmentFlag::AlignCenter</set>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QComboBox" name="ritualTribute2Combo">
+              <property name="sizeAdjustPolicy">
+               <enum>QComboBox::SizeAdjustPolicy::AdjustToMinimumContentsLengthWithIcon</enum>
+              </property>
+              <property name="minimumContentsLength">
+               <number>12</number>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <layout class="QGridLayout" name="ritualTribute2DetailsGrid">
+              <property name="horizontalSpacing">
+               <number>6</number>
+              </property>
+              <property name="verticalSpacing">
+               <number>3</number>
+              </property>
+              <item row="0" column="0">
+               <widget class="QLabel" name="ritualTribute2IdLabel">
+                <property name="text">
+                 <string>Card ID</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QLineEdit" name="ritualTribute2Id">
+                <property name="enabled">
+                 <bool>false</bool>
+                </property>
+                <property name="readOnly">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="0">
+               <widget class="QLabel" name="ritualTribute2DisplayNameLabel">
+                <property name="text">
+                 <string>ATK</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1">
+               <widget class="QSpinBox" name="ritualTribute2Atk">
+                <property name="enabled">
+                 <bool>false</bool>
+                </property>
+                <property name="readOnly">
+                 <bool>true</bool>
+                </property>
+                <property name="maximum">
+                 <number>9999</number>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="2">
+               <widget class="QLabel" name="ritualTribute2TypeLabel">
+                <property name="text">
+                 <string>Type</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="3">
+               <widget class="QComboBox" name="ritualTribute2Type"/>
+              </item>
+              <item row="2" column="0">
+               <widget class="QLabel" name="ritualTribute2AttributeLabel">
+                <property name="text">
+                 <string>Attribute</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="1">
+               <widget class="QComboBox" name="ritualTribute2Attribute">
+                <property name="enabled">
+                 <bool>false</bool>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="2">
+               <widget class="QLabel" name="ritualTribute2LevelLabel">
+                <property name="text">
+                 <string>Level (Stars)</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="3">
+               <widget class="QSpinBox" name="ritualTribute2Level">
+                <property name="enabled">
+                 <bool>false</bool>
+                </property>
+                <property name="maximum">
+                 <number>9999</number>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="2">
+               <widget class="QLabel" name="ritualTribute2DefLabel">
+                <property name="text">
+                 <string>DEF</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="3">
+               <widget class="QSpinBox" name="ritualTribute2Def">
+                <property name="maximum">
+                 <number>9999</number>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="ritualPlus2">
+           <property name="text">
+            <string>+</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignmentFlag::AlignCenter</set>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QFrame" name="ritualTribute3Panel">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+             <horstretch>1</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>360</width>
+             <height>540</height>
+            </size>
+           </property>
+           <property name="frameShape">
+            <enum>QFrame::Shape::StyledPanel</enum>
+           </property>
+           <layout class="QVBoxLayout" name="verticalLayout_4">
+            <item>
+             <widget class="QLabel" name="ritualTribute3Heading">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="text">
+               <string>Tribute 3</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignmentFlag::AlignCenter</set>
+              </property>
+             </widget>
+            </item>
+            <item alignment="Qt::AlignmentFlag::AlignHCenter">
+             <widget class="QLabel" name="ritualTribute3Image">
+              <property name="minimumSize">
+               <size>
+                <width>140</width>
+                <height>196</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>140</width>
+                <height>196</height>
+               </size>
+              </property>
+              <property name="text">
+               <string>—</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignmentFlag::AlignCenter</set>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QComboBox" name="ritualTribute3Combo">
+              <property name="sizeAdjustPolicy">
+               <enum>QComboBox::SizeAdjustPolicy::AdjustToMinimumContentsLengthWithIcon</enum>
+              </property>
+              <property name="minimumContentsLength">
+               <number>12</number>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <layout class="QGridLayout" name="ritualTribute3DetailsGrid">
+              <property name="horizontalSpacing">
+               <number>6</number>
+              </property>
+              <property name="verticalSpacing">
+               <number>3</number>
+              </property>
+              <item row="0" column="0">
+               <widget class="QLabel" name="ritualTribute3IdLabel">
+                <property name="text">
+                 <string>Card ID</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QLineEdit" name="ritualTribute3Id">
+                <property name="enabled">
+                 <bool>false</bool>
+                </property>
+                <property name="readOnly">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="0">
+               <widget class="QLabel" name="ritualTribute3DisplayNameLabel">
+                <property name="text">
+                 <string>ATK</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1">
+               <widget class="QSpinBox" name="ritualTribute3Atk">
+                <property name="enabled">
+                 <bool>false</bool>
+                </property>
+                <property name="readOnly">
+                 <bool>true</bool>
+                </property>
+                <property name="maximum">
+                 <number>9999</number>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="2">
+               <widget class="QLabel" name="ritualTribute3TypeLabel">
+                <property name="text">
+                 <string>Type</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="3">
+               <widget class="QComboBox" name="ritualTribute3Type"/>
+              </item>
+              <item row="2" column="0">
+               <widget class="QLabel" name="ritualTribute3AttributeLabel">
+                <property name="text">
+                 <string>Attribute</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="1">
+               <widget class="QComboBox" name="ritualTribute3Attribute">
+                <property name="enabled">
+                 <bool>false</bool>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="2">
+               <widget class="QLabel" name="ritualTribute3LevelLabel">
+                <property name="text">
+                 <string>Level (Stars)</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="3">
+               <widget class="QSpinBox" name="ritualTribute3Level">
+                <property name="enabled">
+                 <bool>false</bool>
+                </property>
+                <property name="maximum">
+                 <number>9999</number>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="2">
+               <widget class="QLabel" name="ritualTribute3DefLabel">
+                <property name="text">
+                 <string>DEF</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="3">
+               <widget class="QSpinBox" name="ritualTribute3Def">
+                <property name="maximum">
+                 <number>9999</number>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+           </layout>
+          </widget>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="ritualActionsLayout">
+     <item>
+      <widget class="QPushButton" name="editRitualButton">
+       <property name="text">
+        <string>Apply recipe</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="removeRitualButton">
+       <property name="text">
+        <string>Remove recipe</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="revertRitualButton">
+       <property name="text">
+        <string>Revert to retail</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

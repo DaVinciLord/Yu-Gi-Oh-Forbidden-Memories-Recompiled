@@ -1,0 +1,322 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>WorkspacePage</class>
+ <widget class="QWidget" name="WorkspacePage">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1280</width>
+    <height>800</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Duelists</string>
+  </property>
+  <layout class="QVBoxLayout" name="pageLayout">
+   <property name="spacing">
+    <number>10</number>
+   </property>
+   <item>
+    <widget class="QLabel" name="heading">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="text">
+      <string>Duelists</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="muted">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="text">
+      <string>Edit opponent deck and drop pools.</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QSplitter" name="duelistSplit">
+     <property name="orientation">
+      <enum>Qt::Orientation::Horizontal</enum>
+     </property>
+     <property name="handleWidth">
+      <number>2</number>
+     </property>
+     <widget class="QWidget" name="duelistListPane">
+      <layout class="QVBoxLayout" name="duelistListLayout">
+       <item>
+        <widget class="QLabel" name="duelistListHeading">
+         <property name="text">
+          <string>Opponents</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLineEdit" name="duelistSearchEdit">
+         <property name="placeholderText">
+          <string>Search duelists by name…</string>
+         </property>
+         <property name="clearButtonEnabled">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QComboBox" name="duelistPageCombo"/>
+       </item>
+       <item>
+        <widget class="QTableWidget" name="duelistTable">
+         <property name="minimumSize">
+          <size>
+           <width>470</width>
+           <height>400</height>
+          </size>
+         </property>
+         <property name="selectionMode">
+          <enum>QAbstractItemView::SelectionMode::SingleSelection</enum>
+         </property>
+         <property name="selectionBehavior">
+          <enum>QAbstractItemView::SelectionBehavior::SelectItems</enum>
+         </property>
+         <property name="showGrid">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QFrame" name="duelistEditorPanel">
+         <property name="frameShape">
+          <enum>QFrame::Shape::StyledPanel</enum>
+         </property>
+         <layout class="QGridLayout" name="duelistEditorLayout">
+          <item row="0" column="0" rowspan="4">
+           <widget class="QLabel" name="duelistPortraitPreview">
+            <property name="minimumSize">
+             <size>
+              <width>72</width>
+              <height>72</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>72</width>
+              <height>72</height>
+             </size>
+            </property>
+            <property name="text">
+             <string>Portrait</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignmentFlag::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QLabel" name="duelistNameLabel">
+            <property name="text">
+             <string>Name</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="2">
+           <widget class="QLineEdit" name="duelistNameEdit"/>
+          </item>
+          <item row="1" column="1">
+           <widget class="QLabel" name="duelistIdLabel">
+            <property name="text">
+             <string>ID</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="2">
+           <widget class="QLineEdit" name="duelistIdEdit">
+            <property name="placeholderText">
+             <string>new-duelist-id</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QLabel" name="duelistBaseLabel">
+            <property name="text">
+             <string>Copy from</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="2">
+           <widget class="QComboBox" name="duelistBaseCombo"/>
+          </item>
+          <item row="3" column="1">
+           <widget class="QLabel" name="duelistSlotLabel">
+            <property name="text">
+             <string>Grid position</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="2">
+           <widget class="QComboBox" name="duelistPositionCombo"/>
+          </item>
+          <item row="4" column="0" colspan="3">
+           <layout class="QHBoxLayout" name="duelistEditButtonsLayout">
+            <item>
+             <widget class="QPushButton" name="duelistPortraitButton">
+              <property name="text">
+               <string>Choose portrait…</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="addDuelistButton">
+              <property name="text">
+               <string>Add duelist</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="applyDuelistButton">
+              <property name="text">
+               <string>Apply edits</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="removeDuelistButton">
+              <property name="enabled">
+               <bool>false</bool>
+              </property>
+              <property name="text">
+               <string>Remove duelist</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+         </layout>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="duelistDetailPane">
+      <layout class="QVBoxLayout" name="duelistDetailLayout">
+       <item>
+        <layout class="QHBoxLayout" name="duelistPoolHeader">
+         <item>
+          <widget class="QComboBox" name="duelistPoolCombo"/>
+         </item>
+         <item>
+          <widget class="QLabel" name="duelistPoolSummary">
+           <property name="text">
+            <string>Choose a duelist and pool</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QTableWidget" name="duelistPoolTable">
+         <column>
+          <property name="text">
+           <string>ID</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Card</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Type</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Weight</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Chance</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Stock</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>State</string>
+          </property>
+         </column>
+        </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="duelistActionsLayout">
+         <item>
+          <widget class="QSpinBox" name="duelistWeightSpin">
+           <property name="minimum">
+            <number>0</number>
+           </property>
+           <property name="maximum">
+            <number>65535</number>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="addPoolCardButton">
+           <property name="text">
+            <string>Add card…</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="setPoolWeightButton">
+           <property name="text">
+            <string>Set weight</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="removePoolCardButton">
+           <property name="text">
+            <string>Remove selected</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="normalizePoolButton">
+           <property name="text">
+            <string>Normalize to 2048</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="revertPoolButton">
+           <property name="text">
+            <string>Revert pool</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

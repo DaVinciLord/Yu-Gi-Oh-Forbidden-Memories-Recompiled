@@ -1083,6 +1083,15 @@ def save_mod(project: Project, folder, manifest: dict = None) -> Path:
                     target = folder / item.relative_to(source)
                     target.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(item, target)
+    for name in getattr(project, "removed_files", set()):
+        relative = Path(name)
+        if relative.is_absolute() or ".." in relative.parts or name in project.files:
+            continue
+        target = folder / relative
+        try:
+            target.unlink()
+        except FileNotFoundError:
+            pass
     for name, blob in project.files.items():
         target = folder / name
         target.parent.mkdir(parents=True, exist_ok=True)

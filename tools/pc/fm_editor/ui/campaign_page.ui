@@ -1,0 +1,70 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<ui version="4.0">
+ <class>WorkspacePage</class>
+ <widget class="QWidget" name="WorkspacePage">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1280</width>
+    <height>800</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Campaign</string>
+  </property>
+  <layout class="QVBoxLayout" name="pageLayout">
+   <property name="spacing">
+    <number>10</number>
+   </property>
+   <item>
+    <widget class="QLabel" name="pageTitleLabel">
+     <property name="text">
+      <string>Campaign</string>
+     </property>
+     <property name="objectName">
+      <string>heading</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="pageSummaryLabel">
+     <property name="text">
+      <string>Edit story data carried by this mod.</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="objectName">
+      <string>muted</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="campaignStatusLabel">
+     <property name="text">
+      <string>Campaign data stored under the manifest’s story key. Edit JSON only when that key exists.</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPlainTextEdit" name="campaignDataEdit">
+     <property name="placeholderText">
+      <string>No campaign/story data found in this mod.</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="campaignActionsLayout">
+     <item>
+      <widget class="QPushButton" name="applyCampaignButton">
+       <property name="text">
+        <string>Apply story data</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+</ui>

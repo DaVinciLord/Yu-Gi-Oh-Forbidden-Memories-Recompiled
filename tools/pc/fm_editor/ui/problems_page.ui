@@ -1,0 +1,82 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<ui version="4.0">
+ <class>WorkspacePage</class>
+ <widget class="QWidget" name="WorkspacePage">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1280</width>
+    <height>800</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Problems</string>
+  </property>
+  <layout class="QVBoxLayout" name="pageLayout">
+   <property name="spacing">
+    <number>10</number>
+   </property>
+   <item>
+    <widget class="QLabel" name="pageTitleLabel">
+     <property name="text">
+      <string>Problems</string>
+     </property>
+     <property name="objectName">
+      <string>heading</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="pageSummaryLabel">
+     <property name="text">
+      <string>Review errors and warnings before saving.</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="objectName">
+      <string>muted</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="problemSummaryLabel">
+     <property name="text">
+      <string>Run validation to check the mod manifest and game data.</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QTableWidget" name="problemsTable">
+     <column>
+      <property name="text">
+       <string>Level</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Location</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Problem</string>
+      </property>
+     </column>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="problemActions">
+     <item>
+      <widget class="QPushButton" name="checkModButton">
+       <property name="text">
+        <string>Check mod</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+</ui>

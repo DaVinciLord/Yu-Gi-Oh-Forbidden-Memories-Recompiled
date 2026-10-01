@@ -1,0 +1,160 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<ui version="4.0">
+ <class>WorkspacePage</class>
+ <widget class="QWidget" name="WorkspacePage">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1280</width>
+    <height>800</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Mod info</string>
+  </property>
+  <layout class="QVBoxLayout" name="pageLayout">
+   <property name="spacing">
+    <number>10</number>
+   </property>
+   <item>
+    <widget class="QLabel" name="pageTitleLabel">
+     <property name="text">
+      <string>Mod info</string>
+     </property>
+     <property name="objectName">
+      <string>heading</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="pageSummaryLabel">
+     <property name="text">
+      <string>Edit mod identity, settings, and preserved manifest data.</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="objectName">
+      <string>muted</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QFormLayout" name="modInfoForm">
+     <item row="0" column="0">
+      <widget class="QLabel" name="modIdEditLabel">
+       <property name="text">
+        <string>ID</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QLineEdit" name="modIdEdit">
+       <property name="placeholderText">
+        <string>letters, digits, - and _</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QLabel" name="modNameEditLabel">
+       <property name="text">
+        <string>Name</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QLineEdit" name="modNameEdit">
+       <property name="placeholderText">
+        <string />
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="0">
+      <widget class="QLabel" name="modVersionEditLabel">
+       <property name="text">
+        <string>Version</string>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="1">
+      <widget class="QLineEdit" name="modVersionEdit">
+       <property name="placeholderText">
+        <string />
+       </property>
+      </widget>
+     </item>
+     <item row="3" column="0">
+      <widget class="QLabel" name="modAuthorEditLabel">
+       <property name="text">
+        <string>Author</string>
+       </property>
+      </widget>
+     </item>
+     <item row="3" column="1">
+      <widget class="QLineEdit" name="modAuthorEdit">
+       <property name="placeholderText">
+        <string />
+       </property>
+      </widget>
+     </item>
+     <item row="4" column="0">
+      <widget class="QLabel" name="modDescriptionEditLabel">
+       <property name="text">
+        <string>Description</string>
+       </property>
+      </widget>
+     </item>
+     <item row="4" column="1">
+      <widget class="QPlainTextEdit" name="modDescriptionEdit" />
+     </item>
+     <item row="5" column="0">
+      <widget class="QLabel" name="modSettingsEditLabel">
+       <property name="text">
+        <string>Settings (JSON list)</string>
+       </property>
+      </widget>
+     </item>
+     <item row="5" column="1">
+      <widget class="QPlainTextEdit" name="modSettingsEdit" />
+     </item>
+     <item row="6" column="0">
+      <widget class="QLabel" name="modOtherEditLabel">
+       <property name="text">
+        <string>Other mod.json data (JSON object)</string>
+       </property>
+      </widget>
+     </item>
+     <item row="6" column="1">
+      <widget class="QPlainTextEdit" name="modOtherEdit" />
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="modInfoStatusLabel">
+     <property name="text">
+      <string />
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="modInfoActions">
+     <item>
+      <widget class="QPushButton" name="applyModInfoButton">
+       <property name="text">
+        <string>Apply changes</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="previewModJsonButton">
+       <property name="text">
+        <string>Preview mod.json</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+</ui>
