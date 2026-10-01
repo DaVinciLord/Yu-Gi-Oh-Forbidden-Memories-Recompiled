@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 from .gamedata import (CARD_COUNT, DECK_COPY_LIMIT, DECK_POOL_MIN_CARDS, DECK_SIZE, DUELIST_NAMES, POOLS,
                        POOL_LABELS, POOL_TOTAL, TYPE_MAGIC, TYPE_EQUIP, TYPE_RITUAL, exodia_piece)
-from . import art, campaign_map, fixed_decks, guardian_stars, limits
+from . import art, campaign_map, card_text, fixed_decks, guardian_stars, limits
 from .model import KEY_RE, Project
 
 MOD_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,63}$")
@@ -38,23 +38,9 @@ class Issue:
 
 def text_lines(text: str) -> int:
     """How many lines the port's card-text wrapping makes (cards.c
-    encode_description): 20 letters a line, broken at spaces and at \\n."""
-    lines, column = 1, 0
-    for part in re.split(r"(\n)", text):
-        if part == "\n":
-            lines += 1
-            column = 0
-            continue
-        for word in part.split(" "):
-            if not word:
-                continue
-            if column and column + 1 + len(word) > 20:
-                lines += 1
-                column = 0
-            elif column:
-                column += 1
-            column += len(word)
-    return lines
+    encode_description): 20 letters a line, broken at spaces and at \\n;
+    an icon code is one letter, a colour code none."""
+    return 1 + card_text.encode(text).count("\n")
 
 
 def _check_info(project: Project, out: list):
