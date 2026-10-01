@@ -248,6 +248,15 @@ class GuiTest(unittest.TestCase):
             self.assertIn({"with": ["Blue Dragon", "Mystic Elf"], "result": "Kuriboh"}, manifest.build_fusions(p))
         else:
             self.assertEqual(manifest.build_fusions(p), [])
+        # A copy's own list that its base's rule answers first is no row of
+        # its own: it would read "forbidden" where the game plays the rule.
+        copy = p.add_card(1, "x")
+        p.added[copy].extra = {"fusions": [{"with": 2, "result": 500}]}
+        p.set_fusion(1, 2, 599)
+        p._own_pairs = None
+        tab.search.set("")
+        tab.fill()
+        self.assertFalse(tab.tree.exists(f"2:{copy}"))
 
     def test_dark_mode(self):
         from fm_editor import theme

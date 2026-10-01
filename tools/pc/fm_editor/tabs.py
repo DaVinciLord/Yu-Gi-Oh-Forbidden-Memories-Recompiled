@@ -518,11 +518,13 @@ class FusionsTab(Tab):
         p = self.project
         text = self.search.get().strip()
         named = {pair for pair in p.own_fusion_pairs()[0] if pair[0] in p.cards and pair[1] in p.cards}
-        pairs = set(p.fusions) | set(p.retail.fusions) | p.fusion_explicit | named
         # A card's own "fusions" list makes what no rule of the mod decides
-        # first: the row shows what the game plays.
+        # first: the row shows what the game plays. A copy's pair its base's
+        # rule decides is no row of its own (it would read "forbidden").
         removes = set(p.active_removes()) if named else set()
         own = {pair: p.own_fusion(pair, removes) for pair in named}
+        pairs = set(p.fusions) | set(p.retail.fusions) | p.fusion_explicit | \
+            {pair for pair, made in own.items() if made is not None}
         rows = []
         for pair in pairs:
             status = "own list" if own.get(pair) is not None else p.fusion_status(pair)
