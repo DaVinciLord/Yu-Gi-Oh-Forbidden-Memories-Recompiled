@@ -437,7 +437,9 @@ def text_changes(retail_slus: bytes, modded_slus: bytes, report: list, modded_wa
                               "makes them its own menus (a starter deck chooser after the name), which need its "
                               "code, and a menu taller than the name box's three lines stops the game")
         out.append(f"@bank {bank}\n")
-        out += [new[k] + "\n" for k in keys]
+        # No blank line after an item that runs on: a game from before the
+        # listing passed over it reads it as a line break of the string's.
+        out += [new[k] + ("" if new[k].endswith("{cont}") else "\n") for k in keys]
         for k in keys:
             for cid in _card_ids(bank, k):
                 carried[(cid, CARD_BANKS[bank][1])] = new[k]

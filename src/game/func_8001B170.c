@@ -30,6 +30,9 @@
 #include "input.h"
 #include "sound.h"
 #include "../unmatched.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/stars.h"
+#endif
 
 #define DISPLAY_OBJECT_POSITION_VIEW(object) \
     ((DisplayObjectPosition *)(object))
@@ -59,8 +62,30 @@ void func_8001B170(void)
             if (D_800EAE8F[0] & 1) {
                 D_801A7AD8[object->field_6A].flags |= 0x200;
             }
+#ifdef MEMORIES_PC
+            /* A card with one star has nothing to choose (stars.h). */
+            if (Stars_CardSingle(D_801A7AD8[object->field_6A].card_id)) {
+                D_801A7AD8[object->field_6A].flags &= ~0x200;
+            }
+#endif
             goto state_four;
         }
+#ifdef MEMORIES_PC
+        /* The player's monster: no box for a card with one star, nor when
+           a mod's "guardian_stars" picks ("choice": "first" or "best"),
+           which the card then shows as if chosen (stars.h). */
+        if (object->field_68 < 0x14) {
+            s32 pick = Stars_PickForCard(D_801A7AD8[object->field_6A].card_id);
+
+            if (pick >= 0) {
+                D_801A7AD8[object->field_6A].flags &= ~0x200;
+                if (pick) {
+                    D_801A7AD8[object->field_6A].flags |= 0x200;
+                }
+                goto state_four;
+            }
+        }
+#endif
         D_8009B174 = 1;
         DisplayObject_SavePosition(DISPLAY_OBJECT_SNAPSHOT_VIEW(object));
         object->field_60 = 0;

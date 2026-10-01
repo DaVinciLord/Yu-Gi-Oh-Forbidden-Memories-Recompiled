@@ -50,8 +50,23 @@ int Pgxp_FindAt(uint32_t address, uint32_t word, float *x, float *y, float *w);
  * them (Pgxp_AddPrim, from the game units' addPrim: pgxp_game.h). */
 void Pgxp_Stored(uint32_t word, const float *xyw);
 void Pgxp_AddPrim(const void *packet);
+/* The same for a packet whose vertex words were copied from the stored ones
+ * moved by (dx, dy) (LIBGS GsSortPoly adds its buffer offset). */
+void Pgxp_AddPrimMoved(const void *packet, int dx, int dy);
 /* The projections so far were collected: those of the next frame follow. */
 void Pgxp_NextFrame(void);
+/* Whether a stored word's halves could be a projected vertex's screen x, y at
+ * all: the GTE clamps a projection to -1024..1023, and LIBGS adds at most a
+ * screen's offset to it, so a genuine vertex never reaches +-2048; colour,
+ * texture and OT command words routinely do. DrawOTag (libgpu.c) skips
+ * Pgxp_FindAt/Pgxp_Find for a word this rejects, sparing both lookups.
+ * `static inline`: pure and free of any dependency on this file's own state,
+ * so tests/pc/libgpu_test.c checks it directly without linking pgxp.c. */
+static inline int Pgxp_MaybeVertexWord(uint32_t word)
+{
+    int16_t px = (int16_t)(word & 0xffffu), py = (int16_t)(word >> 16);
+    return px >= -2048 && px < 2048 && py >= -2048 && py < 2048;
+}
 
 /* Declared here rather than in gte.h and packets.h, which mods include: a
  * mod's object is part of what a save state is checked against. */

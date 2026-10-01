@@ -18,12 +18,19 @@ static const char *const named[][2] = {{"Kuriboh", "10"}, {"Thunder Dragon", "11
                                        {"Legendary Sword", "20"}, {"Black Luster Ritual", "21"}};
 int Cards_Valid(int id) { return id >= 1 && id <= gCard_nCount; }
 int Cards_BaseId(int id) { return Cards_Valid(id) ? (id > CARD_COUNT ? id - CARD_COUNT : id) : 0; }
+int Cards_EffectId(int id) { return Cards_BaseId(id); }
 int Cards_Type(int id)
 {
     id = Cards_BaseId(id);
     return id == 20 ? CARD_TYPE_EQUIP : id == 21 ? CARD_TYPE_RITUAL : id == 12 || id == 13 ? 0 : 3;
 }
+int Cards_RetailType(int id) { return id >= 1 && id <= CARD_COUNT ? Cards_Type(id) : -1; }
 int Cards_TypeNamed(const char *text) { return same_letters(text, "Dragon") ? 0 : same_letters(text, "Warrior") ? 3 : -1; }
+int Cards_FusionGroupNamed(const char *text)
+{
+    return same_letters(text, "Female") ? CARD_FUSION_GROUP_FEMALE
+         : same_letters(text, "Bugrothian") ? CARD_FUSION_GROUP_BUGROTHIAN : CARD_FUSION_GROUP_NONE;
+}
 /* Card 12 is Light, 13 Dark, the rest Earth. */
 int Cards_AttributeNamed(const char *text)
 {
@@ -61,6 +68,17 @@ void Mods_Note(const char *id, const char *format, ...)
     va_end(arguments);
     notes++;
 }
+/* Mod "s" declares "on" (1) and "pick" (2); every other mod nothing. */
+int Mods_EntryUsed(const char *id, const JsonValue *entry, const char *where)
+{
+    const char *setting = Json_String(Json_Member(entry, "setting"), NULL);
+    const JsonValue *only = Json_Member(entry, "value");
+    int value;
+    (void)where;
+    if (!setting || strcmp(id, "s")) return 1;
+    value = !strcmp(setting, "on") ? 1 : !strcmp(setting, "pick") ? 2 : 0;
+    return only ? value == Json_Number(only, -1) : value != 0;
+}
 int Log_Wanted(LogChannel channel) { (void)channel; return 1; }
 void Log_Printf(LogChannel channel, const char *format, ...)
 {
@@ -79,7 +97,7 @@ const JsonValue *Mods_Manifest(int mod) { (void)mod; return NULL; }
 /* The duelist list is duelists_stubs.c: no duelist mod, the disc's forty,
  * which is what these cases are written against. */
 
-static JsonDocument *documents[64];
+static JsonDocument *documents[112];
 static int document_count;
 static void add(const char *mod, const char *text)
 {
@@ -145,6 +163,16 @@ int main(void)
     assert(fusion(CARD_COUNT + 10, 11) == 12);
     assert(Tables_FilterFusion(50) == 0 && Tables_FilterFusion(51) == 51);
 
+    /* An entry the mod's settings leave out is not read: "setting" off,
+     * or a "value" the setting is not. */
+    add("s", "{\"fusions\": ["
+             "{\"with\": [20, 21], \"result\": 70, \"setting\": \"on\"},"
+             "{\"with\": [20, 22], \"result\": 71, \"setting\": \"off\"},"
+             "{\"with\": [20, 23], \"result\": 72, \"setting\": \"pick\", \"value\": 2},"
+             "{\"with\": [20, 24], \"result\": 73, \"setting\": \"pick\", \"value\": 1}]}");
+    assert(fusion(20, 21) == 70 && fusion(20, 22) == -1);
+    assert(fusion(20, 23) == 72 && fusion(20, 24) == -1);
+
     /* A rule naming a copy is surer than its base's: both cards as they
      * are, then a copy with its partner's base (the later of two such),
      * then the bases. 732 is a copy of 10, 733 of 11, 739 of 17, 740 of 18. */
@@ -201,8 +229,56 @@ int main(void)
     add("a", "{\"rituals\": [{\"card\": \"Black Luster Ritual\", \"tributes\": [1, 2, \"test:copy:1\"], \"result\": 12}]}");
     assert(Tables_Ritual(21, own) == 1 && own[0] == 21 && own[3] == 723 && own[4] == 12 && own[5] == 0);
     assert(Tables_Ritual(22, own) == -1);
+    {
+        TablesRitualRequirement req[3];
+        unsigned short result = 0;
+        add("conditions", "{\"rituals\": [{\"card\": 21, \"tributes\": ["
+            "{\"min_defense\": 1000, \"max_defense\": 2999, \"defense_gt_attack\": true},"
+            "{\"card\": 11},"
+            "{\"type\": \"Dragon\", \"min_attack\": 500, \"max_attack\": 2500}], \"result\": 12}]}");
+        assert(Tables_Ritual(21, own) == -1);
+        assert(Tables_RitualRequirements(21, req, &result) == 1 && result == 12);
+        assert(req[0].card == 0 && req[0].min_defense == 1000 && req[0].max_defense == 2999 && req[0].defense_gt_attack == 1);
+        assert(req[1].card == 11 && req[1].type == -1);
+        assert(req[2].type == 0 && req[2].min_attack == 500 && req[2].max_attack == 2500);
+        add("condition-groups", "{\"rituals\": [{\"card\": 21, \"tributes\": ["
+            "{\"fusion_group\": \"Female\", \"min_level\": 4, \"max_level\": 6},"
+            "{\"fusion_group\": \"Bugrothian\"},"
+            "{\"card\": \"test:copy:1\"}], \"result\": \"test:copy:1\"}]}");
+        result = 0;
+        assert(Tables_RitualRequirements(21, req, &result) == 1 && result == 723);
+        assert(req[0].fusion_group == CARD_FUSION_GROUP_FEMALE && req[0].min_level == 4 && req[0].max_level == 6);
+        assert(req[1].fusion_group == CARD_FUSION_GROUP_BUGROTHIAN);
+        assert(req[2].card == 723); /* stable identity resolves to an added card, not a retail-only id */
+        /* A minimum of 0 is still a requirement (any monster), any case of a
+         * group's name is it, and a key the game does not know is noted. */
+        notes = 0;
+        add("condition-any", "{\"rituals\": [{\"card\": 21, \"tributes\": ["
+            "{\"min_attack\": 0}, {\"fusion_group\": \"female\"}, {\"card\": 11, \"colour\": 1}],"
+            " \"result\": 12}]}");
+        assert(notes == 1);
+        assert(Tables_RitualRequirements(21, req, &result) == 1 && result == 12);
+        assert(req[0].min_attack == 0 && req[0].card == 0 && req[0].type == -1);
+        assert(req[1].fusion_group == CARD_FUSION_GROUP_FEMALE && req[2].card == 11);
+        notes = 0;
+        add("condition-empty", "{\"rituals\": [{\"card\": 21, \"tributes\": [{}, 1, 2], \"result\": 12}]}");
+        assert(notes == 1);
+    }
     add("b", "{\"rituals\": [{\"card\": 21, \"result\": null}]}");
     assert(Tables_Ritual(21, own) == 0);
+    /* A mod's own ritual card (a copy of one) takes a recipe of its own;
+     * a copy of a monster does not, and the base keeps its rule. */
+    assert(!Tables_HasRitual(CARD_COUNT + 21));
+    add("c", "{\"rituals\": [{\"card\": 743, \"tributes\": [1, 2, 3], \"result\": 13}]}");
+    assert(Tables_HasRitual(743) && Tables_Ritual(743, own) == 1 && own[0] == 743 && own[4] == 13);
+    assert(Tables_Ritual(21, own) == 0);
+    notes = 0;
+    add("c", "{\"rituals\": [{\"card\": 723, \"tributes\": [1, 2, 3], \"result\": 13}]}");
+    assert(notes == 1 && !Tables_HasRitual(723));
+    {
+        TablesRitualRequirement req[3];
+        assert(Tables_RitualRequirements(21, req, 0) == 0);
+    }
 
     /* Pools. The disc's: cards 101-116 at 128 each. */
     for (id = 101; id <= 116; id++) retail[id - 1] = 128;
@@ -300,10 +376,21 @@ int main(void)
         assert(Tables_ChestOverflow(2, &starchips) == 0 && starchips == 103);
         assert(Tables_ChestOverflow(3, &starchips) == 999999 && starchips == 999999);
         assert(Tables_ChestOverflow(40, &starchips) == 999999 && starchips == 999999);
+        /* A balance past the cap is kept, not cut back to it. */
+        starchips = 2000000;
+        assert(Tables_ChestOverflow(40, &starchips) == 999999 && starchips == 2000000);
+        starchips = 103;
         add("m", "{\"chest_overflow\": {\"limit\": 10}}");
         starchips = 5;
         assert(Tables_ChestLimit() == 10 && Tables_ChestOverflow(10, &starchips) == 0 && starchips == 5);
         add("n", "{\"chest_overflow\": {\"limit\": 250, \"starchips\": 1}}");
+        /* Past the disc's 250, up to the byte a card the chest keeps. */
+        notes = 0;
+        add("n2", "{\"chest_overflow\": {\"limit\": 256}}");
+        assert(notes == 1 && Tables_ChestLimit() == 250);
+        add("n3", "{\"chest_overflow\": {\"limit\": 255}}");
+        assert(notes == 1 && Tables_ChestLimit() == 255 && !Tables_ChestFull(254) && Tables_ChestFull(255));
+        add("n4", "{\"chest_overflow\": {\"limit\": 250, \"starchips\": 1}}");
     }
 
     /* Terrains: a listed pair has its points; the rest are the disc's until
@@ -313,8 +400,8 @@ int main(void)
         assert(!Tables_TerrainBonus(1, 0, &bonus) && bonus == 12345);
         notes = 0;
         add("o", "{\"terrain_bonus\": {\"Forest\": {\"Dragon\": -300}, \"sea\": {\"Warrior\": 700},"
-                 "\"7\": {\"Dragon\": 1}, \"Umi\": {\"Magic\": 5, \"Dragon\": 10000, \"Warrior\": 650}, \"Yami\": 3}}");
-        assert(notes == 4);                /* terrain 7, Magic, 10000, not an object */
+                 "\"7\": {\"Dragon\": 1}, \"Umi\": {\"Magic\": 5, \"Dragon\": 40000, \"Warrior\": 650}, \"Yami\": 3}}");
+        assert(notes == 4);                /* terrain 7, Magic, 40000, not an object */
         assert(Tables_TerrainBonus(1, 0, &bonus) && bonus == -300);
         assert(Tables_TerrainBonus(5, 3, &bonus) && bonus == 650);          /* "Umi" is "sea", later */
         assert(!Tables_TerrainBonus(1, 3, &bonus) && !Tables_TerrainBonus(5, 0, &bonus));
@@ -334,9 +421,9 @@ int main(void)
     assert(Tables_EquipBonus(20, 12, 500) == 500);
     notes = 0;
     add("r", "{\"equips\": [{\"card\": \"Legendary Sword\", \"bonus\": 300,"
-             "\"bonus_if\": {\"Light\": 900, \"Dragon\": 700, \"Magic\": 1, \"Earth\": 10000}},"
+             "\"bonus_if\": {\"Light\": 900, \"Dragon\": 700, \"Magic\": 1, \"Earth\": 40000}},"
              "{\"card\": \"Kuriboh\", \"bonus\": 5}, {\"card\": 20, \"bonus\": \"lots\"}]}");
-    assert(notes == 4);                    /* Magic, 10000, Kuriboh not an equip, "lots" */
+    assert(notes == 4);                    /* Magic, 40000, Kuriboh not an equip, "lots" */
     assert(Tables_EquipBonus(20, 12, 500) == 900);           /* Light first */
     assert(Tables_EquipBonus(20, 13, 500) == 700);           /* a Dark dragon */
     assert(Tables_EquipBonus(20, 5, 500) == 300);            /* neither */
@@ -349,7 +436,7 @@ int main(void)
     assert(Tables_EquipBonus(20, 12, 500) == 0 && Tables_Equip(20, 12) == 1);
     /* A default for the equips no entry gives a bonus: Megamorph's +1000 too. */
     notes = 0;
-    add("t2", "{\"equip_bonus_default\": 20000}");
+    add("t2", "{\"equip_bonus_default\": 40000}");
     assert(notes == 1 && Tables_EquipBonus(21, 13, 1000) == 1000);
     add("t3", "{\"equip_bonus_default\": 700}");
     assert(Tables_EquipBonus(21, 13, 1000) == 700 && Tables_EquipBonus(21, 5, 500) == 700);
@@ -463,6 +550,74 @@ int main(void)
         notes = 0;
         assert(Tables_CheckPasswords(passwords) == CARD_COUNT - 3 && notes == 1 && !strcmp(noted, "flood"));
     }
+
+    /* Limits: the retail numbers until a mod says; the latest mod wins
+     * each; past what the game keeps is held there with a note; a
+     * duelist's own LP before its side's, before "start". */
+    Tables_Clear();
+    assert(Tables_StatCap(0) == 9999 && Tables_StatCap(1) == 9999 && Tables_StatCapEither() == 9999);
+    assert(Tables_StartingLifePoints(0, 8, 8000) == 8000 && Tables_StartingLifePoints(1, -1, 4000) == 4000);
+    assert(Tables_MaxLifePoints(8000) == 8000 && Tables_MaxLifePoints(3000) == 3000);
+    assert(Tables_TwoPlayerLifePoints(TABLES_TWO_PLAYER_START, 8000) == 8000);
+    assert(Tables_TwoPlayerLifePoints(TABLES_TWO_PLAYER_MAX, 8000) == 8000);
+    assert(Tables_TwoPlayerLifePoints(TABLES_TWO_PLAYER_STEP, 500) == 500);
+    assert(Tables_StarchipCap() == 999999 && Tables_FreeDuelRecordCap() == 999 && Tables_ChestLimit() == 250);
+    assert(Tables_Limit("attack") == 9999 && Tables_Limit("life_points_max") == 0 && Tables_Limit("nothing") == -1);
+    notes = 0;
+    add("lim1", "{\"limits\": {\"stats\": 30000, \"defense\": 20000, \"life_points\": 16000,"
+                " \"starchips\": 5000000, \"chest\": 99, \"free_duel_record\": 9999}}");
+    assert(notes == 0);
+    assert(Tables_StatCap(0) == 30000 && Tables_StatCap(1) == 20000 && Tables_StatCapEither() == 30000);
+    assert(Tables_StartingLifePoints(0, 8, 8000) == 16000 && Tables_StartingLifePoints(1, 8, 8000) == 16000);
+    assert(Tables_StartingLifePoints(0, -1, 8000) == 16000);   /* two-player duels too */
+    assert(Tables_MaxLifePoints(16000) == 16000 && Tables_StarchipCap() == 5000000);
+    assert(Tables_ChestLimit() == 99 && Tables_FreeDuelRecordCap() == 9999 && Tables_Limit("defense") == 20000);
+    add("lim2", "{\"limits\": {\"attack\": 0, \"life_points\": {\"player\": 4000, \"max\": 32767,"
+                " \"duelists\": {\"Heishin\": 12000, \"Seto\": {\"player\": 100, \"opponent\": 200},"
+                " \"all\": {\"player\": 7000}}},"
+                " \"two_player\": {\"start\": 9000, \"max\": 20000, \"step\": 1000}}}");
+    assert(notes == 0);
+    assert(Tables_StatCap(0) == 0 && Tables_StatCap(1) == 20000);
+    assert(Tables_StartingLifePoints(1, 8, 8000) == 12000);  /* Heishin's own */
+    assert(Tables_StartingLifePoints(0, 8, 8000) == 7000);   /* "all" of them, before the side's */
+    assert(Tables_StartingLifePoints(0, 7, 8000) == 100 && Tables_StartingLifePoints(1, 7, 8000) == 200);
+    assert(Tables_StartingLifePoints(1, 9, 8000) == 16000);  /* the opponent's side, from lim1's start */
+    assert(Tables_StartingLifePoints(0, -1, 8000) == 4000);  /* a two-player duel has no duelist */
+    assert(Tables_MaxLifePoints(4000) == 32767 && Tables_Limit("life_points_max") == 32767);
+    assert(Tables_TwoPlayerLifePoints(TABLES_TWO_PLAYER_START, 8000) == 9000);
+    assert(Tables_TwoPlayerLifePoints(TABLES_TWO_PLAYER_MAX, 8000) == 20000);
+    assert(Tables_TwoPlayerLifePoints(TABLES_TWO_PLAYER_STEP, 500) == 1000);
+    /* Past the storage: held at the most the game keeps, with a note each;
+     * the wrong kind of value is left out with one. */
+    notes = 0;
+    add("lim3", "{\"limits\": {\"stats\": 40000, \"life_points\": {\"start\": 99999, \"max\": 0},"
+                " \"two_player\": {\"start\": 30000, \"max\": 25000}, \"chest\": 300,"
+                " \"starchips\": 123456789, \"free_duel_record\": \"lots\", \"lp\": 3}}");
+    assert(notes == 7);   /* stats, start, max 0, chest, starchips, "lots", "lp" */
+    assert(Tables_StatCap(0) == 32767 && Tables_StatCap(1) == 32767);
+    assert(Tables_StartingLifePoints(1, 9, 8000) == 32767 && Tables_MaxLifePoints(8000) == 32767);
+    assert(Tables_ChestLimit() == 255 && Tables_StarchipCap() == 99999999u && Tables_FreeDuelRecordCap() == 9999);
+    assert(Tables_TwoPlayerLifePoints(TABLES_TWO_PLAYER_START, 8000) == 25000);   /* held at the top */
+    /* A top under the disc's start or the step: both are held at it. */
+    add("lim3b", "{\"limits\": {\"two_player\": {\"max\": 4000, \"step\": 10000}}}");
+    assert(Tables_TwoPlayerLifePoints(TABLES_TWO_PLAYER_START, 8000) == 4000);
+    assert(Tables_TwoPlayerLifePoints(TABLES_TWO_PLAYER_STEP, 500) == 4000);
+    notes = 0;
+    add("lim4", "{\"limits\": {\"life_points\": {\"duelists\": {\"Nobody\": 5, \"Heishin\": [1]}},"
+                " \"two_player\": 3}}");
+    assert(notes == 3);
+    add("lim5", "{\"limits\": {\"starchips\": 0}}");
+    assert(Tables_StarchipCap() == 0);
+    add("lim6", "{\"limits\": 5}");
+    assert(notes == 4);
+    /* A key misspelt inside life_points or two_player is said too. */
+    add("lim7", "{\"limits\": {\"life_points\": {\"strat\": 9000}, \"two_player\": {\"stpe\": 100}}}");
+    assert(notes == 6 && Tables_StartingLifePoints(1, 9, 8000) == 32767);
+
+    Tables_Clear();
+    assert(Tables_StatCap(0) == 9999 && Tables_StartingLifePoints(1, 8, 8000) == 8000);
+    assert(Tables_MaxLifePoints(8000) == 8000 && Tables_StarchipCap() == 999999 && Tables_ChestLimit() == 250);
+    assert(Tables_TwoPlayerLifePoints(TABLES_TWO_PLAYER_MAX, 8000) == 8000 && Tables_FreeDuelRecordCap() == 999);
 
     Tables_Clear();
     {

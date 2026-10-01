@@ -47,10 +47,19 @@ static Rect rect(int x, int y, int w, int h)
 static int inside(Rect r, int x, int y) { return x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h; }
 static int max(int a, int b) { return a > b ? a : b; }
 static int min(int a, int b) { return a < b ? a : b; }
+static int wrap(MenuCanvas *c, int x, int y, int w, const char *s, unsigned colour);
+/* The lines a status too long for one (a save's path and reason) needs
+ * beyond the first; the footer grows by them. */
+static int status_extra(void)
+{
+    if (!*status || width_text(status) <= width - 40 * unit)
+        return 0;
+    return min(max(wrap(NULL, 0, 0, width - 40 * unit, status, 0) / LINE, 1), 6) - 1;
+}
 static void layout(Layout *l)
 {
-    int p = 20 * unit, gap = 16 * unit, left = width * 36 / 100, footer = height - 72 * unit, top = 142 * unit, right,
-        view_top;
+    int p = 20 * unit, gap = 16 * unit, left = width * 36 / 100, footer = height - 72 * unit - status_extra() * LINE,
+        top = 142 * unit, right, view_top;
     l->search = rect(p, 64 * unit, left - p, 32 * unit);
     l->filter = rect(p, 104 * unit, left - p, 28 * unit);
     l->list = rect(p, top, left - p, footer - top - 12 * unit);
@@ -418,7 +427,7 @@ void ModsWindow_Draw(MenuCanvas *c)
 {
     Layout l;
     char line[512];
-    int enabled = 0, list_bar;
+    int enabled = 0, list_bar, extra;
     layout(&l);
     fill(c, rect(0, 0, c->width, c->height), BG);
     for (int i = 0; i < Mods_Count(); i++)
@@ -498,9 +507,13 @@ void ModsWindow_Draw(MenuCanvas *c)
     } else
         text(c, l.detail.x + 20 * unit, l.detail.y + 30 * unit, l.detail.w - 40 * unit,
              "Select a mod to view its details", DIM);
-    fill(c, rect(0, height - 72 * unit, width, 1), EDGE);
-    text(c, 20 * unit, height - 59 * unit, width - 40 * unit,
-         *status ? status : "Changes are staged. Apply once when you are ready.", pending ? WARN : DIM);
+    extra = status_extra() * LINE;
+    fill(c, rect(0, height - 72 * unit - extra, width, 1), EDGE);
+    if (extra) /* the last line where a one-line status goes */
+        wrap(c, 20 * unit, height - 59 * unit - extra - LINE / 2, width - 40 * unit, status, pending ? WARN : DIM);
+    else
+        text(c, 20 * unit, height - 59 * unit, width - 40 * unit,
+             *status ? status : "Changes are staged. Apply once when you are ready.", pending ? WARN : DIM);
     text(c, 20 * unit, height - 32 * unit, l.folder.x - 28 * unit,
          "Arrow keys: select / toggle   Tab: search   Mouse wheel: scroll", DIM);
     button(c, l.folder, "Open mods folder", 0);
@@ -634,12 +647,16 @@ static void adjust(int option, int direction)
             bit++;
         bit = (bit + direction + 17) % 17;
         value = bit == 16 ? 0 : 1 << bit;
+    } else if (!strcmp(type, "choice")) {
+        /* A closed, named set of options, the same as "key"'s pad buttons
+         * are: wraps around rather than clamping, so either arrow always
+         * does something, never leaving a press at either end with nothing
+         * to do but press the other way. Unlike a plain int (below), there
+         * is no meaningful "one past the end" to stop at. */
+        int count = Json_Count(Json_Member(spec, "choices"));
+        if (count > 0)
+            value = ((value + (direction > 0 ? 1 : -1)) % count + count) % count;
     } else {
-        if (!strcmp(type, "choice")) {
-            low = 0;
-            high = Json_Count(Json_Member(spec, "choices")) - 1;
-            step = 1;
-        }
         int64_t next = (int64_t)value + (direction > 0 ? step : -step);
         value = next > high ? high : next < low ? low : (int)next;
     }
@@ -834,11 +851,16 @@ int ModsWindow_Event(const MenuEvent *e)
                         wanted[mod] = !wanted[mod];
                 }
             }
-            if (inside(l.save, e->x, e->y))
-                snprintf(status, sizeof(status), "%s",
-                         changed()                   ? "Apply your changes before saving a profile."
-                         : Mods_ProfileSave(profile) ? "Profile saved."
-                                                     : "Could not save profile; use a simple name.");
+            if (inside(l.save, e->x, e->y)) {
+                if (changed())
+                    snprintf(status, sizeof(status), "Apply your changes before saving a profile.");
+                else if (Mods_ProfileSave(profile))
+                    snprintf(status, sizeof(status), "Profile saved.");
+                else if (*Mods_ProfileSaveError())
+                    snprintf(status, sizeof(status), "Could not save the profile to %s", Mods_ProfileSaveError());
+                else
+                    snprintf(status, sizeof(status), "Could not save profile; use a simple name.");
+            }
             if (inside(l.load, e->x, e->y)) {
                 if (Mods_ProfileRead(profile, wanted)) {
                     for (int i = 0; i < Mods_Count(); i++) {

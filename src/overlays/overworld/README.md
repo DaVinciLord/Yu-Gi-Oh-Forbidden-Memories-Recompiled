@@ -42,6 +42,21 @@ Their `_functions.csv` inventories track per-function status, while their
 separate `_matching_c.json` manifests map accepted source/profile pairs.
 `make match-overlays` remains the exact-byte gate.
 
+## The location table in the PC port
+
+`location_table.c` initializes `gCampaignMap_aLocationTable` for the console
+build only. Under `MEMORIES_PC` it is a tentative definition, which
+`tools/pc/build_game32.py` pins to its guest address `0x801691A8` like any
+other variable the game C leaves undefined, so the port reads the 1056 bytes
+the overworld package delivers from the disc there, as the console does. With
+the retail disc they are the initializer's bytes (the map's frames are the
+same, pixel for pixel); a mod's `data` patch of them (the FM Editor's Map tab,
+[`tools/pc/fm_editor`](../../../tools/pc/fm_editor/README.md)) changes the
+map. The package is `WA_MRG.MRG` sectors `8153` (before the coup) or `8311`
+(after, flag `0x47`), and the table starts `0x11A8` bytes into either. The
+alternate table at `0x1E54` holds the same bytes; no reader of it has been
+found on the paths the map takes, so the port leaves it initialized in C.
+
 ## Active location lifecycle translation unit
 
 `set_location.c` contains all thirteen matched functions in the active

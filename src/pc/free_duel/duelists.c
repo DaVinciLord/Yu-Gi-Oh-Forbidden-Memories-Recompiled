@@ -384,21 +384,25 @@ int Duelists_Unlocked(const void *state, int duelist)
      * conditions to is answered here instead, and the screen leaves its flag
      * alone (Duelists_HasUnlock). */
     if (!one || !one->has_unlock) return 1;
-    if (!state) return 0;
+    return Duelists_ConditionsMet(state, one->beat, one->wins, one->story, one->card, one->copies);
+}
 
-    if (one->story >= 0 && Campaign_TestStoryFlag(one->story) == 0) return 0;
-    if (one->beat[0]) {
+int Duelists_ConditionsMet(const void *state, const char *beat, int wins, int story, const char *card, int copies)
+{
+    if (!state) return 0;
+    if (story >= 0 && Campaign_TestStoryFlag(story) == 0) return 0;
+    if (beat && beat[0]) {
         /* A duelist that is not here this run -- its mod was turned off, or
          * the name is a misspelling -- leaves the condition unmet rather than
          * met, so a roster never opens up by accident. */
-        const int against = Duelists_Named(one->beat);
-        if (against < 0 || wins_against(state, against) < (one->wins > 0 ? one->wins : 1)) return 0;
-    } else if (one->wins > 0 && wins_against(state, -1) < one->wins) {
+        const int against = Duelists_Named(beat);
+        if (against < 0 || wins_against(state, against) < (wins > 0 ? wins : 1)) return 0;
+    } else if (wins > 0 && wins_against(state, -1) < wins) {
         return 0;
     }
-    if (one->card[0]) {
-        const int card = Cards_Named(one->card);
-        if (card <= 0 || copies_held((void *)state, card) < (one->copies > 0 ? one->copies : 1)) return 0;
+    if (card && card[0]) {
+        const int id = Cards_Named(card);
+        if (id <= 0 || copies_held((void *)state, id) < (copies > 0 ? copies : 1)) return 0;
     }
     return 1;
 }
@@ -573,10 +577,13 @@ void Duelists_SaveWritten(const void *state, unsigned sequence)
     slash = strrchr(directory, '/');
     if (slash) { *slash = '\0'; Paths_MakeDirs(directory); }
     snprintf(temporary, sizeof temporary, "%s.tmp", path);
+    Paths_WriteBegin();
     out = fopen(temporary, "w");
     if (!out) {
+        char why[1200];
+        Paths_WriteError(why, sizeof why, path);
         if (in) fclose(in);
-        fprintf(stderr, "memories-pc: cannot write %s\n", temporary);
+        fprintf(stderr, "memories-pc: cannot write %s\n", why);
         return;
     }
 
@@ -601,8 +608,10 @@ void Duelists_SaveWritten(const void *state, unsigned sequence)
         int failed = ferror(out);
         if (fclose(out)) failed = 1;
         if (failed || rename(temporary, path)) {
+            char why[1200];
+            Paths_WriteError(why, sizeof why, path); /* before remove() changes the reason */
             remove(temporary);
-            fprintf(stderr, "memories-pc: cannot replace %s\n", path);
+            fprintf(stderr, "memories-pc: cannot replace %s\n", why);
         }
     }
 }

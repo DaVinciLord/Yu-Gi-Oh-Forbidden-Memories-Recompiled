@@ -10,7 +10,9 @@ import zipfile
 def check_exe(image):
     """The shipped .exe: stripped (tools/pc/package.py strip) and with a
     resource section (version information), since virus scanners flag data
-    after the last section and programs that say nothing about themselves."""
+    after the last section and programs that say nothing about themselves.
+    Its PDB is named without the builder's path: Bitdefender flagged the CI
+    builds, whose path was the GitHub runner's D:/a/..."""
     header = struct.unpack_from("<I", image, 0x3C)[0]
     sections, _, symbols, symbol_count, optional = struct.unpack_from("<HIIIH", image, header + 6)
     table = header + 24 + optional
@@ -23,6 +25,24 @@ def check_exe(image):
     assert symbols == 0 and symbol_count == 0, "memories-pc.exe keeps its COFF symbol table"
     assert len(image) == end, f"memories-pc.exe has {len(image) - end} bytes after its last section"
     assert b".rsrc" in names, "memories-pc.exe has no resources (version information)"
+    marker = image.find(b"RSDS")
+    assert marker >= 0, "memories-pc.exe has no CodeView record"
+    pdb = image[marker + 24:image.index(b"\0", marker + 24)]
+    assert pdb == b"memories-pc.pdb", f"memories-pc.exe names its PDB {pdb!r}, not by bare name"
+    # What v0.1.4-preview.1 gained and 11 engines' models held against it
+    # (notes/pc-release.md): DEP-policy imports and the executable-guest-RAM
+    # test path, which a release leaves out (MEMORIES_TEST_HOOKS).
+    for name in (b"SetProcessDEPPolicy", b"GetProcessDEPPolicy", b"GetSystemDEPPolicy", b"MEMORIES_TEST_EXEC_GUEST"):
+        assert name not in image, f"memories-pc.exe contains {name.decode()}"
+    # The PE checksum package.py fills in after the strip: ImageHlp's sum
+    # of the file's 16-bit words (its own field as 0), folded, plus the length.
+    field = header + 24 + 64
+    stored = struct.unpack_from("<I", image, field)[0]
+    padded = image[:field] + bytes(4) + image[field + 4:] + bytes(len(image) % 2)
+    total = sum(struct.unpack(f"<{len(padded) // 2}H", padded))
+    while total >> 16:
+        total = (total & 0xFFFF) + (total >> 16)
+    assert stored == total + len(image), f"memories-pc.exe's PE checksum is {stored:#x}, not {total + len(image):#x}"
 
 
 def check(path):

@@ -299,10 +299,7 @@ static int store(void)
     SaveSlots_StateName((const unsigned char *)&workspace()->state, name, sizeof(name));
     snprintf(comment, sizeof(comment), "Deck slots of %s (duelist code %08X), kept by the PC port.",
              name[0] ? name : "(no name)", (unsigned)draft.code);
-    if (DeckSlots_Write(path, draft.slots, identity, comment)) {
-        fprintf(stderr, "memories-pc: cannot write %s\n", path);
-        return -1;
-    }
+    if (DeckSlots_Write(path, draft.slots, identity, comment)) return -1; /* it says where and why */
     return 0;
 }
 

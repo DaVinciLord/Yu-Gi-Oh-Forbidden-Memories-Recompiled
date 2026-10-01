@@ -30,6 +30,7 @@
 #include "../../game/func_80029574.h"
 #ifdef MEMORIES_PC
 #include "pc/debug/cheats.h"
+#include "pc/cards/pack_shop.h"
 #endif
 #include "../../game/duel_effect_resource_setup.h"
 #include "../../game/text_box_lifecycle.h"
@@ -137,6 +138,10 @@ void Password_UpdateDigitCursorDecoration(u8 *object)
 {
     PasswordCursorView *obj = (PasswordCursorView *)object;
 
+#ifdef MEMORIES_PC
+    /* The card packs' list: the arrows are its (pack_shop.h). */
+    if (PackShop_Decoration(object)) return;
+#endif
     switch (obj->kind) {
     case 0:
         obj->flags |= DISPLAY_OBJECT_FLAG_RENDERABLE;
@@ -191,7 +196,7 @@ void Password_InitShopScreen(void)
     s32 i;
     DisplayObject *o;
     DuelEffectResourceRecord *cardCache;
-    DisplayObject **slot;
+    DisplayObject *G32 *slot;
     DisplayObjectCallback hook;
     u8 *p;
 
@@ -347,6 +352,12 @@ void Password_UpdateShopScreen(void)
             Password_RefreshDigitDisplay();
             return;
         }
+#ifdef MEMORIES_PC
+        /* △: the card packs a mod sells (pack_shop.h). */
+        if (PackShop_Triangle()) {
+            return;
+        }
+#endif
         if ((gInput_wPad1Pressed & PAD_BUTTON_CANCEL) != 0) {
             SD_SEPlayFull(8);
             SD_BGMFadeOut();
@@ -358,6 +369,12 @@ void Password_UpdateShopScreen(void)
             card = Password_LookupCardID();
             D_8016D4DC = card;
             if (card == 0) {
+#ifdef MEMORIES_PC
+                /* No card's: a pack's password? (pack_shop.h) */
+                if (PackShop_Password()) {
+                    return;
+                }
+#endif
                 SD_SEPlayFull(9);
                 return;
             }
@@ -487,5 +504,11 @@ void Password_UpdateShopScreen(void)
             D_8016D424 = 0;
         }
         return;
+#ifdef MEMORIES_PC
+    default:
+        /* The card packs' own states, 5 on (pack_shop.h). */
+        PackShop_Update(state);
+        return;
+#endif
     }
 }

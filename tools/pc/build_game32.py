@@ -124,8 +124,16 @@ NATIVE = sorted(glob.glob("src/pc/guest/*.[cS]") + glob.glob("src/pc/sdk/*.c") +
 MODULES = [("main_menu", "src/overlays/main_menu/*.c", 0x0F, 0),
            ("password", "src/overlays/password/*.c", 0x15, 0x80168000),
            ("overworld", "src/overlays/overworld/*.c", 0x14, 0x80168000),
-           ("free_duel", "src/overlays/free_duel/*.c", 0x13, 0x80168000)]
+           ("free_duel", "src/overlays/free_duel/*.c", 0x13, 0x80168000),
+           ("duel_effects", "src/overlays/duel_effects/*.c", 0x18, 0x80146000)]
 MODULE_CONFIG = {"overworld": "overworld_before_coup"}
+# Modules entered only through a native gate that checks the delivered bytes
+# first (src/pc/overlays/duel_effects.c): their guest addresses
+# stay out of Memories_FunctionMap, so a call into a modded image is
+# interpreted instead. They must have no variables of their own (theirs stay
+# in guest memory), so they are left out of the module registry too, which
+# would otherwise tell the interpreter their range holds native code.
+GATED_MODULES = {"duel_effects"}
 
 # Save states outlive native rebuilds because everything a state can point at
 # in the game objects stays put (src/pc/guest/state.h): their code and
@@ -149,9 +157,24 @@ def run(command):
         sys.exit(f"{' '.join(command[:6])} ...\n{result.stderr}")
     return result.stdout
 
+def flags_changed(path, flags):
+    """When these flags were last different: path keeps them, rewritten
+    only when they change, so its time is when they did (--release adds or
+    drops one, in the same build directory)."""
+    text = "\n".join(flags) + "\n"
+    try:
+        with open(path) as handle:
+            same = handle.read() == text
+    except OSError:
+        same = False
+    if not same:
+        with open(path, "w") as handle:
+            handle.write(text)
+    return os.path.getmtime(path)
+
 def compile_unit(job):
-    source, obj, flags, renames = job
-    if os.path.exists(obj) and os.path.getmtime(obj) >= NEWEST_HEADER and \
+    source, obj, flags, renames, newest = job
+    if os.path.exists(obj) and os.path.getmtime(obj) >= newest and \
             os.path.getmtime(obj) >= os.path.getmtime(source):
         return
     run([CC, *flags, "-c", source, "-o", obj])
@@ -621,8 +644,14 @@ def main():
                 if line.split():
                     out.write(" ".join(PREFIX + name for name in line.split()) + "\n")
         renames_file = f"{options.build}/host_symbol_renames.txt"
-    jobs = [(s, obj(s), CFLAGS, renames_file) for s in game]
-    jobs += [(s, obj(s), NATIVE_CFLAGS, None) for s in NATIVE]
+    # Test-only paths (MEMORIES_TEST_EXEC_GUEST, src/pc/guest/image.c) are
+    # left out of a release: virus scanners' heuristics hold executable
+    # memory against a program. smoke.py runs them in the other builds.
+    if not options.release:
+        NATIVE_CFLAGS.append("-DMEMORIES_TEST_HOOKS")
+    native_newest = max(NEWEST_HEADER, flags_changed(f"{options.build}/native-flags.txt", NATIVE_CFLAGS))
+    jobs = [(s, obj(s), CFLAGS, renames_file, NEWEST_HEADER) for s in game]
+    jobs += [(s, obj(s), NATIVE_CFLAGS, None, native_newest) for s in NATIVE]
     with concurrent.futures.ThreadPoolExecutor(os.cpu_count()) as pool:
         list(pool.map(compile_unit, jobs))
 
@@ -645,6 +674,10 @@ def main():
                   if symbol in module_elf[name] and symbol not in resident_defined and any(
                       places.get(symbol, module_elf[name][symbol]) != module_elf[name][symbol]
                       for places in [resident_elf] + [module_elf[o] for o in others])}
+        if name in GATED_MODULES:
+            # Everything it defines: a resident call by the retail name (the
+            # credits' func_801807B0) must still reach the gate at that address.
+            clash |= defined | common
         renamed[name] = {symbol: f"{name}__{symbol}" for symbol in clash if not symbol.startswith(f"{name}__")}
         for source in module_sources[name]:
             command = [OBJCOPY]
@@ -661,6 +694,12 @@ def main():
                 run(command + [obj(source)])
         headers_text = run([OBJDUMP, "-h", *[obj(s) for s in module_sources[name]]])
         sections[name] = [kind for kind in ("data", "bss") if f"ovl_{name}_{kind}" in headers_text]
+        # A tentative definition (-fcommon) is in no section yet: it would
+        # become host data the image never sees, so it counts too.
+        if name in GATED_MODULES and (common or any(
+                len(parts) > 2 and parts[1].startswith(f"ovl_{name}_") and int(parts[2], 16)
+                for parts in (line.split() for line in headers_text.splitlines()))):
+            sys.exit(f"{name}: a gated module with variables of its own")
 
     for source in game if WINDOWS else []:
         rename_coff_sections(obj(source), {".text": "game_text$m", ".rdata": "game_rodata$m",
@@ -696,7 +735,8 @@ def main():
             for row in csv.DictReader(handle):
                 row["name"] = renamed.get(name, {}).get(row["name"], row["name"])
                 row["bank"], row["identifier"] = bank, identifier if bank else 0
-                overlay_rows.append(row)
+                if name not in GATED_MODULES:
+                    overlay_rows.append(row)
     by_address = {int(row["address"], 16): row["name"] for row in rows}
     addresses = dict(resident_elf)
     for name, _, _, _ in MODULES:
@@ -824,7 +864,8 @@ def main():
         handle.writelines(f"    {{0x{address:08X}u, {name}, 0x{bank:08X}u, 0x{identifier:X}u}},\n"
                           for address, name, bank, identifier in mapped)
         handle.write(f"}};\nconst unsigned Memories_FunctionMapCount = {len(mapped)};\n")
-        shared = [(name, identifier, bank) for name, _, identifier, bank in MODULES if bank]
+        shared = [(name, identifier, bank) for name, _, identifier, bank in MODULES
+                  if bank and name not in GATED_MODULES]
         for name, _, _ in shared:
             for kind in sections[name]:
                 handle.write(f"extern char __start_ovl_{name}_{kind}[], __stop_ovl_{name}_{kind}[];\n")
@@ -854,8 +895,11 @@ def main():
         # -debug:symtab keeps the COFF symbol table beside the PDB (--pdb
         # alone drops it): the save-state tables below are read from it
         # with nm, and an empty one gave every build the same id.
+        # -pdbaltpath records the PDB by bare name, not the builder's path:
+        # the GitHub runner's D:/a/... path was enough for Bitdefender to
+        # flag the CI builds (Gen:Variant.Yogi) when local ones passed.
         run([CC, *(["-mwindows"] if options.release else []), "-o", output, f"-Wl,--pdb={options.build}/memories-pc.pdb",
-             "-Wl,-Xlink=-debug:symtab",
+             "-Wl,-Xlink=-debug:symtab", "-Wl,-Xlink=-pdbaltpath:%_PDB%",
              "-Wl,--large-address-aware", "-Wl,--disable-dynamicbase", "-Wl,--nxcompat",
              "-Wl,--allow-multiple-definition", f"{options.build}/guest_symbols.o",
              *[obj(s) for s in NATIVE + game], f"{options.build}/stubs.o", guest_branches, f"{options.build}/mod_exports.o",

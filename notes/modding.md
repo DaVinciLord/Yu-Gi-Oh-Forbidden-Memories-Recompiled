@@ -64,7 +64,11 @@ editors write, is fine):
 | `equip_bonus_default` | what an equip adds when no `equips` entry sets its bonus, below |
 | `trap_thresholds` | the attack each of the six attack traps stops, below |
 | `passwords` | each card's password and starchip price on the Password screen, below |
+| `limits` | the numbers the game caps (ATK and DEF, life points, starchips, the chest, the records), below |
+| `guardian_stars` | the stars' names and icons, stars 11 to 15, and what each star gets against each other, below |
 | `starter` | the forty cards a new game begins with, one deck or a list of them, below |
+| `packs`, `pack_shop` | card packs sold for starchips on the Password screen, and the shop's rules, below |
+| `title`, `menu` | the title screen, and its two menus: their entries, buttons of the mod's own and their background, below |
 | `text`, `font` | a translation of the game's text, and fonts for letters it has none of, below |
 
 `version`, `author` and `description` are displayed in the manager. Version
@@ -127,6 +131,27 @@ path (`"\\DATA\\CARD.MRG;1"`, as the game asks for it) or a raw sector
   crosses a sector boundary is fine. This is the shape the community's
   hex-editor tutorials are written in, so their offsets carry over directly
   (`modding-tutorial-gameplay-patches.md`).
+
+Most of what the game's overlays hold is compiled into the port, so a patch
+of an overlay's bytes on the disc reaches the port only where the port reads
+them from memory as the console does. The campaign map's table of places,
+exits, marker positions and cameras is one: it is read where the overworld
+package puts it (`src/overlays/overworld/README.md`), so a patch of
+`WA_MRG.MRG` at `0xFEC800 + 0x11A8` and `0x103B800 + 0x11A8` (before and after
+the coup, 16 records of 66 bytes, `notes/overlays/campaign-map-records.md`)
+changes the map. The FM Editor's Map tab writes those patches
+([tools/pc/fm_editor](../tools/pc/fm_editor/README.md)). A save state holds the
+table as it was in memory, so a state made without the map mod shows the
+disc's map after loading, even with the mod on, until the game enters the map
+again (`Main_RunCampaignMap` reads the overworld package each time it does).
+
+The duel-effect bank is the other way round: it runs as native C only while
+its bytes are the disc's. A disc patch that changes it is seen when the
+package is read, and the delivered MIPS then runs in the interpreter, patch
+included (`notes/pc-build.md`). The check happens at that read only, so a
+code mod that writes into the bank's memory itself, after it is loaded, is
+not seen and the native C still runs; such a mod patches the disc instead,
+or sets `MEMORIES_DUEL_EFFECTS=interpreter` while it is developed.
 
 Named patches may address the expanded tail. They are checked against the
 final selected replacement; a shorter replacement still allows patches
@@ -193,7 +218,9 @@ mod add up. The extracted images themselves are the game's, so a pack
 ships painted images or a way to make them from the player's own disc,
 never the originals. The FM Editor's Art tab
 ([tools/pc/fm_editor](../tools/pc/fm_editor/README.md)) writes such a pack
-for card pictures and thumbnails, a PNG at a time.
+for card pictures and thumbnails, a PNG at a time, and its Map tab for the
+campaign map's sprites (the marker, the arrows, the name panel) and the
+textures of its terrain.
 
 A pack image does not need the extracted image's shape either: it is
 stretched to the texture's width and rows (the crop's width, below), so a
@@ -253,7 +280,8 @@ setting per part in `mod.json` and give each entry of a part its key:
 ```json
 "settings": [
     {"key": "card_art", "label": "Card art", "type": "bool", "default": 1},
-    {"key": "portraits", "label": "Free Duel portraits", "type": "bool", "default": 1}
+    {"key": "portraits", "label": "Free Duel portraits", "type": "bool", "default": 1,
+     "description": "The opponents' pictures on the Free Duel screen."}
 ]
 ```
 
@@ -384,7 +412,8 @@ audio: music 0x10 starts
 audio: xa 0x8020 starts
 ```
 
-Songs known so far: `0x000` is the title screen, `0x010` the main menu.
+Songs known so far: `0x000` is the title screen and both its menus, `0x010`
+name entry after NEW GAME (`NameEntry_Init`).
 A sound effect the game starts every frame is logged every 60th time.
 
 * **music** is the sound driver's song number, `SD_BGMPlay(0x2D0)` is song
@@ -448,6 +477,222 @@ MEMORIES_INPUT="700:0008,706:0000" tmp/pc/game32/memories-pc
 
 `out.raw` is s16le stereo at 44.1 kHz. How it is done:
 [`src/pc/audio/replace.h`](../src/pc/audio/replace.h).
+## The title screen
+
+A mod may change the title screen with a `"title"` object: its song, the
+intro before it, its background, its pictures -- the logo, PUSH START
+BUTTON and the copyright line, moved, coloured or replaced with the mod's
+own -- which menu entries it offers, and lines of text of the mod's own.
+
+```json
+"title": {
+    "music": "0x010",
+    "skip_intro": true,
+    "idle_seconds": 0,
+    "background": {"image": "art/background.png", "dim": 64},
+    "logo": {"image": "art/logo.png"},
+    "prompt": {"image": "art/press-start.png", "y": -4},
+    "copyright": {"tint": "#FFD060"},
+    "entries": {"duel": {"hide": true}, "trade": {"hide": true},
+                "options": {"tint": "#FF8080"}},
+    "text": [{"text": "My mod 1.2", "x": 316, "y": 232, "align": "right"},
+             {"text": "Press START", "y": 12, "show": "press_start", "color": "#FFE040"}]
+}
+```
+
+Nothing on the title is text: the logo, PUSH START BUTTON, the copyright
+line and every menu entry are pictures from `SU.MRG`. The background and
+the three pictures take an `"image"` of the mod's own (below); the menu
+entries' words are changed by a texture pack of the `sheets/menu` images
+(above). Places are in the game's 320 x 240 picture, which grows with the
+window and stays centred in widescreen.
+
+| Key | Meaning |
+|---|---|
+| `music` | the song the title plays (retail `0x000`); an `audio` entry replaces a song's sound, this picks another song |
+| `skip_intro` | `true`: go past the intro movie to the title at start-up and after a title jump |
+| `press_start` | `false`: open on the menu, without PUSH START BUTTON |
+| `idle_seconds` | seconds at PUSH START BUTTON before the intro plays again, `0` never (retail a little under a minute) |
+| `background` | `image` (a PNG drawn over the whole screen instead of the hieroglyph wall), `picture` and `shade` (`false` leaves out the wall, or the mod's image, and the dark-to-light shade over it), `tint` (the wall's colour, `#FFFFFF` as it is), `color` (a solid colour under them, seen where they are left out or see-through), `dim` (how far the menu darkens the screen, `0` to `128`, retail `128`), `wide` and `wide_image` (widescreen, [below](#widescreen)) |
+| `logo`, `copyright`, `prompt` | the three pictures: the logo, the (c) 1996 line and PUSH START BUTTON. `image` a PNG drawn instead, `width` and `height` its size, `x`, `y` move one from its place (`wide_x`, `wide_y` in widescreen), `tint` colours it, `hide` leaves it out (hiding `prompt` is `"press_start": false`), `show` when: `always`, `press_start` (not while a menu is up) or, for the logo and the copyright line, `menu` (only while one is) |
+| `entries` | the menu entries by name: `new_game`, `load`, `duel`, `trade`, `options` before a game is loaded; `campaign`, `free_duel`, `build_deck`, `library`, `password`, `save` after (or their numbers, 0 to 10). Each may have `hide`, `x` (moved from the middle), `y` (its place) and `tint`, and all the keys of [the menus](#the-titles-menus)' items |
+| `spacing` | how far apart the entries stand (retail 32) |
+| `text` | lines drawn over the title, each `{"text", "x", "y", "align", "color", "size", "show"}`: `x` and `y` its place (default 160, 220, `y` the line's middle; `wide_x`, `wide_y` in widescreen), `align` `left`, `center` or `right` of `x`, `size` 1 to 8 (1 about the game's own letters), `show` `always`, `press_start` or `menu`; at most 16 |
+
+A hidden entry is left out of its menu and the cursor steps over it; the
+others close up, `spacing` apart around the middle of the retail menu,
+unless given their own `y`. A menu with every entry hidden shows them all.
+Hiding `load` hides the way to the second menu too, since loading a save is
+what opens it. The tints multiply the picture's colours, so `#FFFFFF` leaves
+one as it is and a colour can only darken what is there; on PUSH START
+BUTTON the tint goes over its pulse.
+
+Every applied mod's `title` is read in load order each time the title
+opens, a later mod's value winning key by key and the `text` lines of all of
+them shown, so applying or removing a mod shows the next time the title
+opens, with no restart. A key the title does not know, a colour that is not
+`#RRGGBB` or an entry that does not exist is noted beside the mod in the
+Mods window. How it is done: [`src/pc/platform/title_screen.c`](../src/pc/platform/title_screen.c),
+the pictures in `title_images.c`; the manifest is read by `title_config.c`,
+checked by `tests/pc/title_config_test.c`. A code mod that wants more hooks the game's
+own functions (`MainMenu_InitFrontendMenu`, `MainMenu_UpdateFrontendMenu`,
+`MainMenu_DrawFrontendBackground`, API 4).
+
+### The title's pictures
+
+An `image` is a PNG in the mod, named relative to its directory. The
+background's is stretched over the whole 320 x 240 screen, so draw it at
+that shape: 1280 x 960 is four times the console's size. A picture's is
+drawn with its middle where the game's picture has its middle (the logo's
+at 162, 90, PUSH START BUTTON's at 160, 185, the copyright line's at 163,
+207), moved by `x` and `y`. Its size is `width` by `height`, or one of them
+and the PNG's shape; without either, the PNG's own size divided by the
+smallest whole number that makes it fit -- 320 x 240 for the logo, 320 x
+120 for the other two. That guess is right for a picture drawn at the
+console's size, or one as wide as the screen at any multiple of it; for
+anything else, say the size: a PUSH START BUTTON drawn at 4x, 800 x 64,
+wants `"width": 200`. A see-through part of the PNG shows what is under
+it.
+
+At the console's resolution the picture is made into the game's own kind
+of texture, 256 colours with anything under half covered clear, at the size
+it is drawn; at an internal resolution above it (View > Internal 2x, 4x)
+the PNG itself is drawn, at its own resolution and with soft edges, as a
+mod card's art is. It is drawn where the game draws its own, so the menu
+still goes over the logo and dims it, and PUSH START BUTTON still pulses
+(its colour is the game's pulse times its `tint`) and goes when START is
+pressed. A PNG that cannot be read is noted beside the mod, and the game's
+own picture shows. The pictures take VRAM the intro movie uses and the
+title does not, uploaded again each time the title opens.
+
+## The title's menus
+
+The two menus on the title -- the first, after PUSH START BUTTON (NEW GAME,
+LOAD, 2P DUEL, TRADE, OPTION), and the second, once a game is loaded
+(CAMPAIGN to SAVE) -- take a `"menu"` object: buttons of the mod's own, the
+game's entries changed, the order of both, and a background of their own.
+
+```json
+"menu": {
+    "background": {"image": "art/menu.png", "shade": false, "dim": 0},
+    "entries": {"trade": {"hide": true},
+                "options": {"label": "SETTINGS"},
+                "new_game": {"image": "art/new.png", "selected_image": "art/new-on.png"}},
+    "buttons": [
+        {"id": "credits", "label": "CREDITS", "notice": {"title": "Credits", "text": "Made by me."}},
+        {"id": "gallery", "image": "art/gallery.png", "selected_image": "art/gallery-on.png",
+         "action": "event", "value": 1},
+        {"id": "quick", "menu": "second", "label": "QUICK DUEL", "action": "free_duel"}
+    ],
+    "order": {"first": ["new_game", "load", "credits", "gallery", "duel", "options"]}
+}
+```
+
+| Key | Meaning |
+|---|---|
+| `buttons` | buttons the mod adds, at most 16 in all: each an `id` of its own (letters, digits, `_`, `-`), `menu` `first` (the default) or `second`, and the item keys below. A button is known to others as `"<mod id>:<id>"`: a later mod changes or hides one with that as its `id` |
+| `entries` | the game's entries by name, as the title's `entries`, with the item keys below |
+| `order` | the items top to bottom, as the cursor goes: `{"first": [...], "second": [...]}`, or a list alone for the first. A name is an entry's, a button's id (the mod's own) or `"<mod id>:<id>"`; the items it leaves out follow in the game's order, then the buttons as the mods made them. A later mod's list replaces an earlier one's |
+| `spacing` | how far apart the items stand (retail 32; the same as the title's `spacing`) |
+| `background` | the background while a menu is up, as the title's `background` (`image`, `picture`, `shade`, `tint`, `color`, `dim`); what it leaves out is the title's |
+
+Each item -- button or entry -- may have:
+
+| Key | Meaning |
+|---|---|
+| `label` | its words, drawn on a frame in the entries' own look: dark in an olive rim, and red and orange with green letters while the cursor is on it. At most 31 letters, in the serif the card names are set in (Times; the system's sans without it) |
+| `image`, `selected_image` | a PNG drawn instead, and another while the cursor is on it. Without `selected_image` the one picture is drawn darker while the cursor is elsewhere. Sized as the title's pictures are: `width` and `height`, one of them and the PNG's shape, or the PNG's own size divided by the smallest whole number that brings it to 32 rows or fewer -- so a picture drawn at 4 times the entries' 28 rows comes out their size. At most 256 x 64 |
+| `action` | what choosing it does: an entry's name (what that entry does), `back`, `notice`, `quit`, `debug_menu`, `event` or `none`. An entry does its own unless given one; a button without one does nothing, or shows its `notice` |
+| `notice` | the words of a `notice` action's box: text, or `{"title", "text"}` |
+| `value` | a number handed to a code mod with `event` |
+| `hide`, `x`, `y`, `tint` | as the title's entries: left out, moved from the middle (160), its middle's place, its colours multiplied |
+| `wide_x`, `wide_y` | its `x` and `y` in widescreen, [below](#widescreen) |
+
+The actions:
+
+| Action | What it does |
+|---|---|
+| `new_game`, `options` | leaves the title for that, from either menu |
+| `load`, `duel`, `trade` | the game's own dialog for it, in the first menu only |
+| `campaign`, `free_duel`, `build_deck`, `library`, `password`, `save` | need a game loaded: in the second menu only |
+| `back` | the first menu back to PUSH START BUTTON (a buzz when the title has none), the second back to the first, as Circle does |
+| `notice` | a box over the picture with the item's `notice` and OK |
+| `quit` | asks, then quits the game |
+| `debug_menu` | the game's own debug menu |
+| `event` | nothing but a code mod's `MEMORIES_EVENT_MENU` (below); a buzz when no mod takes it |
+| `none` | a buzz |
+
+An action a menu cannot take -- `campaign` in the first, say -- is noted
+beside the mod and does nothing. The items drawn by the port (the ones
+with a `label` or an `image`) slide in and out as the game's entries do,
+from alternate sides, leaving the same afterimages; the game's own entries
+are the game's sprites still, and a texture pack of `sheets/menu` changes
+their words. Places are in the game's 320 x 240, as on the title. The shown
+items stand `spacing` apart around the middle of the retail menu, closer
+together when they would not fit between y 16 and 204; a `y` of the mod's
+own stands. Fresh from PUSH START BUTTON the first menu opens on its top
+row; back from a screen a choice opened, on the item it was chosen from.
+
+A label's frame is made once as a PNG four times its size, under the user
+directory's `cache/menu-labels/`, and like an `image` is drawn at the
+console's resolution as the game's own kind of texture and above it
+(View > Internal 2x, 4x) from the PNG itself. The items' pictures share the
+VRAM the title's pictures leave: about a dozen items with two pictures
+each, more when the title has no background or logo picture of the mod's
+own; one that finds no room is noted beside the mod.
+
+### Widescreen
+
+With View > Aspect at 16:9 the picture is 4/3 as wide: 54 of the game's
+pixels more on either side of its 320, from x -54 to 374. By default the
+title and its menus stay the game's 4:3 between black sides. A mod that
+wants the room says so:
+
+```json
+"title": {"background": {"wide": true}},
+"menu": {
+    "background": {"image": "art/menu.png", "wide_image": "art/menu-wide.png"},
+    "buttons": [{"id": "credits", "label": "CREDITS", "x": 0, "wide_x": 150}]
+}
+```
+
+- **`wide`** on a `background` fills the sides: the game's hieroglyph wall
+  tiles on into them, and the shade, the solid colour and the menu's
+  dimming widen with it. A 4:3 `image` is never stretched: it stays in the
+  middle with the background's `color` (or black) beside it.
+- **`wide_image`** is the background's picture for widescreen, drawn over
+  the whole 428 x 240 (draw it at 1712 x 960, four times that); giving one
+  turns `wide` on. The menus' background without one of its own uses the
+  title's, unless it has a 4:3 `image` of its own.
+- **`wide_x`, `wide_y`** are a second place, used instead of `x` and `y`
+  while widescreen is on: on the menus' items (an offset from the middle and
+  a middle, as `x` and `y` are), the logo, copyright and PUSH START BUTTON,
+  and the `text` lines. What is left out keeps its 4:3 place (an item
+  without `wide_y` its stacked one), so a mod can move only what it wants.
+
+Items drawn by the port (a `label` or an `image`) can go right into the
+sides. The game's own entries are sprites, which the widened picture clips
+to the middle 320, so move an entry into the sides by giving it a picture
+or a label. Turning widescreen on or off with the menu up moves the items
+at once; the logo, copyright and PUSH START BUTTON, when the title opens
+next.
+
+A code mod takes a choice with `MEMORIES_EVENT_MENU` (API 9, [the API 3
+guide](mod-api-3.md)): `a` the item (0 to 10 the entries, as
+`MainMenuSelection`; 11 on the buttons, `host->menu_item(host, a)` names
+it, `"my-mod:gallery"`), `b` the menu, `c` its `value`. Before, it may
+handle it instead of the item's action, and set `result` to a choice the
+title then slides out with and returns -- one of the game's, or a number of
+the mod's own that its `MEMORIES_EVENT_SCENE` hook acts on (with `a` that
+number); unhandled, a number the game does not know opens the debug menu.
+The title comes back to the menu the choice was made in, on its item.
+
+Every applied mod's `menu` is read with its `title`, each time the title
+opens. How it is done: [`src/pc/platform/title_menu.c`](../src/pc/platform/title_menu.c)
+(the cursor, the actions, the slides), the pictures in `title_images.c`,
+the labels in `menu_label.c`; the manifest is read by `title_config.c` and
+checked by `tests/pc/title_config_test.c`.
+
 ## Rules: fusions, equips, rituals, drops, decks and more
 
 A mod may change what fuses into what, what an equip card may equip, what a
@@ -476,17 +721,130 @@ set what it adds, in place of the disc's +500, and a top-level
 the attack each attack trap springs on.
 `"passwords": {"Blue-eyes White Dragon": {"password": "00000001", "starchips": 100}}`
 sets what the Password screen takes for a card and what it costs;
-`"all": {"password": "card number", "starchips_percent": 10}` does every card. These are the rules a community mod
+`"all": {"password": "card number", "starchips_percent": 10}` does every card.
+`"limits": {"stats": 30000, "life_points": 16000}` raises the ATK and DEF cap
+and the life points a duel starts with; `limits` also sets how far healing
+goes, each side's and each duelist's LP, the two-player LP choice, the most
+starchips, the chest and the Free Duel record, up to what the game keeps
+them in (32767 for ATK, DEF and LP), and the duel's numbers take a fifth
+digit where they need one. These are the rules a community mod
 such as The Wicked Gods changes in its code; with them it plays close to its
 own rules without C. The Wicked Gods also makes a monster's attribute count on
-a terrain, lets monsters be equips and raises the stat cap to 30000: those
-need a code mod or the port itself. Several mods' edits of the same opponent add up rather than
-replace each other. [Gameplay tables](gameplay-tables.md) has every key, the
+a terrain and lets monsters be equips: those need a code mod or the port
+itself. Several mods' edits of the same opponent add up rather than
+replace each other. A fusion, equip or ritual entry with `"setting"` is
+read only while that setting of the mod is on, so the player can switch
+groups of rules in the Mods window. [Gameplay tables](gameplay-tables.md) has every key, the
 opponents' names, and how the rules combine. Like cards, they need a restart.
 
 The [FM Editor](../tools/pc/fm_editor/README.md) (`python tools/pc/fm_editor`)
 reads these tables and the cards out of the player's own game files and
 writes a mod folder whose `mod.json` holds only what was changed.
+
+## Guardian Stars: names, icons, new stars and matchups
+
+The disc has ten stars in two cycles (Mars, Jupiter, Saturn, Uranus, Pluto,
+Neptune; Mercury, Sun, Moon, Venus), each strong against the next in its
+cycle. A mod may rename them, redraw their icons, add stars 11 to 15 and say
+what every star gets against every other, which makes Pokémon types,
+Digimon's Vaccine, Virus and Data, a pantheon or anything else:
+
+```json
+"guardian_stars": {
+    "stars": [
+        {"id": 11, "name": "Fire", "icon": "icons/fire.png", "beats": ["Grass"]},
+        {"id": 12, "name": {"en-us": "Water", "fr": "Eau"}, "icon": "icons/water.png", "beats": ["Fire"]},
+        {"id": 13, "name": "Grass", "icon": "icons/grass.png", "palette": "own", "beats": ["Water"]},
+        {"id": 1, "name": "Ares"}
+    ],
+    "matchups": [ {"attacker": "Water", "defender": "Fire", "bonus": 1000} ],
+    "default_bonus": 500,
+    "replace": false,
+    "choice": "ask"
+}
+```
+
+What a matchup is. For each ORDERED pair, the attacker's star and the
+defender's, the game has one signed number: what `Duel_CalcGuardianStarMatchup`
+returns, the disc's +500, -500 or 0. The battle adds it to the attacker's
+side of the comparison (capped at the ATK/DEF cap, a mod's
+[`limits`](gameplay-tables.md), 9999 without one; there is no lower clamp),
+as the disc adds its 500 ([the game](research/the-game.md), §5.8). So
+"super-effective" is a pair at +1000, "neutral" 0, and "immune" is 0 too:
+nothing here invents a battle rule the game does not have. The pair
+backwards is its own entry, so a matchup may be one-sided.
+
+| Key | Meaning |
+|---|---|
+| `matchups` | pairs: `attacker` and `defender` (a star's number or any of its names), `bonus` (points, -32767 to 32767; the default bonus when left out), `"mirror": true` to set the reverse pair to the opposite as well |
+| `default_bonus` | what the disc's two cycles give instead of 500 (both signs), and what `beats` and a matchup with no `bonus` give |
+| `replace` | `true`: every pair starts at 0, the disc's cycles gone |
+| `stars` | declares a star: `id` 1 to 15, `name` (a string, or one per language: `en-us`, `en-eu`, `fr`, `de`, `it`, `es`, and `default`), `icon` (a PNG in the mod), `palette` (`game`, the default: the disc's stars' own 16 colours, as the game draws them; `own`: the PNG's, up to 15), and `beats` (stars it is strong against: +default for it, -default for them) |
+| `choice` | at a summon: `ask` (the disc's SELECT A GUARDIAN STAR box), `first` (no box: the first star), `best` (no box: the star that does better against the opponent's face-up monsters, what it gains attacking them less what they gain attacking it; the first on a tie or with none) |
+
+A minimal mod is one matchup; everything left out is the disc's. Where two
+mods set the same pair the later one wins. Stars 11 to 15 are neutral against
+every star until something says otherwise. A new star without a `name` is
+"Star 11" (a translation's `[8322]` stands over that, since the names bank
+has star N's name at `0x8317 + N`), and without an `icon` a plain disc in
+the stars' colours. A card names them in its `stars` as it names the disc's
+(`"stars": ["Fire", "Sun"]`, or `[11, 8]`).
+
+One star. A card whose second star is none (`"stars": ["Fire", 0]`) or the
+same as its first has only that one: there is no choice when it is summoned,
+even with `ask`, and the card view shows one star. A first star of none with
+a second (`[0, "Sun"]`) is the same one-star card, `["Sun", 0]`: the duel
+reads the first star unless the second is chosen, so the game puts it first.
+None is `0`, `null`, `"none"` or the FM Editor's `"(none)"` (a star a mod
+names "None" is that star instead).
+
+No star. A monster with both none (`"stars": [0, 0]`) has no star at all:
+no SELECT A GUARDIAN STAR box at a summon, no star bonus given or taken (it
+meets every star at 0 both ways, the AI's sums too), and nothing where a star
+would be drawn: the field bar and the lists show no icon and no name, the
+card view (the duel's, the Library's) lays it out as it does a magic card,
+with no GUARDIAN STAR heading, and its battles have no star effect. This is decided for star 0
+only once a mod has made such a monster, since the disc's arithmetic gives
+star 0 a bonus against some stars (+500 against Mars, -500 against Pluto)
+and nothing of the disc has it on a monster. A `replace` entry that turns a
+magic, trap, ritual or equip card into a monster and says no `stars` still
+takes its model's (or the Sun and the Moon); one that says `[0, 0]` has none.
+No card of the disc is any of these, so without a mod nothing changes. A
+`stars` that is not a list of two, or names no star, is noted in the Mods
+window and left out, and the card keeps the stars it had.
+
+The on-screen modifier climbs to the pair's own value, by 16 an update as on
+the disc up to 512 and faster past it, so it never takes longer than the
+disc's 32 updates; the yellow and red label goes by the sign, as before.
+
+Icons are made at the console's size (16x16, 4 bits) in a texture bank of the
+port's (`src/pc/cards/star_icons.c`) and drawn wherever the game draws a
+star: the SELECT A GUARDIAN STAR box, the card view, the field bar, the
+lists and the battle's star effect. The disc's ten are in the boot sheet
+(`sheets/boot/a-c1-4-pb60500.png` from `tools/pc/extract_images.py`), so a
+texture pack can also repaint them there at any resolution, one entry a
+star: `"archive": "WA_MRG.MRG"`, `"offset"` `0xB51840 + ((N-1) % 8) * 8 +
+((N-1) / 8) * 0x800` for star N, `"words": 4`, `"rows": 16`, `"stride": 64`,
+`"bpp": 4`, `"clut_offset": 0xB60500`, `"clut_entries": 16` (the stars have
+that palette to themselves, so nothing else changes). A mod's `icon` is not
+drawn above the console's resolution yet: texture packs follow what the game
+uploads to VRAM, and the bank the icons are made in has no such shadow.
+
+The Mods window notes a star no card has, a card whose star no mod declares,
+a declared star with no matchup, and a bonus past the stat cap. The
+[FM Editor](../tools/pc/fm_editor/README.md)'s Guardian Stars tab edits all of
+it, with the grid, and sets many cards' stars by attribute or type.
+
+Limits. The stars are 4-bit fields of every card's stat word
+(`gDuel_adwCardStats`, bits 18-21 and 22-25), so 15 is the most there can
+be; more would need a wider card record in every table that holds one.
+Every place that turns a star into a bonus, a name or an icon reads it from
+that word by the card's id (`Duel_CalcGuardianStarBonus`,
+`func_80023144`, `func_80037DA4`, and the AI's `func_80027DF8`), with the
+record's flag `0x200` choosing the second: a future card effect that changes
+a monster's star in a duel ("Terastalization") would give the duel record a
+star of its own (it has three spare bytes, `pad_19`) and have those reads
+take it first.
 
 ## Duelists: more than the disc has
 
@@ -539,6 +897,32 @@ more than three copies of a card or more than one Exodia piece, says so in the
 Mods window and is dealt as written. A deck that is not forty cards is left
 out. [The starter deck](starter-deck.md) has the rest, including what it costs
 the game's random numbers; `examples/mods/starter-deck` is a working one.
+
+## Card packs: booster packs for starchips
+
+A mod may sell packs of cards. The smallest is one line of a list:
+
+```json
+"packs": [
+    {"name": "Dragons", "price": 50, "cards": ["Blue-eyes White Dragon", "Baby Dragon", "Koumori Dragon"]}
+]
+```
+
+The Password screen then says △PACKS beside ✕OK ○END; △ opens the packs, ←/→
+go through them, ✕ buys one and the big card turns each card over, in the
+game's own card, boxes, letters and sounds. The starchips count down as a
+password's price does, and the cards go into the chest before the first turns
+over. Every option has a default: tiers with odds, a rule per slot, a
+guarantee, a pity count, no repeats in a pack, a limit on copies held (and
+whether a pack with nothing left for the player is still sold), a stock,
+unlock conditions, a secret password, cards from the chest as part of
+the price, an image of the pack's own, the reveal and the sounds; and
+`pack_shop` sets whether the screen sells passwords, packs or both, several
+shops, and whether a save can reroll a pack. The packs of every applied mod
+add up; they need a restart, like the tables.
+
+[Card packs](card-packs.md) has every key, how a pack is dealt (always four of
+the game's random numbers a card), and what the save keeps.
 
 ## Translations
 
@@ -607,7 +991,7 @@ the player's settings file as `mod.<id>.<key>`, and read from
 `MEMORIES_MOD_<ID>_<KEY>` first when that is set; a key is letters, digits,
 `_` and `-`, and `order` is the manager's), `disc_file_start`/
 `disc_read`, `pad`, and from mod API 2 `now_us` (a clock) and `map_fixed`
-(memory at an address the mod chooses, as 3D Monsters' model arenas need). API 4 adds `hook`/`unhook`/`symbol`, below; API 5 adds `duelist_id`, which resolves an added duelist's identity to the id it has this run as `card_id` does for a card. API 7 adds `card_notes` and `card_tag`, a card's [notes](more-cards.md#notes-on-a-card) and the `<tag: value>` tags in them.
+(memory at an address the mod chooses, as 3D Monsters' model arenas need). API 4 adds `hook`/`unhook`/`symbol`, below; API 5 adds `duelist_id`, which resolves an added duelist's identity to the id it has this run as `card_id` does for a card. API 7 adds `card_notes` and `card_tag`, a card's [notes](more-cards.md#notes-on-a-card) and the `<tag: value>` tags in them. API 8 adds `limit`, the numbers the game caps as the mods' `limits` set them ([Gameplay tables](gameplay-tables.md#limits-atk-def-lp-starchips-and-more)): `host->limit(host, "attack")` is 9999 without such a mod. API 9 adds `menu_item`, the name of an item of the title's menus, and the event `MEMORIES_EVENT_MENU` ([The title's menus](#the-titles-menus)).
 A mod that uses an entry newer than API 1 should refuse to start when
 `host->api` is older.
 
@@ -798,7 +1182,7 @@ the reason beside any that failed to load.
 
 | Mod | What it is |
 |---|---|
-| `mods/3d-monsters` | face-up monsters on the duel field stand on their cards as animated models (`notes/pc-build.md`) |
+| `mods/3d-monsters` | face-up monsters on the duel field stand on their cards, either as animated models (`notes/pc-build.md`) or, its `style` setting turned to "Card art", as an enlarged, glowing cutout of the card's own art instead |
 | `mods/hand-camera` | L1/R1 turn and L3/R3 zoom the duel camera while the hand is up |
 | `mods/ai-hard-mode` | optional stronger opponent decisions |
 | `mods/yamyi-mods` | return-to-title confirmation, rarity colours and Library drop odds, with independent switches |
@@ -806,13 +1190,53 @@ the reason beside any that failed to load.
 
 The first two were part of the executable until they became mods; they are the worked
 examples of a code mod that reaches deep into the game. 3D Monsters' knobs
-are its declared settings `scale`, `pixels`, `lift`, `pitch`, `depth`,
-`battle`, `battle_pixels` and `battle_dim`, in
+are its declared settings `style`, `scale`, `pixels`, `lift`, `pitch`, `depth`,
+`battle`, `battle_pixels`, `battle_dim`, `glow`, `glow_r`, `glow_g`, `glow_b`,
+`glow_reach` and `glow_period`, in
 the Mods window (`MEMORIES_MOD_3D_MONSTERS_SCALE=5000` for one run; they were
 `MEMORIES_MODS_SCALE` and so on before it became one object for both systems).
-One more, `test`, is read but not declared, so the window does not show it:
-`MEMORIES_MOD_3D_MONSTERS_TEST=<card>` stands a different monster in every
-zone from that card on, for measuring the cache and the arenas.
+`style` picks the presentation (0 the original 3D models, 1 Card art).
+`pixels`, `lift`, `pitch` and `depth` are shared on purpose -- both styles
+fit and place their own cutout or model by the same target height, lift,
+field-pitch threshold and depth offset, so one setting means the same thing
+either way, and `field_art.c` simply reads the settings `field_models.c`
+already declares rather than repeating them. Everything else belongs to one
+style alone: `scale`, `battle`, `battle_pixels` and `battle_dim` are 3D
+models only (down to their own labels saying so in the manifest); `glow` and
+the rest are Card art only, the same way. One more, `test`, is read but not
+declared, so the window does not show it: `MEMORIES_MOD_3D_MONSTERS_TEST=<card>` stands a
+different monster in every zone from that card on, for measuring the cache
+and the arenas.
+
+**A mod with a "style"-like choice setting** (more than one whole presentation,
+picked by one setting, the way 3D Monsters' two styles are): a setting or a
+whole piece of behaviour that belongs to one style alone must have no effect
+in the other, not just be unlikely to matter there -- the settings window has
+no way to hide a setting only some styles use, so this cannot be enforced by
+the window; it has to be true of the code itself, checked at the one place
+that reads the style, not left to whichever function happens to read the
+setting. 3D Monsters got this wrong once during review: `battle` (the attack-
+card presentation) kept running under Card art, since it has no card-art
+equivalent and so seemed harmless to leave alone, but the two models it stood
+still showed while everything else on the field had switched to cutouts.
+Fixed by moving the style check ahead of it in `draw_frame`, so a style-
+exclusive function is never even called under the other style, the same way
+Card art's own drawing is never reached under 3D models. Where a setting is
+genuinely the same thing under either style (3D Monsters' `pixels`, `lift`,
+`pitch` and `depth`), share it rather than adding a second copy -- but where
+it belongs to one style, its label says so (`"(3D models)"`, `"(Card art)"`)
+even though the window shows it regardless, since that is the only signal a
+player has that it does nothing under the other choice.
+
+Building `style` surfaced a Mods window bug, since fixed for every mod's
+`choice` settings, not just this one: `adjust()` (`mods_window.c`) clamped a
+`choice` at its first and last option the way a plain `int` clamps at its
+`min`/`max`, so pressing the same arrow again at either end did nothing --
+confusing for a two-option choice especially, since one arrow would appear to
+stop working entirely and the player had to know to press the other one. A
+`choice` is a closed, named set the way a `key` setting's pad buttons are, not
+a range with a meaningful limit, so it now wraps around instead, the same way
+`key` already did.
 
 ## Testing a mod
 

@@ -106,7 +106,7 @@ typedef struct {
 typedef struct { const char *label; Item items[20]; int count; int x, w; } Menu;
 
 enum { MENU_FILE, MENU_VIDEO, MENU_AUDIO, MENU_GAME, MENU_VIEW, MENU_DEBUG, MENU_HELP, MENU_COUNT };
-enum { SUB_SCALE, SUB_MENU_SIZE, SUB_SPEED, SUB_FPS, SUB_CHEATS, SUB_TRACE, SUB_SCALING, SUB_ASPECT, SUB_RESOLUTION, SUB_COLOR, SUB_EFFECTS, SUB_JUMP, SUB_ANTIALIAS, SUB_FILTER, SUB_RANK, SUB_LANGUAGE, SUB_COUNT };
+enum { SUB_SCALE, SUB_MENU_SIZE, SUB_SPEED, SUB_FPS, SUB_CHEATS, SUB_TRACE, SUB_SCALING, SUB_ASPECT, SUB_RESOLUTION, SUB_COLOR, SUB_EFFECTS, SUB_JUMP, SUB_ANTIALIAS, SUB_FILTER, SUB_RANK, SUB_LANGUAGE, SUB_PGXP, SUB_COUNT };
 static Menu menus[MENU_COUNT] = {
     {"File", {{"Save state", "F5", ITEM_ACTION, ACT_SAVE_STATE, -1},
               {"Load state", "F7", ITEM_ACTION, ACT_LOAD_STATE, -1},
@@ -130,7 +130,8 @@ static Menu menus[MENU_COUNT] = {
               {"Filtering", 0, ITEM_SUBMENU, MENU_ITEM_FILTER, -1, SUB_FILTER, ITEM_GROUP_BREAK},
               {"VSync", 0, ITEM_CHECK, MENU_ITEM_VSYNC, SET_VSYNC},
               {"Color", 0, ITEM_SUBMENU, 0, -1, SUB_COLOR, ITEM_GROUP_BREAK},
-              {"Effects", 0, ITEM_SUBMENU, 0, -1, SUB_EFFECTS}}, 13},
+              {"Effects", 0, ITEM_SUBMENU, 0, -1, SUB_EFFECTS},
+              {"Precise geometry", 0, ITEM_SUBMENU, MENU_ITEM_PGXP, -1, SUB_PGXP, ITEM_GROUP_BREAK}}, 14},
     {"Audio", {{"Master", 0, ITEM_SLIDER, SLIDER_MASTER, SET_MASTER_VOLUME},
                {"Music", 0, ITEM_SLIDER, SLIDER_MUSIC, SET_MUSIC_VOLUME},
                {"Sound FX", 0, ITEM_SLIDER, SLIDER_SFX, SET_SFX_VOLUME},
@@ -257,6 +258,11 @@ static Menu submenus[SUB_COUNT] = {
                   {"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_DE},
                   {"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_IT},
                   {"", 0, ITEM_RADIO, RADIO_LANGUAGE, SET_LANGUAGE, LANGUAGE_ES}}, 6},
+    /* PGXP recovers the GTE's discarded depth to fix affine texture warping
+     * on tilted polygons (pgxp.h). Level 2, precise positions, is not
+     * offered yet (settings.c clamps it). */
+    {"Precise geometry", {{"Off", 0, ITEM_RADIO, 0, SET_PGXP, 0},
+                          {"Textures", 0, ITEM_RADIO, 0, SET_PGXP, 1}}, 2},
 };
 
 static int open_menu = -1, hot_item = -1, hover_bar = -1, grabbed, ready, visible = 1;
@@ -370,9 +376,12 @@ static int render_glyph(FT_Face face, FT_ULong character, Glyph *g)
 
 /* Forgets the characters past ASCII and closes the face (a new size renders
  * them again). */
+static void forget_big_glyphs(void);
+
 static void free_extra_glyphs(void)
 {
     unsigned i;
+    forget_big_glyphs();
     for (i = 0; extra_glyphs && i <= extra_mask; i++) free(extra_glyphs[i].glyph.coverage);
     free(extra_glyphs);
     extra_glyphs = NULL;
@@ -647,6 +656,47 @@ void Menu_DrawText(MenuCanvas *into, int x, int y, const char *text, uint32_t co
 int Menu_TextWidth(const char *text) { return text_width(text); }
 
 int Menu_TextWidthScaled(const char *text, int scale) { return text_width(text) * scale / ui; }
+/* Characters bigger than the menu's own (Menu_DrawTextScaled at a scale
+ * above it: the title's text lines, the side windows), rendered at their
+ * size rather than magnified, kept by character and scale until the table
+ * fills, when it starts again. */
+typedef struct { uint32_t code; int scale, missing; Glyph glyph; } BigGlyph;
+#define BIG_GLYPHS 1024
+static BigGlyph big_glyphs[BIG_GLYPHS];
+static int big_count;
+
+static void forget_big_glyphs(void)
+{
+    int i;
+    for (i = 0; i < BIG_GLYPHS; i++) free(big_glyphs[i].glyph.coverage);
+    memset(big_glyphs, 0, sizeof(big_glyphs));
+    big_count = 0;
+}
+
+static const Glyph *big_glyph_for(uint32_t character, int scale)
+{
+    unsigned slot = (character * 2654435761u + (unsigned)scale * 40503u) & (BIG_GLYPHS - 1);
+    BigGlyph *b;
+    for (b = &big_glyphs[slot]; b->code; slot = (slot + 1) & (BIG_GLYPHS - 1), b = &big_glyphs[slot]) {
+        if (b->code == character && b->scale == scale) return b->missing ? NULL : &b->glyph;
+    }
+    if (big_count * 2 >= BIG_GLYPHS) {
+        forget_big_glyphs();
+        slot = (character * 2654435761u + (unsigned)scale * 40503u) & (BIG_GLYPHS - 1);
+        b = &big_glyphs[slot];
+    }
+    b->code = character;
+    b->scale = scale;
+    big_count++;
+    /* The face is the menu's: at the character's size for this one, then
+     * back to the menu's for everything else. */
+    b->missing = FT_Set_Pixel_Sizes(font_face, 0, (FT_UInt)(13 * scale)) ||
+                 !FT_Get_Char_Index(font_face, (FT_ULong)character) ||
+                 !render_glyph(font_face, (FT_ULong)character, &b->glyph);
+    FT_Set_Pixel_Sizes(font_face, 0, FONT_PX);
+    return b->missing ? NULL : &b->glyph;
+}
+
 void Menu_DrawTextScaled(MenuCanvas *into, int x, int middle, const char *text, uint32_t colour, int scale)
 {
     canvas = into;
@@ -657,7 +707,18 @@ void Menu_DrawTextScaled(MenuCanvas *into, int x, int middle, const char *text, 
     int baseline = middle + (font_ascent - font_descent + 1) * scale / (2 * ui);
     int advance = 0;
     while (*text) {
-        const Glyph *g = glyph_for(Glyphs_NextCharacter(&text));
+        uint32_t character = Glyphs_NextCharacter(&text);
+        const Glyph *g = glyph_for(character), *big = scale > ui && font_face ? big_glyph_for(character, scale) : NULL;
+        /* Placed by the menu-size glyph's advance, so widths are what
+         * Menu_TextWidthScaled says; drawn from the one at its size. */
+        if (big) {
+            for (int row = 0; row < big->h && big->coverage; row++)
+                for (int col = 0; col < big->w; col++)
+                    put(x + advance * scale / ui + big->left + col, baseline - big->top + row, colour,
+                        big->coverage[row * big->w + col]);
+            advance += g->advance;
+            continue;
+        }
         for (int row = 0; row < g->h * scale / ui && g->coverage; row++)
             for (int col = 0; col < g->w * scale / ui; col++)
                 put(x + advance * scale / ui + g->left * scale / ui + col,
@@ -758,9 +819,11 @@ static void choose_language(int language)
     language_before = Settings_Get(SET_LANGUAGE);
     Settings_Set(SET_LANGUAGE, language);
     if (!Settings_Save()) {
+        char why[sizeof(notice.text)];
         Settings_Set(SET_LANGUAGE, language_before);
-        Menu_ShowNotice("Language", "The settings file could not be written; the language stays as it was.", ok, 1,
-                        0, NULL);
+        snprintf(why, sizeof(why), "%s The language stays as it was.", Settings_LastError());
+        Settings_TakeNewError(); /* told here */
+        Menu_ShowNotice("Language", why, ok, 1, 0, NULL);
         return;
     }
     if (language == Language_Current()) return; /* back to the one this launch has */
@@ -803,7 +866,7 @@ static int hd_picture;
  * opponent's name also at 1x, where the software GPU draws it. */
 static void update_hd_items(void)
 {
-    static const int ids[] = {MENU_ITEM_HD_TEXT, MENU_ITEM_OPPONENT_NAME};
+    static const int ids[] = {MENU_ITEM_HD_TEXT, MENU_ITEM_OPPONENT_NAME, MENU_ITEM_PGXP};
     int console = Settings_Get(SET_INTERNAL_SCALE) < 2;
     const char *hd_why = !hd_picture ? "needs OpenGL 3" : console ? "needs Internal 2x" : NULL;
     const char *name_why = !hd_picture && !console ? "needs OpenGL 3 or 1x" : NULL;
@@ -1198,9 +1261,22 @@ void Menu_CloseNotice(void)
     changed = 1;
 }
 
+/* A settings save that failed (settings.h), told once in a notice: most
+ * saves (a menu item, a slider, a moved window, a hotkey) do not look at
+ * the result themselves. Waits while another notice is up. */
+static void tell_settings_error(void)
+{
+    static const char *const ok[] = {"OK"};
+    const char *error;
+    if (Menu_NoticeShown() || !(error = Settings_TakeNewError())) return;
+    Menu_ShowNotice("Settings not saved", error, ok, 1, 0, NULL);
+}
+
 int Menu_TakeChanged(void)
 {
-    int was = changed;
+    int was;
+    tell_settings_error();
+    was = changed;
     changed = 0;
     return was;
 }
@@ -1407,28 +1483,43 @@ static int *active_hot(void) { return open_sub >= 0 ? &hot_sub : &hot_item; }
 
 /* The cheats that change the save refuse before a game is loaded. */
 /* Help > System info for bug reports: this build's version and what a crash
- * report starts with (monitor.h: the build, the system, the GPU, DEP, the
+ * report starts with (monitor.h: the build, the system, the GPU, the
  * settings, the mods), put on the clipboard and in system-info.txt in the
  * user folder, so a report carries them without a crash. The notice shows
- * it but for the settings, a long line. */
+ * it but for the settings, a long line. The file is opened before the facts
+ * are read, so their "user dir" line (paths.h) carries its outcome when
+ * nothing had been saved yet. */
 static void show_system_info(void)
 {
     static const char *const ok[] = {"OK"};
     static char facts[MONITOR_FACTS_SIZE], text[MONITOR_FACTS_SIZE + 128];
-    char shown[sizeof(notice.text)], path[1100];
+    char shown[sizeof(notice.text)], path[1100], why[400] = "", full[1400];
     const char *at;
     size_t used;
     int copied, saved = 0;
     FILE *file;
+    snprintf(path, sizeof(path), "%s/system-info.txt", Paths_UserDir());
+    Paths_WriteBegin();
+    file = fopen(path, "w");
+    if (file) {
+        Paths_WriteDone(path);
+    } else { /* before anything changes the reason */
+        Paths_WriteError(full, sizeof(full), path);
+        Paths_WriteReason(why, sizeof(why), path);
+    }
     Monitor_Facts(facts, sizeof(facts));
     snprintf(text, sizeof(text), "YFM Re-Decomp %s\n%s", Update_VersionLabel(), facts);
-    copied = Platform_CopyText(text);
-    snprintf(path, sizeof(path), "%s/system-info.txt", Paths_UserDir());
-    if ((file = fopen(path, "w"))) {
+    if (file) {
         saved = fputs(text, file) >= 0;
         saved = !fclose(file) && saved;
+        if (!saved) {
+            Paths_WriteError(full, sizeof(full), path);
+            Paths_WriteReason(why, sizeof(why), path);
+        }
     }
-    used = (size_t)snprintf(shown, sizeof(shown), "%s\n", Update_VersionLabel());
+    if (!saved) fprintf(stderr, "memories-pc: could not write %s\n", full); /* the folder is the "user dir" fact's */
+    copied = Platform_CopyText(text);
+    used =(size_t)snprintf(shown, sizeof(shown), "%s\n", Update_VersionLabel());
     for (at = facts; *at && used < sizeof(shown);) {
         const char *end = strchr(at, '\n');
         size_t length = end ? (size_t)(end - at) + 1 : strlen(at);
@@ -1437,10 +1528,12 @@ static void show_system_info(void)
         at += length;
     }
     if (used < sizeof(shown)) {
-        snprintf(shown + used, sizeof(shown) - used, "\n%s%s%s%s",
+        snprintf(shown + used, sizeof(shown) - used, "\n%s%s%s%s%s%s",
                  copied ? "Copied to the clipboard: paste it into your bug report." : "",
                  copied && saved ? " Also in " : saved ? "Attach this file to your bug report: " : "",
-                 saved ? path : "", saved ? "." : "");
+                 saved ? path : "", saved ? "." : "",
+                 saved ? "" : copied ? " Could not write system-info.txt: " : "Could not write system-info.txt: ",
+                 saved ? "" : why);
     }
     Menu_ShowNotice("System info", shown, ok, 1, 0, NULL);
 }

@@ -13,6 +13,11 @@
 #include "pc/cards/cards.h"
 #include "pc/free_duel/duelists.h"
 #include "pc/text/text.h"
+#include "pc/text/number_width.h"
+#include "pc/cards/stars.h"
+
+/* A star's second name, left out: an empty string in the names bank. */
+static const u8 no_star_name[] = {0xFF};
 #endif
 
 #define TEXT_STREAM_OWNER(object) ((TextStreamOwner *)(object))
@@ -41,7 +46,10 @@ void func_80037DA4(DuelEffectChannel *object)
     s32 type;
     u8 *text;
     u8 *current;
-    u8 **slot;
+    u8 *G32 *slot;
+#ifdef MEMORIES_PC
+    s32 star = 0;   /* the guardian star an icon stands for (stars.h) */
+#endif
 
     text = (u8 *)(s32)object->stream_58;
     object->field_62 = 0;
@@ -97,6 +105,19 @@ void func_80037DA4(DuelEffectChannel *object)
             id = (stats >> CARD_STAT_GUARDIAN_STAR_1_SHIFT) &
                  CARD_STAT_GUARDIAN_STAR_MASK;
             type = (stats >> CARD_STAT_TYPE_SHIFT) & CARD_STAT_TYPE_MASK;
+#ifdef MEMORIES_PC
+            star = id;
+            /* A monster a mod gave no star (none of the disc's): no icon
+               and no name, as for a card with no second (stars.h). */
+            if (id == 0 && type < CARD_TYPE_MAGIC && Stars_NoStarUsed()) {
+                if (op & 0x80) {
+                    object->stream_58++;
+                    text = (u8 *)no_star_name;
+                    goto store;
+                }
+                n = 1;
+            }
+#endif
             id += 0x17;
             if ((u32)(type - CARD_TYPE_MAGIC) < CARD_NON_MONSTER_TYPE_COUNT) {
                 object->field_62 = type;
@@ -106,6 +127,20 @@ void func_80037DA4(DuelEffectChannel *object)
             id = (gDuel_adwCardStats[gDuel_wSelectedCardID - 1] >>
                   CARD_STAT_GUARDIAN_STAR_2_SHIFT) &
                  CARD_STAT_GUARDIAN_STAR_MASK;
+#ifdef MEMORIES_PC
+            /* A card with one star (the same one twice; none of the disc's)
+               shows it once, as the disc shows a card with no second. */
+            if (id != 0 && Stars_CardSingle(gDuel_wSelectedCardID)) {
+                id = 0;
+            }
+            star = id;
+            if (id == 0 && (op & 0x80)) {
+                /* Nor a name for the star it does not have. */
+                object->stream_58++;
+                text = (u8 *)no_star_name;
+                goto store;
+            }
+#endif
             id += 0x17;
             if (id == 0x17) {
                 n = 1;
@@ -141,6 +176,11 @@ store:
 plain:
     object->flags_34 |= 0x80;
     if ((u8)n == 0) {
+#ifdef MEMORIES_PC
+        /* Stars 11-15 are past the disc's icons, and a mod may give any
+           star its own: the entry says which star it is (stars.h). */
+        Stars_MarkIcon(star);
+#endif
         func_80036C14(object, id);
     }
     object->flags_34 &= 0xFF7F;
@@ -158,12 +198,23 @@ void func_80038024(DuelEffectChannel *object, s32 value)
 
 void func_80038070(DuelEffectChannel *object)
 {
+#ifdef MEMORIES_PC
+    /* The field bar's active star (func_80023144 keeps it + 0x17). A
+       monster a mod gave no star has none to draw: the place stays, as
+       func_80037DA4 leaves it for a card with no second star (stars.h). */
+    if (D_8009B344 == 0x17 && Stars_NoStarUsed()) {
+        object->flags_34 &= 0xFF7F;
+        object->field_38 += 0x10;
+        return;
+    }
+    Stars_MarkIcon(D_8009B344 - 0x17);
+#endif
     func_80038024(object, D_8009B344);
 }
 
 void func_80038094(DuelEffectChannel *object)
 {
-    u8 **stream =
+    u8 *G32 *stream =
         &TEXT_STREAM_OWNER(object)->streams[object->stream_58];
 
     func_80038024(object, *(*stream)++);
@@ -171,7 +222,7 @@ void func_80038094(DuelEffectChannel *object)
 
 void func_800380D4(DuelEffectChannel *object)
 {
-    register u8 **stream;
+    register u8 *G32 *stream;
     register u8 *current;
     register u32 value;
 
@@ -187,9 +238,9 @@ void func_800380D4(DuelEffectChannel *object)
 
 void func_80038110(DuelEffectChannel *object)
 {
-    u8 **stream =
+    u8 *G32 *stream =
         &TEXT_STREAM_OWNER(object)->streams[object->stream_58];
-    register u8 **slot = stream;
+    register u8 *G32 *slot = stream;
     register u8 *current = *slot;
     register u32 value = current[0];
 
@@ -215,13 +266,50 @@ void func_80038148(DuelEffectChannel *object)
     t = *TEXT_STREAM_OWNER(object)->streams[object->stream_58]++;
     c = t;
 #ifdef MEMORIES_PC
-    /* Three digits are how the retail strings print a card number; the PC
-       port's run to five (card_constants.h), so a wider one is not cut. */
-    if ((c & 0xF) == 3 && *(s32 *)r >= 1000) {
-        c = (c & 0xF0) | (*(s32 *)r >= 10000 ? 5 : 4);
+    {
+        /* A number wider than the field its string gives it keeps all of its
+           digits, up to eight, rather than lose the first: three are how the
+           retail strings print a card number, and the PC port's run to five
+           (card_constants.h); four print ATK, DEF and LP, and six the
+           starchips, which a mod's "limits" may take past 9999 and 999999
+           (pc/cards/tables.h). A number that fits is left as it was. */
+        s32 value = *(s32 *)r;
+        s32 need = 1;
+        s32 bound = 10;
+
+        while (need < 8 && value >= bound) {
+            need++;
+            bound *= 10;
+        }
+        /* Fields of three digits and more: card numbers, ATK, DEF, LP and
+           starchips. A one- or two-digit field prints what it always did. */
+        if ((c & 0xF) >= 3 && need > (c & 0xF)) {
+            /* The field keeps its width: the digits are drawn closer
+               together (number_width.h), so nothing after it moves and a
+               box sized for the field still holds it. A card number (three
+               digits) is not squeezed, as it never was. */
+            if ((c & 0xF) >= 4) {
+                NumberWidth_Squeeze(object->index_57, need, c & 0xF, object->field_5A);
+            }
+            c = (c & 0xF0) | need;
+        }
+        if ((c & 0xF) > 6) {
+            /* Past the six digits Text_EncodeDecimalDigits' table holds:
+               the same digits, lowest first, and blanks for leading zeros. */
+            for (i = 0; i < (c & 0xF); i++) {
+                buf[i] = value % TEXT_DECIMAL_RADIX;
+                value /= TEXT_DECIMAL_RADIX;
+            }
+            for (i = (c & 0xF) - 1; i > 0 && buf[i] == 0; i--) {
+                buf[i] = TEXT_DECIMAL_BLANK_DIGIT;
+            }
+        } else {
+            Text_EncodeDecimalDigits(*(s32 *)r, c & 0xF, buf);
+        }
     }
-#endif
+#else
     Text_EncodeDecimalDigits(*(s32 *)r, c & 0xF, buf);
+#endif
 
     h = 0;
 
@@ -281,7 +369,7 @@ write:
 /* Inlining keeps the stream value and channel in independent live ranges. */
 static __inline__ u32 read_operand(DuelEffectChannel *object)
 {
-    u8 **stream =
+    u8 *G32 *stream =
         &TEXT_STREAM_OWNER(object)->streams[object->stream_58];
     u8 *cursor = *stream;
     u32 value = *cursor++;
@@ -314,7 +402,7 @@ void func_80038334(DuelEffectChannel *object)
 {
     /* Separate lifetimes preserve allocation across the two stream reads. */
     {
-        u8 **stream =
+        u8 *G32 *stream =
             &TEXT_STREAM_OWNER(object)->streams[object->stream_58];
         u8 *current = *stream;
         u8 value = *current++;
@@ -323,7 +411,7 @@ void func_80038334(DuelEffectChannel *object)
         object->field_5A = value;
     }
     {
-        u8 **stream =
+        u8 *G32 *stream =
             &TEXT_STREAM_OWNER(object)->streams[object->stream_58];
         u8 *current = *stream;
         u8 value = *current++;
@@ -380,7 +468,7 @@ u32 *func_800383DC(DuelEffectChannel *a0) {
 
 void func_80038498(DuelEffectChannel *object)
 {
-    u8 **slot =
+    u8 *G32 *slot =
         &TEXT_STREAM_OWNER(object)->streams[object->stream_58];
     u8 *q = *slot;
     s32 v = *q;

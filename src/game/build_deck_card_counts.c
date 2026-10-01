@@ -9,6 +9,9 @@
 #include "text_box_runtime.h"
 #include "text_staging.h"
 #include "display_object.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/tables.h"
+#endif
 
 /* The Build Deck screen's three contiguous count helpers. They refresh the
    count box, return a card to the chest, and remove a card from it. The unit
@@ -51,7 +54,13 @@ void BuildDeck_ReturnCardToChest(BuildDeckTransitionState *base, s32 index)
         /* Keep the post-search adjustment separate from the flag store. */
         ((volatile CardListSortItem *)entry)->field_0D = 1;
         func_80032C48(&base->lists[0]);
+#ifdef MEMORIES_PC
+    /* Up to 250, or a mod's chest past it (tables.h); below the room, as
+       an 8-bit count at 255 must not wrap to none. */
+    } else if (count < Tables_ChestRoom()) {
+#else
     } else if (count != CARD_CHEST_QUANTITY_MAX) {
+#endif
         s32 next = raw + 1;
 
         base->chest_card_quantities[index] = next;

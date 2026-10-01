@@ -44,8 +44,15 @@ int Mods_Compatible(int mod, const int *enabled, char *error, size_t size)
     int i;
     long api = Json_Number(member(mod, "min_api"), 1);
     const char *game = Mods_Metadata(mod, "game");
-    if (api > MEMORIES_MOD_API || (*game && strcmp(game, "slus_01411"))) {
-        snprintf(error, size, "%s needs another game or mod API version", Mods_Name(mod));
+    /* Said apart: a mod for a newer release is the usual case, and the
+     * player can fix it by updating the game. */
+    if (*game && strcmp(game, "slus_01411")) {
+        snprintf(error, size, "%s is made for another game (%s)", Mods_Name(mod), game);
+        return 0;
+    }
+    if (api > MEMORIES_MOD_API) {
+        snprintf(error, size, "%s needs a newer game: mod API %ld, this one has %d. Update the game",
+                 Mods_Name(mod), api, MEMORIES_MOD_API);
         return 0;
     }
     for (i = 0; i < Json_Count(list); i++) {
@@ -178,7 +185,9 @@ int Mods_Apply(const int *enabled, char *error, size_t size)
             if (enabled[i] != old[i])
                 Settings_SetNamed(key, stored[i]);
         }
-        snprintf(error, size, "Could not save settings; changes cancelled");
+        /* Where and why (settings.h); told here, so no notice repeats it. */
+        snprintf(error, size, "%s Changes cancelled.", Settings_LastError());
+        Settings_TakeNewError();
         return 0;
     }
     n = newest_first(newest);
@@ -209,9 +218,11 @@ int Mods_Apply(const int *enabled, char *error, size_t size)
                 snprintf(key, sizeof(key), "mod.%s", Mods_Id(j));
                 Settings_SetNamed(key, stored[j]);
             }
-            if (!Settings_Save())
-                snprintf(error, size,
-                         "Mod failed and preferences could not be restored; check settings before restarting");
+            if (!Settings_Save()) {
+                snprintf(error, size, "Mod failed and preferences could not be restored; check settings before "
+                         "restarting. %s", Settings_LastError());
+                Settings_TakeNewError();
+            }
             return 0;
         }
     return 1;
@@ -282,20 +293,26 @@ static void profile_write(const char *key, int value, void *context)
     if (!strncmp(key, "mod.", 4))
         fprintf(context, "%s=%d\n", key, value);
 }
+static char profile_error[1200];
+const char *Mods_ProfileSaveError(void) { return profile_error; }
 int Mods_ProfileSave(const char *name)
 {
     char path[1024], temp[1040];
     FILE *file;
     int i, failed;
+    profile_error[0] = 0;
     if (!profile_path(path, sizeof(path), name))
         return 0;
     snprintf(temp, sizeof(temp), "%s", path);
     *strrchr(temp, '/') = 0;
     Paths_MakeDirs(temp);
     snprintf(temp, sizeof(temp), "%s.tmp", path);
+    Paths_WriteBegin();
     file = fopen(temp, "w");
-    if (!file)
+    if (!file) {
+        Paths_WriteError(profile_error, sizeof(profile_error), path);
         return 0;
+    }
     Settings_VisitNamed(profile_write, file);
     /* Include defaults, so a profile is complete even before any edit. */
     for (i = 0; i < Mods_Count(); i++) {
@@ -309,6 +326,7 @@ int Mods_ProfileSave(const char *name)
     if (fclose(file))
         failed = 1;
     if (failed || rename(temp, path)) {
+        Paths_WriteError(profile_error, sizeof(profile_error), path);
         remove(temp);
         return 0;
     }
@@ -422,7 +440,7 @@ unsigned Mods_Signature(void)
         Settings_VisitNamed(hash_setting, &settings_hash);
         hash ^= settings_hash;
     }
-    return hash ^ Mods_CardSignature() ^ Mods_DiscSignature();
+    return hash ^ Mods_CardSignature() ^ Mods_PackSignature() ^ Mods_DiscSignature();
 }
 
 /* An "audio" id as replace.c reads it: 0x-prefixed hexadecimal, else decimal. */

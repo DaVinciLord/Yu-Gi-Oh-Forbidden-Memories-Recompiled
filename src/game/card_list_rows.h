@@ -12,7 +12,7 @@
  * halfword and
  * seven card entries below. */
 typedef struct {
-    DuelCardDisplayObject *object;
+    DuelCardDisplayObject *G32 object;
     s16 x;
     s16 y;
     u16 enabled;

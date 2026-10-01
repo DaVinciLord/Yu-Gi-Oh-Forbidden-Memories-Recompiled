@@ -40,7 +40,8 @@
  *      (MemoriesMod.overlay); save slot events; more of the C library
  *   5  duelist_id
  *   6  the STARCHIP event
- *   7  card_notes, card_tag: a card's notes and the tags in them */
+ *   7  card_notes, card_tag: a card's notes and the tags in them
+ *   8  limit: the numbers the game caps, as the mods' "limits" set them */
 #include "mod_types.h"
 
 typedef struct MemoriesModHost MemoriesModHost;
@@ -199,6 +200,25 @@ struct MemoriesModHost {
      * Answers once the card tables are built, which is before the title. */
     const char *(*card_notes)(const MemoriesModHost *, int id);
     int (*card_tag)(const MemoriesModHost *, int id, const char *key, char *out, size_t size);
+
+    /* --- API 8 ---
+     * A limit the game plays by this run, after every applied mod's
+     * "limits" (notes/gameplay-tables.md): "attack" and "defense" (the most
+     * a monster has, 9999 on the disc), "life_points" (the start against the
+     * CPU), "life_points_max" (how far healing goes; 0 while it stops at the
+     * start), "two_player_start", "two_player_max", "two_player_step",
+     * "starchips", "chest", "free_duel_record" and "two_player_record".
+     * -1 for a name it does not know. Answers once the card tables are
+     * built, which is before the title. A mod that deals damage or bonuses of
+     * its own reads the caps here rather than assume 9999. */
+    long (*limit)(const MemoriesModHost *, const char *name);
+
+    /* --- API 9 ---
+     * The name of item `index` of the title's menus, as MEMORIES_EVENT_MENU
+     * gives it: an entry's ("new_game" ... "save", 0 to 10) or a button's
+     * "mod-id:button-id" (11 on); NULL for none. A button's number depends
+     * on the mods applied, so a mod knows its own by name. */
+    const char *(*menu_item)(const MemoriesModHost *, int index);
 };
 
 /* The symbol a mod's object defines, and its type. */

@@ -31,6 +31,9 @@ static struct {
 
 static SaveSlotCheck check;
 static int shown_rows = SAVE_SLOT_COUNT; /* how many rows the last draw had room for */
+/* Under a failed save's message: where and why (SaveSlots_LastError). Kept
+ * out of `menu`, whose bytes save states carry, so their layout stays. */
+static char detail[1200];
 
 static void changed(void) { menu.changes++; }
 
@@ -64,6 +67,7 @@ static int selectable(int slot)
 static void show_message(int after, int waits, const char *format, int slot)
 {
     snprintf(menu.message, sizeof(menu.message), format, slot + 1);
+    detail[0] = '\0';
     menu.view = VIEW_MESSAGE;
     menu.after_message = after;
     menu.message_waits = waits;
@@ -146,7 +150,14 @@ static void start(int channel)
     keep_cursor_shown();
     menu.view = VIEW_LIST;
     changed();
-    if (!any) show_message(2, 1, "There are no saved games to load.", 0);
+    if (!any && *SaveSlots_ReadError()) {
+        /* Not "no saved games" when they could not be read: they may all be
+         * there, behind a folder the system refuses. */
+        show_message(2, 1, "Could not read your saved games.", 0);
+        snprintf(detail, sizeof(detail), "%s", SaveSlots_ReadError());
+    } else if (!any) {
+        show_message(2, 1, "There are no saved games to load.", 0);
+    }
 }
 
 /* Games saved and loaded through the menu (SaveMenu_SaveCount). */
@@ -174,7 +185,12 @@ static void save(int slot)
     /* The dialog's buffer is the state; the header the game built is the
      * 0x200 bytes before it (SaveData_RequestWrite). */
     if (SaveSlots_WriteFile(slot, menu.buffer - SAVE_SLOT_HEADER_SIZE, SAVE_SLOT_HEADER_SIZE + (size_t)menu.size)) {
-        show_message(BACK_TO_LIST, 1, "Could not save to slot %d. Try another slot.", slot);
+        /* Where and why under it: another slot does not help when the
+         * folder refuses every file. */
+        const char *why = SaveSlots_LastError();
+        show_message(BACK_TO_LIST, 1, *why ? "Could not save to slot %d." : "Could not save to slot %d. Try another slot.",
+                     slot);
+        snprintf(detail, sizeof(detail), "%s", why);
         return;
     }
     menu.current_slot = slot;
@@ -352,6 +368,38 @@ static void centred(MenuCanvas *canvas, int x, int w, int y, const char *text, u
     draw_text(canvas, x + (w - text_width(text)) / 2, y, text, colour);
 }
 
+/* `text` word-wrapped to `w`, each line centred, `line_h` apart from `y`;
+ * a word wider than a line (a long folder name) breaks inside. Without a
+ * canvas it only counts. Returns the number of lines. */
+static int wrapped(MenuCanvas *canvas, int x, int w, int y, int line_h, const char *text, uint32_t colour)
+{
+    char line[256];
+    int lines = 0;
+    while (*text) {
+        size_t n = 0, fit = 0;
+        while (text[n]) {
+            size_t next = n + 1;
+            while (((unsigned char)text[next] & 0xC0) == 0x80) next++; /* whole UTF-8 characters */
+            if (next >= sizeof(line)) break;
+            memcpy(line, text, next);
+            line[next] = '\0';
+            if (text_width(line) > w) break;
+            n = next;
+            if (text[n] == ' ' || !text[n]) fit = n;
+        }
+        if (!fit) fit = n;
+        if (!fit) /* not even one character fits: one a line, whole */
+            for (fit = 1; ((unsigned char)text[fit] & 0xC0) == 0x80; fit++) {}
+        memcpy(line, text, fit);
+        line[fit] = '\0';
+        if (canvas) centred(canvas, x, w, y + lines * line_h, line, colour);
+        lines++;
+        text += fit;
+        while (*text == ' ') text++;
+    }
+    return lines;
+}
+
 static void describe(const SaveSlotInfo *info, char *out, size_t size)
 {
     char when[32] = "";
@@ -443,11 +491,14 @@ void SaveMenu_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
             right = details;
         } else {
             snprintf(line, sizeof(line), "%2d", slot + 1);
-            right = info->status == SAVE_SLOT_EMPTY ? "Empty" : "Damaged save";
+            right = info->status == SAVE_SLOT_EMPTY        ? "Empty"
+                    : info->status == SAVE_SLOT_UNREADABLE ? "Cannot read"
+                                                           : "Damaged save";
         }
         draw_text(canvas, px + 16 * s, cy, line, colour);
         draw_text(canvas, px + pw - 16 * s - text_width(right), cy, right,
-                      info->status == SAVE_SLOT_DAMAGED ? COLOUR_WARN : colour);
+                      info->status == SAVE_SLOT_DAMAGED || info->status == SAVE_SLOT_UNREADABLE ? COLOUR_WARN
+                                                                                                : colour);
     }
     if (menu.top > 0) draw_text(canvas, px + pw - 30 * s, py + 20 * s, "^", COLOUR_DIM);
     if (menu.top + rows < SAVE_SLOT_COUNT) draw_text(canvas, px + pw - 18 * s, py + 20 * s, "v", COLOUR_DIM);
@@ -463,6 +514,17 @@ void SaveMenu_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
                   COLOUR_DIM);
     if (menu.view == VIEW_CONFIRM) {
         draw_confirm(canvas, px, pw, py + ph / 2, s);
+    } else if (menu.view == VIEW_MESSAGE && detail[0]) {
+        /* A failed save: the message, then where and why, wrapped. */
+        int mw = pw - 32 * s, mx = px + 16 * s, line_h = 18 * s;
+        int lines = wrapped(NULL, mx + 12 * s, mw - 24 * s, 0, line_h, detail, COLOUR_DIM);
+        int mh = 64 * s + lines * line_h, my = py + (ph - mh) / 2;
+        frame(canvas, mx, my, mw, mh, s);
+        centred(canvas, mx, mw, my + 24 * s, menu.message, COLOUR_TEXT);
+        wrapped(canvas, mx + 12 * s, mw - 24 * s, my + 44 * s, line_h, detail, COLOUR_WARN);
+        if (menu.message_waits)
+            centred(canvas, mx, mw, my + mh - 18 * s, Settings_Get(SET_JP_BUTTONS) ? "Press Circle" : "Press Cross",
+                    COLOUR_DIM);
     } else if (menu.view == VIEW_MESSAGE) {
         int mw = pw - 96 * s, mh = 64 * s, mx = px + 48 * s, my = py + (ph - mh) / 2;
         frame(canvas, mx, my, mw, mh, s);
@@ -479,7 +541,9 @@ void SaveMenu_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
 void SaveMenu_State(MemoriesState *state)
 {
     MemoriesStateField fields[] = {{&menu, sizeof(menu)}};
-    if (Memories_StateChunk(state, "save-menu", fields, 1) && menu.view == VIEW_CONFIRM) {
+    int loaded = Memories_StateChunk(state, "save-menu", fields, 1);
+    if (loaded) detail[0] = '\0'; /* it went with the message shown before */
+    if (loaded && menu.view == VIEW_CONFIRM) {
         /* The slot may have changed since this prompt was saved. Return
          * to the list so the next pick reads disk and asks afresh, using
          * the validity callback supplied by the current caller. */

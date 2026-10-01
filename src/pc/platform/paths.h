@@ -11,7 +11,10 @@
  *    Documents\My Games\YFM Re-Decomp; elsewhere $XDG_DATA_HOME/YFM Re-Decomp
  *    (~/.local/share/YFM Re-Decomp). A file named portable.txt in the
  *    program directory makes it user/ there instead (portable mode).
- *    MEMORIES_USER_DIR names another and wins over both.
+ *    MEMORIES_USER_DIR names another and wins over both. When that folder
+ *    has no saves but saves/ beside the game does (where the port keeps
+ *    everything when it cannot make the folder), what is there is copied
+ *    in, and used where it is only when it cannot be.
  */
 #include <stddef.h>
 
@@ -30,5 +33,29 @@ int Paths_Contained(const char *relative);
 /* Carry what older builds left in ./saves into the user directory. Copies a
  * file only when the destination is missing, so it is safe to call always. */
 void Paths_MigrateLegacySaves(void);
+
+/* Why writing `path` just failed, in words for the player:
+ * "<path>: <reason>." The path is written as the system shows it (in full,
+ * with backslashes, on Windows) and the reason is the operating system's own
+ * (FormatMessage, in the user's language, on Windows; strerror elsewhere).
+ * When Windows denied access inside Documents a short hint follows: an
+ * antivirus's ransomware protection or Controlled folder access is what
+ * usually does that. Call it straight after the failing call, before
+ * anything else (removing the partial file) changes errno or the last error;
+ * Paths_WriteBegin before the write's first call keeps an older failure from
+ * being taken for this one. Returns `out`. */
+void Paths_WriteBegin(void);
+const char *Paths_WriteError(char *out, size_t size, const char *path);
+/* The same without the path: "<reason>." and the hint, if any. */
+const char *Paths_WriteReason(char *out, size_t size, const char *path);
+/* A write under the user directory succeeded: said after one did (the
+ * failures are known from Paths_WriteError and Paths_WriteReason). Leaves
+ * errno and the last error as they were. */
+void Paths_WriteDone(const char *path);
+/* `watch` hears what writes under the user directory show: writable (1), or
+ * not (0) with Paths_WriteReason's text, each time the last outcome changes.
+ * Nothing is written to find out: the crash reports' "user dir" fact says
+ * "not tried yet" until the game itself saves something (main.c). */
+void Paths_WatchUserDir(void (*watch)(int writable, const char *why));
 
 #endif

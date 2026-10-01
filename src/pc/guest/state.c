@@ -6,15 +6,18 @@
 #include "pc/mods/mods.h"
 #include "pc/mods/events.h"
 #include "image.h"
+#include "retail_image.h"
 #include "pc/audio/spu.h"
 #include "pc/audio/replace.h"
 #include "pc/compat/gte.h"
 #include "pc/render/soft_gpu.h"
 #include "pc/render/texture_dump.h"
 #include "pc/saves/deck_menu.h"
+#include "pc/cards/pack_shop.h"
 #include "pc/text/language.h"
 #include "pc/text/text.h"
 #include "pc/platform/menu.h"
+#include "pc/platform/title_screen.h"
 #include "pc/debug/crash.h"
 #include "pc/debug/log.h"
 #include "pc/compat/signal.h"
@@ -204,9 +207,14 @@ int Memories_StateChunk(MemoriesState *state, const char *tag, const MemoriesSta
         return 0;
     }
     from = find_chunk(state, tag, &size);
-    if (!from || size != total) {
-        fprintf(stderr, "memories-pc: state: %s '%s' (%lu bytes in the state, %lu in this build); that part keeps its current state\n",
-                from ? "layout changed for" : "no chunk", tag, (unsigned long)size, (unsigned long)total);
+    if (!from) {
+        fprintf(stderr, "memories-pc: state: no chunk '%s' (%lu bytes in this build); that part keeps its current state\n",
+                tag, (unsigned long)total);
+        return 0;
+    }
+    if (size != total) {
+        fprintf(stderr, "memories-pc: state: layout changed for '%s' (%lu bytes in the state, %lu in this build); that part keeps its current state\n",
+                tag, (unsigned long)size, (unsigned long)total);
         return 0;
     }
     for (i = 0; i < count; i++) {
@@ -395,6 +403,7 @@ static void subsystems(MemoriesState *state)
         SoftGpu_PictureFromVram();
     }
     Memories_StateChunk(state, "gte", gte, 1);
+    RetailImage_State(state);
     Spu_State(state);
     LibSpu_State(state);
     LibDs_State(state);
@@ -405,7 +414,9 @@ static void subsystems(MemoriesState *state)
     LibMcrd_State(state);
     SaveMenu_State(state);
     if (!Memories_StateLoading(state)) DeckMenu_ShopState(state);
+    if (!Memories_StateLoading(state)) PackShop_State(state);
     TitleJump_State(state);
+    TitleScreen_State(state);
     Platform_State(state);
     DeckMenu_State(state); /* the decks' draft, kept with the save */
 }
@@ -480,22 +491,38 @@ static void serialize(MemoriesState *state)
     hold_signals(0);
 }
 
-static int save(const char *path)
+/* Where and why a state was not saved: on stderr, and for the player's own
+ * request (`tell`) in a notice as well, since F5 is otherwise silent. */
+static int not_saved(const char *path, int tell)
+{
+    static const char *const ok[] = {"OK"};
+    char why[1200], text[1300];
+    Paths_WriteError(why, sizeof(why), path);
+    snprintf(text, sizeof(text), "Could not save the state to %s", why);
+    fprintf(stderr, "memories-pc: %s\n", text);
+    if (tell) Menu_ShowNotice("Save state not saved", text, ok, 1, 0, NULL);
+    return -1;
+}
+
+static int save(const char *path, int tell)
 {
     MemoriesState state = {0, NULL, NULL, 0};
     char partial[600];
+    int failed;
     snprintf(partial, sizeof(partial), "%s.partial", path);
+    Paths_WriteBegin();
     state.file = fopen(partial, "wb");
-    if (!state.file) {
-        perror(partial);
-        return -1;
-    }
+    if (!state.file) return not_saved(path, tell);
     serialize(&state);
-    if (fclose(state.file) != 0 || rename(partial, path) != 0) {
-        perror(path);
+    failed = ferror(state.file) != 0; /* a short write (a full disk) leaves fclose content */
+    if (fclose(state.file) != 0) failed = 1;
+    if (failed || rename(partial, path) != 0) {
+        not_saved(path, tell); /* before remove() changes the reason */
+        remove(partial);
         return -1;
     }
     fprintf(stderr, "memories-pc: state saved to %s\n", path);
+    Paths_WriteDone(path);
     return 0;
 }
 
@@ -511,6 +538,7 @@ static void apply(void)
     hold_signals(1);
     Spu_Hold(1);
     DeckMenu_ShopState(&state);
+    PackShop_State(&state); /* its text, like the shop's menu, remapped first */
     chunk = find_chunk(&state, "memory", &size);
     memcpy((void *)(uintptr_t)MEMORIES_GUEST_RAM, chunk, MEMORIES_GUEST_RAM_SIZE);
     memcpy((void *)(uintptr_t)SCRATCHPAD, chunk + MEMORIES_GUEST_RAM_SIZE, SCRATCHPAD_SIZE);
@@ -908,7 +936,7 @@ void Memories_StatePoint(unsigned presented_frames)
     }
     if (scripted_path && !scripted_done && presented_frames >= scripted_frame) {
         scripted_done = 1;
-        save(scripted_path);
+        save(scripted_path, 0);
     }
     {
         /* MEMORIES_AUTOSAVE=<seconds>: a rolling state every so many seconds
@@ -938,14 +966,14 @@ void Memories_StatePoint(unsigned presented_frames)
             snprintf(path, sizeof(path), "%.*s/auto%u.state", slash ? (int)(slash - folder) : 1,
                      slash ? folder : ".", autosave_index % 3 + 1);
             autosave_index++;
-            if (!save(path)) LOG(LOG_STATE, "autosave %s at frame %u", path, presented_frames);
+            if (!save(path, 0)) LOG(LOG_STATE, "autosave %s at frame %u", path, presented_frames);
         }
     }
     what = __atomic_exchange_n(&requested, 0, __ATOMIC_SEQ_CST);
     if (what) {
         slot_path(path, sizeof(path), requested_slot);
         if (what == 1) {
-            save(path);
+            save(path, 1);
         } else {
             if (!load(path)) last_loaded_slot = requested_slot;
             else Crash_ReportSoft("state load failed", path);

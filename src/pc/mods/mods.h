@@ -69,6 +69,11 @@ int Mods_Setting(const char *id, const char *key, int fallback);
  * it has one; or it names no file in the mod (noted). A setting the mod does
  * not declare is noted and the file used. `name` is the file as written. */
 int Mods_File(int mod, const char *key, int index, char *path, size_t size, const char **name);
+/* Whether one entry of a mod's rule list ("fusions", "equips", "rituals";
+ * src/pc/cards/tables.c) is used: as a Mods_File entry, its "setting" (and
+ * "value") may leave it out; a setting the mod does not declare is noted
+ * and the entry used. `where` names the entry ("fusions[3]"). */
+int Mods_EntryUsed(const char *id, const struct JsonValue *entry, const char *where);
 /* Say why a mod is not quite what it asked for: on stderr and beside it in
  * the Mods window. */
 void Mods_Note(const char *id, const char *format, ...);
@@ -134,9 +139,16 @@ int Mods_ProfileValue(const char *name, const char *key, int fallback);
 int Mods_Validate(const int *enabled, char *error, size_t size);
 int Mods_Apply(const int *enabled, char *error, size_t size);
 int Mods_ProfileSave(const char *name);
+/* Why the last Mods_ProfileSave could not write its file ("<path>: <reason>.",
+ * Paths_WriteError), or "" when it failed on the name or succeeded. */
+const char *Mods_ProfileSaveError(void);
 int Mods_ProfileRead(const char *name, int *enabled);
 void Mods_SetCardSignature(unsigned signature);
 unsigned Mods_CardSignature(void);
+/* The card packs' files and pictures (pc/cards/packs.h): a "packs" file and
+ * its images are not in the manifest the signature hashes. 0 without packs. */
+void Mods_SetPackSignature(unsigned signature);
+unsigned Mods_PackSignature(void);
 void Mods_SetCardResolver(int (*resolve)(const char *));
 /* The same for a duelist identity (pc/free_duel/duelists.h), which the free
    duel list injects once it is built. */
@@ -154,7 +166,14 @@ void Mods_OptionChanged(int mod, int option);
 unsigned Mods_CodeHash(int mod);
 unsigned Mods_Signature(void);
 int Mods_DamageLife(int side, int life, int damage, int kind);
-/* Add a duel StarChip prize to *balance (cap 999999). Dispatches
+/* The mods' "limits" by name (pc/cards/tables.h, Tables_Limit), which the
+ * card tables hand over once they are built; `fallback` until then, and for
+ * a name it does not know. Also the mod API's `limit` (API 8). */
+void Mods_SetLimitSource(long (*source)(const char *name));
+/* Where host->menu_item (API 9) finds the title menus' items (title_menu.c). */
+void Mods_SetMenuItemSource(const char *(*source)(int index));
+long Mods_Limit(const char *name, long fallback);
+/* Add a duel StarChip prize to *balance (cap 999999, or a mod's "limits"). Dispatches
  * MEMORIES_EVENT_STARCHIP; returns the resulting balance. */
 int Mods_AwardStarchips(unsigned *balance, int prize);
 #endif

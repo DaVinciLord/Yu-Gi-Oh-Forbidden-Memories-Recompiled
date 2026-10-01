@@ -10,7 +10,7 @@ from unittest import mock
 from pathlib import Path
 
 from fm_editor import disc, gamedata as g, manifest, pools, validate
-from fm_editor.model import Project
+from fm_editor.model import Project, card_matches
 from fm_editor.tests.fixtures import Fixture, make_iso
 
 FIXTURE = None
@@ -27,7 +27,7 @@ def state(project: Project):
     """Everything a mod can change, for comparing two projects."""
     return ({cid: vars(card) for cid, card in project.cards.items()},
             {cid: (a.key, a.base, a.drops, a.opponents, a.extra) for cid, a in project.added.items()},
-            project.fusions, {e: m for e, m in project.equips.items() if m or e in project.retail.equips},
+            project.fusions, project.active_removes(), {e: m for e, m in project.equips.items() if m or e in project.retail.equips},
             project.rituals, [{k: {c: w for c, w in v.items() if w} for k, v in d.items()} for d in project.pools],
             project.card_extra, project.notes)
 
@@ -293,6 +293,258 @@ class ManifestTest(unittest.TestCase):
         built = manifest.build(p)
         self.assertIn({"with": ["other:x:1", 1], "result": 2}, built["fusions"])
 
+    # --- {"remove": C} ------------------------------------------------------
+
+    def removed_result(self):
+        """A card two disc recipes or more make, and those recipes."""
+        p = Project(self.retail)
+        return next((c, p.retail_recipes(c)) for c in sorted(set(self.retail.fusions.values()))
+                    if len(p.retail_recipes(c)) >= 3)
+
+    def remove_mod(self):
+        """A mod as the editor writes one: a remove, a changed pair, a pair
+        taken away and a pair added, none of them a recipe of the removed card."""
+        c, recipes = self.removed_result()
+        p = Project(self.retail)
+        others = [pair for pair in sorted(self.retail.fusions) if self.retail.fusions[pair] != c]
+        changed, forbidden = others[0], others[1]
+        new = next((a, b) for a in range(1, 50) for b in range(a, 50) if (a, b) not in self.retail.fusions)
+        rules = [{"remove": p.ref(c)}]
+        for pair, result in sorted({changed: c, forbidden: None, new: c}.items()):
+            rules.append({"with": [p.ref(pair[0]), p.ref(pair[1])], "result": p.ref(result) if result else None})
+        return c, recipes, {"id": "rm", "name": "Remove", "fusions": rules}
+
+    def game_fusions(self, p: Project, rules):
+        """What the port makes of written fusion rules, pair by pair
+        (duel_card_checks.c CardRules_Fusion): Tables_Fusion, then the cards'
+        own "fusions" lists as the project keeps them (cards.c Cards_Fusion),
+        then the disc's table by the bases, filtered."""
+        own = {cid: extra.get("fusions") or [] for cid, extra in p.card_extra.items()}
+        own.update({cid: added.extra.get("fusions") or [] for cid, added in p.added.items()})
+        pairs, removes = {}, set()
+        for order, rule in enumerate(rules):
+            if "remove" in rule:
+                removes.add(p.resolve(rule["remove"]))
+                continue
+            a, b = (p.resolve(c) for c in rule["with"])
+            pairs[p.pair(a, b)] = (order, p.resolve(rule["result"]) if rule["result"] else 0)
+
+        def fusion(a, b):
+            find = lambda x, y: pairs.get(p.pair(x, y))
+            base_a, base_b = p.base_of(a), p.base_of(b)
+            rule = find(a, b)
+            if not rule:
+                one = find(a, base_b) if base_b != b else None
+                other = find(base_a, b) if base_a != a else None
+                rule = one if one and (not other or one[0] > other[0]) else other
+            if not rule and base_a != a and base_b != b:
+                rule = find(base_a, base_b)
+            if rule:
+                return rule[1]
+            for x, y in ((a, b), (b, a)):
+                for listed in own.get(x, []):
+                    if p.resolve(listed.get("with")) == y:
+                        return p.resolve(listed.get("result")) if listed.get("result") else 0
+            made = self.retail.fusions.get(p.pair(base_a, base_b), 0)
+            return 0 if made in removes else made
+        return fusion
+
+    def assert_same_game(self, p: Project, rules, other_rules=None, cards=()):
+        """The written rules make, for every pair a table names (and the
+        pairs of `cards` with them), what the project holds, or what
+        `other_rules` make."""
+        game = self.game_fusions(p, rules)
+        want = self.game_fusions(p, other_rules) if other_rules is not None else \
+            (lambda a, b: p.fusions.get(p.pair(a, b)) or 0)
+        pairs = set(self.retail.fusions) | set(p.fusions)
+        for card in cards:
+            base = p.base_of(card)
+            pairs |= {p.pair(card, b if a == base else a) for a, b in self.retail.fusions if base in (a, b)}
+        for pair in sorted(pairs):
+            self.assertEqual(game(*pair), want(*pair), pair)
+
+    def test_fusion_remove_kept_as_written(self):
+        from fm_editor import bulk_fusions
+        c, recipes, mod = self.remove_mod()
+        p = Project(self.retail)
+        self.assertEqual(manifest.apply(p, json.loads(json.dumps(mod))), [])
+        self.assertEqual(p.fusion_removes, [c])
+        self.assertFalse([pair for pair in recipes if pair in p.fusions])
+        built = manifest.build(p)["fusions"]
+        self.assertEqual(manifest.dumps({"fusions": built}), manifest.dumps({"fusions": mod["fusions"]}))
+        self.assertEqual(bulk_fusions.rule_count(p), len(built))
+        self.assert_same_game(p, built, mod["fusions"])
+        self.assert_same_game(p, built)
+        self.assertEqual(state(self.reopen(p)), state(p))
+        # A copy of a recipe's card fuses as its base: the remove holds for it.
+        copy = p.add_card(recipes[0][0], "c")
+        self.assertEqual(self.game_fusions(p, built)(copy, recipes[0][1]), 0)
+        self.assert_same_game(p, manifest.build(p)["fusions"], mod["fusions"], cards=[copy])
+
+    def test_fusion_remove_with_a_recipe_back(self):
+        from fm_editor import bulk_fusions
+        c, recipes, mod = self.remove_mod()
+        p = Project(self.retail)
+        manifest.apply(p, mod)
+        p.revert_fusion(recipes[1])
+        built = manifest.build(p)["fusions"]
+        self.assertEqual(built[0], {"remove": p.ref(c)})
+        back = {"with": [p.ref(recipes[1][0]), p.ref(recipes[1][1])], "result": p.ref(c)}
+        self.assertIn(back, built)
+        self.assertEqual(len(built), len(mod["fusions"]) + 1)
+        self.assertEqual(bulk_fusions.rule_count(p), len(built))
+        self.assert_same_game(p, built)
+        self.assertEqual(state(self.reopen(p)), state(p))
+        # A recipe changed to another card stays a rule of its own, the remove too.
+        p.set_fusion(*recipes[2], recipes[2][0])
+        built = manifest.build(p)["fusions"]
+        self.assertEqual(built[0], {"remove": p.ref(c)})
+        self.assert_same_game(p, built)
+        # Every recipe back: the remove is gone, and with it the rules it needed.
+        for pair in recipes:
+            p.revert_fusion(pair)
+        built = manifest.build(p)["fusions"]
+        self.assertEqual((p.fusion_removes, p.active_removes()), ([], []))
+        self.assertEqual(built, mod["fusions"][1:])
+        self.assertEqual(bulk_fusions.rule_count(p), len(built))
+        self.assert_same_game(p, built)
+        self.assertEqual(state(self.reopen(p)), state(p))
+        # Taking one away again writes a rule for it alone, as it does in the
+        # mod saved and opened again: the remove does not come back.
+        again = self.reopen(p)
+        for project in (p, again):
+            project.set_fusion(*recipes[0], None)
+        self.assertEqual(manifest.build(p)["fusions"], manifest.build(again)["fusions"])
+        self.assertIn({"with": [p.ref(recipes[0][0]), p.ref(recipes[0][1])], "result": None},
+                      manifest.build(p)["fusions"])
+
+    def test_fusion_remove_edge_cases(self):
+        c, recipes = self.removed_result()
+        p = Project(self.retail)
+        p.info.id = "rm"
+        copy = p.add_card(5, "c5")
+        none_makes = next(x for x in range(1, 723) if not p.retail_recipes(x))
+        rules = [{"remove": p.ref(none_makes)}, {"remove": p.ref(c)}, {"remove": p.ref(c)},
+                 {"remove": "rm:c5:1"}]
+        rules += [{"with": [p.ref(a), p.ref(b)], "result": p.ref(c)} for a, b in recipes]
+        manifest.apply(p, {"id": "rm", "fusions": rules})
+        # A remove no disc recipe answers to is the mod's, and stays; one of a
+        # card whose every recipe the mod puts back does nothing, and goes
+        # (the rules that put them back are the mod's, and stay).
+        self.assertEqual(p.active_removes(), [none_makes, copy])
+        built = manifest.build(p)["fusions"]
+        kept = [{"with": [p.ref(a), p.ref(b)], "result": p.ref(c)} for a, b in recipes]
+        self.assertEqual(built, [{"remove": p.ref(none_makes)}, {"remove": "rm:c5:1"}] + kept)
+        self.assert_same_game(p, built, rules)
+        p.remove_card(copy)
+        self.assertEqual(manifest.build(p)["fusions"], [{"remove": p.ref(none_makes)}] + kept)
+        # The Fusions tab's "remove every disc recipe": the pairs go, and a
+        # pair the mod has changed stays changed.
+        p = Project(self.retail)
+        p.set_fusion(*recipes[0], recipes[0][0])
+        p.remove_recipes(c)
+        self.assertEqual([pair for pair in recipes if pair in p.fusions], [recipes[0]])
+        built = manifest.build(p)["fusions"]
+        self.assertEqual(built[0], {"remove": p.ref(c)})
+        self.assertEqual(len(built), 2)
+        self.assert_same_game(p, built)
+
+    def test_fusion_rules_before_own_lists(self):
+        """A rule of the mod's is asked before a card's own "fusions" list:
+        one the result alone needs none for (a null rule on a recipe a
+        remove takes away, a rule giving the disc's result) still decides."""
+        c, recipes = self.removed_result()
+        a, b = recipes[0]
+        used = {a, b}
+        others = []
+        for pair, made in sorted(self.retail.fusions.items()):
+            if made != c and pair[0] != pair[1] and not used & set(pair) and len(others) < 4:
+                others.append(pair)
+                used |= set(pair)
+        (d1, d2), (e, f), (g, h), (i, j) = others
+        p = Project(self.retail)
+        ref = p.ref
+        mod = {"id": "own", "name": "Own lists",
+               "cards": [{"replace": ref(a), "fusions": [{"with": ref(b), "result": ref(600)}]},
+                         {"replace": ref(d1), "fusions": [{"with": ref(d2), "result": ref(599)},
+                                                         {"with": ref(h), "result": ref(598)}]},
+                         {"replace": ref(g), "fusions": [{"with": ref(h), "result": ref(596)}]},
+                         {"copy": e, "id": "k", "fusions": [{"with": ref(f), "result": ref(597)}]}]}
+        rules = [{"remove": ref(c)}]
+        for pair, result in sorted({(a, b): None, (d1, d2): self.retail.fusions[(d1, d2)],
+                                    (e, f): self.retail.fusions[(e, f)]}.items()):
+            rules.append({"with": [ref(pair[0]), ref(pair[1])], "result": ref(result) if result else None})
+        mod["fusions"] = rules
+        p = Project(self.retail)
+        manifest.apply(p, json.loads(json.dumps(mod)))
+        copy = max(p.added)
+        game = self.game_fusions(p, rules)
+        self.assertEqual((game(a, b), game(d1, d2), game(copy, f), game(g, h)),
+                         (0, self.retail.fusions[(d1, d2)], self.retail.fusions[(e, f)], 596))
+        built = manifest.build(p)
+        self.assertEqual(manifest.dumps({"fusions": built["fusions"]}), manifest.dumps({"fusions": rules}))
+        self.assert_same_game(p, built["fusions"], rules, cards=[copy])
+        self.assertEqual(manifest.dumps(manifest.build(self.reopen(p))), manifest.dumps(built))
+        # The modder's edits of a disc pair an own list names keep a rule, so
+        # the game plays the result the tab shows: a recipe back under the
+        # remove, and the disc's result where the list would otherwise win.
+        p.revert_fusion((a, b))
+        p.set_fusion(g, h, 5)
+        p.revert_fusion((g, h))
+        game = self.game_fusions(p, manifest.build(p)["fusions"])
+        self.assertEqual((game(a, b), game(g, h)), (c, self.retail.fusions[(g, h)]))
+        # A pair with no disc result reverted is no rule at all: the list decides.
+        p.set_fusion(d1, h, 5)
+        p.revert_fusion(p.pair(d1, h))
+        self.assertNotIn(p.pair(d1, h), p.fusion_explicit)
+        self.assertEqual(self.game_fusions(p, manifest.build(p)["fusions"])(d1, h),
+                         self.retail.fusions.get(p.pair(d1, h)) or 598)
+        p.set_fusion(copy, f, 5)
+        p.revert_fusion(p.pair(copy, f))
+        self.assertNotIn(p.pair(copy, f), p.fusion_explicit)
+        # A pair no own list names goes back to no rule at all.
+        p.set_fusion(i, j, 5)
+        p.revert_fusion((i, j))
+        self.assertNotIn((i, j), p.fusion_explicit)
+        self.assertNotIn([ref(i), ref(j)], [rule.get("with") for rule in manifest.build(p)["fusions"]])
+        # The file's rule for the base pair a copy's own list falls back on
+        # stays through an edit: without it the copy's list would decide.
+        p.set_fusion(e, f, 5)
+        p.revert_fusion((e, f))
+        self.assertIn((e, f), p.fusion_explicit)
+        self.assertEqual(self.game_fusions(p, manifest.build(p)["fusions"])(copy, f), self.retail.fusions[(e, f)])
+        from fm_editor import bulk_fusions
+        self.assertEqual(bulk_fusions.rule_count(p), len(manifest.build(p)["fusions"]))
+        p.fusion_explicit.discard((e, f))
+        self.assertEqual(self.game_fusions(p, manifest.build(p)["fusions"])(copy, f), 597)
+        # "Remove recipes of...": the remove leaves the own lists their pairs,
+        # and own_fusion (the tab's "own list" rows) says what they make.
+        p.remove_recipes(c)
+        removes = set(p.active_removes())
+        game = self.game_fusions(p, manifest.build(p)["fusions"])
+        self.assertEqual((p.own_fusion((a, b), removes), game(a, b)), (600, 600))
+        for pair in p.own_fusion_pairs()[0]:
+            own = p.own_fusion(pair, removes)
+            self.assertEqual(game(*pair), own if own is not None else game(*pair), pair)
+        self.assertIsNone(p.own_fusion((d1, d2), removes))       # the mod's rule decides
+
+    def test_deleted_card_leaves_no_needless_null_rule(self):
+        p = Project(self.retail)
+        free = [(a, b) for a in range(1, 40) for b in range(a + 1, 40) if (a, b) not in self.retail.fusions]
+        (x, y), (u, v) = free[0], free[1]
+        disc = next(pair for pair in sorted(self.retail.fusions) if not {x, y, u, v} & set(pair))
+        mod = {"id": "d", "name": "Delete",
+               "cards": [{"copy": 5, "id": "c"}, {"replace": u, "fusions": [{"with": v, "result": 400}]}],
+               "fusions": [{"with": [p.ref(a), p.ref(b)], "result": "d:c:1"} for a, b in sorted([(x, y), (u, v), disc])]}
+        manifest.apply(p, mod)
+        p.remove_card(max(p.added))
+        built = manifest.build(p)["fusions"]
+        # the disc pair's rule forbids its disc fusion, and the own list's pair
+        # keeps its null rule (it decided the pair before the list); the other goes
+        self.assertEqual(built, [{"with": [p.ref(a), p.ref(b)], "result": None} for a, b in sorted([(u, v), disc])])
+        self.assertEqual((p.fusion_status((u, v)), p.fusion_status(disc)), ("removed", "removed"))
+        self.assertNotIn((x, y), p.fusion_explicit)
+
     def reopen(self, p: Project) -> Project:
         again = Project(self.retail)
         manifest.apply(again, json.loads(manifest.dumps(manifest.build(p))))
@@ -322,6 +574,21 @@ class ManifestTest(unittest.TestCase):
         for e in p.equip_cards():
             self.assertEqual(again.equips.get(e, again.equip_baseline(e)), want[e], e)
 
+    def test_rules_switched_by_a_setting_are_kept(self):
+        # The editor shows the disc's table, not a setting's: a rule with
+        # "setting" is written back as it came, and does not change the table.
+        p = Project(self.retail)
+        fusion = {"with": [1, 2], "result": 5, "setting": "thunder"}
+        equip = {"card": 652, "add": ["Dragon"], "setting": "thunder"}
+        ritual = {"card": 665, "tributes": [1, 2, 3], "result": 4, "setting": "pick", "value": 2}
+        data = {"id": "s", "settings": [{"key": "thunder", "type": "bool", "default": 1}],
+                "fusions": [fusion], "equips": [equip], "rituals": [ritual]}
+        messages = manifest.apply(p, data)
+        self.assertEqual(p.fusions.get((1, 2)), self.retail.fusions.get((1, 2)))
+        self.assertEqual(sum("switched by setting" in m for m in messages), 3)
+        built = json.loads(manifest.dumps(manifest.build(p)))
+        self.assertEqual((built["fusions"], built["equips"], built["rituals"]), ([fusion], [equip], [ritual]))
+
     def test_forbidden_copy_fusion(self):
         p = Project(self.retail)
         p.info.id = "t"
@@ -334,6 +601,71 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(again.fusions.get((2, copy)), 0)
         again.revert_fusion((2, copy))
         self.assertNotIn((2, copy), again.fusions)
+
+    def test_added_ritual(self):
+        # A copy of a ritual card is listed, has its base's recipe until it
+        # is given one, and its own recipe goes out and comes back by id.
+        p = Project(self.retail)
+        p.info.id = "t"
+        base = p.ritual_cards()[0]
+        copy = p.add_card(base, "r1")
+        monster = p.add_card(1, "m1")
+        self.assertIn(copy, p.ritual_cards())
+        self.assertNotIn(monster, p.ritual_cards())
+        self.assertNotIn("rituals", manifest.build(p))
+        p.rituals[copy] = (1, 2, 3, 4)
+        self.assertEqual(p.ritual_status(copy), "added")
+        self.assertIn({"card": "t:r1:1", "tributes": [p.ref(1), p.ref(2), p.ref(3)], "result": p.ref(4)},
+                      manifest.build(p)["rituals"])
+        self.assertFalse([i for i in validate.validate(p) if i.area == "Rituals"])
+        again = self.reopen(p)
+        self.assertEqual(again.rituals.get(copy), (1, 2, 3, 4))
+        self.assertEqual(again.rituals.get(base), p.rituals.get(base))
+        p.remove_card(copy)
+        self.assertNotIn(copy, p.rituals)
+
+    def test_card_made_a_ritual(self):
+        # A disc monster typed Ritual is a ritual only with "effect" naming
+        # one (it is played with that card's effect); its recipe round-trips.
+        p = Project(self.retail)
+        p.info.id = "t"
+        base = p.ritual_cards()[0]
+        p.cards[1] = p.cards[1].copy(type=g.TYPE_RITUAL)
+        self.assertNotIn(1, p.ritual_cards())
+        p.card_extra[1] = {"effect": base}
+        self.assertIn(1, p.ritual_cards())
+        p.rituals[1] = (2, 3, 4, 5)
+        self.assertFalse([i for i in validate.validate(p) if i.area == "Rituals"])
+        again = self.reopen(p)
+        self.assertIn(1, again.ritual_cards())
+        self.assertEqual(again.rituals.get(1), (2, 3, 4, 5))
+
+    def test_reverts(self):
+        # What the tabs' Revert buttons do, in the model a front end calls.
+        p = Project(self.retail)
+        p.rituals[681] = (4, 5, 6, 500)
+        p.rituals.pop(682)
+        p.rituals[683] = (1, 2, 3, 502)
+        self.assertEqual([p.ritual_status(r) for r in (681, 682, 683, 684)], ["changed", "removed", "added", ""])
+        for r in (681, 682, 683):
+            p.revert_ritual(r)
+        self.assertEqual(p.rituals, self.retail.rituals)
+        p.pools[1]["pow"] = {1: 2048}
+        p.revert_pool(1, "pow")
+        self.assertEqual(p.pools[1]["pow"], self.retail.pools[1]["pow"])
+        self.assertIsNot(p.pools[1]["pow"], self.retail.pools[1]["pow"])
+        p.cards[1] = p.cards[1].copy(attack=1230)
+        copy = p.add_card(1, "c1")
+        p.cards[copy] = p.cards[copy].copy(name="Another", defense=10)
+        p.set_password(copy, "12345678")
+        p.set_notes(copy, "mine")
+        p.revert_card(copy)            # back to its base as the mod has it
+        self.assertTrue(p.cards[copy].same(p.cards[1].copy(id=copy)))
+        self.assertEqual((p.password(copy), p.notes[copy]), ("", "mine"))
+        self.assertTrue(card_matches(p, copy, str(copy)))
+        self.assertTrue(card_matches(p, copy, p.cards[1].name[1:4].upper()))
+        self.assertFalse(card_matches(p, 2, str(copy)))
+        self.assertTrue(card_matches(p, 2, ""))
 
     def test_notes(self):
         p = self.edited()
@@ -481,6 +813,10 @@ class ValidateTest(unittest.TestCase):
         self.assertEqual(validate.text_lines("a b"), 1)
         self.assertEqual(validate.text_lines("x" * 20 + " y"), 2)
         self.assertEqual(validate.text_lines("a\nb\nc"), 3)
+        # An icon is one letter of the line, a colour none (cards.c text_code).
+        self.assertEqual(validate.text_lines("x" * 16 + " {f8 0B 04} y"), 1)
+        self.assertEqual(validate.text_lines("x" * 17 + " {f8 0B 04} y"), 2)
+        self.assertEqual(validate.text_lines("{f8 0A 02}" + "x" * 18 + " y"), 1)
 
 
 

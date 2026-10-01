@@ -2,24 +2,40 @@
 a scrolled tree, and dialogs."""
 from __future__ import annotations
 
+import sys
 import tkinter as tk
 import tkinter.font as tkfont
 from tkinter import ttk
 
 from . import theme
 from .gamedata import TYPE_NAMES
+from .model import card_matches  # noqa: F401 (model.py's; tabs.py and art_tab.py import it from here)
 
 
 def ui_scale(widget) -> float:
     """How much bigger than at 96 dpi the default font is drawn: a desktop
     set to 144 dpi (Xft.dpi) enlarges the text but not Tk's pixel sizes, so
-    widths, wrap lengths and row heights given in pixels grow by this."""
+    widths, wrap lengths and row heights given in pixels grow by this.
+    On Windows the program is dpi aware (theme.dpi_awareness): Tk's scaling
+    (pixels a point) is the dpi's, 4/3 at 100%, and the fonts in points
+    follow it, so the pixel sizes do too."""
+    if sys.platform == "win32":
+        return max(1.0, float(widget.tk.call("tk", "scaling")) * 72 / 96)
     return max(1.0, tkfont.nametofont("TkDefaultFont", root=widget).metrics("linespace") / 19)
 
 
 def px(widget, pixels: int) -> int:
     """`pixels` at 96 dpi, at the desktop's size (ui_scale)."""
     return round(pixels * ui_scale(widget))
+
+
+def ui_font(size: int, weight: str = "bold"):
+    """The default font's face at another size (a heading): ("TkDefaultFont",
+    size, weight) names no face, which X11 matches to its default sans but
+    Windows to Arial, so there the face is TkDefaultFont's own."""
+    if sys.platform == "win32":
+        return (tkfont.nametofont("TkDefaultFont").actual("family"), size, weight)
+    return ("TkDefaultFont", size, weight)
 
 
 def scrolled_tree(parent, columns, widths, height=20, selectmode="browse"):
@@ -41,16 +57,6 @@ def scrolled_tree(parent, columns, widths, height=20, selectmode="browse"):
     for tag in theme.TAGS:
         tree.tag_configure(tag, foreground=theme.tag_color(tree, tag))
     return frame, tree
-
-
-def card_matches(project, cid: int, text: str) -> bool:
-    if not text:
-        return True
-    text = text.lower().strip()
-    card = project.cards.get(cid)
-    if card is None:
-        return False
-    return text == str(cid) or text in card.name.lower()
 
 
 class CardPicker(tk.Toplevel):
@@ -80,7 +86,7 @@ class CardPicker(tk.Toplevel):
         self.bind("<Escape>", lambda e: self.destroy())
         self.fill()
         entry.focus_set()
-        self.grab_set()
+        grab(self)
 
     def _select_first(self):
         children = self.tree.get_children()
@@ -118,8 +124,39 @@ def pick_card(master, project, title="Choose a card", only=None, initial=""):
     # The picker took the grab: a dialog it was opened from gets it back.
     top = master.winfo_toplevel()
     if isinstance(top, tk.Toplevel) and top.winfo_exists():
-        top.grab_set()
+        grab(top)
     return dialog.result
+
+
+def grab(window):
+    """window.grab_set(), once the window is on screen: a dialog opened by a
+    double-click is often not mapped yet, and Tk refuses the grab ("window
+    not viewable")."""
+    try:
+        window.grab_set()
+    except tk.TclError:
+        window.after(20, lambda: window.winfo_exists() and grab(window))
+
+
+def card_named(project, text: str) -> int:
+    """The card a CardField's text names, or 0."""
+    text = text.strip()
+    if not text:
+        return 0
+    # A number, or a card as CardField.set() shows it ("7 Name"); otherwise a
+    # name, which may start with a digit ("7 Colored Fish").
+    if text.isdigit() and int(text) in project.cards:
+        return int(text)
+    head = text.split(" ", 1)[0]
+    if head.isdigit() and int(head) in project.cards and project.card_label(int(head)) == text:
+        return int(head)
+    cid = project.resolve(text)
+    if cid:
+        return cid
+    for other, card in project.cards.items():
+        if card.name.lower() == text.lower():
+            return other
+    return 0
 
 
 class CardField(ttk.Frame):
@@ -146,24 +183,7 @@ class CardField(ttk.Frame):
 
     def get(self) -> int:
         """The card named, or 0."""
-        project = self.project_getter()
-        text = self.var.get().strip()
-        if not text:
-            return 0
-        # A number, or a card as set() shows it ("7 Name"); otherwise a name,
-        # which may start with a digit ("7 Colored Fish").
-        if text.isdigit() and int(text) in project.cards:
-            return int(text)
-        head = text.split(" ", 1)[0]
-        if head.isdigit() and int(head) in project.cards and project.card_label(int(head)) == text:
-            return int(head)
-        cid = project.resolve(text)
-        if cid:
-            return cid
-        for other, card in project.cards.items():
-            if card.name.lower() == text.lower():
-                return other
-        return 0
+        return card_named(self.project_getter(), self.var.get())
 
 
 class FormDialog(tk.Toplevel):
@@ -187,7 +207,7 @@ class FormDialog(tk.Toplevel):
         ttk.Button(buttons, text="OK", command=self.ok).pack(side="right")
         ttk.Button(buttons, text="Cancel", command=self.destroy).pack(side="right", padx=4)
         self.bind("<Escape>", lambda e: self.destroy())
-        self.grab_set()
+        grab(self)
 
     def ok(self):
         problem = self.on_ok(self)

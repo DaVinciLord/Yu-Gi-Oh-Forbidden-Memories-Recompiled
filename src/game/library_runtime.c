@@ -65,6 +65,7 @@
 #include "../psyq/libgs.h"
 #ifdef MEMORIES_PC
 #include "pc/cards/cards.h"
+#include "pc/cards/stars.h"
 #endif
 
 /* The seven contiguous functions of the Library screen: the card-view state
@@ -257,6 +258,12 @@ void func_8002ACA4(u8 *state)
         if (((gDuel_adwCardStats[gDuel_wSelectedCardID - 1] >> 0x1A) & 0x1F) >= 0x14) {
             layout = 4;
         }
+#ifdef MEMORIES_PC
+        /* A monster a mod gave no star: the magic cards' layout (stars.h). */
+        if (Stars_NoStarCard(gDuel_wSelectedCardID)) {
+            layout = 4;
+        }
+#endif
         box = TextBox_Create(0, layout, 0x94, 0xE, 0xA8, 0xC0);
         B(box, 0x54) = 0;
         B(box, 0x53) = 1;
@@ -554,7 +561,7 @@ void func_8002BAB4(void)
                 cur = model->view.vry;
                 if (D_80181012 < cur) {
                     model->view.vry = cur - step;
-                    cur = *(volatile long *)&model->view.vry;
+                    cur = *(volatile PSXLONG *)&model->view.vry;
                 }
                 if (cur < D_80181012) {
                     model->view.vry = cur + step;

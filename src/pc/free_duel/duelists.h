@@ -117,6 +117,10 @@ void Duelists_SetAvailable(int duelist, int shown);
  */
 int Duelists_Unlocked(const void *state, int duelist);
 int Duelists_HasUnlock(int duelist);
+/* The same conditions given one by one, for whatever else unlocks by them
+ * (the card packs' "unlock", pc/cards/packs.h): "" (or NULL) for no duelist
+ * or card, 0 wins and copies for the defaults, -1 for no story flag. */
+int Duelists_ConditionsMet(const void *state, const char *beat, int wins, int story, const char *card, int copies);
 
 /* The records of the added duelists, beside the memory card's block: read
  * when a save is loaded and written when one is written, by the duelist code

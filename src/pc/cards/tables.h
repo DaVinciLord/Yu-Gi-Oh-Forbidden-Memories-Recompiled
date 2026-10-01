@@ -4,7 +4,7 @@
  *
  * A mod's manifest may carry "fusions", "equips", "rituals", "drops",
  * "decks", "equip_bonus_default", "terrain_bonus", "trap_thresholds",
- * "chest_overflow" and "passwords":
+ * "chest_overflow", "passwords" and "limits":
  * edits to the tables and constants the duel reads from the disc, written with
  * card names, stable identities or ids. They are read once at startup, after
  * the cards (cards.h), in the order the mods load; where two mods set the
@@ -48,6 +48,22 @@ int Tables_EquipBonus(int equip, int monster, int retail);
  * and a 0 after them in `recipe` (the layout of the game's ritual table),
  * 0 when a mod removed the ritual, -1 when the disc's recipe stands. */
 int Tables_Ritual(int ritual, unsigned short recipe[6]);
+/* Whether any mod has a "rituals" entry for this card (a card past the
+ * disc's without one is its base's ritual). */
+int Tables_HasRitual(int ritual);
+
+/* A condition-based ritual tribute. A slot may require a specific card,
+ * a monster type, secondary fusion group (Elf/Female), minimum/maximum printed
+ * ATK/DEF, a minimum/maximum printed level, and/or DEF greater than ATK.
+ * The requirements in one slot are ANDed. Returns 1 when the latest ritual
+ * rule has condition-based tributes and fills result, 0 otherwise. */
+typedef struct {
+    unsigned short card;
+    short min_attack, min_defense, max_attack, max_defense;
+    signed char type, min_level, max_level;
+    unsigned char fusion_group, defense_gt_attack;
+} TablesRitualRequirement;
+int Tables_RitualRequirements(int ritual, TablesRitualRequirement requirements[3], unsigned short *result);
 
 /* A weighted pool as the running opponent's mods have it: TABLES_POOL_DECK
  * (the cards an opponent's deck is dealt from), or a drop pool (S/A-POW,
@@ -83,8 +99,65 @@ int Tables_FixedDeck(int duelist, unsigned short cards[TABLES_DECK_SIZE]);
  * then keeps what it holds, and the password shop sells no copy. Without
  * one it is always 0, and the chest is the disc's. */
 int Tables_ChestLimit(void);
+/* The most copies of a card the chest may hold at all: the disc's 250, or a
+ * mod's limit past it (up to 255, a byte a card). Returning a card from the
+ * deck and a trade stop there. */
+int Tables_ChestRoom(void);
 int Tables_ChestFull(unsigned quantity);
 int Tables_ChestOverflow(unsigned quantity, unsigned *starchips);
+
+/* --- limits (notes/gameplay-tables.md, "Limits") ---------------------------
+ *
+ * A mod's "limits" raise or lower the numbers the game caps: a monster's ATK
+ * and DEF, the life points a duel starts with and may heal up to, the
+ * two-player setup's LP choice, the starchips the save holds, the copies of a
+ * card the chest keeps and a Free Duel record. Each answer is the retail
+ * constant when no mod sets it, so without one nothing changes.
+ *
+ * The values live in 16-bit fields (DuelCardRecord, AiActiveCard,
+ * DuelSideState), so 32767 is as far as ATK, DEF and LP go; the chest is a
+ * byte a card (255) and the Free Duel records are halfwords. A value past
+ * that is noted in the Mods window and held at the largest the game keeps. */
+#define TABLES_LIMIT_STAT_MAX 32767        /* s16 ATK/DEF */
+#define TABLES_LIMIT_LIFE_POINTS_MAX 32767 /* s16 LP */
+#define TABLES_LIMIT_CHEST_MAX 255         /* a byte a card in the chest */
+#define TABLES_LIMIT_RECORD_MAX 32767      /* s16 wins and losses */
+#define TABLES_LIMIT_TWO_PLAYER_RECORD_MAX 65535 /* u16 wins and losses on a 2P save */
+#define TABLES_LIMIT_STARCHIPS_MAX 99999999L
+
+/* The most ATK (`defense` 0) or DEF (1) a monster has after its bonuses:
+ * CARD_STAT_MAX, 9999, unless a mod's "attack", "defense" or "stats" say. */
+int Tables_StatCap(int defense);
+/* The higher of the two, for a scan that ranks by either. */
+int Tables_StatCapEither(void);
+/* The life points a side (0 the player, 1 the opponent) starts a duel
+ * against `duelist` (gDuel_bOpponentID; negative for a two-player duel)
+ * with: the mod's entry for that duelist, else its "player" or
+ * "opponent", else its "start", else `retail`. */
+int Tables_StartingLifePoints(int side, int duelist, int retail);
+/* How far healing may take a side that started with `start`: the mod's
+ * "max", else `start` (the disc's rule: no healing past the start). */
+int Tables_MaxLifePoints(int start);
+/* The two-player setup's LP choice: TABLES_TWO_PLAYER_START (8000),
+ * TABLES_TWO_PLAYER_MAX (8000) and TABLES_TWO_PLAYER_STEP (500), each the
+ * mod's "two_player" entry or `retail`. */
+enum { TABLES_TWO_PLAYER_START, TABLES_TWO_PLAYER_MAX, TABLES_TWO_PLAYER_STEP };
+int Tables_TwoPlayerLifePoints(int which, int retail);
+/* The most starchips the save holds: SAVE_DATA_STARCHIP_MAX (999999) or
+ * the mod's "starchips". */
+unsigned Tables_StarchipCap(void);
+/* The most wins or losses a Free Duel record counts: FREE_DUEL_RECORD_MAX
+ * (999) or the mod's "free_duel_record". */
+int Tables_FreeDuelRecordCap(void);
+/* The most wins or losses a two-player duel adds up on a memory card's
+ * save: 9999 or the mod's "two_player_record". */
+int Tables_TwoPlayerRecordCap(void);
+/* A limit by the name the mod API asks with (modapi.h, API 8): "attack",
+ * "defense", "life_points" (the start against the CPU), "life_points_max"
+ * (0 while healing stops at the start), "two_player_start",
+ * "two_player_max", "two_player_step", "starchips", "chest",
+ * "free_duel_record", "two_player_record". -1 for a name it does not know. */
+long Tables_Limit(const char *name);
 
 /* A mod's "terrain_bonus" for a monster of `type` (0-19) on `terrain`
  * (gDuel_bTerrain: 1 Forest to 6 Yami): 1 with the points, signed, in

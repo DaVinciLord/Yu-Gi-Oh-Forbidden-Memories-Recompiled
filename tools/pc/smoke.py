@@ -97,10 +97,26 @@ def run_smoke(executable: Path, record: bool) -> bool:
     return passed
 
 
+def test_only_variables(executable: Path, case: dict[str, object]) -> list[str]:
+    """The variables a case sets that this executable does not read: a
+    release leaves test-only paths out (MEMORIES_TEST_HOOKS in
+    build_game32.py), and the name goes with its getenv."""
+    image = executable.read_bytes()
+    return [key for key in case.get("environment", {}) if key.encode() not in image]
+
+
 def run_cases(command: list[str], extra: dict[str, str], fixtures: list[Path], output: Path, record: bool) -> bool:
+    executable = Path(command[-1])
     for fixture in fixtures:
         case = json.loads(fixture.read_text(encoding="utf-8"))
         name = str(case["name"])
+        # "environment": variables for this case alone, which must show in
+        # the game's output ("expect_output"), so a case that tests a path is
+        # never passed by a build without it: that build skips it, saying so.
+        missing = test_only_variables(executable, case)
+        if missing:
+            print(f"smoke: {name} skipped: {executable.name} does not read {', '.join(missing)} (a release build)")
+            continue
         image = output / f"{name}.ppm"
         settings = output / f"{name}.settings"
         user = output / f"{name}.user"
@@ -110,17 +126,25 @@ def run_cases(command: list[str], extra: dict[str, str], fixtures: list[Path], o
         settings.write_text("".join(f"{key}={value}\n" for key, value in case.get("settings", {}).items()),
                             encoding="utf-8")
         print(f"smoke: {name} (frame {case['frame']})", flush=True)
+        expected = case.get("expect_output")
         try:
             result = subprocess.run(
                 command,
                 cwd=ROOT,
-                env={**smoke_environment(case, image, settings, user), **extra},
+                env={**smoke_environment(case, image, settings, user), **case.get("environment", {}), **extra},
                 timeout=float(os.environ.get("MEMORIES_SMOKE_TIMEOUT", "120")),
                 check=False,
+                **({"stdout": subprocess.PIPE, "stderr": subprocess.STDOUT} if expected else {}),
             )
         except subprocess.TimeoutExpired:
             print(f"smoke: timed out; partial frame: {image}", file=sys.stderr)
             return False
+        if expected:
+            text = result.stdout.decode(errors="replace")
+            sys.stdout.write(text)
+            if str(expected) not in text:
+                print(f"smoke: {name}: the game never said {expected!r}", file=sys.stderr)
+                return False
         if result.returncode != 0 or not image.is_file():
             print(f"smoke: game exited {result.returncode}; differing frame: {image}", file=sys.stderr)
             return False

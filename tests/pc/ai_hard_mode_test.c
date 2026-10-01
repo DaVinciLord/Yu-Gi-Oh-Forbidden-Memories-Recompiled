@@ -24,6 +24,8 @@ static int fusion(int a, int b)
 static int equip(int a, int b) { return a == 657 && b > 0; }
 static int terrain(int type, int field) { return type == 0 && field == 3 ? 500 : 0; }
 static int ritual(int id) { return id == 700; }
+/* A mod's table: star 11 beats Saturn (3) by 1000 and nothing else counts. */
+static int custom_matchup(int a, int d) { return a == 11 && d == 3 ? 1000 : a == 3 && d == 11 ? -1000 : 0; }
 static const HmRules rules = {card, fusion, equip, terrain, ritual};
 static HmOptions opts(void)
 {
@@ -63,6 +65,18 @@ static void tactical_cases(void)
     assert(Hm_StarBonus(2,3) == 500 && Hm_StarBonus(3,2) == -500);
     assert(Hm_StarBonus(6,1) == 500 && Hm_StarBonus(10,7) == 500);
     assert(Hm_StarBonus(6,7) == 0 && Hm_StarBonus(0,1) == 0);
+    /* In the game the planner scores stars by the game's matchup, which a
+       mod's "guardian_stars" changes (stars 11-15 included). */
+    Hm_StarMatchup = custom_matchup;
+    assert(Hm_StarBonus(11,3) == 1000 && Hm_StarBonus(3,11) == -1000 && Hm_StarBonus(2,3) == 0);
+    assert(Hm_StarBonus(0,11) == 0 && Hm_StarBonus(11,16) == 0);
+    b = empty(); b.enemy[0] = monster(20,2100,1000); b.enemy[0].star = 3;
+    {
+        HmCard c = monster(10,1800,1000);
+        c.star = 2; c.star2 = 11;
+        assert(Hm_ChooseStar(&b,c,0) == 1);
+    }
+    Hm_StarMatchup = 0;
 
     b = empty(); b.own[0] = monster(1,3000,2500); b.own[1] = monster(3,1600,1000);
     b.enemy[0] = monster(4,1500,1000); b.enemy_lp = 3000;

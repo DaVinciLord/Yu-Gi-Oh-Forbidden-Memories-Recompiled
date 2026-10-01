@@ -4,7 +4,7 @@
 #include "sound.h"
 #include "sound_output_transition.h"
 
-extern SDValue *volatile g_SDValue_output_transition asm("g_SDValue");
+extern SDValue *G32 volatile g_SDValue_output_transition asm("g_SDValue");
 
 void func_8004666C(void)
 {

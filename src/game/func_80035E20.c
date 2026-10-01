@@ -31,6 +31,7 @@
 #include "gpu_packets.h"
 #include "pc/text/glyphs.h"
 #include "pc/text/hd_text.h"
+#include "pc/cards/stars.h"
 
 /* A glyph past the retail font's is in a texture bank (glyphs.h), which a
    sprite packet names in bits the sprite's own tpage cannot carry through
@@ -59,7 +60,7 @@ void func_80035E20(DisplayObject *obj, GsOT *ot)
     u16 *code;
     POLY_FT4 *ft4;
     SVECTOR *vec;
-    long *res;
+    PSXLONG *res;
     GsSPRITE *sprites[3];
     GsSPRITE *spr;
     POLY_GT4 *gt4;
@@ -88,7 +89,7 @@ void func_80035E20(DisplayObject *obj, GsOT *ot)
     ft4 = (POLY_FT4 *)0x1F800038;
     vec = (SVECTOR *)0x1F800060;
     mat = (MATRIX *)0x1F800078;
-    res = (long *)0x1F8000A0;
+    res = (PSXLONG *)0x1F8000A0;
     gt4 = (POLY_GT4 *)0x1F800000;
     sprites[0] = (GsSPRITE *)0x1F8000C0;
     sprites[1] = (GsSPRITE *)0x1F800100;
@@ -195,6 +196,28 @@ void func_80035E20(DisplayObject *obj, GsOT *ot)
                         spr->attribute |= 0x01000000;
                     }
                 }
+#ifdef MEMORIES_PC
+                /* A guardian star's icon the disc has not got (11-15) or a
+                   mod redrew: the entry's code says which (stars.h). */
+                {
+                    int tpage;
+                    int u;
+                    int v;
+                    int cx;
+                    int cy;
+
+                    if (Stars_IconCell((u16)c, &tpage, &u, &v, &cx, &cy)) {
+                        spr->tpage = tpage;
+                        spr->u = u;
+                        spr->v = v;
+                        spr->cx = cx;
+                        spr->cy = cy;
+                        spr->w = 0x10;
+                        spr->h = 0x10;
+                        spr->attribute = obj->attribute | 0x08000000;
+                    }
+                }
+#endif
             } else {
                 spr = sprites[2];
                 spr->cx = (p[0] * 0x10) + 0x290;
@@ -406,9 +429,15 @@ placed:
                 /* An added glyph's page and bank, or HD text's mark, with
                    the object's semi-transparency and depth. */
                 u16 page = ft4->tpage;
+                u16 palette = ft4->clut;
 
                 if ((spr == sprites[0] || spr == sprites[2]) && (spr->tpage & (0x7800 | HD_TEXT_MARK))) {
                     ft4->tpage = (page & 0x1E0) | (spr->tpage & (0x781F | HD_TEXT_MARK));
+                }
+                /* A star's icon from its bank, with its own palette. */
+                if (spr == sprites[1] && (spr->tpage & 0x7800)) {
+                    ft4->tpage = (page & 0x1E0) | (spr->tpage & 0x781F);
+                    ft4->clut = (spr->cy << 6) | ((spr->cx >> 4) & 0x3F);
                 }
 #endif
                 SetGeomOffset((s16)spr->x + 8, (s16)spr->y + 8);
@@ -438,13 +467,14 @@ placed:
                 vec[4].vy = 8;
                 vec[4].vz = 0;
                 if (RotAverageNclip4(&vec[1], &vec[2], &vec[3], &vec[4],
-                                     (long *)&ft4->x0, (long *)&ft4->x1,
-                                     (long *)&ft4->x2, (long *)&ft4->x3,
+                                     (PSXLONG *)&ft4->x0, (PSXLONG *)&ft4->x1,
+                                     (PSXLONG *)&ft4->x2, (PSXLONG *)&ft4->x3,
                                      &res[0], &res[1], &res[2]) > 0) {
                     GsSortPoly(ft4, ot, pri);
                 }
 #ifdef MEMORIES_PC
                 ft4->tpage = page;
+                ft4->clut = palette;
 #endif
             } else {
                 GsSortFastSprite(spr, ot, pri);

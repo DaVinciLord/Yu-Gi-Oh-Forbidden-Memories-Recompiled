@@ -33,6 +33,9 @@ typedef struct {
     int result, score, nodes;
 } HmDecision;
 
+/* The matchup the planner scores guardian stars by: the game's when the
+ * adapter sets it (Duel_CalcGuardianStarMatchup), else the disc's cycles. */
+extern int (*Hm_StarMatchup)(int attacker, int defender);
 int Hm_StarBonus(int a, int b);
 int Hm_KeepValue(HmCard card);
 int Hm_ChooseStar(const HmBoard *, HmCard, int pinned);

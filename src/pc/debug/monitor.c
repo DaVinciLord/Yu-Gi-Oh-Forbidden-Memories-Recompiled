@@ -177,17 +177,9 @@ void Monitor_NoteSystem(void)
         }
         GetNativeSystemInfo(&system);
         Monitor_Fact("cpu", "%s, %lu threads", cpu, system.dwNumberOfProcessors);
-        /* Data Execution Prevention: calls into guest code are caught by it
-         * (image.c), and a player with it off crashed where no one else did. */
-        {
-            static const char *const policies[] = {"always off", "always on", "opt-in", "opt-out"};
-            DWORD flags = 0;
-            BOOL permanent = FALSE;
-            unsigned policy = (unsigned)GetSystemDEPPolicy();
-            int on = GetProcessDEPPolicy(GetCurrentProcess(), &flags, &permanent) && (flags & PROCESS_DEP_ENABLE);
-            Monitor_Fact("dep", "%s for the game (system: %s)", on ? "on" : "off",
-                         policy < 4 ? policies[policy] : "unknown");
-        }
+        /* No DEP fact: with the branch thunks the game runs the same with DEP
+         * on or off, and the DEP-policy calls were among the imports virus
+         * scanners' heuristics held against v0.1.4-preview.1. */
         memory.dwLength = sizeof(memory);
         if (GlobalMemoryStatusEx(&memory)) {
             Monitor_Fact("memory", "%llu MB, %llu MB free", (unsigned long long)(memory.ullTotalPhys >> 20),

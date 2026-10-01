@@ -11,6 +11,7 @@
  *   first sector arrives. */
 #include "pc/render/texture_dump.h"
 #include "image.h"
+#include "retail_image.h"
 #include "pc/debug/monitor.h"
 #include <stdint.h>
 #include <stdlib.h>
@@ -48,6 +49,7 @@ void Memories_GuestWritten(void *destination, size_t length)
     TextureDump_Written(destination, (unsigned)length); /* a delivery no longer describes these bytes */
     uintptr_t first = (uintptr_t)destination;
     unsigned i;
+    RetailImage_Written(first, length);
     for (i = 0; snapshots && i < Memories_ModuleCount; i++) {
         const MemoriesModule *module = &Memories_Modules[i];
         if (first <= module->bank && module->bank + 4 <= first + length &&

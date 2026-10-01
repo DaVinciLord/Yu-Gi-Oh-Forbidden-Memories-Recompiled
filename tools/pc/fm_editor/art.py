@@ -32,7 +32,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import pngio
+from . import map_art, pngio
 from .gamedata import CARD_COUNT
 from .pngio import Image
 
@@ -351,6 +351,7 @@ def read_mod(project, folder, messages: list = None):
             if not isinstance(entries, list):
                 raise ValueError("it is not an array")
             st.adopt(entries)
+            map_art.adopt(project, st)
         except (OSError, ValueError) as problem:
             st.problem = f"{value}/manifest.json: {problem}"
             messages.append(f"\"textures\": {st.problem}; the editor leaves the pack as it is")
@@ -657,7 +658,7 @@ def entries_now(project) -> list:
         mine = next((i for i in same if out[i].get("file") == rep.file and not out[i].get("setting")), None)
         if mine is not None and same[0] < mine:
             out.insert(same[0], out.pop(mine))
-    return out
+    return out + map_art.entries(project)
 
 
 def _free_file(st: ArtState, owner, name: str) -> str:
@@ -689,6 +690,7 @@ def _adopt_imported(project, st: ArtState):
     except ValueError:
         return          # left in project.files, written as the importer made it
     st.adopt(entries)
+    map_art.adopt(project, st)
     del project.files[name]
     st.changed = True
 
@@ -704,6 +706,7 @@ def write_mod(project, folder):
         if rep.kind == "pack" and rep.pending:
             rep.file = _free_file(st, key, rep.file)
     textures = pack_dir(project)
+    map_art.write(project, folder)
     for key, rep in sorted(st.images.items()):
         if rep.pending and rep.image is not None:
             path = folder / (textures if rep.kind == "pack" else "") / rep.file
@@ -721,6 +724,7 @@ def write_mod(project, folder):
         else:
             project.other.pop("textures", None)
         st.adopt(entries)
+        map_art.adopt(project, st)
         st.changed = False
     st.folder = folder
 
@@ -745,6 +749,7 @@ def check(project, out: list):
     folder = st.folder or project.source_dir
     textures = project.other.get("textures")
     pending = {(rep.kind, rep.file) for rep in st.images.values() if rep.pending}
+    pending |= {("pack", file) for file in map_art.pending_files(project)}
     if textures is not None and (not isinstance(textures, str) or not contained(textures)):
         out.append(Issue("error", "Art", "textures", f"{textures!r} is outside the mod: the pack is not loaded"))
         return

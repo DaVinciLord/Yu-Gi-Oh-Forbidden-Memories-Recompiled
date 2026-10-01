@@ -19,6 +19,7 @@
 #ifdef MEMORIES_PC
 #include "card_constants.h"
 #include "pc/cards/tables.h"
+#include "pc/cards/pack_shop.h"
 #endif
 
 void Main_RunPasswordMenu(void)
@@ -49,6 +50,9 @@ void Main_RunPasswordMenu(void)
         }
 #endif
         Password_InitShopScreen();
+#ifdef MEMORIES_PC
+        PackShop_Enter();   /* the card packs a mod sells (pack_shop.h) */
+#endif
     }
     Password_UpdateShopScreen();
 }

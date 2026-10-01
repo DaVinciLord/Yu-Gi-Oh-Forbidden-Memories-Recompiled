@@ -3,7 +3,8 @@
  * whose setting is off is left out, and one naming a setting the mod does
  * not declare is a problem and used. Also exercise field-thumbnail uploads
  * after a duplicate from a battle/effect's full-art record was delivered,
- * and images the port makes (a mod card's art), known by their bytes. */
+ * images the port makes (a mod card's art), known by their bytes, and a
+ * palette whose entries carry the semi-transparency bit (the campaign map's). */
 #include "pc/compat/fs.h"
 #include "pc/render/texture_pack.h"
 #include "pc/render/texture_dump.h"
@@ -203,6 +204,61 @@ static void made_image(void)
     assert(TextureDump_Sample(640, 0, 1, 30 << 16, 5 << 16, &rgb) == 1 && rgb == 0x0000ff);
 }
 
+/* The campaign map's palettes reach VRAM from memory with the
+ * semi-transparency bit set on every entry but the first. A pack entry
+ * naming the palette on the disc still replaces the texture (the FM
+ * Editor's Map tab writes such entries): the palette rule keys on the first
+ * entry, which the game leaves as the disc has it. A first entry of its own
+ * is another palette. */
+static void stp_palette(void)
+{
+    uint16_t block[48];
+    unsigned char encoded[512], pixels[16 * 8 * 4];
+    png_alloc_size_t size;
+    png_image png = {0};
+    char path[1024];
+    FILE *file;
+    uint32_t rgb;
+    int i;
+    for (i = 0; i < 32; i++) block[i] = (uint16_t)(0x1234 + i * 0x0111);
+    for (i = 0; i < 16; i++) block[32 + i] = (uint16_t)(i * 0x0421);  /* entry 0 clear */
+    memcpy(disc + 4096, block, sizeof(block));
+    make_dir("stp");
+    for (i = 0; i < 16 * 8; i++) {
+        pixels[i * 4] = 255;
+        pixels[i * 4 + 1] = pixels[i * 4 + 2] = 0;
+        pixels[i * 4 + 3] = 255;
+    }
+    png.version = PNG_IMAGE_VERSION;
+    png.width = 16;
+    png.height = 8;
+    png.format = PNG_FORMAT_RGBA;
+    size = sizeof(encoded);
+    assert(png_image_write_to_memory(&png, encoded, &size, 0, pixels, 0, NULL) && size <= sizeof(encoded));
+    snprintf(path, sizeof(path), "%s/stp/t.png", root);
+    file = fopen(path, "wb");
+    assert(file);
+    assert(fwrite(encoded, 1, size, file) == size);
+    assert(!fclose(file));
+    /* The archive starts at sector 1: the delivery from sector 2 is offset 2048. */
+    write_text("stp/manifest.json", "[{\"file\":\"t.png\",\"archive\":\"WA_MRG.MRG\",\"offset\":2048,\"words\":4,"
+               "\"rows\":8,\"bpp\":4,\"clut_offset\":2112,\"clut_entries\":16}]");
+    snprintf(path, sizeof(path), "%s/stp", root);
+    assert(TexturePack_Load(path, 1, NULL, NULL, NULL, 0) == 1);
+    TexturePack_Service();
+    TextureDump_Delivered(block, sizeof(block), 2, 0);
+    for (i = 1; i < 16; i++) block[32 + i] |= 0x8000;             /* as the map's model setup leaves them */
+    SoftGpu_Load(768, 0, 4, 8, block);
+    SoftGpu_Load(768, 400, 16, 1, block + 32);
+    TexturePack_Service();
+    assert(TexturePack_EntryFor(768, 0, 0, 768, 400, 0, 0) != 0);
+    assert(TextureDump_Sample(768, 0, 0, 2 << 16, 2 << 16, &rgb) == 1 && rgb == 0xff0000);
+    block[32] ^= 0x0001;                                          /* a colour of its own: not the disc's */
+    SoftGpu_Load(768, 400, 16, 1, block + 32);
+    assert(TexturePack_EntryFor(768, 0, 0, 768, 400, 0, 0) == 0);
+    TexturePack_Unload();
+}
+
 int main(void)
 {
     char path[1024], problems[256];
@@ -232,6 +288,7 @@ int main(void)
     TexturePack_Unload();
     field_thumbnail();
     made_image();
+    stp_palette();
     puts("texture pack tests passed");
     return 0;
 }

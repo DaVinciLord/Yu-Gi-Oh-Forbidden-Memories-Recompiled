@@ -8,6 +8,7 @@
 #include "pc/debug/monitor.h"
 #include "pc/debug/crash_test.h"
 #include "pc/platform/settings.h"
+#include "pc/platform/paths.h"
 #include "pc/mods/mods.h"
 #include "pc/mods/exports.h"
 #include "pc/platform/game_files.h"
@@ -156,6 +157,13 @@ void Psx___main(void)
 {
 }
 
+/* Paths_WatchUserDir: the last write under the user folder, for the facts. */
+static void user_dir_fact(int writable, const char *why)
+{
+    if (writable) Monitor_Fact("user dir", "%s; writable: yes", Paths_UserDir());
+    else Monitor_Fact("user dir", "%s; writable: no: %s", Paths_UserDir(), why);
+}
+
 int main(int argc, char **argv)
 {
 #ifdef _WIN32
@@ -183,6 +191,12 @@ int main(int argc, char **argv)
     Symbols_Load();
     Crash_Init();
     Monitor_NoteSystem();
+    /* Whether the player's files can be saved at all (an antivirus or
+     * Controlled folder access blocking Documents), in every report and in
+     * Help > System info: known from the game's own writes, never from a
+     * test file, which such guards notify about or take for ransomware. */
+    Monitor_Fact("user dir", "%s; writable: not tried yet", Paths_UserDir());
+    Paths_WatchUserDir(user_dir_fact);
     CrashTest_Init();
     /* Guest globals are linked at fixed addresses: map before touching any. */
     if (Memories_GuestMap() != 0) return 1;

@@ -35,18 +35,18 @@ int main(void)
     assert(Settings_Get(SET_MASTER_VOLUME) == 40);
     assert(Settings_Get(SET_MUSIC_VOLUME) == 70);
     assert(Settings_Get(SET_SFX_VOLUME) == 100);
-    /* Disabled PGXP cannot be restored by an old preference, environment
-     * override or runtime setting change. */
-    assert(Settings_Get(SET_PGXP) == 0);
+    /* Only "Textures" (1) is offered yet; a saved, env-supplied or runtime
+     * "Textures and positions" (2) preference clamps down to it. */
+    assert(Settings_Get(SET_PGXP) == 1);
     assert(!setenv("MEMORIES_PGXP", "1", 1));
     Settings_Load();
-    assert(Settings_Get(SET_PGXP) == 0);
+    assert(Settings_Get(SET_PGXP) == 1);
     assert(!setenv("MEMORIES_PGXP", "2", 1));
     Settings_Load();
-    assert(Settings_Get(SET_PGXP) == 0);
+    assert(Settings_Get(SET_PGXP) == 1);
     assert(!unsetenv("MEMORIES_PGXP"));
     Settings_Set(SET_PGXP, 2);
-    assert(Settings_Get(SET_PGXP) == 0);
+    assert(Settings_Get(SET_PGXP) == 1);
     Settings_Set(SET_ASPECT, 2);
     assert(Settings_Get(SET_ASPECT) == 2);
     Settings_Set(SET_ASPECT, 3);
@@ -64,7 +64,7 @@ int main(void)
     assert(contains(path, "volume=40\n"));
     assert(contains(path, "sfx_volume=65\n"));
     assert(contains(path, "unknown=7\n"));
-    assert(contains(path, "pgxp=0\n"));
+    assert(contains(path, "pgxp=1\n"));
     /* A retired id keeps its number for code mods (settings.h), but has no
      * key: its old line is carried through as any other unknown one. */
     assert(SET_HD_TEXT == 32 && SET_CARD_DROPS == 38 && Settings_Key(SET_HD_HUD) == NULL);
@@ -86,8 +86,23 @@ int main(void)
     assert(Settings_GetNamed("mod.bad=name", -1) == -1 && Settings_GetNamed("mod.x\nvolume", -1) == -1);
     assert(Settings_Save()); Settings_Load();
     assert(Settings_Get(SET_MASTER_VOLUME) != 99 && !contains(path, "bad="));
+    assert(!*Settings_LastError() && !Settings_TakeNewError());
     unlink(path);
     assert(!setenv("MEMORIES_SETTINGS", "/dev/null/settings", 1));
     assert(!Settings_Save());
+    /* A failed save says where and why ("...settings: <the system's
+     * reason>."), told once until the reason changes or a save succeeds. */
+    {
+        const char *error = Settings_LastError(), *reason = strstr(error, "settings: ");
+        printf("%s\n", error);
+        assert(!strncmp(error, "Could not save settings to ", 27));
+        assert(strstr(error, "null") && reason && strlen(reason) > strlen("settings: ") + 1);
+        assert(error[strlen(error) - 1] == '.');
+        assert(Settings_TakeNewError() == error && !Settings_TakeNewError());
+        assert(!Settings_Save() && !Settings_TakeNewError()); /* the same reason: not news */
+    }
+    assert(!setenv("MEMORIES_SETTINGS", path, 1));
+    assert(Settings_Save() && !*Settings_LastError() && !Settings_TakeNewError());
+    unlink(path);
     return 0;
 }

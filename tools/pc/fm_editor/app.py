@@ -8,6 +8,10 @@ from tkinter import filedialog, messagebox, ttk
 from . import disc, gamedata, manifest, settings, theme, validate
 from .model import KEY_RE, Project
 from .art_tab import ArtTab
+from .map_tab import MapTab
+from .limits_tab import LimitsTab
+from .guardian_stars_tab import GuardianStarsTab
+from .packs_tab import PacksTab
 from .tabs import (CardsTab, DuelistsTab, EquipsTab, FusionsTab, ModInfoTab, ConflictsTab, RitualsTab,
                    StarterTab)
 from .widgets import px
@@ -17,6 +21,7 @@ APP_TITLE = "FM Editor"
 
 class App(tk.Tk):
     def __init__(self, game=None, mod=None, ask=True, autostart=True):
+        theme.dpi_awareness()      # Windows: before the first window, or it is drawn stretched
         super().__init__()
         self.title(APP_TITLE)
         self.theme = theme.Theme(self)
@@ -42,10 +47,14 @@ class App(tk.Tk):
         self.rituals = RitualsTab(self.notebook, self)
         self.duelists = DuelistsTab(self.notebook, self)
         self.starter = StarterTab(self.notebook, self)
+        self.map = MapTab(self.notebook, self)
+        self.limits = LimitsTab(self.notebook, self)
+        self.stars = GuardianStarsTab(self.notebook, self)
+        self.packs = PacksTab(self.notebook, self)
         self.info = ModInfoTab(self.notebook, self)
         self.conflicts = ConflictsTab(self.notebook, self)
         self.tabs = [self.cards, self.art, self.fusions, self.equips, self.rituals, self.duelists, self.starter,
-                     self.info, self.conflicts]
+                     self.map, self.limits, self.stars, self.packs, self.info, self.conflicts]
         self.status = ttk.Label(self, relief="sunken", anchor="w", padding=(6, 2))
         self.status.pack(fill="x", side="bottom")
         if self.dark.get():
@@ -222,11 +231,16 @@ class App(tk.Tk):
         elif current is self.duelists:
             current.fill_list()
             current.fill()
+        elif current is self.packs:
+            current.fill_list()
+            current.fill()
         elif current in (self.fusions, self.rituals, self.cards):
             current.fill()
         elif current is self.art:
             current.fill()
             current.show(current.current)
+        elif current is self.stars:
+            current.fill()          # the cards' stars may have changed
 
     def need_game(self):
         if self.retail is None:
@@ -356,8 +370,18 @@ class App(tk.Tk):
         elif issue.area == "Starter decks":
             self.notebook.select(self.starter)
             self.starter.goto(target)
+        elif issue.area == "Map":
+            self.notebook.select(self.map)
+            self.map.goto(target)
+        elif issue.area == "Packs":
+            self.notebook.select(self.packs)
+            self.packs.goto(target)
         elif issue.area == "Mod info":
             self.notebook.select(self.info)
+        elif issue.area == "Limits":
+            self.notebook.select(self.limits)
+        elif issue.area == "Guardian Stars":
+            self.notebook.select(self.stars)
 
     def about(self):
         messagebox.showinfo(APP_TITLE, "FM Editor\n\nMakes mods for the PC port of Yu-Gi-Oh! Forbidden Memories. "

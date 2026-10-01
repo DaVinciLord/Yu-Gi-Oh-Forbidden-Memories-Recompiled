@@ -117,12 +117,13 @@ How it works:
   primary mechanism, and it needs nothing from the system: the game works
   without DEP. The fault of executing guest RAM (mapped without execute
   permission) is a second safety net, which works only where DEP is on; the
-  game turns DEP on where it can (see "Faults" in the Windows part). Before the
+  game leaves the system's DEP policy as it is (see "Faults" in the Windows part). Before the
   thunks it was the only one, and a player with DEP off (Windows `AlwaysOff`)
   crashed on the title's Options: the handler at `0x80038b4c` ran its MIPS
   bytes as x86. `MEMORIES_TEST_EXEC_GUEST=1` maps guest RAM executable, as it
   is without DEP, on any machine: with it, only the thunks stand between a
-  guest call and the MIPS bytes. `pc_branch_thunks` (CTest) checks all seven
+  guest call and the MIPS bytes (builds that are not releases only; the smoke
+  case `options-exec-guest` uses it). `pc_branch_thunks` (CTest) checks all seven
   thunks' register and stack contract. clang also turns switch jump tables
   into compare trees; GCC sends them through a thunk too.
 - Undefined functions become stubs calling `Memories_Unimplemented`. Current
@@ -140,6 +141,19 @@ How it works:
   RTPS, RTPT, MVMVA, SQR, NCDS, NCCS, NCCT, NCLIP, AVSZ3/4, GPF, plus the
   remaining colour commands). `pc_gte` holds hand-computed known answers;
   it has **not** been compared against hardware or an emulator yet.
+
+### Guest-width pointers (G32, CALL32, PSXLONG)
+
+Game declarations carry upstream's annotations for a native 64-bit build
+(`src/port_ptr.h`, cherry-picked from memories-decomp #6623 and #6637, since
+the port does not merge upstream): `T *G32 p` for a pointer the game stores
+in memory (a structure member or a global pinned to a retail address),
+`T *G32 *p` for a local that walks such storage, `CALL32(type, f)(args)` for
+a call through a stored function pointer, and `PSXLONG` for the Psy-Q
+32-bit `long`. On the console and in this 32-bit build all three expand to
+what they replace, so the objects do not change. `make check-g32`
+(`tools/project/check_g32.py`, run by the metadata workflow) rejects game code
+under `src/` without them; `src/pc`, the port's own host code, is exempt.
 
 ### What runs (2026-09-20)
 
@@ -161,8 +175,9 @@ with hardware. The Free Duel `0x80168000` module is integrated; its opponent
 grid initializes from the save's unlock flags and accepts cursor input.
 The duel's 3D battle presentation loads and renders both monster models, the
 arena and camera sequence, then returns to the field. Per-monster MODEL
-control modules and the shared WA effect dispatcher are retail MIPS overlays
-with no C source, and by default (2026-09-21) they run as they are: see
+control modules are retail MIPS overlays with no C source, and by default
+(2026-09-21) they run as they are; the shared WA effect bank runs as the
+decomp's native C when the disc delivered the retail bytes, else as MIPS: see
 [MIPS-only effects](#mips-only-effects) below. Every duel effect id and every
 monster's own attack choreography therefore plays with its retail timing,
 colours and particles.
@@ -284,13 +299,16 @@ game's debug menu, reached with the options case's input; see
 `MEMORIES_INPUT="700:0008,706:0000"` (scripted pad bits from a frame on;
 `MEMORIES_INPUT2` the same for the second pad, which then counts as
 connected: two-player trades and duels),
-`MEMORIES_DEBUG_CHEST=N` (N of every card in the trunk) and
+`MEMORIES_DEBUG_CHEST=N` (N of every card in the trunk),
 `MEMORIES_DEBUG_DECK="723-762"` (the deck, as ids and ranges repeated to
-forty), both once a save is live ([More cards](more-cards.md)),
+forty) and `MEMORIES_DEBUG_STARCHIPS=N` (the balance, as Set StarChips puts
+it, capped at 999999 or a mod's `limits`), all once a save is live
+([More cards](more-cards.md)),
 `MEMORIES_NO_AUDIO=1`, `MEMORIES_DUMP_AUDIO=path` (raw s16le stereo 44.1 kHz
 instead of a device),
 `MEMORIES_TEST_EXEC_GUEST=1` (guest RAM mapped executable, as without DEP,
-to check that the branch thunks carry every guest call; see "How it works"),
+to check that the branch thunks carry every guest call; see "How it works";
+not in release builds),
 and `MEMORIES_STUB_TRACE=1`. Traces on stderr: `MEMORIES_TRACE_SPU=1` (every
 `SpuSetKeyOnWithAttr`), `MEMORIES_TRACE_INPUT=1` (scripted pad changes with
 frame and VBlank numbers; script frames are presented frames, which run
@@ -318,9 +336,9 @@ logs "replaces a key-on not yet mixed" whenever it still happens.
 
 ### MIPS-only effects
 
-Two kinds of duel code exist only as MIPS bytes inside the archives:
+Two kinds of duel code were loaded as MIPS bytes from the archives:
 
-- the shared WA effect bank that every duel package copies to `0x80146000`,
+- the shared WA effect bank (native C since 2026-09-30, below) that every duel package copies to `0x80146000`,
   entered at `0x801462B0` with an effect id: fusion (1), battle damage (2),
   destruction (3), the magic, trap, ritual, terrain and field effects up to
   id 23;
@@ -354,8 +372,35 @@ byte-swapped relative to the raw pad, so in `duel_scene_field_actions.c`
 `0xC0` is Cross or Square: either starts an attack, Square commits the
 target with the 3D presentation (`D_8009B229 = 1`), Cross without it.
 
-Switches: `MEMORIES_DUEL_EFFECTS=native` restores the bring-up behaviour
-(ids 1-3 interpreted, others complete at once); `MEMORIES_MODEL_MODULES=native`
+**The effect bank in native C.** Upstream matched the whole North American
+bank (85/85 functions, #6691), and its C is linked in as the `duel_effects`
+module (`src/overlays/duel_effects/`, bank `0x80146000`, identifier word
+`0x18`; `tools/pc/build_game32.py`). `Memories_DuelEffectControl`
+(`src/pc/overlays/duel_effects.c`, the function map's entry for
+`0x801462B0`) calls the decomp's dispatcher instead of interpreting, under
+one rule: **the native C runs only for the retail bytes.** A disc delivery
+that writes the bank's first word (`0x80146000`, a new copy of it) marks it
+pending; the next effect call
+hashes all `0x16000` bytes (SHA-256, before the bank has written its own
+variables) and compares them with the image `config/slus_01411/overlays.json`
+records (`baa203b9...`, the same at all seven WA_MRG copies). A mod or disc
+patch that changed any byte, code or tables, gets the delivered bank
+interpreted as before (`src/pc/guest/retail_image.c`). `MEMORIES_TRACE=mods`
+logs each verdict (`duel_effects: retail bytes ... native C` or `changed
+bytes ... interpreter`); save states carry it (chunk `retail-images`), and a
+state from before the check, whose bank can no longer be hashed, gets the
+interpreter until the next duel package. The bank's functions are kept out of
+`Memories_FunctionMap` (`GATED_MODULES`), so nothing else can reach the native
+C for a modded image. Only the NA executable runs here, so the regional
+banks (French matched 85/85, Spanish 84/85, European and Japanese 80/85
+upstream) are never loaded; the language packs take only text from PAL discs.
+
+Switches: `MEMORIES_DUEL_EFFECTS=interpreter` interprets the bank even when it
+is retail (the reference for comparisons); `MEMORIES_DUEL_EFFECTS=skip`
+(called `native` before the bank ran as native C; `native` now means the
+default) restores the bring-up behaviour
+(ids 1-3 interpreted, others complete at once); `MEMORIES_FRAME_HASHES=<file>`
+writes a hash of VRAM per presented frame for comparing two runs; `MEMORIES_MODEL_MODULES=native`
 uses the resident spark burst instead of the monster's module; an effect or
 module the interpreter cannot run is reported once on stderr and falls back
 the same way. `MEMORIES_TRACE_MIPS_PRINTF=1` prints the modules' own
@@ -437,6 +482,42 @@ that finds the destination missing (`Paths_MigrateLegacySaves`), so an
 existing card, settings and bindings survive the move. The game's own files
 (the disc image, `mods/` as shipped) stay where the release put them and are
 only read.
+
+When a write there fails, the player is told where and why, never only that
+it failed (`Paths_WriteError`, `paths.h`): the full path as Explorer shows it
+and the system's own reason (FormatMessage, in the user's language, on
+Windows; strerror elsewhere), e.g. `Could not save settings to
+C:\Users\...\Documents\My Games\YFM Re-Decomp\settings.txt: Access is
+denied.` When Windows denies access inside Documents, one sentence follows:
+an antivirus's "ransomware protection" or Windows' "Controlled folder access"
+may be blocking the Documents folder; allow `memories-pc.exe` there (Avast's
+Ransomware Shield did this to a player of v0.1.3-preview.1: every setting
+reverted at the next launch, with nothing saying why). Where it is said:
+
+- settings (`Settings_Save`, `Settings_LastError`): the Mods window's status
+  line (it grows to more lines for it), Game > Language's notice, and for
+  every other save (menu items, sliders, hotkeys, a moved window, which do
+  not look at the result) a "Settings not saved" notice, once until the
+  reason changes or a save succeeds (`Settings_TakeNewError`, `menu.c`);
+- game saves: the save slot menu's message, with the path and reason under
+  it (`SaveSlots_LastError`); deck slots, the mods' card and duelist records
+  and memory card images on stderr;
+- save states (F5), screenshots (F12) and a mod profile: a notice, or the
+  Mods window's status; Controls: its window's status; Help > System info
+  when `system-info.txt` cannot be written; the ROM location
+  (`disc-path.txt`): the setup error.
+
+Nothing about where files go changes. The crash reports' facts (and Help >
+System info) carry `user dir: <folder>; writable: not tried yet` until the
+game writes something there, then the last write's outcome: `writable: yes`
+or `writable: no: <reason>` (`Paths_WatchUserDir`; failures are seen in
+`Paths_WriteError`, successes said with `Paths_WriteDone` by the settings,
+save slots, states, screenshots and System info). Nothing is written only to
+find out: a test file made and removed at every start would raise Controlled
+folder access's notification on every launch and looks like ransomware to
+antivirus heuristics. Help > System info opens `system-info.txt` before it
+reads the facts, so what it shows answers the question when nothing had been
+saved yet.
 
 ### Window and menu bar
 
@@ -558,7 +639,11 @@ before a duel, is open, and says **Leave Build Deck first**
 writes it back over the save as it closes, so cards given meanwhile were
 neither listed nor kept. `MEMORIES_DEBUG_CHEST` waits for the same. The settings
 rows (LP, free spending, the CPU's hand) change nothing in the save and work
-at any time.
+at any time. Starting LP is 1 to 32767 (`cheat_life_points`,
+`MEMORIES_CHEAT_LIFE_POINTS`; the menu offers 1000, 4000, 8000 and 9999); at
+the console's 8000 a mod's `limits` decide the start instead, and any other
+value comes first. Set StarChips and `MEMORIES_DEBUG_STARCHIPS` stop at the
+game's 999999, or at a mod's `limits` (notes/gameplay-tables.md).
 
 ### Back to the title screen
 
@@ -1248,8 +1333,13 @@ out pixel-identical to the sheets' crops, and a pack of the sheets as they
 are draws the same frame as no pack at 1x, 2x, in software and in GL. A
 mod with `"textures"` in its manifest replaces the images at draw time
 from such a directory (`notes/modding.md`, "Texture packs"). Not yet: the
-monster textures (`MODEL.MRG`) and the campaign map's own pictures, which
-its overlay uploads from a 134-sector block.
+monster textures (`MODEL.MRG`). The campaign map's own pictures (the
+terrain model's textures, uploaded from its 134-sector block) have no
+extractor family and a dump's `assets.txt` leaves them out: their palettes
+reach VRAM from memory with the semi-transparency bit set on every entry but
+the first, and an asset wants every entry traced. A pack replaces them all
+the same, since its palette rule keys on the first entry; the FM Editor's
+Map tab writes such entries (`tools/pc/fm_editor/map_art.py`).
 
 ### Texture dump (what is on screen)
 
@@ -1858,24 +1948,29 @@ viewer and was not reached.
 
 ### Precise geometry (PGXP)
 
-Precise geometry (PGXP) is currently disabled and has no Video menu option.
-The `pgxp` setting is clamped to zero, including saved preferences,
-`MEMORIES_PGXP` overrides and runtime changes. Its implementation and tests
-remain in place for future use. The modes described below are inactive;
-when enabled in the code, they affect the OpenGL picture at 2x and up.
+Precise geometry (PGXP) has a Video menu option, *Off*/*Textures*
+(`MENU_ITEM_PGXP`, `menu.c`), disabled where it cannot draw: below Internal
+2x, or without the OpenGL picture pass. It affects the OpenGL picture only,
+at 2x and up.
 
 - **Affine textures** (`pgxp=1`, *Textures*). The GTE keeps no depth with a
   vertex, so textures on 3D polygons bend. Textured polygons are drawn in
   perspective, at the console's whole-pixel vertices.
-- **Rounded vertices** (`pgxp=2`, *Textures and positions*, experimental).
-  The GTE's perspective transform rounds each vertex to a whole console
-  pixel, which makes 3D polygons wobble as they move. Polygons are also
-  drawn at the vertices' precise positions. A model's parts are projected
-  each with its own matrix, and where they meet, the vertices lie up to
-  about a console pixel apart; the console's rounding closes those seams.
-  So a frame word that carries two different precise positions keeps its
-  whole-pixel one (`snap_seams` in `libgpu.c`; its depth stays precise).
-  Still experimental, so not the default level.
+- **Rounded vertices** (`pgxp=2`, *Textures and positions*). The GTE's
+  perspective transform rounds each vertex to a whole console pixel, which
+  makes 3D polygons wobble as they move. Polygons are also drawn at the
+  vertices' precise positions. A model's parts are projected each with its
+  own matrix, and where they meet, the vertices lie up to about a console
+  pixel apart; the console's rounding closes those seams. So a frame word
+  that carries two different precise positions keeps its whole-pixel one
+  (`snap_seams` in `libgpu.c`; its depth stays precise).
+
+  The `pgxp` setting is clamped to 1 for now: level 2 is not offered from
+  the menu yet, pending a fix to `snap_seams` (a small model or part that
+  happens to land on the same screen word as an unrelated one can be
+  wrongly treated as a seam) and independent testing across more than one
+  OS/GPU driver combination. Level 1 has none of that seam logic and is not
+  affected.
 
 **How it works** (`src/pc/compat/pgxp.c`):
 
@@ -1936,6 +2031,14 @@ when enabled in the code, they affect the OpenGL picture at 2x and up.
 main menu after one cursor move (4:3 and widescreen), Options, and the first
 campaign duel with both code mods on (a 3D Monsters model standing on a
 face-up card at frame 6760; the field turned by the hand camera's L1 at 6560).
+Options is played again with guest RAM executable (`options-exec-guest`,
+`MEMORIES_TEST_EXEC_GUEST=1`, as a machine without DEP): the same frame, so
+the branch thunks carried every guest call. A case's `environment` sets
+variables for it alone, and its `expect_output` must appear in the game's
+output. That variable is read only by builds that are not releases
+(`MEMORIES_TEST_HOOKS`, which `build_game32.py` defines without
+`--release`): the runner skips the case, saying so, for an executable that
+does not contain the variable's name, such as the release `package.py` smokes.
 Each run works in a folder of its own, `tmp/pc/smoke/run-XXXXXXXX` (printed
 at the start), removed when every case passes and kept with the differing
 image when one fails: worktrees share `tmp/` through a junction, and two runs
@@ -2215,6 +2318,7 @@ Native pieces (all under `src/pc/`):
 |---|---|---|
 | GPU | `render/soft_gpu.c` | Software rasterizer: flat/Gouraud/textured polygons, sprites, lines, fills, VRAM transfers, 4/8/15-bit textures, texture window, four blend modes, mask bits, dithering. `pc_soft_gpu` checks the fill rule, CLUT path, clipping and wraparound. Replaces PSY-Z for the 32-bit build (no 32-bit SDL installed here) |
 | Mods | `src/pc/mods/mods.c`, `mods/3d-monsters/field_models.c` | The mod system (`notes/modding.md`) and **3D Monsters**, described above: the duel field's face-up monsters as animated models, on their own arenas and software-GPU texture banks. Off by default; nothing in it runs while it is off |
+| Guardian Stars | `cards/stars.c`, `cards/star_icons.c`, `cards/stars_duel.c` | A mod's `guardian_stars` (`notes/modding.md`): the matchup table `Duel_CalcGuardianStarMatchup` asks first (nothing decided without a mod, so the disc's arithmetic runs), the names Text_Resolve gives at `0x8318`-`0x8326`, stars 11-15, the summon choice and one-star cards, and the icons, made from the mod's PNGs in software-GPU texture bank 14 (3D Monsters uses 1-12, the added glyphs 15) and drawn by func_80035E20 for the icon entries func_80037DA4 marks, and by the battle's star effect (0xE) through `Memories_DuelEffectControl` |
 | Menu bar | `platform/menu_x11.c` | **File > Exit**, **Audio > Volume** and **Mods**, one checked item per extra (a 0-100 slider: drag it, click the track, or use the wheel over it). Drawn with plain Xlib, since the port has no toolkit; the window is `Menu_Height()` (22 px) taller than the picture and the picture sits below it. Labels use an X core font, falling back to a small built-in glyph table because a server started under Wayland often has no core fonts. The volume is kept in `settings.txt` in the user directory (see `MEMORIES_SETTINGS`) and applied through `Spu_SetOutputVolume`, which is the port's own control and deliberately outside save states. While a menu is open it owns every mouse event, including the wheel: otherwise the wheel stepped the game's cursor behind the menu and played its sound |
 | Window/input | `platform/x11.c` | Plain Xlib. The 59.94 Hz VBlank is a `SIGALRM` tick on the main thread, standing in for the interrupt, so the game's busy-waits on VBlank counters work unchanged. Game units are built `-O0` so those non-volatile polls are not hoisted. The frame and the menu bar are composed in an offscreen pixmap and reach the window in one `XCopyArea`: an open menu hangs over the picture, so drawing both straight to the window made the menu flash once a frame |
 | LIBETC/pads | `sdk/libetc.c` | Callbacks, `VSync` (presents, then waits), critical sections that defer the tick, BIOS pad buffers |
@@ -2304,10 +2408,10 @@ is written: `crash-<pid>.txt` or `hang-<pid>.txt` in `Crash_ReportDir`,
 with a message box naming it (not when headless or scripted;
 `MEMORIES_CRASH_DIALOG=0/1` decides). The two share a block of memory the
 game writes and the monitor reads, so what the game knew survives however
-it ended: facts (build and commit, OS or Wine version, CPU, memory, on
-Windows whether DEP is on for the game and the system's DEP policy, GPU and
+it ended: facts (build and commit, OS or Wine version, CPU, memory, GPU and
 driver, SDL video and audio drivers, every setting but the retired ones, the
-applied mods), the
+applied mods, the user folder and whether it can be written to, with the
+reason when not), the
 runtime module last loaded, the frame and VBlank counts, and the last 128
 lines of the log. The mods, state, memory card and duel model channels are
 kept there even when not traced (`Log_Wanted`). The game's console output
@@ -2440,11 +2544,13 @@ What differs from Linux, and why:
 - **Faults.** A vectored exception handler in `image.c` does what the
   SIGSEGV/SIGTRAP handlers do (guest-call redirect, low-address fixup); the
   guest-call redirect is the second net behind the branch thunks, since it
-  needs DEP. The game works without DEP and turns it on where it can as a
-  second safety net: a 32-bit process follows the system's DEP policy (only
-  64-bit processes always have DEP), so under `OptIn`, the default,
-  `--nxcompat` turns it on, under `OptOut` with the game excepted
-  `SetProcessDEPPolicy` in `image.c` does, and under `AlwaysOff` nothing can;
+  needs DEP. The game works without DEP; where DEP is on it is a second
+  safety net. A 32-bit process follows the system's DEP policy (only 64-bit
+  processes always have DEP), so under `OptIn`, the default, `--nxcompat`
+  turns it on. The game does not call `SetProcessDEPPolicy` for `OptOut`
+  with the game excepted: a program switching its own DEP policy is what
+  virus scanners' heuristics look for (0.1.4 was flagged), and the thunks
+  make it unnecessary;
   32-bit processes on 64-bit Windows can report the single step as
   `STATUS_WX86_SINGLE_STEP`. Fatal exceptions raised in the executable are
   reported by `crash.c` through `Win32_SetCrashReporter`.

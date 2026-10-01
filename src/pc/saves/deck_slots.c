@@ -1,5 +1,6 @@
 /* Deck slots: the rules and the slot file. See deck_slots.h. */
 #include "deck_slots.h"
+#include "pc/platform/paths.h"
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -158,6 +159,14 @@ int DeckSlots_Read(const char *path, DeckSlot slots[DECK_SLOT_COUNT], DeckFindFn
     return used;
 }
 
+/* Where and why the slots were not written (paths.h), on stderr. */
+static int not_written(const char *path)
+{
+    char why[1200];
+    fprintf(stderr, "memories-pc: cannot write deck slots to %s\n", Paths_WriteError(why, sizeof(why), path));
+    return -1;
+}
+
 int DeckSlots_Write(const char *path, const DeckSlot slots[DECK_SLOT_COUNT], DeckIdentityFn identity,
                     const char *comment)
 {
@@ -165,8 +174,9 @@ int DeckSlots_Write(const char *path, const DeckSlot slots[DECK_SLOT_COUNT], Dec
     FILE *file;
     int slot, i, failed;
     snprintf(partial, sizeof(partial), "%s.partial", path);
+    Paths_WriteBegin();
     file = fopen(partial, "w");
-    if (!file) return -1;
+    if (!file) return not_written(path);
     if (comment) fprintf(file, "# %s\n", comment);
     fprintf(file, "# One line per slot: its number, then the forty cards (a retail id, or a mod card's identity).\n");
     for (slot = 0; slot < DECK_SLOT_COUNT; slot++) {
@@ -182,6 +192,7 @@ int DeckSlots_Write(const char *path, const DeckSlot slots[DECK_SLOT_COUNT], Dec
     failed = ferror(file) != 0;
     if (fclose(file) != 0) failed = 1;
     if (failed || rename(partial, path) != 0) {
+        not_written(path); /* before remove() changes the reason */
         remove(partial);
         return -1;
     }

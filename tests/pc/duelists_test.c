@@ -123,6 +123,9 @@ int Paths_User(char *out, size_t size, const char *relative)
 }
 const char *Paths_UserDir(void) { return NULL; }  /* no roster folder in the cases */
 int Paths_MakeDirs(const char *path) { mkdir(path, 0777); return 0; }
+void Paths_WriteBegin(void) {}
+const char *Paths_WriteError(char *out, size_t size, const char *path)
+{ snprintf(out, size, "%s: failed.", path); return out; }
 int Log_Wanted(LogChannel channel) { (void)channel; return 0; }
 void Log_Printf(LogChannel channel, const char *format, ...) { (void)channel; (void)format; }
 

@@ -24,6 +24,17 @@ GitHub shows each release asset's SHA-256 itself, so there are no
 settings, saves, reports or personal HD packs belong in the archive. Release
 builds omit the optional executable icon extracted from a local disc.
 
+The Windows executable is what virus scanners' heuristics judge, so the
+release keeps it plain: `package.py` strips the symbol table and debug
+sections (`memories-pc.pdb` has them) and fills in the PE checksum the linker
+leaves 0; the build gives it version information, names its PDB without the
+builder's path, and leaves test-only paths out (`MEMORIES_TEST_HOOKS`,
+[PC build](pc-build.md)); the game does not call `SetProcessDEPPolicy`.
+v0.1.4-preview.1 was flagged by 11 engines with generic machine-learning
+labels (a false positive): Bitdefender's engines over the GitHub runner's PDB
+path, the rest with no reason given, in the release that had gained the
+DEP-policy imports. `test_package.py` checks all of these on every release.
+
 ## Launch experience
 
 If a remembered or auto-detected disc is available, launch goes straight
@@ -135,3 +146,66 @@ a newer one is out; it never installs it itself ([updates](updates.md)). `--vers
 version the build compares with (`MEMORIES_VERSION`); CI passes the tag, so
 tag builds check and `dev-*` builds do not. User settings and memory-card
 saves persist; cross-build save-state compatibility is not guaranteed.
+
+## VirusTotal
+
+Generic machine-learning and heuristic engines keep flagging the Windows
+`memories-pc.exe` (v0.1.4-preview.1: 11 of 71). `tools/pc/vt_check.py`
+measures that without uploading by hand on the website: it looks each file
+up by SHA-256 (API v3), uploads the ones VirusTotal has not seen, waits for
+the analysis and prints detections/total, the label of every engine that
+flagged the file, an engine × file matrix when there are several files, and
+each file's page (`https://www.virustotal.com/gui/file/<sha256>`). The
+count is the engines that said "malicious", out of those that gave any
+verdict, as the website counts; "suspicious" verdicts are listed apart.
+
+**Key.** Sign up at virustotal.com (a free community account); the key is
+under the profile menu, *API key*. Keep it out of the repository: the script
+reads `VT_API_KEY`, else `~/.config/yfm/vt_api_key` (on Windows
+`%USERPROFILE%\.config\yfm\vt_api_key`; make it readable only by you). It
+never prints the key, only where it came from.
+
+**Terms and limits.** The free public API is for non-commercial use only
+(this project qualifies; a commercial product or service needs VirusTotal's
+premium API). It allows 4 requests a minute, 500 a day and 15.5 thousand a
+month. The script spaces its requests 15 s apart (`--rate`), backs off on
+HTTP 429, and stops at `--daily` requests (500) in one run. A lookup is one
+request; an upload is one or two more, then one per 15 s until the analysis
+is done, usually a few minutes.
+
+**Uploads are public.** Every uploaded file is shared with the antivirus
+vendors and downloadable by VirusTotal's premium users. Upload only builds
+that are, or will be, public anyway: release candidates of our own
+executable. Never anything with game data (a disc image, extracted files,
+HD packs), nor builds nobody will ship. `--lookup-only` never uploads.
+
+**Bisecting locally.** Build the variants exactly like the release (as
+`package.py windows` does: `build_game32.py --target windows --backend sdl
+--release --build tmp/pc/<name>` with `MEMORIES_VERSION` set, then that
+commit's `package.strip()` on a copy, since the shipped exe is stripped; a
+build dir of its own, because worktrees share `tmp/`). Then:
+
+```sh
+python tools/pc/vt_check.py --lookup-only old-release.exe      # already public: no upload
+python tools/pc/vt_check.py --label master --label no-dep a.exe b.exe --json vt.json
+python tools/pc/vt_check.py --reanalyze --label v0.1.4 v0.1.4.exe   # rescan with today's engines
+```
+
+The same engine names down one column tell which change moved which
+engine. Engines' verdicts drift over days (a rescan can flag a file that
+was clean when it shipped), so compare variants scanned the same day.
+`--max N` exits 1 when a file has more than N detections; 2 means the
+check itself failed (no key, network, quota, `--timeout`).
+
+**In CI.** The release workflow's *VirusTotal* step (Windows job) runs the
+script on the shipped `memories-pc.exe` and `fm-editor.exe`, taken from
+the archives, and writes the table, the matrix and the links into the job
+summary. It warns above `VT_MAX_DETECTIONS` (2) and never fails the build;
+when VirusTotal is down or slow it warns too, after at most 10 minutes an
+analysis (`--timeout 600`) and 30 for the step. McAfeeD's reputation verdict (`ti!<hash>`) marks every file VirusTotal has
+just met, so 0 would warn on every release. It runs only on version tags and
+manual runs (*Run workflow*), so only those builds are uploaded; never on
+pull requests nor on pushes to `master`, and it is skipped when the
+repository has no `VT_API_KEY` secret (forks). A repository admin adds the secret with
+`gh secret set VT_API_KEY` (it prompts for the value, so it stays out of
+the shell history); removing it turns the step off.

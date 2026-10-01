@@ -1,7 +1,7 @@
 # FM Editor
 
-A standalone editor for mods of the PC port: cards and their art, fusions, equips, rituals
-and the opponents' deck and drop pools. It is a program of its own, not part
+A standalone editor for mods of the PC port: cards and their art, fusions, equips, rituals,
+the opponents' deck and drop pools, and the campaign map. It is a program of its own, not part
 of the game, and needs nothing but Python 3 and Tkinter (part of Python on
 Windows and macOS; on Linux maybe a package of its own: `python3-tk`, or `tk`
 on Arch).
@@ -27,14 +27,18 @@ the original editor until their modern versions are ported.
 
 | Tab | What you edit |
 |---|---|
-| Cards | search and filter the 722 cards; name, card text (with the game's 20-letter, 8-line wrapping counted, and **Tools > Card text preview** to see it as the card view draws it, below), ATK/DEF, type, attribute, level, guardian stars, password; the retail value beside each field. **Frame**: the colour of the card's frame (by type, or monster, magic, trap, ritual, purple or orange whatever its type), with a swatch of it; the card view, the Library and the duel draw it ([frame colour](../../../notes/more-cards.md#frame-colour)). **Notes**: text of your own on the card (what you changed, what you plan), saved as its `"notes"`; the game shows none of it, and a code mod can read `<tag: value>` tags from it ([notes on a card](../../../notes/more-cards.md#notes-on-a-card)). **Revert to retail** keeps them; the **With notes** filter lists the cards that have some, and the search finds words of them too. **Add a card** copies the selected one as a new card with a stable id; a new card starts in nobody's chest (it is won in its base's place, dealt in a starter deck, or given by Game > Cheats), and its password is only shown in the card view: the Password screen sells the disc's 722 |
+| Cards | search and filter the 722 cards; name, card text (with the game's 20-letter, 8-line wrapping counted, and **Tools > Card text preview** to see it as the card view draws it, below), ATK/DEF, type, attribute, level, guardian stars, password; the retail value beside each field. A guardian star may be **(none)**, written `0`: both none is a monster with no star at all (no SELECT A GUARDIAN STAR box, no star bonus given or taken, no star drawn), the second none a monster with one star; a first star of none with a second is warned about, because the game takes the second as the card's one star ([no star](../../../notes/modding.md#guardian-stars-names-icons-new-stars-and-matchups)). **Frame**: the colour of the card's frame (by type, or monster, magic, trap, ritual, purple or orange whatever its type), with a swatch of it; the card view, the Library and the duel draw it ([frame colour](../../../notes/more-cards.md#frame-colour)). **Notes**: text of your own on the card (what you changed, what you plan), saved as its `"notes"`; the game shows none of it, and a code mod can read `<tag: value>` tags from it ([notes on a card](../../../notes/more-cards.md#notes-on-a-card)). **Revert to retail** keeps them; the **With notes** filter lists the cards that have some, and the search finds words of them too. **Add a card** copies the selected one as a new card with a stable id; a new card starts in nobody's chest (it is won in its base's place, dealt in a starter deck, or given by Game > Cheats), and its password is only shown in the card view: the Password screen sells the disc's 722 |
 | Art | a card's picture (102x96), thumbnail (40x32, the hand and the field) and name plate (96x14) as the disc has them, beside what the game will draw at the console's resolution and at Internal 2x/4x; **Import PNG**, **Export** the disc's or the mod's (to paint over), **Revert** |
-| Fusions | every pair and its result (search by a card, or show the changed ones); add, change, remove (the pair no longer fuses) or revert; **Bulk...** adds or takes away the fusions of every card of one filtered set with every card of another (below) |
+| Fusions | every pair and its result (search by a card, or show the changed ones); add, change, remove (the pair no longer fuses) or revert; **Remove recipes of...** takes away every disc recipe of a card in one `remove` rule; a pair a card's own `fusions` list makes (no rule of the mod deciding it first) shows that list's result, marked "own list"; **Bulk...** adds or takes away the fusions of every card of one filtered set with every card of another (below) |
 | Equips | per equip card, the monsters it may equip; add one, add or remove a whole type, remove, revert |
 | Rituals | per ritual card, its three tributes and the monster it summons |
 | Duelists | per opponent, the deck pool and the S/A-POW, B/C/D and S/A-TEC drop pools: weights, their chance, the retail weight, and the total against 2048 (**Normalize** scales a pool back to 2048 the way the port does). The deck is either the **Weighted deck (retail)** or a **Fixed deck (40 cards)**: forty specific cards by their copies, counted against 40, each beside its weighted chance; **Copy the weighted deck's most likely 40**, **Clear**, **Revert to retail** |
 | Starter decks | the decks a new game may be dealt in place of the disc's weighted pools: a deck's name, its weight against the other decks offered, and its cards by their copies, counted against the forty a deck holds |
-| Mod info | id, name, version, author, description, `settings`, and the other `mod.json` keys, kept as written |
+| Map | the campaign map's sixteen places (below): each exit's destination, direction, story-flag condition, length and arrow on the screen, the Millennium Puzzle marker's place in the town, Confirm's destination and each place's camera, over pictures of the map drawn from your disc; **Reset place**, **Reset all**; **Pictures...**: the marker, arrows and name panel, and the terrain's textures |
+| Limits | the numbers the game caps (`limits`, [gameplay tables](../../../notes/gameplay-tables.md#limits-atk-def-lp-starchips-and-more)). The simple part: the ATK and DEF cap, the LP a duel starts with, and how far healing goes. **Show advanced**: ATK and DEF apart, each side's starting LP, the two-player LP choice (start, most, step), the most starchips, the chest's copies, the Free Duel and two-player records, and a table of duelists with the LP each side starts with against them. An empty field is the game's own number (beside it, with the range the game keeps); a value past that range is warned about and held at the most the game keeps |
+| Guardian Stars | the stars (`guardian_stars`, [Guardian Stars](../../../notes/modding.md#guardian-stars-names-icons-new-stars-and-matchups)): the list of stars with a name and an icon each (**Import icon (PNG)...**, with a preview; the game makes it 16x16 in the disc's stars' colours), **Add star** for 11 to 15 (a card holds its stars in 4 bits, so fifteen at most), and the full grid of matchups: a row is the attacker's star, a column the defender's, a cell the bonus the attacker's side gets, green above 0 and red below; click a cell, type a bonus or use **+ default**, **- default** or **0** (with **Reverse pair gets the opposite** on, the reverse cell takes the opposite sign). **Default bonus** moves the disc's 500 in both cycles, **Retail cycles** and **Clear all** are presets, **Revert to retail** takes the whole key away. **Set stars by rule...** sets many cards' first or second star from their attribute or type through a table you fill in (a Fire monster's first star is Fire), or one star for all, **(none)** included (a first star of none leaves the second as the card's one star, as the game reads it; both none, no star), over a filter of cards like Bulk fusions', with a preview and **Undo last batch**. **Show advanced**: a name per language (`fr=Feu, de=Feuer`), an icon's colours (`game` or its own), and what happens at a summon (`ask`, `first`, `best`). The Cards tab's star lists show the mod's stars as they are named here |
+| Packs | the card packs the mod sells for starchips on the Password screen: each pack's name, description, price, cards a pack and picture, its cards with their tier, weight and chance; an **Advanced** part for everything else; **Shop settings...** and **Simulate...** (below) |
+| Mod info | id, name, version, author, description, `settings`, and the other `mod.json` keys, kept as written (`limits` is the Limits tab's, `guardian_stars` the Guardian Stars tab's) |
 | Conflicts | the loader's checks; double-click a line to go to it |
 
 **File > Save** writes the mod folder (Ctrl+S); the first save asks where
@@ -60,6 +64,14 @@ strip of menu buttons with the same menus stands in for it (Alt+letter and
 F10 open them). Left light: the thin frame Windows draws around an open
 menu, and the system's own dialogs (message boxes, choosing a file or
 folder).
+
+On Windows the editor tells the system it knows the screen's dpi (per
+monitor, `theme.dpi_awareness`, before the first window), so at 125% or
+150% it is drawn at that size itself instead of stretched and blurred: the
+fonts, in points, follow Tk's scaling, and so do the sizes the editor gives
+in pixels (`widgets.px`) and the dark theme's arrows and check boxes. Its
+face is Windows 11's Segoe UI Variable where there is one (Segoe UI before),
+Consolas for the fixed one. None of this runs elsewhere.
 
 ### Bulk fusions
 
@@ -98,6 +110,90 @@ would leave the mod past 300,000 rules is refused. Ports built before the
 bulk fusions read a long `fusions` list in quadratic time (20,000 rules took
 about a minute); use a current build.
 
+### The Map tab
+
+The campaign map (`campaign_map.py`) is the overworld module's table of
+sixteen places: 0-9 the world map's sites, 10-15 the town's, named as the
+game names them (strings `0x8350` + place; two town places read "before /
+after" when their label changes once the tournament is over). A place is
+what the game shows while the player stands there, so it is edited as a
+screen:
+
+* **Screen**: the place at 2x, over the map as its camera sees it (drawn
+  from the disc's own 3D map, `map_view.py`: the terrain model, its
+  textures, the camera of `ViewState_ApplyOrbit`, the game's fog and, on the
+  world map, its spotlight; close to the game's frame, not exact, because
+  the light is a fit). The name panel, each used exit's arrow (the game's
+  own sprite from the map's strip, `field_08`) and, in the town, the
+  Millennium Puzzle marker are drawn where the game draws them; drag an
+  arrow or the marker to move it. Exits at the same spot share one label,
+  with the flag each needs.
+* **Overview**: the world map from straight above (turned as its cameras
+  mostly look: -x up) with each world site where its camera looks, the town
+  (place 10's camera) with its places where the marker stands, and every
+  exit as an arrow to its destination: green always, amber while a flag is
+  set, blue while it is clear, dashed for Confirm; thicker for the selected
+  place. Dragging a world site moves its camera's target; dragging a town
+  place moves its marker. **Map** chooses the model before or after the
+  coup (the terrain changes; the table is one for both). A **Reference
+  picture...** (a screenshot of the game at this place) replaces the drawn
+  map for this camera while the editor is open.
+* The form: the camera (distance, heading, pitch in 4096ths of a turn, and
+  the x and z it looks at); the marker (the town only: the world map draws
+  none, so a world site's are kept as they are); Confirm's destination
+  ("enter the place's own scene" is the disc's 0) and whether it waits for
+  exit 1's condition (the record's gate); and four exits, each **Used** or
+  not (destination 16 on the disc), its destination by name, the direction
+  held as a D-pad (any of the four), **When**: always, while a story flag
+  is set, or while it is clear (the flag number is the one the game tests,
+  `0x8000` set in the record for "clear"), **Frames** (the move's length:
+  the camera and the marker take that many frames), the arrow's picture
+  (one of the eight the map has) and its x, y on the screen. A new exit
+  starts at 16 frames, the disc's usual length.
+
+The game takes the first exit whose direction is held and whose condition
+holds, so two exits may share a direction under opposite conditions (the
+disc does that); Cancel in the town, once the tournament is over
+(flag `0x47`), always leads back to the world map at Metropolis.
+
+**Pictures...** (`map_art.py`) replaces the map's own pictures, as
+texture pack entries in the mod's pack (the Art tab's pack, `textures/`,
+the map's PNGs under `textures/map/`); the Screen and Overview draw them
+at once:
+
+* **Sprites**: the map's one strip of sprites (WA sector `+141` of each
+  package, 256x256 at four bits, drawn through four 16-colour palettes:
+  0 the name panel, 2 the marker, 3 the arrows; a dump shows palette 1
+  read too). **Import picture...**
+  for one sprite (the marker, the name panel, an arrow) pastes it into every
+  cell of that sprite's animation (the marker turns through 16 frames, an
+  arrow pulses through 10; the name panel is one frame), so the new picture
+  keeps the sprite's motion but not the differences between its frames; an
+  arrow and its mirror share their cells (right and left, the diagonals).
+  The picture is the sprite's first frame as the preview shows it (the
+  marker 32x32, an arrow 16x24, 24x16 or, on a diagonal, 16x16, the panel
+  256x32); a bigger one is
+  kept at up to 4x. **Export sprites...** writes the strip through each
+  palette (`sprites-p0.png` to `p3.png`) to paint every frame yourself, and
+  **Import sprites...** takes those files back, any size up to 4x. The
+  mod's entry names the strip as the game reads it through one palette, in
+  both packages (the strips are the same, and share the PNG).
+* **Terrain textures**: the map is a 3D model whose textures are tiles
+  (86 in 100 of the texels of its upward faces are drawn more than once,
+  one up to 51 times), so there is no single picture of the map to swap:
+  its textures are replaced one by one. **Export textures...** writes each
+  texture of the chosen map (before or after the coup: two models, 60 and
+  61 textures, 4 or 8 bits) as the terrain draws it, one PNG per palette it
+  is drawn with (`textureNN-PPPP.png`: the upload's number and the palette
+  word), and **Import textures...** takes the files of a folder with those
+  names; a texture whose file is not there stays the disc's. A picture of
+  another shape is stretched to the texture's, and kept at up to 4x.
+
+At the console's resolution a bigger picture is averaged down to the
+texture (the game's 4 or 8 bits are gone: any colour goes); Internal 2x
+and 4x draw it at its own resolution. The game reads a pack at start, like
+the table, so the mod needs a restart.
+
 ## Game files
 
 The editor looks for the game where the port does: `MEMORIES_DISC`, the disc
@@ -116,6 +212,7 @@ What it reads (layouts in `gamedata.py`):
 | deck and drop pools | `WA_MRG.MRG` `0xE99800 + 0x1800 * opponent` |
 | the Password screen's passwords | `WA_MRG.MRG` `0xFB9800 + 8 * card`: price, then the password as BCD digits (`0xFFFFFFFE` for none) |
 | the text font and its colours (the card-text preview only) | `WA_MRG.MRG` sector `0x1690` (16 sectors, the 8x12 font's page) and the first 32 bytes of sector `0x16C2`, as `src/pc/cards/font_art.c` reads them |
+| the campaign map (the Map tab) | `WA_MRG.MRG`, the two overworld packages at sectors 8153 (before the coup) and 8311 (after): the module's first word `0x14`, the table at `+0x11A8` (16 x 66 bytes), the display resource bank at sector `+140`, the sprite strip `+141` (16 sectors, 256x256 at four bits) and its palettes `+157`; the terrain model at `+6` (134 sectors, an HMD) |
 
 The 15 "glitch" fusions the game's table reader makes by reading past an odd
 record are shown as retail fusions and marked.
@@ -128,6 +225,9 @@ record are shown as retail fusions and marked.
   passwords). Keys the editor does not show (`model`, `count`...) are kept as
   written; `art`,
   `thumbnail` and `title` are the Art tab's (below). A copy with no `name` shows its base's name from the disc.
+  `stars` is written as the disc's names and `0` for none (`[0, 0]`: no
+  star); read back, `0`, `null`, `"none"` and `"(none)"` are all none, as the
+  game reads them, and `[none, X]` stays as written.
 * `passwords`: a retail card whose password changed gets `{"password": "…"}`
   (`""` for none) under its name, merged into the mod's own entries, whose
   `starchips`, `all` and `"card number"` stay as written. A password is up to
@@ -135,13 +235,36 @@ record are shown as retail fusions and marked.
   one, since the Password screen then gives the lower card number.
 * `fusions`: one rule per pair whose result changed (`"result": null` for a
   fusion taken away). An added card fuses as its base until a rule names it,
-  so taking away its pair's fusion writes a `null` rule for it.
+  so taking away its pair's fusion writes a `null` rule for it. A mod's
+  `{"remove": C}` rules are kept as written, first: the disc recipes of C
+  they take away write nothing, and one the mod keeps or changes (reverted
+  in the tab, say) is written as a rule of its own, which the remove would
+  otherwise take away too. When every disc recipe of C is back, the remove
+  is dropped; one for a card no disc recipe makes stays as it was. A
+  pair rule the mod wrote is kept even where the result alone needs none
+  (the disc's result, or a `null` on a recipe a remove takes away): the
+  game asks it before a card's own `fusions` list. So is one for a pair
+  such a list names once the modder edits it, so the game plays what the
+  tab shows. A remove leaves such a pair to the list, as in the game (mods'
+  recipes still make the card): the tab's row says "own list" and shows
+  what the list makes (`own_fusion`). Deleting an added card turns a kept
+  rule that made it into a null rule, shown as "removed"; one on a pair
+  with no disc fusion that no own list names is dropped instead.
 * `equips`: per equip card, `add` and `remove` (a whole monster type as its
   name), or `replace` when that is shorter. An added card is equipped (and
   equips) as its base, so what differs for it is written in later entries,
   which the game's reading of the rules confirms before saving. `bonus` and
   `bonus_if` are kept as written.
 * `rituals`: a changed recipe, or `"result": null`.
+* `guardian_stars`: the stars the mod declares (`id`, and `name`, `icon`,
+  `palette` when set), `default_bonus`, `replace` and `choice` when not the
+  disc's, and a `matchups` entry for each pair whose bonus differs from what
+  the rest of the key already gives; a mod's `beats` and `mirror` are read
+  into the grid and written back as those pairs. Icons are written to
+  `icons/star-<id>.png` in the mod folder.
+* `limits`: what the Limits tab sets, a key per field that is not empty
+  (`"life_points": 16000` when only both sides' start is set); a key the tab
+  does not show is kept as written.
 * `drops` and `decks`: per opponent and pool, the fewest listed weights that
   make the port's arithmetic (`tables.c`, mirrored in `pools.py`) come out
   at exactly the edited pool; an edit every opponent shares is written once
@@ -178,6 +301,15 @@ record are shown as retail fusions and marked.
   A card the editor cannot place keeps its row and its copies, under the name
   it was written with, and `"starter"` given as the name of a file stays that
   filename.
+* `packs` and `pack_shop`: the card packs and the shop's rules
+  ([card packs](../../../notes/card-packs.md)). Each pack is kept as the
+  object the mod wrote, so a key the editor has no field for stays as
+  written, and is written back with only what differs from the game's
+  defaults: no `"count": 5`, `"price": 100`, `"duplicates": "allow"`,
+  `"reveal": "flip"`..., a pool of weights of 1 as a list, `"cost":
+  {"starchips": n}` alone as `"price"`. A pack's picture goes in the mod's
+  `packs/` folder. `"packs"` given as the name of a file stays that filename
+  (the tab then edits nothing).
 * The duelists the editor knows are the forty the disc lays out, since it
   reads the game's own files. A mod may add its own
   ([more duelists](../../../notes/more-duelists.md)), and which of those exist
@@ -186,6 +318,29 @@ record are shown as retail fusions and marked.
   given as the name of a file (`"decks": "tables/decks.json"`), which the
   editor does not read. A roster's `duelists/`, `decks/`, `drops/` and
   `portraits/` folders are copied with the mod's other files.
+* `data` (the Map tab): one entry patching `\DATA\WA_MRG.MRG;1` where the
+  map differs from the disc, the same bytes in both overworld packages'
+  tables (`0xFEC800 + 0x11A8` and `0x103B800 + 0x11A8`, each 1056 bytes),
+  as runs of changed bytes (`{"at": "0xFED9CF", "bytes": "01"}`). The PC
+  port reads the table from the package it loads
+  (`src/overlays/overworld/location_table.c`), as the console does, so the
+  patch works on either; the game reads it when the map loads, and data
+  mods need a restart. The module's alternate copy of the table
+  (`+0x1E54`) has no reader found on the map's paths and is not written. The mod's other
+  `data` entries are kept as written, before the map's; opening a mod
+  takes its patches of the two tables back into the map (a run across a
+  table's edge stays as written, with a note), and a mod whose two tables
+  differ opens with the one before the coup and saves both alike.
+* The map's pictures (the Map tab's **Pictures...**, `map_art.py`): texture
+  pack entries in the same `textures/manifest.json`, after the Art tab's,
+  PNGs under `textures/map/`: the sprite strip as one entry per palette and
+  package (`archive` `WA_MRG.MRG`, `offset` the strip's sector `+141`,
+  64 words x 256 rows at 4 bits, `clut_offset` the palette in sector
+  `+157`), and a terrain texture as one entry per palette it is drawn with
+  (the image's place in the model's image section, its words and rows, 4
+  or 8 bits, and the palette the polygons name, as the last upload to that
+  place in VRAM leaves it). Opening a mod takes such entries back into the
+  map; the pack's other entries are kept as written.
 * Art (the Art tab, `art.py`): a retail card's picture and thumbnail go in
   a texture pack, `textures/manifest.json` with PNGs under
   `textures/cards/`, one entry each addressed as `extract_images.py` and
@@ -304,6 +459,13 @@ the file inside the pack and there, its measures (offset, words 1-1024,
 rows 1-512, depth 4/8/16, stride, `crop_left` and `width` within the row),
 `row_offsets` as long as `rows`, and a `setting` the mod declares; and the
 cards' `art`, `thumbnail` and `title`: inside the mod, there, and PNGs.
+For the map: a destination past 15 (16 is "no exit") or Confirm past 15,
+and a move of 0 frames (the game divides by it) are errors; an exit that
+leads back to its own place, needs no direction or other buttons, is
+shadowed by an earlier exit in the same direction under the same condition,
+has a flag past `0x7FF` or its arrow off the screen, a marker off the
+screen, and a place no exit, Confirm or Cancel leads to any more are
+warnings.
 
 ## Card text preview
 
@@ -386,13 +548,283 @@ its files (or `fm-editor`) lands beside the game's program. The Linux one is bui
 Debian 11, like the game, and brings its own Python and Tk. Running it from
 the source as above works too.
 
+### Packs
+
+The left list is the mod's packs in their order (`#`, name, price, cards a
+pack, stock): **Add pack**, **Duplicate**, **Remove**, **Up**/**Down** (the
+list's order is the order the game sells them in; `"order"` is written only
+when set under Advanced). A pack the game would leave out is red, one with a
+note amber; the Conflicts tab has the reader's words (packs.py says what the
+game's Mods window would).
+
+The simple view has what most packs need: **Name** (16 letters show; the
+identity `mod-id:id` beside it stays when the name changes, since a save's
+progress is kept by it), **Description**, **Price** in starchips and **Cards
+a pack**. The picture is what the big card on the Password screen shows:
+**Import PNG** (cut to 102:96 from the middle, kept at up to 4x; the console's
+resolution makes it 102x96, Internal 2x and 4x draw its own detail), **Export**,
+**Revert** (back to the cover card's art), with the name plate the game sets
+in its serif font under it, at 1x, 2x and 4x. The cards: `#`, card, tier,
+weight and **Chance**, the share of a slot dealt by the tiers' odds that is
+this card, before any is taken out. **Add a card...** (the mod's own cards
+too), **Add filtered...** (the Bulk fusions filters: every Dragon under 1500
+ATK, say) into the chosen tier at the weight typed, **Tier**/**Set** moves the
+selected rows, **Weight**/**Set**, **Remove selected**.
+
+**Advanced** (closed at first):
+
+* **Tiers**: name, odds (and their share), label (`"ULTRA RARE!"`), colour
+  (the game's text colours, 0-15), sound, reveal and how many cards; **Add
+  tier**, **Edit...**, **Remove**, **Up**/**Down**: the order is the rarity,
+  commonest first. A one-pool pack becomes a pack of tiers with its pool the
+  tier `cards`. A renamed tier is renamed in the slots, guarantee and pity.
+* **Slots**: every slot by the tiers' odds, or a rule for each: a tier, tiers
+  by weight, its own cards (`card=weight`), or always one card.
+* **Dealing**: guarantee and pity (`tier=n`), max copies, stock, cost in
+  cards (`card=copies` from the chest), order, shops, cover, duplicates
+  (`unique_in_pack`), reveal (`flip`, `quick`, `list`), include the cards mods
+  add, and **All owned** (`when_nothing_left`): with max copies, when the
+  player holds that many of every card, `refuse` the pack (ALL OWNED on the
+  screen, nothing paid) or `sell` it anyway, or `(shop's)` for Shop
+  settings' rule.
+* **Unlock**: beat (a duelist), wins, story flag (`0x6E0` + n is the n-th
+  campaign duelist beaten), card and copies, starchips spent on packs, packs
+  opened, opened (`pack=n`), and whether a locked pack is hidden or shown.
+* **Password and sounds**: a password (said when a card has it too: the card
+  comes first), once a save, in the list, and the five sound ids (empty for
+  the Password screen's own).
+
+**Shop settings...** edits `pack_shop`: what the Password screen sells (both,
+packs only, passwords only), the random numbers (`game`, or `save` so a
+reloaded save deals the same pack), the music, **All owned** (the rule for
+the packs that do not say, `refuse` by default), and the shops, one a line
+(`id | name | unlock as JSON`, sixteen at most); a shop's other keys (`where`,
+and any the editor has no field for) stay as written. Not yet in the game, and so not offered (the keys
+are kept free for them): a PACKS entry in the campaign's shop
+(`campaign_shop`), the main menu, saving after each purchase (`autosave`),
+selling mods' cards by their passwords (`sell_added_cards`), a currency of the
+mod's own (`currency`) and a stock that comes back (`restock`).
+
+**Simulate...** opens N packs (1000 at first) from a seed with the game's own
+dealer (`packs.py` is `src/pc/cards/packs.c` in Python: four of the game's
+random numbers a card, the guarantee and the pity redealing the last slots,
+`unique_in_pack` and `max_copies` shrinking the pools), the pity counted from
+one pack to the next as a save counts it, and lists the cards dealt by tier
+and by card, how often a tier with a pity came on average and how often the
+pity dealt it. The packs are opened a slice at a time, so the editor stays
+free meanwhile: a bar shows how far it is and **Stop** shows what came so far
+(at most a million packs, and five million cards in all, about a minute).
+The tests hold the Python dealer to the C one's deals
+(`tests/pc/packs_golden.txt`), line for line.
+
+A field of the pack left as the tab showed it keeps the key as the mod wrote
+it: opening a mod and moving through its packs changes nothing of it (a
+`"cover": 2` stays a number), and **Apply** writes only the fields changed.
+**Duplicate** gives the copy a picture of its own, so importing one for
+either pack leaves the other's. When `packs` names a file of the mod, the
+tab keeps it as written: a pack's fields and buttons are grey, and only
+**Shop settings...** (the manifest's `pack_shop`) is offered.
+
 ## Tests
 
     python -m unittest discover -s tools/pc/fm_editor/tests -t tools/pc
 
 (ctest `pc_fm_editor`). The tests build synthetic game files at the retail
-offsets (`tests/fixtures.py`), art records included, and their PNGs in code;
+offsets (`tests/fixtures.py`), art records included, and their PNGs in code
+(`tests/map_fixture.py` adds the two overworld packages: a made-up table,
+resource bank, strip and a one-quad HMD);
 they need no game data (the bulk fusion tests time a 722 x 722 preview). PNGs are
 read and written by `pngio.py`, in plain Python like the rest; the card-text
 preview's tests build their font page and a TrueType file in code as well
 (`tests/test_card_text.py`).
+
+## Building another front end
+
+The window is one front end over an engine that has no Tk in it. Another
+front end (Qt, a web page, a script) reuses the engine as it is and replaces
+only the window; it does not rewrite the engine, whose rules are the port's
+(`tables.c`, `cards.c`, the loaders) and are pinned by the tests below.
+
+**The engine** (no `tkinter` import; plain Python 3, nothing to install):
+
+| Module | What it does |
+|---|---|
+| `disc.py` | finds and reads the game files (`load`, `find_game`, `user_dir`) into `GameFiles(slus, wa, source)` |
+| `gamedata.py` | the retail tables from them: `load_game(files)` → `GameData`; the names of types, attributes, stars, duelists, pools |
+| `model.py` | `Project`: the retail tables with the edits on top, and the edits themselves (below) |
+| `manifest.py` | reading a mod folder (`open_mod`, `apply`) and writing one (`build`, `dumps`, `save_mod`) |
+| `validate.py` | the loader's checks: `validate(project)` → `Issue` list |
+| `pools.py`, `fixed_decks.py`, `bulk_fusions.py` | the port's pool arithmetic, fixed decks, bulk fusions |
+| `art.py`, `campaign_map.py`, `map_art.py`, `map_view.py` | card art, the campaign map's table and pictures, the map drawn from the disc's 3D model (`map_view.py` has no Tk despite its name) |
+| `guardian_stars.py`, `star_rules.py` | a mod's `guardian_stars` (the stars, the matchup grid, presets, checks) and setting many cards' stars by a rule |
+| `card_text.py`, `ttf.py`, `pngio.py` | the card-text layout and picture, TrueType outlines, PNGs and the `Image` type every picture is |
+| `importer.py`, `kit.py`, `ygomods.py` | importing a modified game, and converting a `.ygomods` package |
+| `cli.py` | `check` and `import` (the window only through a lazy import) |
+
+It needs `tools/pc/text_listing.py` beside the package (`gamedata.py`
+finds it). **The Tk front end** is `app.py`, `tabs.py`, `widgets.py`,
+`theme.py`, `art_tab.py`, `map_tab.py`, `fixed_deck_view.py`,
+`bulk_dialog.py`, `guardian_stars_tab.py`, `star_rules_dialog.py`,
+`preview.py`, `importers.py` (the File menu's import
+dialogs) and `settings.py` (the window's own settings, no Tk).
+
+**The whole round trip, with no Tk** (run from the source tree's root; it
+prints `{"replace": 1, "attack": 3500}` in the mod.json for Blue-Eyes):
+
+```python
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, "tools/pc")        # the folder holding fm_editor/ and text_listing.py
+from fm_editor import disc, gamedata, manifest, validate
+from fm_editor.model import Project
+
+files = disc.load("game")             # a folder, a .bin or an ISO; disc.find_game() looks where the port does
+retail = gamedata.load_game(files)    # the disc's tables, read once
+project = Project(retail)             # or: project, notes = manifest.open_mod(retail, "path/to/mod")
+project.info.id, project.info.name = "stronger-blue-eyes", "Stronger Blue-Eyes"
+
+card = project.cards[1]               # Blue-Eyes White Dragon
+project.cards[1] = card.copy(attack=card.attack + 500)
+
+issues = validate.validate(project)   # the loader's checks: Issue(level, area, where, message, target)
+for issue in issues:
+    print(issue)
+if not validate.errors(issues):
+    path = manifest.save_mod(project, Path(tempfile.mkdtemp()) / project.info.id)
+    print(path.read_text(encoding="utf-8"))
+
+assert "tkinter" not in sys.modules
+```
+
+**Opening.** `gamedata.load_game(files)` once per game; then either
+`Project(retail)` (a new mod, everything as retail) or
+`manifest.open_mod(retail, folder)` → `(project, messages)`: the folder's
+`mod.json` laid over retail, its texts, art and map taken back, and what
+could not be read said in `messages` (show them). `open_mod` raises
+`ValueError` or `OSError` for a `mod.json` that is not JSON or not there.
+`project.source_dir` is where it came from; `project.retail` stays the
+disc's, and every "changed" mark compares with it.
+
+**Reading and changing.** Change the project, then redraw what shows it;
+the engine keeps no undo (a front end may keep `project.clone()`s).
+
+* Cards: `project.cards[id]` is a `gamedata.Card` (name, description,
+  attack, defense, type, attribute, level, star1, star2, frame); replace it
+  with `card.copy(field=value)`; a function's `card` argument below is the
+  number, not the `Card`. `card_changed`, `revert_card`,
+  `add_card(base, key)` (an added card, id 723 and up, in
+  `project.added`), `remove_card`, `password`/`set_password`,
+  `set_notes`, `card_label`, `model.card_matches` (the search).
+* Fusions: `project.fusions[(low, high)] = result`, through
+  `set_fusion(a, b, result or None)`; `fusion_status`, `revert_fusion`.
+  `project.fusion_removes` lists the `{"remove": C}` cards in the mod's
+  order (`remove_recipes`, `retail_recipes`, `active_removes`,
+  `fusion_rule`: whether a pair is written, which the bulk count shares);
+  `project.fusion_explicit` the pairs written whatever their result
+  (`own_fusion_pairs`, `explicit_after_edit`).
+  Bulk: `bulk_fusions.plan(project, BulkSpec(...))`, then `apply` and `undo`.
+* Equips: `project.equips[equip]` is a set of monsters; `equip_baseline`
+  is what the disc gives it. Rituals: `project.rituals[ritual] = (t1, t2,
+  t3, result)`; `ritual_status`, `revert_ritual`.
+* Duelists: `project.pools[duelist][pool]` is `{card: weight}` for the
+  pools `gamedata.POOLS` (`"deck"`, `"pow"`, `"bcd"`, `"tec"`), out of
+  2048; `pools.normalize`, `revert_pool`. A fixed deck:
+  `fixed_decks.deck_of`, `set_deck(project, d, {card: copies})`,
+  `most_likely`, `remove`.
+* Starter decks: `project.starter`, a list of `model.StarterDeck`.
+* Guardian Stars: `guardian_stars.read(project.other.get("guardian_stars"))`
+  → a `Stars` to edit (`add_star`, `remove_star`, `set_default`,
+  `preset_retail`, `preset_clear`), `.build()` back into
+  `project.other["guardian_stars"]` (`None` when it would change nothing);
+  `guardian_stars.choices(section)` names the stars a card may have.
+  Many cards' stars by a rule: `star_rules.plan(project, spec)`, `apply`,
+  `undo`.
+* Mod info: `project.info` (`ModInfo`); other `mod.json` keys, kept as
+  written, in `project.other`.
+* Art: `art.set_image(project, card, part, image)` (part `"art"`,
+  `"thumbnail"` or `"title"`; returns notes), `art.revert`,
+  `art.changed_cards`.
+* The map: `campaign_map.state(project).locations`, a list of 16
+  `Location`s: store an edited `loc.copy()` back at its index;
+  `campaign_map.reset`, `reset_all`. Its pictures: `map_art.set_sprite`,
+  `set_texture`, `import_sprites`, `import_textures`, `revert_*`.
+* Importing: `importer.import_modded(retail_files, modded_files, id,
+  name)` → a result with `.project` and `.report` (saved with
+  `importer.save`); `ygomods.import_package(retail, files.wa, path, id,
+  name)` → `(project, report)`.
+
+**Checking.** `validate.validate(project)` is every check the window's
+Conflicts tab lists, `validate.errors(issues)` the ones the loader refuses,
+`validate.validate_card(project, card)` one card's. An `Issue` has `level`
+(`"error"`/`"warning"`), `area` (the tab: `"Cards"`, `"Fusions"`, `"Map"`...),
+`where`, `message`, and `target`, what to select to show it (a card id, a
+fusion pair, `(duelist, pool)`, a map place).
+
+**Saving.** `manifest.save_mod(project, folder)` writes the art's PNGs and
+texture pack first (that sets `"textures"`), then `mod.json`, holding only
+what differs from retail, and on a save somewhere new copies the source
+mod's other files. It refuses a folder that holds game files.
+`manifest.dumps(manifest.build(project))` is the text it would write, for a
+preview. **A front end never writes `mod.json`, the texture pack or the
+mod's PNGs itself**: only `manifest.save_mod` (or `importer.save`), so the
+diff, the order of the writes and what is kept as written stay the
+engine's.
+
+**Pictures.** Every picture is a `pngio.Image` (`width`, `height`,
+`rgba` bytes); `pngio.encode(image)` makes PNG bytes any toolkit reads.
+
+* Card text: `card_text.Renderer(card_text.RetailFont(files.wa), face).render(text,
+  scale)` → `(image, layout)`, with `face` `None` for the retail font or a
+  `ttf.Font(path)` (`card_text.port_face_path()` is the port's own);
+  `layout` has the rows, the cut rows and the glyphs to mark.
+* Art: `art.disc_image(files.wa, card, part)`, and `art.in_game(project,
+  files.wa, card, part, scale)` as the game draws the mod's at 1x, 2x, 4x.
+* The map: `map_view.render(map_view.model(files.wa, sector), camera,
+  spotlight=place < campaign_map.TOWN_FIRST,
+  overrides=map_art.texture_overrides(project, package))`, with `camera`
+  `(distance, heading, pitch, target_x, target_z)` of the place and
+  `(package, sector)` one of `campaign_map.PACKAGES`; `map_view.render_top`
+  the world from above. The sprites, as `(image, left, top)`:
+  `campaign_map.sprite_image(data, *campaign_map.PANEL, strips)` (or
+  `MARKER`) and `arrow_image(data, arrow, strips)`, with `data`
+  `campaign_map.state(project).retail` and `strips` the mod's strips,
+  `{p: map_art.strip_override(project, p)}` for the palettes that have one.
+
+**Still in the Tk layer** (a new front end redoes these, or they move to the
+engine first):
+
+* `App.save`: where a first save goes (an empty folder, or a folder named
+  after the mod id inside the chosen one; the id must be letters, digits,
+  `-` and `_`), and asking before replacing another mod's `mod.json`;
+  `App.load_mod` wants a `mod.json` in the folder.
+* Reading the forms: a password is up to 8 digits, padded with zeros
+  (`CardsTab.apply`); an added card's key is `model.KEY_RE` and unique; a
+  new card copies the selected card (not its base) and is named "... II";
+  a pool weight is 0-65535, a deck's copies 0-40, a starter deck's weight
+  0-`STARTER_WEIGHT_LIMIT`, and a card left at 0 is taken out of the pool
+  or deck; "Add every"/"Remove every" of a monster type (`EquipsTab.by_type`);
+  a card named by typing (`widgets.CardField.get`: a number, "7 Name",
+  `Project.resolve`, then the exact name).
+* `FixedDeckView.switch`: switching a duelist back to the weighted deck
+  keeps its fixed deck aside until the mod is closed.
+* `ModInfoTab.commit`: `settings` and the other keys parsed as JSON, and
+  the keys the tabs own refused there.
+* `MapTab`: the fields' ranges (-32768 to 32767, a flag up to `0x7FFF`,
+  frames up to 255), a new exit's 16 frames; the Screen put together from
+  the map picture, the name panel at `campaign_map.PANEL_AT`, the arrows
+  and the marker at their sprite offsets; the Overview's geometry, and
+  turning a drag into coordinates.
+* `importers.ask_modded_files`: a modified `SLUS_014.11`'s `WA_MRG.MRG`
+  looked for in `DATA/` beside it, then beside it.
+* `preview.describe`: the card-text layout's marks in words.
+
+**The tests a front end keeps passing** (the command above): `test_data`
+(tables, the diff to `mod.json` and back, the pools' arithmetic, the
+checks), `test_family` and `test_importer` (imports), `test_ygomods`,
+`test_art`, `test_card_text`, `test_campaign_map` and `test_map_art` need no
+Tk. `test_bulk_fusions`, `test_fixed_decks` and `test_starter` test the
+engine and then the Tk dialogs, and `test_gui` and `test_map_gui` drive the
+window; those Tk parts skip where Tk cannot start. A new front end adds its
+own tests beside them and leaves the engine's as they are.

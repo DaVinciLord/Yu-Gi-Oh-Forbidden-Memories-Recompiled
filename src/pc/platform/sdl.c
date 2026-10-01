@@ -353,6 +353,17 @@ static void update_menu_visibility(void)
     menu_dirty = 1;
 }
 
+/* A screenshot that could not be written: where and why (paths.h), on
+ * stderr and in a notice, since F12 is otherwise silent. */
+static void screenshot_not_saved(const char *why)
+{
+    static const char *const ok[] = {"OK"};
+    char text[1300];
+    snprintf(text, sizeof(text), "Could not save the screenshot to %s", why);
+    fprintf(stderr, "memories-pc: %s\n", text);
+    Menu_ShowNotice("Screenshot not saved", text, ok, 1, 0, NULL);
+}
+
 static int screenshot_path(char *path, size_t size, const char *extension)
 {
     const char *directory = getenv("MEMORIES_SCREENSHOT_DIR");
@@ -364,7 +375,12 @@ static int screenshot_path(char *path, size_t size, const char *extension)
         if (Paths_User(user, sizeof(user), "screenshots")) return 0;
         directory = user;
     }
-    mkdir(directory, 0777);
+    Paths_WriteBegin();
+    if (Paths_MakeDirs(directory)) { /* mkdir's own reason, not the file's "path not found" */
+        char why[1200];
+        screenshot_not_saved(Paths_WriteError(why, sizeof(why), directory));
+        return 0;
+    }
     localtime_r(&now, &local);
     strftime(stamp, sizeof(stamp), "%Y-%m-%d-%H%M%S", &local);
     return snprintf(path, size, "%s/%s-%u.%s", directory, stamp, current_frame, extension) < (int)size;
@@ -376,8 +392,25 @@ static void save_surface(SDL_Surface *surface, const char *path)
         fprintf(stderr, "memories-pc: screenshot failed: %s\n", SDL_GetError());
         return;
     }
-    if (SDL_SaveBMP(surface, path)) fprintf(stderr, "memories-pc: screenshot: %s\n", path);
-    else fprintf(stderr, "memories-pc: screenshot failed: %s\n", SDL_GetError());
+    {
+        /* Opened here first, as every other file the port writes is, so a
+         * folder that refuses it says where and why (paths.h); SDL then
+         * writes over the empty file. */
+        char why[1200];
+        FILE *file;
+        Paths_WriteBegin();
+        file = fopen(path, "wb");
+        if (!file || fclose(file)) {
+            screenshot_not_saved(Paths_WriteError(why, sizeof(why), path));
+        } else if (SDL_SaveBMP(surface, path)) {
+            fprintf(stderr, "memories-pc: screenshot: %s\n", path);
+            Paths_WriteDone(path);
+        } else {
+            snprintf(why, sizeof(why), "%s: %s", path, SDL_GetError());
+            remove(path);
+            screenshot_not_saved(why);
+        }
+    }
     SDL_DestroySurface(surface);
 }
 
@@ -1104,9 +1137,12 @@ static void show(void)
         if (gl_pass_shown) {
             int pw = gl_pass_size[0], ph = gl_pass_size[1], x = gl_pass_rect[0], y = gl_pass_rect[1];
             GLuint texture = gl_pass_texture ? gl_pass_texture : (GLuint)GlPicture_Texture(&pw, &ph), shown;
-            /* Bilinear reads the shown area alone: past its edges lies the
-             * rest of VRAM (gl_picture.h). */
-            if (!gl_pass_texture && Settings_Get(SET_FILTER) == 1 &&
+            /* Every filter reads the shown area alone: past its edges lies
+             * the rest of VRAM, which bilinear would blend in (gl_picture.h),
+             * and the area moves between the game's two buffers every frame,
+             * so nearest at a scale that is not whole would round its edge
+             * texels one way, then the other, and the picture would shake. */
+            if (!gl_pass_texture &&
                 (shown = (GLuint)GlPicture_ShownTexture(x, y, gl_pass_rect[2], gl_pass_rect[3]))) {
                 texture = shown;
                 pw = gl_pass_rect[2];

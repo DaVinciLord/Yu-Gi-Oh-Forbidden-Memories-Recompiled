@@ -13,6 +13,9 @@ typedef struct {
 int Fusion_Step(const FusionRules *, FusionCard first, FusionCard second, FusionCard *out);
 int Fusion_Attack(FusionCard card);
 int Fusion_Defense(FusionCard card);
+/* The caps Fusion_Attack and Fusion_Defense clamp to (9999 each until set):
+ * the duel's, which a mod's "limits" may move (tables.h). */
+void Fusion_SetCaps(int attack, int defense);
 /* Invalid/duplicate picks fail closed. Best ends in a successful combination;
  * ties consume fewer cards, then use the other stat, then leftmost order. */
 void Fusion_Plan(const FusionRules *, const FusionCard hand[FUSION_HAND],

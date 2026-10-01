@@ -45,6 +45,8 @@ const char *Cards_Identity(int id);
 int Cards_FindIdentity(const char *identity);
 int Cards_ModelId(int id);
 int Cards_EffectId(int id);
+/* The type a card has on the disc, which is what its effect is; -1 past the disc. */
+int Cards_RetailType(int id);
 /* Whether the disc has a 3D model for `id` to stand as: a magic, trap, ritual
  * or equip card a mod made a monster has none unless it borrows one. */
 int Cards_HasModel(int id);
@@ -75,6 +77,35 @@ int Cards_Type(int id);
  * "Wind"), 0-5, or -1; and the attribute of a card. */
 int Cards_AttributeNamed(const char *text);
 int Cards_Attribute(int id);
+/* A monster's printed level (the number of stars), or -1 for no card. */
+int Cards_Level(int id);
+/* Forbidden Memories' secondary fusion groups used by general fusion rules.
+ * These are properties of the retail base card, not primary monster types. */
+enum {
+    CARD_FUSION_GROUP_NONE,
+    CARD_FUSION_GROUP_ANGEL_WINGED,
+    CARD_FUSION_GROUP_BUGROTHIAN,
+    CARD_FUSION_GROUP_EGG,
+    CARD_FUSION_GROUP_ELF,
+    CARD_FUSION_GROUP_FEATHER_FROM_BEAR,
+    CARD_FUSION_GROUP_FEATHER_FROM_HARPIE,
+    CARD_FUSION_GROUP_FEATHER_FROM_MACHINE,
+    CARD_FUSION_GROUP_FEMALE,
+    CARD_FUSION_GROUP_JAR,
+    CARD_FUSION_GROUP_KOUMORIAN,
+    CARD_FUSION_GROUP_MERCURY_MAGIC_USER,
+    CARD_FUSION_GROUP_MERCURY_SPELLCASTER,
+    CARD_FUSION_GROUP_MIRROR,
+    CARD_FUSION_GROUP_MUS_KINGIAN,
+    CARD_FUSION_GROUP_MYST_ELFIAN,
+    CARD_FUSION_GROUP_RAINBOW,
+    CARD_FUSION_GROUP_SHEEPIAN,
+    CARD_FUSION_GROUP_THRONIAN,
+    CARD_FUSION_GROUP_TURTLE,
+    CARD_FUSION_GROUP_USABLE_BEAST
+};
+int Cards_FusionGroupNamed(const char *text);
+int Cards_InFusionGroup(int id, int group);
 
 /* The retail card `id` is a copy of, or `id` itself; 0 for no card. */
 int Cards_BaseId(int id);
@@ -132,7 +163,23 @@ int Cards_OwnPassword(int id, unsigned *password);
  * func_80029164 read (the picture, the title plate, the thumbnail), and the
  * 0x580-byte thumbnail block the duel copies for the hand and field. */
 void Cards_PatchArtRecord(int id, unsigned char *record);
+/* The Password screen's card packs (pack_shop.h) draw a pack on the big
+ * card: the next art record loaded for `id` takes `record`'s picture,
+ * palette and plate (the bytes before the thumbnail), or, with `record`
+ * NULL, `plate` (CARD_TITLE_BYTES) over the card's own plate. Once. Whether
+ * the last record loaded was so changed, asked once (HD text then leaves
+ * its title alone). An id of 0 disarms it. */
+void Cards_OverrideArt(int id, const unsigned char *record, const unsigned char *plate);
+int Cards_ArtOverridden(void);
 void Cards_PatchThumbnail(int id, unsigned char *block);
+
+/* "field_art" (notes/more-cards.md): a card's picture for its cutout on the
+ * duel field alone (mods/3d-monsters/field_art.c), art.h's CARD_ART_PIXELS +
+ * CARD_ART_CLUT layout, or NULL when the card (and its base) have none, in
+ * which case the cutout uses the card's own art as Cards_PatchArtRecord
+ * would. Never applied by Cards_PatchArtRecord itself, so nowhere else the
+ * card's art shows is affected. */
+const unsigned char *Cards_FieldArtRecord(int id);
 
 /* The game's text for string `id`, found at `text` (a translation's or the
  * disc's), or the port's own version of it where the string counts the

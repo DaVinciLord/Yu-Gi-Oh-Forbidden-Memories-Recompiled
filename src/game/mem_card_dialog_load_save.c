@@ -94,7 +94,7 @@ void MemCardDialog_UpdateLoad(void)
         break;
     case 2:
         if (MemCardGetDirentry(D_8009B3F9, (char *)D_800EFE18,
-                               (struct DIRENTRY *)D_800EFBC0, (long *)&files, 0,
+                               (struct DIRENTRY *)D_800EFBC0, (PSXLONG *)&files, 0,
                                MEM_CARD_BLOCK_COUNT) != 0) {
             D_8009B3EB = 6;
             break;
@@ -110,7 +110,7 @@ void MemCardDialog_UpdateLoad(void)
             D_8009B3EB |= MEM_CARD_DIALOG_FLAG_RESULT_READY;
             MemCardDialog_SetMessage(0xD5, 0);
             MemCardReadFile(D_8009B3F9, (char *)D_800EFE18,
-                            (unsigned long *)gMemCard_pPrimaryTransferCursor,
+                            (unsigned PSXLONG *)gMemCard_pPrimaryTransferCursor,
                             D_8009B3C4,
                             D_8009B3C2);
         io_pending:
@@ -302,7 +302,7 @@ void MemCardDialog_UpdateSave(void)
         break;
     case 3:
         if (MemCardGetDirentry(0, (char *)D_8009AF70,
-                               (struct DIRENTRY *)D_800EFBC0, (long *)&files, 0,
+                               (struct DIRENTRY *)D_800EFBC0, (PSXLONG *)&files, 0,
                                MEM_CARD_BLOCK_COUNT) != 0) {
             D_8009B3EB = 0xD;
             break;
@@ -398,7 +398,7 @@ void MemCardDialog_UpdateSave(void)
             D_8009B3EB |= MEM_CARD_DIALOG_FLAG_RESULT_READY;
             D_8009B3EC = 0;
             MemCardReadFile(0, (char *)D_800EFE18,
-                            (unsigned long *)gLibrary_aCardArtRecord,
+                            (unsigned PSXLONG *)gLibrary_aCardArtRecord,
                             D_8009B3C4, 0x480);
             goto io_pending;
         }
@@ -425,7 +425,7 @@ void MemCardDialog_UpdateSave(void)
                 D_8009B3EC++;
                 D_8009B3EB &= ~MEM_CARD_DIALOG_FLAG_RESULT_CREATED;
                 MemCardReadFile(0, (char *)D_800EFE18,
-                                (unsigned long *)gLibrary_aCardArtRecord,
+                                (unsigned PSXLONG *)gLibrary_aCardArtRecord,
                                 D_8009B3C4 + SAVE_DATA_STATE_SIZE, 0x480);
                 goto io_pending;
             }
@@ -449,7 +449,7 @@ void MemCardDialog_UpdateSave(void)
             D_8009B3EB |= MEM_CARD_DIALOG_FLAG_RESULT_READY;
             MemCardDialog_SetMessage(0xD6, 0);
             MemCardWriteFile(0, (char *)D_800EFE18,
-                             (unsigned long *)gMemCard_pPrimaryTransferCursor,
+                             (unsigned PSXLONG *)gMemCard_pPrimaryTransferCursor,
                              D_8009B3C4,
                              D_8009B3C2);
         io_pending:

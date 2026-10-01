@@ -28,7 +28,10 @@
 #define SAVE_SLOT_DUPLICATE_OFFSET (SAVE_SLOT_HEADER_SIZE + SAVE_SLOT_STATE_SIZE)
 #define SAVE_SLOT_TAG_OFFSET (SAVE_SLOT_DUPLICATE_OFFSET + SAVE_SLOT_STATE_SIZE)
 
-typedef enum { SAVE_SLOT_EMPTY, SAVE_SLOT_USED, SAVE_SLOT_DAMAGED } SaveSlotStatus;
+/* Damaged: the file is there but neither copy passes the game's check.
+ * Unreadable: the file, or the saves folder, could not be opened at all
+ * (SaveSlots_ReadError says why); the save itself may well be sound. */
+typedef enum { SAVE_SLOT_EMPTY, SAVE_SLOT_USED, SAVE_SLOT_DAMAGED, SAVE_SLOT_UNREADABLE } SaveSlotStatus;
 
 /* What a slot shows in the menu, read from its save state. */
 typedef struct SaveSlotInfo {
@@ -63,9 +66,17 @@ int SaveSlots_WriteAt(int slot, long offset, const unsigned char *data, size_t b
 /* Replace both state copies together, preserving the existing header and
  * padding. Used after a trade so backup recovery retains the traded cards. */
 int SaveSlots_WriteState(int slot, const unsigned char state[SAVE_SLOT_STATE_SIZE]);
+/* Why the last write failed, "<path>: <reason>." (Paths_WriteError). */
+const char *SaveSlots_LastError(void);
+/* Why the last unreadable slot SaveSlots_Scan met could not be read,
+ * "<path>: <reason>.", or "" when it met none. */
+const char *SaveSlots_ReadError(void);
 /* The slot's token, or 0 when it has none (empty, or saved by an older
  * build). */
 unsigned SaveSlots_Token(int slot);
+/* The same, -1 when the slot's file is there but cannot be read (its token
+ * is then not known), 0 otherwise. */
+int SaveSlots_ReadToken(int slot, unsigned *token);
 /* Copy the save named `name` off the memory card images into slots 1 and
  * 2, once: only when the saves directory does not exist yet. */
 void SaveSlots_ImportMemoryCards(const char *name);

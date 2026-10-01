@@ -48,6 +48,13 @@ int main(void)
     assert(Fusion_Step(&rules, card(1), card(657), &out));
     assert(Fusion_Attack(out) == 500 && Fusion_Defense(out) == 9999);
     out.modifier = -1000; assert(Fusion_Attack(out) == 0);
+    /* A mod's "limits" move the caps: DEF may then pass 9999. */
+    out.modifier = 12000;
+    Fusion_SetCaps(30000, 15000);
+    assert(Fusion_Attack(out) == 11500 && Fusion_Defense(out) == 15000);
+    Fusion_SetCaps(9999, 9999);
+    assert(Fusion_Attack(out) == 9999 && Fusion_Defense(out) == 9999);
+    out.modifier = -1000;
     /* Real pick order, failed step replaces carry, incoming live stats stay. */
     Fusion_Plan(&rules, hand, pick, 3, 0, &selected, &best);
     assert(selected.card.id == 3 && selected.failed == 4);

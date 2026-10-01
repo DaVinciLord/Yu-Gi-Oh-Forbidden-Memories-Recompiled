@@ -180,7 +180,11 @@ def describe(lay: card_text.Layout) -> list:
         many = len(lay.cut_rows) > 1
         out.append(f"A word longer than the box's 21 letters is cut where the red tick is (row{'s' if many else ''} "
                    f"{rows} start{'' if many else 's'} mid-word), and the rest of its line takes a row of its own.")
-    missing = sorted({c for c, _, _ in lay.glyphs if c != " " and not card_text.retail_character(c)})
+    codes = sorted({c for c, _, _ in lay.glyphs if c.startswith("{")})
+    if codes:
+        out.append("Left empty here: " + " ".join(codes) + " (the game draws the icon or glyph).")
+    missing = sorted({c for c, _, _ in lay.glyphs if c != " " and not c.startswith("{")
+                      and not card_text.retail_character(c)})
     if missing:
         out.append("Red boxes: " + " ".join(missing) + " (no retail letter; the port sets one from a font).")
     accented = sorted({c for c, _, _ in lay.glyphs if card_text.retail_character(c) and not c.isascii()})

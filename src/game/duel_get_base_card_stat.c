@@ -3,6 +3,9 @@
 #include "duel_get_base_card_stat.h"
 #include "card_constants.h"
 #include "duel_card.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/tables.h"
+#endif
 
 /* MATCH (2026-09-05). Was an ASSEMBLY TRANSCRIPTION (Unchiga's port of
  * 2026-08-30, an inline asm block) counted as debt in docs/ASM_DEBT.md;
@@ -55,9 +58,16 @@ s32 Duel_GetBaseCardStat(s32 arg0, s32 arg1) {
         return 0;
     }
 
+#ifdef MEMORIES_PC
+    /* The cap of the stat read: a mod's "limits" may move it (tables.h). */
+    if (s > Tables_StatCap(arg1 != 0)) {
+        s = Tables_StatCap(arg1 != 0);
+    }
+#else
     if (s >= CARD_STAT_MAX + 1) {
         s = CARD_STAT_MAX;
     }
+#endif
 
     return s;
 }

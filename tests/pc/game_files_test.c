@@ -17,6 +17,12 @@ int Paths_User(char *out, size_t size, const char *leaf)
     return snprintf(out, size, "%s/%s", root, leaf) >= (int)size ? -1 : 0;
 }
 int Paths_Program(char *out, size_t size, const char *leaf) { return Paths_User(out, size, leaf); }
+void Paths_WriteBegin(void) {}
+const char *Paths_WriteError(char *out, size_t size, const char *path)
+{
+    snprintf(out, size, "%s: failed.", path);
+    return out;
+}
 int Platform_SelectDisc(char *path, size_t size, char *why, size_t why_size)
 {
     picks++;

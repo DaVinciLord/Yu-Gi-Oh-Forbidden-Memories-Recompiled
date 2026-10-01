@@ -64,6 +64,53 @@ CLASSIC = {
              "disabledforeground": DISABLED, "selectcolor": FG},
     "Toplevel": {"background": BG},
 }
+if sys.platform == "win32":
+    # Windows draws a classic widget's sunken border with a white bevel,
+    # glaring on the dark fields: a flat one-pixel line instead, in the ttk
+    # fields' border color (the focus color when focused). Same width.
+    # Not a Combobox's drop-down list (use): its frame is its border.
+    for _cls in ("Text", "Listbox"):
+        CLASSIC[_cls].update(relief="flat", borderwidth=1, highlightthickness=1, highlightbackground=BORDER,
+                             highlightcolor=FOCUS)
+BORDERS = ("relief", "borderwidth", "highlightthickness")
+
+
+def dpi_awareness():
+    """Windows stretches the window of a program that does not say it
+    knows the screen's dpi: blurry at 125% or 150%. Said before the first
+    window: per-monitor (v2, Windows 10 1703 on), else per-monitor (8.1),
+    else system-wide (Vista). Tk then sizes the fonts, in points, for the
+    real dpi (tk scaling), and widgets.px the rest. Elsewhere nothing."""
+    if sys.platform != "win32":
+        return
+    import ctypes
+    try:
+        if ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+            return
+    except (AttributeError, OSError):
+        pass
+    try:
+        if ctypes.windll.shcore.SetProcessDpiAwareness(2) == 0:
+            return
+    except (AttributeError, OSError):
+        pass
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except (AttributeError, OSError):
+        pass
+
+
+def windows_fonts(root):
+    """Windows 11's own UI face where there is one (Segoe UI Variable, the
+    Text cut; Tk's default Segoe UI before), at Tk's sizes; the fixed font
+    as the editor's text boxes (Consolas). Elsewhere nothing."""
+    if sys.platform != "win32":
+        return
+    if "Segoe UI Variable Text" in tkfont.families(root):
+        for name in ("TkDefaultFont", "TkTextFont", "TkHeadingFont", "TkMenuFont", "TkCaptionFont",
+                     "TkSmallCaptionFont", "TkIconFont", "TkTooltipFont"):
+            tkfont.nametofont(name, root=root).configure(family="Segoe UI Variable Text")
+    tkfont.nametofont("TkFixedFont", root=root).configure(family="Consolas", size=10)
 
 
 def is_dark(widget) -> bool:
@@ -80,6 +127,14 @@ class Theme:
 
     def __init__(self, root: tk.Tk):
         self.root = root
+        windows_fonts(root)       # before the row height is measured
+        # fm-dark's elements sized in pixels (arrows, check boxes), grown
+        # with the dpi on Windows (widgets.ui_scale); kept elsewhere.
+        if sys.platform == "win32":
+            from .widgets import ui_scale
+            self.scale = ui_scale(root)
+        else:
+            self.scale = 1.0
         self.style = ttk.Style(root)
         try:
             self.style.theme_use("vista" if os.name == "nt" else "clam")
@@ -92,11 +147,15 @@ class Theme:
         self.style.configure("Treeview", rowheight=self.row_height)
         for name, (light, _) in INKS.items():
             self.style.configure(f"{name}.TLabel", foreground=light)
-        # Tk's own defaults for the classic widgets, to go back to.
+        # Tk's own defaults for the classic widgets, to go back to, and each
+        # option's name in the option database (highlightBackground for
+        # -highlightbackground: the database is case sensitive).
         self.defaults = {}
+        self.dbnames = {}
         for cls, options in CLASSIC.items():
             sample = root if cls == "Toplevel" else getattr(tk, cls)(root)
             self.defaults[cls] = {option: str(sample.configure(option)[3]) for option in options}
+            self.dbnames[cls] = {option: sample.configure(option)[1] for option in options}
             if sample is not root:
                 sample.destroy()
         root.bind_class("Toplevel", "<Map>", lambda e: self.title_bar(e.widget), add="+")
@@ -104,6 +163,12 @@ class Theme:
         self.strip = None
         root.bind("<Alt-KeyPress>", self.alt_key, add="+")
         root.bind("<F10>", self.alt_key, add="+")
+
+    def px(self, *pixels):
+        """Pixel sizes at 96 dpi, at the desktop's (self.scale): one, or a
+        tuple of them. Unchanged where the scale is 1."""
+        sized = tuple(round(value * self.scale) for value in pixels)
+        return sized[0] if len(sized) == 1 else sized
 
     def use(self, dark: bool):
         if dark and DARK_THEME not in self.style.theme_names():
@@ -114,7 +179,12 @@ class Theme:
         for cls, options in CLASSIC.items():
             values = options if dark else self.defaults[cls]
             for option, value in values.items():
-                self.root.option_add(f"*{cls}.{option}", value)
+                self.root.option_add(f"*{cls}.{self.dbnames[cls][option]}", value)
+        if "relief" in CLASSIC["Listbox"]:
+            # ttk's own for a Combobox's list (combobox.tcl), after the above
+            # to come first for the lists made from now on.
+            self.root.option_add("*TCombobox*Listbox.relief", "flat")
+            self.root.option_add("*TCombobox*Listbox.highlightThickness", 0)
         # The widgets that exist, Tcl's own included (tkinter's
         # winfo_children skips the Combobox's drop-down list).
         call = self.root.tk.call
@@ -123,6 +193,8 @@ class Theme:
             cls = "Toplevel" if cls == "Tk" else cls
             if cls in CLASSIC:
                 values = CLASSIC[cls] if dark else self.defaults[cls]
+                if ".popdown." in path:     # a Combobox's list keeps the borders ttk gave it
+                    values = {option: value for option, value in values.items() if option not in BORDERS}
                 call(path, "configure", *[item for option, value in values.items()
                                           for item in (f"-{option}", value)])
             elif cls == "Treeview":
@@ -210,7 +282,7 @@ class Theme:
                 continue
             button = tk.Menubutton(strip, text=bar.entrycget(index, "label"), underline=0, background=BG,
                                    foreground=FG, activebackground=HOVER, activeforeground=FG, borderwidth=0,
-                                   highlightthickness=0, padx=7, pady=2)
+                                   highlightthickness=0, padx=self.px(7), pady=self.px(2))
             clone = f"{button}.menu"
             self.root.tk.call(bar.entrycget(index, "menu"), "clone", clone, "normal")
             button.configure(menu=clone)
@@ -243,7 +315,7 @@ class Theme:
         style.map(".", background=[("disabled", BG), ("active", HOVER)], foreground=[("disabled", DISABLED)],
                   arrowcolor=[("disabled", DISABLED)])
         style.configure("TButton", background=RAISED, lightcolor=HOVER, darkcolor=RAISED, anchor="center",
-                        width=-11, padding=5, relief="raised")
+                        width=-11, padding=self.px(5), relief="raised")
         style.map("TButton", background=[("disabled", BG), ("pressed", PRESSED), ("active", HOVER)],
                   lightcolor=[("pressed", PRESSED)], darkcolor=[("pressed", PRESSED)],
                   bordercolor=[("focus", FOCUS)])
@@ -258,11 +330,11 @@ class Theme:
         style.configure("TCombobox", padding=(1, 1, 1, 1))
         style.configure("ComboboxPopdownFrame", background=FIELD, bordercolor=BORDER, relief="solid")
         style.configure("TNotebook", background=BG, bordercolor=BORDER, lightcolor=BG, darkcolor=BG,
-                        tabmargins=(2, 2, 2, 0))
+                        tabmargins=self.px(2, 2, 2, 0))
         style.configure("TNotebook.Tab", background=RAISED, foreground=FG, lightcolor=RAISED, darkcolor=BG,
-                        bordercolor=BORDER, padding=(6, 2, 6, 2))
+                        bordercolor=BORDER, padding=self.px(6, 2, 6, 2))
         style.map("TNotebook.Tab", background=[("selected", BG), ("active", HOVER)],
-                  padding=[("selected", (6, 4, 6, 2))], lightcolor=[("selected", BG)])
+                  padding=[("selected", self.px(6, 4, 6, 2))], lightcolor=[("selected", BG)])
         style.configure("Treeview", background=FIELD, fieldbackground=FIELD, foreground=FG, bordercolor=BORDER,
                         lightcolor=FIELD, darkcolor=FIELD, rowheight=self.row_height)
         style.map("Treeview", background=[("disabled", BG), ("selected", SELECT)],
@@ -274,14 +346,28 @@ class Theme:
                         lightcolor=RAISED, darkcolor=RAISED, arrowcolor=FG, gripcount=0)
         style.map("TScrollbar", background=[("pressed", BORDER), ("active", HOVER)])
         style.configure("TLabelframe", background=BG, bordercolor=BORDER, lightcolor=BG, darkcolor=BG, relief="solid",
-                        borderwidth=1, labelmargins=(6, 0, 6, 2))
+                        borderwidth=1, labelmargins=self.px(6, 0, 6, 2))
         style.configure("TLabelframe.Label", background=BG, foreground=FG)
         style.configure("TSeparator", background=BORDER)
         for toggle in ("TCheckbutton", "TRadiobutton"):
             style.configure(toggle, indicatorbackground=FIELD, indicatorforeground=FG, upperbordercolor=BORDER,
-                            lowerbordercolor=BORDER, indicatormargin=(1, 1, 4, 1), padding=2)
+                            lowerbordercolor=BORDER, indicatormargin=self.px(1, 1, 4, 1), padding=self.px(2))
             style.map(toggle, indicatorbackground=[("pressed", BG), ("disabled", BG)],
                       background=[("active", BG)])
+        # A toggle drawn as a button (the Map tab's D-pad): pressed shows.
+        style.configure("Toolbutton", background=BG, lightcolor=BG, darkcolor=BG, bordercolor=BORDER,
+                        padding=self.px(2), relief="flat")
+        style.map("Toolbutton", background=[("disabled", BG), ("selected", SELECT), ("active", HOVER)],
+                  relief=[("selected", "sunken")], foreground=[("disabled", DISABLED)])
+        if self.scale != 1.0:
+            # clam's own sizes (its check boxes 10, scrollbar and drop-down
+            # arrows 14, spin arrows 10, sashes 6), at the dpi.
+            for toggle in ("TCheckbutton", "TRadiobutton"):
+                style.configure(toggle, indicatorsize=self.px(10))
+            style.configure("TScrollbar", arrowsize=self.px(14))
+            style.configure("TCombobox", arrowsize=self.px(14))
+            style.configure("TSpinbox", arrowsize=self.px(10))
+            style.configure("Sash", sashthickness=self.px(6))
         for name, (_, dark) in INKS.items():
             style.configure(f"{name}.TLabel", foreground=dark)
         style.theme_use(current)

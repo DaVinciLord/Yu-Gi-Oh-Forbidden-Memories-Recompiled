@@ -351,8 +351,15 @@ static void rtp(unsigned index, unsigned shift, int lm, int last)
         double depth = (double)z / 4096.0, unit = (double)(1u << shift);
         double sx = (double)gte.ofx / 65536.0 + (double)gte.h * ((double)row_sums[0] / unit) / depth;
         double sy = (double)gte.ofy / 65536.0 + (double)gte.h * ((double)row_sums[1] / unit) / depth;
+        /* The GTE truncates IR1 and IR2 before it divides, which moves the
+         * word by up to H / SZ3 pixels, and SZ3 itself, which moves it by up
+         * to its distance from the centre / SZ3: close to the camera a few
+         * pixels in all, so the window widens by as much. */
+        double cx = sx - (double)gte.ofx / 65536.0, cy = sy - (double)gte.ofy / 65536.0;
+        double far = (cx < 0 ? -cx : cx) > (cy < 0 ? -cy : cy) ? (cx < 0 ? -cx : cx) : (cy < 0 ? -cy : cy);
+        double slack = ((double)gte.h + far) / (double)gte.sz[3];
         int32_t wx = gte.sxy[2][0], wy = gte.sxy[2][1];
-        if (sx > wx - 1 && sx < wx + 2 && sy > wy - 1 && sy < wy + 2) {
+        if (sx > wx - 1 - slack && sx < wx + 2 + slack && sy > wy - 1 - slack && sy < wy + 2 + slack) {
             precise[2].x = (float)sx;
             precise[2].y = (float)sy;
             precise[2].w = (float)depth;
