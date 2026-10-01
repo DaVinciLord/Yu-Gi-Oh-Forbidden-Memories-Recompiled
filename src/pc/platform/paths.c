@@ -6,6 +6,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "paths.h"
 #include <ctype.h>
+#include <dirent.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,6 +29,7 @@ static char program_dir[PATH_MAX_];
 static int make_dir(const char *path)
 {
     int error;
+    struct stat info;
 #ifdef _WIN32
     DWORD code;
     unsigned long dos;
@@ -38,7 +40,8 @@ static int make_dir(const char *path)
     code = GetLastError();
     dos = _doserrno;
 #endif
-    if (!access(path, X_OK)) return 0;
+    /* A folder, not a file in its way (Windows' access() passes any file for X_OK). */
+    if (!stat(path, &info) && S_ISDIR(info.st_mode)) return 0;
     errno = error;
 #ifdef _WIN32
     _doserrno = dos;
@@ -102,6 +105,108 @@ static int portable(char *out, size_t size)
     return 1;
 }
 
+/* Whether a folder holds the player's saves: a save slot, or the memory
+ * card image the builds before save slots kept. */
+static int has_saves(const char *dir)
+{
+    char path[PATH_MAX_];
+    int slot;
+    for (slot = 1; slot <= 10; slot++) { /* SAVE_SLOT_COUNT */
+        snprintf(path, sizeof(path), "%s/saves/slot%02d.sav", dir, slot);
+        if (!access(path, F_OK)) return 1;
+    }
+    snprintf(path, sizeof(path), "%s/memcard1.mcd", dir);
+    if (!access(path, F_OK)) return 1;
+    snprintf(path, sizeof(path), "%s/memcard2.mcd", dir);
+    return !access(path, F_OK);
+}
+
+/* saves/ beside the game, where every build has kept the player's files when
+ * it could not make its own folder (Paths_UserDir), when it holds saves:
+ * the working directory's, as those builds named it, else the program
+ * directory's. NULL when neither does. */
+static const char *legacy_saves(void)
+{
+    static char program[PATH_MAX_];
+    if (has_saves("saves")) return "saves";
+    if (snprintf(program, sizeof(program), "%s/saves", Paths_ProgramDir()) < (int)sizeof(program) &&
+        has_saves(program))
+        return program;
+    return NULL;
+}
+
+/* `from` moved to `to` only when nothing is there: never over a file, not
+ * even one that appeared since it was looked for. */
+static int move_new(const char *from, const char *to)
+{
+#ifdef _WIN32
+    wchar_t *a = Memories_Utf8ToWide(from), *b = Memories_Utf8ToWide(to);
+    int moved = a && b && MoveFileExW(a, b, MOVEFILE_WRITE_THROUGH); /* no MOVEFILE_REPLACE_EXISTING */
+    free(a);
+    free(b);
+    return moved ? 0 : -1;
+#else
+    if (!link(from, to)) return remove(from), 0;
+    if (errno == EEXIST) return -1;
+    /* A file system without links (FAT): checked, then renamed. */
+    return access(to, F_OK) && !rename(from, to) ? 0 : -1;
+#endif
+}
+
+/* One file, unless `to` is already there, which is never replaced: written
+ * beside it and moved in, so a copy cut short is never taken for a save.
+ * 0 when it is there afterwards. */
+static int copy_file(const char *from, const char *to)
+{
+    char partial[PATH_MAX_ + 16], buffer[65536];
+    FILE *in, *out;
+    size_t got;
+    int failed = 0;
+    if (!access(to, F_OK)) return 0;
+    if (snprintf(partial, sizeof(partial), "%s.copying", to) >= (int)sizeof(partial)) return -1;
+    if (!(in = fopen(from, "rb"))) return -1;
+    if (!(out = fopen(partial, "wb"))) {
+        fclose(in);
+        return -1;
+    }
+    while (!failed && (got = fread(buffer, 1, sizeof(buffer), in)) > 0) failed = fwrite(buffer, 1, got, out) != got;
+    failed |= ferror(in);
+    fclose(in);
+    failed |= fclose(out) != 0;
+    if (failed || move_new(partial, to)) {
+        remove(partial);
+        return access(to, F_OK) ? -1 : 0; /* someone else's file there is fine */
+    }
+    return 0;
+}
+
+/* Everything in `from` that `to` lacks, folders and all; at the top, not
+ * the crash reports or the cache, which are the game's own. 0 when it all
+ * arrived. The originals stay. */
+static int copy_tree(const char *from, const char *to, int top)
+{
+    DIR *folder;
+    struct dirent *item;
+    int failed = 0;
+    if (Paths_MakeDirs(to) || !(folder = opendir(from))) return -1;
+    while ((item = readdir(folder)) != NULL) {
+        char source[PATH_MAX_], destination[PATH_MAX_];
+        struct stat info;
+        if (!strcmp(item->d_name, ".") || !strcmp(item->d_name, "..")) continue;
+        if (top && (!strcmp(item->d_name, "reports") || !strcmp(item->d_name, "cache"))) continue;
+        if (snprintf(source, sizeof(source), "%s/%s", from, item->d_name) >= (int)sizeof(source) ||
+            snprintf(destination, sizeof(destination), "%s/%s", to, item->d_name) >= (int)sizeof(destination) ||
+            stat(source, &info)) {
+            failed = 1;
+            continue;
+        }
+        if (S_ISDIR(info.st_mode)) failed |= copy_tree(source, destination, 0) != 0;
+        else failed |= copy_file(source, destination) != 0;
+    }
+    closedir(folder);
+    return failed ? -1 : 0;
+}
+
 const char *Paths_UserDir(void)
 {
     const char *named = getenv("MEMORIES_USER_DIR");
@@ -140,6 +245,22 @@ const char *Paths_UserDir(void)
             /* Bring the old folder along under the new name, once. */
             if (access(user_dir, F_OK) && !access(old, F_OK) && !rename(old, user_dir))
                 fprintf(stderr, "memories-pc: moved %s to %s\n", old, user_dir);
+            /* A player whose files went beside the game (an antivirus or
+             * Controlled folder access kept this folder from being made)
+             * has them copied here once this folder is there to take them;
+             * the originals stay. When they cannot be, the game goes on
+             * with them beside it: a folder without saves never wins over
+             * one with them. */
+            if (!has_saves(user_dir)) {
+                const char *legacy = legacy_saves();
+                if (legacy && !copy_tree(legacy, user_dir, 1) && has_saves(user_dir)) {
+                    fprintf(stderr, "memories-pc: copied the saves in %s to %s\n", legacy, user_dir);
+                } else if (legacy) {
+                    fprintf(stderr, "memories-pc: cannot copy the saves in %s to %s; using them there\n", legacy,
+                            user_dir);
+                    snprintf(user_dir, sizeof(user_dir), "%s", legacy);
+                }
+            }
         } else {
             snprintf(user_dir, sizeof(user_dir), "saves");
         }
