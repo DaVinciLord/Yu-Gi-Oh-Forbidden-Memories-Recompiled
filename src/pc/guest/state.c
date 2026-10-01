@@ -6,6 +6,7 @@
 #include "pc/mods/mods.h"
 #include "pc/mods/events.h"
 #include "image.h"
+#include "retail_image.h"
 #include "pc/audio/spu.h"
 #include "pc/audio/replace.h"
 #include "pc/compat/gte.h"
@@ -205,9 +206,14 @@ int Memories_StateChunk(MemoriesState *state, const char *tag, const MemoriesSta
         return 0;
     }
     from = find_chunk(state, tag, &size);
-    if (!from || size != total) {
-        fprintf(stderr, "memories-pc: state: %s '%s' (%lu bytes in the state, %lu in this build); that part keeps its current state\n",
-                from ? "layout changed for" : "no chunk", tag, (unsigned long)size, (unsigned long)total);
+    if (!from) {
+        fprintf(stderr, "memories-pc: state: no chunk '%s' (%lu bytes in this build); that part keeps its current state\n",
+                tag, (unsigned long)total);
+        return 0;
+    }
+    if (size != total) {
+        fprintf(stderr, "memories-pc: state: layout changed for '%s' (%lu bytes in the state, %lu in this build); that part keeps its current state\n",
+                tag, (unsigned long)size, (unsigned long)total);
         return 0;
     }
     for (i = 0; i < count; i++) {
@@ -396,6 +402,7 @@ static void subsystems(MemoriesState *state)
         SoftGpu_PictureFromVram();
     }
     Memories_StateChunk(state, "gte", gte, 1);
+    RetailImage_State(state);
     Spu_State(state);
     LibSpu_State(state);
     LibDs_State(state);
