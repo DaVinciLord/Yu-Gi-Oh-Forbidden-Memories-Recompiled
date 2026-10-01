@@ -454,6 +454,36 @@ has loaded its table.
 View > Card passwords shows the passwords the mods set. The latest mod that
 sets a card's password or price wins.
 
+## Rules a setting switches
+
+A `fusions`, `equips` or `rituals` entry may say `"setting": "key"`, which
+names one of the mod's declared `settings`: the entry is read only while
+that setting is not 0, or, with `"value": N` as well, only while it is
+exactly N (one choice of a `choice` setting). An entry without `setting`
+is always read. So one mod may let the player turn groups of its rules on
+and off in the Mods window:
+
+```json
+"settings": [
+    {"key": "thunder_fusions", "label": "Thunder + Fiend fusions", "type": "bool", "default": 1,
+     "restart": true, "description": "Thunder and Fiend monsters fuse into King of Yamimakai."},
+    {"key": "expanded_fusions", "label": "Expanded Fiend fusions", "type": "bool", "default": 1,
+     "restart": true, "description": "Fiends fuse with Dragons, Beasts and Warriors."}
+],
+"fusions": [
+    {"with": ["Kuriboh", "Thunder Dragon"], "result": "King of Yamimakai", "setting": "thunder_fusions"},
+    {"with": ["Kuriboh", "Baby Dragon"], "result": "Darkfire Dragon", "setting": "expanded_fusions"}
+]
+```
+
+The Mods window shows each setting's `label`, with its `description`
+under it. The tables are read as the game starts, so such a setting wants
+`"restart": true`. A `setting` the mod does not declare is noted in the
+Mods window and the entry read. Each key is read once: a manifest with
+two `"fusions"` lists reads the first and warns of the second, so the
+groups go in one list, each entry with its setting. The FM Editor shows
+the disc's table and keeps these entries as they are written.
+
 ## Where two mods disagree
 
 Mods apply in load order (priority, then `after` and `requires`, then the

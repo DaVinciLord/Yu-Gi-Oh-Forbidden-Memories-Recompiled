@@ -25,6 +25,7 @@ Nothing of the game is kept: the font is read from the disc each run.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import unicodedata
@@ -55,9 +56,24 @@ GUTTER, GUTTER_COLOUR = 3, (200, 200, 200)   # texels right of the box, for the 
 
 # --- layout -------------------------------------------------------------------
 
+# cards.c text_code: an icon "{f8 0B NN}" (a letter wide), a colour
+# "{f8 0A NN}" (none) or a glyph by number "{g X}" (a letter).
+CODE = re.compile(r"\{f8 *(0[AaBb]) *([0-9A-Fa-f]{1,2})\}|\{g *([0-9A-Fa-f]{1,4})\}")
+
+
+def code_at(text: str, i: int):
+    """(the code's characters, its width in letters), or None."""
+    match = CODE.match(text, i)
+    if not match or (match.group(3) and int(match.group(3), 16) >= 0x600):
+        return None
+    return match.group(0), 0 if (match.group(1) or "").upper() == "0A" else 1
+
+
 def encode(text: str) -> list:
     """The glyphs cards.c encode_description writes: characters, " " for
-    the space it puts between words, "\\n" for its line breaks (0xFE)."""
+    the space it puts between words, "\\n" for its line breaks (0xFE). An
+    icon or numbered glyph is its code as written, in one cell; a colour
+    code takes none and is left out."""
     out, column, i = [], 0, 0
     while i < len(text):
         c = text[i]
@@ -69,18 +85,24 @@ def encode(text: str) -> list:
         if c == " ":
             i += 1
             continue
-        end = i
+        word, end = [], i
         while end < len(text) and text[end] not in " \n":
-            end += 1
-        word = text[i:end]
-        if column and column + 1 + len(word) > LINE_LETTERS:
+            code = code_at(text, end)
+            if code:
+                word.append(code)
+                end += len(code[0])
+            else:
+                word.append((text[end], 1))
+                end += 1
+        letters = sum(width for _, width in word)
+        if column and column + 1 + letters > LINE_LETTERS:
             out.append("\n")
             column = 0
         elif column:
             out.append(" ")
             column += 1
-        for letter in word:
-            if letter >= " ":
+        for letter, width in word:
+            if width and letter >= " ":
                 out.append(letter)
                 column += 1
         i = end
@@ -557,7 +579,7 @@ class Renderer:
                 rgb[y * w * 3:(y + 1) * w * 3] = line
         colours = self.retail.colours
         for c, column, row in lay.glyphs:
-            if c == " ":
+            if c == " " or c.startswith("{"):      # an icon or numbered glyph: left empty here
                 continue
             x0, y0 = column * CELL_W * f, row * CELL_H * f
             dim = row >= SHOWN_ROWS

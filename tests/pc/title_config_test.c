@@ -44,6 +44,17 @@ const JsonValue *Mods_Manifest(int mod) { (void)mod; return NULL; }
 static JsonDocument *documents[8];
 static int document_count;
 
+static void add_as(const char *mod, const char *text)
+{
+    char error[256];
+    JsonDocument *document = Json_Parse(text, error, sizeof(error));
+    if (!document) fprintf(stderr, "%s\n", error);
+    CHECK(document != NULL);
+    CHECK(document_count < 8);
+    documents[document_count++] = document;
+    TitleConfig_Read(mod, "/mods/test", Json_Root(document));
+}
+
 static void add(const char *text)
 {
     char error[256];
@@ -72,13 +83,13 @@ static void retail(void)
     int i;
     CHECK(notes == 0);
     CHECK(config->song == 0 && !config->skip_movie && config->press_start && config->idle_frames == -1);
-    CHECK(config->picture && config->shade && config->dim == 0x80 && config->colour == -1);
-    CHECK(config->tint == 0xFFFFFF && config->lines == 0);
+    CHECK(config->background[0].picture && config->background[0].shade && config->dim == 0x80 && config->background[0].colour == -1);
+    CHECK(config->background[0].tint == 0xFFFFFF && config->lines == 0);
     for (i = 0; i < TITLE_LAYERS; i++) CHECK(!config->layers[i].hidden && config->layers[i].tint == 0xFFFFFF);
     /* frontend.c's own places: 50 + 32i, then 42 + 32(i - 5). */
     for (i = 0; i < TITLE_ENTRIES; i++) {
-        CHECK(!config->entries[i].hidden && config->entries[i].x == 0);
-        CHECK(config->entries[i].y == (i < 5 ? 50 + i * 32 : 42 + (i - 5) * 32));
+        CHECK(!config->items[i].hidden && config->items[i].x == 0);
+        CHECK(config->items[i].y == (i < 5 ? 50 + i * 32 : 42 + (i - 5) * 32));
     }
 }
 
@@ -94,12 +105,12 @@ static void keys(void)
         "            \"size\": 2, \"show\": \"menu\"}, {\"text\": \"hi\"}]}}");
     CHECK(notes == 0);
     CHECK(config->song == 0x10 && config->skip_movie && !config->press_start && config->idle_frames == 180);
-    CHECK(!config->picture && !config->shade && config->tint == 0x9070FF && config->colour == 0x102040);
+    CHECK(!config->background[0].picture && !config->background[0].shade && config->background[0].tint == 0x9070FF && config->background[0].colour == 0x102040);
     CHECK(config->dim == 64);
     CHECK(config->layers[0].x == -10 && config->layers[0].y == 4 && config->layers[1].hidden);
     CHECK(config->layers[2].tint == 0xFFE040);
-    CHECK(config->entries[4].x == 80 && config->entries[4].tint == 0xFF8080);
-    CHECK(config->entries[9].set_y && config->entries[9].y == 7);
+    CHECK(config->items[4].x == 80 && config->items[4].tint == 0xFF8080);
+    CHECK(config->items[9].set_y && config->items[9].y == 7);
     CHECK(config->lines == 2);
     CHECK(!strcmp(config->line[0].text, "v1") && config->line[0].x == 316 && config->line[0].y == 232);
     CHECK(config->line[0].align == TITLE_ALIGN_RIGHT && config->line[0].colour == 0xFFD000);
@@ -114,18 +125,18 @@ static void layout(void)
     /* Two of the first menu's five hidden: the other three close up around
      * the retail middle (y 114), 32 apart; the hidden ones go off screen. */
     const TitleConfig *config = one("{\"title\": {\"entries\": {\"duel\": {\"hide\": true}, \"trade\": {\"hide\": true}}}}");
-    CHECK(config->entries[0].y == 82 && config->entries[1].y == 114 && config->entries[4].y == 146);
-    CHECK(config->entries[2].y == TITLE_PARKED_Y && config->entries[3].y == TITLE_PARKED_Y);
-    CHECK(config->entries[5].y == 42);
+    CHECK(config->items[0].y == 82 && config->items[1].y == 114 && config->items[4].y == 146);
+    CHECK(config->items[2].y == TITLE_PARKED_Y && config->items[3].y == TITLE_PARKED_Y);
+    CHECK(config->items[5].y == 42);
     /* Wider apart, one "y" of the mod's own left alone. */
     config = one("{\"title\": {\"spacing\": 40, \"entries\": {\"options\": {\"y\": 200}}}}");
-    CHECK(config->entries[0].y == 34 && config->entries[1].y == 74 && config->entries[4].y == 200);
+    CHECK(config->items[0].y == 34 && config->items[1].y == 74 && config->items[4].y == 200);
     /* Every entry of a menu hidden: none is. */
     config = one("{\"title\": {\"entries\": {\"new_game\": {\"hide\": true}, \"load\": {\"hide\": true},"
                  " \"duel\": {\"hide\": true}, \"trade\": {\"hide\": true}, \"options\": {\"hide\": true},"
                  " \"save\": {\"hide\": true}}}}");
-    CHECK(!config->entries[0].hidden && !config->entries[4].hidden && config->entries[0].y == 50);
-    CHECK(config->entries[10].hidden && config->entries[10].y == TITLE_PARKED_Y);
+    CHECK(!config->items[0].hidden && !config->items[4].hidden && config->items[0].y == 50);
+    CHECK(config->items[10].hidden && config->items[10].y == TITLE_PARKED_Y);
 }
 
 static void pictures(void)
@@ -134,7 +145,7 @@ static void pictures(void)
                                     " \"logo\": {\"image\": \"logo.png\", \"width\": 300},"
                                     " \"prompt\": {\"image\": \"press.png\", \"width\": 400, \"height\": -2}}}");
     CHECK(notes == 0);
-    CHECK(!strcmp(config->picture_image.file, "/mods/test/art/bg.png") && !strcmp(config->picture_image.mod, "test"));
+    CHECK(!strcmp(config->background[0].image.file, "/mods/test/art/bg.png") && !strcmp(config->background[0].image.mod, "test"));
     CHECK(!strcmp(config->layers[0].image.file, "/mods/test/logo.png") && config->layers[0].image.width == 300);
     CHECK(config->layers[0].image.height == 0 && !config->layers[1].image.file[0]);
     /* Out of range: worked out from the PNG instead. */
@@ -154,7 +165,7 @@ static void mods_add_up(void)
     add("{\"title\": {\"background\": {\"dim\": 0}, \"text\": [{\"text\": \"b\"}]}}");
     TitleConfig_Finish();
     config = TitleConfig_Get();
-    CHECK(config->song == 5 && config->tint == 0xFF0000 && config->dim == 0);
+    CHECK(config->song == 5 && config->background[0].tint == 0xFF0000 && config->dim == 0);
     CHECK(config->lines == 2 && !strcmp(config->line[1].text, "b"));
 }
 
@@ -167,7 +178,7 @@ static void mistakes(void)
     config = one("{\"title\": {\"music\": 4096}}");
     CHECK(notes == 1 && config->song == 0);
     config = one("{\"title\": {\"background\": {\"tint\": \"#12345\"}}}");
-    CHECK(notes == 1 && strstr(note, "colour") && config->tint == 0xFFFFFF);
+    CHECK(notes == 1 && strstr(note, "colour") && config->background[0].tint == 0xFFFFFF);
     config = one("{\"title\": {\"entries\": {\"quit\": {\"hide\": true}}}}");
     CHECK(notes == 1 && strstr(note, "no entry \"quit\""));
     config = one("{\"title\": {\"entries\": {\"11\": {\"hide\": true}}}}");
@@ -180,6 +191,146 @@ static void mistakes(void)
     CHECK(notes == 0 && config->dim == 0x80);
 }
 
+static void buttons(void)
+{
+    const TitleConfig *config = one(
+        "{\"menu\": {\"buttons\": [{\"id\": \"credits\", \"label\": \"CREDITS\","
+        "                          \"notice\": {\"title\": \"Credits\", \"text\": \"Made by me\"}},"
+        "                         {\"id\": \"quick\", \"menu\": \"second\", \"image\": \"q.png\","
+        "                          \"selected_image\": \"q-on.png\", \"width\": 96, \"action\": \"free_duel\","
+        "                          \"x\": 8, \"value\": 3}],"
+        "            \"order\": [\"credits\", \"new_game\"],"
+        "            \"entries\": {\"trade\": {\"label\": \"SWAP\", \"action\": \"debug_menu\"}}}}");
+    const TitleItem *credits = &config->items[TITLE_ENTRIES], *quick = &config->items[TITLE_ENTRIES + 1];
+    CHECK(notes == 0);
+    CHECK(credits->used && !strcmp(credits->name, "test:credits") && credits->menu == 0);
+    CHECK(!strcmp(credits->label, "CREDITS") && credits->action == TITLE_ACTION_NOTICE);
+    CHECK(!strcmp(credits->notice_title, "Credits") && !strcmp(credits->notice, "Made by me"));
+    CHECK(quick->menu == 1 && quick->action == 6 && quick->x == 8 && quick->value == 3);
+    CHECK(!strcmp(quick->image.file, "/mods/test/q.png") && !strcmp(quick->selected.file, "/mods/test/q-on.png"));
+    CHECK(quick->image.width == 96 && quick->selected.width == 96);
+    CHECK(TitleConfig_Drawn(credits) && TitleConfig_Drawn(quick) && !TitleConfig_Drawn(&config->items[0]));
+    CHECK(!strcmp(config->items[3].label, "SWAP") && config->items[3].action == TITLE_ACTION_DEBUG_MENU);
+    CHECK(config->items[0].action == TITLE_ACTION_OWN);
+    /* The order: the list's, then the rest as they were. */
+    CHECK(config->shown[0] == 6 && config->order[0][0] == TITLE_ENTRIES && config->order[0][1] == 0);
+    CHECK(config->order[0][2] == 1 && config->order[0][5] == 4);
+    /* Six 32 apart around the first menu's middle (114). */
+    CHECK(credits->y == 34 && config->items[0].y == 66 && config->items[4].y == 194);
+    /* Seven in the second: closer (31 apart) and kept above y 204. */
+    CHECK(config->shown[1] == 7 && config->order[1][6] == TITLE_ENTRIES + 1);
+    CHECK(config->items[5].y == 18 && quick->y == 204);
+}
+
+static void button_mistakes(void)
+{
+    const TitleConfig *config = one("{\"menu\": {\"buttons\": [{\"id\": \"plain\"}]}}");
+    /* No picture or words: it shows its id, and does nothing. */
+    CHECK(notes == 1 && strstr(note, "no \"image\" or \"label\""));
+    CHECK(!strcmp(config->items[TITLE_ENTRIES].label, "plain") && config->items[TITLE_ENTRIES].action == TITLE_ACTION_NONE);
+    config = one("{\"menu\": {\"buttons\": [{\"id\": \"a\", \"label\": \"A\", \"action\": \"campaign\"}]}}");
+    CHECK(notes == 1 && strstr(note, "cannot campaign from the first menu"));
+    CHECK(config->items[TITLE_ENTRIES].action == TITLE_ACTION_NONE);
+    config = one("{\"menu\": {\"entries\": {\"save\": {\"action\": \"load\"}}}}");
+    CHECK(notes == 1 && strstr(note, "cannot load from the second menu") && config->items[10].action == TITLE_ACTION_NONE);
+    one("{\"menu\": {\"buttons\": [{\"id\": \"a\", \"label\": \"A\", \"action\": \"fly\"}]}}");
+    CHECK(notes == 1 && strstr(note, "no action \"fly\""));
+    one("{\"menu\": {\"buttons\": [{\"id\": \"a b\", \"label\": \"A\"}]}}");
+    CHECK(notes == 1 && strstr(note, "letters, digits"));
+    one("{\"menu\": {\"buttons\": [{\"id\": \"load\", \"label\": \"A\"}]}}");
+    CHECK(notes == 1 && strstr(note, "an entry's name"));
+    one("{\"menu\": {\"buttons\": [{\"id\": \"other:x\", \"hide\": true}]}}");
+    CHECK(notes == 1 && strstr(note, "no button \"other:x\""));
+    one("{\"menu\": {\"buttons\": [{\"id\": \"a\", \"label\": \"A\", \"menu\": \"third\", \"colour\": 1}]}}");
+    CHECK(notes == 2);
+    one("{\"menu\": {\"order\": [\"new_game\", \"nothing\", \"campaign\"]}}");
+    CHECK(notes == 2 && strstr(note, "\"campaign\" in the first menu"));
+    one("{\"menu\": {\"buttons\": [{\"id\": \"a\", \"label\": \"A very long label that goes on and on\"}]}}");
+    CHECK(notes == 1 && strstr(note, "longer than"));
+    one("{\"menu\": {\"buttons\": ["
+        "{\"id\": \"b0\", \"label\": \"x\"}, {\"id\": \"b1\", \"label\": \"x\"}, {\"id\": \"b2\", \"label\": \"x\"},"
+        "{\"id\": \"b3\", \"label\": \"x\"}, {\"id\": \"b4\", \"label\": \"x\"}, {\"id\": \"b5\", \"label\": \"x\"},"
+        "{\"id\": \"b6\", \"label\": \"x\"}, {\"id\": \"b7\", \"label\": \"x\"}, {\"id\": \"b8\", \"label\": \"x\"},"
+        "{\"id\": \"b9\", \"label\": \"x\"}, {\"id\": \"c0\", \"label\": \"x\"}, {\"id\": \"c1\", \"label\": \"x\"},"
+        "{\"id\": \"c2\", \"label\": \"x\"}, {\"id\": \"c3\", \"label\": \"x\"}, {\"id\": \"c4\", \"label\": \"x\"},"
+        "{\"id\": \"c5\", \"label\": \"x\"}, {\"id\": \"c6\", \"label\": \"x\"}]}}");
+    CHECK(notes == 1 && strstr(note, "more than 16 buttons"));
+    config = one("{\"menu\": 3}");
+    CHECK(notes == 1 && strstr(note, "\"menu\" is an object"));
+    config = one("{\"menu\": {\"button\": []}}");
+    CHECK(notes == 1 && strstr(note, "unknown key \"button\""));
+}
+
+static void buttons_across_mods(void)
+{
+    const TitleConfig *config;
+    TitleConfig_Reset();
+    notes = 0;
+    add_as("first", "{\"menu\": {\"buttons\": [{\"id\": \"x\", \"label\": \"X\"}, {\"id\": \"y\", \"label\": \"Y\"}]}}");
+    /* Another mod hides one of them, names both in its order and adds its own. */
+    add_as("second", "{\"menu\": {\"buttons\": [{\"id\": \"first:x\", \"hide\": true}, {\"id\": \"x\", \"label\": \"Z\"}],"
+                     "          \"order\": [\"first:y\", \"x\", \"load\"]}}");
+    TitleConfig_Finish();
+    config = TitleConfig_Get();
+    CHECK(notes == 0);
+    CHECK(config->items[TITLE_ENTRIES].hidden && !strcmp(config->items[TITLE_ENTRIES + 2].name, "second:x"));
+    CHECK(config->order[0][0] == TITLE_ENTRIES + 1 && config->order[0][1] == TITLE_ENTRIES + 2);
+    CHECK(config->order[0][2] == 1 && config->order[0][3] == 0 && config->shown[0] == 7);
+    CHECK(config->items[TITLE_ENTRIES].y == TITLE_PARKED_Y);
+}
+
+static void menu_background(void)
+{
+    const TitleConfig *config = one(
+        "{\"title\": {\"background\": {\"tint\": \"#FF0000\", \"image\": \"bg.png\"}, \"logo\": {\"show\": \"press_start\"},"
+        "             \"copyright\": {\"show\": \"menu\"}},"
+        " \"menu\": {\"background\": {\"picture\": false, \"color\": \"#000010\", \"dim\": 0}}}");
+    CHECK(notes == 0);
+    CHECK(!config->background[1].picture && config->background[1].colour == 0x10 && config->dim == 0);
+    /* What the menus' did not set is the title's. */
+    CHECK(config->background[1].tint == 0xFF0000 && config->background[1].shade);
+    CHECK(!strcmp(config->background[1].image.file, "/mods/test/bg.png"));
+    CHECK(config->background[0].picture && config->background[0].colour == -1);
+    CHECK(config->layers[0].show == TITLE_SHOW_PROMPT && config->layers[1].show == TITLE_SHOW_MENU);
+    config = one("{\"menu\": {\"background\": {\"image\": \"menu.png\"}}}");
+    CHECK(!strcmp(config->background[1].image.file, "/mods/test/menu.png") && !config->background[0].image.file[0]);
+    one("{\"title\": {\"prompt\": {\"show\": \"menu\"}}}");
+    CHECK(notes == 1 && strstr(note, "prompt \"show\""));
+}
+
+static void widescreen(void)
+{
+    const TitleConfig *config = one(
+        "{\"title\": {\"background\": {\"wide\": true}, \"logo\": {\"wide_x\": -40},"
+        "             \"text\": [{\"text\": \"v1\", \"x\": 300, \"wide_x\": 360}]},"
+        " \"menu\": {\"background\": {\"image\": \"m.png\", \"wide_image\": \"m-wide.png\"},"
+        "          \"entries\": {\"load\": {\"wide_x\": -100, \"wide_y\": 30}},"
+        "          \"buttons\": [{\"id\": \"b\", \"label\": \"B\", \"x\": 10, \"wide_x\": 150}]}}");
+    const TitleItem *load = &config->items[1], *b = &config->items[TITLE_ENTRIES];
+    CHECK(notes == 0);
+    CHECK(config->background[0].wide && !config->background[0].wide_image.file[0]);
+    /* A picture for widescreen makes the background fill it. */
+    CHECK(config->background[1].wide && !strcmp(config->background[1].wide_image.file, "/mods/test/m-wide.png"));
+    CHECK(config->layers[0].wide.set_x && config->layers[0].wide.x == -40 && !config->layers[0].wide.set_y);
+    CHECK(config->line[0].wide.set_x && TitleWide_X(&config->line[0].wide, config->line[0].x, 1) == 360);
+    CHECK(TitleWide_X(&config->line[0].wide, config->line[0].x, 0) == 300);
+    CHECK(TitleWide_X(&load->wide, load->x, 1) == -100 && TitleWide_Y(&load->wide, load->y, 1) == 30);
+    /* 4:3 keeps the stacked place; widescreen without a wide_y does too. */
+    CHECK(TitleWide_Y(&load->wide, load->y, 0) == load->y && load->y != 30);
+    CHECK(TitleWide_X(&b->wide, b->x, 1) == 150 && TitleWide_X(&b->wide, b->x, 0) == 10);
+    CHECK(TitleWide_Y(&b->wide, b->y, 1) == b->y);
+    /* The menus' own 4:3 picture without a wide one: not the title's wide one. */
+    config = one("{\"title\": {\"background\": {\"wide_image\": \"t-wide.png\"}},"
+                 " \"menu\": {\"background\": {\"image\": \"m.png\"}}}");
+    CHECK(config->background[0].wide && !strcmp(config->background[0].wide_image.file, "/mods/test/t-wide.png"));
+    CHECK(!config->background[1].wide_image.file[0] && config->background[1].wide);
+    /* Nothing said: the menus' is the title's. */
+    config = one("{\"title\": {\"background\": {\"wide_image\": \"t-wide.png\"}}}");
+    CHECK(!strcmp(config->background[1].wide_image.file, "/mods/test/t-wide.png"));
+    one("{\"menu\": {\"background\": {\"wide_imag\": \"x.png\"}}}");
+    CHECK(notes == 1 && strstr(note, "unknown key \"wide_imag\""));
+}
+
 int main(void)
 {
     retail();
@@ -188,6 +339,11 @@ int main(void)
     pictures();
     mods_add_up();
     mistakes();
+    buttons();
+    button_mistakes();
+    buttons_across_mods();
+    menu_background();
+    widescreen();
     while (document_count) Json_Free(documents[--document_count]);
     printf("title config: ok\n");
     return 0;

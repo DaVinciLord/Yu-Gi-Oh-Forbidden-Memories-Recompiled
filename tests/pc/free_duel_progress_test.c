@@ -41,6 +41,7 @@ unsigned char *Cards_ChestSlot(void *state, int id)
     nowhere = 0;
     return Cards_Valid(id) ? &extra_chest[id] : &nowhere;
 }
+int Mods_EntryUsed(const char *id, const JsonValue *entry, const char *where) { (void)id; (void)entry; (void)where; return 1; }
 void Mods_Note(const char *id, const char *format, ...)
 {
     va_list arguments;
