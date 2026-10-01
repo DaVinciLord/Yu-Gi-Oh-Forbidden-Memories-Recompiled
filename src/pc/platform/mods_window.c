@@ -4,6 +4,7 @@
 #include "../../types.h"
 #include "pc/mods/json.h"
 #include "pc/mods/mods.h"
+#include "pc/mods/overlap.h"
 #include "platform.h"
 #include "settings.h"
 #include <ctype.h>
@@ -351,6 +352,74 @@ static void option(MenuCanvas *c, int index, int w, int y, OptionBox *o)
     }
     fill(c, rect(0, y + o->height - 1, w, 1), EDGE);
 }
+/* What the selected mod changes that another enabled mod changes too
+ * (overlap.h), by kind: a heading with the count, the first few lines, and
+ * "and N more" to show the rest (at most OVERLAPS_OPEN), the log having them
+ * all. A real override is in the warning colour; what adds up, agrees or
+ * follows an `after` is dim. Where each "more" line is, for the press that
+ * opens it, is kept in more_top/more_bottom. */
+#define OVERLAPS_SHOWN 4
+#define OVERLAPS_OPEN 200
+static int opened[MODS_OVERLAP_KINDS], opened_for = -1, more_top[MODS_OVERLAP_KINDS], more_bottom[MODS_OVERLAP_KINDS];
+static int overlaps(MenuCanvas *c, int w, int y)
+{
+    const ModsOverlaps *found = Mods_Overlaps(wanted, ranks);
+    int place = Mods_OverlapPlace(selected), total = 0, warnings = 0, n = Mods_OverlapCount(found);
+    char line[1024];
+    if (opened_for != selected)
+        memset(opened, 0, sizeof(opened));
+    opened_for = selected;
+    for (int k = 0; k < MODS_OVERLAP_KINDS; k++)
+        more_top[k] = more_bottom[k] = 0;
+    if (!wanted[selected] || place < 0)
+        return wrap(c, 0, y, w, "Enable this mod to see what it changes that other enabled mods change too.", DIM);
+    for (int i = 0; i < n; i++)
+        if (Mods_OverlapInvolves(found, i, place)) {
+            total++;
+            warnings += Mods_OverlapSeverity(found, i) == MODS_OVERLAP_WARNING;
+        }
+    if (!total)
+        return wrap(c, 0, y, w, "Nothing it changes is changed by another enabled mod.", GREEN);
+    snprintf(line, sizeof(line), "Also changed by other enabled mods: %d thing%s, %d where only one mod's change is used.",
+             total, total == 1 ? "" : "s", warnings);
+    y = wrap(c, 0, y, w, line, warnings ? WARN : TEXT);
+    for (int kind = 0, i = 0; kind < MODS_OVERLAP_KINDS; kind++) {
+        int count = 0, kind_warnings = 0, shown = 0, limit = opened[kind] ? OVERLAPS_OPEN : OVERLAPS_SHOWN;
+        int first = i;
+        while (i < n && Mods_OverlapKind(found, i) == kind) {
+            if (Mods_OverlapInvolves(found, i, place)) {
+                count++;
+                kind_warnings += Mods_OverlapSeverity(found, i) == MODS_OVERLAP_WARNING;
+            }
+            i++;
+        }
+        if (!count)
+            continue;
+        snprintf(line, sizeof(line), "%s: %d (%d warning%s)", Mods_OverlapKindName(kind), count, kind_warnings,
+                 kind_warnings == 1 ? "" : "s");
+        y = wrap(c, 0, y + 10 * unit, w, line, TEXT);
+        for (int j = first; j < i && shown < limit; j++)
+            if (Mods_OverlapInvolves(found, j, place)) {
+                Mods_OverlapText(found, j, line, sizeof(line));
+                y = wrap(c, 12 * unit, y, w - 12 * unit, line,
+                         Mods_OverlapSeverity(found, j) == MODS_OVERLAP_WARNING ? WARN : DIM);
+                shown++;
+            }
+        if (count > shown || opened[kind]) {
+            if (count > shown && opened[kind])
+                snprintf(line, sizeof(line), "...and %d more, in the log (MEMORIES_TRACE=mods). Show fewer", count - shown);
+            else if (count > shown)
+                snprintf(line, sizeof(line), "...and %d more: show %s", count - shown,
+                         count - shown > OVERLAPS_OPEN - OVERLAPS_SHOWN ? "the next ones" : "them");
+            else
+                snprintf(line, sizeof(line), "Show fewer");
+            more_top[kind] = y;
+            y = wrap(c, 12 * unit, y, w - 12 * unit, line, BLUE);
+            more_bottom[kind] = y;
+        }
+    }
+    return wrap(c, 0, y + 10 * unit, w, "Every line is in the log with MEMORIES_TRACE=mods.", DIM);
+}
 /* The selected tab's contents, `w` wide from `y`; returns where they end. */
 static int body(MenuCanvas *c, int w, int y)
 {
@@ -393,8 +462,7 @@ static int body(MenuCanvas *c, int w, int y)
             y = wrap(c, 0, y + 12 * unit, w, line, WARN);
         else
             y = wrap(c, 0, y + 12 * unit, w, "Dependencies and declared conflicts are satisfied.", GREEN);
-        if (Mods_ConflictText(selected, line, sizeof(line)))
-            y = wrap(c, 0, y + 12 * unit, w, line, WARN);
+        y = overlaps(c, w, y + 12 * unit);
     }
     return y;
 }
@@ -427,14 +495,25 @@ void ModsWindow_Draw(MenuCanvas *c)
 {
     Layout l;
     char line[512];
-    int enabled = 0, list_bar, extra;
+    int enabled = 0, list_bar, extra, overlap_count = 0, overlap_warnings = 0;
     layout(&l);
     fill(c, rect(0, 0, c->width, c->height), BG);
     for (int i = 0; i < Mods_Count(); i++)
         enabled += !!wanted[i];
+    if (enabled > 1) {
+        const ModsOverlaps *found = Mods_Overlaps(wanted, ranks);
+        overlap_count = Mods_OverlapCount(found);
+        for (int i = 0; i < overlap_count; i++)
+            overlap_warnings += Mods_OverlapSeverity(found, i) == MODS_OVERLAP_WARNING;
+    }
     text(c, 20 * unit, 29 * unit, width - 40 * unit, "Mod library", TEXT);
-    snprintf(line, sizeof(line), "%d installed  /  %d enabled%s", Mods_Count(), enabled,
-             changed() ? "  /  Unsaved changes" : "");
+    if (overlap_count)
+        snprintf(line, sizeof(line), "%d installed  /  %d enabled  /  %d overlap%s, %d warning%s%s", Mods_Count(),
+                 enabled, overlap_count, overlap_count == 1 ? "" : "s", overlap_warnings,
+                 overlap_warnings == 1 ? "" : "s", changed() ? "  /  Unsaved changes" : "");
+    else
+        snprintf(line, sizeof(line), "%d installed  /  %d enabled%s", Mods_Count(), enabled,
+                 changed() ? "  /  Unsaved changes" : "");
     text(c, width / 2, 29 * unit, width / 2 - 20 * unit, line, DIM);
     fill(c, l.search, focus == 1 ? EDGE : PANEL);
     text(c, l.search.x + 10 * unit, l.search.y + 16 * unit, l.search.w - 20 * unit,
@@ -888,6 +967,14 @@ int ModsWindow_Event(const MenuEvent *e)
                     ranks[selected]--;
                 if (inside(l.order[1], e->x, e->y) && ranks[selected] < 100000)
                     ranks[selected]++;
+                if (tab == 2 && inside(l.view, e->x, e->y)) {
+                    /* Where the "and N more" lines are now (overlaps()). */
+                    int at = e->y - l.view.y;
+                    body(NULL, body_width(&l), -detail_scroll);
+                    for (int k = 0; k < MODS_OVERLAP_KINDS; k++)
+                        if (more_bottom[k] > more_top[k] && at >= more_top[k] && at < more_bottom[k])
+                            opened[k] = !opened[k];
+                }
                 if (tab == 1 && counts[selected]) {
                     if (inside(l.defaults, e->x, e->y))
                         for (int j = 0; j < counts[selected]; j++)

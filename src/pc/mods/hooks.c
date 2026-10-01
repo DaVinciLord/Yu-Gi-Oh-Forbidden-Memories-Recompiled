@@ -143,6 +143,14 @@ void Hooks_Clear(int owner)
     Hooks_Relink();
 }
 
+int Hooks_At(int index, int *owner, const void **function)
+{
+    if (index < 0 || index >= hook_count) return 0;
+    *owner = hooks[index].owner;
+    *function = targets[hooks[index].target].entry;
+    return 1;
+}
+
 int Hooks_IsHooked(const void *function)
 {
     int i;

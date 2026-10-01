@@ -3,6 +3,10 @@
 #include "../../types.h"
 #include "json.h"
 #include "mods.h"
+#include "overlap.h"
+#include "hooks.h"
+#include "events.h"
+#include "pc/debug/log.h"
 #include "pc/platform/paths.h"
 #include "pc/platform/settings.h"
 #include "pc/compat/posix.h" /* rename() that replaces, on Windows too */
@@ -98,7 +102,14 @@ int Mods_WaitsForRestart(int mod, const int *enabled)
     unsigned char seen[MODS_MAX] = {0};
     return mod >= 0 && mod < MODS_MAX ? waits_for_restart(mod, enabled, seen) : -1;
 }
+static int order_ranked(const int *enabled, const int *ranks, int *order, char *error, size_t size);
 int Mods_Order(const int *enabled, int *order, char *error, size_t size)
+{
+    return order_ranked(enabled, NULL, order, error, size);
+}
+/* The load order, each mod's rank its "Load order" (`ranks`, staged in the
+ * Mods window), or the saved one when `ranks` is NULL. */
+static int order_ranked(const int *enabled, const int *ranks, int *order, char *error, size_t size)
 {
     int done[MODS_MAX] = {0}, total = 0, wanted = 0, i;
     for (i = 0; i < Mods_Count(); i++)
@@ -120,7 +131,7 @@ int Mods_Order(const int *enabled, int *order, char *error, size_t size)
                     }
                 }
                 snprintf(key, sizeof(key), "mod.%s.order", Mods_Id(i));
-                rank = Settings_GetNamed(key, (int)Json_Number(member(i, "priority"), 0));
+                rank = ranks ? ranks[i] : Settings_GetNamed(key, (int)Json_Number(member(i, "priority"), 0));
                 if (!blocked && (best < 0 || rank < priority)) {
                     best = i;
                     priority = rank;
@@ -443,65 +454,172 @@ unsigned Mods_Signature(void)
     return hash ^ Mods_CardSignature() ^ Mods_PackSignature() ^ Mods_DiscSignature();
 }
 
-/* An "audio" id as replace.c reads it: 0x-prefixed hexadecimal, else decimal. */
-static long audio_id(const char *text)
+/* --- overlaps (overlap.h) --------------------------------------------------
+ *
+ * What the enabled mods change in common, in the order they would load, for
+ * the Mods window and MEMORIES_TRACE=mods. Worked out again only when the set,
+ * the order, a mod's settings, or what the code mods hook changes. */
+static int (*overlap_card)(const char *text, long number);
+static int (*overlap_card_name)(int id, char *out, size_t size);
+static int (*overlap_duelist)(const char *text);
+static const char *(*overlap_function)(uintptr_t address, uintptr_t *offset);
+static unsigned overlap_generation = 1;
+static ModsOverlaps *overlaps;
+static unsigned overlaps_key;
+static int overlap_place[MODS_MAX], overlap_mod[MODS_MAX], overlap_count;
+
+static int source_card(const char *text, long number, void *context)
 {
-    char *end;
-    long value;
-    if (!text || !*text) return -1;
-    value = text[0] == '0' && (text[1] == 'x' || text[1] == 'X') ? strtol(text + 2, &end, 16) : strtol(text, &end, 10);
-    return *end ? -1 : value;
+    (void)context;
+    return overlap_card(text, number);
+}
+static int source_card_name(int id, char *out, size_t size, void *context)
+{
+    (void)context;
+    return overlap_card_name(id, out, size);
+}
+static int source_duelist(const char *text, void *context)
+{
+    (void)context;
+    return overlap_duelist(text);
+}
+static int source_setting(int place, const char *key, void *context)
+{
+    int mod = overlap_mod[place];
+    (void)context;
+    for (int j = 0; j < Mods_OptionCount(mod); j++)
+        if (!strcmp(key, Json_String(Json_Member(Mods_Option(mod, j), "key"), ""))) return Mods_OptionValue(mod, j);
+    return -1;
+}
+static int source_hook(int index, int *place, uint64_t *what, char *label, size_t size, void *context)
+{
+    int owner;
+    const void *function;
+    uintptr_t offset = 0;
+    const char *name;
+    (void)context;
+    if (!Hooks_At(index, &owner, &function)) return 0;
+    *place = owner >= 0 && owner < MODS_MAX ? overlap_place[owner] : -1;
+    *what = (uint64_t)(uintptr_t)function;
+    name = overlap_function ? overlap_function((uintptr_t)function, &offset) : NULL;
+    if (name && !offset) snprintf(label, size, "%s", name);
+    else snprintf(label, size, "at 0x%llx", (unsigned long long)(uintptr_t)function);
+    return 1;
+}
+static int source_event(int index, int *place, uint64_t *what, char *label, size_t size, void *context)
+{
+    static const char *const names[MEMORIES_EVENT_COUNT] = {
+        "INPUT", "DAMAGE", "REWARD",   "FUSION", "EFFECT",    "AI",        "SCENE",    "SAVE",
+        "LOAD",  "SETTINGS", "EQUIP", "SLOT_SAVE", "SLOT_LOAD", "STARCHIP", "MENU"};
+    int owner;
+    unsigned event;
+    (void)context;
+    if (!Mods_SubscriptionAt(index, &owner, &event)) return 0;
+    *place = owner >= 0 && owner < MODS_MAX ? overlap_place[owner] : -1;
+    *what = event;
+    snprintf(label, size, "%s", event < MEMORIES_EVENT_COUNT && names[event] ? names[event] : "?");
+    return 1;
 }
 
-/* Whether two mods replace one sound: the one applied later is heard. */
-static int audio_overlap(int a, int b)
+static unsigned overlap_key(const int *enabled, const int *ranks)
 {
-    static const char *const kinds[] = {"music", "xa", "sfx"};
-    for (int k = 0; k < 3; k++) {
-        const JsonValue *x = Json_Member(member(a, "audio"), kinds[k]), *y = Json_Member(member(b, "audio"), kinds[k]);
-        for (int i = 0; i < Json_Count(x); i++)
-            for (int j = 0; j < Json_Count(y); j++) {
-                long id = audio_id(Json_Name(Json_At(x, i)));
-                if (id >= 0 && id == audio_id(Json_Name(Json_At(y, j)))) return 1;
-            }
+    unsigned hash = 2166136261u ^ overlap_generation;
+    int i, owner;
+    const void *function;
+    unsigned event;
+    for (int mod = 0; mod < Mods_Count(); mod++) {
+        char key[160];
+        int rank;
+        snprintf(key, sizeof(key), "mod.%s.order", Mods_Id(mod));
+        rank = ranks ? ranks[mod] : Settings_GetNamed(key, (int)Json_Number(member(mod, "priority"), 0));
+        hash = (hash ^ (unsigned)!!enabled[mod]) * 16777619u;
+        hash = (hash ^ (unsigned)rank) * 16777619u;
+        for (int j = 0; j < Mods_OptionCount(mod); j++) hash = (hash ^ (unsigned)Mods_OptionValue(mod, j)) * 16777619u;
     }
-    return 0;
+    for (i = 0; Hooks_At(i, &owner, &function); i++) {
+    }
+    hash = (hash ^ (unsigned)i) * 16777619u;
+    for (i = 0; Mods_SubscriptionAt(i, &owner, &event); i++) {
+    }
+    return (hash ^ (unsigned)i) * 16777619u;
 }
 
-int Mods_ConflictText(int mod, char *out, size_t size)
+static void log_overlaps(const ModsOverlaps *found)
 {
-    const JsonValue *data = member(mod, "data");
-    int i, j, k;
-    for (i = 0; i < Mods_Count(); i++)
-        if (i != mod && Mods_Enabled(i)) {
-            const JsonValue *other = member(i, "data");
-            for (j = 0; j < Json_Count(data); j++)
-                for (k = 0; k < Json_Count(other); k++) {
-                    const JsonValue *a = Json_At(data, j), *b = Json_At(other, k);
-                    const char *af = Json_String(Json_Member(a, "file"), ""),
-                               *bf = Json_String(Json_Member(b, "file"), "");
-                    long al = Json_Number(Json_Member(a, "lba"), -1), bl = Json_Number(Json_Member(b, "lba"), -1);
-                    if ((*af && !strcmp(af, bf)) || (al >= 0 && al == bl)) {
-                        snprintf(out, size,
-                                 "Potential data overlap with %s. Replacements run first, "
-                                 "then patches; later entries win within each kind.",
-                                 Mods_Name(i));
-                        return 1;
-                    }
-                }
-            if (audio_overlap(mod, i)) {
-                snprintf(out, size, "Replaces some of the same sounds as %s; the mod applied later is heard.",
-                         Mods_Name(i));
-                return 1;
-            }
-            if (*Mods_Metadata(mod, "textures") && *Mods_Metadata(i, "textures")) {
-                snprintf(out, size,
-                         "Multiple texture packs enabled. Where two replace the same "
-                         "image, the one later in load order is drawn.");
-                return 1;
-            }
+    char line[1024];
+    int n = Mods_OverlapCount(found), warnings = 0;
+    for (int i = 0; i < n; i++) warnings += Mods_OverlapSeverity(found, i) == MODS_OVERLAP_WARNING;
+    LOG(LOG_MODS, "overlaps: %d between %d enabled mods (%d warnings)", n, overlap_count, warnings);
+    for (int i = 0; i < n; i++) {
+        Mods_OverlapText(found, i, line, sizeof(line));
+        LOG(LOG_MODS, "overlap: %s: %s: %s", Mods_OverlapSeverity(found, i) ? "warning" : "info",
+            Mods_OverlapKindName(Mods_OverlapKind(found, i)), line);
+    }
+}
+
+const ModsOverlaps *Mods_Overlaps(const int *enabled, const int *ranks)
+{
+    ModsOverlapMod list[MODS_MAX];
+    ModsOverlapSource source = {0};
+    char ignored[160];
+    int order[MODS_MAX + 1], n;
+    unsigned key = overlap_key(enabled, ranks);
+    if (overlaps && key == overlaps_key) return overlaps;
+    Mods_OverlapFree(overlaps);
+    overlaps = NULL;
+    overlaps_key = key;
+    n = order_ranked(enabled, ranks, order, ignored, sizeof(ignored));
+    if (n < 0) /* a cycle: the mods that could be placed (Mods_Order) */
+        for (n = 0; order[n] >= 0; n++) {
         }
-    return 0;
+    for (int i = 0; i < MODS_MAX; i++) overlap_place[i] = -1;
+    for (int i = 0; i < n; i++) {
+        overlap_place[order[i]] = i;
+        overlap_mod[i] = order[i];
+        list[i].id = Mods_Id(order[i]);
+        list[i].name = Mods_Name(order[i]);
+        list[i].directory = Mods_Directory(order[i]);
+        list[i].manifest = Mods_Manifest(order[i]);
+    }
+    overlap_count = n;
+    if (overlap_card) source.card = source_card;
+    if (overlap_card_name) source.card_name = source_card_name;
+    if (overlap_duelist) source.duelist = source_duelist;
+    source.setting = source_setting;
+    source.hook = source_hook;
+    source.event = source_event;
+    overlaps = Mods_OverlapCompute(list, n, &source);
+    if (overlaps && Mods_OverlapCount(overlaps) && Log_Enabled(LOG_MODS)) log_overlaps(overlaps);
+    return overlaps;
+}
+int Mods_OverlapPlace(int mod) { return mod >= 0 && mod < MODS_MAX && overlaps ? overlap_place[mod] : -1; }
+
+/* The mods applied now: their overlaps in the log, once the cards and the
+ * duelists (and so their names) are known. */
+static void log_applied(void)
+{
+    int enabled[MODS_MAX];
+    if (!Log_Enabled(LOG_MODS)) return;
+    for (int i = 0; i < Mods_Count(); i++) enabled[i] = Mods_Active(i);
+    Mods_Overlaps(enabled, NULL);
+}
+void Mods_SetOverlapCards(int (*card)(const char *text, long number), int (*name)(int id, char *out, size_t size))
+{
+    overlap_card = card;
+    overlap_card_name = name;
+    overlap_generation++;
+    if (overlap_duelist) log_applied();
+}
+void Mods_SetOverlapDuelists(int (*duelist)(const char *text))
+{
+    overlap_duelist = duelist;
+    overlap_generation++;
+    if (overlap_card) log_applied();
+}
+void Mods_SetFunctionNames(const char *(*lookup)(uintptr_t address, uintptr_t *offset))
+{
+    overlap_function = lookup;
+    overlap_generation++;
 }
 
 int Mods_CheckManifest(int mod, char *error, size_t size)

@@ -189,6 +189,7 @@ int main(int argc, char **argv)
     }
     Log_Init();
     Symbols_Load();
+    Mods_SetFunctionNames(Symbols_Lookup);   /* the functions code mods hook, in the Mods window */
     Crash_Init();
     Monitor_NoteSystem();
     /* Whether the player's files can be saved at all (an antivirus or

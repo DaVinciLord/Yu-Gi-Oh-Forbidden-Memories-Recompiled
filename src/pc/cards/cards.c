@@ -505,6 +505,12 @@ int Cards_Reference(const JsonValue *value)
     return text ? Cards_Named(text) : -1;
 }
 
+/* A card a manifest names, for the Mods window's overlaps (mods.h). */
+static int overlap_card(const char *text, long number)
+{
+    return text ? Cards_Named(text) : number > 0 && number <= 0xFFFF && Cards_Valid((int)number) ? (int)number : -1;
+}
+
 int Cards_Named(const char *text)
 {
     int id;
@@ -1368,6 +1374,7 @@ void Cards_Build(void)
     if (!context) return;
     Mods_VisitCards(add_mod, context);
     Mods_SetCardResolver(Cards_FindIdentity);
+    Mods_SetOverlapCards(overlap_card, Cards_NameUtf8);
     Mods_SetCardNotes(Cards_Notes, Cards_NoteTag);
     Mods_SetLimitSource(Tables_Limit);   /* read by Tables_Build below; asked later */
     {

@@ -7,14 +7,38 @@
 static int restarts;
 int Menu_Scale(void) { return 1; }
 int Menu_TextWidthScaled(const char *s, int scale) { return (int)strlen(s) * 7 * scale; }
+/* What a draw wrote, while `capture` is on: each string, its colour and
+ * the middle of its line (in the canvas it was drawn on). */
+static int capture;
+static char drawn[16384];
+static int drawn_y(const char *part)
+{
+    const char *at = strstr(drawn, part), *line;
+    if (!at) return -1;
+    for (line = at; line > drawn && line[-1] != '\n'; line--) {
+    }
+    return atoi(line);
+}
 void Menu_DrawTextScaled(MenuCanvas *c, int x, int y, const char *s, uint32_t color, int scale)
 {
     (void)c;
     (void)x;
-    (void)y;
-    (void)s;
-    (void)color;
     (void)scale;
+    if (capture && strlen(drawn) + strlen(s) + 32 < sizeof(drawn))
+        snprintf(drawn + strlen(drawn), sizeof(drawn) - strlen(drawn), "%d %06x %s\n", y, (unsigned)color, s);
+}
+static void draw(int w, int h)
+{
+    MenuCanvas canvas = {0};
+    canvas.width = canvas.stride = w;
+    canvas.height = h;
+    canvas.pixels = calloc((size_t)w * h, 4);
+    assert(canvas.pixels);
+    drawn[0] = 0;
+    capture = 1;
+    ModsWindow_Draw(&canvas);
+    capture = 0;
+    free(canvas.pixels);
 }
 static char opened[1024];
 int Platform_OpenFolder(const char *path)
@@ -78,7 +102,14 @@ int main(void)
         snprintf(path, sizeof(path), "mods/mod%02d", i);
         make_dir(path);
         snprintf(path, sizeof(path), "mods/mod%02d/mod.json", i);
-        if (i == 1) { /* more settings than the details show at once */
+        if (i == 2 || i == 3) { /* six fusion pairs both set: overlaps */
+            char json[2048] = "{\"fusions\":[";
+            for (int j = 0; j < 6; j++)
+                snprintf(json + strlen(json), sizeof(json) - strlen(json), "%s{\"with\":[%d,%d],\"result\":%d}",
+                         j ? "," : "", 100 + j, 200 + j, i);
+            strcat(json, "]}");
+            write_text(path, json);
+        } else if (i == 1) { /* more settings than the details show at once */
             char json[2048] = "{\"settings\":[";
             for (int j = 0; j < 12; j++)
                 snprintf(json + strlen(json), sizeof(json) - strlen(json), "%s{\"key\":\"s%d\",\"type\":\"bool\"}",
@@ -182,6 +213,33 @@ int main(void)
     ModsWindow_Init();
     click(550, 600); /* Open mods folder: the folder new mods are installed in */
     assert(!strcmp(opened, getenv("MEMORIES_MODS_DIR")));
+    {
+        /* What two enabled mods both change: in the header, and by kind in
+         * the Compatibility tab, the first few lines, then the rest on a
+         * press. The load order staged in the window decides who wins. */
+        int more;
+        ModsWindow_Init();
+        click(32, 142 + 2 * 58 + 20); /* mod02 and mod03, staged */
+        click(32, 142 + 3 * 58 + 20);
+        click(800, 238); /* Compatibility */
+        draw(920, 640);
+        assert(strstr(drawn, "6 overlaps, 6 warnings"));
+        assert(strstr(drawn, "Fusions: 6 (6 warnings)"));
+        assert(strstr(drawn, "f4bd6a Fusion #100 + #200 (mod02, mod03): mod03 wins (later in load order)") ||
+               strstr(drawn, "(mod02, mod03): mod03 wins (later in load order)"));
+        assert(strstr(drawn, "...and 2 more: show them") && !strstr(drawn, "#105 + #205"));
+        more = drawn_y("...and 2 more");
+        click(600, 142 + 124 + more);
+        draw(920, 640);
+        assert(strstr(drawn, "#105 + #205") && strstr(drawn, "Show fewer"));
+        click(100, 142 + 2 * 58 + 20); /* mod02 selected, and loaded after mod03 */
+        click(856 + 14, 186 + 13);
+        draw(920, 640);
+        assert(strstr(drawn, "(mod03, mod02): mod02 wins (later in load order)"));
+        click(32, 142 + 3 * 58 + 20); /* one of them off: nothing in common */
+        draw(920, 640);
+        assert(!strstr(drawn, "overlap") && strstr(drawn, "Enable this mod"));
+    }
     ModsWindow_Init();
     ModsWindow_Resize(720, 480);
     ModsWindow_Size(&w, &h);

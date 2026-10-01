@@ -42,6 +42,7 @@ const JsonValue *Mods_Manifest(int mod) { return Json_Root(manifests[mod]); }
 void Mods_Note(const char *mod, const char *format, ...) { (void)mod; (void)format; notes++; }
 static int (*given_resolver)(const char *);   /* what the list hands the mod API */
 void Mods_SetDuelistResolver(int (*resolve)(const char *)) { given_resolver = resolve; }
+void Mods_SetOverlapDuelists(int (*duelist)(const char *)) { (void)duelist; }
 
 /* The forty the disc has; only the handful the cases name need a real one. */
 const char *const Tables_DuelistNames[TABLES_DUELIST_COUNT] = {
