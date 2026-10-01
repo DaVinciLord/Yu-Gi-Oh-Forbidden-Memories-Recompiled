@@ -8,6 +8,7 @@
  * for one. Also the copy entry, a magic card made a monster with and without
  * "stars", an earlier mod's no-star card under a later replace, [none, X],
  * and what is refused with a note. */
+#define _POSIX_C_SOURCE 200809L /* before any header: cards.c's strdup */
 #include <stdint.h>
 
 /* The disc's tables, here. cards.c reads them at fixed addresses. */
