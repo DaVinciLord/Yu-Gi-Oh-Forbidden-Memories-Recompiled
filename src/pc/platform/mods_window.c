@@ -511,7 +511,10 @@ void ModsWindow_Draw(MenuCanvas *c)
         snprintf(line, sizeof(line), "%d installed  /  %d enabled  /  %d overlap%s, %d warning%s%s", Mods_Count(),
                  enabled, overlap_count, overlap_count == 1 ? "" : "s", overlap_warnings,
                  overlap_warnings == 1 ? "" : "s", changed() ? "  /  Unsaved changes" : "");
-    else
+    if (overlap_count && width_text(line) > width / 2 - 20 * unit) /* a small window: the tab has the warnings */
+        snprintf(line, sizeof(line), "%d installed  /  %d enabled  /  %d overlap%s%s", Mods_Count(), enabled,
+                 overlap_count, overlap_count == 1 ? "" : "s", changed() ? "  /  Unsaved" : "");
+    else if (!overlap_count)
         snprintf(line, sizeof(line), "%d installed  /  %d enabled%s", Mods_Count(), enabled,
                  changed() ? "  /  Unsaved changes" : "");
     text(c, width / 2, 29 * unit, width / 2 - 20 * unit, line, DIM);

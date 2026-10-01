@@ -127,8 +127,9 @@ const struct ModsOverlaps *Mods_Overlaps(const int *enabled, const int *ranks);
 int Mods_OverlapPlace(int mod);
 /* What the overlaps name cards, duelists and hooked functions by, once the
  * game knows them (pc/cards Cards_Named and Cards_NameUtf8, pc/free_duel
- * Duelists_Named, pc/debug Symbols_Lookup). Setting the cards also logs the
- * applied mods' overlaps under MEMORIES_TRACE=mods. */
+ * Duelists_Named, pc/debug Symbols_Lookup). Once both the cards and the
+ * duelists are set, the applied mods' overlaps go to the log under
+ * MEMORIES_TRACE=mods. */
 void Mods_SetOverlapCards(int (*card)(const char *text, long number), int (*name)(int id, char *out, size_t size));
 void Mods_SetOverlapDuelists(int (*duelist)(const char *text));
 void Mods_SetFunctionNames(const char *(*lookup)(uintptr_t address, uintptr_t *offset));

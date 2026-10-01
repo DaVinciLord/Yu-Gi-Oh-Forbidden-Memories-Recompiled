@@ -223,7 +223,7 @@ int main(void)
         click(32, 142 + 3 * 58 + 20);
         click(800, 238); /* Compatibility */
         draw(920, 640);
-        assert(strstr(drawn, "6 overlaps, 6 warnings"));
+        assert(strstr(drawn, "/  6 overlaps")); /* with the warnings when the line has room */
         assert(strstr(drawn, "Fusions: 6 (6 warnings)"));
         assert(strstr(drawn, "f4bd6a Fusion #100 + #200 (mod02, mod03): mod03 wins (later in load order)") ||
                strstr(drawn, "(mod02, mod03): mod03 wins (later in load order)"));
