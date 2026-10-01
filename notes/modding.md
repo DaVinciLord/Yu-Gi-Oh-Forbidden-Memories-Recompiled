@@ -116,7 +116,8 @@ path (`"\\DATA\\CARD.MRG;1"`, as the game asks for it) or a raw sector
   positions. The last replacement in startup load order wins, then patches
   apply on top. Competing replacements are reported in the Mods window,
   for named files and for raw sectors alike, and so are two mods patching
-  the same bytes (the later one's bytes are the ones read).
+  the same bytes (the later one's bytes are the ones read; [When mods
+  overlap](#when-mods-overlap)).
   Replacing a raw `lba` region needs a `sectors` count and must fit that
   allocation; an oversized raw replacement is rejected.
 * The streamed files, `MASTER.XA` and `MOVIE.STR`, cannot be replaced or
@@ -249,7 +250,8 @@ When two enabled packs replace the same image read the same way (the same
 archive offset, size, depth and palette), the one later in the mods' load
 order is drawn: the higher `priority` number, or the player's Order in the
 Mods window, or the one that names the other in `after`. That holds however
-the packs were applied, on Linux and on Windows alike. Entries of different
+the packs were applied, on Linux and on Windows alike, and the Mods window
+lists each such image ([When mods overlap](#when-mods-overlap)). Entries of different
 sizes at one offset are not the same image; which one a texel comes from
 follows their size, not the packs.
 
@@ -403,7 +405,7 @@ A mod with only `audio` applies and removes live in **Game > Mods**, with no
 restart; a song that is playing when the mod is applied or removed switches
 at once. When several applied mods replace the same id, the one applied last
 wins, as data overrides do (load order: `priority`, `after`, `requires`, then
-discovery order); the Mods window warns about the overlap.
+discovery order); the Mods window warns about each id two mods replace.
 
 ### Finding the ids
 
@@ -974,6 +976,86 @@ so a mod with `text` or `font` asks for a restart on its own, and so does a
 change to any of its settings (the setting may still say `"restart": true`,
 which shows "Requires a restart" beside it). A `setting` the mod does not
 declare is noted beside the mod and the file read.
+
+## When mods overlap
+
+Two enabled mods may change the same thing. Nothing stops that, and nothing
+is refused: the game reads every mod in load order and each key decides what
+happens, usually the later mod winning. The Mods window says where it
+happens. Its **Compatibility** tab lists, by kind and with counts,
+everything the selected mod changes that another enabled mod changes too,
+one line each: what it is, which mods, and how it comes out. The first four
+lines of a kind show; **and N more** shows the rest (up to 200 at a time). The
+header counts the overlaps between all enabled mods. A line is in the warning
+colour when only one mod's change is used, and dim when the changes add up,
+agree, or follow an order the winning mod asked for:
+
+```
+Fusion 'Kuriboh' + 'Mystical Elf' (Alpha, Beta, Gamma): Gamma wins (later in load order)
+Simon Muran's POW drops (Alpha, Beta): both apply and add up (each edits the pool as the mods before left it)
+Card 'Blue-eyes White Dragon' (Alpha, Beta): the later mod's description is used; the rest combines
+menu.spacing (Beta, Gamma): Gamma wins (it loads after Beta on purpose: after/requires)
+```
+
+Load order is the one in the window, before Apply: enabling, disabling or
+moving a mod's **Load order** shows the new outcome at once. The list is worked
+out when the enabled mods, their order, a mod's settings or the code mods'
+hooks change, not every frame, so dozens of mods with thousands of entries
+each cost nothing while the window is open (two mods of every pair of 400
+cards' fusions, 79,800 overlaps, take about a tenth of a second).
+`MEMORIES_TRACE=mods` writes every line to the log (`overlap: warning: Cards:
+...`), for the mods applied at startup and again whenever the window's set
+changes.
+
+What counts as the same thing, and how each comes out:
+
+| Kind | The same thing | How it comes out |
+|---|---|---|
+| `data` | a disc file (by name, any case, with or without `;1`) or a raw sector | replacements: the later wins; patches: the later's bytes where two patch the same bytes, else both apply |
+| `audio` | a `music`, `xa` or `sfx` id | the later is heard |
+| `textures` | an image read the same way: archive, offset, size, depth and palette | the later is drawn; one line per image |
+| `cards` | a card `replace` names (by name, number or stable identity) | key by key: the later's keys win, what it leaves out stays; a `replace` of another mod's added card is that mod's card changed on purpose |
+| `fusions` | a pair, in either order | the later's result; `remove`s add up |
+| `equips` | an equip card | the latest entry that says something about a monster decides, so entries naming other monsters, types or bonuses add up; a later `"replace": true` clears the earlier lists |
+| `equip_bonus_default` | | the later |
+| `rituals` | a ritual card | the later's recipe |
+| `drops`, `decks` | an opponent's pool (`"all"` reaches every opponent another mod names) | edits add up, each on the pool as the mods before left it; a later `"replace": true` empties it first; a fixed deck wins over every weighted edit, the later fixed deck over an earlier |
+| `starter` | | the decks add up |
+| `passwords` | a card's password, or its price (`starchips` and `starchips_percent` are one price); `"all"` reaches every card another mod names | the later |
+| `guardian_stars` | an ordered pair of stars (from `matchups`, `beats`, `mirror`, and `default_bonus` for the disc's cycles); a star's name, icon or palette; `choice`, `default_bonus` | the later; a later `"replace": true` sets every pair the earlier mods set to 0 |
+| `limits`, `chest_overflow` | each key (`life_points` as a number is `life_points.start`, `chest_overflow.limit` is `chest`); a duelist's LP by duelist | the later |
+| `terrain_bonus` | a terrain and a monster type | the later; a later `"replace": true` clears the earlier |
+| `trap_thresholds` | a trap | the later |
+| `duelists/` folder | a duelist `replace` names; a Free Duel `slot` | the later has the duelist; the earlier keeps the slot, the later takes the next free one |
+| `text` | a string id of the listings | the later's words |
+| `font` | | the fonts add up |
+| `title`, `menu` | each key; a menu button by `"<mod id>:<id>"` | the later; the title's `text` lines add up; a mod changing another's button changes it on purpose |
+| code hooks | a game function two mods hook (`host->hook`) | the mod applied last is called first; the others run only if it calls its `original` |
+| events | an event two mods subscribe to (`host->subscribe`) | all are called, by priority; one that handles it stops the rest |
+
+Information, not a warning:
+
+* **They agree.** Two mods setting the same value (the same fusion result,
+  the same threshold, the same words for a string) change nothing between
+  them.
+* **They add up.** Pool edits, `remove`s, starter decks, fonts, title text
+  lines, and two card `replace`s that set different keys.
+* **On purpose.** When the winner lists every other mod of the line in its
+  `after` or `requires`, it is layered over them by design, and the line says
+  so instead of warning. A mod made to go over another should say so with
+  `after` (or `requires`, when it needs it).
+
+An entry a mod's setting switches off (`"setting"`, as on a text file, a
+pack's image or a rule entry) is not counted while it is off, as the setting
+is applied. A code mod's hooks and events are known once its code has run in
+this session. A mod's own `settings` never meet another's: each is kept as
+`mod.<id>.<key>`. Data a code mod changes by writing memory cannot be seen.
+
+The [FM Editor](../tools/pc/fm_editor/README.md)'s Conflicts tab checks the
+mod being edited against the other mods installed in the player's mods folder
+(or a folder chosen there), with the same lines: `tools/pc/fm_editor/overlaps.py`
+is the Python twin of `src/pc/mods/overlap.c`, and both are tested against
+the three mods in `tests/pc/mod_overlaps` (`pc_mods_overlap`, `test_overlaps.py`).
 
 ## Code mods
 

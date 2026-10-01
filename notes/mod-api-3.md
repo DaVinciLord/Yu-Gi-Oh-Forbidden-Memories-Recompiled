@@ -62,9 +62,11 @@ persistence. Missing defaults use zero; integer bounds default to 0–100.
 Use integers in documented units for fractional quantities, e.g. thousandths.
 
 Data replacements run before byte patches. Within either kind, later loaded
-entries win. The manager warns when enabled mods target the same disc file/raw
-starting sector, or when several texture packs may overlap. These are potential
-conflicts, not a claim that arbitrary native code can be analyzed for conflicts.
+entries win. The manager lists everything two enabled mods both change, from
+disc files and texture images to cards, rules, limits and text, and how load
+order settles it ([When mods overlap](modding.md#when-mods-overlap)); for code
+it lists functions two mods hook and events two mods subscribe to, not what
+native code changes by writing memory.
 Data override preparation is atomic per mod: one invalid entry rolls back every
 prepared override from that mod. Warning text on a successfully active mod does
 not make it permanently impossible to re-enable. A mod whose data could not be
