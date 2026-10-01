@@ -102,6 +102,17 @@ nothing when played unless `effect` names the card whose effect it takes
 `equips` in the [gameplay tables](gameplay-tables.md). `model` and `effect`
 work the same on a card that stays on its side.
 
+A card that changes kind (monster, magic, trap, ritual or equip) leaves the
+disc's fusion and equip tables, which describe the card it was: it fuses and
+equips only by the mods' own rules, and no disc recipe makes it. Otherwise the
+CPU would plan with the old card, fusing a monster with what is now a magic
+card or taking a monster off the field for what is now an equip, and lose the
+cards. An equip made from another kind equips nothing until `equips` says
+what. A magic, trap, ritual or equip card has no ATK or DEF, so a monster made
+one loses its own, and `attack` or `defense` on it is noted and left out: the
+CPU ranks the cards in its hand by them whatever their type, and would set it
+face down turn after turn as its best monster.
+
 A replaced piece of Exodia (cards 17 to 21) is an ordinary card: a deck may
 hold three of it, and Exodia can no longer be assembled. `"exodia": true`
 keeps both rules, for a mod that only changes how the pieces look. Nothing of it goes in the save, so the mod can be

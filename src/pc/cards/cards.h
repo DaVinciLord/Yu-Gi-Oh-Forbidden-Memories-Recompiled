@@ -47,6 +47,11 @@ int Cards_ModelId(int id);
 int Cards_EffectId(int id);
 /* The type a card has on the disc, which is what its effect is; -1 past the disc. */
 int Cards_RetailType(int id);
+/* Nonzero for a card a mod's "replace" made another kind of card than its
+ * base is on the disc: a monster made a magic, trap, ritual or equip card, or
+ * one of those made a monster or another of them. The disc's fusions and
+ * equips are of the card it was, so they no longer hold for it (rules.h). */
+int Cards_KindChanged(int id);
 /* Whether the disc has a 3D model for `id` to stand as: a magic, trap, ritual
  * or equip card a mod made a monster has none unless it borrows one. */
 int Cards_HasModel(int id);

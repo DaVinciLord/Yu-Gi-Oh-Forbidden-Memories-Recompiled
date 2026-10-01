@@ -908,6 +908,13 @@ int Cards_RetailType(int id)
     return id >= 1 && id <= CARD_COUNT ? (int)((((const unsigned *)(uintptr_t)RETAIL_STATS)[id - 1] >> 26) & 0x1F) : -1;
 }
 
+/* Monster, magic, trap, ritual or equip: what a card is played as. */
+static int kind(int type) { return type < CARD_TYPE_MAGIC ? 0 : type; }
+int Cards_KindChanged(int id)
+{
+    return Cards_Valid(id) && kind(Cards_Type(id)) != kind(Cards_RetailType(Cards_BaseId(id)));
+}
+
 static int retail_monster(int id)
 {
     return id >= 1 && id <= CARD_COUNT &&
@@ -1116,6 +1123,16 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         } else {
             stats = (stats & ~(0x1Fu << 26)) | ((unsigned)value << 26);
         }
+    }
+    /* Only a monster has ATK and DEF: no magic, trap, ritual or equip card of
+     * the disc has either. A monster replaced as one of those would keep its
+     * own, and the CPU, which ranks its hand by them whatever their type,
+     * would take it for its best monster: it plays it face down every turn,
+     * into the back row, over the last one it set. */
+    if (((stats >> 26) & 0x1F) >= CARD_TYPE_MAGIC && (stats & 0x3FFFFu)) {
+        if (Json_Number(Json_Member(entry, "attack"), 0) > 0 || Json_Number(Json_Member(entry, "defense"), 0) > 0)
+            Mods_Note(mod, "cards[%d]: only a monster has ATK and DEF; \"attack\" and \"defense\" left out", index);
+        stats &= ~0x3FFFFu;
     }
     if (stars && (Json_TypeOf(stars) != JSON_ARRAY || Json_Count(stars) != 2)) {
         Mods_Note(mod, "cards[%d]: \"stars\" is a list of two, [first, second] (none for no star); left out", index);
