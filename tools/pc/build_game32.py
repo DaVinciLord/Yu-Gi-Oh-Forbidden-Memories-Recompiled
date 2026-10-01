@@ -464,13 +464,14 @@ def build_mods(build, release=False):
 
     A mod is its manifest and whatever it ships; if it has C, that becomes
     one object file (tools/pc/build_mod.py), which the game's own loader
-    links in when the mod is applied (src/pc/mods/object_loader.c). The
-    object is built once, in tmp/pc/mod-build, and the same file is copied
-    beside both the Linux and the Windows game: one mod, every system. The
-    folder there is named by build_mod.py's flags: checkouts of other
-    branches share tmp, and an object built with other flags (the branch
-    thunks' flags need a game that lends the thunks) must not pass for up to
-    date in them.
+    links in when the mod is applied (src/pc/mods/object_loader.c). One
+    object serves every system, so the Linux and the Windows game can carry
+    the same file. build_mod.py keeps it in tmp/pc/mod-build/<mod>-<key>,
+    the key a digest of the compiler, the flags and the preprocessed
+    sources: every checkout shares tmp (the worktrees link it), and one
+    reuses an object only when it would build the same one. It is copied
+    beside this game when the copy there differs, and checked against this
+    game's exports either way.
 
     The SDK goes beside the game too, so a release carries what a mod author
     builds against: modapi.h and the game's headers under sdk/include, the C
@@ -486,9 +487,7 @@ def build_mods(build, release=False):
         shutil.rmtree(out_root, ignore_errors=True)
     os.makedirs(out_root, exist_ok=True)
     write_sdk(build)
-    flags = " ".join(build_mod.FLAGS + build_mod.CLANG_FLAGS + build_mod.GCC_FLAGS)
-    mod_build = f"tmp/pc/mod-build/{hashlib.sha256(flags.encode()).hexdigest()[:8]}"
-    built = []
+    mods = []
     for manifest in sorted(glob.glob("mods/*/mod.json")):
         if tracked is not None and manifest not in tracked:
             continue
@@ -502,16 +501,21 @@ def build_mods(build, release=False):
             if path.endswith(".c") or path.endswith(".h") or os.path.isdir(path):
                 continue
             copy_if_newer(path, os.path.join(out_dir, os.path.relpath(path, source_dir)))
-        # Checked against this build's own export table: the other system's
-        # may be older than this build.
-        obj = build_mod.build(source_dir, out_dir=f"{mod_build}/{name}", games=[build], quiet=True)
+        mods.append((name, source_dir, out_dir))
+    # All at once: a mod whose key is not remembered starts the preprocessor,
+    # and a new key the compiler. Checked against this build's own export
+    # table: the other system's may be older than this build. Written where
+    # the manifest's "library" puts it, which may be a subdirectory.
+    with concurrent.futures.ThreadPoolExecutor(max(1, len(mods))) as pool:
+        objects = list(pool.map(lambda mod: build_mod.build(mod[1], out_dir=mod[2], games=[build], quiet=True),
+                                mods))
+    built = []
+    for (name, source_dir, out_dir), obj in zip(mods, objects):
         if not obj:
             built.append(f"{name} (data)")
             continue
         for stale in glob.glob(f"{out_dir}/*.so") + glob.glob(f"{out_dir}/*.dll"):
             os.remove(stale)   # native libraries from before mods were objects
-        # Where the manifest's "library" puts it, which may be a subdirectory.
-        copy_if_newer(obj, os.path.join(out_dir, os.path.relpath(obj, f"{mod_build}/{name}")))
         built.append(name)
     if built:
         print(f"{out_root}: " + ", ".join(built))
