@@ -425,13 +425,6 @@ static int choice(const JsonValue *value, const char *const *choices, int count)
     return (int)Json_Number(value, -1);
 }
 
-/* A guardian star: its number, or its name (stars.h). -1 for neither. */
-static int star_choice(const JsonValue *value)
-{
-    if (!value) return -1;
-    if (Json_TypeOf(value) == JSON_NUMBER) return (int)Json_Number(value, -1);
-    return Stars_Find(Json_String(value, ""));
-}
 
 /* Letters and digits only, lowercased: "Blue-Eyes White Dragon" finds the
  * disc's "Blue-eyes White Dragon". */
@@ -924,7 +917,8 @@ static int retail_monster(int id)
  * monster whose model it takes, and fights without one. A monster made
  * anything else has no effect unless "effect" names a card whose effect it
  * takes. */
-static void replace_model_effect(const char *mod, int index, const JsonValue *entry, int id, unsigned *stats)
+static void replace_model_effect(const char *mod, int index, const JsonValue *entry, int id, unsigned *stats,
+                                 int was_monster, int stars_given)
 {
     const JsonValue *model = Json_Member(entry, "model"), *effect = Json_Member(entry, "effect");
     int type = (int)((*stats >> 26) & 0x1F), value;
@@ -937,8 +931,10 @@ static void replace_model_effect(const char *mod, int index, const JsonValue *en
         }
     }
     /* A card that was no monster has no guardian stars either: unless
-     * "stars" gives some, its model's, or the Sun and the Moon. */
-    if (type < CARD_TYPE_MAGIC && !(*stats & (0xFFu << 18))) {
+     * "stars" gives some, its model's, or the Sun and the Moon. A monster
+     * that "stars" leaves with none, or that was one before this entry
+     * (an earlier mod's no-star card), keeps none (stars.h). */
+    if (type < CARD_TYPE_MAGIC && !was_monster && !stars_given && !(*stats & (0xFFu << 18))) {
         *stats |= retail_monster(Cards_ModelId(id))
                       ? ((const unsigned *)(uintptr_t)RETAIL_STATS)[Cards_ModelId(id) - 1] & (0xFFu << 18)
                       : (8u << 22) | (9u << 18);
@@ -1044,6 +1040,7 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     int base = 0, count, n, value, has_password;
     unsigned stats, password = CARD_PASSWORD_NONE, entry_fusion_groups = 0;
     int entry_has_fusion_groups = 0;
+    int was_monster, stars_given = 0;
     unsigned char level_attr, frame;
     if (Json_TypeOf(entry) != JSON_OBJECT) {
         Mods_Note(mod, "cards[%d] is not an object", index);
@@ -1080,6 +1077,7 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     }
     /* What the entry leaves out is the base's. */
     stats = (unsigned)gDuel_adwCardStats[base - 1];
+    was_monster = (int)((stats >> 26) & 0x1F) < CARD_TYPE_MAGIC;
     level_attr = gDuel_abCardLevelAttr[base];
     /* A card's own ATK and DEF are nine bits of tens in its stats word
      * (gDuel_adwCardStats): 0 to 5110 in steps of 10. A mod's "limits" raise
@@ -1116,24 +1114,29 @@ static void add_entry(const char *mod, const char *directory, int index, const J
             stats = (stats & ~(0x1Fu << 26)) | ((unsigned)value << 26);
         }
     }
-    if (Json_Count(stars) == 2) {
+    if (stars && (Json_TypeOf(stars) != JSON_ARRAY || Json_Count(stars) != 2)) {
+        Mods_Note(mod, "cards[%d]: \"stars\" is a list of two, [first, second] (none for no star); left out", index);
+    } else if (stars) {
         /* A number, the disc's names, or a name a mod's "guardian_stars"
          * gives (stars.h): up to 15, what the card's 4-bit fields hold. */
-        int first = star_choice(Json_At(stars, 0)), second = star_choice(Json_At(stars, 1));
-        /* No first star is no stars at all: the duel reads the first
-           unless the second is chosen, and a card with no second never
-           chooses it (stars.h). */
-        if (first == 0 && second > 0) {
-            Mods_Note(mod, "cards[%d]: \"stars\": the first star cannot be none when the second is not; left out",
-                      index);
-            first = second = -2;
-        }
+        int first = Stars_Value(Json_At(stars, 0)), second = Stars_Value(Json_At(stars, 1));
+        int kept_first, kept_second;
+        stars_given = first >= 0 && second >= 0;
         if (first >= 0) stats = (stats & ~(0xFu << 22)) | ((unsigned)clamp(first, 0, STARS_MAX) << 22);
         if (second >= 0) stats = (stats & ~(0xFu << 18)) | ((unsigned)clamp(second, 0, STARS_MAX) << 18);
         if (first > STARS_MAX || second > STARS_MAX)
             Mods_Note(mod, "cards[%d]: a card holds a guardian star in 4 bits: 15 at most", index);
         if (first == -1 || second == -1)
             Mods_Note(mod, "cards[%d]: \"stars\": not a guardian star; left out", index);
+        /* None is 0, null, "none" or "(none)". The duel reads the first star
+           unless the second is chosen, and a card with no second never
+           chooses it: so [none, X] is the one-star card [X, none], and
+           [none, none] a monster with no star at all (stars.h). Of the
+           pair as it now stands, with the base's for a star left out. */
+        kept_first = (int)((stats >> 22) & 0xF);
+        kept_second = (int)((stats >> 18) & 0xF);
+        if (Stars_Normalize(&kept_first, &kept_second))
+            stats = (stats & ~(0xFFu << 18)) | ((unsigned)kept_first << 22) | ((unsigned)kept_second << 18);
     }
     if ((value = (int)Json_Number(Json_Member(entry, "level"), -1)) >= 0) {
         level_attr = (unsigned char)((level_attr & 0xF0) | clamp(value, 0, 12));
@@ -1236,7 +1239,7 @@ static void add_entry(const char *mod, const char *directory, int index, const J
                 not_exodia[id - EXODIA_FIRST_CARD_ID] = !Json_Bool(Json_Member(entry, "exodia"), 0);
             }
             replaced[id] = mod;
-            replace_model_effect(mod, index, entry, id, &stats);
+            replace_model_effect(mod, index, entry, id, &stats, was_monster, stars_given);
             goto own;
         }
         if (!*key) { snprintf(fallback, sizeof(fallback), "entry-%d", index); key = fallback; }
@@ -1261,6 +1264,8 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         fusion_groups[id] = entry_fusion_groups;
         has_fusion_groups[id] = (unsigned char)entry_has_fusion_groups;
         gDuel_adwCardStats[id - 1] = (int)stats;
+        /* A monster with no star: star 0 is neutral from now on (stars.h). */
+        if (((stats >> 26) & 0x1F) < CARD_TYPE_MAGIC && !(stats & (0xFu << 22))) Stars_NoteNoStar();
         gDuel_abCardLevelAttr[id] = level_attr;
         frames[id] = frame;
         names[id] = name && *name ? encode_name(mod, name, n, id) : NULL;

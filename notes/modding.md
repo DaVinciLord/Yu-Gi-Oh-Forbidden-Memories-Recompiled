@@ -792,9 +792,25 @@ the stars' colours. A card names them in its `stars` as it names the disc's
 
 One star. A card whose second star is none (`"stars": ["Fire", 0]`) or the
 same as its first has only that one: there is no choice when it is summoned,
-even with `ask`, and the card view shows one star. No card of the disc is
-either, so this changes nothing without a mod; a first star of none with a
-second is refused.
+even with `ask`, and the card view shows one star. A first star of none with
+a second (`[0, "Sun"]`) is the same one-star card, `["Sun", 0]`: the duel
+reads the first star unless the second is chosen, so the game puts it first.
+None is `0`, `null`, `"none"` or the FM Editor's `"(none)"` (a star a mod
+names "None" is that star instead).
+
+No star. A monster with both none (`"stars": [0, 0]`) has no star at all:
+no SELECT A GUARDIAN STAR box at a summon, no star bonus given or taken (it
+meets every star at 0 both ways, the AI's sums too), and nothing where a star
+would be drawn: the card view, the field bar and the lists show no icon and
+no name, and its battles have no star effect. This is decided for star 0
+only once a mod has made such a monster, since the disc's arithmetic gives
+star 0 a bonus against some stars (+500 against Mars, -500 against Pluto)
+and nothing of the disc has it on a monster. A `replace` entry that turns a
+magic, trap, ritual or equip card into a monster and says no `stars` still
+takes its model's (or the Sun and the Moon); one that says `[0, 0]` has none.
+No card of the disc is any of these, so without a mod nothing changes. A
+`stars` that is not a list of two, or names no star, is noted in the Mods
+window and left out, and the card keeps the stars it had.
 
 The on-screen modifier climbs to the pair's own value, by 16 an update as on
 the disc up to 512 and faster past it, so it never takes longer than the

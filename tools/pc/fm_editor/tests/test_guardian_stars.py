@@ -136,7 +136,9 @@ class ManifestTest(unittest.TestCase):
                                                 {"replace": 3, "stars": [0, "Moon"]}]})
         self.assertEqual((p.cards[1].star1, p.cards[1].star2), (11, 8))
         self.assertEqual((p.cards[2].star1, p.cards[2].star2), (14, 0))
-        self.assertTrue(any("first star cannot be none" in m for m in messages), messages)
+        # [none, Moon] is kept as written; the game reads it as [Moon, none].
+        self.assertEqual((p.cards[3].star1, p.cards[3].star2), (0, 9))
+        self.assertFalse([m for m in messages if "stars" in m], messages)
         built = manifest.build(p)
         self.assertEqual(built["guardian_stars"], {"stars": [{"id": 11, "name": "Fire"}]})
         again = project()
@@ -166,6 +168,50 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(choices[1], "Ares (Mars)")
         self.assertEqual(choices[11], "11 Star 11")
         self.assertEqual(choices[12], "12 Water")
+
+
+class NoStarTest(unittest.TestCase):
+    """A monster with no guardian star (notes/modding.md, "No star"): what
+    the editor writes for (none) is what the game reads (stars.c
+    Stars_Value and Stars_Normalize), and it comes back the same."""
+
+    def test_card_star(self):
+        for value, want in ((0, 0), (None, 0), ("none", 0), ("(none)", 0), ("(None)", 0), ("Mars", 1),
+                            ("0", 0), (3, 3), (20, 20), (-2, -1), ("Nothing", -1), ("", -1), (True, -1), ([1], -1)):
+            self.assertEqual(gs.card_star(value), want, value)
+        # A star the mod names "None" is that star, as in the game.
+        self.assertEqual(gs.card_star("(none)", {"stars": [{"id": 11, "name": "None"}]}), 11)
+        self.assertEqual(gs.normalized(0, 8), (8, 0))
+        self.assertEqual(gs.normalized(0, 0), (0, 0))
+        self.assertEqual(gs.normalized(5, 6), (5, 6))
+
+    def test_no_star_round_trip(self):
+        p = project()
+        monster = next(cid for cid in sorted(p.cards) if p.cards[cid].is_monster())
+        p.cards[monster] = p.cards[monster].copy(star1=0, star2=0)
+        built = manifest.build(p)
+        entry = next(e for e in built["cards"] if e.get("replace") == monster)
+        self.assertEqual(entry["stars"], [0, 0])
+        again = project()
+        messages = manifest.apply(again, json.loads(json.dumps(built)))
+        self.assertEqual((again.cards[monster].star1, again.cards[monster].star2), (0, 0))
+        self.assertFalse([m for m in messages if "stars" in m], messages)
+        self.assertEqual(manifest.build(again)["cards"], built["cards"])
+        # No warning: the game takes a monster with no star.
+        cards = [i.message for i in validate.validate(again) if i.area == "Cards" and i.target == monster]
+        self.assertFalse([m for m in cards if "star" in m], cards)
+
+    def test_hand_written_none(self):
+        p = project()
+        messages = manifest.apply(p, {"cards": [{"replace": 1, "stars": [None, "(none)"]},
+                                                {"replace": 2, "stars": ["none", "Sun"]},
+                                                {"replace": 3, "stars": ["Mars"]},
+                                                {"replace": 4, "stars": "Mars"}]})
+        self.assertEqual((p.cards[1].star1, p.cards[1].star2), (0, 0))
+        self.assertEqual((p.cards[2].star1, p.cards[2].star2), (0, 8))
+        self.assertEqual(sum("a list of two" in m for m in messages), 2, messages)
+        cards = [i.message for i in validate.validate(p) if i.area == "Cards" and i.target == 2]
+        self.assertTrue(any("the one star Sun" in m for m in cards), cards)
 
 
 class ReviewTest(unittest.TestCase):
@@ -217,9 +263,13 @@ class RulesTest(unittest.TestCase):
         spec = star_rules.RuleSpec(filter=CardFilter(cards=str(monsters[0])), which="second", source="star",
                                    mapping={None: 0})
         self.assertEqual(star_rules.plan(p, spec).changes[0][2][1], 0)
-        # A first star of none is refused; an empty filter is too.
+        # A first star of none leaves the second as the one star, as the game
+        # reads it; both none, no star. An empty filter is refused.
+        card = p.cards[monsters[0]]
         spec.which = "first"
-        self.assertFalse(star_rules.plan(p, spec).changes)
+        self.assertEqual(star_rules.plan(p, spec).changes[0][2], (card.star2, 0))
+        spec.which = "both"
+        self.assertEqual(star_rules.plan(p, spec).changes[0][2], (0, 0))
         self.assertTrue(star_rules.plan(p, star_rules.RuleSpec(mapping={None: 3}, source="star")).errors)
 
 
