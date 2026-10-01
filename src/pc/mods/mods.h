@@ -69,6 +69,11 @@ int Mods_Setting(const char *id, const char *key, int fallback);
  * it has one; or it names no file in the mod (noted). A setting the mod does
  * not declare is noted and the file used. `name` is the file as written. */
 int Mods_File(int mod, const char *key, int index, char *path, size_t size, const char **name);
+/* Whether one entry of a mod's rule list ("fusions", "equips", "rituals";
+ * src/pc/cards/tables.c) is used: as a Mods_File entry, its "setting" (and
+ * "value") may leave it out; a setting the mod does not declare is noted
+ * and the entry used. `where` names the entry ("fusions[3]"). */
+int Mods_EntryUsed(const char *id, const struct JsonValue *entry, const char *where);
 /* Say why a mod is not quite what it asked for: on stderr and beside it in
  * the Mods window. */
 void Mods_Note(const char *id, const char *format, ...);

@@ -322,6 +322,21 @@ class ManifestTest(unittest.TestCase):
         for e in p.equip_cards():
             self.assertEqual(again.equips.get(e, again.equip_baseline(e)), want[e], e)
 
+    def test_rules_switched_by_a_setting_are_kept(self):
+        # The editor shows the disc's table, not a setting's: a rule with
+        # "setting" is written back as it came, and does not change the table.
+        p = Project(self.retail)
+        fusion = {"with": [1, 2], "result": 5, "setting": "thunder"}
+        equip = {"card": 652, "add": ["Dragon"], "setting": "thunder"}
+        ritual = {"card": 665, "tributes": [1, 2, 3], "result": 4, "setting": "pick", "value": 2}
+        data = {"id": "s", "settings": [{"key": "thunder", "type": "bool", "default": 1}],
+                "fusions": [fusion], "equips": [equip], "rituals": [ritual]}
+        messages = manifest.apply(p, data)
+        self.assertEqual(p.fusions.get((1, 2)), self.retail.fusions.get((1, 2)))
+        self.assertEqual(sum("switched by setting" in m for m in messages), 3)
+        built = json.loads(manifest.dumps(manifest.build(p)))
+        self.assertEqual((built["fusions"], built["equips"], built["rituals"]), ([fusion], [equip], [ritual]))
+
     def test_forbidden_copy_fusion(self):
         p = Project(self.retail)
         p.info.id = "t"

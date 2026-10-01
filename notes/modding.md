@@ -271,7 +271,8 @@ setting per part in `mod.json` and give each entry of a part its key:
 ```json
 "settings": [
     {"key": "card_art", "label": "Card art", "type": "bool", "default": 1},
-    {"key": "portraits", "label": "Free Duel portraits", "type": "bool", "default": 1}
+    {"key": "portraits", "label": "Free Duel portraits", "type": "bool", "default": 1,
+     "description": "The opponents' pictures on the Free Duel screen."}
 ]
 ```
 
@@ -722,7 +723,9 @@ such as The Wicked Gods changes in its code; with them it plays close to its
 own rules without C. The Wicked Gods also makes a monster's attribute count on
 a terrain and lets monsters be equips: those need a code mod or the port
 itself. Several mods' edits of the same opponent add up rather than
-replace each other. [Gameplay tables](gameplay-tables.md) has every key, the
+replace each other. A fusion, equip or ritual entry with `"setting"` is
+read only while that setting of the mod is on, so the player can switch
+groups of rules in the Mods window. [Gameplay tables](gameplay-tables.md) has every key, the
 opponents' names, and how the rules combine. Like cards, they need a restart.
 
 The [FM Editor](../tools/pc/fm_editor/README.md) (`python tools/pc/fm_editor`)

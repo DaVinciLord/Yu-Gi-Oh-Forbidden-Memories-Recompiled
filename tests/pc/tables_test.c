@@ -66,6 +66,17 @@ void Mods_Note(const char *id, const char *format, ...)
     va_end(arguments);
     notes++;
 }
+/* Mod "s" declares "on" (1) and "pick" (2); every other mod nothing. */
+int Mods_EntryUsed(const char *id, const JsonValue *entry, const char *where)
+{
+    const char *setting = Json_String(Json_Member(entry, "setting"), NULL);
+    const JsonValue *only = Json_Member(entry, "value");
+    int value;
+    (void)where;
+    if (!setting || strcmp(id, "s")) return 1;
+    value = !strcmp(setting, "on") ? 1 : !strcmp(setting, "pick") ? 2 : 0;
+    return only ? value == Json_Number(only, -1) : value != 0;
+}
 int Log_Wanted(LogChannel channel) { (void)channel; return 1; }
 void Log_Printf(LogChannel channel, const char *format, ...)
 {
@@ -84,7 +95,7 @@ const JsonValue *Mods_Manifest(int mod) { (void)mod; return NULL; }
 /* The duelist list is duelists_stubs.c: no duelist mod, the disc's forty,
  * which is what these cases are written against. */
 
-static JsonDocument *documents[64];
+static JsonDocument *documents[80];
 static int document_count;
 static void add(const char *mod, const char *text)
 {
@@ -149,6 +160,16 @@ int main(void)
     assert(fusion(10, 12) == -1);          /* no rule: the disc decides */
     assert(fusion(CARD_COUNT + 10, 11) == 12);
     assert(Tables_FilterFusion(50) == 0 && Tables_FilterFusion(51) == 51);
+
+    /* An entry the mod's settings leave out is not read: "setting" off,
+     * or a "value" the setting is not. */
+    add("s", "{\"fusions\": ["
+             "{\"with\": [20, 21], \"result\": 70, \"setting\": \"on\"},"
+             "{\"with\": [20, 22], \"result\": 71, \"setting\": \"off\"},"
+             "{\"with\": [20, 23], \"result\": 72, \"setting\": \"pick\", \"value\": 2},"
+             "{\"with\": [20, 24], \"result\": 73, \"setting\": \"pick\", \"value\": 1}]}");
+    assert(fusion(20, 21) == 70 && fusion(20, 22) == -1);
+    assert(fusion(20, 23) == 72 && fusion(20, 24) == -1);
 
     /* A rule naming a copy is surer than its base's: both cards as they
      * are, then a copy with its partner's base (the later of two such),
