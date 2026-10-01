@@ -661,7 +661,8 @@ class _Check:
             overlap.mods = [self.mods[m].id for m in sorted({c.mod for c in claims})]
             overlap.text = self.text(overlap)
             found.append(overlap)
-        found.sort(key=lambda o: (o.kind, -o.severity, o.label))
+        # Within a kind, the warnings first, then as the earliest mod's manifest has them.
+        found.sort(key=lambda o: (o.kind, -o.severity, o.claims[0].seq))
         return found
 
     def widen(self):

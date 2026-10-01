@@ -1182,12 +1182,16 @@ static void decide(ModsOverlaps *x, Group *g)
     }
 }
 
-/* Within a kind, the warnings first, each in the order of its key. */
+/* Within a kind, the warnings first, then as the earliest mod's manifest
+ * has them (its claims come first in a group). */
+static const Claim *sorting;
 static int by_severity(const void *left, const void *right)
 {
     const Group *a = left, *b = right;
+    int sa = sorting[a->first].seq, sb = sorting[b->first].seq;
     if (a->kind != b->kind) return a->kind < b->kind ? -1 : 1;
     if (a->severity != b->severity) return a->severity > b->severity ? -1 : 1;
+    if (sa != sb) return sa < sb ? -1 : 1;
     return (a->first > b->first) - (a->first < b->first);
 }
 
@@ -1219,6 +1223,7 @@ static void group(ModsOverlaps *x)
         }
         start = i;
     }
+    sorting = x->claims;
     if (x->group_count) qsort(x->groups, (size_t)x->group_count, sizeof(*x->groups), by_severity);
 }
 
