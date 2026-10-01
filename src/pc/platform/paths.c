@@ -102,6 +102,36 @@ static int portable(char *out, size_t size)
     return 1;
 }
 
+/* Whether a folder holds the player's saves: a save slot, or the memory
+ * card image the builds before save slots kept. */
+static int has_saves(const char *dir)
+{
+    char path[PATH_MAX_];
+    int slot;
+    for (slot = 1; slot <= 10; slot++) { /* SAVE_SLOT_COUNT */
+        snprintf(path, sizeof(path), "%s/saves/slot%02d.sav", dir, slot);
+        if (!access(path, F_OK)) return 1;
+    }
+    snprintf(path, sizeof(path), "%s/memcard1.mcd", dir);
+    if (!access(path, F_OK)) return 1;
+    snprintf(path, sizeof(path), "%s/memcard2.mcd", dir);
+    return !access(path, F_OK);
+}
+
+/* saves/ beside the game, where every build has kept the player's files when
+ * it could not make its own folder (Paths_UserDir), when it holds saves:
+ * the working directory's, as those builds named it, else the program
+ * directory's. NULL when neither does. */
+static const char *legacy_saves(void)
+{
+    static char program[PATH_MAX_];
+    if (has_saves("saves")) return "saves";
+    if (snprintf(program, sizeof(program), "%s/saves", Paths_ProgramDir()) < (int)sizeof(program) &&
+        has_saves(program))
+        return program;
+    return NULL;
+}
+
 const char *Paths_UserDir(void)
 {
     const char *named = getenv("MEMORIES_USER_DIR");
@@ -140,6 +170,18 @@ const char *Paths_UserDir(void)
             /* Bring the old folder along under the new name, once. */
             if (access(user_dir, F_OK) && !access(old, F_OK) && !rename(old, user_dir))
                 fprintf(stderr, "memories-pc: moved %s to %s\n", old, user_dir);
+            /* A player whose saves went beside the game (an antivirus or
+             * Controlled folder access kept this folder from being made)
+             * goes on finding them there, though the folder is made later
+             * or by something else: a folder without saves never wins over
+             * one with them. */
+            if (!has_saves(user_dir)) {
+                const char *legacy = legacy_saves();
+                if (legacy) {
+                    fprintf(stderr, "memories-pc: no saves in %s; using %s, which has them\n", user_dir, legacy);
+                    snprintf(user_dir, sizeof(user_dir), "%s", legacy);
+                }
+            }
         } else {
             snprintf(user_dir, sizeof(user_dir), "saves");
         }

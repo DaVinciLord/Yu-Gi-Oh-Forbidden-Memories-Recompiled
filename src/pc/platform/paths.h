@@ -11,7 +11,9 @@
  *    Documents\My Games\YFM Re-Decomp; elsewhere $XDG_DATA_HOME/YFM Re-Decomp
  *    (~/.local/share/YFM Re-Decomp). A file named portable.txt in the
  *    program directory makes it user/ there instead (portable mode).
- *    MEMORIES_USER_DIR names another and wins over both.
+ *    MEMORIES_USER_DIR names another and wins over both. When that folder
+ *    has no saves but saves/ beside the game does (where the port keeps
+ *    everything when it cannot make the folder), that is used instead.
  */
 #include <stddef.h>
 
