@@ -1,6 +1,7 @@
 /* View > Card passwords (passwords.h). */
 #include "passwords.h"
 #include "cards.h"
+#include "stars.h"
 #include "tables.h"
 #include "pc/platform/settings.h"
 #include "pc/debug/log.h"
@@ -117,7 +118,10 @@ static int text_card = -1;
 
 static int layout_of(int card)
 {
-    return ((gDuel_adwCardStats[card - 1] >> CARD_STAT_TYPE_SHIFT) & CARD_STAT_TYPE_MASK) >= CARD_TYPE_MAGIC
+    /* As the viewer chose it: a monster a mod gave no star has the other
+     * layout, with no GUARDIAN STAR heading (stars.h). */
+    return ((gDuel_adwCardStats[card - 1] >> CARD_STAT_TYPE_SHIFT) & CARD_STAT_TYPE_MASK) >= CARD_TYPE_MAGIC ||
+                   Stars_NoStarCard(card)
                ? LAYOUT_OTHER
                : LAYOUT_MONSTER;
 }

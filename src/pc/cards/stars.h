@@ -68,10 +68,32 @@ int Stars_ChoiceMode(void);
 int Stars_SummonChoice(int first, int second, const int *enemy, int count);
 /* Whether a card with these stars has only one: no second, or the same. */
 int Stars_Single(int first, int second);
+
+/* No star. A card's "stars" may say none (0, null, "none" or "(none)"):
+ * [none, none] is a monster with no star at all, [none, X] is read as
+ * [X, none], a monster with the one star X. No card of the disc is either.
+ * Once a mod has made a monster with no star (cards.c calls
+ * Stars_NoteNoStar), star 0 meets every star at 0 both ways, where the
+ * disc's arithmetic gives 0 against Mars +500 and against Pluto -500; the
+ * lists and the field bar draw no icon and no name for it, and the card
+ * view has the magic cards' layout (Stars_NoStarCard). Without such a card
+ * nothing here changes anything. */
+/* A star as a card's "stars" gives it: its number (0 is none, up to 15 and
+ * past it, which the caller says is too many), a name Stars_Find knows, or
+ * none; -1 for anything else. */
+int Stars_Value(const struct JsonValue *value);
+/* [none, X] to [X, none]: 1 when it swapped. */
+int Stars_Normalize(int *first, int *second);
+void Stars_NoteNoStar(void);
+int Stars_NoStarUsed(void);
 /* The same two for card `card_id` summoned now by the side whose turn it
  * is, against the duel's records (stars_duel.c). */
 int Stars_PickForCard(int card_id);
 int Stars_CardSingle(int card_id);
+/* Whether card `card_id` is a monster a mod gave no star (0 until a mod has
+ * made one, Stars_NoStarUsed): the card views lay it out as a magic card's,
+ * with no GUARDIAN STAR heading over nothing (stars_duel.c). */
+int Stars_NoStarCard(int card_id);
 
 /* How many stars there are: 10, or the highest a mod declares. */
 int Stars_Count(void);

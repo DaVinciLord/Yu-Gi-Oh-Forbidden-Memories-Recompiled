@@ -236,6 +236,81 @@ int main(void)
         Json_Free(document);
     }
 
+    /* No star: a card's "stars" may say none, [none, X] is [X, none], and
+       once a mod has a monster with no star, star 0 is neutral both ways.
+       Before that, star 0 is the disc's (the golden tables' row 0). */
+    {
+        const JsonValue *value;
+        int first, second, a, d, bonus;
+        static const int want[] = {0, 0, 0, 0, 1, -1, 3, -1, 20, -1, 0};
+        size_t i = 0;
+        document = Json_Parse("[0, null, \"none\", \"(None)\", \"Mars\", \"Nothing\", 3, -2, 20, true, \"0\"]", NULL, 0);
+        Stars_Clear();
+        for (value = Json_At(Json_Root(document), 0); value; value = Json_Next(value), i++) {
+            if (Stars_Value(value) != want[i]) {
+                fprintf(stderr, "Stars_Value #%d: %d, not %d\n", (int)i, Stars_Value(value), want[i]);
+                assert(0);
+            }
+        }
+        assert(i == sizeof(want) / sizeof(want[0]) && Stars_Value(NULL) == -1);
+        Json_Free(document);
+        /* A star a mod names "None" is that star. */
+        document = Json_Parse("{\"guardian_stars\": {\"stars\": [{\"id\": 11, \"name\": \"None\"}]}}", NULL, 0);
+        Stars_Add("named", Json_Root(document));
+        {
+            JsonDocument *text = Json_Parse("\"(none)\"", NULL, 0);
+            assert(Stars_Value(Json_Root(text)) == 11);
+            Json_Free(text);
+        }
+        Json_Free(document);
+
+        first = 0, second = 8;
+        assert(Stars_Normalize(&first, &second) && first == 8 && second == 0);
+        first = 0, second = 0;
+        assert(!Stars_Normalize(&first, &second) && first == 0 && second == 0);
+        first = 5, second = 0;
+        assert(!Stars_Normalize(&first, &second) && first == 5 && second == 0);
+        first = 5, second = 6;
+        assert(!Stars_Normalize(&first, &second) && first == 5 && second == 6);
+        assert(Stars_Single(0, 0));   /* no box at a summon */
+
+        /* The flag off: star 0 is the disc's, untouched. */
+        Stars_Clear();
+        assert(!Stars_NoStarUsed() && !Stars_Matchup(0, 1, &bonus));
+        assert(Duel_CalcGuardianStarMatchup(0, 1) == 500 && Duel_CalcGuardianStarMatchup(0, 5) == -500);
+        /* On: 0 against anything and anything against 0 is 0; the rest as
+           before, a mod's table included. */
+        Stars_NoteNoStar();
+        assert(Stars_NoStarUsed());
+        for (a = 0; a <= STARS_MAX; a++) {
+            assert(Duel_CalcGuardianStarMatchup(0, a) == 0 && Duel_CalcGuardianStarMatchup(a, 0) == 0);
+            assert(Stars_Matchup(0, a, &bonus) && bonus == 0 && Stars_Bonus(a, 0) == 0);
+            for (d = 1; a && d <= STARS_MAX; d++) {
+                assert(Duel_CalcGuardianStarMatchup(a, d) == Stars_RetailMatchup(a, d));
+            }
+        }
+        document = load("replace.json");
+        Stars_Add("replace", Json_Root(document));
+        assert(Stars_NoStarUsed() && Duel_CalcGuardianStarMatchup(0, 1) == 0);
+        Json_Free(document);
+        document = load("bonus.json");
+        Stars_Clear();
+        Stars_Add("bonus", Json_Root(document));
+        Stars_NoteNoStar();
+        assert(Duel_CalcGuardianStarMatchup(1, 2) == 1500 && Duel_CalcGuardianStarMatchup(0, 1) == 0 &&
+               Duel_CalcGuardianStarMatchup(1, 0) == 0);
+        {
+            /* "best" against a face-up monster with no star: both stars
+               score 0, so the first. */
+            int enemy[1] = {0};
+            JsonDocument *best = Json_Parse("{\"guardian_stars\": {\"choice\": \"best\"}}", NULL, 0);
+            Stars_Add("c", Json_Root(best));
+            assert(Stars_SummonChoice(4, 2, enemy, 1) == 0);
+            Json_Free(best);
+        }
+        Json_Free(document);
+    }
+
     puts("stars: ok");
     return 0;
 }

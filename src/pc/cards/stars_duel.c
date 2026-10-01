@@ -41,3 +41,12 @@ int Stars_CardSingle(int card_id)
     stars_of(card_id, &first, &second);
     return Stars_Single(first, second);
 }
+
+int Stars_NoStarCard(int card_id)
+{
+    unsigned stats;
+    if (!Stars_NoStarUsed() || card_id < 1) return 0;
+    stats = (unsigned)gDuel_adwCardStats[card_id - 1];
+    return (int)((stats >> CARD_STAT_TYPE_SHIFT) & CARD_STAT_TYPE_MASK) < CARD_TYPE_MAGIC &&
+           !((stats >> CARD_STAT_GUARDIAN_STAR_1_SHIFT) & CARD_STAT_GUARDIAN_STAR_MASK);
+}

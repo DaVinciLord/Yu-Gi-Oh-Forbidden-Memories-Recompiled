@@ -43,6 +43,7 @@
 #include "main_mode_state.h"
 #ifdef MEMORIES_PC
 #include "pc/cards/card_browse.h"
+#include "pc/cards/stars.h"
 #endif
 
 #define DISPLAY_OBJECT_POSITION_VIEW(object) \
@@ -118,6 +119,13 @@ void DuelEffect_UpdateCardViewerState(void)
                      CARD_STAT_TYPE_MASK) >= CARD_TYPE_MAGIC) {
                     kind = 4;
                 }
+#ifdef MEMORIES_PC
+                /* A monster a mod gave no star: the magic cards' layout,
+                   not a GUARDIAN STAR heading over nothing (stars.h). */
+                if (Stars_NoStarCard((s16)id)) {
+                    kind = 4;
+                }
+#endif
                 box = TextBox_Create(i, kind, 0x148, 0xE, 0xA8, 0xC0);
                 box->field_53 = 1;
                 box->field_54 = 0;

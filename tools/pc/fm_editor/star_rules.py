@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from . import guardian_stars
 from .bulk_fusions import CardFilter
 
 SOURCES = ("attribute", "type", "star")   # what picks the star: the card's attribute, its type, or none
@@ -73,12 +74,12 @@ def plan(project, spec: RuleSpec, count: int = 15) -> Plan:
             continue
         first, second = card.star1, card.star2
         if spec.which in ("first", "both"):
-            if star == 0:
-                out.skipped += 1       # a monster's first star is never none
-                continue
             first = star
         if spec.which in ("second", "both"):
             second = star
+        # As the game has them (stars.c Stars_Normalize): a first star of
+        # none leaves the second as the card's one star; both none, no star.
+        first, second = guardian_stars.normalized(first, second)
         if (first, second) != (card.star1, card.star2):
             out.changes.append((cid, (card.star1, card.star2), (first, second)))
     return out
