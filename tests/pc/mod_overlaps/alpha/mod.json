@@ -77,6 +77,15 @@
                 "Dragon"
             ],
             "bonus": 300
+        },
+        {
+            "card": "Megamorph",
+            "remove": [
+                "Blue-eyes White Dragon"
+            ],
+            "bonus_if": {
+                "Dragon": 900
+            }
         }
     ],
     "rituals": [
@@ -160,13 +169,27 @@
             {
                 "text": "Alpha"
             }
-        ]
+        ],
+        "entries": {
+            "load": {
+                "hide": true
+            }
+        }
     },
     "menu": {
         "buttons": [
             {
                 "id": "credits",
                 "label": "CREDITS"
+            }
+        ]
+    },
+    "pack_shop": {
+        "password": "both",
+        "shops": [
+            {
+                "id": "main",
+                "name": "CARD SHOP"
             }
         ]
     }

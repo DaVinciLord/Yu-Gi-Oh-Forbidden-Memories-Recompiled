@@ -1,8 +1,9 @@
 /* What two or more mods change in common (src/pc/mods/overlap.c), against
  * the mods in tests/pc/mod_overlaps: every overlap they make, one line each
- * as "kind|severity|outcome|mods|label", sorted, must be expected.txt there.
- * The FM Editor's check (tools/pc/fm_editor/overlaps.py) reads the same
- * fixture and must find the same lines. Then the cases a manifest cannot
+ * as "kind|severity|outcome|mods|label", a tab and the line the Mods window
+ * shows, in the engine's order, must be expected.txt there. The FM Editor's
+ * check (tools/pc/fm_editor/overlaps.py) reads the same fixture and must
+ * find the same lines in the same order. Then the cases a manifest cannot
  * show: code hooks and events, one mod, and many thousands of rules. */
 #include "pc/mods/json.h"
 #include "pc/mods/overlap.h"
@@ -52,6 +53,20 @@ static int duelist(const char *text, void *context)
     return -1;
 }
 
+/* The fixture's "types": a card's monster type and attribute. */
+static int card_info(int id, int *base, int *type, int *attribute, void *context)
+{
+    char key[16];
+    const JsonValue *info;
+    (void)context;
+    snprintf(key, sizeof(key), "%d", id);
+    *base = id;
+    if (!(info = Json_Member(Json_Member(fixture, "types"), key))) return 0;
+    *type = (int)Json_Number(Json_At(info, 0), -1);
+    *attribute = (int)Json_Number(Json_At(info, 1), -1);
+    return 1;
+}
+
 /* A mod's setting as a fresh install has it: its declared default. */
 static ModsOverlapMod list[8];
 static int setting(int mod, const char *key, void *context)
@@ -83,8 +98,6 @@ static int event(int index, int *mod, uint64_t *what, char *label, size_t size, 
     return 1;
 }
 
-static int by_text(const void *a, const void *b) { return strcmp(*(char *const *)a, *(char *const *)b); }
-
 static char *read_all(const char *path)
 {
     FILE *f = fopen(path, "rb");
@@ -102,7 +115,7 @@ static char *read_all(const char *path)
 
 int main(void)
 {
-    char path[1024], error[256], line[2048], label[512], mods[512];
+    char path[1024], error[256], line[4096], label[512], mods[512], text[1500];
     JsonDocument *documents[8], *setup;
     ModsOverlapSource source = {0};
     ModsOverlaps *found;
@@ -126,6 +139,7 @@ int main(void)
     }
     source.card = card;
     source.card_name = card_name;
+    source.card_info = card_info;
     source.duelist = duelist;
     source.setting = setting;
     found = Mods_OverlapCompute(list, count, &source);
@@ -135,14 +149,13 @@ int main(void)
     for (int i = 0; i < Mods_OverlapCount(found); i++) {
         Mods_OverlapLabel(found, i, label, sizeof(label));
         Mods_OverlapMods(found, i, mods, sizeof(mods));
-        snprintf(line, sizeof(line), "%s|%s|%s|%s|%s", Mods_OverlapKindName(Mods_OverlapKind(found, i)),
-                 Mods_OverlapSeverity(found, i) ? "warning" : "info", Mods_OverlapOutcome(found, i), mods, label);
+        Mods_OverlapText(found, i, text, sizeof(text));
+        snprintf(line, sizeof(line), "%s|%s|%s|%s|%s\t%s", Mods_OverlapKindName(Mods_OverlapKind(found, i)),
+                 Mods_OverlapSeverity(found, i) ? "warning" : "info", Mods_OverlapOutcome(found, i), mods, label, text);
         assert(n < 512);
         lines[n++] = strdup(line);
-        Mods_OverlapText(found, i, line, sizeof(line));
-        printf("  %s\n", line);
+        printf("  %s\n", text);
     }
-    qsort(lines, (size_t)n, sizeof(*lines), by_text);
     snprintf(path, sizeof(path), "%s/tests/pc/mod_overlaps/expected.txt", MEMORIES_SOURCE_DIR);
     expected = read_all(path);
     at = expected;
@@ -185,7 +198,7 @@ int main(void)
             if (Mods_OverlapKind(found, i) == MODS_OVERLAP_EVENTS) {
                 events++;
                 assert(Mods_OverlapSeverity(found, i) == MODS_OVERLAP_INFO);
-                assert(strstr(line, "FUSION event (Beta, Gamma): each is called"));
+                assert(strstr(line, "FUSION event (Beta, Gamma): each is called, higher priority first; a before-hook"));
             }
         }
         assert(hooks == 1 && events == 1);
@@ -237,7 +250,7 @@ int main(void)
 
     /* Two mods of every pair of 400 cards' fusions (79,800 rules each, as the
      * FM Editor's bulk fusions writes) meet on every pair: worked out once,
-     * in well under a second. */
+     * in well under a second (30 s allows for the sanitizers). */
     {
         size_t room = 8u << 20, length = 0;
         char *text = malloc(room);
@@ -265,7 +278,7 @@ int main(void)
         assert(found && Mods_OverlapCount(found) == 79800);
         Mods_OverlapText(found, 0, line, sizeof(line));
         printf("bulk: %d overlaps in %.3f s, the first: %s\n", Mods_OverlapCount(found), seconds, line);
-        assert(seconds < 5.0);
+        assert(seconds < 30.0); /* about 0.1 s; a sanitizer build is slower */
         Mods_OverlapFree(found);
         Json_Free(big[0]);
         Json_Free(big[1]);

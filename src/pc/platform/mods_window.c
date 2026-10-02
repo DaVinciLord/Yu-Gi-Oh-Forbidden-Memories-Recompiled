@@ -363,7 +363,7 @@ static void option(MenuCanvas *c, int index, int w, int y, OptionBox *o)
 static int opened[MODS_OVERLAP_KINDS], opened_for = -1, more_top[MODS_OVERLAP_KINDS], more_bottom[MODS_OVERLAP_KINDS];
 static int overlaps(MenuCanvas *c, int w, int y)
 {
-    const ModsOverlaps *found = Mods_Overlaps(wanted, ranks);
+    const ModsOverlaps *found = Mods_Overlaps(wanted, ranks, (const int *const *)values);
     int place = Mods_OverlapPlace(selected), total = 0, warnings = 0, n = Mods_OverlapCount(found);
     char line[1024];
     if (opened_for != selected)
@@ -501,7 +501,7 @@ void ModsWindow_Draw(MenuCanvas *c)
     for (int i = 0; i < Mods_Count(); i++)
         enabled += !!wanted[i];
     if (enabled > 1) {
-        const ModsOverlaps *found = Mods_Overlaps(wanted, ranks);
+        const ModsOverlaps *found = Mods_Overlaps(wanted, ranks, (const int *const *)values);
         overlap_count = Mods_OverlapCount(found);
         for (int i = 0; i < overlap_count; i++)
             overlap_warnings += Mods_OverlapSeverity(found, i) == MODS_OVERLAP_WARNING;

@@ -74,5 +74,24 @@
             "setting": "mode",
             "value": 1
         }
+    ],
+    "cards": [
+        {
+            "replace": "Kuriboh",
+            "attack": 500
+        }
+    ],
+    "data": [
+        {
+            "lba": 1230,
+            "replace": "low.bin",
+            "sectors": 10
+        }
+    ],
+    "duelists": [
+        {
+            "replace": "Heishin",
+            "name": "Gamma's Heishin"
+        }
     ]
 }

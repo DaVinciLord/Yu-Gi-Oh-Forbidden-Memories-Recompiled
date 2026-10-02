@@ -9,10 +9,15 @@
  * way the reader of that key decides it. A kind fewer than two mods have is
  * not looked at, so one mod (or none) costs nothing.
  *
- * "all" (drops, decks, passwords) and "replace" (guardian star matchups,
- * terrain bonuses) reach things they do not name: such a claim is "wide",
- * and stands, besides its own key, beside every key of its kind another mod
- * names that it covers. */
+ * Some keys reach things they do not name: "all" (drops, decks, passwords),
+ * "stats" (the attack and defense caps), a life-point start (both sides),
+ * "replace" (guardian star matchups, terrain bonuses) and a new star's first
+ * declaration (its matchups). Such a claim is "wide", and stands, besides its
+ * own key, beside every key of its kind another mod names that it covers; one
+ * that resets (a "replace") reaches only what earlier mods set.
+ *
+ * Every key is read as the type its reader takes, a list or an object, and
+ * anything else as nothing, as the readers note it and leave it out. */
 #include "pc/compat/fs.h" /* UTF-8 paths on Windows too (notes/pc-build.md) */
 #include "overlap.h"
 #include "json.h"
@@ -25,10 +30,14 @@
 
 enum { SET, ADD, FIXED, BASE, CHAIN, EVENT, FIRST };   /* what a claim does */
 enum { VIA_WIDE = 1, AIMED = 2, RESETS = 4 };          /* claim flags */
-enum { O_LATER, O_AFTER, O_AGREE, O_ADD, O_RESET, O_FIXED, O_KEYS, O_BYTES, O_CHAIN, O_EVENTS, O_FIRST, O_AIMED };
-static const char *const outcome_words[] = {"later", "after", "agree", "add",   "reset",  "fixed",
-                                            "keys",  "bytes", "chain", "events", "first", "aimed"};
+enum {
+    O_LATER, O_AFTER, O_AGREE, O_ADD, O_RESET, O_FIXED, O_KEYS, O_BYTES, O_CHAIN, O_EVENTS, O_FIRST, O_AIMED,
+    O_PATCHED, O_EARLY
+};
+static const char *const outcome_words[] = {"later", "after", "agree", "add",   "reset",   "fixed", "keys",
+                                            "bytes", "chain", "events", "first", "aimed", "patched", "early"};
 
+#define CARD_COUNT 722             /* the disc's cards: what "replace" and the Password screen take */
 #define TEXT_KEY (1ull << 40)      /* a card named by letters no card has: its letters' hash */
 #define ALL_CARDS ((1ull << 41) - 1)
 #define SUB(n) ((uint64_t)(n) << 56)
@@ -36,11 +45,17 @@ static const char *const outcome_words[] = {"later", "after", "agree", "add",   
 #define RESET_SUB 0xFE
 #define DEFAULT_EQUIP_BONUS (1ull << 62)
 #define ALL_DUELISTS ((1ull << 47) - 1)
+#define RAW_SECTORS (3ull << 62)   /* a data key: raw sectors, by the first of a run that meets (a file's: 2 << 62) */
+#define ATTACK_TRAP_FIRST 681      /* House of Adhesive Tape .. Widespread Ruin: 681 to 686 */
+#define ATTACK_TRAPS 6
 
 typedef struct {
-    uint64_t key, mask, match; /* mask: a wide claim, beside every key k with (k & mask) == match */
+    /* mask: a wide claim, beside every key k with (k & mask) == match, or
+     * (k & mask2) == match2 when mask2 is set */
+    uint64_t key, mask, match, mask2, match2;
+    long long lo, hi;          /* raw sectors: the first and the last a "data" entry reaches */
     uint32_t value;            /* what it sets, hashed: equal values agree */
-    int mod, seq, label;       /* label: in the strings, or -1 to make it from `src` */
+    int mod, seq, label, via;  /* label, via: in the strings, or -1 (via: the wide key's own name) */
     unsigned char kind, mode, flags;
     const JsonValue *src;
 } Claim;
@@ -60,6 +75,14 @@ typedef struct {
     int id;
 } StarName;
 
+/* A duelist a mod defines (its duelists/ folder and "duelists" list): its
+ * pool files name it by its own id, which stands for whom it replaces. */
+typedef struct {
+    int mod;
+    char id[64];
+    uint64_t replaces; /* the duelist key, or 0 for a new one */
+} Defined;
+
 struct ModsOverlaps {
     ModsOverlapMod *mods;
     int mod_count;
@@ -77,6 +100,9 @@ struct ModsOverlaps {
     int memo_room, memo_count;
     StarName *star_names;
     int star_name_count, star_name_room;
+    Defined *defined;
+    int defined_count, defined_room;
+    unsigned char star_declared[16];
     int seq, failed;
 };
 
@@ -113,6 +139,7 @@ static const char *name_of(const JsonValue *value)
  * (they note it) reads as nothing. */
 static const JsonValue *list_of(const JsonValue *value) { return Json_TypeOf(value) == JSON_ARRAY ? value : NULL; }
 static const JsonValue *object_of(const JsonValue *value) { return Json_TypeOf(value) == JSON_OBJECT ? value : NULL; }
+static int digits_only(const char *text) { return text && *text && strspn(text, "0123456789") == strlen(text); }
 static uint64_t mix(uint64_t a, uint64_t b)
 {
     uint64_t hash = (a ^ 0x9E3779B97F4A7C15ull) * 0xBF58476D1CE4E5B9ull;
@@ -136,6 +163,14 @@ static uint32_t hash_json(uint32_t hash, const JsonValue *value, int named)
     return hash;
 }
 static uint32_t value_of(const JsonValue *value) { return hash_json(2166136261u, value, 0); }
+/* The value of a number the reader takes when a key is left out, as
+ * value_of would hash it written out. */
+static uint32_t number_value(long number)
+{
+    char text[40];
+    snprintf(text, sizeof(text), "%ld", number);
+    return (uint32_t)fnv((2166136261u ^ (unsigned)JSON_NUMBER) * 16777619u, text);
+}
 /* A value nobody else's equals: two images of two packs never "agree". */
 static uint32_t own_value(int mod) { return 0x80000000u | (uint32_t)mod; }
 
@@ -187,7 +222,7 @@ static Claim *claim(ModsOverlaps *x, int kind, int mod, uint64_t key, int mode, 
     c->value = value;
     c->mod = mod;
     c->seq = ++x->seq;
-    c->label = -1;
+    c->label = c->via = -1;
     c->kind = (unsigned char)kind;
     c->mode = (unsigned char)mode;
     c->src = src;
@@ -196,6 +231,18 @@ static Claim *claim(ModsOverlaps *x, int kind, int mod, uint64_t key, int mode, 
 static void labelled(ModsOverlaps *x, Claim *c, const char *label)
 {
     if (c) c->label = add_string(x, label);
+}
+/* A claim made wide: beside the keys (k & mask) == match (or the second
+ * pair's), naming itself `via` in the line ("all", "stats"...). */
+static void widened(ModsOverlaps *x, Claim *c, uint64_t mask, uint64_t match, uint64_t mask2, uint64_t match2,
+                    const char *via)
+{
+    if (!c) return;
+    c->mask = mask;
+    c->match = match;
+    c->mask2 = mask2;
+    c->match2 = match2;
+    if (via) c->via = add_string(x, via);
 }
 
 static const JsonValue *member(const ModsOverlaps *x, int mod, const char *key)
@@ -230,12 +277,14 @@ static const JsonValue *mod_file(ModsOverlaps *x, int mod, const char *relative)
     return Json_Root(document);
 }
 
-/* The ".json" files of a folder of the mod's, sorted, as the readers list
- * them; their names without ".json", one after another, ended by "". */
+/* The ".json" files of a folder of the mod's, sorted (strcmp) as the readers
+ * sort them; their names without ".json", one after another, ended by "". */
+static int by_name(const void *a, const void *b) { return strcmp(*(char *const *)a, *(char *const *)b); }
 static char *folder_names(const ModsOverlaps *x, int mod, const char *folder)
 {
-    char path[1024], *names = NULL;
-    size_t length = 0, room = 0;
+    char path[1024], *names = NULL, **list = NULL;
+    size_t length = 0, total = 0;
+    int count = 0, room = 0;
     DIR *dir;
     struct dirent *item;
     if (!x->mods[mod].directory ||
@@ -244,18 +293,28 @@ static char *folder_names(const ModsOverlaps *x, int mod, const char *folder)
         return NULL;
     while ((item = readdir(dir)) != NULL) {
         size_t n = strlen(item->d_name);
+        char **bigger, *name;
         if (n < 6 || strcmp(item->d_name + n - 5, ".json")) continue;
-        if (length + n + 2 > room) {
-            char *bigger = realloc(names, room = (room + n + 2) * 2);
-            if (!bigger) break;
-            names = bigger;
-        }
-        memcpy(names + length, item->d_name, n - 5);
-        names[length + n - 5] = 0;
-        length += n - 4;
+        if (!(bigger = grow(list, &room, count, sizeof(*list)))) break;
+        list = bigger;
+        if (!(name = malloc(n - 4))) break;
+        memcpy(name, item->d_name, n - 5);
+        name[n - 5] = 0;
+        list[count++] = name;
+        total += n - 4;
     }
     closedir(dir);
-    if (names) names[length] = 0;
+    if (count) qsort(list, (size_t)count, sizeof(*list), by_name);
+    if ((names = malloc(total + 1)) != NULL) {
+        for (int i = 0; i < count; i++) {
+            size_t n = strlen(list[i]) + 1;
+            memcpy(names + length, list[i], n);
+            length += n;
+        }
+        names[length] = 0;
+    }
+    for (int i = 0; i < count; i++) free(list[i]);
+    free(list);
     return names;
 }
 
@@ -304,7 +363,7 @@ static uint64_t card_text(ModsOverlaps *x, const char *text)
     if (!hash) return 0;
     if (!memo_find(x, hash, &id)) {
         if (x->source.card) id = x->source.card(text, 0, x->source.context);
-        else if (strspn(text, "0123456789") == strlen(text)) id = atoi(text);
+        else if (digits_only(text)) id = atoi(text);
         memo_keep(x, hash, id);
     }
     return id > 0 ? (uint64_t)id : TEXT_KEY | (hash >> 24);
@@ -317,6 +376,18 @@ static uint64_t card_key(ModsOverlaps *x, const JsonValue *value)
         return id > 0 ? (uint64_t)id : number > 0 && number < (long)TEXT_KEY ? (uint64_t)number : 0;
     }
     return Json_TypeOf(value) == JSON_STRING ? card_text(x, Json_String(value, "")) : 0;
+}
+/* A card's base, type and attribute, when the game says (0 and -1 when it
+ * does not). */
+static void card_info(const ModsOverlaps *x, uint64_t key, int *base, int *type, int *attribute)
+{
+    *base = key < TEXT_KEY ? (int)key : 0;
+    *type = *attribute = -1;
+    if (key && key < TEXT_KEY && x->source.card_info &&
+        !x->source.card_info((int)key, base, type, attribute, x->source.context)) {
+        *base = (int)key;
+        *type = *attribute = -1;
+    }
 }
 /* A card for a line: its name when the game has one, else as written. */
 static void card_words(const ModsOverlaps *x, const JsonValue *value, char *out, size_t size)
@@ -341,69 +412,155 @@ static uint64_t duelist_key(ModsOverlaps *x, const char *name)
     if (!name) name = "";
     if (same_letters(name, "all")) return ALL_DUELISTS;
     id = x->source.duelist ? x->source.duelist(name, x->source.context) : -1;
-    if (id < 0 && strspn(name, "0123456789") == strlen(name) && *name) id = atoi(name);
-    return id >= 0 ? (uint64_t)id : (1ull << 46) | (hash_letters(name) >> 18);
-}
-
-/* --- the kinds ------------------------------------------------------------ */
-
-/* "data": a disc file by name (as the game asks for it, any case) or a raw
- * sector. Replacements, then patches; the later of each wins. */
-static void read_data(ModsOverlaps *x, int mod)
-{
-    for (const JsonValue *entry = Json_At(list_of(member(x, mod, "data")), 0); entry; entry = Json_Next(entry)) {
-        const char *file = Json_String(Json_Member(entry, "file"), NULL);
-        long lba = Json_Number(Json_Member(entry, "lba"), -1);
-        uint64_t key;
-        if (file && *file) {
-            char name[256];
-            size_t n = 0;
-            for (const char *s = file; *s && *s != ';' && n + 1 < sizeof(name); s++)
-                if (n || (*s != '\\' && *s != '/')) name[n++] = *s == '/' ? '\\' : (char)toupper((unsigned char)*s);
-            name[n] = 0;
-            key = (1ull << 63) | (hash_text(name) >> 1);
-        } else if (lba >= 0)
-            key = (uint64_t)lba;
-        else
-            continue;
-        claim(x, MODS_OVERLAP_DATA, mod, key, Json_Member(entry, "replace") ? SET : ADD, own_value(mod), entry);
-    }
-}
-
-/* "audio": an id of music, xa or sfx; the mod applied later is heard. */
-static long audio_id(const char *text)
-{
-    char *end;
-    long value;
-    if (!text || !*text) return -1;
-    value = text[0] == '0' && (text[1] == 'x' || text[1] == 'X') ? strtol(text + 2, &end, 16) : strtol(text, &end, 10);
-    return *end ? -1 : value;
-}
-static void read_audio(ModsOverlaps *x, int mod)
-{
-    static const char *const kinds[] = {"music", "xa", "sfx"};
-    for (int k = 0; k < 3; k++)
-        for (const JsonValue *m = Json_At(object_of(Json_Member(member(x, mod, "audio"), kinds[k])), 0); m; m = Json_Next(m)) {
-            long id = audio_id(name_of(m));
-            if (id >= 0) claim(x, MODS_OVERLAP_AUDIO, mod, ((uint64_t)k << 32) | (uint64_t)id, SET, value_of(m), m);
-        }
+    if (id < 0 && digits_only(name)) id = atoi(name);
+    return id >= 0 ? (uint64_t)(id & 0xFFFFFF) : (1ull << 46) | (hash_letters(name) >> 18);
 }
 
 /* Whether an entry naming a mod's setting ("setting", and "value" for one
- * choice of it) is used, as Mods_File, the pack loader and the rule tables
- * decide: a text file, a pack's image, a fusion, equip or ritual entry.
- * A setting the mod does not declare leaves the entry used. */
+ * choice of it) is used, as Mods_File and the rule tables decide (mods.c
+ * entry_used): a text file, a fusion, equip or ritual entry. A setting the
+ * mod does not declare, or a "value" that is not a number, leaves it used. */
 static int switched_on(const ModsOverlaps *x, int mod, const JsonValue *entry)
 {
     const char *key = Json_String(Json_Member(entry, "setting"), NULL);
     const JsonValue *only = Json_Member(entry, "value");
     int value;
-    if (!key || !x->source.setting || (value = x->source.setting(mod, key, x->source.context)) < 0) return 1;
-    if (only && Json_TypeOf(only) != JSON_NUMBER) return 1; /* warned of, and used (mods.c entry_used) */
+    if (!key || !*key || !x->source.setting || (value = x->source.setting(mod, key, x->source.context)) < 0) return 1;
+    if (only && Json_TypeOf(only) != JSON_NUMBER) return 1;
     return only ? value == (int)Json_Number(only, 0) : value != 0;
 }
+
+/* --- the kinds ------------------------------------------------------------ */
+
+/* "data": a disc file by name, as the disc's lookup takes it (libds.c
+ * search_file: leading backslashes and the ";1" aside, letter for letter),
+ * or raw sectors, which meet when their runs of sectors do. Replacements
+ * go first, then every patch over them, the later of each winning. */
+static long patch_length(const JsonValue *patch)
+{
+    long digits = 0;
+    for (const char *s = Json_String(Json_Member(patch, "bytes"), ""); *s; s++) digits += isxdigit((unsigned char)*s) != 0;
+    return digits / 2;
+}
+static void read_data(ModsOverlaps *x, int mod)
+{
+    for (const JsonValue *entry = Json_At(list_of(member(x, mod, "data")), 0); entry; entry = Json_Next(entry)) {
+        const char *file = Json_String(Json_Member(entry, "file"), NULL);
+        long lba = Json_Number(Json_Member(entry, "lba"), -1);
+        int replace = Json_Member(entry, "replace") != NULL;
+        Claim *c;
+        if (file && *file) {
+            char name[256];
+            size_t n = 0;
+            while (*file == '\\') file++;
+            while (file[n] && file[n] != ';' && n + 1 < sizeof(name)) {
+                name[n] = file[n];
+                n++;
+            }
+            name[n] = 0;
+            claim(x, MODS_OVERLAP_DATA, mod, (2ull << 62) | (hash_text(name) >> 2), replace ? SET : ADD,
+                  own_value(mod), entry);
+        } else if (lba >= 0) {
+            /* The sectors it reaches: a replacement's run, a patch's bytes. */
+            long sectors = Json_Number(Json_Member(entry, "sectors"), 1);
+            long long lo = -1, hi = -1;
+            if (replace) {
+                lo = lba;
+                hi = lba + (sectors > 0 ? sectors : 1) - 1;
+            }
+            for (const JsonValue *p = Json_At(list_of(Json_Member(entry, "patch")), 0); p; p = Json_Next(p)) {
+                long at = Json_Number(Json_Member(p, "at"), 0), length = patch_length(p);
+                long long first, last;
+                if (at < 0) continue;
+                first = lba + at / 2048;
+                last = lba + (at + (length ? length : 1) - 1) / 2048;
+                if (lo < 0 || first < lo) lo = first;
+                if (last > hi) hi = last;
+            }
+            if (lo < 0) lo = hi = lba;
+            if ((c = claim(x, MODS_OVERLAP_DATA, mod, RAW_SECTORS, replace ? SET : ADD, own_value(mod), entry))) {
+                c->lo = lo;
+                c->hi = hi;
+            }
+        }
+    }
+}
+/* Raw sectors: each run of entries whose sectors meet is one key, named
+ * for the sectors it spans. */
+static int by_sector(const void *left, const void *right)
+{
+    const Claim *a = *(const Claim *const *)left, *b = *(const Claim *const *)right;
+    if (a->lo != b->lo) return a->lo < b->lo ? -1 : 1;
+    return (a->seq > b->seq) - (a->seq < b->seq);
+}
+static void sector_runs(ModsOverlaps *x)
+{
+    Claim **raw = NULL;
+    int count = 0, room = 0;
+    for (int i = 0; i < x->claim_count; i++) {
+        Claim **bigger;
+        if (x->claims[i].kind != MODS_OVERLAP_DATA || x->claims[i].key != RAW_SECTORS) continue;
+        if (!(bigger = grow(raw, &room, count, sizeof(*raw)))) {
+            x->failed = 1;
+            free(raw);
+            return;
+        }
+        raw = bigger;
+        raw[count++] = &x->claims[i];
+    }
+    if (count) qsort(raw, (size_t)count, sizeof(*raw), by_sector);
+    for (int start = 0; start < count;) {
+        int end = start + 1;
+        long long hi = raw[start]->hi;
+        char label[80];
+        int at;
+        while (end < count && raw[end]->lo <= hi) {
+            if (raw[end]->hi > hi) hi = raw[end]->hi;
+            end++;
+        }
+        if (raw[start]->lo == hi) snprintf(label, sizeof(label), "Sector %lld", hi);
+        else snprintf(label, sizeof(label), "Sectors %lld-%lld", raw[start]->lo, hi);
+        at = add_string(x, label);
+        for (int i = start; i < end; i++) {
+            raw[i]->key = RAW_SECTORS | (uint64_t)raw[start]->lo;
+            raw[i]->label = at;
+        }
+        start = end;
+    }
+    free(raw);
+}
+
+/* "audio": an id of music, xa or sfx, as AudioReplace_ParseId reads it; the
+ * mod applied later is heard. A file is the mod's own, whatever its name. */
+static long audio_id(const char *text)
+{
+    char *end;
+    long value;
+    if (!text || !*text) return -1;
+    if (text[0] == '0' && (text[1] == 'x' || text[1] == 'X')) {
+        if (!text[2]) return -1;
+        value = strtol(text + 2, &end, 16);
+    } else
+        value = strtol(text, &end, 10);
+    if (*end || value < 0 || value > 0xFFFF || text[0] == '-' || text[0] == '+' || text[0] == ' ') return -1;
+    return value;
+}
+static void read_audio(ModsOverlaps *x, int mod)
+{
+    static const char *const kinds[] = {"music", "xa", "sfx"};
+    for (int k = 0; k < 3; k++)
+        for (const JsonValue *m = Json_At(object_of(Json_Member(object_of(member(x, mod, "audio")), kinds[k])), 0); m;
+             m = Json_Next(m)) {
+            long id = audio_id(name_of(m));
+            if (id >= 0) claim(x, MODS_OVERLAP_AUDIO, mod, ((uint64_t)k << 32) | (uint64_t)id, SET, own_value(mod), m);
+        }
+}
+
 /* "textures": the pack's manifest.json, an image per entry; the same image
- * is the same archive, offset, size, depth and palette (texture_pack.c). */
+ * is the same reading of the same words (texture_pack.c compare: archive,
+ * offset, size, stride, depth and palette). An entry the loader leaves out
+ * (no file or archive, measures out of range, its part switched off) is not
+ * counted; a pack's "setting" is on while not 0, its "value" unread. */
 static void read_textures(ModsOverlaps *x, int mod)
 {
     const char *folder = Json_String(member(x, mod, "textures"), NULL);
@@ -412,60 +569,60 @@ static void read_textures(ModsOverlaps *x, int mod)
     if (!folder || snprintf(relative, sizeof(relative), "%s/manifest.json", folder) >= (int)sizeof(relative)) return;
     list = mod_file(x, mod, relative);
     for (const JsonValue *entry = Json_At(list_of(list), 0); entry; entry = Json_Next(entry)) {
-        const char *archive = Json_String(Json_Member(entry, "archive"), "");
-        if (!switched_on(x, mod, entry)) continue;
-        long clut = Json_Number(Json_Member(entry, "clut_entries"), 0);
-        char upper[128];
-        size_t n = 0;
-        for (; archive[n] && n + 1 < sizeof(upper); n++) upper[n] = (char)toupper((unsigned char)archive[n]);
-        upper[n] = 0;
-        snprintf(key, sizeof(key), "%s|%ld|%ld|%ld|%ld|%ld|%ld", upper, Json_Number(Json_Member(entry, "offset"), -1),
-                 Json_Number(Json_Member(entry, "words"), 0), Json_Number(Json_Member(entry, "rows"), 0),
-                 Json_Number(Json_Member(entry, "bpp"), 0), clut ? Json_Number(Json_Member(entry, "clut_offset"), 0) : 0,
-                 clut);
+        const char *archive = Json_String(Json_Member(entry, "archive"), NULL);
+        const char *setting = Json_String(Json_Member(entry, "setting"), NULL);
+        long offset = Json_Number(Json_Member(entry, "offset"), -1), words = Json_Number(Json_Member(entry, "words"), 0),
+             rows = Json_Number(Json_Member(entry, "rows"), 0), bpp = Json_Number(Json_Member(entry, "bpp"), 0),
+             stride = Json_Number(Json_Member(entry, "stride"), words),
+             clut = Json_Number(Json_Member(entry, "clut_entries"), 0);
+        if (!archive || !Json_String(Json_Member(entry, "file"), NULL) ||
+            !Paths_Contained(Json_String(Json_Member(entry, "file"), "")) || offset < 0 || words < 1 || words > 1024 ||
+            rows < 1 || rows > 512 || (bpp != 4 && bpp != 8 && bpp != 16) || stride < 1)
+            continue;
+        if (Json_Member(entry, "setting") && setting && *setting && x->source.setting &&
+            x->source.setting(mod, setting, x->source.context) == 0)
+            continue;
+        snprintf(key, sizeof(key), "%s|%ld|%ld|%ld|%ld|%ld|%ld", archive, offset, words, rows, stride, bpp,
+                 clut ? Json_Number(Json_Member(entry, "clut_offset"), 0) : 0);
         claim(x, MODS_OVERLAP_TEXTURES, mod, hash_text(key), SET, own_value(mod), entry);
     }
 }
 
-/* "cards": a "replace" changes a card in place, the later entry going over
- * the earlier key by key (cards.c); a "copy" makes new cards, whose
- * identities another mod's "replace" may name. */
-static int any_identity_replace(const ModsOverlaps *x)
+/* "cards": a "replace" changes one of the disc's cards in place (cards.c
+ * add_entry: a name, or a number, of the disc's 722; nothing else). Its
+ * stats, stars, frame, model and effect go over the earlier entries'; its
+ * name, text, password, art, plate, field art and fusion groups are reset
+ * by every later replace, whether it gives them or not; notes add up. An
+ * entry of notes alone only adds them. */
+static const char *const card_reset_keys[] = {"name",  "description", "password",  "art",
+                                              "thumbnail", "title", "field_art", "fusion_groups"};
+static int card_resets(const char *key)
 {
-    for (int i = 0; i < x->mod_count; i++)
-        for (const JsonValue *e = Json_At(list_of(member(x, i, "cards")), 0); e; e = Json_Next(e)) {
-            const char *text = Json_String(Json_Member(e, "replace"), NULL);
-            if (text && strchr(text, ':')) return 1;
-        }
+    for (size_t i = 0; i < sizeof(card_reset_keys) / sizeof(card_reset_keys[0]); i++)
+        if (!strcmp(key, card_reset_keys[i])) return 1;
     return 0;
 }
-static void read_cards(ModsOverlaps *x, int mod, int identities)
+static int notes_only(const JsonValue *entry)
 {
-    int index = 0;
-    for (const JsonValue *e = Json_At(list_of(member(x, mod, "cards")), 0); e; e = Json_Next(e), index++) {
+    for (const JsonValue *m = Json_At(entry, 0); m; m = Json_Next(m))
+        if (strcmp(name_of(m), "replace") && strcmp(name_of(m), "notes") && strcmp(name_of(m), "id")) return 0;
+    return Json_Member(entry, "notes") != NULL;
+}
+static void read_cards(ModsOverlaps *x, int mod)
+{
+    for (const JsonValue *e = Json_At(list_of(member(x, mod, "cards")), 0); e; e = Json_Next(e)) {
         const JsonValue *replaced = Json_Member(e, "replace");
-        if (replaced) {
-            uint64_t key = card_key(x, replaced);
-            Claim *c = key ? claim(x, MODS_OVERLAP_CARDS, mod, key, SET, value_of(e), e) : NULL;
-            const char *text = Json_String(replaced, NULL);
-            if (c && text && strchr(text, ':') && strncmp(text, x->mods[mod].id, strlen(x->mods[mod].id)))
-                c->flags |= AIMED;
-        } else if (identities && Json_Member(e, "copy")) {
-            long count = Json_Number(Json_Member(e, "count"), 1);
-            const char *id = Json_String(Json_Member(e, "id"), NULL);
-            char entry[64], identity[256];
-            if (!id) {
-                snprintf(entry, sizeof(entry), "entry-%d", index);
-                id = entry;
-            }
-            for (long n = 1; n <= count && n <= 4096; n++) {
-                Claim *c;
-                snprintf(identity, sizeof(identity), "%s:%s:%ld", x->mods[mod].id, id, n);
-                c = claim(x, MODS_OVERLAP_CARDS, mod, card_text(x, identity), BASE, 0, e);
-                snprintf(entry, sizeof(entry), "Card '%.40s'", identity);
-                labelled(x, c, entry);
-            }
+        const char *text = Json_String(replaced, NULL);
+        uint64_t key;
+        if (!replaced || Json_TypeOf(e) != JSON_OBJECT || notes_only(e)) continue;
+        if (text && !isdigit((unsigned char)*text)) {
+            if (strchr(text, ':')) continue; /* an added card's identity: not the disc's */
+            key = card_text(x, text);
+        } else {
+            long number = Json_Number(replaced, 0);
+            key = number >= 1 && number <= CARD_COUNT ? (uint64_t)number : 0;
         }
+        if (key && (key >= TEXT_KEY || key <= CARD_COUNT)) claim(x, MODS_OVERLAP_CARDS, mod, key, SET, value_of(e), e);
     }
 }
 
@@ -489,15 +646,17 @@ static void read_fusions(ModsOverlaps *x, int mod)
     }
 }
 
-/* "equips": an entry per equip card; the latest entry that says anything
- * about a monster decides (tables.c Tables_Equip), so entries naming other
- * monsters add up. "equip_bonus_default": the latest mod's. */
+/* "equips": an entry per equip card. For a monster, the latest entry that
+ * says anything about it decides (tables.c Tables_Equip, Tables_EquipBonus):
+ * the decisions are worked out per monster below. "equip_bonus_default":
+ * the latest mod's. */
 static void read_equips(ModsOverlaps *x, int mod)
 {
     const JsonValue *bonus = member(x, mod, "equip_bonus_default");
     for (const JsonValue *e = Json_At(list_of(member(x, mod, "equips")), 0); e; e = Json_Next(e)) {
         uint64_t key = card_key(x, Json_Member(e, "card"));
-        if (key && switched_on(x, mod, e)) claim(x, MODS_OVERLAP_EQUIPS, mod, key, SET, value_of(e), e);
+        if (key && Json_TypeOf(e) == JSON_OBJECT && switched_on(x, mod, e))
+            claim(x, MODS_OVERLAP_EQUIPS, mod, key, SET, value_of(e), e);
     }
     if (bonus) claim(x, MODS_OVERLAP_EQUIPS, mod, DEFAULT_EQUIP_BONUS, SET, value_of(bonus), bonus);
 }
@@ -513,11 +672,73 @@ static void read_rituals(ModsOverlaps *x, int mod)
     }
 }
 
+/* The duelists the mods define: their duelists/ folders (a file a duelist,
+ * named by its id) and their "duelists" lists (or the file it names), read
+ * before the pools that may name them. A replacement takes over one of the
+ * disc's 39; anything else is a duelist of its own (duelists.c
+ * read_one_duelist). */
+static void define_duelist(ModsOverlaps *x, int mod, const char *id, uint64_t replaces)
+{
+    Defined *defined = grow(x->defined, &x->defined_room, x->defined_count, sizeof(*x->defined));
+    if (!defined || !id || !*id) return;
+    x->defined = defined;
+    snprintf(defined[x->defined_count].id, sizeof(defined[0].id), "%s", id);
+    defined[x->defined_count].mod = mod;
+    defined[x->defined_count++].replaces = replaces;
+}
+/* One duelist entry: the later of two mods replacing one duelist has him; of
+ * two asking for one Free Duel slot (40-127, not on a replacement, with a
+ * "copy"), the earlier keeps it. */
+static void duelist_entry(ModsOverlaps *x, int mod, const char *id, const JsonValue *entry)
+{
+    const JsonValue *over = Json_Member(entry, "replace"), *slot = Json_Member(entry, "slot");
+    const char *copy = Json_String(Json_Member(entry, "copy"), NULL);
+    char label[200];
+    uint64_t target = 0;
+    if (Json_TypeOf(entry) != JSON_OBJECT) return;
+    if (over) {
+        const char *who = Json_String(over, NULL);
+        int number = digits_only(who) ? atoi(who) : -1;
+        if (!who) return;
+        target = duelist_key(x, who);
+        /* One of the disc's 39 (Duelists_Named), when the game can say. */
+        if (target == ALL_DUELISTS || number == 0 || number >= 40 || (target < (1ull << 46) && (target == 0 || target >= 40)) ||
+            (x->source.duelist && target >= (1ull << 46)))
+            return;
+        snprintf(label, sizeof(label), "Duelist '%.80s' replaced", who);
+        labelled(x, claim(x, MODS_OVERLAP_DUELISTS, mod, (1ull << 62) | target, SET, own_value(mod), entry), label);
+    } else if (!copy || !*copy)
+        return;
+    define_duelist(x, mod, id, target);
+    if (slot && !over && Json_TypeOf(slot) == JSON_NUMBER && Json_Number(slot, -1) >= 40 &&
+        Json_Number(slot, -1) < 128) {
+        snprintf(label, sizeof(label), "Free Duel slot %ld", Json_Number(slot, 0));
+        labelled(x,
+                 claim(x, MODS_OVERLAP_DUELISTS, mod, (3ull << 62) | (uint64_t)Json_Number(slot, 0), FIRST,
+                       own_value(mod), entry),
+                 label);
+    }
+}
+static void read_duelists(ModsOverlaps *x, int mod)
+{
+    const JsonValue *list = member(x, mod, "duelists");
+    char *names = folder_names(x, mod, "duelists"), relative[160];
+    for (const char *name = names; name && *name; name += strlen(name) + 1) {
+        snprintf(relative, sizeof(relative), "duelists/%.100s.json", name);
+        duelist_entry(x, mod, name, mod_file(x, mod, relative));
+    }
+    free(names);
+    if (Json_TypeOf(list) == JSON_STRING) list = mod_file(x, mod, Json_String(list, NULL));
+    for (const JsonValue *e = Json_At(list_of(list), 0); e; e = Json_Next(e))
+        duelist_entry(x, mod, Json_String(Json_Member(e, "id"), NULL), e);
+}
+
 /* "drops" and "decks": an opponent's pools. Plain edits add up, each on the
  * pool as the mods before left it; "replace": true empties it first; a fixed
- * deck wins over every weighted edit (tables.c). "all" reaches every
- * opponent. The pools may be in a file, or a file per opponent in the mod's
- * drops/ and decks/ folders. */
+ * deck (exactly 40 cards) wins over every weighted edit (tables.c). "all"
+ * reaches every opponent. The pools may be in a file, or a file per opponent
+ * in the mod's drops/ and decks/ folders, named by an opponent or by a
+ * duelist of the mod's own. */
 static int pool_named(const char *name)
 {
     static const char *const names[][2] = {{"pow", "sa-pow"}, {"bcd", "b-c-d"}, {"tec", "sa-tec"}};
@@ -526,21 +747,31 @@ static int pool_named(const char *name)
     return -1;
 }
 static const char *const pool_words[] = {"deck", "POW drops", "B/C/D drops", "TEC drops"};
-static void pool_claim(ModsOverlaps *x, int mod, const char *duelist, int pool, const JsonValue *entry)
+/* An opponent the game has, by what duelist_key made of a name: NO_DUELIST
+ * when the game can say there is none (the reader leaves its pools out). */
+#define NO_DUELIST (~0ull)
+static uint64_t known_duelist(const ModsOverlaps *x, uint64_t who)
 {
-    uint64_t who = duelist_key(x, duelist);
-    int fixed = !pool && Json_Bool(Json_Member(entry, "fixed"), 0);
-    Claim *c = claim(x, MODS_OVERLAP_POOLS, mod, (who << 8) | (uint64_t)pool,
-                     fixed                                          ? FIXED
-                     : Json_Bool(Json_Member(entry, "replace"), 0) ? SET
-                                                                    : ADD,
-                     value_of(entry), entry);
+    return x->source.duelist && who >= (1ull << 46) && who != ALL_DUELISTS ? NO_DUELIST : who;
+}
+static void pool_claim(ModsOverlaps *x, int mod, const char *duelist, uint64_t who, int pool, const JsonValue *entry)
+{
+    const JsonValue *fixed_value = pool ? NULL : Json_Member(entry, "fixed");
+    int fixed = Json_Bool(fixed_value, 0), mode;
     char label[160];
-    if (!c) return;
+    Claim *c;
+    if (fixed_value && Json_TypeOf(fixed_value) != JSON_BOOL && Json_TypeOf(fixed_value) != JSON_NUMBER) return;
+    if (fixed) { /* the forty cards, counted out; any other count is left out */
+        long total = 0;
+        for (const JsonValue *m = Json_At(entry, 0); m; m = Json_Next(m))
+            if (strcmp(name_of(m), "fixed") && Json_TypeOf(m) == JSON_NUMBER) total += Json_Number(m, 0);
+        if (total != 40) return;
+    }
+    mode = fixed ? FIXED : Json_Bool(Json_Member(entry, "replace"), 0) ? SET : ADD;
+    if (!(c = claim(x, MODS_OVERLAP_POOLS, mod, (who << 8) | (uint64_t)pool, mode, value_of(entry), entry))) return;
     if (c->mode == SET) c->flags |= RESETS;
     if (who == ALL_DUELISTS) {
-        c->mask = 0xFF;
-        c->match = (uint64_t)pool;
+        widened(x, c, 0xFF, (uint64_t)pool, 0, 0, "all");
         snprintf(label, sizeof(label), "Every opponent's %s", pool_words[pool]);
     } else
         snprintf(label, sizeof(label), "%.80s's %s", duelist, pool_words[pool]);
@@ -548,18 +779,31 @@ static void pool_claim(ModsOverlaps *x, int mod, const char *duelist, int pool, 
 }
 static void pool_table(ModsOverlaps *x, int mod, const JsonValue *table, int decks)
 {
-    if (Json_TypeOf(table) != JSON_OBJECT) return; /* tables.c read_pool_table: an object of opponents */
-    for (const JsonValue *entry = Json_At(table, 0); entry; entry = Json_Next(entry)) {
+    for (const JsonValue *entry = Json_At(object_of(table), 0); entry; entry = Json_Next(entry)) {
+        uint64_t who = known_duelist(x, duelist_key(x, name_of(entry)));
+        if (who == NO_DUELIST) continue;
         if (decks) {
-            pool_claim(x, mod, name_of(entry), 0, entry);
+            pool_claim(x, mod, name_of(entry), who, 0, entry);
             continue;
         }
-        if (Json_TypeOf(entry) != JSON_OBJECT) continue;
-        for (const JsonValue *pool = Json_At(entry, 0); pool; pool = Json_Next(pool)) {
+        for (const JsonValue *pool = Json_At(object_of(entry), 0); pool; pool = Json_Next(pool)) {
             int which = pool_named(name_of(pool));
-            if (which > 0) pool_claim(x, mod, name_of(entry), which, pool);
+            if (which > 0) pool_claim(x, mod, name_of(entry), who, which, pool);
         }
     }
+}
+/* A pool file's opponent: the mod's own duelist of that id (or whom it
+ * replaces), else an opponent by name (tables.c read_pool_folder). */
+static uint64_t pool_file_duelist(ModsOverlaps *x, int mod, const char *name)
+{
+    for (int i = 0; i < x->defined_count; i++)
+        if (x->defined[i].mod == mod && !strcmp(x->defined[i].id, name)) {
+            char identity[192];
+            if (x->defined[i].replaces) return x->defined[i].replaces;
+            snprintf(identity, sizeof(identity), "%s:%s", x->mods[mod].id, name);
+            return (1ull << 45) | (hash_text(identity) >> 20);
+        }
+    return known_duelist(x, duelist_key(x, name));
 }
 static void read_pools(ModsOverlaps *x, int mod)
 {
@@ -571,38 +815,42 @@ static void read_pools(ModsOverlaps *x, int mod)
         names = folder_names(x, mod, decks ? "decks" : "drops");
         for (const char *name = names; name && *name; name += strlen(name) + 1) {
             const JsonValue *root;
+            uint64_t who = pool_file_duelist(x, mod, name);
+            if (who == NO_DUELIST) continue;
             snprintf(relative, sizeof(relative), "%s/%.100s.json", decks ? "decks" : "drops", name);
             if (!(root = mod_file(x, mod, relative))) continue;
             if (decks)
-                pool_claim(x, mod, name, 0, root);
+                pool_claim(x, mod, name, who, 0, root);
             else
-                for (const JsonValue *pool = Json_At(root, 0); pool; pool = Json_Next(pool))
-                    if (pool_named(name_of(pool)) > 0) pool_claim(x, mod, name, pool_named(name_of(pool)), pool);
+                for (const JsonValue *pool = Json_At(object_of(root), 0); pool; pool = Json_Next(pool))
+                    if (pool_named(name_of(pool)) > 0) pool_claim(x, mod, name, who, pool_named(name_of(pool)), pool);
         }
         free(names);
     }
 }
 
 /* "passwords": a card's password and its price; "all" every card, before
- * the cards named beside it. The latest mod that sets one wins. */
+ * the cards named beside it. The latest mod that sets one wins; a price in
+ * starchips and one in percent are not the same price. Only the disc's 722
+ * are on the Password screen. */
 static void read_passwords(ModsOverlaps *x, int mod)
 {
     static const char *const fields[][2] = {{"password", NULL}, {"starchips", "starchips_percent"}};
     for (const JsonValue *m = Json_At(object_of(member(x, mod, "passwords")), 0); m; m = Json_Next(m)) {
         int all = same_letters(name_of(m), "all");
         uint64_t card = all ? ALL_CARDS : card_text(x, name_of(m));
-        if (!card) continue;
+        if (!card || Json_TypeOf(m) != JSON_OBJECT || (card > CARD_COUNT && card < TEXT_KEY)) continue;
         for (int f = 0; f < 2; f++) {
             const JsonValue *v = Json_Member(m, fields[f][0]);
             char label[160];
             Claim *c;
             if (!v && fields[f][1]) v = Json_Member(m, fields[f][1]);
             if (!v) continue;
-            c = claim(x, MODS_OVERLAP_PASSWORDS, mod, (card << 4) | (uint64_t)(f + 1), SET, value_of(v), m);
+            c = claim(x, MODS_OVERLAP_PASSWORDS, mod, (card << 4) | (uint64_t)(f + 1), SET,
+                      hash_json(2166136261u, v, 1), m);
             if (!c) return;
             if (all) {
-                c->mask = 0xF;
-                c->match = (uint64_t)(f + 1);
+                widened(x, c, 0xF, (uint64_t)(f + 1), 0, 0, "all");
                 snprintf(label, sizeof(label), "Every card's %s", f ? "price" : "password");
             } else {
                 char card_name[120];
@@ -617,8 +865,9 @@ static void read_passwords(ModsOverlaps *x, int mod)
 }
 
 /* "guardian_stars": an ordered pair of stars, a star's name, icon and
- * palette, the way a summon chooses; the later mod's, and "replace" sets
- * every pair to 0 first (stars.c). */
+ * palette, the way a summon chooses; the later mod's. "replace" sets every
+ * pair to 0 first, and the first mod to declare a star 11-15 sets its pairs
+ * to 0 (stars.c), over what earlier mods gave them. */
 static const char *const star_retail[] = {"",        "Mars",    "Jupiter", "Saturn", "Uranus", "Pluto",
                                           "Neptune", "Mercury", "Sun",     "Moon",   "Venus"};
 static void star_learn(ModsOverlaps *x, uint64_t name, int id)
@@ -635,8 +884,8 @@ static void star_names(ModsOverlaps *x)
 {
     for (int i = 1; i <= 10; i++) star_learn(x, hash_letters(star_retail[i]), i);
     for (int mod = 0; mod < x->mod_count; mod++)
-        for (const JsonValue *s = Json_At(list_of(Json_Member(member(x, mod, "guardian_stars"), "stars")), 0); s;
-             s = Json_Next(s)) {
+        for (const JsonValue *s = Json_At(list_of(Json_Member(object_of(member(x, mod, "guardian_stars")), "stars")), 0);
+             s; s = Json_Next(s)) {
             const JsonValue *name = Json_Member(s, "name");
             int id = (int)Json_Number(Json_Member(s, "id"), -1);
             if (Json_TypeOf(name) == JSON_STRING) star_learn(x, hash_letters(Json_String(name, "")), id);
@@ -650,7 +899,7 @@ static int star_of(const ModsOverlaps *x, const JsonValue *value)
     uint64_t name;
     if (Json_TypeOf(value) == JSON_NUMBER) return (int)Json_Number(value, -1);
     if (!text) return -1;
-    if (*text && strspn(text, "0123456789") == strlen(text)) return atoi(text);
+    if (digits_only(text)) return atoi(text);
     name = hash_letters(text);
     for (int i = 0; i < x->star_name_count; i++)
         if (x->star_names[i].name == name) return x->star_names[i].id;
@@ -663,22 +912,19 @@ static void star_pair(ModsOverlaps *x, int mod, int a, int d, long bonus, const 
 }
 static void read_stars(ModsOverlaps *x, int mod)
 {
-    const JsonValue *section = member(x, mod, "guardian_stars"), *v;
+    const JsonValue *section = object_of(member(x, mod, "guardian_stars")), *v;
     long bonus = 500;
     int reset = Json_Bool(Json_Member(section, "replace"), 0);
-    if (Json_TypeOf(section) != JSON_OBJECT) return;
+    if (!section) return;
     if (reset) {
         Claim *c = claim(x, MODS_OVERLAP_STARS, mod, SUB(RESET_SUB), SET, 0, Json_Member(section, "replace"));
-        if (c) {
-            c->mask = SUB_MASK;
-            c->match = SUB(1);
-            c->flags |= RESETS;
-        }
+        widened(x, c, SUB_MASK, SUB(1), 0, 0, "replace");
+        if (c) c->flags |= RESETS;
     }
     if ((v = Json_Member(section, "default_bonus")) != NULL && Json_TypeOf(v) == JSON_NUMBER) {
         bonus = Json_Number(v, 500);
-        claim(x, MODS_OVERLAP_STARS, mod, SUB(3) | 1, SET, (uint32_t)bonus, v);
-        /* It is what the disc's two cycles give, unless "replace" took them. */
+        /* What the disc's two cycles give, unless "replace" took them; the
+         * section's own beats and matchups take it too. */
         for (int a = 1; a <= 10 && !reset; a++) {
             int d = a <= 6 ? a % 6 + 1 : (a - 7 + 1) % 4 + 7;
             star_pair(x, mod, a, d, bonus, v);
@@ -688,9 +934,23 @@ static void read_stars(ModsOverlaps *x, int mod)
     if ((v = Json_Member(section, "choice")) != NULL)
         claim(x, MODS_OVERLAP_STARS, mod, SUB(3) | 2, SET, (uint32_t)hash_letters(Json_String(v, "")), v);
     for (const JsonValue *s = Json_At(list_of(Json_Member(section, "stars")), 0); s; s = Json_Next(s)) {
+        int id = (int)Json_Number(Json_Member(s, "id"), -1);
+        if (Json_TypeOf(s) != JSON_OBJECT || !Json_Member(s, "id") || id < 1 || id > 15) continue;
+        if (id > 10 && !x->star_declared[id]) {
+            Claim *c = claim(x, MODS_OVERLAP_STARS, mod, SUB(0xFD) | (uint64_t)id, SET, 0, s);
+            char label[80];
+            widened(x, c, SUB_MASK | 0xFF00, SUB(1) | ((uint64_t)id << 8), SUB_MASK | 0xFF, SUB(1) | (uint64_t)id,
+                    "stars");
+            if (c) c->flags |= RESETS;
+            snprintf(label, sizeof(label), "Star %d declared (every matchup of it at 0)", id);
+            labelled(x, c, label);
+        }
+        x->star_declared[id] = 1;
+    }
+    for (const JsonValue *s = Json_At(list_of(Json_Member(section, "stars")), 0); s; s = Json_Next(s)) {
         static const char *const fields[] = {"name", "icon", "palette"};
         int id = (int)Json_Number(Json_Member(s, "id"), -1);
-        if (id < 1 || id > 15) continue;
+        if (Json_TypeOf(s) != JSON_OBJECT || !Json_Member(s, "id") || id < 1 || id > 15) continue;
         for (int f = 0; f < 3; f++)
             if ((v = Json_Member(s, fields[f])) != NULL)
                 claim(x, MODS_OVERLAP_STARS, mod, SUB(2) | ((uint64_t)id << 8) | (uint64_t)(f + 1), SET,
@@ -704,53 +964,97 @@ static void read_stars(ModsOverlaps *x, int mod)
     for (const JsonValue *m = Json_At(list_of(Json_Member(section, "matchups")), 0); m; m = Json_Next(m)) {
         int a = star_of(x, Json_Member(m, "attacker")), d = star_of(x, Json_Member(m, "defender"));
         long points = Json_Member(m, "bonus") ? Json_Number(Json_Member(m, "bonus"), bonus) : bonus;
+        if (Json_TypeOf(m) != JSON_OBJECT) continue;
         star_pair(x, mod, a, d, points, m);
         if (Json_Bool(Json_Member(m, "mirror"), 0)) star_pair(x, mod, d, a, -points, m);
     }
 }
 
-/* "limits" (and "chest_overflow"): each key the latest mod's; two mods'
- * entries for different duelists add up. */
-static void limit_claim(ModsOverlaps *x, int mod, const char *path, const JsonValue *v)
+/* "limits" (and "chest_overflow"): each key the latest mod's (tables.c
+ * read_limits). "stats" sets both "attack" and "defense", and a life-point
+ * start (a number, or "start") both "player" and "opponent"; a duelist's
+ * own LP is a side or both, and two mods' different duelists add up.
+ * "chest_overflow" sets the chest and the starchips both, 250 and 0 when it
+ * leaves one out. */
+static Claim *limit_claim(ModsOverlaps *x, int mod, const char *path, const char *key, uint32_t value,
+                          const JsonValue *v)
 {
     char label[200];
+    Claim *c = claim(x, MODS_OVERLAP_LIMITS, mod, hash_text(key ? key : path), SET, value, v);
     snprintf(label, sizeof(label), "Limit %s", path);
-    labelled(x, claim(x, MODS_OVERLAP_LIMITS, mod, hash_text(path), SET, value_of(v), v), label);
+    labelled(x, c, label);
+    return c;
 }
-static void limit_tree(ModsOverlaps *x, int mod, const char *path, const JsonValue *v)
+/* A key that stands for two: its own claim, and wide over the two. */
+static void limit_both(ModsOverlaps *x, int mod, const char *path, const char *key, const char *one,
+                       const char *two, const char *via, const JsonValue *v)
 {
-    char inner[200];
-    if (Json_TypeOf(v) != JSON_OBJECT) {
-        limit_claim(x, mod, path, v);
-        return;
-    }
-    for (const JsonValue *m = Json_At(v, 0); m; m = Json_Next(m)) {
-        snprintf(inner, sizeof(inner), "%s.%.60s", path, name_of(m));
-        if (!strcmp(path, "life_points.duelists")) {
-            /* By opponent, however it is named: a number or an object, one setting. */
-            uint64_t who = duelist_key(x, name_of(m));
-            char key[200], label[220];
-            snprintf(key, sizeof(key), "life_points.duelists.#%llx", (unsigned long long)who);
-            snprintf(label, sizeof(label), "Limit %s", inner);
-            labelled(x, claim(x, MODS_OVERLAP_LIMITS, mod, hash_text(key), SET, value_of(m), m), label);
-        } else
-            limit_tree(x, mod, inner, m);
-    }
+    Claim *c = limit_claim(x, mod, path, key, value_of(v), v);
+    widened(x, c, ~0ull, hash_text(one), ~0ull, hash_text(two), via);
 }
 static void read_limits(ModsOverlaps *x, int mod)
 {
-    const JsonValue *limits = member(x, mod, "limits"), *overflow = member(x, mod, "chest_overflow");
-    if (Json_TypeOf(limits) != JSON_OBJECT) limits = NULL; /* tables.c: "limits" is an object */
+    const JsonValue *limits = object_of(member(x, mod, "limits")), *overflow = object_of(member(x, mod, "chest_overflow"));
     for (const JsonValue *m = Json_At(limits, 0); m; m = Json_Next(m)) {
-        if (!strcmp(name_of(m), "life_points") && Json_TypeOf(m) == JSON_NUMBER)
-            limit_claim(x, mod, "life_points.start", m);
-        else
-            limit_tree(x, mod, name_of(m), m);
+        const char *name = name_of(m);
+        if (!strcmp(name, "stats"))
+            limit_both(x, mod, "stats", "stats", "attack", "defense", "stats", m);
+        else if (!strcmp(name, "life_points") && Json_TypeOf(m) != JSON_OBJECT)
+            limit_both(x, mod, "life_points", "life_points.start", "life_points.player", "life_points.opponent",
+                       "life_points", m);
+        else if (!strcmp(name, "life_points")) {
+            for (const JsonValue *k = Json_At(m, 0); k; k = Json_Next(k)) {
+                char path[200];
+                snprintf(path, sizeof(path), "life_points.%.60s", name_of(k));
+                if (!strcmp(name_of(k), "start"))
+                    limit_both(x, mod, path, path, "life_points.player", "life_points.opponent", "life_points.start", k);
+                else if (!strcmp(name_of(k), "duelists")) {
+                    for (const JsonValue *d = Json_At(object_of(k), 0); d; d = Json_Next(d)) {
+                        uint64_t who = duelist_key(x, name_of(d));
+                        char key[200], side[220], label[220];
+                        if (who == ALL_DUELISTS) continue; /* a named duelist wins over "all" whatever the order */
+                        snprintf(key, sizeof(key), "life_points.duelists.#%llx", (unsigned long long)who);
+                        snprintf(label, sizeof(label), "life_points.duelists.%.60s", name_of(d));
+                        if (Json_TypeOf(d) == JSON_OBJECT) {
+                            for (const JsonValue *s = Json_At(d, 0); s; s = Json_Next(s)) {
+                                char path_side[240];
+                                if (strcmp(name_of(s), "player") && strcmp(name_of(s), "opponent")) continue;
+                                snprintf(side, sizeof(side), "%s.%s", key, name_of(s));
+                                snprintf(path_side, sizeof(path_side), "%s.%s", label, name_of(s));
+                                limit_claim(x, mod, path_side, side, value_of(s), s);
+                            }
+                        } else {
+                            char player[240], opponent[240];
+                            snprintf(player, sizeof(player), "%s.player", key);
+                            snprintf(opponent, sizeof(opponent), "%s.opponent", key);
+                            limit_both(x, mod, label, key, player, opponent, name_of(d), d);
+                        }
+                    }
+                } else if (Json_TypeOf(k) == JSON_OBJECT) {
+                    for (const JsonValue *s = Json_At(k, 0); s; s = Json_Next(s)) {
+                        char inner[280];
+                        snprintf(inner, sizeof(inner), "%s.%.60s", path, name_of(s));
+                        limit_claim(x, mod, inner, NULL, value_of(s), s);
+                    }
+                } else
+                    limit_claim(x, mod, path, NULL, value_of(k), k);
+            }
+        } else if (Json_TypeOf(m) == JSON_OBJECT) {
+            for (const JsonValue *k = Json_At(m, 0); k; k = Json_Next(k)) {
+                char path[200];
+                snprintf(path, sizeof(path), "%.60s.%.60s", name, name_of(k));
+                limit_claim(x, mod, path, NULL, value_of(k), k);
+            }
+        } else
+            limit_claim(x, mod, name, NULL, value_of(m), m);
     }
-    /* chest_overflow's "limit" is "limits": {"chest"} by another name. */
-    if (Json_Member(overflow, "limit")) limit_claim(x, mod, "chest", Json_Member(overflow, "limit"));
-    if (Json_Member(overflow, "starchips"))
-        limit_claim(x, mod, "chest_overflow.starchips", Json_Member(overflow, "starchips"));
+    if (overflow) {
+        const JsonValue *limit = Json_Member(overflow, "limit"), *starchips = Json_Member(overflow, "starchips");
+        limit_claim(x, mod, limit ? "chest_overflow.limit" : "chest_overflow.limit (250, left out)", "chest",
+                    limit ? value_of(limit) : number_value(250), overflow);
+        limit_claim(x, mod, starchips ? "chest_overflow.starchips" : "chest_overflow.starchips (0, left out)",
+                    "chest_overflow.starchips", starchips ? value_of(starchips) : number_value(0), overflow);
+    }
 }
 
 /* "terrain_bonus": a terrain and a monster type; "replace" clears every
@@ -762,27 +1066,24 @@ static int terrain_named(const char *name)
     if (!name) return -1;
     for (int i = 0; i < 6; i++)
         if (same_letters(name, names[i][0]) || (names[i][1] && same_letters(name, names[i][1]))) return i + 1;
-    if (*name && strspn(name, "0123456789") == strlen(name)) return atoi(name);
+    if (digits_only(name)) return atoi(name);
     return -1;
 }
 static const char *const terrain_names[] = {"", "Forest", "Wasteland", "Mountain", "Sogen", "Umi", "Yami"};
 static void read_terrain(ModsOverlaps *x, int mod)
 {
-    const JsonValue *table = member(x, mod, "terrain_bonus");
-    if (Json_TypeOf(table) != JSON_OBJECT) return; /* tables.c: an object of terrains */
+    const JsonValue *table = object_of(member(x, mod, "terrain_bonus"));
+    if (!table) return;
     if (Json_Bool(Json_Member(table, "replace"), 0)) {
         Claim *c = claim(x, MODS_OVERLAP_TERRAIN, mod, SUB(RESET_SUB), SET, 0, Json_Member(table, "replace"));
-        if (c) {
-            c->mask = SUB_MASK;
-            c->match = SUB(1);
-            c->flags |= RESETS;
-        }
+        widened(x, c, SUB_MASK, SUB(1), 0, 0, "replace");
+        if (c) c->flags |= RESETS;
         labelled(x, c, "Every terrain bonus (\"replace\")");
     }
     for (const JsonValue *t = Json_At(table, 0); t; t = Json_Next(t)) {
         int terrain = terrain_named(name_of(t));
-        if (terrain < 1 || terrain > 6 || Json_TypeOf(t) != JSON_OBJECT) continue;
-        for (const JsonValue *type = Json_At(t, 0); type; type = Json_Next(type)) {
+        if (terrain < 1 || terrain > 6) continue;
+        for (const JsonValue *type = Json_At(object_of(t), 0); type; type = Json_Next(type)) {
             char label[160];
             snprintf(label, sizeof(label), "%s bonus of %.60s", terrain_names[terrain], name_of(type));
             labelled(x,
@@ -794,75 +1095,72 @@ static void read_terrain(ModsOverlaps *x, int mod)
     }
 }
 
-/* "trap_thresholds": a trap's threshold, the latest mod's. */
+/* "trap_thresholds": a trap's threshold, the latest mod's. Only the six
+ * attack traps (or copies of them) have one. */
 static void read_traps(ModsOverlaps *x, int mod)
 {
     for (const JsonValue *t = Json_At(object_of(member(x, mod, "trap_thresholds")), 0); t; t = Json_Next(t)) {
         uint64_t key = card_text(x, name_of(t));
-        if (key) claim(x, MODS_OVERLAP_TRAPS, mod, key, SET, value_of(t), t);
+        int base, type, attribute;
+        if (!key) continue;
+        card_info(x, key, &base, &type, &attribute);
+        if (key < TEXT_KEY && (base < ATTACK_TRAP_FIRST || base >= ATTACK_TRAP_FIRST + ATTACK_TRAPS)) continue;
+        claim(x, MODS_OVERLAP_TRAPS, mod, key < TEXT_KEY ? (uint64_t)base : key, SET, value_of(t), t);
     }
-}
-
-/* The duelists/ folder (notes/more-duelists.md): the later of two mods
- * replacing one duelist has him; of two asking for one slot, the earlier
- * keeps it. */
-static void read_duelists(ModsOverlaps *x, int mod)
-{
-    char *names = folder_names(x, mod, "duelists"), relative[160], label[200];
-    for (const char *name = names; name && *name; name += strlen(name) + 1) {
-        const JsonValue *root, *replaced, *slot;
-        snprintf(relative, sizeof(relative), "duelists/%.100s.json", name);
-        if (!(root = mod_file(x, mod, relative))) continue;
-        if ((replaced = Json_Member(root, "replace")) != NULL) {
-            const char *who = Json_String(replaced, "");
-            char number[24];
-            if (Json_TypeOf(replaced) == JSON_NUMBER) {
-                snprintf(number, sizeof(number), "%ld", Json_Number(replaced, 0));
-                who = number;
-            }
-            snprintf(label, sizeof(label), "Duelist '%.80s' replaced", who);
-            labelled(x, claim(x, MODS_OVERLAP_DUELISTS, mod, (1ull << 62) | duelist_key(x, who), SET, own_value(mod), root),
-                     label);
-        }
-        if ((slot = Json_Member(root, "slot")) != NULL && Json_TypeOf(slot) == JSON_NUMBER) {
-            snprintf(label, sizeof(label), "Free Duel slot %ld", Json_Number(slot, 0));
-            labelled(x,
-                     claim(x, MODS_OVERLAP_DUELISTS, mod, (2ull << 62) | (uint64_t)Json_Number(slot, 0), FIRST,
-                           own_value(mod), root),
-                     label);
-        }
-    }
-    free(names);
 }
 
 /* "text": the listings' strings by id (translation.c: a later string with
- * the same id replaces an earlier one). The value is the string's text, so
- * two mods with the same words agree. */
+ * the same id replaces an earlier one). An item may name several ids, "[8001
+ * 8002]", each as strtoul reads it (listing.c); a "{:L...}" line starts an
+ * item of no id. The value is the item's words (its blank and "#" lines
+ * aside), so two mods with the same words agree. */
+static void text_item(ModsOverlaps *x, int *open, int count, uint32_t value)
+{
+    for (int i = 0; i < count; i++) x->claims[open[i]].value = value;
+}
 static void text_file(ModsOverlaps *x, int mod, const char *path)
 {
     FILE *file = fopen(path, "rb");
-    char line[4096];
-    long id = -1;
+    char *text = NULL, *line, *next;
+    long size;
+    int open[64], count = 0;
     uint32_t value = 2166136261u;
-    Claim *open = NULL;
     if (!file) return;
-    while (fgets(line, sizeof(line), file)) {
-        size_t n = strlen(line);
-        while (n && (line[n - 1] == '\n' || line[n - 1] == '\r')) line[--n] = 0;
-        if (line[0] == '[' || line[0] == '@') {
-            char *end;
-            if (open) open->value = value;
-            open = NULL;
-            if (line[0] == '@') continue;
-            id = strtol(line + 1, &end, 16);
-            if (*end != ']' || id < 0) continue;
+    if (fseek(file, 0, SEEK_END) || (size = ftell(file)) < 0 || fseek(file, 0, SEEK_SET) ||
+        !(text = malloc((size_t)size + 1)) || fread(text, 1, (size_t)size, file) != (size_t)size) {
+        free(text);
+        fclose(file);
+        return;
+    }
+    fclose(file);
+    text[size] = 0;
+    for (line = text; line; line = next) {
+        size_t n;
+        next = strchr(line, '\n');
+        if (next) *next++ = 0;
+        n = strlen(line);
+        if (n && line[n - 1] == '\r') line[--n] = 0;
+        if (line[0] == '[' || (line[0] == '{' && line[1] == ':')) {
+            const char *close = line[0] == '[' ? strchr(line, ']') : NULL, *word = line + 1;
+            text_item(x, open, count, value);
+            count = 0;
             value = 2166136261u;
-            open = claim(x, MODS_OVERLAP_TEXT, mod, (uint64_t)id, SET, 0, NULL);
-        } else if (open && line[0] && line[0] != '#')
+            while (close && word < close && count < 64) {
+                char *after;
+                unsigned long id = strtoul(word, &after, 16);
+                Claim *c;
+                if (after == word) break;
+                word = after;
+                while (word < close && *word == ' ') word++;
+                if (id > 0xFFFF) continue;
+                if (!(c = claim(x, MODS_OVERLAP_TEXT, mod, (uint64_t)id, SET, 0, NULL))) break;
+                open[count++] = (int)(c - x->claims);
+            }
+        } else if (count && line[0] && line[0] != '#')
             value = (uint32_t)fnv(value * 31u, line);
     }
-    if (open) open->value = value;
-    fclose(file);
+    text_item(x, open, count, value);
+    free(text);
 }
 static void read_text(ModsOverlaps *x, int mod)
 {
@@ -877,46 +1175,74 @@ static void read_text(ModsOverlaps *x, int mod)
     }
 }
 
-/* "title" and "menu": each key the latest mod's; the title's "text" lines
- * add up; a button belongs to the mod that makes it, and another changes it
- * by naming it "<mod id>:<id>" (title_config.c). */
-static void title_tree(ModsOverlaps *x, int mod, const char *path, const JsonValue *v, int mode, int flags)
+/* "title" and "menu": each key the latest mod's (title_config.c). Both say
+ * "spacing" and "entries", which are one setting: an entry by its name or
+ * its number 0-10. The title's "text" lines add up. A button belongs to the
+ * mod that makes it; another changes it by naming it "<mod id>:<id>", and
+ * only when it loads after that mod. */
+static const char *const entry_names[] = {"new_game", "load",       "duel",    "trade",    "options", "campaign",
+                                          "free_duel", "build_deck", "library", "password", "save"};
+static int entry_index(const char *name)
 {
-    char inner[256];
+    char *end;
+    long number;
+    for (int i = 0; i < 11; i++)
+        if (!strcmp(name, entry_names[i])) return i;
+    number = strtol(name, &end, 10);
+    return *name && !*end && number >= 0 && number < 11 ? (int)number : -1;
+}
+static void title_tree(ModsOverlaps *x, int mod, const char *path, const char *key, const JsonValue *v, int mode,
+                       int flags)
+{
+    char inner[256], inner_key[256];
     if (Json_TypeOf(v) != JSON_OBJECT) {
-        Claim *c = claim(x, MODS_OVERLAP_TITLE, mod, hash_text(path), mode, value_of(v), v);
+        Claim *c = claim(x, MODS_OVERLAP_TITLE, mod, hash_text(key), mode, value_of(v), v);
         if (c) c->flags |= (unsigned char)flags;
         labelled(x, c, path);
         return;
     }
     for (const JsonValue *m = Json_At(v, 0); m; m = Json_Next(m)) {
         snprintf(inner, sizeof(inner), "%s.%.60s", path, name_of(m));
-        title_tree(x, mod, inner, m, mode, flags);
+        snprintf(inner_key, sizeof(inner_key), "%s.%.60s", key, name_of(m));
+        title_tree(x, mod, inner, inner_key, m, mode, flags);
+    }
+}
+static void title_entries(ModsOverlaps *x, int mod, const char *path, const JsonValue *entries)
+{
+    for (const JsonValue *e = Json_At(object_of(entries), 0); e; e = Json_Next(e)) {
+        char inner[160], key[64];
+        int i = entry_index(name_of(e));
+        if (i < 0) continue;
+        snprintf(inner, sizeof(inner), "%s.%.60s", path, name_of(e));
+        snprintf(key, sizeof(key), "entries.%d", i);
+        title_tree(x, mod, inner, key, e, SET, 0);
     }
 }
 static void read_title(ModsOverlaps *x, int mod)
 {
-    const JsonValue *title = member(x, mod, "title"), *menu = member(x, mod, "menu");
-    /* title_config.c reads objects only; an array's entries have no names. */
-    if (Json_TypeOf(title) != JSON_OBJECT) title = NULL;
-    if (Json_TypeOf(menu) != JSON_OBJECT) menu = NULL;
+    const JsonValue *title = object_of(member(x, mod, "title")), *menu = object_of(member(x, mod, "menu"));
     for (const JsonValue *m = Json_At(title, 0); m; m = Json_Next(m)) {
         char path[128];
-        snprintf(path, sizeof(path), "title.%.60s", name_of(m));
-        if (!strcmp(name_of(m), "text"))
-            labelled(x, claim(x, MODS_OVERLAP_TITLE, mod, hash_text(path), ADD, 0, m), "title.text (lines)");
+        const char *name = name_of(m);
+        snprintf(path, sizeof(path), "title.%.60s", name);
+        if (!strcmp(name, "text")) {
+            if (Json_TypeOf(m) == JSON_ARRAY)
+                labelled(x, claim(x, MODS_OVERLAP_TITLE, mod, hash_text(path), ADD, 0, m), "title.text (lines)");
+        } else if (!strcmp(name, "entries"))
+            title_entries(x, mod, path, m);
         else
-            title_tree(x, mod, path, m, SET, 0);
+            title_tree(x, mod, path, !strcmp(name, "spacing") ? "spacing" : path, m, SET, 0);
     }
     for (const JsonValue *m = Json_At(menu, 0); m; m = Json_Next(m)) {
         char path[160];
-        if (!strcmp(name_of(m), "buttons")) {
+        const char *name = name_of(m);
+        if (!strcmp(name, "buttons")) {
             /* title_config.c read_buttons: a list of objects. */
-            for (const JsonValue *b = Json_TypeOf(m) == JSON_ARRAY ? Json_At(m, 0) : NULL; b; b = Json_Next(b)) {
-                if (Json_TypeOf(b) != JSON_OBJECT) continue;
+            for (const JsonValue *b = Json_At(list_of(m), 0); b; b = Json_Next(b)) {
                 const char *id = Json_String(Json_Member(b, "id"), "");
                 size_t own = strlen(x->mods[mod].id);
                 int theirs = strchr(id, ':') && !(strncmp(id, x->mods[mod].id, own) == 0 && id[own] == ':');
+                if (Json_TypeOf(b) != JSON_OBJECT || entry_index(id) >= 0 || !*id) continue;
                 if (strchr(id, ':'))
                     snprintf(path, sizeof(path), "menu.buttons.%.100s", id);
                 else
@@ -925,16 +1251,56 @@ static void read_title(ModsOverlaps *x, int mod)
                     char leaf[256];
                     if (!strcmp(name_of(k), "id")) continue;
                     snprintf(leaf, sizeof(leaf), "%s.%.60s", path, name_of(k));
-                    title_tree(x, mod, leaf, k, theirs ? SET : BASE, theirs ? AIMED : 0);
+                    title_tree(x, mod, leaf, leaf, k, theirs ? SET : BASE, theirs ? AIMED : 0);
                 }
             }
-        } else if (!strcmp(name_of(m), "order") && Json_TypeOf(m) == JSON_ARRAY)
-            title_tree(x, mod, "menu.order.first", m, SET, 0);
-        else {
-            snprintf(path, sizeof(path), "menu.%.60s", name_of(m));
-            title_tree(x, mod, path, m, SET, 0);
+        } else if (!strcmp(name, "order")) {
+            if (Json_TypeOf(m) == JSON_ARRAY)
+                title_tree(x, mod, "menu.order", "menu.order.first", m, SET, 0);
+            else
+                for (const JsonValue *k = Json_At(object_of(m), 0); k; k = Json_Next(k))
+                    if (!strcmp(name_of(k), "first") || !strcmp(name_of(k), "second")) {
+                        snprintf(path, sizeof(path), "menu.order.%s", name_of(k));
+                        title_tree(x, mod, path, path, k, SET, 0);
+                    }
+        } else if (!strcmp(name, "entries")) {
+            title_entries(x, mod, "menu.entries", m);
+        } else {
+            snprintf(path, sizeof(path), "menu.%.60s", name);
+            title_tree(x, mod, path, !strcmp(name, "spacing") ? "spacing" : path, m, SET, 0);
         }
     }
+}
+
+/* "packs" and "pack_shop" (packs.c): a pack is its mod's own, "<mod
+ * id>:<id>". The shop's rules are one mod's, the last in the load order's,
+ * every rule it leaves out back at its default; its shops are kept by id,
+ * a later mod's name and unlock going over an earlier's, the packs of both
+ * in it. "packs" may name a file holding the list, or the list and the
+ * rules. */
+static void pack_rules(ModsOverlaps *x, int mod, const JsonValue *rules)
+{
+    uint32_t value = 2166136261u;
+    if (!object_of(rules)) return;
+    for (const JsonValue *m = Json_At(rules, 0); m; m = Json_Next(m))
+        if (strcmp(name_of(m), "shops")) value = hash_json(value * 31u, m, 1);
+    labelled(x, claim(x, MODS_OVERLAP_PACKS, mod, 1, SET, value, rules), "The pack shop's rules");
+    for (const JsonValue *s = Json_At(list_of(Json_Member(rules, "shops")), 0); s; s = Json_Next(s)) {
+        const char *id = Json_String(Json_Member(s, "id"), "");
+        char label[120];
+        if (Json_TypeOf(s) != JSON_OBJECT || !*id) continue;
+        snprintf(label, sizeof(label), "Pack shop '%.60s'", id);
+        labelled(x, claim(x, MODS_OVERLAP_PACKS, mod, (1ull << 62) | (hash_text(id) >> 2), SET, value_of(s), s), label);
+    }
+}
+static void read_packs(ModsOverlaps *x, int mod)
+{
+    const JsonValue *packs = member(x, mod, "packs");
+    if (Json_TypeOf(packs) == JSON_STRING) {
+        const JsonValue *file = mod_file(x, mod, Json_String(packs, NULL));
+        if (Json_TypeOf(file) == JSON_OBJECT) pack_rules(x, mod, Json_Member(file, "pack_shop"));
+    }
+    pack_rules(x, mod, member(x, mod, "pack_shop"));
 }
 
 /* Code: function hooks chain, the mod applied last called first; event
@@ -966,8 +1332,13 @@ static int by_key(const void *left, const void *right)
     return (a->seq > b->seq) - (a->seq < b->seq);
 }
 
+static int covers(const Claim *wide, uint64_t key)
+{
+    return (key & wide->mask) == wide->match || (wide->mask2 && (key & wide->mask2) == wide->match2);
+}
 /* A wide claim stands beside each key of its kind another mod names that
- * it covers, as a copy marked VIA_WIDE. */
+ * it covers, as a copy marked VIA_WIDE; one that resets, only beside the
+ * keys of mods loading before it. */
 static void widen(ModsOverlaps *x)
 {
     int count = x->claim_count, wide = 0;
@@ -981,12 +1352,13 @@ static void widen(ModsOverlaps *x)
         if (!spread.mask) continue;
         for (int i = 0; i < count; i++) {
             Claim c = x->claims[i], *copy;
-            if (c.kind != spread.kind || c.mask || c.mod == spread.mod || (c.key & spread.mask) != spread.match ||
-                (emitted && c.key == last))
+            if (c.kind != spread.kind || c.mask || c.mod == spread.mod || !covers(&spread, c.key) ||
+                (spread.flags & RESETS && c.mod > spread.mod) || (emitted && c.key == last))
                 continue;
             if (!(copy = claim(x, spread.kind, spread.mod, c.key, spread.mode, spread.value, spread.src))) return;
             copy->seq = spread.seq;
             copy->label = spread.label;
+            copy->via = spread.via;
             copy->flags = (unsigned char)(spread.flags | VIA_WIDE);
             emitted = 1;
             last = c.key;
@@ -999,91 +1371,203 @@ static int declared(const ModsOverlaps *x, int winner, int other)
     return x->declared[winner * x->mod_count + other];
 }
 
-/* Where a mod's entry for one card sets a key another mod's sets
- * differently: those keys of the winner's, and whether any key met at all. */
-static int card_keys(const ModsOverlaps *x, const Group *g, char *out, size_t size, int *met)
+/* Two card entries of one card, earlier and later from another mod: the
+ * keys the later sets differently (it wins them), and the reset keys the
+ * earlier sets that the later leaves out (dropped); whether any key met. */
+typedef struct {
+    char used[200], dropped[200];
+    int met;
+} CardKeys;
+static void add_word(char *list, size_t size, const char *word)
 {
-    const Claim *c = &x->claims[g->first];
-    int conflicts = 0;
-    size_t length = 0;
-    if (out && size) *out = 0;
-    *met = 0;
-    for (int i = 0; i < g->count; i++) {
-        if (c[i].mode != SET) continue;
-        for (const JsonValue *k = Json_At(c[i].src, 0); k; k = Json_Next(k)) {
-            const char *name = name_of(k);
-            int differs = 0, later = 0;
-            if (!strcmp(name, "replace") || !strcmp(name, "notes") || !strcmp(name, "id")) continue;
-            for (int j = 0; j < g->count; j++) {
-                const JsonValue *other;
-                if (c[j].mode != SET || c[j].mod == c[i].mod || !(other = Json_Member(c[j].src, name))) continue;
-                if (j > i) later = 1;
-                else {
-                    *met = 1;
-                    differs |= value_of(other) != value_of(k);
-                }
-            }
-            if (differs && !later) {
-                conflicts++;
-                if (out && length + strlen(name) + 3 < size)
-                    length += (size_t)snprintf(out + length, size - length, "%s%s", length ? ", " : "", name);
-            }
-        }
+    size_t n = strlen(list);
+    char padded[80];
+    snprintf(padded, sizeof(padded), ", %s,", word);
+    if (n) {
+        char check[220];
+        snprintf(check, sizeof(check), ", %s,", list);
+        if (strstr(check, padded)) return;
     }
-    return conflicts;
+    if (n + strlen(word) + 3 < size) snprintf(list + n, size - n, "%s%s", n ? ", " : "", word);
 }
-
-/* The equip entries meeting on one equip card: whether the later says
- * something different about a monster, a type or a bonus the earlier
- * named; whether they said the same about one. */
-static void equip_targets(const JsonValue *entry, int pass, const JsonValue **list)
-{
-    *list = Json_Member(entry, pass == 0 ? "add" : pass == 1 ? "remove" : "bonus_if");
-}
-static int equips_meet(ModsOverlaps *x, const Group *g, int *agree)
+static void card_keys(const ModsOverlaps *x, const Group *g, CardKeys *keys)
 {
     const Claim *c = &x->claims[g->first];
-    *agree = 0;
+    memset(keys, 0, sizeof(*keys));
     for (int i = 0; i < g->count; i++)
         for (int j = i + 1; j < g->count; j++) {
-            if (c[i].mod == c[j].mod) continue;
-            if (Json_Member(c[i].src, "bonus") && Json_Member(c[j].src, "bonus")) {
-                if (value_of(Json_Member(c[i].src, "bonus")) != value_of(Json_Member(c[j].src, "bonus"))) return 1;
-                *agree = 1;
+            if (c[j].mod == c[i].mod) continue;
+            for (const JsonValue *k = Json_At(c[i].src, 0); k; k = Json_Next(k)) {
+                const char *name = name_of(k);
+                const JsonValue *other = Json_Member(c[j].src, name);
+                if (!strcmp(name, "replace") || !strcmp(name, "notes") || !strcmp(name, "id")) continue;
+                if (other) {
+                    keys->met = 1;
+                    if (value_of(other) != value_of(k)) add_word(keys->used, sizeof(keys->used), name);
+                } else if (card_resets(name))
+                    add_word(keys->dropped, sizeof(keys->dropped), name);
             }
-            for (int p = 0; p < 3; p++)
-                for (int q = 0; q < 3; q++) {
-                    const JsonValue *a, *b;
-                    if ((p == 2) != (q == 2)) continue;
-                    equip_targets(c[i].src, p, &a);
-                    equip_targets(c[j].src, q, &b);
-                    for (const JsonValue *s = Json_At(a, 0); s; s = Json_Next(s))
-                        for (const JsonValue *t = Json_At(b, 0); t; t = Json_Next(t)) {
-                            int same = p == 2 ? same_letters(name_of(s), name_of(t)) : card_key(x, s) == card_key(x, t);
-                            if (!same) continue;
-                            if (p == 2 ? value_of(s) != value_of(t) : p != q) return 1;
-                            *agree = 1;
-                        }
-                }
         }
-    return 0;
 }
 
-/* Two patches from different mods over the same bytes. */
-static long patch_length(const JsonValue *patch)
+/* Two equip entries of one equip card: for each kind of monster either
+ * names (a card, a type, any other; a type and an attribute for a bonus),
+ * what each says; the later decides where it says anything. Whether they
+ * differ anywhere, and whether they said the same somewhere. */
+static const char *const type_names[] = {"Dragon", "Spellcaster", "Zombie", "Warrior", "Beast-Warrior", "Beast",
+                                         "Winged Beast", "Fiend", "Fairy", "Insect", "Dinosaur", "Reptile",
+                                         "Fish", "Sea Serpent", "Machine", "Thunder", "Aqua", "Pyro", "Rock",
+                                         "Plant", "Magic", "Trap", "Ritual", "Equip"};
+static const char *const attribute_names[] = {"Light", "Dark", "Earth", "Water", "Fire", "Wind"};
+static int type_named(const char *text)
 {
-    long digits = 0;
-    for (const char *s = Json_String(Json_Member(patch, "bytes"), ""); *s; s++) digits += isxdigit((unsigned char)*s) != 0;
-    return digits / 2;
+    for (int i = 0; i < 24; i++)
+        if (same_letters(text, type_names[i])) return i;
+    return -1;
 }
+static int attribute_named(const char *text)
+{
+    for (int i = 0; i < 6; i++)
+        if (same_letters(text, attribute_names[i])) return i;
+    return -1;
+}
+/* A target of "add" or "remove": a card (its key), or a type (-2 - type). */
+static long long equip_target(ModsOverlaps *x, const JsonValue *t)
+{
+    const char *text = Json_String(t, NULL);
+    int type = text ? type_named(text) : -1;
+    uint64_t key;
+    if (type >= 0 && (!x->source.card || x->source.card(text, 0, x->source.context) <= 0)) return -2 - type;
+    key = card_key(x, t);
+    return key ? (long long)key : -1;
+}
+/* What an entry says of a monster that is card `card` (0 none) of `type`:
+ * 1 may equip, 0 may not, -1 nothing. The most specific rule decides. */
+static int equip_allows(ModsOverlaps *x, const JsonValue *entry, long long card, int type)
+{
+    int best = -1, rank = 0;
+    if (Json_Bool(Json_Member(entry, "replace"), 0)) {
+        best = 0;
+        rank = 1;
+    }
+    for (int pass = 0; pass < 2; pass++)
+        for (const JsonValue *t = Json_At(list_of(Json_Member(entry, pass ? "remove" : "add")), 0); t; t = Json_Next(t)) {
+            long long target = equip_target(x, t);
+            int r = target >= 0 && target == card ? 3 : target <= -2 && type >= 0 && -2 - target == type ? 2 : 0;
+            if (r && r >= rank) {
+                best = !pass;
+                rank = r;
+            }
+        }
+    return best;
+}
+/* Its bonus for a monster of `type` and `attribute` (-1: neither named): the
+ * first "bonus_if" that fits, then "bonus"; INT32_MIN for nothing. */
+static long equip_bonus(const JsonValue *entry, int type, int attribute)
+{
+    for (const JsonValue *b = Json_At(object_of(Json_Member(entry, "bonus_if")), 0); b; b = Json_Next(b)) {
+        int t = type_named(name_of(b)), a = t < 0 || t >= 20 ? attribute_named(name_of(b)) : -1;
+        if (Json_TypeOf(b) != JSON_NUMBER) continue;
+        if ((t >= 0 && t < 20 && t == type) || (a >= 0 && a == attribute)) return Json_Number(b, 0);
+    }
+    if (Json_TypeOf(Json_Member(entry, "bonus")) == JSON_NUMBER) return Json_Number(Json_Member(entry, "bonus"), 0);
+    return -2147483647L - 1;
+}
+static void equips_meet(ModsOverlaps *x, const JsonValue *early, const JsonValue *late, int *differ, int *same)
+{
+    long long cards[64];
+    int card_types[64], types[32], attributes[8], n_cards = 0, n_types = 0, n_attributes = 0;
+    const JsonValue *entries[2] = {early, late};
+    types[n_types++] = -1;
+    attributes[n_attributes++] = -1;
+    for (int e = 0; e < 2; e++) {
+        for (int pass = 0; pass < 2; pass++)
+            for (const JsonValue *t = Json_At(list_of(Json_Member(entries[e], pass ? "remove" : "add")), 0); t;
+                 t = Json_Next(t)) {
+                long long target = equip_target(x, t);
+                if (target >= 0 && n_cards < 64) {
+                    int base, type, attribute;
+                    card_info(x, (uint64_t)target, &base, &type, &attribute);
+                    card_types[n_cards] = type;
+                    cards[n_cards++] = target;
+                } else if (target <= -2 && n_types < 32)
+                    types[n_types++] = (int)(-2 - target);
+            }
+        for (const JsonValue *b = Json_At(object_of(Json_Member(entries[e], "bonus_if")), 0); b; b = Json_Next(b)) {
+            int t = type_named(name_of(b)), a = attribute_named(name_of(b));
+            if (t >= 0 && t < 20 && n_types < 32) types[n_types++] = t;
+            else if (a >= 0 && n_attributes < 8) attributes[n_attributes++] = a;
+        }
+    }
+    *differ = *same = 0;
+    for (int i = 0; i < n_cards + n_types; i++) {
+        long long card = i < n_cards ? cards[i] : 0;
+        int type = i < n_cards ? card_types[i] : types[i - n_cards];
+        int a = equip_allows(x, early, card, type), b = equip_allows(x, late, card, type);
+        if (a < 0 || b < 0) continue;
+        if (a != b) *differ = 1;
+        else *same = 1;
+    }
+    for (int t = 0; t < n_types; t++)
+        for (int a = 0; a < n_attributes; a++) {
+            long one = equip_bonus(early, types[t], attributes[a]), two = equip_bonus(late, types[t], attributes[a]);
+            if (one == -2147483647L - 1 || two == -2147483647L - 1) continue;
+            if (one != two) *differ = 1;
+            else *same = 1;
+        }
+}
+
+/* Two patches from different mods over the same bytes; raw sectors from
+ * their first sector's byte. */
 static int patches_meet(const Claim *a, const Claim *b)
 {
-    for (const JsonValue *p = Json_At(Json_Member(a->src, "patch"), 0); p; p = Json_Next(p))
-        for (const JsonValue *q = Json_At(Json_Member(b->src, "patch"), 0); q; q = Json_Next(q)) {
-            long pa = Json_Number(Json_Member(p, "at"), 0), qa = Json_Number(Json_Member(q, "at"), 0);
+    long long base_a = (a->key >> 62) == 3 ? Json_Number(Json_Member(a->src, "lba"), 0) * 2048LL : 0,
+              base_b = (b->key >> 62) == 3 ? Json_Number(Json_Member(b->src, "lba"), 0) * 2048LL : 0;
+    if ((a->key >> 62) != (b->key >> 62)) return 0;
+    for (const JsonValue *p = Json_At(list_of(Json_Member(a->src, "patch")), 0); p; p = Json_Next(p))
+        for (const JsonValue *q = Json_At(list_of(Json_Member(b->src, "patch")), 0); q; q = Json_Next(q)) {
+            long long pa = base_a + Json_Number(Json_Member(p, "at"), 0), qa = base_b + Json_Number(Json_Member(q, "at"), 0);
             if (pa < qa + patch_length(q) && qa < pa + patch_length(p)) return 1;
         }
     return 0;
+}
+/* Raw replacements whose sectors meet. */
+static int sectors_meet(const Claim *a, const Claim *b) { return a->lo <= b->hi && b->lo <= a->hi; }
+
+static void decide_data(ModsOverlaps *x, Group *g)
+{
+    const Claim *c = &x->claims[g->first];
+    int i, j;
+    g->severity = MODS_OVERLAP_WARNING;
+    for (i = g->count - 1; i >= 0; i--) /* two replacements: the later's is read */
+        for (j = 0; j < i; j++)
+            if (c[i].mode == SET && c[j].mode == SET && c[i].mod != c[j].mod && sectors_meet(&c[i], &c[j])) {
+                g->winner = c[i].mod;
+                g->other = c[j].mod;
+                g->outcome = declared(x, g->winner, g->other) ? O_AFTER : O_LATER;
+                if (g->outcome == O_AFTER) g->severity = MODS_OVERLAP_INFO;
+                return;
+            }
+    for (i = g->count - 1; i >= 0; i--)
+        for (j = 0; j < i; j++)
+            if (c[i].mode == ADD && c[j].mode == ADD && c[i].mod != c[j].mod && patches_meet(&c[i], &c[j])) {
+                g->winner = c[i].mod;
+                g->other = c[j].mod;
+                g->outcome = O_BYTES;
+                return;
+            }
+    /* A patch goes over every replacement (mods.c Mods_DiscSector), however
+     * the two load: another mod's patch lands in this one's file. */
+    for (i = 0; i < g->count; i++)
+        for (j = 0; j < g->count; j++)
+            if (c[i].mode == ADD && c[j].mode == SET && c[i].mod != c[j].mod && sectors_meet(&c[i], &c[j])) {
+                g->winner = c[i].mod;
+                g->other = c[j].mod;
+                g->outcome = O_PATCHED;
+                return;
+            }
+    g->outcome = O_ADD;
+    g->severity = MODS_OVERLAP_INFO;
 }
 
 static void decide(ModsOverlaps *x, Group *g)
@@ -1101,34 +1585,8 @@ static void decide(ModsOverlaps *x, Group *g)
         g->outcome = O_EVENTS;
         g->severity = MODS_OVERLAP_INFO;
         return;
-    case MODS_OVERLAP_DATA: {
-        int replaced = -1, other = -1;
-        for (i = 0; i < g->count; i++)
-            if (c[i].mode == SET) {
-                if (replaced >= 0 && c[replaced].mod != c[i].mod) other = c[replaced].mod;
-                replaced = i;
-            }
-        if (other >= 0) {
-            g->winner = c[replaced].mod;
-            g->other = other;
-            g->outcome = declared(x, g->winner, other) ? O_AFTER : O_LATER;
-            g->severity = g->outcome == O_AFTER ? MODS_OVERLAP_INFO : MODS_OVERLAP_WARNING;
-            return;
-        }
-        for (i = g->count - 1; i >= 0; i--)
-            for (int j = 0; j < i; j++)
-                if (c[i].mode == ADD && c[j].mode == ADD && c[i].mod != c[j].mod && patches_meet(&c[i], &c[j])) {
-                    g->winner = c[i].mod;
-                    g->other = c[j].mod;
-                    g->outcome = O_BYTES;
-                    return;
-                }
-        g->outcome = O_ADD;
-        g->severity = MODS_OVERLAP_INFO;
-        return;
-    }
-    default:
-        break;
+    case MODS_OVERLAP_DATA: decide_data(x, g); return;
+    default: break;
     }
     for (i = 0; i < g->count; i++) {
         if (c[i].mode == FIXED) fixed = i;
@@ -1147,8 +1605,18 @@ static void decide(ModsOverlaps *x, Group *g)
         g->severity = agree ? MODS_OVERLAP_INFO : MODS_OVERLAP_WARNING;
         return;
     }
+    /* A button named by a mod loading before the one that makes it: its
+     * change is left out (title_config.c read_buttons). */
+    for (i = 0; i < g->count; i++)
+        if (c[i].mode == BASE)
+            for (int j = 0; j < i; j++)
+                if (c[j].flags & AIMED && c[j].mod < c[i].mod) {
+                    g->winner = c[j].mod;
+                    g->other = c[i].mod;
+                    g->outcome = O_EARLY;
+                    return;
+                }
     if (last < 0) {
-        /* Only additions, and maybe the owner's own definition. */
         g->outcome = O_ADD;
         g->severity = MODS_OVERLAP_INFO;
         return;
@@ -1167,7 +1635,7 @@ static void decide(ModsOverlaps *x, Group *g)
     }
     if (!losers) {
         /* The one change is the only one, on top of what the others add, or
-         * of a card or button another mod made (its BASE). */
+         * of a button another mod made (its BASE). */
         for (i = 0; i < g->count; i++)
             if (c[i].mode == BASE && c[i].mod != g->winner) g->other = c[i].mod;
         g->outcome = g->other >= 0 ? O_AIMED : O_ADD;
@@ -1175,24 +1643,30 @@ static void decide(ModsOverlaps *x, Group *g)
         return;
     }
     if (g->kind == MODS_OVERLAP_CARDS) {
-        int met, conflicts = card_keys(x, g, NULL, 0, &met);
-        if (!conflicts) {
-            g->outcome = met ? O_AGREE : O_ADD;
+        CardKeys keys;
+        card_keys(x, g, &keys);
+        if (!*keys.used && !*keys.dropped) {
+            g->outcome = keys.met ? O_AGREE : O_ADD;
             g->severity = MODS_OVERLAP_INFO;
             return;
         }
         g->outcome = O_KEYS;
     } else if (g->kind == MODS_OVERLAP_EQUIPS && c[last].key != DEFAULT_EQUIP_BONUS) {
-        int same;
-        if (Json_Bool(Json_Member(c[last].src, "replace"), 0))
-            g->outcome = O_RESET;
-        else if (equips_meet(x, g, &same))
-            g->outcome = O_LATER;
-        else {
+        int differ = 0, same = 0;
+        for (i = 0; i < g->count; i++)
+            for (int j = i + 1; j < g->count; j++)
+                if (c[i].mod != c[j].mod) {
+                    int d, s;
+                    equips_meet(x, c[i].src, c[j].src, &d, &s);
+                    differ |= d;
+                    same |= s;
+                }
+        if (!differ) {
             g->outcome = same ? O_AGREE : O_ADD;
             g->severity = MODS_OVERLAP_INFO;
             return;
         }
+        g->outcome = Json_Bool(Json_Member(c[last].src, "replace"), 0) ? O_RESET : O_LATER;
     } else if (agree) {
         g->outcome = O_AGREE;
         g->severity = MODS_OVERLAP_INFO;
@@ -1206,14 +1680,24 @@ static void decide(ModsOverlaps *x, Group *g)
 }
 
 /* Within a kind, the warnings first, then as the earliest mod's manifest
- * has them (its claims come first in a group). */
+ * has them (its claims come first in a group), and between the keys an
+ * "all" reaches, as the manifests name them. */
 static const Claim *sorting;
+static int named_seq(const Group *g)
+{
+    for (int i = 0; i < g->count; i++)
+        if (!(sorting[g->first + i].flags & VIA_WIDE)) return sorting[g->first + i].seq;
+    return sorting[g->first].seq;
+}
 static int by_severity(const void *left, const void *right)
 {
     const Group *a = left, *b = right;
     int sa = sorting[a->first].seq, sb = sorting[b->first].seq;
     if (a->kind != b->kind) return a->kind < b->kind ? -1 : 1;
     if (a->severity != b->severity) return a->severity > b->severity ? -1 : 1;
+    if (sa != sb) return sa < sb ? -1 : 1;
+    sa = named_seq(a);
+    sb = named_seq(b);
     if (sa != sb) return sa < sb ? -1 : 1;
     return (a->first > b->first) - (a->first < b->first);
 }
@@ -1253,7 +1737,6 @@ static void group(ModsOverlaps *x)
 ModsOverlaps *Mods_OverlapCompute(const ModsOverlapMod *mods, int count, const ModsOverlapSource *source)
 {
     ModsOverlaps *x = calloc(1, sizeof(*x));
-    int identities;
     if (!x) return NULL;
     if (source) x->source = *source;
     x->mod_count = count;
@@ -1266,19 +1749,19 @@ ModsOverlaps *Mods_OverlapCompute(const ModsOverlapMod *mods, int count, const M
     memcpy(x->mods, mods, (size_t)count * sizeof(*mods));
     for (int w = 0; w < count; w++)
         for (int k = 0; k < 2; k++)
-            for (const JsonValue *v = Json_At(member(x, w, k ? "requires" : "after"), 0); v; v = Json_Next(v)) {
+            for (const JsonValue *v = Json_At(list_of(member(x, w, k ? "requires" : "after")), 0); v; v = Json_Next(v)) {
                 const char *id = Json_String(v, Json_String(Json_Member(v, "id"), ""));
                 for (int o = 0; o < count; o++)
                     if (!strcmp(id, mods[o].id)) x->declared[w * count + o] = 1;
             }
     if (count < 2) return x;
-    identities = any_identity_replace(x);
     if (having(x, "guardian_stars") >= 2) star_names(x);
+    for (int mod = 0; mod < count; mod++) read_duelists(x, mod); /* before the pools that name them */
     for (int mod = 0; mod < count; mod++) {
         if (having(x, "data") >= 2) read_data(x, mod);
         if (having(x, "audio") >= 2) read_audio(x, mod);
         if (having(x, "textures") >= 2) read_textures(x, mod);
-        if (having(x, "cards") >= 2) read_cards(x, mod, identities);
+        if (having(x, "cards") >= 2) read_cards(x, mod);
         if (having(x, "fusions") >= 2) read_fusions(x, mod);
         if (having(x, "equips") + having(x, "equip_bonus_default") >= 2) read_equips(x, mod);
         if (having(x, "rituals") >= 2) read_rituals(x, mod);
@@ -1286,17 +1769,18 @@ ModsOverlaps *Mods_OverlapCompute(const ModsOverlapMod *mods, int count, const M
         if (having(x, "starter") >= 2 && member(x, mod, "starter"))
             claim(x, MODS_OVERLAP_STARTER, mod, 0, ADD, 0, member(x, mod, "starter"));
         if (having(x, "passwords") >= 2) read_passwords(x, mod);
+        if (having(x, "packs") + having(x, "pack_shop") >= 2) read_packs(x, mod);
         if (having(x, "guardian_stars") >= 2) read_stars(x, mod);
         if (having(x, "limits") + having(x, "chest_overflow") >= 2) read_limits(x, mod);
         if (having(x, "terrain_bonus") >= 2) read_terrain(x, mod);
         if (having(x, "trap_thresholds") >= 2) read_traps(x, mod);
-        read_duelists(x, mod);
         if (having(x, "text") >= 2) read_text(x, mod);
         if (having(x, "font") >= 2 && member(x, mod, "font"))
             claim(x, MODS_OVERLAP_FONT, mod, 0, ADD, 0, member(x, mod, "font"));
         if (having(x, "title") + having(x, "menu") >= 2) read_title(x, mod);
     }
     read_code(x);
+    sector_runs(x);
     widen(x);
     group(x);
     if (x->failed) {
@@ -1316,6 +1800,7 @@ void Mods_OverlapFree(ModsOverlaps *x)
     free(x->strings);
     free(x->memo);
     free(x->star_names);
+    free(x->defined);
     free(x->declared);
     free(x->mods);
     free(x);
@@ -1339,7 +1824,7 @@ const char *Mods_OverlapKindName(int kind)
 {
     static const char *const names[MODS_OVERLAP_KINDS] = {
         "Disc data", "Sounds",   "Texture images", "Cards",        "Fusions",  "Equips",          "Rituals",
-        "Drops and decks", "Starter decks", "Passwords", "Guardian Stars", "Limits", "Terrain bonuses",
+        "Drops and decks", "Starter decks", "Passwords", "Card packs", "Guardian Stars", "Limits", "Terrain bonuses",
         "Attack traps", "Duelists", "Text", "Fonts", "Title screen and menus", "Code hooks", "Game events"};
     return kind >= 0 && kind < MODS_OVERLAP_KINDS ? names[kind] : "";
 }
@@ -1351,8 +1836,8 @@ static void star_words(const ModsOverlaps *x, int star, char *out, size_t size)
         return;
     }
     for (int mod = 0; mod < x->mod_count; mod++)
-        for (const JsonValue *s = Json_At(list_of(Json_Member(member(x, mod, "guardian_stars"), "stars")), 0); s;
-             s = Json_Next(s)) {
+        for (const JsonValue *s = Json_At(list_of(Json_Member(object_of(member(x, mod, "guardian_stars")), "stars")), 0);
+             s; s = Json_Next(s)) {
             const JsonValue *name = Json_Member(s, "name");
             if (Json_Number(Json_Member(s, "id"), -1) != star) continue;
             if (Json_TypeOf(name) == JSON_OBJECT) name = Json_At(name, 0);
@@ -1379,12 +1864,9 @@ void Mods_OverlapLabel(const ModsOverlaps *x, int index, char *out, size_t size)
         return;
     }
     switch (g->kind) {
-    case MODS_OVERLAP_DATA: {
-        const char *file = Json_String(Json_Member(c->src, "file"), NULL);
-        if (file) snprintf(out, size, "File %s", file);
-        else snprintf(out, size, "Sector %ld", Json_Number(Json_Member(c->src, "lba"), 0));
+    case MODS_OVERLAP_DATA:
+        snprintf(out, size, "File %s", Json_String(Json_Member(c->src, "file"), "?"));
         return;
-    }
     case MODS_OVERLAP_AUDIO: {
         static const char *const kinds[] = {"Song", "XA clip", "Sound effect"};
         snprintf(out, size, "%s 0x%llX", kinds[(c->key >> 32) % 3], (unsigned long long)(c->key & 0xFFFFFFFFu));
@@ -1434,7 +1916,7 @@ void Mods_OverlapLabel(const ModsOverlaps *x, int index, char *out, size_t size)
             star_words(x, one, a, sizeof(a));
             snprintf(out, size, "The %s of star %d, %s", fields[two & 3], one, a);
         } else if (sub == 3)
-            snprintf(out, size, two == 1 ? "The default star bonus" : "How a summon chooses its star");
+            snprintf(out, size, "How a summon chooses its star");
         else
             snprintf(out, size, "Every matchup (\"replace\")");
         return;
@@ -1464,16 +1946,19 @@ void Mods_OverlapMods(const ModsOverlaps *x, int index, char *out, size_t size)
 void Mods_OverlapText(const ModsOverlaps *x, int index, char *out, size_t size)
 {
     const Group *g = &x->groups[index];
-    char label[256], names[512], keys[200];
+    char label[256], names[512], through[120] = "", word[90] = "replace";
     const char *winner = g->winner >= 0 ? x->mods[g->winner].name : "",
                *other = g->other >= 0 ? x->mods[g->other].name : "";
     size_t length = 0;
-    int distinct = 0, via = 0;
+    int distinct = 0;
     Mods_OverlapLabel(x, index, label, sizeof(label));
     names[0] = 0;
     for (int i = 0; i < g->count; i++) {
         const Claim *c = &x->claims[g->first + i];
-        if (c->mod == g->winner && c->flags & VIA_WIDE) via = 1;
+        if (c->mod == g->winner && c->flags & VIA_WIDE && c->via >= 0 && !*through) {
+            snprintf(through, sizeof(through), ", through its \"%.80s\"", x->strings + c->via);
+            snprintf(word, sizeof(word), "%.80s", x->strings + c->via);
+        }
         if (i && x->claims[g->first + i - 1].mod == c->mod) continue;
         distinct++;
         if (length < sizeof(names))
@@ -1482,8 +1967,7 @@ void Mods_OverlapText(const ModsOverlaps *x, int index, char *out, size_t size)
     }
     switch (g->outcome) {
     case O_LATER:
-        snprintf(out, size, "%s (%s): %s wins (later in load order%s)", label, names, winner,
-                 via ? ", through its \"all\"" : "");
+        snprintf(out, size, "%s (%s): %s wins (later in load order%s)", label, names, winner, through);
         break;
     case O_AFTER:
         snprintf(out, size, "%s (%s): %s wins (it loads after %s on purpose: after/requires)", label, names,
@@ -1497,34 +1981,44 @@ void Mods_OverlapText(const ModsOverlaps *x, int index, char *out, size_t size)
     case O_ADD:
         snprintf(out, size, "%s (%s): %s apply and add up%s", label, names, distinct > 2 ? "all" : "both",
                  g->kind == MODS_OVERLAP_DATA      ? " (replacements first, then patches of different bytes)"
-                 : g->kind == MODS_OVERLAP_CARDS   ? " (they set different keys)"
+                 : g->kind == MODS_OVERLAP_CARDS   ? " (they set different stats)"
                  : g->kind == MODS_OVERLAP_POOLS   ? " (each edits the pool as the mods before left it)"
                  : g->kind == MODS_OVERLAP_FONT    ? " (a letter comes from the first font that has it)"
                                                    : "");
         break;
     case O_RESET:
-        snprintf(out, size, "%s (%s): %s's \"replace\" clears what the earlier mods set", label, names, winner);
+        snprintf(out, size, "%s (%s): %s's \"%s\" clears what the earlier mods set", label, names, winner, word);
         break;
     case O_FIXED:
         snprintf(out, size, "%s (%s): %s's fixed deck is dealt; the other edits of it are left out", label, names,
                  winner);
         break;
     case O_KEYS: {
-        int met;
-        card_keys(x, g, keys, sizeof(keys), &met);
-        snprintf(out, size, "%s (%s): the later mod's %s %s used; the rest combines", label, names, keys,
-                 strchr(keys, ',') ? "are" : "is");
+        CardKeys keys;
+        char used[260] = "", dropped[300] = "";
+        card_keys(x, g, &keys);
+        if (*keys.used)
+            snprintf(used, sizeof(used), "the later mod's %s %s used", keys.used, strchr(keys.used, ',') ? "are" : "is");
+        if (*keys.dropped)
+            snprintf(dropped, sizeof(dropped), "%sthe earlier's %s %s dropped (a later replace resets it)",
+                     *used ? "; " : "", keys.dropped, strchr(keys.dropped, ',') ? "are" : "is");
+        snprintf(out, size, "%s (%s): %s%s; the rest combines", label, names, used, dropped);
         break;
     }
     case O_BYTES:
         snprintf(out, size, "%s (%s): %s's bytes are read where they patch the same ones", label, names, winner);
+        break;
+    case O_PATCHED:
+        snprintf(out, size, "%s (%s): %s's patch is written into %s's replacement, at the disc's offsets", label,
+                 names, winner, other);
         break;
     case O_CHAIN:
         snprintf(out, size, "%s (%s): %s's hook runs first (applied last); the others run only if it calls its original",
                  label, names, winner);
         break;
     case O_EVENTS:
-        snprintf(out, size, "%s (%s): each is called, higher priority first; one that handles it stops the rest", label,
+        snprintf(out, size,
+                 "%s (%s): each is called, higher priority first; a before-hook that handles it stops the rest", label,
                  names);
         break;
     case O_FIRST:
@@ -1533,6 +2027,10 @@ void Mods_OverlapText(const ModsOverlaps *x, int index, char *out, size_t size)
         break;
     case O_AIMED:
         snprintf(out, size, "%s (%s): %s changes %s's own on purpose", label, names, winner, other);
+        break;
+    case O_EARLY:
+        snprintf(out, size, "%s (%s): %s's change is left out: it loads before %s, whose button it names", label,
+                 names, winner, other);
         break;
     }
 }

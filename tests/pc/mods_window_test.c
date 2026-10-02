@@ -4,6 +4,7 @@
 #include "mods_test.c"
 #undef main
 #include "pc/platform/mods_window.h"
+#include "pc/mods/overlap.h"
 static int restarts;
 int Menu_Scale(void) { return 1; }
 int Menu_TextWidthScaled(const char *s, int scale) { return (int)strlen(s) * 7 * scale; }
@@ -102,11 +103,11 @@ int main(void)
         snprintf(path, sizeof(path), "mods/mod%02d", i);
         make_dir(path);
         snprintf(path, sizeof(path), "mods/mod%02d/mod.json", i);
-        if (i == 2 || i == 3) { /* six fusion pairs both set: overlaps */
-            char json[2048] = "{\"fusions\":[";
+        if (i == 2 || i == 3) { /* six fusion pairs both set: overlaps; mod03's first by its setting "on" */
+            char json[2048] = "{\"settings\":[{\"key\":\"on\",\"type\":\"bool\",\"default\":1}],\"fusions\":[";
             for (int j = 0; j < 6; j++)
-                snprintf(json + strlen(json), sizeof(json) - strlen(json), "%s{\"with\":[%d,%d],\"result\":%d}",
-                         j ? "," : "", 100 + j, 200 + j, i);
+                snprintf(json + strlen(json), sizeof(json) - strlen(json), "%s{\"with\":[%d,%d],\"result\":%d%s}",
+                         j ? "," : "", 100 + j, 200 + j, i, i == 3 && !j ? ",\"setting\":\"on\"" : "");
             strcat(json, "]}");
             write_text(path, json);
         } else if (i == 1) { /* more settings than the details show at once */
@@ -239,6 +240,18 @@ int main(void)
         click(32, 142 + 3 * 58 + 20); /* one of them off: nothing in common */
         draw(920, 640);
         assert(!strstr(drawn, "overlap") && strstr(drawn, "Enable this mod"));
+        {
+            /* A setting staged in the window, before Apply, switches mod03's
+             * first fusion off: one overlap fewer. */
+            int both[MODS_MAX] = {0}, off = 0, on = 1;
+            const int *staged[MODS_MAX] = {0};
+            both[2] = both[3] = 1;
+            staged[3] = &on;
+            assert(Mods_OverlapCount(Mods_Overlaps(both, NULL, staged)) == 6);
+            staged[3] = &off;
+            assert(Mods_OverlapCount(Mods_Overlaps(both, NULL, staged)) == 5);
+            assert(Mods_OverlapCount(Mods_Overlaps(both, NULL, NULL)) == 6); /* saved: its default, on */
+        }
     }
     ModsWindow_Init();
     ModsWindow_Resize(720, 480);

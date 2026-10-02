@@ -118,19 +118,23 @@ int Mods_Active(int mod);
 int Mods_Failed(int mod);
 /* What the mods in `enabled` change in common, loading in the order `ranks`
  * gives (each mod's Load order, as the Mods window stages it), or the saved
- * order when `ranks` is NULL: overlap.h. Worked out again only when the set,
- * the order, a mod's settings or the code mods' hooks change; NULL when
- * memory ran out. MEMORIES_TRACE=mods logs every line each time. */
+ * order when `ranks` is NULL, with the settings `values` gives (values[mod]
+ * [option], staged in the window) or the saved ones when NULL: overlap.h.
+ * Worked out again only when the set, the order, a mod's settings or the
+ * code mods' hooks change; NULL when memory ran out. MEMORIES_TRACE=mods
+ * logs every line each time. */
 struct ModsOverlaps;
-const struct ModsOverlaps *Mods_Overlaps(const int *enabled, const int *ranks);
+const struct ModsOverlaps *Mods_Overlaps(const int *enabled, const int *ranks, const int *const *values);
 /* Where mod `mod` stands in the last overlaps' list of mods, -1 if not in it. */
 int Mods_OverlapPlace(int mod);
 /* What the overlaps name cards, duelists and hooked functions by, once the
- * game knows them (pc/cards Cards_Named and Cards_NameUtf8, pc/free_duel
+ * game knows them (pc/cards Cards_Named, Cards_NameUtf8 and a card's base,
+ * type and attribute, pc/free_duel
  * Duelists_Named, pc/debug Symbols_Lookup). Once both the cards and the
  * duelists are set, the applied mods' overlaps go to the log under
  * MEMORIES_TRACE=mods. */
-void Mods_SetOverlapCards(int (*card)(const char *text, long number), int (*name)(int id, char *out, size_t size));
+void Mods_SetOverlapCards(int (*card)(const char *text, long number), int (*name)(int id, char *out, size_t size),
+                          int (*info)(int id, int *base, int *type, int *attribute));
 void Mods_SetOverlapDuelists(int (*duelist)(const char *text));
 void Mods_SetFunctionNames(const char *(*lookup)(uintptr_t address, uintptr_t *offset));
 int Mods_OptionCount(int mod);

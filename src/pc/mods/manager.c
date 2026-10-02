@@ -461,12 +461,14 @@ unsigned Mods_Signature(void)
  * the order, a mod's settings, or what the code mods hook changes. */
 static int (*overlap_card)(const char *text, long number);
 static int (*overlap_card_name)(int id, char *out, size_t size);
+static int (*overlap_card_info)(int id, int *base, int *type, int *attribute);
 static int (*overlap_duelist)(const char *text);
 static const char *(*overlap_function)(uintptr_t address, uintptr_t *offset);
 static unsigned overlap_generation = 1;
 static ModsOverlaps *overlaps;
 static unsigned overlaps_key;
 static int overlap_place[MODS_MAX], overlap_mod[MODS_MAX], overlap_count;
+static const int *const *overlap_values; /* the settings staged in the window, or NULL: the saved ones */
 
 static int source_card(const char *text, long number, void *context)
 {
@@ -478,6 +480,11 @@ static int source_card_name(int id, char *out, size_t size, void *context)
     (void)context;
     return overlap_card_name(id, out, size);
 }
+static int source_card_info(int id, int *base, int *type, int *attribute, void *context)
+{
+    (void)context;
+    return overlap_card_info(id, base, type, attribute);
+}
 static int source_duelist(const char *text, void *context)
 {
     (void)context;
@@ -488,7 +495,8 @@ static int source_setting(int place, const char *key, void *context)
     int mod = overlap_mod[place];
     (void)context;
     for (int j = 0; j < Mods_OptionCount(mod); j++)
-        if (!strcmp(key, Json_String(Json_Member(Mods_Option(mod, j), "key"), ""))) return Mods_OptionValue(mod, j);
+        if (!strcmp(key, Json_String(Json_Member(Mods_Option(mod, j), "key"), "")))
+            return overlap_values && overlap_values[mod] ? overlap_values[mod][j] : Mods_OptionValue(mod, j);
     return -1;
 }
 static int source_hook(int index, int *place, uint64_t *what, char *label, size_t size, void *context)
@@ -521,7 +529,7 @@ static int source_event(int index, int *place, uint64_t *what, char *label, size
     return 1;
 }
 
-static unsigned overlap_key(const int *enabled, const int *ranks)
+static unsigned overlap_key(const int *enabled, const int *ranks, const int *const *values)
 {
     unsigned hash = 2166136261u ^ overlap_generation;
     int i, owner;
@@ -534,7 +542,8 @@ static unsigned overlap_key(const int *enabled, const int *ranks)
         rank = ranks ? ranks[mod] : Settings_GetNamed(key, (int)Json_Number(member(mod, "priority"), 0));
         hash = (hash ^ (unsigned)!!enabled[mod]) * 16777619u;
         hash = (hash ^ (unsigned)rank) * 16777619u;
-        for (int j = 0; j < Mods_OptionCount(mod); j++) hash = (hash ^ (unsigned)Mods_OptionValue(mod, j)) * 16777619u;
+        for (int j = 0; j < Mods_OptionCount(mod); j++)
+            hash = (hash ^ (unsigned)(values && values[mod] ? values[mod][j] : Mods_OptionValue(mod, j))) * 16777619u;
     }
     for (i = 0; Hooks_At(i, &owner, &function); i++) {
     }
@@ -557,13 +566,13 @@ static void log_overlaps(const ModsOverlaps *found)
     }
 }
 
-const ModsOverlaps *Mods_Overlaps(const int *enabled, const int *ranks)
+const ModsOverlaps *Mods_Overlaps(const int *enabled, const int *ranks, const int *const *values)
 {
     ModsOverlapMod list[MODS_MAX];
     ModsOverlapSource source = {0};
     char ignored[160];
     int order[MODS_MAX + 1], n;
-    unsigned key = overlap_key(enabled, ranks);
+    unsigned key = overlap_key(enabled, ranks, values);
     if (overlaps && key == overlaps_key) return overlaps;
     Mods_OverlapFree(overlaps);
     overlaps = NULL;
@@ -582,13 +591,16 @@ const ModsOverlaps *Mods_Overlaps(const int *enabled, const int *ranks)
         list[i].manifest = Mods_Manifest(order[i]);
     }
     overlap_count = n;
+    overlap_values = values;
     if (overlap_card) source.card = source_card;
+    if (overlap_card_info) source.card_info = source_card_info;
     if (overlap_card_name) source.card_name = source_card_name;
     if (overlap_duelist) source.duelist = source_duelist;
     source.setting = source_setting;
     source.hook = source_hook;
     source.event = source_event;
     overlaps = Mods_OverlapCompute(list, n, &source);
+    overlap_values = NULL; /* the window's, only while it is read */
     if (overlaps && Mods_OverlapCount(overlaps) && Log_Enabled(LOG_MODS)) log_overlaps(overlaps);
     return overlaps;
 }
@@ -601,12 +613,14 @@ static void log_applied(void)
     int enabled[MODS_MAX];
     if (!Log_Enabled(LOG_MODS)) return;
     for (int i = 0; i < Mods_Count(); i++) enabled[i] = Mods_Active(i);
-    Mods_Overlaps(enabled, NULL);
+    Mods_Overlaps(enabled, NULL, NULL);
 }
-void Mods_SetOverlapCards(int (*card)(const char *text, long number), int (*name)(int id, char *out, size_t size))
+void Mods_SetOverlapCards(int (*card)(const char *text, long number), int (*name)(int id, char *out, size_t size),
+                          int (*info)(int id, int *base, int *type, int *attribute))
 {
     overlap_card = card;
     overlap_card_name = name;
+    overlap_card_info = info;
     overlap_generation++;
     if (overlap_duelist) log_applied();
 }

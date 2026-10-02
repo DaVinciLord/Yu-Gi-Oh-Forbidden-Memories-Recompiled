@@ -8,6 +8,10 @@
         "bcd": {
             "replace": true,
             "Kuriboh": 1
+        },
+        "pow": {
+            "replace": true,
+            "Kuriboh": 1
         }
     }
 }

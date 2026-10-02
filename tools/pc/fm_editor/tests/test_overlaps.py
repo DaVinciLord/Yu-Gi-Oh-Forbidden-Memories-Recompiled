@@ -12,7 +12,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from fm_editor import overlaps, validate
+from fm_editor import manifest, overlaps, validate
 from fm_editor.model import Project
 from fm_editor.tests.test_data import fixture
 
@@ -24,7 +24,13 @@ class FixtureSource(overlaps.Source):
 
     def __init__(self, setup):
         self.cards = {int(k): v for k, v in setup["cards"].items()}
+        self.types = {int(k): v for k, v in setup["types"].items()}
         self.duelists = setup["duelists"]
+
+    def card_info(self, cid):
+        if cid not in self.types:
+            return None
+        return cid, self.types[cid][0], self.types[cid][1]
 
     def card(self, text, number):
         for cid, name in self.cards.items():
@@ -55,10 +61,18 @@ def fixture_mods():
 
 class SameAsTheGame(unittest.TestCase):
     def test_the_fixture_lines(self):
+        # The lines and their texts, in the order the Mods window lists them.
         setup, mods = fixture_mods()
         found = overlaps.check(mods, FixtureSource(setup))
         expected = [row for row in (FIXTURE / "expected.txt").read_text(encoding="utf-8").splitlines() if row]
-        self.assertEqual(sorted(overlaps.line(o) for o in found), expected)
+        self.assertEqual([f"{overlaps.line(o)}\t{o.text}" for o in found], expected)
+
+    def test_involving_one_mod(self):
+        # The editor's check works out only the overlaps of the mod it edits.
+        setup, mods = fixture_mods()
+        every = [o.text for o in overlaps.check(mods, FixtureSource(setup)) if "Gamma" in o.text.split(": ")[0]]
+        only = [o.text for o in overlaps.check(mods, FixtureSource(setup), involving=2)]
+        self.assertEqual(only, every)
 
     def test_the_texts(self):
         setup, mods = fixture_mods()
@@ -128,6 +142,34 @@ class ConflictsTab(unittest.TestCase):
         self.assertIn("Mine wins (later in load order)", stats[0].message)
         self.assertIn("2 installed mods", summary)
         self.assertIn("beta is off in the game now", summary)
+
+    def test_renamed_mod_is_itself(self):
+        # Opened from alpha/ and given another id: the folder it came from is
+        # still this mod, not another installed one meeting it everywhere.
+        project, _ = manifest.open_mod(fixture().game(), self.folder / "alpha")
+        project.info.id = "renamed"
+        issues, summary = validate.cross_mod(project, [self.folder], False)
+        self.assertIn("Checked against 1 installed mods", summary)
+        self.assertFalse(any("renamed" in i.message and "Alpha" in i.message and "Beta" not in i.message
+                             for i in issues))
+
+    def test_cycle_is_left_out(self):
+        a = overlaps.Mod("a", "A", {"after": ["b"]})
+        b = overlaps.Mod("b", "B", {"after": ["a"]})
+        c = overlaps.Mod("c", "C", {"requires": ["missing"]})
+        d = overlaps.Mod("d", "D", {})
+        self.assertEqual([m.id for m in overlaps.load_order([a, b, c, d])], ["d"])
+
+    def test_applied(self):
+        mod = overlaps.Mod("x-y", "X", {"legacy_setting": "old_x"})
+        self.assertFalse(validate.applied(mod, {}))
+        self.assertTrue(validate.applied(mod, {"old_x": 1}))
+        self.assertFalse(validate.applied(mod, {"old_x": 1, "mod.x-y": 0}))
+        os.environ["MEMORIES_MOD_X_Y"] = "1"
+        try:
+            self.assertTrue(validate.applied(mod, {"mod.x-y": 0}))
+        finally:
+            del os.environ["MEMORIES_MOD_X_Y"]
 
     def test_no_other_mods(self):
         project = Project(fixture().game())

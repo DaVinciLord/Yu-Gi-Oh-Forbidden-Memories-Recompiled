@@ -4,7 +4,7 @@
     "priority": 1,
     "data": [
         {
-            "file": "\\data\\wa_mrg.mrg",
+            "file": "\\DATA\\WA_MRG.MRG",
             "replace": "wa2.mrg"
         },
         {
@@ -73,6 +73,13 @@
             "add": [
                 "Kuriboh"
             ]
+        },
+        {
+            "card": "Megamorph",
+            "add": [
+                "Dragon"
+            ],
+            "bonus": 300
         }
     ],
     "equip_bonus_default": 700,
@@ -121,7 +128,8 @@
                 "Heishin": 20000
             }
         },
-        "chest": 5
+        "chest": 5,
+        "attack": 9999
     },
     "terrain_bonus": {
         "replace": true
@@ -149,6 +157,20 @@
                 "label": "THANKS"
             }
         ],
-        "spacing": 28
+        "spacing": 28,
+        "entries": {
+            "1": {
+                "hide": false
+            }
+        }
+    },
+    "pack_shop": {
+        "password": "packs_only",
+        "shops": [
+            {
+                "id": "main",
+                "name": "MAIN"
+            }
+        ]
     }
 }

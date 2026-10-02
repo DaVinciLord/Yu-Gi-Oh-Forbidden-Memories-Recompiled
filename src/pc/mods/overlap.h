@@ -14,8 +14,8 @@
  * asked for (a mod of every fusion pair has 261,003 of them).
  *
  * The FM Editor makes the same check in Python
- * (tools/pc/fm_editor/overlaps.py); tests/pc/fixtures/mod-overlaps holds the
- * mods and the lines both must find. */
+ * (tools/pc/fm_editor/overlaps.py); tests/pc/mod_overlaps holds the mods and
+ * the lines both must find, in order. */
 #include <stddef.h>
 #include <stdint.h>
 
@@ -32,6 +32,7 @@ enum {
     MODS_OVERLAP_POOLS,
     MODS_OVERLAP_STARTER,
     MODS_OVERLAP_PASSWORDS,
+    MODS_OVERLAP_PACKS,
     MODS_OVERLAP_STARS,
     MODS_OVERLAP_LIMITS,
     MODS_OVERLAP_TERRAIN,
@@ -66,6 +67,10 @@ typedef struct {
     int (*card)(const char *text, long number, void *context);
     /* A card's name for a line, 0 when there is none. */
     int (*card_name)(int id, char *out, size_t size, void *context);
+    /* A card's base (the disc's card a copy is of, or itself), monster type
+     * (0-23, cards.c type_names) and attribute (0-5), 0 when unknown: an
+     * equip's rules by type, a copy of an attack trap. */
+    int (*card_info)(int id, int *base, int *type, int *attribute, void *context);
     /* An opponent by name ("Heishin", "8"), -1 for none (Duelists_Named). */
     int (*duelist)(const char *text, void *context);
     /* Mod `mod`'s setting `key` (a "setting" of a text file or a pack's
@@ -98,7 +103,8 @@ void Mods_OverlapLabel(const ModsOverlaps *overlaps, int index, char *out, size_
 void Mods_OverlapMods(const ModsOverlaps *overlaps, int index, char *out, size_t size);
 /* How it comes out, as one word the FM Editor's check uses too: "later",
  * "after", "agree", "add", "reset", "fixed", "keys", "bytes", "chain",
- * "events", "first" or "aimed" (overlap.c, outcome_words). */
+ * "events", "first", "aimed", "patched" or "early" (overlap.c,
+ * outcome_words). */
 const char *Mods_OverlapOutcome(const ModsOverlaps *overlaps, int index);
 /* "Cards", "Drops and decks"... */
 const char *Mods_OverlapKindName(int kind);

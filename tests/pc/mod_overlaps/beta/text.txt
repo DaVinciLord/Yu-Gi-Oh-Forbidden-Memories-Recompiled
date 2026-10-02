@@ -4,5 +4,5 @@
 # the same words as Alpha's
 Blue-eyes
 
-[8003]
+[8002 8003]
 Giant

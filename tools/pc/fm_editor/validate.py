@@ -409,47 +409,96 @@ def errors(issues) -> list:
 
 # --- the other installed mods ------------------------------------------------------
 
-def overlaps_list(value) -> list:
-    return value if isinstance(value, list) else []
+def _overlaps():
+    from . import overlaps
+    return overlaps
 
 
 class _ProjectSource:
     """overlaps.Source for the editor: the cards and opponents of the game the
-    editor read, and the mods' settings as the port's settings file has them."""
+    editor read, and the mods' settings as the port's settings file has them.
+    (Made from overlaps.Source when first used: validate imports nothing of
+    it at load.)"""
 
-    def __init__(self, project: Project, settings: dict):
-        self.project = project
-        self.settings = settings
+    def __new__(cls, project: Project, settings: dict):
+        overlaps = _overlaps()
 
-    def card(self, text, number):
-        if text is None:
-            return number if number in self.project.cards else -1
-        return self.project.resolve(text) or -1
+        class Source(overlaps.Source):
+            def card(self, text, number):
+                if text is None:
+                    return number if number in project.cards else -1
+                return project.resolve(text) or -1
 
-    def card_name(self, cid):
-        card = self.project.cards.get(cid)
-        return card.name if card is not None and card.name else None
+            def card_name(self, cid):
+                card = project.cards.get(cid)
+                return card.name if card is not None and card.name else None
 
-    def duelist(self, text):
-        from .model import duelist_named
-        return duelist_named(text)
+            def card_info(self, cid):
+                card = project.cards.get(cid)
+                if card is None:
+                    return None
+                return project.base_of(cid), card.type, card.attribute
 
-    def setting(self, mod, key):
-        for spec in overlaps_list(mod.manifest.get("settings")):
-            if isinstance(spec, dict) and spec.get("key") == key:
-                return self.settings.get(f"mod.{mod.id}.{key}", spec.get("default", 0))
-        return None
+            def duelist(self, text):
+                from .model import duelist_named
+                return duelist_named(text)
+
+            def setting(self, mod, key):
+                for spec in overlaps._list(mod.manifest.get("settings")):
+                    if isinstance(spec, dict) and spec.get("key") == key:
+                        return settings.get(f"mod.{mod.id}.{key}", overlaps._json_number(spec.get("default"), 0))
+                return None
+
+        return Source()
+
+
+def shipped_folder():
+    """The mods folder beside the game, which the game reads first (mods.c,
+    Paths_Program "mods"), when the editor can find the game: beside the
+    editor's own program, beside the game files the port was last pointed at
+    (disc-path.txt, in the game's folder or its game/ folder), or the source
+    tree's mods/. None when none of them is there."""
+    import sys
+    from pathlib import Path
+    from . import disc
+    places = []
+    program = Path(sys.executable if getattr(sys, "frozen", False) else (sys.argv[0] or ".")).resolve().parent
+    places.append(program / "mods")
+    try:
+        text = (disc.user_dir() / "disc-path.txt").read_text(encoding="utf-8", errors="replace").strip()
+        if text:
+            game = Path(text)
+            folder = game if game.is_dir() else game.parent
+            places += [folder / "mods", folder.parent / "mods"]
+    except OSError:
+        pass
+    here = Path(__file__).resolve()
+    if len(here.parents) > 3:
+        places.append(here.parents[3] / "mods")
+    for place in places:
+        try:
+            if place.is_dir() and any((child / "mod.json").is_file() for child in place.iterdir()):
+                return place
+        except OSError:
+            continue
+    return None
 
 
 def mod_folders(project: Project = None) -> list:
-    """Where the player's mods are: MEMORIES_MODS_DIR when set (the only folder
-    the game then reads), else the user directory's mods folder; and the
-    folder the mod being edited was opened from, when it is another."""
+    """Where the game finds mods, in its order: MEMORIES_MODS_DIR when set
+    (the only folder it then reads); else the mods beside the game
+    (shipped_folder) and the user directory's mods folder, whose copy of a
+    mod replaces the shipped one. And the folder the mod being edited was
+    opened from, when it is another."""
     import os
     from pathlib import Path
     from . import disc
     named = os.environ.get("MEMORIES_MODS_DIR")
-    folders = [Path(named)] if named else [disc.user_dir() / "mods"]
+    if named:
+        folders = [Path(named)]
+    else:
+        shipped = shipped_folder()
+        folders = ([shipped] if shipped else []) + [disc.user_dir() / "mods"]
     source = getattr(project, "source_dir", None)
     if source is not None and Path(source).parent.resolve() not in [f.resolve() for f in folders]:
         folders.append(Path(source).parent)
@@ -466,6 +515,26 @@ def settings_file():
     return Path(named) if named else disc.user_dir() / "settings.txt"
 
 
+def applied(mod, settings: dict) -> bool:
+    """Whether the game applies `mod` now (mods.c Mods_Load): MEMORIES_MODS=0
+    turns every mod off; MEMORIES_MOD_<ID> settles one for the run; else the
+    player's mod.<id>, or the older key a "legacy_setting" names, or the
+    manifest's "enabled" (off when left out)."""
+    import os
+    overlaps = _overlaps()
+    if os.environ.get("MEMORIES_MODS") in ("0", "off"):
+        return False
+    variable = "MEMORIES_MOD_" + "".join(c.upper() if c.isascii() and c.isalnum() else "_" for c in mod.id)
+    if os.environ.get(variable) not in (None, ""):
+        return os.environ[variable] not in ("0", "off")
+    if f"mod.{mod.id}" in settings:
+        return bool(settings[f"mod.{mod.id}"])
+    legacy = mod.manifest.get("legacy_setting")
+    if isinstance(legacy, str) and legacy in settings:
+        return bool(settings[legacy])
+    return overlaps._json_bool(mod.manifest.get("enabled"))
+
+
 def cross_mod(project: Project, folders=None, settings_path=None) -> tuple:
     """(issues, summary): where the mod being edited meets the other mods
     installed in `folders` (mod_folders()), in the order the game would load
@@ -473,32 +542,47 @@ def cross_mod(project: Project, folders=None, settings_path=None) -> tuple:
     way the game's Mods window says it (overlaps.py, src/pc/mods/overlap.c).
     Every installed mod counts, applied or not, so a modder sees a clash
     before a player does; the summary names the ones off in the game now.
+    The folder the mod was opened from is this mod, whatever id it has now.
     A real override is a warning; changes that add up, agree, or follow an
     after/requires the winner declared are notes."""
-    from . import manifest, overlaps
+    from pathlib import Path
+    from . import manifest
+    overlaps = _overlaps()
     folders = mod_folders(project) if folders is None else list(folders)
     settings = overlaps.read_settings(settings_file() if settings_path is None else settings_path) \
         if settings_path is not False else {}
-    own = manifest.build(project)
-    mine = overlaps.Mod(project.info.id or "this-mod", project.info.name or project.info.id or "This mod", own,
-                        getattr(project, "source_dir", None))
-    others = [m for m in overlaps.installed(folders) if m.id != mine.id]
+    source_dir = getattr(project, "source_dir", None)
+    mine = overlaps.Mod(project.info.id or "this-mod", project.info.name or project.info.id or "This mod",
+                        manifest.build(project), source_dir)
+
+    def same_folder(mod) -> bool:
+        try:
+            return source_dir is not None and Path(mod.directory).resolve() == Path(source_dir).resolve()
+        except OSError:
+            return False
+
+    others = [m for m in overlaps.installed(folders) if m.id != mine.id and not same_folder(m)]
     if not others:
         return [], "There are no other installed mods to check against (" + ", ".join(str(f) for f in folders) + ")."
     order = overlaps.load_order(others + [mine], settings)
+    left = [m.id for m in others if m not in order]
+    if mine not in order:
+        return [], ("This mod would not load: its \"requires\" names a mod that is not installed, or its "
+                    "\"after\" and \"requires\" make a cycle.")
     place = order.index(mine)
     issues = []
-    # Applied: the player's choice, else the manifest's "enabled" (off by default, mods.c).
-    off = [m.id for m in others if not settings.get(f"mod.{m.id}", 1 if m.manifest.get("enabled") is True else 0)]
-    for overlap in overlaps.check(order, _ProjectSource(project, settings)):
-        if not any(c.mod == place for c in overlap.claims):
-            continue
+    off = [m.id for m in others if m in order and not applied(m, settings)]
+    for overlap in overlaps.check(order, _ProjectSource(project, settings), involving=place):
         where = overlap.label + (" (with a mod off now)" if any(m in off for m in overlap.mods) else "")
         message = overlap.text[len(overlap.label) + 1:]
-        issues.append(Issue("warning" if overlap.severity else "note", "Other mods", where,
-                            message, overlap.label))
-    summary = f"Checked against {len(others)} installed mods in " + ", ".join(str(f) for f in folders) + \
+        issues.append(Issue("warning" if overlap.severity else "note", "Other mods", where, message, overlap.label))
+    summary = f"Checked against {len(order) - 1} installed mods in " + ", ".join(str(f) for f in folders) + \
         f", in the order the game loads them; this mod loads {place + 1} of {len(order)}."
     if off:
         summary += " " + ", ".join(off) + (" is" if len(off) == 1 else " are") + " off in the game now."
+    if left:
+        summary += " Left out, as the game would not load them (a missing requirement or a cycle): " + \
+            ", ".join(left) + "."
+    if source_dir is None:
+        summary += " Files beside mod.json (pools, duelists, text, the pack) are read once the mod is saved."
     return issues, summary

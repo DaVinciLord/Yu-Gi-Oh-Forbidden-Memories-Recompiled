@@ -2,7 +2,7 @@
     {
         "file": "x.png",
         "alias": "cards/001",
-        "archive": "wa_mrg.mrg",
+        "archive": "WA_MRG.MRG",
         "offset": 4096,
         "words": 51,
         "rows": 96,

@@ -510,6 +510,14 @@ static int overlap_card(const char *text, long number)
 {
     return text ? Cards_Named(text) : number > 0 && number <= 0xFFFF && Cards_Valid((int)number) ? (int)number : -1;
 }
+static int overlap_card_info(int id, int *base, int *type, int *attribute)
+{
+    if (!Cards_Valid(id)) return 0;
+    *base = Cards_BaseId(id);
+    *type = Cards_Type(id);
+    *attribute = Cards_Attribute(id);
+    return 1;
+}
 
 int Cards_Named(const char *text)
 {
@@ -1374,7 +1382,7 @@ void Cards_Build(void)
     if (!context) return;
     Mods_VisitCards(add_mod, context);
     Mods_SetCardResolver(Cards_FindIdentity);
-    Mods_SetOverlapCards(overlap_card, Cards_NameUtf8);
+    Mods_SetOverlapCards(overlap_card, Cards_NameUtf8, overlap_card_info);
     Mods_SetCardNotes(Cards_Notes, Cards_NoteTag);
     Mods_SetLimitSource(Tables_Limit);   /* read by Tables_Build below; asked later */
     {

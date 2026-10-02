@@ -1,32 +1,37 @@
-Attack traps|info|agree|alpha, beta|Attack trap 'Bear Trap'
-Cards|info|agree|alpha, beta|Card 'Kuriboh'
-Cards|info|aimed|alpha, beta|Card 'alpha:tiny:1'
-Cards|warning|keys|alpha, beta|Card 'Blue-eyes White Dragon'
-Disc data|info|add|alpha, beta|Sector 1234
-Disc data|warning|bytes|alpha, beta|File \DATA\SU.MRG;1
-Disc data|warning|later|alpha, beta|File \DATA\WA_MRG.MRG;1
-Drops and decks|info|add|alpha, beta|Simon Muran's POW drops
-Drops and decks|info|add|alpha, gamma|Seto's TEC drops
-Drops and decks|warning|fixed|alpha, beta, gamma|Heishin's deck
-Duelists|warning|first|alpha, beta|Free Duel slot 41
-Duelists|warning|later|alpha, beta|Duelist 'Heishin' replaced
-Equips|warning|reset|alpha, beta, gamma|Equip 'Legendary Sword'
-Fusions|info|add|alpha, beta|Disc recipes for 'Celtic Guardian' removed
-Fusions|info|agree|alpha, beta|Fusion 'Baby Dragon' + 'Ryu-kishin'
-Fusions|warning|later|alpha, beta, gamma|Fusion 'Kuriboh' + 'Mystical Elf'
-Guardian Stars|warning|later|alpha, beta|The name of star 11, Fire
-Guardian Stars|warning|reset|alpha, beta|Matchup Mars attacking Jupiter
-Limits|warning|later|alpha, beta|Limit chest
-Limits|warning|later|alpha, beta|Limit life_points.start
-Passwords|warning|later|alpha, beta, gamma|Price of 'Kuriboh'
-Passwords|warning|later|alpha, beta|Price of 'Mystical Elf'
-Rituals|warning|later|alpha, beta, gamma|Ritual 'Black Luster Ritual'
-Sounds|warning|later|alpha, beta, gamma|Song 0x10
-Starter decks|info|add|alpha, beta|Starter decks
-Terrain bonuses|warning|reset|alpha, beta|Forest bonus of Beast
-Texture images|warning|later|alpha, beta|Image cards/001, WA_MRG.MRG at 0x1000
-Text|info|agree|alpha, beta|Text [8001]
-Title screen and menus|info|add|alpha, beta|title.text (lines)
-Title screen and menus|info|after|beta, gamma|menu.spacing
-Title screen and menus|info|aimed|alpha, beta|menu.buttons.alpha:credits.label
-Title screen and menus|warning|later|alpha, beta|title.logo.tint
+Disc data|warning|later|alpha, beta|File \DATA\WA_MRG.MRG;1	File \DATA\WA_MRG.MRG;1 (Alpha, Beta): Beta wins (later in load order)
+Disc data|warning|bytes|alpha, beta|File \DATA\SU.MRG;1	File \DATA\SU.MRG;1 (Alpha, Beta): Beta's bytes are read where they patch the same ones
+Disc data|warning|patched|alpha, beta, gamma|Sectors 1230-1239	Sectors 1230-1239 (Alpha, Beta, Gamma): Alpha's patch is written into Gamma's replacement, at the disc's offsets
+Sounds|warning|later|alpha, beta, gamma|Song 0x10	Song 0x10 (Alpha, Beta, Gamma): Gamma wins (later in load order)
+Texture images|warning|later|alpha, beta|Image cards/001, WA_MRG.MRG at 0x1000	Image cards/001, WA_MRG.MRG at 0x1000 (Alpha, Beta): Beta wins (later in load order)
+Cards|warning|keys|alpha, beta, gamma|Card 'Kuriboh'	Card 'Kuriboh' (Alpha, Beta, Gamma): the later mod's attack is used; the earlier's name is dropped (a later replace resets it); the rest combines
+Cards|warning|keys|alpha, beta|Card 'Blue-eyes White Dragon'	Card 'Blue-eyes White Dragon' (Alpha, Beta): the later mod's description is used; the rest combines
+Fusions|warning|later|alpha, beta, gamma|Fusion 'Kuriboh' + 'Mystical Elf'	Fusion 'Kuriboh' + 'Mystical Elf' (Alpha, Beta, Gamma): Gamma wins (later in load order)
+Fusions|info|agree|alpha, beta|Fusion 'Baby Dragon' + 'Ryu-kishin'	Fusion 'Baby Dragon' + 'Ryu-kishin' (Alpha, Beta): the same in each, so no difference
+Fusions|info|add|alpha, beta|Disc recipes for 'Celtic Guardian' removed	Disc recipes for 'Celtic Guardian' removed (Alpha, Beta): both apply and add up
+Equips|warning|reset|alpha, beta, gamma|Equip 'Legendary Sword'	Equip 'Legendary Sword' (Alpha, Beta, Gamma): Gamma's "replace" clears what the earlier mods set
+Equips|warning|later|alpha, beta|Equip 'Megamorph'	Equip 'Megamorph' (Alpha, Beta): Beta wins (later in load order)
+Rituals|warning|later|alpha, beta, gamma|Ritual 'Black Luster Ritual'	Ritual 'Black Luster Ritual' (Alpha, Beta, Gamma): Gamma wins (later in load order)
+Drops and decks|warning|reset|alpha, beta|dark-heishin's POW drops	dark-heishin's POW drops (Alpha, Beta): Beta's "replace" clears what the earlier mods set
+Drops and decks|warning|fixed|alpha, beta, gamma|Heishin's deck	Heishin's deck (Alpha, Beta, Gamma): Beta's fixed deck is dealt; the other edits of it are left out
+Drops and decks|info|add|alpha, beta|Simon Muran's POW drops	Simon Muran's POW drops (Alpha, Beta): both apply and add up (each edits the pool as the mods before left it)
+Drops and decks|info|add|alpha, gamma|Seto's TEC drops	Seto's TEC drops (Alpha, Gamma): both apply and add up (each edits the pool as the mods before left it)
+Starter decks|info|add|alpha, beta|Starter decks	Starter decks (Alpha, Beta): both apply and add up
+Passwords|warning|later|alpha, beta, gamma|Price of 'Kuriboh'	Price of 'Kuriboh' (Alpha, Beta, Gamma): Gamma wins (later in load order)
+Passwords|warning|later|alpha, beta|Price of 'Mystical Elf'	Price of 'Mystical Elf' (Alpha, Beta): Beta wins (later in load order, through its "all")
+Card packs|warning|later|alpha, beta|The pack shop's rules	The pack shop's rules (Alpha, Beta): Beta wins (later in load order)
+Card packs|warning|later|alpha, beta|Pack shop 'main'	Pack shop 'main' (Alpha, Beta): Beta wins (later in load order)
+Guardian Stars|warning|later|alpha, beta|The name of star 11, Fire	The name of star 11, Fire (Alpha, Beta): Beta wins (later in load order)
+Guardian Stars|warning|reset|alpha, beta|Matchup Mars attacking Jupiter	Matchup Mars attacking Jupiter (Alpha, Beta): Beta's "replace" clears what the earlier mods set
+Limits|warning|later|alpha, beta|Limit attack	Limit attack (Alpha, Beta): Beta wins (later in load order)
+Limits|warning|later|alpha, beta|Limit life_points	Limit life_points (Alpha, Beta): Beta wins (later in load order)
+Limits|warning|later|alpha, beta|Limit chest_overflow.limit	Limit chest_overflow.limit (Alpha, Beta): Beta wins (later in load order)
+Terrain bonuses|warning|reset|alpha, beta|Forest bonus of Beast	Forest bonus of Beast (Alpha, Beta): Beta's "replace" clears what the earlier mods set
+Duelists|warning|later|alpha, beta, gamma|Duelist 'Heishin' replaced	Duelist 'Heishin' replaced (Alpha, Beta, Gamma): Gamma wins (later in load order)
+Duelists|warning|first|alpha, beta|Free Duel slot 41	Free Duel slot 41 (Alpha, Beta): Alpha keeps it, earlier in load order; the others take the next free slot
+Text|warning|later|alpha, beta|Text [8002]	Text [8002] (Alpha, Beta): Beta wins (later in load order)
+Text|info|agree|alpha, beta|Text [8001]	Text [8001] (Alpha, Beta): the same in each, so no difference
+Title screen and menus|warning|later|alpha, beta|title.logo.tint	title.logo.tint (Alpha, Beta): Beta wins (later in load order)
+Title screen and menus|warning|later|alpha, beta|title.entries.load.hide	title.entries.load.hide (Alpha, Beta): Beta wins (later in load order)
+Title screen and menus|info|add|alpha, beta|title.text (lines)	title.text (lines) (Alpha, Beta): both apply and add up
+Title screen and menus|info|aimed|alpha, beta|menu.buttons.alpha:credits.label	menu.buttons.alpha:credits.label (Alpha, Beta): Beta changes Alpha's own on purpose
+Title screen and menus|info|after|beta, gamma|menu.spacing	menu.spacing (Beta, Gamma): Gamma wins (it loads after Beta on purpose: after/requires)
