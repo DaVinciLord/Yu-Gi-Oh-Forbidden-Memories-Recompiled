@@ -293,7 +293,7 @@ int main(void)
         found = Mods_OverlapCompute(pair, 2, NULL);
         assert(found && Mods_OverlapCount(found) == 1);
         Mods_OverlapText(found, 0, line, sizeof(line));
-        assert(!strcmp(line, "Card #1 (B, A): the later mod's attack is used; the rest combines"));
+        assert(!strcmp(line, "Card #1 (B, A): A's attack is used (cards are read in folder order, not load order); the rest combines"));
         Mods_OverlapFree(found);
         Json_Free(docs[0]);
         Json_Free(docs[1]);

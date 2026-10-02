@@ -34,6 +34,11 @@ INFO, WARNING = 0, 1
 
 SET, ADD, FIXED, BASE, CHAIN, EVENT, FIRST = range(7)
 CARD_COUNT = 722
+# The order the game reads the mods' "cards" in: the order the mods were
+# found, folder by folder and names sorted (mods.c Mods_VisitCards), not the
+# load order every other table follows. False once the cards follow the load
+# order (the one line to change; overlap.c CARDS_IN_FOUND_ORDER).
+CARDS_IN_FOUND_ORDER = True
 ATTACK_TRAP_FIRST, ATTACK_TRAPS = 681, 6
 ALL = ("all",)
 DEFAULT_EQUIP_BONUS = ("default",)
@@ -45,7 +50,8 @@ TYPE_NAMES = ["Dragon", "Spellcaster", "Zombie", "Warrior", "Beast-Warrior", "Be
               "Fairy", "Insect", "Dinosaur", "Reptile", "Fish", "Sea Serpent", "Machine", "Thunder", "Aqua", "Pyro",
               "Rock", "Plant", "Magic", "Trap", "Ritual", "Equip"]
 ATTRIBUTE_NAMES = ["Light", "Dark", "Earth", "Water", "Fire", "Wind"]
-CARD_RESET_KEYS = ("name", "description", "password", "art", "thumbnail", "title", "field_art", "fusion_groups")
+# What a later replace of a card resets, given or not (the plate, "title", is not: cards.c keeps it).
+CARD_RESET_KEYS = ("name", "description", "password", "art", "thumbnail", "field_art", "fusion_groups")
 ENTRY_NAMES = ["new_game", "load", "duel", "trade", "options", "campaign", "free_duel", "build_deck", "library",
                "password", "save"]
 NO_BONUS = object()
@@ -933,7 +939,7 @@ class _Check:
             mods = {c.mod for c in claims}
             if len(mods) < 2 or (involving is not None and involving not in mods):
                 continue
-            if kind == CARDS:   # read in the order the mods were found (mods.c Mods_VisitCards)
+            if kind == CARDS and CARDS_IN_FOUND_ORDER:   # read in the order the mods were found
                 claims.sort(key=lambda c: (self.mods[c.mod].found, c.mod, c.seq))
             else:
                 claims.sort(key=lambda c: (c.mod, c.seq))
@@ -1021,11 +1027,13 @@ class _Check:
             o.outcome, o.severity = ("aimed" if o.other >= 0 else "add"), INFO
             return
         if o.kind == CARDS:
-            used, dropped, met = self.card_keys(o)
+            used, dropped, met, _ = self.card_keys(o)
             if not used and not dropped:
                 o.outcome, o.severity = ("agree" if met else "add"), INFO
                 return
             o.outcome = "keys"
+            if CARDS_IN_FOUND_ORDER:
+                return   # an "after" is load order: the cards do not follow it
         elif o.kind == EQUIPS and c[last].key != DEFAULT_EQUIP_BONUS:
             differ = same = False
             for i in range(len(c)):
@@ -1072,7 +1080,7 @@ class _Check:
         """The keys a later mod's entry sets differently (used), the reset keys
         an earlier entry sets that a later one leaves out (dropped), and
         whether any key met at all."""
-        c, used, dropped, met = o.claims, [], [], False
+        c, used, dropped, met, dropped_from = o.claims, [], [], False, []
         for i in range(len(c)):
             for j in range(i + 1, len(c)):
                 if c[j].mod == c[i].mod:
@@ -1084,9 +1092,12 @@ class _Check:
                         met = True
                         if canonical(c[j].src[name]) != canonical(value) and name not in used:
                             used.append(name)
-                    elif name in CARD_RESET_KEYS and name not in dropped:
-                        dropped.append(name)
-        return used, dropped, met
+                    elif name in CARD_RESET_KEYS:
+                        if name not in dropped:
+                            dropped.append(name)
+                        if c[i].mod not in dropped_from and len(dropped_from) < 8:
+                            dropped_from.append(c[i].mod)
+        return used, dropped, met, dropped_from
 
     def equip_target(self, value):
         """A target of "add" or "remove": ("type", n), a card key, or None."""
@@ -1239,14 +1250,18 @@ class _Check:
         if o.outcome == "fixed":
             return head + f"{winner}'s fixed deck is dealt; the other edits of it are left out"
         if o.outcome == "keys":
-            used, dropped, _ = self.card_keys(o)
-            used_words = ", ".join(used)
-            dropped_words = ", ".join(dropped)
-            said = f"the later mod's {used_words} {'are' if ',' in used_words else 'is'} used" if used else ""
+            used, dropped, _, dropped_from = self.card_keys(o)
+            used_words, dropped_words = ", ".join(used), ", ".join(dropped)
+            said = f"{winner}'s {used_words} {'are' if ',' in used_words else 'is'} used" if used else ""
             if dropped:
-                said += f"{'; ' if said else ''}the earlier's {dropped_words} " \
-                        f"{'are' if ',' in dropped_words else 'is'} dropped (a later replace resets it)"
-            return head + f"{said}; the rest combines"
+                names = [self.mods[m].name for m in dropped_from]
+                gave = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+                said += f"{' and ' if said else ''}the {dropped_words} {gave} gave " \
+                        f"{'are' if ',' in dropped_words else 'is'} dropped, as {winner}'s replace starts " \
+                        f"{'them' if ',' in dropped_words else 'it'} from the disc's" \
+                        f"{', though the picture keeps its name plate' if 'name' in dropped_words else ''}"
+            why = "cards are read in folder order, not load order" if CARDS_IN_FOUND_ORDER else "later in load order"
+            return head + f"{said} ({why}); the rest combines"
         if o.outcome == "bytes":
             return head + f"{winner}'s bytes are read where they patch the same ones"
         if o.outcome == "patched":
