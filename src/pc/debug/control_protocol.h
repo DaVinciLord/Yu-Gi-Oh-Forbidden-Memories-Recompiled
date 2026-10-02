@@ -14,6 +14,11 @@
  *     save PATH         a save state
  *     load PATH         resume a save state
  *     info              frame, VBlank, mode, build id
+ *     jump TARGET [OPPONENT [DECK]]
+ *                       another screen through the debug menu (title_jump.h):
+ *                       title, debug, duel, free_duel, build_deck, library,
+ *                       password, map, credits, options; a duel against
+ *                       OPPONENT (decimal) with DECK ("723-762", "1,2,3")
  *     quit              end the game
  *
  * Numbers that are hex may carry a 0x; decimal ones may be given as 0x...
@@ -34,6 +39,7 @@ typedef enum {
     CONTROL_SAVE,
     CONTROL_LOAD,
     CONTROL_INFO,
+    CONTROL_JUMP,
     CONTROL_QUIT
 } ControlKind;
 
@@ -44,7 +50,9 @@ typedef struct {
     uint16_t bits;    /* pad */
     uint32_t address; /* peek, poke: as given (normalised by ControlProtocol_GuestRange) */
     uint32_t length;  /* peek: bytes asked for; poke: bytes decoded into the caller's buffer */
-    const char *path; /* shot, save, load: inside the parsed line */
+    const char *path; /* shot, save, load: inside the parsed line; jump: the target */
+    int opponent;     /* jump */
+    const char *deck; /* jump: NULL when not given */
 } ControlCommand;
 
 /* Parse one line (without its newline; a trailing '\r' is ignored). `data`

@@ -61,7 +61,12 @@ static void commands(void)
     strcat(big, "aa");
     CHECK(parse(big, &c) == -1);
     CHECK(parse("", &c) == -1 && parse("   ", &c) == -1);
-    CHECK(parse("jump 3", &c) == -1 && strstr(error, "unknown command 'jump'"));
+    CHECK(parse("goto 3", &c) == -1 && strstr(error, "unknown command 'goto'"));
+    CHECK(parse("jump library", &c) == 0 && c.kind == CONTROL_JUMP && !strcmp(c.path, "library") && !c.deck);
+    CHECK(parse("jump duel 3 723-762", &c) == 0 && c.opponent == 3 && !strcmp(c.deck, "723-762"));
+    CHECK(parse("jump duel 3", &c) == 0 && c.opponent == 3 && !c.deck);
+    CHECK(parse("jump", &c) == -1 && parse("jump duel x", &c) == -1 && parse("jump duel 256", &c) == -1);
+    CHECK(parse("jump duel 3 1-40 extra", &c) == -1);
 }
 
 static void ranges(void)

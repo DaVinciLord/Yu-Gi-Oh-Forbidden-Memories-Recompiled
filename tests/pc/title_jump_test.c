@@ -46,6 +46,21 @@ void TitleJump_Execute(void)
     TitleJump_Frame(30);
 }
 
+/* The debug menu, as the game side would report it (overrides/title_jump.c). */
+static int in_debug_menu, debug_idle, entered = -1, entered_opponent;
+static char entered_deck[64];
+int TitleJump_InDebugMenu(void) { return in_debug_menu; }
+int TitleJump_DebugMenuIdle(void) { return debug_idle; }
+int TitleJump_EnterTarget(int target, int opponent, const char *deck)
+{
+    entered = target;
+    entered_opponent = opponent;
+    snprintf(entered_deck, sizeof(entered_deck), "%s", deck);
+    return 0;
+}
+int Duelists_Count(void) { return 40; }
+int Duelists_Valid(int duelist) { return duelist >= 0 && duelist < 40; }
+
 struct MemoriesState { int loading, present, active; };
 int Memories_StateLoading(const MemoriesState *state) { return state->loading; }
 int Memories_StateChunk(MemoriesState *state, const char *tag, const MemoriesStateField *fields, size_t count)
@@ -164,6 +179,45 @@ int main(void)
     answer(0);
     TitleJump_Poll();
     assert(jumps == 3);
+    /* Another screen: refused targets, then by way of the title, which
+     * gives way to the debug menu, whose entry is taken once it is idle. */
+    {
+        char why[64];
+        assert(TitleJump_RequestTo(JUMP_COUNT, 0, NULL, why, sizeof(why)) == -1);
+        assert(TitleJump_RequestTo(JUMP_DUEL, 40, NULL, why, sizeof(why)) == -1 && strstr(why, "no duelist 40"));
+        assert(TitleJump_TargetByName("duel") == JUMP_DUEL && TitleJump_TargetByName("nowhere") == -1);
+        assert(!strcmp(TitleJump_TargetName(JUMP_BUILD_DECK), "build_deck"));
+        TitleJump_SetActive(1);
+        assert(TitleJump_RequestTo(JUMP_DUEL, 3, "1-40", why, sizeof(why)) == 0 && TitleJump_Pending());
+        TitleJump_Poll();
+        assert(jumps == 4 && entered == -1); /* to the title first */
+        TitleJump_SetActive(0);              /* the title's loop */
+        assert(TitleJump_Pending());
+        TitleJump_TitleGaveWay();            /* its menu returned the debug menu's choice */
+        assert(!TitleJump_Pending());
+        TitleJump_Poll();                    /* Main_Loop, the debug menu not started yet */
+        assert(jumps == 4 && entered == -1);
+        debug_idle = 1;
+        TitleJump_Poll();
+        assert(entered == JUMP_DUEL && entered_opponent == 3 && !strcmp(entered_deck, "1-40") && jumps == 4);
+        TitleJump_Poll();
+        assert(jumps == 4);
+        /* From the idle debug menu itself, no title jump. */
+        in_debug_menu = 1;
+        entered = -1;
+        assert(TitleJump_RequestTo(JUMP_LIBRARY, 0, NULL, why, sizeof(why)) == 0);
+        TitleJump_Poll();
+        assert(entered == JUMP_LIBRARY && jumps == 4);
+        /* A state load drops a waiting jump. */
+        in_debug_menu = debug_idle = 0;
+        entered = -1;
+        assert(TitleJump_RequestTo(JUMP_MAP, 0, NULL, why, sizeof(why)) == 0);
+        game.loading = 1;
+        TitleJump_State(&game);
+        assert(!TitleJump_Pending());
+        TitleJump_Poll();
+        assert(jumps == 4 && entered == -1);
+    }
     puts("title jump: ok");
     return 0;
 }

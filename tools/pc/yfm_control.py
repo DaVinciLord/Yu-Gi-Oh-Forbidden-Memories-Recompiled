@@ -52,6 +52,10 @@ MODE = {"debug": 0, "animated_battle": 1, "campaign": 2, "duel": 3, "library": 4
         "free_duel": 6, "build_deck": 7, "menu": 8, "name_entry": 9, "password": 10, "options": 11,
         "game_over": 12, "unused_developer": 13, "trade": 14, "credits": 15, "two_player_setup": 16}
 MODE_NAMES = {value: name for name, value in MODE.items()}
+# Where each `jump` target lands (title_jump.h): the mode it runs.
+JUMP_MODES = {"title": MODE["menu"], "debug": MODE["debug"], "duel": MODE["duel"], "free_duel": MODE["free_duel"],
+              "build_deck": MODE["build_deck"], "library": MODE["library"], "password": MODE["password"],
+              "map": MODE["campaign_map"], "credits": MODE["credits"], "options": MODE["options"]}
 
 # Guest addresses by name. config/pc/guest_addresses.txt has every global the
 # build pins to its retail address, and is read when present (a checkout);
@@ -68,6 +72,7 @@ FALLBACK = {
     "gLibrary_abCardChest": 0x801D0250,   # save_data.h: copies in the chest, u8 by card id - 1
     "gLibrary_dwStarchips": 0x801D07E0,   # save_data.h: SaveDataState.starchips, u32
     "gSaveData_aPlayerNameSjis": 0x801D060C,  # save_data.h: the player's name, Shift JIS
+    "D_8009B26E": 0x8009B26E,             # a mode's step; 0x80 in a duel: the deck screen before it
 }
 # Overlay modules (tools/pc/build_game32.py, MODULES): the load address and
 # the identifier word an image starts with while it is resident.
@@ -294,6 +299,41 @@ class Game:
         wanted = MODE[mode] if isinstance(mode, str) else mode
         return self.wait_until(lambda game: game.mode() == wanted, timeout,
                                what=f"mode {MODE_NAMES.get(wanted, wanted)}")
+
+    # Where the game is going: Debug > Jump to's path (title_jump.h).
+
+    def goto(self, target: str, opponent: int | None = None, deck: str | Iterable[int] | None = None,
+             timeout: int = 6000) -> dict[str, int]:
+        """Jump to a screen the way Debug > Jump to does (the title, then the
+        game's own debug menu and its entry), and step until it runs:
+        "debug", "duel" (against `opponent`, with `deck`: ids or ranges as
+        MEMORIES_DEBUG_DECK takes them, repeated to forty), "free_duel",
+        "build_deck", "library", "password", "map", "credits", "options",
+        "title". A duel stops at the deck screen the game shows before every
+        duel (leave it with circle; duel_ready() waits for the hand)."""
+        if deck is not None and not isinstance(deck, str):
+            deck = ",".join(str(card) for card in deck)
+        line = f"jump {target}"
+        if opponent is not None or deck:
+            line += f" {opponent or 0}" + (f" {deck}" if deck else "")
+        self.command(line)
+        wanted = JUMP_MODES[target]
+        if target == "title":
+            return {"vblanks": self.wait_until(lambda g: g.mode() == wanted and g.resident("main_menu"), timeout,
+                                               what="the title")}
+        if target == "debug":
+            return {"vblanks": self.wait_until(lambda g: g.u8("D_8009B26C") == 0xC0, timeout, what="the debug menu")}
+        return {"vblanks": self.wait_until(lambda g: g.u8("D_8009B26C") & 0x9F == 0x80 | wanted, timeout,
+                                           what=target)}
+
+    def duel_ready(self, timeout: int = 6000) -> int:
+        """In a duel: past the deck screen before it (circle), until the
+        player's five cards are dealt and the hand takes input."""
+        self.press_until(lambda g: g.u8("D_8009B26E") != 0x80 and not g.resident("main_menu"), "circle", every=60,
+                         timeout=timeout, what="the duel field")
+        taken = self.wait_until(lambda g: all(g.duel()[0]["hand"]), timeout, every=10, what="the hand")
+        self.step(200)   # the cards come up from the deck
+        return taken + 200
 
     def shot(self, path: Path | str) -> Path:
         """The presented picture, as PNG (PPM for a .ppm path); relative

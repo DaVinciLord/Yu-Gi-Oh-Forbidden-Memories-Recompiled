@@ -6,6 +6,7 @@
 #include "pc/guest/image.h"
 #include "pc/guest/state.h"
 #include "pc/platform/platform.h"
+#include "pc/platform/title_jump.h"
 #include "pc/sdk/display.h"
 #include <png.h>
 #include <stdio.h>
@@ -225,6 +226,20 @@ static int handle(char *text)
                  Platform_VBlankCount(), (unsigned)*guest(MODE_BYTE, 1, &ram), (unsigned)Memories_StateBuildId());
         send_line(reply);
         return 0;
+    case CONTROL_JUMP: {
+        /* Taken now, done by the game at its next point between two
+         * screens' frames: the client waits for the mode it wants. */
+        int target = TitleJump_TargetByName(command.path);
+        if (target < 0) {
+            send_error("no such screen (title, debug, duel, free_duel, build_deck, library, password, map, "
+                       "credits, options)");
+        } else if (TitleJump_RequestTo(target, command.opponent, command.deck, error, sizeof(error))) {
+            send_error(error);
+        } else {
+            send_line("ok");
+        }
+        return 0;
+    }
     case CONTROL_QUIT:
         send_line("ok");
         detach("the client asked to quit");

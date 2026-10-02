@@ -6,8 +6,8 @@ no unit test saw. This is the plan for tools that let a test, or an agent,
 drive the game completely, and that turn a bug report into a replay that
 fails until the bug is fixed and is kept from then on.
 
-Status: phase 1 steps 1 and 2 landed, step 5 as a first cut (see the
-**Landed** notes under each); the rest is design. Each phase below lands
+Status: phase 1 steps 1 to 4 and 6 landed, step 5 in part (see the
+**Landed** notes under each). Each phase below lands
 with its own code and updates this file.
 
 ## What exists
@@ -22,7 +22,7 @@ with its own code and updates this file.
 - **Determinism:** a run was deterministic only with HEADLESS (or DETERMINISTIC) and DUMP_FRAME and SPEED=-1 together (`MEMORIES_DETERMINISTIC=1` alone since step 1 below).
   - The silent mixer thread still runs in real time, so the sound driver's work area (`g_SDValue`, `0x801E0384..0x801E1B44`) and the spu chunks differ between two runs.
 - **No live channel:** no socket, no pipe, no recorder, and no way to read the game's state as data. Tests patch a state's `memory` chunk offline and read raw addresses. (Steps 2 and 5 below add the channel and its client; no recorder yet.)
-- **Debug > Jump to** has only Title Screen.
+- **Debug > Jump to** had only Title Screen (step 6 below adds the rest).
 - **Existing tests:** `tools/pc/smoke.py` (8 frame-hash cases) and `tools/pc/test_packs.py` (state patching) are the closest thing to replays. About 600 one-off agent scripts in `tmp/` repeat the same environment boilerplate, button macros, one-process-per-frame captures and RAM peeks.
 
 ## Phase 1: control and replays
@@ -67,6 +67,7 @@ build with the old combination; the eight smoke cases unchanged.
 | `save PATH` / `load PATH` | a save state |
 | `info` | frame, VBlank, mode, build id |
 | `quit` | exit |
+| `jump TARGET [OPPONENT [DECK]]` | another screen, as Debug > Jump to goes there (step 6; added with it) |
 
 **Landed** (`src/pc/debug/control.c`, `control_net.c`, `control_protocol.c`;
 `tools/pc/yfm_control.py` is the client, section 5):
@@ -137,6 +138,8 @@ build with the old combination; the eight smoke cases unchanged.
   - `info`: `ok frame F vblank V mode M build B` (M the raw mode byte
     `D_8009B26C`, B the build id in hex).
   - `quit`: `ok`, then the game ends as when its window is closed (exit 0).
+  - `jump TARGET [OPPONENT [DECK]]` (step 6): `ok` once taken; the game
+    goes there at its next point between two screens' frames.
   - Errors: `err` and the reason (an unknown command, a usage, a line over
     64 KiB). The connection stays open.
 
@@ -291,6 +294,44 @@ One code path, used by both Debug > Jump to and the client's `goto`. It
 wraps the game's own debug menu (mode 0, 20 entries) with parameters: the
 opponent, and the deck through the `DEBUG_DECK` path. Built once, offered in
 two places.
+
+**Landed** (`src/pc/platform/title_jump.c` and its game side
+`src/pc/overrides/title_jump.c`; the channel's `jump`; the client's
+`goto`; Debug > Jump to):
+
+- **The path:** a jump to another screen is held (`TitleJump_RequestTo`)
+  and taken where Title Screen's is, between two mode runners. From
+  anywhere but the debug menu the game first leaves for the title exactly
+  as Title Screen does (the sequence checked from eleven screens). The
+  title skips its opening movie and its menu gives way at once with the
+  choice retail has no case for, 10 (the hidden SAVE), which
+  `Main_ApplyMenuSelection` turns into the debug menu (mode 0). Once that
+  menu is idle (mode byte `0xC0`, no step running), the target's entry is
+  taken as Cross takes it: the cursor on it and `D_8009B2EB = entry + 1`.
+  Entries: Free Duel 8, DeckEdit 7, Detail 3 (the Library), Password 11,
+  3D MAP 6 (the campaign map), Option 16; `debug` stops at the menu. The
+  menu's DUEL entry fights duelist 1 with the debug arming, so `duel` is
+  armed as the Free Duel screen arms one (`func_80024DC8(-1, opponent,
+  0x6000, 0x6000)`, back to Free Duel after), with the deck first set
+  through `MEMORIES_DEBUG_DECK`'s parser (`Cheats_SetDeck`); a duel with
+  no deck given and none in the save is refused. The credits have no entry:
+  their mode is set, as `MEMORIES_MODE_AT` does. A state load drops a
+  waiting jump, as it does Title Screen's request.
+- **Offered in two places:** Debug > Jump to lists Debug Menu, Free Duel,
+  Build Deck, Library, Password, Map, Options and Credits under Title
+  Screen (no parameters there: a duel needs an opponent and a deck, which
+  only the channel takes); `jump TARGET [OPPONENT [DECK]]` on the channel,
+  and `Game.goto(target, opponent, deck)` on the client, which steps until
+  the target's mode runs. `Game.duel_ready()` then leaves the deck screen
+  every duel opens with (Circle) and waits for the dealt hand.
+- **Checked:** one game, from before the title, jumping in turn to the
+  Library, Build Deck, Password, the map, Options, Free Duel, the debug
+  menu, a duel against duelist 3 with cards 1-40 (its hand dealt from
+  them), the title and the credits; each screen's picture is the one its
+  menu opens. `pc_title_jump` covers the request, the title's hand-over,
+  the wait for the idle menu and the state load.
+- **Not yet:** a jump during the credits restarts the game (Title Screen's
+  rule) and is lost with the process.
 
 ### Acceptance
 

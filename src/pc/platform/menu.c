@@ -90,7 +90,7 @@ enum {
     ACT_MODS, ACT_CONTROLS, ACT_RELOAD_SETTINGS, ACT_PAUSE, ACT_FRAME_STEP, ACT_DUMP_FRAME, ACT_DUMP_VRAM,
     SLIDER_MASTER, SLIDER_MUSIC, SLIDER_SFX, CHECK_MUTE,
     CHECK_HUD, CHECK_HUD_FULL, RADIO_STATE_SLOT, ACT_UNLOCK_FREE_DUELISTS, ACT_RESET_COLOR,
-    ACT_CHECK_UPDATES, ACT_RELEASES, ACT_VERSION, ACT_SET_STARCHIPS, RADIO_LANGUAGE, ACT_SYSTEM_INFO,
+    ACT_CHECK_UPDATES, ACT_RELEASES, ACT_VERSION, ACT_SET_STARCHIPS, RADIO_LANGUAGE, ACT_SYSTEM_INFO, ACT_JUMP,
     CHECK_TRACE = 300  /* value is a LogChannel */
 };
 
@@ -238,7 +238,17 @@ static Menu submenus[SUB_COUNT] = {
     {"Effects", {{"CRT scanlines", 0, ITEM_CHECK, 0, SET_CRT},
                  {"Reduce flashes", 0, ITEM_CHECK, 0, SET_FLASH},
                  {"xBR pixel smoothing", 0, ITEM_CHECK, 0, SET_XBR}}, 3},
-    {"Jump to", {{"Title Screen", 0, ITEM_ACTION, MENU_ITEM_TITLE, -1, 0, ITEM_DISABLED}}, 1},
+    /* The others go by way of the title and the game's debug menu, as the
+     * control channel's `jump` does (title_jump.h); a duel needs a deck. */
+    {"Jump to", {{"Title Screen", 0, ITEM_ACTION, MENU_ITEM_TITLE, -1, 0, ITEM_DISABLED},
+                 {"Debug Menu", 0, ITEM_ACTION, ACT_JUMP, -1, JUMP_DEBUG_MENU, ITEM_GROUP_BREAK},
+                 {"Free Duel", 0, ITEM_ACTION, ACT_JUMP, -1, JUMP_FREE_DUEL},
+                 {"Build Deck", 0, ITEM_ACTION, ACT_JUMP, -1, JUMP_BUILD_DECK},
+                 {"Library", 0, ITEM_ACTION, ACT_JUMP, -1, JUMP_LIBRARY},
+                 {"Password", 0, ITEM_ACTION, ACT_JUMP, -1, JUMP_PASSWORD},
+                 {"Map", 0, ITEM_ACTION, ACT_JUMP, -1, JUMP_MAP},
+                 {"Options", 0, ITEM_ACTION, ACT_JUMP, -1, JUMP_OPTIONS},
+                 {"Credits", 0, ITEM_ACTION, ACT_JUMP, -1, JUMP_CREDITS}}, 9},
     {"Anti-aliasing", {{"Off", 0, ITEM_RADIO, 0, SET_MSAA, 0},
                        {"2x", 0, ITEM_RADIO, 0, SET_MSAA, 2},
                        {"4x", 0, ITEM_RADIO, 0, SET_MSAA, 4},
@@ -1585,6 +1595,11 @@ static void activate(const Item *item, int *quit)
     case ACT_RELEASES: Update_OpenReleases(); break;
     case ACT_SYSTEM_INFO: show_system_info(); break;
     case MENU_ITEM_TITLE: TitleJump_Request(); break;
+    case ACT_JUMP: {
+        char why[120];
+        if (TitleJump_RequestTo(item->value, 0, NULL, why, sizeof(why))) fprintf(stderr, "memories-pc: jump: %s\n", why);
+        break;
+    }
     case MENU_ITEM_RESTART: TitleJump_Confirm(); break;
     case MENU_ITEM_DECKS: DeckMenu_Request(); break;
     case ACT_RELOAD_SETTINGS:

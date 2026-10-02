@@ -108,6 +108,18 @@ int ControlProtocol_Parse(char *line, ControlCommand *command, uint8_t *data, ch
             snprintf(error, error_size, "usage: %s", name);
             return -1;
         }
+    } else if (!strcmp(name, "jump")) {
+        command->kind = CONTROL_JUMP;
+        command->path = word(&cursor);
+        argument = word(&cursor);
+        if (!command->path) return fail(error, error_size, "usage: jump TARGET [OPPONENT [DECK]]");
+        if (argument) {
+            if (number(argument, 0, &value) || value > 255)
+                return fail(error, error_size, "usage: jump TARGET [OPPONENT [DECK]] (OPPONENT decimal)");
+            command->opponent = (int)value;
+            command->deck = word(&cursor);
+            if (!at_end(&cursor)) return fail(error, error_size, "usage: jump TARGET [OPPONENT [DECK]]");
+        }
     } else if (!strcmp(name, "peek")) {
         command->kind = CONTROL_PEEK;
         if (number(word(&cursor), 1, &command->address) || number(word(&cursor), 0, &command->length) ||

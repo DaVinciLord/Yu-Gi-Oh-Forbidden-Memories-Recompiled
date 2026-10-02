@@ -789,6 +789,13 @@ disc left idle first. That way, no transfer the old screen asked for lands on
 the title's package. While the save slot menu is open, the request waits
 for it to close, so the menu is never left drawn over the title.
 
+Debug > Jump to's other items (Debug Menu, Free Duel, Build Deck, Library,
+Password, Map, Options, Credits) and the control channel's `jump` take the
+same way out, then the title gives way at once to the game's own debug
+menu, whose entry for the screen is taken as Cross would take it; a duel
+(channel only: it needs an opponent and a deck) is armed as the Free Duel
+screen arms one. See [Agent control](agent-control.md), step 6.
+
 The request is only taken between two mode runners. A `MEMORIES_PC` hook in
 `Main_Loop` polls after each frame. That is the one point where no runner is
 half way through a step, and where no nested frame loop is on the stack
