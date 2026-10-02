@@ -908,6 +908,13 @@ int Cards_RetailType(int id)
     return id >= 1 && id <= CARD_COUNT ? (int)((((const unsigned *)(uintptr_t)RETAIL_STATS)[id - 1] >> 26) & 0x1F) : -1;
 }
 
+/* Monster, magic, trap, ritual or equip: what a card is played as. */
+static int kind(int type) { return type < CARD_TYPE_MAGIC ? 0 : type; }
+int Cards_KindChanged(int id)
+{
+    return Cards_Valid(id) && kind(Cards_Type(id)) != kind(Cards_RetailType(Cards_BaseId(id)));
+}
+
 static int retail_monster(int id)
 {
     return id >= 1 && id <= CARD_COUNT &&
@@ -1117,6 +1124,16 @@ static void add_entry(const char *mod, const char *directory, int index, const J
             stats = (stats & ~(0x1Fu << 26)) | ((unsigned)value << 26);
         }
     }
+    /* Only a monster has ATK and DEF: no magic, trap, ritual or equip card of
+     * the disc has either. A monster replaced as one of those would keep its
+     * own, and the CPU, which ranks its hand by them whatever their type,
+     * would take it for its best monster: it plays it face down every turn,
+     * into the back row, over the last one it set. */
+    if (((stats >> 26) & 0x1F) >= CARD_TYPE_MAGIC && (stats & 0x3FFFFu)) {
+        if (Json_Number(Json_Member(entry, "attack"), 0) > 0 || Json_Number(Json_Member(entry, "defense"), 0) > 0)
+            Mods_Note(mod, "cards[%d]: only a monster has ATK and DEF; \"attack\" and \"defense\" left out", index);
+        stats &= ~0x3FFFFu;
+    }
     if (stars && (Json_TypeOf(stars) != JSON_ARRAY || Json_Count(stars) != 2)) {
         Mods_Note(mod, "cards[%d]: \"stars\" is a list of two, [first, second] (none for no star); left out", index);
     } else if (stars) {
@@ -1210,7 +1227,9 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     }
     /* Field-only artwork: its own PNG, never shared with "art" and never
      * patched into the card's own record, so only the field cutout ever
-     * shows it. */
+     * shows it. Its own transparency-preserving loader (art.h), not
+     * CardArt_FromImage's: a background-removed PNG draws as a cutout of
+     * its own shape, not a rectangle. */
     {
         const char *file = Json_String(Json_Member(entry, "field_art"), NULL);
         char path[1200], why[1300];
@@ -1221,7 +1240,7 @@ static void add_entry(const char *mod, const char *directory, int index, const J
                 field_art_record = calloc(1, CARD_ART_RECORD);
                 if (!field_art_record) {
                     Mods_Note(mod, "cards[%d]: \"field_art\": out of memory", index);
-                } else if (!CardArt_FromImage(path, field_art_record, why, sizeof(why))) {
+                } else if (!CardArt_FieldArtFromImage(path, field_art_record, why, sizeof(why))) {
                     Mods_Note(mod, "cards[%d]: \"field_art\": %s", index, why);
                     free(field_art_record);
                     field_art_record = NULL;

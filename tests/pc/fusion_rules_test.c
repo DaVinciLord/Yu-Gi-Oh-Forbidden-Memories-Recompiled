@@ -11,8 +11,9 @@
 
 unsigned short gDuel_awEquipTable[0x2100 / 2];
 unsigned short gDuel_aFusionTable[0x10000 / 2];
-static int event_count, mod_result = -1, equip_rule = -1, removed;
+static int event_count, mod_result = -1, equip_rule = -1, removed, changed;
 int Cards_Valid(int id) { return id > 0 && id <= 800; }
+int Cards_KindChanged(int id) { return id == changed; }
 int Cards_BaseId(int id) { return id > 722 ? id - 722 : id; }
 int Tables_Fusion(int a, int b, int *result)
 {
@@ -54,6 +55,17 @@ int main(void)
     equip_rule = 0; assert(!CardRules_Equip(301, 1));
     equip_rule = 1; assert(CardRules_Equip(301, 724) == 724);
     assert(!CardRules_Equip(301, 0) && !CardRules_Fusion(0, 1));
+    /* A card a "replace" made another kind is out of the disc's tables, as
+     * material, as result, as equip and as the monster equipped; the mods'
+     * own rules still name it. */
+    equip_rule = -1; removed = 0;
+    changed = 2; assert(!CardRules_Fusion(1, 2) && !CardRules_Fusion(2, 1) && CardRules_Fusion(1, 4) == 5);
+    changed = 3; assert(!CardRules_Fusion(1, 2));
+    changed = 2; mod_result = 750; assert(CardRules_Fusion(1, 2) == 750); mod_result = -1;
+    changed = 301; assert(!CardRules_Equip(301, 1));
+    changed = 1; assert(!CardRules_Equip(301, 1));
+    equip_rule = 1; assert(CardRules_Equip(301, 1) == 1); equip_rule = -1;
+    changed = 0; assert(CardRules_Fusion(1, 2) == 3 && CardRules_Equip(301, 1) == 1);
     assert(!event_count);
     puts("fusion rules: gameplay parity, mod rules and side-effect-free preview passed");
     return 0;

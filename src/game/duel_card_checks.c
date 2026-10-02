@@ -48,13 +48,19 @@ s32 Duel_CheckEquip(s32 arg0, s32 arg1)
 
 #ifdef MEMORIES_PC
 /* An equip answers with the monster it was asked about, so a copy stays
-   itself. The mods' rules come before the disc's table (tables.h). */
+   itself. The mods' rules come before the disc's table (tables.h). The
+   disc's is of the cards as they were: a replaced card made another kind
+   (cards.h) is out of it, or an equip card made a monster would still
+   equip, taking a monster off the field for the one it is played on. */
 int CardRules_Equip(int a, int b)
 {
     int ruled;
     if (!Cards_Valid(a) || !Cards_Valid(b)) return 0;
     ruled = Tables_Equip(a, b);
-    return (ruled >= 0 ? ruled : Duel_CheckEquipRetail(Cards_BaseId(a), Cards_BaseId(b)) != 0) ? b : 0;
+    if (ruled < 0)
+        ruled = !Cards_KindChanged(a) && !Cards_KindChanged(b) &&
+                Duel_CheckEquipRetail(Cards_BaseId(a), Cards_BaseId(b)) != 0;
+    return ruled ? b : 0;
 }
 
 s32 Duel_CheckEquip(s32 arg0, s32 arg1)
@@ -118,12 +124,18 @@ s32 Duel_CheckFusion(s32 arg0, s32 arg1)
 }
 
 #ifdef MEMORIES_PC
+/* The disc's table is of the cards as they were, so a replaced card made
+   another kind (cards.h) neither fuses by it nor comes out of it: the CPU
+   would fuse a monster with what is now a magic card, which the game plays
+   as a magic card, and lose it. The mods' rules still name any card. */
 int CardRules_Fusion(int a, int b)
 {
     int result = 0;
-    if (!Tables_Fusion(a, b, &result) && !Cards_Fusion(a, b, &result))
-        result = Cards_Valid(a) && Cards_Valid(b)
-            ? Tables_FilterFusion(Duel_CheckFusionRetail(a, b)) : 0;
+    if (!Tables_Fusion(a, b, &result) && !Cards_Fusion(a, b, &result)) {
+        if (Cards_Valid(a) && Cards_Valid(b) && !Cards_KindChanged(a) && !Cards_KindChanged(b))
+            result = Tables_FilterFusion(Duel_CheckFusionRetail(a, b));
+        if (result && Cards_KindChanged(result)) result = 0;
+    }
     return Cards_Valid(result) ? result : 0;
 }
 

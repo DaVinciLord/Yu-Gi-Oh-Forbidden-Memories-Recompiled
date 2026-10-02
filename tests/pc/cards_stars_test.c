@@ -36,7 +36,7 @@ int gDuel_adwCardStats[CARD_TABLE_ID_END];
 short gCard_asNameSortKey[CARD_TABLE_ID_END];
 unsigned char gDuel_abCardLevelAttr[CARD_TABLE_ID_END];
 
-static int notes[4];     /* per mod, "a" to "d" */
+static int notes[5];     /* per mod, "a" to "e" */
 
 void Mods_Note(const char *id, const char *format, ...)
 {
@@ -46,7 +46,7 @@ void Mods_Note(const char *id, const char *format, ...)
     vsnprintf(note, sizeof(note), format, arguments);
     va_end(arguments);
     fprintf(stderr, "note: %s: %s\n", id, note);
-    if (id[0] >= 'a' && id[0] <= 'd' && !id[1]) notes[id[0] - 'a']++;
+    if (id[0] >= 'a' && id[0] <= 'e' && !id[1]) notes[id[0] - 'a']++;
 }
 
 /* What cards.c and stars.c reach that these checks never get to. */
@@ -64,6 +64,11 @@ int CardArt_FromImage(const char *path, unsigned char *record, char *why, size_t
     return 0;
 }
 int CardArt_ThumbnailFromImage(const char *path, unsigned char *record, char *why, size_t why_size)
+{
+    (void)path; (void)record; (void)why; (void)why_size;
+    return 0;
+}
+int CardArt_FieldArtFromImage(const char *path, unsigned char *record, char *why, size_t why_size)
 {
     (void)path; (void)record; (void)why; (void)why_size;
     return 0;
@@ -117,6 +122,12 @@ static const char *const mod_cards[][2] = {
           " {\"replace\": 6, \"stars\": [\"Mars\"]},"
           " {\"replace\": 7, \"stars\": [\"Nowhere\", \"Mars\"]},"
           " {\"replace\": 8, \"stars\": [0, \"Nowhere\"]}]"},
+    /* Monsters made a magic, an equip and a trap card: no ATK or DEF, an
+       "attack" given said to be left out, and each another kind than on the
+       disc, so out of its fusion and equip tables (Cards_KindChanged). */
+    {"e", "[{\"replace\": 10, \"type\": \"Magic\"},"
+          " {\"replace\": 11, \"type\": \"Equip\", \"attack\": 1500},"
+          " {\"replace\": 12, \"type\": \"Trap\", \"defense\": 0}]"},
 };
 
 void Mods_VisitCards(void (*visit)(const char *id, const char *directory, const struct JsonValue *cards, void *context),
@@ -224,6 +235,13 @@ int main(void)
     expect(6, SUN, MOON);
     expect(7, SUN, MARS);                      /* the star it names, the other kept */
     expect(8, MOON, 0);
+
+    for (id = 10; id <= 12; id++) assert(!((unsigned)gDuel_adwCardStats[id - 1] & 0x3FFFF));
+    assert(notes[4] == 1);
+    assert(Cards_KindChanged(10) && Cards_KindChanged(11) && Cards_KindChanged(12));
+    assert(Cards_KindChanged(300) && Cards_KindChanged(301));   /* magic cards made Dragons */
+    assert(!Cards_KindChanged(1) && !Cards_KindChanged(4) && !Cards_KindChanged(CARD_COUNT + 1));
+    assert(((unsigned)gDuel_adwCardStats[3] & 0x1FF) == 100);   /* a monster keeps its own */
 
     puts("cards stars: ok");
     return 0;

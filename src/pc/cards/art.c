@@ -252,6 +252,130 @@ int CardArt_ThumbnailFromImage(const char *path, unsigned char *record, char *wh
     return image_into(path, record, 1, why, why_size);
 }
 
+/* Like load_png, but keeps the PNG's own alpha instead of flattening it
+ * away: field_art's cutouts (below) need to know what to leave out; every
+ * other user of a card's art draws a full rectangle, so nothing else does.
+ * *alpha is the same length as the returned pixels, NULL on failure along
+ * with the return. */
+static Rgb *load_png_rgba(const char *path, int *width, int *height, unsigned char **alpha)
+{
+    png_image image;
+    FILE *file;
+    unsigned char *rgba;
+    Rgb *out;
+    size_t i, count;
+    memset(&image, 0, sizeof(image));
+    image.version = PNG_IMAGE_VERSION;
+    file = fopen(path, "rb");
+    if (!file) return NULL;
+    if (!png_image_begin_read_from_stdio(&image, file)) { fclose(file); return NULL; }
+    image.format = PNG_FORMAT_RGBA;
+    rgba = malloc(PNG_IMAGE_SIZE(image));
+    if (!rgba || !png_image_finish_read(&image, NULL, rgba, 0, NULL)) {
+        free(rgba);
+        fclose(file);
+        png_image_free(&image);
+        return NULL;
+    }
+    fclose(file);
+    count = (size_t)image.width * image.height;
+    out = malloc(count * sizeof(*out));
+    *alpha = malloc(count);
+    if (!out || !*alpha) {
+        free(out);
+        free(*alpha);
+        *alpha = NULL;
+        free(rgba);
+        png_image_free(&image);
+        return NULL;
+    }
+    for (i = 0; i < count; i++) {
+        out[i].r = rgba[i * 4];
+        out[i].g = rgba[i * 4 + 1];
+        out[i].b = rgba[i * 4 + 2];
+        (*alpha)[i] = rgba[i * 4 + 3];
+    }
+    *width = (int)image.width;
+    *height = (int)image.height;
+    free(rgba);
+    png_image_free(&image);
+    return out;
+}
+
+/* resample's own crop-and-average, for a single channel: called with the
+ * same source and target sizes resample itself is, so the same crop window
+ * (a deterministic function of those sizes alone) lines back up with it,
+ * texel for texel. */
+static void resample_alpha(const unsigned char *source, int sw, int sh, unsigned char *out, int w, int h)
+{
+    double cw = sw, ch = sh, x0, y0;
+    int x, y;
+    if (cw * h > ch * w) cw = ch * w / h; else ch = cw * h / w;
+    x0 = (sw - cw) / 2;
+    y0 = (sh - ch) / 2;
+    for (y = 0; y < h; y++) {
+        int top = (int)(y0 + ch * y / h), bottom = (int)(y0 + ch * (y + 1) / h);
+        if (bottom <= top) bottom = top + 1;
+        for (x = 0; x < w; x++) {
+            int left = (int)(x0 + cw * x / w), right = (int)(x0 + cw * (x + 1) / w), sx, sy;
+            unsigned long a = 0, n = 0;
+            if (right <= left) right = left + 1;
+            for (sy = top; sy < bottom && sy < sh; sy++) {
+                for (sx = left; sx < right && sx < sw; sx++) {
+                    a += source[(size_t)sy * sw + sx];
+                    n++;
+                }
+            }
+            if (!n) n = 1;
+            out[y * w + x] = (unsigned char)(a / n);
+        }
+    }
+}
+
+#define FIELD_ART_ALPHA_CUTOFF 128
+
+int CardArt_FieldArtFromImage(const char *path, unsigned char *record, char *why, size_t why_size)
+{
+    int width, height, i;
+    unsigned char *alpha;
+    Rgb *source = load_png_rgba(path, &width, &height, &alpha), *art;
+    unsigned char *art_alpha;
+    unsigned short clut[256];
+
+    if (!source) {
+        snprintf(why, why_size, "%s is not a PNG it could read", path);
+        return 0;
+    }
+    art = malloc(CARD_ART_WIDTH * CARD_ART_HEIGHT * sizeof(*art));
+    art_alpha = malloc(CARD_ART_WIDTH * CARD_ART_HEIGHT);
+    if (!art || !art_alpha) {
+        free(source);
+        free(alpha);
+        free(art);
+        free(art_alpha);
+        return 0;
+    }
+    resample(source, width, height, art, CARD_ART_WIDTH, CARD_ART_HEIGHT);
+    resample_alpha(alpha, width, height, art_alpha, CARD_ART_WIDTH, CARD_ART_HEIGHT);
+    quantize(art, CARD_ART_WIDTH * CARD_ART_HEIGHT, 255, clut, record + CARD_ART_PIXELS);
+    /* A texel this transparent is written as index 0 (never quantize's own
+     * output: every real pixel is 1-255), and its CLUT entry set to the
+     * PS1's own transparent colour, 0x0000 (to555's own comment) -- unlike
+     * quantize's own default for it, 0x8000, opaque black, since index 0
+     * never reaches a real pixel anywhere else a card's art is drawn. */
+    clut[0] = 0;
+    for (i = 0; i < CARD_ART_WIDTH * CARD_ART_HEIGHT; i++) {
+        if (art_alpha[i] < FIELD_ART_ALPHA_CUTOFF) record[CARD_ART_PIXELS + i] = 0;
+    }
+    put_clut(record + CARD_ART_CLUT, clut, 256);
+
+    free(source);
+    free(alpha);
+    free(art);
+    free(art_alpha);
+    return 1;
+}
+
 /* A Free Duel portrait record: the 48x48 image at 8 bits a pixel, then its
  * 64-entry palette, which is what the screen uploads and the disc holds forty
  * of (notes/more-duelists.md). The same shape as a card's, at another size. */

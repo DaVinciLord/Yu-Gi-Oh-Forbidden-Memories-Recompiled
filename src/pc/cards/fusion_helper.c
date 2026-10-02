@@ -64,9 +64,21 @@ static void name(int id, char out[256])
     if (Cards_Valid(id)) snprintf(out, 256, "Card %d", id);
 }
 
+/* What placement gives (duel_scene_card_placement.c): a mod's bonus for the
+ * equip and monster, kept where the 16-bit stat_modifier holds it. */
+static int bonus(int equipment, int monster, int modifier)
+{
+    int value = Tables_EquipBonus(equipment, monster, equipment == 657 ? 1000 : 500);
+    int room = 2 * Tables_StatCapEither();
+    if (room > TABLES_LIMIT_STAT_MAX) room = TABLES_LIMIT_STAT_MAX;
+    if (modifier + value > room) value = room - modifier;
+    if (modifier + value < -room) value = -room - modifier;
+    return value;
+}
+
 static void update(void)
 {
-    static const FusionRules rules = {card, CardRules_Fusion, CardRules_Equip};
+    static const FusionRules rules = {card, CardRules_Fusion, CardRules_Equip, bonus};
     FusionCard hand[FUSION_HAND] = {{0}};
     int prefix[FUSION_HAND] = {-1, -1, -1, -1, -1};
     int slot, picked = 0, count = 0, side = D_8009B1D5;

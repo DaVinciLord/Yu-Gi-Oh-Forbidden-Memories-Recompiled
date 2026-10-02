@@ -13,6 +13,13 @@ static int clamp(int value, int cap) { return value < 0 ? 0 : value > cap ? cap 
 int Fusion_Attack(FusionCard card) { return clamp(card.attack + card.modifier + card.terrain, caps[0]); }
 int Fusion_Defense(FusionCard card) { return clamp(card.defense + card.modifier + card.terrain, caps[1]); }
 
+/* Placement tests the actual equip id, not its inherited base/effect. */
+static int bonus(const FusionRules *rules, FusionCard equipment, FusionCard monster)
+{
+    int retail = equipment.id == 657 ? 1000 : 500;
+    return rules->bonus ? rules->bonus(equipment.id, monster.id, monster.modifier) : retail;
+}
+
 int Fusion_Step(const FusionRules *rules, FusionCard a, FusionCard b, FusionCard *out)
 {
     int result = rules->fusion(a.id, b.id);
@@ -22,13 +29,12 @@ int Fusion_Step(const FusionRules *rules, FusionCard a, FusionCard b, FusionCard
     }
     if (rules->equip(b.id, a.id)) {
         *out = a;
-        /* Placement tests the actual equip id, not its inherited base/effect. */
-        out->modifier += b.id == 657 ? 1000 : 500;
+        out->modifier += bonus(rules, b, a);
         return 1;
     }
     if (rules->equip(a.id, b.id)) {
         *out = b;
-        out->modifier += a.id == 657 ? 1000 : 500;
+        out->modifier += bonus(rules, a, b);
         return 1;
     }
     /* Placement discards an incoming non-monster when a monster stands. */
