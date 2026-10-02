@@ -330,9 +330,16 @@ def compile_object(sources, output, objects_dir, extra_flags=()):
     objects = []
     os.makedirs(objects_dir, exist_ok=True)
     os.makedirs(os.path.dirname(os.path.abspath(output)), exist_ok=True)
+    clang = programs()[1]
     for source in sources:
         obj = os.path.join(objects_dir, os.path.basename(source) + ".o")
-        run(cc + FLAGS + cc_flags + headers() + [*extra_flags, "-c", source, "-o", obj])
+        # clang names the compile unit after the file it compiles, here the
+        # preprocessed copy in a staging folder that is gone a moment later
+        # (and has a random name, so no two builds were the same bytes).
+        # Given that same path as the main file name, it takes the name in
+        # the first line marker instead, the source's, as GCC does.
+        named = ["-Xclang", "-main-file-name", "-Xclang", source] if clang and "cpp-output" in extra_flags else []
+        run(cc + FLAGS + cc_flags + headers() + [*extra_flags, *named, "-c", source, "-o", obj])
         objects.append(obj)
     run(linker + ["-o", output] + objects)
     return output
