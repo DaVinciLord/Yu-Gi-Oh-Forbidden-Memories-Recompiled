@@ -52,6 +52,9 @@ static unsigned stall_ms;
 
 void Win32_InterruptEntry(void);
 void Win32_InterruptBody(void);
+/* AV test (av/no-crash-reports, not for merging): no crash handlers, hang
+ * register snapshots or minidumps on Windows. */
+#define AV_NO_CRASH_REPORTS 1
 static void write_dump(const char *kind, EXCEPTION_POINTERS *pointers, DWORD thread);
 
 /* A redirect the main thread never took: the exception that was on its way
@@ -239,6 +242,11 @@ int Win32_UndoInterruptedFault(void *context)
 
 void Win32_SetStallReporter(void (*report)(void *context), unsigned seconds)
 {
+#if AV_NO_CRASH_REPORTS
+    (void)report;
+    (void)seconds;
+    return;
+#endif
     stall_ms = seconds * 1000u;
     stall_report = report;
 }
@@ -442,12 +450,18 @@ static void write_dump(const char *kind, EXCEPTION_POINTERS *pointers, DWORD thr
     file = CreateFileW(wide, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     free(wide);
     if (file == INVALID_HANDLE_VALUE) return;
+#if AV_NO_CRASH_REPORTS
+    (void)exception;
+    (void)thread;
+    (void)pointers;
+#else
     exception.ThreadId = thread;
     exception.ExceptionPointers = pointers;
     exception.ClientPointers = FALSE;
     MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), file,
                       (MINIDUMP_TYPE)(MiniDumpWithThreadInfo | MiniDumpWithIndirectlyReferencedMemory),
                       pointers ? &exception : NULL, NULL, NULL);
+#endif
     CloseHandle(file);
 }
 
@@ -582,6 +596,13 @@ static LONG CALLBACK on_unclaimed(EXCEPTION_POINTERS *pointers)
 
 void Win32_SetCrashReporter(Win32CrashReport report)
 {
+#if AV_NO_CRASH_REPORTS
+    (void)report;
+    (void)on_unhandled;
+    (void)on_exception;
+    (void)on_unclaimed;
+    return;
+#endif
     SetUnhandledExceptionFilter(on_unhandled);
     crash_report = report;
     Win32_ImageRange(&image_low, &image_high);

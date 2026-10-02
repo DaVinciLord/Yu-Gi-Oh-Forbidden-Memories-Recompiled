@@ -52,6 +52,14 @@
 #include <unistd.h>
 #endif
 
+/* AV test (av/no-crash-reports, not for merging): no crash monitor on
+ * Windows, so none of its process/thread/minidump calls are in the exe. */
+#ifdef _WIN32
+#define AV_NO_CRASH_REPORTS 1
+#else
+#define AV_NO_CRASH_REPORTS 0
+#endif
+
 /* platform.h brings the game's types, which clash with <windows.h>. */
 void Platform_ShowError(const char *title, const char *message);
 
@@ -219,6 +227,7 @@ void Monitor_NoteSystem(void)
 #endif
 }
 
+#if !AV_NO_CRASH_REPORTS
 /* A new game in the block: the first start, or a restart. */
 static void begin_generation(void)
 {
@@ -770,6 +779,7 @@ static int write_minidump(const char *path)
     return written ? 0 : -1;
 }
 #endif
+#endif /* !AV_NO_CRASH_REPORTS */
 
 /* The report -------------------------------------------------------------- */
 
@@ -787,6 +797,7 @@ size_t Monitor_Facts(char *out, size_t size)
     snprintf(out, size, "%s", copy);
     return strlen(out);
 }
+#if !AV_NO_CRASH_REPORTS
 
 static void put_facts(void)
 {
@@ -1390,11 +1401,17 @@ static int attach(void)
     return 1;
 }
 #endif
+#endif /* !AV_NO_CRASH_REPORTS */
 
 int Monitor_Main(int argc, char **argv, int *status)
 {
     (void)argc;
     (void)argv;
+#if AV_NO_CRASH_REPORTS
+    (void)status;
+    return 0;
+#else
     if (attach() || !wanted()) return 0;
     return !run_monitor(status);
+#endif
 }
