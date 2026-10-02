@@ -63,6 +63,21 @@ initially enabled. Run it with `python tools/pc/test_path_layout.py --build
 <cmake-build-directory>` after building the tests. Existing path-length
 limits and the operating system's filename restrictions still apply.
 
+### Build folders shared by worktrees
+
+Worktrees share `tmp/` through a junction, and with it the default build
+folders (`tmp/pc/game32`, and `tmp/pc/win32` where `package.py` builds a
+release). A game object is kept while it is newer than its source and the
+headers, which says nothing about whose source it was: an object another
+worktree compiled is newer than every file this checkout wrote before it.
+So `<build>/checkout.txt` names the checkout a folder was last built from
+(written when a build ends, removed when one from another checkout starts),
+and a build from any other checkout, or after one that was stopped, compiles
+everything again. What `build_game32.py` copies into the folder (the SDK's
+headers and tools, the mods' data, the languages) is copied when its bytes
+differ, not when it is newer. A build folder of its own per worktree
+(`--build tmp/pc/game32-<name>`) still saves the full rebuilds.
+
 ### Mod objects (`tmp/pc/mod-build`)
 
 Every build compiles the code mods in `mods/` (`build_mods` in
