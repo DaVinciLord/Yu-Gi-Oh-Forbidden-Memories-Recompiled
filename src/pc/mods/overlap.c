@@ -680,8 +680,10 @@ static void read_rituals(ModsOverlaps *x, int mod)
  * read_one_duelist). */
 static void define_duelist(ModsOverlaps *x, int mod, const char *id, uint64_t replaces)
 {
-    Defined *defined = grow(x->defined, &x->defined_room, x->defined_count, sizeof(*x->defined));
-    if (!defined || !id || !*id) return;
+    Defined *defined;
+    if (!id || !*id) return; /* before grow(), which may move the array */
+    defined = grow(x->defined, &x->defined_room, x->defined_count, sizeof(*x->defined));
+    if (!defined) return;
     x->defined = defined;
     snprintf(defined[x->defined_count].id, sizeof(defined[0].id), "%s", id);
     defined[x->defined_count].mod = mod;
