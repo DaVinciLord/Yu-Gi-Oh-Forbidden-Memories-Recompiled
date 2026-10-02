@@ -1322,6 +1322,11 @@ static void add_entry(const char *mod, const char *directory, int index, const J
             plates[id] = named_plate;
         } else if (name && *name) {
             plates[id] = named_plate;
+        } else {
+            /* Neither: the plate goes with the name, so a later mod's
+             * replace that gives none shows the card's own name on the
+             * picture too, not an earlier mod's plate. */
+            plates[id] = NULL;
         }
         if (replace) continue;
         context->use[id] = (unsigned char)((Json_Bool(Json_Member(entry, "drops"), 1) ? 1 : 0) |

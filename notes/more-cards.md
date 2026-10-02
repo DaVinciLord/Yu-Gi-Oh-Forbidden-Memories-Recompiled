@@ -139,8 +139,13 @@ own show the replaced ones.
 
 When two entries (or two mods) replace the same card, the later one goes over
 the earlier: of two mods, the later in load order, whatever their folders
-are called. What the later entry leaves out stays as the earlier one set it.
-The Mods window notes it.
+are called. Its stats, stars, level, attribute, type, frame, model and
+effect go over the earlier one's where it gives them, and what it leaves out
+of those stays as the earlier one set it. Its name (with the plate that says
+it), text, password, art, `title`, `field_art` and `fusion_groups` take the
+earlier one's place whether it gives them or not: left out, the card's own
+come back. Notes add up ([below](#notes-on-a-card)). The Mods window notes
+it.
 
 ## Frame colour
 

@@ -173,17 +173,20 @@ int main(int argc, char **argv)
     make_dir("mods");
     /* Each replaces card 1 with its own name and ATK and adds a copy; b's
      * copy of card 1 comes before its own replace, so it is card 1 as the
-     * mods before b left it. */
+     * mods before b left it. Card 4: a gives it a name (and so a plate), b
+     * only an ATK. */
     make_dir("mods/cardorder-a");
     write_text("mods/cardorder-a/mod.json",
                "{\"id\":\"cardorder-a\",\"cards\":["
                "{\"replace\":1,\"name\":\"Alpha\",\"attack\":1100},"
-               "{\"copy\":2,\"id\":\"twin\",\"name\":\"Alpha twin\"}]}");
+               "{\"copy\":2,\"id\":\"twin\",\"name\":\"Alpha twin\"},"
+               "{\"replace\":4,\"name\":\"Alpha baby\"}]}");
     make_dir("mods/cardorder-b");
     write_text("mods/cardorder-b/mod.json",
                "{\"id\":\"cardorder-b\",\"cards\":["
                "{\"copy\":1,\"id\":\"of-one\",\"name\":\"Beta copy\"},"
-               "{\"replace\":1,\"name\":\"Beta\",\"attack\":2200}]}");
+               "{\"replace\":1,\"name\":\"Beta\",\"attack\":2200},"
+               "{\"replace\":4,\"attack\":500}]}");
     /* What the Mods window writes: both applied, and b moved up. */
     write_text("settings.txt", b_first ? "mod.cardorder-a=1\nmod.cardorder-b=1\nmod.cardorder-b.order=-1\n"
                                        : "mod.cardorder-a=1\nmod.cardorder-b=1\n");
@@ -211,6 +214,12 @@ int main(int argc, char **argv)
     /* b's copy of card 1: card 1 as a left it when a came first, the disc's
      * when b did. */
     assert(attack(Cards_FindIdentity("cardorder-b:of-one:1")) == (b_first ? 1000 : 1100));
+
+    /* Card 4: b's replace, later, gives no name, so a's name and the plate
+     * that says it go, and the picture shows the card's own name; first, it
+     * leaves them as a set them. b's ATK either way. */
+    assert(attack(4) == 500);
+    assert(b_first ? names[4] && plates[4] : !names[4] && !plates[4]);
 
     printf("cards order (%s): ok\n", argv[1]);
     return 0;
