@@ -2235,7 +2235,13 @@ bit-identical. How (details in `src/pc/guest/state.h`):
 - Stored: guest RAM, scratchpad, those sections, the game stack above the
   call, and one self-described chunk per native subsystem (`*_State`
   functions: soft GPU, SPU, LIBSPU, LIBDS including buffered movie frames,
-  LIBETC, LIBGPU, LIBGTE, MDEC, VBlank count). A chunk whose layout changed is
+  LIBETC, LIBGPU, LIBGTE, MDEC, VBlank count), and the game's random seed
+  (chunk `rng`: `rand` is the native `Memories_Rand`, whose seed sits in no
+  game section; without it a state loaded in a running game dealt other
+  cards, shuffles and CPU choices than the game that saved it: the same
+  pack bought twice from one state, loaded in place in between, dealt
+  other cards; a state without the chunk loads as before, with the seed
+  left as it is). A chunk whose layout changed is
   reported and skipped, leaving that subsystem as it is. Nothing native is
   stored by address; timers, the disc file, the window and the audio device
   belong to the process. The exception is text the port compiles (a

@@ -10,6 +10,7 @@
 #include "pc/audio/spu.h"
 #include "pc/audio/replace.h"
 #include "pc/compat/gte.h"
+#include "pc/rng.h"
 #include "pc/render/soft_gpu.h"
 #include "pc/render/texture_dump.h"
 #include "pc/saves/deck_menu.h"
@@ -403,6 +404,16 @@ static void subsystems(MemoriesState *state)
         SoftGpu_PictureFromVram();
     }
     Memories_StateChunk(state, "gte", gte, 1);
+    {
+        /* The game's random seed (src/pc/rng.c, which `rand` and `srand`
+         * are renamed to): native, so in no game section, yet the deck's
+         * shuffle, the CPU's choices and a pack's cards all follow it. On
+         * the console it sits in RAM, which a state holds. Without it a
+         * state loaded in a running game drew other numbers than the game
+         * that saved it. */
+        MemoriesStateField seed = {&gRand_dwSeed, sizeof(gRand_dwSeed)};
+        Memories_StateChunk(state, "rng", &seed, 1);
+    }
     RetailImage_State(state);
     Spu_State(state);
     LibSpu_State(state);
