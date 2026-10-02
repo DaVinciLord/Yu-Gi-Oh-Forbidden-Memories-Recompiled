@@ -56,7 +56,7 @@ def fixture_mods():
     setup = json.loads((FIXTURE / "fixture.json").read_text(encoding="utf-8"))
     mods = []
     for mid in setup["order"]:
-        manifest = json.loads((FIXTURE / mid / "mod.json").read_text(encoding="utf-8"))
+        manifest = overlaps._read_json(FIXTURE / mid / "mod.json")   # as json.c reads it (delta's needs it)
         mods.append(overlaps.Mod(mid, manifest["name"], manifest, FIXTURE / mid))
     return setup, mods
 
@@ -127,12 +127,35 @@ class SameAsTheGame(unittest.TestCase):
         found = overlaps.check(mods, FixtureSource(setup))
         self.assertEqual([o.text for o in found], [DUELISTS_64])
 
+    def test_names_as_the_game_keeps_them(self):
+        # mods_overlap_test.c's: an escape of one byte that is not UTF-8
+        # (U+FFFD where the window shows it), and six names of 95 bytes,
+        # each cut where a letter starts, all in the line.
+        escaped = overlaps.parse('"' + chr(92) + 'u00c9clair"')
+        names = [escaped] + [f"{m}{0:093d}\u00f1tail" for m in range(1, 6)]
+        mods = [overlaps.Mod(f"m{m}", names[m], {"font": "f.ttf"}, found=m) for m in range(6)]
+        found = overlaps.check(mods[:2])
+        self.assertEqual(found[0].text, f"Fonts (\ufffdclair, 1{0:093d}): both apply and add up "
+                                        "(a letter comes from the first font that has it)")
+        found = overlaps.check(mods[1:])
+        self.assertIn(f", 5{0:093d}): all apply", found[0].text)
+
+    def test_read_as_json_c_reads(self):
+        b = chr(92)
+        self.assertEqual(overlaps.parse('{"a": 1, "a": 2,}').pairs, [("a", 1), ("a", 2)])
+        self.assertEqual(overlaps.parse('{"a": 1, "a": 2}')["a"], 1)
+        self.assertEqual(overlaps.parse('\v[1e3, 2.50e1, -0]\f'), [1000, 25, 0])
+        for refused in ('[,]', '{"a":,}', '[1,,]', '2.5000000000000001e1', '1e-1', '2147483648', 'NaN', '[01]'):
+            self.assertIsNone(overlaps.parse(refused), refused)
+        self.assertEqual(overlaps.parse(f'"{b}u00c3{b}u00a9 {b}u4e2d a{b}u0000b"'), "\u00e9 ? a")
+        self.assertEqual(overlaps.parse(f'"{b}{b}u0041"'), f"{b}u0041")
+
     def test_one_mod_is_nothing(self):
         setup, mods = fixture_mods()
         self.assertEqual(overlaps.check(mods[:1], FixtureSource(setup)), [])
 
     def test_load_order(self):
-        _, mods = fixture_mods()
+        mods = fixture_mods()[1][:3]   # alpha, beta, gamma
         # Gamma names Beta in "after": however low its rank, it loads after it.
         order = overlaps.load_order(list(reversed(mods)), {"mod.gamma.order": -5})
         self.assertEqual([m.id for m in order], ["alpha", "beta", "gamma"])

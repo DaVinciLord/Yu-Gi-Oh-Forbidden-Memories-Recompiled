@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -144,19 +145,40 @@ class _Refused(ValueError):
     pass
 
 
-def _whole(text):
-    """A JSON number json.c takes: whole ("1e3" is), within a 32-bit long."""
-    number = float(text)
-    if number != int(number):
+LONG_MIN, LONG_MAX = -2 ** 31, 2 ** 31 - 1   # a long in the game's (32-bit) build
+NUMBER = re.compile(r"-?([0-9]+)(?:[.]([0-9]+))?(?:[eE]([-+]?)([0-9]+))?")
+
+
+def _whole(text: str) -> int:
+    """A JSON number as json.c parse_number reads it: whole ("1e3" is 1000,
+    "2.50e1" is 25), its digits walked one by one, within a long; anything
+    else refused, as json.c refuses the file."""
+    number = NUMBER.fullmatch(text)
+    if not number:
         raise _Refused(text)
-    return _in_long(int(number))
-
-
-def _in_long(number):
-    number = int(number)
-    if not -2 ** 31 <= number <= 2 ** 31 - 1:
-        raise _Refused(number)
-    return number
+    negative, whole, fraction = text[:1] == "-", number.group(1), number.group(2) or ""
+    exponent = 0
+    for digit in number.group(4) or "":
+        if exponent < 100000:
+            exponent = exponent * 10 + int(digit)
+    exponent = -exponent if number.group(3) == "-" else exponent
+    limit = LONG_MAX + 1 if negative else LONG_MAX
+    digits, keep, magnitude = whole + fraction, len(whole) + exponent, 0
+    for i, digit in enumerate(int(d) for d in digits):
+        if i >= keep:
+            if digit:
+                raise _Refused(text)    # "a number must be whole"
+            continue
+        if magnitude > (limit - digit) // 10:
+            raise _Refused(text)        # "number out of range"
+        magnitude = magnitude * 10 + digit
+    i = len(digits)
+    while magnitude and i < keep:
+        if magnitude > limit // 10:
+            raise _Refused(text)
+        magnitude *= 10
+        i += 1
+    return -magnitude if negative else magnitude
 
 
 def _depth(value, depth=0) -> int:
@@ -166,14 +188,155 @@ def _depth(value, depth=0) -> int:
     return depth
 
 
+def _refuse(text):
+    raise _Refused(text)
+
+
+class JsonObject(dict):
+    """An object as json.c keeps one: a name given twice is found by its
+    first (Json_Member), and a walk over the members (items(), keys(),
+    values(), iterating, len()) meets every one, in order (Json_At)."""
+
+    def __init__(self, pairs=()):
+        super().__init__()
+        self.pairs = list(pairs)
+        for name, member in self.pairs:
+            self.setdefault(name, member)
+
+    def items(self):
+        return list(self.pairs)
+
+    def keys(self):
+        return [name for name, _ in self.pairs]
+
+    def values(self):
+        return [member for _, member in self.pairs]
+
+    def __iter__(self):
+        return iter(self.keys())
+
+    def __len__(self):
+        return len(self.pairs)
+
+
+HEX_DIGITS = "0123456789abcdefABCDEF"
+
+
+def _as_json(text: str) -> str:
+    """What json.c reads that Python's json reads otherwise or not at all,
+    written as JSON Python reads the same way: a \\u escape is one byte, the
+    code's when it is under 0x100 (above 0x7F a byte of its own, as
+    surrogateescape keeps it), else "?"; a comma may close a list or an
+    object; \\v and \\f are spaces between values (C's isspace)."""
+    out, i, n, last = [], 0, len(text), ""   # last: the last character outside strings and spaces
+    while i < n:
+        c = text[i]
+        if c == '"':
+            part, j = ['"'], i + 1
+            while j < n and text[j] != '"':
+                if text[j] == "\\" and j + 1 < n:
+                    code = text[j + 2:j + 6]
+                    if text[j + 1] == "u" and len(code) == 4 and all(h in HEX_DIGITS for h in code):
+                        number = int(code, 16)
+                        part.append(text[j:j + 6] if number < 0x80 else "\\udc%02x" % number if number < 0x100
+                                    else "?")
+                        j += 6
+                        continue
+                    part.append(text[j:j + 2])
+                    j += 2
+                    continue
+                part.append(text[j])
+                j += 1
+            part.append(text[j:j + 1])
+            out.append("".join(part))
+            i, last = j + 1, '"'
+            continue
+        if c in "\v\f":
+            out.append(" ")
+            i += 1
+            continue
+        if c in "]}" and last == ",":
+            # The comma, unless nothing stands before it ("[,]" is no list).
+            k = len(out) - 1
+            while len(out[k]) == 1 and out[k] in C_SPACE:
+                k -= 1
+            m = k - 1
+            while m >= 0 and len(out[m]) == 1 and out[m] in C_SPACE:
+                m -= 1
+            if m >= 0 and out[m] not in ("[", "{", ",", ":"):
+                del out[k]
+        out.append(c)
+        if c not in C_SPACE:
+            last = c
+        i += 1
+    return "".join(out)
+
+
+def _to_nul(value):
+    """A string json.c reads ends at its first NUL (a \\u0000); its bytes are
+    held as _read_json holds a file's (two escaped bytes that are UTF-8 are
+    that character)."""
+    if isinstance(value, str):
+        return _bytes(value.split("\x00", 1)[0]).decode("utf-8", "surrogateescape")
+    if isinstance(value, list):
+        return [_to_nul(v) for v in value]
+    if isinstance(value, dict):
+        return JsonObject((_to_nul(k), _to_nul(v)) for k, v in value.items())
+    return value
+
+
 def parse(text: str):
     """A manifest as json.c reads it, or None: whole numbers within a long,
-    64 levels deep at most."""
+    64 levels deep at most, control characters in strings, a name given
+    twice as JsonObject keeps it, and what _as_json reads. The text is what
+    _read_json makes of the file's bytes, which it reads to the first NUL
+    (json.c reads a C string)."""
+    text = text.split("\x00", 1)[0]
+    if text[:1] == "﻿":
+        text = text[1:]
+    for attempt in ((text,) if "\\u" not in text else ()) + (None,):
+        try:
+            value = json.loads(_as_json(text) if attempt is None else attempt, strict=False, parse_float=_whole,
+                               parse_int=_whole, parse_constant=_refuse, object_pairs_hook=JsonObject)
+        except (ValueError, RecursionError):
+            continue
+        if attempt is None:
+            value = _to_nul(value)
+        return value if _depth(value) <= 64 else None
+    return None
+
+
+def _bytes(text: str) -> bytes:
+    """A string as the C engine holds it: its UTF-8, a byte the file had
+    that was not UTF-8 (surrogateescape) as that byte."""
     try:
-        value = json.loads(text, parse_float=_whole, parse_int=_in_long)
-    except (ValueError, RecursionError):
-        return None
-    return value if _depth(value) <= 64 else None
+        return text.encode("utf-8", "surrogateescape")
+    except UnicodeEncodeError:
+        return text.encode("utf-8", "replace")
+
+
+def _cut(text: str, size: int) -> str:
+    """printf's "%.<size>s": the first `size` bytes, a character cut in two
+    and all, as the C engine cuts it."""
+    return _bytes(text)[:size].decode("utf-8", "surrogateescape")
+
+
+def _shown(text: str) -> str:
+    """What a line shows: its bytes as UTF-8, a byte that is not shown as
+    U+FFFD (as the Mods window, and a reader of the C lines, show it)."""
+    return _bytes(text).decode("utf-8", "replace")
+
+
+def _fit_name(name: str) -> str:
+    """A mod's name as the game keeps one (mods.c copy_text, Menu_TextFit):
+    95 bytes at most, cut where a character starts (overlap.c fit_name)."""
+    data = _bytes(name)
+    if len(data) >= 96:
+        n = 95
+        while n and (data[n] & 0xC0) == 0x80:
+            n -= 1
+        data = data[:n]
+    return data.decode("utf-8", "surrogateescape")
 
 
 _cache = {}
@@ -191,9 +354,12 @@ def _read_json(path: Path):
     if held is not None and held[0] == key:
         return held[1]
     try:
-        value = parse(Path(path).read_bytes().decode("utf-8-sig"))
-    except (OSError, UnicodeDecodeError):
-        value = None
+        data = Path(path).read_bytes().split(b"\0", 1)[0]
+    except OSError:
+        data = None
+    if data is not None and data[:3] == b"\xef\xbb\xbf":
+        data = data[3:]
+    value = None if data is None else parse(data.decode("utf-8", "surrogateescape"))
     _cache[str(path)] = (key, value)
     return value
 
@@ -271,6 +437,7 @@ class Source:
 class _Check:
     def __init__(self, mods, source):
         self.mods = mods
+        self.names = [_fit_name(m.name if isinstance(m.name, str) else "") for m in mods]
         self.source = source or Source()
         self.claims = []
         self.seq = 0
@@ -534,7 +701,7 @@ class _Check:
             if target == ALL or number == 0 or number >= 40 or (isinstance(target, int) and (target == 0 or target >= 40)) \
                     or (self.source.duelist and isinstance(target, tuple)):
                 return
-            self.claim(DUELISTS, mod, ("replace", target), SET, ("own", mod), entry, f"Duelist '{who[:80]}' replaced")
+            self.claim(DUELISTS, mod, ("replace", target), SET, ("own", mod), entry, f"Duelist '{_cut(who, 80)}' replaced")
         elif not copy:
             return
         if did:
@@ -566,7 +733,7 @@ class _Check:
         if who == ALL:
             label = f"Every opponent's {POOL_WORDS[pool]}"
         else:
-            label = f"{duelist[:80]}'s {POOL_WORDS[pool]}"
+            label = f"{_cut(duelist, 80)}'s {POOL_WORDS[pool]}"
         c = self.claim(POOLS, mod, (who, pool), mode, canonical(entry), entry, label)
         c.resets = mode == SET
         if who == ALL:
@@ -625,7 +792,7 @@ class _Check:
                     label = f"Every card's {'price' if f else 'password'}"
                 else:
                     shown = self.source.card_name(card) if isinstance(card, int) and self.source.card_name else None
-                    label = f"{'Price' if f else 'Password'} of '{shown[:100] if shown else name[:80]}'"
+                    label = f"{'Price' if f else 'Password'} of '{_cut(shown, 100) if shown else _cut(name, 80)}'"
                 c = self.claim(PASSWORDS, mod, (card, f + 1), SET, canonical([field_name, entry[field_name]]),
                                entry, label)
                 if is_all:
@@ -640,7 +807,7 @@ class _Check:
             sid = _json_string(_obj(shop).get("id")) or ""
             if not isinstance(shop, dict) or not sid:
                 continue
-            self.claim(PACKS, mod, ("shop", sid), SET, canonical(shop), shop, f"Pack shop '{sid[:60]}'")
+            self.claim(PACKS, mod, ("shop", sid), SET, canonical(shop), shop, f"Pack shop '{_cut(sid, 60)}'")
 
     def pack_passwords(self, mod, packs):
         """A pack's password: of two packs with one, the first in the packs'
@@ -779,7 +946,7 @@ class _Check:
                                 "life_points.opponent", "life_points", m)
             elif name == "life_points":
                 for k, v in m.items():
-                    path = f"life_points.{k[:60]}"
+                    path = f"life_points.{_cut(k, 60)}"
                     if k == "start":
                         self.limit_both(mod, path, path, "life_points.player", "life_points.opponent",
                                         "life_points.start", v)
@@ -790,7 +957,7 @@ class _Check:
                             who = self.known_duelist(self.duelist_key(d))
                             if who is None:
                                 continue
-                            key, label = ("lp", who), f"life_points.duelists.{d[:60]}"
+                            key, label = ("lp", who), f"life_points.duelists.{_cut(d, 60)}"
                             if isinstance(dv, dict):
                                 for s, sv in dv.items():
                                     if s in ("player", "opponent"):
@@ -799,12 +966,12 @@ class _Check:
                                 self.limit_claim(mod, label, key + ("opponent",), canonical(dv), dv)
                     elif isinstance(v, dict):
                         for s, sv in v.items():
-                            self.limit_claim(mod, f"{path}.{s[:60]}", None, canonical(sv), sv)
+                            self.limit_claim(mod, f"{path}.{_cut(s, 60)}", None, canonical(sv), sv)
                     else:
                         self.limit_claim(mod, path, None, canonical(v), v)
             elif isinstance(m, dict):
                 for k, v in m.items():
-                    self.limit_claim(mod, f"{name[:60]}.{k[:60]}", None, canonical(v), v)
+                    self.limit_claim(mod, f"{_cut(name, 60)}.{_cut(k, 60)}", None, canonical(v), v)
             else:
                 self.limit_claim(mod, name, None, canonical(m), m)
         overflow = self.member(mod, "chest_overflow")
@@ -830,7 +997,7 @@ class _Check:
                 continue
             for type_name, value in _obj(types).items():
                 self.claim(TERRAIN, mod, ("t", terrain, letters(type_name)), SET, canonical(value), value,
-                           f"{TERRAINS[terrain]} bonus of {type_name[:60]}")
+                           f"{TERRAINS[terrain]} bonus of {_cut(type_name, 60)}")
 
     def read_traps(self, mod):
         for name, value in _obj(self.member(mod, "trap_thresholds")).items():
@@ -884,18 +1051,18 @@ class _Check:
             c.aimed = aimed
             return
         for name, inner in value.items():
-            self.title_tree(mod, f"{path}.{name[:60]}", f"{key}.{name[:60]}", inner, mode, aimed)
+            self.title_tree(mod, f"{path}.{_cut(name, 60)}", f"{key}.{_cut(name, 60)}", inner, mode, aimed)
 
     def title_entries(self, mod, path, entries):
         for name, value in _obj(entries).items():
             i = _entry_index(name)
             if i >= 0:
-                self.title_tree(mod, f"{path}.{name[:60]}", f"entries.{i}", value, SET)
+                self.title_tree(mod, f"{path}.{_cut(name, 60)}", f"entries.{i}", value, SET)
 
     def read_title(self, mod):
         own = self.mods[mod].id
         for name, value in _obj(self.member(mod, "title")).items():
-            path = f"title.{name[:60]}"
+            path = f"title.{_cut(name, 60)}"
             if name == "text":
                 if isinstance(value, list):
                     self.claim(TITLE, mod, path, ADD, 0, value, "title.text (lines)")
@@ -910,10 +1077,10 @@ class _Check:
                     if not isinstance(button, dict) or _entry_index(bid) >= 0 or not bid:
                         continue
                     theirs = ":" in bid and not bid.startswith(own + ":")
-                    path = f"menu.buttons.{bid[:100]}" if ":" in bid else f"menu.buttons.{own[:60]}:{bid[:60]}"
+                    path = f"menu.buttons.{_cut(bid, 100)}" if ":" in bid else f"menu.buttons.{_cut(own, 60)}:{_cut(bid, 60)}"
                     for k, v in button.items():
                         if k != "id":
-                            leaf = f"{path}.{k[:60]}"
+                            leaf = f"{path}.{_cut(k, 60)}"
                             self.title_tree(mod, leaf, leaf, v, SET if theirs else BASE, theirs)
             elif name == "order":
                 if isinstance(value, list):
@@ -925,7 +1092,7 @@ class _Check:
             elif name == "entries":
                 self.title_entries(mod, "menu.entries", value)
             else:
-                path = f"menu.{name[:60]}"
+                path = f"menu.{_cut(name, 60)}"
                 self.title_tree(mod, path, "spacing" if name == "spacing" else path, value, SET)
 
     # --- grouping ------------------------------------------------------------
@@ -992,8 +1159,9 @@ class _Check:
             overlap = Overlap(kind, claims)
             self.decide(overlap)
             overlap.label = self.label(overlap)
-            overlap.mods = [self.mods[m].id for m in _order(claims)]
-            overlap.text = self.text(overlap)
+            overlap.mods = [_shown(self.mods[m].id) for m in _order(claims)]
+            overlap.text = _shown(self.text(overlap))
+            overlap.label = _shown(overlap.label)
             found.append(overlap)
         # Within a kind, the warnings first, then as the earliest mod's manifest
         # has them, and between the keys an "all" reaches, as the manifests name them.
@@ -1278,14 +1446,14 @@ class _Check:
         return "?"
 
     def text(self, o: Overlap) -> str:
-        names = ", ".join(self.mods[m].name for m in _order(o.claims))
-        winner = self.mods[o.winner].name if o.winner >= 0 else ""
-        other = self.mods[o.other].name if o.other >= 0 else ""
+        names = ", ".join(self.names[m] for m in _order(o.claims))
+        winner = self.names[o.winner] if o.winner >= 0 else ""
+        other = self.names[o.other] if o.other >= 0 else ""
         via = next((c.via for c in o.claims if c.mod == o.winner and c.via_wide and c.via), None)
         head = f"{o.label} ({names}): "
         distinct = len({c.mod for c in o.claims})
         if o.outcome == "later":
-            through = f', through its "{via[:80]}"' if via else ""
+            through = f', through its "{_cut(via, 80)}"' if via else ""
             return head + f"{winner} wins (later in load order{through})"
         if o.outcome == "after":
             return head + f"{winner} wins (it loads after {other} on purpose: after/requires)"
@@ -1299,7 +1467,7 @@ class _Check:
                      FONT: " (a letter comes from the first font that has it)"}.get(o.kind, "")
             return head + f"{'all' if distinct > 2 else 'both'} apply and add up{extra}"
         if o.outcome == "reset":
-            word = via[:80] if via else "replace"
+            word = _cut(via, 80) if via else "replace"
             return head + f"{winner}'s \"{word}\" clears what the earlier mods set"
         if o.outcome == "fixed":
             return head + f"{winner}'s fixed deck is dealt; the other edits of it are left out"
@@ -1308,7 +1476,7 @@ class _Check:
             used_words, dropped_words = ", ".join(used), ", ".join(dropped)
             said = f"{winner}'s {used_words} {'are' if ',' in used_words else 'is'} used" if used else ""
             if dropped:
-                names = [self.mods[m].name for m in dropped_from]
+                names = [self.names[m] for m in dropped_from]
                 gave = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
                 said += f"{' and ' if said else ''}the {dropped_words} {gave} gave " \
                         f"{'are' if ',' in dropped_words else 'is'} dropped, as {winner}'s replace starts " \

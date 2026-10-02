@@ -117,7 +117,7 @@ static char *read_all(const char *path)
 
 int main(void)
 {
-    char path[1024], error[256], line[4096], label[512], mods[512], text[1500];
+    char path[1024], error[256], line[8192], label[512], mods[512], text[4096];
     JsonDocument *documents[8], *setup;
     ModsOverlapSource source = {0};
     ModsOverlaps *found;
@@ -297,6 +297,40 @@ int main(void)
         Mods_OverlapFree(found);
         Json_Free(docs[0]);
         Json_Free(docs[1]);
+    }
+
+    /* A name as json.c reads it and the game keeps it: a \u escape is one
+     * byte (0xC9 alone, not UTF-8), and six names of 95 bytes are all in
+     * the line, each cut to 95 bytes where a letter starts. */
+    {
+        JsonDocument *docs[6];
+        ModsOverlapMod six[6];
+        char long_name[6][140];
+        static const char *const ids[6] = {"m0", "m1", "m2", "m3", "m4", "m5"};
+        for (int m = 0; m < 6; m++) {
+            snprintf(line, sizeof(line), "{\"name\":\"%s\",\"font\":\"f.ttf\"}", m ? "x" : "\\u00c9clair");
+            docs[m] = Json_Parse(line, error, sizeof(error));
+            assert(docs[m]);
+            /* 94 letters and a two-byte one across the 95th byte: cut before it. */
+            snprintf(long_name[m], sizeof(long_name[m]), "%d%093d\xc3\xb1tail", m, 0);
+            six[m].id = ids[m];
+            six[m].name = m ? long_name[m] : Json_String(Json_Member(Json_Root(docs[m]), "name"), "");
+            six[m].directory = NULL;
+            six[m].manifest = Json_Root(docs[m]);
+            six[m].found = m;
+        }
+        found = Mods_OverlapCompute(six, 2, NULL);
+        assert(found && Mods_OverlapCount(found) == 1);
+        Mods_OverlapText(found, 0, line, sizeof(line));
+        assert(!strcmp(line, "Fonts (\xc9" "clair, 1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000): "
+                             "both apply and add up (a letter comes from the first font that has it)"));
+        Mods_OverlapFree(found);
+        found = Mods_OverlapCompute(six + 1, 5, NULL);
+        assert(found && Mods_OverlapCount(found) == 1);
+        Mods_OverlapText(found, 0, line, sizeof(line));
+        assert(strstr(line, ", 5000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000): all apply"));
+        Mods_OverlapFree(found);
+        for (int m = 0; m < 6; m++) Json_Free(docs[m]);
     }
 
     /* One mod, or none: nothing is read and nothing overlaps. */

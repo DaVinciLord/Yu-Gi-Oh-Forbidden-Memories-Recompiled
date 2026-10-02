@@ -1,0 +1,7 @@
+{
+    "id": "delta",
+    "name": "Delta \u00c3\u00a9 \u4e2d xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxñtail",
+    "about": "json.c's reading, which the editor's must match: a \\u escape is one byte (two that are UTF-8 are a letter, above 0xFF a '?'), a mod's name is cut to 95 bytes where a letter starts, a member named twice is met twice, and a comma may close an object.",
+    "font": "delta.ttf",
+    "trap_thresholds": {"Bear Trap": 1600, "Bear Trap": 2000,},
+}

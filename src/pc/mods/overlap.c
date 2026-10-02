@@ -92,6 +92,9 @@ typedef struct {
 struct ModsOverlaps {
     ModsOverlapMod *mods;
     int mod_count;
+    char (*names)[96];  /* the mods' names, as the game keeps them (fit_name) */
+    char *name_list;    /* room for every name of a line, comma-separated */
+    size_t name_list_size;
     ModsOverlapSource source;
     Claim *claims;
     int claim_count, claim_room;
@@ -1853,6 +1856,20 @@ static void group(ModsOverlaps *x)
     if (x->group_count) qsort(x->groups, (size_t)x->group_count, sizeof(*x->groups), by_severity);
 }
 
+/* A mod's name as the game keeps one (mods.c copy_text, Menu_TextFit): 95
+ * bytes at most, cut where a character starts, so every caller's lines
+ * read as the Mods window's do. */
+static void fit_name(char *out, const char *name)
+{
+    size_t length = strlen(name);
+    if (length >= 96) {
+        length = 95;
+        while (length && ((unsigned char)name[length] & 0xC0) == 0x80) length--;
+    }
+    memcpy(out, name, length);
+    out[length] = '\0';
+}
+
 ModsOverlaps *Mods_OverlapCompute(const ModsOverlapMod *mods, int count, const ModsOverlapSource *source)
 {
     ModsOverlaps *x = calloc(1, sizeof(*x));
@@ -1861,11 +1878,19 @@ ModsOverlaps *Mods_OverlapCompute(const ModsOverlapMod *mods, int count, const M
     x->mod_count = count;
     x->mods = calloc((size_t)(count ? count : 1), sizeof(*x->mods));
     x->declared = calloc((size_t)(count ? count * count : 1), 1);
-    if (!x->mods || !x->declared) {
+    x->names = calloc((size_t)(count ? count : 1), sizeof(*x->names));
+    x->name_list_size = 1;
+    for (int i = 0; i < count; i++) x->name_list_size += strlen(mods[i].name ? mods[i].name : "") + 2;
+    x->name_list = malloc(x->name_list_size);
+    if (!x->mods || !x->declared || !x->names || !x->name_list) {
         Mods_OverlapFree(x);
         return NULL;
     }
     memcpy(x->mods, mods, (size_t)count * sizeof(*mods));
+    for (int i = 0; i < count; i++) {
+        fit_name(x->names[i], mods[i].name ? mods[i].name : "");
+        x->mods[i].name = x->names[i];
+    }
     for (int w = 0; w < count; w++)
         for (int k = 0; k < 2; k++)
             for (const JsonValue *v = Json_At(list_of(member(x, w, k ? "requires" : "after")), 0); v; v = Json_Next(v)) {
@@ -1922,6 +1947,8 @@ void Mods_OverlapFree(ModsOverlaps *x)
     free(x->star_names);
     free(x->defined);
     free(x->declared);
+    free(x->names);
+    free(x->name_list);
     free(x->mods);
     free(x);
 }
@@ -2066,7 +2093,7 @@ void Mods_OverlapMods(const ModsOverlaps *x, int index, char *out, size_t size)
 void Mods_OverlapText(const ModsOverlaps *x, int index, char *out, size_t size)
 {
     const Group *g = &x->groups[index];
-    char label[256], names[512], through[120] = "", word[90] = "replace";
+    char label[256], *names = x->name_list, through[120] = "", word[90] = "replace";
     const char *winner = g->winner >= 0 ? x->mods[g->winner].name : "",
                *other = g->other >= 0 ? x->mods[g->other].name : "";
     size_t length = 0;
@@ -2081,8 +2108,8 @@ void Mods_OverlapText(const ModsOverlaps *x, int index, char *out, size_t size)
         }
         if (i && x->claims[g->first + i - 1].mod == c->mod) continue;
         distinct++;
-        if (length < sizeof(names))
-            length += (size_t)snprintf(names + length, sizeof(names) - length, "%s%s", length ? ", " : "",
+        if (length < x->name_list_size)
+            length += (size_t)snprintf(names + length, x->name_list_size - length, "%s%s", length ? ", " : "",
                                        x->mods[c->mod].name);
     }
     switch (g->outcome) {
@@ -2117,7 +2144,7 @@ void Mods_OverlapText(const ModsOverlaps *x, int index, char *out, size_t size)
         /* Named: which mod's keys are used, which mod's are dropped, and why
          * the one wins (the order the cards are read in). */
         CardKeys keys;
-        char used[300] = "", dropped[800] = "", from[300] = "";
+        char used[400] = "", dropped[1500] = "", from[900] = "";
         card_keys(x, g, &keys);
         for (int f = 0; f < keys.froms; f++) {
             size_t n = strlen(from);
