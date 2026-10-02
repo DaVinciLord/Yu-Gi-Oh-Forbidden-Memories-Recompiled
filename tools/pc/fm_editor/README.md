@@ -770,7 +770,10 @@ from, which is this mod whatever its id now. Every installed mod counts,
 applied or not; the summary names the ones off in the game now
 (`validate.applied`: `MEMORIES_MODS`, `MEMORIES_MOD_<ID>`, the player's
 choice, `legacy_setting`, `enabled`) and those the game would not load (a
-missing requirement, a cycle). Its issues have `area` `"Other mods"` and
+broken `mod.json`, which the game lists in its folder's place, over a
+shipped copy of its id, but never loads; a missing requirement, or one left
+out itself; a cycle). A card is named as the game will name it: the last
+replace's name in load order, else the disc's. Its issues have `area` `"Other mods"` and
 `level` `"warning"` (only one mod's change is used) or `"note"` (they add
 up, agree, or follow an `after` the winner declared); a problem reading the
 other mods is said beside them and never stops a mod opening.
@@ -779,7 +782,10 @@ other mods is said beside them and never stops a mod opening.
 `overlaps.Mod`s in load order (with `involving`, only that mod's overlaps
 are worked out), `overlaps.installed(folders)`, `overlaps.load_order(mods,
 settings)`; it reads each file again only when it changed.
-`tests/pc/mod_overlaps` holds three mods and the lines both must find, in
+`overlaps.parse` reads a manifest as the game's json.c does (a `\u`
+escape is one byte, a member named twice is met twice, a comma may close a
+list), and a mod's name is cut to 95 bytes as the game keeps it, so the
+lines match byte for byte. `tests/pc/mod_overlaps` holds four mods and the lines both must find, in
 order and with their texts (`tests/test_overlaps.py`,
 `tests/pc/mods_overlap_test.c`), so a rule changed in one and not the other
 fails a test.

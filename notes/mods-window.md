@@ -19,7 +19,9 @@ more** to show the rest (up to 200), a warning where only one mod's change is
 used and a dim line where they add up, agree or follow an `after`; the header
 counts the overlaps between all enabled mods ([When mods
 overlap](modding.md#when-mods-overlap)). They follow the enabled set, the
-order and the settings staged in the window. Lower Order values load first, subject to
+order and the settings staged in the window; a setting that needs a restart
+counts there as staged (or as saved), so after **Apply changes** the list
+shows the next launch, not the session still running with the old value. Lower Order values load first, subject to
 dependencies.
 
 Changes are staged until **Apply changes**. Restart-only changes share one
