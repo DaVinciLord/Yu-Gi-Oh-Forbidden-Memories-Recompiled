@@ -198,6 +198,42 @@ does not have (only the matching build gets the retail executable, through a
 secret). So they are a **local gate**, run like `smoke.py` before a PR, until
 CI can hold retail inputs.
 
+**Landed** (`tools/pc/replay.py`; its docstring has the format):
+
+- **Container:** a folder of text (`replay.json`, `recording.txt` or
+  `scenario.py`), which is what `tests/pc/replays/` holds, or the same files
+  in a zip (`.yfmreplay`) with any states, to pass around. The header is the
+  recording's own lines: the build id, the OS, every setting, the mods that
+  were on (the crash reports' `mods` fact: the order is the manifests', not
+  the load order yet), the language. A play writes that settings file and
+  turns each mod beside the executable on or off as the header says.
+- **No game data:** a save state holds the 2 MiB of guest RAM, the disc's
+  code and data, so `record` refuses a start state or a state checkpoint for
+  a replay under `tests/pc/replays/`: those start from boot and check frame
+  hashes. Replays with states stay outside the repository.
+- **Making one:** `replay.py record OUT --session FILE.py` runs FILE.py's
+  `run(game, out)` on the client with `MEMORIES_RECORD` on and packages the
+  recording (`--state` to start at one, `--states-every N` for checkpoints,
+  `--hash-every N` to keep every Nth frame hash); `--recording` packages a
+  `MEMORIES_RECORD` file made any other way; `--scripted FILE.py` keeps a
+  scenario, `run(executable, out)`, whose assertions are the verdict.
+- **Checking:** `replay.py play FILE --check` plays a recorded replay with
+  `MEMORIES_PLAY`, records the play, and names the first frame hash that
+  differs (its VBlank and the frame it was) and, at the first state
+  checkpoint whose RAM differs (the `memory` chunk; `g_SDValue` masked, the
+  other chunks not compared), the first differing range. `--update` takes
+  this build's hashes as the expected ones. `replay.py run` checks every
+  replay in `tests/pc/replays/`, like `smoke.py`.
+- **In `tests/pc/replays/`:** `first-duel` (recorded: boot to the first
+  card played in the first story duel, a frame hash every 4 frames;
+  `session.py` records it again) and `state-load-rng` (scripted: a real bug,
+  below).
+- **The bug as a replay:** `state-load-rng` buys a pack from a state, loads
+  the state in the same game and buys it again with the same presses. On
+  this branch without "Port: save states carry the game's random seed" it
+  fails (`dealt {2, 3, 4, 7, 8}, then {4, 8, 8, 8, 9} after loading it`);
+  with it, it passes.
+
 ### 5. The Python client
 
 `tools/pc/yfm_control.py` holds all the game knowledge:

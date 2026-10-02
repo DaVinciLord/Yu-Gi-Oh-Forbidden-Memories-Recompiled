@@ -360,7 +360,9 @@ and pause and frame step work, headless runs flat out; see
 every frame and, with `MEMORIES_RECORD_STATES=N`, a state every N VBlanks,
 as text; `src/pc/debug/recorder.h`), `MEMORIES_PLAY=path` (play such a
 file back instead of the live pads, ending the game at its end; replays
-are made and checked with `tools/pc/replay.py`),
+are made and checked with `tools/pc/replay.py`, and `python3
+tools/pc/replay.py run` checks those in `tests/pc/replays/` before a PR,
+like `smoke.py`: a local gate, since CI has no disc),
 `MEMORIES_CONTROL=<port>` (a control channel on 127.0.0.1:<port>: the
 game waits at its first frame for a client, which steps it, holds pad
 buttons, reads and writes guest memory, takes pictures and save states;

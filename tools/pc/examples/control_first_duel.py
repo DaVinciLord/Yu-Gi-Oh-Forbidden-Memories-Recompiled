@@ -38,42 +38,47 @@ def play(executable: Path | None, out: Path) -> dict:
     record: dict = {}
     with Game(executable, out=out) as game:
         record["build"] = f"{game.info()['build']:08x}"
-        # The title comes with the main menu's module; Start skips the
-        # opening, opens the menu, and Cross takes NEW GAME, its first item.
-        game.wait_until(lambda g: g.resident("main_menu"), 3000, what="the title")
-        game.press_until(lambda g: g.resident("password"), ["start", "cross"], every=40, what="the name entry")
-        # Cross types the letter under the cursor once the screen takes
-        # input; Start goes to END, and Cross takes END and then YES.
-        game.press_until(lambda g: g.player_name(), "cross", every=20, what="a letter of the name")
-        picture(game, "1-name", record)
-        game.press("start")
-        game.press_until(lambda g: g.mode() == MODE["campaign"], "cross", every=40, what="the story")
-        record["story_frame"] = game.frame
-        # The story's dialogue and the map, then the duel.
-        game.press_until(lambda g: g.mode() == MODE["duel"], "cross", every=40, timeout=20000, what="the duel")
-        record["duel_frame"] = game.frame
-        picture(game, "2-duel-begins", record)
-        # The deck's screen before it (in the main menu's module): Circle
-        # leaves it. Then the five cards are dealt.
-        game.press_until(lambda g: not g.resident("main_menu"), "circle", every=60, what="the duel field")
-        game.wait_until(lambda g: all(g.duel()[0]["hand"]), 3000, every=10, what="the hand")
-        game.step(200)   # the cards come up from the deck: the hand is shown and takes input
-        sides = game.duel()
-        record["opponent"] = game.u8("gDuel_bOpponentID")
-        record["lp"] = [side["lp"] for side in sides]
-        record["hand"] = cards(sides[0]["hand"])
-        record["hand_stats"] = [(card["attack"], card["defense"]) for card in sides[0]["hand"]]
-        picture(game, "3-hand", record)
-        # The first card: Cross picks it, Cross again puts it down, Cross
-        # takes the first zone and Cross the guardian star offered first.
-        game.press_until(lambda g: any(g.duel()[0]["monsters"]), "cross", every=46, timeout=1200,
-                         what="the card on the field")
-        game.step(120)
-        sides = game.duel()
-        record["after_play"] = {"hand": cards(sides[0]["hand"]), "monsters": cards(sides[0]["monsters"]),
-                                "lp": [side["lp"] for side in sides], "frame": game.frame}
-        picture(game, "4-played", record)
+        drive(game, record)
     return record
+
+
+def drive(game: Game, record: dict) -> None:
+    """From boot to the first card played (tests/pc/replays/first-duel records it)."""
+    # The title comes with the main menu's module; Start skips the
+    # opening, opens the menu, and Cross takes NEW GAME, its first item.
+    game.wait_until(lambda g: g.resident("main_menu"), 3000, what="the title")
+    game.press_until(lambda g: g.resident("password"), ["start", "cross"], every=40, what="the name entry")
+    # Cross types the letter under the cursor once the screen takes
+    # input; Start goes to END, and Cross takes END and then YES.
+    game.press_until(lambda g: g.player_name(), "cross", every=20, what="a letter of the name")
+    picture(game, "1-name", record)
+    game.press("start")
+    game.press_until(lambda g: g.mode() == MODE["campaign"], "cross", every=40, what="the story")
+    record["story_frame"] = game.frame
+    # The story's dialogue and the map, then the duel.
+    game.press_until(lambda g: g.mode() == MODE["duel"], "cross", every=40, timeout=20000, what="the duel")
+    record["duel_frame"] = game.frame
+    picture(game, "2-duel-begins", record)
+    # The deck's screen before it (in the main menu's module): Circle
+    # leaves it. Then the five cards are dealt.
+    game.press_until(lambda g: not g.resident("main_menu"), "circle", every=60, what="the duel field")
+    game.wait_until(lambda g: all(g.duel()[0]["hand"]), 3000, every=10, what="the hand")
+    game.step(200)   # the cards come up from the deck: the hand is shown and takes input
+    sides = game.duel()
+    record["opponent"] = game.u8("gDuel_bOpponentID")
+    record["lp"] = [side["lp"] for side in sides]
+    record["hand"] = cards(sides[0]["hand"])
+    record["hand_stats"] = [(card["attack"], card["defense"]) for card in sides[0]["hand"]]
+    picture(game, "3-hand", record)
+    # The first card: Cross picks it, Cross again puts it down, Cross
+    # takes the first zone and Cross the guardian star offered first.
+    game.press_until(lambda g: any(g.duel()[0]["monsters"]), "cross", every=46, timeout=1200,
+                     what="the card on the field")
+    game.step(120)
+    sides = game.duel()
+    record["after_play"] = {"hand": cards(sides[0]["hand"]), "monsters": cards(sides[0]["monsters"]),
+                            "lp": [side["lp"] for side in sides], "frame": game.frame}
+    picture(game, "4-played", record)
 
 
 def main() -> int:
