@@ -207,6 +207,7 @@ class Mod:
     name: str
     manifest: dict
     directory: Path | None = None
+    found: int = 0     # where it was found (folder by folder, names sorted): the cards' reading order
 
 
 @dataclass
@@ -932,11 +933,14 @@ class _Check:
             mods = {c.mod for c in claims}
             if len(mods) < 2 or (involving is not None and involving not in mods):
                 continue
-            claims.sort(key=lambda c: (c.mod, c.seq))
+            if kind == CARDS:   # read in the order the mods were found (mods.c Mods_VisitCards)
+                claims.sort(key=lambda c: (self.mods[c.mod].found, c.mod, c.seq))
+            else:
+                claims.sort(key=lambda c: (c.mod, c.seq))
             overlap = Overlap(kind, claims)
             self.decide(overlap)
             overlap.label = self.label(overlap)
-            overlap.mods = [self.mods[m].id for m in sorted(mods)]
+            overlap.mods = [self.mods[m].id for m in _order(claims)]
             overlap.text = self.text(overlap)
             found.append(overlap)
         # Within a kind, the warnings first, then as the earliest mod's manifest
@@ -1209,7 +1213,7 @@ class _Check:
         return "?"
 
     def text(self, o: Overlap) -> str:
-        names = ", ".join(self.mods[m].name for m in sorted({c.mod for c in o.claims}))
+        names = ", ".join(self.mods[m].name for m in _order(o.claims))
         winner = self.mods[o.winner].name if o.winner >= 0 else ""
         other = self.mods[o.other].name if o.other >= 0 else ""
         via = next((c.via for c in o.claims if c.mod == o.winner and c.via_wide and c.via), None)
@@ -1256,6 +1260,15 @@ class _Check:
         if o.outcome == "early":
             return head + f"{winner}'s change is left out: it loads before {other}, whose button it names"
         return head + f"{winner} changes {other}'s own on purpose"
+
+
+def _order(claims) -> list:
+    """The mods of a line's claims, in the claims' order, once each."""
+    seen = []
+    for c in claims:
+        if c.mod not in seen:
+            seen.append(c.mod)
+    return seen
 
 
 def _notes_only(entry: dict) -> bool:
@@ -1426,8 +1439,13 @@ def installed(folders) -> list:
             if mid in here:
                 continue
             here.add(mid)
-            found[mid] = Mod(mid, manifest.get("name") if isinstance(manifest.get("name"), str) else mid, manifest,
-                             Path(folder) / name)
+            mod = Mod(mid, manifest.get("name") if isinstance(manifest.get("name"), str) else mid, manifest,
+                      Path(folder) / name)
+            if mid in found:
+                mod.found = found[mid].found
+            else:
+                mod.found = len(found)
+            found[mid] = mod
     return list(found.values())
 
 

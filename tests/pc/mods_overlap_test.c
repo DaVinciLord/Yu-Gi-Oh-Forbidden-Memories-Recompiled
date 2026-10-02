@@ -240,6 +240,29 @@ int main(void)
             }
     }
 
+    /* The cards are read in the order the mods were found, not in load
+     * order: the second loads later but was found first. */
+    {
+        JsonDocument *docs[2];
+        ModsOverlapMod pair[2];
+        for (int m = 0; m < 2; m++) {
+            snprintf(line, sizeof(line), "{\"id\":\"m%d\",\"cards\":[{\"replace\":1,\"attack\":%d}]}", m, 100 * (m + 1));
+            docs[m] = Json_Parse(line, error, sizeof(error));
+            assert(docs[m]);
+            pair[m].id = pair[m].name = m ? "B" : "A";
+            pair[m].directory = NULL;
+            pair[m].manifest = Json_Root(docs[m]);
+            pair[m].found = 1 - m;
+        }
+        found = Mods_OverlapCompute(pair, 2, NULL);
+        assert(found && Mods_OverlapCount(found) == 1);
+        Mods_OverlapText(found, 0, line, sizeof(line));
+        assert(!strcmp(line, "Card #1 (B, A): the later mod's attack is used; the rest combines"));
+        Mods_OverlapFree(found);
+        Json_Free(docs[0]);
+        Json_Free(docs[1]);
+    }
+
     /* One mod, or none: nothing is read and nothing overlaps. */
     found = Mods_OverlapCompute(list, 1, &source);
     assert(found && Mods_OverlapCount(found) == 0);
@@ -250,7 +273,7 @@ int main(void)
 
     /* Two mods of every pair of 400 cards' fusions (79,800 rules each, as the
      * FM Editor's bulk fusions writes) meet on every pair: worked out once,
-     * in well under a second (30 s allows for the sanitizers). */
+     * in well under a second. */
     {
         size_t room = 8u << 20, length = 0;
         char *text = malloc(room);
@@ -278,7 +301,7 @@ int main(void)
         assert(found && Mods_OverlapCount(found) == 79800);
         Mods_OverlapText(found, 0, line, sizeof(line));
         printf("bulk: %d overlaps in %.3f s, the first: %s\n", Mods_OverlapCount(found), seconds, line);
-        assert(seconds < 30.0); /* about 0.1 s; a sanitizer build is slower */
+        assert(seconds < 5.0);
         Mods_OverlapFree(found);
         Json_Free(big[0]);
         Json_Free(big[1]);

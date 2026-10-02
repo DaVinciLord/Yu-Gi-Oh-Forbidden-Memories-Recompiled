@@ -104,6 +104,14 @@ class SameAsTheGame(unittest.TestCase):
                     self.assertTrue(found.text)
                 overlaps.load_order(mods)
 
+    def test_cards_in_the_order_found(self):
+        # The cards are read in the order the mods were found, not in load
+        # order: "b" loads later but was found first, so "a" has the card.
+        a = overlaps.Mod("a", "A", {"cards": [{"replace": 1, "attack": 100}]}, found=1)
+        b = overlaps.Mod("b", "B", {"cards": [{"replace": 1, "attack": 200}]}, found=0)
+        found = overlaps.check([a, b])
+        self.assertEqual(found[0].text, "Card #1 (B, A): the later mod's attack is used; the rest combines")
+
     def test_one_mod_is_nothing(self):
         setup, mods = fixture_mods()
         self.assertEqual(overlaps.check(mods[:1], FixtureSource(setup)), [])

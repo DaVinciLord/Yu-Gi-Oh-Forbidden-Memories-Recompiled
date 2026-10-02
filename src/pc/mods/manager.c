@@ -589,6 +589,7 @@ const ModsOverlaps *Mods_Overlaps(const int *enabled, const int *ranks, const in
         list[i].name = Mods_Name(order[i]);
         list[i].directory = Mods_Directory(order[i]);
         list[i].manifest = Mods_Manifest(order[i]);
+        list[i].found = order[i]; /* the manager's own order is the order they were found */
     }
     overlap_count = n;
     overlap_values = values;

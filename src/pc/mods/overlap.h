@@ -54,6 +54,10 @@ typedef struct {
     const char *id, *name;
     const char *directory; /* where its files are named from; NULL: none read */
     const struct JsonValue *manifest;
+    /* Where it was found among the mods (folder by folder, names sorted):
+     * the cards are read in that order, not the load order (mods.c
+     * Mods_VisitCards). 0 for every mod: the load order. */
+    int found;
 } ModsOverlapMod;
 
 /* What the engine cannot know from manifests alone. Every member may be

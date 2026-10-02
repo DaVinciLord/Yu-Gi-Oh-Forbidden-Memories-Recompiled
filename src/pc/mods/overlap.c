@@ -589,7 +589,8 @@ static void read_textures(ModsOverlaps *x, int mod)
 }
 
 /* "cards": a "replace" changes one of the disc's cards in place (cards.c
- * add_entry: a name, or a number, of the disc's 722; nothing else). Its
+ * add_entry: a name, or a number, of the disc's 722; nothing else), the
+ * mods read in the order they were found, not in load order. Its
  * stats, stars, frame, model and effect go over the earlier entries'; its
  * name, text, password, art, plate, field art and fusion groups are reset
  * by every later replace, whether it gives them or not; notes add up. An
@@ -1702,21 +1703,32 @@ static int by_severity(const void *left, const void *right)
     return (a->first > b->first) - (a->first < b->first);
 }
 
+/* The cards are read in the order the mods were found (mods.c
+ * Mods_VisitCards), so a card's claims go in that order before they are
+ * decided. */
+static const ModsOverlaps *finding;
+static int by_found(const void *left, const void *right)
+{
+    const Claim *a = left, *b = right;
+    int fa = finding->mods[a->mod].found, fb = finding->mods[b->mod].found;
+    if (fa != fb) return fa < fb ? -1 : 1;
+    if (a->mod != b->mod) return a->mod < b->mod ? -1 : 1;
+    return (a->seq > b->seq) - (a->seq < b->seq);
+}
+
 static void group(ModsOverlaps *x)
 {
-    int start = 0;
+    int start = 0, room = 0;
     if (!x->claim_count) return;
     qsort(x->claims, (size_t)x->claim_count, sizeof(*x->claims), by_key);
     x->groups = NULL;
     for (int i = 1; i <= x->claim_count; i++) {
         const Claim *a = &x->claims[start];
-        int mods = 0, room;
+        int mods = 0;
         if (i < x->claim_count && x->claims[i].kind == a->kind && x->claims[i].key == a->key) continue;
         for (int j = start + 1; j < i; j++) mods += x->claims[j].mod != x->claims[j - 1].mod;
         if (mods) {
-            Group *g, *groups;
-            room = x->group_count;
-            groups = realloc(x->groups, (size_t)(room + 1) * sizeof(*groups));
+            Group *g, *groups = grow(x->groups, &room, x->group_count, sizeof(*groups));
             if (!groups) {
                 x->failed = 1;
                 return;
@@ -1726,6 +1738,10 @@ static void group(ModsOverlaps *x)
             g->first = start;
             g->count = i - start;
             g->kind = a->kind;
+            if (g->kind == MODS_OVERLAP_CARDS) {
+                finding = x;
+                qsort(&x->claims[start], (size_t)g->count, sizeof(*x->claims), by_found);
+            }
             decide(x, g);
         }
         start = i;
