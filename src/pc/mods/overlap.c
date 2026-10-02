@@ -772,6 +772,8 @@ static void pool_claim(ModsOverlaps *x, int mod, const char *duelist, uint64_t w
     int fixed = Json_Bool(fixed_value, 0), mode;
     char label[160];
     Claim *c;
+    /* A pool is an object of cards (tables.c read_pool, read_fixed_deck). */
+    if (Json_TypeOf(entry) != JSON_OBJECT) return;
     if (fixed_value && Json_TypeOf(fixed_value) != JSON_BOOL && Json_TypeOf(fixed_value) != JSON_NUMBER) return;
     if (fixed) { /* the forty cards, counted out; any other count is left out */
         long total = 0;

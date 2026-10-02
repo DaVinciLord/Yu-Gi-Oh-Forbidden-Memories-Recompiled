@@ -553,7 +553,9 @@ class _Check:
             self.duelist_entry(mod, _json_string(_obj(entry).get("id")), entry)
 
     def pool_claim(self, mod, duelist, who, pool, entry):
-        e = _obj(entry)
+        if not isinstance(entry, dict):   # a pool is an object of cards (tables.c read_pool)
+            return
+        e = entry
         fixed_value = e.get("fixed") if pool == 0 else None
         if pool == 0 and "fixed" in e and not isinstance(fixed_value, (bool, int)):
             return
