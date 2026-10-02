@@ -63,6 +63,7 @@ static volatile int watchdog_reported;
 static int deterministic_dump, deterministic_asked, deterministic_paced;
 static volatile uint64_t deterministic_last_wait; /* real time the game last waited for a VBlank */
 static uint64_t pace_next;                         /* real time the next paced VBlank is due */
+static int controlled;                             /* a control client decides (Platform_ControlAttach) */
 
 static int virtual_clock(void)
 {
@@ -294,6 +295,43 @@ void Platform_SetClockRate(int percent)
 int Platform_ClockRate(void) { return rate; }
 void Platform_StepFrame(void) { step_pending = 1; }
 
+void Platform_ControlAttach(int attached)
+{
+    static unsigned watchdog_before;
+    if (!attached == !controlled) return;
+    controlled = attached;
+    if (attached) {
+        watchdog_before = watchdog_seconds;
+        watchdog_seconds = 0;
+        if (!cooperative) {
+            fprintf(stderr, "memories-pc: control: the interrupt clock (MEMORIES_CLOCK=interrupt) keeps running "
+                            "while the client holds the game; lockstep needs the default clock\n");
+        }
+    } else {
+        watchdog_seconds = watchdog_before;
+    }
+#ifdef _WIN32
+    Win32_SetStallReporter(Crash_ReportHang, watchdog_seconds);
+#endif
+    Monitor_Modal(attached); /* the crash monitor's freeze check */
+}
+
+void Platform_ControlHold(int held)
+{
+    sigset_t set, previous;
+    uint64_t now;
+    if (held) return;
+    sigemptyset(&set);
+    sigaddset(&set, SIGALRM);
+    sigprocmask(SIG_BLOCK, &set, &previous);
+    now = now_us();
+    real_prev = now;                /* the real-time clock does not catch up the wait */
+    last_vsync_real = now;
+    if (deterministic_last_wait) deterministic_last_wait = now; /* nor does the virtual one take it for a spin */
+    pace_next = 0;
+    sigprocmask(SIG_SETMASK, &previous, NULL);
+}
+
 float Platform_GameHz(void)
 {
     return rate > 0 ? 1000000.0f / (float)vblank_period * (float)rate / 100.0f : 0.0f;
@@ -420,7 +458,7 @@ static void pace(void)
 {
     struct timespec nap = {0, 500000};
     uint64_t now;
-    if (!deterministic_paced) return;
+    if (!deterministic_paced || controlled) return;
     while (rate == 0 && !step_pending && !Platform_ShouldQuit()) {
         deterministic_last_wait = now_us(); /* waiting, not spinning (advance) */
         Platform_PumpEvents();

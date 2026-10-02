@@ -271,24 +271,28 @@ int Memories_SetInternalScale(int wanted)
 /* MEMORIES_FRAME_HASHES=<file>: one line per presented frame, the frame
  * number and an FNV-1a hash of all of VRAM, for comparing two runs frame by
  * frame (native against interpreted code, for one) without dumping them. */
+unsigned long long Memories_VramHash(void)
+{
+    const uint16_t *vram = SoftGpu_Vram();
+    uint64_t hash = 1469598103934665603ull;
+    unsigned i;
+    for (i = 0; i < 1024u * 512u; i++) {
+        hash = (hash ^ vram[i]) * 1099511628211ull;
+    }
+    return hash;
+}
+
 static void frame_hash(void)
 {
     static FILE *out;
     static int opened;
-    const uint16_t *vram;
-    uint64_t hash = 1469598103934665603ull;
-    unsigned i;
     if (!opened) {
         const char *path = getenv("MEMORIES_FRAME_HASHES");
         opened = 1;
         out = path && *path ? fopen(path, "w") : NULL;
     }
     if (!out) return;
-    vram = SoftGpu_Vram();
-    for (i = 0; i < 1024u * 512u; i++) {
-        hash = (hash ^ vram[i]) * 1099511628211ull;
-    }
-    fprintf(out, "%u %016llx\n", (unsigned)frames_presented, (unsigned long long)hash);
+    fprintf(out, "%u %016llx\n", (unsigned)frames_presented, Memories_VramHash());
     fflush(out);
 }
 

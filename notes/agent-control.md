@@ -67,6 +67,76 @@ build with the old combination; the eight smoke cases unchanged.
 | `info` | frame, VBlank, mode, build id |
 | `quit` | exit |
 
+**Landed** (`src/pc/debug/control.c`, `control_net.c`, `control_protocol.c`;
+`tools/pc/yfm_control.py` is the client, section 5):
+
+- **Where:** `Control_Point()`, called by `Memories_VSync` right after
+  `Memories_StatePoint` at the end of every `VSync(0)`, whoever called it.
+  Checked that it is reached often enough: with `step 1` from boot through
+  the duel-hand-camera input to frame 7000 (title, new game, name entry, the
+  story, the map and the first duel), every stop came one VBlank after the
+  last, except in the opening logos and movie (mode byte 0, about frames
+  316-600), where the game presents every 3 to 5 VBlanks and polls
+  `VSync(-1)` between. No load ran past a VBlank without reaching it. So
+  `step N` runs until at least N VBlanks have passed and stops at the next
+  point; its reply says where (`ok frame F vblank V`). `save` and `load` are
+  refused (`err not at a state point`) when that `VSync(0)` came from
+  native code, as `Memories_StatePoint` refuses its own.
+- **Transport:** `MEMORIES_CONTROL=port` listens on 127.0.0.1 only (0 lets
+  the system pick; the port is logged). The listener opens at the first
+  `VSync(0)` of the game process, so under the crash monitor it is the
+  child's (checked with `netstat`: the listening PID is the game's, not the
+  launched monitor's), and it works with `MEMORIES_NO_MONITOR=1`. Neither
+  socket is inherited (`WSA_FLAG_NO_HANDLE_INHERIT`, `SOCK_CLOEXEC`), so a
+  restart can listen again; Linux sends with `MSG_NOSIGNAL`. The game waits
+  at its first `VSync(0)` for the first client, so a run is the client's
+  from its first frame. A client that leaves (closes without `quit`) lets
+  the game run on with its pads released; the next client stops it at the
+  next point.
+- **Lockstep:** while a client is attached the game runs only for a `step`.
+  The watchdog is off (`Platform_ControlAttach`: the Windows stall
+  reporter, the Linux interrupt watchdog and the crash monitor's freeze
+  check), and the time the client takes counts for nothing
+  (`Platform_ControlHold`: the virtual clock's spin check and the real-time
+  clock's catch-up start again when the game goes on); in a window the
+  events are pumped while it waits, and the virtual clock neither paces nor
+  pauses. Checked: 7000 frames stepped one at a time hash the same as a free
+  deterministic run, and a 3 s wait between two steps changes nothing.
+  `MEMORIES_CLOCK=interrupt` keeps its timer running while the client holds
+  the game (logged); lockstep needs the default cooperative clock.
+- **Cost:** with `MEMORIES_CONTROL` unset, `Control_Point` returns at its
+  first test and the pads it adds are 0. The eight smoke cases pass, and
+  7000 frame hashes of a run without it equal the origin/master build's.
+- **Commands as built** (numbers: hex where marked, else decimal; `0x`
+  accepted on both):
+  - `step N`: `ok frame F vblank V` once stopped. `step 0` answers at once.
+  - `pad P BITS`: P is 1 or 2, BITS hex. ORed into what `run_vblank` gives
+    the game, with the keyboard's and the controllers' and like
+    `MEMORIES_INPUT`'s: the mods' `INPUT` hooks see them, the deck slot
+    screen holds them back with the rest, and View > Japanese buttons does
+    not exchange them. Pad 2 counts as connected once set.
+  - `shot PATH`: `Memories_DumpFrame`'s picture (widescreen and the scaled
+    picture as it dumps them) as PNG, or as PPM for a `.ppm` path.
+  - `hash`: FNV-1a of VRAM, the hash `MEMORIES_FRAME_HASHES` writes. Taken
+    at the stop, after the VBlank: checked equal to that file's line for
+    the same frame at 140 frames through the first duel.
+  - `peek ADDR LEN` (ADDR hex, LEN up to 16384) answers `ok HEX`; `poke ADDR
+    HEX`. KSEG0, KSEG1 and physical addresses name the same 2 MiB of RAM;
+    the scratchpad is `1F800000`-`1F8003FF`; anything else, or a range past
+    an end, is refused. A poke into RAM tells the module registry
+    (`Memories_GuestWritten`).
+  - `save PATH`; `load PATH` resumes the state and answers at the next stop,
+    one frame into it (`ok frame F vblank V`), or `err` with the reason
+    (no notice on screen). The frame count is the run's own and is not in a
+    state; the VBlank count is. Checked in the story and in the duel: the 60
+    frames after a load hash as the 60 after the save. A state saved during
+    the opening movie did not resume pixel-exact.
+  - `info`: `ok frame F vblank V mode M build B` (M the raw mode byte
+    `D_8009B26C`, B the build id in hex).
+  - `quit`: `ok`, then the game ends as when its window is closed (exit 0).
+  - Errors: `err` and the reason (an unknown command, a usage, a line over
+    64 KiB). The connection stays open.
+
 ### 3. A recorder
 
 `MEMORIES_RECORD=path` records the pad bits at the point the game reads them

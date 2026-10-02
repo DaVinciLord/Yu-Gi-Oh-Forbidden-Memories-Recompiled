@@ -122,6 +122,14 @@ int Platform_ClockRate(void);
 /* Game frames per second at the current speed; 0 when paused or uncapped. */
 float Platform_GameHz(void);
 void Platform_StepFrame(void);
+/* The control channel (src/pc/debug/control.c). Attached, a client decides
+ * when the game runs: the freeze watchdog is off, and the virtual clock in a
+ * window neither paces nor pauses. Held, the game waits for the client;
+ * the time it waited counts for nothing when it goes on. */
+void Platform_ControlAttach(int attached);
+void Platform_ControlHold(int held);
+/* End the game at the next VSync, as closing the window does (no prompt). */
+void Platform_RequestQuit(void);
 void Platform_SetPresentCap(int fps);
 int Platform_PresentCap(void);
 /* Present period from the cap and the display refresh, in microseconds; 0 for every frame. */

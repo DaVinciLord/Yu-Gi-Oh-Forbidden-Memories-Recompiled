@@ -356,6 +356,11 @@ give the same frames; in a window the frames are shown at the game speed
 and pause and frame step work, headless runs flat out; see
 [Agent control](agent-control.md). `MEMORIES_HEADLESS` with
 `MEMORIES_DUMP_FRAME` and `MEMORIES_SPEED=-1` still selects it too),
+`MEMORIES_CONTROL=<port>` (a control channel on 127.0.0.1:<port>: the
+game waits at its first frame for a client, which steps it, holds pad
+buttons, reads and writes guest memory, takes pictures and save states;
+`tools/pc/yfm_control.py` is the client, the commands are in
+[Agent control](agent-control.md)),
 `MEMORIES_WINDOW_SHOT=N` (save the window as shown at frame N, as the
 screenshot key does, into `MEMORIES_SCREENSHOT_DIR` or the user folder),
 `MEMORIES_SCALE_AT=N:S` (change the internal resolution to S at frame N, as

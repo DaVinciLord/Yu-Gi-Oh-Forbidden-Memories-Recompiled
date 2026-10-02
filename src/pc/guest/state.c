@@ -271,6 +271,11 @@ static int compatible_mods(MemoriesState *state)
 /* Why a state was not loaded: on stderr, and in a notice over the picture
  * (Menu_ShowNotice), since F7 is otherwise silent where there is no
  * console. load() runs in the game's thread, which is the window's. */
+/* Set while the control channel loads (Memories_StateLoadHere): the reason
+ * goes back to it instead of into a notice. */
+static char *refusal;
+static size_t refusal_size;
+
 static void refuse(const char *format, ...)
 {
     static const char *const ok[] = {"OK"};
@@ -280,7 +285,8 @@ static void refuse(const char *format, ...)
     vsnprintf(text, sizeof(text), format, arguments);
     va_end(arguments);
     fprintf(stderr, "memories-pc: %s\n", text);
-    Menu_ShowNotice("Save state not loaded", text, ok, 1, 0, NULL);
+    if (refusal) snprintf(refusal, refusal_size, "%s", text);
+    else Menu_ShowNotice("Save state not loaded", text, ok, 1, 0, NULL);
 }
 
 /* The language the game's text is in (Game > Language), and where that
@@ -546,6 +552,7 @@ static void apply(void)
     size_t size;
     char tag[32];
     unsigned i;
+    refusal = NULL; /* accepted: Memories_StateLoadHere's buffer is on the stack being replaced */
     hold_signals(1);
     Spu_Hold(1);
     DeckMenu_ShopState(&state);
@@ -990,6 +997,36 @@ void Memories_StatePoint(unsigned presented_frames)
             else Crash_ReportSoft("state load failed", path);
         }
     }
+}
+
+/* The control channel (src/pc/debug/control.c), from the end of VSync(0),
+ * after the state point. */
+int Memories_StateSaveHere(const char *path)
+{
+    if (!from_game_code()) return -2;
+    return save(path, 0);
+}
+
+int Memories_StateLoadHere(const char *path, char *why, size_t why_size)
+{
+    int result;
+    if (!from_game_code()) return -2;
+    snprintf(why, why_size, "the state was not loaded (the reason is in the log)");
+    refusal = why;
+    refusal_size = why_size;
+    result = load(path); /* returns only when it refused */
+    refusal = NULL;
+    if (!result) {
+        snprintf(why, why_size, "the state was not loaded");
+        result = -1;
+    }
+    return result;
+}
+
+uint32_t Memories_StateBuildId(void)
+{
+    if (!build_id) read_build_id();
+    return build_id;
 }
 
 static void run_game(void)

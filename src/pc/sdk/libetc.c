@@ -18,6 +18,7 @@
 #include "pc/guest/state.h"
 #include "pc/debug/log.h"
 #include "pc/debug/monitor.h"
+#include "pc/debug/control.h"
 #include "pc/mods/mods.h"
 #ifdef _WIN32
 #include "pc/platform/win32.h"
@@ -83,7 +84,8 @@ static void run_vblank(void)
     for (port = 0; port < 2 && pads_started; port++) {
         if (pad_buffer[port]) {
             /* Released while the deck slot screen reads the pad (deck_menu.h). */
-            unsigned bits = DeckMenu_HoldsPads() ? 0 : Platform_Pad(port);
+            /* A control client's bits join, like MEMORIES_INPUT's (control.h). */
+            unsigned bits = DeckMenu_HoldsPads() ? 0 : Platform_Pad(port) | Control_Pad(port);
             MemoriesModEvent input = {MEMORIES_EVENT_INPUT, MEMORIES_BEFORE, port, (int)bits, 0, (int)bits, 0};
             Mods_Dispatch(&input);
             bits = (unsigned)(input.handled ? input.result : input.b) & 0xffffu;
@@ -91,9 +93,10 @@ static void run_vblank(void)
              * place every pad the game reads passes (button_layout.h). The
              * mods' before-hooks see the controller's own bits, as host->pad
              * does; after-hooks see what the game gets. */
-            if (Settings_Get(SET_JP_BUTTONS)) bits = ButtonLayout_Apply((uint16_t)bits, Platform_PadFixedBits(port), 1);
+            if (Settings_Get(SET_JP_BUTTONS))
+                bits = ButtonLayout_Apply((uint16_t)bits, Platform_PadFixedBits(port) | Control_Pad(port), 1);
             input.result = (int)bits; input.phase = MEMORIES_AFTER; Mods_Dispatch(&input);
-            pad_buffer[port][0] = Platform_PadConnected(port) ? 0x00 : 0xff; /* 0xff: no pad */
+            pad_buffer[port][0] = Platform_PadConnected(port) || Control_PadConnected(port) ? 0x00 : 0xff; /* 0xff: no pad */
             pad_buffer[port][1] = 0x41;
             pad_buffer[port][2] = (unsigned char)~bits;
             pad_buffer[port][3] = (unsigned char)~(bits >> 8);
@@ -305,6 +308,7 @@ int Memories_VSync(int mode)
         Platform_LimitVBlanks(-1);
         clock_gettime(CLOCK_MONOTONIC, &left);
         Memories_StatePoint(Memories_PresentedFrames());
+        Control_Point(); /* MEMORIES_CONTROL: the client's turn, at the same point */
     } else if (mode > 1) {
         while (Platform_VBlankCount() - last_vsync < (unsigned)mode) {
             Platform_WaitVBlank(Platform_VBlankCount());

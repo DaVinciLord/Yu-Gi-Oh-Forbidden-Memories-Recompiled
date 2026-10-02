@@ -1,0 +1,23 @@
+#ifndef MEMORIES_PC_DEBUG_CONTROL_NET_H
+#define MEMORIES_PC_DEBUG_CONTROL_NET_H
+/* The control channel's socket (control.h): TCP on 127.0.0.1, one client at
+ * a time, through Winsock or POSIX sockets. Kept apart from control.c, which
+ * includes game headers that clash with <windows.h>. Neither socket is
+ * inherited by a process the game starts, so a restart can listen again. */
+#include <stddef.h>
+
+/* Listen on 127.0.0.1:port (0: a port the system picks); *bound gets the
+ * port. 0 on success, -1 with the reason on stderr. */
+int ControlNet_Listen(unsigned port, unsigned *bound);
+/* Take a waiting client, waiting up to timeout_ms for one (0: only look).
+ * 1 when one is connected now, 0 when none came. */
+int ControlNet_Accept(int timeout_ms);
+/* Bytes from the client, waiting up to timeout_ms: the count, 0 when none
+ * came in time, -1 when the client has gone. */
+long ControlNet_Receive(char *buffer, size_t size, int timeout_ms);
+/* All of `size` bytes to the client; -1 when it has gone. */
+int ControlNet_Send(const char *data, size_t size);
+/* Close the client's connection; the listener stays. */
+void ControlNet_Drop(void);
+
+#endif
