@@ -16,7 +16,7 @@
 
 static const JsonValue *fixture;
 /* What tests/pc/mod_overlaps/duelists-64 makes (tools/pc/fm_editor/tests/test_overlaps.py too). */
-#define DUELISTS_64 "heishin2's POW drops (B, C): C's \"replace\" clears what the earlier mods set"
+#define DUELISTS_64 "Heishin's POW drops (B, C): C's \"replace\" clears what the earlier mods set"
 
 static int same_letters(const char *a, const char *b)
 {
@@ -62,7 +62,7 @@ static int card_info(int id, int *base, int *type, int *attribute, void *context
     const JsonValue *info;
     (void)context;
     snprintf(key, sizeof(key), "%d", id);
-    *base = id;
+    *base = (int)Json_Number(Json_Member(Json_Member(fixture, "bases"), key), id);
     if (!(info = Json_Member(Json_Member(fixture, "types"), key))) return 0;
     *type = (int)Json_Number(Json_At(info, 0), -1);
     *attribute = (int)Json_Number(Json_At(info, 1), -1);

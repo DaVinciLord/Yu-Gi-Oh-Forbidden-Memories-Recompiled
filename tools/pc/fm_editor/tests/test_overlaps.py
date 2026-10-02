@@ -18,7 +18,7 @@ from fm_editor.tests.test_data import fixture
 
 FIXTURE = Path(__file__).resolve().parents[4] / "tests" / "pc" / "mod_overlaps"
 # What tests/pc/mod_overlaps/duelists-64 makes (tests/pc/mods_overlap_test.c too).
-DUELISTS_64 = "heishin2's POW drops (B, C): C's \"replace\" clears what the earlier mods set"
+DUELISTS_64 = "Heishin's POW drops (B, C): C's \"replace\" clears what the earlier mods set"
 
 
 class FixtureSource(overlaps.Source):
@@ -27,12 +27,13 @@ class FixtureSource(overlaps.Source):
     def __init__(self, setup):
         self.cards = {int(k): v for k, v in setup["cards"].items()}
         self.types = {int(k): v for k, v in setup["types"].items()}
+        self.bases = {int(k): v for k, v in setup.get("bases", {}).items()}
         self.duelists = setup["duelists"]
 
     def card_info(self, cid):
         if cid not in self.types:
             return None
-        return cid, self.types[cid][0], self.types[cid][1]
+        return self.bases.get(cid, cid), self.types[cid][0], self.types[cid][1]
 
     def card(self, text, number):
         for cid, name in self.cards.items():

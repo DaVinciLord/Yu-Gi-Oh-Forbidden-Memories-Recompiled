@@ -119,6 +119,9 @@
                 "id": 11,
                 "name": "Flame"
             }
+        ],
+        "matchups": [
+            {"attacker": "Comet", "defender": "Sun", "bonus": 200}
         ]
     },
     "limits": {

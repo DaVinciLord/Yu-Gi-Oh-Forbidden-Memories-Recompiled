@@ -38,6 +38,7 @@ CARD_COUNT = 722
 ATTACK_TRAP_FIRST, ATTACK_TRAPS = 681, 6
 ALL = ("all",)
 DEFAULT_EQUIP_BONUS = ("default",)
+EQUIP_CARDS = 1 << 20   # overlap.c EQUIP_CARDS
 STAR_RETAIL = ["", "Mars", "Jupiter", "Saturn", "Uranus", "Pluto", "Neptune", "Mercury", "Sun", "Moon", "Venus"]
 TERRAINS = ["", "Forest", "Wasteland", "Mountain", "Sogen", "Umi", "Yami"]
 TERRAIN_ALIASES = {"meadow": 4, "sea": 5, "dark": 6}
@@ -623,6 +624,9 @@ class _Check:
             setting = _json_string(entry.get("setting"))
             if "setting" in entry and setting and self.source.setting and self.setting(mod, setting) == 0:
                 continue
+            row_offsets = entry.get("row_offsets")
+            if isinstance(row_offsets, (list, dict)) and len(row_offsets) == rows:
+                stride = 0   # read row by row: no stride (texture_pack.c)
             key = (archive, offset, words, rows, stride, bpp, _json_number(entry.get("clut_offset"), 0) if clut else 0)
             self.claim(TEXTURES, mod, key, SET, ("own", mod), entry)
 
@@ -665,8 +669,18 @@ class _Check:
     def read_equips(self, mod):
         for entry in _list(self.member(mod, "equips")):
             key = self.card_key(_obj(entry).get("card"))
-            if key is not None and isinstance(entry, dict) and self.switched_on(mod, entry):
-                self.claim(EQUIPS, mod, key, SET, canonical(entry), entry)
+            if key is None or not isinstance(entry, dict) or not self.switched_on(mod, entry):
+                continue
+            # A rule for an equip card is one for its copies too (Tables_Equip
+            # matches the card or its base): keyed by base and card, a card's
+            # own rule stands beside its copies' rules in other mods.
+            if isinstance(key, int) and key < EQUIP_CARDS:
+                base = self.card_info(key)[0]
+                base = base if isinstance(base, int) and 0 < base < EQUIP_CARDS else key
+                key = ("equip", base, key)
+            c = self.claim(EQUIPS, mod, key, SET, canonical(entry), entry)
+            if isinstance(key, tuple) and key[0] == "equip" and key[1] == key[2]:
+                c.wide = lambda other, base=key[1]: isinstance(other, tuple) and other[:2] == ("equip", base)
         if "equip_bonus_default" in self.mods[mod].manifest:
             bonus = self.member(mod, "equip_bonus_default")
             self.claim(EQUIPS, mod, DEFAULT_EQUIP_BONUS, SET, canonical(bonus), bonus)
@@ -700,7 +714,7 @@ class _Check:
         elif not copy:
             return
         if did:
-            self.defined.append((mod, did, target))
+            self.defined.append((mod, did, target, _cut(did if _json_string(entry.get("replace")) is None else entry["replace"], 95)))
         slot = entry.get("slot")
         if "slot" in entry and "replace" not in entry and _int(slot) and 40 <= slot < 128:
             self.claim(DUELISTS, mod, ("slot", slot), FIRST, ("own", mod), entry, f"Free Duel slot {slot}")
@@ -748,10 +762,11 @@ class _Check:
                     self.pool_claim(mod, name, who, which, pool)
 
     def pool_file_duelist(self, mod, name):
-        for owner, did, replaces in self.defined:
+        """(the opponent, the label's name): overlap.c pool_file_duelist."""
+        for owner, did, replaces, who in self.defined:
             if owner == mod and did == name:
-                return replaces if replaces else ("own", f"{self.mods[mod].id}:{name}")
-        return self.known_duelist(self.duelist_key(name))
+                return (replaces, who) if replaces else (("own", f"{self.mods[mod].id}:{name}"), name)
+        return self.known_duelist(self.duelist_key(name)), name
 
     def read_pools(self, mod):
         for decks, key in ((0, "drops"), (1, "decks")):
@@ -760,18 +775,18 @@ class _Check:
                 table = self.mod_file(mod, table)
             self.pool_table(mod, table, decks)
             for name in self.folder_names(mod, key):
-                who = self.pool_file_duelist(mod, name)
+                who, label = self.pool_file_duelist(mod, name)
                 if who is None:
                     continue
                 root = self.mod_file(mod, f"{key}/{name}.json")
                 if root is None:
                     continue
                 if decks:
-                    self.pool_claim(mod, name, who, 0, root)
+                    self.pool_claim(mod, label, who, 0, root)
                 else:
                     for pool_name, pool in _obj(root).items():
                         if _pool_named(pool_name) > 0:
-                            self.pool_claim(mod, name, who, _pool_named(pool_name), pool)
+                            self.pool_claim(mod, label, who, _pool_named(pool_name), pool)
 
     def read_passwords(self, mod):
         for name, entry in _obj(self.member(mod, "passwords")).items():
@@ -849,18 +864,17 @@ class _Check:
             c = self.claim(PACKS, mod, ("password", password), SET, 0, name, f"Password {password:08d}")
             c.card_pw, c.lo = True, card if isinstance(card, int) else 0x7FFFFFFF
 
-    def learn_star_names(self):
-        for i in range(1, 11):
-            self.star_names.setdefault(letters(STAR_RETAIL[i]), i)
-        for mod in self.mods:
-            for s in _list(_obj(mod.manifest.get("guardian_stars")).get("stars")):
-                s = _obj(s)
-                sid = _json_number(s.get("id"), -1)
-                name = s.get("name")
-                names = [name] if isinstance(name, str) else list(name.values()) if isinstance(name, dict) else []
-                for n in names:
-                    if letters(n if isinstance(n, str) else ""):
-                        self.star_names.setdefault(letters(n), sid)
+    def declare_stars(self, section):
+        """overlap.c star_declare: a mod's "stars" before its own matchups; a
+        star's name replaces the names it had (stars.c)."""
+        for s in _list(section.get("stars")):
+            if not isinstance(s, dict) or "id" not in s:
+                continue
+            sid, name = _json_number(s.get("id"), -1), s.get("name")
+            if not 1 <= sid <= 15 or not isinstance(name, (str, dict)):
+                continue
+            names = [name] if isinstance(name, str) else [n for n in name.values() if isinstance(n, str)]
+            self.star_names[sid] = {letters(n) for n in names if letters(n)}
 
     def star_of(self, value) -> int:
         if _int(value):
@@ -869,7 +883,12 @@ class _Check:
             return -1
         if is_digits(value):
             return int(value)
-        return self.star_names.get(letters(value), -1)
+        # The disc's ten by their names first, then 1-15 by theirs now (Stars_Find).
+        name = letters(value)
+        for sid in range(1, 11):
+            if letters(STAR_RETAIL[sid]) == name:
+                return sid
+        return next((sid for sid in range(1, 16) if name in self.star_names.get(sid, ())), -1)
 
     def star_pair(self, mod, a, d, bonus, src):
         if 0 <= a <= 15 and 0 <= d <= 15:
@@ -879,6 +898,7 @@ class _Check:
         section = self.member(mod, "guardian_stars")
         if not isinstance(section, dict):
             return
+        self.declare_stars(section)
         bonus = 500
         reset = _json_bool(section.get("replace"))
         if reset:
@@ -972,6 +992,11 @@ class _Check:
         overflow = self.member(mod, "chest_overflow")
         if isinstance(overflow, dict):
             limit, starchips = overflow.get("limit"), overflow.get("starchips")
+            # tables.c read_chest_overflow leaves the whole entry out for a
+            # limit past 1-255 or starchips past 0-999999.
+            bad_limit = "limit" in overflow and not (_int(limit) and 1 <= limit <= 255)
+            if bad_limit or ("starchips" in overflow and not (_int(starchips) and 0 <= starchips <= 999999)):
+                return
             self.limit_claim(mod, "chest_overflow.limit" if "limit" in overflow else
                              "chest_overflow.limit (250, left out)", "chest",
                              canonical(limit) if "limit" in overflow else canonical(250), overflow)
@@ -1095,8 +1120,6 @@ class _Check:
     def run(self, involving=None) -> list:
         if len(self.mods) < 2:
             return []
-        if self.having("guardian_stars") >= 2:
-            self.learn_star_names()
         for mod in range(len(self.mods)):
             self.read_duelists(mod)
         for mod in range(len(self.mods)):
