@@ -11,6 +11,7 @@ Fusions|info|add|alpha, beta|Disc recipes for 'Celtic Guardian' removed	Disc rec
 Equips|warning|reset|alpha, beta, gamma|Equip 'Legendary Sword'	Equip 'Legendary Sword' (Alpha, Beta, Gamma): Gamma's "replace" clears what the earlier mods set
 Equips|warning|later|alpha, beta|Equip 'Megamorph'	Equip 'Megamorph' (Alpha, Beta): Beta wins (later in load order)
 Rituals|warning|later|alpha, beta, gamma|Ritual 'Black Luster Ritual'	Ritual 'Black Luster Ritual' (Alpha, Beta, Gamma): Gamma wins (later in load order)
+Drops and decks|warning|reset|alpha, beta|8's B/C/D drops	8's B/C/D drops (Alpha, Beta): Beta's "replace" clears what the earlier mods set
 Drops and decks|warning|reset|alpha, beta|dark-heishin's POW drops	dark-heishin's POW drops (Alpha, Beta): Beta's "replace" clears what the earlier mods set
 Drops and decks|warning|fixed|alpha, beta, gamma|Heishin's deck	Heishin's deck (Alpha, Beta, Gamma): Beta's fixed deck is dealt; the other edits of it are left out
 Drops and decks|info|add|alpha, beta|Simon Muran's POW drops	Simon Muran's POW drops (Alpha, Beta): both apply and add up (each edits the pool as the mods before left it)

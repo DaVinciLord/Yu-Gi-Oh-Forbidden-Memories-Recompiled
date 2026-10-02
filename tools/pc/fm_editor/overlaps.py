@@ -959,13 +959,16 @@ class _Check:
         wide = [c for c in self.claims if c.wide]
         if not wide:
             return
-        named = {}
+        named = {}   # (kind, key) -> (key, {mod: whether a claim of it does more than add})
         for c in self.claims:
             if not c.wide and not c.via_wide:
-                named.setdefault((c.kind, repr(c.key)), (c.key, set()))[1].add(c.mod)
+                mods = named.setdefault((c.kind, repr(c.key)), (c.key, {}))[1]
+                mods[c.mod] = mods.get(c.mod, False) or c.mode != ADD
         for w in wide:
             for (kind, _), (key, mods) in named.items():
-                others = {m for m in mods if m != w.mod and (not w.resets or m < w.mod)}
+                # A reset reaches earlier mods' keys only; a pool's "all" also a later replace or fixed deck.
+                others = {m for m, more in mods.items()
+                          if m != w.mod and (not w.resets or m < w.mod or (w.kind == POOLS and more))}
                 if kind == w.kind and others and w.wide(key):
                     copy = Claim(w.kind, w.mod, key, w.mode, w.value, w.src, w.seq, w.label, None, True, w.aimed,
                                  w.resets, w.via)

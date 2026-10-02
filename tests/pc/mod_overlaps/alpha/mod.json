@@ -108,6 +108,10 @@
         "all": {
             "tec": {
                 "Kuriboh": 0
+            },
+            "bcd": {
+                "replace": true,
+                "Kuriboh": 5
             }
         }
     },

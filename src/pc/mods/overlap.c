@@ -1347,7 +1347,10 @@ static int covers(const Claim *wide, uint64_t key)
 }
 /* A wide claim stands beside each key of its kind another mod names that
  * it covers, as a copy marked VIA_WIDE; one that resets, only beside the
- * keys of mods loading before it. */
+ * keys of mods loading before it, but for a pool's: an "all" that empties
+ * every pool also stands beside a later mod's own replace or fixed deck of
+ * one, which empties that pool again (only a later plain edit of it adds
+ * up). */
 static void widen(ModsOverlaps *x)
 {
     int count = x->claim_count, wide = 0;
@@ -1362,7 +1365,9 @@ static void widen(ModsOverlaps *x)
         for (int i = 0; i < count; i++) {
             Claim c = x->claims[i], *copy;
             if (c.kind != spread.kind || c.mask || c.mod == spread.mod || !covers(&spread, c.key) ||
-                (spread.flags & RESETS && c.mod > spread.mod) || (emitted && c.key == last))
+                (spread.flags & RESETS && c.mod > spread.mod &&
+                 !(spread.kind == MODS_OVERLAP_POOLS && c.mode != ADD)) ||
+                (emitted && c.key == last))
                 continue;
             if (!(copy = claim(x, spread.kind, spread.mod, c.key, spread.mode, spread.value, spread.src))) return;
             copy->seq = spread.seq;
