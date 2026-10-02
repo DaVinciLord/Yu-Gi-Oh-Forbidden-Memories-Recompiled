@@ -14,7 +14,7 @@
             "type": "choice",
             "default": 0,
             "choices": ["3D models", "Card art"],
-            "description": "3D models is the original presentation. Card art stands an enlarged cutout of the card's own art instead, with an optional glow (below); it never uses a model, an arena or a texture bank the way 3D models does, and the battle presentation (Monsters on attack cards, below) is 3D models only -- attack cards show plainly in the Card art style, the same as with the mod off."
+            "description": "3D models shows each monster standing on its card as its battle model. Card art shows an enlarged cutout of the card's own art instead, with an optional glow. Monsters on attack cards works in 3D models only."
         },
         {
             "key": "scale",
