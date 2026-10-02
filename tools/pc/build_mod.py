@@ -279,9 +279,17 @@ def remember(folder, key, read, started):
         files[portable(path)] = file_digest(path)
     os.makedirs(folder, exist_ok=True)
     handle, temporary = tempfile.mkstemp(dir=folder, suffix=".tmp")
-    with os.fdopen(handle, "w", encoding="utf-8") as stream:
-        json.dump({"key": key, "files": files}, stream, indent=0)
-    os.replace(temporary, os.path.join(folder, key[:16] + ".json"))
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as stream:
+            json.dump({"key": key, "files": files}, stream, indent=0)
+        os.replace(temporary, os.path.join(folder, key[:16] + ".json"))
+    except OSError:
+        # Windows will not replace a file another build is reading (recall),
+        # and that file is this same memo. A memo is only a shortcut.
+        try:
+            os.remove(temporary)
+        except OSError:
+            pass
 
 
 def compile_object(sources, output, objects_dir, extra_flags=()):
