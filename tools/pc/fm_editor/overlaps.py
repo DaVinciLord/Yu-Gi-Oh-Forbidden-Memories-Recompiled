@@ -376,6 +376,7 @@ class Mod:
     name: str
     manifest: dict
     directory: Path | None = None
+    broken: bool = False   # mods.c read_manifest: the game lists it but cannot load it
 
 
 @dataclass
@@ -1681,11 +1682,46 @@ def read_settings(path: Path) -> dict:
     return values
 
 
+ID_LETTERS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")
+
+
+def _fit(text: str, size: int) -> str:
+    """mods.c copy_text: at most size - 1 bytes, cut where a character starts."""
+    data = _bytes(text)
+    if len(data) >= size:
+        n = size - 1
+        while n and (data[n] & 0xC0) == 0x80:
+            n -= 1
+        data = data[:n]
+    return data.decode("utf-8", "surrogateescape")
+
+
+def _identity(manifest, folder_name: str) -> tuple:
+    """(id, broken) as mods.c read_manifest gives them: a mod.json that is
+    not an object, or an id that is not 1-63 letters, digits, hyphens or
+    underscores, is the folder's name and broken; so is a mod whose library
+    or textures reach outside it, or whose "data" or "cards" is not a list or
+    "audio" not an object. The game lists a broken mod (in its place, over a
+    shipped copy of that id) but never loads it."""
+    folder_id = _fit(folder_name, 64)
+    if not isinstance(manifest, dict):
+        return folder_id, True
+    text = _json_string(manifest.get("id")) or folder_name
+    if len(_bytes(text)) >= 64 or not all(c in ID_LETTERS for c in text):
+        return folder_id, True
+    broken = any(isinstance(manifest.get(key), str) and manifest[key] and not _contained(manifest[key])
+                 for key in ("library", "textures"))
+    broken = broken or any(key in manifest and not isinstance(manifest[key], kind)
+                           for key, kind in (("data", list), ("audio", dict), ("cards", list)))
+    return text, broken
+
+
 def installed(folders) -> list:
     """Every mod (a folder with a mod.json) in `folders`, in the order the
     game finds them (mods.c scan): folder by folder, names sorted; the first
     of one id is kept within a folder, a later folder's copy replaces an
-    earlier's in its place."""
+    earlier's in its place. A broken one (_identity) is listed too, as the
+    game lists it, and load_order leaves it out."""
     found = {}
     for folder in folders:
         try:
@@ -1696,15 +1732,16 @@ def installed(folders) -> list:
         for name in names:
             if name.startswith("."):
                 continue
-            manifest = _read_json(Path(folder) / name / "mod.json")
-            if not isinstance(manifest, dict):
+            if not (Path(folder) / name / "mod.json").is_file():
                 continue
-            mid = manifest.get("id") if isinstance(manifest.get("id"), str) else name
+            manifest = _read_json(Path(folder) / name / "mod.json")
+            mid, broken = _identity(manifest, name)
             if mid in here:
                 continue
             here.add(mid)
+            manifest = manifest if isinstance(manifest, dict) else {}
             mod = Mod(mid, manifest.get("name") if isinstance(manifest.get("name"), str) else mid, manifest,
-                      Path(folder) / name)
+                      Path(folder) / name, broken)
             found[mid] = mod   # a later folder's copy keeps the earlier's place
     return list(found.values())
 
@@ -1718,12 +1755,17 @@ def load_order(mods: list, settings: dict = None) -> list:
     """manager.c Mods_Order: the lowest Load order first (the player's
     mod.<id>.order, else the manifest's priority), never before a mod it
     requires or names in "after"; equal ones in the order they were found.
-    A mod whose requirement is not there, and the mods of a cycle (and those
-    waiting on them), are left out, as the game leaves them out."""
+    A broken mod, a mod whose requirement is not there (or is left out
+    itself), and the mods of a cycle (and those waiting on them), are left
+    out, as the game leaves them out."""
     settings = settings or {}
-    ids = {m.id for m in mods}
-    mods = [m for m in mods if all(r in ids for r in _needs(m.manifest, "requires") if r)]
-    ids = {m.id for m in mods}
+    mods = [m for m in mods if not getattr(m, "broken", False)]
+    while True:   # a mod that requires one left out is left out too, and so on
+        ids = {m.id for m in mods}
+        kept = [m for m in mods if all(r in ids for r in _needs(m.manifest, "requires") if r)]
+        if len(kept) == len(mods):
+            break
+        mods = kept
     done, order = set(), []
     while len(order) < len(mods):
         best = None

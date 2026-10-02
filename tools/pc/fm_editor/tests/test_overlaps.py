@@ -206,6 +206,34 @@ class ConflictsTab(unittest.TestCase):
         d = overlaps.Mod("d", "D", {})
         self.assertEqual([m.id for m in overlaps.load_order([a, b, c, d])], ["d"])
 
+    def test_broken_mods_keep_their_place(self):
+        # mods.c: a mod.json that is not an object, or an id that is not one,
+        # is listed under its folder's name (a player's copy over a shipped
+        # one) and never loaded; nor is a mod requiring it, and so on.
+        shipped, user = self.folder / "shipped", self.folder / "user"
+        manifests = {shipped / "x": '{"id": "x", "name": "X"}', user / "x": "[1]",
+                     user / "y": '{"id": "not an id!"}', user / "z": '{"id": "z", "requires": ["y"]}',
+                     user / "w": '{"id": "w", "requires": ["z"]}', user / "v": '{"id": "v"}'}
+        for folder, text in manifests.items():
+            folder.mkdir(parents=True)
+            (folder / "mod.json").write_text(text, encoding="utf-8")
+        every = overlaps.installed([shipped, user])
+        self.assertEqual([(m.id, m.broken) for m in every],
+                         [("x", True), ("v", False), ("w", False), ("y", True), ("z", False)])
+        self.assertEqual([m.id for m in overlaps.load_order(every)], ["v"])
+
+    def test_card_named_as_the_game_names_it(self):
+        # The last replace in load order names the card; one without a name
+        # leaves the disc's, whatever the edited mod calls it.
+        project = Project(fixture().game())
+        cid = next(iter(project.retail.cards))
+        retail = project.retail.cards[cid].name
+        project.cards[cid].name = "Mine"
+        a = overlaps.Mod("a", "A", {"cards": [{"replace": cid, "name": "Red"}]})
+        b = overlaps.Mod("b", "B", {"cards": [{"replace": cid, "attack": 5}]})
+        self.assertEqual(validate._ProjectSource(project, {}, [a, b]).card_name(cid), retail)
+        self.assertEqual(validate._ProjectSource(project, {}, [b, a]).card_name(cid), "Red")
+
     def test_applied(self):
         mod = overlaps.Mod("x-y", "X", {"legacy_setting": "old_x"})
         self.assertFalse(validate.applied(mod, {}))

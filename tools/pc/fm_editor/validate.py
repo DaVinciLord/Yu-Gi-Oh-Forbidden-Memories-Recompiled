@@ -420,8 +420,9 @@ class _ProjectSource:
     (Made from overlaps.Source when first used: validate imports nothing of
     it at load.)"""
 
-    def __new__(cls, project: Project, settings: dict):
+    def __new__(cls, project: Project, settings: dict, order: list = ()):
         overlaps = _overlaps()
+        shown = {}   # a card's name in the game: the last replace in load order that names it
 
         class Source(overlaps.Source):
             def card(self, text, number):
@@ -430,7 +431,27 @@ class _ProjectSource:
                 return project.resolve(text) or -1
 
             def card_name(self, cid):
-                card = project.cards.get(cid)
+                # As the game's window names it (cards.c, the cards read in
+                # load order): the name of the last mod's replace of it, the
+                # disc's when that replace gives none; not the edited mod's
+                # own unless it is the last.
+                if not shown and order:
+                    for mod in order:
+                        for entry in overlaps._list(mod.manifest.get("cards")):
+                            if not isinstance(entry, dict) or "replace" not in entry:
+                                continue
+                            replace = entry["replace"]
+                            target = self.card(None, replace) if overlaps._int(replace) else \
+                                self.card(replace, 0) if isinstance(replace, str) else -1
+                            if target and target > 0:
+                                name = entry.get("name")
+                                shown[target] = name if isinstance(name, str) and name else None
+                    shown.setdefault(0, None)
+                if shown.get(cid):
+                    return shown[cid]
+                retail = getattr(getattr(project, "retail", None), "cards", None) or {}
+                card = retail.get(cid) if isinstance(retail, dict) else None
+                card = card if card is not None else project.cards.get(cid)
                 return card.name if card is not None and card.name else None
 
             def card_info(self, cid):
@@ -578,7 +599,7 @@ def cross_mod(project: Project, folders=None, settings_path=None) -> tuple:
     place = order.index(mine)
     issues = []
     off = [m.id for m in others if m in order and not applied(m, settings)]
-    for overlap in overlaps.check(order, _ProjectSource(project, settings), involving=place):
+    for overlap in overlaps.check(order, _ProjectSource(project, settings, order), involving=place):
         where = overlap.label + (" (with a mod off now)" if any(m in off for m in overlap.mods) else "")
         message = overlap.text[len(overlap.label) + 1:]
         issues.append(Issue("warning" if overlap.severity else "note", "Other mods", where, message, overlap.label))
@@ -587,7 +608,8 @@ def cross_mod(project: Project, folders=None, settings_path=None) -> tuple:
     if off:
         summary += " " + ", ".join(off) + (" is" if len(off) == 1 else " are") + " off in the game now."
     if left:
-        summary += " Left out, as the game would not load them (a missing requirement or a cycle): " + \
+        summary += " Left out, as the game would not load them (a broken mod.json, a missing requirement or a " \
+            "cycle): " + \
             ", ".join(left) + "."
     if source_dir is None:
         summary += " Files beside mod.json (pools, duelists, text, the pack) are read once the mod is saved."
