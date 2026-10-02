@@ -45,6 +45,14 @@ static int hook_count, serial;
 static int writable(unsigned char *from, size_t size, int on)
 {
     uintptr_t page = 4096, start = (uintptr_t)from & ~(page - 1), end = ((uintptr_t)from + size + page - 1) & ~(page - 1);
+#ifdef _WIN32
+    /* AV test (av/no-code-patching, not for merging): the game's code is
+     * never made writable, so no hook is ever installed. */
+    (void)start;
+    (void)end;
+    (void)on;
+    return 0;
+#endif
     return mprotect((void *)start, end - start, on ? PROT_READ | PROT_WRITE | PROT_EXEC : PROT_READ | PROT_EXEC) == 0;
 }
 
