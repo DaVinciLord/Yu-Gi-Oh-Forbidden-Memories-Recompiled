@@ -63,6 +63,72 @@ initially enabled. Run it with `python tools/pc/test_path_layout.py --build
 <cmake-build-directory>` after building the tests. Existing path-length
 limits and the operating system's filename restrictions still apply.
 
+### Build folders shared by worktrees
+
+Worktrees share `tmp/` through a junction, and with it the default build
+folders (`tmp/pc/game32`, and `tmp/pc/win32` where `package.py` builds a
+release). A game object is kept while it is newer than its source and the
+headers, which says nothing about whose source it was: an object another
+worktree compiled is newer than every file this checkout wrote before it.
+So `<build>/checkout.txt` names the checkout a folder was last built from
+(written when a build ends, removed when one from another checkout starts),
+and a build from any other checkout, or after one from another checkout that
+was stopped, compiles everything again. What `build_game32.py` copies into
+the folder (the SDK's headers and tools, the mods' data, the languages) is
+copied when its bytes differ, not when it is newer. A build folder of its own
+per worktree (`--build tmp/pc/game32-<name>`) still saves the full rebuilds.
+Two builds into one folder at the same time are still not supported (there
+is no lock): they write the same objects, and the one that ends last names
+its checkout in `checkout.txt` whatever the other compiled after it started.
+
+### Mod objects (`tmp/pc/mod-build`)
+
+Every build compiles the code mods in `mods/` (`build_mods` in
+`tools/pc/build_game32.py`, through `tools/pc/build_mod.py`) and copies each
+object into `<build>/mods/<mod>/` when the copy there differs. Worktrees share
+`tmp/` through a junction, so the objects are kept by what goes into them,
+never by time: `tmp/pc/mod-build/<mod>-<key>/<library>`, where the key is a
+SHA-256 of the compiler and linker files (name, size, time, as ccache's
+`compiler_check=mtime`), the flags with the checkout's root spelled
+`<root>`, the environment variables the compiler takes include directories
+or options from (`CPATH`, `C_INCLUDE_PATH`, `CCC_OVERRIDE_OPTIONS`, ...),
+`build_mod.py` (line ends normalized) and each source after the
+preprocessor with the file names taken out of its line markers. So every
+header a source includes is in it, from wherever it comes, and two checkouts
+share an object exactly when they would build the same one (it then carries
+the debug paths of the checkout that built it). The object is compiled from
+that preprocessed text (`-x cpp-output`), not from the sources again, so it
+is made of exactly what its key was taken from even when a header is edited
+while the mod builds (`tools/pc/test_mod_cache.py`, ctest `pc_mod_cache`).
+It is built in a staging folder (`.<mod>-XXXX`), checked and renamed into
+place, so a folder there is always a whole object that passed, with the
+names it leaves undefined in `<library>.undefined`. It is checked against the game's exports
+on every build, reused or not, from that list: what a game lends comes from
+its own sources, which the key does not cover. A failed check removes the
+copy beside the game, not the shared object.
+
+Running the preprocessor costs a process start per source, which a virus
+scanner makes slow on Windows. `tmp/pc/mod-build/.memo/<mod>-<digest>/`
+holds memos (as ccache's direct mode): the key the preprocessor gave, with
+the SHA-256 of every file it read. The folder is named by the settings, the
+sources and the names of every file under `src/` (or the SDK's `include/`)
+and the mod's directory, so a new file that would be included first also
+misses; a memo whose files are all unchanged gives
+the key with no process started. A memo is not written when a file it read
+changed while the preprocessor ran, nor when it named a file that cannot be
+found. It leads only to a key that has an object: when that object is
+missing, the key is taken from the preprocessor again before building.
+
+Since the key covers the compiler, builds with different compilers (llvm-mingw
+on Windows and gcc under WSL, say) keep an object each, and either runs on
+both systems; `./build-pc.sh` builds both games with one compiler and so
+copies one object beside both. Each build removes staging folders a day old
+(from a build that was stopped) and memo folders no build has used for 30
+days; objects are a few hundred KB and stay. `tmp/pc/mod-build` can be
+deleted at any time, and so can the
+folders from before the key (`<mod>/`, `e1e2eded/`) and
+`tmp/pc/mod-objects`, which nothing uses any more.
+
 ## 32-bit game executable (bring-up)
 
 The user chose a 32-bit (ILP32) host build as the bring-up memory model on

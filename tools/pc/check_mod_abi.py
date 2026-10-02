@@ -371,8 +371,9 @@ def run_mods(tag, release, executable, build):
     os.makedirs(user)
     # The SDK's examples stand for a mod someone else made with that release:
     # the code ones are built by its own build_mod.py, against its headers.
-    # A copy of its SDK is run, as that script keeps its objects in
-    # tmp/pc/mod-objects beside the SDK, where another run would be writing.
+    # A copy of its SDK is run, as that script keeps its objects in tmp/pc
+    # beside the SDK (mod-objects, or mod-build since its objects are kept
+    # by key), where another run would be writing.
     sdk = os.path.join(work, "sdk")
     shutil.copytree(os.path.join(release, "sdk"), sdk, ignore=shutil.ignore_patterns("examples"))
     for example in sorted(glob.glob(os.path.join(release, "sdk", "examples", "mods", "*"))):
