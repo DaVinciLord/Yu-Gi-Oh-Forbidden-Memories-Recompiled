@@ -52,8 +52,8 @@ int TitleScreen_Song(void)
 
 int TitleScreen_SkipMovie(void)
 {
-    if (TitleJump_Pending()) return 1; /* on its way to another screen (title_jump.h) */
-    return TitleConfig_Load()->skip_movie;
+    int skip = TitleConfig_Load()->skip_movie; /* read on every entry: the title's update uses it */
+    return TitleJump_Pending() ? 1 : skip;   /* on its way to another screen (title_jump.h) */
 }
 
 /* 0xRRGGBB over the game's 128 = unchanged. */

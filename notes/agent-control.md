@@ -347,6 +347,11 @@ two places.
   the wait for the idle menu and the state load.
 - **Not yet:** a jump during the credits restarts the game (Title Screen's
   rule) and is lost with the process.
+- **Also:** the new menu items run the same `TitleJump_RequestTo` as the
+  channel and were checked through the channel, not clicked in a window. A
+  jump asked for during the opening movie waits for its end (the movie
+  skip is decided as it starts). `goto("title")` at boot only waits for
+  the title there (no jump is made: it is already the title's loop).
 
 ### Acceptance
 

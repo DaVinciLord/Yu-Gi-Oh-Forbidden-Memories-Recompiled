@@ -334,8 +334,10 @@ class Game:
         self.command(line)
         wanted = JUMP_MODES[target]
         if target == "title":
-            return {"vblanks": self.wait_until(lambda g: g.mode() == wanted and g.resident("main_menu"), timeout,
-                                               what="the title")}
+            # The title's own loop runs before Main_Loop starts a mode: the
+            # byte has no flags (0 at boot, MAIN_MODE_MENU after a jump).
+            return {"vblanks": self.wait_until(lambda g: g.u8("D_8009B26C") in (0, wanted) and
+                                               g.resident("main_menu"), timeout, what="the title")}
         if target == "debug":
             return {"vblanks": self.wait_until(lambda g: g.u8("D_8009B26C") == 0xC0, timeout, what="the debug menu")}
         return {"vblanks": self.wait_until(lambda g: g.u8("D_8009B26C") & 0x9F == 0x80 | wanted, timeout,
