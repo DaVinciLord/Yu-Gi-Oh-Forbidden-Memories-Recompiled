@@ -562,12 +562,15 @@ def cross_mod(project: Project, folders=None, settings_path=None) -> tuple:
             return False
 
     every = overlaps.installed(folders)
-    # Where the game finds this mod: where its folder is, else after the rest.
-    mine.found = next((m.found for m in every if same_folder(m)), len(every))
     others = [m for m in every if m.id != mine.id and not same_folder(m)]
+    # Where the game finds this mod (which breaks a tie in the load order):
+    # where its folder is, else after the rest.
+    listed = [mine if same_folder(m) else m for m in every if same_folder(m) or m.id != mine.id]
+    if not any(m is mine for m in listed):
+        listed.append(mine)
     if not others:
         return [], "There are no other installed mods to check against (" + ", ".join(str(f) for f in folders) + ")."
-    order = overlaps.load_order(others + [mine], settings)
+    order = overlaps.load_order(listed, settings)
     left = [m.id for m in others if m not in order]
     if mine not in order:
         return [], ("This mod would not load: its \"requires\" names a mod that is not installed, or its "

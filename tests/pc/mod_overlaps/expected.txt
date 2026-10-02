@@ -3,8 +3,8 @@ Disc data|warning|bytes|alpha, beta|File \DATA\SU.MRG;1	File \DATA\SU.MRG;1 (Alp
 Disc data|warning|patched|alpha, beta, gamma|Sectors 1230-1239	Sectors 1230-1239 (Alpha, Beta, Gamma): Alpha's patch is written into Gamma's replacement, at the disc's offsets
 Sounds|warning|later|alpha, beta, gamma|Song 0x10	Song 0x10 (Alpha, Beta, Gamma): Gamma wins (later in load order)
 Texture images|warning|later|alpha, beta|Image cards/001, WA_MRG.MRG at 0x1000	Image cards/001, WA_MRG.MRG at 0x1000 (Alpha, Beta): Beta wins (later in load order)
-Cards|warning|keys|alpha, beta, gamma|Card 'Kuriboh'	Card 'Kuriboh' (Alpha, Beta, Gamma): Gamma's attack is used and the name Alpha and Beta gave is dropped, as Gamma's replace starts it from the disc's, though the picture keeps its name plate (cards are read in folder order, not load order); the rest combines
-Cards|warning|keys|alpha, beta|Card 'Blue-eyes White Dragon'	Card 'Blue-eyes White Dragon' (Alpha, Beta): Beta's description is used (cards are read in folder order, not load order); the rest combines
+Cards|warning|keys|alpha, beta, gamma|Card 'Kuriboh'	Card 'Kuriboh' (Alpha, Beta, Gamma): Gamma's attack is used and the name Alpha and Beta gave is dropped, as Gamma's replace starts it from the disc's (later in load order); the rest combines
+Cards|warning|keys|alpha, beta|Card 'Blue-eyes White Dragon'	Card 'Blue-eyes White Dragon' (Alpha, Beta): Beta's description is used (later in load order); the rest combines
 Fusions|warning|later|alpha, beta, gamma|Fusion 'Kuriboh' + 'Mystical Elf'	Fusion 'Kuriboh' + 'Mystical Elf' (Alpha, Beta, Gamma): Gamma wins (later in load order)
 Fusions|info|agree|alpha, beta|Fusion 'Baby Dragon' + 'Ryu-kishin'	Fusion 'Baby Dragon' + 'Ryu-kishin' (Alpha, Beta): the same in each, so no difference
 Fusions|info|add|alpha, beta|Disc recipes for 'Celtic Guardian' removed	Disc recipes for 'Celtic Guardian' removed (Alpha, Beta): both apply and add up

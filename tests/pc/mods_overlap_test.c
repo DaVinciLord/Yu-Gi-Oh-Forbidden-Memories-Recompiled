@@ -201,7 +201,6 @@ int main(void)
             three[m].name = Json_String(Json_Member(Json_Root(docs[m]), "name"), "");
             three[m].directory = directories[m];
             three[m].manifest = Json_Root(docs[m]);
-            three[m].found = m;
         }
         found = Mods_OverlapCompute(three, 3, &source);
         assert(found && Mods_OverlapCount(found) == 1);
@@ -276,24 +275,25 @@ int main(void)
             }
     }
 
-    /* The cards are read in the order the mods were found, not in load
-     * order: the second loads later but was found first. */
+    /* The cards follow the load order (mods.c Mods_VisitCards); a later
+     * replace that gives no plate drops the earlier's, as it does the name. */
     {
         JsonDocument *docs[2];
         ModsOverlapMod pair[2];
         for (int m = 0; m < 2; m++) {
-            snprintf(line, sizeof(line), "{\"id\":\"m%d\",\"cards\":[{\"replace\":1,\"attack\":%d}]}", m, 100 * (m + 1));
+            snprintf(line, sizeof(line), "{\"id\":\"m%d\",\"cards\":[{\"replace\":1,\"attack\":%d%s}]}", m,
+                     100 * (m + 1), m ? "" : ",\"title\":\"A\"");
             docs[m] = Json_Parse(line, error, sizeof(error));
             assert(docs[m]);
             pair[m].id = pair[m].name = m ? "B" : "A";
             pair[m].directory = NULL;
             pair[m].manifest = Json_Root(docs[m]);
-            pair[m].found = 1 - m;
         }
         found = Mods_OverlapCompute(pair, 2, NULL);
         assert(found && Mods_OverlapCount(found) == 1);
         Mods_OverlapText(found, 0, line, sizeof(line));
-        assert(!strcmp(line, "Card #1 (B, A): A's attack is used (cards are read in folder order, not load order); the rest combines"));
+        assert(!strcmp(line, "Card #1 (A, B): B's attack is used and the title A gave is dropped, as B's replace starts "
+                             "it from the disc's (later in load order); the rest combines"));
         Mods_OverlapFree(found);
         Json_Free(docs[0]);
         Json_Free(docs[1]);
@@ -317,7 +317,6 @@ int main(void)
             six[m].name = m ? long_name[m] : Json_String(Json_Member(Json_Root(docs[m]), "name"), "");
             six[m].directory = NULL;
             six[m].manifest = Json_Root(docs[m]);
-            six[m].found = m;
         }
         found = Mods_OverlapCompute(six, 2, NULL);
         assert(found && Mods_OverlapCount(found) == 1);

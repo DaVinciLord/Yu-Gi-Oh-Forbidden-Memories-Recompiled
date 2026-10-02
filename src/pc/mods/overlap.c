@@ -39,11 +39,6 @@ static const char *const outcome_words[] = {"later", "after", "agree", "add",   
                                             "sold"};
 
 #define CARD_COUNT 722             /* the disc's cards: what "replace" and the Password screen take */
-/* The order the game reads the mods' "cards" in: the order the mods were
- * found, folder by folder and names sorted (mods.c Mods_VisitCards), not
- * the load order every other table follows. 0 once the cards follow the
- * load order (the one line to change; overlaps.py CARDS_IN_FOUND_ORDER). */
-#define CARDS_IN_FOUND_ORDER 1
 #define TEXT_KEY (1ull << 40)      /* a card named by letters no card has: its letters' hash */
 #define ALL_CARDS ((1ull << 41) - 1)
 #define SUB(n) ((uint64_t)(n) << 56)
@@ -601,14 +596,13 @@ static void read_textures(ModsOverlaps *x, int mod)
 
 /* "cards": a "replace" changes one of the disc's cards in place (cards.c
  * add_entry: a name, or a number, of the disc's 722; nothing else), the
- * mods read in CARDS_IN_FOUND_ORDER's order. Its stats, stars, frame, model
- * and effect go over the earlier entries'; its name, text, password, art,
- * field art and fusion groups are reset by every later replace, whether it
- * gives them or not; the plate on the picture is not (cards.c keeps the
- * earlier one's unless the later gives a "name" or "title"); notes add up.
- * An entry of notes alone only adds them. */
-static const char *const card_reset_keys[] = {"name",  "description", "password",
-                                              "art",   "thumbnail",   "field_art", "fusion_groups"};
+ * mods read in load order (mods.c Mods_VisitCards). Its stats, stars,
+ * frame, model and effect go over the earlier entries'; its name, text,
+ * password, art, plate ("title", which goes with the name), field art and
+ * fusion groups are reset by every later replace, whether it gives them or
+ * not; notes add up. An entry of notes alone only adds them. */
+static const char *const card_reset_keys[] = {"name",      "description", "password",  "art",
+                                              "thumbnail", "title",       "field_art", "fusion_groups"};
 static int card_resets(const char *key)
 {
     for (size_t i = 0; i < sizeof(card_reset_keys) / sizeof(card_reset_keys[0]); i++)
@@ -1757,7 +1751,6 @@ static void decide(ModsOverlaps *x, Group *g)
             return;
         }
         g->outcome = O_KEYS;
-        if (CARDS_IN_FOUND_ORDER) return; /* an "after" is load order: the cards do not follow it */
     } else if (g->kind == MODS_OVERLAP_EQUIPS && c[last].key != DEFAULT_EQUIP_BONUS) {
         int differ = 0, same = 0;
         for (i = 0; i < g->count; i++)
@@ -1809,19 +1802,6 @@ static int by_severity(const void *left, const void *right)
     return (a->first > b->first) - (a->first < b->first);
 }
 
-/* The cards are read in the order the mods were found (mods.c
- * Mods_VisitCards), so a card's claims go in that order before they are
- * decided. */
-static const ModsOverlaps *finding;
-static int by_found(const void *left, const void *right)
-{
-    const Claim *a = left, *b = right;
-    int fa = finding->mods[a->mod].found, fb = finding->mods[b->mod].found;
-    if (fa != fb) return fa < fb ? -1 : 1;
-    if (a->mod != b->mod) return a->mod < b->mod ? -1 : 1;
-    return (a->seq > b->seq) - (a->seq < b->seq);
-}
-
 static void group(ModsOverlaps *x)
 {
     int start = 0, room = 0;
@@ -1844,10 +1824,6 @@ static void group(ModsOverlaps *x)
             g->first = start;
             g->count = i - start;
             g->kind = a->kind;
-            if (g->kind == MODS_OVERLAP_CARDS && CARDS_IN_FOUND_ORDER) {
-                finding = x;
-                qsort(&x->claims[start], (size_t)g->count, sizeof(*x->claims), by_found);
-            }
             decide(x, g);
         }
         start = i;
@@ -2141,8 +2117,7 @@ void Mods_OverlapText(const ModsOverlaps *x, int index, char *out, size_t size)
                  winner);
         break;
     case O_KEYS: {
-        /* Named: which mod's keys are used, which mod's are dropped, and why
-         * the one wins (the order the cards are read in). */
+        /* Named: which mod's keys are used and which mod's are dropped. */
         CardKeys keys;
         char used[400] = "", dropped[1500] = "", from[900] = "";
         card_keys(x, g, &keys);
@@ -2154,12 +2129,10 @@ void Mods_OverlapText(const ModsOverlaps *x, int index, char *out, size_t size)
         if (*keys.used)
             snprintf(used, sizeof(used), "%s's %s %s used", winner, keys.used, strchr(keys.used, ',') ? "are" : "is");
         if (*keys.dropped)
-            snprintf(dropped, sizeof(dropped), "%sthe %s %s gave %s dropped, as %s's replace starts %s from the disc's%s",
+            snprintf(dropped, sizeof(dropped), "%sthe %s %s gave %s dropped, as %s's replace starts %s from the disc's",
                      *used ? " and " : "", keys.dropped, from, strchr(keys.dropped, ',') ? "are" : "is", winner,
-                     strchr(keys.dropped, ',') ? "them" : "it",
-                     strstr(keys.dropped, "name") ? ", though the picture keeps its name plate" : "");
-        snprintf(out, size, "%s (%s): %s%s (%s); the rest combines", label, names, used, dropped,
-                 CARDS_IN_FOUND_ORDER ? "cards are read in folder order, not load order" : "later in load order");
+                     strchr(keys.dropped, ',') ? "them" : "it");
+        snprintf(out, size, "%s (%s): %s%s (later in load order); the rest combines", label, names, used, dropped);
         break;
     }
     case O_BYTES:

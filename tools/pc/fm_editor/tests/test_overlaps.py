@@ -84,8 +84,7 @@ class SameAsTheGame(unittest.TestCase):
         self.assertEqual(texts["menu.spacing"],
                          "menu.spacing (Beta, Gamma): Gamma wins (it loads after Beta on purpose: after/requires)")
         self.assertEqual(texts["Card 'Blue-eyes White Dragon'"],
-                         "Card 'Blue-eyes White Dragon' (Alpha, Beta): Beta's description is used (cards are read in folder "
-                         "order, not load order); "
+                         "Card 'Blue-eyes White Dragon' (Alpha, Beta): Beta's description is used (later in load order); "
                          "the rest combines")
 
     def test_wrong_types_are_nothing(self):
@@ -107,14 +106,14 @@ class SameAsTheGame(unittest.TestCase):
                     self.assertTrue(found.text)
                 overlaps.load_order(mods)
 
-    def test_cards_in_the_order_found(self):
-        # The cards are read in the order the mods were found, not in load
-        # order: "b" loads later but was found first, so "a" has the card.
-        a = overlaps.Mod("a", "A", {"cards": [{"replace": 1, "attack": 100}]}, found=1)
-        b = overlaps.Mod("b", "B", {"cards": [{"replace": 1, "attack": 200}]}, found=0)
+    def test_cards_in_load_order(self):
+        # The cards follow the load order (mods.c Mods_VisitCards); a later
+        # replace that gives no plate drops the earlier's, as it does the name.
+        a = overlaps.Mod("a", "A", {"cards": [{"replace": 1, "attack": 100, "title": "A"}]})
+        b = overlaps.Mod("b", "B", {"cards": [{"replace": 1, "attack": 200}]})
         found = overlaps.check([a, b])
-        self.assertEqual(found[0].text, "Card #1 (B, A): A's attack is used (cards are read in folder order, not load order); "
-                                        "the rest combines")
+        self.assertEqual(found[0].text, "Card #1 (A, B): B's attack is used and the title A gave is dropped, as B's "
+                                        "replace starts it from the disc's (later in load order); the rest combines")
 
     def test_duelists_64(self):
         # 64 duelists in one mod's folder, then one of its list without an
@@ -122,7 +121,7 @@ class SameAsTheGame(unittest.TestCase):
         # (the C engine once lost or freed its list here).
         setup, _ = fixture_mods()
         folder = FIXTURE / "duelists-64"
-        mods = [overlaps.Mod(m, m.upper(), overlaps._read_json(folder / m / "mod.json"), folder / m, found=i)
+        mods = [overlaps.Mod(m, m.upper(), overlaps._read_json(folder / m / "mod.json"), folder / m)
                 for i, m in enumerate(("a", "b", "c"))]
         found = overlaps.check(mods, FixtureSource(setup))
         self.assertEqual([o.text for o in found], [DUELISTS_64])
@@ -133,7 +132,7 @@ class SameAsTheGame(unittest.TestCase):
         # each cut where a letter starts, all in the line.
         escaped = overlaps.parse('"' + chr(92) + 'u00c9clair"')
         names = [escaped] + [f"{m}{0:093d}\u00f1tail" for m in range(1, 6)]
-        mods = [overlaps.Mod(f"m{m}", names[m], {"font": "f.ttf"}, found=m) for m in range(6)]
+        mods = [overlaps.Mod(f"m{m}", names[m], {"font": "f.ttf"}) for m in range(6)]
         found = overlaps.check(mods[:2])
         self.assertEqual(found[0].text, f"Fonts (\ufffdclair, 1{0:093d}): both apply and add up "
                                         "(a letter comes from the first font that has it)")

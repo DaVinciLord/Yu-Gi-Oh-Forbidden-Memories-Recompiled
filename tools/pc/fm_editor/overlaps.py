@@ -35,11 +35,6 @@ INFO, WARNING = 0, 1
 
 SET, ADD, FIXED, BASE, CHAIN, EVENT, FIRST = range(7)
 CARD_COUNT = 722
-# The order the game reads the mods' "cards" in: the order the mods were
-# found, folder by folder and names sorted (mods.c Mods_VisitCards), not the
-# load order every other table follows. False once the cards follow the load
-# order (the one line to change; overlap.c CARDS_IN_FOUND_ORDER).
-CARDS_IN_FOUND_ORDER = True
 ATTACK_TRAP_FIRST, ATTACK_TRAPS = 681, 6
 ALL = ("all",)
 DEFAULT_EQUIP_BONUS = ("default",)
@@ -51,8 +46,9 @@ TYPE_NAMES = ["Dragon", "Spellcaster", "Zombie", "Warrior", "Beast-Warrior", "Be
               "Fairy", "Insect", "Dinosaur", "Reptile", "Fish", "Sea Serpent", "Machine", "Thunder", "Aqua", "Pyro",
               "Rock", "Plant", "Magic", "Trap", "Ritual", "Equip"]
 ATTRIBUTE_NAMES = ["Light", "Dark", "Earth", "Water", "Fire", "Wind"]
-# What a later replace of a card resets, given or not (the plate, "title", is not: cards.c keeps it).
-CARD_RESET_KEYS = ("name", "description", "password", "art", "thumbnail", "field_art", "fusion_groups")
+# What a later replace of a card resets, given or not; the plate ("title") goes with the name.
+CARD_RESET_KEYS = ("name", "description", "password", "art", "thumbnail", "title", "field_art",
+                   "fusion_groups")
 ENTRY_NAMES = ["new_game", "load", "duel", "trade", "options", "campaign", "free_duel", "build_deck", "library",
                "password", "save"]
 NO_BONUS = object()
@@ -379,7 +375,6 @@ class Mod:
     name: str
     manifest: dict
     directory: Path | None = None
-    found: int = 0     # where it was found (folder by folder, names sorted): the cards' reading order
 
 
 @dataclass
@@ -1152,10 +1147,7 @@ class _Check:
             mods = {c.mod for c in claims}
             if len(mods) < 2 or (involving is not None and involving not in mods):
                 continue
-            if kind == CARDS and CARDS_IN_FOUND_ORDER:   # read in the order the mods were found
-                claims.sort(key=lambda c: (self.mods[c.mod].found, c.mod, c.seq))
-            else:
-                claims.sort(key=lambda c: (c.mod, c.seq))
+            claims.sort(key=lambda c: (c.mod, c.seq))
             overlap = Overlap(kind, claims)
             self.decide(overlap)
             overlap.label = self.label(overlap)
@@ -1254,8 +1246,6 @@ class _Check:
                 o.outcome, o.severity = ("agree" if met else "add"), INFO
                 return
             o.outcome = "keys"
-            if CARDS_IN_FOUND_ORDER:
-                return   # an "after" is load order: the cards do not follow it
         elif o.kind == EQUIPS and c[last].key != DEFAULT_EQUIP_BONUS:
             differ = same = False
             for i in range(len(c)):
@@ -1480,10 +1470,8 @@ class _Check:
                 gave = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
                 said += f"{' and ' if said else ''}the {dropped_words} {gave} gave " \
                         f"{'are' if ',' in dropped_words else 'is'} dropped, as {winner}'s replace starts " \
-                        f"{'them' if ',' in dropped_words else 'it'} from the disc's" \
-                        f"{', though the picture keeps its name plate' if 'name' in dropped_words else ''}"
-            why = "cards are read in folder order, not load order" if CARDS_IN_FOUND_ORDER else "later in load order"
-            return head + f"{said} ({why}); the rest combines"
+                        f"{'them' if ',' in dropped_words else 'it'} from the disc's"
+            return head + f"{said} (later in load order); the rest combines"
         if o.outcome == "bytes":
             return head + f"{winner}'s bytes are read where they patch the same ones"
         if o.outcome == "patched":
@@ -1694,11 +1682,7 @@ def installed(folders) -> list:
             here.add(mid)
             mod = Mod(mid, manifest.get("name") if isinstance(manifest.get("name"), str) else mid, manifest,
                       Path(folder) / name)
-            if mid in found:
-                mod.found = found[mid].found
-            else:
-                mod.found = len(found)
-            found[mid] = mod
+            found[mid] = mod   # a later folder's copy keeps the earlier's place
     return list(found.values())
 
 
