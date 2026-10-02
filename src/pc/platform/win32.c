@@ -466,6 +466,8 @@ void Win32_GuardStack(uintptr_t low, unsigned room)
 {
     DWORD old;
     guard_page = low + room;
+    /* AV test (av/no-runtime-code, not for merging): no VirtualProtect. */
+    if (1) { (void)old; guard_page = 0; return; }
     if (!VirtualProtect((void *)guard_page, 4096, PAGE_READWRITE | PAGE_GUARD, &old)) guard_page = 0;
 }
 
