@@ -3,7 +3,7 @@ the game's random seed"). A pack is bought from a state, the state is loaded
 again in the same game, and the same pack is bought with the same presses:
 it must deal the same cards. Before the fix the seed was not in the state,
 so the second purchase dealt other cards. The pack is test_packs.py's test
-mod, made in the run's folder; the opening is that test's own input."""
+mod, made in the run's folder; the Password screen is reached with goto."""
 import struct
 import sys
 from pathlib import Path
@@ -27,9 +27,9 @@ def buy(game):
 def run(executable, out):
     (out / "mods").mkdir(parents=True, exist_ok=True)
     packs.make_mod(out / "mods")
-    with Game(executable, out=out / "game", settings=SETTINGS, mods_dir=out / "mods",
-              env={"MEMORIES_INPUT": packs.OPENING, "MEMORIES_MODE_AT": "1000:10"}) as game:
-        game.wait_until(lambda g: g.frame >= packs.SCREEN, 3000)   # the Password screen, with the pack shop
+    with Game(executable, out=out / "game", settings=SETTINGS, mods_dir=out / "mods") as game:
+        game.goto("password")   # the Password screen, with the pack shop
+        game.step(300)
         game.poke("gLibrary_dwStarchips", struct.pack("<I", 1000))
         before = game.peek(packs.CHEST + 1, 722)
         game.save("rich.state")

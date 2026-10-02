@@ -293,6 +293,9 @@ def play_scripted(replay: Replay, executable: Path, out: Path) -> bool:
     except AssertionError as failure:
         print(f"replay: {replay.name}: FAILED: {failure}")
         return False
+    except Exception as failure:   # the scenario could not run on this build
+        print(f"replay: {replay.name}: FAILED to run: {type(failure).__name__}: {failure}")
+        return False
     print(f"replay: {replay.name}: passed")
     return True
 

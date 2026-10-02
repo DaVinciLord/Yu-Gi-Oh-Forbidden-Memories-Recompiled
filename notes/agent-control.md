@@ -374,7 +374,13 @@ If the API cannot express these cleanly, the API is wrong.
   story duel had Simon attack Kuriboh; in a free duel he does not, so
   Kuriboh attacks his monster instead; and the ritual's guardian star is
   asked during the card's use, which the actions now answer.
-- **`test_packs.py`:** see below.
+- **`test_packs.py`:** rewritten on the client: the Password screen by
+  `goto`, the starchips and the owned cards poked in place of a state
+  patched offline, each purchase from the same state loaded in the same
+  game, the checks read as data, the resumed purchase in a second game and
+  the no-mod case in a third. The same nineteen checks pass, in 16 s
+  against 54 s for the old one (fifteen processes) on the same build; 265
+  lines against 279, most of both being the mod it makes.
 - **A real recent bug:** `tests/pc/replays/state-load-rng` (step 4) fails on
   this branch without the random-seed fix and passes with it.
 
