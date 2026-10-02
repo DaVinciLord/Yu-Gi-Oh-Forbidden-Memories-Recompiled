@@ -72,7 +72,9 @@ object into `<build>/mods/<mod>/` when the copy there differs. Worktrees share
 never by time: `tmp/pc/mod-build/<mod>-<key>/<library>`, where the key is a
 SHA-256 of the compiler and linker files (name, size, time, as ccache's
 `compiler_check=mtime`), the flags with the checkout's root spelled
-`<root>`, `build_mod.py` (line ends normalized) and each source after the
+`<root>`, the environment variables the compiler takes include directories
+or options from (`CPATH`, `C_INCLUDE_PATH`, `CCC_OVERRIDE_OPTIONS`, ...),
+`build_mod.py` (line ends normalized) and each source after the
 preprocessor with the file names taken out of its line markers. So every
 header a source includes is in it, from wherever it comes, and two checkouts
 share an object exactly when they would build the same one (it then carries

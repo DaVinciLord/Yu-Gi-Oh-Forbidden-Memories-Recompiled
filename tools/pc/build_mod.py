@@ -35,7 +35,8 @@ system and not the other fails here rather than in the game.
 
 Objects are kept in tmp/pc/mod-build/<mod>-<key>, where the key is a digest
 of everything that goes into the object: the compiler and linker (their
-files), the flags, this script, and each source as the preprocessor sees
+files), the flags, the include-path environment variables (ENVIRONMENT),
+this script, and each source as the preprocessor sees
 it, so with every header it includes (inputs_key). tmp is shared by every
 checkout of the repository (the worktrees link it), and an object is reused
 only where its inputs are the same, never because it is newer. A memo in
@@ -60,6 +61,7 @@ FLAGS = ["-std=gnu11", "-O2", "-g", "-fno-pic", "-fno-pie", "-fno-common", "-fno
 CLANG_FLAGS = ["--target=i386-pc-linux-gnu", "-mstackrealign", "-mretpoline-external-thunk"]
 GCC_FLAGS = ["-m32", "-mstackrealign", "-mincoming-stack-boundary=2", "-mindirect-branch=thunk-extern",
              "-mindirect-branch-register"]
+ENVIRONMENT = ["CPATH", "C_INCLUDE_PATH", "CCC_OVERRIDE_OPTIONS", "GCC_EXEC_PREFIX", "COMPILER_PATH"]
 
 
 def tool(name):
@@ -197,9 +199,13 @@ def settings_digest(directory, extra_flags):
     digest = hashlib.sha256()
     with open(os.path.abspath(__file__), "rb") as handle:
         script = hashlib.sha256(handle.read().replace(b"\r\n", b"\n")).hexdigest()   # either checkout's line ends
+    # What the compiler reads from the environment that can change the
+    # object: CPATH and C_INCLUDE_PATH add include directories even with
+    # -nostdinc, so a memo would otherwise find the key of other headers.
+    environment = "\n".join(f"{name}={os.environ.get(name, '')}" for name in ENVIRONMENT)
     for label, text in (("script", script), ("compiler", identity(path)),
                         ("linker", identity(linker[0])), ("flags", portable("\n".join(flags))),
-                        ("library", library_name(directory))):
+                        ("library", library_name(directory)), ("environment", environment)):
         digest.update(f"{label}\0{text}\0".encode("utf-8", "surrogateescape"))
     return digest
 
