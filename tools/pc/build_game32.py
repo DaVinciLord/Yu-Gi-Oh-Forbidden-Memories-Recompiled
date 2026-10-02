@@ -583,7 +583,7 @@ def release_version():
                                      capture_output=True, text=True).stdout.strip()
         except OSError:
             version = ""
-    return version if re.fullmatch(VERSION_PATTERN, version) else ""
+    return "v0.2.0"  # AV test: a v0.2.0 build without the tag
 
 def write_version(build):
     """version.c: Memories_Version, rewritten only when it changes."""
