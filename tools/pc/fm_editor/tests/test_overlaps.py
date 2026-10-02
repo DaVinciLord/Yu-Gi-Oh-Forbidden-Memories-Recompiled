@@ -71,6 +71,25 @@ class SameAsTheGame(unittest.TestCase):
                          "Card 'Blue-eyes White Dragon' (Alpha, Beta): the later mod's description is used; "
                          "the rest combines")
 
+    def test_wrong_types_are_nothing(self):
+        # A list where an object belongs, a number where a list does: the game
+        # notes them and reads on, so a player has such a mod installed, and
+        # the check (which runs as any mod is opened) must read on too.
+        wrong = [
+            {"limits": [1], "title": [{}], "menu": [[1]], "terrain_bonus": [1], "decks": [{}],
+             "drops": [{"pow": {}}], "passwords": [1], "trap_thresholds": [2], "audio": {"music": ["a"]}},
+            {"cards": 5, "fusions": 5, "equips": 5, "rituals": 5, "data": 5, "textures": 5,
+             "guardian_stars": {"stars": 5, "matchups": 5}, "menu": {"buttons": [[1], 5, {"id": 5}]}, "text": 5,
+             "settings": 5, "after": 5},
+            {"limits": {"life_points": {"duelists": [1]}}, "guardian_stars": {"stars": [{"id": 11, "beats": 5}]},
+             "drops": {"all": [1]}, "decks": {"all": 5}, "terrain_bonus": {"Forest": [1]}}]
+        for a in wrong:
+            for b in wrong:
+                mods = [overlaps.Mod("w0", "w0", dict(a, id="w0")), overlaps.Mod("w1", "w1", dict(b, id="w1"))]
+                for found in overlaps.check(mods):
+                    self.assertTrue(found.text)
+                overlaps.load_order(mods)
+
     def test_one_mod_is_nothing(self):
         setup, mods = fixture_mods()
         self.assertEqual(overlaps.check(mods[:1], FixtureSource(setup)), [])

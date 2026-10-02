@@ -409,6 +409,10 @@ def errors(issues) -> list:
 
 # --- the other installed mods ------------------------------------------------------
 
+def overlaps_list(value) -> list:
+    return value if isinstance(value, list) else []
+
+
 class _ProjectSource:
     """overlaps.Source for the editor: the cards and opponents of the game the
     editor read, and the mods' settings as the port's settings file has them."""
@@ -431,7 +435,7 @@ class _ProjectSource:
         return duelist_named(text)
 
     def setting(self, mod, key):
-        for spec in mod.manifest.get("settings") or []:
+        for spec in overlaps_list(mod.manifest.get("settings")):
             if isinstance(spec, dict) and spec.get("key") == key:
                 return self.settings.get(f"mod.{mod.id}.{key}", spec.get("default", 0))
         return None

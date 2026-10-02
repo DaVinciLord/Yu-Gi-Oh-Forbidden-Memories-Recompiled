@@ -47,6 +47,17 @@ def canonical(value) -> str:
     return json.dumps(value, separators=(",", ":"), ensure_ascii=False)
 
 
+def _list(value) -> list:
+    """A list where the game's readers take only a list; anything else (they
+    note it and leave it out) is nothing."""
+    return value if isinstance(value, list) else []
+
+
+def _obj(value) -> dict:
+    """The same for an object."""
+    return value if isinstance(value, dict) else {}
+
+
 def is_digits(text) -> bool:
     return isinstance(text, str) and text != "" and text.isascii() and text.isdigit()
 
@@ -106,7 +117,7 @@ class Source:
 
     def setting(self, mod: Mod, key: str):
         """The mod's setting `key`, or None when it declares none."""
-        for spec in mod.manifest.get("settings") or []:
+        for spec in _list(mod.manifest.get("settings")):
             if isinstance(spec, dict) and spec.get("key") == key:
                 return spec.get("default", 0)
         return None
@@ -150,7 +161,7 @@ class _Check:
         self.declared = set()
         for w, mod in enumerate(mods):
             for key in ("after", "requires"):
-                for v in mod.manifest.get(key) or []:
+                for v in _list(mod.manifest.get(key)):
                     target = v if isinstance(v, str) else v.get("id", "") if isinstance(v, dict) else ""
                     for o, other in enumerate(mods):
                         if other.id == target:
@@ -239,7 +250,7 @@ class _Check:
     # --- the kinds -----------------------------------------------------------
 
     def read_data(self, mod):
-        for entry in self.member(mod, "data") or []:
+        for entry in _list(self.member(mod, "data")):
             if not isinstance(entry, dict):
                 continue
             file, lba = entry.get("file"), _json_number(entry.get("lba"), -1)
@@ -255,7 +266,7 @@ class _Check:
     def read_audio(self, mod):
         audio = self.member(mod, "audio")
         for k, kind in enumerate(("music", "xa", "sfx")):
-            for name, value in ((audio or {}).get(kind) or {}).items():
+            for name, value in _obj(_obj(audio).get(kind)).items():
                 try:
                     number = int(name[2:], 16) if name[:2].lower() == "0x" else int(name, 10)
                 except ValueError:
@@ -267,7 +278,7 @@ class _Check:
         folder = self.member(mod, "textures")
         if not isinstance(folder, str):
             return
-        for entry in self.mod_file(mod, f"{folder}/manifest.json") or []:
+        for entry in _list(self.mod_file(mod, f"{folder}/manifest.json")):
             if not isinstance(entry, dict) or not self.switched_on(mod, entry):
                 continue
             clut = _json_number(entry.get("clut_entries"), 0)
@@ -278,11 +289,11 @@ class _Check:
 
     def any_identity_replace(self) -> bool:
         return any(isinstance(e, dict) and isinstance(e.get("replace"), str) and ":" in e["replace"]
-                   for m in self.mods for e in (m.manifest.get("cards") or []))
+                   for m in self.mods for e in _list(m.manifest.get("cards")))
 
     def read_cards(self, mod, identities):
         own = self.mods[mod].id
-        for index, entry in enumerate(self.member(mod, "cards") or []):
+        for index, entry in enumerate(_list(self.member(mod, "cards"))):
             if not isinstance(entry, dict):
                 continue
             if "replace" in entry:
@@ -301,7 +312,7 @@ class _Check:
                     self.claim(CARDS, mod, self.card_text(identity), BASE, 0, entry, f"Card '{identity[:40]}'")
 
     def read_fusions(self, mod):
-        for rule in self.member(mod, "fusions") or []:
+        for rule in _list(self.member(mod, "fusions")):
             if not isinstance(rule, dict) or not self.switched_on(mod, rule):
                 continue
             if "remove" in rule:
@@ -319,7 +330,7 @@ class _Check:
             self.claim(FUSIONS, mod, ("pair",) + pair, SET, self.card_key(rule["result"]) or 0, rule)
 
     def read_equips(self, mod):
-        for entry in self.member(mod, "equips") or []:
+        for entry in _list(self.member(mod, "equips")):
             if not isinstance(entry, dict):
                 continue
             key = self.card_key(entry.get("card"))
@@ -330,7 +341,7 @@ class _Check:
             self.claim(EQUIPS, mod, DEFAULT_EQUIP_BONUS, SET, canonical(bonus), bonus)
 
     def read_rituals(self, mod):
-        for entry in self.member(mod, "rituals") or []:
+        for entry in _list(self.member(mod, "rituals")):
             if not isinstance(entry, dict):
                 continue
             key = self.card_key(entry.get("card"))
@@ -407,7 +418,7 @@ class _Check:
             self.star_names.setdefault(letters(STAR_RETAIL[i]), i)
         for mod in self.mods:
             section = mod.manifest.get("guardian_stars")
-            for s in (section.get("stars") or []) if isinstance(section, dict) else []:
+            for s in _list(_obj(section).get("stars")):
                 if not isinstance(s, dict):
                     continue
                 sid = _json_number(s.get("id"), -1)
@@ -451,7 +462,7 @@ class _Check:
         if "choice" in section:
             self.claim(STARS, mod, ("scalar", 2), SET, letters(section["choice"]) if isinstance(section["choice"], str)
                        else "", section["choice"])
-        for s in section.get("stars") or []:
+        for s in _list(section.get("stars")):
             if not isinstance(s, dict):
                 continue
             sid = _json_number(s.get("id"), -1)
@@ -461,11 +472,11 @@ class _Check:
                 if name in s:
                     self.claim(STARS, mod, ("star", sid, f + 1), SET,
                                ("own", mod) if f == 1 else canonical(s[name]), s[name])
-            for t in s.get("beats") or []:
+            for t in _list(s.get("beats")):
                 other = self.star_of(t)
                 self.star_pair(mod, sid, other, bonus, t)
                 self.star_pair(mod, other, sid, -bonus, t)
-        for m in section.get("matchups") or []:
+        for m in _list(section.get("matchups")):
             if not isinstance(m, dict):
                 continue
             a, d = self.star_of(m.get("attacker")), self.star_of(m.get("defender"))
@@ -838,7 +849,7 @@ class _Check:
             return STAR_RETAIL[star]
         for mod in self.mods:
             section = mod.manifest.get("guardian_stars")
-            for s in (section.get("stars") or []) if isinstance(section, dict) else []:
+            for s in _list(_obj(section).get("stars")):
                 if not isinstance(s, dict) or _json_number(s.get("id"), -1) != star:
                     continue
                 name = s.get("name")
@@ -897,7 +908,8 @@ class _Check:
         head = f"{o.label} ({names}): "
         distinct = len({c.mod for c in o.claims})
         if o.outcome == "later":
-            return head + f"{winner} wins (later in load order{', through its \"all\"' if via else ''})"
+            through = ', through its "all"' if via else ''
+            return head + f"{winner} wins (later in load order{through})"
         if o.outcome == "after":
             return head + f"{winner} wins (it loads after {other} on purpose: after/requires)"
         if o.outcome == "agree":
@@ -1023,7 +1035,7 @@ def load_order(mods: list, settings: dict = None) -> list:
             if m.id in done:
                 continue
             waits = [v if isinstance(v, str) else v.get("id") if isinstance(v, dict) else None
-                     for k in ("requires", "after") for v in (m.manifest.get(k) or [])]
+                     for k in ("requires", "after") for v in _list(m.manifest.get(k))]
             if any(w in ids and w not in done for w in waits):
                 continue
             rank = settings.get(f"mod.{m.id}.order", _json_number(m.manifest.get("priority"), 0))

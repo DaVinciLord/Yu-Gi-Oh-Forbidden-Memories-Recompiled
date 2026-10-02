@@ -1627,8 +1627,8 @@ class ConflictsTab(Tab):
             from pathlib import Path
             folders = [Path(self.other_folder)] if self.other_folder else None
             others, said = validate.cross_mod(self.project, folders)
-        except (OSError, ValueError) as problem:     # an unreadable folder: say so, keep the rest
-            others, said = [], f"The other mods could not be read: {problem}"
+        except Exception as problem:   # noqa: BLE001 -- never let another mod stop this one opening
+            others, said = [], f"The other mods could not be checked: {type(problem).__name__}: {problem}"
         self.issues += others
         self.others.configure(text=said)
         self.tree.delete(*self.tree.get_children())
