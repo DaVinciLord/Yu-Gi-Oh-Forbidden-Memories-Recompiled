@@ -102,6 +102,11 @@ nothing when played unless `effect` names the card whose effect it takes
 `equips` in the [gameplay tables](gameplay-tables.md). `model` and `effect`
 work the same on a card that stays on its side.
 
+A trap card springs as the trap its `effect` names (`"effect": "Bear Trap"`,
+stopping the attacks `trap_thresholds` gives Bear Trap), else as its own. A
+card made anything but a trap springs as no trap, even one that was a trap on
+the disc.
+
 A card that changes kind (monster, magic, trap, ritual or equip) leaves the
 disc's fusion and equip tables, which describe the card it was: it fuses and
 equips only by the mods' own rules, and no disc recipe makes it. Otherwise the

@@ -83,8 +83,9 @@ s32 Duel_SelectAttackTrap(u8 *p) {
             DUEL_CARD_RECORD_SIZE + (s32)rec2);
         if ((e->flags & DUEL_CARD_FLAG_OCCUPIED) != 0) {
 #ifdef MEMORIES_PC
-            /* A copy of a trap springs as the trap. */
-            id = (u16)Cards_BaseId(e->card_id);
+            /* A copy of a trap springs as the trap, a trap whose "effect"
+               names one as that one (cards.h Cards_TrapId). */
+            id = (u16)Cards_TrapId(e->card_id);
 #else
             id = (u16)e->card_id;
 #endif
@@ -155,7 +156,7 @@ s32 Duel_SelectAttackTrap(u8 *p) {
             DUEL_CARD_RECORD_SIZE + (s32)rec3);
         if ((e->flags & DUEL_CARD_FLAG_OCCUPIED) != 0) {
 #ifdef MEMORIES_PC
-            v = Cards_BaseId(e->card_id);
+            v = Cards_TrapId(e->card_id);
 #else
             v = e->card_id;
 #endif

@@ -32,8 +32,9 @@ s32 Duel_SelectTrapByCardId(s32 arg0)
         record = &D_801A7AD8[D_800907D8[i + base]];
         if (record->flags & DUEL_CARD_FLAG_OCCUPIED) {
 #ifdef MEMORIES_PC
-            /* A copy of the trap springs as the trap. */
-            if (Cards_BaseId((s16)record->card_id) == arg0) {
+            /* A copy of the trap springs as the trap, a trap whose
+               "effect" names it as it (cards.h Cards_TrapId). */
+            if (Cards_TrapId((s16)record->card_id) == arg0) {
 #else
             if ((s16) record->card_id == arg0) {
 #endif

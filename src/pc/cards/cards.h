@@ -45,6 +45,10 @@ const char *Cards_Identity(int id);
 int Cards_FindIdentity(const char *identity);
 int Cards_ModelId(int id);
 int Cards_EffectId(int id);
+/* The trap a card set on the field springs as: a trap card's effect (its
+ * own, its base's or the one "effect" names), 0 for a card of another type,
+ * which springs as none even where it was a trap on the disc. */
+int Cards_TrapId(int id);
 /* The type a card has on the disc, which is what its effect is; -1 past the disc. */
 int Cards_RetailType(int id);
 /* Nonzero for a card a mod's "replace" made another kind of card than its
