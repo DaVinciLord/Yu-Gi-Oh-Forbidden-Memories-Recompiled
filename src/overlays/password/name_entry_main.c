@@ -22,6 +22,13 @@
    a mod name the cards costs. Cards_MarkSeen rather than the Library's flag
    directly: a card a mod added sits past the range those flags cover, and is
    remembered beside them (cards.c). */
+/* The game's own generator, handed to Starter_DealPools so the numbers a new
+ * game spends stay the ones the game spends. */
+static unsigned NameEntry_StarterRandom(void)
+{
+    return (unsigned)rand();
+}
+
 static s32 NameEntry_DealModStarterDeck(void)
 {
     unsigned short cards[STARTER_DECK_SIZE];
@@ -30,9 +37,12 @@ static s32 NameEntry_DealModStarterDeck(void)
     s32 i;
 
     if (total == 0) {
-        return 0;
-    }
-    if (!Starter_Deck(Starter_Roll((unsigned)rand()), cards, 0)) {
+        /* No deck written down: a mod may still weight its own pools, which
+         * the disc's rows cannot do for a card a mod added (starter.h). */
+        if (!Starter_DealPools(NameEntry_StarterRandom, cards)) {
+            return 0;
+        }
+    } else if (!Starter_Deck(Starter_Roll((unsigned)rand()), cards, 0)) {
         return 0;
     }
     out = (s16 *)gDuel_awPlayerDeck;

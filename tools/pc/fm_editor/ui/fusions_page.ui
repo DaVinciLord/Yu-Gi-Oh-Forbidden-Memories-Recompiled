@@ -39,7 +39,7 @@
          <item>
           <widget class="QLabel" name="muted">
            <property name="text">
-            <string>Search and edit card fusion outcomes.</string>
+            <string>Search and edit card fusion outcomes. A pair fuses the same in either order. Rows in brown are the retail table's “glitch” fusions.</string>
            </property>
            <property name="wordWrap">
             <bool>true</bool>
@@ -61,7 +61,6 @@
           <item>
            <widget class="QRadioButton" name="fusionSearchMaterialsRadio">
             <property name="text"><string>Materials</string></property>
-            <property name="checked"><bool>true</bool></property>
            </widget>
           </item>
           <item>
@@ -72,6 +71,7 @@
           <item>
            <widget class="QRadioButton" name="fusionSearchBothRadio">
             <property name="text"><string>Both</string></property>
+            <property name="checked"><bool>true</bool></property>
            </widget>
           </item>
           <item>

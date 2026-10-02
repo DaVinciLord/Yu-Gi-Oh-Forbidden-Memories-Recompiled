@@ -30,7 +30,7 @@
    <item>
     <widget class="QLabel" name="pageSummaryLabel">
      <property name="text">
-      <string>Edit mod identity, settings, and preserved manifest data.</string>
+      <string>Who the mod is by, what the Mods window shows of it, and every mod.json key the editor's own pages do not write.</string>
      </property>
      <property name="wordWrap">
       <bool>true</bool>
@@ -66,7 +66,7 @@
      <item row="1" column="1">
       <widget class="QLineEdit" name="modNameEdit">
        <property name="placeholderText">
-        <string />
+        <string>what the Mods window shows</string>
        </property>
       </widget>
      </item>
@@ -80,7 +80,7 @@
      <item row="2" column="1">
       <widget class="QLineEdit" name="modVersionEdit">
        <property name="placeholderText">
-        <string />
+        <string>1.0</string>
        </property>
       </widget>
      </item>
@@ -106,34 +106,95 @@
       </widget>
      </item>
      <item row="4" column="1">
-      <widget class="QPlainTextEdit" name="modDescriptionEdit" />
-     </item>
-     <item row="5" column="0">
-      <widget class="QLabel" name="modSettingsEditLabel">
-       <property name="text">
-        <string>Settings (JSON list)</string>
+      <widget class="QPlainTextEdit" name="modDescriptionEdit">
+       <property name="maximumHeight">
+        <number>96</number>
        </property>
       </widget>
-     </item>
-     <item row="5" column="1">
-      <widget class="QPlainTextEdit" name="modSettingsEdit" />
-     </item>
-     <item row="6" column="0">
-      <widget class="QLabel" name="modOtherEditLabel">
-       <property name="text">
-        <string>Other mod.json data (JSON object)</string>
-       </property>
-      </widget>
-     </item>
-     <item row="6" column="1">
-      <widget class="QPlainTextEdit" name="modOtherEdit" />
      </item>
     </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="modInfoBoxes">
+     <property name="spacing">
+      <number>10</number>
+     </property>
+     <item>
+      <widget class="QFrame" name="modSettingsPanel">
+       <layout class="QVBoxLayout" name="modSettingsPanelLayout">
+        <item>
+         <widget class="QLabel" name="modSettingsEditLabel">
+          <property name="text">
+           <string>Settings</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="modSettingsHint">
+          <property name="text">
+           <string>A JSON list of the settings the Mods window offers; see notes/modding.md.</string>
+          </property>
+          <property name="wordWrap">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPlainTextEdit" name="modSettingsEdit">
+          <property name="lineWrapMode">
+           <enum>QPlainTextEdit::NoWrap</enum>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <widget class="QFrame" name="modOtherPanel">
+       <layout class="QVBoxLayout" name="modOtherPanelLayout">
+        <item>
+         <widget class="QLabel" name="modOtherEditLabel">
+          <property name="text">
+           <string>Other mod.json keys</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="modOtherHint">
+          <property name="text">
+           <string>A JSON object, kept as written: data, text, textures, audio, requires… The keys the editor's own pages write are not shown here and are left alone.</string>
+          </property>
+          <property name="wordWrap">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPlainTextEdit" name="modOtherEdit">
+          <property name="lineWrapMode">
+           <enum>QPlainTextEdit::NoWrap</enum>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="modFolderLabel">
+     <property name="text">
+      <string />
+     </property>
+    </widget>
    </item>
    <item>
     <widget class="QLabel" name="modInfoStatusLabel">
      <property name="text">
       <string />
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
      </property>
     </widget>
    </item>
@@ -152,6 +213,19 @@
         <string>Preview mod.json</string>
        </property>
       </widget>
+     </item>
+     <item>
+      <spacer name="modInfoActionSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
      </item>
     </layout>
    </item>

@@ -30,7 +30,7 @@
    <item>
     <widget class="QLabel" name="pageSummaryLabel">
      <property name="text">
-      <string>Review errors and warnings before saving.</string>
+      <string>Review errors and warnings before saving. Double-click a line to go to it.</string>
      </property>
      <property name="wordWrap">
       <bool>true</bool>
@@ -74,6 +74,19 @@
         <string>Check mod</string>
        </property>
       </widget>
+     </item>
+     <item>
+      <spacer name="problemActionSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
      </item>
     </layout>
    </item>

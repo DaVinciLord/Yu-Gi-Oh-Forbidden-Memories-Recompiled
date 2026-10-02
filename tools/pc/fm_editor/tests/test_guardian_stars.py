@@ -11,6 +11,7 @@ against the same files, so the editor and the game agree on every pair.
 """
 import copy
 import json
+import struct
 import unittest
 from pathlib import Path
 
@@ -394,3 +395,36 @@ class GuardianStarsTabTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DiscIconTest(unittest.TestCase):
+    """The disc's ten symbols, out of the boot UI sheet in WA_MRG.MRG."""
+
+    def test_each_symbol_is_sixteen_square_and_partly_clear(self):
+        wa = bytearray(0xB70000)
+        # A CLUT whose entry 1 is white, and one row of the Mars tile set to it.
+        struct.pack_into("<16H", wa, gs.ICON_CLUT, *([0] + [0xFFFF] * 15))
+        start = gs.ICON_SHEET + 3 * gs.ICON_STRIDE
+        wa[start:start + 8] = bytes([0x11] * 8)
+        found = gs.disc_icon(bytes(wa), 1)
+        self.assertIsNotNone(found)
+        width, height, rgba = found
+        self.assertEqual((width, height), (gs.ICON_SIDE, gs.ICON_SIDE))
+        self.assertEqual(len(rgba), gs.ICON_SIDE * gs.ICON_SIDE * 4)
+        row3 = rgba[3 * 16 * 4:4 * 16 * 4]
+        self.assertEqual(set(row3[3::4]), {255})            # that row is opaque
+        self.assertEqual(set(rgba[:16 * 4][3::4]), {0})     # row 0 is clear
+
+    def test_the_ten_symbols_sit_where_the_sheet_puts_them(self):
+        self.assertEqual(len(gs.ICON_SPOTS), gs.RETAIL_COUNT)
+        self.assertEqual(gs.ICON_SPOTS[0], (0, 0))
+        self.assertEqual(gs.ICON_SPOTS[7], (112, 0))        # Sun ends the first run
+        self.assertEqual(gs.ICON_SPOTS[8], (0, 16))         # Moon starts the second
+        self.assertEqual(gs.ICON_SPOTS[9], (16, 16))
+
+    def test_a_star_without_a_symbol_gives_none(self):
+        wa = bytes(0xB70000)
+        for star in (0, -1, gs.RETAIL_COUNT + 1, gs.MAX_STARS):
+            self.assertIsNone(gs.disc_icon(wa, star), star)
+        self.assertIsNone(gs.disc_icon(None, 1))
+        self.assertIsNone(gs.disc_icon(b"short", 1))

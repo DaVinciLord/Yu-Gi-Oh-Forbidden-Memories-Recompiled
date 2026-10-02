@@ -87,7 +87,8 @@ def build_parser():
     parser = argparse.ArgumentParser(prog="fm_editor", description="FM Editor: mods for the Forbidden Memories port")
     parser.add_argument("--game", help="the game: a folder with SLUS_014.11 and DATA/WA_MRG.MRG, or the .bin")
     parser.add_argument("--mod", help="a mod folder to open")
-    parser.add_argument("--modern", action="store_true", help="open the modern PySide6 interface (Cards first)")
+    parser.add_argument("--classic", action="store_true",
+                        help="the old Tk window instead of the Qt one")
     commands = parser.add_subparsers(dest="command")
     check = commands.add_parser("check", help="validate a mod folder against the retail tables")
     check.add_argument("mod")
@@ -110,8 +111,31 @@ def main(argv=None) -> int:
         return command_check(arguments)
     if arguments.command == "import":
         return command_import(arguments)
-    if arguments.modern:
-        from .pyside_app import main as window
-        return window(arguments.game, arguments.mod)
+    return command_window(arguments)
+
+
+def say_no_qt(problem):
+    """The Qt window is not to be had: say so where it can be read.
+
+    A released editor is built windowed, so nothing printed here reaches
+    anyone; and telling somebody to pip install into a program that carries
+    its own Python helps no one. There the old window simply opens."""
+    if getattr(sys, "frozen", False):
+        return
+    print(f"PySide6 is not installed ({problem}); opening the old window instead.\n"
+          f"    python -m pip install PySide6\n"
+          f"brings the new one back; --classic keeps this one.", file=sys.stderr)
+
+
+def command_window(arguments) -> int:
+    """The editor window: the Qt one, or the Tk one for --classic and where
+    PySide6 is not installed."""
+    if not arguments.classic:
+        try:
+            from .pyside_app import main as window
+        except ImportError as problem:
+            say_no_qt(problem)
+        else:
+            return window(arguments.game, arguments.mod)
     from .app import main as window
     return window(arguments.game, arguments.mod)

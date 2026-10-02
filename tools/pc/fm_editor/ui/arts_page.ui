@@ -158,6 +158,18 @@
         </widget>
        </item>
        <item>
+        <widget class="QLabel" name="texturePackStatusLabel">
+         <property name="text"><string>Texture pack: none configured</string></property>
+         <property name="wordWrap"><bool>true</bool></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="artInstructionsLabel">
+         <property name="text"><string /></property>
+         <property name="wordWrap"><bool>true</bool></property>
+        </widget>
+       </item>
+       <item>
         <widget class="QScrollArea" name="artPartsScroll">
          <property name="widgetResizable">
           <bool>true</bool>
@@ -245,7 +257,7 @@
                <item>
                 <widget class="QGroupBox" name="pictureGameGroup">
                  <property name="title">
-                  <string>In-game preview</string>
+                  <string>In game (1×)</string>
                  </property>
                  <layout class="QVBoxLayout" name="pictureGameLayout">
                   <item alignment="Qt::AlignmentFlag::AlignHCenter">
@@ -281,6 +293,30 @@
                     <property name="wordWrap">
                      <bool>true</bool>
                     </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <item>
+                <widget class="QGroupBox" name="pictureInternalGroup">
+                 <property name="title">
+                  <string>Internal 2×</string>
+                 </property>
+                 <layout class="QVBoxLayout" name="pictureInternalLayout">
+                  <item alignment="Qt::AlignmentFlag::AlignHCenter">
+                   <widget class="QLabel" name="pictureInternalPreview">
+                    <property name="minimumSize"><size><width>1</width><height>1</height></size></property>
+                    <property name="maximumSize"><size><width>408</width><height>384</height></size></property>
+                    <property name="text"><string>Internal rendering</string></property>
+                    <property name="alignment"><set>Qt::AlignmentFlag::AlignCenter</set></property>
+                   </widget>
+                  </item>
+                  <item alignment="Qt::AlignmentFlag::AlignHCenter">
+                   <widget class="QLabel" name="pictureInternalInfo">
+                    <property name="text"><string>What the game draws at Internal 2×</string></property>
+                    <property name="alignment"><set>Qt::AlignmentFlag::AlignCenter</set></property>
+                    <property name="wordWrap"><bool>true</bool></property>
                    </widget>
                   </item>
                  </layout>
@@ -347,64 +383,7 @@
                  <property name="bottomMargin">
                   <number>0</number>
                  </property>
-                 <item>
-                  <layout class="QHBoxLayout" name="pictureScaleControlLayout">
-                   <property name="spacing">
-                    <number>4</number>
-                   </property>
-                   <property name="leftMargin">
-                    <number>0</number>
-                   </property>
-                   <property name="topMargin">
-                    <number>0</number>
-                   </property>
-                   <property name="rightMargin">
-                    <number>0</number>
-                   </property>
-                   <property name="bottomMargin">
-                    <number>0</number>
-                   </property>
-                   <item>
-                    <widget class="QPushButton" name="pictureScale1Button">
-                     <property name="text">
-                      <string>1×</string>
-                     </property>
-                     <property name="checkable">
-                      <bool>true</bool>
-                     </property>
-                     <property name="checked">
-                      <bool>true</bool>
-                     </property>
-                    </widget>
-                   </item>
-                   <item>
-                    <widget class="QPushButton" name="pictureScale2Button">
-                     <property name="text">
-                      <string>2×</string>
-                     </property>
-                     <property name="checkable">
-                      <bool>true</bool>
-                     </property>
-                     <property name="checked">
-                      <bool>false</bool>
-                     </property>
-                    </widget>
-                   </item>
-                   <item>
-                    <widget class="QPushButton" name="pictureScale4Button">
-                     <property name="text">
-                      <string>4×</string>
-                     </property>
-                     <property name="checkable">
-                      <bool>true</bool>
-                     </property>
-                     <property name="checked">
-                      <bool>false</bool>
-                     </property>
-                    </widget>
-                   </item>
-                  </layout>
-                 </item>
+                 
                  <item>
                   <widget class="QPushButton" name="importPictureButton">
                    <property name="minimumSize">
@@ -521,7 +500,7 @@
                <item>
                 <widget class="QGroupBox" name="thumbnailGameGroup">
                  <property name="title">
-                  <string>In-game preview</string>
+                  <string>In game (1×)</string>
                  </property>
                  <layout class="QVBoxLayout" name="thumbnailGameLayout">
                   <item alignment="Qt::AlignmentFlag::AlignHCenter">
@@ -557,6 +536,30 @@
                     <property name="wordWrap">
                      <bool>true</bool>
                     </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <item>
+                <widget class="QGroupBox" name="thumbnailInternalGroup">
+                 <property name="title">
+                  <string>Internal 4×</string>
+                 </property>
+                 <layout class="QVBoxLayout" name="thumbnailInternalLayout">
+                  <item alignment="Qt::AlignmentFlag::AlignHCenter">
+                   <widget class="QLabel" name="thumbnailInternalPreview">
+                    <property name="minimumSize"><size><width>1</width><height>1</height></size></property>
+                    <property name="maximumSize"><size><width>408</width><height>384</height></size></property>
+                    <property name="text"><string>Internal rendering</string></property>
+                    <property name="alignment"><set>Qt::AlignmentFlag::AlignCenter</set></property>
+                   </widget>
+                  </item>
+                  <item alignment="Qt::AlignmentFlag::AlignHCenter">
+                   <widget class="QLabel" name="thumbnailInternalInfo">
+                    <property name="text"><string>What the game draws at Internal 4×</string></property>
+                    <property name="alignment"><set>Qt::AlignmentFlag::AlignCenter</set></property>
+                    <property name="wordWrap"><bool>true</bool></property>
                    </widget>
                   </item>
                  </layout>
@@ -623,64 +626,7 @@
                  <property name="bottomMargin">
                   <number>0</number>
                  </property>
-                 <item>
-                  <layout class="QHBoxLayout" name="thumbnailScaleControlLayout">
-                   <property name="spacing">
-                    <number>4</number>
-                   </property>
-                   <property name="leftMargin">
-                    <number>0</number>
-                   </property>
-                   <property name="topMargin">
-                    <number>0</number>
-                   </property>
-                   <property name="rightMargin">
-                    <number>0</number>
-                   </property>
-                   <property name="bottomMargin">
-                    <number>0</number>
-                   </property>
-                   <item>
-                    <widget class="QPushButton" name="thumbnailScale1Button">
-                     <property name="text">
-                      <string>1×</string>
-                     </property>
-                     <property name="checkable">
-                      <bool>true</bool>
-                     </property>
-                     <property name="checked">
-                      <bool>true</bool>
-                     </property>
-                    </widget>
-                   </item>
-                   <item>
-                    <widget class="QPushButton" name="thumbnailScale2Button">
-                     <property name="text">
-                      <string>2×</string>
-                     </property>
-                     <property name="checkable">
-                      <bool>true</bool>
-                     </property>
-                     <property name="checked">
-                      <bool>false</bool>
-                     </property>
-                    </widget>
-                   </item>
-                   <item>
-                    <widget class="QPushButton" name="thumbnailScale4Button">
-                     <property name="text">
-                      <string>4×</string>
-                     </property>
-                     <property name="checkable">
-                      <bool>true</bool>
-                     </property>
-                     <property name="checked">
-                      <bool>false</bool>
-                     </property>
-                    </widget>
-                   </item>
-                  </layout>
-                 </item>
+                 
                  <item>
                   <widget class="QPushButton" name="importThumbnailButton">
                    <property name="minimumSize">
@@ -797,7 +743,7 @@
                <item>
                 <widget class="QGroupBox" name="titleGameGroup">
                  <property name="title">
-                  <string>In-game preview</string>
+                  <string>In game (1×)</string>
                  </property>
                  <layout class="QVBoxLayout" name="titleGameLayout">
                   <item alignment="Qt::AlignmentFlag::AlignHCenter">
@@ -899,64 +845,7 @@
                  <property name="bottomMargin">
                   <number>0</number>
                  </property>
-                 <item>
-                  <layout class="QHBoxLayout" name="titleScaleControlLayout">
-                   <property name="spacing">
-                    <number>4</number>
-                   </property>
-                   <property name="leftMargin">
-                    <number>0</number>
-                   </property>
-                   <property name="topMargin">
-                    <number>0</number>
-                   </property>
-                   <property name="rightMargin">
-                    <number>0</number>
-                   </property>
-                   <property name="bottomMargin">
-                    <number>0</number>
-                   </property>
-                   <item>
-                    <widget class="QPushButton" name="titleScale1Button">
-                     <property name="text">
-                      <string>1×</string>
-                     </property>
-                     <property name="checkable">
-                      <bool>true</bool>
-                     </property>
-                     <property name="checked">
-                      <bool>true</bool>
-                     </property>
-                    </widget>
-                   </item>
-                   <item>
-                    <widget class="QPushButton" name="titleScale2Button">
-                     <property name="text">
-                      <string>2×</string>
-                     </property>
-                     <property name="checkable">
-                      <bool>true</bool>
-                     </property>
-                     <property name="checked">
-                      <bool>false</bool>
-                     </property>
-                    </widget>
-                   </item>
-                   <item>
-                    <widget class="QPushButton" name="titleScale4Button">
-                     <property name="text">
-                      <string>4×</string>
-                     </property>
-                     <property name="checkable">
-                      <bool>true</bool>
-                     </property>
-                     <property name="checked">
-                      <bool>false</bool>
-                     </property>
-                    </widget>
-                   </item>
-                  </layout>
-                 </item>
+                 
                  <item>
                   <widget class="QPushButton" name="importTitleButton">
                    <property name="minimumSize">

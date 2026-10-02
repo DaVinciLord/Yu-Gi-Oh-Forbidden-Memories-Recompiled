@@ -16,6 +16,7 @@ Trojan:Win32/Wacatac.B!ml). The folder build carries version information
 too, which scanners also like to see.
 """
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -53,13 +54,29 @@ def main() -> int:
     parser.add_argument("--dist", type=Path, default=ROOT / "tmp" / "pc" / "fm-editor")
     parser.add_argument("--console", action="store_true", help="keep a console window (for the command line)")
     parser.add_argument("--version", default="", help="the release, vX.Y.Z[-PRE], for the version information")
+    parser.add_argument("--without-qt", action="store_true",
+                        help="build without PySide6 installed: the old Tk window alone")
     arguments = parser.parse_args()
+    try:
+        import PySide6      # noqa: F401
+    except ImportError:
+        # The Qt window is the editor; the Tk one is on its way out. A build
+        # without PySide6 here carries no window worth shipping, so say so
+        # rather than hand over an editor that opens the old one.
+        print("PySide6 is not installed: the build would carry no Qt window.\n"
+              "    python -m pip install PySide6\n"
+              "or pass --without-qt to build the old Tk window on its own.", file=sys.stderr)
+        if not arguments.without_qt:
+            return 1
     dist = arguments.dist.resolve()
     work = dist / "build"
     work.mkdir(parents=True, exist_ok=True)
     build = ["--noconfirm", "--clean", "--distpath", str(dist), "--workpath", str(work)]
     program = ["--name", "fm-editor", "--specpath", str(work), "--paths", str(HERE.parent),
-               "--hidden-import", "text_listing", "--collect-submodules", "fm_editor"]
+               "--hidden-import", "text_listing", "--collect-submodules", "fm_editor",
+               # The Qt window loads its forms beside itself at run time, so
+               # they must be in the build and not only the modules.
+               "--add-data", f"{HERE / 'ui'}{os.pathsep}fm_editor/ui"]
     if sys.platform == "win32":
         version_file = work / "version.txt"
         version_file.write_text(version_info(arguments.version), encoding="utf-8")

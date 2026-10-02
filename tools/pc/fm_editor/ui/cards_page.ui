@@ -1,4 +1,4 @@
-<?xml version='1.0' encoding='UTF-8'?>
+<?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
  <class>CardsPage</class>
  <widget class="QWidget" name="CardsPage">
@@ -81,42 +81,40 @@
         </widget>
        </item>
        <item>
-        <widget class="QWidget" name="cardFilterRow">
-         <layout class="QHBoxLayout" name="cardFilterRowLayout">
-          <property name="leftMargin">
-           <number>0</number>
-          </property>
-          <property name="topMargin">
-           <number>0</number>
-          </property>
-          <property name="rightMargin">
-           <number>0</number>
-          </property>
-          <property name="bottomMargin">
-           <number>0</number>
-          </property>
-          <property name="spacing">
-           <number>6</number>
-          </property>
-          <item>
-           <widget class="QComboBox" name="cardFilterCombo">
-            <property name="toolTip">
-             <string>Filter the card list</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="advancedCardFilterButton">
-            <property name="text">
-             <string>Advanced…</string>
-            </property>
-            <property name="toolTip">
-             <string>Filter by card type, attribute, and stat ranges</string>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
+        <layout class="QHBoxLayout" name="cardFilterRowLayout">
+         <property name="spacing">
+          <number>6</number>
+         </property>
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QComboBox" name="cardFilterCombo">
+           <property name="toolTip">
+            <string>Filter the card list</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="advancedCardFilterButton">
+           <property name="toolTip">
+            <string>Filter by card type, attribute, and stat ranges</string>
+           </property>
+           <property name="text">
+            <string>Advanced…</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
        </item>
        <item>
         <widget class="QLabel" name="cardCountLabel">
@@ -151,8 +149,8 @@
          <attribute name="verticalHeaderVisible">
           <bool>false</bool>
          </attribute>
-         <column />
-         <column />
+         <column/>
+         <column/>
         </widget>
        </item>
        <item>
@@ -213,8 +211,8 @@
            <rect>
             <x>0</x>
             <y>0</y>
-            <width>525</width>
-            <height>938</height>
+            <width>475</width>
+            <height>964</height>
            </rect>
           </property>
           <layout class="QVBoxLayout" name="cardFieldsLayout">
@@ -245,26 +243,22 @@
                </property>
               </widget>
              </item>
-             <item row="1" column="0">
-              <widget class="QLabel" name="nameLabel">
-               <property name="text">
-                <string>Name</string>
-               </property>
-              </widget>
-             </item>
-             <item row="1" column="1">
-              <widget class="QLineEdit" name="nameEdit" />
-             </item>
              <item row="0" column="1">
               <widget class="QSpinBox" name="cardIdSpinBox">
                <property name="enabled">
                 <bool>true</bool>
                </property>
                <property name="sizePolicy">
-                <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
+                <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
                  <horstretch>0</horstretch>
                  <verstretch>0</verstretch>
                 </sizepolicy>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>75</width>
+                 <height>16777215</height>
+                </size>
                </property>
                <property name="wrapping">
                 <bool>false</bool>
@@ -280,6 +274,23 @@
                </property>
               </widget>
              </item>
+             <item row="1" column="1">
+              <widget class="QLineEdit" name="nameEdit">
+               <property name="maximumSize">
+                <size>
+                 <width>405</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="0">
+              <widget class="QLabel" name="nameLabel">
+               <property name="text">
+                <string>Name</string>
+               </property>
+              </widget>
+             </item>
             </layout>
            </item>
            <item>
@@ -290,14 +301,8 @@
              <property name="verticalSpacing">
               <number>7</number>
              </property>
-             <item row="1" column="1">
-              <widget class="QComboBox" name="attributeCombo" />
-             </item>
-             <item row="8" column="0">
-              <widget class="QComboBox" name="guardian1Combo" />
-             </item>
              <item row="8" column="1">
-              <widget class="QComboBox" name="guardian2Combo" />
+              <widget class="QComboBox" name="guardian2Combo"/>
              </item>
              <item row="7" column="0">
               <widget class="QLabel" name="guardian1Label">
@@ -306,32 +311,28 @@
                </property>
               </widget>
              </item>
-             <item row="1" column="0">
-              <widget class="QComboBox" name="typeCombo" />
-             </item>
-             <item row="2" column="1">
-              <widget class="QLabel" name="frameLabel">
-               <property name="text">
-                <string>Frame</string>
-               </property>
-              </widget>
-             </item>
-             <item row="0" column="1">
-              <widget class="QLabel" name="attributeLabel">
-               <property name="text">
-                <string>Attribute</string>
-               </property>
-              </widget>
-             </item>
-             <item row="3" column="1">
-              <widget class="QComboBox" name="frameCombo" />
-             </item>
              <item row="7" column="1">
               <widget class="QLabel" name="guardian2Label">
                <property name="text">
                 <string>Guardian Star 2</string>
                </property>
               </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QComboBox" name="attributeCombo"/>
+             </item>
+             <item row="4" column="0">
+              <widget class="QLabel" name="attackLabel">
+               <property name="text">
+                <string>ATK</string>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="1">
+              <widget class="QComboBox" name="frameCombo"/>
+             </item>
+             <item row="8" column="0">
+              <widget class="QComboBox" name="guardian1Combo"/>
              </item>
              <item row="2" column="0">
               <widget class="QLabel" name="levelLabel">
@@ -340,10 +341,10 @@
                </property>
               </widget>
              </item>
-             <item row="3" column="0">
-              <widget class="QSpinBox" name="levelSpinBox">
-               <property name="maximum">
-                <number>12</number>
+             <item row="0" column="1">
+              <widget class="QLabel" name="attributeLabel">
+               <property name="text">
+                <string>Attribute</string>
                </property>
               </widget>
              </item>
@@ -357,6 +358,13 @@
                </property>
               </widget>
              </item>
+             <item row="3" column="0">
+              <widget class="QSpinBox" name="levelSpinBox">
+               <property name="maximum">
+                <number>12</number>
+               </property>
+              </widget>
+             </item>
              <item row="0" column="0">
               <widget class="QLabel" name="typeLabel">
                <property name="text">
@@ -364,10 +372,16 @@
                </property>
               </widget>
              </item>
-             <item row="4" column="0">
-              <widget class="QLabel" name="attackLabel">
-               <property name="text">
-                <string>ATK</string>
+             <item row="1" column="0">
+              <widget class="QComboBox" name="typeCombo"/>
+             </item>
+             <item row="5" column="1">
+              <widget class="QSpinBox" name="defenseSpinBox">
+               <property name="maximum">
+                <number>5110</number>
+               </property>
+               <property name="singleStep">
+                <number>10</number>
                </property>
               </widget>
              </item>
@@ -378,13 +392,10 @@
                </property>
               </widget>
              </item>
-             <item row="5" column="1">
-              <widget class="QSpinBox" name="defenseSpinBox">
-               <property name="maximum">
-                <number>5110</number>
-               </property>
-               <property name="singleStep">
-                <number>10</number>
+             <item row="2" column="1">
+              <widget class="QLabel" name="frameLabel">
+               <property name="text">
+                <string>Frame</string>
                </property>
               </widget>
              </item>
@@ -472,6 +483,13 @@
                </widget>
               </item>
               <item>
+               <widget class="QLabel" name="stableIDlabel">
+                <property name="text">
+                 <string>Stable ID</string>
+                </property>
+               </widget>
+              </item>
+              <item>
                <widget class="QLineEdit" name="stableKeyEdit">
                 <property name="placeholderText">
                  <string>Stable card key</string>
@@ -495,7 +513,7 @@
               <item>
                <widget class="QLabel" name="baseCardInfoLabel">
                 <property name="text">
-                 <string />
+                 <string/>
                 </property>
                </widget>
               </item>
@@ -505,7 +523,7 @@
            <item>
             <widget class="QLabel" name="validationLabel">
              <property name="text">
-              <string />
+              <string/>
              </property>
              <property name="wordWrap">
               <bool>true</bool>
@@ -645,7 +663,7 @@
           </size>
          </property>
          <property name="text">
-          <string />
+          <string/>
          </property>
          <property name="scaledContents">
           <bool>false</bool>
@@ -661,6 +679,6 @@
    </item>
   </layout>
  </widget>
- <resources />
- <connections />
+ <resources/>
+ <connections/>
 </ui>

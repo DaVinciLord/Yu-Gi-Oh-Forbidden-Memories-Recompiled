@@ -4,8 +4,9 @@ A mod may write down the forty cards a new game begins with, in place of the
 seven weighted pools the disc draws them from. Several decks may be offered,
 and one is picked for each new game.
 
-The disc's own generator, and why this does not extend it, is in
-[starter-deck pool tables](starter-deck-pools.md).
+A mod may instead weight pools of its own and let the game draw from them,
+with `starter_pools` below. The disc's own generator, and the table it reads,
+are in [starter-deck pool tables](starter-deck-pools.md).
 
 ## The manifest
 
@@ -112,3 +113,46 @@ log names, its forty cards in Build Deck, the Library showing them seen, and
 the save loaded back in a fresh process with the deck intact. Without a
 starter mod the new game's deck is the disc's, and the smoke screenshots are
 unchanged.
+
+
+## Pools of the mod's own
+
+`starter_pools` is the disc's seven rows made a mod's to write: a list of
+pools, each drawing its own number of cards from its own weights.
+
+```json
+{
+    "id": "weighted-start",
+    "starter_pools": [
+        { "name": "Weak monsters", "draws": 16, "cards": { "Mystical Elf": 100, "Hitotsu-Me Giant": 60 } },
+        { "draws": 20, "cards": { "Dark Magician": 1 } },
+        { "draws": 4,  "cards": { "Fire Kraken": 5, "My Added Card": 5 } }
+    ]
+}
+```
+
+| Key | Meaning |
+|---|---|
+| `draws` | how many cards this pool draws, 0 to 40. Every pool's draws must add up to the forty a deck holds, or the pools are left out and the disc's rows are read |
+| `cards` | a card and its weight, 0 to 65535. A card is named as `decks` and `drops` name one; a weight of 0 is a card the pool never draws |
+| `name` | the pool's own name, for the log |
+
+A draw asks for a threshold spread over the pool's own weight total and walks
+its cards until the weights reach it, as `NameEntry_BuildStarterDeck` walks a
+row of the disc's. A card already held `DECK_CARD_COPY_LIMIT` times is drawn
+again, as the disc retries one; unlike the disc's, the retry gives up after a
+bounded number of tries, so a pool of three cards or fewer cannot hang a new
+game and the last draw stands.
+
+What this does that the disc's rows cannot: the disc keeps 722 weights of a
+fixed width and reads only the first 720 of them, so no weight of its own can
+name a card a mod added. A pool here names cards the way the rest of a
+manifest does, so a mod's own are weighted like any other.
+
+A written deck still wins. `NameEntry_BuildStarterDeck` asks for one first,
+then for these pools, and reads the disc's rows only when neither is offered.
+The pools of every applied mod add up, in the order the mods load, as the
+decks do.
+
+The editor's Starter decks tab writes `starter` on its *Written decks* tab and
+`starter_pools` on its *Weighted pools* tab.

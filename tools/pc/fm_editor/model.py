@@ -173,7 +173,7 @@ class Project:
         self.pool_files = {}            # "decks"/"drops" -> the file the mod names in place of the table
         self.source_dir = None
         self.files = {}                 # path in the mod folder -> bytes to write with it (an import's)
-        self.removed_files = set()      # source files to omit on the next mod save
+        self.removed_files = set()      # paths of the source folder a save must not copy over (a duelist taken out)
         self.text_cards = {}            # card id -> {field: value} its "text" file carries while unchanged
         # Passwords the mod sets, 8 digits or "" for none: a disc card's goes in
         # "passwords" (the Password screen's), an added card's is its entry's

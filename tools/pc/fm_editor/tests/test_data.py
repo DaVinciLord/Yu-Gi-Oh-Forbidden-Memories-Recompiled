@@ -922,3 +922,43 @@ class PasswordTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RemovedFilesTest(unittest.TestCase):
+    """What a save takes out of the folder it copied (manifest._remove_files)."""
+
+    def project(self, folder):
+        project = Project.__new__(Project)
+        project.__dict__ = {}
+        return project
+
+    def test_a_dropped_file_goes_and_the_rest_stay(self):
+        with tempfile.TemporaryDirectory() as home:
+            folder = Path(home)
+            for name in ("duelists/gone.json", "duelists/kept.json"):
+                (folder / name).parent.mkdir(parents=True, exist_ok=True)
+                (folder / name).write_text("{}")
+            project = mock.Mock(removed_files={"duelists/gone.json"})
+            manifest._remove_files(project, folder)
+            self.assertFalse((folder / "duelists/gone.json").exists())
+            self.assertTrue((folder / "duelists/kept.json").exists())
+
+    def test_a_name_that_climbs_out_of_the_folder_takes_nothing(self):
+        with tempfile.TemporaryDirectory() as home:
+            folder = Path(home) / "mod"
+            folder.mkdir()
+            outside = Path(home) / "outside.txt"
+            outside.write_text("x")
+            project = mock.Mock(removed_files={"../outside.txt", "/etc/passwd", "C:outside.txt"})
+            manifest._remove_files(project, folder)
+            self.assertTrue(outside.exists())
+
+    def test_a_folder_is_left_alone_and_a_missing_file_is_nothing_to_do(self):
+        """unlink raises on a directory, which aborted the save after the
+        copy and before mod.json was written."""
+        with tempfile.TemporaryDirectory() as home:
+            folder = Path(home)
+            (folder / "portraits").mkdir()
+            project = mock.Mock(removed_files={"portraits", "portraits/never-was.png"})
+            manifest._remove_files(project, folder)        # must not raise
+            self.assertTrue((folder / "portraits").is_dir())

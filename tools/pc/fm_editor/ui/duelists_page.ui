@@ -224,6 +224,28 @@
         </layout>
        </item>
        <item>
+      <layout class="QHBoxLayout" name="deckModeRow">
+       <property name="spacing"><number>10</number></property>
+       <item>
+        <widget class="QRadioButton" name="weightedDeckRadio">
+         <property name="text"><string>Weighted deck (retail)</string></property>
+         <property name="checked"><bool>true</bool></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QRadioButton" name="fixedDeckRadio">
+         <property name="text"><string>Fixed deck (40 cards)</string></property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="deckModeSpacer">
+         <property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property>
+         <property name="sizeHint" stdset="0"><size><width>20</width><height>20</height></size></property>
+        </spacer>
+       </item>
+      </layout>
+     </item>
+     <item>
         <widget class="QTableWidget" name="duelistPoolTable">
          <column>
           <property name="text">
@@ -311,6 +333,81 @@
          </item>
         </layout>
        </item>
+     <item>
+      <widget class="QTableWidget" name="fixedDeckTable">
+       <property name="alternatingRowColors"><bool>true</bool></property>
+       <property name="selectionBehavior"><enum>QAbstractItemView::SelectionBehavior::SelectRows</enum></property>
+       <property name="selectionMode"><enum>QAbstractItemView::SelectionMode::ExtendedSelection</enum></property>
+       <property name="editTriggers"><set>QAbstractItemView::EditTrigger::NoEditTriggers</set></property>
+       <column><property name="text"><string>#</string></property></column>
+       <column><property name="text"><string>Card</string></property></column>
+       <column><property name="text"><string>Type</string></property></column>
+       <column><property name="text"><string>Copies</string></property></column>
+       <column><property name="text"><string>Weighted</string></property></column>
+       <column><property name="text"><string>Note</string></property></column>
+      </widget>
+     </item>
+     <item>
+      <layout class="QHBoxLayout" name="fixedDeckActionsLayout">
+       <property name="spacing"><number>8</number></property>
+       <item>
+        <widget class="QPushButton" name="addFixedCardButton">
+         <property name="text"><string>Add a card…</string></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="fixedCopiesLabel">
+         <property name="text"><string>Copies</string></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QSpinBox" name="fixedCopiesSpin">
+         <property name="minimum"><number>0</number></property>
+         <property name="maximum"><number>40</number></property>
+         <property name="value"><number>1</number></property>
+         <property name="maximumSize"><size><width>90</width><height>16777215</height></size></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="setFixedCopiesButton">
+         <property name="text"><string>Set</string></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="removeFixedCardsButton">
+         <property name="text"><string>Remove selected</string></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="copyWeightedDeckButton">
+         <property name="text"><string>Copy the likeliest 40</string></property>
+         <property name="toolTip"><string>The forty cards the weighted deck most likely deals</string></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="clearFixedDeckButton">
+         <property name="text"><string>Clear</string></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="revertFixedDeckButton">
+         <property name="text"><string>Revert to retail</string></property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="fixedDeckActionsSpacer">
+         <property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property>
+         <property name="sizeHint" stdset="0"><size><width>20</width><height>20</height></size></property>
+        </spacer>
+       </item>
+      </layout>
+     </item>
+     <item>
+      <widget class="QLabel" name="fixedDeckHint">
+       <property name="text"><string>A fixed deck is these 40 cards, shuffled for each duel, in place of the weighted deck. A card may have 0 to 40 copies (the weighted deal stops at 3). A deck that is not 40 cards, or names a card the game does not have, is left out and the weighted deck is dealt.</string></property>
+       <property name="wordWrap"><bool>true</bool></property>
+      </widget>
+     </item>
       </layout>
      </widget>
     </widget>

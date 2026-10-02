@@ -1242,6 +1242,26 @@ def is_game_folder(folder: Path) -> bool:
             for p in folder.glob("*") if p.is_file())
 
 
+def _remove_files(project: Project, folder: Path):
+    """Take out what the editor dropped (a duelist's roster, deck, drop and
+    portrait files), after the copy that may have brought them over.
+
+    A name is only ever a path inside the mod folder: it is resolved and
+    checked against it, so "../x", "/x" and a drive-relative "C:x" on Windows
+    all name nothing. A folder is left alone (unlink would raise on it), and
+    one that has gone already is nothing to do."""
+    for name in sorted(getattr(project, "removed_files", ()) or ()):
+        target = (folder / name).resolve()
+        if not target.is_relative_to(folder.resolve()) or target == folder.resolve():
+            continue
+        try:
+            if target.is_dir():
+                continue
+            target.unlink()
+        except (OSError, FileNotFoundError):
+            continue
+
+
 def save_mod(project: Project, folder, manifest: dict = None) -> Path:
     """Write the mod folder: mod.json, and when it is a new place, the files
     of the folder the mod was opened from (art, text, textures...)."""
@@ -1263,19 +1283,11 @@ def save_mod(project: Project, folder, manifest: dict = None) -> Path:
                     target = folder / item.relative_to(source)
                     target.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(item, target)
-    for name in getattr(project, "removed_files", set()):
-        relative = Path(name)
-        if relative.is_absolute() or ".." in relative.parts or name in project.files:
-            continue
-        target = folder / relative
-        try:
-            target.unlink()
-        except FileNotFoundError:
-            pass
     for name, blob in project.files.items():
         target = folder / name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(blob)
+    _remove_files(project, folder)
     art.write_mod(project, folder)     # the art's PNGs and texture pack, and "textures" in mod.json
     manifest = build(project) if manifest is None else manifest
     path = folder / "mod.json"
