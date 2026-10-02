@@ -213,40 +213,50 @@ def settings_digest(directory, extra_flags):
 # A line marker in preprocessed C: # <line> "<file>" <flags>. The key keeps
 # the line, which the debug information records, and drops the file, which
 # names the checkout; the file goes in the memo's list instead.
-LINE_MARKER = re.compile(r'^(#(?: line)? \d+) "((?:[^"\\]|\\.)*)"', re.M)
+LINE_MARKER = re.compile(rb'^(#(?: line)? \d+) "((?:[^"\\]|\\.)*)"', re.M)
 
 
-def inputs_key(directory, sources, extra_flags=()):
+def inputs_key(directory, sources, extra_flags, into):
     """The key an object is kept under in tmp/pc/mod-build: settings_digest
     and each source after the preprocessor, which takes in every header it
-    includes from wherever it is. Returns (key, the files the preprocessor
-    read, when it started). No time goes into the key: another checkout
-    sharing tmp gets the same object only when it has the same inputs."""
+    includes from wherever it is. The preprocessed sources are written to
+    `into` (<source>.i), and publish compiles those, not the sources: the
+    object is made of exactly what the key was taken from, even when a
+    header changes while the mod builds. No time goes into the key: another
+    checkout sharing tmp gets the same object only when it has the same
+    inputs. Returns (key, the preprocessed files, the files the
+    preprocessor read, or None when one of them cannot be named, and when
+    it started)."""
     cc, cc_flags, _ = compiler()
     flags = FLAGS + cc_flags + headers() + list(extra_flags)
     digest = settings_digest(directory, extra_flags)
     started = time.time()
+    preprocessed = [os.path.join(into, os.path.basename(source) + ".i") for source in sources]
     with concurrent.futures.ThreadPoolExecutor(len(sources)) as pool:
-        preprocessed = list(pool.map(lambda source: run(cc + flags + ["-E", source]), sources))
-    read = set()
-    for source, text in zip(sources, preprocessed):
+        list(pool.map(lambda pair: run(cc + flags + ["-E", pair[0], "-o", pair[1]]), zip(sources, preprocessed)))
+    read, unnamed = set(), False
+    for source, path in zip(sources, preprocessed):
+        with open(path, "rb") as handle:
+            text = handle.read().replace(b"\r\n", b"\n")   # clang on Windows writes CRLF
         for match in LINE_MARKER.finditer(text):
-            # Not <built-in> or <command line>, nor the working directory
-            # GCC names with -g ("/path//").
-            path = os.path.normpath(os.path.abspath(re.sub(r"\\(.)", r"\1", match.group(2))))
-            if not match.group(2).startswith("<") and os.path.isfile(path):
-                read.add(path)
-        digest.update(os.path.basename(source).encode() + b"\0")
-        digest.update(LINE_MARKER.sub(r"\1", text).encode("utf-8", "surrogateescape") + b"\0")
-    return digest.hexdigest(), read, started
+            if match.group(2).startswith(b"<"):
+                continue   # <built-in>, <command line>
+            name = os.path.normpath(os.path.abspath(
+                re.sub(rb"\\(.)", rb"\1", match.group(2)).decode("utf-8", "surrogateescape")))
+            if os.path.isfile(name):
+                read.add(name)
+            elif not os.path.isdir(name):   # GCC names the working directory with -g
+                unnamed = True   # a file the memo could not watch: no memo
+        digest.update(os.path.basename(source).encode() + b"\0" + LINE_MARKER.sub(rb"\1", text) + b"\0")
+    return digest.hexdigest(), preprocessed, None if unnamed else read, started
 
 
 # The memo: the key inputs_key gave, remembered with the content of every
 # file the preprocessor read, so that a build with none of them changed
 # finds the key again without starting the preprocessor (as ccache's direct
 # mode). It is only a way to the key, never to an object: a memo that does
-# not hold sends the build to inputs_key.
-MEMOS = os.path.join(CACHE, ".memo")
+# not hold sends the build to inputs_key. The memos are in
+# tmp/pc/mod-build/.memo.
 
 
 def memo_folder(directory, sources, extra_flags):
@@ -261,7 +271,7 @@ def memo_folder(directory, sources, extra_flags):
     names += glob.glob(os.path.join(directory, "**", "*.h"), recursive=True)
     listing = "\n".join(sorted(portable(os.path.abspath(name)) for name in names))
     digest.update(listing.encode("utf-8", "surrogateescape"))
-    return os.path.join(MEMOS, f"{os.path.basename(os.path.abspath(directory))}-{digest.hexdigest()[:24]}")
+    return os.path.join(CACHE, ".memo", f"{os.path.basename(os.path.abspath(directory))}-{digest.hexdigest()[:24]}")
 
 
 def recall(folder):
@@ -278,6 +288,8 @@ def recall(folder):
 
 
 def remember(folder, key, read, started):
+    if read is None:
+        return
     files = {}
     for path in sorted(read):
         if os.path.getmtime(path) >= started:
@@ -326,25 +338,36 @@ def build(directory, out_dir=None, objects_dir=None, extra_flags=(), games=GAME_
     name = library_name(directory)
     output = os.path.join(out_dir or directory, name)
     extra_flags = ["-I", directory, *extra_flags]
+    mod = os.path.basename(os.path.abspath(directory))
     memo = memo_folder(directory, sources, extra_flags)
     key = recall(memo)
-    if key is None:
-        key, read, started = inputs_key(directory, sources, extra_flags)
-        remember(memo, key, read, started)
-    entry = os.path.join(CACHE, f"{os.path.basename(os.path.abspath(directory))}-{key[:16]}")
-    cached = os.path.join(entry, name)
+    state = "up to date"
     try:
-        if os.path.exists(cached):
+        if key is None or not os.path.exists(os.path.join(CACHE, f"{mod}-{key[:16]}", name)):
+            # The key again from the preprocessor: a memo is never trusted to
+            # say what an object is made of, only that it is already built.
+            os.makedirs(CACHE, exist_ok=True)
+            stage = tempfile.mkdtemp(prefix=f".{mod}-", dir=CACHE)
+            try:
+                parts = os.path.join(stage, "parts")
+                os.makedirs(parts)
+                key, preprocessed, read, started = inputs_key(directory, sources, extra_flags, parts)
+                remember(memo, key, read, started)
+                entry = os.path.join(CACHE, f"{mod}-{key[:16]}")
+                if not os.path.exists(os.path.join(entry, name)):
+                    publish(entry, name, stage, preprocessed, objects_dir or parts, extra_flags, games)
+                    state = f"{len(sources)} source{'s' if len(sources) != 1 else ''}"
+            finally:
+                shutil.rmtree(stage, ignore_errors=True)
+        entry = os.path.join(CACHE, f"{mod}-{key[:16]}")
+        cached = os.path.join(entry, name)
+        if state == "up to date":
             try:
                 with open(cached + ".undefined") as handle:
                     undefined = set(handle.read().split())
             except OSError:
                 undefined = None
             check(cached, games, undefined)
-            state = "up to date"
-        else:
-            publish(entry, name, sources, objects_dir, extra_flags, games)
-            state = f"{len(sources)} source{'s' if len(sources) != 1 else ''}"
     except SystemExit:
         if os.path.exists(output):
             os.remove(output)   # not left there to pass for this mod's object
@@ -357,36 +380,31 @@ def build(directory, out_dir=None, objects_dir=None, extra_flags=(), games=GAME_
     return output
 
 
-def publish(entry, name, sources, objects_dir, extra_flags, games):
-    """Build the object in a folder of its own beside `entry`, check it, and
-    rename the folder to `entry`: a folder there is always a whole object
+def publish(entry, name, stage, preprocessed, objects_dir, extra_flags, games):
+    """Compile the preprocessed sources into `stage`, check the object, and
+    rename its folder to `entry`: a folder there is always a whole object
     that passed, with the names it leaves undefined beside it
     (<library>.undefined). When another checkout gets there first with the
     same key, its object is the same and this one is dropped."""
-    os.makedirs(CACHE, exist_ok=True)
-    stage = tempfile.mkdtemp(prefix=f".{os.path.basename(entry)}-", dir=CACHE)
-    try:
-        staged = os.path.join(stage, "object")
-        output = compile_object(sources, os.path.join(staged, name), objects_dir or os.path.join(stage, "parts"),
-                                extra_flags)
-        undefined = undefined_names(output)
-        check(output, games, undefined)
-        with open(output + ".undefined", "w") as handle:
-            handle.writelines(symbol + "\n" for symbol in sorted(undefined))
-        for attempt in range(40):
-            try:
-                os.rename(staged, entry)
+    staged = os.path.join(stage, "object")
+    output = compile_object(preprocessed, os.path.join(staged, name), objects_dir,
+                            [*extra_flags, "-x", "cpp-output"])
+    undefined = undefined_names(output)
+    check(output, games, undefined)
+    with open(output + ".undefined", "w") as handle:
+        handle.writelines(symbol + "\n" for symbol in sorted(undefined))
+    for attempt in range(40):
+        try:
+            os.rename(staged, entry)
+            return
+        except OSError:
+            if os.path.exists(os.path.join(entry, name)):
                 return
-            except OSError:
-                if os.path.exists(os.path.join(entry, name)):
-                    return
-                if os.path.isdir(entry):
-                    shutil.rmtree(entry, ignore_errors=True)   # emptied by hand: not an object
-                if attempt == 39:
-                    raise
-                time.sleep(0.25)   # a virus scanner still holding the new file (Windows)
-    finally:
-        shutil.rmtree(stage, ignore_errors=True)
+            if os.path.isdir(entry):
+                shutil.rmtree(entry, ignore_errors=True)   # emptied by hand: not an object
+            if attempt == 39:
+                raise
+            time.sleep(0.25)   # a virus scanner still holding the new file (Windows)
 
 
 def undefined_names(output):

@@ -78,10 +78,13 @@ or options from (`CPATH`, `C_INCLUDE_PATH`, `CCC_OVERRIDE_OPTIONS`, ...),
 preprocessor with the file names taken out of its line markers. So every
 header a source includes is in it, from wherever it comes, and two checkouts
 share an object exactly when they would build the same one (it then carries
-the debug paths of the checkout that built it). An object is built in a
-staging folder (`.<mod>-<key>-XXXX`), checked and renamed into place, so a
-folder there is always a whole object that passed, with the names it leaves
-undefined in `<library>.undefined`. It is checked against the game's exports
+the debug paths of the checkout that built it). The object is compiled from
+that preprocessed text (`-x cpp-output`), not from the sources again, so it
+is made of exactly what its key was taken from even when a header is edited
+while the mod builds (`tools/pc/test_mod_cache.py`, ctest `pc_mod_cache`).
+It is built in a staging folder (`.<mod>-XXXX`), checked and renamed into
+place, so a folder there is always a whole object that passed, with the
+names it leaves undefined in `<library>.undefined`. It is checked against the game's exports
 on every build, reused or not, from that list: what a game lends comes from
 its own sources, which the key does not cover. A failed check removes the
 copy beside the game, not the shared object.
@@ -93,8 +96,9 @@ the SHA-256 of every file it read. The folder is named by the settings, the
 sources and the names of every header that could be included, so a new
 header found first also misses; a memo whose files are all unchanged gives
 the key with no process started. A memo is not written when a file it read
-changed while the preprocessor ran. It leads only to a key: a missing object
-is built, and a memo that does not hold sends the build to the preprocessor.
+changed while the preprocessor ran, nor when it named a file that cannot be
+found. It leads only to a key that has an object: when that object is
+missing, the key is taken from the preprocessor again before building.
 
 Since the key covers the compiler, builds with different compilers (llvm-mingw
 on Windows and gcc under WSL, say) keep an object each, and either runs on

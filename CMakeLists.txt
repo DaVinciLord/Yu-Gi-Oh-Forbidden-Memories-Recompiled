@@ -649,6 +649,14 @@ if(Python3_Interpreter_FOUND)
             COMMAND "${Python3_EXECUTABLE}" tools/pc/test_object_loader.py --target linux
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
     endif()
+    # The mod object cache (tools/pc/build_mod.py): what goes into a key, and
+    # a header edited while a mod builds. Needs the mod compiler (clang and
+    # lld, or gcc -m32).
+    if(BUILD_TESTING)
+        add_test(NAME pc_mod_cache
+            COMMAND "${Python3_EXECUTABLE}" tools/pc/test_mod_cache.py
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+    endif()
     # The FM Editor's data layer (tools/pc/fm_editor), on synthetic game files.
     if(BUILD_TESTING)
         add_test(NAME pc_fm_editor
