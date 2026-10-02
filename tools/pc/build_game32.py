@@ -641,8 +641,9 @@ def main():
     # this checkout's source can be another checkout's code. checkout.txt
     # names the checkout the folder was last built from, written when a
     # build ends; when it is not this one (or not there), everything is
-    # compiled again. It is removed first, so a build stopped halfway
-    # compiles everything the next time too.
+    # compiled again. Another checkout's is removed first, so when this
+    # build stops halfway the next one compiles everything too. Two builds
+    # into one folder at once are not supported (no lock).
     checkout = f"{options.build}/checkout.txt"
     try:
         with open(checkout, encoding="utf-8") as handle:

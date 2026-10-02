@@ -72,11 +72,14 @@ headers, which says nothing about whose source it was: an object another
 worktree compiled is newer than every file this checkout wrote before it.
 So `<build>/checkout.txt` names the checkout a folder was last built from
 (written when a build ends, removed when one from another checkout starts),
-and a build from any other checkout, or after one that was stopped, compiles
-everything again. What `build_game32.py` copies into the folder (the SDK's
-headers and tools, the mods' data, the languages) is copied when its bytes
-differ, not when it is newer. A build folder of its own per worktree
-(`--build tmp/pc/game32-<name>`) still saves the full rebuilds.
+and a build from any other checkout, or after one from another checkout that
+was stopped, compiles everything again. What `build_game32.py` copies into
+the folder (the SDK's headers and tools, the mods' data, the languages) is
+copied when its bytes differ, not when it is newer. A build folder of its own
+per worktree (`--build tmp/pc/game32-<name>`) still saves the full rebuilds.
+Two builds into one folder at the same time are still not supported (there
+is no lock): they write the same objects, and the one that ends last names
+its checkout in `checkout.txt` whatever the other compiled after it started.
 
 ### Mod objects (`tmp/pc/mod-build`)
 
