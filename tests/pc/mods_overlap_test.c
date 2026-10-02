@@ -192,6 +192,41 @@ int main(void)
     }
     Mods_OverlapFree(found);
 
+    /* Wrong types, as a hand-written manifest has them: a list where an
+     * object belongs, a number where a list does. The readers note and
+     * leave them out; so do the overlaps, without reading a name an
+     * element of a list does not have. */
+    {
+        static const char *const wrong[] = {
+            "{\"id\":\"w%d\",\"limits\":[1],\"title\":[{}],\"menu\":[[1]],\"terrain_bonus\":[1],\"decks\":[{}],"
+            "\"drops\":[{\"pow\":{}}],\"passwords\":[1],\"trap_thresholds\":[2],\"audio\":{\"music\":[\"a\"]}}",
+            "{\"id\":\"w%d\",\"cards\":5,\"fusions\":5,\"equips\":5,\"rituals\":5,\"data\":5,\"textures\":5,"
+            "\"guardian_stars\":{\"stars\":5,\"matchups\":5},\"menu\":{\"buttons\":[[1],5,{\"id\":5}]},\"text\":5}",
+            "{\"id\":\"w%d\",\"limits\":{\"life_points\":{\"duelists\":[1]}},\"guardian_stars\":{\"stars\":[{\"id\":11,"
+            "\"beats\":5}]},\"drops\":{\"all\":[1]},\"decks\":{\"all\":5},\"terrain_bonus\":{\"Forest\":[1]}}"};
+        for (int a = 0; a < 3; a++)
+            for (int b = 0; b < 3; b++) {
+                char text[1024];
+                JsonDocument *docs[2];
+                ModsOverlapMod pair[2];
+                for (int m = 0; m < 2; m++) {
+                    snprintf(text, sizeof(text), wrong[m ? b : a], m);
+                    docs[m] = Json_Parse(text, error, sizeof(error));
+                    assert(docs[m]);
+                    pair[m].id = m ? "w1" : "w0";
+                    pair[m].name = pair[m].id;
+                    pair[m].directory = NULL;
+                    pair[m].manifest = Json_Root(docs[m]);
+                }
+                found = Mods_OverlapCompute(pair, 2, &source);
+                assert(found);
+                for (int i = 0; i < Mods_OverlapCount(found); i++) Mods_OverlapText(found, i, line, sizeof(line));
+                Mods_OverlapFree(found);
+                Json_Free(docs[0]);
+                Json_Free(docs[1]);
+            }
+    }
+
     /* One mod, or none: nothing is read and nothing overlaps. */
     found = Mods_OverlapCompute(list, 1, &source);
     assert(found && Mods_OverlapCount(found) == 0);
