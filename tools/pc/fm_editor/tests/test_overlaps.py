@@ -17,6 +17,8 @@ from fm_editor.model import Project
 from fm_editor.tests.test_data import fixture
 
 FIXTURE = Path(__file__).resolve().parents[4] / "tests" / "pc" / "mod_overlaps"
+# What tests/pc/mod_overlaps/duelists-64 makes (tests/pc/mods_overlap_test.c too).
+DUELISTS_64 = "heishin2's POW drops (B, C): C's \"replace\" clears what the earlier mods set"
 
 
 class FixtureSource(overlaps.Source):
@@ -111,6 +113,17 @@ class SameAsTheGame(unittest.TestCase):
         b = overlaps.Mod("b", "B", {"cards": [{"replace": 1, "attack": 200}]}, found=0)
         found = overlaps.check([a, b])
         self.assertEqual(found[0].text, "Card #1 (B, A): the later mod's attack is used; the rest combines")
+
+    def test_duelists_64(self):
+        # 64 duelists in one mod's folder, then one of its list without an
+        # "id", then another mod's duelist whose pool file a third mod meets
+        # (the C engine once lost or freed its list here).
+        setup, _ = fixture_mods()
+        folder = FIXTURE / "duelists-64"
+        mods = [overlaps.Mod(m, m.upper(), overlaps._read_json(folder / m / "mod.json"), folder / m, found=i)
+                for i, m in enumerate(("a", "b", "c"))]
+        found = overlaps.check(mods, FixtureSource(setup))
+        self.assertEqual([o.text for o in found], [DUELISTS_64])
 
     def test_one_mod_is_nothing(self):
         setup, mods = fixture_mods()

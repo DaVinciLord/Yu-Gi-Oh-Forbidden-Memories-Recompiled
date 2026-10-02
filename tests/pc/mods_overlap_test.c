@@ -15,6 +15,8 @@
 #include <time.h>
 
 static const JsonValue *fixture;
+/* What tests/pc/mod_overlaps/duelists-64 makes (tools/pc/fm_editor/tests/test_overlaps.py too). */
+#define DUELISTS_64 "heishin2's POW drops (B, C): C's \"replace\" clears what the earlier mods set"
 
 static int same_letters(const char *a, const char *b)
 {
@@ -178,6 +180,40 @@ int main(void)
     }
     assert(!failed);
     Mods_OverlapFree(found);
+
+    /* tests/pc/mod_overlaps/duelists-64: 64 duelists of one mod's folder, then
+     * one of its "duelists" list without an "id" (the game loads it), then
+     * another mod's duelist whose pool file a third mod's edit meets. The
+     * id-less entry once grew the list without keeping it: the later
+     * definition was lost, or past 64 written to freed memory. */
+    {
+        static const char *const ids[] = {"a", "b", "c"};
+        JsonDocument *docs[3];
+        ModsOverlapMod three[3];
+        char *directories[3];
+        for (int m = 0; m < 3; m++) {
+            directories[m] = malloc(1024);
+            snprintf(directories[m], 1024, "%s/tests/pc/mod_overlaps/duelists-64/%s", MEMORIES_SOURCE_DIR, ids[m]);
+            snprintf(path, sizeof(path), "%s/mod.json", directories[m]);
+            docs[m] = Json_ParseFile(path, error, sizeof(error));
+            assert(docs[m]);
+            three[m].id = ids[m];
+            three[m].name = Json_String(Json_Member(Json_Root(docs[m]), "name"), "");
+            three[m].directory = directories[m];
+            three[m].manifest = Json_Root(docs[m]);
+            three[m].found = m;
+        }
+        found = Mods_OverlapCompute(three, 3, &source);
+        assert(found && Mods_OverlapCount(found) == 1);
+        Mods_OverlapText(found, 0, line, sizeof(line));
+        printf("duelists-64: %s\n", line);
+        assert(!strcmp(line, DUELISTS_64));
+        Mods_OverlapFree(found);
+        for (int m = 0; m < 3; m++) {
+            Json_Free(docs[m]);
+            free(directories[m]);
+        }
+    }
 
     /* Code: hooks chain, events are all called. */
     source.hook = hook;
