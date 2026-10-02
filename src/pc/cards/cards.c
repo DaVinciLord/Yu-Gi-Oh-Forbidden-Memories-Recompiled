@@ -83,6 +83,7 @@ int Cards_FindIdentity(const char *identity)
 }
 int Cards_ModelId(int id) { return Cards_Valid(id) && model_ids[id] ? model_ids[id] : Cards_BaseId(id); }
 int Cards_EffectId(int id) { return Cards_Valid(id) && effect_ids[id] ? effect_ids[id] : Cards_BaseId(id); }
+int Cards_TrapId(int id) { return Cards_Valid(id) && Cards_Type(id) == CARD_TYPE_TRAP ? Cards_EffectId(id) : 0; }
 static int retail_monster(int id);
 int Cards_HasModel(int id) { return Cards_Valid(id) && retail_monster(Cards_ModelId(id)); }
 int Cards_FrameColor(int id) { return Cards_Valid(id) ? frames[id] - 1 : -1; }
