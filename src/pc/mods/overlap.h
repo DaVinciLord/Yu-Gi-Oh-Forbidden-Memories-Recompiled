@@ -103,7 +103,7 @@ void Mods_OverlapLabel(const ModsOverlaps *overlaps, int index, char *out, size_
 void Mods_OverlapMods(const ModsOverlaps *overlaps, int index, char *out, size_t size);
 /* How it comes out, as one word the FM Editor's check uses too: "later",
  * "after", "agree", "add", "reset", "fixed", "keys", "bytes", "chain",
- * "events", "first", "aimed", "patched" or "early" (overlap.c,
+ * "events", "first", "aimed", "patched", "early" or "sold" (overlap.c,
  * outcome_words). */
 const char *Mods_OverlapOutcome(const ModsOverlaps *overlaps, int index);
 /* "Cards", "Drops and decks"... */
