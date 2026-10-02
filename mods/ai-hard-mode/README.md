@@ -77,7 +77,7 @@ and chaining. It does not alter the opponent parameter table or bytecode.
 ## Build and checks
 
 ```sh
-python3 tools/pc/build_mod.py mods/ai-hard-mode --out tmp/pc/mod-build/ai-hard-mode
+python3 tools/pc/build_mod.py mods/ai-hard-mode --out tmp/pc/ai-hard-mode
 python3 tools/pc/test_ai_hard_mode.py --target both
 python3 tools/pc/smoke_ai_hard_mode.py --target both
 python3 tools/pc/smoke_ai_hard_mode.py --target both --retail-tactics
