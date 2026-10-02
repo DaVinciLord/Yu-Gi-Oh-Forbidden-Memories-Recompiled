@@ -357,6 +357,27 @@ The tool is accepted when it does these in game, with less code than today:
 
 If the API cannot express these cleanly, the API is wrong.
 
+**Where it stands:**
+
+- **`fx.py`:** `tools/pc/test_duel_effects.py` (162 lines; the review's
+  `fx.py`, `scenarios.py`, `stateedit.py` and the state-making script were
+  219, with a story-input prefix and twenty saved states besides). One game
+  a side, native and `MEMORIES_DUEL_EFFECTS=interpreter`, run side by side;
+  each of the twenty scenarios is a `goto("duel", opponent=1, deck=...)`
+  and the duel actions, the review's state edits done in the one frame
+  between the shuffle and the deal (`duel_ready(before_deal=...)`:
+  `arrange_deck` for the opening hands, the opponent's deck made a trap).
+  The two sides must agree on every frame hash and effect call, and each
+  scenario must call an effect: 20 of 20 agree, in 1 min 41 s for both,
+  with the effect ids the review saw (Raigeki's 2, the ritual's 22, Exodia's
+  19 and 24, the battle's 2 and 3...). Two scenarios changed: the review's
+  story duel had Simon attack Kuriboh; in a free duel he does not, so
+  Kuriboh attacks his monster instead; and the ritual's guardian star is
+  asked during the card's use, which the actions now answer.
+- **`test_packs.py`:** see below.
+- **A real recent bug:** `tests/pc/replays/state-load-rng` (step 4) fails on
+  this branch without the random-seed fix and passes with it.
+
 ## Phase 2: a bug report that is a replay
 
 **Help > Report a problem** writes a zip a player can attach:

@@ -57,9 +57,10 @@ MODE_NAMES = {value: name for name, value in MODE.items()}
 DUEL_PHASES = {"effect_preview": 0, "startup": 1, "draw": 2, "draw_resolution": 3, "hand": 4, "field": 5,
                "card_use": 6, "placement": 7, "position": 8, "battle": 9, "turn_switch": 10, "resume": 11,
                "result": 12, "rewards": 13, "exodia": 14}
-# The duel's two grid cursors' column bytes (DuelFieldCursor.col; .row follows):
-# the field's, and the attack target's.
-FIELD_CURSOR, TARGET_CURSOR = 0x800E9F57, 0x800E9F73
+# The duel's cursors, found by watching RAM while pressing: the hand's slot,
+# and the column bytes of the field's and the attack target's grid cursors
+# (duel_grid.h's DuelFieldCursor.col; .row follows).
+HAND_CURSOR, FIELD_CURSOR, TARGET_CURSOR = 0x800E9F1E, 0x800E9F57, 0x800E9F73
 CARD_OCCUPIED = 0x8000   # duel_card_layout.h, DUEL_CARD_FLAG_OCCUPIED
 # Where each `jump` target lands (title_jump.h): the mode it runs.
 JUMP_MODES = {"title": MODE["menu"], "debug": MODE["debug"], "duel": MODE["duel"], "free_duel": MODE["free_duel"],
@@ -85,6 +86,7 @@ FALLBACK = {
     "gDuel_wSceneStateFlags": 0x8009B23A, # duel_scene_state.h: the duel's phase in the low four bits
     "gDuel_wSelectedCardID": 0x8009B338,  # the card under the duel's cursor
     "D_8009B1D5": 0x8009B1D5,             # duel_side_state.h: whose turn, 0 the player
+    "gDuel_aDeckCardRecords": 0x801A7E20, # duel_deck_card.h: both decks, 6 bytes a card
     "D_8009B26E": 0x8009B26E,             # a mode's step; 0x80 in a duel: the deck screen before it
 }
 # Overlay modules (tools/pc/build_game32.py, MODULES): the load address and
@@ -339,14 +341,53 @@ class Game:
         return {"vblanks": self.wait_until(lambda g: g.u8("D_8009B26C") & 0x9F == 0x80 | wanted, timeout,
                                            what=target)}
 
-    def duel_ready(self, timeout: int = 6000) -> int:
+    def duel_ready(self, timeout: int = 6000, before_deal: Callable[["Game"], object] | None = None) -> int:
         """In a duel: past the deck screen before it (circle), until the
-        player's five cards are dealt and the hand takes input."""
-        self.press_until(lambda g: g.u8("D_8009B26E") != 0x80 and not g.resident("main_menu"), "circle", every=60,
-                         timeout=timeout, what="the duel field")
-        taken = self.wait_until(lambda g: all(g.duel()[0]["hand"]), timeout, every=10, what="the hand")
+        player's five cards are dealt and the hand takes input. `before_deal`
+        runs once both decks are shuffled and before a card is dealt (the
+        one frame for arrange_deck and the like)."""
+        start = self.vblank
+        self.wait_until(lambda g: g.u8("D_8009B26E") == 0x80, timeout, what="the deck screen")
+        self.press_until(lambda g: g.u8("D_8009B26E") != 0x80, "circle", every=60, timeout=timeout,
+                         what="the duel field")
+        if before_deal:
+            # The duel's start (phase 1, no card dealt): the last duel's decks
+            # are still in the table until the new ones are written, on the
+            # last frame before the deal.
+            self.wait_until(lambda g: g.phase() == DUEL_PHASES["startup"] and
+                            all(slot < 0 for slot in g.duel()[0]["hand_slots"]), timeout, what="the duel's start")
+            old = self.peek("gDuel_aDeckCardRecords", 80 * 6)
+            self.wait_until(lambda g: g.peek("gDuel_aDeckCardRecords", 80 * 6) != old or
+                            g.phase() != DUEL_PHASES["startup"], timeout, what="the shuffled decks")
+            if self.phase() != DUEL_PHASES["startup"]:
+                raise ControlError("the cards were dealt before the decks could be changed (the same decks as the "
+                                   "duel before?)")
+            before_deal(self)
+        self.wait_until(lambda g: all(g.duel()[0]["hand"]), timeout, every=10, what="the hand")
         self.step(200)   # the cards come up from the deck
-        return taken + 200
+        return self.vblank - start
+
+    def decks(self) -> list[list[int]]:
+        """Both duel decks in draw order, card ids (gDuel_aDeckCardRecords,
+        duel_deck_card.h: 6 bytes a card, the player's 40 then the
+        opponent's 40)."""
+        data = self.peek("gDuel_aDeckCardRecords", 80 * 6)
+        ids = [struct.unpack_from("<h", data, 6 * i)[0] for i in range(80)]
+        return [ids[:40], ids[40:]]
+
+    def arrange_deck(self, side: int, cards: Iterable[int]) -> None:
+        """Bring these cards to the top of a shuffled deck (the first five
+        are the opening hand), the card's id and data block swapped with the
+        card there: for duel_ready's before_deal."""
+        data = bytearray(self.peek("gDuel_aDeckCardRecords", 80 * 6))
+        base = 40 * side
+        for position, card in enumerate(cards):
+            at = next(i for i in range(base + position, base + 40)
+                      if struct.unpack_from("<h", data, 6 * i)[0] == card)
+            top, there = 6 * (base + position), 6 * at
+            for offset in (0, 1, 3):   # the id and the card data block; deck_index and the flags stay
+                data[top + offset], data[there + offset] = data[there + offset], data[top + offset]
+        self.poke("gDuel_aDeckCardRecords", bytes(data))
 
     # The duel, as a player plays it (pad presses, and waits on what the game
     # holds; duel_scene_callbacks.c names the phases).
@@ -372,24 +413,34 @@ class Game:
 
     def _settle(self, timeout: int = 6000) -> None:
         """After an action: until the player can act again or it is no longer
-        their turn (the card's effect, the battle and the camera are done)."""
-        self.wait_until(lambda g: g.duel_over() or g.turn() != 0 or g.phase() in (DUEL_PHASES["hand"],
-                                                                                    DUEL_PHASES["field"]),
-                        timeout, every=2, what="the action to end")
+        their turn (the card's effect, the battle and the camera are done).
+        A question on the way (the guardian star of a ritual's monster,
+        asked during the card's use) gets Cross, the first answer offered,
+        once the game has stood in one phase for four seconds."""
+        start = changed = self.vblank
+        phase = self.phase()
+        while not (self.duel_over() or self.turn() != 0 or phase in (DUEL_PHASES["hand"], DUEL_PHASES["field"])):
+            if self.vblank - start >= timeout:
+                raise TimeoutError(f"the action to end not reached in {timeout} VBlanks (frame {self.frame}, "
+                                   f"phase {phase})")
+            if phase == DUEL_PHASES["position"] or self.vblank - changed >= 240:
+                self.press("cross", hold=4, after=36)
+                changed = self.vblank
+            else:
+                self.step(2)
+            if self.phase() != phase:
+                phase, changed = self.phase(), self.vblank
 
-    def hand_cursor(self) -> int | None:
-        """The hand slot under the cursor: the card gDuel_wSelectedCardID
-        names, when it is in the hand once."""
-        selected = self.u16("gDuel_wSelectedCardID")
-        ids = [card and card["id"] for card in self.duel()[0]["hand"]]
-        return ids.index(selected) if ids.count(selected) == 1 else None
+    def hand_cursor(self) -> int:
+        """The hand slot under the cursor (0-4)."""
+        return self.u8(HAND_CURSOR)
 
     def _hand_to(self, slot: int) -> None:
         for _ in range(10):
             at = self.hand_cursor()
             if at == slot:
                 return
-            self.press("right" if at is None or at < slot else "left", hold=4, after=8)
+            self.press("right" if at < slot else "left", hold=4, after=8)
         raise ControlError(f"the hand's cursor did not reach slot {slot}")
 
     def _place(self, face_up: bool, star: int) -> None:
