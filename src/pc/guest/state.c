@@ -920,9 +920,13 @@ static int from_game_code(void)
     return caller >= (uintptr_t)__start_game_text && caller < (uintptr_t)__stop_game_text;
 }
 
+/* MEMORIES_LOAD_STATE has been acted on (whether or not it loaded). */
+static int startup_done;
+int Memories_StateStartupDone(void) { return startup_done; }
+
 void Memories_StatePoint(unsigned presented_frames)
 {
-    static int startup_done, scripted_done;
+    static int scripted_done;
     static unsigned scripted_frame;
     static const char *scripted_path;
     char path[512];

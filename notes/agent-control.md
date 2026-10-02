@@ -147,6 +147,36 @@ build with the old combination; the eight smoke cases unchanged.
 script and controller. VBlank indices count from the recording's start, so a
 replay can begin at a state.
 
+**Landed** (`src/pc/debug/recorder.c`, format in `recorder.h`):
+
+- **Where:** `run_vblank` now ORs every source first (`Platform_Pad`,
+  `Control_Pad`, and the part exempt from View > Japanese buttons) and hands
+  them to `Recorder_Pads`, which notes them or, playing, replaces them;
+  then the deck slot screen's hold, the mods' `INPUT` hooks and the
+  Japanese buttons act on them as before, once. A change is buffered at the
+  VBlank (it may run from the timer) and written at the end of the
+  `VSync(0)` (`Recorder_Point`, before `Control_Point`), with a frame hash
+  (`H`) at every such point and a state every `MEMORIES_RECORD_STATES`
+  VBlanks (`S`). The file starts with the build and the facts every crash
+  report has (`F build`, `os`, `settings`, `mods`) and ends with `E`
+  when the game exits.
+- **Start:** from boot the indices are the VBlank count; with
+  `MEMORIES_LOAD_STATE` the recording starts at the first safe point after
+  the startup load (`Memories_StateStartupDone`), and so does a play.
+- **Play:** `MEMORIES_PLAY=path` gives the pads the file's bits (the live
+  ones are ignored) and ends the game at its `E`. A mod's `host->pad`
+  reads the played bits too (`Mods_PadSource`): it used to read the
+  keyboard directly, so the hand camera's L1 was lost in a play. It now
+  also sees a control client's bits, which it did not.
+- **Not recorded:** host actions (F5/F7, the deck slots on F6, the menus,
+  Esc), and a `load` through the channel (the indices would jump back): a
+  replay that needs those is a scripted one.
+- **Checked:** the duel-hand-camera input recorded to frame 7143 and played
+  back without it: the 7143 frame hashes and the 213 input changes agree.
+  A play from a state with state checkpoints agrees; with its first press
+  removed, the check names VBlank 3 and the first RAM range that differs.
+  Unset, a run's 7000 frame hashes equal origin/master's.
+
 ### 4. Replays
 
 A replay is a file with:

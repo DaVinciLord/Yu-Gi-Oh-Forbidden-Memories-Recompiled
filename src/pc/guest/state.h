@@ -61,6 +61,8 @@ void Memories_StateRequest(int what, int slot);
  * game resumes in the state's own VSync caller. */
 int Memories_StateSaveHere(const char *path);
 int Memories_StateLoadHere(const char *path, char *why, size_t why_size);
+/* The boot's MEMORIES_LOAD_STATE has been acted on (from presented frame 30). */
+int Memories_StateStartupDone(void);
 /* The running build's id (the `buildid` file beside the executable). */
 uint32_t Memories_StateBuildId(void);
 /* Locate the running build's symbol table beside the executable. */
