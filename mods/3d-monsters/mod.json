@@ -14,7 +14,7 @@
             "type": "choice",
             "default": 0,
             "choices": ["3D models", "Card art"],
-            "description": "3D models shows each monster standing on its card as its battle model. Card art shows an enlarged, glowing cutout of the card's own art instead. Attack cards always display plainly, in either style."
+            "description": "3D models shows each monster standing on its card as its battle model. Card art shows an enlarged cutout of the card's own art instead, with an optional glow. Monsters on attack cards works in 3D models only."
         },
         {
             "key": "scale",
