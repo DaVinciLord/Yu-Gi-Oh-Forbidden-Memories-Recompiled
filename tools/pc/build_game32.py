@@ -18,7 +18,7 @@ leading underscore; sections cannot be placed at chosen addresses, so the
 fixed game sections (save states across rebuilds) are not available; the
 section renames edit the COFF headers directly (rename_coff_sections) and
 __start_/__stop_ come from grouped marker sections; overrides win by link order instead of weakened symbols."""
-import argparse, concurrent.futures, csv, glob, hashlib, json, os, re, shutil, struct, subprocess, sys
+import argparse, concurrent.futures, csv, filecmp, glob, hashlib, json, os, re, shutil, struct, subprocess, sys
 import build_process
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -500,7 +500,7 @@ def build_mods(build, release=False):
                 continue
             if path.endswith(".c") or path.endswith(".h") or os.path.isdir(path):
                 continue
-            copy_if_newer(path, os.path.join(out_dir, os.path.relpath(path, source_dir)))
+            copy_if_changed(path, os.path.join(out_dir, os.path.relpath(path, source_dir)))
         mods.append((name, source_dir, out_dir))
     # All at once: a mod whose key is not remembered starts the preprocessor,
     # and a new key the compiler. Checked against this build's own export
@@ -532,14 +532,17 @@ def copy_languages(build, release=False):
         packs = [path for path in packs if path.replace(os.sep, "/") in tracked]
         shutil.rmtree(out_root, ignore_errors=True)
     for path in packs:
-        copy_if_newer(path, os.path.join(out_root, os.path.basename(path)))
+        copy_if_changed(path, os.path.join(out_root, os.path.basename(path)))
     if packs:
         print(f"{out_root}: " + ", ".join(os.path.splitext(os.path.basename(path))[0] for path in packs))
 
 
-def copy_if_newer(source, destination):
+def copy_if_changed(source, destination):
+    """Copy when the destination is missing or its bytes differ. Not by
+    date: a build folder in tmp is shared by every worktree (a junction),
+    and a newer file there may be another checkout's."""
     os.makedirs(os.path.dirname(destination), exist_ok=True)
-    if not os.path.exists(destination) or os.path.getmtime(destination) < os.path.getmtime(source):
+    if not os.path.exists(destination) or not filecmp.cmp(source, destination, shallow=False):
         shutil.copy2(source, destination)
 
 
@@ -550,20 +553,20 @@ def write_sdk(build):
         relative = os.path.relpath(header, "src")
         if relative.startswith(os.path.join("pc", "mods", "sdk")):
             relative = os.path.join("libc", os.path.relpath(header, "src/pc/mods/sdk"))
-        copy_if_newer(header, os.path.join(sdk, "include", relative))
+        copy_if_changed(header, os.path.join(sdk, "include", relative))
     for name in ("build_mod.py", "build_process.py"):
-        copy_if_newer(f"tools/pc/{name}", f"{sdk}/tools/{name}")
+        copy_if_changed(f"tools/pc/{name}", f"{sdk}/tools/{name}")
     # What else a mod author needs beside the headers: the texture pack tools
     # (the standard library only; upscale_pack.py also wants Pillow and
     # Upscayl, which it asks for), the example mods, and the notes that
     # describe all of it.
     for name in ("extract_images.py", "upscale_pack.py"):
-        copy_if_newer(f"tools/pc/{name}", f"{sdk}/tools/{name}")
+        copy_if_changed(f"tools/pc/{name}", f"{sdk}/tools/{name}")
     for path in glob.glob("examples/mods/**/*", recursive=True):
         if os.path.isfile(path):
-            copy_if_newer(path, os.path.join(sdk, os.path.relpath(path)))
+            copy_if_changed(path, os.path.join(sdk, os.path.relpath(path)))
     for name in ("modding.md", "mod-api-3.md", "more-cards.md"):
-        copy_if_newer(f"notes/{name}", f"{sdk}/notes/{name}")
+        copy_if_changed(f"notes/{name}", f"{sdk}/notes/{name}")
     # What this game lends a mod, for build_mod.py's check beside the game.
     import build_mod
     with open(f"{sdk}/exports.txt", "w") as handle:
@@ -589,14 +592,15 @@ def release_version():
             version = ""
     return version if re.fullmatch(VERSION_PATTERN, version) else ""
 
-def write_version(build):
+def write_version(build, force=False):
     """version.c: Memories_Version, rewritten only when it changes."""
     text = f'const char Memories_Version[] = "{release_version()}";\n'
     path = f"{build}/version.c"
     if not os.path.exists(path) or open(path).read() != text:
         with open(path, "w") as handle:
             handle.write(text)
-    if not os.path.exists(f"{build}/version.o") or os.path.getmtime(f"{build}/version.o") < os.path.getmtime(path):
+    stale = not os.path.exists(f"{build}/version.o") or os.path.getmtime(f"{build}/version.o") < os.path.getmtime(path)
+    if force or stale:
         run([CC, *NATIVE_CFLAGS, "-c", path, "-o", f"{build}/version.o"])
     return f"{build}/version.o"
 
@@ -632,6 +636,23 @@ def main():
     os.makedirs(options.build + "/obj", exist_ok=True)
     headers = glob.glob("src/**/*.h", recursive=True) + glob.glob("mods/**/*.h", recursive=True) + [__file__, "config/pc/host_symbol_renames.txt"]
     NEWEST_HEADER = max(os.path.getmtime(path) for path in headers)
+    # A build folder may have been built last by another checkout: tmp is
+    # shared by every worktree (a junction), and an object there newer than
+    # this checkout's source can be another checkout's code. checkout.txt
+    # names the checkout the folder was last built from, written when a
+    # build ends; when it is not this one (or not there), everything is
+    # compiled again. It is removed first, so a build stopped halfway
+    # compiles everything the next time too.
+    checkout = f"{options.build}/checkout.txt"
+    try:
+        with open(checkout, encoding="utf-8") as handle:
+            ours = handle.read() == os.path.realpath(ROOT) + "\n"
+    except OSError:
+        ours = False
+    if not ours:
+        if os.path.exists(checkout):
+            os.remove(checkout)
+        NEWEST_HEADER = float("inf")
     obj = lambda source: f"{options.build}/obj/{source.replace('/', '_')}.o"
     # main_menu is the only overlay with a private load address (0x80180000),
     # so it can simply be linked in. The 0x80168000 modules share one address
@@ -886,7 +907,7 @@ def main():
     run([CC, *NATIVE_CFLAGS, "-c", f"{options.build}/stubs.c", "-o", f"{options.build}/stubs.o"])
     write_mod_exports(options.build, game_defined | native_defined | tentative | set(pinned) | set(branches) | set(stubs),
                       aliases)
-    version = write_version(options.build)
+    version = write_version(options.build, force=not ours)
     output = f"{options.build}/memories-pc"
     if WINDOWS:
         output += ".exe"
@@ -983,6 +1004,8 @@ def main():
         json.dump(report, handle, indent=1)
     print(f"{output}: {len(game)} game units, {len(pinned)} pinned data symbols, " +
           ", ".join(f"{len(v)} {k} stubs" for k, v in report["stubbed"].items()))
+    with open(checkout, "w", encoding="utf-8") as handle:
+        handle.write(os.path.realpath(ROOT) + "\n")
 
 if __name__ == "__main__":
     main()
