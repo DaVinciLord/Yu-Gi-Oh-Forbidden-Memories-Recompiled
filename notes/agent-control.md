@@ -18,7 +18,7 @@ file.
   - `MEMORIES_DEBUG_DECK`, `MEMORIES_DEBUG_CHEST` and `MEMORIES_DEBUG_STARCHIPS` set up a save;
   - `MEMORIES_DUMP_FRAME` writes one picture, then exits;
   - `MEMORIES_FRAME_HASHES` writes a hash per presented frame.
-- **Determinism:** a run is deterministic only with HEADLESS (or DETERMINISTIC) and DUMP_FRAME and SPEED=-1 together.
+- **Determinism:** a run was deterministic only with HEADLESS (or DETERMINISTIC) and DUMP_FRAME and SPEED=-1 together (`MEMORIES_DETERMINISTIC=1` alone since step 1 below).
   - The silent mixer thread still runs in real time, so the sound driver's work area (`g_SDValue`, `0x801E0384..0x801E1B44`) and the spu chunks differ between two runs.
 - **No live channel:** no socket, no pipe, no recorder, and no way to read the game's state as data. Tests patch a state's `memory` chunk offline and read raw addresses.
 - **Debug > Jump to** has only Title Screen.
@@ -33,6 +33,20 @@ windowed, with no frame dump needed and no exit. Proven by the smoke hashes
 staying the same and by two runs giving identical frame hashes. Stepping the
 mixer by virtual time is a separate change; until then, RAM comparisons mask
 `g_SDValue` and the spu, libspu, bss and data chunks.
+
+**Landed** (`platform_common.c`, `virtual_clock()`). The old combination
+(HEADLESS or DETERMINISTIC, with DUMP_FRAME and SPEED=-1) still selects it,
+evaluated as before. In a window the virtual clock is shown at the game
+speed: `pace()` sleeps before each VBlank until its real time at the speed
+setting, and pause (P, focus loss) and frame step (`.`) hold or release the
+next VBlank; neither changes what the game sees. Headless runs flat out
+whatever the speed. The display's re-phasing of the VBlank at 100%
+(`Platform_NotifyPresent`) is off under the virtual clock. Checked on
+Windows, with the duel-hand-camera case's input through the first duel:
+7000 frame hashes (3425 distinct) identical between two headless runs (one
+under the crash monitor, one without), two windowed runs at SPEED=-1, the
+first 1500 of a windowed run paced at 100%, and a run of the origin/master
+build with the old combination; the eight smoke cases unchanged.
 
 ### 2. A control channel
 

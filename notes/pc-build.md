@@ -350,6 +350,12 @@ stored volume and applies headless too), `MEMORIES_SETTINGS` (another
 settings file), `MEMORIES_HEADLESS=1`,
 `MEMORIES_DUMP_FRAME=N` with `MEMORIES_DUMP_PATH` and optional
 `MEMORIES_DUMP_VRAM=1` (write frame N as PPM and exit),
+`MEMORIES_DETERMINISTIC=1` (the virtual clock for the whole run, headless
+or in a window, with no frame dump needed: two runs with the same input
+give the same frames; in a window the frames are shown at the game speed
+and pause and frame step work, headless runs flat out; see
+[Agent control](agent-control.md). `MEMORIES_HEADLESS` with
+`MEMORIES_DUMP_FRAME` and `MEMORIES_SPEED=-1` still selects it too),
 `MEMORIES_WINDOW_SHOT=N` (save the window as shown at frame N, as the
 screenshot key does, into `MEMORIES_SCREENSHOT_DIR` or the user folder),
 `MEMORIES_SCALE_AT=N:S` (change the internal resolution to S at frame N, as
@@ -1504,7 +1510,7 @@ load redraws it from VRAM. That costs about 9 ms a frame at 2x and 30 ms
 at 4x in the same duel. It is the OpenGL pass's oracle: `MEMORIES_DUMP_FRAME`
 with `MEMORIES_DUMP_PICTURE=1` writes the picture (from either renderer)
 instead of the frame, and `MEMORIES_DETERMINISTIC=1` makes a windowed run
-with a frame dump as deterministic as a headless one, so the two can be
+as deterministic as a headless one, so the two can be
 compared on one frame of the same build; the title, the main menu, a 2D
 duel frame and a 3D one come out identical pixel for pixel at 2x and 4x
 (three edge pixels differ on the 3D monster). The X11 backend shows VRAM
