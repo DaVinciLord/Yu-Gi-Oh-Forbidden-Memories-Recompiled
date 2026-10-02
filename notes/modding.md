@@ -350,7 +350,7 @@ its own:
 ]
 ```
 
-The cards take the ids after 722, in the order the mods are found, and work
+The cards take the ids after 722, in the mods' load order, and work
 in the Library, Build Deck, duels, rewards, trades and saves.
 An `art` PNG bigger than the card's 102x96 picture (408x384 is 4x) is also
 drawn at its own resolution when the internal resolution is above 1x, with

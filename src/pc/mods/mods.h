@@ -49,7 +49,7 @@ int Mods_RequiresRestart(int mod);
 void Mods_SetEnabled(int mod, int enabled);
 
 /* The "cards" array of every applied mod, with the directory its images are
- * named from, in the order the mods were found, for src/pc/cards (json.h
+ * named from, in load order (Mods_Loaded, below), for src/pc/cards (json.h
  * reads them). A data mod needs no code for them. */
 struct JsonValue;
 void Mods_VisitCards(void (*visit)(const char *id, const char *directory, const struct JsonValue *cards, void *context),

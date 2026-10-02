@@ -1845,8 +1845,12 @@ void Mods_VisitCards(void (*visit)(const char *id, const char *directory, const 
                      void *context)
 {
     int i;
-    for (i = 0; i < mod_count; i++) {
-        if (mods[i].active && Json_Count(mods[i].cards)) visit(mods[i].id, mods[i].directory, mods[i].cards, context);
+    /* In load order, as every other table reads the mods (Mods_Loaded):
+     * where two replace one card the later one wins, and the copies take
+     * their ids in that order. Cards_Build runs once, after the first load. */
+    for (i = 0; i < loaded_count; i++) {
+        const Mod *mod = &mods[loaded[i]];
+        if (mod->active && Json_Count(mod->cards)) visit(mod->id, mod->directory, mod->cards, context);
     }
 }
 

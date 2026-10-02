@@ -147,7 +147,8 @@ that has no retail counterpart. New arbitrary 3D geometry still requires a code
 mod or a replacement of the corresponding model data; `model` is a retail ID.
 
 New sidecar sections persist identities for ownership, seen flags and decks.
-Changing discovery order remaps the same cards. A missing card falls back to its
+Runtime ids follow the load order, so changing it (or which mods are applied)
+remaps the same cards. A missing card falls back to its
 retail base in a deck; its stored ownership/seen flags survive saves made with
 other card packs, and return when it is reinstalled.
 
