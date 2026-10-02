@@ -230,8 +230,11 @@ static void text(MenuCanvas *c, int x, int y, int w, const char *s, unsigned col
 }
 static void button(MenuCanvas *c, Rect r, const char *label, int accent)
 {
+    /* A label that does not fit the usual margins (the Load order's "+" in
+     * its 28-pixel button) is centred in what there is, not cut to "...". */
+    int pad = max(2 * unit, min(10 * unit, (r.w - width_text(label)) / 2));
     fill(c, r, accent ? ACCENT : EDGE);
-    text(c, r.x + 10 * unit, r.y + r.h / 2, r.w - 20 * unit, label, TEXT);
+    text(c, r.x + pad, r.y + r.h / 2, r.w - 2 * pad, label, TEXT);
 }
 static void centred(MenuCanvas *c, Rect r, const char *s, unsigned colour)
 {
