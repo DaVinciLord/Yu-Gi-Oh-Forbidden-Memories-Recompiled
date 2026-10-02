@@ -261,14 +261,18 @@ def inputs_key(directory, sources, extra_flags, into):
 
 def memo_folder(directory, sources, extra_flags):
     """Where the memos for these sources are: named by settings_digest, the
-    sources and the names of the headers that could be included, so that a
-    new header that would be found first (and was never read) also misses."""
+    sources and the names of every file that could be included (in the
+    game's headers or the SDK's, and in the mod's directory), so that a new
+    file that would be found first, and so was never read, also misses."""
     digest = settings_digest(directory, extra_flags)
     for source in sources:
         digest.update(os.path.basename(source).encode() + b"\0" + file_digest(source).encode() + b"\0")
     include = os.path.join(SDK, "include") if SHIPPED else os.path.join(ROOT, "src")
-    names = glob.glob(os.path.join(include, "**", "*.h"), recursive=True)
-    names += glob.glob(os.path.join(directory, "**", "*.h"), recursive=True)
+    names = glob.glob(os.path.join(include, "**", "*"), recursive=True)
+    # Not the object build_mod.py writes beside the sources by default.
+    output = os.path.abspath(os.path.join(directory, library_name(directory)))
+    names += [name for name in glob.glob(os.path.join(directory, "**", "*"), recursive=True)
+              if os.path.abspath(name) != output]
     listing = "\n".join(sorted(portable(os.path.abspath(name)) for name in names))
     digest.update(listing.encode("utf-8", "surrogateescape"))
     return os.path.join(CACHE, ".memo", f"{os.path.basename(os.path.abspath(directory))}-{digest.hexdigest()[:24]}")
@@ -281,6 +285,10 @@ def recall(folder):
             with open(path, encoding="utf-8") as handle:
                 memo = json.load(handle)
             if all(file_digest(name.replace("<root>", ROOT)) == digest for name, digest in memo["files"].items()):
+                try:
+                    os.utime(folder)   # in use: kept by prune
+                except OSError:
+                    pass
                 return memo["key"]
         except (OSError, ValueError, KeyError, AttributeError):
             continue   # a file gone, or a memo from another version of this script
@@ -335,6 +343,7 @@ def build(directory, out_dir=None, objects_dir=None, extra_flags=(), games=GAME_
     sources = sorted(glob.glob(os.path.join(directory, "*.c")))
     if not sources:
         return None
+    prune()
     name = library_name(directory)
     output = os.path.join(out_dir or directory, name)
     extra_flags = ["-I", directory, *extra_flags]
@@ -405,6 +414,22 @@ def publish(entry, name, stage, preprocessed, objects_dir, extra_flags, games):
             if attempt == 39:
                 raise
             time.sleep(0.25)   # a virus scanner still holding the new file (Windows)
+
+
+@functools.lru_cache(maxsize=None)
+def prune():
+    """Once per process: drop what nothing will use. A staging folder
+    (.<mod>-XXXX) a day old is from a build that was stopped; a memo folder
+    no build has found a key in for 30 days is from sources that are gone.
+    Objects stay: each is small, and one may be about to be copied."""
+    now = time.time()
+    for path in glob.glob(os.path.join(CACHE, ".*-*")) + glob.glob(os.path.join(CACHE, ".memo", "*")):
+        try:
+            age = now - os.path.getmtime(path)
+        except OSError:
+            continue
+        if age > (30 if os.path.basename(os.path.dirname(path)) == ".memo" else 1) * 86400:
+            shutil.rmtree(path, ignore_errors=True)
 
 
 def undefined_names(output):

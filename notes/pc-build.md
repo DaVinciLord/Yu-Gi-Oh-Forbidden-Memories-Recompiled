@@ -93,8 +93,9 @@ Running the preprocessor costs a process start per source, which a virus
 scanner makes slow on Windows. `tmp/pc/mod-build/.memo/<mod>-<digest>/`
 holds memos (as ccache's direct mode): the key the preprocessor gave, with
 the SHA-256 of every file it read. The folder is named by the settings, the
-sources and the names of every header that could be included, so a new
-header found first also misses; a memo whose files are all unchanged gives
+sources and the names of every file under `src/` (or the SDK's `include/`)
+and the mod's directory, so a new file that would be included first also
+misses; a memo whose files are all unchanged gives
 the key with no process started. A memo is not written when a file it read
 changed while the preprocessor ran, nor when it named a file that cannot be
 found. It leads only to a key that has an object: when that object is
@@ -103,8 +104,10 @@ missing, the key is taken from the preprocessor again before building.
 Since the key covers the compiler, builds with different compilers (llvm-mingw
 on Windows and gcc under WSL, say) keep an object each, and either runs on
 both systems; `./build-pc.sh` builds both games with one compiler and so
-copies one object beside both. Old entries are a few hundred KB and are not
-pruned; `tmp/pc/mod-build` can be deleted at any time, and so can the
+copies one object beside both. Each build removes staging folders a day old
+(from a build that was stopped) and memo folders no build has used for 30
+days; objects are a few hundred KB and stay. `tmp/pc/mod-build` can be
+deleted at any time, and so can the
 folders from before the key (`<mod>/`, `e1e2eded/`) and
 `tmp/pc/mod-objects`, which nothing uses any more.
 
