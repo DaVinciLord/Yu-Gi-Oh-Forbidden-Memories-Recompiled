@@ -52,6 +52,15 @@ MODE = {"debug": 0, "animated_battle": 1, "campaign": 2, "duel": 3, "library": 4
         "free_duel": 6, "build_deck": 7, "menu": 8, "name_entry": 9, "password": 10, "options": 11,
         "game_over": 12, "unused_developer": 13, "trade": 14, "credits": 15, "two_player_setup": 16}
 MODE_NAMES = {value: name for name, value in MODE.items()}
+# The duel scene's phases: gDuel_wSceneStateFlags & 0xF indexes
+# gDuel_apfnSceneStateHandler (src/game/duel_scene_callbacks.c).
+DUEL_PHASES = {"effect_preview": 0, "startup": 1, "draw": 2, "draw_resolution": 3, "hand": 4, "field": 5,
+               "card_use": 6, "placement": 7, "position": 8, "battle": 9, "turn_switch": 10, "resume": 11,
+               "result": 12, "rewards": 13, "exodia": 14}
+# The duel's two grid cursors' column bytes (DuelFieldCursor.col; .row follows):
+# the field's, and the attack target's.
+FIELD_CURSOR, TARGET_CURSOR = 0x800E9F57, 0x800E9F73
+CARD_OCCUPIED = 0x8000   # duel_card_layout.h, DUEL_CARD_FLAG_OCCUPIED
 # Where each `jump` target lands (title_jump.h): the mode it runs.
 JUMP_MODES = {"title": MODE["menu"], "debug": MODE["debug"], "duel": MODE["duel"], "free_duel": MODE["free_duel"],
               "build_deck": MODE["build_deck"], "library": MODE["library"], "password": MODE["password"],
@@ -68,10 +77,14 @@ FALLBACK = {
     "gDuel_bOpponentID": 0x8009B361,      # the duellist the next duel is against
     "D_800E9FF0": 0x800E9FF0,             # duel_side_state.h: DuelSideState[2], 0x20 each
     "D_801A7AD8": 0x801A7AD8,             # duel_card.h: DuelCardRecord[30], 0x1C each
+    "D_800907D8": 0x800907D8,             # duel_grid.h: the field grid, u8[2][20] record indices
     "gDuel_awPlayerDeck": 0x801D0200,     # save_data.h: the player's deck, u16[40] card ids
     "gLibrary_abCardChest": 0x801D0250,   # save_data.h: copies in the chest, u8 by card id - 1
     "gLibrary_dwStarchips": 0x801D07E0,   # save_data.h: SaveDataState.starchips, u32
     "gSaveData_aPlayerNameSjis": 0x801D060C,  # save_data.h: the player's name, Shift JIS
+    "gDuel_wSceneStateFlags": 0x8009B23A, # duel_scene_state.h: the duel's phase in the low four bits
+    "gDuel_wSelectedCardID": 0x8009B338,  # the card under the duel's cursor
+    "D_8009B1D5": 0x8009B1D5,             # duel_side_state.h: whose turn, 0 the player
     "D_8009B26E": 0x8009B26E,             # a mode's step; 0x80 in a duel: the deck screen before it
 }
 # Overlay modules (tools/pc/build_game32.py, MODULES): the load address and
@@ -335,6 +348,129 @@ class Game:
         self.step(200)   # the cards come up from the deck
         return taken + 200
 
+    # The duel, as a player plays it (pad presses, and waits on what the game
+    # holds; duel_scene_callbacks.c names the phases).
+
+    def phase(self) -> int:
+        """The duel scene's phase (DUEL_PHASES): gDuel_wSceneStateFlags & 0xF."""
+        return self.u16("gDuel_wSceneStateFlags") & 0xF
+
+    def turn(self) -> int:
+        """Whose turn it is: 0 the player, 1 the opponent (D_8009B1D5)."""
+        return self.u8("D_8009B1D5")
+
+    def duel_over(self) -> bool:
+        return self.mode() != MODE["duel"] or self.phase() in (DUEL_PHASES["result"], DUEL_PHASES["rewards"],
+                                                               DUEL_PHASES["exodia"])
+
+    def wait_turn(self, phases=("hand", "field"), timeout: int = 20000) -> int:
+        """Until the player can act (their turn, in one of these phases) or
+        the duel is over."""
+        wanted = {DUEL_PHASES[name] for name in phases}
+        return self.wait_until(lambda g: g.duel_over() or (g.turn() == 0 and g.phase() in wanted), timeout,
+                               every=2, what="the player's turn")
+
+    def _settle(self, timeout: int = 6000) -> None:
+        """After an action: until the player can act again or it is no longer
+        their turn (the card's effect, the battle and the camera are done)."""
+        self.wait_until(lambda g: g.duel_over() or g.turn() != 0 or g.phase() in (DUEL_PHASES["hand"],
+                                                                                    DUEL_PHASES["field"]),
+                        timeout, every=2, what="the action to end")
+
+    def hand_cursor(self) -> int | None:
+        """The hand slot under the cursor: the card gDuel_wSelectedCardID
+        names, when it is in the hand once."""
+        selected = self.u16("gDuel_wSelectedCardID")
+        ids = [card and card["id"] for card in self.duel()[0]["hand"]]
+        return ids.index(selected) if ids.count(selected) == 1 else None
+
+    def _hand_to(self, slot: int) -> None:
+        for _ in range(10):
+            at = self.hand_cursor()
+            if at == slot:
+                return
+            self.press("right" if at is None or at < slot else "left", hold=4, after=8)
+        raise ControlError(f"the hand's cursor did not reach slot {slot}")
+
+    def _place(self, face_up: bool, star: int) -> None:
+        """Past the raised card: the side it is put down on (the card shows
+        its back; Left or Right turns it), the zone (the game's first free
+        one), then for a monster its guardian star."""
+        if face_up:
+            self.press("right", hold=4, after=12)
+        self.press_until(lambda g: g.phase() != DUEL_PHASES["hand"] or g.duel_over(), "cross", every=40,
+                         timeout=1200, what="the zone choice")
+        self.press_until(lambda g: g.phase() != DUEL_PHASES["placement"] or g.duel_over(), "cross", every=40,
+                         timeout=1200, what="the zone")
+        if self.phase() == DUEL_PHASES["position"] and star:
+            for _ in range(star):
+                self.press("down", hold=4, after=12)
+        if self.phase() == DUEL_PHASES["position"]:
+            self.press_until(lambda g: g.phase() != DUEL_PHASES["position"] or g.duel_over(), "cross", every=40,
+                             timeout=1200, what="the guardian star")
+        self._settle()
+
+    def play_card(self, slot: int, face_up: bool = False, star: int = 0) -> None:
+        """Play the card in hand slot `slot` (0-4): face down unless asked,
+        to the first free zone, with its first guardian star (or the
+        `star`th after it). A magic card played face up is activated."""
+        self.wait_turn(("hand",))
+        self._hand_to(slot)
+        self.press("cross", hold=4, after=30)
+        self._place(face_up, star)
+
+    def fuse(self, slots: Iterable[int], face_up: bool = False, star: int = 0) -> None:
+        """Fuse hand cards in this order: each marked with Up, then Cross."""
+        self.wait_turn(("hand",))
+        for slot in slots:
+            self._hand_to(slot)
+            self.press("up", hold=4, after=16)
+        self.press("cross", hold=4, after=30)
+        self._place(face_up, star)
+
+    def _cursor_to(self, column_address: int, column: int, what: str) -> None:
+        for _ in range(12):
+            at = self.u8(column_address)
+            if at == column:
+                return
+            self.press("right" if at < column else "left", hold=4, after=16)
+        raise ControlError(f"the {what} cursor did not reach column {column}")
+
+    def attack(self, column: int = 0, target: int | None = None) -> None:
+        """Attack with the player's monster in field() row 2, `column`, the
+        opponent's monster in field() row 1, column `target` (as the player
+        sees the field), or directly when `target` is None. The game asks
+        for a card from the hand every turn first, so this comes after
+        play_card or fuse. The cursors: the field's column at 0x800E9F57
+        (its row at 0x800E9F58), the target's at 0x800E9F73; their
+        records' col and row bytes are duel_grid.h's DuelFieldCursor."""
+        self.wait_turn()
+        if self.phase() != DUEL_PHASES["field"]:
+            raise ControlError("attack from the field: play a card first (the game asks for one every turn)")
+        if not self.field()[2][column]:
+            raise ControlError(f"no monster of the player's in column {column}")
+        for _ in range(4):   # to the monsters' row
+            row = self.u8(FIELD_CURSOR + 1)
+            if row == 2:
+                break
+            self.press("down" if row < 2 else "up", hold=4, after=16)
+        self._cursor_to(FIELD_CURSOR, column, "field")
+        self.press("cross", hold=4, after=40)   # the monster: its targets are offered
+        if target is not None:
+            if not self.field()[1][target]:
+                raise ControlError(f"no monster of the opponent's in column {target}")
+            self._cursor_to(TARGET_CURSOR, target, "target")
+        self.press("cross", hold=4, after=30)
+        self._settle()
+
+    def end_turn(self, timeout: int = 30000) -> None:
+        """Start ends the player's turn; back when it is theirs again (the
+        opponent has played) or the duel is over."""
+        self.wait_turn()
+        self.press_until(lambda g: g.turn() != 0 or g.duel_over(), "start", every=60, timeout=1200,
+                         what="the end of the turn")
+        self.wait_turn(("hand",), timeout)
+
     def shot(self, path: Path | str) -> Path:
         """The presented picture, as PNG (PPM for a .ppm path); relative
         paths go in the run's folder."""
@@ -400,25 +536,41 @@ class Game:
         }
         if mode & 0x1F in (MODE["duel"], MODE["campaign"]):
             result["duel"] = self.duel()
+            result["field"] = self.field()
+            result["phase"] = self.phase()
+            result["turn"] = self.turn()
         return result
+
+    def field(self) -> list[list[int | None]]:
+        """The field as the player sees it, four rows of five card ids (None
+        empty): the opponent's spell and trap row, their monsters, the
+        player's monsters, the player's spells and traps. Laid out by the
+        game's own grid (D_800907D8[0], duel_grid.h: a record index a slot)."""
+        grid = self.peek("D_800907D8", 20)
+        records = self.peek("D_801A7AD8", 30 * RECORD_SIZE)
+        def card(index: int) -> int | None:
+            card_id, flags = struct.unpack_from("<h8xH", records, index * RECORD_SIZE + 0x0C)
+            return card_id if card_id > 0 and flags & CARD_OCCUPIED else None
+        return [[card(grid[row * 5 + column]) for column in range(5)] for row in range(4)]
 
     def duel(self) -> list[dict[str, object]]:
         """Both sides of the duel: 0 the player, 1 the opponent. A hand slot
         whose byte at +0x1A is negative is empty (its card record keeps the
-        card it held); a field zone is taken when its record has a card id.
-        `flags` is the record's raw word (0x8000 set on every card dealt;
-        0x1000 seen on a card just played). Checked against pictures of the
-        first duel's opening hand and its first monster; a destroyed card's
-        zone is not checked yet."""
+        card it held).
+        `flags` is the record's word (duel_card_layout.h: 0x8000 occupied,
+        0x4000 used this turn, 0x1000 face down, 0x0800 defense position);
+        a zone or slot without 0x8000 is empty."""
         sides = self.peek("D_800E9FF0", 2 * SIDE_SIZE)
         records = self.peek("D_801A7AD8", 30 * RECORD_SIZE)
 
         def card(index: int) -> dict[str, int] | None:
             at = index * RECORD_SIZE
             card_id, attack, defense, _, _, flags = struct.unpack_from("<hhhhhH", records, at + 0x0C)
-            if card_id <= 0:
+            if card_id <= 0 or not flags & CARD_OCCUPIED:
                 return None
-            return {"id": card_id, "attack": attack, "defense": defense, "flags": flags}
+            return {"id": card_id, "attack": attack, "defense": defense, "flags": flags,
+                    "face_down": bool(flags & 0x1000), "defense_position": bool(flags & 0x0800),
+                    "used_this_turn": bool(flags & 0x4000)}
 
         result = []
         for side in range(2):

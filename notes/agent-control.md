@@ -282,11 +282,26 @@ CI can hold retail inputs.
   reads both LP and the hand, plays the first card and takes four pictures,
   in one process (about 13 s), with no frame number anywhere. Two runs
   agree on every number and picture.
-- **Not yet:** the semantic layer, and the acceptance rewrites. A first
-  purchase of `test_packs.py` and its "same input, same pack" check ran on
-  the client in one process (the opening still its `MEMORIES_INPUT`),
-  pokes in place of a state patched offline; that check is what showed
-  states did not carry the random seed.
+- **Semantic layer** (on pad presses and waits on what the game holds):
+  `goto(target, opponent, deck)` (step 6) and `duel_ready()`; in a duel
+  `phase()` (`gDuel_wSceneStateFlags & 0xF`, the index into
+  `gDuel_apfnSceneStateHandler`: 4 hand, 5 field, 7 placement, 8 position
+  and guardian star, 9 battle, 10 turn switch, 12-14 the result), `turn()`
+  (`D_8009B1D5`), `wait_turn()`, `field()` (four rows of five as the player
+  sees them, laid out by the game's grid `D_800907D8[0]`), `play_card(slot,
+  face_up, star)`, `fuse(slots)` (Up marks each, in order), `attack(column,
+  target)` and `end_turn()`. The hand's cursor is found by
+  `gDuel_wSelectedCardID`, the field's and the attack target's by their
+  `DuelFieldCursor` column bytes (`0x800E9F57`, `0x800E9F73`, found by
+  watching RAM while pressing). A card goes to the zone the game offers
+  first; the game asks for a card every turn, so an attack follows a play.
+  A card record counts only with `DUEL_CARD_FLAG_OCCUPIED`; its flags are
+  decoded (face down, defense position, used this turn). Checked in a duel
+  against duelist 3 with cards 1-40: a monster played, the turn ended and
+  the opponent's monster came, a second played and an attack on the
+  opponent's defending monster (6500 LP after it, the attacker kept), and
+  a fusion of two hand cards.
+- **Acceptance rewrites:** see Acceptance below.
 
 ### 6. Jump to
 
