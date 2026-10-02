@@ -743,16 +743,18 @@ class _Check:
                                         "life_points.start", v)
                     elif k == "duelists":
                         for d, dv in _obj(v).items():
-                            who = self.duelist_key(d)
-                            if who == ALL:
+                            # tables.c read_life_points: "all" is its own (a named duelist wins over it
+                            # whatever the order); an opponent the game lacks is left out.
+                            who = self.known_duelist(self.duelist_key(d))
+                            if who is None:
                                 continue
                             key, label = ("lp", who), f"life_points.duelists.{d[:60]}"
                             if isinstance(dv, dict):
                                 for s, sv in dv.items():
                                     if s in ("player", "opponent"):
                                         self.limit_claim(mod, f"{label}.{s}", key + (s,), canonical(sv), sv)
-                            else:
-                                self.limit_both(mod, label, key, key + ("player",), key + ("opponent",), d, dv)
+                            elif _int(dv):   # a number is the duelist's own LP: the opponent's side alone
+                                self.limit_claim(mod, label, key + ("opponent",), canonical(dv), dv)
                     elif isinstance(v, dict):
                         for s, sv in v.items():
                             self.limit_claim(mod, f"{path}.{s[:60]}", None, canonical(sv), sv)

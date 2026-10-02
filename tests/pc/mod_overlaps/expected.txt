@@ -26,6 +26,7 @@ Guardian Stars|warning|reset|alpha, beta|Matchup Mars attacking Jupiter	Matchup 
 Limits|warning|later|alpha, beta|Limit attack	Limit attack (Alpha, Beta): Beta wins (later in load order)
 Limits|warning|later|alpha, beta|Limit life_points	Limit life_points (Alpha, Beta): Beta wins (later in load order)
 Limits|warning|later|alpha, beta|Limit chest_overflow.limit	Limit chest_overflow.limit (Alpha, Beta): Beta wins (later in load order)
+Limits|info|after|beta, gamma|Limit life_points.duelists.all	Limit life_points.duelists.all (Beta, Gamma): Gamma wins (it loads after Beta on purpose: after/requires)
 Terrain bonuses|warning|reset|alpha, beta|Forest bonus of Beast	Forest bonus of Beast (Alpha, Beta): Beta's "replace" clears what the earlier mods set
 Duelists|warning|later|alpha, beta, gamma|Duelist 'Heishin' replaced	Duelist 'Heishin' replaced (Alpha, Beta, Gamma): Gamma wins (later in load order)
 Duelists|warning|first|alpha, beta|Free Duel slot 41	Free Duel slot 41 (Alpha, Beta): Alpha keeps it, earlier in load order; the others take the next free slot

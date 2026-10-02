@@ -125,7 +125,8 @@
         "life_points": {
             "start": 12000,
             "duelists": {
-                "Heishin": 20000
+                "Heishin": 20000,
+                "all": 9000
             }
         },
         "chest": 5,

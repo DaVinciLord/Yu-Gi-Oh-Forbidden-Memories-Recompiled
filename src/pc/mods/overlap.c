@@ -1019,9 +1019,11 @@ static void read_limits(ModsOverlaps *x, int mod)
                     limit_both(x, mod, path, path, "life_points.player", "life_points.opponent", "life_points.start", k);
                 else if (!strcmp(name_of(k), "duelists")) {
                     for (const JsonValue *d = Json_At(object_of(k), 0); d; d = Json_Next(d)) {
-                        uint64_t who = duelist_key(x, name_of(d));
+                        /* tables.c read_life_points: "all" is its own (a named duelist wins
+                         * over it whatever the order); an opponent the game lacks is left out. */
+                        uint64_t who = known_duelist(x, duelist_key(x, name_of(d)));
                         char key[200], side[220], label[220];
-                        if (who == ALL_DUELISTS) continue; /* a named duelist wins over "all" whatever the order */
+                        if (who == NO_DUELIST) continue;
                         snprintf(key, sizeof(key), "life_points.duelists.#%llx", (unsigned long long)who);
                         snprintf(label, sizeof(label), "life_points.duelists.%.60s", name_of(d));
                         if (Json_TypeOf(d) == JSON_OBJECT) {
@@ -1032,11 +1034,10 @@ static void read_limits(ModsOverlaps *x, int mod)
                                 snprintf(path_side, sizeof(path_side), "%s.%s", label, name_of(s));
                                 limit_claim(x, mod, path_side, side, value_of(s), s);
                             }
-                        } else {
-                            char player[240], opponent[240];
-                            snprintf(player, sizeof(player), "%s.player", key);
-                            snprintf(opponent, sizeof(opponent), "%s.opponent", key);
-                            limit_both(x, mod, label, key, player, opponent, name_of(d), d);
+                        } else if (Json_TypeOf(d) == JSON_NUMBER) {
+                            /* A number is the duelist's own LP: the opponent's side alone. */
+                            snprintf(side, sizeof(side), "%s.opponent", key);
+                            limit_claim(x, mod, label, side, value_of(d), d);
                         }
                     }
                 } else if (Json_TypeOf(k) == JSON_OBJECT) {

@@ -93,5 +93,15 @@
             "replace": "Heishin",
             "name": "Gamma's Heishin"
         }
-    ]
+    ],
+    "limits": {
+        "life_points": {
+            "duelists": {
+                "Heishin": {
+                    "player": 3000
+                },
+                "all": 7000
+            }
+        }
+    }
 }
