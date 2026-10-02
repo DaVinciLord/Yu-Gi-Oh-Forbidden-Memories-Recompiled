@@ -158,7 +158,7 @@ static DWORD WINAPI run_clock(void *unused)
              * report writes files, and the main thread may hold the C
              * runtime's locks. */
             stall_reported = 1;
-#if AV_TEST_NO_THREAD_CONTEXT
+#if 0 /* AV test: hang registers back */
             memset(&context, 0, sizeof(context)); /* AV test: no registers */
             stall_report(&context);
 #else
@@ -452,7 +452,7 @@ static void write_dump(const char *kind, EXCEPTION_POINTERS *pointers, DWORD thr
     file = CreateFileW(wide, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     free(wide);
     if (file == INVALID_HANDLE_VALUE) return;
-#if AV_TEST_NO_THREAD_CONTEXT
+#if 0 /* AV test: minidumps back */
     (void)exception;
     (void)thread;
     (void)pointers;
