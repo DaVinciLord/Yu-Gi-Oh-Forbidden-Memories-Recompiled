@@ -18,8 +18,8 @@ mod changes too, by kind with counts: the first four lines of each, **and N
 more** to show the rest (up to 200), a warning where only one mod's change is
 used and a dim line where they add up, agree or follow an `after`; the header
 counts the overlaps between all enabled mods ([When mods
-overlap](modding.md#when-mods-overlap)). They follow the enabled set and
-order staged in the window. Lower Order values load first, subject to
+overlap](modding.md#when-mods-overlap)). They follow the enabled set, the
+order and the settings staged in the window. Lower Order values load first, subject to
 dependencies.
 
 Changes are staged until **Apply changes**. Restart-only changes share one

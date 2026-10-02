@@ -146,7 +146,7 @@ of those stays as the earlier one set it. Its name (with the plate that says
 it), text, password, art, `title`, `field_art` and `fusion_groups` take the
 earlier one's place whether it gives them or not: left out, the card's own
 come back. Notes add up ([below](#notes-on-a-card)). The Mods window notes
-it.
+it ([When mods overlap](modding.md#when-mods-overlap)).
 
 ## Frame colour
 
