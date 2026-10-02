@@ -19,8 +19,10 @@ Drops and decks|info|add|alpha, gamma|Seto's TEC drops	Seto's TEC drops (Alpha, 
 Starter decks|info|add|alpha, beta|Starter decks	Starter decks (Alpha, Beta): both apply and add up
 Passwords|warning|later|alpha, beta, gamma|Price of 'Kuriboh'	Price of 'Kuriboh' (Alpha, Beta, Gamma): Gamma wins (later in load order)
 Passwords|warning|later|alpha, beta|Price of 'Mystical Elf'	Price of 'Mystical Elf' (Alpha, Beta): Beta wins (later in load order, through its "all")
+Card packs|warning|sold|alpha, beta|Password 12345678	Password 12345678 (Alpha, Beta): Beta's pack 'first' is sold, the first in the list; the others' with it are not
 Card packs|warning|later|alpha, beta|The pack shop's rules	The pack shop's rules (Alpha, Beta): Beta wins (later in load order)
 Card packs|warning|later|alpha, beta|Pack shop 'main'	Pack shop 'main' (Alpha, Beta): Beta wins (later in load order)
+Card packs|warning|sold|alpha, gamma|Password 00000001	Password 00000001 (Alpha, Gamma): the digits give Gamma's card 'Mystical Elf', not the others' card or pack
 Guardian Stars|warning|later|alpha, beta|The name of star 11, Fire	The name of star 11, Fire (Alpha, Beta): Beta wins (later in load order)
 Guardian Stars|warning|reset|alpha, beta|Matchup Mars attacking Jupiter	Matchup Mars attacking Jupiter (Alpha, Beta): Beta's "replace" clears what the earlier mods set
 Limits|warning|later|alpha, beta|Limit attack	Limit attack (Alpha, Beta): Beta wins (later in load order)

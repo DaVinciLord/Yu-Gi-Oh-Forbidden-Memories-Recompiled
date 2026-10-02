@@ -29,13 +29,14 @@
 #include <string.h>
 
 enum { SET, ADD, FIXED, BASE, CHAIN, EVENT, FIRST };   /* what a claim does */
-enum { VIA_WIDE = 1, AIMED = 2, RESETS = 4 };          /* claim flags */
+enum { VIA_WIDE = 1, AIMED = 2, RESETS = 4, CARD_PW = 8 }; /* claim flags (CARD_PW: a card's password) */
 enum {
     O_LATER, O_AFTER, O_AGREE, O_ADD, O_RESET, O_FIXED, O_KEYS, O_BYTES, O_CHAIN, O_EVENTS, O_FIRST, O_AIMED,
-    O_PATCHED, O_EARLY
+    O_PATCHED, O_EARLY, O_SOLD
 };
 static const char *const outcome_words[] = {"later", "after", "agree", "add",   "reset",   "fixed", "keys",
-                                            "bytes", "chain", "events", "first", "aimed", "patched", "early"};
+                                            "bytes", "chain", "events", "first", "aimed", "patched", "early",
+                                            "sold"};
 
 #define CARD_COUNT 722             /* the disc's cards: what "replace" and the Password screen take */
 /* The order the game reads the mods' "cards" in: the order the mods were
@@ -66,7 +67,7 @@ typedef struct {
 } Claim;
 
 typedef struct {
-    int first, count, winner, other, outcome;
+    int first, count, winner, other, outcome, best; /* best: the claim a password gives (O_SOLD) */
     unsigned char kind, severity;
 } Group;
 
@@ -108,7 +109,7 @@ struct ModsOverlaps {
     Defined *defined;
     int defined_count, defined_room;
     unsigned char star_declared[16];
-    int seq, failed;
+    int seq, failed, packs_declared;
 };
 
 /* --- small tools ---------------------------------------------------------- */
@@ -1305,14 +1306,78 @@ static void pack_rules(ModsOverlaps *x, int mod, const JsonValue *rules)
         labelled(x, claim(x, MODS_OVERLAP_PACKS, mod, (1ull << 62) | (hash_text(id) >> 2), SET, value_of(s), s), label);
     }
 }
+/* The digits typed on the Password screen, as a number: up to eight digits
+ * as a string, or a number 0-99999999 (packs.c read_password); -1 for none. */
+#define PASSWORD_KEY (3ull << 62)
+static long password_number(const JsonValue *value)
+{
+    const char *text = Json_String(value, NULL);
+    if (Json_TypeOf(value) == JSON_NUMBER) {
+        long number = Json_Number(value, -1);
+        return number >= 0 && number <= 99999999L ? number : -1;
+    }
+    if (!text || !*text || strlen(text) > 8 || strspn(text, "0123456789") != strlen(text)) return -1;
+    return atol(text);
+}
+/* A pack's password: of two packs with one, the first in the packs' list is
+ * sold (by "order", else the place it is declared in, across all mods;
+ * packs.c Packs_Finish); a card with it too is what the digits sell
+ * (pack_shop.c check_passwords). */
+static void pack_passwords(ModsOverlaps *x, int mod, const JsonValue *list)
+{
+    for (const JsonValue *p = Json_At(list_of(list), 0); p; p = Json_Next(p)) {
+        long password, declared;
+        char label[40];
+        Claim *c;
+        if (Json_TypeOf(p) != JSON_OBJECT) continue;
+        declared = x->packs_declared++;
+        if ((password = password_number(Json_Member(p, "password"))) < 0) continue;
+        snprintf(label, sizeof(label), "Password %08ld", password);
+        if ((c = claim(x, MODS_OVERLAP_PACKS, mod, PASSWORD_KEY | (uint64_t)password, SET, 0, p))) {
+            c->lo = Json_TypeOf(Json_Member(p, "order")) == JSON_NUMBER ? Json_Number(Json_Member(p, "order"), 0)
+                                                                         : declared;
+            c->hi = declared;
+            labelled(x, c, label);
+        }
+    }
+}
 static void read_packs(ModsOverlaps *x, int mod)
 {
     const JsonValue *packs = member(x, mod, "packs");
     if (Json_TypeOf(packs) == JSON_STRING) {
         const JsonValue *file = mod_file(x, mod, Json_String(packs, NULL));
-        if (Json_TypeOf(file) == JSON_OBJECT) pack_rules(x, mod, Json_Member(file, "pack_shop"));
-    }
+        if (Json_TypeOf(file) == JSON_OBJECT) {
+            pack_passwords(x, mod, Json_Member(file, "packs"));
+            pack_rules(x, mod, Json_Member(file, "pack_shop"));
+        } else
+            pack_passwords(x, mod, file);
+    } else
+        pack_passwords(x, mod, packs);
     pack_rules(x, mod, member(x, mod, "pack_shop"));
+}
+/* The passwords a mod gives the disc's cards ("passwords", by card), beside
+ * the packs' and each other's: of two cards with one, the screen gives the
+ * lower card number (tables.c Tables_CheckPasswords). */
+static void card_passwords(ModsOverlaps *x, int mod)
+{
+    for (const JsonValue *m = Json_At(object_of(member(x, mod, "passwords")), 0); m; m = Json_Next(m)) {
+        const JsonValue *v = Json_Member(m, "password");
+        uint64_t card;
+        long password;
+        Claim *c;
+        char label[40];
+        if (same_letters(name_of(m), "all") || !(card = card_text(x, name_of(m))) || (card > CARD_COUNT && card < TEXT_KEY))
+            continue;
+        password = Json_String(v, NULL) && same_letters(Json_String(v, ""), "card number") && card <= CARD_COUNT
+                       ? (long)card : password_number(v);
+        if (password < 0) continue;
+        snprintf(label, sizeof(label), "Password %08ld", password);
+        if ((c = claim(x, MODS_OVERLAP_PACKS, mod, PASSWORD_KEY | (uint64_t)password, SET, 0, m))) {
+            c->flags |= CARD_PW;
+            c->lo = card < TEXT_KEY ? (long long)card : 0x7FFFFFFF;
+            labelled(x, c, label);
+        }
+    }
 }
 
 /* Code: function hooks chain, the mod applied last called first; event
@@ -1607,6 +1672,21 @@ static void decide(ModsOverlaps *x, Group *g)
         g->severity = MODS_OVERLAP_INFO;
         return;
     case MODS_OVERLAP_DATA: decide_data(x, g); return;
+    case MODS_OVERLAP_PACKS:
+        if ((c[0].key >> 62) == 3) { /* one password: a card's first (the lowest), else the first pack */
+            int best = -1;
+            for (i = 0; i < g->count; i++) {
+                int card = !!(c[i].flags & CARD_PW), best_card = best >= 0 && (c[best].flags & CARD_PW);
+                if (best < 0 || (card && !best_card) ||
+                    (card == best_card && (c[i].lo < c[best].lo || (c[i].lo == c[best].lo && c[i].hi < c[best].hi))))
+                    best = i;
+            }
+            g->winner = c[best].mod;
+            g->best = best;
+            g->outcome = O_SOLD;
+            return;
+        }
+        break;
     default: break;
     }
     for (i = 0; i < g->count; i++) {
@@ -1807,6 +1887,7 @@ ModsOverlaps *Mods_OverlapCompute(const ModsOverlapMod *mods, int count, const M
             claim(x, MODS_OVERLAP_STARTER, mod, 0, ADD, 0, member(x, mod, "starter"));
         if (having(x, "passwords") >= 2) read_passwords(x, mod);
         if (having(x, "packs") + having(x, "pack_shop") >= 2) read_packs(x, mod);
+        if (having(x, "packs") + having(x, "passwords") >= 2 && having(x, "passwords")) card_passwords(x, mod);
         if (having(x, "guardian_stars") >= 2) read_stars(x, mod);
         if (having(x, "limits") + having(x, "chest_overflow") >= 2) read_limits(x, mod);
         if (having(x, "terrain_bonus") >= 2) read_terrain(x, mod);
@@ -2075,6 +2156,16 @@ void Mods_OverlapText(const ModsOverlaps *x, int index, char *out, size_t size)
     case O_AIMED:
         snprintf(out, size, "%s (%s): %s changes %s's own on purpose", label, names, winner, other);
         break;
+    case O_SOLD: {
+        const Claim *best = &x->claims[g->first + g->best];
+        if (best->flags & CARD_PW)
+            snprintf(out, size, "%s (%s): the digits give %s's card '%s'%s", label, names, winner, name_of(best->src),
+                     g->count > 1 ? ", not the others' card or pack" : "");
+        else
+            snprintf(out, size, "%s (%s): %s's pack '%s' is sold, the first in the list; the others' with it are not",
+                     label, names, winner, Json_String(Json_Member(best->src, "id"), Json_String(Json_Member(best->src, "name"), "?")));
+        break;
+    }
     case O_EARLY:
         snprintf(out, size, "%s (%s): %s's change is left out: it loads before %s, whose button it names", label,
                  names, winner, other);

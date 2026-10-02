@@ -233,6 +233,7 @@ class Claim:
     via: str | None = None       # the wide key's own name, for the line
     lo: int = 0
     hi: int = 0
+    card_pw: bool = False         # a card's password, beside the packs'
 
 
 @dataclass
@@ -243,6 +244,7 @@ class Overlap:
     outcome: str = "later"
     winner: int = -1
     other: int = -1
+    best: object = None          # the claim a password gives ("sold")
     label: str = ""
     text: str = ""
     mods: list = field(default_factory=list)
@@ -276,6 +278,7 @@ class _Check:
         self.star_names = {}
         self.star_declared = set()
         self.defined = []
+        self.packs_declared = 0
         self.declared = set()
         for w, mod in enumerate(mods):
             for key in ("after", "requires"):
@@ -637,13 +640,50 @@ class _Check:
                 continue
             self.claim(PACKS, mod, ("shop", sid), SET, canonical(shop), shop, f"Pack shop '{sid[:60]}'")
 
+    def pack_passwords(self, mod, packs):
+        """A pack's password: of two packs with one, the first in the packs'
+        list is sold (by "order", else its place across all mods)."""
+        for pack in _list(packs):
+            if not isinstance(pack, dict):
+                continue
+            declared = self.packs_declared
+            self.packs_declared += 1
+            password = _password_number(pack.get("password"))
+            if password < 0:
+                continue
+            c = self.claim(PACKS, mod, ("password", password), SET, 0, pack, f"Password {password:08d}")
+            c.lo = pack["order"] if _int(pack.get("order")) else declared
+            c.hi = declared
+
     def read_packs(self, mod):
         packs = self.member(mod, "packs")
         if isinstance(packs, str):
             found = self.mod_file(mod, packs)
             if isinstance(found, dict):
+                self.pack_passwords(mod, found.get("packs"))
                 self.pack_rules(mod, found.get("pack_shop"))
+            else:
+                self.pack_passwords(mod, found)
+        else:
+            self.pack_passwords(mod, packs)
         self.pack_rules(mod, self.member(mod, "pack_shop"))
+
+    def card_passwords(self, mod):
+        """The passwords a mod gives the disc's cards, beside the packs' and
+        each other's: of two cards with one, the screen gives the lower number."""
+        for name, entry in _obj(self.member(mod, "passwords")).items():
+            card = None if letters(name) == "all" else self.card_text(name)
+            if card is None or (isinstance(card, int) and card > CARD_COUNT):
+                continue
+            value = _obj(entry).get("password")
+            if isinstance(value, str) and letters(value) == "cardnumber" and isinstance(card, int):
+                password = card
+            else:
+                password = _password_number(value)
+            if password < 0:
+                continue
+            c = self.claim(PACKS, mod, ("password", password), SET, 0, name, f"Password {password:08d}")
+            c.card_pw, c.lo = True, card if isinstance(card, int) else 0x7FFFFFFF
 
     def learn_star_names(self):
         for i in range(1, 11):
@@ -917,6 +957,8 @@ class _Check:
                 self.read_passwords(mod)
             if self.having("packs") + self.having("pack_shop") >= 2:
                 self.read_packs(mod)
+            if self.having("packs") + self.having("passwords") >= 2 and self.having("passwords"):
+                self.card_passwords(mod)
             if self.having("guardian_stars") >= 2:
                 self.read_stars(mod)
             if self.having("limits") + self.having("chest_overflow") >= 2:
@@ -987,6 +1029,11 @@ class _Check:
             return
         if o.kind == DATA:
             self.decide_data(o)
+            return
+        if o.kind == PACKS and isinstance(c[0].key, tuple) and c[0].key[0] == "password":
+            # One password: a card's first (the lowest number), else the first pack in the list.
+            best = min(c, key=lambda x: (not x.card_pw, x.lo, x.hi))
+            o.winner, o.best, o.outcome = best.mod, best, "sold"
             return
         fixed = last = -1
         for i, x in enumerate(c):
@@ -1277,6 +1324,12 @@ class _Check:
             return head + "each is called, higher priority first; a before-hook that handles it stops the rest"
         if o.outcome == "first":
             return head + f"{winner} keeps it, earlier in load order; the others take the next free slot"
+        if o.outcome == "sold":
+            if o.best.card_pw:
+                tail = ", not the others' card or pack" if len(o.claims) > 1 else ""
+                return head + f"the digits give {winner}'s card '{o.best.src}'{tail}"
+            pack = _json_string(o.best.src.get("id")) or _json_string(o.best.src.get("name")) or "?"
+            return head + f"{winner}'s pack '{pack}' is sold, the first in the list; the others' with it are not"
         if o.outcome == "early":
             return head + f"{winner}'s change is left out: it loads before {other}, whose button it names"
         return head + f"{winner} changes {other}'s own on purpose"
@@ -1289,6 +1342,16 @@ def _order(claims) -> list:
         if c.mod not in seen:
             seen.append(c.mod)
     return seen
+
+
+def _password_number(value) -> int:
+    """The digits typed on the Password screen, as a number (packs.c
+    read_password): up to eight digits, or a number 0-99999999; -1 for none."""
+    if _int(value):
+        return value if 0 <= value <= 99999999 else -1
+    if not isinstance(value, str) or not value or len(value) > 8 or not all(c in "0123456789" for c in value):
+        return -1
+    return int(value)
 
 
 def _notes_only(entry: dict) -> bool:

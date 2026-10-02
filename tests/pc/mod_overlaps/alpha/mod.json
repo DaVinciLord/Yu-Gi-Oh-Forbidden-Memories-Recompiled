@@ -196,5 +196,14 @@
                 "name": "CARD SHOP"
             }
         ]
-    }
+    },
+    "packs": [
+        {
+            "id": "starter",
+            "password": "12345678",
+            "cards": [
+                "Kuriboh"
+            ]
+        }
+    ]
 }

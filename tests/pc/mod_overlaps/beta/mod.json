@@ -173,5 +173,15 @@
                 "name": "MAIN"
             }
         ]
-    }
+    },
+    "packs": [
+        {
+            "id": "first",
+            "password": 12345678,
+            "order": -1,
+            "cards": [
+                "Kuriboh"
+            ]
+        }
+    ]
 }

@@ -39,6 +39,9 @@
     "passwords": {
         "Kuriboh": {
             "starchips": 99
+        },
+        "Mystical Elf": {
+            "password": "00000001"
         }
     },
     "menu": {
