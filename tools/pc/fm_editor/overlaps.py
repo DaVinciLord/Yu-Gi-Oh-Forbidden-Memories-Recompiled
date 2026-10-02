@@ -1143,7 +1143,9 @@ class _Check:
                 self.claim(STARTER, mod, 0, ADD, 0)
             if self.having("passwords") >= 2:
                 self.read_passwords(mod)
-            if self.having("packs") + self.having("pack_shop") >= 2:
+            # A pack's password meets another mod's pack or card password too.
+            if self.having("packs") + self.having("pack_shop") >= 2 or \
+                    (self.having("packs") and self.having("packs") + self.having("passwords") >= 2):
                 self.read_packs(mod)
             if self.having("packs") + self.having("passwords") >= 2 and self.having("passwords"):
                 self.card_passwords(mod)

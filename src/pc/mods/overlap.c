@@ -1928,7 +1928,10 @@ ModsOverlaps *Mods_OverlapCompute(const ModsOverlapMod *mods, int count, const M
         if (having(x, "starter") >= 2 && member(x, mod, "starter"))
             claim(x, MODS_OVERLAP_STARTER, mod, 0, ADD, 0, member(x, mod, "starter"));
         if (having(x, "passwords") >= 2) read_passwords(x, mod);
-        if (having(x, "packs") + having(x, "pack_shop") >= 2) read_packs(x, mod);
+        /* A pack's password meets another mod's pack or card password too. */
+        if (having(x, "packs") + having(x, "pack_shop") >= 2 ||
+            (having(x, "packs") && having(x, "packs") + having(x, "passwords") >= 2))
+            read_packs(x, mod);
         if (having(x, "packs") + having(x, "passwords") >= 2 && having(x, "passwords")) card_passwords(x, mod);
         if (having(x, "guardian_stars") >= 2) read_stars(x, mod);
         if (having(x, "limits") + having(x, "chest_overflow") >= 2) read_limits(x, mod);

@@ -299,6 +299,30 @@ int main(void)
         Json_Free(docs[1]);
     }
 
+    /* One mod's pack and another's card password, and no second pack: the
+     * digits give the card (pack_shop.c check_passwords). */
+    {
+        static const char *const texts[2] = {"{\"passwords\":{\"Kuriboh\":{\"password\":\"87654321\"}}}",
+                                             "{\"packs\":[{\"name\":\"B\",\"cards\":[1],\"password\":\"87654321\"}]}"};
+        JsonDocument *docs[2];
+        ModsOverlapMod pair[2];
+        for (int m = 0; m < 2; m++) {
+            docs[m] = Json_Parse(texts[m], error, sizeof(error));
+            assert(docs[m]);
+            pair[m].id = m ? "b" : "a";
+            pair[m].name = m ? "B" : "A";
+            pair[m].directory = NULL;
+            pair[m].manifest = Json_Root(docs[m]);
+        }
+        found = Mods_OverlapCompute(pair, 2, NULL);
+        assert(found && Mods_OverlapCount(found) == 1);
+        Mods_OverlapText(found, 0, line, sizeof(line));
+        assert(!strcmp(line, "Password 87654321 (A, B): the digits give A's card 'Kuriboh', not the others' card or pack"));
+        Mods_OverlapFree(found);
+        Json_Free(docs[0]);
+        Json_Free(docs[1]);
+    }
+
     /* A name as json.c reads it and the game keeps it: a \u escape is one
      * byte (0xC9 alone, not UTF-8), and six names of 95 bytes are all in
      * the line, each cut to 95 bytes where a letter starts. */

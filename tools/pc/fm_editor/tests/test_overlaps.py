@@ -116,6 +116,15 @@ class SameAsTheGame(unittest.TestCase):
         self.assertEqual(found[0].text, "Card #1 (A, B): B's attack is used and the title A gave is dropped, as B's "
                                         "replace starts it from the disc's (later in load order); the rest combines")
 
+    def test_pack_password_beside_one_mods_card(self):
+        # One mod's pack and another's card password, and no second pack:
+        # the digits give the card (pack_shop.c check_passwords).
+        a = overlaps.Mod("a", "A", {"passwords": {"Kuriboh": {"password": "87654321"}}})
+        b = overlaps.Mod("b", "B", {"packs": [{"name": "B", "cards": [1], "password": "87654321"}]})
+        found = overlaps.check([a, b])
+        self.assertEqual([o.text for o in found], ["Password 87654321 (A, B): the digits give A's card 'Kuriboh', "
+                                                   "not the others' card or pack"])
+
     def test_duelists_64(self):
         # 64 duelists in one mod's folder, then one of its list without an
         # "id", then another mod's duelist whose pool file a third mod meets
