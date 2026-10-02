@@ -467,14 +467,16 @@ static void read_data(ModsOverlaps *x, int mod)
                   own_value(mod), entry);
         } else if (lba >= 0) {
             /* The sectors it reaches: a replacement's run, a patch's bytes. */
-            long sectors = Json_Number(Json_Member(entry, "sectors"), 1);
+            /* In long long: a long is 32 bits in the game, and a manifest's
+             * numbers may be as large as one holds. */
+            long long sectors = Json_Number(Json_Member(entry, "sectors"), 1);
             long long lo = -1, hi = -1;
             if (replace) {
                 lo = lba;
-                hi = lba + (sectors > 0 ? sectors : 1) - 1;
+                hi = (long long)lba + (sectors > 0 ? sectors : 1) - 1;
             }
             for (const JsonValue *p = Json_At(list_of(Json_Member(entry, "patch")), 0); p; p = Json_Next(p)) {
-                long at = Json_Number(Json_Member(p, "at"), 0), length = patch_length(p);
+                long long at = Json_Number(Json_Member(p, "at"), 0), length = patch_length(p);
                 long long first, last;
                 if (at < 0) continue;
                 first = lba + at / 2048;
