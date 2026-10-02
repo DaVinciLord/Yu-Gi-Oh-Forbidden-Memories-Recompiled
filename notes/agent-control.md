@@ -6,8 +6,9 @@ no unit test saw. This is the plan for tools that let a test, or an agent,
 drive the game completely, and that turn a bug report into a replay that
 fails until the bug is fixed and is kept from then on.
 
-Status: design. Each phase below lands with its own code and updates this
-file.
+Status: phase 1 steps 1 and 2 landed, step 5 as a first cut (see the
+**Landed** notes under each); the rest is design. Each phase below lands
+with its own code and updates this file.
 
 ## What exists
 
@@ -20,7 +21,7 @@ file.
   - `MEMORIES_FRAME_HASHES` writes a hash per presented frame.
 - **Determinism:** a run was deterministic only with HEADLESS (or DETERMINISTIC) and DUMP_FRAME and SPEED=-1 together (`MEMORIES_DETERMINISTIC=1` alone since step 1 below).
   - The silent mixer thread still runs in real time, so the sound driver's work area (`g_SDValue`, `0x801E0384..0x801E1B44`) and the spu chunks differ between two runs.
-- **No live channel:** no socket, no pipe, no recorder, and no way to read the game's state as data. Tests patch a state's `memory` chunk offline and read raw addresses.
+- **No live channel:** no socket, no pipe, no recorder, and no way to read the game's state as data. Tests patch a state's `memory` chunk offline and read raw addresses. (Steps 2 and 5 below add the channel and its client; no recorder yet.)
 - **Debug > Jump to** has only Title Screen.
 - **Existing tests:** `tools/pc/smoke.py` (8 frame-hash cases) and `tools/pc/test_packs.py` (state patching) are the closest thing to replays. About 600 one-off agent scripts in `tmp/` repeat the same environment boilerplate, button macros, one-process-per-frame captures and RAM peeks.
 
@@ -129,8 +130,10 @@ build with the old combination; the eight smoke cases unchanged.
     one frame into it (`ok frame F vblank V`), or `err` with the reason
     (no notice on screen). The frame count is the run's own and is not in a
     state; the VBlank count is. Checked in the story and in the duel: the 60
-    frames after a load hash as the 60 after the save. A state saved during
-    the opening movie did not resume pixel-exact.
+    frames after a load hash as the 60 after the save; and, since states
+    carry the random seed (chunk `rng`, which this check found missing), a
+    pack bought from a state twice, loaded in place, deals the same cards.
+    A state saved during the opening movie did not resume pixel-exact.
   - `info`: `ok frame F vblank V mode M build B` (M the raw mode byte
     `D_8009B26C`, B the build id in hex).
   - `quit`: `ok`, then the game ends as when its window is closed (exit 0).
@@ -172,6 +175,49 @@ CI can hold retail inputs.
 - **Symbols and structs:** reads symbols from the symbol table the port already ships for state relocation, and decodes structs from `src/game/*.h` and `notes/`. `state()` gives the mode, both duel sides (LP, hand, field), the deck, chest, starchips and opponent as data.
 - **Primitives:** `press(keys)`, `wait_until(predicate, timeout)`, `shot()`, `ram()`.
 - **Semantic layer:** `goto_free_duel(opponent, deck)`, `play_card`, `attack`, `fuse`, built on pad and poke.
+
+**First cut landed** (`tools/pc/yfm_control.py`, `Game`):
+
+- **Launch:** like `smoke.py`: a `tmp/pc/control/run-XXXXXXXX` folder of
+  its own (or `out=`) with the settings file (`settings=` by key, the rest
+  the defaults), the user folder and the log; the mods shipped beside the
+  executable, or `mods_dir=`; `MEMORIES_DETERMINISTIC=1`, headless by
+  default; Wine for a Windows build off Windows (`smoke.launcher`). A free
+  port is picked and retried if the game cannot listen on it. The process
+  ends with its `Game` (`with`, `quit()`, or when the object or the
+  interpreter goes), since a game whose client has gone runs on.
+- **Primitives:** `step`, `info`, `mode`, `resident(module)` (an overlay's
+  identifier word at its load address), `pad`, `press(keys, hold=6,
+  after=6)` and `presses` (names: `start`, `cross`, `up+cross`...),
+  `wait_until(predicate, timeout)`, `wait_mode`, `press_until(predicate,
+  keys)` (a press every so many VBlanks until something holds: dialogue
+  and menus without counting frames), `shot`, `hash`, `peek`/`poke`/`u8`/
+  `u16`/`u32` by address or symbol, `save`/`load`, `quit`.
+- **Symbols:** deviation from the plan: the table shipped for state
+  relocation (`symbols/<build id>.txt`) holds only host addresses (every
+  function, and the variables of the game's own sections), none of the
+  guest globals a test reads. The client reads names from
+  `config/pc/guest_addresses.txt`, the table the build pins those globals
+  with, and falls back to constants, each with the header it comes from.
+- **`state()`:** the mode (and its flags), the opponent
+  (`gDuel_bOpponentID`), the starchips, the deck (`gDuel_awPlayerDeck`),
+  the chest (`gLibrary_abCardChest`) and, in the story or a duel, both sides
+  (`D_800E9FF0`, `duel_side_state.h`): LP shown and real, the maximum, the
+  deck cursor, the hand and the field. Cards come from the 30 records at
+  `D_801A7AD8` (`duel_card.h`), 15 a side: five hand slots, five monster
+  zones, five spell and trap zones (`D_800907CC`, `D_800907D8`); a hand slot
+  is empty when its byte at +0x1A is negative (the record keeps the card).
+  Checked against pictures of the first duel's hand and its first monster.
+- **Example:** `tools/pc/examples/control_first_duel.py` boots, starts a new
+  game, follows the story to the first duel by the mode and the modules,
+  reads both LP and the hand, plays the first card and takes four pictures,
+  in one process (about 13 s), with no frame number anywhere. Two runs
+  agree on every number and picture.
+- **Not yet:** the semantic layer, and the acceptance rewrites. A first
+  purchase of `test_packs.py` and its "same input, same pack" check ran on
+  the client in one process (the opening still its `MEMORIES_INPUT`),
+  pokes in place of a state patched offline; that check is what showed
+  states did not carry the random seed.
 
 ### 6. Jump to
 
