@@ -299,12 +299,17 @@ def remember(folder, key, read, started):
     if read is None:
         return
     files = {}
-    for path in sorted(read):
-        if os.path.getmtime(path) >= started:
-            return   # changed while the preprocessor ran: the key may not be of what is there now
-        files[portable(path)] = file_digest(path)
-    os.makedirs(folder, exist_ok=True)
-    handle, temporary = tempfile.mkstemp(dir=folder, suffix=".tmp")
+    try:
+        for path in sorted(read):
+            if os.path.getmtime(path) >= started:
+                return   # changed while the preprocessor ran: the key may not be of what is there now
+            files[portable(path)] = file_digest(path)
+        os.makedirs(folder, exist_ok=True)
+        handle, temporary = tempfile.mkstemp(dir=folder, suffix=".tmp")
+    except OSError:
+        # A header gone since the preprocessor read it (a checkout while the
+        # mod builds), or the folder pruned by another build just now.
+        return
     try:
         with os.fdopen(handle, "w", encoding="utf-8") as stream:
             json.dump({"key": key, "files": files}, stream, indent=0)
