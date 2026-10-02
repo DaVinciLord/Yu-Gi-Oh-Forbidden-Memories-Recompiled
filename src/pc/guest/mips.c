@@ -30,6 +30,38 @@
 #include <string.h>
 #include "pc/compat/mman.h"
 
+/* AV test (av/no-mips, not for merging): no MIPS interpreter on Windows.
+ * Every overlay routine "fails"; duel effects and models fall back, and the
+ * credits stop the game. */
+#ifdef _WIN32
+uint32_t Memories_MipsThunkTarget;
+int Memories_MipsInOverlay(uint32_t address) { (void)address; return 0; }
+int Memories_MipsTry(uint32_t address, const uint32_t *args, unsigned count, uint32_t *result)
+{
+    (void)args;
+    (void)count;
+    *result = 0;
+    fprintf(stderr, "memories-pc: no MIPS interpreter in this build (0x%08x)\n", address);
+    return -1;
+}
+uint32_t Memories_MipsCall(uint32_t address, uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3)
+{
+    (void)a0;
+    (void)a1;
+    (void)a2;
+    (void)a3;
+    Crash_ReportFatal("MIPS overlay", "no MIPS interpreter in this build");
+    (void)address;
+    exit(71);
+}
+uint32_t Memories_MipsThunk(uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5,
+                            uint32_t a6, uint32_t a7, uint32_t a8, uint32_t a9, uint32_t a10, uint32_t a11)
+{
+    (void)a1; (void)a2; (void)a3; (void)a4; (void)a5; (void)a6; (void)a7; (void)a8; (void)a9; (void)a10; (void)a11;
+    return Memories_MipsCall(Memories_MipsThunkTarget, a0, 0, 0, 0);
+}
+#else
+
 #define STACK_BASE 0x9FF00000u
 #define STACK_SIZE 0x40000u
 #define LIMIT 20000000u
@@ -379,3 +411,4 @@ uint32_t Memories_MipsThunk(uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, 
     }
     return result;
 }
+#endif /* !_WIN32 (AV test) */
