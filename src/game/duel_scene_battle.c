@@ -190,6 +190,14 @@ void DuelScene_UpdateBattle(void)
         if (!(D_8009B174 & 0x80) && ((D_8009B0F4_abs & 0x02000030) | D_8009B134_abs) == 0) {
             if (!(D_8009B174 & 0x40)) {
                 id = D_8009B22A;
+#ifdef MEMORIES_PC
+                /* A trap that springs as another (Cards_TrapId) shows as
+                   itself: D_8009B22A is the trap whose effect it has,
+                   D_8009B1B8 the card that sprang. */
+                if (id != 0) {
+                    id = (s16)D_801A7AD8[D_8009B1B8].card_id;
+                }
+#endif
                 D_8009B174 |= 0x40;
                 if (id == 0) {
                     if (D_800E9EF0[1] != 0) {
