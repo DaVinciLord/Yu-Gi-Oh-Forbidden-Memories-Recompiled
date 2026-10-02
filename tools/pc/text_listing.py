@@ -33,10 +33,11 @@ GLYPH_COUNT = 0x5C
 STRING_TABLE = 0x801C0000   # u16 offsets: menus 0x000-0x0FF, descriptions 0x100+, dialogue 0x400+
 NAME_TABLE = 0x801D5800     # u16 offsets from 0x801D0000, ids 0x8000+
 
-# Strings the game writes while it runs (the player's name and the two
-# names a two-player screen loads): their bytes are a placeholder, and a
-# reference to one must reach the game's own buffer.
-BUFFERS = {0x801B125A, 0x801B122B, 0x801B1238}
+# Strings the game writes while it runs (the player's name, the two names a
+# two-player screen loads and the Password screen's eight digits, string
+# 0xFD): their bytes are a placeholder, and a reference to one must reach the
+# game's own buffer.
+BUFFERS = {0x801B125A, 0x801B122B, 0x801B1238, 0x801B1245}
 
 # Characters the retail glyphs are written as, where the glyph table's
 # Shift-JIS is not the character a translator would type.

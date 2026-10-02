@@ -598,9 +598,30 @@ const unsigned char *Text_CompileOwn(const char *listing, int id, size_t *size)
     return NULL;
 }
 
+/* Strings the game writes while it runs: the player's name (0x125A), the
+ * two names a two-player screen loads (0x122B, 0x1238) and the Password
+ * screen's eight digits (string 0xFD, Password_RefreshDigitDisplay). A mod's
+ * string for one is a copy of the placeholder (FM Editor imports from before
+ * the listing knew 0x1245 write 0xFD as blanks): the game would show it, not
+ * what it wrote. */
+static int game_buffer(const unsigned char *retail)
+{
+    uintptr_t at = (uintptr_t)retail;
+    return at == 0x801B122Bu || at == 0x801B1238u || at == 0x801B1245u || at == 0x801B125Au;
+}
+
 const unsigned char *Text_Resolve(int id, const unsigned char *retail)
 {
     const unsigned char *own = overrides && id >= 0 && id <= 0xFFFF ? overrides[id] : NULL;
+    if (own && game_buffer(retail)) {
+        static unsigned char told[0x10000 / 8];
+        if (!(told[id >> 3] & (1 << (id & 7)))) {
+            told[id >> 3] |= (unsigned char)(1 << (id & 7));
+            LOG(LOG_MODS, "text: [%04X] is a place the game writes (the player's name, the Password screen's "
+                          "digits): the mod's string for it is left out", id);
+        }
+        own = NULL;
+    }
     const unsigned char *card = NULL, *side = side_name(id), *drops = CardDrops_Text(id), *shop = DeckMenu_Text(id);
     const unsigned char *page = FreeDuelPage_Text(id), *packs = PackShop_Text(id);
     if (page) return page;   /* the Free Duel grid's page (free_duel/page_box.h) */
