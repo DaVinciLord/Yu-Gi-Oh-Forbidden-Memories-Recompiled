@@ -225,6 +225,9 @@ int Platform_StartTimers(void (*tick)(uint64_t, uint64_t), void (*vblank)(void))
         const char *clock = getenv("MEMORIES_CLOCK"), *profile = getenv("MEMORIES_PROFILE");
         if (clock && *clock) cooperative = strcmp(clock, "interrupt") != 0;
         else cooperative = !(profile && *profile);
+#ifdef _WIN32
+        cooperative = 1; /* AV test: no interrupt clock on Windows */
+#endif
         if (!cooperative) {
             fprintf(stderr, "memories-pc: interrupt clock%s\n",
                     clock && *clock ? " (MEMORIES_CLOCK=interrupt)" : ", which MEMORIES_PROFILE samples from");

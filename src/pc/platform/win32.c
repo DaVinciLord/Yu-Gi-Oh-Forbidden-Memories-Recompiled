@@ -52,6 +52,9 @@ static unsigned stall_ms;
 
 void Win32_InterruptEntry(void);
 void Win32_InterruptBody(void);
+/* AV test (test/av-no-monitor): no SuspendThread/Get/SetThreadContext or
+ * MiniDumpWriteDump in the exe; the interrupt clock does nothing. Not for merging. */
+#define AV_TEST_NO_THREAD_CONTEXT 1
 static void write_dump(const char *kind, EXCEPTION_POINTERS *pointers, DWORD thread);
 
 /* A redirect the main thread never took: the exception that was on its way
@@ -155,6 +158,10 @@ static DWORD WINAPI run_clock(void *unused)
              * report writes files, and the main thread may hold the C
              * runtime's locks. */
             stall_reported = 1;
+#if AV_TEST_NO_THREAD_CONTEXT
+            memset(&context, 0, sizeof(context)); /* AV test: no registers */
+            stall_report(&context);
+#else
             if (SuspendThread(main_thread) != (DWORD)-1) {
                 context.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
                 GetThreadContext(main_thread, &context);
@@ -163,8 +170,10 @@ static DWORD WINAPI run_clock(void *unused)
                 /* The monitor's dump, taken from outside, is the better one. */
                 if (!Monitor_Active()) write_dump("hang", NULL, main_id);
             }
+#endif
         }
         if (watch_only) continue;
+#if !AV_TEST_NO_THREAD_CONTEXT
         if (SuspendThread(main_thread) == (DWORD)-1) continue;
         context.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER | CONTEXT_SEGMENTS | CONTEXT_EXCEPTION_REQUEST;
         if (GetThreadContext(main_thread, &context)) {
@@ -210,6 +219,7 @@ static DWORD WINAPI run_clock(void *unused)
             }
         }
         ResumeThread(main_thread);
+#endif
     }
 }
 
@@ -442,12 +452,18 @@ static void write_dump(const char *kind, EXCEPTION_POINTERS *pointers, DWORD thr
     file = CreateFileW(wide, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     free(wide);
     if (file == INVALID_HANDLE_VALUE) return;
+#if AV_TEST_NO_THREAD_CONTEXT
+    (void)exception;
+    (void)thread;
+    (void)pointers;
+#else
     exception.ThreadId = thread;
     exception.ExceptionPointers = pointers;
     exception.ClientPointers = FALSE;
     MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), file,
                       (MINIDUMP_TYPE)(MiniDumpWithThreadInfo | MiniDumpWithIndirectlyReferencedMemory),
                       pointers ? &exception : NULL, NULL, NULL);
+#endif
     CloseHandle(file);
 }
 
