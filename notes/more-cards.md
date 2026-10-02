@@ -73,10 +73,11 @@ they are written. The runtime ids follow each other in that order, so
 moving a mod in the load order renumbers the cards added after it for the
 run: saves and deck slots keep them by identity (above), and a save state
 made with another order is refused, as for any change of the mods' order
-([Mod API 3](mod-api-3.md#save-states)). What a copy leaves out is its base
-as the entries before it left it: a copy of a card that an earlier mod in
-load order replaces has the replacement's stats, a later mod's replace does
-not reach it. A mod
+([Mod API 3](mod-api-3.md#save-states)). The stats a copy leaves out are its
+base's as the entries before it left them: a copy of a card that an earlier
+mod in load order replaces has the replacement's stats, a later mod's
+replace does not reach them. A name, text or picture it leaves out is its
+base's as the game ends up with it, later mods' replaces included. A mod
 with `cards` needs a restart to apply or remove, like a data override: the
 cards are counted once, when the game starts. The window and the log
 (`MEMORIES_TRACE=mods`) say which ids each entry got.
