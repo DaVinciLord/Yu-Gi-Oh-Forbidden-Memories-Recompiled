@@ -406,6 +406,12 @@ int ObjectLoader_Load(const void *data, size_t size, ObjectResolver resolve, voi
         fail(&loader, "is empty");
         goto done;
     }
+#ifdef _WIN32
+    /* AV test (av/no-mod-code, not for merging): no mod code is ever loaded
+     * into executable memory on Windows. */
+    fail(&loader, "cannot load: code mods are off in this test build");
+    goto done;
+#endif
     if (read_sections(&loader) || lay_out(&loader, &code_size, &total)) goto done;
     image = mmap(NULL, total, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (image == MAP_FAILED) {
