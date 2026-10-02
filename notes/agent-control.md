@@ -234,7 +234,7 @@ CI can hold retail inputs.
 - **The bug as a replay:** `state-load-rng` buys a pack from a state, loads
   the state in the same game and buys it again with the same presses. On
   this branch without "Port: save states carry the game's random seed" it
-  fails (`dealt {2, 3, 4, 7, 8}, then {4, 8, 8, 8, 9} after loading it`);
+  fails (`dealt {4, 5, 7, 7, 9}, then {2, 4, 5, 6, 8} after loading it`);
   with it, it passes.
 
 ### 5. The Python client
