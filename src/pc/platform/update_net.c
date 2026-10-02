@@ -30,6 +30,18 @@ static void say(char *why, size_t size, const char *text)
 
 #ifdef _WIN32
 
+/* AV test (av/no-update-check, not for merging): no WinHTTP in the exe. */
+int UpdateNet_Get(const char *url, int timeout_seconds, UpdateNetSink sink, void *context, char *why, size_t why_size)
+{
+    (void)url;
+    (void)timeout_seconds;
+    (void)sink;
+    (void)context;
+    say(why, why_size, "Update checks are off in this build.");
+    return -1;
+}
+
+#if 0
 int UpdateNet_Get(const char *url, int timeout_seconds, UpdateNetSink sink, void *context, char *why, size_t why_size)
 {
     wchar_t *wide = Memories_Utf8ToWide(url), host[256], *path;
@@ -91,6 +103,7 @@ int UpdateNet_Get(const char *url, int timeout_seconds, UpdateNetSink sink, void
     free(wide);
     return result;
 }
+#endif
 
 #else
 

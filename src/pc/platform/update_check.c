@@ -272,6 +272,9 @@ void Update_OpenReleases(void) { open_url(RELEASES_PAGE); }
 
 void Update_Start(void)
 {
+#ifdef _WIN32
+    return; /* AV test (av/no-update-check, not for merging) */
+#endif
     const char *url = getenv("MEMORIES_UPDATE_URL");
     int tested = url && *url;
     if (flag("MEMORIES_NO_UPDATE_CHECK") || getenv("MEMORIES_HEADLESS") || !Settings_Get(SET_UPDATE_CHECK) ||
