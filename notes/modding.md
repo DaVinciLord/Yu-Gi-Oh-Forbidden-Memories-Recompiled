@@ -151,7 +151,12 @@ package is read, and the delivered MIPS then runs in the interpreter, patch
 included (`notes/pc-build.md`). The check happens at that read only, so a
 code mod that writes into the bank's memory itself, after it is loaded, is
 not seen and the native C still runs; such a mod patches the disc instead,
-or sets `MEMORIES_DUEL_EFFECTS=interpreter` while it is developed.
+or sets `MEMORIES_DUEL_EFFECTS=interpreter` while it is developed. The
+credits follow the same rule: the ending's 16-sector credits module at
+`0x80180000` runs as native C only while its bytes are the disc's, a disc
+patch of it is seen when it is read and then interpreted, and a code mod
+that writes into its memory after the load is not seen; such a mod patches
+the disc or sets `MEMORIES_CREDITS=interpreter`.
 
 Named patches may address the expanded tail. They are checked against the
 final selected replacement; a shorter replacement still allows patches
