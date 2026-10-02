@@ -1395,6 +1395,11 @@ int Monitor_Main(int argc, char **argv, int *status)
 {
     (void)argc;
     (void)argv;
+#ifdef _WIN32
+    /* AV test (test/av-no-monitor): no monitor on Windows, so the exe has no
+     * cross-process debugging imports. Not for merging. */
+    if (1) return 0;
+#endif
     if (attach() || !wanted()) return 0;
     return !run_monitor(status);
 }
