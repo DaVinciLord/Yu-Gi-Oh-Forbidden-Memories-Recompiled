@@ -25,14 +25,14 @@ Commands for the first phone session (Git Bash, from D:/DecompRecomp-arm64)
    Read the "occupied before mapping" block, not only PASS/FAIL: the
    scratchpad 0x1F800000 and the stack 0x70000000 are expected to be taken
    (the port moves them to 0x9F800000 and 0xB0000000); the 64-bit loader
-   wants a low image range (0x08000000 or 0x40000000) to be free.
+   wants its image range (0x60000000, 64 MiB on arm64) to be free.
    If abilist32 lists armeabi-v7a, also: run_apk.sh $SERIAL phone armeabi-v7a
 
 4. The game as a plain arm64 process (headless; no taps on the phone):
    export ANDROID_SDK_ROOT=D:/Android/sdk ANDROID_SERIAL=c7ffc349
    export MEMORIES_DISC=D:/DecompRecomp/game/rpg-yfm.bin
    python tools/pc/android/device_run.py setup tmp/pc/arm64wt-android
-   python tools/pc/replay.py play tests/pc/replays/first-duel --check        --executable tmp/pc/arm64wt-android/device.cmd
+   python tools/pc/replay.py play tests/pc/replays/first-duel --check --executable tmp/pc/arm64wt-android/device.cmd
    (a plain boot: MEMORIES_HEADLESS=1 MEMORIES_SPEED=-1 python
     tools/pc/android/device_run.py run tmp/pc/arm64wt-android)
 
