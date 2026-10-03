@@ -3654,3 +3654,44 @@ Reference logs are under `tmp/reference-match.log` and
 `tmp/reference-overlays.log`; these generated files are ignored. Windows CI is
 configured but has not been run here. No native game boot, retail-frame fidelity,
 audio, or assembly-replacement equivalence claim is made by these checks.
+
+## Android arm64 (A1/A2, 2026-10-03, branch feat/android-arm64)
+
+`feat/android-arm64` = `feat/x64-x1` + origin/master (the replay tool) +
+`feat/android-m4`. `--target android-arm64-v8a` builds libgame.so with G32
+pointers (`WIDE` in build_game32.py: the windows-x64 flags), clang's
+`-mharden-sls=blr` thunks in AArch64 form (`branch_thunks.c`; the build
+checks that no `br`/`blr` escapes them), `setjmp_aarch64.S` and
+`state_aarch64.S`, and the AArch64 fault handler in `image.c` (a low or
+retail-scratchpad access runs once from a stub page mapped within a `b`'s
+reach of the faulting code, with the addressing register moved up by
+0x80000000; no free register exists at an arbitrary load, so the return is
+a direct branch).
+
+Host function addresses reach the game's 4-byte slots, so the game library
+is linked at 0x40000000 (`ANDROID_GAME_BASE` on arm64) and the loader
+(`android_loader.c`, `ANDROID_DLEXT_RESERVED_ADDRESS`) puts it there: below
+4 GB, bit 30 set (the thunks' fast path), and clear of a 64-bit app
+process's low ART heap (0x02000000-0x22000000 on a Xiaomi 11T Pro, Android
+14) and boot image (~0x70000000). No trampoline table: the probe
+(tmp/android/probe) loaded a library at 0x60000000 with pinned symbols on
+that phone. A function of another library (libc, SDL) whose address the
+game stored would not fit; none is known, and the plain-process runs below
+are where it would show (a fault at a truncated address).
+
+Build and test (Git Bash, `ANDROID_SDK_ROOT=D:/Android/sdk`):
+
+```sh
+python tools/pc/build_android_deps.py arm64-v8a          # SDL3, libpng, FreeType (once)
+python tools/pc/build_game32.py --target android-arm64-v8a --build tmp/pc/android-arm64-v8a
+python tools/pc/android/device_check.py                   # the phone's ABIs, page size
+python tools/pc/android/device_run.py setup tmp/pc/android-arm64-v8a   # runner, libs, disc
+python tools/pc/replay.py play tests/pc/replays/first-duel --check \
+    --executable tmp/pc/android-arm64-v8a/device.cmd      # plain process, headless
+adb install -r tmp/pc/android-arm64-v8a/memories-arm64-v8a.apk   # Xiaomi asks on the phone
+```
+
+qemu-aarch64 (WSL, 4.2) is not the test bed: the Android build is a
+bionic shared library, which needs the phone's linker and libc; the phone
+over adb is a real kernel (PROT_EXEC honoured, the guest-call fault path
+testable) and runs at full speed.
