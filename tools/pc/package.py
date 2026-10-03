@@ -16,9 +16,10 @@ The Linux executable is built against Debian 11's libraries
 other people's Linux. Every build is smoke tested before it is packed.
 
 The 64-bit Windows archive (-windows-x64.zip, notes/pc-build.md "64-bit
-Windows") is the same folder without the mod SDK: that game loads the data
-mods and refuses code mods, which are 32-bit objects, and its smoke test
-skips the cases that turn one on."""
+Windows") unpacks to a folder of its own (yfm-redecomp-<version>-x64) and
+carries only the data mods, no mod SDK, and a README whose Mods section
+says so: that game refuses code mods, which are 32-bit objects. Its smoke
+test skips the cases that turn one on."""
 import argparse, datetime, os, re, shutil, struct, subprocess, sys, tarfile, zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -29,6 +30,22 @@ BUILDS = {"windows": ("tmp/pc/win32", "memories-pc.exe", ["SDL3.dll", "memories-
           "windows-x64": ("tmp/pc/win64", "memories-pc.exe", ["SDL3.dll", "memories-pc.pdb"]),
           "linux": ("tmp/pc/game32", "memories-pc", [])}
 SUFFIX = {"windows": "-windows.zip", "windows-x64": "-windows-x64.zip", "linux": "-linux.tar.gz"}
+# The archive's top folder: the two Windows archives unpacked side by side
+# must not mix (the 32-bit sdk/ beside the 64-bit executable).
+FOLDER = {"windows-x64": "-x64"}
+# The README's Mods section for the 64-bit Windows game, which ships and
+# loads data mods only (tools/pc/release/README.txt has the 32-bit one).
+X64_MODS = """Game > Mods lists the mods the game found and lets you turn them on and
+off. This is the 64-bit Windows game: it loads mods made of data (cards,
+rules, texture packs, sounds, translations), not mods that contain code,
+which are built for the 32-bit game. 3D Monsters, Hand Camera, AI Hard
+Mode and Yamyi Mods are code mods, so they come with the 32-bit Windows
+and Linux archives only; a code mod you install here stays off, with the
+reason beside it in Game > Mods.
+
+To install someone else's mod, put its folder in the "mods" folder of your
+user folder. Mod authors: the mod SDK comes with the 32-bit archives.
+"""
 GAME_README = """Start memories-pc and choose your own ROM in the welcome screen.
 Alternatively, put your raw image of Forbidden Memories (USA, SLUS-01411)
 here: the .bin file of a .bin/.cue pair. Any file name ending in .bin will do.
@@ -92,7 +109,7 @@ def set_pe_checksum(executable):
 def stage(system, label):
     build_dir, executable, extras = BUILDS[system]
     build_dir = os.path.join(ROOT, build_dir)
-    folder = os.path.join(DIST, "stage", system, f"{NAME}-{label}")
+    folder = os.path.join(DIST, "stage", system, f"{NAME}-{label}{FOLDER.get(system, '')}")
     shutil.rmtree(os.path.dirname(folder), ignore_errors=True)
     os.makedirs(os.path.join(folder, "game"))
     for name in [executable, "buildid", "commit"] + extras:
@@ -114,6 +131,13 @@ def stage(system, label):
             if a.read() == b.read():
                 shutil.copy2(path, os.path.join(folder, "symbols", name))
     shutil.copy2(os.path.join(ROOT, "tools/pc/release/README.txt"), folder)
+    if system == "windows-x64":
+        with open(os.path.join(folder, "README.txt"), encoding="utf-8") as handle:
+            text = handle.read()
+        start = text.index("Game > Mods lists")
+        end = text.index("Languages" + chr(10) + "---------")
+        with open(os.path.join(folder, "README.txt"), "w", encoding="utf-8") as handle:
+            handle.write(text[:start] + X64_MODS + chr(10) + chr(10) + text[end:])
     shutil.copy2(os.path.join(ROOT, "LICENSE"), folder)
     with open(os.path.join(folder, "game", "README.txt"), "w", newline="\r\n" if system.startswith("windows") else "\n") as handle:
         handle.write(GAME_README)
@@ -126,7 +150,9 @@ def stage(system, label):
 
 
 def pack(system, folder):
-    base = os.path.join(DIST, os.path.basename(folder) + SUFFIX[system])
+    name = os.path.basename(folder)
+    name = name[:len(name) - len(FOLDER.get(system, ""))]
+    base = os.path.join(DIST, name + SUFFIX[system])
     parent = os.path.dirname(folder)
     if system.startswith("windows"):
         with zipfile.ZipFile(base, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:

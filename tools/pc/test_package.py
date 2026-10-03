@@ -59,6 +59,12 @@ def check(path):
             header = struct.unpack_from("<I", image, 0x3C)[0]
             machine = struct.unpack_from("<H", image, header + 4)[0]
             assert machine == (0x8664 if wide else 0x14C), f"memories-pc.exe is for machine {machine:#x}"
+            sdl = archive.read(next(name for name in names if name.endswith("/SDL3.dll")))
+            header = struct.unpack_from("<I", sdl, 0x3C)[0]
+            machine = struct.unpack_from("<H", sdl, header + 4)[0]
+            assert machine == (0x8664 if wide else 0x14C), f"SDL3.dll is for machine {machine:#x}"
+            readme = archive.read(next(name for name in names if name.endswith("/README.txt") and name.count("/") == 1))
+            assert wide == (b"sdk/" not in readme), "the README's Mods section is not this archive's"
     else:
         with tarfile.open(path) as archive:
             members = archive.getmembers()
@@ -68,6 +74,8 @@ def check(path):
             assert len(executable) == 1 and executable[0].mode & 0o111, "Linux executable must be executable"
     roots = {PurePosixPath(name).parts[0] for name in names}
     assert len(roots) == 1, "archive needs one top-level folder"
+    if windows:
+        assert next(iter(roots)).endswith("-x64") == wide, "the two Windows archives need distinct top folders"
     assert all(not PurePosixPath(name).is_absolute() and ".." not in PurePosixPath(name).parts for name in names)
     contents = {str(PurePosixPath(name).relative_to(next(iter(roots)))) for name in names}
     required = {"README.txt", "LICENSE", "buildid", "commit", "game/README.txt",
