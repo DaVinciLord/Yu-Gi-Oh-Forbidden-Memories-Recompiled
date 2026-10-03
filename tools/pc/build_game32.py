@@ -306,6 +306,11 @@ def write_guest_branches(build, branches):
     return f"{build}/guest_branches.o"
 
 MOD_INTERNALS = ("Mods_", "Json_", "ObjectLoader_")  # the mod system itself (src/pc/mods)
+# Guest variables a release exported that the port's own code no longer
+# uses: still pinned, so a mod built against that release still loads
+# (tools/pc/check_mod_abi.py). D_801A8008: the disc's password table from
+# card 1 (overlays/password/shop.h), which the PC shop no longer walks.
+KEPT_FOR_MODS = {"D_801A8008"}
 
 def write_mod_exports(build, names, aliases):
     """mod_exports.c: every name a code mod may bind to (src/pc/mods/exports.h).
@@ -816,7 +821,7 @@ def main():
             hits = weaken.get(obj(source))
             if hits:
                 run([OBJCOPY, *[f"--weaken-symbol={name}" for name in hits], obj(source)])
-    wanted = (undefined | tentative) - game_defined - native_defined - HOST_LIBC
+    wanted = (undefined | tentative | KEPT_FOR_MODS) - game_defined - native_defined - HOST_LIBC
     pinned, stubs, unknown, aliases = {}, [], [], {}
     for name in sorted(wanted):
         address = addresses.get(name)
