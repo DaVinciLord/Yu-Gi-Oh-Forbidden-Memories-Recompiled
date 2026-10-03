@@ -1869,13 +1869,20 @@ int Mods_Setting(const char *id, const char *key, int fallback)
 
 void Mods_Note(const char *id, const char *format, ...)
 {
+    char message[STATUS_MAX];
     va_list arguments;
+    size_t length;
     int i = by_id(id);
     if (i < 0) return;
     va_start(arguments, format);
-    vsnprintf(mods[i].status, sizeof(mods[i].status), format, arguments);
+    vsnprintf(message, sizeof(message), format, arguments);
     va_end(arguments);
-    fprintf(stderr, "memories-pc: mod %s: %s\n", mods[i].id, mods[i].status);
+    fprintf(stderr, "memories-pc: mod %s: %s\n", mods[i].id, message);
+    /* After the notes before it, as warn() adds a warning, unless it is one
+     * of them already (a reader run again). */
+    if (strstr(mods[i].status, message)) return;
+    length = strlen(mods[i].status);
+    snprintf(mods[i].status + length, sizeof(mods[i].status) - length, "%s%s", length ? "; " : "", message);
 }
 
 void Mods_DrawFrame(void)
