@@ -271,25 +271,39 @@ int Memories_SetInternalScale(int wanted)
 /* MEMORIES_FRAME_HASHES=<file>: one line per presented frame, the frame
  * number and an FNV-1a hash of all of VRAM, for comparing two runs frame by
  * frame (native against interpreted code, for one) without dumping them. */
+unsigned long long Memories_VramHash(void)
+{
+    const uint16_t *vram = SoftGpu_Vram();
+    uint64_t hash = 1469598103934665603ull;
+    unsigned i;
+    for (i = 0; i < 1024u * 512u; i++) {
+        hash = (hash ^ vram[i]) * 1099511628211ull;
+    }
+    return hash;
+}
+
 static void frame_hash(void)
 {
     static FILE *out;
     static int opened;
-    const uint16_t *vram;
-    uint64_t hash = 1469598103934665603ull;
-    unsigned i;
     if (!opened) {
         const char *path = getenv("MEMORIES_FRAME_HASHES");
         opened = 1;
         out = path && *path ? fopen(path, "w") : NULL;
     }
     if (!out) return;
-    vram = SoftGpu_Vram();
-    for (i = 0; i < 1024u * 512u; i++) {
-        hash = (hash ^ vram[i]) * 1099511628211ull;
-    }
-    fprintf(out, "%u %016llx\n", (unsigned)frames_presented, (unsigned long long)hash);
+    fprintf(out, "%u %016llx\n", (unsigned)frames_presented, Memories_VramHash());
     fflush(out);
+}
+
+/* The display area as it stands, shown in the window with the port's menu
+ * and notices over it, with no game frame counted and nothing drawn: the
+ * control channel's wait for its first client (control.c), before the game
+ * has shown a frame, which is when the window first gets its picture. */
+void Memories_ShowStill(void)
+{
+    int w = disp_env.disp.w > 0 ? disp_env.disp.w : 320, h = disp_env.disp.h > 0 ? disp_env.disp.h : 240;
+    Platform_Present(SoftGpu_Vram(), SOFT_GPU_WIDTH, disp_env.disp.x, disp_env.disp.y, w, h, disp_env.isrgb24);
 }
 
 void Memories_PresentDisplay(void)

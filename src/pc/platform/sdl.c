@@ -1814,6 +1814,7 @@ int Platform_ReadWidePicture(uint32_t *out, int x, int y, int w, int h, int wide
 }
 
 int Platform_ShouldQuit(void) { return quit; }
+void Platform_RequestQuit(void) { quit = 1; }
 int Platform_Widescreen(void) { return Settings_Get(SET_ASPECT) == 2; }
 int Platform_StateSlot(void) { return state_slot; }
 void Platform_SetStateSlot(int slot)

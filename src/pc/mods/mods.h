@@ -31,6 +31,12 @@ void Mods_SetAudio(int (*load)(int mod, const char *id, const char *directory, c
                                char *error, size_t size),
                    void (*unload)(int mod));
 void Mods_Shutdown(void);
+/* What a mod's host->pad reads; NULL: Platform_Pad. The game sets it
+ * (libetc.c) so mods see the control client's bits and, while a recording
+ * plays, the recording's (pc/debug/recorder.h). */
+extern unsigned short (*Mods_PadSource)(int port);
+/* The mods' rand seed (mod_libc.c), its size in *size: save states carry it. */
+void *Mods_RandSeed(unsigned *size);
 
 int Mods_Count(void);
 const char *Mods_Id(int mod);

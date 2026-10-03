@@ -13,6 +13,7 @@
 #include "title_config.h"
 #include "title_images.h"
 #include "title_menu.h"
+#include "title_jump.h"
 #include "pc/mods/mods.h"
 #include "pc/saves/save_menu.h"
 #include "pc/saves/deck_menu.h"
@@ -51,7 +52,8 @@ int TitleScreen_Song(void)
 
 int TitleScreen_SkipMovie(void)
 {
-    return TitleConfig_Load()->skip_movie;
+    int skip = TitleConfig_Load()->skip_movie; /* read on every entry: the title's update uses it */
+    return TitleJump_Pending() ? 1 : skip;   /* on its way to another screen (title_jump.h) */
 }
 
 /* 0xRRGGBB over the game's 128 = unchanged. */
@@ -181,6 +183,13 @@ int TitleScreen_Update(void)
     /* The menus' cursor and the choices the game would not make
      * (title_menu.h): the pad bits it took are the port's, and the game
      * does not see them. */
+    /* Debug > Jump to or the control channel's `jump` (title_jump.h): the
+     * game's own debug menu, which Main_ApplyMenuSelection runs for any
+     * choice it has no case for (10, the hidden SAVE). */
+    if (TitleJump_Pending()) {
+        TitleJump_TitleGaveWay();
+        return 10;
+    }
     hidden = open ? TitleMenu_Before() : 0;
     if (hidden) {
         gInput_wPad1Repeat = (u16)(repeat & ~hidden);

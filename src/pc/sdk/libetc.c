@@ -18,6 +18,8 @@
 #include "pc/guest/state.h"
 #include "pc/debug/log.h"
 #include "pc/debug/monitor.h"
+#include "pc/debug/control.h"
+#include "pc/debug/recorder.h"
 #include "pc/mods/mods.h"
 #ifdef _WIN32
 #include "pc/platform/win32.h"
@@ -79,11 +81,20 @@ static void run_tick(uint64_t game_now, uint64_t real_now)
 
 static void run_vblank(void)
 {
-    int port;
+    uint16_t source[2], fixed[2];
+    int port, pad2 = Platform_PadConnected(1) || Control_PadConnected(1);
+    /* Every source's bits, ORed: the keyboard, the controllers, the mouse,
+     * MEMORIES_INPUT and a control client (control.h); the recorder notes
+     * them here, or replaces them with a recording's (recorder.h). */
+    for (port = 0; port < 2; port++) {
+        source[port] = (uint16_t)(Platform_Pad(port) | Control_Pad(port));
+        fixed[port] = (uint16_t)(Platform_PadFixedBits(port) | Control_Pad(port));
+    }
+    Recorder_Pads(source, fixed, &pad2);
     for (port = 0; port < 2 && pads_started; port++) {
         if (pad_buffer[port]) {
             /* Released while the deck slot screen reads the pad (deck_menu.h). */
-            unsigned bits = DeckMenu_HoldsPads() ? 0 : Platform_Pad(port);
+            unsigned bits = DeckMenu_HoldsPads() ? 0 : source[port];
             MemoriesModEvent input = {MEMORIES_EVENT_INPUT, MEMORIES_BEFORE, port, (int)bits, 0, (int)bits, 0};
             Mods_Dispatch(&input);
             bits = (unsigned)(input.handled ? input.result : input.b) & 0xffffu;
@@ -91,9 +102,9 @@ static void run_vblank(void)
              * place every pad the game reads passes (button_layout.h). The
              * mods' before-hooks see the controller's own bits, as host->pad
              * does; after-hooks see what the game gets. */
-            if (Settings_Get(SET_JP_BUTTONS)) bits = ButtonLayout_Apply((uint16_t)bits, Platform_PadFixedBits(port), 1);
+            if (Settings_Get(SET_JP_BUTTONS)) bits = ButtonLayout_Apply((uint16_t)bits, fixed[port], 1);
             input.result = (int)bits; input.phase = MEMORIES_AFTER; Mods_Dispatch(&input);
-            pad_buffer[port][0] = Platform_PadConnected(port) ? 0x00 : 0xff; /* 0xff: no pad */
+            pad_buffer[port][0] = (port == 0 || pad2) ? 0x00 : 0xff; /* 0xff: no pad */
             pad_buffer[port][1] = 0x41;
             pad_buffer[port][2] = (unsigned char)~bits;
             pad_buffer[port][3] = (unsigned char)~(bits >> 8);
@@ -144,10 +155,19 @@ void ExitCriticalSection(void)
     }
 }
 
+/* A mod's host->pad (mods.h): the live sources, as run_vblank ORs them,
+ * or the recording's while one plays. */
+static unsigned short mods_pad(int port)
+{
+    return Recorder_HostPad(port, (uint16_t)(Platform_Pad(port) | Control_Pad(port)));
+}
+
 int ResetCallback(void)
 {
     if (!started) {
         started = 1;
+        Recorder_Init(); /* before the first VBlank */
+        Mods_PadSource = mods_pad;
         if (Platform_StartTimers(on_tick, on_vblank) != 0) {
             abort();
         }
@@ -305,6 +325,8 @@ int Memories_VSync(int mode)
         Platform_LimitVBlanks(-1);
         clock_gettime(CLOCK_MONOTONIC, &left);
         Memories_StatePoint(Memories_PresentedFrames());
+        Recorder_Point(Memories_PresentedFrames()); /* MEMORIES_RECORD, MEMORIES_PLAY */
+        Control_Point(); /* MEMORIES_CONTROL: the client's turn, at the same point */
     } else if (mode > 1) {
         while (Platform_VBlankCount() - last_vsync < (unsigned)mode) {
             Platform_WaitVBlank(Platform_VBlankCount());

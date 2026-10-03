@@ -58,6 +58,13 @@ static int mod_rand(void)
     return (int)(mod_seed / 65536u % 32768u);
 }
 static void mod_srand(unsigned seed) { mod_seed = seed; }
+/* For save states (state.c's "mod-rng" chunk): a mod's draws after a load
+ * follow the game that saved, as the game's own do (the "rng" chunk). */
+void *Mods_RandSeed(unsigned *size)
+{
+    *size = (unsigned)sizeof(mod_seed);
+    return &mod_seed;
+}
 
 #define F(name) {#name, (Function)name}
 #define AS(name, function) {#name, (Function)function}

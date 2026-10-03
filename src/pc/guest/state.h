@@ -54,6 +54,17 @@ int Memories_StateRunGame(int (*entry)(void));
 void Memories_StatePoint(unsigned presented_frames);
 /* 1 save, 2 load; taken up at the next state point. Async-signal-safe. */
 void Memories_StateRequest(int what, int slot);
+/* The control channel (src/pc/debug/control.c), at the end of VSync(0):
+ * save or load a state here. -2 when this VSync was called from native
+ * code, where a state means nothing to another build; -1 when it failed
+ * (a load's reason in `why`). A load that succeeds does not return: the
+ * game resumes in the state's own VSync caller. */
+int Memories_StateSaveHere(const char *path);
+int Memories_StateLoadHere(const char *path, char *why, size_t why_size);
+/* The boot's MEMORIES_LOAD_STATE has been acted on (from presented frame 30). */
+int Memories_StateStartupDone(void);
+/* The running build's id (the `buildid` file beside the executable). */
+uint32_t Memories_StateBuildId(void);
 /* Locate the running build's symbol table beside the executable. */
 int Memories_SymbolTablePath(char *out, size_t size);
 int Memories_LastStateSlot(void);

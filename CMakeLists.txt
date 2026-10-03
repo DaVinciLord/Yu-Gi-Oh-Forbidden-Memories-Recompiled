@@ -121,7 +121,13 @@ if(BUILD_TESTING)
     add_executable(memories_deck_shop_test tests/pc/deck_shop_test.c src/pc/saves/deck_shop.c)
     add_executable(memories_entry_layout_test tests/pc/entry_layout_test.c src/pc/text/entry_layout.c)
     add_executable(memories_state_remap_test tests/pc/state_remap_test.c src/pc/guest/state_remap.c)
-    foreach(target memories_deck_shop_test memories_entry_layout_test memories_state_remap_test)
+    add_executable(memories_control_protocol_test tests/pc/control_protocol_test.c src/pc/debug/control_protocol.c)
+    add_executable(memories_control_net_test tests/pc/control_net_test.c src/pc/debug/control_net.c)
+    if(WIN32)
+        target_link_libraries(memories_control_net_test PRIVATE ws2_32)
+    endif()
+    foreach(target memories_deck_shop_test memories_entry_layout_test memories_state_remap_test
+            memories_control_protocol_test memories_control_net_test)
         target_include_directories(${target} PRIVATE src)
         if(NOT MSVC)
             target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -Werror)
@@ -134,6 +140,9 @@ if(BUILD_TESTING)
     add_test(NAME pc_deck_shop COMMAND memories_deck_shop_test)
     add_test(NAME pc_entry_layout COMMAND memories_entry_layout_test)
     add_test(NAME pc_state_remap COMMAND memories_state_remap_test)
+    add_test(NAME pc_control_protocol COMMAND memories_control_protocol_test)
+    add_test(NAME pc_control_net COMMAND memories_control_net_test)
+    set_tests_properties(pc_control_net PROPERTIES TIMEOUT 15)
     add_executable(memories_fusion_test tests/pc/fusion_test.c src/pc/cards/fusion.c)
     target_include_directories(memories_fusion_test PRIVATE src)
     if(NOT MSVC)
@@ -691,6 +700,10 @@ if(Python3_Interpreter_FOUND)
     if(BUILD_TESTING)
         add_test(NAME pc_fm_editor
             COMMAND "${Python3_EXECUTABLE}" -m unittest discover -s tools/pc/fm_editor/tests -t tools/pc
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+        # replay.py's check on made-up recordings (notes/agent-control.md).
+        add_test(NAME pc_replay_check
+            COMMAND "${Python3_EXECUTABLE}" tests/pc/replay_check_test.py
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
         # Native units that name files reach compat/fs.h (notes/pc-build.md).
         add_test(NAME pc_utf8_paths
