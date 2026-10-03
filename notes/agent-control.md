@@ -350,8 +350,11 @@ CI can hold retail inputs.
   its own (`tmp/pc/replays/<name>-XXXXXXXX`), so two at once never share one.
 - **In `tests/pc/replays/`:** `first-duel` (recorded: boot to the first
   card played in the first story duel, a frame hash every 4 frames;
-  `session.py` records it again) and `state-load-rng` (scripted: a real bug,
-  below).
+  `session.py` records it again), `full-duel`, `credits` and `menus` (the
+  64-bit build's gate on feat/x64-x1: a duel with a fusion, magic cards
+  and 3D battles to its rewards, the whole credits, the main menu's
+  screens; recorded with `goto` and arranged decks, which the C lines
+  replay) and `state-load-rng` (scripted: a real bug, below).
 - **The bug as a replay:** `state-load-rng` buys a pack from a state, loads
   the state in the same game and buys it again with the same presses. On
   this branch without "Port: save states carry the game's random seed" it
