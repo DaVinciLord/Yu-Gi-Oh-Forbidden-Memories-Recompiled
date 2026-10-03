@@ -420,6 +420,15 @@ static void subsystems(MemoriesState *state)
         MemoriesStateField seed = {&gRand_dwSeed, sizeof(gRand_dwSeed)};
         Memories_StateChunk(state, "rng", &seed, 1);
     }
+    {
+        /* The mods' rand seed (mod_libc.c): the same kind of number, one
+         * sequence for every mod, which a mod's choices follow. */
+        unsigned size;
+        MemoriesStateField seed;
+        seed.data = Mods_RandSeed(&size);
+        seed.size = size;
+        Memories_StateChunk(state, "mod-rng", &seed, 1);
+    }
     RetailImage_State(state);
     Spu_State(state);
     LibSpu_State(state);

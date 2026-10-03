@@ -2266,7 +2266,8 @@ bit-identical. How (details in `src/pc/guest/state.h`):
   cards, shuffles and CPU choices than the game that saved it: the same
   pack bought twice from one state, loaded in place in between, dealt
   other cards; a state without the chunk loads as before, with the seed
-  left as it is). A chunk whose layout changed is
+  left as it is), and the mods' own rand seed (chunk `mod-rng`, the one
+  sequence `mod_libc.c` gives every mod). A chunk whose layout changed is
   reported and skipped, leaving that subsystem as it is. Nothing native is
   stored by address; timers, the disc file, the window and the audio device
   belong to the process. The exception is text the port compiles (a
