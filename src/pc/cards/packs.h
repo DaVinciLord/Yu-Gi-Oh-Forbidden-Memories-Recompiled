@@ -43,6 +43,9 @@
 #define PACK_NAME_LETTERS 16       /* the name's room between the list's arrows */
 
 enum { PACK_REVEAL_FLIP, PACK_REVEAL_QUICK, PACK_REVEAL_LIST };
+/* "image_style": the "image" as a card's art in the card's frame, or the
+ * whole picture where the card is drawn (pack_shop.c). */
+enum { PACK_IMAGE_CARD, PACK_IMAGE_FULL };
 enum { PACK_SOUND_MOVE, PACK_SOUND_BUY, PACK_SOUND_REFUSE, PACK_SOUND_REVEAL, PACK_SOUND_BACK, PACK_SOUNDS };
 /* "pack_shop": {"password": ...}: where the Password screen stands. */
 enum { PACK_SHOP_BOTH, PACK_SHOP_PACKS_ONLY, PACK_SHOP_PASSWORD_ONLY };
@@ -105,6 +108,7 @@ typedef struct {
     char name[PACK_TEXT_MAX];
     char description[PACK_DESCRIPTION_MAX];
     char image[PACK_PATH_MAX];     /* a PNG, whole path; "" for none */
+    int image_style;               /* PACK_IMAGE_* */
     int cover;                     /* the card whose art stands in for an image */
     unsigned shops;                /* a bit per shop (PackShopRules), all when "shop" is left out */
     long order;
