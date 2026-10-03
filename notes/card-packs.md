@@ -276,23 +276,37 @@ rather than setting the Magic card's name over it.
 
 With `"image_style": "full"` the picture is the whole card instead: the PNG
 as large as fits the card's 140x196, its shape kept, in the middle, with
-what it leaves clear (and the PNG's own clear parts) showing the screen behind.
+what it leaves clear (and the PNG's own clear parts) showing the screen
+behind. At the console's resolution a pixel under half opaque is clear and
+the rest opaque; at 2x and 4x the PNG itself is drawn, of any size (a small
+one smoothly scaled), with its own transparency.
+
 It is made into the game's kind of texture, 8 bits a texel through 256
 colours with entry 0 clear, as the title's pictures are
 (`CardArt_IndexedImage`), and put in VRAM the Password screen leaves unused:
 the 8-bit page at (384,256)-(511,511), its palette at (128,511) (empty in
 dumps of every state of the screen: the digits, the list, BUY / QUIT,
-paying, each card turning over, what came and the details). The card view
-draws it (`func_80028B08`, asking `PackShop_Picture`) in the place of the
-art, the plates and the icons, through the same turn as the card, and the
-frame's front is not drawn (`DisplayObject_RenderSpriteSheet` asks
+paying, each card turning over, what came and the details). Other screens
+use that VRAM (a Free Duel and a duel write row 511), so the picture is
+uploaded again each time the screen opens. The card view draws it
+(`func_80028B08`, asking `PackShop_Picture`) in the place of the art, the
+plates and the icons, through the same turn as the card, and the frame's
+front is not drawn (`DisplayObject_RenderSpriteSheet` asks
 `PackShop_HidesFrame`), so the card still turns over to its back and the
-picture turns in. Above the console's resolution the PNG itself is drawn
-(`TexturePack_AddMadeSeeThrough`). The card loaded under it is the first
-Magic card, whose art and plate are not shown. A state saved with the
-picture up has it in VRAM; the load uploads it again so that the PNG is
-known above the console's resolution. A picture that cannot be read shows
-the cover, as above, with a note in the Mods window.
+picture turns in (`TexturePack_AddMadeSeeThrough` for the PNG above the
+console's resolution). The card loaded under it is the first Magic card,
+whose art and plate are not shown.
+
+A state saved with the picture up has it in VRAM. Its load is read before
+the state's RAM is, so the card's objects are taken at the first draw after
+it, whichever screen the state was loaded from, and the picture is uploaded
+again at the screen's next update so that the PNG is known above the
+console's resolution. A state saved while that card turns away (to the next
+pack, or to its back) shows the Magic card's frame for the rest of that half
+turn after the load, since the state keeps which pack comes next, not which
+one is going. Leaving the screen to the main menu, and the Free Duel after
+it, draw the same as without the picture (checked). A picture that cannot be
+read shows the cover, as above, with a note in the Mods window.
 
 ## The save
 
