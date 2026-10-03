@@ -197,6 +197,47 @@ replay can begin at a state.
 - **Not recorded:** host actions (F5/F7, the deck slots on F6, the menus,
   Esc), and a `load` through the channel (the indices would jump back): a
   replay that needs those is a scripted one.
+- **The clock:** only a run on the virtual clock plays back. The file says
+  which ran (`F clock: virtual` or `real`, at its first frame), the game
+  warns on stderr when it records on the real-time one, `replay.py record`
+  warns too, and `play` refuses such a replay. On the real-time clock each
+  VBlank and each tick comes when the host's time says, at whichever
+  service point the game reaches then (a VSync, one turn of a VBlank wait,
+  a DrawSync, a `VSync(-1)` poll), so the same pad bits meet the game at
+  other moments of its own work: a windowed session diverged at VBlank 35.
+- **The end:** a game closed while it waits for a VBlank presents its last
+  frame without one (the wait ends on the quit), so a recording ends with a
+  frame at a VBlank the play reaches one VBlank later. The play ends once
+  past the end's VBlank or at its frame, and the check keys frames by VBlank
+  and frame, looking the last VBlank's up by frame alone (`pc_replay_check`
+  covers it; a windowed session closed by its window now checks, 585 of 585
+  frames).
+- **Mods' `host->pad`** reads the last VBlank's bits while recording as
+  while playing, so a mod sees the same in both; with neither on it reads
+  the live pad, as before. With `MEMORIES_CLOCK=interrupt` the buffer the
+  VBlank fills is taken with the timer's signal held.
+- **For phase 2** (a player's report from normal play, which runs on the
+  real-time clock): two ways, the first the plan.
+  1. Run players on the virtual clock: `MEMORIES_DETERMINISTIC` in a window
+     is already paced to the game speed, and pause and frame step work. What
+     it changes: a host too slow for a frame slows the game instead of
+     letting VBlanks pass (the console's way, and the real-time clock's, is
+     a frame that counts two VBlanks), and the music's sequencer follows
+     game time, not the wall clock. The audio mixer stays on real time
+     (RAM comparisons mask `g_SDValue`). This needs a pacer that lets a
+     slow frame cost VBlanks the way real time does, decided only from
+     virtual time (for one, a frame that overruns its VBlank budget, as
+     measured in virtual time by the work done, gets its second VBlank),
+     and a check that a played session looks and sounds the same.
+  2. Record the real-time clock instead: at every `advance()` the elapsed
+     time it took (`elapsed`, and `real_now` for the sequencer's counter,
+     `run_tick` in libetc.c) and at every `Platform_WaitVBlank` turn, keyed
+     by a count of service calls since the start; a play feeds the same
+     values to the same calls. About two thousand service calls a second
+     (the VBlank wait wakes every 0.5 ms), so a few tens of KB a second
+     before compression; the interrupt clock (`MEMORIES_CLOCK=interrupt`,
+     the profiler) would be left out. Not built: the first way makes every
+     session replayable with nothing recorded but the pads.
 - **Checked:** the duel-hand-camera input recorded to frame 7143 and played
   back without it: the 7143 frame hashes and the 213 input changes agree.
   A play from a state with state checkpoints agrees; with its first press
@@ -245,11 +286,13 @@ CI can hold retail inputs.
   scenario, `run(executable, out)`, whose assertions are the verdict.
 - **Checking:** `replay.py play FILE --check` plays a recorded replay with
   `MEMORIES_PLAY`, records the play, and names the first frame hash that
-  differs (its VBlank and the frame it was) and, at the first state
+  differs (its VBlank and the frame it was; one the play does not reach,
+  the run having ended or taken another path) and, at the first state
   checkpoint whose RAM differs (the `memory` chunk; `g_SDValue` masked, the
   other chunks not compared), the first differing range. `--update` takes
   this build's hashes as the expected ones. `replay.py run` checks every
-  replay in `tests/pc/replays/`, like `smoke.py`.
+  replay in `tests/pc/replays/`, like `smoke.py`. Each play gets a folder of
+  its own (`tmp/pc/replays/<name>-XXXXXXXX`), so two at once never share one.
 - **In `tests/pc/replays/`:** `first-duel` (recorded: boot to the first
   card played in the first story duel, a frame hash every 4 frames;
   `session.py` records it again) and `state-load-rng` (scripted: a real bug,

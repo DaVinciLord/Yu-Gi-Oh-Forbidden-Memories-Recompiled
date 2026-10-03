@@ -5,6 +5,7 @@
 #include "pc/guest/state.h"
 #include "pc/platform/platform.h"
 #include "pc/sdk/display.h"
+#include "pc/compat/signal.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,7 +33,9 @@ static PadEvent *script;
 static size_t script_count, script_at;
 static unsigned play_end;
 static int play_has_end;
-static volatile uint16_t played[2]; /* the bits given at the last VBlank played */
+static unsigned play_end_frame;
+static int clock_written;
+static volatile uint16_t played[2]; /* the bits given at the last VBlank, played or recorded */
 
 static void begin(void)
 {
@@ -69,6 +72,7 @@ static void read_script(const char *path)
             script_count++;
         } else if (sscanf(line, "E %u %u", &index, &frame) == 2) {
             play_end = index;
+            play_end_frame = frame;
             play_has_end = 1;
         }
     }
@@ -156,9 +160,11 @@ void Recorder_Pads(uint16_t bits[2], uint16_t fixed[2], int *pad2_connected)
             bits[0] = bits[1] = fixed[0] = fixed[1] = 0;
             *pad2_connected = 0;
         }
-        played[0] = bits[0];
-        played[1] = bits[1];
     }
+    /* A mod's host->pad reads these, recording or playing, so both see the
+     * same bits (Recorder_HostPad). */
+    played[0] = bits[0];
+    played[1] = bits[1];
     if (recording) {
         PadEvent event;
         event.index = index;
@@ -174,7 +180,7 @@ void Recorder_Pads(uint16_t bits[2], uint16_t fixed[2], int *pad2_connected)
 
 uint16_t Recorder_HostPad(int port, uint16_t live)
 {
-    return playing ? played[port & 1] : live;
+    return playing || (recording && phase == RUNNING) ? played[port & 1] : live;
 }
 
 void Recorder_Point(unsigned frame)
@@ -187,8 +193,30 @@ void Recorder_Point(unsigned frame)
     }
     index = Platform_VBlankCount() - start_vblank;
     if (recording && out) {
-        for (i = 0; i < pending_count; i++) {
-            const PadEvent *event = &pending[i];
+        /* The VBlank's buffer, taken whole: with MEMORIES_CLOCK=interrupt
+         * the timer may append to it at any moment. */
+        static PadEvent taken[PENDING_MAX];
+        unsigned count;
+        sigset_t set, previous;
+        sigemptyset(&set);
+        sigaddset(&set, SIGALRM);
+        sigprocmask(SIG_BLOCK, &set, &previous);
+        count = pending_count;
+        memcpy(taken, pending, count * sizeof(*taken));
+        pending_count = 0;
+        sigprocmask(SIG_SETMASK, &previous, NULL);
+        if (!clock_written) {
+            /* Only the virtual clock replays: a run on the real-time clock
+             * met each VBlank at its own moment (notes/agent-control.md). */
+            clock_written = 1;
+            fprintf(out, "F clock: %s\n", Platform_VirtualClock() ? "virtual" : "real");
+            if (!Platform_VirtualClock()) {
+                fprintf(stderr, "memories-pc: record: the real-time clock runs: this recording will not play back "
+                                "(MEMORIES_DETERMINISTIC=1 makes one that does)\n");
+            }
+        }
+        for (i = 0; i < count; i++) {
+            const PadEvent *event = &taken[i];
             if (have_last && !memcmp(event->bits, last_written.bits, sizeof(event->bits)) &&
                 !memcmp(event->fixed, last_written.fixed, sizeof(event->fixed)) && event->pad2 == last_written.pad2) {
                 continue;
@@ -198,7 +226,6 @@ void Recorder_Point(unsigned frame)
             last_written = *event;
             have_last = 1;
         }
-        pending_count = 0;
         if (dropped) {
             fprintf(stderr, "memories-pc: record: %u VBlanks of input were dropped (too many between two frames)\n",
                     dropped);
@@ -215,7 +242,9 @@ void Recorder_Point(unsigned frame)
         }
         fflush(out);
     }
-    if (playing && play_has_end && index >= play_end) {
+    /* The end: its VBlank and its frame (a game closed between two VBlanks
+     * presents twice in the last one). */
+    if (playing && play_has_end && (index > play_end || (index == play_end && frame >= play_end_frame))) {
         fprintf(stderr, "memories-pc: replay: the recording ends at VBlank %u; done\n", play_end);
         playing = 0;
         Platform_RequestQuit();

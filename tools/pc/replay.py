@@ -115,7 +115,7 @@ def parse(path: Path) -> dict:
             result["I"].append(line)
         elif kind == "H":
             index, frame, value = rest.split()
-            result["H"][int(index)] = (int(frame), value)
+            result["H"][(int(index), int(frame))] = value
         elif kind == "S":
             index, frame, state = rest.split(" ", 2)
             result["S"][int(index)] = (int(frame), state)
@@ -135,7 +135,8 @@ def header_from(recording: dict, extra_settings: dict | None = None) -> dict:
     settings = dict(item.split("=", 1) for item in recording["F"].get("settings", "").split() if "=" in item)
     settings.update({key: str(value) for key, value in (extra_settings or {}).items()})
     mods = recording["F"].get("mods", "none")
-    return {"build": recording["build"], "os": recording["F"].get("os", sys.platform), "recorded_on": sys.platform,
+    return {"build": recording["build"], "clock": recording["F"].get("clock", "virtual"),
+            "os": recording["F"].get("os", sys.platform), "recorded_on": sys.platform,
             "commit": recording["F"].get("build", ""), "settings": settings,
             "mods": [] if mods == "none" else mods.split(), "language": settings.get("language", "0")}
 
@@ -157,6 +158,9 @@ def package_recording(out: Path, recording_path: Path, start_state: Path | None,
     recording = parse(recording_path)
     if recording["E"] is None:
         raise SystemExit(f"{recording_path}: no E line (the game did not end cleanly); quit it, don't kill it")
+    if recording["F"].get("clock") == "real":
+        print(f"replay: WARNING: {recording_path} ran on the real-time clock: it will not play back the same "
+              "(record with MEMORIES_DETERMINISTIC=1; notes/agent-control.md, step 3)", file=sys.stderr)
     lines = thin(recording_path.read_text(encoding="utf-8").splitlines(), max(hash_every, 1))
     files: dict[str, Path | str] = {}
     states = []
@@ -256,11 +260,17 @@ def check(replay: Replay, actual_path: Path) -> bool:
     expected = parse(replay.file(replay.meta["recording"]))
     actual = parse(actual_path)
     ok = True
-    for index, (frame, value) in sorted(expected["H"].items()):
-        got = actual["H"].get(index)
-        if got is None or got[1] != value:
+    # A game closed while it waited for a VBlank presents its last frame
+    # without one (the wait ends on the quit): the frames at the recording's
+    # last VBlank are looked up by frame alone, as the play reaches them a
+    # VBlank later.
+    by_frame = {frame: value for (_, frame), value in actual["H"].items()}
+    last = expected["E"][0] if expected["E"] else None
+    for (index, frame), value in sorted(expected["H"].items()):
+        got = actual["H"].get((index, frame)) or (by_frame.get(frame) if index == last else None)
+        if got != value:
             print(f"replay: {replay.name}: FIRST DIFFERENCE at VBlank {index} (frame {frame} when recorded): "
-                  f"expected {value}, got {got[1] if got else 'no frame there (the run ended or took another path)'}")
+                  f"expected {value}, got {got or 'no such frame (the run ended or took another path)'}")
             ok = False
             break
     else:
@@ -277,8 +287,9 @@ def check(replay: Replay, actual_path: Path) -> bool:
                   f"{difference} (g_SDValue masked)")
             ok = False
             break
-    if expected["E"] and actual["E"] and actual["E"][0] < expected["E"][0]:
-        print(f"replay: {replay.name}: ended at VBlank {actual['E'][0]}, the recording at {expected['E'][0]}")
+    if expected["E"] and actual["E"] and actual["E"] < expected["E"]:
+        print(f"replay: {replay.name}: ended at VBlank {actual['E'][0]} (frame {actual['E'][1]}), the recording "
+              f"at {expected['E'][0]} ({expected['E'][1]})")
         ok = False
     return ok
 
@@ -302,20 +313,24 @@ def play_scripted(replay: Replay, executable: Path, out: Path) -> bool:
 
 def play(path: Path, executable: Path, do_check: bool, update: bool, timeout: float) -> bool:
     replay = Replay(path)
-    out = OUTPUT / replay.name
-    shutil.rmtree(out, ignore_errors=True)
+    OUTPUT.mkdir(parents=True, exist_ok=True)
+    out = Path(tempfile.mkdtemp(prefix=f"{replay.name}-", dir=OUTPUT))
     if replay.meta["kind"] == "scripted":
         return play_scripted(replay, executable, out)
     header = replay.meta["header"]
+    if header.get("clock") == "real":
+        print(f"replay: {replay.name}: recorded on the real-time clock, where each VBlank came at its own moment: "
+              "it cannot be played back (only a run with MEMORIES_DETERMINISTIC=1 can)")
+        return False
     build = (executable.parent / "buildid").read_text().strip() if (executable.parent / "buildid").exists() else "?"
     if header.get("build") and header["build"] != build:
         print(f"replay: {replay.name}: recorded by build {header['build']}, playing on {build}")
     actual = play_recorded(replay, executable, out, timeout)
     if update:
         recording = replay.file(replay.meta["recording"])
-        keep = {line.split()[1] for line in recording.read_text().splitlines() if line.startswith("H ")}
+        keep = {tuple(line.split()[1:3]) for line in recording.read_text().splitlines() if line.startswith("H ")}
         lines = [line for line in actual.read_text().splitlines()
-                 if not line.startswith("H ") or line.split()[1] in keep]
+                 if not line.startswith("H ") or tuple(line.split()[1:3]) in keep]
         if not path.is_dir():
             raise SystemExit("--update rewrites a replay folder, not a zip")
         (path / replay.meta["recording"]).write_text("\n".join(lines) + "\n", encoding="utf-8")

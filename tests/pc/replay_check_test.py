@@ -1,0 +1,53 @@
+"""replay.py's check on made-up recordings (CTest pc_replay_check): no game needed.
+
+A game closed while it waits for a VBlank presents its last frame without
+one, so the recording ends with two frame hashes at one VBlank, which the
+play reaches a VBlank later; the check must pass a play that agrees, and
+still name the first frame that differs."""
+import json
+from pathlib import Path
+import sys
+import tempfile
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools/pc"))
+import replay  # noqa: E402
+
+HEAD = "yfm-recording 1\nbuild 0000abcd\nstart boot\nF clock: virtual\nI 1 0000 0000 0000 0000 0\n"
+RECORDED = HEAD + "H 1 1 aa\nH 2 2 bb\nH 7307 6399 cc\nH 7307 6400 dd\nE 7307 6400\n"
+
+
+def replay_of(folder: Path, text: str, clock: str = "virtual") -> replay.Replay:
+    folder.mkdir(parents=True)
+    (folder / "recording.txt").write_text(text)
+    (folder / "replay.json").write_text(json.dumps({"format": 1, "kind": "recorded", "start": {"kind": "boot"},
+                                                    "recording": "recording.txt",
+                                                    "header": {"clock": clock}}))
+    return replay.Replay(folder)
+
+
+def main() -> int:
+    work = Path(tempfile.mkdtemp())
+    expected = replay_of(work / "replay", RECORDED)
+    same = work / "same.txt"
+    same.write_text(RECORDED)
+    assert replay.check(expected, same), "a play that agrees, with two frames in its last VBlank, passes"
+    later = work / "later.txt"
+    later.write_text(HEAD + "H 1 1 aa\nH 2 2 bb\nH 7307 6399 cc\nH 7308 6400 dd\nE 7308 6400\n")
+    assert replay.check(expected, later), "the last frame a VBlank later in the play (the quit cut its wait) passes"
+    stopped = work / "stopped.txt"
+    stopped.write_text(HEAD + "H 1 1 aa\nH 2 2 bb\nH 7307 6399 cc\nE 7307 6399\n")
+    assert not replay.check(expected, stopped), "a play that stops a frame early fails"
+    other = work / "other.txt"
+    other.write_text(RECORDED.replace("H 2 2 bb", "H 2 2 b0"))
+    assert not replay.check(expected, other), "a frame that differs fails"
+    parsed = replay.parse(same)
+    assert parsed["H"][(7307, 6399)] == "cc" and parsed["H"][(7307, 6400)] == "dd"
+    assert replay.header_from(parsed)["clock"] == "virtual"
+    real = replay_of(work / "real", RECORDED.replace("clock: virtual", "clock: real"), clock="real")
+    assert not replay.play(real.path, Path(sys.executable), True, False, 1), "a real-time recording is refused"
+    print("replay check: ok")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

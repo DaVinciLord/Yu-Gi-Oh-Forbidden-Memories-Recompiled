@@ -677,6 +677,10 @@ if(Python3_Interpreter_FOUND)
         add_test(NAME pc_fm_editor
             COMMAND "${Python3_EXECUTABLE}" -m unittest discover -s tools/pc/fm_editor/tests -t tools/pc
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+        # replay.py's check on made-up recordings (notes/agent-control.md).
+        add_test(NAME pc_replay_check
+            COMMAND "${Python3_EXECUTABLE}" tests/pc/replay_check_test.py
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
         # Native units that name files reach compat/fs.h (notes/pc-build.md).
         add_test(NAME pc_utf8_paths
             COMMAND "${Python3_EXECUTABLE}" tools/pc/check_utf8_paths.py
