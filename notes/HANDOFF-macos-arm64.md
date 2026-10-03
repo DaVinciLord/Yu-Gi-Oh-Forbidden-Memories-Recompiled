@@ -75,6 +75,14 @@ manette et clavier SDL dummy (`post-sprite-save-load.log`,
 `tmp/arm64-save-load/run-18996`). Le README indique désormais le build source
 macOS et les limites des save states/mods de code.
 
+Les save states repassent également sur ce même binaire après la correction
+des sprites : reprise dans un nouveau processus avec données et pixels
+identiques, puis F5/F7 SDL (`post-sprite-states.log`,
+`tmp/arm64-states/run-19473`). Le contrôle confirme trois rechargements,
+le replay de la RAM, le refus des fichiers invalides/incompatibles et la
+rotation/restauration des autosaves (`post-sprite-state-control.log`,
+`tmp/arm64-states/control-19494`). Les deux runners terminent avec le code 0.
+
 ## Entrée commune et lanceurs — 3 octobre 2026
 
 La CI construit maintenant les trois jeux complets sans disque et ajoute un
