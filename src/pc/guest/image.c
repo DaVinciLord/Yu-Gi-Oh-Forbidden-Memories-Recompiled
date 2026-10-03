@@ -224,6 +224,7 @@ static int guest_ram_executable(void)
 #endif
 
 #if defined(_WIN32) && defined(__x86_64__)
+void __x86_indirect_thunk_r11(void); /* branch_thunks.c */
 static DWORD64 *context_register(CONTEXT *context, int number)
 {
     switch (number) {
@@ -443,6 +444,33 @@ static LONG CALLBACK on_guest_exception(EXCEPTION_POINTERS *pointers)
     if (context->Rip == address || address < 0x10000u ||
         (address >= MEMORIES_GUEST_RAM && address < MEMORIES_GUEST_RAM + 0x00800000u)) {
         report_guest_fault((uint32_t)address, (uint32_t)context->Rip);
+    }
+    if (context->Rip == address || context->Rip - (uintptr_t)__x86_indirect_thunk_r11 < 0x40 ||
+        context->Rip - (uintptr_t)GetModuleHandleW(NULL) < 0x10000000u) {
+        /* A fault the game will not survive, in its own code or in a call
+         * to where nothing is (or, a #GP in the branch thunk, to a
+         * non-canonical address, reported as 0xFFFFFFFF...): the crash
+         * report's frame-pointer walk finds nothing in x86-64 code, so the
+         * callers here, by the unwind tables. */
+        CONTEXT walk = *context;
+        int depth;
+        fprintf(stderr, "memories-pc: fault at rip 0x%llx (r11 0x%llx); callers:",
+                (unsigned long long)context->Rip, (unsigned long long)context->R11);
+        for (depth = 0; depth < 12; depth++) {
+            DWORD64 image;
+            PRUNTIME_FUNCTION function = RtlLookupFunctionEntry(walk.Rip, &image, NULL);
+            if (function) {
+                void *data;
+                DWORD64 frame;
+                RtlVirtualUnwind(UNW_FLAG_NHANDLER, image, walk.Rip, function, &walk, &data, &frame, NULL);
+            } else { /* a leaf, the thunk, or no code at all: the return address is on top */
+                walk.Rip = *(const DWORD64 *)(uintptr_t)walk.Rsp;
+                walk.Rsp += 8;
+            }
+            if (!walk.Rip) break;
+            fprintf(stderr, " 0x%llx", (unsigned long long)walk.Rip);
+        }
+        fprintf(stderr, "\n");
     }
     return EXCEPTION_CONTINUE_SEARCH;
 }
