@@ -227,7 +227,9 @@ The Password screen's own, with nothing drawn by the port over it:
   translation's last line has no room). `password_only` leaves the string as
   it is; `packs_only` never shows it.
 * **The list** (△). The digits' panel shows the pack's name, centred, in the
-  panel's own letters, between the digit cursor's ◄ and ► (shown when there
+  panel's own 16x16 letters, 12 pixels apart (closer for a name that would
+  otherwise run into the arrows, which it never does: 7 apart at 16
+  letters), between the digit cursor's ◄ and ► (shown when there
   is more than one pack; ▲ and ▼ when there is more than one shop); the red
   cursor is hidden. The big card turns to the pack. The message box has the
   shop's name in blue (with more than one shop), the description's first
