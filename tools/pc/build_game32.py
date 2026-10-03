@@ -941,6 +941,8 @@ def main():
     os.chdir(ROOT)
     os.makedirs(options.build + "/obj", exist_ok=True)
     headers = glob.glob("src/**/*.h", recursive=True) + glob.glob("mods/**/*.h", recursive=True) + [__file__, "config/pc/host_symbol_renames.txt"]
+    if A64:
+        headers.append("tools/pc/ptr32_stores.py")   # it rewrites every unit's IR (compile_unit)
     NEWEST_HEADER = max(os.path.getmtime(path) for path in headers)
     # A build folder may have been built last by another checkout: tmp is
     # shared by every worktree (a junction), and an object there newer than
