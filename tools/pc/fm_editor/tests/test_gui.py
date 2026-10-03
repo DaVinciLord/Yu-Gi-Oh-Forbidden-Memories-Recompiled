@@ -380,8 +380,16 @@ class GuiTest(unittest.TestCase):
         app.limits.advanced_shown.set(True)
         app.limits._show_advanced()
         app.update()
-        app.limits.scroll.canvas.yview_moveto(1)
-        self.assertGreater(app.limits.scroll.canvas.yview()[0], 0)
+        scroll = app.limits.scroll
+        # Windows fonts can fit the whole form at 640px. Size the viewport
+        # from the form itself so this exercises overflowing content there too.
+        chrome_height = app.winfo_height() - scroll.canvas.winfo_height()
+        app.minsize(1, 1)
+        app.geometry(f"1100x{chrome_height + scroll.body.winfo_reqheight() // 2}")
+        app.update()
+        self.assertGreater(scroll.body.winfo_reqheight(), scroll.canvas.winfo_height())
+        scroll.canvas.yview_moveto(1)
+        self.assertGreater(scroll.canvas.yview()[0], 0)
 
     def test_packs(self):
         from fm_editor import pngio
