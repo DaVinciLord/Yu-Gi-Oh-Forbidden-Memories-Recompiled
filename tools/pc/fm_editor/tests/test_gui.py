@@ -324,6 +324,21 @@ class GuiTest(unittest.TestCase):
         self.assertEqual(app.project.card_extra[1], {"effect": 701})
         from fm_editor import validate
         self.assertTrue(any("CPU" in i.message for i in validate.validate_card(app.project, 1)))
+        # Made a trap, the card shows that effect and keeps it.
+        cards.tree.selection_set("1")
+        cards.select()
+        cards.vars["type"].set("Trap")
+        self.assertEqual(cards.vars["effect"].get(), "701 Card 701")
+        self.assertTrue(cards.apply())
+        self.assertEqual(app.project.card_extra[1], {"effect": 701})
+
+    def test_copy_has_its_replaced_base_effect(self):
+        # A copy with no "effect" plays its base's (cards.c Cards_EffectId).
+        project = self.app.project
+        project.card_extra[610] = {"effect": 620}
+        copy = project.add_card(610)
+        self.assertEqual(project.effect_of(copy), 620)
+        self.assertEqual(project.effect_of(611), 611)
 
     def test_art(self):
         from fm_editor import art, pngio

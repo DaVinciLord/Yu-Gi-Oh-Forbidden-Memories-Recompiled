@@ -40,8 +40,6 @@
 #else
 #define PLACED_EQUIP_EFFECT D_8009B206
 #endif
-#ifdef MEMORIES_PC
-#endif
 
 #define PLACEMENT_PX(object) ((object)->field_30.h.field_30)
 #define PLACEMENT_PY(object) ((object)->field_30.h.field_32)

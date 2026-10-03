@@ -1302,8 +1302,9 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         /* A replaced base lends the model and effect it was given. */
         value = (int)Json_Number(Json_Member(entry, "model"), 0);
         model_ids[id] = (unsigned short)(value >= 1 && value <= CARD_COUNT ? value : Cards_ModelId(base));
-        /* A number or a card's name, as a replace's (Cards_Reference). */
-        value = Cards_Reference(Json_Member(entry, "effect"));
+        /* A number or a card's name, as a replace's (Cards_Reference); 0,
+         * as before names could be given, is the base's effect. */
+        value = Json_Number(Json_Member(entry, "effect"), -1) == 0 ? 0 : Cards_Reference(Json_Member(entry, "effect"));
         if (n == 1 && (value < 0 || value > CARD_COUNT))
             Mods_Note(mod, "cards[%d]: \"effect\" must name a card of the disc", index);
         effect_ids[id] = (unsigned short)(value >= 1 && value <= CARD_COUNT ? value : Cards_EffectId(base));

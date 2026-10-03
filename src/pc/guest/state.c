@@ -577,9 +577,14 @@ static void apply(void)
         chunk = find_chunk(&state, tag, &size);
         /* A shorter chunk is a state from before the variables that now
          * end the section (the Windows build's small data, which came in
-         * after the rest: build_game32.py): those keep their values. */
+         * after the rest: build_game32.py): those keep their values. Only
+         * that build's sections grew so; elsewhere the size must match. */
         saved = size / 2;
+#ifdef _WIN32
         if (chunk && size % 2 == 0 && saved <= length) {
+#else
+        if (chunk && size % 2 == 0 && saved == length) {
+#endif
             memcpy(region->data, chunk + saved, saved);
             /* Relocated words the game never changed follow this build. */
             for (word = 0; word + 4 <= saved; word += 4) {

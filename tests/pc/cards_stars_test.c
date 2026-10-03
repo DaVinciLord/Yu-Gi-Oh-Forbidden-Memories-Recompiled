@@ -112,7 +112,9 @@ static const char *const mod_cards[][2] = {
           " {\"replace\": 2, \"stars\": [0, \"Sun\"]},"
           " {\"replace\": 3, \"stars\": [null, \"none\"]},"
           " {\"copy\": 4, \"id\": \"none\", \"stars\": [0, 0]},"
-          " {\"copy\": 1, \"id\": \"of-none\"}]"},
+          " {\"copy\": 1, \"id\": \"of-none\"},"
+          /* "effect": 0, as copies wrote it before names: the base's, no note. */
+          " {\"copy\": 4, \"id\": \"zero-effect\", \"effect\": 0}]"},
     /* A magic card made a monster: with no "stars", its model's or the Sun
        and the Moon; with [0, 0], none. */
     {"b", "[{\"replace\": 300, \"type\": \"Dragon\"},"
@@ -221,10 +223,11 @@ int main(void)
     expect(1, 0, 0);
     expect(2, SUN, 0);
     expect(3, 0, 0);
-    assert(gCard_nCount == CARD_COUNT + 2);
+    assert(gCard_nCount == CARD_COUNT + 3);
     expect(CARD_COUNT + 1, 0, 0);
     expect(CARD_COUNT + 2, 0, 0);
     expect(4, SUN, MOON);                      /* a copy's base is left alone */
+    assert(Cards_EffectId(CARD_COUNT + 3) == 4);
     assert(notes[0] == 0);
 
     expect(300, SUN, MOON);
