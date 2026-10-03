@@ -249,10 +249,15 @@ static DWORD64 *context_register(CONTEXT *context, int number)
 /* low_access_register with x86-64's REX prefix: which register (0 RAX to
  * 15 R15) does the faulting instruction address memory through? -1 for
  * none, a RIP-relative or absolute address, and for VEX-encoded
- * instructions, which game code at -O0 does not use for such accesses. */
-static int low_access_register64(const unsigned char *code, uint64_t rsi)
+ * instructions, which game code at -O0 does not use for such accesses.
+ * A load through a G32 pointer has no base register: clang addresses it
+ * as disp32 plus the zero-extended pointer as the index (`movl
+ * 0x1c(,%rax), %eax`). Then the index is the register, and *scale its
+ * scale, which the fix-up divides the offset to guest RAM by. */
+static int low_access_register64(const unsigned char *code, uint64_t rsi, unsigned *scale)
 {
     unsigned rex = 0, modrm, base;
+    *scale = 1;
     while (*code == 0x66 || *code == 0x67 || *code == 0xf2 || *code == 0xf3 || *code == 0x2e || *code == 0x36 ||
            *code == 0x3e || *code == 0x26 || *code == 0x64 || *code == 0x65) {
         code++;
@@ -276,10 +281,12 @@ static int low_access_register64(const unsigned char *code, uint64_t rsi)
     }
     base = modrm & 7;
     if (base == 4) {
-        unsigned sib = *code;
+        unsigned sib = *code, index = (sib >> 3 & 7) | (rex & 2u) << 2;
         base = sib & 7;
         if (base == 5 && modrm >> 6 == 0) {
-            return -1;
+            if (index == 4) return -1; /* no index either: an absolute address */
+            *scale = 1u << (sib >> 6);
+            return (int)index;
         }
     }
     return (int)(base | (rex & 1u) << 3);
@@ -405,13 +412,14 @@ static LONG CALLBACK on_guest_exception(EXCEPTION_POINTERS *pointers)
     }
     address = (uintptr_t)record->ExceptionInformation[1];
     if (address < MEMORIES_GUEST_RAM_SIZE && context->Rip != address && !low_fixup.active) {
-        int reg = low_access_register64((const unsigned char *)(uintptr_t)context->Rip, context->Rsi);
+        unsigned scale;
+        int reg = low_access_register64((const unsigned char *)(uintptr_t)context->Rip, context->Rsi, &scale);
         if (reg >= 0 && *context_register(context, reg) < MEMORIES_GUEST_RAM_SIZE) {
             report_low_access((uint32_t)context->Rip, (uint32_t)address);
             low_fixup.active = 1;
             low_fixup.reg = reg;
             low_fixup.original = (uint32_t)*context_register(context, reg);
-            low_fixup.patched = low_fixup.original + MEMORIES_GUEST_RAM;
+            low_fixup.patched = low_fixup.original + MEMORIES_GUEST_RAM / scale;
             *context_register(context, reg) = low_fixup.patched;
             context->EFlags |= 0x100;
             return EXCEPTION_CONTINUE_EXECUTION;
