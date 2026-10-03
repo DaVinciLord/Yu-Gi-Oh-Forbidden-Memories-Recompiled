@@ -31,6 +31,39 @@ et les parcours de jeu du build structuré restent à valider. Les preuves de ga
 le spike : elles doivent être repassées sur le nouveau binaire d'intégration.
 Les journaux du rebase sont sous `tmp/arm64-integration/rebase-*`.
 
+## Dépendances macOS locales et build neuf — 3 octobre 2026
+
+`tools/pc/macos_deps.py` prépare SDL3 3.4.16, FreeType 2.14.3, libpng 1.6.58,
+zlib 1.3.2 et zstd 1.5.7 sous `tmp/pc/macos-deps`. Les archives sont verrouillées
+par SHA-256 ; CMake 4.4.3 et Ninja 1.13.2 sont aussi pris dans leurs releases
+macOS officielles vérifiées. La compilation utilise Clang/LLVM 21.1.8 et le
+SDK renvoyé par `xcrun --sdk macosx --show-sdk-path`. La découverte CMake des
+bibliothèques est limitée au préfixe local et au SDK, sans package manager.
+
+Le jeu lie les archives locales explicitement. La dépendance absolue zstd
+encodée dans llvm-config par la machine de build officielle est remplacée par
+l'archive locale ; toute autre dépendance absolue extérieure est refusée.
+Les quatre consommateurs de polices macOS passent par CoreText pour découvrir
+les fichiers système, puis par FreeType pour les dessiner. Linux/fontconfig et
+Windows conservent leurs branches. `test_macos_linkage.py` vérifie les vraies
+architectures des archives, les dépendances Mach-O du jeu/compilateur et le
+chargement/raster des polices UI, gras, serif et japonais. Les tests CMake de
+polices et titres de cartes passent ; le test des polices passe sous sanitizers.
+
+Preuves : build complet et quatorze parcours gameplay sous
+`tmp/arm64-integration/macos-local-*`, linkage/fonts sous `macos-linkage.log`,
+CTest sous `macos-font-ctest-final.log`. Build depuis l'index exporté (arbre
+`34d660c19ecee79f1e0e36a02009468cc3a9b2bd`) dans
+`/Users/vincentmetton/Code/FM/macos-clean-build-20261003` : seules les archives
+et le cache LLVM officiel sont réutilisés, aucun objet/source générée du spike.
+Les dépendances et 754 unités du jeu sont reconstruites avec un PATH système.
+Logs de cette preuve : `macos-clean-build.log`, `macos-clean-linkage.log`,
+`macos-clean-victory.log`.
+
+La victoire française avec reprise d'état passe et son chunk `language`
+confirme réellement `fr` (`macos-local-french-victory.log`). Les deux rapports
+de progression française restent à reproduire séparément.
+
 ## Save states natifs intégrés — 3 octobre 2026
 
 La demande explicite de save states remplace leur exclusion initiale. Le backend
@@ -74,8 +107,8 @@ Journaux : `tmp/arm64-integration/state-*`. Aucun test de cadence ni fenêtre r�
 Les quatorze parcours gameplay et les sauvegardes normales/deck pad et SDL
 repassent avec le backend natif de save states.
 
-La migration globale reste en cours : dépendances locales reproductibles,
-entrée de build commune, CI et validation Linux/Windows/matching console restent
+La migration globale reste en cours : entrée de build commune, CI et
+validation Linux/Windows/matching console restent
 à terminer. Les exclusions de save states mentionnées plus bas sont historiques.
 
 Les runners gameplay et sauvegarde acceptent maintenant `--binary` pour tester

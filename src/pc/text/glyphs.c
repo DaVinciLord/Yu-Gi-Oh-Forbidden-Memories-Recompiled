@@ -9,7 +9,7 @@
 #ifdef _WIN32
 #include "pc/platform/win32.h"
 #elif defined(__APPLE__)
-#include <CoreText/CoreText.h>
+#include "pc/platform/macos_fonts.h"
 #else
 #include <fontconfig/fontconfig.h>
 #endif
@@ -189,16 +189,7 @@ static void open_system_face(void)
 #ifdef _WIN32
     open_face(Win32_FontPath(0));
 #elif defined(__APPLE__)
-    {
-        CTFontRef font = CTFontCreateUIFontForLanguage(kCTFontUIFontEmphasizedSystem, 0, NULL);
-        CFURLRef url = font ? CTFontCopyAttribute(font, kCTFontURLAttribute) : NULL;
-        UInt8 path[4096];
-        if (url && CFGetTypeID(url) == CFURLGetTypeID() &&
-            CFURLGetFileSystemRepresentation(url, true, path, sizeof(path)))
-            open_face((const char *)path);
-        if (url) CFRelease(url);
-        if (font) CFRelease(font);
-    }
+    open_face(MacOS_FontPath(MEMORIES_FONT_BOLD));
 #else
     {
         FcPattern *pattern, *match;

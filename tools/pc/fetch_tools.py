@@ -29,6 +29,13 @@ RELEASES = {
                    "e3ad77d117a4bea19a7a3b333341824d79a5a371004a10e25b8504e7b3047666", "llvm-mingw-20260922-ucrt-x86_64/bin"),
 }
 PROGRAMS = {"cmake": "cmake", "ninja": "ninja", "llvm-mingw": "i686-w64-mingw32-clang"}
+if sys.platform == "darwin":
+    RELEASES.update({
+        "cmake": ("https://github.com/Kitware/CMake/releases/download/v4.4.3/cmake-4.4.3-macos-universal.tar.gz",
+                  "0c5d65251c14cc884bfa16bdbed3c263ce5bffe2e21c0d0d00962cb0610464fa", "cmake-4.4.3-macos-universal/CMake.app/Contents/bin"),
+        "ninja": ("https://github.com/ninja-build/ninja/releases/download/v1.13.2/ninja-mac.zip",
+                  "c99048673aa765960a99cf10c6ddb9f1fad506099ff0a0e137ad8960a88f321b", "."),
+    })
 
 
 def download(url, digest):
@@ -70,19 +77,22 @@ def unpack(archive, destination):
                 bundle.extractall(destination)
 
 
-def ensure(name):
+def ensure(name, *, pinned=False):
     """The tool on PATH: the installed one, else the pinned release."""
     program = PROGRAMS[name]
     url, digest, inner = RELEASES[name]
-    fetched = os.path.join(TOOLS, name, inner)
+    destination = os.path.join(TOOLS, "macos", name) if sys.platform == "darwin" else os.path.join(TOOLS, name)
+    fetched = os.path.join(destination, inner)
     if os.path.isdir(fetched):
         add_to_path(fetched)
-    if shutil.which(program):
+    if os.path.isfile(os.path.join(fetched, program)):
+        return os.path.join(fetched, program)
+    if not pinned and shutil.which(program):
         return shutil.which(program)
     if name == "llvm-mingw" and not WINDOWS:
         sys.exit("llvm-mingw for Linux comes from tools/pc/build_win32_deps.py")
-    shutil.rmtree(os.path.join(TOOLS, name), ignore_errors=True)
-    unpack(download(url, digest), os.path.join(TOOLS, name))
+    shutil.rmtree(destination, ignore_errors=True)
+    unpack(download(url, digest), destination)
     add_to_path(fetched)
     if not shutil.which(program):
         sys.exit(f"{name}: {program} is not in {fetched} after unpacking")

@@ -1,5 +1,9 @@
 """Pinned source archives shared by native PC dependency builders."""
 ARCHIVES = {
+    "sdl-source": ("https://github.com/libsdl-org/SDL/releases/download/release-3.4.16/SDL3-3.4.16.tar.gz",
+                   "7322236cd12090c3eb40b9728be4d49c76f66ad17d04369584d4ecad5cf77c68"),
+    "zstd": ("https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz",
+             "eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3"),
     "zlib": ("https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.gz",
              "bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16"),
     "libpng": ("https://github.com/pnggroup/libpng/archive/refs/tags/v1.6.58.tar.gz",

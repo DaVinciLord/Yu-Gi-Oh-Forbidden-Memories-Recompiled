@@ -19,7 +19,11 @@
 #include "pc/platform/win32.h"
 #include <windows.h>
 #else
+#ifndef __APPLE__
 #include <fontconfig/fontconfig.h>
+#else
+#include "pc/platform/macos_fonts.h"
+#endif
 #include <iconv.h>
 #endif
 #include <stdint.h>
@@ -67,6 +71,15 @@ static uint32_t sjis_to_unicode(unsigned code)
 #else
 static void open_face(void)
 {
+#ifdef __APPLE__
+    const char *file = MacOS_FontPath(MEMORIES_FONT_JAPANESE);
+    face_tried = 1;
+    if (FT_Init_FreeType(&library)) return;
+    if (file && !FT_New_Face(library, file, 0, &face)) {
+        FT_Set_Pixel_Sizes(face, 0, 14);
+        LOG(LOG_WINDOW, "kanji ROM glyphs from %s", file);
+    } else face = NULL;
+#else
     FcPattern *pattern, *match;
     FcResult result;
     FcChar8 *file = NULL;
@@ -86,6 +99,7 @@ static void open_face(void)
     }
     if (match) FcPatternDestroy(match);
     FcPatternDestroy(pattern);
+#endif
 }
 
 static uint32_t sjis_to_unicode(unsigned code)

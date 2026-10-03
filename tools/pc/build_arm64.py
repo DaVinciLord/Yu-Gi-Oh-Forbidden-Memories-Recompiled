@@ -70,7 +70,9 @@ def main():
     args = parser.parse_args()
     llvm = toolchain()
     cc = str(llvm/'bin/clang')
-    sdk = subprocess.check_output(['xcrun', '--show-sdk-path'], text=True).strip()
+    from macos_deps import ensure, sdk_path
+    dependencies = ensure(jobs=args.jobs)
+    sdk = str(sdk_path())
     build=args.build.resolve();generated=ROOT
     for d in ['raw','ir','obj','logs']: (build/d).mkdir(parents=True,exist_ok=True)
     modules=MODULES;module_config=MODULE_CONFIG;address_tables=maps()
@@ -84,8 +86,7 @@ def main():
     # Local independent runtime helpers must never resolve their own accesses.
     flags=['-isysroot',sdk,'-std=gnu11','-fms-extensions','-O0','-fno-strict-aliasing','-fwrapv','-fcommon','-fno-stack-protector',
            '-DMEMORIES_PC','-DMEMORIES_TRANSLATED','-D_LANGUAGE_C','-DLANGUAGE_C','-D_DARWIN_C_SOURCE',
-           '-Isrc','-I/opt/homebrew/include','-I/opt/homebrew/include/freetype2',
-           '-I'+str(ROOT/'tmp/pc/sdl-arm64/install/include'),'-w',
+           '-Isrc','-I'+str(dependencies/'include'),'-I'+str(dependencies/'include/freetype2'),'-w',
            '-Wno-incompatible-pointer-types','-Wno-int-conversion','-Wno-implicit-function-declaration']
     game_extra=['-include','src/pc/compat/pgxp_game.h']
     if not args.optimize or args.instrument_softgpu:
@@ -232,8 +233,8 @@ def main():
     status=run_logged([cc,*flags,'-c',str(generated_tables),'-o',str(tables_obj)],build/'logs/tables.log')
     if status:raise SystemExit('Table compilation failed: '+str(build/'logs/tables.log'))
     command=[cc,'-isysroot',sdk,*[str(path_for('obj',s,'.o')) for s,g in jobs],str(tables_obj),
-             '-L/opt/homebrew/lib','-lfreetype','-lfontconfig','-lpng','-lz','-liconv',
-             str(ROOT/'tmp/pc/sdl-arm64/install/lib/libSDL3.a'),'-framework','Cocoa','-framework','IOKit',
+             *[str(dependencies/'lib'/name) for name in ['libfreetype.a','libpng16.a','libz.a','libSDL3.a']],
+             '-liconv','-framework','Cocoa','-framework','IOKit',
              '-framework','CoreVideo','-framework','CoreAudio','-framework','AudioToolbox','-framework','Metal',
              '-framework','QuartzCore','-framework','GameController','-framework','UniformTypeIdentifiers',
              '-framework','CoreMedia','-framework','AVFoundation','-framework','OpenGL','-framework','Foundation',

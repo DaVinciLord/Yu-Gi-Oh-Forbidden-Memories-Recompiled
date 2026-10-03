@@ -28,12 +28,21 @@ def compiler():
     OUT.mkdir(parents=True, exist_ok=True)
     binary = OUT/'memories-guest-ir'
     source = ROOT/'tools/pc/llvm/guest_ir.cpp'
-    if binary.is_file() and binary.stat().st_mtime >= max(source.stat().st_mtime, CONFIG.stat().st_mtime, Path(__file__).stat().st_mtime):
+    deps_source = Path(__file__).with_name('macos_deps.py')
+    if binary.is_file() and binary.stat().st_mtime >= max(source.stat().st_mtime, CONFIG.stat().st_mtime, Path(__file__).stat().st_mtime, deps_source.stat().st_mtime):
         return binary
     llvm = toolchain()
     flags = shlex.split(subprocess.check_output([str(llvm/'bin/llvm-config'), '--cxxflags',
         '--ldflags', '--libs', 'core', 'irreader', 'passes', 'support', '--system-libs'], text=True))
-    sdk = subprocess.check_output(['xcrun', '--show-sdk-path'], text=True).strip()
+    from macos_deps import ensure, sdk_path
+    dependencies = ensure(('zstd',))
+    # LLVM's official archive encodes its build machine's absolute zstd
+    # path. Replace that dependency by identity, regardless of its prefix.
+    flags = [str(dependencies / 'lib/libzstd.a') if Path(flag).name == 'libzstd.a' else flag for flag in flags]
+    unexpected = [flag for flag in flags if flag.startswith('/') and not Path(flag).is_relative_to(llvm)
+                  and not Path(flag).is_relative_to(dependencies)]
+    if unexpected: raise RuntimeError(f'Unsupported external LLVM dependencies: {unexpected}')
+    sdk = str(sdk_path())
     subprocess.run([str(llvm/'bin/clang++'), '-isysroot', sdk, '-nostdlib++', str(source), *flags,
                     str(llvm/'lib/libc++.a'), str(llvm/'lib/libc++abi.a'),
                     '-Wl,-rpath,@loader_path/../llvm-macos/' + llvm.name + '/lib',
