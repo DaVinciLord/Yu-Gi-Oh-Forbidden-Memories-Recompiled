@@ -7,6 +7,7 @@
 #ifdef MEMORIES_PC
 #include "ai_opponent_data.h"   /* gDuel_bOpponentID */
 #include "pc/free_duel/duelists.h"
+#include "pc/cards/cards.h"
 #endif
 
 /* AI script opcode taking two operand bytes: a register that when non-zero
@@ -213,9 +214,20 @@ void AiScript_FindCard(void)
     Ai_GetCardRange(type, &start, &end);
 
     for (i = start; i <= end; i++) {
+#ifdef MEMORIES_PC
+        /* The scripts ask for disc cards by number, and play a found magic
+           card straight from the hand with no zone to go to. A card a mod
+           replaced with another kind would be played as that card instead,
+           and a monster or equip with no zone left the hand cursor waiting
+           for a column that does not exist: the turn never ended. */
+        if ((gDuel_aActiveCards[i].card_id ? Cards_AiId(gDuel_aActiveCards[i].card_id) : 0) != wanted) {
+            continue;
+        }
+#else
         if (gDuel_aActiveCards[i].card_id != wanted) {
             continue;
         }
+#endif
         if (type == 1 || type == 3 || type == 6 || type == 8) {
             if (gDuel_aActiveCards[i].flags & DUEL_CARD_FLAG_USED_THIS_TURN) {
                 continue;
