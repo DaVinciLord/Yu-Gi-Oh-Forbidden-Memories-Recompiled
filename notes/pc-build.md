@@ -2844,23 +2844,62 @@ hashes (PGXP and HD off, as the fixtures run). What makes it work:
   4 GB, and once took the game stack's range. `MEMORIES_X64_MAP_REPORT=1`
   prints the image base; 320 headless launches all mapped, and windowed runs
   with GL and audio give the fixture frames (2026-09-30).
+- **Host memory the game is handed is low too.** A block the port
+  allocates and gives the game, or that native code returns to it as a
+  pointer, comes from `Memories_LowAlloc`/`Memories_LowFree`
+  (`src/pc/guest/low_memory.h`): a first-fit allocator over 16 MiB at the
+  fixed address `0x9E000000` (after the compiled text's region at
+  `0x9C000000`, below the interpreter's stack at `0x9FF00000`), held from
+  `Memories_GuestMap` like the other regions and mapped on first use. Its
+  users: the kanji ROM glyphs `Krom2RawAdd2` returns to the credits, the
+  compiled text when its own region cannot be had or is full (on 32-bit it
+  stays on the heap as before), and a mod's card names and texts, guardian
+  star names and duelist names. On 32-bit the two are `malloc` and `free`.
+  New code that hands the game a host block uses them; host-only memory
+  stays on the heap.
 - **Arch code.** One branch thunk (`__x86_indirect_thunk_r11`, the only
   one clang's x86-64 retpoline uses), `state_x86_64.S` (VSync entry and
   the game-stack switch, TEB bounds through `%gs`), `setjmp_x86_64.S`
   (the Win64 state does not fit the game's 48-byte `jmp_buf`: it goes in a
   host slot keyed by the buffer), and the fault handler's `Rip`/REX decoding
-  for the null-page fix-up.
+  for the null-page fix-up, which also takes clang's load through a G32
+  pointer, `disp32(,%reg)` with no base register. A fatal fault in the
+  game's code, or a call to where nothing is (a non-canonical target faults
+  as a #GP in the branch thunk, reported at `0xFFFFFFFF`), prints its
+  callers from the unwind tables ("fault at rip ...; callers: ..."), since
+  the crash report's frame-pointer walk finds nothing in x86-64 code.
+- **What G32 on declarations does not cover.** A local that receives a
+  guest table whole (`func_8004EB00` copies four model handlers from
+  `D_800114E8` as one 16-byte block) is `T (*G32 name[N])(...)`, called
+  through `CALL32`; the port's own `extern` declarations of pinned guest
+  globals (`libgs.c`'s `D_800E9D98`) carry G32 as the game's headers do; a
+  guest struct the port reads through a cast (`GsDrawOt`'s GsOT tag) reads
+  `T *G32`. `check_x64_casts.py` scans `src/pc/sdk` and `src/pc/platform`
+  for the last kind as well as the game.
 - **Truncation check.** `MEMORIES_X64_HIGH_HEAP=1` reserves every free range
   below 4 GB and fills the process heap's low segments, so host memory comes
   from above 4 GB; a host pointer stored into a guest slot then faults, and
   is reported as "truncated host pointer". The title, the menus and a duel
   run with it clean.
 
+**X2 (2026-10-03): the game plays as on 32-bit.** Replays recorded on the
+32-bit build with every mod off (`tools/pc/replay.py`, notes/agent-control.md)
+play on the 64-bit build with every frame hash the same, plainly and with
+`MEMORIES_X64_HIGH_HEAP=1`: boot to the first story duel; a whole duel
+against Simon Muran with a fusion, Raigeki, Forest, Red Medicine and 3D
+battles (each attacker's MODEL variant module run by the MIPS interpreter,
+`MEMORIES_TRACE=model`) through the result to Free Duel, also with
+`MEMORIES_DUEL_EFFECTS=interpreter`; the credits from the save prompt to the
+end of the roll, also with `MEMORIES_CREDITS=interpreter`; the title menu,
+Options, Build Deck, the Library, Password, the map and Free Duel. On the
+way, `func_80051350` (the 3D camera's nearness test) stopped reading two
+locals through pointers that only the console's stack frame lines up: both
+port builds had read other words there, and a credits scene's camera
+drifted.
+
 Not in the 64-bit build yet: save states (X3; refused with a message), code
-mods (X3; none are built or loaded), the crash monitor process (X3), the
-interrupt clock (the cooperative one is the default anyway), and a check of
-the MIPS interpreter's paths, the credits and duels against the 32-bit
-frames (X2).
+mods (X3; none are built or loaded), the crash monitor process (X3) and the
+interrupt clock (the cooperative one is the default anyway).
 
 ## Launch the local graphics preview
 
