@@ -933,6 +933,11 @@ int Cards_KindChanged(int id)
 {
     return Cards_Valid(id) && kind(Cards_Type(id)) != kind(Cards_RetailType(Cards_BaseId(id)));
 }
+int Cards_AiId(int id)
+{
+    int as = Cards_EffectId(id);
+    return Cards_Valid(id) && kind(Cards_Type(id)) == kind(Cards_RetailType(as)) ? as : -1;
+}
 
 static int retail_monster(int id)
 {
