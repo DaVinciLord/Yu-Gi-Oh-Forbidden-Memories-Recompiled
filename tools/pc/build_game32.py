@@ -107,7 +107,8 @@ if WINDOWS:
         "-mno-ms-bitfields",  # the game's structures, shared with native code (see CFLAGS)
         "-gcodeview"]
     if X64:
-        NATIVE_CFLAGS = X64_FLAGS + NATIVE_CFLAGS
+        # The mods' code is 32-bit x86 (src/pc/mods/mods.c refuses it here).
+        NATIVE_CFLAGS = X64_FLAGS + NATIVE_CFLAGS + ["-DMEMORIES_NO_CODE_MODS"]
 # Every unit's indirect calls and jumps go through __x86_indirect_thunk_<reg>
 # (src/pc/guest/branch_thunks.c), which sends a target in guest memory to its
 # native function: tables in the retail data image hold MIPS addresses, and
@@ -511,7 +512,13 @@ def exe_resources(build, release):
     return [f"{build}/resources.o"]
 
 
-def build_mods(build, release=False):
+def library(source_dir):
+    """The manifest's "library": the mod has code."""
+    with open(f"{source_dir}/mod.json", encoding="utf-8") as handle:
+        return bool(json.load(handle).get("library"))
+
+
+def build_mods(build, release=False, code=True):
     """Each directory under mods/ becomes a mod directory beside the game.
 
     A mod is its manifest and whatever it ships; if it has C, that becomes
@@ -529,7 +536,12 @@ def build_mods(build, release=False):
     builds against: modapi.h and the game's headers under sdk/include, the C
     library a mod may use under sdk/include/libc, build_mod.py and the texture
     pack tools under sdk/tools, the example mods under sdk/examples/mods and
-    the modding notes under sdk/notes."""
+    the modding notes under sdk/notes.
+
+    With code=False (the 64-bit game) the mods are copied as data: a mod's
+    C is not built, the game refuses a mod with a library and says why in
+    the Mods window, and no SDK goes beside it (the SDK builds 32-bit
+    objects; the 64-bit one is a later milestone)."""
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import build_mod
     out_root = f"{build}/mods"
@@ -538,7 +550,8 @@ def build_mods(build, release=False):
         tracked = set(subprocess.check_output(["git", "ls-files", "-z", "mods"], text=True).split("\0"))
         shutil.rmtree(out_root, ignore_errors=True)
     os.makedirs(out_root, exist_ok=True)
-    write_sdk(build)
+    if code:
+        write_sdk(build)
     mods = []
     for manifest in sorted(glob.glob("mods/*/mod.json")):
         if tracked is not None and manifest not in tracked:
@@ -558,6 +571,10 @@ def build_mods(build, release=False):
     # and a new key the compiler. Checked against this build's own export
     # table: the other system's may be older than this build. Written where
     # the manifest's "library" puts it, which may be a subdirectory.
+    if not code:
+        print(f"{out_root}: " + ", ".join(f"{name} ({'code, not loaded by this game' if library(source_dir) else 'data'})"
+                                          for name, source_dir, _ in mods))
+        return
     with concurrent.futures.ThreadPoolExecutor(max(1, len(mods))) as pool:
         objects = list(pool.map(lambda mod: build_mod.build(mod[1], out_dir=mod[2], games=[build], quiet=True),
                                 mods))
@@ -1055,12 +1072,9 @@ def main():
              *[obj(s) for s in game + NATIVE],
              f"{options.build}/stubs.o", guest_branches, f"{options.build}/mod_exports.o", version, f"{options.build}/guest_symbols.ld", *(libraries if options.backend == "sdl"
                else ["-lm", *fonts, "-lX11", "-lXext", "-lasound", *system]), *build_linux_sysroot.endfiles()])
-    if X64:
-        # Code mods are i386 objects, and the 64-bit loader is not written
-        # yet (milestone X3): the 64-bit game loads none.
-        print(f"{options.build}: no mods in the 64-bit build yet")
-    else:
-        build_mods(options.build, options.release)
+    # Code mods are 32-bit objects: the 64-bit game takes the data mods and
+    # refuses the others by name (MEMORIES_NO_CODE_MODS, src/pc/mods/mods.c).
+    build_mods(options.build, options.release, code=not X64)
     copy_languages(options.build, options.release)
     # Save states are carried between builds with these tables
     # (src/pc/guest/state.c): every function in the executable, because the

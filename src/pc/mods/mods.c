@@ -1597,6 +1597,18 @@ static void activate_once(int index, int on)
                 mod->failed = 1; note(mod, "out of memory for settings"); drop_overrides(index); return;
             }
         }
+#ifdef MEMORIES_NO_CODE_MODS
+        /* The 64-bit game (build_game32.py --target windows-x64): a mod's
+         * code is a 32-bit x86 object, which this game cannot link or call.
+         * The mod stays off with the reason beside it, and its choice and
+         * the other mods' Apply are left alone: it is not a broken mod. */
+        if (!mod->broken && mod->library[0]) {
+            note(mod, "needs a 64-bit build of this mod: its code was built for the 32-bit game, which is the one "
+                      "to play it with");
+            drop_overrides(index);
+            return;
+        }
+#endif
         /* A mod that cannot load keeps the player's choice and its reason:
          * the window shows both, and removing it still works. */
         if (mod->broken || !load_library(mod)) {
