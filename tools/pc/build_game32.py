@@ -95,8 +95,13 @@ if WINDOWS:
 # the thunk for those, which lets a host target straight through.
 BRANCH_THUNKS = (["-mretpoline-external-thunk"] if WINDOWS else
                  ["-mindirect-branch=thunk-extern", "-mindirect-branch-register"])
-CFLAGS = CFLAGS + BRANCH_THUNKS
-NATIVE_CFLAGS = NATIVE_CFLAGS + BRANCH_THUNKS
+# Floating point in SSE registers, as clang does for the Windows build: GCC's
+# 32-bit default is the x87 with its 80-bit intermediates, which rounded the
+# MDEC's IDCT (libpress.c) a step apart from Windows and so broke replays
+# recorded on one when played on the other.
+FLOAT_MATH = [] if WINDOWS else ["-msse2", "-mfpmath=sse"]
+CFLAGS = CFLAGS + BRANCH_THUNKS + FLOAT_MATH
+NATIVE_CFLAGS = NATIVE_CFLAGS + BRANCH_THUNKS + FLOAT_MATH
 if PORTABLE:
     SYSROOT_COMPILE, SYSROOT_LINK = build_linux_sysroot.flags()
     CFLAGS = CFLAGS + SYSROOT_COMPILE
