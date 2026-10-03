@@ -140,22 +140,23 @@ static uintptr_t initial_frame(uintptr_t top, void (*entry)(void))
 /* setjmp_x86_64.S: where the registers for a game jmp_buf are kept. The
  * game's buffer (the Psy-Q int[12] at 0x800E9DC0) is too small for them, so
  * each buffer address gets a host slot of 240 bytes. The game uses one. */
+static struct {
+    void *buffer;
+    uint64_t words[30];
+} jump_slots[16];
+
 void *Memories_JumpSlot(void *buffer)
 {
-    static struct {
-        void *buffer;
-        uint64_t words[30];
-    } slots[16];
     unsigned i;
-    for (i = 0; i < sizeof(slots) / sizeof(slots[0]) && slots[i].buffer; i++) {
-        if (slots[i].buffer == buffer) return slots[i].words;
+    for (i = 0; i < sizeof(jump_slots) / sizeof(jump_slots[0]) && jump_slots[i].buffer; i++) {
+        if (jump_slots[i].buffer == buffer) return jump_slots[i].words;
     }
-    if (i == sizeof(slots) / sizeof(slots[0])) {
+    if (i == sizeof(jump_slots) / sizeof(jump_slots[0])) {
         Crash_ReportFatal("setjmp", "more than 16 jmp_buf addresses");
         _exit(70);
     }
-    slots[i].buffer = buffer;
-    return slots[i].words;
+    jump_slots[i].buffer = buffer;
+    return jump_slots[i].words;
 }
 #else
 void Memories_ContextSwitch(uint32_t *from_esp, const uint32_t *to_esp);
@@ -489,6 +490,15 @@ static void subsystems(MemoriesState *state)
         seed.size = size;
         Memories_StateChunk(state, "mod-rng", &seed, 1);
     }
+#if defined(__x86_64__)
+    {
+        /* The game's jmp_buf lives in a host slot here (Memories_JumpSlot),
+         * outside guest RAM, which carries it on 32-bit: Main_Init's setjmp,
+         * which the Game Over and debug-menu longjmps return to. */
+        MemoriesStateField jumps = {jump_slots, sizeof(jump_slots)};
+        Memories_StateChunk(state, "jump-slots", &jumps, 1);
+    }
+#endif
     RetailImage_State(state);
     Spu_State(state);
     LibSpu_State(state);
@@ -595,11 +605,6 @@ static int save(const char *path, int tell)
     MemoriesState state = {0, NULL, NULL, 0};
     char partial[600];
     int failed;
-#if defined(__x86_64__)
-    /* The 64-bit state format (a wider entry, xmm registers) is milestone X3. */
-    refuse("%s: save states are not in the 64-bit build yet", path);
-    return -1;
-#endif
     snprintf(partial, sizeof(partial), "%s.partial", path);
     Paths_WriteBegin();
     state.file = fopen(partial, "wb");
@@ -932,11 +937,6 @@ static int load(const char *path)
     uint32_t header[2];
     size_t size;
     long length;
-#if defined(__x86_64__)
-    if (file) fclose(file);
-    refuse("%s: save states are not in the 64-bit build yet", path);
-    return -1;
-#endif
     if (!file) {
         refuse("%s: %s", path, strerror(errno));
         return -1;

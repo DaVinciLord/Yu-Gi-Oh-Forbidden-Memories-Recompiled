@@ -56,6 +56,7 @@ void Memories_StateRemapRange(MemoriesState *state, uint32_t from, uint32_t to, 
  * reads one name on both. */
 typedef struct MemoriesStateEntry {
     uint64_t rbx, rbp, rdi, rsi, r12, r13, r14, r15, esp; /* esp: rsp, at the return address */
+    uint64_t xmm[20]; /* xmm6-xmm15, which Win64 keeps across a call too */
 } MemoriesStateEntry;
 #else
 typedef struct MemoriesStateEntry {

@@ -18,12 +18,21 @@ VSync:
     movq %r14, Memories_StateEntry+48(%rip)
     movq %r15, Memories_StateEntry+56(%rip)
     movq %rsp, Memories_StateEntry+64(%rip)
+    movdqu %xmm6, Memories_StateEntry+72(%rip)
+    movdqu %xmm7, Memories_StateEntry+88(%rip)
+    movdqu %xmm8, Memories_StateEntry+104(%rip)
+    movdqu %xmm9, Memories_StateEntry+120(%rip)
+    movdqu %xmm10, Memories_StateEntry+136(%rip)
+    movdqu %xmm11, Memories_StateEntry+152(%rip)
+    movdqu %xmm12, Memories_StateEntry+168(%rip)
+    movdqu %xmm13, Memories_StateEntry+184(%rip)
+    movdqu %xmm14, Memories_StateEntry+200(%rip)
+    movdqu %xmm15, Memories_StateEntry+216(%rip)
     jmp Memories_VSync
 
 /* void Memories_StateReturn(const MemoriesStateEntry *entry, int value):
- * return `value` from the VSync call that `entry` describes. Save states
- * are not carried by the 64-bit build yet (state.c refuses them), so the
- * xmm registers are not part of the entry. */
+ * return `value` from the VSync call that `entry` describes, with the
+ * registers it recorded, xmm6-xmm15 included. */
     .globl Memories_StateReturn
 Memories_StateReturn:
     movl %edx, %eax
@@ -35,6 +44,16 @@ Memories_StateReturn:
     movq 40(%rcx), %r13
     movq 48(%rcx), %r14
     movq 56(%rcx), %r15
+    movdqu 72(%rcx), %xmm6
+    movdqu 88(%rcx), %xmm7
+    movdqu 104(%rcx), %xmm8
+    movdqu 120(%rcx), %xmm9
+    movdqu 136(%rcx), %xmm10
+    movdqu 152(%rcx), %xmm11
+    movdqu 168(%rcx), %xmm12
+    movdqu 184(%rcx), %xmm13
+    movdqu 200(%rcx), %xmm14
+    movdqu 216(%rcx), %xmm15
     movq 64(%rcx), %rsp
     ret
 
