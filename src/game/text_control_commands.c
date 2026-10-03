@@ -125,10 +125,10 @@ void Text_HandleCampaignFlagCommand(DuelEffectChannel *object)
         target &= 0xFFFF;
         if (Campaign_TestStoryFlag(flag) != 0) {
             s32 *cursor = (s32 *)(
-                (u32)object + (u32)&((u8 **)0)[object->stream_58]);
+                (u32)object + (u32)&((u8 *G32 *)0)[object->stream_58]);
 
 #ifdef MEMORIES_PC
-            *cursor = (s32)Text_Retarget((u8 *)*cursor, target);
+            *cursor = (s32)Text_Retarget((u8 *G32)*cursor, target);
 #else
             *cursor = (*cursor & 0xFFFF0000) | target;
 #endif

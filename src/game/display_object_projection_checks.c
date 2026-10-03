@@ -133,7 +133,7 @@ s32 func_80041F90(
 #else
                 if (cb < 0) {
 #endif
-                    ((void (*)(DisplayObject *, s32))cb)(obj, otz);
+                    CALL32(void (*)(DisplayObject *, s32), ((void (*G32)(DisplayObject *, s32))cb))(obj, otz);
                 }
                 if (otz >= 0) {
                     return otz;

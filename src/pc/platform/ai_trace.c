@@ -18,15 +18,16 @@
  * result. */
 #include "pc/compat/fs.h"
 #include "pc/platform/ai_trace.h"
+#include "port_ptr.h" /* G32 */
 #include "pc/rng.h"
 #include <stdio.h>
 #include <stdlib.h>
 
 extern struct { /* AiScriptState, src/game/ai.h */
     unsigned char enabled, pad01[3];
-    unsigned char *script_base;
-    unsigned char *script_cursor;
-    unsigned char *previous_cursor;
+    unsigned char *G32 script_base;
+    unsigned char *G32 script_cursor;
+    unsigned char *G32 previous_cursor;
 } gAiScript_State;
 extern signed char gDuel_bOpponentID;
 extern int AiScript_Run(void);

@@ -34,7 +34,7 @@ void Text_InitDecimalDigitGlyphMap(void) {
     do {
         e = D_801D9004;
         n = 1;
-        key = (*(u8 *)p << 8) | buf.bytes[i];
+        key = (*(u8 *G32)p << 8) | buf.bytes[i];
         if (D_801D9004[0] != 0) {
             q = out;
         search:

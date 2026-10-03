@@ -1110,7 +1110,7 @@ extern  "C" {
 	extern int GsSetRefViewUnit(GsRVIEWUNIT *);
 	extern int GsSetRefViewLUnit(GsRVIEWUNIT *);
 	extern u32 *GsScanAnim(u32 *,GsTYPEUNIT *);
-	extern PSXLONG GsLinkAnim(GsSEQ **,u32 *);
+	extern PSXLONG GsLinkAnim(GsSEQ *G32 *,u32 *);
 
 	/* for MIMe */
 	extern void	GsInitRstVtxMIMe(u32 *primtop, u32 *hp);

@@ -10,10 +10,15 @@
 /* Declared by hand: <windows.h> would bring RECT and other names that clash
  * with the game's own types. Same signatures as the SDK (LPVOID, SIZE_T, DWORD). */
 #ifndef _WINDOWS_
-__declspec(dllimport) void *__stdcall VirtualAlloc(void *address, unsigned long size, unsigned long type,
+#ifdef _WIN64
+#define MEMORIES_SIZE_T unsigned long long /* SIZE_T is 64 bits there */
+#else
+#define MEMORIES_SIZE_T unsigned long
+#endif
+__declspec(dllimport) void *__stdcall VirtualAlloc(void *address, MEMORIES_SIZE_T size, unsigned long type,
                                                    unsigned long protect);
-__declspec(dllimport) int __stdcall VirtualFree(void *address, unsigned long size, unsigned long type);
-__declspec(dllimport) int __stdcall VirtualProtect(void *address, unsigned long size, unsigned long protect,
+__declspec(dllimport) int __stdcall VirtualFree(void *address, MEMORIES_SIZE_T size, unsigned long type);
+__declspec(dllimport) int __stdcall VirtualProtect(void *address, MEMORIES_SIZE_T size, unsigned long protect,
                                                    unsigned long *old_protect);
 #define MEM_COMMIT 0x1000
 #define MEM_RESERVE 0x2000

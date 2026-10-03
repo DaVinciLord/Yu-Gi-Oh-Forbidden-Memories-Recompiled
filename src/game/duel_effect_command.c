@@ -51,7 +51,7 @@ void func_80037DA4(DuelEffectChannel *object)
     s32 star = 0;   /* the guardian star an icon stands for (stars.h) */
 #endif
 
-    text = (u8 *)(s32)object->stream_58;
+    text = (u8 *G32)(s32)object->stream_58;
     object->field_62 = 0;
     text = (u8 *)((u32)text * 4);
     {
@@ -59,9 +59,9 @@ void func_80037DA4(DuelEffectChannel *object)
 
         stream += (u32)text;
         text = stream;
-        current = *(u8 **)text;
+        current = *(u8 *G32 *)text;
         op = *current++;
-        *(u8 **)text = current;
+        *(u8 *G32 *)text = current;
     }
     n = 0;
     if (op & 0x10) {
@@ -273,7 +273,7 @@ void func_80038148(DuelEffectChannel *object)
            (card_constants.h); four print ATK, DEF and LP, and six the
            starchips, which a mod's "limits" may take past 9999 and 999999
            (pc/cards/tables.h). A number that fits is left as it was. */
-        s32 value = *(s32 *)r;
+        s32 value = *(s32 *G32)r;
         s32 need = 1;
         s32 bound = 10;
 
@@ -304,7 +304,7 @@ void func_80038148(DuelEffectChannel *object)
                 buf[i] = TEXT_DECIMAL_BLANK_DIGIT;
             }
         } else {
-            Text_EncodeDecimalDigits(*(s32 *)r, c & 0xF, buf);
+            Text_EncodeDecimalDigits(*(s32 *G32)r, c & 0xF, buf);
         }
     }
 #else
@@ -482,4 +482,4 @@ void func_80038498(DuelEffectChannel *object)
     object->field_54 = w;
 }
 
-void func_800384E4(DuelEffectChannel*object){register DuelEffectChannel*obj;register u8**stream;register u8*current;register unsigned int value;obj=object;obj->flags_34&=0xEFFF;stream=&((u8**)obj)[obj->stream_58];current=*stream;value=*current;current++;*stream=current;if(value)obj->flags_34|=0x1000;}
+void func_800384E4(DuelEffectChannel*object){register DuelEffectChannel*obj;register u8*G32 *stream;register u8*current;register unsigned int value;obj=object;obj->flags_34&=0xEFFF;stream=&((u8*G32 *)obj)[obj->stream_58];current=*stream;value=*current;current++;*stream=current;if(value)obj->flags_34|=0x1000;}

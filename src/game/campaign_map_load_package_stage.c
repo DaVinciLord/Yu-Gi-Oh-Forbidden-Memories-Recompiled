@@ -70,7 +70,7 @@ void CampaignMap_LoadPackageStage(FileTransferDescriptor *object, s32 mode) {
         object->y = 0xF0;
         object->w = 0x100;
         object->h = 4;
-        LoadImage2((RECT *)object, (u32 *)D_8009B118);
+        LoadImage2((RECT *)object, (u32 *G32)D_8009B118);
         break;
     }
 }

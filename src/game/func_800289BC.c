@@ -10,7 +10,7 @@
 #include "pc/text/hd_text.h"
 #endif
 
-#define VRAM_UPLOAD_WORDS(address) ((u32 *)(address))
+#define VRAM_UPLOAD_WORDS(address) ((u32 *G32)(address))
 
 void func_800289BC(FileTransferDescriptor *object, s32 mode)
 {
@@ -31,7 +31,7 @@ void func_800289BC(FileTransferDescriptor *object, s32 mode)
     e = &D_800EA0E8[(s32)object->callback_data];
 #ifdef MEMORIES_PC
     /* A card a mod added may have artwork of its own over its base's. */
-    Cards_PatchArtRecord(e->field_30, (u8 *)D_8009B118);
+    Cards_PatchArtRecord(e->field_30, (u8 *G32)D_8009B118);
 #endif
 
     rect = &e->rects[0];
