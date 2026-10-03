@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Build the game for sharing: one archive for Windows, one for Linux.
+"""Build the game for sharing: archives for Windows (32-bit and 64-bit) and Linux.
 
-    python3 tools/pc/package.py            # both, into dist/
+    python3 tools/pc/package.py                # all three, into dist/
+    python3 tools/pc/package.py windows-x64    # the 64-bit Windows one only
 
 Each archive is a folder a player unpacks and runs: the executable, the mods
 the release ships (the same object files for both systems), the mod SDK,
@@ -12,7 +13,12 @@ from the game's discs is included.
 
 The Linux executable is built against Debian 11's libraries
 (tools/pc/build_linux_sysroot.py), as every Linux build is, so it runs on
-other people's Linux. Both builds are smoke tested before they are packed."""
+other people's Linux. Every build is smoke tested before it is packed.
+
+The 64-bit Windows archive (-windows-x64.zip, notes/pc-build.md "64-bit
+Windows") is the same folder without the mod SDK: that game loads the data
+mods and refuses code mods, which are 32-bit objects, and its smoke test
+skips the cases that turn one on."""
 import argparse, datetime, os, re, shutil, struct, subprocess, sys, tarfile, zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -20,7 +26,9 @@ DIST = os.path.join(ROOT, "dist")
 NAME = "yfm-redecomp"
 # memories-pc.pdb: the Windows build's symbols, for a debugger or profiler.
 BUILDS = {"windows": ("tmp/pc/win32", "memories-pc.exe", ["SDL3.dll", "memories-pc.pdb"]),
+          "windows-x64": ("tmp/pc/win64", "memories-pc.exe", ["SDL3.dll", "memories-pc.pdb"]),
           "linux": ("tmp/pc/game32", "memories-pc", [])}
+SUFFIX = {"windows": "-windows.zip", "windows-x64": "-windows-x64.zip", "linux": "-linux.tar.gz"}
 GAME_README = """Start memories-pc and choose your own ROM in the welcome screen.
 Alternatively, put your raw image of Forbidden Memories (USA, SLUS-01411)
 here: the .bin file of a .bin/.cue pair. Any file name ending in .bin will do.
@@ -89,9 +97,11 @@ def stage(system, label):
     os.makedirs(os.path.join(folder, "game"))
     for name in [executable, "buildid", "commit"] + extras:
         shutil.copy2(os.path.join(build_dir, name), folder)
-    if system == "windows":
+    if system.startswith("windows"):
         strip(os.path.join(folder, executable))
     for name in ("mods", "sdk", "languages"):
+        if name == "sdk" and system == "windows-x64":
+            continue   # the SDK builds 32-bit code mods, which this game refuses
         shutil.copytree(os.path.join(build_dir, name), os.path.join(folder, name))
     # This build's symbol table, under its build id and under the game
     # fingerprint (the same table): not the ones earlier builds left there.
@@ -105,9 +115,9 @@ def stage(system, label):
                 shutil.copy2(path, os.path.join(folder, "symbols", name))
     shutil.copy2(os.path.join(ROOT, "tools/pc/release/README.txt"), folder)
     shutil.copy2(os.path.join(ROOT, "LICENSE"), folder)
-    with open(os.path.join(folder, "game", "README.txt"), "w", newline="\r\n" if system == "windows" else "\n") as handle:
+    with open(os.path.join(folder, "game", "README.txt"), "w", newline="\r\n" if system.startswith("windows") else "\n") as handle:
         handle.write(GAME_README)
-    if system == "windows":   # Notepad and friends
+    if system.startswith("windows"):   # Notepad and friends
         with open(os.path.join(folder, "README.txt"), encoding="utf-8") as handle:
             text = handle.read()
         with open(os.path.join(folder, "README.txt"), "w", encoding="utf-8", newline="\r\n") as handle:
@@ -116,9 +126,9 @@ def stage(system, label):
 
 
 def pack(system, folder):
-    base = os.path.join(DIST, os.path.basename(folder) + ("-windows.zip" if system == "windows" else "-linux.tar.gz"))
+    base = os.path.join(DIST, os.path.basename(folder) + SUFFIX[system])
     parent = os.path.dirname(folder)
-    if system == "windows":
+    if system.startswith("windows"):
         with zipfile.ZipFile(base, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
             for directory, _, files in os.walk(folder):
                 for name in sorted(files):
@@ -138,14 +148,14 @@ def pack(system, folder):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("systems", nargs="*", help="windows, linux (default: both)")
+    parser.add_argument("systems", nargs="*", help="windows, windows-x64, linux (default: all)")
     parser.add_argument("--no-build", action="store_true", help="pack what is already built")
     parser.add_argument("--skip-smoke", action="store_true", help="build without ROM-dependent gameplay tests (CI)")
     parser.add_argument("--version", help="archive version, e.g. v0.1.0 or dev-abcdef0")
     options = parser.parse_args()
-    systems = options.systems or ["windows", "linux"]
+    systems = options.systems or ["windows", "windows-x64", "linux"]
     if set(systems) - set(BUILDS):
-        parser.error("systems are windows and linux")
+        parser.error("systems are windows, windows-x64 and linux")
     label = options.version or version()
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}", label):
         parser.error("version must be 1-100 letters, numbers, dots, underscores or hyphens, starting with a letter or number")
