@@ -85,6 +85,17 @@ rotation/restauration des autosaves (`post-sprite-state-control.log`,
 
 ## Entrée commune et lanceurs — 3 octobre 2026
 
+Nettoyage vérifié le 4 octobre : les anciens générateurs
+`build_arm64_game_ir.py`/`build_arm64_native_ir.py` et les injections textuelles
+`guest_pointer_overrides.py`/`host_renderer_boundaries.py` sont retirés.
+Le test de `func_80038898` compile désormais le fichier source commun intact
+avec LLVM 21.1.8, puis applique la passe structurée avant optimisation et
+exécution. Les trois alias mémoire, l'incrément du stream et les globals
+épinglés passent. `test_guest_storage_layout.py` vérifie les vraies déclarations
+des headers sur les quatre ABI, sans copies corrigées ; il est ajouté à la CI.
+Preuves locales : `shared-storage-layout.log`, `structured-native.log`
+(21 scénarios) et `structured-native-sanitize.log`.
+
 La CI construit maintenant les trois jeux complets sans disque et ajoute un
 job macOS ARM64 (`macos-15`) avec LLVM 21.1.8, cache des dépendances vérifiées,
 tests LLVM, linkage/polices, composants normaux et ASan/UBSan. Les premiers

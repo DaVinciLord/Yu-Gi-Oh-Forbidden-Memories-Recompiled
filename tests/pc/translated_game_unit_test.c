@@ -1,4 +1,4 @@
-/* Runs the scoped generated copy of the real func_80038898 command.
+/* Runs the original func_80038898 through the structured LLVM compiler.
  * Full game boot, callbacks, invalid command handling and other globals are
  * deliberately outside this proof. */
 #include "ygo_types.h"

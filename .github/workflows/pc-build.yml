@@ -91,6 +91,7 @@ jobs:
         run: |
           python tools/pc/test_llvm_guest.py
           python tools/pc/test_ps1_layouts.py
+          python tools/pc/test_guest_storage_layout.py
           python tools/pc/test_libgs_sprite_guest.py
           python tools/pc/test_macos_linkage.py --binary tmp/pc/macos/memories-arm64
       - name: Native components and sanitizers with pinned Clang
