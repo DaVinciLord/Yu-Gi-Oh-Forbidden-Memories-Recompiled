@@ -1028,8 +1028,7 @@ int Memories_GuestMap(void)
     /* Native function addresses go into 4-byte guest slots: the game must
      * be where it was linked (android_loader.c), below 4 GB. */
     if ((uintptr_t)Memories_GuestMap >= 0x100000000ull) {
-        fprintf(stderr, "memories-pc: the game's code is at %p, above 4 GB; the 64-bit game needs its link address
-",
+        fprintf(stderr, "memories-pc: the game's code is at %p, above 4 GB; the 64-bit game needs its link address\n",
                 (void *)(uintptr_t)Memories_GuestMap);
         result = -1;
     }
