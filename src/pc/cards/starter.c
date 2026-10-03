@@ -434,6 +434,17 @@ void Starter_Build(void)
     Starter_Check();
 }
 
+/* A mod's name for a note, by its id; the id when it is not loaded. */
+static const char *mod_name(const char *id)
+{
+    int i;
+    for (i = 0; i < Mods_LoadedCount(); i++) {
+        int mod = Mods_Loaded(i);
+        if (!strcmp(Mods_Id(mod), id)) return Mods_Name(mod);
+    }
+    return id;
+}
+
 /* What a new game will make of the decks and pools, in the log, and beside
  * each mod whose pools are left out (Mods_Note: the Mods window shows it,
  * with one mod or many): a written deck that weighs anything is dealt
@@ -471,11 +482,29 @@ void Starter_Check(void)
             if (!j || strcmp(pools[j].mod, pools[j - 1].mod)) mods++;
         }
         if (weight) {
-            const char *writer = decks[0].mod;
-            for (j = 0; j < deck_count && !decks[j].weight; j++) {
+            /* Every mod whose decks weigh anything, by name, as the Mods
+             * window's overlap line names them: "A's", "A's and B's". */
+            char who[600] = "";
+            int writers = 0, written = 0, dealt = 0, k;
+            for (j = 0; j < deck_count; j++) {
+                if (!decks[j].weight) continue;
+                dealt++;
+                for (k = 0; k < j && (!decks[k].weight || strcmp(decks[k].mod, decks[j].mod)); k++) {
+                }
+                writers += k == j;
             }
-            if (j < deck_count) writer = decks[j].mod;
-            Mods_Note(mod, "starter_pools left out: %s's written starter deck is dealt first", writer);
+            for (j = 0; j < deck_count; j++) {
+                size_t at = strlen(who);
+                if (!decks[j].weight) continue;
+                for (k = 0; k < j && (!decks[k].weight || strcmp(decks[k].mod, decks[j].mod)); k++) {
+                }
+                if (k < j) continue;
+                written++;
+                snprintf(who + at, sizeof(who) - at, "%s%s's", written == 1 ? "" : written == writers ? " and " : ", ",
+                         mod_name(decks[j].mod));
+            }
+            Mods_Note(mod, "starter_pools left out: %s written starter deck%s %s dealt first", who,
+                      dealt > 1 ? "s" : "", dealt > 1 ? "are" : "is");
         } else if (mods == 1) {
             Mods_Note(mod, "starter_pools left out: they draw %d cards, not %d; the disc's starter decks are dealt",
                       own, STARTER_DECK_SIZE);
