@@ -80,6 +80,7 @@ def run(build, argv):
     env["MEMORIES_DISC"] = f"{REMOTE}/game/disc.bin"
     env["MEMORIES_PROGRAM_DIR"] = REMOTE
     env["MEMORIES_RUNNER_LIBS"] = REMOTE
+    env.setdefault("MEMORIES_NO_MONITOR", "1")  # its ptrace, from an adb shell process: noise
     exports = " ".join(f"{key}={shlex.quote(value)}" for key, value in sorted(env.items()))
     command = f"cd {REMOTE} && LD_LIBRARY_PATH={REMOTE} {exports} ./runner {' '.join(shlex.quote(a) for a in argv)}; echo EXIT=$?"
     result = subprocess.run(adb() + ["shell", command], capture_output=True, text=True, errors="replace")

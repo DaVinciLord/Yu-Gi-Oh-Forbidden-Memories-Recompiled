@@ -225,10 +225,12 @@ __asm__(".text\n"
  * -fno-optimize-sibling-calls and -fno-jump-tables no `br xN` is left in a
  * unit (tools/pc/build_game32.py checks the objects). The contract is the
  * x86 one in AAPCS64 terms: the thunk is reached by `bl`, so LR is already
- * the caller's return address; every register is kept but X16 and X17
- * (IP0/IP1, which AAPCS64 lets a call's veneer change; X16 carries the
- * resolved target) and the flags, which are dead at a call. The stack is as
- * the caller left it. X18 is the platform register, never a target.
+ * the caller's return address. X16 and X17 (IP0/IP1, which AAPCS64 lets a
+ * call's veneer change; X16 carries the resolved target) and the flags may
+ * change; on the slow path so may X9-X15, the temporaries no call keeps.
+ * Everything else is kept, the argument registers X0-X8 and Q0-Q7 too.
+ * The stack is as the caller left it. X18 is the platform register, never
+ * a target (tests/pc/branch_thunks_test.c checks all of it).
  *
  * Fast path: a target with anything in its upper half (the system's
  * libraries and the heap sit far above 4 GB), or with bits 21-28 or 30 set

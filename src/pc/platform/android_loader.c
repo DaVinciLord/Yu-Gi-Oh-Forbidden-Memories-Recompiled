@@ -85,6 +85,16 @@ int SDL_main(int argc, char **argv)
         Dl_info info;
         if (dladdr((void *)run, &info)) bias = (long)((uintptr_t)info.dli_fbase - (uintptr_t)base);
     }
+#if UINTPTR_MAX > 0xffffffffu
+    /* 64-bit: the game's function addresses go into 4-byte guest slots, so
+     * anywhere but its link address (below 4 GB) it would run broken. */
+    if (bias) {
+        snprintf(line, sizeof(line), "memories-pc: libgame.so loaded %ld bytes from its link address %p; the 64-bit "
+                 "game needs it there", bias, base);
+        say(line);
+        return 1;
+    }
+#endif
     snprintf(line, sizeof(line), "%ld", bias);
     setenv("MEMORIES_ANDROID_LOAD_BIAS", line, 1);
     /* When the port's main returns (a problem before the game started, as
