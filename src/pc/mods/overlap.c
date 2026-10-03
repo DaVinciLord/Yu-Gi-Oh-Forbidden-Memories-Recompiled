@@ -32,11 +32,11 @@ enum { SET, ADD, FIXED, BASE, CHAIN, EVENT, FIRST };   /* what a claim does */
 enum { VIA_WIDE = 1, AIMED = 2, RESETS = 4, CARD_PW = 8 }; /* claim flags (CARD_PW: a card's password) */
 enum {
     O_LATER, O_AFTER, O_AGREE, O_ADD, O_RESET, O_FIXED, O_KEYS, O_BYTES, O_CHAIN, O_EVENTS, O_FIRST, O_AIMED,
-    O_PATCHED, O_EARLY, O_SOLD
+    O_PATCHED, O_EARLY, O_SOLD, O_WRITTEN, O_DROPPED
 };
 static const char *const outcome_words[] = {"later", "after", "agree", "add",   "reset",   "fixed", "keys",
                                             "bytes", "chain", "events", "first", "aimed", "patched", "early",
-                                            "sold"};
+                                            "sold",  "written", "dropped"};
 
 #define CARD_COUNT 722             /* the disc's cards: what "replace" and the Password screen take */
 #define TEXT_KEY (1ull << 40)      /* a card named by letters no card has: its letters' hash */
@@ -1419,6 +1419,100 @@ static void card_passwords(ModsOverlaps *x, int mod)
     }
 }
 
+/* --- starter decks and pools (src/pc/cards/starter.c) ---------------------
+ *
+ * The pools of every mod add up and are dealt from only when their draws
+ * make the forty cards of a deck (Starter_HasPools); else the disc's rows
+ * deal it, which only the log says. A written deck any mod offers wins over
+ * every mod's pools (name_entry_main.c asks for one first). So each mod's
+ * pools are one claim of the STARTER_POOLS key, their draws in `lo`, and
+ * each mod's written decks one more (FIXED, how many in `lo`), as the
+ * reader keeps them: a pool or a deck it leaves out is not counted. */
+
+#define STARTER_POOLS 1            /* the starter key of the pools' line (the decks' own is 0) */
+#define STARTER_DECK_SIZE 40
+#define STARTER_WEIGHT_LIMIT 32767 /* a deck's weight (starter.c) */
+#define STARTER_POOL_WEIGHT_LIMIT 65535
+
+/* A card a deck or a pool names by a member's name: one Cards_Named knows.
+ * Without the game's cards, any name is one but a number that is not. */
+static int starter_card(ModsOverlaps *x, const char *name)
+{
+    uint64_t key = card_text(x, name ? name : "");
+    return key && ((!x->source.card && !digits_only(name)) || key < TEXT_KEY);
+}
+/* A pool read_pool keeps, its draws added to `draws`: an object whose
+ * "draws" is 0 to 40 and whose "cards" is an object weighting at least one
+ * card when it draws any. */
+static int starter_pool(ModsOverlaps *x, const JsonValue *entry, long long *draws)
+{
+    const JsonValue *count = Json_Member(object_of(entry), "draws"), *cards = object_of(Json_Member(object_of(entry), "cards"));
+    long n = Json_Number(count, -1);
+    int weighted = 0;
+    if (!object_of(entry) || Json_TypeOf(count) != JSON_NUMBER || n < 0 || n > STARTER_DECK_SIZE || !cards) return 0;
+    for (const JsonValue *c = Json_At(cards, 0); c && !weighted; c = Json_Next(c)) {
+        long weight = Json_Number(c, -1);
+        weighted = Json_TypeOf(c) == JSON_NUMBER && weight > 0 && weight <= STARTER_POOL_WEIGHT_LIMIT &&
+                   starter_card(x, Json_Name(c));
+    }
+    if (n && !weighted) return 0;
+    *draws += n;
+    return 1;
+}
+/* A deck read_deck keeps and Starter_Deck can pick: forty cards it knows,
+ * and a weight above 0 (one a deck leaves out). */
+static int starter_deck(ModsOverlaps *x, const JsonValue *entry)
+{
+    const JsonValue *given = Json_Member(object_of(entry), "weight");
+    long weight = Json_Number(given, 1), total = 0;
+    if (!object_of(entry) || (given && (Json_TypeOf(given) != JSON_NUMBER || weight < 0 || weight > STARTER_WEIGHT_LIMIT)) ||
+        !weight)
+        return 0;
+    for (const JsonValue *c = Json_At(entry, 0); c; c = Json_Next(c)) {
+        const char *name = Json_Name(c);
+        long copies = Json_Number(c, -1);
+        if (!name || !strcmp(name, "name") || !strcmp(name, "weight")) continue;
+        if (starter_card(x, name) && Json_TypeOf(c) == JSON_NUMBER && copies >= 0 && copies <= STARTER_DECK_SIZE)
+            total += copies;
+    }
+    return total == STARTER_DECK_SIZE;
+}
+static void read_starter(ModsOverlaps *x, int mod)
+{
+    const JsonValue *decks = member(x, mod, "starter"), *pools = member(x, mod, "starter_pools");
+    long long draws = 0;
+    int dealt = 0, kept = 0;
+    Claim *c;
+    if (object_of(decks)) dealt = starter_deck(x, decks);
+    for (const JsonValue *d = Json_At(list_of(decks), 0); d; d = Json_Next(d)) dealt += starter_deck(x, d);
+    if (object_of(pools)) kept = starter_pool(x, pools, &draws);
+    for (const JsonValue *p = Json_At(list_of(pools), 0); p; p = Json_Next(p)) kept += starter_pool(x, p, &draws);
+    if (dealt && (c = claim(x, MODS_OVERLAP_STARTER, mod, STARTER_POOLS, FIXED, 0, decks))) c->lo = dealt;
+    if (kept && (c = claim(x, MODS_OVERLAP_STARTER, mod, STARTER_POOLS, ADD, 0, pools))) c->lo = draws;
+}
+/* Whether the pools' claims make a line: pools beside another mod's written
+ * deck, two mods' pools, or one mod's whose draws are not a deck's forty
+ * (which the game treats the same: the disc's rows deal it). The draws of
+ * every pool, and how many written decks win over them. */
+static int starter_line(const Claim *c, int count, long long *draws, int *decks)
+{
+    int pools = 0, written = 0, mods = 0;
+    *draws = 0;
+    *decks = 0;
+    for (int i = 0; i < count; i++) {
+        mods += !i || c[i].mod != c[i - 1].mod;
+        if (c[i].mode == FIXED) {
+            written++;
+            *decks += (int)c[i].lo;
+        } else {
+            pools++;
+            *draws += c[i].lo;
+        }
+    }
+    if (!pools) return 0;
+    return written ? mods >= 2 : pools >= 2 || *draws != STARTER_DECK_SIZE;
+}
+
 /* Code: function hooks chain, the mod applied last called first; event
  * subscribers are all called, by priority. */
 static void read_code(ModsOverlaps *x)
@@ -1711,6 +1805,18 @@ static void decide(ModsOverlaps *x, Group *g)
         g->severity = MODS_OVERLAP_INFO;
         return;
     case MODS_OVERLAP_DATA: decide_data(x, g); return;
+    case MODS_OVERLAP_STARTER:
+        if (c[0].key == STARTER_POOLS) { /* a written deck wins, else pools that draw forty add up */
+            long long draws;
+            int decks;
+            starter_line(c, g->count, &draws, &decks);
+            for (i = g->count - 1; i >= 0; i--)
+                if (c[i].mode == FIXED) g->winner = c[i].mod;
+            g->outcome = decks ? O_WRITTEN : draws == STARTER_DECK_SIZE ? O_ADD : O_DROPPED;
+            if (g->outcome == O_ADD) g->severity = MODS_OVERLAP_INFO;
+            return;
+        }
+        break;
     case MODS_OVERLAP_PACKS:
         if ((c[0].key >> 62) == 3) { /* one password: a card's first (the lowest), else the first pack */
             int best = -1;
@@ -1850,10 +1956,12 @@ static void group(ModsOverlaps *x)
     x->groups = NULL;
     for (int i = 1; i <= x->claim_count; i++) {
         const Claim *a = &x->claims[start];
-        int mods = 0;
+        int mods = 0, decks;
+        long long draws;
         if (i < x->claim_count && x->claims[i].kind == a->kind && x->claims[i].key == a->key) continue;
         for (int j = start + 1; j < i; j++) mods += x->claims[j].mod != x->claims[j - 1].mod;
-        if (mods) {
+        if (a->kind == MODS_OVERLAP_STARTER && a->key == STARTER_POOLS ? starter_line(a, i - start, &draws, &decks)
+                                                                       : mods) {
             Group *g, *groups = grow(x->groups, &room, x->group_count, sizeof(*groups));
             if (!groups) {
                 x->failed = 1;
@@ -1927,6 +2035,7 @@ ModsOverlaps *Mods_OverlapCompute(const ModsOverlapMod *mods, int count, const M
         read_pools(x, mod);
         if (having(x, "starter") >= 2 && member(x, mod, "starter"))
             claim(x, MODS_OVERLAP_STARTER, mod, 0, ADD, 0, member(x, mod, "starter"));
+        if (having(x, "starter_pools")) read_starter(x, mod); /* one mod's may make a line too */
         if (having(x, "passwords") >= 2) read_passwords(x, mod);
         /* A pack's password meets another mod's pack or card password too. */
         if (having(x, "packs") + having(x, "pack_shop") >= 2 ||
@@ -1983,6 +2092,14 @@ int Mods_OverlapInvolves(const ModsOverlaps *x, int index, int mod)
     for (int i = 0; i < g->count; i++)
         if (x->claims[g->first + i].mod == mod) return 1;
     return 0;
+}
+
+int Mods_OverlapModCount(const ModsOverlaps *x, int index)
+{
+    const Group *g = &x->groups[index];
+    int mods = 1;
+    for (int i = 1; i < g->count; i++) mods += x->claims[g->first + i].mod != x->claims[g->first + i - 1].mod;
+    return mods;
 }
 
 const char *Mods_OverlapKindName(int kind)
@@ -2069,7 +2186,7 @@ void Mods_OverlapLabel(const ModsOverlaps *x, int index, char *out, size_t size)
         card_words(x, Json_Member(c->src, "card"), a, sizeof(a));
         snprintf(out, size, "Ritual %s", a);
         return;
-    case MODS_OVERLAP_STARTER: snprintf(out, size, "Starter decks"); return;
+    case MODS_OVERLAP_STARTER: snprintf(out, size, "%s", c->key == STARTER_POOLS ? "Starter pools" : "Starter decks"); return;
     case MODS_OVERLAP_STARS: {
         int sub = (int)(c->key >> 56), one = (int)((c->key >> 8) & 0xFF), two = (int)(c->key & 0xFF);
         static const char *const fields[] = {"", "name", "icon", "palette"};
@@ -2149,8 +2266,41 @@ void Mods_OverlapText(const ModsOverlaps *x, int index, char *out, size_t size)
                  : g->kind == MODS_OVERLAP_CARDS   ? " (they set different stats)"
                  : g->kind == MODS_OVERLAP_POOLS   ? " (each edits the pool as the mods before left it)"
                  : g->kind == MODS_OVERLAP_FONT    ? " (a letter comes from the first font that has it)"
-                                                   : "");
+                 : g->kind == MODS_OVERLAP_STARTER && x->claims[g->first].key == STARTER_POOLS
+                     ? " (their draws make the 40 cards of a deck)"
+                     : "");
         break;
+    case O_WRITTEN:
+    case O_DROPPED: {
+        /* Whose written decks win, by name ("A's", "A's and C's"), or how far
+         * the pools' draws are from a deck. */
+        size_t room = x->name_list_size + 8 * (size_t)x->mod_count, n = 0;
+        char *who = malloc(room);
+        long long draws;
+        int decks, writers = 0, written = 0;
+        starter_line(&x->claims[g->first], g->count, &draws, &decks);
+        if (!who) {
+            snprintf(out, size, "%s (%s)", label, names);
+            break;
+        }
+        who[0] = 0;
+        for (int i = 0; i < g->count; i++) writers += x->claims[g->first + i].mode == FIXED;
+        for (int i = 0; i < g->count; i++) {
+            const Claim *c = &x->claims[g->first + i];
+            if (c->mode != FIXED) continue;
+            written++;
+            n += (size_t)snprintf(who + n, room - n, "%s%s's", written == 1 ? "" : written == writers ? " and " : ", ",
+                                  x->mods[c->mod].name);
+        }
+        if (g->outcome == O_WRITTEN)
+            snprintf(out, size, "%s (%s): %s starter deck%s %s dealt; every mod's pools are left out (a written deck wins)",
+                     label, names, who, decks > 1 ? "s" : "", decks > 1 ? "are" : "is");
+        else
+            snprintf(out, size, "%s (%s): pools dropped: %lld draws, not %d; the disc's starter decks are used", label,
+                     names, draws, STARTER_DECK_SIZE);
+        free(who);
+        break;
+    }
     case O_RESET:
         snprintf(out, size, "%s (%s): %s's \"%s\" clears what the earlier mods set", label, names, winner, word);
         break;

@@ -39,11 +39,11 @@ int Cards_ExodiaPiece(int id)
 }
 
 static int notes;
-static char note[512];
+static char note[512], noted[64]; /* noted: the mod the last note is beside */
 void Mods_Note(const char *id, const char *format, ...)
 {
     va_list arguments;
-    (void)id;
+    snprintf(noted, sizeof(noted), "%s", id);
     notes++;
     va_start(arguments, format);
     vsnprintf(note, sizeof(note), format, arguments);
@@ -53,10 +53,14 @@ int Log_Wanted(LogChannel channel) { (void)channel; return 0; }
 void Log_Printf(LogChannel channel, const char *format, ...) { (void)channel; (void)format; }
 
 /* Starter_Build's mod list: the tests call Starter_Add themselves. */
-int Mods_LoadedCount(void) { return 0; }
-int Mods_Loaded(int index) { (void)index; return 0; }
+static const char *const loaded_ids[] = {"test", "first", "second"};
+static const char *const loaded_names[] = {"Test Mod", "First Mod", "Second Mod"};
+static int loaded; /* how many of them are loaded: the notes name a mod by its name */
+int Mods_LoadedCount(void) { return loaded; }
+int Mods_Loaded(int index) { return index; }
 int Mods_Active(int mod) { (void)mod; return 0; }
-const char *Mods_Id(int mod) { (void)mod; return "test"; }
+const char *Mods_Id(int mod) { return loaded_ids[mod]; }
+const char *Mods_Name(int mod) { return loaded_names[mod]; }
 const JsonValue *Mods_Manifest(int mod) { (void)mod; return NULL; }
 
 /* --- the harness -------------------------------------------------------- */
@@ -362,6 +366,52 @@ int main(void)
     one(text);
     CHECK(notes == 0 && Starter_Count() == 1 && Starter_HasPools());
     CHECK(Starter_Deck(0, cards, &name) && !strcmp(name, "Written"));
+
+    /* Starter_Check says beside each mod whose pools a new game leaves out:
+     * one mod's that do not draw forty, several mods' that do not together,
+     * and any beside a written deck that weighs anything. */
+    Starter_Check();
+    CHECK(notes == 1 && !strcmp(noted, "test") && strstr(note, "test's written starter deck is dealt first"));
+    loaded = 3;
+    notes = 0;
+    Starter_Check();
+    CHECK(notes == 1 && strstr(note, ": Test Mod's written starter deck is dealt first"));
+    /* Every mod whose decks weigh anything is named, the deck of weight 0 not. */
+    Starter_Clear();
+    notes = 0;
+    snprintf(text, sizeof(text), "{\"starter\":[{\"3\":3%s},{\"weight\":2,\"3\":3%s}]}", filler(3), filler(3));
+    add("first", text);
+    snprintf(text, sizeof(text), "{\"starter\":{\"weight\":0,\"3\":3%s},"
+                                 "\"starter_pools\":{\"draws\":40,\"cards\":{\"9\":1}}}", filler(3));
+    add("test", text);
+    snprintf(text, sizeof(text), "{\"starter\":{\"3\":3%s}}", filler(3));
+    add("second", text);
+    CHECK(notes == 0 && Starter_Count() == 4);
+    Starter_Check();
+    CHECK(notes == 1 && !strcmp(noted, "test") &&
+          strstr(note, ": First Mod's and Second Mod's written starter decks are dealt first"));
+    loaded = 0;
+    one("{\"starter_pools\":{\"draws\":24,\"cards\":{\"3\":1}}}");
+    Starter_Check();
+    CHECK(notes == 1 && strstr(note, "they draw 24 cards, not 40; the disc's starter decks are dealt"));
+    Starter_Clear();
+    notes = 0;
+    add("first", "{\"starter_pools\":[{\"draws\":30,\"cards\":{\"3\":1}},{\"draws\":10,\"cards\":{\"3\":1}}]}");
+    add("second", "{\"starter_pools\":{\"draws\":40,\"cards\":{\"4\":1}}}");
+    Starter_Check();
+    CHECK(notes == 2 && !strcmp(noted, "second") && strstr(note, "draw 80 cards together, not 40 (these 40)"));
+    Starter_Clear();
+    notes = 0;
+    add("first", "{\"starter_pools\":{\"draws\":16,\"cards\":{\"3\":1}}}");
+    add("second", "{\"starter_pools\":{\"draws\":24,\"cards\":{\"4\":1}}}");
+    Starter_Check();
+    CHECK(notes == 0);
+    /* A written deck of weight 0 is never dealt: the pools stand. */
+    snprintf(text, sizeof(text), "{\"starter\":{\"weight\":0,\"3\":3%s},"
+                                 "\"starter_pools\":{\"draws\":40,\"cards\":{\"9\":1}}}", filler(3));
+    one(text);
+    Starter_Check();
+    CHECK(notes == 0 && Starter_HasPools());
 
     /* What the reader refuses, and says so about. */
     one("{\"starter_pools\":40}");

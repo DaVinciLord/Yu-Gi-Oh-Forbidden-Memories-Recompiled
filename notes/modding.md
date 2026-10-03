@@ -1026,6 +1026,7 @@ decides it:
 | `rituals` | a ritual card | the later's recipe |
 | `drops`, `decks` | an opponent's pool, named by name, number, `"all"` (every opponent another mod names) or, in a mod's `drops/` and `decks/` folders, by a duelist of the mod's own (whom it replaces, and the line names him as the mod did, or itself); a pool that is not an object of cards is left out, as the game leaves it | edits add up, each on the pool as the mods before left it; a later `"replace": true` empties it first, and an earlier `"all"` with `"replace": true` empties every pool, so it meets a later mod's edit of any one; a fixed deck (exactly 40 cards) wins over every weighted edit, the later fixed deck over an earlier |
 | `starter` | | the decks add up |
+| `starter_pools` | every mod's pools, and any mod's written `starter` deck beside them (one the game would deal: forty cards it knows, a `weight` above 0) | the pools add up, and are dealt from only when their `draws` together make the 40 cards of a deck; at any other total they are dropped and the disc's starter decks are used (a warning, even for one mod's pools, when two mods or more are listed; the mod itself also carries a note, with one mod or many); a written deck in any mod wins over every mod's pools (a warning naming whose) |
 | `passwords` | a card's password, or its price (`starchips` and `starchips_percent` are two different prices); `"all"` reaches every card another mod names | the later; only the disc's 722 are on the Password screen |
 | `packs`, `pack_shop` | the shop's rules; a shop by id (a pack is its mod's own, `<mod id>:<id>`); a password the Password screen takes, a pack's or a card's (`passwords`) | the rules are the later mod's, every rule it leaves out back at its default; a shop's name and unlock are the later's, the packs of both in it; of packs with one password, the first in the packs' list (by `order`, else as declared) is sold, and a card with it goes before them all (of several cards, the lowest number) |
 | `guardian_stars` | an ordered pair of stars (from `matchups`, `beats`, `mirror`, and `default_bonus` for the disc's cycles; a star named as the mods read so far, its own `stars` first, have named it, as the game reads them); a star's name, icon or palette; `choice` | the later; a later `"replace": true` sets every pair an earlier mod set to 0, and so does the first declaration of a star 11-15 for that star's pairs |
@@ -1048,8 +1049,9 @@ Information, not a warning:
 * **They agree.** Two mods setting the same value (the same fusion result,
   the same threshold, the same words for a string) change nothing between
   them.
-* **They add up.** Pool edits, `remove`s, starter decks, fonts, title text
-  lines, and two card `replace`s that only set different stats.
+* **They add up.** Pool edits, `remove`s, starter decks, starter pools whose
+  draws make forty, fonts, title text lines, and two card `replace`s that
+  only set different stats.
 * **On purpose.** When the winner lists every other mod of the line in its
   `after` or `requires`, it is layered over them by design, and the line says
   so instead of warning. A mod made to go over another should say so with
@@ -1067,9 +1069,9 @@ The [FM Editor](../tools/pc/fm_editor/README.md)'s Conflicts tab checks the
 mod being edited against the other mods installed beside the game and in the
 player's mods folder (or a folder chosen there), with the same lines:
 `tools/pc/fm_editor/overlaps.py` is the Python twin of
-`src/pc/mods/overlap.c`, and both are tested against the three mods in
-`tests/pc/mod_overlaps`, line for line and in order (`pc_mods_overlap`,
-`test_overlaps.py`).
+`src/pc/mods/overlap.c`, and both are tested against the mods in
+`tests/pc/mod_overlaps` (and the sets of `starter-pools` there), line for
+line and in order (`pc_mods_overlap`, `test_overlaps.py`).
 
 ## Code mods
 

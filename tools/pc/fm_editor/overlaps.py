@@ -36,6 +36,10 @@ INFO, WARNING = 0, 1
 SET, ADD, FIXED, BASE, CHAIN, EVENT, FIRST = range(7)
 CARD_COUNT = 722
 ATTACK_TRAP_FIRST, ATTACK_TRAPS = 681, 6
+STARTER_POOLS = 1                 # the starter key of the pools' line (the decks' own is 0)
+STARTER_DECK_SIZE = 40
+STARTER_WEIGHT_LIMIT = 32767      # a deck's weight (starter.c)
+STARTER_POOL_WEIGHT_LIMIT = 65535
 ALL = ("all",)
 DEFAULT_EQUIP_BONUS = ("default",)
 EQUIP_CARDS = 1 << 20   # overlap.c EQUIP_CARDS
@@ -1116,6 +1120,59 @@ class _Check:
                 path = f"menu.{_cut(name, 60)}"
                 self.title_tree(mod, path, "spacing" if name == "spacing" else path, value, SET)
 
+    # The pools of every mod add up and are dealt from only when their draws
+    # make the forty cards of a deck (starter.c Starter_HasPools); else the
+    # disc's rows deal it. A written deck any mod offers wins over every mod's
+    # pools. Each mod's pools are one claim of the STARTER_POOLS key, their
+    # draws in `lo`, and its written decks one more (FIXED, how many in `lo`),
+    # as the reader keeps them (overlap.c read_starter).
+
+    def starter_card(self, name) -> bool:
+        """A card a deck or a pool names by a member's name: one Cards_Named
+        knows. Without the game's cards, any name is one but a number that is not."""
+        key = self.card_text(name if isinstance(name, str) else "")
+        return key is not None and ((not self.source.card and not is_digits(name)) or isinstance(key, int))
+
+    def starter_pool(self, entry):
+        """The draws of a pool read_pool keeps, or None."""
+        if not isinstance(entry, dict):
+            return None
+        count, cards = entry.get("draws"), entry.get("cards")
+        if not _int(count) or not 0 <= count <= STARTER_DECK_SIZE or not isinstance(cards, dict):
+            return None
+        weighted = any(_int(w) and 0 < w <= STARTER_POOL_WEIGHT_LIMIT and self.starter_card(name)
+                       for name, w in cards.items())
+        return None if count and not weighted else count
+
+    def starter_deck(self, entry) -> bool:
+        """A deck read_deck keeps and Starter_Deck can pick: forty cards it
+        knows, and a weight above 0."""
+        if not isinstance(entry, dict):
+            return False
+        if "weight" in entry:
+            weight = entry["weight"]
+            if not _int(weight) or not 0 <= weight <= STARTER_WEIGHT_LIMIT:
+                return False
+        else:
+            weight = 1
+        if not weight:
+            return False
+        total = sum(copies for name, copies in entry.items()
+                    if name not in ("name", "weight") and self.starter_card(name) and _int(copies)
+                    and 0 <= copies <= STARTER_DECK_SIZE)
+        return total == STARTER_DECK_SIZE
+
+    def read_starter(self, mod):
+        decks, pools = self.member(mod, "starter"), self.member(mod, "starter_pools")
+        dealt = self.starter_deck(decks) if isinstance(decks, dict) else \
+            sum(self.starter_deck(d) for d in _list(decks))
+        drawn = [self.starter_pool(pools)] if isinstance(pools, dict) else [self.starter_pool(p) for p in _list(pools)]
+        drawn = [d for d in drawn if d is not None]
+        if dealt:
+            self.claim(STARTER, mod, STARTER_POOLS, FIXED, 0, decks).lo = int(dealt)
+        if drawn:
+            self.claim(STARTER, mod, STARTER_POOLS, ADD, 0, pools).lo = sum(drawn)
+
     # --- grouping ------------------------------------------------------------
 
     def run(self, involving=None) -> list:
@@ -1141,6 +1198,8 @@ class _Check:
             self.read_pools(mod)
             if self.having("starter") >= 2 and "starter" in self.mods[mod].manifest:
                 self.claim(STARTER, mod, 0, ADD, 0)
+            if self.having("starter_pools"):   # one mod's may make a line too
+                self.read_starter(mod)
             if self.having("passwords") >= 2:
                 self.read_passwords(mod)
             # A pack's password meets another mod's pack or card password too.
@@ -1171,9 +1230,10 @@ class _Check:
         found = []
         for (kind, _), claims in groups.items():
             mods = {c.mod for c in claims}
-            if len(mods) < 2 or (involving is not None and involving not in mods):
-                continue
             claims.sort(key=lambda c: (c.mod, c.seq))
+            makes = _starter_line(claims)[0] if kind == STARTER and claims[0].key == STARTER_POOLS else len(mods) >= 2
+            if not makes or (involving is not None and involving not in mods):
+                continue
             overlap = Overlap(kind, claims)
             self.decide(overlap)
             overlap.label = self.label(overlap)
@@ -1217,6 +1277,14 @@ class _Check:
             return
         if o.kind == DATA:
             self.decide_data(o)
+            return
+        if o.kind == STARTER and c[0].key == STARTER_POOLS:
+            # A written deck wins, else pools that draw forty add up.
+            _, draws, decks = _starter_line(c)
+            o.winner = next((x.mod for x in c if x.mode == FIXED), -1)
+            o.outcome = "written" if decks else "add" if draws == STARTER_DECK_SIZE else "dropped"
+            if o.outcome == "add":
+                o.severity = INFO
             return
         if o.kind == PACKS and isinstance(c[0].key, tuple) and c[0].key[0] == "password":
             # One password: a card's first (the lowest number), else the first pack in the list.
@@ -1443,7 +1511,7 @@ class _Check:
         if kind == RITUALS:
             return f"Ritual {self.card_words(src.get('card'))}"
         if kind == STARTER:
-            return "Starter decks"
+            return "Starter pools" if c.key == STARTER_POOLS else "Starter decks"
         if kind == STARS:
             key = c.key
             if key[0] == "pair":
@@ -1481,12 +1549,24 @@ class _Check:
                      CARDS: " (they set different stats)",
                      POOLS: " (each edits the pool as the mods before left it)",
                      FONT: " (a letter comes from the first font that has it)"}.get(o.kind, "")
+            if o.kind == STARTER and o.claims[0].key == STARTER_POOLS:
+                extra = " (their draws make the 40 cards of a deck)"
             return head + f"{'all' if distinct > 2 else 'both'} apply and add up{extra}"
         if o.outcome == "reset":
             word = _cut(via, 80) if via else "replace"
             return head + f"{winner}'s \"{word}\" clears what the earlier mods set"
         if o.outcome == "fixed":
             return head + f"{winner}'s fixed deck is dealt; the other edits of it are left out"
+        if o.outcome in ("written", "dropped"):
+            # Whose written decks win, by name ("A's", "A's and C's"), or how
+            # far the pools' draws are from a deck.
+            _, draws, decks = _starter_line(o.claims)
+            if o.outcome == "dropped":
+                return head + f"pools dropped: {draws} draws, not {STARTER_DECK_SIZE}; the disc's starter decks are used"
+            writers = [f"{self.names[x.mod]}'s" for x in o.claims if x.mode == FIXED]
+            who = writers[0] if len(writers) == 1 else ", ".join(writers[:-1]) + " and " + writers[-1]
+            return head + (f"{who} starter deck{'s' if decks > 1 else ''} {'are' if decks > 1 else 'is'} dealt; "
+                           "every mod's pools are left out (a written deck wins)")
         if o.outcome == "keys":
             used, dropped, _, dropped_from = self.card_keys(o)
             used_words, dropped_words = ", ".join(used), ", ".join(dropped)
@@ -1517,6 +1597,21 @@ class _Check:
         if o.outcome == "early":
             return head + f"{winner}'s change is left out: it loads before {other}, whose button it names"
         return head + f"{winner} changes {other}'s own on purpose"
+
+
+def _starter_line(claims) -> tuple:
+    """Whether the pools' claims make a line (overlap.c starter_line): pools
+    beside another mod's written deck, two mods' pools, or one mod's whose
+    draws are not a deck's forty (which the game treats the same). Then the
+    draws of every pool, and how many written decks win over them."""
+    pools = [c for c in claims if c.mode != FIXED]
+    written = [c for c in claims if c.mode == FIXED]
+    draws, decks = sum(c.lo for c in pools), sum(c.lo for c in written)
+    if not pools:
+        return False, draws, decks
+    if written:
+        return len({c.mod for c in claims}) >= 2, draws, decks
+    return len(pools) >= 2 or draws != STARTER_DECK_SIZE, draws, decks
 
 
 def _order(claims) -> list:
