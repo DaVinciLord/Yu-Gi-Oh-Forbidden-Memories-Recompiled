@@ -24,7 +24,7 @@ from llvm_guest import translate, TranslationError, normalize, inspect, process,
 from direct_overlay_bridges import ENTRIES as DIRECT_OVERLAY_ENTRIES, validate_declaration, emit_bridge
 SOFT_GPU = 'src/pc/render/soft_gpu.c'
 from native_call_marshalling import emit_native_calls
-from build_config import MODULES, MODULE_CONFIG, GATED_MODULES, native_sources
+from build_config import MODULES, MODULE_CONFIG, GATED_MODULES, native_sources, game_sources
 
 ROOT = Path(__file__).resolve().parents[2]
 SECTION = re.compile(r'__attribute__\s*\(\(\s*section\s*\(\s*"[^"\n]+"\s*\)\s*\)\)')
@@ -76,8 +76,7 @@ def main():
     build=args.build.resolve();generated=ROOT
     for d in ['raw','ir','obj','logs']: (build/d).mkdir(parents=True,exist_ok=True)
     modules=MODULES;module_config=MODULE_CONFIG;address_tables=maps()
-    groups={'resident':sorted(str(p.relative_to(ROOT)) for directory in ['src/game','src/pc/game'] for p in (ROOT/directory).glob('*.c'))}
-    for name,pattern,_,_ in modules:groups[name]=sorted(str(p.relative_to(ROOT)) for p in ROOT.glob(pattern))
+    groups=game_sources()
     natives=native_sources('arm64')
     required={'src/pc/guest/translated_image_backend.c','src/pc/guest/state_translated.c','src/pc/guest/translated_runtime.c'}
     if required-set(natives):raise SystemExit('Native backend files missing: '+str(required-set(natives)))

@@ -1,6 +1,19 @@
 """Shared game modules and native source selection for all PC targets."""
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
+TARGETS = {
+    'linux': {'architecture': 'i386', 'driver': 'build_game32.py', 'build': 'tmp/pc/game32', 'executable': 'memories-pc'},
+    'windows': {'architecture': 'i686', 'driver': 'build_game32.py', 'build': 'tmp/pc/win32', 'executable': 'memories-pc.exe'},
+    'macos': {'architecture': 'arm64', 'driver': 'build_arm64.py', 'build': 'tmp/pc/macos', 'executable': 'memories-arm64'},
+}
+
+def game_sources():
+    """The same resident and overlay inventory for every PC architecture."""
+    groups = {'resident': sorted(str(p.relative_to(ROOT)) for directory in ('src/game', 'src/pc/game')
+                                 for p in (ROOT / directory).glob('*.c'))}
+    groups.update((name, sorted(str(p.relative_to(ROOT)) for p in ROOT.glob(pattern)))
+                  for name, pattern, _, _ in MODULES)
+    return groups
 
 BACKENDS = {"sdl": ["src/pc/platform/sdl.c", "src/pc/render/gl_picture.c", "src/pc/render/present_pass.c"],
             "x11": ["src/pc/platform/x11.c", "src/pc/platform/audio_alsa.c", "src/pc/platform/gamepad_evdev.c"]}
@@ -32,7 +45,7 @@ def native_sources(architecture, backend='sdl'):
         sources -= FIXED_MEMORY
         sources.add('src/pc/memory.c')
         sources.update(str(p.relative_to(ROOT)) for p in (ROOT/'src/pc/guest').glob('translated*.S'))
-    elif architecture == 'i386':
+    elif architecture in ('i386', 'i686'):
         sources.update(str(p.relative_to(ROOT)).replace('\\','/') for p in (ROOT/'src/pc/guest').glob('*.S'))
         sources = {s for s in sources if not s.startswith('src/pc/guest/translated') and s != 'src/pc/guest/state_translated.c'}
     else: raise ValueError('Unsupported PC architecture: '+architecture)

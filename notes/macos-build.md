@@ -5,8 +5,8 @@ les outils de développement Xcode et le SDK macOS. Aucune installation
 Homebrew, CMake/Ninja globale ni commande pip n'est nécessaire.
 
 ```sh
-python3 tools/pc/build_arm64.py
-tmp/arm64-build/memories-arm64
+python3 tools/pc/build.py --target macos
+tmp/pc/macos/memories-arm64
 ```
 
 Le premier build télécharge les archives officielles et vérifie leurs SHA-256.
@@ -25,7 +25,7 @@ Contrôles sans disque :
 
 ```sh
 python3 tools/pc/test_llvm_guest.py
-python3 tools/pc/test_macos_linkage.py --binary tmp/arm64-build/memories-arm64
+python3 tools/pc/test_macos_linkage.py --binary tmp/pc/macos/memories-arm64
 ```
 
 Le contrôle de linkage lit les véritables dépendances Mach-O, refuse les
@@ -34,6 +34,18 @@ archives et dessine des glyphes Latin/japonais avec les polices découvertes.
 Le compilateur LLVM utilise aussi le zstd local, même si son llvm-config
 contient le chemin absolu de la machine de build officielle.
 
-L'intégration de ce driver à la commande de build commune, à `play.sh` et à
-la CI reste en cours. Le packaging `.app` est différé. Pour les états natifs,
+`./play.sh` construit puis lance le jeu ; `./play.sh load 1` charge un slot
+et `./play.sh trace` active les diagnostics. CMake expose aussi le build du jeu :
+
+```sh
+cmake -S . -B tmp/pc/cmake -DBUILD_TESTING=OFF
+cmake --build tmp/pc/cmake --target pc_game
+```
+
+`MEMORIES_GAME_TARGET` sélectionne `linux`, `windows` ou `macos` dans CMake ;
+sa valeur par défaut suit la plateforme hôte. Les scripts Linux/Windows utilisent
+la même entrée Python et conservent leurs compilateurs et architectures i386/i686.
+Le driver ARM64 direct reste disponible pour les diagnostics existants.
+
+Le packaging `.app` est différé. Pour les états natifs,
 voir [macos-arm64-save-states.md](macos-arm64-save-states.md).

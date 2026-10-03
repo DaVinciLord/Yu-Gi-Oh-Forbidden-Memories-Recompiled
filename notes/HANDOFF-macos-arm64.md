@@ -33,6 +33,26 @@ Les journaux du rebase sont sous `tmp/arm64-integration/rebase-*`.
 
 ## Dépendances macOS locales et build neuf — 3 octobre 2026
 
+## Entrée commune et lanceurs — 3 octobre 2026
+
+`tools/pc/build.py --target linux|windows|macos` est l'entrée commune. Les
+métadonnées de cibles, sources résidentes, modules et sélection native sont
+partagées dans `build_config.py` ; les drivers n'analysent pas le Python de
+l'autre cible. Les compilateurs i386/i686 existants restent sélectionnés par
+le driver 32 bits, ARM64 par son driver structuré. La cible macOS commune
+produit `tmp/pc/macos/memories-arm64`.
+
+`play.sh` détecte Darwin, vérifie Python/xcrun et construit/lance le jeu via
+`build-pc.sh`. Ce dernier gère run/trace/load sur macOS ; sa construction
+Linux/Windows conserve ses deux builds et le contrôle de layouts. `play.bat`
+passe aussi par l'entrée commune, avec son répertoire game32 Windows conservé.
+CMake expose `pc_game` et `MEMORIES_GAME_TARGET` (défaut selon la plateforme).
+Preuves : `common-macos-build.log`, `common-play.log` et `common-play.ppm`,
+`common-cmake-game.log`. Les composants passent avec Clang 21.1.8, en normal
+et sous sanitizers (`common-native-llvm21*.log`).
+
+## Dépendances locales : preuves
+
 `tools/pc/macos_deps.py` prépare SDL3 3.4.16, FreeType 2.14.3, libpng 1.6.58,
 zlib 1.3.2 et zstd 1.5.7 sous `tmp/pc/macos-deps`. Les archives sont verrouillées
 par SHA-256 ; CMake 4.4.3 et Ninja 1.13.2 sont aussi pris dans leurs releases
@@ -107,8 +127,8 @@ Journaux : `tmp/arm64-integration/state-*`. Aucun test de cadence ni fenêtre r�
 Les quatorze parcours gameplay et les sauvegardes normales/deck pad et SDL
 repassent avec le backend natif de save states.
 
-La migration globale reste en cours : entrée de build commune, CI et
-validation Linux/Windows/matching console restent
+La migration globale reste en cours : CI et validation
+Linux/Windows/matching console restent
 à terminer. Les exclusions de save states mentionnées plus bas sont historiques.
 
 Les runners gameplay et sauvegarde acceptent maintenant `--binary` pour tester

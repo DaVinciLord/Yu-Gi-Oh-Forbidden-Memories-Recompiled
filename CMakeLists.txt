@@ -708,6 +708,20 @@ endif()
 
 find_package(Python3 COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
+    if(APPLE)
+        set(memories_default_game_target macos)
+    elseif(WIN32)
+        set(memories_default_game_target windows)
+    else()
+        set(memories_default_game_target linux)
+    endif()
+    set(MEMORIES_GAME_TARGET "${memories_default_game_target}" CACHE STRING "Game target: linux, windows or macos")
+    set_property(CACHE MEMORIES_GAME_TARGET PROPERTY STRINGS linux windows macos)
+    add_custom_target(pc_game
+        COMMAND "${Python3_EXECUTABLE}" tools/pc/build.py --target "${MEMORIES_GAME_TARGET}"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        USES_TERMINAL
+        COMMENT "Build the native ${MEMORIES_GAME_TARGET} game")
     add_custom_target(pc_audit
         COMMAND "${Python3_EXECUTABLE}" tools/pc/audit.py
             --output "${CMAKE_BINARY_DIR}/port-audit.json"

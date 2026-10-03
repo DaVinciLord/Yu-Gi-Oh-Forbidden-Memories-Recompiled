@@ -20,7 +20,7 @@ section renames edit the COFF headers directly (rename_coff_sections) and
 __start_/__stop_ come from grouped marker sections; overrides win by link order instead of weakened symbols."""
 import argparse, concurrent.futures, csv, filecmp, glob, hashlib, json, os, re, shutil, struct, subprocess, sys
 import build_process
-from build_config import MODULES, MODULE_CONFIG, GATED_MODULES, BACKENDS, native_sources
+from build_config import MODULES, MODULE_CONFIG, GATED_MODULES, BACKENDS, native_sources, game_sources
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ELF = "tmp/project-build/SLUS_014.11.elf"
@@ -649,8 +649,9 @@ def main():
     # src/pc/game holds the port's own game-side variables (the card tables
     # sized for more cards than the disc has): compiled and placed like game
     # code, so they sit in the fixed sections a save state carries.
-    resident = sorted(glob.glob("src/game/*.c")) + sorted(glob.glob("src/pc/game/*.c"))
-    module_sources = {name: sorted(glob.glob(pattern)) for name, pattern, _, _ in MODULES}
+    groups = game_sources()
+    resident = groups.pop('resident')
+    module_sources = groups
     game = resident + [source for name, _, _, _ in MODULES for source in module_sources[name]]
     renames_file = "config/pc/host_symbol_renames.txt"
     if WINDOWS:

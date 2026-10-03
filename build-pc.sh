@@ -13,10 +13,20 @@
 # matching build is not needed: its addresses are in config/pc/guest_addresses.txt.
 set -eu
 cd -- "$(dirname -- "$0")"
-python3 tools/pc/build_game32.py
+if [ "$(uname -s)" = Darwin ]; then
+    python3 tools/pc/build.py --target macos
+    case "${1:-}" in
+        run) exec tmp/pc/macos/memories-arm64 ;;
+        trace) MEMORIES_STUB_TRACE=1 exec tmp/pc/macos/memories-arm64 ;;
+        load) MEMORIES_LOAD_STATE="${2:-1}" exec tmp/pc/macos/memories-arm64 ;;
+        "") exit 0 ;;
+        *) echo "Use run, trace or load [slot] on macOS" >&2; exit 1 ;;
+    esac
+fi
+python3 tools/pc/build.py
 if [ "${MEMORIES_SKIP_WINDOWS:-0}" != 1 ]; then
     [ -f tmp/pc/win32-deps/lib/libfreetype.a ] && [ -d tmp/pc/llvm-mingw ] || python3 tools/pc/build_win32_deps.py
-    python3 tools/pc/build_game32.py --target windows
+    python3 tools/pc/build.py --target windows
     # Both builds and every mod share one layout of the game's structures.
     python3 tools/pc/check_layouts.py
 fi
