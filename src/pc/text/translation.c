@@ -20,6 +20,8 @@
 #include "pc/free_duel/page_box.h"
 #include "pc/saves/deck_menu.h"
 #include "pc/debug/log.h"
+#include "pc/debug/crash.h"
+#include "pc/guest/low_memory.h"
 #include "game/card_constants.h"
 #include "game/duel_side_state.h"
 #include "pc/compat/mman.h"
@@ -52,7 +54,9 @@ static TextUnit *language_unit;
  * is refused: state.c). The card shop's menu, compiled on first use, comes
  * after the others either way. 3D Monsters' arenas sit at 0x90000000 for
  * the same reason; the interpreter's stack at 0x9FF00000. If the region
- * cannot be had, the text stays on the heap, as before. */
+ * cannot be had, the text stays on the heap, as before; on the 64-bit build,
+ * whose heap may be above 4 GB where the game's 4-byte pointers cannot
+ * reach, it goes to the low memory region instead (pc/guest/low_memory.h). */
 #define ARENA_BASE 0x9C000000u
 #define ARENA_SIZE 0x01000000u
 #define ARENA_ALIGN 16u
@@ -94,7 +98,16 @@ static void pin(TextUnit *unit)
     if (!unit->size) return;
     if (!(moved = arena_take(unit->size))) {
         unpinned = 1;
+#if defined(__x86_64__) || defined(__aarch64__)
+        /* One byte more, as arena_take gives. */
+        if (!(moved = Memories_LowAlloc(unit->size + 1))) {
+            fprintf(stderr, "memories-pc: no room below 4 GB for %lu bytes of text\n", (unsigned long)unit->size);
+            Crash_ReportFatal("text", "no room below 4 GB for the compiled text");
+            exit(1);
+        }
+#else
         return;
+#endif
     }
     memcpy(moved, old, unit->size);
     for (i = 0; i < unit->target_count; i++) {
