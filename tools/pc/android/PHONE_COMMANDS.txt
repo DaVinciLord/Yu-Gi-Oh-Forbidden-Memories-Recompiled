@@ -1,0 +1,32 @@
+Commands for the first phone session (Git Bash, from D:/DecompRecomp-arm64)
+==========================================================================
+
+0. SDK tools on PATH:
+   . /d/Android/env.sh
+
+1. Is the phone there, and what can it run?
+   python tools/pc/android/device_check.py
+   Decision-relevant lines: abilist32 (empty = arm64-only, the armeabi-v7a
+   APK cannot run), page size (16384 = 16 KiB pages: every 0x1000 mapping,
+   the fix-up stub page and the .so alignment need checking).
+
+2. Keep it reachable without the cable (same Wi-Fi):
+   adb tcpip 5555
+   adb shell ip -f inet addr show wlan0      # note the phone's IP
+   adb connect <phone-ip>:5555
+   adb devices                               # serial is now <phone-ip>:5555
+
+3. The fixed-address probe (tmp/android/probe, built in the spike), inside a
+   64-bit app process and as a plain process:
+   SERIAL=$(adb devices | awk 'NR==2{print $1}')
+   sh /d/DecompRecomp/tmp/android/probe/run_apk.sh $SERIAL phone arm64-v8a
+   sh /d/DecompRecomp/tmp/android/probe/run_exe.sh $SERIAL phone arm64-v8a
+   Results: /d/DecompRecomp/tmp/android/probe/results/phone-arm64-v8a-*.txt
+   Read the "occupied before mapping" block, not only PASS/FAIL: the
+   scratchpad 0x1F800000 and the stack 0x70000000 are expected to be taken
+   (the port moves them to 0x9F800000 and 0xB0000000); the 64-bit loader
+   wants a low image range (0x08000000 or 0x40000000) to be free.
+   If abilist32 lists armeabi-v7a, also: run_apk.sh $SERIAL phone armeabi-v7a
+
+4. The game as a plain arm64 process (once A1 builds; headless, replays):
+   see notes/pc-build.md "Android arm64" for the exact push/run lines.
