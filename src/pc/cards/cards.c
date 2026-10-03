@@ -1710,9 +1710,8 @@ int Cards_PickVariant(int id, int use)
  * the card of that identity (none when the mod is missing) wherever the list
  * holds the old id. The id alone is the key: a section's recent2 lines are
  * one numbering (the run's that last wrote the list), so an old id names one
- * card, and the list moves down a place at
- * every drop, so a save made later without a card mod (which has no section
- * of its own and reads this one) still finds its leftovers. A save from
+ * card wherever it stands in the list. A run with no card mod has none of
+ * them and clears their entries on load. A save from
  * before recent2 has no such lines and its ids stay as they are: they are
  * right as long as the mods are, and zeroing them would wipe right marks.
  * A trade writes the save's first 0x400 bytes only, not this list, so a

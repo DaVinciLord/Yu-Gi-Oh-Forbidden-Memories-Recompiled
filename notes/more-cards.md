@@ -323,9 +323,10 @@ card of that identity back wherever the list holds the old id, or none when
 its mod is missing; so after mods are added, removed or reordered, "New!" stays
 on the card that was won. The old id alone is the key: a section's `recent2`
 lines are one numbering, that of the run that last wrote the list (after a
-trade its `deck2` lines may be a later run's), and the list moves down a place
-at every drop, so a later save made with no card mod (no section of its own)
-still finds its leftovers in the section it reads. A section from before `recent2` has no such lines, and its
+trade its `deck2` lines may be a later run's), so an old id names one card
+wherever it stands in the list. A run with no card mod has none of these
+cards: its load clears their entries, and a save it makes keeps no "New!" on
+them. A section from before `recent2` has no such lines, and its
 list is left as it is: those ids are right as long as the mods are, and
 zeroing them would wipe right marks on the first load. A trade writes the
 save's first 0x400 bytes only, which do not hold the list, so its rewrite of the
