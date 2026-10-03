@@ -118,8 +118,9 @@ def refused_code_mods(executable: Path, case: dict[str, object]) -> list[str]:
     refused = []
     for key, value in case.get("settings", {}).items():
         manifest = executable.parent / "mods" / key[4:] / "mod.json"
-        if wide and key.startswith("mod.") and value and manifest.is_file() and \
-                json.loads(manifest.read_text(encoding="utf-8")).get("library"):
+        # The 64-bit build leaves code mods out of its mods folder.
+        if wide and key.startswith("mod.") and value and (not manifest.is_file() or
+                                                          json.loads(manifest.read_text(encoding="utf-8")).get("library")):
             refused.append(key[4:])
     return refused
 

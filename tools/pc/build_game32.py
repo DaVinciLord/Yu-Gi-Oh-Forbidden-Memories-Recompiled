@@ -538,10 +538,12 @@ def build_mods(build, release=False, code=True):
     pack tools under sdk/tools, the example mods under sdk/examples/mods and
     the modding notes under sdk/notes.
 
-    With code=False (the 64-bit game) the mods are copied as data: a mod's
-    C is not built, the game refuses a mod with a library and says why in
-    the Mods window, and no SDK goes beside it (the SDK builds 32-bit
-    objects; the 64-bit one is a later milestone)."""
+    With code=False (the 64-bit game) only the data mods go beside it: a
+    mod with a library is 32-bit code that game refuses, and shipping it
+    would put one refusal per code mod in every player's Mods window (one
+    the player installs is still refused by name). No SDK goes beside it
+    either (the SDK builds 32-bit objects; the 64-bit one is a later
+    milestone)."""
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import build_mod
     out_root = f"{build}/mods"
@@ -552,13 +554,17 @@ def build_mods(build, release=False, code=True):
     os.makedirs(out_root, exist_ok=True)
     if code:
         write_sdk(build)
-    mods = []
+    mods, skipped = [], []
     for manifest in sorted(glob.glob("mods/*/mod.json")):
         if tracked is not None and manifest not in tracked:
             continue
         source_dir = os.path.dirname(manifest)
         name = os.path.basename(source_dir)
         out_dir = f"{out_root}/{name}"
+        if not code and library(source_dir):
+            shutil.rmtree(out_dir, ignore_errors=True)   # from a build that copied it
+            skipped.append(name)
+            continue
         os.makedirs(out_dir, exist_ok=True)
         for path in sorted(glob.glob(f"{source_dir}/**/*", recursive=True)):
             if tracked is not None and path not in tracked:
@@ -572,8 +578,8 @@ def build_mods(build, release=False, code=True):
     # table: the other system's may be older than this build. Written where
     # the manifest's "library" puts it, which may be a subdirectory.
     if not code:
-        print(f"{out_root}: " + ", ".join(f"{name} ({'code, not loaded by this game' if library(source_dir) else 'data'})"
-                                          for name, source_dir, _ in mods))
+        print(f"{out_root}: " + ", ".join(f"{name} (data)" for name, _, _ in mods) +
+              (f"; left out, code: {', '.join(skipped)}" if skipped else ""))
         return
     with concurrent.futures.ThreadPoolExecutor(max(1, len(mods))) as pool:
         objects = list(pool.map(lambda mod: build_mod.build(mod[1], out_dir=mod[2], games=[build], quiet=True),
