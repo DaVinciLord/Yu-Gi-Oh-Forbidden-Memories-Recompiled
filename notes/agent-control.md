@@ -354,7 +354,11 @@ CI can hold retail inputs.
   64-bit build's gate on feat/x64-x1: a duel with a fusion, magic cards
   and 3D battles to its rewards, the whole credits, the main menu's
   screens; recorded with `goto` and arranged decks, which the C lines
-  replay) and `state-load-rng` (scripted: a real bug, below).
+  replay), `state-load-rng` (scripted: a real bug, below) and
+  `state-load-cpu` (scripted: a state saved while the CPU duelist thinks,
+  loaded again in the same game, must replay its 600 frames; it failed at
+  the first before "Port: a loaded state finishes the VSync(0) it resumes
+  in", and passes with it).
 - **The bug as a replay:** `state-load-rng` buys a pack from a state, loads
   the state in the same game and buys it again with the same presses. On
   this branch without "Port: save states carry the game's random seed" it
