@@ -22,4 +22,14 @@ void func_80058938(
     s32 slot, s32 selection, ModelTintColor start, ModelTintColor end,
     s32 duration, const u8 *part_mask);
 
+#ifdef MEMORIES_PC
+/* Model_QueueTintRequestForParts with its part list (ending at the first
+   negative word) passed as a pointer and each colour as the word a MIPS
+   register carries it in: how the interpreter (src/pc/guest/mips.c, which
+   cannot include the game's types) bridges the MODEL.MRG modules' calls,
+   whose lists outrun the argument words it forwards. */
+void Model_QueueTintRequestForPartList(
+    s32 slot, s32 part, u32 start, u32 end, s32 duration, const s32 *parts);
+#endif
+
 #endif
