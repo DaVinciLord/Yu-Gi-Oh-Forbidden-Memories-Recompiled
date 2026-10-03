@@ -288,6 +288,27 @@ class GuiTest(unittest.TestCase):
         from fm_editor import validate
         self.assertEqual([i.message for i in validate.validate_card(app.project, 1) if "effect" in i.message], [])
 
+    def test_monster_again_gets_its_stats_back(self):
+        app = self.app
+        cards = app.cards
+        disc = app.project.retail.cards[1]
+        cards.tree.selection_set("1")
+        cards.select()
+        cards.vars["type"].set("Magic")
+        self.assertTrue(cards.apply())
+        self.assertEqual(app.project.cards[1].attack, 0)
+        # Shown again, with the zeros it was stored with.
+        cards.tree.selection_set("2")
+        cards.select()
+        cards.tree.selection_set("1")
+        cards.select()
+        from fm_editor.tabs import type_label
+        cards.vars["type"].set(type_label(disc.type))
+        self.assertTrue(cards.apply())
+        card = app.project.cards[1]
+        self.assertEqual((card.attack, card.defense, card.level, card.star1, card.star2, card.attribute),
+                         (disc.attack, disc.defense, disc.level, disc.star1, disc.star2, disc.attribute))
+
     def test_untouched_effect_stays_as_written(self):
         app = self.app
         cards = app.cards

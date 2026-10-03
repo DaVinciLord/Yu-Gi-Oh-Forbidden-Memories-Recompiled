@@ -430,6 +430,7 @@ class CardsTab(Tab):
         for widget in self.effect_row:
             widget.grid_remove() if monster else widget.grid()
         if monster:
+            self.refill_monster()
             return
         # The disc's cards of the same type: one of another would be played
         # as its own type, and the CPU would not know what to do with it.
@@ -440,6 +441,22 @@ class CardsTab(Tab):
         self.effect_box.configure(values=choices)
         if self.vars["effect"].get() not in choices:
             self.vars["effect"].set(choices[0] if not own else self.effect_label(self.effect_default(self.current)))
+
+    def refill_monster(self):
+        """A card applied as a non-monster lost its ATK, DEF, level and stars;
+        made a monster again, it gets the disc card's (a copy's base's) back."""
+        cid = self.current
+        if self.project is None or cid not in self.project.cards or self.project.cards[cid].is_monster():
+            return
+        src = self.project.retail.cards.get(self.project.base_of(cid))
+        if src is None or not src.is_monster():
+            return
+        self.vars["attack"].set(src.attack)
+        self.vars["defense"].set(src.defense)
+        self.vars["level"].set(src.level)
+        self.vars["attribute"].set(attribute_label(src.attribute))
+        self.vars["star1"].set(star_label(src.star1, self.project))
+        self.vars["star2"].set(star_label(src.star2, self.project))
 
     def store_effect(self, cid: int, card) -> bool:
         """The Effect list into the card's "effect"; whether that changed it.
