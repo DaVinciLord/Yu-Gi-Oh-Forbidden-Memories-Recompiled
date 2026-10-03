@@ -31,8 +31,6 @@ et les parcours de jeu du build structuré restent à valider. Les preuves de ga
 le spike : elles doivent être repassées sur le nouveau binaire d'intégration.
 Les journaux du rebase sont sous `tmp/arm64-integration/rebase-*`.
 
-## Dépendances macOS locales et build neuf — 3 octobre 2026
-
 ## Entrée commune et lanceurs — 3 octobre 2026
 
 `tools/pc/build.py --target linux|windows|macos` est l'entrée commune. Les
@@ -48,8 +46,14 @@ Linux/Windows conserve ses deux builds et le contrôle de layouts. `play.bat`
 passe aussi par l'entrée commune, avec son répertoire game32 Windows conservé.
 CMake expose `pc_game` et `MEMORIES_GAME_TARGET` (défaut selon la plateforme).
 Preuves : `common-macos-build.log`, `common-play.log` et `common-play.ppm`,
-`common-cmake-game.log`. Les composants passent avec Clang 21.1.8, en normal
-et sous sanitizers (`common-native-llvm21*.log`).
+`common-cmake-game.log`. Les composants passent avec Clang 21.1.8 en normal
+(`common-native-llvm21.log`). Sur l'hôte macOS 26, le runtime ASan officiel
+21.1.8 se bloque avant `main` : l'initialisation de la shadow memory parcourt
+le cache dyld Swift, dont l'allocation réentre dans l'initialisation ASan.
+La trace est dans `llvm21-asan-sample.txt`. Cela ne valide pas cette suite avec
+LLVM 21 ; la CI macOS 15 doit encore la vérifier sur son propre système.
+Les 21 scénarios ASan/UBSan passent avec Xcode
+(`common-native-xcode-sanitize.log`), sans mélanger les runtimes.
 
 ## Dépendances locales : preuves
 

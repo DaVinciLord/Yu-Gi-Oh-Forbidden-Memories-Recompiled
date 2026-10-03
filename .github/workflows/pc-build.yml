@@ -2,6 +2,7 @@ name: Native PC foundation
 on:
   push:
   pull_request:
+  workflow_dispatch:
 jobs:
   core-linux:
     runs-on: ubuntu-latest
@@ -19,6 +20,8 @@ jobs:
       - run: python tools/pc/test_path_layout.py --build tmp/pc
       - run: cmake --build tmp/pc --target pc_audit
       - run: python tools/pc/test_vt_check.py
+      - name: Build the complete Linux i386 game without a disc
+        run: python tools/pc/build.py --target linux
   # The Windows game is built with llvm-mingw for i686 (play.bat,
   # tools/pc/fetch_tools.py), so the tests are too: the same pinned release,
   # with zlib and libpng from tools/pc/build_win32_deps.py. The runner's cmake
@@ -63,6 +66,39 @@ jobs:
       - run: python tools/pc/test_controls_backend.py --target windows --software
       - run: python tools/pc/test_path_layout.py --build tmp/pc/tests
       - run: cmake --build tmp/pc/tests --target pc_audit
+      - name: Build the complete Windows i686 game without a disc
+        run: python tools/pc/build.py --target windows --release
+  macos-arm64:
+    # The standard macos-15 image is ARM64; the Intel image has a distinct
+    # macos-15-intel label (actions/runner-images).
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            tmp/pc/llvm-macos
+            tmp/pc/tools/macos
+            tmp/pc/macos-deps
+          key: macos-arm64-llvm21.1.8-${{ hashFiles('tools/pc/macos_toolchain.json', 'tools/pc/macos_deps.py', 'tools/pc/dependency_archives.py', 'tools/pc/fetch_tools.py') }}
+      - name: Build the complete macOS ARM64 game without a disc
+        run: python tools/pc/build.py --target macos
+      - name: Verify LLVM transformations and native linkage
+        run: |
+          python tools/pc/test_llvm_guest.py
+          python tools/pc/test_macos_linkage.py --binary tmp/pc/macos/memories-arm64
+      - name: Native components and sanitizers with pinned Clang
+        run: |
+          export CC="$PWD/tmp/pc/llvm-macos/LLVM-21.1.8-macOS-ARM64/bin/clang"
+          export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
+          python tools/pc/test_native.py
+          python tools/pc/test_native.py --sanitize
+      - name: Source contracts
+        run: make basic-types check-g32
   sanitizers:
     runs-on: ubuntu-latest
     steps:
