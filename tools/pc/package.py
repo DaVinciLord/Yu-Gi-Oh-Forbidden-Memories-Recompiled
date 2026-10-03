@@ -81,10 +81,14 @@ def set_pe_checksum(executable):
         handle.write(data)
 
 
+def staged(system, label):
+    return os.path.join(DIST, "stage", system, f"{NAME}-{label}")
+
+
 def stage(system, label):
     build_dir, executable, extras = BUILDS[system]
     build_dir = os.path.join(ROOT, build_dir)
-    folder = os.path.join(DIST, "stage", system, f"{NAME}-{label}")
+    folder = staged(system, label)
     shutil.rmtree(os.path.dirname(folder), ignore_errors=True)
     os.makedirs(os.path.join(folder, "game"))
     for name in [executable, "buildid", "commit"] + extras:
@@ -142,6 +146,11 @@ def main():
     parser.add_argument("--no-build", action="store_true", help="pack what is already built")
     parser.add_argument("--skip-smoke", action="store_true", help="build without ROM-dependent gameplay tests (CI)")
     parser.add_argument("--version", help="archive version, e.g. v0.1.0 or dev-abcdef0")
+    # CI signs the Windows executable between the two (notes/pc-release.md,
+    # "Code signing"): the archive must hold the signed file.
+    parser.add_argument("--stage-only", action="store_true",
+                        help="build and lay out the folder in dist/stage, without packing it")
+    parser.add_argument("--pack-staged", action="store_true", help="pack the folder --stage-only left")
     options = parser.parse_args()
     systems = options.systems or ["windows", "linux"]
     if set(systems) - set(BUILDS):
@@ -149,11 +158,24 @@ def main():
     label = options.version or version()
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}", label):
         parser.error("version must be 1-100 letters, numbers, dots, underscores or hyphens, starting with a letter or number")
+    if options.stage_only and options.pack_staged:
+        parser.error("--stage-only and --pack-staged exclude each other")
     made = []
     for system in systems:
-        if not options.no_build:
-            build(system, label, options.skip_smoke)
-        made.append(pack(system, stage(system, label)))
+        if options.pack_staged:
+            folder = staged(system, label)
+            if not os.path.isdir(folder):
+                parser.error(f"nothing staged at {os.path.relpath(folder, ROOT)}")
+        else:
+            if not options.no_build:
+                build(system, label, options.skip_smoke)
+            folder = stage(system, label)
+        if options.stage_only:
+            print(f"{os.path.relpath(folder, ROOT)}: staged")
+        else:
+            made.append(pack(system, folder))
+    if options.stage_only:
+        return
     shutil.rmtree(os.path.join(DIST, "stage"), ignore_errors=True)
     for path in made:
         print(f"{os.path.relpath(path, ROOT)}: {os.path.getsize(path) / 1e6:.1f} MB")

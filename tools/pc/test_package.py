@@ -7,10 +7,12 @@ import tarfile
 import zipfile
 
 
-def check_exe(image):
+def check_exe(image, signed=False):
     """The shipped .exe: stripped (tools/pc/package.py strip) and with a
     resource section (version information), since virus scanners flag data
     after the last section and programs that say nothing about themselves.
+    The one thing allowed after the last section is an Authenticode
+    signature, which is where Windows keeps it; `signed` requires one.
     Its PDB is named without the builder's path: Bitdefender flagged the CI
     builds, whose path was the GitHub runner's D:/a/..."""
     header = struct.unpack_from("<I", image, 0x3C)[0]
@@ -23,7 +25,15 @@ def check_exe(image):
         size, offset = struct.unpack_from("<II", image, at + 16)
         end = max(end, offset + size)
     assert symbols == 0 and symbol_count == 0, "memories-pc.exe keeps its COFF symbol table"
-    assert len(image) == end, f"memories-pc.exe has {len(image) - end} bytes after its last section"
+    # The certificate table: data directory 4 of a PE32 optional header,
+    # a file offset and size rather than an address.
+    certificates, certificates_size = struct.unpack_from("<II", image, header + 24 + 96 + 8 * 4)
+    if certificates_size:
+        assert certificates >= end and certificates + certificates_size == len(image), \
+            "memories-pc.exe's signature is not the end of the file"
+        end = certificates
+    assert not signed or certificates_size, "memories-pc.exe is not signed"
+    assert len(image) == end + certificates_size, f"memories-pc.exe has {len(image) - end} bytes after its last section"
     assert b".rsrc" in names, "memories-pc.exe has no resources (version information)"
     marker = image.find(b"RSDS")
     assert marker >= 0, "memories-pc.exe has no CodeView record"
@@ -45,13 +55,13 @@ def check_exe(image):
     assert stored == total + len(image), f"memories-pc.exe's PE checksum is {stored:#x}, not {total + len(image):#x}"
 
 
-def check(path):
+def check(path, signed=False):
     windows = path.suffix == ".zip"
     if windows:
         with zipfile.ZipFile(path) as archive:
             assert archive.testzip() is None
             names = archive.namelist()
-            check_exe(archive.read(next(name for name in names if name.endswith("/memories-pc.exe"))))
+            check_exe(archive.read(next(name for name in names if name.endswith("/memories-pc.exe"))), signed)
     else:
         with tarfile.open(path) as archive:
             members = archive.getmembers()
@@ -83,11 +93,12 @@ def check(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--archives", type=Path, required=True)
+    parser.add_argument("--signed", action="store_true", help="the Windows executable must be signed")
     args = parser.parse_args()
     archives = sorted(args.archives.glob("*.zip")) + sorted(args.archives.glob("*.tar.gz"))
     assert archives, "no release archives found"
     for path in archives:
-        check(path)
+        check(path, args.signed)
 
 
 if __name__ == "__main__":

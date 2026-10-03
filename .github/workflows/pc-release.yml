@@ -30,6 +30,9 @@ jobs:
       # Whether the repository has a VirusTotal key; the key itself is
       # handed only to the step that uses it.
       VT_ENABLED: ${{ secrets.VT_API_KEY != '' }}
+      # Whether the repository is set up for Azure Artifact Signing
+      # (notes/pc-release.md, "Code signing").
+      SIGNING_ENABLED: ${{ secrets.AZURE_CLIENT_SECRET != '' }}
     defaults:
       run:
         shell: bash
@@ -75,12 +78,38 @@ jobs:
           else
             echo "PACKAGE_VERSION=dev-${GITHUB_SHA:0:12}" >> "$GITHUB_ENV"
           fi
+      # Signed: the Windows programs of tags and manual runs, never pull
+      # requests (which may carry anyone's code) nor every push to master.
+      # Skipped without the Azure secrets (forks).
+      - name: Signing
+        if: runner.os == 'Windows' && (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && env.SIGNING_ENABLED == 'true'
+        run: echo "SIGN=1" >> "$GITHUB_ENV"
       # Public runners never receive a game ROM. The regular PC workflow
       # runs the full adapter suite; this checks setup and the archives.
       - name: Build and package
-        run: python tools/pc/package.py "${{ matrix.system }}" --skip-smoke --version "$PACKAGE_VERSION"
+        run: |
+          if [ "$SIGN" = 1 ]; then stage=--stage-only; else stage=; fi
+          python tools/pc/package.py "${{ matrix.system }}" --skip-smoke --version "$PACKAGE_VERSION" $stage
+      - name: Sign the game
+        if: env.SIGN == '1'
+        uses: azure/artifact-signing-action@v2
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        with:
+          endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_SIGNING_PROFILE }}
+          files: ${{ github.workspace }}\dist\stage\windows\yfm-redecomp-${{ env.PACKAGE_VERSION }}\memories-pc.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      - name: Package the signed game
+        if: env.SIGN == '1'
+        run: python tools/pc/package.py windows --pack-staged --version "$PACKAGE_VERSION"
       - name: Test archive structure
-        run: python tools/pc/test_package.py --archives dist
+        run: python tools/pc/test_package.py --archives dist ${SIGN:+--signed}
       # The SDK just built against every release in tools/pc/mod_compat.txt:
       # a mod made with one of them must still load and run (no disc needed).
       - name: Mods from earlier releases
@@ -99,6 +128,24 @@ jobs:
         run: |
           python -m pip install --no-binary pyinstaller pyinstaller==6.18.0
           python tools/pc/fm_editor/build_exe.py --dist tmp/fm-editor --version "$PACKAGE_VERSION"
+      - name: Sign the FM Editor
+        if: env.SIGN == '1'
+        uses: azure/artifact-signing-action@v2
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        with:
+          endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_SIGNING_PROFILE }}
+          files: ${{ github.workspace }}\tmp\fm-editor\fm-editor\fm-editor.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      - name: FM Editor archive (Windows)
+        if: runner.os == 'Windows'
+        run: |
           python - <<'EOF'
           import os, zipfile
           version = os.environ["PACKAGE_VERSION"]

@@ -209,3 +209,67 @@ pull requests nor on pushes to `master`, and it is skipped when the
 repository has no `VT_API_KEY` secret (forks). A repository admin adds the secret with
 `gh secret set VT_API_KEY` (it prompts for the value, so it stays out of
 the shell history); removing it turns the step off.
+
+## Code signing
+
+Microsoft Defender's `Wacatac.B!ml`/`.C!ml` verdict comes and goes between
+scans of the same unsigned file, and McAfee's `ti!<hash>` marks every file
+it has not met. Removing features from the executable changed neither
+(October 2026: crash monitor, winpthreads, update check, MIPS interpreter,
+function hooks, code mods, all tried). Both look at reputation, and an
+unsigned file starts with none every release. A signature ties the
+reputation to the publisher instead, so it carries over between releases.
+
+**Service.** Azure Artifact Signing (formerly Trusted Signing): $9.99 a
+month for 5,000 signatures (Basic), a few per release. Individuals must be
+in the United States or Canada; the identity check uses the Azure billing
+account's details. Signatures are timestamped, so files signed while the
+subscription ran stay valid after it ends.
+
+**Setup in Azure** (once, by the account owner):
+
+1. A paid Azure subscription (pay-as-you-go), billing account type
+   *Individual* for a person.
+2. Register the `Microsoft.CodeSigning` resource provider on the
+   subscription (*Subscriptions* > *Resource providers*).
+3. Create an *Artifact Signing account* (Basic). Note its region's endpoint,
+   e.g. `https://eus.codesigning.azure.net/` for East US.
+4. Give yourself the *Artifact Signing Identity Verifier* role on the account
+   (*Access control (IAM)*), then *Identity validations* > *Individual* >
+   *New identity* > *Public*. The form takes the name and address from the
+   billing account, which must match the government ID. When the request
+   says *Action Required*, its link leads through an ID check (AU10TIX, on a
+   phone) into Microsoft Authenticator. Microsoft quotes 1 to 20 business
+   days.
+5. Once validated, create a *Certificate profile* (Public Trust) from it.
+6. *Microsoft Entra ID* > *App registrations* > new registration (e.g.
+   `yfm-redecomp-signing`), then *Certificates & secrets* > new client
+   secret. Note the tenant id, the application (client) id and the secret's
+   value (shown once).
+7. On the signing account, give that app the *Artifact Signing Certificate
+   Profile Signer* role.
+
+**Setup in GitHub** (repository admin). Secrets, each prompting for its
+value so it stays out of the shell history:
+
+```sh
+gh secret set AZURE_TENANT_ID
+gh secret set AZURE_CLIENT_ID
+gh secret set AZURE_CLIENT_SECRET
+gh variable set AZURE_SIGNING_ENDPOINT --body https://eus.codesigning.azure.net/
+gh variable set AZURE_SIGNING_ACCOUNT --body <signing account name>
+gh variable set AZURE_SIGNING_PROFILE --body <certificate profile name>
+```
+
+**In CI.** With `AZURE_CLIENT_SECRET` set, the release workflow signs
+`memories-pc.exe` and `fm-editor.exe` on version tags and manual runs
+(never pull requests, whose code may be anyone's, nor pushes to `master`).
+`package.py --stage-only` lays out the Windows folder, the
+`azure/artifact-signing-action` step signs the executable in it, and
+`package.py --pack-staged` zips it; `test_package.py --signed` then requires
+the signature. Without the secret (forks) nothing changes. The client
+secret expires (at most 24 months): make a new one and `gh secret set` it
+again before then.
+
+Check a signed download on Windows: the file's *Properties* > *Digital
+Signatures*, or `Get-AuthenticodeSignature memories-pc.exe` in PowerShell.
