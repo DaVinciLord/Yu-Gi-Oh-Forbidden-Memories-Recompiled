@@ -24,7 +24,7 @@ from llvm_guest import translate, TranslationError, normalize, inspect, process,
 from direct_overlay_bridges import ENTRIES as DIRECT_OVERLAY_ENTRIES, validate_declaration, emit_bridge
 SOFT_GPU = 'src/pc/render/soft_gpu.c'
 from native_call_marshalling import emit_native_calls
-from build_config import MODULES, MODULE_CONFIG, native_sources
+from build_config import MODULES, MODULE_CONFIG, GATED_MODULES, native_sources
 
 ROOT = Path(__file__).resolve().parents[2]
 SECTION = re.compile(r'__attribute__\s*\(\(\s*section\s*\(\s*"[^"\n]+"\s*\)\s*\)\)')
@@ -128,7 +128,7 @@ def main():
         if not bank:renames[name]={};continue
         others=set().union(*(symbols for g,symbols in group_defs.items() if g!=name))
         clashes=group_defs[name]&others
-        if name=='duel_effects':clashes|=group_defs[name]
+        if name in GATED_MODULES:clashes|=group_defs[name]
         renames[name]={symbol:name+'__'+symbol for symbol in clashes}
         for s in groups[name]:raw_text[s]=replace_names(raw_text[s],renames[name])
     pin_maps={}
@@ -148,7 +148,7 @@ def main():
         for row in csv.DictReader((ROOT/f'config/slus_01411/overlays/{module_config.get(name,name)}_functions.csv').open()):
             row['name']=host_renames.get(row['name'],row['name'])
             row['name']=renames.get(name,{}).get(row['name'],row['name']);row['bank']=bank;row['identifier']=identifier if bank else 0
-            if name!='duel_effects':rows.append(row)
+            if name not in GATED_MODULES:rows.append(row)
     by_address={int(row['address'],16):row['name'] for row in rows if not row.get('bank')}
     aliases={}
     for s,g in jobs:
@@ -222,7 +222,7 @@ def main():
     tables+='const MemoriesGuestFunction Memories_FunctionMap[] = {\n'+''.join(f'{{0x{a:08x}u, {n}, 0x{int(b):08x}u, 0x{int(i):x}u}},\n' for a,n,b,i in sorted(mapped))+'};\n'
     tables+=f'const unsigned Memories_FunctionMapCount = {len(mapped)};\n'
     tables += emit_native_calls(mapped, raw_text.values(), stubs)
-    shared=[(n,i,b) for n,_,i,b in modules if b and n!='duel_effects']
+    shared=[(n,i,b) for n,_,i,b in modules if b and n not in GATED_MODULES]
     tables+='const MemoriesModule Memories_Modules[] = {\n'+''.join(f'{{"{n}",0x{b:08x}u,0x{i:x}u,0,0,0,0}},\n' for n,i,b in shared)+'};\n'
     tables+=f'const unsigned Memories_ModuleCount = {len(shared)};\n'
     # ELF i386 code mods cannot bind native ARM64 code. Empty exports accurately

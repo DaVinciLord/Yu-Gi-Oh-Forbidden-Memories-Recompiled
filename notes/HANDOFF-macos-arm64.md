@@ -2,6 +2,35 @@
 
 État vérifié le 3 octobre 2026. Ce document est le point de reprise opérationnel ; les deux autres notes macOS conservent l’historique des investigations.
 
+## Intégration durable et rebase upstream — 3 octobre 2026
+
+La branche de travail est `integration/macos-arm64`. Elle est rebasée sur
+`origin/master` à `8f27718bad44302c6b3f74cdfaa43c0525b973f0`, après la release
+`v0.2.0` (`0185f58df`). Le spike `spike/macos-arm64` reste à
+`a42660450fa558bb7ebb0a194b072a1672e6fc8e`. Les branches
+`backup/macos-arm64-before-upstream-20261003` et
+`backup/macos-arm64-wip-20261003` conservent respectivement le spike et le travail
+d'intégration avant rebase. Le commit d'intégration est explicitement WIP :
+la migration vers le build commun et la passe LLVM n'est pas achevée.
+
+Les conflits ont été résolus en conservant les corrections upstream 64 bits,
+les listes de parties des modèles lues par variadiques/stack guest, et les
+annotations G32 nouvelles. La configuration partagée inclut désormais le module
+`credits` et sa sélection par la porte native vérifiant les données retail.
+Le nouveau contrôle réseau reçoit une variante Darwin utilisant `accept` et
+`fcntl(FD_CLOEXEC)` ; Linux et Windows conservent leurs chemins existants.
+
+Validation après rebase : `make basic-types check-g32` passe (604 sources C).
+Les 104 fichiers console/header modifiés produisent les mêmes tokens prétraités
+que le dernier upstream avec la cible MIPS ; ce contrôle ne constitue pas un
+matching binaire. Les 17 scénarios de `test_native.py` passent, ainsi que leur
+exécution ASan/UBSan. Les tests upstream `control_protocol` et `control_net`
+passent sur macOS (le test loopback exige de sortir du sandbox). La compilation
+des 748 unités ARM64 passe avec `build_arm64.py --compile-only` ; le linkage
+et les parcours de jeu du build structuré restent à valider. Les preuves de gameplay des sections historiques concernent
+le spike : elles doivent être repassées sur le nouveau binaire d'intégration.
+Les journaux du rebase sont sous `tmp/arm64-integration/rebase-*`.
+
 ## Objectif et consignes de travail
 
 Faire fonctionner Forbidden Memories sur le MacBook Air M3 de l’utilisateur : lancement natif ARM64, jeu réellement jouable, sauvegarde et chargement. Le build et un duel complet jusqu'à la défaite et au game over sont validés. La sauvegarde dans la boutique et le chargement dans un nouveau processus sont validés. Les essais manuels de fenêtre/audio sont laissés à l’utilisateur conformément à sa consigne. Voir la mise à jour de reprise ci-dessous avant les sections historiques.

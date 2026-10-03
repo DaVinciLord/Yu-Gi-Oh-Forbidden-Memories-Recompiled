@@ -31,6 +31,21 @@ static int last_error(void) { return errno; }
 
 static Socket listener = NO_SOCKET, client = NO_SOCKET;
 
+#ifdef __APPLE__
+/* Darwin has neither SOCK_CLOEXEC nor accept4. */
+static Socket close_on_exec(Socket socket)
+{
+    int flags, error;
+    if (socket == NO_SOCKET) return socket;
+    flags = fcntl(socket, F_GETFD);
+    if (flags >= 0 && fcntl(socket, F_SETFD, flags | FD_CLOEXEC) == 0) return socket;
+    error = errno;
+    close_socket(socket);
+    errno = error;
+    return NO_SOCKET;
+}
+#endif
+
 static int nonblocking(Socket socket)
 {
 #ifdef _WIN32
@@ -94,7 +109,11 @@ int ControlNet_Listen(unsigned port, unsigned *bound)
     }
 #else
     int yes = 1;
+#ifdef __APPLE__
+    listener = close_on_exec(socket(AF_INET, SOCK_STREAM, 0));
+#else
     listener = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
+#endif
     /* A restart listens again at once, past the old connection's TIME_WAIT.
      * (Windows' SO_REUSEADDR would let another program take the port.) */
     if (listener != NO_SOCKET) setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
@@ -126,6 +145,8 @@ int ControlNet_Accept(int timeout_ms)
 #ifdef _WIN32
     client = accept(listener, NULL, NULL);
     if (client != NO_SOCKET) SetHandleInformation((HANDLE)client, HANDLE_FLAG_INHERIT, 0);
+#elif defined(__APPLE__)
+    client = close_on_exec(accept(listener, NULL, NULL));
 #else
     client = accept4(listener, NULL, NULL, SOCK_CLOEXEC);
 #endif
