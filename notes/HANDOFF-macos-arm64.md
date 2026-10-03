@@ -33,6 +33,31 @@ Les journaux du rebase sont sous `tmp/arm64-integration/rebase-*`.
 
 ## Entrée commune et lanceurs — 3 octobre 2026
 
+## Rotation des sprites — 4 octobre 2026
+
+Le `Sprite` privé de `src/pc/sdk/libgs.c` gardait `long rotate`, donc huit
+octets sur ARM64 au lieu des quatre octets du `GsSPRITE` PS1. Le renderer
+lisait ainsi le mot adjacent au sprite comme la moitié haute de l'angle.
+`test_libgs_sprite_guest.py` compile et exécute le vrai renderer : trois
+sentinelles après le record déclenchaient une rotation injustifiée avant
+correction (`sprite-before.log`, assertion dans RotMatrix). Avec `PSXLONG`,
+les sprites sans angle restent des packets droits, et l'angle explicite
+90 degrés reste un quad tourné. Normal et ASan/UBSan Xcode passent
+(`sprite-after.log`, `sprite-sanitize.log`). Les locals de projection et
+signatures Ambient/Projection utilisent aussi PSXLONG. Le build complet
+et le parcours Free Duel passent (`sprite-fixed-build.log`,
+`sprite-free-duel.log`). La validation visuelle manuelle reste à l'utilisateur.
+
+La progression contrôlée du village a gagné Jono puis les trois villageois
+(opponents 2, 4, 5, 6), sans poke des résultats ou des flags, en français et
+en anglais. Les flags progressent et les scènes deviennent 98, 100, 102, 104.
+Une répétition de Cross après la scène 104 ne rejoint pas immédiatement
+la carte ou un autre duel dans les deux langues. L'état exact de ce menu
+reste en investigation ; ne pas conclure à un bug français ni à une campagne
+complète validée. Probes et journaux sous `tmp/arm64-campaign/gauntlet-*`.
+
+## Entrée commune et lanceurs — preuves
+
 La CI construit maintenant les trois jeux complets sans disque et ajoute un
 job macOS ARM64 (`macos-15`) avec LLVM 21.1.8, cache des dépendances vérifiées,
 tests LLVM, linkage/polices, composants normaux et ASan/UBSan. Les premiers

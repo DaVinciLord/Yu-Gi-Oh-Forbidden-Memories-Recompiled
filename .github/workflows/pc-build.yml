@@ -91,6 +91,7 @@ jobs:
         run: |
           python tools/pc/test_llvm_guest.py
           python tools/pc/test_ps1_layouts.py
+          python tools/pc/test_libgs_sprite_guest.py
           python tools/pc/test_macos_linkage.py --binary tmp/pc/macos/memories-arm64
       - name: Native components and sanitizers with pinned Clang
         run: |
@@ -98,6 +99,7 @@ jobs:
           export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
           python tools/pc/test_native.py
           python tools/pc/test_native.py --sanitize
+          python tools/pc/test_libgs_sprite_guest.py --sanitize
       - name: Source contracts
         run: make basic-types check-g32
   sanitizers:
