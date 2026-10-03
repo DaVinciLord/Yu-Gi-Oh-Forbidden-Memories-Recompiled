@@ -14,6 +14,13 @@
 #include "pc/cards/starter.h"
 #include "pc/platform/title_jump.h"
 
+/* The game's own generator, handed to Starter_DealPools so the numbers a new
+ * game spends stay the ones the game spends. */
+static unsigned NameEntry_StarterRandom(void)
+{
+    return (unsigned)rand();
+}
+
 /* A starter deck a mod wrote down (starter.h): its forty cards as they are,
    in place of the seven weighted pools below. One random number picks which
    deck, where the pools would have drawn one for each card and one for every
@@ -30,9 +37,12 @@ static s32 NameEntry_DealModStarterDeck(void)
     s32 i;
 
     if (total == 0) {
-        return 0;
-    }
-    if (!Starter_Deck(Starter_Roll((unsigned)rand()), cards, 0)) {
+        /* No deck written down: a mod may still weight its own pools, which
+         * the disc's rows cannot do for a card a mod added (starter.h). */
+        if (!Starter_DealPools(NameEntry_StarterRandom, cards)) {
+            return 0;
+        }
+    } else if (!Starter_Deck(Starter_Roll((unsigned)rand()), cards, 0)) {
         return 0;
     }
     out = (s16 *)gDuel_awPlayerDeck;

@@ -903,6 +903,25 @@ Mods window and is dealt as written. A deck that is not forty cards is left
 out. [The starter deck](starter-deck.md) has the rest, including what it costs
 the game's random numbers; `examples/mods/starter-deck` is a working one.
 
+A mod may weight pools of its own instead, with `starter_pools`: a list of
+pools, each drawing its own number of cards from its own weights, whose draws
+add up to the forty a deck holds.
+
+```json
+"starter_pools": [
+    {"name": "Weak monsters", "draws": 16, "cards": {"Mystical Elf": 100, "Baby Dragon": 60}},
+    {"draws": 24, "cards": {"Dark Magician": 1}}
+]
+```
+
+They are the disc's seven rows made a mod's to write, and they lift what the
+disc's cannot do: a pool here names cards as the rest of a manifest does, so a
+card a mod added may be weighted like any other. A written `starter` deck
+still wins -- the game asks for one first, then for these, and reads the
+disc's rows only when neither is offered. A draw that keeps finding a card
+already held three times is retried a bounded number of times, so a pool of
+three cards or fewer cannot hang a new game.
+
 ## Card packs: booster packs for starchips
 
 A mod may sell packs of cards. The smallest is one line of a list:

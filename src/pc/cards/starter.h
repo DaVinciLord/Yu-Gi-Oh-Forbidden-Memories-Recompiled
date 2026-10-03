@@ -52,4 +52,40 @@ int Starter_Deck(unsigned roll, unsigned short cards[STARTER_DECK_SIZE], const c
  * as Starter_Deck writes it, picked by place rather than by weight. */
 int Starter_DeckAt(int index, unsigned short cards[STARTER_DECK_SIZE], const char **name);
 
+/* --- pools of the mod's own ------------------------------------------------
+ *
+ * A mod may weight its own pools instead of writing a deck down, with
+ * "starter_pools": a list of {"draws": n, "cards": {card: weight, ...}} whose
+ * draws add up to the forty a deck holds. They are the disc's seven rows made
+ * a mod's to write, and they lift what the disc's cannot do: the disc keeps
+ * 722 weights of a fixed width and reads only the first 720
+ * (STARTER_DECK_WEIGHT_SCAN_COUNT), so no weight of its own can name a card a
+ * mod added, while a pool here names cards as the rest of a manifest does and
+ * may weight any of them.
+ *
+ * A written deck still wins: NameEntry_BuildStarterDeck asks for one first,
+ * then for these, then reads the disc's rows. The pools of every applied mod
+ * add up, in the order the mods load, as the decks do. */
+
+/* How many pools the applied mods offer; 0 when none do. */
+int Starter_PoolCount(void);
+
+/* The cards the offered pools draw between them: STARTER_DECK_SIZE when they
+ * would deal a deck, and whatever they add up to otherwise. */
+int Starter_PoolDraws(void);
+
+/* Whether the pools would deal a deck: some are offered and their draws add
+ * up to STARTER_DECK_SIZE. 0 leaves the disc's rows to it. */
+int Starter_HasPools(void);
+
+/* Deal a deck from the pools, drawing from `next_random` (the game's rand(),
+ * so the numbers a new game spends stay the game's): the forty cards in id
+ * order in `cards`. 1 when one was dealt, 0 when the pools would not deal.
+ *
+ * A card already held DECK_CARD_COPY_LIMIT times is drawn again, as the
+ * disc's generator retries one; unlike the disc's, the retry gives up after a
+ * bounded number of tries so a pool of three cards or fewer cannot hang the
+ * new game, and the last draw stands. */
+int Starter_DealPools(unsigned (*next_random)(void), unsigned short cards[STARTER_DECK_SIZE]);
+
 #endif

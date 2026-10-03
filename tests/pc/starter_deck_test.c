@@ -95,6 +95,31 @@ static const char *filler(int used)
     return text;
 }
 
+/* The game's rand() for Starter_DealPools: the numbers a case wants, in
+ * order, and the last one again once they run out. A pool spreads one over
+ * its own weight total, so a case picks a card by naming the number. */
+static unsigned rolls[256];
+static int roll_count, roll_at;
+
+static unsigned next_roll(void)
+{
+    if (roll_at >= roll_count) return roll_count ? rolls[roll_count - 1] : 0;
+    return rolls[roll_at++];
+}
+
+static void rolling(int count, ...)
+{
+    va_list arguments;
+    int i;
+    va_start(arguments, count);
+    for (i = 0; i < count && i < (int)(sizeof(rolls) / sizeof(*rolls)); i++) {
+        rolls[i] = (unsigned)va_arg(arguments, unsigned);
+    }
+    va_end(arguments);
+    roll_count = count;
+    roll_at = 0;
+}
+
 int main(void)
 {
     unsigned short cards[STARTER_DECK_SIZE];
@@ -249,6 +274,115 @@ int main(void)
     CHECK(Starter_Count() == 0 && notes == 1 && strstr(note, "list of decks"));
     one("{\"starter\":[40]}");
     CHECK(Starter_Count() == 0 && notes == 1 && strstr(note, "object of cards"));
+
+    /* --- "starter_pools": the disc's seven rows made a mod's to write --- */
+
+    /* Nothing offered: the disc's own rows stand. */
+    one("{\"id\":\"quiet\"}");
+    CHECK(Starter_PoolCount() == 0 && Starter_PoolDraws() == 0 && !Starter_HasPools());
+    rolling(1, 0u);
+    CHECK(!Starter_DealPools(next_roll, cards));
+
+    /* Pools whose draws add up to a deck deal one, in id order. A draw
+     * spreads its number over the pool's own weight total: 0 reaches the
+     * first card, 0x7FFF the last. */
+    one("{\"starter_pools\":[{\"name\":\"weak\",\"draws\":20,"
+        "\"cards\":{\"7\":1,\"9\":1}},"
+        "{\"draws\":20,\"cards\":{\"3\":1}}]}");
+    CHECK(notes == 0);
+    CHECK(Starter_PoolCount() == 2 && Starter_PoolDraws() == STARTER_DECK_SIZE);
+    CHECK(Starter_HasPools());
+    rolling(2, 0u, 0x7FFFu);
+    CHECK(Starter_DealPools(next_roll, cards));
+    for (i = 1; i < STARTER_DECK_SIZE; i++) CHECK(cards[i - 1] <= cards[i]);
+    CHECK(cards[0] == 3);                       /* the second pool's twenty */
+    CHECK(cards[19] == 3 && cards[20] == 7);    /* then the first pool's */
+    CHECK(cards[21] == 9);                      /* 0 took 7, the rest took 9 */
+
+    /* Draws that do not add up to forty are no pools at all: the game reads
+     * the disc's rows instead. */
+    one("{\"starter_pools\":{\"draws\":39,\"cards\":{\"3\":1}}}");
+    CHECK(notes == 0 && Starter_PoolCount() == 1 && Starter_PoolDraws() == 39);
+    CHECK(!Starter_HasPools());
+    rolling(1, 0u);
+    CHECK(!Starter_DealPools(next_roll, cards));
+
+    /* A pool of one card draws it past the copy limit: the retry is bounded,
+     * so the deal ends rather than running for ever, and the last draw
+     * stands. */
+    one("{\"starter_pools\":{\"draws\":40,\"cards\":{\"5\":1}}}");
+    CHECK(Starter_HasPools());
+    rolling(1, 0u);
+    CHECK(Starter_DealPools(next_roll, cards));
+    for (i = 0; i < STARTER_DECK_SIZE; i++) CHECK(cards[i] == 5);
+
+    /* A weight of 0 is a card the pool never draws. */
+    one("{\"starter_pools\":{\"draws\":40,\"cards\":{\"11\":0,\"12\":1}}}");
+    rolling(1, 0u);
+    CHECK(Starter_DealPools(next_roll, cards));
+    for (i = 0; i < STARTER_DECK_SIZE; i++) CHECK(cards[i] == 12);
+
+    /* A pool that draws cards but weights none is left out, with a note: a
+     * weight of 0 is a card the pool never draws, so nothing is left to
+     * draw from. Without it the draws no longer add up and the disc's rows
+     * stand. */
+    one("{\"starter_pools\":[{\"draws\":40,\"cards\":{\"13\":0}}]}");
+    CHECK(Starter_PoolCount() == 0 && !Starter_HasPools());
+    CHECK(notes == 1 && strstr(note, "weights none"));
+    rolling(1, 0u);
+    CHECK(!Starter_DealPools(next_roll, cards));
+
+    /* A pool that draws nothing needs no weights, and is kept. */
+    one("{\"starter_pools\":[{\"draws\":0,\"cards\":{}},"
+        "{\"draws\":40,\"cards\":{\"14\":1}}]}");
+    CHECK(notes == 0 && Starter_PoolCount() == 2 && Starter_HasPools());
+    rolling(1, 0u);
+    CHECK(Starter_DealPools(next_roll, cards));
+    CHECK(cards[0] == 14 && cards[39] == 14);
+
+    /* Without the game's own numbers there is nothing to draw by. */
+    one("{\"starter_pools\":{\"draws\":40,\"cards\":{\"3\":1}}}");
+    CHECK(!Starter_DealPools(NULL, cards));
+
+    /* The pools of several mods add up, in the order the mods load. */
+    Starter_Clear();
+    notes = 0;
+    add("first", "{\"starter_pools\":{\"draws\":16,\"cards\":{\"3\":1}}}");
+    add("second", "{\"starter_pools\":{\"draws\":24,\"cards\":{\"4\":1}}}");
+    CHECK(notes == 0 && Starter_PoolCount() == 2);
+    CHECK(Starter_PoolDraws() == STARTER_DECK_SIZE && Starter_HasPools());
+    rolling(1, 0u);
+    CHECK(Starter_DealPools(next_roll, cards));
+    CHECK(cards[0] == 3 && cards[15] == 3 && cards[16] == 4 && cards[39] == 4);
+
+    /* A written deck and pools together: Starter_Deck still answers, and
+     * NameEntry_BuildStarterDeck asks it first. */
+    snprintf(text, sizeof(text), "{\"starter\":{\"name\":\"Written\",\"3\":3%s},"
+                                 "\"starter_pools\":{\"draws\":40,\"cards\":{\"9\":1}}}", filler(3));
+    one(text);
+    CHECK(notes == 0 && Starter_Count() == 1 && Starter_HasPools());
+    CHECK(Starter_Deck(0, cards, &name) && !strcmp(name, "Written"));
+
+    /* What the reader refuses, and says so about. */
+    one("{\"starter_pools\":40}");
+    CHECK(Starter_PoolCount() == 0 && notes == 1 && strstr(note, "pool, or a list of pools"));
+    one("{\"starter_pools\":[40]}");
+    CHECK(Starter_PoolCount() == 0 && notes == 1 && strstr(note, "object of \"draws\" and \"cards\""));
+    one("{\"starter_pools\":{\"cards\":{\"3\":1}}}");
+    CHECK(Starter_PoolCount() == 0 && notes == 1 && strstr(note, "how many cards it draws"));
+    one("{\"starter_pools\":{\"draws\":41,\"cards\":{\"3\":1}}}");
+    CHECK(Starter_PoolCount() == 0 && notes == 1 && strstr(note, "how many cards it draws"));
+    one("{\"starter_pools\":{\"draws\":40,\"cards\":3}}");
+    CHECK(Starter_PoolCount() == 0 && notes == 1 && strstr(note, "cards and their weights"));
+    /* A weight the game could not read is left out; the pool keeps the cards
+     * it could. */
+    one("{\"starter_pools\":{\"draws\":40,\"cards\":{\"3\":70000,\"4\":1}}}");
+    CHECK(notes == 1 && strstr(note, "a weight is 0 to"));
+    CHECK(Starter_PoolCount() == 1 && Starter_HasPools());
+    rolling(1, 0u);
+    CHECK(Starter_DealPools(next_roll, cards) && cards[0] == 4 && cards[39] == 4);
+    one("{\"starter_pools\":{\"draws\":40,\"cards\":{\"3\":1},\"odds\":2}}");
+    CHECK(notes == 1 && strstr(note, "no \"odds\" in a pool"));
 
     Starter_Clear();
     printf("starter deck: ok\n");

@@ -172,16 +172,253 @@ static void read_starter(const char *mod, const JsonValue *value)
     }
 }
 
+/* --- pools of the mod's own ------------------------------------------------
+ *
+ * "starter_pools" is the disc's seven rows made a mod's to write: each pool
+ * draws its own number of cards from its own weights. The disc keeps its
+ * weights in a table of a fixed width whose first 720 only are read, so a
+ * card a mod adds can never be drawn from it; a pool here names cards the way
+ * the rest of a manifest does, so a mod's own are weighted like any other. */
+
+typedef struct {
+    int id;
+    unsigned weight;
+} StarterWeight;
+
+typedef struct {
+    const char *mod;        /* the manifest's, which outlives these */
+    const char *name;       /* its "name", for the log */
+    int draws;
+    StarterWeight *cards;
+    int count;
+    unsigned total;         /* its weights added up */
+} StarterPool;
+
+static StarterPool *pools;
+static int pool_count, pool_room;
+
+/* The most one weight may be, as a pool's total must stay countable. */
+#define STARTER_POOL_WEIGHT_LIMIT 65535
+/* How often one draw may be taken again because the card it found is already
+ * held to the copy limit. The disc retries for ever, which a pool of three
+ * cards or fewer would never leave. */
+#define STARTER_POOL_RETRIES 64
+
+static int pool_control_key(const char *name)
+{
+    return !strcmp(name, "name") || !strcmp(name, "draws") || !strcmp(name, "cards");
+}
+
+/* One pool: { "name": ..., "draws": n, "cards": { card: weight, ... } }. */
+static void read_pool(const char *mod, const char *where, const JsonValue *entry)
+{
+    StarterPool pool, *slot;
+    const JsonValue *draws_value, *cards;
+    StarterWeight *list;
+    long draws;
+    int i, n = 0, room;
+
+    if (Json_TypeOf(entry) != JSON_OBJECT) {
+        Mods_Note(mod, "%s: a starter pool is an object of \"draws\" and \"cards\"", where);
+        return;
+    }
+    draws_value = Json_Member(entry, "draws");
+    draws = Json_Number(draws_value, -1);
+    if (Json_TypeOf(draws_value) != JSON_NUMBER || draws < 0 || draws > STARTER_DECK_SIZE) {
+        Mods_Note(mod, "%s: a pool's \"draws\" is how many cards it draws, 0 to %d", where, STARTER_DECK_SIZE);
+        return;
+    }
+    cards = Json_Member(entry, "cards");
+    if (Json_TypeOf(cards) != JSON_OBJECT) {
+        Mods_Note(mod, "%s: a pool's \"cards\" is an object of cards and their weights", where);
+        return;
+    }
+    for (i = 0; i < Json_Count(entry); i++) {
+        const char *name = Json_Name(Json_At(entry, i));
+        if (name && !pool_control_key(name)) {
+            Mods_Note(mod, "%s: no \"%s\" in a pool (name, draws, cards)", where, name);
+        }
+    }
+    room = Json_Count(cards);
+    list = calloc((size_t)room + 1, sizeof(*list));
+    if (!list) return;
+    memset(&pool, 0, sizeof(pool));
+    for (i = 0; i < room; i++) {
+        const JsonValue *member = Json_At(cards, i);
+        const char *name = Json_Name(member);
+        long weight;
+        int id, seen;
+        char at[160];
+        snprintf(at, sizeof(at), "%s \"%s\"", where, name);
+        id = Cards_Named(name);
+        if (id <= 0) {
+            Mods_Note(mod, "%s: no such card", at);
+            continue;
+        }
+        weight = Json_Number(member, -1);
+        if (Json_TypeOf(member) != JSON_NUMBER || weight < 0 || weight > STARTER_POOL_WEIGHT_LIMIT) {
+            Mods_Note(mod, "%s: a weight is 0 to %d", at, STARTER_POOL_WEIGHT_LIMIT);
+            continue;
+        }
+        if (!weight) continue;
+        /* A card named twice (by name and by number) is one card, its weights
+         * added, as a written deck's copies are. */
+        for (seen = 0; seen < n; seen++) {
+            if (list[seen].id == id) break;
+        }
+        if (seen < n) {
+            list[seen].weight += (unsigned)weight;
+        } else {
+            list[n].id = id;
+            list[n++].weight = (unsigned)weight;
+        }
+        pool.total += (unsigned)weight;
+    }
+    if (draws && !n) {
+        Mods_Note(mod, "%s: draws %ld card%s but weights none; left out", where, draws, draws == 1 ? "" : "s");
+        free(list);
+        return;
+    }
+    pool.mod = mod;
+    pool.name = Json_String(Json_Member(entry, "name"), NULL);
+    pool.draws = (int)draws;
+    pool.cards = list;
+    pool.count = n;
+    slot = grow(&pools, &pool_room, pool_count, sizeof(*pools));
+    if (!slot) {
+        free(list);
+        return;
+    }
+    *slot = pool;
+    pool_count++;
+}
+
+/* "starter_pools": one pool, or a list of them. */
+static void read_starter_pools(const char *mod, const JsonValue *value)
+{
+    char where[64];
+    int i;
+    if (!value) return;
+    if (Json_TypeOf(value) == JSON_OBJECT) {
+        read_pool(mod, "starter_pools", value);
+        return;
+    }
+    if (Json_TypeOf(value) != JSON_ARRAY) {
+        Mods_Note(mod, "\"starter_pools\" is a pool, or a list of pools");
+        return;
+    }
+    for (i = 0; i < Json_Count(value); i++) {
+        snprintf(where, sizeof(where), "starter_pools %d", i + 1);
+        read_pool(mod, where, Json_At(value, i));
+    }
+}
+
+int Starter_PoolCount(void)
+{
+    return pool_count;
+}
+
+int Starter_PoolDraws(void)
+{
+    int total = 0, i;
+    for (i = 0; i < pool_count; i++) total += pools[i].draws;
+    return total;
+}
+
+int Starter_HasPools(void)
+{
+    return pool_count && Starter_PoolDraws() == STARTER_DECK_SIZE;
+}
+
+/* The card a roll picks out of one pool: its weights walked until they reach
+ * the threshold, as the disc's generator walks its row. */
+static int pool_card(const StarterPool *pool, unsigned random)
+{
+    unsigned long long threshold;
+    unsigned acc = 0;
+    int i;
+    if (!pool->count || !pool->total) return 0;
+    /* The disc asks for (rand() & 0x7FF) + 1 against weights that add up to
+     * 2048; a pool here may add up to anything, so the number is spread over
+     * its own total instead. */
+    threshold = (unsigned long long)(random & 0x7FFFu) * pool->total / 0x8000u + 1;
+    for (i = 0; i < pool->count; i++) {
+        acc += pool->cards[i].weight;
+        if (acc >= threshold) return pool->cards[i].id;
+    }
+    return pool->cards[pool->count - 1].id;
+}
+
+static int by_card_id(const void *left, const void *right)
+{
+    return (int)((const unsigned short *)left)[0] - (int)((const unsigned short *)right)[0];
+}
+
+int Starter_DealPools(unsigned (*next_random)(void), unsigned short cards[STARTER_DECK_SIZE])
+{
+    int held[STARTER_DECK_SIZE];
+    int dealt = 0, i, draw, capped = 0;
+    if (!Starter_HasPools() || !next_random) return 0;
+    memset(held, 0, sizeof(held));
+    for (i = 0; i < pool_count; i++) {
+        const StarterPool *pool = &pools[i];
+        for (draw = 0; draw < pool->draws && dealt < STARTER_DECK_SIZE; draw++) {
+            int id = 0, tries;
+            for (tries = 0; tries <= STARTER_POOL_RETRIES; tries++) {
+                int copies = 0, k;
+                id = pool_card(pool, next_random());
+                if (!id) break;
+                for (k = 0; k < dealt; k++) {
+                    if (cards[k] == (unsigned short)id) copies++;
+                }
+                if (copies < DECK_CARD_COPY_LIMIT) break;
+                /* Held to the limit already: draw again, as the disc does. */
+                if (tries == STARTER_POOL_RETRIES) capped = 1;
+            }
+            if (!id) continue;
+            cards[dealt++] = (unsigned short)id;
+        }
+    }
+    if (dealt != STARTER_DECK_SIZE) {
+        LOG(LOG_MODS, "starter: the pools drew %d of %d cards; the disc's rows stand", dealt, STARTER_DECK_SIZE);
+        return 0;
+    }
+    if (capped) {
+        LOG(LOG_MODS, "starter: a pool kept drawing a card already held %d times; the last draw stands",
+            DECK_CARD_COPY_LIMIT);
+    }
+    /* In id order, as a written deck's cards are. */
+    qsort(cards, STARTER_DECK_SIZE, sizeof(*cards), by_card_id);
+    if (Log_Wanted(LOG_MODS)) {
+        char text[STARTER_DECK_SIZE * 12];
+        int at = 0;
+        for (i = 0; i < STARTER_DECK_SIZE; i++) {
+            int copies = 1;
+            while (i + 1 < STARTER_DECK_SIZE && cards[i + 1] == cards[i]) i++, copies++;
+            at += snprintf(text + at, sizeof(text) - (size_t)at, " %dx%d", copies, cards[i]);
+        }
+        LOG(LOG_MODS, "starter: dealt from %d pool%s (copies x card):%s", pool_count, pool_count == 1 ? "" : "s",
+            text);
+    }
+    return 1;
+}
+
 void Starter_Add(const char *mod, const JsonValue *manifest)
 {
     read_starter(mod, Json_Member(manifest, "starter"));
+    read_starter_pools(mod, Json_Member(manifest, "starter_pools"));
 }
 
 void Starter_Clear(void)
 {
+    int i;
     free(decks);
     decks = NULL;
     deck_count = deck_room = 0;
+    for (i = 0; i < pool_count; i++) free(pools[i].cards);
+    free(pools);
+    pools = NULL;
+    pool_count = pool_room = 0;
 }
 
 void Starter_Build(void)
@@ -197,6 +434,15 @@ void Starter_Build(void)
     if (deck_count) {
         LOG(LOG_MODS, "starter: %d deck%s offered, %u weight between them", deck_count, deck_count == 1 ? "" : "s",
             Starter_WeightTotal());
+    }
+    if (pool_count) {
+        int draws = Starter_PoolDraws();
+        LOG(LOG_MODS, "starter: %d pool%s offered, drawing %d of %d cards", pool_count, pool_count == 1 ? "" : "s",
+            draws, STARTER_DECK_SIZE);
+        if (draws != STARTER_DECK_SIZE) {
+            LOG(LOG_MODS, "starter: the pools draw %d cards, not the %d a deck holds; the disc's rows stand",
+                draws, STARTER_DECK_SIZE);
+        }
     }
 }
 
