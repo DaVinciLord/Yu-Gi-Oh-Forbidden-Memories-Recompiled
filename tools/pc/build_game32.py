@@ -716,7 +716,8 @@ def main():
             for old, new in sorted(renamed[name].items()):
                 command.append(f"--redefine-sym={PREFIX}{old}={PREFIX}{new}")
             if WINDOWS:
-                rename_coff_sections(obj(source), {".data": f"ovl_{name}_data$m", ".bss": f"ovl_{name}_bss$m"})
+                rename_coff_sections(obj(source), {".data": f"ovl_{name}_data$m", ".bss": f"ovl_{name}_bss$m",
+                                                   ".sdata": f"ovl_{name}_data$n", ".sbss": f"ovl_{name}_data$n"})
             else:
                 for section in (".data", ".sdata"):
                     command.append(f"--rename-section={section}=ovl_{name}_data")
@@ -733,9 +734,21 @@ def main():
                 for parts in (line.split() for line in headers_text.splitlines()))):
             sys.exit(f"{name}: a gated module with variables of its own")
 
+    # The game's small-data variables (section(".sdata") in the sources, the
+    # retail .sdata the matching build keeps them in) are game variables as
+    # much as .data's: in a host section of their own they were in no save
+    # state, so a state loaded in the opening movie decoded into the wrong
+    # one of its two buffers (D_8009B066) from then on. ELF renames them
+    # with .data (below); here they go after it ($n), where no variable
+    # that was there before moves, and states from before keep loading
+    # (state.c takes a shorter variables chunk as the start of these).
+    # .sbss too: COFF has it as initialized data (zeros), and with game_bss's
+    # uninitialized parts lld would make it a second game_bss outside the
+    # markers.
     for source in game if WINDOWS else []:
         rename_coff_sections(obj(source), {".text": "game_text$m", ".rdata": "game_rodata$m",
-                                           ".data": "game_data$m", ".bss": "game_bss$m"})
+                                           ".data": "game_data$m", ".bss": "game_bss$m",
+                                           ".sdata": "game_data$n", ".sbss": "game_data$n"})
     for source in game if not WINDOWS else []:
         run([OBJCOPY, "--rename-section=.text=game_text", "--rename-section=.rodata=game_rodata",
              "--rename-section=.data=game_data", "--rename-section=.sdata=game_data",
