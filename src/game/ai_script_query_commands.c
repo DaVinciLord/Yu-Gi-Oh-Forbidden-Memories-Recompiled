@@ -7,6 +7,9 @@
 #include "duel_card.h"
 #include "duel_card_layout.h"
 #include "duel_side_state.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/cards.h"
+#endif
 
 void AiScript_TestHighStat(void)
 {
@@ -41,6 +44,21 @@ void AiScript_LoadCardID(void)
     s32 *memory = gAiScript_aMemory;
     s32 index = memory[AiScript_ReadByte()];
 
+#ifdef MEMORIES_PC
+    /* The field script finds a magic or trap card by the disc card it plays
+       as (ai_script_find_card.c), then reloads its number to choose what to
+       do with it: a mod's Umi or Stain Storm was taken for Forest or Dragon
+       Capture Jar. A magic or trap card reads as the disc card whose effect
+       it has. Equips, rituals and monsters stay themselves: their number
+       goes on to their own equip rules, recipes and stats. */
+    {
+        s32 id = gDuel_aActiveCards[index].card_id;
+        s32 type = id ? Cards_Type(id) : 0;
+        if ((type == CARD_TYPE_MAGIC || type == CARD_TYPE_TRAP) && Cards_AiId(id) > 0) id = Cards_AiId(id);
+        memory[AiScript_ReadByte()] = id;
+        return;
+    }
+#endif
     memory[AiScript_ReadByte()] = gDuel_aActiveCards[index].card_id;
 }
 
