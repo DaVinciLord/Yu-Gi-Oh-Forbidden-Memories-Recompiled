@@ -1,6 +1,5 @@
-/* Experimental native-stack backend for translated macOS arm64 game code.
- * This deliberately provides no save-state serialization or stack restore.
- * The existing i386 backend and its ABI remain unchanged. */
+/* Native-stack entry and save-state requests for translated ARM64 game code. */
+#include "pc/compat/fs.h"
 #include "state.h"
 #include "types.h"
 #include "game/build_deck_transition_state.h"

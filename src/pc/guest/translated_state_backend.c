@@ -1,5 +1,6 @@
 #define _DARWIN_C_SOURCE
 #define MEMORIES_TRANSLATED_MMAN_IMPLEMENTATION
+#include "pc/compat/fs.h"
 #include "translated_state_backend.h"
 #include "state_arm64.h"
 #include "state_io.h"

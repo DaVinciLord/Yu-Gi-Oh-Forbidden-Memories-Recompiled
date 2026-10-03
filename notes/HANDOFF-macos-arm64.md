@@ -33,6 +33,20 @@ Les journaux du rebase sont sous `tmp/arm64-integration/rebase-*`.
 
 ## Entrée commune et lanceurs — 3 octobre 2026
 
+La CI construit maintenant les trois jeux complets sans disque et ajoute un
+job macOS ARM64 (`macos-15`) avec LLVM 21.1.8, cache des dépendances vérifiées,
+tests LLVM, linkage/polices, composants normaux et ASan/UBSan. Les premiers
+jobs ont révélé des tests à adapter après extraction des sous-systèmes d'état
+et un `tmpfile()` non portable sur Windows ; leur correction est validée
+localement, les résultats Linux/Windows complets restent attendus.
+
+`test_llvm_guest.py` comporte 12 tests. Un fixture IR transformé puis compilé
+et exécuté en optimisation vérifie les accès PS1, conversions, memcpy/memmove/
+memset, atomiques et callback sur des régions contrôlées. Les rejets couvrent
+les espaces d'adresse non supportés, l'assembleur machine, les types scalable,
+les appels avec unwind et les adresses PS1 hors 32 bits. Preuve locale :
+`llvm-execution-tests.log`.
+
 `tools/pc/build.py --target linux|windows|macos` est l'entrée commune. Les
 métadonnées de cibles, sources résidentes, modules et sélection native sont
 partagées dans `build_config.py` ; les drivers n'analysent pas le Python de

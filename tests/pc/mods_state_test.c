@@ -1,6 +1,7 @@
 /* Exercise the actual save-state chunk reader and mod compatibility preflight. */
 #include "pc/compat/fs.h"
-#include "../../src/pc/guest/state.c"
+#include "../../src/pc/guest/state_subsystems.c"
+#include "../../src/pc/guest/state_io.c"
 #include <assert.h>
 static unsigned test_signature = 12345, test_version = 1;
 static int state_registered = 1;
@@ -41,30 +42,30 @@ int main(int argc, char **argv)
     state.loading = 1;
     state.image = image;
     state.image_size = length;
-    assert(compatible_mods(&state));
+    assert(Memories_StateCompatibleMods(&state));
     payload[0] = 99;
     Mods_VisitState(mod_state_visit, &state);
     assert(payload[0] == 7);
     reordered = 1;
     payload[0] = other_payload[0] = 99;
-    assert(compatible_mods(&state));
+    assert(Memories_StateCompatibleMods(&state));
     Mods_VisitState(mod_state_visit, &state);
     assert(payload[0] == 7 && other_payload[0] == 13);
     test_signature++;
     payload[0] = 99;
-    assert(!compatible_mods(&state));
+    assert(!Memories_StateCompatibleMods(&state));
     assert(payload[0] == 99);
     test_signature--;
     test_version++;
-    assert(!compatible_mods(&state));
+    assert(!Memories_StateCompatibleMods(&state));
     test_version--;
     state.image_size = length - 1;
-    assert(!compatible_mods(&state));
+    assert(!Memories_StateCompatibleMods(&state));
     state.image_size = 16;
-    assert(!compatible_mods(&state));
+    assert(!Memories_StateCompatibleMods(&state));
     state_registered = 0;
     test_signature = 2166136261u;
-    assert(compatible_mods(&state));
+    assert(Memories_StateCompatibleMods(&state));
     remove(path);
     return 0;
 }

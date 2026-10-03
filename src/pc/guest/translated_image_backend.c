@@ -1,6 +1,7 @@
 #ifndef _DARWIN_C_SOURCE
 #define _DARWIN_C_SOURCE
 #endif
+#include "pc/compat/fs.h"
 #include "../../types.h"
 #include "image.h"
 #include "mips.h"

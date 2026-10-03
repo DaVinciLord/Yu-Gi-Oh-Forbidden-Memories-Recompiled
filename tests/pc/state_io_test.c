@@ -1,14 +1,28 @@
+#define _POSIX_C_SOURCE 200809L
+#include "scratch.h"
 #include "pc/guest/state_io.h"
 #include <assert.h>
 #include <errno.h>
 #include <string.h>
+
+/* Windows tmpfile() uses the drive root, which CI cannot write. Use the
+ * shared Unicode-safe scratch directory and its automatic cleanup. */
+static FILE *state_file(void)
+{
+    static char directory[SCRATCH_MAX];
+    static unsigned count;
+    char path[SCRATCH_MAX + 32];
+    if (!*directory && !scratch_dir(directory, sizeof(directory), "memories-state")) return NULL;
+    snprintf(path, sizeof(path), "%s/chunk%u.bin", directory, count++);
+    return fopen(path, "w+b");
+}
 
 int main(void)
 {
     uint32_t number = 0x12345678, length;
     uint8_t flags[2] = {7, 9}, image[42], zero[16] = {0};
     MemoriesStateField fields[] = {{&number, sizeof(number)}, {flags, sizeof(flags)}, {NULL, 0}};
-    MemoriesState save = {0, tmpfile(), NULL, 0};
+    MemoriesState save = {0, state_file(), NULL, 0};
     MemoriesState load = {1, NULL, image, sizeof(image)};
     size_t size;
     assert(save.file);
@@ -42,7 +56,7 @@ int main(void)
     assert(!Memories_StateChunk(&load, "fixture", fields, 3) && errno == EINVAL);
     {
         uint8_t sealed[68];
-        MemoriesState writer = {0, tmpfile(), NULL, 0};
+        MemoriesState writer = {0, state_file(), NULL, 0};
         MemoriesState reader = {1, NULL, sealed, sizeof(sealed)};
         MemoriesStateField field = {&number, sizeof(number)};
         assert(writer.file);
