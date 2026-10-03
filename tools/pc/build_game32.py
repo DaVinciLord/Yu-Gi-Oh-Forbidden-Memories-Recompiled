@@ -203,14 +203,17 @@ ANDROID_BACKEND = {"src/pc/render/present_pass.c": "src/pc/render/gl_desktop_non
 # the fixed game sections the Linux build places from 0x01000000, clear of
 # the guest's own ranges); the span is checked after the link.
 ANDROID_LOADER = "src/pc/platform/android_loader.c"
-# arm64-v8a: a 64-bit app process has ART's heap low (0x02000000-0x22000000 on
-# a Xiaomi 11T Pro, Android 14) and its boot image near 0x70000000; the game
-# goes at 0x60000000, where the spike's probe loaded a library both on that
-# phone and under the emulator's ARM translation, which holds 0x40000000
-# (below 4 GB, so its
-# function addresses fit the game's 4-byte slots; bit 30 set, the branch
-# thunks' fast path).
-ANDROID_GAME_BASE = 0x60000000 if A64 else 0x08000000
+# arm64-v8a: ART fills a 64-bit app process's low 4 GB from the bottom up:
+# on a Xiaomi 11T Pro (Android 14, heapsize 512m) its heap at 0x02000000-
+# 0x22000000, a free list at 0x42000000, the JIT caches at 0x62000000-
+# 0x6A000000, its boot image and spaces at 0x6FCFC000-0x76000000, and nothing
+# from there to 4 GB but a sentinel page at 0xEBAD6000. A bigger heap moves
+# all of that up, so the game goes above the guest (0x80000000-0xB0800000),
+# at 0xC0000000: below 4 GB, so its function addresses fit the game's 4-byte
+# slots (zero-extended, G32 is __uptr); bit 30 set, the branch thunks' fast
+# path; outside every guest range the port tests (they are explicit ranges).
+# The image is about 35 MiB (most of it .bss).
+ANDROID_GAME_BASE = 0xC0000000 if A64 else 0x08000000
 ANDROID_GAME_SPAN = 0x04000000 if A64 else 0x02000000
 # Assembly comes per architecture: name_i386.S, name_x86_64.S or
 # name_aarch64.S.

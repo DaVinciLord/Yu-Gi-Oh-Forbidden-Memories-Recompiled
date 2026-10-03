@@ -25,7 +25,8 @@ Commands for the first phone session (Git Bash, from D:/DecompRecomp-arm64)
    Read the "occupied before mapping" block, not only PASS/FAIL: the
    scratchpad 0x1F800000 and the stack 0x70000000 are expected to be taken
    (the port moves them to 0x9F800000 and 0xB0000000); the 64-bit loader
-   wants its image range (0x60000000, 64 MiB on arm64) to be free.
+   wants its image range (0xC0000000, 64 MiB on arm64) to be free. The probe
+   maps only a small library there; only the APK shows the app's real layout.
    If abilist32 lists armeabi-v7a, also: run_apk.sh $SERIAL phone armeabi-v7a
 
 4. The game as a plain arm64 process (headless; no taps on the phone):
@@ -41,4 +42,5 @@ Commands for the first phone session (Git Bash, from D:/DecompRecomp-arm64)
    adb logcat -c; adb shell am start -n org.yfmredecomp.game/org.libsdl.app.SDLActivity
    adb logcat -d -s memories:* SDL:* DEBUG:*
    Look for the loader: "libgame.so loaded ... from its link address" or
-   "the game's address range at 0x60000000 is taken" means the base must move.
+   "the game's address range at 0xC0000000 is taken" (followed by "occupied by"
+   lines naming what holds it) means the base must move.

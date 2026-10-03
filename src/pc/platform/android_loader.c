@@ -35,6 +35,22 @@ static void say(const char *text)
     __android_log_write(ANDROID_LOG_INFO, LOG_TAG, text);
 }
 
+/* What holds the part of [low, high) that the reservation could not have. */
+static void say_occupants(uintptr_t low, uintptr_t high)
+{
+    char text[512], line[600];
+    unsigned long start, end;
+    FILE *maps = fopen("/proc/self/maps", "r");
+    if (!maps) return;
+    while (fgets(text, sizeof(text), maps))
+        if (sscanf(text, "%lx-%lx", &start, &end) == 2 && start < high && end > low) {
+            text[strcspn(text, "\n")] = 0;
+            snprintf(line, sizeof(line), "memories-pc: occupied by %s", text);
+            say(line);
+        }
+    fclose(maps);
+}
+
 /* libgame.so beside this library (the app's native library folder). */
 static int game_path(char *out, size_t size)
 {
@@ -51,7 +67,11 @@ int SDL_main(int argc, char **argv)
     GameMain run;
     long bias = 0;
     if (game_path(path, sizeof(path))) snprintf(path, sizeof(path), "libgame.so");
-    reserved = mmap(base, MEMORIES_ANDROID_GAME_SPAN, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+    /* MAP_FIXED_NOREPLACE: without it the address is a hint, which the
+     * kernel may pass over even when the range is free (it did in a phone's
+     * app process); kernels before 4.17 ignore the flag and take the hint. */
+    reserved = mmap(base, MEMORIES_ANDROID_GAME_SPAN, PROT_NONE,
+                    MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED_NOREPLACE, -1, 0);
     if (reserved == base) {
         android_dlextinfo extinfo;
         memset(&extinfo, 0, sizeof(extinfo));
@@ -68,6 +88,7 @@ int SDL_main(int argc, char **argv)
         snprintf(line, sizeof(line), "memories-pc: the game's address range at %p is taken (got %p)", base, reserved);
         say(line);
         if (reserved != MAP_FAILED) munmap(reserved, MEMORIES_ANDROID_GAME_SPAN);
+        say_occupants((uintptr_t)base, (uintptr_t)base + MEMORIES_ANDROID_GAME_SPAN);
     }
     if (!game && !(game = dlopen(path, RTLD_NOW))) {
         snprintf(line, sizeof(line), "memories-pc: cannot load %s: %s", path, dlerror());

@@ -3669,14 +3669,27 @@ reach of the faulting code, with the addressing register moved up by
 a direct branch).
 
 Host function addresses reach the game's 4-byte slots, so the game library
-is linked at 0x60000000 (`ANDROID_GAME_BASE` on arm64; the emulator's ARM
-translation holds 0x40000000) and the loader
-(`android_loader.c`, `ANDROID_DLEXT_RESERVED_ADDRESS`) puts it there: below
-4 GB, bit 30 set (the thunks' fast path), and clear of a 64-bit app
-process's low ART heap (0x02000000-0x22000000 on a Xiaomi 11T Pro, Android
-14) and boot image (~0x70000000). No trampoline table: the probe
-(tmp/android/probe) loaded a library at 0x60000000 with pinned symbols on
-that phone. A function of another library (libc, SDL) whose address the
+is linked at 0xC0000000 (`ANDROID_GAME_BASE` on arm64) and the loader
+(`android_loader.c`, `ANDROID_DLEXT_RESERVED_ADDRESS`) puts it there, in a
+range it asks for with `MAP_FIXED_NOREPLACE` (a plain address is only a
+hint, which the kernel passed over on the phone). That base is below 4 GB
+(slots are zero-extended: G32 is `__uptr`), has bit 30 set (the thunks'
+fast path), and lies outside every guest range the port tests. It is above
+the guest because ART fills a 64-bit app process's low 4 GB from the
+bottom up. On a Xiaomi 11T Pro (Android 14, `dalvik.vm.heapsize` 512m) the
+app process held:
+
+- the heap at 0x02000000-0x22000000;
+- a free list at 0x42000000;
+- the JIT caches at 0x62000000-0x6A000000;
+- the boot image and its spaces at 0x6FCFC000-0x76000000;
+- nothing from there to 4 GB, apart from a sentinel page at 0xEBAD6000.
+
+A bigger heap moves all of it up. The first base, 0x60000000, ran as a
+plain process but not in the app: the JIT caches took it. When the range
+is taken, the loader logs every mapping in it ("occupied by"). The image
+is about 35 MiB, most of it `.bss`, inside a 64 MiB reservation. No
+trampoline table. A function of another library (libc, SDL) whose address the
 game stored would not fit; none is known, and the plain-process runs below
 are where it would show (a fault at a truncated address).
 
