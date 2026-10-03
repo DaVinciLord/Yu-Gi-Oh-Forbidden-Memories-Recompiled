@@ -1,0 +1,50 @@
+<ui version="4.0">
+ <class>WorkspacePage</class>
+ <widget class="QWidget" name="WorkspacePage">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1641</width>
+    <height>1000</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Campaign</string>
+  </property>
+  <layout class="QVBoxLayout" name="pageLayout">
+   <property name="spacing">
+    <number>10</number>
+   </property>
+   <item>
+    <widget class="QLabel" name="heading">
+     <property name="text">
+      <string>Campaign</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="muted">
+     <property name="text">
+      <string>The campaign's scenes and its map: the story's commands scene by scene, the order they run in, and each place's exits, camera and marker.</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QTabWidget" name="campaignTabs">
+     <property name="currentIndex">
+      <number>0</number>
+     </property>
+     </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="campaignStatusRow" />
+   </item>
+  </layout>
+ </widget>
+ <resources />
+ <connections />
+</ui>

@@ -1,0 +1,215 @@
+<ui version="4.0"><class>fusionListTab</class><widget class="QWidget" name="fusionListTab">
+      <layout class="QVBoxLayout" name="fusionListTabLayout">
+       <item>
+        <layout class="QVBoxLayout" name="fusionListLayout">
+         <item>
+          <widget class="QLabel" name="heading">
+           <property name="text">
+            <string>Fusions</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="muted">
+           <property name="text">
+            <string>Search and edit card fusion outcomes. A pair fuses the same in either order. Rows in brown are the retail table's “glitch” fusions.</string>
+           </property>
+           <property name="wordWrap">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <layout class="QHBoxLayout" name="fusionFiltersLayout">
+           <item>
+           <widget class="QLineEdit" name="fusionSearchEdit">
+             <property name="placeholderText">
+              <string>Search card names or IDs…</string>
+             </property>
+             <property name="clearButtonEnabled">
+              <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QRadioButton" name="fusionSearchMaterialsRadio">
+            <property name="text"><string>Materials</string></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QRadioButton" name="fusionSearchResultsRadio">
+            <property name="text"><string>Results</string></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QRadioButton" name="fusionSearchBothRadio">
+            <property name="text"><string>Both</string></property>
+            <property name="checked"><bool>true</bool></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="fusionChangedCheck">
+             <property name="text">
+              <string>Changed only</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="fusionCountLabel">
+             <property name="text">
+              <string>0 fusion rules</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="fusionViewSwitchLayout">
+             <property name="spacing">
+              <number>4</number>
+             </property>
+             <property name="leftMargin">
+              <number>0</number>
+             </property>
+             <property name="topMargin">
+              <number>0</number>
+             </property>
+             <property name="rightMargin">
+              <number>0</number>
+             </property>
+             <property name="bottomMargin">
+              <number>0</number>
+             </property>
+             <item>
+              <widget class="QPushButton" name="fusionGridButton">
+               <property name="text">
+                <string>▦  Grid</string>
+               </property>
+               <property name="checkable">
+                <bool>true</bool>
+               </property>
+               <property name="checked">
+                <bool>false</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="fusionListButton">
+               <property name="text">
+                <string>☷  List</string>
+               </property>
+               <property name="checkable">
+                <bool>true</bool>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+          </layout>
+         </item>
+         <item>
+          <widget class="QWidget" name="fusionImageHeader">
+           <property name="maximumSize"><size><width>16777215</width><height>30</height></size></property>
+           <layout class="QHBoxLayout" name="fusionImageHeaderLayout">
+            <property name="spacing"><number>0</number></property>
+            <property name="leftMargin"><number>12</number></property>
+            <property name="topMargin"><number>0</number></property>
+            <property name="rightMargin"><number>8</number></property>
+            <property name="bottomMargin"><number>0</number></property>
+            <item><widget class="QPushButton" name="fusionSortCardAButton"><property name="text"><string>Card A</string></property><property name="flat"><bool>true</bool></property></widget></item>
+            <item><widget class="QPushButton" name="fusionSortCardBButton"><property name="text"><string>Card B</string></property><property name="flat"><bool>true</bool></property></widget></item>
+            <item><widget class="QPushButton" name="fusionSortResultButton"><property name="text"><string>Fusion result</string></property><property name="flat"><bool>true</bool></property></widget></item>
+            <item><widget class="QPushButton" name="fusionSortAtkButton"><property name="text"><string>ATK</string></property><property name="flat"><bool>true</bool></property></widget></item>
+            <item><widget class="QPushButton" name="fusionSortDefButton"><property name="text"><string>DEF</string></property><property name="flat"><bool>true</bool></property></widget></item>
+            <item><widget class="QPushButton" name="fusionSortStateButton"><property name="text"><string>State</string></property><property name="flat"><bool>true</bool></property></widget></item>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <widget class="QStackedWidget" name="fusionViewStack">
+           <property name="currentIndex">
+            <number>0</number>
+           </property>
+           <widget class="QTableWidget" name="fusionTable">
+            <column>
+             <property name="text">
+              <string>Card A</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Card B</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Result</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>ATK</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>DEF</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>State</string>
+             </property>
+            </column>
+           </widget>
+           <widget class="QListWidget" name="fusionImageList">
+            <property name="selectionMode">
+             <enum>QAbstractItemView::SelectionMode::SingleSelection</enum>
+            </property>
+            <property name="spacing">
+             <number>4</number>
+            </property>
+            <property name="uniformItemSizes">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </widget>
+         </item>
+         <item>
+          <layout class="QHBoxLayout" name="fusionActionsLayout">
+           <item>
+            <widget class="QPushButton" name="addFusionButton">
+             <property name="text">
+              <string>Add fusion…</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="editFusionButton">
+             <property name="text">
+              <string>Change result…</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="removeFusionButton">
+             <property name="text">
+              <string>Remove fusion</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="revertFusionButton">
+             <property name="text">
+              <string>Revert to retail</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
+     </ui>

@@ -18,12 +18,25 @@ again. It writes mod folders only: never the disc, never `game/`.
 
     python tools/pc/fm_editor [--game <folder or .bin>] [--mod <mod folder>]
 
+That opens the Qt window, which needs PySide6:
+
+    python -m pip install PySide6
+
+Without it (or with `--classic`) the old Tk window opens instead, over the
+same editor underneath; both read and write the same mod folder, so a mod may
+be opened in either.
+
+The Tk window is on its way out: it is kept for a release or two so there is
+something to fall back to, and `--classic` goes with it. PySide6 is therefore
+not optional for long — `build_exe.py` already refuses to build without it
+unless `--without-qt` says to.
+
 The window has a tab per table:
 
 | Tab | What you edit |
 |---|---|
 | Cards | search and filter the 722 cards; name, card text (with the game's 20-letter, 8-line wrapping counted, and **Tools > Card text preview** to see it as the card view draws it, below), ATK/DEF, type, attribute, level, guardian stars, password; the retail value beside each field. A guardian star may be **(none)**, written `0`: both none is a monster with no star at all (no SELECT A GUARDIAN STAR box, no star bonus given or taken, no star drawn), the second none a monster with one star; a first star of none with a second is warned about, because the game takes the second as the card's one star ([no star](../../../notes/modding.md#guardian-stars-names-icons-new-stars-and-matchups)). **Frame**: the colour of the card's frame (by type, or monster, magic, trap, ritual, purple or orange whatever its type), with a swatch of it; the card view, the Library and the duel draw it ([frame colour](../../../notes/more-cards.md#frame-colour)). **Notes**: text of your own on the card (what you changed, what you plan), saved as its `"notes"`; the game shows none of it, and a code mod can read `<tag: value>` tags from it ([notes on a card](../../../notes/more-cards.md#notes-on-a-card)). **Revert to retail** keeps them; the **With notes** filter lists the cards that have some, and the search finds words of them too. **Add a card** copies the selected one as a new card with a stable id; a new card starts in nobody's chest (it is won in its base's place, dealt in a starter deck, or given by Game > Cheats), and its password is only shown in the card view: the Password screen sells the disc's 722 |
-| Art | a card's picture (102x96), thumbnail (40x32, the hand and the field) and name plate (96x14) as the disc has them, beside what the game will draw at the console's resolution and at Internal 2x/4x; **Import PNG**, **Export** the disc's or the mod's (to paint over), **Revert** |
+| Art | a card's picture (102x96), thumbnail (40x32, the hand and the field) and name plate (96x14): the disc's, what the game draws at the console's resolution, what it draws at Internal 2x (a picture) or 4x (a thumbnail), and the mod's own replacement, all four side by side; **Import PNG**, **Export** the disc's or the mod's (to paint over), **Revert** |
 | Fusions | every pair and its result (search by a card, or show the changed ones); add, change, remove (the pair no longer fuses) or revert; **Remove recipes of...** takes away every disc recipe of a card in one `remove` rule; a pair a card's own `fusions` list makes (no rule of the mod deciding it first) shows that list's result, marked "own list"; **Bulk...** adds or takes away the fusions of every card of one filtered set with every card of another (below) |
 | Equips | per equip card, the monsters it may equip; add one, add or remove a whole type, remove, revert |
 | Rituals | per ritual card, its three tributes and the monster it summons |
@@ -33,8 +46,9 @@ The window has a tab per table:
 | Limits | the numbers the game caps (`limits`, [gameplay tables](../../../notes/gameplay-tables.md#limits-atk-def-lp-starchips-and-more)). The simple part: the ATK and DEF cap, the LP a duel starts with, and how far healing goes. **Show advanced**: ATK and DEF apart, each side's starting LP, the two-player LP choice (start, most, step), the most starchips, the chest's copies, the Free Duel and two-player records, and a table of duelists with the LP each side starts with against them. An empty field is the game's own number (beside it, with the range the game keeps); a value past that range is warned about and held at the most the game keeps |
 | Guardian Stars | the stars (`guardian_stars`, [Guardian Stars](../../../notes/modding.md#guardian-stars-names-icons-new-stars-and-matchups)): the list of stars with a name and an icon each (**Import icon (PNG)...**, with a preview; the game makes it 16x16 in the disc's stars' colours), **Add star** for 11 to 15 (a card holds its stars in 4 bits, so fifteen at most), and the full grid of matchups: a row is the attacker's star, a column the defender's, a cell the bonus the attacker's side gets, green above 0 and red below; click a cell, type a bonus or use **+ default**, **- default** or **0** (with **Reverse pair gets the opposite** on, the reverse cell takes the opposite sign). **Default bonus** moves the disc's 500 in both cycles, **Retail cycles** and **Clear all** are presets, **Revert to retail** takes the whole key away. **Set stars by rule...** sets many cards' first or second star from their attribute or type through a table you fill in (a Fire monster's first star is Fire), or one star for all, **(none)** included (a first star of none leaves the second as the card's one star, as the game reads it; both none, no star), over a filter of cards like Bulk fusions', with a preview and **Undo last batch**. **Show advanced**: a name per language (`fr=Feu, de=Feuer`), an icon's colours (`game` or its own), and what happens at a summon (`ask`, `first`, `best`). The Cards tab's star lists show the mod's stars as they are named here |
 | Packs | the card packs the mod sells for starchips on the Password screen: each pack's name, description, price, cards a pack and picture, its cards with their tier, weight and chance; an **Advanced** part for everything else; **Shop settings...** and **Simulate...** (below) |
-| Mod info | id, name, version, author, description, `settings`, and the other `mod.json` keys, kept as written (`limits` is the Limits tab's, `guardian_stars` the Guardian Stars tab's) |
-| Conflicts | the loader's checks; double-click a line to go to it |
+| Mod info | id, name, version, author, description, `settings`, and the other `mod.json` keys, kept as written (the keys a page of its own writes are not shown here and are left alone: `limits`, `guardian_stars`, `starter_pools` and `story`) |
+| Conflicts | the loader's checks; double-click a line to go to it. Called **Problems** in the Qt window |
+
 
 **File > Save** writes the mod folder (Ctrl+S); the first save asks where
 (an empty folder, or a parent where a folder named after the mod id is
@@ -543,6 +557,14 @@ its files (or `fm-editor`) lands beside the game's program. The Linux one is bui
 Debian 11, like the game, and brings its own Python and Tk. Running it from
 the source as above works too.
 
+The release carries the Qt window: `pc-release.yml` installs PySide6 beside
+PyInstaller, which brings Qt into the build -- the Linux one is about 97 MB
+with it. PySide6 is pinned to 6.9.3: the Linux build is made in Debian 11,
+whose glibc 2.31 is as far as that wheel goes, and a release is the same Qt
+either side. A build made without PySide6 carries only the Tk window and
+opens that instead, saying nothing about it, since a built editor has no
+Python to install into.
+
 ### Packs
 
 The left list is the mod's packs in their order (`#`, name, price, cards a
@@ -633,12 +655,27 @@ read and written by `pngio.py`, in plain Python like the rest; the card-text
 preview's tests build their font page and a TrueType file in code as well
 (`tests/test_card_text.py`).
 
+## The two windows
+
+Both are front ends over an engine that has neither Tk nor Qt in it, and the
+split is the same either side:
+
+| | Tk | Qt |
+|---|---|---|
+| the frame | `app.py` | `qt/window.py` |
+| a page | `tabs.py`, `art_tab.py`, `map_tab.py`, `limits_tab.py`, `guardian_stars_tab.py`, `packs_tab.py` | `qt/cards.py`, `qt/art.py`, `qt/map.py`, `qt/limits.py`, `qt/stars.py`, `qt/packs.py`, ... |
+| what the pages share | `widgets.py`, `theme.py` | `qt/common.py` |
+
+A Qt page is a mixin class (`PacksMixin`, `MapMixin`, ...) that
+`qt/window.py` mixes into `ModernEditor`, so a page is read and changed in
+its own file while the window stays one object. `pyside_app.py` names them
+both and is what the rest of the editor imports.
+
 ## Building another front end
 
-The window is one front end over an engine that has no Tk in it. Another
-front end (Qt, a web page, a script) reuses the engine as it is and replaces
-only the window; it does not rewrite the engine, whose rules are the port's
-(`tables.c`, `cards.c`, the loaders) and are pinned by the tests below.
+Another front end (a web page, a script) reuses the engine as it is and
+replaces only the window; it does not rewrite the engine, whose rules are the
+port's (`tables.c`, `cards.c`, the loaders) and are pinned by the tests below.
 
 **The engine** (no `tkinter` import; plain Python 3, nothing to install):
 

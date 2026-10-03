@@ -1,0 +1,58 @@
+<ui version="4.0">
+ <class>WorkspacePage</class>
+ <widget class="QWidget" name="WorkspacePage">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1280</width>
+    <height>800</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Starter decks</string>
+  </property>
+  <layout class="QVBoxLayout" name="pageLayout">
+   <property name="spacing">
+    <number>10</number>
+   </property>
+   <item>
+    <widget class="QLabel" name="heading">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="text">
+      <string>Starter decks</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="muted">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="text">
+      <string>Build weighted starter decks for new games.</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+      <item>
+    <widget class="QTabWidget" name="starterTabs">
+     <property name="currentIndex"><number>0</number></property>
+     </widget>
+   </item>
+
+  </layout>
+ </widget>
+ <resources />
+ <connections />
+</ui>

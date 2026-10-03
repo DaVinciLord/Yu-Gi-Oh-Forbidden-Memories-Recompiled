@@ -87,6 +87,8 @@ def build_parser():
     parser = argparse.ArgumentParser(prog="fm_editor", description="FM Editor: mods for the Forbidden Memories port")
     parser.add_argument("--game", help="the game: a folder with SLUS_014.11 and DATA/WA_MRG.MRG, or the .bin")
     parser.add_argument("--mod", help="a mod folder to open")
+    parser.add_argument("--classic", action="store_true",
+                        help="the old Tk window instead of the Qt one")
     commands = parser.add_subparsers(dest="command")
     check = commands.add_parser("check", help="validate a mod folder against the retail tables")
     check.add_argument("mod")
@@ -109,5 +111,51 @@ def main(argv=None) -> int:
         return command_check(arguments)
     if arguments.command == "import":
         return command_import(arguments)
-    from .app import main as window
-    return window(arguments.game, arguments.mod)
+    return command_window(arguments)
+
+
+def say_no_qt(problem):
+    """The Qt window is not to be had: say so where it can be read.
+
+    A released editor is built windowed, so nothing printed here reaches
+    anyone; and telling somebody to pip install into a program that carries
+    its own Python helps no one. There the old window simply opens."""
+    if getattr(sys, "frozen", False):
+        return
+    print(f"The Qt window could not start ({problem}); opening the old one instead.\n"
+          f"    python -m pip install PySide6\n"
+          f"installs what it needs; on Linux Qt also wants its own system\n"
+          f"libraries (libxcb-cursor0 among them).",
+          file=sys.stderr)
+
+
+def command_window(arguments) -> int:
+    """The editor window: the Qt one, or the Tk one for --classic and where
+    PySide6 is not installed."""
+    if not arguments.classic:
+        try:
+            from .pyside_app import main as window
+        except ImportError as problem:
+            say_no_qt(problem)
+        except Exception as problem:        # noqa: BLE001 - see below
+            # Qt aborts rather than raises ImportError when a system library
+            # it wants is missing (libxcb-cursor0 and the like), and a player
+            # should get the old window instead of nothing at all.
+            say_no_qt(problem)
+        else:
+            return window(arguments.game, arguments.mod)
+    try:
+        # The import and the call both reach for tkinter (app.py takes it at
+        # the top, and its main() pulls in importers, which takes it too), so
+        # opening the window is inside the guard, not only finding it.
+        from .app import main as window
+        return window(arguments.game, arguments.mod)
+    except ImportError as problem:
+        # Neither window is to be had: say which pieces are missing rather
+        # than end on an import traceback. A runner without tkinter, or a
+        # Linux box with neither Qt's libraries nor python3-tk, lands here.
+        print(f"No editor window can open ({problem}).\n"
+              f"    python -m pip install PySide6\n"
+              f"gives the Qt one; the old one needs Python's tkinter, which\n"
+              f"some systems package separately (python3-tk).", file=sys.stderr)
+        return 1

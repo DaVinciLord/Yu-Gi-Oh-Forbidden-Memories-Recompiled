@@ -1,0 +1,740 @@
+<ui version="4.0"><class>mapTab</class><widget class="QWidget" name="mapTab">
+      <layout class="QVBoxLayout" name="mapTabLayout">
+       <property name="spacing">
+        <number>10</number>
+       </property>
+       <item>
+        <widget class="QFrame" name="mapToolbar">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="frameShape">
+          <enum>QFrame::Shape::NoFrame</enum>
+         </property>
+         <layout class="QHBoxLayout" name="mapToolbarLayout">
+          <property name="spacing">
+           <number>8</number>
+          </property>
+          <property name="leftMargin">
+           <number>14</number>
+          </property>
+          <property name="topMargin">
+           <number>10</number>
+          </property>
+          <property name="rightMargin">
+           <number>14</number>
+          </property>
+          <property name="bottomMargin">
+           <number>10</number>
+          </property>
+          <item>
+           <widget class="QRadioButton" name="mapScreenRadio">
+            <property name="text">
+             <string>Screen</string>
+            </property>
+            <property name="checked">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QRadioButton" name="mapOverviewRadio">
+            <property name="text">
+             <string>Overview</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="mapToolbarSeparator">
+            <property name="text">
+             <string>|</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="mapPackageLabel">
+            <property name="text">
+             <string>Map:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QComboBox" name="mapPackageCombo">
+            <property name="minimumSize">
+             <size>
+              <width>190</width>
+              <height>0</height>
+             </size>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="mapReferenceButton">
+            <property name="toolTip">
+             <string>Show a screenshot of this place behind the arrows</string>
+            </property>
+            <property name="text">
+             <string>Reference picture…</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="mapPicturesButton">
+            <property name="toolTip">
+             <string>The map's sprites and terrain textures</string>
+            </property>
+            <property name="text">
+             <string>Pictures…</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="mapToolbarSpacer">
+            <property name="orientation">
+             <enum>Qt::Orientation::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QLabel" name="mapContextLabel">
+            <property name="text">
+             <string />
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QSplitter" name="mapSplitter">
+         <property name="orientation">
+          <enum>Qt::Orientation::Horizontal</enum>
+         </property>
+         <property name="childrenCollapsible">
+          <bool>false</bool>
+         </property>
+         <widget class="QFrame" name="mapPlacesPanel">
+          <property name="frameShape">
+           <enum>QFrame::Shape::NoFrame</enum>
+          </property>
+          <layout class="QVBoxLayout" name="mapPlacesLayout">
+           <property name="spacing">
+            <number>8</number>
+           </property>
+           <property name="leftMargin">
+            <number>12</number>
+           </property>
+           <property name="topMargin">
+            <number>12</number>
+           </property>
+           <property name="rightMargin">
+            <number>12</number>
+           </property>
+           <property name="bottomMargin">
+            <number>12</number>
+           </property>
+           <item>
+            <widget class="QLabel" name="mapPlacesTitle">
+             <property name="text">
+              <string>Places</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="mapSearchLayout">
+             <property name="spacing">
+              <number>6</number>
+             </property>
+             <item>
+              <widget class="QLineEdit" name="mapSearchEdit">
+               <property name="placeholderText">
+                <string>Search places…</string>
+               </property>
+               <property name="clearButtonEnabled">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="mapSearchButton">
+               <property name="maximumSize">
+                <size>
+                 <width>36</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+               <property name="text">
+                <string>⌕</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="QTableWidget" name="mapPlaceTable">
+             <property name="editTriggers">
+              <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
+             </property>
+             <property name="alternatingRowColors">
+              <bool>true</bool>
+             </property>
+             <property name="selectionMode">
+              <enum>QAbstractItemView::SelectionMode::SingleSelection</enum>
+             </property>
+             <property name="selectionBehavior">
+              <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
+             </property>
+             <column>
+              <property name="text">
+               <string>#</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>Place</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>Area</string>
+              </property>
+             </column>
+            </widget>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="mapResetLayout">
+             <property name="spacing">
+              <number>8</number>
+             </property>
+             <item>
+              <widget class="QPushButton" name="resetPlaceButton">
+               <property name="text">
+                <string>⟳  Reset place</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="resetAllButton">
+               <property name="text">
+                <string>⟳  Reset all</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="QLabel" name="mapHintLabel">
+             <property name="text">
+              <string />
+             </property>
+             <property name="wordWrap">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+         <widget class="QFrame" name="mapPreviewPanel">
+          <property name="frameShape">
+           <enum>QFrame::Shape::NoFrame</enum>
+          </property>
+          <layout class="QVBoxLayout" name="mapPreviewLayout">
+           <property name="spacing">
+            <number>8</number>
+           </property>
+           <property name="leftMargin">
+            <number>12</number>
+           </property>
+           <property name="topMargin">
+            <number>12</number>
+           </property>
+           <property name="rightMargin">
+            <number>12</number>
+           </property>
+           <property name="bottomMargin">
+            <number>12</number>
+           </property>
+           <item>
+            <widget class="QLabel" name="mapPreviewTitle">
+             <property name="text">
+              <string>Map screen preview</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="mapCanvas">
+             <property name="minimumSize">
+              <size>
+               <width>640</width>
+               <height>480</height>
+              </size>
+             </property>
+             <property name="text">
+              <string />
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignmentFlag::AlignCenter</set>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="mapCaptionLabel">
+             <property name="text">
+              <string />
+             </property>
+             <property name="wordWrap">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="mapProblemsLabel">
+             <property name="text">
+              <string />
+             </property>
+             <property name="wordWrap">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <spacer name="mapPreviewSpacer">
+             <property name="orientation">
+              <enum>Qt::Orientation::Vertical</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>20</width>
+               <height>10</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+          </layout>
+         </widget>
+         <widget class="QScrollArea" name="mapFormScroll">
+          <property name="frameShape">
+           <enum>QFrame::Shape::NoFrame</enum>
+          </property>
+          <property name="widgetResizable">
+           <bool>true</bool>
+          </property>
+          <widget class="QWidget" name="mapFormContents">
+           <property name="geometry">
+            <rect>
+             <x>0</x>
+             <y>0</y>
+             <width>460</width>
+             <height>809</height>
+            </rect>
+           </property>
+           <layout class="QVBoxLayout" name="mapFormLayout">
+            <property name="spacing">
+             <number>10</number>
+            </property>
+            <item>
+             <widget class="QGroupBox" name="mapCameraGroup">
+              <property name="title">
+               <string>Camera</string>
+              </property>
+              <layout class="QGridLayout" name="mapCameraLayout">
+               <property name="horizontalSpacing">
+                <number>6</number>
+               </property>
+               <item row="0" column="0">
+                <widget class="QLabel" name="mapDistanceLabel">
+                 <property name="text">
+                  <string>Distance</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="0" column="1">
+                <widget class="QSpinBox" name="mapDistanceSpin" />
+               </item>
+               <item row="0" column="2">
+                <widget class="QLabel" name="mapHeadingLabel">
+                 <property name="text">
+                  <string>Heading</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="0" column="3">
+                <widget class="QSpinBox" name="mapHeadingSpin" />
+               </item>
+               <item row="0" column="4">
+                <widget class="QLabel" name="mapPitchLabel">
+                 <property name="text">
+                  <string>Pitch</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="0" column="5">
+                <widget class="QSpinBox" name="mapPitchSpin" />
+               </item>
+               <item row="1" column="0">
+                <widget class="QLabel" name="mapTargetXLabel">
+                 <property name="text">
+                  <string>Looks at x</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="1" column="1">
+                <widget class="QSpinBox" name="mapTargetXSpin" />
+               </item>
+               <item row="1" column="2">
+                <widget class="QLabel" name="mapTargetZLabel">
+                 <property name="text">
+                  <string>z</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="1" column="3">
+                <widget class="QSpinBox" name="mapTargetZSpin" />
+               </item>
+              </layout>
+             </widget>
+            </item>
+            <item>
+             <widget class="QGroupBox" name="mapMarkerGroup">
+              <property name="title">
+               <string>Millennium Puzzle marker (the town)</string>
+              </property>
+              <layout class="QGridLayout" name="mapMarkerLayout">
+               <property name="horizontalSpacing">
+                <number>6</number>
+               </property>
+               <item row="0" column="0">
+                <widget class="QLabel" name="mapMarkerXLabel">
+                 <property name="text">
+                  <string>x</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="0" column="1">
+                <widget class="QSpinBox" name="mapMarkerXSpin" />
+               </item>
+               <item row="0" column="2">
+                <widget class="QLabel" name="mapMarkerYLabel">
+                 <property name="text">
+                  <string>y</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="0" column="3">
+                <widget class="QSpinBox" name="mapMarkerYSpin" />
+               </item>
+               <item row="1" column="0" colspan="4">
+                <widget class="QLabel" name="mapMarkerNote">
+                 <property name="text">
+                  <string />
+                 </property>
+                 <property name="wordWrap">
+                  <bool>true</bool>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+            </item>
+            <item>
+             <widget class="QGroupBox" name="mapConfirmGroup">
+              <property name="title">
+               <string>Confirm (Cross)</string>
+              </property>
+              <layout class="QVBoxLayout" name="mapConfirmLayout">
+               <property name="spacing">
+                <number>6</number>
+               </property>
+               <item>
+                <widget class="QComboBox" name="mapConfirmCombo" />
+               </item>
+               <item>
+                <widget class="QCheckBox" name="mapGateCheck">
+                 <property name="text">
+                  <string>Only while exit 1's condition holds</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+            </item>
+            <item>
+             <widget class="QGroupBox" name="mapExitsGroup">
+              <property name="title">
+               <string>Exits</string>
+              </property>
+              <layout class="QVBoxLayout" name="mapExitsLayout">
+               <property name="spacing">
+                <number>8</number>
+               </property>
+               <item>
+                <layout class="QHBoxLayout" name="mapExitTabsLayout">
+                 <property name="spacing">
+                  <number>4</number>
+                 </property>
+                 <item>
+                  <widget class="QPushButton" name="mapExitTab1">
+                   <property name="text">
+                    <string>1</string>
+                   </property>
+                   <property name="checkable">
+                    <bool>true</bool>
+                   </property>
+                   <property name="checked">
+                    <bool>true</bool>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="mapExitTab2">
+                   <property name="text">
+                    <string>2</string>
+                   </property>
+                   <property name="checkable">
+                    <bool>true</bool>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="mapExitTab3">
+                   <property name="text">
+                    <string>3</string>
+                   </property>
+                   <property name="checkable">
+                    <bool>true</bool>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="mapExitTab4">
+                   <property name="text">
+                    <string>4</string>
+                   </property>
+                   <property name="checkable">
+                    <bool>true</bool>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+               <item>
+                <layout class="QHBoxLayout" name="mapExitUsedLayout">
+                 <property name="spacing">
+                  <number>8</number>
+                 </property>
+                 <item>
+                  <widget class="QCheckBox" name="mapExitUsedCheck">
+                   <property name="text">
+                    <string>Used</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QComboBox" name="mapExitDestinationCombo" />
+                 </item>
+                </layout>
+               </item>
+               <item>
+                <layout class="QGridLayout" name="mapExitGrid">
+                 <property name="horizontalSpacing">
+                  <number>6</number>
+                 </property>
+                 <item row="0" column="0" rowspan="3">
+                  <widget class="QWidget" name="mapExitPad" native="true">
+                   <layout class="QGridLayout" name="mapExitPadLayout">
+                    <property name="leftMargin">
+                     <number>0</number>
+                    </property>
+                    <property name="topMargin">
+                     <number>0</number>
+                    </property>
+                    <property name="rightMargin">
+                     <number>6</number>
+                    </property>
+                    <property name="bottomMargin">
+                     <number>0</number>
+                    </property>
+                    <property name="spacing">
+                     <number>1</number>
+                    </property>
+                    <item row="0" column="1">
+                     <widget class="QPushButton" name="mapExitUpButton">
+                      <property name="maximumSize">
+                       <size>
+                        <width>30</width>
+                        <height>26</height>
+                       </size>
+                      </property>
+                      <property name="toolTip">
+                       <string>Up is held to take this exit</string>
+                      </property>
+                      <property name="text">
+                       <string>▲</string>
+                      </property>
+                      <property name="checkable">
+                       <bool>true</bool>
+                      </property>
+                     </widget>
+                    </item>
+                    <item row="1" column="0">
+                     <widget class="QPushButton" name="mapExitLeftButton">
+                      <property name="maximumSize">
+                       <size>
+                        <width>30</width>
+                        <height>26</height>
+                       </size>
+                      </property>
+                      <property name="toolTip">
+                       <string>Left is held to take this exit</string>
+                      </property>
+                      <property name="text">
+                       <string>◀</string>
+                      </property>
+                      <property name="checkable">
+                       <bool>true</bool>
+                      </property>
+                     </widget>
+                    </item>
+                    <item row="1" column="2">
+                     <widget class="QPushButton" name="mapExitRightButton">
+                      <property name="maximumSize">
+                       <size>
+                        <width>30</width>
+                        <height>26</height>
+                       </size>
+                      </property>
+                      <property name="toolTip">
+                       <string>Right is held to take this exit</string>
+                      </property>
+                      <property name="text">
+                       <string>▶</string>
+                      </property>
+                      <property name="checkable">
+                       <bool>true</bool>
+                      </property>
+                     </widget>
+                    </item>
+                    <item row="2" column="1">
+                     <widget class="QPushButton" name="mapExitDownButton">
+                      <property name="maximumSize">
+                       <size>
+                        <width>30</width>
+                        <height>26</height>
+                       </size>
+                      </property>
+                      <property name="toolTip">
+                       <string>Down is held to take this exit</string>
+                      </property>
+                      <property name="text">
+                       <string>▼</string>
+                      </property>
+                      <property name="checkable">
+                       <bool>true</bool>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </widget>
+                 </item>
+                 <item row="0" column="1">
+                  <widget class="QLabel" name="mapExitWhenLabel">
+                   <property name="text">
+                    <string>When</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="0" column="2">
+                  <widget class="QComboBox" name="mapExitConditionCombo" />
+                 </item>
+                 <item row="1" column="1">
+                  <widget class="QLabel" name="mapExitFlagLabel">
+                   <property name="text">
+                    <string>Flag</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="1" column="2">
+                  <widget class="QSpinBox" name="mapExitFlagSpin" />
+                 </item>
+                 <item row="2" column="1">
+                  <widget class="QLabel" name="mapExitFramesLabel">
+                   <property name="text">
+                    <string>Frames</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="2" column="2">
+                  <widget class="QSpinBox" name="mapExitFramesSpin" />
+                 </item>
+                 <item row="3" column="0">
+                  <widget class="QLabel" name="mapExitArrowLabel">
+                   <property name="text">
+                    <string>Arrow</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="3" column="1" colspan="2">
+                  <widget class="QComboBox" name="mapExitArrowCombo" />
+                 </item>
+                 <item row="4" column="0">
+                  <widget class="QLabel" name="mapExitAtLabel">
+                   <property name="text">
+                    <string>At x</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="4" column="1">
+                  <widget class="QSpinBox" name="mapExitXSpin" />
+                 </item>
+                 <item row="4" column="2">
+                  <layout class="QHBoxLayout" name="mapExitYLayout">
+                   <property name="spacing">
+                    <number>6</number>
+                   </property>
+                   <item>
+                    <widget class="QLabel" name="mapExitYLabel">
+                     <property name="text">
+                      <string>y</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QSpinBox" name="mapExitYSpin" />
+                   </item>
+                  </layout>
+                 </item>
+                </layout>
+               </item>
+              </layout>
+             </widget>
+            </item>
+            <item>
+             <spacer name="mapFormSpacer">
+              <property name="orientation">
+               <enum>Qt::Orientation::Vertical</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>20</width>
+                <height>40</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </widget>
+         </widget>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+     </ui>

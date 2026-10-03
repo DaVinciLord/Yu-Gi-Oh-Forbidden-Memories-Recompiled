@@ -1,0 +1,491 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<ui version="4.0">
+ <class>WorkspacePage</class>
+ <widget class="QWidget" name="WorkspacePage">
+  <property name="geometry">
+   <rect><x>0</x><y>0</y><width>1620</width><height>960</height></rect>
+  </property>
+  <property name="windowTitle"><string>Packs</string></property>
+  <layout class="QVBoxLayout" name="pageLayout">
+   <property name="spacing"><number>10</number></property>
+   <item>
+    <widget class="QLabel" name="pageTitleLabel">
+     <property name="text"><string>Packs</string></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="pageSummaryLabel">
+     <property name="text"><string>Edit booster pack contents, prices, and shop settings.</string></property>
+     <property name="wordWrap"><bool>true</bool></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QSplitter" name="packsSplitter">
+     <property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property>
+     <property name="childrenCollapsible"><bool>false</bool></property>
+
+     <widget class="QFrame" name="packListPanel">
+      <layout class="QVBoxLayout" name="packListPanelLayout">
+       <property name="spacing"><number>10</number></property>
+       <item>
+        <widget class="QLabel" name="packListTitle">
+         <property name="text"><string>Pack list</string></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QListWidget" name="packsList"/>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="packListButtons">
+         <property name="spacing"><number>8</number></property>
+         <item>
+          <widget class="QPushButton" name="addPackButton">
+           <property name="text"><string>+  Add pack</string></property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="duplicatePackButton">
+           <property name="text"><string>❐</string></property>
+           <property name="toolTip"><string>Duplicate the selected pack</string></property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="removePackButton">
+           <property name="text"><string>✕</string></property>
+           <property name="toolTip"><string>Remove the selected pack</string></property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="movePackUpButton">
+           <property name="text"><string>⌃</string></property>
+           <property name="toolTip"><string>Move the pack up the list</string></property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="movePackDownButton">
+           <property name="text"><string>⌄</string></property>
+           <property name="toolTip"><string>Move the pack down the list</string></property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="packListButtonsSpacer">
+           <property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property>
+           <property name="sizeHint" stdset="0"><size><width>10</width><height>20</height></size></property>
+          </spacer>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
+
+     <widget class="QFrame" name="packSettingsPanel">
+      <layout class="QVBoxLayout" name="packSettingsPanelLayout">
+       <property name="spacing"><number>10</number></property>
+       <item>
+        <widget class="QLabel" name="packSettingsTitle">
+         <property name="text"><string>Pack settings</string></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QScrollArea" name="packSettingsScroll">
+         <property name="widgetResizable"><bool>true</bool></property>
+         <property name="frameShape"><enum>QFrame::Shape::NoFrame</enum></property>
+         <widget class="QWidget" name="packSettingsContents">
+          <layout class="QFormLayout" name="packFormLayout">
+           <property name="horizontalSpacing"><number>12</number></property>
+           <property name="verticalSpacing"><number>12</number></property>
+           <item row="0" column="0">
+            <widget class="QLabel" name="packNameLabel">
+             <property name="text"><string>Name</string></property>
+            </widget>
+           </item>
+           <item row="0" column="1">
+            <widget class="QLineEdit" name="packNameEdit"/>
+           </item>
+           <item row="1" column="0">
+            <widget class="QLabel" name="packDescriptionLabel">
+             <property name="text"><string>Description</string></property>
+            </widget>
+           </item>
+           <item row="1" column="1">
+            <layout class="QVBoxLayout" name="packDescriptionBox">
+             <property name="spacing"><number>0</number></property>
+             <item>
+              <widget class="QPlainTextEdit" name="packDescriptionEdit">
+               <property name="minimumSize"><size><width>0</width><height>86</height></size></property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="packDescriptionCount">
+               <property name="text"><string>0 / 255</string></property>
+               <property name="alignment"><set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignVCenter</set></property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item row="2" column="0">
+            <widget class="QLabel" name="packPriceLabel">
+             <property name="text"><string>Price</string></property>
+            </widget>
+           </item>
+           <item row="2" column="1">
+            <layout class="QHBoxLayout" name="packPriceRow">
+             <property name="spacing"><number>8</number></property>
+             <item>
+              <widget class="QSpinBox" name="packPriceSpin">
+               <property name="minimum"><number>0</number></property>
+               <property name="maximum"><number>999999</number></property>
+               <property name="value"><number>100</number></property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="packPriceHint">
+               <property name="text"><string>(in star chips)</string></property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="packPriceSpacer">
+               <property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property>
+               <property name="sizeHint" stdset="0"><size><width>10</width><height>20</height></size></property>
+              </spacer>
+             </item>
+            </layout>
+           </item>
+           <item row="3" column="0">
+            <widget class="QLabel" name="packCountLabel">
+             <property name="text"><string>Cards per pack</string></property>
+            </widget>
+           </item>
+           <item row="3" column="1">
+            <layout class="QHBoxLayout" name="packCountRow">
+             <item>
+              <widget class="QSpinBox" name="packCountSpin">
+               <property name="minimum"><number>1</number></property>
+               <property name="maximum"><number>40</number></property>
+               <property name="value"><number>5</number></property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="packCountSpacer">
+               <property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property>
+               <property name="sizeHint" stdset="0"><size><width>10</width><height>20</height></size></property>
+              </spacer>
+             </item>
+            </layout>
+           </item>
+           <item row="4" column="0">
+            <widget class="QLabel" name="packStockLabel">
+             <property name="text"><string>Stock</string></property>
+            </widget>
+           </item>
+           <item row="4" column="1">
+            <layout class="QHBoxLayout" name="packStockRow">
+             <property name="spacing"><number>10</number></property>
+             <item>
+              <widget class="QSpinBox" name="packStockSpin">
+               <property name="minimum"><number>0</number></property>
+               <property name="maximum"><number>65535</number></property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="packInfiniteStockCheck">
+               <property name="text"><string>Infinite stock</string></property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="packStockSpacer">
+               <property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property>
+               <property name="sizeHint" stdset="0"><size><width>10</width><height>20</height></size></property>
+              </spacer>
+             </item>
+            </layout>
+           </item>
+           <item row="5" column="0">
+            <widget class="QLabel" name="packImageLabel">
+             <property name="text"><string>Pack image</string></property>
+            </widget>
+           </item>
+           <item row="5" column="1">
+            <layout class="QHBoxLayout" name="packImageRow">
+             <property name="spacing"><number>10</number></property>
+             <item>
+              <widget class="QLabel" name="packImagePreview">
+               <property name="minimumSize"><size><width>106</width><height>152</height></size></property>
+               <property name="alignment"><set>Qt::AlignmentFlag::AlignCenter</set></property>
+               <property name="text"><string>No image</string></property>
+              </widget>
+             </item>
+             <item>
+              <layout class="QVBoxLayout" name="packImageButtons">
+               <property name="spacing"><number>8</number></property>
+               <item>
+                <widget class="QComboBox" name="packImageScaleCombo"/>
+               </item>
+               <item>
+                <widget class="QPushButton" name="importPackImageButton">
+                 <property name="text"><string>Import PNG…</string></property>
+                 <property name="toolTip"><string>Import a PNG for this pack's own picture</string></property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QPushButton" name="exportPackImageButton">
+                 <property name="text"><string>Export…</string></property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QPushButton" name="revertPackImageButton">
+                 <property name="text"><string>Revert</string></property>
+                 <property name="toolTip"><string>Drop this pack's own picture and show the cover</string></property>
+                </widget>
+               </item>
+               <item>
+                <spacer name="packImageButtonsSpacer">
+                 <property name="orientation"><enum>Qt::Orientation::Vertical</enum></property>
+                 <property name="sizeHint" stdset="0"><size><width>20</width><height>10</height></size></property>
+                </spacer>
+               </item>
+              </layout>
+             </item>
+             <item>
+              <spacer name="packImageSpacer">
+               <property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property>
+               <property name="sizeHint" stdset="0"><size><width>10</width><height>20</height></size></property>
+              </spacer>
+             </item>
+            </layout>
+           </item>
+          </layout>
+         </widget>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="packValidationLabel">
+         <property name="text"><string/></property>
+         <property name="wordWrap"><bool>true</bool></property>
+        </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="packSettingsFooter">
+         <property name="spacing"><number>8</number></property>
+         <item>
+          <widget class="QLabel" name="packIdentityValue">
+           <property name="text"><string>—</string></property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="packSettingsFooterSpacer">
+           <property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property>
+           <property name="sizeHint" stdset="0"><size><width>10</width><height>20</height></size></property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QPushButton" name="toggleAdvancedPackButton">
+           <property name="text"><string>Advanced…</string></property>
+           <property name="toolTip"><string>The keys this form has no field for: tiers, slots, dealing, unlock and sounds</string></property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
+
+     <widget class="QFrame" name="packContentsPanel">
+      <layout class="QVBoxLayout" name="packContentsPanelLayout">
+       <property name="spacing"><number>10</number></property>
+       <item>
+        <layout class="QHBoxLayout" name="packContentsHeader">
+         <property name="spacing"><number>8</number></property>
+         <item>
+          <widget class="QLabel" name="packContentsTitle">
+           <property name="text"><string>Pack contents</string></property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="packContentsHeaderSpacer">
+           <property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property>
+           <property name="sizeHint" stdset="0"><size><width>20</width><height>20</height></size></property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QLabel" name="packTotalWeightLabel">
+           <property name="text"><string>Total weight: 0</string></property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QToolButton" name="packContentsHelpButton">
+           <property name="text"><string>?</string></property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QTableWidget" name="packContentsTable"/>
+       </item>
+       <item>
+        <widget class="QWidget" name="contentsActionsHost">
+         <widget class="QPushButton" name="addPackCardButton">
+          <property name="text"><string>Add card…</string></property>
+         </widget>
+         <widget class="QPushButton" name="addFilteredPackCardsButton">
+          <property name="text"><string>Add filtered…</string></property>
+         </widget>
+         <widget class="QWidget" name="packSetControls">
+          <layout class="QGridLayout" name="contentsSetGrid">
+           <property name="horizontalSpacing"><number>6</number></property>
+           <property name="verticalSpacing"><number>6</number></property>
+           <property name="leftMargin"><number>0</number></property>
+           <property name="topMargin"><number>0</number></property>
+           <property name="rightMargin"><number>0</number></property>
+           <property name="bottomMargin"><number>0</number></property>
+           <item row="0" column="0">
+            <widget class="QLabel" name="packTierLabel">
+             <property name="text"><string>Tier</string></property>
+            </widget>
+           </item>
+           <item row="0" column="1">
+            <widget class="QComboBox" name="packTierCombo"/>
+           </item>
+           <item row="0" column="2">
+            <widget class="QPushButton" name="setPackTierButton">
+             <property name="text"><string>Set</string></property>
+             <property name="toolTip"><string>Move the selected cards into that tier</string></property>
+            </widget>
+           </item>
+           <item row="1" column="0">
+            <widget class="QLabel" name="packWeightLabel">
+             <property name="text"><string>Weight</string></property>
+            </widget>
+           </item>
+           <item row="1" column="1">
+            <widget class="QSpinBox" name="packWeightSpin">
+             <property name="minimum"><number>0</number></property>
+             <property name="maximum"><number>1000000</number></property>
+             <property name="value"><number>100</number></property>
+            </widget>
+           </item>
+           <item row="1" column="2">
+            <widget class="QPushButton" name="setPackWeightButton">
+             <property name="text"><string>Set</string></property>
+             <property name="toolTip"><string>Give the selected cards that weight</string></property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+         <widget class="QPushButton" name="addPackTierButton">
+          <property name="text"><string>New tier…</string></property>
+         </widget>
+         <widget class="QPushButton" name="removePackCardsButton">
+          <property name="text"><string>Remove selected</string></property>
+         </widget>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+
+   <item>
+    <layout class="QHBoxLayout" name="packsBottomLayout">
+     <property name="spacing"><number>10</number></property>
+     <item>
+      <widget class="QFrame" name="shopSettingsPanel">
+       <layout class="QVBoxLayout" name="shopSettingsPanelLayout">
+        <property name="spacing"><number>8</number></property>
+        <item>
+         <widget class="QLabel" name="shopSettingsTitle">
+          <property name="text"><string>Shop settings</string></property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="shopSettingsHint">
+          <property name="text"><string>Configure global shop behaviour related to booster packs.</string></property>
+          <property name="wordWrap"><bool>true</bool></property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="shopSettingsRow">
+          <item>
+           <widget class="QPushButton" name="openShopSettingsButton">
+            <property name="text"><string>Open shop settings…</string></property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="shopSettingsSpacer">
+            <property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property>
+            <property name="sizeHint" stdset="0"><size><width>10</width><height>20</height></size></property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <widget class="QFrame" name="simulationPanel">
+       <layout class="QVBoxLayout" name="simulationPanelLayout">
+        <property name="spacing"><number>8</number></property>
+        <item>
+         <widget class="QLabel" name="simulationTitle">
+          <property name="text"><string>Simulation</string></property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="simulationHint">
+          <property name="text"><string>Simulate pack openings to preview the card distribution based on current weights.</string></property>
+          <property name="wordWrap"><bool>true</bool></property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="simulationRow">
+          <property name="spacing"><number>8</number></property>
+          <item>
+           <widget class="QLabel" name="packSimulationCountLabel">
+            <property name="text"><string>Open</string></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QSpinBox" name="packSimulationCountSpin">
+            <property name="minimum"><number>1</number></property>
+            <property name="maximum"><number>1000000</number></property>
+            <property name="value"><number>1000</number></property>
+            <property name="minimumSize"><size><width>120</width><height>0</height></size></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="simulatePackButton">
+            <property name="text"><string>Simulate</string></property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="simulationSpacer">
+            <property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property>
+            <property name="sizeHint" stdset="0"><size><width>10</width><height>20</height></size></property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QPushButton" name="viewPackResultsButton">
+            <property name="text"><string>View results…</string></property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QTableWidget" name="packSimulationResultsTable">
+          <property name="minimumSize"><size><width>0</width><height>180</height></size></property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+    </layout>
+   </item>
+
+   <item>
+    <widget class="QLabel" name="packsStatusLabel">
+     <property name="text"><string/></property>
+     <property name="wordWrap"><bool>true</bool></property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+</ui>
