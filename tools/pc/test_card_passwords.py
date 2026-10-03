@@ -3,8 +3,10 @@
 
 Creates isolated mods/saves, buys added and replaced cards, checks payment,
 repeat purchases, free cards, insufficient funds, and the on-card viewer.
-Runs both the normal shop and the optional card-number-passwords mod. Images
-stay in --out. No player settings or saves are changed.
+Runs the normal shop, and with --number-mod (a copy of Douglas's Card Number
+Passwords 1.2.0 or later, which hooks Cards_Password, Cards_PasswordPrice and
+Password_LookupCardID; published on its own, not in this repository) that
+mod's shop too. Images stay in --out. No player settings or saves are changed.
 """
 import argparse
 import json
@@ -46,6 +48,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--executable", type=Path, default=ROOT / "tmp/pc/game32/memories-pc")
     parser.add_argument("--out", type=Path)
+    parser.add_argument("--number-mod", type=Path, help="the Card Number Passwords mod's folder")
     args = parser.parse_args()
     out = args.out or Path(tempfile.mkdtemp(prefix="card-passwords-", dir=ROOT / "tmp/pc"))
     mods = out.resolve() / "mods"
@@ -63,10 +66,11 @@ def main():
                       "password-test:added:1": {"starchips": 100},
                       "password-test:free:1": {"starchips": 0},
                       "password-test:number:1": {"starchips": 55}}}), encoding="utf-8")
-    numbered = mods / "card-number-passwords"
-    shutil.copytree(ROOT / "mods/card-number-passwords", numbered, dirs_exist_ok=True)
-    build_mod.build(str(numbered), games=[str(args.executable.resolve().parent)])
-    for enabled in (False, True):
+    if args.number_mod:
+        numbered = mods / "card-number-passwords"
+        shutil.copytree(args.number_mod, numbered, dirs_exist_ok=True)
+        build_mod.build(str(numbered), games=[str(args.executable.resolve().parent)])
+    for enabled in (False, True) if args.number_mod else (False,):
         name = "number-mod" if enabled else "core"
         with Game(args.executable, out=out / name, mods_dir=mods,
                   settings={"card_passwords": 1, "mod.card-number-passwords": int(enabled)}) as game:

@@ -30,6 +30,11 @@ unsigned Cards_PasswordPrice(int id);
 /* Unhooked defaults, backed by the disc, cards[] and passwords tables. */
 unsigned CardPassword_Resolve(int id);
 unsigned CardPassword_ResolvePrice(int id);
+/* Whether the disc's table was read (once a run); if not, the Password
+ * screen gives the one it loaded, card by card, so its shop still sells
+ * the disc's cards. */
+int CardPassword_DiscTable(void);
+void CardPassword_SetDiscEntry(int id, unsigned price, unsigned password);
 
 /* Text_Resolve's question: the composed line for CARD_PASSWORD_TEXT_ID. */
 const unsigned char *CardPassword_Text(int id);

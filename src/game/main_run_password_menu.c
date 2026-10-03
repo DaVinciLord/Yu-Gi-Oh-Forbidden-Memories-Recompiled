@@ -36,6 +36,10 @@ void Main_RunPasswordMenu(void)
             static int checked;
             static unsigned passwords[CARD_TABLE_ID_END];
             int id;
+            if (!CardPassword_DiscTable()) {
+                for (id = 1; id <= CARD_COUNT; id++)
+                    CardPassword_SetDiscEntry(id, D_801A8000[id].price, (unsigned)D_801A8000[id].password);
+            }
             for (id = 1; id <= gCard_nCount; id++) {
                 unsigned password = Cards_Password(id);
                 if (id <= CARD_COUNT) {

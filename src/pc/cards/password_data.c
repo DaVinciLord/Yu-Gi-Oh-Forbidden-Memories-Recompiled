@@ -54,6 +54,20 @@ static void read_table(void)
             table[1] == BLUE_EYES_PASSWORD ? " (as it should be)" : " (not 89631139: a changed disc)", none);
 }
 
+int CardPassword_DiscTable(void)
+{
+    if (!table_state) read_table();
+    return table_state > 0;
+}
+
+void CardPassword_SetDiscEntry(int id, unsigned price, unsigned password)
+{
+    if (id < 1 || id > CARD_COUNT) return;
+    prices[id] = price;
+    table[id] = password;
+    table_state = 1;
+}
+
 /* Resolve afresh over the cached raw disc values: a rule that sets the
  * retail password still wins over cards[].password; price percentages are
  * never applied twice. Added cards do not depend on a disc read succeeding. */

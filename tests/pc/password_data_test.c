@@ -71,6 +71,13 @@ int main(void)
     has_override[58] = 0;
     assert(Cards_Password(58) == 0x723);
     assert(Cards_Password(1) == CARD_PASSWORD_NONE);
+    /* The table the Password screen loaded stands in for it. */
+    assert(!CardPassword_DiscTable() && reads == 1);
+    CardPassword_SetDiscEntry(1, 1000, BLUE_EYES_PASSWORD);
+    CardPassword_SetDiscEntry(CARD_COUNT + 1, 5, 5);
+    assert(CardPassword_DiscTable() && reads == 1);
+    assert(Cards_Password(1) == BLUE_EYES_PASSWORD && Cards_PasswordPrice(1) == 1000);
+    assert(Cards_Password(723) == 0x12345678);
     puts("password data: ok");
     return 0;
 }

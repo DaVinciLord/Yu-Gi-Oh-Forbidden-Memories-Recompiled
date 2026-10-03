@@ -479,10 +479,12 @@ View > Card passwords:
 }
 ```
 
-The optional [Card Number Passwords mod](../mods/card-number-passwords/README-EN.md)
-uses numeric IDs for cards without an explicit password and keeps the viewer
-in sync. Update older copies of that mod: versions that replace the entire
-shop handler bypass the shared policy.
+A code mod can change the policy for the shop and the viewer at once by
+hooking `Cards_Password`, `Cards_PasswordPrice` and `Password_LookupCardID`.
+Douglas's Card Number Passwords mod (1.2.0 and later, published on its own)
+does this: cards without an explicit password are sold by their number.
+Older copies of that mod replace the whole shop handler, which bypasses
+the shared policy.
 
 ## Rules a setting switches
 
