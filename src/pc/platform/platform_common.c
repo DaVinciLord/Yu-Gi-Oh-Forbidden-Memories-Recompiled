@@ -612,11 +612,25 @@ void Platform_WaitVBlank(unsigned count_at_entry)
     }
 }
 
-/* The VBlank count is what the game sees through VSync(-1). */
+/* The VBlank count is what the game sees through VSync(-1). The clock's
+ * phase goes in a chunk of its own ("platform-clock", so that states
+ * without it keep loading "platform"): how far off the next VBlank is, in
+ * the clock's microseconds. Under the virtual clock the ticks between two VBlanks are the
+ * 1 ms steps up to it, 16 or 17 as the phase falls, and each tick reads disc
+ * sectors and runs the sound driver; a load that kept the loading process's
+ * phase gave a frame a tick more or less than the game that saved it had,
+ * a file finished loading a frame apart and the campaign map parted company
+ * from it some 350 frames on. */
 void Platform_State(MemoriesState *state)
 {
     const MemoriesStateField fields[] = {{(void *)&vblank_count, sizeof(vblank_count)}};
+    int64_t phase = next_vblank ? (int64_t)(next_vblank - virtual_now) : 0;
+    MemoriesStateField clock = {&phase, sizeof(phase)};
     Memories_StateChunk(state, "platform", fields, 1);
+    if (Memories_StateChunk(state, "platform-clock", &clock, 1) && phase > 0 &&
+        phase <= 4 * (int64_t)vblank_period) {
+        next_vblank = virtual_now + (uint64_t)phase;
+    }
 }
 
 /* MEMORIES_INPUT="600:0008,610:0000": hex pad bits applied from a frame on;

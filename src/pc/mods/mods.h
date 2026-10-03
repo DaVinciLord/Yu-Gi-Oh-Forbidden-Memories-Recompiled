@@ -81,7 +81,9 @@ int Mods_File(int mod, const char *key, int index, char *path, size_t size, cons
  * and the entry used. `where` names the entry ("fusions[3]"). */
 int Mods_EntryUsed(const char *id, const struct JsonValue *entry, const char *where);
 /* Say why a mod is not quite what it asked for: on stderr and beside it in
- * the Mods window. */
+ * the Mods window, after the notes it has ("; "), so a reader's reason and
+ * a later summary (Starter_Check, Packs_Build) both show; a note it already
+ * has is not added twice. */
 void Mods_Note(const char *id, const char *format, ...);
 
 /* Called once the game's frame is on its way to the GPU (libgpu's GsDrawOt),

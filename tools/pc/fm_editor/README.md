@@ -18,9 +18,12 @@ again. It writes mod folders only: never the disc, never `game/`.
 
     python tools/pc/fm_editor [--game <folder or .bin>] [--mod <mod folder>]
 
-The Cards tab's right-hand options and the Limits tab scroll vertically:
-use the scrollbar or mouse wheel when the window is too short. Tabbing to
-a field brings it into view; text boxes keep their own scrolling.
+The window opens at 1600x960 (less on a smaller screen) and every tab fits
+it. On a smaller window a tab gets scrollbars instead of being cut off; the
+mouse wheel scrolls it too, except over lists, text boxes and pictures,
+which keep their own scrolling. The Cards tab's right-hand options and the
+Limits tab also scroll vertically on their own: tabbing to a field brings it
+into view.
 
 **Starchips**, below **Password** in Cards, edits any card's price
 on the Password screen (0–999999; **0 is free**). The field shows the price
@@ -34,8 +37,8 @@ The window has a tab per table:
 
 | Tab | What you edit |
 |---|---|
-| Cards | search and filter the 722 cards; name, card text (with the game's 20-letter, 8-line wrapping counted, and **Tools > Card text preview** to see it as the card view draws it, below), ATK/DEF, type, attribute, level, guardian stars, password; the retail value beside each field. A guardian star may be **(none)**, written `0`: both none is a monster with no star at all (no SELECT A GUARDIAN STAR box, no star bonus given or taken, no star drawn), the second none a monster with one star; a first star of none with a second is warned about, because the game takes the second as the card's one star ([no star](../../../notes/modding.md#guardian-stars-names-icons-new-stars-and-matchups)). **Frame**: the colour of the card's frame (by type, or monster, magic, trap, ritual, purple or orange whatever its type), with a swatch of it; the card view, the Library and the duel draw it ([frame colour](../../../notes/more-cards.md#frame-colour)). **Notes**: text of your own on the card (what you changed, what you plan), saved as its `"notes"`; the game shows none of it, and a code mod can read `<tag: value>` tags from it ([notes on a card](../../../notes/more-cards.md#notes-on-a-card)). **Revert to retail** keeps them; the **With notes** filter lists the cards that have some, and the search finds words of them too. **Add a card** copies the selected one as a new card with a stable id; a new card starts in nobody's chest (it is won in its base's place, dealt in a starter deck, or given by Game > Cheats), and its password works in the Password shop and is shown in the card view. Added cards default to 999999 starchips; edit **Starchips** to change the price |
-| Art | a card's picture (102x96), thumbnail (40x32, the hand and the field) and name plate (96x14) as the disc has them, beside what the game will draw at the console's resolution and at Internal 2x/4x; **Import PNG**, **Export** the disc's or the mod's (to paint over), **Revert** |
+| Cards | search and filter the 722 cards; name, card text (with the game's 20-letter, 8-line wrapping counted, and **Tools > Card text preview** to see it as the card view draws it, below), ATK/DEF, type, attribute, level, guardian stars, password; the retail value beside each field. A magic, trap, ritual or equip card has no ATK, DEF, level, attribute or stars, so the form hides them for one; it shows **Effect** instead: the disc card of the same type it plays as, for you and for the CPU (`"effect"`, [more cards](../../../notes/more-cards.md)). A monster made magic starts at **(none)**, which does nothing when played; a disc magic card has its own effect, and choosing it writes nothing. A guardian star may be **(none)**, written `0`: both none is a monster with no star at all (no SELECT A GUARDIAN STAR box, no star bonus given or taken, no star drawn), the second none a monster with one star; a first star of none with a second is warned about, because the game takes the second as the card's one star ([no star](../../../notes/modding.md#guardian-stars-names-icons-new-stars-and-matchups)). **Frame**: the colour of the card's frame (by type, or monster, magic, trap, ritual, purple or orange whatever its type), with a swatch of it; the card view, the Library and the duel draw it ([frame colour](../../../notes/more-cards.md#frame-colour)). **Notes**: text of your own on the card (what you changed, what you plan), saved as its `"notes"`; the game shows none of it, and a code mod can read `<tag: value>` tags from it ([notes on a card](../../../notes/more-cards.md#notes-on-a-card)). **Revert to retail** keeps them; the **With notes** filter lists the cards that have some, and the search finds words of them too. **Add a card** copies the selected one as a new card with a stable id; a new card starts in nobody's chest (it is won in its base's place, dealt in a starter deck, or given by Game > Cheats), and its password works in the Password shop and is shown in the card view. Added cards default to 999999 starchips; edit **Starchips** to change the price |
+| Art | a card's picture (102x96), thumbnail (40x32, the hand and the field) and name plate (96x14) as the disc has them, beside what the game will draw at the console's resolution and at Internal 2x/4x; **Import PNG** (up to 4x, 408x384 and 160x128, for detail at Internal 2x/4x, on retail and added cards alike), **Export** the disc's or the mod's (to paint over), **Revert** |
 | Fusions | every pair and its result (search by a card, or show the changed ones); add, change, remove (the pair no longer fuses) or revert; **Remove recipes of...** takes away every disc recipe of a card in one `remove` rule; a pair a card's own `fusions` list makes (no rule of the mod deciding it first) shows that list's result, marked "own list"; **Bulk...** adds or takes away the fusions of every card of one filtered set with every card of another (below) |
 | Equips | per equip card, the monsters it may equip; add one, add or remove a whole type, remove, revert |
 | Rituals | per ritual card, its three tributes and the monster it summons |
@@ -371,7 +374,8 @@ record are shown as retail fusions and marked.
   adds has its base's place on the disc, so a pack cannot tell the two
   apart: its picture and thumbnail are the entry's `art` and `thumbnail`
   PNGs (under `art/`), made into 102x96 and 40x32 at 255 and 63 colours when
-  the game starts, the same at every resolution. The name plate of any
+  the game starts; a bigger one is drawn at its own resolution at Internal
+  2x and 4x (`cards.c`, `add_full_picture`). The name plate of any
   card is the entry's `title` PNG (dark ink on white; a retail card gets a
   `replace` entry for it). An imported PNG is cut to the part's shape from
   the middle (a warning says so), made opaque over black, and kept at most

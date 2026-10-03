@@ -126,13 +126,14 @@ static void leave_game_stack(void)
     Memories_ContextSwitch(&game_context, &service_context);
 }
 
-/* The VSync a loaded state resumes in (apply). */
+/* The VSync a loaded state resumes in (apply), and what it returns. */
 static MemoriesStateEntry resume_entry;
+static int resume_value;
 
 /* The first thing the game stack runs after a load: return from that VSync. */
 static void resume_game(void)
 {
-    Memories_StateReturn(&resume_entry, 263); /* one field, as VSync(0) reports it */
+    Memories_StateReturn(&resume_entry, resume_value);
 }
 #else
 static ucontext_t service_context, game_context;
@@ -571,14 +572,18 @@ static void apply(void)
     memcpy((void *)(uintptr_t)SCRATCHPAD, chunk + MEMORIES_GUEST_RAM_SIZE, SCRATCHPAD_SIZE);
     for (i = 0; i < region_count; i++) {
         Region *region = &regions[i];
-        size_t length = (size_t)(region->data_end - region->data), word;
+        size_t length = (size_t)(region->data_end - region->data), word, saved;
         tagged(tag, sizeof(tag), "data", region->name);
         chunk = find_chunk(&state, tag, &size);
-        if (chunk && size == length * 2) {
-            memcpy(region->data, chunk + length, length);
+        /* A shorter chunk is a state from before the variables that now
+         * end the section (the Windows build's small data, which came in
+         * after the rest: build_game32.py): those keep their values. */
+        saved = size / 2;
+        if (chunk && size % 2 == 0 && saved <= length) {
+            memcpy(region->data, chunk + saved, saved);
             /* Relocated words the game never changed follow this build. */
-            for (word = 0; word + 4 <= length; word += 4) {
-                if (!memcmp(chunk + word, chunk + length + word, 4) && memcmp(chunk + word, region->startup + word, 4)) {
+            for (word = 0; word + 4 <= saved; word += 4) {
+                if (!memcmp(chunk + word, chunk + saved + word, 4) && memcmp(chunk + word, region->startup + word, 4)) {
                     memcpy(region->data + word, region->startup + word, 4);
                 }
             }
@@ -589,6 +594,8 @@ static void apply(void)
         chunk = find_chunk(&state, tag, &size);
         if (chunk && size == (size_t)(region->bss_end - region->bss)) {
             memcpy(region->bss, chunk, size);
+        } else if (chunk) {
+            fprintf(stderr, "memories-pc: state: zeroed variables of '%s' do not match this build\n", region->name);
         }
     }
     subsystems(&state);
@@ -606,6 +613,7 @@ static void apply(void)
         Mods_Dispatch(&event);
     }
     fprintf(stderr, "memories-pc: state loaded\n");
+    const int value = LibEtc_StateResumed(); /* the fields VSync(0) reports, as for the game that saved it */
     hold_signals(0);
 #ifdef _WIN32
     set_stack_bounds(game_bounds);
@@ -621,11 +629,12 @@ static void apply(void)
         frame[4] = (uint32_t)(uintptr_t)resume_game;
         frame[5] = 0;
         resume_entry = entry;
+        resume_value = value;
         game_context = (uint32_t)(uintptr_t)frame;
         Memories_ContextSwitch(&service_context, &game_context);
     }
 #else
-    Memories_StateReturn(&entry, 263); /* one field, as VSync(0) reports it */
+    Memories_StateReturn(&entry, value);
 #endif
 }
 

@@ -74,6 +74,8 @@ void Spu_State(MemoriesState *state);
 void LibSpu_State(MemoriesState *state);
 void LibDs_State(MemoriesState *state);
 void LibEtc_State(MemoriesState *state);
+/* The rest of the VSync(0) a loaded state resumes in; its return value. */
+int LibEtc_StateResumed(void);
 void LibGpu_State(MemoriesState *state);
 void LibGte_State(MemoriesState *state);
 void LibPress_State(MemoriesState *state);

@@ -42,7 +42,7 @@ void AiScript_CalcCardPower(void)
         power = 0;
         if (mode == 0) {
 #ifdef MEMORIES_PC
-            switch (card > 0 ? Cards_BaseId(card) : card) {
+            switch (card > 0 ? Cards_EffectId(card) : card) {
 #else
             switch (card) {
 #endif

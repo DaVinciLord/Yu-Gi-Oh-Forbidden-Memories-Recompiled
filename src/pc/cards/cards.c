@@ -22,6 +22,7 @@
 #include "pc/platform/paths.h"
 #include "pc/platform/settings.h"
 #include "pc/debug/log.h"
+#include "pc/guest/low_memory.h"
 #include "pc/render/texture_dump.h"
 #include "pc/render/texture_pack.h"
 #include "pc/rng.h"
@@ -116,8 +117,10 @@ int Cards_Fusion(int a, int b, int *result)
     return 0;
 }
 
-static unsigned char *names[CARD_TABLE_ID_END];     /* own names, glyph codes */
-static unsigned char *descriptions[CARD_TABLE_ID_END];  /* own card text, glyph codes */
+/* Own names and card text, in glyph codes. The game is handed them as text
+ * and keeps them in 4-byte pointers: low memory (pc/guest/low_memory.h). */
+static unsigned char *names[CARD_TABLE_ID_END];
+static unsigned char *descriptions[CARD_TABLE_ID_END];
 /* The "notes" of every entry for the card, in load order, a line between
  * two (card_notes.h). Nothing the game draws or plays by. */
 static char *card_notes[CARD_TABLE_ID_END];
@@ -236,7 +239,7 @@ static unsigned char *encode_name(const char *mod, const char *pattern, int n, i
         else text[length++] = *p;
     }
     text[length] = '\0';
-    glyphs = malloc(length * 2 + 1);
+    glyphs = Memories_LowAlloc(length * 2 + 1);
     if (!glyphs) return NULL;
     {   /* UTF-8: accented letters and the like are glyphs of the port's (glyphs.h). */
         const char *at = text;
@@ -291,7 +294,7 @@ static size_t text_code(const char *at, unsigned char out[3], int *bytes, int *l
 static unsigned char *encode_description(const char *mod, const char *text, int id)
 {
     size_t length = strlen(text), n = 0;
-    unsigned char *glyphs = malloc(length * 2 + 2);
+    unsigned char *glyphs = Memories_LowAlloc(length * 2 + 2);
     const char *word = text;
     int column = 0, lines = 1, warned = 0;
     if (!glyphs) return NULL;
@@ -930,6 +933,11 @@ int Cards_KindChanged(int id)
 {
     return Cards_Valid(id) && kind(Cards_Type(id)) != kind(Cards_RetailType(Cards_BaseId(id)));
 }
+int Cards_AiId(int id)
+{
+    int as = Cards_EffectId(id);
+    return Cards_Valid(id) && kind(Cards_Type(id)) == kind(Cards_RetailType(as)) ? as : -1;
+}
 
 static int retail_monster(int id)
 {
@@ -1294,7 +1302,10 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         /* A replaced base lends the model and effect it was given. */
         value = (int)Json_Number(Json_Member(entry, "model"), 0);
         model_ids[id] = (unsigned short)(value >= 1 && value <= CARD_COUNT ? value : Cards_ModelId(base));
-        value = (int)Json_Number(Json_Member(entry, "effect"), 0);
+        /* A number or a card's name, as a replace's (Cards_Reference). */
+        value = Cards_Reference(Json_Member(entry, "effect"));
+        if (n == 1 && (value < 0 || value > CARD_COUNT))
+            Mods_Note(mod, "cards[%d]: \"effect\" must name a card of the disc", index);
         effect_ids[id] = (unsigned short)(value >= 1 && value <= CARD_COUNT ? value : Cards_EffectId(base));
         gCard_awBaseId[id] = (unsigned short)base;
         gCard_asNameSortKey[id - 1] = gCard_asNameSortKey[base - 1];

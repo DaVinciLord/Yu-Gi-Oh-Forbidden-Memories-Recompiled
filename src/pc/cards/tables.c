@@ -554,9 +554,10 @@ static void read_equips(const char *mod, const JsonValue *list)
 int Tables_Equip(int equip, int monster)
 {
     const EquipRule *best = NULL;
-    int i, base_equip, base_monster, type;
+    int i, base_equip, effect_equip, base_monster, type;
     if (!equip_count || !Cards_Valid(equip) || !Cards_Valid(monster)) return -1;
     base_equip = Cards_BaseId(equip);
+    effect_equip = Cards_EffectId(equip);       /* a rule for the equip it plays as holds for it */
     base_monster = Cards_BaseId(monster);
     type = Cards_Type(monster);
     /* The latest entry that says anything decides; within it a card is
@@ -564,7 +565,7 @@ int Tables_Equip(int equip, int monster)
     for (i = 0; i < equip_count; i++) {
         const EquipRule *rule = &equips[i];
         int match;
-        if (rule->equip != equip && rule->equip != base_equip) continue;
+        if (rule->equip != equip && rule->equip != base_equip && rule->equip != effect_equip) continue;
         match = rule->kind == TARGET_ANY || (rule->kind == TARGET_TYPE && rule->target == type) ||
                 (rule->kind == TARGET_CARD && (rule->target == monster || rule->target == base_monster));
         if (!match) continue;
@@ -576,9 +577,10 @@ int Tables_Equip(int equip, int monster)
 int Tables_EquipBonus(int equip, int monster, int retail)
 {
     const BonusRule *best = NULL;
-    int i, base_equip, type, attribute;
+    int i, base_equip, effect_equip, type, attribute;
     if ((!bonus_count && !equip_default_set) || !Cards_Valid(equip) || !Cards_Valid(monster)) return retail;
     base_equip = Cards_BaseId(equip);
+    effect_equip = Cards_EffectId(equip);
     type = Cards_Type(monster);
     attribute = Cards_Attribute(monster);
     /* The latest entry that says anything about this monster decides;
@@ -586,7 +588,7 @@ int Tables_EquipBonus(int equip, int monster, int retail)
     for (i = 0; i < bonus_count; i++) {
         const BonusRule *rule = &bonuses[i];
         int fits;
-        if (rule->equip != equip && rule->equip != base_equip) continue;
+        if (rule->equip != equip && rule->equip != base_equip && rule->equip != effect_equip) continue;
         fits = rule->kind == BONUS_ANY || (rule->kind == BONUS_TYPE && rule->value == type) ||
                (rule->kind == BONUS_ATTRIBUTE && rule->value == attribute);
         if (!fits) continue;

@@ -48,7 +48,7 @@ static DslRCB ready_callback;
 static void (*cd_ready_callback)(u8, u8 *);
 static u8 sector[RAW_SECTOR];
 static unsigned sector_cursor;
-static uint64_t stream_next_us;
+static uint64_t stream_next_us, service_us; /* the clock at the last Memories_DiscService */
 static int xa_history[2][2];
 static volatile unsigned disc_bytes_total;
 
@@ -535,6 +535,7 @@ static void play_xa(const u8 *raw, int heard)
 void Memories_DiscService(uint64_t now_us)
 {
     int budget = 2;
+    service_us = now_us;
     while (queue_head != queue_tail) {
         Pending done = queue[queue_head];
         queue_head = (queue_head + 1) % QUEUE;
@@ -586,9 +587,18 @@ void Memories_DiscService(uint64_t now_us)
 }
 
 /* The disc file itself belongs to the process. Callbacks are game functions.
- * Buffered movie frames are kept so a state taken during a stream resumes. */
+ * Buffered movie frames are kept so a state taken during a stream resumes.
+ * The stream's pace goes in "libds-clock", apart so that states without it
+ * keep loading "libds": when its next sector is due, from the clock's last
+ * service, kept as that distance since the clock's microseconds are the
+ * process's. Without it (an older state) the stream starts again from the
+ * next tick, and a movie or a voice runs its sectors on other ticks than in
+ * the game that saved it. */
 void LibDs_State(MemoriesState *state)
 {
+    int64_t phase = stream_next_us ? (int64_t)(stream_next_us - service_us) : 0;
+    uint32_t pacing = stream_next_us != 0;
+    const MemoriesStateField clock[] = {{&pacing, sizeof(pacing)}, {&phase, sizeof(phase)}};
     const MemoriesStateField fields[] = {
         {queue, sizeof(queue)}, {(void *)&queue_head, sizeof(queue_head)}, {(void *)&queue_tail, sizeof(queue_tail)},
         {&next_id, sizeof(next_id)}, {&mode, sizeof(mode)}, {&filter_file, sizeof(filter_file)},
@@ -601,6 +611,10 @@ void LibDs_State(MemoriesState *state)
         {&st_last_loc, sizeof(st_last_loc)}};
     if (Memories_StateChunk(state, "libds", fields, sizeof(fields) / sizeof(fields[0]))) {
         stream_next_us = 0;
+    }
+    if (Memories_StateChunk(state, "libds-clock", clock, 2) && pacing &&
+        service_us > 200000 && phase > -200000 && phase <= 200000) {
+        stream_next_us = service_us + (uint64_t)phase;
     }
 }
 

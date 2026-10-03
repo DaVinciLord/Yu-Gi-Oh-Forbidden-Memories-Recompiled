@@ -2300,6 +2300,40 @@ bit-identical. How (details in `src/pc/guest/state.h`):
   loads (FR→FR 3/10, pt-BR 3/10); 10/10 now. States saved before that with
   a language or translation on keep the old heap addresses and may still
   crash; English (US) states never held any.
+- **A loaded state goes on frame for frame as the game that saved it**
+  (`tools/pc/test_state_resume.py`: a second process loads the state and
+  plays the same input; 2000 frames on the campaign map, twice, and through
+  the opening movie, identical). Three things were missing until then:
+  - the clock's phase, in chunks of their own so that older states keep
+    loading the old ones: `platform-clock` (how far off the next VBlank is),
+    `libetc-clock` (the sound driver's next tick from the last clock tick)
+    and `libds-clock` (a stream's next sector). Kept as distances, since
+    the clock's microseconds are the process's. Under the virtual clock a
+    frame gets the 1 ms ticks up to the next VBlank, 16 or 17 as the phase
+    falls, and each reads disc sectors: with the loading process's phase a
+    file on the campaign map finished loading a frame apart and the map
+    parted from the saving game some 180 or 350 frames on, depending on
+    where it was saved, in the same process as in a new one;
+  - the end of the `VSync(0)` the state resumes in (`LibEtc_StateResumed`):
+    states are taken before `last_vsync` moves on to the VBlank just waited
+    for, so after a load `VSync(1)` reported a frame already spent, and a
+    CPU duelist thinking when the state was taken (`AiScript_Run` thinks
+    until `VSync(1)` reaches 240 lines) stopped after one step and played a
+    frame late (the replay `state-load-cpu`). `VSync(0)` also returns the
+    fields that passed, not one;
+  - on Windows, the game's small-data variables: `section(".sdata")` and
+    `(".sbss")` in the sources (the movie's decode slot `D_8009B066` and 90
+    others) stayed in the host's own sections, outside `game_data`, so no
+    state held them; a state loaded in the opening movie decoded into the
+    wrong one of its two buffers from then on. `build_game32.py` now puts
+    them in `game_data` after everything else (`$n`), where no variable
+    moves, and a variables chunk shorter than the section (a state from
+    before) restores the part it has. The other way round, an older build says the
+    game's variables "do not match this build" and leaves them out: the
+    state loads, but play does not go on as saved.
+  Not reproduced bit for bit: the SPU mixer's state (`spu`, `libspu`) and the
+  sound driver's work area, which the mixer thread updates in real time (as
+  between any two runs).
 - **A state loads only in the language it was made in** (Game > Language),
   **and only with the same compiled text at the same place.** The
   `language` chunk (32 bytes, `LanguageChunk` in `state.c`) holds the

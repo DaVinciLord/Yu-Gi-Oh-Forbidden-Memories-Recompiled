@@ -51,15 +51,19 @@ s32 Duel_CheckEquip(s32 arg0, s32 arg1)
    itself. The mods' rules come before the disc's table (tables.h). The
    disc's is of the cards as they were: a replaced card made another kind
    (cards.h) is out of it, or an equip card made a monster would still
-   equip, taking a monster off the field for the one it is played on. */
+   equip, taking a monster off the field for the one it is played on. An
+   equip card whose "effect" is a disc equip fits what that one fits, though
+   it was a monster on the disc. */
 int CardRules_Equip(int a, int b)
 {
-    int ruled;
+    int ruled, as;
     if (!Cards_Valid(a) || !Cards_Valid(b)) return 0;
     ruled = Tables_Equip(a, b);
+    as = Cards_Type(a) == CARD_TYPE_EQUIP && Cards_RetailType(Cards_EffectId(a)) == CARD_TYPE_EQUIP
+             ? Cards_EffectId(a) : 0;
     if (ruled < 0)
-        ruled = !Cards_KindChanged(a) && !Cards_KindChanged(b) &&
-                Duel_CheckEquipRetail(Cards_BaseId(a), Cards_BaseId(b)) != 0;
+        ruled = (as || !Cards_KindChanged(a)) && !Cards_KindChanged(b) &&
+                Duel_CheckEquipRetail(as ? as : Cards_BaseId(a), Cards_BaseId(b)) != 0;
     return ruled ? b : 0;
 }
 

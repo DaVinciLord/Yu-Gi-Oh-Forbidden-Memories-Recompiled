@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .gamedata import (CARD_COUNT, DECK_COPY_LIMIT, DECK_POOL_MIN_CARDS, DECK_SIZE, DUELIST_NAMES, POOLS,
-                       POOL_LABELS, POOL_TOTAL, TYPE_MAGIC, TYPE_EQUIP, TYPE_RITUAL, exodia_piece)
+                       POOL_LABELS, POOL_TOTAL, TYPE_MAGIC, TYPE_EQUIP, TYPE_NAMES, TYPE_RITUAL, exodia_piece)
 from . import art, campaign_map, card_text, fixed_decks, guardian_stars, limits, packs as packmath
 from . import starter_pools
 from .model import KEY_RE, Project, duelist_named
@@ -165,6 +165,11 @@ def _check_card(project: Project, cid: int, out: list):
             add("warning", "a monster made a non-monster does nothing when played unless \"effect\" names a card")
         if not retail.is_monster() and card.is_monster() and "model" not in extra:
             add("warning", "a card made a monster fights without a 3D model unless \"model\" names one")
+    extra = project.added[cid].extra if cid in project.added else project.card_extra.get(cid, {})
+    effect = project.retail.cards.get(project.effect_of(cid)) if "effect" in extra else None
+    if effect and not card.is_monster() and effect.type != card.type:
+        add("warning", f"its effect is {effect.name}'s, a {TYPE_NAMES[effect.type]} card's: the CPU does not play it, "
+                       f"and as a {TYPE_NAMES[card.type]} card it may do nothing")
 
 
 def _check_password(project: Project, cid: int, add):

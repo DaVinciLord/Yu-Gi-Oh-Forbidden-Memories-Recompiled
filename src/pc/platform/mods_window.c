@@ -367,7 +367,7 @@ static int opened[MODS_OVERLAP_KINDS], opened_for = -1, more_top[MODS_OVERLAP_KI
 static int overlaps(MenuCanvas *c, int w, int y)
 {
     const ModsOverlaps *found = Mods_Overlaps(wanted, ranks, (const int *const *)values);
-    int place = Mods_OverlapPlace(selected), total = 0, warnings = 0, n = Mods_OverlapCount(found);
+    int place = Mods_OverlapPlace(selected), total = 0, warnings = 0, alone = 0, n = Mods_OverlapCount(found);
     char line[1024];
     if (opened_for != selected)
         memset(opened, 0, sizeof(opened));
@@ -376,16 +376,31 @@ static int overlaps(MenuCanvas *c, int w, int y)
         more_top[k] = more_bottom[k] = 0;
     if (!wanted[selected] || place < 0)
         return wrap(c, 0, y, w, "Enable this mod to see what it changes that other enabled mods change too.", DIM);
+    /* A line about this mod alone (overlap.h Mods_OverlapModCount: starter
+     * pools the game leaves out) is no other mod's change: said apart. */
     for (int i = 0; i < n; i++)
         if (Mods_OverlapInvolves(found, i, place)) {
+            if (Mods_OverlapModCount(found, i) < 2) {
+                alone++;
+                continue;
+            }
             total++;
             warnings += Mods_OverlapSeverity(found, i) == MODS_OVERLAP_WARNING;
         }
-    if (!total)
+    if (!total && !alone)
         return wrap(c, 0, y, w, "Nothing it changes is changed by another enabled mod.", GREEN);
-    snprintf(line, sizeof(line), "Also changed by other enabled mods: %d thing%s, %d where only one mod's change is used.",
-             total, total == 1 ? "" : "s", warnings);
-    y = wrap(c, 0, y, w, line, warnings ? WARN : TEXT);
+    if (total) {
+        snprintf(line, sizeof(line),
+                 "Also changed by other enabled mods: %d thing%s, %d where only one mod's change is used.", total,
+                 total == 1 ? "" : "s", warnings);
+        y = wrap(c, 0, y, w, line, warnings ? WARN : TEXT);
+    } else
+        y = wrap(c, 0, y, w, "Nothing it changes is changed by another enabled mod.", GREEN);
+    if (alone) {
+        snprintf(line, sizeof(line), "Left out by the game with these mods enabled: %d thing%s of its own.", alone,
+                 alone == 1 ? "" : "s");
+        y = wrap(c, 0, y, w, line, WARN);
+    }
     for (int kind = 0, i = 0; kind < MODS_OVERLAP_KINDS; kind++) {
         int count = 0, kind_warnings = 0, shown = 0, limit = opened[kind] ? OVERLAPS_OPEN : OVERLAPS_SHOWN;
         int first = i;

@@ -246,6 +246,9 @@ int main(void)
     assert(Cards_KindChanged(10) && Cards_KindChanged(11) && Cards_KindChanged(12));
     assert(Cards_KindChanged(300) && Cards_KindChanged(301));   /* magic cards made Dragons */
     assert(!Cards_KindChanged(1) && !Cards_KindChanged(4) && !Cards_KindChanged(CARD_COUNT + 1));
+    /* The opponent's scripts find none of them by their disc numbers. */
+    assert(Cards_AiId(10) == -1 && Cards_AiId(11) == -1 && Cards_AiId(300) == -1);
+    assert(Cards_AiId(1) == 1 && Cards_AiId(4) == 4);
     assert(((unsigned)gDuel_adwCardStats[3] & 0x1FF) == 100);   /* a monster keeps its own */
 
     puts("cards stars: ok");

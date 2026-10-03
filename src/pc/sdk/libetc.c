@@ -349,6 +349,21 @@ int Memories_VSync(int mode)
     return (int)(elapsed * 263u);
 }
 
+/* A loaded state resumes in the VSync(0) that saved it, from its state
+ * point, and returns to the game from there (state.c): the rest of
+ * VSync(0) above is done here. States are taken before last_vsync moves on
+ * to the VBlank just waited for, so a load left it a frame or more behind:
+ * the CPU duelist, which thinks until VSync(1) says the frame's time is up
+ * (AiScript_Run), stopped after one step in the first frame after the load
+ * and played a frame later than in the game that saved it. And VSync(0)
+ * said one field had passed when the frame had taken more. */
+int LibEtc_StateResumed(void)
+{
+    unsigned elapsed = Platform_VBlankCount() - last_vsync;
+    last_vsync = Platform_VBlankCount();
+    return (int)(elapsed * 263u);
+}
+
 void GsInitVcount(void)
 {
 }
@@ -377,7 +392,13 @@ void ChangeClearPAD(long value)
 }
 
 /* Callbacks are game functions and the pad buffers are guest addresses. The
- * timer phase belongs to the running process and restarts. */
+ * timer's phase goes in "libetc-clock", apart so that states without it keep
+ * loading "libetc": how far off the sound driver's next tick is from the last
+ * clock tick, which a load puts after the loading process's own last tick.
+ * The clock's microseconds are the process's, so the distance is kept, not
+ * the time. Without it (an older state) the counter starts a period after
+ * the next tick, as it always did, and the music's notes fall on other
+ * frames than in the game that saved it. */
 void LibEtc_State(MemoriesState *state)
 {
     const MemoriesStateField fields[] = {{&vsync_callback, sizeof(vsync_callback)},
@@ -386,8 +407,14 @@ void LibEtc_State(MemoriesState *state)
                                          {(void *)&counter_running, sizeof(counter_running)},
                                          {(void *)&counter_period_us, sizeof(counter_period_us)},
                                          {pad_buffer, sizeof(pad_buffer)}, {&last_vsync, sizeof(last_vsync)}};
+    int64_t phase = counter_next_us ? (int64_t)(counter_next_us - last_real_us) : 0;
+    MemoriesStateField clock = {&phase, sizeof(phase)};
     if (Memories_StateChunk(state, "libetc", fields, sizeof(fields) / sizeof(fields[0]))) {
         counter_next_us = 0;
         critical = pending_tick = pending_vblank = 0;
+    }
+    if (Memories_StateChunk(state, "libetc-clock", &clock, 1) && phase > 0 &&
+        (uint64_t)phase <= counter_period_us) {
+        counter_next_us = last_real_us + (uint64_t)phase;
     }
 }
