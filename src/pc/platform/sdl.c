@@ -901,7 +901,14 @@ int Platform_StartAudio(void (*mix)(int16_t *, size_t))
         return Platform_StartSilentAudio(mix, dump);
     }
     mixer = mix;
+#ifdef __ANDROID__
+    /* 256 frames starved AAudio on a phone (Xiaomi 11T Pro, Android 14): its
+     * track got 5 s of sound every 6.3 s, crackling and gaps; 1024 (23 ms)
+     * keeps it fed. */
+    SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "1024");
+#else
     SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "256");
+#endif
     block_signals(&previous);
     stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, feed, NULL);
     if (stream) {
