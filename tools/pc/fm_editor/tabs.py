@@ -90,7 +90,7 @@ class CardsTab(Tab):
         self.search.trace_add("write", lambda *_: self.fill())
         self.filter.trace_add("write", lambda *_: self.fill())
         frame, self.tree = scrolled_tree(left, [("id", "#"), ("name", "Name"), ("type", "Type"), ("atk", "ATK"),
-                                                ("def", "DEF"), ("state", "")], [50, 230, 100, 50, 50, 60], 24)
+                                                ("def", "DEF"), ("state", "")], [50, 230, 100, 50, 50, 60], 24, sort_numeric=("id", "atk", "def"))
         frame.pack(fill="both", expand=True, pady=4)
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.select())
         bottom = ttk.Frame(left)
@@ -237,6 +237,7 @@ class CardsTab(Tab):
                 values, tags = self.row(cid)
                 self.tree.insert("", "end", iid=str(cid), values=values, tags=tags)
                 shown += 1
+        self.tree.sorting.apply()
         self.count.configure(text=f"{shown} cards")
         if self.current and self.tree.exists(str(self.current)):
             self.tree.selection_set(str(self.current))
@@ -251,6 +252,7 @@ class CardsTab(Tab):
         if self.tree.exists(str(cid)):
             values, tags = self.row(cid)
             self.tree.item(str(cid), values=values, tags=tags)
+            self.tree.sorting.apply()
 
     def select(self):
         selection = self.tree.selection()
@@ -649,7 +651,7 @@ class EquipsTab(Tab):
         left.pack(side="left", fill="y")
         ttk.Label(left, text="Equip cards").pack(anchor="w")
         frame, self.equips = scrolled_tree(left, [("id", "#"), ("name", "Equip card"), ("n", "Fits")],
-                                           [50, 200, 50], 26)
+                                           [50, 200, 50], 26, sort_numeric=("id", "n"))
         frame.pack(fill="y", expand=True)
         self.equips.bind("<<TreeviewSelect>>", lambda e: self.select())
         right = ttk.Frame(self)
@@ -657,7 +659,9 @@ class EquipsTab(Tab):
         self.heading = ttk.Label(right, font=ui_font(11))
         self.heading.pack(anchor="w")
         frame, self.monsters = scrolled_tree(right, [("id", "#"), ("name", "Monster"), ("type", "Type"),
-                                                     ("state", "")], [50, 260, 110, 80], 22, selectmode="extended")
+                                                     ("atk", "ATK"), ("def", "DEF"), ("state", "")],
+                                                     [50, 220, 100, 50, 50, 80], 22, selectmode="extended",
+                                                     sort_numeric=("id", "atk", "def"))
         frame.pack(fill="both", expand=True, pady=4)
         buttons = ttk.Frame(right)
         buttons.pack(fill="x")
@@ -688,6 +692,7 @@ class EquipsTab(Tab):
             changed = now != p.equip_baseline(cid)
             self.equips.insert("", "end", iid=str(cid), values=(cid, p.cards[cid].name, len(now)),
                                tags=("changed",) if changed else ())
+        self.equips.sorting.apply()
         if self.current and self.equips.exists(str(self.current)):
             self.equips.selection_set(str(self.current))
 
@@ -711,8 +716,10 @@ class EquipsTab(Tab):
             card = p.cards.get(cid)
             if card is None:
                 continue
-            self.monsters.insert("", "end", iid=str(cid), values=(cid, card.name, type_label(card.type), state),
-                                 tags=(state,) if state else ())
+            self.monsters.insert("", "end", iid=str(cid), values=(
+                cid, card.name, type_label(card.type), card.attack, card.defense, state),
+                tags=(state,) if state else ())
+        self.monsters.sorting.apply()
 
     def edited(self):
         self.app.changed()
@@ -1085,7 +1092,8 @@ class DuelistsTab(Tab):
         self.duelist = 1
         left = ttk.Frame(self)
         left.pack(side="left", fill="y")
-        frame, self.list = scrolled_tree(left, [("id", "#"), ("name", "Opponent"), ("state", "")], [36, 170, 60], 26)
+        frame, self.list = scrolled_tree(left, [("id", "#"), ("name", "Opponent"), ("state", "")],
+                                         [36, 170, 60], 26, sort_numeric=("id",))
         frame.pack(fill="y", expand=True)
         self.list.bind("<<TreeviewSelect>>", lambda e: self.select())
         right = ttk.Frame(self)
@@ -1098,9 +1106,11 @@ class DuelistsTab(Tab):
                             command=self.fill).pack(side="left", padx=(0, 8))
         self.total = ttk.Label(top, font=ui_font(10))
         self.total.pack(side="right")
-        frame, self.tree = scrolled_tree(right, [("id", "#"), ("name", "Card"), ("type", "Type"), ("w", "Weight"),
+        frame, self.tree = scrolled_tree(right, [("id", "#"), ("name", "Card"), ("type", "Type"),
+                                                 ("atk", "ATK"), ("def", "DEF"), ("w", "Weight"),
                                                  ("pct", "Chance"), ("retail", "Retail"), ("state", "")],
-                                         [50, 240, 100, 60, 60, 60, 70], 22, selectmode="extended")
+                                         [50, 220, 100, 50, 50, 60, 60, 60, 70], 22, selectmode="extended",
+                                         sort_numeric=("id", "atk", "def", "w", "pct", "retail"))
         frame.pack(fill="both", expand=True, pady=4)
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.pick_row())
         edit = ttk.Frame(right)
@@ -1132,6 +1142,7 @@ class DuelistsTab(Tab):
                           for p in POOLS)
             state = "fixed" if fixed_decks.deck_of(self.project, d) else "changed" if changed else ""
             self.list.insert("", "end", iid=str(d), values=(d, name, state), tags=("changed",) if state else ())
+        self.list.sorting.apply()
         if self.list.exists(str(self.duelist)):
             self.list.selection_set(str(self.duelist))
 
@@ -1158,8 +1169,10 @@ class DuelistsTab(Tab):
             state = "" if weight == before else "added" if not before else "removed" if not weight else "changed"
             card = p.cards.get(cid)
             self.tree.insert("", "end", iid=str(cid), tags=(state,) if state else (), values=(
-                cid, card.name if card else "?", type_label(card.type) if card else "", weight,
+                cid, card.name if card else "?", type_label(card.type) if card else "",
+                card.attack if card else "", card.defense if card else "", weight,
                 f"{weight * 100 / POOL_TOTAL:.2f}%", before, state))
+        self.tree.sorting.apply()
         total = sum(pool.values())
         cards = sum(1 for w in pool.values() if w)
         self.total.configure(text=f"{DUELIST_NAMES[self.duelist]}: {cards} cards, total {total} / {POOL_TOTAL}",

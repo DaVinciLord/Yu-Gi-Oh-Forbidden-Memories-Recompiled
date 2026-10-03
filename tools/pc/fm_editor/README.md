@@ -36,6 +36,16 @@ The window has a tab per table:
 | Mod info | id, name, version, author, description, `settings`, and the other `mod.json` keys, kept as written (`limits` is the Limits tab's, `guardian_stars` the Guardian Stars tab's) |
 | Conflicts | the loader's checks; double-click a line to go to it. Below them, where this mod meets the **other mods installed** (beside the game and in the player's mods folder, or a folder chosen with **Other mods folder...**): the same lines as the game's Mods window, a warning where only one mod's change is used and a note where the changes add up or agree ([When mods overlap](../../../notes/modding.md#when-mods-overlap)) |
 
+On **Cards**, **Equips**, and **Duelists**, click a column heading to sort
+ascending; click it again to reverse the order. An arrow marks the active
+column and direction. Card lists support **#**, **Name** (or **Card/Monster**),
+**Type**, **ATK**, and **DEF**; the equip and opponent lists also sort by their
+own headings, as do weights, chances and fixed-deck copies. Numbers sort by
+value, names and types alphabetically. Each list keeps its chosen order while
+filtering, editing, or switching opponents and pools. Sorting keeps the current
+selection and changes only the view, so it does not mark the mod as edited.
+Wide lists have a horizontal scrollbar.
+
 **File > Save** writes the mod folder (Ctrl+S); the first save asks where
 (an empty folder, or a parent where a folder named after the mod id is
 made; the port's player mods are in `Documents\My Games\YFM Re-Decomp\mods`).

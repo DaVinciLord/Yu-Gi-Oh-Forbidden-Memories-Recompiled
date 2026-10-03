@@ -55,6 +55,120 @@ class GuiTest(unittest.TestCase):
         self.app.dirty = False
         self.app.destroy()
 
+    def click_heading(self, tree, column):
+        tree.tk.call(tree.heading(column, "command"))
+
+    def test_card_heading_sort_and_pending_edit(self):
+        tab, p = self.app.cards, self.app.project
+        for cid, name, attack, defense, kind in (
+                (2, "Sort zebra", 100, 2000, 0),
+                (10, "Sort alpha", 2000, 90, 1),
+                (100, "Sort Bravo", 900, 100, 2)):
+            p.cards[cid] = p.cards[cid].copy(name=name, attack=attack, defense=defense, type=kind)
+        tab.search.set("Sort ")
+        tab.tree.selection_set("10")
+        tab.select()
+        tab.vars["name"].set("Pending name")
+        self.app.dirty = False
+        expected = {"id": ("2", "10", "100"), "name": ("10", "100", "2"),
+                    "atk": ("2", "100", "10"), "def": ("10", "100", "2")}
+        from fm_editor.gamedata import TYPE_NAMES
+        expected["type"] = tuple(str(cid) for cid in sorted(
+            (2, 10, 100), key=lambda cid: TYPE_NAMES[p.cards[cid].type].casefold()))
+        for column, ascending in expected.items():
+            with self.subTest(column=column):
+                self.click_heading(tab.tree, column)
+                self.assertEqual(tab.tree.get_children(), ascending)
+                self.assertTrue(tab.tree.heading(column, "text").endswith("▲"))
+                self.click_heading(tab.tree, column)
+                self.assertEqual(tab.tree.get_children(), tuple(reversed(ascending)))
+                self.assertTrue(tab.tree.heading(column, "text").endswith("▼"))
+        self.app.update()
+        self.assertEqual(tab.tree.selection(), ("10",))
+        self.assertEqual(tab.vars["name"].get(), "Pending name")
+        self.assertEqual(p.cards[10].name, "Sort alpha")
+        self.assertFalse(self.app.dirty)
+        # Filtering and editing a sort value both retain the active order.
+        self.click_heading(tab.tree, "atk")
+        tab.search.set("Sort a")
+        tab.search.set("Sort ")
+        self.assertEqual(tab.tree.get_children(), expected["atk"])
+        tab.vars["name"].set("Sort alpha")
+        tab.vars["attack"].set("50")
+        self.assertTrue(tab.apply())
+        self.assertEqual(tab.tree.get_children(), ("10", "2", "100"))
+
+    def test_equips_and_duelist_heading_sorts(self):
+        app, p = self.app, self.app.project
+        for cid, attack, defense in ((2, 100, 2000), (10, 2000, 90), (100, 900, 100)):
+            p.cards[cid] = p.cards[cid].copy(attack=attack, defense=defense)
+        equips, duelists = app.equips, app.duelists
+        equip = p.equip_cards()[0]
+        p.equips[equip] = {2, 10, 100}
+        equips.current = equip
+        equips.fill_equips()
+        equips.fill()
+        before = set(equips.monsters.get_children())
+        self.click_heading(equips.monsters, "atk")
+        selected = tuple(sorted(before, key=lambda cid: (p.cards[int(cid)].attack, int(cid))))
+        self.assertEqual(equips.monsters.get_children(), selected)
+        equips.monsters.selection_set("2", "10")
+        self.click_heading(equips.monsters, "atk")
+        self.assertEqual(set(equips.monsters.selection()), {"2", "10"})
+        equips.remove()
+        self.assertEqual(p.equips[equip], {100})
+        self.assertTrue(equips.monsters.heading("atk", "text").endswith("▼"))
+        # The left-hand lists sort too, retaining their order on refill.
+        for tree, refill in ((equips.equips, equips.fill_equips), (duelists.list, duelists.fill_list)):
+            self.click_heading(tree, "id")
+            self.click_heading(tree, "id")
+            expected = tuple(sorted(tree.get_children(), key=int, reverse=True))
+            refill()
+            self.assertEqual(tree.get_children(), expected)
+            self.click_heading(tree, "name")
+            names = [tree.set(iid, "name").casefold() for iid in tree.get_children()]
+            self.assertEqual(names, sorted(names))
+        for pool in ("deck", "pow", "bcd", "tec"):
+            p.pools[duelists.duelist][pool] = {2: 100, 10: 900, 100: 1048}
+        self.click_heading(duelists.tree, "def")
+        for pool in ("deck", "pow", "bcd", "tec"):
+            duelists.pool.set(pool)
+            duelists.fill()
+            rows = duelists.tree.get_children()
+            self.assertEqual([cid for cid in rows if cid in {"2", "10", "100"}], ["10", "100", "2"])
+        duelists.tree.selection_set("10")
+        duelists.weight.set("50")
+        duelists.set_weight()
+        self.assertEqual(p.pools[duelists.duelist]["tec"][10], 50)
+        self.click_heading(duelists.tree, "w")
+        weights = [int(duelists.tree.set(iid, "w")) for iid in duelists.tree.get_children()]
+        self.assertEqual(weights, sorted(weights))
+        self.click_heading(duelists.tree, "pct")
+        self.assertEqual([int(duelists.tree.set(iid, "w")) for iid in duelists.tree.get_children()], weights)
+
+    def test_fixed_deck_sort_with_missing_cards(self):
+        from fm_editor import fixed_decks
+        tab, p = self.app.duelists, self.app.project
+        fixed_decks.set_deck(p, tab.duelist, {2: 2, 10: 10, 100: 28})
+        deck = fixed_decks.deck_of(p, tab.duelist)
+        deck.kept["Missing card"] = 1
+        tab.fill()
+        tree = tab.fixed.tree
+        self.click_heading(tree, "id")
+        self.assertEqual(tree.get_children(), ("2", "10", "100", "kept:Missing card"))
+        self.click_heading(tree, "id")
+        self.assertEqual(tree.get_children(), ("100", "10", "2", "kept:Missing card"))
+        for column in ("atk", "def", "type", "name", "copies", "weight"):
+            self.click_heading(tree, column)
+            if column in ("atk", "def"):
+                self.assertEqual(tree.get_children()[-1], "kept:Missing card")
+        self.click_heading(tree, "copies")
+        tree.selection_set("10")
+        tab.fixed.copies.set("5")
+        tab.fixed.set_copies()
+        self.assertEqual(deck.cards[10], 5)
+        self.assertEqual(tree.get_children(), ("kept:Missing card", "2", "10", "100"))
+
     def test_edit_and_save(self):
         app = self.app
         cards = app.cards
