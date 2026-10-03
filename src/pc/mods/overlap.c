@@ -2094,6 +2094,14 @@ int Mods_OverlapInvolves(const ModsOverlaps *x, int index, int mod)
     return 0;
 }
 
+int Mods_OverlapModCount(const ModsOverlaps *x, int index)
+{
+    const Group *g = &x->groups[index];
+    int mods = 1;
+    for (int i = 1; i < g->count; i++) mods += x->claims[g->first + i].mod != x->claims[g->first + i - 1].mod;
+    return mods;
+}
+
 const char *Mods_OverlapKindName(int kind)
 {
     static const char *const names[MODS_OVERLAP_KINDS] = {

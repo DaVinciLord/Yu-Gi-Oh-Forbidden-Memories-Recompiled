@@ -275,6 +275,11 @@ int main(void)
                 assert(0);
             }
             printf("starter-pools: %s\n", text);
+            {   /* How many mods it names, as its ids do (one for a lone mod's pools). */
+                int named = 1;
+                for (const char *comma = mods; (comma = strchr(comma, ',')); comma++) named++;
+                assert(Mods_OverlapModCount(found, have) == named);
+            }
             have++;
         }
         assert(!found || have == Mods_OverlapCount(found));

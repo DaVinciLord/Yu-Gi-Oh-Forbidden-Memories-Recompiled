@@ -99,6 +99,9 @@ int Mods_OverlapCount(const ModsOverlaps *overlaps);
 int Mods_OverlapKind(const ModsOverlaps *overlaps, int index);
 int Mods_OverlapSeverity(const ModsOverlaps *overlaps, int index);
 int Mods_OverlapInvolves(const ModsOverlaps *overlaps, int index, int mod);
+/* How many mods a line names: 1 for a line about one mod alone (starter
+ * pools the game leaves out), else 2 or more. */
+int Mods_OverlapModCount(const ModsOverlaps *overlaps, int index);
 void Mods_OverlapText(const ModsOverlaps *overlaps, int index, char *out, size_t size);
 /* What the line is about, alone ("Card 'Kuriboh'"), and the mods' ids in
  * load order, comma-separated, for tests and tools. */
