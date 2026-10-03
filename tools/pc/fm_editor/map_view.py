@@ -154,15 +154,23 @@ class MapModel:
         return self._blocks
 
     def world(self, v):
-        m, t = self.matrix, self.translation
-        return tuple(sum(m[i][j] * v[j] for j in range(3)) * SCALE + t[i] for i in range(3))
+        """A vertex in the world the cameras look at.
+
+        The terrain is already in world coordinates: both overworld packages
+        carry the same table of cameras, and the places they name land on the
+        same ground in each. The coordinate unit's own placement is not that
+        ground -- the package after the coup carries a rotation and an offset
+        there where the one before it carries none, and turning the map by it
+        leaves the camera looking at nothing. It is read (`matrix`,
+        `translation`) but not applied."""
+        return tuple(v[i] * SCALE for i in range(3))
 
     def shades(self):
-        """The light each normal gets, turned with the model."""
-        m = self.matrix
+        """The light each normal gets. The normals are in the same space as
+        the vertices above, so nothing turns them either."""
         out = []
         for n in self.normals:
-            turned = [sum(m[i][j] * n[j] for j in range(3)) / 4096 for i in range(3)]
+            turned = [n[i] / 4096 for i in range(3)]
             out.append(AMBIENT + DIFFUSE * max(0.0, sum(turned[i] * LIGHT[i] for i in range(3))))
         return out
 

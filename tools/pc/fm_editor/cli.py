@@ -122,9 +122,11 @@ def say_no_qt(problem):
     its own Python helps no one. There the old window simply opens."""
     if getattr(sys, "frozen", False):
         return
-    print(f"PySide6 is not installed ({problem}); opening the old window instead.\n"
+    print(f"The Qt window could not start ({problem}); opening the old one instead.\n"
           f"    python -m pip install PySide6\n"
-          f"brings the new one back; --classic keeps this one.", file=sys.stderr)
+          f"installs what it needs; on Linux Qt also wants its own system\n"
+          f"libraries (libxcb-cursor0 among them). --classic keeps this window.",
+          file=sys.stderr)
 
 
 def command_window(arguments) -> int:
@@ -134,6 +136,11 @@ def command_window(arguments) -> int:
         try:
             from .pyside_app import main as window
         except ImportError as problem:
+            say_no_qt(problem)
+        except Exception as problem:        # noqa: BLE001 - see below
+            # Qt aborts rather than raises ImportError when a system library
+            # it wants is missing (libxcb-cursor0 and the like), and a player
+            # should get the old window instead of nothing at all.
             say_no_qt(problem)
         else:
             return window(arguments.game, arguments.mod)

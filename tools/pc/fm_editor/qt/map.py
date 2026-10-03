@@ -889,3 +889,16 @@ class MapMixin:
         package = self._map_dialog_package()
         map_art.revert_textures(self.project, package)
         self._map_art_done([], f"The textures of the map {cm.PACKAGE_LABELS[package]} are the disc's again.")
+
+    def _map_package_name(self):
+        label = self.workspace_controls["Campaign"]["map"]["package"].currentText()
+        return next((name for name, _ in cm.PACKAGES if cm.PACKAGE_LABELS[name] == label), cm.PACKAGES[0][0])
+    def _map_package_sector(self):
+        name = self._map_package_name()
+        return next(sector for other, sector in cm.PACKAGES if other == name)
+    def _map_package_changed(self, *_):
+        self.map_pictures.clear()
+        self._draw_map()
+    def _map_dialog_package(self):
+        label = self.map_dialog_controls["package"].currentText()
+        return next(name for name, _ in cm.PACKAGES if cm.PACKAGE_LABELS[name] == label)

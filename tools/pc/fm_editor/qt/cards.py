@@ -504,7 +504,6 @@ class CardsMixin:
             card = preview_project.cards[self.current]
             kind = TYPE_NAMES[card.type] if 0 <= card.type < len(TYPE_NAMES) else "Unknown"
             attribute = ATTRIBUTE_NAMES[card.attribute] if 0 <= card.attribute < len(ATTRIBUTE_NAMES) else ""
-            stars = [STAR_NAMES[s] for s in (card.star1, card.star2) if 0 < s < len(STAR_NAMES)]
         except (IndexError, ValueError, OSError, art.pngio.PngError) as problem:
             self.preview_image.clear()
     def _set_preview_scale(self, scale):

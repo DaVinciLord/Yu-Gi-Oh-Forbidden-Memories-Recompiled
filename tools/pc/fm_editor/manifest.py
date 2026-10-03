@@ -1246,11 +1246,22 @@ def _remove_files(project: Project, folder: Path):
     """Take out what the editor dropped (a duelist's roster, deck, drop and
     portrait files), after the copy that may have brought them over.
 
+    A name the mod writes again is not dropped: a duelist taken out and one
+    put back under the same id would otherwise be written and then deleted,
+    and the name would keep doing it on every later save. Writing a path is
+    what takes it off the list.
+
     A name is only ever a path inside the mod folder: it is resolved and
     checked against it, so "../x", "/x" and a drive-relative "C:x" on Windows
     all name nothing. A folder is left alone (unlink would raise on it), and
     one that has gone already is nothing to do."""
-    for name in sorted(getattr(project, "removed_files", ()) or ()):
+    dropped = getattr(project, "removed_files", None)
+    if not dropped:
+        return
+    written = set(project.files)
+    for name in sorted(dropped):
+        if name in written:
+            continue
         target = (folder / name).resolve()
         if not target.is_relative_to(folder.resolve()) or target == folder.resolve():
             continue
@@ -1260,6 +1271,8 @@ def _remove_files(project: Project, folder: Path):
             target.unlink()
         except (OSError, FileNotFoundError):
             continue
+    # What the mod writes again is no longer dropped, whichever save wrote it.
+    dropped -= written
 
 
 def save_mod(project: Project, folder, manifest: dict = None) -> Path:

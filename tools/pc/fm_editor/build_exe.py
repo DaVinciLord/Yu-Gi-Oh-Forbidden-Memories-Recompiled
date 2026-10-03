@@ -49,6 +49,15 @@ def version_info(label: str) -> str:
 """
 
 
+def say(text):
+    """Print a line that may hold letters the console cannot encode. CI builds
+    under a path like "Jos\u00e9-\u00e9-\u042f-\u6771\u4eac-\U0001f600" and a cp1252 stdout would
+    raise on it, which is no reason for a build to fail."""
+    stream = sys.stdout
+    encoding = getattr(stream, "encoding", None) or "utf-8"
+    stream.write(text.encode(encoding, "replace").decode(encoding, "replace") + "\n")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--dist", type=Path, default=ROOT / "tmp" / "pc" / "fm-editor")
@@ -87,7 +96,7 @@ def main() -> int:
         program.append("--windowed")
     program.append(str(HERE / "__main__.py"))
     makespec = [sys.executable, "-m", "PyInstaller.utils.cliutils.makespec", *program]
-    print(" ".join(makespec))
+    say(" ".join(makespec))
     if subprocess.run(makespec, cwd=str(ROOT)).returncode != 0:
         return 1
     spec = work / "fm-editor.spec"
@@ -106,7 +115,7 @@ def main() -> int:
         text = text.replace("    exclude_binaries=True,\n", "    exclude_binaries=True,\n    append_pkg=False,\n", 1)
     spec.write_text(text)
     command = [sys.executable, "-m", "PyInstaller", *build, str(spec)]
-    print(" ".join(command))
+    say(" ".join(command))
     result = subprocess.run(command, cwd=str(ROOT))
     if result.returncode == 0:
         built = dist / "fm-editor" / "fm-editor.exe" if sys.platform == "win32" else dist / "fm-editor"

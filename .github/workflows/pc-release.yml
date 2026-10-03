@@ -100,7 +100,10 @@ jobs:
           python -m pip install --no-binary pyinstaller pyinstaller==6.18.0
           # The Qt window is the editor's own; without PySide6 here the build
           # would carry only the Tk one (fm_editor/cli.py falls back to it).
-          python -m pip install PySide6
+          # Pinned: the Linux build is made in Debian 11, whose glibc 2.31 can
+          # take 6.9.3 and no more (6.10 wants 2.34), and a release should be
+          # the same Qt on both sides.
+          python -m pip install "PySide6==6.9.3"
           python tools/pc/fm_editor/build_exe.py --dist tmp/fm-editor --version "$PACKAGE_VERSION"
           python - <<'EOF'
           import os, zipfile
@@ -165,7 +168,7 @@ jobs:
         run: |
           docker run --rm -v "$PWD:/src" -w /src -e PACKAGE_VERSION -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" python:3.12-bullseye sh -ec '
             python -m pip install --root-user-action=ignore pyinstaller==6.18.0
-            python -m pip install --root-user-action=ignore PySide6
+            python -m pip install --root-user-action=ignore "PySide6==6.9.3"
             python tools/pc/fm_editor/build_exe.py --dist tmp/fm-editor
             python - <<EOF
           import os, tarfile

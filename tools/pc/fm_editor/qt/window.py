@@ -179,10 +179,6 @@ class ModernEditor(ArtMixin, CardsMixin, DuelistsMixin, EquipsMixin, FusionsMixi
             if not self._apply_mod_info():
                 self._set_navigation_active(self.current_workspace)
                 return
-        if self.current_workspace == "Campaign" and name != "Campaign":
-            if not self._apply_campaign():
-                self._set_navigation_active(self.current_workspace)
-                return
         if self.current_workspace == "Packs" and name != "Packs":
             if not self._commit_packs():
                 self._set_navigation_active(self.current_workspace)
@@ -200,6 +196,41 @@ class ModernEditor(ArtMixin, CardsMixin, DuelistsMixin, EquipsMixin, FusionsMixi
             button.setObjectName("primary" if page_name == name else "")
             button.style().unpolish(button)
             button.style().polish(button)
+    # A page's tabs are forms of their own, one file each, so a tab is read
+    # and changed without the rest of the page around it. The page's form
+    # keeps the empty tab widget; these fill it, in this order.
+    PAGE_TABS = {
+        # The campaign's story pages come with the campaign work, in a PR of
+        # their own; this page is the map.
+        "Campaign": ("campaignTabs", (("campaign_map.ui", "Map"),)),
+        "Fusions": ("fusionPages", (("fusions_fusion_list.ui", "Fusion list"),
+                                    ("fusions_generic_fusions.ui", "Generic fusions"))),
+        "Starter decks": ("starterTabs", (("starter_written_decks.ui", "Written decks"),
+                                          ("starter_weighted_pools.ui", "Weighted pools"))),
+    }
+
+    def _load_page_tabs(self, name, page):
+        """Put each tab's own form into the page's tab widget, before anything
+        is wired: the page is then the same object tree as one file would give."""
+        wanted = self.PAGE_TABS.get(name)
+        if wanted is None:
+            return
+        book_name, tabs = wanted
+        book = page.findChild(QTabWidget, book_name)
+        if book is None:
+            raise RuntimeError(f"{name} form is missing {book_name!r}")
+        loader = QUiLoader()
+        for filename, title in tabs:
+            path = UI_DIR / filename
+            source = QFile(str(path))
+            if not source.open(QIODevice.OpenModeFlag.ReadOnly):
+                raise RuntimeError(f"Could not open {title} form {path}: {source.errorString()}")
+            tab = loader.load(source, book)
+            source.close()
+            if tab is None:
+                raise RuntimeError(f"Could not load {title} form {path}: {loader.errorString()}")
+            book.addTab(tab, title)
+
     def _build_workspace_page(self, name, parent):
         if name == "Packs":
             self._build_packs_page(parent)
@@ -219,6 +250,7 @@ class ModernEditor(ArtMixin, CardsMixin, DuelistsMixin, EquipsMixin, FusionsMixi
         source.close()
         if page is None:
             raise RuntimeError(f"Could not load {name} form {path}: {loader.errorString()}")
+        self._load_page_tabs(name, page)
         wrapper = QVBoxLayout(parent)
         wrapper.setContentsMargins(0, 0, 0, 0)
         wrapper.addWidget(page)
@@ -252,56 +284,12 @@ class ModernEditor(ArtMixin, CardsMixin, DuelistsMixin, EquipsMixin, FusionsMixi
             return page.findChild(cls, key)
 
         if name == "Campaign":
-            controls.update(data=get(QPlainTextEdit, "campaignDataEdit"),
-                            status=get(QLabel, "campaignStatusLabel"),
-                            tabs=get(QTabWidget, "campaignTabs"),
-                            scenes=get(QTreeWidget, "sceneTree"),
-                            steps=get(QTableWidget, "sceneStepTable"),
-                            preview=get(QLabel, "scenePreviewImage"))
-            get(QPushButton, "applyCampaignButton").clicked.connect(self._apply_campaign)
-            # The Scenes tab is a shell: it writes a "story" key no part of the
-            # port reads. Out of the way until a scene format exists, and its
-            # page left alone so a mod that carries "story" keeps it.
-            scenes_tab = controls["tabs"].indexOf(get(QWidget, "scenesTab"))
-            if scenes_tab >= 0:
-                controls["tabs"].removeTab(scenes_tab)
-            controls["scenes_shown"] = False
-            # Styled by rule, not by object name: an objectName set here would
-            # take the widget's own name with it and no findChild would see it.
-            for title in ("scenesTitle", "sceneStepsTitle", "stepEditorTitle", "scenePreviewTitle"):
-                get(QLabel, title).setStyleSheet("font-size:16px;font-weight:650;color:#f3f7fc")
-            for muted in ("sceneStepsContextLabel", "stepEditorContextLabel", "previewStepLabel",
-                          "scenePreviewSeparator", "stepDialogueCountLabel"):
-                get(QLabel, muted).setStyleSheet("color:#9aacc4")
-            get(QPushButton, "addStepButton").setStyleSheet(
-                "background:#216cf1;border-color:#216cf1;color:white;font-weight:600")
-            # The step editor is a narrow column too: no combo may ask for the
-            # width of its longest entry, and the column keeps a floor.
-            step_scroll = get(QScrollArea, "stepEditorScroll")
-            step_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-            step_scroll.setMinimumWidth(390)
-            for key in ("stepTypeCombo", "stepCharacterCombo", "stepPoseCombo",
-                        "stepPositionCombo", "stepBackgroundCombo", "previewStepCombo"):
-                box = get(QComboBox, key)
-                box.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
-                box.setMinimumContentsLength(5)
-                box.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            controls.update(tabs=get(QTabWidget, "campaignTabs"))
             # The card look, by a selector naming the frame itself: a bare
             # stylesheet here would paint every child the same.
-            for panel in ("scenesPanel", "sceneStepsPanel", "stepEditorPanel", "scenePreviewPanel",
-                          "mapToolbar", "mapPlacesPanel", "mapPreviewPanel"):
+            for panel in ("mapToolbar", "mapPlacesPanel", "mapPreviewPanel"):
                 get(QFrame, panel).setStyleSheet(
                     f"QFrame#{panel} {{ background:#101b2b; border:1px solid #26374c; border-radius:10px; }}")
-            for panel in ("scenesPanel", "sceneStepsPanel"):
-                get(QFrame, panel).setMinimumWidth(240)
-            columns = get(QSplitter, "sceneColumnsSplitter")
-            for index, stretch in enumerate((4, 5, 5)):
-                columns.setStretchFactor(index, stretch)
-            columns.setSizes([400, 530, 500])
-            scenes_splitter = get(QSplitter, "scenesSplitter")
-            scenes_splitter.setStretchFactor(0, 3)
-            scenes_splitter.setStretchFactor(1, 1)
-            scenes_splitter.setSizes([620, 340])
             self._build_map_tab(page, get, controls)
         elif name == "Fusions":
             fusion_pages = get(QTabWidget, "fusionPages")
@@ -613,23 +601,12 @@ class ModernEditor(ArtMixin, CardsMixin, DuelistsMixin, EquipsMixin, FusionsMixi
                 star_header.setSectionResizeMode(column, QHeaderView.ResizeMode.Fixed)
                 star_header.resizeSection(column, width)
             star_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        elif name == "Campaign":
-            # After the shared pass above, which stretches every column.
-            step_header = controls["steps"].horizontalHeader()
-            for column, width in ((0, 54), (1, 150)):
-                step_header.setSectionResizeMode(column, QHeaderView.ResizeMode.Fixed)
-                step_header.resizeSection(column, width)
-            step_header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self._refresh_workspace(name)
     def _refresh_workspace(self, name):
         if not hasattr(self, "workspace_controls") or name not in self.workspace_controls:
             return
         c, p = self.workspace_controls[name], self.project
         if name == "Campaign":
-            value = p.other.get("story", {})
-            c["data"].setPlainText(json.dumps(value, indent=2, ensure_ascii=False) if value else "")
-            c["status"].setText("Story data found in mod.json." if value else
-                                "No story key is present. This project format does not include a campaign editor.")
             self._refresh_map()
         elif name == "Fusions":
             self._refresh_fusions()
@@ -675,6 +652,18 @@ class ModernEditor(ArtMixin, CardsMixin, DuelistsMixin, EquipsMixin, FusionsMixi
             combo.setCurrentIndex(-1)
             combo.clearEditText()
         return combo
+    MAP_ZOOM = 2
+    MAP_CANVAS = (cm.SCREEN[0] * MAP_ZOOM, cm.SCREEN[1] * MAP_ZOOM)
+    MAP_CONDITIONS = ("always", "while the flag is set", "while the flag is clear")
+    MAP_CONDITION_KINDS = ("always", "set", "clear")
+    MAP_CONFIRM_SCENE = "(enter the place's own scene)"
+    MAP_ARROW_GLYPHS = {"up": "▲", "down": "▼", "left": "◀", "right": "▶"}
+    MAP_EDGE_COLOURS = {"always": "#4fc36b", "set": "#f2c04c", "clear": "#6fb1ff"}
+    MAP_WORLD_BOX = (0, 40, 440, 480)
+    MAP_TOWN_BOX = (448, 40, 640, 184)
+    MAP_WORLD_CENTRE = (0, 0)
+    MAP_WORLD_SPAN = 2800
+    MAP_INTS = ("distance", "heading", "pitch", "target_x", "target_z", "marker_x", "marker_y")
     @staticmethod
     def _set_combo_card(combo, cid):
         """Show a card in a card combo by its number."""
@@ -727,9 +716,18 @@ class ModernEditor(ArtMixin, CardsMixin, DuelistsMixin, EquipsMixin, FusionsMixi
     @staticmethod
     def _populate_checkable_list(listing, names):
         listing.clear()
+        if not listing.property("toggleOnDoubleClick"):
+            # Once per list, however often it is filled again: the name is a
+            # bigger target than the box beside it.
+            listing.setProperty("toggleOnDoubleClick", True)
+            listing.setSpacing(2)
+            listing.itemDoubleClicked.connect(
+                lambda item: item.setCheckState(
+                    Qt.CheckState.Unchecked if item.checkState() == Qt.CheckState.Checked
+                    else Qt.CheckState.Checked))
         for index, name in enumerate(names):
             item = QListWidgetItem(name)
-            item.setSizeHint(QSize(0, max(24, listing.fontMetrics().height() + 8)))
+            item.setSizeHint(QSize(0, max(26, listing.fontMetrics().height() + 10)))
             item.setData(Qt.ItemDataRole.UserRole, index)
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             item.setCheckState(Qt.CheckState.Unchecked)
@@ -751,12 +749,21 @@ class ModernEditor(ArtMixin, CardsMixin, DuelistsMixin, EquipsMixin, FusionsMixi
     def _checkable_list(names, parent, height=6):
         listing = QListWidget(parent)
         listing.setMaximumHeight(108)
+        # Room between the boxes: ticking the one you meant is hard when the
+        # rows are a line of text apart.
+        listing.setSpacing(3)
+        listing.setStyleSheet("QListWidget::item { padding: 3px 2px; }")
         for index, name in enumerate(names):
             item = QListWidgetItem(name)
             item.setData(Qt.ItemDataRole.UserRole, index)
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             item.setCheckState(Qt.CheckState.Unchecked)
             listing.addItem(item)
+        # The box is a small target; double-clicking the name does the same.
+        listing.itemDoubleClicked.connect(
+            lambda item: item.setCheckState(
+                Qt.CheckState.Unchecked if item.checkState() == Qt.CheckState.Checked
+                else Qt.CheckState.Checked))
         return listing
     @staticmethod
     def _checked_items(listing):
@@ -782,30 +789,6 @@ class ModernEditor(ArtMixin, CardsMixin, DuelistsMixin, EquipsMixin, FusionsMixi
     STAR_CELL_COLOURS = {"plus": "#1f4d2c", "minus": "#5a2323", "zero": "#16212f"}
     MOD_INFO_OWNED = ("limits", "guardian_stars", "starter_pools", "story")
     MOD_INFO_RESERVED = frozenset(manifest.INFO_KEYS + manifest.TABLE_KEYS + MOD_INFO_OWNED)
-    def _apply_campaign(self):
-        c=self.workspace_controls["Campaign"]
-        if not c.get("scenes_shown",True):
-            return True         # the form is not shown: "story" stays as written
-        text=c["data"].toPlainText().strip()
-        try:value=json.loads(text) if text else None
-        except ValueError as problem:c["status"].setText(f"Invalid JSON: {problem}");return False
-        if value is None:self.project.other.pop("story",None)
-        else:self.project.other["story"]=value
-        c["status"].setText("Story data applied to the mod manifest.");self._mark_dirty()
-        return True
-    MAP_ZOOM = 2
-    MAP_CANVAS = (cm.SCREEN[0] * MAP_ZOOM, cm.SCREEN[1] * MAP_ZOOM)
-    MAP_CONDITIONS = ("always", "while the flag is set", "while the flag is clear")
-    MAP_CONDITION_KINDS = ("always", "set", "clear")
-    MAP_CONFIRM_SCENE = "(enter the place's own scene)"
-    MAP_ARROW_GLYPHS = {"up": "▲", "down": "▼", "left": "◀", "right": "▶"}
-    MAP_EDGE_COLOURS = {"always": "#4fc36b", "set": "#f2c04c", "clear": "#6fb1ff"}
-    MAP_WORLD_BOX = (0, 40, 440, 480)
-    MAP_TOWN_BOX = (448, 40, 640, 184)
-    MAP_WORLD_CENTRE = (0, 0)
-    MAP_WORLD_SPAN = 2800
-    MAP_INTS = ("distance", "heading", "pitch", "target_x", "target_z", "marker_x", "marker_y")
-    @staticmethod
     def _select_table_id(table, value, column=0):
         """Select the row whose `column` carries `value` as its id, showing it
         even when a search has hidden it."""
@@ -1023,7 +1006,6 @@ class ModernEditor(ArtMixin, CardsMixin, DuelistsMixin, EquipsMixin, FusionsMixi
         if self.current and not self.apply_card(quiet=True):
             return
         if self.current_workspace == "Mod info" and not self._apply_mod_info(): return
-        if self.current_workspace == "Campaign" and not self._apply_campaign(): return
         if self.current_workspace == "Packs" and not self._commit_packs(): return
         issues = validate.validate(self.project)
         errors = validate.errors(issues)
@@ -1041,7 +1023,6 @@ class ModernEditor(ArtMixin, CardsMixin, DuelistsMixin, EquipsMixin, FusionsMixi
             return
         if self.current_workspace == "Mod info" and not self._apply_mod_info():
             return
-        if self.current_workspace == "Campaign" and not self._apply_campaign(): return
         dialog = QDialog(self)
         dialog.setWindowTitle("Preview mod.json")
         dialog.resize(760, 620)
@@ -1192,7 +1173,6 @@ class ModernEditor(ArtMixin, CardsMixin, DuelistsMixin, EquipsMixin, FusionsMixi
     def save_mod(self, choose=False):
         if self.current and not self.apply_card(quiet=True): return
         if self.current_workspace == "Mod info" and not self._apply_mod_info(): return
-        if self.current_workspace == "Campaign" and not self._apply_campaign(): return
         if self.current_workspace == "Packs" and not self._commit_packs(): return
         folder = str(self.project.source_dir or "")
         if choose or not folder:
@@ -1228,7 +1208,6 @@ class ModernEditor(ArtMixin, CardsMixin, DuelistsMixin, EquipsMixin, FusionsMixi
     def confirm_discard(self):
         if self.current and not self.apply_card(quiet=True): return False
         if self.current_workspace == "Mod info" and not self._apply_mod_info(): return False
-        if self.current_workspace == "Campaign" and not self._apply_campaign(): return False
         if self.current_workspace == "Packs" and not self._commit_packs(): return False
         if not self.dirty: return True
         answer = QMessageBox.question(self, "Unsaved changes", "Save changes to this mod before continuing?",

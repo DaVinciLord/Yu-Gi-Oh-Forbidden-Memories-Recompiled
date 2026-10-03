@@ -49,8 +49,6 @@ The window has a tab per table:
 | Mod info | id, name, version, author, description, `settings`, and the other `mod.json` keys, kept as written (the keys a page of its own writes are not shown here and are left alone: `limits`, `guardian_stars`, `starter_pools` and `story`) |
 | Conflicts | the loader's checks; double-click a line to go to it. Called **Problems** in the Qt window |
 
-The Qt window's Campaign page holds the Map; a Scenes page is drafted but not
-shown, as nothing in the port reads a scene yet.
 
 **File > Save** writes the mod folder (Ctrl+S); the first save asks where
 (an empty folder, or a parent where a folder named after the mod id is
@@ -560,9 +558,12 @@ Debian 11, like the game, and brings its own Python and Tk. Running it from
 the source as above works too.
 
 The release carries the Qt window: `pc-release.yml` installs PySide6 beside
-PyInstaller, which brings Qt into the build (about 60 MB of it). A build made
-without PySide6 installed carries only the Tk window and opens that instead,
-saying nothing about it, since a built editor has no Python to install into.
+PyInstaller, which brings Qt into the build -- the Linux one is about 97 MB
+with it. PySide6 is pinned to 6.9.3: the Linux build is made in Debian 11,
+whose glibc 2.31 is as far as that wheel goes, and a release is the same Qt
+either side. A build made without PySide6 carries only the Tk window and
+opens that instead, saying nothing about it, since a built editor has no
+Python to install into.
 
 ### Packs
 

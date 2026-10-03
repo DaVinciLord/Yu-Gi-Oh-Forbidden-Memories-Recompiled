@@ -1,0 +1,162 @@
+<ui version="4.0"><class>starterWrittenTab</class><widget class="QWidget" name="starterWrittenTab">
+      <layout class="QVBoxLayout" name="starterWrittenLayout">
+<item>
+    <widget class="QSplitter" name="starterSplit">
+     <property name="orientation">
+      <enum>Qt::Orientation::Horizontal</enum>
+     </property>
+     <widget class="QWidget" name="starterListPane">
+      <layout class="QVBoxLayout" name="starterListLayout">
+       <item>
+        <widget class="QLabel" name="starterDeckHeading">
+         <property name="text">
+          <string>Starter decks</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QTableWidget" name="starterDeckTable">
+         <column>
+          <property name="text">
+           <string>#</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Deck</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Weight</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Cards</string>
+          </property>
+         </column>
+        </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="starterDeckActions">
+         <item>
+          <widget class="QPushButton" name="addDeckButton">
+           <property name="text">
+            <string>Add deck</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="removeDeckButton">
+           <property name="text">
+            <string>Remove deck</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+      <property name="leftMargin"><number>2</number></property><property name="rightMargin"><number>2</number></property><property name="topMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property><property name="spacing"><number>8</number></property></layout>
+     </widget>
+     <widget class="QWidget" name="starterDetailPane">
+      <layout class="QVBoxLayout" name="starterDetailLayout">
+       <item>
+        <layout class="QHBoxLayout" name="starterDeckDetails">
+         <item>
+          <widget class="QLineEdit" name="starterNameEdit">
+           <property name="placeholderText">
+            <string>Deck name</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QSpinBox" name="starterWeightSpin">
+           <property name="minimum">
+            <number>0</number>
+           </property>
+           <property name="maximum">
+            <number>65535</number>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="applyDeckButton">
+           <property name="text">
+            <string>Apply deck details</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QTableWidget" name="starterCardTable">
+         <column>
+          <property name="text">
+           <string>ID</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Card</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Type</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Copies</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Notes</string>
+          </property>
+         </column>
+        </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="starterCardActions">
+         <item>
+          <widget class="QSpinBox" name="starterCopiesSpin">
+           <property name="minimum">
+            <number>0</number>
+           </property>
+           <property name="maximum">
+            <number>40</number>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="addDeckCardButton">
+           <property name="text">
+            <string>Add card…</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="setDeckCopiesButton">
+           <property name="text">
+            <string>Set copies</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="removeDeckCardButton">
+           <property name="text">
+            <string>Remove selected</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+      <property name="leftMargin"><number>2</number></property><property name="rightMargin"><number>2</number></property><property name="topMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property><property name="spacing"><number>8</number></property></layout>
+     </widget>
+    <property name="handleWidth"><number>12</number></property><property name="childrenCollapsible"><bool>false</bool></property></widget>
+   </item>
+      </layout>
+     </widget>
+
+      </ui>

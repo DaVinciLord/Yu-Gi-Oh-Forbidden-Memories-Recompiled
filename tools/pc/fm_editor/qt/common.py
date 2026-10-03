@@ -53,9 +53,14 @@ QWidget#topbar { background: #101b2b; border: 1px solid #26374c; border-radius: 
 QWidget#sidebar { background: #101b2b; border: 1px solid #26374c; border-radius: 10px; }
 QFrame#panel { background: #101b2b; border: 1px solid #26374c; border-radius: 10px; }
 QWidget#artSectionCard { background: #101b2b; border: 1px solid #26374c; border-radius: 11px; }
-QGroupBox { border: 1px solid #2a3d55; border-radius: 10px; margin-top: 14px;
+/* The title sits in the margin above the frame, so the margin has to be
+   taller than a line of it: at 14px it was drawn over the row above. */
+QGroupBox { border: 1px solid #2a3d55; border-radius: 10px; margin-top: 20px;
   padding: 12px 8px 8px; background: #0f1a2a; color: #c9d8ed; font-weight: 600; }
-QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 5px; color: #aebfd6; }
+/* The title needs the group's own ground behind it, or the frame's top
+   border is drawn straight through the words. */
+QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; left: 12px;
+  padding: 0 5px; color: #aebfd6; background: #0f1a2a; }
 QLabel#artPreviewImage { background: #0b1220; border: 1px solid #26374c; border-radius: 8px; }
 QLabel { background: transparent; color: #dce6f4; }
 QLabel#heading { font-size: 16px; font-weight: 650; color: #f3f7fc; }
@@ -344,7 +349,7 @@ def _card_image(project: Project, wa: bytes, cid: int, frame_cache: dict, scale:
             painter.drawImage(QRect(0, 144, 128, 48), atlas, QRect(0, 208, 128, 48))
         # Keep the existing lower outline and extend it with 62px left and
         # middle pieces plus the four-pixel corner at the right.
-        bottom = atlas.copy(0, 0, 128, 4).mirrored(False, True)
+        bottom = atlas.copy(0, 0, 128, 4).flipped(Qt.Orientation.Vertical)
         bottom_left = bottom.copy(0, 0, 62, 4)
         bottom_middle = bottom.copy(62, 0, 62, 4)
         painter.drawImage(QRect(0, 192, 64, 4), bottom_left)

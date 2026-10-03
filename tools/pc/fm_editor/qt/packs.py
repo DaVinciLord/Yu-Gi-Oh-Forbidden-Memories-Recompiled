@@ -39,6 +39,9 @@ class PacksMixin:
         c["pack_art"]={}
         c["filling"]=False
         c["description"].textChanged.connect(self._count_pack_description)
+        # The list follows the name as it is typed: there is no Apply button
+        # to make it catch up, and the pack being renamed is the one shown.
+        c["name"].textChanged.connect(self._rename_pack_row)
         c["list"].currentRowChanged.connect(self._select_pack);t.itemSelectionChanged.connect(self._select_pack_content)
         actions=(("addPackButton",self._add_pack),("duplicatePackButton",self._duplicate_pack),("removePackButton",self._remove_pack),("movePackUpButton",lambda:self._move_pack(-1)),("movePackDownButton",lambda:self._move_pack(1)),("addPackCardButton",self._add_pack_card),("addFilteredPackCardsButton",self._add_filtered_pack_cards),("removePackCardsButton",self._remove_pack_cards),("setPackWeightButton",self._set_pack_weight),("setPackTierButton",self._set_pack_tier),("addPackTierButton",self._add_pack_tier),("importPackImageButton",self._import_pack_image),("exportPackImageButton",self._export_pack_image),("revertPackImageButton",self._revert_pack_image),("toggleAdvancedPackButton",self._toggle_pack_advanced),("openShopSettingsButton",self._edit_pack_shop),("simulatePackButton",self._simulate_pack),("viewPackResultsButton",self._show_pack_results))
         for name,fn in actions:get(QPushButton,name).clicked.connect(fn)
@@ -143,14 +146,13 @@ class PacksMixin:
             listing.addItem(f"{i+1}   {e.get('name','Pack')}\n      {pack.price if pack else '—'}      "
                             f"{pack.count if pack else '—'} cards      Stock: {stock}")
             listing.item(i).setData(Qt.ItemDataRole.UserRole,i)
-            image_path=e.get("image") if isinstance(e,dict) else None
-            image_data=self.project.files.get(image_path) if isinstance(image_path,str) else None
+            image_data=self._pack_image_bytes(e)
             if image_data:
                 thumb=QImage.fromData(image_data)
                 if not thumb.isNull():listing.item(i).setIcon(QIcon(QPixmap.fromImage(thumb).scaled(QSize(52,74),Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation)))
             if not pack:listing.item(i).setForeground(QColor("#ff7777"))
             elif notes:listing.item(i).setForeground(QColor("#f2c04c"))
-        c["pack_index"]=min(c.get("pack_index",0),len(self.project.packs)-1) if self.project.packs else -1
+        c["pack_index"]=min(max(0,c.get("pack_index",0)),len(self.project.packs)-1) if self.project.packs else -1
         listing.setCurrentRow(c["pack_index"]);listing.blockSignals(False)
         external=self.project.packs_file is not None
         # Before the form is filled: what it has to say about the picture is
@@ -205,6 +207,34 @@ class PacksMixin:
         self._fill_pack_advanced(e,pack)
         c["adv_baseline"]=self._pack_advanced_state()
         self._refresh_pack_image()
+    def _rename_pack_row(self, text):
+        """The chosen row's first line, as the name is typed. The rest of the
+        row (its price, cards and stock) waits for the pack to be stored."""
+        c = self.workspace_controls.get("Packs")
+        if not c or c.get("filling"):
+            return
+        row = c["pack_index"]
+        item = c["list"].item(row) if 0 <= row < c["list"].count() else None
+        if item is None:
+            return
+        lines = item.text().split("\n")
+        lines[0] = f"{row + 1}   {text.strip() or '(unnamed)'}"
+        item.setText("\n".join(lines))
+
+    def _pack_image_bytes(self, entry):
+        """A pack's own picture: the mod's files, or the folder it was opened
+        from (PacksTab.image_bytes). None where it names none."""
+        path = entry.get("image") if isinstance(entry, dict) else None
+        if not isinstance(path, str) or not path:
+            return None
+        blob = self.project.files.get(path)
+        if blob is None and self.project.source_dir:
+            try:
+                blob = (Path(self.project.source_dir) / path).read_bytes()
+            except OSError:
+                blob = None
+        return blob
+
     def _refresh_pack_image(self):
         c=self.workspace_controls.get("Packs")
         if not c:return
@@ -212,10 +242,7 @@ class PacksMixin:
         def nothing():
             c["image"].setPixmap(QPixmap());c["image"].setText("No image");self._set_pack_image_buttons(False)
         if not e:nothing();return
-        path=e.get("image");blob=self.project.files.get(path) if isinstance(path,str) else None
-        if blob is None and isinstance(path,str) and self.project.source_dir:
-            try:blob=(Path(self.project.source_dir)/path).read_bytes()
-            except OSError:pass
+        path=e.get("image");blob=self._pack_image_bytes(e)
         zoom=max(1,c["image_scale"].currentIndex()*2)
         picture,own=None,False
         if blob:
@@ -1481,15 +1508,6 @@ class PacksMixin:
         if isinstance(name,str) and not self._pack_image_shared(name,e):
             self.project.files.pop(name,None)
         self._mark_dirty();self._refresh_packs()
-    def _map_package_name(self):
-        label = self.workspace_controls["Campaign"]["map"]["package"].currentText()
-        return next((name for name, _ in cm.PACKAGES if cm.PACKAGE_LABELS[name] == label), cm.PACKAGES[0][0])
-    def _map_package_sector(self):
-        name = self._map_package_name()
-        return next(sector for other, sector in cm.PACKAGES if other == name)
-    def _map_package_changed(self, *_):
-        self.map_pictures.clear()
-        self._draw_map()
     def goto_pack(self, index):
         """Packs: the pack a validation line is about (PacksTab.goto)."""
         controls = self.workspace_controls.get("Packs")
@@ -1497,9 +1515,6 @@ class PacksMixin:
             return
         if isinstance(index, int) and 0 <= index < controls["list"].count():
             controls["list"].setCurrentRow(index)
-    def _map_dialog_package(self):
-        label = self.map_dialog_controls["package"].currentText()
-        return next(name for name, _ in cm.PACKAGES if cm.PACKAGE_LABELS[name] == label)
     def _update_art_pack_status(self, state=None):
         label = getattr(self, "art_pack_status", None)
         if label is None:

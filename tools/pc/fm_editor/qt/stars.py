@@ -252,7 +252,7 @@ class StarsMixin:
             for d in range(1, n + 1):
                 bonus = model.grid[a][d]
                 item = QTableWidgetItem(f"{bonus:+}" if bonus else "-")
-                item.setTextAlignment(int(Qt.AlignmentFlag.AlignCenter))
+                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 kind = "plus" if bonus > 0 else "minus" if bonus < 0 else "zero"
                 item.setBackground(QColor(self.STAR_CELL_COLOURS[kind]))
                 if bonus and bonus != guardian_stars.retail_matchup(a, d):

@@ -543,49 +543,6 @@ class CardsTest(unittest.TestCase):
             w._remove_fusion_result()
         self.assertEqual(seen['selected'], expected)
 
-    def test_the_scenes_form_is_drawn_even_though_it_is_not_shown(self):
-        from PySide6.QtWidgets import (QTabWidget, QTreeWidget, QTableWidget, QComboBox,
-                                       QPushButton, QPlainTextEdit, QSpinBox, QCheckBox,
-                                       QLineEdit, QLabel)
-        w = self.window
-        w.select_workspace('Campaign')
-        page = w.workspace_forms['Campaign']
-        tabs = page.findChild(QTabWidget, 'campaignTabs')
-        self.assertIsNotNone(tabs)
-        # Scenes is drafted but not shown; its form is still in the page.
-        self.assertEqual([tabs.tabText(i) for i in range(tabs.count())], ['Map'])
-        # Every control the Scenes form draws, by the name the wiring will use.
-        wanted = [(QLineEdit, 'sceneSearchEdit'), (QTreeWidget, 'sceneTree'),
-                  (QPushButton, 'addSceneButton'), (QPushButton, 'duplicateSceneButton'),
-                  (QPushButton, 'renameSceneButton'), (QPushButton, 'removeSceneButton'),
-                  (QTableWidget, 'sceneStepTable'), (QLabel, 'sceneStepsContextLabel'),
-                  (QPushButton, 'addStepButton'), (QPushButton, 'moveStepUpButton'),
-                  (QPushButton, 'moveStepDownButton'), (QPushButton, 'duplicateStepButton'),
-                  (QPushButton, 'removeStepButton'), (QLabel, 'stepEditorContextLabel'),
-                  (QComboBox, 'stepTypeCombo'), (QComboBox, 'stepCharacterCombo'),
-                  (QPushButton, 'previousPortraitButton'), (QLabel, 'stepPortraitPreview'),
-                  (QPushButton, 'nextPortraitButton'), (QComboBox, 'stepPoseCombo'),
-                  (QComboBox, 'stepPositionCombo'), (QLabel, 'stepBackgroundPreview'),
-                  (QComboBox, 'stepBackgroundCombo'), (QPushButton, 'browseBackgroundButton'),
-                  (QPlainTextEdit, 'stepDialogueEdit'), (QPushButton, 'insertDialogueTokenButton'),
-                  (QLabel, 'stepDialogueCountLabel'), (QSpinBox, 'stepTextSpeedSpin'),
-                  (QCheckBox, 'stepAutoContinueCheck'), (QComboBox, 'previewStepCombo'),
-                  (QCheckBox, 'showUiFrameCheck'), (QLabel, 'scenePreviewImage')]
-        missing = [name for widget_type, name in wanted if page.findChild(widget_type, name) is None]
-        self.assertEqual(missing, [])
-        steps = page.findChild(QTableWidget, 'sceneStepTable')
-        self.assertEqual([steps.horizontalHeaderItem(i).text() for i in range(steps.columnCount())],
-                         ['#', 'Type', 'Description'])
-
-    def test_the_story_box_writes_nothing_while_it_is_hidden(self):
-        """Typing in a box nobody can reach must not reach the mod either."""
-        w = self.window
-        w.select_workspace('Campaign')
-        w.project.other['story'] = {'scenes': [1, 2]}
-        w.workspace_controls['Campaign']['data'].setPlainText('{"scenes": [9]}')
-        self.assertTrue(w._apply_campaign())
-        self.assertEqual(w.project.other['story'], {'scenes': [1, 2]})
-
     def test_the_card_list_shows_all_six_columns(self):
         """The middle column used to crowd the list until DEF and State fell off
         its right edge."""
@@ -2093,21 +2050,22 @@ class CardsTest(unittest.TestCase):
 
     # --- the Campaign page while the Scenes tab is away ----------------------
 
-    def test_the_campaign_page_shows_the_map_alone(self):
-        """Scenes is out of the way until a scene format exists."""
+    def test_the_campaign_page_holds_the_scenes_and_the_map(self):
+        """The story editor from the campaign work, beside the map."""
         w = self.window
         w.select_workspace('Campaign')
         c = w.workspace_controls['Campaign']
-        self.assertEqual([c['tabs'].tabText(i) for i in range(c['tabs'].count())], ['Map'])
+        self.assertEqual([c['tabs'].tabText(i) for i in range(c['tabs'].count())],
+                         ['Scene editor', 'Timeline viewer', 'Map'])
 
-    def test_a_mod_s_story_key_survives_the_hidden_scenes_tab(self):
-        """The form is not shown, so it must not write what it cannot show."""
+    def test_a_mod_s_story_key_is_left_alone(self):
+        """No page writes "story": the editor keeps it as the mod wrote it."""
         w = self.window
         w.project.other['story'] = {'scenes': [{'id': 'intro'}]}
         w.select_workspace('Campaign')
-        self.assertTrue(w._apply_campaign())
-        w.select_workspace('Cards')         # leaving the page applies it too
+        w.select_workspace('Cards')
         self.assertEqual(w.project.other['story'], {'scenes': [{'id': 'intro'}]})
+        self.assertIn('story', manifest.build(w.project))
 
     def test_a_map_problem_still_goes_to_its_place(self):
         from fm_editor.validate import Issue
@@ -2257,3 +2215,45 @@ class CardsTest(unittest.TestCase):
             self.assertFalse(w.art_previews[part]['internal'].pixmap().isNull(), part)
             self.assertIn(f'Internal {factor}', w.art_info[part]['internal'].text())
             self.assertIn("console's render", w.art_info[part]['game'].text())
+
+    def test_opening_a_mod_with_packs_shows_its_first_pack(self):
+        """min(-1, 0) left the list with a row and nothing chosen, so every
+        field of a mod that plainly has a pack read as empty."""
+        w = self.window
+        c = self.packs_page()
+        w.project.packs.append({'name': 'Dragons', 'cards': {'1': 100}})
+        c['pack_index'] = -1                      # as a freshly built page has it
+        w._refresh_packs()
+        self.assertEqual(c['pack_index'], 0)
+        self.assertEqual(c['list'].currentRow(), 0)
+        self.assertEqual(c['name'].text(), 'Dragons')
+
+    def test_a_cover_on_disk_is_drawn_without_being_in_project_files(self):
+        """A mod opened from a folder keeps its PNG there, not in memory."""
+        import tempfile
+        from pathlib import Path
+        w = self.window
+        c = self.packs_page()
+        with tempfile.TemporaryDirectory() as folder:
+            (Path(folder) / 'packs').mkdir()
+            Path(folder, 'packs/cover.png').write_bytes(
+                Path(self.pack_png()).read_bytes())
+            w.project.source_dir = Path(folder)
+            w.project.packs.append({'name': 'From disk', 'cards': {'1': 100},
+                                    'image': 'packs/cover.png'})
+            w._refresh_packs()
+            self.assertNotIn('packs/cover.png', w.project.files)
+            self.assertIsNotNone(w._pack_image_bytes(w._pack_entry()))
+            self.assertFalse(c['list'].item(0).icon().isNull())
+            self.assertFalse(c['image'].pixmap().isNull())
+
+    def test_the_list_follows_the_name_as_it_is_typed(self):
+        """There is no Apply button to make it catch up."""
+        w = self.window
+        c = self.packs_page()
+        w._add_pack()
+        self.assertIn('Pack 1', c['list'].item(0).text())
+        c['name'].setText('Dragons!')
+        self.assertIn('Dragons!', c['list'].item(0).text().splitlines()[0])
+        c['name'].clear()
+        self.assertIn('(unnamed)', c['list'].item(0).text().splitlines()[0])

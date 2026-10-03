@@ -938,7 +938,7 @@ class RemovedFilesTest(unittest.TestCase):
             for name in ("duelists/gone.json", "duelists/kept.json"):
                 (folder / name).parent.mkdir(parents=True, exist_ok=True)
                 (folder / name).write_text("{}")
-            project = mock.Mock(removed_files={"duelists/gone.json"})
+            project = mock.Mock(removed_files={"duelists/gone.json"}, files={})
             manifest._remove_files(project, folder)
             self.assertFalse((folder / "duelists/gone.json").exists())
             self.assertTrue((folder / "duelists/kept.json").exists())
@@ -949,7 +949,7 @@ class RemovedFilesTest(unittest.TestCase):
             folder.mkdir()
             outside = Path(home) / "outside.txt"
             outside.write_text("x")
-            project = mock.Mock(removed_files={"../outside.txt", "/etc/passwd", "C:outside.txt"})
+            project = mock.Mock(removed_files={"../outside.txt", "/etc/passwd", "C:outside.txt"}, files={})
             manifest._remove_files(project, folder)
             self.assertTrue(outside.exists())
 
@@ -959,6 +959,31 @@ class RemovedFilesTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as home:
             folder = Path(home)
             (folder / "portraits").mkdir()
-            project = mock.Mock(removed_files={"portraits", "portraits/never-was.png"})
+            project = mock.Mock(removed_files={"portraits", "portraits/never-was.png"}, files={})
             manifest._remove_files(project, folder)        # must not raise
             self.assertTrue((folder / "portraits").is_dir())
+
+    def test_a_name_the_mod_writes_again_is_not_dropped(self):
+        """Remove a duelist, add one back under the same id, save: the file
+        was written and then deleted, and went on being deleted after that."""
+        with tempfile.TemporaryDirectory() as home:
+            folder = Path(home)
+            (folder / "duelists").mkdir()
+            (folder / "duelists/other.json").write_text('{"copy": 1, "name": "Other"}')
+            dropped = {"duelists/other.json", "decks/other.json"}
+            project = mock.Mock(removed_files=dropped,
+                                files={"duelists/other.json": b'{"copy": 2}'})
+            manifest._remove_files(project, folder)
+            self.assertTrue((folder / "duelists/other.json").exists())
+            # and it is off the list, so a later save does not come back for it
+            self.assertNotIn("duelists/other.json", dropped)
+            self.assertIn("decks/other.json", dropped)
+
+    def test_a_name_the_mod_does_not_write_is_still_dropped(self):
+        with tempfile.TemporaryDirectory() as home:
+            folder = Path(home)
+            (folder / "duelists").mkdir()
+            (folder / "duelists/gone.json").write_text("{}")
+            project = mock.Mock(removed_files={"duelists/gone.json"}, files={})
+            manifest._remove_files(project, folder)
+            self.assertFalse((folder / "duelists/gone.json").exists())
