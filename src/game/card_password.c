@@ -1,3 +1,5 @@
+#include "../types.h"
+
 /* PC-only policy entry points. Resident game code makes these hookable by
  * code mods, so the shop and on-card viewer always ask the same policy. */
 #ifdef MEMORIES_PC
