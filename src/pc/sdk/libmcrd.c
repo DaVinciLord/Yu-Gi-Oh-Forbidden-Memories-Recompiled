@@ -32,11 +32,12 @@ enum { McErrNone, McErrCardNotExist, McErrCardInvalid, McErrNewCard, McErrNotFor
        McErrAlreadyExist, McErrBlockFull };
 struct DIRENTRY {
     char name[20];
-    long attr, size;
+    PSXLONG attr, size;
     struct DIRENTRY *G32 next;
-    long head;
+    PSXLONG head;
     char system[4];
 };
+_Static_assert(sizeof(struct DIRENTRY) == 40, "PS1 directory entry layout");
 
 #define CARD_SIZE 0x20000
 #define FRAME 128
@@ -199,7 +200,7 @@ static void begin(long command, long result, unsigned vblanks)
     pending = 1;
 }
 
-void MemCardInit(long shared_with_pad) { (void)shared_with_pad; }
+void MemCardInit(PSXLONG shared_with_pad) { (void)shared_with_pad; }
 void MemCardEnd(void) {}
 void MemCardStart(void) { active = 1; }
 void MemCardStop(void) { active = 0; }
@@ -226,8 +227,8 @@ static long check(long channel, long command)
     return 1;
 }
 
-long MemCardExist(long channel) { return check(channel, McFuncExist); }
-long MemCardAccept(long channel) { return check(channel, McFuncAccept); }
+PSXLONG MemCardExist(PSXLONG channel) { return check(channel, McFuncExist); }
+PSXLONG MemCardAccept(PSXLONG channel) { return check(channel, McFuncAccept); }
 
 static long transfer(long channel, const char *name, u8 *memory, long offset, long bytes, int writing)
 {
@@ -274,18 +275,18 @@ static long transfer(long channel, const char *name, u8 *memory, long offset, lo
     return 1;
 }
 
-long MemCardReadFile(long channel, char *file, unsigned long *address, long offset, long bytes)
+PSXLONG MemCardReadFile(PSXLONG channel, char *file, unsigned PSXLONG *address, PSXLONG offset, PSXLONG bytes)
 {
     return transfer(channel, file, (u8 *)address, offset, bytes, 0);
 }
 
-long MemCardWriteFile(long channel, char *file, unsigned long *address, long offset, long bytes)
+PSXLONG MemCardWriteFile(PSXLONG channel, char *file, unsigned PSXLONG *address, PSXLONG offset, PSXLONG bytes)
 {
     return transfer(channel, file, (u8 *)address, offset, bytes, 1);
 }
 
 /* mode 0 waits for the command; mode 1 reports: 1 done, 0 running, -1 none. */
-long MemCardSync(long mode, long *command, long *result)
+PSXLONG MemCardSync(PSXLONG mode, PSXLONG *command, PSXLONG *result)
 {
     if (!pending) {
         return -1;
@@ -307,7 +308,7 @@ long MemCardSync(long mode, long *command, long *result)
     return 1;
 }
 
-long MemCardCreateFile(long channel, char *file, long blocks)
+PSXLONG MemCardCreateFile(PSXLONG channel, char *file, PSXLONG blocks)
 {
     Card *card = open_card(channel);
     int chain[BLOCKS], found = 0, i;
@@ -345,7 +346,7 @@ long MemCardCreateFile(long channel, char *file, long blocks)
     return store(card) == 0 ? McErrNone : McErrCardInvalid;
 }
 
-long MemCardDeleteFile(long channel, char *file)
+PSXLONG MemCardDeleteFile(PSXLONG channel, char *file)
 {
     Card *card = open_card(channel);
     int block;
@@ -371,7 +372,7 @@ long MemCardDeleteFile(long channel, char *file)
     return store(card) == 0 ? McErrNone : McErrCardInvalid;
 }
 
-long MemCardFormat(long channel)
+PSXLONG MemCardFormat(PSXLONG channel)
 {
     Card *card = open_card(channel);
     if (!card) {
@@ -381,7 +382,7 @@ long MemCardFormat(long channel)
     return store(card) == 0 ? McErrNone : McErrCardInvalid;
 }
 
-long MemCardGetDirentry(long channel, char *name, struct DIRENTRY *directory, long *files, long offset, long max)
+PSXLONG MemCardGetDirentry(PSXLONG channel, char *name, struct DIRENTRY *directory, PSXLONG *files, PSXLONG offset, PSXLONG max)
 {
     Card *card = open_card(channel);
     long seen = 0, stored = 0;
@@ -413,10 +414,10 @@ long MemCardGetDirentry(long channel, char *name, struct DIRENTRY *directory, lo
     }
     *files = stored;
     if (Log_Enabled(LOG_MEMCARD)) {
-        LOG(LOG_MEMCARD, "directory channel=%ld pattern='%s' files=%ld", channel, name, stored);
+        LOG(LOG_MEMCARD, "directory channel=%ld pattern='%s' files=%ld", (long)channel, name, stored);
         for (i = 0; i < stored; i++) {
             LOG(LOG_MEMCARD, "directory entry=%d name='%.20s' size=%ld head=%ld",
-                i, directory[i].name, directory[i].size, directory[i].head);
+                i, directory[i].name, (long)directory[i].size, (long)directory[i].head);
         }
     }
     return McErrNone;

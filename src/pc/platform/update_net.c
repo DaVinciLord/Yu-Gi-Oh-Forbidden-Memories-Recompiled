@@ -113,7 +113,17 @@ int UpdateNet_Get(const char *url, int timeout_seconds, UpdateNetSink sink, void
     /* Both ends close-on-exec (the dup2 onto curl's stdout clears it there):
      * a program the main thread starts meanwhile (the browser, a restart)
      * must not inherit the write end, or the read below never sees EOF. */
+ #ifdef __APPLE__
+    if (pipe(pipe_ends)) { say(why, why_size, "Could not start curl."); return -1; }
+    if (fcntl(pipe_ends[0], F_SETFD, FD_CLOEXEC) == -1 ||
+        fcntl(pipe_ends[1], F_SETFD, FD_CLOEXEC) == -1) {
+        int saved_error = errno;
+        close(pipe_ends[0]); close(pipe_ends[1]); errno = saved_error;
+        say(why, why_size, "Could not start curl."); return -1;
+    }
+ #else
     if (pipe2(pipe_ends, O_CLOEXEC)) { say(why, why_size, "Could not start curl."); return -1; }
+ #endif
     posix_spawn_file_actions_init(&actions);
     posix_spawn_file_actions_adddup2(&actions, pipe_ends[1], 1);
     posix_spawn_file_actions_addclose(&actions, pipe_ends[1]);

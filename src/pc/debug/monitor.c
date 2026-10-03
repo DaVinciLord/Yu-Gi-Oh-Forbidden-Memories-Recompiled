@@ -1,3 +1,67 @@
+#ifdef __APPLE__
+/* Native bring-up runs without the Linux/Windows child-process monitor.
+ * Keep in-process facts and logs available to the real crash reporter. */
+#include "monitor.h"
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/sysctl.h>
+#include <sys/utsname.h>
+
+static MonitorShared darwin_shared;
+MonitorShared *Monitor_Shared(void) { return &darwin_shared; }
+int Monitor_Active(void) { return 0; }
+void Monitor_Modal(int on)
+{
+    if (on) __atomic_add_fetch(&darwin_shared.modal, 1, __ATOMIC_SEQ_CST);
+    else if (darwin_shared.modal) __atomic_sub_fetch(&darwin_shared.modal, 1, __ATOMIC_SEQ_CST);
+}
+void Monitor_Fact(const char *key, const char *format, ...)
+{
+    char value[1024], facts[MONITOR_FACTS_SIZE];
+    const char *at = darwin_shared.facts;
+    size_t used = 0, key_length = strlen(key);
+    va_list args;
+    va_start(args, format);
+    vsnprintf(value, sizeof(value), format, args);
+    va_end(args);
+    for (char *c = value; *c; c++) if (*c == '\n' || *c == '\r') *c = ' ';
+    while (*at) {
+        const char *end = strchr(at, '\n');
+        size_t length = end ? (size_t)(end - at) + 1 : strlen(at);
+        if (!(length > key_length && !strncmp(at, key, key_length) && at[key_length] == ':') && used + length < sizeof(facts)) {
+            memcpy(facts + used, at, length);
+            used += length;
+        }
+        at += length;
+    }
+    snprintf(facts + used, sizeof(facts) - used, "%s: %s\n", key, value);
+    __atomic_add_fetch(&darwin_shared.facts_sequence, 1, __ATOMIC_SEQ_CST);
+    memcpy(darwin_shared.facts, facts, strlen(facts) + 1);
+    __atomic_add_fetch(&darwin_shared.facts_sequence, 1, __ATOMIC_SEQ_CST);
+}
+size_t Monitor_Facts(char *out, size_t size)
+{
+    if (!size) return 0;
+    return (size_t)snprintf(out, size, "%s", darwin_shared.facts);
+}
+void Monitor_NoteSystem(void)
+{
+    struct utsname system;
+    char cpu[128] = "Apple ARM64";
+    size_t size = sizeof(cpu);
+    sysctlbyname("machdep.cpu.brand_string", cpu, &size, NULL, 0);
+    if (!uname(&system)) Monitor_Fact("system", "%s %s %s", system.sysname, system.release, system.machine);
+    Monitor_Fact("cpu", "%s", cpu);
+    Monitor_Fact("monitor", "external crash/hang monitoring unavailable in macOS bring-up");
+}
+int Monitor_Main(int argc, char **argv, int *status)
+{
+    (void)argc; (void)argv; (void)status;
+    fprintf(stderr, "memories-pc: external crash/hang monitor unavailable in macOS bring-up; running with in-process crash reporting\n");
+    return 0; /* documented unmonitored path; this process runs the game */
+}
+#else
 /* The crash monitor (monitor.h). The game half: the shared block, the facts,
  * the system description. The monitor half: start the game, pass its
  * console output through, watch its heartbeat, and write the report when
@@ -1399,3 +1463,5 @@ int Monitor_Main(int argc, char **argv, int *status)
     if (attach() || !wanted()) return 0;
     return !run_monitor(status);
 }
+
+#endif /* __APPLE__ */

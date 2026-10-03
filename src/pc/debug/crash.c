@@ -8,6 +8,9 @@
 #include "pc/platform/platform.h"
 #include "pc/sdk/display.h"
 #include "pc/platform/paths.h"
+#ifdef __APPLE__
+#include "pc/platform/darwin_image.h"
+#endif
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <pthread.h>
@@ -20,7 +23,11 @@
 #ifdef _WIN32
 #include "pc/platform/win32.h"
 #else
+#ifdef __APPLE__
+#include <sys/ucontext.h>
+#else
 #include <ucontext.h>
+#endif
 #endif
 
 #ifdef _WIN32
@@ -56,6 +63,9 @@ static const char *region(uintptr_t address)
 #ifdef _WIN32
     uintptr_t image_low, image_high;
     Win32_ImageRange(&image_low, &image_high);
+#elif defined(__APPLE__)
+    uintptr_t image_low, image_high;
+    DarwinImage_TextRange(&image_low, &image_high);
 #else
     extern char __executable_start[], etext[];
     uintptr_t image_low = (uintptr_t)__executable_start, image_high = (uintptr_t)etext;
@@ -157,6 +167,12 @@ static void report_fatal(const char *what, unsigned long number, uintptr_t fault
     snprintf(text, sizeof(text), strcmp(what, "signal") ? "fatal %s 0x%08lx" : "fatal %s %lu", what, number);
     line("memories-pc: %s at 0x%08lx (%s)\n", (uintptr_t)text, fault, (uintptr_t)region(fault));
     line("registers: EIP=0x%08lx ESP=0x%08lx EBP=0x%08lx\n", eip, esp, ebp);
+#ifdef __APPLE__
+    uintptr_t text_first, text_last;
+    if (DarwinImage_TextRange(&text_first, &text_last))
+        line("Mach-O text: 0x%lx..0x%lx (PC offset 0x%lx)\n", text_first, text_last,
+             eip >= text_first && eip < text_last ? eip - text_first : 0);
+#endif
     walk(eip, ebp);
     line("frame=%lu vblank=%lu clock=%ld%%\n", Memories_PresentedFrames(), Platform_VBlankCount(),
          (uintptr_t)(long)Platform_ClockRate());
@@ -216,9 +232,15 @@ void Crash_HandleSignal(int number, siginfo_t *info, void *context)
     ucontext_t *user = context;
     struct sigaction action;
     if (reporting++) _exit(128 + number);
+ #if defined(__APPLE__) && defined(__aarch64__)
+    report_fatal("signal", (unsigned long)number, info ? (uintptr_t)info->si_addr : 0,
+                 (uintptr_t)user->uc_mcontext->__ss.__pc, (uintptr_t)user->uc_mcontext->__ss.__sp,
+                 (uintptr_t)user->uc_mcontext->__ss.__fp);
+ #else
     report_fatal("signal", (unsigned long)number, info ? (uintptr_t)info->si_addr : 0,
                  (uintptr_t)user->uc_mcontext.gregs[REG_EIP], (uintptr_t)user->uc_mcontext.gregs[REG_ESP],
                  (uintptr_t)user->uc_mcontext.gregs[REG_EBP]);
+ #endif
     memset(&action, 0, sizeof(action));
     action.sa_handler = SIG_DFL;
     sigemptyset(&action.sa_mask);
@@ -241,10 +263,18 @@ void Crash_Init(void)
     size_t size;
     unsigned i;
     Crash_ChooseReportDir();
+#ifdef __APPLE__
+    uintptr_t text_first, text_last;
+    DarwinImage_TextRange(&text_first, &text_last); /* populate cache outside handlers */
+#endif
     stack.ss_sp = alternate_stack;
     stack.ss_size = sizeof(alternate_stack);
     stack.ss_flags = 0;
     sigaltstack(&stack, NULL);
+ #ifdef __APPLE__
+    main_stack_high = (uintptr_t)pthread_get_stackaddr_np(pthread_self());
+    main_stack_low = main_stack_high - pthread_get_stacksize_np(pthread_self());
+ #else
     if (!pthread_getattr_np(pthread_self(), &attributes)) {
         if (!pthread_attr_getstack(&attributes, &address, &size)) {
             main_stack_low = (uintptr_t)address;
@@ -252,6 +282,7 @@ void Crash_Init(void)
         }
         pthread_attr_destroy(&attributes);
     }
+ #endif
     memset(&action, 0, sizeof(action));
     action.sa_sigaction = installed_handler;
     action.sa_flags = SA_SIGINFO | SA_ONSTACK;
@@ -300,10 +331,17 @@ void Crash_ReportHang(void *context_pointer)
 #ifdef _WIN32
     Win32_ContextRegisters(context_pointer, &eip, &esp, &ebp);
 #else
+ #if defined(__APPLE__) && defined(__aarch64__)
+    ucontext_t *user = context_pointer;
+    eip = context_pointer ? (uintptr_t)user->uc_mcontext->__ss.__pc : 0;
+    esp = context_pointer ? (uintptr_t)user->uc_mcontext->__ss.__sp : 0;
+    ebp = context_pointer ? (uintptr_t)user->uc_mcontext->__ss.__fp : 0;
+ #else
     ucontext_t *user = context_pointer;
     eip = (uintptr_t)user->uc_mcontext.gregs[REG_EIP];
     esp = (uintptr_t)user->uc_mcontext.gregs[REG_ESP];
     ebp = (uintptr_t)user->uc_mcontext.gregs[REG_EBP];
+ #endif
 #endif
     report_fd = -1;
     snprintf(path, sizeof(path), "%s/hang-%ld.txt", Crash_ReportDir, (long)getpid());
@@ -312,7 +350,13 @@ void Crash_ReportHang(void *context_pointer)
         static const char message[] = "memories-pc: no VSync for 5 s\n";
         output(message, sizeof(message) - 1);
         line("registers: EIP=0x%08lx ESP=0x%08lx EBP=0x%08lx\n", eip, esp, ebp);
-        walk(eip, ebp);
+    #ifdef __APPLE__
+    uintptr_t text_first, text_last;
+    if (DarwinImage_TextRange(&text_first, &text_last))
+        line("Mach-O text: 0x%lx..0x%lx (PC offset 0x%lx)\n", text_first, text_last,
+             eip >= text_first && eip < text_last ? eip - text_first : 0);
+#endif
+    walk(eip, ebp);
         line("frame=%lu vblank=%lu clock=%ld%%\n", Memories_PresentedFrames(), Platform_VBlankCount(),
              (uintptr_t)(long)Platform_ClockRate());
         context();

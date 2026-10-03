@@ -390,6 +390,13 @@ static uint32_t fingerprint(const Loader *loader)
 int ObjectLoader_Load(const void *data, size_t size, ObjectResolver resolve, void *context,
                       LoadedObject *object, char *error, size_t error_size)
 {
+#if defined(__APPLE__) && defined(__aarch64__) && defined(MEMORIES_TRANSLATED)
+    /* This loader's object format and relocations are i386. */
+    (void)data; (void)size; (void)resolve; (void)context;
+    memset(object, 0, sizeof(*object));
+    if (error_size) snprintf(error, error_size, "i386 code mods are unavailable in the native arm64 build");
+    return -1;
+#else
     Loader loader;
     unsigned char *image = NULL;
     size_t code_size = 0, total = 0;
@@ -438,6 +445,7 @@ done:
     free(loader.values);
     free(loader.bound);
     return result;
+#endif
 }
 
 void *ObjectLoader_Symbol(const LoadedObject *object, const char *name)

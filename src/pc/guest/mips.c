@@ -20,6 +20,9 @@
 #define _GNU_SOURCE
 #include "mips.h"
 #include "image.h"
+#ifdef MEMORIES_TRANSLATED
+#include "translated_runtime.h"
+#endif
 #include "pc/compat/gte.h"
 #include "pc/rng.h"
 #include "pc/debug/log.h"
@@ -126,10 +129,12 @@ static const MemoriesGuestFunction *find_native(uint32_t address)
 static uint32_t call_native(State *s, uint32_t address)
 {
     const MemoriesGuestFunction *e;
+#ifndef MEMORIES_TRANSLATED
     /* uintptr_t: a 64-bit callee reads whole registers, and a guest pointer
      * argument must arrive zero-extended (the same types on i386). */
     typedef uintptr_t (*Call)(uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t,
                               uintptr_t, uintptr_t, uintptr_t, uintptr_t);
+#endif
     uint32_t sp = s->r[29], keep, result;
 
     /* libc and libmath routines linked as SDK assembly in the original and
@@ -178,8 +183,17 @@ static uint32_t call_native(State *s, uint32_t address)
     }
     keep = current_sp;
     current_sp = sp;
+#ifdef MEMORIES_TRANSLATED
+    {
+        uint32_t arguments[12] = {s->r[4], s->r[5], s->r[6], s->r[7]};
+        unsigned i;
+        for (i = 4; i < 12; i++) arguments[i] = l32(sp + i * 4);
+        result = GuestRuntime_InvokeNative((unsigned)(e - Memories_FunctionMap), arguments);
+    }
+#else
     result = (uint32_t)((Call)e->host)(s->r[4], s->r[5], s->r[6], s->r[7], l32(sp + 16), l32(sp + 20), l32(sp + 24),
-                                       l32(sp + 28), l32(sp + 32), l32(sp + 36), l32(sp + 40), l32(sp + 44));
+                             l32(sp + 28), l32(sp + 32), l32(sp + 36), l32(sp + 40), l32(sp + 44));
+#endif
     current_sp = keep;
     return result;
 }

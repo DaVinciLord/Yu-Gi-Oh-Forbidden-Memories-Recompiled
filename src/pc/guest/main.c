@@ -21,6 +21,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#include <errno.h>
+#endif
 
 /* MEMORIES_RESTART_ENV="NAME=value;NAME=;...": what a scripted check changes
  * in the environment the restarted game starts with (an empty value removes
@@ -72,6 +76,19 @@ static char **launch_argv;
 #ifndef _WIN32
 int Platform_RestartGame(void)
 {
+ #ifdef __APPLE__
+    uint32_t capacity = 1024;
+    char *path = malloc(capacity);
+    if (!path) return -1;
+    if (_NSGetExecutablePath(path, &capacity)) {
+        free(path); path = malloc(capacity);
+        if (!path) return -1;
+        if (_NSGetExecutablePath(path, &capacity)) { free(path); errno = ENAMETOOLONG; return -1; }
+    }
+    char *executable = realpath(path, NULL);
+    free(path);
+    if (!executable) return -1; /* restart only a verified absolute pathname */
+ #endif
     struct itimerval stopped = {0}, previous;
     struct sigaction ignored = {0}, old_action;
     ignored.sa_handler = SIG_IGN;
@@ -82,7 +99,12 @@ int Platform_RestartGame(void)
     restart_environment();
     /* A restart must boot the game, not auto-load an old launch state. */
     unsetenv("MEMORIES_LOAD_STATE");
+ #ifdef __APPLE__
+    execv(executable, launch_argv);
+    int saved_error = errno; free(executable); errno = saved_error;
+ #else
     execv("/proc/self/exe", launch_argv);
+ #endif
     perror("memories-pc: restart");
     sigaction(SIGALRM, &old_action, NULL);
     setitimer(ITIMER_REAL, &previous, NULL);
