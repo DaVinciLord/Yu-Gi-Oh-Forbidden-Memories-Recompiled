@@ -212,12 +212,12 @@ void GsInit3D(void)
     D_800FE0D8 = 0x3fff;
 }
 
-void GsSetAmbient(long r, long g, long b)
+void GsSetAmbient(PSXLONG r, PSXLONG g, PSXLONG b)
 {
     SetBackColor(r >> 4, g >> 4, b >> 4);
 }
 
-void GsSetProjection(long h)
+void GsSetProjection(PSXLONG h)
 {
     SetGeomScreen(h);
 }
@@ -312,7 +312,7 @@ typedef struct Sprite {
     u8 r, g, b;
     short mx, my;
     short scalex, scaley;
-    long rotate;
+    PSXLONG rotate;
 } Sprite;
 
 static u32 sprite_colour(const Sprite *sprite, u32 code)
@@ -375,8 +375,8 @@ void GsSortSprite(Sprite *sprite, u32 *ot, unsigned short pri)
     for (i = 0; i < 4; i++) {
         SVECTOR corner = {(short)((i & 1 ? sprite->w : 0) - sprite->mx),
                           (short)((i & 2 ? sprite->h : 0) - sprite->my), 0, 0};
-        long p, flag;
-        RotTransPers(&corner, (long *)&xy[i], &p, &flag);
+        PSXLONG p, flag;
+        RotTransPers(&corner, (PSXLONG *)&xy[i], &p, &flag);
     }
     u_left = attribute & 0x800000 ? sprite->u + sprite->w - 1 : sprite->u;
     u_right = attribute & 0x800000 ? sprite->u : sprite->u + sprite->w - 1;

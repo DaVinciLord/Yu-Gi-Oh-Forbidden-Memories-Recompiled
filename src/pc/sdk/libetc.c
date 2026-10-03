@@ -2,6 +2,7 @@
 /* LIBETC/LIBAPI: callbacks, VSync, critical sections and the BIOS pad driver.
  * The VBlank "interrupt" is the platform's 60 Hz signal; everything reachable
  * from it must stay async-signal-safe (no stdio, no allocation, no Xlib). */
+#include "port_ptr.h" /* PSXLONG: the Psy-Q long */
 #include "pc/platform/platform.h"
 #include "pc/platform/button_layout.h"
 #include "pc/platform/settings.h"
@@ -26,7 +27,7 @@
 #endif
 
 static void (*vsync_callback)(void);
-static long (*counter_handler)(void);
+static PSXLONG (*counter_handler)(void);
 static volatile int critical, started, pads_started, counter_running;
 static volatile int pending_vblank, pending_tick;
 static volatile uint64_t counter_period_us, counter_next_us, last_game_us, last_real_us;
@@ -135,9 +136,9 @@ static void on_vblank(void)
     }
 }
 
-long EnterCriticalSection(void)
+PSXLONG EnterCriticalSection(void)
 {
-    long was_enabled = !critical;
+    PSXLONG was_enabled = !critical;
     critical = 1;
     return was_enabled;
 }
@@ -178,23 +179,23 @@ int ResetCallback(void)
 /* Root counter 2 drives the sound sequencer. Without the system-clock flag
  * SetRCnt selects sysclk/8 (mode 0x248), so the period is target*8/33.8688MHz:
  * 0xE000 gives 73.8 Hz. Other counters and events are accepted and inert. */
-long OpenEvent(unsigned long descriptor, long spec, long mode, long (*handler)(void))
+PSXLONG OpenEvent(unsigned PSXLONG descriptor, PSXLONG spec, PSXLONG mode, PSXLONG (*handler)(void))
 {
     (void)spec; (void)mode;
-    if (descriptor == 0xf2000002ul) {
+    if (descriptor == 0xf2000002u) {
         counter_handler = handler;
     }
-    return 0x100 + (long)(descriptor & 0xff);
+    return 0x100 + (PSXLONG)(descriptor & 0xff);
 }
 
-long CloseEvent(long event) { (void)event; return 1; }
-long EnableEvent(long event) { (void)event; return 1; }
-long DisableEvent(long event) { (void)event; return 1; }
-long TestEvent(long event) { (void)event; return 0; }
+PSXLONG CloseEvent(PSXLONG event) { (void)event; return 1; }
+PSXLONG EnableEvent(PSXLONG event) { (void)event; return 1; }
+PSXLONG DisableEvent(PSXLONG event) { (void)event; return 1; }
+PSXLONG TestEvent(PSXLONG event) { (void)event; return 0; }
 
-long SetRCnt(unsigned long spec, unsigned short target, long flags)
+PSXLONG SetRCnt(unsigned PSXLONG spec, unsigned short target, PSXLONG flags)
 {
-    if (spec == 0xf2000002ul) {
+    if (spec == 0xf2000002u) {
         uint64_t divider = flags & 1 ? 1 : 8;
         counter_period_us = (uint64_t)(target ? target : 0x10000) * divider * 1000000u / 33868800u;
         counter_next_us = 0;
@@ -202,9 +203,9 @@ long SetRCnt(unsigned long spec, unsigned short target, long flags)
     return 1;
 }
 
-long GetRCnt(unsigned long spec) { (void)spec; return 0; }
-long StartRCnt(unsigned long spec) { if (spec == 0xf2000002ul) { counter_running = 1; } return 1; }
-long StopRCnt(unsigned long spec) { if (spec == 0xf2000002ul) { counter_running = 0; } return 1; }
+PSXLONG GetRCnt(unsigned PSXLONG spec) { (void)spec; return 0; }
+PSXLONG StartRCnt(unsigned PSXLONG spec) { if (spec == 0xf2000002u) { counter_running = 1; } return 1; }
+PSXLONG StopRCnt(unsigned PSXLONG spec) { if (spec == 0xf2000002u) { counter_running = 0; } return 1; }
 
 int StopCallback(void)
 {
@@ -368,25 +369,25 @@ void GsInitVcount(void)
 {
 }
 
-void SetMem(long size)
+void SetMem(PSXLONG size)
 {
     (void)size;
 }
 
-long InitPAD(char *first, long first_length, char *second, long second_length)
+PSXLONG InitPAD(char *first, PSXLONG first_length, char *second, PSXLONG second_length)
 {
     pad_buffer[0] = first_length >= 4 ? (unsigned char *)first : NULL;
     pad_buffer[1] = second_length >= 4 ? (unsigned char *)second : NULL;
     return 1;
 }
 
-long StartPAD(void)
+PSXLONG StartPAD(void)
 {
     pads_started = 1;
     return 1;
 }
 
-void ChangeClearPAD(long value)
+void ChangeClearPAD(PSXLONG value)
 {
     (void)value;
 }

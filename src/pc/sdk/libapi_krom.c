@@ -13,6 +13,7 @@
  * Shift-JIS converts through code page 932. The game keeps a pattern's
  * address in a 4-byte pointer, so the patterns come from the low memory
  * region (pc/guest/low_memory.h; plain malloc on 32-bit). */
+#include "port_ptr.h" /* PSXLONG */
 #include "pc/debug/log.h"
 #include "pc/guest/low_memory.h"
 #include <ft2build.h>
@@ -31,8 +32,8 @@
 
 /* Prototypes as psyq/libapi.h has them; that header's own libc declarations
  * clash with the host's, so it is not included here. */
-long Krom2RawAdd(unsigned long sjis);
-long Krom2RawAdd2(unsigned short sjis);
+PSXLONG Krom2RawAdd(unsigned PSXLONG sjis);
+PSXLONG Krom2RawAdd2(unsigned short sjis);
 
 #define GLYPH_BYTES 30
 #define GLYPH_W 16
@@ -144,19 +145,19 @@ static void render(unsigned code, unsigned char *out)
     }
 }
 
-long Krom2RawAdd2(unsigned short sjis)
+PSXLONG Krom2RawAdd2(unsigned short sjis)
 {
     unsigned code = sjis;
     if (!face_tried) open_face();
     if (!patterns[code]) {
         patterns[code] = Memories_LowAlloc(GLYPH_BYTES);
-        if (!patterns[code]) return (long)(uintptr_t)blank;
+        if (!patterns[code]) return (PSXLONG)(uintptr_t)blank;
         render(code, patterns[code]);
     }
-    return (long)(uintptr_t)patterns[code];
+    return (PSXLONG)(uintptr_t)patterns[code];
 }
 
-long Krom2RawAdd(unsigned long sjis)
+PSXLONG Krom2RawAdd(unsigned PSXLONG sjis)
 {
     return Krom2RawAdd2((unsigned short)sjis);
 }
