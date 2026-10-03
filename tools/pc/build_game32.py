@@ -205,10 +205,12 @@ ANDROID_BACKEND = {"src/pc/render/present_pass.c": "src/pc/render/gl_desktop_non
 ANDROID_LOADER = "src/pc/platform/android_loader.c"
 # arm64-v8a: a 64-bit app process has ART's heap low (0x02000000-0x22000000 on
 # a Xiaomi 11T Pro, Android 14) and its boot image near 0x70000000; the game
-# goes at 0x40000000, as the 64-bit Windows executable (below 4 GB, so its
+# goes at 0x60000000, where the spike's probe loaded a library both on that
+# phone and under the emulator's ARM translation, which holds 0x40000000
+# (below 4 GB, so its
 # function addresses fit the game's 4-byte slots; bit 30 set, the branch
 # thunks' fast path).
-ANDROID_GAME_BASE = 0x40000000 if A64 else 0x08000000
+ANDROID_GAME_BASE = 0x60000000 if A64 else 0x08000000
 ANDROID_GAME_SPAN = 0x04000000 if A64 else 0x02000000
 # Assembly comes per architecture: name_i386.S, name_x86_64.S or
 # name_aarch64.S.

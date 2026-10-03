@@ -45,8 +45,15 @@ def call(*args, quiet=False):
 def setup(build):
     clang = os.path.join(build_android_deps.llvm_bin(), "clang")
     runner = os.path.join(build, "runner")
+    # The base the build linked libgame.so at: its first LOAD segment.
+    readelf = os.path.join(build_android_deps.llvm_bin(), "llvm-readelf")
+    loads = [line.split() for line in subprocess.run([readelf, "-lW", os.path.join(build, "libgame.so")],
+                                                     capture_output=True, text=True, check=True).stdout.splitlines()
+             if line.split()[:1] == ["LOAD"]]
+    base = int(loads[0][2], 16)
+    span = (max(int(l[2], 16) + int(l[5], 16) for l in loads) - base + 0xffffff) & ~0xffffff
     subprocess.run([clang, "--target=aarch64-linux-android24", "-fPIE", "-pie", "-O2", "-Wall",
-                    "-DGAME_BASE=0x40000000", "-DGAME_SPAN=0x04000000",
+                    f"-DGAME_BASE=0x{base:x}", f"-DGAME_SPAN=0x{span:x}",
                     os.path.join(ROOT, "tools", "pc", "android", "runner.c"), "-ldl", "-o", runner], check=True)
     disc = os.environ.get("MEMORIES_DISC") or next(iter(sorted(glob.glob(os.path.join(ROOT, "game", "*.bin")))), None)
     if not disc:

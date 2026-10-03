@@ -28,5 +28,17 @@ Commands for the first phone session (Git Bash, from D:/DecompRecomp-arm64)
    wants a low image range (0x08000000 or 0x40000000) to be free.
    If abilist32 lists armeabi-v7a, also: run_apk.sh $SERIAL phone armeabi-v7a
 
-4. The game as a plain arm64 process (once A1 builds; headless, replays):
-   see notes/pc-build.md "Android arm64" for the exact push/run lines.
+4. The game as a plain arm64 process (headless; no taps on the phone):
+   export ANDROID_SDK_ROOT=D:/Android/sdk ANDROID_SERIAL=c7ffc349
+   export MEMORIES_DISC=D:/DecompRecomp/game/rpg-yfm.bin
+   python tools/pc/android/device_run.py setup tmp/pc/arm64wt-android
+   python tools/pc/replay.py play tests/pc/replays/first-duel --check        --executable tmp/pc/arm64wt-android/device.cmd
+   (a plain boot: MEMORIES_HEADLESS=1 MEMORIES_SPEED=-1 python
+    tools/pc/android/device_run.py run tmp/pc/arm64wt-android)
+
+5. The APK (the phone asks to confirm the install: tell the user first):
+   adb install -r tmp/pc/arm64wt-android/memories-arm64-v8a.apk
+   adb logcat -c; adb shell am start -n org.yfmredecomp.game/org.libsdl.app.SDLActivity
+   adb logcat -d -s memories:* SDL:* DEBUG:*
+   Look for the loader: "libgame.so loaded ... from its link address" or
+   "the game's address range at 0x60000000 is taken" means the base must move.

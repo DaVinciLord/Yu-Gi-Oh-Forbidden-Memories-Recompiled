@@ -3669,7 +3669,8 @@ reach of the faulting code, with the addressing register moved up by
 a direct branch).
 
 Host function addresses reach the game's 4-byte slots, so the game library
-is linked at 0x40000000 (`ANDROID_GAME_BASE` on arm64) and the loader
+is linked at 0x60000000 (`ANDROID_GAME_BASE` on arm64; the emulator's ARM
+translation holds 0x40000000) and the loader
 (`android_loader.c`, `ANDROID_DLEXT_RESERVED_ADDRESS`) puts it there: below
 4 GB, bit 30 set (the thunks' fast path), and clear of a 64-bit app
 process's low ART heap (0x02000000-0x22000000 on a Xiaomi 11T Pro, Android
