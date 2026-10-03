@@ -31,8 +31,6 @@ et les parcours de jeu du build structuré restent à valider. Les preuves de ga
 le spike : elles doivent être repassées sur le nouveau binaire d'intégration.
 Les journaux du rebase sont sous `tmp/arm64-integration/rebase-*`.
 
-## Entrée commune et lanceurs — 3 octobre 2026
-
 ## Rotation des sprites — 4 octobre 2026
 
 Le `Sprite` privé de `src/pc/sdk/libgs.c` gardait `long rotate`, donc huit
@@ -51,12 +49,26 @@ et le parcours Free Duel passent (`sprite-fixed-build.log`,
 La progression contrôlée du village a gagné Jono puis les trois villageois
 (opponents 2, 4, 5, 6), sans poke des résultats ou des flags, en français et
 en anglais. Les flags progressent et les scènes deviennent 98, 100, 102, 104.
-Une répétition de Cross après la scène 104 ne rejoint pas immédiatement
-la carte ou un autre duel dans les deux langues. L'état exact de ce menu
-reste en investigation ; ne pas conclure à un bug français ni à une campagne
-complète validée. Probes et journaux sous `tmp/arm64-campaign/gauntlet-*`.
+Une répétition de Cross après la scène 104 revient au menu « Parler à quelqu'un
+d'autre / Sortir » dans les deux langues. Les deux choix sont activés, mais
+le premier revient au menu une fois les villageois épuisés. Choisir Sortir
+rejoint la carte au domicile (location 10) et pose le flag 0x6F. Le vrai retour
+au Duel Ground (Left vers location 12, puis Cross) conserve les flags et passe
+par le script de revanche 0x277 ; Jono dit « J'ai perdu le dernier match ».
+Preuves : `exit-probe.log`, `reenter-grounds.log` et captures sous
+`tmp/arm64-campaign/fr-return-grounds`. Le runner durable
+`test_arm64_campaign.py` reproduit ces étapes en anglais et français et passe
+dans les deux langues (`campaign-regression.log`, sorties
+`tmp/arm64-campaign/test-18895/{0,2}`). Le flag de sortie est bien 0x6F
+(byte 13, masque 1), et les 256 octets de flags restent identiques au retour.
+Cela ne valide pas une campagne complète.
 
-## Entrée commune et lanceurs — preuves
+La CI de la correction des sprites est verte :
+[run 37158973251](https://github.com/DaVinciLord/Yu-Gi-Oh-Forbidden-Memories-Recompiled/actions/runs/37158973251),
+builds complets Linux/Windows/macOS, tests du vrai renderer en normal et sous
+ASan/UBSan LLVM 21.1.8 sur macOS 15.
+
+## Entrée commune et lanceurs — 3 octobre 2026
 
 La CI construit maintenant les trois jeux complets sans disque et ajoute un
 job macOS ARM64 (`macos-15`) avec LLVM 21.1.8, cache des dépendances vérifiées,

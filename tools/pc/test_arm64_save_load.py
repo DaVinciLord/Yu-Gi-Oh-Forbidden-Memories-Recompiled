@@ -29,7 +29,7 @@ def run(folder, disc, sequence, frames, label, settings=None, *, binary):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--disc', type=Path, default=ROOT/'game/YGOFM Vanilla (Base).bin')
-    p.add_argument('--binary', type=Path, default=ROOT/'tmp/arm64-build/memories-arm64')
+    p.add_argument('--binary', type=Path, default=ROOT/'tmp/pc/macos/memories-arm64')
     args = p.parse_args(); disc = args.disc.resolve()
     binary = args.binary.resolve()
     if not binary.is_file(): p.error('build the requested executable first')
