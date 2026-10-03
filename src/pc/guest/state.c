@@ -963,9 +963,10 @@ static int load(const char *path)
         free(image);
         return -1;
     }
-    if (header[0] == VERSION && chunk && size != sizeof(entry) && (size == 20 || size >= 72)) {
+    if (header[0] == VERSION && chunk && size != sizeof(entry) && (sizeof(void *) == 8 ? size == 20 : size >= 72)) {
         /* The registers at VSync: five 32-bit words from the 32-bit game,
-         * nine or more 64-bit ones from the 64-bit game. The rest of the
+         * nine or more 64-bit ones from the 64-bit game (another size here
+         * is refused below, as an unsupported state). The rest of the
          * state is laid out for that build as well: its native stack frames,
          * its variables and its subsystems' fields. */
         int other = sizeof(void *) == 8 ? 32 : 64;
