@@ -13,7 +13,9 @@ static int clamp(int value, int cap) { return value < 0 ? 0 : value > cap ? cap 
 int Fusion_Attack(FusionCard card) { return clamp(card.attack + card.modifier + card.terrain, caps[0]); }
 int Fusion_Defense(FusionCard card) { return clamp(card.defense + card.modifier + card.terrain, caps[1]); }
 
-/* Placement tests the actual equip id, not its inherited base/effect. */
+/* The bonus rule (the game's and the fusion helper's Tables_EquipBonus)
+ * follows the equip's effect, as placement does; without one (the tests)
+ * only Megamorph's own id gives 1000. */
 static int bonus(const FusionRules *rules, FusionCard equipment, FusionCard monster)
 {
     int retail = equipment.id == 657 ? 1000 : 500;

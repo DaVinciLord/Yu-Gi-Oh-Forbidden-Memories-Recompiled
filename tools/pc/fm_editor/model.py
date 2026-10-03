@@ -572,10 +572,13 @@ class Project:
 
     def effect_of(self, cid: int) -> int:
         """The disc card whose effect this one has when played (cards.c
-        Cards_EffectId): the one "effect" names, else its base, else itself."""
+        Cards_EffectId): the one "effect" names, else its base's (a replaced
+        base may name one), else itself."""
         extra = self.added[cid].extra if cid in self.added else self.card_extra.get(cid, {})
         named = self.resolve(extra["effect"]) if "effect" in extra else None
-        return named if named and named <= CARD_COUNT else self.base_of(cid)
+        if named and named <= CARD_COUNT:
+            return named
+        return self.effect_of(self.base_of(cid)) if cid in self.added else cid
 
     def is_ritual(self, cid: int) -> bool:
         """A ritual card a recipe may be for: typed Ritual and played as a

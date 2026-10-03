@@ -439,6 +439,12 @@ class CardsTab(Tab):
         choices = [] if own else [EFFECT_NONE]
         choices += [self.effect_label(eid) for eid in sorted(self.project.retail.cards) if self.effect_kind(eid) == kind]
         self.effect_box.configure(values=choices)
+        # An "effect" written for another type (shown as none) fits this one:
+        # shown, so that the change of type keeps it.
+        if self.current is not None and self.vars["effect"].get() == self._shown_effect:
+            stored = self.project.effect_of(self.current)
+            if self.effect_kind(stored) == kind and self.effect_label(stored) in choices:
+                self.vars["effect"].set(self.effect_label(stored))
         if self.vars["effect"].get() not in choices:
             self.vars["effect"].set(choices[0] if not own else self.effect_label(self.effect_default(self.current)))
 
