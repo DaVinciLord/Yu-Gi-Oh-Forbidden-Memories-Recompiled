@@ -49,6 +49,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from smoke import launcher  # noqa: E402
 import yfm_control  # noqa: E402
 
+
+def report(message: str, *, file=None) -> None:
+    """Keep diagnostics usable with Unicode paths on legacy Windows consoles."""
+    stream = sys.stdout if file is None else file
+    encoding = getattr(stream, "encoding", None) or "utf-8"
+    print(message.encode(encoding, errors="backslashreplace").decode(encoding), file=stream)
+
+
 ROOT = Path(__file__).resolve().parents[2]
 REPLAYS = ROOT / "tests/pc/replays"
 OUTPUT = ROOT / "tmp/pc/replays"
@@ -102,7 +110,7 @@ def write_replay(out: Path, meta: dict, files: dict[str, Path | str]) -> None:
             for item in sorted(out_dir.iterdir()):
                 archive.write(item, item.name)
         shutil.rmtree(out_dir, ignore_errors=True)
-    print(f"replay: wrote {out}")
+    report(f"replay: wrote {out}")
 
 
 # Recordings (recorder.h's lines).
@@ -159,7 +167,7 @@ def package_recording(out: Path, recording_path: Path, start_state: Path | None,
     if recording["E"] is None:
         raise SystemExit(f"{recording_path}: no E line (the game did not end cleanly); quit it, don't kill it")
     if recording["F"].get("clock") == "real":
-        print(f"replay: WARNING: {recording_path} ran on the real-time clock: it will not play back the same "
+        report(f"replay: WARNING: {recording_path} ran on the real-time clock: it will not play back the same "
               "(record with MEMORIES_DETERMINISTIC=1; notes/agent-control.md, step 3)", file=sys.stderr)
     lines = thin(recording_path.read_text(encoding="utf-8").splitlines(), max(hash_every, 1))
     files: dict[str, Path | str] = {}
@@ -222,12 +230,12 @@ def play_recorded(replay: Replay, executable: Path, out: Path, timeout: float) -
                                   stdout=log, stderr=subprocess.STDOUT, timeout=timeout).returncode
         except subprocess.TimeoutExpired:
             code = "timeout"
-    print(f"replay: {replay.name}: played in {time.monotonic() - started:.0f} s (exit {code})")
+    report(f"replay: {replay.name}: played in {time.monotonic() - started:.0f} s (exit {code})")
     if code != 0:
-        print(f"replay: {replay.name}: FAILED: game exit {code}; see {out / 'game.log'}")
+        report(f"replay: {replay.name}: FAILED: game exit {code}; see {out / 'game.log'}")
         return None
     if not actual.is_file():
-        print(f"replay: {replay.name}: FAILED: the game wrote no recording; see {out / 'game.log'}")
+        report(f"replay: {replay.name}: FAILED: the game wrote no recording; see {out / 'game.log'}")
         return None
     return actual
 
@@ -266,10 +274,10 @@ def completed(expected: dict, actual: dict, name: str) -> bool:
     """Require a clean, complete run even when hashes are thinned or updated."""
     if expected["E"] is None or actual["E"] is None:
         which = "expected recording" if expected["E"] is None else "playback"
-        print(f"replay: {name}: FAILED: {which} has no end marker")
+        report(f"replay: {name}: FAILED: {which} has no end marker")
         return False
     if any(got < wanted for got, wanted in zip(actual["E"], expected["E"])):
-        print(f"replay: {name}: ended at VBlank {actual['E'][0]} (frame {actual['E'][1]}), the recording "
+        report(f"replay: {name}: ended at VBlank {actual['E'][0]} (frame {actual['E'][1]}), the recording "
               f"at {expected['E'][0]} ({expected['E'][1]})")
         return False
     return True
@@ -290,21 +298,21 @@ def check(replay: Replay, actual_path: Path) -> bool:
     for (index, frame), value in sorted(expected["H"].items()):
         got = actual["H"].get((index, frame)) or (by_frame.get(frame) if index == last else None)
         if got != value:
-            print(f"replay: {replay.name}: FIRST DIFFERENCE at VBlank {index} (frame {frame} when recorded): "
+            report(f"replay: {replay.name}: FIRST DIFFERENCE at VBlank {index} (frame {frame} when recorded): "
                   f"expected {value}, got {got or 'no such frame (the run ended or took another path)'}")
             ok = False
             break
     else:
-        print(f"replay: {replay.name}: {len(expected['H'])} frames as recorded")
+        report(f"replay: {replay.name}: {len(expected['H'])} frames as recorded")
     for index, (frame, name) in sorted(expected["S"].items()):
         mine = actual["S"].get(index)
         if not mine:
-            print(f"replay: {replay.name}: no state taken at VBlank {index} in the play")
+            report(f"replay: {replay.name}: no state taken at VBlank {index} in the play")
             ok = False
             continue
         difference = first_ram_difference(replay.file(Path(name).name), Path(mine[1]))
         if difference:
-            print(f"replay: {replay.name}: RAM at the state checkpoint of VBlank {index} differs first at "
+            report(f"replay: {replay.name}: RAM at the state checkpoint of VBlank {index} differs first at "
                   f"{difference} (g_SDValue masked)")
             ok = False
             break
@@ -319,12 +327,12 @@ def play_scripted(replay: Replay, executable: Path, out: Path) -> bool:
     try:
         scenario.run(executable, out)
     except AssertionError as failure:
-        print(f"replay: {replay.name}: FAILED: {failure}")
+        report(f"replay: {replay.name}: FAILED: {failure}")
         return False
     except Exception as failure:   # the scenario could not run on this build
-        print(f"replay: {replay.name}: FAILED to run: {type(failure).__name__}: {failure}")
+        report(f"replay: {replay.name}: FAILED to run: {type(failure).__name__}: {failure}")
         return False
-    print(f"replay: {replay.name}: passed")
+    report(f"replay: {replay.name}: passed")
     return True
 
 
@@ -339,7 +347,7 @@ def play(path: Path, executable: Path, do_check: bool, update: bool, timeout: fl
         if out and passed:
             shutil.rmtree(out[0], ignore_errors=True)
         elif out:
-            print(f"replay: kept {out[0]}")
+            report(f"replay: kept {out[0]}")
     return passed
 
 
@@ -352,12 +360,12 @@ def play_in(path: Path, executable: Path, do_check: bool, update: bool, timeout:
         return play_scripted(replay, executable, out)
     header = replay.meta["header"]
     if header.get("clock") == "real":
-        print(f"replay: {replay.name}: recorded on the real-time clock, where each VBlank came at its own moment: "
+        report(f"replay: {replay.name}: recorded on the real-time clock, where each VBlank came at its own moment: "
               "it cannot be played back (only a run with MEMORIES_DETERMINISTIC=1 can)")
         return False
     build = (executable.parent / "buildid").read_text().strip() if (executable.parent / "buildid").exists() else "?"
     if header.get("build") and header["build"] != build:
-        print(f"replay: {replay.name}: recorded by build {header['build']}, playing on {build}")
+        report(f"replay: {replay.name}: recorded by build {header['build']}, playing on {build}")
     actual = play_recorded(replay, executable, out, timeout)
     if actual is None:
         return False
@@ -371,7 +379,7 @@ def play_in(path: Path, executable: Path, do_check: bool, update: bool, timeout:
         if not path.is_dir():
             raise SystemExit("--update rewrites a replay folder, not a zip")
         (path / replay.meta["recording"]).write_text("\n".join(lines) + "\n", encoding="utf-8")
-        print(f"replay: {replay.name}: checkpoints updated from this build")
+        report(f"replay: {replay.name}: checkpoints updated from this build")
         return True
     return check(replay, actual) if do_check else True
 
@@ -442,7 +450,7 @@ def main() -> int:
     replays = sorted(path for path in arguments.folder.iterdir()
                      if (path / "replay.json").exists() or path.suffix == ".yfmreplay")
     failed = [path.name for path in replays if not play(path, executable, True, False, arguments.timeout)]
-    print(f"replay: {len(replays) - len(failed)} of {len(replays)} passed" + (f"; failed: {', '.join(failed)}"
+    report(f"replay: {len(replays) - len(failed)} of {len(replays)} passed" + (f"; failed: {', '.join(failed)}"
                                                                                if failed else ""))
     return 1 if failed else 0
 

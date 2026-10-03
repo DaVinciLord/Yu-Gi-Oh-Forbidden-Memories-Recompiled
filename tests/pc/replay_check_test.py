@@ -4,6 +4,7 @@ A game closed while it waits for a VBlank presents its last frame without
 one, so the recording ends with two frame hashes at one VBlank, which the
 play reaches a VBlank later; the check must pass a play that agrees, and
 still name the first frame that differs."""
+import io
 import json
 from pathlib import Path
 import sys
@@ -83,7 +84,13 @@ def main() -> int:
     assert replay.header_from(parsed)["clock"] == "virtual"
     real = replay_of(work / "real", RECORDED.replace("clock: virtual", "clock: real"), clock="real")
     assert not replay.play(real.path, Path(sys.executable), True, False, 1), "a real-time recording is refused"
-    failed_runs(work)
+    # Windows CI runs under Unicode temp paths with a legacy stdout code page.
+    # Failure reporting must not throw before returning the failed verdict.
+    output = io.BytesIO()
+    with io.TextIOWrapper(output, encoding="cp1252", write_through=True) as console:
+        with mock.patch.object(sys, "stdout", console):
+            failed_runs(work / "paths-e\u0301-\u6771\u4eac")
+        assert b"\\u6771" in output.getvalue()
     print("replay check: ok")
     return 0
 
