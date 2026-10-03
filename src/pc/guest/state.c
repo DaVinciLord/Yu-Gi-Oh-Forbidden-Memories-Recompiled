@@ -572,14 +572,18 @@ static void apply(void)
     memcpy((void *)(uintptr_t)SCRATCHPAD, chunk + MEMORIES_GUEST_RAM_SIZE, SCRATCHPAD_SIZE);
     for (i = 0; i < region_count; i++) {
         Region *region = &regions[i];
-        size_t length = (size_t)(region->data_end - region->data), word;
+        size_t length = (size_t)(region->data_end - region->data), word, saved;
         tagged(tag, sizeof(tag), "data", region->name);
         chunk = find_chunk(&state, tag, &size);
-        if (chunk && size == length * 2) {
-            memcpy(region->data, chunk + length, length);
+        /* A shorter chunk is a state from before the variables that now
+         * end the section (the Windows build's small data, which came in
+         * after the rest: build_game32.py): those keep their values. */
+        saved = size / 2;
+        if (chunk && size % 2 == 0 && saved <= length) {
+            memcpy(region->data, chunk + saved, saved);
             /* Relocated words the game never changed follow this build. */
-            for (word = 0; word + 4 <= length; word += 4) {
-                if (!memcmp(chunk + word, chunk + length + word, 4) && memcmp(chunk + word, region->startup + word, 4)) {
+            for (word = 0; word + 4 <= saved; word += 4) {
+                if (!memcmp(chunk + word, chunk + saved + word, 4) && memcmp(chunk + word, region->startup + word, 4)) {
                     memcpy(region->data + word, region->startup + word, 4);
                 }
             }
@@ -590,6 +594,8 @@ static void apply(void)
         chunk = find_chunk(&state, tag, &size);
         if (chunk && size == (size_t)(region->bss_end - region->bss)) {
             memcpy(region->bss, chunk, size);
+        } else if (chunk) {
+            fprintf(stderr, "memories-pc: state: zeroed variables of '%s' do not match this build\n", region->name);
         }
     }
     subsystems(&state);
