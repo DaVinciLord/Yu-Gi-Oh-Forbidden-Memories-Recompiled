@@ -68,6 +68,13 @@ La CI de la correction des sprites est verte :
 builds complets Linux/Windows/macOS, tests du vrai renderer en normal et sous
 ASan/UBSan LLVM 21.1.8 sur macOS 15.
 
+Les quatorze parcours de gameplay repassent sur le binaire corrigé
+(`post-sprite-gameplay.log`, `tmp/arm64-gameplay/run-18997`), ainsi que
+sauvegarde normale, chargement neuf et les sept tris des deux panneaux par
+manette et clavier SDL dummy (`post-sprite-save-load.log`,
+`tmp/arm64-save-load/run-18996`). Le README indique désormais le build source
+macOS et les limites des save states/mods de code.
+
 ## Entrée commune et lanceurs — 3 octobre 2026
 
 La CI construit maintenant les trois jeux complets sans disque et ajoute un
