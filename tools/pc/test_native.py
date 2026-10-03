@@ -29,6 +29,7 @@ def main():
     if args.sanitize:
         flags += ["-fsanitize=address,undefined", "-fno-omit-frame-pointer"]
     cases = [
+        ("state-io", ["tests/pc/state_io_test.c", "src/pc/guest/state_io.c"], [], [None]),
         ("core", ["tests/pc/core_test.c", "src/pc/memory.c", "src/pc/rng.c",
                   "src/game/rand_get_interval.c", "src/game/util_compare_s16.c"],
          ["-Drand=Memories_Rand", "-Dsrand=Memories_Srand"], [None]),
@@ -60,11 +61,19 @@ def main():
                     "-o", str(binary)], check=True)
     subprocess.run([str(binary)], check=True)
     count += 1
+    binary = out / "arm64-state-context"
+    # Context restoration deliberately switches back to the caller's frame;
+    # this assembly boundary is verified without sanitizer stack bookkeeping.
+    subprocess.run([compiler, "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2", "-Isrc",
+                    "tests/pc/state_arm64_context_test.c", "src/pc/guest/translated_state_arm64.S",
+                    "-o", str(binary)], check=True)
+    subprocess.run([str(binary)], check=True)
+    count += 1
     binary = out / "native-state-lifecycle"
     subprocess.run([compiler, *flags, "-Wno-language-extension-token",
                     "-Wno-gnu-folding-constant", "-Wno-pointer-to-int-cast",
                     "-DMEMORIES_PC", "-fms-extensions", "tests/pc/state_translated_test.c",
-                    "src/pc/guest/state_translated.c", "src/pc/guest/translated_runtime.c",
+                    "src/pc/guest/state_translated.c", "src/pc/guest/state_io.c", "src/pc/guest/translated_runtime.c",
                     "src/pc/memory.c", "-o", str(binary)], check=True)
     subprocess.run([str(binary)], check=True)
     count += 1

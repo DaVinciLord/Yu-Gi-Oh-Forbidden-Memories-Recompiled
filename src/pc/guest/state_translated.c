@@ -163,18 +163,31 @@ int Memories_LastStateSlot(void)
     return 0; /* no state has been loaded */
 }
 
-int Memories_StateChunk(MemoriesState *state, const char *tag,
-                        const MemoriesStateField *fields, size_t count)
+int Memories_StateSaveHere(const char *path)
 {
-    (void)state; (void)tag; (void)fields; (void)count;
-    unsupported("state chunk serialization is unsupported by the native translated backend");
-    return 0;
+    (void)path;
+    unsupported("save states are unsupported on macOS ARM64; use the game's normal saves");
+    return -1;
 }
 
-int Memories_StateLoading(const MemoriesState *state)
+int Memories_StateLoadHere(const char *path, char *why, size_t why_size)
 {
-    (void)state;
-    return 0; /* this backend never constructs or loads a state */
+    (void)path;
+    if (why && why_size)
+        snprintf(why, why_size, "save states are unsupported on macOS ARM64; use the game's normal saves");
+    unsupported("state load rejected: i386 saved stacks cannot be restored on arm64");
+    return -1;
+}
+
+int Memories_StateStartupDone(void)
+{
+    return startup_checked;
+}
+
+uint32_t Memories_StateBuildId(void)
+{
+    extern const unsigned Memories_GameFingerprint;
+    return Memories_GameFingerprint;
 }
 
 void Memories_StateRemapRange(MemoriesState *state, uint32_t from,

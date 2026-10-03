@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define REGION_LIMIT 2048
 #define FUNCTION_LIMIT 8192
 /* External native data uses explicit guest-visible spans, never truncation. */
 #define EXTERNAL_BASE 0x80200000u
@@ -11,7 +10,9 @@
 struct Region { uintptr_t host; size_t length; u32 guest; };
 struct Function { u32 guest; uintptr_t host; };
 static MemoriesMemory *active;
-static struct Region regions[REGION_LIMIT];
+static struct Region *regions;
+static size_t region_capacity;
+static u32 automatic_cursor = 0xd0000000u;
 static struct Function functions[FUNCTION_LIMIT];
 static unsigned region_count, function_count;
 static void *(*function_resolver)(u32);
@@ -39,6 +40,10 @@ void GuestRuntime_Reset(void)
     active = NULL;
     function_resolver = NULL;
     region_count = function_count = 0;
+    free(regions);
+    regions = NULL;
+    region_capacity = 0;
+    automatic_cursor = 0xd0000000u;
 }
 int GuestRuntime_IsBound(void) { return active != NULL; }
 MemoriesMemory *GuestRuntime_Memory(void) { return active; }
@@ -62,13 +67,22 @@ int GuestRuntime_RegisterData(void *host, size_t length, u32 guest)
 {
     unsigned i;
     uintptr_t start = (uintptr_t)host;
-    if (!active || !host || !length || region_count == REGION_LIMIT ||
+    if (!active || !host || !length ||
         length > UINTPTR_MAX - start || guest < EXTERNAL_BASE || guest >= EXTERNAL_END ||
         length > EXTERNAL_END - guest) return -1;
     for (i = 0; i < region_count; ++i) {
         const struct Region *r = &regions[i];
         if ((start < r->host + r->length && r->host < start + length) ||
             (guest < r->guest + r->length && r->guest < guest + length)) return -1;
+    }
+    if (region_count == region_capacity) {
+        size_t capacity = region_capacity ? region_capacity * 2 : 128;
+        struct Region *grown;
+        if (capacity <= region_capacity || capacity > SIZE_MAX / sizeof(*regions)) return -1;
+        grown = realloc(regions, (size_t)capacity * sizeof(*regions));
+        if (!grown) return -1;
+        regions = grown;
+        region_capacity = capacity;
     }
     regions[region_count++] = (struct Region){start, length, guest};
     return 0;
@@ -86,7 +100,7 @@ int GuestRuntime_RegisterFunction(u32 guest, void (*host)(void))
 }
 void GuestRuntime_RegisterAutomatic(void *host, size_t length)
 {
-    u32 candidate = 0xd0000000u;
+    u32 candidate = automatic_cursor;
     unsigned i;
     int moved;
     if (!host || !length) return;
@@ -109,11 +123,14 @@ void GuestRuntime_RegisterAutomatic(void *host, size_t length)
         }
     } while (moved);
     if (GuestRuntime_RegisterData(host, length, candidate)) invalid("cannot register native allocation", (uintptr_t)host, length);
+    automatic_cursor = (u32)(((size_t)candidate + length + 15u) & ~(size_t)15u);
 }
 int GuestRuntime_UnregisterData(void *host)
 {
     unsigned i;
     for (i = 0; i < region_count; ++i) if (regions[i].host == (uintptr_t)host) {
+        if (regions[i].guest >= 0xd0000000u && regions[i].guest < automatic_cursor)
+            automatic_cursor = regions[i].guest;
         regions[i] = regions[--region_count];
         return 0;
     }

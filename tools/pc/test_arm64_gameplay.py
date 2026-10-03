@@ -104,8 +104,8 @@ def inputs(third=False, magic=False):
     events += [(f+6, '0000') for f, _ in list(events)]
     return ','.join(f'{f}:{b}' for f, b in sorted(events))
 
-def run(case, disc):
-    folder = ROOT/'tmp/arm64-gameplay'/case
+def run(case, disc, binary, output, language=0):
+    folder = output/case
     mods = folder/'mods'; mods.mkdir(parents=True, exist_ok=True)
     if case in ('equip', 'magic', 'victory', 'animated-battle', 'trap', 'trap-threshold',
                 'ritual', 'ritual-failure', 'ritual-retail'):
@@ -135,7 +135,7 @@ def run(case, disc):
     env = {k:v for k,v in os.environ.items() if not k.startswith('MEMORIES_')}
     env.update(MEMORIES_HEADLESS='1', MEMORIES_NO_AUDIO='1',
                MEMORIES_NO_GAMEPAD='1', MEMORIES_NO_UPDATE_CHECK='1',
-               MEMORIES_SPEED='-1', MEMORIES_TRACE_GAMEPLAY='1',
+               MEMORIES_SPEED='-1', MEMORIES_TRACE_GAMEPLAY='1', MEMORIES_LANGUAGE=str(language),
                MEMORIES_DISC=str(disc), MEMORIES_USER_DIR=str(folder/'user'),
                MEMORIES_MODS_DIR=str(mods), MEMORIES_INPUT=inputs(case == 'fusion', case in ('magic','victory')),
                MEMORIES_DUMP_FRAME='11500', MEMORIES_DUMP_PATH=str(folder/'end.ppm'))
@@ -168,7 +168,7 @@ def run(case, disc):
         env['MEMORIES_MODE_AT'] = '1000:6'
     log = folder/'run.log'
     with log.open('w') as stream:
-        subprocess.run([str(ROOT/'tmp/arm64-build/memories-arm64')], cwd=ROOT,
+        subprocess.run([str(binary)], cwd=ROOT,
                        env=env, stdout=stream, stderr=subprocess.STDOUT,
                        check=True, timeout=240)
     text = log.read_text()
@@ -253,8 +253,14 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--disc', type=Path, default=ROOT/'game/YGOFM Vanilla (Base).bin')
     p.add_argument('--case', choices=CASES)
+    p.add_argument('--binary', type=Path, default=ROOT/'tmp/arm64-build/memories-arm64')
+    p.add_argument('--output', type=Path, default=ROOT/f'tmp/arm64-gameplay/run-{os.getpid()}')
+    p.add_argument('--language', type=int, choices=range(6), default=0)
     args = p.parse_args()
     disc = args.disc.resolve()
     if not disc.is_file(): p.error('a user-owned retail disc is required')
-    for case in ([args.case] if args.case else CASES): run(case, disc)
+    binary = args.binary.resolve()
+    if not binary.is_file(): p.error('build the requested executable first')
+    for case in ([args.case] if args.case else CASES):
+        run(case, disc, binary, args.output.resolve(), args.language)
 if __name__ == '__main__': main()

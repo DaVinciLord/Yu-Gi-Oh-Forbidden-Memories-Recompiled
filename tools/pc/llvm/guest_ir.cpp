@@ -72,39 +72,43 @@ static void inspect(Module &module, StringRef output) {
   result["signatures"] = std::move(signatures);
   writeJSON(output, std::move(result));
 }
+static void renameGlobal(Module &module, GlobalValue *value, StringRef target) {
+  if (!value || value->getName() == target) return;
+  auto *existing = module.getNamedValue(target);
+  if (!existing) { value->setName(target); return; }
+  if (value->getValueID() != existing->getValueID() || value->getType() != existing->getType())
+    fail("incompatible renamed symbols: " + target);
+  if (!value->isDeclaration() && !existing->isDeclaration())
+    fail("duplicate renamed definition: " + target);
+  // Opaque pointers let differently spelled declarations of one address
+  // share its definition; each call retains its own LLVM function type.
+  if (!value->isDeclaration()) {
+    existing->replaceAllUsesWith(value);
+    existing->eraseFromParent();
+    value->setName(target);
+  } else {
+    value->replaceAllUsesWith(existing);
+    value->eraseFromParent();
+  }
+}
 static void normalize(Module &module, const json::Object &options) {
-  // Explicit assembler names use LLVM's no-mangling prefix. Mach-O needs the
-  // ordinary C name so platform decoration is applied by code generation.
+  // Gather names before merging, since erasing a declaration invalidates
+  // iteration over the module's symbol lists.
+  SmallVector<std::pair<std::string, std::string>> assemblerNames;
   for (auto &value : module.global_values()) {
     StringRef name = value.getName();
-    if (name.starts_with("\1")) {
-      name = name.drop_front();
-      if (name.starts_with("_")) name = name.drop_front();
-      std::string normalized = name.str();
-      value.setName(normalized);
-    }
+    if (!name.starts_with("\1")) continue;
+    StringRef target = name.drop_front();
+    if (target.starts_with("_")) target = target.drop_front();
+    assemblerNames.emplace_back(name.str(), target.str());
   }
+  for (auto &entry : assemblerNames)
+    renameGlobal(module, module.getNamedValue(entry.first), entry.second);
   if (auto *renames = options.getObject("renames"))
     for (auto &entry : *renames) {
       auto target = entry.second.getAsString();
       if (!target) fail("rename target must be a string");
-      auto *value = module.getNamedValue(entry.first);
-      if (!value || value->getName() == *target) continue;
-      if (auto *existing = module.getNamedValue(*target)) {
-        auto *oldFunction = dyn_cast<Function>(value);
-        auto *newFunction = dyn_cast<Function>(existing);
-        if (!oldFunction || !newFunction) fail("duplicate renamed global: " + *target);
-        if (!oldFunction->isDeclaration() && !newFunction->isDeclaration())
-          fail("duplicate renamed definition: " + *target);
-        if (!oldFunction->isDeclaration()) {
-          newFunction->replaceAllUsesWith(oldFunction);
-          newFunction->eraseFromParent();
-          oldFunction->setName(*target);
-        } else {
-          oldFunction->replaceAllUsesWith(newFunction);
-          oldFunction->eraseFromParent();
-        }
-      } else value->setName(*target);
+      renameGlobal(module, module.getNamedValue(entry.first), *target);
     }
   if (auto *drop = options.getArray("drop_definitions"))
     for (auto &entry : *drop)
@@ -263,6 +267,10 @@ public:
       auto callee = module.getOrInsertFunction("GuestRuntime_RegisterAutomatic", builder.getVoidTy(), builder.getPtrTy(), builder.getInt64Ty());
       for (auto &global : module.globals()) {
         if (global.isDeclaration() || global.getName().starts_with("llvm.")) continue;
+        // Registration gives each global its own guest span. LLVM may
+        // otherwise merge unnamed constants and their string suffixes,
+        // leaving distinct registered globals overlapping in host memory.
+        global.setUnnamedAddr(GlobalValue::UnnamedAddr::None);
         auto size = module.getDataLayout().getTypeAllocSize(global.getValueType());
         if (size.isScalable()) fail("scalable global is unsupported");
         if (size.getFixedValue()) builder.CreateCall(callee, {&global, builder.getInt64(size.getFixedValue())});

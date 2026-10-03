@@ -7,7 +7,7 @@ import struct
 import subprocess
 from test_arm64_gameplay import ROOT, inputs
 
-def run(folder, disc, sequence, frames, label, settings=None):
+def run(folder, disc, sequence, frames, label, settings=None, *, binary):
     mods = folder/'mods'; mods.mkdir(exist_ok=True)
     env = {k:v for k,v in os.environ.items() if not k.startswith('MEMORIES_')}
     env.update(MEMORIES_HEADLESS='1', MEMORIES_NO_AUDIO='1', MEMORIES_NO_GAMEPAD='1',
@@ -21,7 +21,7 @@ def run(folder, disc, sequence, frames, label, settings=None):
         env.pop('MEMORIES_HEADLESS', None)
     log = folder/(label+'.log')
     with log.open('w') as stream:
-        subprocess.run([str(ROOT/'tmp/arm64-build/memories-arm64')], cwd=ROOT, env=env,
+        subprocess.run([str(binary)], cwd=ROOT, env=env,
                        stdout=stream, stderr=subprocess.STDOUT, check=True, timeout=240)
     assert (folder/(label+'.ppm')).is_file(), f'missing completed frame: {log}'
     return log.read_text()
@@ -29,7 +29,10 @@ def run(folder, disc, sequence, frames, label, settings=None):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--disc', type=Path, default=ROOT/'game/YGOFM Vanilla (Base).bin')
+    p.add_argument('--binary', type=Path, default=ROOT/'tmp/arm64-build/memories-arm64')
     args = p.parse_args(); disc = args.disc.resolve()
+    binary = args.binary.resolve()
+    if not binary.is_file(): p.error('build the requested executable first')
     if not disc.is_file(): p.error('a user-owned retail disc is required')
     folder = ROOT/f'tmp/arm64-save-load/run-{os.getpid()}'
     folder.mkdir(parents=True, exist_ok=False)
@@ -37,7 +40,7 @@ def main():
     events = [(5600,'0040'), (5900,'0020'), (6200,'0020'), (6500,'4000')]
     events += [(f,'4000') for f in (6800,7100,7400,7800,8200,8600)]
     events += [(f+6,'0000') for f,_ in list(events)]
-    text = run(folder, disc, opening+','+','.join(f'{f}:{b}' for f,b in sorted(events)), 9000, 'save')
+    text = run(folder, disc, opening+','+','.join(f'{f}:{b}' for f,b in sorted(events)), 9000, 'save', binary=binary)
     assert 'scene=45 location=13 deck=40' in text, f'did not reach card shop: {folder}'
     slot = folder/'user/saves/slot01.sav'; data = slot.read_bytes()
     assert len(data) == 8192 and data[:2] == b'SC'
@@ -46,7 +49,7 @@ def main():
     assert data[0x200:0x880] == data[0x880:0xf00], 'save payload copies differ'
     events = [(700,'0008'), (780,'0040'), (820,'4000'), (1100,'4000'), (1400,'4000')]
     events += [(f+6,'0000') for f,_ in list(events)]
-    text = run(folder, disc, ','.join(f'{f}:{b}' for f,b in sorted(events)), 4000, 'load')
+    text = run(folder, disc, ','.join(f'{f}:{b}' for f,b in sorted(events)), 4000, 'load', binary=binary)
     assert 'mode=c2 sub=00 scene=45 location=0 deck=40' in text, f'fresh process did not restore campaign: {folder}'
     assert slot.read_bytes() == data, 'load unexpectedly changed the saved slot'
     # Reach standalone Build Deck through LOAD's real title menu. Cover
@@ -77,7 +80,7 @@ def main():
                             MEMORIES_SDL_SCRIPT=','.join(f'{f}:{op}:{k}' for f,op,k in sorted(script)))
         sequence += [(f+6,'0000') for f,_ in list(sequence)]
         text = run(folder, disc, ','.join(f'{f}:{b}' for f,b in sorted(sequence)), 6500,
-                   'deck-'+variant, settings)
+                   'deck-'+variant, settings, binary=binary)
         assert 'mode=c7' in text and 'gameplay frame=6480 mode=c8' in text, f'deck entry/exit failed: {folder}'
         for pane in (0,1):
             for choice in range(7):

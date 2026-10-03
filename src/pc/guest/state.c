@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "state.h"
+#include "state_io.h"
 #include "state_remap.h"
 #include "pc/platform/settings.h"
 #include "pc/platform/paths.h"
@@ -73,12 +74,7 @@ typedef struct Region {
     char *startup; /* the data as linked, before the game ran */
 } Region;
 
-struct MemoriesState {
-    int loading;
-    FILE *file;              /* saving to a file */
-    const uint8_t *image;    /* loading: the whole file */
-    size_t image_size;
-};
+
 
 static Region *regions;
 static unsigned region_count;
@@ -145,7 +141,6 @@ static uint8_t *pending_image;
 static uint32_t build_id; /* from the `buildid` file beside the executable */
 static size_t pending_size;
 
-int Memories_StateLoading(const MemoriesState *state) { return state->loading; }
 int Memories_LastStateSlot(void) { return last_loaded_slot; }
 
 void Memories_StateRequest(int what, int slot)
@@ -156,74 +151,11 @@ void Memories_StateRequest(int what, int slot)
     requested = what;
 }
 
-static void emit(MemoriesState *state, const void *data, size_t size)
-{
-    fwrite(data, 1, size, state->file);
-}
-
-/* Chunk: 16-byte tag, 32-bit size, payload. */
-static const uint8_t *find_chunk(const MemoriesState *state, const char *tag, size_t *size)
-{
-    size_t at = 16;
-    char padded[16];
-    memset(padded, 0, sizeof(padded));
-    strncpy(padded, tag, sizeof(padded) - 1);
-    while (at + 20 <= state->image_size) {
-        uint32_t length;
-        memcpy(&length, state->image + at + 16, 4);
-        if (length > state->image_size - at - 20) {
-            return NULL;
-        }
-        if (!memcmp(state->image + at, padded, 16)) {
-            *size = length;
-            return state->image + at + 20;
-        }
-        at += 20 + length;
-    }
-    return NULL;
-}
-
 void Memories_StateRemapRange(MemoriesState *state, uint32_t from, uint32_t to, uint32_t size)
 {
     if (state->loading) Memories_StateRemapImage((uint8_t *)state->image, state->image_size, from, to, size);
 }
 
-int Memories_StateChunk(MemoriesState *state, const char *tag, const MemoriesStateField *fields, size_t count)
-{
-    size_t total = 0, i, size;
-    const uint8_t *from;
-    for (i = 0; i < count; i++) {
-        total += fields[i].size;
-    }
-    if (!state->loading) {
-        char padded[16];
-        uint32_t length = (uint32_t)total;
-        memset(padded, 0, sizeof(padded));
-        strncpy(padded, tag, sizeof(padded) - 1);
-        emit(state, padded, 16);
-        emit(state, &length, 4);
-        for (i = 0; i < count; i++) {
-            emit(state, fields[i].data, fields[i].size);
-        }
-        return 0;
-    }
-    from = find_chunk(state, tag, &size);
-    if (!from) {
-        fprintf(stderr, "memories-pc: state: no chunk '%s' (%lu bytes in this build); that part keeps its current state\n",
-                tag, (unsigned long)total);
-        return 0;
-    }
-    if (size != total) {
-        fprintf(stderr, "memories-pc: state: layout changed for '%s' (%lu bytes in the state, %lu in this build); that part keeps its current state\n",
-                tag, (unsigned long)size, (unsigned long)total);
-        return 0;
-    }
-    for (i = 0; i < count; i++) {
-        memcpy(fields[i].data, from, fields[i].size);
-        from += fields[i].size;
-    }
-    return 1;
-}
 
 typedef struct { MemoriesState *state; int valid; } ModStateCheck;
 static void mod_state_tag(char *tag, size_t size, int owner)
@@ -250,14 +182,14 @@ static void mod_state_check(int owner, void *data, size_t size, unsigned version
     const uint8_t *chunk;
     (void)data;
     mod_state_tag(tag, sizeof(tag), owner);
-    chunk = find_chunk(check->state, tag, &have);
+    chunk = Memories_StateFindChunk(check->state, tag, &have);
     if (chunk && have >= sizeof(saved)) memcpy(&saved, chunk, sizeof(saved));
     if (!chunk || have != size + sizeof(version) || saved != version) check->valid = 0;
 }
 static int compatible_mods(MemoriesState *state)
 {
     size_t size = 0;
-    const uint8_t *chunk = find_chunk(state, "mod-set", &size);
+    const uint8_t *chunk = Memories_StateFindChunk(state, "mod-set", &size);
     unsigned saved = 0, current = Mods_Signature();
     ModStateCheck check = {state, 1};
     if (chunk && size == sizeof(saved)) memcpy(&saved, chunk, size);
@@ -318,7 +250,7 @@ _Static_assert(sizeof(LanguageChunk) == LANGUAGE_CODE_SIZE + 4 * sizeof(uint32_t
 static int state_language(const MemoriesState *state, LanguageChunk *saved)
 {
     size_t size = 0;
-    const uint8_t *chunk = find_chunk(state, "language", &size);
+    const uint8_t *chunk = Memories_StateFindChunk(state, "language", &size);
     memset(saved, 0, sizeof(*saved));
     if (!chunk || size < LANGUAGE_CODE_SIZE) {
         snprintf(saved->code, sizeof(saved->code), "%s", Language_Code(LANGUAGE_US));
@@ -483,8 +415,8 @@ static void serialize(MemoriesState *state)
     unsigned i;
     hold_signals(1);
     Spu_Hold(1);
-    emit(state, "YFMSTATE", 8);
-    emit(state, header, 8);
+    Memories_StateWrite(state, "YFMSTATE", 8);
+    Memories_StateWrite(state, header, 8);
     {
         MemoriesStateField fields[] = {{&entry, sizeof(entry)}};
         Memories_StateChunk(state, "entry", fields, 1);
@@ -566,14 +498,14 @@ static void apply(void)
     Spu_Hold(1);
     DeckMenu_ShopState(&state);
     PackShop_State(&state); /* its text, like the shop's menu, remapped first */
-    chunk = find_chunk(&state, "memory", &size);
+    chunk = Memories_StateFindChunk(&state, "memory", &size);
     memcpy((void *)(uintptr_t)MEMORIES_GUEST_RAM, chunk, MEMORIES_GUEST_RAM_SIZE);
     memcpy((void *)(uintptr_t)SCRATCHPAD, chunk + MEMORIES_GUEST_RAM_SIZE, SCRATCHPAD_SIZE);
     for (i = 0; i < region_count; i++) {
         Region *region = &regions[i];
         size_t length = (size_t)(region->data_end - region->data), word;
         tagged(tag, sizeof(tag), "data", region->name);
-        chunk = find_chunk(&state, tag, &size);
+        chunk = Memories_StateFindChunk(&state, tag, &size);
         if (chunk && size == length * 2) {
             memcpy(region->data, chunk + length, length);
             /* Relocated words the game never changed follow this build. */
@@ -586,15 +518,15 @@ static void apply(void)
             fprintf(stderr, "memories-pc: state: variables of '%s' do not match this build\n", region->name);
         }
         tagged(tag, sizeof(tag), "bss", region->name);
-        chunk = find_chunk(&state, tag, &size);
+        chunk = Memories_StateFindChunk(&state, tag, &size);
         if (chunk && size == (size_t)(region->bss_end - region->bss)) {
             memcpy(region->bss, chunk, size);
         }
     }
     subsystems(&state);
-    chunk = find_chunk(&state, "entry", &size);
+    chunk = Memories_StateFindChunk(&state, "entry", &size);
     memcpy(&entry, chunk, sizeof(entry));
-    chunk = find_chunk(&state, "stack", &size);
+    chunk = Memories_StateFindChunk(&state, "stack", &size);
     memcpy((void *)(uintptr_t)entry.esp, chunk, size);
     free(pending_image);
     pending_image = NULL;
@@ -867,7 +799,7 @@ static int load(const char *path)
     memcpy(header, image + 8, 8);
     state.image = image;
     state.image_size = (size_t)length;
-    chunk = find_chunk(&state, "entry", &size);
+    chunk = Memories_StateFindChunk(&state, "entry", &size);
     if (header[0] < VERSION) {
         refuse("%s was made by an older version of the game; save states don't carry over across this update "
                "(memory card saves do)", path);
@@ -888,9 +820,9 @@ static int load(const char *path)
         free(image);
         return -1;
     }
-    chunk = find_chunk(&state, "stack", &size);
+    chunk = Memories_StateFindChunk(&state, "stack", &size);
     if (!chunk || entry.esp < STACK_BASE || entry.esp >= STACK_TOP || size != STACK_TOP - entry.esp ||
-        !find_chunk(&state, "memory", &size) || size != MEMORIES_GUEST_RAM_SIZE + SCRATCHPAD_SIZE) {
+        !Memories_StateFindChunk(&state, "memory", &size) || size != MEMORIES_GUEST_RAM_SIZE + SCRATCHPAD_SIZE) {
         refuse("%s: damaged state", path);
         free(image);
         return -1;

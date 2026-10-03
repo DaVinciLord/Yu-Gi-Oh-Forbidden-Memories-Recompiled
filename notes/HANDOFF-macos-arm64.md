@@ -31,6 +31,50 @@ et les parcours de jeu du build structuré restent à valider. Les preuves de ga
 le spike : elles doivent être repassées sur le nouveau binaire d'intégration.
 Les journaux du rebase sont sous `tmp/arm64-integration/rebase-*`.
 
+## Reprise : build structuré fonctionnel et save states demandés
+
+L'utilisateur a explicitement demandé d'intégrer les save states sur macOS ARM64.
+Cette demande remplace leur exclusion du périmètre initial. Ils ne fonctionnent
+pas encore : le backend signale toujours ENOTSUP, jusqu'à l'intégration complète
+et à ses preuves de restauration. Ne pas confondre cela avec les sauvegardes
+normales, qui passent déjà sur le nouveau binaire.
+
+Le build structuré compile et lie `tmp/pc/macos-integration/memories-arm64`
+(750 unités après ajout des deux unités de fondation). La passe fusionne
+structurellement les déclarations et alias de noms assembleur, sans suffixes
+LLVM accidentels : six tests dans `test_llvm_guest.py`. Elle préserve les adresses
+des constantes enregistrées. La table des régions du runtime grandit désormais
+dynamiquement ; le build enregistre plus de 5 000 globals, au-delà de l'ancienne
+limite de 2 048. Le test runtime vérifie 8 192 régions et une libération/réutilisation,
+en exécution normale et ASan/UBSan.
+
+Fondations des save states :
+
+- `state_io.c/.h` partage le format des chunks YFMSTATE avec `state.c` ; les
+  tests vérifient round-trip, troncature, layout et overflow. Cible CMake/CTest
+  `pc_state_io`, incluse aussi dans `test_native.py`.
+- `state_arm64.h` et `translated_state_arm64.S` capturent/restaurent x19–x30,
+  SP et d8–d15, avec une continuation returns_twice. Le test optimisé restaure
+  depuis un appel imbriqué après perturbation des registres flottants.
+- Le raccordement de VSync, d'une pile de jeu dédiée, des allocations et des
+  sous-systèmes au format partagé reste à faire. Pour un chargement dans un
+  nouveau processus, les pointeurs hôtes, la pile et les adresses de retour
+  doivent être relocalisés ; les tokens guest ne doivent pas changer.
+- `Memories_GuestMap` est appelé avant `Memories_StateRunGame` et enregistre
+  actuellement la pile principale sous le token e0000000. Une pile dédiée
+  devra avoir sa propre région. `translated_jmp.c` conserve aussi des jmp_buf
+  hôtes qu'il faut traiter lors de la restauration.
+
+Les runners gameplay et sauvegarde acceptent maintenant `--binary` pour tester
+explicitement le nouveau build. Le runner gameplay accepte `--language` et
+isole chaque exécution dans un répertoire neuf. Les sauvegardes normales,
+chargement dans un nouveau processus, et deck retail/slots/clavier SDL passent.
+Le parcours victoire lancé avec `--language 2` atteint récompense et dialogue
+(ce contrôle ne prouve pas encore le retour au terrain de duel ou la fin des
+villageois rapportés par l'utilisateur). Les tests natifs passent 19 scénarios,
+y compris sous ASan/UBSan. Journaux : `tmp/arm64-integration/structured-*` et
+`state-foundations-*`. Aucun test de cadence ni fenêtre réelle.
+
 ## Objectif et consignes de travail
 
 Faire fonctionner Forbidden Memories sur le MacBook Air M3 de l’utilisateur : lancement natif ARM64, jeu réellement jouable, sauvegarde et chargement. Le build et un duel complet jusqu'à la défaite et au game over sont validés. La sauvegarde dans la boutique et le chargement dans un nouveau processus sont validés. Les essais manuels de fenêtre/audio sont laissés à l’utilisateur conformément à sa consigne. Voir la mise à jour de reprise ci-dessous avant les sections historiques.

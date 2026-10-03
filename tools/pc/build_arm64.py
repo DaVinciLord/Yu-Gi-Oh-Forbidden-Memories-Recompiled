@@ -237,7 +237,7 @@ def main():
              '-framework','CoreVideo','-framework','CoreAudio','-framework','AudioToolbox','-framework','Metal',
              '-framework','QuartzCore','-framework','GameController','-framework','UniformTypeIdentifiers',
              '-framework','CoreMedia','-framework','AVFoundation','-framework','OpenGL','-framework','Foundation',
-             '-framework','ForceFeedback','-framework','Carbon','-framework','CoreHaptics',
+             '-framework','CoreText','-framework','ForceFeedback','-framework','Carbon','-framework','CoreHaptics',
              '-o',str(build/'memories-arm64')]
     (build/'link-command.json').write_text(json.dumps(command,indent=2)+'\n')
     status=run_logged(command,build/'logs/link.log')

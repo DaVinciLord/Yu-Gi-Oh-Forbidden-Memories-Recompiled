@@ -26,7 +26,8 @@ int main(void)
 {
     MemoriesMemory *memory = calloc(1, sizeof(*memory));
     u8 external[8] = {0};
-    u8 adjacent[34] = {0};
+    struct { u8 bytes[34]; u8 guard[16]; } adjacent_storage = {0};
+    u8 *adjacent = adjacent_storage.bytes;
     s32 (*function)(s32, s32);
     unsigned i;
     assert(memory && GuestRuntime_Bind(memory) == 0);
@@ -63,6 +64,22 @@ int main(void)
     function = (s32 (*)(s32, s32))GuestRuntime_ResolveFunction((void *)(intptr_t)(int32_t)0x80010000u);
     assert(function(10, -3) == 7);
     for (i = 0; i < 4; ++i) expect_abort((int)i);
+    {
+        /* The structured build registers over 5,000 globals; keep tokens
+         * valid across table growth and reuse a released allocation. */
+        u8 *many = calloc(8192, 1);
+        u32 released;
+        assert(many);
+        for (i = 0; i < 8192; ++i) GuestRuntime_RegisterAutomatic(many + i, 1);
+        for (i = 0; i < 8192; ++i)
+            assert(GuestRuntime_ResolveData((void *)(uintptr_t)GuestRuntime_EncodePointer(many + i), 1) == many + i);
+        released = GuestRuntime_EncodePointer(many + 4000);
+        assert(!GuestRuntime_UnregisterData(many + 4000));
+        GuestRuntime_RegisterAutomatic(many + 4000, 1);
+        assert(GuestRuntime_EncodePointer(many + 4000) == released);
+        GuestRuntime_Reset();
+        free(many);
+    }
     GuestRuntime_Reset();
     free(memory);
     puts("Translated runtime: data/function round trips and fail-closed invalid addresses passed");
