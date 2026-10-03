@@ -10,6 +10,8 @@ a player would close the window.
     python3 tools/pc/crash_check.py              every kind, Linux build
     python3 tools/pc/crash_check.py --windows    the Windows build (under Wine off Windows)
     python3 tools/pc/crash_check.py segv hang    only these
+    python3 tools/pc/crash_check.py --windows --executable tmp/pc/win64/memories-pc.exe
+                                                 another build (the 64-bit one)
 
 Reports are left in tmp/pc/crash-check/<kind>/user/reports to read.
 """
@@ -156,11 +158,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("kinds", nargs="*", help=f"some of: {' '.join(CASES)}")
     parser.add_argument("--windows", action="store_true", help="the Windows build (under Wine off Windows)")
+    parser.add_argument("--executable", type=Path, help="the game to check (default: the system's usual build)")
     arguments = parser.parse_args()
     unknown = [kind for kind in arguments.kinds if kind not in CASES]
     if unknown:
         parser.error(f"no such kind: {' '.join(unknown)}")
-    executable = smoke.WINDOWS_EXECUTABLE if arguments.windows else smoke.DEFAULT_EXECUTABLE
+    executable = arguments.executable or (smoke.WINDOWS_EXECUTABLE if arguments.windows else smoke.DEFAULT_EXECUTABLE)
+    executable = executable.resolve()
     if not executable.is_file():
         sys.exit(f"crash_check: {executable} is not built")
     results = [check(kind, executable, arguments.windows) for kind in (arguments.kinds or CASES)]
