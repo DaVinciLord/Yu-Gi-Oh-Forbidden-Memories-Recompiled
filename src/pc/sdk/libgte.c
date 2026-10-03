@@ -1,6 +1,13 @@
 /* LIBGTE register setup over the software coprocessor. */
 #include "pc/compat/gte.h"
 #include "port_ptr.h" /* G32: the records below live in guest memory */
+/* The declarations the game calls through: a definition here that disagrees
+ * with one (a host `long` where the library has PSXLONG, say) is a compile
+ * error rather than a store of the wrong width on LP64 hosts. */
+#include "types.h"
+#include "psyq/libgte.h"
+#include "psyq/libgpu.h"
+#include "psyq/libgs.h"
 
 void InitGeom(void)
 {
@@ -14,13 +21,13 @@ void InitGeom(void)
     Memories_GteWriteControl(25, 0);
 }
 
-void SetGeomOffset(int x, int y)
+void SetGeomOffset(PSXLONG x, PSXLONG y)
 {
     Memories_GteWriteControl(24, (uint32_t)x << 16);
     Memories_GteWriteControl(25, (uint32_t)y << 16);
 }
 
-void SetGeomScreen(int h)
+void SetGeomScreen(PSXLONG h)
 {
     Memories_GteWriteControl(26, (uint32_t)h);
 }
@@ -61,11 +68,11 @@ static void load_matrix(unsigned base, const short *m)
     Memories_GteWriteControl(base + 4, (uint16_t)m[8]);
 }
 
-void SetRotMatrix(void *matrix) { load_matrix(0, matrix); }
-void SetLightMatrix(void *matrix) { load_matrix(8, matrix); }
-void SetColorMatrix(void *matrix) { load_matrix(16, matrix); }
+void SetRotMatrix(MATRIX *matrix) { load_matrix(0, matrix->m[0]); }
+void SetLightMatrix(MATRIX *matrix) { load_matrix(8, matrix->m[0]); }
+void SetColorMatrix(MATRIX *matrix) { load_matrix(16, matrix->m[0]); }
 
-void SetTransMatrix(void *matrix)
+void SetTransMatrix(MATRIX *matrix)
 {
     const int32_t *t = (const int32_t *)((const char *)matrix + 20);
     Memories_GteWriteControl(5, (uint32_t)t[0]);
@@ -123,9 +130,15 @@ int rcos(int angle) { return sin_1(((angle < 0 ? -angle : angle) + 0x400) & 0xff
 int Psx_csin(int angle) { return rsin(angle); }
 int Psx_ccos(int angle) { return rcos(angle); }
 
-typedef struct Matrix { short m[3][3]; short pad; int32_t t[3]; } Matrix;
-typedef struct ShortVector { short x, y, z, pad; } ShortVector;
-typedef struct LongVector { int32_t x, y, z, pad; } LongVector;
+/* The library's records under the names this file has always used. */
+typedef MATRIX Matrix;
+typedef SVECTOR ShortVector;
+typedef VECTOR LongVector;
+
+/* The console's layouts, which the game's data and the GTE code above share. */
+_Static_assert(sizeof(MATRIX) == 32 && sizeof(VECTOR) == 16 && sizeof(SVECTOR) == 8 && sizeof(CVECTOR) == 4 &&
+                   sizeof(DVECTOR) == 4,
+               "Psy-Q GTE records must keep their 32-bit layouts");
 
 static void sin_cos(int angle, int *sine, int *cosine)
 {
@@ -139,9 +152,9 @@ static void sin_cos(int angle, int *sine, int *cosine)
 Matrix *RotMatrix(ShortVector *r, Matrix *m)
 {
     int sx, cx, sy, cy, sz, cz, t;
-    sin_cos(r->x, &sx, &cx);
-    sin_cos(r->y, &sy, &cy);
-    sin_cos(r->z, &sz, &cz);
+    sin_cos(r->vx, &sx, &cx);
+    sin_cos(r->vy, &sy, &cy);
+    sin_cos(r->vz, &sz, &cz);
     m->m[0][2] = (short)sy;
     m->m[1][2] = (short)(-(cy * sx) >> 12);
     m->m[2][2] = (short)((cy * cx) >> 12);
@@ -161,9 +174,9 @@ Matrix *RotMatrix(ShortVector *r, Matrix *m)
 Matrix *RotMatrixZYX_gte(ShortVector *r, Matrix *m)
 {
     int sx, cx, sy, cy, sz, cz, sxsy, cxsy;
-    sin_cos(r->x, &sx, &cx);
-    sin_cos(r->y, &sy, &cy);
-    sin_cos(r->z, &sz, &cz);
+    sin_cos(r->vx, &sx, &cx);
+    sin_cos(r->vy, &sy, &cy);
+    sin_cos(r->vz, &sz, &cz);
     sxsy = (sx * sy) >> 12;
     cxsy = (cx * sy) >> 12;
     m->m[0][0] = (short)((cz * cy) >> 12);
@@ -183,9 +196,9 @@ Matrix *RotMatrixZYX_gte(ShortVector *r, Matrix *m)
 Matrix *RotMatrix_gte(ShortVector *r, Matrix *m)
 {
     int sx, cx, sy, cy, sz, cz, sxsy, cxsy;
-    sin_cos(r->x, &sx, &cx);
-    sin_cos(r->y, &sy, &cy);
-    sin_cos(r->z, &sz, &cz);
+    sin_cos(r->vx, &sx, &cx);
+    sin_cos(r->vy, &sy, &cy);
+    sin_cos(r->vz, &sz, &cz);
     sxsy = (sx * sy) >> 12;
     cxsy = (cx * sy) >> 12;
     m->m[0][0] = (short)((cz * cy) >> 12);
@@ -206,9 +219,9 @@ Matrix *RotMatrix_gte(ShortVector *r, Matrix *m)
 Matrix *RotMatrixZXY(ShortVector *r, Matrix *m)
 {
     int sx, cx, sy, cy, sz, cz, sxsy, sxcy;
-    sin_cos(r->x, &sx, &cx);
-    sin_cos(r->y, &sy, &cy);
-    sin_cos(r->z, &sz, &cz);
+    sin_cos(r->vx, &sx, &cx);
+    sin_cos(r->vy, &sy, &cy);
+    sin_cos(r->vz, &sz, &cz);
     m->m[2][1] = (short)sx;
     m->m[2][0] = (short)(-(cx * sy) >> 12);
     m->m[2][2] = (short)((cx * cy) >> 12);
@@ -227,9 +240,9 @@ Matrix *RotMatrixZXY(ShortVector *r, Matrix *m)
 Matrix *RotMatrixYXZ_gte(ShortVector *r, Matrix *m)
 {
     int sx, cx, sy, cy, sz, cz, sysx, cysx;
-    sin_cos(r->x, &sx, &cx);
-    sin_cos(r->y, &sy, &cy);
-    sin_cos(r->z, &sz, &cz);
+    sin_cos(r->vx, &sx, &cx);
+    sin_cos(r->vy, &sy, &cy);
+    sin_cos(r->vz, &sz, &cz);
     sysx = (sy * sx) >> 12;
     cysx = (cy * sx) >> 12;
     m->m[0][0] = (short)(((cy * cz) >> 12) + ((sz * sysx) >> 12));
@@ -291,7 +304,8 @@ static void multiply(const Matrix *a, const Matrix *b, Matrix *out)
             out->m[row][column] = result[row][column];
         }
     }
-    out->pad = (short)(result[2][2] < 0 ? -1 : 0); /* the routine stores IR3 as a whole word */
+    /* the routine stores IR3 as a whole word, into the padding after m[2][2] */
+    *(short *)((char *)out + 18) = (short)(result[2][2] < 0 ? -1 : 0);
 }
 
 Matrix *MulMatrix(Matrix *m0, Matrix *m1) { multiply(m0, m1, m0); return m0; }
@@ -301,7 +315,7 @@ Matrix *MulMatrix2(Matrix *m0, Matrix *m1) { multiply(m0, m1, m1); return m1; }
  * part (shifted product) and a signed high part (unshifted product << 3). */
 LongVector *ApplyMatrixLV(Matrix *m, LongVector *v, LongVector *out)
 {
-    int32_t in[3] = {v->x, v->y, v->z}, high[3], low[3], upper[3];
+    int32_t in[3] = {v->vx, v->vy, v->vz}, high[3], low[3], upper[3];
     int i;
     load_matrix(0, m->m[0]);
     for (i = 0; i < 3; i++) {
@@ -323,9 +337,9 @@ LongVector *ApplyMatrixLV(Matrix *m, LongVector *v, LongVector *out)
         Memories_GteWriteData(9 + (unsigned)i, (uint32_t)low[i]);
     }
     Memories_GteCommand(MVMVA_ROTATE_IR);
-    out->x = (int32_t)(Memories_GteReadData(25) + ((uint32_t)upper[0] << 3));
-    out->y = (int32_t)(Memories_GteReadData(26) + ((uint32_t)upper[1] << 3));
-    out->z = (int32_t)(Memories_GteReadData(27) + ((uint32_t)upper[2] << 3));
+    out->vx = (int32_t)(Memories_GteReadData(25) + ((uint32_t)upper[0] << 3));
+    out->vy = (int32_t)(Memories_GteReadData(26) + ((uint32_t)upper[1] << 3));
+    out->vz = (int32_t)(Memories_GteReadData(27) + ((uint32_t)upper[2] << 3));
     return out;
 }
 
@@ -368,9 +382,9 @@ Matrix *ScaleMatrix(Matrix *m, LongVector *v)
 {
     int i;
     for (i = 0; i < 3; i++) {
-        m->m[i][0] = (short)((m->m[i][0] * v->x) >> 12);
-        m->m[i][1] = (short)((m->m[i][1] * v->y) >> 12);
-        m->m[i][2] = (short)((m->m[i][2] * v->z) >> 12);
+        m->m[i][0] = (short)((m->m[i][0] * v->vx) >> 12);
+        m->m[i][1] = (short)((m->m[i][1] * v->vy) >> 12);
+        m->m[i][2] = (short)((m->m[i][2] * v->vz) >> 12);
     }
     return m;
 }
@@ -380,7 +394,7 @@ PSXLONG ReadGeomScreen(void) { return (PSXLONG)(Memories_GteReadControl(26) & 0x
 PSXLONG RotTransPers(ShortVector *v, PSXLONG *sxy, PSXLONG *p, PSXLONG *flag)
 {
     Memories_GteLoad(0, v);
-    Memories_GteLoad(1, &v->z);
+    Memories_GteLoad(1, &v->vz);
     Memories_GteCommand(0x0180001);
     *sxy = (PSXLONG)Memories_GteReadData(14);
     *p = (PSXLONG)Memories_GteReadData(8);
@@ -395,11 +409,11 @@ PSXLONG RotAverageNclip3(ShortVector *v0, ShortVector *v1, ShortVector *v2, PSXL
 {
     PSXLONG opz;
     Memories_GteLoad(0, v0);
-    Memories_GteLoad(1, &v0->z);
+    Memories_GteLoad(1, &v0->vz);
     Memories_GteLoad(2, v1);
-    Memories_GteLoad(3, &v1->z);
+    Memories_GteLoad(3, &v1->vz);
     Memories_GteLoad(4, v2);
-    Memories_GteLoad(5, &v2->z);
+    Memories_GteLoad(5, &v2->vz);
     Memories_GteCommand(0x0280030);
     *flag = (PSXLONG)Memories_GteReadControl(31);
     Memories_GteCommand(0x1400006);
@@ -422,11 +436,11 @@ PSXLONG RotAverageNclip3_nom(ShortVector *v0, ShortVector *v1, ShortVector *v2)
 {
     PSXLONG flag;
     Memories_GteLoad(0, v0);
-    Memories_GteLoad(1, &v0->z);
+    Memories_GteLoad(1, &v0->vz);
     Memories_GteLoad(2, v1);
-    Memories_GteLoad(3, &v1->z);
+    Memories_GteLoad(3, &v1->vz);
     Memories_GteLoad(4, v2);
-    Memories_GteLoad(5, &v2->z);
+    Memories_GteLoad(5, &v2->vz);
     Memories_GteCommand(0x0280030);
     flag = (PSXLONG)Memories_GteReadControl(31);
     Memories_GteCommand(0x158002d);
@@ -439,11 +453,11 @@ PSXLONG RotAverageNclip4(ShortVector *v0, ShortVector *v1, ShortVector *v2, Shor
 {
     PSXLONG opz;
     Memories_GteLoad(0, v0);
-    Memories_GteLoad(1, &v0->z);
+    Memories_GteLoad(1, &v0->vz);
     Memories_GteLoad(2, v1);
-    Memories_GteLoad(3, &v1->z);
+    Memories_GteLoad(3, &v1->vz);
     Memories_GteLoad(4, v2);
-    Memories_GteLoad(5, &v2->z);
+    Memories_GteLoad(5, &v2->vz);
     Memories_GteCommand(0x0280030);
     *flag = (PSXLONG)Memories_GteReadControl(31);
     Memories_GteCommand(0x1400006);
@@ -455,7 +469,7 @@ PSXLONG RotAverageNclip4(ShortVector *v0, ShortVector *v1, ShortVector *v2, Shor
     Memories_GteStore(13, sxy1);
     Memories_GteStore(14, sxy2);
     Memories_GteLoad(0, v3);
-    Memories_GteLoad(1, &v3->z);
+    Memories_GteLoad(1, &v3->vz);
     Memories_GteCommand(0x0180001);
     Memories_GteStore(14, sxy3);
     *flag |= (PSXLONG)Memories_GteReadControl(31);
@@ -470,7 +484,7 @@ PSXLONG RotAverageNclip4(ShortVector *v0, ShortVector *v1, ShortVector *v2, Shor
 static void load_vertex(unsigned index, const ShortVector *v)
 {
     Memories_GteLoad(index * 2, v);
-    Memories_GteLoad(index * 2 + 1, &v->z);
+    Memories_GteLoad(index * 2 + 1, &v->vz);
 }
 
 PSXLONG RotAverage3(ShortVector *v0, ShortVector *v1, ShortVector *v2, PSXLONG *sxy0, PSXLONG *sxy1, PSXLONG *sxy2, PSXLONG *p,
@@ -534,9 +548,9 @@ void RotTrans(ShortVector *v0, LongVector *v1, PSXLONG *flag)
 {
     load_vertex(0, v0);
     Memories_GteCommand(MVMVA_ROTATE_TRANSLATE_V0);
-    v1->x = (int32_t)Memories_GteReadData(25);
-    v1->y = (int32_t)Memories_GteReadData(26);
-    v1->z = (int32_t)Memories_GteReadData(27);
+    v1->vx = (int32_t)Memories_GteReadData(25);
+    v1->vy = (int32_t)Memories_GteReadData(26);
+    v1->vz = (int32_t)Memories_GteReadData(27);
     *flag = (PSXLONG)Memories_GteReadControl(31);
 }
 
@@ -545,27 +559,27 @@ void RotTransSV(ShortVector *v0, ShortVector *v1, PSXLONG *flag)
     uint32_t z;
     load_vertex(0, v0);
     Memories_GteCommand(MVMVA_ROTATE_TRANSLATE_V0);
-    v1->x = (short)Memories_GteReadData(9);
-    v1->y = (short)Memories_GteReadData(10);
+    v1->vx = (short)Memories_GteReadData(9);
+    v1->vy = (short)Memories_GteReadData(10);
     z = Memories_GteReadData(11); /* stored as a word: z and the pad after it */
-    v1->z = (short)z;
+    v1->vz = (short)z;
     v1->pad = (short)(z >> 16);
     *flag = (PSXLONG)Memories_GteReadControl(31);
 }
 
-void RotTransPersN(ShortVector *v0, int32_t *sxy, uint16_t *sz, uint16_t *p, uint16_t *flag, PSXLONG n)
+void RotTransPersN(ShortVector *v0, DVECTOR *v1, uint16_t *sz, uint16_t *p, uint16_t *flag, PSXLONG n)
 {
     do {
         load_vertex(0, v0++);
         Memories_GteCommand(0x0180001);
-        *sxy++ = (int32_t)Memories_GteReadData(14);
+        *(int32_t *)v1++ = (int32_t)Memories_GteReadData(14); /* SXY2 as one word */
         *sz++ = (uint16_t)Memories_GteReadData(19);
         *p++ = (uint16_t)Memories_GteReadData(8);
         *flag++ = (uint16_t)(Memories_GteReadControl(31) >> 12);
     } while (--n > 0);
 }
 
-PSXLONG RotColorDpq(ShortVector *v0, ShortVector *v1, uint32_t *v2, PSXLONG *sxy, uint32_t *v3, PSXLONG *flag)
+PSXLONG RotColorDpq(ShortVector *v0, ShortVector *v1, CVECTOR *v2, PSXLONG *sxy, CVECTOR *v3, PSXLONG *flag)
 {
     load_vertex(0, v0);
     Memories_GteCommand(0x0180001);
@@ -578,7 +592,7 @@ PSXLONG RotColorDpq(ShortVector *v0, ShortVector *v1, uint32_t *v2, PSXLONG *sxy
     return (PSXLONG)(int32_t)Memories_GteReadData(19) >> 2;
 }
 
-void NormalColorCol(ShortVector *v0, uint32_t *v1, uint32_t *v2)
+void NormalColorCol(ShortVector *v0, CVECTOR *v1, CVECTOR *v2)
 {
     load_vertex(0, v0);
     Memories_GteLoad(6, v1);
@@ -618,6 +632,9 @@ typedef struct DividePolygon4 {
 } DividePolygon4;
 
 _Static_assert(sizeof(DivideVertex) == 0x18 && sizeof(DivideLevel) == 0x8c, "DIVPOLYGON4 layout");
+_Static_assert(sizeof(DivideVertex) == sizeof(RVECTOR) && sizeof(DivideLevel) == sizeof(CRVECTOR4) &&
+                   sizeof(DividePolygon4) == sizeof(DIVPOLYGON4),
+               "DividePolygon4 is libgte.h's DIVPOLYGON4");
 
 static uint32_t *emit_ft4(uint32_t *packet, DividePolygon4 *work, const DivideVertex *a, const DivideVertex *b,
                           const DivideVertex *c, const DivideVertex *d)
@@ -668,12 +685,12 @@ static uint32_t *divide_ft4(uint32_t *packet, DividePolygon4 *work, uint32_t dep
 #undef BELOW
 #undef ABOVE
     for (i = 0; i < 3; i++) {
-        const short c0 = (&r[0]->v.x)[i], c1 = (&r[1]->v.x)[i], c2 = (&r[2]->v.x)[i], c3 = (&r[3]->v.x)[i];
-        (&level->r31.v.x)[i] = (short)((c3 + c1) >> 1);
-        (&level->r02.v.x)[i] = (short)((c0 + c2) >> 1);
-        (&level->r01.v.x)[i] = (short)((c0 + c1) >> 1);
-        (&level->r32.v.x)[i] = (short)((c3 + c2) >> 1);
-        (&level->centre.v.x)[i] = (short)((c0 + c1 + c3 + c2) >> 2);
+        const short c0 = (&r[0]->v.vx)[i], c1 = (&r[1]->v.vx)[i], c2 = (&r[2]->v.vx)[i], c3 = (&r[3]->v.vx)[i];
+        (&level->r31.v.vx)[i] = (short)((c3 + c1) >> 1);
+        (&level->r02.v.vx)[i] = (short)((c0 + c2) >> 1);
+        (&level->r01.v.vx)[i] = (short)((c0 + c1) >> 1);
+        (&level->r32.v.vx)[i] = (short)((c3 + c2) >> 1);
+        (&level->centre.v.vx)[i] = (short)((c0 + c1 + c3 + c2) >> 2);
     }
     for (i = 0; i < 2; i++) {
         const int t0 = r[0]->uv[i], t1 = r[1]->uv[i], t2 = r[2]->uv[i], t3 = r[3]->uv[i];
@@ -684,19 +701,19 @@ static uint32_t *divide_ft4(uint32_t *packet, DividePolygon4 *work, uint32_t dep
         level->centre.uv[i] = (uint8_t)((t0 + t1 + t3 + t2) >> 2);
     }
     Memories_GteLoad(0, &level->r01.v);
-    Memories_GteLoad(1, &level->r01.v.z);
+    Memories_GteLoad(1, &level->r01.v.vz);
     Memories_GteLoad(2, &level->r02.v);
-    Memories_GteLoad(3, &level->r02.v.z);
+    Memories_GteLoad(3, &level->r02.v.vz);
     Memories_GteLoad(4, &level->centre.v);
-    Memories_GteLoad(5, &level->centre.v.z);
+    Memories_GteLoad(5, &level->centre.v.vz);
     Memories_GteCommand(0x0280030);
     store_screen(&level->r01, 12, 17);
     store_screen(&level->r02, 13, 18);
     store_screen(&level->centre, 14, 19);
     Memories_GteLoad(0, &level->r31.v);
-    Memories_GteLoad(1, &level->r31.v.z);
+    Memories_GteLoad(1, &level->r31.v.vz);
     Memories_GteLoad(2, &level->r32.v);
-    Memories_GteLoad(3, &level->r32.v.z);
+    Memories_GteLoad(3, &level->r32.v.vz);
     Memories_GteCommand(0x0280030); /* the centre rides along as V2 again */
     depth++;
     if (work->ndiv == depth) {
@@ -723,10 +740,11 @@ static uint32_t *divide_ft4(uint32_t *packet, DividePolygon4 *work, uint32_t dep
     return packet;
 }
 
-uint32_t *DivideFT4(ShortVector *v0, ShortVector *v1, ShortVector *v2, ShortVector *v3, uint32_t *uv0, uint32_t *uv1,
-                    uint32_t *uv2, uint32_t *uv3, uint32_t *rgbc, uint32_t *packet, uint32_t *ot,
-                    DividePolygon4 *work)
+POLY_FT4 *DivideFT4(SVECTOR *v0, SVECTOR *v1, SVECTOR *v2, SVECTOR *v3, u32 *uv0, u32 *uv1, u32 *uv2, u32 *uv3,
+                    CVECTOR *colour, POLY_FT4 *first, u32 *ot, DIVPOLYGON4 *divp)
 {
+    uint32_t *packet = (uint32_t *)first, *rgbc = (uint32_t *)colour;
+    DividePolygon4 *work = (DividePolygon4 *)divp;
     const ShortVector *corners[4] = {v0, v1, v2, v3};
     const uint32_t *texture[4] = {uv0, uv1, uv2, uv3};
     PSXLONG sxy[4], p, otz, flag;
@@ -737,7 +755,7 @@ uint32_t *DivideFT4(ShortVector *v0, ShortVector *v1, ShortVector *v2, ShortVect
     }
     if (RotAverageNclip4(&work->r[0].v, &work->r[1].v, &work->r[2].v, &work->r[3].v, &sxy[0], &sxy[1], &sxy[2],
                          &sxy[3], &p, &otz, &flag) <= 0) {
-        return packet;
+        return first;
     }
     for (i = 0; i < 4; i++) {
         work->r[i].sx = (int16_t)sxy[i];
@@ -751,7 +769,7 @@ uint32_t *DivideFT4(ShortVector *v0, ShortVector *v1, ShortVector *v2, ShortVect
     work->rgbc = *rgbc;
     work->clut = (uint16_t)(*uv0 >> 16);
     work->tpage = (uint16_t)(*uv1 >> 16);
-    return divide_ft4(packet, work, 0, &work->level[0]);
+    return (POLY_FT4 *)divide_ft4(packet, work, 0, &work->level[0]);
 }
 
 void LibGte_State(MemoriesState *state)

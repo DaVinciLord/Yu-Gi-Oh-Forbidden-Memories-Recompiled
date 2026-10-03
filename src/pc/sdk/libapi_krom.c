@@ -30,10 +30,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Prototypes as psyq/libapi.h has them; that header's own libc declarations
- * clash with the host's, so it is not included here. */
-PSXLONG Krom2RawAdd(unsigned PSXLONG sjis);
-PSXLONG Krom2RawAdd2(unsigned short sjis);
+#include "pc/sdk/krom.h" /* checked against psyq/libapi.h in libetc.c */
 
 #define GLYPH_BYTES 30
 #define GLYPH_W 16

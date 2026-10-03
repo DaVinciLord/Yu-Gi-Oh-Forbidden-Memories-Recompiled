@@ -3,6 +3,17 @@
  * The VBlank "interrupt" is the platform's 60 Hz signal; everything reachable
  * from it must stay async-signal-safe (no stdio, no allocation, no Xlib). */
 #include "port_ptr.h" /* PSXLONG: the Psy-Q long */
+/* The declarations the game calls through: a definition below that disagrees
+ * with one (a host `long` where the library has PSXLONG, say) is a compile
+ * error rather than a value of the wrong width on LP64 hosts. Two of
+ * libapi.h's BIOS calls share a name with the host C library's. */
+#define rename Psx_rename
+#define _get_errno Psx_get_errno
+#include "psyq/libapi.h"
+#undef rename
+#undef _get_errno
+#include "psyq/libetc.h"
+#include "pc/sdk/krom.h" /* libapi_krom.c's prototypes, checked against libapi.h here */
 #include "pc/platform/platform.h"
 #include "pc/platform/button_layout.h"
 #include "pc/platform/settings.h"
@@ -136,9 +147,9 @@ static void on_vblank(void)
     }
 }
 
-PSXLONG EnterCriticalSection(void)
+int EnterCriticalSection(void)
 {
-    PSXLONG was_enabled = !critical;
+    int was_enabled = !critical;
     critical = 1;
     return was_enabled;
 }

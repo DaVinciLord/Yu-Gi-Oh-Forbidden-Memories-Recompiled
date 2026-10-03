@@ -25,18 +25,12 @@
 #include <string.h>
 #include <sys/stat.h>
 #include "pc/compat/posix.h"
+/* The declarations the game calls through (and kernel.h's DIRENTRY): a
+ * definition below that disagrees with one is a compile error rather than a
+ * result of the wrong width on LP64 hosts. */
+#include "psyq/libmcrd.h"
 
-/* From libmcrd.h and kernel.h, which pull in MIPS-only headers. */
-enum { McFuncExist = 1, McFuncAccept, McFuncReadFile, McFuncWriteFile };
-enum { McErrNone, McErrCardNotExist, McErrCardInvalid, McErrNewCard, McErrNotFormat, McErrFileNotExist,
-       McErrAlreadyExist, McErrBlockFull };
-struct DIRENTRY {
-    char name[20];
-    PSXLONG attr, size;
-    struct DIRENTRY *G32 next;
-    PSXLONG head;
-    char system[4];
-};
+_Static_assert(sizeof(struct DIRENTRY) == 40, "DIRENTRY keeps its 32-bit layout");
 
 #define CARD_SIZE 0x20000
 #define FRAME 128
