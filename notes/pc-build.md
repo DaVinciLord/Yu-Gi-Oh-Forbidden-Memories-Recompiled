@@ -2923,8 +2923,8 @@ drifted.
   is expected but not yet checked.) The width check comes before the mods check, so
   the mods refusal ("uses different mods...") is only ever between two
   states of one width, whose code mods are the same (none on 64-bit).
-- **Mods.** The 64-bit build carries the mods folder: every mod is copied
-  as data (`build_mods(code=False)`), and the game is built with
+- **Mods.** The 64-bit build carries the data mods (`build_mods(code=False)`
+  copies them and leaves the code mods out), and the game is built with
   `MEMORIES_NO_CODE_MODS`. The data mod loader is the 32-bit one, and what
   was run on 64-bit draws as there: cards and a texture pack (the gate
   replay below), a booster pack (state-load-rng's test mod), and the
@@ -2934,8 +2934,9 @@ drifted.
   64-bit frame check yet; star and duelist names come from the low memory
   region (X2), which no mod has exercised there. A mod with a `library` (3d-monsters,
   hand-camera, ai-hard-mode, yamyi-mods, the gameplay-rules example) is a
-  32-bit object: the game does not load it, and the Mods window shows
-  "needs a 64-bit build of this mod" beside it. It is not a broken mod, so
+  32-bit object: none ships with the 64-bit game, and one the player
+  installs is not loaded: the Mods window shows "needs a 64-bit build of
+  this mod" beside it. It is not a broken mod, so
   the other mods' Apply goes on, and it is not in a state's mod set. What
   stays off with it: `object_loader.c` maps an object wherever the system
   puts it and its relocations are i386 (`ObjectLoader_Load` refuses too),
@@ -2944,19 +2945,21 @@ drifted.
   i386 already). No mod SDK goes beside the 64-bit game: it builds 32-bit
   objects. `check_mod_abi.py --run --build <64-bit build>` plays a
   baseline release's mods there and requires that note for each code mod.
-  The replay tests/pc/replays/x64-data-mods (scratch/x64-x3: the card-pack
-  example with its two cards in the deck, and a texture pack of the
-  screens' sheets with every colour turned, made at play time by its
-  `mods.py` from the repository and the disc) was recorded on 32-bit and
-  plays on 64-bit with all 1145 frame hashes the same, also with
-  `MEMORIES_X64_HIGH_HEAP=1`.
+  A replay recorded on 32-bit with two data mods on (the card-pack example
+  with its two cards in the deck, and a texture pack of the screens'
+  sheets with every colour turned, made from the disc at play time) plays
+  on 64-bit with all 1145 frame hashes the same, also with
+  `MEMORIES_X64_HIGH_HEAP=1`; replays that make their own mods are not in
+  tools/pc/replay.py yet, so it is not among tests/pc/replays.
 - **Crash monitor.** On, as on 32-bit: the second copy of the game with the
   shared block. A thread's callers come from the unwind tables through
   dbghelp's `StackWalk64` on the game's process. `crash_check.py --windows
   --executable tmp/pc/win64/memories-pc.exe`: all 13 kinds end in their
   reports.
 - **Package.** `python tools/pc/package.py windows-x64` makes
-  `dist/yfm-redecomp-<version>-windows-x64.zip` beside the 32-bit
+  `dist/yfm-redecomp-<version>-windows-x64.zip` (its folder
+  `yfm-redecomp-<version>-x64`, with the data mods and a README that says
+  so) beside the 32-bit
   `-windows.zip` (the default now packs all three); `smoke.py` skips the
   cases that turn on a code mod for it, and `test_package.py` checks the
   x86-64 executable and that there is no SDK. The release workflow
