@@ -16,8 +16,10 @@ mod's staged settings. Compatibility lists requirements, ordering constraints
 and declared conflicts, then everything the mod changes that another enabled
 mod changes too, by kind with counts: the first four lines of each, **and N
 more** to show the rest (up to 200), a warning where only one mod's change is
-used and a dim line where they add up, agree or follow an `after`; the header
-counts the overlaps between all enabled mods ([When mods
+used and a dim line where they add up, agree or follow an `after`; a line
+about the mod alone (its starter pools that the game leaves out with these
+mods enabled) is counted apart, as left out rather than changed by another
+mod; the header counts the overlaps between all enabled mods ([When mods
 overlap](modding.md#when-mods-overlap)). They follow the enabled set, the
 order and the settings staged in the window; a setting that needs a restart
 counts there as staged (or as saved), so after **Apply changes** the list
