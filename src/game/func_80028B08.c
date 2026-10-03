@@ -12,6 +12,7 @@
 #include "../ygo_types.h"
 #ifdef MEMORIES_PC
 #include "pc/cards/tables.h"
+#include "pc/cards/pack_shop.h"
 #endif
 /*
  * Duel card-detail panel: builds the scratchpad sprite parameters for the
@@ -104,6 +105,29 @@ void func_80028B08(DisplayObject *obj, s32 arg1) {
         CTX->field_7 = 0x2C;
     }
 
+#ifdef MEMORIES_PC
+    {
+        /* A card pack's whole picture (pack_shop.h): drawn as the art is,
+           turning with the card, in the place of all the rest. */
+        PackShopPicture picture;
+
+        if (PackShop_Picture(obj, &picture)) {
+            PRM->attribute = obj->attribute;
+            PRM->xy.h.x = win->field_30.h.field_30 + picture.x;
+            PRM->xy.h.y = win->field_30.h.field_32 + picture.y;
+            PRM->extent.wh.w.word = picture.width;
+            PRM->extent.wh.h = picture.height;
+            PRM->rgb = win->field_0C;
+            PRM->cxcy.h.cx = picture.clut_x;
+            PRM->cxcy.h.cy = picture.clut_y;
+            PRM->uv.b.lo = picture.u;
+            PRM->uv.b.hi = picture.v;
+            PRM->tpage = picture.tpage;
+            DisplayObject_SubmitPacket(PRM, CTX, arg1, arg, EXT);
+            return;
+        }
+    }
+#endif
     PRM->attribute = obj->attribute;
     PRM->xy.h.x = win->field_30.h.field_30 + 0x13;
     PRM->xy.h.y = win->field_30.h.field_32 + 0x32;
