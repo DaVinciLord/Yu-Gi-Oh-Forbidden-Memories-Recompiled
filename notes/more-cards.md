@@ -300,8 +300,9 @@ the trade screen and its commit.
 
 **Beside the save.** A memory card block has no room for them either, so
 `cards/<duelist code>.txt` in the user directory holds them, a section per
-save sequence (`save <n>`, then `chest2 <identity> <count>`, `seen2 <identity>` and
-`deck2 <slot> <old-id> <base> <identity>` lines, then `end`), the newest eight kept. The
+save sequence (`save <n>`, then `chest2 <identity> <count>`, `seen2 <identity>`,
+`deck2 <slot> <old-id> <base> <identity>` and `recent2 <index> <old-id> <identity>`
+lines, then `end`), the newest eight kept. The
 game's own save writes one (`SaveData_RequestWrite`, under the sequence the
 payload gets), a load reads the one for the loaded sequence
 (`SaveData_PollLoad`), a two-player load reads both saves', and a trade
@@ -312,6 +313,38 @@ when they last played with the mod. A deck that holds a card the run does not
 have (the mod was removed) gets each such slot's base back, from its `deck2`
 line, so a duel never deals a card that is not there. Ownership and seen records
 for missing mods are retained; returning mods recover them by stable identity.
+
+**The recent drops.** The save's list of the last 16 cards won
+(`gDuel_awRecentCardDrops`, save offset +0x5BC) gives Build Deck its "New!"
+mark and its sort by new, and holds card ids. A section has a
+`recent2 <index> <old-id> <identity>` line for each entry past the disc's
+cards (`-` for a card the run did not have when it saved), and a load puts the
+card of that identity back wherever the list holds the old id, or none when
+its mod is missing; so after mods are added, removed or reordered, "New!" stays
+on the card that was won. The old id alone is the key: a section's `recent2`
+lines are one numbering, that of the run that last wrote the list (after a
+trade its `deck2` lines may be a later run's), so an old id names one card
+wherever it stands in the list. A run with no card mod has none of these
+cards: its load clears their entries, and a save it makes keeps no "New!" on
+them. A section from before `recent2` has no such lines, and its
+list is left as it is: those ids are right as long as the mods are, and
+zeroing them would wipe right marks on the first load. A trade writes the
+save's first 0x400 bytes only, which do not hold the list, so its rewrite of the
+section keeps the `recent2` lines as they were. The disc's ids (722 and below)
+never change.
+
+The other fields of the 0x680-byte save state hold no card ids that need
+this. The deck has its `deck2` lines; the trunk (+0x50) and the Library's seen
+marks (campaign flags `0x120 + id`) are indexed by id and cover the disc's
+cards only, the added cards' being the `chest2` and `seen2` lines; the named
+rest is the duelist code, the sequence, the name, the campaign flags, the win
+and loss totals and the Free Duel records (wins and losses by opponent), the
+scene index, the sound output and the starchips. The card a duel drops is kept
+in the result record (`DuelResultDisplayState.dropped_card_id`), not in the
+save. A save written in game after a deck of added cards won one more held
+their ids at the deck (+0x00..+0x4F) and at +0x5BC only, nowhere else in the
+0x680 bytes; the unnamed bytes (+0x322..+0x333, +0x338..+0x3FF, +0x5B8..+0x5BB
+and the tail from +0x628) were all zero.
 
 **Its own art and text.** The game still loads the base's art record
 (`func_80029164`) and the base's thumbnail sector
