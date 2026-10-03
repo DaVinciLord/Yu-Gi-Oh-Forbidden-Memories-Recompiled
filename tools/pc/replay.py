@@ -440,7 +440,8 @@ def main() -> int:
     playing.add_argument("--update", action="store_true", help="take this build's frame hashes as the expected")
     playing.add_argument("--executable", type=Path)
     playing.add_argument("--timeout", type=float, default=900)
-    playing.add_argument("--env", nargs="*", default=[], help="KEY=VALUE variables for the game (MEMORIES_TRACE...)")
+    playing.add_argument("--env", action="append", default=[], metavar="KEY=VALUE",
+                         help="a variable for the game (MEMORIES_TRACE...); repeat for more")
     playing.add_argument("--keep", action="store_true", help="keep the play's folder (its log) when it passes")
     running = commands.add_parser("run", help="every replay in a folder, checked")
     running.add_argument("folder", type=Path, nargs="?", default=REPLAYS)
@@ -452,6 +453,9 @@ def main() -> int:
         arguments.executable = executable
         return record(arguments)
     if arguments.command == "play":
+        bad = [item for item in arguments.env if "=" not in item or item.startswith("=")]
+        if bad:
+            playing.error(f"--env takes KEY=VALUE, not {bad[0]!r}")
         more_env = dict(item.split("=", 1) for item in arguments.env)
         return 0 if play(arguments.replay, executable, arguments.check, arguments.update, arguments.timeout,
                          more_env, arguments.keep) else 1
