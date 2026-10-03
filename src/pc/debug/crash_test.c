@@ -119,6 +119,7 @@ void CrashTest_Frame(void)
         static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
         pthread_mutex_lock(&lock);
         pthread_mutex_lock(&lock);
+        __asm__ volatile(""); /* not a tail call: the report's stack shows this function (x86-64 made it one) */
     } else if (!strcmp(kind, "tickhang")) {
         CrashTest_TickHang = 1;
         for (;;) rest(60);
