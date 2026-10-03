@@ -11,7 +11,8 @@
  * there they come from a 16 MiB region at the fixed address
  * MEMORIES_LOW_MEMORY_BASE, below the interpreter's stack and after the
  * compiled text's region (src/pc/text/translation.c), mapped when the
- * first block is asked for. Blocks asked for in the same order land at the
+ * first block is asked for (where that address is taken, as under
+ * AddressSanitizer, Linux puts it below 2 GB instead). Blocks asked for in the same order land at the
  * same addresses in every run; the game asks for some in the order play
  * goes (a guardian star's name, a kanji glyph), so an address is not a
  * block's identity.

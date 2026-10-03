@@ -21,7 +21,25 @@ typedef struct Block {
 _Static_assert(sizeof(Block) <= ALIGN, "a block's header fits its alignment");
 
 static Block *free_list;
+static unsigned char *region; /* where the region is: MEMORIES_LOW_MEMORY_BASE, or the fallback below */
 static int state; /* 0 not tried, 1 mapped, -1 not to be had */
+
+/* Where the fixed address cannot be had, Linux x86-64 can still give 16 MiB
+ * below 2 GB (MAP_32BIT): AddressSanitizer keeps its shadow over
+ * 0x9E000000, so a test built with it gets the region there. The blocks
+ * stay below 4 GB, which is all the game needs of them; only their fixed
+ * place is lost (low_memory.h). The game itself holds the fixed range from
+ * the start on Windows, where there is no such flag. */
+static void *map_below_4gb(void)
+{
+#if defined(__linux__) && defined(__x86_64__) && defined(MAP_32BIT)
+    void *got = mmap(NULL, MEMORIES_LOW_MEMORY_SIZE, PROT_READ | PROT_WRITE, MAP_32BIT | MAP_PRIVATE | MAP_ANONYMOUS,
+                     -1, 0);
+    if (got != MAP_FAILED && (uintptr_t)got + MEMORIES_LOW_MEMORY_SIZE <= 0x100000000ull) return got;
+    if (got != MAP_FAILED) munmap(got, MEMORIES_LOW_MEMORY_SIZE);
+#endif
+    return NULL;
+}
 
 static int map(void)
 {
@@ -29,11 +47,15 @@ static int map(void)
     got = mmap(wanted, MEMORIES_LOW_MEMORY_SIZE, PROT_READ | PROT_WRITE,
                MAP_FIXED_NOREPLACE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (got != MAP_FAILED && got != wanted) munmap(got, MEMORIES_LOW_MEMORY_SIZE); /* taken as a hint */
-    if (got != wanted) {
+    if (got != wanted && (got = map_below_4gb()) != NULL) {
+        fprintf(stderr, "memories-pc: the low memory region's address 0x%08x is taken; it is at %p instead\n",
+                MEMORIES_LOW_MEMORY_BASE, got);
+    } else if (got != wanted) {
         fprintf(stderr, "memories-pc: cannot map the low memory region at 0x%08x; host blocks the game would be "
                         "handed are refused\n", MEMORIES_LOW_MEMORY_BASE);
         return -1;
     }
+    region = got;
     free_list = got;
     free_list->size = MEMORIES_LOW_MEMORY_SIZE;
     free_list->next = NULL;
@@ -79,7 +101,7 @@ static void refuse_free(const void *pointer, const char *why)
 
 void Memories_LowFree(void *pointer)
 {
-    const unsigned char *base = (const unsigned char *)(uintptr_t)MEMORIES_LOW_MEMORY_BASE;
+    const unsigned char *base = region;
     Block *block, **link, *after;
     if (!pointer) return;
     if (state <= 0 || (const unsigned char *)pointer < base + ALIGN ||
@@ -120,4 +142,7 @@ void Memories_LowFree(void *pointer)
         }
     }
 }
+#else
+/* Nothing here: an empty file is not ISO C (-Wpedantic). */
+typedef int memories_low_memory_unused;
 #endif

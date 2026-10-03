@@ -34,18 +34,18 @@ static void card_text_codes(void)
     static const unsigned char colour[] = {0xF8, 0x0A, 0x02, 'R', 'e', 'd', 0xFE, 'G', 0xF1, 0x23, 0xFF};
     unsigned char *text = encode_description("t", "a {f8 0B 04} m", 1);
     assert(!memcmp(text, icon, sizeof(icon)));
-    free(text);
+    Memories_LowFree(text);
     text = encode_description("t", "{f8 0A 02}Red\nG{g 123}", 1);
     assert(!memcmp(text, colour, sizeof(colour)));
-    free(text);
+    Memories_LowFree(text);
     /* Twenty letters with the icon, so "c" still fits; an unknown code is
      * its letters (and the braces, which this stub has no glyph for). */
     text = encode_description("t", "aaaaaaaaaaaaaaaa {f8 0B 04} c", 1);
     assert(text[16] == 0 && text[17] == 0xF8 && text[20] == 0 && text[21] == 'c' && text[22] == 0xFF);
-    free(text);
+    Memories_LowFree(text);
     text = encode_description("t", "{f8 99 04}", 1);
     assert(text[0] == 'f' && text[1] == 0);   /* "f", a space, and the rest has no glyph */
-    free(text);
+    Memories_LowFree(text);
 }
 static void set_recent(unsigned char *state, const unsigned short *ids)
 {
