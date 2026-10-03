@@ -431,18 +431,30 @@ void Starter_Build(void)
         int mod = Mods_Loaded(i);
         if (Mods_Active(mod)) Starter_Add(Mods_Id(mod), Mods_Manifest(mod));
     }
+    Starter_Check();
+}
+
+/* What a new game will make of the decks and pools, in the log: a written
+ * deck that weighs anything is dealt first, and pools whose draws are not a
+ * deck's forty leave it to the disc's rows (NameEntry_DealModStarterDeck). */
+void Starter_Check(void)
+{
+    unsigned weight = Starter_WeightTotal();
+    int draws = Starter_PoolDraws();
     if (deck_count) {
         LOG(LOG_MODS, "starter: %d deck%s offered, %u weight between them", deck_count, deck_count == 1 ? "" : "s",
-            Starter_WeightTotal());
+            weight);
     }
-    if (pool_count) {
-        int draws = Starter_PoolDraws();
+    if (!pool_count) return;
+    if (weight) {
+        LOG(LOG_MODS, "starter: %d pool%s offered, drawing %d cards; left out, as a written deck is dealt first",
+            pool_count, pool_count == 1 ? "" : "s", draws);
+    } else if (draws != STARTER_DECK_SIZE) {
+        LOG(LOG_MODS, "starter: %d pool%s offered, drawing %d cards, not the %d a deck holds; the disc's rows stand",
+            pool_count, pool_count == 1 ? "" : "s", draws, STARTER_DECK_SIZE);
+    } else {
         LOG(LOG_MODS, "starter: %d pool%s offered, drawing %d of %d cards", pool_count, pool_count == 1 ? "" : "s",
             draws, STARTER_DECK_SIZE);
-        if (draws != STARTER_DECK_SIZE) {
-            LOG(LOG_MODS, "starter: the pools draw %d cards, not the %d a deck holds; the disc's rows stand",
-                draws, STARTER_DECK_SIZE);
-        }
     }
 }
 

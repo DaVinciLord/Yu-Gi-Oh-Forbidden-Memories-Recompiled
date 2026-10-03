@@ -24,6 +24,11 @@
 /* Read every applied mod's "starter"; once, from Cards_Build. */
 void Starter_Build(void);
 
+/* What a new game will make of the decks and pools read, in the log (a
+ * written deck that weighs anything is dealt first; pools that do not draw
+ * a deck's forty leave it to the disc's rows). Starter_Build calls it. */
+void Starter_Check(void);
+
 /* Starter_Build without a mod list: one manifest's decks, for the tests. */
 struct JsonValue;
 void Starter_Add(const char *mod, const struct JsonValue *manifest);
