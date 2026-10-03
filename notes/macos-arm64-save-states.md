@@ -45,9 +45,9 @@ Ces tests utilisent le disque USA possédé par l'utilisateur, jamais fourni
 par le dépôt :
 
 ```sh
-python3 tools/pc/build_arm64.py
-python3 tools/pc/test_arm64_states.py --binary tmp/arm64-build/memories-arm64
-python3 tools/pc/test_arm64_state_control.py --binary tmp/arm64-build/memories-arm64
+python3 tools/pc/build.py --target macos
+python3 tools/pc/test_arm64_states.py
+python3 tools/pc/test_arm64_state_control.py
 ```
 
 Le premier compare une reprise dans un nouveau processus à la continuation

@@ -90,6 +90,12 @@ de progression française restent à reproduire séparément.
 
 ## Save states natifs intégrés — 3 octobre 2026
 
+Revalidation du 4 octobre sur `tmp/pc/macos/memories-arm64`, produit par
+l'entrée commune : reprise du deck dans un processus neuf avec pixels
+identiques, F5/F7 SDL dummy, trois rechargements via contrôle, RAM identique,
+refus des états incompatibles sans mutation et autosaves réussis. Journaux :
+`common-save-states.log` et `common-state-control.log`.
+
 La demande explicite de save states remplace leur exclusion initiale. Le backend
 ARM64 est maintenant raccordé aux commandes F5/F7, aux slots, aux autosaves et au
 canal de contrôle. Les sauvegardes normales restent distinctes. Détails,

@@ -271,7 +271,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--disc', type=Path, default=ROOT/'game/YGOFM Vanilla (Base).bin')
     p.add_argument('--case', choices=CASES)
-    p.add_argument('--binary', type=Path, default=ROOT/'tmp/arm64-build/memories-arm64')
+    p.add_argument('--binary', type=Path, default=ROOT/'tmp/pc/macos/memories-arm64')
     p.add_argument('--output', type=Path, default=ROOT/f'tmp/arm64-gameplay/run-{os.getpid()}')
     p.add_argument('--language', type=int, choices=range(6), default=0)
     p.add_argument('--state-frame', type=int, help='Save here and replay the remaining inputs in a fresh process')

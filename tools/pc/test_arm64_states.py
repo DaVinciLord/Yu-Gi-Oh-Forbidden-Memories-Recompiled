@@ -33,7 +33,7 @@ def run(binary, disc, folder, label, settings, *, require_duel=True):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--binary', type=Path, default=ROOT / 'tmp/pc/macos-integration/memories-arm64')
+    p.add_argument('--binary', type=Path, default=ROOT / 'tmp/pc/macos/memories-arm64')
     p.add_argument('--disc', type=Path, default=ROOT / 'game/YGOFM Vanilla (Base).bin')
     args = p.parse_args()
     binary, disc = args.binary.resolve(), args.disc.resolve()

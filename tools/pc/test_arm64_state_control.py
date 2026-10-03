@@ -28,7 +28,7 @@ def incompatible(data, tag, offset=0):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--binary', type=Path, default=ROOT / 'tmp/arm64-build/memories-arm64')
+    parser.add_argument('--binary', type=Path, default=ROOT / 'tmp/pc/macos/memories-arm64')
     args = parser.parse_args()
     folder = ROOT / f'tmp/arm64-states/control-{os.getpid()}'
     mods = folder / 'mods'
