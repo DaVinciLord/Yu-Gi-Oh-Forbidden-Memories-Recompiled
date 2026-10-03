@@ -15,9 +15,11 @@ check_g32.py says so:
            table (a local array of pointers, the address of a pointer
            variable) is left alone.
 
-Every game unit is parsed by the 64-bit build's clang (x86_64-w64-mingw32,
-the build's own flags) with its JSON AST, about a minute and a half. A cast
-inside a macro is reported, and fixed, at the macro's definition.
+Every game unit, and the port's SDK and platform code (src/pc/sdk,
+src/pc/platform, which build guest pointers from integers too; the window
+backends aside), is parsed by the 64-bit build's clang (x86_64-w64-mingw32,
+the build's own flags for each) with its JSON AST, about two minutes. A
+cast inside a macro is reported, and fixed, at the macro's definition.
 
 --fix inserts G32 into each cast it can: not a function-pointer cast (a
 call through one needs CALL32 as well) nor a typedef'd pointer, which it
@@ -34,8 +36,12 @@ import build_game32 as build  # noqa: E402  (the flags and the unit list)
 sys.argv = ARGV
 
 SIGNED = re.compile(r"^(const )?(volatile )?(signed )?(char|short|int|long|long long)$")
-FLAGS = [f for f in build.CFLAGS if f not in ("-g", "-gcodeview") and not f.startswith("-mretpoline")] + \
-        ["-fsyntax-only", "-ferror-limit=0", "-Xclang", "-ast-dump=json"]
+AST = ["-fsyntax-only", "-ferror-limit=0", "-Xclang", "-ast-dump=json"]
+FLAGS = [f for f in build.CFLAGS if f not in ("-g", "-gcodeview") and not f.startswith("-mretpoline")] + AST
+NATIVE_FLAGS = [f for f in build.NATIVE_CFLAGS if f not in ("-g", "-gcodeview") and not f.startswith("-mretpoline")] + \
+               ["-w"] + AST
+# The port's code that is scanned besides the game's.
+PORT = ("src/pc/sdk/", "src/pc/platform/")
 PREFIX = ROOT.replace("\\", "/") + "/"
 
 
@@ -82,7 +88,8 @@ class Locations:
 
 
 def scan(unit):
-    result = subprocess.run([build.CC, *FLAGS, unit], cwd=ROOT, capture_output=True)
+    flags = NATIVE_FLAGS if unit.startswith(PORT) else FLAGS
+    result = subprocess.run([build.CC, *flags, unit], cwd=ROOT, capture_output=True)
     try:
         tree = json.loads(result.stdout)
     except ValueError:
@@ -98,10 +105,16 @@ def scan(unit):
         kind = node.get("kind")
         if kind in ("CStyleCastExpr", "ImplicitCastExpr") and begin and begin[0]:
             path = begin[0][len(PREFIX):] if begin[0].startswith(PREFIX) else begin[0]
-            if path.startswith("src/") and not path.startswith("src/pc/"):
+            if path.startswith("src/") and (not path.startswith("src/pc/") or path.startswith(PORT)):
                 operand = (node.get("inner") or [{}])[0]
                 kinds = []
-                if node.get("castKind") == "IntegralToPointer" and "__ptr32" not in qual(node) and \
+                # Annotated when the OUTERMOST level is __ptr32: `(T *G32 *)i`
+                # still sign-extends. The sugared spelling keeps the levels in
+                # place; a G32 function pointer's is `(*__ptr32 __uptr)(...)`.
+                outer = qual(node).rstrip()
+                if node.get("castKind") == "IntegralToPointer" and \
+                        not re.search(r"(__ptr32|__uptr)$", outer) and \
+                        not re.match(r"^[^(]*\(\*\s*(__ptr32|__uptr)", outer) and \
                         (strip(operand) or {}).get("kind") != "IntegerLiteral" and SIGNED.match(desugared(operand)):
                     kinds.append("signed")
                 target = desugared(node).replace(" ", "")
@@ -125,6 +138,8 @@ def scan(unit):
 
 def units():
     found = glob.glob("src/game/*.c", root_dir=ROOT) + glob.glob("src/pc/game/*.c", root_dir=ROOT)
+    native = {source.replace("\\", "/") for source in build.NATIVE}
+    found += [path for path in native if path.startswith(PORT)]
     for _, pattern, _, _ in build.MODULES:
         found += glob.glob(pattern, root_dir=ROOT)
     return sorted({path.replace("\\", "/") for path in found})
