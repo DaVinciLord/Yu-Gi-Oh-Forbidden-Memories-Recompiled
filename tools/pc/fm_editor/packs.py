@@ -36,14 +36,28 @@ DEFAULT_MUSIC = 29520
 SOUND_KEYS = ("move", "buy", "refuse", "reveal", "back")
 DEFAULT_SOUNDS = {"move": 47, "buy": 48, "refuse": 9, "reveal": 12, "back": 8}
 REVEALS = ("flip", "quick", "list")
+IMAGE_STYLES = ("card", "full")      # "image_style": the picture as a card's art, or the whole picture
+CARD_VIEW = (140, 196)              # the big card's frame, where a "full" picture is fitted
+
+
+def fit_full(width: int, height: int):
+    """pack_shop.c fit_picture: the size a PNG is drawn at with "image_style":
+    "full", as large as fits the card with its shape kept, even across."""
+    cw, ch = CARD_VIEW
+    if width * ch > height * cw:
+        w, h = cw, (height * cw + width // 2) // width
+    else:
+        w, h = (width * ch + height // 2) // height, ch
+    return max(w & ~1, 2), max(h, 1)
+
 NOTHING_LEFT = ("refuse", "sell")    # "when_nothing_left"; "refuse" is the shop's default
 DESCRIPTION_BYTES = 255
 # \A and \Z: "$" would let a trailing newline through.
 KEY_RE = re.compile(r"\A[A-Za-z0-9_-]{1,63}\Z")
 
-PACK_KEYS = ("id", "name", "description", "image", "cover", "shop", "order", "price", "cost", "count", "cards",
-             "tiers", "slots", "guarantee", "pity", "duplicates", "max_copies", "include_added_cards", "stock",
-             "unlock", "locked", "password", "once", "listed", "reveal", "sounds", "when_nothing_left")
+PACK_KEYS = ("id", "name", "description", "image", "image_style", "cover", "shop", "order", "price", "cost", "count",
+             "cards", "tiers", "slots", "guarantee", "pity", "duplicates", "max_copies", "include_added_cards",
+             "stock", "unlock", "locked", "password", "once", "listed", "reveal", "sounds", "when_nothing_left")
 PACK_RESERVED = ("restock",)
 TIER_KEYS = ("odds", "cards", "label", "color", "sound", "reveal")
 COST_KEYS = ("starchips", "cards")
@@ -576,6 +590,12 @@ def read_pack(entry, resolve, mod: str = "mod", index: int = 0, taken_ids=(), de
     notes += check_unlock(where, entry.get("unlock", MISSING))
     if "locked" in entry and entry["locked"] not in ("shown", "hidden"):
         notes.append(("warning", f"{where}: \"locked\" is \"hidden\" or \"shown\"; hidden"))
+    if "image_style" in entry:
+        if entry["image_style"] not in IMAGE_STYLES:
+            notes.append(("warning", f"{where}: \"image_style\" is \"card\" or \"full\"; \"card\" is used"))
+        elif entry["image_style"] == "full" and "image" not in entry:
+            notes.append(("warning", f"{where}: \"image_style\" \"full\" shows the \"image\", and there is none; "
+                                     "its cover is shown"))
     if "password" in entry:
         pack.password = password_bits(entry["password"])
         if pack.password is None:
@@ -1096,7 +1116,8 @@ def minimize(entry):
     # The game lists a pack by default unless it has a password it can read.
     has_password = password_bits(out["password"]) is not None if "password" in out else False
     defaults = {"price": DEFAULT_PRICE, "duplicates": "allow", "include_added_cards": True, "locked": "hidden",
-                "reveal": "flip", "once": False, "listed": not has_password, "count": default_count(out)}
+                "reveal": "flip", "image_style": "card", "once": False, "listed": not has_password,
+                "count": default_count(out)}
     for key, value in defaults.items():
         if key in out and out[key] == value and type(out[key]) is type(value):
             del out[key]
