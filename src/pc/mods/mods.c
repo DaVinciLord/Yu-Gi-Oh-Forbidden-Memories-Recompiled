@@ -1214,7 +1214,7 @@ static const char *const manifest_keys[] = {
     "data", "textures", "cards", "audio", "min_api", "game", "requires", "after", "conflicts", "priority",
     "settings", "fusions", "equips", "rituals", "drops", "decks", "duelists", "text", "font",
     "chest_overflow", "terrain_bonus", "trap_thresholds", "equip_bonus_default", "passwords", "starter",
-    "title", "menu", "limits", "guardian_stars", "packs", "pack_shop",
+    "starter_pools", "title", "menu", "limits", "guardian_stars", "packs", "pack_shop",
 };
 
 /* How many letters to add, remove or change to turn one word into the
@@ -1350,8 +1350,8 @@ static int read_manifest(Mod *mod, const char *directory, const char *origin)
          * read once, at startup. */
         static const char *const tables[] = {"fusions", "equips", "rituals", "drops", "decks", "duelists",
                                              "text", "font", "terrain_bonus", "trap_thresholds",
-                                             "chest_overflow", "passwords", "starter", "limits",
-                                             "guardian_stars", "packs", "pack_shop"};
+                                             "chest_overflow", "passwords", "starter", "starter_pools",
+                                             "limits", "guardian_stars", "packs", "pack_shop"};
         for (size_t t = 0; t < sizeof(tables) / sizeof(tables[0]); t++) {
             const JsonValue *value = Json_Member(root, tables[t]);
             /* "text": "text.txt" is one file named as a string. */
