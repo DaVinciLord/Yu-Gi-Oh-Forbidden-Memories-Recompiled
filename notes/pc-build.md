@@ -3702,17 +3702,32 @@ Two things differ from windows-x64 beyond the pointer width:
   `pc/sdk/krom.h`), so a definition that disagrees with the game's
   declaration does not compile. `_Static_assert`s pin the records they
   touch (MATRIX, VECTOR, SVECTOR, GsSPRITE, GsOT, DIRENTRY).
-- **LLVM's AArch64 back end drops the truncation of a store through a
-  `__ptr32` pointer** (NDK r29's clang 21 and clang 22.1.8): `p->u16 |= x`
-  through a G32 pointer became `ldrh w8, [x9]; orr; str w8, [x9]`, and at
-  -O2 a plain `p->u8 = v` a 4-byte `str`, overwriting the next field (it
-  cleared DisplayObject.field_0A beside the flags, which relinked the
-  display lists: the duel drew cards on the wrong side of the field and the
-  portraits out of place, while the game's state stayed in step). Loads are
-  right. On arm64 every C unit is compiled through IR, and
-  `tools/pc/ptr32_stores.py` sends each store and memcpy/memmove/memset
-  through a G32 pointer via an addrspacecast to an ordinary pointer; it
-  fails the build if one is left.
+- **A workaround for an LLVM AArch64 bug: stores through `__ptr32`
+  pointers lose their width.** Affected: NDK r29's clang 21 (21.0.0,
+  r563880c) and upstream clang 22.1.8; x86-64 is not (the windows-x64 build
+  needs no workaround), and loads are selected correctly. `p->u16 |= x`
+  through a G32 pointer became `ldrh w8, [x9]; orr; str w8, [x9]`, at -O2 a
+  plain `p->u8 = v` a 4-byte `str`, and a 6-byte structure copy ended in a
+  4-byte store, overwriting what follows (it cleared DisplayObject.field_0A
+  beside the flags, which relinked the display lists: the duel drew cards on
+  the wrong side of the field and the portraits out of place, while the
+  game's state stayed in step). The front end's IR is right, so on arm64
+  every C unit is compiled to IR first and `tools/pc/ptr32_stores.py` sends
+  each store and memcpy/memmove/memset through a G32 pointer via an
+  addrspacecast to an ordinary pointer, then the IR is compiled; it fails
+  the build if such a write is left. A minimal repro and a draft upstream
+  report are in `tmp/research/llvm-ptr32-aarch64/` (not filed).
+
+  Retiring it: every arm64 build first compiles a canary
+  (`ptr32_stores.CANARY`: `p->u16 |= 1` at -O0, `p->u8 = v` at -O2, through
+  a G32 pointer, without the pass) and prints either `ptr32: compiler bug
+  still present (...): pass needed` or `ptr32: the compiler keeps store
+  widths through __ptr32: the pass can be retired`. With a new NDK, build
+  with `MEMORIES_PTR32_PASS=0`: while the bug is present the build stops
+  ("MEMORIES_PTR32_PASS=0 refused"); once the canary is clean it builds
+  without the pass, and if first-duel, full-duel, credits and menus all
+  play as recorded on arm64, drop the IR step from `compile_unit`, the
+  canary and `ptr32_stores.py`.
 
 Off the phone, the x86_64 emulator image (`api35x64`, Google APIs, which
 runs arm64 code through `libndk_translation`) runs `device_run.py` the same

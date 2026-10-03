@@ -60,6 +60,9 @@ ANDROID = ANDROID_ABI is not None
 # thunks are clang's -mharden-sls=blr ones (check_arm_branches).
 A64 = ANDROID_ABI == "arm64-v8a"
 WIDE = X64 or A64
+# arm64: every C unit through tools/pc/ptr32_stores.py (an LLVM AArch64 bug,
+# notes/pc-build.md "Android arm64"); main() checks the compiler first.
+PTR32_PASS = A64
 if TARGET not in ("linux", "windows", "windows-x64") and not ANDROID:
     sys.exit(f"--target {TARGET}: linux, windows, windows-x64 or android-<abi>")
 # tools/pc/build_win32_deps.py (--arch x86_64 for the 64-bit build)
@@ -319,7 +322,7 @@ def compile_unit(job):
     if os.path.exists(obj) and os.path.getmtime(obj) >= newest and \
             os.path.getmtime(obj) >= os.path.getmtime(source):
         return
-    if A64 and source.endswith(".c"):
+    if PTR32_PASS and source.endswith(".c"):
         # LLVM's AArch64 back end drops the truncation of a store through a
         # __ptr32 pointer (G32), so a u8/u16 store writes 4 bytes: the unit
         # goes through IR with those stores sent through 64-bit pointers
@@ -896,7 +899,7 @@ def check_x64_compiler(build):
         handle.write(version + "\n")
 
 def main():
-    global NEWEST_HEADER
+    global NEWEST_HEADER, PTR32_PASS
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--backend", choices=list(BACKENDS), default=os.environ.get("MEMORIES_BACKEND") or
                         "sdl")
@@ -940,6 +943,18 @@ def main():
             NATIVE_CFLAGS.extend([f"-I{SDL_SOURCE}/include", f"-I{SDL_BUILD}/include-revision"])
     os.chdir(ROOT)
     os.makedirs(options.build + "/obj", exist_ok=True)
+    if A64:
+        # The canary: is the compiler's AArch64 __ptr32 store bug still there?
+        # MEMORIES_PTR32_PASS=0 skips the pass, which is refused while it is.
+        bug = ptr32_stores.compiler_bug(CC, ANDROID_FLAGS, options.build)
+        skip = os.environ.get("MEMORIES_PTR32_PASS") == "0"
+        if bug and skip:
+            sys.exit("ptr32: compiler bug still present (" + ", ".join(bug) + "): the pass is needed; "
+                     "MEMORIES_PTR32_PASS=0 refused")
+        print("ptr32: compiler bug still present (" + ", ".join(bug) + "): pass needed" if bug else
+              "ptr32: the compiler keeps store widths through __ptr32: the pass can be retired "
+              "(notes/pc-build.md)" + ("; skipped" if skip else ""))
+        PTR32_PASS = not skip
     headers = glob.glob("src/**/*.h", recursive=True) + glob.glob("mods/**/*.h", recursive=True) + [__file__, "config/pc/host_symbol_renames.txt"]
     if A64:
         headers.append("tools/pc/ptr32_stores.py")   # it rewrites every unit's IR (compile_unit)

@@ -22,6 +22,10 @@ usual:
     %g32.0 = addrspacecast ptr addrspace(271) %p to ptr
     store i16 %v, ptr %g32.0
 
+This is a workaround: compiler_bug() is the canary every arm64 build runs
+first, and once it comes back empty for the NDK in use the pass can go
+(notes/pc-build.md, "Android arm64").
+
 rewrite() returns the new text and raises if such a write is left (a store,
 a memory intrinsic, an atomicrmw or a cmpxchg), so a construct it does not
 handle fails the build instead of miscompiling.
@@ -154,6 +158,34 @@ def _writes_32(line):
         return True
     match = _INTRINSIC.search(stripped)
     return bool(match and _POINTER.search(stripped[match.end():]))
+
+
+CANARY = """struct S { unsigned a; unsigned short f; unsigned char b, c; };
+extern struct S *__ptr32 __uptr gp;
+void canary_or16(void) { gp->f |= 1; }
+void canary_set8(unsigned char v) { gp->b = v; }
+"""
+_WIDE_STORE = re.compile(r"^\s*(str|stur)\s+w\d+,\s*\[x\d+")
+
+
+def compiler_bug(cc, flags, workdir):
+    """The canary cases the compiler gets wrong: a 4-byte store (str w) to a
+    2-byte field at -O0 or a 1-byte field at -O2, through a G32 pointer,
+    compiled without this pass. Empty once the compiler is fixed."""
+    import subprocess
+    source = f"{workdir}/ptr32_canary.c"
+    with open(source, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(CANARY)
+    bad = []
+    for level, function in (("-O0", "canary_or16"), ("-O2", "canary_set8")):
+        result = subprocess.run([cc, *flags, "-fms-extensions", "-w", level, "-S", source, "-o", "-"],
+                                capture_output=True, text=True)
+        if result.returncode:
+            raise RuntimeError(f"ptr32 canary did not compile: {result.stderr.strip()}")
+        body = result.stdout.split(f"\n{function}:", 1)[-1].split(".Lfunc_end", 1)[0]
+        if any(_WIDE_STORE.match(line) for line in body.splitlines()):
+            bad.append(f"{function} at {level}")
+    return bad
 
 
 def rewrite(text):
