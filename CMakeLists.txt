@@ -768,6 +768,18 @@ if(MEMORIES_PSYZ_ROOT)
     endif()
 endif()
 
+if(BUILD_TESTING)
+    # Units that hand the game host blocks call Memories_LowAlloc/LowFree
+    # (src/pc/guest/low_memory.h): real functions in a 64-bit clang build,
+    # malloc and free elsewhere, where low_memory.c compiles to nothing.
+    foreach(target memories_duelists_test memories_stars_test memories_cards_stars_test memories_cards_order_test
+                   memories_cards_identity_test memories_card_notes_test)
+        if(TARGET ${target})
+            target_sources(${target} PRIVATE src/pc/guest/low_memory.c)
+        endif()
+    endforeach()
+endif()
+
 # Every test leaves the scratch sweep to run after it (tests/pc/scratch.h).
 if(BUILD_TESTING)
     get_property(memories_all_tests DIRECTORY PROPERTY TESTS)
