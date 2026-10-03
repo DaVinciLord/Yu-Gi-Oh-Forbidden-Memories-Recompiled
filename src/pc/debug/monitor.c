@@ -165,7 +165,11 @@ void Monitor_NoteSystem(void)
         memset(&version, 0, sizeof(version));
         version.dwOSVersionInfoSize = sizeof(version);
         if (get_version) get_version(&version);
+#if defined(__x86_64__)
+        wow64 = TRUE; /* the OS's width: a 64-bit process runs on 64-bit Windows only (IsWow64Process says no) */
+#else
         IsWow64Process(GetCurrentProcess(), &wow64);
+#endif
         if (wine) {
             const char *sysname = "?", *release = "?";
             if (host) host(&sysname, &release);
@@ -238,9 +242,6 @@ static void begin_generation(void)
 static int wanted(void)
 {
     const char *off = getenv("MEMORIES_NO_MONITOR");
-#if defined(_WIN32) && defined(__x86_64__)
-    return 0; /* the 64-bit build runs without the crash monitor yet (its stack walk is i386) */
-#endif
     if (off && *off && strcmp(off, "0")) return 0;
 #ifdef _WIN32
     if (IsDebuggerPresent()) return 0;
@@ -701,6 +702,10 @@ static void dump_threads(void)
     closedir(tasks);
 }
 #else
+#if defined(__x86_64__)
+static void walk_remote_x64(const CONTEXT *registers);
+#endif
+
 static void dump_threads(void)
 {
     typedef HRESULT(WINAPI * DescriptionFunction)(HANDLE, PWSTR *);
@@ -747,7 +752,7 @@ static void dump_threads(void)
 #if defined(__x86_64__)
             put("    RIP=0x%llx RSP=0x%llx RBP=0x%llx\n", (unsigned long long)context.Rip,
                 (unsigned long long)context.Rsp, (unsigned long long)context.Rbp);
-            walk_remote(context.Rip, context.Rsp, context.Rbp);
+            walk_remote_x64(&context);
 #else
             put("    EIP=0x%08lx ESP=0x%08lx EBP=0x%08lx\n", (unsigned long)context.Eip, (unsigned long)context.Esp,
                 (unsigned long)context.Ebp);
@@ -760,6 +765,39 @@ static void dump_threads(void)
     }
     CloseHandle(snapshot);
 }
+
+#if defined(__x86_64__)
+/* x86-64 code keeps no frame chain to follow (Windows' own never has one):
+ * the callers come from the unwind tables, as the fault handler's do
+ * (crash.c), here through dbghelp on the game's process. */
+static void walk_remote_x64(const CONTEXT *registers)
+{
+    static int symbols_ready;
+    CONTEXT context = *registers;
+    STACKFRAME64 frame;
+    char name[160];
+    int depth;
+    if (!symbols_ready) symbols_ready = SymInitialize(game_process, NULL, TRUE) ? 1 : -1;
+    memset(&frame, 0, sizeof(frame));
+    frame.AddrPC.Offset = context.Rip;
+    frame.AddrPC.Mode = AddrModeFlat;
+    frame.AddrStack.Offset = context.Rsp;
+    frame.AddrStack.Mode = AddrModeFlat;
+    frame.AddrFrame.Offset = context.Rbp;
+    frame.AddrFrame.Mode = AddrModeFlat;
+    for (depth = 0; depth < 40; depth++) {
+        if (!StackWalk64(IMAGE_FILE_MACHINE_AMD64, game_process, NULL, &frame, &context, NULL,
+                         symbols_ready > 0 ? SymFunctionTableAccess64 : NULL,
+                         symbols_ready > 0 ? SymGetModuleBase64 : NULL, NULL) ||
+            !frame.AddrPC.Offset) {
+            break;
+        }
+        name_code((uintptr_t)frame.AddrPC.Offset, name, sizeof(name));
+        put("    #%-2d 0x%08llx %s\n", depth, (unsigned long long)frame.AddrPC.Offset, name);
+    }
+    if (depth < 2) walk_remote(registers->Rip, registers->Rsp, 0); /* code addresses on the stack, as a hint */
+}
+#endif
 
 static int write_minidump(const char *path)
 {
