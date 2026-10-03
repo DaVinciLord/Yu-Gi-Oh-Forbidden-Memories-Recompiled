@@ -46,17 +46,29 @@ static uint64_t present_next_us;  /* the present pacer's next slot */
 static uint64_t last_vsync_real;
 static unsigned watchdog_seconds = 5;
 static volatile int watchdog_reported;
-/* Headless, uncapped and dumping a frame (smoke tests, scripted runs): the
- * run must come out the same on every host. Virtual time then moves only in
+/* The virtual clock. MEMORIES_DETERMINISTIC=1 asks for it, headless or in a
+ * window, for as long as the game runs; headless, uncapped and dumping a
+ * frame (MEMORIES_HEADLESS + MEMORIES_DUMP_FRAME + MEMORIES_SPEED=-1, what
+ * the smoke tests have always set) gets it too. The run must come out the
+ * same on every host. Virtual time then moves only in
  * Platform_WaitVBlank, 1 ms at a time, so the disc, the root counter and the
  * VBlank see the same time between the same two game frames whatever the
  * host's speed or its timer. Driven by the host timer, a frame that took
  * longer to compute got more ticks, so more sectors, and a load finished a
  * frame or ten earlier on one host than another (the random seed, which the
  * name entry screen draws on every frame, then parted company). A VSync
- * that only reads the count steps it too (Platform_PollTime). */
-static int deterministic_dump;
+ * that only reads the count steps it too (Platform_PollTime). In a window
+ * the frames are then shown at the game speed (pace(), which only sleeps),
+ * and pause and frame step work; headless runs flat out. */
+static int deterministic_dump, deterministic_asked, deterministic_paced;
 static volatile uint64_t deterministic_last_wait; /* real time the game last waited for a VBlank */
+static uint64_t pace_next;                         /* real time the next paced VBlank is due */
+static int controlled;                             /* a control client decides (Platform_ControlAttach) */
+
+static int virtual_clock(void)
+{
+    return deterministic_asked || (deterministic_dump && rate == -1);
+}
 #define DETERMINISTIC_STEP 1000
 #define DETERMINISTIC_SPIN 1000000 /* real us outside a wait before the timer steps a spinning game */
 
@@ -93,7 +105,7 @@ static void advance(uint64_t real_now, uintptr_t eip)
      * time the game should catch up. Serviced cooperatively, a heavy frame
      * can legitimately run past 100 ms between two services. */
     if (elapsed > (cooperative ? 500000u : 100000u)) elapsed = 0;
-    if (deterministic_dump && rate == -1) {
+    if (virtual_clock()) {
         /* Time passes in Platform_WaitVBlank. Only a game that has spun for
          * a second without waiting for a VBlank gets steps from the timer,
          * so that it cannot hang; no loop the game runs does that today, and
@@ -211,10 +223,15 @@ int Platform_StartTimers(void (*tick)(uint64_t, uint64_t), void (*vblank)(void))
 #endif
     tick_handler = tick;
     vblank_handler = vblank;
-    /* MEMORIES_DETERMINISTIC asks for the same with a window (comparing
-     * the window's renderers on one frame). */
+    /* The virtual clock (above). The frame-dump combination is kept as it
+     * was; MEMORIES_DETERMINISTIC=1 alone needs neither a dump nor speed -1. */
     deterministic_dump = (getenv("MEMORIES_HEADLESS") != NULL || getenv("MEMORIES_DETERMINISTIC") != NULL) &&
                          getenv("MEMORIES_DUMP_FRAME") != NULL;
+    {
+        const char *asked = getenv("MEMORIES_DETERMINISTIC");
+        deterministic_asked = asked && *asked && strcmp(asked, "0") != 0;
+        deterministic_paced = deterministic_asked && getenv("MEMORIES_HEADLESS") == NULL;
+    }
     last_vsync_real = now_us();
     {
         const char *watchdog = getenv("MEMORIES_WATCHDOG");
@@ -277,6 +294,61 @@ void Platform_SetClockRate(int percent)
 
 int Platform_ClockRate(void) { return rate; }
 void Platform_StepFrame(void) { step_pending = 1; }
+
+void Platform_ControlAttach(int attached)
+{
+    static unsigned watchdog_before;
+    if (!attached == !controlled) return;
+    controlled = attached;
+    if (attached) {
+        watchdog_before = watchdog_seconds;
+        watchdog_seconds = 0;
+        if (!cooperative) {
+            fprintf(stderr, "memories-pc: control: the interrupt clock (MEMORIES_CLOCK=interrupt) keeps running "
+                            "while the client holds the game; lockstep needs the default clock\n");
+        }
+    } else {
+        watchdog_seconds = watchdog_before;
+    }
+#ifdef _WIN32
+    Win32_SetStallReporter(Crash_ReportHang, watchdog_seconds);
+#endif
+    Monitor_Modal(attached); /* the crash monitor's freeze check */
+}
+
+int Platform_VirtualClock(void)
+{
+    return virtual_clock();
+}
+
+void Platform_ControlIdle(void)
+{
+    /* Waiting on purpose, not frozen: every watch sees a heartbeat. */
+    __atomic_add_fetch(&Monitor_Shared()->heartbeat, 1, __ATOMIC_RELEASE);
+    last_vsync_real = now_us();
+    /* A present meanwhile (the wait's still) services the clock: the virtual
+     * one must not take the wait for a spin and step. */
+    if (deterministic_last_wait) deterministic_last_wait = last_vsync_real;
+#ifdef _WIN32
+    Win32_Heartbeat();
+#endif
+}
+
+void Platform_ControlHold(int held)
+{
+    sigset_t set, previous;
+    uint64_t now;
+    if (held) return;
+    sigemptyset(&set);
+    sigaddset(&set, SIGALRM);
+    sigprocmask(SIG_BLOCK, &set, &previous);
+    now = now_us();
+    real_prev = now;                /* the real-time clock does not catch up the wait */
+    last_vsync_real = now;
+    if (deterministic_last_wait) deterministic_last_wait = now; /* nor does the virtual one take it for a spin */
+    pace_next = 0;
+    sigprocmask(SIG_SETMASK, &previous, NULL);
+}
 
 float Platform_GameHz(void)
 {
@@ -370,7 +442,8 @@ void Platform_NotifyPresent(uint64_t real_now_us, int vsynced)
 {
     (void)real_now_us;
     service(); /* the cooperative clock's time, as of after the present */
-    if (vsynced && rate == 100 && present_refresh >= 59.0f && present_refresh <= 61.0f) {
+    /* Never under the virtual clock: the display's phase is not the game's. */
+    if (vsynced && rate == 100 && present_refresh >= 59.0f && present_refresh <= 61.0f && !virtual_clock()) {
         sigset_t set, previous;
         unsigned period = (unsigned)(1000000.0f / present_refresh + 0.5f);
         sigemptyset(&set);
@@ -394,13 +467,47 @@ void Platform_StopTimers(void)
 #endif
 }
 
+/* The virtual clock in a window (MEMORIES_DETERMINISTIC=1 without
+ * MEMORIES_HEADLESS), before a VBlank: paused, nothing moves until the pause
+ * ends or a frame step lets one VBlank through; running, the VBlank waits
+ * for its real time at the game speed. It only sleeps and pumps the
+ * window's events, so the game sees the same as uncapped. */
+static void pace(void)
+{
+    struct timespec nap = {0, 500000};
+    uint64_t now;
+    if (!deterministic_paced || controlled) return;
+    while (rate == 0 && !step_pending && !Platform_ShouldQuit()) {
+        deterministic_last_wait = now_us(); /* waiting, not spinning (advance) */
+        Platform_PumpEvents();
+#ifdef _WIN32
+        Win32_Heartbeat(); /* paused, not hung */
+#endif
+        nanosleep(&nap, NULL);
+    }
+    step_pending = 0;
+    if (rate <= 0) {
+        pace_next = 0;
+        return;
+    }
+    now = now_us();
+    if (!pace_next || now > pace_next + 100000u) pace_next = now; /* a stall: start the grid again */
+    while (now < pace_next) {
+        struct timespec rest = {0, (long)(pace_next - now) * 1000};
+        nanosleep(&rest, NULL);
+        now = now_us();
+    }
+    pace_next += (uint64_t)vblank_period * 100u / (unsigned)rate;
+}
+
 void Platform_PollTime(void)
 {
     sigset_t set, previous;
-    if (!(deterministic_dump && rate == -1)) {
+    if (!virtual_clock()) {
         service();
         return;
     }
+    if (next_vblank && virtual_now + DETERMINISTIC_STEP >= next_vblank) pace();
     sigemptyset(&set);
     sigaddset(&set, SIGALRM);
     sigprocmask(SIG_BLOCK, &set, &previous);
@@ -456,8 +563,10 @@ void Platform_WaitVBlank(unsigned count_at_entry)
      * VSync(0) after its VBlank, which the limit must not hold forever. */
     if (vblank_budget == 0 && vblank_count == count_at_entry) vblank_budget = -1;
     while (vblank_count == count_at_entry && !Platform_ShouldQuit()) {
-        if (rate == -1 && deterministic_dump) {
+        if (virtual_clock()) {
             sigset_t set, previous;
+            pace();
+            if (Platform_ShouldQuit()) break;
             sigemptyset(&set);
             sigaddset(&set, SIGALRM);
             sigprocmask(SIG_BLOCK, &set, &previous);

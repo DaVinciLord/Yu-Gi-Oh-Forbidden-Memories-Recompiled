@@ -350,6 +350,25 @@ stored volume and applies headless too), `MEMORIES_SETTINGS` (another
 settings file), `MEMORIES_HEADLESS=1`,
 `MEMORIES_DUMP_FRAME=N` with `MEMORIES_DUMP_PATH` and optional
 `MEMORIES_DUMP_VRAM=1` (write frame N as PPM and exit),
+`MEMORIES_DETERMINISTIC=1` (the virtual clock for the whole run, headless
+or in a window, with no frame dump needed: two runs with the same input
+give the same frames; in a window the frames are shown at the game speed
+and pause and frame step work, headless runs flat out; see
+[Agent control](agent-control.md). `MEMORIES_HEADLESS` with
+`MEMORIES_DUMP_FRAME` and `MEMORIES_SPEED=-1` still selects it too),
+`MEMORIES_RECORD=path` (the pad bits of every VBlank, a frame hash at
+every frame and, with `MEMORIES_RECORD_STATES=N`, a state every N VBlanks,
+as text; `src/pc/debug/recorder.h`), `MEMORIES_PLAY=path` (play such a
+file back instead of the live pads, ending the game at its end; replays
+are made and checked with `tools/pc/replay.py`, and `python3
+tools/pc/replay.py run` checks those in `tests/pc/replays/` before a PR,
+like `smoke.py`: a local gate, since CI has no disc),
+`MEMORIES_CONTROL=<port>` (a control channel on 127.0.0.1:<port>: the
+game waits at its first frame for a client, which steps it, holds pad
+buttons, reads and writes guest memory, takes pictures and save states;
+it waits `MEMORIES_CONTROL_WAIT` seconds for one, 10 unset, -1 for good;
+`tools/pc/yfm_control.py` is the client, the commands are in
+[Agent control](agent-control.md)),
 `MEMORIES_WINDOW_SHOT=N` (save the window as shown at frame N, as the
 screenshot key does, into `MEMORIES_SCREENSHOT_DIR` or the user folder),
 `MEMORIES_SCALE_AT=N:S` (change the internal resolution to S at frame N, as
@@ -784,6 +803,13 @@ dispatches that sequence through `src/pc/overrides/title_jump.c`, after
 disc left idle first. That way, no transfer the old screen asked for lands on
 the title's package. While the save slot menu is open, the request waits
 for it to close, so the menu is never left drawn over the title.
+
+Debug > Jump to's other items (Debug Menu, Free Duel, Build Deck, Library,
+Password, Map, Options, Credits) and the control channel's `jump` take the
+same way out, then the title gives way at once to the game's own debug
+menu, whose entry for the screen is taken as Cross would take it; a duel
+(channel only: it needs an opponent and a deck) is armed as the Free Duel
+screen arms one. See [Agent control](agent-control.md), step 6.
 
 The request is only taken between two mode runners. A `MEMORIES_PC` hook in
 `Main_Loop` polls after each frame. That is the one point where no runner is
@@ -1518,7 +1544,7 @@ load redraws it from VRAM. That costs about 9 ms a frame at 2x and 30 ms
 at 4x in the same duel. It is the OpenGL pass's oracle: `MEMORIES_DUMP_FRAME`
 with `MEMORIES_DUMP_PICTURE=1` writes the picture (from either renderer)
 instead of the frame, and `MEMORIES_DETERMINISTIC=1` makes a windowed run
-with a frame dump as deterministic as a headless one, so the two can be
+as deterministic as a headless one, so the two can be
 compared on one frame of the same build; the title, the main menu, a 2D
 duel frame and a 3D one come out identical pixel for pixel at 2x and 4x
 (three edge pixels differ on the 3D monster). The X11 backend shows VRAM
@@ -2255,7 +2281,8 @@ bit-identical. How (details in `src/pc/guest/state.h`):
   cards, shuffles and CPU choices than the game that saved it: the same
   pack bought twice from one state, loaded in place in between, dealt
   other cards; a state without the chunk loads as before, with the seed
-  left as it is). A chunk whose layout changed is
+  left as it is), and the mods' own rand seed (chunk `mod-rng`, the one
+  sequence `mod_libc.c` gives every mod). A chunk whose layout changed is
   reported and skipped, leaving that subsystem as it is. Nothing native is
   stored by address; timers, the disc file, the window and the audio device
   belong to the process. The exception is text the port compiles (a

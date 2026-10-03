@@ -208,6 +208,13 @@ int Mods_AwardStarchips(unsigned *balance, int prize)
     return (int)*balance;
 }
 
+int Mods_SubscriptionAt(int index, int *owner, unsigned *event)
+{
+    if (index < 0 || index >= count) return 0;
+    *owner = hooks[index].owner;
+    *event = hooks[index].event;
+    return 1;
+}
 int Mods_HasSubscribers(unsigned event)
 {
     int i;

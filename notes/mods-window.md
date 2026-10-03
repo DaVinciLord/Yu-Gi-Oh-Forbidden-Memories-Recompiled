@@ -12,9 +12,17 @@ one block each: the label beside `-` value `+`, the description wrapped under
 them, then an integer's slider. The value box is sized for the widest value the
 setting can take, so choices are never cut off; clicking it steps forward.
 Restore defaults (above the list, which scrolls under it) resets the selected
-mod's staged settings. Compatibility lists
-requirements, ordering constraints, declared conflicts and potential data or
-texture overlap. Lower Order values load first, subject to dependencies.
+mod's staged settings. Compatibility lists requirements, ordering constraints
+and declared conflicts, then everything the mod changes that another enabled
+mod changes too, by kind with counts: the first four lines of each, **and N
+more** to show the rest (up to 200), a warning where only one mod's change is
+used and a dim line where they add up, agree or follow an `after`; the header
+counts the overlaps between all enabled mods ([When mods
+overlap](modding.md#when-mods-overlap)). They follow the enabled set, the
+order and the settings staged in the window; a setting that needs a restart
+counts there as staged (or as saved), so after **Apply changes** the list
+shows the next launch, not the session still running with the old value. Lower Order values load first, subject to
+dependencies.
 
 Changes are staged until **Apply changes**. Restart-only changes share one
 confirmation; restarting discards unsaved game progress. Close/Escape asks before
@@ -52,7 +60,8 @@ not fit: drag its thumb, or press the track to jump there. The details scroll by
 pixels, so every tab (About, Settings, Compatibility) reaches its last line;
 integer sliders support dragging.
 
-Implementation: `src/pc/platform/mods_window.c`, `src/pc/mods/manager.c`, and
+Implementation: `src/pc/platform/mods_window.c`, `src/pc/mods/manager.c`
+(`src/pc/mods/overlap.c` for the overlaps), and
 window ownership in `sdl.c` / `x11.c`. `pc_mods_window` exercises real settings
 and manifests with a fake renderer/restart. `tools/pc/test_mods_context.sh`
 checks actual SDL/OpenGL context ownership during secondary-window operations.

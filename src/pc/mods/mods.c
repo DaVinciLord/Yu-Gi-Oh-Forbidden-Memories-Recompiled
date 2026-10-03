@@ -317,10 +317,12 @@ static int host_disc_read(const MemoriesModHost *host, int lba, int sectors, voi
     return out && sectors > 0 ? Memories_DiscReadSectors(lba, sectors, out) : 0;
 }
 
+unsigned short (*Mods_PadSource)(int port);
+
 static unsigned short host_pad(const MemoriesModHost *host, int port)
 {
     (void)host;
-    return Platform_Pad(port);
+    return Mods_PadSource ? Mods_PadSource(port) : Platform_Pad(port);
 }
 
 static uint64_t host_now_us(const MemoriesModHost *host)

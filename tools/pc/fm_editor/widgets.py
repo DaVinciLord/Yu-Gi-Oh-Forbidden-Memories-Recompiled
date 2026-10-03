@@ -129,7 +129,47 @@ class ScrolledForm(ttk.Frame):
                 self._root().deletecommand(command)
 
 
-def scrolled_tree(parent, columns, widths, height=20, selectmode="browse"):
+class TreeSort:
+    """Sort displayed rows without changing their identity, selection or data."""
+
+    def __init__(self, tree, columns, numeric):
+        self.tree = tree
+        self.labels = dict(columns)
+        self.numeric = set(numeric)
+        self.column = None
+        self.reverse = False
+        for column, label in columns:
+            if label:
+                tree.heading(column, command=lambda c=column: self.choose(c))
+
+    def choose(self, column):
+        self.reverse = not self.reverse if self.column == column else False
+        self.column = column
+        self.apply()
+
+    def apply(self):
+        if self.column is None:
+            return
+        tree, column = self.tree, self.column
+        rows, missing = [], []
+        for iid in tree.get_children():
+            value = tree.set(iid, column)
+            if value == "":
+                missing.append(iid)
+            else:
+                key = float(value.rstrip("%")) if column in self.numeric else value.casefold()
+                rows.append((key, iid))
+        # Equal values keep a deterministic card/opponent-number order.
+        rows.sort(key=lambda row: (0, int(row[1])) if row[1].isdigit() else (1, row[1]))
+        rows.sort(key=lambda row: row[0], reverse=self.reverse)
+        for index, iid in enumerate([iid for _, iid in rows] + missing):
+            tree.move(iid, "", index)
+        for key, label in self.labels.items():
+            arrow = (" ▼" if self.reverse else " ▲") if key == column else ""
+            tree.heading(key, text=label + arrow)
+
+
+def scrolled_tree(parent, columns, widths, height=20, selectmode="browse", *, sort_numeric=None):
     """A Treeview with a vertical scrollbar, in a frame of its own."""
     frame = ttk.Frame(parent)
     tree = ttk.Treeview(frame, columns=[c for c, _ in columns], show="headings", height=height, selectmode=selectmode)
@@ -145,6 +185,11 @@ def scrolled_tree(parent, columns, widths, height=20, selectmode="browse"):
     bar.grid(row=0, column=1, sticky="ns")
     frame.rowconfigure(0, weight=1)
     frame.columnconfigure(0, weight=1)
+    if sort_numeric is not None:
+        tree.sorting = TreeSort(tree, columns, sort_numeric)
+        horizontal = ttk.Scrollbar(frame, orient="horizontal", command=tree.xview)
+        tree.configure(xscrollcommand=horizontal.set)
+        horizontal.grid(row=1, column=0, sticky="ew")
     for tag in theme.TAGS:
         tree.tag_configure(tag, foreground=theme.tag_color(tree, tag))
     return frame, tree

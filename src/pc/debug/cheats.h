@@ -45,4 +45,10 @@ int Cheats_FreeSpending(void);
  * MEMORIES_DEBUG_DECK="723-762" (ids and ranges, repeated to forty) sets the
  * deck, the first time a save is live in the workspace. */
 void Cheats_Frame(void);
+/* MEMORIES_DEBUG_DECK's deck now (ids and ranges, repeated to forty), for
+ * Debug > Jump to and the control channel's `jump`: the number of ids
+ * taken, 0 when none was a card (the deck is left alone). */
+int Cheats_SetDeck(const char *list);
+/* The ids `list` names (what Cheats_SetDeck would take), writing nothing. */
+int Cheats_DeckCount(const char *list);
 #endif

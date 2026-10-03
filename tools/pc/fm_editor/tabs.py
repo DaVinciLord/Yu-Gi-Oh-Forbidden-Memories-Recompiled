@@ -93,7 +93,7 @@ class CardsTab(Tab):
         self.search.trace_add("write", lambda *_: self.fill())
         self.filter.trace_add("write", lambda *_: self.fill())
         frame, self.tree = scrolled_tree(left, [("id", "#"), ("name", "Name"), ("type", "Type"), ("atk", "ATK"),
-                                                ("def", "DEF"), ("state", "")], [50, 230, 100, 50, 50, 60], 24)
+                                                ("def", "DEF"), ("state", "")], [50, 230, 100, 50, 50, 60], 24, sort_numeric=("id", "atk", "def"))
         frame.pack(fill="both", expand=True, pady=4)
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.select())
         bottom = ttk.Frame(left)
@@ -246,6 +246,7 @@ class CardsTab(Tab):
                 values, tags = self.row(cid)
                 self.tree.insert("", "end", iid=str(cid), values=values, tags=tags)
                 shown += 1
+        self.tree.sorting.apply()
         self.count.configure(text=f"{shown} cards")
         if self.current and self.tree.exists(str(self.current)):
             self.tree.selection_set(str(self.current))
@@ -260,6 +261,7 @@ class CardsTab(Tab):
         if self.tree.exists(str(cid)):
             values, tags = self.row(cid)
             self.tree.item(str(cid), values=values, tags=tags)
+            self.tree.sorting.apply()
 
     def select(self):
         selection = self.tree.selection()
@@ -682,7 +684,7 @@ class EquipsTab(Tab):
         left.pack(side="left", fill="y")
         ttk.Label(left, text="Equip cards").pack(anchor="w")
         frame, self.equips = scrolled_tree(left, [("id", "#"), ("name", "Equip card"), ("n", "Fits")],
-                                           [50, 200, 50], 26)
+                                           [50, 200, 50], 26, sort_numeric=("id", "n"))
         frame.pack(fill="y", expand=True)
         self.equips.bind("<<TreeviewSelect>>", lambda e: self.select())
         right = ttk.Frame(self)
@@ -690,7 +692,9 @@ class EquipsTab(Tab):
         self.heading = ttk.Label(right, font=ui_font(11))
         self.heading.pack(anchor="w")
         frame, self.monsters = scrolled_tree(right, [("id", "#"), ("name", "Monster"), ("type", "Type"),
-                                                     ("state", "")], [50, 260, 110, 80], 22, selectmode="extended")
+                                                     ("atk", "ATK"), ("def", "DEF"), ("state", "")],
+                                                     [50, 220, 100, 50, 50, 80], 22, selectmode="extended",
+                                                     sort_numeric=("id", "atk", "def"))
         frame.pack(fill="both", expand=True, pady=4)
         buttons = ttk.Frame(right)
         buttons.pack(fill="x")
@@ -721,6 +725,7 @@ class EquipsTab(Tab):
             changed = now != p.equip_baseline(cid)
             self.equips.insert("", "end", iid=str(cid), values=(cid, p.cards[cid].name, len(now)),
                                tags=("changed",) if changed else ())
+        self.equips.sorting.apply()
         if self.current and self.equips.exists(str(self.current)):
             self.equips.selection_set(str(self.current))
 
@@ -744,8 +749,10 @@ class EquipsTab(Tab):
             card = p.cards.get(cid)
             if card is None:
                 continue
-            self.monsters.insert("", "end", iid=str(cid), values=(cid, card.name, type_label(card.type), state),
-                                 tags=(state,) if state else ())
+            self.monsters.insert("", "end", iid=str(cid), values=(
+                cid, card.name, type_label(card.type), card.attack, card.defense, state),
+                tags=(state,) if state else ())
+        self.monsters.sorting.apply()
 
     def edited(self):
         self.app.changed()
@@ -1118,7 +1125,8 @@ class DuelistsTab(Tab):
         self.duelist = 1
         left = ttk.Frame(self)
         left.pack(side="left", fill="y")
-        frame, self.list = scrolled_tree(left, [("id", "#"), ("name", "Opponent"), ("state", "")], [36, 170, 60], 26)
+        frame, self.list = scrolled_tree(left, [("id", "#"), ("name", "Opponent"), ("state", "")],
+                                         [36, 170, 60], 26, sort_numeric=("id",))
         frame.pack(fill="y", expand=True)
         self.list.bind("<<TreeviewSelect>>", lambda e: self.select())
         right = ttk.Frame(self)
@@ -1131,9 +1139,11 @@ class DuelistsTab(Tab):
                             command=self.fill).pack(side="left", padx=(0, 8))
         self.total = ttk.Label(top, font=ui_font(10))
         self.total.pack(side="right")
-        frame, self.tree = scrolled_tree(right, [("id", "#"), ("name", "Card"), ("type", "Type"), ("w", "Weight"),
+        frame, self.tree = scrolled_tree(right, [("id", "#"), ("name", "Card"), ("type", "Type"),
+                                                 ("atk", "ATK"), ("def", "DEF"), ("w", "Weight"),
                                                  ("pct", "Chance"), ("retail", "Retail"), ("state", "")],
-                                         [50, 240, 100, 60, 60, 60, 70], 22, selectmode="extended")
+                                         [50, 220, 100, 50, 50, 60, 60, 60, 70], 22, selectmode="extended",
+                                         sort_numeric=("id", "atk", "def", "w", "pct", "retail"))
         frame.pack(fill="both", expand=True, pady=4)
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.pick_row())
         edit = ttk.Frame(right)
@@ -1165,6 +1175,7 @@ class DuelistsTab(Tab):
                           for p in POOLS)
             state = "fixed" if fixed_decks.deck_of(self.project, d) else "changed" if changed else ""
             self.list.insert("", "end", iid=str(d), values=(d, name, state), tags=("changed",) if state else ())
+        self.list.sorting.apply()
         if self.list.exists(str(self.duelist)):
             self.list.selection_set(str(self.duelist))
 
@@ -1191,8 +1202,10 @@ class DuelistsTab(Tab):
             state = "" if weight == before else "added" if not before else "removed" if not weight else "changed"
             card = p.cards.get(cid)
             self.tree.insert("", "end", iid=str(cid), tags=(state,) if state else (), values=(
-                cid, card.name if card else "?", type_label(card.type) if card else "", weight,
+                cid, card.name if card else "?", type_label(card.type) if card else "",
+                card.attack if card else "", card.defense if card else "", weight,
                 f"{weight * 100 / POOL_TOTAL:.2f}%", before, state))
+        self.tree.sorting.apply()
         total = sum(pool.values())
         cards = sum(1 for w in pool.values() if w)
         self.total.configure(text=f"{DUELIST_NAMES[self.duelist]}: {cards} cards, total {total} / {POOL_TOTAL}",
@@ -1619,11 +1632,34 @@ class ConflictsTab(Tab):
         self.summary = ttk.Label(top)
         self.summary.pack(side="left", padx=8)
         ttk.Label(top, text="Double-click a line to go to it.", style="Hint.TLabel").pack(side="right")
+        # The other installed mods this one is checked against (validate.cross_mod):
+        # the player's mods folder, or one chosen here (kept in the editor's settings).
+        other = ttk.Frame(self)
+        other.pack(fill="x", pady=(4, 0))
+        ttk.Button(other, text="Other mods folder...", command=self.choose_folder).pack(side="left")
+        ttk.Button(other, text="Player's folder", command=lambda: self.set_folder(None)).pack(side="left", padx=4)
+        self.others = ttk.Label(other, style="Hint.TLabel", wraplength=900, justify="left")
+        self.others.pack(side="left", padx=8, fill="x", expand=True)
+        from . import settings
+        self.other_folder = settings.load().get("other_mods")
         frame, self.tree = scrolled_tree(self, [("level", "Level"), ("area", "Where"), ("what", "What"),
                                                 ("message", "Conflict")], [70, 90, 260, 560], 26)
         frame.pack(fill="both", expand=True, pady=4)
         self.tree.bind("<Double-1>", lambda e: self.go())
         self.issues = []
+
+    def choose_folder(self):
+        from tkinter import filedialog
+        folder = filedialog.askdirectory(parent=self, title="A folder of mods to check this one against",
+                                         initialdir=self.other_folder or str(self.app.mods_dir()))
+        if folder:
+            self.set_folder(folder)
+
+    def set_folder(self, folder):
+        from . import settings
+        self.other_folder = folder
+        settings.save("other_mods", folder)
+        self.run()
 
     def refresh(self):
         self.run()
@@ -1633,12 +1669,21 @@ class ConflictsTab(Tab):
             return []
         self.app.commit_all()
         self.issues = validate.validate(self.project)
+        try:
+            from pathlib import Path
+            folders = [Path(self.other_folder)] if self.other_folder else None
+            others, said = validate.cross_mod(self.project, folders)
+        except Exception as problem:   # noqa: BLE001 -- never let another mod stop this one opening
+            others, said = [], f"The other mods could not be checked: {type(problem).__name__}: {problem}"
+        self.issues += others
+        self.others.configure(text=said)
         self.tree.delete(*self.tree.get_children())
         for i, issue in enumerate(self.issues):
             self.tree.insert("", "end", iid=str(i), values=(issue.level, issue.area, issue.where, issue.message),
                              tags=(issue.level,))
         errors = len(validate.errors(self.issues))
-        self.summary.configure(text=f"{errors} errors, {len(self.issues) - errors} warnings",
+        notes = sum(1 for issue in self.issues if issue.level == "note")
+        self.summary.configure(text=f"{errors} errors, {len(self.issues) - errors - notes} warnings, {notes} notes",
                                style="Error.TLabel" if errors else "Ok.TLabel")
         return self.issues
 

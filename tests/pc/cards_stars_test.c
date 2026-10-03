@@ -95,6 +95,11 @@ void Mods_SetCardNotes(const char *(*which)(int id), int (*tag)(int id, const ch
     (void)which; (void)tag;
 }
 void Mods_SetCardResolver(int (*resolve)(const char *)) { (void)resolve; }
+void Mods_SetOverlapCards(int (*card)(const char *, long), int (*name)(int, char *, size_t),
+                          int (*info)(int, int *, int *, int *))
+{
+    (void)card, (void)name, (void)info;
+}
 void Mods_SetCardSignature(unsigned signature) { (void)signature; }
 void Mods_SetLimitSource(long (*source)(const char *name)) { (void)source; }
 int Mods_Setting(const char *id, const char *key, int fallback) { (void)id; (void)key; return fallback; }

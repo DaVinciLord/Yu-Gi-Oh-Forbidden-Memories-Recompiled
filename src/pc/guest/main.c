@@ -58,6 +58,7 @@ static void restart_environment(void)
 
 int Platform_RestartGame(void)
 {
+    unsetenv("MEMORIES_CONTROL"); /* no client follows a restart (MEMORIES_RESTART_ENV may name one) */
     restart_environment();
     return Win32_Restart();
 }
@@ -77,6 +78,7 @@ int Platform_RestartGame(void)
     sigemptyset(&ignored.sa_mask);
     sigaction(SIGALRM, &ignored, &old_action);
     setitimer(ITIMER_REAL, &stopped, &previous);
+    unsetenv("MEMORIES_CONTROL"); /* no client follows a restart (MEMORIES_RESTART_ENV may name one) */
     restart_environment();
     /* A restart must boot the game, not auto-load an old launch state. */
     unsetenv("MEMORIES_LOAD_STATE");
@@ -189,6 +191,7 @@ int main(int argc, char **argv)
     }
     Log_Init();
     Symbols_Load();
+    Mods_SetFunctionNames(Symbols_Lookup);   /* the functions code mods hook, in the Mods window */
     Crash_Init();
     Monitor_NoteSystem();
     /* Whether the player's files can be saved at all (an antivirus or

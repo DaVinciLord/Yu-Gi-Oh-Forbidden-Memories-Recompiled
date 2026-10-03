@@ -835,6 +835,11 @@ int Platform_ShouldQuit(void)
 {
     return quit;
 }
+
+void Platform_RequestQuit(void)
+{
+    quit = 1;
+}
 int Platform_StateSlot(void) { return state_slot; }
 void Platform_SetStateSlot(int slot)
 {

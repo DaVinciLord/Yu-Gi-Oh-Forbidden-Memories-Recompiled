@@ -333,8 +333,10 @@ for the player); the FM Editor's `tests/test_packs.py` holds its reader and
 Simulate to the same file and the same rules, null and all.
 
 With the disc in `game/` and the game built, `python3 tools/pc/test_packs.py`
-makes a pack mod of its own (the PNG drawn by the script), opens the Password
-screen of a fresh game, gives it starchips in a saved state and buys a pack
+makes a pack mod of its own (the PNG drawn by the script), drives the game
+through the control channel (`tools/pc/yfm_control.py`), opens the Password
+screen (Debug > Jump to's path), gives it starchips and buys a pack, each time
+from the same state loaded in place,
 with △, ✕, ✕ and □, and checks that:
 
 - the starchips drop by the price, the chest gains exactly the pack's cards,

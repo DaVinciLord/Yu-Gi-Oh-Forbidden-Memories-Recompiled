@@ -9,11 +9,87 @@
 #include "game/func_80035A64.h"
 #include "game/main_modes.h"
 #include "game/sound.h"
+#include "game/func_80024DC8.h"
+#include "pc/debug/cheats.h"
 #include <stdio.h>
 
 extern u8 D_8009B268, D_8009B26C, D_8009B26D;
 extern int D_800E9DC0[];
 void Psx_longjmp(int *env, int value);
+/* The debug menu's state (frontend_debug_state.h, frontend_debug_tables.h)
+ * and the Free Duel return byte (free_duel.h), declared plainly here: this
+ * unit is native, so the codegen spellings those headers select do not
+ * matter. */
+extern u8 D_8009B2EB, gDebugMenu_bPage, gFreeDuel_bReturnFlags, D_8009B368, D_8009B269;
+extern s8 gDebugMenu_bCursor;
+extern u16 gDuel_awPlayerDeck[];
+
+/* The debug menu (mode 0) has run its first frame and runs no entry. */
+int TitleJump_DebugMenuIdle(void)
+{
+    return D_8009B26C == (MAIN_MODE_DEBUG | 0xC0) && D_8009B2EB == 0;
+}
+
+int TitleJump_InDebugMenu(void)
+{
+    return (D_8009B26C & 0x9F) == (MAIN_MODE_DEBUG | 0x80); /* Main_Loop runs it (0 alone: before Main_Loop) */
+}
+
+/* The debug menu's entry for each target (frontend_debug_tables.h: Detail is
+ * the Library, 3D MAP the campaign map); -1 for those set up here instead. */
+static int entry_of(int target)
+{
+    switch (target) {
+    case JUMP_FREE_DUEL: return 8;
+    case JUMP_BUILD_DECK: return 7;
+    case JUMP_LIBRARY: return 3;
+    case JUMP_PASSWORD: return 11;
+    case JUMP_MAP: return 6;
+    case JUMP_OPTIONS: return 16;
+    default: return -1;
+    }
+}
+
+/* From the idle debug menu, between two mode runners. An entry is taken as
+ * the menu takes Cross on it: the cursor on it and its step asked for
+ * (D_8009B2EB = entry + 1), which the menu's next frame runs. A duel is armed
+ * as the Free Duel screen arms one (screen_runtime.c), against `opponent`,
+ * with the deck set first through MEMORIES_DEBUG_DECK's path; it comes back
+ * to the Free Duel menu. The credits have no entry: their mode is set, as
+ * MEMORIES_MODE_AT does. */
+int TitleJump_EnterTarget(int target, int opponent, const char *deck)
+{
+    int entry = entry_of(target);
+    if (deck && *deck && !Cheats_SetDeck(deck)) {
+        fprintf(stderr, "memories-pc: jump: no card in the deck '%s'\n", deck);
+        return -1;
+    }
+    fprintf(stderr, "memories-pc: jump: from the debug menu to %s\n", TitleJump_TargetName(target));
+    if (entry >= 0) {
+        gDebugMenu_bPage = 0;
+        gDebugMenu_bCursor = (s8)entry;
+        D_8009B2EB = (u8)(entry + 1);
+        return 0;
+    }
+    switch (target) {
+    case JUMP_DUEL:
+        if (!gDuel_awPlayerDeck[0]) {
+            fprintf(stderr, "memories-pc: jump: the deck is empty (no save loaded); give one\n");
+            return -1;
+        }
+        gFreeDuel_bReturnFlags = 0x80;
+        func_80024DC8(-1, opponent, 0x6000, 0x6000);
+        D_8009B368 = MAIN_MODE_FREE_DUEL;
+        D_8009B269 = MAIN_MODE_DEBUG;
+        return 0;
+    case JUMP_CREDITS:
+        D_8009B26C = MAIN_MODE_CREDITS;
+        D_8009B269 = MAIN_MODE_DEBUG;
+        return 0;
+    default:
+        return 0; /* the debug menu itself */
+    }
+}
 
 void TitleJump_Execute(void)
 {
