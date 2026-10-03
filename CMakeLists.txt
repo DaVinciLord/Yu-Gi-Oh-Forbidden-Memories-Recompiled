@@ -301,6 +301,24 @@ if(BUILD_TESTING)
         endif()
         add_test(NAME pc_branch_thunks COMMAND memories_branch_thunks_test)
     endif()
+    # The MIPS interpreter's call into a native function whose argument list
+    # outruns the words it forwards (Model_QueueTintRequestForParts' parts).
+    # Guest addresses are 32-bit words: a 32-bit build only.
+    if(NOT MSVC AND (CMAKE_SIZEOF_VOID_P EQUAL 4 OR NOT WIN32))
+        add_executable(memories_mips_varargs_test tests/pc/mips_varargs_test.c src/pc/guest/mips.c
+            src/game/func_80058838.c)
+        target_include_directories(memories_mips_varargs_test PRIVATE src)
+        target_compile_definitions(memories_mips_varargs_test PRIVATE MEMORIES_PC _LANGUAGE_C LANGUAGE_C)
+        target_compile_options(memories_mips_varargs_test PRIVATE -Wall)
+        set_source_files_properties(src/game/func_80058838.c PROPERTIES COMPILE_OPTIONS "-fno-strict-aliasing")
+        if(NOT WIN32)
+            target_compile_options(memories_mips_varargs_test PRIVATE -m32)
+            target_link_options(memories_mips_varargs_test PRIVATE -m32)
+        else()
+            target_compile_options(memories_mips_varargs_test PRIVATE -mno-ms-bitfields)
+        endif()
+        add_test(NAME pc_mips_varargs COMMAND memories_mips_varargs_test)
+    endif()
     # mod_libc.c lends mods the indirect-branch thunks (src/pc/guest/branch_thunks.c).
     add_executable(memories_mods_test tests/pc/mods_test.c src/pc/mods/mods.c src/pc/mods/events.c src/pc/mods/hooks.c src/pc/mods/manager.c src/pc/mods/mod_libc.c
         src/pc/mods/object_loader.c src/pc/mods/json.c src/pc/guest/branch_thunks.c

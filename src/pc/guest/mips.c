@@ -40,6 +40,10 @@ extern int rsin(int angle);
 extern int rcos(int angle);
 extern int Psx_csin(int angle);
 extern int Psx_ccos(int angle);
+/* src/game/func_80058938.h, whose types this file cannot include (its s32 is
+ * a store here): the colours are the words their registers hold. */
+extern void Model_QueueTintRequestForPartList(int32_t slot, int32_t part, uint32_t start, uint32_t end,
+                                              int32_t duration, const int32_t *parts);
 
 static uint32_t stack_top;   /* 0 until the stack is mapped */
 static uint32_t current_sp;  /* the innermost interpreted frame, or 0 */
@@ -155,6 +159,17 @@ static uint32_t call_native(State *s, uint32_t address)
     case 0x8008E870u: /* printf: the modules' debug prints */
         LOG(LOG_MIPS_PRINTF, "overlay printf: %s", (const char *)(uintptr_t)s->r[4]);
         return 0;
+    case 0x80058838u: { /* Model_QueueTintRequestForParts(slot, part, start, end, duration, part, ..., -1) */
+        /* The variant modules pass up to 18 parts (24 argument words), more
+         * than the twelve forwarded below, so the list is handed over where
+         * the module left it on the guest stack. */
+        keep = current_sp;
+        current_sp = sp;
+        Model_QueueTintRequestForPartList((int32_t)s->r[4], (int32_t)s->r[5], s->r[6], s->r[7],
+                                          (int32_t)l32(sp + 16), (const int32_t *)(uintptr_t)(sp + 20));
+        current_sp = keep;
+        return 0;
+    }
     default: break;
     }
     e = find_native(address);

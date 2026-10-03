@@ -429,6 +429,20 @@ guest-call fault handler) into the interpreter. Interpreted code runs on its
 own stack mapped at `0x9FF00000`, negative like every console address, and
 nests through native calls.
 
+A bridged call forwards a0-a3 and eight stack words (sp+16 to sp+44). The
+one native callee that takes more is `Model_QueueTintRequestForParts`
+(0x80058838), whose part list ends at the first negative word: 140 call
+sites in the variant modules, 90 of them passing parts 1 to 18 (24 words,
+up to sp+92) and 10 a list read from a table (13 words). `call_native`
+hands the list over where the module stored it on the guest stack
+(`Model_QueueTintRequestForPartList`); before, the walk ran past the
+forwarded words into the host frame: Master & Expert's attack (command 9 of
+the shared variant module 0x2F0) asked for parts 1-18 and got 1-7. A scan
+of MODEL, WA and SU found no other variadic callee: `printf` is handled in
+`call_native` itself, and `FntPrint`, `sprintf` and
+`Model_SetSlotProperties` are never called from them.
+`tests/pc/mips_varargs_test.c` runs such a call through the interpreter.
+
 Checked from `slot1.state`: the AI's attack (card clash, damage lettering,
 burn destruction: ids 2 and 3), the player's attack committed with Square
 (the 3D battle: arena, both monsters, the variant module's setup command and
