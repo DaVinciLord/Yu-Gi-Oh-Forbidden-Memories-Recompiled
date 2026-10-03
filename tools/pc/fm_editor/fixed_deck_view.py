@@ -43,8 +43,10 @@ class FixedDeckView:
                         command=self.switch).pack(side="left")
         self.panel = ttk.Frame(right)
         frame, self.tree = scrolled_tree(self.panel, [("id", "#"), ("name", "Card"), ("type", "Type"),
+                                                      ("atk", "ATK"), ("def", "DEF"),
                                                       ("copies", "Copies"), ("weight", "Weighted"), ("note", "")],
-                                         [50, 240, 100, 60, 70, 170], 20, selectmode="extended")
+                                         [50, 220, 100, 50, 50, 60, 70, 170], 20, selectmode="extended",
+                                         sort_numeric=("id", "atk", "def", "copies", "weight"))
         frame.pack(fill="both", expand=True, pady=4)
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.pick_row())
         edit = ttk.Frame(self.panel)
@@ -126,12 +128,14 @@ class FixedDeckView:
             self.tree.insert("", "end", iid=str(cid), tags=("error",) if card is None else (), values=(
                 cid, card.name if card else "?", (TYPE_NAMES[card.type] if 0 <= card.type < len(TYPE_NAMES)
                                                   else card.type) if card else "",
+                card.attack if card else "", card.defense if card else "",
                 copies, f"{weight * 100 / POOL_TOTAL:.2f}%" if weight else "", ", ".join(notes)))
         # A card the editor could not place keeps its row, so its copies are
         # not quietly lost.
         for name, copies in deck.kept.items():
             self.tree.insert("", "end", iid=f"kept:{name}", tags=("removed",),
-                             values=("", name, "", copies, "", "no such card; the deck is left out"))
+                             values=("", name, "", "", "", copies, "", "no such card; the deck is left out"))
+        self.tree.sorting.apply()
         total = deck.total()
         good = total == DECK_SIZE and not deck.kept
         self.tab.total.configure(text=f"{DUELIST_NAMES[self.tab.duelist]}: fixed deck, {total} / {DECK_SIZE} cards",
