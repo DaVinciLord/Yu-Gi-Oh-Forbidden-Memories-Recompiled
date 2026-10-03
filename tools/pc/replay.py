@@ -13,6 +13,10 @@ files in a zip (.yfmreplay, to pass around):
                    states (S) and the end (E)
     scenario.py    scripted: run(game, out) on tools/pc/yfm_control.py; its
                    assertions are the verdict, so it survives timing changes
+    mods.py        optional: make(folder, root) writes the data mods the run had
+                   into folder and returns their ids (made from the repository and
+                   the player's disc at play time, as a texture pack's images
+                   are the game's); the game gets them as MEMORIES_MODS_DIR
     *.state        a start state and state checkpoints (never in tests/pc/replays:
                    a state holds the game's RAM, which is the disc's data)
 
@@ -161,8 +165,28 @@ def thin(lines: list[str], every: int) -> list[str]:
     return kept
 
 
+def make_mods(script: Path, folder: Path) -> list[str]:
+    """Run a replay's mods.py: its mods in `folder`, and their ids. Its
+    make(folder, root) gets the repository's root, as the replay may be a
+    .yfmreplay unpacked elsewhere. A missing script, or one that fails,
+    stops with a message (ModsError)."""
+    if not script.is_file():
+        raise ModsError(f"{script}: no such mods.py")
+    try:
+        spec = importlib.util.spec_from_file_location("replay_mods", script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return list(module.make(folder, ROOT))
+    except Exception as failure:
+        raise ModsError(f"{script} could not make its mods: {type(failure).__name__}: {failure}") from failure
+
+
+class ModsError(Exception):
+    pass
+
+
 def package_recording(out: Path, recording_path: Path, start_state: Path | None, hash_every: int,
-                      settings: dict | None, notes: str = "") -> None:
+                      settings: dict | None, notes: str = "", mods_script: Path | None = None) -> None:
     recording = parse(recording_path)
     if recording["E"] is None:
         raise SystemExit(f"{recording_path}: no E line (the game did not end cleanly); quit it, don't kill it")
@@ -186,6 +210,9 @@ def package_recording(out: Path, recording_path: Path, start_state: Path | None,
     every = sorted(states[i + 1]["index"] - states[i]["index"] for i in range(len(states) - 1))
     meta = {"format": 1, "kind": "recorded", "header": header_from(recording, settings), "start": start,
             "recording": "recording.txt", "states_every": every[0] if every else 0, "notes": notes}
+    if mods_script:
+        meta["mods"] = "mods.py"
+        files["mods.py"] = mods_script
     write_replay(out, meta, files)
 
 
@@ -202,11 +229,14 @@ def environment(settings_file: Path, user: Path, extra: dict[str, str]) -> dict[
     return env
 
 
-def settings_text(header: dict, executable: Path) -> str:
-    """The recorded settings, and each mod beside the executable on or off as
-    the recording had it."""
+def settings_text(header: dict, executable: Path, mods: Path | None = None) -> str:
+    """The recorded settings, and each mod beside the executable (and in the
+    replay's own mods folder) on or off as the recording had it."""
     settings = dict(header.get("settings", {}))
-    for manifest in sorted((executable.parent / "mods").glob("*/mod.json")):
+    manifests = sorted((executable.parent / "mods").glob("*/mod.json"))
+    if mods:
+        manifests += sorted(mods.glob("*/mod.json"))
+    for manifest in manifests:
         settings[f"mod.{manifest.parent.name}"] = "1" if manifest.parent.name in header.get("mods", []) else "0"
     return "".join(f"{key}={value}\n" for key, value in settings.items())
 
@@ -216,9 +246,19 @@ def play_recorded(replay: Replay, executable: Path, out: Path, timeout: float,
     out.mkdir(parents=True, exist_ok=True)
     (out / "user").mkdir(exist_ok=True)
     settings = out / "settings.txt"
-    settings.write_text(settings_text(replay.meta["header"], executable), encoding="utf-8")
+    mods = None
+    if replay.meta.get("mods"):
+        mods = out / "mods"
+        try:
+            make_mods(replay.file(replay.meta["mods"]), mods)
+        except ModsError as failure:
+            report(f"replay: {replay.name}: FAILED: {failure}")
+            return None
+    settings.write_text(settings_text(replay.meta["header"], executable, mods), encoding="utf-8")
     actual = out / "actual.txt"
     extra = {"MEMORIES_PLAY": str(replay.file(replay.meta["recording"])), "MEMORIES_RECORD": str(actual)}
+    if mods:
+        extra["MEMORIES_MODS_DIR"] = str(mods)
     if replay.meta["start"]["kind"] == "state":
         extra["MEMORIES_LOAD_STATE"] = str(replay.file(replay.meta["start"]["file"]))
     if replay.meta.get("states_every"):
@@ -401,6 +441,8 @@ def record(arguments) -> int:
                           arguments.notes or "")
         return 0
     # A client session, recorded.
+    if arguments.mods and not arguments.mods.is_file():
+        raise SystemExit(f"replay: {arguments.mods}: no such mods.py")
     OUTPUT.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix="record-", dir=OUTPUT))
     spec = importlib.util.spec_from_file_location("session", arguments.session)
@@ -411,10 +453,18 @@ def record(arguments) -> int:
         env["MEMORIES_LOAD_STATE"] = str(arguments.state.resolve())
     if arguments.states_every:
         env["MEMORIES_RECORD_STATES"] = str(arguments.states_every)
-    with yfm_control.Game(arguments.executable, out=work / "game", settings=settings, env=env) as game:
+    mods = None
+    if arguments.mods:
+        mods = work / "mods"
+        try:
+            settings.update({f"mod.{mod}": "1" for mod in make_mods(arguments.mods.resolve(), mods)})
+        except ModsError as failure:
+            raise SystemExit(f"replay: {failure}") from None
+    with yfm_control.Game(arguments.executable, out=work / "game", settings=settings, env=env,
+                          mods_dir=mods) as game:
         session.run(game, work)
     package_recording(out, work / "recording.txt", arguments.state, arguments.hash_every, settings,
-                      arguments.notes or "")
+                      arguments.notes or "", arguments.mods.resolve() if arguments.mods else None)
     return 0
 
 
@@ -433,6 +483,7 @@ def main() -> int:
     making.add_argument("--hash-every", type=int, default=1, help="keep every Nth frame hash")
     making.add_argument("--settings", nargs="*", help="key=value settings of the run (the session's)")
     making.add_argument("--notes", help="what the replay is for")
+    making.add_argument("--mods", type=Path, help="a mods.py whose make(folder, root) writes the data mods the run has")
     making.add_argument("--executable", type=Path)
     playing = commands.add_parser("play", help="play a replay")
     playing.add_argument("replay", type=Path)
