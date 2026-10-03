@@ -92,6 +92,8 @@ enum {
 #define NAME_LINE 16                  /* the font's height, the digits' line */
 #define NAME_ROOM 127                 /* pixels of ink between the arrows */
 #define NAME_INK 15                   /* the widest letter's ink, from a pixel left of its cell */
+#define LINE_HEIGHT 12                /* the message box's */
+#define ICON_ROW_GAP 4                /* an icon is 16 rows: a row of them this much lower clears the line above */
 #define ICON_WIDTH 16
 #define FLIP_STEP 8                   /* the game's own turn, state 1 */
 #define QUICK_STEP 16
@@ -398,6 +400,15 @@ static void command(Out *out, int op, int operand)
 static void newline(Out *out)
 {
     put(out, 0xFE);
+    out->x = 0;
+}
+
+/* A new line for a row of buttons: their icons are taller than a line, so
+ * the row goes a little lower, clear of the line above (F8 01: x 0, y on by
+ * its operand). */
+static void icon_row(Out *out)
+{
+    command(out, 0x01, LINE_HEIGHT + ICON_ROW_GAP);
     out->x = 0;
 }
 
@@ -940,10 +951,10 @@ static void compose_list(void)
         }
     }
     while (written < top) { newline(&out); written++; }
-    newline(&out);
+    icon_row(&out);
     if (!locked) hint(&out, ICON_CROSS, TEXT_OWN_PACK_BUY, "BUY");
     hint(&out, ICON_CIRCLE, back_id, back_english);
-    if (!one_row) newline(&out);
+    if (!one_row) icon_row(&out);
     hint(&out, ICON_SQUARE, TEXT_OWN_PACK_INFO, "INFO");
     finish(&out);
 }
@@ -1070,7 +1081,7 @@ static void compose_reveal(int slot)
         own(&out, TEXT_OWN_NEW, "NEW", NULL, NULL);
         colour(&out, WHITE);
     }
-    newline(&out);
+    icon_row(&out);
     if (reveal_style(slot) == PACK_REVEAL_FLIP) {
         hint(&out, ICON_CROSS, TEXT_OWN_PACK_NEXT, "NEXT");
         hint(&out, ICON_SQUARE, TEXT_OWN_PACK_SKIP, "SKIP");
@@ -1106,7 +1117,7 @@ static void compose_summary(void)
             colour(&out, WHITE);
         }
     }
-    newline(&out);
+    icon_row(&out);
     hint(&out, ICON_CROSS, TEXT_OWN_PACK_OK, "OK");
     if (pages > 1) count_at_right(&out, (unsigned)s.page + 1, (unsigned)pages);
     finish(&out);
@@ -1245,7 +1256,7 @@ static void compose_info(void)
         if (row >= info_count) continue;
         for (p = info[row]; *p != 0xFF; p++) put(&out, *p);
     }
-    newline(&out);
+    icon_row(&out);
     hint(&out, ICON_CIRCLE, TEXT_OWN_PACK_BACK, "BACK");
     if (pages > 1) count_at_right(&out, (unsigned)s.page + 1, (unsigned)pages);
     finish(&out);
