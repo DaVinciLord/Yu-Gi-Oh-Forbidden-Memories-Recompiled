@@ -377,7 +377,13 @@ void ChangeClearPAD(long value)
 }
 
 /* Callbacks are game functions and the pad buffers are guest addresses. The
- * timer phase belongs to the running process and restarts. */
+ * timer's phase goes in "libetc-clock", apart so that states without it keep
+ * loading "libetc": how far off the sound driver's next tick is from the last
+ * clock tick, which a load puts after the loading process's own last tick.
+ * The clock's microseconds are the process's, so the distance is kept, not
+ * the time. Without it (an older state) the counter starts a period after
+ * the next tick, as it always did, and the music's notes fall on other
+ * frames than in the game that saved it. */
 void LibEtc_State(MemoriesState *state)
 {
     const MemoriesStateField fields[] = {{&vsync_callback, sizeof(vsync_callback)},
@@ -386,8 +392,14 @@ void LibEtc_State(MemoriesState *state)
                                          {(void *)&counter_running, sizeof(counter_running)},
                                          {(void *)&counter_period_us, sizeof(counter_period_us)},
                                          {pad_buffer, sizeof(pad_buffer)}, {&last_vsync, sizeof(last_vsync)}};
+    int64_t phase = counter_next_us ? (int64_t)(counter_next_us - last_real_us) : 0;
+    MemoriesStateField clock = {&phase, sizeof(phase)};
     if (Memories_StateChunk(state, "libetc", fields, sizeof(fields) / sizeof(fields[0]))) {
         counter_next_us = 0;
         critical = pending_tick = pending_vblank = 0;
+    }
+    if (Memories_StateChunk(state, "libetc-clock", &clock, 1) && phase > 0 &&
+        (uint64_t)phase <= counter_period_us) {
+        counter_next_us = last_real_us + (uint64_t)phase;
     }
 }
