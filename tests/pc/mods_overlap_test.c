@@ -216,6 +216,77 @@ int main(void)
         }
     }
 
+    /* tests/pc/mod_overlaps/starter-pools: each "# a, b" a set of its mods in
+     * load order, then the lines it makes (test_overlaps.py too). Pools of
+     * several mods add up and are dealt from only at forty draws, one mod's
+     * that do not draw forty make a line too, and a written deck wins. */
+    {
+        char *sets, *row, *next;
+        JsonDocument *docs[8];
+        ModsOverlapMod some[8];
+        char *directories[8];
+        int m = 0, have = 0, set_count = 0;
+        snprintf(path, sizeof(path), "%s/tests/pc/mod_overlaps/starter-pools/expected.txt", MEMORIES_SOURCE_DIR);
+        sets = read_all(path);
+        found = NULL;
+        for (row = sets; row && *row; row = next) {
+            size_t length;
+            next = strchr(row, '\n');
+            if (next) *next++ = 0;
+            length = strlen(row);
+            if (length && row[length - 1] == '\r') row[--length] = 0;
+            if (!strncmp(row, "# ", 2)) {
+                /* The set before is done: every line it makes was read. */
+                assert(!found || have == Mods_OverlapCount(found));
+                Mods_OverlapFree(found);
+                for (int i = 0; i < m; i++) {
+                    Json_Free(docs[i]);
+                    free(directories[i]);
+                }
+                m = have = 0;
+                for (char *id = strtok(row + 2, ", "); id; id = strtok(NULL, ", ")) {
+                    assert(m < 8);
+                    directories[m] = malloc(1024);
+                    snprintf(directories[m], 1024, "%s/tests/pc/mod_overlaps/starter-pools/%s", MEMORIES_SOURCE_DIR, id);
+                    snprintf(path, sizeof(path), "%s/mod.json", directories[m]);
+                    docs[m] = Json_ParseFile(path, error, sizeof(error));
+                    assert(docs[m]);
+                    some[m].id = Json_String(Json_Member(Json_Root(docs[m]), "id"), "");
+                    some[m].name = Json_String(Json_Member(Json_Root(docs[m]), "name"), "");
+                    some[m].directory = directories[m];
+                    some[m].manifest = Json_Root(docs[m]);
+                    m++;
+                }
+                found = Mods_OverlapCompute(some, m, &source);
+                assert(found);
+                set_count++;
+                continue;
+            }
+            if (!length) continue;
+            assert(found && have < Mods_OverlapCount(found));
+            Mods_OverlapLabel(found, have, label, sizeof(label));
+            Mods_OverlapMods(found, have, mods, sizeof(mods));
+            Mods_OverlapText(found, have, text, sizeof(text));
+            snprintf(line, sizeof(line), "%s|%s|%s|%s|%s\t%s", Mods_OverlapKindName(Mods_OverlapKind(found, have)),
+                     Mods_OverlapSeverity(found, have) ? "warning" : "info", Mods_OverlapOutcome(found, have), mods,
+                     label, text);
+            if (strcmp(line, row)) {
+                fprintf(stderr, "starter-pools: found   %s\n               expected %s\n", line, row);
+                assert(0);
+            }
+            printf("starter-pools: %s\n", text);
+            have++;
+        }
+        assert(!found || have == Mods_OverlapCount(found));
+        Mods_OverlapFree(found);
+        for (int i = 0; i < m; i++) {
+            Json_Free(docs[i]);
+            free(directories[i]);
+        }
+        assert(set_count >= 8);
+        free(sets);
+    }
+
     /* Code: hooks chain, events are all called. */
     source.hook = hook;
     source.event = event;

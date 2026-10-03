@@ -136,6 +136,32 @@ class SameAsTheGame(unittest.TestCase):
         found = overlaps.check(mods, FixtureSource(setup))
         self.assertEqual([o.text for o in found], [DUELISTS_64])
 
+    def test_starter_pools(self):
+        # tests/pc/mod_overlaps/starter-pools: each "# a, b" a set of its mods
+        # in load order, then the lines it makes (mods_overlap_test.c too).
+        # Pools add up and deal only at forty draws; a written deck wins.
+        setup, _ = fixture_mods()
+        folder = FIXTURE / "starter-pools"
+        sets = []
+        for row in (folder / "expected.txt").read_text(encoding="utf-8").splitlines():
+            if row.startswith("# "):
+                sets.append((row[2:].split(", "), []))
+            elif row:
+                sets[-1][1].append(row)
+        self.assertGreaterEqual(len(sets), 8)
+        for ids, expected in sets:
+            mods = []
+            for mid in ids:
+                manifest = overlaps._read_json(folder / mid / "mod.json")
+                mods.append(overlaps.Mod(mid, manifest["name"], manifest, folder / mid))
+            found = overlaps.check(mods, FixtureSource(setup))
+            self.assertEqual([f"{overlaps.line(o)}\t{o.text}" for o in found], expected, ids)
+            # The editor's check of one mod: a line one mod makes alone is its.
+            for m in range(len(mods)):
+                mine = [o.text for o in overlaps.check(mods, FixtureSource(setup), involving=m)]
+                self.assertEqual(mine, [row.split("\t")[1] for row in expected
+                                        if mods[m].id in row.split("|")[3].split(", ")], (ids, m))
+
     def test_names_as_the_game_keeps_them(self):
         # mods_overlap_test.c's: an escape of one byte that is not UTF-8
         # (U+FFFD where the window shows it), and six names of 95 bytes,

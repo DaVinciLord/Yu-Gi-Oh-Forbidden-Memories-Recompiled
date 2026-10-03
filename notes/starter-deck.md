@@ -152,7 +152,11 @@ manifest does, so a mod's own are weighted like any other.
 A written deck still wins. `NameEntry_BuildStarterDeck` asks for one first,
 then for these pools, and reads the disc's rows only when neither is offered.
 The pools of every applied mod add up, in the order the mods load, as the
-decks do.
+decks do. Pools that do not draw forty together are dropped and the disc's
+rows deal the deck, which the game itself says only in the log
+(`MEMORIES_TRACE=mods`); the Mods window and the FM Editor's Conflicts tab
+say it as a warning (notes/modding.md, "When mods overlap"), and also when
+another mod's written deck wins over the pools.
 
 The editor's Starter decks tab writes `starter` on its *Written decks* tab and
 `starter_pools` on its *Weighted pools* tab.

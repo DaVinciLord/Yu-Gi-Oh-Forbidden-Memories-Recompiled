@@ -9,9 +9,12 @@
  *
  * The mods come in load order, earliest first, which is what decides most
  * overlaps: the later mod wins. Some keys add up instead (drop and deck
- * pool edits, starter decks, title text lines), which is said too, as
- * information rather than a warning. Each overlap is one line, built when
- * asked for (a mod of every fusion pair has 261,003 of them).
+ * pool edits, starter decks and pools, title text lines), which is said too,
+ * as information rather than a warning. Each overlap is one line, built when
+ * asked for (a mod of every fusion pair has 261,003 of them). One line may
+ * name a single mod: starter pools that do not draw a deck's forty cards,
+ * which the game leaves out however many mods wrote them (when two mods or
+ * more are listed; one mod alone has no overlaps).
  *
  * The FM Editor makes the same check in Python
  * (tools/pc/fm_editor/overlaps.py); tests/pc/mod_overlaps holds the mods and
@@ -103,8 +106,9 @@ void Mods_OverlapLabel(const ModsOverlaps *overlaps, int index, char *out, size_
 void Mods_OverlapMods(const ModsOverlaps *overlaps, int index, char *out, size_t size);
 /* How it comes out, as one word the FM Editor's check uses too: "later",
  * "after", "agree", "add", "reset", "fixed", "keys", "bytes", "chain",
- * "events", "first", "aimed", "patched", "early" or "sold" (overlap.c,
- * outcome_words). */
+ * "events", "first", "aimed", "patched", "early", "sold", "written" (a
+ * written starter deck wins over the pools) or "dropped" (the pools do not
+ * draw the forty cards of a deck) (overlap.c, outcome_words). */
 const char *Mods_OverlapOutcome(const ModsOverlaps *overlaps, int index);
 /* "Cards", "Drops and decks"... */
 const char *Mods_OverlapKindName(int kind);
