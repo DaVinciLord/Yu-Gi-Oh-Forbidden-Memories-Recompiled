@@ -312,9 +312,25 @@ def play_scripted(replay: Replay, executable: Path, out: Path) -> bool:
 
 
 def play(path: Path, executable: Path, do_check: bool, update: bool, timeout: float) -> bool:
+    """Play a replay in a folder of its own under tmp/pc/replays, removed when
+    it passes and kept when it fails, for a look."""
+    out: list[Path] = []
+    passed = False
+    try:
+        passed = play_in(path, executable, do_check, update, timeout, out)
+    finally:
+        if out and passed:
+            shutil.rmtree(out[0], ignore_errors=True)
+        elif out:
+            print(f"replay: kept {out[0]}")
+    return passed
+
+
+def play_in(path: Path, executable: Path, do_check: bool, update: bool, timeout: float, folder: list) -> bool:
     replay = Replay(path)
     OUTPUT.mkdir(parents=True, exist_ok=True)
     out = Path(tempfile.mkdtemp(prefix=f"{replay.name}-", dir=OUTPUT))
+    folder.append(out)
     if replay.meta["kind"] == "scripted":
         return play_scripted(replay, executable, out)
     header = replay.meta["header"]

@@ -339,7 +339,7 @@ class Game:
         line = f"jump {target}"
         if opponent is not None or deck:
             line += f" {opponent or 0}" + (f" {deck}" if deck else "")
-        jumps = self.info()["jumps"]
+        jumps, start = self.info()["jumps"], self.vblank
         self.command(line)   # refused at once (ControlError) when the game cannot take it
         # Landed when the game counts it, even when the screen asked for is
         # the one already running (the game leaves it and comes back).
@@ -349,12 +349,13 @@ class Game:
         if target == "title":
             # The title's own loop runs before Main_Loop starts a mode: the
             # byte has no flags (0 at boot, MAIN_MODE_MENU after a jump).
-            return {"vblanks": self.wait_until(lambda g: g.u8("D_8009B26C") in (0, wanted) and
-                                               g.resident("main_menu"), timeout, what="the title")}
-        if target == "debug":
-            return {"vblanks": self.wait_until(lambda g: g.u8("D_8009B26C") == 0xC0, timeout, what="the debug menu")}
-        return {"vblanks": self.wait_until(lambda g: g.u8("D_8009B26C") & 0x9F == 0x80 | wanted, timeout,
-                                           what=target)}
+            self.wait_until(lambda g: g.u8("D_8009B26C") in (0, wanted) and g.resident("main_menu"), timeout,
+                            what="the title")
+        elif target == "debug":
+            self.wait_until(lambda g: g.u8("D_8009B26C") == 0xC0, timeout, what="the debug menu")
+        else:
+            self.wait_until(lambda g: g.u8("D_8009B26C") & 0x9F == 0x80 | wanted, timeout, what=target)
+        return {"vblanks": self.vblank - start}   # all the jump took
 
     def duel_ready(self, timeout: int = 6000, before_deal: Callable[["Game"], object] | None = None) -> int:
         """In a duel: past the deck screen before it (circle), until the
