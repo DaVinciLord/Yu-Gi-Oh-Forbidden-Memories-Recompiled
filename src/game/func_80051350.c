@@ -193,8 +193,18 @@ s32 func_80051350(s32 mode, s32 min_extent, s32 depth)
         pb = e3.values - 4;
         pb += i;
         pb++;
+#ifdef MEMORIES_PC
+        /* The pointers reach dy and e1 only in the console's frame, where
+         * the pairs lie in declaration order 8 bytes apart. The port's
+         * compilers lay the frame out otherwise: the 32-bit build read the
+         * return address and the caller's frame there, the 64-bit build
+         * other words again. */
+        v = dy.values[i];
+        eb = e1.values[i];
+#else
         v = pv[13];
         eb = pb[7];
+#endif
         if (v < 0) {
             v = -v;
         }
