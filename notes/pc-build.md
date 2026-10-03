@@ -3693,6 +3693,34 @@ trampoline table. A function of another library (libc, SDL) whose address the
 game stored would not fit; none is known, and the plain-process runs below
 are where it would show (a fault at a truncated address).
 
+Two things differ from windows-x64 beyond the pointer width:
+
+- **`long` is 8 bytes (LP64).** The Psy-Q `long` is `PSXLONG` (`int` here)
+  in the psyq headers and in the SDK stand-ins, and each stand-in unit
+  includes the psyq header it implements (`libgte.c`, `libgs.c`,
+  `libmcrd.c`, `libetc.c`, `libpress.c`; `libapi_krom.c` through
+  `pc/sdk/krom.h`), so a definition that disagrees with the game's
+  declaration does not compile. `_Static_assert`s pin the records they
+  touch (MATRIX, VECTOR, SVECTOR, GsSPRITE, GsOT, DIRENTRY).
+- **LLVM's AArch64 back end drops the truncation of a store through a
+  `__ptr32` pointer** (NDK r29's clang 21 and clang 22.1.8): `p->u16 |= x`
+  through a G32 pointer became `ldrh w8, [x9]; orr; str w8, [x9]`, and at
+  -O2 a plain `p->u8 = v` a 4-byte `str`, overwriting the next field (it
+  cleared DisplayObject.field_0A beside the flags, which relinked the
+  display lists: the duel drew cards on the wrong side of the field and the
+  portraits out of place, while the game's state stayed in step). Loads are
+  right. On arm64 every C unit is compiled through IR, and
+  `tools/pc/ptr32_stores.py` sends each store and memcpy/memmove/memset
+  through a G32 pointer via an addrspacecast to an ordinary pointer; it
+  fails the build if one is left.
+
+Off the phone, the x86_64 emulator image (`api35x64`, Google APIs, which
+runs arm64 code through `libndk_translation`) runs `device_run.py` the same
+way (`ANDROID_SERIAL=emulator-5554`) and reproduced the phone's replay
+divergence exactly; a process there ends with SIGSEGV (exit 139) after the
+game exits, which replay.py reports as a failure even when every frame
+matches.
+
 Build and test (Git Bash, `ANDROID_SDK_ROOT=D:/Android/sdk`):
 
 ```sh

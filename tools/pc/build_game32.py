@@ -39,6 +39,7 @@ sections cannot be placed at chosen addresses (as on Windows). The APK is packag
 package_android.py) with the SDK's build tools; notes/pc-build.md, "Android"."""
 import argparse, concurrent.futures, csv, filecmp, glob, hashlib, json, os, re, shutil, struct, subprocess, sys
 import build_process
+import ptr32_stores
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ELF = "tmp/project-build/SLUS_014.11.elf"
@@ -318,7 +319,25 @@ def compile_unit(job):
     if os.path.exists(obj) and os.path.getmtime(obj) >= newest and \
             os.path.getmtime(obj) >= os.path.getmtime(source):
         return
-    run([CC, *flags, "-c", source, "-o", obj])
+    if A64 and source.endswith(".c"):
+        # LLVM's AArch64 back end drops the truncation of a store through a
+        # __ptr32 pointer (G32), so a u8/u16 store writes 4 bytes: the unit
+        # goes through IR with those stores sent through 64-bit pointers
+        # (tools/pc/ptr32_stores.py). One optimization pipeline still runs,
+        # in the second step.
+        ir = obj[:-2] + ".ll"
+        run([CC, *flags, "-S", "-emit-llvm", "-Xclang", "-disable-llvm-passes", source, "-o", ir])
+        with open(ir, encoding="utf-8") as handle:
+            text = handle.read()
+        try:
+            text = ptr32_stores.rewrite(text)
+        except ValueError as error:
+            sys.exit(f"{source}: {error}")
+        with open(ir, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(text)
+        run([CC, *flags, "-Wno-unused-command-line-argument", "-c", ir, "-o", obj])
+    else:
+        run([CC, *flags, "-c", source, "-o", obj])
     if os.path.exists(obj + ".aliased"):
         os.remove(obj + ".aliased")  # the fresh object names them itself (see main)
     if WINDOWS and not X64:
