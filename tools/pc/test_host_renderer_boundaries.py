@@ -3,19 +3,20 @@
 import argparse
 from pathlib import Path
 import subprocess
-from host_renderer_boundaries import adapt_soft_gpu, SOFT_GPU
+SOFT_GPU = 'src/pc/render/soft_gpu.c'
 from translate_guest_ir import translate
 from build_arm64 import optimize_translated_ir
 ROOT=Path(__file__).resolve().parents[2]
 def main():
  p=argparse.ArgumentParser();p.add_argument('--sanitize',action='store_true');p.add_argument('--instrumented',action='store_true');p.add_argument('--differential',action='store_true');a=p.parse_args()
  out=ROOT/'tmp/host-renderer';out.mkdir(parents=True,exist_ok=True)
- source=out/'soft_gpu.c';source.write_text(adapt_soft_gpu((ROOT/SOFT_GPU).read_text()))
+ source=out/'soft_gpu.c';source.write_text((ROOT/SOFT_GPU).read_text())
  flags=['-O2','-std=c11','-DMEMORIES_PC','-DMEMORIES_TRANSLATED','-fms-extensions','-I'+str(ROOT/'src'),'-I'+str(ROOT/'src/pc/render')]
  if a.sanitize:flags+=['-fsanitize=address,undefined','-fno-omit-frame-pointer']
  sources=[source]
  if a.instrumented or a.differential:
   frontend_flags=[flag for flag in flags if not flag.startswith('-fsanitize=')]
+  frontend_flags+=['-DMEMORIES_INSTRUMENT_SOFTGPU']
   raw=out/'soft_gpu.raw.ll';subprocess.run(['clang',*frontend_flags,'-O0','-S','-emit-llvm',str(ROOT/SOFT_GPU),'-o',str(raw)],check=True)
   instrumented=out/'soft_gpu.instrumented.ll';instrumented.write_text(optimize_translated_ir(translate(raw.read_text())))
   sources=([source,instrumented] if a.differential else [instrumented])

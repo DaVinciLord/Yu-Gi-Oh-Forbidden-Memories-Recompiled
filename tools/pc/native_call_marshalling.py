@@ -5,8 +5,7 @@ Each mapped retail argument consumes one o32 word. The i64 frontend parameters
 below are audited host longs or four-byte ModelTintColor ABI coercions, not
 retail 64-bit integers. Reject new wide parameters until their ABI is audited.
 """
-import re
-from translate_guest_ir import split_top
+from llvm_guest import inspect
 
 WIDE_WORDS = {
     'GsSetAmbient', 'GsSetProjection', 'OpenEvent', 'CloseEvent', 'EnableEvent',
@@ -22,19 +21,13 @@ VARIADIC_WORDS = {'Model_SetSlotProperties', 'Model_QueueTintRequestForParts', '
 def signatures(texts):
     definitions, declarations = {}, {}
     for text in texts:
-        for line in text.splitlines():
-            match = re.match(r'^(define|declare) (.*?)@([\w.$]+)\((.*)\)', line)
-            if not match or re.search(r'\b(internal|private)\b', match[2]):
-                continue
-            ret = re.search(r'(void|i\d+|ptr(?: addrspace\(\d+\))?)\s*$', match[2])
-            if not ret:
-                continue
-            parameters = split_top(match[4]) if match[4] else []
-            result = ret[1]
-            if result in {'i8', 'i16'} and re.search(r'\bsignext\b', match[2]):
+        for name, signature in inspect(text)['signatures'].items():
+            result = signature['result']
+            if result in {'i8', 'i16'} and signature['result_signext']:
                 result = 's' + result[1:]
-            signature = (result, parameters)
-            (definitions if match[1] == 'define' else declarations).setdefault(match[3], signature)
+            parameters = list(signature['parameters'])
+            if signature['variadic']: parameters.append({'kind': '...'})
+            (definitions if signature['definition'] else declarations).setdefault(name, (result, parameters))
     return {**declarations, **definitions}
 
 
@@ -60,16 +53,14 @@ def emit_native_calls(mapped, texts, stubs=()):
             raise ValueError('Missing native call signature: ' + name)
         types, values = [], []
         for word, parameter in enumerate(parameters):
-            if parameter == '...':
+            kind = parameter['kind']
+            if kind == '...':
                 if name not in VARIADIC_WORDS:
                     raise ValueError('Unaudited variadic native call: ' + name)
                 types.append('...')
                 values.extend(f'a[{n}]' for n in range(word, 12))
                 break
-            match = re.match(r'(ptr(?: addrspace\(\d+\))?|i\d+)(?=\s|$)', parameter)
-            if not match: raise ValueError('Unsupported native parameter: ' + parameter)
-            kind = match[1]
-            if kind in {'i8', 'i16'} and re.search(r'\bsignext\b', parameter):
+            if kind in {'i8', 'i16'} and parameter.get('signext'):
                 kind = 's' + kind[1:]
             types.append(c_type(kind, name, word))
             if kind.startswith('ptr'):

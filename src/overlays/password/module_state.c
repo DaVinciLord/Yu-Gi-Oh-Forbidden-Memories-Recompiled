@@ -1,6 +1,7 @@
+#include "../../port_ptr.h"
 #include "../../types.h"
 #include "../../ygo_types.h"
 #include "module_state.h"
 
 PasswordModuleState gPassword_ModuleState
-    __attribute__((section(".data"))) = {0};
+    PSX_SECTION(".data") = {0};

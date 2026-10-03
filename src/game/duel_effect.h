@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef YUGIOH_GAME_DUEL_EFFECT_H
 #define YUGIOH_GAME_DUEL_EFFECT_H
 
@@ -73,7 +74,7 @@ extern DuelEffectChannel D_800EB15C;
  * `u32`; the `[]` was the -G8 placement device, which the .data arm does
  * now. */
 #ifdef D_800EB12C_IN_DATA
-extern u32 D_800EB12C __attribute__((section(".data")));
+extern u32 D_800EB12C PSX_SECTION(".data");
 #else
 extern u32 D_800EB12C;
 #endif
@@ -99,7 +100,7 @@ typedef char TextEntries_channels_must_match[DUEL_EFFECT_CHANNEL_COUNT == TEXT_E
  * $at, while the matching reader is gp-relative, so the writer selects the
  * .data declaration and the reader takes the plain declaration. */
 #ifdef D_8009B344_IN_DATA
-extern u8 D_8009B344 __attribute__((section(".data")));
+extern u8 D_8009B344 PSX_SECTION(".data");
 #else
 extern u8 D_8009B344;
 #endif
@@ -120,7 +121,7 @@ extern u8 D_8009B344;
  * duel_effect_object_commands.c takes the plain byte, and so does
  * func_800610E0.c, whose -G0 unit stores through $at either way. */
 #ifdef D_8009B34E_IN_DATA
-extern u8 D_8009B34E __attribute__((section(".data")));
+extern u8 D_8009B34E PSX_SECTION(".data");
 #else
 extern u8 D_8009B34E;
 #endif
@@ -132,7 +133,7 @@ extern u8 D_8009B34E;
  * Same two units, same forms (four $at stores and one lui/lbu read in
  * func_80023144, gp-relative in func_80038A44), same arms. */
 #ifdef D_8009B355_IN_DATA
-extern u8 D_8009B355 __attribute__((section(".data")));
+extern u8 D_8009B355 PSX_SECTION(".data");
 #else
 extern u8 D_8009B355;
 #endif
@@ -158,7 +159,7 @@ extern u8 D_8009B355;
  * define the .data arm; func_80037DA4's candidate takes the plain byte.
  * Initial value not read. */
 #ifdef D_8009B320_IN_DATA
-extern u8 D_8009B320 __attribute__((section(".data")));
+extern u8 D_8009B320 PSX_SECTION(".data");
 #else
 extern u8 D_8009B320;
 #endif
@@ -197,7 +198,7 @@ extern u8 D_8009B320;
  * at -G0, takes the plain declaration.
  * Initial value not read. */
 #ifdef GDUEL_WSELECTEDCARDID_IN_DATA
-extern s16 gDuel_wSelectedCardID __attribute__((section(".data")));
+extern s16 gDuel_wSelectedCardID PSX_SECTION(".data");
 #else
 extern s16 gDuel_wSelectedCardID;
 #endif
@@ -314,7 +315,7 @@ extern u8 gDuel_bActiveEffectState;
  * duel_effect_dialog_state.c, main_reset_frontend_runtime.c and
  * MainMenu_UpdateTradeScreen take the plain arm. */
 #ifdef GDUEL_BEFFECTSTATE_IN_DATA
-extern u8 gDuel_bEffectState __attribute__((section(".data")));
+extern u8 gDuel_bEffectState PSX_SECTION(".data");
 #else
 extern u8 gDuel_bEffectState;
 #endif

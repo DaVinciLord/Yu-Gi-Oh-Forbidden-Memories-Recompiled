@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef MEMORIES_DECOMP_MEM_CARD_DIRECTORY_H
 #define MEMORIES_DECOMP_MEM_CARD_DIRECTORY_H
 
@@ -47,9 +48,9 @@ void MemCard_FindLoadedEntry(u8 *name);
 
 /* Current directory-entry buffer and the number of records loaded into it. */
 #ifdef MEM_CARD_DIRECTORY_IN_DATA
-extern struct DIRENTRY *G32 gMemCard_pDirEntries __attribute__((section(".data")));
-extern s32 gMemCard_nDirEntries __attribute__((section(".data")));
-extern s32 gMemCard_nFreeBlocks __attribute__((section(".data")));
+extern struct DIRENTRY *G32 gMemCard_pDirEntries PSX_SECTION(".data");
+extern s32 gMemCard_nDirEntries PSX_SECTION(".data");
+extern s32 gMemCard_nFreeBlocks PSX_SECTION(".data");
 #else
 extern struct DIRENTRY *G32 gMemCard_pDirEntries;
 extern s32 gMemCard_nDirEntries;

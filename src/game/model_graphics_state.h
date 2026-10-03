@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef MEMORIES_DECOMP_MODEL_GRAPHICS_STATE_H
 #define MEMORIES_DECOMP_MODEL_GRAPHICS_STATE_H
 
@@ -18,7 +19,7 @@
  * selects it from D_80091008; model view/update code reads fields through it.
  * The background renderer reads through +0xB1, including texture metadata,
  * and reads this pointer before checking its model slot's active byte. */
-extern u8 *D_8009AF88;
+extern u8 *G32 D_8009AF88;
 
 /* Model view and scene state. D_8009AF8E/D_8009AF90 are the yaw/pitch
  * accumulators updated by func_8004E7B0; D_8009AF94 is the unsigned scene
@@ -48,8 +49,8 @@ extern u8 D_8009AFA1;
 
 /* Active graphics buffer, bounded frame step, and frame-step override. */
 #ifdef MODEL_GRAPHICS_STATE_FRAME_ABSOLUTE
-extern u8 D_8009AFA2 __attribute__((section(".data")));
-extern u8 D_8009AFA3 __attribute__((section(".data")));
+extern u8 D_8009AFA2 PSX_SECTION(".data");
+extern u8 D_8009AFA3 PSX_SECTION(".data");
 #elif defined(MODEL_GRAPHICS_STATE_CLAMP_NONVOLATILE)
 extern u8 D_8009AFA2;
 extern u8 D_8009AFA3;
@@ -72,7 +73,7 @@ extern volatile u8 D_8009AFA3;
 #endif
 extern u8 D_8009AFA4[4];
 #elif defined(MODEL_GRAPHICS_STATE_FRAME_ABSOLUTE)
-extern u8 D_8009AFA4 __attribute__((section(".data")));
+extern u8 D_8009AFA4 PSX_SECTION(".data");
 #else
 extern u8 D_8009AFA4;
 #endif

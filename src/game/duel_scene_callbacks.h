@@ -11,7 +11,7 @@
  * DUEL_SCENE_PHASE_MASK]`, and the mask permits an index the fifteen
  * defined entries do not cover, so a bound here would assert something the
  * call site does not. */
-extern void (*gDuel_apfnSceneStateHandler[])(void);
+extern void (*G32 gDuel_apfnSceneStateHandler[])(void);
 
 /* Card-move presentation, position choice, and deferred stat adjustment. */
 void func_8001B170(void);

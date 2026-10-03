@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef MEMORIES_DECOMP_DUEL_EFFECT_REQUEST_H
 #define MEMORIES_DECOMP_DUEL_EFFECT_REQUEST_H
 
@@ -123,7 +124,7 @@ extern u8 *G32 D_8009B17C;
  * array the unit declared privately gives cc1psx's own splittable pair
  * instead, and the lui half lands in the slot. */
 #ifdef gDuel_bEffectRequestStatus_IN_DATA
-extern u8 gDuel_bEffectRequestStatus __attribute__((section(".data")));
+extern u8 gDuel_bEffectRequestStatus PSX_SECTION(".data");
 #else
 extern u8 gDuel_bEffectRequestStatus;
 #endif

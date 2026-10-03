@@ -33,10 +33,10 @@ typedef void (*DuelEffectHandler)(void);
    each pair is DuelEffect_ClearCardEffect for every group but three.
    DuelEffect_UpdateState runs one of the five state handlers by the state
    index it latched. */
-extern DuelEffectHandler gDuelEffect_apfnGroupHandler
+extern DuelEffectHandler G32 gDuelEffect_apfnGroupHandler
     [DUEL_EFFECT_GROUP_COUNT * DUEL_CARD_EFFECT_HANDLERS_PER_GROUP];
 extern u8 gDuelEffect_abGroupByEffectId[DUEL_EFFECT_ID_COUNT];
-extern DuelEffectHandler
+extern DuelEffectHandler G32
     gDuelEffect_apfnStateHandler[DUEL_EFFECT_STATE_HANDLER_COUNT];
 
 #endif

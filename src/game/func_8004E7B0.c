@@ -8,7 +8,7 @@
  * The graphics state binds to its strong .sdata owner and the snapshot
  * names to existing image/layout symbols; they add no replacement storage.
  * The named profile's --use-comm-section spelling is load-bearing. */
-u8 *D_8009AF88;
+u8 *G32 D_8009AF88;
 s16 D_8009AF8E;
 s16 D_8009AF90;
 

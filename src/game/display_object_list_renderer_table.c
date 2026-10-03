@@ -18,7 +18,7 @@
  * So this array is declared sized, unlike the other three, because the size
  * is established rather than assumed. */
 
-void (*gDisplayObject_ListRenderers[DISPLAY_OBJECT_LIST_COUNT])(void) = {
+void (*G32 gDisplayObject_ListRenderers[DISPLAY_OBJECT_LIST_COUNT])(void) = {
     DisplayObject_RunUpdateCallbackList,
     DisplayObject_RenderSpriteList,
     DisplayObject_RenderSpriteSheetList,

@@ -34,12 +34,12 @@
  * memory card paths, so this is not evidence that the tables are
  * frontend-only. */
 
-void (*gDebugMenu_apfnAlternatePageSteps[])(void) = {
+void (*G32 gDebugMenu_apfnAlternatePageSteps[])(void) = {
     DebugMenu_ResetEntryState,
     DebugMenu_UpdateTwoPlayerDuelEntry,
 };
 
-void (*gDebugMenu_apfnPrimaryPageSteps[])(void) = {
+void (*G32 gDebugMenu_apfnPrimaryPageSteps[])(void) = {
     DebugMenu_ResetEntryState,
     DebugMenu_EnterMappedMode,       /* 3D */
     DebugMenu_UpdateCampaignEntry,   /* Campaign */

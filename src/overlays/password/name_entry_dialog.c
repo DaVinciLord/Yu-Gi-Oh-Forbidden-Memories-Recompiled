@@ -1,3 +1,6 @@
+#ifdef MEMORIES_PC
+#include "pc/debug/name_trace.h"
+#endif
 #include "../../types.h"
 #include "../../psyq/libgte.h"
 #include "../../psyq/libgpu.h"
@@ -52,6 +55,9 @@ void NameEntry_UpdateDialog(void)
     s32 c;
     s32 term;
 
+#ifdef MEMORIES_PC
+    if (gInput_wPad1Pressed || gInput_wPad1Repeat) NAME_TRACE("name dialog frame=%u flags=%x dialog=%x pressed=%x repeat=%x\n", Memories_PresentedFrames(), D_8016D400, D_8016D4D2, gInput_wPad1Pressed, gInput_wPad1Repeat);
+#endif
     if (D_8016D4D2 != 0) {
         flags = D_8016D400;
         if ((flags & 4) == 0) {
@@ -122,6 +128,9 @@ void NameEntry_UpdateDialog(void)
             }
         } else {
             func_80039794();
+#ifdef MEMORIES_PC
+            if (gInput_wPad1Pressed || Memories_PresentedFrames() % 120 == 0) NAME_TRACE("name wait frame=%u textflags=%x choice=%x pressed=%x completion=%x\n", Memories_PresentedFrames(), box->flags_34, (u32)(uintptr_t)box->field_30, gInput_wPad1Pressed, *(u32 *)&box->flags_34 & TEXT_BOX_COMPLETION_MASK);
+#endif
             if ((*(u32 *)&box->flags_34 & TEXT_BOX_COMPLETION_MASK) !=
                 TEXT_BOX_FLAG_DONE) {
                 return;
@@ -159,6 +168,9 @@ void NameEntry_UpdateDialog(void)
         DisplayObject_ReleaseIfPresent(caret);
         ff = D_8016D400;
         D_8016D400 = ff & 0x7F;
+#ifdef MEMORIES_PC
+        NAME_TRACE("name transfer frame=%u buffer=%x first=%x caret=%d\n", Memories_PresentedFrames(), (u32)(uintptr_t)D_8016D418, *(u16 *)D_8016D418, D_8016D42C);
+#endif
         Text_SjisToGlyphCodes(D_801B125A, D_8016D418, 6);
         TextBox_Create(3, 254, 112, 204, 96, 16);
         panel = D_800EB0F8;

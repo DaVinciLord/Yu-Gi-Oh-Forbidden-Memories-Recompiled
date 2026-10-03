@@ -1,3 +1,4 @@
+#include "../../port_ptr.h"
 #ifndef MEMORIES_DECOMP_OVERLAYS_FREE_DUEL_H
 #define MEMORIES_DECOMP_OVERLAYS_FREE_DUEL_H
 
@@ -28,7 +29,7 @@ extern s8 gFreeDuel_bTargetRow;
  * byte against 0 twice -- so the overlay records the reason and acts on it
  * next time round. The two resident writers only ever clear it. */
 #ifdef GFREEDUEL_BRETURNFLAGS_IN_DATA
-extern u8 gFreeDuel_bReturnFlags __attribute__((section(".data")));
+extern u8 gFreeDuel_bReturnFlags PSX_SECTION(".data");
 #else
 extern u8 gFreeDuel_bReturnFlags;
 #endif

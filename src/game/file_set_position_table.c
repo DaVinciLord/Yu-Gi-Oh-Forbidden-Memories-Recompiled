@@ -8,7 +8,7 @@
 void File_SetPositionTable(void)
 {
     s32 *position;
-    u8 **name;
+    u8 *G32 *name;
     u8 *current;
     s32 i;
     SpritePrim *state;
