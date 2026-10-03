@@ -11,23 +11,27 @@ from tkinter import ttk
 from . import limits
 from .gamedata import DUELIST_NAMES
 from .tabs import Tab
+from .widgets import ScrolledForm
 
 
 class LimitsTab(Tab):
     def __init__(self, notebook, app):
         super().__init__(notebook, app, "Limits")
-        ttk.Label(self, style="Hint.TLabel", wraplength=900, justify="left",
+        self.scroll = ScrolledForm(self)
+        self.scroll.pack(fill="both", expand=True)
+        body = self.scroll.body
+        ttk.Label(body, style="Hint.TLabel", wraplength=900, justify="left",
                   text="The numbers the game caps. Leave a field empty for the game's own number (in brackets). "
                        "ATK, DEF and LP are kept in 16 bits, so 32767 is as high as they go; the duel's numbers "
                        "take a fifth digit past 9999.").pack(anchor="w", pady=(0, 6))
         self.vars = {}
-        simple = ttk.LabelFrame(self, text="Limits", padding=6)
+        simple = ttk.LabelFrame(body, text="Limits", padding=6)
         simple.pack(fill="x")
         self._fields(simple, limits.FIELDS)
         self.advanced_shown = tk.BooleanVar(self, value=False)
-        ttk.Checkbutton(self, text="Show advanced", variable=self.advanced_shown,
+        ttk.Checkbutton(body, text="Show advanced", variable=self.advanced_shown,
                         command=self._show_advanced).pack(anchor="w", pady=(6, 0))
-        self.advanced = ttk.Frame(self)
+        self.advanced = ttk.Frame(body)
         numbers = ttk.LabelFrame(self.advanced, text="Advanced", padding=6)
         numbers.pack(side="left", fill="y")
         self._fields(numbers, limits.ADVANCED)
@@ -55,9 +59,9 @@ class LimitsTab(Tab):
         ttk.Entry(row, textvariable=self.duelist_opponent, width=7).pack(side="left")
         ttk.Button(row, text="Set", command=self._set_duelist).pack(side="left", padx=(6, 0))
         ttk.Button(row, text="Remove", command=self._remove_duelist).pack(side="left", padx=(4, 0))
-        self.status = ttk.Label(self, style="Error.TLabel", wraplength=900, justify="left")
+        self.status = ttk.Label(body, style="Error.TLabel", wraplength=900, justify="left")
         self.status.pack(anchor="w", pady=(6, 0))
-        buttons = ttk.Frame(self)
+        buttons = ttk.Frame(body)
         buttons.pack(fill="x")
         ttk.Button(buttons, text="Apply", command=self.commit).pack(side="left")
         ttk.Button(buttons, text="Game's numbers", command=self.clear).pack(side="left", padx=4)

@@ -169,6 +169,7 @@ class GameData:
     rituals: dict = field(default_factory=dict)        # ritual id -> (t1, t2, t3, result)
     pools: list = field(default_factory=list)          # [duelist][pool] -> {card id: weight}
     passwords: dict = field(default_factory=dict)      # id -> the Password screen's 8 digits, "" for none
+    starchips: dict = field(default_factory=dict)      # id -> the disc's Password shop price
     notes: list = field(default_factory=list)          # oddities found while reading
     campaign_map: object = None                        # campaign_map.MapData, None without the overworld packages
 
@@ -415,6 +416,9 @@ def read_game(slus: bytes, wa: bytes) -> GameData:
     data = GameData(cards=read_cards(slus, wa))
     read_archive(wa, data)
     data.passwords = read_passwords(wa)
+    if data.passwords:
+        data.starchips = {cid: struct.unpack_from("<I", wa, PASSWORD_TABLE + 8 * cid)[0]
+                          for cid in data.passwords}
     from . import campaign_map
     data.campaign_map = campaign_map.read(slus, wa)
     if data.campaign_map is not None:

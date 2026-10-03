@@ -56,7 +56,7 @@ class App(tk.Tk):
         self.tabs = [self.cards, self.art, self.fusions, self.equips, self.rituals, self.duelists, self.starter,
                      self.map, self.limits, self.stars, self.packs, self.info, self.conflicts]
         self.status = ttk.Label(self, relief="sunken", anchor="w", padding=(6, 2))
-        self.status.pack(fill="x", side="bottom")
+        self.status.pack(fill="x", side="bottom", before=self.notebook)
         if self.dark.get():
             self.theme.use(True)
         self.notebook.bind("<<NotebookTabChanged>>", lambda e: self.tab_changed())

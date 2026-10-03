@@ -820,6 +820,75 @@ class ValidateTest(unittest.TestCase):
 
 
 
+class StarchipTest(unittest.TestCase):
+    def setUp(self):
+        self.project = Project(fixture().game())
+
+    def test_price_round_trip_and_revert(self):
+        p = self.project
+        self.assertEqual(p.retail.starchips[1], 10)
+        self.assertEqual(p.retail.starchips[g.CARD_COUNT], g.CARD_COUNT * 10)
+        for cid, cost in ((1, 0), (2, 999999)):
+            p.set_starchips(cid, cost)
+            self.assertTrue(p.card_changed(cid))
+        p.set_password(1, "00000001")
+        data = manifest.build(p)
+        self.assertEqual(data["passwords"], {
+            "Blue Dragon": {"password": "00000001", "starchips": 0},
+            "Mystic Elf": {"starchips": 999999}})
+        again = Project(p.retail)
+        self.assertEqual(manifest.apply(again, data), [])
+        self.assertEqual(again.starchip_cost(1), 0)
+        self.assertEqual(again.starchip_cost(2), 999999)
+        self.assertEqual(manifest.build(again), data)
+        again.revert_card(2)
+        self.assertEqual(again.starchip_cost(2), 20)
+        self.assertNotIn("Mystic Elf", manifest.build(again)["passwords"])
+        self.assertFalse(again.card_changed(2))
+
+    def test_preserve_rules_and_replace_alias_prices(self):
+        p = self.project
+        table = {"all": {"starchips": 500},
+                 "1": {"password": "card number", "starchips": 70, "extra": 42},
+                 "Blue Dragon": {"starchips_percent": 25},
+                 "Mystic Elf": {"starchips": 100, "starchips_percent": 50},
+                 "Unknown": {"starchips": "keep this"}}
+        manifest.apply(p, {"passwords": table})
+        self.assertEqual(manifest.build(p)["passwords"], table)
+        # Percentages apply to the disc price, rounded like Tables_PasswordShop.
+        self.assertEqual(p.starchip_cost(1), 3)
+        self.assertEqual(p.starchip_cost(2), 100)
+        self.assertEqual(p.starchip_cost(3), 500)
+        p.set_starchips(1, 0)
+        edited = manifest.build(p)["passwords"]
+        self.assertEqual(edited["1"], {"password": "card number", "extra": 42})
+        self.assertEqual(edited["Blue Dragon"], {"starchips": 0})
+        for key in ("all", "Mystic Elf", "Unknown"):
+            self.assertEqual(edited[key], table[key])
+        again = Project(p.retail)
+        manifest.apply(again, {"passwords": edited})
+        self.assertEqual(again.starchip_cost(1), 0)
+        again.set_starchips(1, None)
+        self.assertEqual(again.starchip_cost(1), 500)
+        self.assertNotIn("Blue Dragon", manifest.build(again)["passwords"])
+        self.assertEqual(manifest.build(again)["passwords"]["1"], {"password": "card number", "extra": 42})
+
+    def test_cost_validation_and_percent_limits(self):
+        p = self.project
+        for bad in (-1, 1000000, True, 1.5, "100"):
+            with self.assertRaises(ValueError):
+                p.set_starchips(1, bad)
+        added = p.add_card(1, "added")
+        self.assertIsNone(p.starchip_cost(added))
+        with self.assertRaises(ValueError):
+            p.set_starchips(added, 100)
+        for percent, expected in ((0, 0), (1, 1), (25, 3), (1000, 100)):
+            p.other["passwords"] = {"all": {"starchips_percent": percent}}
+            self.assertEqual(p.starchip_cost(1), expected)
+        p.retail.starchips[1] = 999999
+        self.assertEqual(p.starchip_cost(1), 999999)
+
+
 class PasswordTest(unittest.TestCase):
     """A card's password in the Cards tab: a disc card's goes in "passwords"
     (the Password screen's), an added card's in its entry (the card view's)."""
