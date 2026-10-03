@@ -61,8 +61,8 @@ def process(operation, text, **options):
             cached.write_text(result)
     return json.loads(result) if operation == 'inspect' else result
 
-def translate(text, pinned=None, registration=None):
-    return process('translate', text, pins=pinned or {}, **({'registration': registration} if registration else {}))
+def translate(text, pinned=None, registration=None, *, game_unit=False):
+    return process('translate', text, pins=pinned or {}, game_unit=game_unit, **({'registration': registration} if registration else {}))
 
 def normalize(text, renames=None, drop_definitions=()):
     return process('normalize', text, renames=renames or {}, drop_definitions=list(drop_definitions))

@@ -51,6 +51,15 @@ extern void Model_QueueTintRequestForPartList(int32_t slot, int32_t part, uint32
 static uint32_t stack_top;   /* 0 until the stack is mapped */
 static uint32_t current_sp;  /* the innermost interpreted frame, or 0 */
 uint32_t Memories_MipsThunkTarget;
+#ifdef MEMORIES_TRANSLATED
+#include "state.h"
+void Memories_MipsState(MemoriesState *state)
+{
+    MemoriesStateField fields[] = {{&stack_top, sizeof(stack_top)}, {&current_sp, sizeof(current_sp)},
+                                  {&Memories_MipsThunkTarget, sizeof(Memories_MipsThunkTarget)}};
+    Memories_StateChunk(state, "arm64-mips", fields, sizeof(fields) / sizeof(fields[0]));
+}
+#endif
 
 static uint32_t l32(uint32_t a) { return *(uint32_t *)(uintptr_t)a; }
 static uint16_t l16(uint32_t a) { return *(uint16_t *)(uintptr_t)a; }

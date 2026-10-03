@@ -7,7 +7,7 @@
 void *GuestRuntime_malloc(size_t length)
 {
     void *p = malloc(length ? length : 1);
-    if (p && GuestRuntime_IsBound()) GuestRuntime_RegisterAutomatic(p, length ? length : 1);
+    if (p && GuestRuntime_IsBound()) GuestRuntime_RegisterAllocation(p, length ? length : 1);
     return p;
 }
 void *GuestRuntime_calloc(size_t count, size_t length)
@@ -17,7 +17,7 @@ void *GuestRuntime_calloc(size_t count, size_t length)
     if (count && length > SIZE_MAX / count) { errno = ENOMEM; return NULL; }
     size = count * length;
     p = calloc(1, size ? size : 1);
-    if (p && GuestRuntime_IsBound()) GuestRuntime_RegisterAutomatic(p, size ? size : 1);
+    if (p && GuestRuntime_IsBound()) GuestRuntime_RegisterAllocation(p, size ? size : 1);
     return p;
 }
 void GuestRuntime_free(void *pointer)
@@ -37,6 +37,6 @@ void *GuestRuntime_realloc(void *pointer, size_t length)
     p = realloc(old, length);
     if (!p) return NULL;
     GuestRuntime_UnregisterData(old);
-    if (GuestRuntime_IsBound()) GuestRuntime_RegisterAutomatic(p, length);
+    if (GuestRuntime_IsBound()) GuestRuntime_RegisterAllocation(p, length);
     return p;
 }

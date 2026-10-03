@@ -104,7 +104,7 @@ def inputs(third=False, magic=False):
     events += [(f+6, '0000') for f, _ in list(events)]
     return ','.join(f'{f}:{b}' for f, b in sorted(events))
 
-def run(case, disc, binary, output, language=0):
+def run(case, disc, binary, output, language=0, state_frame=None):
     folder = output/case
     mods = folder/'mods'; mods.mkdir(parents=True, exist_ok=True)
     if case in ('equip', 'magic', 'victory', 'animated-battle', 'trap', 'trap-threshold',
@@ -167,11 +167,29 @@ def run(case, disc, binary, output, language=0):
         env['MEMORIES_INPUT'] = inputs().split(',8000:')[0]+','+','.join(f'{f}:{b}' for f,b in sorted(events))
         env['MEMORIES_MODE_AT'] = '1000:6'
     log = folder/'run.log'
+    if state_frame is not None:
+        assert 30 < state_frame < int(env['MEMORIES_DUMP_FRAME'])
+        env['MEMORIES_SAVE_STATE'] = f'{state_frame}:{folder / "replay.state"}'
     with log.open('w') as stream:
         subprocess.run([str(binary)], cwd=ROOT,
                        env=env, stdout=stream, stderr=subprocess.STDOUT,
                        check=True, timeout=240)
     text = log.read_text()
+    if state_frame is not None:
+        replay = env.copy()
+        replay.pop('MEMORIES_SAVE_STATE')
+        replay['MEMORIES_LOAD_STATE'] = str(folder / 'replay.state')
+        replay['MEMORIES_INPUT'] = ','.join(
+            f'{int(part.split(":")[0]) - state_frame + 30}:{part.split(":")[1]}'
+            for part in env['MEMORIES_INPUT'].split(',') if int(part.split(':')[0]) > state_frame)
+        replay['MEMORIES_DUMP_FRAME'] = str(int(env['MEMORIES_DUMP_FRAME']) - state_frame + 30)
+        replay['MEMORIES_DUMP_PATH'] = str(folder / 'replay.ppm')
+        with (folder / 'replay.log').open('w') as stream:
+            subprocess.run([str(binary)], cwd=ROOT, env=replay, stdout=stream,
+                           stderr=subprocess.STDOUT, check=True, timeout=240)
+        assert 'ARM64 state loading:' in (folder / 'replay.log').read_text()
+        assert (folder / 'end.ppm').read_bytes() == (folder / 'replay.ppm').read_bytes(), f'{case}: state replay pixels differ'
+        print(f'{case}: fresh-process save-state replay pixels match', flush=True)
     assert (folder/'end.ppm').is_file(), f'{case}: no completed frame capture; {log}'
     for failure in ('cannot run;', 'using the native stand-in', 'unimplemented game routine'):
         assert failure not in text, f'{case}: gameplay used a fallback: {failure}; {log}'
@@ -256,11 +274,12 @@ def main():
     p.add_argument('--binary', type=Path, default=ROOT/'tmp/arm64-build/memories-arm64')
     p.add_argument('--output', type=Path, default=ROOT/f'tmp/arm64-gameplay/run-{os.getpid()}')
     p.add_argument('--language', type=int, choices=range(6), default=0)
+    p.add_argument('--state-frame', type=int, help='Save here and replay the remaining inputs in a fresh process')
     args = p.parse_args()
     disc = args.disc.resolve()
     if not disc.is_file(): p.error('a user-owned retail disc is required')
     binary = args.binary.resolve()
     if not binary.is_file(): p.error('build the requested executable first')
     for case in ([args.case] if args.case else CASES):
-        run(case, disc, binary, args.output.resolve(), args.language)
+        run(case, disc, binary, args.output.resolve(), args.language, args.state_frame)
 if __name__ == '__main__': main()

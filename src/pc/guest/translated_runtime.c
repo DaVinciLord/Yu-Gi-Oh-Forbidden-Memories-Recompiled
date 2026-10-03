@@ -7,10 +7,9 @@
 /* External native data uses explicit guest-visible spans, never truncation. */
 #define EXTERNAL_BASE 0x80200000u
 #define EXTERNAL_END 0xf0000000u
-struct Region { uintptr_t host; size_t length; u32 guest; };
 struct Function { u32 guest; uintptr_t host; };
 static MemoriesMemory *active;
-static struct Region *regions;
+static GuestRuntimeRegion *regions;
 static size_t region_capacity;
 static u32 automatic_cursor = 0xd0000000u;
 static struct Function functions[FUNCTION_LIMIT];
@@ -71,20 +70,29 @@ int GuestRuntime_RegisterData(void *host, size_t length, u32 guest)
         length > UINTPTR_MAX - start || guest < EXTERNAL_BASE || guest >= EXTERNAL_END ||
         length > EXTERNAL_END - guest) return -1;
     for (i = 0; i < region_count; ++i) {
-        const struct Region *r = &regions[i];
+        const GuestRuntimeRegion *r = &regions[i];
         if ((start < r->host + r->length && r->host < start + length) ||
             (guest < r->guest + r->length && r->guest < guest + length)) return -1;
     }
-    if (region_count == region_capacity) {
-        size_t capacity = region_capacity ? region_capacity * 2 : 128;
-        struct Region *grown;
-        if (capacity <= region_capacity || capacity > SIZE_MAX / sizeof(*regions)) return -1;
-        grown = realloc(regions, (size_t)capacity * sizeof(*regions));
-        if (!grown) return -1;
-        regions = grown;
-        region_capacity = capacity;
+    if (GuestRuntime_ReserveRegions((size_t)region_count + 1)) return -1;
+    regions[region_count++] = (GuestRuntimeRegion){start, length, guest, 0, 0};
+    return 0;
+}
+int GuestRuntime_ReserveRegions(size_t count)
+{
+    size_t capacity = region_capacity ? region_capacity : 128;
+    GuestRuntimeRegion *grown;
+    if (count <= region_capacity) return 0;
+    if (count > UINT32_MAX || count > SIZE_MAX / sizeof(*regions)) return -1;
+    while (capacity < count) {
+        if (capacity > SIZE_MAX / 2) return -1;
+        capacity *= 2;
     }
-    regions[region_count++] = (struct Region){start, length, guest};
+    if (capacity > SIZE_MAX / sizeof(*regions)) return -1;
+    grown = realloc(regions, capacity * sizeof(*regions));
+    if (!grown) return -1;
+    regions = grown;
+    region_capacity = capacity;
     return 0;
 }
 int GuestRuntime_RegisterFunction(u32 guest, void (*host)(void))
@@ -112,7 +120,7 @@ void GuestRuntime_RegisterAutomatic(void *host, size_t length)
         moved = 0;
         if (length > 0xe0000000u - candidate) invalid("guest token arena exhausted", (uintptr_t)host, length);
         for (i = 0; i < region_count; ++i) {
-            const struct Region *r = &regions[i];
+            const GuestRuntimeRegion *r = &regions[i];
             if (candidate < r->guest + r->length && r->guest < candidate + length) {
                 size_t next = ((size_t)r->guest + r->length + 15u) & ~(size_t)15u;
                 if (next >= 0xe0000000u) invalid("guest token arena exhausted", (uintptr_t)host, length);
@@ -124,6 +132,42 @@ void GuestRuntime_RegisterAutomatic(void *host, size_t length)
     } while (moved);
     if (GuestRuntime_RegisterData(host, length, candidate)) invalid("cannot register native allocation", (uintptr_t)host, length);
     automatic_cursor = (u32)(((size_t)candidate + length + 15u) & ~(size_t)15u);
+}
+unsigned GuestRuntime_RegionCount(void) { return region_count; }
+const GuestRuntimeRegion *GuestRuntime_Region(unsigned index)
+{
+    return index < region_count ? &regions[index] : NULL;
+}
+void GuestRuntime_RegisterGlobal(void *host, size_t length, uint64_t identity, unsigned flags)
+{
+    unsigned i;
+    GuestRuntime_RegisterAutomatic(host, length);
+    for (i = 0; i < region_count; ++i) if (regions[i].host == (uintptr_t)host) {
+        if (!regions[i].identity) regions[i].identity = identity;
+        regions[i].flags |= MEMORIES_REGION_GLOBAL | flags;
+        return;
+    }
+}
+void GuestRuntime_RegisterAllocation(void *host, size_t length)
+{
+    unsigned i;
+    GuestRuntime_RegisterAutomatic(host, length);
+    for (i = 0; i < region_count; ++i) if (regions[i].host == (uintptr_t)host) {
+        regions[i].flags |= MEMORIES_REGION_HEAP;
+        return;
+    }
+}
+int GuestRuntime_RegisterAllocationAt(void *host, size_t length, uint32_t guest)
+{
+    if (GuestRuntime_RegisterData(host, length, guest)) return -1;
+    regions[region_count - 1].flags = MEMORIES_REGION_HEAP;
+    return 0;
+}
+int GuestRuntime_RegisterMapping(void *host, size_t length, uint32_t guest)
+{
+    if (GuestRuntime_RegisterData(host, length, guest)) return -1;
+    regions[region_count - 1].flags = MEMORIES_REGION_MAPPING;
+    return 0;
 }
 int GuestRuntime_UnregisterData(void *host)
 {
@@ -146,7 +190,7 @@ void *GuestRuntime_ResolveData(void *pointer, size_t length)
     host = Memories_Resolve(active, (u32)address, length, 1);
     if (host) return host;
     for (i = 0; i < region_count; ++i) {
-        const struct Region *r = &regions[i];
+        const GuestRuntimeRegion *r = &regions[i];
         size_t offset;
         if (address < r->guest) continue;
         offset = address - r->guest;
@@ -188,7 +232,7 @@ u32 GuestRuntime_EncodePointer(void *pointer)
     if (host >= scratch && host - scratch < MEMORIES_SCRATCHPAD_SIZE) return 0x1f800000u + (u32)(host - scratch);
     for (i = 0; i < function_count; ++i) if (functions[i].host == host) return functions[i].guest;
     for (i = 0; i < region_count; ++i) {
-        const struct Region *r = &regions[i];
+        const GuestRuntimeRegion *r = &regions[i];
         if (host >= r->host && host - r->host < r->length) return r->guest + (u32)(host - r->host);
     }
     /* Keep one-past encodings for legal pointer arithmetic only after all
@@ -196,7 +240,7 @@ u32 GuestRuntime_EncodePointer(void *pointer)
     if (host == ram + MEMORIES_RAM_SIZE) return 0x80000000u + MEMORIES_RAM_SIZE;
     if (host == scratch + MEMORIES_SCRATCHPAD_SIZE) return 0x1f800000u + MEMORIES_SCRATCHPAD_SIZE;
     for (i = 0; i < region_count; ++i) {
-        const struct Region *r = &regions[i];
+        const GuestRuntimeRegion *r = &regions[i];
         if (host == r->host + r->length) return r->guest + (u32)r->length;
     }
     invalid("unregistered native pointer cannot fit guest storage", host, 0);

@@ -31,39 +31,52 @@ et les parcours de jeu du build structuré restent à valider. Les preuves de ga
 le spike : elles doivent être repassées sur le nouveau binaire d'intégration.
 Les journaux du rebase sont sous `tmp/arm64-integration/rebase-*`.
 
-## Reprise : build structuré fonctionnel et save states demandés
+## Save states natifs intégrés — 3 octobre 2026
 
-L'utilisateur a explicitement demandé d'intégrer les save states sur macOS ARM64.
-Cette demande remplace leur exclusion du périmètre initial. Ils ne fonctionnent
-pas encore : le backend signale toujours ENOTSUP, jusqu'à l'intégration complète
-et à ses preuves de restauration. Ne pas confondre cela avec les sauvegardes
-normales, qui passent déjà sur le nouveau binaire.
+La demande explicite de save states remplace leur exclusion initiale. Le backend
+ARM64 est maintenant raccordé aux commandes F5/F7, aux slots, aux autosaves et au
+canal de contrôle. Les sauvegardes normales restent distinctes. Détails,
+commandes et limites : [macos-arm64-save-states.md](macos-arm64-save-states.md).
 
-Le build structuré compile et lie `tmp/pc/macos-integration/memories-arm64`
-(750 unités après ajout des deux unités de fondation). La passe fusionne
-structurellement les déclarations et alias de noms assembleur, sans suffixes
-LLVM accidentels : six tests dans `test_llvm_guest.py`. Elle préserve les adresses
-des constantes enregistrées. La table des régions du runtime grandit désormais
-dynamiquement ; le build enregistre plus de 5 000 globals, au-delà de l'ancienne
-limite de 2 048. Le test runtime vérifie 8 192 régions et une libération/réutilisation,
-en exécution normale et ASan/UBSan.
+Le build structuré compile et lie `tmp/arm64-build/memories-arm64` (753 unités).
+La pile de jeu dédiée est protégée par deux pages de garde. VSync capture les
+registres ARM64 ; le chargement restaure depuis la pile de service. Les contextes
+setjmp sont capturés par le même mécanisme et font partie de l'état. Les régions
+conservent leurs tokens PS1, identités de globals et ownership des allocations.
+Les pointeurs hôtes sont relocalisés pour ASLR ; les champs des serializers sont
+traités séparément pour respecter les callbacks non alignés dans leurs chunks.
+Les mappings guest, dont la pile MIPS 0x9ff00000 utilisée par les modèles 3D,
+sont recréés avec leur payload ; stack_top/current_sp de l'interpréteur sont
+restaurés avec eux.
 
-Fondations des save states :
+Les serializers, contrôles des mods et de la langue sont partagés avec i386.
+Le fichier ARM64 a une version distincte, un UUID d'exécutable et une empreinte
+d'intégrité. Un autre exécutable, des données incompatibles, un fichier tronqué
+ou corrompu sont refusés avant mutation. Il n'y a pas de conversion d'états
+i386/émulateur ni de garantie de transport entre deux builds ARM64. Conserver
+les sauvegardes normales pour cela.
 
-- `state_io.c/.h` partage le format des chunks YFMSTATE avec `state.c` ; les
-  tests vérifient round-trip, troncature, layout et overflow. Cible CMake/CTest
-  `pc_state_io`, incluse aussi dans `test_native.py`.
-- `state_arm64.h` et `translated_state_arm64.S` capturent/restaurent x19–x30,
-  SP et d8–d15, avec une continuation returns_twice. Le test optimisé restaure
-  depuis un appel imbriqué après perturbation des registres flottants.
-- Le raccordement de VSync, d'une pile de jeu dédiée, des allocations et des
-  sous-systèmes au format partagé reste à faire. Pour un chargement dans un
-  nouveau processus, les pointeurs hôtes, la pile et les adresses de retour
-  doivent être relocalisés ; les tokens guest ne doivent pas changer.
-- `Memories_GuestMap` est appelé avant `Memories_StateRunGame` et enregistre
-  actuellement la pile principale sous le token e0000000. Une pile dédiée
-  devra avoir sa propre région. `translated_jmp.c` conserve aussi des jmp_buf
-  hôtes qu'il faut traiter lors de la restauration.
+Preuves de restauration : `test_arm64_states.py` reprend un état du deck dans un
+nouveau processus, reproduit les données de duel/deck et les pixels, puis teste
+F5 et trois F7 via SDL dummy. `test_arm64_state_control.py` vérifie trois reprises,
+la RAM du jeu, les refus sans mutation et les autosaves tournantes. Le bloc audio
+retail à 0x801e0000 continue avec l'horloge hôte : le test de RAM rejouée couvre
+l'image du jeu jusqu'à cette frontière et ne revendique pas des samples identiques.
+`test_arm64_gameplay.py --state-frame` permet aussi une reprise pendant les
+mécaniques du duel. Fusion et équipement à frame 9000 ont des pixels identiques.
+Le combat 3D sauvegardé à frame 20000, dans le mode c1, reprend dans un nouveau
+processus et revient au terrain avec les mêmes dégâts et pixels finaux.
+
+Les 21 scénarios de composants passent en normal et ASan/UBSan ; les frontières
+assembleur de changement de pile sont exécutées séparément sans annotations de
+pile des sanitizers. Les six tests LLVM et `make basic-types check-g32` passent.
+Journaux : `tmp/arm64-integration/state-*`. Aucun test de cadence ni fenêtre réelle.
+Les quatorze parcours gameplay et les sauvegardes normales/deck pad et SDL
+repassent avec le backend natif de save states.
+
+La migration globale reste en cours : dépendances locales reproductibles,
+entrée de build commune, CI et validation Linux/Windows/matching console restent
+à terminer. Les exclusions de save states mentionnées plus bas sont historiques.
 
 Les runners gameplay et sauvegarde acceptent maintenant `--binary` pour tester
 explicitement le nouveau build. Le runner gameplay accepte `--language` et

@@ -10,6 +10,23 @@ int GuestRuntime_IsBound(void);
 MemoriesMemory *GuestRuntime_Memory(void);
 int GuestRuntime_RegisterData(void *host, size_t length, uint32_t guest);
 void GuestRuntime_RegisterAutomatic(void *host, size_t length);
+enum {
+    MEMORIES_REGION_GLOBAL = 1, MEMORIES_REGION_GAME = 2,
+    MEMORIES_REGION_CONSTANT = 4, MEMORIES_REGION_HEAP = 8, MEMORIES_REGION_MAPPING = 16
+};
+typedef struct GuestRuntimeRegion {
+    uintptr_t host;
+    size_t length;
+    uint32_t guest, flags;
+    uint64_t identity;
+} GuestRuntimeRegion;
+void GuestRuntime_RegisterGlobal(void *host, size_t length, uint64_t identity, unsigned flags);
+void GuestRuntime_RegisterAllocation(void *host, size_t length);
+unsigned GuestRuntime_RegionCount(void);
+const GuestRuntimeRegion *GuestRuntime_Region(unsigned index);
+int GuestRuntime_RegisterAllocationAt(void *host, size_t length, uint32_t guest);
+int GuestRuntime_RegisterMapping(void *host, size_t length, uint32_t guest);
+int GuestRuntime_ReserveRegions(size_t count);
 int GuestRuntime_UnregisterData(void *host);
 int GuestRuntime_RegisterFunction(uint32_t guest, void (*host)(void));
 void *GuestRuntime_ResolveData(void *address, size_t length);

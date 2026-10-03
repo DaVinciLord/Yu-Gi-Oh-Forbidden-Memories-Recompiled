@@ -19,7 +19,7 @@ void *Memories_TranslatedMmap(void *address, size_t length, int prot, int flags,
     }
     host = mmap(NULL, length, prot, flags & ~MAP_FIXED_NOREPLACE, fd, offset);
     if (host == MAP_FAILED) return host;
-    if (GuestRuntime_RegisterData(host, length, (u32)(uintptr_t)address)) {
+    if (GuestRuntime_RegisterMapping(host, length, (u32)(uintptr_t)address)) {
         munmap(host, length);
         errno = EEXIST;
         return MAP_FAILED;

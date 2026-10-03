@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include "state.h"
 #include "state_io.h"
+#include "state_subsystems.h"
 #include "state_remap.h"
 #include "pc/platform/settings.h"
 #include "pc/platform/paths.h"
@@ -157,49 +158,6 @@ void Memories_StateRemapRange(MemoriesState *state, uint32_t from, uint32_t to, 
 }
 
 
-typedef struct { MemoriesState *state; int valid; } ModStateCheck;
-static void mod_state_tag(char *tag, size_t size, int owner)
-{
-    int ordinal = 0;
-    /* Rank by stable identity, independent of discovery and activation order. */
-    for (int i = 0; i < Mods_Count(); i++)
-        if (Mods_Active(i) && strcmp(Mods_Id(i), Mods_Id(owner)) < 0)
-            ordinal++;
-    snprintf(tag, size, "mod:%d", ordinal);
-}
-static void mod_state_visit(int owner, void *data, size_t size, unsigned version, void *context)
-{
-    MemoriesState *state = context;
-    char tag[16];
-    MemoriesStateField fields[] = {{&version, sizeof(version)}, {data, size}};
-    mod_state_tag(tag, sizeof(tag), owner);
-    Memories_StateChunk(state, tag, fields, 2);
-}
-static void mod_state_check(int owner, void *data, size_t size, unsigned version, void *context)
-{
-    ModStateCheck *check = context;
-    char tag[16]; size_t have = 0; unsigned saved = 0;
-    const uint8_t *chunk;
-    (void)data;
-    mod_state_tag(tag, sizeof(tag), owner);
-    chunk = Memories_StateFindChunk(check->state, tag, &have);
-    if (chunk && have >= sizeof(saved)) memcpy(&saved, chunk, sizeof(saved));
-    if (!chunk || have != size + sizeof(version) || saved != version) check->valid = 0;
-}
-static int compatible_mods(MemoriesState *state)
-{
-    size_t size = 0;
-    const uint8_t *chunk = Memories_StateFindChunk(state, "mod-set", &size);
-    unsigned saved = 0, current = Mods_Signature();
-    ModStateCheck check = {state, 1};
-    if (chunk && size == sizeof(saved)) memcpy(&saved, chunk, size);
-    /* Old vanilla states remain usable; old modded states have no way to
-     * establish card identity or native callback compatibility. */
-    if ((!chunk && current != 2166136261u) || (chunk && (size != sizeof(saved) || saved != current))) return 0;
-    Mods_VisitState(mod_state_check, &check);
-    return check.valid;
-}
-
 /* Why a state was not loaded: on stderr, and in a notice over the picture
  * (Menu_ShowNotice), since F7 is otherwise silent where there is no
  * console. load() runs in the game's thread, which is the window's. */
@@ -233,150 +191,12 @@ static void refuse(const char *format, ...)
  * The chunk: the language's code (16 bytes, NUL-padded), then a version and
  * the layout (Text_Layout). A later version appends to it, so the code and
  * the layout stay where they are. */
-#define LANGUAGE_CODE_SIZE 16
-#define LANGUAGE_CHUNK_VERSION 1u
-typedef struct {
-    char code[LANGUAGE_CODE_SIZE];
-    uint32_t version;
-    uint32_t base, used, crc; /* TextLayout */
-} LanguageChunk;
-/* Written as it lies in memory, in the machine's byte order like the rest
- * of the state (which loads only on the system that saved it): 32 bytes,
- * no padding between the fields. */
-_Static_assert(sizeof(LanguageChunk) == LANGUAGE_CODE_SIZE + 4 * sizeof(uint32_t), "LanguageChunk is padded");
-
-/* The state's chunk: 1 with the layout, 0 with the code only, -1 with no
- * chunk (English US). */
-static int state_language(const MemoriesState *state, LanguageChunk *saved)
-{
-    size_t size = 0;
-    const uint8_t *chunk = Memories_StateFindChunk(state, "language", &size);
-    memset(saved, 0, sizeof(*saved));
-    if (!chunk || size < LANGUAGE_CODE_SIZE) {
-        snprintf(saved->code, sizeof(saved->code), "%s", Language_Code(LANGUAGE_US));
-        return -1;
-    }
-    memcpy(saved->code, chunk, LANGUAGE_CODE_SIZE - 1);
-    if (size < sizeof(*saved)) return 0;
-    memcpy(&saved->version, chunk + LANGUAGE_CODE_SIZE, sizeof(*saved) - LANGUAGE_CODE_SIZE);
-    return saved->version >= 1;
-}
-
-static const char *language_label(const char *code)
-{
-    int language;
-    for (language = 0; language < LANGUAGE_COUNT; language++) {
-        if (!strcmp(code, Language_Code(language))) return Language_Label(language);
-    }
-    return code;
-}
-
 static int compatible_language(const MemoriesState *state, const char *path)
 {
-    LanguageChunk saved;
-    int found = state_language(state, &saved);
-    TextLayout now = Text_Layout();
-    const char *name = path, *at;
-    for (at = path; *at; at++) {
-        if (*at == '/' || *at == '\\') name = at + 1; /* MEMORIES_LOAD_STATE may give a Windows path */
-    }
-    if (strcmp(saved.code, Language_Code(Language_Current()))) {
-        refuse("%s was made with the game in %s%s, and the game is in %s now. Choose %s in Game > Language, "
-               "restart, and load it again.", name, language_label(saved.code),
-               found < 0 ? " (it is older than the language setting)" : "", Language_Label(Language_Current()),
-               language_label(saved.code));
-        return 0;
-    }
-    if (found < 1) {
-        /* No layout to check: only the game's own text (English US, no
-         * translation mod) is where it was. */
-        if (!now.used) return 1;
-        refuse("%s is older than this version's text check, and the game has text of its own compiled now (a "
-               "language or a translation mod), which the state cannot be checked against. Loading it could show "
-               "the wrong lines or crash.", name);
-        return 0;
-    }
-    if (saved.used && !saved.base) {
-        refuse("%s was made while the game's text could not be placed at its fixed address, so the text it "
-               "points into is gone.", name);
-        return 0;
-    }
-    if (saved.base != now.base || saved.used != now.used || saved.crc != now.crc) {
-        refuse("%s was made with other game text: a language pack, a translation mod's text or this version's "
-               "own words changed since (%u bytes at 0x%08X, CRC %08X then; %u bytes at 0x%08X, CRC %08X now). "
-               "Loading it would show the wrong lines or crash.",
-               name, (unsigned)saved.used, (unsigned)saved.base, (unsigned)saved.crc, now.used, now.base, now.crc);
-        return 0;
-    }
-    return 1;
-}
-
-static void subsystems(MemoriesState *state)
-{
-    unsigned signature = Mods_Signature();
-    MemoriesStateField mod_set = {&signature, sizeof(signature)};
-    MemoriesStateField gpu[2], gte[1];
-    LanguageChunk language;
-    MemoriesStateField language_field = {&language, sizeof(language)};
-    if (!Memories_StateLoading(state)) {
-        TextLayout layout = Text_Layout();
-        Memories_StateChunk(state, "mod-set", &mod_set, 1);
-        memset(&language, 0, sizeof(language));
-        snprintf(language.code, sizeof(language.code), "%s", Language_Code(Language_Current()));
-        language.version = LANGUAGE_CHUNK_VERSION;
-        language.base = layout.base;
-        language.used = layout.used;
-        language.crc = layout.crc;
-        Memories_StateChunk(state, "language", &language_field, 1);
-    }
-    Mods_VisitState(mod_state_visit, state);
-    unsigned gte_size;
-    gpu[0].data = SoftGpu_StateData(0, &gpu[0].size);
-    gpu[1].data = SoftGpu_StateData(1, &gpu[1].size);
-    gte[0].data = Gte_StateData(&gte_size);
-    gte[0].size = gte_size;
-    if (Memories_StateChunk(state, "soft_gpu", gpu, 2)) {
-        /* VRAM restored without the disc: what its words came from is unknown. */
-        TextureDump_Cleared(0, 0, SOFT_GPU_WIDTH, SOFT_GPU_HEIGHT);
-        if (TextureDump_Restored) TextureDump_Restored();
-        SoftGpu_PictureFromVram();
-    }
-    Memories_StateChunk(state, "gte", gte, 1);
-    {
-        /* The game's random seed (src/pc/rng.c, which `rand` and `srand`
-         * are renamed to): native, so in no game section, yet the deck's
-         * shuffle, the CPU's choices and a pack's cards all follow it. On
-         * the console it sits in RAM, which a state holds. Without it a
-         * state loaded in a running game drew other numbers than the game
-         * that saved it. */
-        MemoriesStateField seed = {&gRand_dwSeed, sizeof(gRand_dwSeed)};
-        Memories_StateChunk(state, "rng", &seed, 1);
-    }
-    {
-        /* The mods' rand seed (mod_libc.c): the same kind of number, one
-         * sequence for every mod, which a mod's choices follow. */
-        unsigned size;
-        MemoriesStateField seed;
-        seed.data = Mods_RandSeed(&size);
-        seed.size = size;
-        Memories_StateChunk(state, "mod-rng", &seed, 1);
-    }
-    RetailImage_State(state);
-    Spu_State(state);
-    LibSpu_State(state);
-    LibDs_State(state);
-    LibEtc_State(state);
-    LibGpu_State(state);
-    LibGte_State(state);
-    LibPress_State(state);
-    LibMcrd_State(state);
-    SaveMenu_State(state);
-    if (!Memories_StateLoading(state)) DeckMenu_ShopState(state);
-    if (!Memories_StateLoading(state)) PackShop_State(state);
-    TitleJump_State(state);
-    TitleScreen_State(state);
-    Platform_State(state);
-    DeckMenu_State(state); /* the decks' draft, kept with the save */
+    char why[900];
+    if (Memories_StateCompatibleLanguage(state, path, why, sizeof(why))) return 1;
+    refuse("%s", why);
+    return 0;
 }
 
 static void tagged(char *out, size_t size, const char *kind, const char *name)
@@ -440,7 +260,7 @@ static void serialize(MemoriesState *state)
         MemoriesModEvent event = {MEMORIES_EVENT_SAVE, MEMORIES_BEFORE, 0, 0, 0, 0, 0};
         Mods_Dispatch(&event);
     }
-    subsystems(state);
+    Memories_StateSubsystems(state);
     {
         MemoriesStateField fields[] = {{(void *)(uintptr_t)entry.esp, STACK_TOP - entry.esp}};
         Memories_StateChunk(state, "stack", fields, 1);
@@ -523,7 +343,7 @@ static void apply(void)
             memcpy(region->bss, chunk, size);
         }
     }
-    subsystems(&state);
+    Memories_StateSubsystems(&state);
     chunk = Memories_StateFindChunk(&state, "entry", &size);
     memcpy(&entry, chunk, sizeof(entry));
     chunk = Memories_StateFindChunk(&state, "stack", &size);
@@ -832,7 +652,7 @@ static int load(const char *path)
         free(image);
         return -1;
     }
-    if (!compatible_mods(&state)) {
+    if (!Memories_StateCompatibleMods(&state)) {
         refuse("save state uses different mods, card definitions or mod state layouts; restore its mod profile first");
         free(image); return -1;
     }

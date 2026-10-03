@@ -29,6 +29,8 @@ def main():
     if args.sanitize:
         flags += ["-fsanitize=address,undefined", "-fno-omit-frame-pointer"]
     cases = [
+        ("state-native-memory", ["tests/pc/state_native_memory_test.c", "src/pc/guest/translated_state_memory.c",
+                                 "src/pc/guest/translated_runtime.c", "src/pc/guest/state_io.c", "src/pc/memory.c"], [], [None]),
         ("state-io", ["tests/pc/state_io_test.c", "src/pc/guest/state_io.c"], [], [None]),
         ("core", ["tests/pc/core_test.c", "src/pc/memory.c", "src/pc/rng.c",
                   "src/game/rand_get_interval.c", "src/game/util_compare_s16.c"],
@@ -66,6 +68,14 @@ def main():
     # this assembly boundary is verified without sanitizer stack bookkeeping.
     subprocess.run([compiler, "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2", "-Isrc",
                     "tests/pc/state_arm64_context_test.c", "src/pc/guest/translated_state_arm64.S",
+                    "-o", str(binary)], check=True)
+    subprocess.run([str(binary)], check=True)
+    count += 1
+    binary = out / "arm64-game-jumps"
+    subprocess.run([compiler, "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2", "-Isrc",
+                    "tests/pc/translated_jmp_test.c", "src/pc/guest/translated_jmp.c",
+                    "src/pc/guest/translated_setjmp_arm64.S", "src/pc/guest/translated_state_arm64.S",
+                    "src/pc/guest/translated_runtime.c", "src/pc/guest/state_io.c", "src/pc/memory.c",
                     "-o", str(binary)], check=True)
     subprocess.run([str(binary)], check=True)
     count += 1

@@ -14,4 +14,7 @@ struct MemoriesState {
  * belong to the header; both backends validate their version themselves. */
 void Memories_StateWrite(MemoriesState *state, const void *data, size_t size);
 const uint8_t *Memories_StateFindChunk(const MemoriesState *state, const char *tag, size_t *size);
+/* Optional integrity footer for new backends; legacy files stay unchanged. */
+int Memories_StateSeal(MemoriesState *state);
+int Memories_StateIntegrity(const MemoriesState *state);
 #endif

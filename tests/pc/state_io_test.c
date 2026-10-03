@@ -40,6 +40,26 @@ int main(void)
     assert(!Memories_StateChunk(NULL, "fixture", fields, 3) && errno == EINVAL);
     fields[0].size = SIZE_MAX;
     assert(!Memories_StateChunk(&load, "fixture", fields, 3) && errno == EINVAL);
+    {
+        uint8_t sealed[68];
+        MemoriesState writer = {0, tmpfile(), NULL, 0};
+        MemoriesState reader = {1, NULL, sealed, sizeof(sealed)};
+        MemoriesStateField field = {&number, sizeof(number)};
+        assert(writer.file);
+        Memories_StateWrite(&writer, zero, sizeof(zero));
+        Memories_StateChunk(&writer, "payload", &field, 1);
+        assert(!Memories_StateSeal(&writer));
+        assert(ftell(writer.file) == sizeof(sealed));
+        rewind(writer.file);
+        assert(fread(sealed, 1, sizeof(sealed), writer.file) == sizeof(sealed));
+        fclose(writer.file);
+        assert(Memories_StateIntegrity(&reader));
+        sealed[36] ^= 1;
+        assert(!Memories_StateIntegrity(&reader));
+        sealed[36] ^= 1;
+        reader.image_size--;
+        assert(!Memories_StateIntegrity(&reader));
+    }
     puts("State chunks: round trip, field ordering, truncation, layout mismatch and overflow passed");
     return 0;
 }

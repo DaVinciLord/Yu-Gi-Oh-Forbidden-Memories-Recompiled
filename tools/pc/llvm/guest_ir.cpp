@@ -264,7 +264,7 @@ public:
       auto *type = FunctionType::get(Type::getVoidTy(context), false);
       auto *function = Function::Create(type, GlobalValue::ExternalLinkage, *name, module);
       IRBuilder<> builder(BasicBlock::Create(context, "entry", function));
-      auto callee = module.getOrInsertFunction("GuestRuntime_RegisterAutomatic", builder.getVoidTy(), builder.getPtrTy(), builder.getInt64Ty());
+      auto callee = module.getOrInsertFunction("GuestRuntime_RegisterGlobal", builder.getVoidTy(), builder.getPtrTy(), builder.getInt64Ty(), builder.getInt64Ty(), builder.getInt32Ty());
       for (auto &global : module.globals()) {
         if (global.isDeclaration() || global.getName().starts_with("llvm.")) continue;
         // Registration gives each global its own guest span. LLVM may
@@ -273,7 +273,13 @@ public:
         global.setUnnamedAddr(GlobalValue::UnnamedAddr::None);
         auto size = module.getDataLayout().getTypeAllocSize(global.getValueType());
         if (size.isScalable()) fail("scalable global is unsupported");
-        if (size.getFixedValue()) builder.CreateCall(callee, {&global, builder.getInt64(size.getFixedValue())});
+        uint64_t identity = 14695981039346656037ull;
+        std::string key = module.getSourceFileName() + ":" + global.getName().str();
+        for (unsigned char byte : key) { identity ^= byte; identity *= 1099511628211ull; }
+        unsigned flags = options.getBoolean("game_unit").value_or(false) ? 2 : 0;
+        if (global.isConstant()) flags |= 4;
+        if (size.getFixedValue()) builder.CreateCall(callee, {&global, builder.getInt64(size.getFixedValue()),
+          builder.getInt64(identity), builder.getInt32(flags)});
       }
       builder.CreateRetVoid();
     }

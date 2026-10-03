@@ -8,7 +8,7 @@ _Psx_setjmp:
     mov x29, sp
     bl _GuestRuntime_JumpBuffer
     ldp x29, x30, [sp], #16
-    b _setjmp
+    b _Memories_Arm64Capture
 .p2align 2
 .globl _Psx_longjmp
 _Psx_longjmp:
@@ -18,4 +18,4 @@ _Psx_longjmp:
     bl _GuestRuntime_JumpBufferForRestore
     ldr x1, [sp, #16]
     ldp x29, x30, [sp], #32
-    b _longjmp
+    b _Memories_Arm64Restore

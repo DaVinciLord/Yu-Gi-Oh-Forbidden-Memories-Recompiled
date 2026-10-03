@@ -1906,6 +1906,7 @@ static void run_event_script(unsigned frame)
                           : strncmp(name, "f3", n) == 0 ? SDLK_F3
                           : strncmp(name, "f5", n) == 0 ? SDLK_F5
                           : strncmp(name, "f6", n) == 0 ? SDLK_F6
+                          : strncmp(name, "f7", n) == 0 ? SDLK_F7
                           : strncmp(name, "f8", n) == 0 ? SDLK_F8
                           : strncmp(name, "f11", n) == 0 ? SDLK_F11
                           : strncmp(name, "f12", n) == 0 ? SDLK_F12

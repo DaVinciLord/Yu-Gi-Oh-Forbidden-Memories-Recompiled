@@ -177,7 +177,7 @@ def main():
         try:
             routine = 'GuestRuntime_RegisterUnit_' + hashlib.sha256(source.encode()).hexdigest()[:16]
             registrations[source] = routine
-            text=translate(raw_text[source],pin_maps[group],routine)
+            text=translate(raw_text[source],pin_maps[group],routine, game_unit=group != 'native')
             if args.optimize: text=optimize_translated_ir(text)
         except TranslationError as error:path_for('logs',source,'.transform.log').write_text(str(error));return source,1
         if not ir.exists() or ir.read_text()!=text:ir.write_text(text)

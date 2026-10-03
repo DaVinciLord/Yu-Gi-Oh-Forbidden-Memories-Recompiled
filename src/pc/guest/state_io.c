@@ -2,12 +2,52 @@
 #include "state_io.h"
 #include <errno.h>
 #include <string.h>
+#ifdef MEMORIES_TRANSLATED
+#include "translated_runtime.h"
+#include "translated_state_backend.h"
+#endif
 
 int Memories_StateLoading(const MemoriesState *state) { return state && state->loading; }
 
+static uint64_t hash_bytes(uint64_t hash, const uint8_t *bytes, size_t size)
+{
+    for (size_t i = 0; i < size; ++i) { hash ^= bytes[i]; hash *= 1099511628211ull; }
+    return hash;
+}
+int Memories_StateSeal(MemoriesState *state)
+{
+    uint8_t buffer[8192];
+    uint64_t hash = 14695981039346656037ull;
+    size_t count;
+    MemoriesStateField field = {&hash, sizeof(hash)};
+    if (!state || !state->file || fflush(state->file) || fseek(state->file, 0, SEEK_SET)) return -1;
+    while ((count = fread(buffer, 1, sizeof(buffer), state->file))) hash = hash_bytes(hash, buffer, count);
+    if (ferror(state->file) || fseek(state->file, 0, SEEK_END)) return -1;
+    Memories_StateChunk(state, "state-integrity", &field, 1);
+    return ferror(state->file) ? -1 : 0;
+}
+int Memories_StateIntegrity(const MemoriesState *state)
+{
+    static const char tag[16] = "state-integrity";
+    uint64_t saved;
+    uint32_t length;
+    size_t at;
+    if (!state || !state->image || state->image_size < 44) return 0;
+    at = state->image_size - 28;
+    if (memcmp(state->image + at, tag, sizeof(tag))) return 0;
+    memcpy(&length, state->image + at + 16, sizeof(length));
+    memcpy(&saved, state->image + at + 20, sizeof(saved));
+    return length == sizeof(saved) && saved == hash_bytes(14695981039346656037ull, state->image, at);
+}
+
 void Memories_StateWrite(MemoriesState *state, const void *data, size_t size)
 {
-    if (size) fwrite(data, 1, size, state->file);
+    if (size) {
+#ifdef MEMORIES_TRANSLATED
+        data = GuestRuntime_ResolveData((void *)data, size);
+#endif
+        fwrite(data, 1, size, state->file);
+    }
 }
 
 /* Chunk: 16-byte tag, 32-bit size, payload. */
@@ -70,7 +110,12 @@ int Memories_StateChunk(MemoriesState *state, const char *tag, const MemoriesSta
         return 0;
     }
     for (i = 0; i < count; i++) {
-        if (fields[i].size) memcpy(fields[i].data, from, fields[i].size);
+        if (fields[i].size) {
+            memcpy(fields[i].data, from, fields[i].size);
+#ifdef MEMORIES_TRANSLATED
+            Memories_NativeStateRelocateField(tag, GuestRuntime_ResolveData(fields[i].data, fields[i].size), fields[i].size);
+#endif
+        }
         from += fields[i].size;
     }
     return 1;

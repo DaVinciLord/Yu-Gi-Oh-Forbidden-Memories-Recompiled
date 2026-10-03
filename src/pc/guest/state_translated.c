@@ -6,10 +6,15 @@
 #include "game/build_deck_transition_state.h"
 #include "pc/debug/crash.h"
 #include "pc/guest/translated_runtime.h"
+#ifdef MEMORIES_TRANSLATED
+#include "translated_state_backend.h"
+#include "state_io.h"
+#endif
 #include <errno.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 MemoriesStateEntry Memories_StateEntry; /* compatibility storage; never captured */
 static volatile sig_atomic_t requested;
@@ -24,6 +29,7 @@ static void unsupported(const char *operation)
     errno = ENOTSUP;
 }
 
+#ifndef MEMORIES_TRANSLATED
 int VSync(int mode)
 {
     /* The real native SDK implementation presents, services timers/input and
@@ -31,17 +37,27 @@ int VSync(int mode)
     return Memories_VSync(mode);
 }
 
+#endif
+
 int Memories_StateRunGame(int (*entry)(void))
 {
     if (!entry) {
         errno = EINVAL;
         return 1;
     }
+#ifdef MEMORIES_TRANSLATED
+    return Memories_NativeStateRunGame(entry);
+#else
     return entry();
+#endif
 }
 
 void Memories_StateRequest(int what, int slot)
 {
+#ifdef MEMORIES_TRANSLATED
+    Memories_NativeStateRequest(what, slot);
+    return;
+#endif
     /* Async-signal-safe: diagnostic work stays at the next frame boundary. */
     if (slot > 0) requested_slot = slot;
     requested = what;
@@ -140,6 +156,10 @@ void Memories_StatePoint(unsigned presented_frames)
             }
         }
     }
+#ifdef MEMORIES_TRANSLATED
+    Memories_NativeStatePoint(presented_frames);
+    return;
+#endif
     (void)requested_slot;
     requested = 0;
     if (!startup_checked) {
@@ -160,11 +180,18 @@ void Memories_StatePoint(unsigned presented_frames)
 
 int Memories_LastStateSlot(void)
 {
-    return 0; /* no state has been loaded */
+#ifdef MEMORIES_TRANSLATED
+    return Memories_NativeStateLastSlot();
+#else
+    return 0;
+#endif
 }
 
 int Memories_StateSaveHere(const char *path)
 {
+#ifdef MEMORIES_TRANSLATED
+    return Memories_NativeStateSave(path);
+#endif
     (void)path;
     unsupported("save states are unsupported on macOS ARM64; use the game's normal saves");
     return -1;
@@ -172,6 +199,9 @@ int Memories_StateSaveHere(const char *path)
 
 int Memories_StateLoadHere(const char *path, char *why, size_t why_size)
 {
+#ifdef MEMORIES_TRANSLATED
+    return Memories_NativeStateLoad(path, why, why_size);
+#endif
     (void)path;
     if (why && why_size)
         snprintf(why, why_size, "save states are unsupported on macOS ARM64; use the game's normal saves");
@@ -181,7 +211,11 @@ int Memories_StateLoadHere(const char *path, char *why, size_t why_size)
 
 int Memories_StateStartupDone(void)
 {
+#ifdef MEMORIES_TRANSLATED
+    return Memories_NativeStateStartupDone();
+#else
     return startup_checked;
+#endif
 }
 
 uint32_t Memories_StateBuildId(void)
@@ -193,6 +227,10 @@ uint32_t Memories_StateBuildId(void)
 void Memories_StateRemapRange(MemoriesState *state, uint32_t from,
                              uint32_t to, uint32_t size)
 {
+#ifdef MEMORIES_TRANSLATED
+    Memories_NativeStateRemapRange(state, from, to, size);
+    return;
+#endif
     (void)state; (void)from; (void)to; (void)size;
     unsupported("saved-memory remapping is unsupported by the native translated backend");
 }
