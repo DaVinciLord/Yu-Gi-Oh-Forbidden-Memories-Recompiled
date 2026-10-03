@@ -147,7 +147,8 @@ that has no retail counterpart. New arbitrary 3D geometry still requires a code
 mod or a replacement of the corresponding model data; `model` is a retail ID.
 
 New sidecar sections persist identities for ownership, seen flags and decks.
-Changing discovery order remaps the same cards. A missing card falls back to its
+Runtime ids follow the load order, so changing it (or which mods are applied)
+remaps the same cards. A missing card falls back to its
 retail base in a deck; its stored ownership/seen flags survive saves made with
 other card packs, and return when it is reinstalled.
 
@@ -155,7 +156,11 @@ Old sidecars have numeric IDs only. By default their ambiguous ownership is not
 assigned to current cards, decks fall back to the recorded retail base, and the
 old numeric lines are carried over unchanged (a copy is kept as `.txt.legacy`)
 while new progress is still saved under stable identities. To migrate, restore the **original card mod set
-and entry order**, launch once with `MEMORIES_MIGRATE_CARD_IDS=1`, load the save,
+and entry order**, with the card mods in the load order of the folders' names
+(the order the ids were given in before they followed the load order: no
+`mod.<id>.order` or `priority` and no `after` or `requires` between them that
+moves one),
+launch once with `MEMORIES_MIGRATE_CARD_IDS=1`, load the save,
 and save again. Retained sections are then converted to identities. The game cannot infer a lost historical
 mod order; keep that backup if the original set is uncertain.
 

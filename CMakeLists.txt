@@ -391,6 +391,18 @@ if(BUILD_TESTING)
         target_compile_options(memories_cards_stars_test PRIVATE -Wall -Wextra)
     endif()
     add_test(NAME pc_cards_stars COMMAND memories_cards_stars_test)
+    # Two mods' "cards" in the load order the settings give, through the real
+    # mod loader and cards.c's Cards_Build: once as the folders sort, once
+    # with the second moved first (notes/more-cards.md).
+    add_executable(memories_cards_order_test tests/pc/cards_order_test.c src/pc/cards/stars.c ${MOD_TEST_SOURCES})
+    target_include_directories(memories_cards_order_test PRIVATE src)
+    target_compile_definitions(memories_cards_order_test PRIVATE MEMORIES_PC)
+    target_link_libraries(memories_cards_order_test PRIVATE m Threads::Threads)
+    if(NOT MSVC)
+        target_compile_options(memories_cards_order_test PRIVATE -Wall -Wextra)
+    endif()
+    add_test(NAME pc_cards_order_found COMMAND memories_cards_order_test found)
+    add_test(NAME pc_cards_order_moved COMMAND memories_cards_order_test b-first)
     add_executable(memories_free_duel_progress_test tests/pc/free_duel_progress_test.c tests/pc/duelists_stubs.c src/pc/mods/json.c)
     target_include_directories(memories_free_duel_progress_test PRIVATE src)
     target_compile_definitions(memories_free_duel_progress_test PRIVATE MEMORIES_PC)

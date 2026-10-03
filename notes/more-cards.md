@@ -66,8 +66,18 @@ What an entry leaves out is its base's. Give entries explicit stable `id` keys. 
 IDs are remapped when mods change. Legacy numeric sidecars require explicit
 migration as described in [Mod API 3](mod-api-3.md#card-definitions-and-identities).
 
-The runtime ids follow each other in the order
-the mods are found (sorted by directory) and the entries are written. A mod
+The mods' `cards` are read in load order, as every other table is
+(`priority`, then `after` and `requires`, then the order the mods were
+found; the Mods window's Load order), and each mod's entries in the order
+they are written. The runtime ids follow each other in that order, so
+moving a mod in the load order renumbers the cards added after it for the
+run: saves and deck slots keep them by identity (above), and a save state
+made with another order is refused, as for any change of the mods' order
+([Mod API 3](mod-api-3.md#save-states)). The stats a copy leaves out are its
+base's as the entries before it left them: a copy of a card that an earlier
+mod in load order replaces has the replacement's stats, a later mod's
+replace does not reach them. A name, text or picture it leaves out is its
+base's as the game ends up with it, later mods' replaces included. A mod
 with `cards` needs a restart to apply or remove, like a data override: the
 cards are counted once, when the game starts. The window and the log
 (`MEMORIES_TRACE=mods`) say which ids each entry got.
@@ -129,8 +139,14 @@ sort it by the new name. Copies of it that set no name, text or art of their
 own show the replaced ones.
 
 When two entries (or two mods) replace the same card, the later one goes over
-the earlier: what the later entry leaves out stays as the earlier one set it.
-The Mods window notes it.
+the earlier: of two mods, the later in load order, whatever their folders
+are called. Its stats, stars, level, attribute, type, frame, model and
+effect go over the earlier one's where it gives them, and what it leaves out
+of those stays as the earlier one set it. Its name (with the plate that says
+it), text, password, art, `title`, `field_art` and `fusion_groups` take the
+earlier one's place whether it gives them or not: left out, the card's own
+come back. Notes add up ([below](#notes-on-a-card)). The Mods window notes
+it.
 
 ## Frame colour
 
