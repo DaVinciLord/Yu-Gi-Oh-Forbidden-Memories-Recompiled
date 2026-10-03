@@ -155,7 +155,9 @@ int main(void)
         snprintf(line, sizeof(line), "%s|%s|%s|%s|%s\t%s", Mods_OverlapKindName(Mods_OverlapKind(found, i)),
                  Mods_OverlapSeverity(found, i) ? "warning" : "info", Mods_OverlapOutcome(found, i), mods, label, text);
         assert(n < 512);
-        lines[n++] = strdup(line);
+        lines[n] = malloc(strlen(line) + 1);
+        assert(lines[n]);
+        strcpy(lines[n++], line);
         printf("  %s\n", text);
     }
     snprintf(path, sizeof(path), "%s/tests/pc/mod_overlaps/expected.txt", MEMORIES_SOURCE_DIR);
