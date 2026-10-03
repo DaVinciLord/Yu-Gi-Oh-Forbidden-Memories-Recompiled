@@ -2883,10 +2883,12 @@ hashes (PGXP and HD off, as the fixtures run). What makes it work:
   run with it clean.
 
 **X2 (2026-10-03): the game plays as on 32-bit.** Replays recorded on the
-32-bit build with every mod off (the replay tool of PR #244 on branch
-scratch/x64-replay, where the recordings live under `tests/pc/replays`)
-play on the 64-bit build with every frame hash the same, plainly and with
-`MEMORIES_X64_HIGH_HEAP=1`: boot to the first story duel; a whole duel
+32-bit build with every mod off (`tests/pc/replays`: `python
+tools/pc/replay.py run tests/pc/replays --executable
+tmp/pc/win64/memories-pc.exe`) play on the 64-bit build with every frame
+hash the same, plainly and with `MEMORIES_X64_HIGH_HEAP=1` (the same command
+with `--env MEMORIES_X64_HIGH_HEAP=1`: a replay's game never sees the
+caller's own MEMORIES_* variables): boot to the first story duel; a whole duel
 against Simon Muran with a fusion, Raigeki, Forest, Red Medicine and 3D
 battles (each attacker's MODEL variant module run by the MIPS interpreter,
 `MEMORIES_TRACE=model`) through the result to Free Duel, also with
@@ -2905,16 +2907,18 @@ drifted.
   (Win64 keeps them across a call), and a `jump-slots` chunk for the host
   slot that holds the game's `jmp_buf` (on 32-bit it lies in guest RAM).
   A state saved, then loaded in a new process and played with the same
-  presses, draws the same 600 frames in a duel; on the map and at the title
-  screen the loaded run parts from the saved one after 355 and 0 frames,
-  with the same hashes on 32-bit, so that is the state format's, not the
-  width's. tests/pc/replays/state-load-rng passes on 64-bit.
+  presses, draws the same 2000 frames on the campaign map (twice) and in
+  the opening movie (`tools/pc/test_state_resume.py --executable
+  tmp/pc/win64/memories-pc.exe`), as on 32-bit; the replays
+  `state-load-rng` and `state-load-cpu` pass on 64-bit. The VSync a loaded
+  state resumes in returns what it returned in the game that saved it
+  (`resume_value`) on both widths.
 - **No state crosses the widths.** A state holds the game's native stack
   (the frames of `run_game`, `Main_Init`, `Main_Loop`, `Main_AdvanceFrame`,
   `Graphics_SyncFrame` and, during a fade or a load, more: compiled for one
   width), the game objects' variables as one build lays them out
-  (`game_dat` is 0x29F4 bytes at 0x022CD000 on 32-bit and 0x2FE4 at
-  0x42090000 on 64-bit) and its subsystems' native fields. Either game
+  (`game_dat` is 0x2B44 bytes at 0x023A3000 on 32-bit and 0x3144 at
+  0x421A5000 on 64-bit, in the builds of 2026-10-03) and its subsystems' native fields. Either game
   refuses the other's states by name ("saved by the 32-bit game, and this
   one is 64-bit"), told by the size of the `entry` chunk (20 bytes on
   32-bit). Carrying a state across needs a format without native frames
@@ -2949,8 +2953,9 @@ drifted.
   with its two cards in the deck, and a texture pack of the screens'
   sheets with every colour turned, made from the disc at play time) plays
   on 64-bit with all 1145 frame hashes the same, also with
-  `MEMORIES_X64_HIGH_HEAP=1`; replays that make their own mods are not in
-  tools/pc/replay.py yet, so it is not among tests/pc/replays.
+  `MEMORIES_X64_HIGH_HEAP=1`: `tests/pc/replays/x64-data-mods`, whose
+  `mods.py` makes the two mods in the play's folder (`tools/pc/replay.py`
+  gives the game `MEMORIES_MODS_DIR`).
 - **Crash monitor.** On, as on 32-bit: the second copy of the game with the
   shared block. A thread's callers come from the unwind tables through
   dbghelp's `StackWalk64` on the game's process. `crash_check.py --windows

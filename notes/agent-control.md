@@ -335,6 +335,10 @@ CI can hold retail inputs.
   `--hash-every N` to keep every Nth frame hash); `--recording` packages a
   `MEMORIES_RECORD` file made any other way; `--scripted FILE.py` keeps a
   scenario, `run(executable, out)`, whose assertions are the verdict.
+  `--mods FILE.py` records with the data mods FILE.py's `make(folder, root)`
+  writes (from the repository and the disc: a texture pack's images are the
+  game's, never kept in the replay) and keeps it as the replay's `mods.py`,
+  which every play runs into its own folder (`MEMORIES_MODS_DIR`).
 - **Checking:** `replay.py play FILE --check` plays a recorded replay with
   `MEMORIES_PLAY`, records the play, and names the first frame hash that
   differs (its VBlank and the frame it was; one the play does not reach,
@@ -358,7 +362,9 @@ CI can hold retail inputs.
   `state-load-cpu` (scripted: a state saved while the CPU duelist thinks,
   loaded again in the same game, must replay its 600 frames; it failed at
   the first before "Port: a loaded state finishes the VSync(0) it resumes
-  in", and passes with it).
+  in", and passes with it), and `x64-data-mods` (recorded with two data
+  mods, a card pack and a recoloured texture pack, made by its `mods.py`:
+  the 64-bit build's data mods gate).
 - **The bug as a replay:** `state-load-rng` buys a pack from a state, loads
   the state in the same game and buys it again with the same presses. On
   this branch without "Port: save states carry the game's random seed" it
