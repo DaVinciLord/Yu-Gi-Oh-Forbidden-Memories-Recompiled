@@ -1883,6 +1883,7 @@ void Mods_Note(const char *id, const char *format, ...)
     if (strstr(mods[i].status, message)) return;
     length = strlen(mods[i].status);
     snprintf(mods[i].status + length, sizeof(mods[i].status) - length, "%s%s", length ? "; " : "", message);
+    Menu_TextTrim(mods[i].status);
 }
 
 void Mods_DrawFrame(void)
