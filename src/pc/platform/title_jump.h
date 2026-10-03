@@ -34,6 +34,9 @@ int TitleJump_RequestTo(int target, int opponent, const char *deck, char *why, u
 /* The title's menu (title_screen.c): a jump waits to go through the debug
  * menu, so the title gives way at once, skipping the opening movie. */
 int TitleJump_Pending(void);
+/* Jumps taken so far (Title Screen's and the others'), which the control
+ * channel's `info` reports, so a client knows its own has landed. */
+unsigned TitleJump_Count(void);
 void TitleJump_TitleGaveWay(void);
 /* Game-ABI side (src/pc/overrides/title_jump.c). */
 int TitleJump_InDebugMenu(void);

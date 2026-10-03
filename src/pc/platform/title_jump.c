@@ -40,6 +40,7 @@
 #include "pc/saves/save_menu.h"
 #include "pc/guest/state.h"
 #include "pc/free_duel/duelists.h"
+#include "pc/debug/cheats.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -99,6 +100,7 @@ void TitleJump_Frame(unsigned presented)
 /* A jump to another screen (title_jump.h): the target, and whether the
  * title has already given way to the debug menu for it. */
 static int jump_target = -1, jump_opponent, handed;
+static unsigned jump_count; /* jumps taken, for the control channel's `info` */
 static char jump_deck[256];
 static const char *const target_names[JUMP_COUNT] = {
     "title", "debug", "duel", "free_duel", "build_deck", "library", "password", "map", "credits", "options"};
@@ -124,11 +126,20 @@ int TitleJump_RequestTo(int target, int opponent, const char *deck, char *why, u
         return -1;
     }
     if (target == JUMP_TITLE) {
-        TitleJump_Request(); /* already at the title (or not past it yet): nothing to do */
+        if (!active) jump_count++; /* already at the title (or not past it yet): nothing to do */
+        TitleJump_Request();
         return 0;
     }
-    if (target == JUMP_DUEL && !Duelists_Valid(opponent)) {
-        snprintf(why, why_size, "no duelist %d (1 to %d)", opponent, Duelists_Count() - 1);
+    if (target == JUMP_DUEL && (opponent < 1 || !Duelists_Valid(opponent))) {
+        snprintf(why, why_size, "a duel needs an opponent: no duelist %d (1 to %d)", opponent, Duelists_Count() - 1);
+        return -1;
+    }
+    if (deck && *deck && !Cheats_DeckCount(deck)) {
+        snprintf(why, why_size, "no card in the deck '%.40s' (ids and ranges, \"723-762\", \"1,2,3\")", deck);
+        return -1;
+    }
+    if (target == JUMP_DUEL && !(deck && *deck) && !Cheats_SaveLoaded()) {
+        snprintf(why, why_size, "the save has no deck (none loaded): give one");
         return -1;
     }
     jump_target = target;
@@ -161,6 +172,7 @@ void TitleJump_Poll(void)
                 jump_target = -1;
                 handed = 0;
                 TitleJump_EnterTarget(target, jump_opponent, jump_deck);
+                jump_count++;
             }
             return;
         }
@@ -175,7 +187,13 @@ void TitleJump_Poll(void)
     /* Disc waits and fades present frames and accept menu input. Disable
      * now, so another click during the jump cannot reset the next game. */
     TitleJump_SetActive(0);
+    if (jump_target < 0) jump_count++; /* a jump to the title: taken (Execute does not return) */
     TitleJump_Execute();
+}
+
+unsigned TitleJump_Count(void)
+{
+    return jump_count;
 }
 
 void TitleJump_State(MemoriesState *state)

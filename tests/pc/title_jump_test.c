@@ -60,6 +60,9 @@ int TitleJump_EnterTarget(int target, int opponent, const char *deck)
 }
 int Duelists_Count(void) { return 40; }
 int Duelists_Valid(int duelist) { return duelist >= 0 && duelist < 40; }
+static int save_loaded;
+int Cheats_SaveLoaded(void) { return save_loaded; }
+int Cheats_DeckCount(const char *list) { return list[0] >= '0' && list[0] <= '9' ? 40 : 0; }
 
 struct MemoriesState { int loading, present, active; };
 int Memories_StateLoading(const MemoriesState *state) { return state->loading; }
@@ -182,9 +185,14 @@ int main(void)
     /* Another screen: refused targets, then by way of the title, which
      * gives way to the debug menu, whose entry is taken once it is idle. */
     {
-        char why[64];
+        char why[96];
+        unsigned taken;
         assert(TitleJump_RequestTo(JUMP_COUNT, 0, NULL, why, sizeof(why)) == -1);
         assert(TitleJump_RequestTo(JUMP_DUEL, 40, NULL, why, sizeof(why)) == -1 && strstr(why, "no duelist 40"));
+        assert(TitleJump_RequestTo(JUMP_DUEL, 0, "1-40", why, sizeof(why)) == -1 && strstr(why, "needs an opponent"));
+        assert(TitleJump_RequestTo(JUMP_DUEL, 3, "abc", why, sizeof(why)) == -1 && strstr(why, "no card in the deck"));
+        assert(TitleJump_RequestTo(JUMP_DUEL, 3, NULL, why, sizeof(why)) == -1 && strstr(why, "no deck"));
+        taken = TitleJump_Count(); /* the title jumps above */
         assert(TitleJump_TargetByName("duel") == JUMP_DUEL && TitleJump_TargetByName("nowhere") == -1);
         assert(!strcmp(TitleJump_TargetName(JUMP_BUILD_DECK), "build_deck"));
         TitleJump_SetActive(1);
@@ -200,6 +208,7 @@ int main(void)
         debug_idle = 1;
         TitleJump_Poll();
         assert(entered == JUMP_DUEL && entered_opponent == 3 && !strcmp(entered_deck, "1-40") && jumps == 4);
+        assert(TitleJump_Count() == taken + 1); /* the duel; the title stage on the way is not counted */
         TitleJump_Poll();
         assert(jumps == 4);
         /* From the idle debug menu itself, no title jump. */

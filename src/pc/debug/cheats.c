@@ -126,10 +126,9 @@ s8 Cheats_CardViewMode(const DuelSideState *side)
 
 /* MEMORIES_DEBUG_DECK: the forty cards of the deck, as ids and ranges
  * ("723-762", "1,2,723"), repeated until the deck is full. */
-int Cheats_SetDeck(const char *list)
+static int parse_deck(const char *list, int ids[DECK_SIZE])
 {
-    SaveDataWorkspace *save = (SaveDataWorkspace *)D_801D0000;
-    int ids[DECK_SIZE], count = 0, i;
+    int count = 0;
     const char *p = list;
     while (*p && count < DECK_SIZE) {
         char *end;
@@ -142,6 +141,19 @@ int Cheats_SetDeck(const char *list)
         }
         p = *end == ',' ? end + 1 : end;
     }
+    return count;
+}
+
+int Cheats_DeckCount(const char *list)
+{
+    int ids[DECK_SIZE];
+    return parse_deck(list, ids);
+}
+
+int Cheats_SetDeck(const char *list)
+{
+    SaveDataWorkspace *save = (SaveDataWorkspace *)D_801D0000;
+    int ids[DECK_SIZE], count = parse_deck(list, ids), i;
     if (!count) return 0;
     for (i = 0; i < DECK_SIZE; i++) save->state.player_deck[i] = (u16)ids[i % count];
     fprintf(stderr, "memories-pc: deck set from %s\n", list);

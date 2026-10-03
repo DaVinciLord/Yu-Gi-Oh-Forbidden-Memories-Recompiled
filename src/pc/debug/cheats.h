@@ -49,4 +49,6 @@ void Cheats_Frame(void);
  * Debug > Jump to and the control channel's `jump`: the number of ids
  * taken, 0 when none was a card (the deck is left alone). */
 int Cheats_SetDeck(const char *list);
+/* The ids `list` names (what Cheats_SetDeck would take), writing nothing. */
+int Cheats_DeckCount(const char *list);
 #endif
