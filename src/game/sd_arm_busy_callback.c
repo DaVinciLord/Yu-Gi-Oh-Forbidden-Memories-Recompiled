@@ -4,8 +4,8 @@
 #include "sound_output_state.h"
 
 /* The absolute spelling is load-bearing in this -G8 unit. */
-#define g_SDValue (*(SDValue **)0x8009B45C)
-#define D_8009B128 (*(void (**)(void))0x8009B128)
+#define g_SDValue (*(SDValue *G32 *)0x8009B45C)
+#define D_8009B128 (*(void (*G32 *)(void))0x8009B128)
 
 void SD_ArmBusyCallback(void) {
     g_SDValue->busy = 1;

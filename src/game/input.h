@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef MEMORIES_DECOMP_INPUT_H
 #define MEMORIES_DECOMP_INPUT_H
 
@@ -95,11 +96,11 @@ extern u32 gInput_dwPendingHeld;
  * .data view used by DebugMenu_UpdateSoundEntry, and it has no `[5]`. */
 #ifdef GINPUT_PAD1_PRESSED_SIZED_IN_DATA_VOLATILE
 extern volatile u16 gInput_wPad1Pressed[4]
-    __attribute__((section(".data")));
+    PSX_SECTION(".data");
 #elif defined(GINPUT_PAD1_PRESSED_IN_DATA_VOLATILE)
-extern volatile u16 gInput_wPad1Pressed __attribute__((section(".data")));
+extern volatile u16 gInput_wPad1Pressed PSX_SECTION(".data");
 #elif defined(GINPUT_PAD1_PRESSED_IN_DATA)
-extern u16 gInput_wPad1Pressed __attribute__((section(".data")));
+extern u16 gInput_wPad1Pressed PSX_SECTION(".data");
 #elif defined(GINPUT_PAD1_PRESSED_SIZED_VOLATILE)
 extern volatile u16 gInput_wPad1Pressed[4];
 #elif defined(GINPUT_PAD1_PRESSED_IS_AGGREGATE)
@@ -124,13 +125,13 @@ extern u16 gInput_wPad1Pressed;
  * symbol as a plain volatile halfword and spelled it D_8009B3A4 until then. */
 #ifdef GINPUT_PAD1_HELD_SIZED_IN_DATA_VOLATILE
 extern volatile u16 gInput_wPad1Held[4]
-    __attribute__((section(".data")));
+    PSX_SECTION(".data");
 #elif defined(GINPUT_PAD1_HELD_SIZED_VOLATILE)
 extern volatile u16 gInput_wPad1Held[4];
 #elif defined(GINPUT_PAD1_HELD_IN_DATA_VOLATILE)
-extern volatile u16 gInput_wPad1Held __attribute__((section(".data")));
+extern volatile u16 gInput_wPad1Held PSX_SECTION(".data");
 #elif defined(GINPUT_PAD1_HELD_IN_DATA)
-extern u16 gInput_wPad1Held __attribute__((section(".data")));
+extern u16 gInput_wPad1Held PSX_SECTION(".data");
 #elif defined(GINPUT_PAD1_HELD_IS_AGGREGATE)
 extern u16 gInput_wPad1Held[];
 #elif defined(GINPUT_PAD1_HELD_IS_VOLATILE)
@@ -148,13 +149,13 @@ extern u16 gInput_wPad1Held;
  * arm is a nonvolatile absolute halfword, distinct from the volatile arm. */
 #ifdef GINPUT_PAD1_REPEAT_SIZED_IN_DATA_VOLATILE
 extern volatile u16 gInput_wPad1Repeat[4]
-    __attribute__((section(".data")));
+    PSX_SECTION(".data");
 #elif defined(GINPUT_PAD1_REPEAT_SIZED_VOLATILE)
 extern volatile u16 gInput_wPad1Repeat[4];
 #elif defined(GINPUT_PAD1_REPEAT_IN_DATA_VOLATILE)
-extern volatile u16 gInput_wPad1Repeat __attribute__((section(".data")));
+extern volatile u16 gInput_wPad1Repeat PSX_SECTION(".data");
 #elif defined(GINPUT_PAD1_REPEAT_IN_DATA)
-extern u16 gInput_wPad1Repeat __attribute__((section(".data")));
+extern u16 gInput_wPad1Repeat PSX_SECTION(".data");
 #elif defined(GINPUT_PAD1_REPEAT_IS_VOLATILE)
 extern volatile u16 gInput_wPad1Repeat;
 #else
@@ -210,7 +211,7 @@ extern u16 gInput_wPad1RepeatBackup;
  * notes/memory-map.md and the main_menu README. */
 #ifdef GINPUT_PAD2_HELD_SIZED_IN_DATA_VOLATILE
 extern volatile u16 gInput_wPad2Held[4]
-    __attribute__((section(".data")));
+    PSX_SECTION(".data");
 #elif defined(GINPUT_PAD2_HELD_SIZED_VOLATILE)
 extern volatile u16 gInput_wPad2Held[4];
 #elif defined(GINPUT_PAD2_HELD_IS_VOLATILE)
@@ -221,13 +222,13 @@ extern u16 gInput_wPad2Held;
 
 #ifdef GINPUT_PAD2_PRESSED_SIZED_IN_DATA_VOLATILE
 extern volatile u16 gInput_wPad2Pressed[4]
-    __attribute__((section(".data")));
+    PSX_SECTION(".data");
 #elif defined(GINPUT_PAD2_PRESSED_SIZED_VOLATILE)
 extern volatile u16 gInput_wPad2Pressed[4];
 #elif defined(GINPUT_PAD2_PRESSED_IN_DATA_VOLATILE)
-extern volatile u16 gInput_wPad2Pressed __attribute__((section(".data")));
+extern volatile u16 gInput_wPad2Pressed PSX_SECTION(".data");
 #elif defined(GINPUT_PAD2_PRESSED_IN_DATA)
-extern u16 gInput_wPad2Pressed __attribute__((section(".data")));
+extern u16 gInput_wPad2Pressed PSX_SECTION(".data");
 #elif defined(GINPUT_PAD2_PRESSED_IS_VOLATILE)
 extern volatile u16 gInput_wPad2Pressed;
 #else
@@ -236,7 +237,7 @@ extern u16 gInput_wPad2Pressed;
 
 #ifdef GINPUT_PAD2_REPEAT_SIZED_IN_DATA_VOLATILE
 extern volatile u16 gInput_wPad2Repeat[4]
-    __attribute__((section(".data")));
+    PSX_SECTION(".data");
 #elif defined(GINPUT_PAD2_REPEAT_SIZED_VOLATILE)
 extern volatile u16 gInput_wPad2Repeat[4];
 #else

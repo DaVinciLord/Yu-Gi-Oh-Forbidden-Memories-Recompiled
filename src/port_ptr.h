@@ -3,8 +3,8 @@
 
 /* Guest-width pointer annotations for native 64-bit builds of this source.
  *
- * Nothing in this repository defines MEMORIES_PC, so for the console and
- * for every build and check here the macros expand to what they replace:
+ * For the console and the matching-source checks the macros expand to
+ * what they replace:
  * G32 to nothing, CALL32(type, f) to f and PSXLONG to long. The
  * preprocessed tokens, and therefore the objects, are unchanged.
  *
@@ -42,6 +42,21 @@
 #define PSXLONG int
 #else
 #define PSXLONG long
+#endif
+
+/* Mach-O cannot express ELF section names. The translated backend places
+ * guest globals through its address manifest, rather than host sections. */
+#if defined(MEMORIES_TRANSLATED) && defined(__APPLE__)
+#define PSX_SECTION(name)
+#else
+#define PSX_SECTION(name) __attribute__((section(name)))
+#endif
+
+/* Guest lists encode their terminator as a word, not an LP64 pointer. */
+#ifdef MEMORIES_TRANSLATED
+#define PSX_POINTER_END 0xFFFFFFFFu
+#else
+#define PSX_POINTER_END -1
 #endif
 
 #endif

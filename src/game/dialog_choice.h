@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef MEMORIES_DECOMP_DIALOG_CHOICE_H
 #define MEMORIES_DECOMP_DIALOG_CHOICE_H
 
@@ -28,7 +29,7 @@
  */
 extern u8 gDialog_bChoiceEnabled;
 #ifdef GDIALOG_CHOICE_COUNT_IN_DATA
-extern s8 gDialog_bChoiceCount __attribute__((section(".data")));
+extern s8 gDialog_bChoiceCount PSX_SECTION(".data");
 #else
 extern s8 gDialog_bChoiceCount;
 #endif
@@ -60,7 +61,7 @@ extern s8 gDialog_bChoiceCount;
 #ifdef GDIALOG_CHOICE_SIZED
 extern s8 gDialog_bChoice[9];
 #elif defined(GDIALOG_CHOICE_IN_DATA)
-extern s8 gDialog_bChoice __attribute__((section(".data")));
+extern s8 gDialog_bChoice PSX_SECTION(".data");
 #else
 extern s8 gDialog_bChoice;
 #endif

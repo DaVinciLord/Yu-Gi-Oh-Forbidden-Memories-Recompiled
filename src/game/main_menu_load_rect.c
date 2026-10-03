@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #include "../types.h"
 
 /* The eight bytes at 0x8009B058, the first of the three owners in the
@@ -32,7 +33,7 @@
  * No linker alias covers this symbol, so unlike the two blocks after it
  * there is nothing to retire. */
 
-u8 D_8009B058[8] __attribute__((section(".sdata"))) = {
+u8 D_8009B058[8] PSX_SECTION(".sdata") = {
     0x00,
     0x00,
     0xF0,

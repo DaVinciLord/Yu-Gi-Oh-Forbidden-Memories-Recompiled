@@ -206,7 +206,7 @@ void DuelEffect_ApplyRitual(void)
                non-struct read; as a plain card->data read the function's
                schedule changes (17 differences). */
             *(u16 *)card->data = ritual = D_8009B1A0;
-            data = *(u8 **)&card->data;
+            data = *(u8 *G32 *)&card->data;
             D_8009B210 = state | 0x80;
             card->card_id = ritual;
             value = data[3];

@@ -56,7 +56,7 @@ int DuelEffect_UpdateCardEffect(void)
 
     if (flags & DUEL_CARD_EFFECT_FLAG_ACTIVE) {
         u8 *indices = gDuelEffect_abGroupByEffectId;
-        DuelEffectHandler *callbacks;
+        DuelEffectHandler G32 *callbacks;
         int index = indices[gDuel_sCardEffectIndex] * DUEL_CARD_EFFECT_HANDLERS_PER_GROUP;
 
         if (flags & DUEL_CARD_EFFECT_FLAG_SECOND_HANDLER)

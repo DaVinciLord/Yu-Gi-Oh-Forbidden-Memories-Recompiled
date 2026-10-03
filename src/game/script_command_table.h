@@ -3,6 +3,6 @@
 
 #include "../ygo_types.h"
 
-extern ScriptCommandHandler D_80090C50[];
+extern ScriptCommandHandler G32 D_80090C50[];
 
 #endif

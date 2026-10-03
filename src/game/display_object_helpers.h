@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef DISPLAY_OBJECT_HELPERS_H
 #define DISPLAY_OBJECT_HELPERS_H
 
@@ -55,9 +56,9 @@ typedef struct {
    outside small data; dialog_transition.c, func_800339D0.c, func_8003DA40.c
    and src/game/func_800283F4.c define the arm below for that. */
 #ifdef D_8009AF74_IN_DATA
-extern volatile u16 D_8009AF74[4] __attribute__((section(".data")));
+extern volatile u16 D_8009AF74[4] PSX_SECTION(".data");
 #else
-extern volatile u16 D_8009AF74[4] __attribute__((section(".sdata")));
+extern volatile u16 D_8009AF74[4] PSX_SECTION(".sdata");
 #endif
 
 /* Returns the first allocated display object carrying the requested tag. */

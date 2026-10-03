@@ -1,3 +1,6 @@
+#if defined(MEMORIES_TRANSLATED) && !defined(MEMORIES_INSTRUMENT_SOFTGPU)
+#include "pc/guest/translated_runtime.h"
+#endif
 #include "soft_gpu.h"
 #include "texture_dump.h"
 #include <stdio.h>
@@ -123,6 +126,9 @@ const uint16_t *SoftGpu_Vram(void)
 
 void SoftGpu_StateWords(uint32_t words[6])
 {
+#if defined(MEMORIES_TRANSLATED) && !defined(MEMORIES_INSTRUMENT_SOFTGPU)
+    words = GuestRuntime_ResolveData(words, 6 * sizeof(*words));
+#endif
     uint32_t bank = 0, b;
     for (b = 1; b < SOFT_GPU_BANKS; b++) {
         if (banks[b] && texture_source == banks[b]) bank = b; /* bits 11-14, as set_page reads them */
@@ -211,6 +217,9 @@ void SoftGpu_PictureFromVram(void)
 
 void SoftGpu_SetRecorder(const SoftGpuRecorder *wanted)
 {
+#if defined(MEMORIES_TRANSLATED) && !defined(MEMORIES_INSTRUMENT_SOFTGPU)
+    if (wanted) wanted = GuestRuntime_ResolveData((void *)wanted, sizeof(*wanted));
+#endif
     if (wanted == recorder) return;
     recorder = wanted;
     if (recorder) {
@@ -375,6 +384,9 @@ const uint32_t *SoftGpu_WidePicture(int x, int y, int w, int h)
 
 int SoftGpu_WideFrameView(int x, int y, int w, int h, const uint16_t **pixels, int *out_x, int *out_w)
 {
+#if defined(MEMORIES_TRANSLATED) && !defined(MEMORIES_INSTRUMENT_SOFTGPU)
+    pixels = GuestRuntime_ResolveData(pixels, sizeof(*pixels)); out_x = GuestRuntime_ResolveData(out_x, sizeof(*out_x)); out_w = GuestRuntime_ResolveData(out_w, sizeof(*out_w));
+#endif
     int t;
     for (t = 0; t < WIDE_TARGETS; t++) {
         const WideTarget *wt = &wide[t];
@@ -390,6 +402,9 @@ int SoftGpu_WideFrameView(int x, int y, int w, int h, const uint16_t **pixels, i
 
 int SoftGpu_WideFrame(int x, int y, int w, int h, const uint16_t **pixels, int *out_x, int *out_w)
 {
+#if defined(MEMORIES_TRANSLATED) && !defined(MEMORIES_INSTRUMENT_SOFTGPU)
+    pixels = GuestRuntime_ResolveData(pixels, sizeof(*pixels)); out_x = GuestRuntime_ResolveData(out_x, sizeof(*out_x)); out_w = GuestRuntime_ResolveData(out_w, sizeof(*out_w));
+#endif
     int t;
     for (t = 0; t < WIDE_TARGETS; t++) {
         WideTarget *wt = &wide[t];
@@ -434,6 +449,9 @@ static void load_words(int x, int y, int w, int h, const uint16_t *pixels)
 
 void SoftGpu_Store(int x, int y, int w, int h, uint16_t *pixels)
 {
+#if defined(MEMORIES_TRANSLATED) && !defined(MEMORIES_INSTRUMENT_SOFTGPU)
+    if (w > 0 && h > 0) pixels = GuestRuntime_ResolveData(pixels, (size_t)w * (size_t)h * sizeof(*pixels));
+#endif
     int i, j;
     for (j = 0; j < h; j++) {
         for (i = 0; i < w; i++) {
@@ -506,6 +524,9 @@ static void fill_words(int x, int y, int w, int h, uint32_t rgb24)
  * transfers are in its record already. */
 void SoftGpu_Load(int x, int y, int w, int h, const uint16_t *pixels)
 {
+#if defined(MEMORIES_TRANSLATED) && !defined(MEMORIES_INSTRUMENT_SOFTGPU)
+    if (w > 0 && h > 0) pixels = GuestRuntime_ResolveData((void *)pixels, (size_t)w * (size_t)h * sizeof(*pixels));
+#endif
     if (recorder && scale > 1) recorder->load(x, y, w, h, pixels);
     load_words(x, y, w, h, pixels);
 }
@@ -1184,12 +1205,18 @@ static size_t precise_count;
 
 void SoftGpu_SetPrecise(const PgxpVertex *vertices, size_t count)
 {
+#if defined(MEMORIES_TRANSLATED) && !defined(MEMORIES_INSTRUMENT_SOFTGPU)
+    if (count) vertices = GuestRuntime_ResolveData((void *)vertices, count * sizeof(*vertices));
+#endif
     precise = vertices;
     precise_count = count;
 }
 
 size_t SoftGpu_Gp0(const uint32_t *words, size_t count)
 {
+#if defined(MEMORIES_TRANSLATED) && !defined(MEMORIES_INSTRUMENT_SOFTGPU)
+    if (count) words = GuestRuntime_ResolveData((void *)words, count * sizeof(*words));
+#endif
     size_t at = 0;
     if (recorder && scale > 1) {
         if (precise_count && recorder->precise) recorder->precise(precise, precise_count);
@@ -1293,6 +1320,9 @@ size_t SoftGpu_Gp0(const uint32_t *words, size_t count)
 /* Save states: VRAM (index 0) and the drawing state (index 1). */
 void *SoftGpu_StateData(int index, size_t *size)
 {
+#if defined(MEMORIES_TRANSLATED) && !defined(MEMORIES_INSTRUMENT_SOFTGPU)
+    size = GuestRuntime_ResolveData(size, sizeof(*size));
+#endif
     *size = index ? sizeof(gpu) : sizeof(vram);
     return index ? (void *)&gpu : (void *)vram;
 }

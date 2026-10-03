@@ -9,7 +9,7 @@
  * Sized, unlike the other tables carved alongside it. DISPLAY_OBJECT_LIST_COUNT
  * is seven, equals the entry count, and is the same constant that bounds the
  * list heads in display_object.h and DisplayObject_ResetPool's loop. */
-extern void (*gDisplayObject_ListRenderers[DISPLAY_OBJECT_LIST_COUNT])(void);
+extern void (*G32 gDisplayObject_ListRenderers[DISPLAY_OBJECT_LIST_COUNT])(void);
 
 /* Renders the untextured Gouraud-quad list in renderer-table slot 4. */
 void DisplayObject_RenderGouraudQuadList(void);

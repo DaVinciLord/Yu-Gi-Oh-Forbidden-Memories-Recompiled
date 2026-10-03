@@ -314,7 +314,7 @@ void FreeDuel_Init(u8 *src)
     s32 col;
     s32 count;
     u16 *rec;
-    DisplayObject **slot;
+    DisplayObject *G32 *slot;
     u8 *cell;
     DisplayObject *obj;
     RECT *clut;
@@ -549,7 +549,7 @@ done:
     SD_BGMPlay(29376);
 }
 
-DisplayObject **FreeDuel_GetSparkleSlot(void)
+DisplayObject *G32 *FreeDuel_GetSparkleSlot(void)
 {
     s32 i;
 
@@ -598,7 +598,7 @@ void FreeDuel_UpdateSparkle(void)
 void FreeDuel_UpdateCursorTween(void)
 {
     DisplayObject *widget = gFreeDuel_pCursorWidget;
-    DisplayObject **slot;
+    DisplayObject *G32 *slot;
     DisplayObject *sparkle;
     s32 tx;
     s32 ty;

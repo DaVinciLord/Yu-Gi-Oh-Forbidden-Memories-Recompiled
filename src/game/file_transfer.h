@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef MEMORIES_DECOMP_FILE_TRANSFER_H
 #define MEMORIES_DECOMP_FILE_TRANSFER_H
 
@@ -156,7 +157,7 @@ void func_80014FA4(void);
  * for those two; the other three do not need it.
  */
 #ifdef D_800101D8_IN_DATA
-extern u8 *G32 D_800101D8 __attribute__((section(".data")));
+extern u8 *G32 D_800101D8 PSX_SECTION(".data");
 #else
 extern u8 *G32 D_800101D8;
 #endif
@@ -167,7 +168,7 @@ extern u8 *G32 D_800101D8;
 extern s32 gFile_anLba[];
 
 extern volatile u32 D_8009B0F4;
-extern volatile u32 D_8009B0F4_abs __attribute__((section(".data")));
+extern volatile u32 D_8009B0F4_abs PSX_SECTION(".data");
 
 /* The transfer-step flag word. File_StepActiveTransfer sets and clears every
  * bit of it through the streaming retry state machine and reloads it after
@@ -184,7 +185,7 @@ extern volatile u32 D_8009B0F4_abs __attribute__((section(".data")));
  * _abs twin is not volatile, and that is measured -- the two readers build
  * byte-identical without it, as D_8009B134_abs does. */
 extern volatile u16 D_8009B112;
-extern u16 D_8009B112_abs __attribute__((section(".data")));
+extern u16 D_8009B112_abs PSX_SECTION(".data");
 
 /* The loader's secondary-request word at 0x8009B134, the other half of the
  * `(D_8009B0F4 & FILE_TRANSFER_REQUEST_BLOCKED_MASK) | D_8009B134` predicate
@@ -200,7 +201,7 @@ extern u16 D_8009B112_abs __attribute__((section(".data")));
  * the `|=`, where retail keeps one load live in `$3` across all three uses.
  */
 extern u32 D_8009B134;
-extern u32 D_8009B134_abs __attribute__((section(".data")));
+extern u32 D_8009B134_abs PSX_SECTION(".data");
 
 /* 0x801DC000, gLibrary_aCardArtRecord in config/slus_01411/symbols.txt:372.
  * File_SetPositionTable hands its address to File_InitTransferState
@@ -233,7 +234,7 @@ extern FileTransferDescriptor gFile_PrimaryTransferDescriptor;
    be switched by a phase callback. The sector callback reads it through
    the FileTransferDescriptor members; only its image-phase buffer select is
    still an address sum (see func_80013C28.c). */
-extern FileTransferDescriptor *D_8009AF18;
+extern FileTransferDescriptor *G32 D_8009AF18;
 extern u32 *G32 D_8009B0F8;
 
 /* func_800140A0 resets these counters before the ready-system callback,
@@ -268,7 +269,7 @@ extern char D_8009B104[1];
  * asm("D_8009B10C") alias of this type; the pointer is what every use
  * assigns and calls. */
 #ifdef D_8009B10C_IN_DATA
-extern void (*G32 D_8009B10C)(void) __attribute__((section(".data")));
+extern void (*G32 D_8009B10C)(void) PSX_SECTION(".data");
 #else
 extern void (*G32 D_8009B10C)(void);
 #endif
@@ -293,12 +294,12 @@ void File_SetPositionTable(void);
  * File_StepActiveTransfer, but sw %lo through $at in SD_InitState, whose unit
  * defines the .data arms below for that. Initial value not read. */
 #ifdef D_8009B0F0_IN_DATA
-extern void (*G32 D_8009B0F0)(void) __attribute__((section(".data")));
+extern void (*G32 D_8009B0F0)(void) PSX_SECTION(".data");
 #else
 extern void (*G32 D_8009B0F0)(void);
 #endif
 #ifdef D_8009B120_IN_DATA
-extern void (*G32 D_8009B120)(void) __attribute__((section(".data")));
+extern void (*G32 D_8009B120)(void) PSX_SECTION(".data");
 #else
 extern void (*G32 D_8009B120)(void);
 #endif

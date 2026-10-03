@@ -24,7 +24,7 @@
  * same record.
  * The entries include two that share func_80039FF8. */
 
-void (*D_80090F68[])(MenuRecord *) = {
+void (*G32 D_80090F68[])(MenuRecord *) = {
     (void (*)(MenuRecord *))func_80039FF8,
     (void (*)(MenuRecord *))func_80039FF8,
     (void (*)(MenuRecord *))func_8003A560,

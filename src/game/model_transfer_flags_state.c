@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #include "../types.h"
 #include "model_transfer_flags.h"
 
@@ -42,12 +43,12 @@
  * bearing rather than decorative: without them these objects would be placed
  * in .sbss and leave .sdata entirely. */
 
-Key *G32 D_8009B074 __attribute__((section(".sdata"))) = 0;
-u8 D_8009B078 __attribute__((section(".sdata"))) = 0;
-u8 D_8009B079 __attribute__((section(".sdata"))) = 0;
-s8 D_8009B07A __attribute__((section(".sdata"))) = -1;
-u8 D_8009B07B __attribute__((section(".sdata"))) = 0;
-u8 D_8009B07C __attribute__((section(".sdata"))) = 0;
-static u8 sModelTransferFlags_Pad7D __attribute__((section(".sdata"))) = 0;
-static u8 sModelTransferFlags_Pad7E __attribute__((section(".sdata"))) = 0;
-static u8 sModelTransferFlags_Pad7F __attribute__((section(".sdata"))) = 0;
+Key *G32 D_8009B074 PSX_SECTION(".sdata") = 0;
+u8 D_8009B078 PSX_SECTION(".sdata") = 0;
+u8 D_8009B079 PSX_SECTION(".sdata") = 0;
+s8 D_8009B07A PSX_SECTION(".sdata") = -1;
+u8 D_8009B07B PSX_SECTION(".sdata") = 0;
+u8 D_8009B07C PSX_SECTION(".sdata") = 0;
+static u8 sModelTransferFlags_Pad7D PSX_SECTION(".sdata") = 0;
+static u8 sModelTransferFlags_Pad7E PSX_SECTION(".sdata") = 0;
+static u8 sModelTransferFlags_Pad7F PSX_SECTION(".sdata") = 0;

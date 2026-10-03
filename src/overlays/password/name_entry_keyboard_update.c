@@ -1,3 +1,6 @@
+#ifdef MEMORIES_PC
+#include "pc/debug/name_trace.h"
+#endif
 #define GINPUT_PAD1_HELD_IS_VOLATILE
 #define GINPUT_PAD1_REPEAT_IS_VOLATILE
 #define GINPUT_PAD1_PRESSED_IS_VOLATILE
@@ -56,6 +59,9 @@ void NameEntry_UpdateKeyboard(void)
     s32 d;
 
     w = D_8016D404;
+#ifdef MEMORIES_PC
+    if (gInput_wPad1Pressed || gInput_wPad1Repeat) NAME_TRACE("name keyboard frame=%u held=%x pressed=%x repeat=%x row=%d col=%d flags=%x caret=%d\n", Memories_PresentedFrames(), gInput_wPad1Held, gInput_wPad1Pressed, gInput_wPad1Repeat, (s8)D_8016D402, (s8)D_8016D401, D_8016D400, D_8016D42C);
+#endif
     if ((D_8016D4D4 & 0x4000) != 0) {
         home = w->width - 16;
         work = w->widthBonus - home;
@@ -196,6 +202,9 @@ arme:
 join:
     ;
     node = TextBox_GetGlyphAt(kind, gx, gy);
+#ifdef MEMORIES_PC
+    NAME_TRACE("name select frame=%u kind=%d gx=%d gy=%d cell=%d node=%x code=%x\n", Memories_PresentedFrames(), kind, gx, gy, glyphCode, (u32)(uintptr_t)node, node ? node->code_00 : 0);
+#endif
     obj = NameEntry_SpawnGlyphSprite(kind, node);
     ((DisplayObject *)obj)->field_6C = 1;
     ((DisplayObject *)obj)->update =
@@ -220,6 +229,9 @@ join:
         if (node != 0) {
             *slot = node->code_00;
         }
+#ifdef MEMORIES_PC
+        NAME_TRACE("name store frame=%u buffer=%x caret=%d slot=%x code=%x\n", Memories_PresentedFrames(), (u32)(uintptr_t)D_8016D418, D_8016D42C, (u32)(uintptr_t)slot, *slot);
+#endif
         obj = NameEntry_SpawnGlyphSprite(1, node);
         ((DisplayObject *)obj)->field_60 = 8;
         ((DisplayObject *)obj)->update =

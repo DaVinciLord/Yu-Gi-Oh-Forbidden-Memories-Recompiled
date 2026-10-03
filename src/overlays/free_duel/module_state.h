@@ -12,11 +12,11 @@ extern u8 gFreeDuel_abGridAvailable[FREE_DUEL_GRID_STATE_CAPACITY];
 
 /* The scrollbar thumb and cursor use the same display-object allocation and
  * layout as the cursor-trail sparkle pool. */
-extern DisplayObject *gFreeDuel_pThumbWidget;
-extern DisplayObject *gFreeDuel_apSparklePool[
+extern DisplayObject *G32 gFreeDuel_pThumbWidget;
+extern DisplayObject *G32 gFreeDuel_apSparklePool[
     FREE_DUEL_SPARKLE_POOL_CAPACITY
 ];
-extern DisplayObject *gFreeDuel_pCursorWidget;
+extern DisplayObject *G32 gFreeDuel_pCursorWidget;
 
 /* The linker symbol names the live low byte; module_state.c owns its complete
  * four-byte initialized storage so the following raw tail keeps its offset. */

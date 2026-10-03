@@ -21,7 +21,7 @@
    rim of the ground shadow fan (ModelShadowFanStep in the header): +/-0x0B50
    in both axes for the diagonals and +/-0x1000 on one axis for the rest,
    which is a unit circle in Q12 sampled every 45 degrees. */
-s32 (*D_80090FEC[])(DisplayObjectStreamState *, const u8 *) = {
+s32 (*G32 D_80090FEC[])(DisplayObjectStreamState *, const u8 *) = {
     DisplayObjectStream_Stop,
     DisplayObjectStream_ResetOffset,
     DisplayObjectStream_Noop,

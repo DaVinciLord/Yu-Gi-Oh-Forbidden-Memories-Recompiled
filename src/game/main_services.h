@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef MEMORIES_DECOMP_MAIN_SERVICES_H
 #define MEMORIES_DECOMP_MAIN_SERVICES_H
 
@@ -101,13 +102,13 @@ extern u8 D_8009B0A3[];
    script_op_save_prompt.c, script_op_return_to_menu.c and frontend_scene_states.c
    address them with %hi/%lo, outside small data, and define the .data arms. */
 #ifdef D_8009B268_IN_DATA
-extern u8 D_8009B268 __attribute__((section(".data")));
+extern u8 D_8009B268 PSX_SECTION(".data");
 #else
 extern u8 D_8009B268;
 #endif
 
 #ifdef D_8009B26D_IN_DATA
-extern u8 D_8009B26D __attribute__((section(".data")));
+extern u8 D_8009B26D PSX_SECTION(".data");
 #else
 extern u8 D_8009B26D;
 #endif

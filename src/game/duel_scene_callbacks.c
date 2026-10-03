@@ -38,7 +38,7 @@
  * the game ever produces index 15, and widening the array would change the
  * bytes. */
 
-void (*gDuel_apfnSceneStateHandler[])(void) = {
+void (*G32 gDuel_apfnSceneStateHandler[])(void) = {
     DuelScene_UpdateEffectPreview,
     DuelScene_UpdateStartup,
     DuelScene_UpdateDrawPhase,

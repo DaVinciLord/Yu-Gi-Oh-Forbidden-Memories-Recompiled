@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #include "../types.h"
 #include "file_transfer.h"
 
@@ -25,8 +26,8 @@
  * bss_end to size the region below the stack. 0x00200000 is the console's
  * main RAM size and 0x00002000 the reserve held back from it; both are
  * loaded through %hi/%lo as independent words rather than as one array. */
-u32 D_8009AF10 __attribute__((section(".sdata"))) = 0x00200000;
-u32 D_8009AF14 __attribute__((section(".sdata"))) = 0x00002000;
+u32 D_8009AF10 PSX_SECTION(".sdata") = 0x00200000;
+u32 D_8009AF14 PSX_SECTION(".sdata") = 0x00002000;
 
 /* Initialized to the primary transfer descriptor and read as the current
  * one. The pointer target is what gives this its type: the readers only
@@ -34,7 +35,7 @@ u32 D_8009AF14 __attribute__((section(".sdata"))) = 0x00002000;
  * FileTransferDescriptor, which is evidence the offsets alone do not carry.
  * model_graphics_state.c shows a .sdata pointer relocation of this kind
  * surviving the link. */
-FileTransferDescriptor *D_8009AF18
-    __attribute__((section(".sdata"))) = &gFile_PrimaryTransferDescriptor;
+FileTransferDescriptor *G32 D_8009AF18
+    PSX_SECTION(".sdata") = &gFile_PrimaryTransferDescriptor;
 
-static u32 sData8009AF10_Pad1C __attribute__((section(".sdata"))) = 0;
+static u32 sData8009AF10_Pad1C PSX_SECTION(".sdata") = 0;

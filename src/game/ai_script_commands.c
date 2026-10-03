@@ -5,7 +5,7 @@
 
 /* Initialized data at 0x800916E0: the opcode dispatch table AiScript_Run
    indexes. Opcode 0 is unused and its slot is null. */
-AiScriptHandler gAiScript_apfnCommand[68] = {
+AiScriptHandler G32 gAiScript_apfnCommand[68] = {
     (AiScriptHandler)0,
     AiScript_Jump,
     AiScript_JumpGreaterEqual,

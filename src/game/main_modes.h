@@ -69,6 +69,6 @@ void Main_RunTrade(void);
 void Main_RunCredits(void);
 void Main_RunTwoPlayerDuelSetup(void);
 
-extern MainModeRunner gMain_apfnModeRunner[MAIN_MODE_COUNT];
+extern MainModeRunner G32 gMain_apfnModeRunner[MAIN_MODE_COUNT];
 
 #endif

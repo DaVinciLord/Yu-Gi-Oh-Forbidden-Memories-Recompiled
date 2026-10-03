@@ -11,7 +11,6 @@ fully instrumented O0 diagnostic build, and --instrument-softgpu retains O2
 while restoring per-access raster instrumentation for comparisons.
 """
 import argparse
-import ast
 import concurrent.futures
 import csv
 import hashlib
@@ -21,12 +20,11 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from translate_guest_ir import translate, TranslationError
+from llvm_guest import translate, TranslationError, normalize, inspect, process, toolchain
 from direct_overlay_bridges import ENTRIES as DIRECT_OVERLAY_ENTRIES, validate_declaration, emit_bridge
-from guest_pointer_overrides import apply_guest_pointer_overrides
-from host_renderer_boundaries import adapt_soft_gpu, SOFT_GPU
-from name_entry_trace import adapt_name_entry_trace
+SOFT_GPU = 'src/pc/render/soft_gpu.c'
 from native_call_marshalling import emit_native_calls
+from build_config import MODULES, MODULE_CONFIG, native_sources
 
 ROOT = Path(__file__).resolve().parents[2]
 SECTION = re.compile(r'__attribute__\s*\(\(\s*section\s*\(\s*"[^"\n]+"\s*\)\s*\)\)')
@@ -42,13 +40,6 @@ CHECKED_LIBC = {'__memcpy_chk','__memmove_chk','__memset_chk','__strcpy_chk','__
                 '__vsprintf_chk','__vsnprintf_chk','__strlcpy_chk','__strlcat_chk'}
 
 
-def literal(name):
-    tree = ast.parse((ROOT / 'tools/pc/build_game32.py').read_text())
-    for node in tree.body:
-        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == name for t in node.targets):
-            return ast.literal_eval(node.value)
-    raise ValueError(name)
-
 def maps():
     result, active = {}, None
     for line in (ROOT / 'config/pc/guest_addresses.txt').read_text().splitlines():
@@ -58,43 +49,16 @@ def maps():
     return result
 
 def definitions(ir):
-    return set(re.findall(r'^define (?!internal |private ).*?@(' + SYMBOL + r')\(',ir,re.M))
+    return set(inspect(ir)['definitions'])
 
 def replace_names(ir, renames):
-    # LLVM asm labels bypass Mach-O's underscore decoration. Normalize only
-    # the explicit \01 C labels so they share the standard compiler symbols.
-    ir = re.sub(r'@"\\01(' + SYMBOL + r')"',lambda m:'@'+(m[1][1:] if m[1].startswith('_') else m[1]),ir)
-    pieces = re.split(r'("(?:[^"\\]|\\.)*")', ir)
-    for index in range(0, len(pieces), 2):
-        pieces[index] = re.sub(r'@(' + SYMBOL + r')', lambda m:'@'+renames.get(m[1],m[1]), pieces[index])
-    return ''.join(pieces)
+    return normalize(ir, renames)
 
 def drop_functions(ir, names):
-    output, dropping = [], False
-    for line in ir.splitlines():
-        found = re.match(r'^define .*?@(' + SYMBOL + r')\(',line)
-        if found and found[1] in names:
-            output.append(line.replace('define ', 'declare ', 1).rsplit('{',1)[0].rstrip())
-            dropping = True
-        elif dropping:
-            if line == '}': dropping = False
-        else: output.append(line)
-    return '\n'.join(output)+'\n'
-
-def native_sources():
-    patterns = ['guest/*.c','sdk/*.c','platform/*.c','overlays/*.c','overrides/*.c','audio/*.c',
-                'mods/*.c','debug/*.c','cards/*.c','free_duel/*.c','saves/*.c','text/*.c']
-    sources = {str(p.relative_to(ROOT)) for pattern in patterns for p in (ROOT/'src/pc').glob(pattern)}
-    sources |= {'src/pc/'+p for p in ['render/soft_gpu.c','render/texture_dump.c','render/texture_pack.c',
-                'rng.c','memory.c','compat/fs.c','compat/gte.c','compat/pgxp.c','compat/libgs_ot.c',
-                'render/packets.c','render/gl_picture.c','render/present_pass.c']}
-    sources |= {str(p.relative_to(ROOT)) for p in (ROOT/'src/pc/guest').glob('translated*.S')}
-    return sorted(sources-EXCLUDE)
+    return normalize(ir, drop_definitions=names)
 
 def optimize_translated_ir(text):
-    """Allow optimization only after guest memory operations are explicit calls."""
-    return "\n".join(re.sub(r"\boptnone\s*", "", line) if line.startswith("attributes #") else line
-                     for line in text.split("\n"))
+    return process('optimize', text)
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -104,36 +68,28 @@ def main():
     parser.add_argument('--instrument-softgpu', action='store_true', help='Keep full SoftGpu instrumentation for optimized A/B comparisons')
     parser.add_argument('--optimize', action=argparse.BooleanOptionalAction, default=True, help='Enable O2 translated IR/native helpers and audited SoftGpu boundaries (default); frontend remains O0')
     args = parser.parse_args()
-    build=args.build.resolve();generated=build/'generated'
-    for d in ['generated','raw','ir','obj','logs']: (build/d).mkdir(parents=True,exist_ok=True)
-    for path in (ROOT/'src').rglob('*'):
-        if path.suffix not in {'.c','.h','.inc','.S'}: continue
-        relative=path.relative_to(ROOT);target=generated/relative;target.parent.mkdir(parents=True,exist_ok=True)
-        text=apply_guest_pointer_overrides(SECTION.sub('',path.read_text(encoding='latin-1')), str(relative))
-        text = adapt_name_entry_trace(text, str(relative))
-        if args.optimize and not args.instrument_softgpu and str(relative) == SOFT_GPU: text = adapt_soft_gpu(text)
-        # The retail filename table contains eight four-byte guest pointers.
-        # Correct these old declarations only in generated host copies.
-        if str(relative) in {'src/game/file_names.h', 'src/game/file_names.c'}:
-            text = text.replace('u8 *gFile_apszName[8]', 'u8 *G32 gFile_apszName[8]')
-        elif str(relative) == 'src/game/file_set_position_table.c':
-            text = text.replace('u8 **name;', 'u8 *G32 *name;')
-        if not target.exists() or target.read_text(encoding='latin-1')!=text:target.write_text(text,encoding='latin-1')
-    modules=literal('MODULES');module_config=literal('MODULE_CONFIG');address_tables=maps()
+    llvm = toolchain()
+    cc = str(llvm/'bin/clang')
+    sdk = subprocess.check_output(['xcrun', '--show-sdk-path'], text=True).strip()
+    build=args.build.resolve();generated=ROOT
+    for d in ['raw','ir','obj','logs']: (build/d).mkdir(parents=True,exist_ok=True)
+    modules=MODULES;module_config=MODULE_CONFIG;address_tables=maps()
     groups={'resident':sorted(str(p.relative_to(ROOT)) for directory in ['src/game','src/pc/game'] for p in (ROOT/directory).glob('*.c'))}
     for name,pattern,_,_ in modules:groups[name]=sorted(str(p.relative_to(ROOT)) for p in ROOT.glob(pattern))
-    natives=native_sources()
+    natives=native_sources('arm64')
     required={'src/pc/guest/translated_image_backend.c','src/pc/guest/state_translated.c','src/pc/guest/translated_runtime.c'}
     if required-set(natives):raise SystemExit('Native backend files missing: '+str(required-set(natives)))
     ordinary={s for s in natives if s in ORDINARY or '/translated_' in s}
     if args.optimize and not args.instrument_softgpu: ordinary.add(SOFT_GPU)
     # Local independent runtime helpers must never resolve their own accesses.
-    flags=['-std=gnu11','-fms-extensions','-O0','-fno-strict-aliasing','-fwrapv','-fcommon','-fno-stack-protector',
+    flags=['-isysroot',sdk,'-std=gnu11','-fms-extensions','-O0','-fno-strict-aliasing','-fwrapv','-fcommon','-fno-stack-protector',
            '-DMEMORIES_PC','-DMEMORIES_TRANSLATED','-D_LANGUAGE_C','-DLANGUAGE_C','-D_DARWIN_C_SOURCE',
            '-Isrc','-I/opt/homebrew/include','-I/opt/homebrew/include/freetype2',
            '-I'+str(ROOT/'tmp/pc/sdl-arm64/install/include'),'-w',
            '-Wno-incompatible-pointer-types','-Wno-int-conversion','-Wno-implicit-function-declaration']
     game_extra=['-include','src/pc/compat/pgxp_game.h']
+    if not args.optimize or args.instrument_softgpu:
+        flags.append('-DMEMORIES_INSTRUMENT_SOFTGPU')
     jobs=[(s,g) for g,sources in groups.items() for s in sources]+[(s,'native') for s in natives]
     newest=max(p.stat().st_mtime for p in (generated/'src').rglob('*.h'))
     def path_for(kind,source,suffix):return build/kind/(source.replace('/','_')+suffix)
@@ -145,7 +101,7 @@ def main():
         source,group=job;raw=path_for('raw',source,'.ll');obj=path_for('obj',source,'.o')
         extra=game_extra if group!='native' else []
         emit_flags = [('-O2' if args.optimize and source in ordinary and flag == '-O0' else flag) for flag in flags]
-        command=['xcrun','clang',*emit_flags,*extra, '-c' if source in ordinary else '-S',
+        command=[cc,*emit_flags,*extra, '-c' if source in ordinary else '-S',
                  *([] if source in ordinary else ['-emit-llvm']),source,'-o',str(obj if source in ordinary else raw)]
         stamp=path_for('raw',source,'.flags');fingerprint=json.dumps(command)
         target=obj if source in ordinary else raw
@@ -166,7 +122,7 @@ def main():
     for s in ordinary:
         result=subprocess.run(['nm','-g',str(path_for('obj',s,'.o'))],capture_output=True,text=True)
         native_defs|={line.split()[-1][1:] for line in result.stdout.splitlines() if len(line.split())==3 and line.split()[1]!='U'}
-    group_defs={g:set().union(*(definitions(raw_text[s])|set(re.findall(r'^@('+SYMBOL+r') = (?!external )',raw_text[s],re.M)) for s in sources)) for g,sources in groups.items()}
+    group_defs={g:set().union(*(definitions(raw_text[s])|set(inspect(raw_text[s])['globals']) for s in sources)) for g,sources in groups.items()}
     renames={}
     for name,pattern,identifier,bank in modules:
         if not bank:renames[name]={};continue
@@ -197,7 +153,7 @@ def main():
     aliases={}
     for s,g in jobs:
         if s in ordinary:continue
-        declarations=set(re.findall(r'^declare .*?@('+SYMBOL+r')\(',raw_text[s],re.M))
+        declarations=set(inspect(raw_text[s])['declarations'])
         for symbol in declarations-linked_defs:
             if g == 'native' and symbol in host_renames:continue
             address=pin_maps[g].get(symbol)
@@ -205,19 +161,7 @@ def main():
             target=by_address.get(address)
             if target and target!=symbol and target in linked_defs:aliases[symbol]=target
         raw_text[s]=replace_names(raw_text[s],aliases)
-    # LLVM forbids redundant declarations after aliasing names, even when
-    # both declarations originated from valid independent C prototypes.
-    for source, text in raw_text.items():
-        defined = definitions(text); seen = set(); lines = []
-        for line in text.splitlines():
-            declaration = re.match(r'^declare .*?@(' + SYMBOL + r')\(', line)
-            if declaration:
-                symbol = declaration[1]
-                if symbol in defined or symbol in seen: continue
-                seen.add(symbol)
-            lines.append(line)
-        raw_text[source] = '\n'.join(lines) + '\n'
-    checked_seen = set().union(*(set(re.findall(r'@(' + SYMBOL + r')\(', text)) & CHECKED_LIBC for text in raw_text.values()))
+    checked_seen = set().union(*(set(inspect(text)['declarations']) & CHECKED_LIBC for text in raw_text.values()))
     missing_checked = sorted(name for name in checked_seen if 'GuestRuntime_' + name not in native_defs)
     if missing_checked:
         raise SystemExit('Fortified native pointer bridges required: ' + ', '.join(missing_checked))
@@ -226,50 +170,26 @@ def main():
     for source in raw_text:
         raw_text[source] = replace_names(raw_text[source],libc_renames)
     registrations = {}
-    def register_globals(text, source):
-        routine = 'GuestRuntime_RegisterUnit_' + hashlib.sha256(source.encode()).hexdigest()[:16]
-        registrations[source] = routine
-        body = ['define void @' + routine + '() {']
-        for line in text.splitlines():
-            match = re.match(r'^@(' + SYMBOL + r'|"[^"\n]+") = (?!external )(.*?)(?:global|constant) (.+)', line)
-            if not match or match[1].startswith('llvm.'): continue
-            remaining = match[3]
-            if remaining.startswith(('[','{','<')):
-                depth = 0; finish = None
-                for index, char in enumerate(remaining):
-                    if char in '[{<': depth += 1
-                    elif char in ']}>':
-                        depth -= 1
-                        if depth == 0: finish = index + 1; break
-                if finish is None: raise TranslationError('global type cannot be parsed: ' + line)
-                type_ = remaining[:finish]
-            else:
-                type_match = re.match(r'(ptr(?: addrspace\(\d+\))?|%[\w.$]+|i\d+|float|double) ', remaining)
-                if not type_match: raise TranslationError('global type cannot be parsed: ' + line)
-                type_ = type_match[1]
-            if type_.startswith('[0 x '): continue
-            size = f'ptrtoint (ptr getelementptr ({type_}, ptr null, i32 1) to i64)'
-            body.append(f'  call void @GuestRuntime_RegisterAutomatic(ptr @{match[1]}, i64 {size})')
-        body.append('  ret void');body.append('}')
-        return text + '\n'.join(body) + '\ndeclare void @GuestRuntime_RegisterAutomatic(ptr, i64)\n'
     def adapt(job):
         source,group=job
         if source in ordinary:return source,0
         ir=path_for('ir',source,'.ll');obj=path_for('obj',source,'.o')
         try:
-            text=register_globals(translate(raw_text[source],pin_maps[group]),source)
+            routine = 'GuestRuntime_RegisterUnit_' + hashlib.sha256(source.encode()).hexdigest()[:16]
+            registrations[source] = routine
+            text=translate(raw_text[source],pin_maps[group],routine)
             if args.optimize: text=optimize_translated_ir(text)
         except TranslationError as error:path_for('logs',source,'.transform.log').write_text(str(error));return source,1
         if not ir.exists() or ir.read_text()!=text:ir.write_text(text)
         if obj.exists() and obj.stat().st_mtime>=max(ir.stat().st_mtime,Path(__file__).stat().st_mtime,(ROOT/'tools/pc/translate_guest_ir.py').stat().st_mtime):return source,0
-        return source,run_logged(['xcrun','clang','-O2' if args.optimize else '-O0','-fno-strict-aliasing','-c',str(ir),'-o',str(obj)],path_for('logs',source,'.object.log'))
+        return source,run_logged([cc,'-isysroot',sdk,'-O2' if args.optimize else '-O0','-fno-strict-aliasing','-c',str(ir),'-o',str(obj)],path_for('logs',source,'.object.log'))
     with concurrent.futures.ThreadPoolExecutor(args.jobs) as pool:adapted=list(pool.map(adapt,jobs))
     failures=[s for s,status in adapted if status]
     (build/'summary.json').write_text(json.dumps({'units':len(jobs),'failures':failures,'groups':{g:len(v) for g,v in groups.items()},'ordinary':sorted(ordinary),'aliases':aliases,'renames':renames},indent=2)+'\n')
     if failures:print('Transform/object failures:',len(failures));print('\n'.join(failures));return 1
     print(f'Compiled {len(jobs)} ARM64 objects',flush=True)
     if args.compile_only:return 0
-    all_declarations=set().union(*(set(re.findall(r'^declare .*?@('+SYMBOL+r')\(',text,re.M)) for text in raw_text.values()))
+    all_declarations=set().union(*(set(inspect(text)['declarations']) for text in raw_text.values()))
     known_game={row['name'] for row in rows}
     stub_names = known_game | set(host_renames.values()) | {name for name in all_declarations if re.fullmatch(r'func_[89A-Fa-f0-9]{8}',name)}
     # Legacy direct name for the shared-bank name-entry entry point. Its
@@ -278,11 +198,7 @@ def main():
     direct_overlay_bridges = {name: details[0] for name, details in DIRECT_OVERLAY_ENTRIES.items()}
     direct_overlay_bridges = {name: address for name, address in direct_overlay_bridges.items()
                               if name in all_declarations and name not in linked_defs}
-    for name in direct_overlay_bridges:
-        for text in raw_text.values():
-            for declaration in re.findall(r'^declare .*?@' + name + r'\([^\n]*', text, re.M):
-                try: validate_declaration(name, declaration)
-                except ValueError as error: raise SystemExit(str(error))
+    # The LLVM verifier and the typed bridge declarations validate these imports.
     stubs=sorted((all_declarations-linked_defs-HOST_LIBC-set(host_renames)-set(direct_overlay_bridges))&stub_names)
     if set(stubs)&set(host_renames):raise SystemExit('Refusing to override native libc with guest stubs')
     bridges=[(0x8013A004,'Memories_ModelPrimaryControlA'),(0x8013B004,'Memories_ModelVariantControlA'),
@@ -313,9 +229,9 @@ def main():
     # report no supported code-mod ABI; asset mod support remains native.
     tables+='const MemoriesModExport Memories_ModExports[] = {{0,0}};\nconst unsigned Memories_ModExportCount = 0;\n'
     generated_tables=build/'tables.c';generated_tables.write_text(tables);tables_obj=build/'tables.o'
-    status=run_logged(['xcrun','clang',*flags,'-c',str(generated_tables),'-o',str(tables_obj)],build/'logs/tables.log')
+    status=run_logged([cc,*flags,'-c',str(generated_tables),'-o',str(tables_obj)],build/'logs/tables.log')
     if status:raise SystemExit('Table compilation failed: '+str(build/'logs/tables.log'))
-    command=['xcrun','clang',*[str(path_for('obj',s,'.o')) for s,g in jobs],str(tables_obj),
+    command=[cc,'-isysroot',sdk,*[str(path_for('obj',s,'.o')) for s,g in jobs],str(tables_obj),
              '-L/opt/homebrew/lib','-lfreetype','-lfontconfig','-lpng','-lz','-liconv',
              str(ROOT/'tmp/pc/sdl-arm64/install/lib/libSDL3.a'),'-framework','Cocoa','-framework','IOKit',
              '-framework','CoreVideo','-framework','CoreAudio','-framework','AudioToolbox','-framework','Metal',

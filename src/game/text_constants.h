@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef MEMORIES_DECOMP_TEXT_CONSTANTS_H
 #define MEMORIES_DECOMP_TEXT_CONSTANTS_H
 
@@ -38,7 +39,7 @@ extern u16 D_801D5800[];
  * The result controller selects the absolute arm for that store; the
  * existing readers keep the plain GP-relative declaration. */
 #ifdef TEXT_STRING_ID_IN_DATA
-extern u16 D_8009B32E __attribute__((section(".data")));
+extern u16 D_8009B32E PSX_SECTION(".data");
 #else
 extern u16 D_8009B32E;
 #endif

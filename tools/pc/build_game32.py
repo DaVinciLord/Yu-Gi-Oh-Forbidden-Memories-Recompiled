@@ -20,6 +20,7 @@ section renames edit the COFF headers directly (rename_coff_sections) and
 __start_/__stop_ come from grouped marker sections; overrides win by link order instead of weakened symbols."""
 import argparse, concurrent.futures, csv, glob, hashlib, json, os, re, shutil, struct, subprocess, sys
 import build_process
+from build_config import MODULES, MODULE_CONFIG, GATED_MODULES, BACKENDS, native_sources
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ELF = "tmp/project-build/SLUS_014.11.elf"
@@ -106,16 +107,7 @@ if PORTABLE:
 # (see notes/pc-build.md), else X11. --backend or MEMORIES_BACKEND picks.
 SDL_BUILD = "tmp/pc/sdl-m32-portable"   # build_linux_sysroot.py
 SDL_SOURCE = "tmp/pc/sdl-source/SDL3-3.4.16"
-BACKENDS = {"sdl": ["src/pc/platform/sdl.c", "src/pc/render/gl_picture.c", "src/pc/render/present_pass.c"],
-            "x11": ["src/pc/platform/x11.c", "src/pc/platform/audio_alsa.c", "src/pc/platform/gamepad_evdev.c"]}
-BACKEND_SOURCES = sorted(sum(BACKENDS.values(), []))
-NATIVE = sorted(glob.glob("src/pc/guest/*.[cS]") + glob.glob("src/pc/sdk/*.c") +
-                [f for f in glob.glob("src/pc/platform/*.c") if f not in BACKEND_SOURCES] + glob.glob("src/pc/overlays/*.c") + glob.glob("src/pc/overrides/*.c") + glob.glob("src/pc/audio/*.c") + glob.glob("src/pc/mods/*.c") + glob.glob("src/pc/debug/*.c") + glob.glob("src/pc/cards/*.c") + glob.glob("src/pc/free_duel/*.c") + glob.glob("src/pc/saves/*.c") + glob.glob("src/pc/text/*.c") + ["src/pc/render/soft_gpu.c", "src/pc/render/texture_dump.c", "src/pc/render/texture_pack.c"]) + [
-    "src/pc/rng.c", "src/pc/compat/fs.c", "src/pc/compat/gte.c", "src/pc/compat/pgxp.c", "src/pc/compat/libgs_ot.c", "src/pc/render/packets.c"]
-# Experimental arm64 translation helpers belong to their own build driver.
-# Keep the existing i386 source inventory and context backend unchanged.
-NATIVE = [source for source in NATIVE if not (
-    source.startswith("src/pc/guest/translated") or source == "src/pc/guest/state_translated.c")]
+NATIVE = native_sources('i386', None)
 # Same contract as the host C library, so the host's version is used directly.
 # Runtime-loaded modules linked into the executable: name, sources, identifier
 # word at the start of the image, and load bank. main_menu has its load address
@@ -125,19 +117,12 @@ NATIVE = [source for source in NATIVE if not (
 # The overworld's two packages (before and after the coup) are one program:
 # their images differ only in the data blob behind the C, which stays in guest
 # memory, so one module serves both, configured from the first.
-MODULES = [("main_menu", "src/overlays/main_menu/*.c", 0x0F, 0),
-           ("password", "src/overlays/password/*.c", 0x15, 0x80168000),
-           ("overworld", "src/overlays/overworld/*.c", 0x14, 0x80168000),
-           ("free_duel", "src/overlays/free_duel/*.c", 0x13, 0x80168000),
-           ("duel_effects", "src/overlays/duel_effects/*.c", 0x18, 0x80146000)]
-MODULE_CONFIG = {"overworld": "overworld_before_coup"}
 # Modules entered only through a native gate that checks the delivered bytes
 # first (src/pc/overlays/duel_effects.c): their guest addresses
 # stay out of Memories_FunctionMap, so a call into a modded image is
 # interpreted instead. They must have no variables of their own (theirs stay
 # in guest memory), so they are left out of the module registry too, which
 # would otherwise tell the interpreter their range holds native code.
-GATED_MODULES = {"duel_effects"}
 
 # Save states outlive native rebuilds because everything a state can point at
 # in the game objects stays put (src/pc/guest/state.h): their code and

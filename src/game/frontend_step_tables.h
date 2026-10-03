@@ -9,7 +9,7 @@
  * Both are deliberately left unsized. The mask permits thirty-two entries and
  * neither table has that many, so a bound here would assert something the
  * call site does not support. */
-extern void (*gDebugMenu_apfnAlternatePageSteps[])(void);
-extern void (*gDebugMenu_apfnPrimaryPageSteps[])(void);
+extern void (*G32 gDebugMenu_apfnAlternatePageSteps[])(void);
+extern void (*G32 gDebugMenu_apfnPrimaryPageSteps[])(void);
 
 #endif
