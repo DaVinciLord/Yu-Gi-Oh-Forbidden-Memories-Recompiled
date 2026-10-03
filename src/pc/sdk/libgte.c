@@ -1,4 +1,5 @@
 /* LIBGTE register setup over the software coprocessor. */
+#include "types.h"
 #include "pc/compat/gte.h"
 
 void InitGeom(void)
@@ -24,23 +25,23 @@ void SetGeomScreen(int h)
     Memories_GteWriteControl(26, (uint32_t)h);
 }
 
-void SetBackColor(long r, long g, long b)
+void SetBackColor(PSXLONG r, PSXLONG g, PSXLONG b)
 {
     Memories_GteWriteControl(13, (uint32_t)(r << 4));
     Memories_GteWriteControl(14, (uint32_t)(g << 4));
     Memories_GteWriteControl(15, (uint32_t)(b << 4));
 }
 
-void SetFarColor(long r, long g, long b)
+void SetFarColor(PSXLONG r, PSXLONG g, PSXLONG b)
 {
     Memories_GteWriteControl(21, (uint32_t)(r << 4));
     Memories_GteWriteControl(22, (uint32_t)(g << 4));
     Memories_GteWriteControl(23, (uint32_t)(b << 4));
 }
 
-void SetFogNearFar(long near, long far, long h)
+void SetFogNearFar(PSXLONG near, PSXLONG far, PSXLONG h)
 {
-    long range = far - near, dqa;
+    PSXLONG range = far - near, dqa;
     if (range < 100) {
         return;
     }
@@ -246,7 +247,7 @@ Matrix *RotMatrixYXZ_gte(ShortVector *r, Matrix *m)
 /* Angle of (x, y) in 4096ths of a turn, from the library's arctangent table
  * (0x80099638: atan of n/1024 for n = 0..1024). The smaller magnitude is
  * divided by the larger, pre-shifting whichever keeps the quotient in range. */
-long ratan2(long y, long x)
+PSXLONG ratan2(PSXLONG y, PSXLONG x)
 {
     const int16_t *table = (const int16_t *)0x80099638u;
     int negative_x = x < 0, negative_y = y < 0;
@@ -347,7 +348,7 @@ Matrix *TransposeMatrix(Matrix *m0, Matrix *m1)
 
 /* Integer square root through the library's table (192 entries from
  * 0x800951A8), normalized with the GTE's leading-zero counter. */
-long SquareRoot0(long value)
+PSXLONG SquareRoot0(PSXLONG value)
 {
     const int16_t *table = (const int16_t *)0x800951a8u;
     int zeros, even, shift;
@@ -360,7 +361,7 @@ long SquareRoot0(long value)
     even = zeros & ~1;
     shift = (31 - even) >> 1;
     index = even - 24 < 0 ? (int32_t)value >> (24 - even) : (int32_t)((uint32_t)value << (even - 24));
-    return (long)(((uint32_t)(int32_t)table[index - 0x40] << shift) >> 12);
+    return (PSXLONG)(((uint32_t)(int32_t)table[index - 0x40] << shift) >> 12);
 }
 
 Matrix *ScaleMatrix(Matrix *m, LongVector *v)
@@ -374,25 +375,25 @@ Matrix *ScaleMatrix(Matrix *m, LongVector *v)
     return m;
 }
 
-long ReadGeomScreen(void) { return (long)(Memories_GteReadControl(26) & 0xffff); }
+PSXLONG ReadGeomScreen(void) { return (PSXLONG)(Memories_GteReadControl(26) & 0xffff); }
 
-long RotTransPers(ShortVector *v, long *sxy, long *p, long *flag)
+PSXLONG RotTransPers(ShortVector *v, PSXLONG *sxy, PSXLONG *p, PSXLONG *flag)
 {
     Memories_GteLoad(0, v);
     Memories_GteLoad(1, &v->z);
     Memories_GteCommand(0x0180001);
-    *sxy = (long)Memories_GteReadData(14);
-    *p = (long)Memories_GteReadData(8);
-    *flag = (long)Memories_GteReadControl(31);
-    return (long)Memories_GteReadData(19) >> 2;
+    *sxy = (PSXLONG)Memories_GteReadData(14);
+    *p = (PSXLONG)Memories_GteReadData(8);
+    *flag = (PSXLONG)Memories_GteReadControl(31);
+    return (PSXLONG)Memories_GteReadData(19) >> 2;
 }
 
 /* Project three or four vertices, stop at a back face, otherwise report the
  * screen points, the last interpolation value and the average depth. */
-long RotAverageNclip3(ShortVector *v0, ShortVector *v1, ShortVector *v2, long *sxy0, long *sxy1, long *sxy2,
-                      long *p, long *otz, long *flag)
+PSXLONG RotAverageNclip3(ShortVector *v0, ShortVector *v1, ShortVector *v2, PSXLONG *sxy0, PSXLONG *sxy1, PSXLONG *sxy2,
+                      PSXLONG *p, PSXLONG *otz, PSXLONG *flag)
 {
-    long opz;
+    PSXLONG opz;
     Memories_GteLoad(0, v0);
     Memories_GteLoad(1, &v0->z);
     Memories_GteLoad(2, v1);
@@ -400,9 +401,9 @@ long RotAverageNclip3(ShortVector *v0, ShortVector *v1, ShortVector *v2, long *s
     Memories_GteLoad(4, v2);
     Memories_GteLoad(5, &v2->z);
     Memories_GteCommand(0x0280030);
-    *flag = (long)Memories_GteReadControl(31);
+    *flag = (PSXLONG)Memories_GteReadControl(31);
     Memories_GteCommand(0x1400006);
-    opz = (long)Memories_GteReadData(24);
+    opz = (PSXLONG)Memories_GteReadData(24);
     if (opz <= 0) {
         return opz;
     }
@@ -411,15 +412,15 @@ long RotAverageNclip3(ShortVector *v0, ShortVector *v1, ShortVector *v2, long *s
     Memories_GteStore(14, sxy2);
     Memories_GteStore(8, p);
     Memories_GteCommand(0x158002d);
-    *otz = (long)Memories_GteReadData(7);
+    *otz = (PSXLONG)Memories_GteReadData(7);
     return opz;
 }
 
 /* The "no memory" form: results stay in the GTE for the caller's inline
  * reads; only the flag word comes back. */
-long RotAverageNclip3_nom(ShortVector *v0, ShortVector *v1, ShortVector *v2)
+PSXLONG RotAverageNclip3_nom(ShortVector *v0, ShortVector *v1, ShortVector *v2)
 {
-    long flag;
+    PSXLONG flag;
     Memories_GteLoad(0, v0);
     Memories_GteLoad(1, &v0->z);
     Memories_GteLoad(2, v1);
@@ -427,16 +428,16 @@ long RotAverageNclip3_nom(ShortVector *v0, ShortVector *v1, ShortVector *v2)
     Memories_GteLoad(4, v2);
     Memories_GteLoad(5, &v2->z);
     Memories_GteCommand(0x0280030);
-    flag = (long)Memories_GteReadControl(31);
+    flag = (PSXLONG)Memories_GteReadControl(31);
     Memories_GteCommand(0x158002d);
     Memories_GteCommand(0x1400006);
     return flag;
 }
 
-long RotAverageNclip4(ShortVector *v0, ShortVector *v1, ShortVector *v2, ShortVector *v3, long *sxy0, long *sxy1,
-                      long *sxy2, long *sxy3, long *p, long *otz, long *flag)
+PSXLONG RotAverageNclip4(ShortVector *v0, ShortVector *v1, ShortVector *v2, ShortVector *v3, PSXLONG *sxy0, PSXLONG *sxy1,
+                      PSXLONG *sxy2, PSXLONG *sxy3, PSXLONG *p, PSXLONG *otz, PSXLONG *flag)
 {
-    long opz;
+    PSXLONG opz;
     Memories_GteLoad(0, v0);
     Memories_GteLoad(1, &v0->z);
     Memories_GteLoad(2, v1);
@@ -444,9 +445,9 @@ long RotAverageNclip4(ShortVector *v0, ShortVector *v1, ShortVector *v2, ShortVe
     Memories_GteLoad(4, v2);
     Memories_GteLoad(5, &v2->z);
     Memories_GteCommand(0x0280030);
-    *flag = (long)Memories_GteReadControl(31);
+    *flag = (PSXLONG)Memories_GteReadControl(31);
     Memories_GteCommand(0x1400006);
-    opz = (long)Memories_GteReadData(24);
+    opz = (PSXLONG)Memories_GteReadData(24);
     if (opz <= 0) {
         return opz;
     }
@@ -457,10 +458,10 @@ long RotAverageNclip4(ShortVector *v0, ShortVector *v1, ShortVector *v2, ShortVe
     Memories_GteLoad(1, &v3->z);
     Memories_GteCommand(0x0180001);
     Memories_GteStore(14, sxy3);
-    *flag |= (long)Memories_GteReadControl(31);
+    *flag |= (PSXLONG)Memories_GteReadControl(31);
     Memories_GteStore(8, p);
     Memories_GteCommand(0x168002e);
-    *otz = (long)Memories_GteReadData(7);
+    *otz = (PSXLONG)Memories_GteReadData(7);
     return opz;
 }
 
@@ -472,8 +473,8 @@ static void load_vertex(unsigned index, const ShortVector *v)
     Memories_GteLoad(index * 2 + 1, &v->z);
 }
 
-long RotAverage3(ShortVector *v0, ShortVector *v1, ShortVector *v2, long *sxy0, long *sxy1, long *sxy2, long *p,
-                 long *flag)
+PSXLONG RotAverage3(ShortVector *v0, ShortVector *v1, ShortVector *v2, PSXLONG *sxy0, PSXLONG *sxy1, PSXLONG *sxy2, PSXLONG *p,
+                 PSXLONG *flag)
 {
     load_vertex(0, v0);
     load_vertex(1, v1);
@@ -483,13 +484,13 @@ long RotAverage3(ShortVector *v0, ShortVector *v1, ShortVector *v2, long *sxy0, 
     Memories_GteStore(13, sxy1);
     Memories_GteStore(14, sxy2);
     Memories_GteStore(8, p);
-    *flag = (long)Memories_GteReadControl(31);
+    *flag = (PSXLONG)Memories_GteReadControl(31);
     Memories_GteCommand(0x158002d);
-    return (long)Memories_GteReadData(7);
+    return (PSXLONG)Memories_GteReadData(7);
 }
 
-long RotAverage4(ShortVector *v0, ShortVector *v1, ShortVector *v2, ShortVector *v3, long *sxy0, long *sxy1,
-                 long *sxy2, long *sxy3, long *p, long *flag)
+PSXLONG RotAverage4(ShortVector *v0, ShortVector *v1, ShortVector *v2, ShortVector *v3, PSXLONG *sxy0, PSXLONG *sxy1,
+                 PSXLONG *sxy2, PSXLONG *sxy3, PSXLONG *p, PSXLONG *flag)
 {
     uint32_t first;
     load_vertex(0, v0);
@@ -504,42 +505,42 @@ long RotAverage4(ShortVector *v0, ShortVector *v1, ShortVector *v2, ShortVector 
     Memories_GteCommand(0x0180001);
     Memories_GteStore(14, sxy3);
     Memories_GteStore(8, p);
-    *flag = (long)(Memories_GteReadControl(31) | first);
+    *flag = (PSXLONG)(Memories_GteReadControl(31) | first);
     Memories_GteCommand(0x168002e);
-    return (long)Memories_GteReadData(7);
+    return (PSXLONG)Memories_GteReadData(7);
 }
 
-long AverageZ3(long sz0, long sz1, long sz2)
+PSXLONG AverageZ3(PSXLONG sz0, PSXLONG sz1, PSXLONG sz2)
 {
     Memories_GteWriteData(17, (uint32_t)sz0);
     Memories_GteWriteData(18, (uint32_t)sz1);
     Memories_GteWriteData(19, (uint32_t)sz2);
     Memories_GteCommand(0x158002d);
-    return (long)Memories_GteReadData(7);
+    return (PSXLONG)Memories_GteReadData(7);
 }
 
-long NormalClip(long sxy0, long sxy1, long sxy2)
+PSXLONG NormalClip(PSXLONG sxy0, PSXLONG sxy1, PSXLONG sxy2)
 {
     Memories_GteWriteData(12, (uint32_t)sxy0);
     Memories_GteWriteData(14, (uint32_t)sxy2);
     Memories_GteWriteData(13, (uint32_t)sxy1);
     Memories_GteCommand(0x1400006);
-    return (long)Memories_GteReadData(24);
+    return (PSXLONG)Memories_GteReadData(24);
 }
 
 #define MVMVA_ROTATE_TRANSLATE_V0 0x0480012u /* sf=1, rotation matrix, V0, translation vector */
 
-void RotTrans(ShortVector *v0, LongVector *v1, long *flag)
+void RotTrans(ShortVector *v0, LongVector *v1, PSXLONG *flag)
 {
     load_vertex(0, v0);
     Memories_GteCommand(MVMVA_ROTATE_TRANSLATE_V0);
     v1->x = (int32_t)Memories_GteReadData(25);
     v1->y = (int32_t)Memories_GteReadData(26);
     v1->z = (int32_t)Memories_GteReadData(27);
-    *flag = (long)Memories_GteReadControl(31);
+    *flag = (PSXLONG)Memories_GteReadControl(31);
 }
 
-void RotTransSV(ShortVector *v0, ShortVector *v1, long *flag)
+void RotTransSV(ShortVector *v0, ShortVector *v1, PSXLONG *flag)
 {
     uint32_t z;
     load_vertex(0, v0);
@@ -549,10 +550,10 @@ void RotTransSV(ShortVector *v0, ShortVector *v1, long *flag)
     z = Memories_GteReadData(11); /* stored as a word: z and the pad after it */
     v1->z = (short)z;
     v1->pad = (short)(z >> 16);
-    *flag = (long)Memories_GteReadControl(31);
+    *flag = (PSXLONG)Memories_GteReadControl(31);
 }
 
-void RotTransPersN(ShortVector *v0, int32_t *sxy, uint16_t *sz, uint16_t *p, uint16_t *flag, long n)
+void RotTransPersN(ShortVector *v0, int32_t *sxy, uint16_t *sz, uint16_t *p, uint16_t *flag, PSXLONG n)
 {
     do {
         load_vertex(0, v0++);
@@ -564,17 +565,17 @@ void RotTransPersN(ShortVector *v0, int32_t *sxy, uint16_t *sz, uint16_t *p, uin
     } while (--n > 0);
 }
 
-long RotColorDpq(ShortVector *v0, ShortVector *v1, uint32_t *v2, long *sxy, uint32_t *v3, long *flag)
+PSXLONG RotColorDpq(ShortVector *v0, ShortVector *v1, uint32_t *v2, PSXLONG *sxy, uint32_t *v3, PSXLONG *flag)
 {
     load_vertex(0, v0);
     Memories_GteCommand(0x0180001);
-    *flag = (long)Memories_GteReadControl(31);
+    *flag = (PSXLONG)Memories_GteReadControl(31);
     Memories_GteStore(14, sxy);
     load_vertex(0, v1);
     Memories_GteLoad(6, v2);
     Memories_GteCommand(0x0e80413);
     Memories_GteStore(22, v3);
-    return (long)(int32_t)Memories_GteReadData(19) >> 2;
+    return (PSXLONG)(int32_t)Memories_GteReadData(19) >> 2;
 }
 
 void NormalColorCol(ShortVector *v0, uint32_t *v1, uint32_t *v2)
@@ -603,15 +604,15 @@ typedef struct DivideVertex {
 
 typedef struct DivideLevel {
     DivideVertex r01, r02, r31, r32, centre;
-    DivideVertex *corner[4];
-    uint32_t *unused_return;
+    DivideVertex *G32 corner[4];
+    uint32_t *G32 unused_return;
 } DivideLevel;
 
 typedef struct DividePolygon4 {
     uint32_t ndiv, pih, piv;
     uint16_t clut, tpage;
     uint32_t rgbc;
-    uint32_t *ot;
+    uint32_t *G32 ot;
     DivideVertex r[4];
     DivideLevel level[5];
 } DividePolygon4;
@@ -646,7 +647,7 @@ static void store_screen(DivideVertex *vertex, unsigned sxy, unsigned sz)
 
 static uint32_t *divide_ft4(uint32_t *packet, DividePolygon4 *work, uint32_t depth, DivideLevel *level)
 {
-    DivideVertex **r = level->corner;
+    DivideVertex *G32 *r = level->corner;
     int32_t near_limit = (int32_t)Memories_GteReadControl(26) >> 1;
     int32_t centre_x = (int32_t)Memories_GteReadControl(24) >> 16, centre_y = (int32_t)Memories_GteReadControl(25) >> 16;
     int32_t half_w = (int32_t)(work->pih >> 1), half_h = (int32_t)(work->piv >> 1);
@@ -728,7 +729,7 @@ uint32_t *DivideFT4(ShortVector *v0, ShortVector *v1, ShortVector *v2, ShortVect
 {
     const ShortVector *corners[4] = {v0, v1, v2, v3};
     const uint32_t *texture[4] = {uv0, uv1, uv2, uv3};
-    long sxy[4], p, otz, flag;
+    PSXLONG sxy[4], p, otz, flag;
     int i;
     for (i = 0; i < 4; i++) {
         work->level[0].corner[i] = &work->r[i];

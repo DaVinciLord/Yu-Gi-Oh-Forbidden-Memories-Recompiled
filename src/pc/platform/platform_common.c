@@ -29,7 +29,11 @@
 #include "win32.h"
 #else
 #include <sys/syscall.h>
+#ifdef __APPLE__
+#include <sys/ucontext.h>
+#else
 #include <ucontext.h>
+#endif
 #endif
 
 static volatile unsigned vblank_count;
@@ -191,7 +195,11 @@ static void on_alarm(int number, siginfo_t *info, void *context)
     ucontext_t *user = context;
     (void)number;
     (void)info;
+    #if defined(__APPLE__) && defined(__aarch64__)
+    on_tick((uintptr_t)user->uc_mcontext->__ss.__pc, context);
+#else
     on_tick((uintptr_t)user->uc_mcontext.gregs[REG_EIP], context);
+#endif
 }
 #endif
 
@@ -205,9 +213,11 @@ int Platform_StartTimers(void (*tick)(uint64_t, uint64_t), void (*vblank)(void))
 {
 #ifndef _WIN32
     struct sigaction action;
+ #ifndef __APPLE__
     struct sigevent event;
     struct itimerspec spec;
     timer_t timer;
+ #endif
 #endif
     tick_handler = tick;
     vblank_handler = vblank;
@@ -243,6 +253,7 @@ int Platform_StartTimers(void (*tick)(uint64_t, uint64_t), void (*vblank)(void))
     if (sigaction(SIGALRM, &action, NULL)) {
         return -1;
     }
+ #ifndef __APPLE__
     memset(&event, 0, sizeof(event));
     event.sigev_notify = SIGEV_THREAD_ID;
     event.sigev_signo = SIGALRM;
@@ -252,6 +263,7 @@ int Platform_StartTimers(void (*tick)(uint64_t, uint64_t), void (*vblank)(void))
     if (timer_create(CLOCK_MONOTONIC, &event, &timer) == 0 && timer_settime(timer, 0, &spec, NULL) == 0) {
         return 0;
     }
+ #endif
     {
         struct itimerval fallback;
         fallback.it_interval.tv_sec = fallback.it_value.tv_sec = 0;

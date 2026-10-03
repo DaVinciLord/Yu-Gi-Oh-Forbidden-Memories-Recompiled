@@ -5,6 +5,9 @@
 #ifdef _WIN32
 #include "pc/platform/win32.h"
 #endif
+#ifdef __APPLE__
+#include "pc/platform/darwin_image.h"
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -64,12 +67,23 @@ static void write_profile(void)
 
 void Profile_Init(void)
 {
+ #ifndef __APPLE__
     extern char __start_game_text[], __stop_game_text[];
 #ifndef _WIN32
     extern char __executable_start[], etext[];
 #endif
+ #endif
     output_path = getenv("MEMORIES_PROFILE");
     if (!output_path || !*output_path) return;
+ #ifdef __APPLE__
+    /* Translated game and SDK code currently share Mach-O __text. Sample
+     * that real range once; no separate game section exists in this build. */
+    if (!DarwinImage_TextRange(&ranges[0].first, &ranges[0].last)) {
+        fprintf(stderr, "memories-pc: cannot find Mach-O executable text for profiling\n");
+        return;
+    }
+    ranges[1].first = ranges[1].last = 0;
+ #else
     ranges[0].first = (uintptr_t)__start_game_text;
     ranges[0].last = (uintptr_t)__stop_game_text;
 #ifdef _WIN32
@@ -78,11 +92,12 @@ void Profile_Init(void)
     ranges[1].first = (uintptr_t)__executable_start;
     ranges[1].last = (uintptr_t)etext;
 #endif
+ #endif
     ranges[0].count = (ranges[0].last - ranges[0].first + 15) / 16;
     ranges[1].count = (ranges[1].last - ranges[1].first + 15) / 16;
     ranges[0].samples = calloc(ranges[0].count, sizeof(uint32_t));
-    ranges[1].samples = calloc(ranges[1].count, sizeof(uint32_t));
-    if (!ranges[0].samples || !ranges[1].samples) {
+    ranges[1].samples = ranges[1].count ? calloc(ranges[1].count, sizeof(uint32_t)) : NULL;
+    if (!ranges[0].samples || (ranges[1].count && !ranges[1].samples)) {
         free(ranges[0].samples);
         free(ranges[1].samples);
         ranges[0].samples = ranges[1].samples = NULL;

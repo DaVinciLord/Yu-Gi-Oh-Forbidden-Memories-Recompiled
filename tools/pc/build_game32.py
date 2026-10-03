@@ -112,6 +112,10 @@ BACKEND_SOURCES = sorted(sum(BACKENDS.values(), []))
 NATIVE = sorted(glob.glob("src/pc/guest/*.[cS]") + glob.glob("src/pc/sdk/*.c") +
                 [f for f in glob.glob("src/pc/platform/*.c") if f not in BACKEND_SOURCES] + glob.glob("src/pc/overlays/*.c") + glob.glob("src/pc/overrides/*.c") + glob.glob("src/pc/audio/*.c") + glob.glob("src/pc/mods/*.c") + glob.glob("src/pc/debug/*.c") + glob.glob("src/pc/cards/*.c") + glob.glob("src/pc/free_duel/*.c") + glob.glob("src/pc/saves/*.c") + glob.glob("src/pc/text/*.c") + ["src/pc/render/soft_gpu.c", "src/pc/render/texture_dump.c", "src/pc/render/texture_pack.c"]) + [
     "src/pc/rng.c", "src/pc/compat/fs.c", "src/pc/compat/gte.c", "src/pc/compat/pgxp.c", "src/pc/compat/libgs_ot.c", "src/pc/render/packets.c"]
+# Experimental arm64 translation helpers belong to their own build driver.
+# Keep the existing i386 source inventory and context backend unchanged.
+NATIVE = [source for source in NATIVE if not (
+    source.startswith("src/pc/guest/translated") or source == "src/pc/guest/state_translated.c")]
 # Same contract as the host C library, so the host's version is used directly.
 # Runtime-loaded modules linked into the executable: name, sources, identifier
 # word at the start of the image, and load bank. main_menu has its load address
