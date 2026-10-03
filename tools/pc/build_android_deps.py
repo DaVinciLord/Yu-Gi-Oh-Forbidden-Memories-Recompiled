@@ -25,15 +25,23 @@ OUT = os.path.join(ROOT, "tmp", "pc", "android-deps")
 # What the port needs from later ones has a fallback in
 # src/pc/compat/android.h.
 API = 24
-# ABI -> clang target triple (without the API level).
-TRIPLES = {"x86": "i686-linux-android", "armeabi-v7a": "armv7a-linux-androideabi"}
+# ABI -> clang target triple (without the API level). arm64-v8a also needs
+# clang 21 or later (x64 gate: clang 12 miscompiles __ptr32 silently); NDK
+# r29's is 21.
+TRIPLES = {"x86": "i686-linux-android", "armeabi-v7a": "armv7a-linux-androideabi", "arm64-v8a": "aarch64-linux-android"}
 # The ABIs the game builds for, with their own compiler flags: the indirect
 # branch thunks (src/pc/guest/branch_thunks.c) and the rest. x86 reuses every
 # i386 piece of the desktop port.
-READY = {"x86": {"thunks": ["-mretpoline-external-thunk"], "flags": ["-fsigned-char"]}}
+READY = {"x86": {"thunks": ["-mretpoline-external-thunk"], "flags": ["-fsigned-char"]},
+         # arm64-v8a: G32 (src/port_ptr.h) with clang's __ptr32, as the 64-bit
+         # Windows build (build_game32.py adds its flags: WIDE), and clang's
+         # -mharden-sls=blr thunks as the indirect-branch thunks, with no
+         # indirect tail calls or jump tables, which those would miss
+         # (src/pc/guest/branch_thunks.c).
+         "arm64-v8a": {"thunks": ["-mharden-sls=blr", "-fno-optimize-sibling-calls", "-fno-jump-tables"],
+                       "flags": ["-fsigned-char"]}}
 # What an ABI still needs before it builds (notes/pc-build.md, "Android").
-NOT_READY = {"armeabi-v7a": "not yet: needs the ARM branch thunks (-mharden-sls=blr), the ARM fault handler, "
-                            "setjmp and the stack switch in ARM assembly (milestone M2)"}
+NOT_READY = {"armeabi-v7a": "not supported: the Android app is arm64-v8a (32-bit ARM was dropped)"}
 
 
 def ndk():
@@ -62,7 +70,9 @@ def cmake(abi, name, source, *options):
                     "-DCMAKE_TOOLCHAIN_FILE=" + os.path.join(ndk(), "build", "cmake", "android.toolchain.cmake"),
                     f"-DANDROID_ABI={abi}", f"-DANDROID_PLATFORM=android-{API}", "-DANDROID_ARM_MODE=arm",
                     f"-DCMAKE_INSTALL_PREFIX={prefix}", f"-DCMAKE_PREFIX_PATH={prefix}",
-                    f"-DCMAKE_FIND_ROOT_PATH={prefix}", "-DCMAKE_POLICY_VERSION_MINIMUM=3.5", *options], check=True)
+                    f"-DCMAKE_FIND_ROOT_PATH={prefix}", "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",
+                    # the ninja Python finds: a shared tmp/ may hold another system's
+                    "-DCMAKE_MAKE_PROGRAM=" + shutil.which("ninja"), *options], check=True)
     subprocess.run(["cmake", "--build", build, "--target", "install"], check=True)
 
 
