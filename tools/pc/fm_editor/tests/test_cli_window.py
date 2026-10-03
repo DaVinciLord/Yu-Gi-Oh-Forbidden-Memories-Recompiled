@@ -125,6 +125,7 @@ class BuildTest(unittest.TestCase):
         self.assertIn("PySide6 is not installed", said.getvalue())
         self.assertIn("pip install PySide6", said.getvalue())
 
+    @unittest.skipUnless(HAS_TK, "tkinter is not installed")
     def test_a_broken_qt_falls_back_rather_than_aborting(self):
         """Qt wants system libraries of its own; without one it raises
         something that is not an ImportError, and a player should still get
@@ -142,6 +143,24 @@ class BuildTest(unittest.TestCase):
             self.assertEqual(cli.main([]), 0)
         self.assertEqual(which.get("w"), "tk")
         self.assertIn("libxcb-cursor0", said.getvalue())
+
+    def test_with_no_window_at_all_it_says_so(self):
+        """A runner with neither PySide6 nor tkinter: a line about both, not
+        an import traceback."""
+        said = io.StringIO()
+        real = builtins.__import__
+
+        def absent(name, *args, **rest):
+            if name.startswith("PySide6") or name == "tkinter" or "pyside_app" in name:
+                raise ModuleNotFoundError(f"No module named {name!r}")
+            return real(name, *args, **rest)
+
+        with mock.patch.object(builtins, "__import__", absent), \
+             mock.patch("sys.stderr", said):
+            self.assertEqual(cli.main([]), 1)
+        self.assertIn("No editor window can open", said.getvalue())
+        self.assertIn("tkinter", said.getvalue())
+        self.assertNotIn("Traceback", said.getvalue())
 
     def test_without_qt_is_how_to_ask_for_the_old_window_alone(self):
         from fm_editor import build_exe

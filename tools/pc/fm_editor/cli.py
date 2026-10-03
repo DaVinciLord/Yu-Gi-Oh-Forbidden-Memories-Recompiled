@@ -125,7 +125,7 @@ def say_no_qt(problem):
     print(f"The Qt window could not start ({problem}); opening the old one instead.\n"
           f"    python -m pip install PySide6\n"
           f"installs what it needs; on Linux Qt also wants its own system\n"
-          f"libraries (libxcb-cursor0 among them). --classic keeps this window.",
+          f"libraries (libxcb-cursor0 among them).",
           file=sys.stderr)
 
 
@@ -144,5 +144,18 @@ def command_window(arguments) -> int:
             say_no_qt(problem)
         else:
             return window(arguments.game, arguments.mod)
-    from .app import main as window
-    return window(arguments.game, arguments.mod)
+    try:
+        # The import and the call both reach for tkinter (app.py takes it at
+        # the top, and its main() pulls in importers, which takes it too), so
+        # opening the window is inside the guard, not only finding it.
+        from .app import main as window
+        return window(arguments.game, arguments.mod)
+    except ImportError as problem:
+        # Neither window is to be had: say which pieces are missing rather
+        # than end on an import traceback. A runner without tkinter, or a
+        # Linux box with neither Qt's libraries nor python3-tk, lands here.
+        print(f"No editor window can open ({problem}).\n"
+              f"    python -m pip install PySide6\n"
+              f"gives the Qt one; the old one needs Python's tkinter, which\n"
+              f"some systems package separately (python3-tk).", file=sys.stderr)
+        return 1
