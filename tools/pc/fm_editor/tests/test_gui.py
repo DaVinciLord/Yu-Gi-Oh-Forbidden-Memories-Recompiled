@@ -357,6 +357,10 @@ class GuiTest(unittest.TestCase):
         app = self.app
         app.deiconify()
         app.geometry("1600x960")
+        app.update()
+        # Windows keeps a window within wm maxsize (the screen: 1024x768 on
+        # CI), so check "no scrollbars" only where the window got the size.
+        roomy = app.winfo_width() >= 1600 and app.winfo_height() >= 960
         cards = app.cards
         cards.tree.selection_set("1")
         cards.select()
@@ -367,7 +371,8 @@ class GuiTest(unittest.TestCase):
         self.assertGreaterEqual(scroll.canvas.winfo_width(), scroll.body.winfo_reqwidth())
         hint = cards.hints["name"]
         self.assertGreaterEqual(hint.winfo_width(), hint.winfo_reqwidth())
-        self.assertFalse(cards.page.xbar.winfo_ismapped() or cards.page.ybar.winfo_ismapped())
+        if roomy:
+            self.assertFalse(cards.page.xbar.winfo_ismapped() or cards.page.ybar.winfo_ismapped())
         # A window smaller than a tab scrolls the tab instead of cutting it off.
         app.notebook.select(app.stars)
         self.assertIs(app.notebook.current(), app.stars)
@@ -382,7 +387,8 @@ class GuiTest(unittest.TestCase):
         self.assertGreater(page.canvas.yview()[0], 0)
         app.geometry("1600x960")
         app.update()
-        self.assertFalse(page.xbar.winfo_ismapped() or page.ybar.winfo_ismapped())
+        if roomy:
+            self.assertFalse(page.xbar.winfo_ismapped() or page.ybar.winfo_ismapped())
         self.assertEqual(page.canvas.cget("background"), ttk.Style(app).lookup("TFrame", "background"))
 
     def test_scrolled_options_keep_text_scroll_and_dark_background(self):
