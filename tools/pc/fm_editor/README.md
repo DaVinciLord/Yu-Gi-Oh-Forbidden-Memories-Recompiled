@@ -18,6 +18,18 @@ again. It writes mod folders only: never the disc, never `game/`.
 
     python tools/pc/fm_editor [--game <folder or .bin>] [--mod <mod folder>]
 
+The Cards tab's right-hand options and the Limits tab scroll vertically:
+use the scrollbar or mouse wheel when the window is too short. Tabbing to
+a field brings it into view; text boxes keep their own scrolling.
+
+**Starchips**, below **Password** in Cards, edits an original card's price
+on the Password screen (0–999999; **0 is free**). The field shows the price
+after this mod's `passwords` rules, with the disc's price beside it. Leave
+it empty to remove the card's price override and use the mod's `all` rule,
+or the disc's price if there is none. **Apply**, then **File > Save**.
+Unedited percentage prices stay as percentages. Added cards have this
+field disabled: the `passwords` price table supports the original 722.
+
 The window has a tab per table:
 
 | Tab | What you edit |
@@ -225,7 +237,9 @@ record are shown as retail fusions and marked.
   game reads them, and `[none, X]` stays as written.
 * `passwords`: a retail card whose password changed gets `{"password": "…"}`
   (`""` for none) under its name, merged into the mod's own entries, whose
-  `starchips`, `all` and `"card number"` stay as written. A password is up to
+  `all` and `"card number"` stay as written. Editing **Starchips** writes
+  `"starchips": n` in the card's entry, replacing its previous absolute or
+  percentage price; other cards' prices stay as written. A password is up to
   8 digits, and no other card's: the Conflicts tab says when two cards share
   one, since the Password screen then gives the lower card number.
 * `fusions`: one rule per pair whose result changed (`"result": null` for a

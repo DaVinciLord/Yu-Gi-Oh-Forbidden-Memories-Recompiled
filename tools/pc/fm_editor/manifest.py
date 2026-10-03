@@ -383,6 +383,23 @@ def build_passwords(project: Project):
         if not isinstance(table.get(key), dict):
             table[key] = {}
         table[key]["password"] = project.passwords[cid]
+    for cid, price in project.starchips.items():
+        # Remove every alias's old price, so an earlier name/number cannot
+        # override the edit. Preserve passwords and unrelated entry fields.
+        key = project.password_keys.get(cid) or str(project.ref(cid))
+        for name, entry in list(table.items()):
+            if same_all(name) or project.resolve(name) != cid:
+                continue
+            if isinstance(entry, dict):
+                key = name
+                entry.pop("starchips", None)
+                entry.pop("starchips_percent", None)
+                if not entry:
+                    del table[name]
+        if price is not None:
+            if not isinstance(table.get(key), dict):
+                table[key] = {}
+            table[key]["starchips"] = price
     return table or None
 
 

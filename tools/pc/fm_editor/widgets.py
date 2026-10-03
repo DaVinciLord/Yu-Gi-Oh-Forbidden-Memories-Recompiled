@@ -38,6 +38,97 @@ def ui_font(size: int, weight: str = "bold"):
     return ("TkDefaultFont", size, weight)
 
 
+class ScrolledForm(ttk.Frame):
+    """A form with a vertical scrollbar, wheel support and focus visibility.
+
+    Put controls in body. A private binding tag handles the wheel before
+    Spinbox/Combobox bindings can change values. Text boxes and lists keep
+    their own scrolling while they have more content in that direction.
+    """
+
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, **kwargs)
+        self.canvas = tk.Canvas(self, width=1, height=1, highlightthickness=0,
+                                yscrollincrement=1)
+        self.bar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=self.bar.set)
+        self.bar.pack(side="right", fill="y")
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.body = ttk.Frame(self.canvas)
+        self.window = self.canvas.create_window(0, 0, window=self.body, anchor="nw")
+        self.body.bind("<Configure>", self._layout)
+        self.canvas.bind("<Configure>", self._layout)
+        self.bind("<<ThemeChanged>>", self._theme)
+        self._theme()
+        self._tag = f"ScrolledForm:{self}"
+        self._bindings = [(sequence, self.bind_class(self._tag, sequence, self._wheel))
+                          for sequence in ("<MouseWheel>", "<Button-4>", "<Button-5>")]
+        self._top = self.winfo_toplevel()
+        self._map_binding = self._top.bind("<Map>", self._mapped, add=True)
+        self._focus_binding = self._top.bind("<FocusIn>", self._focus, add=True)
+        self.bind("<Destroy>", self._destroyed, add=True)
+
+    def _contains(self, widget):
+        while widget is not None:
+            if widget is self.body or widget is self.canvas:
+                return True
+            widget = getattr(widget, "master", None)
+        return False
+
+    def _mapped(self, event):
+        if self._contains(event.widget) and self._tag not in event.widget.bindtags():
+            event.widget.bindtags((self._tag,) + event.widget.bindtags())
+
+    def _theme(self, event=None):
+        self.canvas.configure(background=ttk.Style(self).lookup("TFrame", "background"))
+
+    def _layout(self, event=None):
+        width = self.body.winfo_reqwidth()
+        if int(self.canvas.cget("width")) != width:
+            self.canvas.configure(width=width)
+        self.canvas.itemconfigure(self.window, width=max(width, self.canvas.winfo_width()))
+        self.canvas.configure(scrollregion=(0, 0, width, self.body.winfo_reqheight()))
+
+    def _wheel(self, event):
+        if getattr(event, "num", None) in (4, 5):
+            units = -3 if event.num == 4 else 3
+        else:
+            delta = event.delta
+            if not delta:
+                return
+            units = -int(delta) if sys.platform == "darwin" else -int(delta / 120)
+            if not units:
+                units = -1 if delta > 0 else 1
+        widget = event.widget
+        if isinstance(widget, (tk.Text, tk.Listbox, ttk.Treeview)):
+            first, last = widget.yview()
+            if (units < 0 and first > 0) or (units > 0 and last < 1):
+                return  # its class binding scrolls its contents
+        if self.body.winfo_reqheight() > self.canvas.winfo_height():
+            self.canvas.yview_scroll(units * px(self, 20), "units")
+            return "break"
+
+    def _focus(self, event):
+        widget = event.widget
+        if not self._contains(widget) or not widget.winfo_ismapped():
+            return
+        top = widget.winfo_rooty() - self.body.winfo_rooty()
+        bottom = top + widget.winfo_height()
+        first = self.canvas.canvasy(0)
+        height = self.canvas.winfo_height()
+        target = top if top < first else bottom - height if bottom > first + height else first
+        if target != first:
+            self.canvas.yview_moveto(max(0, target) / max(1, self.body.winfo_reqheight()))
+
+    def _destroyed(self, event):
+        if event.widget is self:
+            self._top.unbind("<Map>", self._map_binding)
+            self._top.unbind("<FocusIn>", self._focus_binding)
+            for sequence, command in self._bindings:
+                self.unbind_class(self._tag, sequence)
+                self._root().deletecommand(command)
+
+
 def scrolled_tree(parent, columns, widths, height=20, selectmode="browse"):
     """A Treeview with a vertical scrollbar, in a frame of its own."""
     frame = ttk.Frame(parent)

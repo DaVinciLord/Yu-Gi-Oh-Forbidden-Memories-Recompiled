@@ -180,6 +180,10 @@ class Project:
         # "passwords" named a disc card, so the entry is written back there.
         self.passwords = {}
         self.password_keys = {}
+        # Price edits overlay the original "passwords" rules. None removes
+        # the card's price rule, returning it to "all" or the disc's price.
+        # Keep unedited percentage rules and unusual entries as written.
+        self.starchips = {}
         # card id -> the card's "notes": the modder's own text, which the game
         # plays by none of; a code mod may read <tag: value> from it (API 7).
         self.notes = {}
@@ -214,6 +218,53 @@ class Project:
 
     def password_changed(self, cid: int) -> bool:
         return cid in self.passwords
+
+    def starchip_rule(self, cid: int, *, own_only=False):
+        """The last applicable price rule, in the game's all-then-card order."""
+        table = self.other.get("passwords", {})
+        rule = None
+        if isinstance(table, dict):
+            for own in (False, True):
+                if not own and own_only:
+                    continue
+                for key, entry in table.items():
+                    if not isinstance(entry, dict):
+                        continue
+                    if own:
+                        if cid in self.starchips or same_letters(key, "all") or self.resolve(key) != cid:
+                            continue
+                    elif not same_letters(key, "all"):
+                        continue
+                    field = "starchips" if "starchips" in entry else "starchips_percent"
+                    value = entry.get(field)
+                    limit = 999999 if field == "starchips" else 1000
+                    if type(value) is int and 0 <= value <= limit:
+                        rule = (field, value)
+        if self.starchips.get(cid) is not None:
+            rule = ("starchips", self.starchips[cid])
+        return rule
+
+    def starchip_cost(self, cid: int):
+        """Shop price on the supplied disc, after this mod's price rules."""
+        if cid not in self.retail.cards:
+            return None
+        retail = self.retail.starchips.get(cid)
+        rule = self.starchip_rule(cid)
+        if rule is None:
+            return retail
+        field, value = rule
+        if field == "starchips":
+            return value
+        if retail is None:
+            return None
+        return min(999999, max(1 if retail and value else 0, (retail * value + 50) // 100))
+
+    def set_starchips(self, cid: int, value):
+        if cid not in self.retail.cards:
+            raise ValueError("only original cards have a Password shop price")
+        if value is not None and (type(value) is not int or not 0 <= value <= 999999):
+            raise ValueError("Starchips is a whole number from 0 to 999999, or empty for the default")
+        self.starchips[cid] = value
 
     def identity(self, cid: int) -> str:
         return f"{self.info.id}:{self.added[cid].key}:1"
@@ -315,12 +366,14 @@ class Project:
             self.card_extra.pop(cid, None)
             self._own_pairs = None
             self.passwords.pop(cid, None)
+            if self.starchip_rule(cid, own_only=True) is not None:
+                self.set_starchips(cid, None)
 
     def card_changed(self, cid: int) -> bool:
         if cid in self.added:
             return True
         return (not self.cards[cid].same(self.retail.cards[cid]) or bool(self.card_extra.get(cid))
-                or self.password_changed(cid))
+                or self.password_changed(cid) or self.starchip_rule(cid, own_only=True) is not None)
 
     # --- tables ------------------------------------------------------------
 

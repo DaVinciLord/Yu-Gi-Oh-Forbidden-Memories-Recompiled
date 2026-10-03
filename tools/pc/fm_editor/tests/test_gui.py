@@ -136,6 +136,127 @@ class GuiTest(unittest.TestCase):
         app.art.revert("art")
         self.assertEqual(art.changed_cards(app.project), set())
 
+    def test_card_starchips_save_load_and_validation(self):
+        from fm_editor import manifest
+        app = self.app
+        cards = app.cards
+        cards.tree.selection_set("1")
+        cards.select()
+        self.assertEqual(cards.vars["starchips"].get(), "10")
+        for invalid in ("-1", "1000000", "1.5", "abc"):
+            cards.vars["starchips"].set(invalid)
+            self.assertFalse(cards.apply())
+            self.assertEqual(app.project.starchip_cost(1), 10)
+        cards.vars["starchips"].set("0")
+        self.assertTrue(cards.apply())
+        cards.filter.set("Changed")
+        self.assertEqual(cards.tree.get_children(), ("1",))
+        out = Path(self.tmp.name) / "saved-starchips"
+        app.project.source_dir = out
+        self.assertTrue(app.save())
+        data = json.loads((out / "mod.json").read_text(encoding="utf-8"))
+        self.assertEqual(data["passwords"], {"Blue Dragon": {"starchips": 0}})
+        app.load_mod(out)
+        cards.tree.selection_set("1")
+        cards.select()
+        self.assertEqual(cards.vars["starchips"].get(), "0")
+        cards.vars["starchips"].set("")
+        self.assertTrue(cards.apply())
+        self.assertEqual(cards.vars["starchips"].get(), "10")
+        self.assertNotIn("passwords", manifest.build(app.project))
+        cards.filter.set("All cards")
+        cards.tree.selection_set("1")
+        cards.select()
+        cards.add_card()
+        app.update()
+        self.assertTrue(cards.price.instate(["disabled"]))
+        self.assertEqual(cards.vars["starchips"].get(), "")
+
+    def test_card_cost_does_not_flatten_percentage_rules(self):
+        from fm_editor import manifest
+        app = self.app
+        cards = app.cards
+        cards.tree.selection_set("1")
+        cards.select()
+        # Editing the raw rules in Mod info must not let an unchanged Cards
+        # form write its old displayed price back over those rules on Save.
+        app.info.other.insert("1.0", json.dumps({"passwords": {"all": {"starchips_percent": 25}}}))
+        self.assertTrue(app.commit_all())
+        self.assertTrue(app.commit_all())
+        self.assertEqual(cards.vars["starchips"].get(), "3")
+        self.assertEqual(manifest.build(app.project)["passwords"], {"all": {"starchips_percent": 25}})
+        cards.vars["starchips"].set("200")
+        self.assertTrue(cards.apply())
+        self.assertTrue(app.commit_all())
+        self.assertEqual(manifest.build(app.project)["passwords"]["Blue Dragon"], {"starchips": 200})
+
+    def test_card_form_scrolls_and_reveals_keyboard_focus(self):
+        app = self.app
+        app.deiconify()
+        app.geometry("1100x640")
+        cards = app.cards
+        cards.tree.selection_set("1")
+        cards.select()
+        app.update()
+        scroll = cards.card_scroll
+        self.assertGreater(scroll.body.winfo_reqheight(), scroll.canvas.winfo_height())
+        self.assertTrue(scroll.bar.winfo_ismapped())
+        self.assertGreater(scroll.canvas.winfo_width(), 200)
+        self.assertTrue(app.status.winfo_ismapped())
+        add = next(w for w in cards.count.master.winfo_children() if w.winfo_class() == "TButton")
+        self.assertTrue(add.winfo_ismapped())
+        # Wheel over an entry scrolls the form, leaving its value untouched.
+        before = cards.vars["starchips"].get()
+        cards.price.event_generate("<MouseWheel>", delta=-120)
+        app.update()
+        self.assertGreater(scroll.canvas.yview()[0], 0)
+        self.assertEqual(cards.vars["starchips"].get(), before)
+        cards.price.event_generate("<Button-4>")
+        app.update()
+        scroll.canvas.yview_moveto(0)
+        buttons = [w for w in cards.form.winfo_children() if w.winfo_class() == "TFrame"]
+        apply = next(w for box in buttons for w in box.winfo_children() if w.cget("text") == "Apply")
+        apply.focus_force()
+        app.update()
+        self.assertGreater(scroll.canvas.yview()[0], 0)
+        self.assertGreaterEqual(apply.winfo_rooty(), scroll.canvas.winfo_rooty())
+        self.assertLessEqual(apply.winfo_rooty() + apply.winfo_height(),
+                             scroll.canvas.winfo_rooty() + scroll.canvas.winfo_height())
+        cards.price.focus_force()
+        app.update()
+        # At a taller window, the scroll range contracts again.
+        app.geometry("1100x1000")
+        app.update()
+        self.assertEqual(scroll.canvas.yview(), (0.0, 1.0))
+
+    def test_scrolled_options_keep_text_scroll_and_dark_background(self):
+        from tkinter import ttk
+        app = self.app
+        app.deiconify()
+        app.geometry("1100x640")
+        cards = app.cards
+        cards.tree.selection_set("1")
+        cards.select()
+        app.update()
+        cards.text.delete("1.0", "end")
+        cards.text.insert("1.0", "line\n" * 40)
+        cards.text.yview_moveto(0)
+        before = cards.card_scroll.canvas.yview()
+        cards.text.event_generate("<Button-5>")
+        app.update()
+        self.assertGreater(cards.text.yview()[0], 0)
+        self.assertEqual(cards.card_scroll.canvas.yview(), before)
+        app.dark.set(True)
+        app.toggle_dark()
+        app.update()
+        self.assertEqual(cards.card_scroll.canvas.cget("background"), ttk.Style(app).lookup("TFrame", "background"))
+        app.notebook.select(app.limits)
+        app.limits.advanced_shown.set(True)
+        app.limits._show_advanced()
+        app.update()
+        app.limits.scroll.canvas.yview_moveto(1)
+        self.assertGreater(app.limits.scroll.canvas.yview()[0], 0)
+
     def test_packs(self):
         from fm_editor import pngio
         from fm_editor.packs_tab import SimulateDialog

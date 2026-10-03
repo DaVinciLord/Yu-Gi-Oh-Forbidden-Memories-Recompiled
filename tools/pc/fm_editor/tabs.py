@@ -14,7 +14,7 @@ from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIM
 from . import fixed_decks
 from .fixed_deck_view import FixedDeckView
 from .model import KEY_RE, StarterDeck
-from .widgets import CardField, FormDialog, card_matches, card_named, grab, pick_card, px, scrolled_tree, show_text, ui_font
+from .widgets import CardField, FormDialog, ScrolledForm, card_matches, card_named, grab, pick_card, px, scrolled_tree, show_text, ui_font
 
 ATTRIBUTE_CHOICES = ATTRIBUTE_NAMES + ["6 (magic)", "7 (trap)"]
 STAR_CHOICES = ["(none)"] + STAR_NAMES[1:]
@@ -78,8 +78,11 @@ class CardsTab(Tab):
     def __init__(self, notebook, app):
         super().__init__(notebook, app, "Cards")
         self.current = None
+        self._shown_price = ""
+        self.rowconfigure(0, weight=1)
+        self.columnconfigure(0, weight=1)
         left = ttk.Frame(self)
-        left.pack(side="left", fill="both", expand=True)
+        left.grid(row=0, column=0, sticky="nsew")
         top = ttk.Frame(left)
         top.pack(fill="x")
         ttk.Label(top, text="Search").pack(side="left")
@@ -94,16 +97,18 @@ class CardsTab(Tab):
         frame.pack(fill="both", expand=True, pady=4)
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.select())
         bottom = ttk.Frame(left)
-        bottom.pack(fill="x")
+        bottom.pack(side="bottom", fill="x", before=frame)
         ttk.Button(bottom, text="Add a card (copy of the selected one)", command=self.add_card).pack(side="left")
         self.count = ttk.Label(bottom)
         self.count.pack(side="right")
 
-        form = ttk.LabelFrame(self, text="Card", padding=8)
-        form.pack(side="left", fill="y", padx=(8, 0))
+        self.card_scroll = ScrolledForm(self)
+        self.card_scroll.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
+        form = ttk.LabelFrame(self.card_scroll.body, text="Card", padding=8)
+        form.pack(fill="both", expand=True)
         self.form = form
         self.vars = {k: tk.StringVar() for k in ("name", "attack", "defense", "type", "attribute", "level",
-                                                  "star1", "star2", "password", "key", "frame")}
+                                                  "star1", "star2", "password", "starchips", "key", "frame")}
         row = 0
 
         def line(label, widget, hint=None):
@@ -139,6 +144,10 @@ class CardsTab(Tab):
         line("Guardian star 1", self.star_boxes[0], hint("star1"))
         line("Guardian star 2", self.star_boxes[1], hint("star2"))
         line("Password", ttk.Entry(form, textvariable=self.vars["password"], width=12), hint("password"))
+        self.price = line("Starchips", ttk.Entry(form, textvariable=self.vars["starchips"], width=12), hint("starchips"))
+        ttk.Label(form, text="0 = free; empty = default price", style="Hint.TLabel").grid(
+            row=row, column=1, columnspan=2, sticky="w")
+        row += 1
         ttk.Label(form, text="Card text").grid(row=row, column=0, sticky="nw", pady=2)
         # 21 columns: the game's 20 letters a line and room for the cursor.
         self.text = tk.Text(form, width=21, height=9, wrap="word", font=("Consolas", 10))
@@ -317,6 +326,13 @@ class CardsTab(Tab):
         self.vars["star2"].set(star_label(card.star2, self.project))
         self.vars["frame"].set(frame_label(card.frame))
         self.vars["password"].set(self.project.password(cid))
+        price = self.project.starchip_cost(cid)
+        self._shown_price = "" if price is None else str(price)
+        self.vars["starchips"].set(self._shown_price)
+        self.price.configure(state="normal" if cid in self.project.retail.cards else "disabled")
+        self.hints["starchips"].configure(text=(
+            f"Retail: {self.project.retail.starchips.get(cid, 'unknown')}" if cid in self.project.retail.cards
+            else "Original cards only"))
         self.text.insert("1.0", card.description)
         self.notes.insert("1.0", self.project.notes.get(cid, ""))
         self.notes.edit_reset()
@@ -400,6 +416,17 @@ class CardsTab(Tab):
             self.status.configure(text="a password is up to 8 digits, or empty for none")
             return False
         password = password.zfill(8) if password else ""
+        price_text = self.vars["starchips"].get().strip()
+        price = None
+        if cid in self.project.retail.cards and price_text:
+            if not price_text.isascii() or not price_text.isdigit() or len(price_text) > 6:
+                self.status.configure(text="Starchips is a whole number from 0 to 999999, or empty for the default")
+                return False
+            price = int(price_text)
+        price_changed = cid in self.project.retail.cards and price_text != self._shown_price
+        if price_changed and not isinstance(self.project.other.get("passwords", {}), dict):
+            self.status.configure(text='The mod\'s "passwords" must be an object before editing Starchips')
+            return False
         changed = not card.same(self.project.cards[cid])
         if cid in self.project.added:
             added = self.project.added[cid]
@@ -422,6 +449,12 @@ class CardsTab(Tab):
             self.project.set_password(cid, password)
             self.vars["password"].set(password)
             changed = True
+        if price_changed:
+            self.project.set_starchips(cid, price)
+            changed = True
+        cost = self.project.starchip_cost(cid)
+        self._shown_price = "" if cost is None else str(cost)
+        self.vars["starchips"].set(self._shown_price)
         if changed:
             self.project.cards[cid] = card
             self.app.changed()
