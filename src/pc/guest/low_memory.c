@@ -92,11 +92,21 @@ void *Memories_LowAlloc(size_t size)
     return NULL;
 }
 
-/* A free the allocator cannot take: reported once, the region left as it is. */
+/* A free the allocator cannot take, the region left as it is: each
+ * different one is reported (the same pointer and reason again is not),
+ * up to a limit, so a second bug is not hidden behind the first. */
 static void refuse_free(const void *pointer, const char *why)
 {
+    static const void *last_pointer;
+    static const char *last_why;
     static int reported;
-    if (!reported++) fprintf(stderr, "memories-pc: Memories_LowFree(%p): %s; not freed\n", pointer, why);
+    if (pointer == last_pointer && why == last_why) return;
+    last_pointer = pointer;
+    last_why = why;
+    if (reported < 16) {
+        fprintf(stderr, "memories-pc: Memories_LowFree(%p): %s; not freed%s\n", pointer, why,
+                ++reported == 16 ? " (no more of these are reported)" : "");
+    }
 }
 
 void Memories_LowFree(void *pointer)
