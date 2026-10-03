@@ -22,6 +22,12 @@
 #define SIGNAL_CONTEXT_PC(user) ((user)->uc_mcontext.arm_pc)
 #define SIGNAL_CONTEXT_SP(user) ((user)->uc_mcontext.arm_sp)
 #define SIGNAL_CONTEXT_FP(user) ((user)->uc_mcontext.arm_fp)
+#elif defined(__aarch64__)
+/* AArch64 (Android arm64-v8a): X29 is the frame pointer; a frame record
+ * holds the caller's X29 at [fp] and the return address at [fp+8]. */
+#define SIGNAL_CONTEXT_PC(user) ((user)->uc_mcontext.pc)
+#define SIGNAL_CONTEXT_SP(user) ((user)->uc_mcontext.sp)
+#define SIGNAL_CONTEXT_FP(user) ((user)->uc_mcontext.regs[29])
 #else
 #error "signal_context.h: no register names for this architecture"
 #endif

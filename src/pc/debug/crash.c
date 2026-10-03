@@ -32,6 +32,12 @@
 #include <inttypes.h>
 #define ADDRESS "%08" PRIxPTR
 #define REGISTERS "registers: RIP=0x" ADDRESS " RSP=0x" ADDRESS " RBP=0x" ADDRESS "\n"
+#elif defined(__aarch64__)
+/* Android arm64: the program counter, stack pointer, frame pointer (x29),
+ * and the link register on a line of its own (fault_lr), whole. */
+#define ADDRESS "%08lx"
+#define REGISTERS "registers: PC=0x%016lx SP=0x%016lx FP(x29)=0x%016lx\n"
+static uintptr_t fault_lr;
 #else
 #define ADDRESS "%08lx"
 #define REGISTERS "registers: EIP=0x%08lx ESP=0x%08lx EBP=0x%08lx\n"
@@ -194,6 +200,9 @@ static void report_fatal(const char *what, unsigned long number, uintptr_t fault
     snprintf(text, sizeof(text), strcmp(what, "signal") ? "fatal %s 0x%08lx" : "fatal %s %lu", what, number);
     line("memories-pc: %s at 0x" ADDRESS " (%s)\n", (uintptr_t)text, fault, (uintptr_t)region(fault));
     line(REGISTERS, eip, esp, ebp);
+#if defined(__aarch64__)
+    line("           LR=0x%016lx\n", fault_lr, 0, 0);
+#endif
     WALK(eip, esp, ebp);
     line("frame=%lu vblank=%lu clock=%ld%%\n", Memories_PresentedFrames(), Platform_VBlankCount(),
          (uintptr_t)(long)Platform_ClockRate());
@@ -253,6 +262,9 @@ void Crash_HandleSignal(int number, siginfo_t *info, void *context)
     ucontext_t *user = context;
     struct sigaction action;
     if (reporting++) _exit(128 + number);
+#if defined(__aarch64__)
+    fault_lr = (uintptr_t)user->uc_mcontext.regs[30];
+#endif
     report_fatal("signal", (unsigned long)number, info ? (uintptr_t)info->si_addr : 0,
                  (uintptr_t)SIGNAL_CONTEXT_PC(user), (uintptr_t)SIGNAL_CONTEXT_SP(user),
                  (uintptr_t)SIGNAL_CONTEXT_FP(user));
@@ -350,6 +362,9 @@ void Crash_ReportHang(void *context_pointer)
     eip = (uintptr_t)SIGNAL_CONTEXT_PC(user);
     esp = (uintptr_t)SIGNAL_CONTEXT_SP(user);
     ebp = (uintptr_t)SIGNAL_CONTEXT_FP(user);
+#if defined(__aarch64__)
+    fault_lr = (uintptr_t)user->uc_mcontext.regs[30];
+#endif
 #endif
     report_fd = -1;
     snprintf(path, sizeof(path), "%s/hang-%ld.txt", Crash_ReportDir, (long)getpid());
@@ -358,6 +373,9 @@ void Crash_ReportHang(void *context_pointer)
         static const char message[] = "memories-pc: no VSync for 5 s\n";
         output(message, sizeof(message) - 1);
         line(REGISTERS, eip, esp, ebp);
+#if defined(__aarch64__)
+        line("           LR=0x%016lx\n", fault_lr, 0, 0);
+#endif
         WALK(eip, esp, ebp);
         line("frame=%lu vblank=%lu clock=%ld%%\n", Memories_PresentedFrames(), Platform_VBlankCount(),
              (uintptr_t)(long)Platform_ClockRate());

@@ -172,7 +172,11 @@ void Monitor_NoteSystem(void)
     strftime(started, sizeof(started), "%Y-%m-%d %H:%M:%S %z", localtime(&now));
     Monitor_Fact("build", "%s (commit %s)", build[0] ? build : "unknown", commit[0] ? commit : "unknown");
     /* The game's own width, which the os line (the system's) does not say. */
+#if defined(__aarch64__)
+    Monitor_Fact("executable", "%s", "64-bit (arm64)");
+#else
     Monitor_Fact("executable", "%s", sizeof(void *) == 8 ? "64-bit (x86-64)" : "32-bit (i386)");
+#endif
     Monitor_Fact("started", "%s", started);
     cpu_name(cpu, sizeof(cpu));
 #ifdef _WIN32
@@ -666,10 +670,21 @@ static int thread_registers(pid_t tid, uintptr_t *eip, uintptr_t *esp, uintptr_t
             /* An interrupt stop, or a signal on its way (the 1 kHz clock
              * makes that likely), which detaching hands back. */
             int inject = (status >> 16) == PTRACE_EVENT_STOP ? 0 : WSTOPSIG(status);
+#if defined(__aarch64__)
+            /* AArch64 has no PTRACE_GETREGS: the general registers are the
+             * NT_PRSTATUS register set. */
+            struct iovec vector = {&registers, sizeof(registers)};
+            int result = ptrace(PTRACE_GETREGSET, tid, (void *)(uintptr_t)1 /* NT_PRSTATUS */, &vector) ? -1 : 0;
+#else
             int result = ptrace(PTRACE_GETREGS, tid, 0, &registers) ? -1 : 0;
+#endif
             ptrace(PTRACE_DETACH, tid, 0, (void *)(uintptr_t)inject);
             if (result) return -1;
-#if defined(__arm__)
+#if defined(__aarch64__)
+            *eip = (uintptr_t)registers.pc;
+            *esp = (uintptr_t)registers.sp;
+            *ebp = (uintptr_t)registers.regs[29];
+#elif defined(__arm__)
             *eip = (uintptr_t)registers.uregs[15];
             *esp = (uintptr_t)registers.uregs[13];
             *ebp = (uintptr_t)registers.uregs[11];
