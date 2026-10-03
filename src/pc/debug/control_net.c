@@ -52,6 +52,11 @@ int ControlNet_Listen(unsigned port, unsigned *bound)
         return -1;
     }
     listener = WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, NULL, 0, WSA_FLAG_OVERLAPPED | WSA_FLAG_NO_HANDLE_INHERIT);
+    if (listener != NO_SOCKET) {
+        /* The port is this game's alone: no other program binds it too. */
+        BOOL exclusive = TRUE;
+        setsockopt(listener, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (const char *)&exclusive, sizeof(exclusive));
+    }
 #else
     int yes = 1;
     listener = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
@@ -93,6 +98,31 @@ int ControlNet_Accept(int timeout_ms)
     /* One short line each way per command: no waiting to fill a packet. */
     setsockopt(client, IPPROTO_TCP, TCP_NODELAY, (const char *)&yes, sizeof(yes));
     return 1;
+}
+
+void ControlNet_RefuseOthers(const char *reply)
+{
+    Socket other;
+    if (listener == NO_SOCKET || client == NO_SOCKET || !readable(listener, 0)) return;
+    other = accept(listener, NULL, NULL);
+    if (other == NO_SOCKET) return;
+#ifdef _WIN32
+    send(other, reply, (int)strlen(reply), 0);
+    shutdown(other, SD_SEND);
+#else
+    send(other, reply, strlen(reply), MSG_NOSIGNAL);
+    shutdown(other, SHUT_WR);
+#endif
+    close_socket(other);
+}
+
+int ControlNet_Gone(void)
+{
+    char byte;
+    if (client == NO_SOCKET) return 1;
+    if (!readable(client, 0)) return 0;
+    /* Readable with nothing to read: the client closed its end. */
+    return recv(client, &byte, 1, MSG_PEEK) <= 0;
 }
 
 long ControlNet_Receive(char *buffer, size_t size, int timeout_ms)

@@ -90,11 +90,27 @@ build with the old combination; the eight smoke cases unchanged.
   child's (checked with `netstat`: the listening PID is the game's, not the
   launched monitor's), and it works with `MEMORIES_NO_MONITOR=1`. Neither
   socket is inherited (`WSA_FLAG_NO_HANDLE_INHERIT`, `SOCK_CLOEXEC`), so a
-  restart can listen again; Linux sends with `MSG_NOSIGNAL`. The game waits
-  at its first `VSync(0)` for the first client, so a run is the client's
-  from its first frame. A client that leaves (closes without `quit`) lets
-  the game run on with its pads released; the next client stops it at the
-  next point.
+  restart can listen again; Linux sends with `MSG_NOSIGNAL`; on Windows the
+  port is the game's alone (`SO_EXCLUSIVEADDRUSE`). A restart (the language
+  change's, the credits') drops `MEMORIES_CONTROL` from the new game's
+  environment (`MEMORIES_RESTART_ENV` may set it again): no client follows.
+- **The first client:** the game waits at its first `VSync(0)` for
+  `MEMORIES_CONTROL_WAIT` seconds (10 unset; a negative number as long as it
+  takes, which `yfm_control.py` sets, its game being its own; 0 not at
+  all), so a client's run is its own from the first frame. In a window a
+  notice says so, with Play now; the clock stands paused meanwhile, which is
+  what draws the notice, and closing the window (or Esc) quits at once,
+  whatever Confirm before quitting says. The freeze watches see a heartbeat
+  and stay on: the watchdog goes off only once a client is attached. Past
+  the time the game goes on by itself, logs it, and a client may attach at
+  any later frame (checked: a stray `MEMORIES_CONTROL` headless ran on
+  after its 3 s, with no hang report, and a client attached later; a window
+  closed while waiting ended the game, with and without the question).
+- **One client:** another that connects while one is attached is answered
+  `err busy: another client is attached` and closed. A client that leaves
+  (closes without `quit`) lets the game run on with its pads released, even
+  in the middle of a `step` (its end is seen at the next frame); the next
+  client stops it at the next point.
 - **Lockstep:** while a client is attached the game runs only for a `step`.
   The watchdog is off (`Platform_ControlAttach`: the Windows stall
   reporter, the Linux interrupt watchdog and the crash monitor's freeze
@@ -135,11 +151,18 @@ build with the old combination; the eight smoke cases unchanged.
     carry the random seed (chunk `rng`, which this check found missing), a
     pack bought from a state twice, loaded in place, deals the same cards.
     A state saved during the opening movie did not resume pixel-exact.
-  - `info`: `ok frame F vblank V mode M build B` (M the raw mode byte
-    `D_8009B26C`, B the build id in hex).
+  - `info`: `ok frame F vblank V mode M build B jumps J clock C` (M the raw
+    mode byte `D_8009B26C`, B the build id in hex, J the jumps taken so far,
+    step 6, and C `virtual` or `real`, the clock running).
   - `quit`: `ok`, then the game ends as when its window is closed (exit 0).
-  - `jump TARGET [OPPONENT [DECK]]` (step 6): `ok` once taken; the game
-    goes there at its next point between two screens' frames.
+  - `jump TARGET [OPPONENT [DECK]]` (step 6): `ok` once accepted (or `err`
+    with why: an unknown screen, a duel without a duelist, a deck without a
+    card, a duel with no deck given and none in the save); the game goes
+    there at its next point between two screens' frames, and `info`'s
+    `jumps` counts it once it has.
+  - `shot` and `hash` see the game's frame (VRAM), not the window: the
+    port's overlays (the menu bar, notices, the save slot menu) are not in
+    them.
   - Errors: `err` and the reason (an unknown command, a usage, a line over
     64 KiB). The connection stays open.
 
@@ -347,6 +370,16 @@ two places.
   the wait for the idle menu and the state load.
 - **Not yet:** a jump during the credits restarts the game (Title Screen's
   rule) and is lost with the process.
+- **Checked before it is taken:** `TitleJump_RequestTo` refuses an unknown
+  screen, a duel without a duelist (0 is none), a deck that names no card
+  (parsed by `Cheats_DeckCount`, nothing written) and a duel with no deck
+  given and none in the save; the channel answers `err` with the reason. A
+  deck given replaces the save's deck, as `MEMORIES_DEBUG_DECK` does. Each
+  jump taken is counted (`TitleJump_Count`, `info`'s `jumps`), so `goto`
+  waits for its own to land even to the screen already running (it leaves
+  and comes back), and a duel after a duel gets its own opponent and deck.
+  A `jump title` while the credits' save prompt is up waits for it to close,
+  as Title Screen's request does.
 - **Also:** the new menu items run the same `TitleJump_RequestTo` as the
   channel and were checked through the channel, not clicked in a window. A
   jump asked for during the opening movie waits for its end (the movie

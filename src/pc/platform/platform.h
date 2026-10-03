@@ -128,6 +128,12 @@ void Platform_StepFrame(void);
  * the time it waited counts for nothing when it goes on. */
 void Platform_ControlAttach(int attached);
 void Platform_ControlHold(int held);
+/* Waiting for a client before one is attached (the watchdog still on):
+ * a heartbeat for the freeze watches. */
+void Platform_ControlIdle(void);
+/* The virtual clock runs (MEMORIES_DETERMINISTIC=1, or the frame-dump
+ * combination): what a recording needs to be played back. */
+int Platform_VirtualClock(void);
 /* End the game at the next VSync, as closing the window does (no prompt). */
 void Platform_RequestQuit(void);
 void Platform_SetPresentCap(int fps);

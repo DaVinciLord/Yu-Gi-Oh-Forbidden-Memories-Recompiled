@@ -17,6 +17,11 @@ int ControlNet_Accept(int timeout_ms);
 long ControlNet_Receive(char *buffer, size_t size, int timeout_ms);
 /* All of `size` bytes to the client; -1 when it has gone. */
 int ControlNet_Send(const char *data, size_t size);
+/* While a client is attached: answer any other that connects with `reply`
+ * and close it, so it is told rather than left waiting. */
+void ControlNet_RefuseOthers(const char *reply);
+/* Without waiting: 1 when the client has closed its end (or there is none). */
+int ControlNet_Gone(void);
 /* Close the client's connection; the listener stays. */
 void ControlNet_Drop(void);
 

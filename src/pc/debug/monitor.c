@@ -1201,6 +1201,7 @@ static int run_monitor(int *status)
                 CloseHandle(game_process);
                 note_session("restart");
                 SetEnvironmentVariableA("MEMORIES_LOAD_STATE", NULL);
+                SetEnvironmentVariableA("MEMORIES_CONTROL", NULL); /* no client follows a restart */
                 shared->restart = 0;
                 /* The first game's pipe end is gone with it: a new pipe. */
                 if (reader) {

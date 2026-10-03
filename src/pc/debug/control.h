@@ -8,7 +8,8 @@
  * The channel is served at the end of every VSync(0), after the state point
  * (libetc.c, Memories_StatePoint): the one place where the game's state is
  * whole, and where save states are taken. The game waits there for its
- * first client. While a client is attached the game runs only when told to
+ * first client, MEMORIES_CONTROL_WAIT seconds (10 unset, negative: as long
+ * as it takes). While a client is attached the game runs only when told to
  * (`step N`: until N VBlanks have passed, then to the next such point), and
  * the freeze watchdog is off. When the client goes, the game runs on by
  * itself, and a new client stops it at the next point. */

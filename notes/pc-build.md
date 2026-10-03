@@ -366,6 +366,7 @@ like `smoke.py`: a local gate, since CI has no disc),
 `MEMORIES_CONTROL=<port>` (a control channel on 127.0.0.1:<port>: the
 game waits at its first frame for a client, which steps it, holds pad
 buttons, reads and writes guest memory, takes pictures and save states;
+it waits `MEMORIES_CONTROL_WAIT` seconds for one, 10 unset, -1 for good;
 `tools/pc/yfm_control.py` is the client, the commands are in
 [Agent control](agent-control.md)),
 `MEMORIES_WINDOW_SHOT=N` (save the window as shown at frame N, as the

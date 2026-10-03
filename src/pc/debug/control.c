@@ -7,6 +7,8 @@
 #include "pc/guest/state.h"
 #include "pc/platform/platform.h"
 #include "pc/platform/title_jump.h"
+#include "pc/platform/menu.h"
+#include "pc/platform/settings.h"
 #include "pc/sdk/display.h"
 #include <png.h>
 #include <stdio.h>
@@ -58,6 +60,7 @@ static void attach(void)
 {
     attached = 1;
     running = owed = 0;
+    Platform_ControlAttach(1); /* the watchdog is off from now on, not before a client exists */
     fprintf(stderr, "memories-pc: control: a client is attached at frame %u\n", Memories_PresentedFrames());
 }
 
@@ -68,6 +71,65 @@ static void detach(const char *why)
     pads[0] = pads[1] = 0; /* nothing held by a client that has gone */
     Platform_ControlAttach(0);
     fprintf(stderr, "memories-pc: control: %s at frame %u\n", why, Memories_PresentedFrames());
+}
+
+/* The window's notice while the game waits for its first client: "Play\n * now" ends the wait. */
+static int play_now;
+static void wait_answered(int button, int *quit)
+{
+    (void)button;
+    (void)quit;
+    play_now = 1;
+}
+
+/* The first client, for MEMORIES_CONTROL_WAIT seconds (10 unset, a negative
+ * number for as long as it takes, 0 not at all): a run is the client's from
+ * its first frame. Past the time the game goes on by itself, as when a
+ * client has left, and a client may attach later. In a window the wait says
+ * so in a notice, which (or closing the window) ends it; the clock stands
+ * paused meanwhile, which is what lets the notice and the quit question be
+ * drawn and answered with no frame presented. */
+static void wait_first(unsigned port)
+{
+    static const char *const buttons[] = {"Play now"};
+    const char *setting = getenv("MEMORIES_CONTROL_WAIT");
+    long seconds = setting && *setting ? strtol(setting, NULL, 10) : 10;
+    long waited = 0;
+    int rate = Platform_ClockRate(), confirm = Settings_Get(SET_CONFIRM_QUIT);
+    char text[200];
+    if (!seconds) return;
+    if (seconds > 0) {
+        snprintf(text, sizeof(text), "Waiting %ld s for a control client on 127.0.0.1:%u (MEMORIES_CONTROL is set).",
+                 seconds, port);
+    } else {
+        snprintf(text, sizeof(text), "Waiting for a control client on 127.0.0.1:%u (MEMORIES_CONTROL is set).", port);
+    }
+    fprintf(stderr, "memories-pc: control: %s\n", text);
+    play_now = 0;
+    Menu_ShowNotice("Control channel", text, buttons, 1, 0, wait_answered);
+    Platform_SetClockRate(0);
+    Platform_ControlHold(1);
+    /* Nothing is played yet: closing the window (or Esc) quits at once. */
+    Settings_Set(SET_CONFIRM_QUIT, 0);
+    for (;;) {
+        if (ControlNet_Accept(WAIT_MS)) {
+            attach();
+            break;
+        }
+        waited += WAIT_MS;
+        Platform_ControlIdle();
+        Platform_PumpEvents();
+        if (Platform_ShouldQuit()) break;
+        if (play_now || (seconds > 0 && waited >= seconds * 1000)) {
+            fprintf(stderr, "memories-pc: control: no client %s; the game goes on, and a client may attach "
+                            "later\n", play_now ? "(Play now)" : "in time");
+            break;
+        }
+    }
+    if (!play_now && Menu_NoticeShown()) Menu_CloseNotice();
+    Settings_Set(SET_CONFIRM_QUIT, confirm);
+    Platform_SetClockRate(rate);
+    Platform_ControlHold(0);
 }
 
 static void start(void)
@@ -86,14 +148,7 @@ static void start(void)
     if (ControlNet_Listen((unsigned)number, &bound)) return;
     channel = ON;
     fprintf(stderr, "memories-pc: control: listening on 127.0.0.1:%u\n", bound);
-    /* Nothing of the run happens without the client: it gets the game at
-     * its first frame, and from then on the watchdog is off. */
-    Platform_ControlAttach(1);
-    while (!ControlNet_Accept(WAIT_MS)) {
-        if (Platform_ShouldQuit()) return;
-        Platform_PumpEvents();
-    }
-    attach();
+    wait_first(bound);
 }
 
 /* The guest bytes [address, address + length) in this process, or NULL. */
@@ -222,8 +277,9 @@ static int handle(char *text)
         send_error(error);
         return 0;
     case CONTROL_INFO:
-        snprintf(reply, sizeof(reply), "ok frame %u vblank %u mode %u build %08x", Memories_PresentedFrames(),
-                 Platform_VBlankCount(), (unsigned)*guest(MODE_BYTE, 1, &ram), (unsigned)Memories_StateBuildId());
+        snprintf(reply, sizeof(reply), "ok frame %u vblank %u mode %u build %08x jumps %u clock %s",
+                 Memories_PresentedFrames(), Platform_VBlankCount(), (unsigned)*guest(MODE_BYTE, 1, &ram),
+                 (unsigned)Memories_StateBuildId(), TitleJump_Count(), Platform_VirtualClock() ? "virtual" : "real");
         send_line(reply);
         return 0;
     case CONTROL_JUMP: {
@@ -268,6 +324,7 @@ static int next_line(void)
             continue;
         }
         Platform_PumpEvents();
+        ControlNet_RefuseOthers("err busy: another client is attached\n");
         if (Platform_ShouldQuit()) return 0;
     }
 }
@@ -281,10 +338,15 @@ void Control_Point(void)
     }
     if (!attached) {
         if (!ControlNet_Accept(0)) return;
-        Platform_ControlAttach(1);
         attach();
     }
-    if (running && (int)(Platform_VBlankCount() - target) < 0) return;
+    ControlNet_RefuseOthers("err busy: another client is attached\n");
+    if (running && (int)(Platform_VBlankCount() - target) < 0) {
+        /* A client that has gone mid-step: its pads are let go now, and
+         * the game runs on by itself. */
+        if (ControlNet_Gone()) detach("the client left during a step; the game runs on");
+        return;
+    }
     running = 0;
     if (owed) {
         owed = 0;

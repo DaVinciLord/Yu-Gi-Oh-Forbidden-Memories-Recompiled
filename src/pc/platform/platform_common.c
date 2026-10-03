@@ -316,6 +316,21 @@ void Platform_ControlAttach(int attached)
     Monitor_Modal(attached); /* the crash monitor's freeze check */
 }
 
+int Platform_VirtualClock(void)
+{
+    return virtual_clock();
+}
+
+void Platform_ControlIdle(void)
+{
+    /* Waiting on purpose, not frozen: every watch sees a heartbeat. */
+    __atomic_add_fetch(&Monitor_Shared()->heartbeat, 1, __ATOMIC_RELEASE);
+    last_vsync_real = now_us();
+#ifdef _WIN32
+    Win32_Heartbeat();
+#endif
+}
+
 void Platform_ControlHold(int held)
 {
     sigset_t set, previous;
