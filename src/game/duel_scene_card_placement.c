@@ -32,7 +32,15 @@
 #include "duel_scene_card_placement.h"
 #include "card_constants.h"
 #ifdef MEMORIES_PC
+#include "pc/cards/cards.h"
 #include "pc/cards/tables.h"
+/* The equip whose effect a card has (cards.h Cards_EffectId): a mod's equip
+   whose "effect" is Megamorph gives Megamorph's bonus and animation. */
+#define PLACED_EQUIP_EFFECT Cards_EffectId(D_8009B206)
+#else
+#define PLACED_EQUIP_EFFECT D_8009B206
+#endif
+#ifdef MEMORIES_PC
 #endif
 
 #define PLACEMENT_PX(object) ((object)->field_30.h.field_30)
@@ -404,7 +412,7 @@ request_combination:
                             PLACEMENT_TY(object) = 500;
                             D_8009B210 |= 0x40;
                             object->field_2C.h.field_2C = card->stat_modifier;
-                            if (D_8009B206 == 0x291) {
+                            if (PLACED_EQUIP_EFFECT == 0x291) {
                                 PLACEMENT_TY(object) = 1000;
                                 D_8009B154 += 500;
                             }
@@ -574,13 +582,13 @@ request_combination:
                 D_8009B174 |= 0x20;
                 effect = DUEL_EFFECT_REQUEST_VIEW(
                     DuelEffect_AllocateRequest(
-                        ((u32)((u16)D_8009B206 - 301) < 2) * 4));
+                        ((u32)((u16)PLACED_EQUIP_EFFECT - 301) < 2) * 4));
                 effect->field_00 = PLACEMENT_PX(D_800E9EF0[0]) + 26;
                 D_8009B17C = (u8 *)effect;
                 effect->field_02 = PLACEMENT_PY(D_800E9EF0[0]) + 30;
-                if (D_8009B206 == 302)
+                if (PLACED_EQUIP_EFFECT == 302)
                 effect->field_1A = 1;
-                if (D_8009B206 == 0x291)
+                if (PLACED_EQUIP_EFFECT == 0x291)
                 effect->field_1A = 10;
                 SD_SEPlayFull(22);
             } else if (DUEL_EFFECT_REQUEST_VIEW(D_8009B17C)->field_1D) {

@@ -9,7 +9,8 @@ from tkinter import messagebox, ttk
 
 from . import bulk_dialog, guardian_stars, manifest, pools as poolmath, validate
 from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, DUELIST_NAMES, FRAME_NAMES,
-                       POOL_LABELS, POOL_TOTAL, POOLS, STAR_NAMES, STARTER_WEIGHT_LIMIT, TYPE_EQUIP, TYPE_NAMES, TYPE_RITUAL,
+                       POOL_LABELS, POOL_TOTAL, POOLS, STAR_NAMES, STARTER_WEIGHT_LIMIT, TYPE_EQUIP, TYPE_MAGIC, TYPE_NAMES,
+                       TYPE_RITUAL, TYPE_TRAP,
                        exodia_piece, type_frame)
 from . import fixed_decks
 from .fixed_deck_view import FixedDeckView
@@ -19,6 +20,7 @@ from .widgets import (CardField, FormDialog, ScrolledForm, ScrolledPage, card_ma
 
 ATTRIBUTE_CHOICES = ATTRIBUTE_NAMES + ["6 (magic)", "7 (trap)"]
 STAR_CHOICES = ["(none)"] + STAR_NAMES[1:]
+EFFECT_NONE = "(none)"
 FRAME_CHOICES = ["By type"] + FRAME_NAMES
 # Each frame's colour, as the hand's frames have it (the duel's palette rows 1-6).
 FRAME_COLOURS = ["#e0a838", "#409830", "#b040a0", "#2848b0", "#8868d8", "#e07000"]
@@ -87,6 +89,7 @@ class CardsTab(Tab):
         super().__init__(notebook, app, "Cards")
         self.current = None
         self._shown_price = ""
+        self._shown_effect = ""
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
         # The form keeps its width; the list takes what is left, down to this.
@@ -118,15 +121,22 @@ class CardsTab(Tab):
         form.pack(fill="both", expand=True)
         self.form = form
         self.vars = {k: tk.StringVar() for k in ("name", "attack", "defense", "type", "attribute", "level",
-                                                  "star1", "star2", "password", "starchips", "key", "frame")}
+                                                  "star1", "star2", "password", "starchips", "key", "frame",
+                                                  "effect")}
         row = 0
+        # Only a monster has these; a magic, trap, ritual or equip card has
+        # an effect instead (show_kind).
+        self.monster_rows, self.effect_row = [], []
 
-        def line(label, widget, hint=None):
+        def line(label, widget, hint=None, rows=None):
             nonlocal row
-            ttk.Label(form, text=label).grid(row=row, column=0, sticky="w", pady=2)
+            caption = ttk.Label(form, text=label)
+            caption.grid(row=row, column=0, sticky="w", pady=2)
             widget.grid(row=row, column=1, sticky="we", pady=2)
             if hint is not None:
                 hint.grid(row=row, column=2, sticky="w", padx=6)
+            if rows is not None:
+                rows.extend(w for w in (caption, widget, hint) if w is not None)
             row += 1
             return widget
 
@@ -146,17 +156,23 @@ class CardsTab(Tab):
         line("Name", ttk.Entry(form, textvariable=self.vars["name"], width=26), hint("name"))
         line("Type", ttk.Combobox(form, textvariable=self.vars["type"], values=TYPE_NAMES, state="readonly", width=18),
              hint("type"))
+        # What the card does when played: a disc card of its type whose
+        # effect it has (cards.c "effect"), so the game and the CPU play it
+        # as that card.
+        self.effect_box = line("Effect", ttk.Combobox(form, textvariable=self.vars["effect"], state="readonly",
+                                                       width=26), hint("effect"), self.effect_row)
         line("Attribute", ttk.Combobox(form, textvariable=self.vars["attribute"], values=ATTRIBUTE_CHOICES,
-                                       state="readonly", width=18), hint("attribute"))
-        line("Level", ttk.Spinbox(form, textvariable=self.vars["level"], from_=0, to=12, width=8), hint("level"))
+                                       state="readonly", width=18), hint("attribute"), self.monster_rows)
+        line("Level", ttk.Spinbox(form, textvariable=self.vars["level"], from_=0, to=12, width=8), hint("level"),
+             self.monster_rows)
         line("ATK", ttk.Spinbox(form, textvariable=self.vars["attack"], from_=0, to=5110, increment=10, width=8),
-             hint("attack"))
+             hint("attack"), self.monster_rows)
         line("DEF", ttk.Spinbox(form, textvariable=self.vars["defense"], from_=0, to=5110, increment=10, width=8),
-             hint("defense"))
+             hint("defense"), self.monster_rows)
         self.star_boxes = [ttk.Combobox(form, textvariable=self.vars[key], values=STAR_CHOICES, state="readonly",
                                         width=18) for key in ("star1", "star2")]
-        line("Guardian star 1", self.star_boxes[0], hint("star1"))
-        line("Guardian star 2", self.star_boxes[1], hint("star2"))
+        line("Guardian star 1", self.star_boxes[0], hint("star1"), self.monster_rows)
+        line("Guardian star 2", self.star_boxes[1], hint("star2"), self.monster_rows)
         line("Password", ttk.Entry(form, textvariable=self.vars["password"], width=12), hint("password"))
         self.price = line("Starchips", ttk.Entry(form, textvariable=self.vars["starchips"], width=12), hint("starchips"))
         ttk.Label(form, text="0 = free; empty = default price", style="Hint.TLabel").grid(
@@ -185,6 +201,7 @@ class CardsTab(Tab):
         row += 1
         self.vars["frame"].trace_add("write", lambda *_: self.show_swatch())
         self.vars["type"].trace_add("write", lambda *_: self.show_swatch())
+        self.vars["type"].trace_add("write", lambda *_: self.show_kind())
         ttk.Label(form, text="Notes").grid(row=row, column=0, sticky="nw", pady=2)
         self.notes = tk.Text(form, width=36, height=4, wrap="word", undo=True)
         self.notes.grid(row=row, column=1, columnspan=2, sticky="we", pady=2)
@@ -332,6 +349,8 @@ class CardsTab(Tab):
         self.vars["name"].set(card.name)
         self.vars["attack"].set(card.attack)
         self.vars["defense"].set(card.defense)
+        # Before the type, whose trace fills the effect list for it.
+        self.vars["effect"].set(self.effect_label(self.effect_shown(cid)))
         self.vars["type"].set(type_label(card.type))
         self.vars["attribute"].set(attribute_label(card.attribute))
         self.vars["level"].set(card.level)
@@ -361,6 +380,9 @@ class CardsTab(Tab):
                            ("star1", star_label(reference.star1)), ("star2", star_label(reference.star2)),
                            ("frame", frame_label(reference.frame).lower())):
             self.hints[key].configure(text=f"{what}: {label}" if key != "name" or len(str(label)) < 28 else what)
+        default = self.effect_default(cid)
+        self.hints["effect"].configure(text=f"{what}: " + (
+            "none" if self.effect_kind(default) < 0 else "its own" if default == cid else self.effect_label(default)))
         if cid in self.project.retail.cards:
             self.hints["password"].configure(text=f"Retail: {self.project.retail.passwords.get(cid) or 'none'}")
         else:
@@ -377,7 +399,90 @@ class CardsTab(Tab):
         else:
             self.added_frame.grid_remove()
             extra = self.project.card_extra.get(cid, {})
-        self.extra.configure(text=("Kept as written in mod.json: " + ", ".join(sorted(extra))) if extra else "")
+        self._shown_effect = self.vars["effect"].get()
+        kept = sorted(set(extra) - {"effect"})        # the Effect list shows that one
+        self.extra.configure(text=("Kept as written in mod.json: " + ", ".join(kept)) if kept else "")
+
+    # A magic, trap, ritual or equip card's effect
+    def effect_kind(self, eid: int) -> int:
+        """The type of the disc card `eid`, if it is no monster; else -1."""
+        card = self.project.retail.cards.get(eid) if self.project else None
+        return card.type if card and not card.is_monster() else -1
+
+    def effect_label(self, eid: int) -> str:
+        return f"{eid} {self.project.retail.cards[eid].name}" if self.effect_kind(eid) >= 0 else EFFECT_NONE
+
+    def effect_default(self, cid: int) -> int:
+        """The effect the card has with no "effect" key: a disc card its own,
+        a copy its base's (cards.c Cards_EffectId)."""
+        return self.project.effect_of(self.project.base_of(cid)) if cid in self.project.added else cid
+
+    def effect_shown(self, cid: int) -> int:
+        eid = self.project.effect_of(cid)
+        return eid if self.effect_kind(eid) == self.project.cards[cid].type else 0
+
+    def show_kind(self):
+        """The monster's rows for a monster, the effect for the rest."""
+        kind = parse_choice(self.vars["type"].get(), TYPE_NAMES)
+        monster = not (kind >= TYPE_MAGIC and self.project is not None)
+        for widget in self.monster_rows:
+            widget.grid() if monster else widget.grid_remove()
+        for widget in self.effect_row:
+            widget.grid_remove() if monster else widget.grid()
+        if monster:
+            self.refill_monster()
+            return
+        # The disc's cards of the same type: one of another would be played
+        # as its own type, and the CPU would not know what to do with it.
+        # "(none)" only for a card with no effect of its own to fall back on.
+        own = self.current is not None and self.effect_kind(self.effect_default(self.current)) == kind
+        choices = [] if own else [EFFECT_NONE]
+        choices += [self.effect_label(eid) for eid in sorted(self.project.retail.cards) if self.effect_kind(eid) == kind]
+        self.effect_box.configure(values=choices)
+        if self.vars["effect"].get() not in choices:
+            self.vars["effect"].set(choices[0] if not own else self.effect_label(self.effect_default(self.current)))
+
+    def refill_monster(self):
+        """A card applied as a non-monster lost its ATK, DEF, level and stars;
+        made a monster again, it gets the disc card's (a copy's base's) back."""
+        cid = self.current
+        if self.project is None or cid not in self.project.cards or self.project.cards[cid].is_monster():
+            return
+        src = self.project.retail.cards.get(self.project.base_of(cid))
+        if src is None or not src.is_monster():
+            return
+        self.vars["attack"].set(src.attack)
+        self.vars["defense"].set(src.defense)
+        self.vars["level"].set(src.level)
+        self.vars["attribute"].set(attribute_label(src.attribute))
+        self.vars["star1"].set(star_label(src.star1, self.project))
+        self.vars["star2"].set(star_label(src.star2, self.project))
+
+    def store_effect(self, cid: int, card) -> bool:
+        """The Effect list into the card's "effect"; whether that changed it.
+        Left out when it is what the card has anyway, or for a monster, which
+        never plays one. An "effect" the form has not been touched for stays
+        as written, whatever it names."""
+        if self.vars["effect"].get() == self._shown_effect and card.type == self.project.cards[cid].type:
+            return False
+        extra = self.project.added[cid].extra if cid in self.project.added else self.project.card_extra.get(cid, {})
+        chosen = 0 if card.is_monster() else max(0, parse_choice(self.vars["effect"].get(), [EFFECT_NONE]))
+        default = self.effect_default(cid)
+        wanted = chosen if chosen and chosen != default else None
+        had = extra.get("effect")
+        if wanted is None:
+            if "effect" not in extra:
+                return False
+            del extra["effect"]
+        else:
+            if had is not None and self.project.resolve(had) == wanted:
+                return False
+            extra["effect"] = wanted
+            if cid not in self.project.added:
+                self.project.card_extra[cid] = extra
+        if cid not in self.project.added and not extra:
+            self.project.card_extra.pop(cid, None)
+        return True
 
     def show_swatch(self):
         """The colour the frame will be: the chosen one, or the type's."""
@@ -416,6 +521,12 @@ class CardsTab(Tab):
         if min(values) < 0:
             return "choose a type, an attribute and two stars"
         card.type, card.attribute, card.star1, card.star2 = values
+        if not card.is_monster():
+            # As the disc's: no ATK, DEF, level or stars, and the magic or
+            # trap attribute.
+            card.attack = card.defense = card.level = card.star1 = card.star2 = 0
+            if card.attribute not in (6, 7):
+                card.attribute = 7 if card.type == TYPE_TRAP else 6
         card.frame = max(-1, parse_choice(self.vars["frame"].get(), FRAME_CHOICES) - 1)
         return card
 
@@ -468,6 +579,9 @@ class CardsTab(Tab):
         if price_changed:
             self.project.set_starchips(cid, price)
             changed = True
+        if self.store_effect(cid, card):
+            changed = True
+        self._shown_effect = self.vars["effect"].get()
         cost = self.project.starchip_cost(cid)
         self._shown_price = "" if cost is None else str(cost)
         self.vars["starchips"].set(self._shown_price)

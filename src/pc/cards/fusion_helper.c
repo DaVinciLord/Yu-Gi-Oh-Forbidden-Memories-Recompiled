@@ -68,7 +68,7 @@ static void name(int id, char out[256])
  * equip and monster, kept where the 16-bit stat_modifier holds it. */
 static int bonus(int equipment, int monster, int modifier)
 {
-    int value = Tables_EquipBonus(equipment, monster, equipment == 657 ? 1000 : 500);
+    int value = Tables_EquipBonus(equipment, monster, Cards_EffectId(equipment) == 657 ? 1000 : 500);
     int room = 2 * Tables_StatCapEither();
     if (room > TABLES_LIMIT_STAT_MAX) room = TABLES_LIMIT_STAT_MAX;
     if (modifier + value > room) value = room - modifier;

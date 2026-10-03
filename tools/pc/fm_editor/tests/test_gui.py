@@ -222,6 +222,109 @@ class GuiTest(unittest.TestCase):
         self.assertEqual(app.project.cards[1].name, "Bulbasaur")
         self.assertEqual(len(app.project.added), 1)
 
+    def test_magic_card_has_an_effect_not_monster_stats(self):
+        app = self.app
+        cards = app.cards
+        monster_widgets = cards.monster_rows
+
+        def shown(widgets):
+            return all(w.winfo_manager() for w in widgets)
+
+        cards.tree.selection_set("1")
+        cards.select()
+        self.assertTrue(shown(monster_widgets))
+        self.assertFalse(any(w.winfo_manager() for w in cards.effect_row))
+        cards.vars["type"].set("Magic")
+        self.assertFalse(any(w.winfo_manager() for w in monster_widgets))
+        self.assertTrue(shown(cards.effect_row))
+        # The disc's magic cards to pick from, and none for a monster made one.
+        values = cards.effect_box.cget("values")
+        self.assertEqual(values[0], "(none)")
+        self.assertIn("601 Card 601", values)
+        self.assertNotIn("651 Card 651", values)        # an equip
+        self.assertEqual(cards.vars["effect"].get(), "(none)")
+        cards.vars["effect"].set("605 Card 605")
+        self.assertTrue(cards.apply())
+        card = app.project.cards[1]
+        self.assertEqual((card.type, card.attack, card.defense, card.level, card.star1, card.star2, card.attribute),
+                         (20, 0, 0, 0, 0, 0, 6))
+        self.assertEqual(app.project.card_extra[1]["effect"], 605)
+        self.assertEqual(app.project.effect_of(1), 605)
+        # Shown again as it was stored.
+        cards.tree.selection_set("2")
+        cards.select()
+        cards.tree.selection_set("1")
+        cards.select()
+        self.assertEqual(cards.vars["effect"].get(), "605 Card 605")
+        # A disc magic card has its own effect: no "(none)", and picking it
+        # again writes nothing.
+        cards.tree.selection_set("610")
+        cards.select()
+        self.assertTrue(shown(cards.effect_row))
+        self.assertNotIn("(none)", cards.effect_box.cget("values"))
+        self.assertEqual(cards.vars["effect"].get(), "610 Card 610")
+        cards.vars["effect"].set("620 Card 620")
+        self.assertTrue(cards.apply())
+        self.assertEqual(app.project.card_extra[610], {"effect": 620})
+        cards.vars["effect"].set("610 Card 610")
+        self.assertTrue(cards.apply())
+        self.assertNotIn(610, app.project.card_extra)
+        # A trap lists traps.
+        cards.vars["type"].set("Trap")
+        self.assertIn("701 Card 701", cards.effect_box.cget("values"))
+        self.assertNotIn("601 Card 601", cards.effect_box.cget("values"))
+        cards.vars["type"].set("Magic")
+        # Saved as the game reads it, and back.
+        app.info.vars["id"].set("gui-test")
+        self.assertTrue(app.info.commit())
+        out = Path(self.tmp.name) / "saved-effect"
+        app.project.source_dir = out
+        self.assertTrue(app.save())
+        data = json.loads((out / "mod.json").read_text(encoding="utf-8"))
+        entry = next(e for e in data["cards"] if e.get("replace") == 1)
+        self.assertEqual((entry["type"], entry["effect"]), ("Magic", 605))
+        app.load_mod(out)
+        self.assertEqual(app.project.effect_of(1), 605)
+        from fm_editor import validate
+        self.assertEqual([i.message for i in validate.validate_card(app.project, 1) if "effect" in i.message], [])
+
+    def test_monster_again_gets_its_stats_back(self):
+        app = self.app
+        cards = app.cards
+        disc = app.project.retail.cards[1]
+        cards.tree.selection_set("1")
+        cards.select()
+        cards.vars["type"].set("Magic")
+        self.assertTrue(cards.apply())
+        self.assertEqual(app.project.cards[1].attack, 0)
+        # Shown again, with the zeros it was stored with.
+        cards.tree.selection_set("2")
+        cards.select()
+        cards.tree.selection_set("1")
+        cards.select()
+        from fm_editor.tabs import type_label
+        cards.vars["type"].set(type_label(disc.type))
+        self.assertTrue(cards.apply())
+        card = app.project.cards[1]
+        self.assertEqual((card.attack, card.defense, card.level, card.star1, card.star2, card.attribute),
+                         (disc.attack, disc.defense, disc.level, disc.star1, disc.star2, disc.attribute))
+
+    def test_untouched_effect_stays_as_written(self):
+        app = self.app
+        cards = app.cards
+        # A trap's effect on a magic card: shown as none, kept unless changed.
+        app.project.cards[1] = app.project.cards[1].copy(type=20, attack=0, defense=0, level=0, star1=0, star2=0,
+                                                         attribute=6)
+        app.project.card_extra[1] = {"effect": 701}
+        cards.tree.selection_set("1")
+        cards.select()
+        self.assertEqual(cards.vars["effect"].get(), "(none)")
+        cards.tree.selection_set("2")
+        cards.select()
+        self.assertEqual(app.project.card_extra[1], {"effect": 701})
+        from fm_editor import validate
+        self.assertTrue(any("CPU" in i.message for i in validate.validate_card(app.project, 1)))
+
     def test_art(self):
         from fm_editor import art, pngio
         from fm_editor.tests.test_art import gradient

@@ -15,6 +15,11 @@ static int event_count, mod_result = -1, equip_rule = -1, removed, changed;
 int Cards_Valid(int id) { return id > 0 && id <= 800; }
 int Cards_KindChanged(int id) { return id == changed; }
 int Cards_BaseId(int id) { return id > 722 ? id - 722 : id; }
+/* Card `effect_card` is an equip whose "effect" is `effect_as`. */
+static int effect_card, effect_as;
+int Cards_EffectId(int id) { return id == effect_card ? effect_as : Cards_BaseId(id); }
+int Cards_Type(int id) { return id == effect_card || (Cards_BaseId(id) == 301 && id != changed) ? 23 : 0; }
+int Cards_RetailType(int id) { return id == 301 ? 23 : 0; }
 int Tables_Fusion(int a, int b, int *result)
 {
     if (mod_result < 0 || !((a == 1 && b == 2) || (a == 2 && b == 1))) return 0;
@@ -66,6 +71,13 @@ int main(void)
     changed = 1; assert(!CardRules_Equip(301, 1));
     equip_rule = 1; assert(CardRules_Equip(301, 1) == 1); equip_rule = -1;
     changed = 0; assert(CardRules_Fusion(1, 2) == 3 && CardRules_Equip(301, 1) == 1);
+    /* An equip whose "effect" is a disc equip fits what that one does: a
+     * monster the "replace" made one, and a copy of another equip. */
+    effect_card = changed = 5; effect_as = 301;
+    assert(CardRules_Equip(5, 1) == 1 && !CardRules_Equip(5, 2));
+    effect_card = 760; changed = 0; assert(CardRules_Equip(760, 1) == 1);
+    effect_as = 2; assert(!CardRules_Equip(760, 1));     /* a monster's effect is no equip's */
+    effect_card = 0;
     assert(!event_count);
     puts("fusion rules: gameplay parity, mod rules and side-effect-free preview passed");
     return 0;

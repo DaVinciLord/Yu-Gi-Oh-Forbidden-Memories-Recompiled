@@ -108,9 +108,18 @@ made a monster fights without one unless `model` names a monster whose model
 it takes (`"model": "Kuriboh"`), and without `stars` it gets that monster's
 guardian stars, or the Sun and the Moon. A monster made anything else does
 nothing when played unless `effect` names the card whose effect it takes
-(`"effect": "Legendary Sword"`); what an equip made so may equip is up to
-`equips` in the [gameplay tables](gameplay-tables.md). `model` and `effect`
-work the same on a card that stays on its side.
+(`"effect": "Legendary Sword"`). An equip whose `effect` is a disc equip fits
+the monsters that one fits, with its bonus (Megamorph's +1000 too), and
+`equips` in the [gameplay tables](gameplay-tables.md) may change that. `model`
+and `effect` work the same on a card that stays on its side, and a copy's
+`effect` may name the card as a replace's does.
+
+The CPU plays a magic card as the disc's card its `effect` names, when that is
+a magic card too: its scripts look cards up by the disc's numbers, so a mod
+card whose effect is Raigeki is played when Raigeki would be, and one whose
+effect is Umi when Umi would be. An effect of another kind (a trap's on a
+magic card) is never played by the CPU. The FM Editor's Cards tab offers only
+the disc's cards of the card's own type in its **Effect** list.
 
 A trap card springs as the trap its `effect` names (`"effect": "Bear Trap"`,
 stopping the attacks `trap_thresholds` gives Bear Trap), else as its own. A
@@ -123,7 +132,7 @@ equips only by the mods' own rules, and no disc recipe makes it. Otherwise the
 CPU would plan with the old card, fusing a monster with what is now a magic
 card or taking a monster off the field for what is now an equip, and lose the
 cards. An equip made from another kind equips nothing until `equips` says
-what. A magic, trap, ritual or equip card has no ATK or DEF, so a monster made
+what, or its `effect` names a disc equip. A magic, trap, ritual or equip card has no ATK or DEF, so a monster made
 one loses its own, and `attack` or `defense` on it is noted and left out: the
 CPU ranks the cards in its hand by them whatever their type, and would set it
 face down turn after turn as its best monster.
