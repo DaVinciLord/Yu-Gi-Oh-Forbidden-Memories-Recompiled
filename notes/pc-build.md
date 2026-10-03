@@ -2883,7 +2883,8 @@ hashes (PGXP and HD off, as the fixtures run). What makes it work:
   run with it clean.
 
 **X2 (2026-10-03): the game plays as on 32-bit.** Replays recorded on the
-32-bit build with every mod off (`tools/pc/replay.py`, notes/agent-control.md)
+32-bit build with every mod off (the replay tool of PR #244 on branch
+scratch/x64-replay, where the recordings live under `tests/pc/replays`)
 play on the 64-bit build with every frame hash the same, plainly and with
 `MEMORIES_X64_HIGH_HEAP=1`: boot to the first story duel; a whole duel
 against Simon Muran with a fusion, Raigeki, Forest, Red Medicine and 3D
