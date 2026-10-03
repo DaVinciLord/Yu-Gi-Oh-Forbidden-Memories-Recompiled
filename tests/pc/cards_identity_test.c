@@ -112,8 +112,8 @@ static void recent_drops(unsigned char *state)
     assert(strstr(text, "recent2 0 724 beta:mage:1\n") && strstr(text, "recent2 3 730 -\n"));
     for (at = text; (at = strstr(at, "recent2 ")); at++) count++;
     assert(count == 4);
-    /* A later save made with no card mod has no section of its own and reads
-     * save 1's; two retail drops moved the leftovers down two places. */
+    /* A later save with no section of its own reads save 1's: an old id is
+     * found wherever it now stands in the list. */
     sequence = 2;
     memcpy(state + SAVE_SEQUENCE, &sequence, 4);
     {
