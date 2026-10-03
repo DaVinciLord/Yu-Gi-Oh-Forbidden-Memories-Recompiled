@@ -2807,7 +2807,7 @@ What differs from Linux, and why:
   (`Win32_FontPath`), iconv by code page 932, and the few POSIX calls by
   `pc/compat/posix.h` and `pc/compat/mman.h`.
 
-### 64-bit Windows (milestone X1, in progress)
+### 64-bit Windows (milestones X1-X3)
 
 ```sh
 python tools/pc/build_win32_deps.py --arch x86_64   # once; build_game32.py does it too
@@ -2898,9 +2898,78 @@ locals through pointers that only the console's stack frame lines up: both
 port builds had read other words there, and a credits scene's camera
 drifted.
 
-Not in the 64-bit build yet: save states (X3; refused with a message), code
-mods (X3; none are built or loaded), the crash monitor process (X3) and the
-interrupt clock (the cooperative one is the default anyway).
+**X3 (2026-10-03): states, the crash monitor, data mods, a package.**
+
+- **Save states.** The 64-bit game saves and loads its own states: the
+  32-bit format, with an entry of nine 64-bit registers and xmm6-xmm15
+  (Win64 keeps them across a call), and a `jump-slots` chunk for the host
+  slot that holds the game's `jmp_buf` (on 32-bit it lies in guest RAM).
+  A state saved, then loaded in a new process and played with the same
+  presses, draws the same 600 frames in a duel; on the map and at the title
+  screen the loaded run parts from the saved one after 355 and 0 frames,
+  with the same hashes on 32-bit, so that is the state format's, not the
+  width's. tests/pc/replays/state-load-rng passes on 64-bit.
+- **No state crosses the widths.** A state holds the game's native stack
+  (the frames of `run_game`, `Main_Init`, `Main_Loop`, `Main_AdvanceFrame`,
+  `Graphics_SyncFrame` and, during a fade or a load, more: compiled for one
+  width), the game objects' variables as one build lays them out
+  (`game_dat` is 0x29F4 bytes at 0x022CD000 on 32-bit and 0x2FE4 at
+  0x42090000 on 64-bit) and its subsystems' native fields. Either game
+  refuses the other's states by name ("saved by the 32-bit game, and this
+  one is 64-bit"), told by the size of the `entry` chunk (20 bytes on
+  32-bit). Carrying a state across needs a format without native frames
+  or layouts: a milestone of its own. (The game's own saves,
+  `saves/slotNN.sav`, are the game's data; that the other width loads them
+  is expected but not yet checked.) The width check comes before the mods check, so
+  the mods refusal ("uses different mods...") is only ever between two
+  states of one width, whose code mods are the same (none on 64-bit).
+- **Mods.** The 64-bit build carries the mods folder: every mod is copied
+  as data (`build_mods(code=False)`), and the game is built with
+  `MEMORIES_NO_CODE_MODS`. The data mod loader is the 32-bit one, and what
+  was run on 64-bit draws as there: cards and a texture pack (the gate
+  replay below), a booster pack (state-load-rng's test mod), and the
+  baseline release's data examples load without a note (`check_mod_abi`
+  below). Fusions and the other tables, guardian stars, duelists, limits,
+  audio, translations and disc patches load the same way but have no
+  64-bit frame check yet; star and duelist names come from the low memory
+  region (X2), which no mod has exercised there. A mod with a `library` (3d-monsters,
+  hand-camera, ai-hard-mode, yamyi-mods, the gameplay-rules example) is a
+  32-bit object: the game does not load it, and the Mods window shows
+  "needs a 64-bit build of this mod" beside it. It is not a broken mod, so
+  the other mods' Apply goes on, and it is not in a state's mod set. What
+  stays off with it: `object_loader.c` maps an object wherever the system
+  puts it and its relocations are i386 (`ObjectLoader_Load` refuses too),
+  `mod_libc.c` lends 32-bit helpers and the heap's `malloc` (which may be
+  above 4 GB), and `hooks.c` writes an i386 `jmp *[abs32]` (inert off
+  i386 already). No mod SDK goes beside the 64-bit game: it builds 32-bit
+  objects. `check_mod_abi.py --run --build <64-bit build>` plays a
+  baseline release's mods there and requires that note for each code mod.
+  The replay tests/pc/replays/x64-data-mods (scratch/x64-x3: the card-pack
+  example with its two cards in the deck, and a texture pack of the
+  screens' sheets with every colour turned, made at play time by its
+  `mods.py` from the repository and the disc) was recorded on 32-bit and
+  plays on 64-bit with all 1145 frame hashes the same, also with
+  `MEMORIES_X64_HIGH_HEAP=1`.
+- **Crash monitor.** On, as on 32-bit: the second copy of the game with the
+  shared block. A thread's callers come from the unwind tables through
+  dbghelp's `StackWalk64` on the game's process. `crash_check.py --windows
+  --executable tmp/pc/win64/memories-pc.exe`: all 13 kinds end in their
+  reports.
+- **Package.** `python tools/pc/package.py windows-x64` makes
+  `dist/yfm-redecomp-<version>-windows-x64.zip` beside the 32-bit
+  `-windows.zip` (the default now packs all three); `smoke.py` skips the
+  cases that turn on a code mod for it, and `test_package.py` checks the
+  x86-64 executable and that there is no SDK. The release workflow
+  (pc-release.yml) does not build it yet: its Windows job's later steps
+  (the FM Editor, VirusTotal) key on the runner being Windows, so a second
+  Windows entry would need them keyed on the system, and the 64-bit
+  libraries (`tmp/pc/win64-deps`) a cache of their own.
+
+Still off in the 64-bit build: code mods, whose 64-bit SDK is a later
+milestone, after arm64, covering both 64-bit targets (the loader for
+x86-64 and AArch64 objects, the mod C library, function hooks); the
+interrupt clock (the cooperative one is the default anyway); a state from
+the other width.
 
 ## Launch the local graphics preview
 
