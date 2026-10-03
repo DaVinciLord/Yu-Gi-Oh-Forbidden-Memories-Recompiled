@@ -1586,11 +1586,34 @@ class ConflictsTab(Tab):
         self.summary = ttk.Label(top)
         self.summary.pack(side="left", padx=8)
         ttk.Label(top, text="Double-click a line to go to it.", style="Hint.TLabel").pack(side="right")
+        # The other installed mods this one is checked against (validate.cross_mod):
+        # the player's mods folder, or one chosen here (kept in the editor's settings).
+        other = ttk.Frame(self)
+        other.pack(fill="x", pady=(4, 0))
+        ttk.Button(other, text="Other mods folder...", command=self.choose_folder).pack(side="left")
+        ttk.Button(other, text="Player's folder", command=lambda: self.set_folder(None)).pack(side="left", padx=4)
+        self.others = ttk.Label(other, style="Hint.TLabel", wraplength=900, justify="left")
+        self.others.pack(side="left", padx=8, fill="x", expand=True)
+        from . import settings
+        self.other_folder = settings.load().get("other_mods")
         frame, self.tree = scrolled_tree(self, [("level", "Level"), ("area", "Where"), ("what", "What"),
                                                 ("message", "Conflict")], [70, 90, 260, 560], 26)
         frame.pack(fill="both", expand=True, pady=4)
         self.tree.bind("<Double-1>", lambda e: self.go())
         self.issues = []
+
+    def choose_folder(self):
+        from tkinter import filedialog
+        folder = filedialog.askdirectory(parent=self, title="A folder of mods to check this one against",
+                                         initialdir=self.other_folder or str(self.app.mods_dir()))
+        if folder:
+            self.set_folder(folder)
+
+    def set_folder(self, folder):
+        from . import settings
+        self.other_folder = folder
+        settings.save("other_mods", folder)
+        self.run()
 
     def refresh(self):
         self.run()
@@ -1600,12 +1623,21 @@ class ConflictsTab(Tab):
             return []
         self.app.commit_all()
         self.issues = validate.validate(self.project)
+        try:
+            from pathlib import Path
+            folders = [Path(self.other_folder)] if self.other_folder else None
+            others, said = validate.cross_mod(self.project, folders)
+        except Exception as problem:   # noqa: BLE001 -- never let another mod stop this one opening
+            others, said = [], f"The other mods could not be checked: {type(problem).__name__}: {problem}"
+        self.issues += others
+        self.others.configure(text=said)
         self.tree.delete(*self.tree.get_children())
         for i, issue in enumerate(self.issues):
             self.tree.insert("", "end", iid=str(i), values=(issue.level, issue.area, issue.where, issue.message),
                              tags=(issue.level,))
         errors = len(validate.errors(self.issues))
-        self.summary.configure(text=f"{errors} errors, {len(self.issues) - errors} warnings",
+        notes = sum(1 for issue in self.issues if issue.level == "note")
+        self.summary.configure(text=f"{errors} errors, {len(self.issues) - errors - notes} warnings, {notes} notes",
                                style="Error.TLabel" if errors else "Ok.TLabel")
         return self.issues
 

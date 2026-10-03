@@ -51,6 +51,7 @@ TAGS = {
     "glitch": ("#865e3c", "#e0ae78"),
     "error": ("#c01c28", "#ff8f87"),
     "warning": ("#9c6500", "#f2c04c"),
+    "note": ("#5e5c64", "#a8a6ae"),
 }
 
 # The classic widgets' colors in the dark look, by widget class.

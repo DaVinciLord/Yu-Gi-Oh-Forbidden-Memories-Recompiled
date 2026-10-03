@@ -11,4 +11,7 @@ void *Mods_Find(const char *qualified);
 void Mods_VisitState(void (*visit)(int owner, void *data, size_t size, unsigned version, void *context), void *context);
 /* Any applied mod observes or replaces this gameplay event. */
 int Mods_HasSubscribers(unsigned event);
+/* Subscription `index` (from 0) of any mod: 0 past the last, else 1 with its
+ * mod and event (the Mods window's overlaps). */
+int Mods_SubscriptionAt(int index, int *owner, unsigned *event);
 #endif

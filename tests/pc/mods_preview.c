@@ -79,6 +79,25 @@ int main(void)
     ModsWindow_Init();
     ModsWindow_Size(&w, &h);
     MenuCanvas c = make(w, h);
+    if (getenv("PREVIEW_OVERLAPS")) {
+        /* PREVIEW_OVERLAPS=<mod id>: that mod's Compatibility tab, with what
+         * it changes that the other enabled mods change too, at full size,
+         * with its first "and N more" opened, and in a small window. */
+        for (int i = 0; i < Mods_Count() && strcmp(Mods_Id(i), getenv("PREVIEW_OVERLAPS")); i++)
+            send(MENU_EVENT_KEY_DOWN, 0, 0, 0, MENU_KEY_DOWN);
+        send(MENU_EVENT_BUTTON_DOWN, w * 87 / 100, 238 * h / 640, 0, MENU_KEY_OTHER);
+        save(&c, "tmp/pc/mods-overlaps.ppm");
+        for (int i = 0; i < 6; i++)
+            send(MENU_EVENT_WHEEL, w * 68 / 100, 450 * h / 640, -1, MENU_KEY_OTHER);
+        save(&c, "tmp/pc/mods-overlaps-scrolled.ppm");
+        ModsWindow_Resize(620, 480);
+        ModsWindow_Size(&w, &h);
+        MenuCanvas small = make(w, h);
+        save(&small, "tmp/pc/mods-overlaps-small.ppm");
+        free(small.pixels);
+        free(c.pixels);
+        return 0;
+    }
     /* AI Hard Mode has the longest settings list. */
     for (int i = 0; i < Mods_Count() && strcmp(Mods_Id(i), "ai-hard-mode"); i++)
         send(MENU_EVENT_KEY_DOWN, 0, 0, 0, MENU_KEY_DOWN);

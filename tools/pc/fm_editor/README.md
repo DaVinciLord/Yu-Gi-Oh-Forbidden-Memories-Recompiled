@@ -34,7 +34,7 @@ The window has a tab per table:
 | Guardian Stars | the stars (`guardian_stars`, [Guardian Stars](../../../notes/modding.md#guardian-stars-names-icons-new-stars-and-matchups)): the list of stars with a name and an icon each (**Import icon (PNG)...**, with a preview; the game makes it 16x16 in the disc's stars' colours), **Add star** for 11 to 15 (a card holds its stars in 4 bits, so fifteen at most), and the full grid of matchups: a row is the attacker's star, a column the defender's, a cell the bonus the attacker's side gets, green above 0 and red below; click a cell, type a bonus or use **+ default**, **- default** or **0** (with **Reverse pair gets the opposite** on, the reverse cell takes the opposite sign). **Default bonus** moves the disc's 500 in both cycles, **Retail cycles** and **Clear all** are presets, **Revert to retail** takes the whole key away. **Set stars by rule...** sets many cards' first or second star from their attribute or type through a table you fill in (a Fire monster's first star is Fire), or one star for all, **(none)** included (a first star of none leaves the second as the card's one star, as the game reads it; both none, no star), over a filter of cards like Bulk fusions', with a preview and **Undo last batch**. **Show advanced**: a name per language (`fr=Feu, de=Feuer`), an icon's colours (`game` or its own), and what happens at a summon (`ask`, `first`, `best`). The Cards tab's star lists show the mod's stars as they are named here |
 | Packs | the card packs the mod sells for starchips on the Password screen: each pack's name, description, price, cards a pack and picture, its cards with their tier, weight and chance; an **Advanced** part for everything else; **Shop settings...** and **Simulate...** (below) |
 | Mod info | id, name, version, author, description, `settings`, and the other `mod.json` keys, kept as written (`limits` is the Limits tab's, `guardian_stars` the Guardian Stars tab's) |
-| Conflicts | the loader's checks; double-click a line to go to it |
+| Conflicts | the loader's checks; double-click a line to go to it. Below them, where this mod meets the **other mods installed** (beside the game and in the player's mods folder, or a folder chosen with **Other mods folder...**): the same lines as the game's Mods window, a warning where only one mod's change is used and a note where the changes add up or agree ([When mods overlap](../../../notes/modding.md#when-mods-overlap)) |
 
 **File > Save** writes the mod folder (Ctrl+S); the first save asks where
 (an empty folder, or a parent where a folder named after the mod id is
@@ -756,6 +756,39 @@ Conflicts tab lists, `validate.errors(issues)` the ones the loader refuses,
 (`"error"`/`"warning"`), `area` (the tab: `"Cards"`, `"Fusions"`, `"Map"`...),
 `where`, `message`, and `target`, what to select to show it (a card id, a
 fusion pair, `(duelist, pool)`, a map place).
+
+**Against the other mods.** `validate.cross_mod(project, folders=None,
+settings_path=None)` is `(issues, summary)`: where the mod meets each mod
+installed in `folders`, in the order the game would load them with the
+player's Load order from the port's settings file (`MEMORIES_SETTINGS`, else
+the user directory's `settings.txt`). `validate.mod_folders(project)` is
+where the game finds mods: `MEMORIES_MODS_DIR` when set, else the mods
+beside the game (`validate.shipped_folder()`: beside the editor's program,
+beside the game files the port was last pointed at, or the source tree's
+`mods/`) and the user directory's `mods`; and the folder the mod was opened
+from, which is this mod whatever its id now. Every installed mod counts,
+applied or not; the summary names the ones off in the game now
+(`validate.applied`: `MEMORIES_MODS`, `MEMORIES_MOD_<ID>`, the player's
+choice, `legacy_setting`, `enabled`) and those the game would not load (a
+broken `mod.json`, which the game lists in its folder's place, over a
+shipped copy of its id, but never loads; a missing requirement, or one left
+out itself; a cycle). A card is named as the game will name it: the last
+replace's name in load order, else the disc's. Its issues have `area` `"Other mods"` and
+`level` `"warning"` (only one mod's change is used) or `"note"` (they add
+up, agree, or follow an `after` the winner declared); a problem reading the
+other mods is said beside them and never stops a mod opening.
+`overlaps.py` is the check itself, the Python twin of the game's
+`src/pc/mods/overlap.c`: `overlaps.check(mods, source, involving=None)` over
+`overlaps.Mod`s in load order (with `involving`, only that mod's overlaps
+are worked out), `overlaps.installed(folders)`, `overlaps.load_order(mods,
+settings)`; it reads each file again only when it changed.
+`overlaps.parse` reads a manifest as the game's json.c does (a `\u`
+escape is one byte, a member named twice is met twice, a comma may close a
+list), and a mod's name is cut to 95 bytes as the game keeps it, so the
+lines match byte for byte. `tests/pc/mod_overlaps` holds four mods and the lines both must find, in
+order and with their texts (`tests/test_overlaps.py`,
+`tests/pc/mods_overlap_test.c`), so a rule changed in one and not the other
+fails a test.
 
 **Saving.** `manifest.save_mod(project, folder)` writes the art's PNGs and
 texture pack first (that sets `"textures"`), then `mod.json`, holding only

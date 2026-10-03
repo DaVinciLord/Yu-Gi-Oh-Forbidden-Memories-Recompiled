@@ -11,4 +11,7 @@ void Hooks_Clear(int owner);
 /* Rebuild every chain from the mods now applied (Mods_Active). */
 void Hooks_Relink(void);
 int Hooks_IsHooked(const void *function);
+/* Hook `index` (from 0) of any mod, applied or not: 0 past the last, else 1
+ * with its mod and the function it hooks (the Mods window's overlaps). */
+int Hooks_At(int index, int *owner, const void **function);
 #endif

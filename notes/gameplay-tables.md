@@ -499,7 +499,8 @@ the disc's table and keeps these entries as they are written.
 Mods apply in load order (priority, then `after` and `requires`, then the
 order they were found; [the API 3 guide](mod-api-3.md)), and a later mod's
 fusion, equip or ritual rule wins over an earlier one's for the same cards.
-Pools add up, as above.
+Pools add up, as above. The Mods window lists each place two enabled mods
+meet and how it comes out ([When mods overlap](modding.md#when-mods-overlap)).
 
 ## Code mods
 

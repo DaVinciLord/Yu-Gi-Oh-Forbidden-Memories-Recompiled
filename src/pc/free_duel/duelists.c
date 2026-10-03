@@ -1219,6 +1219,7 @@ void Duelists_Build(void)
     /* A code mod resolves an identity to the id it has this run through the
        host's duelist_id, as it does a card's (modapi.h). */
     Mods_SetDuelistResolver(Duelists_Find);
+    Mods_SetOverlapDuelists(Duelists_Named);
     for (i = 0; i < added_top; i++) count += added[i].used;
     for (i = 0; i < DUELISTS_RETAIL_COUNT; i++) over += replaced[i].used;
     if (count || over)

@@ -116,7 +116,8 @@ path (`"\\DATA\\CARD.MRG;1"`, as the game asks for it) or a raw sector
   positions. The last replacement in startup load order wins, then patches
   apply on top. Competing replacements are reported in the Mods window,
   for named files and for raw sectors alike, and so are two mods patching
-  the same bytes (the later one's bytes are the ones read).
+  the same bytes (the later one's bytes are the ones read; [When mods
+  overlap](#when-mods-overlap)).
   Replacing a raw `lba` region needs a `sectors` count and must fit that
   allocation; an oversized raw replacement is rejected.
 * The streamed files, `MASTER.XA` and `MOVIE.STR`, cannot be replaced or
@@ -249,7 +250,8 @@ When two enabled packs replace the same image read the same way (the same
 archive offset, size, depth and palette), the one later in the mods' load
 order is drawn: the higher `priority` number, or the player's Order in the
 Mods window, or the one that names the other in `after`. That holds however
-the packs were applied, on Linux and on Windows alike. Entries of different
+the packs were applied, on Linux and on Windows alike, and the Mods window
+lists each such image ([When mods overlap](#when-mods-overlap)). Entries of different
 sizes at one offset are not the same image; which one a texel comes from
 follows their size, not the packs.
 
@@ -403,7 +405,7 @@ A mod with only `audio` applies and removes live in **Game > Mods**, with no
 restart; a song that is playing when the mod is applied or removed switches
 at once. When several applied mods replace the same id, the one applied last
 wins, as data overrides do (load order: `priority`, `after`, `requires`, then
-discovery order); the Mods window warns about the overlap.
+discovery order); the Mods window warns about each id two mods replace.
 
 ### Finding the ids
 
@@ -974,6 +976,100 @@ so a mod with `text` or `font` asks for a restart on its own, and so does a
 change to any of its settings (the setting may still say `"restart": true`,
 which shows "Requires a restart" beside it). A `setting` the mod does not
 declare is noted beside the mod and the file read.
+
+## When mods overlap
+
+Two enabled mods may change the same thing. Nothing stops that, and nothing
+is refused: the game reads every mod in load order and each key decides what
+happens, usually the later mod winning. The Mods window says where it
+happens. Its **Compatibility** tab lists, by kind and with counts,
+everything the selected mod changes that another enabled mod changes too,
+one line each: what it is, which mods, and how it comes out. The first four
+lines of a kind show; **and N more** shows the rest (up to 200 at a time). The
+header counts the overlaps between all enabled mods. A line is in the warning
+colour when only one mod's change is used, and dim when the changes add up,
+agree, or follow an order the winning mod asked for:
+
+```
+Fusion 'Kuriboh' + 'Mystical Elf' (Alpha, Beta, Gamma): Gamma wins (later in load order)
+Simon Muran's POW drops (Alpha, Beta): both apply and add up (each edits the pool as the mods before left it)
+Card 'Blue-eyes White Dragon' (Alpha, Beta): the later mod's description is used; the rest combines
+menu.spacing (Beta, Gamma): Gamma wins (it loads after Beta on purpose: after/requires)
+```
+
+Load order is the one in the window, before Apply: enabling, disabling or
+moving a mod's **Load order**, or changing a setting that switches an entry
+on or off, shows the new outcome at once. (What applies live, without a
+restart -- sounds, code hooks, data a mod says needs no restart -- goes in
+after the mods already in place until the game restarts, whatever the
+order says; the restart puts it right.) The list is worked out when the
+enabled mods, their order, their settings or the code mods' hooks change,
+not every frame, so dozens of mods with thousands of entries each cost
+nothing while the window is open (two mods of every pair of 400 cards'
+fusions, 79,800 overlaps, take about a tenth of a second).
+`MEMORIES_TRACE=mods` writes every line to the log (`overlap: warning: Cards:
+...`), for the mods applied at startup and again whenever the window's set
+changes.
+
+What counts as the same thing, and how each comes out, as each key's reader
+decides it:
+
+| Kind | The same thing | How it comes out |
+|---|---|---|
+| `data` | a disc file, by name as the disc's lookup takes it (letter case counts; leading backslashes and the `;1` aside), or raw sectors, which meet where their runs of sectors do (raw sectors and a file by name never meet, though the game reads a raw replacement over that file's sectors: the window does not know where the disc's files lie) | replacements: the later is read; patches: the later's bytes where two patch the same bytes, else both apply; a patch over another mod's replacement is written into it, at the disc's offsets (a warning) |
+| `audio` | a `music`, `xa` or `sfx` id | the later is heard; two files are never the same sound, whatever their names, each being its mod's own |
+| `textures` | an image read the same way: archive, offset, size, stride (none for one read row by row, `row_offsets`), depth and palette (an entry the loader leaves out, or whose part is switched off, is not counted) | the later is drawn; one line per image |
+| `cards` | one of the disc's 722 a `replace` names (an added card's identity cannot be replaced) | the later in load order; the line names whose keys are used and whose are dropped. Its stats, stars, frame, model and effect go over the earlier's; its name, text, password, art, plate (`title`), field art and fusion groups too, and when it leaves one out the earlier's is dropped all the same: every replace of a card starts those from the disc; notes add up |
+| `fusions` | a pair, in either order | the later's result; `remove`s add up |
+| `equips` | an equip card, and its copies (a rule for the card is one for each copy of it, as the game matches the card or its base) | for each monster, the latest entry that says something about it decides (a card before a type before `"replace"` within an entry), so a later rule for a type, or a plain `bonus`, goes over an earlier rule for a card of it, or an earlier `bonus_if`; entries about other monsters add up |
+| `equip_bonus_default` | | the later |
+| `rituals` | a ritual card | the later's recipe |
+| `drops`, `decks` | an opponent's pool, named by name, number, `"all"` (every opponent another mod names) or, in a mod's `drops/` and `decks/` folders, by a duelist of the mod's own (whom it replaces, and the line names him as the mod did, or itself); a pool that is not an object of cards is left out, as the game leaves it | edits add up, each on the pool as the mods before left it; a later `"replace": true` empties it first, and an earlier `"all"` with `"replace": true` empties every pool, so it meets a later mod's edit of any one; a fixed deck (exactly 40 cards) wins over every weighted edit, the later fixed deck over an earlier |
+| `starter` | | the decks add up |
+| `passwords` | a card's password, or its price (`starchips` and `starchips_percent` are two different prices); `"all"` reaches every card another mod names | the later; only the disc's 722 are on the Password screen |
+| `packs`, `pack_shop` | the shop's rules; a shop by id (a pack is its mod's own, `<mod id>:<id>`); a password the Password screen takes, a pack's or a card's (`passwords`) | the rules are the later mod's, every rule it leaves out back at its default; a shop's name and unlock are the later's, the packs of both in it; of packs with one password, the first in the packs' list (by `order`, else as declared) is sold, and a card with it goes before them all (of several cards, the lowest number) |
+| `guardian_stars` | an ordered pair of stars (from `matchups`, `beats`, `mirror`, and `default_bonus` for the disc's cycles; a star named as the mods read so far, its own `stars` first, have named it, as the game reads them); a star's name, icon or palette; `choice` | the later; a later `"replace": true` sets every pair an earlier mod set to 0, and so does the first declaration of a star 11-15 for that star's pairs |
+| `limits`, `chest_overflow` | each key, where `stats` is `attack` and `defense`, a life-point start (a number, or `start`) is both `player` and `opponent`, a duelist's own LP is a side (written as a number, it is the opponent's side, as the game reads it; `"all"` is a duelist of its own, which a named one goes over), and `chest_overflow` is the chest and its starchips, 250 and 0 for what it leaves out (one the game leaves out, a `limit` past 1-255 or `starchips` past 0-999999, is no claim) | the later; different duelists add up |
+| `terrain_bonus` | a terrain and a monster type | the later; a later `"replace": true` clears the earlier |
+| `trap_thresholds` | one of the six attack traps (or a copy of one) | the later |
+| duelists (`duelists/` folder and `"duelists"` list) | a duelist a valid `replace` names; a Free Duel `slot` (40-127, with a `copy`) | the later has the duelist; the earlier keeps the slot, the later takes the next free one |
+| `text` | a string id of the listings (an item may name several, `[8001 8002]`) | the later's words |
+| `font` | | the fonts add up |
+| `title`, `menu` | each key, where the title's and the menus' `spacing` and `entries` are one setting (an entry by its name or its number); a menu button by `"<mod id>:<id>"` | the later; the title's `text` lines add up; a mod loading after another changes its button on purpose, one loading before it is left out (a warning) |
+| code hooks | a game function two mods hook (`host->hook`) | the mod applied last is called first; the others run only if it calls its `original` |
+| events | an event two mods subscribe to (`host->subscribe`) | all are called, by priority; a before-hook that handles it stops the rest |
+
+Every key is read as the type its reader takes, a list or an object; a
+manifest with anything else there (a list where an object belongs) is
+read as the game reads it: that key as nothing, the rest as it is.
+
+Information, not a warning:
+
+* **They agree.** Two mods setting the same value (the same fusion result,
+  the same threshold, the same words for a string) change nothing between
+  them.
+* **They add up.** Pool edits, `remove`s, starter decks, fonts, title text
+  lines, and two card `replace`s that only set different stats.
+* **On purpose.** When the winner lists every other mod of the line in its
+  `after` or `requires`, it is layered over them by design, and the line says
+  so instead of warning. A mod made to go over another should say so with
+  `after` (or `requires`, when it needs it).
+
+An entry a mod's setting switches off (`"setting"`, as on a text file, a
+pack's image or a fusion, equip or ritual entry) is not counted while it is
+off. A code mod's hooks and events are known once its code has run in this
+session. A mod's own `settings` never meet another's: each is kept as
+`mod.<id>.<key>`. An image whose PNG is missing still counts (the loader
+leaves it out), and data a code mod changes by writing memory cannot be
+seen. A name or text longer than a line has room for is cut short.
+
+The [FM Editor](../tools/pc/fm_editor/README.md)'s Conflicts tab checks the
+mod being edited against the other mods installed beside the game and in the
+player's mods folder (or a folder chosen there), with the same lines:
+`tools/pc/fm_editor/overlaps.py` is the Python twin of
+`src/pc/mods/overlap.c`, and both are tested against the three mods in
+`tests/pc/mod_overlaps`, line for line and in order (`pc_mods_overlap`,
+`test_overlaps.py`).
 
 ## Code mods
 
