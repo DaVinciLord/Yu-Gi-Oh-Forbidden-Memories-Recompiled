@@ -38,7 +38,12 @@ job macOS ARM64 (`macos-15`) avec LLVM 21.1.8, cache des dépendances vérifiée
 tests LLVM, linkage/polices, composants normaux et ASan/UBSan. Les premiers
 jobs ont révélé des tests à adapter après extraction des sous-systèmes d'état
 et un `tmpfile()` non portable sur Windows ; leur correction est validée
-localement, les résultats Linux/Windows complets restent attendus.
+localement. Le job macOS du run `37157433569` passe la compilation complète,
+le linkage et ASan/UBSan avec le LLVM officiel sur macOS 15. Les suites Linux
+et Windows passent maintenant l'étape composants ; leurs premiers builds
+complets ont révélé un include `stdint.h` manquant dans la trace des noms
+et la normalisation POSIX des chemins de l'inventaire Windows. Ces corrections
+sont en revalidation CI.
 
 `test_llvm_guest.py` comporte 12 tests. Un fixture IR transformé puis compilé
 et exécuté en optimisation vérifie les accès PS1, conversions, memcpy/memmove/
@@ -46,6 +51,13 @@ memset, atomiques et callback sur des régions contrôlées. Les rejets couvrent
 les espaces d'adresse non supportés, l'assembleur machine, les types scalable,
 les appels avec unwind et les adresses PS1 hors 32 bits. Preuve locale :
 `llvm-execution-tests.log`.
+
+`test_ps1_layouts.py` compare sans SDK système les 185 records des en-têtes
+`ygo_types.h`, `libgte.h`, `libgpu.h` et `libgs.h`. Tailles, alignements et
+offsets correspondent sur MIPS console, Linux i386, Windows i686 et macOS
+ARM64. Aucun de ces en-têtes n'est ignoré en cas d'erreur. Ce contrôle ne
+compare pas les structures purement natives ni tous les en-têtes annexes.
+Preuve : `ps1-layouts.log`.
 
 `tools/pc/build.py --target linux|windows|macos` est l'entrée commune. Les
 métadonnées de cibles, sources résidentes, modules et sélection native sont

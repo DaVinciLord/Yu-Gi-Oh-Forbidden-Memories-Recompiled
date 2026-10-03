@@ -9,9 +9,9 @@ TARGETS = {
 
 def game_sources():
     """The same resident and overlay inventory for every PC architecture."""
-    groups = {'resident': sorted(str(p.relative_to(ROOT)) for directory in ('src/game', 'src/pc/game')
+    groups = {'resident': sorted(p.relative_to(ROOT).as_posix() for directory in ('src/game', 'src/pc/game')
                                  for p in (ROOT / directory).glob('*.c'))}
-    groups.update((name, sorted(str(p.relative_to(ROOT)) for p in ROOT.glob(pattern)))
+    groups.update((name, sorted(p.relative_to(ROOT).as_posix() for p in ROOT.glob(pattern)))
                   for name, pattern, _, _ in MODULES)
     return groups
 
