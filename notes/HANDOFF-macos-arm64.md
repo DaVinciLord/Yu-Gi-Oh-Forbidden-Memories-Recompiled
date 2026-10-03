@@ -1,6 +1,6 @@
 # Handoff — Forbidden Memories sur macOS Apple Silicon
 
-État vérifié le 3 octobre 2026. Ce document est le point de reprise opérationnel ; les deux autres notes macOS conservent l’historique des investigations.
+État vérifié le 4 octobre 2026. Ce document est le point de reprise opérationnel ; les deux autres notes macOS conservent l’historique des investigations.
 
 ## Intégration durable et rebase upstream — 3 octobre 2026
 
@@ -44,6 +44,15 @@ et Windows passent maintenant l'étape composants ; leurs premiers builds
 complets ont révélé un include `stdint.h` manquant dans la trace des noms
 et la normalisation POSIX des chemins de l'inventaire Windows. Ces corrections
 sont en revalidation CI.
+
+Résultat final de ces corrections : la CI du commit `e726cba84` est verte,
+run [37158015033](https://github.com/DaVinciLord/Yu-Gi-Oh-Forbidden-Memories-Recompiled/actions/runs/37158015033).
+Les builds complets Linux i386, Windows i686 et macOS ARM64 compilent et
+lient sans disque. Les suites composants Linux/Windows, ASan/UBSan Linux,
+et composants ARM64 normaux/ASan/UBSan avec LLVM 21.1.8 passent. Le job macOS
+valide également les 12 tests LLVM, les 185 layouts PS1, le linkage, les
+polices et les contrats de sources. Cela ne constitue pas un matching binaire
+console ni une exécution du jeu Windows/Linux avec disque.
 
 `test_llvm_guest.py` comporte 12 tests. Un fixture IR transformé puis compilé
 et exécuté en optimisation vérifie les accès PS1, conversions, memcpy/memmove/

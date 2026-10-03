@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Experimental full macOS arm64 translated build; no i386 artifacts reused.
+"""macOS ARM64 driver for the common PC build.
 
-The driver generates copies/IR under tmp, compiles every resident and configured
+The driver emits IR under tmp, compiles every resident and configured
 module unit, and links native SDK/platform services. Missing game functions use
 existing fatal Memories_Unimplemented diagnostics, never success placeholders.
 
@@ -27,10 +27,6 @@ from native_call_marshalling import emit_native_calls
 from build_config import MODULES, MODULE_CONFIG, GATED_MODULES, native_sources, game_sources
 
 ROOT = Path(__file__).resolve().parents[2]
-SECTION = re.compile(r'__attribute__\s*\(\(\s*section\s*\(\s*"[^"\n]+"\s*\)\s*\)\)')
-SYMBOL = r'[A-Za-z_][\w.$]*'
-EXCLUDE = {'src/pc/guest/resolve.c', 'src/pc/guest/image.c', 'src/pc/guest/branch_thunks.c', 'src/pc/guest/state.c',
-           'src/pc/platform/x11.c', 'src/pc/platform/audio_alsa.c', 'src/pc/platform/gamepad_evdev.c'}
 ORDINARY = {'src/pc/memory.c', 'src/pc/guest/state_translated.c'}
 HOST_LIBC = {'printf','sprintf','strcmp','strcpy','bzero','qsort','memcpy','memset','memmove',
              'strlen','strcat','strncmp','strncpy','memcmp','snprintf','vsnprintf',
@@ -62,7 +58,7 @@ def optimize_translated_ir(text):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--build',type=Path,default=ROOT/'tmp/arm64-build')
+    parser.add_argument('--build',type=Path,default=ROOT/'tmp/pc/macos')
     parser.add_argument('--jobs',type=int,default=8)
     parser.add_argument('--compile-only',action='store_true')
     parser.add_argument('--instrument-softgpu', action='store_true', help='Keep full SoftGpu instrumentation for optimized A/B comparisons')
@@ -181,7 +177,7 @@ def main():
             if args.optimize: text=optimize_translated_ir(text)
         except TranslationError as error:path_for('logs',source,'.transform.log').write_text(str(error));return source,1
         if not ir.exists() or ir.read_text()!=text:ir.write_text(text)
-        if obj.exists() and obj.stat().st_mtime>=max(ir.stat().st_mtime,Path(__file__).stat().st_mtime,(ROOT/'tools/pc/translate_guest_ir.py').stat().st_mtime):return source,0
+        if obj.exists() and obj.stat().st_mtime>=max(ir.stat().st_mtime,Path(__file__).stat().st_mtime):return source,0
         return source,run_logged([cc,'-isysroot',sdk,'-O2' if args.optimize else '-O0','-fno-strict-aliasing','-c',str(ir),'-o',str(obj)],path_for('logs',source,'.object.log'))
     with concurrent.futures.ThreadPoolExecutor(args.jobs) as pool:adapted=list(pool.map(adapt,jobs))
     failures=[s for s,status in adapted if status]
