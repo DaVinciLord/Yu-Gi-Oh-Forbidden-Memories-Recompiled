@@ -1,8 +1,9 @@
-/* Host memory the game is handed, below 4 GB (low_memory.h). A 32-bit build
- * uses malloc and free and compiles nothing here. */
-#if defined(__x86_64__) || defined(__aarch64__)
+/* Host memory the game is handed, below 4 GB (low_memory.h). Where the
+ * game's pointers are native (a 32-bit build, a gcc test) these are malloc
+ * and free and nothing here is compiled. */
 #define _DEFAULT_SOURCE /* MAP_ANONYMOUS, MAP_FIXED_NOREPLACE */
 #include "low_memory.h"
+#ifdef MEMORIES_LOW_MEMORY
 #include "pc/compat/mman.h"
 #include <stdint.h>
 #include <stdio.h>
@@ -69,14 +70,41 @@ void *Memories_LowAlloc(size_t size)
     return NULL;
 }
 
+/* A free the allocator cannot take: reported once, the region left as it is. */
+static void refuse_free(const void *pointer, const char *why)
+{
+    static int reported;
+    if (!reported++) fprintf(stderr, "memories-pc: Memories_LowFree(%p): %s; not freed\n", pointer, why);
+}
+
 void Memories_LowFree(void *pointer)
 {
+    const unsigned char *base = (const unsigned char *)(uintptr_t)MEMORIES_LOW_MEMORY_BASE;
     Block *block, **link, *after;
     if (!pointer) return;
+    if (state <= 0 || (const unsigned char *)pointer < base + ALIGN ||
+        (const unsigned char *)pointer >= base + MEMORIES_LOW_MEMORY_SIZE ||
+        ((uintptr_t)pointer - (uintptr_t)base) % ALIGN) {
+        refuse_free(pointer, "not a block of the low memory region");
+        return;
+    }
     block = (Block *)((unsigned char *)pointer - ALIGN);
     for (link = &free_list; *link && *link < block; link = &(*link)->next) {
     }
     after = *link;
+    /* Already free: it is a free block, or lies inside the free block
+     * before it (merged into it when it was freed). */
+    if (after == block) {
+        refuse_free(pointer, "already free");
+        return;
+    }
+    if (link != &free_list) {
+        const Block *before = (const Block *)((unsigned char *)link - offsetof(Block, next));
+        if ((const unsigned char *)before + before->size > (const unsigned char *)block) {
+            refuse_free(pointer, "already free");
+            return;
+        }
+    }
     block->next = after;
     *link = block;
     if (after && (unsigned char *)block + block->size == (unsigned char *)after) {

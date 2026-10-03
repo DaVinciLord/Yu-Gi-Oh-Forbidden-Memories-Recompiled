@@ -10,15 +10,25 @@
  * anywhere (MEMORIES_X64_HIGH_HEAP=1 puts it above 4 GB to prove it), so
  * there they come from a 16 MiB region at the fixed address
  * MEMORIES_LOW_MEMORY_BASE, below the interpreter's stack and after the
- * compiled text's region (src/pc/text/translation.c), which
- * Memories_GuestMap holds from the start like the other fixed regions.
- * Like those, a fixed address keeps the blocks where they were for save
- * states (X3).
+ * compiled text's region (src/pc/text/translation.c), mapped when the
+ * first block is asked for. Blocks asked for in the same order land at the
+ * same addresses in every run; the game asks for some in the order play
+ * goes (a guardian star's name, a kanji glyph), so an address is not a
+ * block's identity.
+ *
+ * The region is the game's where its pointers are 4 bytes: the condition
+ * of G32 (src/port_ptr.h), MEMORIES_LOW_MEMORY below. Elsewhere, the 32-bit
+ * builds and a 64-bit test built with gcc (whose G32 is a native pointer),
+ * these are malloc and free and low_memory.c compiles nothing.
  *
  * Memories_LowAlloc returns NULL when the region is full or cannot be had,
  * as malloc does when out of memory; Memories_LowFree takes NULL and only
- * blocks Memories_LowAlloc returned. Game thread only. */
-#if defined(__x86_64__) || defined(__aarch64__)
+ * blocks Memories_LowAlloc returned: anything else (outside the region, or
+ * a block already free) is reported and left alone. Game thread only. */
+#if defined(MEMORIES_PC) && defined(__clang__) && (defined(__x86_64__) || defined(__aarch64__))
+#define MEMORIES_LOW_MEMORY 1
+#endif
+#ifdef MEMORIES_LOW_MEMORY
 #include <stddef.h>
 #define MEMORIES_LOW_MEMORY_BASE 0x9E000000u
 #define MEMORIES_LOW_MEMORY_SIZE 0x01000000u

@@ -62,7 +62,13 @@ static TextUnit *language_unit;
 #define ARENA_ALIGN 16u
 static unsigned char *arena;
 static size_t arena_used;
-static int unpinned; /* a unit stayed on the heap */
+static int unpinned; /* a unit is outside the region: on the heap, or in low memory */
+#ifdef MEMORIES_LOW_MEMORY
+static int low_fallback; /* in low memory (low_memory.h), the region being full */
+#define OFF_REGION (low_fallback ? "partly in the low memory region (the text region is full)" : "on the heap")
+#else
+#define OFF_REGION "on the heap"
+#endif
 
 static unsigned char *arena_take(size_t size)
 {
@@ -98,8 +104,9 @@ static void pin(TextUnit *unit)
     if (!unit->size) return;
     if (!(moved = arena_take(unit->size))) {
         unpinned = 1;
-#if defined(__x86_64__) || defined(__aarch64__)
+#ifdef MEMORIES_LOW_MEMORY
         /* One byte more, as arena_take gives. */
+        low_fallback = 1;
         if (!(moved = Memories_LowAlloc(unit->size + 1))) {
             fprintf(stderr, "memories-pc: no room below 4 GB for %lu bytes of text\n", (unsigned long)unit->size);
             Crash_ReportFatal("text", "no room below 4 GB for the compiled text");
@@ -156,7 +163,7 @@ static void measure_layout(void)
     layout.used = (unsigned)(layout.base ? arena_used : bytes);
     if (layout.used) {
         LOG(LOG_MODS, "text: %u bytes %s, CRC-32 %08x", layout.used,
-            layout.base ? "in the region at 0x9C000000" : "on the heap", layout.crc);
+            layout.base ? "in the region at 0x9C000000" : OFF_REGION, layout.crc);
     }
 }
 
