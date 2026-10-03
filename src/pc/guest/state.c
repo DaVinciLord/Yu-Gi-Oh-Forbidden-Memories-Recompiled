@@ -88,11 +88,11 @@ struct MemoriesState {
 
 static Region *regions;
 static unsigned region_count;
-#if defined(_WIN32) || defined(__ANDROID__)
+#if defined(_WIN32) || defined(__ANDROID__) || defined(__aarch64__)
 /* Windows has no ucontext, and neither has Android's C library (bionic).
  * A context there is the stack pointer of a suspended
- * Memories_ContextSwitch (state_i386.S, state_x86_64.S), which keeps the
- * callee-saved registers on that stack. */
+ * Memories_ContextSwitch (state_i386.S, state_x86_64.S, state_aarch64.S),
+ * which keeps the callee-saved registers on that stack. */
 #define ASM_CONTEXT_SWITCH 1
 void Memories_ContextSwitch(uintptr_t *from_sp, const uintptr_t *to_sp);
 static uintptr_t service_context, game_context;
@@ -159,10 +159,11 @@ static void set_stack_bounds(const uint32_t *bounds)
 #define set_stack_bounds(bounds) ((void)0)
 #endif
 
-#if defined(__x86_64__)
-/* setjmp_x86_64.S: where the registers for a game jmp_buf are kept. The
- * game's buffer (the Psy-Q int[12] at 0x800E9DC0) is too small for them, so
- * each buffer address gets a host slot of 240 bytes. The game uses one. */
+#if defined(__x86_64__) || defined(__aarch64__)
+/* setjmp_x86_64.S, setjmp_aarch64.S: where the registers for a game jmp_buf
+ * are kept. The game's buffer (the Psy-Q int[12] at 0x800E9DC0) is too
+ * small for them, so each buffer address gets a host slot of 240 bytes. The
+ * game uses one. */
 static struct {
     void *buffer;
     uint64_t words[30];
@@ -201,6 +202,20 @@ static uintptr_t switch_frame(uintptr_t limit, void (*function)(void))
     uintptr_t *frame = slot - 8 - 20;
     memset(frame, 0, (size_t)((char *)(slot + 8) - (char *)frame));
     *slot = (uintptr_t)function;
+    return (uintptr_t)frame;
+}
+#elif defined(__aarch64__)
+/* A frame for Memories_ContextSwitch (state_aarch64.S) to resume `function`
+ * from, below `limit`: what it pops (D8-D15, X19-X28, X29), then LR, which
+ * it returns to. `function` never returns (it would start over). It starts
+ * with the stack 16-byte aligned, as AAPCS64 requires, and a zero frame
+ * pointer, where a stack walk ends. Returns the context. */
+static uintptr_t switch_frame(uintptr_t limit, void (*function)(void))
+{
+    uintptr_t start = (limit - 64u) & ~(uintptr_t)15; /* the stack pointer `function` starts with */
+    uintptr_t *frame = (uintptr_t *)(start - 176u);
+    memset(frame, 0, 176u);
+    frame[19] = (uintptr_t)function; /* LR, at 152 */
     return (uintptr_t)frame;
 }
 #else
@@ -525,7 +540,7 @@ static void subsystems(MemoriesState *state)
         seed.size = size;
         Memories_StateChunk(state, "mod-rng", &seed, 1);
     }
-#if defined(__x86_64__)
+#if defined(__x86_64__) || defined(__aarch64__)
     {
         /* The game's jmp_buf lives in a host slot here (Memories_JumpSlot),
          * outside guest RAM, which carries it on 32-bit: Main_Init's setjmp,
@@ -620,7 +635,7 @@ static void serialize(MemoriesState *state)
     }
     subsystems(state);
     {
-        MemoriesStateField fields[] = {{(void *)(uintptr_t)entry.esp, STACK_TOP - entry.esp}};
+        MemoriesStateField fields[] = {{(void *)(uintptr_t)MEMORIES_STATE_ENTRY_SP(entry), STACK_TOP - MEMORIES_STATE_ENTRY_SP(entry)}};
         Memories_StateChunk(state, "stack", fields, 1);
     }
     Spu_Hold(0);
@@ -716,7 +731,7 @@ static void apply(void)
     chunk = find_chunk(&state, "entry", &size);
     memcpy(&entry, chunk, sizeof(entry));
     chunk = find_chunk(&state, "stack", &size);
-    memcpy((void *)(uintptr_t)entry.esp, chunk, size);
+    memcpy((void *)(uintptr_t)MEMORIES_STATE_ENTRY_SP(entry), chunk, size);
     free(pending_image);
     pending_image = NULL;
     Spu_Hold(0);
@@ -740,7 +755,7 @@ static void apply(void)
          * on the game stack, below what the state restored there. */
         resume_entry = entry;
         resume_value = value;
-        game_context = switch_frame((uintptr_t)entry.esp - 64u, resume_game);
+        game_context = switch_frame(MEMORIES_STATE_ENTRY_SP(entry) - 64u, resume_game);
         Memories_ContextSwitch(&service_context, &game_context);
     }
 #else
@@ -1015,7 +1030,8 @@ static int load(const char *path)
         const uint8_t *system = find_chunk(&state, "system", &size);
         if (system && size == sizeof(saved_by)) {
             memcpy(saved_by, system, sizeof(saved_by) - 1);
-        } else if (entry.esp >= OLD_LINUX_STACK_BASE && entry.esp < OLD_LINUX_STACK_BASE + STACK_SIZE) {
+        } else if (MEMORIES_STATE_ENTRY_SP(entry) >= OLD_LINUX_STACK_BASE &&
+                   MEMORIES_STATE_ENTRY_SP(entry) < OLD_LINUX_STACK_BASE + STACK_SIZE) {
             refuse("%s was saved by an older Linux build, whose game stack was elsewhere; save states don't carry "
                    "over across this update (memory card saves do)", path);
             free(image);
@@ -1031,7 +1047,8 @@ static int load(const char *path)
         }
     }
     chunk = find_chunk(&state, "stack", &size);
-    if (!chunk || entry.esp < STACK_BASE || entry.esp >= STACK_TOP || size != STACK_TOP - entry.esp ||
+    if (!chunk || MEMORIES_STATE_ENTRY_SP(entry) < STACK_BASE || MEMORIES_STATE_ENTRY_SP(entry) >= STACK_TOP ||
+        size != STACK_TOP - MEMORIES_STATE_ENTRY_SP(entry) ||
         !find_chunk(&state, "memory", &size) || size != MEMORIES_GUEST_RAM_SIZE + SCRATCHPAD_SIZE) {
         refuse("%s: damaged state", path);
         free(image);
@@ -1064,10 +1081,11 @@ static int load(const char *path)
 static int from_game_code(void)
 {
     uint32_t caller;
-    if (Memories_StateEntry.esp < STACK_BASE || Memories_StateEntry.esp >= STACK_TOP) {
+    if (MEMORIES_STATE_ENTRY_SP(Memories_StateEntry) < STACK_BASE ||
+        MEMORIES_STATE_ENTRY_SP(Memories_StateEntry) >= STACK_TOP) {
         return 0;
     }
-    caller = *(const uint32_t *)(uintptr_t)Memories_StateEntry.esp;
+    caller = MEMORIES_STATE_ENTRY_CALLER(Memories_StateEntry);
     return caller >= (uintptr_t)__start_game_text && caller < (uintptr_t)__stop_game_text;
 }
 

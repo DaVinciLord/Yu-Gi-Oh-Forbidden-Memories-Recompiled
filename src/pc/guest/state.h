@@ -49,7 +49,13 @@ int Memories_StateLoading(const MemoriesState *state);
  * and entry registers are scanned; native chunks keep their own formats. */
 void Memories_StateRemapRange(MemoriesState *state, uint32_t from, uint32_t to, uint32_t size);
 
-/* Registers on entry to VSync, written by the assembly entry (state_i386.S). */
+/* Registers on entry to VSync, written by the assembly entry (state_i386.S,
+ * state_x86_64.S, state_aarch64.S): what the game caller expects back. The
+ * stack pointer as the caller left it (MEMORIES_STATE_ENTRY_SP), and where
+ * VSync returns to (MEMORIES_STATE_ENTRY_CALLER): on x86 the word the stack
+ * pointer points at, on AArch64 the link register. The layout is the
+ * "entry" chunk of a state, and a state loads only in a build for the
+ * system that saved it. */
 #if defined(__x86_64__)
 /* state_x86_64.S. The stack pointer keeps the i386 name, so the state code
  * reads one name on both. */
@@ -57,10 +63,23 @@ typedef struct MemoriesStateEntry {
     uint64_t rbx, rbp, rdi, rsi, r12, r13, r14, r15, esp; /* esp: rsp, at the return address */
     uint64_t xmm[20]; /* xmm6-xmm15, which Win64 keeps across a call too */
 } MemoriesStateEntry;
+#define MEMORIES_STATE_ENTRY_SP(entry) ((entry).esp)
+#define MEMORIES_STATE_ENTRY_CALLER(entry) (*(const uint64_t *)(uintptr_t)(entry).esp)
+#elif defined(__aarch64__)
+/* state_aarch64.S. `esp` is SP as the caller left it, as on x86-64. */
+typedef struct MemoriesStateEntry {
+    uint64_t x19_x28[10];  /* offsets 0..72 */
+    uint64_t x29, lr, esp; /* 80, 88, 96 */
+    uint64_t d8_d15[8];    /* 104: the low halves of V8-V15 */
+} MemoriesStateEntry;
+#define MEMORIES_STATE_ENTRY_SP(entry) ((entry).esp)
+#define MEMORIES_STATE_ENTRY_CALLER(entry) ((entry).lr)
 #else
 typedef struct MemoriesStateEntry {
     uint32_t ebx, esi, edi, ebp, esp; /* esp points at the return address */
 } MemoriesStateEntry;
+#define MEMORIES_STATE_ENTRY_SP(entry) ((entry).esp)
+#define MEMORIES_STATE_ENTRY_CALLER(entry) (*(const uint32_t *)(uintptr_t)(entry).esp)
 #endif
 extern MemoriesStateEntry Memories_StateEntry;
 
