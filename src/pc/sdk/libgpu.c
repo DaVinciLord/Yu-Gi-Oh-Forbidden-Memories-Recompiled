@@ -296,6 +296,16 @@ static void frame_hash(void)
     fflush(out);
 }
 
+/* The display area as it stands, shown in the window with the port's menu
+ * and notices over it, with no game frame counted and nothing drawn: the
+ * control channel's wait for its first client (control.c), before the game
+ * has shown a frame, which is when the window first gets its picture. */
+void Memories_ShowStill(void)
+{
+    int w = disp_env.disp.w > 0 ? disp_env.disp.w : 320, h = disp_env.disp.h > 0 ? disp_env.disp.h : 240;
+    Platform_Present(SoftGpu_Vram(), SOFT_GPU_WIDTH, disp_env.disp.x, disp_env.disp.y, w, h, disp_env.isrgb24);
+}
+
 void Memories_PresentDisplay(void)
 {
     const char *dump = getenv("MEMORIES_DUMP_FRAME");

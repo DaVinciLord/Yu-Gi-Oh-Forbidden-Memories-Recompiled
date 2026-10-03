@@ -2,6 +2,9 @@
 #define MEMORIES_PC_SDK_DISPLAY_H
 /* Show the area selected by the last PutDispEnv. Main thread only. */
 void Memories_PresentDisplay(void);
+/* The display area shown as it stands, menu and notices over it, no frame
+ * counted (the control channel's wait). Main thread only. */
+void Memories_ShowStill(void);
 unsigned Memories_PresentedFrames(void);
 /* Frames that reached the window: presentation is paced apart from the game. */
 unsigned Memories_ShownFrames(void);

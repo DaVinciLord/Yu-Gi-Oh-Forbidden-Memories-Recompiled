@@ -326,6 +326,9 @@ void Platform_ControlIdle(void)
     /* Waiting on purpose, not frozen: every watch sees a heartbeat. */
     __atomic_add_fetch(&Monitor_Shared()->heartbeat, 1, __ATOMIC_RELEASE);
     last_vsync_real = now_us();
+    /* A present meanwhile (the wait's still) services the clock: the virtual
+     * one must not take the wait for a spin and step. */
+    if (deterministic_last_wait) deterministic_last_wait = last_vsync_real;
 #ifdef _WIN32
     Win32_Heartbeat();
 #endif

@@ -86,9 +86,10 @@ static void wait_answered(int button, int *quit)
  * number for as long as it takes, 0 not at all): a run is the client's from
  * its first frame. Past the time the game goes on by itself, as when a
  * client has left, and a client may attach later. In a window the wait says
- * so in a notice, which (or closing the window) ends it; the clock stands
- * paused meanwhile, which is what lets the notice and the quit question be
- * drawn and answered with no frame presented. */
+ * so in a notice, which (or closing the window) ends it: the window is
+ * given a still of the display area to draw it over (Memories_ShowStill),
+ * and the clock stands paused meanwhile, so that the backend's pumps
+ * repaint the menu and the notice with no game frame. */
 static void wait_first(unsigned port)
 {
     static const char *const buttons[] = {"Play now"};
@@ -116,6 +117,11 @@ static void wait_first(unsigned port)
             attach();
             break;
         }
+        /* Before its first frame the window has no picture to draw the
+         * notice over: it gets the display area as it stands (black at
+         * boot), twice a second (once was too early, before the window was
+         * up), and the paused clock's pumps repaint the menu and notice. */
+        if (waited % 500 == 0) Memories_ShowStill();
         waited += WAIT_MS;
         Platform_ControlIdle();
         Platform_PumpEvents();
@@ -336,17 +342,18 @@ void Control_Point(void)
         start();
         if (channel != ON) return;
     }
+    /* A client that has gone mid-step: its pads are let go now, and the
+     * game runs on by itself; seen before anyone new is turned away, so a
+     * client reconnecting at once is taken, not told it is busy. */
+    if (attached && running && (int)(Platform_VBlankCount() - target) < 0 && ControlNet_Gone()) {
+        detach("the client left during a step; the game runs on");
+    }
     if (!attached) {
         if (!ControlNet_Accept(0)) return;
         attach();
     }
     ControlNet_RefuseOthers("err busy: another client is attached\n");
-    if (running && (int)(Platform_VBlankCount() - target) < 0) {
-        /* A client that has gone mid-step: its pads are let go now, and
-         * the game runs on by itself. */
-        if (ControlNet_Gone()) detach("the client left during a step; the game runs on");
-        return;
-    }
+    if (running && (int)(Platform_VBlankCount() - target) < 0) return;
     running = 0;
     if (owed) {
         owed = 0;

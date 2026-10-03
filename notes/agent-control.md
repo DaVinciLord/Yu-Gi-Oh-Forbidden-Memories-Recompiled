@@ -129,8 +129,14 @@ build with the old combination; the eight smoke cases unchanged.
   `MEMORIES_CONTROL_WAIT` seconds (10 unset; a negative number as long as it
   takes, which `yfm_control.py` sets, its game being its own; 0 not at
   all), so a client's run is its own from the first frame. In a window a
-  notice says so, with Play now; the clock stands paused meanwhile, which is
-  what draws the notice, and closing the window (or Esc) quits at once,
+  notice says so, with Play now, over the menu bar. Before its first frame
+  the window has no picture to draw them over, so the wait gives it the
+  display area as it stands (black at boot) twice a second
+  (`Memories_ShowStill`: no frame counted, nothing drawn), and the clock
+  stands paused so that the backend's pumps repaint the menu (checked with
+  a capture of the game's window alone, under the crash monitor: the bar,
+  the notice and its button are there at 3, 6 and 10 s). Closing the
+  window (or Esc) quits at once,
   whatever Confirm before quitting says. The freeze watches see a heartbeat
   and stay on: the watchdog goes off only once a client is attached. Past
   the time the game goes on by itself, logs it, and a client may attach at
