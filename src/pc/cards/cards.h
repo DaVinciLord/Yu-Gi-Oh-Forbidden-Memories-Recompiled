@@ -56,6 +56,11 @@ int Cards_RetailType(int id);
  * one of those made a monster or another of them. The disc's fusions and
  * equips are of the card it was, so they no longer hold for it (rules.h). */
 int Cards_KindChanged(int id);
+/* The disc card the opponent's scripts take `id` for when they look a card up
+ * by number: its effect (Cards_EffectId) while it is still that card's kind,
+ * -1 when a "replace" made it another kind. Reshiram replacing Dark Hole is
+ * no Dark Hole to play; a magic card whose "effect" is Dark Hole is one. */
+int Cards_AiId(int id);
 /* Whether the disc has a 3D model for `id` to stand as: a magic, trap, ritual
  * or equip card a mod made a monster has none unless it borrows one. */
 int Cards_HasModel(int id);
