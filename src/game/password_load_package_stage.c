@@ -39,7 +39,7 @@ void Password_LoadPackageStage(FileTransferDescriptor *object, s32 mode) {
         object->y = 0xF0;
         object->w = 0x100;
         object->h = 0x10;
-        LoadImage2((RECT *)object, (u32 *)D_8009B118);
+        LoadImage2((RECT *)object, (u32 *G32)D_8009B118);
         object->value_0C = (s32)D_801A8000;
         object->value_08 = (s32)D_801A8000;
         object->phase_size = 3 * FILE_SECTOR_SIZE;

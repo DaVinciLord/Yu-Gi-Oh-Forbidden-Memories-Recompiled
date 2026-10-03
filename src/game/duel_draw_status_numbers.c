@@ -144,7 +144,7 @@ static void Duel_DrawWideLifePointPanel(DisplayObject *panel)
     s32 left;
     s32 top;
 
-    if (((SpriteSheetHeader *)panel->field_4C)->count != 1 ||
+    if (((SpriteSheetHeader *G32)panel->field_4C)->count != 1 ||
         (panel->flags & DISPLAY_OBJECT_FLAG_CLIP_TEST) || (panel->attribute & 0x800000)) {
         return;
     }
@@ -188,7 +188,7 @@ void Duel_DrawLifePointsAndDeckCounts(DisplayObject *arg0)
 
     Duel_UpdateLifePointDisplay(&D_800E9FF0[0]);
     Duel_UpdateLifePointDisplay(&D_800E9FF0[1]);
-    pos = (DisplayObject *)arg0->field_50.word;
+    pos = (DisplayObject *G32)arg0->field_50.word;
 #ifdef MEMORIES_PC
     digits = Duel_LifePointDigits();
 #endif

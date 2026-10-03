@@ -112,7 +112,7 @@ void func_800323F8(u8 *base, void *deck, s32 other, s32 flags)
        is kept outside the save (Cards_ChestSlot). */
     BUILD_DECK_TRANSITION_STATE_VIEW(state)[0].pad_6343 = flags;
     BUILD_DECK_TRANSITION_STATE_VIEW(state)[0].deck_cards = deck;
-    BUILD_DECK_TRANSITION_STATE_VIEW(state)[1].deck_cards = (u16 *)other;
+    BUILD_DECK_TRANSITION_STATE_VIEW(state)[1].deck_cards = (u16 *G32)other;
     BUILD_DECK_TRANSITION_STATE_VIEW(state)[0].pane_index = 0;
     BUILD_DECK_TRANSITION_STATE_VIEW(state)[1].pane_index = 0;
     for (pane = 0; pane < 2; pane++) {
@@ -139,7 +139,7 @@ void func_800323F8(u8 *base, void *deck, s32 other, s32 flags)
         decks->first = 0;
         decks->cursor = 0;
         decks->sort_choice = 0;
-        decks->sort_mode = ((u8 *)(decks->kind * 16 + icons))[1] & 0xF;
+        decks->sort_mode = ((u8 *G32)(decks->kind * 16 + icons))[1] & 0xF;
         cards = ws->deck_cards;
         for (j = 0; j < DECK_SIZE; j++, cards++) {
             entry = (u8 *)&decks->entries[j] + 8;
@@ -170,7 +170,7 @@ void func_800323F8(u8 *base, void *deck, s32 other, s32 flags)
         chest->row_count = CARD_COUNT_LIVE;
         chest->cursor = 0;
         chest->sort_choice = 0;
-        chest->sort_mode = ((u8 *)(chest->kind * 16 + icons))[1] & 0xF;
+        chest->sort_mode = ((u8 *G32)(chest->kind * 16 + icons))[1] & 0xF;
         stats = all_stats;
         for (j = 0; j < CARD_COUNT_LIVE; stats++, j++) {
             id = j + 1;

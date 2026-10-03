@@ -124,7 +124,7 @@ void AiScript_Jump(void)
     register AiScriptState *state = &gAiScript_State;
 
     state->script_cursor =
-        (u8 *)(result + (s32)state->script_base);
+        (u8 *G32)(result + (s32)state->script_base);
 }
 
 /* The AI script VM's control-flow opcodes: the six conditional jumps, which
@@ -148,7 +148,7 @@ void AiScript_JumpGreaterEqual(void)
     if (values[a] >= values[b]) {
         register AiScriptState *s = &gAiScript_State;
         offset += (s32)s->script_base;
-        s->script_cursor = (u8 *)offset;
+        s->script_cursor = (u8 *G32)offset;
     }
 }
 
@@ -162,7 +162,7 @@ void AiScript_JumpGreater(void)
     if (values[a] > values[b]) {
         register AiScriptState *s = &gAiScript_State;
         offset += (s32)s->script_base;
-        s->script_cursor = (u8 *)offset;
+        s->script_cursor = (u8 *G32)offset;
     }
 }
 
@@ -175,7 +175,7 @@ void AiScript_JumpEqual(void)
     if (gAiScript_aMemory[first] == gAiScript_aMemory[second]) {
         AiScriptState *state = &gAiScript_State;
         offset += (s32)state->script_base;
-        state->script_cursor = (u8 *)offset;
+        state->script_cursor = (u8 *G32)offset;
     }
 }
 
@@ -189,7 +189,7 @@ void AiScript_JumpNotEqual(void)
     if (values[first] != values[second]) {
         register AiScriptState *state = &gAiScript_State;
         offset += (s32)state->script_base;
-        state->script_cursor = (u8 *)offset;
+        state->script_cursor = (u8 *G32)offset;
     }
 }
 
@@ -206,7 +206,7 @@ void AiScript_JumpBetween(void)
         gAiScript_aMemory[third] <= value
     ) {
         offset += (s32)gAiScript_State.script_base;
-        gAiScript_State.script_cursor = (u8 *)offset;
+        gAiScript_State.script_cursor = (u8 *G32)offset;
     }
 }
 
@@ -221,7 +221,7 @@ void AiScript_JumpRandom(void)
     result = AiScript_ReadShort();
     if (rand() % AI_SCRIPT_PERCENT_SCALE < limit) {
         result += (s32)gAiScript_State.script_base;
-        gAiScript_State.script_cursor = (u8 *)result;
+        gAiScript_State.script_cursor = (u8 *G32)result;
     }
 }
 
@@ -243,7 +243,7 @@ void AiScript_Call(void) {
     {
         AiScriptState *state = &gAiScript_State;
         val += (s32)state->script_base;
-        state->script_cursor = (u8 *)val;
+        state->script_cursor = (u8 *G32)val;
     }
 }
 
