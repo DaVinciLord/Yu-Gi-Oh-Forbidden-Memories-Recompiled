@@ -349,6 +349,21 @@ int Memories_VSync(int mode)
     return (int)(elapsed * 263u);
 }
 
+/* A loaded state resumes in the VSync(0) that saved it, from its state
+ * point, and returns to the game from there (state.c): the rest of
+ * VSync(0) above is done here. States are taken before last_vsync moves on
+ * to the VBlank just waited for, so a load left it a frame or more behind:
+ * the CPU duelist, which thinks until VSync(1) says the frame's time is up
+ * (AiScript_Run), stopped after one step in the first frame after the load
+ * and played a frame later than in the game that saved it. And VSync(0)
+ * said one field had passed when the frame had taken more. */
+int LibEtc_StateResumed(void)
+{
+    unsigned elapsed = Platform_VBlankCount() - last_vsync;
+    last_vsync = Platform_VBlankCount();
+    return (int)(elapsed * 263u);
+}
+
 void GsInitVcount(void)
 {
 }
