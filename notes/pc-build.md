@@ -3728,6 +3728,11 @@ Two things differ from windows-x64 beyond the pointer width:
   without the pass, and if first-duel, full-duel, credits and menus all
   play as recorded on arm64, drop the IR step from `compile_unit`, the
   canary and `ptr32_stores.py`.
+- **No fused multiply-add.** clang contracts `a*b+c` into AArch64's
+  `fmadd` by default and x86 has none without `-mfma`, so float code
+  (LIBPRESS's IDCT holds 83 of them) rounded differently from the other
+  builds: the menus replay had two VRAM pixels off in 36 of its 1039
+  frames. arm64 builds with `-ffp-contract=off`.
 
 Off the phone, the x86_64 emulator image (`api35x64`, Google APIs, which
 runs arm64 code through `libndk_translation`) runs `device_run.py` the same

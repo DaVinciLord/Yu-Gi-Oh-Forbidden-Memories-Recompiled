@@ -175,6 +175,12 @@ if ANDROID:
         # G32 as on windows-x64; the mods' code is 32-bit x86 (src/pc/mods/mods.c
         # refuses it here).
         NATIVE_CFLAGS = X64_FLAGS + NATIVE_CFLAGS + ["-DMEMORIES_NO_CODE_MODS"]
+        # No fused multiply-add: AArch64 has it and clang contracts a*b+c
+        # into it by default, x86 (no -mfma) does not, so float code (LIBPRESS's
+        # IDCT holds 83 of them) rounded differently from the other builds: the
+        # menus replay had two VRAM pixels off in 36 of its 1039 frames.
+        CFLAGS = CFLAGS + ["-ffp-contract=off"]
+        NATIVE_CFLAGS = NATIVE_CFLAGS + ["-ffp-contract=off"]
 if A64:
     # No patchable function entries: game functions are hooked on i386
     # only (src/pc/mods/hooks.c).
