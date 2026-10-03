@@ -178,7 +178,9 @@ class Game:
         if os.environ.get("MEMORIES_DISC"):
             environment["MEMORIES_DISC"] = os.environ["MEMORIES_DISC"]
         environment.update(MEMORIES_DETERMINISTIC="1", MEMORIES_NO_UPDATE_CHECK="1", MEMORIES_NO_GAMEPAD="1",
-                           MEMORIES_SHOW_HUD="0", MEMORIES_WATCHDOG="0", MEMORIES_SETTINGS=str(settings_file),
+                           MEMORIES_SHOW_HUD="0", MEMORIES_WATCHDOG="0",
+                           MEMORIES_CONTROL_WAIT="-1",   # this game is the client's: it waits as long as needed
+                           MEMORIES_SETTINGS=str(settings_file),
                            MEMORIES_USER_DIR=str(self.out / "user"))
         if headless:
             environment.update(MEMORIES_HEADLESS="1", MEMORIES_NO_AUDIO="1")
@@ -234,9 +236,11 @@ class Game:
             raise ControlError(f"{line.split()[0]}: {text[4:]}")
         return text[3:] if text.startswith("ok ") else ""
 
-    def _stopped(self, reply: str) -> dict[str, int]:
+    def _stopped(self, reply: str) -> dict[str, object]:
         fields = reply.split()
-        values = {fields[i]: int(fields[i + 1], 16 if fields[i] == "build" else 10) for i in range(0, len(fields), 2)}
+        values = {}
+        for key, value in zip(fields[0::2], fields[1::2]):
+            values[key] = int(value, 16) if key == "build" else int(value) if value.isdigit() else value
         self.frame, self.vblank = values["frame"], values["vblank"]
         return values
 
@@ -325,13 +329,22 @@ class Game:
         MEMORIES_DEBUG_DECK takes them, repeated to forty), "free_duel",
         "build_deck", "library", "password", "map", "credits", "options",
         "title". A duel stops at the deck screen the game shows before every
-        duel (leave it with circle; duel_ready() waits for the hand)."""
+        duel (leave it with circle; duel_ready() waits for the hand); its
+        deck, when given, replaces the save's deck (as MEMORIES_DEBUG_DECK
+        does), and without one the save's is used. The credits begin, as
+        retail does, with the save prompt (the port's slot menu, which
+        shot() does not see) and the SECRET NO. screen."""
         if deck is not None and not isinstance(deck, str):
             deck = ",".join(str(card) for card in deck)
         line = f"jump {target}"
         if opponent is not None or deck:
             line += f" {opponent or 0}" + (f" {deck}" if deck else "")
-        self.command(line)
+        jumps = self.info()["jumps"]
+        self.command(line)   # refused at once (ControlError) when the game cannot take it
+        # Landed when the game counts it, even when the screen asked for is
+        # the one already running (the game leaves it and comes back).
+        self.wait_until(lambda g: g.info()["jumps"] > jumps, timeout,
+                        what=f"the jump to {target} (see {self.log_path})")
         wanted = JUMP_MODES[target]
         if target == "title":
             # The title's own loop runs before Main_Loop starts a mode: the
@@ -352,12 +365,12 @@ class Game:
         self.wait_until(lambda g: g.u8("D_8009B26E") == 0x80, timeout, what="the deck screen")
         self.press_until(lambda g: g.u8("D_8009B26E") != 0x80, "circle", every=60, timeout=timeout,
                          what="the duel field")
+        # The duel's start (phase 1, no card dealt): the last duel's hand and
+        # decks stay in memory until then, and its decks until the new ones
+        # are written, on the last frame before the deal.
+        self.wait_until(lambda g: g.phase() == DUEL_PHASES["startup"] and
+                        all(slot < 0 for slot in g.duel()[0]["hand_slots"]), timeout, what="the duel's start")
         if before_deal:
-            # The duel's start (phase 1, no card dealt): the last duel's decks
-            # are still in the table until the new ones are written, on the
-            # last frame before the deal.
-            self.wait_until(lambda g: g.phase() == DUEL_PHASES["startup"] and
-                            all(slot < 0 for slot in g.duel()[0]["hand_slots"]), timeout, what="the duel's start")
             old = self.peek("gDuel_aDeckCardRecords", 80 * 6)
             self.wait_until(lambda g: g.peek("gDuel_aDeckCardRecords", 80 * 6) != old or
                             g.phase() != DUEL_PHASES["startup"], timeout, what="the shuffled decks")
@@ -526,7 +539,9 @@ class Game:
 
     def shot(self, path: Path | str) -> Path:
         """The presented picture, as PNG (PPM for a .ppm path); relative
-        paths go in the run's folder."""
+        paths go in the run's folder. It is the game's frame (VRAM), not the
+        window: the port's own overlays (the menu bar, notices, the save
+        slot menu) are not in it, and hash() hashes the same VRAM."""
         path = self.out / path
         path.parent.mkdir(parents=True, exist_ok=True)
         self.command(f"shot {path}")
@@ -537,7 +552,12 @@ class Game:
         return int(self.command("hash"), 16)
 
     def address(self, where: int | str) -> int:
-        return self.symbols[where] if isinstance(where, str) else where
+        if isinstance(where, str):
+            if where not in self.symbols:
+                raise KeyError(f"no guest address named {where!r}: not in config/pc/guest_addresses.txt nor in "
+                               "yfm_control.FALLBACK")
+            return self.symbols[where]
+        return where
 
     def peek(self, where: int | str, length: int) -> bytes:
         """Guest memory (KSEG0, KSEG1 or physical; or a symbol's name)."""

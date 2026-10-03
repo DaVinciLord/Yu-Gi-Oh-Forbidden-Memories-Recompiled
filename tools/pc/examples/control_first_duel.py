@@ -18,6 +18,7 @@ import json
 from pathlib import Path
 import shutil
 import sys
+import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from yfm_control import Game, MODE, OUTPUT  # noqa: E402
@@ -84,9 +85,12 @@ def drive(game: Game, record: dict) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--executable", type=Path, help="the game (default: yfm_control's)")
-    parser.add_argument("--out", type=Path, default=OUTPUT / "first-duel", help="where the runs go")
+    parser.add_argument("--out", type=Path, help="where the runs go (default: a new tmp/pc/control/first-duel-*)")
     parser.add_argument("--runs", type=int, default=2)
     arguments = parser.parse_args()
+    if not arguments.out:   # a folder of its own: two at once must not share one
+        OUTPUT.mkdir(parents=True, exist_ok=True)
+        arguments.out = Path(tempfile.mkdtemp(prefix="first-duel-", dir=OUTPUT))
     records = []
     for run in range(arguments.runs):
         out = arguments.out.resolve() / f"run{run + 1}"

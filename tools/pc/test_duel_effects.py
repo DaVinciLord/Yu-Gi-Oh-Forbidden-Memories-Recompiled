@@ -19,11 +19,12 @@ import re
 import shutil
 import struct
 import sys
+import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from yfm_control import Game, OUTPUT  # noqa: E402
 
-OUT = OUTPUT / "duel-effects"
+OUT = OUTPUT / "duel-effects"   # a new duel-effects-* folder in it a run, unless --out
 SIMON = 1
 
 
@@ -128,8 +129,16 @@ def side(executable, name, env, scenarios):
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--executable", type=Path)
+    parser.add_argument("--out", type=Path, help="where the two games go (default: a new tmp/pc/control/"
+                                                  "duel-effects-* folder)")
     parser.add_argument("names", nargs="*")
     arguments = parser.parse_args()
+    global OUT
+    if arguments.out:
+        OUT = arguments.out.resolve()
+    else:   # a folder of its own: two runs at once must not share one
+        OUTPUT.mkdir(parents=True, exist_ok=True)
+        OUT = Path(tempfile.mkdtemp(prefix="duel-effects-", dir=OUTPUT))
     scenarios = [s for s in SCENARIOS if not arguments.names or s[0] in arguments.names]
     with ThreadPoolExecutor(2) as pool:
         native = pool.submit(side, arguments.executable, "native", {}, scenarios)

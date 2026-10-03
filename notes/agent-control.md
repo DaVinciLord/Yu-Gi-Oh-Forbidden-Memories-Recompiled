@@ -10,6 +10,37 @@ Status: phase 1 steps 1 to 4 and 6 landed, step 5 in part (see the
 **Landed** notes under each). Each phase below lands
 with its own code and updates this file.
 
+## Quickstart: drive the game from Python
+
+```python
+import sys; sys.path.insert(0, "tools/pc")
+from yfm_control import Game
+with Game() as game:                    # its own settings, user folder and log; virtual clock; headless
+    game.goto("duel", opponent=3, deck="1-40")   # through the debug menu (step 6)
+    game.duel_ready()                   # past the deck screen every duel opens with, to the dealt hand
+    game.play_card(0)                   # also fuse([0, 1]), attack(column, target), end_turn()
+    print(game.state())                 # mode, starchips, deck, chest; in a duel LP, hand, field()
+    game.shot("hand.png")               # in the run's folder (game.out)
+    game.save("hand.state"); game.step(60); game.load("hand.state")
+```
+
+`step(n)`, `press("cross")`, `press_until(predicate, keys)`, `wait_until(predicate)`,
+`peek`/`poke`/`u8` (addresses or names from `config/pc/guest_addresses.txt`) are
+the primitives under it. Replays: `python3 tools/pc/replay.py run` before a PR.
+
+Gotchas:
+- One client at a time; another is answered `err busy`. A client that leaves
+  lets the game run on, pads released; `Game` kills its own game when it goes.
+- `shot()` and `hash()` are the game's frame (VRAM), not the window: the menu
+  bar, notices and the port's save slot menu are not in them.
+- The credits start with the save prompt (the port's slot menu) and SECRET NO.
+- A deck given to `goto("duel", ...)` replaces the save's deck.
+- `load()` stops one frame into the state; the frame count is the run's own.
+- Only the virtual clock replays (`MEMORIES_DETERMINISTIC=1`, which `Game`
+  sets). Host keys (F5/F7, F6, the menus) are not recorded.
+- `MEMORIES_CONTROL` alone makes a game wait 10 s at its first frame for a
+  client (`MEMORIES_CONTROL_WAIT`); `Game` sets it to wait for good.
+
 ## What exists
 
 - **Before launch, environment variables decide everything:**
