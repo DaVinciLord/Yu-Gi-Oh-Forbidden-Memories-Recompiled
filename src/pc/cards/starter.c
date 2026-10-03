@@ -434,13 +434,15 @@ void Starter_Build(void)
     Starter_Check();
 }
 
-/* What a new game will make of the decks and pools, in the log: a written
- * deck that weighs anything is dealt first, and pools whose draws are not a
- * deck's forty leave it to the disc's rows (NameEntry_DealModStarterDeck). */
+/* What a new game will make of the decks and pools, in the log, and beside
+ * each mod whose pools are left out (Mods_Note: the Mods window shows it,
+ * with one mod or many): a written deck that weighs anything is dealt
+ * first, and pools whose draws are not a deck's forty leave it to the
+ * disc's rows (NameEntry_DealModStarterDeck). */
 void Starter_Check(void)
 {
     unsigned weight = Starter_WeightTotal();
-    int draws = Starter_PoolDraws();
+    int draws = Starter_PoolDraws(), i, j;
     if (deck_count) {
         LOG(LOG_MODS, "starter: %d deck%s offered, %u weight between them", deck_count, deck_count == 1 ? "" : "s",
             weight);
@@ -455,6 +457,33 @@ void Starter_Check(void)
     } else {
         LOG(LOG_MODS, "starter: %d pool%s offered, drawing %d of %d cards", pool_count, pool_count == 1 ? "" : "s",
             draws, STARTER_DECK_SIZE);
+        return;
+    }
+    /* Once for each mod with pools, at its first. */
+    for (i = 0; i < pool_count; i++) {
+        const char *mod = pools[i].mod;
+        int own = 0, mods = 0;
+        for (j = 0; j < i && strcmp(pools[j].mod, mod); j++) {
+        }
+        if (j < i) continue;
+        for (j = 0; j < pool_count; j++) {
+            if (!strcmp(pools[j].mod, mod)) own += pools[j].draws;
+            if (!j || strcmp(pools[j].mod, pools[j - 1].mod)) mods++;
+        }
+        if (weight) {
+            const char *writer = decks[0].mod;
+            for (j = 0; j < deck_count && !decks[j].weight; j++) {
+            }
+            if (j < deck_count) writer = decks[j].mod;
+            Mods_Note(mod, "starter_pools left out: %s's written starter deck is dealt first", writer);
+        } else if (mods == 1) {
+            Mods_Note(mod, "starter_pools left out: they draw %d cards, not %d; the disc's starter decks are dealt",
+                      own, STARTER_DECK_SIZE);
+        } else {
+            Mods_Note(mod, "starter_pools left out: every mod's pools draw %d cards together, not %d (these %d); the "
+                           "disc's starter decks are dealt",
+                      draws, STARTER_DECK_SIZE, own);
+        }
     }
 }
 

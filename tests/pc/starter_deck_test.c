@@ -39,11 +39,11 @@ int Cards_ExodiaPiece(int id)
 }
 
 static int notes;
-static char note[512];
+static char note[512], noted[64]; /* noted: the mod the last note is beside */
 void Mods_Note(const char *id, const char *format, ...)
 {
     va_list arguments;
-    (void)id;
+    snprintf(noted, sizeof(noted), "%s", id);
     notes++;
     va_start(arguments, format);
     vsnprintf(note, sizeof(note), format, arguments);
@@ -362,6 +362,33 @@ int main(void)
     one(text);
     CHECK(notes == 0 && Starter_Count() == 1 && Starter_HasPools());
     CHECK(Starter_Deck(0, cards, &name) && !strcmp(name, "Written"));
+
+    /* Starter_Check says beside each mod whose pools a new game leaves out:
+     * one mod's that do not draw forty, several mods' that do not together,
+     * and any beside a written deck that weighs anything. */
+    Starter_Check();
+    CHECK(notes == 1 && !strcmp(noted, "test") && strstr(note, "test's written starter deck is dealt first"));
+    one("{\"starter_pools\":{\"draws\":24,\"cards\":{\"3\":1}}}");
+    Starter_Check();
+    CHECK(notes == 1 && strstr(note, "they draw 24 cards, not 40; the disc's starter decks are dealt"));
+    Starter_Clear();
+    notes = 0;
+    add("first", "{\"starter_pools\":[{\"draws\":30,\"cards\":{\"3\":1}},{\"draws\":10,\"cards\":{\"3\":1}}]}");
+    add("second", "{\"starter_pools\":{\"draws\":40,\"cards\":{\"4\":1}}}");
+    Starter_Check();
+    CHECK(notes == 2 && !strcmp(noted, "second") && strstr(note, "draw 80 cards together, not 40 (these 40)"));
+    Starter_Clear();
+    notes = 0;
+    add("first", "{\"starter_pools\":{\"draws\":16,\"cards\":{\"3\":1}}}");
+    add("second", "{\"starter_pools\":{\"draws\":24,\"cards\":{\"4\":1}}}");
+    Starter_Check();
+    CHECK(notes == 0);
+    /* A written deck of weight 0 is never dealt: the pools stand. */
+    snprintf(text, sizeof(text), "{\"starter\":{\"weight\":0,\"3\":3%s},"
+                                 "\"starter_pools\":{\"draws\":40,\"cards\":{\"9\":1}}}", filler(3));
+    one(text);
+    Starter_Check();
+    CHECK(notes == 0 && Starter_HasPools());
 
     /* What the reader refuses, and says so about. */
     one("{\"starter_pools\":40}");

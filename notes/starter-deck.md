@@ -153,10 +153,12 @@ A written deck still wins. `NameEntry_BuildStarterDeck` asks for one first,
 then for these pools, and reads the disc's rows only when neither is offered.
 The pools of every applied mod add up, in the order the mods load, as the
 decks do. Pools that do not draw forty together are dropped and the disc's
-rows deal the deck, which the game itself says only in the log
-(`MEMORIES_TRACE=mods`); the Mods window and the FM Editor's Conflicts tab
-say it as a warning (notes/modding.md, "When mods overlap"), and also when
-another mod's written deck wins over the pools.
+rows deal the deck; pools beside a written deck that weighs anything are
+left out too. Either way each mod whose pools are left out carries a note
+in the Mods window, with one mod or many (`Starter_Check`), and the log
+says which it is (`MEMORIES_TRACE=mods`). With two mods or more, the Mods
+window's overlaps and the FM Editor's Conflicts tab say it as well
+(notes/modding.md, "When mods overlap").
 
 The editor's Starter decks tab writes `starter` on its *Written decks* tab and
 `starter_pools` on its *Weighted pools* tab.
