@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools/pc"))
 import replay  # noqa: E402
@@ -25,6 +26,39 @@ def replay_of(folder: Path, text: str, clock: str = "virtual") -> replay.Replay:
     return replay.Replay(folder)
 
 
+def failed_runs(work: Path) -> None:
+    """Exercise real subprocess exits/timeouts, including --update's writes."""
+    expected_text = HEAD + "H 1 1 aa\nE 100 100\n"  # thinned hashes
+    expected = replay_of(work / "failures", expected_text)
+    script = work / "fake_game.py"
+    cases = (
+        ("crash", HEAD + "H 1 1 aa\nE 100 100\n", "raise SystemExit(17)", 5),
+        ("timeout", HEAD + "H 1 1 aa\nE 100 100\n", "import time; time.sleep(10)", 0.5),
+        ("missing-end", HEAD + "H 1 1 aa\n", "", 5),
+        ("premature-end", HEAD + "H 1 1 aa\nE 2 2\n", "", 5),
+        ("missing-output", None, "", 5),
+    )
+    with mock.patch.object(replay, "OUTPUT", work / "output"), \
+         mock.patch.object(replay, "launcher", return_value=([sys.executable, str(script)], {})):
+        for name, recording, tail, timeout in cases:
+            script.write_text("import os\nfrom pathlib import Path\n" +
+                (f"Path(os.environ['MEMORIES_RECORD']).write_text({recording!r})\n" if recording is not None else "") +
+                tail + "\n")
+            for check, update in ((True, False), (False, True), (False, False)):
+                before = set(replay.OUTPUT.iterdir()) if replay.OUTPUT.exists() else set()
+                assert not replay.play(expected.path, Path(sys.executable), check, update, timeout), name
+                assert (expected.path / "recording.txt").read_text() == expected_text, name
+                created = set(replay.OUTPUT.iterdir()) - before
+                assert len(created) == 1 and (created.pop() / "game.log").is_file(), name
+        # An update still accepts changed hashes from a complete successful run.
+        updated = HEAD + "H 1 1 bb\nE 100 100\n"
+        script.write_text("import os\nfrom pathlib import Path\n" +
+                          f"Path(os.environ['MEMORIES_RECORD']).write_text({updated!r})\n")
+        assert replay.play(expected.path, Path(sys.executable), False, True, 5)
+        assert (expected.path / "recording.txt").read_text() == updated
+        assert replay.play(expected.path, Path(sys.executable), True, False, 5)
+
+
 def main() -> int:
     work = Path(tempfile.mkdtemp())
     expected = replay_of(work / "replay", RECORDED)
@@ -37,6 +71,10 @@ def main() -> int:
     stopped = work / "stopped.txt"
     stopped.write_text(HEAD + "H 1 1 aa\nH 2 2 bb\nH 7307 6399 cc\nE 7307 6399\n")
     assert not replay.check(expected, stopped), "a play that stops a frame early fails"
+    stopped.write_text(RECORDED.rsplit("E ", 1)[0])
+    assert not replay.check(expected, stopped), "all hashes without a clean end still fail"
+    stopped.write_text(RECORDED.replace("E 7307 6400", "E 7308 6399"))
+    assert not replay.check(expected, stopped), "a later VBlank does not excuse an early final frame"
     other = work / "other.txt"
     other.write_text(RECORDED.replace("H 2 2 bb", "H 2 2 b0"))
     assert not replay.check(expected, other), "a frame that differs fails"
@@ -45,6 +83,7 @@ def main() -> int:
     assert replay.header_from(parsed)["clock"] == "virtual"
     real = replay_of(work / "real", RECORDED.replace("clock: virtual", "clock: real"), clock="real")
     assert not replay.play(real.path, Path(sys.executable), True, False, 1), "a real-time recording is refused"
+    failed_runs(work)
     print("replay check: ok")
     return 0
 

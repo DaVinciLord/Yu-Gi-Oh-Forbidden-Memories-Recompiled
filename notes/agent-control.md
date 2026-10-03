@@ -125,6 +125,10 @@ build with the old combination; the eight smoke cases unchanged.
   port is the game's alone (`SO_EXCLUSIVEADDRUSE`). A restart (the language
   change's, the credits') drops `MEMORIES_CONTROL` from the new game's
   environment (`MEMORIES_RESTART_ENV` may set it again): no client follows.
+  Replies use nonblocking writes with a one-second deadline. While a client
+  is slow to read, the game continues servicing its window; a timeout or a
+  window-close request ends the send and drops the client. Its queued
+  commands and held pads are discarded, and another client can connect.
 - **The first client:** the game waits at its first `VSync(0)` for
   `MEMORIES_CONTROL_WAIT` seconds (10 unset; a negative number as long as it
   takes, which `yfm_control.py` sets, its game being its own; 0 not at
@@ -327,7 +331,11 @@ CI can hold retail inputs.
   the run having ended or taken another path) and, at the first state
   checkpoint whose RAM differs (the `memory` chunk; `g_SDValue` masked, the
   other chunks not compared), the first differing range. `--update` takes
-  this build's hashes as the expected ones. `replay.py run` checks every
+  this build's hashes as the expected ones. A nonzero game exit, timeout,
+  missing recording/end marker, or premature end fails playback, including
+  when hashes are thinned or `--check` is omitted. `--update` leaves the
+  expected recording untouched on these failures, and the run's diagnostic
+  folder is kept. `replay.py run` checks every
   replay in `tests/pc/replays/`, like `smoke.py`. Each play gets a folder of
   its own (`tmp/pc/replays/<name>-XXXXXXXX`), so two at once never share one.
 - **In `tests/pc/replays/`:** `first-duel` (recorded: boot to the first

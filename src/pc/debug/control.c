@@ -24,12 +24,20 @@ static int attached;      /* a client is connected */
 static int running;       /* a `step` is being run */
 static unsigned target;   /* the VBlank count it runs to */
 static int owed;          /* the "ok" of a `step` or a `load`, sent at the next stop */
+static int send_failed;
 static volatile uint16_t pads[2];
 static volatile int pad2_set;
 static ControlLines lines;
 static char line[CONTROL_LINE_MAX + 1];
 static uint8_t data[CONTROL_DATA_MAX];
 static char reply[2 * CONTROL_DATA_MAX + 64];
+
+static int send_idle(void)
+{
+    Platform_ControlIdle();
+    Platform_PumpEvents();
+    return !Platform_ShouldQuit();
+}
 
 uint16_t Control_Pad(int port) { return pads[port & 1]; }
 int Control_PadConnected(int port) { return port == 1 && pad2_set; }
@@ -40,7 +48,10 @@ static void send_line(const char *text)
     size_t length = strlen(text);
     if (text != reply) memcpy(reply, text, length);
     reply[length] = '\n';
-    if (ControlNet_Send(reply, length + 1)) ControlNet_Drop(); /* noticed at the next read */
+    if (ControlNet_Send(reply, length + 1, send_idle)) {
+        send_failed = 1;
+        ControlNet_Drop(); /* next_line discards pending commands and detaches */
+    }
 }
 
 static void send_error(const char *message)
@@ -68,6 +79,8 @@ static void detach(const char *why)
 {
     ControlNet_Drop();
     attached = running = owed = 0;
+    send_failed = pad2_set = 0;
+    lines.used = lines.dropping = 0;
     pads[0] = pads[1] = 0; /* nothing held by a client that has gone */
     Platform_ControlAttach(0);
     fprintf(stderr, "memories-pc: control: %s at frame %u\n", why, Memories_PresentedFrames());
@@ -319,7 +332,9 @@ static int next_line(void)
         size_t room;
         char *at;
         long count;
-        int got = ControlLines_Next(&lines, line);
+        int got;
+        if (send_failed) return -1;
+        got = ControlLines_Next(&lines, line);
         if (got > 0) return 1;
         if (got < 0) send_error("line too long");
         at = ControlLines_Room(&lines, &room);
@@ -363,8 +378,6 @@ void Control_Point(void)
     for (;;) {
         int got = next_line();
         if (got < 0) {
-            lines.used = 0;
-            lines.dropping = 0;
             detach("the client left; the game runs on");
             break;
         }

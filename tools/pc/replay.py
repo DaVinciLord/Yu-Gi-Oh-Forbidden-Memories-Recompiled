@@ -203,7 +203,7 @@ def settings_text(header: dict, executable: Path) -> str:
     return "".join(f"{key}={value}\n" for key, value in settings.items())
 
 
-def play_recorded(replay: Replay, executable: Path, out: Path, timeout: float) -> Path:
+def play_recorded(replay: Replay, executable: Path, out: Path, timeout: float) -> Path | None:
     out.mkdir(parents=True, exist_ok=True)
     (out / "user").mkdir(exist_ok=True)
     settings = out / "settings.txt"
@@ -223,6 +223,12 @@ def play_recorded(replay: Replay, executable: Path, out: Path, timeout: float) -
         except subprocess.TimeoutExpired:
             code = "timeout"
     print(f"replay: {replay.name}: played in {time.monotonic() - started:.0f} s (exit {code})")
+    if code != 0:
+        print(f"replay: {replay.name}: FAILED: game exit {code}; see {out / 'game.log'}")
+        return None
+    if not actual.is_file():
+        print(f"replay: {replay.name}: FAILED: the game wrote no recording; see {out / 'game.log'}")
+        return None
     return actual
 
 
@@ -256,9 +262,24 @@ def first_ram_difference(expected: Path, actual: Path) -> str | None:
     return None
 
 
+def completed(expected: dict, actual: dict, name: str) -> bool:
+    """Require a clean, complete run even when hashes are thinned or updated."""
+    if expected["E"] is None or actual["E"] is None:
+        which = "expected recording" if expected["E"] is None else "playback"
+        print(f"replay: {name}: FAILED: {which} has no end marker")
+        return False
+    if any(got < wanted for got, wanted in zip(actual["E"], expected["E"])):
+        print(f"replay: {name}: ended at VBlank {actual['E'][0]} (frame {actual['E'][1]}), the recording "
+              f"at {expected['E'][0]} ({expected['E'][1]})")
+        return False
+    return True
+
+
 def check(replay: Replay, actual_path: Path) -> bool:
     expected = parse(replay.file(replay.meta["recording"]))
     actual = parse(actual_path)
+    if not completed(expected, actual, replay.name):
+        return False
     ok = True
     # A game closed while it waited for a VBlank presents its last frame
     # without one (the wait ends on the quit): the frames at the recording's
@@ -287,10 +308,6 @@ def check(replay: Replay, actual_path: Path) -> bool:
                   f"{difference} (g_SDValue masked)")
             ok = False
             break
-    if expected["E"] and actual["E"] and actual["E"] < expected["E"]:
-        print(f"replay: {replay.name}: ended at VBlank {actual['E'][0]} (frame {actual['E'][1]}), the recording "
-              f"at {expected['E'][0]} ({expected['E'][1]})")
-        ok = False
     return ok
 
 
@@ -342,6 +359,10 @@ def play_in(path: Path, executable: Path, do_check: bool, update: bool, timeout:
     if header.get("build") and header["build"] != build:
         print(f"replay: {replay.name}: recorded by build {header['build']}, playing on {build}")
     actual = play_recorded(replay, executable, out, timeout)
+    if actual is None:
+        return False
+    if not completed(parse(replay.file(replay.meta["recording"])), parse(actual), replay.name):
+        return False
     if update:
         recording = replay.file(replay.meta["recording"])
         keep = {tuple(line.split()[1:3]) for line in recording.read_text().splitlines() if line.startswith("H ")}
