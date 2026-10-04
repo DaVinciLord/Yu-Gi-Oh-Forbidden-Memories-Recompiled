@@ -227,7 +227,9 @@ The Password screen's own, with nothing drawn by the port over it:
   translation's last line has no room). `password_only` leaves the string as
   it is; `packs_only` never shows it.
 * **The list** (△). The digits' panel shows the pack's name, centred, in the
-  panel's own letters, between the digit cursor's ◄ and ► (shown when there
+  panel's own 16x16 letters, 12 pixels apart (closer for a name that would
+  otherwise run into the arrows, which it never does: 7 apart at 16
+  letters), between the digit cursor's ◄ and ► (shown when there
   is more than one pack; ▲ and ▼ when there is more than one shop); the red
   cursor is hidden. The big card turns to the pack. The message box has the
   shop's name in blue (with more than one shop), the description's first
@@ -236,8 +238,11 @@ The Password screen's own, with nothing drawn by the port over it:
   pack of how many at the right, and `✕BUY ○BACK □INFO`. When a language's
   words for them do not fit the box's twenty letters (the French, German,
   Italian and Spanish do not), `✕BUY ○BACK` is one line and `□INFO` the next,
-  and the description has one line. A locked pack shown is face down, named
-  `??????`, with LOCKED and what opens it.
+  and the description has one line. A row of buttons is 4 pixels lower than
+  the next line would be (`F8 01 10`, 16 pixels), so that their icons, 16 rows
+  tall on the box's 12, clear the price's star above; so is the buttons' row
+  of the reveal, of what came and of the details. A locked pack shown is face
+  down, named `??????`, with LOCKED and what opens it.
 * **BUY / QUIT** (✕): the game's EXCHANGE / QUIT question, word for word in
   its layout (strings 227 and 228): the name, the price, then the choice,
   BUY red and not to be chosen when the starchips, the stock, a `once` or the

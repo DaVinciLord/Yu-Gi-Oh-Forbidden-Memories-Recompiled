@@ -83,6 +83,17 @@ enum {
 #define BOX_LETTERS 20                /* the message box: 0xA0 wide, 8 a letter */
 #define BOX_WIDTH 0xA0
 #define NAME_WIDTH 0x80               /* between the digit cursor's arrows */
+/* The name's letters are the panel's 16x16 font's. Measured on screen
+ * (2026-10-03): the text starts at x 170 (0xAA, at_x 0); the arrows' tiles
+ * end at 168 and start at 298, so a letter's ink may go from at_x 0 to 126;
+ * a letter's ink starts a pixel left of its cell and the widest (M, W) take
+ * 14 more. */
+#define NAME_STEP 12                  /* letters this far apart read as a word */
+#define NAME_LINE 16                  /* the font's height, the digits' line */
+#define NAME_ROOM 127                 /* pixels of ink between the arrows */
+#define NAME_INK 15                   /* the widest letter's ink, from a pixel left of its cell */
+#define LINE_HEIGHT 12                /* the message box's */
+#define ICON_ROW_GAP 4                /* an icon is 16 rows: a row of them this much lower clears the line above */
 #define ICON_WIDTH 16
 #define FLIP_STEP 8                   /* the game's own turn, state 1 */
 #define QUICK_STEP 16
@@ -359,7 +370,20 @@ typedef struct {
     u8 *at, *end;
     int x;                    /* pixels into the line */
     int limit;                /* the line's width: what would go past it is left out */
+    int step;                 /* a letter's: the box's cell (8, the name's set by F8 05) */
 } Out;
+
+/* Every Out is made here, so that none has a field left unset. */
+static Out out_into(u8 *at, u8 *end, int limit)
+{
+    Out out;
+    out.at = at;
+    out.end = end;
+    out.x = 0;
+    out.limit = limit;
+    out.step = 8;
+    return out;
+}
 
 static void put(Out *out, int byte)
 {
@@ -379,6 +403,15 @@ static void newline(Out *out)
     out->x = 0;
 }
 
+/* A new line for a row of buttons: their icons are taller than a line, so
+ * the row goes a little lower, clear of the line above (F8 01: x 0, y on by
+ * its operand). */
+static void icon_row(Out *out)
+{
+    command(out, 0x01, LINE_HEIGHT + ICON_ROW_GAP);
+    out->x = 0;
+}
+
 static void colour(Out *out, int ink) { command(out, 0x0A, ink); }
 
 static void at_x(Out *out, int x)
@@ -393,9 +426,9 @@ static void at_x(Out *out, int x)
 
 static void space(Out *out)
 {
-    if (out->x + 8 > out->limit) return;
-    command(out, 0x02, 8);
-    out->x += 8;
+    if (out->x + out->step > out->limit) return;
+    command(out, 0x02, out->step);
+    out->x += out->step;
 }
 
 static void icon(Out *out, int which)
@@ -411,10 +444,10 @@ static void glyph(Out *out, int code)
 {
     if (code < 0 || out->end - out->at < 3) return;
     if (code == 0) { space(out); return; }
-    if (out->x + 8 > out->limit) return;
+    if (out->x + out->step > out->limit) return;
     if (code >= 0xF0) put(out, 0xF0 + (code >> 8));
     put(out, code & 0xFF);
-    out->x += 8;
+    out->x += out->step;
 }
 
 /* ASCII in the game's letters. */
@@ -516,13 +549,9 @@ static int own_pass(Out *to, int id, const char *english, const unsigned *number
  * `out` unless it is NULL. */
 static int own(Out *out, int id, const char *english, const unsigned *numbers, const unsigned char *const *names)
 {
-    Out scratch;
     u8 dummy[512];
+    Out scratch = out_into(dummy, dummy + sizeof(dummy), 0x7FFF);
     int fixed, room, x = out ? out->x : 0;
-    scratch.at = dummy;
-    scratch.end = dummy + sizeof(dummy);
-    scratch.x = 0;
-    scratch.limit = 0x7FFF;
     fixed = own_pass(&scratch, id, english, numbers, names, 0);
     room = ((out ? out->limit : BOX_WIDTH) - x - fixed) / 8;
     if (room < 4) room = 4;
@@ -536,14 +565,10 @@ static int own(Out *out, int id, const char *english, const unsigned *numbers, c
 
 static Out begin(int which)
 {
-    Out out;
     /* Where a menu's answer jumps (PackShop_Retarget): an {end}. */
     memset(s.arena, 0xFF, text_at[TEXT_NAME]);
-    out.at = s.arena + text_at[which];
-    out.end = s.arena + text_at[which] + text_room[which] - 8;
-    out.x = 0;
-    out.limit = which == TEXT_NAME ? NAME_WIDTH : BOX_WIDTH;
-    return out;
+    return out_into(s.arena + text_at[which], s.arena + text_at[which] + text_room[which] - 8,
+                    which == TEXT_NAME ? NAME_WIDTH : BOX_WIDTH);
 }
 
 static void finish(Out *out)
@@ -926,28 +951,34 @@ static void compose_list(void)
         }
     }
     while (written < top) { newline(&out); written++; }
-    newline(&out);
+    icon_row(&out);
     if (!locked) hint(&out, ICON_CROSS, TEXT_OWN_PACK_BUY, "BUY");
     hint(&out, ICON_CIRCLE, back_id, back_english);
-    if (!one_row) newline(&out);
+    if (!one_row) icon_row(&out);
     hint(&out, ICON_SQUARE, TEXT_OWN_PACK_INFO, "INFO");
     finish(&out);
 }
 
-/* The pack's name in the digits' panel, centred between the arrows. */
+/* The pack's name in the digits' panel, centred between the arrows, in the
+ * panel's 16x16 letters NAME_STEP apart (F8 05: the box's cell), or closer
+ * for a name that would run into the arrows otherwise: it always fits
+ * between them (16 letters are 7 apart). */
 static void compose_name(int pack, int hidden)
 {
     Out out = begin(TEXT_NAME);
-    int room = NAME_WIDTH / 8, length;
+    int room = NAME_WIDTH / 8, length, ink, i;
     const unsigned char *name = pack_name(pack);
+    length = hidden ? 6 : letters(name);
+    if (length > room) length = room;
+    out.step = NAME_STEP;
+    if (length > 1 && (length - 1) * out.step + NAME_INK > NAME_ROOM) out.step = (NAME_ROOM - NAME_INK) / (length - 1);
+    ink = length ? (length - 1) * out.step + NAME_INK : 0;
+    command(&out, 0x05, out.step);
+    put(&out, NAME_LINE);
+    at_x(&out, (NAME_ROOM - ink) / 2 + 1);
     if (hidden) {
-        int i;
-        at_x(&out, (NAME_WIDTH - 6 * 8) / 2);
         for (i = 0; i < 6; i++) glyph(&out, Glyphs_Code('?'));
     } else {
-        length = letters(name);
-        if (length > room) length = room;
-        at_x(&out, (NAME_WIDTH - 8 * length) / 2);
         codes(&out, name, room);
     }
     finish(&out);
@@ -1050,7 +1081,7 @@ static void compose_reveal(int slot)
         own(&out, TEXT_OWN_NEW, "NEW", NULL, NULL);
         colour(&out, WHITE);
     }
-    newline(&out);
+    icon_row(&out);
     if (reveal_style(slot) == PACK_REVEAL_FLIP) {
         hint(&out, ICON_CROSS, TEXT_OWN_PACK_NEXT, "NEXT");
         hint(&out, ICON_SQUARE, TEXT_OWN_PACK_SKIP, "SKIP");
@@ -1086,7 +1117,7 @@ static void compose_summary(void)
             colour(&out, WHITE);
         }
     }
-    newline(&out);
+    icon_row(&out);
     hint(&out, ICON_CROSS, TEXT_OWN_PACK_OK, "OK");
     if (pages > 1) count_at_right(&out, (unsigned)s.page + 1, (unsigned)pages);
     finish(&out);
@@ -1101,12 +1132,7 @@ static int info_count;
 
 static Out info_line(void)
 {
-    Out out;
-    out.at = info[info_count];
-    out.end = info[info_count] + INFO_LINE_BYTES - 8;
-    out.x = 0;
-    out.limit = BOX_WIDTH;
-    return out;
+    return out_into(info[info_count], info[info_count] + INFO_LINE_BYTES - 8, BOX_WIDTH);
 }
 
 static void info_done(Out *out)
@@ -1202,13 +1228,9 @@ static void build_info(void)
         info_done(&out);
         {   /* Every condition still unmet, a line each. */
             u8 buffer[INFO_LINE_BYTES * 8];
-            Out all;
+            Out all = out_into(buffer, buffer + sizeof(buffer) - 8, BOX_WIDTH);
             const u8 *p;
             int line = 0;
-            all.at = buffer;
-            all.end = buffer + sizeof(buffer) - 8;
-            all.x = 0;
-            all.limit = BOX_WIDTH;
             n = condition_lines(&pack->unlock, &all, 8, 1);
             *all.at = 0xFF;
             for (p = buffer; line < n && *p != 0xFF; line++) {
@@ -1234,7 +1256,7 @@ static void compose_info(void)
         if (row >= info_count) continue;
         for (p = info[row]; *p != 0xFF; p++) put(&out, *p);
     }
-    newline(&out);
+    icon_row(&out);
     hint(&out, ICON_CIRCLE, TEXT_OWN_PACK_BACK, "BACK");
     if (pages > 1) count_at_right(&out, (unsigned)s.page + 1, (unsigned)pages);
     finish(&out);
