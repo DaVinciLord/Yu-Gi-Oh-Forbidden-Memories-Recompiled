@@ -27,7 +27,15 @@
  *
  * Build Deck (mode 7): the active pane's list (build_deck_pane_input.c).
  * The pane is idle while the viewer is up (func_800339D0 only runs it when
- * DuelEffect_UpdateState is). */
+ * DuelEffect_UpdateState is).
+ *
+ * The pre-duel chest (mode 3, Main_RunDuel's own step 0, "which deck first"
+ * before a campaign duel): Build Deck's own screen, reused in place
+ * (main_run_duel.c calls the same func_800323F8 Build Deck does, so
+ * gBuildDeck_pState is the same list, and move_build_deck_cursor needs no
+ * change) -- only while it is actually open and interactive, D_8009B26E ==
+ * 0x80 (deck_menu.c's own duel_chest()), never during the duel proper,
+ * which reuses the same main mode but a different step. */
 #define GINPUT_PAD1_REPEAT_SIZED_VOLATILE /* both pads: [0] and [1] */
 #include "card_browse.h"
 #include "stars.h"
@@ -56,6 +64,7 @@
 #include "game/build_deck_transition_state.h"
 
 extern u8 D_8009B26C; /* main_mode_state.h: the active mode */
+extern u8 D_8009B26E; /* main_run_duel.c: Main_RunDuel's own step, 0x80 once its screen is up */
 
 /* DuelEffect_UpdateCardViewerState's opening: the resource slot and where
  * its texture goes, where the card slides to (its slide-in's end), its
@@ -130,6 +139,19 @@ static u16 move_build_deck_cursor(int pad, int step)
     return 0;
 }
 
+/* The pre-duel chest: Build Deck's own list and cursor (gBuildDeck_pState is
+ * never cleared between the two, main_run_duel.c's own func_800323F8 call),
+ * so move_build_deck_cursor needs no change -- only guarded to the chest's
+ * own step, since Main_RunDuel reuses MAIN_MODE_DUEL for the duel proper
+ * too, where gBuildDeck_pState is still whatever the chest last left it
+ * (deck_menu.c's own duel_chest() check, the proven way to tell them
+ * apart). */
+static u16 move_duel_chest_cursor(int pad, int step)
+{
+    if (D_8009B26E != 0x80) return NOT_THIS_LIST;
+    return move_build_deck_cursor(pad, step);
+}
+
 /* The screens that open the viewer on a list, by main mode. `move` takes
  * the pad pressed (0 or 1) and the step; it returns the card now under the
  * cursor, 0 at the end of the list, or NOT_THIS_LIST. */
@@ -138,6 +160,7 @@ static const struct {
     u16 (*move)(int pad, int step);
 } screens[] = {
     {MAIN_MODE_BUILD_DECK, move_build_deck_cursor},
+    {MAIN_MODE_DUEL, move_duel_chest_cursor},
 };
 
 /* The viewer's opening for `id`, its pieces already where they slide to. */
