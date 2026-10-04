@@ -699,7 +699,16 @@ def check_x64_compiler(build):
                                     "-Wl,--disable-dynamicbase", "-Wl,--disable-high-entropy-va", X64_GATE, "-o", exe])
         if result.returncode:
             sys.exit(f"{CC} ({version}) cannot build the 64-bit game:\n{result.stderr}")
-        checked = subprocess.run([os.path.abspath(exe)], capture_output=True, text=True)
+        command = [os.path.abspath(exe)]
+        if sys.platform != "win32":
+            # Built on Linux: Wine runs it (binfmt may not be set up for .exe).
+            if not shutil.which("wine"):
+                print(f"build: wine is missing, so {CC} ({version}) is not checked for the clang 12 "
+                      "G32 miscompile; use clang 21 or later", file=sys.stderr)
+                return
+            command.insert(0, "wine")
+        checked = subprocess.run(command, capture_output=True, text=True,
+                                 env=dict(os.environ, WINEDEBUG="-all", WINEDLLOVERRIDES="mscoree,mshtml="))
         if checked.returncode:
             sys.exit(f"{CC} ({version}) miscompiles 32-bit guest pointers at {level}; the 64-bit build needs "
                      f"clang 21 or later:\n{checked.stdout}{checked.stderr}")

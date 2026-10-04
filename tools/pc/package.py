@@ -65,7 +65,10 @@ def version():
 def x64_toolchain_missing():
     """Why the 64-bit Windows game cannot be built here, or None: it needs
     x86_64-w64-mingw32-clang, clang 21 or later (build_game32.py's compiler
-    gate refuses older ones)."""
+    gate refuses older ones), looked for where the build looks too."""
+    if sys.platform != "win32":     # the llvm-mingw fetched into tmp/pc (on Windows it would fetch one)
+        import build_win32_deps
+        build_win32_deps.use_toolchain()
     compiler = shutil.which("x86_64-w64-mingw32-clang")
     if not compiler:
         return "x86_64-w64-mingw32-clang is not on PATH"
@@ -98,8 +101,9 @@ def strip(executable):
     some 350 KB after the last section, where scanners' heuristics expect a
     dropper's payload (Bitdefender flagged v0.1.2 as Gen:Variant.Yogi)."""
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    import build_win32_deps
-    build_win32_deps.use_toolchain()
+    if sys.platform != "win32":     # the llvm-mingw fetched into tmp/pc (on Windows it would fetch one)
+        import build_win32_deps
+        build_win32_deps.use_toolchain()
     subprocess.run(["llvm-strip", "--strip-all", executable], check=True)
     set_pe_checksum(executable)
 
@@ -203,9 +207,15 @@ def main():
     label = options.version or version()
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}", label):
         parser.error("version must be 1-100 letters, numbers, dots, underscores or hyphens, starting with a letter or number")
-    missing = x64_toolchain_missing() if "windows-x64" in systems and not options.no_build else None
+    if "windows-x64" not in systems:
+        missing = None
+    elif options.no_build:
+        executable = os.path.join(ROOT, BUILDS["windows-x64"][0], BUILDS["windows-x64"][1])
+        missing = None if os.path.isfile(executable) else f"{os.path.relpath(executable, ROOT)} is not built"
+    else:
+        missing = x64_toolchain_missing()
     if missing and options.systems:
-        sys.exit(f"package: cannot build windows-x64: {missing}")
+        sys.exit(f"package: cannot pack windows-x64: {missing}")
     if missing:
         # Packing everything: the other archives do not wait on it.
         print(f"package: windows-x64 skipped: {missing}; the other archives are packed", file=sys.stderr)
