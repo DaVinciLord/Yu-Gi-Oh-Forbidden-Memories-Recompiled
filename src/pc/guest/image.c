@@ -23,11 +23,15 @@
 #if defined(_WIN32) && defined(__x86_64__)
 /* The 64-bit Windows build keeps the same fixed addresses; the game's stored
  * pointers are 4 bytes wide through G32 (src/port_ptr.h), and the image is
- * linked below 4 GB (tools/pc/build_game32.py --target windows-x64). No
- * other 64-bit target has that yet. */
+ * linked below 4 GB (tools/pc/build_game32.py --target windows-x64). */
 _Static_assert(sizeof(void *) == 8, "the 64-bit Windows guest image model is LLP64");
 /* The faulting instruction, as the messages below name it. */
 #define FAULT_PC "rip"
+#elif defined(__aarch64__)
+/* The Android arm64 build, the same way: G32 pointers, and the game's
+ * library linked below 4 GB (--target android-arm64-v8a). */
+_Static_assert(sizeof(void *) == 8, "the arm64 guest image model is LP64");
+#define FAULT_PC "pc"
 #else
 _Static_assert(sizeof(void *) == 4, "the guest image model requires an ILP32 build");
 #define FAULT_PC "eip"
@@ -48,10 +52,12 @@ static unsigned char *low_memory;
  * Windows holds the others (see there). */
 static unsigned char low_piece_mapped[MEMORIES_GUEST_RAM_SIZE / 0x10000u];
 #endif
+#if defined(__i386__) || defined(__x86_64__)
 static struct {
     int active, reg; /* reg: the ModRM register number, 0 (EAX) to 7 (EDI) */
     uint32_t original, patched;
 } low_fixup;
+#endif
 /* Whether the retail scratchpad view (0x1F800000) is mapped (image.h);
  * where it is not, an access there takes the same register rebase as the
  * first 64 KiB, onto the port's view. Windows always maps it. */
@@ -81,6 +87,7 @@ static void report_low_access(uint32_t eip, uint32_t address)
     (void)!write(2, text, (size_t)length);
 }
 
+#if defined(__i386__) || defined(__x86_64__)
 /* Which register (ModRM number) does the faulting instruction address memory
  * through? -1 for none. */
 #define REGISTER_ESI 6
@@ -113,6 +120,7 @@ static int low_access_register(const unsigned char *code, uint32_t esi)
     }
     return (int)base;
 }
+#endif
 
 /* Tables in the retail data image hold MIPS function addresses, and native
  * code calls through them. The build generates Memories_FunctionMap (guest
@@ -708,6 +716,7 @@ static int map_at(uint32_t address, size_t length, int fd, off_t offset)
     return 0;
 }
 
+#if defined(__i386__)
 /* ModRM/SIB register numbers to gregs[]. */
 static const int register_slot[8] = {REG_EAX, REG_ECX, REG_EDX, REG_EBX, REG_ESP, REG_EBP, REG_ESI, REG_EDI};
 
@@ -766,6 +775,165 @@ static void on_fault(int number, siginfo_t *info, void *context)
     report_guest_fault(address, eip);
     Crash_HandleSignal(number, info, context);
 }
+#elif defined(__aarch64__)
+/* 64-bit ARM (AArch64), for the two faults the i386 handler above takes.
+ * AArch64 has no single-step trap, so a fixed-up instruction runs once out
+ * of line instead.
+ *
+ * A low or retail-scratchpad access runs once out of line: the handler
+ * moves the register that addresses the low page (the base Rn, bits 5-9 in
+ * every load/store class, or for a register offset with no shift the index
+ * Rm, bits 16-20) up by 0x80000000, onto the same RAM in KSEG0, and
+ * resumes in a stub: the instruction, then `eor Xr, Xr, #0x80000000`
+ * (which also undoes the move after a writeback), then a `b` back behind
+ * the original. A direct branch, because no register is free at an
+ * arbitrary load (X16/X17 are only scratch at a call); so the stub page is
+ * mapped within the branch's reach (+-128 MiB) of the faulting code, one
+ * page per region the faults come from. When the instruction loads the
+ * moved register the loaded value stands and there is no `eor`. Not
+ * handled, and fatal as before: a store of the moved register itself, an
+ * SP base, and PC-relative loads (which do not fault low).
+ *
+ * A call into guest code: the target of a guest address, as on i386. LR
+ * holds the caller's return address already, and X0-X7 the arguments. */
+#define A64_NOP 0xd503201fu
+#define A64_EOR_2_31 0xd2610000u /* eor Xd, Xn, #0x80000000 (N=1, immr=33, imms=0) */
+#define A64_B 0x14000000u
+
+static struct {
+    uint32_t *page;
+} fixup_pages[8];
+
+static int a64_in_reach(uintptr_t from, uintptr_t to)
+{
+    intptr_t delta = (intptr_t)(to - from);
+    return delta >= -(intptr_t)0x08000000 && delta < (intptr_t)0x08000000;
+}
+
+/* A stub page within reach of `pc` (and of `pc + 4`, where it returns). */
+static uint32_t *fixup_page_near(uintptr_t pc)
+{
+    unsigned i;
+    uintptr_t hint;
+    for (i = 0; i < sizeof(fixup_pages) / sizeof(fixup_pages[0]) && fixup_pages[i].page; i++) {
+        if (a64_in_reach(pc, (uintptr_t)fixup_pages[i].page) &&
+            a64_in_reach((uintptr_t)fixup_pages[i].page + 8, pc + 4)) {
+            return fixup_pages[i].page;
+        }
+    }
+    if (i == sizeof(fixup_pages) / sizeof(fixup_pages[0])) return NULL;
+    /* Below the code first (the image's own gap), then above it. */
+    for (hint = (pc & ~(uintptr_t)0xfffff) - 0x00400000u; hint; hint = 0) {
+        void *page = mmap((void *)hint, 0x10000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (page != MAP_FAILED && a64_in_reach(pc, (uintptr_t)page) && a64_in_reach((uintptr_t)page + 8, pc + 4)) {
+            fixup_pages[i].page = page;
+            return page;
+        }
+        if (page != MAP_FAILED) munmap(page, 0x10000);
+        page = mmap((void *)((pc & ~(uintptr_t)0xfffff) + 0x00400000u), 0x10000, PROT_READ | PROT_WRITE,
+                    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (page != MAP_FAILED && a64_in_reach(pc, (uintptr_t)page) && a64_in_reach((uintptr_t)page + 8, pc + 4)) {
+            fixup_pages[i].page = page;
+            return page;
+        }
+        if (page != MAP_FAILED) munmap(page, 0x10000);
+    }
+    return NULL;
+}
+
+/* The register a load or store addresses memory through that holds
+ * `want(value)`, or -1. Sets *loads_it when the access loads that register,
+ * *stores_it when it stores it. */
+static int a64_access(uint32_t code, const uint64_t *regs, int low, int *loads_it, int *stores_it)
+{
+    unsigned rn = (code >> 5) & 31, rt = code & 31, rt2 = (code >> 10) & 31, rm = (code >> 16) & 31;
+    int vector = (code >> 26) & 1, load, pair = 0, regoff = 0, chosen;
+    if ((code & 0x0a000000u) != 0x08000000u) return -1; /* not the load/store class (op0 x1x0) */
+    if ((code & 0x3a000000u) == 0x28000000u) {          /* LDP/STP/LDNP/STNP and the pre/post-indexed pairs */
+        pair = 1;
+        load = (code >> 22) & 1;
+    } else if ((code & 0x3b000000u) == 0x38000000u) {   /* LDR/STR (immediate pre/post, unscaled, register) */
+        load = ((code >> 22) & 3) != 0;
+        regoff = (code & 0x00200c00u) == 0x00200800u;   /* bit 21 set, bits 11-10 = 10: register offset */
+        if (regoff && ((code >> 12) & 1)) regoff = 2;   /* S: the index is shifted */
+    } else if ((code & 0x3b000000u) == 0x39000000u) {   /* LDR/STR (unsigned immediate) */
+        load = ((code >> 22) & 3) != 0;
+    } else if ((code & 0x3f000000u) == 0x08000000u) {   /* exclusives, acquire/release */
+        load = (code >> 22) & 1;
+        if (!load && rm == rn) return -1;               /* the status register is the base */
+    } else {
+        return -1; /* SIMD structure loads, atomics and the rest: not seen here */
+    }
+    if (rn != 31 && (low ? regs[rn] < 0x10000u : regs[rn] - MEMORIES_GUEST_SCRATCHPAD_RETAIL < 0x1000u)) {
+        chosen = (int)rn;
+    } else if (regoff == 1 && rm != 31 && rm != rn &&
+               (low ? regs[rm] < 0x10000u : regs[rm] - MEMORIES_GUEST_SCRATCHPAD_RETAIL < 0x1000u)) {
+        chosen = (int)rm;
+    } else {
+        return -1;
+    }
+    if (regoff == 1 && rm == rn) return -1;
+    if (!vector) {
+        int hits = rt == (unsigned)chosen || (pair && rt2 == (unsigned)chosen);
+        *loads_it = load && hits;
+        *stores_it = !load && hits;
+    }
+    return chosen;
+}
+
+/* Returns 1 when the access will run from the stub. */
+static int run_rebased(ucontext_t *user, uint32_t address)
+{
+    uint64_t *regs = (uint64_t *)user->uc_mcontext.regs;
+    uintptr_t pc = (uintptr_t)user->uc_mcontext.pc;
+    uint32_t code, *stub;
+    int reg, loads_it = 0, stores_it = 0, low = address < 0x10000u;
+    code = *(const uint32_t *)pc;
+    reg = a64_access(code, regs, low, &loads_it, &stores_it);
+    if (reg < 0 || stores_it) return 0;
+    if (!(stub = fixup_page_near(pc))) return 0;
+    report_low_access((uint32_t)pc, address);
+    if (mprotect(stub, 0x10000, PROT_READ | PROT_WRITE)) return 0;
+    stub[0] = code;
+    stub[1] = loads_it ? A64_NOP : A64_EOR_2_31 | (uint32_t)reg << 5 | (uint32_t)reg;
+    stub[2] = A64_B | (uint32_t)(((intptr_t)(pc + 4) - (intptr_t)(stub + 2)) >> 2 & 0x03ffffff);
+    if (mprotect(stub, 0x10000, PROT_READ | PROT_EXEC)) return 0;
+    __builtin___clear_cache((char *)stub, (char *)(stub + 3));
+    regs[reg] += 0x80000000u;
+    user->uc_mcontext.pc = (uint64_t)(uintptr_t)stub;
+    return 1;
+}
+
+static void on_fault(int number, siginfo_t *info, void *context)
+{
+    ucontext_t *user = context;
+    uintptr_t full = (uintptr_t)info->si_addr;
+    uint32_t address = (uint32_t)full;
+    uintptr_t pc = (uintptr_t)user->uc_mcontext.pc;
+    void *target;
+    if (pc != full && ((full < 0x10000u) ||
+                       (!Memories_ScratchpadRetailView && full - MEMORIES_GUEST_SCRATCHPAD_RETAIL < 0x1000u))) {
+        if (run_rebased(user, address)) return;
+    }
+    if (pc == full && full < 0x100000000ull && (target = guest_call_target(address)) != NULL) {
+        user->uc_mcontext.pc = (uint64_t)(uintptr_t)target;
+        return;
+    }
+    if (pc == full && full < 0x100000000ull) {
+        report_guest_fault(address, (uint32_t)pc); /* a call into guest code with no native function */
+    } else {
+        /* Whole: a host address is 64 bits here (report_guest_fault's are 32). */
+        char text[160];
+        int length = snprintf(text, sizeof(text), "memories-pc: bad memory access at 0x%llx (pc 0x%llx, lr 0x%llx)\n",
+                              (unsigned long long)full, (unsigned long long)pc,
+                              (unsigned long long)user->uc_mcontext.regs[30]);
+        (void)!write(2, text, (size_t)length);
+    }
+    Crash_HandleSignal(number, info, context);
+}
+#else
+#error "image.c: no fault handler for this architecture"
+#endif
 
 #ifdef MEMORIES_TEST_HOOKS
 /* MEMORIES_TEST_HOLD_SCRATCHPAD=rw or none: a page is held at 0x1F800000
@@ -823,8 +991,10 @@ int Memories_GuestMap(void)
     action.sa_sigaction = on_fault;
     action.sa_flags = SA_SIGINFO | SA_ONSTACK;
     sigaction(SIGSEGV, &action, NULL);
+#if defined(__i386__)
     action.sa_sigaction = on_step;
     sigaction(SIGTRAP, &action, NULL);
+#endif
     fd = memfd_create("memories-ram", 0);
     /* Guest RAM, then a page for the scratchpad. */
     if (fd < 0 || ftruncate(fd, MEMORIES_GUEST_RAM_SIZE + 0x1000) != 0) {
