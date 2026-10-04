@@ -10,7 +10,8 @@
     python tools/pc/fm_editor import <modified .bin, folder, SLUS_014.11, or an old recomp's .ygomods> -o <mod folder>
                              [--wa <modified WA_MRG.MRG>] [--game <retail>] [--id <mod id>]
         turn a community mod's modified game files into a port mod (what
-        differs from retail); what cannot be carried over is reported
+        differs from retail); what cannot be carried over is reported.
+        Importing a modified game is experimental and not supported yet
 """
 from __future__ import annotations
 
@@ -93,7 +94,7 @@ def build_parser():
     check.add_argument("--game", default=argparse.SUPPRESS,     # so a --game before "check" counts too
                        help="the game: a folder with SLUS_014.11 and DATA/WA_MRG.MRG, or the .bin")
     check.add_argument("--print", action="store_true", help="print the mod.json the editor would write")
-    imp = commands.add_parser("import", help="turn a modified game into a port mod")
+    imp = commands.add_parser("import", help="turn a modified game into a port mod (experimental for a .bin, folder or SLUS_014.11)")
     imp.add_argument("modded", help="the modified game: a .bin, a folder or its SLUS_014.11; or an old recomp's .ygomods package, converted one way")
     imp.add_argument("-o", "--output", required=True, help="the mod folder to write")
     imp.add_argument("--wa", help="the modified WA_MRG.MRG, when the first argument is SLUS_014.11 alone")
