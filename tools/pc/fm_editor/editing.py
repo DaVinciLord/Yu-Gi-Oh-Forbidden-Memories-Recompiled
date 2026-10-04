@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import json
+import shutil
 import tkinter as tk
+from pathlib import Path
 from tkinter import messagebox, ttk
 
 from . import manifest, recovery
@@ -18,6 +20,7 @@ class Editing:
         self._pending = set()
         self._recovered = False
         self._recovery_source = None
+        self._recovered_from = None     # the crashed session a recovered copy came from
         self._input_before = {}
 
     def install_editing(self):
@@ -90,6 +93,12 @@ class Editing:
         if self._input_before.get(str(widget)) == value:
             return
         self._input_before[str(widget)] = value
+        self.form_edited(tab)
+
+    def form_edited(self, tab):
+        """A form now holds input not yet applied (typed, or put there by a tab)."""
+        if self._refreshing or self.project is None:
+            return
         self._pending.add(tab)
         self.update_title()
         self.update_edit_state()
@@ -107,7 +116,15 @@ class Editing:
         label = "Choose game files to start" if self.project is None else (
             "Unapplied edits • Apply or leave the tab to apply • Ctrl+S saves" if self._pending else
             "Unsaved changes • Ctrl+S saves" if self.dirty else "No unsaved changes")
-        self.edit_state.configure(text=label)
+        style = "TLabel" if self.project is None else (
+            "Warning.TLabel" if self._pending else "Changed.TLabel" if self.dirty else "TLabel")
+        self.edit_state.configure(text=label, style=style)
+
+    def forget_recovered_copy(self):
+        """The recovered session is saved now: stop offering it at start."""
+        if self._recovered_from is not None and self._recovered_from.parent.resolve() == recovery.root().resolve():
+            shutil.rmtree(self._recovered_from, ignore_errors=True)
+        self._recovered_from = None
 
     def clear_recovery(self):
         self.recovery.clear()
@@ -352,6 +369,9 @@ class Editing:
             return
         self.set_project(project)
         self._recovery_source = staging
+        # A crashed session's copy (not a save backup) goes once it is saved.
+        if not data.get("backup") and Path(folder).parent.name.startswith("session-"):
+            self._recovered_from = Path(folder).parent
         self._recovered = True
         self.dirty = True
         self.restore_drafts(data.get("forms"))

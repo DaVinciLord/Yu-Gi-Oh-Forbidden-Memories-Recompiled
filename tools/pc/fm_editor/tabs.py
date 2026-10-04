@@ -90,6 +90,10 @@ HINT_WIDTH = 35     # characters: "Retail: " and the longest name it shows in fu
 
 class CardsTab(Tab):
     FILTERS = ["All cards", "Changed", "Added by the mod", "With notes", "Monsters", "Non-monsters"] + TYPE_NAMES
+    # The fields whose disc value (a copy's base's) is shown, as a link
+    # putting it back, only while the form differs from it (mark).
+    MARKED = ("name", "type", "effect", "attribute", "level", "attack", "defense", "star1", "star2", "password",
+              "starchips", "text", "frame")
 
     def __init__(self, notebook, app):
         super().__init__(notebook, app, "Cards")
@@ -137,10 +141,14 @@ class CardsTab(Tab):
         self.trap_rows = []
         self.equip_rows = []
 
+        self.captions = {}
+
         def line(label, widget, hint=None, rows=None):
             nonlocal row
             caption = ttk.Label(form, text=label)
             caption.grid(row=row, column=0, sticky="w", pady=2)
+            if hint is not None:
+                self.captions[next(k for k, v in self.hints.items() if v is hint)] = caption
             widget.grid(row=row, column=1, sticky="we", pady=2)
             if hint is not None:
                 hint.grid(row=row, column=2, sticky="w", padx=6)
@@ -160,6 +168,8 @@ class CardsTab(Tab):
         # form would keep its first width and cut them off.
         def hint(key):
             self.hints[key] = ttk.Label(form, style="Hint.TLabel", width=HINT_WIDTH)
+            if key in self.MARKED:
+                self.hints[key].bind("<Button-1>", lambda e, k=key: self.restore(k))
             return self.hints[key]
 
         line("Name", ttk.Entry(form, textvariable=self.vars["name"], width=26), hint("name"))
@@ -193,18 +203,23 @@ class CardsTab(Tab):
         ttk.Label(form, text="0 = free; empty = default price", style="Hint.TLabel").grid(
             row=row, column=1, columnspan=2, sticky="w")
         row += 1
-        ttk.Label(form, text="Card text").grid(row=row, column=0, sticky="nw", pady=2)
+        self.captions["text"] = ttk.Label(form, text="Card text")
+        self.captions["text"].grid(row=row, column=0, sticky="nw", pady=2)
         # 21 columns: the game's 20 letters a line and room for the cursor.
         self.text = tk.Text(form, width=21, height=9, wrap="word", font=("Consolas", 10))
-        self.text.grid(row=row, column=1, columnspan=2, sticky="w", pady=2)
+        self.text.grid(row=row, column=1, sticky="w", pady=2)
+        self.hints["text"] = ttk.Label(form, style="Hint.TLabel", width=HINT_WIDTH)
+        self.hints["text"].grid(row=row, column=2, sticky="nw", padx=6, pady=2)
+        self.hints["text"].bind("<Button-1>", lambda e: self.restore("text"))
         row += 1
         self.lines = ttk.Label(form, style="Hint.TLabel")
         self.lines.grid(row=row, column=1, columnspan=2, sticky="w")
         row += 1
-        self.text.bind("<KeyRelease>", lambda e: self.count_lines())
+        self.text.bind("<KeyRelease>", lambda e: (self.count_lines(), self.mark_later()))
         # The frame the card view, the Library and the duel draw it in: its
         # type's unless the mod picks one (cards.c "frame").
-        ttk.Label(form, text="Frame").grid(row=row, column=0, sticky="w", pady=2)
+        self.captions["frame"] = ttk.Label(form, text="Frame")
+        self.captions["frame"].grid(row=row, column=0, sticky="w", pady=2)
         ttk.Combobox(form, textvariable=self.vars["frame"], values=FRAME_CHOICES, state="readonly",
                      width=18).grid(row=row, column=1, sticky="we", pady=2)
         beside = ttk.Frame(form)
@@ -213,6 +228,7 @@ class CardsTab(Tab):
         self.swatch.pack(side="left")
         self.hints["frame"] = ttk.Label(beside, style="Hint.TLabel", width=HINT_WIDTH - 4)
         self.hints["frame"].pack(side="left", padx=(6, 0))
+        self.hints["frame"].bind("<Button-1>", lambda e: self.restore("frame"))
         row += 1
         self.vars["frame"].trace_add("write", lambda *_: self.show_swatch())
         self.vars["type"].trace_add("write", lambda *_: self.show_swatch())
@@ -254,6 +270,10 @@ class CardsTab(Tab):
         for child in form.winfo_children():
             if isinstance(child, (ttk.Entry, ttk.Spinbox)):
                 child.bind("<Return>", lambda e: self.apply())
+        self._mark_job = None
+        for key in self.MARKED:
+            if key in self.vars:
+                self.vars[key].trace_add("write", lambda *_: self.mark_later())
         self.fill()
         self.show(None)
 
@@ -336,6 +356,19 @@ class CardsTab(Tab):
             return True
         return False
 
+    def show_card(self, cid):
+        """Select the card, in the list as it is filtered if it is there."""
+        if not self.tree.exists(str(cid)):
+            self.goto(cid)
+            return
+        self.tree.selection_set(str(cid))
+        self.tree.see(str(cid))
+        self.select()
+
+    def follow(self, cid):
+        if cid != self.current and cid in self.project.cards:
+            self.show_card(cid)
+
     # the form
     def show(self, cid):
         self.current = cid
@@ -360,8 +393,10 @@ class CardsTab(Tab):
                 var.set("")
             self.added_frame.grid_remove()
             self.extra.configure(text="")
+            self.reference = None
             for label in self.hints.values():
                 label.configure(text="")
+            self.mark()
             self.lines.configure(text="")
             self.text.configure(state="disabled")
             self.notes.configure(state="disabled")
@@ -369,6 +404,7 @@ class CardsTab(Tab):
                 self.app.text_preview.later()
             return
         card = self.project.cards[cid]
+        self.app.current_card = cid
         self.title.configure(text=f"#{cid}" + ("  (added by the mod)" if cid in self.project.added else ""))
         self.vars["name"].set(card.name)
         self.vars["attack"].set(card.attack)
@@ -393,28 +429,12 @@ class CardsTab(Tab):
         self._shown_price = "" if price is None else str(price)
         self.vars["starchips"].set(self._shown_price)
         self.price.configure(state="normal")
-        self.hints["starchips"].configure(text=(
-            f"Retail: {self.project.retail.starchips.get(cid, 'unknown')}" if cid in self.project.retail.cards
-            else "Default: 999999"))
         self.text.insert("1.0", card.description)
         self.notes.insert("1.0", self.project.notes.get(cid, ""))
         self.notes.edit_reset()
         self.count_lines()
-        reference = self.project.retail.cards.get(cid) or self.project.cards.get(self.project.base_of(cid))
-        what = "Retail" if cid in self.project.retail.cards else "Base"
-        for key, label in (("name", reference.name), ("type", type_label(reference.type)),
-                           ("attribute", attribute_label(reference.attribute)), ("level", reference.level),
-                           ("attack", reference.attack), ("defense", reference.defense),
-                           ("star1", star_label(reference.star1)), ("star2", star_label(reference.star2)),
-                           ("frame", frame_label(reference.frame).lower())):
-            self.hints[key].configure(text=f"{what}: {label}" if key != "name" or len(str(label)) < 28 else what)
-        default = self.effect_default(cid)
-        self.hints["effect"].configure(text=f"{what}: " + (
-            "none" if self.effect_kind(default) < 0 else "its own" if default == cid else self.effect_label(default)))
-        if cid in self.project.retail.cards:
-            self.hints["password"].configure(text=f"Retail: {self.project.retail.passwords.get(cid) or 'none'}")
-        else:
-            self.hints["password"].configure(text="Card view only")
+        self.reference = self.project.retail.cards.get(cid) or self.project.cards.get(self.project.base_of(cid))
+        self.mark()
         if cid in self.project.added:
             added = self.project.added[cid]
             self.vars["key"].set(added.key)
@@ -430,6 +450,85 @@ class CardsTab(Tab):
         self._shown_effect = self.vars["effect"].get()
         kept = sorted(set(extra) - {"effect", "trap_threshold"})
         self.extra.configure(text=("Kept as written in mod.json: " + ", ".join(kept)) if kept else "")
+
+    # What differs from the disc
+    def retail_values(self) -> dict:
+        """key -> (the form's text for the disc's value or None, the words
+        for it, whether the form differs from it). A copy's are its base's."""
+        cid, ref, p = self.current, self.reference, self.project
+        if not cid or ref is None or cid not in p.cards:
+            return {}
+        values = {"name": ref.name, "type": type_label(ref.type), "attribute": attribute_label(ref.attribute),
+                  "level": str(ref.level), "attack": str(ref.attack), "defense": str(ref.defense),
+                  "star1": star_label(ref.star1, p), "star2": star_label(ref.star2, p), "frame": frame_label(ref.frame)}
+        shown = {key: (value, value, self.vars[key].get().strip() != value.strip()) for key, value in values.items()}
+        for key in ("star1", "star2", "attribute"):
+            choices = star_choices(p) if key != "attribute" else ATTRIBUTE_CHOICES
+            number = ref.attribute if key == "attribute" else getattr(ref, key)
+            shown[key] = (values[key], values[key], parse_choice(self.vars[key].get(), choices) != number)
+        shown["frame"] = (values["frame"], values["frame"].lower(),
+                          parse_choice(self.vars["frame"].get(), FRAME_CHOICES) - 1 != ref.frame)
+        shown["text"] = (ref.description, "text", self.text.get("1.0", "end-1c") != ref.description)
+        # The effect only against the disc card's own type: another type's
+        # list has none of its choices.
+        default = self.effect_default(cid)
+        if parse_choice(self.vars["type"].get(), TYPE_NAMES) == ref.type and self.effect_kind(default) >= 0:
+            label = self.effect_label(default)
+            shown["effect"] = (label, label, self.vars["effect"].get() != label)
+        if cid in p.retail.cards:
+            retail = p.retail.passwords.get(cid) or ""
+            typed = self.vars["password"].get().strip()
+            shown["password"] = (retail, retail or "none", (typed.zfill(8) if typed else "") != (retail.zfill(8) if retail else ""))
+            price = str(p.retail.starchips.get(cid, ""))
+            shown["starchips"] = (price, price or "unknown", self.vars["starchips"].get().strip() not in ("", price))
+        else:
+            shown["password"] = (None, "card view only", False)
+            shown["starchips"] = ("", "999999", self.vars["starchips"].get().strip() not in ("", "999999"))
+        return shown
+
+    def mark_later(self):
+        if self._mark_job is None:
+            self._mark_job = self.app.after_idle(self.mark)   # the window cancels its own jobs on close
+
+    def mark(self):
+        """A field that differs from the disc: its caption in the changed
+        colour and, beside it, the disc's value, a click putting it back.
+        The disc's value is not repeated beside the fields that have it."""
+        if self._mark_job is not None:
+            self.app.after_cancel(self._mark_job)
+            self._mark_job = None
+        shown = self.retail_values()
+        what = ("Retail" if self.current in self.project.retail.cards else "Base") if shown else ""
+        for key in self.MARKED:
+            value, words, differs = shown.get(key, (None, "", False))
+            hint, caption = self.hints[key], self.captions.get(key)
+            if key == "password" and value is None and shown:
+                hint.configure(text="Card view only", style="Hint.TLabel", cursor="")
+            elif differs:
+                text = f"{what}: {words} (restore)" if key != "text" else f"Restore {what.lower()} text"
+                if len(text) > HINT_WIDTH:
+                    text = f"{what}: {words[:HINT_WIDTH - len(what) - 13]}… (restore)"
+                hint.configure(text=text, style="Changed.TLabel", cursor="hand2")
+            else:
+                hint.configure(text="", style="Hint.TLabel", cursor="")
+            if caption is not None:
+                caption.configure(style="Changed.TLabel" if differs else "TLabel")
+
+    def restore(self, key):
+        """Put the disc's value back in the form (Apply stores it)."""
+        value, _, differs = self.retail_values().get(key, (None, "", False))
+        if value is None or not differs:
+            return
+        if key == "text":
+            self.text.delete("1.0", "end")
+            self.text.insert("1.0", value)
+            self.count_lines()
+        else:
+            self.vars[key].set(value)
+        edited = getattr(self.app, "form_edited", None)
+        if edited:
+            edited(self)
+        self.mark()
 
     # A magic, trap, ritual or equip card's effect
     def effect_kind(self, eid: int) -> int:
@@ -503,12 +602,7 @@ class CardsTab(Tab):
         """Apply the card and open its target list without another search."""
         if not self.apply() or self.current is None or self.project.cards[self.current].type != TYPE_EQUIP:
             return
-        tab = self.app.equips
-        self.app.notebook.select(tab)
-        tab.fill_equips()
-        tab.equips.selection_set(str(self.current))
-        tab.equips.see(str(self.current))
-        tab.select()
+        self.app.open_card(self.app.equips, self.current)
 
     def refill_monster(self):
         """A card applied as a non-monster lost its ATK, DEF, level and stars;
@@ -727,6 +821,27 @@ class CardsTab(Tab):
 
 # --- Fusions -------------------------------------------------------------------
 
+def fusion_pairs(p):
+    """({pair: what its card's own list makes}, every pair the Fusions tab lists)."""
+    named = {pair for pair in p.own_fusion_pairs()[0] if pair[0] in p.cards and pair[1] in p.cards}
+    # A card's own "fusions" list makes what no rule of the mod decides
+    # first: the row shows what the game plays. A copy's pair its base's
+    # rule decides is no row of its own (it would read "forbidden").
+    removes = set(p.active_removes()) if named else set()
+    own = {pair: p.own_fusion(pair, removes) for pair in named}
+    pairs = set(p.fusions) | set(p.retail.fusions) | p.fusion_explicit | \
+        {pair for pair, made in own.items() if made is not None}
+    return own, pairs
+
+
+def labelled_card(p, text: str):
+    """The card whose whole label (Project.card_label) the text is, or None."""
+    head = text.split(" ", 1)[0]
+    if head.isdigit() and int(head) in p.cards and p.card_label(int(head)) == text:
+        return int(head)
+    return None
+
+
 class FusionsTab(Tab):
     LIMIT = 3000
 
@@ -758,7 +873,23 @@ class FusionsTab(Tab):
                                 "\"glitch\" fusions.", style="Hint.TLabel").pack(side="right")
 
     def refresh(self):
+        # A search still naming a whole card (after Undo, another mod) is
+        # the followed one, so the tab keeps following.
+        self.followed = labelled_card(self.project, self.search.get().strip())
         self.fill()
+
+    def show_card(self, cid):
+        """The fusions the card is in or makes."""
+        self.followed = cid
+        self.search.set(self.project.card_label(cid))
+
+    def follow(self, cid):
+        """The window's card, when it changed, unless the search is the
+        modder's own."""
+        followed = getattr(self, "followed", None)
+        text = self.search.get().strip()
+        if cid != followed and cid in self.project.cards and (not text or labelled_card(self.project, text) == followed):
+            self.show_card(cid)
 
     def fill(self):
         if self.project is None:
@@ -766,22 +897,21 @@ class FusionsTab(Tab):
         self.tree.delete(*self.tree.get_children())
         p = self.project
         text = self.search.get().strip()
-        named = {pair for pair in p.own_fusion_pairs()[0] if pair[0] in p.cards and pair[1] in p.cards}
-        # A card's own "fusions" list makes what no rule of the mod decides
-        # first: the row shows what the game plays. A copy's pair its base's
-        # rule decides is no row of its own (it would read "forbidden").
-        removes = set(p.active_removes()) if named else set()
-        own = {pair: p.own_fusion(pair, removes) for pair in named}
-        pairs = set(p.fusions) | set(p.retail.fusions) | p.fusion_explicit | \
-            {pair for pair, made in own.items() if made is not None}
+        own, pairs = fusion_pairs(p)
+        # A card's whole label ("1 Blue-eyes White Dragon", as the right-click
+        # menu and the Add dialog put it) finds that card only.
+        exact = labelled_card(p, text)
         rows = []
         for pair in pairs:
             status = "own list" if own.get(pair) is not None else p.fusion_status(pair)
             if self.changed_only.get() and status in ("", "glitch"):
                 continue
             result = own.get(pair) if status == "own list" else p.fusions.get(pair) or p.retail.fusions.get(pair)
-            if text and not (card_matches(p, pair[0], text) or card_matches(p, pair[1], text)
-                             or card_matches(p, result, text)):
+            if exact is not None:
+                if exact not in (pair[0], pair[1], result):
+                    continue
+            elif text and not (card_matches(p, pair[0], text) or card_matches(p, pair[1], text)
+                               or card_matches(p, result, text)):
                 continue
             rows.append((pair, status))
         rows.sort()
@@ -924,8 +1054,22 @@ class EquipsTab(Tab):
 
     def refresh(self):
         self.current = None
+        self.followed = None
         self.fill_equips()
         self.fill()
+
+    def show_card(self, cid):
+        """An equip card's targets."""
+        self.followed = cid
+        self.fill_equips()
+        if self.equips.exists(str(cid)):
+            self.equips.selection_set(str(cid))
+            self.equips.see(str(cid))
+            self.select()
+
+    def follow(self, cid):
+        if cid != getattr(self, "followed", None) and cid in self.project.equip_cards():
+            self.show_card(cid)
 
     def fill_equips(self):
         if self.project is None:
@@ -1080,6 +1224,11 @@ class RitualsTab(Tab):
     def selected(self):
         selection = self.tree.selection()
         return int(selection[0]) if selection else None
+
+    def show_card(self, cid):
+        if self.tree.exists(str(cid)):
+            self.tree.selection_set(str(cid))
+            self.tree.see(str(cid))
 
     def edit(self):
         ritual = self.selected()
