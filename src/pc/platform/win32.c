@@ -448,6 +448,56 @@ const char *Win32_SerifFontPath(void)
     return NULL;
 }
 
+#if defined(__x86_64__)
+/* Whether `size` bytes at `address` can be read: the unwinder reads the
+ * stack of a thread that may have just overflowed or run wild. */
+static int readable(uintptr_t address, size_t size)
+{
+    MEMORY_BASIC_INFORMATION info;
+    if (!VirtualQuery((const void *)address, &info, sizeof(info)) || info.State != MEM_COMMIT ||
+        (info.Protect & (PAGE_NOACCESS | PAGE_GUARD))) {
+        return 0;
+    }
+    return address + size <= (uintptr_t)info.BaseAddress + info.RegionSize;
+}
+
+int Win32_UnwindCallers(uintptr_t pc, uintptr_t sp, uintptr_t fp, uintptr_t *callers, int count)
+{
+    CONTEXT walk;
+    int found = 0;
+    memset(&walk, 0, sizeof(walk));
+    walk.Rip = pc;
+    walk.Rsp = sp;
+    walk.Rbp = fp;
+    while (found < count) {
+        DWORD64 image;
+        PRUNTIME_FUNCTION function = RtlLookupFunctionEntry(walk.Rip, &image, NULL);
+        if (!readable(walk.Rsp, 8)) break;
+        if (function) {
+            void *data;
+            DWORD64 frame;
+            RtlVirtualUnwind(UNW_FLAG_NHANDLER, image, walk.Rip, function, &walk, &data, &frame, NULL);
+        } else {
+            walk.Rip = *(const DWORD64 *)(uintptr_t)walk.Rsp;
+            walk.Rsp += 8;
+        }
+        if (!walk.Rip) break;
+        callers[found++] = (uintptr_t)walk.Rip;
+    }
+    return found;
+}
+
+int Win32_CurrentCallers(int skip, uintptr_t *callers, int count)
+{
+    void *frames[64];
+    int found, i;
+    if (count > 64) count = 64;
+    found = RtlCaptureStackBackTrace((DWORD)(1 + skip), (DWORD)count, frames, NULL);
+    for (i = 0; i < found; i++) callers[i] = (uintptr_t)frames[i];
+    return found;
+}
+#endif
+
 void Win32_StackRange(uintptr_t *low, uintptr_t *high)
 {
     ULONG_PTR bottom, top;

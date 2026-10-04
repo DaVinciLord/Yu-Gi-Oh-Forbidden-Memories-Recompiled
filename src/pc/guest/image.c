@@ -449,28 +449,12 @@ static LONG CALLBACK on_guest_exception(EXCEPTION_POINTERS *pointers)
         context->Rip - (uintptr_t)GetModuleHandleW(NULL) < 0x10000000u) {
         /* A fault the game will not survive, in its own code or in a call
          * to where nothing is (or, a #GP in the branch thunk, to a
-         * non-canonical address, reported as 0xFFFFFFFF...): the crash
-         * report's frame-pointer walk finds nothing in x86-64 code, so the
-         * callers here, by the unwind tables. */
-        CONTEXT walk = *context;
-        int depth;
-        fprintf(stderr, "memories-pc: fault at rip 0x%llx (r11 0x%llx); callers:",
+         * non-canonical address, reported as 0xFFFFFFFF...). R11 is where
+         * a call through the thunk was going. The crash report that follows
+         * lists the callers, from the unwind tables and symbolized (crash.c,
+         * Win32_UnwindCallers). */
+        fprintf(stderr, "memories-pc: fault at rip 0x%llx (r11 0x%llx); the crash report lists its callers\n",
                 (unsigned long long)context->Rip, (unsigned long long)context->R11);
-        for (depth = 0; depth < 12; depth++) {
-            DWORD64 image;
-            PRUNTIME_FUNCTION function = RtlLookupFunctionEntry(walk.Rip, &image, NULL);
-            if (function) {
-                void *data;
-                DWORD64 frame;
-                RtlVirtualUnwind(UNW_FLAG_NHANDLER, image, walk.Rip, function, &walk, &data, &frame, NULL);
-            } else { /* a leaf, the thunk, or no code at all: the return address is on top */
-                walk.Rip = *(const DWORD64 *)(uintptr_t)walk.Rsp;
-                walk.Rsp += 8;
-            }
-            if (!walk.Rip) break;
-            fprintf(stderr, " 0x%llx", (unsigned long long)walk.Rip);
-        }
-        fprintf(stderr, "\n");
     }
     return EXCEPTION_CONTINUE_SEARCH;
 }

@@ -2865,9 +2865,13 @@ hashes (PGXP and HD off, as the fixtures run). What makes it work:
   for the null-page fix-up, which also takes clang's load through a G32
   pointer, `disp32(,%reg)` with no base register. A fatal fault in the
   game's code, or a call to where nothing is (a non-canonical target faults
-  as a #GP in the branch thunk, reported at `0xFFFFFFFF`), prints its
-  callers from the unwind tables ("fault at rip ...; callers: ..."), since
-  the crash report's frame-pointer walk finds nothing in x86-64 code.
+  as a #GP in the branch thunk, reported at `0xFFFFFFFF`), is noted on
+  stderr ("fault at rip ... (r11 ...)", r11 being where a call through the
+  thunk went). x86-64 code keeps no frame chain, so the 64-bit crash and
+  hang reports list the callers from the unwind tables, named as on 32-bit
+  (`Win32_UnwindCallers` in win32.c), with whole 64-bit addresses and a
+  `RIP RSP RBP` registers line; their `executable` fact says
+  `64-bit (x86-64)`.
 - **What G32 on declarations does not cover.** A local that receives a
   guest table whole (`func_8004EB00` copies four model handlers from
   `D_800114E8` as one 16-byte block) is `T (*G32 name[N])(...)`, called
