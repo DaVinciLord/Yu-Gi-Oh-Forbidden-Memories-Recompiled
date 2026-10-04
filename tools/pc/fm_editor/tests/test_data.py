@@ -810,6 +810,15 @@ class ValidateTest(unittest.TestCase):
             self.assertTrue(any(i.level == "error" and "trap_threshold" in i.message
                                 for i in validate.validate_card(p, added)))
 
+    def test_clearing_a_retail_trap_threshold_writes_no_entry(self):
+        p = Project(fixture().game())
+        p.retail.cards[681].type = p.cards[681].type = g.TYPE_TRAP
+        p.set_trap_threshold(681, 1234)
+        self.assertEqual(manifest.build_cards(p), [{"replace": 681, "trap_threshold": 1234}])
+        p.set_trap_threshold(681, None)
+        self.assertEqual(manifest.build_cards(p), [])
+        self.assertNotIn(681, p.card_extra)
+
     def test_problems(self):
         p = Project(fixture().game())
         p.info.id = "bad id!"

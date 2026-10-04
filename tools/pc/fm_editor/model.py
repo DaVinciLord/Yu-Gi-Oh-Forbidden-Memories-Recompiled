@@ -621,9 +621,17 @@ class Project:
         return value
 
     def set_trap_threshold(self, cid: int, value):
+        if value is None and cid not in self.added:
+            # A disc card has nothing to inherit: clearing drops the key, and
+            # an entry left empty, so no bare "replace" is written for it.
+            extra = self.card_extra.get(cid, {})
+            extra.pop("trap_threshold", None)
+            if not extra:
+                self.card_extra.pop(cid, None)
+            return
         extra = self.added[cid].extra if cid in self.added else self.card_extra.setdefault(cid, {})
-        # null explicitly clears an override, including one inherited from a
-        # base or an earlier mod. Untouched empty fields never write it.
+        # null on a copy explicitly clears an override inherited from its
+        # base. Untouched empty fields never write it.
         extra["trap_threshold"] = value
 
     def is_ritual(self, cid: int) -> bool:
