@@ -236,6 +236,10 @@ static uint32_t switch_frame(uint32_t limit, void (*function)(void))
 }
 #endif
 
+#if defined(__ANDROID__) && defined(__aarch64__)
+void Memories_CallOnStack(void (*function)(void *), void *argument, uintptr_t top); /* state_aarch64.S */
+#endif
+
 /* The VSync a loaded state resumes in (apply), and what it returns. */
 static MemoriesStateEntry resume_entry;
 static int resume_value;
@@ -248,6 +252,93 @@ static void resume_game(void)
 #else
 static ucontext_t service_context, game_context;
 #endif
+#if defined(__ANDROID__) && defined(__aarch64__)
+/* MEMORIES_TEST_HOST_STACK=1: how deep the calls Memories_OnHostStack runs
+ * on the thread's own stack go. At the first switch the span below the
+ * switch point is painted (at most 512 KiB, and never within 64 KiB of the
+ * stack's low end, where ART keeps protected pages), and
+ * Memories_HostStackUsed finds the lowest word written since. */
+#include <pthread.h>
+#define HOST_STACK_PAINT 0xa5a5a5a5a5a5a5a5ull
+static uintptr_t paint_low, paint_top;
+static size_t host_stack_size;
+static int paint_state; /* 0 not yet, 1 painted, -1 off */
+
+static void paint_host_stack(uintptr_t top)
+{
+    const char *value = getenv("MEMORIES_TEST_HOST_STACK");
+    pthread_attr_t attributes;
+    void *address = NULL;
+    size_t size = 0;
+    uintptr_t low, at;
+    paint_state = -1;
+    if (!value || !*value || !strcmp(value, "0")) return;
+    if (pthread_getattr_np(pthread_self(), &attributes)) return;
+    if (pthread_attr_getstack(&attributes, &address, &size)) size = 0;
+    pthread_attr_destroy(&attributes);
+    if (!size || top <= (uintptr_t)address + 64u * 1024u) return;
+    low = (uintptr_t)address + 64u * 1024u;
+    if (top - low > 512u * 1024u) low = top - 512u * 1024u;
+    low = (low + 7u) & ~(uintptr_t)7u;
+    for (at = low; at + 8u <= top; at += 8u) *(volatile uint64_t *)at = HOST_STACK_PAINT;
+    paint_low = low;
+    paint_top = top;
+    host_stack_size = size;
+    paint_state = 1;
+    fprintf(stderr, "memories-pc: host stack: %zu bytes painted below the switch point %p (thread stack %zu bytes)\n",
+            (size_t)(top - low), (void *)top, size);
+}
+
+size_t Memories_HostStackUsed(size_t *painted, size_t *stack_size)
+{
+    uintptr_t at;
+    if (paint_state != 1) return 0;
+    for (at = paint_low; at < paint_top && *(const volatile uint64_t *)at == HOST_STACK_PAINT; at += 8u) {
+    }
+    *painted = paint_top - paint_low;
+    *stack_size = host_stack_size;
+    return paint_top - at;
+}
+#endif
+
+void Memories_OnHostStack(void (*function)(void *), void *argument)
+{
+#if defined(__ANDROID__) && defined(__aarch64__)
+    /* On the game stack, the process side waits in Memories_ContextSwitch
+     * with its stack pointer in service_context: the thread's own stack
+     * below it is free (256 bytes kept below the saved frame). */
+    uintptr_t here = (uintptr_t)__builtin_frame_address(0);
+    if (here >= STACK_BASE && here < STACK_TOP && service_context) {
+        if (!paint_state) paint_host_stack((service_context - 256u) & ~(uintptr_t)15);
+        Memories_CallOnStack(function, argument, (service_context - 256u) & ~(uintptr_t)15);
+        return;
+    }
+#endif
+    function(argument);
+}
+
+#ifdef __ANDROID__
+static unsigned jni_guard_count;
+
+void Memories_JniGuard(const char *name)
+{
+    static const char *seen[48];
+    static unsigned seen_count;
+    uintptr_t here = (uintptr_t)__builtin_frame_address(0);
+    unsigned i;
+    if (here < STACK_BASE || here >= STACK_TOP) return;
+    jni_guard_count++;
+    for (i = 0; i < seen_count; i++) {
+        if (seen[i] == name) return;
+    }
+    if (seen_count < sizeof(seen) / sizeof(seen[0])) seen[seen_count++] = name;
+    fprintf(stderr, "memories-pc: %s, which may call Java, ran on the game stack (%p): Android's runtime refuses "
+            "that; its caller must go through Memories_OnHostStack\n", name, (void *)here);
+}
+
+unsigned Memories_JniGuardCount(void) { return jni_guard_count; }
+#endif
+
 static int (*game_entry)(void);
 static int game_result;
 static volatile int requested, requested_slot = 1;

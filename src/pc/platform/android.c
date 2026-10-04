@@ -47,6 +47,7 @@
 #include <sys/ioctl.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+#include "jni_guard.h" /* last: after SDL's own headers */
 
 #define LOG_TAG "memories"
 

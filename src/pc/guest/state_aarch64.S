@@ -94,4 +94,32 @@ Memories_ContextSwitch:
     add sp, sp, #176
     ret
     .size Memories_ContextSwitch, . - Memories_ContextSwitch
+
+/* void Memories_CallOnStack(void (*function)(void *), void *argument,
+ * uintptr_t top): function(argument) with the stack pointer at `top`
+ * (16-byte aligned), then back on the stack it was called on. The frame
+ * record stays on the caller's stack and x29 points at it, so the frame
+ * chain from inside `function` leads back to the caller across the
+ * switch. A frame-pointer walk that stops when the chain goes down has to
+ * cross it once, from the thread's stack down to the game stack (crash.c's
+ * walk does). The call goes through the X16 thunk, as every indirect call
+ * here does (build_game32.py's check_arm_branches). */
+    .globl Memories_CallOnStack
+    .type Memories_CallOnStack, %function
+    .p2align 2
+Memories_CallOnStack:
+    stp x29, x30, [sp, #-32]!
+    str x19, [sp, #16]
+    mov x29, sp
+    mov x19, sp
+    and x2, x2, #0xfffffffffffffff0
+    mov sp, x2
+    mov x16, x0
+    mov x0, x1
+    bl __llvm_slsblr_thunk_x16
+    mov sp, x19
+    ldr x19, [sp, #16]
+    ldp x29, x30, [sp], #32
+    ret
+    .size Memories_CallOnStack, . - Memories_CallOnStack
     .section .note.GNU-stack, "", %progbits

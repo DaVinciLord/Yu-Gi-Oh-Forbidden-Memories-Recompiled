@@ -85,6 +85,27 @@ extern MemoriesStateEntry Memories_StateEntry;
 
 /* main(): run `entry` on the fixed game stack. Does not return. */
 int Memories_StateRunGame(int (*entry)(void));
+/* function(argument) on the thread's own stack. Android's runtime refuses a
+ * Java call (JNI) from a native stack it does not know, as the game stack
+ * is: on Android arm64 a call made there runs below the suspended process
+ * side of the game thread (the service context) instead. Anywhere else, or
+ * off the game stack, a plain call. */
+void Memories_OnHostStack(void (*function)(void *), void *argument);
+#ifdef __ANDROID__
+/* Android: before an SDL call that may reach Java (platform/jni_guard.h).
+ * On the game stack it logs `name` once ("... which may call Java, ran on
+ * the game stack") and counts it; elsewhere it does nothing. */
+void Memories_JniGuard(const char *name);
+/* How many such calls ran on the game stack since the start. */
+unsigned Memories_JniGuardCount(void);
+#ifdef __aarch64__
+/* MEMORIES_TEST_HOST_STACK=1: the deepest use, in bytes, of the thread's
+ * own stack below the switch point by Memories_OnHostStack's calls since
+ * the first; 0 when not measuring. *painted is the span watched, and
+ * *stack_size the thread's stack. */
+size_t Memories_HostStackUsed(size_t *painted, size_t *stack_size);
+#endif
+#endif
 /* VSync(0), after presenting: act on a pending save or load request. */
 void Memories_StatePoint(unsigned presented_frames);
 /* 1 save, 2 load; taken up at the next state point. Async-signal-safe. */

@@ -136,13 +136,30 @@ __attribute__((noinline)) static void walk_current(void)
 static void walk(uintptr_t eip, uintptr_t ebp)
 {
     int depth = 0;
+#if defined(__aarch64__)
+    int crossed = 0;
+#endif
     symbol_line(depth++, eip);
     while (depth < 32 && valid_frame(ebp)) {
         const uintptr_t *frame = (const uintptr_t *)ebp;
         uintptr_t next = frame[0], return_address = frame[1];
         if (!return_address) break;
         symbol_line(depth++, return_address);
+#if defined(__aarch64__)
+        /* A chain only climbs, but once: Memories_CallOnStack (Android)
+         * runs a call on the thread's own stack and leaves its frame record
+         * on the game stack, below, so from a crash inside a present the
+         * walk goes on there to the game's callers. */
+        if (!valid_frame(next)) break;
+        if (next <= ebp) {
+            if (crossed || next < GAME_STACK_LOW || next >= GAME_STACK_HIGH ||
+                (ebp >= GAME_STACK_LOW && ebp < GAME_STACK_HIGH))
+                break;
+            crossed = 1;
+        }
+#else
         if (next <= ebp || !valid_frame(next)) break;
+#endif
         ebp = next;
     }
 }
