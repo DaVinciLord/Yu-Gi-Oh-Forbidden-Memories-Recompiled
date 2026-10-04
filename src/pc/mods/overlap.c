@@ -1680,15 +1680,18 @@ static int equip_allows(ModsOverlaps *x, const JsonValue *entry, long long card,
         }
     return best;
 }
-/* Its bonus for a monster of `type` and `attribute` (-1: neither named): the
- * first "bonus_if" that fits, then "bonus"; INT32_MIN for nothing. */
-static long equip_bonus(const JsonValue *entry, int type, int attribute)
+/* Its ATK (stat 0) or DEF (1) bonus for a monster of `type` and `attribute`
+ * (-1: neither named): the first "bonus_if" that fits, then "bonus_attack"
+ * or "bonus_defense", then "bonus"; INT32_MIN for nothing. */
+static long equip_bonus(const JsonValue *entry, int type, int attribute, int stat)
 {
+    const JsonValue *own = Json_Member(entry, stat ? "bonus_defense" : "bonus_attack");
     for (const JsonValue *b = Json_At(object_of(Json_Member(entry, "bonus_if")), 0); b; b = Json_Next(b)) {
         int t = type_named(name_of(b)), a = t < 0 || t >= 20 ? attribute_named(name_of(b)) : -1;
         if (Json_TypeOf(b) != JSON_NUMBER) continue;
         if ((t >= 0 && t < 20 && t == type) || (a >= 0 && a == attribute)) return Json_Number(b, 0);
     }
+    if (Json_TypeOf(own) == JSON_NUMBER) return Json_Number(own, 0);
     if (Json_TypeOf(Json_Member(entry, "bonus")) == JSON_NUMBER) return Json_Number(Json_Member(entry, "bonus"), 0);
     return -2147483647L - 1;
 }
@@ -1728,12 +1731,14 @@ static void equips_meet(ModsOverlaps *x, const JsonValue *early, const JsonValue
         else *same = 1;
     }
     for (int t = 0; t < n_types; t++)
-        for (int a = 0; a < n_attributes; a++) {
-            long one = equip_bonus(early, types[t], attributes[a]), two = equip_bonus(late, types[t], attributes[a]);
-            if (one == -2147483647L - 1 || two == -2147483647L - 1) continue;
-            if (one != two) *differ = 1;
-            else *same = 1;
-        }
+        for (int a = 0; a < n_attributes; a++)
+            for (int stat = 0; stat < 2; stat++) {
+                long one = equip_bonus(early, types[t], attributes[a], stat);
+                long two = equip_bonus(late, types[t], attributes[a], stat);
+                if (one == -2147483647L - 1 || two == -2147483647L - 1) continue;
+                if (one != two) *differ = 1;
+                else *same = 1;
+            }
 }
 
 /* Two patches from different mods over the same bytes; raw sectors from

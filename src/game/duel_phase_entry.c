@@ -53,6 +53,9 @@ void DuelScene_UpdateResume(void)
     s32 y;
     u16 flags;
     s8 n;
+#ifdef MEMORIES_PC
+    s32 defense_y;
+#endif
 
     if ((gDuel_wSceneStateFlags & DUEL_SCENE_FLAG_INITIALIZED) == 0) {
         gDuel_wSceneStateFlags |= DUEL_SCENE_FLAG_INITIALIZED;
@@ -62,9 +65,15 @@ void DuelScene_UpdateResume(void)
             if (flags & DUEL_CARD_FLAG_OCCUPIED) {
                 keep = flags & 0x7A00;
                 y = rec->stat_modifier;
+#ifdef MEMORIES_PC
+                defense_y = rec->defense_modifier;
+#endif
                 func_80024D34(i, ((s8 *)rec->data)[2]);
                 rec->flags |= keep;
                 rec->stat_modifier = y;
+#ifdef MEMORIES_PC
+                rec->defense_modifier = defense_y;
+#endif
                 Duel_ApplyCardObjectFlags(
                     DUEL_CARD_DISPLAY_OBJECT_VIEW(rec->object));
             }
@@ -75,9 +84,15 @@ void DuelScene_UpdateResume(void)
             if (flags & DUEL_CARD_FLAG_OCCUPIED) {
                 keep = flags & 0x7A00;
                 y = rec->stat_modifier;
+#ifdef MEMORIES_PC
+                defense_y = rec->defense_modifier;
+#endif
                 func_80024D34(i, ((s8 *)rec->data)[2]);
                 rec->flags |= keep;
                 rec->stat_modifier = y;
+#ifdef MEMORIES_PC
+                rec->defense_modifier = defense_y;
+#endif
                 Duel_ApplyCardObjectFlags(
                     DUEL_CARD_DISPLAY_OBJECT_VIEW(rec->object));
             }

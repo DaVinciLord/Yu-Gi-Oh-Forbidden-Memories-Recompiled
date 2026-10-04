@@ -723,7 +723,8 @@ the chest and makes each card past them worth 3 starchips instead of lost.
 `"terrain_bonus": {"Forest": {"Beast": 300, "Fairy": -200}}` sets, in points,
 what a terrain gives a monster type.
 An equip entry's `"bonus": 800` and `"bonus_if": {"Dragon": 1000, "Light": 700}`
-set what it adds, in place of the disc's +500, and a top-level
+set what it adds, in place of the disc's +500 (`"bonus_attack"` and
+`"bonus_defense"` set ATK and DEF apart), and a top-level
 `"equip_bonus_default": 700` what every other equip adds.
 `"trap_thresholds": {"House of Adhesive Tape": 800}` sets, in points of ATK,
 the attack each attack trap springs on.

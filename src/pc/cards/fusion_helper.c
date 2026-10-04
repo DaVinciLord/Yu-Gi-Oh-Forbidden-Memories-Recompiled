@@ -64,21 +64,28 @@ static void name(int id, char out[256])
     if (Cards_Valid(id)) snprintf(out, 256, "Card %d", id);
 }
 
-/* What placement gives (duel_scene_card_placement.c): a mod's bonus for the
- * equip and monster, kept where the 16-bit stat_modifier holds it. */
-static int bonus(int equipment, int monster, int modifier)
+/* What placement gives (duel_scene_card_placement.c): a mod's bonuses for
+ * the equip and monster, kept where the 16-bit modifiers hold them. */
+static void bonuses(int equipment, int monster, int modifier, int defense_modifier, int *attack, int *defense)
 {
-    int value = Tables_EquipBonus(equipment, monster, Cards_EffectId(equipment) == 657 ? 1000 : 500);
+    int value, guard, had;
     int room = 2 * Tables_StatCapEither();
+    Tables_EquipBoost(equipment, monster, &value, &guard);
     if (room > TABLES_LIMIT_STAT_MAX) room = TABLES_LIMIT_STAT_MAX;
     if (modifier + value > room) value = room - modifier;
     if (modifier + value < -room) value = -room - modifier;
-    return value;
+    had = modifier + defense_modifier;
+    if (had + guard > room) guard = room - had;
+    if (had + guard < -room) guard = -room - had;
+    if (defense_modifier + guard - value > TABLES_LIMIT_STAT_MAX) guard = TABLES_LIMIT_STAT_MAX - defense_modifier + value;
+    if (defense_modifier + guard - value < -TABLES_LIMIT_STAT_MAX) guard = -TABLES_LIMIT_STAT_MAX - defense_modifier + value;
+    *attack = value;
+    *defense = guard;
 }
 
 static void update(void)
 {
-    static const FusionRules rules = {card, CardRules_Fusion, CardRules_Equip, bonus};
+    static const FusionRules rules = {card, CardRules_Fusion, CardRules_Equip, NULL, bonuses};
     FusionCard hand[FUSION_HAND] = {{0}};
     int prefix[FUSION_HAND] = {-1, -1, -1, -1, -1};
     int slot, picked = 0, count = 0, side = D_8009B1D5;
@@ -99,7 +106,8 @@ static void update(void)
         record = &D_801A7AD8[index];
         if (!Cards_Valid(record->card_id) || !(record->flags & DUEL_CARD_FLAG_OCCUPIED)) return;
         hand[slot] = (FusionCard){record->card_id, Cards_Type(record->card_id),
-            record->attack, record->defense, record->stat_modifier, record->terrain_modifier};
+            record->attack, record->defense, record->stat_modifier, record->terrain_modifier,
+            record->defense_modifier};
         view.card_x[slot] = (short)object->field_30.h.field_30;
         view.card_y[slot] = (short)object->field_30.h.field_32;
         count++;

@@ -441,6 +441,24 @@ int main(void)
     add("t3", "{\"equip_bonus_default\": 700}");
     assert(Tables_EquipBonus(21, 13, 1000) == 700 && Tables_EquipBonus(21, 5, 500) == 700);
     assert(Tables_EquipBonus(20, 12, 500) == 0 && Tables_EquipBonus(20, 5, 500) == 0);
+    /* "bonus_attack" and "bonus_defense": one half each, over "bonus"; a
+     * later entry with one of them leaves the other to what came before. */
+    {
+        int attack, defense;
+        add("t4", "{\"equips\": [{\"card\": 20, \"bonus\": 300, \"bonus_attack\": 1200, \"bonus_defense\": -400}]}");
+        Tables_EquipBonuses(20, 5, 500, &attack, &defense);
+        assert(attack == 1200 && defense == -400 && Tables_EquipBonus(20, 5, 500) == 1200);
+        add("t5", "{\"equips\": [{\"card\": 20, \"bonus_defense\": 900}]}");
+        Tables_EquipBonuses(20, 5, 500, &attack, &defense);
+        assert(attack == 1200 && defense == 900);
+        Tables_EquipBonuses(CARD_COUNT + 20, 13, 500, &attack, &defense);   /* a copy has its base's */
+        assert(attack == 1200 && defense == 900);
+        Tables_EquipBonuses(21, 5, 1000, &attack, &defense);               /* the mods' default */
+        assert(attack == 700 && defense == 700);
+        notes = 0;
+        add("t6", "{\"equips\": [{\"card\": 20, \"bonus_defense\": \"lots\"}]}");
+        assert(notes == 1);
+    }
 
     /* Attack traps: the disc's thresholds until a mod sets one, in points;
      * only the six attack traps; a warning when they fall out of order. */

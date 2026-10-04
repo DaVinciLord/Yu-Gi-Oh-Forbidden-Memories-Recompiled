@@ -93,7 +93,7 @@ class CardsTab(Tab):
     FILTERS = ["All cards", "Changed", "Added by the mod", "With notes", "Monsters", "Non-monsters"] + TYPE_NAMES
     # The fields whose disc value (a copy's base's) is shown, as a link
     # putting it back, only while the form differs from it (mark).
-    MARKED = ("name", "type", "effect", "equip_bonus", "attribute", "level", "attack", "defense", "star1", "star2",
+    MARKED = ("name", "type", "effect", "equip_attack", "equip_defense", "attribute", "level", "attack", "defense", "star1", "star2",
               "password", "starchips", "text", "frame")
 
     def __init__(self, notebook, app):
@@ -102,7 +102,7 @@ class CardsTab(Tab):
         self._shown_price = ""
         self._shown_effect = ""
         self._shown_threshold = ""
-        self._shown_bonus = ""
+        self._shown_bonus = ("", "")
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
         # The form keeps its width; the list takes what is left, down to this.
@@ -135,7 +135,8 @@ class CardsTab(Tab):
         self.form = form
         self.vars = {k: tk.StringVar() for k in ("name", "attack", "defense", "type", "attribute", "level",
                                                   "star1", "star2", "password", "starchips", "key", "frame",
-                                                  "effect", "trap_threshold", "equip_bonus")}
+                                                  "effect", "trap_threshold", "equip_attack",
+                                                  "equip_defense")}
         row = 0
         # Only a monster has these; a magic, trap, ritual or equip card has
         # an effect instead (show_kind).
@@ -186,11 +187,12 @@ class CardsTab(Tab):
         self.edit_equips_button.grid(row=row, column=1, sticky="w", pady=(0, 4))
         self.equip_rows.append(self.edit_equips_button)
         row += 1
-        # What the equip adds to the monster's ATK and DEF (tables.c "equips"
-        # "bonus"): the disc's +500, Megamorph's +1000.
-        line("Equip bonus", ttk.Spinbox(form, textvariable=self.vars["equip_bonus"], from_=-EQUIP_BONUS_MAX,
-                                        to=EQUIP_BONUS_MAX, increment=100, width=10), hint("equip_bonus"),
-             self.equip_rows)
+        # What the equip adds to the monster's ATK and to its DEF (tables.c
+        # "equips" "bonus_attack", "bonus_defense"): the disc's +500 to both,
+        # Megamorph's +1000. An equip has no Retail effect to choose.
+        for key, label in (("equip_attack", "ATK boost"), ("equip_defense", "DEF boost")):
+            line(label, ttk.Spinbox(form, textvariable=self.vars[key], from_=-EQUIP_BONUS_MAX, to=EQUIP_BONUS_MAX,
+                                    increment=100, width=10), hint(key), self.equip_rows)
         line("Trigger at ATK ≤", ttk.Spinbox(form, textvariable=self.vars["trap_threshold"], from_=0, to=65535,
                                            increment=50, width=10), hint("trap_threshold"), self.trap_rows)
         line("Attribute", ttk.Combobox(form, textvariable=self.vars["attribute"], values=ATTRIBUTE_CHOICES,
@@ -245,7 +247,6 @@ class CardsTab(Tab):
         self.vars["type"].trace_add("write", lambda *_: self.show_swatch())
         self.vars["type"].trace_add("write", lambda *_: self.show_kind())
         self.vars["effect"].trace_add("write", lambda *_: self.show_trap_threshold())
-        self.vars["effect"].trace_add("write", lambda *_: self.follow_bonus())
         ttk.Label(form, text="Notes").grid(row=row, column=0, sticky="nw", pady=2)
         self.notes = tk.Text(form, width=36, height=4, wrap="word", undo=True)
         self.notes.grid(row=row, column=1, columnspan=2, sticky="we", pady=2)
@@ -428,8 +429,7 @@ class CardsTab(Tab):
         self._shown_threshold = "" if threshold is None else str(threshold)
         self.vars["trap_threshold"].set(self._shown_threshold)
         self.show_trap_threshold()
-        self._shown_bonus = str(self.project.equip_bonus_of(cid)) if card.type == TYPE_EQUIP else ""
-        self.vars["equip_bonus"].set(self._shown_bonus)
+        self.show_bonus(cid, card.type)
         self.vars["attribute"].set(attribute_label(card.attribute))
         self.vars["level"].set(card.level)
         # The mod's stars (the Guardian Stars tab) are in the lists too.
@@ -490,9 +490,8 @@ class CardsTab(Tab):
             label = self.effect_label(default)
             shown["effect"] = (label, label, self.vars["effect"].get() != label)
         if parse_choice(self.vars["type"].get(), TYPE_NAMES) == TYPE_EQUIP:
-            bonus = str(p.equip_bonus_default(cid, self.chosen_effect() or cid))
-            shown["equip_bonus"] = (bonus, f"+{bonus}" if int(bonus) >= 0 else bonus,
-                                    self.vars["equip_bonus"].get().strip() not in ("", bonus))
+            for key, points in zip(("equip_attack", "equip_defense"), p.equip_bonus_default(cid)):
+                shown[key] = (str(points), f"{points:+d}", self.vars[key].get().strip() not in ("", str(points)))
         if cid in p.retail.cards:
             retail = p.retail.passwords.get(cid) or ""
             typed = self.vars["password"].get().strip()
@@ -582,16 +581,12 @@ class CardsTab(Tab):
             widget.grid() if threshold is not None else widget.grid_remove()
         self.hints["trap_threshold"].configure(text=f"Blank: effect default ({threshold})" if threshold is not None else "")
 
-    def follow_bonus(self):
-        """An Equip bonus the form has not been touched for, and the card has
-        none of its own: what the chosen effect gives (Megamorph +1000)."""
-        cid = self.current
-        if (self.project is None or cid not in self.project.cards or cid in self.project.equip_bonus
-                or self.vars["equip_bonus"].get().strip() != self._shown_bonus
-                or parse_choice(self.vars["type"].get(), TYPE_NAMES) != TYPE_EQUIP):
-            return
-        self._shown_bonus = str(self.project.equip_bonus_default(cid, self.chosen_effect() or cid))
-        self.vars["equip_bonus"].set(self._shown_bonus)
+    def show_bonus(self, cid, kind):
+        """The equip's ATK and DEF boosts in the form; blank for another card."""
+        shown = self.project.equip_bonus_of(cid) if kind == TYPE_EQUIP else ("", "")
+        self._shown_bonus = tuple(str(points) for points in shown)
+        for key, text in zip(("equip_attack", "equip_defense"), self._shown_bonus):
+            self.vars[key].set(text)
 
     def effect_shown(self, cid: int) -> int:
         eid = self.project.effect_of(cid)
@@ -604,7 +599,7 @@ class CardsTab(Tab):
         for widget in self.monster_rows:
             widget.grid() if monster else widget.grid_remove()
         for widget in self.effect_row:
-            widget.grid_remove() if monster else widget.grid()
+            widget.grid_remove() if monster or kind == TYPE_EQUIP else widget.grid()
         for widget in self.equip_rows:
             widget.grid() if kind == TYPE_EQUIP and self.current is not None else widget.grid_remove()
         self.show_trap_threshold()
@@ -653,10 +648,19 @@ class CardsTab(Tab):
         """The Effect list into the card's "effect"; whether that changed it.
         Left out when it is what the card has anyway, or for a monster, which
         never plays one. An "effect" the form has not been touched for stays
-        as written, whatever it names."""
+        as written, whatever it names. An equip has no list: one the mod
+        names stays (a copy of Megamorph is still one), another type's goes."""
+        extra = self.project.added[cid].extra if cid in self.project.added else self.project.card_extra.get(cid, {})
+        if card.type == TYPE_EQUIP:
+            named = self.project.resolve(extra["effect"]) if "effect" in extra else None
+            if not named or self.effect_kind(named) == TYPE_EQUIP:
+                return False
+            del extra["effect"]
+            if cid not in self.project.added and not extra:
+                self.project.card_extra.pop(cid, None)
+            return True
         if self.vars["effect"].get() == self._shown_effect and card.type == self.project.cards[cid].type:
             return False
-        extra = self.project.added[cid].extra if cid in self.project.added else self.project.card_extra.get(cid, {})
         chosen = 0 if card.is_monster() else self.chosen_effect()
         default = self.effect_default(cid)
         wanted = chosen if chosen and chosen != default else None
@@ -754,18 +758,20 @@ class CardsTab(Tab):
                                                       len(threshold_text) > 5 or int(threshold_text) > 65535):
             self.status.configure(text="Trigger ATK is a whole number from 0 to 65535, or blank for the effect default")
             return False
-        bonus_text = self.vars["equip_bonus"].get().strip()
-        bonus_changed = card.type == TYPE_EQUIP and bonus_text != self._shown_bonus
-        bonus = None
-        if bonus_changed and bonus_text:
+        bonus_texts = tuple(self.vars[key].get().strip() for key in ("equip_attack", "equip_defense"))
+        bonus_changed = card.type == TYPE_EQUIP and bonus_texts != self._shown_bonus
+        bonus = []
+        for text in bonus_texts if bonus_changed else ():
+            points = None
             try:
-                bonus = int(bonus_text) if bonus_text.isascii() else None
+                points = int(text) if text.isascii() else None
             except ValueError:
                 pass
-            if bonus is None or abs(bonus) > EQUIP_BONUS_MAX:
-                self.status.configure(text=f"Equip bonus is a whole number from -{EQUIP_BONUS_MAX} to "
+            if text and (points is None or abs(points) > EQUIP_BONUS_MAX):
+                self.status.configure(text=f"ATK and DEF boosts are whole numbers from -{EQUIP_BONUS_MAX} to "
                                            f"{EQUIP_BONUS_MAX}, or empty for the default")
                 return False
+            bonus.append(points)
         if cid in self.project.added:
             added = self.project.added[cid]
             key = self.vars["key"].get().strip()
@@ -802,13 +808,13 @@ class CardsTab(Tab):
             self._shown_threshold = ""
             changed = True
         had = self.project.equip_bonus.get(cid)
-        if bonus_changed:       # after the effect, which the default follows
-            self.project.set_equip_bonus(cid, bonus)
+        if bonus_changed:       # after the effect, which the default follows; empty: the default
+            default = self.project.equip_bonus_default(cid)
+            self.project.set_equip_bonus(cid, *(d if b is None else b for b, d in zip(bonus, default)))
         elif card.type != TYPE_EQUIP:
             self.project.set_equip_bonus(cid, None)
         changed = changed or self.project.equip_bonus.get(cid) != had
-        self._shown_bonus = str(self.project.equip_bonus_of(cid)) if card.type == TYPE_EQUIP else ""
-        self.vars["equip_bonus"].set(self._shown_bonus)
+        self.show_bonus(cid, card.type)
         self._shown_effect = self.vars["effect"].get()
         cost = self.project.starchip_cost(cid)
         self._shown_price = "" if cost is None else str(cost)

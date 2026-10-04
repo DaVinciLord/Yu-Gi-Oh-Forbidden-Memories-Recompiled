@@ -94,25 +94,30 @@ Within one entry a named card is surer than a type and a type surer than
 dragon but one. What no entry mentions, the disc's table decides, except for
 a card a `replace` made another kind, which the disc's table no longer
 covers either way: an equip made from a monster equips only what `add`
-names.
+names. A copy of a monster may become an equip with no `"effect"`: an equip
+does nothing but add its bonus, so it needs no retail card to play as.
 
 An entry may also set what the equip adds to the monster's ATK and DEF, in
 place of the disc's +500 (+1000 for Megamorph):
 
 | Key | Meaning |
 |---|---|
-| `bonus` | points, with a sign, for any monster it equips |
+| `bonus` | points, with a sign, to ATK and DEF of any monster it equips |
+| `bonus_attack`, `bonus_defense` | points to that one only, over `bonus` |
 | `bonus_if` | an object of monster types (`"Dragon"`) or attributes (`"Light"`, `"Dark"`, `"Earth"`, `"Water"`, `"Fire"`, `"Wind"`) and their points |
 
 ```json
 "equips": [
     {"card": "Legendary Sword", "bonus": 300, "bonus_if": {"Warrior": 800, "Light": 600}},
-    {"card": "Megamorph", "bonus": 1500}
+    {"card": "Megamorph", "bonus": 1500},
+    {"card": "Dark Energy", "bonus_attack": 800, "bonus_defense": 200}
 ]
 ```
 
-The first `bonus_if` that fits the monster decides, then `bonus`; an entry
-with neither for this monster says nothing, and an earlier entry decides,
+The first `bonus_if` that fits the monster decides, then `bonus_attack` or
+`bonus_defense`, then `bonus`; an entry with none of them for this monster
+(or, for DEF, no `bonus_defense` or `bonus` when it only sets
+`bonus_attack`) says nothing, and an earlier entry decides,
 else `equip_bonus_default` (below) if a mod sets it, else the disc. The latest entry that says something wins, as for what an
 equip may equip, and a copy of an equip a mod added has its base's bonus.
 Values are whole points from -9999 to 9999; a negative bonus lowers the
@@ -123,11 +128,12 @@ monster. A bonus past Megamorph's +1000 climbs on screen in about the time
 sets what every equip no entry gives a bonus for adds, in place of the
 disc's +500 and Megamorph's +1000 alike (give Megamorph an entry to keep it
 apart). Without it those keep the disc's values. The latest mod that sets it
-wins. Equips whose effect is more than a bonus (a Wicked Gods or Remaster
-equip that heals, or gives +400 ATK and -200 DEF) need a code mod: the
-bonus here always goes to ATK and DEF alike. ATK and DEF still stop at 9999 and 0. Reverse Trap turns
-the bonus the equip gave into as large a loss, as it does on the disc. The CPU chooses its equips as before: it
-never counted the bonus.
+wins. An equip that gives ATK and DEF different amounts (+400 ATK and -200
+DEF) sets `bonus_attack` and `bonus_defense`; one that heals or does more
+than a bonus still needs a code mod. ATK and DEF still stop at 9999 and 0, and climb on screen
+together, each to its own bonus. Reverse Trap turns what the equip gave each into as large a loss, as it does on
+the disc, and Cursebreaker takes away what lowered either. The CPU chooses its equips as before: it never counted
+the bonus, but it sees a monster's ATK and DEF with it once equipped.
 
 ## Rituals
 

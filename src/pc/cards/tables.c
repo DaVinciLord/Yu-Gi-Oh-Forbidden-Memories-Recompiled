@@ -203,9 +203,11 @@ enum { BONUS_ANY, BONUS_TYPE, BONUS_ATTRIBUTE };
 typedef struct {
     unsigned short equip;
     unsigned char kind, value;  /* BONUS_*, and the type or attribute */
-    short bonus;
+    unsigned char stats;        /* BONUS_ATTACK and/or BONUS_DEFENSE: what it sets */
+    short attack, defense;
     unsigned order, rank;       /* the entry, and the place in its "bonus_if" */
 } BonusRule;
+enum { BONUS_ATTACK = 1, BONUS_DEFENSE = 2 };
 
 static BonusRule *bonuses;
 static int bonus_count, bonus_room;
@@ -444,14 +446,17 @@ static void add_equip(int equip, EquipRule rule, unsigned order)
     equip_count++;
 }
 
-static void add_bonus(int equip, int kind, int value, long bonus, unsigned order, unsigned rank)
+static void add_bonus(int equip, int kind, int value, int stats, long attack, long defense, unsigned order,
+                      unsigned rank)
 {
     BonusRule *slot = grow(&bonuses, &bonus_room, bonus_count, sizeof(*bonuses));
     if (!slot) return;
     slot->equip = (unsigned short)equip;
     slot->kind = (unsigned char)kind;
     slot->value = (unsigned char)value;
-    slot->bonus = (short)bonus;
+    slot->stats = (unsigned char)stats;
+    slot->attack = (short)attack;
+    slot->defense = (short)defense;
     slot->order = order;
     slot->rank = rank;
     bonus_count++;
@@ -469,19 +474,40 @@ static int bonus_points(const char *mod, const char *where, const JsonValue *val
     return 0;
 }
 
-/* An equip entry's "bonus": points, in place of the disc's +500 (+1000 for
- * Megamorph), and "bonus_if": { type or attribute: points }, for monsters
- * of that type or attribute; the first that fits comes before "bonus". */
+/* An equip entry's "bonus": points to ATK and DEF, in place of the disc's
+ * +500 (+1000 for Megamorph); "bonus_attack" and "bonus_defense" set one of
+ * them (over "bonus"); and "bonus_if": { type or attribute: points }, for
+ * monsters of that type or attribute; the first that fits comes before
+ * "bonus". */
 static void read_equip_bonus(const char *mod, int index, int equip, const JsonValue *entry, unsigned order)
 {
     const JsonValue *plain = Json_Member(entry, "bonus"), *conditions = Json_Member(entry, "bonus_if");
+    const JsonValue *attack = Json_Member(entry, "bonus_attack"), *defense = Json_Member(entry, "bonus_defense");
     char where[128];
-    long points;
-    int j;
+    long points, atk = 0, def = 0;
+    int j, stats = 0;
     if (plain) {
         snprintf(where, sizeof(where), "equips[%d].bonus", index);
-        if (bonus_points(mod, where, plain, &points)) add_bonus(equip, BONUS_ANY, 0, points, order, 0);
+        if (bonus_points(mod, where, plain, &points)) {
+            atk = def = points;
+            stats = BONUS_ATTACK | BONUS_DEFENSE;
+        }
     }
+    if (attack) {
+        snprintf(where, sizeof(where), "equips[%d].bonus_attack", index);
+        if (bonus_points(mod, where, attack, &points)) {
+            atk = points;
+            stats |= BONUS_ATTACK;
+        }
+    }
+    if (defense) {
+        snprintf(where, sizeof(where), "equips[%d].bonus_defense", index);
+        if (bonus_points(mod, where, defense, &points)) {
+            def = points;
+            stats |= BONUS_DEFENSE;
+        }
+    }
+    if (stats) add_bonus(equip, BONUS_ANY, 0, stats, atk, def, order, 0);
     if (!conditions) return;
     if (Json_TypeOf(conditions) != JSON_OBJECT) {
         Mods_Note(mod, "equips[%d].bonus_if: an object of monster types or attributes and their bonus", index);
@@ -497,8 +523,11 @@ static void read_equip_bonus(const char *mod, int index, int equip, const JsonVa
             continue;
         }
         if (!bonus_points(mod, where, member, &points)) continue;
-        if (type >= 0 && type < CARD_TYPE_MAGIC) add_bonus(equip, BONUS_TYPE, type, points, order, (unsigned)j + 1);
-        else add_bonus(equip, BONUS_ATTRIBUTE, attribute, points, order, (unsigned)j + 1);
+        if (type >= 0 && type < CARD_TYPE_MAGIC)
+            add_bonus(equip, BONUS_TYPE, type, BONUS_ATTACK | BONUS_DEFENSE, points, points, order, (unsigned)j + 1);
+        else
+            add_bonus(equip, BONUS_ATTRIBUTE, attribute, BONUS_ATTACK | BONUS_DEFENSE, points, points, order,
+                      (unsigned)j + 1);
     }
 }
 
@@ -574,17 +603,24 @@ int Tables_Equip(int equip, int monster)
     return best ? best->allow : -1;
 }
 
-int Tables_EquipBonus(int equip, int monster, int retail)
+void Tables_EquipBonuses(int equip, int monster, int retail, int *attack, int *defense)
 {
-    const BonusRule *best = NULL;
-    int i, base_equip, effect_equip, type, attribute;
-    if ((!bonus_count && !equip_default_set) || !Cards_Valid(equip) || !Cards_Valid(monster)) return retail;
+    const BonusRule *best[2] = {NULL, NULL};
+    int i, stat, base_equip, effect_equip, type, attribute;
+    int out[2];
+    out[0] = out[1] = equip_default_set ? equip_default : retail;
+    if (!bonus_count || !Cards_Valid(equip) || !Cards_Valid(monster)) {
+        *attack = out[0];
+        *defense = out[1];
+        return;
+    }
     base_equip = Cards_BaseId(equip);
     effect_equip = Cards_EffectId(equip);
     type = Cards_Type(monster);
     attribute = Cards_Attribute(monster);
-    /* The latest entry that says anything about this monster decides;
-     * within it the first "bonus_if" that fits, then its "bonus". */
+    /* For each of ATK and DEF, the latest entry that says something about
+     * it for this monster decides; within it the first "bonus_if" that
+     * fits, then its "bonus" ("bonus_attack", "bonus_defense"). */
     for (i = 0; i < bonus_count; i++) {
         const BonusRule *rule = &bonuses[i];
         int fits;
@@ -592,14 +628,33 @@ int Tables_EquipBonus(int equip, int monster, int retail)
         fits = rule->kind == BONUS_ANY || (rule->kind == BONUS_TYPE && rule->value == type) ||
                (rule->kind == BONUS_ATTRIBUTE && rule->value == attribute);
         if (!fits) continue;
-        if (!best || rule->order > best->order ||
-            (rule->order == best->order && rule->rank && (!best->rank || rule->rank < best->rank)))
-            best = rule;
+        for (stat = 0; stat < 2; stat++) {
+            const BonusRule *had = best[stat];
+            if (!(rule->stats & (stat ? BONUS_DEFENSE : BONUS_ATTACK))) continue;
+            if (!had || rule->order > had->order ||
+                (rule->order == had->order && rule->rank && (!had->rank || rule->rank < had->rank)))
+                best[stat] = rule;
+        }
     }
-    if (!best && !equip_default_set) return retail;
-    LOG(LOG_MODS, "tables: equip %d on %d: %+d (the disc's %+d)%s", equip, monster, best ? best->bonus : equip_default,
-        retail, best ? "" : ", the mods' default");
-    return best ? best->bonus : equip_default;
+    if (best[0]) out[0] = best[0]->attack;
+    if (best[1]) out[1] = best[1]->defense;
+    if (best[0] || best[1])
+        LOG(LOG_MODS, "tables: equip %d on %d: ATK %+d, DEF %+d (the disc's %+d)", equip, monster, out[0], out[1],
+            retail);
+    *attack = out[0];
+    *defense = out[1];
+}
+
+int Tables_EquipBonus(int equip, int monster, int retail)
+{
+    int attack, defense;
+    Tables_EquipBonuses(equip, monster, retail, &attack, &defense);
+    return attack;
+}
+
+void Tables_EquipBoost(int equip, int monster, int *attack, int *defense)
+{
+    Tables_EquipBonuses(equip, monster, Cards_EffectId(equip) == TABLES_MEGAMORPH ? 1000 : 500, attack, defense);
 }
 
 /* --- rituals --------------------------------------------------------- */

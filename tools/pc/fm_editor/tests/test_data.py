@@ -780,7 +780,7 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(p.equips[653], {1})
         built = manifest.build(p)
         self.assertEqual(built["cards"][0]["password"], "12345678")
-        self.assertEqual(p.equip_bonus, {653: 300})        # the Cards tab's Equip bonus
+        self.assertEqual(p.equip_bonus, {653: (300, 300)})      # the Cards tab's ATK and DEF boosts
         self.assertEqual(built["equips"][-2:], [{"card": p.ref(653), "bonus": 300},
                                                 {"card": 653, "bonus_if": {"Dragon": 900}}])
         self.assertEqual(built["decks"]["Simon Muran"], {"fixed": True, "Card 1": 40})
@@ -995,41 +995,50 @@ class EquipBonusTest(unittest.TestCase):
 
     def test_bonus_round_trip_and_megamorph(self):
         p = self.project
-        self.assertEqual(p.equip_bonus_of(651), 500)
-        self.assertEqual(p.equip_bonus_of(g.MEGAMORPH), 1000)
+        self.assertEqual(p.equip_bonus_of(651), (500, 500))
+        self.assertEqual(p.equip_bonus_of(g.MEGAMORPH), (1000, 1000))
         copy = p.add_card(g.MEGAMORPH, "mega-copy")
-        self.assertEqual(p.equip_bonus_of(copy), 1000)     # it plays as Megamorph
+        self.assertEqual(p.equip_bonus_of(copy), (1000, 1000))      # it plays as Megamorph
         p.set_equip_bonus(g.MEGAMORPH, 2500)
-        self.assertEqual(p.equip_bonus_of(copy), 2500)      # a rule for its base holds for it
-        p.set_equip_bonus(copy, 1000)
-        p.set_equip_bonus(651, 500)                         # the disc's: nothing to write
-        self.assertEqual(p.equip_bonus, {g.MEGAMORPH: 2500, copy: 1000})
+        self.assertEqual(p.equip_bonus_of(copy), (2500, 2500))      # a rule for its base holds for it
+        p.set_equip_bonus(copy, 1000, 300)
+        p.set_equip_bonus(651, 500, 500)                             # the disc's: nothing to write
+        self.assertEqual(p.equip_bonus, {g.MEGAMORPH: (2500, 2500), copy: (1000, 300)})
         self.assertTrue(p.card_changed(g.MEGAMORPH))
         data = manifest.build(p)
-        self.assertEqual([e for e in data["equips"] if "bonus" in e],
-                         [{"card": p.ref(g.MEGAMORPH), "bonus": 2500}, {"card": p.ref(copy), "bonus": 1000}])
+        self.assertEqual([e for e in data["equips"] if "card" in e and any(k.startswith("bonus") for k in e)],
+                         [{"card": p.ref(g.MEGAMORPH), "bonus": 2500},
+                          {"card": p.ref(copy), "bonus_attack": 1000, "bonus_defense": 300}])
         again = Project(p.retail)
         self.assertEqual(manifest.apply(again, data), [])
         self.assertEqual(again.equip_bonus, p.equip_bonus)
         self.assertEqual(manifest.build(again), data)
         again.revert_card(g.MEGAMORPH)
-        self.assertEqual(again.equip_bonus, {copy: 1000})
+        self.assertEqual(again.equip_bonus, {copy: (1000, 300)})
         again.remove_card(copy)
         self.assertNotIn("equips", manifest.build(again))
 
-    def test_bonus_if_stays_as_written(self):
+    def test_bonus_keys_and_bonus_if(self):
         p = self.project
         data = manifest.build(p)
         data["equips"] = [{"card": 651, "bonus_if": {"Dragon": 900}}, {"card": 652, "bonus_if": {"Dragon": 900}},
-                          {"card": 651, "bonus": 700}, {"card": 653, "bonus": 800, "bonus_if": {"Fiend": 100}}]
+                          {"card": 651, "bonus": 700}, {"card": 653, "bonus": 800, "bonus_if": {"Fiend": 100}},
+                          {"card": 654, "bonus_defense": 1200}, {"card": 655, "bonus": 100, "bonus_attack": 50}]
         self.assertEqual(manifest.apply(p, data), [])
-        self.assertEqual(p.equip_bonus, {651: 700, 653: 800})
+        self.assertEqual(p.equip_bonus, {651: (700, 700), 653: (800, 800), 654: (500, 1200), 655: (50, 100)})
         # 651's "bonus_if" came before a "bonus" for every monster: it did nothing.
         self.assertEqual(p.kept["equips"], [{"card": 652, "bonus_if": {"Dragon": 900}},
                                             {"card": 653, "bonus_if": {"Fiend": 100}}])
         self.assertEqual(manifest.build(p)["equips"],
                          [{"card": p.ref(651), "bonus": 700}, {"card": p.ref(653), "bonus": 800},
+                          {"card": p.ref(654), "bonus_attack": 500, "bonus_defense": 1200},
+                          {"card": p.ref(655), "bonus_attack": 50, "bonus_defense": 100},
                           {"card": 652, "bonus_if": {"Dragon": 900}}, {"card": 653, "bonus_if": {"Fiend": 100}}])
+        # A bonus the game would refuse stays as written.
+        again = Project(p.retail)
+        data["equips"] = [{"card": 651, "bonus_defense": "lots"}]
+        manifest.apply(again, data)
+        self.assertEqual((again.equip_bonus, again.kept["equips"]), ({}, [{"card": 651, "bonus_defense": "lots"}]))
 
 
 class PasswordTest(unittest.TestCase):

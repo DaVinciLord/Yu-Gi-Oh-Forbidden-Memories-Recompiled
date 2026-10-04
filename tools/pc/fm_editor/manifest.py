@@ -117,8 +117,10 @@ def build_cards(project: Project) -> list:
         fields.update(_card_fields(card, base))     # what is left out is the base's, as the port has it
         if card.is_monster() != base.is_monster() or (not base.is_monster() and card.type != base.type):
             effect = project.retail.cards.get(project.effect_of(cid))
-            if card.is_monster() or effect is None or effect.type != card.type:
-                fields.pop("type", None)    # the port refuses a kind change without a matching effect
+            # The port refuses a kind change without a matching effect, but
+            # for an equip, which needs none (cards.c).
+            if card.is_monster() or (card.type != 23 and (effect is None or effect.type != card.type)):
+                fields.pop("type", None)
         entry.update(fields)
         if project.passwords.get(cid):
             entry["password"] = project.passwords[cid]
@@ -195,10 +197,12 @@ def build_equips(project: Project) -> list:
             entry["remove"] = remove_types + [project.ref(m) for m in sorted(remove)]
         entries.append(entry)
     entries += _equip_fixes(project, entries)
-    # The Cards tab's Equip bonus, before the kept "bonus_if" entries that
+    # The Cards tab's ATK and DEF boosts, before the kept "bonus_if" entries that
     # come after it in the mod (_read_equip_bonus).
-    entries += [{"card": project.ref(equip), "bonus": points} for equip, points in sorted(project.equip_bonus.items())
-                if equip in project.cards and project.cards[equip].type == 23]
+    for equip, (attack, defense) in sorted(project.equip_bonus.items()):
+        if equip in project.cards and project.cards[equip].type == 23:
+            entries.append({"card": project.ref(equip), "bonus": attack} if attack == defense else
+                           {"card": project.ref(equip), "bonus_attack": attack, "bonus_defense": defense})
     return entries + project.kept["equips"]
 
 
@@ -613,7 +617,7 @@ def _apply_fields(card, entry: dict, is_replace: bool, messages: list, where: st
             value = _clamp(value, 0, 23)
             monster = card.type < TYPE_MAGIC
             if (not is_replace and (value >= TYPE_MAGIC if monster else value != card.type) and
-                    not (value >= TYPE_MAGIC and value == effect_type)):
+                    not (value >= TYPE_MAGIC and value == effect_type) and value != 23):     # cards.c
                 messages.append(f"{where}: a copy keeps its base's side (monster or not); \"type\" left out")
             else:
                 card.type = value
@@ -798,17 +802,29 @@ EQUIP_ANY, EQUIP_TYPE, EQUIP_CARD = 0, 1, 2
 
 
 def _read_equip_bonus(project: Project, equip: int, entry: dict, kept: list):
-    """An entry's "bonus" into the Cards tab's Equip bonus; "bonus_if" (and a
-    "bonus" the game would refuse) kept as written. The latest entry that
-    fits a monster decides (Tables_EquipBonus), so a plain "bonus" leaves an
+    """An entry's "bonus" ("bonus_attack", "bonus_defense") into the Cards
+    tab's ATK and DEF boosts; "bonus_if" (and a bonus the game would refuse)
+    kept as written. For each of ATK and DEF the latest entry that fits a
+    monster decides (Tables_EquipBonuses), so one setting both leaves an
     earlier kept "bonus_if" of the card's nothing to do."""
-    plain = entry.get("bonus")
-    if type(plain) is int and -EQUIP_BONUS_MAX <= plain <= EQUIP_BONUS_MAX:
-        kept[:] = [k for k in kept if set(k) != {"card", "bonus_if"} or project.resolve(k["card"]) != equip]
-        project.equip_bonus[equip] = plain
-        rest = {"bonus_if": entry["bonus_if"]} if "bonus_if" in entry else {}
+    def points(key):
+        value = entry.get(key)
+        return value if type(value) is int and -EQUIP_BONUS_MAX <= value <= EQUIP_BONUS_MAX else None
+
+    keys = ("bonus", "bonus_attack", "bonus_defense")
+    if any(key in entry and points(key) is None for key in keys):
+        rest = {k: entry[k] for k in keys + ("bonus_if",) if k in entry}
     else:
-        rest = {k: entry[k] for k in ("bonus", "bonus_if") if k in entry}
+        attack, defense = project.equip_bonus_of(equip)
+        if "bonus" in entry:
+            attack = defense = entry["bonus"]
+        attack = entry.get("bonus_attack", attack)
+        defense = entry.get("bonus_defense", defense)
+        if "bonus" in entry or ("bonus_attack" in entry and "bonus_defense" in entry):
+            kept[:] = [k for k in kept if set(k) != {"card", "bonus_if"} or project.resolve(k["card"]) != equip]
+        if any(key in entry for key in keys):
+            project.equip_bonus[equip] = (attack, defense)
+        rest = {"bonus_if": entry["bonus_if"]} if "bonus_if" in entry else {}
     if rest:
         kept.append({"card": entry.get("card"), **rest})
 

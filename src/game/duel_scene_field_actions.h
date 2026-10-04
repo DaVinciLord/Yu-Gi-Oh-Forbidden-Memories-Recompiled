@@ -61,6 +61,10 @@ extern u16 D_8009B170[2];
 extern u16 D_8009B170;
 extern u16 D_8009B172;
 #endif
+#ifdef MEMORIES_PC
+/* Their DuelCardRecord.defense_modifier, saved and restored beside them. */
+extern s16 gDuel_awSavedDefenseModifier[2];
+#endif
 #ifdef D_8009B178_AS_SIDE_ARRAY
 extern u16 D_8009B178[2];
 #else

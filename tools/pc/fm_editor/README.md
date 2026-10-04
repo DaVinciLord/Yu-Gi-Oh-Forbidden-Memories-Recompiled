@@ -25,12 +25,13 @@ which keep their own scrolling. The Cards tab's right-hand options and the
 Limits tab also scroll vertically on their own: tabbing to a field brings it
 into view.
 
-**Equip bonus**, under **Retail effect** for an equip card, is what it adds
-to the monster's ATK and DEF: the disc's +500, or +1000 when its effect is
-Megamorph's (choose Megamorph as the effect and an untouched bonus follows).
-Any whole number from -32767 to 32767; empty puts the default back. A bonus
-set on a disc equip holds for its copies and for cards with its effect,
-unless they set their own.
+**ATK boost** and **DEF boost**, for an equip card, are what it adds to the
+monster's ATK and DEF: the disc's +500 each, or +1000 for Megamorph. Any
+whole number from -32767 to 32767 each; empty puts the default back. An
+equip has no **Retail effect** to choose: it plays as an equip whatever it
+was, and a monster made an equip equips only what you give it in Equips. A
+boost set on a disc equip holds for its copies too, unless they set their
+own.
 
 The **Password** field takes up to 8 digits.
 
@@ -46,7 +47,7 @@ The window has a tab per table:
 
 | Tab | What you edit |
 |---|---|
-| Cards | search and filter the 722 cards; name, card text (with the game's 20-letter, 8-line wrapping counted, and **Tools > Card text preview** to see it as the card view draws it, below), ATK/DEF, type, attribute, level, guardian stars, password; the retail value beside each field. A magic, trap, ritual or equip card has no ATK, DEF, level, attribute or stars, so the form hides them for one; it shows **Retail effect** instead: the disc card of the same type it plays as, for you and for the CPU (`"effect"`, [more cards](../../../notes/more-cards.md)). A monster made magic starts at **(none)**, which does nothing when played; a disc magic card has its own effect, and choosing it writes nothing. A guardian star may be **(none)**, written `0`: both none is a monster with no star at all (no SELECT A GUARDIAN STAR box, no star bonus given or taken, no star drawn), the second none a monster with one star; a first star of none with a second is warned about, because the game takes the second as the card's one star ([no star](../../../notes/modding.md#guardian-stars-names-icons-new-stars-and-matchups)). **Frame**: the colour of the card's frame (by type, or monster, magic, trap, ritual, purple or orange whatever its type), with a swatch of it; the card view, the Library and the duel draw it ([frame colour](../../../notes/more-cards.md#frame-colour)). **Notes**: text of your own on the card (what you changed, what you plan), saved as its `"notes"`; the game shows none of it, and a code mod can read `<tag: value>` tags from it ([notes on a card](../../../notes/more-cards.md#notes-on-a-card)). **Revert to retail** keeps them; the **With notes** filter lists the cards that have some, and the search finds words of them too. **Add a card** copies the selected one as a new card with a stable id; a new card starts in nobody's chest (it is won in its base's place, dealt in a starter deck, or given by Game > Cheats), and its password works in the Password shop and is shown in the card view. Added cards default to 999999 starchips; edit **Starchips** to change the price |
+| Cards | search and filter the 722 cards; name, card text (with the game's 20-letter, 8-line wrapping counted, and **Tools > Card text preview** to see it as the card view draws it, below), ATK/DEF, type, attribute, level, guardian stars, password; the retail value beside each field. A magic, trap, ritual or equip card has no ATK, DEF, level, attribute or stars, so the form hides them for one; a magic, trap or ritual card shows **Retail effect** instead (an equip shows its **ATK boost** and **DEF boost**): the disc card of the same type it plays as, for you and for the CPU (`"effect"`, [more cards](../../../notes/more-cards.md)). A monster made magic starts at **(none)**, which does nothing when played; a disc magic card has its own effect, and choosing it writes nothing. A guardian star may be **(none)**, written `0`: both none is a monster with no star at all (no SELECT A GUARDIAN STAR box, no star bonus given or taken, no star drawn), the second none a monster with one star; a first star of none with a second is warned about, because the game takes the second as the card's one star ([no star](../../../notes/modding.md#guardian-stars-names-icons-new-stars-and-matchups)). **Frame**: the colour of the card's frame (by type, or monster, magic, trap, ritual, purple or orange whatever its type), with a swatch of it; the card view, the Library and the duel draw it ([frame colour](../../../notes/more-cards.md#frame-colour)). **Notes**: text of your own on the card (what you changed, what you plan), saved as its `"notes"`; the game shows none of it, and a code mod can read `<tag: value>` tags from it ([notes on a card](../../../notes/more-cards.md#notes-on-a-card)). **Revert to retail** keeps them; the **With notes** filter lists the cards that have some, and the search finds words of them too. **Add a card** copies the selected one as a new card with a stable id; a new card starts in nobody's chest (it is won in its base's place, dealt in a starter deck, or given by Game > Cheats), and its password works in the Password shop and is shown in the card view. Added cards default to 999999 starchips; edit **Starchips** to change the price |
 | Art | a card's picture (102x96), thumbnail (40x32, the hand and the field) and name plate (96x14) as the disc has them, beside what the game will draw at the console's resolution and at Internal 2x/4x; **Import PNG** (up to 4x, 408x384 and 160x128, for detail at Internal 2x/4x, on retail and added cards alike), **Export** the disc's or the mod's (to paint over), **Revert** |
 | Fusions | every pair and its result (search by a card, or show the changed ones); add, change, remove (the pair no longer fuses) or revert; **Remove recipes of...** takes away every disc recipe of a card in one `remove` rule; a pair a card's own `fusions` list makes (no rule of the mod deciding it first) shows that list's result, marked "own list"; **Bulk...** adds or takes away the fusions of every card of one filtered set with every card of another (below) |
 | Equips | per equip card, the monsters it may equip; add one, add or remove a whole type, remove, revert |
@@ -67,6 +68,7 @@ clears the opponent's monsters after the original Raigeki is renamed, given
 another effect, or turned into a monster. Any existing card or added copy can
 become **Magic**: select the type, choose its retail effect, then apply and save.
 An added copy changing kind needs a matching effect; **(none)** is insufficient.
+An equip needs none: made an **Equip**, a card shows its ATK and DEF boosts instead.
 Numbers appear in the effect list only when retail names are duplicated.
 
 Changing a card to **Equip** makes it available in the **Equips** tab after
@@ -366,8 +368,9 @@ record are shown as retail fusions and marked.
   name), or `replace` when that is shorter. An added card is equipped (and
   equips) as its base, so what differs for it is written in later entries,
   which the game's reading of the rules confirms before saving. An equip
-  card's **Equip bonus** (Cards tab) is written as an entry of its own,
-  `{"card": ..., "bonus": points}`; `bonus_if` is kept as written, after it.
+  card's **ATK boost** and **DEF boost** (Cards tab) are written as an entry
+  of its own, `{"card": ..., "bonus": points}`, or `bonus_attack` and
+  `bonus_defense` when they differ; `bonus_if` is kept as written, after it.
 * `rituals`: a changed recipe, or `"result": null`.
 * `guardian_stars`: the stars the mod declares (`id`, and `name`, `icon`,
   `palette` when set), `default_bonus`, `replace` and `choice` when not the

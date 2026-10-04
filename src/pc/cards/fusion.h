@@ -3,7 +3,9 @@
 /* Pure five-card planner. Slots identify materials, including duplicates.
  * A prefix is the player's actual pick order. No query changes game state. */
 #define FUSION_HAND 5
-typedef struct { int id, type, attack, defense, modifier, terrain; } FusionCard;
+/* modifier goes to ATK and DEF; defense_modifier to DEF beyond it (an equip
+ * whose DEF bonus differs, duel_card.h). */
+typedef struct { int id, type, attack, defense, modifier, terrain, defense_modifier; } FusionCard;
 typedef struct { FusionCard card; int count, slots[FUSION_HAND], failed; } FusionLine;
 typedef struct {
     FusionCard (*card)(int id);
@@ -12,6 +14,9 @@ typedef struct {
     /* What `equipment` adds to `monster`, which already carries `modifier`.
      * NULL: the disc's +500 (+1000 for Megamorph, 657). */
     int (*bonus)(int equipment, int monster, int modifier);
+    /* Both halves, over `bonus` when set: what `equipment` adds to ATK and
+     * to DEF of a monster carrying `modifier` and `defense_modifier`. */
+    void (*bonuses)(int equipment, int monster, int modifier, int defense_modifier, int *attack, int *defense);
 } FusionRules;
 int Fusion_Step(const FusionRules *, FusionCard first, FusionCard second, FusionCard *out);
 int Fusion_Attack(FusionCard card);

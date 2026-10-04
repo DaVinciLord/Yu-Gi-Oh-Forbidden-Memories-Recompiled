@@ -155,8 +155,9 @@ class Project:
         self.fusion_explicit = set()
         self._own_pairs = None          # (pairs own lists name, the pairs a rule for them falls back on)
         self.equips = {e: set(m) for e, m in retail.equips.items()}
-        # equip card -> the points it adds, the mod's "equips" "bonus" (one
-        # with "bonus_if" stays in kept["equips"]).
+        # equip card -> (ATK, DEF) it adds, the mod's "equips" "bonus" (or
+        # "bonus_attack" and "bonus_defense"); one with "bonus_if" stays in
+        # kept["equips"].
         self.equip_bonus = {}
         self.rituals = dict(retail.rituals)
         # ritual id -> three requirement dictionaries. Empty means the traditional
@@ -610,27 +611,33 @@ class Project:
     def equip_cards(self):
         return sorted(cid for cid, card in self.cards.items() if card.type == 23)
 
-    def equip_bonus_default(self, cid: int, effect: int = None) -> int:
-        """What the equip adds with no "bonus" of its own (tables.c
-        Tables_EquipBonus): a rule for its base or for the equip whose effect
-        it has (the later entry, written by id), else the mods'
-        "equip_bonus_default", else the disc's +500, or +1000 when its effect
-        is Megamorph's. effect: the one the form has chosen."""
-        effect = self.effect_of(cid) if effect is None else effect
+    def equip_bonus_default(self, cid: int) -> tuple:
+        """(ATK, DEF) the equip adds with no bonus of its own (tables.c
+        Tables_EquipBonuses): a rule for its base or for the equip whose
+        effect it has (the later entry, written by id), else the mods'
+        "equip_bonus_default", else the disc's +500, or +1000 for Megamorph
+        and a card with its effect."""
+        effect = self.effect_of(cid)
         for source in sorted({self.base_of(cid), effect} - {cid}, reverse=True):
             if source in self.equip_bonus:
                 return self.equip_bonus[source]
         default = self.other.get("equip_bonus_default")
         if type(default) is int and -EQUIP_BONUS_MAX <= default <= EQUIP_BONUS_MAX:
-            return default
-        return MEGAMORPH_BONUS if effect == MEGAMORPH else EQUIP_BONUS
+            return default, default
+        points = MEGAMORPH_BONUS if effect == MEGAMORPH else EQUIP_BONUS
+        return points, points
 
-    def equip_bonus_of(self, cid: int) -> int:
+    def equip_bonus_of(self, cid: int) -> tuple:
         return self.equip_bonus.get(cid, self.equip_bonus_default(cid))
 
-    def set_equip_bonus(self, cid: int, points):
-        """The equip's own bonus; None, or what it gets anyway, sets none."""
-        if points is None or points == self.equip_bonus_default(cid):
+    def set_equip_bonus(self, cid: int, attack, defense=None):
+        """The equip's own (ATK, DEF) bonus, DEF as ATK when not given; None,
+        or what it gets anyway, sets none."""
+        if attack is None:
+            self.equip_bonus.pop(cid, None)
+            return
+        points = (attack, attack if defense is None else defense)
+        if points == self.equip_bonus_default(cid):
             self.equip_bonus.pop(cid, None)
         else:
             self.equip_bonus[cid] = points

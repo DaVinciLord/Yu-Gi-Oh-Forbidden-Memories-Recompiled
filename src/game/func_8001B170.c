@@ -171,6 +171,9 @@ state_four:
                 card->flags = flags & ~0x2400;
             }
             card->stat_modifier = scratch->stat_modifier;
+#ifdef MEMORIES_PC
+            card->defense_modifier = scratch->defense_modifier;
+#endif
             DisplayObject_ReleaseIfPresent(object);
             D_800E9EF0[0] = card->object;
             object = D_800E9EF0[0];
@@ -222,6 +225,11 @@ state_four:
         gDuel_wSceneStateFlags = 5;
         card = &D_801A7AD8[slot];
         card->stat_modifier -= D_8009B154 * 2;
+#ifdef MEMORIES_PC
+        /* DEF lost what the equips gave it beyond their ATK too
+           (duel_scene_card_placement.c). */
+        card->defense_modifier -= gDuel_wEquipDefenseExtra * 2;
+#endif
         break;
     }
 }

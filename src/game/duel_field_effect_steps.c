@@ -137,10 +137,24 @@ void DuelEffect_ApplyCursebreaker(void) {
         SD_SEPlayFull(0x14);
 
         if ((record->flags & DUEL_CARD_FLAG_OCCUPIED) != 0) {
+#ifdef MEMORIES_PC
+            /* ATK and DEF each lose what lowers them: DEF's modifier is
+               stat_modifier plus defense_modifier (duel_card.h). */
+            s32 attack = record->stat_modifier;
+            s32 defense = attack + record->defense_modifier;
+            if (attack < 0 || defense < 0) {
+                if (attack < 0) attack = 0;
+                if (defense < 0) defense = 0;
+                record->stat_modifier = attack;
+                record->defense_modifier = defense - attack;
+                object->field_1A = 5;
+            }
+#else
             if (record->stat_modifier < 0) {
                 record->stat_modifier = 0;
                 object->field_1A = 5;
             }
+#endif
         }
     } else {
         gDuel_wCardEffectFlags = 0;

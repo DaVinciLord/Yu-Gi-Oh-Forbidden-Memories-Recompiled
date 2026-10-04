@@ -523,9 +523,15 @@ void DuelScene_UpdateBattle(void)
             func_80024D34(pair[0]->field_6A, pair[0]->field_6B);
             left->flags |= (D_8009B178[0] & 0xA00) | 0x4000;
             left->stat_modifier = D_8009B170[0];
+#ifdef MEMORIES_PC
+            left->defense_modifier = gDuel_awSavedDefenseModifier[0];
+#endif
             func_80024D34(pair[1]->field_6A, pair[1]->field_6B);
             right->flags |= D_8009B178[1] & 0xA00;
             H(right, 0x12) = D_8009B170[1];
+#ifdef MEMORIES_PC
+            right->defense_modifier = gDuel_awSavedDefenseModifier[1];
+#endif
             models = D_800EF658;
             D_8009B209 = -1;
             D_8009B208 = -1;
@@ -715,6 +721,9 @@ void DuelScene_UpdateBattle(void)
                 left = &D_801A7AD8[D_800E9EF0[0]->field_6A];
                 left->flags |= (D_8009B178[0] & 0xA00) | 0x4000;
                 left->stat_modifier = D_8009B170[0];
+#ifdef MEMORIES_PC
+                left->defense_modifier = gDuel_awSavedDefenseModifier[0];
+#endif
                 Duel_ApplyCardObjectFlags((DuelCardDisplayObject *)left->object);
             }
             if (D_800E9EF0[3] != 0) {
@@ -723,6 +732,9 @@ void DuelScene_UpdateBattle(void)
                     left = &D_801A7AD8[D_800E9EF0[1]->field_6A];
                     left->flags |= D_8009B178[1] & 0xA00;
                     left->stat_modifier = D_8009B170[1];
+#ifdef MEMORIES_PC
+                    left->defense_modifier = gDuel_awSavedDefenseModifier[1];
+#endif
                     if (D_8009B22A != 0) {
                         left->flags |= D_8009B178[1] & 0x3000;
                     }
