@@ -138,6 +138,21 @@ static inline void Menu_TextTrim(char *text)
 }
 void Menu_SetVisible(int visible);
 int Menu_IsOpen(void);
+/* Opens the bar's first menu with no row lit: a touch screen's MENU button
+ * (touch_pad.h). Nothing while a notice is up. */
+void Menu_Open(void);
+/* On a touch screen, the smallest height a finger hits in window pixels
+ * (48 dp): the bar, the rows and a notice's buttons are at least that tall.
+ * 0, the default, keeps the mouse's sizes. */
+void Menu_SetTouchTarget(int pixels);
+/* The part of the window what is drawn over the picture keeps within (the
+ * save slot and deck slot menus): across, between `left` and `right` (the
+ * touch controls hold the sides while they show; the whole width when
+ * right <= left); down, from `top` (below the bar when negative, the
+ * default; 0 where the bar is drawn over the picture and hidden).
+ * Menu_OverlayArea gives it for a canvas. */
+void Menu_SetOverlayArea(int left, int right, int top);
+void Menu_OverlayArea(const MenuCanvas *canvas, int *left, int *right, int *top);
 /* The rectangle the menu currently covers (the bar, plus an open menu). */
 void Menu_Bounds(int *x, int *y, int *w, int *h);
 /* Handle one event. Returns 1 when the menu took it (and must be redrawn)

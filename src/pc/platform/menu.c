@@ -48,10 +48,11 @@
 #include <string.h>
 
 /* Geometry, in multiples of `ui` (Menu_SetScale): 1 suits a 720p window,
- * a 4K display wants 3. */
-static int ui = 1;
-#define MENU_H (26 * ui)
-#define ITEM_H (26 * ui)
+ * a 4K display wants 3. On a touch screen the bar and the rows are at least
+ * a finger's target tall (Menu_SetTouchTarget), whatever `ui` is. */
+static int ui = 1, touch_row;
+#define MENU_H (26 * ui > touch_row ? 26 * ui : touch_row)
+#define ITEM_H (26 * ui > touch_row ? 26 * ui : touch_row)
 #define BAR_PAD (12 * ui)    /* left and right of a bar label */
 #define ITEM_PAD (12 * ui)   /* dropdown edge to the mark column */
 #define MARK_W (22 * ui)     /* the check or radio column */
@@ -284,12 +285,22 @@ static int open_menu = -1, hot_item = -1, hover_bar = -1, grabbed, ready, visibl
 /* The open submenu (index into submenus), its row in the bar menu, and its hot row. */
 static int open_sub = -1, sub_item = -1, hot_sub = -1;
 static int consumed_press[8];
+/* A menu taller than the window is cut to it and its rows scroll (by a
+ * drag, the wheel, the arrow bands at its ends, or the keyboard keeping
+ * the lit row in view): how far each open level is scrolled, in pixels.
+ * A press on a row of such a menu acts when it comes up without having
+ * dragged, so a finger can scroll it without choosing what it lands on. */
+static int scroll[2];
+static struct { int active, level, x, y, from, dragged; } drag;
+#define SCROLL_BAND (ITEM_H / 2)
+/* The part of the window overlays keep within (Menu_SetOverlayArea). */
+static int span_left, span_right, span_top = -1;
 
 /* One notice at a time, over the middle of the picture (menu.h). */
 #define NOTICE_MAX_W (500 * ui)
 #define NOTICE_PAD (18 * ui)
 #define NOTICE_LINE (19 * ui)
-#define NOTICE_BUTTON_H (28 * ui)
+#define NOTICE_BUTTON_H (28 * ui > touch_row ? 28 * ui : touch_row)
 #define NOTICE_BUTTON_PAD (14 * ui)
 #define NOTICE_BUTTON_GAP (8 * ui)
 #define NOTICE_LINES 24
@@ -523,6 +534,8 @@ int Menu_AutoScale(int window_h)
 }
 
 static MenuCanvas *canvas;
+/* Rows drawn outside these canvas rows are cut (a scrolled menu's). */
+static int clip_top, clip_bottom = 1 << 30;
 
 static int text_width(const char *text)
 {
@@ -560,7 +573,7 @@ static inline uint32_t blend(uint32_t under, uint32_t over, unsigned alpha)
 static void put(int x, int y, uint32_t colour, unsigned alpha)
 {
     uint32_t *at;
-    if (x < 0 || y < 0 || x >= canvas->width || y >= canvas->height || !alpha) {
+    if (x < 0 || y < 0 || x >= canvas->width || y >= canvas->height || !alpha || y < clip_top || y >= clip_bottom) {
         return;
     }
     at = canvas->pixels + (size_t)y * (size_t)canvas->stride + (size_t)x;
@@ -571,9 +584,11 @@ static void fill(int x, int y, int w, int h, uint32_t colour, unsigned alpha)
 {
     int i, j;
     if (x < 0) { w += x; x = 0; }
+    if (y < clip_top) { h -= clip_top - y; y = clip_top; }
     if (y < 0) { h += y; y = 0; }
     if (x + w > canvas->width) { w = canvas->width - x; }
     if (y + h > canvas->height) { h = canvas->height - y; }
+    if (y + h > clip_bottom) { h = clip_bottom - y; }
     for (j = 0; j < h; j++) {
         uint32_t *row = canvas->pixels + (size_t)(y + j) * (size_t)canvas->stride + (size_t)x;
         if (alpha >= 255) {
@@ -930,6 +945,35 @@ void Menu_SetHdPicture(int on)
 void Menu_SetVisible(int wanted) { visible = !!wanted; }
 int Menu_IsOpen(void) { return open_menu >= 0; }
 
+void Menu_SetTouchTarget(int pixels) { touch_row = pixels > 0 ? pixels : 0; }
+
+static void close_menu(void);
+
+void Menu_Open(void)
+{
+    if (!ready || notice.shown) return;
+    close_menu();
+    open_menu = 0;
+    changed = 1;
+}
+
+void Menu_SetOverlayArea(int left, int right, int top)
+{
+    span_left = left;
+    span_right = right;
+    span_top = top;
+}
+
+void Menu_OverlayArea(const MenuCanvas *on, int *left, int *right, int *top)
+{
+    *left = 0;
+    *right = on ? on->width : 0;
+    *top = span_top < 0 ? MENU_H : span_top;
+    if (span_right <= span_left || !on) return;
+    if (span_left > 0 && span_left < on->width) *left = span_left;
+    if (span_right < on->width && span_right > *left) *right = span_right;
+}
+
 static int item_height(const Item *item)
 {
     return item->kind == ITEM_SEPARATOR ? SEP_H : ITEM_H + (item->flags & ITEM_GROUP_BREAK ? SEP_H : 0);
@@ -940,9 +984,11 @@ static const Menu *level_menu(int level) { return level ? &submenus[open_sub] : 
 
 static int item_top(int level, int index);
 
-/* A menu's box, without its shadow; a submenu sits beside its parent row,
- * or to its left when the window is too narrow. */
-static void drop_geometry(int level, int *x, int *y, int *w, int *h)
+/* A menu's box as drawn, without its shadow, and the height its rows need
+ * (`full`). A submenu sits beside its parent row, or to its left when the
+ * window is too narrow; one that would run off the bottom moves up. A menu
+ * still taller than the window is cut to it and scrolls (`full` > `h`). */
+static void drop_box(int level, int *x, int *y, int *w, int *h, int *full)
 {
     const Menu *menu = level_menu(level);
     int i, widest = 0, shortcuts = 0, height = DROP_PAD * 2;
@@ -966,20 +1012,48 @@ static void drop_geometry(int level, int *x, int *y, int *w, int *h)
         }
     }
     *w = ITEM_PAD + MARK_W + widest + (shortcuts ? SHORTCUT_GAP + shortcuts : 0) + ITEM_PAD;
-    *h = height;
+    *h = *full = height;
     if (level == 0) {
         *x = menu->x;
         *y = MENU_H;
         if (*w < menu->w) {
             *w = menu->w;
         }
+        if (canvas && *x + *w > canvas->width) *x = canvas->width > *w ? canvas->width - *w : 0;
     } else {
-        int px, py, pw, ph;
-        drop_geometry(0, &px, &py, &pw, &ph);
+        int px, py, pw, ph, pfull;
+        drop_box(0, &px, &py, &pw, &ph, &pfull);
         *x = px + pw - 2;
         *y = item_top(0, sub_item) - DROP_PAD;
         if (canvas && *x + *w + SHADOW > canvas->width && px - *w + 2 >= 0) *x = px - *w + 2;
+        else if (canvas && *x + *w > canvas->width) *x = canvas->width > *w ? canvas->width - *w : 0;
+        if (canvas && *y + *h > canvas->height) *y = canvas->height - *h > MENU_H ? canvas->height - *h : MENU_H;
     }
+    if (canvas && *y + *h > canvas->height) {
+        int most;
+        *h = canvas->height - *y;
+        if (*h < 2 * SCROLL_BAND + ITEM_H) *h = 2 * SCROLL_BAND + ITEM_H;
+        most = *full - 2 * DROP_PAD - (*h - 2 * SCROLL_BAND);
+        if (scroll[level] > most) scroll[level] = most;
+        if (scroll[level] < 0) scroll[level] = 0;
+    } else {
+        scroll[level] = 0;
+    }
+}
+
+static void drop_geometry(int level, int *x, int *y, int *w, int *h)
+{
+    int full;
+    drop_box(level, x, y, w, h, &full);
+}
+
+/* Where a menu's rows start (scrolled), and whether it scrolls. */
+static int rows_origin(int level, int *origin)
+{
+    int x, y, w, h, full;
+    drop_box(level, &x, &y, &w, &h, &full);
+    *origin = full > h ? y + SCROLL_BAND - scroll[level] : y + DROP_PAD;
+    return full > h;
 }
 
 static void notice_geometry(int *x, int *y, int *w, int *h);
@@ -1010,10 +1084,9 @@ void Menu_Bounds(int *x, int *y, int *w, int *h)
 /* Row `index` of a menu: its top. */
 static int item_top(int level, int index)
 {
-    int x, y, w, h, i;
+    int y, i;
     const Menu *menu = level_menu(level);
-    drop_geometry(level, &x, &y, &w, &h);
-    y += DROP_PAD;
+    rows_origin(level, &y);
     for (i = 0; i < index; i++) {
         y += item_height(&menu->items[i]);
     }
@@ -1030,13 +1103,18 @@ static int inside_drop(int level, int px, int py)
 
 static int item_at(int level, int px, int py)
 {
-    int x, y, w, h, i;
+    int x, y, w, h, i, full;
     const Menu *menu = level_menu(level);
-    drop_geometry(level, &x, &y, &w, &h);
-    if (px < x || px >= x + w || py < y + DROP_PAD || py >= y + h - DROP_PAD) {
-        return -1;
+    drop_box(level, &x, &y, &w, &h, &full);
+    if (full > h) {
+        if (px < x || px >= x + w || py < y + SCROLL_BAND || py >= y + h - SCROLL_BAND) return -1;
+        y += SCROLL_BAND - scroll[level];
+    } else {
+        if (px < x || px >= x + w || py < y + DROP_PAD || py >= y + h - DROP_PAD) {
+            return -1;
+        }
+        y += DROP_PAD;
     }
-    y += DROP_PAD;
     for (i = 0; i < menu->count; i++) {
         const Item *item = &menu->items[i];
         int height = item_height(item);
@@ -1047,6 +1125,28 @@ static int item_at(int level, int px, int py)
         y += height;
     }
     return -1;
+}
+
+/* -1 on a scrolling menu's top arrow band, 1 on its bottom one, else 0. */
+static int scroll_band_at(int level, int px, int py)
+{
+    int x, y, w, h, full;
+    drop_box(level, &x, &y, &w, &h, &full);
+    if (full <= h || px < x || px >= x + w || py < y || py >= y + h) return 0;
+    return py < y + SCROLL_BAND ? -1 : py >= y + h - SCROLL_BAND ? 1 : 0;
+}
+
+/* Scroll a menu so that row `index` is in view. */
+static void keep_shown(int level, int index)
+{
+    int x, y, w, h, full, top;
+    if (index < 0) return;
+    drop_box(level, &x, &y, &w, &h, &full);
+    if (full <= h) return;
+    top = item_top(level, index);
+    if (top < y + SCROLL_BAND) scroll[level] -= y + SCROLL_BAND - top;
+    else if (top + ITEM_H > y + h - SCROLL_BAND) scroll[level] += top + ITEM_H - (y + h - SCROLL_BAND);
+    drop_box(level, &x, &y, &w, &h, &full); /* clamps it */
 }
 
 static int bar_item_at(int x, int y)
@@ -1078,6 +1178,17 @@ static void draw_arrow(int x, int middle, uint32_t colour)
     for (c = 0; c < span; c++) {
         int half = (span - c) * 7 * ui / (2 * span);
         fill(x + c, middle - half, 1, 2 * half + 1, colour, 255);
+    }
+}
+
+/* A triangle pointing up (-1) or down (1) with its middle at cx, middle:
+ * a scrolling menu's arrow band. */
+static void draw_band_arrow(int cx, int middle, int direction, uint32_t colour)
+{
+    int span = 5 * ui, r;
+    for (r = 0; r < span; r++) {
+        int half = direction < 0 ? r : span - 1 - r;
+        fill(cx - half * 3 / 2, middle - span / 2 + r, half * 3 + 1, 1, colour, 255);
     }
 }
 
@@ -1398,8 +1509,8 @@ void Menu_Draw(MenuCanvas *into)
     }
     for (level = 0; level < (open_sub >= 0 ? 2 : open_menu >= 0 ? 1 : 0); level++) {
         const Menu *menu = level_menu(level);
-        int x, y, w, h, top, hot_row = level ? hot_sub : hot_item;
-        drop_geometry(level, &x, &y, &w, &h);
+        int x, y, w, h, top, hot_row = level ? hot_sub : hot_item, full, scrolls;
+        drop_box(level, &x, &y, &w, &h, &full);
         /* The shadow: SHADOW copies of the box, each offset one more pixel,
          * blended over each other. Only the part outside the box shows (the
          * box is opaque), so blend just each copy's right and bottom strips:
@@ -1412,7 +1523,11 @@ void Menu_Draw(MenuCanvas *into)
         }
         fill(x, y, w, h, C_DROP, 255);
         outline(x, y, w, h, C_DROP_EDGE);
-        top = y + DROP_PAD;
+        scrolls = rows_origin(level, &top);
+        if (scrolls) {
+            clip_top = y + SCROLL_BAND;
+            clip_bottom = y + h - SCROLL_BAND;
+        }
         for (i = 0; i < menu->count; i++) {
             const Item *item = &menu->items[i];
             int middle, hot = i == hot_row;
@@ -1460,6 +1575,16 @@ void Menu_Draw(MenuCanvas *into)
             }
             top += ITEM_H;
         }
+        clip_top = 0;
+        clip_bottom = 1 << 30;
+        if (scrolls) {
+            /* The arrow bands: lit while there is more that way. */
+            int most = full - 2 * DROP_PAD - (h - 2 * SCROLL_BAND);
+            fill(x + ITEM_PAD, y + SCROLL_BAND - 1, w - ITEM_PAD * 2, 1, C_SEP, 255);
+            fill(x + ITEM_PAD, y + h - SCROLL_BAND, w - ITEM_PAD * 2, 1, C_SEP, 255);
+            draw_band_arrow(x + w / 2, y + SCROLL_BAND / 2, -1, scroll[level] > 0 ? C_TEXT : C_SEP);
+            draw_band_arrow(x + w / 2, y + h - SCROLL_BAND / 2, 1, scroll[level] < most ? C_TEXT : C_SEP);
+        }
     }
     if (notice.shown) draw_notice();
 }
@@ -1492,6 +1617,8 @@ static void close_submenu(void)
     open_sub = -1;
     sub_item = -1;
     hot_sub = -1;
+    scroll[1] = 0;
+    if (drag.level == 1) drag.active = 0;
 }
 
 static void close_menu(void)
@@ -1500,6 +1627,8 @@ static void close_menu(void)
     hot_item = -1;
     grabbed = 0;
     close_submenu();
+    scroll[0] = 0;
+    drag.active = 0;
 }
 
 static void open_submenu(int index)
@@ -1510,6 +1639,49 @@ static void open_submenu(int index)
     open_sub = item->value;
     sub_item = index;
     hot_item = index;
+}
+
+static void activate(const Item *item, int *quit);
+
+/* A press on row `index` of an open menu: a submenu opens, a slider takes
+ * the pointer, anything else is done. */
+static void press_row(int level, int index, int px, int *quit)
+{
+    const Item *item = &level_menu(level)->items[index];
+    if (level == 0 && item->kind == ITEM_SUBMENU) {
+        open_submenu(index);
+    } else if (item->kind == ITEM_SLIDER && !(item->flags & ITEM_DISABLED)) {
+        *(level ? &hot_sub : &hot_item) = index;
+        slider_from_pointer(level, index, px);
+        grabbed = level + 1;
+    } else {
+        activate(item, quit);
+    }
+}
+
+/* A press in a menu that scrolls: an arrow band moves it a row; on a row it
+ * waits for the release (a drag scrolls instead), but for a slider's,
+ * which takes the pointer at once. 0 when the menu does not scroll. */
+static int scroll_press(int level, int px, int py)
+{
+    int x, y, w, h, full, band = scroll_band_at(level, px, py), index;
+    drop_box(level, &x, &y, &w, &h, &full);
+    if (full <= h) return 0;
+    if (band) {
+        scroll[level] += band * ITEM_H;
+        if (level == 0) close_submenu();
+        drop_box(level, &x, &y, &w, &h, &full);
+        return 1;
+    }
+    index = item_at(level, px, py);
+    if (index >= 0 && level_menu(level)->items[index].kind == ITEM_SLIDER) return 0;
+    drag.active = 1;
+    drag.level = level;
+    drag.x = px;
+    drag.y = py;
+    drag.from = scroll[level];
+    drag.dragged = 0;
+    return 1;
 }
 
 /* The row the keyboard works on: the submenu's when one is open. */
@@ -1749,30 +1921,10 @@ int Menu_Event(const MenuEvent *event, int *quit)
             }
         } else if (open_sub >= 0 && inside_drop(1, px, py)) {
             int index = item_at(1, px, py);
-            if (index >= 0 && event->button == 1) {
-                const Item *item = &submenus[open_sub].items[index];
-                if (item->kind == ITEM_SLIDER && !(item->flags & ITEM_DISABLED)) {
-                    hot_sub = index;
-                    slider_from_pointer(1, index, px);
-                    grabbed = 2;
-                } else {
-                    activate(item, quit);
-                }
-            }
+            if (event->button == 1 && !scroll_press(1, px, py) && index >= 0) press_row(1, index, px, quit);
         } else if (inside_drop(0, px, py)) {
             int index = item_at(0, px, py);
-            if (index >= 0 && event->button == 1) {
-                const Item *item = &menus[open_menu].items[index];
-                if (item->kind == ITEM_SUBMENU) {
-                    open_submenu(index);
-                } else if (item->kind == ITEM_SLIDER && !(item->flags & ITEM_DISABLED)) {
-                    hot_item = index;
-                    slider_from_pointer(0, index, px);
-                    grabbed = 1;
-                } else {
-                    activate(item, quit);
-                }
-            }
+            if (event->button == 1 && !scroll_press(0, px, py) && index >= 0) press_row(0, index, px, quit);
         } else {
             close_menu(); /* a click outside an open menu only closes it */
         }
@@ -1788,13 +1940,39 @@ int Menu_Event(const MenuEvent *event, int *quit)
             grabbed = 0;
             Settings_Save();
         }
+        if (drag.active && event->button == 1) {
+            int level = drag.level, index;
+            drag.active = 0;
+            if (!drag.dragged && open_menu >= 0 && (level == 0 || open_sub >= 0) &&
+                (index = item_at(level, drag.x, drag.y)) >= 0)
+                press_row(level, index, drag.x, quit);
+        }
         return 1;
     case MENU_EVENT_WHEEL:
         if (open_menu >= 0 && *active_hot() >= 0) {
-            const Item *item = &level_menu(active_level())->items[*active_hot()];
-            if (item->kind == ITEM_SLIDER && !(item->flags & ITEM_DISABLED)) {
+            int level = active_level(), index = *active_hot(), x, y, w, h, full, sx = 0, middle;
+            const Item *item = &level_menu(level)->items[index];
+            /* In a menu that scrolls, the wheel scrolls it unless the pointer
+             * is on the slider itself (its row, right of the label): the lit
+             * row is where the pointer last was, and a wheel meant to scroll
+             * past it changed the setting. A menu that fits keeps the
+             * wheel on a lit slider, as before. */
+            drop_box(level, &x, &y, &w, &h, &full);
+            if (full > h) slider_geometry(level, index, &sx, &middle);
+            if (item->kind == ITEM_SLIDER && !(item->flags & ITEM_DISABLED) &&
+                (full <= h || (item_at(level, event->x, event->y) == index && event->x >= sx))) {
                 set_slider(item, Settings_Get(item->setting) + slider_step(item) * event->wheel);
                 Settings_Save();
+                return 1;
+            }
+        }
+        if (open_menu >= 0) {
+            int level = open_sub >= 0 && inside_drop(1, event->x, event->y) ? 1 : 0, x, y, w, h, full;
+            drop_box(level, &x, &y, &w, &h, &full);
+            if (full > h) {
+                scroll[level] -= event->wheel * ITEM_H;
+                if (level == 0) close_submenu();
+                drop_box(level, &x, &y, &w, &h, &full);
                 return 1;
             }
         }
@@ -1806,6 +1984,20 @@ int Menu_Event(const MenuEvent *event, int *quit)
         if (grabbed) {
             slider_from_pointer(grabbed - 1, grabbed == 2 ? hot_sub : hot_item, px);
             return 1;
+        }
+        if (drag.active) {
+            int x, y, w, h, full;
+            if (!drag.dragged && (py - drag.y > ITEM_H / 3 || drag.y - py > ITEM_H / 3)) drag.dragged = 1;
+            if (drag.dragged) {
+                scroll[drag.level] = drag.from - (py - drag.y);
+                if (drag.level == 0) {
+                    close_submenu();
+                    hot_item = -1;
+                }
+                hot_sub = -1;
+                drop_box(drag.level, &x, &y, &w, &h, &full);
+                return 1;
+            }
         }
         hover_bar = bar;
         if (open_menu >= 0) {
@@ -1841,6 +2033,7 @@ int Menu_Event(const MenuEvent *event, int *quit)
             if (event->key == MENU_KEY_F10) {
                 open_menu = 0;
                 hot_item = step_item(0, -1, 1);
+                keep_shown(0, hot_item);
                 return 1;
             }
             return 0;
@@ -1859,6 +2052,7 @@ int Menu_Event(const MenuEvent *event, int *quit)
             } else if (event->key == MENU_KEY_RIGHT && item && item->kind == ITEM_SUBMENU) {
                 open_submenu(*hot);
                 hot_sub = step_item(1, -1, 1);
+                keep_shown(1, hot_sub);
             } else if (event->key == MENU_KEY_LEFT && open_sub >= 0) {
                 close_submenu();
             } else {
@@ -1866,17 +2060,25 @@ int Menu_Event(const MenuEvent *event, int *quit)
                 close_menu();
                 open_menu = next;
                 hot_item = step_item(0, -1, 1);
+                keep_shown(0, hot_item);
             }
             return 1;
         }
-        case MENU_KEY_UP: *active_hot() = step_item(active_level(), *active_hot() < 0 ? 0 : *active_hot(), -1); return 1;
-        case MENU_KEY_DOWN: *active_hot() = step_item(active_level(), *active_hot(), 1); return 1;
+        case MENU_KEY_UP:
+            *active_hot() = step_item(active_level(), *active_hot() < 0 ? 0 : *active_hot(), -1);
+            keep_shown(active_level(), *active_hot());
+            return 1;
+        case MENU_KEY_DOWN:
+            *active_hot() = step_item(active_level(), *active_hot(), 1);
+            keep_shown(active_level(), *active_hot());
+            return 1;
         case MENU_KEY_ENTER: {
             int level = active_level(), *hot = active_hot();
             const Item *item = *hot >= 0 ? &level_menu(level)->items[*hot] : NULL;
             if (item && item->kind == ITEM_SUBMENU) {
                 open_submenu(*hot);
                 hot_sub = step_item(1, -1, 1);
+                keep_shown(1, hot_sub);
             } else if (item && item->kind != ITEM_SLIDER) {
                 activate(item, quit);
             }
