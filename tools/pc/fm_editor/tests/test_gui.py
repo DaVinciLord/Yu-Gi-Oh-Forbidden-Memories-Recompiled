@@ -1268,6 +1268,7 @@ class GuiTest(unittest.TestCase):
         app.autosave()
         latest = next(row for row in recovery.records() if row[0].parent == app.recovery.folder)
         self.assertEqual((latest[1] / "extra.bin").read_bytes(), b"keep across autosaves")
+        self.assertTrue(row[1].exists(), "original recovery copy remains until saved")
         source = app.project.source_dir
         destination = Path(self.tmp.name) / "recovered-save"
         with mock.patch("fm_editor.app.filedialog.askdirectory", return_value=str(destination)) as choose:
@@ -1275,7 +1276,8 @@ class GuiTest(unittest.TestCase):
         choose.assert_called_once()
         self.assertFalse(app._recovered)
         self.assertFalse(source.exists())
-        self.assertTrue(row[1].exists(), "original recovery copy remains available")
+        # Saved now: the crashed session is no longer offered at start.
+        self.assertFalse(prior.folder.exists())
         reopened, _ = manifest.open_mod(app.retail, destination)
         self.assertEqual(reopened.cards[1].name, "Crash recovery")
         self.assertEqual((destination / "extra.bin").read_bytes(), b"keep across autosaves")
@@ -1376,6 +1378,57 @@ class GuiTest(unittest.TestCase):
         self.assertIs(app.notebook.current(), app.cards)
         self.assertEqual(app.cards.current, 3)
         menu.destroy()
+
+    def test_card_opened_from_another_tab_wins(self):
+        from fm_editor import card_links
+        app, p = self.app, self.app.project
+
+        def invoke(tab, cid, label):
+            menu = tk.Menu(app, tearoff=False)
+            card_links.fill_menu(menu, app, tab, cid)
+            labels = [menu.entrycget(i, "label") if menu.type(i) == "command" else None
+                      for i in range(menu.index("end") + 1)]
+            menu.invoke(labels.index(label))
+            app.update()
+            menu.destroy()
+
+        # The tab-changed event's follow() must not put back the Cards card.
+        app.cards.show_card(2)
+        app.notebook.select(app.duelists)
+        app.update()
+        invoke(app.duelists, 3, "Show its fusions")
+        self.assertEqual(app.fusions.search.get(), p.card_label(3))
+        equips = p.equip_cards()
+        app.notebook.select(app.cards)
+        app.cards.show_card(equips[0])
+        app.notebook.select(app.duelists)
+        app.update()
+        invoke(app.duelists, equips[1], "Edit its equip targets")
+        self.assertEqual(app.equips.current, equips[1])
+        # After a refresh (Undo, another mod) a search naming a whole card
+        # still follows the window's card.
+        app.fusions.refresh()
+        app.notebook.select(app.cards)
+        app.cards.show_card(4)
+        app.notebook.select(app.fusions)
+        app.update()
+        self.assertEqual(app.fusions.search.get(), p.card_label(4))
+
+    def test_where_used_lists_pack_unlock_and_starter_pools(self):
+        from fm_editor import card_links
+        app, p = self.app, self.app.project
+        p.packs.append({"name": "Locked", "cards": [1], "unlock": {"card": 5}})
+        p.other["starter_pools"] = [{"name": "Mine", "draws": 4, "cards": {"5": 7}}]
+        p.starter_pool_state = None
+        lines = card_links.uses(app, 5)
+        whats = {(w, t) for w, t, _ in lines}
+        self.assertIn(("Packs", "Locked: unlocked by owning it"), whats)
+        self.assertIn(("Starter pools", "Mine: weight 7 (mod.json only)"), whats)
+        window = card_links.UsesWindow(app, 5)
+        row = next(i for i, (w, _, _) in enumerate(window.lines) if w == "Starter pools")
+        window.tree.selection_set(str(row))
+        window.go()     # a line with nowhere to go does nothing
+        window.destroy()
 
     def test_recovered_type_change_restores_effect_controls(self):
         from fm_editor.gamedata import TYPE_NAMES

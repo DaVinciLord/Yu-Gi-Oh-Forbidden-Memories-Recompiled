@@ -206,6 +206,7 @@ class App(Editing, tk.Tk):
         self.recovery = recovery.Recovery()
         self._pending.clear()
         self._recovered = False
+        self._recovered_from = None
         self.project = project
         self.current_card = None
         self.dirty = False
@@ -304,7 +305,12 @@ class App(Editing, tk.Tk):
         return self.notebook.current() is tab
 
     def open_card(self, tab, cid):
-        if self.project is not None and cid in self.project.cards and self.open_tab(tab):
+        if self.project is None or cid not in self.project.cards:
+            return
+        # The tab-changed event comes after select() and makes the tab follow
+        # the window's card: make that this card first.
+        self.current_card = cid
+        if self.open_tab(tab):
             tab.show_card(cid)
 
     def open_pool(self, d, pool, cid=None):
@@ -425,6 +431,7 @@ class App(Editing, tk.Tk):
             return False
         self.dirty = False
         self._recovered = False
+        self.forget_recovered_copy()
         self.history.mark_saved(self.project)
         self.cancel_edit_jobs()
         self.clear_recovery()

@@ -12,7 +12,7 @@ import sys
 import tkinter as tk
 from tkinter import ttk
 
-from . import fixed_decks, packs as packmath, validate
+from . import fixed_decks, packs as packmath, starter_pools, validate
 from .gamedata import DUELIST_NAMES, POOL_LABELS, POOL_TOTAL, POOLS, TYPE_EQUIP
 from .widgets import px, scrolled_tree
 
@@ -171,6 +171,15 @@ def uses(app, cid) -> list:
                 name = entry.get("name", packmath.pack_id(entry))
                 add("Packs", name + (f" (tier {tier})" if tier != "cards" else ""),
                     lambda i=i: app.open_pack(i))
+        unlock = entry.get("unlock")
+        if isinstance(unlock, dict) and "card" in unlock and resolve(unlock["card"]) == cid:
+            add("Packs", entry.get("name", packmath.pack_id(entry)) + ": unlocked by owning it",
+                lambda i=i: app.open_pack(i))
+    # No tab edits "starter_pools" (kept as written in mod.json): listed, no link.
+    for i, pool in enumerate(starter_pools.state(p)):
+        weight = pool.cards.get(cid, 0)
+        if weight:
+            add("Starter pools", f"{pool.name or f'pool {i + 1}'}: weight {weight} (mod.json only)", None)
     return lines
 
 
@@ -209,12 +218,12 @@ class UsesWindow(tk.Toplevel):
         for i, (where, what, _) in enumerate(self.lines):
             self.tree.insert("", "end", iid=str(i), values=(where, what))
         self.summary.configure(text=f"{len(self.lines)} uses" if self.lines else
-                               "Nothing in the mod uses this card: no fusion, equip, ritual, deck, drop or pack.")
+                               "Nothing in the mod uses this card: no fusion, equip, ritual, deck, drop, pack or starter pool.")
         if self.lines:
             self.tree.selection_set("0")
             self.tree.focus("0")
 
     def go(self):
         selection = self.tree.selection()
-        if selection and int(selection[0]) < len(self.lines):
+        if selection and int(selection[0]) < len(self.lines) and self.lines[int(selection[0])][2]:
             self.lines[int(selection[0])][2]()

@@ -873,7 +873,9 @@ class FusionsTab(Tab):
                                 "\"glitch\" fusions.", style="Hint.TLabel").pack(side="right")
 
     def refresh(self):
-        self.followed = None
+        # A search still naming a whole card (after Undo, another mod) is
+        # the followed one, so the tab keeps following.
+        self.followed = labelled_card(self.project, self.search.get().strip())
         self.fill()
 
     def show_card(self, cid):

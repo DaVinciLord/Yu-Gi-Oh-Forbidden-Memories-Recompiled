@@ -102,7 +102,8 @@ Fusions, Equips, Rituals, Duelists, a fixed deck, Starter decks, Packs) for
 **Open in Cards**, **Open in Art**, **Show its fusions**, **Edit its equip
 targets** (an equip card) and **Where it's used...**: every fusion, equip,
 ritual, duelist deck or drop pool (with its chance), fixed deck, starter
-deck, pack and added copy that names the card. Double-click a line to go
+deck, pack (or pack unlock), starter pool and added copy that names the card
+(starter pools have no tab, so their lines only list). Double-click a line to go
 there; the window lists again each time it comes back to the front.
 
 **File > Save** writes the mod folder (Ctrl+S); the first save asks where
@@ -136,7 +137,8 @@ Cards, Mod info, Limits and Packs fields are included, even incomplete input.
 This does not save or change the original mod folder. The editor offers to
 review leftover drafts on startup; **File > Recover work...** lists drafts and
 save backups, with their date and original folder. **Open copy** opens a separate
-working copy and its first Save asks for a destination. **Delete copy** removes
+working copy and its first Save asks for a destination; once that save
+succeeds, the crashed session's copy is removed. **Delete copy** removes
 an unwanted recovery copy. Before overwriting a saved mod, the editor backs up
 the whole folder and keeps its five most recent backups. A failed backup stops
 the save, and a failed recovery update preserves the last complete copy and
