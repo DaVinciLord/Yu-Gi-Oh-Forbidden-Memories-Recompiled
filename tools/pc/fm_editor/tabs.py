@@ -129,6 +129,7 @@ class CardsTab(Tab):
         # an effect instead (show_kind).
         self.monster_rows, self.effect_row = [], []
         self.trap_rows = []
+        self.equip_rows = []
 
         def line(label, widget, hint=None, rows=None):
             nonlocal row
@@ -163,6 +164,10 @@ class CardsTab(Tab):
         # as that card.
         self.effect_box = line("Retail effect", ttk.Combobox(form, textvariable=self.vars["effect"], state="readonly",
                                                        width=26), hint("effect"), self.effect_row)
+        self.edit_equips_button = ttk.Button(form, text="Edit equip targets...", command=self.edit_equips)
+        self.edit_equips_button.grid(row=row, column=1, sticky="w", pady=(0, 4))
+        self.equip_rows.append(self.edit_equips_button)
+        row += 1
         line("Trigger at ATK ≤", ttk.Spinbox(form, textvariable=self.vars["trap_threshold"], from_=0, to=65535,
                                            increment=50, width=10), hint("trap_threshold"), self.trap_rows)
         line("Attribute", ttk.Combobox(form, textvariable=self.vars["attribute"], values=ATTRIBUTE_CHOICES,
@@ -227,7 +232,7 @@ class CardsTab(Tab):
         ttk.Label(self.added_frame, style="Hint.TLabel", wraplength=px(form, 320), justify="left",
                   text="A new card starts in nobody's chest. Players win it in its base's place (above), "
                        "from a starter deck (Starter decks tab) or with Game > Cheats > Give. Its password "
-                       "is shown in View > Card passwords only: the Password screen sells the disc's cards.").grid(
+                       "also works in the Password shop. Set its price with Starchips above.").grid(
             row=4, column=0, columnspan=2, sticky="w", pady=(4, 0))
         ttk.Button(self.added_frame, text="Remove this card", command=self.remove_card).grid(
             row=5, column=0, columnspan=2, sticky="w", pady=(4, 0))
@@ -311,12 +316,19 @@ class CardsTab(Tab):
         self.show(cid)
 
     def goto(self, cid):
+        if self.current is not None and not self.apply(quiet=True):
+            return False
         self.search.set("")
         self.filter.set(self.FILTERS[0])
         self.fill()
         if self.tree.exists(str(cid)):
             self.tree.selection_set(str(cid))
             self.tree.see(str(cid))
+            # A pending tab-change refresh rebuilds the list. Set the
+            # current card now so that refresh keeps this selection.
+            self.show(cid)
+            return True
+        return False
 
     # the form
     def show(self, cid):
@@ -459,6 +471,8 @@ class CardsTab(Tab):
             widget.grid() if monster else widget.grid_remove()
         for widget in self.effect_row:
             widget.grid_remove() if monster else widget.grid()
+        for widget in self.equip_rows:
+            widget.grid() if kind == TYPE_EQUIP and self.current is not None else widget.grid_remove()
         self.show_trap_threshold()
         if monster:
             self.refill_monster()
@@ -478,6 +492,17 @@ class CardsTab(Tab):
                 self.vars["effect"].set(self.effect_label(stored))
         if self.vars["effect"].get() not in choices:
             self.vars["effect"].set(choices[0] if not own else self.effect_label(self.effect_default(self.current)))
+
+    def edit_equips(self):
+        """Apply the card and open its target list without another search."""
+        if not self.apply() or self.current is None or self.project.cards[self.current].type != TYPE_EQUIP:
+            return
+        tab = self.app.equips
+        self.app.notebook.select(tab)
+        tab.fill_equips()
+        tab.equips.selection_set(str(self.current))
+        tab.equips.see(str(self.current))
+        tab.select()
 
     def refill_monster(self):
         """A card applied as a non-monster lost its ATK, DEF, level and stars;
@@ -880,6 +905,7 @@ class EquipsTab(Tab):
         frame.pack(fill="both", expand=True, pady=4)
         buttons = ttk.Frame(right)
         buttons.pack(fill="x")
+        self.actions = buttons
         ttk.Button(buttons, text="Add a monster...", command=self.add).pack(side="left")
         self.type_choice = tk.StringVar(value=TYPE_NAMES[0])
         ttk.Button(buttons, text="Add every", command=lambda: self.by_type(True)).pack(side="left", padx=(8, 2))
@@ -920,7 +946,11 @@ class EquipsTab(Tab):
     def fill(self):
         self.monsters.delete(*self.monsters.get_children())
         p = self.project
-        if not self.current or p is None or self.current not in p.equip_cards():
+        editable = p is not None and self.current in p.equip_cards()
+        for action in self.actions.winfo_children():
+            action.state(["!disabled"] if editable else ["disabled"])
+        if not editable:
+            self.current = None
             self.heading.configure(text="Select an equip card")
             return
         self.heading.configure(text=f"{p.card_label(self.current)} may equip:")

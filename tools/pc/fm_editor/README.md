@@ -60,6 +60,12 @@ become **Magic**: select the type, choose its retail effect, then apply and save
 An added copy changing kind needs a matching effect; **(none)** is insufficient.
 Numbers appear in the effect list only when retail names are duplicated.
 
+Changing a card to **Equip** makes it available in the **Equips** tab after
+Apply or switching tabs. **Edit equip targets...** beside its effect applies
+the card and opens that equip's target list directly. Add/remove individual
+monsters or whole types there; the changes survive saving and reopening.
+**Revert to retail** restores the selected effect's default targets.
+
 For **Trap**, the form shows **Retail effect** and hides ATK, DEF, guardian
 stars, level and attribute. The six effects that destroy an attacking monster
 also show **Trigger at ATK ≤**: the largest current ATK that triggers this
