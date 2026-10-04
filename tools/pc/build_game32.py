@@ -60,6 +60,10 @@ ANDROID = ANDROID_ABI is not None
 # thunks are clang's -mharden-sls=blr ones (check_arm_branches).
 A64 = ANDROID_ABI == "arm64-v8a"
 WIDE = X64 or A64
+# The ABIs an APK is made for. android-x86 (the emulator images M1-M4 were
+# made on) still builds, as a development target, but is neither run nor
+# shipped.
+ANDROID_PACKAGED = ("arm64-v8a",)
 # arm64: every C unit through tools/pc/ptr32_stores.py (an LLVM AArch64 bug,
 # notes/pc-build.md "Android arm64"); main() checks the compiler first.
 PTR32_PASS = A64
@@ -1396,7 +1400,11 @@ def main():
         assets = {"build/buildid": f"{options.build}/buildid", "build/commit": f"{options.build}/commit",
                   f"build/symbols/{build_id}.txt": f"{options.build}/symbols/{build_id}.txt"}
         assets.update(package_android.program_files(options.build, ("mods", "languages")))
-        package_android.package(options.build, ANDROID_ABI, f"{options.build}/libmain.so", output, assets)
+        if ANDROID_ABI in ANDROID_PACKAGED:
+            package_android.package(options.build, ANDROID_ABI, f"{options.build}/libmain.so", output, assets)
+        else:
+            print(f"{options.build}: android-{ANDROID_ABI} builds for development and is not packaged; the app is "
+                  f"{', '.join('android-' + abi for abi in ANDROID_PACKAGED)}")
     kinds = {name: functions.get(name, "outside_resident_image") for name in stubs}
     report = {"game_units": len(game), "pinned_data_symbols": len(pinned),
               "stubbed": {kind: sorted(n for n in stubs if kinds[n] == kind)
