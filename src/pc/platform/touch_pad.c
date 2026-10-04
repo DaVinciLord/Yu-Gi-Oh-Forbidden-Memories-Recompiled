@@ -12,6 +12,7 @@ typedef struct {
     Zone zone;
     TouchButton button; /* ZONE_BUTTON's */
     uint16_t bits;
+    int x, y; /* where it is now */
 } Finger;
 
 /* PS1 pad bits, as Platform_Pad reports them. */
@@ -21,17 +22,19 @@ static const uint16_t bits_of[TOUCH_BUTTONS] = {
     [TOUCH_L2] = 0x0100, [TOUCH_R2] = 0x0200, [TOUCH_L1] = 0x0400, [TOUCH_R1] = 0x0800,
     [TOUCH_SELECT] = 0x0001, [TOUCH_START] = 0x0008};
 
-static int mode, touched, width, height, top;
+static int mode, touched, blocked, width, height, top;
+static float density; /* window pixels per dp, 0 unknown (TouchPad_SetDensity) */
 static int rects[TOUCH_BUTTONS][4];
 static int unit, dpad_x, dpad_y, face_x, face_y;
 static Finger fingers[FINGERS];
 static uint16_t held, tapped, presses;
+static int menu_down, menu_taps;
 
 uint16_t TouchPad_Bit(TouchButton button) { return button < TOUCH_BUTTONS ? bits_of[button] : 0; }
 
 int TouchPad_Shown(void)
 {
-    return width > 0 && height > 0 && (mode == TOUCH_PAD_SHOW || (mode == TOUCH_PAD_AUTO && touched));
+    return width > 0 && height > 0 && !blocked && (mode == TOUCH_PAD_SHOW || (mode == TOUCH_PAD_AUTO && touched));
 }
 
 static void place(TouchButton button, int x, int y, int w, int h)
@@ -42,17 +45,31 @@ static void place(TouchButton button, int x, int y, int w, int h)
     rects[button][3] = h;
 }
 
-/* A button is about a thumb's width: 13% of the window's short side. The
- * D-pad and the face buttons sit in the middle of the left and right sides
- * (where the 4:3 picture leaves black bars on a phone), the shoulders above
- * them, SELECT and START below. */
+/* A button is about a thumb's width: 13% of the window's short side, and
+ * where the density is known 48 to 80 dp of it (the smallest target a
+ * finger hits, and no bigger than one, so a tablet's buttons stay at the
+ * edges), but never above 16% of the short side. The D-pad and the face
+ * buttons sit in the middle of the left and right sides (where the 4:3
+ * picture leaves black bars on a phone), the shoulders above them, SELECT
+ * and START below; MENU under L2/L1, the D-pad's reach (two buttons from
+ * its middle) starting below MENU's. */
 static void lay_out(void)
 {
-    int s = (width < height ? width : height) * 13 / 100, m = s * 35 / 100, bottom;
+    int shorter = width < height ? width : height, s = shorter * 13 / 100, m, bottom, menu_y;
+    if (density > 0) {
+        int least = (int)(48 * density + 0.5f), most = (int)(80 * density + 0.5f);
+        if (s < least) s = least;
+        if (s > most) s = most;
+        if (s > shorter * 16 / 100) s = shorter * 16 / 100;
+    }
+    m = s * 35 / 100;
     unit = s;
     dpad_x = m + s * 3 / 2;
     face_x = width - m - s * 3 / 2;
     dpad_y = face_y = top + (height - top) * 56 / 100;
+    menu_y = top + m / 2 + s + m / 2;
+    if (dpad_y - 2 * s < menu_y + s) dpad_y = face_y = menu_y + 3 * s;
+    place(TOUCH_MENU, m, menu_y + s / 4, s * 4 / 3, s / 2);
     place(TOUCH_UP, dpad_x - s / 2, dpad_y - s * 3 / 2, s, s);
     place(TOUCH_DOWN, dpad_x - s / 2, dpad_y + s / 2, s, s);
     place(TOUCH_LEFT, dpad_x - s * 3 / 2, dpad_y - s / 2, s, s);
@@ -68,6 +85,14 @@ static void lay_out(void)
     bottom = height - m / 2;
     place(TOUCH_SELECT, dpad_x - s, bottom - s * 3 / 5, s * 2, s / 2);
     place(TOUCH_START, face_x - s * 4 / 5, bottom - s * 4 / 5, s * 8 / 5, s * 4 / 5);
+}
+
+int TouchPad_SetDensity(float pixels_per_dp)
+{
+    if (pixels_per_dp == density) return 0;
+    density = pixels_per_dp;
+    lay_out();
+    return TouchPad_Shown();
 }
 
 int TouchPad_Layout(int window_w, int window_h, int bar)
@@ -90,16 +115,25 @@ int TouchPad_Rect(TouchButton button, int *x, int *y, int *w, int *h)
     return 1;
 }
 
-int TouchPad_Held(TouchButton button) { return button < TOUCH_BUTTONS && (held & bits_of[button]) != 0; }
+int TouchPad_Held(TouchButton button)
+{
+    if (button == TOUCH_MENU) return menu_down;
+    return button < TOUCH_BUTTONS && (held & bits_of[button]) != 0;
+}
 
 static long distance2(int x, int y, int cx, int cy) { return (long)(x - cx) * (x - cx) + (long)(y - cy) * (y - cy); }
 
-/* A button's rectangle, a little larger to aim at. */
+/* A button's rectangle, a little larger to aim at; the short ones (SELECT,
+ * START, MENU) as tall as a button to tap. */
 static int in_button(TouchButton button, int x, int y)
 {
-    int grow = unit * 15 / 100;
-    return x >= rects[button][0] - grow && y >= rects[button][1] - grow &&
-           x < rects[button][0] + rects[button][2] + grow && y < rects[button][1] + rects[button][3] + grow;
+    int grow = unit * 15 / 100, top = rects[button][1], h = rects[button][3];
+    if (h < unit) {
+        top -= (unit - h) / 2;
+        h = unit;
+    }
+    return x >= rects[button][0] - grow && y >= top - grow && x < rects[button][0] + rects[button][2] + grow &&
+           y < top + h + grow;
 }
 
 static Zone zone_at(int x, int y, TouchButton *button)
@@ -159,14 +193,17 @@ static uint16_t press_at(const Finger *finger, int x, int y)
 static int refresh(void)
 {
     uint16_t now = 0;
-    int i;
+    int i, menu = 0;
     for (i = 0; i < FINGERS; i++) {
         if (fingers[i].used) now |= fingers[i].bits;
+        if (fingers[i].used && fingers[i].zone == ZONE_BUTTON && fingers[i].button == TOUCH_MENU)
+            menu |= in_button(TOUCH_MENU, fingers[i].x, fingers[i].y);
     }
     presses |= now & ~held;
     tapped |= now & ~held;
-    if (now == held) return 0;
+    if (now == held && menu == menu_down) return 0;
     held = now;
+    menu_down = menu;
     return 1;
 }
 
@@ -183,6 +220,40 @@ int TouchPad_SetMode(int wanted)
     mode = wanted;
     if (!TouchPad_Shown()) release_all();
     return was != TouchPad_Shown();
+}
+
+int TouchPad_Block(int wanted)
+{
+    int was = TouchPad_Shown();
+    wanted = !!wanted;
+    if (wanted == blocked) return 0;
+    blocked = wanted;
+    if (blocked) release_all();
+    return was != TouchPad_Shown();
+}
+
+int TouchPad_TakeMenu(void)
+{
+    int taps = menu_taps;
+    menu_taps = 0;
+    return taps != 0;
+}
+
+int TouchPad_FreeSpan(int *left, int *right)
+{
+    int i, grow = unit * 15 / 100;
+    if (!TouchPad_Shown()) return 0;
+    *left = dpad_x + 2 * unit; /* the D-pad's and the face buttons' reach (zone_at) */
+    *right = face_x - 2 * unit;
+    for (i = 0; i < TOUCH_BUTTONS; i++) {
+        const int *r = rects[i];
+        if (r[0] + r[2] / 2 < width / 2) {
+            if (r[0] + r[2] + grow > *left) *left = r[0] + r[2] + grow;
+        } else if (r[0] - grow < *right) {
+            *right = r[0] - grow;
+        }
+    }
+    return 1;
 }
 
 int TouchPad_OtherInput(void)
@@ -209,7 +280,7 @@ int TouchPad_Finger(int kind, uint64_t id, int x, int y)
     if (kind == TOUCH_FINGER_DOWN) {
         TouchButton button = TOUCH_UP;
         Zone zone;
-        if (mode == TOUCH_PAD_HIDE) return 0;
+        if (mode == TOUCH_PAD_HIDE || blocked) return 0;
         if (!TouchPad_Shown()) {
             touched = 1; /* the first touch shows the pad; it presses nothing */
             return 1;
@@ -224,11 +295,16 @@ int TouchPad_Finger(int kind, uint64_t id, int x, int y)
         finger->id = id;
         finger->zone = zone;
         finger->button = button;
+        finger->x = x;
+        finger->y = y;
         finger->bits = press_at(finger, x, y);
+        if (zone == ZONE_BUTTON && button == TOUCH_MENU) menu_taps++;
         return refresh();
     }
     if (!finger) return 0;
     if (kind == TOUCH_FINGER_MOVE) {
+        finger->x = x;
+        finger->y = y;
         finger->bits = press_at(finger, x, y);
     } else {
         memset(finger, 0, sizeof(*finger));

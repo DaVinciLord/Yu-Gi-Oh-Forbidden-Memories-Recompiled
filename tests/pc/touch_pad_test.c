@@ -79,6 +79,48 @@ int main(void)
     assert(TouchPad_SetMode(TOUCH_PAD_SHOW) && TouchPad_Shown() && !TouchPad_OtherInput() && TouchPad_Shown());
     assert(TouchPad_SetMode(TOUCH_PAD_HIDE) && !TouchPad_Shown());
     assert(!TouchPad_Finger(TOUCH_FINGER_DOWN, 8, 100, 600) && !TouchPad_Shown() && TouchPad_Update() == 0);
-    puts("touch pad: showing, D-pad angles, face buttons, taps, fingers, hiding passed");
+
+    /* MENU: tapped once, it presses no pad button; it sits clear of the
+     * D-pad (a touch on it is not an arrow) and is a button tall. */
+    assert(TouchPad_SetMode(TOUCH_PAD_SHOW) && TouchPad_Shown());
+    centre(TOUCH_MENU, &x, &y);
+    assert(TouchPad_Covers(x, y) && !TouchPad_TakeMenu());
+    assert(TouchPad_Finger(TOUCH_FINGER_DOWN, 9, x, y) && TouchPad_Held(TOUCH_MENU));
+    assert(TouchPad_Update() == 0 && TouchPad_TakeMenu() && !TouchPad_TakeMenu());
+    {
+        int mx, my, mw, mh, ax, ay, aw, ah;
+        TouchPad_Rect(TOUCH_MENU, &mx, &my, &mw, &mh);
+        TouchPad_Rect(TOUCH_UP, &ax, &ay, &aw, &ah);
+        assert(my + mh <= ay);
+        assert(TouchPad_Covers(x, my - (1080 * 13 / 100 - mh) / 2 + 2)); /* the taller hit box */
+    }
+
+    /* Blocked (a menu is up): nothing drawn, no touch taken, held let go. */
+    centre(TOUCH_CROSS, &x, &y);
+    TouchPad_Finger(TOUCH_FINGER_DOWN, 10, x, y);
+    assert(TouchPad_Update() == TouchPad_Bit(TOUCH_CROSS));
+    assert(TouchPad_Block(1) && !TouchPad_Shown() && !TouchPad_Covers(x, y) && !TouchPad_Held(TOUCH_MENU));
+    assert(TouchPad_Update() == 0 && !TouchPad_Finger(TOUCH_FINGER_DOWN, 11, x, y) && !TouchPad_Block(1));
+    assert(TouchPad_Block(0) && TouchPad_Shown() && TouchPad_Covers(x, y));
+    TouchPad_Finger(TOUCH_FINGER_UP, 9, x, y);
+    TouchPad_Finger(TOUCH_FINGER_UP, 10, x, y);
+
+    /* The free span: between the columns, the picture's middle in it. */
+    {
+        int left, right;
+        assert(TouchPad_FreeSpan(&left, &right) && left < 1140 && right > 1140 && left > 0 && right < 2280);
+        assert(!TouchPad_Covers(left, 540) && !TouchPad_Covers(right - 1, 540));
+        /* With the density: a thumb is 48 dp at least and 80 dp at most. */
+        TouchPad_Layout(2560, 1600, 0);
+        assert(TouchPad_SetDensity(2.0f));
+        centre(TOUCH_CROSS, &x, &y);
+        TouchPad_Rect(TOUCH_CROSS, &dx, &dy, &ux, &uy);
+        assert(ux == 160 && uy == 160);
+        TouchPad_Layout(1280, 720, 0);
+        TouchPad_Rect(TOUCH_CROSS, &dx, &dy, &ux, &uy);
+        assert(ux == 96);
+        assert(!TouchPad_SetMode(TOUCH_PAD_HIDE) || !TouchPad_FreeSpan(&left, &right));
+    }
+    puts("touch pad: showing, D-pad angles, face buttons, taps, fingers, hiding, MENU, blocking, density passed");
     return 0;
 }

@@ -30,14 +30,16 @@ static const Cell cells[TOUCH_BUTTONS] = {
     [TOUCH_L1] = {0, 216, 16, 16}, [TOUCH_R1] = {16, 216, 16, 16},
     [TOUCH_L2] = {32, 224, 16, 16}, [TOUCH_R2] = {48, 216, 16, 16},
     [TOUCH_START] = {96, 128, 32, 16}};
-/* SELECT in the text font (8 x 12 cells; glyphs.c's retail_cell). */
-static const char select_text[] = "SELECT";
+/* SELECT and MENU in the text font (8 x 12 cells of its full-width capitals;
+ * glyphs.c's retail_cell). */
+static const char select_text[] = "SELECT", menu_text[] = "MENU";
 static const Cell letters[] = {{16, 36, 8, 12}, {32, 24, 8, 12}, {88, 24, 8, 12}, {32, 24, 8, 12}, {16, 24, 8, 12},
                                {24, 36, 8, 12}};
+static const Cell menu_letters[] = {{96, 24, 8, 12}, {32, 24, 8, 12}, {104, 24, 8, 12}, {32, 36, 8, 12}};
 
 static struct {
     int state; /* 0 unread, 1 read, -1 not readable */
-    DiscArt button[TOUCH_BUTTONS], letter[sizeof(select_text) - 1];
+    DiscArt button[TOUCH_BUTTONS], letter[sizeof(select_text) - 1], menu_letter[sizeof(menu_text) - 1];
 } art;
 
 static int read_art(void)
@@ -48,7 +50,7 @@ static int read_art(void)
         !DiscArt_LoadRect(RAMP_SECTOR, 0, RAMP_X, RAMP_Y, RAMP_W, RAMP_H))
         return 0;
     for (i = 0; i < TOUCH_BUTTONS; i++) {
-        if (i == TOUCH_SELECT) continue;
+        if (i == TOUCH_SELECT || i == TOUCH_MENU) continue;
         if (!DiscArt_Cut(&art.button[i], BUTTON_PAGE, 0, 4, cells[i].u, cells[i].v, cells[i].w, cells[i].h,
                          BUTTON_CLUT_X, BUTTON_CLUT_Y))
             return 0;
@@ -56,6 +58,11 @@ static int read_art(void)
     for (i = 0; select_text[i]; i++) {
         if (!DiscArt_Cut(&art.letter[i], FONT_PAGE, 0, 4, letters[i].u, letters[i].v, letters[i].w, letters[i].h,
                          RAMP_X, RAMP_Y))
+            return 0;
+    }
+    for (i = 0; menu_text[i]; i++) {
+        if (!DiscArt_Cut(&art.menu_letter[i], FONT_PAGE, 0, 4, menu_letters[i].u, menu_letters[i].v,
+                         menu_letters[i].w, menu_letters[i].h, RAMP_X, RAMP_Y))
             return 0;
     }
     return 1;
@@ -66,6 +73,7 @@ void TouchPadArt_Reset(void)
     int i;
     for (i = 0; i < TOUCH_BUTTONS; i++) DiscArt_Free(&art.button[i]);
     for (i = 0; select_text[i]; i++) DiscArt_Free(&art.letter[i]);
+    for (i = 0; menu_text[i]; i++) DiscArt_Free(&art.menu_letter[i]);
     art.state = 0;
 }
 
@@ -150,10 +158,11 @@ void TouchPadArt_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
         if (!TouchPad_Rect((TouchButton)i, &bx, &by, &bw, &bh)) return;
         grow(&x0, &y0, &x1, &y1, bx, by, bw, bh);
         inset = down ? bw / 16 : 0;
-        if (i == TOUCH_SELECT) {
-            int n = (int)sizeof(select_text) - 1, k, letter_w = bw / n;
+        if (i == TOUCH_SELECT || i == TOUCH_MENU) {
+            const DiscArt *word = i == TOUCH_SELECT ? art.letter : art.menu_letter;
+            int n = (int)(i == TOUCH_SELECT ? sizeof(select_text) : sizeof(menu_text)) - 1, k, letter_w = bw / n;
             for (k = 0; k < n; k++)
-                draw(canvas, &art.letter[k], bx + k * letter_w + inset / 2, by + inset / 2, letter_w - inset,
+                draw(canvas, &word[k], bx + k * letter_w + inset / 2, by + inset / 2, letter_w - inset,
                      bh - inset, opacity, 0);
         } else {
             draw(canvas, &art.button[i], bx + inset, by + inset * bh / bw, bw - 2 * inset, bh - 2 * inset * bh / bw,
