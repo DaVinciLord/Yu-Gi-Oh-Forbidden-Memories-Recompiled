@@ -25,6 +25,15 @@ which keep their own scrolling. The Cards tab's right-hand options and the
 Limits tab also scroll vertically on their own: tabbing to a field brings it
 into view.
 
+**Equip bonus**, under **Retail effect** for an equip card, is what it adds
+to the monster's ATK and DEF: the disc's +500, or +1000 when its effect is
+Megamorph's (choose Megamorph as the effect and an untouched bonus follows).
+Any whole number from -32767 to 32767; empty puts the default back. A bonus
+set on a disc equip holds for its copies and for cards with its effect,
+unless they set their own.
+
+The **Password** field takes up to 8 digits.
+
 **Starchips**, below **Password** in Cards, edits any card's price
 on the Password screen (0–999999; **0 is free**). The field shows the price
 after this mod's `passwords` rules, with the disc's price beside it. Leave
@@ -103,7 +112,8 @@ Fusions, Equips, Rituals, Duelists, a fixed deck, Starter decks, Packs) for
 targets** (an equip card) and **Where it's used...**: every fusion, equip,
 ritual, duelist deck or drop pool (with its chance), fixed deck, starter
 deck, pack (or pack unlock), starter pool and added copy that names the card
-(starter pools have no tab, so their lines only list). Double-click a line to go
+(starter pools have no tab, so their lines only list). The menu closes on a
+click elsewhere, another tab or Escape. Double-click a line to go
 there; the window lists again each time it comes back to the front.
 
 **File > Save** writes the mod folder (Ctrl+S); the first save asks where
@@ -113,7 +123,10 @@ Enable the mod in the game under **Game > Mods** and restart. **File > Open
 mod folder** opens a mod over retail. Save refuses nothing, but lists what
 the loader would refuse first. **Save as** copies the mod's assets too,
 replacing matching files when overwriting another mod. Its destination may
-be inside the source mod; the destination itself is excluded from the copy.
+be inside the source mod; the destination itself is excluded from the copy. **File > Export mod...**
+saves the same way, but always into a new folder named after the mod's id
+inside the folder you choose (the game's `mods` folder, say), since the game
+reads each mod from a folder of its own.
 
 **Apply and Save:** Apply stores a form in the working mod; **Ctrl+S** applies
 all valid forms and writes the mod folder. Leaving a tab also applies its form.
@@ -352,8 +365,9 @@ record are shown as retail fusions and marked.
 * `equips`: per equip card, `add` and `remove` (a whole monster type as its
   name), or `replace` when that is shorter. An added card is equipped (and
   equips) as its base, so what differs for it is written in later entries,
-  which the game's reading of the rules confirms before saving. `bonus` and
-  `bonus_if` are kept as written.
+  which the game's reading of the rules confirms before saving. An equip
+  card's **Equip bonus** (Cards tab) is written as an entry of its own,
+  `{"card": ..., "bonus": points}`; `bonus_if` is kept as written, after it.
 * `rituals`: a changed recipe, or `"result": null`.
 * `guardian_stars`: the stars the mod declares (`id`, and `name`, `icon`,
   `palette` when set), `default_bonus`, `replace` and `choice` when not the

@@ -8,7 +8,8 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from . import bulk_dialog, guardian_stars, manifest, pools as poolmath, validate
-from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, DUELIST_NAMES, FRAME_NAMES,
+from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, DUELIST_NAMES,
+                       EQUIP_BONUS_MAX, FRAME_NAMES,
                        POOL_LABELS, POOL_TOTAL, POOLS, STAR_NAMES, STARTER_WEIGHT_LIMIT, TYPE_EQUIP, TYPE_MAGIC, TYPE_NAMES,
                        TYPE_RITUAL, TYPE_TRAP,
                        exodia_piece, type_frame)
@@ -92,8 +93,8 @@ class CardsTab(Tab):
     FILTERS = ["All cards", "Changed", "Added by the mod", "With notes", "Monsters", "Non-monsters"] + TYPE_NAMES
     # The fields whose disc value (a copy's base's) is shown, as a link
     # putting it back, only while the form differs from it (mark).
-    MARKED = ("name", "type", "effect", "attribute", "level", "attack", "defense", "star1", "star2", "password",
-              "starchips", "text", "frame")
+    MARKED = ("name", "type", "effect", "equip_bonus", "attribute", "level", "attack", "defense", "star1", "star2",
+              "password", "starchips", "text", "frame")
 
     def __init__(self, notebook, app):
         super().__init__(notebook, app, "Cards")
@@ -101,6 +102,7 @@ class CardsTab(Tab):
         self._shown_price = ""
         self._shown_effect = ""
         self._shown_threshold = ""
+        self._shown_bonus = ""
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
         # The form keeps its width; the list takes what is left, down to this.
@@ -133,7 +135,7 @@ class CardsTab(Tab):
         self.form = form
         self.vars = {k: tk.StringVar() for k in ("name", "attack", "defense", "type", "attribute", "level",
                                                   "star1", "star2", "password", "starchips", "key", "frame",
-                                                  "effect", "trap_threshold")}
+                                                  "effect", "trap_threshold", "equip_bonus")}
         row = 0
         # Only a monster has these; a magic, trap, ritual or equip card has
         # an effect instead (show_kind).
@@ -184,6 +186,11 @@ class CardsTab(Tab):
         self.edit_equips_button.grid(row=row, column=1, sticky="w", pady=(0, 4))
         self.equip_rows.append(self.edit_equips_button)
         row += 1
+        # What the equip adds to the monster's ATK and DEF (tables.c "equips"
+        # "bonus"): the disc's +500, Megamorph's +1000.
+        line("Equip bonus", ttk.Spinbox(form, textvariable=self.vars["equip_bonus"], from_=-EQUIP_BONUS_MAX,
+                                        to=EQUIP_BONUS_MAX, increment=100, width=10), hint("equip_bonus"),
+             self.equip_rows)
         line("Trigger at ATK ≤", ttk.Spinbox(form, textvariable=self.vars["trap_threshold"], from_=0, to=65535,
                                            increment=50, width=10), hint("trap_threshold"), self.trap_rows)
         line("Attribute", ttk.Combobox(form, textvariable=self.vars["attribute"], values=ATTRIBUTE_CHOICES,
@@ -198,7 +205,11 @@ class CardsTab(Tab):
                                         width=18) for key in ("star1", "star2")]
         line("Guardian star 1", self.star_boxes[0], hint("star1"), self.monster_rows)
         line("Guardian star 2", self.star_boxes[1], hint("star2"), self.monster_rows)
-        line("Password", ttk.Entry(form, textvariable=self.vars["password"], width=12), hint("password"))
+        # Typing past 8 digits, or anything else, does nothing.
+        digits = (self.register(lambda text: text == "" or (len(text) <= 8 and text.isascii() and text.isdigit())),
+                  "%P")
+        line("Password", ttk.Entry(form, textvariable=self.vars["password"], width=12, validate="key",
+                                   validatecommand=digits), hint("password"))
         self.price = line("Starchips", ttk.Entry(form, textvariable=self.vars["starchips"], width=12), hint("starchips"))
         ttk.Label(form, text="0 = free; empty = default price", style="Hint.TLabel").grid(
             row=row, column=1, columnspan=2, sticky="w")
@@ -234,6 +245,7 @@ class CardsTab(Tab):
         self.vars["type"].trace_add("write", lambda *_: self.show_swatch())
         self.vars["type"].trace_add("write", lambda *_: self.show_kind())
         self.vars["effect"].trace_add("write", lambda *_: self.show_trap_threshold())
+        self.vars["effect"].trace_add("write", lambda *_: self.follow_bonus())
         ttk.Label(form, text="Notes").grid(row=row, column=0, sticky="nw", pady=2)
         self.notes = tk.Text(form, width=36, height=4, wrap="word", undo=True)
         self.notes.grid(row=row, column=1, columnspan=2, sticky="we", pady=2)
@@ -416,6 +428,8 @@ class CardsTab(Tab):
         self._shown_threshold = "" if threshold is None else str(threshold)
         self.vars["trap_threshold"].set(self._shown_threshold)
         self.show_trap_threshold()
+        self._shown_bonus = str(self.project.equip_bonus_of(cid)) if card.type == TYPE_EQUIP else ""
+        self.vars["equip_bonus"].set(self._shown_bonus)
         self.vars["attribute"].set(attribute_label(card.attribute))
         self.vars["level"].set(card.level)
         # The mod's stars (the Guardian Stars tab) are in the lists too.
@@ -475,6 +489,10 @@ class CardsTab(Tab):
         if parse_choice(self.vars["type"].get(), TYPE_NAMES) == ref.type and self.effect_kind(default) >= 0:
             label = self.effect_label(default)
             shown["effect"] = (label, label, self.vars["effect"].get() != label)
+        if parse_choice(self.vars["type"].get(), TYPE_NAMES) == TYPE_EQUIP:
+            bonus = str(p.equip_bonus_default(cid, self.chosen_effect() or cid))
+            shown["equip_bonus"] = (bonus, f"+{bonus}" if int(bonus) >= 0 else bonus,
+                                    self.vars["equip_bonus"].get().strip() not in ("", bonus))
         if cid in p.retail.cards:
             retail = p.retail.passwords.get(cid) or ""
             typed = self.vars["password"].get().strip()
@@ -563,6 +581,17 @@ class CardsTab(Tab):
         for widget in self.trap_rows:
             widget.grid() if threshold is not None else widget.grid_remove()
         self.hints["trap_threshold"].configure(text=f"Blank: effect default ({threshold})" if threshold is not None else "")
+
+    def follow_bonus(self):
+        """An Equip bonus the form has not been touched for, and the card has
+        none of its own: what the chosen effect gives (Megamorph +1000)."""
+        cid = self.current
+        if (self.project is None or cid not in self.project.cards or cid in self.project.equip_bonus
+                or self.vars["equip_bonus"].get().strip() != self._shown_bonus
+                or parse_choice(self.vars["type"].get(), TYPE_NAMES) != TYPE_EQUIP):
+            return
+        self._shown_bonus = str(self.project.equip_bonus_default(cid, self.chosen_effect() or cid))
+        self.vars["equip_bonus"].set(self._shown_bonus)
 
     def effect_shown(self, cid: int) -> int:
         eid = self.project.effect_of(cid)
@@ -725,6 +754,18 @@ class CardsTab(Tab):
                                                       len(threshold_text) > 5 or int(threshold_text) > 65535):
             self.status.configure(text="Trigger ATK is a whole number from 0 to 65535, or blank for the effect default")
             return False
+        bonus_text = self.vars["equip_bonus"].get().strip()
+        bonus_changed = card.type == TYPE_EQUIP and bonus_text != self._shown_bonus
+        bonus = None
+        if bonus_changed and bonus_text:
+            try:
+                bonus = int(bonus_text) if bonus_text.isascii() else None
+            except ValueError:
+                pass
+            if bonus is None or abs(bonus) > EQUIP_BONUS_MAX:
+                self.status.configure(text=f"Equip bonus is a whole number from -{EQUIP_BONUS_MAX} to "
+                                           f"{EQUIP_BONUS_MAX}, or empty for the default")
+                return False
         if cid in self.project.added:
             added = self.project.added[cid]
             key = self.vars["key"].get().strip()
@@ -760,6 +801,14 @@ class CardsTab(Tab):
             self.vars["trap_threshold"].set("")
             self._shown_threshold = ""
             changed = True
+        had = self.project.equip_bonus.get(cid)
+        if bonus_changed:       # after the effect, which the default follows
+            self.project.set_equip_bonus(cid, bonus)
+        elif card.type != TYPE_EQUIP:
+            self.project.set_equip_bonus(cid, None)
+        changed = changed or self.project.equip_bonus.get(cid) != had
+        self._shown_bonus = str(self.project.equip_bonus_of(cid)) if card.type == TYPE_EQUIP else ""
+        self.vars["equip_bonus"].set(self._shown_bonus)
         self._shown_effect = self.vars["effect"].get()
         cost = self.project.starchip_cost(cid)
         self._shown_price = "" if cost is None else str(cost)

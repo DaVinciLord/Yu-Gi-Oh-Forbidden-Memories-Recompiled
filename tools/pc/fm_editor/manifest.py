@@ -25,7 +25,7 @@ import shutil
 from pathlib import Path
 
 from .gamedata import (FUSION_GROUPS, RITUAL_REQUIREMENT_KEYS, fusion_group_named, ATTRIBUTE_NAMES, CARD_COUNT, DECK_SIZE, DUELIST_NAMES, FRAME_NAMES, POOLS, STAR_NAMES,
-                       STARTER_WEIGHT_LIMIT, TYPE_NAMES, TYPE_MAGIC, GameData)
+                       EQUIP_BONUS_MAX, STARTER_WEIGHT_LIMIT, TYPE_NAMES, TYPE_MAGIC, GameData)
 from .model import AddedCard, ModInfo, Project, StarterDeck, duelist_named, type_named, KEY_RE
 from . import art, campaign_map, fixed_decks, guardian_stars, packs as packmath, pools as poolmath
 
@@ -195,6 +195,10 @@ def build_equips(project: Project) -> list:
             entry["remove"] = remove_types + [project.ref(m) for m in sorted(remove)]
         entries.append(entry)
     entries += _equip_fixes(project, entries)
+    # The Cards tab's Equip bonus, before the kept "bonus_if" entries that
+    # come after it in the mod (_read_equip_bonus).
+    entries += [{"card": project.ref(equip), "bonus": points} for equip, points in sorted(project.equip_bonus.items())
+                if equip in project.cards and project.cards[equip].type == 23]
     return entries + project.kept["equips"]
 
 
@@ -793,6 +797,22 @@ def _json_bool(value, default: bool) -> bool:
 EQUIP_ANY, EQUIP_TYPE, EQUIP_CARD = 0, 1, 2
 
 
+def _read_equip_bonus(project: Project, equip: int, entry: dict, kept: list):
+    """An entry's "bonus" into the Cards tab's Equip bonus; "bonus_if" (and a
+    "bonus" the game would refuse) kept as written. The latest entry that
+    fits a monster decides (Tables_EquipBonus), so a plain "bonus" leaves an
+    earlier kept "bonus_if" of the card's nothing to do."""
+    plain = entry.get("bonus")
+    if type(plain) is int and -EQUIP_BONUS_MAX <= plain <= EQUIP_BONUS_MAX:
+        kept[:] = [k for k in kept if set(k) != {"card", "bonus_if"} or project.resolve(k["card"]) != equip]
+        project.equip_bonus[equip] = plain
+        rest = {"bonus_if": entry["bonus_if"]} if "bonus_if" in entry else {}
+    else:
+        rest = {k: entry[k] for k in ("bonus", "bonus_if") if k in entry}
+    if rest:
+        kept.append({"card": entry.get("card"), **rest})
+
+
 def equip_rules(project: Project, entries, messages: list, kept: list = None) -> list:
     """The equip rules the port makes of "equips" (tables.c read_equips):
     (equip, kind, target, allow, order), an entry's adds before its removes."""
@@ -817,9 +837,8 @@ def equip_rules(project: Project, entries, messages: list, kept: list = None) ->
         if project.cards[equip].type != 23:
             messages.append(f"{where}: \"card\" is not an equip card; left out")
             continue
-        bonus = {k: entry[k] for k in ("bonus", "bonus_if") if k in entry}
-        if bonus and kept is not None:
-            kept.append({"card": entry.get("card"), **bonus})     # the editor does not show bonuses
+        if kept is not None:
+            _read_equip_bonus(project, equip, entry, kept)
         if _json_bool(entry.get("replace"), False):
             rules.append((equip, EQUIP_ANY, 0, False, order))
         unplaced = False

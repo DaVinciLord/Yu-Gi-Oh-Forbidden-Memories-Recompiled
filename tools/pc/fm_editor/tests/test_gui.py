@@ -436,6 +436,78 @@ class GuiTest(unittest.TestCase):
         self.assertEqual(set(map(int, app.equips.monsters.get_children())), app.project.equip_baseline(1))
         self.assertTrue(all(w.instate(["!disabled"]) for w in app.equips.actions.winfo_children()))
 
+    def test_equip_bonus_field_follows_megamorph(self):
+        app, cards = self.app, self.app.cards
+        cards.goto(651)
+        app.update()
+        self.assertEqual(cards.vars["equip_bonus"].get(), "500")
+        self.assertEqual(cards.hints["equip_bonus"].cget("text"), "")
+        cards.vars["equip_bonus"].set("1200")
+        self.assertTrue(cards.apply())
+        self.assertEqual(app.project.equip_bonus, {651: 1200})
+        app.update()
+        self.assertEqual(str(cards.hints["equip_bonus"].cget("text")), "Retail: +500 (restore)")
+        cards.restore("equip_bonus")
+        self.assertTrue(cards.apply())
+        self.assertEqual(app.project.equip_bonus, {})
+        # An untouched bonus follows the effect: Megamorph's is +1000.
+        cards.vars["effect"].set(cards.effect_label(657))
+        self.assertEqual(cards.vars["equip_bonus"].get(), "1000")
+        self.assertTrue(cards.apply())
+        self.assertEqual((app.project.effect_of(651), app.project.equip_bonus), (657, {}))
+        cards.vars["equip_bonus"].set("-300")
+        self.assertTrue(cards.apply())
+        self.assertEqual(app.project.equip_bonus, {651: -300})
+        cards.vars["equip_bonus"].set("1e3")
+        self.assertFalse(cards.apply())
+        self.assertIn("Equip bonus", str(cards.status.cget("text")))
+        cards.vars["equip_bonus"].set("")       # empty: the default again
+        self.assertTrue(cards.apply())
+        self.assertEqual(app.project.equip_bonus, {})
+        cards.goto(1)
+        app.update()
+        self.assertEqual(cards.vars["equip_bonus"].get(), "")
+
+    def test_password_takes_up_to_8_digits(self):
+        cards = self.app.cards
+        cards.goto(2)
+        self.app.update()
+        entry = next(w for w in cards.form.winfo_children()
+                     if w.winfo_class() == "TEntry" and str(w.cget("textvariable")) == str(cards.vars["password"]))
+        entry.delete(0, "end")
+        for ch in "1234x5678 9":
+            entry.insert("end", ch)
+        self.assertEqual(entry.get(), "12345678")
+        entry.delete(0, "end")
+        entry.insert(0, "123456789")
+        self.assertEqual(entry.get(), "")
+
+    def test_export_makes_a_folder_named_after_the_mod(self):
+        app = self.app
+        app.info.vars["id"].set("export-test")
+        with tempfile.TemporaryDirectory() as where, \
+                mock.patch("fm_editor.app.filedialog.askdirectory", return_value=where):
+            self.assertTrue(app.save(ask=True, export=True))
+            self.assertTrue((Path(where) / "export-test" / "mod.json").is_file())
+            self.assertEqual(Path(app.project.source_dir), Path(where) / "export-test")
+
+    def test_right_click_menu_closes(self):
+        from fm_editor import card_links
+        app = self.app
+        app.deiconify()
+        for close in (lambda: app.notebook.select(app.fusions),
+                      lambda: app.cards.tree.event_generate("<ButtonPress-1>", x=5, y=5)):
+            app.notebook.select(app.cards)
+            app.update()
+            menu = card_links._open_menu = tk.Menu(app.cards.tree, tearoff=False)
+            menu.add_command(label="Where it's used...")
+            menu.post(app.winfo_rootx(), app.winfo_rooty())
+            app.update()
+            close()
+            app.update()
+            self.assertFalse(menu.winfo_exists())
+            self.assertIsNone(card_links._open_menu)
+
     def test_card_navigation_keeps_invalid_pending_edits(self):
         cards = self.app.cards
         cards.goto(1)

@@ -11,7 +11,8 @@ import re
 from dataclasses import dataclass, field
 
 from .gamedata import (ATTACK_TRAP_FIRST, ATTACK_TRAP_THRESHOLDS, CARD_COUNT, DECK_SIZE, DUELIST_COUNT,
-                       DUELIST_NAMES, POOLS, TYPE_NAMES, Card, GameData)
+                       DUELIST_NAMES, EQUIP_BONUS, EQUIP_BONUS_MAX, MEGAMORPH, MEGAMORPH_BONUS, POOLS, TYPE_NAMES,
+                       Card, GameData)
 
 KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
@@ -154,6 +155,9 @@ class Project:
         self.fusion_explicit = set()
         self._own_pairs = None          # (pairs own lists name, the pairs a rule for them falls back on)
         self.equips = {e: set(m) for e, m in retail.equips.items()}
+        # equip card -> the points it adds, the mod's "equips" "bonus" (one
+        # with "bonus_if" stays in kept["equips"]).
+        self.equip_bonus = {}
         self.rituals = dict(retail.rituals)
         # ritual id -> three requirement dictionaries. Empty means the traditional
         # three-specific-card recipe represented by self.rituals.
@@ -347,6 +351,7 @@ class Project:
         del self.cards[cid]
         self.passwords.pop(cid, None)
         self.notes.pop(cid, None)
+        self.equip_bonus.pop(cid, None)
         made = {p for p, r in self.fusions.items() if r == cid and cid not in p}
         self.fusions = {p: r for p, r in self.fusions.items() if cid not in p and r != cid}
         self.fusion_explicit = {p for p in self.fusion_explicit if cid not in p}
@@ -380,6 +385,7 @@ class Project:
     def revert_card(self, cid: int):
         """Back to the disc's card, or an added card back to its base as the
         mod has it; its notes stay, as they are the modder's."""
+        self.equip_bonus.pop(cid, None)
         if cid in self.added:
             self.cards[cid] = self.cards[self.added[cid].base].copy(id=cid)
             self.passwords.pop(cid, None)
@@ -397,7 +403,8 @@ class Project:
         if cid in self.added:
             return True
         return (not self.cards[cid].same(self.retail.cards[cid]) or bool(self.card_extra.get(cid))
-                or self.password_changed(cid) or self.starchip_rule(cid, own_only=True) is not None)
+                or self.password_changed(cid) or self.starchip_rule(cid, own_only=True) is not None
+                or cid in self.equip_bonus)
 
     # --- tables ------------------------------------------------------------
 
@@ -602,6 +609,31 @@ class Project:
 
     def equip_cards(self):
         return sorted(cid for cid, card in self.cards.items() if card.type == 23)
+
+    def equip_bonus_default(self, cid: int, effect: int = None) -> int:
+        """What the equip adds with no "bonus" of its own (tables.c
+        Tables_EquipBonus): a rule for its base or for the equip whose effect
+        it has (the later entry, written by id), else the mods'
+        "equip_bonus_default", else the disc's +500, or +1000 when its effect
+        is Megamorph's. effect: the one the form has chosen."""
+        effect = self.effect_of(cid) if effect is None else effect
+        for source in sorted({self.base_of(cid), effect} - {cid}, reverse=True):
+            if source in self.equip_bonus:
+                return self.equip_bonus[source]
+        default = self.other.get("equip_bonus_default")
+        if type(default) is int and -EQUIP_BONUS_MAX <= default <= EQUIP_BONUS_MAX:
+            return default
+        return MEGAMORPH_BONUS if effect == MEGAMORPH else EQUIP_BONUS
+
+    def equip_bonus_of(self, cid: int) -> int:
+        return self.equip_bonus.get(cid, self.equip_bonus_default(cid))
+
+    def set_equip_bonus(self, cid: int, points):
+        """The equip's own bonus; None, or what it gets anyway, sets none."""
+        if points is None or points == self.equip_bonus_default(cid):
+            self.equip_bonus.pop(cid, None)
+        else:
+            self.equip_bonus[cid] = points
 
     def ritual_cards(self):
         return sorted(cid for cid in self.cards if self.is_ritual(cid))
