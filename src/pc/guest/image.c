@@ -6,6 +6,7 @@
 #include "pc/debug/crash.h"
 #include "pc/debug/log.h"
 #include "pc/debug/profile.h"
+#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -705,12 +706,35 @@ int Memories_GuestMap(void)
 #else
 static int view_protection = PROT_READ | PROT_WRITE;
 
+/* What already holds part of [low, high) (/proc/self/maps), for a guest
+ * range that cannot be mapped: in an Android app ART's heap can reach the
+ * guest's ranges (notes/pc-build.md, "Android arm64"). */
+static void say_occupants(uint32_t low, uint64_t high)
+{
+    char text[512];
+    unsigned long long start, end;
+    FILE *maps = fopen("/proc/self/maps", "r");
+    if (!maps) return;
+    while (fgets(text, sizeof(text), maps)) {
+        if (sscanf(text, "%llx-%llx", &start, &end) == 2 && start < high && end > low)
+            fprintf(stderr, "memories-pc: occupied by %s", text);
+    }
+    fclose(maps);
+}
+
 static int map_at(uint32_t address, size_t length, int fd, off_t offset)
 {
-    void *wanted = (void *)(uintptr_t)address;
+    void *wanted = (void *)(uintptr_t)address, *got;
     int flags = MAP_FIXED_NOREPLACE | (fd < 0 ? MAP_PRIVATE | MAP_ANONYMOUS : MAP_SHARED);
-    if (mmap(wanted, length, fd < 0 ? PROT_READ | PROT_WRITE : view_protection, flags, fd, offset) != wanted) {
-        fprintf(stderr, "cannot map guest memory at 0x%08x\n", (unsigned)address);
+    got = mmap(wanted, length, fd < 0 ? PROT_READ | PROT_WRITE : view_protection, flags, fd, offset);
+    if (got != wanted) {
+        /* EEXIST: something holds part of the range; a kernel before 4.17
+         * takes the address as a hint and may map elsewhere. */
+        int error = errno;
+        if (got != MAP_FAILED) munmap(got, length);
+        fprintf(stderr, "cannot map guest memory at 0x%08x: %s\n", (unsigned)address,
+                got == MAP_FAILED ? strerror(error) : "the system mapped it elsewhere");
+        say_occupants(address, (uint64_t)address + length);
         return -1;
     }
     return 0;
