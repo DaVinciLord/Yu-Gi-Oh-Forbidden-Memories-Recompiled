@@ -15,8 +15,10 @@ BUILD/device.sh, which replay.py takes as --executable:
         --executable tmp/pc/android-arm64-v8a/device.cmd
 
 run pushes the files the environment names (MEMORIES_SETTINGS,
-MEMORIES_PLAY, MEMORIES_LOAD_STATE), runs the game there with the same
-variables pointed at the copies, and pulls MEMORIES_RECORD's file back. The
+MEMORIES_PLAY, MEMORIES_LOAD_STATE, and the MEMORIES_MODS_DIR folder), runs
+the game there with the same variables pointed at the copies, forwards the
+control channel (MEMORIES_CONTROL) for scripted replays, and pulls
+MEMORIES_RECORD's file back. The
 serial is $ANDROID_SERIAL, else the only device. The disc stays on the
 phone, in the shell user's private folder; nothing of it is committed."""
 import glob, os, shlex, subprocess, sys
@@ -80,6 +82,12 @@ def run(build, argv):
             remote = f"{REMOTE}/run/{key.lower()}_{os.path.basename(env[key])}"
             call("push", env[key], remote)
             env[key] = remote
+    # A mods folder of the caller's (a replay's mods.py, a scripted replay's
+    # test mod): pushed whole, as run/ is new.
+    mods = env.get("MEMORIES_MODS_DIR")
+    if mods and os.path.isdir(mods):
+        call("push", mods, f"{REMOTE}/run/mods")
+        env["MEMORIES_MODS_DIR"] = f"{REMOTE}/run/mods"
     record = env.get("MEMORIES_RECORD")
     if record:
         env["MEMORIES_RECORD"] = f"{REMOTE}/run/record.txt"
@@ -90,14 +98,28 @@ def run(build, argv):
     env.setdefault("MEMORIES_NO_MONITOR", "1")  # its ptrace, from an adb shell process: noise
     exports = " ".join(f"{key}={shlex.quote(value)}" for key, value in sorted(env.items()))
     command = f"cd {REMOTE} && LD_LIBRARY_PATH={REMOTE} {exports} ./runner {' '.join(shlex.quote(a) for a in argv)}; echo EXIT=$?"
-    result = subprocess.run(adb() + ["shell", command], capture_output=True, text=True, errors="replace")
-    output = result.stdout + result.stderr
+    # The control channel (MEMORIES_CONTROL, yfm_control.py) listens on the
+    # phone's 127.0.0.1: the same port on this machine is forwarded to it
+    # once the game says it listens. Not before: adb's end takes every
+    # connection at once and drops it when nothing listens on the phone,
+    # where the client must see "refused" and try again.
+    port = env.get("MEMORIES_CONTROL")
+    forwarded = False
+    process = subprocess.Popen(adb() + ["shell", command], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                               text=True, errors="replace")
     code = 1
-    for line in output.splitlines():
+    for line in process.stdout:
+        line = line.rstrip("\r\n")
         if line.startswith("EXIT="):
             code = int(line[5:].strip() or 1)
-        else:
-            print(line)
+            continue
+        print(line, flush=True)
+        if port and not forwarded and "control: listening on 127.0.0.1:" in line:
+            call("forward", f"tcp:{port}", f"tcp:{port}")
+            forwarded = True
+    process.wait()
+    if forwarded:
+        call("forward", "--remove", f"tcp:{port}", quiet=True)
     if record:
         call("pull", f"{REMOTE}/run/record.txt", record, quiet=True)
     return code
