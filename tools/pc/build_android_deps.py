@@ -20,15 +20,14 @@ import build_win32_deps      # libpng's and FreeType's pinned archives, shared w
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUT = os.path.join(ROOT, "tmp", "pc", "android-deps")
-# The Android API level every ABI is built for: 24 (Android 7.0), so that the
-# one real 32-bit ARM system image (API 25) can run the armeabi-v7a build.
+# The Android API level every ABI is built for: 24 (Android 7.0).
 # What the port needs from later ones has a fallback in
 # src/pc/compat/android.h.
 API = 24
 # ABI -> clang target triple (without the API level). arm64-v8a also needs
 # clang 21 or later (x64 gate: clang 12 miscompiles __ptr32 silently); NDK
 # r29's is 21.
-TRIPLES = {"x86": "i686-linux-android", "armeabi-v7a": "armv7a-linux-androideabi", "arm64-v8a": "aarch64-linux-android"}
+TRIPLES = {"x86": "i686-linux-android", "arm64-v8a": "aarch64-linux-android"}
 # The ABIs the game builds for, with their own compiler flags: the indirect
 # branch thunks (src/pc/guest/branch_thunks.c) and the rest. x86 reuses every
 # i386 piece of the desktop port.

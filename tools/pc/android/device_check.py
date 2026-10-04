@@ -65,7 +65,7 @@ def main():
         print(f"  android:      {prop('ro.build.version.release')} (API {prop('ro.build.version.sdk')})")
         print(f"  abilist:      {prop('ro.product.cpu.abilist')}")
         print(f"  abilist64:    {abi64 or '(none)'}")
-        print(f"  abilist32:    {abi32 or '(none: 64-bit only, the armeabi-v7a APK cannot run)'}")
+        print(f"  abilist32:    {abi32 or '(none)'}")
         print(f"  kernel:       {shell(adb, serial, 'uname -m')} {shell(adb, serial, 'uname -r')}")
         print(f"  soc:          {prop('ro.soc.model') or prop('ro.board.platform')}")
         print(f"  screen:       {shell(adb, serial, 'wm size').replace(chr(10), '; ')}")
@@ -76,9 +76,7 @@ def main():
         verdict = []
         if "arm64-v8a" in abi64:
             verdict.append("arm64-v8a APK: yes")
-        if "armeabi-v7a" in abi32:
-            verdict.append("armeabi-v7a APK: yes (64-bit kernel)" if abi64 else "armeabi-v7a: 32-bit kernel, unsupported")
-        print(f"  verdict:      {'; '.join(verdict) or 'no ARM ABI we build'}")
+        print(f"  verdict:      {'; '.join(verdict) or 'no arm64-v8a: the APK cannot run here'}")
     return 0
 
 

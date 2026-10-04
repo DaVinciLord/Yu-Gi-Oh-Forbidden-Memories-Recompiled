@@ -6,8 +6,7 @@ Commands for the first phone session (Git Bash, from D:/DecompRecomp-arm64)
 
 1. Is the phone there, and what can it run?
    python tools/pc/android/device_check.py
-   Decision-relevant lines: abilist32 (empty = arm64-only, the armeabi-v7a
-   APK cannot run), page size (16384 = 16 KiB pages: every 0x1000 mapping,
+   Decision-relevant lines: abilist64 (arm64-v8a: the APK runs), page size (16384 = 16 KiB pages: every 0x1000 mapping,
    the fix-up stub page and the .so alignment need checking).
 
 2. Keep it reachable without the cable (same Wi-Fi):
@@ -27,7 +26,6 @@ Commands for the first phone session (Git Bash, from D:/DecompRecomp-arm64)
    (the port moves them to 0x9F800000 and 0xB0000000); the 64-bit loader
    wants its image range (0xC0000000, 64 MiB on arm64) to be free. The probe
    maps only a small library there; only the APK shows the app's real layout.
-   If abilist32 lists armeabi-v7a, also: run_apk.sh $SERIAL phone armeabi-v7a
 
 4. The game as a plain arm64 process (headless; no taps on the phone):
    export ANDROID_SDK_ROOT=D:/Android/sdk ANDROID_SERIAL=c7ffc349

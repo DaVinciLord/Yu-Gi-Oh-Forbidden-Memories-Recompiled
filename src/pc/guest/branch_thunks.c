@@ -218,8 +218,9 @@ __asm__(".text\n"
         "    movq %r11, %rax\n"
         "    jmp memories_branch_resolve\n");
 #elif defined(__aarch64__)
-/* 64-bit ARM (AArch64: Android arm64-v8a, Linux arm64). As on 32-bit ARM,
- * clang's -mharden-sls=blr turns every `blr xN` into `bl
+/* 64-bit ARM (AArch64: Android arm64-v8a, Linux arm64). No compiler routes
+ * indirect calls through named thunks as the x86 ones do, but clang's
+ * -mharden-sls=blr turns every `blr xN` into `bl
  * __llvm_slsblr_thunk_xN` and emits those thunks as weak definitions of its
  * own, which the strong ones below replace at link; with
  * -fno-optimize-sibling-calls and -fno-jump-tables no `br xN` is left in a

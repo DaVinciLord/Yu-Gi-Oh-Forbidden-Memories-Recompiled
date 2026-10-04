@@ -642,11 +642,7 @@ static const char *syscall_name(long number)
 
 static int thread_registers(pid_t tid, uintptr_t *eip, uintptr_t *esp, uintptr_t *ebp)
 {
-#if defined(__arm__)
-    struct user_regs registers; /* uregs[11] fp, [13] sp, [15] pc */
-#else
     struct user_regs_struct registers;
-#endif
     int status;
     if (ptrace(PTRACE_SEIZE, tid, 0, 0)) return -1;
     if (ptrace(PTRACE_INTERRUPT, tid, 0, 0)) {
@@ -684,10 +680,6 @@ static int thread_registers(pid_t tid, uintptr_t *eip, uintptr_t *esp, uintptr_t
             *eip = (uintptr_t)registers.pc;
             *esp = (uintptr_t)registers.sp;
             *ebp = (uintptr_t)registers.regs[29];
-#elif defined(__arm__)
-            *eip = (uintptr_t)registers.uregs[15];
-            *esp = (uintptr_t)registers.uregs[13];
-            *ebp = (uintptr_t)registers.uregs[11];
 #else
             *eip = (uintptr_t)registers.eip;
             *esp = (uintptr_t)registers.esp;
