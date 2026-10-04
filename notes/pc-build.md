@@ -3239,12 +3239,24 @@ Screenshots of the device, never the host: `adb exec-out screencap -p`.
   is never reached there.
 - In the SDL backend (`sdl.c`), under `SDL_PLATFORM_ANDROID`: Back closes
   a menu or answers a notice as Esc does, closes the deck slot screen, and
-  otherwise asks before quitting (the quit prompt); the rows for second
+  otherwise asks "Quit the game?" with Quit, Menu (opens the first menu: the
+  way to the menus with a controller in hand) and Keep playing
+  (`QuitPrompt_Back`); the rows for second
   windows (Controls..., Mods), the window's size and mode, and the update
   check are dimmed (`Menu_SetPlatformItems`), `Platform_HasWindowModes`
-  answers 0 (F11, Alt+Enter and Esc keep the whole screen), and Automatic
-  menu size is the largest the window allows. Everything else there is the
-  desktop's.
+  answers 0 (F11, Alt+Enter and Esc keep the whole screen). Sizes come from
+  the display's density (SDL's content scale, densityDpi / 160), not the
+  window: Automatic menu size is the density rounded (13 px text at 1 dp,
+  about the system's 14 sp), the bar, the rows and a notice's buttons are at
+  least 48 dp tall (`Menu_SetTouchTarget`), and the touch controls 48 to 80
+  dp. The bar is hidden, as in a desktop's fullscreen, and drawn over the
+  picture when it shows (where the window is always the whole screen,
+  `bar_overlays`), so the picture and the touch controls never move: MENU on
+  the touch controls opens it, as does a tap at the top of the screen or
+  Back's Menu. The mouse SDL makes of a finger does not hover: before, its
+  last place (0,0 at start, the top after a tap on the bar) kept the bar
+  shown for good, and its move to a tap opened the menu that the press then
+  closed. Everything else there is the desktop's.
 - Shared changes this needed, one commit each: the game stack at
   `0xB0000000` on every system; the scratchpad at `0x9F800000`
   (`SCRATCHPAD_ADDR`, "How it works" above); `HIDDEN` pins; the asm stack
@@ -3325,8 +3337,8 @@ Paused on 2026-09-29 until the 64-bit (relocatable guest) work is done.
     `ai-hard-mode` and `yamyi-mods` need entry-patching trampolines.
   - A mod `.zip` through the system's file picker; Mods and Controls as
     panels inside the game window (the game's font, as the other overlays);
-    the menu bar hiding in play (`covers_screen()` is already true there;
-    what keeps it shown is to be found on the emulator first).
+    the menu bar hiding in play: done on feat/android-arm64 (the mouse SDL
+    makes of a touch kept it shown; see "How it differs").
 
 ### Not yet
 
