@@ -3667,10 +3667,9 @@ Reference logs are under `tmp/reference-match.log` and
 configured but has not been run here. No native game boot, retail-frame fidelity,
 audio, or assembly-replacement equivalence claim is made by these checks.
 
-## Android arm64 (A1/A2, 2026-10-03, branch feat/android-arm64)
+## Android arm64 (A1/A2, 2026-10-03)
 
-`feat/android-arm64` = `feat/x64-x1` + origin/master (the replay tool) +
-`feat/android-m4`. `--target android-arm64-v8a` builds libgame.so with G32
+`--target android-arm64-v8a` builds libgame.so with G32
 pointers (`WIDE` in build_game32.py: the windows-x64 flags), clang's
 `-mharden-sls=blr` thunks in AArch64 form (`branch_thunks.c`; the build
 checks that no `br`/`blr` escapes them), `setjmp_aarch64.S` and
@@ -3705,7 +3704,7 @@ trampoline table. A function of another library (libc, SDL) whose address the
 game stored would not fit; none is known, and the plain-process runs below
 are where it would show (a fault at a truncated address).
 
-Two things differ from windows-x64 beyond the pointer width:
+Three things differ from windows-x64 beyond the pointer width:
 
 - **`long` is 8 bytes (LP64).** The Psy-Q `long` is `PSXLONG` (`int` here)
   in the psyq headers and in the SDK stand-ins, and each stand-in unit
@@ -3727,8 +3726,8 @@ Two things differ from windows-x64 beyond the pointer width:
   every C unit is compiled to IR first and `tools/pc/ptr32_stores.py` sends
   each store and memcpy/memmove/memset through a G32 pointer via an
   addrspacecast to an ordinary pointer, then the IR is compiled; it fails
-  the build if such a write is left. A minimal repro and a draft upstream
-  report are in `tmp/research/llvm-ptr32-aarch64/` (not filed).
+  the build if such a write is left. Reported upstream, with a minimal
+  repro: [llvm/llvm-project#228782](https://github.com/llvm/llvm-project/issues/228782).
 
   Retiring it: every arm64 build first compiles a canary
   (`ptr32_stores.CANARY`: `p->u16 |= 1` at -O0, `p->u8 = v` at -O2, through
