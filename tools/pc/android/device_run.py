@@ -64,6 +64,10 @@ def setup(build):
     sdl = os.path.join(build_android_deps.OUT, "arm64-v8a", "lib", "libSDL3.so")
     for local in (runner, os.path.join(build, "libgame.so"), sdl):
         call("push", local, f"{REMOTE}/")
+    # The program directory's build id, which save states carry: without it
+    # the runner saves states as build 0, and the app refuses them.
+    if os.path.isfile(os.path.join(build, "buildid")):
+        call("push", os.path.join(build, "buildid"), f"{REMOTE}/")
     if call("shell", f"ls {REMOTE}/game/disc.bin", quiet=True).strip() != f"{REMOTE}/game/disc.bin":
         call("push", disc, f"{REMOTE}/game/disc.bin")
     call("shell", f"chmod 755 {REMOTE}/runner")
