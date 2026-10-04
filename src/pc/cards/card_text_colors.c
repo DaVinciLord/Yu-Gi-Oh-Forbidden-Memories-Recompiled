@@ -4,6 +4,7 @@
 #include "pc/mods/json.h"
 #include "pc/mods/mods.h"
 #include "game/duel_effect.h"
+#include <stdio.h>
 #include <string.h>
 
 /* There are eight 4bpp text ramps in the retail font texture. */
@@ -30,7 +31,7 @@ static int color(const JsonValue *value)
     return Json_TypeOf(value) == JSON_NUMBER && n >= 0 && n < COLOR_COUNT ? (int)n : -1;
 }
 
-static void set_colors(const char *mod, const JsonValue *entry, int card)
+static void set_colors(const char *mod, const JsonValue *entry, int card, const char *label)
 {
     static const char *const keys[] = {"name", "description", "guardian_star"};
     unsigned char *into[] = {&colors[card].name, &colors[card].description, &colors[card].guardian};
@@ -41,7 +42,7 @@ static void set_colors(const char *mod, const JsonValue *entry, int card)
         if (!value) continue;
         if (color(value) < 0)
             Mods_Note(mod, "card_text_colors: card '%s': \"%s\" must be a colour from 0 to 7",
-                      Json_Name(entry) ? Json_Name(entry) : "?", keys[i]);
+                      label, keys[i]);
         else *into[i] = (unsigned char)(color(value) + 1);
     }
 }
@@ -53,15 +54,20 @@ static void read_cards(const char *mod, const JsonValue *list)
     for (entry = Json_At(list, 0); entry; entry = Json_Next(entry)) {
         const char *name = Json_Name(entry);
         const JsonValue *card = Json_Member(entry, "card");
+        char label[64];
         int id;
         if (Json_TypeOf(entry) != JSON_OBJECT) continue;
         if (card) id = Cards_Reference(card);
         else id = Cards_Named(name);
+        if (Json_TypeOf(card) == JSON_NUMBER)
+            snprintf(label, sizeof(label), "%ld", Json_Number(card, 0));
+        else
+            snprintf(label, sizeof(label), "%s", card ? Json_String(card, "") : name ? name : "");
         if (id <= 0) {
-            Mods_Note(mod, "card_text_colors: no card called '%s'", card ? Json_String(card, "") : name ? name : "");
+            Mods_Note(mod, "card_text_colors: no card called '%s'", label);
             continue;
         }
-        set_colors(mod, entry, id);
+        set_colors(mod, entry, id, label);
     }
 }
 

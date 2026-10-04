@@ -66,6 +66,7 @@ editors write, is fine):
 | `passwords` | each card's password and starchip price on the Password screen, below |
 | `limits` | the numbers the game caps (ATK and DEF, life points, starchips, the chest, the records), below |
 | `guardian_stars` | the stars' names and icons, stars 11 to 15, and what each star gets against each other, below |
+| `card_text_colors` | the colour a card's name, description and guardian star are written in on its details, below |
 | `starter` | the forty cards a new game begins with, one deck or a list of them, below |
 | `packs`, `pack_shop` | card packs sold for starchips on the Password screen, and the shop's rules, below |
 | `title`, `menu` | the title screen, and its two menus: their entries, buttons of the mod's own and their background, below |
@@ -1346,7 +1347,7 @@ the reason beside any that failed to load.
 | `mods/3d-monsters` | face-up monsters on the duel field stand on their cards, either as animated models (`notes/pc-build.md`) or, its `style` setting turned to "Card art", as an enlarged, glowing cutout of the card's own art instead |
 | `mods/hand-camera` | L1/R1 turn and L3/R3 zoom the duel camera while the hand is up |
 | `mods/ai-hard-mode` | optional stronger opponent decisions |
-| `mods/yamyi-mods` | return-to-title confirmation, rarity colours and Library drop odds, with independent switches |
+| `mods/yamyi-mods` | return-to-title confirmation and Library drop odds, with independent switches |
 | `mods/drop-missing-cards` | off by default: gives the 82 cards no duelist drops a duelist to win them from, as the old static recomp's option did; a data-only `drops` table |
 
 The first two were part of the executable until they became mods; they are the worked
@@ -1425,13 +1426,17 @@ return-to-title confirmation and Library drop odds.
 The panel can hide its rarity-score column, choose a sort order, list up to
 20 duelists and change position. It only describes cards visible in the Library.
 Rows are reduced to fit the window; enlarge a very small window to see the panel.
-Colours and odds both respect other mods' drop-table edits and added cards.
+Scores and odds respect other mods' drop-table edits and added cards.
 When sorting by score, each duelist's best scoring rank is shown; other sorts
 use its highest drop weight. A weight of `w/2048` is the chance per win at that rank.
 
-The package is disabled by default and does not alter actual drops or duel
-rules. Card-detail colours belong in any mod's `card_text_colors` declaration
-above, rather than Yamyi Mods' former private INI file.
+The first Library display creates `mod-data/yamyi-mods/card_name_color.ini`
+in the player's directory. Its rarity tiers and duelist/rank multipliers give
+the panel's score; restart after editing it. Lower scores mean rarer cards; an
+explicit zero multiplier is respected. Its colour slots and card overrides
+are no longer read: card-name colours are a `card_text_colors` declaration
+(above), in this or any other mod. The package is disabled by default and does
+not alter actual drops or duel rules.
 
 These features originate in yamyi's PRs #68, #70 and #77. Their overlapping
 Library panels are combined into one panel here; do not also install the old
