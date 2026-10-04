@@ -401,8 +401,9 @@ static Picture *make_picture(const Pack *pack, char *why, size_t why_size)
     /* Above the console's resolution, the PNG itself, whatever its size (a
      * small one is drawn smoothly scaled, as a pack's image is): known by
      * these bytes when they are uploaded (upload_picture). */
-    TexturePack_AddMadeSeeThrough(picture->texels, picture->width / 2, picture->height, 8, picture->clut, 256,
-                                  pack->image, 0, 0, png_w, png_h);
+    if (!TexturePack_AddMadeSeeThrough(picture->texels, picture->width / 2, picture->height, 8, picture->clut, 256,
+                                       pack->image, 0, 0, png_w, png_h))
+        fprintf(stderr, "memories-pc: packs: %s is drawn at the console's size only\n", pack->image);
     return picture;
 }
 
