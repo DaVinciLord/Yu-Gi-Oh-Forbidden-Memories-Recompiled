@@ -1249,6 +1249,27 @@ class GuiTest(unittest.TestCase):
         app.update()
         self.assertEqual(text.get("1.0", "end-1c"), original + "x")
 
+    def test_autosave_uses_the_history_snapshot_only_when_current(self):
+        from fm_editor import manifest, recovery
+        app = self.app
+
+        def copied():
+            row = next(row for row in recovery.records() if row[0].parent == app.recovery.folder)
+            return manifest.open_mod(app.retail, row[1])[0].cards[1].name
+
+        app.project.cards[1].name = "Recorded"
+        app.changed()
+        app.update()                        # the history records it when idle
+        self.assertIsNone(app._history_job)
+        with mock.patch.object(recovery, "Snapshot", side_effect=AssertionError("snapshot taken twice")):
+            app.autosave()
+        self.assertEqual(copied(), "Recorded")
+        app.project.cards[1].name = "Not recorded yet"
+        app.changed()                       # no idle time: the history is behind
+        self.assertIsNotNone(app._history_job)
+        app.autosave()
+        self.assertEqual(copied(), "Not recorded yet")
+
     def test_recovered_copy_survives_multiple_autosaves_and_save_as(self):
         from fm_editor import manifest, recovery
         app = self.app

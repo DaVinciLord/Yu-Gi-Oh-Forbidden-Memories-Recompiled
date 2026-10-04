@@ -143,7 +143,8 @@ an unwanted recovery copy. Before overwriting a saved mod, the editor backs up
 the whole folder and keeps its five most recent backups. A failed backup stops
 the save, and a failed recovery update preserves the last complete copy and
 shows an error. Copies live in a `recovery` folder beside the editor's settings
-file. A successful save or explicitly discarding a session clears that session's
+file; a file unchanged since the previous copy is hard-linked to it rather
+than copied again, so a large mod's art takes its space once. A successful save or explicitly discarding a session clears that session's
 draft; recovery does not cover edits made in dialogs before their confirmation.
 
 **View > Dark mode** switches the window, its dialogs and the text boxes,

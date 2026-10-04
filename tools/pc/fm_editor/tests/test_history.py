@@ -1,6 +1,8 @@
 """Undo across tables and assets, save boundaries and crash-safe recovery."""
 import json
+import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -192,11 +194,72 @@ class HistoryTest(unittest.TestCase):
         rows = recovery.records()
         self.assertEqual(len(rows), 2)
         self.assertEqual({(folder / "art.png").read_bytes() for _, folder, _ in rows}, {b"\x02", b"\x03"})
-        with mock.patch.object(recovery.shutil, "copytree", side_effect=OSError("disk full")):
+        with mock.patch.object(recovery.shutil, "copy2", side_effect=OSError("disk full")):
             with self.assertRaises(OSError):
                 recovery.backup(source)
         self.assertEqual(len(recovery.records()), 2)
         self.assertEqual((source / "art.png").read_bytes(), b"\x03")
+
+    def test_copies_share_unchanged_files(self):
+        """Autosaves and backups link what did not change since the last copy
+        and copy the rest, so a large mod's art is not copied every time."""
+        source = self.folder / "mod"
+        manifest.save_mod(self.project, source)
+        (source / "big.bin").write_bytes(b"art" * 1000)
+        (source / "edited.bin").write_bytes(b"old")
+        old = time.time() - 60      # settled well before the copies
+        for name in ("big.bin", "edited.bin"):
+            os.utime(source / name, (old, old))
+        p, _ = manifest.open_mod(self.project.retail, source)
+
+        r = recovery.Recovery()
+        r.write(p)
+        first = next(row[1] for row in recovery.records() if row[0].parent == r.folder)
+        linked = (first / "big.bin").stat().st_ino
+        edited = (first / "edited.bin").stat().st_ino
+        (source / "edited.bin").write_bytes(b"new!")
+        os.utime(source / "edited.bin", (old + 1, old + 1))
+        p.files["extra.bin"] = b"unsaved"
+        r.write(p)
+        second = next(row[1] for row in recovery.records() if row[0].parent == r.folder)
+        self.assertFalse(first.exists())
+        self.assertEqual((second / "big.bin").read_bytes(), b"art" * 1000)
+        self.assertEqual((second / "edited.bin").read_bytes(), b"new!")
+        self.assertEqual((second / "extra.bin").read_bytes(), b"unsaved")
+        self.assertFalse((second / "big.bin").samefile(source / "big.bin"))
+        if (second / "big.bin").stat().st_ino != linked:
+            self.skipTest("no hard links on this file system")
+        self.assertNotEqual((second / "edited.bin").stat().st_ino, edited)
+        r.clear()
+        # Backups: the second shares big.bin with the first; a file changed
+        # in between, or written just before the first, is copied.
+        recovery.backup(source)
+        (source / "edited.bin").write_bytes(b"newer")
+        (source / "fresh.bin").write_bytes(b"just written")
+        recovery.backup(source)
+        rows = sorted(recovery.records(), key=lambda row: row[0].stat().st_mtime_ns)
+        a, b = rows[0][1], rows[1][1]
+        self.assertTrue((a / "big.bin").samefile(b / "big.bin"))
+        self.assertFalse((a / "edited.bin").samefile(b / "edited.bin"))
+        self.assertEqual((a / "edited.bin").read_bytes(), b"new!")
+        self.assertEqual((b / "edited.bin").read_bytes(), b"newer")
+        self.assertFalse((source / "big.bin").samefile(b / "big.bin"))
+        self.assertEqual((b / "mod.json").read_bytes(), (source / "mod.json").read_bytes())
+
+    def test_recent_file_is_copied_not_linked(self):
+        """A file written right around the previous copy may have changed
+        within the clock's step: it is copied."""
+        source = self.folder / "mod"
+        manifest.save_mod(self.project, source)
+        (source / "art.png").write_bytes(b"\x01")
+        recovery.backup(source)
+        (source / "art.png").write_bytes(b"\x02")
+        last = max(recovery.records(), key=lambda row: row[2]["time"])[1]
+        stat = (last / "art.png").stat()
+        os.utime(source / "art.png", ns=(stat.st_atime_ns, stat.st_mtime_ns))  # same size and time
+        recovery.backup(source)
+        rows = sorted(recovery.records(), key=lambda row: row[0].stat().st_mtime_ns)
+        self.assertEqual((rows[-1][1] / "art.png").read_bytes(), b"\x02")
 
     def test_broken_previous_index_does_not_delete_other_sessions(self):
         first, second = recovery.Recovery(), recovery.Recovery()
