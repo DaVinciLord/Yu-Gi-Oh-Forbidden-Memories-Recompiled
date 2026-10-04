@@ -147,6 +147,8 @@ void Monitor_NoteSystem(void)
     read_file_line("commit", commit, sizeof(commit));
     strftime(started, sizeof(started), "%Y-%m-%d %H:%M:%S %z", localtime(&now));
     Monitor_Fact("build", "%s (commit %s)", build[0] ? build : "unknown", commit[0] ? commit : "unknown");
+    /* The game's own width, which the os line (the system's) does not say. */
+    Monitor_Fact("executable", "%s", sizeof(void *) == 8 ? "64-bit (x86-64)" : "32-bit (i386)");
     Monitor_Fact("started", "%s", started);
     cpu_name(cpu, sizeof(cpu));
 #ifdef _WIN32
