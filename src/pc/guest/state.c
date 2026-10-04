@@ -131,19 +131,6 @@ static void set_stack_bounds(const uintptr_t *bounds)
                      : "memory");
 }
 
-/* What Memories_ContextSwitch pops to start `entry` on a stack whose top
- * is `top`: xmm6-xmm15 (20 words), eight registers, then the return into
- * `entry`, 16-byte aligned so that `entry` starts as a called function
- * does, with room above it for the shadow space a Win64 callee may write. */
-static uintptr_t initial_frame(uintptr_t top, void (*entry)(void))
-{
-    uintptr_t *slot = (uintptr_t *)((top - 64) & ~(uintptr_t)15);
-    uintptr_t *frame = slot - 8 - 20;
-    memset(frame, 0, (size_t)((char *)(slot + 8) - (char *)frame));
-    *slot = (uintptr_t)entry;
-    return (uintptr_t)frame;
-}
-
 /* setjmp_x86_64.S: where the registers for a game jmp_buf are kept. The
  * game's buffer (the Psy-Q int[12] at 0x800E9DC0) is too small for them, so
  * each buffer address gets a host slot of 240 bytes. The game uses one. */
@@ -192,6 +179,38 @@ static void leave_game_stack(void)
     set_stack_bounds(process_bounds);
     Memories_ContextSwitch(&game_context, &service_context);
 }
+
+#if defined(__x86_64__)
+/* What Memories_ContextSwitch (state_x86_64.S) pops to start `function` on
+ * a stack whose top is `limit`: xmm6-xmm15 (20 words), eight registers,
+ * then the return into `function`, 16-byte aligned so that `function`
+ * starts as a called function does, with room above it for the shadow
+ * space a Win64 callee may write. Returns the context. */
+static uintptr_t switch_frame(uintptr_t limit, void (*function)(void))
+{
+    uintptr_t *slot = (uintptr_t *)((limit - 64) & ~(uintptr_t)15);
+    uintptr_t *frame = slot - 8 - 20;
+    memset(frame, 0, (size_t)((char *)(slot + 8) - (char *)frame));
+    *slot = (uintptr_t)function;
+    return (uintptr_t)frame;
+}
+#else
+/* A frame for Memories_ContextSwitch to resume `function` from, below
+ * `limit`: what it pops (EDI ESI EBX EBP), then the return into `function`,
+ * whose own return address is never used. `function` starts with the stack
+ * as a call leaves it when the stack was 16-byte aligned at the call: the
+ * i386 System V ABI (Android) keeps SSE values on the stack at that
+ * alignment; Windows needs 4. Returns the context. */
+static uint32_t switch_frame(uint32_t limit, void (*function)(void))
+{
+    uint32_t start = ((limit - 32u) & ~15u) - 4u; /* the stack pointer `function` starts with */
+    uint32_t *frame = (uint32_t *)(uintptr_t)(start - 20u);
+    frame[0] = frame[1] = frame[2] = frame[3] = 0;
+    frame[4] = (uint32_t)(uintptr_t)function;
+    frame[5] = 0;
+    return (uint32_t)(uintptr_t)frame;
+}
+#endif
 
 /* The VSync a loaded state resumes in (apply), and what it returns. */
 static MemoriesStateEntry resume_entry;
@@ -710,19 +729,9 @@ static void apply(void)
          * the next load would resume from those (EBP 0, a return into the
          * middle of Memories_StateRunGame). The switch lands in resume_game
          * on the game stack, below what the state restored there. */
-#if defined(__x86_64__)
         resume_entry = entry;
         resume_value = value;
-        game_context = initial_frame((uintptr_t)entry.esp - 64, resume_game);
-#else
-        uint32_t *frame = (uint32_t *)(uintptr_t)(entry.esp - 64);
-        frame[0] = frame[1] = frame[2] = frame[3] = 0;
-        frame[4] = (uint32_t)(uintptr_t)resume_game;
-        frame[5] = 0;
-        resume_entry = entry;
-        resume_value = value;
-        game_context = (uint32_t)(uintptr_t)frame;
-#endif
+        game_context = switch_frame((uintptr_t)entry.esp - 64u, resume_game);
         Memories_ContextSwitch(&service_context, &game_context);
     }
 #else
@@ -1217,17 +1226,7 @@ int Memories_StateRunGame(int (*entry)(void))
     game_entry = entry;
 #ifdef _WIN32
     {
-#if defined(__x86_64__)
-        game_context = initial_frame(STACK_TOP, run_game);
-#else
-        /* What Memories_ContextSwitch pops: EDI ESI EBX EBP, then the return
-         * into run_game, whose own return address is never used. */
-        uint32_t *top = (uint32_t *)(uintptr_t)(STACK_TOP - 64);
-        top[0] = top[1] = top[2] = top[3] = 0;
-        top[4] = (uint32_t)(uintptr_t)run_game;
-        top[5] = 0;
-        game_context = (uint32_t)(uintptr_t)top;
-#endif
+        game_context = switch_frame(STACK_TOP, run_game);
         Win32_GuardStack(STACK_BASE, GUARD_ROOM);
         save_stack_bounds(process_bounds);
         set_stack_bounds(game_bounds);
