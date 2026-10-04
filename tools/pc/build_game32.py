@@ -211,7 +211,10 @@ ANDROID_BACKEND = {"src/pc/render/present_pass.c": "src/pc/render/gl_desktop_non
 # states and crash symbols then hold from one launch to the next. The range
 # is free in every app process seen (below ART's heap at 0x12C00000, above
 # the fixed game sections the Linux build places from 0x01000000, clear of
-# the guest's own ranges); the span is checked after the link.
+# the guest's own ranges); the span is checked after the link. 64 MiB on
+# every ABI: the 32-bit image outgrew 32 MiB (0x2201000 bytes, most of it
+# .bss, on master after the 64-bit Windows build), and 0x0C000000 is still
+# below ART's heap.
 ANDROID_LOADER = "src/pc/platform/android_loader.c"
 # arm64-v8a: ART fills a 64-bit app process's low 4 GB from the bottom up:
 # on a Xiaomi 11T Pro (Android 14, heapsize 512m) its heap at 0x02000000-
@@ -224,7 +227,7 @@ ANDROID_LOADER = "src/pc/platform/android_loader.c"
 # path; outside every guest range the port tests (they are explicit ranges).
 # The image is about 35 MiB (most of it .bss).
 ANDROID_GAME_BASE = 0xC0000000 if A64 else 0x08000000
-ANDROID_GAME_SPAN = 0x04000000 if A64 else 0x02000000
+ANDROID_GAME_SPAN = 0x04000000
 # Assembly comes per architecture: name_i386.S, name_x86_64.S or
 # name_aarch64.S.
 ARCH_SUFFIX = "_x86_64.S" if X64 else "_aarch64.S" if A64 else "_i386.S"

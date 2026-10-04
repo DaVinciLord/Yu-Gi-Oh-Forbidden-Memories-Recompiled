@@ -3150,8 +3150,8 @@ adb install -r tmp/pc/android-x86/memories-x86.apk
   for the ABI at API 24, `-fPIC`, and links the game as the shared object
   `libgame.so` (`-Bsymbolic`, `--no-undefined`; pins `HIDDEN`, no fixed
   sections, as on Windows) at a fixed base, `0x08000000` (`--image-base`;
-  the build checks that its load span fits the `0x02000000` the loader
-  reserves). `libmain.so`, the library SDL's Java shell loads, is only a
+  the build checks that its load span fits the `0x04000000` the loader
+  reserves; it was `0x02000000` until the image outgrew it). `libmain.so`, the library SDL's Java shell loads, is only a
   loader (`src/pc/platform/android_loader.c`): it reserves that range and
   loads `libgame.so` into it with
   `android_dlopen_ext(ANDROID_DLEXT_RESERVED_ADDRESS)`, so the load bias is
