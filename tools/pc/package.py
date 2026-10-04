@@ -4,6 +4,10 @@
     python3 tools/pc/package.py                # all three, into dist/
     python3 tools/pc/package.py windows-x64    # the 64-bit Windows one only
 
+Packing all three where the 64-bit Windows game cannot be built (no
+x86_64-w64-mingw32-clang 21 or later) skips that one with a message and
+packs the other two; asking for windows-x64 by name stops there instead.
+
 Each archive is a folder a player unpacks and runs: the executable, the mods
 the release ships (the same object files for both systems), the mod SDK,
 the official European languages' text (languages/, Game > Language), the
@@ -56,6 +60,20 @@ def version():
     commit = subprocess.run(["git", "describe", "--always", "--dirty"], cwd=ROOT, capture_output=True,
                             text=True).stdout.strip() or "unknown"
     return f"{datetime.date.today():%Y%m%d}-{commit}"
+
+
+def x64_toolchain_missing():
+    """Why the 64-bit Windows game cannot be built here, or None: it needs
+    x86_64-w64-mingw32-clang, clang 21 or later (build_game32.py's compiler
+    gate refuses older ones)."""
+    compiler = shutil.which("x86_64-w64-mingw32-clang")
+    if not compiler:
+        return "x86_64-w64-mingw32-clang is not on PATH"
+    first = (subprocess.run([compiler, "--version"], capture_output=True, text=True).stdout.splitlines() or ["?"])[0]
+    match = re.search(r"clang version (\d+)", first)
+    if not match or int(match.group(1)) < 21:
+        return f"{compiler} is {first}, and the 64-bit game needs clang 21 or later"
+    return None
 
 
 def build(system, label, skip_smoke=False):
@@ -185,6 +203,13 @@ def main():
     label = options.version or version()
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}", label):
         parser.error("version must be 1-100 letters, numbers, dots, underscores or hyphens, starting with a letter or number")
+    missing = x64_toolchain_missing() if "windows-x64" in systems and not options.no_build else None
+    if missing and options.systems:
+        sys.exit(f"package: cannot build windows-x64: {missing}")
+    if missing:
+        # Packing everything: the other archives do not wait on it.
+        print(f"package: windows-x64 skipped: {missing}; the other archives are packed", file=sys.stderr)
+        systems = [system for system in systems if system != "windows-x64"]
     made = []
     for system in systems:
         if not options.no_build:

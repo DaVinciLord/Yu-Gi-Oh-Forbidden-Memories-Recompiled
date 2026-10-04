@@ -2555,16 +2555,22 @@ conversions.
 ## Sharing a build
 
 ```sh
-python3 tools/pc/package.py        # dist/yfm-redecomp-<date>-<commit>-{windows.zip,linux.tar.gz}
+python3 tools/pc/package.py        # dist/yfm-redecomp-<date>-<commit>-{windows.zip,windows-x64.zip,linux.tar.gz}
 ```
 
-Builds both, smoke tests both, and packs each as a folder a player unpacks
+Builds all three (32-bit Windows, 64-bit Windows, Linux), smoke tests each,
+and packs each as a folder a player unpacks
 and runs: the executable, the shipped mods, the mod SDK, this build's symbol
 table, an empty `game/` for their own `.bin`, and `tools/pc/release/README.txt`.
 Nothing from the disc goes in. A missing disc image is reported in a message
 box naming the folder to put it in. Crash and hang reports, minidumps and
 menu frame dumps go to `reports/` in the user directory when the game is not
 run from a checkout (`Crash_ReportDir`; `tmp/pc` in one).
+
+The 64-bit Windows archive has the data mods only and no mod SDK ("64-bit
+Windows" below). Where its compiler is missing (x86_64-w64-mingw32-clang 21
+or later), `package.py` with no arguments skips it with a message and packs
+the other two; `package.py windows-x64` stops instead.
 
 ### Crash reports
 

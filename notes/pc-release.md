@@ -121,7 +121,9 @@ reason. After publishing a release, add `baseline <tag>` for it to
 cmake -S . -B tmp/pc/cmake-test -DCMAKE_BUILD_TYPE=Release
 cmake --build tmp/pc/cmake-test --parallel
 
-# Build, smoke-test with your own disc, then package both platforms:
+# Build, smoke-test with your own disc, then package all three archives
+# (32-bit Windows, 64-bit Windows, Linux; the 64-bit one is skipped with a
+# message where x86_64-w64-mingw32-clang 21 or later is missing):
 python tools/pc/package.py --version v0.1.0
 
 # Compile/package without a disc (the CI path):
