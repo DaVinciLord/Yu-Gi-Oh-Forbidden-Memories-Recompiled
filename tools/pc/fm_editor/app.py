@@ -8,7 +8,7 @@ from tkinter import filedialog, messagebox, ttk
 from . import disc, gamedata, manifest, settings, theme, validate
 from .model import KEY_RE, Project
 from .editing import Editing
-from . import card_links, history, recovery
+from . import card_links, history, recovery, screen
 from .art_tab import ArtTab
 from .map_tab import MapTab
 from .limits_tab import LimitsTab
@@ -21,6 +21,15 @@ from .widgets import Pages, px
 APP_TITLE = "FM Editor"
 
 
+def initial_geometry(window, area=None) -> str:
+    """1600x960 at 96 dpi, no more than 90% of the monitor's work area,
+    in its middle."""
+    x, y, width, height = area or screen.work_area(window)
+    w = min(px(window, 1600), width * 9 // 10)
+    h = min(px(window, 960), height * 9 // 10)
+    return f"{w}x{h}+{x + (width - w) // 2}+{y + (height - h) // 2}"
+
+
 class App(Editing, tk.Tk):
     def __init__(self, game=None, mod=None, ask=True, autostart=True):
         theme.dpi_awareness()      # Windows: before the first window, or it is drawn stretched
@@ -28,10 +37,12 @@ class App(Editing, tk.Tk):
         self.title(APP_TITLE)
         self.theme = theme.Theme(self)
         # Sizes for 96 dpi, grown with the desktop's font (widgets.ui_scale)
-        # but kept on the screen; a row as tall as a line of text.
-        width, height = self.winfo_screenwidth() * 9 // 10, self.winfo_screenheight() * 9 // 10
-        self.geometry(f"{min(px(self, 1600), width)}x{min(px(self, 960), height)}")
-        self.minsize(min(px(self, 1000), width), min(px(self, 640), height))
+        # but kept on the monitor it opens on, centred there; a row as tall
+        # as a line of text.
+        area = screen.work_area(self)
+        self.geometry(initial_geometry(self, area))
+        width, height = area[2:]
+        self.minsize(min(px(self, 1000), width * 9 // 10), min(px(self, 640), height * 9 // 10))
         self.retail = None
         self.files = None
         self.project = None
