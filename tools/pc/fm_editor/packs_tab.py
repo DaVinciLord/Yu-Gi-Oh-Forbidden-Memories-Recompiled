@@ -99,6 +99,31 @@ def card_picture(art_image: pngio.Image, inks, zoom: int) -> pngio.Image:
     return pngio.Image(w, h, bytes(out))
 
 
+def full_picture(image: pngio.Image, zoom: int) -> pngio.Image:
+    """"image_style": "full": the picture fitted inside the card's 140x196,
+    its shape kept and centred, as the big card shows it (pack_shop.c), over
+    the Password screen's black, `zoom` times. At 1x as the console's
+    texture has it (art.c CardArt_IndexedImage): a texel under half opaque
+    is clear, the rest opaque; at 2x and 4x with the PNG's own alpha, as
+    the game draws the PNG itself there."""
+    w, h = packmath.fit_full(image.width, image.height)
+    picture = pngio.resample(image, w * zoom, h * zoom)
+    width, height = packmath.CARD_VIEW[0] * zoom, packmath.CARD_VIEW[1] * zoom
+    out = bytearray(b"\x00\x00\x00\xff") * (width * height)
+    left, top = (packmath.CARD_VIEW[0] - w) // 2 * zoom, (packmath.CARD_VIEW[1] - h) // 2 * zoom
+    for y in range(picture.height):
+        row = picture.rgba[y * picture.width * 4:(y + 1) * picture.width * 4]
+        start = ((top + y) * width + left) * 4
+        for x in range(picture.width):   # its clear parts show the black, as the game's do
+            r, g, b, a = row[x * 4:x * 4 + 4]
+            if zoom == 1:
+                if a * 2 >= 255:
+                    out[start + x * 4:start + x * 4 + 4] = bytes((r, g, b, 255))
+            elif a:
+                out[start + x * 4:start + x * 4 + 4] = bytes((r * a // 255, g * a // 255, b * a // 255, 255))
+    return pngio.Image(width, height, bytes(out))
+
+
 class PacksTab(Tab):
     def __init__(self, notebook, app):
         super().__init__(notebook, app, "Packs")
@@ -133,7 +158,7 @@ class PacksTab(Tab):
         top.pack(fill="x")
         form = ttk.Frame(top)
         form.pack(side="left", fill="x", expand=True)
-        self.vars = {k: tk.StringVar() for k in ("name", "description", "price", "count")}
+        self.vars = {k: tk.StringVar() for k in ("name", "description", "price", "count", "image_style")}
         ttk.Label(form, text="Name").grid(row=0, column=0, sticky="w", pady=1)
         ttk.Entry(form, textvariable=self.vars["name"], width=26).grid(row=0, column=1, sticky="w", pady=1)
         self.identity = ttk.Label(form, style="Hint.TLabel")
@@ -167,6 +192,15 @@ class PacksTab(Tab):
         self.export_button.pack(side="left", padx=2)
         self.revert_button = ttk.Button(line, text="Revert", command=self.revert_png)
         self.revert_button.pack(side="left")
+        line = ttk.Frame(picture)
+        line.pack()
+        ttk.Label(line, text="Shown as").pack(side="left")
+        style = ttk.Combobox(line, textvariable=self.vars["image_style"], values=packmath.IMAGE_STYLES,
+                             state="readonly", width=6)
+        style.pack(side="left", padx=4)
+        style.bind("<<ComboboxSelected>>", lambda e: self.show_picture())
+        ttk.Label(line, text="card: in the card's frame; full: the whole picture", style="Hint.TLabel").pack(
+            side="left")
         self.picture_note = ttk.Label(picture, style="Hint.TLabel", wraplength=px(self, 240), justify="left")
         self.picture_note.pack()
 
@@ -447,6 +481,8 @@ class PacksTab(Tab):
             price = entry["cost"]["starchips"]
         self.vars["price"].set(str(price))
         self.vars["count"].set(str(entry.get("count", packmath.default_count(entry))))
+        style = entry.get("image_style", "card")
+        self.vars["image_style"].set(style if style in packmath.IMAGE_STYLES else "card")
         errors = [m for level, m in notes if level == "error"]
         if errors:
             self.problem.configure(text=errors[0])
@@ -580,6 +616,8 @@ class PacksTab(Tab):
                 new["cost"]["starchips"] = price
             else:
                 new["price"] = price
+        if changed("image_style"):
+            new["image_style"] = self.vars["image_style"].get() or "card"
         if changed("count"):
             new["count"] = whole(self.vars["count"].get(), "Cards a pack", 1, packmath.COUNT_MAX,
                                  packmath.default_count(new))
@@ -1152,11 +1190,17 @@ class PacksTab(Tab):
         art_image, note = None, ""
         blob = self.image_bytes(entry)
         own = blob is not None
+        full = self.vars["image_style"].get() == "full"
         if own:
             try:
                 art_image = pngio.decode(blob)
-                note = (f"The pack's picture, {art_image.width}x{art_image.height}: made into the console's 102x96 "
-                        "at 1x; Internal 2x and 4x draw it at its own size.")
+                if full:
+                    note = (f"The pack's whole picture, {art_image.width}x{art_image.height}, where the card is drawn: "
+                            "fitted inside the card's 140x196 at 1x, its shape kept, a pixel under half opaque "
+                            "clear; Internal 2x and 4x draw the PNG itself, with its own transparency.")
+                else:
+                    note = (f"The pack's picture, {art_image.width}x{art_image.height}: made into the console's "
+                            "102x96 at 1x; Internal 2x and 4x draw it at its own size.")
             except pngio.PngError as problem:
                 note = f"{entry.get('image')}: {problem}"
         elif isinstance(entry.get("image"), str):
@@ -1172,8 +1216,11 @@ class PacksTab(Tab):
         if inks is None:
             note += " (No Times font here to preview the name plate the game sets.)"
         try:
-            self.photos["card"] = photo(self, card_picture(art_image, inks, zoom if own or zoom == 1 else 1),
-                                        1 if own or zoom == 1 else zoom)
+            if full and own and art_image is not None:
+                self.photos["card"] = photo(self, full_picture(art_image, zoom))
+            else:
+                self.photos["card"] = photo(self, card_picture(art_image, inks, zoom if own or zoom == 1 else 1),
+                                            1 if own or zoom == 1 else zoom)
             self.picture.configure(image=self.photos["card"])
         except (ValueError, pngio.PngError):
             self.picture.configure(image="")

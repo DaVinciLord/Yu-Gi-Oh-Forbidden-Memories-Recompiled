@@ -274,6 +274,33 @@ class ReaderTest(unittest.TestCase):
         self.assertNotIn("listed", packs.minimize({"name": "X", "cards": [1], "password": "1234", "listed": False}))
 
 
+class ImageStyleTest(unittest.TestCase):
+    def test_image_style(self):
+        """As packs.c reads it: "card" unless it says "full"; another word, or
+        "full" with no "image", is said."""
+        for entry, words in (({"cards": [1], "image_style": "card"}, None),
+                             ({"cards": [1], "image": "packs/a.png", "image_style": "full"}, None),
+                             ({"cards": [1], "image_style": "full"}, "there is none"),
+                             ({"cards": [1], "image_style": "poster"}, "\"image_style\" is \"card\" or \"full\""),
+                             ({"cards": [1], "image_styl": "full"}, "did you mean \"image_style\"")):
+            pack, notes = packs.read_pack(entry, by_id, "m", 0)
+            self.assertIsNotNone(pack, entry)
+            said = [m for _, m in notes if "image" in m]
+            if words is None:
+                self.assertEqual(said, [], entry)
+            else:
+                self.assertTrue(any(words in m for m in said), (entry, notes))
+        self.assertEqual(packs.minimize({"cards": [1], "image_style": "card"}), {"cards": [1]})
+        self.assertEqual(packs.minimize({"cards": [1], "image_style": "full"})["image_style"], "full")
+
+    def test_fit_full(self):
+        """pack_shop.c fit_picture's sizes."""
+        self.assertEqual(packs.fit_full(300, 500), (118, 196))
+        self.assertEqual(packs.fit_full(600, 300), (140, 70))
+        self.assertEqual(packs.fit_full(140, 196), (140, 196))
+        self.assertEqual(packs.fit_full(1, 1000), (2, 196))
+
+
 class ManifestTest(unittest.TestCase):
     def test_round_trip_writes_only_what_differs(self):
         source = {"packs": [

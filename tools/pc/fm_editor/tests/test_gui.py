@@ -589,6 +589,23 @@ class GuiTest(unittest.TestCase):
         for zoom in (1, 2, 4):
             tab.zoom.set(zoom)
             tab.show_picture()
+        # "image_style": "full" shows the whole picture; "card" is written as no key.
+        tab.vars["image_style"].set("full")
+        tab.show_picture()
+        self.assertEqual(tab.photos["card"].height(), 196 * 4)
+        # At 1x a pixel under half opaque is clear (black here), the rest opaque, as the game's texture.
+        from fm_editor.packs_tab import full_picture
+        half = pngio.Image(140, 196, bytes((200, 100, 50, 100)) * (140 * 98) + bytes((200, 100, 50, 200)) * (140 * 98))
+        shown = full_picture(half, 1).rgba
+        self.assertEqual(shown[:4], bytes((0, 0, 0, 255)))
+        self.assertEqual(shown[-4:], bytes((200, 100, 50, 255)))
+        self.assertTrue(tab.commit())
+        self.assertEqual(app.project.packs[0]["image_style"], "full")
+        tab.vars["image_style"].set("card")
+        self.assertTrue(tab.commit())
+        from fm_editor import packs as packmath
+        self.assertNotIn("image_style", packmath.minimize(app.project.packs[0]))
+        tab.zoom.set(1)
         dialog = SimulateDialog(tab, tab.parsed()[0])
         while dialog.running:            # opened a slice at a time, the window answering between
             app.update()
