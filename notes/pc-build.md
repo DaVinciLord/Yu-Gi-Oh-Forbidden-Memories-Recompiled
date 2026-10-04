@@ -3630,7 +3630,9 @@ Three things differ from windows-x64 beyond the pointer width:
   beside the flags, which relinked the display lists: the duel drew cards on
   the wrong side of the field and the portraits out of place, while the
   game's state stayed in step). The front end's IR is right, so on arm64
-  every C unit is compiled to IR first and `tools/pc/ptr32_stores.py` sends
+  every game and port C unit (all that `compile_unit` builds; the generated
+  stubs, `guest_branches.c` and `mod_exports.c` hold no G32 store) is
+  compiled to IR first and `tools/pc/ptr32_stores.py` sends
   each store and memcpy/memmove/memset through a G32 pointer via an
   addrspacecast to an ordinary pointer, then the IR is compiled; it fails
   the build if such a write is left. Reported upstream, with a minimal

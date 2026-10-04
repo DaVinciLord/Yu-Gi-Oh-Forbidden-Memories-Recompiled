@@ -64,8 +64,11 @@ WIDE = X64 or A64
 # made on) still builds, as a development target, but is neither run nor
 # shipped.
 ANDROID_PACKAGED = ("arm64-v8a",)
-# arm64: every C unit through tools/pc/ptr32_stores.py (an LLVM AArch64 bug,
-# notes/pc-build.md "Android arm64"); main() checks the compiler first.
+# arm64: every C unit compile_unit builds (the game's and the port's)
+# through tools/pc/ptr32_stores.py (an LLVM AArch64 bug, notes/pc-build.md
+# "Android arm64"); main() checks the compiler first. The generated
+# guest_branches.c, stubs and mod_exports.c hold no G32 stores and are
+# compiled directly.
 PTR32_PASS = A64
 if TARGET not in ("linux", "windows", "windows-x64") and not ANDROID:
     sys.exit(f"--target {TARGET}: linux, windows, windows-x64 or android-<abi>")
@@ -972,6 +975,11 @@ def main():
     if A64:
         headers.append("tools/pc/ptr32_stores.py")   # it rewrites every unit's IR (compile_unit)
     NEWEST_HEADER = max(os.path.getmtime(path) for path in headers)
+    if A64:
+        # The pass on or off (MEMORIES_PTR32_PASS) changes every unit's code:
+        # a change of it recompiles them all, as a change of flags does.
+        NEWEST_HEADER = max(NEWEST_HEADER, flags_changed(f"{options.build}/ptr32-pass.txt",
+                                                         [f"ptr32_stores={int(PTR32_PASS)}"]))
     # A build folder may have been built last by another checkout: tmp is
     # shared by every worktree (a junction), and an object there newer than
     # this checkout's source can be another checkout's code. checkout.txt

@@ -38,7 +38,9 @@ import sys
 SPACES = ("270", "271", "272")
 _POINTER = re.compile(r"ptr addrspace\((27[012])\)")
 _OPEN, _CLOSE = "([{<", ")]}>"
-_INTRINSIC = re.compile(r"@llvm\.(memcpy|memmove|memset|memcpy\.inline|memset\.inline)\.([\w.]+)\(")
+# The .inline forms first: else "memcpy" matches and "inline" lands in the
+# type suffix, which then no longer lines up with the arguments.
+_INTRINSIC = re.compile(r"@llvm\.(memcpy\.inline|memset\.inline|memcpy|memmove|memset)\.([\w.]+)\(")
 _ORDERING = re.compile(r"\s(syncscope\(\"[^\"]*\"\)\s+)?(unordered|monotonic|acquire|release|acq_rel|seq_cst)$")
 
 

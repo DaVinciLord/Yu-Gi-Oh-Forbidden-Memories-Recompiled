@@ -4,11 +4,12 @@
  * build linked it at (the same reservation android_loader.c makes in the
  * app), then calls the port's own main: the caller sets the environment a
  * desktop run would have (MEMORIES_DISC, MEMORIES_HEADLESS, a replay's
- * MEMORIES_PLAY/MEMORIES_RECORD). tools/pc/android/device_replay.py builds
- * and drives it.
+ * MEMORIES_PLAY/MEMORIES_RECORD). tools/pc/android/device_run.py builds
+ * it (GAME_BASE and GAME_SPAN from libgame.so's LOAD segments, 0xC0000000
+ * and 64 MiB today) and drives it:
  *
  *   clang --target=aarch64-linux-android24 -fPIE -pie -O2 runner.c -ldl \
- *       -DGAME_BASE=0x40000000 -DGAME_SPAN=0x04000000 -o runner */
+ *       -DGAME_BASE=0xc0000000 -DGAME_SPAN=0x04000000 -o runner */
 #include <android/dlext.h>
 #include <dlfcn.h>
 #include <stdint.h>
