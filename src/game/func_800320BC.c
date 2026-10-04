@@ -10,9 +10,13 @@
 
 #define BUILD_DECK_ADD_LIST_OFFSET \
     ((u32)&((BuildDeckTransitionState *)0)->lists[1])
+/* u32 as a whole, as the list offset is: with a 64-bit sizeof the sum would
+   be 64 bits wide, and `arg0 + offset` would sign-extend the s32 record
+   address, which on arm64 (the game library at 0xC0000000) points the
+   entry into the top of the address space. */
 #define BUILD_DECK_ADD_ENTRY_CURSOR_OFFSET \
-    ((u32)&((BuildDeckTransitionState *)0)->lists[1].entries[0].id + \
-     2 * sizeof(s16))
+    ((u32)((u32)&((BuildDeckTransitionState *)0)->lists[1].entries[0].id + \
+           2 * sizeof(s16)))
 #define BUILD_DECK_ADD_ENTRY_HALFWORD_STRIDE \
     (sizeof(CardEntry) / sizeof(s16))
 #define CARD_ENTRY_BYTES(entry) ((u8 *)(entry))
