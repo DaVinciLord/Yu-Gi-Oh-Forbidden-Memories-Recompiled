@@ -235,6 +235,17 @@ static void test_warnings(void)
     CHECK(one("{\"packs\": [{\"cards\": [1], \"image\": \"packs/missing.png\"}]}") == 1 && noted("cannot be read"));
     CHECK(Packs_At(0)->image[0] == 0);
     CHECK(one("{\"packs\": [{\"cards\": [1], \"image\": \"../outside.png\"}]}") == 1 && noted("inside the mod"));
+    /* "image_style": "card" unless it says "full"; another word is said. */
+    CHECK(one("{\"packs\": [{\"cards\": [1]}, {\"id\": \"b\", \"cards\": [1], \"image_style\": \"card\"}]}") == 2);
+    CHECK(Packs_At(0)->image_style == PACK_IMAGE_CARD && Packs_At(1)->image_style == PACK_IMAGE_CARD && notes == 0);
+    CHECK(one("{\"packs\": [{\"cards\": [1], \"image\": \"packs/missing.png\", \"image_style\": \"full\"}]}") == 1 &&
+          noted("cannot be read") && !noted("there is none"));
+    CHECK(Packs_At(0)->image_style == PACK_IMAGE_FULL);
+    CHECK(one("{\"packs\": [{\"cards\": [1], \"image_style\": \"full\"}]}") == 1 && noted("there is none"));
+    CHECK(one("{\"packs\": [{\"cards\": [1], \"image_style\": \"poster\"}]}") == 1 &&
+          noted("\"image_style\" is \"card\" or \"full\""));
+    CHECK(Packs_At(0)->image_style == PACK_IMAGE_CARD);
+    CHECK(one("{\"packs\": [{\"cards\": [1], \"image_styl\": \"full\"}]}") == 1 && noted("did you mean \"image_style\""));
     /* "price" and "cost" at odds: "cost" wins. */
     CHECK(one("{\"packs\": [{\"cards\": [1], \"price\": 5, \"cost\": {\"starchips\": 7, \"cards\": {\"3\": 2}}}]}") == 1 &&
           noted("\"cost\" is used"));

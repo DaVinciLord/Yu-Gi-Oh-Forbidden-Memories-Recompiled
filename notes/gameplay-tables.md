@@ -316,7 +316,35 @@ one before it): the Mods window warns when they are not, naming the two
 thresholds and the mod that set each (or the disc), since a trap behind
 a lower threshold would never spring. Values are whole points, 0 to 65535;
 a trap no mod names keeps the disc's threshold. A copy of a trap springs as
-its base. Which cards are attack traps, and what they do, is the disc's.
+its selected retail effect (`effect`), even when the original effect card is
+replaced or renamed.
+
+The FM Editor's Cards tab also supports an independent threshold on an
+individual card:
+
+```json
+"cards": [
+  {"replace": 1, "type": "Trap", "effect": "Bear Trap", "trap_threshold": 1800},
+  {"copy": 2, "id": "small-trap", "type": "Trap", "effect": "Bear Trap", "trap_threshold": 900}
+]
+```
+
+Both cards spring automatically when an opposing monster attacks, using the
+normal trap presentation, destruction and rank accounting. The threshold uses
+the attacker's current ATK, including bonuses, and the boundary is inclusive.
+With any individual threshold on the defending field, each actual card is
+checked independently: an ineligible copy cannot hide another copy with the
+same effect. Eligible traps retain retail effect priority (House of Adhesive
+Tape first, Widespread Ruin last), then the last field slot for equal effects.
+Fake Trap remains the fallback when no destruction trap qualifies. With no
+individual override on the field, the original selector and global ordering
+rules above remain unchanged.
+
+`trap_threshold: null` restores the selected effect's global or retail
+threshold. An override does nothing on a monster, magic card, or a trap with
+a special effect such as Goblin Fan. The editor hides that field for such
+cards. Trap cards have no ATK/DEF or guardian stars; the trigger threshold is
+a condition on the attacking monster, not a stat of the trap.
 
 ## A full chest pays starchips
 

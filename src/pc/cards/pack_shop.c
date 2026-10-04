@@ -40,6 +40,8 @@
 #include "pc/compat/fs.h"
 #include "types.h"
 #include "ygo_types.h"
+#include "psyq/libgte.h"
+#include "psyq/libgpu.h"
 #include "game/input.h"
 #include "game/campaign_flags.h"
 #include "game/display_object.h"
@@ -83,6 +85,17 @@ enum {
 #define BOX_LETTERS 20                /* the message box: 0xA0 wide, 8 a letter */
 #define BOX_WIDTH 0xA0
 #define NAME_WIDTH 0x80               /* between the digit cursor's arrows */
+/* The name's letters are the panel's 16x16 font's. Measured on screen
+ * (2026-10-03): the text starts at x 170 (0xAA, at_x 0); the arrows' tiles
+ * end at 168 and start at 298, so a letter's ink may go from at_x 0 to 126;
+ * a letter's ink starts a pixel left of its cell and the widest (M, W) take
+ * 14 more. */
+#define NAME_STEP 12                  /* letters this far apart read as a word */
+#define NAME_LINE 16                  /* the font's height, the digits' line */
+#define NAME_ROOM 127                 /* pixels of ink between the arrows */
+#define NAME_INK 15                   /* the widest letter's ink, from a pixel left of its cell */
+#define LINE_HEIGHT 12                /* the message box's */
+#define ICON_ROW_GAP 4                /* an icon is 16 rows: a row of them this much lower clears the line above */
 #define ICON_WIDTH 16
 #define FLIP_STEP 8                   /* the game's own turn, state 1 */
 #define QUICK_STEP 16
@@ -321,9 +334,169 @@ static void add_full_picture(const char *path, const unsigned char *record)
                         path, x, y, cw, ch);
 }
 
+/* --- "image_style": "full" -------------------------------------------------------
+ *
+ * The pack's whole picture where the big card is drawn: the PNG fitted
+ * inside the card's 140x196 with its shape kept and centred, made into the
+ * game's kind of texture (8 bits a texel through a 256-colour palette,
+ * entry 0 clear, as the title's pictures are, title_images.c), put in VRAM
+ * the Password screen leaves unused, and drawn by the card view's own
+ * drawing (func_80028B08) in the place of the card's art, plates and frame,
+ * so it turns over as a card does and the card's back stays the card's. At
+ * an internal resolution above the console's the PNG itself is drawn
+ * (TexturePack_AddMadeSeeThrough).
+ *
+ * The VRAM (dumps of every state of the screen, 2026-10-03: the digits,
+ * the list, BUY / QUIT, paying, each card turning over, what came, the
+ * details): the 8-bit page at (384,256)-(511,511) and the row (128,511)-
+ * (383,511) stay empty; the card's art is at (320,256), its palette at
+ * (512,240). Other screens use them (a Free Duel and a duel write row 511),
+ * so the picture is uploaded again each time the screen opens. */
+#define PICTURE_X 384
+#define PICTURE_Y 256
+#define PICTURE_CLUT_X 128
+#define PICTURE_CLUT_Y 511
+#define PICTURE_TPAGE ((PICTURE_X >> 6) | ((PICTURE_Y >> 8) << 4))
+#define CARD_VIEW_WIDTH 140           /* the card's frame, its art window at 19,50 */
+#define CARD_VIEW_HEIGHT 196
+#define CARD_BACK_VARIANT 2           /* CardPreview_UpdateVariant: the frame object's back */
+
+typedef struct {
+    unsigned char *texels;
+    unsigned short clut[256];
+    int width, height;
+} Picture;
+static Picture *pictures[PACKS_MAX];
+/* The big card while it shows a picture: its frame and art objects
+ * (D_800EA0E8[0]), and the picture in VRAM; nothing when it shows none. */
+static const void *picture_frame, *picture_art;
+static int picture_resident = -1, picture_pending;
+/* A state loaded with pack `picture_rearm`'s picture up: the card's objects
+ * are known once the state's RAM is in, at the next draw or update. */
+static int picture_rearm = -1;
+
+/* The size a PNG of `png_w` x `png_h` is drawn at: as large as fits the
+ * card, its shape kept; even across, two texels a word. */
+static void fit_picture(int png_w, int png_h, int *w, int *h)
+{
+    if ((long)png_w * CARD_VIEW_HEIGHT > (long)png_h * CARD_VIEW_WIDTH) {
+        *w = CARD_VIEW_WIDTH;
+        *h = (int)(((long)png_h * CARD_VIEW_WIDTH + png_w / 2) / png_w);
+    } else {
+        *h = CARD_VIEW_HEIGHT;
+        *w = (int)(((long)png_w * CARD_VIEW_HEIGHT + png_h / 2) / png_h);
+    }
+    *w &= ~1;
+    if (*w < 2) *w = 2;
+    if (*h < 1) *h = 1;
+}
+
+static Picture *make_picture(const Pack *pack, char *why, size_t why_size)
+{
+    Picture *picture;
+    int png_w, png_h;
+    if (!CardArt_ImageSize(pack->image, &png_w, &png_h) || png_w <= 0 || png_h <= 0) {
+        snprintf(why, why_size, "%s is not a PNG it could read", pack->image);
+        return NULL;
+    }
+    picture = calloc(1, sizeof(*picture));
+    if (!picture) return NULL;
+    fit_picture(png_w, png_h, &picture->width, &picture->height);
+    picture->texels = malloc((size_t)picture->width * picture->height);
+    if (!picture->texels || !CardArt_IndexedImage(pack->image, picture->width, picture->height, picture->texels,
+                                                  picture->clut, why, why_size)) {
+        free(picture->texels);
+        free(picture);
+        return NULL;
+    }
+    /* Above the console's resolution, the PNG itself, whatever its size (a
+     * small one is drawn smoothly scaled, as a pack's image is): known by
+     * these bytes when they are uploaded (upload_picture). */
+    if (!TexturePack_AddMadeSeeThrough(picture->texels, picture->width / 2, picture->height, 8, picture->clut, 256,
+                                       pack->image, 0, 0, png_w, png_h))
+        fprintf(stderr, "memories-pc: packs: %s is drawn at the console's size only\n", pack->image);
+    return picture;
+}
+
+/* Pack `pack`'s picture into its place in VRAM; the first upload since the
+ * picture was made waits for the packs to have sorted it in, between
+ * frames, or it would show at the console's size. */
+static void upload_picture(int pack)
+{
+    const Picture *picture = pack >= 0 && pack < PACKS_MAX ? pictures[pack] : NULL;
+    RECT rect;
+    if (!picture) return;
+    TexturePack_Service();
+    rect.x = PICTURE_X;
+    rect.y = PICTURE_Y;
+    rect.w = (short)(picture->width / 2);
+    rect.h = (short)picture->height;
+    LoadImage(&rect, (u32 *)picture->texels);
+    rect.x = PICTURE_CLUT_X;
+    rect.y = PICTURE_CLUT_Y;
+    rect.w = 256;
+    rect.h = 1;
+    LoadImage(&rect, (u32 *)picture->clut);
+    picture_resident = pack;
+}
+
+/* The big card just made (Password_RecreateCardPreview) shows pack
+ * `pack`'s picture. */
+static void arm_picture(int pack)
+{
+    picture_frame = D_800EA0E8[0].object_00;
+    picture_art = D_800EA0E8[0].object_04;
+    if (picture_resident != pack || picture_pending) upload_picture(pack);
+    picture_pending = 0;
+}
+
+static void disarm_picture(void)
+{
+    picture_frame = picture_art = NULL;
+    picture_rearm = -1;
+}
+
+/* After a state's load (PackShop_State runs before the state's RAM is in):
+ * its card's objects, now that it is. */
+static void rearm_picture(void)
+{
+    if (picture_rearm < 0 || !s.open || !on_screen()) return;
+    picture_frame = D_800EA0E8[0].object_00;
+    picture_art = D_800EA0E8[0].object_04;
+    picture_resident = picture_rearm;
+    picture_rearm = -1;
+}
+
+int PackShop_Picture(const void *art, PackShopPicture *out)
+{
+    const Picture *picture;
+    rearm_picture();
+    if (!art || art != picture_art || !s.open || !on_screen() || picture_resident < 0) return 0;
+    picture = pictures[picture_resident];
+    if (!picture) return 0;
+    out->x = (CARD_VIEW_WIDTH - picture->width) / 2;   /* centred: the rest of the card is clear */
+    out->y = (CARD_VIEW_HEIGHT - picture->height) / 2;
+    out->width = picture->width;
+    out->height = picture->height;
+    out->u = 0;
+    out->v = PICTURE_Y & 0xFF;
+    out->tpage = PICTURE_TPAGE;
+    out->clut_x = PICTURE_CLUT_X;
+    out->clut_y = PICTURE_CLUT_Y;
+    return 1;
+}
+
+int PackShop_HidesFrame(const void *frame)
+{
+    if (frame) rearm_picture();
+    return frame && frame == picture_frame && s.open && on_screen() && picture_resident >= 0 &&
+           ((const DisplayObject *)frame)->field_69 != CARD_BACK_VARIANT;
+}
+
 /* Each pack's picture: its "image" made as a card's art (102x96 of 256
- * colours), with its name on the title plate as a mod card's is; without
- * one, the plate alone, over its cover card's art. */
+ * colours), with its name on the title plate as a mod card's is, or with
+ * "image_style": "full" the whole picture (above); without one, the plate
+ * alone, over its cover card's art. */
 static void build_art(void)
 {
     int i;
@@ -332,7 +505,13 @@ static void build_art(void)
     for (i = 0; i < Packs_Count() && i < PACKS_MAX; i++) {
         const Pack *pack = Packs_At(i);
         char why[PACK_PATH_MAX + 64];   /* the reason comes after the whole path */
-        if (pack->image[0]) {
+        if (pack->image[0] && pack->image_style == PACK_IMAGE_FULL) {
+            why[0] = '\0';
+            pictures[i] = make_picture(pack, why, sizeof(why));
+            if (!pictures[i])
+                Mods_Note(pack->mod, "pack \"%s\": its cover is shown, as its \"image\" cannot be used: %s", pack->id,
+                          why[0] ? why : "out of memory");
+        } else if (pack->image[0]) {
             unsigned char *record = calloc(1, CARD_ART_RECORD);
             why[0] = '\0';
             if (record && CardArt_FromImage(pack->image, record, why, sizeof(why))) {
@@ -345,7 +524,7 @@ static void build_art(void)
                           why[0] ? why : "out of memory");
             }
         }
-        if (!art_records[i]) {
+        if (!art_records[i] && !pictures[i]) {
             unsigned char *plate = malloc(CARD_TITLE_BYTES);
             if (plate && CardArt_TitleFromName(pack->name, plate)) plates[i] = plate;
             else free(plate);
@@ -359,7 +538,20 @@ typedef struct {
     u8 *at, *end;
     int x;                    /* pixels into the line */
     int limit;                /* the line's width: what would go past it is left out */
+    int step;                 /* a letter's: the box's cell (8, the name's set by F8 05) */
 } Out;
+
+/* Every Out is made here, so that none has a field left unset. */
+static Out out_into(u8 *at, u8 *end, int limit)
+{
+    Out out;
+    out.at = at;
+    out.end = end;
+    out.x = 0;
+    out.limit = limit;
+    out.step = 8;
+    return out;
+}
 
 static void put(Out *out, int byte)
 {
@@ -379,6 +571,15 @@ static void newline(Out *out)
     out->x = 0;
 }
 
+/* A new line for a row of buttons: their icons are taller than a line, so
+ * the row goes a little lower, clear of the line above (F8 01: x 0, y on by
+ * its operand). */
+static void icon_row(Out *out)
+{
+    command(out, 0x01, LINE_HEIGHT + ICON_ROW_GAP);
+    out->x = 0;
+}
+
 static void colour(Out *out, int ink) { command(out, 0x0A, ink); }
 
 static void at_x(Out *out, int x)
@@ -393,9 +594,9 @@ static void at_x(Out *out, int x)
 
 static void space(Out *out)
 {
-    if (out->x + 8 > out->limit) return;
-    command(out, 0x02, 8);
-    out->x += 8;
+    if (out->x + out->step > out->limit) return;
+    command(out, 0x02, out->step);
+    out->x += out->step;
 }
 
 static void icon(Out *out, int which)
@@ -411,10 +612,10 @@ static void glyph(Out *out, int code)
 {
     if (code < 0 || out->end - out->at < 3) return;
     if (code == 0) { space(out); return; }
-    if (out->x + 8 > out->limit) return;
+    if (out->x + out->step > out->limit) return;
     if (code >= 0xF0) put(out, 0xF0 + (code >> 8));
     put(out, code & 0xFF);
-    out->x += 8;
+    out->x += out->step;
 }
 
 /* ASCII in the game's letters. */
@@ -516,13 +717,9 @@ static int own_pass(Out *to, int id, const char *english, const unsigned *number
  * `out` unless it is NULL. */
 static int own(Out *out, int id, const char *english, const unsigned *numbers, const unsigned char *const *names)
 {
-    Out scratch;
     u8 dummy[512];
+    Out scratch = out_into(dummy, dummy + sizeof(dummy), 0x7FFF);
     int fixed, room, x = out ? out->x : 0;
-    scratch.at = dummy;
-    scratch.end = dummy + sizeof(dummy);
-    scratch.x = 0;
-    scratch.limit = 0x7FFF;
     fixed = own_pass(&scratch, id, english, numbers, names, 0);
     room = ((out ? out->limit : BOX_WIDTH) - x - fixed) / 8;
     if (room < 4) room = 4;
@@ -536,14 +733,10 @@ static int own(Out *out, int id, const char *english, const unsigned *numbers, c
 
 static Out begin(int which)
 {
-    Out out;
     /* Where a menu's answer jumps (PackShop_Retarget): an {end}. */
     memset(s.arena, 0xFF, text_at[TEXT_NAME]);
-    out.at = s.arena + text_at[which];
-    out.end = s.arena + text_at[which] + text_room[which] - 8;
-    out.x = 0;
-    out.limit = which == TEXT_NAME ? NAME_WIDTH : BOX_WIDTH;
-    return out;
+    return out_into(s.arena + text_at[which], s.arena + text_at[which] + text_room[which] - 8,
+                    which == TEXT_NAME ? NAME_WIDTH : BOX_WIDTH);
 }
 
 static void finish(Out *out)
@@ -926,28 +1119,34 @@ static void compose_list(void)
         }
     }
     while (written < top) { newline(&out); written++; }
-    newline(&out);
+    icon_row(&out);
     if (!locked) hint(&out, ICON_CROSS, TEXT_OWN_PACK_BUY, "BUY");
     hint(&out, ICON_CIRCLE, back_id, back_english);
-    if (!one_row) newline(&out);
+    if (!one_row) icon_row(&out);
     hint(&out, ICON_SQUARE, TEXT_OWN_PACK_INFO, "INFO");
     finish(&out);
 }
 
-/* The pack's name in the digits' panel, centred between the arrows. */
+/* The pack's name in the digits' panel, centred between the arrows, in the
+ * panel's 16x16 letters NAME_STEP apart (F8 05: the box's cell), or closer
+ * for a name that would run into the arrows otherwise: it always fits
+ * between them (16 letters are 7 apart). */
 static void compose_name(int pack, int hidden)
 {
     Out out = begin(TEXT_NAME);
-    int room = NAME_WIDTH / 8, length;
+    int room = NAME_WIDTH / 8, length, ink, i;
     const unsigned char *name = pack_name(pack);
+    length = hidden ? 6 : letters(name);
+    if (length > room) length = room;
+    out.step = NAME_STEP;
+    if (length > 1 && (length - 1) * out.step + NAME_INK > NAME_ROOM) out.step = (NAME_ROOM - NAME_INK) / (length - 1);
+    ink = length ? (length - 1) * out.step + NAME_INK : 0;
+    command(&out, 0x05, out.step);
+    put(&out, NAME_LINE);
+    at_x(&out, (NAME_ROOM - ink) / 2 + 1);
     if (hidden) {
-        int i;
-        at_x(&out, (NAME_WIDTH - 6 * 8) / 2);
         for (i = 0; i < 6; i++) glyph(&out, Glyphs_Code('?'));
     } else {
-        length = letters(name);
-        if (length > room) length = room;
-        at_x(&out, (NAME_WIDTH - 8 * length) / 2);
         codes(&out, name, room);
     }
     finish(&out);
@@ -1050,7 +1249,7 @@ static void compose_reveal(int slot)
         own(&out, TEXT_OWN_NEW, "NEW", NULL, NULL);
         colour(&out, WHITE);
     }
-    newline(&out);
+    icon_row(&out);
     if (reveal_style(slot) == PACK_REVEAL_FLIP) {
         hint(&out, ICON_CROSS, TEXT_OWN_PACK_NEXT, "NEXT");
         hint(&out, ICON_SQUARE, TEXT_OWN_PACK_SKIP, "SKIP");
@@ -1086,7 +1285,7 @@ static void compose_summary(void)
             colour(&out, WHITE);
         }
     }
-    newline(&out);
+    icon_row(&out);
     hint(&out, ICON_CROSS, TEXT_OWN_PACK_OK, "OK");
     if (pages > 1) count_at_right(&out, (unsigned)s.page + 1, (unsigned)pages);
     finish(&out);
@@ -1101,12 +1300,7 @@ static int info_count;
 
 static Out info_line(void)
 {
-    Out out;
-    out.at = info[info_count];
-    out.end = info[info_count] + INFO_LINE_BYTES - 8;
-    out.x = 0;
-    out.limit = BOX_WIDTH;
-    return out;
+    return out_into(info[info_count], info[info_count] + INFO_LINE_BYTES - 8, BOX_WIDTH);
 }
 
 static void info_done(Out *out)
@@ -1202,13 +1396,9 @@ static void build_info(void)
         info_done(&out);
         {   /* Every condition still unmet, a line each. */
             u8 buffer[INFO_LINE_BYTES * 8];
-            Out all;
+            Out all = out_into(buffer, buffer + sizeof(buffer) - 8, BOX_WIDTH);
             const u8 *p;
             int line = 0;
-            all.at = buffer;
-            all.end = buffer + sizeof(buffer) - 8;
-            all.x = 0;
-            all.limit = BOX_WIDTH;
             n = condition_lines(&pack->unlock, &all, 8, 1);
             *all.at = 0xFF;
             for (p = buffer; line < n && *p != 0xFF; line++) {
@@ -1234,7 +1424,7 @@ static void compose_info(void)
         if (row >= info_count) continue;
         for (p = info[row]; *p != 0xFF; p++) put(&out, *p);
     }
-    newline(&out);
+    icon_row(&out);
     hint(&out, ICON_CIRCLE, TEXT_OWN_PACK_BACK, "BACK");
     if (pages > 1) count_at_right(&out, (unsigned)s.page + 1, (unsigned)pages);
     finish(&out);
@@ -1329,6 +1519,7 @@ static int card_busy(void)
         }
         /* fallthrough */
     case CARD_LOADING:
+        disarm_picture();   /* the card turned away is made again below */
         if (s.card_goal < 0 || (!s.card_goal && s.card_pack_art < 0)) {
             s.card_phase = CARD_IDLE;   /* face down it stays */
             return 0;
@@ -1339,7 +1530,12 @@ static int card_busy(void)
         } else {
             const Pack *pack = Packs_At(s.card_pack_art);
             build_art();
-            if (art_records[s.card_pack_art] && support_card()) {
+            if (pictures[s.card_pack_art] && support_card()) {
+                /* The Magic card's frame, for its turn and its back: its
+                   art and plates are the picture's to cover (arm_picture). */
+                s.card_cover = support_card();
+                Cards_OverrideArt(0, NULL, NULL);
+            } else if (art_records[s.card_pack_art] && support_card()) {
                 s.card_cover = support_card();
                 Cards_OverrideArt(s.card_cover, art_records[s.card_pack_art], NULL);
             } else {
@@ -1356,6 +1552,8 @@ static int card_busy(void)
            the art loaded is its cover's, or its own picture. */
         if (!s.card_goal && support_card()) D_800EA0E8[0].field_30 = (s16)support_card();
         Password_RecreateCardPreview(0);
+        if (!s.card_goal && s.card_pack_art >= 0 && pictures[s.card_pack_art] && support_card())
+            arm_picture(s.card_pack_art);
         s.card_phase = CARD_SHOWING;
         return 1;
     case CARD_SHOWING:
@@ -1428,6 +1626,7 @@ static void leave_to_digits(void)
 static void quit_screen(void)
 {
     Cards_OverrideArt(0, NULL, NULL);
+    disarm_picture();
     SD_SEPlayFull((u32)sound(PACK_SOUND_BACK));
     SD_BGMFadeOut();
     Fade_WaitOut();
@@ -1678,6 +1877,7 @@ static void update_leave(void)
     int i;
     if (card_busy()) return;
     Cards_OverrideArt(0, NULL, NULL);
+    disarm_picture();
     s.open = 0;
     s.from_password = 0;
     set_cursor_shown(1);
@@ -1696,6 +1896,13 @@ void PackShop_Update(int state)
     if (!PackShop_Available() || !s.open) {
         D_8016D424 = 0;   /* a state of packs with none: back to the digits */
         return;
+    }
+    /* A state loaded with a picture up: VRAM has it, but only an upload
+       makes it known for the PNG above the console's resolution. */
+    rearm_picture();
+    if (picture_pending && picture_frame) {
+        upload_picture(picture_resident);
+        picture_pending = 0;
     }
     switch (state) {
     case STATE_LIST: update_list(); break;
@@ -1772,6 +1979,11 @@ void PackShop_Enter(void)
     /* A pack's picture armed for a load the screen never saw (a state
        loaded, a jump to the title) is not the next Magic card's. */
     Cards_OverrideArt(0, NULL, NULL);
+    disarm_picture();
+    /* The other screens use the picture's VRAM (a Free Duel or a duel its
+       palette's row): it is uploaded again when next shown. */
+    picture_resident = -1;
+    picture_pending = 1;
     s.open = 0;
     s.card_phase = CARD_IDLE;
     own_progress();
@@ -1928,6 +2140,8 @@ void PackShop_State(MemoriesState *state)
     if (Memories_StateLoading(state)) {
         Screen before = s;
         Cards_OverrideArt(0, NULL, NULL);   /* this session's, not the state's */
+        disarm_picture();
+        picture_pending = 1;
         s.open = 0;   /* a state without the chunk: the packs closed */
         if (Memories_StateChunk(state, "pack-shop", fields, 3)) {
             if (s.version != STATE_VERSION || size != ARENA_SIZE) {
@@ -1942,6 +2156,13 @@ void PackShop_State(MemoriesState *state)
                 build_art();
                 if (art_records[s.card_pack_art]) Cards_OverrideArt(s.card_cover, art_records[s.card_pack_art], NULL);
                 else if (plates[s.card_pack_art]) Cards_OverrideArt(s.card_cover, NULL, plates[s.card_pack_art]);
+            }
+            /* Saved with a pack's whole picture up: the card is the state's,
+               and the picture in VRAM with it. */
+            if (s.open && (s.card_phase == CARD_SHOWING || s.card_phase == CARD_IDLE) && !s.card_goal &&
+                s.card_pack_art >= 0 && s.card_pack_art < Packs_Count()) {
+                build_art();
+                if (pictures[s.card_pack_art]) picture_rearm = s.card_pack_art;
             }
             if (base != (uint32_t)(uintptr_t)s.arena) {
                 LOG(LOG_MODS, "packs: the screen's text moved from %08X to %08X since the state was saved",

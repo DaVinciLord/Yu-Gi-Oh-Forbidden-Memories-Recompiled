@@ -240,10 +240,10 @@ class GuiTest(unittest.TestCase):
         # The disc's magic cards to pick from, and none for a monster made one.
         values = cards.effect_box.cget("values")
         self.assertEqual(values[0], "(none)")
-        self.assertIn("601 Card 601", values)
-        self.assertNotIn("651 Card 651", values)        # an equip
+        self.assertIn("Card 601", values)
+        self.assertNotIn("Card 651", values)        # an equip
         self.assertEqual(cards.vars["effect"].get(), "(none)")
-        cards.vars["effect"].set("605 Card 605")
+        cards.vars["effect"].set("Card 605")
         self.assertTrue(cards.apply())
         card = app.project.cards[1]
         self.assertEqual((card.type, card.attack, card.defense, card.level, card.star1, card.star2, card.attribute),
@@ -255,24 +255,24 @@ class GuiTest(unittest.TestCase):
         cards.select()
         cards.tree.selection_set("1")
         cards.select()
-        self.assertEqual(cards.vars["effect"].get(), "605 Card 605")
+        self.assertEqual(cards.vars["effect"].get(), "Card 605")
         # A disc magic card has its own effect: no "(none)", and picking it
         # again writes nothing.
         cards.tree.selection_set("610")
         cards.select()
         self.assertTrue(shown(cards.effect_row))
         self.assertNotIn("(none)", cards.effect_box.cget("values"))
-        self.assertEqual(cards.vars["effect"].get(), "610 Card 610")
-        cards.vars["effect"].set("620 Card 620")
+        self.assertEqual(cards.vars["effect"].get(), "Card 610")
+        cards.vars["effect"].set("Card 620")
         self.assertTrue(cards.apply())
         self.assertEqual(app.project.card_extra[610], {"effect": 620})
-        cards.vars["effect"].set("610 Card 610")
+        cards.vars["effect"].set("Card 610")
         self.assertTrue(cards.apply())
         self.assertNotIn(610, app.project.card_extra)
         # A trap lists traps.
         cards.vars["type"].set("Trap")
-        self.assertIn("701 Card 701", cards.effect_box.cget("values"))
-        self.assertNotIn("601 Card 601", cards.effect_box.cget("values"))
+        self.assertIn("Card 701", cards.effect_box.cget("values"))
+        self.assertNotIn("Card 601", cards.effect_box.cget("values"))
         cards.vars["type"].set("Magic")
         # Saved as the game reads it, and back.
         app.info.vars["id"].set("gui-test")
@@ -328,7 +328,7 @@ class GuiTest(unittest.TestCase):
         cards.tree.selection_set("1")
         cards.select()
         cards.vars["type"].set("Trap")
-        self.assertEqual(cards.vars["effect"].get(), "701 Card 701")
+        self.assertEqual(cards.vars["effect"].get(), "Card 701")
         self.assertTrue(cards.apply())
         self.assertEqual(app.project.card_extra[1], {"effect": 701})
 
@@ -339,6 +339,106 @@ class GuiTest(unittest.TestCase):
         copy = project.add_card(610)
         self.assertEqual(project.effect_of(copy), 620)
         self.assertEqual(project.effect_of(611), 611)
+
+    def test_any_card_can_use_an_independent_retail_magic_effect(self):
+        from fm_editor import manifest, validate
+        from fm_editor.model import Project
+        app, tab = self.app, self.app.cards
+        # Monster, magic, equip, ritual and trap, plus a new copy of each.
+        originals = [1, 610, 651, 681, 701]
+        added = [app.project.add_card(cid) for cid in originals]
+        tab.refresh()
+        for cid in originals + added:
+            tab.tree.selection_set(str(cid))
+            tab.select()
+            tab.vars["type"].set("Magic")
+            tab.vars["effect"].set("Card 605")
+            self.assertTrue(tab.apply())
+            self.assertEqual(app.project.effect_of(cid), 605)
+            self.assertEqual(app.project.cards[cid].attribute, 6)
+            self.assertFalse([i for i in validate.validate_card(app.project, cid) if i.level == "error"])
+        # The effect source becomes a monster with another name. The effect
+        # list and numeric references must keep the original retail behavior.
+        tab.tree.selection_set("605")
+        tab.select()
+        tab.vars["type"].set("Dragon")
+        tab.vars["name"].set("New monster")
+        self.assertTrue(tab.apply())
+        tab.tree.selection_set("1")
+        tab.select()
+        self.assertEqual(tab.vars["effect"].get(), "Card 605")
+        built = manifest.build(app.project)
+        restored = Project(app.project.retail)
+        manifest.apply(restored, built)
+        for cid in originals + added:
+            self.assertEqual(restored.effect_of(cid), 605)
+            self.assertEqual(restored.cards[cid].type, 20)
+        # Changing the source to another magic effect also leaves explicit
+        # users of its original effect alone.
+        app.project.card_extra[605] = {"effect": 620}
+        self.assertEqual(app.project.effect_of(1), 605)
+
+    def test_duplicate_retail_effect_names_remain_distinct(self):
+        tab, project = self.app.cards, self.app.project
+        project.retail.cards[605].name = project.retail.cards[606].name = "Same effect name"
+        tab.tree.selection_set("1")
+        tab.select()
+        tab.vars["type"].set("Magic")
+        self.assertIn("Same effect name (605)", tab.effect_box.cget("values"))
+        tab.vars["effect"].set("Same effect name (606)")
+        self.assertTrue(tab.apply())
+        self.assertEqual(project.effect_of(1), 606)
+
+    def test_trap_form_thresholds_and_independent_copy_roundtrip(self):
+        from fm_editor import manifest, validate
+        from fm_editor.model import Project
+        tab, p = self.app.cards, self.app.project
+        # This synthetic disc normally places traps at 701 onward.
+        for cid in range(681, 691):
+            p.retail.cards[cid].type = p.cards[cid].type = 21
+        copy = p.add_card(1)
+        tab.refresh()
+        tab.tree.selection_set(str(copy))
+        tab.select()
+        tab.vars["type"].set("Trap")
+        tab.vars["effect"].set("Card 681")
+        self.assertTrue(all(w.winfo_manager() for w in tab.effect_row + tab.trap_rows))
+        self.assertFalse(any(w.winfo_manager() for w in tab.monster_rows))
+        tab.vars["trap_threshold"].set("1234")
+        self.assertTrue(tab.apply())
+        self.assertEqual(p.cards[copy].attribute, 7)
+        self.assertEqual(tab.row(copy)[0][3:5], ("", ""))
+        self.assertEqual((p.cards[copy].attack, p.cards[copy].defense, p.cards[copy].star1, p.cards[copy].star2), (0, 0, 0, 0))
+        self.assertFalse([i for i in validate.validate_card(p, copy) if i.level == "error"])
+        built = manifest.build(p)
+        entry = next(e for e in built["cards"] if "copy" in e)
+        self.assertEqual((entry["type"], entry["effect"], entry["trap_threshold"]), ("Trap", 681, 1234))
+        self.assertTrue(p.cards[1].is_monster())  # the copy's base stays a monster
+        restored = Project(p.retail)
+        manifest.apply(restored, built)
+        self.assertEqual(restored.cards[copy].type, 21)
+        self.assertEqual(restored.trap_threshold_override(copy), 1234)
+        for invalid in ("-1", "65536", "1.5", "bad"):
+            tab.vars["trap_threshold"].set(invalid)
+            self.assertFalse(tab.apply())
+            self.assertEqual(p.trap_threshold_override(copy), 1234)
+        for valid in ("0", "65535", ""):
+            tab.vars["trap_threshold"].set(valid)
+            self.assertTrue(tab.apply())
+            self.assertEqual(p.trap_threshold_override(copy), int(valid) if valid else None)
+        tab.vars["trap_threshold"].set("700")
+        self.assertTrue(tab.apply())
+        # Special traps have no attack threshold. Applying the new effect
+        # clears the old threshold and does not reveal monster statistics.
+        tab.vars["effect"].set("Card 687")
+        self.assertFalse(any(w.winfo_manager() for w in tab.trap_rows + tab.monster_rows))
+        self.assertTrue(tab.apply())
+        self.assertIsNone(p.trap_threshold_override(copy))
+        tab.vars["type"].set("Magic")
+        tab.vars["effect"].set("Card 605")
+        self.assertTrue(tab.apply())
+        self.assertEqual(p.cards[copy].attribute, 6)
+        self.assertEqual(next(e for e in manifest.build(p)["cards"] if "copy" in e)["type"], "Magic")
 
     def test_art(self):
         from fm_editor import art, pngio
@@ -589,6 +689,23 @@ class GuiTest(unittest.TestCase):
         for zoom in (1, 2, 4):
             tab.zoom.set(zoom)
             tab.show_picture()
+        # "image_style": "full" shows the whole picture; "card" is written as no key.
+        tab.vars["image_style"].set("full")
+        tab.show_picture()
+        self.assertEqual(tab.photos["card"].height(), 196 * 4)
+        # At 1x a pixel under half opaque is clear (black here), the rest opaque, as the game's texture.
+        from fm_editor.packs_tab import full_picture
+        half = pngio.Image(140, 196, bytes((200, 100, 50, 100)) * (140 * 98) + bytes((200, 100, 50, 200)) * (140 * 98))
+        shown = full_picture(half, 1).rgba
+        self.assertEqual(shown[:4], bytes((0, 0, 0, 255)))
+        self.assertEqual(shown[-4:], bytes((200, 100, 50, 255)))
+        self.assertTrue(tab.commit())
+        self.assertEqual(app.project.packs[0]["image_style"], "full")
+        tab.vars["image_style"].set("card")
+        self.assertTrue(tab.commit())
+        from fm_editor import packs as packmath
+        self.assertNotIn("image_style", packmath.minimize(app.project.packs[0]))
+        tab.zoom.set(1)
         dialog = SimulateDialog(tab, tab.parsed()[0])
         while dialog.running:            # opened a slice at a time, the window answering between
             app.update()

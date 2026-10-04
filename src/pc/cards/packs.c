@@ -373,8 +373,8 @@ static int read_unlock(const char *mod, const char *where, const JsonValue *valu
 /* --- a pack ----------------------------------------------------------------- */
 
 static const char *const pack_keys[] = {
-    "id", "name", "description", "image", "cover", "shop", "order", "price", "cost", "count", "cards", "tiers",
-    "slots", "guarantee", "pity", "duplicates", "max_copies", "include_added_cards", "stock", "unlock", "locked",
+    "id", "name", "description", "image", "image_style", "cover", "shop", "order", "price", "cost", "count", "cards",
+    "tiers", "slots", "guarantee", "pity", "duplicates", "max_copies", "include_added_cards", "stock", "unlock", "locked",
     "password", "once", "listed", "reveal", "sounds", "when_nothing_left", NULL};
 static const char *const pack_reserved[] = {"restock", NULL};
 static const char *const tier_keys[] = {"odds", "cards", "label", "color", "sound", "reveal", NULL};
@@ -856,6 +856,15 @@ static void read_pack(const char *mod, const char *directory, int index, const J
             Mods_Note(mod, "%s: \"image\" %s cannot be read; its cover is shown instead", where, image);
             pack->image[0] = '\0';
         }
+    }
+    pack->image_style = PACK_IMAGE_CARD;
+    if ((value = Json_Member(entry, "image_style")) != NULL) {
+        const char *style = Json_String(value, "");
+        if (!strcmp(style, "full")) pack->image_style = PACK_IMAGE_FULL;
+        else if (strcmp(style, "card"))
+            Mods_Note(mod, "%s: \"image_style\" is \"card\" or \"full\"; \"card\" is used", where);
+        if (pack->image_style == PACK_IMAGE_FULL && !Json_Member(entry, "image"))
+            Mods_Note(mod, "%s: \"image_style\" \"full\" shows the \"image\", and there is none; its cover is shown", where);
     }
     pack->cover = 0;
     if ((value = Json_Member(entry, "cover")) != NULL) {

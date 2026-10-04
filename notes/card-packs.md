@@ -40,6 +40,7 @@ the game starts, like the other tables: changing them needs a restart.
 | `name` | the `id` | up to 16 letters, the room between the list's ◄ and ► arrows; longer is cut, with a note. UTF-8: letters the game lacks come from the mods' fonts, as card names do |
 | `description` | none | the first two lines (20 letters each) show under the name; □ shows it all |
 | `image` | none | a PNG inside the mod: the big card's picture ("The screen", below); any size, cut to 102:96 from the middle |
+| `image_style` | `"card"` | how the `image` shows: `"card"`: as the card's art, in the card's frame with the name on its plate, cut to 102:96 from the middle; `"full"`: the whole picture where the card is drawn, frame and all, as large as fits the card's 140x196 with its shape kept, in the middle (a booster pack's own picture) |
 | `cover` | the first card of the rarest tier that has cards | the card whose art stands in when there is no `image` |
 | `shop` | every shop | a shop's id or a list of them (`pack_shop` `shops`); `"*"` for all |
 | `order` | the place it is declared in, across all mods | the list is sorted by it, ties by declaration |
@@ -162,8 +163,9 @@ tier at odds 0 with a slot dealt by the odds.
 Anything else is a note and the pack stays: an unknown card is left out of its
 pool; an unreadable `image` shows the cover; a name past 16 letters is cut, a
 description past 255 bytes too (between two letters, never inside one);
-`sounds` that is not an object, or a `when_nothing_left`, `locked`, `reveal`
-or `shop` of another kind, keeps the default; an unknown key gets the
+`sounds` that is not an object, or a `when_nothing_left`, `locked`, `reveal`,
+`image_style` or `shop` of another kind, keeps the default; `"image_style":
+"full"` without an `image` shows the cover; an unknown key gets the
 likeliest meant ("did you mean"); an `unlock` naming something absent stays
 locked; two packs with one password sell the first in the list's order; a
 `shop` naming no shop is said. In `pack_shop`, a `password`, `rng`,
@@ -227,7 +229,9 @@ The Password screen's own, with nothing drawn by the port over it:
   translation's last line has no room). `password_only` leaves the string as
   it is; `packs_only` never shows it.
 * **The list** (△). The digits' panel shows the pack's name, centred, in the
-  panel's own letters, between the digit cursor's ◄ and ► (shown when there
+  panel's own 16x16 letters, 12 pixels apart (closer for a name that would
+  otherwise run into the arrows, which it never does: 7 apart at 16
+  letters), between the digit cursor's ◄ and ► (shown when there
   is more than one pack; ▲ and ▼ when there is more than one shop); the red
   cursor is hidden. The big card turns to the pack. The message box has the
   shop's name in blue (with more than one shop), the description's first
@@ -236,8 +240,11 @@ The Password screen's own, with nothing drawn by the port over it:
   pack of how many at the right, and `✕BUY ○BACK □INFO`. When a language's
   words for them do not fit the box's twenty letters (the French, German,
   Italian and Spanish do not), `✕BUY ○BACK` is one line and `□INFO` the next,
-  and the description has one line. A locked pack shown is face down, named
-  `??????`, with LOCKED and what opens it.
+  and the description has one line. A row of buttons is 4 pixels lower than
+  the next line would be (`F8 01 10`, 16 pixels), so that their icons, 16 rows
+  tall on the box's 12, clear the price's star above; so is the buttons' row
+  of the reveal, of what came and of the details. A locked pack shown is face
+  down, named `??????`, with LOCKED and what opens it.
 * **BUY / QUIT** (✕): the game's EXCHANGE / QUIT question, word for word in
   its layout (strings 227 and 228): the name, the price, then the choice,
   BUY red and not to be chosen when the starchips, the stock, a `once` or the
@@ -270,9 +277,41 @@ cover card's art with the pack's name on the plate (without a serif font to
 set the name in, the cover card's own plate stays). The override is armed for
 one load at a time (`Cards_OverrideArt`) and disarmed whenever the screen
 opens or closes and when a state loads; HD text leaves that plate as it is
-rather than setting the Magic card's name over it. A picture larger than the
-card's art area, or one of its own shape, would need a sprite and VRAM of its
-own and is not built.
+rather than setting the Magic card's name over it.
+
+With `"image_style": "full"` the picture is the whole card instead: the PNG
+as large as fits the card's 140x196, its shape kept, in the middle, with
+what it leaves clear (and the PNG's own clear parts) showing the screen
+behind. At the console's resolution a pixel under half opaque is clear and
+the rest opaque; at 2x and 4x the PNG itself is drawn, of any size (a small
+one smoothly scaled), with its own transparency.
+
+It is made into the game's kind of texture, 8 bits a texel through 256
+colours with entry 0 clear, as the title's pictures are
+(`CardArt_IndexedImage`), and put in VRAM the Password screen leaves unused:
+the 8-bit page at (384,256)-(511,511), its palette at (128,511) (empty in
+dumps of every state of the screen: the digits, the list, BUY / QUIT,
+paying, each card turning over, what came and the details). Other screens
+use that VRAM (a Free Duel and a duel write row 511), so the picture is
+uploaded again each time the screen opens. The card view draws it
+(`func_80028B08`, asking `PackShop_Picture`) in the place of the art, the
+plates and the icons, through the same turn as the card, and the frame's
+front is not drawn (`DisplayObject_RenderSpriteSheet` asks
+`PackShop_HidesFrame`), so the card still turns over to its back and the
+picture turns in (`TexturePack_AddMadeSeeThrough` for the PNG above the
+console's resolution). The card loaded under it is the first Magic card,
+whose art and plate are not shown.
+
+A state saved with the picture up has it in VRAM. Its load is read before
+the state's RAM is, so the card's objects are taken at the first draw after
+it, whichever screen the state was loaded from, and the picture is uploaded
+again at the screen's next update so that the PNG is known above the
+console's resolution. A state saved while that card turns away (to the next
+pack, or to its back) shows the Magic card's frame for the rest of that half
+turn after the load, since the state keeps which pack comes next, not which
+one is going. Leaving the screen to the main menu, and the Free Duel after
+it, draw the same as without the picture (checked). A picture that cannot be
+read shows the cover, as above, with a note in the Mods window.
 
 ## The save
 
@@ -327,7 +366,7 @@ not built.
 that a pack spends four numbers a slot whatever it holds, the guarantee, the
 pity, `unique_in_pack` and `max_copies` (fixed cards first), the fall to a
 commoner tier, `when_nothing_left`, the chest's room, the unlock conditions, the progress file
-(lines of packs not here kept) and the deals of `packs_fixture.json` against
+(lines of packs not here kept), `image_style` and its notes, and the deals of `packs_fixture.json` against
 `packs_golden.txt` (a line ends `| nothing left` for a pack with nothing left
 for the player); the FM Editor's `tests/test_packs.py` holds its reader and
 Simulate to the same file and the same rules, null and all.

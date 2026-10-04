@@ -35,6 +35,50 @@ u8 gDuel_abTrapAttackThresholds[DUEL_ATTACK_TRAP_COUNT] = {
     DUEL_WIDESPREAD_RUIN_ATTACK_THRESHOLD / DUEL_ATTACK_TRAP_THRESHOLD_SCALE,
 };
 
+#ifdef MEMORIES_PC
+/* Retail groups equal effects into one slot. With per-card thresholds that
+ * would let an ineligible copy hide an eligible one. Check each actual card,
+ * keeping retail effect priority and the last field slot for equal effects.
+ * Leave the retail path untouched when no card has its own threshold. */
+static int select_custom_attack_trap(u8 *attacker)
+{
+    int slot, custom = 0, chosen_effect = 0, chosen_slot = 0, fake_slot = -1;
+    int base = D_8009B1D5 * DUEL_FIELD_SIDE_GRID_SLOT_COUNT;
+    int attack;
+    for (slot = 0; slot < DUEL_FIELD_ROW_SIZE; slot++) {
+        DuelCardRecord *card = &D_801A7AD8[D_800907D8[base + slot]];
+        if ((card->flags & DUEL_CARD_FLAG_OCCUPIED) && Cards_TrapThreshold(card->card_id, -1) >= 0)
+            custom = 1;
+    }
+    if (!custom) return -1;
+    attack = Duel_CalcCardStats(&D_801A7AD8[((DisplayObject *)attacker)->field_6A]) & 0xFFFF;
+    for (slot = 0; slot < DUEL_FIELD_ROW_SIZE; slot++) {
+        DuelCardRecord *card = &D_801A7AD8[D_800907D8[base + slot]];
+        int effect, index, threshold;
+        if (!(card->flags & DUEL_CARD_FLAG_OCCUPIED)) continue;
+        effect = Cards_TrapId(card->card_id);
+        if (effect == DUEL_FAKE_TRAP_CARD_ID && fake_slot < 0)
+            fake_slot = ((DisplayObject *)card->object)->field_6A;
+        index = effect - DUEL_ATTACK_TRAP_FIRST_CARD_ID;
+        if ((unsigned)index >= DUEL_ATTACK_TRAP_COUNT) continue;
+        threshold = Tables_TrapThreshold(index, gDuel_abTrapAttackThresholds[index] * DUEL_ATTACK_TRAP_THRESHOLD_SCALE);
+        threshold = Cards_TrapThreshold(card->card_id, threshold);
+        if (attack <= threshold && (!chosen_effect || effect <= chosen_effect)) {
+            chosen_effect = effect;
+            chosen_slot = ((DisplayObject *)card->object)->field_6A;
+        }
+    }
+    if (!chosen_effect && fake_slot >= 0) {
+        chosen_effect = DUEL_FAKE_TRAP_CARD_ID;
+        chosen_slot = fake_slot;
+    }
+    if (!chosen_effect) return 0;
+    D_8009B22A = chosen_effect;
+    D_8009B1B8 = chosen_slot;
+    return 1;
+}
+#endif
+
 s32 Duel_SelectAttackTrap(u8 *p) {
     s32 i;
     s32 off1;
@@ -64,6 +108,11 @@ s32 Duel_SelectAttackTrap(u8 *p) {
     u8 *rec3;
     s32 h3;
     s32 k;
+
+#ifdef MEMORIES_PC
+    int custom_result = select_custom_attack_trap(p);
+    if (custom_result >= 0) return custom_result;
+#endif
 
     i = 0;
     off1 = 0x18000;

@@ -10,6 +10,9 @@
 #include "sprite_primitive.h"
 #include "display_object_packet_submit.h"
 #include "display_object_render_sprite_sheet.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/pack_shop.h"
+#endif
 
 /* Caching this pointer shortens retail; each use must reload field_4C. */
 #define SPRITE_SHEET_HEADER(object) \
@@ -118,6 +121,13 @@ retry:
         }
         work->mode = 0xF0000;
     }
+#ifdef MEMORIES_PC
+    /* The front of a card whose place a card pack's whole picture takes
+       (pack_shop.h); its back, turning, is drawn. */
+    if (PackShop_HidesFrame(object)) {
+        return;
+    }
+#endif
     do {
         sprite->attribute = work->attribute;
         work->cell = part->cell;

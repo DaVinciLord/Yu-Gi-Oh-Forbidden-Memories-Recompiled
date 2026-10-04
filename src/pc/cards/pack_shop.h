@@ -40,6 +40,20 @@ const unsigned char *PackShop_Text(int id);
  * ends it; NULL for a stream that is not this module's. */
 unsigned char *PackShop_Retarget(const unsigned char *cursor);
 
+/* "image_style": "full" (notes/card-packs.md). func_80028B08, which draws the
+ * card view's art and plates: while the big card shows such a pack, 1 and
+ * its picture, drawn at (x, y) of the card's frame, width x height texels
+ * from (u, v) of 8-bit page `tpage` through the palette at VRAM (clut_x,
+ * clut_y), in the place of the art, the plates and the icons; 0 for any
+ * other card view (`art` is the view's art object). */
+typedef struct {
+    int x, y, width, height, u, v, tpage, clut_x, clut_y;
+} PackShopPicture;
+int PackShop_Picture(const void *art, PackShopPicture *picture);
+/* DisplayObject_RenderSpriteSheet: 1 when `frame` is that card's frame
+ * showing its front, which the picture stands in for (its back is drawn). */
+int PackShop_HidesFrame(const void *frame);
+
 /* The running save was loaded (SaveCards_Applied) or written
  * (SaveCards_Saved): what it holds of the packs, beside it. */
 void PackShop_SaveLoaded(const void *state);

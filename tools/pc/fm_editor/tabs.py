@@ -90,6 +90,7 @@ class CardsTab(Tab):
         self.current = None
         self._shown_price = ""
         self._shown_effect = ""
+        self._shown_threshold = ""
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
         # The form keeps its width; the list takes what is left, down to this.
@@ -122,11 +123,12 @@ class CardsTab(Tab):
         self.form = form
         self.vars = {k: tk.StringVar() for k in ("name", "attack", "defense", "type", "attribute", "level",
                                                   "star1", "star2", "password", "starchips", "key", "frame",
-                                                  "effect")}
+                                                  "effect", "trap_threshold")}
         row = 0
         # Only a monster has these; a magic, trap, ritual or equip card has
         # an effect instead (show_kind).
         self.monster_rows, self.effect_row = [], []
+        self.trap_rows = []
 
         def line(label, widget, hint=None, rows=None):
             nonlocal row
@@ -159,8 +161,10 @@ class CardsTab(Tab):
         # What the card does when played: a disc card of its type whose
         # effect it has (cards.c "effect"), so the game and the CPU play it
         # as that card.
-        self.effect_box = line("Effect", ttk.Combobox(form, textvariable=self.vars["effect"], state="readonly",
+        self.effect_box = line("Retail effect", ttk.Combobox(form, textvariable=self.vars["effect"], state="readonly",
                                                        width=26), hint("effect"), self.effect_row)
+        line("Trigger at ATK ≤", ttk.Spinbox(form, textvariable=self.vars["trap_threshold"], from_=0, to=65535,
+                                           increment=50, width=10), hint("trap_threshold"), self.trap_rows)
         line("Attribute", ttk.Combobox(form, textvariable=self.vars["attribute"], values=ATTRIBUTE_CHOICES,
                                        state="readonly", width=18), hint("attribute"), self.monster_rows)
         line("Level", ttk.Spinbox(form, textvariable=self.vars["level"], from_=0, to=12, width=8), hint("level"),
@@ -202,6 +206,7 @@ class CardsTab(Tab):
         self.vars["frame"].trace_add("write", lambda *_: self.show_swatch())
         self.vars["type"].trace_add("write", lambda *_: self.show_swatch())
         self.vars["type"].trace_add("write", lambda *_: self.show_kind())
+        self.vars["effect"].trace_add("write", lambda *_: self.show_trap_threshold())
         ttk.Label(form, text="Notes").grid(row=row, column=0, sticky="nw", pady=2)
         self.notes = tk.Text(form, width=36, height=4, wrap="word", undo=True)
         self.notes.grid(row=row, column=1, columnspan=2, sticky="we", pady=2)
@@ -265,7 +270,8 @@ class CardsTab(Tab):
         card = self.project.cards[cid]
         state = ("added" if cid in self.project.added else "changed" if self.project.card_changed(cid)
                  else "notes" if cid in self.project.notes else "")
-        return (cid, card.name, type_label(card.type), card.attack, card.defense, state), (state,) if state else ()
+        attack, defense = (card.attack, card.defense) if card.is_monster() else ("", "")
+        return (cid, card.name, type_label(card.type), attack, defense, state), (state,) if state else ()
 
     def fill(self):
         if not hasattr(self, "tree") or self.project is None:
@@ -352,6 +358,10 @@ class CardsTab(Tab):
         # Before the type, whose trace fills the effect list for it.
         self.vars["effect"].set(self.effect_label(self.effect_shown(cid)))
         self.vars["type"].set(type_label(card.type))
+        threshold = self.project.trap_threshold_override(cid)
+        self._shown_threshold = "" if threshold is None else str(threshold)
+        self.vars["trap_threshold"].set(self._shown_threshold)
+        self.show_trap_threshold()
         self.vars["attribute"].set(attribute_label(card.attribute))
         self.vars["level"].set(card.level)
         # The mod's stars (the Guardian Stars tab) are in the lists too.
@@ -400,7 +410,7 @@ class CardsTab(Tab):
             self.added_frame.grid_remove()
             extra = self.project.card_extra.get(cid, {})
         self._shown_effect = self.vars["effect"].get()
-        kept = sorted(set(extra) - {"effect"})        # the Effect list shows that one
+        kept = sorted(set(extra) - {"effect", "trap_threshold"})
         self.extra.configure(text=("Kept as written in mod.json: " + ", ".join(kept)) if kept else "")
 
     # A magic, trap, ritual or equip card's effect
@@ -410,12 +420,32 @@ class CardsTab(Tab):
         return card.type if card and not card.is_monster() else -1
 
     def effect_label(self, eid: int) -> str:
-        return f"{eid} {self.project.retail.cards[eid].name}" if self.effect_kind(eid) >= 0 else EFFECT_NONE
+        if self.effect_kind(eid) < 0:
+            return EFFECT_NONE
+        card = self.project.retail.cards[eid]
+        # Names describe fixed retail behaviors, not the mod's current cards.
+        # Only duplicate names need a number to distinguish the choices.
+        duplicate = any(other.id != eid and other.type == card.type and other.name == card.name
+                        for other in self.project.retail.cards.values())
+        return f"{card.name} ({eid})" if duplicate or card.name == EFFECT_NONE else card.name
 
     def effect_default(self, cid: int) -> int:
         """The effect the card has with no "effect" key: a disc card its own,
         a copy its base's (cards.c Cards_EffectId)."""
         return self.project.effect_of(self.project.base_of(cid)) if cid in self.project.added else cid
+
+    def chosen_effect(self) -> int:
+        kind = parse_choice(self.vars["type"].get(), TYPE_NAMES)
+        return next((eid for eid in self.project.retail.cards
+                     if self.effect_kind(eid) == kind and self.effect_label(eid) == self.vars["effect"].get()), 0)
+
+    def show_trap_threshold(self):
+        threshold = None
+        if self.project is not None and parse_choice(self.vars["type"].get(), TYPE_NAMES) == TYPE_TRAP:
+            threshold = self.project.trap_threshold_default(self.chosen_effect())
+        for widget in self.trap_rows:
+            widget.grid() if threshold is not None else widget.grid_remove()
+        self.hints["trap_threshold"].configure(text=f"Blank: effect default ({threshold})" if threshold is not None else "")
 
     def effect_shown(self, cid: int) -> int:
         eid = self.project.effect_of(cid)
@@ -429,6 +459,7 @@ class CardsTab(Tab):
             widget.grid() if monster else widget.grid_remove()
         for widget in self.effect_row:
             widget.grid_remove() if monster else widget.grid()
+        self.show_trap_threshold()
         if monster:
             self.refill_monster()
             return
@@ -472,7 +503,7 @@ class CardsTab(Tab):
         if self.vars["effect"].get() == self._shown_effect and card.type == self.project.cards[cid].type:
             return False
         extra = self.project.added[cid].extra if cid in self.project.added else self.project.card_extra.get(cid, {})
-        chosen = 0 if card.is_monster() else max(0, parse_choice(self.vars["effect"].get(), [EFFECT_NONE]))
+        chosen = 0 if card.is_monster() else self.chosen_effect()
         default = self.effect_default(cid)
         wanted = chosen if chosen and chosen != default else None
         had = extra.get("effect")
@@ -531,8 +562,7 @@ class CardsTab(Tab):
             # As the disc's: no ATK, DEF, level or stars, and the magic or
             # trap attribute.
             card.attack = card.defense = card.level = card.star1 = card.star2 = 0
-            if card.attribute not in (6, 7):
-                card.attribute = 7 if card.type == TYPE_TRAP else 6
+            card.attribute = 7 if card.type == TYPE_TRAP else 6
         card.frame = max(-1, parse_choice(self.vars["frame"].get(), FRAME_CHOICES) - 1)
         return card
 
@@ -561,6 +591,15 @@ class CardsTab(Tab):
             self.status.configure(text='The mod\'s "passwords" must be an object before editing Starchips')
             return False
         changed = not card.same(self.project.cards[cid])
+        threshold_text = self.vars["trap_threshold"].get().strip()
+        threshold_active = card.type == TYPE_TRAP and self.project.trap_threshold_default(self.chosen_effect()) is not None
+        threshold_changed = threshold_active and threshold_text != self._shown_threshold
+        threshold_clear = (not threshold_active and self.project.trap_threshold_override(cid) is not None and
+                           (card.type != self.project.cards[cid].type or self.vars["effect"].get() != self._shown_effect))
+        if threshold_changed and threshold_text and (not threshold_text.isascii() or not threshold_text.isdigit() or
+                                                      len(threshold_text) > 5 or int(threshold_text) > 65535):
+            self.status.configure(text="Trigger ATK is a whole number from 0 to 65535, or blank for the effect default")
+            return False
         if cid in self.project.added:
             added = self.project.added[cid]
             key = self.vars["key"].get().strip()
@@ -586,6 +625,15 @@ class CardsTab(Tab):
             self.project.set_starchips(cid, price)
             changed = True
         if self.store_effect(cid, card):
+            changed = True
+        if threshold_changed:
+            self.project.set_trap_threshold(cid, int(threshold_text) if threshold_text else None)
+            self._shown_threshold = threshold_text
+            changed = True
+        elif threshold_clear:
+            self.project.set_trap_threshold(cid, None)
+            self.vars["trap_threshold"].set("")
+            self._shown_threshold = ""
             changed = True
         self._shown_effect = self.vars["effect"].get()
         cost = self.project.starchip_cost(cid)
