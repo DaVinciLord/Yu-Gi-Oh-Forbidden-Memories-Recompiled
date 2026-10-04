@@ -8,9 +8,13 @@
  * launch to the next, as they do for the desktop executables. The system
  * would otherwise load it at a different address each time.
  *
- * If the range cannot be had, the game is loaded where the system chooses
- * and told so (MEMORIES_ANDROID_LOAD_BIAS): it runs, but its save states
- * cannot be carried to another launch (notes/pc-build.md, "Android"). */
+ * If the range cannot be had, the 64-bit game is not loaded at all (its
+ * function addresses go into 4-byte guest slots: anywhere else it would run
+ * broken), and the player is told so in a message box; the 32-bit one is
+ * loaded where the system chooses and told so (MEMORIES_ANDROID_LOAD_BIAS):
+ * it runs, but its save states cannot be carried to another launch
+ * (notes/pc-build.md, "Android"). A failure ends the process: the app does
+ * not just flash and close. */
 #ifdef __ANDROID__
 #include "pc/compat/fs.h" /* setenv, as every unit that names a file or a variable */
 #include <android/dlext.h>
@@ -51,6 +55,19 @@ static void say_occupants(uintptr_t low, uintptr_t high)
     fclose(maps);
 }
 
+/* A failure the player sees: the log, then SDL's message box (libSDL3.so,
+ * which SDL's Java shell loaded before this library), then the process
+ * ends, so the next launch starts afresh. */
+static void fail(const char *text)
+{
+    typedef int (*ShowBox)(unsigned flags, const char *title, const char *message, void *window);
+    void *sdl = dlopen("libSDL3.so", RTLD_NOW | RTLD_NOLOAD);
+    ShowBox show = sdl ? (ShowBox)dlsym(sdl, "SDL_ShowSimpleMessageBox") : NULL;
+    say(text);
+    if (show) show(0x10u /* SDL_MESSAGEBOX_ERROR */, "YFM Re-Decomp", text, NULL);
+    exit(1);
+}
+
 /* libgame.so beside this library (the app's native library folder). */
 static int game_path(char *out, size_t size)
 {
@@ -80,26 +97,35 @@ int SDL_main(int argc, char **argv)
         extinfo.reserved_size = MEMORIES_ANDROID_GAME_SPAN;
         game = android_dlopen_ext(path, RTLD_NOW, &extinfo);
         if (!game) {
-            snprintf(line, sizeof(line), "memories-pc: loading %s at %p: %s", path, base, dlerror());
+            snprintf(line, sizeof(line), "The game could not start: loading %s at %p failed: %s", path, base,
+                     dlerror());
+#if UINTPTR_MAX > 0xffffffffu
+            fail(line);
+#else
             say(line);
             munmap(reserved, MEMORIES_ANDROID_GAME_SPAN);
+#endif
         }
     } else {
         snprintf(line, sizeof(line), "memories-pc: the game's address range at %p is taken (got %p)", base, reserved);
         say(line);
         if (reserved != MAP_FAILED) munmap(reserved, MEMORIES_ANDROID_GAME_SPAN);
         say_occupants((uintptr_t)base, (uintptr_t)base + MEMORIES_ANDROID_GAME_SPAN);
+#if UINTPTR_MAX > 0xffffffffu
+        /* Refused before anything of the game is loaded: elsewhere its
+         * initialisers would run at an address it cannot work at. */
+        snprintf(line, sizeof(line), "The game could not start: it needs the addresses %p-%p, which this phone "
+                 "already uses for something else (the log lists what). Please report this, with the phone's "
+                 "model and Android version.", base, (void *)((uintptr_t)base + MEMORIES_ANDROID_GAME_SPAN));
+        fail(line);
+#endif
     }
     if (!game && !(game = dlopen(path, RTLD_NOW))) {
-        snprintf(line, sizeof(line), "memories-pc: cannot load %s: %s", path, dlerror());
-        say(line);
-        return 1;
+        snprintf(line, sizeof(line), "The game could not start: cannot load %s: %s", path, dlerror());
+        fail(line);
     }
     run = (GameMain)dlsym(game, "Memories_AndroidMain");
-    if (!run) {
-        say("memories-pc: libgame.so has no Memories_AndroidMain");
-        return 1;
-    }
+    if (!run) fail("The game could not start: libgame.so has no Memories_AndroidMain");
     {
         /* Where it went, against where it was linked: 0 when the
          * reservation held. */
@@ -110,10 +136,9 @@ int SDL_main(int argc, char **argv)
     /* 64-bit: the game's function addresses go into 4-byte guest slots, so
      * anywhere but its link address (below 4 GB) it would run broken. */
     if (bias) {
-        snprintf(line, sizeof(line), "memories-pc: libgame.so loaded %ld bytes from its link address %p; the 64-bit "
-                 "game needs it there", bias, base);
-        say(line);
-        return 1;
+        snprintf(line, sizeof(line), "The game could not start: libgame.so was loaded %ld bytes from its link "
+                 "address %p; the 64-bit game needs it there", bias, base);
+        fail(line);
     }
 #endif
     snprintf(line, sizeof(line), "%ld", bias);
