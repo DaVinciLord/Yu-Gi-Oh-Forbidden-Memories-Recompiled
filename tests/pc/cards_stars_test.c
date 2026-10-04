@@ -204,6 +204,53 @@ static void expect(int id, int first, int second)
     }
 }
 
+static void magic_conversions(void)
+{
+    BuildContext context = {0};
+    JsonDocument *document;
+    char json[256], error[128];
+    int id, base;
+    /* Real retail effect identities, independent of the cards occupying
+       those slots after a mod. Every retail slot can become Raigeki. */
+    test_stats[337 - 1] = STATS(CARD_TYPE_MAGIC, 0, 0);
+    test_stats[343 - 1] = STATS(CARD_TYPE_MAGIC, 0, 0);
+    for (id = 1; id <= CARD_COUNT; id++) {
+        snprintf(json, sizeof(json), "{\"replace\":%d,\"type\":\"Magic\",\"effect\":337}", id);
+        document = Json_Parse(json, error, sizeof(error));
+        assert(document);
+        add_entry("conversion", ".", id, Json_Root(document), &context);
+        assert(Cards_Type(id) == CARD_TYPE_MAGIC);
+        assert(Cards_EffectId(id) == 337);
+        assert(Cards_AiId(id) == 337);
+        assert(Cards_TrapId(id) == 0);
+        assert(!((unsigned)gDuel_adwCardStats[id - 1] & 0x3FFFFu));
+    }
+    /* Copies of each original kind may cross to magic with a matching
+       effect. No monster stats survive to confuse the AI's ranking. */
+    for (base = 1; base <= 5; base++) {
+        int type = base == 1 ? 0 : CARD_TYPE_MAGIC + base - 2;
+        gDuel_adwCardStats[base - 1] = test_stats[base - 1] = STATS(type, SUN, MOON);
+        snprintf(json, sizeof(json), "{\"copy\":%d,\"id\":\"magic-%d\",\"type\":\"Magic\",\"effect\":337}", base, base);
+        document = Json_Parse(json, error, sizeof(error));
+        assert(document);
+        id = gCard_nCount + 1;
+        add_entry("conversion", ".", base, Json_Root(document), &context);
+        assert(gCard_nCount == id && Cards_Type(id) == CARD_TYPE_MAGIC);
+        assert(Cards_EffectId(id) == 337 && Cards_AiId(id) == 337);
+        assert(Cards_KindChanged(id) == (type != CARD_TYPE_MAGIC));
+        assert(!((unsigned)gDuel_adwCardStats[id - 1] & 0x3FFFFu));
+    }
+    /* Raigeki itself now plays Sparks; explicit references to Raigeki
+       still mean retail Raigeki, for existing cards and added copies. */
+    effect_ids[337] = 343;
+    assert(Cards_EffectId(337) == 343 && Cards_AiId(337) == 343);
+    assert(Cards_EffectId(6) == 337 && Cards_AiId(6) == 337);
+    assert(Cards_EffectId(id) == 337 && Cards_AiId(id) == 337);
+    gDuel_adwCardStats[337 - 1] = STATS(0, SUN, MOON);
+    assert(Cards_AiId(337) == -1);
+    assert(Cards_AiId(6) == 337 && Cards_AiId(id) == 337);
+}
+
 int main(void)
 {
     int id;
@@ -254,6 +301,7 @@ int main(void)
     assert(Cards_AiId(1) == 1 && Cards_AiId(4) == 4);
     assert(((unsigned)gDuel_adwCardStats[3] & 0x1FF) == 100);   /* a monster keeps its own */
 
-    puts("cards stars: ok");
+    magic_conversions();
+    puts("cards stars and magic conversions: ok");
     return 0;
 }

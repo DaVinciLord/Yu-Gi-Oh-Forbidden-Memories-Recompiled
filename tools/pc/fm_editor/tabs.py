@@ -159,7 +159,7 @@ class CardsTab(Tab):
         # What the card does when played: a disc card of its type whose
         # effect it has (cards.c "effect"), so the game and the CPU play it
         # as that card.
-        self.effect_box = line("Effect", ttk.Combobox(form, textvariable=self.vars["effect"], state="readonly",
+        self.effect_box = line("Retail effect", ttk.Combobox(form, textvariable=self.vars["effect"], state="readonly",
                                                        width=26), hint("effect"), self.effect_row)
         line("Attribute", ttk.Combobox(form, textvariable=self.vars["attribute"], values=ATTRIBUTE_CHOICES,
                                        state="readonly", width=18), hint("attribute"), self.monster_rows)
@@ -410,7 +410,14 @@ class CardsTab(Tab):
         return card.type if card and not card.is_monster() else -1
 
     def effect_label(self, eid: int) -> str:
-        return f"{eid} {self.project.retail.cards[eid].name}" if self.effect_kind(eid) >= 0 else EFFECT_NONE
+        if self.effect_kind(eid) < 0:
+            return EFFECT_NONE
+        card = self.project.retail.cards[eid]
+        # Names describe fixed retail behaviors, not the mod's current cards.
+        # Only duplicate names need a number to distinguish the choices.
+        duplicate = any(other.id != eid and other.type == card.type and other.name == card.name
+                        for other in self.project.retail.cards.values())
+        return f"{card.name} ({eid})" if duplicate or card.name == EFFECT_NONE else card.name
 
     def effect_default(self, cid: int) -> int:
         """The effect the card has with no "effect" key: a disc card its own,
@@ -472,7 +479,9 @@ class CardsTab(Tab):
         if self.vars["effect"].get() == self._shown_effect and card.type == self.project.cards[cid].type:
             return False
         extra = self.project.added[cid].extra if cid in self.project.added else self.project.card_extra.get(cid, {})
-        chosen = 0 if card.is_monster() else max(0, parse_choice(self.vars["effect"].get(), [EFFECT_NONE]))
+        chosen = 0 if card.is_monster() else next(
+            (eid for eid in self.project.retail.cards
+             if self.effect_kind(eid) == card.type and self.effect_label(eid) == self.vars["effect"].get()), 0)
         default = self.effect_default(cid)
         wanted = chosen if chosen and chosen != default else None
         had = extra.get("effect")
@@ -531,8 +540,7 @@ class CardsTab(Tab):
             # As the disc's: no ATK, DEF, level or stars, and the magic or
             # trap attribute.
             card.attack = card.defense = card.level = card.star1 = card.star2 = 0
-            if card.attribute not in (6, 7):
-                card.attribute = 7 if card.type == TYPE_TRAP else 6
+            card.attribute = 7 if card.type == TYPE_TRAP else 6
         card.frame = max(-1, parse_choice(self.vars["frame"].get(), FRAME_CHOICES) - 1)
         return card
 

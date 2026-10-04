@@ -1135,15 +1135,19 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         }
     }
     if ((value = choice(Json_Member(entry, "type"), type_names, 24)) >= 0) {
-        /* A monster has its base's 3D model and a magic, trap or equip card
-         * its base's effect: a copy stays on the same side of that line.
-         * A replaced card may cross it, with a "model" or "effect" to go with
-         * its new side (below). */
+        /* A copy may become a non-monster when it has a retail effect of
+         * that type. The effect names a built-in behavior, even if the
+         * source card was itself replaced. */
         int monster = ((stats >> 26) & 0x1F) < CARD_TYPE_MAGIC;
+        int effect = Cards_Reference(Json_Member(entry, "effect"));
+        if (effect <= 0 && Json_Number(Json_Member(entry, "effect"), 0) == 0)
+            effect = Cards_EffectId(base);
         value = clamp(value, 0, CARD_TYPE_EQUIP);
-        if (!replace && (monster ? value >= CARD_TYPE_MAGIC : value != (int)((stats >> 26) & 0x1F))) {
+        if (!replace && (monster ? value >= CARD_TYPE_MAGIC : value != (int)((stats >> 26) & 0x1F)) &&
+            !(value >= CARD_TYPE_MAGIC && Cards_RetailType(effect) == value)) {
             Mods_Note(mod, "cards[%d]: %s; \"type\" left out", index,
-                      monster ? "a copy of a monster stays a monster" : "a copy of a magic, trap, ritual or equip card keeps its type");
+                      monster ? "a copy needs a matching retail effect to become a non-monster" :
+                                "a non-monster copy needs a matching retail effect to change type");
         } else {
             stats = (stats & ~(0x1Fu << 26)) | ((unsigned)value << 26);
         }

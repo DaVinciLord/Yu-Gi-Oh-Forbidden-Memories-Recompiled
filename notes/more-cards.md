@@ -49,7 +49,7 @@ The release ships no card mod; the checks below were made with test mods
 | `field_art` | a PNG (same sizing rule as `art`) for the 3D Monsters mod's Card art style cutout alone, on top of the card on the duel field: never patched into the card's own record, so the Library, hand, trade screen and detail panel keep showing `art` (or the base's own picture) untouched. Without one the cutout shows the same picture everything else does |
 | `title` | a PNG for the name plate at the top of the card's picture (96x14; dark ink on white, or on a transparent background). Without one, a card with its own name gets a plate with that name set in Times at the retail plates' size (Times New Roman on Windows, fontconfig's match for `Times` elsewhere, Liberation Serif on most Linux systems), or a blank plate when there is none |
 | `attack`, `defense` | 0 to 5110, in tens, as the game stores them |
-| `type` | a number or a name (`"Dragon"`, `"Winged Beast"`). A copy of a monster stays a monster, since it has its base's 3D model; a copy of a magic, trap, ritual or equip card keeps its type, since it has its base's effect |
+| `type` | a number or a name (`"Dragon"`, `"Winged Beast"`). A copy may become Magic, Trap, Ritual or Equip when `effect` selects a retail behavior of that type. Without a matching effect it keeps its original kind; a non-monster copy cannot become a monster |
 | `attribute` | a number or a name (`"Light"` to `"Wind"`) |
 | `level` | 0 to 12 |
 | `stars` | the two guardian stars, as numbers or names (`"Mars"` to `"Venus"`, and a mod's own up to 15: [Guardian Stars](modding.md#guardian-stars-names-icons-new-stars-and-matchups)); a second of `0` (none) or the same as the first is a card with one star |

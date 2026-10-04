@@ -804,7 +804,7 @@ class ValidateTest(unittest.TestCase):
         self.assertIn("id must be 1-63", text)
         self.assertIn("stored in tens", text)
         self.assertIn("level is 0 to 12", text)
-        self.assertIn("stays a monster", text)
+        self.assertIn("matching retail effect", text)
         self.assertIn("at least 14 cards", text)
         self.assertIn("add up to 2000", text)
         self.assertIn("not an equip card", text)

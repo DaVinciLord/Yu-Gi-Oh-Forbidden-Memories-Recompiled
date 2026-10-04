@@ -154,10 +154,12 @@ def _check_card(project: Project, cid: int, out: list):
             add("error", "invalid stable id: letters, digits, _ and - (at most 80)")
         if sum(1 for a in project.added.values() if a.key == added.key) > 1:
             add("error", f"duplicate card identity {added.key}")
-        if base and base.is_monster() and not card.is_monster():
-            add("error", "a copy of a monster stays a monster (it has its base's 3D model)")
-        elif base and not base.is_monster() and card.type != base.type:
-            add("error", "a copy of a magic, trap, ritual or equip card keeps its type (it has its base's effect)")
+        effect = project.retail.cards.get(project.effect_of(cid))
+        matching_effect = not card.is_monster() and effect and effect.type == card.type
+        if base and base.is_monster() and not card.is_monster() and not matching_effect:
+            add("error", "a copy needs a matching retail effect to become a non-monster")
+        elif base and not base.is_monster() and card.type != base.type and not matching_effect:
+            add("error", "a non-monster copy needs a matching retail effect to change type")
     elif cid in project.retail.cards:
         retail = project.retail.cards[cid]
         extra = project.card_extra.get(cid, {})
