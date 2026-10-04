@@ -2719,7 +2719,8 @@ for a report that has no crash behind it (`Monitor_Facts`, `menu.c`).
 
 `MEMORIES_CRASH_TEST=<kind>@<frame>` fails on purpose
 (`src/pc/debug/crash_test.c`: segv, thread, overflow, abort, fatal, kill,
-hang, spin, deadlock, tickhang, slow, restart, null), and
+hang, spin, deadlock, tickhang, slow, restart, null; and present, the segv
+write inside the next present, which `crash_check.py` does not run), and
 `tools/pc/crash_check.py [--windows]` runs every kind headless and checks
 its report; all 13 pass on Linux and under Wine. Not yet seen on real
 Windows: the message box, the minidump's size (Wine's is small), and the
@@ -3552,6 +3553,63 @@ is about 35 MiB, most of it `.bss`, inside a 64 MiB reservation. No
 trampoline table. A function of another library (libc, SDL) whose address the
 game stored would not fit; none is known, and the plain-process runs below
 are where it would show (a fault at a truncated address).
+
+**The guest's own ranges have the same limit:** guest RAM at 0x80000000
+(and its mirror at 0xA0000000), the scratchpad view at 0x9F800000 and the
+game stack at 0xB0000000 must be free, and with Android 10-13's concurrent
+copying collector a `dalvik.vm.heapsize` of about 870m or more reaches
+0x80000000. The game then stops with "cannot map guest memory at ...", the
+reason, and the mappings that hold the range ("occupied by", in logcat);
+it does not run elsewhere.
+
+**The retail scratchpad is never used in the app.** 0x1F800000 lies inside
+ART's heap there (the port says "0x1f800000 is taken here; the scratchpad
+is reached at 0x9f800000"), where an access would not fault but reach the
+Java heap. Every native path translates a retail scratchpad address to the
+view at 0x9F800000 ("How it works" above), the words the interpreter hands
+to native code included, since the retail view is not mapped there
+(`Memories_ScratchpadRetailView` 0). `MEMORIES_TEST_HOLD_SCRATCHPAD` holds
+the page as ART does, in a test build (Linux or Android). Code mods, which
+could write a retail address of their own, are not loaded on arm64.
+
+**SDL's calls into Java run on the thread's own stack.** SDL reaches Java
+(JNI) for events and joysticks (`Android_JNI_PollInputDevices`, every 3 s
+from the event pump), the window's mode, the cursor, the clipboard,
+message boxes, URLs and audio devices, and ART refuses a call from a
+native stack it does not know: below the thread's stack end it throws
+`StackOverflowError` or skips the method, and with CheckJNI the next call
+aborts. The game stack at 0xB0000000 is such a stack. So every platform
+entry point the game thread calls that may get there runs through
+`Memories_OnHostStack` (`state.c`): on the game stack,
+`Memories_CallOnStack` (`state_aarch64.S`) runs it below the frame of the
+process side waiting in `Memories_ContextSwitch`, which is the thread's
+own stack. They are the presents, which pump the events and apply the
+display settings every frame (`Platform_Present`,
+`Platform_PresentPicture`, `Platform_PresentWidePicture`),
+`Platform_Frame`, `Platform_PumpEvents` (a frame that is not shown),
+`Platform_StartAudio` (`SpuInit`), `Platform_ShowError`,
+`Platform_OpenUrl`, `Platform_OpenFolder`, `Platform_CopyText` and the
+second windows (`sdl.c`'s `HERE`). Only `sdl.c` and `android.c` call SDL
+functions that may reach Java (`gl_picture.c` and `present_pass.c` call
+`SDL_GL_GetProcAddress` and `SDL_GetTicksNS`, which do not);
+`platform/jni_guard.h`, included last in both, checks each
+SDL call that may reach Java against the game stack and logs one that
+runs there ("... which may call Java, ran on the game stack"), so a new
+path that misses the wrapper shows in logcat (arm64 only: the x86
+development build has no stack switch, so the check would flag every call). `MEMORIES_TEST_JAVA=<frame>`
+(or `<frame>box`, with a message box) makes such calls at that frame in
+`Platform_Frame` and in the present's pump, and logs the stack they ran on
+and how many guarded calls ran on the game stack so far; `<frame>guard`
+also calls the guard once on the game stack (no Java call), to show it
+logs and counts. The emulator does
+not show the refusal (its translator runs Java on a stack of its own), so
+a phone is the real check. A crash inside such a call keeps the game's
+callers in its report: `Memories_CallOnStack` leaves its frame record on
+the game stack, and `crash.c`'s walk follows the chain down to it once
+(`MEMORIES_CRASH_TEST=present` faults inside the next present). These
+calls use the SDL thread's own stack, about 1 MiB for a Java thread;
+`MEMORIES_TEST_HOST_STACK=1` paints up to 512 KiB below the switch point
+at the first switch and logs every 1000 frames how deep they went.
 
 Three things differ from windows-x64 beyond the pointer width:
 
