@@ -680,6 +680,22 @@ read and written by `pngio.py`, in plain Python like the rest; the card-text
 preview's tests build their font page and a TrueType file in code as well
 (`tests/test_card_text.py`).
 
+With a built game and your disc in `game/`, these checks save editor mods
+into isolated folders and play real duels (no changes to your saves or mods):
+
+    python3 tests/pc/card_types_runtime.py
+    python3 tests/pc/magic_effects_runtime.py
+    python3 tests/pc/trap_effects_runtime.py
+    python3 tests/pc/trap_effects_runtime.py --hard-mode
+    python3 tests/pc/editor_mods_runtime.py
+    python3 tests/pc/editor_mods_runtime.py --hard-mode
+
+They cover every monster type, converted equips and rituals, all 33 retail
+magic effects, trap thresholds and special triggers, and CPU spell decisions
+and outcomes compared with retail after saving and reopening the mod. Pass
+`--out <folder>` to retain their logs. The AI adapter's native regression
+test is also registered with CTest as `pc_ai_hard_mode_adapter`.
+
 ## Building another front end
 
 The window is one front end over an engine that has no Tk in it. Another

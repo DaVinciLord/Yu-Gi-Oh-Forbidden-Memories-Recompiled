@@ -158,9 +158,11 @@ def build_equips(project: Project) -> list:
     own reading of those rules (equip_rules/simulate_equips)."""
     entries = []
     retail = {e: set(m) for e, m in project.retail.equips.items()}
-    for equip in sorted(e for e in set(retail) | set(project.equips) if e <= CARD_COUNT):
-        before = retail.get(equip, set())
-        after = {m for m in project.equips.get(equip, set()) if m <= CARD_COUNT}
+    monsters = set(project.monsters())
+    for equip in sorted(e for e in set(retail) | set(project.equips)
+                        if e <= CARD_COUNT and project.cards[e].type == 23):
+        before = retail.get(equip, set()) & monsters
+        after = {m for m in project.equips.get(equip, set()) if m <= CARD_COUNT and m in monsters}
         if before == after:
             continue
         add, remove = after - before, before - after
@@ -207,7 +209,11 @@ def _equip_fixes(project: Project, entries: list) -> list:
     got = simulate_equips(project, equip_rules(project, entries, []))
     fixes = []
     for equip in sorted(got):
-        want = project.equips.get(equip, project.equip_baseline(equip))
+        # Changing a copied monster to magic/trap/ritual/equip can leave
+        # its old membership in the editing sets. Such a card is no longer
+        # an equip target; emitting an "add" for it also loses that rule
+        # on reopen, since simulate_equips only considers monsters.
+        want = project.equip_targets(equip)
         have = got[equip]
         if want == have:
             continue

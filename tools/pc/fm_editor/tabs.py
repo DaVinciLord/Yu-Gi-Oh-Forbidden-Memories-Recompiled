@@ -899,11 +899,11 @@ class EquipsTab(Tab):
             return
         self.equips.delete(*self.equips.get_children())
         p = self.project
-        cards = sorted(set(p.equip_cards()) | set(p.equips))
+        cards = p.equip_cards()
         for cid in cards:
             if cid not in p.cards:
                 continue
-            now = p.equips.get(cid, set())
+            now = p.equip_targets(cid)
             changed = now != p.equip_baseline(cid)
             self.equips.insert("", "end", iid=str(cid), values=(cid, p.cards[cid].name, len(now)),
                                tags=("changed",) if changed else ())
@@ -920,11 +920,11 @@ class EquipsTab(Tab):
     def fill(self):
         self.monsters.delete(*self.monsters.get_children())
         p = self.project
-        if not self.current or p is None:
+        if not self.current or p is None or self.current not in p.equip_cards():
             self.heading.configure(text="Select an equip card")
             return
         self.heading.configure(text=f"{p.card_label(self.current)} may equip:")
-        now = p.equips.get(self.current, set())
+        now = p.equip_targets(self.current)
         retail = p.equip_baseline(self.current)
         for cid in sorted(now | retail):
             state = "" if cid in now and cid in retail else "added" if cid in now else "removed"
@@ -946,7 +946,7 @@ class EquipsTab(Tab):
             return
         cid = pick_card(self, self.project, "Monster it may equip", only=lambda c: 0 <= self.project.cards[c].type < 20)
         if cid:
-            self.project.equips.setdefault(self.current, set()).add(cid)
+            self.project.equips.setdefault(self.current, self.project.equip_targets(self.current)).add(cid)
             self.edited()
 
     def by_type(self, allow):
@@ -954,7 +954,7 @@ class EquipsTab(Tab):
             return
         t = TYPE_NAMES.index(self.type_choice.get())
         members = {cid for cid, card in self.project.cards.items() if card.type == t}
-        now = self.project.equips.setdefault(self.current, set())
+        now = self.project.equips.setdefault(self.current, self.project.equip_targets(self.current))
         if allow:
             now |= members
         else:
@@ -964,7 +964,7 @@ class EquipsTab(Tab):
     def remove(self):
         if not self.current:
             return
-        now = self.project.equips.setdefault(self.current, set())
+        now = self.project.equips.setdefault(self.current, self.project.equip_targets(self.current))
         for iid in self.monsters.selection():
             now.discard(int(iid))
         self.edited()

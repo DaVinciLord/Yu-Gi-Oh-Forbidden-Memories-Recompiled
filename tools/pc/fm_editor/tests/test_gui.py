@@ -332,6 +332,30 @@ class GuiTest(unittest.TestCase):
         self.assertTrue(cards.apply())
         self.assertEqual(app.project.card_extra[1], {"effect": 701})
 
+    def test_converted_equip_displays_and_edits_effect_targets(self):
+        app, p = self.app, self.app.project
+        equip = p.add_card(3, "converted-equip")
+        p.cards[equip] = p.cards[equip].copy(type=23, attack=0, defense=0)
+        p.added[equip].extra["effect"] = 651
+        trap = p.add_card(5, "converted-trap")
+        p.cards[trap] = p.cards[trap].copy(type=21, attack=0, defense=0)
+        p.added[trap].extra["effect"] = 701
+        p.cards[652] = p.cards[652].copy(type=0)
+        tab = app.equips
+        tab.refresh()
+        self.assertFalse(tab.equips.exists("652"))
+        tab.current = equip
+        tab.fill()
+        expected = set(p.retail.equips[651])
+        self.assertEqual(set(map(int, tab.monsters.get_children())), expected)
+        self.assertNotIn(trap, p.equip_targets(651))
+        self.assertEqual(int(tab.equips.set(str(equip), "n")), len(expected))
+        tab.monsters.selection_set("5")
+        tab.remove()
+        self.assertEqual(p.equip_targets(equip), expected - {5})
+        self.assertEqual(set(map(int, tab.monsters.get_children())), expected)
+        self.assertEqual(tab.monsters.set("5", "state"), "removed")
+
     def test_copy_has_its_replaced_base_effect(self):
         # A copy with no "effect" plays its base's (cards.c Cards_EffectId).
         project = self.app.project

@@ -574,6 +574,47 @@ class ManifestTest(unittest.TestCase):
         for e in p.equip_cards():
             self.assertEqual(again.equips.get(e, again.equip_baseline(e)), want[e], e)
 
+    def test_converted_copies_are_not_equip_targets(self):
+        for kind in (g.TYPE_MAGIC, g.TYPE_TRAP, g.TYPE_RITUAL, g.TYPE_EQUIP):
+            with self.subTest(kind=kind):
+                p = Project(self.retail)
+                cid = p.add_card(5, "converted")
+                self.assertIn(cid, p.equips[652])
+                effect = next(i for i, card in self.retail.cards.items() if card.type == kind)
+                p.cards[cid] = p.cards[cid].copy(type=kind, attack=0, defense=0)
+                p.added[cid].extra["effect"] = effect
+                built = manifest.build(p)
+                self.assertNotIn(cid, self.game_equips(p)[652])
+                self.assertEqual(manifest.build(self.reopen(p)), built)
+                self.assertFalse(p.equip_retail(652, cid))
+
+    def test_converted_equip_uses_its_retail_effect_targets(self):
+        p = Project(self.retail)
+        cid = p.add_card(3, "equip")
+        p.cards[cid] = p.cards[cid].copy(type=g.TYPE_EQUIP)
+        p.added[cid].extra["effect"] = 652
+        # Changing the original effect slot must not change its behavior.
+        p.cards[652] = p.cards[652].copy(type=0)
+        self.assertEqual(p.equip_baseline(cid), set(self.retail.equips[652]))
+        self.assertEqual(self.game_equips(p)[cid], set(self.retail.equips[652]))
+        self.assertFalse(p.equip_retail(cid, 652))
+
+    def test_converted_retail_cards_do_not_leak_into_equip_rules(self):
+        p = Project(self.retail)
+        p.cards[5] = p.cards[5].copy(type=g.TYPE_MAGIC)
+        p.equips[651] = {5, 6}
+        # An equip changed into a monster must not export its old edits.
+        p.cards[652] = p.cards[652].copy(type=0)
+        p.equips[652] = {1}
+        built = manifest.build(p)
+        messages = []
+        again = Project(self.retail)
+        manifest.apply(again, built, messages)
+        self.assertFalse(messages)
+        self.assertEqual(manifest.build(again), built)
+        self.assertEqual(self.game_equips(p)[651], {6})
+        self.assertTrue(all(p.resolve(entry["card"]) != 652 for entry in built["equips"]))
+
     def test_rules_switched_by_a_setting_are_kept(self):
         # The editor shows the disc's table, not a setting's: a rule with
         # "setting" is written back as it came, and does not change the table.
