@@ -997,7 +997,15 @@ int Memories_GuestMap(void)
 #endif
     fd = memfd_create("memories-ram", 0);
     /* Guest RAM, then a page for the scratchpad. */
-    if (fd < 0 || ftruncate(fd, MEMORIES_GUEST_RAM_SIZE + 0x1000) != 0) {
+    if (fd >= 0 && ftruncate(fd, MEMORIES_GUEST_RAM_SIZE + 0x1000) != 0) {
+        close(fd);
+        fd = -1;
+    }
+#ifdef __ANDROID__
+    /* Before memfd (Linux 3.17): the ashmem device (android.c). */
+    if (fd < 0) fd = memories_ashmem_create("memories-ram", MEMORIES_GUEST_RAM_SIZE + 0x1000);
+#endif
+    if (fd < 0) {
         perror("guest RAM");
         return -1;
     }
