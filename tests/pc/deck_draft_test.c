@@ -20,6 +20,12 @@ void SD_SEPlayFull(u32 id) { (void)id; }
 void Menu_SetItemEnabled(int id, int enabled) { (void)id; (void)enabled; }
 int Menu_Scale(void) { return 1; }
 int Menu_Height(void) { return 26; }
+void Menu_OverlayArea(const MenuCanvas *canvas, int *left, int *right, int *top)
+{
+    *left = 0;
+    *right = canvas->width;
+    *top = 26;
+}
 void Menu_DrawTextScaled(MenuCanvas *canvas, int x, int y, const char *text, uint32_t colour, int scale)
 { (void)canvas; (void)x; (void)y; (void)text; (void)colour; (void)scale; assert(0); }
 int Menu_TextWidthScaled(const char *text, int scale) { (void)text; (void)scale; assert(0); return 0; }

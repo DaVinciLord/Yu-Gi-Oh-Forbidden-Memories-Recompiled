@@ -15,6 +15,13 @@
 int Settings_Get(SettingId id) { (void)id; return 0; } /* View > Japanese buttons off: the hints only */
 int Menu_Scale(void) { return 1; }
 int Menu_Height(void) { return 24; }
+static int span_left, span_right; /* Menu_OverlayArea: the touch controls' free span, none when equal */
+void Menu_OverlayArea(const MenuCanvas *canvas, int *left, int *right, int *top)
+{
+    *left = span_right > span_left ? span_left : 0;
+    *right = span_right > span_left ? span_right : canvas->width;
+    *top = Menu_Height();
+}
 int Menu_TextWidthScaled(const char *text, int scale) { return (int)strlen(text) * 6 * scale; }
 void Menu_DrawTextScaled(MenuCanvas *canvas, int x, int y, const char *text, uint32_t colour, int scale)
 {
@@ -266,6 +273,24 @@ int main(void)
         assert(!SaveSlots_ReadState(1, right, sound) && right[0x50] == 4);
     }
 #endif
+
+    /* Drawn: as wide as it always was in a window; between the touch
+     * controls it keeps inside their span, its rows two lines. */
+    {
+        static uint32_t pixels[1280 * 720];
+        MenuCanvas canvas = {pixels, 1280, 1280, 720, 1};
+        int x, y, w, h, wide_h;
+        begin(SAVE_MENU_LOAD, left, NULL, sizeof(left), 0);
+        SaveMenu_Draw(&canvas, &x, &y, &w, &h);
+        assert(w == 600 && x == (1280 - 600) / 2);
+        wide_h = h;
+        span_left = 370;
+        span_right = 910;
+        SaveMenu_Draw(&canvas, &x, &y, &w, &h);
+        assert(x >= span_left && x + w <= span_right && w >= 400 && h >= wide_h / 2);
+        span_left = span_right = 0;
+        while (SaveMenu_Active()) poll(SAVE_MENU_PAD_CANCEL, 0);
+    }
 
     for (i = 0; i < SAVE_SLOT_COUNT; i++) {
         assert(!SaveSlots_Path(i, path, sizeof(path)));
