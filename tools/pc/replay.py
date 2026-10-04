@@ -33,6 +33,9 @@ The header holds the build id, the OS, the settings and the mods the run had
     replay.py run [DIR]                      every replay in tests/pc/replays with
                                              --check, like smoke.py: a local gate
                                              (CI has no disc)
+
+play and run take --env KEY=VALUE for the game (the play's own MEMORIES_*
+variables replace the caller's, which a game here never sees).
 """
 from __future__ import annotations
 
@@ -361,11 +364,12 @@ def check(replay: Replay, actual_path: Path) -> bool:
     return ok
 
 
-def play_scripted(replay: Replay, executable: Path, out: Path) -> bool:
+def play_scripted(replay: Replay, executable: Path, out: Path, more_env: dict[str, str] | None = None) -> bool:
     spec = importlib.util.spec_from_file_location("scenario", replay.file(replay.meta["script"]))
     scenario = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(scenario)
     out.mkdir(parents=True, exist_ok=True)
+    yfm_control.EXTRA_ENV = dict(more_env or {})   # the scenario's games get --env too
     try:
         scenario.run(executable, out)
     except AssertionError as failure:
@@ -374,6 +378,8 @@ def play_scripted(replay: Replay, executable: Path, out: Path) -> bool:
     except Exception as failure:   # the scenario could not run on this build
         report(f"replay: {replay.name}: FAILED to run: {type(failure).__name__}: {failure}")
         return False
+    finally:
+        yfm_control.EXTRA_ENV = {}
     report(f"replay: {replay.name}: passed")
     return True
 
@@ -401,7 +407,7 @@ def play_in(path: Path, executable: Path, do_check: bool, update: bool, timeout:
     out = Path(tempfile.mkdtemp(prefix=f"{replay.name}-", dir=OUTPUT))
     folder.append(out)
     if replay.meta["kind"] == "scripted":
-        return play_scripted(replay, executable, out)
+        return play_scripted(replay, executable, out, more_env)
     header = replay.meta["header"]
     if header.get("clock") == "real":
         report(f"replay: {replay.name}: recorded on the real-time clock, where each VBlank came at its own moment: "
@@ -498,21 +504,23 @@ def main() -> int:
     running.add_argument("folder", type=Path, nargs="?", default=REPLAYS)
     running.add_argument("--executable", type=Path)
     running.add_argument("--timeout", type=float, default=900)
+    running.add_argument("--env", action="append", default=[], metavar="KEY=VALUE",
+                         help="a variable for every replay's game (MEMORIES_X64_HIGH_HEAP=1...); repeat for more")
     arguments = parser.parse_args()
     executable = Path(arguments.executable or os.environ.get("YFM_EXECUTABLE") or yfm_control.EXECUTABLE).resolve()
     if arguments.command == "record":
         arguments.executable = executable
         return record(arguments)
+    bad = [item for item in arguments.env if "=" not in item or item.startswith("=")]
+    if bad:
+        (playing if arguments.command == "play" else running).error(f"--env takes KEY=VALUE, not {bad[0]!r}")
+    more_env = dict(item.split("=", 1) for item in arguments.env)
     if arguments.command == "play":
-        bad = [item for item in arguments.env if "=" not in item or item.startswith("=")]
-        if bad:
-            playing.error(f"--env takes KEY=VALUE, not {bad[0]!r}")
-        more_env = dict(item.split("=", 1) for item in arguments.env)
         return 0 if play(arguments.replay, executable, arguments.check, arguments.update, arguments.timeout,
                          more_env, arguments.keep) else 1
     replays = sorted(path for path in arguments.folder.iterdir()
                      if (path / "replay.json").exists() or path.suffix == ".yfmreplay")
-    failed = [path.name for path in replays if not play(path, executable, True, False, arguments.timeout)]
+    failed = [path.name for path in replays if not play(path, executable, True, False, arguments.timeout, more_env)]
     report(f"replay: {len(replays) - len(failed)} of {len(replays)} passed" + (f"; failed: {', '.join(failed)}"
                                                                                if failed else ""))
     return 1 if failed else 0
