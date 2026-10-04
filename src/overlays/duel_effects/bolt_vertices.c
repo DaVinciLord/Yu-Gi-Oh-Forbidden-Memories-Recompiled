@@ -36,7 +36,9 @@ void func_8014FABC(u16 radius, u16 spread, u16 height, u16 count, SVECTOR *verti
         } while (0);
         do {
             t = 2048 / count;
-            v = (SVECTOR *)(i * sizeof(SVECTOR) + (s32)vertices);
+            /* u32 offset: a 64-bit sizeof would sign-extend the s32
+               address (check_x64_casts.py, "widened"). */
+            v = (SVECTOR *)((u32)(i * sizeof(SVECTOR)) + (s32)vertices);
             v->vy = step * i - height;
             v->vz = z + b * ((s = csin(t * i), z < 0) ? (s = -s) : s) / 4096;
         } while (0);
