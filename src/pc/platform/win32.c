@@ -19,6 +19,7 @@
 #include "pc/debug/crash.h"
 #include "pc/debug/monitor.h"
 #include "pc/compat/signal.h"
+#include "pc/guest/state.h"
 #include <stdio.h>
 #include <string.h>
 #include <windows.h>
@@ -26,6 +27,17 @@
 
 #ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
 #define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
+#endif
+/* CONTEXT's instruction, stack and frame pointers: Eip, Esp and Ebp in the
+ * 32-bit build, Rip, Rsp and Rbp in the 64-bit one. */
+#if defined(__x86_64__)
+#define CONTEXT_IP Rip
+#define CONTEXT_SP Rsp
+#define CONTEXT_FP Rbp
+#else
+#define CONTEXT_IP Eip
+#define CONTEXT_SP Esp
+#define CONTEXT_FP Ebp
 #endif
 #ifndef CONTEXT_EXCEPTION_REQUEST /* mingw-w64 defines these for x86-64 only */
 #define CONTEXT_EXCEPTION_ACTIVE 0x08000000
@@ -71,6 +83,14 @@ static void release_lost_redirect(void)
 
 /* Every register and the FPU/SSE state around the tick; the direction flag
  * is cleared for the C code. The interrupted EIP is the return address. */
+#if defined(__x86_64__)
+/* The 64-bit build has the cooperative clock only (Win32_StartInterrupt),
+ * so nothing redirects the main thread here. */
+void Win32_InterruptEntry(void)
+{
+    abort();
+}
+#else
 __asm__(".text\n"
         ".globl _Win32_InterruptEntry\n"
         "_Win32_InterruptEntry:\n"
@@ -87,11 +107,12 @@ __asm__(".text\n"
         "    popal\n"
         "    popfl\n"
         "    ret\n");
+#endif
 
 void Win32_InterruptBody(void)
 {
     redirected = 0;
-    tick_handler(interrupted.Eip, &interrupted);
+    tick_handler(interrupted.CONTEXT_IP, &interrupted);
     in_tick = 0;
 }
 
@@ -186,19 +207,19 @@ static DWORD WINAPI run_clock(void *unused)
              * it captured. The tick then never runs and would hold in_tick
              * for ever. While it does run, the thread is below the slot the
              * redirect pushed; above it, the redirect was lost. */
-            if (!unreliable && redirected && context.Esp > pushed_at) release_lost_redirect();
+            if (!unreliable && redirected && context.CONTEXT_SP > pushed_at) release_lost_redirect();
             if (unreliable) {
                 InterlockedIncrement(&skipped_unreliable);
                 pending = 1;
-            } else if (!held && !in_tick && !(context.EFlags & 0x100) && context.Eip >= image_low &&
-                       context.Eip < image_high) {
+            } else if (!held && !in_tick && !(context.EFlags & 0x100) && context.CONTEXT_IP >= image_low &&
+                       context.CONTEXT_IP < image_high) {
                 interrupted = context;
                 in_tick = 1;
                 pending = 0;
-                context.Esp -= 4;
-                *(DWORD *)(uintptr_t)context.Esp = context.Eip;
-                context.Eip = (DWORD)(uintptr_t)Win32_InterruptEntry;
-                pushed_at = context.Esp;
+                context.CONTEXT_SP -= 4;
+                *(DWORD *)(uintptr_t)context.CONTEXT_SP = context.CONTEXT_IP;
+                context.CONTEXT_IP = (DWORD)(uintptr_t)Win32_InterruptEntry;
+                pushed_at = context.CONTEXT_SP;
                 redirected = 1;
                 if (!SetThreadContext(main_thread, &context)) {
                     redirected = 0;
@@ -218,7 +239,7 @@ int Win32_UndoInterruptedFault(void *context)
     CONTEXT *registers = context;
     /* Another thread's exception says nothing about the main thread's redirect. */
     if (!redirected || GetCurrentThreadId() != main_id) return 0;
-    if (registers->Eip != (DWORD)(uintptr_t)Win32_InterruptEntry) {
+    if (registers->CONTEXT_IP != (DWORD)(uintptr_t)Win32_InterruptEntry) {
         /* The exception's registers were captured before the redirect, and
          * are what the thread resumes with: the redirect is already lost.
          * Noticed here rather than by the clock, whose test (the stack
@@ -228,8 +249,8 @@ int Win32_UndoInterruptedFault(void *context)
         return 0;
     }
     /* The clock pushed the interrupted EIP before redirecting. */
-    registers->Eip = *(const DWORD *)(uintptr_t)registers->Esp;
-    registers->Esp += 4;
+    registers->CONTEXT_IP = *(const DWORD *)(uintptr_t)registers->CONTEXT_SP;
+    registers->CONTEXT_SP += 4;
     redirected = 0;
     pending = 1;
     in_tick = 0;
@@ -263,15 +284,22 @@ void Win32_ServiceInterrupt(void)
     if (InterlockedCompareExchange(&in_tick, 1, 0) != 0) return;
     pending = 0;
     memset(&interrupted, 0, sizeof(interrupted));
-    interrupted.Eip = (DWORD)(uintptr_t)__builtin_return_address(0);
-    interrupted.Ebp = (DWORD)(uintptr_t)__builtin_frame_address(0);
-    tick_handler(interrupted.Eip, &interrupted);
+    interrupted.CONTEXT_IP = (DWORD)(uintptr_t)__builtin_return_address(0);
+    interrupted.CONTEXT_FP = (DWORD)(uintptr_t)__builtin_frame_address(0);
+    tick_handler(interrupted.CONTEXT_IP, &interrupted);
     in_tick = 0;
 }
 
 int Win32_StartInterrupt(void (*tick)(uintptr_t eip, void *context))
 {
     HANDLE thread;
+#if defined(__x86_64__)
+    if (!watch_only) {
+        /* Its trampoline (Win32_InterruptEntry) is i386 code. */
+        fprintf(stderr, "memories-pc: the interrupt clock is not in the 64-bit build yet\n");
+        return -1;
+    }
+#endif
     tick_handler = tick;
     main_id = GetCurrentThreadId();
     if (!DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &main_thread,
@@ -318,9 +346,9 @@ void Win32_StopInterrupt(void)
 void Win32_ContextRegisters(const void *context, uintptr_t *eip, uintptr_t *esp, uintptr_t *ebp)
 {
     const CONTEXT *registers = context;
-    *eip = registers->Eip;
-    *esp = registers->Esp;
-    *ebp = registers->Ebp;
+    *eip = registers->CONTEXT_IP;
+    *esp = registers->CONTEXT_SP;
+    *ebp = registers->CONTEXT_FP;
 }
 
 void Win32_ImageRange(uintptr_t *low, uintptr_t *high)
@@ -420,6 +448,56 @@ const char *Win32_SerifFontPath(void)
     return NULL;
 }
 
+#if defined(__x86_64__)
+/* Whether `size` bytes at `address` can be read: the unwinder reads the
+ * stack of a thread that may have just overflowed or run wild. */
+static int readable(uintptr_t address, size_t size)
+{
+    MEMORY_BASIC_INFORMATION info;
+    if (!VirtualQuery((const void *)address, &info, sizeof(info)) || info.State != MEM_COMMIT ||
+        (info.Protect & (PAGE_NOACCESS | PAGE_GUARD))) {
+        return 0;
+    }
+    return address + size <= (uintptr_t)info.BaseAddress + info.RegionSize;
+}
+
+int Win32_UnwindCallers(uintptr_t pc, uintptr_t sp, uintptr_t fp, uintptr_t *callers, int count)
+{
+    CONTEXT walk;
+    int found = 0;
+    memset(&walk, 0, sizeof(walk));
+    walk.Rip = pc;
+    walk.Rsp = sp;
+    walk.Rbp = fp;
+    while (found < count) {
+        DWORD64 image;
+        PRUNTIME_FUNCTION function = RtlLookupFunctionEntry(walk.Rip, &image, NULL);
+        if (!readable(walk.Rsp, 8)) break;
+        if (function) {
+            void *data;
+            DWORD64 frame;
+            RtlVirtualUnwind(UNW_FLAG_NHANDLER, image, walk.Rip, function, &walk, &data, &frame, NULL);
+        } else {
+            walk.Rip = *(const DWORD64 *)(uintptr_t)walk.Rsp;
+            walk.Rsp += 8;
+        }
+        if (!walk.Rip) break;
+        callers[found++] = (uintptr_t)walk.Rip;
+    }
+    return found;
+}
+
+int Win32_CurrentCallers(int skip, uintptr_t *callers, int count)
+{
+    void *frames[64];
+    int found, i;
+    if (count > 64) count = 64;
+    found = RtlCaptureStackBackTrace((DWORD)(1 + skip), (DWORD)count, frames, NULL);
+    for (i = 0; i < found; i++) callers[i] = (uintptr_t)frames[i];
+    return found;
+}
+#endif
+
 void Win32_StackRange(uintptr_t *low, uintptr_t *high)
 {
     ULONG_PTR bottom, top;
@@ -473,9 +551,23 @@ static DWORD WINAPI report_overflow(void *argument)
 {
     const OverflowReport *job = argument;
     const CONTEXT *context = job->pointers->ContextRecord;
-    if (crash_report) crash_report(EXCEPTION_STACK_OVERFLOW, job->fault, context->Eip, context->Esp, context->Ebp);
+    if (crash_report) crash_report(EXCEPTION_STACK_OVERFLOW, job->fault, context->CONTEXT_IP, context->CONTEXT_SP, context->CONTEXT_FP);
     write_dump("crash", job->pointers, job->thread);
     return 0;
+}
+
+/* Whether the thread has no exception handler to try: the game stack runs
+ * with an empty chain (state.c). The 64-bit TEB has no chain; there the
+ * stack pointer says whether the thread is on the game stack. */
+static int on_game_stack(const CONTEXT *context)
+{
+#if defined(__x86_64__)
+    return context->Rsp >= MEMORIES_GAME_STACK_BASE &&
+           context->Rsp < MEMORIES_GAME_STACK_BASE + MEMORIES_GAME_STACK_SIZE;
+#else
+    (void)context;
+    return __readfsdword(0) == 0xffffffffu;
+#endif
 }
 
 /* Code in the executable installs no exception handlers of its own, so an
@@ -515,7 +607,7 @@ static LONG CALLBACK on_exception(EXCEPTION_POINTERS *pointers)
      * raised there with none installed is the end of the process. */
     if ((address < image_low || address >= image_high) && !(address >= 0x80000000u && address < 0x80200000u) &&
         !(address >= 0xa0000000u && address < 0xa0200000u) && address >= 0x00200000u &&
-        __readfsdword(0) != 0xffffffffu) {
+        !on_game_stack(context)) {
         /* Except the main thread running where no module is: a jump
          * through a bad pointer or return address, which nothing handles. */
         HMODULE owner;
@@ -535,7 +627,7 @@ static LONG CALLBACK on_exception(EXCEPTION_POINTERS *pointers)
         if (reporter) WaitForSingleObject(reporter, 30000);
         TerminateProcess(GetCurrentProcess(), EXCEPTION_STACK_OVERFLOW);
     }
-    if (crash_report) crash_report(record->ExceptionCode, fault, context->Eip, context->Esp, context->Ebp);
+    if (crash_report) crash_report(record->ExceptionCode, fault, context->CONTEXT_IP, context->CONTEXT_SP, context->CONTEXT_FP);
     write_dump("crash", pointers, GetCurrentThreadId());
     /* The exception's code for the exit status, as Windows gives it when
      * nothing handles one: the monitor and play.bat read it. */
@@ -552,7 +644,7 @@ static LONG WINAPI on_unhandled(EXCEPTION_POINTERS *pointers)
             record->ExceptionAddress, GetCurrentThreadId());
     if (crash_report) {
         crash_report(record->ExceptionCode, record->NumberParameters >= 2 ? record->ExceptionInformation[1] : 0,
-                     context->Eip, context->Esp, context->Ebp);
+                     context->CONTEXT_IP, context->CONTEXT_SP, context->CONTEXT_FP);
     }
     write_dump("crash", pointers, GetCurrentThreadId());
     return EXCEPTION_EXECUTE_HANDLER;

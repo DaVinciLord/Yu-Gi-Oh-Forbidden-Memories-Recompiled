@@ -2555,16 +2555,22 @@ conversions.
 ## Sharing a build
 
 ```sh
-python3 tools/pc/package.py        # dist/yfm-redecomp-<date>-<commit>-{windows.zip,linux.tar.gz}
+python3 tools/pc/package.py        # dist/yfm-redecomp-<date>-<commit>-{windows.zip,windows-x64.zip,linux.tar.gz}
 ```
 
-Builds both, smoke tests both, and packs each as a folder a player unpacks
+Builds all three (32-bit Windows, 64-bit Windows, Linux), smoke tests each,
+and packs each as a folder a player unpacks
 and runs: the executable, the shipped mods, the mod SDK, this build's symbol
 table, an empty `game/` for their own `.bin`, and `tools/pc/release/README.txt`.
 Nothing from the disc goes in. A missing disc image is reported in a message
 box naming the folder to put it in. Crash and hang reports, minidumps and
 menu frame dumps go to `reports/` in the user directory when the game is not
 run from a checkout (`Crash_ReportDir`; `tmp/pc` in one).
+
+The 64-bit Windows archive has the data mods only and no mod SDK ("64-bit
+Windows" below). Where its compiler is missing (x86_64-w64-mingw32-clang 21
+or later), `package.py` with no arguments skips it with a message and packs
+the other two; `package.py windows-x64` stops instead.
 
 ### Crash reports
 
@@ -2806,6 +2812,182 @@ What differs from Linux, and why:
 - **Libraries.** fontconfig is replaced by fonts from `%WINDIR%\Fonts`
   (`Win32_FontPath`), iconv by code page 932, and the few POSIX calls by
   `pc/compat/posix.h` and `pc/compat/mman.h`.
+
+### 64-bit Windows (milestones X1-X3)
+
+```sh
+python tools/pc/build_win32_deps.py --arch x86_64   # once; build_game32.py does it too
+python tools/pc/build_game32.py --target windows-x64  # tmp/pc/win64/memories-pc.exe
+```
+
+A native x86-64 executable from the same sources, with the guest at its
+fixed addresses and 32-bit guest pointers. It boots through the logos and the movie
+to the title, the main menu and Options, and the smoke fixtures `title`,
+`main-menu-cursor`, `main-menu-widescreen` and `options` give the 32-bit
+hashes (PGXP and HD off, as the fixtures run). What makes it work:
+
+- **Guest pointers stay 4 bytes.** The game's stored pointers are clang's
+  `__ptr32 __uptr` through `G32` (`src/port_ptr.h`, "Guest-width pointers"
+  above), with `-fms-extensions`; `CALL32` casts before a call through one.
+  Casts that make a pointer from a signed int or walk a guest table carry
+  `G32` as well; `python tools/pc/check_x64_casts.py` finds the ones that
+  do not (two minutes; `--fix` edits them).
+- **Toolchain.** `x86_64-w64-mingw32-clang`, clang 21 or later: the build
+  first runs `tools/pc/x64_compiler_gate.c`, which refuses clang 12's
+  silent miscompile of `__ptr32` function-pointer arrays. `-fno-jump-tables`.
+  `src/pc/compat/ptr32.h` is included first into every unit: mingw's
+  `_mingw.h` defines `__ptr32` as nothing, and Psy-Q's `size_t` must be
+  the host's.
+- **Everything the game can reach is below 4 GB.** The image is linked at
+  0x40000000 without ASLR (`--disable-dynamicbase
+  --disable-high-entropy-va`): native function addresses go into 4-byte
+  guest slots, and game code reaches the pinned variables RIP-relative
+  within 2 GB. Guest RAM, its mirrors, the scratchpad, the game stack
+  (0xB0000000) and the arenas keep their 32-bit addresses. The game stops
+  with a message if Windows ever loads it above 4 GB. The regions mapped
+  after guest RAM (arenas, the interpreter's and the game's stacks) are
+  reserved right after it: a 64-bit GL driver and audio also load below
+  4 GB, and once took the game stack's range. `MEMORIES_X64_MAP_REPORT=1`
+  prints the image base; 320 headless launches all mapped, and windowed runs
+  with GL and audio give the fixture frames (2026-09-30).
+- **Host memory the game is handed is low too.** A block the port
+  allocates and gives the game, or that native code returns to it as a
+  pointer, comes from `Memories_LowAlloc`/`Memories_LowFree`
+  (`src/pc/guest/low_memory.h`): a first-fit allocator over 16 MiB at the
+  fixed address `0x9E000000` (after the compiled text's region at
+  `0x9C000000`, below the interpreter's stack at `0x9FF00000`), held from
+  `Memories_GuestMap` like the other regions and mapped on first use. Its
+  users: the kanji ROM glyphs `Krom2RawAdd2` returns to the credits, the
+  compiled text when its own region cannot be had or is full (on 32-bit it
+  stays on the heap as before), and a mod's card names and texts, guardian
+  star names and duelist names. On 32-bit the two are `malloc` and `free`.
+  New code that hands the game a host block uses them; host-only memory
+  stays on the heap.
+- **Arch code.** One branch thunk (`__x86_indirect_thunk_r11`, the only
+  one clang's x86-64 retpoline uses), `state_x86_64.S` (VSync entry and
+  the game-stack switch, TEB bounds through `%gs`), `setjmp_x86_64.S`
+  (the Win64 state does not fit the game's 48-byte `jmp_buf`: it goes in a
+  host slot keyed by the buffer), and the fault handler's `Rip`/REX decoding
+  for the null-page fix-up, which also takes clang's load through a G32
+  pointer, `disp32(,%reg)` with no base register. A fatal fault in the
+  game's code, or a call to where nothing is (a non-canonical target faults
+  as a #GP in the branch thunk, reported at `0xFFFFFFFF`), is noted on
+  stderr ("fault at rip ... (r11 ...)", r11 being where a call through the
+  thunk went). x86-64 code keeps no frame chain, so the 64-bit crash and
+  hang reports list the callers from the unwind tables, named as on 32-bit
+  (`Win32_UnwindCallers` in win32.c), with whole 64-bit addresses and a
+  `RIP RSP RBP` registers line; their `executable` fact says
+  `64-bit (x86-64)`.
+- **What G32 on declarations does not cover.** A local that receives a
+  guest table whole (`func_8004EB00` copies four model handlers from
+  `D_800114E8` as one 16-byte block) is `T (*G32 name[N])(...)`, called
+  through `CALL32`; the port's own `extern` declarations of pinned guest
+  globals (`libgs.c`'s `D_800E9D98`) carry G32 as the game's headers do; a
+  guest struct the port reads through a cast (`GsDrawOt`'s GsOT tag) reads
+  `T *G32`. `check_x64_casts.py` scans `src/pc/sdk` and `src/pc/platform`
+  for the last kind as well as the game.
+- **Truncation check.** `MEMORIES_X64_HIGH_HEAP=1` reserves every free range
+  below 4 GB and fills the process heap's low segments, so host memory comes
+  from above 4 GB; a host pointer stored into a guest slot then faults, and
+  is reported as "truncated host pointer". The title, the menus and a duel
+  run with it clean.
+
+**X2 (2026-10-03): the game plays as on 32-bit.** Replays recorded on the
+32-bit build with every mod off (`tests/pc/replays`: `python
+tools/pc/replay.py run tests/pc/replays --executable
+tmp/pc/win64/memories-pc.exe`) play on the 64-bit build with every frame
+hash the same, plainly and with `MEMORIES_X64_HIGH_HEAP=1` (the same command
+with `--env MEMORIES_X64_HIGH_HEAP=1`: a replay's game never sees the
+caller's own MEMORIES_* variables): boot to the first story duel; a whole duel
+against Simon Muran with a fusion, Raigeki, Forest, Red Medicine and 3D
+battles (each attacker's MODEL variant module run by the MIPS interpreter,
+`MEMORIES_TRACE=model`) through the result to Free Duel, also with
+`MEMORIES_DUEL_EFFECTS=interpreter`; the credits from the save prompt to the
+end of the roll, also with `MEMORIES_CREDITS=interpreter`; the title menu,
+Options, Build Deck, the Library, Password, the map and Free Duel. On the
+way, `func_80051350` (the 3D camera's nearness test) stopped reading two
+locals through pointers that only the console's stack frame lines up: both
+port builds had read other words there, and a credits scene's camera
+drifted.
+
+**X3 (2026-10-03): states, the crash monitor, data mods, a package.**
+
+- **Save states.** The 64-bit game saves and loads its own states: the
+  32-bit format, with an entry of nine 64-bit registers and xmm6-xmm15
+  (Win64 keeps them across a call), and a `jump-slots` chunk for the host
+  slot that holds the game's `jmp_buf` (on 32-bit it lies in guest RAM).
+  A state saved, then loaded in a new process and played with the same
+  presses, draws the same 2000 frames on the campaign map (twice) and in
+  the opening movie (`tools/pc/test_state_resume.py --executable
+  tmp/pc/win64/memories-pc.exe`), as on 32-bit; the replays
+  `state-load-rng` and `state-load-cpu` pass on 64-bit. The VSync a loaded
+  state resumes in returns what it returned in the game that saved it
+  (`resume_value`) on both widths.
+- **No state crosses the widths.** A state holds the game's native stack
+  (the frames of `run_game`, `Main_Init`, `Main_Loop`, `Main_AdvanceFrame`,
+  `Graphics_SyncFrame` and, during a fade or a load, more: compiled for one
+  width), the game objects' variables as one build lays them out
+  (`game_dat` is 0x2B44 bytes at 0x023A3000 on 32-bit and 0x3144 at
+  0x421A5000 on 64-bit, in the builds of 2026-10-03) and its subsystems' native fields. Either game
+  refuses the other's states by name ("saved by the 32-bit game, and this
+  one is 64-bit"), told by the size of the `entry` chunk (20 bytes on
+  32-bit). Carrying a state across needs a format without native frames
+  or layouts: a milestone of its own. (The game's own saves,
+  `saves/slotNN.sav`, are the game's data; that the other width loads them
+  is expected but not yet checked.) The width check comes before the mods check, so
+  the mods refusal ("uses different mods...") is only ever between two
+  states of one width, whose code mods are the same (none on 64-bit).
+- **Mods.** The 64-bit build carries the data mods (`build_mods(code=False)`
+  copies them and leaves the code mods out), and the game is built with
+  `MEMORIES_NO_CODE_MODS`. The data mod loader is the 32-bit one, and what
+  was run on 64-bit draws as there: cards and a texture pack (the gate
+  replay below), a booster pack (state-load-rng's test mod), and the
+  baseline release's data examples load without a note (`check_mod_abi`
+  below). Fusions and the other tables, guardian stars, duelists, limits,
+  audio, translations and disc patches load the same way but have no
+  64-bit frame check yet; star and duelist names come from the low memory
+  region (X2), which no mod has exercised there. A mod with a `library` (3d-monsters,
+  hand-camera, ai-hard-mode, yamyi-mods, the gameplay-rules example) is a
+  32-bit object: none ships with the 64-bit game, and one the player
+  installs is not loaded: the Mods window shows "needs a 64-bit build of
+  this mod" beside it. It is not a broken mod, so
+  the other mods' Apply goes on, and it is not in a state's mod set. What
+  stays off with it: `object_loader.c` maps an object wherever the system
+  puts it and its relocations are i386 (`ObjectLoader_Load` refuses too),
+  `mod_libc.c` lends 32-bit helpers and the heap's `malloc` (which may be
+  above 4 GB), and `hooks.c` writes an i386 `jmp *[abs32]` (inert off
+  i386 already). No mod SDK goes beside the 64-bit game: it builds 32-bit
+  objects. `check_mod_abi.py --run --build <64-bit build>` plays a
+  baseline release's mods there and requires that note for each code mod.
+  A replay recorded on 32-bit with two data mods on (the card-pack example
+  with its two cards in the deck, and a texture pack of the screens'
+  sheets with every colour turned, made from the disc at play time) plays
+  on 64-bit with all 1145 frame hashes the same, also with
+  `MEMORIES_X64_HIGH_HEAP=1`: `tests/pc/replays/x64-data-mods`, whose
+  `mods.py` makes the two mods in the play's folder (`tools/pc/replay.py`
+  gives the game `MEMORIES_MODS_DIR`).
+- **Crash monitor.** On, as on 32-bit: the second copy of the game with the
+  shared block. A thread's callers come from the unwind tables through
+  dbghelp's `StackWalk64` on the game's process. `crash_check.py --windows
+  --executable tmp/pc/win64/memories-pc.exe`: all 13 kinds end in their
+  reports.
+- **Package.** `python tools/pc/package.py windows-x64` makes
+  `dist/yfm-redecomp-<version>-windows-x64.zip` (its folder
+  `yfm-redecomp-<version>-x64`, with the data mods and a README that says
+  so) beside the 32-bit
+  `-windows.zip` (the default now packs all three); `smoke.py` skips the
+  cases that turn on a code mod for it, and `test_package.py` checks the
+  x86-64 executable and that there is no SDK. The release workflow
+  (pc-release.yml) does not build it yet: its Windows job's later steps
+  (the FM Editor, VirusTotal) key on the runner being Windows, so a second
+  Windows entry would need them keyed on the system, and the 64-bit
+  libraries (`tmp/pc/win64-deps`) a cache of their own.
+
+Still off in the 64-bit build: code mods, whose 64-bit SDK is a later
+milestone, after arm64, covering both 64-bit targets (the loader for
+x86-64 and AArch64 objects, the mod C library, function hooks); the
+interrupt clock (the cooperative one is the default anyway); a state from
+the other width.
 
 ## Launch the local graphics preview
 

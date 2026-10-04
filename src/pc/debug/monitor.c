@@ -147,6 +147,8 @@ void Monitor_NoteSystem(void)
     read_file_line("commit", commit, sizeof(commit));
     strftime(started, sizeof(started), "%Y-%m-%d %H:%M:%S %z", localtime(&now));
     Monitor_Fact("build", "%s (commit %s)", build[0] ? build : "unknown", commit[0] ? commit : "unknown");
+    /* The game's own width, which the os line (the system's) does not say. */
+    Monitor_Fact("executable", "%s", sizeof(void *) == 8 ? "64-bit (x86-64)" : "32-bit (i386)");
     Monitor_Fact("started", "%s", started);
     cpu_name(cpu, sizeof(cpu));
 #ifdef _WIN32
@@ -165,7 +167,11 @@ void Monitor_NoteSystem(void)
         memset(&version, 0, sizeof(version));
         version.dwOSVersionInfoSize = sizeof(version);
         if (get_version) get_version(&version);
+#if defined(__x86_64__)
+        wow64 = TRUE; /* the OS's width: a 64-bit process runs on 64-bit Windows only (IsWow64Process says no) */
+#else
         IsWow64Process(GetCurrentProcess(), &wow64);
+#endif
         if (wine) {
             const char *sysname = "?", *release = "?";
             if (host) host(&sysname, &release);
@@ -698,6 +704,10 @@ static void dump_threads(void)
     closedir(tasks);
 }
 #else
+#if defined(__x86_64__)
+static void walk_remote_x64(const CONTEXT *registers);
+#endif
+
 static void dump_threads(void)
 {
     typedef HRESULT(WINAPI * DescriptionFunction)(HANDLE, PWSTR *);
@@ -741,9 +751,15 @@ static void dump_threads(void)
             first ? " (main: the game's)" : "");
         first = 0;
         if (got) {
+#if defined(__x86_64__)
+            put("    RIP=0x%llx RSP=0x%llx RBP=0x%llx\n", (unsigned long long)context.Rip,
+                (unsigned long long)context.Rsp, (unsigned long long)context.Rbp);
+            walk_remote_x64(&context);
+#else
             put("    EIP=0x%08lx ESP=0x%08lx EBP=0x%08lx\n", (unsigned long)context.Eip, (unsigned long)context.Esp,
                 (unsigned long)context.Ebp);
             walk_remote(context.Eip, context.Esp, context.Ebp);
+#endif
         } else {
             put("    (its registers could not be read: error %lu)\n", GetLastError());
         }
@@ -751,6 +767,39 @@ static void dump_threads(void)
     }
     CloseHandle(snapshot);
 }
+
+#if defined(__x86_64__)
+/* x86-64 code keeps no frame chain to follow (Windows' own never has one):
+ * the callers come from the unwind tables, as the fault handler's do
+ * (crash.c), here through dbghelp on the game's process. */
+static void walk_remote_x64(const CONTEXT *registers)
+{
+    static int symbols_ready;
+    CONTEXT context = *registers;
+    STACKFRAME64 frame;
+    char name[160];
+    int depth;
+    if (!symbols_ready) symbols_ready = SymInitialize(game_process, NULL, TRUE) ? 1 : -1;
+    memset(&frame, 0, sizeof(frame));
+    frame.AddrPC.Offset = context.Rip;
+    frame.AddrPC.Mode = AddrModeFlat;
+    frame.AddrStack.Offset = context.Rsp;
+    frame.AddrStack.Mode = AddrModeFlat;
+    frame.AddrFrame.Offset = context.Rbp;
+    frame.AddrFrame.Mode = AddrModeFlat;
+    for (depth = 0; depth < 40; depth++) {
+        if (!StackWalk64(IMAGE_FILE_MACHINE_AMD64, game_process, NULL, &frame, &context, NULL,
+                         symbols_ready > 0 ? SymFunctionTableAccess64 : NULL,
+                         symbols_ready > 0 ? SymGetModuleBase64 : NULL, NULL) ||
+            !frame.AddrPC.Offset) {
+            break;
+        }
+        name_code((uintptr_t)frame.AddrPC.Offset, name, sizeof(name));
+        put("    #%-2d 0x%08llx %s\n", depth, (unsigned long long)frame.AddrPC.Offset, name);
+    }
+    if (depth < 2) walk_remote(registers->Rip, registers->Rsp, 0); /* code addresses on the stack, as a hint */
+}
+#endif
 
 static int write_minidump(const char *path)
 {

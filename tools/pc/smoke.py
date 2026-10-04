@@ -105,6 +105,27 @@ def test_only_variables(executable: Path, case: dict[str, object]) -> list[str]:
     return [key for key in case.get("environment", {}) if key.encode() not in image]
 
 
+def refused_code_mods(executable: Path, case: dict[str, object]) -> list[str]:
+    """The code mods a case turns on that this executable refuses: the
+    64-bit Windows game (a PE for x86-64) loads no code mods (they are
+    32-bit objects), so a case about one is not its to pass."""
+    try:
+        head = executable.read_bytes()[:4096]
+        at = int.from_bytes(head[0x3C:0x40], "little")
+        wide = head[at:at + 4] == b"PE" + bytes(2) and int.from_bytes(head[at + 4:at + 6], "little") == 0x8664
+    except (OSError, ValueError):
+        return []
+    refused = []
+    for key, value in case.get("settings", {}).items():
+        manifest = executable.parent / "mods" / key[4:].split(".")[0] / "mod.json"   # mod.<id> or mod.<id>.<option>
+        # The 64-bit build leaves code mods out of its mods folder.
+        if wide and key.startswith("mod.") and value and (not manifest.is_file() or
+                                                          json.loads(manifest.read_text(encoding="utf-8")).get("library")) \
+                and manifest.parent.name not in refused:
+            refused.append(manifest.parent.name)
+    return refused
+
+
 def run_cases(command: list[str], extra: dict[str, str], fixtures: list[Path], output: Path, record: bool) -> bool:
     executable = Path(command[-1])
     for fixture in fixtures:
@@ -116,6 +137,10 @@ def run_cases(command: list[str], extra: dict[str, str], fixtures: list[Path], o
         missing = test_only_variables(executable, case)
         if missing:
             print(f"smoke: {name} skipped: {executable.name} does not read {', '.join(missing)} (a release build)")
+            continue
+        refused = refused_code_mods(executable, case)
+        if refused:
+            print(f"smoke: {name} skipped: the 64-bit game loads no code mods ({', '.join(refused)})")
             continue
         image = output / f"{name}.ppm"
         settings = output / f"{name}.settings"

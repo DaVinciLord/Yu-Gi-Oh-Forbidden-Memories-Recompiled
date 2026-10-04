@@ -40,6 +40,9 @@ from smoke import launcher  # noqa: E402  (Wine for a Windows build off Windows)
 ROOT = Path(__file__).resolve().parents[2]
 EXECUTABLE = ROOT / "tmp/pc/game32" / ("memories-pc.exe" if sys.platform == "win32" else "memories-pc")
 OUTPUT = ROOT / "tmp/pc/control"   # a run-XXXXXXXX folder each, as smoke.py does
+# Variables every game this client starts gets, before a Game's own env:
+# replay.py play/run --env sets them for a scripted replay's games.
+EXTRA_ENV: dict[str, str] = {}
 ADDRESSES = ROOT / "config/pc/guest_addresses.txt"
 
 # PS1 digital pad bits, active high (src/pc/platform/platform.h, Platform_Pad).
@@ -186,6 +189,7 @@ class Game:
             environment.update(MEMORIES_HEADLESS="1", MEMORIES_NO_AUDIO="1")
         if mods_dir:
             environment["MEMORIES_MODS_DIR"] = str(Path(mods_dir).resolve())
+        environment.update(EXTRA_ENV)
         environment.update(env or {})
         command, extra = launcher(self.executable)
         environment.update(extra)

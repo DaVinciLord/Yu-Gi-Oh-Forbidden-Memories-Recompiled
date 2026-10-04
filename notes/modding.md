@@ -1084,6 +1084,12 @@ the game reads the file with its own loader
 ([`src/pc/mods/object_loader.c`](../src/pc/mods/object_loader.c)) rather than
 the system's, so the container is the same too.
 
+The 64-bit Windows game (`-windows-x64.zip`) loads data mods only: a code
+mod is 32-bit code, so it stays off there with "needs a 64-bit build of
+this mod" in the Mods window, and the 32-bit game is the one to play it
+with. A 64-bit mod SDK, for 64-bit Windows and the arm64 targets, is a
+later milestone (`notes/pc-build.md`, "64-bit Windows").
+
 The mod exports one function, described in
 [`src/pc/mods/modapi.h`](../src/pc/mods/modapi.h):
 

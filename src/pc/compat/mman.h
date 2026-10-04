@@ -38,6 +38,13 @@ __declspec(dllimport) int __stdcall VirtualProtect(void *address, MEMORIES_SIZE_
 #define MAP_FIXED_NOREPLACE 0x100000
 #define MAP_FAILED ((void *)-1)
 
+#ifdef _WIN64
+/* src/pc/guest/image.c, under MEMORIES_X64_HIGH_HEAP: a fixed region takes
+ * its range back from the reservation that keeps the heap above 4 GB. Weak,
+ * for the tests that use this header without the game. */
+void Memories_ReleaseLowPlaceholder(void *address, size_t length) __attribute__((weak));
+#endif
+
 static inline void *mmap(void *address, size_t length, int prot, int flags, int fd, long long offset)
 {
     void *p;
@@ -45,6 +52,9 @@ static inline void *mmap(void *address, size_t length, int prot, int flags, int 
     (void)flags;
     (void)fd;
     (void)offset;
+#ifdef _WIN64
+    if (address && Memories_ReleaseLowPlaceholder) Memories_ReleaseLowPlaceholder(address, length);
+#endif
     p = VirtualAlloc(address, length, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     return p ? p : MAP_FAILED;
 }

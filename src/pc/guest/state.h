@@ -25,6 +25,14 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* The game stack: the fixed range the game's own code runs on (state.c). */
+#ifdef _WIN32
+#define MEMORIES_GAME_STACK_BASE 0xB0000000u /* 32-bit Windows loads system DLLs around 0x70000000; mods use 0x90000000 */
+#else
+#define MEMORIES_GAME_STACK_BASE 0x70000000u
+#endif
+#define MEMORIES_GAME_STACK_SIZE 0x00800000u
+
 typedef struct MemoriesState MemoriesState;
 typedef struct MemoriesStateField {
     void *data;
@@ -43,9 +51,18 @@ int Memories_StateLoading(const MemoriesState *state);
 void Memories_StateRemapRange(MemoriesState *state, uint32_t from, uint32_t to, uint32_t size);
 
 /* Registers on entry to VSync, written by the assembly entry (state_i386.S). */
+#if defined(__x86_64__)
+/* state_x86_64.S. The stack pointer keeps the i386 name, so the state code
+ * reads one name on both. */
+typedef struct MemoriesStateEntry {
+    uint64_t rbx, rbp, rdi, rsi, r12, r13, r14, r15, esp; /* esp: rsp, at the return address */
+    uint64_t xmm[20]; /* xmm6-xmm15, which Win64 keeps across a call too */
+} MemoriesStateEntry;
+#else
 typedef struct MemoriesStateEntry {
     uint32_t ebx, esi, edi, ebp, esp; /* esp points at the return address */
 } MemoriesStateEntry;
+#endif
 extern MemoriesStateEntry Memories_StateEntry;
 
 /* main(): run `entry` on the fixed game stack. Does not return. */

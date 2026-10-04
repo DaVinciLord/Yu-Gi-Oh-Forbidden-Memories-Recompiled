@@ -398,6 +398,12 @@ int ObjectLoader_Load(const void *data, size_t size, ObjectResolver resolve, voi
     memset(object, 0, sizeof(*object));
     memset(&loader, 0, sizeof(loader));
     loader.file = data;
+#ifdef MEMORIES_NO_CODE_MODS
+    /* Mods.c refuses code mods before this; nothing here can be linked for
+     * the 64-bit game, whose code mods are 32-bit objects. */
+    snprintf(error, error_size, "code mods are not loaded by the 64-bit game");
+    return result;
+#endif
     loader.file_size = size;
     loader.error = error;
     loader.error_size = error_size;

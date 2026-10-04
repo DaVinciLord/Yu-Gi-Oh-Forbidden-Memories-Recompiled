@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include "pc/compat/fs.h"
 #include "image.h"
+#include "low_memory.h"
 #include "mips.h"
 #include "pc/debug/crash.h"
 #include "pc/debug/log.h"
@@ -19,7 +20,18 @@
 #include <ucontext.h>
 #endif
 
+#if defined(_WIN32) && defined(__x86_64__)
+/* The 64-bit Windows build keeps the same fixed addresses; the game's stored
+ * pointers are 4 bytes wide through G32 (src/port_ptr.h), and the image is
+ * linked below 4 GB (tools/pc/build_game32.py --target windows-x64). No
+ * other 64-bit target has that yet. */
+_Static_assert(sizeof(void *) == 8, "the 64-bit Windows guest image model is LLP64");
+/* The faulting instruction, as the messages below name it. */
+#define FAULT_PC "rip"
+#else
 _Static_assert(sizeof(void *) == 4, "the guest image model requires an ILP32 build");
+#define FAULT_PC "eip"
+#endif
 
 /* The first 64 KiB. On the console that is kernel RAM, and retail code reaches
  * it through null pointers: CardList_CreateSlotTextBox clears a flag in
@@ -56,7 +68,7 @@ static void report_low_access(uint32_t eip, uint32_t address)
     if (count < sizeof(seen) / sizeof(seen[0])) {
         seen[count++] = eip;
     }
-    length = snprintf(text, sizeof(text), "memories-pc: null-pointer access to 0x%04x at eip 0x%08x goes to kernel RAM, as on the console\n",
+    length = snprintf(text, sizeof(text), "memories-pc: null-pointer access to 0x%04x at " FAULT_PC " 0x%08x goes to kernel RAM, as on the console\n",
                       (unsigned)address, (unsigned)eip);
     (void)!write(2, text, (size_t)length);
 }
@@ -148,7 +160,7 @@ static void report_guest_fault(uint32_t address, uint32_t eip)
         length = snprintf(text, sizeof(text), "memories-pc: call into guest code at 0x%08x, which has no native function\n",
                           (unsigned)address);
     } else {
-        length = snprintf(text, sizeof(text), "memories-pc: bad memory access at 0x%08x (eip 0x%08x)\n",
+        length = snprintf(text, sizeof(text), "memories-pc: bad memory access at 0x%08x (" FAULT_PC " 0x%08x)\n",
                           (unsigned)address, (unsigned)eip);
     }
     (void)!write(2, text, (size_t)length);
@@ -211,7 +223,242 @@ static int guest_ram_executable(void)
 }
 #endif
 
-#ifdef _WIN32
+#if defined(_WIN32) && defined(__x86_64__)
+void __x86_indirect_thunk_r11(void); /* branch_thunks.c */
+static DWORD64 *context_register(CONTEXT *context, int number)
+{
+    switch (number) {
+    case 0: return &context->Rax;
+    case 1: return &context->Rcx;
+    case 2: return &context->Rdx;
+    case 3: return &context->Rbx;
+    case 4: return &context->Rsp;
+    case 5: return &context->Rbp;
+    case 6: return &context->Rsi;
+    case 7: return &context->Rdi;
+    case 8: return &context->R8;
+    case 9: return &context->R9;
+    case 10: return &context->R10;
+    case 11: return &context->R11;
+    case 12: return &context->R12;
+    case 13: return &context->R13;
+    case 14: return &context->R14;
+    default: return &context->R15;
+    }
+}
+
+/* low_access_register with x86-64's REX prefix: which register (0 RAX to
+ * 15 R15) does the faulting instruction address memory through? -1 for
+ * none, a RIP-relative or absolute address, and for VEX-encoded
+ * instructions, which game code at -O0 does not use for such accesses.
+ * A load through a G32 pointer has no base register: clang addresses it
+ * as disp32 plus the zero-extended pointer as the index (`movl
+ * 0x1c(,%rax), %eax`). Then the index is the register, and *scale its
+ * scale, which the fix-up divides the offset to guest RAM by. */
+static int low_access_register64(const unsigned char *code, uint64_t rsi, unsigned *scale)
+{
+    unsigned rex = 0, modrm, base;
+    *scale = 1;
+    while (*code == 0x66 || *code == 0x67 || *code == 0xf2 || *code == 0xf3 || *code == 0x2e || *code == 0x36 ||
+           *code == 0x3e || *code == 0x26 || *code == 0x64 || *code == 0x65) {
+        code++;
+    }
+    if ((*code & 0xf0) == 0x40) rex = *code++;
+    if ((*code >= 0xa4 && *code <= 0xa7) || *code == 0xaa || *code == 0xab) { /* string moves and stores */
+        if (*code != 0xaa && *code != 0xab && rsi < 0x10000u) {
+            return REGISTER_ESI;
+        }
+        return REGISTER_EDI;
+    }
+    if (*code == 0xc4 || *code == 0xc5) return -1;
+    if (*code == 0x0f) {
+        code += code[1] == 0x38 || code[1] == 0x3a ? 3 : 2;
+    } else {
+        code++;
+    }
+    modrm = *code++;
+    if (modrm >> 6 == 3 || ((modrm >> 6) == 0 && (modrm & 7) == 5)) {
+        return -1; /* register operand, or RIP-relative */
+    }
+    base = modrm & 7;
+    if (base == 4) {
+        unsigned sib = *code, index = (sib >> 3 & 7) | (rex & 2u) << 2;
+        base = sib & 7;
+        if (base == 5 && modrm >> 6 == 0) {
+            if (index == 4) return -1; /* no index either: an absolute address */
+            *scale = 1u << (sib >> 6);
+            return (int)index;
+        }
+    }
+    return (int)(base | (rex & 1u) << 3);
+}
+
+/* MEMORIES_X64_HIGH_HEAP=1 (a check for the 64-bit build): every address
+ * range below 4 GB that is still free once guest RAM is mapped is reserved,
+ * so that the host heap, and everything else Windows hands out later, lands
+ * above 4 GB. A host pointer that reaches a 4-byte guest slot then loses its
+ * upper half, and the access through what is left lands in one of these
+ * reservations: the fault is reported as that. The fixed regions mapped
+ * later (the game stack, the text arena, the interpreter's stack, mod
+ * arenas) take their range back out of a reservation as they are mapped
+ * (Memories_ReleaseLowPlaceholder, from compat/mman.h's mmap). The process
+ * heap's own segments predate this and would go on serving small blocks
+ * from below 4 GB, so they are filled up first, and the blocks kept. */
+typedef struct HighHeapRange { uintptr_t low, high; } HighHeapRange;
+static HighHeapRange high_heap[512];
+static unsigned high_heap_count;
+
+static void reserve_free(uintptr_t low, uintptr_t high)
+{
+    low = (low + 0xffffu) & ~(uintptr_t)0xffffu;
+    high &= ~(uintptr_t)0xffffu;
+    if (high <= low || high_heap_count == sizeof(high_heap) / sizeof(high_heap[0])) return;
+    if (VirtualAlloc((void *)low, high - low, MEM_RESERVE, PAGE_NOACCESS) == (void *)low) {
+        high_heap[high_heap_count].low = low;
+        high_heap[high_heap_count++].high = high;
+    }
+}
+
+void Memories_ReleaseLowPlaceholder(void *address, size_t length)
+{
+    uintptr_t low = (uintptr_t)address & ~(uintptr_t)0xffffu, high = (uintptr_t)address + length;
+    unsigned i;
+    for (i = 0; i < high_heap_count; i++) {
+        HighHeapRange range = high_heap[i];
+        if (high <= range.low || low >= range.high) continue;
+        /* One reservation is freed whole: give it back, then keep its
+         * parts on either side. */
+        VirtualFree((void *)range.low, 0, MEM_RELEASE);
+        high_heap[i] = high_heap[--high_heap_count];
+        if (range.low < low) reserve_free(range.low, low);
+        if (high < range.high) reserve_free((high + 0xffffu) & ~(uintptr_t)0xffffu, range.high);
+        i = (unsigned)-1; /* the table changed: look again */
+    }
+}
+
+static void fill_low_heap(void)
+{
+    static const size_t sizes[] = {0x10000, 16, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 2048, 4096,
+                                   8192, 16384};
+    unsigned i, count;
+    for (i = 0; i < sizeof(sizes) / sizeof(sizes[0]); i++) {
+        for (count = 0; count < 1000000u; count++) {
+            void *block = malloc(sizes[i]);
+            if (!block) break;
+            if ((uintptr_t)block >= 0x100000000ull) {
+                free(block);
+                break;
+            }
+            /* kept: the low block must not be handed out again */
+        }
+    }
+}
+
+static void reserve_low_memory(void)
+{
+    const char *value = getenv("MEMORIES_X64_HIGH_HEAP");
+    uintptr_t at = 0x10000u, reserved = 0;
+    unsigned i;
+    if (!value || !*value || !strcmp(value, "0")) return;
+    while (at < 0x100000000ull) {
+        MEMORY_BASIC_INFORMATION info;
+        uintptr_t end;
+        if (!VirtualQuery((void *)at, &info, sizeof(info))) break;
+        end = (uintptr_t)info.BaseAddress + info.RegionSize;
+        if (end > 0x100000000ull) end = 0x100000000ull;
+        if (info.State == MEM_FREE) reserve_free(at, end);
+        at = end;
+    }
+    fill_low_heap();
+    for (i = 0; i < high_heap_count; i++) reserved += high_heap[i].high - high_heap[i].low;
+    {
+        void *small = malloc(64), *large = malloc(1u << 20);
+        fprintf(stderr, "memories-pc: MEMORIES_X64_HIGH_HEAP: %u MiB below 4 GB reserved in %u ranges; malloc(64) "
+                        "%p, malloc(1 MiB) %p\n", (unsigned)(reserved >> 20), high_heap_count, small, large);
+        free(small);
+        free(large);
+    }
+}
+
+static int in_high_heap_reservation(uintptr_t address)
+{
+    unsigned i;
+    for (i = 0; i < high_heap_count; i++) {
+        if (address >= high_heap[i].low && address < high_heap[i].high) return 1;
+    }
+    return 0;
+}
+
+static LONG CALLBACK on_guest_exception(EXCEPTION_POINTERS *pointers)
+{
+    const EXCEPTION_RECORD *record = pointers->ExceptionRecord;
+    CONTEXT *context = pointers->ContextRecord;
+    uintptr_t address;
+    void *target;
+    if (record->ExceptionCode == EXCEPTION_SINGLE_STEP) {
+        DWORD64 *reg;
+        if (!low_fixup.active) {
+            return EXCEPTION_CONTINUE_SEARCH;
+        }
+        low_fixup.active = 0;
+        reg = context_register(context, low_fixup.reg);
+        if (*reg == low_fixup.patched) {
+            *reg = low_fixup.original;
+        }
+        context->EFlags &= ~0x100; /* trap flag */
+        return EXCEPTION_CONTINUE_EXECUTION;
+    }
+    if (record->ExceptionCode != EXCEPTION_ACCESS_VIOLATION || record->NumberParameters < 2) {
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+    address = (uintptr_t)record->ExceptionInformation[1];
+    if (address < MEMORIES_GUEST_RAM_SIZE && context->Rip != address && !low_fixup.active) {
+        unsigned scale;
+        int reg = low_access_register64((const unsigned char *)(uintptr_t)context->Rip, context->Rsi, &scale);
+        if (reg >= 0 && *context_register(context, reg) < MEMORIES_GUEST_RAM_SIZE) {
+            report_low_access((uint32_t)context->Rip, (uint32_t)address);
+            low_fixup.active = 1;
+            low_fixup.reg = reg;
+            low_fixup.original = (uint32_t)*context_register(context, reg);
+            low_fixup.patched = low_fixup.original + MEMORIES_GUEST_RAM / scale;
+            *context_register(context, reg) = low_fixup.patched;
+            context->EFlags |= 0x100;
+            return EXCEPTION_CONTINUE_EXECUTION;
+        }
+    }
+    if (context->Rip == address && address < 0x100000000ull &&
+        (target = guest_call_target((uint32_t)address)) != NULL) {
+        context->Rip = (DWORD64)(uintptr_t)target;
+        return EXCEPTION_CONTINUE_EXECUTION;
+    }
+    if (in_high_heap_reservation(address)) {
+        char text[160];
+        snprintf(text, sizeof(text), "access to 0x%08llx at rip 0x%llx: a host pointer above 4 GB that lost its "
+                                     "upper half in a 4-byte guest slot?", (unsigned long long)address,
+                 (unsigned long long)context->Rip);
+        fprintf(stderr, "memories-pc: %s\n", text);
+        Crash_ReportFatal("truncated host pointer", text);
+        Profile_Flush();
+        _exit(70);
+    }
+    if (context->Rip == address || address < 0x10000u ||
+        (address >= MEMORIES_GUEST_RAM && address < MEMORIES_GUEST_RAM + 0x00800000u)) {
+        report_guest_fault((uint32_t)address, (uint32_t)context->Rip);
+    }
+    if (context->Rip == address || context->Rip - (uintptr_t)__x86_indirect_thunk_r11 < 0x40 ||
+        context->Rip - (uintptr_t)GetModuleHandleW(NULL) < 0x10000000u) {
+        /* A fault the game will not survive, in its own code or in a call
+         * to where nothing is (or, a #GP in the branch thunk, to a
+         * non-canonical address, reported as 0xFFFFFFFF...). R11 is where
+         * a call through the thunk was going. The crash report that follows
+         * lists the callers, from the unwind tables and symbolized (crash.c,
+         * Win32_UnwindCallers). */
+        fprintf(stderr, "memories-pc: fault at rip 0x%llx (r11 0x%llx); the crash report lists its callers\n",
+                (unsigned long long)context->Rip, (unsigned long long)context->R11);
+    }
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+#elif defined(_WIN32)
 static DWORD *context_register(CONTEXT *context, int number)
 {
     switch (number) {
@@ -314,6 +561,9 @@ static LONG CALLBACK on_guest_exception(EXCEPTION_POINTERS *pointers)
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
+#endif
+
+#ifdef _WIN32
 /* The Linux layout as far as Windows allows: one pagefile-backed section
  * holds guest RAM and is viewed at 0x80000000 and 0xA0000000. The physical
  * mirror (0x10000..0x200000) competes with what Windows puts there before
@@ -387,6 +637,37 @@ int Memories_GuestMap(void)
     }
     /* The views keep the section alive. */
     CloseHandle(section);
+#if defined(__x86_64__)
+    {
+        /* Native function addresses go into 4-byte guest slots: the image
+         * must be where it was linked (0x40000000, no ASLR), below 4 GB. */
+        uintptr_t base = (uintptr_t)GetModuleHandleW(NULL);
+        const char *report = getenv("MEMORIES_X64_MAP_REPORT");
+        if (base >= 0x100000000ull || (uintptr_t)Memories_GuestMap >= 0x100000000ull) {
+            fprintf(stderr, "memories-pc: the executable was loaded at %p, above 4 GB; the 64-bit game needs it at "
+                            "its link address, 0x40000000\n", (void *)base);
+            result = -1;
+        }
+        if (report && *report && strcmp(report, "0")) {
+            fprintf(stderr, "memories-pc: image %p; guest RAM 0x80000000 and 0xA0000000 %s; scratchpad 0x1F800000\n",
+                    (void *)base, result ? "NOT mapped" : "mapped");
+        }
+    }
+    if (!result) {
+        /* The fixed regions mapped later (mod arenas, the text arena, the
+         * low memory region, the interpreter's stack, the game stack) are
+         * held from here: in a 64-bit process the window's GL driver and
+         * audio load below 4 GB too, and took the game stack's range before
+         * it was mapped. Each takes its range back as compat/mman.h's mmap
+         * maps it. */
+        reserve_free(0x90000000u, 0x91000000u);
+        reserve_free(0x9C000000u, 0x9D000000u);
+        reserve_free(MEMORIES_LOW_MEMORY_BASE, MEMORIES_LOW_MEMORY_BASE + MEMORIES_LOW_MEMORY_SIZE);
+        reserve_free(0x9FF00000u, 0x9FF40000u);
+        reserve_free(0xB0000000u, 0xB0800000u);
+        reserve_low_memory();
+    }
+#endif
     return result ? -1 : 0;
 }
 #else

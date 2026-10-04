@@ -43,6 +43,17 @@ void Win32_StackRange(uintptr_t *low, uintptr_t *high);
 /* The DLL an address is in, as "name.dll"; 0 when it is in none. */
 int Win32_ModuleName(uintptr_t address, char *out, unsigned size, uintptr_t *offset);
 
+#if defined(__x86_64__)
+/* x86-64 code keeps no frame chain: the callers of the code at `pc`, whose
+ * stack and frame pointers are `sp` and `fp`, by the unwind tables (the
+ * return address on top where a function has none: a leaf, the branch
+ * thunk, no code at all). Up to `count` into `callers`; returns how many.
+ * Win32_CurrentCallers: where the calling function is, then its callers,
+ * leaving out the first `skip`. */
+int Win32_UnwindCallers(uintptr_t pc, uintptr_t sp, uintptr_t fp, uintptr_t *callers, int count);
+int Win32_CurrentCallers(int skip, uintptr_t *callers, int count);
+#endif
+
 /* A font file under %WINDIR%\Fonts standing in for fontconfig's match:
  * a Japanese face when `japanese`, else a plain sans-serif. NULL if none. */
 const char *Win32_FontPath(int japanese);

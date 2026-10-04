@@ -31,6 +31,17 @@
 #define GAME_STACK_HIGH 0x70800000u
 #endif
 
+/* An address in the report, and the registers line. The 64-bit Windows
+ * build's long is 32 bits: its addresses are printed as uintptr_t, whole. */
+#if defined(_WIN32) && defined(__x86_64__)
+#include <inttypes.h>
+#define ADDRESS "%08" PRIxPTR
+#define REGISTERS "registers: RIP=0x" ADDRESS " RSP=0x" ADDRESS " RBP=0x" ADDRESS "\n"
+#else
+#define ADDRESS "%08lx"
+#define REGISTERS "registers: EIP=0x%08lx ESP=0x%08lx EBP=0x%08lx\n"
+#endif
+
 static unsigned char alternate_stack[64 * 1024];
 static uintptr_t main_stack_low, main_stack_high;
 static volatile sig_atomic_t reporting;
@@ -85,12 +96,41 @@ static void symbol_line(int index, uintptr_t address)
     char module[64];
     if (!name && Win32_ModuleName(address, module, sizeof(module), &offset)) name = module;
 #endif
+#if defined(_WIN32) && defined(__x86_64__)
+    if (name) length = snprintf(text, sizeof(text), "  #%d 0x" ADDRESS " %s+0x%" PRIxPTR "\n", index, address, name,
+                                offset);
+    else length = snprintf(text, sizeof(text), "  #%d 0x" ADDRESS "\n", index, address);
+#else
     if (name) length = snprintf(text, sizeof(text), "  #%d 0x%08lx %s+0x%lx\n",
                                 index, (unsigned long)address, name, (unsigned long)offset);
     else length = snprintf(text, sizeof(text), "  #%d 0x%08lx\n", index, (unsigned long)address);
+#endif
     if (length > 0) output(text, (size_t)length);
 }
 
+#if defined(_WIN32) && defined(__x86_64__)
+/* x86-64 code keeps no frame chain to follow: the callers come from the
+ * unwind tables (win32.c), symbolized as on 32-bit. */
+#define WALK(pc, sp, fp) walk_unwound(pc, sp, fp)
+static void walk_unwound(uintptr_t pc, uintptr_t sp, uintptr_t fp)
+{
+    uintptr_t callers[31];
+    int count = Win32_UnwindCallers(pc, sp, fp, callers, 31), i;
+    (void)valid_frame; /* the frame-pointer walk's */
+    symbol_line(0, pc);
+    for (i = 0; i < count; i++) symbol_line(i + 1, callers[i]);
+}
+
+/* Where the report function that calls this was called from, and its
+ * callers. */
+__attribute__((noinline)) static void walk_current(void)
+{
+    uintptr_t callers[32];
+    int count = Win32_CurrentCallers(2, callers, 32), i;
+    for (i = 0; i < count; i++) symbol_line(i, callers[i]);
+}
+#else
+#define WALK(pc, sp, fp) walk(pc, fp)
 static void walk(uintptr_t eip, uintptr_t ebp)
 {
     int depth = 0;
@@ -104,6 +144,7 @@ static void walk(uintptr_t eip, uintptr_t ebp)
         ebp = next;
     }
 }
+#endif
 
 char Crash_ReportDir[512] = "tmp/pc";
 
@@ -155,9 +196,9 @@ static void report_fatal(const char *what, unsigned long number, uintptr_t fault
     char text[128];
     open_report();
     snprintf(text, sizeof(text), strcmp(what, "signal") ? "fatal %s 0x%08lx" : "fatal %s %lu", what, number);
-    line("memories-pc: %s at 0x%08lx (%s)\n", (uintptr_t)text, fault, (uintptr_t)region(fault));
-    line("registers: EIP=0x%08lx ESP=0x%08lx EBP=0x%08lx\n", eip, esp, ebp);
-    walk(eip, ebp);
+    line("memories-pc: %s at 0x" ADDRESS " (%s)\n", (uintptr_t)text, fault, (uintptr_t)region(fault));
+    line(REGISTERS, eip, esp, ebp);
+    WALK(eip, esp, ebp);
     line("frame=%lu vblank=%lu clock=%ld%%\n", Memories_PresentedFrames(), Platform_VBlankCount(),
          (uintptr_t)(long)Platform_ClockRate());
     line("last loaded state slot=%ld\n", (uintptr_t)(long)Memories_LastStateSlot(), 0, 0);
@@ -267,7 +308,11 @@ void Crash_ReportSoft(const char *kind, const char *detail)
     fprintf(stderr, "memories-pc: %s: %s\n", kind, detail ? detail : "");
     fprintf(stderr, "frame=%u vblank=%u clock=%d%%\n", Memories_PresentedFrames(), Platform_VBlankCount(),
             Platform_ClockRate());
+#if defined(_WIN32) && defined(__x86_64__)
+    walk_current();
+#else
     walk((uintptr_t)__builtin_return_address(0), (uintptr_t)__builtin_frame_address(0));
+#endif
     count = Log_Tail(32, tail_lines);
     for (i = 0; i < count; i++) fprintf(stderr, "  %s%s", tail_lines[i], strchr(tail_lines[i], '\n') ? "" : "\n");
 }
@@ -284,7 +329,12 @@ void Crash_ReportFatal(const char *kind, const char *detail)
         output(detail, strlen(detail));
     }
     output("\n", 1);
+#if defined(_WIN32) && defined(__x86_64__)
+    (void)ebp;
+    walk_current();
+#else
     walk((uintptr_t)__builtin_return_address(0), ebp);
+#endif
     line("frame=%lu vblank=%lu clock=%ld%%\n", Memories_PresentedFrames(), Platform_VBlankCount(),
          (uintptr_t)(long)Platform_ClockRate());
     line("last loaded state slot=%ld\n", (uintptr_t)(long)Memories_LastStateSlot(), 0, 0);
@@ -311,8 +361,8 @@ void Crash_ReportHang(void *context_pointer)
     {
         static const char message[] = "memories-pc: no VSync for 5 s\n";
         output(message, sizeof(message) - 1);
-        line("registers: EIP=0x%08lx ESP=0x%08lx EBP=0x%08lx\n", eip, esp, ebp);
-        walk(eip, ebp);
+        line(REGISTERS, eip, esp, ebp);
+        WALK(eip, esp, ebp);
         line("frame=%lu vblank=%lu clock=%ld%%\n", Memories_PresentedFrames(), Platform_VBlankCount(),
              (uintptr_t)(long)Platform_ClockRate());
         context();

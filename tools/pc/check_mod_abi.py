@@ -24,6 +24,11 @@ disc is needed), and plays each smoke case that turns mods on
 (tests/pc/smoke) with the baseline's copies of those mods and with this
 build's: every code mod must load, and the frames must be the same.
 
+The 64-bit Windows build (build_game32.py --target windows-x64) loads no
+code mods, so it has no SDK to compare; --run there checks that every code
+mod is refused by name ("needs a 64-bit build of this mod", the Mods
+window's note) and never loaded, and that the data mods load as on 32-bit.
+
 The releases checked, and the differences reviewed and accepted, are in
 tools/pc/mod_compat.txt. A release is downloaded once into tmp/pc/mod-compat.
 Each --run plays in a folder of its own beside it, tmp/pc/mod-compat/run/
@@ -360,6 +365,20 @@ def manifest(directory):
         return json.load(handle)
 
 
+REFUSED = "needs a 64-bit build of this mod"
+
+
+def is_64bit(executable):
+    """A PE image for x86-64 (the 64-bit Windows build, which loads no code mods)."""
+    try:
+        with open(executable, "rb") as handle:
+            data = handle.read(4096)
+        at = int.from_bytes(data[0x3C:0x40], "little")
+        return data[at:at + 4] == b"PE\0\0" and int.from_bytes(data[at + 4:at + 6], "little") == 0x8664
+    except (OSError, ValueError):
+        return False
+
+
 def run_mods(tag, release, executable, build):
     """Every mod the baseline shipped, all on, in this build: ([(kind, name, what)],
     the run's folder). main() removes the folder unless a finding in it was
@@ -396,14 +415,27 @@ def run_mods(tag, release, executable, build):
                                  **extra})
     output = result.stdout + result.stderr
     found = []
+    wide = is_64bit(executable)
     if result.returncode:
         found.append(("run", "mods", f"the game exited {result.returncode} with {tag}'s mods on"))
     for mod, library in ids.items():
+        refused = False
         for line in re.findall(rf"memories-pc: mod {re.escape(mod)}: (?!warning)(.*)", output):
-            found.append(("run", mod, line))
-        if library and not re.search(rf"mods\] {re.escape(mod)}: loaded ", output):
+            if wide and library and line.startswith(REFUSED):
+                refused = True
+            else:
+                found.append(("run", mod, line))
+        loaded = re.search(rf"mods\] {re.escape(mod)}: loaded ", output)
+        if wide and library:
+            # The 64-bit game: a code mod is refused by name, never loaded.
+            if loaded:
+                found.append(("run", mod, "the 64-bit game loaded its 32-bit code"))
+            elif not refused:
+                found.append(("run", mod, f"the 64-bit game did not refuse it with \"{REFUSED}\""))
+        elif library and not loaded:
             found.append(("run", mod, "its code was not loaded"))
-    print(f"check_mod_abi: {tag}: {len(ids)} mods run in {executable}")
+    print(f"check_mod_abi: {tag}: {len(ids)} mods run in {executable}" +
+          (f"; {sum(1 for library in ids.values() if library)} code mods refused by name" if wide else ""))
     for case_path in sorted(glob.glob(os.path.join(ROOT, "tests/pc/smoke/*.json"))):
         with open(case_path, encoding="utf-8") as handle:
             case = json.load(handle)
@@ -411,6 +443,8 @@ def run_mods(tag, release, executable, build):
         if not wanted or not all(os.path.isdir(os.path.join(release, "mods", m)) and
                                  os.path.isdir(os.path.join(build, "mods", m)) for m in wanted):
             continue
+        if wide and any(manifest(os.path.join(build, "mods", m)).get("library") for m in wanted):
+            continue   # code mods: refused on both sides, which proves nothing about them
         frames = []
         for side, source in (("baseline", os.path.join(release, "mods")), ("current", os.path.join(build, "mods"))):
             folder = os.path.join(work, f"{case['name']}-{side}")
@@ -444,6 +478,8 @@ def main():
     baselines, accepted = read_list()
     compiler = clang()
     current_sdk = os.path.join(options.build, "sdk")
+    if is_64bit(options.executable or os.path.join(options.build, "memories-pc.exe")):
+        return run_64bit(options, baselines, accepted)
     if not os.path.isfile(os.path.join(current_sdk, "exports.txt")):
         sys.exit(f"check_mod_abi: {current_sdk} has no exports.txt; build the game first (tools/pc/build_game32.py)")
     with open(os.path.join(current_sdk, "exports.txt")) as handle:
@@ -487,6 +523,29 @@ def main():
         print(f"check_mod_abi: {tag}: {len(exports_old)} exports, {compared} declarations, "
               f"{len(reachable([n for n in exports_old & exports_new if n in old['decls']], old))} records and "
               f"{len(old['enums'])} enumerators compared; {len(old['skipped'])} headers do not compile alone")
+    return 1 if failed else 0
+
+
+def run_64bit(options, baselines, accepted):
+    """The 64-bit build: no SDK to compare (it loads no code mods), so only
+    --run, which holds it to refusing each code mod by name."""
+    if not options.run:
+        sys.exit("check_mod_abi: the 64-bit build has no mod SDK (it loads no code mods); --run checks its mods")
+    executable = os.path.abspath(options.executable or os.path.join(options.build, "memories-pc.exe"))
+    failed = False
+    for baseline in options.baseline or baselines:
+        release = baseline if os.path.isdir(baseline) else fetch(baseline, "windows")
+        tag = os.path.basename(os.path.normpath(release)).replace("yfm-redecomp-", "") if os.path.isdir(baseline) else baseline
+        found, work = run_mods(tag, release, executable, options.build)
+        keep = False
+        for kind, name, what in found:
+            if (tag, kind, name) in accepted:
+                print(f"  accepted: {kind} {name}: {what} ({accepted[(tag, kind, name)]})")
+                continue
+            failed = keep = True
+            print(f"check_mod_abi: {tag}: {kind} {name}: {what}", file=sys.stderr)
+        if not keep:
+            shutil.rmtree(work, ignore_errors=True)
     return 1 if failed else 0
 
 
