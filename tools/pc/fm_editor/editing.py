@@ -290,8 +290,11 @@ class Editing:
         if not self.dirty and not self._pending:
             self.recovery.clear()
             return
+        # The history records each edit when idle; with none waiting, its
+        # current snapshot is this project.
+        snapshot = self.history.items[self.history.position] if self.history and self._history_job is None else None
         try:
-            self.recovery.write(self.project, self.form_drafts())
+            self.recovery.write(self.project, self.form_drafts(), snapshot)
         except (OSError, ValueError) as problem:
             self.edit_state.configure(text=f"Recovery copy failed: {problem}. Use Ctrl+S to save.")
         else:

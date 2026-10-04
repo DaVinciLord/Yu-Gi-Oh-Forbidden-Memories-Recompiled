@@ -68,11 +68,14 @@ def duelist_named(text) -> int:
     return -1
 
 
+_TYPE_LETTERS = {}
+
+
 def type_named(text: str) -> int:
-    for t, name in enumerate(TYPE_NAMES):
-        if same_letters(text, name):
-            return t
-    return -1
+    if not _TYPE_LETTERS:       # once: saving a big mod asks for thousands of types
+        for t, name in enumerate(TYPE_NAMES):
+            _TYPE_LETTERS.setdefault(letters(name), t)
+    return _TYPE_LETTERS.get(letters(text), -1)
 
 
 def card_matches(project, cid: int, text: str) -> bool:

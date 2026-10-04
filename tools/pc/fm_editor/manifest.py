@@ -1271,15 +1271,16 @@ def is_game_folder(folder: Path) -> bool:
             for p in folder.glob("*") if p.is_file())
 
 
-def save_mod(project: Project, folder, manifest: dict = None) -> Path:
+def save_mod(project: Project, folder, manifest: dict = None, copy_source: bool = True) -> Path:
     """Write the mod folder: mod.json, and when it is a new place, the files
-    of the folder the mod was opened from (art, text, textures...)."""
+    of the folder the mod was opened from (art, text, textures...).
+    copy_source=False leaves those out (recovery fills them in itself)."""
     folder = Path(folder)
     if folder.exists() and is_game_folder(folder):
         raise ValueError(f"{folder} holds game files; the editor writes mod folders only")
     folder.mkdir(parents=True, exist_ok=True)
     source = project.source_dir
-    if source and Path(source).resolve() != folder.resolve() and Path(source).is_dir():
+    if copy_source and source and Path(source).resolve() != folder.resolve() and Path(source).is_dir():
         destination = folder.resolve()
         for directory, subdirs, files in os.walk(source):
             directory = Path(directory)
