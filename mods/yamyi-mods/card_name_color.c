@@ -160,6 +160,11 @@ typedef struct {
 } SavedNameColor;
 static SavedNameColor saved_colors[TRACKED_BOXES];
 
+/* Colour declarations moved to the core manifest framework.  Keep this
+ * module's drop-odds machinery, but never revive its old private INI hook
+ * for a profile that still contains the former setting. */
+static int legacy_colors_enabled(void) { return 0; }
+
 /* ---- small helpers ------------------------------------------------------- */
 
 /* Compare letters and digits only, ignoring case, spaces and punctuation, so
@@ -850,7 +855,7 @@ static void process_text_command(DuelEffectChannel *object)
     original = (void (*)(DuelEffectChannel *))original_func_80037DA4;
     restore_name_color(object);
     original(object);
-    if (!host->setting(host, "colors", 1)) return;
+    if (!legacy_colors_enabled()) return;
 
     id = gDuel_wSelectedCardID;
     ensure_config();
@@ -1425,7 +1430,7 @@ static void colors_removed(void)
 }
 static void colors_frame(void)
 {
-    if (!host->setting(host, "colors", 1)) colors_removed();
+    if (!legacy_colors_enabled()) colors_removed();
 }
 static void colors_applied(int on)
 {

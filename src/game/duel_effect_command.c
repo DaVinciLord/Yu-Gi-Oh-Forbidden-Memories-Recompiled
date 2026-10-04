@@ -15,6 +15,7 @@
 #include "pc/text/text.h"
 #include "pc/text/number_width.h"
 #include "pc/cards/stars.h"
+#include "pc/cards/card_text_colors.h"
 
 /* A star's second name, left out: an empty string in the names bank. */
 static const u8 no_star_name[] = {0xFF};
@@ -64,11 +65,18 @@ void func_80037DA4(DuelEffectChannel *object)
         *(u8 *G32 *)text = current;
     }
     n = 0;
+#ifdef MEMORIES_PC
+    /* A previous inserted card field may have borrowed this box's colour. */
+    CardTextColors_Restore(object);
+#endif
     if (op & 0x10) {
         object->field_54 = D_8009B320;
         return;
     }
     if (op & 0x20) {
+#ifdef MEMORIES_PC
+        CardTextColors_Apply(object, CARD_TEXT_COLOR_NAME, 0);
+#endif
 #ifdef MEMORIES_PC
         /* A card past the disc's has a name of its own, from its mod, or
            its base's (cards.h); the text bank only has the retail ones. */
@@ -82,6 +90,9 @@ void func_80037DA4(DuelEffectChannel *object)
         id = gDuel_wSelectedCardID + 0x8000;
 #endif
     } else if (op & 0x40) {
+#ifdef MEMORIES_PC
+        CardTextColors_Apply(object, CARD_TEXT_COLOR_DESCRIPTION, 0);
+#endif
 #ifdef MEMORIES_PC
         if (Cards_DescriptionText(gDuel_wSelectedCardID) != 0) {
             object->stream_58++;
@@ -150,6 +161,10 @@ void func_80037DA4(DuelEffectChannel *object)
         if (!(op & 0x80)) {
             goto plain;
         }
+#ifdef MEMORIES_PC
+        if (kind == 1 || kind == 2)
+            CardTextColors_Apply(object, CARD_TEXT_COLOR_GUARDIAN_STAR, star);
+#endif
         id += 0x8300;
     }
     object->stream_58++;

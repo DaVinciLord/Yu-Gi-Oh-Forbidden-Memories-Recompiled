@@ -4,9 +4,15 @@
 #include "text_box_lifecycle.h"
 #include "display_object_core.h"
 #include "text_box_set_rect.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/card_text_colors.h"
+#endif
 
 void TextBox_Destroy(DuelEffectChannel *record)
 {
+#ifdef MEMORIES_PC
+    CardTextColors_DestroyChannel(record);
+#endif
     func_80035CA8(record->index_57);
     DuelEffect_ClearMatchingMarker(record->index_57);
     record->flags_34 = 0;

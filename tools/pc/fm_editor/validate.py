@@ -23,7 +23,7 @@ MANIFEST_KEYS = ("id", "name", "version", "author", "description", "library", "e
                  "legacy_setting", "data", "textures", "cards", "audio", "min_api", "game", "requires", "after",
                  "conflicts", "priority", "settings", "fusions", "equips", "rituals", "drops", "decks", "text", "font",
                  "chest_overflow", "terrain_bonus", "trap_thresholds", "equip_bonus_default", "passwords",
-                 "starter", "starter_pools", "limits", "guardian_stars", "packs", "pack_shop")
+                 "starter", "starter_pools", "limits", "guardian_stars", "packs", "pack_shop", "card_text_colors")
 HOST_API = 8
 
 
