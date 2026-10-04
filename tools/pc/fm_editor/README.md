@@ -95,6 +95,36 @@ the loader would refuse first. **Save as** copies the mod's assets too,
 replacing matching files when overwriting another mod. Its destination may
 be inside the source mod; the destination itself is excluded from the copy.
 
+**Apply and Save:** Apply stores a form in the working mod; **Ctrl+S** applies
+all valid forms and writes the mod folder. Leaving a tab also applies its form.
+An invalid form stays visible with its explanation and keeps your input. The
+window title's **\*** and the editing status show unsaved or unapplied changes.
+**Edit > Apply edits** applies the forms without saving; **Edit > Discard form
+edits** drops unapplied form input while keeping changes already applied.
+
+**Undo and Redo:** **Ctrl+Z**, **Ctrl+Y** (also **Ctrl+Shift+Z**) undo and redo
+applied edits across tabs, including card conversions, equip targets, tables,
+and imported card/map artwork, pack pictures and Guardian Star icons. Undo first applies a valid pending form, so that
+form can be undone too. Invalid input must be corrected or discarded first.
+History retains up to 50 edits, with a 64 MiB snapshot budget (at least the
+current and previous snapshot). It lasts until a different mod or game is
+opened; saving keeps it. Undoing a save changes the working mod: save again to
+write that restored version. Dialogs keep their own keyboard behavior.
+
+**Recovery and backups:** After two seconds without another edit, the editor
+updates a separate recovery copy of the working mod and its assets. Unapplied
+Cards, Mod info, Limits and Packs fields are included, even incomplete input.
+This does not save or change the original mod folder. The editor offers to
+review leftover drafts on startup; **File > Recover work...** lists drafts and
+save backups, with their date and original folder. **Open copy** opens a separate
+working copy and its first Save asks for a destination. **Delete copy** removes
+an unwanted recovery copy. Before overwriting a saved mod, the editor backs up
+the whole folder and keeps its five most recent backups. A failed backup stops
+the save, and a failed recovery update preserves the last complete copy and
+shows an error. Copies live in a `recovery` folder beside the editor's settings
+file. A successful save or explicitly discarding a session clears that session's
+draft; recovery does not cover edits made in dialogs before their confirmation.
+
 **View > Dark mode** switches the window, its dialogs and the text boxes,
 lists and menus to a dark look at once, and back (no restart); the editor
 remembers it in its own settings file, `%APPDATA%\FM Editor\settings.json`

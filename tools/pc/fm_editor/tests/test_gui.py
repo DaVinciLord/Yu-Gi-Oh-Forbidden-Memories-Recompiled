@@ -1111,6 +1111,191 @@ class GuiTest(unittest.TestCase):
         self.assertEqual(str(app.cards.tree.tag_configure("changed", "foreground")), theme.TAGS["changed"][0])
         self.assertTrue(app.cget("menu"))       # the window's own menu bar is back
 
+    def test_history_card_conversion_and_equip_targets(self):
+        from fm_editor.gamedata import TYPE_NAMES
+        app = self.app
+        original = app.project.cards[1].type
+        app.cards.goto(1)
+        app.cards.vars["type"].set(TYPE_NAMES[23])
+        app.cards.show_kind()
+        app.cards.vars["effect"].set(app.cards.effect_label(301))
+        self.assertTrue(app.cards.apply(quiet=True))
+        app.update()
+        app.notebook.select(app.equips)
+        app.update()
+        self.assertTrue(app.equips.equips.exists("1"))
+        app.project.equips[1] = {2, 3}
+        app.changed()
+        app.update()
+        app.undo()
+        app.update()
+        self.assertNotIn(1, app.project.equips)
+        self.assertEqual(app.project.cards[1].type, 23)
+        app.undo()
+        app.update()
+        self.assertEqual(app.project.cards[1].type, original)
+        self.assertFalse(app.equips.equips.exists("1"))
+        self.assertFalse(app.dirty)
+        app.redo()
+        app.update()
+        app.redo()
+        app.update()
+        self.assertEqual(app.project.equips[1], {2, 3})
+        self.assertTrue(app.equips.equips.exists("1"))
+
+    def test_invalid_form_stays_visible_when_switching_tabs(self):
+        app = self.app
+        app.cards.goto(1)
+        app.cards.vars["attack"].set("unfinished")
+        app.notebook.select(app.equips)
+        app.update()
+        self.assertIs(app.notebook.current(), app.cards)
+        self.assertEqual(app.cards.vars["attack"].get(), "unfinished")
+        self.assertTrue(app.cards.status.cget("text"))
+        app.cards.vars["attack"].set("1234")
+        app.notebook.select(app.equips)
+        app.update()
+        self.assertIs(app.notebook.current(), app.equips)
+        self.assertEqual(app.project.cards[1].attack, 1234)
+
+    def test_undo_commits_pending_text_and_keeps_selection(self):
+        app = self.app
+        app.cards.goto(10)
+        old = app.project.cards[10].name
+        app.cards.vars["name"].set("Pending undo")
+        app.undo()
+        app.update()
+        self.assertEqual(app.project.cards[10].name, old)
+        self.assertEqual(app.cards.current, 10)
+        self.assertEqual(app.cards.vars["name"].get(), old)
+        app.redo()
+        app.update()
+        self.assertEqual(app.cards.vars["name"].get(), "Pending undo")
+
+    def test_pending_drafts_and_recovery_failure(self):
+        from fm_editor import recovery
+        app = self.app
+        app.cards.goto(1)
+        widget = app.cards.text
+        app._remember_input(widget)
+        widget.insert("end", "Draft text")
+        app._form_input(app.cards, widget)
+        self.assertTrue(app.title().startswith("*"))
+        self.assertIn(app.cards, app._pending)
+        app.cards.vars["attack"].set("unfinished")
+        app.autosave()
+        rows = [row for row in recovery.records() if row[0].parent == app.recovery.folder]
+        self.assertEqual(len(rows), 1)
+        forms = rows[0][2]["forms"]
+        self.assertEqual(forms["cards"]["vars"]["attack"], "unfinished")
+        app.discard_forms()
+        self.assertNotEqual(app.cards.vars["attack"].get(), "unfinished")
+        app.restore_drafts(forms)
+        self.assertEqual(app.cards.vars["attack"].get(), "unfinished")
+        self.assertTrue(widget.get("1.0", "end-1c").endswith("Draft text"))
+        with mock.patch.object(app.recovery, "write", side_effect=OSError("disk full")):
+            app.autosave()
+        self.assertIn("Recovery copy failed", app.edit_state.cget("text"))
+        self.assertTrue(rows[0][1].exists())
+
+    def test_save_backup_failure_does_not_overwrite_mod(self):
+        from fm_editor import manifest, recovery
+        app = self.app
+        folder = Path(self.tmp.name) / "history-save"
+        manifest.save_mod(app.project, folder)
+        before = (folder / "mod.json").read_bytes()
+        app.cards.goto(1)
+        app.cards.vars["name"].set("Unsaved name")
+        with mock.patch.object(recovery, "backup", side_effect=OSError("backup failed")), \
+                mock.patch("fm_editor.app.messagebox.showerror") as error:
+            self.assertFalse(app.save())
+        error.assert_called_once()
+        self.assertEqual((folder / "mod.json").read_bytes(), before)
+        self.assertTrue(app.dirty)
+        self.assertTrue(app.save())
+        self.assertFalse(app.dirty)
+        app.undo()
+        app.update()
+        self.assertTrue(app.dirty)
+        app.redo()
+        app.update()
+        self.assertFalse(app.dirty)
+
+
+    def test_keyboard_pending_apply_and_undo_shortcuts(self):
+        app = self.app
+        app.deiconify()
+        app.cards.goto(1)
+        app.update()
+        text = app.cards.text
+        text.focus_force()
+        app.update()
+        original = text.get("1.0", "end-1c")
+        text.mark_set("insert", "end-1c")
+        text.event_generate("<KeyPress-x>")
+        text.event_generate("<KeyRelease-x>")
+        app.update()
+        self.assertIn(app.cards, app._pending)
+        self.assertTrue(app.title().startswith("*"))
+        self.assertTrue(app.cards.apply(quiet=True))
+        app.update()
+        self.assertNotIn(app.cards, app._pending)
+        text.event_generate("<Control-z>")
+        text.event_generate("<KeyRelease-z>", state=4)
+        app.update()
+        self.assertEqual(text.get("1.0", "end-1c"), original)
+        self.assertFalse(app._pending)
+        text.event_generate("<Control-Shift-Z>")
+        app.update()
+        self.assertEqual(text.get("1.0", "end-1c"), original + "x")
+
+    def test_recovered_copy_survives_multiple_autosaves_and_save_as(self):
+        from fm_editor import manifest, recovery
+        app = self.app
+        app.project.files["extra.bin"] = b"keep across autosaves"
+        app.project.cards[1].name = "Crash recovery"
+        prior = recovery.Recovery()
+        prior.write(app.project)
+        row = next(row for row in recovery.records() if row[0].parent == prior.folder)
+        app.set_project(type(app.project)(app.retail))
+        self.assertTrue(app.open_recovery(row[1], row[2]))
+        app.update()
+        self.assertTrue(app._recovered)
+        self.assertEqual(app.project.cards[1].name, "Crash recovery")
+        app.autosave()
+        app.project.info.author = "More edits"
+        app.changed()
+        app.autosave()
+        latest = next(row for row in recovery.records() if row[0].parent == app.recovery.folder)
+        self.assertEqual((latest[1] / "extra.bin").read_bytes(), b"keep across autosaves")
+        source = app.project.source_dir
+        destination = Path(self.tmp.name) / "recovered-save"
+        with mock.patch("fm_editor.app.filedialog.askdirectory", return_value=str(destination)) as choose:
+            self.assertTrue(app.save())
+        choose.assert_called_once()
+        self.assertFalse(app._recovered)
+        self.assertFalse(source.exists())
+        self.assertTrue(row[1].exists(), "original recovery copy remains available")
+        reopened, _ = manifest.open_mod(app.retail, destination)
+        self.assertEqual(reopened.cards[1].name, "Crash recovery")
+        self.assertEqual((destination / "extra.bin").read_bytes(), b"keep across autosaves")
+
+
+    def test_recovered_type_change_restores_effect_controls(self):
+        from fm_editor.gamedata import TYPE_NAMES
+        app = self.app
+        app.cards.search.set("no matching card")
+        app.restore_drafts({"cards": {"current": 1, "vars": {
+            "type": TYPE_NAMES[23], "effect": app.cards.effect_label(301)}}})
+        app.update()
+        self.assertEqual(app.cards.current, 1)
+        self.assertEqual(app.cards.vars["type"].get(), TYPE_NAMES[23])
+        self.assertEqual(app.cards.effect_box.winfo_manager(), "grid")
+        self.assertEqual(app.cards.vars["effect"].get(), app.cards.effect_label(301))
+        self.assertTrue(app.cards.apply(quiet=True))
+        self.assertEqual(app.project.cards[1].type, 23)
+
+
 
 class SettingsTest(unittest.TestCase):
     def test_missing_or_broken(self):
