@@ -55,6 +55,8 @@ TYPE_NAMES = ["Dragon", "Spellcaster", "Zombie", "Warrior", "Beast-Warrior", "Be
               "Fairy", "Insect", "Dinosaur", "Reptile", "Fish", "Sea Serpent", "Machine", "Thunder", "Aqua",
               "Pyro", "Rock", "Plant", "Magic", "Trap", "Ritual", "Equip"]
 TYPE_MAGIC, TYPE_TRAP, TYPE_RITUAL, TYPE_EQUIP = 20, 21, 22, 23
+ATTACK_TRAP_FIRST = 681
+ATTACK_TRAP_THRESHOLDS = (500, 1000, 1500, 2000, 3000, 25500)
 # The secondary fusion groups a ritual tribute may ask for (cards.h
 # CARD_FUSION_GROUP_*, in that order).
 FUSION_GROUPS = ("AngelWinged", "Bugrothian", "Egg", "Elf", "FeatherFromBear", "FeatherFromHarpie",

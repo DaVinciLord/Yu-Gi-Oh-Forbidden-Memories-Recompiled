@@ -60,6 +60,16 @@ become **Magic**: select the type, choose its retail effect, then apply and save
 An added copy changing kind needs a matching effect; **(none)** is insufficient.
 Numbers appear in the effect list only when retail names are duplicated.
 
+For **Trap**, the form shows **Retail effect** and hides ATK, DEF, guardian
+stars, level and attribute. The six effects that destroy an attacking monster
+also show **Trigger at ATK ≤**: the largest current ATK that triggers this
+particular card, inclusive (0–65535). Leave it blank for the effect's default,
+shown alongside it. Two cards using Bear Trap can have different thresholds.
+Goblin Fan, Bad Reaction to Simochi, Reverse Trap and Fake Trap use their retail
+triggers and have no ATK threshold field. Changing to one of these effects
+clears the previous threshold when applied. Set traps trigger automatically
+in a duel; the CPU sets converted and added traps as traps too.
+
 On **Cards**, **Equips**, and **Duelists**, click a column heading to sort
 ascending; click it again to reverse the order. An arrow marks the active
 column and direction. Card lists support **#**, **Name** (or **Card/Monster**),

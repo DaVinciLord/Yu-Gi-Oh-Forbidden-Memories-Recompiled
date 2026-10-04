@@ -116,7 +116,9 @@ def build_cards(project: Project) -> list:
         fields = {"name": card.name}
         fields.update(_card_fields(card, base))     # what is left out is the base's, as the port has it
         if card.is_monster() != base.is_monster() or (not base.is_monster() and card.type != base.type):
-            fields.pop("type", None)        # the port keeps the base's side; validation says so
+            effect = project.retail.cards.get(project.effect_of(cid))
+            if card.is_monster() or effect is None or effect.type != card.type:
+                fields.pop("type", None)    # the port refuses a kind change without a matching effect
         entry.update(fields)
         if project.passwords.get(cid):
             entry["password"] = project.passwords[cid]
@@ -582,7 +584,7 @@ def _clamp(value, low, high):
     return max(low, min(high, value))
 
 
-def _apply_fields(card, entry: dict, is_replace: bool, messages: list, where: str, stars_section=None):
+def _apply_fields(card, entry: dict, is_replace: bool, messages: list, where: str, stars_section=None, effect_type=None):
     name = entry.get("name")
     if isinstance(name, str) and name:
         card.name = name
@@ -600,7 +602,8 @@ def _apply_fields(card, entry: dict, is_replace: bool, messages: list, where: st
         if value >= 0:
             value = _clamp(value, 0, 23)
             monster = card.type < TYPE_MAGIC
-            if not is_replace and (value >= TYPE_MAGIC if monster else value != card.type):
+            if (not is_replace and (value >= TYPE_MAGIC if monster else value != card.type) and
+                    not (value >= TYPE_MAGIC and value == effect_type)):
                 messages.append(f"{where}: a copy keeps its base's side (monster or not); \"type\" left out")
             else:
                 card.type = value
@@ -698,7 +701,12 @@ def read_cards(project: Project, entries, messages: list):
         # A copy with no name of its own shows its base's name from the disc,
         # not the name a "replace" gave the base (cards.c Cards_NameCodes).
         project.cards[cid].name = project.retail.cards[base].name
-        _apply_fields(project.cards[cid], entry, False, messages, where, project.other.get("guardian_stars"))
+        effect_id = project.resolve(entry.get("effect"))
+        if not effect_id or effect_id > CARD_COUNT:
+            effect_id = project.effect_of(base)
+        effect = project.retail.cards.get(effect_id)
+        _apply_fields(project.cards[cid], entry, False, messages, where, project.other.get("guardian_stars"),
+                      effect.type if effect else None)
         added = project.added[cid]
         added.drops = _json_bool(entry.get("drops"), True)
         added.opponents = _json_bool(entry.get("opponents"), False)

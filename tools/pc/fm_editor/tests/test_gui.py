@@ -389,6 +389,57 @@ class GuiTest(unittest.TestCase):
         self.assertTrue(tab.apply())
         self.assertEqual(project.effect_of(1), 606)
 
+    def test_trap_form_thresholds_and_independent_copy_roundtrip(self):
+        from fm_editor import manifest, validate
+        from fm_editor.model import Project
+        tab, p = self.app.cards, self.app.project
+        # This synthetic disc normally places traps at 701 onward.
+        for cid in range(681, 691):
+            p.retail.cards[cid].type = p.cards[cid].type = 21
+        copy = p.add_card(1)
+        tab.refresh()
+        tab.tree.selection_set(str(copy))
+        tab.select()
+        tab.vars["type"].set("Trap")
+        tab.vars["effect"].set("Card 681")
+        self.assertTrue(all(w.winfo_manager() for w in tab.effect_row + tab.trap_rows))
+        self.assertFalse(any(w.winfo_manager() for w in tab.monster_rows))
+        tab.vars["trap_threshold"].set("1234")
+        self.assertTrue(tab.apply())
+        self.assertEqual(p.cards[copy].attribute, 7)
+        self.assertEqual(tab.row(copy)[0][3:5], ("", ""))
+        self.assertEqual((p.cards[copy].attack, p.cards[copy].defense, p.cards[copy].star1, p.cards[copy].star2), (0, 0, 0, 0))
+        self.assertFalse([i for i in validate.validate_card(p, copy) if i.level == "error"])
+        built = manifest.build(p)
+        entry = next(e for e in built["cards"] if "copy" in e)
+        self.assertEqual((entry["type"], entry["effect"], entry["trap_threshold"]), ("Trap", 681, 1234))
+        self.assertTrue(p.cards[1].is_monster())  # the copy's base stays a monster
+        restored = Project(p.retail)
+        manifest.apply(restored, built)
+        self.assertEqual(restored.cards[copy].type, 21)
+        self.assertEqual(restored.trap_threshold_override(copy), 1234)
+        for invalid in ("-1", "65536", "1.5", "bad"):
+            tab.vars["trap_threshold"].set(invalid)
+            self.assertFalse(tab.apply())
+            self.assertEqual(p.trap_threshold_override(copy), 1234)
+        for valid in ("0", "65535", ""):
+            tab.vars["trap_threshold"].set(valid)
+            self.assertTrue(tab.apply())
+            self.assertEqual(p.trap_threshold_override(copy), int(valid) if valid else None)
+        tab.vars["trap_threshold"].set("700")
+        self.assertTrue(tab.apply())
+        # Special traps have no attack threshold. Applying the new effect
+        # clears the old threshold and does not reveal monster statistics.
+        tab.vars["effect"].set("Card 687")
+        self.assertFalse(any(w.winfo_manager() for w in tab.trap_rows + tab.monster_rows))
+        self.assertTrue(tab.apply())
+        self.assertIsNone(p.trap_threshold_override(copy))
+        tab.vars["type"].set("Magic")
+        tab.vars["effect"].set("Card 605")
+        self.assertTrue(tab.apply())
+        self.assertEqual(p.cards[copy].attribute, 6)
+        self.assertEqual(next(e for e in manifest.build(p)["cards"] if "copy" in e)["type"], "Magic")
+
     def test_art(self):
         from fm_editor import art, pngio
         from fm_editor.tests.test_art import gradient

@@ -10,7 +10,8 @@ import copy
 import re
 from dataclasses import dataclass, field
 
-from .gamedata import (CARD_COUNT, DECK_SIZE, DUELIST_COUNT, DUELIST_NAMES, POOLS, TYPE_NAMES, Card, GameData)
+from .gamedata import (ATTACK_TRAP_FIRST, ATTACK_TRAP_THRESHOLDS, CARD_COUNT, DECK_SIZE, DUELIST_COUNT,
+                       DUELIST_NAMES, POOLS, TYPE_NAMES, Card, GameData)
 
 KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
@@ -599,6 +600,31 @@ class Project:
         if named and named <= CARD_COUNT:
             return named
         return self.effect_of(self.base_of(cid)) if cid in self.added else cid
+
+    def trap_threshold_override(self, cid: int):
+        extra = self.added[cid].extra if cid in self.added else self.card_extra.get(cid, {})
+        if "trap_threshold" in extra:
+            return extra["trap_threshold"]
+        return self.trap_threshold_override(self.base_of(cid)) if cid in self.added else None
+
+    def trap_threshold_default(self, effect: int):
+        index = effect - ATTACK_TRAP_FIRST
+        if not 0 <= index < len(ATTACK_TRAP_THRESHOLDS):
+            return None
+        value = ATTACK_TRAP_THRESHOLDS[index]
+        table = self.other.get("trap_thresholds", {})
+        if isinstance(table, dict):
+            for key, points in table.items():
+                cid = self.resolve(key)
+                if cid and self.base_of(cid) == effect and type(points) is int and 0 <= points <= 65535:
+                    value = points
+        return value
+
+    def set_trap_threshold(self, cid: int, value):
+        extra = self.added[cid].extra if cid in self.added else self.card_extra.setdefault(cid, {})
+        # null explicitly clears an override, including one inherited from a
+        # base or an earlier mod. Untouched empty fields never write it.
+        extra["trap_threshold"] = value
 
     def is_ritual(self, cid: int) -> bool:
         """A ritual card a recipe may be for: typed Ritual and played as a

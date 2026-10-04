@@ -168,6 +168,12 @@ def _check_card(project: Project, cid: int, out: list):
         if not retail.is_monster() and card.is_monster() and "model" not in extra:
             add("warning", "a card made a monster fights without a 3D model unless \"model\" names one")
     extra = project.added[cid].extra if cid in project.added else project.card_extra.get(cid, {})
+    threshold = extra.get("trap_threshold")
+    if threshold is not None:
+        if type(threshold) is not int or not 0 <= threshold <= 65535:
+            add("error", '"trap_threshold" must be a whole number from 0 to 65535, or null')
+        elif card.type != 21 or project.trap_threshold_default(project.effect_of(cid)) is None:
+            add("warning", "the saved attack threshold only applies to an attack-destruction trap effect")
     effect = project.retail.cards.get(project.effect_of(cid)) if "effect" in extra else None
     if effect and not card.is_monster() and effect.type != card.type:
         add("warning", f"its effect is {effect.name}'s, a {TYPE_NAMES[effect.type]} card's: the CPU does not play it, "

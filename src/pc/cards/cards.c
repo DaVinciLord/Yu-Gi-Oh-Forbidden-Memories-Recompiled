@@ -68,6 +68,8 @@ extern void Library_UpdateCardUsedFlag(int flag);
 static char *identities[CARD_TABLE_ID_END];
 static const JsonValue *definitions[CARD_TABLE_ID_END];
 static unsigned short model_ids[CARD_TABLE_ID_END], effect_ids[CARD_TABLE_ID_END];
+/* Threshold plus one: zero inherits the effect's global/retail threshold. */
+static unsigned int trap_thresholds[CARD_TABLE_ID_END];
 static unsigned char not_exodia[EXODIA_PIECE_COUNT];  /* a replaced piece without Exodia's rules */
 /* The frame a card is drawn in when its entry says ("frame"), plus one: 0
  * is its type's (cards.h Cards_FrameColor). */
@@ -86,6 +88,12 @@ int Cards_FindIdentity(const char *identity)
 int Cards_ModelId(int id) { return Cards_Valid(id) && model_ids[id] ? model_ids[id] : Cards_BaseId(id); }
 int Cards_EffectId(int id) { return Cards_Valid(id) && effect_ids[id] ? effect_ids[id] : Cards_BaseId(id); }
 int Cards_TrapId(int id) { return Cards_Valid(id) && Cards_Type(id) == CARD_TYPE_TRAP ? Cards_EffectId(id) : 0; }
+int Cards_TrapThreshold(int id, int fallback)
+{
+    int effect = Cards_TrapId(id);
+    return (unsigned)(effect - DUEL_ATTACK_TRAP_FIRST_CARD_ID) < DUEL_ATTACK_TRAP_COUNT && trap_thresholds[id]
+               ? (int)trap_thresholds[id] - 1 : fallback;
+}
 static int retail_monster(int id);
 int Cards_HasModel(int id) { return Cards_Valid(id) && retail_monster(Cards_ModelId(id)); }
 int Cards_FrameColor(int id) { return Cards_Valid(id) ? frames[id] - 1 : -1; }
@@ -1075,6 +1083,7 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     unsigned stats, password = CARD_PASSWORD_NONE, entry_fusion_groups = 0;
     int entry_has_fusion_groups = 0;
     int was_monster, stars_given = 0;
+    unsigned int trap_threshold;
     unsigned char level_attr, frame;
     if (Json_TypeOf(entry) != JSON_OBJECT) {
         Mods_Note(mod, "cards[%d] is not an object", index);
@@ -1111,6 +1120,17 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     }
     /* What the entry leaves out is the base's. */
     stats = (unsigned)gDuel_adwCardStats[base - 1];
+    trap_threshold = trap_thresholds[base];
+    {
+        const JsonValue *threshold = Json_Member(entry, "trap_threshold");
+        if (threshold) {
+            long points = Json_Number(threshold, -1);
+            if (Json_TypeOf(threshold) == JSON_NULL) trap_threshold = 0;
+            else if (Json_TypeOf(threshold) == JSON_NUMBER && points >= 0 && points <= 65535)
+                trap_threshold = (unsigned int)points + 1;
+            else Mods_Note(mod, "cards[%d]: \"trap_threshold\" must be a whole number, 0 to 65535, or null", index);
+        }
+    }
     was_monster = (int)((stats >> 26) & 0x1F) < CARD_TYPE_MAGIC;
     level_attr = gDuel_abCardLevelAttr[base];
     /* A card's own ATK and DEF are nine bits of tens in its stats word
@@ -1315,6 +1335,7 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         gCard_awBaseId[id] = (unsigned short)base;
         gCard_asNameSortKey[id - 1] = gCard_asNameSortKey[base - 1];
     own:
+        trap_thresholds[id] = trap_threshold;
         fusion_groups[id] = entry_fusion_groups;
         has_fusion_groups[id] = (unsigned char)entry_has_fusion_groups;
         gDuel_adwCardStats[id - 1] = (int)stats;

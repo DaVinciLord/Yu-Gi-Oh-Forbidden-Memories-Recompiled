@@ -790,6 +790,26 @@ class ManifestTest(unittest.TestCase):
 
 
 class ValidateTest(unittest.TestCase):
+    def test_trap_threshold_inheritance_and_effect_defaults(self):
+        p = Project(fixture().game())
+        p.retail.cards[681].type = p.cards[681].type = g.TYPE_TRAP
+        p.cards[1] = p.cards[1].copy(type=g.TYPE_TRAP)
+        p.card_extra[1] = {"effect": 681, "trap_threshold": 1234}
+        p.card_extra[681] = {"trap_threshold": 9000}
+        p.other["trap_thresholds"] = {"681": 800}
+        added = p.add_card(1)
+        self.assertEqual(p.trap_threshold_override(added), 1234)
+        self.assertEqual(p.trap_threshold_default(p.effect_of(added)), 800)
+        p.set_trap_threshold(added, None)
+        restored = Project(p.retail)
+        manifest.apply(restored, manifest.build(p))
+        self.assertIsNone(restored.trap_threshold_override(added))
+        self.assertEqual(restored.trap_threshold_default(restored.effect_of(added)), 800)
+        for invalid in (-1, 65536, True, "1500", 1.5):
+            p.set_trap_threshold(added, invalid)
+            self.assertTrue(any(i.level == "error" and "trap_threshold" in i.message
+                                for i in validate.validate_card(p, added)))
+
     def test_problems(self):
         p = Project(fixture().game())
         p.info.id = "bad id!"
