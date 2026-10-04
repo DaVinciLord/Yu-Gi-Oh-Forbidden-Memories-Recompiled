@@ -577,13 +577,25 @@ class Project:
         return [cid for cid, card in self.cards.items() if card.is_monster()]
 
     def equip_retail(self, equip: int, monster: int) -> bool:
-        """What the disc's table says, by the base ids (duel_card_checks.c)."""
-        return self.base_of(monster) in self.retail.equips.get(self.base_of(equip), ())
+        """CardRules_Equip's fallback: the equip effect and unchanged monster kind."""
+        if self.cards[equip].type != 23 or not self.cards[monster].is_monster():
+            return False
+        base = self.base_of(monster)
+        if not self.retail.cards[base].is_monster():
+            return False
+        effect = self.effect_of(equip)
+        source = effect if self.retail.cards[effect].type == 23 else self.base_of(equip)
+        if self.retail.cards[source].type != 23:
+            return False
+        return base in self.retail.equips.get(source, ())
 
     def equip_baseline(self, equip: int) -> set:
-        """What the equip fits with no mod: the disc's list, copies as their
-        bases."""
+        """The current card's retail effect targets, before explicit equip rules."""
         return {m for m in self.cards if self.equip_retail(equip, m)}
+
+    def equip_targets(self, equip: int) -> set:
+        """Editable targets, excluding cards that have become non-monsters."""
+        return self.equips.get(equip, self.equip_baseline(equip)) & set(self.monsters())
 
     def equip_cards(self):
         return sorted(cid for cid, card in self.cards.items() if card.type == 23)

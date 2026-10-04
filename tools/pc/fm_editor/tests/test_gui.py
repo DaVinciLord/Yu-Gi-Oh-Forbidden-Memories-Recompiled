@@ -332,6 +332,121 @@ class GuiTest(unittest.TestCase):
         self.assertTrue(cards.apply())
         self.assertEqual(app.project.card_extra[1], {"effect": 701})
 
+    def test_converted_equip_displays_and_edits_effect_targets(self):
+        app, p = self.app, self.app.project
+        equip = p.add_card(3, "converted-equip")
+        p.cards[equip] = p.cards[equip].copy(type=23, attack=0, defense=0)
+        p.added[equip].extra["effect"] = 651
+        trap = p.add_card(5, "converted-trap")
+        p.cards[trap] = p.cards[trap].copy(type=21, attack=0, defense=0)
+        p.added[trap].extra["effect"] = 701
+        p.cards[652] = p.cards[652].copy(type=0)
+        tab = app.equips
+        tab.refresh()
+        self.assertFalse(tab.equips.exists("652"))
+        tab.current = equip
+        tab.fill()
+        expected = set(p.retail.equips[651])
+        self.assertEqual(set(map(int, tab.monsters.get_children())), expected)
+        self.assertNotIn(trap, p.equip_targets(651))
+        self.assertEqual(int(tab.equips.set(str(equip), "n")), len(expected))
+        tab.monsters.selection_set("5")
+        tab.remove()
+        self.assertEqual(p.equip_targets(equip), expected - {5})
+        self.assertEqual(set(map(int, tab.monsters.get_children())), expected)
+        self.assertEqual(tab.monsters.set("5", "state"), "removed")
+
+    def test_cards_to_equips_workflow_survives_save_and_reopen(self):
+        from fm_editor.model import Project
+        from fm_editor import tabs
+        app = self.app
+        for added in (False, True):
+            with self.subTest(added=added):
+                app.set_project(Project(app.retail))
+                app.notebook.select(app.cards)
+                app.cards.goto(1)
+                app.update()
+                if added:
+                    app.cards.add_card()
+                    app.update()
+                cid = app.cards.current
+                app.cards.vars["type"].set("Equip")
+                app.cards.vars["effect"].set("Card 651")
+                if not added:
+                    self.assertTrue(app.cards.apply())
+                # Switching tabs must commit the form and populate Equips;
+                # do not refresh the tab or assign its current card by hand.
+                app.notebook.select(app.equips)
+                app.update()
+                self.assertEqual(app.project.cards[cid].type, 23)
+                self.assertTrue(app.equips.equips.exists(str(cid)))
+                app.equips.equips.selection_set(str(cid))
+                app.update()
+                self.assertEqual(app.equips.current, cid)
+                baseline = app.project.equip_baseline(cid)
+                self.assertEqual(set(map(int, app.equips.monsters.get_children())), baseline)
+                app.equips.monsters.selection_set("5")
+                app.equips.remove()
+                with mock.patch.object(tabs, "pick_card", return_value=100):
+                    app.equips.add()
+                expected = (baseline - {5}) | {100}
+                self.assertEqual(app.project.equip_targets(cid), expected)
+                self.assertEqual(int(app.equips.equips.set(str(cid), "n")), len(expected))
+                folder = Path(self.tmp.name) / f"equip-workflow-{added}"
+                app.project.source_dir = folder
+                with mock.patch("fm_editor.app.messagebox.askyesno", return_value=False) as warning:
+                    self.assertTrue(app.save())
+                    warning.assert_not_called()
+                app.load_mod(folder)
+                app.notebook.select(app.equips)
+                app.update()
+                app.equips.equips.selection_set(str(cid))
+                app.update()
+                self.assertEqual(app.project.equip_targets(cid), expected)
+                self.assertEqual(app.equips.monsters.set("5", "state"), "removed")
+                self.assertEqual(app.equips.monsters.set("100", "state"), "added")
+                app.equips.revert()
+                self.assertEqual(app.project.equip_targets(cid), baseline)
+                app.notebook.select(app.cards)
+                app.cards.goto(cid)
+                app.update()
+                app.cards.vars["type"].set("Dragon")
+                app.notebook.select(app.equips)
+                app.update()
+                self.assertFalse(app.equips.equips.exists(str(cid)),
+                                 (app.cards.current, app.project.cards[cid].type,
+                                  app.cards.vars["type"].get(), app.cards.status.cget("text")))
+                self.assertTrue(all(w.instate(["disabled"]) for w in app.equips.actions.winfo_children()))
+
+    def test_edit_equips_shortcut_applies_and_selects_the_card(self):
+        app, cards = self.app, self.app.cards
+        self.assertTrue(all(w.instate(["disabled"]) for w in app.equips.actions.winfo_children()))
+        cards.goto(1)
+        app.update()
+        self.assertEqual(cards.edit_equips_button.winfo_manager(), "")
+        cards.vars["type"].set("Equip")
+        cards.vars["effect"].set("Card 651")
+        self.assertEqual(cards.edit_equips_button.winfo_manager(), "grid")
+        cards.edit_equips_button.invoke()
+        app.update()
+        self.assertIs(app.notebook.current(), app.equips)
+        self.assertEqual(app.equips.current, 1)
+        self.assertEqual(app.equips.equips.selection(), ("1",))
+        self.assertEqual(app.project.effect_of(1), 651)
+        self.assertEqual(set(map(int, app.equips.monsters.get_children())), app.project.equip_baseline(1))
+        self.assertTrue(all(w.instate(["!disabled"]) for w in app.equips.actions.winfo_children()))
+
+    def test_card_navigation_keeps_invalid_pending_edits(self):
+        cards = self.app.cards
+        cards.goto(1)
+        self.app.update()
+        cards.vars["attack"].set("unfinished")
+        self.assertFalse(cards.goto(2))
+        self.app.update()
+        self.assertEqual(cards.current, 1)
+        self.assertEqual(cards.tree.selection(), ("1",))
+        self.assertEqual(cards.vars["attack"].get(), "unfinished")
+
     def test_copy_has_its_replaced_base_effect(self):
         # A copy with no "effect" plays its base's (cards.c Cards_EffectId).
         project = self.app.project

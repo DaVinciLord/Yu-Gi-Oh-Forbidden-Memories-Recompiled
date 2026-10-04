@@ -60,6 +60,12 @@ become **Magic**: select the type, choose its retail effect, then apply and save
 An added copy changing kind needs a matching effect; **(none)** is insufficient.
 Numbers appear in the effect list only when retail names are duplicated.
 
+Changing a card to **Equip** makes it available in the **Equips** tab after
+Apply or switching tabs. **Edit equip targets...** beside its effect applies
+the card and opens that equip's target list directly. Add/remove individual
+monsters or whole types there; the changes survive saving and reopening.
+**Revert to retail** restores the selected effect's default targets.
+
 For **Trap**, the form shows **Retail effect** and hides ATK, DEF, guardian
 stars, level and attribute. The six effects that destroy an attacking monster
 also show **Trigger at ATK ≤**: the largest current ATK that triggers this
@@ -679,6 +685,22 @@ they need no game data (the bulk fusion tests time a 722 x 722 preview). PNGs ar
 read and written by `pngio.py`, in plain Python like the rest; the card-text
 preview's tests build their font page and a TrueType file in code as well
 (`tests/test_card_text.py`).
+
+With a built game and your disc in `game/`, these checks save editor mods
+into isolated folders and play real duels (no changes to your saves or mods):
+
+    python3 tests/pc/card_types_runtime.py
+    python3 tests/pc/magic_effects_runtime.py
+    python3 tests/pc/trap_effects_runtime.py
+    python3 tests/pc/trap_effects_runtime.py --hard-mode
+    python3 tests/pc/editor_mods_runtime.py
+    python3 tests/pc/editor_mods_runtime.py --hard-mode
+
+They cover every monster type, converted equips and rituals, all 33 retail
+magic effects, trap thresholds and special triggers, and CPU spell decisions
+and outcomes compared with retail after saving and reopening the mod. Pass
+`--out <folder>` to retain their logs. The AI adapter's native regression
+test is also registered with CTest as `pc_ai_hard_mode_adapter`.
 
 ## Building another front end
 

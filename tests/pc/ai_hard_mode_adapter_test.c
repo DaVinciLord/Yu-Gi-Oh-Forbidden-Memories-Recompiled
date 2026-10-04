@@ -26,9 +26,20 @@ s32 gDuel_adwCardStats[1024];
 static DuelCardDisplayObject objects[10];
 static int spawned, released, original_calls, hidden_lookups, observed_visibility, observed_mode;
 static int deck_mode, hidden_mode, custom_window = 20, retail_hand = 1;
+static int terrain_override, terrain_points, star_points;
 
 int Cards_Valid(int id) { return id > 0 && id < 1024; }
 int Cards_EffectId(int id) { if (id == 999) hidden_lookups++; return id; }
+int Tables_TerrainBonus(int field, int type, int *bonus)
+{
+    if (!terrain_override || field != 2 || type != 3) return 0;
+    *bonus = terrain_points;
+    return 1;
+}
+s32 Duel_CalcGuardianStarMatchup(s32 attacker, s32 defender)
+{
+    return attacker == 11 && defender == 12 ? star_points : 0;
+}
 s32 Duel_CheckFusion(s32 a, s32 b) { (void)a; (void)b; return 0; }
 s32 Duel_CheckEquip(s32 a, s32 b) { (void)a; (void)b; return 0; }
 s32 Duel_CheckRitual(DuelRitualResult *out, s32 id) { (void)out; (void)id; return 0; }
@@ -115,6 +126,20 @@ int main(void)
     MemoriesMod mod = {0}; HmOptions o; HmBoard b; int i;
     fake_host.api = 4; fake_host.setting = fake_setting; fake_host.hook = fake_hook;
     assert(MemoriesModInit(&fake_host,&mod));
+    /* The adapter must use modded terrain and stars, including a zero
+     * terrain override instead of falling back to the retail bonus. */
+    gDuel_aTerrainBoost[3][1] = 50;
+    assert(rules.terrain(3, 2) == 500);
+    terrain_override = 1; terrain_points = -750;
+    assert(rules.terrain(3, 2) == -750);
+    terrain_points = 0;
+    assert(rules.terrain(3, 2) == 0);
+    assert(rules.terrain(20, 2) == 0 && rules.terrain(3, 7) == 0);
+    star_points = 1200;
+    assert(Hm_StarBonus(11, 12) == 1200);
+    star_points = -300;
+    assert(Hm_StarBonus(11, 12) == -300 && Hm_StarBonus(12, 11) == 0);
+    terrain_override = star_points = 0;
     reset(); assert(window() == 20);
     deck_mode = 1; assert(window() == 5);
     deck_mode = 2; custom_window = 999; assert(window() == 20);

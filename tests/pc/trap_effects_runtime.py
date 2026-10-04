@@ -18,7 +18,7 @@ from fm_editor.model import Project
 from yfm_control import Game, FIELD_CURSOR, TARGET_CURSOR
 
 
-def attack_direct(game):
+def attack_direct(game, column=0):
     # After playing magic the first Cross can open the card panel. Confirm
     # the target cursor is active before committing the attack.
     for _ in range(4):
@@ -26,14 +26,14 @@ def attack_direct(game):
         if row == 2:
             break
         game.press("down" if row < 2 else "up", hold=4, after=16)
-    game._cursor_to(FIELD_CURSOR, 0, "field")
+    game._cursor_to(FIELD_CURSOR, column, "field")
     for _ in range(4):
         game.press("cross", hold=4, after=80)
         aim = game.u8(TARGET_CURSOR)
         game.press("left" if aim else "right", hold=4, after=16)
         if game.u8(TARGET_CURSOR) != aim:
             break
-        game._cursor_to(FIELD_CURSOR, 0, "field")
+        game._cursor_to(FIELD_CURSOR, column, "field")
     else:
         raise AssertionError("attack target cursor did not open")
     game.press_until(lambda g: g.phase() != 5, "cross", every=40, timeout=1200, what="attack commitment")
