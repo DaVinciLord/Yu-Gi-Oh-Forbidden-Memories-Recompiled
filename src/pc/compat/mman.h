@@ -6,6 +6,7 @@
  * maps it with VirtualAlloc, which also refuses an address that is already
  * taken. */
 #ifdef _WIN32
+#include <errno.h>
 #include <stddef.h>
 /* Declared by hand: <windows.h> would bring RECT and other names that clash
  * with the game's own types. Same signatures as the SDK (LPVOID, SIZE_T, DWORD). */
@@ -20,6 +21,7 @@ __declspec(dllimport) void *__stdcall VirtualAlloc(void *address, MEMORIES_SIZE_
 __declspec(dllimport) int __stdcall VirtualFree(void *address, MEMORIES_SIZE_T size, unsigned long type);
 __declspec(dllimport) int __stdcall VirtualProtect(void *address, MEMORIES_SIZE_T size, unsigned long protect,
                                                    unsigned long *old_protect);
+__declspec(dllimport) unsigned long __stdcall GetLastError(void);
 #define MEM_COMMIT 0x1000
 #define MEM_RESERVE 0x2000
 #define MEM_RELEASE 0x8000
@@ -56,7 +58,16 @@ static inline void *mmap(void *address, size_t length, int prot, int flags, int 
     if (address && Memories_ReleaseLowPlaceholder) Memories_ReleaseLowPlaceholder(address, length);
 #endif
     p = VirtualAlloc(address, length, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-    return p ? p : MAP_FAILED;
+    if (p) return p;
+    /* errno as mmap sets it, for the callers' messages: an address already
+     * reserved or mapped is ERROR_INVALID_ADDRESS (487), as EEXIST is for
+     * MAP_FIXED_NOREPLACE; no memory or commit charge left, ENOMEM. */
+    switch (GetLastError()) {
+    case 487: errno = address ? EEXIST : ENOMEM; break;    /* ERROR_INVALID_ADDRESS */
+    case 8: case 14: case 1455: errno = ENOMEM; break;     /* NOT_ENOUGH_MEMORY, OUTOFMEMORY, COMMITMENT_LIMIT */
+    default: errno = EINVAL; break;
+    }
+    return MAP_FAILED;
 }
 
 static inline int munmap(void *address, size_t length)

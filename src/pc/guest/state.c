@@ -1209,7 +1209,17 @@ int Memories_StateRunGame(int (*entry)(void))
                        MAP_FIXED_NOREPLACE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     unsigned i;
     if (stack != (void *)(uintptr_t)STACK_BASE) {
-        perror("game stack");
+        /* Never another address: the game's return addresses and pointers
+         * in a save state are on this one. MAP_FIXED_NOREPLACE refuses a
+         * range that holds a mapping (EEXIST); a kernel older than 4.17
+         * takes the address as a hint instead and may put it elsewhere. */
+        int error = errno;
+        if (stack != MAP_FAILED) munmap(stack, STACK_SIZE);
+        fprintf(stderr, "memories-pc: the game stack needs 0x%08x-0x%08x, %s; the game cannot run without it\n",
+                (unsigned)STACK_BASE, (unsigned)STACK_TOP,
+                stack == MAP_FAILED ? (error == EEXIST ? "which something else in this process already holds"
+                                                       : strerror(error))
+                                    : "which this system would not map there");
         return 1;
     }
     read_build_id();
