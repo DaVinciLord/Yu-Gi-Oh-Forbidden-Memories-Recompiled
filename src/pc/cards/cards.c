@@ -8,6 +8,7 @@
  * that fit nowhere in the save, a name, and a share of the drops. */
 #define _POSIX_C_SOURCE 200809L
 #include "cards.h"
+#include "card_text_colors.h"
 #include "art.h"
 #include "card_notes.h"
 #include "tables.h"
@@ -1461,6 +1462,7 @@ void Cards_Build(void)
      * them, so they have to exist by the time those are read. */
     Duelists_Build();
     Tables_Build();
+    CardTextColors_Build();
     /* What the stars a mod adds are worth noting, now the cards have them
      * and "limits" has set the stat cap (stars.h). */
     Stars_Check();

@@ -979,6 +979,33 @@ change to any of its settings (the setting may still say `"restart": true`,
 which shows "Requires a restart" beside it). A `setting` the mod does not
 declare is noted beside the mod and the file read.
 
+## Card text colours
+
+Every mod may give card-detail text its own one of the game's eight colour
+ramps. Put `card_text_colors` at the top level of `mod.json`; it needs no
+library, setting, or extra file. `cards` is a list of rules. `card` accepts a
+card number, its displayed name, or an added card identity. Each of `name`,
+`description`, and `guardian_star` is optional, so a rule can colour any one
+or all three parts. Colours are ramp numbers 0 through 7: white, yellow,
+blue, green, grey, orange, red, and the unused eighth ramp respectively.
+
+```json
+"card_text_colors": {
+  "cards": [
+    {"card": "Blue-Eyes White Dragon", "name": 2, "description": 0, "guardian_star": 1},
+    {"card": "my-cards:dragon:1", "name": 6}
+  ],
+  "guardian_stars": [
+    {"star": "Mars", "color": 5}
+  ]
+}
+```
+
+`guardian_stars` is optional. It colours that star wherever it appears; a
+card's own `guardian_star` rule takes precedence. When two enabled mods set
+the same card part or guardian star, the later mod in load order wins. The
+rules are read when cards are built, so changing them requires a restart.
+
 ## When mods overlap
 
 Two enabled mods may change the same thing. Nothing stops that, and nothing
@@ -1394,7 +1421,7 @@ a range with a meaningful limit, so it now wraps around instead, the same way
 ### Yamyi Mods
 
 Apply **Yamyi Mods** in **Game > Mods**. Its settings separately enable
-return-to-title confirmation, card-name rarity colours and Library drop odds.
+return-to-title confirmation and Library drop odds.
 The panel can hide its rarity-score column, choose a sort order, list up to
 20 duelists and change position. It only describes cards visible in the Library.
 Rows are reduced to fit the window; enlarge a very small window to see the panel.
@@ -1402,12 +1429,9 @@ Colours and odds both respect other mods' drop-table edits and added cards.
 When sorting by score, each duelist's best scoring rank is shown; other sorts
 use its highest drop weight. A weight of `w/2048` is the chance per win at that rank.
 
-The first card-name or Library display creates
-`mod-data/yamyi-mods/card_name_color.ini` in the player's directory. It contains
-named colour slots, rarity tiers, duelist/rank multipliers and card overrides.
-Restart after editing it. Lower scores mean rarer cards; an explicit zero
-multiplier is respected. The package is disabled by default and does not alter
-actual drops or duel rules.
+The package is disabled by default and does not alter actual drops or duel
+rules. Card-detail colours belong in any mod's `card_text_colors` declaration
+above, rather than Yamyi Mods' former private INI file.
 
 These features originate in yamyi's PRs #68, #70 and #77. Their overlapping
 Library panels are combined into one panel here; do not also install the old

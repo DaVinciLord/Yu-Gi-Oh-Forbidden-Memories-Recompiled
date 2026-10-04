@@ -3,22 +3,20 @@
     "name": "Yamyi Mods",
     "version": "1.0",
     "author": "yamyi",
-    "description": "Optional interface improvements by yamyi: confirm before returning to the title, colour card names by rarity, and show Library drop odds. Each feature can be switched independently. Rarity tiers, multipliers and card colours are configured in card_name_color.ini in this mod's player-data directory; restart after editing that file.",
+    "description": "Optional interface improvements by yamyi: confirm before returning to the title and show Library drop odds. Card text colours can be declared in this or any other mod's card_text_colors section.",
     "min_api": 4,
     "game": "slus_01411",
     "library": "yamyi-mods",
     "enabled": false,
     "restart": false,
+    "card_text_colors": {
+        "cards": [],
+        "guardian_stars": []
+    },
     "settings": [
         {
             "key": "confirm_exit",
             "label": "Confirm return to title",
-            "type": "bool",
-            "default": 1
-        },
-        {
-            "key": "colors",
-            "label": "Colour card names by rarity",
             "type": "bool",
             "default": 1
         },
