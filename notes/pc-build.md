@@ -355,6 +355,28 @@ elsewhere is the mouse SDL makes of it (the menu bar). It presses the button
 it shows: its bits join the pad state beside the mouse's, which View >
 Japanese buttons does not exchange, and a tap shorter than a frame counts
 once. Hidden, it draws nothing and takes no touch.
+**MENU**, in the game's font under L2/L1 (the D-pad below it), opens the
+menu bar's first menu (`TouchPad_TakeMenu`, taken in the event pump): the
+way to the menus where the bar is hidden, as in fullscreen or on a phone.
+While a menu, a notice or a bar drawn over the picture is up, the pad
+steps aside (`TouchPad_Block`: it draws nothing, takes no touch and lets
+go of what it held), so their rows and buttons are the finger's; it is
+decided once per event pump, after all of its events, since SDL delivers a
+tap as finger events and mouse events made of them. The mouse SDL makes of
+a finger does not hover: its moves reach the menu only while the finger is
+down (a drag), so its last place never keeps the bar shown, and a tap at
+the top of the screen shows a hidden bar under it. Where the window is
+always the whole screen (`Platform_HasWindowModes` 0, an Android app) the
+bar is drawn over the picture instead of pushing it down. Where the system
+gives the density (Android), a button is 48 to 80 dp wide (13% of the
+short side otherwise, and never above 16% of it), and SELECT, START and
+MENU take a touch a button tall. The save slot and deck slot menus, which
+the pad plays, keep between its columns while it shows
+(`TouchPad_FreeSpan`, `Menu_SetOverlayArea`); narrower than their one-row
+layout, a slot's details go on lines under its name and the hints wrap
+(`saves/flow_text.h`); the deck slot menu's messages break at spaces where
+the box is narrower than them (`centred_words`, `deck_menu.c`); the text
+gets smaller only when even that does not fit.
 
 Esc quits (it closes an open menu first): it is the default key of Game >
 Controls' **Exit game**. With **File > Confirm before quitting** on (the
@@ -765,6 +787,15 @@ alpha passes over a 4K dropdown made the game crawl whenever a menu was
 open. `MEMORIES_TRACE=window` reports compositions per 120 frames.
 A row with a triangle opens a submenu beside it (one level: `ITEM_SUBMENU`,
 `submenus[]`), on hover, click, Enter or Right; Left or Esc closes it.
+A submenu that would run off the bottom of the window moves up, and a menu
+still taller than the window (a small window; a phone's finger-sized rows)
+is cut to it and scrolls: arrow bands at its ends move it a row, the wheel
+or a drag scrolls it, and the arrow keys keep the lit row in view. A press
+on a row of such a menu acts when it comes up without having dragged, so a
+finger can scroll it without choosing what it lands on; a slider's row
+takes the pointer at once. One geometry (`drop_box` in `menu.c`) serves the
+drawing, the hit-testing and the dirty rectangle. Menus that fit are drawn
+and behave as before.
 
 The menu draws at a size multiple (`menu_scale`, `MEMORIES_MENU_SCALE`, View >
 Menu size): bar, rows, marks, font and the HUD all scale together, and the
