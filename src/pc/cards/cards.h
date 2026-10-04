@@ -49,6 +49,10 @@ int Cards_EffectId(int id);
  * own, its base's or the one "effect" names), 0 for a card of another type,
  * which springs as none even where it was a trap on the disc. */
 int Cards_TrapId(int id);
+/* A card's own attack-trap threshold (inclusive ATK), or fallback. Only
+ * active for traps with one of the six retail attack-destruction effects.
+ * Copies inherit their base's override; null clears it. */
+int Cards_TrapThreshold(int id, int fallback);
 /* The type a card has on the disc, which is what its effect is; -1 past the disc. */
 int Cards_RetailType(int id);
 /* Nonzero for a card a mod's "replace" made another kind of card than its

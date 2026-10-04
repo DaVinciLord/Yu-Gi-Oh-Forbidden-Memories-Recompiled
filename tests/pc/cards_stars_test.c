@@ -204,6 +204,81 @@ static void expect(int id, int first, int second)
     }
 }
 
+static void magic_conversions(void)
+{
+    BuildContext context = {0};
+    JsonDocument *document;
+    char json[256], error[128];
+    int id, base;
+    /* Real retail effect identities, independent of the cards occupying
+       those slots after a mod. Every retail slot can become Raigeki. */
+    test_stats[337 - 1] = STATS(CARD_TYPE_MAGIC, 0, 0);
+    test_stats[343 - 1] = STATS(CARD_TYPE_MAGIC, 0, 0);
+    for (id = 1; id <= CARD_COUNT; id++) {
+        snprintf(json, sizeof(json), "{\"replace\":%d,\"type\":\"Magic\",\"effect\":337}", id);
+        document = Json_Parse(json, error, sizeof(error));
+        assert(document);
+        add_entry("conversion", ".", id, Json_Root(document), &context);
+        assert(Cards_Type(id) == CARD_TYPE_MAGIC);
+        assert(Cards_EffectId(id) == 337);
+        assert(Cards_AiId(id) == 337);
+        assert(Cards_TrapId(id) == 0);
+        assert(!((unsigned)gDuel_adwCardStats[id - 1] & 0x3FFFFu));
+    }
+    /* Copies of each original kind may cross to magic with a matching
+       effect. No monster stats survive to confuse the AI's ranking. */
+    for (base = 1; base <= 5; base++) {
+        int type = base == 1 ? 0 : CARD_TYPE_MAGIC + base - 2;
+        gDuel_adwCardStats[base - 1] = test_stats[base - 1] = STATS(type, SUN, MOON);
+        snprintf(json, sizeof(json), "{\"copy\":%d,\"id\":\"magic-%d\",\"type\":\"Magic\",\"effect\":337}", base, base);
+        document = Json_Parse(json, error, sizeof(error));
+        assert(document);
+        id = gCard_nCount + 1;
+        add_entry("conversion", ".", base, Json_Root(document), &context);
+        assert(gCard_nCount == id && Cards_Type(id) == CARD_TYPE_MAGIC);
+        assert(Cards_EffectId(id) == 337 && Cards_AiId(id) == 337);
+        assert(Cards_KindChanged(id) == (type != CARD_TYPE_MAGIC));
+        assert(!((unsigned)gDuel_adwCardStats[id - 1] & 0x3FFFFu));
+    }
+    /* Raigeki itself now plays Sparks; explicit references to Raigeki
+       still mean retail Raigeki, for existing cards and added copies. */
+    effect_ids[337] = 343;
+    assert(Cards_EffectId(337) == 343 && Cards_AiId(337) == 343);
+    assert(Cards_EffectId(6) == 337 && Cards_AiId(6) == 337);
+    assert(Cards_EffectId(id) == 337 && Cards_AiId(id) == 337);
+    gDuel_adwCardStats[337 - 1] = STATS(0, SUN, MOON);
+    assert(Cards_AiId(337) == -1);
+    assert(Cards_AiId(6) == 337 && Cards_AiId(id) == 337);
+}
+
+static void trap_conversions(void)
+{
+    BuildContext context = {0};
+    char error[128];
+    const JsonValue *entry;
+    int i, copy;
+    JsonDocument *doc = Json_Parse(
+        "[{\"replace\":1,\"type\":\"Trap\",\"effect\":681,\"trap_threshold\":1234},"
+        "{\"copy\":1,\"id\":\"inherited-trap\"},"
+        "{\"copy\":1,\"id\":\"default-trap\",\"trap_threshold\":null},"
+        "{\"copy\":1,\"id\":\"zero-trap\",\"trap_threshold\":0},"
+        "{\"replace\":2,\"type\":\"Trap\",\"effect\":681,\"trap_threshold\":65535},"
+        "{\"replace\":681,\"type\":\"Dragon\"}]", error, sizeof(error));
+    assert(doc);
+    test_stats[680] = STATS(CARD_TYPE_TRAP, 0, 0);
+    copy = gCard_nCount + 1;
+    for (i = 0, entry = Json_At(Json_Root(doc), 0); entry; i++, entry = Json_Next(entry))
+        add_entry("traps", ".", i, entry, &context);
+    assert(Cards_TrapId(1) == 681 && Cards_AiId(1) == 681);
+    assert(Cards_TrapId(681) == 0 && Cards_AiId(681) == -1);
+    assert(Cards_TrapThreshold(1, -1) == 1234 && Cards_TrapThreshold(copy, -1) == 1234);
+    assert(Cards_TrapThreshold(copy + 1, -1) == -1);
+    assert(Cards_TrapThreshold(copy + 2, -1) == 0);
+    assert(Cards_TrapThreshold(2, -1) == 65535);
+    effect_ids[1] = 687;
+    assert(Cards_TrapThreshold(1, -1) == -1); /* a reflector never gets an ATK trigger */
+}
+
 int main(void)
 {
     int id;
@@ -254,6 +329,8 @@ int main(void)
     assert(Cards_AiId(1) == 1 && Cards_AiId(4) == 4);
     assert(((unsigned)gDuel_adwCardStats[3] & 0x1FF) == 100);   /* a monster keeps its own */
 
-    puts("cards stars: ok");
+    magic_conversions();
+    trap_conversions();
+    puts("cards stars, magic and trap conversions: ok");
     return 0;
 }

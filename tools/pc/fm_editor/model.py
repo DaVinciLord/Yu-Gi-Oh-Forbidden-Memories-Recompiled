@@ -10,7 +10,8 @@ import copy
 import re
 from dataclasses import dataclass, field
 
-from .gamedata import (CARD_COUNT, DECK_SIZE, DUELIST_COUNT, DUELIST_NAMES, POOLS, TYPE_NAMES, Card, GameData)
+from .gamedata import (ATTACK_TRAP_FIRST, ATTACK_TRAP_THRESHOLDS, CARD_COUNT, DECK_SIZE, DUELIST_COUNT,
+                       DUELIST_NAMES, POOLS, TYPE_NAMES, Card, GameData)
 
 KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
@@ -599,6 +600,39 @@ class Project:
         if named and named <= CARD_COUNT:
             return named
         return self.effect_of(self.base_of(cid)) if cid in self.added else cid
+
+    def trap_threshold_override(self, cid: int):
+        extra = self.added[cid].extra if cid in self.added else self.card_extra.get(cid, {})
+        if "trap_threshold" in extra:
+            return extra["trap_threshold"]
+        return self.trap_threshold_override(self.base_of(cid)) if cid in self.added else None
+
+    def trap_threshold_default(self, effect: int):
+        index = effect - ATTACK_TRAP_FIRST
+        if not 0 <= index < len(ATTACK_TRAP_THRESHOLDS):
+            return None
+        value = ATTACK_TRAP_THRESHOLDS[index]
+        table = self.other.get("trap_thresholds", {})
+        if isinstance(table, dict):
+            for key, points in table.items():
+                cid = self.resolve(key)
+                if cid and self.base_of(cid) == effect and type(points) is int and 0 <= points <= 65535:
+                    value = points
+        return value
+
+    def set_trap_threshold(self, cid: int, value):
+        if value is None and cid not in self.added:
+            # A disc card has nothing to inherit: clearing drops the key, and
+            # an entry left empty, so no bare "replace" is written for it.
+            extra = self.card_extra.get(cid, {})
+            extra.pop("trap_threshold", None)
+            if not extra:
+                self.card_extra.pop(cid, None)
+            return
+        extra = self.added[cid].extra if cid in self.added else self.card_extra.setdefault(cid, {})
+        # null on a copy explicitly clears an override inherited from its
+        # base. Untouched empty fields never write it.
+        extra["trap_threshold"] = value
 
     def is_ritual(self, cid: int) -> bool:
         """A ritual card a recipe may be for: typed Ritual and played as a

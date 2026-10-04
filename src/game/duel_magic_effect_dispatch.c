@@ -1,9 +1,6 @@
 #ifdef MEMORIES_PC
 #include "pc/mods/mods.h"
 #endif
-#ifdef MEMORIES_PC
-#include "pc/mods/mods.h"
-#endif
 #include "../types.h"
 #include "duel_side_state.h"
 #include "duel_grid.h"
@@ -76,8 +73,9 @@ void DuelEffect_StartCardEffect(int value, int flag)
     int index;
 
 #ifdef MEMORIES_PC
-    /* A card past the disc's has its base's effect, and the handlers that
-       test gDuel_wEffectCardID for a particular card see the base. */
+    /* Resolve once to a built-in retail behavior. Do not follow the source
+       card's current effect: replacing Raigeki must not change other cards
+       explicitly assigned the retail Raigeki effect. */
     if (value > 0) {
         value = Cards_EffectId(value);
     }
