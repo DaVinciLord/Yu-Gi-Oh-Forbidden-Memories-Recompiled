@@ -1281,6 +1281,102 @@ class GuiTest(unittest.TestCase):
         self.assertEqual((destination / "extra.bin").read_bytes(), b"keep across autosaves")
 
 
+    def test_card_form_marks_what_differs_from_the_disc(self):
+        cards, p = self.app.cards, self.app.project
+        cards.tree.selection_set("1")
+        cards.select()
+        self.app.update()
+        # As the disc has it: no disc values repeated, no caption marked.
+        for key in ("name", "attack", "defense", "level", "password", "starchips", "text"):
+            with self.subTest(key=key):
+                self.assertEqual(cards.hints[key].cget("text"), "")
+        self.assertEqual(str(cards.captions["attack"].cget("style")), "TLabel")
+        retail = p.retail.cards[1].attack
+        cards.vars["attack"].set(str(retail + 200))
+        self.app.update()
+        self.assertEqual(cards.hints["attack"].cget("text"), f"Retail: {retail} (restore)")
+        self.assertEqual(str(cards.hints["attack"].cget("style")), "Changed.TLabel")
+        self.assertEqual(str(cards.captions["attack"].cget("style")), "Changed.TLabel")
+        self.assertEqual(cards.hints["defense"].cget("text"), "")
+        # Applied, it stays marked; a click on the disc value puts it back
+        # in the form, unapplied until Apply.
+        self.assertTrue(cards.apply())
+        self.app.update()
+        self.assertEqual(p.cards[1].attack, retail + 200)
+        self.assertIn("Retail:", cards.hints["attack"].cget("text"))
+        cards.hints["attack"].event_generate("<Button-1>")
+        self.app.update()
+        self.assertEqual(cards.vars["attack"].get(), str(retail))
+        self.assertEqual(cards.hints["attack"].cget("text"), "")
+        self.assertIn(cards, self.app._pending)
+        self.assertTrue(cards.apply())
+        self.assertEqual(p.cards[1].attack, retail)
+        # The card text too.
+        cards.text.insert("end", " more")
+        cards.text.event_generate("<KeyRelease>")
+        self.app.update()
+        self.assertEqual(cards.hints["text"].cget("text"), "Restore retail text")
+        cards.restore("text")
+        self.assertEqual(cards.text.get("1.0", "end-1c"), p.retail.cards[1].description)
+        # The window's line says unapplied and unsaved apart.
+        self.assertEqual(str(self.app.edit_state.cget("style")), "Warning.TLabel")
+        self.assertTrue(self.app.commit_all())
+        self.assertEqual(str(self.app.edit_state.cget("style")),
+                         "Changed.TLabel" if self.app.dirty else "TLabel")
+
+    def test_card_links_between_tabs(self):
+        from fm_editor import card_links
+        app, p = self.app, self.app.project
+        # The card Cards shows is the one Art shows, and Fusions follows it
+        # with that card's fusions only.
+        app.cards.show_card(2)
+        app.notebook.select(app.art)
+        app.update()
+        self.assertEqual(app.art.current, 2)
+        app.notebook.select(app.fusions)
+        app.update()
+        self.assertEqual(app.fusions.search.get(), p.card_label(2))
+        rows = [tuple(int(x) for x in iid.split(":")) for iid in app.fusions.tree.get_children()]
+        self.assertIn((1, 2), rows)
+        self.assertTrue(all(2 in pair or p.fusions.get(pair) == 2 for pair in rows))
+        # A search of the modder's own is kept.
+        app.fusions.search.set("zzz")
+        app.notebook.select(app.cards)
+        app.cards.show_card(3)
+        app.notebook.select(app.fusions)
+        app.update()
+        self.assertEqual(app.fusions.search.get(), "zzz")
+        # Where it's used: the fusion making card 3, and a pool with it, each
+        # going to its tab.
+        lines = card_links.uses(app, 3)
+        self.assertIn(("Fusions", "Material in"), {(w, t[:11]) for w, t, _ in lines})
+        made = next(t for w, t, _ in lines if w == "Fusions")
+        self.assertNotIn("made by 0 ", made)
+        d, pool = next((d, pool) for d in range(1, len(p.pools)) for pool in ("deck", "pow", "bcd", "tec")
+                       if p.pools[d][pool].get(3))
+        go = next(g for w, t, g in lines if w == "Duelists")
+        app.open_pool(d, pool, 3)
+        app.update()
+        self.assertIs(app.notebook.current(), app.duelists)
+        self.assertEqual((app.duelists.duelist, app.duelists.pool.get()), (d, pool))
+        self.assertEqual(app.duelists.tree.selection(), ("3",))
+        go()
+        app.update()
+        self.assertIs(app.notebook.current(), app.duelists)
+        window = card_links.UsesWindow(app, 3)
+        self.assertEqual(len(window.tree.get_children()), len(lines))
+        window.destroy()
+        # The right-click menu names Cards, Art and fusions, and opens them.
+        menu = tk.Menu(app, tearoff=False)
+        card_links.fill_menu(menu, app, app.duelists, 3)
+        labels = [menu.entrycget(i, "label") for i in range(menu.index("end") + 1) if menu.type(i) == "command"]
+        self.assertEqual(labels[:3], ["Open in Cards", "Open in Art", "Show its fusions"])
+        menu.invoke(0)
+        app.update()
+        self.assertIs(app.notebook.current(), app.cards)
+        self.assertEqual(app.cards.current, 3)
+        menu.destroy()
+
     def test_recovered_type_change_restores_effect_controls(self):
         from fm_editor.gamedata import TYPE_NAMES
         app = self.app

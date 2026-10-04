@@ -41,6 +41,7 @@ INKS = {
     "Error": ("#c01c28", "#ff8f87"),
     "Ok": ("#26a269", "#7fd49b"),
     "Warning": ("#9c6500", "#f2c04c"),
+    "Changed": ("#1a5fb4", "#8ab4f8"),  # a field that differs from the disc (TAGS' "changed")
 }
 
 # Tree row tags (widgets.scrolled_tree): light, dark.

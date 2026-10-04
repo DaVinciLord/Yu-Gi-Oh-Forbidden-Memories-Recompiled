@@ -71,18 +71,27 @@ class ArtTab(Tab):
             info.pack(anchor="w")
             where = ttk.Label(side, style="Hint.TLabel", wraplength=px(side, 330), justify="left")
             where.pack(anchor="w", pady=(2, 4))
+            # Two rows of two: in one row the last were cut off beside three
+            # pictures at 1440 wide, or at 125-150% on a 1080p screen.
             buttons = ttk.Frame(side)
             buttons.pack(anchor="w")
-            ttk.Button(buttons, text="Import PNG...", command=lambda p=part: self.import_png(p)).pack(side="left")
-            ttk.Button(buttons, text="Export disc's...", command=lambda p=part: self.export_png(p, False)).pack(
-                side="left", padx=4)
+            ttk.Button(buttons, text="Import PNG...", command=lambda p=part: self.import_png(p)).grid(
+                row=0, column=0, sticky="we")
+            ttk.Button(buttons, text="Export disc's...", command=lambda p=part: self.export_png(p, False)).grid(
+                row=0, column=1, sticky="we", padx=(4, 0))
             export_mod = ttk.Button(buttons, text="Export mod's...", command=lambda p=part: self.export_png(p, True))
-            export_mod.pack(side="left")
+            export_mod.grid(row=1, column=1, sticky="we", padx=(4, 0), pady=(4, 0))
             revert = ttk.Button(buttons, text="Revert", command=lambda p=part: self.revert(p))
-            revert.pack(side="left", padx=4)
+            revert.grid(row=1, column=0, sticky="we", pady=(4, 0))
             self.rows[part] = {"labels": labels, "info": info, "where": where, "export": export_mod, "revert": revert}
         self.status = ttk.Label(right, style="Warning.TLabel", wraplength=px(right, 720), justify="left")
         self.status.pack(anchor="w", pady=4)
+        # The long lines wrap at the width the tab has, not a fixed one that
+        # ran past the window's edge at 150%: asked small, then widened.
+        for label in (self.how, self.status):
+            label.configure(wraplength=px(right, 480))
+        right.bind("<Configure>", lambda e: [label.configure(wraplength=max(px(right, 300), e.width - px(right, 12)))
+                                             for label in (self.how, self.status)], add=True)
         self.fill()
 
     @property
@@ -132,6 +141,19 @@ class ArtTab(Tab):
         if cid != self.current:
             self.show(cid)
 
+    def show_card(self, cid):
+        """Select the card, in the list as it is filtered if it is there."""
+        if not self.tree.exists(str(cid)):
+            self.goto(cid)
+            return
+        self.tree.selection_set(str(cid))
+        self.tree.see(str(cid))
+        self.select()
+
+    def follow(self, cid):
+        if cid != self.current and cid in self.project.cards:
+            self.show_card(cid)
+
     def goto(self, cid):
         self.search.set("")
         self.filter.set(self.FILTERS[0])
@@ -157,6 +179,7 @@ class ArtTab(Tab):
                 row["where"].configure(text="")
             return
         project = self.project
+        self.app.current_card = cid
         base = project.base_of(cid)
         self.heading.configure(text=project.card_label(cid) + (f"  (a copy of {project.card_label(base)})"
                                                               if base != cid else ""))

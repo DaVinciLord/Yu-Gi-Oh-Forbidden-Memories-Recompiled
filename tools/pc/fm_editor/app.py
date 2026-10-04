@@ -8,7 +8,7 @@ from tkinter import filedialog, messagebox, ttk
 from . import disc, gamedata, manifest, settings, theme, validate
 from .model import KEY_RE, Project
 from .editing import Editing
-from . import history, recovery
+from . import card_links, history, recovery
 from .art_tab import ArtTab
 from .map_tab import MapTab
 from .limits_tab import LimitsTab
@@ -39,6 +39,7 @@ class App(Editing, tk.Tk):
         self.hooks = []            # extra menu entries (importers) add themselves here
         self.dark = tk.BooleanVar(self, value=settings.load().get("dark") is True)
         self.text_preview = None   # Tools > Card text preview, while open
+        self.current_card = None   # the card Cards and Art show, and Fusions and Equips follow (card_links)
         self.init_editing()
         self.build_menu()
         self.notebook = Pages(self)
@@ -61,6 +62,7 @@ class App(Editing, tk.Tk):
         self.status = ttk.Label(self, relief="sunken", anchor="w", padding=(6, 2))
         self.status.pack(fill="x", side="bottom", before=self.notebook)
         self.install_editing()
+        card_links.install_all(self)
         if self.dark.get():
             self.theme.use(True)
         self.notebook.bind("<<NotebookTabChanged>>", lambda e: self.tab_changed())
@@ -205,6 +207,7 @@ class App(Editing, tk.Tk):
         self._pending.clear()
         self._recovered = False
         self.project = project
+        self.current_card = None
         self.dirty = False
         self._refreshing = True
         try:
@@ -289,6 +292,42 @@ class App(Editing, tk.Tk):
             current.show(current.current)
         elif current is self.stars:
             current.fill()          # the cards' stars may have changed
+        follow = getattr(current, "follow", None)
+        if follow is not None and self.current_card is not None:
+            follow(self.current_card)
+
+    # --- a card in another tab (card_links) -------------------------------------
+
+    def open_tab(self, tab) -> bool:
+        """Bring a tab up; False when a form elsewhere cannot be stored."""
+        self.notebook.select(tab)
+        return self.notebook.current() is tab
+
+    def open_card(self, tab, cid):
+        if self.project is not None and cid in self.project.cards and self.open_tab(tab):
+            tab.show_card(cid)
+
+    def open_pool(self, d, pool, cid=None):
+        if self.open_tab(self.duelists):
+            self.duelists.goto((d, pool))
+            # After the opponent list's selection event, which fills the tab again.
+            self.after_idle(self.select_row, (self.duelists.tree, self.duelists.fixed.tree), cid)
+
+    def open_starter(self, index, cid=None):
+        if self.open_tab(self.starter):
+            self.starter.goto(index)
+            self.after_idle(self.select_row, (self.starter.tree,), cid)
+
+    def open_pack(self, index):
+        if self.open_tab(self.packs):
+            self.packs.goto(index)
+
+    @staticmethod
+    def select_row(trees, cid):
+        for tree in trees:
+            if cid is not None and tree.exists(str(cid)):
+                tree.selection_set(str(cid))
+                tree.see(str(cid))
 
     def need_game(self):
         if self.retail is None:

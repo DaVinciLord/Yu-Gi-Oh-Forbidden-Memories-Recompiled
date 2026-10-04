@@ -90,6 +90,12 @@ class Editing:
         if self._input_before.get(str(widget)) == value:
             return
         self._input_before[str(widget)] = value
+        self.form_edited(tab)
+
+    def form_edited(self, tab):
+        """A form now holds input not yet applied (typed, or put there by a tab)."""
+        if self._refreshing or self.project is None:
+            return
         self._pending.add(tab)
         self.update_title()
         self.update_edit_state()
@@ -107,7 +113,9 @@ class Editing:
         label = "Choose game files to start" if self.project is None else (
             "Unapplied edits • Apply or leave the tab to apply • Ctrl+S saves" if self._pending else
             "Unsaved changes • Ctrl+S saves" if self.dirty else "No unsaved changes")
-        self.edit_state.configure(text=label)
+        style = "TLabel" if self.project is None else (
+            "Warning.TLabel" if self._pending else "Changed.TLabel" if self.dirty else "TLabel")
+        self.edit_state.configure(text=label, style=style)
 
     def clear_recovery(self):
         self.recovery.clear()

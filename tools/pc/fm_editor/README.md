@@ -86,6 +86,25 @@ filtering, editing, or switching opponents and pools. Sorting keeps the current
 selection and changes only the view, so it does not mark the mod as edited.
 Wide lists have a horizontal scrollbar.
 
+**What differs from retail:** in the Cards form, a field whose value is not
+the disc's (a copy's: its base's) has its caption in blue and the disc's
+value beside it, **Retail: 3000 (restore)**; a click puts that value back in
+the form, and **Apply** stores it. Fields as the disc has them show nothing
+beside them. The line above the tabs is amber for edits not yet applied and
+blue for changes not yet saved.
+
+**One card across the tabs:** the card selected in Cards is the one Art
+shows, and the other way round. Opening Fusions after choosing another card
+lists that card's fusions only (the search box holds its number and name;
+clear it for every pair; a search of your own is left alone); Equips selects
+it when it is an equip card. **Right-click** a card in any list (Cards, Art,
+Fusions, Equips, Rituals, Duelists, a fixed deck, Starter decks, Packs) for
+**Open in Cards**, **Open in Art**, **Show its fusions**, **Edit its equip
+targets** (an equip card) and **Where it's used...**: every fusion, equip,
+ritual, duelist deck or drop pool (with its chance), fixed deck, starter
+deck, pack and added copy that names the card. Double-click a line to go
+there; the window lists again each time it comes back to the front.
+
 **File > Save** writes the mod folder (Ctrl+S); the first save asks where
 (an empty folder, or a parent where a folder named after the mod id is
 made; the port's player mods are in `Documents\My Games\YFM Re-Decomp\mods`).
