@@ -164,4 +164,5 @@ class LimitsTab(Tab):
         self._report()
         if after != before:
             self.app.changed()
+        self.applied()
         return True

@@ -587,6 +587,7 @@ class PacksTab(Tab):
         now = self.form_state()
         base = self.baseline
         if now == base:
+            self.applied()
             return
         new = copy.deepcopy(entry)
         v = self.adv
@@ -717,6 +718,7 @@ class PacksTab(Tab):
             entry.update(packmath.minimize(new))
             self.app.changed()
         self.baseline = now
+        self.applied()
 
     def edited(self):
         self.app.changed()

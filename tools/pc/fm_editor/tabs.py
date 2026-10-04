@@ -69,6 +69,12 @@ class Tab(ttk.Frame):
     def project(self):
         return self.app.project
 
+    def applied(self):
+        """Tell the window this form no longer contains unapplied input."""
+        callback = getattr(self.app, "form_applied", None)
+        if callback:
+            callback(self)
+
     def refresh(self):
         pass
 
@@ -670,6 +676,7 @@ class CardsTab(Tab):
             self.update_row(cid)
         problems = [i.message for i in validate.validate_card(self.project, cid)] if changed or not quiet else []
         self.status.configure(text="\n".join(problems))
+        self.applied()
         return True
 
     def commit(self):
@@ -1822,6 +1829,7 @@ class ModInfoTab(Tab):
         after = (info.id, info.name, info.version, info.author, info.description, info.settings, self.project.other)
         if after != before:
             self.app.changed()
+        self.applied()
         return True
 
     def shown_other(self) -> dict:

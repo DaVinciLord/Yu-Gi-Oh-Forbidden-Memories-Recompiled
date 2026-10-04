@@ -7,6 +7,8 @@ from tkinter import filedialog, messagebox, ttk
 
 from . import disc, gamedata, manifest, settings, theme, validate
 from .model import KEY_RE, Project
+from .editing import Editing
+from . import history, recovery
 from .art_tab import ArtTab
 from .map_tab import MapTab
 from .limits_tab import LimitsTab
@@ -19,7 +21,7 @@ from .widgets import Pages, px
 APP_TITLE = "FM Editor"
 
 
-class App(tk.Tk):
+class App(Editing, tk.Tk):
     def __init__(self, game=None, mod=None, ask=True, autostart=True):
         theme.dpi_awareness()      # Windows: before the first window, or it is drawn stretched
         super().__init__()
@@ -37,6 +39,7 @@ class App(tk.Tk):
         self.hooks = []            # extra menu entries (importers) add themselves here
         self.dark = tk.BooleanVar(self, value=settings.load().get("dark") is True)
         self.text_preview = None   # Tools > Card text preview, while open
+        self.init_editing()
         self.build_menu()
         self.notebook = Pages(self)
         self.notebook.pack(fill="both", expand=True)
@@ -57,6 +60,7 @@ class App(tk.Tk):
                      self.map, self.limits, self.stars, self.packs, self.info, self.conflicts]
         self.status = ttk.Label(self, relief="sunken", anchor="w", padding=(6, 2))
         self.status.pack(fill="x", side="bottom", before=self.notebook)
+        self.install_editing()
         if self.dark.get():
             self.theme.use(True)
         self.notebook.bind("<<NotebookTabChanged>>", lambda e: self.tab_changed())
@@ -83,12 +87,20 @@ class App(tk.Tk):
         self.file_menu.add_command(label="Open mod folder...", accelerator="Ctrl+O", command=self.open_mod)
         self.file_menu.add_command(label="Save", accelerator="Ctrl+S", command=self.save)
         self.file_menu.add_command(label="Save as...", command=lambda: self.save(ask=True))
+        self.file_menu.add_command(label="Recover work...", command=self.recover_work)
         self.file_menu.add_separator()
         self.import_index = self.file_menu.index("end")
         self.file_menu.add_command(label="Game files...", command=self.choose_game)
         self.file_menu.add_separator()
         self.file_menu.add_command(label="Exit", command=self.quit_app)
         bar.add_cascade(label="File", menu=self.file_menu)
+        self.edit_menu = tk.Menu(bar, tearoff=False)
+        self.edit_menu.add_command(label="Undo", accelerator="Ctrl+Z", command=self.undo)
+        self.edit_menu.add_command(label="Redo", accelerator="Ctrl+Y", command=self.redo)
+        self.edit_menu.add_separator()
+        self.edit_menu.add_command(label="Apply edits", command=self.apply_edits)
+        self.edit_menu.add_command(label="Discard form edits", command=self.discard_forms)
+        bar.add_cascade(label="Edit", menu=self.edit_menu)
         tools = tk.Menu(bar, tearoff=False)
         tools.add_command(label="Check the mod", command=self.show_conflicts)
         tools.add_command(label="Preview mod.json", command=lambda: self.info.preview())
@@ -147,6 +159,9 @@ class App(tk.Tk):
             files = self.ask_game_files()
         if mod:
             self.load_mod(mod)
+        if ask and any(not row[2].get("backup") for row in recovery.records(self.recovery.folder)):
+            if messagebox.askyesno(APP_TITLE, "Unsaved recovery copies are available. Review them?", parent=self):
+                self.recover_work()
 
     def ask_game_files(self):
         path = filedialog.askopenfilename(parent=self, title="The game's disc image",
@@ -184,23 +199,39 @@ class App(tk.Tk):
     # --- the project ---------------------------------------------------------------
 
     def set_project(self, project):
+        self.cancel_edit_jobs()
+        self.clear_recovery()
+        self.recovery = recovery.Recovery()
+        self._pending.clear()
+        self._recovered = False
         self.project = project
         self.dirty = False
-        for tab in self.tabs:
-            tab.refresh()
+        self._refreshing = True
+        try:
+            for tab in self.tabs:
+                tab.refresh()
+        finally:
+            self._refreshing = False
+        self.history = history.History(project)
         self.update_title()
+        self.update_edit_state()
 
     def changed(self):
-        if not self.dirty:
-            self.dirty = True
-            self.update_title()
+        if self._refreshing:
+            return
+        self.dirty = True
+        self.update_title()
+        if self._history_job is None:
+            self._history_job = self.after_idle(self.record_edit)
+        self.schedule_recovery()
+        self.update_edit_state()
 
     def update_title(self):
         if self.project is None:
             self.title(APP_TITLE)
             return
         where = f" - {self.project.source_dir}" if self.project.source_dir else ""
-        self.title(f"{'*' if self.dirty else ''}{self.project.info.name} ({self.project.info.id}){where} - {APP_TITLE}")
+        self.title(f"{'*' if self.dirty or self._pending else ''}{self.project.info.name} ({self.project.info.id}){where} - {APP_TITLE}")
 
     def say(self, text):
         self.status.configure(text=text)
@@ -208,18 +239,35 @@ class App(tk.Tk):
     def commit_all(self, show=False):
         """Store every tab's form. With show, a form that cannot be stored
         is brought up with the reason."""
+        if self._refreshing:
+            return True
         for tab in self.tabs:
             if not tab.commit():
+                self._pending.add(tab)
+                self.update_title()
+                self.update_edit_state()
+                if self.notebook.current() is not tab:
+                    self._redirecting_tab = True
+                    self.notebook.select(tab)
                 if show:
                     self.notebook.select(tab)
                     messagebox.showerror(APP_TITLE, f"The {self.notebook.tab(tab, 'text')} tab holds something "
                                          "that cannot be stored (the tab says what). Correct it or revert it first.",
                                          parent=self)
                 return False
+            self._pending.discard(tab)
+        self.update_title()
+        self.update_edit_state()
         return True
 
     def tab_changed(self):
-        self.commit_all()
+        if self._refreshing:
+            return
+        if getattr(self, "_redirecting_tab", False):
+            self._redirecting_tab = False
+            return
+        if not self.commit_all():
+            return
         current = self.notebook.current()
         # Other tabs may have changed what this one shows (a card's name or
         # type): fill it again, keeping its selection.
@@ -308,7 +356,7 @@ class App(tk.Tk):
                                        icon="warning", default="no", parent=self):
                 return False
         folder = self.project.source_dir
-        if ask or folder is None:
+        if ask or self._recovered or folder is None:
             chosen = filedialog.askdirectory(
                 parent=self, initialdir=str(self.mods_dir()),
                 title=f"Where to save: an empty folder, or its parent (a folder \"{self.project.info.id}\" is made)")
@@ -329,13 +377,20 @@ class App(tk.Tk):
                                            "and matching asset files?",
                                            parent=self):
                     return False
+        self.flush_history()
         try:
+            recovery.backup(folder)
             path = manifest.save_mod(self.project, folder)
         except (ValueError, OSError) as problem:
             messagebox.showerror(APP_TITLE, str(problem), parent=self)
             return False
         self.dirty = False
+        self._recovered = False
+        self.history.mark_saved(self.project)
+        self.cancel_edit_jobs()
+        self.clear_recovery()
         self.update_title()
+        self.update_edit_state()
         self.info.refresh()
         self.say(f"Saved {path}. Enable it in the game under Game > Mods and restart the game.")
         return True
@@ -391,7 +446,15 @@ class App(tk.Tk):
 
     def quit_app(self):
         if self.confirm_discard():
+            self.clear_recovery()
             self.destroy()
+
+    def destroy(self):
+        self.cancel_edit_jobs()
+        # Also stop widget/dialog idle callbacks before their Tcl commands disappear.
+        for job in self.tk.call("after", "info"):
+            self.after_cancel(job)
+        super().destroy()
 
 
 def main(game=None, mod=None):
