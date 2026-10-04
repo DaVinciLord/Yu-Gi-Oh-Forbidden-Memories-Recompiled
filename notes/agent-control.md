@@ -364,7 +364,11 @@ CI can hold retail inputs.
   the first before "Port: a loaded state finishes the VSync(0) it resumes
   in", and passes with it), and `x64-data-mods` (recorded with two data
   mods, a card pack and a recoloured texture pack, made by its `mods.py`:
-  the 64-bit build's data mods gate).
+  the 64-bit build's data mods gate), `dark-hole` and `spellbinding` (the
+  bolt effect, 17 and 13, which crashed the 64-bit build until its vertex
+  step stopped sign-extending a guest address; recorded on 32-bit, they
+  fail on that build) and `build-deck-add` (a card back to the chest and
+  another into the deck, the path that crashed arm64).
 - **The bug as a replay:** `state-load-rng` buys a pack from a state, loads
   the state in the same game and buys it again with the same presses. On
   this branch without "Port: save states carry the game's random seed" it
