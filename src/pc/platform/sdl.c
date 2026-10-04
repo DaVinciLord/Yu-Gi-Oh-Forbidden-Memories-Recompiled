@@ -78,6 +78,14 @@ static volatile uint16_t wheel_now;
 static volatile uint16_t touch_bits;
 static int touch_mouse_on_pad;
 static int pointer_x, pointer_y, pointer_inside, cursor_hidden;
+/* The pointer's place is a mouse's (it hovers): the mouse events SDL makes
+ * of a touch move it only while the finger is down, and leave it where the
+ * finger lifted, so they never reveal the bar by hovering. */
+#ifdef SDL_PLATFORM_ANDROID
+static int pointer_is_mouse;
+#else
+static int pointer_is_mouse = 1;
+#endif
 static unsigned last_pointer_motion, current_frame;
 static int focus_clock_rate = 100, focus_paused;
 /* A phone or tablet app sent to the background (SDL's application events,
@@ -95,18 +103,42 @@ static int menu_dirty;
 static void save_window_image(void);
 static int window_shot_pending;
 
+/* Window pixels per density-independent pixel where the screen is touched
+ * (Android: SDL's content scale is the display's densityDpi / 160), 0 on a
+ * desktop, which keeps the mouse's sizes. */
+static float touch_density(void)
+{
+#ifdef SDL_PLATFORM_ANDROID
+    SDL_DisplayID display = window ? SDL_GetDisplayForWindow(window) : SDL_GetPrimaryDisplay();
+    float density = display ? SDL_GetDisplayContentScale(display) : 0.0f;
+    return density > 0.0f ? density : 1.0f;
+#else
+    return 0.0f;
+#endif
+}
+
 /* The menu's size: the setting, or from the height the window has or is
  * about to have. */
 static void update_menu_scale(int window_h)
 {
     int wanted = Settings_Get(SET_MENU_SCALE);
-#ifdef SDL_PLATFORM_ANDROID
-    /* A phone's pixels are small and the menu is tapped: Automatic is the
-     * largest size the window height allows. */
-    if (!wanted) wanted = window_h >= 900 ? 3 : window_h >= 600 ? 2 : 1;
-#endif
+    float density = touch_density();
+    if (density > 0.0f) {
+        /* The screen is touched: Automatic sets the text at the system's
+         * size (13 px at 1 dp, about 14 sp), the bar, rows and buttons a
+         * finger's target (48 dp) tall, and the touch controls a thumb's
+         * width, from the density rather than the window. */
+        if (!wanted) wanted = density >= 4.0f ? 4 : density < 1.0f ? 1 : (int)(density + 0.5f);
+        Menu_SetTouchTarget((int)(48.0f * density + 0.5f));
+        if (TouchPad_SetDensity(density)) menu_dirty = 1;
+    }
     Menu_SetScale(wanted ? wanted : Menu_AutoScale(window_h));
 }
+
+/* Where the window is always the whole screen (a phone), the bar is drawn
+ * over the picture when it shows: the picture and the touch controls stay
+ * where they are. In a desktop's fullscreen it pushes the picture down. */
+static int bar_overlays(void) { return !Platform_HasWindowModes(); }
 static void relayout(void);
 static void show_cursor(void);
 static void block_signals(sigset_t *previous);
@@ -360,7 +392,8 @@ static int covers_screen(void) { return Settings_Get(SET_FULLSCREEN) || Settings
 static void update_menu_visibility(void)
 {
     int wanted = !covers_screen() || Settings_Get(SET_SHOW_MENU_FULLSCREEN) ||
-                 (pointer_inside && pointer_y < Menu_Height()) || Menu_IsOpen() || menu_reveal_frames > 0;
+                 (pointer_inside && pointer_is_mouse && pointer_y < Menu_Height()) || Menu_IsOpen() ||
+                 menu_reveal_frames > 0;
     if (wanted == menu_visible) return;
     menu_visible = wanted;
     Menu_SetVisible(wanted);
@@ -902,7 +935,7 @@ static void relayout(void)
         return;
     }
     update_menu_scale(window_h);
-    menu = menu_visible ? Menu_Height() : 0;
+    menu = menu_visible && !bar_overlays() ? Menu_Height() : 0;
     area_h = window_h - menu;
     if (area_h < 1) area_h = 1;
     layout.win_w = window_w;
@@ -1115,9 +1148,15 @@ static void gl_quad(GLuint texture, float x, float y, float w, float h)
 
 static void draw_overlay(int *x, int *y, int *w, int *h)
 {
-    int hx, hy, hw, hh, tx, ty, tw, th;
+    int hx, hy, hw, hh, tx, ty, tw, th, left, right;
     FusionHelper_Viewport((int)layout.dst.x, (int)layout.dst.y, (int)layout.dst.w, (int)layout.dst.h);
     TouchPadArt_Draw(&canvas, &tx, &ty, &tw, &th); /* under the menu and the HUD */
+    /* The save and deck slot menus keep between the pad's columns (they are
+     * played with the pad), and below the bar while it shows (pushing the
+     * picture down or drawn over it); from the top only where a bar drawn
+     * over the picture is hidden. */
+    if (!TouchPad_FreeSpan(&left, &right)) left = right = 0;
+    Menu_SetOverlayArea(left, right, bar_overlays() && !menu_visible ? 0 : -1);
     if (Settings_Get(SET_SHOW_HUD) == 2 || Menu_IsOpen()) {
         Hud_Draw(&canvas);
         Menu_Draw(&canvas); /* dropdowns stay above the full statistics panel */
@@ -1425,6 +1464,12 @@ static void pump(void)
         if (event.type == SDL_EVENT_MOUSE_MOTION && event.motion.which == SDL_TOUCH_MOUSEID &&
             (touch_mouse_on_pad || TouchPad_Covers((int)event.motion.x, (int)event.motion.y)))
             continue;
+        /* A tap at the top of the screen shows the hidden bar under it, so
+         * the press lands on the bar's menu there. */
+        if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.which == SDL_TOUCH_MOUSEID) {
+            pointer_is_mouse = 0;
+            if (covers_screen() && event.button.y < Menu_Height() && menu_reveal_frames < 2) menu_reveal_frames = 2;
+        }
         /* A key or a controller's button: Automatic hides the pad again. */
         if (((event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat && event.key.key != SDLK_AC_BACK) ||
              event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) && TouchPad_OtherInput())
@@ -1445,8 +1490,16 @@ static void pump(void)
             else if (ModsWindow_Redraws(&menu_event)) mods_dirty = 1;
             continue;
         }
-        if (event.type == SDL_EVENT_MOUSE_MOTION) {
+        if (event.type == SDL_EVENT_MOUSE_MOTION && event.motion.which == SDL_TOUCH_MOUSEID) {
+            pointer_is_mouse = 0;
+            /* A finger has no hover: SDL moves the mouse to a tap just
+             * before pressing there, which the menu would take for the
+             * pointer sliding along the bar (and open the menu the press
+             * then closes). Only a drag, with the finger down, is the menu's. */
+            if (!(event.motion.state & SDL_BUTTON_LMASK)) continue;
+        } else if (event.type == SDL_EVENT_MOUSE_MOTION) {
             static unsigned logged_frame = ~0u;
+            pointer_is_mouse = 1;
             pointer_x = menu_event.x;
             pointer_y = menu_event.y;
             pointer_inside = 1;
@@ -1557,7 +1610,7 @@ static void pump(void)
              * open menu or a notice took it above, as Esc. */
             if (key == SDLK_AC_BACK) {
                 if (down && DeckMenu_Active()) DeckMenu_Close();
-                else if (down) QuitPrompt_Request(&quit);
+                else if (down) QuitPrompt_Back(&quit);
                 break;
             }
 #endif
@@ -1582,6 +1635,17 @@ static void pump(void)
     if (mods_window && mods_dirty) draw_mods();
     mods_dirty = 0;
     if (TouchPad_SetMode(Settings_Get(SET_TOUCH_PAD))) menu_dirty = 1;
+    /* Once per pump, after every event of it: SDL delivers a tap as finger
+     * events and mouse events made of them, and the pad yielding or coming
+     * back between the two would hand one half to the menu and the other to
+     * the pad. MENU opens the first menu; while a menu, a notice or the bar
+     * drawn over the picture is up, the pad steps aside (touch_pad.h). */
+    if (TouchPad_TakeMenu()) {
+        Menu_Open();
+        menu_dirty = 1;
+    }
+    update_menu_visibility();
+    if (TouchPad_Block(Menu_IsOpen() || Menu_NoticeShown() || (bar_overlays() && menu_visible))) menu_dirty = 1;
     touch_bits = TouchPad_Update();
     Gamepad_Poll(current_frame);
     if (HostActions_Run(&quit)) menu_dirty = 1;
