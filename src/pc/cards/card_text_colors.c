@@ -22,6 +22,7 @@ typedef struct {
 static CardColors colors[CARD_TABLE_ID_END];
 static unsigned char star_colors[STARS_MAX + 1];
 static SavedColor saved[BOX_COUNT];
+static int built;
 
 static int color(const JsonValue *value)
 {
@@ -91,6 +92,7 @@ void CardTextColors_Build(void)
     memset(colors, 0, sizeof(colors));
     memset(star_colors, 0, sizeof(star_colors));
     memset(saved, 0, sizeof(saved));
+    built = 1;
     for (i = 0; i < Mods_LoadedCount(); i++) {
         int mod = Mods_Loaded(i);
         const JsonValue *section;
@@ -137,6 +139,10 @@ void CardTextColors_Apply(struct DuelEffectChannel *channel, int part, int star)
     int id = gDuel_wSelectedCardID;
     unsigned char tint = 0;
     SavedColor *state;
+    /* Card tables and mod-added guardian-star names are ready by the first
+     * detail-box command. Delaying the manifest pass keeps Cards_Build
+     * standalone for focused card-table tests. */
+    if (!built) CardTextColors_Build();
     if (!Cards_Valid(id)) return;
     if (part == CARD_TEXT_COLOR_NAME) tint = colors[id].name;
     else if (part == CARD_TEXT_COLOR_DESCRIPTION) tint = colors[id].description;
