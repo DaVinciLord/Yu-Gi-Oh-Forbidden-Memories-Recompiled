@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check (and fix) the casts a native 64-bit build gets wrong without a word.
 
-G32 (src/port_ptr.h, `make check-g32`) covers declarations. Two kinds of
+G32 (src/port_ptr.h, `make check-g32`) covers declarations. Three kinds of
 cast in game code are just as wrong in the 64-bit build
 (build_game32.py --target windows-x64), and neither compiler nor
 check_g32.py says so:
@@ -14,6 +14,13 @@ check_g32.py says so:
            bytes over 4-byte slots. Write `(T *G32 *)p`. A cast of a native
            table (a local array of pointers, the address of a pointer
            variable) is left alone.
+  widened  `(T *)(i + sizeof(x))`: the sum is unsigned 64-bit, but the
+           signed 32-bit `i` in it was sign-extended to get there, so the
+           native pointer lands in the top of the address space when `i`
+           holds an address with bit 31 set (guest RAM, the game stack, or
+           arm64's game library at 0xC0000000). Keep the arithmetic 32 bits
+           wide (`(u32)sizeof(x)`, or the whole offset `(u32)(...)`) or cast
+           to `T *G32`. Not fixed by --fix.
 
 Every game unit, and the port's SDK and platform code (src/pc/sdk,
 src/pc/platform, which build guest pointers from integers too; the window
@@ -58,6 +65,34 @@ def strip(node):
     while node and node.get("kind") in ("ImplicitCastExpr", "ParenExpr"):
         node = (node.get("inner") or [None])[0]
     return node
+
+
+WIDE = re.compile(r"^(const )?(volatile )?(unsigned )?long long$")   # LLP64: `long` is 4 bytes
+
+
+def variable(node):
+    """Whether an expression reads something other than constants."""
+    if node.get("kind") == "DeclRefExpr":
+        return node.get("referencedDecl", {}).get("kind") != "EnumConstantDecl"
+    if node.get("kind") in ("UnaryExprOrTypeTraitExpr", "OffsetOfExpr"):
+        return False
+    return any(variable(child) for child in node.get("inner", []) or [])
+
+
+def widened(node):
+    """A 64-bit sum that sign-extends a signed 32-bit operand: the arithmetic
+    of `(T *)(i + sizeof(x))`, which is unsigned 64-bit, not signed, so the
+    `signed` kind misses it, while `i` is still sign-extended first. Only
+    through the arithmetic itself: an explicit cast is the author's."""
+    if not node or not WIDE.match(desugared(node)):
+        return False
+    kind = node.get("kind")
+    if kind == "ImplicitCastExpr" and node.get("castKind") == "IntegralCast":
+        operand = (node.get("inner") or [{}])[0]
+        return bool(SIGNED.match(desugared(operand))) and not WIDE.match(desugared(operand)) and variable(operand)
+    if kind in ("ParenExpr", "BinaryOperator", "ImplicitCastExpr"):
+        return any(widened(child) for child in node.get("inner", []) or [])
+    return False
 
 
 def native_ptrptr(text):
@@ -117,6 +152,10 @@ def scan(unit):
                         not re.match(r"^[^(]*\(\*\s*(__ptr32|__uptr)", outer) and \
                         (strip(operand) or {}).get("kind") != "IntegerLiteral" and SIGNED.match(desugared(operand)):
                     kinds.append("signed")
+                elif node.get("castKind") == "IntegralToPointer" and \
+                        not re.search(r"(__ptr32|__uptr)$", outer) and \
+                        not re.match(r"^[^(]*\(\*\s*(__ptr32|__uptr)", outer) and widened(operand):
+                    kinds.append("widened")
                 target = desugared(node).replace(" ", "")
                 # Annotated when __ptr32 is on a level inside the outermost
                 # one (the sugared spelling keeps the levels in place).
@@ -149,8 +188,8 @@ def fix(sites):
     """Insert G32 into the casts at `sites`; return those it could not."""
     left, by_file = [], collections.defaultdict(list)
     for site in sites:
-        (by_file[site["path"]] if site["kind"] == "CStyleCastExpr" and site["offset"] is not None
-         else left).append(site)
+        (by_file[site["path"]] if site["kind"] == "CStyleCastExpr" and site["offset"] is not None and
+         "widened" not in site["kinds"] else left).append(site)
     for path, entries in by_file.items():
         with open(os.path.join(ROOT, path), "rb") as handle:
             raw = bytearray(handle.read())

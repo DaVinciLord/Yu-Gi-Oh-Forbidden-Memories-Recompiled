@@ -2831,7 +2831,18 @@ hashes (PGXP and HD off, as the fixtures run). What makes it work:
   above), with `-fms-extensions`; `CALL32` casts before a call through one.
   Casts that make a pointer from a signed int or walk a guest table carry
   `G32` as well; `python tools/pc/check_x64_casts.py` finds the ones that
-  do not (two minutes; `--fix` edits them).
+  do not (two minutes; `--fix` edits them). It also reports `(T *)(i +
+  sizeof(x))` with a signed 32-bit `i` ("widened"): the sum is 64-bit
+  unsigned, so it is not a signed cast, but `i` is sign-extended into it.
+  It found two, fixed by hand with the offset kept 32 bits wide. The bolt
+  effect's vertex step (`func_8014FABC`, `bolt_vertices.c`) took its buffer,
+  guest RAM at 0x80103800, out to 0xFFFFFFFF801xxxxx: this build crashed as
+  Dark Hole (effect 17) or Spellbinding Circle (effect 13) resolved (the
+  `dark-hole` and `spellbinding` replays; v0.2.0 shipped no 64-bit build).
+  Build Deck's `BuildDeck_AddCard` did it to its record, which is port data
+  in the image: harmless at 0x40000000, but arm64's game library is at
+  0xC0000000, and there the first card added to the deck crashed the game
+  (the `build-deck-add` replay keeps the path in step on both widths).
 - **Toolchain.** `x86_64-w64-mingw32-clang`, clang 21 or later: the build
   first runs `tools/pc/x64_compiler_gate.c`, which refuses clang 12's
   silent miscompile of `__ptr32` function-pointer arrays. `-fno-jump-tables`.
