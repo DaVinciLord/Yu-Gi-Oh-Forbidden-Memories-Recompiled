@@ -243,7 +243,10 @@ def language_folders():
     """Where the translations may be: beside the repository's tools, and
     beside a game the editor ships with."""
     here = Path(__file__).resolve()
-    return [here.parents[3] / "languages", here.parent / "languages"]
+    folders = [here.parent / "languages"]
+    if len(here.parents) > 3:       # in the repository; the packed program's folder is shallower
+        folders.insert(0, here.parents[3] / "languages")
+    return folders
 
 
 def load_listing(code: str, folders=None):
