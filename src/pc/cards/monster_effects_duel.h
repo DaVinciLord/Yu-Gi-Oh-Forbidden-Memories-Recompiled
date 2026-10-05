@@ -74,6 +74,9 @@ int MonsterEffects_PlayFaceUp(int card);
 /* Crush Card's removal (DuelEffect_ApplyMonsterRemoval) as a
  * "destroy" runs it: -1 as ever, else whether it takes `record`. */
 int MonsterEffects_RemovalTakes(int record);
+/* Its target marks (the duel effects bank's effect 15): the card objects
+ * collected, cut to the monsters a "destroy" takes; as ever otherwise. */
+void MonsterEffects_FilterTargets(unsigned *objects);
 /* What face-up monsters and the battle add to a card's ATK and DEF. */
 void MonsterEffects_Stats(const void *record, int *attack, int *defense);
 

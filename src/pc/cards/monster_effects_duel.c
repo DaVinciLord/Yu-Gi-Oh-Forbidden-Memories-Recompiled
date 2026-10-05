@@ -358,6 +358,17 @@ int MonsterEffects_RemovalTakes(int record)
     return record >= 0 && record < MONSTER_RECORDS && (S.destroy_mask >> record & 1);
 }
 
+void MonsterEffects_FilterTargets(unsigned *objects)
+{
+    int i, n = 0;
+    if (!S.destroy_mask) return;
+    for (i = 0; objects[i]; i++) {
+        const DisplayObject *object = (const DisplayObject *)(uintptr_t)objects[i];
+        if (object->field_6A < MONSTER_RECORDS && (S.destroy_mask >> object->field_6A & 1)) objects[n++] = objects[i];
+    }
+    objects[n] = 0;
+}
+
 void MonsterEffects_Placed(int record, int equip)
 {
     /* A card put back on its own zone (the 0x4000 placement, which an equip

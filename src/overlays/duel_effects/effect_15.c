@@ -1,6 +1,12 @@
 #include "../../types.h"
 #include "effect_15.h"
 
+#ifdef MEMORIES_PC
+/* A monster's "destroy" marks only the monsters it takes, not the whole
+   row Crush Card's config collects (src/pc/cards/monster_effects_duel.h). */
+extern void MonsterEffects_FilterTargets(u32 *objects);
+#endif
+
 void func_8014FF40(void *buffer, s32 phase)
 {
     MATRIX world;
@@ -31,6 +37,9 @@ void func_8014FF40(void *buffer, s32 phase)
                 Duel_CollectMatchingFieldCardObjects(D_8015B7A0,
                                                      work->config->selector);
             }
+#ifdef MEMORIES_PC
+            MonsterEffects_FilterTargets(D_8015B7A0);
+#endif
             work->count = 0;
             for (i = 0; D_8015B7A0[i] != 0; i++) {
                 work->count++;
