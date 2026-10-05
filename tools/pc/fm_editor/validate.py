@@ -155,7 +155,8 @@ def _check_card(project: Project, cid: int, out: list):
         if sum(1 for a in project.added.values() if a.key == added.key) > 1:
             add("error", f"duplicate card identity {added.key}")
         effect = project.retail.cards.get(project.effect_of(cid))
-        matching_effect = not card.is_monster() and effect and effect.type == card.type
+        # An equip needs none: its targets and boosts are the mod's rules.
+        matching_effect = not card.is_monster() and (card.type == 23 or (effect and effect.type == card.type))
         if base and base.is_monster() and not card.is_monster() and not matching_effect:
             add("error", "a copy needs a matching retail effect to become a non-monster")
         elif base and not base.is_monster() and card.type != base.type and not matching_effect:
@@ -163,7 +164,7 @@ def _check_card(project: Project, cid: int, out: list):
     elif cid in project.retail.cards:
         retail = project.retail.cards[cid]
         extra = project.card_extra.get(cid, {})
-        if retail.is_monster() and not card.is_monster() and "effect" not in extra:
+        if retail.is_monster() and not card.is_monster() and card.type != 23 and "effect" not in extra:
             add("warning", "a monster made a non-monster does nothing when played unless \"effect\" names a card")
         if not retail.is_monster() and card.is_monster() and "model" not in extra:
             add("warning", "a card made a monster fights without a 3D model unless \"model\" names one")

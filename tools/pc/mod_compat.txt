@@ -24,4 +24,12 @@ accept v0.1.2 record ControlsConfig holds the larger ControlsProfile
 # PR #231 (the fusion helper asks a mod's equip bonus): the planner's rules
 # gained `bonus` at their end. Only the port's own fusion helper builds a
 # FusionRules; none of v0.1.2's mods calls a Fusion_ function.
-accept v0.1.2 record FusionRules grew by one callback at its end
+accept v0.1.2 record FusionRules grew by two callbacks at its end (bonus, bonuses)
+# Equips with their own DEF bonus ("bonus_defense"): the duel record's unused
+# bytes 0x1A-0x1B hold defense_modifier (offsets and size unchanged; the
+# disc never used them), and the planner's card gained defense_modifier at
+# its end, which FusionLine holds. None of v0.1.2's mods calls a Fusion_
+# function, and a mod reading a record's stat_modifier still reads it.
+accept v0.1.2 record DuelCardRecord names two of its pad bytes defense_modifier
+accept v0.1.2 record FusionCard grew by defense_modifier at its end
+accept v0.1.2 record FusionLine holds the larger FusionCard

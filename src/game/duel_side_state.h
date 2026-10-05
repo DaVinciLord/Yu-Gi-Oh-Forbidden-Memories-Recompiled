@@ -115,6 +115,10 @@ extern u8 D_8009B1D5;
  * presentation sequence. Both are reached through small data. */
 extern u8 D_8009B19C;
 extern s16 D_8009B154;
+#ifdef MEMORIES_PC
+/* DEF's part of it past ATK's (duel_scene_card_placement.c). */
+extern s16 gDuel_wEquipDefenseExtra;
+#endif
 
 extern DuelSideState D_800E9FF0[DUEL_SIDE_COUNT];
 /* Always &D_800E9FF0[D_8009B1D5]: four translation units assign it exactly

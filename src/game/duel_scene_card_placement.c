@@ -37,6 +37,25 @@
 /* The equip whose effect a card has (cards.h Cards_EffectId): a mod's equip
    whose "effect" is Megamorph gives Megamorph's bonus and animation. */
 #define PLACED_EQUIP_EFFECT Cards_EffectId(D_8009B206)
+/* What DEF got beyond ATK from this summon's equips, which Reverse Trap
+   takes back with D_8009B154 (func_8001B170.c). */
+s16 gDuel_wEquipDefenseExtra = 0;
+/* The equip being applied: its ATK and DEF bonus, the larger (or, both
+   below zero, the smaller) the climb counts to, and the monster's DEF
+   modifier before it. */
+static s32 equip_attack, equip_defense, equip_span, equip_defense_before;
+
+/* The monster as far as the climb has come: `done` of equip_span. */
+static void equip_climb(DuelCardRecord *card, s32 before, s32 done)
+{
+    if (equip_span == 0 || done == equip_span) {
+        card->stat_modifier = before + equip_attack;
+        card->defense_modifier = equip_defense_before + equip_defense - equip_attack;
+        return;
+    }
+    card->stat_modifier = before + equip_attack * done / equip_span;
+    card->defense_modifier = equip_defense_before + (equip_defense - equip_attack) * done / equip_span;
+}
 #else
 #define PLACED_EQUIP_EFFECT D_8009B206
 #endif
@@ -86,6 +105,9 @@ void DuelScene_UpdateCardPlacement(void)
         D_8009B218 = 0;
         D_8009B1B9 = 0;
         D_8009B154 = 0;
+#ifdef MEMORIES_PC
+        gDuel_wEquipDefenseExtra = 0;
+#endif
         n = 5;
         y = 82;
         slots = D_800E9EF0;
@@ -302,6 +324,9 @@ request_combination:
             } else if (((DuelPlacementCardIdCell *)&D_8009B150)->value & 0x8000) {
                 D_8009B218 = 1;
                 D_8009B154 = 0;
+#ifdef MEMORIES_PC
+                gDuel_wEquipDefenseExtra = 0;
+#endif
                 D_8009B174 = 6;
                 D_8009B1C8->rank.fusions_initiated++;
             } else {
@@ -419,19 +444,37 @@ request_combination:
                                 /* A mod's bonus for this equip and monster
                                    (tables.h). D_8009B154 is what Reverse
                                    Trap takes back, so it follows. */
-                                s32 bonus = Tables_EquipBonus(D_8009B206, card->card_id,
-                                                              (s16)PLACEMENT_TY(object));
+                                s32 bonus, defense, had;
                                 /* stat_modifier is 16-bit: past twice the
                                    stat cap changes nothing, and several big
                                    bonuses would wrap it negative. The cap
                                    is a mod's "limits" too, and twice a
                                    raised one is past what 16 bits hold. */
                                 s32 room = 2 * Tables_StatCapEither();
+                                Tables_EquipBonuses(D_8009B206, card->card_id, (s16)PLACEMENT_TY(object), &bonus,
+                                                    &defense);
                                 if (room > TABLES_LIMIT_STAT_MAX) room = TABLES_LIMIT_STAT_MAX;
                                 if (card->stat_modifier + bonus > room) bonus = room - card->stat_modifier;
                                 if (card->stat_modifier + bonus < -room) bonus = -room - card->stat_modifier;
+                                /* DEF the same, from what it has now; the
+                                   part past ATK's is defense_modifier. */
+                                had = card->stat_modifier + card->defense_modifier;
+                                if (had + defense > room) defense = room - had;
+                                if (had + defense < -room) defense = -room - had;
+                                if (card->defense_modifier + defense - bonus > TABLES_LIMIT_STAT_MAX)
+                                    defense = TABLES_LIMIT_STAT_MAX - card->defense_modifier + bonus;
+                                if (card->defense_modifier + defense - bonus < -TABLES_LIMIT_STAT_MAX)
+                                    defense = -TABLES_LIMIT_STAT_MAX - card->defense_modifier + bonus;
                                 D_8009B154 += bonus - (s16)PLACEMENT_TY(object);
-                                PLACEMENT_TY(object) = bonus;
+                                gDuel_wEquipDefenseExtra += defense - bonus;
+                                equip_attack = bonus;
+                                equip_defense = defense;
+                                equip_defense_before = card->defense_modifier;
+                                /* One climb for both: to the larger bonus,
+                                   or at once when neither is above 0. */
+                                equip_span = bonus > defense ? bonus : defense;
+                                if (equip_span <= 0) equip_span = bonus < defense ? bonus : defense;
+                                PLACEMENT_TY(object) = equip_span;
                             }
 #endif
                         }
@@ -464,7 +507,11 @@ request_combination:
                             PLACEMENT_TX(object) = limit;
                             object->field_60 = 16;
                         }
+#ifdef MEMORIES_PC
+                        equip_climb(card, object->field_2C.h.field_2C, (s16)PLACEMENT_TX(object));
+#else
                         card->stat_modifier = object->field_2C.h.field_2C + PLACEMENT_TX(object);
+#endif
                         value = Duel_CalcCardStats(card);
                         D_800EA0E8[0].field_32 = value;
                         D_800EA0E8[0].field_34 = value >> 16;

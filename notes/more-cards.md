@@ -105,9 +105,12 @@ ritual or equip card can become a monster, and a monster a magic, trap,
 ritual or equip card. The disc has 3D models for its monsters only, so a card
 made a monster fights without one unless `model` names a monster whose model
 it takes (`"model": "Kuriboh"`), and without `stars` it gets that monster's
-guardian stars, or the Sun and the Moon. A monster made anything else does
-nothing when played unless `effect` names the card whose effect it takes
-(`"effect": "Legendary Sword"`). An equip whose `effect` is a disc equip fits
+guardian stars, or the Sun and the Moon. A monster made a magic, trap or
+ritual card does nothing when played unless `effect` names the card whose
+effect it takes (`"effect": "Raigeki"`). A monster made an equip needs no
+`effect`: it adds +500 ATK and DEF, or what `equips` gives it (`bonus`,
+`bonus_attack`, `bonus_defense`), to the monsters `equips` lets it equip,
+and a copy may become one the same way. An equip whose `effect` is a disc equip fits
 the monsters that one fits, with its bonus (Megamorph's +1000 too), and
 `equips` in the [gameplay tables](gameplay-tables.md) may change that. `model`
 and `effect` work the same on a card that stays on its side, and a copy's

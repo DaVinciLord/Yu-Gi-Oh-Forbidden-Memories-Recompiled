@@ -97,6 +97,9 @@
  * puts retail's load-delay nop in front of each gp-relative store. */
 u16 D_8009B170;
 u16 D_8009B172;
+#ifdef MEMORIES_PC
+s16 gDuel_awSavedDefenseModifier[2] = {0, 0};
+#endif
 u16 D_8009B178;
 u16 D_8009B17A;
 u8 D_8009B19C;
@@ -492,6 +495,9 @@ void DuelScene_UpdateFieldActions(void)
         pick = &D_801A7AD8[D_800907D8[i + D_8009B1D5 * 20]];
         D_8009B178 = H(pick, 0x16);
         D_8009B170 = H(pick, 0x12);
+#ifdef MEMORIES_PC
+        gDuel_awSavedDefenseModifier[0] = pick->defense_modifier;
+#endif
         o = func_80017F04(pick, S(pick, 8), S(pick, 0xA));
         DisplayObject_SetDepthOffset(DISPLAY_OBJECT_VIEW(o), -0xA);
         D_800E9EF0[0] = DISPLAY_OBJECT_VIEW(o);
@@ -502,6 +508,9 @@ void DuelScene_UpdateFieldActions(void)
         if (a == 0) {
             D_8009B17A = H(pick, 0x16);
             D_8009B172 = H(pick, 0x12);
+#ifdef MEMORIES_PC
+            gDuel_awSavedDefenseModifier[1] = pick->defense_modifier;
+#endif
             o = func_80017F04(pick, S(pick, 8), S(pick, 0xA));
             D_800E9EF0[1] = DISPLAY_OBJECT_VIEW(o);
             D_8009B19C = B(o, 0x6A);

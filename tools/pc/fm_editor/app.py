@@ -100,6 +100,7 @@ class App(Editing, tk.Tk):
         self.file_menu.add_command(label="Open mod folder...", accelerator="Ctrl+O", command=self.open_mod)
         self.file_menu.add_command(label="Save", accelerator="Ctrl+S", command=self.save)
         self.file_menu.add_command(label="Save as...", command=lambda: self.save(ask=True))
+        self.file_menu.add_command(label="Export mod...", command=lambda: self.save(ask=True, export=True))
         self.file_menu.add_command(label="Recover work...", command=self.recover_work)
         self.file_menu.add_separator()
         self.import_index = self.file_menu.index("end")
@@ -276,6 +277,7 @@ class App(Editing, tk.Tk):
         return True
 
     def tab_changed(self):
+        card_links.close_menu()
         if self._refreshing:
             return
         if getattr(self, "_redirecting_tab", False):
@@ -399,7 +401,10 @@ class App(Editing, tk.Tk):
         folder = disc.user_dir() / "mods"
         return folder if folder.is_dir() else Path.cwd()
 
-    def save(self, ask=False):
+    def save(self, ask=False, export=False):
+        """Save, Save as (ask) or Export mod (export: a folder named after
+        the mod's id is always made in the chosen one, as the game's mods
+        folder wants one folder a mod)."""
         if self.project is None or not self.commit_all(show=True):
             return False
         issues = validate.validate(self.project)
@@ -413,13 +418,21 @@ class App(Editing, tk.Tk):
                 return False
         folder = self.project.source_dir
         if ask or self._recovered or folder is None:
-            chosen = filedialog.askdirectory(
-                parent=self, initialdir=str(self.mods_dir()),
-                title=f"Where to save: an empty folder, or its parent (a folder \"{self.project.info.id}\" is made)")
+            if export and not KEY_RE.match(self.project.info.id or ""):
+                self.notebook.select(self.info)
+                messagebox.showerror(APP_TITLE, "The exported folder is named after the mod's id: give it one of "
+                                     "letters, digits, hyphens and underscores (Mod info).", parent=self)
+                return False
+            title = (f"Export to: a folder \"{self.project.info.id}\" is made in the one you choose (the game's "
+                     "mods folder, say)" if export else f"Where to save: an empty folder, or its parent (a folder "
+                     f"\"{self.project.info.id}\" is made)")
+            chosen = filedialog.askdirectory(parent=self, initialdir=str(self.mods_dir()), title=title)
             if not chosen:
                 return False
             chosen = Path(chosen)
-            if chosen.is_dir() and any(chosen.iterdir()) and not (chosen / "mod.json").exists():
+            if export:
+                chosen = chosen / self.project.info.id
+            elif chosen.is_dir() and any(chosen.iterdir()) and not (chosen / "mod.json").exists():
                 if not KEY_RE.match(self.project.info.id or ""):
                     self.notebook.select(self.info)
                     messagebox.showerror(APP_TITLE, "The mod's folder is named after its id: give it one of "
@@ -449,7 +462,8 @@ class App(Editing, tk.Tk):
         self.update_title()
         self.update_edit_state()
         self.info.refresh()
-        self.say(f"Saved {path}. Enable it in the game under Game > Mods and restart the game.")
+        self.say(f"{'Exported' if export else 'Saved'} {path}. Enable it in the game under Game > Mods and "
+                 "restart the game.")
         return True
 
     def show_conflicts(self):

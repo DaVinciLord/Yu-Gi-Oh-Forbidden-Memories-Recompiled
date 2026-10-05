@@ -8,7 +8,7 @@ static int recipes[801][801];
 static FusionCard card(int id) { return cards[id]; }
 static int fusion(int a, int b) { return recipes[a][b]; }
 static int equip(int e, int m) { return (e == 657 || e == 301 || e == 800) && cards[m].type < 20 ? m : 0; }
-static const FusionRules rules = {card, fusion, equip, NULL};
+static const FusionRules rules = {card, fusion, equip, NULL, NULL};
 /* A mod's "bonus": card 800 gives +1000, kept under +2000 in all. */
 static int bonus(int e, int m, int modifier)
 {
@@ -16,13 +16,21 @@ static int bonus(int e, int m, int modifier)
     (void)m;
     return modifier + value > 2000 ? 2000 - modifier : value;
 }
-static const FusionRules modded = {card, fusion, equip, bonus};
+static const FusionRules modded = {card, fusion, equip, bonus, NULL};
+/* Both halves: card 301 gives +200 ATK and +1500 DEF. */
+static void bonuses(int e, int m, int modifier, int defense_modifier, int *attack, int *defense)
+{
+    (void)m; (void)modifier; (void)defense_modifier;
+    *attack = e == 301 ? 200 : e == 657 ? 1000 : 500;
+    *defense = e == 301 ? 1500 : *attack;
+}
+static const FusionRules split = {card, fusion, equip, bonus, bonuses};
 static void recipe(int a, int b, int r) { recipes[a][b] = recipes[b][a] = r; }
 static void init(void)
 {
     int i;
     memset(recipes, 0, sizeof(recipes));
-    for (i = 1; i <= 800; i++) cards[i] = (FusionCard){i, 0, 1000, 1000, 0, 0};
+    for (i = 1; i <= 800; i++) cards[i] = (FusionCard){i, 0, 1000, 1000, 0, 0, 0};
     cards[657].type = cards[301].type = cards[800].type = 23;
 }
 
@@ -129,6 +137,14 @@ int main(void)
     init(); hand[0] = card(1); hand[1] = card(800); hand[2] = hand[3] = hand[4] = (FusionCard){0};
     Fusion_Plan(&modded, hand, NULL, 0, 0, &selected, &best);
     assert(best.card.id == 1 && Fusion_Attack(best.card) == 2000);
+    /* An equip with its own DEF bonus: DEF's part past ATK's is kept apart,
+     * and a second equip adds to both. */
+    assert(Fusion_Step(&split, card(1), card(301), &out) && Fusion_Attack(out) == 1200 && Fusion_Defense(out) == 2500);
+    assert(out.modifier == 200 && out.defense_modifier == 1300);
+    assert(Fusion_Step(&split, out, card(657), &out) && Fusion_Attack(out) == 2200 && Fusion_Defense(out) == 3500);
+    hand[0] = card(1); hand[1] = card(301); hand[2] = hand[3] = hand[4] = (FusionCard){0};
+    Fusion_Plan(&split, hand, NULL, 0, 1, &selected, &best);
+    assert(best.card.id == 1 && Fusion_Defense(best.card) == 2500);
     puts("fusion planner: passed");
     return 0;
 }

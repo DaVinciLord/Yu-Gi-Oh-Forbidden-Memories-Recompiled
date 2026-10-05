@@ -370,8 +370,7 @@ class GuiTest(unittest.TestCase):
                     app.cards.add_card()
                     app.update()
                 cid = app.cards.current
-                app.cards.vars["type"].set("Equip")
-                app.cards.vars["effect"].set("Card 651")
+                app.cards.vars["type"].set("Equip")     # no effect to choose: no targets yet
                 if not added:
                     self.assertTrue(app.cards.apply())
                 # Switching tabs must commit the form and populate Equips;
@@ -385,11 +384,10 @@ class GuiTest(unittest.TestCase):
                 self.assertEqual(app.equips.current, cid)
                 baseline = app.project.equip_baseline(cid)
                 self.assertEqual(set(map(int, app.equips.monsters.get_children())), baseline)
-                app.equips.monsters.selection_set("5")
-                app.equips.remove()
-                with mock.patch.object(tabs, "pick_card", return_value=100):
-                    app.equips.add()
-                expected = (baseline - {5}) | {100}
+                for monster in (5, 100):
+                    with mock.patch.object(tabs, "pick_card", return_value=monster):
+                        app.equips.add()
+                expected = baseline | {5, 100}
                 self.assertEqual(app.project.equip_targets(cid), expected)
                 self.assertEqual(int(app.equips.equips.set(str(cid), "n")), len(expected))
                 folder = Path(self.tmp.name) / f"equip-workflow-{added}"
@@ -403,7 +401,7 @@ class GuiTest(unittest.TestCase):
                 app.equips.equips.selection_set(str(cid))
                 app.update()
                 self.assertEqual(app.project.equip_targets(cid), expected)
-                self.assertEqual(app.equips.monsters.set("5", "state"), "removed")
+                self.assertEqual(app.equips.monsters.set("5", "state"), "added")
                 self.assertEqual(app.equips.monsters.set("100", "state"), "added")
                 app.equips.revert()
                 self.assertEqual(app.project.equip_targets(cid), baseline)
@@ -425,16 +423,102 @@ class GuiTest(unittest.TestCase):
         app.update()
         self.assertEqual(cards.edit_equips_button.winfo_manager(), "")
         cards.vars["type"].set("Equip")
-        cards.vars["effect"].set("Card 651")
         self.assertEqual(cards.edit_equips_button.winfo_manager(), "grid")
         cards.edit_equips_button.invoke()
         app.update()
         self.assertIs(app.notebook.current(), app.equips)
         self.assertEqual(app.equips.current, 1)
         self.assertEqual(app.equips.equips.selection(), ("1",))
-        self.assertEqual(app.project.effect_of(1), 651)
+        self.assertEqual(app.project.effect_of(1), 1)          # an equip has no effect to choose
         self.assertEqual(set(map(int, app.equips.monsters.get_children())), app.project.equip_baseline(1))
         self.assertTrue(all(w.instate(["!disabled"]) for w in app.equips.actions.winfo_children()))
+
+    def test_equip_boosts_atk_and_def(self):
+        app, cards = self.app, self.app.cards
+        cards.goto(651)
+        app.update()
+        # An equip has no Retail effect: its boosts are the whole of it.
+        self.assertEqual(cards.effect_box.winfo_manager(), "")
+        self.assertEqual((cards.vars["equip_attack"].get(), cards.vars["equip_defense"].get()), ("500", "500"))
+        self.assertEqual(cards.hints["equip_attack"].cget("text"), "")
+        cards.vars["equip_attack"].set("1200")
+        cards.vars["equip_defense"].set("-300")
+        self.assertTrue(cards.apply())
+        self.assertEqual(app.project.equip_bonus, {651: (1200, -300)})
+        app.update()
+        self.assertEqual(str(cards.hints["equip_attack"].cget("text")), "Retail: +500 (restore)")
+        cards.restore("equip_defense")
+        self.assertTrue(cards.apply())
+        self.assertEqual(app.project.equip_bonus, {651: (1200, 500)})
+        cards.vars["equip_attack"].set("")       # empty: the default again
+        self.assertTrue(cards.apply())
+        self.assertEqual(app.project.equip_bonus, {})
+        cards.vars["equip_defense"].set("1e3")
+        self.assertFalse(cards.apply())
+        self.assertIn("DEF boosts", str(cards.status.cget("text")))
+        cards.vars["equip_defense"].set("500")
+        self.assertTrue(cards.apply())
+        # Megamorph's are +1000.
+        cards.goto(657)
+        app.update()
+        self.assertEqual((cards.vars["equip_attack"].get(), cards.vars["equip_defense"].get()), ("1000", "1000"))
+        # A magic card made an equip loses its magic effect and starts at +500.
+        cards.goto(601)
+        app.update()
+        app.project.card_extra[601] = {"effect": 602}
+        cards.vars["type"].set("Equip")
+        self.assertEqual(cards.effect_box.winfo_manager(), "")
+        self.assertTrue(cards.apply())
+        self.assertNotIn(601, app.project.card_extra)
+        self.assertEqual(cards.vars["equip_attack"].get(), "500")
+        cards.goto(1)
+        app.update()
+        self.assertEqual(cards.vars["equip_attack"].get(), "")
+
+    def test_password_takes_up_to_8_digits(self):
+        cards = self.app.cards
+        cards.goto(2)
+        self.app.update()
+        entry = next(w for w in cards.form.winfo_children()
+                     if w.winfo_class() == "TEntry" and str(w.cget("textvariable")) == str(cards.vars["password"]))
+        entry.delete(0, "end")
+        for ch in "1234x5678 9":
+            entry.insert("end", ch)
+        self.assertEqual(entry.get(), "12345678")
+        entry.delete(0, "end")
+        entry.insert(0, "123456789")
+        self.assertEqual(entry.get(), "")
+
+    def test_export_makes_a_folder_named_after_the_mod(self):
+        app = self.app
+        app.info.vars["id"].set("export-test")
+        with tempfile.TemporaryDirectory() as where, \
+                mock.patch("fm_editor.app.filedialog.askdirectory", return_value=where):
+            self.assertTrue(app.save(ask=True, export=True))
+            self.assertTrue((Path(where) / "export-test" / "mod.json").is_file())
+            self.assertEqual(Path(app.project.source_dir), Path(where) / "export-test")
+
+    def test_right_click_menu_closes(self):
+        from fm_editor import card_links
+        app = self.app
+        # Only X11 menus stay up on their own: on Windows (and macOS) a posted
+        # menu is native and modal -- "post" does not return until it is
+        # dismissed, which would hang here -- and closes itself on a click away.
+        if app.tk.call("tk", "windowingsystem") != "x11":
+            self.skipTest("posted menus are modal outside X11")
+        app.deiconify()
+        for close in (lambda: app.notebook.select(app.fusions),
+                      lambda: app.cards.tree.event_generate("<ButtonPress-1>", x=5, y=5)):
+            app.notebook.select(app.cards)
+            app.update()
+            menu = card_links._open_menu = tk.Menu(app.cards.tree, tearoff=False)
+            menu.add_command(label="Where it's used...")
+            menu.post(app.winfo_rootx(), app.winfo_rooty())
+            app.update()
+            close()
+            app.update()
+            self.assertFalse(menu.winfo_exists())
+            self.assertIsNone(card_links._open_menu)
 
     def test_card_navigation_keeps_invalid_pending_edits(self):
         cards = self.app.cards
@@ -1456,14 +1540,14 @@ class GuiTest(unittest.TestCase):
         app = self.app
         app.cards.search.set("no matching card")
         app.restore_drafts({"cards": {"current": 1, "vars": {
-            "type": TYPE_NAMES[23], "effect": app.cards.effect_label(301)}}})
+            "type": TYPE_NAMES[22], "effect": app.cards.effect_label(681)}}})
         app.update()
         self.assertEqual(app.cards.current, 1)
-        self.assertEqual(app.cards.vars["type"].get(), TYPE_NAMES[23])
+        self.assertEqual(app.cards.vars["type"].get(), TYPE_NAMES[22])
         self.assertEqual(app.cards.effect_box.winfo_manager(), "grid")
-        self.assertEqual(app.cards.vars["effect"].get(), app.cards.effect_label(301))
+        self.assertEqual(app.cards.vars["effect"].get(), app.cards.effect_label(681))
         self.assertTrue(app.cards.apply(quiet=True))
-        self.assertEqual(app.project.cards[1].type, 23)
+        self.assertEqual(app.project.cards[1].type, 22)
 
 
 

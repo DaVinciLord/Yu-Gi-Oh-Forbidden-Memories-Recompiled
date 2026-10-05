@@ -746,8 +746,8 @@ def kit_rules(project: Project, modded, retail_files, modded_files) -> tuple:
     if bonus:
         equips = {cid: v for cid, v in bonus.fixed.items() if cid in cards and cards[cid].type == g.TYPE_EQUIP}
         others = [cid for cid in bonus.fixed if cid not in equips]
-        for cid, points in sorted(equips.items()):     # kept as written: the editor does not show bonuses
-            project.kept["equips"].append({"card": project.ref(cid), "bonus": points})
+        for cid, points in sorted(equips.items()):     # the Cards tab's Equip bonus
+            project.set_equip_bonus(cid, points)
         notes.append(f"rules: the mod's DuelScene_UpdateCardPlacement (code at {bonus.where}) sets {len(equips)} "
                      f"equips' bonuses (A7): \"equips\" \"bonus\"; the rest keep +500")
         if equips:

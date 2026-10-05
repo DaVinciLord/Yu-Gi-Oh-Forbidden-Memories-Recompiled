@@ -1460,13 +1460,14 @@ class _Check:
                 same = True
         for t in types:
             for att in attributes:
-                one, two = _equip_bonus(early, t, att), _equip_bonus(late, t, att)
-                if one is NO_BONUS or two is NO_BONUS:
-                    continue
-                if one != two:
-                    differ = True
-                else:
-                    same = True
+                for stat in (0, 1):
+                    one, two = _equip_bonus(early, t, att, stat), _equip_bonus(late, t, att, stat)
+                    if one is NO_BONUS or two is NO_BONUS:
+                        continue
+                    if one != two:
+                        differ = True
+                    else:
+                        same = True
         return differ, same
 
     # --- lines ---------------------------------------------------------------
@@ -1698,7 +1699,8 @@ def _attribute_named(text) -> int:
     return -1
 
 
-def _equip_bonus(entry: dict, type_: int, attribute: int):
+def _equip_bonus(entry: dict, type_: int, attribute: int, stat: int):
+    """Its ATK (stat 0) or DEF (1) bonus (overlap.c equip_bonus)."""
     for name, value in _obj(entry.get("bonus_if")).items():
         t = _type_named(name)
         a = _attribute_named(name) if t < 0 or t >= 20 else -1
@@ -1706,6 +1708,9 @@ def _equip_bonus(entry: dict, type_: int, attribute: int):
             continue
         if (0 <= t < 20 and t == type_) or (a >= 0 and a == attribute):
             return value
+    own = entry.get("bonus_defense" if stat else "bonus_attack")
+    if _int(own):
+        return own
     return entry["bonus"] if _int(entry.get("bonus")) else NO_BONUS
 
 

@@ -1157,14 +1157,15 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     if ((value = choice(Json_Member(entry, "type"), type_names, 24)) >= 0) {
         /* A copy may become a non-monster when it has a retail effect of
          * that type. The effect names a built-in behavior, even if the
-         * source card was itself replaced. */
+         * source card was itself replaced. An equip needs none: what it
+         * equips and adds are the mod's "equips" rules (tables.h). */
         int monster = ((stats >> 26) & 0x1F) < CARD_TYPE_MAGIC;
         int effect = Cards_Reference(Json_Member(entry, "effect"));
         if (effect <= 0 && Json_Number(Json_Member(entry, "effect"), 0) == 0)
             effect = Cards_EffectId(base);
         value = clamp(value, 0, CARD_TYPE_EQUIP);
         if (!replace && (monster ? value >= CARD_TYPE_MAGIC : value != (int)((stats >> 26) & 0x1F)) &&
-            !(value >= CARD_TYPE_MAGIC && Cards_RetailType(effect) == value)) {
+            !(value >= CARD_TYPE_MAGIC && Cards_RetailType(effect) == value) && value != CARD_TYPE_EQUIP) {
             Mods_Note(mod, "cards[%d]: %s; \"type\" left out", index,
                       monster ? "a copy needs a matching retail effect to become a non-monster" :
                                 "a non-monster copy needs a matching retail effect to change type");

@@ -17,6 +17,27 @@ from .gamedata import DUELIST_NAMES, POOL_LABELS, POOL_TOTAL, POOLS, TYPE_EQUIP
 from .widgets import px, scrolled_tree
 
 
+_open_menu = None     # the right-click menu up, if any
+
+
+def close_menu(event=None):
+    """Take the right-click menu down on another tab, a click elsewhere or
+    Escape. Its grab is released once it is posted (else the window's own
+    clicks would be lost), so Tk itself would leave it up."""
+    global _open_menu
+    menu, _open_menu = _open_menu, None
+    if menu is None:
+        return
+    if event is not None and str(event.widget).startswith(str(menu)):
+        _open_menu = menu       # a click on the menu itself, or one of its cascades
+        return
+    try:
+        menu.unpost()
+        menu.destroy()
+    except tk.TclError:
+        pass
+
+
 def install(app, tab, tree, cards_of=None):
     """Give a list of cards the right-click menu. cards_of(iid) names the
     row's cards; by default the row's iid or its "#" column."""
@@ -41,7 +62,10 @@ def install(app, tab, tree, cards_of=None):
         cids = [cid for cid in dict.fromkeys(cards_of(iid)) if cid in app.project.cards]
         if not cids:
             return
+        global _open_menu
+        close_menu()
         menu = tk.Menu(tree, tearoff=False)
+        _open_menu = menu
         if len(cids) == 1:
             fill_menu(menu, app, tab, cids[0])
         else:
@@ -73,6 +97,8 @@ def fill_menu(menu, app, tab, cid):
 
 
 def install_all(app):
+    app.bind_all("<ButtonPress>", close_menu, add="+")
+    app.bind_all("<Escape>", lambda e: close_menu(), add="+")
     p = lambda: app.project     # noqa: E731 -- the project changes when a mod is opened
 
     def fusion_cards(iid):

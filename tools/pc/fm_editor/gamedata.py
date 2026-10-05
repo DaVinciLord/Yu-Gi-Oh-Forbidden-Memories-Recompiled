@@ -56,6 +56,9 @@ TYPE_NAMES = ["Dragon", "Spellcaster", "Zombie", "Warrior", "Beast-Warrior", "Be
               "Pyro", "Rock", "Plant", "Magic", "Trap", "Ritual", "Equip"]
 TYPE_MAGIC, TYPE_TRAP, TYPE_RITUAL, TYPE_EQUIP = 20, 21, 22, 23
 ATTACK_TRAP_FIRST = 681
+# What an equip adds on the disc: +500, Megamorph +1000 (duel_scene_card_
+# placement.c); a mod's "bonus" goes from -32767 to 32767 (tables.c).
+EQUIP_BONUS, MEGAMORPH, MEGAMORPH_BONUS, EQUIP_BONUS_MAX = 500, 657, 1000, 32767
 ATTACK_TRAP_THRESHOLDS = (500, 1000, 1500, 2000, 3000, 25500)
 # The secondary fusion groups a ritual tribute may ask for (cards.h
 # CARD_FUSION_GROUP_*, in that order).

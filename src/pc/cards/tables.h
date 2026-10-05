@@ -41,8 +41,15 @@ int Tables_Equip(int equip, int monster);
 /* What `equip` adds to `monster`'s ATK and DEF: a mod's "bonus" or
  * "bonus_if" for it (the latest entry that fits), else the mods'
  * "equip_bonus_default", else `retail`, the disc's +500 (+1000 for
- * Megamorph). */
+ * Megamorph). This is the ATK half. */
 int Tables_EquipBonus(int equip, int monster, int retail);
+/* Both halves: what it adds to ATK (*attack) and to DEF (*defense). An
+ * entry's "bonus_attack" and "bonus_defense" set one of them. */
+void Tables_EquipBonuses(int equip, int monster, int retail, int *attack, int *defense);
+/* The same with the disc's own value for the equip: +1000 when its effect
+ * (cards.h Cards_EffectId) is Megamorph's, else +500. */
+#define TABLES_MEGAMORPH 657
+void Tables_EquipBoost(int equip, int monster, int *attack, int *defense);
 
 /* A ritual's recipe: 1 with the ritual card, its three tributes, its result
  * and a 0 after them in `recipe` (the layout of the game's ritual table),

@@ -11,15 +11,25 @@ void Fusion_SetCaps(int attack, int defense)
 }
 static int clamp(int value, int cap) { return value < 0 ? 0 : value > cap ? cap : value; }
 int Fusion_Attack(FusionCard card) { return clamp(card.attack + card.modifier + card.terrain, caps[0]); }
-int Fusion_Defense(FusionCard card) { return clamp(card.defense + card.modifier + card.terrain, caps[1]); }
+int Fusion_Defense(FusionCard card)
+{
+    return clamp(card.defense + card.modifier + card.defense_modifier + card.terrain, caps[1]);
+}
 
 /* The bonus rule (the game's and the fusion helper's Tables_EquipBonus)
  * follows the equip's effect, as placement does; without one (the tests)
  * only Megamorph's own id gives 1000. */
-static int bonus(const FusionRules *rules, FusionCard equipment, FusionCard monster)
+static void equip(const FusionRules *rules, FusionCard equipment, FusionCard *monster)
 {
-    int retail = equipment.id == 657 ? 1000 : 500;
-    return rules->bonus ? rules->bonus(equipment.id, monster.id, monster.modifier) : retail;
+    int attack, defense;
+    if (rules->bonuses) {
+        rules->bonuses(equipment.id, monster->id, monster->modifier, monster->defense_modifier, &attack, &defense);
+    } else {
+        attack = defense = rules->bonus ? rules->bonus(equipment.id, monster->id, monster->modifier)
+                                        : equipment.id == 657 ? 1000 : 500;
+    }
+    monster->modifier += attack;
+    monster->defense_modifier += defense - attack;
 }
 
 int Fusion_Step(const FusionRules *rules, FusionCard a, FusionCard b, FusionCard *out)
@@ -31,12 +41,12 @@ int Fusion_Step(const FusionRules *rules, FusionCard a, FusionCard b, FusionCard
     }
     if (rules->equip(b.id, a.id)) {
         *out = a;
-        out->modifier += bonus(rules, b, a);
+        equip(rules, b, out);
         return 1;
     }
     if (rules->equip(a.id, b.id)) {
         *out = b;
-        out->modifier += bonus(rules, a, b);
+        equip(rules, a, out);
         return 1;
     }
     /* Placement discards an incoming non-monster when a monster stands. */

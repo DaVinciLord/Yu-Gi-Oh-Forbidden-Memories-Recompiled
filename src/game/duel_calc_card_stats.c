@@ -26,6 +26,9 @@ s32 Duel_CalcCardStats(DuelCardRecord *card)
     if (attack > CARD_STAT_MAX) attack = CARD_STAT_MAX;
 #endif
     defense = card->defense + card->stat_modifier + card->terrain_modifier;
+#ifdef MEMORIES_PC
+    defense += card->defense_modifier;
+#endif
     if (defense < 0) defense = 0;
 #ifdef MEMORIES_PC
     if (defense > Tables_StatCap(1)) defense = Tables_StatCap(1);

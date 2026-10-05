@@ -25,7 +25,15 @@ typedef struct {
     s16 terrain_modifier;
     u16 flags;
     u8 table_index;
+#ifdef MEMORIES_PC
+    u8 pad_19;
+    /* What DEF gets beyond stat_modifier, which ATK and DEF share: an equip
+       whose mod gives DEF another bonus than ATK (tables.h
+       Tables_EquipBonuses). The disc leaves these bytes unused. */
+    s16 defense_modifier;
+#else
     u8 pad_19[3];
+#endif
 } DuelCardRecord;
 
 /* Strided view used when a loop needs to retain a flags-relative cursor. */
@@ -55,6 +63,11 @@ typedef char DuelCardRecord_defense_offset_must_be_0x10[
 typedef char DuelCardRecord_stat_modifier_offset_must_be_0x12[
     DUEL_CARD_RECORD_OFFSET(DuelCardRecord, stat_modifier) == 0x12 ? 1 : -1
 ];
+#ifdef MEMORIES_PC
+typedef char DuelCardRecord_defense_modifier_offset_must_be_0x1A[
+    DUEL_CARD_RECORD_OFFSET(DuelCardRecord, defense_modifier) == 0x1A ? 1 : -1
+];
+#endif
 typedef char DuelCardRecord_terrain_modifier_offset_must_be_0x14[
     DUEL_CARD_RECORD_OFFSET(DuelCardRecord, terrain_modifier) == 0x14 ? 1 : -1
 ];
