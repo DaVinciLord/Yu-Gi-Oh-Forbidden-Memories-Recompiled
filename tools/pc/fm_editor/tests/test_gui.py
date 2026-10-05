@@ -1761,3 +1761,24 @@ class IconChoiceTest(GuiCase):
         self.assertEqual(cards.vars["star1"].get(), "Mars")
         self.assertEqual(cards.star_icon("Mars"), 0x18)
         self.assertIsNone(cards.star_icon("(none)"))
+
+
+class CardsPanesTest(GuiCase):
+    def test_list_and_form_share_the_width(self):
+        app, cards = self.app, self.app.cards
+        app.deiconify()
+        app.geometry("1600x960")
+        cards.tree.selection_set("1")
+        cards.select()
+        app.update()
+        cards.place_sash()
+        app.update()
+        scroll = cards.card_scroll
+        self.assertGreaterEqual(scroll.canvas.winfo_width(), scroll.body.winfo_reqwidth())   # all of the form
+        self.assertFalse(scroll.xbar.winfo_manager())
+        # Dragged right, the form scrolls across.
+        cards._sash_dragged = True
+        cards.panes.sashpos(0, cards.panes.winfo_width() - 300)
+        app.update()
+        self.assertTrue(scroll.xbar.winfo_manager())
+        app.withdraw()

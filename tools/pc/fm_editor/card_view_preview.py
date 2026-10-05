@@ -4,8 +4,7 @@ the type and the stars as they are typed. "Fit" (the default) makes it as
 tall as the card text box, so the form keeps its height; 1x-3x are the
 game's pixels doubled or tripled. Its language (the port's translations:
 their spacing and accented letters) and size are the window's settings,
-side by side over it, then `side` (which the tab fills), so it is no wider
-than the picture."""
+side by side over it, so it is no wider than the picture."""
 from __future__ import annotations
 
 import base64
@@ -39,8 +38,6 @@ class CardViewPreview(ttk.Frame):
         ttk.Combobox(self.top, textvariable=self.size, values=SIZES, state="readonly", width=4).pack(
             side="left", padx=(4, 0))
         self.size.trace_add("write", lambda *_: (settings.save("card_view_size", self.size.get()), self.later()))
-        self.side = ttk.Frame(self.top)  # the tab's (the retail text's link)
-        self.side.pack(side="left", padx=(6, 0))
         self.picture = ttk.Label(self)
         self.picture.grid(row=1, column=0, sticky="nw")
         self.note = ttk.Label(self, style="Hint.TLabel", wraplength=300, justify="left")

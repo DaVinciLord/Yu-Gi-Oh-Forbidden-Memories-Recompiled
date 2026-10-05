@@ -110,10 +110,16 @@ class CardsTab(Tab):
         self._shown_bonus = ("", "")
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
-        # The form keeps its width; the list takes what is left, down to this.
-        self.columnconfigure(0, minsize=px(self, 320))
-        left = ttk.Frame(self)
-        left.grid(row=0, column=0, sticky="nsew")
+        # The list and the form side by side, the line between them dragged
+        # where wanted; each scrolls across on its own when it is cut short
+        # (the list its columns, the form its controls). Until it is
+        # dragged, the form has all the width it needs and the list the rest,
+        # down to LIST_LEAST.
+        self.panes = ttk.Panedwindow(self, orient="horizontal")
+        self.panes.grid(row=0, column=0, sticky="nsew")
+        self._sash_dragged = False
+        left = ttk.Frame(self.panes)
+        self.panes.add(left, weight=1)
         top = ttk.Frame(left)
         top.pack(fill="x")
         ttk.Label(top, text="Search").pack(side="left")
@@ -133,8 +139,11 @@ class CardsTab(Tab):
         self.count = ttk.Label(bottom)
         self.count.pack(side="right")
 
-        self.card_scroll = ScrolledForm(self)
-        self.card_scroll.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
+        self.card_scroll = ScrolledForm(self.panes, horizontal=True)
+        self.panes.add(self.card_scroll, weight=0)
+        self.panes.bind("<Configure>", lambda e: self.place_sash(), add=True)
+        self.card_scroll.body.bind("<Configure>", lambda e: self.place_sash(), add=True)
+        self.panes.bind("<B1-Motion>", lambda e: setattr(self, "_sash_dragged", True), add=True)
         form = ttk.LabelFrame(self.card_scroll.body, text="Card", padding=8)
         form.pack(fill="both", expand=True)
         self.form = form
@@ -236,12 +245,13 @@ class CardsTab(Tab):
         self.text = CardTextBox(form, app, width=21, height=9, wrap="word", font=("Consolas", 10))
         self.text.grid(row=row, column=1, sticky="nw", pady=2)
         # Beside it, the card view's text box as the game draws it, as tall
-        # as the box; the retail text's link in the column on its right.
+        # as the box; the retail text's link under the box.
         self.card_view = CardViewPreview(form, app, self.card_view_values, lambda: self.text.winfo_height())
         self.card_view.grid(row=row, column=2, sticky="nw", padx=6, pady=2)
-        self.hints["text"] = ttk.Label(self.card_view.side, style="Hint.TLabel")
-        self.hints["text"].pack(anchor="w")
         self.text.bind("<Configure>", lambda e: self.card_view.later(), add=True)
+        row += 1
+        self.hints["text"] = ttk.Label(form, style="Hint.TLabel")
+        self.hints["text"].grid(row=row, column=1, columnspan=2, sticky="w")
         self.hints["text"].bind("<Button-1>", lambda e: self.restore("text"))
         row += 1
         self.lines = ttk.Label(form, style="Hint.TLabel")
@@ -748,6 +758,26 @@ class CardsTab(Tab):
             caption = self.captions.get(key)
             if caption is not None:
                 caption.configure(image=shown.get(name) or "", compound="left")
+
+    LIST_LEAST = 320
+
+    def place_sash(self):
+        """The line between the list and the form, until it is dragged: the
+        form as wide as its controls, the list the rest (at least LIST_LEAST)."""
+        if self._sash_dragged or not self.panes.winfo_ismapped():
+            return
+        width = self.panes.winfo_width()
+        scroll = self.card_scroll
+        # The pane's own edges take a few pixels more than the scrollbar:
+        # what the form's canvas still lacks once placed is taken too.
+        form = scroll.body.winfo_reqwidth() + scroll.bar.winfo_reqwidth()
+        at = max(px(self, self.LIST_LEAST), width - form)
+        if abs(self.panes.sashpos(0) - at) > 1:
+            self.panes.sashpos(0, at)
+            self.panes.update_idletasks()
+        short = scroll.body.winfo_reqwidth() - scroll.canvas.winfo_width()
+        if short > 0 and self.panes.sashpos(0) - short >= px(self, self.LIST_LEAST):
+            self.panes.sashpos(0, self.panes.sashpos(0) - short)
 
     def star_icon(self, label):
         """A guardian star's icon ({f8 0B 18} Mars ... 21 Venus), or None."""
