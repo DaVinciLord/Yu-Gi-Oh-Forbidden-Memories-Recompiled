@@ -106,7 +106,8 @@ once. An added card shows its base's effects until you change them, which
 gives it a list of its own. Write what the effects do in the card text: the
 game shows only the text. A monster with effects is drawn with the orange
 frame while its **Frame** is **By type** (the swatch shows it); choose
-**Monster** to keep it gold. The checks (Conflicts) report an effect the game
+**Monster** to keep it gold, or **Type, never orange** (`"Type"`) for its
+type's frame. The checks (Conflicts) report an effect the game
 would leave out.
 
 ### Icons and colours in card text
