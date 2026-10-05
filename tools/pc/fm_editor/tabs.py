@@ -482,6 +482,9 @@ class CardsTab(Tab):
         self.notes.edit_reset()
         self.effects_box.show(cid)
         self.caption_icons()
+        # The form may want another width now (a hint, an icon): no event
+        # says so where the panes hold it at a width of their own.
+        self.app.after_idle(self.relayout)
         self.count_lines()
         self.reference = self.project.retail.cards.get(cid) or self.project.cards.get(self.project.base_of(cid))
         self.mark()
@@ -758,8 +761,18 @@ class CardsTab(Tab):
             caption = self.captions.get(key)
             if caption is not None:
                 caption.configure(image=shown.get(name) or "", compound="left")
+        # The starchip: the text's own star icon ({f8 0B 26}, as the pack shop writes prices).
+        icons = text_menu.pictures(self.app, self, 1)
+        if self.captions.get("starchips") is not None:
+            self.captions["starchips"].configure(image=(icons.icons.get(0x26) if icons else None) or "",
+                                                 compound="left")
 
     LIST_LEAST = 320
+
+    def relayout(self):
+        if self.winfo_exists():
+            self.card_scroll._layout()
+            self.place_sash()
 
     def place_sash(self):
         """The line between the list and the form, until it is dragged: the
