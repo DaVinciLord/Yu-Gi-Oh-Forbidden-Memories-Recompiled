@@ -2477,13 +2477,27 @@ int GlPicture_CopyInto(unsigned from, int x, int y, int w, int h, unsigned to)
     gl_FramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, to, 0);
     ok = gl_CheckFramebufferStatus(GL_DRAW_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
     if (ok) {
-        /* What lies inside the source; the rest of `to` keeps what it had. */
+        /* What lies inside the source, and past its edges the edge pixels
+         * stretched, as the desktop presenter's clamp to edge samples an
+         * area that runs past the picture: three bands across by three
+         * down, each from the inside part or the pixel row or column at its
+         * edge. */
         int x0 = x < 0 ? 0 : x, y0 = y < 0 ? 0 : y;
         int x1 = x + w < from_w ? x + w : from_w, y1 = y + h < from_h ? y + h : from_h;
         glDisable(GL_SCISSOR_TEST);
         gl_BindFramebuffer(GL_READ_FRAMEBUFFER, read);
         if (x1 > x0 && y1 > y0) {
-            gl_BlitFramebuffer(x0, y0, x1, y1, x0 - x, y0 - y, x1 - x, y1 - y, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+            const int sx[3][2] = {{x0, x0 + 1}, {x0, x1}, {x1 - 1, x1}}, sy[3][2] = {{y0, y0 + 1}, {y0, y1}, {y1 - 1, y1}};
+            const int dx[3][2] = {{0, x0 - x}, {x0 - x, x1 - x}, {x1 - x, w}};
+            const int dy[3][2] = {{0, y0 - y}, {y0 - y, y1 - y}, {y1 - y, h}};
+            int i, j;
+            for (j = 0; j < 3; j++) {
+                for (i = 0; i < 3; i++) {
+                    if (dx[i][1] <= dx[i][0] || dy[j][1] <= dy[j][0]) continue;
+                    gl_BlitFramebuffer(sx[i][0], sy[j][0], sx[i][1], sy[j][1], dx[i][0], dy[j][0], dx[i][1], dy[j][1],
+                                       GL_COLOR_BUFFER_BIT, GL_NEAREST);
+                }
+            }
         }
     } else {
         static int told;
