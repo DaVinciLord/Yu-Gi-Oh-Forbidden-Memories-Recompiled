@@ -49,7 +49,7 @@ typedef struct {
     short attacker_card;        /* the card that attacked it: a flip's "battle" target */
     unsigned char fight[2];     /* the last battle's attacker and defender records, 0 none */
     short fight_card[2];
-    unsigned int destroy_mask;  /* the records a "destroy" takes, while its Warrior Elimination runs */
+    unsigned int destroy_mask;  /* the records a "destroy" takes, while its Crush Card runs */
     short card[MONSTER_RECORDS];
     unsigned char face_up[MONSTER_RECORDS];
     unsigned char placed[MONSTER_RECORDS];  /* placement put a card here since the last look */
@@ -71,7 +71,7 @@ void MonsterEffects_EffectStarted(int ritual);
 void MonsterEffects_Battle(void);
 /* The CPU puts this monster down face up (its effects want it seen). */
 int MonsterEffects_PlayFaceUp(int card);
-/* Warrior Elimination's removal (DuelEffect_ApplyMonsterRemoval) as a
+/* Crush Card's removal (DuelEffect_ApplyMonsterRemoval) as a
  * "destroy" runs it: -1 as ever, else whether it takes `record`. */
 int MonsterEffects_RemovalTakes(int record);
 /* What face-up monsters and the battle add to a card's ATK and DEF. */

@@ -46,7 +46,7 @@ extern u16 D_8009B162;
 #define SE_DAMAGE 0x1C          /* the direct damage cards' */
 #define SE_BOOST 0x0C           /* a card put down */
 #define SE_FLIP 0x0B            /* a card turned over */
-#define WARRIOR_ELIMINATION 653 /* whose removal a "destroy" plays */
+#define CRUSH_CARD 661          /* whose removal a "destroy" plays */
 
 static int monster_zone(int record)
 {
@@ -200,7 +200,7 @@ static int resolve(void)
         change_life(side ^ 1, -effect->amount);
         break;
     case MONSTER_DO_DESTROY:
-        /* Warrior Elimination's removal, on the monsters chosen here
+        /* Crush Card's removal, on the monsters chosen here
          * (MonsterEffects_RemovalTakes): it takes the other side's, as
          * its owner plays it. */
         S.destroy_mask = 0;
@@ -216,7 +216,7 @@ static int resolve(void)
             lend_turn(side);
         }
         S.running = 1;
-        DuelEffect_StartRetailCardEffect(WARRIOR_ELIMINATION, 0);
+        DuelEffect_StartRetailCardEffect(CRUSH_CARD, 0);
         return 1;
     }
     S.pause = PAUSE_FRAMES;

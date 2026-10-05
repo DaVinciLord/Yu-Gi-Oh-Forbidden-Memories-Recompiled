@@ -289,7 +289,7 @@ Man-eater Bug as on the cards:
 | `boost` | ATK and DEF up (or down, below 0) | `attack`, `defense` (-9999 to 9999); `target`; `type` and `attribute` keep it to monsters of that type or attribute |
 | `heal` | its owner gains LP, up to the duel's starting LP as the recovery cards do | `amount` (1 to 9999) |
 | `damage` | the other side loses LP | `amount` (1 to 9999) |
-| `destroy` | the other side's monsters are destroyed, shown as Warrior Elimination shows it | `target`: `opponent` (the default) or, on `flip`, `battle` (the monster attacking it, the default there); `type` and `attribute` keep it to those |
+| `destroy` | the other side's monsters are destroyed, shown as Crush Card shows it | `target`: `opponent` (the default) or, on `flip`, `battle` (the monster attacking it, the default there); `type` and `attribute` keep it to those |
 
 `target` is `self` (the default), `own` (its side's monsters, itself too),
 `others` (its side's other monsters), `opponent`, `all`, or `battle` (the
@@ -334,8 +334,8 @@ monsters, so the next look sees which one won, and a face-down defender
 (its saved flags, `D_8009B178`, when no trap sprang), whose flip the next
 look fires before anything else. The CPU's face-up play is
 its hand play's face-down choice (`D_800EAE88[8]`) cleared. A `destroy`
-runs Warrior Elimination's removal (`DuelEffect_ApplyMonsterRemoval`)
-with the monsters chosen in place of its type test. A `magic` effect runs through the game's
+runs Crush Card's removal (`DuelEffect_ApplyMonsterRemoval`)
+with the monsters chosen in place of its ATK test. A `magic` effect runs through the game's
 card-effect dispatch (`DuelEffect_StartCardEffect`), first handler then
 second, as playing the card does. On the other side's turn, the turn is
 lent to the owner (`D_8009B1D5`, `D_8009B1C8`, `D_8009B22C`) while it runs.
