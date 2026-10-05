@@ -54,7 +54,9 @@ int Platform_HasWindowModes(void);
 /* Whether the window may use the desktop OpenGL renderer (gl_picture.c and
  * present_pass.c: desktop GL, #version 130 shaders). 0 where the system's
  * GL is GLES (Android), whose context SDL would hand over all the same; the
- * SDL renderer then shows the software GPU's picture instead. */
+ * SDL renderer (opengles2) then presents, in an OpenGL ES 3.0 context where
+ * the device has one, with gl_picture.c drawing in it (sdl.c, es_wanted),
+ * else showing the software GPU's picture. */
 int Platform_HasDesktopGL(void);
 /* The fixed-address guest memory could not be mapped (image.c says where on
  * standard error): 1 with a message for the player in `why` where the

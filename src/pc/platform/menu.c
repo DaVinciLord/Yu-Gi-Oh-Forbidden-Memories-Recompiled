@@ -918,8 +918,13 @@ static void update_hd_items(void)
 {
     static const int ids[] = {MENU_ITEM_HD_TEXT, MENU_ITEM_OPPONENT_NAME, MENU_ITEM_PGXP};
     int console = Settings_Get(SET_INTERNAL_SCALE) < 2;
+#ifdef __ANDROID__ /* the system's GL is GLES (sdl.c, es_wanted) */
+    const char *hd_why = !hd_picture ? "needs OpenGL ES 3" : console ? "needs Internal 2x" : NULL;
+    const char *name_why = !hd_picture && !console ? "needs OpenGL ES 3 or 1x" : NULL;
+#else
     const char *hd_why = !hd_picture ? "needs OpenGL 3" : console ? "needs Internal 2x" : NULL;
     const char *name_why = !hd_picture && !console ? "needs OpenGL 3 or 1x" : NULL;
+#endif
     int menu, item;
     unsigned i;
     for (i = 0; i < sizeof(ids) / sizeof(ids[0]); i++) {
