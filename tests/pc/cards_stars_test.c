@@ -36,7 +36,7 @@ int gDuel_adwCardStats[CARD_TABLE_ID_END];
 short gCard_asNameSortKey[CARD_TABLE_ID_END];
 unsigned char gDuel_abCardLevelAttr[CARD_TABLE_ID_END];
 
-static int notes[6];     /* per mod, "a" to "f" */
+static int notes[7];     /* per mod, "a" to "g" */
 static int effect_notes; /* of them, about "monster_effects" */
 
 void Mods_Note(const char *id, const char *format, ...)
@@ -47,7 +47,7 @@ void Mods_Note(const char *id, const char *format, ...)
     vsnprintf(note, sizeof(note), format, arguments);
     va_end(arguments);
     fprintf(stderr, "note: %s: %s\n", id, note);
-    if (id[0] >= 'a' && id[0] <= 'f' && !id[1]) notes[id[0] - 'a']++;
+    if (id[0] >= 'a' && id[0] <= 'g' && !id[1]) notes[id[0] - 'a']++;
     if (strstr(note, "monster_effects")) effect_notes++;
 }
 
@@ -359,6 +359,44 @@ static void monster_effect_entries(void)
     assert(!MonsterEffect_MagicUsable(300) && !MonsterEffect_MagicUsable(1));
 }
 
+/* Copies of magic cards made monsters (as a replace may be): a monster's
+ * type, ATK and DEF, stars as a replaced card gets them, out of the magic
+ * card's tables; made a Trap without a trap's effect, still refused. */
+static void copies_made_monsters(void)
+{
+    BuildContext context = {0};
+    char error[128];
+    const JsonValue *entry;
+    int i, first = gCard_nCount + 1;
+    JsonDocument *doc = Json_Parse(
+        "[{\"copy\":500,\"id\":\"magic-dragon\",\"type\":\"Dragon\",\"attack\":1500,\"defense\":1200,"
+        "  \"monster_effects\":[{\"when\":\"summon\",\"do\":\"heal\",\"amount\":500}]},"
+        "{\"copy\":500,\"id\":\"with-model\",\"type\":\"fiend\",\"model\":400},"
+        "{\"copy\":500,\"id\":\"no-stars\",\"type\":\"Dragon\",\"stars\":[0,0]},"
+        "{\"copy\":500,\"id\":\"bad-model\",\"type\":\"Dragon\",\"model\":\"Nowhere\"},"
+        "{\"copy\":500,\"id\":\"magic-trap\",\"type\":\"Trap\"}]", error, sizeof(error));
+    const MonsterEffect *effects;
+    assert(doc);
+    test_stats[400 - 1] = STATS(0, MOON, MARS);
+    gDuel_adwCardStats[500 - 1] = (int)(test_stats[500 - 1] = STATS(CARD_TYPE_MAGIC, 0, 0));   /* a clean magic card */
+    for (i = 0, entry = Json_At(Json_Root(doc), 0); entry; i++, entry = Json_Next(entry))
+        add_entry("g", ".", i, entry, &context);
+    assert(gCard_nCount == first + 4);
+    assert(Cards_Type(first) == 0 && Cards_Type(first + 1) == 7 && Cards_Type(first + 2) == 0);
+    assert(((unsigned)gDuel_adwCardStats[first - 1] & 0x1FF) == 150);
+    assert((((unsigned)gDuel_adwCardStats[first - 1] >> 9) & 0x1FF) == 120);
+    expect(first, SUN, MOON);                 /* no model: the Sun and the Moon */
+    expect(first + 1, MOON, MARS);            /* its model's */
+    expect(first + 2, 0, 0);
+    assert(Cards_ModelId(first) == 500 && Cards_ModelId(first + 1) == 400 && !Cards_HasModel(first));
+    assert(Cards_KindChanged(first) && Cards_AiId(first) == -1 && Cards_TrapId(first) == 0);
+    assert(Cards_MonsterEffects(first, &effects) == 1 && effects[0].action == MONSTER_DO_HEAL);
+    /* A "model" naming no monster, and the Trap without a trap's effect: noted. */
+    assert(Cards_ModelId(first + 3) == 500);
+    assert(Cards_Type(first + 4) == CARD_TYPE_MAGIC);
+    assert(notes[6] == 2);
+}
+
 int main(void)
 {
     int id;
@@ -412,6 +450,7 @@ int main(void)
     magic_conversions();
     trap_conversions();
     monster_effect_entries();
+    copies_made_monsters();
     puts("cards stars, magic and trap conversions: ok");
     return 0;
 }

@@ -49,7 +49,7 @@ The release ships no card mod; the checks below were made with test mods
 | `field_art` | a PNG (same sizing rule as `art`) for the 3D Monsters mod's Card art style cutout alone, on top of the card on the duel field: never patched into the card's own record, so the Library, hand, trade screen and detail panel keep showing `art` (or the base's own picture) untouched. Without one the cutout shows the same picture everything else does |
 | `title` | a PNG for the name plate at the top of the card's picture (96x14; dark ink on white, or on a transparent background). Without one, a card with its own name gets a plate with that name set in Times at the retail plates' size (Times New Roman on Windows, fontconfig's match for `Times` elsewhere, Liberation Serif on most Linux systems), or a blank plate when there is none |
 | `attack`, `defense` | 0 to 5110, in tens, as the game stores them |
-| `type` | a number or a name (`"Dragon"`, `"Winged Beast"`). A copy may become Magic, Trap, Ritual or Equip when `effect` selects a retail behavior of that type. Without a matching effect it keeps its original kind; a non-monster copy cannot become a monster |
+| `type` | a number or a name (`"Dragon"`, `"Winged Beast"`). A copy may become Magic, Trap, Ritual or Equip when `effect` selects a retail behavior of that type. Without a matching effect it keeps its original kind; any copy may become a monster, as a replaced card may (below) |
 | `trap_threshold` | the highest attacker ATK stopped by this card's attack-destruction trap effect, inclusive, 0–65535. Applies only to a Trap with an effect from House of Adhesive Tape through Widespread Ruin. Omitted: keep the earlier replacement's override, or inherit a copy's base override; `null`: clear it and use the effect's global `trap_thresholds` setting or retail default. Other cards sharing the effect keep their own thresholds |
 | `attribute` | a number or a name (`"Light"` to `"Wind"`) |
 | `level` | 0 to 12 |
@@ -101,9 +101,10 @@ the disc's). It gets no id of its own, so `id`,
 the card keeps its place in the disc's tables, and the
 [gameplay tables](gameplay-tables.md) change its fusions, equips and rituals.
 
-Unlike a copy, a replaced card may change sides with `type`: a magic, trap,
-ritual or equip card can become a monster, and a monster a magic, trap,
-ritual or equip card. The disc has 3D models for its monsters only, so a card
+A replaced card may change sides with `type`: a magic, trap, ritual or
+equip card can become a monster, and a monster a magic, trap, ritual or equip
+card. A copy may become a monster the same way (a copy of Raigeki made a
+Dragon); it becomes a non-monster only as the `type` row above says. The disc has 3D models for its monsters only, so a card
 made a monster fights without one unless `model` names a monster whose model
 it takes (`"model": "Kuriboh"`), and without `stars` it gets that monster's
 guardian stars, or the Sun and the Moon. A monster made a magic, trap or
@@ -115,7 +116,7 @@ and a copy may become one the same way. An equip whose `effect` is a disc equip 
 the monsters that one fits, with its bonus (Megamorph's +1000 too), and
 `equips` in the [gameplay tables](gameplay-tables.md) may change that. `model`
 and `effect` work the same on a card that stays on its side, and a copy's
-`effect` may name the card as a replace's does.
+`model` and `effect` may name the card as a replace's do.
 
 The CPU plays a magic card as the disc's card its `effect` names, when that is
 a magic card too: its scripts look cards up by the disc's numbers, so a mod
