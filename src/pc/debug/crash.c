@@ -23,13 +23,8 @@
 #include <ucontext.h>
 #endif
 
-#ifdef _WIN32
-#define GAME_STACK_LOW 0xB0000000u /* state.c */
+#define GAME_STACK_LOW 0xB0000000u /* state.c, on every system */
 #define GAME_STACK_HIGH 0xB0800000u
-#else
-#define GAME_STACK_LOW 0x70000000u
-#define GAME_STACK_HIGH 0x70800000u
-#endif
 
 /* An address in the report, and the registers line. The 64-bit Windows
  * build's long is 32 bits: its addresses are printed as uintptr_t, whole. */
@@ -73,7 +68,8 @@ static const char *region(uintptr_t address)
 #endif
     if ((address >= 0x80000000u && address < 0x80200000u) ||
         (address >= 0xa0000000u && address < 0xa0200000u) || address < 0x00200000u) return "guest RAM";
-    if (address >= 0x1f800000u && address < 0x1f801000u) return "scratchpad";
+    if ((address >= 0x1f800000u && address < 0x1f801000u) || (address >= 0x9f800000u && address < 0x9f801000u))
+        return "scratchpad";
     if (address >= 0x01000000u && address < 0x0a000000u) return "game section";
     if (address >= GAME_STACK_LOW && address < GAME_STACK_HIGH) return "game stack";
     if (address >= image_low && address < image_high) return "native text";

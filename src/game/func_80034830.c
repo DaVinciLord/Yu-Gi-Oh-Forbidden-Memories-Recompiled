@@ -64,8 +64,8 @@ u32 *func_80034830(GsARGUNIT_NORMAL *arg)
         return func_80061A84(arg);
     }
     mask = 0xFFFFFF;
-    white = (CVECTOR *)0x1F8003C0;
-    scr = (s32 *)0x1F8003E0;
+    white = (CVECTOR *)SCRATCHPAD_ADDR(0x1F8003C0);
+    scr = (s32 *)SCRATCHPAD_ADDR(0x1F8003E0);
     primp = (u32 *)arg->primp;
     out = arg->out_packetp;
     n = ((u16 *)primp)[1];
@@ -94,14 +94,14 @@ u32 *func_80034830(GsARGUNIT_NORMAL *arg)
     }
 
     if (flags & 3) {
-        LINE_G4 *lg = (LINE_G4 *)0x1F800380;
-        POLY_GT4 *gt = (POLY_GT4 *)0x1F800380;
-        CVECTOR *grey = (CVECTOR *)0x1F8003D0;
+        LINE_G4 *lg = (LINE_G4 *)SCRATCHPAD_ADDR(0x1F800380);
+        POLY_GT4 *gt = (POLY_GT4 *)SCRATCHPAD_ADDR(0x1F800380);
+        CVECTOR *grey = (CVECTOR *)SCRATCHPAD_ADDR(0x1F8003D0);
 
         CVECTOR_WORD(white) = mask;
         CVECTOR_WORD(grey) = D_8009B300;
         while (--n != -1) {
-            flg = (s32 *)0x1F8003E8;
+            flg = (s32 *)SCRATCHPAD_ADDR(0x1F8003E8);
             if (D_8009B30C & 2) {
                 z = D_8009B310->sorted_position;
                 D_8009B310++;
@@ -217,7 +217,7 @@ u32 *func_80034830(GsARGUNIT_NORMAL *arg)
             rec += 14;
         }
     } else {
-        POLY_GT4 *gt = (POLY_GT4 *)0x1F800380;
+        POLY_GT4 *gt = (POLY_GT4 *)SCRATCHPAD_ADDR(0x1F800380);
 
         CVECTOR_WORD(white) = D_8009B300;
         while (--n != -1) {

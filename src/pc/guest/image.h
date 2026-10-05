@@ -5,11 +5,32 @@
  * stored in game data and 32-bit structure layouts all hold unchanged. The
  * same pages are visible at KSEG1 and at the physical address (from 0x10000;
  * hosts reserve the first 64 KiB), which is what 24-bit packet links use.
- * The scratchpad is a separate 4 KiB mapping at 0x1F800000. */
+ * The scratchpad is a page of its own at 0x9F800000, the console's KSEG0
+ * view of it, which game C addresses through SCRATCHPAD_ADDR (types.h).
+ * The retail view at 0x1F800000 shows the same page where the host lets it
+ * be mapped (not in an Android app, whose Java heap is there). Native code
+ * never relies on it: every native path that takes a retail address (the
+ * MIPS interpreter's accesses and the pointers it hands over, the GPU's
+ * address resolver, save states, the control channel) translates it with
+ * MEMORIES_SCRATCHPAD_VIEW. Where 0x1F800000 is free but unmappable an
+ * access there faults and is redirected (image.c); where something
+ * readable holds it, an untranslated access would silently reach that. */
 #include <stddef.h>
 
 #define MEMORIES_GUEST_RAM 0x80000000u
 #define MEMORIES_GUEST_RAM_SIZE 0x200000u
+#define MEMORIES_GUEST_SCRATCHPAD 0x9f800000u
+#define MEMORIES_GUEST_SCRATCHPAD_RETAIL 0x1f800000u
+#define MEMORIES_GUEST_SCRATCHPAD_SIZE 0x400u
+/* The retail scratchpad view's address as the port's (the console's two
+ * views of the same RAM); any other address as it is. */
+#define MEMORIES_SCRATCHPAD_VIEW(address) \
+    ((((address) & 0xfffffc00u) == MEMORIES_GUEST_SCRATCHPAD_RETAIL) ? (address) | 0x80000000u : (address))
+
+/* 1 where 0x1F800000 is mapped as a second view of the scratchpad (Windows;
+ * Linux unless something holds the range), 0 where the scratchpad is
+ * reached only at 0x9F800000 (an Android app). Set by Memories_GuestMap. */
+extern int Memories_ScratchpadRetailView;
 
 /* Both return 0 on success and print the reason on failure. */
 int Memories_GuestMap(void);

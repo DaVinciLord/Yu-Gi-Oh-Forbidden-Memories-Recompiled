@@ -60,8 +60,8 @@ void NameEntry_DrawSelectionFrame(NameEntrySelectionFrameView *r, GsOT *ot)
     s32 xp3;
     s32 right;
 
-    poly = (LINE_F3 *)0x1F800000;
-    line = (LINE_G2 *)0x1F800040;
+    poly = (LINE_F3 *)SCRATCHPAD_ADDR(0x1F800000);
+    line = (LINE_G2 *)SCRATCHPAD_ADDR(0x1F800040);
     /* Keep packed color writes; the constructors fill command bytes afterward. */
     *(u32 *)&poly->r0 = 0x0000FF00;
     *(u32 *)&line->r0 = 0x0000FF00;

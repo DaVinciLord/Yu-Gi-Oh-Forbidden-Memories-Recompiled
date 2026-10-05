@@ -45,9 +45,9 @@ void Duel_DrawFieldCards(void) {
             D_8009B310 = D_8009B304;
         }
 
-        p4 = (s32 *)0x1F8000C0;
-        p1 = (POLY_FT4 *)0x1F800140;
-        p3 = (POLY_GT4 *)0x1F800180;
+        p4 = (s32 *)SCRATCHPAD_ADDR(0x1F8000C0);
+        p1 = (POLY_FT4 *)SCRATCHPAD_ADDR(0x1F800140);
+        p3 = (POLY_GT4 *)SCRATCHPAD_ADDR(0x1F800180);
         c = DUEL_DISPLAY_COLOR_NORMAL;
         e = D_801A7B64;
         n = 0;

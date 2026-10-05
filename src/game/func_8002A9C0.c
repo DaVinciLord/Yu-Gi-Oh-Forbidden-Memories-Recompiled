@@ -49,19 +49,19 @@ void func_8002A9C0(DisplayObject *o, GsOT *ot)
         return;
     }
 
-    r = (struct ProjectionOut *)0x1F800398;
+    r = (struct ProjectionOut *)SCRATCHPAD_ADDR(0x1F800398);
     ((u8 *)&o->field_0C)[2] = *(u8 *)&o->field_60;
     func_80041F90(o,
                   *(s16 *)&o->field_30.h.field_30 + *(s16 *)&o->field_18,
                   *(s16 *)&o->field_30.h.field_32 + *(s16 *)&o->field_1A,
                   r);
 
-    q = (LINE_F4 *)0x1F8002A0;
-    b0 = (SVECTOR *)0x1F800300;
+    q = (LINE_F4 *)SCRATCHPAD_ADDR(0x1F8002A0);
+    b0 = (SVECTOR *)SCRATCHPAD_ADDR(0x1F800300);
     m = 0x55555555;
-    b2 = (SVECTOR *)0x1F800310;
-    b3 = (SVECTOR *)0x1F800318;
-    b1 = (SVECTOR *)0x1F800308;
+    b2 = (SVECTOR *)SCRATCHPAD_ADDR(0x1F800310);
+    b3 = (SVECTOR *)SCRATCHPAD_ADDR(0x1F800318);
+    b1 = (SVECTOR *)SCRATCHPAD_ADDR(0x1F800308);
 
     z = *(s32 *)&o->field_0C;
     setlen(q, 6);

@@ -24,8 +24,8 @@ s32 func_80041E7C(u32 arg0, s32 arg1, s32 arg2, struct ProjectionOut *arg3)
     SetGeomOffset(arg1, arg2);
     SetGeomScreen(MODEL_DEFAULT_PROJECTION);
 
-    mtx = (MATRIX *)0x1F8002D0;
-    v308 = (SVECTOR *)0x1F800308;
+    mtx = (MATRIX *)SCRATCHPAD_ADDR(0x1F8002D0);
+    v308 = (SVECTOR *)SCRATCHPAD_ADDR(0x1F800308);
 
     v308->vx = (s16)((arg0 & 0xFF) * 0x10);
     v308->vy = (s16)((arg0 >> 4) & 0xFF0);
@@ -40,8 +40,8 @@ s32 func_80041E7C(u32 arg0, s32 arg1, s32 arg2, struct ProjectionOut *arg3)
     GsSetLsMatrix(mtx);
 
     {
-        register SVECTOR *v318 = (SVECTOR *)0x1F800318;
-        SVECTOR *v310 = (SVECTOR *)0x1F800310;
+        register SVECTOR *v318 = (SVECTOR *)SCRATCHPAD_ADDR(0x1F800318);
+        SVECTOR *v310 = (SVECTOR *)SCRATCHPAD_ADDR(0x1F800310);
 
         v318->vx = 0;
         v308->vx = 0;
@@ -72,8 +72,8 @@ s32 func_80041F90(
     struct ProjectionOut *out
 )
 {
-    MATRIX *mtx = (MATRIX *)0x1F8002D0;
-    SVECTOR *v308 = (SVECTOR *)0x1F800308;
+    MATRIX *mtx = (MATRIX *)SCRATCHPAD_ADDR(0x1F8002D0);
+    SVECTOR *v308 = (SVECTOR *)SCRATCHPAD_ADDR(0x1F800308);
     s32 otz;
 
     out->f0 = arg1;
@@ -104,8 +104,8 @@ s32 func_80041F90(
     GsSetLsMatrix(mtx);
 
     {
-        SVECTOR *v318 = (SVECTOR *)0x1F800318;
-        SVECTOR *v310 = (SVECTOR *)0x1F800310;
+        SVECTOR *v318 = (SVECTOR *)SCRATCHPAD_ADDR(0x1F800318);
+        SVECTOR *v310 = (SVECTOR *)SCRATCHPAD_ADDR(0x1F800310);
         s32 *otzp;
 
         v318->vx = 0;
@@ -148,7 +148,7 @@ s32 func_80041F90(
                 SetRotMatrix(mtx);
 
                 RotAverageNclip3_nom(
-                    v308, v310, (SVECTOR *)0x1F800318);
+                    v308, v310, (SVECTOR *)SCRATCHPAD_ADDR(0x1F800318));
 
                 otzp = &otz;
                 gte_stopz(otzp);

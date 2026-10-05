@@ -37,18 +37,25 @@
 #include <ucontext.h>
 #endif
 
+/* The game stack is at the same address on every system (state.h). Linux
+ * builds up to v0.2.0 had it at 0x70000000: their states hold that stack,
+ * and cannot resume on this one. */
 #define STACK_BASE MEMORIES_GAME_STACK_BASE
+#define OLD_LINUX_STACK_BASE 0x70000000u
+/* Which system's build made a state ("system" chunk): the game code's
+ * layout, which the stack's return addresses point into, is the compiler's
+ * for that system. States from before the chunk tell by the stack. */
 #ifdef _WIN32
-#define OTHER_STACK_BASE 0x70000000u
-#define OTHER_SYSTEM "Linux"
+#define SYSTEM "Windows"
+#elif defined(__ANDROID__)
+#define SYSTEM "Android"
 #else
-#define OTHER_STACK_BASE 0xB0000000u
-#define OTHER_SYSTEM "Windows"
+#define SYSTEM "Linux"
 #endif
 #define STACK_SIZE MEMORIES_GAME_STACK_SIZE
 #define STACK_TOP (STACK_BASE + STACK_SIZE)
-#define SCRATCHPAD 0x1f800000u
-#define SCRATCHPAD_SIZE 0x400u
+#define SCRATCHPAD MEMORIES_GUEST_SCRATCHPAD
+#define SCRATCHPAD_SIZE MEMORIES_GUEST_SCRATCHPAD_SIZE
 /* 1: the header word was the game-source fingerprint; 2: the build id;
  * 3: the game compiled with the indirect-branch thunks (branch_thunks.c).
  * Every function's code changed shape with them, and a return address on a
@@ -124,19 +131,6 @@ static void set_stack_bounds(const uintptr_t *bounds)
                      : "memory");
 }
 
-/* What Memories_ContextSwitch pops to start `entry` on a stack whose top
- * is `top`: xmm6-xmm15 (20 words), eight registers, then the return into
- * `entry`, 16-byte aligned so that `entry` starts as a called function
- * does, with room above it for the shadow space a Win64 callee may write. */
-static uintptr_t initial_frame(uintptr_t top, void (*entry)(void))
-{
-    uintptr_t *slot = (uintptr_t *)((top - 64) & ~(uintptr_t)15);
-    uintptr_t *frame = slot - 8 - 20;
-    memset(frame, 0, (size_t)((char *)(slot + 8) - (char *)frame));
-    *slot = (uintptr_t)entry;
-    return (uintptr_t)frame;
-}
-
 /* setjmp_x86_64.S: where the registers for a game jmp_buf are kept. The
  * game's buffer (the Psy-Q int[12] at 0x800E9DC0) is too small for them, so
  * each buffer address gets a host slot of 240 bytes. The game uses one. */
@@ -185,6 +179,38 @@ static void leave_game_stack(void)
     set_stack_bounds(process_bounds);
     Memories_ContextSwitch(&game_context, &service_context);
 }
+
+#if defined(__x86_64__)
+/* What Memories_ContextSwitch (state_x86_64.S) pops to start `function` on
+ * a stack whose top is `limit`: xmm6-xmm15 (20 words), eight registers,
+ * then the return into `function`, 16-byte aligned so that `function`
+ * starts as a called function does, with room above it for the shadow
+ * space a Win64 callee may write. Returns the context. */
+static uintptr_t switch_frame(uintptr_t limit, void (*function)(void))
+{
+    uintptr_t *slot = (uintptr_t *)((limit - 64) & ~(uintptr_t)15);
+    uintptr_t *frame = slot - 8 - 20;
+    memset(frame, 0, (size_t)((char *)(slot + 8) - (char *)frame));
+    *slot = (uintptr_t)function;
+    return (uintptr_t)frame;
+}
+#else
+/* A frame for Memories_ContextSwitch to resume `function` from, below
+ * `limit`: what it pops (EDI ESI EBX EBP), then the return into `function`,
+ * whose own return address is never used. `function` starts with the stack
+ * as a call leaves it when the stack was 16-byte aligned at the call: the
+ * i386 System V ABI (Android) keeps SSE values on the stack at that
+ * alignment; Windows needs 4. Returns the context. */
+static uint32_t switch_frame(uint32_t limit, void (*function)(void))
+{
+    uint32_t start = ((limit - 32u) & ~15u) - 4u; /* the stack pointer `function` starts with */
+    uint32_t *frame = (uint32_t *)(uintptr_t)(start - 20u);
+    frame[0] = frame[1] = frame[2] = frame[3] = 0;
+    frame[4] = (uint32_t)(uintptr_t)function;
+    frame[5] = 0;
+    return (uint32_t)(uintptr_t)frame;
+}
+#endif
 
 /* The VSync a loaded state resumes in (apply), and what it returns. */
 static MemoriesStateEntry resume_entry;
@@ -560,6 +586,11 @@ static void serialize(MemoriesState *state)
         Memories_StateChunk(state, "entry", fields, 1);
     }
     {
+        char system[16] = SYSTEM;
+        MemoriesStateField fields[] = {{system, sizeof(system)}};
+        Memories_StateChunk(state, "system", fields, 1);
+    }
+    {
         MemoriesStateField fields[] = {{(void *)(uintptr_t)MEMORIES_GUEST_RAM, MEMORIES_GUEST_RAM_SIZE},
                                        {(void *)(uintptr_t)SCRATCHPAD, SCRATCHPAD_SIZE}};
         Memories_StateChunk(state, "memory", fields, 2);
@@ -698,19 +729,9 @@ static void apply(void)
          * the next load would resume from those (EBP 0, a return into the
          * middle of Memories_StateRunGame). The switch lands in resume_game
          * on the game stack, below what the state restored there. */
-#if defined(__x86_64__)
         resume_entry = entry;
         resume_value = value;
-        game_context = initial_frame((uintptr_t)entry.esp - 64, resume_game);
-#else
-        uint32_t *frame = (uint32_t *)(uintptr_t)(entry.esp - 64);
-        frame[0] = frame[1] = frame[2] = frame[3] = 0;
-        frame[4] = (uint32_t)(uintptr_t)resume_game;
-        frame[5] = 0;
-        resume_entry = entry;
-        resume_value = value;
-        game_context = (uint32_t)(uintptr_t)frame;
-#endif
+        game_context = switch_frame((uintptr_t)entry.esp - 64u, resume_game);
         Memories_ContextSwitch(&service_context, &game_context);
     }
 #else
@@ -981,13 +1002,27 @@ static int load(const char *path)
         return -1;
     }
     memcpy(&entry, chunk, sizeof(entry));
-    if (entry.esp >= OTHER_STACK_BASE && entry.esp < OTHER_STACK_BASE + STACK_SIZE) {
+    {
         /* The state holds the game stack, return addresses into the game code
          * as the other system's compiler laid it out: nothing here to resume. */
-        refuse("%s was saved by the %s build; a state loads only in a build for the system that saved it", path,
-               OTHER_SYSTEM);
-        free(image);
-        return -1;
+        char saved_by[16] = "";
+        const uint8_t *system = find_chunk(&state, "system", &size);
+        if (system && size == sizeof(saved_by)) {
+            memcpy(saved_by, system, sizeof(saved_by) - 1);
+        } else if (entry.esp >= OLD_LINUX_STACK_BASE && entry.esp < OLD_LINUX_STACK_BASE + STACK_SIZE) {
+            refuse("%s was saved by an older Linux build, whose game stack was elsewhere; save states don't carry "
+                   "over across this update (memory card saves do)", path);
+            free(image);
+            return -1;
+        } else {
+            strcpy(saved_by, "Windows"); /* before the chunk, only Windows had this stack */
+        }
+        if (strcmp(saved_by, SYSTEM)) {
+            refuse("%s was saved by the %s build; a state loads only in a build for the system that saved it", path,
+                   saved_by);
+            free(image);
+            return -1;
+        }
     }
     chunk = find_chunk(&state, "stack", &size);
     if (!chunk || entry.esp < STACK_BASE || entry.esp >= STACK_TOP || size != STACK_TOP - entry.esp ||
@@ -1174,7 +1209,17 @@ int Memories_StateRunGame(int (*entry)(void))
                        MAP_FIXED_NOREPLACE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     unsigned i;
     if (stack != (void *)(uintptr_t)STACK_BASE) {
-        perror("game stack");
+        /* Never another address: the game's return addresses and pointers
+         * in a save state are on this one. MAP_FIXED_NOREPLACE refuses a
+         * range that holds a mapping (EEXIST); a kernel older than 4.17
+         * takes the address as a hint instead and may put it elsewhere. */
+        int error = errno;
+        if (stack != MAP_FAILED) munmap(stack, STACK_SIZE);
+        fprintf(stderr, "memories-pc: the game stack needs 0x%08x-0x%08x, %s; the game cannot run without it\n",
+                (unsigned)STACK_BASE, (unsigned)STACK_TOP,
+                stack == MAP_FAILED ? (error == EEXIST ? "which something else in this process already holds"
+                                                       : strerror(error))
+                                    : "which this system would not map there");
         return 1;
     }
     read_build_id();
@@ -1191,17 +1236,7 @@ int Memories_StateRunGame(int (*entry)(void))
     game_entry = entry;
 #ifdef _WIN32
     {
-#if defined(__x86_64__)
-        game_context = initial_frame(STACK_TOP, run_game);
-#else
-        /* What Memories_ContextSwitch pops: EDI ESI EBX EBP, then the return
-         * into run_game, whose own return address is never used. */
-        uint32_t *top = (uint32_t *)(uintptr_t)(STACK_TOP - 64);
-        top[0] = top[1] = top[2] = top[3] = 0;
-        top[4] = (uint32_t)(uintptr_t)run_game;
-        top[5] = 0;
-        game_context = (uint32_t)(uintptr_t)top;
-#endif
+        game_context = switch_frame(STACK_TOP, run_game);
         Win32_GuardStack(STACK_BASE, GUARD_ROOM);
         save_stack_bounds(process_bounds);
         set_stack_bounds(game_bounds);

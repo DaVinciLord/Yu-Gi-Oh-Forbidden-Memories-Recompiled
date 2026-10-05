@@ -52,6 +52,10 @@ static struct {
     int active, reg; /* reg: the ModRM register number, 0 (EAX) to 7 (EDI) */
     uint32_t original, patched;
 } low_fixup;
+/* Whether the retail scratchpad view (0x1F800000) is mapped (image.h);
+ * where it is not, an access there takes the same register rebase as the
+ * first 64 KiB, onto the port's view. Windows always maps it. */
+int Memories_ScratchpadRetailView;
 
 static void report_low_access(uint32_t eip, uint32_t address)
 {
@@ -68,8 +72,12 @@ static void report_low_access(uint32_t eip, uint32_t address)
     if (count < sizeof(seen) / sizeof(seen[0])) {
         seen[count++] = eip;
     }
-    length = snprintf(text, sizeof(text), "memories-pc: null-pointer access to 0x%04x at " FAULT_PC " 0x%08x goes to kernel RAM, as on the console\n",
-                      (unsigned)address, (unsigned)eip);
+    if (address >= MEMORIES_GUEST_SCRATCHPAD_RETAIL)
+        length = snprintf(text, sizeof(text), "memories-pc: scratchpad access through 0x%08x at " FAULT_PC " 0x%08x goes to 0x%08x\n",
+                          (unsigned)address, (unsigned)eip, (unsigned)(address | 0x80000000u));
+    else
+        length = snprintf(text, sizeof(text), "memories-pc: null-pointer access to 0x%04x at " FAULT_PC " 0x%08x goes to kernel RAM, as on the console\n",
+                          (unsigned)address, (unsigned)eip);
     (void)!write(2, text, (size_t)length);
 }
 
@@ -585,6 +593,18 @@ static int view_at(HANDLE section, uint32_t address, size_t length, DWORD offset
     return 0;
 }
 
+/* Everything of a 64 KiB scratchpad view past its first page, inaccessible. */
+static int view_tail_closed(uint32_t address)
+{
+    DWORD old;
+    if (!VirtualProtect((void *)(uintptr_t)(address + 0x1000u), 0xf000u, PAGE_NOACCESS, &old)) {
+        fprintf(stderr, "cannot protect 0x%08x-0x%08x (error %lu)\n", (unsigned)address + 0x1000u,
+                (unsigned)address + 0x10000u, GetLastError());
+        return -1;
+    }
+    return 0;
+}
+
 /* Calls into guest code go through the branch thunks: the game works
  * without DEP. Where DEP is on, guest RAM mapped without execute permission
  * is a second safety net: a call that escaped the thunks faults into
@@ -606,7 +626,8 @@ int Memories_GuestMap(void)
 #endif
     Memories_GuestBranchResolver = guest_branch_target;
     check_code_address();
-    section = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, protection, 0, MEMORIES_GUEST_RAM_SIZE, NULL);
+    /* Guest RAM, then 64 KiB (the view granularity) for the scratchpad. */
+    section = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, protection, 0, MEMORIES_GUEST_RAM_SIZE + 0x10000u, NULL);
     AddVectoredExceptionHandler(1, on_guest_exception);
     if (section == NULL) {
         fprintf(stderr, "guest RAM: CreateFileMapping failed (error %lu)\n", GetLastError());
@@ -628,13 +649,16 @@ int Memories_GuestMap(void)
                     (unsigned)(held / 1024));
         }
     }
+    /* The scratchpad's two views (image.h); Windows leaves 0x1F800000 free.
+     * A view is 64 KiB; past the scratchpad's page it is made inaccessible,
+     * so the I/O registers from 0x1F801000 (and 0x9F801000) fault as before
+     * instead of reading 0. */
     result = view_at(section, MEMORIES_GUEST_RAM, MEMORIES_GUEST_RAM_SIZE, 0) ||
-             view_at(section, 0xa0000000u, MEMORIES_GUEST_RAM_SIZE, 0);
-    if (!result && VirtualAlloc((void *)0x1f800000u, 0x1000, MEM_RESERVE | MEM_COMMIT,
-                                PAGE_READWRITE) != (void *)0x1f800000u) {
-        fprintf(stderr, "cannot map the scratchpad at 0x1f800000 (error %lu)\n", GetLastError());
-        result = -1;
-    }
+             view_at(section, 0xa0000000u, MEMORIES_GUEST_RAM_SIZE, 0) ||
+             view_at(section, MEMORIES_GUEST_SCRATCHPAD, 0x10000u, MEMORIES_GUEST_RAM_SIZE) ||
+             view_at(section, MEMORIES_GUEST_SCRATCHPAD_RETAIL, 0x10000u, MEMORIES_GUEST_RAM_SIZE) ||
+             view_tail_closed(MEMORIES_GUEST_SCRATCHPAD) || view_tail_closed(MEMORIES_GUEST_SCRATCHPAD_RETAIL);
+    Memories_ScratchpadRetailView = !result;
     /* The views keep the section alive. */
     CloseHandle(section);
 #if defined(__x86_64__)
@@ -649,7 +673,7 @@ int Memories_GuestMap(void)
             result = -1;
         }
         if (report && *report && strcmp(report, "0")) {
-            fprintf(stderr, "memories-pc: image %p; guest RAM 0x80000000 and 0xA0000000 %s; scratchpad 0x1F800000\n",
+            fprintf(stderr, "memories-pc: image %p; guest RAM 0x80000000 and 0xA0000000 %s; scratchpad 0x9F800000 and 0x1F800000\n",
                     (void *)base, result ? "NOT mapped" : "mapped");
         }
     }
@@ -715,14 +739,21 @@ static void on_fault(int number, siginfo_t *info, void *context)
     uint32_t address = (uint32_t)(uintptr_t)info->si_addr;
     uint32_t eip = (uint32_t)user->uc_mcontext.gregs[REG_EIP];
     void *target;
-    if (address < 0x10000u && eip != address && low_memory && !low_fixup.active) {
+    /* The first 64 KiB go through the low_memory view of guest RAM; the
+     * retail scratchpad view, where it could not be mapped, through the
+     * port's (image.h). Both are the same register rebase. */
+    if (eip != address && !low_fixup.active &&
+        ((address < 0x10000u && low_memory) ||
+         (!Memories_ScratchpadRetailView && address - MEMORIES_GUEST_SCRATCHPAD_RETAIL < 0x1000u))) {
+        int low = address < 0x10000u;
         int reg = low_access_register((const unsigned char *)(uintptr_t)eip, (uint32_t)user->uc_mcontext.gregs[REG_ESI]);
-        if (reg >= 0 && (uint32_t)user->uc_mcontext.gregs[register_slot[reg]] < 0x10000u) {
+        uint32_t base = reg >= 0 ? (uint32_t)user->uc_mcontext.gregs[register_slot[reg]] : 0;
+        if (reg >= 0 && (low ? base < 0x10000u : base - MEMORIES_GUEST_SCRATCHPAD_RETAIL < 0x1000u)) {
             report_low_access(eip, address);
             low_fixup.active = 1;
             low_fixup.reg = reg;
-            low_fixup.original = (uint32_t)user->uc_mcontext.gregs[register_slot[reg]];
-            low_fixup.patched = low_fixup.original + (uint32_t)(uintptr_t)low_memory;
+            low_fixup.original = base;
+            low_fixup.patched = base + (low ? (uint32_t)(uintptr_t)low_memory : 0x80000000u);
             user->uc_mcontext.gregs[register_slot[reg]] = (greg_t)low_fixup.patched;
             user->uc_mcontext.gregs[REG_EFL] |= 0x100;
             return;
@@ -735,6 +766,49 @@ static void on_fault(int number, siginfo_t *info, void *context)
     report_guest_fault(address, eip);
     Crash_HandleSignal(number, info, context);
 }
+
+#ifdef MEMORIES_TEST_HOOKS
+/* MEMORIES_TEST_HOLD_SCRATCHPAD=rw or none: a page is held at 0x1F800000
+ * before the guest is mapped, as an Android app's Java heap holds it:
+ * read-write (filled with 0xA5) or with no access. The port then reaches
+ * the scratchpad only at 0x9F800000, and a native access that still used
+ * the retail address would reach the holder (rw) or fault (none). At exit
+ * the port says whether anything wrote the read-write page. A test hook:
+ * not in a release (see guest_ram_executable). */
+static const unsigned char *held_page;
+
+static void report_held_page(void)
+{
+    unsigned i, changed = 0;
+    for (i = 0; i < 0x1000u; i++) changed += held_page[i] != 0xa5;
+    fprintf(stderr, "memories-pc: the held page at 0x%08x: %s (%u bytes changed)\n", MEMORIES_GUEST_SCRATCHPAD_RETAIL,
+            changed ? "WRITTEN" : "untouched", changed);
+}
+
+static void hold_retail_scratchpad(void)
+{
+    const char *value = getenv("MEMORIES_TEST_HOLD_SCRATCHPAD");
+    void *wanted = (void *)(uintptr_t)MEMORIES_GUEST_SCRATCHPAD_RETAIL, *got;
+    int writable;
+    if (!value || !*value || !strcmp(value, "0")) return;
+    writable = !strcmp(value, "rw");
+    got = mmap(wanted, 0x1000, writable ? PROT_READ | PROT_WRITE : PROT_NONE,
+               MAP_FIXED_NOREPLACE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (got != wanted) {
+        if (got != MAP_FAILED) munmap(got, 0x1000);
+        fprintf(stderr, "memories-pc: MEMORIES_TEST_HOLD_SCRATCHPAD: 0x%08x could not be held\n",
+                MEMORIES_GUEST_SCRATCHPAD_RETAIL);
+        return;
+    }
+    fprintf(stderr, "memories-pc: 0x%08x is held %s (MEMORIES_TEST_HOLD_SCRATCHPAD)\n",
+            MEMORIES_GUEST_SCRATCHPAD_RETAIL, writable ? "read-write" : "with no access");
+    if (writable) {
+        memset(got, 0xa5, 0x1000);
+        held_page = got;
+        atexit(report_held_page);
+    }
+}
+#endif
 
 int Memories_GuestMap(void)
 {
@@ -752,14 +826,29 @@ int Memories_GuestMap(void)
     action.sa_sigaction = on_step;
     sigaction(SIGTRAP, &action, NULL);
     fd = memfd_create("memories-ram", 0);
-    if (fd < 0 || ftruncate(fd, MEMORIES_GUEST_RAM_SIZE) != 0) {
+    /* Guest RAM, then a page for the scratchpad. */
+    if (fd < 0 || ftruncate(fd, MEMORIES_GUEST_RAM_SIZE + 0x1000) != 0) {
         perror("guest RAM");
         return -1;
     }
     result = map_at(MEMORIES_GUEST_RAM, MEMORIES_GUEST_RAM_SIZE, fd, 0) ||
              map_at(0xa0000000u, MEMORIES_GUEST_RAM_SIZE, fd, 0) ||
              map_at(0x00010000u, MEMORIES_GUEST_RAM_SIZE - 0x10000u, fd, 0x10000) ||
-             map_at(0x1f800000u, 0x1000, -1, 0);
+             map_at(MEMORIES_GUEST_SCRATCHPAD, 0x1000, fd, MEMORIES_GUEST_RAM_SIZE);
+    /* The retail view where the host allows it (image.h). */
+#ifdef MEMORIES_TEST_HOOKS
+    if (!result) hold_retail_scratchpad();
+#endif
+    if (!result) {
+        void *wanted = (void *)(uintptr_t)MEMORIES_GUEST_SCRATCHPAD_RETAIL;
+        void *got = mmap(wanted, 0x1000, view_protection, MAP_FIXED_NOREPLACE | MAP_SHARED, fd, MEMORIES_GUEST_RAM_SIZE);
+        Memories_ScratchpadRetailView = got == wanted;
+        if (got != MAP_FAILED && got != wanted) munmap(got, 0x1000); /* taken as a hint */
+        if (!Memories_ScratchpadRetailView) {
+            fprintf(stderr, "memories-pc: 0x%08x is taken here; the scratchpad is reached at 0x%08x\n",
+                    MEMORIES_GUEST_SCRATCHPAD_RETAIL, MEMORIES_GUEST_SCRATCHPAD);
+        }
+    }
     low_memory = mmap(NULL, 0x10000, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (low_memory == MAP_FAILED) {
         low_memory = NULL;

@@ -25,9 +25,9 @@ void DisplayObject_RenderSpotlightMask(DisplayObject *object, GsOT *ot)
     s32 depth;
     s32 inner;
     s32 outer;
-    s32 *radius = (s32 *)0x1F800000;
-    s32 *scale = (s32 *)0x1F800010;
-    POLY_G4 *poly = (POLY_G4 *)0x1F800020;
+    s32 *radius = (s32 *)SCRATCHPAD_ADDR(0x1F800000);
+    s32 *scale = (s32 *)SCRATCHPAD_ADDR(0x1F800010);
+    POLY_G4 *poly = (POLY_G4 *)SCRATCHPAD_ADDR(0x1F800020);
     s32 i;
     s32 j;
     s32 cx;

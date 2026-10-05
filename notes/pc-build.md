@@ -145,13 +145,46 @@ How it works:
 - `src/pc/guest/image.c` maps 2 MiB at `0x80000000`, mirrors the same pages at
   `0xA0000000` and at physical `0x10000..0x200000` (hosts reserve the first
   64 KiB; 24-bit packet links use these addresses), maps the scratchpad at
-  `0x1F800000`, and copies the user's PS-X EXE image to its load address.
+  `0x9F800000`, and copies the user's PS-X EXE image to its load address.
+  `0x9F800000` is the console's own second view of the scratchpad (KSEG0);
+  the retail code uses `0x1F800000`, where an Android app has its Java heap.
+  Game C writes a scratchpad address as `SCRATCHPAD_ADDR(0x1F8003C0)`
+  (`src/types.h`): the literal itself for the console build (every unit
+  preprocesses to the same tokens, so matching is unchanged), the `0x9F80xxxx`
+  view natively. No game unit leaves a scratchpad variable undefined, so
+  neither symbol script pins one; `build_game32.py`'s `host_address` would
+  pin such a variable at the view. Every native path that takes a retail
+  address translates it (`MEMORIES_SCRATCHPAD_VIEW`, `image.h`): the
+  interpreter (`mips.c`) for its own loads and stores, the GTE loads and
+  stores and the string routines; the GPU's address resolver (`resolve.c`),
+  save states and the control channel's peek and poke. The words the
+  interpreter hands to native code (arguments and results) are translated
+  only where the retail view is not mapped (`Memories_ScratchpadRetailView`
+  0, an Android app): which of them are pointers is not known, so an integer
+  in that 1 KiB would be changed too. On the desktops, where both views
+  reach the same page, they go over unchanged, as on master. `0x1F800000` is also mapped as a second
+  view of the same page where the host allows it (Windows, Linux). Where it
+  cannot be mapped and nothing holds it, a native access through it faults
+  and takes the null-page register rebase onto `0x9F800000`, reported once
+  per site. That redirect needs a fault: where something readable holds
+  the range (an Android app's Java heap) an untranslated access would reach
+  the holder, which is why the translation is explicit everywhere.
+  `MEMORIES_TEST_HOLD_SCRATCHPAD=rw` or `none` (not in a release) holds a
+  page there before the guest is mapped, read-write or with no access, and
+  at exit says whether anything wrote the read-write page (smoke case
+  `options-hold-scratchpad`; a Windows build has no such hook and skips
+  it, as Windows maps the retail view itself). On Windows each
+  view is a 64 KiB section view of which only the first page is accessible,
+  so the I/O registers from `0x1F801000` still fault.
   Guest pointers are therefore host pointers, and structure layouts, packet
   words and the `ygo_types.h` size assertions hold unchanged. Linux only so
   far; Windows needs the equivalent `VirtualAlloc`/`MapViewOfFileEx` calls.
 - The driver reads symbol addresses from `tmp/project-build/SLUS_014.11.elf`
   and writes a linker script pinning every data symbol that game C leaves
   undefined or tentative (`-fcommon`) to its retail address: 612 symbols.
+  The pins are `HIDDEN(name = address)`: in a shared object (the Android
+  build's `libmain.so`) bionic adds the load bias to a default-visibility
+  absolute symbol; a hidden one is resolved at link time.
   Initialized data defined in C stays in host `.data`, which keeps function
   pointers in C tables native.
 - Guest-image tables do hold MIPS function addresses (the text opcode
@@ -2275,8 +2308,17 @@ bit-identical. How (details in `src/pc/guest/state.h`):
 - The build collects every game object's code and variables into
   `game_text/rodata/data/bss` (and the `ovl_<module>_*` sections) and links
   them at fixed addresses (`FIXED_SECTIONS` in `tools/pc/build_game32.py`);
-  the game runs on a stack mapped at `0x70000000`. Return addresses and
-  pointers inside a state therefore mean the same in the next build.
+  the game runs on a stack mapped at `0xB0000000` on every system (Linux
+  used `0x70000000` up to v0.2.0; an Android app has ART's boot image
+  there). Return addresses and pointers inside a state therefore mean the
+  same in the next build. A `system` chunk names the system whose build
+  made the state (the code's layout is that compiler's), and a state from
+  another system is refused; states from before the chunk tell by their
+  stack, and an old Linux state (stack at `0x70000000`) is refused with its
+  own message. No format version bump: a Windows state from v0.2.0 still
+  loads (its stack was already there) with v0.2.0's `symbols/<build id>.txt`
+  beside the new executable, as any state from another build needs, and an
+  older Linux one is refused.
 - Stored: guest RAM, scratchpad, those sections, the game stack above the
   call, and one self-described chunk per native subsystem (`*_State`
   functions: soft GPU, SPU, LIBSPU, LIBDS including buffered movie frames,
@@ -2731,8 +2773,8 @@ What differs from Linux, and why:
   so the mirror cannot be mapped; `Memories_Resolve` returns the
   `0x80000000` alias for physical RAM addresses, and the fault handler sends
   any other access there through guest RAM (each site reported once).
-- **Stacks.** The game stack is at `0xB0000000` (32-bit Windows loads system
-  DLLs around `0x70000000`; the mods keep `0x90000000`). `state.c` switches stacks with
+- **Stacks.** The game stack is at `0xB0000000`, as on every system (32-bit
+  Windows loads system DLLs around `0x70000000`; the mods keep `0x90000000`). `state.c` switches stacks with
   `Memories_ContextSwitch` (`state_i386.S`) and moves the TEB's stack bounds,
   `DeallocationStack` and exception chain with it, as fibers do. A guard
   page 64 KiB above the game stack's bottom, below `DeallocationStack` so
