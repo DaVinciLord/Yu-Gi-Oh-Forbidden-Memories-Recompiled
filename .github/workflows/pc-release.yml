@@ -229,7 +229,11 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install --yes --no-install-recommends cmake ninja-build
           sdkmanager="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
-          "$sdkmanager" --install "ndk;$ANDROID_NDK_VERSION" "build-tools;$ANDROID_BUILD_TOOLS" "platforms;$ANDROID_PLATFORM" > /dev/null
+          # Its progress bars fill the log: kept aside, and shown when it fails.
+          if ! "$sdkmanager" --install "ndk;$ANDROID_NDK_VERSION" "build-tools;$ANDROID_BUILD_TOOLS" "platforms;$ANDROID_PLATFORM" > "$RUNNER_TEMP/sdkmanager.log" 2>&1; then
+            cat "$RUNNER_TEMP/sdkmanager.log"
+            exit 1
+          fi
           test -d "$ANDROID_SDK_ROOT/ndk/$ANDROID_NDK_VERSION"
           echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/$ANDROID_NDK_VERSION" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/$ANDROID_NDK_VERSION" >> "$GITHUB_ENV"
@@ -253,39 +257,49 @@ jobs:
           else
             echo "PACKAGE_VERSION=dev-${GITHUB_SHA:0:12}" >> "$GITHUB_ENV"
           fi
-      # The keystore goes to the runner's temporary folder, readable by this
-      # user only; only its path enters the environment. The passwords stay
-      # in the secrets, handed to the signing step alone.
-      - name: Release key
+      - name: Release key check
         env:
-          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           REF_TYPE: ${{ github.ref_type }}
         run: |
-          if [ "$ANDROID_SIGNING" != true ]; then
-            if [ "$REF_TYPE" = tag ]; then
-              echo "::error title=Android release key::the secrets ANDROID_KEYSTORE_BASE64 and ANDROID_KEYSTORE_PASSWORD are not set: a release never ships a debug-signed APK (notes/pc-release.md, \"Android signing\")"
-              exit 1
-            fi
+          if [ "$ANDROID_SIGNING" = true ]; then
+            echo "The APK is signed with the release key after the build."
+          elif [ "$REF_TYPE" = tag ]; then
+            echo "::error title=Android release key::the secrets ANDROID_KEYSTORE_BASE64 and ANDROID_KEYSTORE_PASSWORD are not set: a release never ships a debug-signed APK (notes/pc-release.md, \"Android signing\")"
+            exit 1
+          else
             echo "::notice title=Android::no release key in this run (a pull request, or no ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD secrets): the APK is built as a check, signed with a debug key, and not uploaded"
-            exit 0
           fi
-          umask 077
-          printf '%s' "$KEYSTORE_BASE64" | base64 --decode --ignore-garbage > "$RUNNER_TEMP/android-release.p12"
-          test -s "$RUNNER_TEMP/android-release.p12"
-          echo "MEMORIES_ANDROID_KEYSTORE=$RUNNER_TEMP/android-release.p12" >> "$GITHUB_ENV"
-      # package.py packs the APK only with the release key, checks that the
-      # signer is not the debug key and that its SHA-256 matches
-      # MEMORIES_ANDROID_CERT_SHA256 (the repository variable
+      # The build (the NDK, cmake, the dependencies' downloaded sources) runs
+      # with no secret in its environment. It signs with the debug key; the
+      # next step signs again with the release key.
+      - name: Build the APK
+        run: MEMORIES_VERSION="$PACKAGE_VERSION" python tools/pc/build_game32.py --target android-arm64-v8a --backend sdl --release --build tmp/pc/android-arm64-v8a
+      # The secrets reach this step only. The keystore goes to the runner's
+      # temporary folder, readable by this user only, its path stays in this
+      # step, and it is deleted when the step ends. package_android.py signs
+      # the built APK again with the release key (it checks the signer against
+      # MEMORIES_ANDROID_CERT_SHA256: the repository variable
       # ANDROID_CERT_SHA256 when set, the full digest; else the known prefix
-      # and suffix of the release certificate), and fails otherwise.
-      - name: Build and sign the APK
+      # and suffix of the release certificate), and package.py --no-build
+      # packs it (release key only, not the debug certificate, the version
+      # --version makes), without the passwords.
+      - name: Sign the APK with the release key
         if: env.ANDROID_SIGNING == 'true'
         env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           MEMORIES_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           MEMORIES_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           MEMORIES_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           MEMORIES_ANDROID_CERT_SHA256: ${{ vars.ANDROID_CERT_SHA256 || 'C8DA2D97...4B8B' }}
-        run: python tools/pc/package.py android-arm64 --skip-smoke --version "$PACKAGE_VERSION"
+        run: |
+          umask 077
+          keystore="$RUNNER_TEMP/android-release.p12"
+          trap 'rm -f "$keystore"' EXIT
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode --ignore-garbage > "$keystore"
+          unset KEYSTORE_BASE64
+          test -s "$keystore"
+          MEMORIES_ANDROID_KEYSTORE="$keystore" MEMORIES_VERSION="$PACKAGE_VERSION"             python tools/pc/package_android.py tmp/pc/android-arm64-v8a arm64-v8a
+          env -u MEMORIES_ANDROID_KEYSTORE_PASSWORD -u MEMORIES_ANDROID_KEY_PASSWORD MEMORIES_ANDROID_KEYSTORE="$keystore"             python tools/pc/package.py android-arm64 --no-build --version "$PACKAGE_VERSION"
       - name: APK signer
         if: env.ANDROID_SIGNING == 'true'
         run: |
@@ -296,11 +310,9 @@ jobs:
             echo
             echo '```'
             grep -E 'certificate (DN|SHA-256 digest)' "$RUNNER_TEMP/apk-signer.txt"
+            "$ANDROID_SDK_ROOT/build-tools/$ANDROID_BUILD_TOOLS/aapt2" dump badging "$apk" | head -1
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: Build the APK (check only, debug key)
-        if: env.ANDROID_SIGNING != 'true'
-        run: python tools/pc/build_game32.py --target android-arm64-v8a --release
       - name: Remove the release key
         if: always()
         run: rm -f "$RUNNER_TEMP/android-release.p12"
