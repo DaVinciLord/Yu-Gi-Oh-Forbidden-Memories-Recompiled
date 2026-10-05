@@ -137,6 +137,10 @@ static float known_refresh; /* what the wayland driver reported before a fallbac
 static void show(void);
 static void repaint_menu(void);
 static void reset_renderer(void);
+/* MEMORIES_TEST_GL_RESET=<frame>[fail] (reset_renderer): the frame, and
+ * whether the pass is then made not to start again. */
+static long test_reset_at = -2;
+static int test_reset_fails;
 /* Menu changes from events are coalesced: a pointer sweeping the bar
  * reports hundreds of motions a second, and each used to repaint and
  * present a frame. Now they mark the menu dirty and it is repainted once,
@@ -1306,6 +1310,22 @@ static int es_copy_shown(void)
     return ok;
 }
 
+/* OpenGL ES, before the pass's frame is shown: into es_shown. Where it
+ * cannot be (SDL's texture cannot be made or drawn into) the pass is given
+ * up, so the software GPU draws the picture again, and the caller shows
+ * another picture this time (0). */
+static int es_take_frame(void)
+{
+    es_shown_last = es_copy_shown();
+    if (!es_shown_last) {
+        fprintf(stderr, "memories-pc: the OpenGL picture cannot be shown; the software GPU draws it\n");
+        es_picture = 0;
+        GlPicture_Stop();
+        Menu_SetHdPicture(0);
+    }
+    return es_shown_last;
+}
+
 static void draw_overlay(int *x, int *y, int *w, int *h)
 {
     int hx, hy, hw, hh, tx, ty, tw, th, left, right;
@@ -1413,9 +1433,8 @@ static void show(void)
     physical.h = layout.dst.h * layout.pixel_y;
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
-    /* OpenGL ES: the pass's frame, or, repainting the menu over it, the
-     * same frame again (es_shown keeps it). */
-    if (gl_pass_shown) es_shown_last = es_copy_shown();
+    /* OpenGL ES: the pass's frame (es_take_frame), also when the menu is
+     * repainted over it. */
     if (es_shown_last && es_shown) {
         SDL_SetTextureScaleMode(es_shown, Settings_Get(SET_FILTER) ? SDL_SCALEMODE_LINEAR : SDL_SCALEMODE_NEAREST);
         SDL_RenderTexture(renderer, es_shown, NULL, &physical);
@@ -1604,11 +1623,11 @@ static bool SDLCALL app_event(void *userdata, SDL_Event *event)
 
 static void pump(void)
 {
-    static long test_reset_at = -2; /* MEMORIES_TEST_GL_RESET (reset_renderer) */
     SDL_Event event;
     if (test_reset_at == -2) {
         const char *at = getenv("MEMORIES_TEST_GL_RESET");
         test_reset_at = at && *at ? strtol(at, NULL, 10) : -1;
+        test_reset_fails = at && strstr(at, "fail") != NULL;
     }
     if (test_reset_at >= 0 && current_frame >= (unsigned long)test_reset_at) {
         SDL_zero(event);
@@ -1969,8 +1988,10 @@ static void open_renderer(void)
  * away (Android), and SDL made a new one. SDL's renderer cannot go on in it
  * (its own context is the lost one), so it is made again, its textures with
  * it, and the pass in the new context, whose first replay draws the
- * picture again from VRAM. MEMORIES_TEST_GL_RESET=<frame> sends the event
- * at that frame, with nothing lost, to try this anywhere. */
+ * picture again from VRAM; where the pass does not start again, the
+ * software GPU draws the picture. MEMORIES_TEST_GL_RESET=<frame> sends the
+ * event at that frame, with nothing lost, to try this anywhere;
+ * <frame>fail also keeps the pass from starting again. */
 static void reset_renderer(void)
 {
     fprintf(stderr, "memories-pc: the renderer's device was reset (%s); making it again\n",
@@ -1983,12 +2004,14 @@ static void reset_renderer(void)
     es_shown_last = 0;
     picture_w = picture_h = 0;
     if (es_wanted) ask_for_es3();
+    if (test_reset_fails) SDL_setenv_unsafe("MEMORIES_GL_PICTURE", "0", 1); /* the pass does not start again */
     open_renderer();
     if (!renderer) {
         fprintf(stderr, "memories-pc: SDL: %s\n", SDL_GetError());
         quit = 1;
         return;
     }
+    if (!es_picture) GlPicture_Stop(); /* not started again: the software GPU draws the picture */
     Menu_SetHdPicture(es_picture);
     swap_interval = -1; /* set again on the new renderer */
     menu_dirty = 1;
@@ -2254,6 +2277,11 @@ int HERE(Platform_PresentPicture)(const uint32_t *pixels, int stride, int x, int
         gl_pass_rect[1] = y;
         gl_pass_rect[2] = w;
         gl_pass_rect[3] = h;
+        if (es_context && !es_take_frame()) {
+            gl_pass_shown = 0;
+            pumped = 1;
+            return 0;
+        }
         compose_menu_if_changed();
         show();
         gl_pass_shown = 0;
@@ -2328,6 +2356,12 @@ int HERE(Platform_PresentWidePicture)(int x, int y, int w, int h, int wide_w, in
     gl_pass_rect[1] = 0;
     gl_pass_rect[2] = pw;
     gl_pass_rect[3] = h * at_scale;
+    if (es_context && !es_take_frame()) {
+        gl_pass_shown = 0;
+        gl_pass_texture = 0;
+        pumped = 1;
+        return 0;
+    }
     compose_menu_if_changed();
     show();
     gl_pass_shown = 0;

@@ -2529,3 +2529,9 @@ void GlPicture_Lost(void)
     vertex_count = run_count = 0;
     want_resync = 1; /* VRAM whole into the new picture, at the next replay after Init */
 }
+
+void GlPicture_Stop(void)
+{
+    on = 0;
+    SoftGpu_SetRecorder(NULL); /* the software GPU draws its own picture again, from VRAM */
+}

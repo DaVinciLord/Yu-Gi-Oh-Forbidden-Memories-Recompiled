@@ -61,4 +61,8 @@ int GlPicture_CopyInto(unsigned from, int x, int y, int w, int h, unsigned to);
  * GlPicture_Init in the new context, whose first replay draws the picture
  * again from VRAM. */
 void GlPicture_Lost(void);
+/* The pass given up for good (OpenGL ES: a failed start after a lost
+ * context, or the presenter's texture cannot be drawn into): off, and the
+ * software GPU draws the picture again, from VRAM, as without the pass. */
+void GlPicture_Stop(void);
 #endif
