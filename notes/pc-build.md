@@ -1789,9 +1789,10 @@ Checked (2026-10-05), with Mesa 21.2.6's llvmpipe (32-bit Linux build,
 Xvfb): `MEMORIES_GLES=1` (OpenGL ES 3.2) against desktop GL (3.1) on the
 same build, picture dumps (`MEMORIES_DETERMINISTIC=1`,
 `MEMORIES_DUMP_PICTURE=1`) are identical pixel for pixel: the title and
-the 3D Monsters duel case at 2x and 4x, the widescreen main menu at 2x and
-4x, and the 2D duel at 2x with HD text, the opponent's name, PGXP and 4x
-anti-aliasing on. Dropping `noperspective` changed no pixel there. The
+the 3D Monsters duel case at 2x and 4x, and the 2D duel at 2x with HD
+text, the opponent's name, PGXP and 4x anti-aliasing on. (With Video >
+Aspect Ratio at 16:9 the main menu and the duel case's frame are drawn 4:3,
+so a widened picture shown through the ES path is not checked yet.) Dropping `noperspective` changed no pixel there. The
 window (the desktop presenter against the renderer's copy) is identical
 at the title, also after `MEMORIES_TEST_GL_RESET`. The Android emulator
 (api35x64, SwiftShader, OpenGL ES 3.0) runs the pass at 2x and 4x with HD
