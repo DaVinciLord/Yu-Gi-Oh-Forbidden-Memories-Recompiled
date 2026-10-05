@@ -87,6 +87,36 @@ triggers and have no ATK threshold field. Changing to one of these effects
 clears the previous threshold when applied. Set traps trigger automatically
 in a duel; the CPU sets converted and added traps as traps too.
 
+### Monster effects
+
+A monster's **Monster effects** box, below its guardian stars, lists what
+it does on the field (`"monster_effects"`, [monster effects](../../../notes/more-cards.md#monster-effects)):
+a row per effect, **When** and what it **Does**. **Add...** and **Edit...**
+(or a double-click) open the effect: **When** (On summon, On flip, On draw
+phase, Before combat, When destroyed, While face up, each explained under
+it), **Does** (a magic card's effect, a boost of ATK and DEF, healing its
+owner, damage to the opponent), and what that needs: the magic card, whose
+monsters a boost reaches (and only of one type or attribute), the ATK and
+DEF, the LP. Only what the game can do for that **When** is offered: while
+face up, only boosts; before combat, a boost of the card itself or of the
+monster it battles, healing or damage. **Remove**, **Up** and **Down**
+change the list; the effects resolve in its order. A change is stored at
+once. An added card shows its base's effects until you change them, which
+gives it a list of its own. Write what the effects do in the card text: the
+game shows only the text. The checks (Conflicts) report an effect the game
+would leave out.
+
+### Icons and colours in card text
+
+Right-click the card text box for **Insert icon** (the monster types, the
+card kinds, the guardian stars and the buttons, each shown as the game draws
+it) and **Text colour** (white, yellow, blue, green, grey, orange, red, each
+with its colour). An icon goes in at the cursor as its code (`{f8 0B 00}`
+the Dragon); a colour with text selected colours the selection and goes back
+to white after it, without one it starts at the cursor. The codes are listed
+in [card text codes](../../../notes/more-cards.md#card-text-codes); an icon
+takes two letters of the line. **Tools > Card text preview** draws them.
+
 On **Cards**, **Equips**, and **Duelists**, click a column heading to sort
 ascending; click it again to reverse the order. An arrow marks the active
 column and direction. Card lists support **#**, **Name** (or **Card/Monster**),
@@ -502,7 +532,7 @@ opens and saves like any other:
 | Changed in the modified game | Becomes |
 |---|---|
 | card stats, names, texts; fusions, equips, rituals; deck and drop pools | `cards`, `fusions`, `equips`, `rituals`, `decks`, `drops`. A name or text that differs only by spaces at line ends stays retail's. Drop pools a mod stores encoded (the TeaOnline drop tool writes `bias + 8 * weight + noise` and makes the draw at `0x80021860` jump to code that undoes it) are decoded as `max(0, (raw - bias) >> shift)`, with the bias and shift read from that code's `addiu` and `sra`, or, when the code is not recognized, the values that make every such pool add up to 2048. Any other pool that does not add up to 2048 is scaled to 2048 keeping each card's share. The report says which |
-| other text: dialogue, menus, types, stars, duelists, places | `text.txt`, a partial [text listing](../../../notes/translation.md) (a bank whose changed strings jump is written whole; a bank that is the mod's code is left out and reported). Card names and texts with colour or icon codes, and texts the mod left empty, go there too (as `{f8 0A 05}...` or a bare `{end}`), since `cards[]` cannot carry them; the editor shows them and writes an edited one to `cards[]`. The name entry's strings (`0xF0`-`0xFF`) stay retail's |
+| other text: dialogue, menus, types, stars, duelists, places | `text.txt`, a partial [text listing](../../../notes/translation.md) (a bank whose changed strings jump is written whole; a bank that is the mod's code is left out and reported). Texts the mod left empty go there too (as a bare `{end}`), and so do card names and texts with colour or icon codes (as `{f8 0A 05}...`), as the import finds them; the editor shows them and writes an edited one to `cards[]`, whose `name` and `description` take the codes too. The name entry's strings (`0xF0`-`0xFF`) stay retail's |
 | other bytes of `WA_MRG.MRG` (pictures, passwords and costs, portraits...) | `data` patches; a run longer than 4 KB becomes whole sectors in `data/`, replaced at the retail disc's LBA. Past 256 patches or 16 sector runs (the port holds 1024 and 64 for all mods together), or when the file's size differs, the whole file is replaced. The tables `mod.json` carries (fusions, equips, rituals, pools) are always retail's in what `data` carries, and so are starter decks written as counts of 40 and the programs the port runs its own code for (Free Duel, name entry, password, overworld), all reported |
 | code and tables of the executable (AI parameters, field bonuses, equip bonuses, the draw...) | nothing, except the rules below: the port runs the executable's code natively. Listed in the report by RAM address, with the `j`/`jal` instructions that reach each place; changed bytes of the text banks that the text listing does not read (a mod's code or tables in the banks' free space, text left over) are listed too |
 

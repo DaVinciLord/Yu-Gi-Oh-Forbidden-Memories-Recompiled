@@ -21,5 +21,10 @@
 void DuelEffect_ApplyHarpiesFeatherDuster(void);
 s32 DuelEffect_UpdateCardEffect(void);
 void DuelEffect_StartCardEffect(s32 value, s32 flag);
+#ifdef MEMORIES_PC
+/* The behavior of retail card `value` itself, whatever "effect" a mod gave
+   it (a monster's "magic" effect, monster_effects.h). */
+void DuelEffect_StartRetailCardEffect(int value, int flag);
+#endif
 
 #endif

@@ -14,7 +14,7 @@ from pathlib import Path
 from .gamedata import (CARD_COUNT, DECK_COPY_LIMIT, DECK_POOL_MIN_CARDS, DECK_SIZE, DUELIST_NAMES, POOLS,
                        POOL_LABELS, POOL_TOTAL, TYPE_MAGIC, TYPE_EQUIP, TYPE_NAMES, TYPE_RITUAL, exodia_piece)
 from . import art, campaign_map, card_text, fixed_decks, guardian_stars, limits, packs as packmath
-from . import starter_pools
+from . import monster_effects, starter_pools
 from .model import KEY_RE, Project, duelist_named
 
 MOD_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,63}$")
@@ -42,7 +42,7 @@ class Issue:
 def text_lines(text: str) -> int:
     """How many lines the port's card-text wrapping makes (cards.c
     encode_description): 20 letters a line, broken at spaces and at \\n;
-    an icon code is one letter, a colour code none."""
+    an icon code is two letters, a colour code none."""
     return 1 + card_text.encode(text).count("\n")
 
 
@@ -175,6 +175,11 @@ def _check_card(project: Project, cid: int, out: list):
             add("error", '"trap_threshold" must be a whole number from 0 to 65535, or null')
         elif card.type != 21 or project.trap_threshold_default(project.effect_of(cid)) is None:
             add("warning", "the saved attack threshold only applies to an attack-destruction trap effect")
+    if "monster_effects" in extra:
+        for problem in monster_effects.problems(extra["monster_effects"], project.resolve):
+            add("error", problem)
+        if extra["monster_effects"] and not card.is_monster():
+            add("warning", "monster effects only work for a monster on the field; this card is not one")
     effect = project.retail.cards.get(project.effect_of(cid)) if "effect" in extra else None
     if effect and not card.is_monster() and effect.type != card.type:
         add("warning", f"its effect is {effect.name}'s, a {TYPE_NAMES[effect.type]} card's: the CPU does not play it, "

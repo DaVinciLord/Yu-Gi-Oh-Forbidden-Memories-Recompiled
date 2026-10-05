@@ -7,7 +7,8 @@ import json
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from . import bulk_dialog, guardian_stars, manifest, pools as poolmath, validate
+from . import bulk_dialog, guardian_stars, manifest, pools as poolmath, text_menu, validate
+from .monster_effects_ui import EffectsBox
 from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, DUELIST_NAMES,
                        EQUIP_BONUS_MAX, FRAME_NAMES,
                        POOL_LABELS, POOL_TOTAL, POOLS, STAR_NAMES, STARTER_WEIGHT_LIMIT, TYPE_EQUIP, TYPE_MAGIC, TYPE_NAMES,
@@ -207,6 +208,12 @@ class CardsTab(Tab):
                                         width=18) for key in ("star1", "star2")]
         line("Guardian star 1", self.star_boxes[0], hint("star1"), self.monster_rows)
         line("Guardian star 2", self.star_boxes[1], hint("star2"), self.monster_rows)
+        # What the monster does on the field (cards.c "monster_effects"),
+        # stored as soon as it is changed.
+        self.effects_box = EffectsBox(form, app, self.effects_changed)
+        self.effects_box.grid(row=row, column=0, columnspan=3, sticky="we", pady=4)
+        self.monster_rows.append(self.effects_box)
+        row += 1
         # Typing past 8 digits, or anything else, does nothing.
         digits = (self.register(lambda text: text == "" or (len(text) <= 8 and text.isascii() and text.isdigit())),
                   "%P")
@@ -229,6 +236,8 @@ class CardsTab(Tab):
         self.lines.grid(row=row, column=1, columnspan=2, sticky="w")
         row += 1
         self.text.bind("<KeyRelease>", lambda e: (self.count_lines(), self.mark_later()))
+        # Right-click: insert an icon or a colour, shown as the game draws them.
+        text_menu.install(app, self.text, lambda: (self.count_lines(), self.mark_later()))
         # The frame the card view, the Library and the duel draw it in: its
         # type's unless the mod picks one (cards.c "frame").
         self.captions["frame"] = ttk.Label(form, text="Frame")
@@ -406,6 +415,7 @@ class CardsTab(Tab):
                 var.set("")
             self.added_frame.grid_remove()
             self.extra.configure(text="")
+            self.effects_box.show(None)
             self.reference = None
             for label in self.hints.values():
                 label.configure(text="")
@@ -446,6 +456,7 @@ class CardsTab(Tab):
         self.text.insert("1.0", card.description)
         self.notes.insert("1.0", self.project.notes.get(cid, ""))
         self.notes.edit_reset()
+        self.effects_box.show(cid)
         self.count_lines()
         self.reference = self.project.retail.cards.get(cid) or self.project.cards.get(self.project.base_of(cid))
         self.mark()
@@ -462,7 +473,7 @@ class CardsTab(Tab):
             self.added_frame.grid_remove()
             extra = self.project.card_extra.get(cid, {})
         self._shown_effect = self.vars["effect"].get()
-        kept = sorted(set(extra) - {"effect", "trap_threshold"})
+        kept = sorted(set(extra) - {"effect", "trap_threshold", "monster_effects"})
         self.extra.configure(text=("Kept as written in mod.json: " + ", ".join(kept)) if kept else "")
 
     # What differs from the disc
@@ -621,6 +632,12 @@ class CardsTab(Tab):
                 self.vars["effect"].set(self.effect_label(stored))
         if self.vars["effect"].get() not in choices:
             self.vars["effect"].set(choices[0] if not own else self.effect_label(self.effect_default(self.current)))
+
+    def effects_changed(self, cid):
+        """The Monster effects box stored a change to the card."""
+        self.app.changed()
+        self.update_row(cid)
+        self.status.configure(text="\n".join(i.message for i in validate.validate_card(self.project, cid)))
 
     def edit_equips(self):
         """Apply the card and open its target list without another search."""

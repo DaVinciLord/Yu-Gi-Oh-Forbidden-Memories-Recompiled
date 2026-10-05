@@ -688,6 +688,28 @@ class Project:
         # base. Untouched empty fields never write it.
         extra["trap_threshold"] = value
 
+    def monster_effects_of(self, cid: int):
+        """(the card's "monster_effects", whether they are its base's): an
+        added card without its own has its base's, as the game gives it."""
+        extra = self.added[cid].extra if cid in self.added else self.card_extra.get(cid, {})
+        if "monster_effects" in extra:
+            effects = extra["monster_effects"]
+            return (effects if isinstance(effects, list) else []), False
+        if cid in self.added:
+            return self.monster_effects_of(self.base_of(cid))[0], True
+        return [], False
+
+    def set_monster_effects(self, cid: int, effects):
+        """A card's own list; None takes it away (an added card then has its
+        base's again). An added card's [] is kept: none, not its base's."""
+        extra = self.added[cid].extra if cid in self.added else self.card_extra.setdefault(cid, {})
+        if effects is None or (not effects and cid not in self.added):
+            extra.pop("monster_effects", None)
+        else:
+            extra["monster_effects"] = [dict(e) for e in effects]
+        if cid not in self.added and not extra:
+            self.card_extra.pop(cid, None)
+
     def is_ritual(self, cid: int) -> bool:
         """A ritual card a recipe may be for: typed Ritual and played as a
         disc ritual (tables.c): one of the disc's, a copy of one, or a card

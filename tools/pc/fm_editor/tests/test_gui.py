@@ -1568,3 +1568,76 @@ class SettingsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MonsterEffectsGuiTest(GuiTest):
+    """The Cards tab's Monster effects box and the card text's right-click
+    menu."""
+
+    def test_effects_box(self):
+        app, cards = self.app, self.app.cards
+        cards.tree.selection_set("1")
+        cards.select()
+        box = cards.effects_box
+        self.assertTrue(box.winfo_manager())
+        self.assertEqual(box.tree.get_children(), ())
+        box.effects.append({"when": "summon", "do": "heal", "amount": 500})
+        box.effects.append({"when": "face_up", "do": "boost", "target": "others", "attack": 300})
+        box.store()
+        self.assertEqual(app.project.monster_effects_of(1)[0][1]["when"], "face_up")
+        self.assertEqual([box.tree.set(i, "when") for i in box.tree.get_children()], ["On summon", "While face up"])
+        box.tree.selection_set("1")
+        box.move(-1)
+        self.assertEqual([e["when"] for e in app.project.monster_effects_of(1)[0]], ["face_up", "summon"])
+        box.tree.selection_set("0")
+        box.remove()
+        self.assertEqual(app.project.monster_effects_of(1)[0], [{"when": "summon", "do": "heal", "amount": 500}])
+        self.assertTrue(app.dirty)
+        # Kept across selecting another card; gone for a magic card.
+        cards.tree.selection_set("2")
+        cards.select()
+        self.assertEqual(box.tree.get_children(), ())
+        cards.tree.selection_set("1")
+        cards.select()
+        self.assertEqual(len(box.tree.get_children()), 1)
+        cards.vars["type"].set("Magic")
+        self.assertFalse(box.winfo_manager())
+
+    def test_effect_dialog(self):
+        from fm_editor.monster_effects_ui import EffectDialog
+        app = self.app
+        dialog = EffectDialog(app, app.project, {"when": "combat", "do": "boost", "target": "battle",
+                                                 "attack": -700}, str)
+        self.assertEqual(dialog.vars["when"].get(), "Before combat")
+        self.assertEqual(dialog.vars["target"].get(), "The monster it battles")
+        # Combat offers no magic; face up only boosts.
+        self.assertNotIn("Magic card effect", dialog.do_box.cget("values"))
+        dialog.vars["when"].set("While face up")
+        self.assertEqual(list(dialog.do_box.cget("values")), ["Boost ATK/DEF"])
+        self.assertNotIn("The monster it battles", dialog.target_box.cget("values"))
+        dialog.vars["type"].set("Dragon")
+        dialog.ok()
+        self.assertEqual(dialog.result, {"when": "face_up", "do": "boost", "target": "self", "attack": -700,
+                                         "type": "Dragon"})
+
+    def test_text_menu(self):
+        from fm_editor import text_menu
+        cards = self.app.cards
+        cards.tree.selection_set("1")
+        cards.select()
+        text = cards.text
+        text.delete("1.0", "end")
+        text.insert("1.0", "Can attack 2x a turn.")
+        text.mark_set("insert", "1.0")
+        text_menu.insert_code(text, "{f8 0B 00}")
+        text.tag_add("sel", "1.21", "1.23")
+        text_menu.colour(text, 6)
+        self.assertEqual(text.get("1.0", "end-1c"), "{f8 0B 00}Can attack {f8 0A 06}2x{f8 0A 00} a turn.")
+        menu = tk.Menu(text, tearoff=False)
+        text_menu.fill(menu, self.app, text, lambda: None)
+        labels = [menu.entrycget(i, "label") for i in range(menu.index("end") + 1) if menu.type(i) != "separator"]
+        self.assertEqual(labels, ["Cut", "Copy", "Paste", "Insert icon", "Text colour"])
+        icons = menu.nametowidget(menu.entrycget(4, "menu"))
+        self.assertEqual([icons.entrycget(i, "label") for i in range(4)],
+                         ["Monster types", "Card kinds", "Guardian stars", "Buttons"])
+        menu.destroy()

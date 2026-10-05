@@ -1,6 +1,6 @@
 #ifndef MEMORIES_MOD_TYPES_H
 #define MEMORIES_MOD_TYPES_H
-#define MEMORIES_MOD_API 9
+#define MEMORIES_MOD_API 10
 /* API 3: before hooks may alter arguments/result, or set handled to replace
  * the operation (including cancellation). Highest priority runs first;
  * equal priorities follow registration/load order. After hooks observe the
@@ -32,7 +32,21 @@ enum {
      * with it; result stays -1 to stay. After observes. An item whose
      * action is "event" does nothing but this. */
     MEMORIES_EVENT_MENU,
+    /* API 10: a monster on the field (notes/more-cards.md, "Monster
+     * effects"): a the card, b its duel record (0-29: b / 15 the side, 0 the
+     * player; b % 15 is 5-9 for the monster zones), c what happened:
+     * MEMORIES_MONSTER_SUMMON ... MEMORIES_MONSTER_DESTROYED. Every monster,
+     * with "monster_effects" of its own or not. Before: set handled to skip
+     * the card's own effects for this; a mod may start a card effect of its
+     * own (DuelEffect_StartCardEffect), which runs before the next one.
+     * After observes. COMBAT comes as the battle begins, when no trap
+     * sprang, for the attacker and then the monster it attacks. */
+    MEMORIES_EVENT_MONSTER,
     MEMORIES_EVENT_COUNT
+};
+enum {
+    MEMORIES_MONSTER_SUMMON, MEMORIES_MONSTER_FLIP, MEMORIES_MONSTER_DRAW, MEMORIES_MONSTER_COMBAT,
+    MEMORIES_MONSTER_DESTROYED
 };
 typedef struct {
     unsigned type, phase;

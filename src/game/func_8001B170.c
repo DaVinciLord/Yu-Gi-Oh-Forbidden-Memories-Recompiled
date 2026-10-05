@@ -1,4 +1,7 @@
 #define DUEL_CARD_STAGING_DECK_VIEW
+#ifdef MEMORIES_PC
+#include "pc/cards/monster_effects_duel.h"
+#endif
 #include "../types.h"
 #include "duel_scene_state.h"
 #define D_8009B360_AS_SIDE_ARRAY
@@ -173,6 +176,7 @@ state_four:
             card->stat_modifier = scratch->stat_modifier;
 #ifdef MEMORIES_PC
             card->defense_modifier = scratch->defense_modifier;
+            MonsterEffects_Placed(D_8009B19C, (gDuel_wSceneStateFlags & 0x4000) != 0);
 #endif
             DisplayObject_ReleaseIfPresent(object);
             D_800E9EF0[0] = card->object;

@@ -73,6 +73,52 @@ def synthetic_wa():
     return bytes(wa)
 
 
+def icon_wa():
+    """synthetic_wa with icon 0 (Dragon) drawn: index 1 at its top left
+    texel, 2 elsewhere, and its palette (0x200, 0xF9) red and green."""
+    wa = bytearray(synthetic_wa())
+    wa += bytes(max(0, (card_text.ICON_CLUT_SECTOR + 2) * 2048 - len(wa)))
+    page = card_text.ICON_SECTOR * 2048
+    for y in range(16):
+        for x in range(16):
+            u = 0x80 + x
+            wa[page + y * 128 + u // 2] |= (1 if x == y == 0 else 2) << 4 * (u & 1)
+    clut = card_text.ICON_CLUT_SECTOR * 2048 + (0xF9 - 0xF8) * 512
+    struct.pack_into("<HHH", wa, clut, 0, 31, 31 << 5)
+    return bytes(wa)
+
+
+class IconTest(unittest.TestCase):
+    """{f8 0B NN} and {f8 0A NN}: the icon off the disc, two letters wide, and
+    the colour ramps (notes/more-cards.md, "Card text codes")."""
+
+    def test_icon_and_widths(self):
+        font = card_text.RetailFont(icon_wa())
+        width, height, rgba = font.icon(0)
+        self.assertEqual((width, height), (16, 16))
+        self.assertEqual(rgba[:4], bytes((248, 0, 0, 255)))
+        self.assertEqual(rgba[4:8], bytes((0, 248, 0, 255)))
+        self.assertIsNone(font.icon(1))                  # no palette there on this disc
+        self.assertIsNone(font.icon(len(card_text.ICON_NAMES)))
+        lay = card_text.layout("ab{f8 0B 00}c")
+        self.assertEqual([(c, x) for c, x, _ in lay.glyphs], [("a", 0), ("b", 1), ("{f8 0B 00}", 2), ("c", 4)])
+        # Twenty letters a line with the icon's two.
+        self.assertEqual(card_text.layout("x" * 15 + " {f8 0B 00} y").rows, 1)
+        self.assertEqual(card_text.layout("x" * 16 + " {f8 0B 00} y").rows, 2)
+
+    def test_colours_and_picture(self):
+        font = card_text.RetailFont(icon_wa())
+        self.assertEqual(len(font.ramps), 8)
+        lay = card_text.layout("A{f8 0A 02}A{f8 0A 00}A")
+        self.assertEqual(lay.colours, [0, 2, 0])
+        image, _ = card_text.Renderer(font).render("{f8 0B 00}", 1)
+        # Drawn 2 texels up from its cell (its red top left is off the box),
+        # 16 across: past its own cell into the next.
+        self.assertEqual(image.pixel(0, 0)[:3], (0, 248, 0))
+        self.assertEqual(image.pixel(15, 13)[:3], (0, 248, 0))
+        self.assertEqual(image.pixel(16, 5)[:3], card_text.PANEL)
+
+
 class RetailFontTest(unittest.TestCase):
     def test_cells_and_colours(self):
         font = card_text.RetailFont(synthetic_wa())

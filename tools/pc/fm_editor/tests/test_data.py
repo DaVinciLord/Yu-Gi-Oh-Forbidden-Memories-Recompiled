@@ -885,9 +885,9 @@ class ValidateTest(unittest.TestCase):
         self.assertEqual(validate.text_lines("a b"), 1)
         self.assertEqual(validate.text_lines("x" * 20 + " y"), 2)
         self.assertEqual(validate.text_lines("a\nb\nc"), 3)
-        # An icon is one letter of the line, a colour none (cards.c text_code).
-        self.assertEqual(validate.text_lines("x" * 16 + " {f8 0B 04} y"), 1)
-        self.assertEqual(validate.text_lines("x" * 17 + " {f8 0B 04} y"), 2)
+        # An icon is two letters of the line, a colour none (cards.c text_code).
+        self.assertEqual(validate.text_lines("x" * 15 + " {f8 0B 04} y"), 1)
+        self.assertEqual(validate.text_lines("x" * 16 + " {f8 0B 04} y"), 2)
         self.assertEqual(validate.text_lines("{f8 0A 02}" + "x" * 18 + " y"), 1)
 
 
@@ -1143,3 +1143,67 @@ class PasswordTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MonsterEffectsTest(unittest.TestCase):
+    """A card's "monster_effects" (monster_effects.py): as the game reads
+    them, kept in the card's entry, inherited by a copy, checked."""
+
+    def setUp(self):
+        self.project = Project(fixture().game())
+
+    def test_normalize_and_allowed(self):
+        from fm_editor import monster_effects as fx
+        self.assertEqual(fx.normalize({"when": "Face Up", "do": "boost", "target": "others", "type": "Dragon",
+                                       "attack": 300}),
+                         {"when": "face_up", "do": "boost", "target": "others", "attack": 300, "type": "Dragon"})
+        self.assertEqual(fx.normalize({"when": "summon", "do": "magic", "card": 337}),
+                         {"when": "summon", "do": "magic", "card": 337})
+        # What the game leaves out (monster_effects.c MonsterEffect_Allowed).
+        for effect in ({"when": "face_up", "do": "magic", "card": 337}, {"when": "combat", "do": "magic", "card": 337},
+                       {"when": "combat", "do": "boost", "target": "own", "attack": 1},
+                       {"when": "destroyed", "do": "boost", "target": "self", "attack": 1},
+                       {"when": "summon", "do": "boost", "target": "battle", "attack": 1},
+                       {"when": "summon", "do": "magic", "card": 675},      # a ritual
+                       {"when": "summon", "do": "boost"}, {"when": "summon", "do": "heal", "amount": 0},
+                       {"when": "later", "do": "heal", "amount": 1}, {"when": "summon", "do": "heal", "amount": True}):
+            self.assertIsNone(fx.normalize(effect), effect)
+        # The target left out: the card itself, its side when destroyed.
+        self.assertEqual(fx.normalize({"when": "destroyed", "do": "boost", "attack": 100})["target"], "own")
+        self.assertEqual(fx.actions("face_up"), ["boost"])
+        self.assertEqual(fx.targets("combat"), ["self", "battle"])
+        self.assertEqual(fx.describe({"when": "combat", "do": "boost", "target": "battle", "attack": -500}),
+                         "The monster it battles: -500 ATK for the battle")
+
+    def test_round_trip_copies_and_checks(self):
+        p = self.project
+        effects = [{"when": "summon", "do": "magic", "card": 337},
+                   {"when": "face_up", "do": "boost", "target": "others", "attack": 300, "defense": 300}]
+        p.set_monster_effects(1, effects)
+        copy = p.add_card(1, "copy")
+        self.assertEqual(p.monster_effects_of(copy), (effects, True))       # its base's
+        none = p.add_card(1, "none")
+        p.set_monster_effects(none, [])
+        self.assertEqual(p.monster_effects_of(none), ([], False))           # none at all, not its base's
+        self.assertTrue(p.card_changed(1))
+        data = manifest.build(p)
+        entries = {json.dumps(e.get("replace", e.get("id"))): e for e in data["cards"]}
+        self.assertEqual(entries["1"]["monster_effects"], effects)
+        self.assertNotIn("monster_effects", entries['"copy"'])
+        self.assertEqual(entries['"none"']["monster_effects"], [])
+        again = Project(p.retail)
+        self.assertEqual(manifest.apply(again, data), [])
+        self.assertEqual(manifest.build(again), data)
+        self.assertEqual(again.monster_effects_of(1), (effects, False))
+        # Taking a disc card's away leaves no entry; reverting the card does too.
+        p.set_monster_effects(1, [])
+        self.assertNotIn(1, p.card_extra)
+        p.set_monster_effects(1, effects)
+        p.revert_card(1)
+        self.assertEqual(p.monster_effects_of(1), ([], False))
+        # What the game would not take is an error.
+        p.set_monster_effects(2, [{"when": "face_up", "do": "damage", "amount": 100}])
+        self.assertTrue(any("not one the game takes" in i.message and i.level == "error"
+                            for i in validate.validate_card(p, 2)))
+        p.set_monster_effects(2, [{"when": "summon", "do": "heal", "amount": 100}] * 9)
+        self.assertTrue(any("at most 8" in i.message for i in validate.validate_card(p, 2)))

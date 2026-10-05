@@ -16,6 +16,9 @@
 #include "../unmatched.h"
 #include "duel_magic_effect_dispatch.h"
 #include "dialog_choice.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/monster_effects_duel.h"
+#endif
 
 /* One frame of the duel scene. It services the quit dialog when
  * gDuel_bQuitDialogState is live -- creating the box on the first frame and
@@ -68,6 +71,12 @@ void DuelScene_Update(void)
         void (**callbacks)(void);
         u16 index;
 
+#ifdef MEMORIES_PC
+        /* Monster effects resolve between the steps, as card effects do. */
+        if (MonsterEffects_Update()) {
+            return;
+        }
+#endif
         callbacks = gDuel_apfnSceneStateHandler;
         index = gDuel_wSceneStateFlags;
         callbacks[index & DUEL_SCENE_PHASE_MASK]();

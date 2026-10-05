@@ -1,6 +1,9 @@
 #ifdef MEMORIES_PC
 #include "pc/mods/mods.h"
 #endif
+#ifdef MEMORIES_PC
+#include "pc/cards/monster_effects_duel.h"
+#endif
 #include "../types.h"
 #include "duel_side_state.h"
 #include "duel_grid.h"
@@ -65,6 +68,10 @@ int DuelEffect_UpdateCardEffect(void)
 }
 
 #ifdef MEMORIES_PC
+/* DuelEffect_StartRetailCardEffect: `value` is the retail card whose
+   behavior is wanted, not a card to map through its "effect". */
+static int start_retail;
+
 static void DuelEffect_StartCardEffectRetail(int value, int flag)
 #else
 void DuelEffect_StartCardEffect(int value, int flag)
@@ -76,7 +83,7 @@ void DuelEffect_StartCardEffect(int value, int flag)
     /* Resolve once to a built-in retail behavior. Do not follow the source
        card's current effect: replacing Raigeki must not change other cards
        explicitly assigned the retail Raigeki effect. */
-    if (value > 0) {
+    if (value > 0 && !start_retail) {
         value = Cards_EffectId(value);
     }
 #endif
@@ -114,9 +121,23 @@ void DuelEffect_StartCardEffect(int value, int flag)
     event.a = value; event.b = flag;
     Mods_Dispatch(&event);
 
-    if (!event.handled) { DuelEffect_StartCardEffectRetail(event.a, event.b); }
+    if (!event.handled) {
+        DuelEffect_StartCardEffectRetail(event.a, event.b);
+        /* A ritual takes its tributes off the field: not destroyed. */
+        if (gDuel_wCardEffectFlags &&
+            gDuelEffect_abGroupByEffectId[gDuel_sCardEffectIndex] == DUEL_EFFECT_GROUP_RITUAL) {
+            MonsterEffects_EffectStarted(1);
+        }
+    }
     event.phase = MEMORIES_AFTER; Mods_Dispatch(&event);
 
+}
+
+void DuelEffect_StartRetailCardEffect(int value, int flag)
+{
+    start_retail = 1;
+    DuelEffect_StartCardEffect(value, flag);
+    start_retail = 0;
 }
 #endif
 
