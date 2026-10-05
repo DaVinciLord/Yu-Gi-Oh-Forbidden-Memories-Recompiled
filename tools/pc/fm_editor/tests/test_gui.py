@@ -501,6 +501,11 @@ class GuiTest(unittest.TestCase):
     def test_right_click_menu_closes(self):
         from fm_editor import card_links
         app = self.app
+        # Only X11 menus stay up on their own: on Windows (and macOS) a posted
+        # menu is native and modal -- "post" does not return until it is
+        # dismissed, which would hang here -- and closes itself on a click away.
+        if app.tk.call("tk", "windowingsystem") != "x11":
+            self.skipTest("posted menus are modal outside X11")
         app.deiconify()
         for close in (lambda: app.notebook.select(app.fusions),
                       lambda: app.cards.tree.event_generate("<ButtonPress-1>", x=5, y=5)):
