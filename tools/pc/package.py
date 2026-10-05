@@ -23,7 +23,18 @@ The 64-bit Windows archive (-windows-x64.zip, notes/pc-build.md "64-bit
 Windows") unpacks to a folder of its own (yfm-redecomp-<version>-x64) and
 carries only the data mods, no mod SDK, and a README whose Mods section
 says so: that game refuses code mods, which are 32-bit objects. Its smoke
-test skips the cases that turn one on."""
+test skips the cases that turn one on.
+
+    python3 tools/pc/package.py android-arm64  # the Android app, signed
+
+android-arm64 is not among the default ones (it needs the Android SDK, the
+NDK and a JDK; notes/pc-build.md, "Android"). Its package is the APK itself,
+dist/yfm-redecomp-<version>-android-arm64.apk, and it is made only with the
+release key: MEMORIES_ANDROID_KEYSTORE and its password must be set
+(tools/pc/package_android.py, notes/pc-release.md "Android signing"), and an
+APK signed with the debug key is never put in dist/. A build_game32.py
+--target android-arm64-v8a build without them is the debug-signed APK for
+testing, in its build folder."""
 import argparse, datetime, os, re, shutil, struct, subprocess, sys, tarfile, zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -32,8 +43,12 @@ NAME = "yfm-redecomp"
 # memories-pc.pdb: the Windows build's symbols, for a debugger or profiler.
 BUILDS = {"windows": ("tmp/pc/win32", "memories-pc.exe", ["SDL3.dll", "memories-pc.pdb"]),
           "windows-x64": ("tmp/pc/win64", "memories-pc.exe", ["SDL3.dll", "memories-pc.pdb"]),
-          "linux": ("tmp/pc/game32", "memories-pc", [])}
-SUFFIX = {"windows": "-windows.zip", "windows-x64": "-windows-x64.zip", "linux": "-linux.tar.gz"}
+          "linux": ("tmp/pc/game32", "memories-pc", []),
+          "android-arm64": ("tmp/pc/android-arm64-v8a", "memories-arm64-v8a.apk", [])}
+SUFFIX = {"windows": "-windows.zip", "windows-x64": "-windows-x64.zip", "linux": "-linux.tar.gz",
+          "android-arm64": "-android-arm64.apk"}
+# build_game32.py's --target for a system, where it is not the same name.
+TARGETS = {"android-arm64": "android-arm64-v8a"}
 # The archive's top folder: the two Windows archives unpacked side by side
 # must not mix (the 32-bit sdk/ beside the 64-bit executable).
 FOLDER = {"windows-x64": "-x64"}
@@ -80,13 +95,14 @@ def x64_toolchain_missing():
 
 
 def build(system, label, skip_smoke=False):
-    command = [sys.executable, "tools/pc/build_game32.py", "--target", system,
+    command = [sys.executable, "tools/pc/build_game32.py", "--target", TARGETS.get(system, system),
                "--backend", "sdl", "--release", "--build", BUILDS[system][0]]
     # The label is the version the update check compares (notes/updates.md);
     # one that is not vX.Y.Z[-PRE] makes a build that never checks.
     subprocess.run(command, cwd=ROOT, check=True, env=dict(os.environ, MEMORIES_VERSION=label))
-    if skip_smoke:
-        print("package: gameplay smoke tests skipped (no disc required)")
+    if skip_smoke or system == "android-arm64":
+        print("package: gameplay smoke tests skipped " +
+              ("(no disc required)" if skip_smoke else "(the smoke test runs desktop games only)"))
         return
     smoke = [sys.executable, "tools/pc/smoke.py"]
     smoke += ["--windows"] if system == "windows" else ["--executable", os.path.join(BUILDS[system][0], BUILDS[system][1])]
@@ -171,6 +187,40 @@ def stage(system, label):
     return folder
 
 
+def release_key_missing():
+    """Why the Android APK cannot be packed, or None: only the release key
+    signs what goes in dist/ (package_android.signing_key)."""
+    if not os.environ.get("MEMORIES_ANDROID_KEYSTORE"):
+        return ("MEMORIES_ANDROID_KEYSTORE is not set, and the APK in dist/ is signed with the release key only "
+                "(notes/pc-release.md, \"Android signing\"); build_game32.py --target android-arm64-v8a makes "
+                "a debug-signed one for testing")
+    return None
+
+
+def pack_apk(label):
+    """dist/yfm-redecomp-<version>-android-arm64.apk: the APK the build
+    signed, checked again here. The key named by MEMORIES_ANDROID_KEYSTORE
+    signed it, which this checks as far as it can without the key: one
+    signer, not the debug key, and MEMORIES_ANDROID_CERT_SHA256 if set."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import package_android
+    build_dir, apk, _ = BUILDS["android-arm64"]
+    source = os.path.join(ROOT, build_dir, apk)
+    certificate = package_android.signer(source)
+    if certificate["dn"] == package_android.DEBUG_DN:
+        sys.exit(f"package: {os.path.relpath(source, ROOT)} is signed with the debug key; nothing was packed")
+    expected = os.environ.get("MEMORIES_ANDROID_CERT_SHA256")
+    mismatch = expected and package_android.check_fingerprint(certificate["sha256"], expected)
+    if mismatch:
+        sys.exit(f"package: {os.path.relpath(source, ROOT)}: {mismatch}; nothing was packed")
+    os.makedirs(DIST, exist_ok=True)
+    target = os.path.join(DIST, f"{NAME}-{label}{SUFFIX['android-arm64']}")
+    shutil.copyfile(source, target)
+    print(f"package: {os.path.relpath(target, ROOT)}: signed by {certificate['dn']}, "
+          f"SHA-256 {package_android.colons(certificate['sha256'])}")
+    return target
+
+
 def pack(system, folder):
     name = os.path.basename(folder)
     name = name[:len(name) - len(FOLDER.get(system, ""))]
@@ -196,14 +246,17 @@ def pack(system, folder):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("systems", nargs="*", help="windows, windows-x64, linux (default: all)")
+    parser.add_argument("systems", nargs="*", help="windows, windows-x64, linux (default: those three), "
+                                                    "android-arm64 (the APK, release key only)")
     parser.add_argument("--no-build", action="store_true", help="pack what is already built")
     parser.add_argument("--skip-smoke", action="store_true", help="build without ROM-dependent gameplay tests (CI)")
     parser.add_argument("--version", help="archive version, e.g. v0.1.0 or dev-abcdef0")
     options = parser.parse_args()
     systems = options.systems or ["windows", "windows-x64", "linux"]
     if set(systems) - set(BUILDS):
-        parser.error("systems are windows, windows-x64 and linux")
+        parser.error("systems are windows, windows-x64, linux and android-arm64")
+    if "android-arm64" in systems and release_key_missing():
+        sys.exit(f"package: cannot pack android-arm64: {release_key_missing()}")
     label = options.version or version()
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}", label):
         parser.error("version must be 1-100 letters, numbers, dots, underscores or hyphens, starting with a letter or number")
@@ -224,7 +277,7 @@ def main():
     for system in systems:
         if not options.no_build:
             build(system, label, options.skip_smoke)
-        made.append(pack(system, stage(system, label)))
+        made.append(pack_apk(label) if system == "android-arm64" else pack(system, stage(system, label)))
     shutil.rmtree(os.path.join(DIST, "stage"), ignore_errors=True)
     for path in made:
         print(f"{os.path.relpath(path, ROOT)}: {os.path.getsize(path) / 1e6:.1f} MB")

@@ -8,8 +8,11 @@ be run on its own: package_android.py <build dir> <abi>. Uses only the JDK
 (org.libsdl.app, from the same SDL release as libSDL3.so; build_android_deps.py)
 is compiled against the SDK's android.jar and dexed with d8, aapt2 links the
 manifest, the native libraries go in lib/<abi>/, and the APK is aligned
-(zipalign) and signed (apksigner) with a debug key kept under tmp/, never in
-the repository. The activity is SDL's own SDLActivity: it loads libSDL3.so
+(zipalign) and signed (apksigner). The key is the release key named by the
+environment (signing_key(): MEMORIES_ANDROID_KEYSTORE and its passwords,
+which are never printed or put on a command line), else a debug key kept
+under tmp/, never in the repository; either way the signer's certificate
+(DN, SHA-256) is printed and checked with apksigner verify. The activity is SDL's own SDLActivity: it loads libSDL3.so
 and libmain.so and calls SDL_main (src/pc/platform/android_loader.c), which
 loads libgame.so at its link address. The build's id, commit and symbol
 table go in assets/build/, and the shipped mods and language packs under
@@ -26,6 +29,12 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 PACKAGE = "org.yfmredecomp.game"
 LABEL = "YFM Re-Decomp"
 KEYSTORE = os.path.join(ROOT, "tmp", "pc", "android-deps", "debug.keystore")
+DEBUG_DN = "CN=Android Debug, O=Android, C=US"
+# The alias of the release key when MEMORIES_ANDROID_KEY_ALIAS is unset.
+RELEASE_ALIAS = "yfm-release"
+# Where signing_key() hands apksigner the passwords (env:<name>): the
+# child's environment only, never its command line nor a file.
+STORE_PASS_VAR, KEY_PASS_VAR = "MEMORIES_APKSIGNER_STORE_PASS", "MEMORIES_APKSIGNER_KEY_PASS"
 TARGET_SDK = 35
 
 MANIFEST = f"""<?xml version="1.0" encoding="utf-8"?>
@@ -74,11 +83,113 @@ def tool(build_tools, name):
     sys.exit(f"{name} is not in {build_tools}")
 
 
-def run(command):
-    result = subprocess.run(command, capture_output=True, text=True)
+def run(command, env=None):
+    result = subprocess.run(command, capture_output=True, text=True, env=env)
     if result.returncode:
         sys.exit(f"{' '.join(command[:4])} ...\n{result.stdout}\n{result.stderr}")
     return result.stdout
+
+
+def secret(name):
+    """The value of $name, else the first line of the file $name_FILE (its
+    line ending dropped), else None. The value is never printed."""
+    if os.environ.get(name):
+        return os.environ[name]
+    path = os.environ.get(name + "_FILE")
+    if not path:
+        return None
+    try:
+        with open(path, encoding="utf-8") as handle:
+            value = handle.readline().rstrip("\r\n")
+    except OSError as error:
+        sys.exit(f"{name}_FILE: cannot read {path}: {error.strerror}")
+    if not value:
+        sys.exit(f"{name}_FILE: the first line of {path} is empty")
+    return value
+
+
+def signing_key():
+    """The key the APK is signed with: (apksigner sign's key options, the
+    environment to run it in, a description without any secret).
+
+    MEMORIES_ANDROID_KEYSTORE set: the release key. The keystore (PKCS12 when
+    it ends in .p12 or .pfx) and its password, MEMORIES_ANDROID_KEYSTORE_
+    PASSWORD or the first line of MEMORIES_ANDROID_KEYSTORE_PASSWORD_FILE;
+    the key's alias, MEMORIES_ANDROID_KEY_ALIAS (default yfm-release), and
+    its password, MEMORIES_ANDROID_KEY_PASSWORD(_FILE) (default the
+    keystore's). Anything missing stops the build: it never falls back to
+    the debug key. The passwords reach apksigner as env:<name> in its own
+    environment, so they are on no command line and in no file.
+
+    Unset: the debug key, created under tmp/ the first time."""
+    keystore = os.environ.get("MEMORIES_ANDROID_KEYSTORE")
+    if not keystore:
+        if not os.path.exists(KEYSTORE):
+            home = os.environ.get("JAVA_HOME")
+            keytool = (shutil.which("keytool") or (home and shutil.which("keytool", path=os.path.join(home, "bin"))) or
+                       sys.exit("keytool is not on PATH or in $JAVA_HOME/bin (a JDK)"))
+            run([keytool, "-genkeypair", "-keystore", KEYSTORE, "-alias", "androiddebugkey", "-storepass", "android",
+                 "-keypass", "android", "-dname", "CN=Android Debug,O=Android,C=US", "-keyalg", "RSA",
+                 "-keysize", "2048", "-validity", "10000"])
+        return (["--ks", KEYSTORE, "--ks-pass", "pass:android", "--key-pass", "pass:android"], None,
+                f"the debug key ({os.path.relpath(KEYSTORE, ROOT)}; MEMORIES_ANDROID_KEYSTORE is not set)")
+    if not os.path.isfile(keystore):
+        sys.exit(f"MEMORIES_ANDROID_KEYSTORE: {keystore} is not a file")
+    store = secret("MEMORIES_ANDROID_KEYSTORE_PASSWORD") or sys.exit(
+        "MEMORIES_ANDROID_KEYSTORE is set but its password is not: set MEMORIES_ANDROID_KEYSTORE_PASSWORD_FILE "
+        "(a file whose first line is the password) or MEMORIES_ANDROID_KEYSTORE_PASSWORD")
+    key = secret("MEMORIES_ANDROID_KEY_PASSWORD") or store
+    alias = os.environ.get("MEMORIES_ANDROID_KEY_ALIAS") or RELEASE_ALIAS
+    options = ["--ks", keystore, "--ks-key-alias", alias, "--ks-pass", f"env:{STORE_PASS_VAR}",
+               "--key-pass", f"env:{KEY_PASS_VAR}"]
+    if keystore.lower().endswith((".p12", ".pfx")):
+        options[2:2] = ["--ks-type", "PKCS12"]
+    return options, dict(os.environ, **{STORE_PASS_VAR: store, KEY_PASS_VAR: key}), \
+        f"the release key (alias {alias} in {keystore})"
+
+
+def signer(apk, build_tools=None):
+    """apksigner verify's verdict on an APK, which must have one signer:
+    {"dn": ..., "sha256": ...} (64 lowercase hex digits). Stops the build when
+    the APK does not verify."""
+    build_tools = build_tools or newest(os.path.join(sdk(), "build-tools", "*"))
+    output = run([tool(build_tools, "apksigner"), "verify", "--verbose", "--print-certs", apk])
+    fields = {}
+    for line in output.splitlines():
+        for key, label in (("dn", "certificate DN: "), ("sha256", "certificate SHA-256 digest: ")):
+            if line.startswith("Signer #") and label in line:
+                fields.setdefault(key, []).append(line.split(label, 1)[1].strip())
+    if len(fields.get("dn", [])) != 1 or len(fields.get("sha256", [])) != 1:
+        sys.exit(f"{apk}: apksigner verify found {len(fields.get('sha256', []))} signers, not one:\n{output}")
+    return {"dn": fields["dn"][0], "sha256": fields["sha256"][0].lower()}
+
+
+def colons(digest):
+    """A SHA-256 digest as keytool and the Play Console print it."""
+    return ":".join(digest[i:i + 2] for i in range(0, len(digest), 2)).upper()
+
+
+def fingerprint_parts(expected):
+    """MEMORIES_ANDROID_CERT_SHA256's value as [full] or [prefix, suffix]
+    (lowercase hex): the full digest (64 hex digits, colons and case
+    ignored), or a prefix and a suffix joined by "...", e.g.
+    C8DA2D97...4B8B. Stops the build when it is neither."""
+    parts = [part.replace(":", "").replace(" ", "").lower() for part in expected.split("...")]
+    if len(parts) > 2 or not all(all(c in "0123456789abcdef" for c in part) for part in parts) or \
+            (len(parts) == 1 and len(parts[0]) != 64) or (len(parts) == 2 and not (parts[0] or parts[1])):
+        sys.exit(f"MEMORIES_ANDROID_CERT_SHA256 is {expected!r}: 64 hex digits, or PREFIX...SUFFIX")
+    return parts
+
+
+def check_fingerprint(digest, expected):
+    """None when the certificate's SHA-256 `digest` matches `expected`
+    (fingerprint_parts), else why not."""
+    parts = fingerprint_parts(expected)
+    if len(parts) == 1 and digest == parts[0]:
+        return None
+    if len(parts) == 2 and digest.startswith(parts[0]) and digest.endswith(parts[1]):
+        return None
+    return f"the signer's SHA-256 {colons(digest)} is not the expected {expected}"
 
 
 def program_files(build, folders):
@@ -101,6 +212,15 @@ def program_files(build, folders):
 
 
 def package(build, abi, library, game, assets):
+    apk_path = os.path.join(build, f"memories-{abi}.apk")
+    if os.path.exists(apk_path):
+        os.remove(apk_path)   # a failed build leaves no APK of an earlier build behind
+    # The key and the expected fingerprint first: a mistake in either stops
+    # the build before anything is made.
+    options, environment, description = signing_key()
+    expected = os.environ.get("MEMORIES_ANDROID_CERT_SHA256")
+    if expected:
+        fingerprint_parts(expected)
     build_tools = newest(os.path.join(sdk(), "build-tools", "*"))
     android_jar = os.path.join(newest(os.path.join(sdk(), "platforms", "android-*")), "android.jar")
     work = os.path.join(build, "apk")
@@ -131,17 +251,17 @@ def package(build, abi, library, game, assets):
         apk.write(os.path.join(deps_lib, "libSDL3.so"), f"lib/{abi}/libSDL3.so")
     aligned = os.path.join(work, "aligned.apk")
     run([tool(build_tools, "zipalign"), "-p", "-f", "4", unaligned, aligned])
-    if not os.path.exists(KEYSTORE):
-        home = os.environ.get("JAVA_HOME")
-        keytool = (shutil.which("keytool") or (home and shutil.which("keytool", path=os.path.join(home, "bin"))) or
-                   sys.exit("keytool is not on PATH or in $JAVA_HOME/bin (a JDK)"))
-        run([keytool, "-genkeypair", "-keystore", KEYSTORE, "-alias", "androiddebugkey", "-storepass", "android",
-             "-keypass", "android", "-dname", "CN=Android Debug,O=Android,C=US", "-keyalg", "RSA", "-keysize", "2048",
-             "-validity", "10000"])
-    apk_path = os.path.join(build, f"memories-{abi}.apk")
-    run([tool(build_tools, "apksigner"), "sign", "--ks", KEYSTORE, "--ks-pass", "pass:android", "--key-pass",
-         "pass:android", "--out", apk_path, aligned])
+    run([tool(build_tools, "apksigner"), "sign", *options, "--out", apk_path, aligned], env=environment)
+    certificate = signer(apk_path, build_tools)
     print(f"{apk_path}: {PACKAGE}, lib/{abi}/libmain.so + libgame.so + libSDL3.so, {len(assets)} assets")
+    print(f"{apk_path}: signed with {description}, verified (apksigner verify)\n"
+          f"  certificate: {certificate['dn']}\n  SHA-256: {colons(certificate['sha256'])}")
+    if expected:
+        mismatch = check_fingerprint(certificate["sha256"], expected)
+        if mismatch:
+            os.remove(apk_path)
+            sys.exit(f"{apk_path}: removed: {mismatch} (MEMORIES_ANDROID_CERT_SHA256)")
+        print(f"  matches MEMORIES_ANDROID_CERT_SHA256 ({expected})")
     return apk_path
 
 
