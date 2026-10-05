@@ -9,6 +9,11 @@ baseline v0.1.2
 # game is loaded); a caller built against v0.1.2's void ignores eax.
 accept v0.1.2 function Cheats_GiveAllCards returns int where it returned void
 accept v0.1.2 function Cheats_UnlockAllFreeDuelists returns int where it returned void
+# The port SDK stand-ins compile against the game's Psy-Q headers: libgte.h
+# now declares RotAverageNclip3_nom with the return the resident routine and
+# its stand-in always had (the GTE flag word, in v0/eax). A caller built
+# against v0.1.2's void ignores eax, which every call may change anyway.
+accept v0.1.2 function RotAverageNclip3_nom returns long (the flag word) where it returned void
 # PR #105 (the burning card keeps its HD pack image): the recorder gained
 # `capture` at its end. Only the port's own OpenGL picture installs a
 # recorder; none of v0.1.2's mods calls SoftGpu_SetRecorder.

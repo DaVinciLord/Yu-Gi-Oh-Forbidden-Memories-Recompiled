@@ -30,6 +30,8 @@
 #include "pc/debug/hud.h"
 #include "pc/guest/state.h"
 #include "save_icon.h"
+#include "touch_pad.h"
+#include "touch_pad_art.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_opengl.h>
 #include "pc/render/gl_picture.h"
@@ -70,9 +72,25 @@ static volatile uint16_t scripted_bits2, scripted_bits, mouse_bits;
 static uint16_t wheel_bits;
 static int wheel_frames;
 static volatile uint16_t wheel_now;
+/* The on-screen controller's bits (touch_pad.h), and whether the mouse
+ * button SDL made of a touch went down on the pad (its events are the pad's
+ * until it comes up). */
+static volatile uint16_t touch_bits;
+static int touch_mouse_on_pad;
 static int pointer_x, pointer_y, pointer_inside, cursor_hidden;
+/* The pointer's place is a mouse's (it hovers): the mouse events SDL makes
+ * of a touch move it only while the finger is down, and leave it where the
+ * finger lifted, so they never reveal the bar by hovering. */
+#ifdef SDL_PLATFORM_ANDROID
+static int pointer_is_mouse;
+#else
+static int pointer_is_mouse = 1;
+#endif
 static unsigned last_pointer_motion, current_frame;
 static int focus_clock_rate = 100, focus_paused;
+/* A phone or tablet app sent to the background (SDL's application events,
+ * which desktops never send): the game clock stops until it comes back. */
+static int background_clock_rate, background_paused;
 static float known_refresh; /* what the wayland driver reported before a fallback to x11 */
 
 static void show(void);
@@ -85,13 +103,42 @@ static int menu_dirty;
 static void save_window_image(void);
 static int window_shot_pending;
 
+/* Window pixels per density-independent pixel where the screen is touched
+ * (Android: SDL's content scale is the display's densityDpi / 160), 0 on a
+ * desktop, which keeps the mouse's sizes. */
+static float touch_density(void)
+{
+#ifdef SDL_PLATFORM_ANDROID
+    SDL_DisplayID display = window ? SDL_GetDisplayForWindow(window) : SDL_GetPrimaryDisplay();
+    float density = display ? SDL_GetDisplayContentScale(display) : 0.0f;
+    return density > 0.0f ? density : 1.0f;
+#else
+    return 0.0f;
+#endif
+}
+
 /* The menu's size: the setting, or from the height the window has or is
  * about to have. */
 static void update_menu_scale(int window_h)
 {
     int wanted = Settings_Get(SET_MENU_SCALE);
+    float density = touch_density();
+    if (density > 0.0f) {
+        /* The screen is touched: Automatic sets the text at the system's
+         * size (13 px at 1 dp, about 14 sp), the bar, rows and buttons a
+         * finger's target (48 dp) tall, and the touch controls a thumb's
+         * width, from the density rather than the window. */
+        if (!wanted) wanted = density >= 4.0f ? 4 : density < 1.0f ? 1 : (int)(density + 0.5f);
+        Menu_SetTouchTarget((int)(48.0f * density + 0.5f));
+        if (TouchPad_SetDensity(density)) menu_dirty = 1;
+    }
     Menu_SetScale(wanted ? wanted : Menu_AutoScale(window_h));
 }
+
+/* Where the window is always the whole screen (a phone), the bar is drawn
+ * over the picture when it shows: the picture and the touch controls stay
+ * where they are. In a desktop's fullscreen it pushes the picture down. */
+static int bar_overlays(void) { return !Platform_HasWindowModes(); }
 static void relayout(void);
 static void show_cursor(void);
 static void block_signals(sigset_t *previous);
@@ -345,7 +392,8 @@ static int covers_screen(void) { return Settings_Get(SET_FULLSCREEN) || Settings
 static void update_menu_visibility(void)
 {
     int wanted = !covers_screen() || Settings_Get(SET_SHOW_MENU_FULLSCREEN) ||
-                 (pointer_inside && pointer_y < Menu_Height()) || Menu_IsOpen() || menu_reveal_frames > 0;
+                 (pointer_inside && pointer_is_mouse && pointer_y < Menu_Height()) || Menu_IsOpen() ||
+                 menu_reveal_frames > 0;
     if (wanted == menu_visible) return;
     menu_visible = wanted;
     Menu_SetVisible(wanted);
@@ -705,7 +753,11 @@ static void block_signals(sigset_t *previous)
 static void restore_signals(const sigset_t *previous) { pthread_sigmask(SIG_SETMASK, previous, NULL); }
 
 int Platform_Scale(void) { return scale; }
+#ifdef SDL_PLATFORM_ANDROID
+int Platform_HasWindowModes(void) { return 0; } /* the whole screen, always (android.c) */
+#else
 int Platform_HasWindowModes(void) { return 1; }
+#endif
 
 void Platform_ApplyDisplaySettings(void)
 {
@@ -883,11 +935,12 @@ static void relayout(void)
         return;
     }
     update_menu_scale(window_h);
-    menu = menu_visible ? Menu_Height() : 0;
+    menu = menu_visible && !bar_overlays() ? Menu_Height() : 0;
     area_h = window_h - menu;
     if (area_h < 1) area_h = 1;
     layout.win_w = window_w;
     layout.win_h = window_h;
+    if (TouchPad_Layout(window_w, window_h, menu)) menu_dirty = 1;
     layout.pixel_x = (float)output_w / (float)window_w;
     layout.pixel_y = (float)output_h / (float)window_h;
     if (window_w != logged_window_w || window_h != logged_window_h ||
@@ -1095,8 +1148,15 @@ static void gl_quad(GLuint texture, float x, float y, float w, float h)
 
 static void draw_overlay(int *x, int *y, int *w, int *h)
 {
-    int hx, hy, hw, hh;
+    int hx, hy, hw, hh, tx, ty, tw, th, left, right;
     FusionHelper_Viewport((int)layout.dst.x, (int)layout.dst.y, (int)layout.dst.w, (int)layout.dst.h);
+    TouchPadArt_Draw(&canvas, &tx, &ty, &tw, &th); /* under the menu and the HUD */
+    /* The save and deck slot menus keep between the pad's columns (they are
+     * played with the pad), and below the bar while it shows (pushing the
+     * picture down or drawn over it); from the top only where a bar drawn
+     * over the picture is hidden. */
+    if (!TouchPad_FreeSpan(&left, &right)) left = right = 0;
+    Menu_SetOverlayArea(left, right, bar_overlays() && !menu_visible ? 0 : -1);
     if (Settings_Get(SET_SHOW_HUD) == 2 || Menu_IsOpen()) {
         Hud_Draw(&canvas);
         Menu_Draw(&canvas); /* dropdowns stay above the full statistics panel */
@@ -1106,6 +1166,16 @@ static void draw_overlay(int *x, int *y, int *w, int *h)
     }
     Menu_Bounds(x, y, w, h);
     Hud_Bounds(&hx, &hy, &hw, &hh);
+    if (tw && th) {
+        if (!hw || !hh) { hx = tx; hy = ty; hw = tw; hh = th; }
+        else {
+            int x1 = hx + hw > tx + tw ? hx + hw : tx + tw, y1 = hy + hh > ty + th ? hy + hh : ty + th;
+            hx = hx < tx ? hx : tx;
+            hy = hy < ty ? hy : ty;
+            hw = x1 - hx;
+            hh = y1 - hy;
+        }
+    }
     if (!*w || !*h) { *x = hx; *y = hy; *w = hw; *h = hh; return; }
     if (hw && hh) {
         int x1 = *x + *w > hx + hw ? *x + *w : hx + hw;
@@ -1237,6 +1307,9 @@ static MenuKey menu_key(SDL_Keycode key)
 {
     switch (key) {
     case SDLK_ESCAPE: return MENU_KEY_ESCAPE;
+#ifdef SDL_PLATFORM_ANDROID
+    case SDLK_AC_BACK: return MENU_KEY_ESCAPE; /* a phone's Back closes a menu or answers a notice as Esc does */
+#endif
     case SDLK_F10: return MENU_KEY_F10;
     case SDLK_TAB: return MENU_KEY_TAB;
     case SDLK_BACKSPACE: return MENU_KEY_BACKSPACE;
@@ -1323,6 +1396,39 @@ static int dispatch_controls(const SDL_Event *event, const MenuEvent *menu_event
     return 0;
 }
 
+/* The application events SDL sends only to event watchers, from inside
+ * the pump (SDL_PollEvent) on this thread: a phone or tablet app going to
+ * the background and coming back; desktops never send them. SDL stops its
+ * event loop (and so the game) and the audio until the app is back;
+ * stopping the clock too keeps the game from running to catch up the time
+ * it was away. */
+static bool SDLCALL app_event(void *userdata, SDL_Event *event)
+{
+    (void)userdata;
+    switch (event->type) {
+    case SDL_EVENT_WILL_ENTER_BACKGROUND: case SDL_EVENT_DID_ENTER_BACKGROUND:
+        if (!background_paused) {
+            background_paused = 1;
+            background_clock_rate = Platform_ClockRate();
+            if (background_clock_rate) Platform_SetClockRate(0);
+            ControlsRuntime_ResetKeys();
+            LOG(LOG_WINDOW, "app in the background: clock stopped (was %d%%)", background_clock_rate);
+        }
+        break;
+    case SDL_EVENT_DID_ENTER_FOREGROUND:
+        if (background_paused) {
+            background_paused = 0;
+            if (background_clock_rate && Platform_ClockRate() == 0) Platform_SetClockRate(background_clock_rate);
+            menu_dirty = 1;
+            LOG(LOG_WINDOW, "app in the foreground: clock at %d%%", Platform_ClockRate());
+        }
+        break;
+    default:
+        break;
+    }
+    return true;
+}
+
 static void pump(void)
 {
     SDL_Event event;
@@ -1330,6 +1436,44 @@ static void pump(void)
         MenuEvent menu_event;
         translate(&event, &menu_event);
         if(event.type==SDL_EVENT_KEYMAP_CHANGED){controls_key_labels();continue;}
+        if (event.type == SDL_EVENT_FINGER_DOWN || event.type == SDL_EVENT_FINGER_MOTION ||
+            event.type == SDL_EVENT_FINGER_UP || event.type == SDL_EVENT_FINGER_CANCELED) {
+            int kind = event.type == SDL_EVENT_FINGER_DOWN     ? TOUCH_FINGER_DOWN
+                       : event.type == SDL_EVENT_FINGER_MOTION ? TOUCH_FINGER_MOVE
+                                                               : TOUCH_FINGER_UP;
+            int fx = (int)(event.tfinger.x * (float)layout.win_w), fy = (int)(event.tfinger.y * (float)layout.win_h);
+            if (SDL_GetWindowFromEvent(&event) == window &&
+                TouchPad_Finger(kind, (uint64_t)event.tfinger.fingerID, fx, fy))
+                menu_dirty = 1;
+            if (kind != TOUCH_FINGER_MOVE)
+                LOG(LOG_INPUT, "finger %d %s at %d,%d: touch pad %s", (int)event.tfinger.fingerID,
+                    kind == TOUCH_FINGER_DOWN ? "down" : "up", fx, fy, TouchPad_Shown() ? "shown" : "hidden");
+            continue;
+        }
+        /* The mouse events SDL makes of a touch: on the pad they are the
+         * pad's, not the menu's (from the button going down to it coming
+         * up, and a hover over it). */
+        if ((event.type == SDL_EVENT_MOUSE_BUTTON_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_UP) &&
+            event.button.which == SDL_TOUCH_MOUSEID) {
+            int on_pad = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN
+                             ? (touch_mouse_on_pad = TouchPad_Covers((int)event.button.x, (int)event.button.y))
+                             : touch_mouse_on_pad;
+            if (event.type == SDL_EVENT_MOUSE_BUTTON_UP) touch_mouse_on_pad = 0;
+            if (on_pad) continue;
+        }
+        if (event.type == SDL_EVENT_MOUSE_MOTION && event.motion.which == SDL_TOUCH_MOUSEID &&
+            (touch_mouse_on_pad || TouchPad_Covers((int)event.motion.x, (int)event.motion.y)))
+            continue;
+        /* A tap at the top of the screen shows the hidden bar under it, so
+         * the press lands on the bar's menu there. */
+        if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.which == SDL_TOUCH_MOUSEID) {
+            pointer_is_mouse = 0;
+            if (covers_screen() && event.button.y < Menu_Height() && menu_reveal_frames < 2) menu_reveal_frames = 2;
+        }
+        /* A key or a controller's button: Automatic hides the pad again. */
+        if (((event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat && event.key.key != SDLK_AC_BACK) ||
+             event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) && TouchPad_OtherInput())
+            menu_dirty = 1;
         if(event.type==SDL_EVENT_GAMEPAD_ADDED){open_gamepad(event.gdevice.which);continue;}
         if(event.type==SDL_EVENT_GAMEPAD_REMOVED){close_gamepad(event.gdevice.which);continue;}
         /* Every release, before a menu can take it: else a held action
@@ -1346,8 +1490,16 @@ static void pump(void)
             else if (ModsWindow_Redraws(&menu_event)) mods_dirty = 1;
             continue;
         }
-        if (event.type == SDL_EVENT_MOUSE_MOTION) {
+        if (event.type == SDL_EVENT_MOUSE_MOTION && event.motion.which == SDL_TOUCH_MOUSEID) {
+            pointer_is_mouse = 0;
+            /* A finger has no hover: SDL moves the mouse to a tap just
+             * before pressing there, which the menu would take for the
+             * pointer sliding along the bar (and open the menu the press
+             * then closes). Only a drag, with the finger down, is the menu's. */
+            if (!(event.motion.state & SDL_BUTTON_LMASK)) continue;
+        } else if (event.type == SDL_EVENT_MOUSE_MOTION) {
             static unsigned logged_frame = ~0u;
+            pointer_is_mouse = 1;
             pointer_x = menu_event.x;
             pointer_y = menu_event.y;
             pointer_inside = 1;
@@ -1443,7 +1595,8 @@ static void pump(void)
             /* Alt+Enter (either Enter), beside the Fullscreen binding. The
              * press stops here, so the Enter under Alt never reaches the pad
              * as Start; Alt itself is a reserved modifier (controls.c). */
-            if (down && (key == SDLK_RETURN || key == SDLK_KP_ENTER) && (event.key.mod & SDL_KMOD_ALT)) {
+            if (down && (key == SDLK_RETURN || key == SDLK_KP_ENTER) && (event.key.mod & SDL_KMOD_ALT) &&
+                Platform_HasWindowModes()) {
                 int on = covers_screen();
                 Settings_Set(SET_FULLSCREEN, !on);
                 if (on) Settings_Set(SET_BORDERLESS, 0);
@@ -1451,13 +1604,23 @@ static void pump(void)
                 Platform_ApplyDisplaySettings();
                 break;
             }
+#ifdef SDL_PLATFORM_ANDROID
+            /* Back (android.c traps it): the deck slot screen closes, else
+             * the game asks before it quits, as closing a window does. An
+             * open menu or a notice took it above, as Esc. */
+            if (key == SDLK_AC_BACK) {
+                if (down && DeckMenu_Active()) DeckMenu_Close();
+                else if (down) QuitPrompt_Back(&quit);
+                break;
+            }
+#endif
             if (down && key == SDLK_ESCAPE && DeckMenu_Active()) {
                 DeckMenu_Close(); /* the deck slot screen, not the game */
                 break;
             }
             /* Esc leaves fullscreen first, then borderless; in a window it is
              * only the Exit game control's default key. */
-            if (down && key == SDLK_ESCAPE && covers_screen()) {
+            if (down && key == SDLK_ESCAPE && covers_screen() && Platform_HasWindowModes()) {
                 Settings_Set(Settings_Get(SET_FULLSCREEN) ? SET_FULLSCREEN : SET_BORDERLESS, 0);
                 Settings_Save();
                 Platform_ApplyDisplaySettings();
@@ -1471,11 +1634,24 @@ static void pump(void)
     }
     if (mods_window && mods_dirty) draw_mods();
     mods_dirty = 0;
+    if (TouchPad_SetMode(Settings_Get(SET_TOUCH_PAD))) menu_dirty = 1;
+    /* Once per pump, after every event of it: SDL delivers a tap as finger
+     * events and mouse events made of them, and the pad yielding or coming
+     * back between the two would hand one half to the menu and the other to
+     * the pad. MENU opens the first menu; while a menu, a notice or the bar
+     * drawn over the picture is up, the pad steps aside (touch_pad.h). */
+    if (TouchPad_TakeMenu()) {
+        Menu_Open();
+        menu_dirty = 1;
+    }
+    update_menu_visibility();
+    if (TouchPad_Block(Menu_IsOpen() || Menu_NoticeShown() || (bar_overlays() && menu_visible))) menu_dirty = 1;
+    touch_bits = TouchPad_Update();
     Gamepad_Poll(current_frame);
     if (HostActions_Run(&quit)) menu_dirty = 1;
     /* A notice answers a controller and keeps the game's input at rest. */
     ControlsRuntime_Hold(Menu_NoticeShown());
-    if (Menu_NoticePad(ControlsRuntime_TakePadPresses(), &quit)) menu_dirty = 1;
+    if (Menu_NoticePad(ControlsRuntime_TakePadPresses() | TouchPad_TakePresses(), &quit)) menu_dirty = 1;
     if(controls_window) {
         static uint64_t last_draw;
         ControlsWindow_Tick();
@@ -1488,8 +1664,11 @@ static void pump(void)
 static void create_window(const char *title)
 {
     update_menu_scale(240 * scale + 26 * Menu_AutoScale(240 * scale));
-    window = SDL_CreateWindow(title, 320 * scale, 240 * scale + Menu_Height(),
-                              SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_OPENGL);
+    /* Desktop GL where the system has it (platform.h); else, or without a
+     * context, the SDL renderer. */
+    window = Platform_HasDesktopGL() ? SDL_CreateWindow(title, 320 * scale, 240 * scale + Menu_Height(),
+                                                        SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY |
+                                                        SDL_WINDOW_OPENGL) : NULL;
     gl_context = window ? SDL_GL_CreateContext(window) : NULL;
     use_gl = gl_context != NULL;
     if (!use_gl) {
@@ -1620,6 +1799,7 @@ int Platform_Open(const char *title)
         fprintf(stderr, "memories-pc: SDL: %s; set MEMORIES_HEADLESS=1 to run without a window\n", SDL_GetError());
         return -1;
     }
+    SDL_AddEventWatch(app_event, NULL);
     create_window(title);
     /* A software GL renderer cannot present a scaled 4K frame in the 4 ms a
      * 400% game frame allows. The 32-bit build on an NVIDIA Wayland desktop
@@ -1668,6 +1848,12 @@ int Platform_Open(const char *title)
         LOG(LOG_WINDOW, "SDL fallback renderer %s, video %s", SDL_GetRendererName(renderer), SDL_GetCurrentVideoDriver());
     }
     Menu_Init();
+#ifdef SDL_PLATFORM_ANDROID
+    /* One window, always the whole screen, no update check (android.c):
+     * the rows for a second window, the window's size and mode, and the
+     * update check are dimmed. */
+    Menu_SetPlatformItems(0, 0, 0);
+#endif
     apply_display_settings();
     menu_visible = !covers_screen() || Settings_Get(SET_SHOW_MENU_FULLSCREEN);
     Menu_SetVisible(menu_visible);
@@ -1844,13 +2030,13 @@ void Platform_PumpEvents(void)
 
 uint16_t Platform_Pad(int port)
 {
-    return port == 0 ? (uint16_t)(ControlsRuntime_Keyboard() | (ControlsRuntime_Blocked()?0:(mouse_bits | wheel_now)) | scripted_bits | Gamepad_Bits(0))
+    return port == 0 ? (uint16_t)(ControlsRuntime_Keyboard() | (ControlsRuntime_Blocked()?0:(mouse_bits | wheel_now | touch_bits)) | scripted_bits | Gamepad_Bits(0))
                      : (uint16_t)(Gamepad_Bits(1) | scripted_bits2);
 }
 
 uint16_t Platform_PadFixedBits(int port)
 {
-    return port == 0 ? (uint16_t)((ControlsRuntime_Blocked()?0:(mouse_bits | wheel_now)) | scripted_bits) : scripted_bits2;
+    return port == 0 ? (uint16_t)((ControlsRuntime_Blocked()?0:(mouse_bits | wheel_now | touch_bits)) | scripted_bits) : scripted_bits2;
 }
 
 int Platform_PadConnected(int port) { return port == 0 || Gamepad_Connected(port) || Platform_ScriptedPad2(); }
@@ -1887,9 +2073,9 @@ static void run_event_script(unsigned frame)
             Platform_Screenshot(1);
         } else if (strcmp(kind, "key") == 0 || strcmp(kind, "keydown") == 0 || strcmp(kind, "keyup") == 0 ||
                    strcmp(kind, "down") == 0 || strcmp(kind, "up") == 0) {
-            /* "key" presses and releases in one go; "keydown"/"keyup" (or
-             * "down"/"up") hold a key across frames, as the game only sees
-             * what is held when it reads the pad. */
+            /* "key" presses and releases in one go, a tap the game sees for
+             * one pad update (controls_runtime.c); "keydown"/"keyup" (or
+             * "down"/"up") hold a key across frames. */
             const int press = strcmp(kind, "keyup") != 0 && strcmp(kind, "up") != 0;
             const int release = strcmp(kind, "keydown") != 0 && strcmp(kind, "down") != 0;
             const char *name = script + 1;

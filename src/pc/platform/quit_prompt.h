@@ -7,5 +7,9 @@
  * notice asks first (asked again, it is shown again); otherwise, or on
  * Quit, *quit is set as before. Main thread only. */
 void QuitPrompt_Request(int *quit);
+/* A phone's Back: the same question, with Menu between Quit and Keep
+ * playing, which opens the menu bar's first menu (Menu_Open), a way to the
+ * menus without the touch controls (a controller in hand). */
+void QuitPrompt_Back(int *quit);
 
 #endif

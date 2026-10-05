@@ -25,18 +25,12 @@
 #include <string.h>
 #include <sys/stat.h>
 #include "pc/compat/posix.h"
+/* The declarations the game calls through (and kernel.h's DIRENTRY): a
+ * definition below that disagrees with one is a compile error rather than a
+ * result of the wrong width on LP64 hosts. */
+#include "psyq/libmcrd.h"
 
-/* From libmcrd.h and kernel.h, which pull in MIPS-only headers. */
-enum { McFuncExist = 1, McFuncAccept, McFuncReadFile, McFuncWriteFile };
-enum { McErrNone, McErrCardNotExist, McErrCardInvalid, McErrNewCard, McErrNotFormat, McErrFileNotExist,
-       McErrAlreadyExist, McErrBlockFull };
-struct DIRENTRY {
-    char name[20];
-    long attr, size;
-    struct DIRENTRY *G32 next;
-    long head;
-    char system[4];
-};
+_Static_assert(sizeof(struct DIRENTRY) == 40, "DIRENTRY keeps its 32-bit layout");
 
 #define CARD_SIZE 0x20000
 #define FRAME 128
@@ -56,7 +50,7 @@ typedef struct Card {
 static Card cards[2];
 static int active;
 /* The one command in flight. */
-static long pending_command, pending_result;
+static PSXLONG pending_command, pending_result;
 static unsigned pending_until;
 static int pending;
 
@@ -122,7 +116,7 @@ static int store(Card *card)
 
 /* Re-read the image on every access, so a card swapped or edited outside the
  * game is seen the way a changed card would be. */
-static Card *open_card(long channel)
+static Card *open_card(PSXLONG channel)
 {
     int slot = channel >> 4 ? 1 : 0;
     Card *card = &cards[slot];
@@ -191,7 +185,7 @@ static int matches(const char *pattern, const char *name)
     return !*name;
 }
 
-static void begin(long command, long result, unsigned vblanks)
+static void begin(PSXLONG command, PSXLONG result, unsigned vblanks)
 {
     pending_command = command;
     pending_result = result;
@@ -199,15 +193,15 @@ static void begin(long command, long result, unsigned vblanks)
     pending = 1;
 }
 
-void MemCardInit(long shared_with_pad) { (void)shared_with_pad; }
+void MemCardInit(PSXLONG shared_with_pad) { (void)shared_with_pad; }
 void MemCardEnd(void) {}
 void MemCardStart(void) { active = 1; }
 void MemCardStop(void) { active = 0; }
 
-static long check(long channel, long command)
+static PSXLONG check(PSXLONG channel, PSXLONG command)
 {
     Card *card;
-    long result;
+    PSXLONG result;
     if (pending) {
         return 0;
     }
@@ -222,17 +216,17 @@ static long check(long channel, long command)
     }
     begin(command, result, 20);
     LOG(LOG_MEMCARD, "check channel=%ld command=%ld result=%ld announced=%d",
-        channel, command, result, card ? card->announced : 0);
+        (long)channel, (long)command, (long)result, card ? card->announced : 0);
     return 1;
 }
 
-long MemCardExist(long channel) { return check(channel, McFuncExist); }
-long MemCardAccept(long channel) { return check(channel, McFuncAccept); }
+PSXLONG MemCardExist(PSXLONG channel) { return check(channel, McFuncExist); }
+PSXLONG MemCardAccept(PSXLONG channel) { return check(channel, McFuncAccept); }
 
-static long transfer(long channel, const char *name, u8 *memory, long offset, long bytes, int writing)
+static PSXLONG transfer(PSXLONG channel, const char *name, u8 *memory, PSXLONG offset, PSXLONG bytes, int writing)
 {
     Card *card;
-    long command = writing ? McFuncWriteFile : McFuncReadFile, result = McErrNone;
+    PSXLONG command = writing ? McFuncWriteFile : McFuncReadFile, result = McErrNone;
     int block;
     if (pending) {
         return 0;
@@ -245,10 +239,10 @@ static long transfer(long channel, const char *name, u8 *memory, long offset, lo
     } else if ((block = find(card, name)) < 0) {
         result = McErrFileNotExist;
     } else {
-        long at = offset, left = bytes;
+        PSXLONG at = offset, left = bytes;
         while (left > 0 && block >= 0 && block < BLOCKS) {
             if (at < BLOCK) {
-                long count = BLOCK - at < left ? BLOCK - at : left;
+                PSXLONG count = BLOCK - at < left ? BLOCK - at : left;
                 u8 *data = card->image + BLOCK * (block + 1) + at;
                 if (writing) {
                     memcpy(data, memory, (size_t)count);
@@ -274,18 +268,18 @@ static long transfer(long channel, const char *name, u8 *memory, long offset, lo
     return 1;
 }
 
-long MemCardReadFile(long channel, char *file, unsigned long *address, long offset, long bytes)
+PSXLONG MemCardReadFile(PSXLONG channel, char *file, unsigned PSXLONG *address, PSXLONG offset, PSXLONG bytes)
 {
     return transfer(channel, file, (u8 *)address, offset, bytes, 0);
 }
 
-long MemCardWriteFile(long channel, char *file, unsigned long *address, long offset, long bytes)
+PSXLONG MemCardWriteFile(PSXLONG channel, char *file, unsigned PSXLONG *address, PSXLONG offset, PSXLONG bytes)
 {
     return transfer(channel, file, (u8 *)address, offset, bytes, 1);
 }
 
 /* mode 0 waits for the command; mode 1 reports: 1 done, 0 running, -1 none. */
-long MemCardSync(long mode, long *command, long *result)
+PSXLONG MemCardSync(PSXLONG mode, PSXLONG *command, PSXLONG *result)
 {
     if (!pending) {
         return -1;
@@ -303,11 +297,11 @@ long MemCardSync(long mode, long *command, long *result)
     if (result) {
         *result = pending_result;
     }
-    LOG(LOG_MEMCARD, "sync command=%ld result=%ld", pending_command, pending_result);
+    LOG(LOG_MEMCARD, "sync command=%ld result=%ld", (long)pending_command, (long)pending_result);
     return 1;
 }
 
-long MemCardCreateFile(long channel, char *file, long blocks)
+PSXLONG MemCardCreateFile(PSXLONG channel, char *file, PSXLONG blocks)
 {
     Card *card = open_card(channel);
     int chain[BLOCKS], found = 0, i;
@@ -345,7 +339,7 @@ long MemCardCreateFile(long channel, char *file, long blocks)
     return store(card) == 0 ? McErrNone : McErrCardInvalid;
 }
 
-long MemCardDeleteFile(long channel, char *file)
+PSXLONG MemCardDeleteFile(PSXLONG channel, char *file)
 {
     Card *card = open_card(channel);
     int block;
@@ -371,7 +365,7 @@ long MemCardDeleteFile(long channel, char *file)
     return store(card) == 0 ? McErrNone : McErrCardInvalid;
 }
 
-long MemCardFormat(long channel)
+PSXLONG MemCardFormat(PSXLONG channel)
 {
     Card *card = open_card(channel);
     if (!card) {
@@ -381,10 +375,10 @@ long MemCardFormat(long channel)
     return store(card) == 0 ? McErrNone : McErrCardInvalid;
 }
 
-long MemCardGetDirentry(long channel, char *name, struct DIRENTRY *directory, long *files, long offset, long max)
+PSXLONG MemCardGetDirentry(PSXLONG channel, char *name, struct DIRENTRY *directory, PSXLONG *files, PSXLONG offset, PSXLONG max)
 {
     Card *card = open_card(channel);
-    long seen = 0, stored = 0;
+    PSXLONG seen = 0, stored = 0;
     int i;
     *files = 0;
     if (!card) {
@@ -406,17 +400,17 @@ long MemCardGetDirentry(long channel, char *name, struct DIRENTRY *directory, lo
         }
         memset(&directory[stored], 0, sizeof(directory[stored]));
         memcpy(directory[stored].name, found, 20);
-        directory[stored].attr = (long)STATE_FIRST;
-        directory[stored].size = (long)word(frame + 4);
+        directory[stored].attr = (PSXLONG)STATE_FIRST;
+        directory[stored].size = (PSXLONG)word(frame + 4);
         directory[stored].head = i;
         stored++;
     }
     *files = stored;
     if (Log_Enabled(LOG_MEMCARD)) {
-        LOG(LOG_MEMCARD, "directory channel=%ld pattern='%s' files=%ld", channel, name, stored);
+        LOG(LOG_MEMCARD, "directory channel=%ld pattern='%s' files=%ld", (long)channel, name, (long)stored);
         for (i = 0; i < stored; i++) {
             LOG(LOG_MEMCARD, "directory entry=%d name='%.20s' size=%ld head=%ld",
-                i, directory[i].name, directory[i].size, directory[i].head);
+                i, directory[i].name, (long)directory[i].size, (long)directory[i].head);
         }
     }
     return McErrNone;

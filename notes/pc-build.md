@@ -337,6 +337,47 @@ buttons. Mods: an
 `INPUT` before-hook sees the controller's bits, as `host->pad` does; the
 after-hook sees what the game gets ([mod API](mod-api-3.md)).
 
+**View > Touch controls** (`touch_controls`, `MEMORIES_TOUCH_CONTROLS`: 0
+Automatic, the default; 1 Show; 2 Hide) is an on-screen controller for touch
+screens (phones, tablets, touch laptops): a D-pad and the four face buttons
+at the middle of the left and right sides, L2/L1 and R1/R2 above them,
+SELECT and START below (`platform/touch_pad.c`). It is drawn with the game's
+own pictures, cut off the disc from the boot package the game keeps in VRAM
+(`touch_pad_art.c`, `cards/disc_art.h`): the round Cross, Circle, Triangle and
+Square, START, the L1/L2/R1/R2 tabs and the boxed arrows (Left is Right's,
+turned round); SELECT is set in the game's text font. A button let go is
+see-through; held, it is solid and a little smaller. Automatic shows it once
+the screen is touched (that touch presses nothing) and hides it when a key or
+a controller button is pressed. Several fingers work at once; a finger that
+lands on the pad stays the pad's while it slides (the D-pad goes by the angle
+from its middle, so between two arrows presses both), and one that lands
+elsewhere is the mouse SDL makes of it (the menu bar). It presses the button
+it shows: its bits join the pad state beside the mouse's, which View >
+Japanese buttons does not exchange, and a tap shorter than a frame counts
+once. Hidden, it draws nothing and takes no touch.
+**MENU**, in the game's font under L2/L1 (the D-pad below it), opens the
+menu bar's first menu (`TouchPad_TakeMenu`, taken in the event pump): the
+way to the menus where the bar is hidden, as in fullscreen or on a phone.
+While a menu, a notice or a bar drawn over the picture is up, the pad
+steps aside (`TouchPad_Block`: it draws nothing, takes no touch and lets
+go of what it held), so their rows and buttons are the finger's; it is
+decided once per event pump, after all of its events, since SDL delivers a
+tap as finger events and mouse events made of them. The mouse SDL makes of
+a finger does not hover: its moves reach the menu only while the finger is
+down (a drag), so its last place never keeps the bar shown, and a tap at
+the top of the screen shows a hidden bar under it. Where the window is
+always the whole screen (`Platform_HasWindowModes` 0, an Android app) the
+bar is drawn over the picture instead of pushing it down. Where the system
+gives the density (Android), a button is 48 to 80 dp wide (13% of the
+short side otherwise, and never above 16% of it), and SELECT, START and
+MENU take a touch a button tall. The save slot and deck slot menus, which
+the pad plays, keep between its columns while it shows
+(`TouchPad_FreeSpan`, `Menu_SetOverlayArea`); narrower than their one-row
+layout, a slot's details go on lines under its name and the hints wrap
+(`saves/flow_text.h`); the deck slot menu's messages break at spaces where
+the box is narrower than them (`centred_words`, `deck_menu.c`); the text
+gets smaller only when even that does not fit.
+
 Esc quits (it closes an open menu first): it is the default key of Game >
 Controls' **Exit game**. With **File > Confirm before quitting** on (the
 default) it asks "Quit the game?" first: Quit or Keep playing, Keep playing
@@ -623,6 +664,11 @@ writable (not under `Program Files`); if `user/` cannot be made the port
 falls back to `./saves` as for any user directory. Without the file nothing
 changes.
 
+The program directory (the release's `mods/`, `languages/`, the build's
+`buildid` and `symbols/` for save states, `game/`) is the executable's
+folder; `MEMORIES_PROGRAM_DIR` names another, for a process that is not the
+port's own executable (an Android app, which unpacks those files).
+
 What an older build left in `./saves` is carried over on the first launch
 that finds the destination missing (`Paths_MigrateLegacySaves`), so an
 existing card, settings and bindings survive the move. The game's own files
@@ -741,6 +787,15 @@ alpha passes over a 4K dropdown made the game crawl whenever a menu was
 open. `MEMORIES_TRACE=window` reports compositions per 120 frames.
 A row with a triangle opens a submenu beside it (one level: `ITEM_SUBMENU`,
 `submenus[]`), on hover, click, Enter or Right; Left or Esc closes it.
+A submenu that would run off the bottom of the window moves up, and a menu
+still taller than the window (a small window; a phone's finger-sized rows)
+is cut to it and scrolls: arrow bands at its ends move it a row, the wheel
+or a drag scrolls it, and the arrow keys keep the lit row in view. A press
+on a row of such a menu acts when it comes up without having dragged, so a
+finger can scroll it without choosing what it lands on; a slider's row
+takes the pointer at once. One geometry (`drop_box` in `menu.c`) serves the
+drawing, the hit-testing and the dirty rectangle. Menus that fit are drawn
+and behave as before.
 
 The menu draws at a size multiple (`menu_scale`, `MEMORIES_MENU_SCALE`, View >
 Menu size): bar, rows, marks, font and the HUD all scale together, and the
