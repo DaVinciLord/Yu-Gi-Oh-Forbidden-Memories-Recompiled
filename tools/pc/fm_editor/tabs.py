@@ -8,6 +8,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from . import bulk_dialog, guardian_stars, manifest, pools as poolmath, text_menu, validate
+from .card_text_box import CardTextBox
 from .monster_effects_ui import EffectsBox
 from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, DUELIST_NAMES,
                        EQUIP_BONUS_MAX, FRAME_NAMES,
@@ -226,7 +227,8 @@ class CardsTab(Tab):
         self.captions["text"] = ttk.Label(form, text="Card text")
         self.captions["text"].grid(row=row, column=0, sticky="nw", pady=2)
         # 21 columns: the game's 20 letters a line and room for the cursor.
-        self.text = tk.Text(form, width=21, height=9, wrap="word", font=("Consolas", 10))
+        # Drawn as the card view's panel: icons and colours as the game shows them.
+        self.text = CardTextBox(form, app, width=21, height=9, wrap="word", font=("Consolas", 10))
         self.text.grid(row=row, column=1, sticky="w", pady=2)
         self.hints["text"] = ttk.Label(form, style="Hint.TLabel", width=HINT_WIDTH)
         self.hints["text"].grid(row=row, column=2, sticky="nw", padx=6, pady=2)
@@ -235,7 +237,7 @@ class CardsTab(Tab):
         self.lines = ttk.Label(form, style="Hint.TLabel")
         self.lines.grid(row=row, column=1, columnspan=2, sticky="w")
         row += 1
-        self.text.bind("<KeyRelease>", lambda e: (self.count_lines(), self.mark_later()))
+        self.text.bind("<KeyRelease>", lambda e: (self.count_lines(), self.mark_later()), add=True)
         # Right-click: insert an icon or a colour, shown as the game draws them.
         text_menu.install(app, self.text, lambda: (self.count_lines(), self.mark_later()))
         # The frame the card view, the Library and the duel draw it in: its

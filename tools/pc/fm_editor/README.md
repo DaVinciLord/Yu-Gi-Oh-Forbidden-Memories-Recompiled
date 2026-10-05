@@ -110,6 +110,13 @@ would leave out.
 
 ### Icons and colours in card text
 
+The card text box is drawn as the card view's text panel: dark blue, white
+letters, an icon as the icon itself, two letters wide as the game sets it,
+and a colour as a thin bar of it, the letters after it in that colour. What
+is saved is still the codes: a code typed or pasted in full becomes its
+picture, and copying puts the codes on the clipboard. Without the game files
+the codes stay as written.
+
 Right-click the card text box for **Insert icon...** and **Text colour**.
 **Insert icon...** opens a window of every icon, as the game draws it, by
 group (the monster types, the card kinds, the guardian stars, the buttons);

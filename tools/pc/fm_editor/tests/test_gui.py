@@ -14,7 +14,9 @@ from pathlib import Path
 from fm_editor.tests.test_data import fixture
 
 
-class GuiTest(unittest.TestCase):
+class GuiCase(unittest.TestCase):
+    """The window on the fixture's game files, for each test."""
+
     @classmethod
     def setUpClass(cls):
         if tk is None:
@@ -57,6 +59,9 @@ class GuiTest(unittest.TestCase):
 
     def click_heading(self, tree, column):
         tree.tk.call(tree.heading(column, "command"))
+
+
+class GuiTest(GuiCase):
 
     def test_card_heading_sort_and_pending_edit(self):
         tab, p = self.app.cards, self.app.project
@@ -1570,7 +1575,7 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class MonsterEffectsGuiTest(GuiTest):
+class MonsterEffectsGuiTest(GuiCase):
     """The Cards tab's Monster effects box and the card text's right-click
     menu."""
 
@@ -1658,3 +1663,40 @@ class MonsterEffectsGuiTest(GuiTest):
         cards.effects_box.effects.append({"when": "summon", "do": "heal", "amount": 500})
         cards.effects_box.store()
         self.assertEqual(cards.swatch.cget("background"), FRAME_COLOURS[5])
+
+
+class CardTextBoxTest(GuiCase):
+    """The card text box shows codes as pictures and gives them back."""
+
+    def test_codes_shown_and_kept(self):
+        cards = self.app.cards
+        cards.tree.selection_set("1")
+        cards.select()
+        box = cards.text
+        # Game files with the Dragon icon (the fixture's have none).
+        from fm_editor.tests.test_card_text import icon_wa
+        with mock.patch.object(self.app.files, "wa", icon_wa()):
+            self.assertTrue(box._pictures())
+        box.delete("1.0", "end")
+        text = "{f8 0A 05}<Effect>{f8 0A 00} {f8 0B 00}x"
+        box.insert("1.0", text)
+        self.assertEqual(box.get("1.0", "end-1c"), text)
+        self.assertEqual(len(box.image_names()), 3)
+        self.assertIn("colour5", box.tag_names("1.2"))
+        # Typed by hand (Tcl's own insert, as a key does): a picture once whole.
+        box.tk.call(box._w, "insert", "end", " {f8 0b 00}")
+        self.assertTrue(box.bind("<KeyRelease>"))      # a key's release runs it (the window is withdrawn here)
+        box.picture_codes()
+        self.assertEqual(box.get("1.0", "end-1c"), text + " {f8 0B 00}")
+        self.assertEqual(len(box.image_names()), 4)
+        # The clipboard carries the codes.
+        box.tag_add("sel", "1.0", "end-1c")
+        box.event_generate("<<Copy>>")
+        self.assertEqual(box.clipboard_get(), text + " {f8 0B 00}")
+        box.delete("1.0", "end")
+        box.event_generate("<<Paste>>")
+        self.assertEqual(box.get("1.0", "end-1c"), text + " {f8 0B 00}")
+        self.assertEqual(len(box.image_names()), 4)
+        # Applied as written.
+        self.assertTrue(cards.apply())
+        self.assertEqual(self.app.project.cards[1].description, text + " {f8 0B 00}")
