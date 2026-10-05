@@ -20,7 +20,7 @@ assets/build/files/ with their list in build/files.txt
 (src/pc/platform/android.c unpacks them).
 
 Output: <build>/memories-<abi>.apk. notes/pc-build.md, "Android"."""
-import glob, os, shutil, subprocess, sys, zipfile
+import glob, os, re, shutil, subprocess, sys, zipfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import build_android_deps
@@ -37,9 +37,25 @@ RELEASE_ALIAS = "yfm-release"
 STORE_PASS_VAR, KEY_PASS_VAR = "MEMORIES_APKSIGNER_STORE_PASS", "MEMORIES_APKSIGNER_KEY_PASS"
 TARGET_SDK = 35
 
+# The app's version (app_version): versionCode orders updates (Android installs
+# an APK only over one with the same or a lower code) and versionName is what
+# the player sees. A release vMAJOR.MINOR.PATCH[-LABEL.N] gets
+#   MAJOR*1000000 + MINOR*10000 + PATCH*100 + STAGE
+# with STAGE 99 for the release itself and PRERELEASE[LABEL] + N (N 0-19)
+# before it, so codes rise in the order versions compare (notes/updates.md):
+# v0.2.0-preview.1 = 20041 < v0.2.0-rc.1 = 20061 < v0.2.0 = 20099 <
+# v0.2.1-preview.1 = 20141. MINOR and PATCH are 0-99, MAJOR at most 2146 (the
+# code is a 32-bit int). A development build takes the code of the newest
+# v* tag it descends from (an equal code installs over it), at least
+# VERSION_FLOOR, above the 1 every earlier test APK had.
+VERSION = re.compile(r"v(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?")
+PRERELEASE = {"alpha": 0, "beta": 20, "preview": 40, "rc": 60}
+RELEASE_STAGE = 99
+VERSION_FLOOR = 2
+
 MANIFEST = f"""<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="{PACKAGE}" android:versionCode="1" android:versionName="m1">
+    package="{PACKAGE}" android:versionCode="@VERSION_CODE@" android:versionName="@VERSION_NAME@">
     <uses-feature android:glEsVersion="0x00020000" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.hardware.gamepad" android:required="false" />
@@ -192,6 +208,55 @@ def check_fingerprint(digest, expected):
     return f"the signer's SHA-256 {colons(digest)} is not the expected {expected}"
 
 
+def version_code(version):
+    """versionCode for a release version vX.Y.Z[-LABEL[.N]] (VERSION above).
+    Stops the build for one the scheme has no room for."""
+    major, minor, patch, pre = VERSION.fullmatch(version).groups()
+    major, minor, patch = int(major), int(minor), int(patch)
+    if minor > 99 or patch > 99 or major > 2146:
+        sys.exit(f"{version}: versionCode has room for minor and patch 0-99 and major up to 2146 (package_android.py)")
+    stage = RELEASE_STAGE
+    if pre:
+        match = re.fullmatch(r"([A-Za-z]+)(?:\.(\d+))?", pre)
+        if not match or match.group(1).lower() not in PRERELEASE or int(match.group(2) or 0) > 19:
+            sys.exit(f"{version}: a pre-release for the APK is -LABEL.N with LABEL one of {', '.join(PRERELEASE)} "
+                     f"and N 0-19, for its versionCode (package_android.py)")
+        stage = PRERELEASE[match.group(1).lower()] + int(match.group(2) or 0)
+    return major * 1000000 + minor * 10000 + patch * 100 + stage
+
+
+def git_describe(*options):
+    try:
+        result = subprocess.run(["git", "describe", "--tags", "--match", "v[0-9]*", *options], cwd=ROOT,
+                                capture_output=True, text=True)
+    except OSError:
+        return ""
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
+def app_version():
+    """(versionCode, versionName). The version is MEMORIES_VERSION when set
+    (package.py's --version: the tag in CI), else the v* tag the checkout is
+    exactly at, as for the desktop games (build_game32.release_version). A
+    release version gives version_code() and its name without the v
+    (0.2.0-preview.1). Anything else is a development build: the code of the
+    newest v* tag it descends from, the name git describe's (0.2.0-12-g<sha>);
+    with no tag in reach (a shallow clone), VERSION_FLOOR and 0.0.0-dev."""
+    version = os.environ.get("MEMORIES_VERSION")
+    if version is None:
+        version = git_describe("--exact-match")
+    if VERSION.fullmatch(version):
+        return version_code(version), version[1:]
+    base = git_describe("--abbrev=0")
+    if not VERSION.fullmatch(base):
+        return VERSION_FLOOR, "0.0.0-dev"
+    try:
+        code = version_code(base)
+    except SystemExit:   # an old tag outside the scheme does not stop a development build
+        code = VERSION_FLOOR
+    return max(code, VERSION_FLOOR), (git_describe("--abbrev=10", "--dirty") or base)[1:]
+
+
 def program_files(build, folders):
     """The files under <build>/<folder> for each of `folders`, as assets
     under build/files/, and build/files.txt listing them (one relative path
@@ -215,8 +280,9 @@ def package(build, abi, library, game, assets):
     apk_path = os.path.join(build, f"memories-{abi}.apk")
     if os.path.exists(apk_path):
         os.remove(apk_path)   # a failed build leaves no APK of an earlier build behind
-    # The key and the expected fingerprint first: a mistake in either stops
-    # the build before anything is made.
+    # The version, the key and the expected fingerprint first: a mistake in
+    # any stops the build before anything is made.
+    code, version_name = app_version()
     options, environment, description = signing_key()
     expected = os.environ.get("MEMORIES_ANDROID_CERT_SHA256")
     if expected:
@@ -236,7 +302,7 @@ def package(build, abi, library, game, assets):
     run([tool(build_tools, "d8"), "--release", "--min-api", str(build_android_deps.API), "--lib", android_jar,
          "--output", os.path.join(work, "dex"), *classes])
     with open(os.path.join(work, "AndroidManifest.xml"), "w", encoding="utf-8") as handle:
-        handle.write(MANIFEST)
+        handle.write(MANIFEST.replace("@VERSION_CODE@", str(code)).replace("@VERSION_NAME@", version_name))
     unaligned = os.path.join(work, "unaligned.apk")
     run([tool(build_tools, "aapt2"), "link", "-o", unaligned, "-I", android_jar, "--manifest",
          os.path.join(work, "AndroidManifest.xml"), "--min-sdk-version", str(build_android_deps.API),
@@ -253,7 +319,8 @@ def package(build, abi, library, game, assets):
     run([tool(build_tools, "zipalign"), "-p", "-f", "4", unaligned, aligned])
     run([tool(build_tools, "apksigner"), "sign", *options, "--out", apk_path, aligned], env=environment)
     certificate = signer(apk_path, build_tools)
-    print(f"{apk_path}: {PACKAGE}, lib/{abi}/libmain.so + libgame.so + libSDL3.so, {len(assets)} assets")
+    print(f"{apk_path}: {PACKAGE} {version_name} (versionCode {code}), "
+          f"lib/{abi}/libmain.so + libgame.so + libSDL3.so, {len(assets)} assets")
     print(f"{apk_path}: signed with {description}, verified (apksigner verify)\n"
           f"  certificate: {certificate['dn']}\n  SHA-256: {colons(certificate['sha256'])}")
     if expected:

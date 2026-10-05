@@ -211,7 +211,11 @@ jobs:
       run:
         shell: bash
     steps:
+      # The whole history with its tags: a development APK takes the
+      # versionCode of the newest v* tag it descends from (package_android.py).
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

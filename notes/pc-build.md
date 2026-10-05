@@ -3175,7 +3175,9 @@ adb install -r tmp/pc/android-x86/memories-x86.apk
   The variables, the release key (held by Unchiga, in the repository's
   secrets; releases are signed only by CI) and `package.py android-arm64`
   (`dist/yfm-redecomp-<version>-android-arm64.apk`, release key only) are
-  in [PC release](pc-release.md), "Android signing". The release APK does not
+  in [PC release](pc-release.md), "Android signing". `versionCode` and
+  `versionName` come from the build's version (pc-release.md, "Version":
+  `v0.3.0-preview.1` is 30041, `0.3.0-preview.1`). The release APK does not
   install over a debug-signed one (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`):
   uninstall the test app once first, which deletes its files (disc copy,
   saves). The

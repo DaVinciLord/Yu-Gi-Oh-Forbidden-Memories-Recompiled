@@ -253,6 +253,48 @@ could become a repository variable (`ANDROID_KEY_ALIAS` on the **Variables**
 tab, read as `vars.ANDROID_KEY_ALIAS` in the workflow), and the logs would
 show it plainly.
 
+### Version
+
+`package_android.py` writes the APK's `versionCode` and `versionName` from
+the build's version: `MEMORIES_VERSION` (`package.py --version`, the tag in
+CI), else the `v*` tag the checkout is exactly at, as for the desktop
+games' update check ([updates](updates.md)). Android installs an APK only
+over one with the same or a lower `versionCode`, so codes must rise from
+release to release. For `vMAJOR.MINOR.PATCH[-LABEL.N]`:
+
+```text
+versionCode = MAJOR*1000000 + MINOR*10000 + PATCH*100 + STAGE
+STAGE       = 99 for the release itself
+              alpha+N: 0+N, beta+N: 20+N, preview+N: 40+N, rc+N: 60+N   (N 0-19)
+```
+
+| Tag | versionCode | versionName |
+| --- | --- | --- |
+| `v0.2.0` | 20099 | `0.2.0` |
+| `v0.3.0-preview.1` | 30041 | `0.3.0-preview.1` |
+| `v0.3.0-rc.2` | 30062 | `0.3.0-rc.2` |
+| `v0.3.0` | 30099 | `0.3.0` |
+| `v1.0.0` | 1000099 | `1.0.0` |
+
+The codes rise in the order the versions compare (semver:
+alpha < beta < preview < rc < release). MINOR and PATCH are 0-99, and N is
+0-19. A tag outside that (`-nightly.1`, `-rc.20`, `v0.100.0`) stops the
+Android build with a message. Change the scheme here only upward: a code
+lower than a published one can never update it.
+
+A development build (`dev-<sha>` in CI, an untagged checkout) takes the code
+of the newest `v*` tag it descends from: an equal code installs over that
+release, and the next release is higher. Its name is `git describe`'s
+(`0.2.0-12-g2dffe92641`). With no tag in reach (a shallow clone), the code is
+2 and the name `0.0.0-dev`; the `android` job checks out the whole history
+(`fetch-depth: 0`), so it always has the tags. Every code is above the
+`versionCode` 1 of the APKs made before this (`versionName` `m1`).
+`aapt2 dump badging <apk>` (build-tools) shows both:
+
+```text
+package: name='org.yfmredecomp.game' versionCode='30041' versionName='0.3.0-preview.1' ...
+```
+
 ### Test APKs signed with the debug key
 
 An APK built without the release key (every local
