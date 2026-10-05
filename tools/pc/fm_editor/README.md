@@ -112,7 +112,10 @@ would leave out.
 
 The card text box is drawn as the card view's text panel: dark blue, white
 letters, an icon as the icon itself, two letters wide as the game sets it,
-and a colour as a thin bar of it, the letters after it in that colour. What
+and a colour as a thin bar of it, the letters after it in that colour. Its
+lines break where the game's do (twenty letters, an icon two, a word kept
+whole; a word too long for the box cut at its edge), so what it shows is
+what the card view will show, line for line. What
 is saved is still the codes: a code typed or pasted in full becomes its
 picture, and copying puts the codes on the clipboard. Without the game files
 the codes stay as written.

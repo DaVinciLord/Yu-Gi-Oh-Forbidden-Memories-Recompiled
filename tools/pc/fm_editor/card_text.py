@@ -79,11 +79,12 @@ def code_at(text: str, i: int):
     return match.group(0), 0 if kind == "0A" else 2 if kind == "0B" else 1
 
 
-def encode(text: str, colours: bool = False) -> list:
+def encode(text: str, colours: bool = False, breaks: list = None) -> list:
     """The glyphs cards.c encode_description writes: characters, " " for
     the space it puts between words, "\\n" for its line breaks (0xFE). An
     icon or numbered glyph is its code as written, in one cell; a colour
-    code takes none and is left out (kept as written with `colours`)."""
+    code takes none and is left out (kept as written with `colours`).
+    `breaks` gets the index in text of each space the wrapping breaks at."""
     out, column, i = [], 0, 0
     while i < len(text):
         c = text[i]
@@ -108,6 +109,8 @@ def encode(text: str, colours: bool = False) -> list:
         if column and column + 1 + letters > LINE_LETTERS:
             out.append("\n")
             column = 0
+            if breaks is not None:
+                breaks.append(i - 1)
         elif column:
             out.append(" ")
             column += 1
@@ -119,6 +122,14 @@ def encode(text: str, colours: bool = False) -> list:
                 out.append(letter)
         i = end
     return out
+
+
+def wrap_points(text: str) -> list:
+    """The spaces of text (indices) where the game's wrapping starts a new
+    line: twenty letters a line, an icon two, a word never split."""
+    breaks = []
+    encode(text, breaks=breaks)
+    return breaks
 
 
 @dataclass

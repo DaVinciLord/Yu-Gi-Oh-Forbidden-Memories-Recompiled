@@ -1645,7 +1645,7 @@ class MonsterEffectsGuiTest(GuiCase):
         menu.destroy()
         # The picker: every icon, no taller than the screen, the icon going
         # where the cursor was when it opened.
-        text.mark_set("insert", "1.end")
+        text.mark_set("insert", "end-1c")
         picker = text_menu.IconPicker(self.app, text, lambda: None, 0, 0)
         self.assertEqual(sorted(picker.buttons), list(range(41)))
         self.assertLessEqual(picker.winfo_reqheight(), picker.winfo_screenheight())
@@ -1686,7 +1686,7 @@ class CardTextBoxTest(GuiCase):
         # Typed by hand (Tcl's own insert, as a key does): a picture once whole.
         box.tk.call(box._w, "insert", "end", " {f8 0b 00}")
         self.assertTrue(box.bind("<KeyRelease>"))      # a key's release runs it (the window is withdrawn here)
-        box.picture_codes()
+        box.layout()
         self.assertEqual(box.get("1.0", "end-1c"), text + " {f8 0B 00}")
         self.assertEqual(len(box.image_names()), 4)
         # The clipboard carries the codes.
@@ -1697,6 +1697,15 @@ class CardTextBoxTest(GuiCase):
         box.event_generate("<<Paste>>")
         self.assertEqual(box.get("1.0", "end-1c"), text + " {f8 0B 00}")
         self.assertEqual(len(box.image_names()), 4)
+        # Lines broken where the game breaks them: the space shows as a line's
+        # end and reads back as the space.
+        long = "aaaaaaaaaaaaaaa {f8 0B 00}{f8 0B 00} b"
+        box.delete("1.0", "end")
+        box.insert("1.0", long)
+        self.assertEqual(box.get("1.0", "end-1c"), long)
+        self.assertEqual(box.index("end-1c").split(".")[0], "2")
+        box.delete("1.0", "end")
+        box.insert("1.0", text + " {f8 0B 00}")
         # Applied as written.
         self.assertTrue(cards.apply())
         self.assertEqual(self.app.project.cards[1].description, text + " {f8 0B 00}")

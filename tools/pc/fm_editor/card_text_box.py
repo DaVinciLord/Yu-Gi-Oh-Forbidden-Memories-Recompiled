@@ -1,14 +1,21 @@
 """The Cards tab's card text box, drawn as the card view's text panel: its
 dark blue, white letters, an icon code ({f8 0B NN}) shown as the icon off
 the disc, two letters wide as the game sets it, and a colour code
-({f8 0A NN}) as a thin bar of its colour, the letters after it in that
+({f8 0A NN}) as a hairline of its colour, the letters after it in that
 colour (notes/more-cards.md, "Card text codes").
 
+Its lines break where the game's do (card_text.wrap_points: twenty
+letters a line, an icon two, a word never split), not where Tk's own
+word wrapping would (it breaks between any two pictures): the space the game
+breaks at shows as the end of the line, a "soft" newline that reads back
+as that space.
+
 What it holds is still the text with its codes: get() gives them back for
-the pictures, insert() and a paste turn the codes in what they insert into
-pictures, and a code typed in full becomes one. Copy and cut put the codes
-on the clipboard. Without the game files (no icons to show) the codes stay
-as written."""
+the pictures and soft newlines, and after every change (typing, a paste,
+insert(), delete()) the box is laid out again from that text, so a code
+typed or pasted in full becomes its picture. Copy and cut put the codes on
+the clipboard. Without the game files the codes stay as written, and the
+lines still break as the game's."""
 from __future__ import annotations
 
 import base64
@@ -21,24 +28,30 @@ from . import card_text, pngio
 PANEL = "#%02x%02x%02x" % card_text.PANEL
 INK = "#f8f8f8"
 SELECT = "#4060a0"
-# The codes the box shows as pictures (card_text.CODE, less {g X}), for
-# Python and for Tk's own search.
+SOFT = "soft"           # the tag of the newlines the wrapping puts in
+# The codes the box shows as pictures (card_text.CODE, less {g X}).
 PICTURED = re.compile(r"\{f8 *(0[AaBb]) *([0-9A-Fa-f]{1,2})\}")
-PICTURED_TCL = r"\{f8 *0[AaBb] *[0-9A-Fa-f]{1,2}\}"
 
 
 class CardTextBox(tk.Text):
     keeps_colours = True    # the theme (theme.py) leaves the card view's colours, in either look
+
     def __init__(self, master, app, **options):
+        # The lines are broken here, as the game breaks them; Tk only cuts a
+        # word too long for the box at its edge (21 letters), as the card
+        # view does.
+        options["wrap"] = "char"
         super().__init__(master, background=PANEL, foreground=INK, insertbackground=INK, selectbackground=SELECT,
                          selectforeground=INK, inactiveselectbackground=SELECT, **options)
         self.app = app
         self.codes = {}         # embedded image name -> its code
         self._source = None     # the game files the pictures are of
         self._icons, self._bars, self._inks = {}, {}, {}
+        self._laying = False
         for event, handler in (("<<Copy>>", self._copy), ("<<Cut>>", self._cut), ("<<Paste>>", self._paste)):
             self.bind(event, handler)
-        self.bind("<KeyRelease>", lambda e: self.picture_codes(), add=True)
+        # Any change (a key, a drop, the middle button's paste): laid out again.
+        self.bind("<<Modified>>", self._modified, add=True)
 
     # --- the pictures -----------------------------------------------------------
 
@@ -70,7 +83,8 @@ class CardTextBox(tk.Text):
             rgb = ramp[15]
             self._inks[n] = "#%02x%02x%02x" % rgb
             self.tag_configure(f"colour{n}", foreground=self._inks[n])
-            bar = pngio.Image(3, line, bytes((*rgb, 255)) * (3 * line))
+            # A colour takes no room in the game: a hairline here.
+            bar = pngio.Image(2, line, bytes((*rgb, 255)) * (2 * line))
             self._bars[n] = tk.PhotoImage(master=self, data=base64.b64encode(pngio.encode(bar)), format="png")
         return True
 
@@ -83,62 +97,108 @@ class CardTextBox(tk.Text):
 
     # --- what it holds ----------------------------------------------------------
 
+    def _pieces(self, index1="1.0", index2="end-1c"):
+        """(box index, the text it stands for) of each piece between the
+        two: runs of letters, pictures (their codes), soft newlines (a space)."""
+        soft = SOFT in self.tag_names(index1)
+        for key, value, index in self.dump(index1, index2, text=True, image=True, tag=True):
+            if key == "tagon" and value == SOFT:
+                soft = True
+            elif key == "tagoff" and value == SOFT:
+                soft = False
+            elif key == "text":
+                yield index, value.replace("\n", " ") if soft else value
+            elif key == "image":
+                yield index, self.codes.get(value, "")
+
     def get(self, index1, index2=None):
-        """The text with its codes: a picture gives back the code it shows."""
-        if index2 is None:
-            index2 = f"{index1}+1c"
-        out = []
-        for key, value, _ in self.dump(index1, index2, text=True, image=True):
-            out.append(value if key == "text" else self.codes.get(value, ""))
-        return "".join(out)
+        """The text with its codes: a picture gives back the code it shows,
+        a soft newline the space it stands for."""
+        return "".join(text for _, text in self._pieces(index1, index2 or f"{index1}+1c"))
+
+    def _index_of(self, offset: int) -> str:
+        """The box index of character `offset` of get()'s text (after a
+        picture whose code it falls inside)."""
+        seen = 0
+        for index, text in self._pieces():
+            if offset < seen + len(text):
+                if self._is_image(index):
+                    return index if offset == seen else f"{index}+1c"
+                return f"{index}+{offset - seen}c"
+            seen += len(text)
+        return "end-1c"
+
+    def _is_image(self, index) -> bool:
+        try:
+            self.image_cget(index, "image")
+            return True
+        except tk.TclError:
+            return False
 
     def insert(self, index, chars, *args):
-        """As Text.insert, the codes in chars shown as their pictures."""
-        if not chars or not self._pictures():
-            super().insert(index, chars, *args)
-            self.recolour()
-            return
-        self.mark_set("card_text_at", index)
-        self.mark_gravity("card_text_at", "right")
-        at = 0
-        for match in PICTURED.finditer(chars):
-            image = self._picture(match.group(0))
-            if image is None:
-                continue
-            if match.start() > at:
-                super().insert("card_text_at", chars[at:match.start()], *args)
-            name = self.image_create("card_text_at", image=image)
-            self.codes[name] = "{f8 %s %s}" % (match.group(1).upper(), match.group(2).upper().zfill(2))
-            at = match.end()
-        if at < len(chars):
-            super().insert("card_text_at", chars[at:], *args)
-        self.mark_unset("card_text_at")
-        self.recolour()
+        """As Text.insert, then laid out again: the codes in chars as their
+        pictures, the lines broken as the game's."""
+        super().insert(index, chars, *args)
+        self.layout()
 
     def delete(self, index1, index2=None):
         super().delete(index1, index2)
-        self.recolour()
+        self.layout()
 
-    def picture_codes(self):
-        """A code typed or pasted in full becomes its picture, the cursor
-        staying after it."""
-        if not self._pictures():
+    def _modified(self, event=None):
+        # The flag going back to false is an event too: only a change counts.
+        if self._laying or not self.edit_modified():
             return
-        count = tk.IntVar()
-        start = "1.0"
-        while True:
-            found = self.search(PICTURED_TCL, start, "end", regexp=True, count=count)
-            if not found:
-                break
-            end = f"{found}+{count.get()}c"
-            code = super().get(found, end)
-            if self._picture(code) is None:
-                start = end
-                continue
-            super().delete(found, end)
-            self.insert(found, code)      # the cursor, after the code, stays after its picture
-            start = f"{found}+1c"
-        self.recolour()
+        self.edit_modified(False)
+        self.after_idle(self.layout)
+
+    def layout(self):
+        """The box again from its text: pictures for the codes, the game's
+        line breaks, the colours; the cursor and a selection where they were
+        in the text."""
+        if self._laying or not self.winfo_exists() or str(self.cget("state")) != "normal":
+            return
+        text = self.get("1.0", "end-1c")
+        cursor = len(self.get("1.0", "insert"))
+        selection = (len(self.get("1.0", "sel.first")), len(self.get("1.0", "sel.last"))) \
+            if self.tag_ranges("sel") else None
+        breaks = set(card_text.wrap_points(text))
+        pictures = self._pictures()
+        self._laying = True
+        try:
+            super().delete("1.0", "end")
+            self.codes.clear()
+            at = 0
+            for match in (PICTURED.finditer(text) if pictures else ()):
+                image = self._picture(match.group(0))
+                if image is None:
+                    continue
+                self._put_text(text, at, match.start(), breaks)
+                name = self.image_create("end", image=image)
+                self.codes[name] = "{f8 %s %s}" % (match.group(1).upper(), match.group(2).upper().zfill(2))
+                at = match.end()
+            self._put_text(text, at, len(text), breaks)
+            self.mark_set("insert", self._index_of(cursor))
+            if selection:
+                self.tag_add("sel", self._index_of(selection[0]), self._index_of(selection[1]))
+            self.recolour()
+            self.see("insert")
+        finally:
+            self.edit_modified(False)
+            self._laying = False
+
+    def _put_text(self, text, start, end, breaks):
+        """text[start:end] at the end, a soft newline in place of each space
+        the game breaks at."""
+        run = start
+        for i in range(start, end):
+            if i in breaks:
+                if i > run:
+                    super().insert("end", text[run:i])
+                super().insert("end", "\n", SOFT)
+                run = i + 1
+        if end > run:
+            super().insert("end", text[run:end])
 
     def recolour(self):
         """The letters after a colour code in its colour, as the game draws
@@ -179,8 +239,7 @@ class CardTextBox(tk.Text):
         except tk.TclError:
             return "break"
         if self.tag_ranges("sel"):
-            self.delete("sel.first", "sel.last")
+            super().delete("sel.first", "sel.last")
         self.insert("insert", chars)
-        self.see("insert")
         self.event_generate("<KeyRelease>")
         return "break"
