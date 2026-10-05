@@ -83,3 +83,21 @@ class GameFilesTest(unittest.TestCase):
         self.assertEqual((image.width, image.height), (2 * card_view.WIDTH, 2 * card_view.HEIGHT))
         # The stone's dark blue inside the description box, the frame's tan on its edge.
         self.assertEqual(view.render(4, 9, 1, "").pixel(100, 180)[2] > 40, True)
+
+
+@unittest.skipUnless((GAME / "DATA" / "WA_MRG.MRG").is_file(), "needs the game files in game/")
+class CardIconsTest(unittest.TestCase):
+    def test_pictures_off_the_disc(self):
+        from fm_editor import card_icons
+        wa = (GAME / "DATA" / "WA_MRG.MRG").read_bytes()
+        balls = [card_icons.attribute(wa, n) for n in range(8)]
+        self.assertTrue(all(b is not None and (b.width, b.height) == (16, 16) for b in balls))
+        # Light's middle is gold, Water's blue, Fire's red, Wind's green.
+        r, g, b, _ = balls[0].pixel(8, 8)
+        self.assertTrue(r > b and g > b)
+        self.assertGreater(balls[3].pixel(8, 8)[2], balls[3].pixel(8, 8)[0])
+        self.assertGreater(balls[4].pixel(8, 8)[0], balls[4].pixel(8, 8)[2])
+        self.assertGreater(balls[5].pixel(8, 8)[1], balls[5].pixel(8, 8)[0])
+        self.assertEqual((card_icons.level_star(wa).width, card_icons.sword(wa).width, card_icons.shield(wa).width),
+                         (9, 8, 8))
+        self.assertIsNone(card_icons.attribute(b"", 0))

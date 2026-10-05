@@ -4,7 +4,8 @@ the type and the stars as they are typed. "Fit" (the default) makes it as
 tall as the card text box, so the form keeps its height; 1x-3x are the
 game's pixels doubled or tripled. Its language (the port's translations:
 their spacing and accented letters) and size are the window's settings,
-in a column of their own on its right, over `side` (which the tab fills)."""
+side by side over it, then `side` (which the tab fills), so it is no wider
+than the picture."""
 from __future__ import annotations
 
 import base64
@@ -30,20 +31,20 @@ class CardViewPreview(ttk.Frame):
         saved = settings.load()
         self.language = tk.StringVar(self, value=saved.get("card_view_language", "en-us"))
         self.size = tk.StringVar(self, value=saved.get("card_view_size", "Fit"))
-        self.picture = ttk.Label(self)
-        self.picture.grid(row=0, column=0, sticky="nw")
-        right = ttk.Frame(self)
-        right.grid(row=0, column=1, sticky="nw", padx=(6, 0))
-        self.languages = ttk.Combobox(right, state="readonly", width=16)
-        self.languages.pack(anchor="w")
+        self.top = ttk.Frame(self)
+        self.top.grid(row=0, column=0, sticky="w", pady=(0, 2))
+        self.languages = ttk.Combobox(self.top, state="readonly", width=14)
+        self.languages.pack(side="left")
         self.languages.bind("<<ComboboxSelected>>", lambda e: self._chose_language())
-        ttk.Combobox(right, textvariable=self.size, values=SIZES, state="readonly", width=5).pack(anchor="w",
-                                                                                                  pady=(2, 0))
+        ttk.Combobox(self.top, textvariable=self.size, values=SIZES, state="readonly", width=4).pack(
+            side="left", padx=(4, 0))
         self.size.trace_add("write", lambda *_: (settings.save("card_view_size", self.size.get()), self.later()))
-        self.note = ttk.Label(right, style="Hint.TLabel", wraplength=180, justify="left")
-        self.note.pack(anchor="w", pady=(2, 0))
-        self.side = ttk.Frame(right)     # the tab's (the retail text's link)
-        self.side.pack(anchor="w", fill="x")
+        self.side = ttk.Frame(self.top)  # the tab's (the retail text's link)
+        self.side.pack(side="left", padx=(6, 0))
+        self.picture = ttk.Label(self)
+        self.picture.grid(row=1, column=0, sticky="nw")
+        self.note = ttk.Label(self, style="Hint.TLabel", wraplength=300, justify="left")
+        self.note.grid(row=2, column=0, sticky="w")
         self._fill_languages()
 
     def _folders(self):
@@ -111,7 +112,8 @@ class CardViewPreview(ttk.Frame):
         if size == "Fit":
             # Drawn at the next whole size up and brought down to the box's
             # height, each pixel the average of those under it.
-            height = max(tall, int(self.fit_height() or tall))
+            # The box's height less the row of lists over the picture.
+            height = max(tall, int(self.fit_height() or tall) - self.top.winfo_height() - 2)
             scale = max(1, math.ceil(height / tall))
             image = view.render(card_type, star1, star2, text, language=self.language.get(), colours=colours,
                                 scale=scale, star_names=star_names, text_only=True)

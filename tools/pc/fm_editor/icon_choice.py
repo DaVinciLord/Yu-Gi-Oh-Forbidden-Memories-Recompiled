@@ -16,7 +16,8 @@ ROWS = 12           # a column of the menu at most, so a long list stays on the 
 
 class IconChoice(ttk.Menubutton):
     def __init__(self, master, app, variable: tk.StringVar, values, icon_of, width=18):
-        """icon_of(value) is the icon number ("{f8 0B NN}") beside a value, or None."""
+        """icon_of(value) is the icon number ("{f8 0B NN}") beside a value, a
+        Tk image of its own, or None."""
         super().__init__(master, textvariable=variable, width=width, direction="below", compound="left")
         self.app, self.variable, self.icon_of = app, variable, icon_of
         self._values = list(values)
@@ -30,7 +31,7 @@ class IconChoice(ttk.Menubutton):
 
     def _image(self, value):
         n = self.icon_of(value)
-        return self._icons().get(n) if n is not None else None
+        return self._icons().get(n) if isinstance(n, int) else n
 
     def _show(self):
         if not self.winfo_exists():

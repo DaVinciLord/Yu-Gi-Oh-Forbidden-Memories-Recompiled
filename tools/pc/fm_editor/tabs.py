@@ -10,6 +10,7 @@ from tkinter import messagebox, ttk
 from . import bulk_dialog, guardian_stars, manifest, pools as poolmath, text_menu, validate
 from .card_text_box import CardTextBox
 from .icon_choice import IconChoice
+from . import card_icons
 from .card_view_preview import CardViewPreview
 from .monster_effects_ui import EffectsBox
 from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, DUELIST_NAMES,
@@ -200,8 +201,8 @@ class CardsTab(Tab):
                                     increment=100, width=10), hint(key), self.equip_rows)
         line("Trigger at ATK ≤", ttk.Spinbox(form, textvariable=self.vars["trap_threshold"], from_=0, to=65535,
                                            increment=50, width=10), hint("trap_threshold"), self.trap_rows)
-        line("Attribute", ttk.Combobox(form, textvariable=self.vars["attribute"], values=ATTRIBUTE_CHOICES,
-                                       state="readonly", width=18), hint("attribute"), self.monster_rows)
+        line("Attribute", IconChoice(form, app, self.vars["attribute"], ATTRIBUTE_CHOICES, self.attribute_icon, width=18),
+             hint("attribute"), self.monster_rows)
         line("Level", ttk.Spinbox(form, textvariable=self.vars["level"], from_=0, to=12, width=8), hint("level"),
              self.monster_rows)
         line("ATK", ttk.Spinbox(form, textvariable=self.vars["attack"], from_=0, to=5110, increment=10, width=8),
@@ -211,8 +212,8 @@ class CardsTab(Tab):
         # With their icons (a mod's stars past the disc's ten have none here).
         self.star_boxes = [IconChoice(form, app, self.vars[key], STAR_CHOICES, self.star_icon, width=18)
                            for key in ("star1", "star2")]
-        line("Guardian star 1", self.star_boxes[0], hint("star1"), self.monster_rows)
-        line("Guardian star 2", self.star_boxes[1], hint("star2"), self.monster_rows)
+        line("Star 1", self.star_boxes[0], hint("star1"), self.monster_rows)
+        line("Star 2", self.star_boxes[1], hint("star2"), self.monster_rows)
         # What the monster does on the field (cards.c "monster_effects"),
         # stored as soon as it is changed.
         self.effects_box = EffectsBox(form, app, self.effects_changed)
@@ -238,7 +239,7 @@ class CardsTab(Tab):
         # as the box; the retail text's link in the column on its right.
         self.card_view = CardViewPreview(form, app, self.card_view_values, lambda: self.text.winfo_height())
         self.card_view.grid(row=row, column=2, sticky="nw", padx=6, pady=2)
-        self.hints["text"] = ttk.Label(self.card_view.side, style="Hint.TLabel", wraplength=180, justify="left")
+        self.hints["text"] = ttk.Label(self.card_view.side, style="Hint.TLabel")
         self.hints["text"].pack(anchor="w")
         self.text.bind("<Configure>", lambda e: self.card_view.later(), add=True)
         self.hints["text"].bind("<Button-1>", lambda e: self.restore("text"))
@@ -470,6 +471,7 @@ class CardsTab(Tab):
         self.notes.insert("1.0", self.project.notes.get(cid, ""))
         self.notes.edit_reset()
         self.effects_box.show(cid)
+        self.caption_icons()
         self.count_lines()
         self.reference = self.project.retail.cards.get(cid) or self.project.cards.get(self.project.base_of(cid))
         self.mark()
@@ -733,6 +735,19 @@ class CardsTab(Tab):
         if self.app.text_preview is not None:
             self.app.text_preview.later()
         self.card_view.later()
+
+    def attribute_icon(self, label):
+        """An attribute's ball off the disc (card_icons.py), or None."""
+        return card_icons.photos(self.app, self).get("attribute", {}).get(parse_choice(label, ATTRIBUTE_CHOICES))
+
+    def caption_icons(self):
+        """The level star, the sword and the shield beside their captions,
+        once there are game files to take them from."""
+        shown = card_icons.photos(self.app, self, 2)     # 8 and 9 pixels: doubled, by the 16 of the lists' icons
+        for key, name in (("level", "level"), ("attack", "attack"), ("defense", "defense")):
+            caption = self.captions.get(key)
+            if caption is not None:
+                caption.configure(image=shown.get(name) or "", compound="left")
 
     def star_icon(self, label):
         """A guardian star's icon ({f8 0B 18} Mars ... 21 Venus), or None."""
