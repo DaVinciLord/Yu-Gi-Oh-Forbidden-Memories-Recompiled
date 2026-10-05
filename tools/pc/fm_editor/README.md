@@ -474,11 +474,24 @@ Cards are named by their retail name when that finds the card again in the
 port (`retail_by_name`), by number otherwise, and added cards by their
 stable identity `<mod id>:<id>:1`.
 
-## Importing a modified game
+## Importing a modified game (experimental)
+
+> **Experimental.** Importing a PS1 ROM hack is not officially supported
+> yet; it is a planned feature. The File menu does not offer it unless the
+> editor's settings file (`%APPDATA%\FM Editor\settings.json` on Windows,
+> `~/.config/fm-editor/settings.json` elsewhere) has
+>
+>     "experimental_rom_import": true
+>
+> (the file is JSON, so add it beside any other keys, e.g.
+> `{"dark": true, "experimental_rom_import": true}`), then restart the
+> editor. The `import` command is always there. Expect mods it makes to need
+> checking in the game; converting a `.ygomods` package (below) is not
+> affected.
 
 The PS1 scene's mods (Mod 13, FM 2023, rebalances...) ship patched copies of
-the game's files. **File > Import a modified game** (or the `import`
-command) compares a modified `.bin`, or its `SLUS_014.11` and `WA_MRG.MRG`,
+the game's files. **File > Import a modified game** (once enabled, above; or
+the `import` command) compares a modified `.bin`, or its `SLUS_014.11` and `WA_MRG.MRG`,
 with your retail files and makes a port mod of the difference, which then
 opens and saves like any other:
 
@@ -774,7 +787,7 @@ only the window; it does not rewrite the engine, whose rules are the port's
 | `art.py`, `campaign_map.py`, `map_art.py`, `map_view.py` | card art, the campaign map's table and pictures, the map drawn from the disc's 3D model (`map_view.py` has no Tk despite its name) |
 | `guardian_stars.py`, `star_rules.py` | a mod's `guardian_stars` (the stars, the matchup grid, presets, checks) and setting many cards' stars by a rule |
 | `card_text.py`, `ttf.py`, `pngio.py` | the card-text layout and picture, TrueType outlines, PNGs and the `Image` type every picture is |
-| `importer.py`, `kit.py`, `ygomods.py` | importing a modified game, and converting a `.ygomods` package |
+| `importer.py`, `kit.py`, `ygomods.py` | importing a modified game (experimental), and converting a `.ygomods` package |
 | `cli.py` | `check` and `import` (the window only through a lazy import) |
 
 It needs `tools/pc/text_listing.py` beside the package (`gamedata.py`

@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from tkinter import filedialog, messagebox
 
-from . import disc, importer, ygomods
+from . import disc, importer, settings, ygomods
 from .importer import slug
 
 
@@ -90,5 +90,9 @@ def import_ygomods(app):
 
 
 def install(app):
-    app.add_import("Import a modified game (.bin or SLUS_014.11)...", lambda: import_modded_game(app))
+    # Importing a PS1 ROM hack is experimental and not supported yet: its
+    # entry shows only with "experimental_rom_import": true in settings.json.
+    if settings.load().get("experimental_rom_import") is True:
+        app.add_import("Import a modified game (.bin or SLUS_014.11, experimental)...",
+                       lambda: import_modded_game(app))
     app.add_import("Convert an old recomp's .ygomods package (one way)...", lambda: import_ygomods(app))
