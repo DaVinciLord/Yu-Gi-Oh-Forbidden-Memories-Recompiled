@@ -130,7 +130,7 @@ class CardsTab(Tab):
         self.search.trace_add("write", lambda *_: self.fill())
         self.filter.trace_add("write", lambda *_: self.fill())
         frame, self.tree = scrolled_tree(left, [("id", "#"), ("name", "Name"), ("type", "Type"), ("atk", "ATK"),
-                                                ("def", "DEF"), ("state", "")], [50, 160, 100, 50, 50, 60], 10, sort_numeric=("id", "atk", "def"))
+                                                ("def", "DEF"), ("state", "Status")], [50, 160, 100, 50, 50, 60], 10, sort_numeric=("id", "atk", "def"))
         frame.pack(fill="both", expand=True, pady=4)
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.select())
         bottom = ttk.Frame(left)
@@ -142,7 +142,10 @@ class CardsTab(Tab):
         self.card_scroll = ScrolledForm(self.panes, horizontal=True)
         self.panes.add(self.card_scroll, weight=0)
         self.panes.bind("<Configure>", lambda e: self.place_sash(), add=True)
-        self.card_scroll.body.bind("<Configure>", lambda e: self.place_sash(), add=True)
+        # Only when the form's width changes: scrolling it up and down moves
+        # it too, and placing the line then shook the list beside it.
+        self._form_width = None
+        self.card_scroll.body.bind("<Configure>", lambda e: self.form_resized(), add=True)
         self.panes.bind("<B1-Motion>", lambda e: setattr(self, "_sash_dragged", True), add=True)
         form = ttk.LabelFrame(self.card_scroll.body, text="Card", padding=8)
         form.pack(fill="both", expand=True)
@@ -223,12 +226,6 @@ class CardsTab(Tab):
                            for key in ("star1", "star2")]
         line("Star 1", self.star_boxes[0], hint("star1"), self.monster_rows)
         line("Star 2", self.star_boxes[1], hint("star2"), self.monster_rows)
-        # What the monster does on the field (cards.c "monster_effects"),
-        # stored as soon as it is changed.
-        self.effects_box = EffectsBox(form, app, self.effects_changed)
-        self.effects_box.grid(row=row, column=0, columnspan=3, sticky="we", pady=4)
-        self.monster_rows.append(self.effects_box)
-        row += 1
         # Typing past 8 digits, or anything else, does nothing.
         digits = (self.register(lambda text: text == "" or (len(text) <= 8 and text.isascii() and text.isdigit())),
                   "%P")
@@ -237,6 +234,30 @@ class CardsTab(Tab):
         self.price = line("Starchips", ttk.Entry(form, textvariable=self.vars["starchips"], width=12), hint("starchips"))
         ttk.Label(form, text="0 = free; empty = default price", style="Hint.TLabel").grid(
             row=row, column=1, columnspan=2, sticky="w")
+        row += 1
+        # The frame the card view, the Library and the duel draw it in: its
+        # type's unless the mod picks one (cards.c "frame").
+        self.captions["frame"] = ttk.Label(form, text="Frame")
+        self.captions["frame"].grid(row=row, column=0, sticky="w", pady=2)
+        ttk.Combobox(form, textvariable=self.vars["frame"], values=FRAME_CHOICES, state="readonly",
+                     width=18).grid(row=row, column=1, sticky="we", pady=2)
+        beside = ttk.Frame(form)
+        beside.grid(row=row, column=2, sticky="w", padx=6)
+        self.swatch = tk.Label(beside, width=2, relief="solid", borderwidth=1)
+        self.swatch.pack(side="left")
+        self.hints["frame"] = ttk.Label(beside, style="Hint.TLabel", width=HINT_WIDTH - 4)
+        self.hints["frame"].pack(side="left", padx=(6, 0))
+        self.hints["frame"].bind("<Button-1>", lambda e: self.restore("frame"))
+        row += 1
+        ttk.Label(form, text="Notes").grid(row=row, column=0, sticky="nw", pady=2)
+        self.notes = tk.Text(form, width=36, height=4, wrap="word", undo=True)
+        self.notes.grid(row=row, column=1, columnspan=2, sticky="we", pady=2)
+        row += 1
+        # What the monster does on the field (cards.c "monster_effects"),
+        # stored as soon as it is changed.
+        self.effects_box = EffectsBox(form, app, self.effects_changed)
+        self.effects_box.grid(row=row, column=0, columnspan=3, sticky="we", pady=4)
+        self.monster_rows.append(self.effects_box)
         row += 1
         self.captions["text"] = ttk.Label(form, text="Card text")
         self.captions["text"].grid(row=row, column=0, sticky="nw", pady=2)
@@ -260,30 +281,12 @@ class CardsTab(Tab):
         self.text.bind("<KeyRelease>", lambda e: (self.count_lines(), self.mark_later()), add=True)
         # Right-click: insert an icon or a colour, shown as the game draws them.
         text_menu.install(app, self.text, lambda: (self.count_lines(), self.mark_later()))
-        # The frame the card view, the Library and the duel draw it in: its
-        # type's unless the mod picks one (cards.c "frame").
-        self.captions["frame"] = ttk.Label(form, text="Frame")
-        self.captions["frame"].grid(row=row, column=0, sticky="w", pady=2)
-        ttk.Combobox(form, textvariable=self.vars["frame"], values=FRAME_CHOICES, state="readonly",
-                     width=18).grid(row=row, column=1, sticky="we", pady=2)
-        beside = ttk.Frame(form)
-        beside.grid(row=row, column=2, sticky="w", padx=6)
-        self.swatch = tk.Label(beside, width=2, relief="solid", borderwidth=1)
-        self.swatch.pack(side="left")
-        self.hints["frame"] = ttk.Label(beside, style="Hint.TLabel", width=HINT_WIDTH - 4)
-        self.hints["frame"].pack(side="left", padx=(6, 0))
-        self.hints["frame"].bind("<Button-1>", lambda e: self.restore("frame"))
-        row += 1
         self.vars["frame"].trace_add("write", lambda *_: self.show_swatch())
         self.vars["type"].trace_add("write", lambda *_: self.show_swatch())
         self.vars["type"].trace_add("write", lambda *_: self.show_kind())
         for key in ("type", "star1", "star2"):
             self.vars[key].trace_add("write", lambda *_: self.card_view.later())
         self.vars["effect"].trace_add("write", lambda *_: self.show_trap_threshold())
-        ttk.Label(form, text="Notes").grid(row=row, column=0, sticky="nw", pady=2)
-        self.notes = tk.Text(form, width=36, height=4, wrap="word", undo=True)
-        self.notes.grid(row=row, column=1, columnspan=2, sticky="we", pady=2)
-        row += 1
         self.added_frame = ttk.LabelFrame(form, text="Added card", padding=6)
         self.added_frame.grid(row=row, column=0, columnspan=3, sticky="we", pady=6)
         row += 1
@@ -772,6 +775,12 @@ class CardsTab(Tab):
     def relayout(self):
         if self.winfo_exists():
             self.card_scroll._layout()
+            self.place_sash()
+
+    def form_resized(self):
+        width = self.card_scroll.body.winfo_reqwidth()
+        if width != self._form_width:
+            self._form_width = width
             self.place_sash()
 
     def place_sash(self):

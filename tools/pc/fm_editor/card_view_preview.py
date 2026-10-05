@@ -3,8 +3,8 @@ draws it (card_view.py: its frame, stone and letters), following the text,
 the type and the stars as they are typed. "Fit" (the default) makes it as
 tall as the card text box, so the form keeps its height; 1x-3x are the
 game's pixels doubled or tripled. Its language (the port's translations:
-their spacing and accented letters) and size are the window's settings,
-side by side over it, so it is no wider than the picture."""
+their spacing and accented letters, a saved setting) and size are side by
+side over it, so it is no wider than the picture."""
 from __future__ import annotations
 
 import base64
@@ -29,7 +29,9 @@ class CardViewPreview(ttk.Frame):
         self._view, self._source, self._job, self._photo = None, None, None, None
         saved = settings.load()
         self.language = tk.StringVar(self, value=saved.get("card_view_language", "en-us"))
-        self.size = tk.StringVar(self, value=saved.get("card_view_size", "Fit"))
+        # Each time "Fit", as tall as the card text box; a bigger size only
+        # for the look taken.
+        self.size = tk.StringVar(self, value="Fit")
         self.top = ttk.Frame(self)
         self.top.grid(row=0, column=0, sticky="w", pady=(0, 2))
         self.languages = ttk.Combobox(self.top, state="readonly", width=14)
@@ -37,7 +39,7 @@ class CardViewPreview(ttk.Frame):
         self.languages.bind("<<ComboboxSelected>>", lambda e: self._chose_language())
         ttk.Combobox(self.top, textvariable=self.size, values=SIZES, state="readonly", width=4).pack(
             side="left", padx=(4, 0))
-        self.size.trace_add("write", lambda *_: (settings.save("card_view_size", self.size.get()), self.later()))
+        self.size.trace_add("write", lambda *_: self.later())
         self.picture = ttk.Label(self)
         self.picture.grid(row=1, column=0, sticky="nw")
         self.note = ttk.Label(self, style="Hint.TLabel", wraplength=300, justify="left")
