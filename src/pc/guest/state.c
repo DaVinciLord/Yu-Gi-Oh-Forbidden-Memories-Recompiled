@@ -466,6 +466,39 @@ static int compatible_language(const MemoriesState *state, const char *path)
     return 1;
 }
 
+/* Where VRAM's words came from on the disc (texture_dump.h), which a
+ * texture pack goes by. Without them a loaded state showed retail textures
+ * wherever the pack could not find its pictures again by their bytes alone:
+ * a page the game had drawn into since its upload (the duel's card frames,
+ * digits and panels). As runs (TextureDump_TagRuns), a few thousand pairs
+ * where the tags themselves are 2 MiB. */
+static void texture_tags(MemoriesState *state)
+{
+    const size_t max = (size_t)SOFT_GPU_WIDTH * SOFT_GPU_HEIGHT;
+    uint32_t count = 0, *runs = NULL;
+    MemoriesStateField counted = {&count, sizeof(count)}, data;
+    if (!Memories_StateLoading(state)) {
+        if (!TextureDump_Tags || !(runs = malloc(max * 2 * sizeof(*runs)))) return;
+        count = (uint32_t)TextureDump_TagRuns(runs, max);
+        data.data = runs;
+        data.size = (size_t)count * 2 * sizeof(*runs);
+        Memories_StateChunk(state, "vram-tags", &counted, 1);
+        Memories_StateChunk(state, "vram-tag-runs", &data, 1);
+        free(runs);
+        return;
+    }
+    if (TextureDump_Tags && Memories_StateChunk(state, "vram-tags", &counted, 1) && count && count <= max &&
+        (runs = malloc((size_t)count * 2 * sizeof(*runs)))) {
+        data.data = runs;
+        data.size = (size_t)count * 2 * sizeof(*runs);
+        if (!Memories_StateChunk(state, "vram-tag-runs", &data, 1)) count = 0;
+    } else {
+        count = 0;
+    }
+    TextureDump_TagsLoaded(runs, count); /* VRAM restored: the rest the pack finds again */
+    free(runs);
+}
+
 static void subsystems(MemoriesState *state)
 {
     unsigned signature = Mods_Signature();
@@ -490,11 +523,9 @@ static void subsystems(MemoriesState *state)
     gpu[1].data = SoftGpu_StateData(1, &gpu[1].size);
     gte[0].data = Gte_StateData(&gte_size);
     gte[0].size = gte_size;
-    if (Memories_StateChunk(state, "soft_gpu", gpu, 2)) {
-        /* VRAM restored without the disc: what its words came from is unknown. */
-        TextureDump_Cleared(0, 0, SOFT_GPU_WIDTH, SOFT_GPU_HEIGHT);
-        if (TextureDump_Restored) TextureDump_Restored();
-        SoftGpu_PictureFromVram();
+    if (Memories_StateChunk(state, "soft_gpu", gpu, 2) || !Memories_StateLoading(state)) {
+        texture_tags(state);
+        if (Memories_StateLoading(state)) SoftGpu_PictureFromVram();
     }
     Memories_StateChunk(state, "gte", gte, 1);
     {
