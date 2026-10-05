@@ -619,16 +619,14 @@ void Platform_Screenshot(int window_image)
     SDL_Surface *surface;
     char path[1024];
     if ((!renderer && !use_gl) || !picture_pixels) return;
-    if (window_image && use_gl) {
-        window_shot_pending = 1; /* taken by the next show(), before its swap */
+    if (window_image) {
+        /* Taken by the next show(), before its swap or present: after a
+         * present the renderer's back buffer holds nothing defined. */
+        window_shot_pending = 1;
         return;
     }
     if (!screenshot_path(path, sizeof(path), "bmp")) return;
-    {
-        surface = window_image ? SDL_RenderReadPixels(renderer, NULL) :
-                  SDL_CreateSurfaceFrom(picture_w, picture_h, SDL_PIXELFORMAT_XRGB8888,
-                                        picture_pixels, picture_w * 4);
-    }
+    surface = SDL_CreateSurfaceFrom(picture_w, picture_h, SDL_PIXELFORMAT_XRGB8888, picture_pixels, picture_w * 4);
     save_surface(surface, path);
 }
 
@@ -1425,6 +1423,11 @@ static void show(void)
         SDL_RenderTexture(renderer, picture, NULL, &physical);
     }
     SDL_RenderTexture(renderer, overlay, NULL, NULL);
+    if (window_shot_pending) {
+        char path[1024];
+        window_shot_pending = 0;
+        if (screenshot_path(path, sizeof(path), "bmp")) save_surface(SDL_RenderReadPixels(renderer, NULL), path);
+    }
     apply_swap_interval();
     SDL_RenderPresent(renderer);
     if (swap_interval == 1) Platform_NotifyPresent(real_now_us(), 1);
