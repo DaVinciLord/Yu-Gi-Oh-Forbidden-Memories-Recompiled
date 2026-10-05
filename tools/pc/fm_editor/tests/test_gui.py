@@ -1770,8 +1770,9 @@ class CardsPanesTest(GuiCase):
         app.geometry("1600x960")
         cards.tree.selection_set("1")
         cards.select()
-        app.update()
-        cards.place_sash()
+        for _ in range(5):          # the window takes its size over a few rounds
+            app.update()
+            cards.place_sash()
         app.update()
         scroll = cards.card_scroll
         self.assertGreaterEqual(scroll.canvas.winfo_width(), scroll.body.winfo_reqwidth())   # all of the form
@@ -1779,6 +1780,7 @@ class CardsPanesTest(GuiCase):
         # Dragged right, the form scrolls across.
         cards._sash_dragged = True
         cards.panes.sashpos(0, cards.panes.winfo_width() - 300)
-        app.update()
+        for _ in range(3):
+            app.update()
         self.assertTrue(scroll.xbar.winfo_manager())
         app.withdraw()
