@@ -213,11 +213,18 @@ def pack_apk(label):
     mismatch = expected and package_android.check_fingerprint(certificate["sha256"], expected)
     if mismatch:
         sys.exit(f"package: {os.path.relpath(source, ROOT)}: {mismatch}; nothing was packed")
+    # The version the APK was built with must be this package's (--version):
+    # --no-build packs what is there, which may be an earlier build's.
+    os.environ["MEMORIES_VERSION"] = label
+    wanted, found = package_android.app_version(), package_android.manifest_version(source)
+    if found != wanted:
+        sys.exit(f"package: {os.path.relpath(source, ROOT)} is version {found[1]} (versionCode {found[0]}), "
+                 f"not {wanted[1]} ({wanted[0]}) as --version {label} makes it: build it again; nothing was packed")
     os.makedirs(DIST, exist_ok=True)
     target = os.path.join(DIST, f"{NAME}-{label}{SUFFIX['android-arm64']}")
     shutil.copyfile(source, target)
-    print(f"package: {os.path.relpath(target, ROOT)}: signed by {certificate['dn']}, "
-          f"SHA-256 {package_android.colons(certificate['sha256'])}")
+    print(f"package: {os.path.relpath(target, ROOT)}: {found[1]} (versionCode {found[0]}), "
+          f"signed by {certificate['dn']}, SHA-256 {package_android.colons(certificate['sha256'])}")
     return target
 
 

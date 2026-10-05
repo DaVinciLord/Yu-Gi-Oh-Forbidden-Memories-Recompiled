@@ -44,14 +44,22 @@ TARGET_SDK = 35
 # with STAGE 99 for the release itself and PRERELEASE[LABEL] + N (N 0-19)
 # before it, so codes rise in the order versions compare (notes/updates.md):
 # v0.2.0-preview.1 = 20041 < v0.2.0-rc.1 = 20061 < v0.2.0 = 20099 <
-# v0.2.1-preview.1 = 20141. MINOR and PATCH are 0-99, MAJOR at most 2146 (the
-# code is a 32-bit int). A development build takes the code of the newest
-# v* tag it descends from (an equal code installs over it), at least
-# VERSION_FLOOR, above the 1 every earlier test APK had.
+# v0.2.1-preview.1 = 20141. MINOR and PATCH are 0-99 and MAJOR at most 2099:
+# Google Play takes codes up to 2100000000 (MAX_CODE), below the 32-bit
+# int's 2147483647. LABEL is lowercase, as the update check compares labels
+# byte by byte (update.c, compare_pre: "RC" would sort before "alpha").
+# A development build takes the highest code of the v* tags it descends from
+# (an equal code installs over that release), at least VERSION_FLOOR, above
+# the 1 every earlier test APK had.
 VERSION = re.compile(r"v(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?")
 PRERELEASE = {"alpha": 0, "beta": 20, "preview": 40, "rc": 60}
 RELEASE_STAGE = 99
 VERSION_FLOOR = 2
+MAX_CODE = 2100000000
+# Changes the build itself makes to the checkout, which do not make a
+# development build's name "-dirty" (build_game32.py refreshes the
+# addresses from the matching build's ELFs before the link).
+BUILD_WRITES = ("config/pc/guest_addresses.txt",)
 
 MANIFEST = f"""<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -83,12 +91,38 @@ def sdk():
     return path
 
 
-def newest(pattern):
-    found = sorted(glob.glob(pattern), key=lambda path: [int(part) if part.isdigit() else part
-                                                         for part in os.path.basename(path).replace("-", ".").split(".")])
-    if not found:
-        sys.exit(f"not found: {pattern}")
-    return found[-1]
+def newest(folder, prefix=""):
+    """The subfolder of `folder` named prefix + a plain version (35.0.0,
+    android-35, android-36.1) with the highest version, compared as numbers.
+    Other names are passed over: previews and extensions (36.0.0-rc1,
+    android-36-ext19, android-CANARY), whose parts are not numbers."""
+    versions = []
+    for path in glob.glob(os.path.join(folder, prefix + "*")):
+        rest = os.path.basename(path)[len(prefix):]
+        if os.path.isdir(path) and re.fullmatch(r"\d+(\.\d+)*", rest):
+            versions.append((tuple(int(part) for part in rest.split(".")), path))
+    if not versions:
+        sys.exit(f"no {prefix}<version> folder in {folder}")
+    return max(versions)[1]
+
+
+def build_tools_dir():
+    """The SDK's build-tools: ANDROID_BUILD_TOOLS (a version, e.g. 35.0.0;
+    the release workflow pins it) when set, else the newest installed."""
+    pinned = os.environ.get("ANDROID_BUILD_TOOLS")
+    if pinned:
+        path = os.path.join(sdk(), "build-tools", pinned)
+        if not os.path.isdir(path):
+            sys.exit(f"ANDROID_BUILD_TOOLS is {pinned}, and {path} is not there")
+        return path
+    return newest(os.path.join(sdk(), "build-tools"))
+
+
+def platform_dir():
+    """The SDK platform compiled against: android-TARGET_SDK when installed,
+    else the newest installed."""
+    path = os.path.join(sdk(), "platforms", f"android-{TARGET_SDK}")
+    return path if os.path.isdir(path) else newest(os.path.join(sdk(), "platforms"), "android-")
 
 
 def tool(build_tools, name):
@@ -168,7 +202,7 @@ def signer(apk, build_tools=None):
     """apksigner verify's verdict on an APK, which must have one signer:
     {"dn": ..., "sha256": ...} (64 lowercase hex digits). Stops the build when
     the APK does not verify."""
-    build_tools = build_tools or newest(os.path.join(sdk(), "build-tools", "*"))
+    build_tools = build_tools or build_tools_dir()
     output = run([tool(build_tools, "apksigner"), "verify", "--verbose", "--print-certs", apk])
     fields = {}
     for line in output.splitlines():
@@ -178,6 +212,16 @@ def signer(apk, build_tools=None):
     if len(fields.get("dn", [])) != 1 or len(fields.get("sha256", [])) != 1:
         sys.exit(f"{apk}: apksigner verify found {len(fields.get('sha256', []))} signers, not one:\n{output}")
     return {"dn": fields["dn"][0], "sha256": fields["sha256"][0].lower()}
+
+
+def manifest_version(apk, build_tools=None):
+    """The APK's (versionCode, versionName), from aapt2 dump badging."""
+    build_tools = build_tools or build_tools_dir()
+    first = run([tool(build_tools, "aapt2"), "dump", "badging", apk]).splitlines()[0]
+    match = re.search(r"versionCode='(\d+)' versionName='([^']*)'", first)
+    if not match:
+        sys.exit(f"{apk}: no versionCode/versionName in aapt2's badging: {first}")
+    return int(match.group(1)), match.group(2)
 
 
 def colons(digest):
@@ -213,25 +257,29 @@ def version_code(version):
     Stops the build for one the scheme has no room for."""
     major, minor, patch, pre = VERSION.fullmatch(version).groups()
     major, minor, patch = int(major), int(minor), int(patch)
-    if minor > 99 or patch > 99 or major > 2146:
-        sys.exit(f"{version}: versionCode has room for minor and patch 0-99 and major up to 2146 (package_android.py)")
+    if minor > 99 or patch > 99 or major > 2099:
+        sys.exit(f"{version}: versionCode has room for minor and patch 0-99 and major up to 2099 "
+                 f"(package_android.py; notes/pc-release.md, \"Version\")")
     stage = RELEASE_STAGE
     if pre:
-        match = re.fullmatch(r"([A-Za-z]+)(?:\.(\d+))?", pre)
-        if not match or match.group(1).lower() not in PRERELEASE or int(match.group(2) or 0) > 19:
+        match = re.fullmatch(r"([a-z]+)(?:\.(\d+))?", pre)
+        if not match or match.group(1) not in PRERELEASE or int(match.group(2) or 0) > 19:
             sys.exit(f"{version}: a pre-release for the APK is -LABEL.N with LABEL one of {', '.join(PRERELEASE)} "
-                     f"and N 0-19, for its versionCode (package_android.py)")
-        stage = PRERELEASE[match.group(1).lower()] + int(match.group(2) or 0)
-    return major * 1000000 + minor * 10000 + patch * 100 + stage
+                     f"(lowercase) and N 0-19, for its versionCode (package_android.py; notes/pc-release.md, "
+                     f"\"Version\")")
+        stage = PRERELEASE[match.group(1)] + int(match.group(2) or 0)
+    code = major * 1000000 + minor * 10000 + patch * 100 + stage
+    assert code <= MAX_CODE
+    return code
 
 
-def git_describe(*options):
+def git(*arguments):
+    """git's output in the checkout, or None when it fails (no git, no repository)."""
     try:
-        result = subprocess.run(["git", "describe", "--tags", "--match", "v[0-9]*", *options], cwd=ROOT,
-                                capture_output=True, text=True)
+        result = subprocess.run(["git", *arguments], cwd=ROOT, capture_output=True, text=True)
     except OSError:
-        return ""
-    return result.stdout.strip() if result.returncode == 0 else ""
+        return None
+    return result.stdout.strip() if result.returncode == 0 else None
 
 
 def app_version():
@@ -239,22 +287,29 @@ def app_version():
     (package.py's --version: the tag in CI), else the v* tag the checkout is
     exactly at, as for the desktop games (build_game32.release_version). A
     release version gives version_code() and its name without the v
-    (0.2.0-preview.1). Anything else is a development build: the code of the
-    newest v* tag it descends from, the name git describe's (0.2.0-12-g<sha>);
-    with no tag in reach (a shallow clone), VERSION_FLOOR and 0.0.0-dev."""
+    (0.2.0-preview.1). Anything else is a development build: the highest code
+    of the v* tags it descends from (tags outside the scheme left out), and
+    git describe's name (0.2.0-12-g<sha>), "-dirty" when the checkout has
+    changes other than BUILD_WRITES; with no tag in reach (a shallow clone),
+    VERSION_FLOOR and 0.0.0-dev."""
     version = os.environ.get("MEMORIES_VERSION")
     if version is None:
-        version = git_describe("--exact-match")
+        version = git("describe", "--tags", "--exact-match", "--match", "v[0-9]*") or ""
     if VERSION.fullmatch(version):
         return version_code(version), version[1:]
-    base = git_describe("--abbrev=0")
-    if not VERSION.fullmatch(base):
+    codes = []
+    for tag in (git("tag", "--merged", "HEAD", "--list", "v[0-9]*") or "").split():
+        if VERSION.fullmatch(tag):
+            try:
+                codes.append(version_code(tag))
+            except SystemExit:   # an old tag outside the scheme does not stop a development build
+                pass
+    described = git("describe", "--tags", "--match", "v[0-9]*", "--abbrev=10")
+    if not codes or not described:
         return VERSION_FLOOR, "0.0.0-dev"
-    try:
-        code = version_code(base)
-    except SystemExit:   # an old tag outside the scheme does not stop a development build
-        code = VERSION_FLOOR
-    return max(code, VERSION_FLOOR), (git_describe("--abbrev=10", "--dirty") or base)[1:]
+    if git("diff", "--quiet", "HEAD", "--", ".", *(f":(exclude){path}" for path in BUILD_WRITES)) is None:
+        described += "-dirty"
+    return max(max(codes), VERSION_FLOOR), described[1:]
 
 
 def program_files(build, folders):
@@ -287,8 +342,8 @@ def package(build, abi, library, game, assets):
     expected = os.environ.get("MEMORIES_ANDROID_CERT_SHA256")
     if expected:
         fingerprint_parts(expected)
-    build_tools = newest(os.path.join(sdk(), "build-tools", "*"))
-    android_jar = os.path.join(newest(os.path.join(sdk(), "platforms", "android-*")), "android.jar")
+    build_tools = build_tools_dir()
+    android_jar = os.path.join(platform_dir(), "android.jar")
     work = os.path.join(build, "apk")
     shutil.rmtree(work, ignore_errors=True)
     os.makedirs(os.path.join(work, "classes"))
