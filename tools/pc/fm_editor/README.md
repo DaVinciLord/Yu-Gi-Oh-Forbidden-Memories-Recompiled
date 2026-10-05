@@ -110,12 +110,22 @@ would leave out.
 
 ### Icons and colours in card text
 
-The card text box is drawn as the card view's text panel: dark blue, white
-letters, an icon as the icon itself, two letters wide as the game sets it,
-and a colour as a thin bar of it, the letters after it in that colour. Its
-lines break where the game's do (twenty letters, an icon two, a word kept
-whole; a word too long for the box cut at its edge), so what it shows is
-what the card view will show, line for line. What
+The card text box shows an icon as the icon itself, two letters wide as the
+game sets it, and a colour as a thin bar of it, the letters after it in that
+colour (darker on the light look, so they read). Its lines break where the
+game's do (twenty letters, an icon two, a word kept whole; a word too long
+for the box cut at its edge).
+
+Beside it is the **card view** as the game draws it: the panel's stone and
+frame off your disc, the type line, GUARDIAN STAR and the stars, and the card
+text in the game's letters and colours, following what you type and the
+card's type and stars. Its language list has the port's translations found
+beside the editor or the game (`languages/*.txt`): their own layout, type and
+star names, accented letters as the port makes them, and the European
+letter spacing. The size is 1x, 2x or 3x. Both are remembered. On the
+retail disc it matches the game's screen pixel for pixel (US, German and
+French checked); a letter the port takes from a system font (Greek,
+Cyrillic) can be a pixel off, as FreeType's hinting is not copied. What
 is saved is still the codes: a code typed or pasted in full becomes its
 picture, and copying puts the codes on the clipboard. Without the game files
 the codes stay as written.

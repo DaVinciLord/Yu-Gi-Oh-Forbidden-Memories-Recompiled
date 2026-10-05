@@ -757,7 +757,8 @@ class GuiTest(GuiCase):
         app.update()
         scroll.canvas.yview_moveto(0)
         buttons = [w for w in cards.form.winfo_children() if w.winfo_class() == "TFrame"]
-        apply = next(w for box in buttons for w in box.winfo_children() if w.cget("text") == "Apply")
+        apply = next(w for box in buttons for w in box.winfo_children()
+                     if w.winfo_class() == "TButton" and w.cget("text") == "Apply")
         apply.focus_force()
         app.update()
         self.assertGreater(scroll.canvas.yview()[0], 0)
@@ -1730,3 +1731,16 @@ class ColumnWidthTest(GuiCase):
         app.update()
         self.assertEqual(tree.column("name", "width"), 150)
         app.withdraw()
+
+
+class CardViewPreviewTest(GuiCase):
+    def test_follows_the_form(self):
+        cards = self.app.cards
+        cards.tree.selection_set("1")
+        cards.select()
+        values = cards.card_view_values()
+        self.assertEqual(values[3], self.app.project.cards[1].description)
+        cards.vars["type"].set("Magic")
+        self.assertEqual(cards.card_view_values()[1:3], (0, 0))      # no stars on a magic card
+        cards.card_view.draw()      # the fixture's files: drawn or explained, never an error
+        self.assertTrue(cards.card_view.picture.cget("image") or cards.card_view.note.cget("text") is not None)

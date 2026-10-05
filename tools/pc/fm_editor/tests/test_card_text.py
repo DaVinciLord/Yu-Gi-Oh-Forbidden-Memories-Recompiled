@@ -5,7 +5,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from fm_editor import card_text, ttf, validate
+import os
+import shutil
+import subprocess
+
+from fm_editor import card_text, glyph_cells, ttf, validate
 
 
 def rows_of(lay):
@@ -240,6 +244,152 @@ class TrueTypeTest(unittest.TestCase):
         hd, _ = renderer.render("A", 2)
         self.assertFalse(renderer.face_ok)
         self.assertEqual(hd, plain)
+
+
+class GlyphCellsTest(unittest.TestCase):
+    """glyph_cells.py: the letters the port makes (src/pc/text/glyphs.c), on
+    the synthetic font (an 'A' block, no other letter)."""
+
+    def setUp(self):
+        self.retail = card_text.RetailFont(synthetic_wa())
+
+    def test_kinds(self):
+        cells = glyph_cells.GlyphCells(self.retail)
+        self.assertEqual(cells.kind("A"), "retail")
+        self.assertEqual(cells.kind("’"), "retail")       # typed for '
+        self.assertEqual(cells.kind("«"), "retail")       # drawn as <
+        self.assertEqual(cells.kind("Á"), "composed")
+        self.assertEqual(cells.kind("ệ"), "composed")     # e, ^ and a dot below
+        self.assertEqual(cells.kind("¿"), "composed")     # ? turned
+        self.assertEqual(cells.kind("ß"), "drawn")
+        self.assertEqual(cells.kind(";"), "none")              # no retail glyph: a font's, and there is none
+        self.assertIsNone(cells.cell("☺"))
+        self.assertEqual(cells.cell("A"), self.retail.cell("A"))
+        self.assertEqual(cells.cell(" "), [0] * 96)
+
+    def test_a_capital_gives_up_a_row_for_its_mark(self):
+        cell = glyph_cells.GlyphCells(self.retail).cell("Á")
+        a = self.retail.cell("A")
+        # The acute's two pixels in the letter's colour, over its middle, the
+        # outline round them; the block a row shorter, its foot where it was.
+        self.assertEqual((cell[0 * 8 + 5], cell[1 * 8 + 4]), (15, 15))
+        self.assertEqual((cell[0 * 8 + 4], cell[0 * 8 + 6]), (1, 1))
+        self.assertEqual(cell[8 * 8:], a[8 * 8:])
+        self.assertEqual(cell[2 * 8:8 * 8], a[1 * 8:7 * 8])
+
+    def test_drawn_letter_is_shaded_and_outlined(self):
+        cell = glyph_cells.GlyphCells(self.retail).cell("ß")
+        row = glyph_cells.LETTERS["ß"]
+        for y in range(12):
+            for x in range(8):
+                if row[y][x] == "#":
+                    self.assertEqual(cell[y * 8 + x], 15)    # the capitals' shade on every inked row here
+        self.assertEqual(cell[2 * 8 + 1], 1)
+        self.assertEqual(cell[0], 0)
+
+    def test_font_fallback(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        tiny_font(Path(tmp.name) / "tiny.ttf")
+        face = ttf.Font(Path(tmp.name) / "tiny.ttf")
+        face.cmap[0x263A] = face.cmap[0x41]                    # the square for the smiley
+        cells = glyph_cells.GlyphCells(self.retail, face)
+        self.assertEqual(cells.kind("☺"), "font")
+        cell = cells.cell("☺")
+        # 0.1-0.7 em at 10 pixels: rows 3-8 under the baseline row 10, the
+        # six columns from 1; the hole outlined.
+        self.assertEqual(cell[3 * 8 + 1], 15)
+        self.assertEqual(cell[8 * 8 + 6], 15)
+        self.assertEqual(cell[5 * 8 + 3], 1)
+        self.assertEqual(cell[2 * 8 + 1], 1)
+        self.assertEqual(cell[1 * 8 + 1], 0)
+
+    def test_matches_the_port(self):
+        """Every composed and drawn letter, US and European, against
+        glyphs.c built here on the game's own font (skipped without the
+        game files, a C compiler or FreeType and fontconfig)."""
+        root = Path(__file__).resolve().parents[4]
+        wa, exe = root / "game/DATA/WA_MRG.MRG", root / "game/SLUS_014.11"
+        cc = shutil.which("cc") or shutil.which("gcc")
+        if not (wa.is_file() and exe.is_file() and cc and shutil.which("pkg-config")) or os.name == "nt":
+            self.skipTest("needs the game files, cc and pkg-config")
+        flags = subprocess.run(["pkg-config", "--cflags", "--libs", "freetype2", "fontconfig"], capture_output=True,
+                               text=True)
+        if flags.returncode:
+            self.skipTest("needs FreeType and fontconfig")
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        source, program = Path(tmp.name) / "harness.c", Path(tmp.name) / "harness"
+        source.write_text(PARITY_HARNESS)
+        built = subprocess.run([cc, "-O1", "-w", "-I" + str(root / "src"), str(source), str(root / "src/pc/text/serif.c"),
+                                "-o", str(program), *flags.stdout.split()], capture_output=True, text=True)
+        if built.returncode:
+            self.skipTest("the harness does not build here: " + built.stderr[-300:])
+        out = subprocess.run([str(program), str(exe), str(wa)], capture_output=True, text=True, check=True).stdout
+        retail = card_text.RetailFont(wa.read_bytes())
+        cells = [glyph_cells.GlyphCells(retail, european=e) for e in (False, True)]
+        lines = [line.split() for line in out.splitlines()]
+        self.assertGreater(len(lines), 700)
+        for code, european, data in lines:
+            with self.subTest(character=code, european=european):
+                self.assertEqual("".join("%x" % v for v in cells[int(european)].cell(chr(int(code, 16)))), data)
+
+
+# The C side of test_matches_the_port: glyphs.c with the font page where the
+# game has it (VRAM 0x280, 0) and the executable's glyph table where the
+# game has it; each composed and drawn letter's 8x12 cell, and the retail i
+# and l with the European serifs.
+PARITY_HARNESS = r"""
+#include <sys/mman.h>
+#include "pc/text/glyphs.c"
+static uint16_t vram[SOFT_GPU_WIDTH * SOFT_GPU_HEIGHT];
+const uint16_t *SoftGpu_Vram(void) { return vram; }
+uint16_t *SoftGpu_Bank(int bank) { (void)bank; return NULL; }
+int Log_Wanted(LogChannel c) { (void)c; return 0; }
+void Log_Printf(LogChannel c, const char *f, ...) { (void)c; (void)f; }
+static void dump(uint32_t character, int eu)
+{
+    int code = Glyphs_Code(character), x, y;
+    Cell cell;
+    if (code < GLYPHS_EXTENDED_FIRST) {
+        if (!eu || (character != 'i' && character != 'l')) return;
+        read_cell(0xA, (char)character, FONT_SMALL, &cell);
+        add_serifs(&cell, 0);
+    } else if (added[code - GLYPHS_EXTENDED_FIRST].letter) {
+        compose(&added[code - GLYPHS_EXTENDED_FIRST], 0xA, FONT_SMALL, &cell);
+    } else {
+        render(&added[code - GLYPHS_EXTENDED_FIRST], 0xA, FONT_SMALL, &cell);
+    }
+    printf("%04X %d ", (unsigned)character, eu);
+    for (y = 0; y < 12; y++) for (x = 0; x < 8; x++) printf("%x", cell.pixels[y][x]);
+    printf("\n");
+}
+int main(int argc, char **argv)
+{
+    FILE *f;
+    unsigned char *page = malloc(16 * 2048);
+    size_t a;
+    int y, eu;
+    void *at = mmap((void *)0x801D9000u, 0x1000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+    if (argc < 3 || at != (void *)0x801D9000u || !(f = fopen(argv[1], "rb"))) return 1;
+    fseek(f, 0x801D9000L - 0x80010000L + 0x800L, SEEK_SET);
+    if (fread(at, 4, 0x5C, f) != 0x5C) return 1;
+    fclose(f);
+    if (!(f = fopen(argv[2], "rb"))) return 1;
+    fseek(f, 0x1690L * 2048, SEEK_SET);
+    if (fread(page, 1, 16 * 2048, f) != 16 * 2048) return 1;
+    fclose(f);
+    for (y = 0; y < 256; y++) memcpy(&vram[y * SOFT_GPU_WIDTH + 0x280], page + y * 128, 128);
+    for (eu = 0; eu < 2; eu++) {
+        Glyphs_SetEuropean(eu);
+        for (a = 0; a < sizeof(accents) / sizeof(accents[0]); a++) dump(accents[a].character, eu);
+        for (a = 0; a < sizeof(letters) / sizeof(letters[0]); a++) dump(letters[a].character, eu);
+        dump('i', eu);
+        dump('l', eu);
+    }
+    return 0;
+}
+"""
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ from tkinter import messagebox, ttk
 
 from . import bulk_dialog, guardian_stars, manifest, pools as poolmath, text_menu, validate
 from .card_text_box import CardTextBox
+from .card_view_preview import CardViewPreview
 from .monster_effects_ui import EffectsBox
 from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, DUELIST_NAMES,
                        EQUIP_BONUS_MAX, FRAME_NAMES,
@@ -229,9 +230,14 @@ class CardsTab(Tab):
         # 21 columns: the game's 20 letters a line and room for the cursor.
         # Drawn as the card view's panel: icons and colours as the game shows them.
         self.text = CardTextBox(form, app, width=21, height=9, wrap="word", font=("Consolas", 10))
-        self.text.grid(row=row, column=1, sticky="w", pady=2)
-        self.hints["text"] = ttk.Label(form, style="Hint.TLabel", width=HINT_WIDTH)
-        self.hints["text"].grid(row=row, column=2, sticky="nw", padx=6, pady=2)
+        self.text.grid(row=row, column=1, sticky="nw", pady=2)
+        # Beside it, the card view as the game draws it, and the retail text's link under that.
+        beside_text = ttk.Frame(form)
+        beside_text.grid(row=row, column=2, sticky="nw", padx=6, pady=2)
+        self.card_view = CardViewPreview(beside_text, app, self.card_view_values)
+        self.card_view.pack(anchor="w")
+        self.hints["text"] = ttk.Label(beside_text, style="Hint.TLabel", width=HINT_WIDTH)
+        self.hints["text"].pack(anchor="w")
         self.hints["text"].bind("<Button-1>", lambda e: self.restore("text"))
         row += 1
         self.lines = ttk.Label(form, style="Hint.TLabel")
@@ -257,6 +263,8 @@ class CardsTab(Tab):
         self.vars["frame"].trace_add("write", lambda *_: self.show_swatch())
         self.vars["type"].trace_add("write", lambda *_: self.show_swatch())
         self.vars["type"].trace_add("write", lambda *_: self.show_kind())
+        for key in ("type", "star1", "star2"):
+            self.vars[key].trace_add("write", lambda *_: self.card_view.later())
         self.vars["effect"].trace_add("write", lambda *_: self.show_trap_threshold())
         ttk.Label(form, text="Notes").grid(row=row, column=0, sticky="nw", pady=2)
         self.notes = tk.Text(form, width=36, height=4, wrap="word", undo=True)
@@ -721,6 +729,36 @@ class CardsTab(Tab):
                              style="Error.TLabel" if lines > 8 else "Hint.TLabel")
         if self.app.text_preview is not None:
             self.app.text_preview.later()
+        self.card_view.later()
+
+    def card_view_values(self):
+        """What the card view preview draws: the form's type, stars and text,
+        and the mod's colours for the card (card_text_colors)."""
+        if self.current is None or self.project is None or self.current not in self.project.cards:
+            return None
+        values = [parse_choice(self.vars["type"].get(), TYPE_NAMES),
+                  parse_choice(self.vars["star1"].get(), star_choices(self.project)),
+                  parse_choice(self.vars["star2"].get(), star_choices(self.project))]
+        if min(values) < 0:
+            return None
+        card_type, star1, star2 = values
+        if card_type >= TYPE_MAGIC:
+            star1 = star2 = 0
+        elif star2 == star1:
+            star2 = 0           # one star, shown once (stars.c)
+        names = {s: star_label(s, self.project) for s in (star1, star2) if s > 10}
+        return card_type, star1, star2, self.text.get("1.0", "end-1c"), self.text_colours(), names
+
+    def text_colours(self):
+        """The card's own card_text_colors rule: {"description", "guardian_star"}."""
+        rules = self.project.other.get("card_text_colors")
+        out = {}
+        if isinstance(rules, dict) and isinstance(rules.get("cards"), list):
+            for rule in rules["cards"]:
+                if isinstance(rule, dict) and self.project.resolve(rule.get("card")) == self.current:
+                    out.update({k: rule[k] for k in ("description", "guardian_star")
+                                if isinstance(rule.get(k), int) and 0 <= rule[k] < 8})
+        return out
 
     def read_form(self, cid):
         """The card as the form has it, or an error text."""

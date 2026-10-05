@@ -144,7 +144,7 @@ class CardTextBox(tk.Text):
         if self._laying or not self.edit_modified():
             return
         self.edit_modified(False)
-        self.after_idle(self.layout)
+        self.app.after_idle(self.layout)     # the window's, which it cancels on close
 
     def layout(self):
         """The box again from its text: pictures for the codes, the game's

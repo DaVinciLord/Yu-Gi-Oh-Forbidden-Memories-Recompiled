@@ -20,10 +20,27 @@ static const char *manifest =
     "    ]\n"
     "}\n";
 
+/* \u escapes are the characters as UTF-8, a surrogate pair one past U+FFFF;
+ * a lone surrogate is U+FFFD. */
+static void unicode_escapes(void)
+{
+    char error[128];
+    JsonDocument *document = Json_Parse("[\"W\\u00e4chter \\u00df\\u20ac \\uD83D\\uDE00 \\uD800x\", \"\\u0041\"]", error,
+                                        sizeof(error));
+    const JsonValue *list;
+    assert(document);
+    list = Json_Root(document);
+    assert(!strcmp(Json_String(Json_At(list, 0), ""),
+                   "W\xc3\xa4" "chter \xc3\x9f\xe2\x82\xac \xf0\x9f\x98\x80 \xef\xbf\xbd" "x"));
+    assert(!strcmp(Json_String(Json_At(list, 1), ""), "A"));
+    Json_Free(document);
+}
+
 int main(void)
 {
     char error[128];
     JsonDocument *document = Json_Parse(manifest, error, sizeof(error));
+    unicode_escapes();
     const JsonValue *root, *data, *entry, *patch;
     assert(document);
     root = Json_Root(document);

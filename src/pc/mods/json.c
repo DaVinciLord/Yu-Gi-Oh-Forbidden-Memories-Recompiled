@@ -65,6 +65,19 @@ static void skip_space(Parser *parser)
     while (isspace((unsigned char)*parser->at)) parser->at++;
 }
 
+/* Four hex digits: 0, and their value in *code; 1 when they are not. */
+static int hex4(const char *at, unsigned *code)
+{
+    int i;
+    *code = 0;
+    for (i = 0; i < 4; i++) {
+        if (!isxdigit((unsigned char)at[i])) return 1;
+        *code = *code * 16 + (unsigned)(isdigit((unsigned char)at[i]) ? at[i] - '0'
+                                        : tolower((unsigned char)at[i]) - 'a' + 10);
+    }
+    return 0;
+}
+
 /* A string, unescaped over itself and terminated where its quote was. */
 static char *parse_string(Parser *parser)
 {
@@ -83,18 +96,35 @@ static char *parse_string(Parser *parser)
         case 'f': *out++ = '\f'; break;
         case '\\': case '/': case '"': *out++ = *parser->at; break;
         case 'u': {
-            /* Only the characters a manifest can need: one byte of Latin-1,
-             * which covers an author's name. Anything above stays as "?". */
-            unsigned code = 0;
-            int i;
-            for (i = 1; i <= 4; i++) {
-                char digit = parser->at[i];
-                if (!isxdigit((unsigned char)digit)) { fail(parser, "bad \\u escape"); return NULL; }
-                code = code * 16 + (unsigned)(isdigit((unsigned char)digit) ? digit - '0'
-                                              : tolower((unsigned char)digit) - 'a' + 10);
-            }
-            *out++ = code < 0x100 ? (char)code : '?';
+            /* A character as UTF-8 (a surrogate pair, one past U+FFFF): the
+             * texts are UTF-8 (a description's accents), and a tool that
+             * writes them escaped ("W\u00e4chter") means the same letters.
+             * Never longer than the escape, so it fits where that was. */
+            unsigned code = 0, low = 0;
+            if (hex4(parser->at + 1, &code)) { fail(parser, "bad \\u escape"); return NULL; }
             parser->at += 4;
+            if (code >= 0xD800 && code < 0xDC00 && parser->at[1] == '\\' && parser->at[2] == 'u' &&
+                !hex4(parser->at + 3, &low) && low >= 0xDC00 && low < 0xE000) {
+                code = 0x10000 + ((code - 0xD800) << 10) + (low - 0xDC00);
+                parser->at += 6;
+            } else if (code >= 0xD800 && code < 0xE000) {
+                code = 0xFFFD;      /* a lone surrogate: no character */
+            }
+            if (code < 0x80) {
+                *out++ = (char)code;
+            } else if (code < 0x800) {
+                *out++ = (char)(0xC0 | code >> 6);
+                *out++ = (char)(0x80 | (code & 0x3F));
+            } else if (code < 0x10000) {
+                *out++ = (char)(0xE0 | code >> 12);
+                *out++ = (char)(0x80 | (code >> 6 & 0x3F));
+                *out++ = (char)(0x80 | (code & 0x3F));
+            } else {
+                *out++ = (char)(0xF0 | code >> 18);
+                *out++ = (char)(0x80 | (code >> 12 & 0x3F));
+                *out++ = (char)(0x80 | (code >> 6 & 0x3F));
+                *out++ = (char)(0x80 | (code & 0x3F));
+            }
             break;
         }
         default: fail(parser, "bad escape"); return NULL;

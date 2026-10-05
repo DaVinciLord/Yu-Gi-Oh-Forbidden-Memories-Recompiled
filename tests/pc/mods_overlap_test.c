@@ -404,9 +404,9 @@ int main(void)
         Json_Free(docs[1]);
     }
 
-    /* A name as json.c reads it and the game keeps it: a \u escape is one
-     * byte (0xC9 alone, not UTF-8), and six names of 95 bytes are all in
-     * the line, each cut to 95 bytes where a letter starts. */
+    /* A name as json.c reads it and the game keeps it: a \u escape is its
+     * character as UTF-8 (C3 89), and six names of 95 bytes are all in the
+     * line, each cut to 95 bytes where a letter starts. */
     {
         JsonDocument *docs[6];
         ModsOverlapMod six[6];
@@ -426,7 +426,7 @@ int main(void)
         found = Mods_OverlapCompute(six, 2, NULL);
         assert(found && Mods_OverlapCount(found) == 1);
         Mods_OverlapText(found, 0, line, sizeof(line));
-        assert(!strcmp(line, "Fonts (\xc9" "clair, 1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000): "
+        assert(!strcmp(line, "Fonts (\xc3\x89" "clair, 1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000): "
                              "both apply and add up (a letter comes from the first font that has it)"));
         Mods_OverlapFree(found);
         found = Mods_OverlapCompute(six + 1, 5, NULL);
