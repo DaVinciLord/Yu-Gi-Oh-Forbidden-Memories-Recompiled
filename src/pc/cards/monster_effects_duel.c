@@ -335,7 +335,11 @@ int MonsterEffects_Update(void)
         LOG(LOG_DUEL_EFFECTS, "monster effects: %d effects in a row: the rest are dropped", S.chain);
         S.count = 0;
     }
-    waiting = S.count ? resolve() : 0;
+    /* One that finds nothing to do (a boost or destroy with no monster
+     * left) gives way to the next at once: past this look the phase goes
+     * on, and the rest would wait for the player's next move. */
+    waiting = 0;
+    while (S.count && !waiting) waiting = resolve();
     if (!waiting && !S.count) S.chain = 0;
     return waiting;
 }
