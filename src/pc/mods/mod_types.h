@@ -35,21 +35,24 @@ enum {
     /* API 10: a monster on the field (notes/more-cards.md, "Monster
      * effects"): a the card, b its duel record (0-29: b / 15 the side, 0 the
      * player; b % 15 is 5-9 for the monster zones), c what happened:
-     * MEMORIES_MONSTER_SUMMON ... MEMORIES_MONSTER_DESTROYED. Every monster,
+     * MEMORIES_MONSTER_SUMMON ... MEMORIES_MONSTER_DESTROY_OPPONENT. Every monster,
      * with "monster_effects" of its own or not. Before: set handled to skip
      * the card's own effects for this; a mod may start a card effect of its
      * own (DuelEffect_StartCardEffect), which runs before the next one.
      * After observes. SUMMON is a face-up summon only (a face-down play is
-     * none). FLIP is a face-down monster attacked, before the battle starts
-     * (no trap sprang); turned face up any other way is no FLIP. COMBAT
-     * comes as the battle begins, after the FLIP, when no trap sprang, for
-     * the attacker and then the monster it attacks. */
+     * none). FLIP is a face-down monster attacked, as the attack is
+     * declared, both monsters still on the field (no trap springing); the
+     * attack goes on only if both are still there after. Turned face up
+     * any other way is no FLIP. COMBAT comes as the battle begins, when no
+     * trap sprang, for the attacker and then the monster it attacks.
+     * DESTROY_OPPONENT: it won a battle that destroyed the other monster,
+     * after that one's DESTROYED. */
     MEMORIES_EVENT_MONSTER,
     MEMORIES_EVENT_COUNT
 };
 enum {
     MEMORIES_MONSTER_SUMMON, MEMORIES_MONSTER_FLIP, MEMORIES_MONSTER_DRAW, MEMORIES_MONSTER_COMBAT,
-    MEMORIES_MONSTER_DESTROYED
+    MEMORIES_MONSTER_DESTROYED, MEMORIES_MONSTER_DESTROY_OPPONENT
 };
 typedef struct {
     unsigned type, phase;

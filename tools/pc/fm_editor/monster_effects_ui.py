@@ -185,7 +185,7 @@ class EffectDialog(FormDialog):
         self.vars["when"].set(fx.when_label(e["when"]))
         self.vars["do"].set(fx.DO_LABELS[fx.DO.index(e["do"])])
         self.vars["card"].set(self.magic_label(e.get("card", 337)))
-        target = e.get("target", fx.default_target(e["when"]))
+        target = e.get("target", fx.default_target(e["when"], e["do"]))
         self.vars["target"].set(fx.TARGET_LABELS[fx.TARGET.index(target)])
         self.vars["type"].set(e.get("type", ANY))
         self.vars["attribute"].set(e.get("attribute", ANY))
@@ -222,12 +222,13 @@ class EffectDialog(FormDialog):
             do = actions[0]
             self.vars["do"].set(fx.DO_LABELS[fx.DO.index(do)])
             return      # the trace calls again
-        targets = fx.targets(when)
+        targets = fx.targets(when, do if do in fx.FILTERED else "boost")
         self.target_box.configure(values=[fx.TARGET_LABELS[fx.TARGET.index(t)] for t in targets])
         if self.chosen("target", fx.TARGET, fx.TARGET_LABELS) not in targets:
             self.vars["target"].set(fx.TARGET_LABELS[fx.TARGET.index(targets[0])])
         shown = {"when", "do"} | {"magic": {"card"}, "boost": {"target", "type", "attribute", "attack", "defense"},
-                                  "heal": {"amount"}, "damage": {"amount"}}[do]
+                                  "heal": {"amount"}, "damage": {"amount"},
+                                  "destroy": {"target", "type", "attribute"}}[do]
         for key, widgets in self.rows.items():
             for widget in widgets:
                 widget.grid() if key in shown else widget.grid_remove()
@@ -241,9 +242,9 @@ class EffectDialog(FormDialog):
         if do == "magic":
             text = self.vars["card"].get()
             effect["card"] = int(text.split(" ", 1)[0]) if text[:1].isdigit() else 0
-        elif do == "boost":
+        elif do in fx.FILTERED:
             effect["target"] = self.chosen("target", fx.TARGET, fx.TARGET_LABELS)
-            for key in ("attack", "defense"):
+            for key in ("attack", "defense") if do == "boost" else ():
                 text = self.vars[key].get().strip() or "0"
                 try:
                     value = int(text)
@@ -253,7 +254,7 @@ class EffectDialog(FormDialog):
                     return f"ATK and DEF are -{fx.BOOST_MAX} to {fx.BOOST_MAX}."
                 if value:
                     effect[key] = value
-            if "attack" not in effect and "defense" not in effect:
+            if do == "boost" and "attack" not in effect and "defense" not in effect:
                 return "A boost needs ATK or DEF."
             for key in ("type", "attribute"):
                 if self.vars[key].get() not in ("", ANY):

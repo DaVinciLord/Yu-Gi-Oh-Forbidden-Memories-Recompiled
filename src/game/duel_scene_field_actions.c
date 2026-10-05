@@ -1,3 +1,6 @@
+#ifdef MEMORIES_PC
+#include "pc/cards/monster_effects_duel.h"
+#endif
 /*
  * Duel scene-state 5: the field. It runs the scripted field path for a
  * computer-controlled side, moves the field cursor, opens the card viewer,
@@ -422,6 +425,11 @@ void DuelScene_UpdateFieldActions(void)
         goto commit;
     case 6:
         side = SEL_REC3 + D_8009B1D5 * SIDE_SIZE;
+#ifdef MEMORIES_PC
+        if (MonsterEffects_AttackResumes()) {
+            goto commit;
+        }
+#endif
         if (D_8009B174 & 0x80) {
             D_8009B174 |= 0x80;
             D_8009B1B4 = DUEL_CARD_PICK_CURSOR_VIEW(side);
@@ -487,6 +495,16 @@ void DuelScene_UpdateFieldActions(void)
             SD_SEPlayFull(9);
             return;
         }
+#ifdef MEMORIES_PC
+        /* A face-down defender's flip resolves first, both monsters on the
+           field (monster_effects_duel.h); the attack comes back here. */
+        if (MonsterEffects_AttackDeclared(
+                D_800907D8[FIELD_CURSOR.row * 5 + FIELD_CURSOR.col + D_8009B1D5 * 20],
+                a ? -1 : (s32)(pick - D_801A7AD8))) {
+            SD_SEPlayFull(7);
+            return;
+        }
+#endif
         SD_SEPlayFull(7);
         for (n = 6; n >= 0; n--) {
             D_800E9EF0[n] = 0;

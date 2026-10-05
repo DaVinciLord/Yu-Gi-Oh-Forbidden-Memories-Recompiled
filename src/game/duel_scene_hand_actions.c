@@ -1,3 +1,6 @@
+#ifdef MEMORIES_PC
+#include "pc/cards/monster_effects_duel.h"
+#endif
 /*
  * Duel scene-state 4: the player's hand. It builds the hand cursor, runs the
  * scripted selection when the side is computer controlled, lets the player
@@ -229,6 +232,13 @@ void DuelScene_UpdateHandActions(void)
             if (!(SUBSTATE & 0x8000)) {
                 SUBSTATE |= 0xC000;
                 card_id = CARD_ID(obj->card_index);
+#ifdef MEMORIES_PC
+                /* A monster whose effects want it seen goes down face up
+                   (monster_effects_duel.h). */
+                if (CARD_KIND(card_id) < CARD_TYPE_MAGIC && MonsterEffects_PlayFaceUp(card_id)) {
+                    D_800EAE88[8] = 0;
+                }
+#endif
                 if (CARD_KIND(card_id) < CARD_TYPE_MAGIC) {
                     if (D_800EAE88[8] == 0) {
                         SUBSTATE = 3;

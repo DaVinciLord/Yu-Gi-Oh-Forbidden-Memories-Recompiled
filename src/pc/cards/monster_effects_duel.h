@@ -26,6 +26,8 @@
 
 #define MONSTER_RECORDS 30
 #define MONSTER_QUEUE_MAX 48
+#define MONSTER_ATTACK_HELD 1   /* the field phase waits; the attack is not committed */
+#define MONSTER_ATTACK_RESUME 2 /* the flip is done and both are there: commit it */
 
 typedef struct {
     short card;
@@ -41,9 +43,13 @@ typedef struct {
     unsigned char ritual;       /* a ritual ran since the last look: who left were its tributes */
     unsigned char pause;        /* frames the duel waits after a boost or LP change */
     unsigned char count;        /* queue */
-    unsigned char battle;       /* the battle about to start was looked at (battle_start) */
-    unsigned char pad[2];
+    unsigned char attack;       /* MONSTER_ATTACK_*: a declared attack waiting for its defender's flip */
+    unsigned char attacker, defender;   /* that attack's records */
     unsigned short chain;       /* effects resolved since the field last settled */
+    short attack_card[2];       /* the attacker's and the defender's cards as it was declared */
+    unsigned char fight[2];     /* the last battle's attacker and defender records, 0 none */
+    short fight_card[2];
+    unsigned int destroy_mask;  /* the records a "destroy" takes, while its Warrior Elimination runs */
     short card[MONSTER_RECORDS];
     unsigned char face_up[MONSTER_RECORDS];
     unsigned char placed[MONSTER_RECORDS];  /* placement put a card here since the last look */
@@ -63,6 +69,19 @@ void MonsterEffects_Placed(int record, int equip);
 void MonsterEffects_EffectStarted(int ritual);
 /* A battle begins (DuelScene_UpdateBattle, once the attack trap is known). */
 void MonsterEffects_Battle(void);
+/* DuelScene_UpdateFieldActions, as an attack is about to be committed
+ * (both monsters still on the field; `defender` -1 for a direct attack):
+ * 1 to hold it -- a face-down defender's flip resolves first, then the
+ * field phase commits it again (MonsterEffects_AttackResumes) or, with
+ * either monster gone, the attack is called off. */
+int MonsterEffects_AttackDeclared(int attacker, int defender);
+/* The player's target choice: 1 when a held attack is to be committed. */
+int MonsterEffects_AttackResumes(void);
+/* The CPU puts this monster down face up (its effects want it seen). */
+int MonsterEffects_PlayFaceUp(int card);
+/* Warrior Elimination's removal (DuelEffect_ApplyMonsterRemoval) as a
+ * "destroy" runs it: -1 as ever, else whether it takes `record`. */
+int MonsterEffects_RemovalTakes(int record);
 /* What face-up monsters and the battle add to a card's ATK and DEF. */
 void MonsterEffects_Stats(const void *record, int *attack, int *defense);
 

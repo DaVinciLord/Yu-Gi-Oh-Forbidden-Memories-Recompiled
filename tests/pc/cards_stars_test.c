@@ -305,7 +305,11 @@ static void monster_effect_entries(void)
         "  {\"when\":\"destroyed\",\"do\":\"boost\",\"target\":\"self\",\"attack\":100},"
         "  {\"when\":\"summon\",\"do\":\"heal\",\"amount\":0},"
         "  {\"when\":\"summon\",\"do\":\"boost\"},"
-        "  {\"when\":\"later\",\"do\":\"heal\",\"amount\":1}]},"
+        "  {\"when\":\"later\",\"do\":\"heal\",\"amount\":1},"
+        "  {\"when\":\"destroy_opponent\",\"do\":\"heal\",\"amount\":300},"
+        "  {\"when\":\"flip\",\"do\":\"destroy\",\"type\":\"Warrior\"},"
+        "  {\"when\":\"summon\",\"do\":\"destroy\",\"target\":\"own\"},"
+        "  {\"when\":\"summon\",\"do\":\"destroy\",\"target\":\"battle\"}]},"
         "{\"copy\":20,\"id\":\"inherits\"},"
         "{\"copy\":20,\"id\":\"none\",\"monster_effects\":[]},"
         "{\"replace\":20,\"attack\":1000},"
@@ -319,10 +323,11 @@ static void monster_effect_entries(void)
     test_stats[675 - 1] = STATS(CARD_TYPE_RITUAL, 0, 0);
     for (i = 0, entry = Json_At(Json_Root(doc), 0); entry; i++, entry = Json_Next(entry))
         add_entry("f", ".", i, entry, &context);
-    /* Five taken; a ritual's effect, magic while face up, a combat boost of
-       its side, a destroyed card's own boost, no amount, no boost and an
-       unknown "when" left out, each noted. */
-    assert(Cards_MonsterEffects(20, &effects) == 5);
+    /* Seven taken; a ritual's effect, magic while face up, a combat boost of
+       its side, a destroyed card's own boost, no amount, no boost, an
+       unknown "when", a destroy of its own side and one of the monster it
+       battles outside a flip left out, each noted. */
+    assert(Cards_MonsterEffects(20, &effects) == 7);
     assert(effects[0].when == MONSTER_WHEN_SUMMON && effects[0].action == MONSTER_DO_MAGIC && effects[0].card == 337);
     assert(effects[1].when == MONSTER_WHEN_FACE_UP && effects[1].action == MONSTER_DO_BOOST);
     assert(effects[1].target == MONSTER_TARGET_OTHERS && effects[1].type == 0 && effects[1].attribute == 0);
@@ -331,9 +336,13 @@ static void monster_effect_entries(void)
     assert(effects[3].when == MONSTER_WHEN_DESTROYED && effects[3].action == MONSTER_DO_DAMAGE &&
            effects[3].amount == 800);
     assert(effects[4].when == MONSTER_WHEN_DRAW && effects[4].action == MONSTER_DO_HEAL && effects[4].amount == 100);
-    assert(effect_notes == 8);   /* the seven left out, and 21's that is no list */
+    assert(effects[5].when == MONSTER_WHEN_DESTROY_OPPONENT && effects[5].action == MONSTER_DO_HEAL);
+    /* A flip's destroy without a target: the monster attacking it. */
+    assert(effects[6].when == MONSTER_WHEN_FLIP && effects[6].action == MONSTER_DO_DESTROY &&
+           effects[6].target == MONSTER_TARGET_BATTLE && effects[6].type == 3);
+    assert(effect_notes == 10);   /* the nine left out, and 21's that is no list */
     /* A copy has its base's; [] none; a later replace without the key keeps them. */
-    assert(Cards_MonsterEffects(copy, &effects) == 5);
+    assert(Cards_MonsterEffects(copy, &effects) == 7);
     assert(Cards_MonsterEffects(copy + 1, &effects) == 0);
     /* Not a list: noted, the card keeps what it had (none). */
     assert(Cards_MonsterEffects(21, &effects) == 0);

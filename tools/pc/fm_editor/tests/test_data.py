@@ -1166,12 +1166,23 @@ class MonsterEffectsTest(unittest.TestCase):
                        {"when": "summon", "do": "boost", "target": "battle", "attack": 1},
                        {"when": "summon", "do": "magic", "card": 675},      # a ritual
                        {"when": "summon", "do": "boost"}, {"when": "summon", "do": "heal", "amount": 0},
-                       {"when": "later", "do": "heal", "amount": 1}, {"when": "summon", "do": "heal", "amount": True}):
+                       {"when": "later", "do": "heal", "amount": 1}, {"when": "summon", "do": "heal", "amount": True},
+                       {"when": "summon", "do": "destroy", "target": "own"},
+                       {"when": "destroyed", "do": "destroy", "target": "battle"},
+                       {"when": "combat", "do": "destroy", "target": "battle"}):
             self.assertIsNone(fx.normalize(effect), effect)
         # The target left out: the card itself, its side when destroyed.
         self.assertEqual(fx.normalize({"when": "destroyed", "do": "boost", "attack": 100})["target"], "own")
         self.assertEqual(fx.actions("face_up"), ["boost"])
         self.assertEqual(fx.targets("combat"), ["self", "battle"])
+        # A destroy: the opponent's, or on a flip the monster attacking it (its default there).
+        self.assertEqual(fx.targets("flip", "destroy"), ["opponent", "battle"])
+        self.assertEqual(fx.targets("destroy_opponent", "destroy"), ["opponent"])
+        self.assertEqual(fx.normalize({"when": "flip", "do": "destroy"}),
+                         {"when": "flip", "do": "destroy", "target": "battle"})
+        self.assertEqual(fx.describe({"when": "flip", "do": "destroy", "target": "battle"}),
+                         "Destroy the monster it battles")
+        self.assertNotIn("destroy", fx.actions("combat"))
         self.assertEqual(fx.describe({"when": "combat", "do": "boost", "target": "battle", "attack": -500}),
                          "The monster it battles: -500 ATK for the battle")
 

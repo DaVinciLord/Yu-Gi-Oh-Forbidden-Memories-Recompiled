@@ -94,10 +94,10 @@ A monster's **Monster effects** box, below its guardian stars, lists what
 it does on the field (`"monster_effects"`, [monster effects](../../../notes/more-cards.md#monster-effects)):
 a row per effect, **When** and what it **Does**. **Add...** and **Edit...**
 (or a double-click) open the effect: **When** (On summon, On flip, On draw
-phase, Before combat, When destroyed, While face up, each explained under
+phase, Before combat, When destroyed, Destroy opponent monster, While face up, each explained under
 it: a summon is face up only, a flip is the face-down card attacked), **Does** (a magic card's effect, a boost of ATK and DEF, healing its
-owner, damage to the opponent), and what that needs: the magic card, whose
-monsters a boost reaches (and only of one type or attribute), the ATK and
+owner, damage to the opponent, destroying monsters), and what that needs: the magic card, whose
+monsters a boost or destroy reaches (and only of one type or attribute), the ATK and
 DEF, the LP. Only what the game can do for that **When** is offered: while
 face up, only boosts; before combat, a boost of the card itself or of the
 monster it battles, healing or damage. **Remove**, **Up** and **Down**

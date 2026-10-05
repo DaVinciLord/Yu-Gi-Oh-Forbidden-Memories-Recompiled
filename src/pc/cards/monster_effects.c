@@ -14,8 +14,8 @@ extern unsigned char gDuelEffect_abGroupByEffectId[];
 #define GROUP_RITUAL 12     /* DUEL_EFFECT_GROUP_RITUAL */
 
 const char *const MonsterEffect_WhenNames[MONSTER_WHEN_COUNT] = {"summon", "flip", "draw", "combat", "destroyed",
-                                                                 "face_up"};
-const char *const MonsterEffect_DoNames[MONSTER_DO_COUNT] = {"magic", "boost", "heal", "damage"};
+                                                                 "destroy_opponent", "face_up"};
+const char *const MonsterEffect_DoNames[MONSTER_DO_COUNT] = {"magic", "boost", "heal", "damage", "destroy"};
 const char *const MonsterEffect_TargetNames[MONSTER_TARGET_COUNT] = {"self", "own", "others", "opponent", "all",
                                                                      "battle"};
 #define AMOUNT_MAX 9999
@@ -42,9 +42,18 @@ int MonsterEffect_Allowed(int when, int action, int target)
     if (when == MONSTER_WHEN_COMBAT)
         return action == MONSTER_DO_HEAL || action == MONSTER_DO_DAMAGE ||
                (action == MONSTER_DO_BOOST && (target == MONSTER_TARGET_SELF || target == MONSTER_TARGET_BATTLE));
+    /* Only an attacked monster's flip has a monster it battles outside one. */
+    if (target == MONSTER_TARGET_BATTLE && when != MONSTER_WHEN_FLIP) return 0;
+    if (action == MONSTER_DO_DESTROY) return target == MONSTER_TARGET_OPPONENT || target == MONSTER_TARGET_BATTLE;
     if (action != MONSTER_DO_BOOST) return 1;
     /* A destroyed card has no self to boost. */
-    return target != MONSTER_TARGET_BATTLE && !(when == MONSTER_WHEN_DESTROYED && target == MONSTER_TARGET_SELF);
+    return !(when == MONSTER_WHEN_DESTROYED && target == MONSTER_TARGET_SELF);
+}
+
+int MonsterEffect_DefaultTarget(int when, int action)
+{
+    if (action == MONSTER_DO_DESTROY) return when == MONSTER_WHEN_FLIP ? MONSTER_TARGET_BATTLE : MONSTER_TARGET_OPPONENT;
+    return when == MONSTER_WHEN_DESTROYED ? MONSTER_TARGET_OWN : MONSTER_TARGET_SELF;
 }
 
 static int named(const char *text, const char *const *names, int count)
@@ -93,18 +102,18 @@ static int read_one(const char *mod, int index, int n, const JsonValue *entry, M
     when = named(Json_String(Json_Member(entry, "when"), NULL), MonsterEffect_WhenNames, MONSTER_WHEN_COUNT);
     action = named(Json_String(Json_Member(entry, "do"), NULL), MonsterEffect_DoNames, MONSTER_DO_COUNT);
     if (when < 0) {
-        Mods_Note(mod, "cards[%d]: monster_effects[%d]: \"when\" must be summon, flip, draw, combat, destroyed or "
-                  "face_up", index, n);
+        Mods_Note(mod, "cards[%d]: monster_effects[%d]: \"when\" must be summon, flip, draw, combat, destroyed, "
+                  "destroy_opponent or face_up", index, n);
         return 0;
     }
     if (action < 0) {
-        Mods_Note(mod, "cards[%d]: monster_effects[%d]: \"do\" must be magic, boost, heal or damage", index, n);
+        Mods_Note(mod, "cards[%d]: monster_effects[%d]: \"do\" must be magic, boost, heal, damage or destroy", index,
+                  n);
         return 0;
     }
     value = Json_Member(entry, "target");
     target = value ? named(Json_String(value, NULL), MonsterEffect_TargetNames, MONSTER_TARGET_COUNT)
-                   : when == MONSTER_WHEN_COMBAT ? MONSTER_TARGET_SELF
-                   : when == MONSTER_WHEN_DESTROYED ? MONSTER_TARGET_OWN : MONSTER_TARGET_SELF;
+                   : MonsterEffect_DefaultTarget(when, action);
     if (target < 0) {
         Mods_Note(mod, "cards[%d]: monster_effects[%d]: \"target\" must be self, own, others, opponent, all or battle",
                   index, n);
@@ -112,10 +121,12 @@ static int read_one(const char *mod, int index, int n, const JsonValue *entry, M
     }
     if (!MonsterEffect_Allowed(when, action, target)) {
         Mods_Note(mod, "cards[%d]: monster_effects[%d]: \"%s\" cannot be done on \"%s\"%s", index, n,
-                  action == MONSTER_DO_BOOST ? MonsterEffect_TargetNames[target] : MonsterEffect_DoNames[action],
+                  action == MONSTER_DO_BOOST || action == MONSTER_DO_DESTROY ? MonsterEffect_TargetNames[target]
+                                                                             : MonsterEffect_DoNames[action],
                   MonsterEffect_WhenNames[when],
                   when == MONSTER_WHEN_COMBAT ? " (a boost of self or battle, heal or damage)"
-                  : when == MONSTER_WHEN_FACE_UP ? " (boosts only)" : "");
+                  : when == MONSTER_WHEN_FACE_UP ? " (boosts only)"
+                  : action == MONSTER_DO_DESTROY ? " (destroy takes opponent, or battle on flip)" : "");
         return 0;
     }
     out->when = (unsigned char)when;
@@ -131,14 +142,17 @@ static int read_one(const char *mod, int index, int n, const JsonValue *entry, M
         }
         out->card = (unsigned short)v;
         break;
-    case MONSTER_DO_BOOST: {
+    case MONSTER_DO_BOOST:
+    case MONSTER_DO_DESTROY: {
         int attack = 0, defense = 0, a, d;
-        a = number(mod, index, n, entry, "attack", BOOST_MAX, &attack);
-        d = number(mod, index, n, entry, "defense", BOOST_MAX, &defense);
-        if (a < 0 || d < 0) return 0;
-        if (!attack && !defense) {
-            Mods_Note(mod, "cards[%d]: monster_effects[%d]: a boost needs \"attack\" or \"defense\"", index, n);
-            return 0;
+        if (action == MONSTER_DO_BOOST) {
+            a = number(mod, index, n, entry, "attack", BOOST_MAX, &attack);
+            d = number(mod, index, n, entry, "defense", BOOST_MAX, &defense);
+            if (a < 0 || d < 0) return 0;
+            if (!attack && !defense) {
+                Mods_Note(mod, "cards[%d]: monster_effects[%d]: a boost needs \"attack\" or \"defense\"", index, n);
+                return 0;
+            }
         }
         out->attack = (short)attack;
         out->defense = (short)defense;

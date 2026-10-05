@@ -7,23 +7,29 @@ from __future__ import annotations
 from .gamedata import ATTRIBUTE_NAMES, TYPE_NAMES, TYPE_MAGIC
 
 # The game's names, in the order of its enums, and the editor's for them.
-WHEN = ("summon", "flip", "draw", "combat", "destroyed", "face_up")
-WHEN_LABELS = ("On summon", "On flip", "On draw phase", "Before combat", "When destroyed", "While face up")
+WHEN = ("summon", "flip", "draw", "combat", "destroyed", "destroy_opponent", "face_up")
+WHEN_LABELS = ("On summon", "On flip", "On draw phase", "Before combat", "When destroyed", "Destroy opponent monster",
+               "While face up")
 WHEN_HINTS = (
     "Put on the field face up, once: played, fused or a ritual's monster. A face-down play is no summon (the CPU "
     "puts its monsters down face down).",
-    "Attacked while face down, once, before the battle (not when a trap stops the attack). Attacking face down or "
-    "a reveal (Dark-piercing Light) is no flip.",
+    "Attacked while face down, once: turned face up as the attack is declared, both still on the field (not when "
+    "a trap stops the attack). If either is gone after, the attack is called off. Attacking face down or a reveal "
+    "(Dark-piercing Light) is no flip.",
     "At the start of its owner's every turn, once the hand is drawn, while it is face up.",
     "It attacks or is attacked, before the damage, after a flip (no trap sprang). Boosts last the battle.",
     "Destroyed by a battle or an effect (not when used for a fusion or a ritual).",
+    "It won a battle that destroyed the other monster, and is still on the field: after the battle.",
     "All the while it is face up on the field: a boost that goes when it does.",
 )
-DO = ("magic", "boost", "heal", "damage")
-DO_LABELS = ("Magic card effect", "Boost ATK/DEF", "Heal its owner's LP", "Damage the opponent's LP")
+DO = ("magic", "boost", "heal", "damage", "destroy")
+DO_LABELS = ("Magic card effect", "Boost ATK/DEF", "Heal its owner's LP", "Damage the opponent's LP",
+             "Destroy monsters")
 TARGET = ("self", "own", "others", "opponent", "all", "battle")
 TARGET_LABELS = ("This card", "Its owner's monsters", "Its owner's other monsters", "The opponent's monsters",
                  "Every monster", "The monster it battles")
+# Whose: the boosts' and destroys' choices for each "when" (allowed()).
+FILTERED = ("boost", "destroy")
 # The disc's magic cards whose effect a monster may use: Magic cards whose
 # effect group does something at play time and asks nothing (no ritual).
 MAGIC = (320, 329, 330, 331, 332, 333, 334, 335, 336, 337, 338, 339, 340, 341, 342, 343, 344, 345, 346, 347, 348,
@@ -39,20 +45,26 @@ def allowed(when: str, do: str, target: str | None = None) -> bool:
         return do == "boost" and target != "battle"
     if when == "combat":
         return do in ("heal", "damage") or (do == "boost" and target in ("self", "battle"))
+    if target == "battle" and when != "flip":
+        return False
+    if do == "destroy":
+        return target in ("opponent", "battle")
     if do != "boost":
         return True
-    return target != "battle" and not (when == "destroyed" and target == "self")
+    return not (when == "destroyed" and target == "self")
 
 
 def actions(when: str) -> list:
-    return [do for do in DO if allowed(when, do, "self" if when != "destroyed" else "own")]
+    return [do for do in DO if targets(when, do)]
 
 
-def targets(when: str) -> list:
-    return [t for t in TARGET if allowed(when, "boost", t)]
+def targets(when: str, do: str = "boost") -> list:
+    return [t for t in TARGET if allowed(when, do, t)]
 
 
-def default_target(when: str) -> str:
+def default_target(when: str, do: str = "boost") -> str:
+    if do == "destroy":
+        return "battle" if when == "flip" else "opponent"
     return "own" if when == "destroyed" else "self"
 
 
@@ -70,7 +82,7 @@ def normalize(effect: dict, resolve=None) -> dict | None:
     if not isinstance(effect, dict):
         return None
     when, do = _name(WHEN, effect.get("when")), _name(DO, effect.get("do"))
-    target = _name(TARGET, effect.get("target")) if "target" in effect else (default_target(when) if when else None)
+    target = _name(TARGET, effect.get("target")) if "target" in effect else (default_target(when, do) if when else None)
     if not when or not do or not target or not allowed(when, do, target):
         return None
     out = {"when": when, "do": do}
@@ -80,15 +92,15 @@ def normalize(effect: dict, resolve=None) -> dict | None:
         if card not in MAGIC:
             return None
         out["card"] = card
-    elif do == "boost":
+    elif do in FILTERED:
         out["target"] = target
-        for key in ("attack", "defense"):
+        for key in ("attack", "defense") if do == "boost" else ():
             value = effect.get(key, 0)
             if not isinstance(value, int) or isinstance(value, bool) or abs(value) > BOOST_MAX:
                 return None
             if value:
                 out[key] = value
-        if "attack" not in out and "defense" not in out:
+        if do == "boost" and "attack" not in out and "defense" not in out:
             return None
         if "type" in effect:
             t = effect["type"]
@@ -143,11 +155,13 @@ def describe(effect: dict, card_name=lambda cid: f"#{cid}") -> str:
         return f"Its owner gains {effect.get('amount')} LP"
     if do == "damage":
         return f"The opponent loses {effect.get('amount')} LP"
-    target = effect.get("target", default_target(effect.get("when")))
+    target = effect.get("target", default_target(effect.get("when"), do))
     who = TARGET_LABELS[TARGET.index(target)] if target in TARGET else str(target)
     which = " ".join(str(effect[k]) for k in ("attribute", "type") if k in effect)
     if which:
         who += f" ({which} only)"
+    if do == "destroy":
+        return f"Destroy {who[0].lower()}{who[1:]}"
     stats = " ".join(f"{effect[k]:+d} {label}" for k, label in (("attack", "ATK"), ("defense", "DEF"))
                      if effect.get(k))
     lasting = " for the battle" if effect.get("when") == "combat" else ""
