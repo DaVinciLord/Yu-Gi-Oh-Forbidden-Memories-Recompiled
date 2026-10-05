@@ -267,10 +267,10 @@ says when (`when`) and what (`do`):
 
 | `when` | It happens |
 |---|---|
-| `summon` | the monster is put on the field, face up or face down: played from the hand, a fusion's result (onto a field monster too) or a ritual's monster. Every play is a summon in this game, and the CPU puts its monsters down face down |
-| `flip` | a face-down monster is turned face up: it attacks, it is attacked (even if it is destroyed there), or Swords of Revealing Light or Dark-piercing Light reveal it. An equip leaves a face-down monster face down, so it does not flip it |
-| `draw` | its owner's turn begins, once the card is drawn, while it is face up |
-| `combat` | it attacks or is attacked, before the damage, when no trap springs |
+| `summon` | the monster is put on the field face up: played from the hand, a fusion's result (onto a field monster too) or a ritual's monster. A face-down play is no summon (the CPU puts its monsters down face down) |
+| `flip` | a face-down monster is attacked: it is turned face up, and its flip resolves before the battle goes on, so its boosts count in that battle (even if it is destroyed there). Not when a trap stops the attack. Attacking while face down, or a reveal (Dark-piercing Light), is no flip; an equip leaves a face-down monster face down |
+| `draw` | its owner's turn begins, once the hand is drawn, while it is face up |
+| `combat` | it attacks or is attacked, before the damage and after a flip, when no trap springs |
 | `destroyed` | it leaves the field in a battle or to an effect. Not when it is used as fusion material, a ritual's tribute, or the field is cleared by an Exodia win |
 | `face_up` | all the while it is face up on the field: a boost that goes as soon as the card does |
 
@@ -287,17 +287,21 @@ monster it battles, `combat` only); `destroyed` defaults to `own`. A boost
 on `summon`, `flip`, `draw` or `destroyed` lasts as an equip's does (on the
 monsters on the field then), one on `combat` lasts the battle, and one on
 `face_up` is worked out whenever the game asks a card's ATK and DEF, so the
-field, the battle, traps and the CPU all see it. `face_up` takes only
+field, the battle, traps and the CPU all see it: it reaches each monster it
+names once, those put down later too, and goes with the card. `face_up` takes only
 boosts; `combat` takes a boost of `self` or `battle`, `heal` and `damage`.
 A card has up to eight effects, which resolve in the order written, after
-whatever triggered them is over (a destroyed monster's after the battle).
+whatever triggered them is over (a destroyed monster's after the battle; a flip's before its battle).
 What the game cannot do is left out with a note in the log and the Mods
 window. Write what the effects do in the card's `description`: the game
 shows only the text. The card is drawn with the orange frame unless its
 entry has a `frame` ([Frame colour](#frame-colour)).
 
 Each fires once for each time it happens: a summon once, a draw once a
-turn, a flip each time the card is turned face up. A chain is fine (a summon's Dark Hole
+turn, a flip once (a card is put face down only from the hand). A `flip`'s
+`magic` runs before the battle while the two monsters in it are off the
+field, so it does not reach them (a flip Raigeki takes the attacker's side
+but not the attacker). A chain is fine (a summon's Dark Hole
 destroys a monster whose `destroyed` effect fires next), and the CPU's
 monsters' effects fire as the player's do. The CPU plays as it always has:
 it sees the boosts in its view of the board, but it does not plan around a
@@ -316,9 +320,13 @@ single place where a monster is summoned, flipped or destroyed, so the
 monster zones are looked at as each hand or field phase begins, before its
 first step, with no card effect running. Every way back to those phases
 starts one. What changed since the last look is what happened: placement
-marks the zones it put a card in (`func_8001B170`, the ritual), a battle
-marks the face-down monsters it reveals (`DuelScene_UpdateBattle`), and a
-ritual's start marks its tributes. A `magic` effect runs through the game's
+marks the zones it put a card in (`func_8001B170`, the ritual), and a
+ritual's start marks its tributes. A flip is caught as the battle phase
+begins, before its first step: the defender's saved flags
+(`D_8009B178`) say face down and the attack trap check
+(`Duel_SelectAttackTrap`) finds none, and the battle waits while the flip
+resolves; a boost of one of the two monsters in it goes to the modifiers
+the battle puts back (`D_8009B170`, `gDuel_awSavedDefenseModifier`). A `magic` effect runs through the game's
 card-effect dispatch (`DuelEffect_StartCardEffect`), first handler then
 second, as playing the card does. On the other side's turn, the turn is
 lent to the owner (`D_8009B1D5`, `D_8009B1C8`, `D_8009B22C`) while it runs.

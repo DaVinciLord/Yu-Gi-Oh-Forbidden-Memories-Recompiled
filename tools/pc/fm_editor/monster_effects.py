@@ -10,11 +10,12 @@ from .gamedata import ATTRIBUTE_NAMES, TYPE_NAMES, TYPE_MAGIC
 WHEN = ("summon", "flip", "draw", "combat", "destroyed", "face_up")
 WHEN_LABELS = ("On summon", "On flip", "On draw phase", "Before combat", "When destroyed", "While face up")
 WHEN_HINTS = (
-    "Put on the field, face up or face down (the CPU puts its monsters down face down): played, fused or a "
-    "ritual's monster.",
-    "Turned face up: it attacks or is attacked face down, or a reveal (Swords, Dark-piercing Light).",
-    "At the start of its owner's every turn, while it is face up.",
-    "It attacks or is attacked, before the damage (no trap sprang). Boosts last the battle.",
+    "Put on the field face up, once: played, fused or a ritual's monster. A face-down play is no summon (the CPU "
+    "puts its monsters down face down).",
+    "Attacked while face down, once, before the battle (not when a trap stops the attack). Attacking face down or "
+    "a reveal (Dark-piercing Light) is no flip.",
+    "At the start of its owner's every turn, once the hand is drawn, while it is face up.",
+    "It attacks or is attacked, before the damage, after a flip (no trap sprang). Boosts last the battle.",
     "Destroyed by a battle or an effect (not when used for a fusion or a ritual).",
     "All the while it is face up on the field: a boost that goes when it does.",
 )

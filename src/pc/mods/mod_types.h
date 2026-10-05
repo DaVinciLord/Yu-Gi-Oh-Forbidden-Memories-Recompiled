@@ -39,8 +39,11 @@ enum {
      * with "monster_effects" of its own or not. Before: set handled to skip
      * the card's own effects for this; a mod may start a card effect of its
      * own (DuelEffect_StartCardEffect), which runs before the next one.
-     * After observes. COMBAT comes as the battle begins, when no trap
-     * sprang, for the attacker and then the monster it attacks. */
+     * After observes. SUMMON is a face-up summon only (a face-down play is
+     * none). FLIP is a face-down monster attacked, before the battle starts
+     * (no trap sprang); turned face up any other way is no FLIP. COMBAT
+     * comes as the battle begins, after the FLIP, when no trap sprang, for
+     * the attacker and then the monster it attacks. */
     MEMORIES_EVENT_MONSTER,
     MEMORIES_EVENT_COUNT
 };

@@ -95,7 +95,7 @@ it does on the field (`"monster_effects"`, [monster effects](../../../notes/more
 a row per effect, **When** and what it **Does**. **Add...** and **Edit...**
 (or a double-click) open the effect: **When** (On summon, On flip, On draw
 phase, Before combat, When destroyed, While face up, each explained under
-it), **Does** (a magic card's effect, a boost of ATK and DEF, healing its
+it: a summon is face up only, a flip is the face-down card attacked), **Does** (a magic card's effect, a boost of ATK and DEF, healing its
 owner, damage to the opponent), and what that needs: the magic card, whose
 monsters a boost reaches (and only of one type or attribute), the ATK and
 DEF, the LP. Only what the game can do for that **When** is offered: while

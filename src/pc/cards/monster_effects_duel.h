@@ -2,22 +2,24 @@
 #define MEMORIES_PC_MONSTER_EFFECTS_DUEL_H
 /* Monster effects in a duel (monster_effects.h has what a card may do).
  *
- * The duel has no one place where a monster is summoned, flipped or
- * destroyed, so the field is looked at whenever it has settled: as a hand
- * or field phase begins, no card effect or presentation running. What
- * changed in the monster zones since the last look is what happened -- a
- * card placement put down was summoned (face down too: every play is a
- * summon in this game), one that turned face up was flipped, one that left
- * was destroyed unless placement put another in its zone (fusion material)
- * or a ritual took it (a tribute). Each change fires once, then the look is
- * the new reference. The effects then resolve one at a time, a retail magic
+ * The duel has no one place where a monster is summoned or destroyed, so
+ * the field is looked at whenever it has settled: as a hand or field phase
+ * begins, no card effect or presentation running. What changed in the
+ * monster zones since the last look is what happened -- a card placement
+ * put down face up was summoned (a face-down one was not), one that left was
+ * destroyed unless placement put another in its zone (fusion material) or a
+ * ritual took it (a tribute). Each change fires once, then the look is the
+ * new reference. A face-down monster is flipped when it is attacked: before
+ * the battle's first step (no trap springing), its "flip" effects resolve
+ * while the battle waits. The effects resolve one at a time, a retail magic
  * card's effect through the game's own card-effect dispatch, which keeps
  * the duel waiting just as playing the card does.
  *
- * "combat" fires as a battle starts (no trap sprang), its boosts lasting
- * the battle; "face_up" boosts are worked out whenever the game asks a
- * card's ATK/DEF (Duel_CalcCardStats), so the field, the battle, traps and
- * the CPU's view of the board all see them.
+ * "combat" fires as a battle starts (no trap sprang), after the flip, its
+ * boosts lasting the battle; "face_up" boosts are worked out whenever the
+ * game asks a card's ATK/DEF (Duel_CalcCardStats), so the field, the
+ * battle, traps and the CPU's view of the board all see them, each source
+ * once on each monster it reaches, newcomers too.
  *
  * The state is the game's (src/pc/game/trigger_state.c), in save states. */
 #include "monster_effects.h"
@@ -39,12 +41,12 @@ typedef struct {
     unsigned char ritual;       /* a ritual ran since the last look: who left were its tributes */
     unsigned char pause;        /* frames the duel waits after a boost or LP change */
     unsigned char count;        /* queue */
-    unsigned char pad[3];
+    unsigned char battle;       /* the battle about to start was looked at (battle_start) */
+    unsigned char pad[2];
     unsigned short chain;       /* effects resolved since the field last settled */
     short card[MONSTER_RECORDS];
     unsigned char face_up[MONSTER_RECORDS];
     unsigned char placed[MONSTER_RECORDS];  /* placement put a card here since the last look */
-    short flipped[MONSTER_RECORDS];         /* the card a battle turned face up here */
     short battle_attack[MONSTER_RECORDS], battle_defense[MONSTER_RECORDS];
     MonsterTrigger queue[MONSTER_QUEUE_MAX];
 } MonsterEffectsState;
