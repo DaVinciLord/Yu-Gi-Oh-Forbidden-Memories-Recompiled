@@ -722,7 +722,7 @@ class Project:
         if effects is None or (not effects and cid not in self.added and not keep_empty):
             extra.pop("monster_effects", None)
         else:
-            extra["monster_effects"] = [dict(e) for e in effects]
+            extra["monster_effects"] = [dict(e) if isinstance(e, dict) else e for e in effects]
         if cid not in self.added and not extra:
             self.card_extra.pop(cid, None)
 

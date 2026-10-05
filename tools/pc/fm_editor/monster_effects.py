@@ -79,7 +79,8 @@ def _name(names, value) -> str | None:
     """A game name for `value` as the game reads it ("Face Up" is "face_up")."""
     if not isinstance(value, str):
         return None
-    key = value.strip().lower().replace(" ", "_").replace("-", "_")
+    # No trimming: monster_effects.c named() takes "summon " as no name.
+    key = value.lower().replace(" ", "_").replace("-", "_")
     return key if key in names else None
 
 

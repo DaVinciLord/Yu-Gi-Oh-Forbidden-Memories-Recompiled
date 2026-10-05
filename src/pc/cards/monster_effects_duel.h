@@ -49,6 +49,7 @@ typedef struct {
     short attacker_card;        /* the card that attacked it: a flip's "battle" target */
     unsigned char fight[2];     /* the last battle's attacker and defender records, 0 none */
     short fight_card[2];
+    short magic_card;           /* the retail card whose two handlers a magic or destroy runs */
     unsigned int destroy_mask;  /* the records a "destroy" takes, while its Crush Card runs */
     short card[MONSTER_RECORDS];
     unsigned char face_up[MONSTER_RECORDS];

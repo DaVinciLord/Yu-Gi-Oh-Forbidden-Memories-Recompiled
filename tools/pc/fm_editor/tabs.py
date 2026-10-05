@@ -27,7 +27,9 @@ from .widgets import (CardField, FormDialog, ScrolledForm, ScrolledPage, card_ma
 ATTRIBUTE_CHOICES = ATTRIBUTE_NAMES + ["6 (magic)", "7 (trap)"]
 STAR_CHOICES = ["(none)"] + STAR_NAMES[1:]
 EFFECT_NONE = "(none)"
-FRAME_CHOICES = ["By type"] + FRAME_NAMES
+# "By type" leaves "frame" out (a monster with effects is then orange);
+# the last writes "Type": its type's frame even with effects (frame -2).
+FRAME_CHOICES = ["By type"] + FRAME_NAMES + ["Type, never orange"]
 # Each frame's colour, as the hand's frames have it (the duel's palette rows 1-6).
 FRAME_COLOURS = ["#e0a838", "#409830", "#b040a0", "#2848b0", "#8868d8", "#e07000"]
 
@@ -41,7 +43,15 @@ def attribute_label(a: int) -> str:
 
 
 def frame_label(f: int) -> str:
+    if f == -2:
+        return FRAME_CHOICES[-1]
     return FRAME_CHOICES[f + 1] if -1 <= f < len(FRAME_NAMES) else str(f)
+
+
+def frame_value(label: str) -> int:
+    """A Frame choice as card.frame: -1 left out, -2 "Type", else the colour."""
+    i = parse_choice(label, FRAME_CHOICES)
+    return -2 if i == len(FRAME_CHOICES) - 1 else max(-1, i - 1)
 
 
 def star_choices(project=None) -> list:
@@ -523,7 +533,7 @@ class CardsTab(Tab):
             number = ref.attribute if key == "attribute" else getattr(ref, key)
             shown[key] = (values[key], values[key], parse_choice(self.vars[key].get(), choices) != number)
         shown["frame"] = (values["frame"], values["frame"].lower(),
-                          parse_choice(self.vars["frame"].get(), FRAME_CHOICES) - 1 != ref.frame)
+                          frame_value(self.vars["frame"].get()) != ref.frame)
         shown["text"] = (ref.description, "text", self.text.get("1.0", "end-1c") != ref.description)
         # The effect only against the disc card's own type: another type's
         # list has none of its choices.
@@ -731,9 +741,9 @@ class CardsTab(Tab):
     def show_swatch(self):
         """The colour the frame will be: the chosen one, or the type's (a
         monster with effects is orange, as cards.c Cards_FrameColor draws it)."""
-        frame = parse_choice(self.vars["frame"].get(), FRAME_CHOICES) - 1
+        frame = frame_value(self.vars["frame"].get())
         kind = parse_choice(self.vars["type"].get(), TYPE_NAMES)
-        if frame < 0 and 0 <= kind < TYPE_MAGIC and self.project is not None and self.current in self.project.cards \
+        if frame == -1 and 0 <= kind < TYPE_MAGIC and self.project is not None and self.current in self.project.cards \
                 and self.project.monster_effects_of(self.current)[0]:
             frame = FRAME_NAMES.index("Orange")
         elif frame < 0 and kind >= 0:
@@ -858,7 +868,7 @@ class CardsTab(Tab):
             # trap attribute.
             card.attack = card.defense = card.level = card.star1 = card.star2 = 0
             card.attribute = 7 if card.type == TYPE_TRAP else 6
-        card.frame = max(-1, parse_choice(self.vars["frame"].get(), FRAME_CHOICES) - 1)
+        card.frame = frame_value(self.vars["frame"].get())
         return card
 
     def apply(self, quiet=False):

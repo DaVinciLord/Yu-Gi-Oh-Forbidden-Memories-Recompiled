@@ -731,6 +731,30 @@ class ManifestTest(unittest.TestCase):
         p.remove_card(max(p.added))
         self.assertEqual(set(p.notes), set())
 
+    def test_made_monster_stars(self):
+        """A card made a monster: its stars always written (the game would
+        give defaults), and read without them as the game gives them."""
+        p = Project(self.retail)
+        p.cards[337].type, p.cards[337].star1, p.cards[337].star2 = g.TYPE_MAGIC, 0, 0   # a magic card, as on the disc
+        copy = p.add_card(337, "rd")
+        p.cards[copy].type, p.cards[copy].star1, p.cards[copy].star2 = 0, 0, 0
+        cards = manifest.build(p)["cards"]
+        self.assertEqual(cards[-1]["stars"], [0, 0])
+        self.assertEqual((self.reopen(p).cards[copy].star1, self.reopen(p).cards[copy].star2), (0, 0))
+        other = Project(self.retail)
+        for base in (336, 337, 338):    # magic cards with no stars, as on the disc
+            for card in (other.cards[base], other.retail.cards[base]):
+                card.type, card.star1, card.star2 = g.TYPE_MAGIC, 0, 0
+        manifest.apply(other, {"id": "t", "cards": [
+            {"replace": 336, "type": "Fiend"}, {"copy": 337, "id": "a", "type": "Dragon", "model": 58},
+            {"copy": 338, "id": "b", "type": "Dragon", "stars": ["Mars", "none"]}]})
+        sun_moon = (g.STAR_NAMES.index("Sun"), g.STAR_NAMES.index("Moon"))
+        kuriboh = (self.retail.cards[58].star1, self.retail.cards[58].star2)
+        added = sorted(other.added)
+        self.assertEqual((other.cards[336].star1, other.cards[336].star2), sun_moon)
+        self.assertEqual((other.cards[added[0]].star1, other.cards[added[0]].star2), kuriboh)
+        self.assertEqual((other.cards[added[1]].star1, other.cards[added[1]].star2), (1, 0))
+
     def test_frame(self):
         p = Project(self.retail)
         p.cards[1].frame = 4
@@ -751,9 +775,16 @@ class ManifestTest(unittest.TestCase):
         messages = manifest.apply(other, {"id": "t", "cards": [
             {"replace": 3, "frame": "ritual"}, {"replace": 4, "frame": 1}, {"replace": 4, "frame": "Type"},
             {"replace": 5, "frame": "Gold"}]})
-        self.assertEqual([other.cards[c].frame for c in (3, 4, 5)], [3, -1, -1])
+        self.assertEqual([other.cards[c].frame for c in (3, 4, 5)], [3, -2, -1])
         self.assertEqual(messages, ["cards[3]: \"frame\" is Monster, Magic, Trap, Ritual, Purple, Orange or Type; "
                                     "left out"])
+        self.assertEqual(other.cards[4].shown_frame(), g.type_frame(other.cards[4].type))
+        # "Type" (an effect monster kept gold) is not the same as leaving it out (orange): kept through a save.
+        typed = Project(self.retail)
+        typed.cards[1].frame = -2
+        typed.set_monster_effects(1, [{"when": "summon", "do": "heal", "amount": 100}])
+        self.assertEqual(manifest.build(typed)["cards"][0]["frame"], "Type")
+        self.assertEqual(self.reopen(typed).cards[1].frame, -2)
 
     def test_unnamed_copy_keeps_the_disc_name(self):
         p = Project(self.retail)
@@ -1159,6 +1190,11 @@ class MonsterEffectsTest(unittest.TestCase):
                          {"when": "face_up", "do": "boost", "target": "others", "attack": 300, "type": "Dragon"})
         self.assertEqual(fx.normalize({"when": "summon", "do": "magic", "card": 337}),
                          {"when": "summon", "do": "magic", "card": 337})
+        # No trimming, as monster_effects.c named(): "summon " is no name.
+        self.assertIsNone(fx.normalize({"when": "summon ", "do": "heal", "amount": 100}))
+        # An entry that is not an object is kept as written (the game notes and skips it).
+        self.project.set_monster_effects(1, ["summon", {"when": "summon", "do": "heal", "amount": 100}])
+        self.assertEqual(self.project.monster_effects_of(1)[0][0], "summon")
         # What the game leaves out (monster_effects.c MonsterEffect_Allowed).
         for effect in ({"when": "face_up", "do": "magic", "card": 337}, {"when": "combat", "do": "magic", "card": 337},
                        {"when": "combat", "do": "boost", "target": "own", "attack": 1},

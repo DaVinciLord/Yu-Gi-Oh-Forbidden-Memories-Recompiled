@@ -180,6 +180,7 @@ static int resolve(void)
             lend_turn(side);
         }
         S.running = 1;
+        S.magic_card = effect->card;
         DuelEffect_StartRetailCardEffect(effect->card, 0);
         return 1;
     case MONSTER_DO_BOOST:
@@ -216,6 +217,7 @@ static int resolve(void)
             lend_turn(side);
         }
         S.running = 1;
+        S.magic_card = CRUSH_CARD;
         DuelEffect_StartRetailCardEffect(CRUSH_CARD, 0);
         return 1;
     }
@@ -288,9 +290,11 @@ int MonsterEffects_Update(void)
     }
     if (S.running == 1) {
         /* The first handler is done (most only clear the flags); the
-         * second is the effect, as DuelScene_UpdateCardUse runs them. */
+         * second is the effect, as DuelScene_UpdateCardUse runs them, for
+         * the same card (gDuel_wEffectCardID is set only when the retail
+         * start ran, not when a code mod handled it). */
         S.running = 2;
-        DuelEffect_StartRetailCardEffect(gDuel_wEffectCardID, 1);
+        DuelEffect_StartRetailCardEffect(S.magic_card, 1);
         return 1;
     }
     if (S.running == 2) {

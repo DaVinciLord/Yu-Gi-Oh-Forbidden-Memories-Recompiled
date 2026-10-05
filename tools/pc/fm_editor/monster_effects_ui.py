@@ -55,7 +55,8 @@ class EffectsBox(ttk.LabelFrame):
             self.effects = []
         else:
             effects, inherited = self.project.monster_effects_of(cid)
-            self.effects = [dict(e) for e in effects]
+            # An entry that is not an object stays as written (the game leaves it out).
+            self.effects = [dict(e) if isinstance(e, dict) else e for e in effects]
         retail = cid is not None and self.project is not None and cid in self.project.cards and \
             cid not in self.project.added
         extra = self.project.card_extra.get(cid, {}) if retail else {}
@@ -81,7 +82,8 @@ class EffectsBox(ttk.LabelFrame):
         self.tree.delete(*self.tree.get_children())
         for n, effect in enumerate(self.effects):
             if fx.normalize(effect, self.project.resolve) is None:
-                self.tree.insert("", "end", iid=str(n), values=(effect.get("when", "?"), "(not one the game takes) " +
+                when = effect.get("when", "?") if isinstance(effect, dict) else "?"
+                self.tree.insert("", "end", iid=str(n), values=(when, "(not one the game takes) " +
                                                                 fx.describe_raw(effect)))
                 continue
             self.tree.insert("", "end", iid=str(n), values=(fx.when_label(fx._name(fx.WHEN, effect.get("when"))),
