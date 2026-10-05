@@ -276,9 +276,9 @@ Man-eater Bug as on the cards:
 | `when` | It happens |
 |---|---|
 | `summon` | the monster is put on the field face up: played from the hand, a fusion's result (onto a field monster too) or a ritual's monster. A face-down play is no summon. The CPU puts a monster with a `summon`, `draw` or `face_up` effect down face up (one with a `flip` and no `summon` face down), so its effects work for it too |
-| `flip` | a face-down monster is attacked: as the attack is confirmed (by the player or the CPU), both monsters still on the field, it is turned face up and its flip resolves. The attack then goes on, its boosts counting in the battle, if both monsters are still there; if either is gone (a Dark Hole, a `destroy`), the attack is called off and the attacker has had its attack. Not when a trap stops the attack. Attacking while face down, or a reveal (Dark-piercing Light), is no flip; an equip leaves a face-down monster face down |
+| `flip` | a face-down monster is attacked. As in Yu-Gi-Oh!, the flip does not stop the battle: the damage is worked out with the cards as they are, then the flip resolves right after the battle, even if the battle destroyed the flipped monster, and before any `destroyed` effect of the battle. Not when a trap stops the attack. Attacking while face down, or a reveal (Dark-piercing Light), is no flip; an equip leaves a face-down monster face down |
 | `draw` | its owner's turn begins, once the hand is drawn, while it is face up |
-| `combat` | it attacks or is attacked, before the damage and after a flip, when no trap springs |
+| `combat` | it attacks or is attacked, before the damage, when no trap springs |
 | `destroyed` | it leaves the field in a battle or to an effect. Not when it is used as fusion material, a ritual's tribute, or the field is cleared by an Exodia win |
 | `destroy_opponent` | it won a battle that destroyed the other monster and is still on the field: after the battle, after that monster's `destroyed` |
 | `face_up` | all the while it is face up on the field: a boost that goes as soon as the card does |
@@ -293,7 +293,7 @@ Man-eater Bug as on the cards:
 
 `target` is `self` (the default), `own` (its side's monsters, itself too),
 `others` (its side's other monsters), `opponent`, `all`, or `battle` (the
-monster it battles: on `combat`, and on `flip` the monster attacking it);
+monster it battles: on `combat`, and on `flip` the monster that attacked it, if it is still there);
 `destroyed` defaults to `own`. A boost
 on `summon`, `flip`, `draw`, `destroyed` or `destroy_opponent` lasts as an equip's does (on the
 monsters on the field then), one on `combat` lasts the battle, and one on
@@ -302,7 +302,7 @@ field, the battle, traps and the CPU all see it: it reaches each monster it
 names once, those put down later too, and goes with the card. `face_up` takes only
 boosts; `combat` takes a boost of `self` or `battle`, `heal` and `damage`.
 A card has up to eight effects, which resolve in the order written, after
-whatever triggered them is over (a destroyed monster's after the battle; a flip's before its battle).
+whatever triggered them is over (a flip's and a destroyed monster's after the battle).
 What the game cannot do is left out with a note in the log and the Mods
 window. Write what the effects do in the card's `description`: the game
 shows only the text. The card is drawn with the orange frame unless its
@@ -330,13 +330,9 @@ first step, with no card effect running. Every way back to those phases
 starts one. What changed since the last look is what happened: placement
 marks the zones it put a card in (`func_8001B170`, the ritual), and a
 ritual's start marks its tributes; the battle's start notes its two
-monsters, so the next look sees which one won. A flip is caught where the
-field phase commits an attack (`DuelScene_UpdateFieldActions`), before it
-lifts the two monsters off the field: the defender is face down and the
-attack trap check (`Duel_SelectAttackTrap`) finds none. The field phase
-waits while the flip resolves, then commits the attack again (the player's
-target choice and the CPU's cursor both come back to it) or, a monster
-gone, starts over as it does after a battle. The CPU's face-up play is
+monsters, so the next look sees which one won, and a face-down defender
+(its saved flags, `D_8009B178`, when no trap sprang), whose flip the next
+look fires before anything else. The CPU's face-up play is
 its hand play's face-down choice (`D_800EAE88[8]`) cleared. A `destroy`
 runs Warrior Elimination's removal (`DuelEffect_ApplyMonsterRemoval`)
 with the monsters chosen in place of its type test. A `magic` effect runs through the game's

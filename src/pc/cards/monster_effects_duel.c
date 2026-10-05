@@ -112,8 +112,8 @@ static int reaches(const MonsterEffect *effect, int source, int target, int card
     case MONSTER_TARGET_OPPONENT: if (owner(target) == owner(source)) return 0; break;
     case MONSTER_TARGET_ALL: break;
     case MONSTER_TARGET_BATTLE:
-        /* The monster attacking the flipped one. */
-        if (S.attack != MONSTER_ATTACK_HELD || source != S.defender || target != S.attacker) return 0;
+        /* The monster that attacked the flipped one, if it is still there. */
+        if (source != S.defender || target != S.attacker || D_801A7AD8[target].card_id != S.attacker_card) return 0;
         break;
     default: return 0;
     }
@@ -227,6 +227,12 @@ static int resolve(void)
 static void look(void)
 {
     int record, side = D_8009B1D5, turns = D_800E9FF0[side].rank.turns_taken;
+    if (S.flipped) {
+        /* Flipped by the battle just over: its flip resolves first,
+         * whether or not the battle destroyed it. */
+        occur(S.flipped, S.defender, MONSTER_WHEN_FLIP);
+        S.flipped = 0;
+    }
     for (record = 0; record < MONSTER_RECORDS; record++) {
         const DuelCardRecord *card = &D_801A7AD8[record];
         int now = 0, up = 0, before = S.card[record];
@@ -240,8 +246,9 @@ static void look(void)
         }
         if (now && up && (now != before || S.placed[record])) {
             /* A face-down play is no summon: the card's "flip" fires
-             * when it is attacked instead (battle_start). One turned face
-             * up any other way -- attacking, Swords -- fires nothing. */
+             * when it is attacked instead (MonsterEffects_Battle). One
+             * turned face up any other way -- attacking, Swords -- fires
+             * nothing. */
             occur(now, record, MONSTER_WHEN_SUMMON);
         }
         S.card[record] = (short)now;
@@ -265,34 +272,6 @@ static void look(void)
             if (S.card[record] && S.face_up[record]) occur(S.card[record], record, MONSTER_WHEN_DRAW);
         }
     }
-}
-
-/* A held attack, its flip resolved: committed if both monsters are still
- * there and neither side is out of LP, else called off -- the attacker
- * has had its attack, and the field phase starts over as after a battle. */
-static int attack_settled(void)
-{
-    DuelCardRecord *attacker = &D_801A7AD8[S.attacker], *defender = &D_801A7AD8[S.defender];
-    int there = (attacker->flags & DUEL_CARD_FLAG_OCCUPIED) && attacker->card_id == S.attack_card[0] &&
-                (defender->flags & DUEL_CARD_FLAG_OCCUPIED) && defender->card_id == S.attack_card[1];
-    DuelSelectionRecord *target;
-    if (there && D_800E9FF0[0].life_points.signed_value && D_800E9FF0[1].life_points.signed_value) {
-        S.attack = MONSTER_ATTACK_RESUME;
-        return 0;
-    }
-    LOG(LOG_DUEL_EFFECTS, "monster effects: the attack of record %d on %d is called off", S.attacker, S.defender);
-    S.attack = 0;
-    if ((attacker->flags & DUEL_CARD_FLAG_OCCUPIED) && attacker->card_id == S.attack_card[0]) {
-        attacker->flags |= DUEL_CARD_FLAG_USED_THIS_TURN;
-        Duel_ApplyCardObjectFlags((DuelCardDisplayObject *)attacker->object);
-    }
-    /* The target cursor, as the battle's start lets it go. */
-    target = (DuelSelectionRecord *)(D_800E9F64 + D_8009B1D5 * 0x70);
-    DisplayObject_ReleaseIfPresent(target->cursor_object);
-    target->cursor_object = 0;
-    D_8009B162 = 8;
-    gDuel_wSceneStateFlags = PHASE_FIELD;
-    return 1;
 }
 
 static void reset(void)
@@ -325,18 +304,6 @@ int MonsterEffects_Update(void)
     if (S.pause) {
         S.pause--;
         return 1;
-    }
-    if (S.attack == MONSTER_ATTACK_HELD) {
-        /* The field phase waits while the flip and what it sets off resolve. */
-        if (S.count && S.chain >= CHAIN_MAX) S.count = 0;
-        if (S.count) {
-            resolve();
-            return 1;
-        }
-        look();
-        if (gDuel_wCardEffectFlags || S.count) return 1;
-        S.chain = 0;
-        return attack_settled();
     }
     /* Only as a hand or field phase begins, before its first step: within
      * one the field is not settled (the hand lifts a field monster for a
@@ -371,53 +338,6 @@ int MonsterEffects_Update(void)
     waiting = S.count ? resolve() : 0;
     if (!waiting && !S.count) S.chain = 0;
     return waiting;
-}
-
-int MonsterEffects_AttackDeclared(int attacker, int defender)
-{
-    DuelCardRecord *card;
-    DisplayObject probe;
-    int id, trap;
-    if (S.attack == MONSTER_ATTACK_RESUME) {
-        S.attack = 0;
-        return 0;
-    }
-    if (!S.ready || S.attack || !monster_zone(attacker) || !monster_zone(defender)) return 0;
-    card = &D_801A7AD8[defender];
-    if ((card->flags & (DUEL_CARD_FLAG_OCCUPIED | DUEL_CARD_FLAG_FACE_DOWN)) !=
-        (DUEL_CARD_FLAG_OCCUPIED | DUEL_CARD_FLAG_FACE_DOWN))
-        return 0;
-    /* A trap that springs stops the attack before it reaches the defender:
-     * the battle's first step asks the same, from the same field. */
-    memset(&probe, 0, sizeof(probe));
-    probe.field_6A = (u8)attacker;
-    trap = Duel_SelectAttackTrap((u8 *)&probe);
-    D_8009B22A = 0;
-    D_8009B1B8 = 0;
-    if (trap) return 0;
-    id = card->card_id;
-    S.attack = MONSTER_ATTACK_HELD;
-    S.attacker = (unsigned char)attacker;
-    S.defender = (unsigned char)defender;
-    S.attack_card[0] = D_801A7AD8[attacker].card_id;
-    S.attack_card[1] = (short)id;
-    S.chain = 0;
-    occur(id, defender, MONSTER_WHEN_FLIP);
-    if (!S.count && !gDuel_wCardEffectFlags) {
-        /* Nothing to do: the battle turns it over, as it always has. */
-        S.attack = 0;
-        return 0;
-    }
-    card->flags &= ~DUEL_CARD_FLAG_FACE_DOWN;
-    Duel_ApplyCardObjectFlags((DuelCardDisplayObject *)card->object);
-    if (S.card[defender] == id) S.face_up[defender] = 1;
-    SD_SEPlayFull(SE_FLIP);
-    return 1;
-}
-
-int MonsterEffects_AttackResumes(void)
-{
-    return S.attack == MONSTER_ATTACK_RESUME;
 }
 
 int MonsterEffects_PlayFaceUp(int card)
@@ -459,6 +379,16 @@ void MonsterEffects_Battle(void)
     if (!S.ready || D_8009B22A || !attacker) return;
     records[0] = attacker->field_6A;
     records[1] = defender ? defender->field_6A : -1;
+    /* A face-down defender is flipped by the battle: as Yu-Gi-Oh! has it,
+     * its flip resolves after the damage is worked out (with the card as
+     * it is), at the next look, before what the battle destroyed. */
+    S.flipped = 0;
+    if (monster_zone(records[1]) && monster_zone(records[0]) && (D_8009B178[1] & DUEL_CARD_FLAG_FACE_DOWN)) {
+        S.flipped = D_801A7AD8[records[1]].card_id;
+        S.defender = (unsigned char)records[1];
+        S.attacker = (unsigned char)records[0];
+        S.attacker_card = D_801A7AD8[records[0]].card_id;
+    }
     /* Who won it is seen at the next look (DESTROY_OPPONENT). */
     for (i = 0; i < 2; i++) {
         S.fight[i] = (unsigned char)(monster_zone(records[i]) ? records[i] : 0);

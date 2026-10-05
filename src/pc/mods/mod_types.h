@@ -40,10 +40,10 @@ enum {
      * the card's own effects for this; a mod may start a card effect of its
      * own (DuelEffect_StartCardEffect), which runs before the next one.
      * After observes. SUMMON is a face-up summon only (a face-down play is
-     * none). FLIP is a face-down monster attacked, as the attack is
-     * declared, both monsters still on the field (no trap springing); the
-     * attack goes on only if both are still there after. Turned face up
-     * any other way is no FLIP. COMBAT comes as the battle begins, when no
+     * none). FLIP is a face-down monster attacked (no trap sprang), after
+     * the battle, as Yu-Gi-Oh! resolves it after the damage: whether or
+     * not the battle destroyed it, before the DESTROYED of what it did.
+     * Turned face up any other way is no FLIP. COMBAT comes as the battle begins, when no
      * trap sprang, for the attacker and then the monster it attacks.
      * DESTROY_OPPONENT: it won a battle that destroyed the other monster,
      * after that one's DESTROYED. */

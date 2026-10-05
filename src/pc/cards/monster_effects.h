@@ -16,7 +16,7 @@ struct JsonValue;
 
 enum {
     MONSTER_WHEN_SUMMON,     /* put on the field face up: played, a fusion's or a ritual's monster */
-    MONSTER_WHEN_FLIP,       /* attacked while face down: as the attack is declared, before the battle */
+    MONSTER_WHEN_FLIP,       /* attacked while face down: after the battle's damage, destroyed or not */
     MONSTER_WHEN_DRAW,       /* the start of its owner's turn, once the card is drawn */
     MONSTER_WHEN_COMBAT,     /* it attacks or is attacked, before the damage */
     MONSTER_WHEN_DESTROYED,  /* by a battle or an effect; not as fusion material or a ritual's tribute */

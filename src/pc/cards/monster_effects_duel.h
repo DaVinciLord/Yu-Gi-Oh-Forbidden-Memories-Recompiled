@@ -9,14 +9,15 @@
  * put down face up was summoned (a face-down one was not), one that left was
  * destroyed unless placement put another in its zone (fusion material) or a
  * ritual took it (a tribute). Each change fires once, then the look is the
- * new reference. A face-down monster is flipped when it is attacked: before
- * the battle's first step (no trap springing), its "flip" effects resolve
- * while the battle waits. The effects resolve one at a time, a retail magic
+ * new reference. A face-down monster attacked is flipped: as in Yu-Gi-Oh!,
+ * the battle runs as ever and its flip resolves after it, at the next
+ * look, before what the battle destroyed. The effects resolve one at a
+ * time, a retail magic
  * card's effect through the game's own card-effect dispatch, which keeps
  * the duel waiting just as playing the card does.
  *
- * "combat" fires as a battle starts (no trap sprang), after the flip, its
- * boosts lasting the battle; "face_up" boosts are worked out whenever the
+ * "combat" fires as a battle starts (no trap sprang), its boosts lasting
+ * the battle; "face_up" boosts are worked out whenever the
  * game asks a card's ATK/DEF (Duel_CalcCardStats), so the field, the
  * battle, traps and the CPU's view of the board all see them, each source
  * once on each monster it reaches, newcomers too.
@@ -26,8 +27,6 @@
 
 #define MONSTER_RECORDS 30
 #define MONSTER_QUEUE_MAX 48
-#define MONSTER_ATTACK_HELD 1   /* the field phase waits; the attack is not committed */
-#define MONSTER_ATTACK_RESUME 2 /* the flip is done and both are there: commit it */
 
 typedef struct {
     short card;
@@ -43,10 +42,11 @@ typedef struct {
     unsigned char ritual;       /* a ritual ran since the last look: who left were its tributes */
     unsigned char pause;        /* frames the duel waits after a boost or LP change */
     unsigned char count;        /* queue */
-    unsigned char attack;       /* MONSTER_ATTACK_*: a declared attack waiting for its defender's flip */
-    unsigned char attacker, defender;   /* that attack's records */
+    unsigned char pad;
+    unsigned char attacker, defender;   /* the last battle's records */
     unsigned short chain;       /* effects resolved since the field last settled */
-    short attack_card[2];       /* the attacker's and the defender's cards as it was declared */
+    short flipped;              /* the card that battle flipped (the defender), its flip still to fire */
+    short attacker_card;        /* the card that attacked it: a flip's "battle" target */
     unsigned char fight[2];     /* the last battle's attacker and defender records, 0 none */
     short fight_card[2];
     unsigned int destroy_mask;  /* the records a "destroy" takes, while its Warrior Elimination runs */
@@ -69,14 +69,6 @@ void MonsterEffects_Placed(int record, int equip);
 void MonsterEffects_EffectStarted(int ritual);
 /* A battle begins (DuelScene_UpdateBattle, once the attack trap is known). */
 void MonsterEffects_Battle(void);
-/* DuelScene_UpdateFieldActions, as an attack is about to be committed
- * (both monsters still on the field; `defender` -1 for a direct attack):
- * 1 to hold it -- a face-down defender's flip resolves first, then the
- * field phase commits it again (MonsterEffects_AttackResumes) or, with
- * either monster gone, the attack is called off. */
-int MonsterEffects_AttackDeclared(int attacker, int defender);
-/* The player's target choice: 1 when a held attack is to be committed. */
-int MonsterEffects_AttackResumes(void);
 /* The CPU puts this monster down face up (its effects want it seen). */
 int MonsterEffects_PlayFaceUp(int card);
 /* Warrior Elimination's removal (DuelEffect_ApplyMonsterRemoval) as a

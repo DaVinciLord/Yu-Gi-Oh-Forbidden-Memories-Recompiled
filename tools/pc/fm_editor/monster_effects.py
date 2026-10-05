@@ -13,11 +13,11 @@ WHEN_LABELS = ("On summon", "On flip", "On draw phase", "Before combat", "When d
 WHEN_HINTS = (
     "Put on the field face up, once: played, fused or a ritual's monster. A face-down play is no summon (the CPU "
     "puts its monsters down face down).",
-    "Attacked while face down, once: turned face up as the attack is declared, both still on the field (not when "
-    "a trap stops the attack). If either is gone after, the attack is called off. Attacking face down or a reveal "
+    "Attacked while face down, once: as in Yu-Gi-Oh!, the battle goes on as usual and the flip resolves after the "
+    "damage, even if the battle destroyed it (not when a trap stops the attack). Attacking face down or a reveal "
     "(Dark-piercing Light) is no flip.",
     "At the start of its owner's every turn, once the hand is drawn, while it is face up.",
-    "It attacks or is attacked, before the damage, after a flip (no trap sprang). Boosts last the battle.",
+    "It attacks or is attacked, before the damage (no trap sprang). Boosts last the battle.",
     "Destroyed by a battle or an effect (not when used for a fusion or a ritual).",
     "It won a battle that destroyed the other monster, and is still on the field: after the battle.",
     "All the while it is face up on the field: a boost that goes when it does.",
