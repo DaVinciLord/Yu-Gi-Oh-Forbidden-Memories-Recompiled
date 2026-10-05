@@ -10,6 +10,7 @@
 
 UNUSED_GAME_FUNCTION(Platform_StartSilentAudio)
 UNUSED_GAME_FUNCTION(Monitor_Shared)
+UNUSED_GAME_FUNCTION(CrashTest_Present)
 UNUSED_GAME_FUNCTION(Menu_LoadSettings)
 UNUSED_GAME_FUNCTION(Settings_Get)
 UNUSED_GAME_FUNCTION(Monitor_Fact)

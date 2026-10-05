@@ -879,6 +879,8 @@ static int a64_access(uint32_t code, const uint64_t *regs, int low, int *loads_i
     } else if ((code & 0x3b000000u) == 0x38000000u) {   /* LDR/STR (immediate pre/post, unscaled, register) */
         load = ((code >> 22) & 3) != 0;
         regoff = (code & 0x00200c00u) == 0x00200800u;   /* bit 21 set, bits 11-10 = 10: register offset */
+        /* Only an index taken as unsigned (UXTW, or LSL/UXTX) is rebased below:
+         * SXTW would sign-extend the index moved up by 0x80000000. */
         if (regoff && ((code >> 12) & 1)) regoff = 2;   /* S: the index is shifted */
     } else if ((code & 0x3b000000u) == 0x39000000u) {   /* LDR/STR (unsigned immediate) */
         load = ((code >> 22) & 3) != 0;
@@ -890,7 +892,7 @@ static int a64_access(uint32_t code, const uint64_t *regs, int low, int *loads_i
     }
     if (rn != 31 && (low ? regs[rn] < 0x10000u : regs[rn] - MEMORIES_GUEST_SCRATCHPAD_RETAIL < 0x1000u)) {
         chosen = (int)rn;
-    } else if (regoff == 1 && rm != 31 && rm != rn &&
+    } else if (regoff == 1 && rm != 31 && rm != rn && (((code >> 13) & 7) == 2 || ((code >> 13) & 7) == 3) &&
                (low ? regs[rm] < 0x10000u : regs[rm] - MEMORIES_GUEST_SCRATCHPAD_RETAIL < 0x1000u)) {
         chosen = (int)rm;
     } else {
