@@ -1785,20 +1785,26 @@ extension and `GL_ARB_ES3_compatibility` or later), and stays on desktop
 GL if it is missing. Off Windows it is GLX's ES profile or the system's
 EGL (Mesa).
 
-Checked (2026-10-05), with Mesa 21.2.6's llvmpipe (32-bit Linux build,
-Xvfb): `MEMORIES_GLES=1` (OpenGL ES 3.2) against desktop GL (3.1) on the
+Checked (2026-10-05). With Mesa 21.2.6's llvmpipe (32-bit Linux build,
+Xvfb), `MEMORIES_GLES=1` (OpenGL ES 3.2) against desktop GL (3.1) on the
 same build, picture dumps (`MEMORIES_DETERMINISTIC=1`,
 `MEMORIES_DUMP_PICTURE=1`) are identical pixel for pixel: the title and
 the 3D Monsters duel case at 2x and 4x, and the 2D duel at 2x with HD
-text, the opponent's name, PGXP and 4x anti-aliasing on. (With Video >
-Aspect Ratio at 16:9 the main menu and the duel case's frame are drawn 4:3,
-so a widened picture shown through the ES path is not checked yet.) Dropping `noperspective` changed no pixel there. The
-window (the desktop presenter against the renderer's copy) is identical
-at the title, also after `MEMORIES_TEST_GL_RESET`. The Android emulator
-(api35x64, SwiftShader, OpenGL ES 3.0) runs the pass at 2x and 4x with HD
-text, and carries on after the app goes to the background and back (the
-context was kept there). Not yet checked on a desktop driver's ES profile
-(the NVIDIA one) or a phone's GPU.
+text, the opponent's name, PGXP and 4x anti-aliasing on; dropping
+`noperspective` changed no pixel. The window (the desktop presenter
+against the renderer's copy) is identical at the title, also after
+`MEMORIES_TEST_GL_RESET`. On the NVIDIA driver (RTX 3080, its WGL ES 3.2
+profile) the same dumps of the title and both duels at 2x and 4x are
+identical between the base build, this one on desktop GL and this one
+with `MEMORIES_GLES=1`. Those dumps are 4:3 pictures, so the widened
+picture was compared in the window (`MEMORIES_WINDOW_SHOT`,
+`MEMORIES_ASPECT=2`, half speed so that every frame is presented): the
+title, the main menu, Options, the 2D duel and the 3D Monsters duel,
+widened, at 2x and 4x, are identical on desktop GL and through the ES
+path. The Android emulator (api35x64, SwiftShader, OpenGL ES 3.0) runs the
+pass at 2x and 4x with HD text and carries on after the app goes to the
+background and back (the context was kept there); a phone (Adreno 660)
+plays at 4x with HD text.
 
 ### HD text
 
