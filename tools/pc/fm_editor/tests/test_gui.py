@@ -1709,3 +1709,24 @@ class CardTextBoxTest(GuiCase):
         # Applied as written.
         self.assertTrue(cards.apply())
         self.assertEqual(self.app.project.cards[1].description, text + " {f8 0B 00}")
+
+
+class ColumnWidthTest(GuiCase):
+    def test_a_dragged_column_keeps_its_width(self):
+        from types import SimpleNamespace
+        from fm_editor import widgets
+        app = self.app
+        app.deiconify()
+        app.geometry("1400x800")
+        app.update()
+        tree = app.cards.tree
+        x = next(x for x in range(tree.winfo_width()) if tree.identify_region(x, 10) == "separator")
+        widgets._free_columns(tree, SimpleNamespace(x=x, y=10))
+        columns = list(tree["columns"])
+        self.assertEqual([tree.column(c, "stretch") for c in columns],
+                         [False] * (len(columns) - 1) + [True])
+        # Narrower than it stretched to: it stays so (it took the width back before).
+        tree.column("name", width=150)
+        app.update()
+        self.assertEqual(tree.column("name", "width"), 150)
+        app.withdraw()

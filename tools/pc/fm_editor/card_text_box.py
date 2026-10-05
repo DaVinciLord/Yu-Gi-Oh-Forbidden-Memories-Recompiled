@@ -1,8 +1,9 @@
-"""The Cards tab's card text box, drawn as the card view's text panel: its
-dark blue, white letters, an icon code ({f8 0B NN}) shown as the icon off
-the disc, two letters wide as the game sets it, and a colour code
+"""The Cards tab's card text box: an icon code ({f8 0B NN}) shown as the
+icon off the disc, two letters wide as the game sets it, and a colour code
 ({f8 0A NN}) as a hairline of its colour, the letters after it in that
-colour (notes/more-cards.md, "Card text codes").
+colour (darker on a light background, so they read; white as the box's own
+ink). The preview beside it (preview.py) draws the card view itself
+(notes/more-cards.md, "Card text codes").
 
 Its lines break where the game's do (card_text.wrap_points: twenty
 letters a line, an icon two, a word never split), not where Tk's own
@@ -25,24 +26,18 @@ from tkinter import font as tkfont
 
 from . import card_text, pngio
 
-PANEL = "#%02x%02x%02x" % card_text.PANEL
-INK = "#f8f8f8"
-SELECT = "#4060a0"
 SOFT = "soft"           # the tag of the newlines the wrapping puts in
 # The codes the box shows as pictures (card_text.CODE, less {g X}).
 PICTURED = re.compile(r"\{f8 *(0[AaBb]) *([0-9A-Fa-f]{1,2})\}")
 
 
 class CardTextBox(tk.Text):
-    keeps_colours = True    # the theme (theme.py) leaves the card view's colours, in either look
-
     def __init__(self, master, app, **options):
         # The lines are broken here, as the game breaks them; Tk only cuts a
         # word too long for the box at its edge (21 letters), as the card
         # view does.
         options["wrap"] = "char"
-        super().__init__(master, background=PANEL, foreground=INK, insertbackground=INK, selectbackground=SELECT,
-                         selectforeground=INK, inactiveselectbackground=SELECT, **options)
+        super().__init__(master, **options)
         self.app = app
         self.codes = {}         # embedded image name -> its code
         self._source = None     # the game files the pictures are of
@@ -81,8 +76,7 @@ class CardTextBox(tk.Text):
                                                format="png")
         for n, ramp in enumerate(font.ramps[:len(card_text.COLOUR_NAMES)]):
             rgb = ramp[15]
-            self._inks[n] = "#%02x%02x%02x" % rgb
-            self.tag_configure(f"colour{n}", foreground=self._inks[n])
+            self._inks[n] = rgb
             # A colour takes no room in the game: a hairline here.
             bar = pngio.Image(2, line, bytes((*rgb, 255)) * (2 * line))
             self._bars[n] = tk.PhotoImage(master=self, data=base64.b64encode(pngio.encode(bar)), format="png")
@@ -200,13 +194,24 @@ class CardTextBox(tk.Text):
         if end > run:
             super().insert("end", text[run:end])
 
+    def _ink(self, n: int):
+        """Colour n as the box shows it: on a light background (the theme's
+        light look) a darker one that reads; white, the box's own ink."""
+        r, g, b = (v >> 8 for v in self.winfo_rgb(self.cget("background")))
+        if (r * 299 + g * 587 + b * 114) // 1000 < 128:
+            return "#%02x%02x%02x" % self._inks[n]
+        return "#%02x%02x%02x" % tuple(v * 55 // 100 for v in self._inks[n])
+
     def recolour(self):
         """The letters after a colour code in its colour, as the game draws
-        them; white again after {f8 0A 00}."""
+        them; the box's own ink again after {f8 0A 00}."""
         for n in self._inks:
             self.tag_remove(f"colour{n}", "1.0", "end")
         if not self._inks:
             return
+        for n in self._inks:
+            if n:
+                self.tag_configure(f"colour{n}", foreground=self._ink(n))
         colour = 0
         for key, value, index in self.dump("1.0", "end-1c", text=True, image=True):
             if key == "image":

@@ -193,14 +193,15 @@ class Theme:
         for path in self.walk("."):
             cls = call("winfo", "class", path)
             cls = "Toplevel" if cls == "Tk" else cls
-            if cls in CLASSIC and getattr(self.widget(path), "keeps_colours", False):
-                pass    # a widget drawn in colours of its own (card_text_box.py)
-            elif cls in CLASSIC:
+            if cls in CLASSIC:
                 values = CLASSIC[cls] if dark else self.defaults[cls]
                 if ".popdown." in path:     # a Combobox's list keeps the borders ttk gave it
                     values = {option: value for option, value in values.items() if option not in BORDERS}
                 call(path, "configure", *[item for option, value in values.items()
                                           for item in (f"-{option}", value)])
+                recolour = getattr(self.widget(path), "recolour", None)
+                if recolour:        # the card text box's colours follow the background (card_text_box.py)
+                    recolour()
             elif cls == "Treeview":
                 for tag, (light, dark_ink) in TAGS.items():
                     call(path, "tag", "configure", tag, "-foreground", dark_ink if dark else light)

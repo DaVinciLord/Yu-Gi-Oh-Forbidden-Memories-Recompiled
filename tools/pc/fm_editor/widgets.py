@@ -312,7 +312,23 @@ def scrolled_tree(parent, columns, widths, height=20, selectmode="browse", *, so
         horizontal.grid(row=1, column=0, sticky="ew")
     for tag in theme.TAGS:
         tree.tag_configure(tag, foreground=theme.tag_color(tree, tag))
+    tree.bind("<ButtonPress-1>", lambda e: _free_columns(tree, e), add=True)
     return frame, tree
+
+
+def _free_columns(tree, event):
+    """A press on a heading's edge, about to drag a column's width: the
+    columns keep the widths they have and only the last fills what is left.
+    A stretching column (the wide Name) takes back any width taken from it,
+    so a drag snapped back; now each column keeps what it is dragged to."""
+    if tree.identify_region(event.x, event.y) != "separator" or getattr(tree, "columns_free", False):
+        return
+    tree.columns_free = True
+    columns = list(tree["columns"])
+    for key in columns:
+        tree.column(key, width=tree.column(key, "width"), stretch=key == columns[-1])
+    # What a theme change puts back (theme.py): these widths from now on.
+    tree.widths = {key: tree.column(key, "width") for key in columns}
 
 
 class CardPicker(tk.Toplevel):
