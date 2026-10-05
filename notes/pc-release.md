@@ -182,6 +182,10 @@ python3 tools/pc/package.py android-arm64 --version dev-signing-test
 
 ### The secrets (CI)
 
+**Done (2026-10):** Unchiga added these four secrets, with his release key,
+to `Unchiga/Yu-Gi-Oh-Forbidden-Memories-Recompiled`. The steps below are kept
+for reference: to replace the key's copy there, or to set up a fork.
+
 In the GitHub repository: **Settings > Secrets and variables > Actions**,
 **Secrets** tab, **New repository secret**, one for each of:
 
@@ -217,14 +221,14 @@ the clipboard. `gh secret set NAME` with no value asks for it without showing
 it:
 
 ```sh
-base64 -w0 /path/to/release.p12 | gh secret set ANDROID_KEYSTORE_BASE64 -R Unchiga/DecompRecomp
-gh secret set ANDROID_KEYSTORE_PASSWORD -R Unchiga/DecompRecomp   # prompts
-gh secret set ANDROID_KEY_ALIAS -R Unchiga/DecompRecomp
-gh secret set ANDROID_KEY_PASSWORD -R Unchiga/DecompRecomp
+base64 -w0 /path/to/release.p12 | gh secret set ANDROID_KEYSTORE_BASE64 -R Unchiga/Yu-Gi-Oh-Forbidden-Memories-Recompiled
+gh secret set ANDROID_KEYSTORE_PASSWORD -R Unchiga/Yu-Gi-Oh-Forbidden-Memories-Recompiled   # prompts
+gh secret set ANDROID_KEY_ALIAS -R Unchiga/Yu-Gi-Oh-Forbidden-Memories-Recompiled
+gh secret set ANDROID_KEY_PASSWORD -R Unchiga/Yu-Gi-Oh-Forbidden-Memories-Recompiled
 ```
 
 ```powershell
-[Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\path\to\release.p12")) | gh secret set ANDROID_KEYSTORE_BASE64 -R Unchiga/DecompRecomp
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\path\to\release.p12")) | gh secret set ANDROID_KEYSTORE_BASE64 -R Unchiga/Yu-Gi-Oh-Forbidden-Memories-Recompiled
 ```
 
 The certificate's SHA-256, for `ANDROID_CERT_SHA256` or to compare with the
@@ -241,10 +245,13 @@ forks without the secrets. There the APK is built as a check, debug-signed,
 and not uploaded. A version tag without the secrets fails the job, and with
 it the draft release.
 
-GitHub hides every secret's value in the logs. With `ANDROID_KEY_ALIAS` a
-short word such as `yfm`, the job's log shows `***` wherever that word
-appears (`***-redecomp-...`). This is only in the log; the files are named
-correctly.
+GitHub hides every secret's value in the logs. `ANDROID_KEY_ALIAS` is
+`yfm`, so the job's log shows `***` wherever that word appears
+(`dist/***-redecomp-v0.3.0-android-arm64.apk`). This is only in the log; the
+files and the release assets are named correctly. An alias is not secret: it
+could become a repository variable (`ANDROID_KEY_ALIAS` on the **Variables**
+tab, read as `vars.ANDROID_KEY_ALIAS` in the workflow), and the logs would
+show it plainly.
 
 ### Test APKs signed with the debug key
 
