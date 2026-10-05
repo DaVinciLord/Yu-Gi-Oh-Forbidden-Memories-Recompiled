@@ -3,8 +3,8 @@
 
 #ifdef MEMORIES_PC
 /* A monster's "destroy" marks only the monsters it takes, not the whole
-   row Crush Card's config collects (src/pc/cards/monster_effects_duel.h). */
-extern void MonsterEffects_FilterTargets(u32 *objects);
+   row Crush Card's config collects. */
+#include "pc/cards/monster_effects_duel.h"
 #endif
 
 void func_8014FF40(void *buffer, s32 phase)
