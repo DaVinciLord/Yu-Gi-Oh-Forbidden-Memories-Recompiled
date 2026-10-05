@@ -298,8 +298,10 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode --ignore-garbage > "$keystore"
           unset KEYSTORE_BASE64
           test -s "$keystore"
-          MEMORIES_ANDROID_KEYSTORE="$keystore" MEMORIES_VERSION="$PACKAGE_VERSION"             python tools/pc/package_android.py tmp/pc/android-arm64-v8a arm64-v8a
-          env -u MEMORIES_ANDROID_KEYSTORE_PASSWORD -u MEMORIES_ANDROID_KEY_PASSWORD MEMORIES_ANDROID_KEYSTORE="$keystore"             python tools/pc/package.py android-arm64 --no-build --version "$PACKAGE_VERSION"
+          export MEMORIES_ANDROID_KEYSTORE="$keystore" MEMORIES_VERSION="$PACKAGE_VERSION"
+          python tools/pc/package_android.py tmp/pc/android-arm64-v8a arm64-v8a
+          unset MEMORIES_ANDROID_KEYSTORE_PASSWORD MEMORIES_ANDROID_KEY_PASSWORD
+          python tools/pc/package.py android-arm64 --no-build --version "$PACKAGE_VERSION"
       - name: APK signer
         if: env.ANDROID_SIGNING == 'true'
         run: |
