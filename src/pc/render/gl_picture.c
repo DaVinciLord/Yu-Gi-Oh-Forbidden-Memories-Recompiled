@@ -2495,3 +2495,37 @@ int GlPicture_CopyInto(unsigned from, int x, int y, int w, int h, unsigned to)
     gl_BindFramebuffer(GL_FRAMEBUFFER, 0);
     return ok;
 }
+
+void GlPicture_Lost(void)
+{
+    int bank;
+    on = 0;
+    program = buffer = vertex_array = 0;
+    vram_texture = vram_scratch = vram_fbo = vram_scratch_fbo = 0;
+    picture_texture = picture_scratch = picture_fbo = picture_scratch_fbo = 0;
+    picture_ms_fbo = picture_ms_buffer = 0;
+    scale = samples = samples_scale = 0; /* made again at the next resync */
+    samples_asked = samples_clamped_to = -1;
+    banks_texture = 0;
+    for (bank = 0; bank < SOFT_GPU_BANKS; bank++) { /* uploaded again when next sampled */
+        free(bank_copy[bank]);
+        bank_copy[bank] = NULL;
+    }
+    entry_map_texture = place_map_texture = 0;
+    free(entry_textures);
+    entry_textures = NULL;
+    entry_texture_count = 0;
+    pack_generation = map_generation = ~0u;
+    capture_texture = 0;
+    capture_w = capture_h = 0;
+    memset(capture_rect, 0, sizeof(capture_rect));
+    glyphs_texture = 0;
+    glyphs_side = 0;
+    glyphs_generation = ~0u;
+    memset(wide, 0, sizeof(wide));
+    shown_texture = shown_fbo = 0;
+    shown_w = shown_h = 0;
+    copy_fbo = 0;
+    vertex_count = run_count = 0;
+    want_resync = 1; /* VRAM whole into the new picture, at the next replay after Init */
+}

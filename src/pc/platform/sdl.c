@@ -136,6 +136,7 @@ static float known_refresh; /* what the wayland driver reported before a fallbac
 
 static void show(void);
 static void repaint_menu(void);
+static void reset_renderer(void);
 /* Menu changes from events are coalesced: a pointer sweeping the bar
  * reports hundreds of motions a second, and each used to repaint and
  * present a frame. Now they mark the menu dirty and it is repainted once,
@@ -1600,7 +1601,19 @@ static bool SDLCALL app_event(void *userdata, SDL_Event *event)
 
 static void pump(void)
 {
+    static long test_reset_at = -2; /* MEMORIES_TEST_GL_RESET (reset_renderer) */
     SDL_Event event;
+    if (test_reset_at == -2) {
+        const char *at = getenv("MEMORIES_TEST_GL_RESET");
+        test_reset_at = at && *at ? strtol(at, NULL, 10) : -1;
+    }
+    if (test_reset_at >= 0 && current_frame >= (unsigned long)test_reset_at) {
+        SDL_zero(event);
+        event.type = SDL_EVENT_RENDER_DEVICE_RESET;
+        event.render.windowID = SDL_GetWindowID(window);
+        SDL_PushEvent(&event);
+        test_reset_at = -1;
+    }
     while (SDL_PollEvent(&event)) {
         MenuEvent menu_event;
         translate(&event, &menu_event);
@@ -1706,6 +1719,9 @@ static void pump(void)
         case SDL_EVENT_WINDOW_CLOSE_REQUESTED: QuitPrompt_Request(&quit); break;
         case SDL_EVENT_QUIT: quit = 1; break;
         case SDL_EVENT_WINDOW_EXPOSED: show(); break;
+        case SDL_EVENT_RENDER_DEVICE_RESET:
+            if (renderer && !strcmp(SDL_GetRendererName(renderer), "opengles2")) reset_renderer();
+            break;
         case SDL_EVENT_WINDOW_RESIZED: case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
             relayout();
             menu_dirty = 1;
@@ -1944,6 +1960,35 @@ static void open_renderer(void)
         }
     }
     if (!renderer && window && !use_gl) renderer = SDL_CreateRenderer(window, NULL);
+}
+
+/* SDL_EVENT_RENDER_DEVICE_RESET: the GL context was lost while the app was
+ * away (Android), and SDL made a new one. SDL's renderer cannot go on in it
+ * (its own context is the lost one), so it is made again, its textures with
+ * it, and the pass in the new context, whose first replay draws the
+ * picture again from VRAM. MEMORIES_TEST_GL_RESET=<frame> sends the event
+ * at that frame, with nothing lost, to try this anywhere. */
+static void reset_renderer(void)
+{
+    fprintf(stderr, "memories-pc: the renderer's device was reset (%s); making it again\n",
+            SDL_GetRendererName(renderer));
+    GlPicture_Lost();
+    es_picture = 0;
+    es_context = NULL;
+    SDL_DestroyRenderer(renderer); /* and the textures */
+    picture = overlay = es_shown = NULL;
+    es_shown_last = 0;
+    picture_w = picture_h = 0;
+    if (es_wanted) ask_for_es3();
+    open_renderer();
+    if (!renderer) {
+        fprintf(stderr, "memories-pc: SDL: %s\n", SDL_GetError());
+        quit = 1;
+        return;
+    }
+    Menu_SetHdPicture(es_picture);
+    swap_interval = -1; /* set again on the new renderer */
+    menu_dirty = 1;
 }
 
 static void destroy_window(void)

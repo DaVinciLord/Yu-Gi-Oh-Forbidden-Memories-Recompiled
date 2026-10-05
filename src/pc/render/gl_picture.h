@@ -56,4 +56,9 @@ int GlPicture_ReadWide(int x, int y, int w, int h, int wide_w, int want_scale, u
  * top), after a Replay. Returns 0 when `from` is neither or `to` cannot be
  * drawn into. */
 int GlPicture_CopyInto(unsigned from, int x, int y, int w, int h, unsigned to);
+/* The context was lost (Android, the app sent to the background): every
+ * name the pass held is forgotten, not deleted, and the pass is off until
+ * GlPicture_Init in the new context, whose first replay draws the picture
+ * again from VRAM. */
+void GlPicture_Lost(void);
 #endif
