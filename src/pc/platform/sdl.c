@@ -27,12 +27,36 @@
 #include "update_check.h"
 #include "pc/debug/log.h"
 #include "pc/debug/monitor.h"
+#include "pc/debug/crash_test.h"
 #include "pc/debug/hud.h"
 #include "pc/guest/state.h"
 #include "save_icon.h"
 #include "touch_pad.h"
 #include "touch_pad_art.h"
 #include <SDL3/SDL.h>
+/* Android: SDL reaches Java (JNI) for events and joysticks, message boxes,
+ * the clipboard, URLs, the cursor, the window's mode and audio devices,
+ * and the runtime (ART) refuses a call from a native stack it does not
+ * know, as the game stack at 0xB0000000 is (a StackOverflowError, or the
+ * method skipped; with CheckJNI the next call aborts). Every entry point
+ * the game thread calls that may get there runs on the thread's own stack
+ * (Memories_OnHostStack, state.c): the presents, which pump the events
+ * and apply the display settings every frame (Platform_Present,
+ * Platform_PresentPicture, Platform_PresentWidePicture), Platform_Frame,
+ * Platform_PumpEvents (a frame that is not shown), Platform_StartAudio
+ * (SpuInit), Platform_ShowError, Platform_OpenUrl, Platform_OpenFolder,
+ * Platform_CopyText and the second windows. HERE(name) names their bodies,
+ * and the wrappers at the end of this file call them; elsewhere HERE(name)
+ * is the name itself. jni_guard.h checks every SDL call that may reach
+ * Java against the game stack and logs one that runs there.
+ * MEMORIES_TEST_JAVA=<frame>[box|guard] makes such calls from inside the
+ * game loop, in Platform_Frame and in the present's pump (java_test), and
+ * with "guard" calls the guard on the game stack once, to show it fires. */
+#ifdef SDL_PLATFORM_ANDROID
+#define HERE(name) name##_here
+#else
+#define HERE(name) name
+#endif
 #include <SDL3/SDL_opengl.h>
 #include "pc/render/gl_picture.h"
 #include "pc/compat/signal.h"
@@ -42,6 +66,7 @@
 #include <sys/stat.h>
 #include <time.h>
 #include "pc/compat/posix.h"
+#include "jni_guard.h" /* last: after SDL's own headers */
 
 static SDL_Window *window;
 static SDL_Renderer *renderer;
@@ -193,7 +218,7 @@ static void resize_mods(int w, int h)
     ModsWindow_Resize(w, h);
     restore_game_context();
 }
-int Platform_OpenFolder(const char *path)
+int HERE(Platform_OpenFolder)(const char *path)
 {
     /* xdg-open on Linux, ShellExecute on Windows: both take a plain path. */
 #ifdef _WIN32
@@ -204,8 +229,8 @@ int Platform_OpenFolder(const char *path)
 #endif
     return SDL_OpenURL(path) ? 0 : -1;
 }
-int Platform_OpenUrl(const char *url) { return SDL_OpenURL(url) ? 0 : -1; }
-void Platform_OpenMods(void)
+int HERE(Platform_OpenUrl)(const char *url) { return SDL_OpenURL(url) ? 0 : -1; }
+void HERE(Platform_OpenMods)(void)
 {
     sigset_t previous;
     if (mods_window) { SDL_RaiseWindow(mods_window); return; }
@@ -298,7 +323,7 @@ static void resize_controls(int w, int h)
     controls_canvas.height=h;
     draw_controls();
 }
-void Platform_OpenControls(void)
+void HERE(Platform_OpenControls)(void)
 {
     sigset_t previous;
     if(controls_window){SDL_RaiseWindow(controls_window);return;}
@@ -325,6 +350,66 @@ void Platform_OpenControls(void)
 }
 
 static void pump(void);
+
+#ifdef SDL_PLATFORM_ANDROID
+/* MEMORIES_TEST_JAVA=<frame>, or <frame>box: at that frame, from inside
+ * the game loop, the Java calls a player's input or a menu can make (the
+ * cursor hidden and shown, the clipboard; with "box" a message box too),
+ * and where they ran. On a phone, before they ran on the thread's stack,
+ * the runtime refused them (logcat: StackOverflowError, or a CheckJNI
+ * abort on the next call). */
+static long java_test_at = -2;
+static int java_test_box, java_test_guard;
+
+static int java_test_now(unsigned frame)
+{
+    if (java_test_at == -2) {
+        const char *value = getenv("MEMORIES_TEST_JAVA");
+        char *end = NULL;
+        java_test_at = value && *value ? strtol(value, &end, 10) : -1;
+        java_test_box = end && !strcmp(end, "box");
+        java_test_guard = end && !strcmp(end, "guard");
+    }
+    return java_test_at >= 0 && frame == (unsigned)java_test_at;
+}
+
+static void java_test(unsigned frame)
+{
+    int hid, shown, copied, boxed = -1;
+    int box;
+    if (!java_test_now(frame)) return;
+    box = java_test_box;
+    hid = SDL_HideCursor();
+    shown = SDL_ShowCursor();
+    if (cursor_hidden) SDL_HideCursor();
+    copied = SDL_SetClipboardText("memories-pc: Java test");
+    if (box) boxed = SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "Java test",
+                                              "A message box from inside the game loop.", window);
+    fprintf(stderr, "memories-pc: java test at frame %u: cursor hide %d show %d, clipboard %d, box %d; "
+            "native stack %p (the game stack is 0xb0000000-0xb0800000); on the game stack so far: %u\n", frame,
+            hid, shown, copied, boxed, __builtin_frame_address(0), Memories_JniGuardCount());
+}
+
+/* The same at the present's pump (begin_present): the joysticks polled
+ * (Android_JNI_PollInputDevices), the display settings applied as View >
+ * Menu size or File > Reload settings do (SDL_SetWindowFullscreen), and
+ * the cursor shown and hidden as on focus loss. Before the presents ran on
+ * the thread's stack, these ran on the game stack every frame. */
+static void apply_display_settings(void);
+static void java_test_pump(unsigned frame)
+{
+    int hid, shown;
+    if (!java_test_now(frame)) return;
+    SDL_UpdateJoysticks();
+    apply_display_settings();
+    hid = SDL_HideCursor();
+    shown = SDL_ShowCursor();
+    if (cursor_hidden) SDL_HideCursor();
+    fprintf(stderr, "memories-pc: java test (pump) at frame %u: joysticks polled, display settings applied, "
+            "cursor hide %d show %d; native stack %p; on the game stack so far: %u\n", frame, hid, shown,
+            __builtin_frame_address(0), Memories_JniGuardCount());
+}
+#endif
 
 static void show_cursor(void)
 {
@@ -489,7 +574,7 @@ static void save_window_image(void)
     save_surface(surface, path);
 }
 
-int Platform_CopyText(const char *text) { return SDL_SetClipboardText(text); }
+int HERE(Platform_CopyText)(const char *text) { return SDL_SetClipboardText(text); }
 
 void Platform_Screenshot(int window_image)
 {
@@ -759,12 +844,12 @@ int Platform_HasWindowModes(void) { return 0; } /* the whole screen, always (and
 int Platform_HasWindowModes(void) { return 1; }
 #endif
 
-void Platform_ApplyDisplaySettings(void)
+void Platform_ApplyDisplaySettings(void) /* only marks them: begin_present applies them */
 {
     display_settings_pending = 1;
 }
 
-void Platform_SetScale(int wanted)
+void Platform_SetScale(int wanted) /* the same, with the next frame */
 {
     if (wanted < 1 || wanted > 8) {
         return;
@@ -797,6 +882,7 @@ static void open_gamepad(SDL_JoystickID id)
             d->threshold = 1.0f / 3;
             const char *name = SDL_GetGamepadName(pads[i]);
             snprintf(d->name, sizeof(d->name), "%s", name ? name : "Controller");
+            LOG(LOG_INPUT, "controller %u opened: %s", (unsigned)id, d->name);
             const char *serial = SDL_GetGamepadSerial(pads[i]);
             if (!ControlsLinux_Identity(SDL_GetGamepadPath(pads[i]), d->identity, sizeof(d->identity))) {
                 snprintf(d->identity, sizeof(d->identity), "pad:%04x:%04x:%s", SDL_GetGamepadVendor(pads[i]),
@@ -891,7 +977,7 @@ void Platform_AudioStats(int *queued_frames, unsigned *underruns)
     if (underruns) *underruns = audio_underruns;
 }
 
-int Platform_StartAudio(void (*mix)(int16_t *, size_t))
+int HERE(Platform_StartAudio)(void (*mix)(int16_t *, size_t))
 {
     const char *dump = getenv("MEMORIES_DUMP_AUDIO");
     SDL_AudioSpec spec = {SDL_AUDIO_S16, 2, 44100};
@@ -900,7 +986,14 @@ int Platform_StartAudio(void (*mix)(int16_t *, size_t))
         return Platform_StartSilentAudio(mix, dump);
     }
     mixer = mix;
+#ifdef __ANDROID__
+    /* 256 frames starved AAudio on a phone (Xiaomi 11T Pro, Android 14): its
+     * track got 5 s of sound every 6.3 s, crackling and gaps; 1024 (23 ms)
+     * keeps it fed. */
+    SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "1024");
+#else
     SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "256");
+#endif
     block_signals(&previous);
     stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, feed, NULL);
     if (stream) {
@@ -1470,6 +1563,10 @@ static void pump(void)
             pointer_is_mouse = 0;
             if (covers_screen() && event.button.y < Menu_Height() && menu_reveal_frames < 2) menu_reveal_frames = 2;
         }
+        if ((event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) && !event.key.repeat)
+            LOG(LOG_INPUT, "key %s %s (scancode %d), input %s", SDL_GetScancodeName(event.key.scancode),
+                event.type == SDL_EVENT_KEY_DOWN ? "down" : "up", (int)event.key.scancode,
+                ControlsRuntime_Blocked() ? "held back" : "open");
         /* A key or a controller's button: Automatic hides the pad again. */
         if (((event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat && event.key.key != SDLK_AC_BACK) ||
              event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) && TouchPad_OtherInput())
@@ -1694,6 +1791,7 @@ static int software_gl_renderer(void)
                     strstr(name, "Software Rasterizer"));
 }
 
+#ifndef SDL_PLATFORM_ANDROID /* android.c: the picker copies the image into the app */
 typedef struct DiscSelection {
     SDL_AtomicInt done;
     char *path;
@@ -1767,8 +1865,9 @@ int Platform_SelectDisc(char *path, size_t size, char *why, size_t why_size)
     Monitor_Modal(0);
     return selection.result;
 }
+#endif
 
-void Platform_ShowError(const char *title, const char *message)
+void HERE(Platform_ShowError)(const char *title, const char *message)
 {
     const char *headless = getenv("MEMORIES_HEADLESS");
     fprintf(stderr, "memories-pc: %s\n", message);
@@ -1867,6 +1966,10 @@ static void begin_present(int w, int h, int at_scale)
 {
     if (pumped) pumped = 0;
     else pump(); /* before the frame, so its input and menu state are current */
+#ifdef SDL_PLATFORM_ANDROID
+    java_test_pump(current_frame);
+#endif
+    CrashTest_Present(); /* MEMORIES_CRASH_TEST=present */
     if (pending_scale) {
         scale = pending_scale;
         pending_scale = 0;
@@ -1901,7 +2004,7 @@ static void finish_present(int w, int h)
     show();
 }
 
-int Platform_PresentPicture(const uint32_t *pixels, int stride, int x, int y, int w, int h, int at_scale)
+int HERE(Platform_PresentPicture)(const uint32_t *pixels, int stride, int x, int y, int w, int h, int at_scale)
 {
     int j;
     if ((!renderer && !use_gl) || w <= 0 || h <= 0 || at_scale < 1) return 0;
@@ -1934,7 +2037,7 @@ int Platform_PresentPicture(const uint32_t *pixels, int stride, int x, int y, in
     return 1;
 }
 
-void Platform_Present(const uint16_t *vram, int stride, int x, int y, int w, int h, int rgb24)
+void HERE(Platform_Present)(const uint16_t *vram, int stride, int x, int y, int w, int h, int rgb24)
 {
     int i, j;
     if ((!renderer && !use_gl) || w <= 0 || h <= 0) {
@@ -1966,7 +2069,7 @@ int Platform_ReadPicture(uint32_t *out, int x, int y, int w, int h)
     return GlPicture_Read(x, y, w, h, out);
 }
 
-int Platform_PresentWidePicture(int x, int y, int w, int h, int wide_w, int at_scale)
+int HERE(Platform_PresentWidePicture)(int x, int y, int w, int h, int wide_w, int at_scale)
 {
     GLuint texture;
     int pw, ph;
@@ -2010,7 +2113,7 @@ void Platform_SetStateSlot(int slot)
 }
 /* No frame is coming (paused, or a frame that is not shown): answer the
  * menu now, at most once per call. */
-void Platform_PumpEvents(void)
+void HERE(Platform_PumpEvents)(void)
 {
     static uint64_t last_repaint_us;
     uint64_t now;
@@ -2174,7 +2277,7 @@ static void set_icon(void)
     SDL_DestroySurface(icon);
 }
 
-void Platform_Frame(unsigned frame)
+void HERE(Platform_Frame)(unsigned frame)
 {
     static unsigned composed_then;
     current_frame = frame;
@@ -2195,6 +2298,16 @@ void Platform_Frame(unsigned frame)
     }
     if (menu_reveal_frames > 0) menu_reveal_frames--;
     update_menu_visibility();
+#ifdef SDL_PLATFORM_ANDROID
+    java_test(frame);
+#ifdef __aarch64__
+    if (frame % 1000 == 0) {
+        size_t painted = 0, stack_size = 0, used = Memories_HostStackUsed(&painted, &stack_size);
+        if (used) fprintf(stderr, "memories-pc: host stack at frame %u: %zu bytes used at most below the switch "
+                          "point (%zu painted; thread stack %zu)\n", frame, used, painted, stack_size);
+    }
+#endif
+#endif
     if (window && Settings_Get(SET_HIDE_CURSOR) && pointer_inside && !cursor_hidden &&
         pointer_x >= layout.dst.x && pointer_x < layout.dst.x + layout.dst.w &&
         pointer_y >= layout.dst.y && pointer_y < layout.dst.y + layout.dst.h &&
@@ -2208,3 +2321,111 @@ void Platform_Frame(unsigned frame)
     scripted_bits = Platform_ScriptedBits(frame);
     scripted_bits2 = Platform_ScriptedBits2(frame);
 }
+
+#ifdef SDL_PLATFORM_ANDROID
+/* The entry points named by HERE above, on the thread's own stack. */
+typedef struct {
+    const char *text, *more;
+    int number;
+    int result;
+} HostCall;
+
+/* A present's arguments (Platform_Present*, Platform_StartAudio). */
+typedef struct {
+    const void *pixels;
+    int a[7];
+    void (*mix)(int16_t *, size_t);
+    int result;
+} PresentCall;
+
+static void frame_on_host(void *call) { Platform_Frame_here((unsigned)((HostCall *)call)->number); }
+static void pump_on_host(void *call) { (void)call; Platform_PumpEvents_here(); }
+static void show_error_on_host(void *call) { Platform_ShowError_here(((HostCall *)call)->text, ((HostCall *)call)->more); }
+static void open_url_on_host(void *call) { ((HostCall *)call)->result = Platform_OpenUrl_here(((HostCall *)call)->text); }
+static void open_folder_on_host(void *call)
+{
+    ((HostCall *)call)->result = Platform_OpenFolder_here(((HostCall *)call)->text);
+}
+static void copy_text_on_host(void *call) { ((HostCall *)call)->result = Platform_CopyText_here(((HostCall *)call)->text); }
+static void open_mods_on_host(void *call) { (void)call; Platform_OpenMods_here(); }
+static void open_controls_on_host(void *call) { (void)call; Platform_OpenControls_here(); }
+static void present_on_host(void *call)
+{
+    PresentCall *c = call;
+    Platform_Present_here(c->pixels, c->a[0], c->a[1], c->a[2], c->a[3], c->a[4], c->a[5]);
+}
+static void present_picture_on_host(void *call)
+{
+    PresentCall *c = call;
+    c->result = Platform_PresentPicture_here(c->pixels, c->a[0], c->a[1], c->a[2], c->a[3], c->a[4], c->a[5]);
+}
+static void present_wide_on_host(void *call)
+{
+    PresentCall *c = call;
+    c->result = Platform_PresentWidePicture_here(c->a[0], c->a[1], c->a[2], c->a[3], c->a[4], c->a[5]);
+}
+static void start_audio_on_host(void *call)
+{
+    PresentCall *c = call;
+    c->result = Platform_StartAudio_here(c->mix);
+}
+
+void Platform_Frame(unsigned frame)
+{
+    HostCall call = {NULL, NULL, (int)frame, 0};
+    /* MEMORIES_TEST_JAVA=<frame>guard: the guard itself, called here on the
+     * game stack as a missed path would (no Java call is made), so its log
+     * line and count can be seen to work. */
+    if (java_test_now(frame) && java_test_guard) Memories_JniGuard("MEMORIES_TEST_JAVA=<frame>guard");
+    Memories_OnHostStack(frame_on_host, &call);
+}
+void Platform_PumpEvents(void) { Memories_OnHostStack(pump_on_host, NULL); }
+void Platform_ShowError(const char *title, const char *message)
+{
+    HostCall call = {title, message, 0, 0};
+    Memories_OnHostStack(show_error_on_host, &call);
+}
+int Platform_OpenUrl(const char *url)
+{
+    HostCall call = {url, NULL, 0, -1};
+    Memories_OnHostStack(open_url_on_host, &call);
+    return call.result;
+}
+int Platform_OpenFolder(const char *path)
+{
+    HostCall call = {path, NULL, 0, -1};
+    Memories_OnHostStack(open_folder_on_host, &call);
+    return call.result;
+}
+int Platform_CopyText(const char *text)
+{
+    HostCall call = {text, NULL, 0, 0};
+    Memories_OnHostStack(copy_text_on_host, &call);
+    return call.result;
+}
+void Platform_OpenMods(void) { Memories_OnHostStack(open_mods_on_host, NULL); }
+void Platform_OpenControls(void) { Memories_OnHostStack(open_controls_on_host, NULL); }
+void Platform_Present(const uint16_t *vram, int stride, int x, int y, int w, int h, int rgb24)
+{
+    PresentCall call = {vram, {stride, x, y, w, h, rgb24, 0}, NULL, 0};
+    Memories_OnHostStack(present_on_host, &call);
+}
+int Platform_PresentPicture(const uint32_t *pixels, int stride, int x, int y, int w, int h, int at_scale)
+{
+    PresentCall call = {pixels, {stride, x, y, w, h, at_scale, 0}, NULL, 0};
+    Memories_OnHostStack(present_picture_on_host, &call);
+    return call.result;
+}
+int Platform_PresentWidePicture(int x, int y, int w, int h, int wide_w, int at_scale)
+{
+    PresentCall call = {NULL, {x, y, w, h, wide_w, at_scale, 0}, NULL, 0};
+    Memories_OnHostStack(present_wide_on_host, &call);
+    return call.result;
+}
+int Platform_StartAudio(void (*mix)(int16_t *, size_t))
+{
+    PresentCall call = {NULL, {0}, mix, 0};
+    Memories_OnHostStack(start_audio_on_host, &call);
+    return call.result;
+}
+#endif

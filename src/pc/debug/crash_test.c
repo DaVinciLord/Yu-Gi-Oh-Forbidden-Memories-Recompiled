@@ -13,6 +13,9 @@
  *   kill      SIGKILL, as the out-of-memory killer sends (Linux); a
  *             fail-fast, which no handler sees (Windows)
  *   slow      no frame for 8 s, then on: a long wait, not a freeze
+ *   present   the "segv" write inside the next present (sdl.c), which on
+ *             Android arm64 runs on the thread's own stack: the report's
+ *             callers must cross back to the game's (crash.c's walk)
  *   null      a write to address 0 (MEMORIES_CRASH_TEST=1, as before)
  *   spin      the game's thread spins for ever (MEMORIES_HANG_TEST=1)
  *   restart   the game restarts itself (the mods window's restart), and
@@ -45,6 +48,7 @@ volatile int CrashTest_TickHang;
 static const char *kind;
 static unsigned frame;
 static int done;
+static volatile int in_present;
 
 static volatile int *missing_page(void)
 {
@@ -80,6 +84,15 @@ static void rest(unsigned seconds)
 #endif
 }
 
+void CrashTest_Present(void)
+{
+    if (!in_present) return;
+    in_present = 0;
+    fprintf(stderr, "memories-pc: crash test: present now\n");
+    *missing_page() = 1;
+    __asm__ volatile(""); /* not a tail call: the report shows this function */
+}
+
 void CrashTest_Init(void)
 {
     const char *text = getenv("MEMORIES_CRASH_TEST"), *hang = getenv("MEMORIES_HANG_TEST");
@@ -99,7 +112,7 @@ void CrashTest_Frame(void)
 {
     if (!kind || done || Memories_PresentedFrames() < frame) return;
     done = 1;
-    fprintf(stderr, "memories-pc: crash test: %s now\n", kind);
+    if (strcmp(kind, "present")) fprintf(stderr, "memories-pc: crash test: %s now\n", kind); /* present: CrashTest_Present says it */
     if (!strcmp(kind, "segv")) {
         *missing_page() = 1;
     } else if (!strcmp(kind, "thread")) {
@@ -140,6 +153,8 @@ void CrashTest_Frame(void)
             Crash_ReportFatal("crash test", "MEMORIES_CRASH_TEST=restart, after the restart");
             exit(70);
         }
+    } else if (!strcmp(kind, "present")) {
+        in_present = 1;
     } else if (!strcmp(kind, "null")) {
         *(volatile int *)(uintptr_t)0 = 1;
     } else if (!strcmp(kind, "spin")) {

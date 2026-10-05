@@ -33,7 +33,7 @@
 #include "pc/compat/posix.h"
 #ifdef _WIN32
 #include "pc/platform/win32.h"
-#else
+#elif !defined(__ANDROID__)
 #include <ucontext.h>
 #endif
 
@@ -88,10 +88,16 @@ struct MemoriesState {
 
 static Region *regions;
 static unsigned region_count;
+#if defined(_WIN32) || defined(__ANDROID__) || defined(__aarch64__)
+/* Windows has no ucontext, and neither has Android's C library (bionic).
+ * A context there is the stack pointer of a suspended
+ * Memories_ContextSwitch (state_i386.S, state_x86_64.S, state_aarch64.S),
+ * which keeps the callee-saved registers on that stack. */
+#define ASM_CONTEXT_SWITCH 1
+void Memories_ContextSwitch(uintptr_t *from_sp, const uintptr_t *to_sp);
+static uintptr_t service_context, game_context;
 #ifdef _WIN32
-/* Windows has no ucontext. A context is the stack pointer of a suspended
- * Memories_ContextSwitch (state_i386.S), which keeps the callee-saved
- * registers on that stack. The thread's stack bounds and exception-handler
+/* On Windows the thread's stack bounds and exception-handler
  * chain live in its TEB and must follow the stack, as fibers do: exceptions
  * raised on a stack outside those bounds cannot be dispatched. Bounds are
  * the TEB's first three words (handler chain, stack base, stack limit) and
@@ -111,8 +117,6 @@ static unsigned region_count;
  * %gs, whose stack base, limit and DeallocationStack are at 0x08, 0x10 and
  * 0x1478. x86-64 exceptions are dispatched from unwind tables, not a
  * handler chain, so word 0 is not switched. */
-void Memories_ContextSwitch(uintptr_t *from_sp, const uintptr_t *to_sp);
-static uintptr_t service_context, game_context;
 static uintptr_t process_bounds[4];
 static const uintptr_t game_bounds[4] = {0, STACK_TOP, STACK_BASE, STACK_BASE + GUARD_ROOM + 0x1000u};
 
@@ -130,10 +134,36 @@ static void set_stack_bounds(const uintptr_t *bounds)
                      : "r"(bounds[1]), "r"(bounds[2]), "r"(bounds[3])
                      : "memory");
 }
+#else
+static uint32_t process_bounds[4];
+static const uint32_t game_bounds[4] = {0xffffffffu, STACK_TOP, STACK_BASE, /* no handlers */
+                                        STACK_BASE + GUARD_ROOM + 0x1000u};
 
-/* setjmp_x86_64.S: where the registers for a game jmp_buf are kept. The
- * game's buffer (the Psy-Q int[12] at 0x800E9DC0) is too small for them, so
- * each buffer address gets a host slot of 240 bytes. The game uses one. */
+static void save_stack_bounds(uint32_t *bounds)
+{
+    __asm__ volatile("movl %%fs:0, %0\n\tmovl %%fs:4, %1\n\tmovl %%fs:8, %2\n\tmovl %%fs:0xe0c, %3"
+                     : "=r"(bounds[0]), "=r"(bounds[1]), "=r"(bounds[2]), "=r"(bounds[3]));
+}
+
+static void set_stack_bounds(const uint32_t *bounds)
+{
+    __asm__ volatile("movl %0, %%fs:0\n\tmovl %1, %%fs:4\n\tmovl %2, %%fs:8\n\tmovl %3, %%fs:0xe0c"
+                     :
+                     : "r"(bounds[0]), "r"(bounds[1]), "r"(bounds[2]), "r"(bounds[3])
+                     : "memory");
+}
+#endif
+#else
+/* Elsewhere nothing but the stack pointer says which stack a thread is on. */
+#define save_stack_bounds(bounds) ((void)0)
+#define set_stack_bounds(bounds) ((void)0)
+#endif
+
+#if defined(__x86_64__) || defined(__aarch64__)
+/* setjmp_x86_64.S, setjmp_aarch64.S: where the registers for a game jmp_buf
+ * are kept. The game's buffer (the Psy-Q int[12] at 0x800E9DC0) is too
+ * small for them, so each buffer address gets a host slot of 240 bytes. The
+ * game uses one. */
 static struct {
     void *buffer;
     uint64_t words[30];
@@ -151,26 +181,6 @@ void *Memories_JumpSlot(void *buffer)
     }
     jump_slots[i].buffer = buffer;
     return jump_slots[i].words;
-}
-#else
-void Memories_ContextSwitch(uint32_t *from_esp, const uint32_t *to_esp);
-static uint32_t service_context, game_context;
-static uint32_t process_bounds[4];
-static const uint32_t game_bounds[4] = {0xffffffffu, STACK_TOP, STACK_BASE, /* no handlers */
-                                        STACK_BASE + GUARD_ROOM + 0x1000u};
-
-static void save_stack_bounds(uint32_t *bounds)
-{
-    __asm__ volatile("movl %%fs:0, %0\n\tmovl %%fs:4, %1\n\tmovl %%fs:8, %2\n\tmovl %%fs:0xe0c, %3"
-                     : "=r"(bounds[0]), "=r"(bounds[1]), "=r"(bounds[2]), "=r"(bounds[3]));
-}
-
-static void set_stack_bounds(const uint32_t *bounds)
-{
-    __asm__ volatile("movl %0, %%fs:0\n\tmovl %1, %%fs:4\n\tmovl %2, %%fs:8\n\tmovl %3, %%fs:0xe0c"
-                     :
-                     : "r"(bounds[0]), "r"(bounds[1]), "r"(bounds[2]), "r"(bounds[3])
-                     : "memory");
 }
 #endif
 
@@ -194,6 +204,20 @@ static uintptr_t switch_frame(uintptr_t limit, void (*function)(void))
     *slot = (uintptr_t)function;
     return (uintptr_t)frame;
 }
+#elif defined(__aarch64__)
+/* A frame for Memories_ContextSwitch (state_aarch64.S) to resume `function`
+ * from, below `limit`: what it pops (D8-D15, X19-X28, X29), then LR, which
+ * it returns to. `function` never returns (it would start over). It starts
+ * with the stack 16-byte aligned, as AAPCS64 requires, and a zero frame
+ * pointer, where a stack walk ends. Returns the context. */
+static uintptr_t switch_frame(uintptr_t limit, void (*function)(void))
+{
+    uintptr_t start = (limit - 64u) & ~(uintptr_t)15; /* the stack pointer `function` starts with */
+    uintptr_t *frame = (uintptr_t *)(start - 176u);
+    memset(frame, 0, 176u);
+    frame[19] = (uintptr_t)function; /* LR, at 152 */
+    return (uintptr_t)frame;
+}
 #else
 /* A frame for Memories_ContextSwitch to resume `function` from, below
  * `limit`: what it pops (EDI ESI EBX EBP), then the return into `function`,
@@ -212,6 +236,10 @@ static uint32_t switch_frame(uint32_t limit, void (*function)(void))
 }
 #endif
 
+#if defined(__ANDROID__) && defined(__aarch64__)
+void Memories_CallOnStack(void (*function)(void *), void *argument, uintptr_t top); /* state_aarch64.S */
+#endif
+
 /* The VSync a loaded state resumes in (apply), and what it returns. */
 static MemoriesStateEntry resume_entry;
 static int resume_value;
@@ -224,6 +252,93 @@ static void resume_game(void)
 #else
 static ucontext_t service_context, game_context;
 #endif
+#if defined(__ANDROID__) && defined(__aarch64__)
+/* MEMORIES_TEST_HOST_STACK=1: how deep the calls Memories_OnHostStack runs
+ * on the thread's own stack go. At the first switch the span below the
+ * switch point is painted (at most 512 KiB, and never within 64 KiB of the
+ * stack's low end, where ART keeps protected pages), and
+ * Memories_HostStackUsed finds the lowest word written since. */
+#include <pthread.h>
+#define HOST_STACK_PAINT 0xa5a5a5a5a5a5a5a5ull
+static uintptr_t paint_low, paint_top;
+static size_t host_stack_size;
+static int paint_state; /* 0 not yet, 1 painted, -1 off */
+
+static void paint_host_stack(uintptr_t top)
+{
+    const char *value = getenv("MEMORIES_TEST_HOST_STACK");
+    pthread_attr_t attributes;
+    void *address = NULL;
+    size_t size = 0;
+    uintptr_t low, at;
+    paint_state = -1;
+    if (!value || !*value || !strcmp(value, "0")) return;
+    if (pthread_getattr_np(pthread_self(), &attributes)) return;
+    if (pthread_attr_getstack(&attributes, &address, &size)) size = 0;
+    pthread_attr_destroy(&attributes);
+    if (!size || top <= (uintptr_t)address + 64u * 1024u) return;
+    low = (uintptr_t)address + 64u * 1024u;
+    if (top - low > 512u * 1024u) low = top - 512u * 1024u;
+    low = (low + 7u) & ~(uintptr_t)7u;
+    for (at = low; at + 8u <= top; at += 8u) *(volatile uint64_t *)at = HOST_STACK_PAINT;
+    paint_low = low;
+    paint_top = top;
+    host_stack_size = size;
+    paint_state = 1;
+    fprintf(stderr, "memories-pc: host stack: %zu bytes painted below the switch point %p (thread stack %zu bytes)\n",
+            (size_t)(top - low), (void *)top, size);
+}
+
+size_t Memories_HostStackUsed(size_t *painted, size_t *stack_size)
+{
+    uintptr_t at;
+    if (paint_state != 1) return 0;
+    for (at = paint_low; at < paint_top && *(const volatile uint64_t *)at == HOST_STACK_PAINT; at += 8u) {
+    }
+    *painted = paint_top - paint_low;
+    *stack_size = host_stack_size;
+    return paint_top - at;
+}
+#endif
+
+void Memories_OnHostStack(void (*function)(void *), void *argument)
+{
+#if defined(__ANDROID__) && defined(__aarch64__)
+    /* On the game stack, the process side waits in Memories_ContextSwitch
+     * with its stack pointer in service_context: the thread's own stack
+     * below it is free (256 bytes kept below the saved frame). */
+    uintptr_t here = (uintptr_t)__builtin_frame_address(0);
+    if (here >= STACK_BASE && here < STACK_TOP && service_context) {
+        if (!paint_state) paint_host_stack((service_context - 256u) & ~(uintptr_t)15);
+        Memories_CallOnStack(function, argument, (service_context - 256u) & ~(uintptr_t)15);
+        return;
+    }
+#endif
+    function(argument);
+}
+
+#ifdef __ANDROID__
+static unsigned jni_guard_count;
+
+void Memories_JniGuard(const char *name)
+{
+    static const char *seen[48];
+    static unsigned seen_count;
+    uintptr_t here = (uintptr_t)__builtin_frame_address(0);
+    unsigned i;
+    if (here < STACK_BASE || here >= STACK_TOP) return;
+    jni_guard_count++;
+    for (i = 0; i < seen_count; i++) {
+        if (seen[i] == name) return;
+    }
+    if (seen_count < sizeof(seen) / sizeof(seen[0])) seen[seen_count++] = name;
+    fprintf(stderr, "memories-pc: %s, which may call Java, ran on the game stack (%p): Android's runtime refuses "
+            "that; its caller must go through Memories_OnHostStack\n", name, (void *)here);
+}
+
+unsigned Memories_JniGuardCount(void) { return jni_guard_count; }
+#endif
+
 static int (*game_entry)(void);
 static int game_result;
 static volatile int requested, requested_slot = 1;
@@ -547,7 +662,7 @@ static void subsystems(MemoriesState *state)
         seed.size = size;
         Memories_StateChunk(state, "mod-rng", &seed, 1);
     }
-#if defined(__x86_64__)
+#if defined(__x86_64__) || defined(__aarch64__)
     {
         /* The game's jmp_buf lives in a host slot here (Memories_JumpSlot),
          * outside guest RAM, which carries it on 32-bit: Main_Init's setjmp,
@@ -642,7 +757,7 @@ static void serialize(MemoriesState *state)
     }
     subsystems(state);
     {
-        MemoriesStateField fields[] = {{(void *)(uintptr_t)entry.esp, STACK_TOP - entry.esp}};
+        MemoriesStateField fields[] = {{(void *)(uintptr_t)MEMORIES_STATE_ENTRY_SP(entry), STACK_TOP - MEMORIES_STATE_ENTRY_SP(entry)}};
         Memories_StateChunk(state, "stack", fields, 1);
     }
     Spu_Hold(0);
@@ -738,7 +853,7 @@ static void apply(void)
     chunk = find_chunk(&state, "entry", &size);
     memcpy(&entry, chunk, sizeof(entry));
     chunk = find_chunk(&state, "stack", &size);
-    memcpy((void *)(uintptr_t)entry.esp, chunk, size);
+    memcpy((void *)(uintptr_t)MEMORIES_STATE_ENTRY_SP(entry), chunk, size);
     free(pending_image);
     pending_image = NULL;
     Spu_Hold(0);
@@ -751,7 +866,7 @@ static void apply(void)
     fprintf(stderr, "memories-pc: state loaded\n");
     const int value = LibEtc_StateResumed(); /* the fields VSync(0) reports, as for the game that saved it */
     hold_signals(0);
-#ifdef _WIN32
+#ifdef ASM_CONTEXT_SWITCH
     set_stack_bounds(game_bounds);
     {
         /* Into the game through a context switch, as its first run went, so
@@ -762,7 +877,7 @@ static void apply(void)
          * on the game stack, below what the state restored there. */
         resume_entry = entry;
         resume_value = value;
-        game_context = switch_frame((uintptr_t)entry.esp - 64u, resume_game);
+        game_context = switch_frame(MEMORIES_STATE_ENTRY_SP(entry) - 64u, resume_game);
         Memories_ContextSwitch(&service_context, &game_context);
     }
 #else
@@ -1037,7 +1152,8 @@ static int load(const char *path)
         const uint8_t *system = find_chunk(&state, "system", &size);
         if (system && size == sizeof(saved_by)) {
             memcpy(saved_by, system, sizeof(saved_by) - 1);
-        } else if (entry.esp >= OLD_LINUX_STACK_BASE && entry.esp < OLD_LINUX_STACK_BASE + STACK_SIZE) {
+        } else if (MEMORIES_STATE_ENTRY_SP(entry) >= OLD_LINUX_STACK_BASE &&
+                   MEMORIES_STATE_ENTRY_SP(entry) < OLD_LINUX_STACK_BASE + STACK_SIZE) {
             refuse("%s was saved by an older Linux build, whose game stack was elsewhere; save states don't carry "
                    "over across this update (memory card saves do)", path);
             free(image);
@@ -1053,7 +1169,8 @@ static int load(const char *path)
         }
     }
     chunk = find_chunk(&state, "stack", &size);
-    if (!chunk || entry.esp < STACK_BASE || entry.esp >= STACK_TOP || size != STACK_TOP - entry.esp ||
+    if (!chunk || MEMORIES_STATE_ENTRY_SP(entry) < STACK_BASE || MEMORIES_STATE_ENTRY_SP(entry) >= STACK_TOP ||
+        size != STACK_TOP - MEMORIES_STATE_ENTRY_SP(entry) ||
         !find_chunk(&state, "memory", &size) || size != MEMORIES_GUEST_RAM_SIZE + SCRATCHPAD_SIZE) {
         refuse("%s: damaged state", path);
         free(image);
@@ -1075,7 +1192,7 @@ static int load(const char *path)
     pending_image = image;
     pending_size = (size_t)length;
     /* Leave the game stack; the service context applies the state. */
-#ifdef _WIN32
+#ifdef ASM_CONTEXT_SWITCH
     leave_game_stack();
 #else
     swapcontext(&game_context, &service_context);
@@ -1086,10 +1203,11 @@ static int load(const char *path)
 static int from_game_code(void)
 {
     uint32_t caller;
-    if (Memories_StateEntry.esp < STACK_BASE || Memories_StateEntry.esp >= STACK_TOP) {
+    if (MEMORIES_STATE_ENTRY_SP(Memories_StateEntry) < STACK_BASE ||
+        MEMORIES_STATE_ENTRY_SP(Memories_StateEntry) >= STACK_TOP) {
         return 0;
     }
-    caller = *(const uint32_t *)(uintptr_t)Memories_StateEntry.esp;
+    caller = MEMORIES_STATE_ENTRY_CALLER(Memories_StateEntry);
     return caller >= (uintptr_t)__start_game_text && caller < (uintptr_t)__stop_game_text;
 }
 
@@ -1209,7 +1327,7 @@ uint32_t Memories_StateBuildId(void)
 static void run_game(void)
 {
     game_result = game_entry();
-#ifdef _WIN32
+#ifdef ASM_CONTEXT_SWITCH
     leave_game_stack(); /* what uc_link does on Linux */
 #endif
 }
@@ -1262,10 +1380,12 @@ int Memories_StateRunGame(int (*entry)(void))
         }
     }
     game_entry = entry;
-#ifdef _WIN32
+#ifdef ASM_CONTEXT_SWITCH
     {
         game_context = switch_frame(STACK_TOP, run_game);
+#ifdef _WIN32
         Win32_GuardStack(STACK_BASE, GUARD_ROOM);
+#endif
         save_stack_bounds(process_bounds);
         set_stack_bounds(game_bounds);
         /* Every load request re-enters here, on the process stack. */
@@ -1280,8 +1400,8 @@ int Memories_StateRunGame(int (*entry)(void))
     /* Every load request re-enters here, on the process stack. */
     swapcontext(&service_context, &game_context);
 #endif
-    /* On Windows apply returns once the game leaves its stack again: for
-     * the next load, or at its end (run_game). */
+    /* With the asm switch (Windows, Android) apply returns once the game
+     * leaves its stack again: for the next load, or at its end (run_game). */
     while (pending_image) {
         apply();
     }

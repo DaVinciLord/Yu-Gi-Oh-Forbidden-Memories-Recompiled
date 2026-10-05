@@ -217,4 +217,93 @@ __asm__(".text\n"
         "    pushq %r10\n"
         "    movq %r11, %rax\n"
         "    jmp memories_branch_resolve\n");
+#elif defined(__aarch64__)
+/* 64-bit ARM (AArch64: Android arm64-v8a, Linux arm64). No compiler routes
+ * indirect calls through named thunks as the x86 ones do, but clang's
+ * -mharden-sls=blr turns every `blr xN` into `bl
+ * __llvm_slsblr_thunk_xN` and emits those thunks as weak definitions of its
+ * own, which the strong ones below replace at link; with
+ * -fno-optimize-sibling-calls and -fno-jump-tables no `br xN` is left in a
+ * unit (tools/pc/build_game32.py checks the objects). The contract is the
+ * x86 one in AAPCS64 terms: the thunk is reached by `bl`, so LR is already
+ * the caller's return address. X16 and X17 (IP0/IP1, which AAPCS64 lets a
+ * call's veneer change; X16 carries the resolved target) and the flags may
+ * change; on the slow path so may X9-X15, the temporaries no call keeps.
+ * Everything else is kept, the argument registers X0-X8 and Q0-Q7 too.
+ * The stack is as the caller left it. X18 is the platform register, never
+ * a target (tests/pc/branch_thunks_test.c checks all of it).
+ *
+ * Fast path: a target with anything in its upper half (the system's
+ * libraries and the heap sit far above 4 GB), or with bits 21-28 or 30 set
+ * (the game image is linked at a low address that has them), is branched to
+ * at once. Slow path: X0-X8, Q0-Q7 (the argument registers), X29 and LR are
+ * saved (224 bytes: the stack stays 16-byte aligned), the resolver is
+ * called with the target's low half, and everything but X16/X17 is put
+ * back before the branch. */
+#define A64_THUNK_SCRATCH(n, scratch, move)                                               \
+    ".p2align 2\n"                                                                        \
+    ".globl __llvm_slsblr_thunk_x" #n "\n"                                                \
+    ".type __llvm_slsblr_thunk_x" #n ", %function\n"                                      \
+    "__llvm_slsblr_thunk_x" #n ":\n"                                                      \
+    "    lsr " scratch ", x" #n ", #32\n"                                                 \
+    "    cbnz " scratch ", 1f\n"                                                          \
+    "    tst x" #n ", #0x1fe00000\n"                                                      \
+    "    b.ne 1f\n"                                                                       \
+    "    tst x" #n ", #0x40000000\n"                                                      \
+    "    b.ne 1f\n"                                                                       \
+    move                                                                                  \
+    "    b memories_branch_resolve\n"                                                     \
+    "1:  br x" #n "\n"                                                                    \
+    ".size __llvm_slsblr_thunk_x" #n ", . - __llvm_slsblr_thunk_x" #n "\n"
+#define A64_THUNK(n) A64_THUNK_SCRATCH(n, "x16", "    mov x16, x" #n "\n")
+
+__asm__(".text\n"
+        /* X16: the target; LR: the caller's return address. */
+        ".p2align 2\n"
+        "memories_branch_resolve:\n"
+        "    stp x29, x30, [sp, #-224]!\n"
+        "    mov x29, sp\n"
+        "    stp x0, x1, [sp, #16]\n"
+        "    stp x2, x3, [sp, #32]\n"
+        "    stp x4, x5, [sp, #48]\n"
+        "    stp x6, x7, [sp, #64]\n"
+        "    str x8, [sp, #80]\n"
+        "    stp q0, q1, [sp, #96]\n"
+        "    stp q2, q3, [sp, #128]\n"
+        "    stp q4, q5, [sp, #160]\n"
+        "    stp q6, q7, [sp, #192]\n"
+        "    adrp x17, :got:Memories_GuestBranchResolver\n"
+        "    ldr x17, [x17, #:got_lo12:Memories_GuestBranchResolver]\n"
+        "    ldr x17, [x17]\n"
+        "    cbz x17, 2f\n"
+        "    mov w0, w16\n"
+        "    blr x17\n"
+        "    mov x16, x0\n"
+        "2:  ldp q6, q7, [sp, #192]\n"
+        "    ldp q4, q5, [sp, #160]\n"
+        "    ldp q2, q3, [sp, #128]\n"
+        "    ldp q0, q1, [sp, #96]\n"
+        "    ldr x8, [sp, #80]\n"
+        "    ldp x6, x7, [sp, #64]\n"
+        "    ldp x4, x5, [sp, #48]\n"
+        "    ldp x2, x3, [sp, #32]\n"
+        "    ldp x0, x1, [sp, #16]\n"
+        "    ldp x29, x30, [sp], #224\n"
+        "    br x16\n"
+        /* The entry of a host stub the build writes for a module function
+         * that C calls by name (tools/pc/build_game32.py, guest_branches.c):
+         * the stub leaves the guest address in X16 and keeps LR. */
+        ".p2align 2\n"
+        ".globl Memories_GuestBranchDirect\n"
+        ".type Memories_GuestBranchDirect, %function\n"
+        "Memories_GuestBranchDirect:\n"
+        "    b memories_branch_resolve\n"
+        ".size Memories_GuestBranchDirect, . - Memories_GuestBranchDirect\n"
+        A64_THUNK(0) A64_THUNK(1) A64_THUNK(2) A64_THUNK(3) A64_THUNK(4) A64_THUNK(5) A64_THUNK(6)
+        A64_THUNK(7) A64_THUNK(8) A64_THUNK(9) A64_THUNK(10) A64_THUNK(11) A64_THUNK(12) A64_THUNK(13)
+        A64_THUNK(14) A64_THUNK(15)
+        A64_THUNK_SCRATCH(16, "x17", "")
+        A64_THUNK_SCRATCH(17, "x16", "    mov x16, x17\n")
+        A64_THUNK(19) A64_THUNK(20) A64_THUNK(21) A64_THUNK(22) A64_THUNK(23) A64_THUNK(24)
+        A64_THUNK(25) A64_THUNK(26) A64_THUNK(27) A64_THUNK(28) A64_THUNK(29));
 #endif

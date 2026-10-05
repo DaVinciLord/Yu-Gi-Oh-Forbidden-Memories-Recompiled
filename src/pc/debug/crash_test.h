@@ -4,6 +4,8 @@
 void CrashTest_Init(void);
 /* At every VSync: the failure, once its frame has come. */
 void CrashTest_Frame(void);
+/* In a present (sdl.c's begin_present): the "present" test's failure. */
+void CrashTest_Present(void);
 /* Set by the "tickhang" test: the clock's tick spins. */
 extern volatile int CrashTest_TickHang;
 
