@@ -9,6 +9,7 @@ from tkinter import messagebox, ttk
 
 from . import bulk_dialog, guardian_stars, manifest, pools as poolmath, text_menu, validate
 from .card_text_box import CardTextBox
+from .icon_choice import IconChoice
 from .card_view_preview import CardViewPreview
 from .monster_effects_ui import EffectsBox
 from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, DUELIST_NAMES,
@@ -179,7 +180,8 @@ class CardsTab(Tab):
             return self.hints[key]
 
         line("Name", ttk.Entry(form, textvariable=self.vars["name"], width=26), hint("name"))
-        line("Type", ttk.Combobox(form, textvariable=self.vars["type"], values=TYPE_NAMES, state="readonly", width=18),
+        line("Type", IconChoice(form, app, self.vars["type"], TYPE_NAMES,
+                                lambda label: TYPE_NAMES.index(label) if label in TYPE_NAMES else None, width=18),
              hint("type"))
         # What the card does when played: a disc card of its type whose
         # effect it has (cards.c "effect"), so the game and the CPU play it
@@ -206,8 +208,9 @@ class CardsTab(Tab):
              hint("attack"), self.monster_rows)
         line("DEF", ttk.Spinbox(form, textvariable=self.vars["defense"], from_=0, to=5110, increment=10, width=8),
              hint("defense"), self.monster_rows)
-        self.star_boxes = [ttk.Combobox(form, textvariable=self.vars[key], values=STAR_CHOICES, state="readonly",
-                                        width=18) for key in ("star1", "star2")]
+        # With their icons (a mod's stars past the disc's ten have none here).
+        self.star_boxes = [IconChoice(form, app, self.vars[key], STAR_CHOICES, self.star_icon, width=18)
+                           for key in ("star1", "star2")]
         line("Guardian star 1", self.star_boxes[0], hint("star1"), self.monster_rows)
         line("Guardian star 2", self.star_boxes[1], hint("star2"), self.monster_rows)
         # What the monster does on the field (cards.c "monster_effects"),
@@ -231,13 +234,13 @@ class CardsTab(Tab):
         # Drawn as the card view's panel: icons and colours as the game shows them.
         self.text = CardTextBox(form, app, width=21, height=9, wrap="word", font=("Consolas", 10))
         self.text.grid(row=row, column=1, sticky="nw", pady=2)
-        # Beside it, the card view as the game draws it, and the retail text's link under that.
-        beside_text = ttk.Frame(form)
-        beside_text.grid(row=row, column=2, sticky="nw", padx=6, pady=2)
-        self.card_view = CardViewPreview(beside_text, app, self.card_view_values)
-        self.card_view.pack(anchor="w")
-        self.hints["text"] = ttk.Label(beside_text, style="Hint.TLabel", width=HINT_WIDTH)
+        # Beside it, the card view's text box as the game draws it, as tall
+        # as the box; the retail text's link in the column on its right.
+        self.card_view = CardViewPreview(form, app, self.card_view_values, lambda: self.text.winfo_height())
+        self.card_view.grid(row=row, column=2, sticky="nw", padx=6, pady=2)
+        self.hints["text"] = ttk.Label(self.card_view.side, style="Hint.TLabel", wraplength=180, justify="left")
         self.hints["text"].pack(anchor="w")
+        self.text.bind("<Configure>", lambda e: self.card_view.later(), add=True)
         self.hints["text"].bind("<Button-1>", lambda e: self.restore("text"))
         row += 1
         self.lines = ttk.Label(form, style="Hint.TLabel")
@@ -730,6 +733,11 @@ class CardsTab(Tab):
         if self.app.text_preview is not None:
             self.app.text_preview.later()
         self.card_view.later()
+
+    def star_icon(self, label):
+        """A guardian star's icon ({f8 0B 18} Mars ... 21 Venus), or None."""
+        star = parse_choice(label, star_choices(self.project))
+        return 0x17 + star if 1 <= star <= 10 else None
 
     def card_view_values(self):
         """What the card view preview draws: the form's type, stars and text,

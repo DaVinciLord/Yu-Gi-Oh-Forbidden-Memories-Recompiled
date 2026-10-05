@@ -23,7 +23,7 @@ ZOOM = 2
 class Pictures:
     """The icons and colour swatches of one set of game files, made once."""
 
-    def __init__(self, master, wa):
+    def __init__(self, master, wa, zoom=ZOOM):
         self.icons, self.swatches = {}, {}
         try:
             font = card_text.RetailFont(wa)
@@ -32,25 +32,26 @@ class Pictures:
         for n in range(len(card_text.ICON_NAMES)):
             icon = font.icon(n)
             if icon is not None:
-                image = pngio.scale_nearest(pngio.Image(*icon), ZOOM)
+                image = pngio.scale_nearest(pngio.Image(*icon), zoom)
                 self.icons[n] = tk.PhotoImage(master=master, data=base64.b64encode(pngio.encode(image)), format="png")
         for n in range(len(card_text.COLOUR_NAMES)):
             rgb = font.ramps[n][15]
-            image = pngio.Image(16 * ZOOM, 12 * ZOOM, bytes((*rgb, 255)) * (16 * 12 * ZOOM * ZOOM))
+            image = pngio.Image(16 * zoom, 12 * zoom, bytes((*rgb, 255)) * (16 * 12 * zoom * zoom))
             self.swatches[n] = tk.PhotoImage(master=master, data=base64.b64encode(pngio.encode(image)), format="png")
 
 
-_pictures = {}      # game files' source -> Pictures
 
 
-def pictures(app, widget):
+def pictures(app, widget, zoom=ZOOM):
     files = getattr(app, "files", None)
     if files is None or getattr(files, "wa", None) is None:
         return None
-    key = getattr(files, "source", id(files))
-    if key not in _pictures:
-        _pictures[key] = Pictures(widget, files.wa)
-    return _pictures[key]
+    # Kept by the window: its images are its Tk's, as another window's are not.
+    cache = app.__dict__.setdefault("_text_pictures", {})
+    key = (getattr(files, "source", id(files)), zoom)
+    if key not in cache:
+        cache[key] = Pictures(widget.winfo_toplevel(), files.wa, zoom)
+    return cache[key]
 
 
 def insert_code(text: tk.Text, code: str):

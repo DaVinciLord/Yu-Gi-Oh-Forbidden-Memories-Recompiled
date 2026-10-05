@@ -1744,3 +1744,20 @@ class CardViewPreviewTest(GuiCase):
         self.assertEqual(cards.card_view_values()[1:3], (0, 0))      # no stars on a magic card
         cards.card_view.draw()      # the fixture's files: drawn or explained, never an error
         self.assertTrue(cards.card_view.picture.cget("image") or cards.card_view.note.cget("text") is not None)
+
+
+class IconChoiceTest(GuiCase):
+    def test_type_and_star_lists(self):
+        cards = self.app.cards
+        cards.tree.selection_set("1")
+        cards.select()
+        star = cards.star_boxes[0]
+        self.assertEqual(star.cget("values")[0], "(none)")
+        star.configure(values=("(none)", "Mars"))
+        self.assertEqual(star.cget("values"), ("(none)", "Mars"))
+        star._fill()
+        self.assertEqual(star.menu.index("end"), 1)
+        star.menu.invoke(1)
+        self.assertEqual(cards.vars["star1"].get(), "Mars")
+        self.assertEqual(cards.star_icon("Mars"), 0x18)
+        self.assertIsNone(cards.star_icon("(none)"))

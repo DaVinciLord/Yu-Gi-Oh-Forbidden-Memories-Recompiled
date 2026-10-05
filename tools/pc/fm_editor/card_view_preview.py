@@ -1,10 +1,14 @@
-"""Beside the Cards tab's card text: the card view's panel as the game draws
-it (card_view.py), following the text, the type and the stars as they are
-typed; its language (the port's translations: their layout, names and
-European spacing) and size are the window's settings."""
+"""Beside the Cards tab's card text: the card view's text box as the game
+draws it (card_view.py: its frame, stone and letters), following the text,
+the type and the stars as they are typed. "Fit" (the default) makes it as
+tall as the card text box, so the form keeps its height; 1x-3x are the
+game's pixels doubled or tripled. Its language (the port's translations:
+their spacing and accented letters) and size are the window's settings,
+in a column of their own on its right, over `side` (which the tab fills)."""
 from __future__ import annotations
 
 import base64
+import math
 import sys
 import tkinter as tk
 from pathlib import Path
@@ -12,31 +16,34 @@ from tkinter import ttk
 
 from . import card_view, pngio, settings
 
-SCALES = ("1x", "2x", "3x")
+SIZES = ("Fit", "1x", "2x", "3x")
 
 
 class CardViewPreview(ttk.Frame):
-    def __init__(self, master, app, values):
+    def __init__(self, master, app, values, fit_height):
         """values() gives (type, star 1, star 2, text, colours, the mod's star
-        names) of the form, or None when there is no card."""
+        names) of the form, or None when there is no card; fit_height() the
+        height in pixels "Fit" makes it."""
         super().__init__(master)
-        self.app, self.values = app, values
+        self.app, self.values, self.fit_height = app, values, fit_height
         self._view, self._source, self._job, self._photo = None, None, None, None
         saved = settings.load()
         self.language = tk.StringVar(self, value=saved.get("card_view_language", "en-us"))
-        self.scale = tk.StringVar(self, value=saved.get("card_view_scale", "2x"))
+        self.size = tk.StringVar(self, value=saved.get("card_view_size", "Fit"))
         self.picture = ttk.Label(self)
-        self.picture.grid(row=0, column=0, columnspan=2, sticky="nw")
-        self.note = ttk.Label(self, style="Hint.TLabel")
-        self.note.grid(row=1, column=0, columnspan=2, sticky="w")
-        controls = ttk.Frame(self)
-        controls.grid(row=2, column=0, columnspan=2, sticky="w", pady=(2, 0))
-        self.languages = ttk.Combobox(controls, state="readonly", width=16)
-        self.languages.pack(side="left")
+        self.picture.grid(row=0, column=0, sticky="nw")
+        right = ttk.Frame(self)
+        right.grid(row=0, column=1, sticky="nw", padx=(6, 0))
+        self.languages = ttk.Combobox(right, state="readonly", width=16)
+        self.languages.pack(anchor="w")
         self.languages.bind("<<ComboboxSelected>>", lambda e: self._chose_language())
-        ttk.Combobox(controls, textvariable=self.scale, values=SCALES, state="readonly", width=4).pack(
-            side="left", padx=(4, 0))
-        self.scale.trace_add("write", lambda *_: (settings.save("card_view_scale", self.scale.get()), self.later()))
+        ttk.Combobox(right, textvariable=self.size, values=SIZES, state="readonly", width=5).pack(anchor="w",
+                                                                                                  pady=(2, 0))
+        self.size.trace_add("write", lambda *_: (settings.save("card_view_size", self.size.get()), self.later()))
+        self.note = ttk.Label(right, style="Hint.TLabel", wraplength=180, justify="left")
+        self.note.pack(anchor="w", pady=(2, 0))
+        self.side = ttk.Frame(right)     # the tab's (the retail text's link)
+        self.side.pack(anchor="w", fill="x")
         self._fill_languages()
 
     def _folders(self):
@@ -99,11 +106,19 @@ class CardViewPreview(ttk.Frame):
             self._photo = None
             return
         card_type, star1, star2, text, colours, star_names = values
-        scale = SCALES.index(self.scale.get()) + 1 if self.scale.get() in SCALES else 2
-        image = view.render(card_type, star1, star2, text, language=self.language.get(), colours=colours,
-                            scale=scale, star_names=star_names)
+        size = self.size.get() if self.size.get() in SIZES else "Fit"
+        tall = card_view.TEXT_BOTTOM - card_view.TEXT_TOP
+        if size == "Fit":
+            # Drawn at the next whole size up and brought down to the box's
+            # height, each pixel the average of those under it.
+            height = max(tall, int(self.fit_height() or tall))
+            scale = max(1, math.ceil(height / tall))
+            image = view.render(card_type, star1, star2, text, language=self.language.get(), colours=colours,
+                                scale=scale, star_names=star_names, text_only=True)
+            if image.height != height:
+                image = pngio.resample(image, round(image.width * height / image.height), height)
+        else:
+            image = view.render(card_type, star1, star2, text, language=self.language.get(), colours=colours,
+                                scale=SIZES.index(size), star_names=star_names, text_only=True)
         self._photo = tk.PhotoImage(master=self, data=base64.b64encode(pngio.encode(image)), format="png")
         self.picture.configure(image=self._photo)
-        self.note.configure(text="The card view as the game draws it" +
-                            ("" if self.language.get() == "en-us" else
-                             f", in {card_view.LANGUAGES[self.language.get()]}'s layout and spacing"))

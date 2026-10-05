@@ -35,7 +35,9 @@ TEXELS_AT, TEXELS_SIZE = 0x10E4800, 8 * 2048
 PALETTES_AT = 0x10E9600             # frame's 16 colours; the stone's follow
 BOX_W, BOX_H = 0xA8, 0xC0
 LEFT, TOP = 8, 8                    # the panel's corner in the picture (the frame reaches 8 past it)
-WIDTH, HEIGHT = 180, 192
+WIDTH, HEIGHT = 180, 200             # to 192 below the corner: the ninth row's letters pass the frame
+# The card text's part: its frame's top bar (72) to the ninth row's foot.
+TEXT_TOP, TEXT_BOTTOM = TOP + 72, HEIGHT
 GLYPH_DOWN = 2                      # func_80035E20: a letter is drawn 2 below its place
 ICON_UP = 0                         # an icon at its place's top
 SLUS_LOAD = 0x80010000 - 0x800      # the executable's file offset 0 in memory
@@ -314,10 +316,12 @@ class CardView:
         return self._game_string(NAME_TABLE, NAME_BASE, 0x300 + index)
 
     def render(self, card_type: int, star1: int, star2: int, text: str, language: str = "en-us",
-               colours: dict | None = None, scale: int = 1, star_names: dict | None = None):
+               colours: dict | None = None, scale: int = 1, star_names: dict | None = None,
+               text_only: bool = False):
         """The panel with the card's lines, as pngio.Image at `scale`.
         colours: a card_text_colors rule's {"description", "guardian_star"} ramps;
-        star_names: a mod's names for its stars (past the disc's ten: no icon)."""
+        star_names: a mod's names for its stars (past the disc's ten: no icon);
+        text_only: just the card text's box (its frame, stone and letters)."""
         european = language != "en-us"
         picture = Drawing(bytearray(self.panel), self.retail, self.glyphs(european), european)
         monster = card_type < 20
@@ -336,6 +340,8 @@ class CardView:
         picture.run(self.layout(monster, language), inserts)
         picture.finish()
         image = pngio.Image(WIDTH, HEIGHT, bytes(picture.rgba))
+        if text_only:
+            image = pngio.crop(image, 0, TEXT_TOP, WIDTH, TEXT_BOTTOM - TEXT_TOP)
         return pngio.scale_nearest(image, scale) if scale > 1 else image
 
 
