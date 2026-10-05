@@ -635,6 +635,7 @@ class CardsTab(Tab):
 
     def effects_changed(self, cid):
         """The Monster effects box stored a change to the card."""
+        self.show_swatch()
         self.app.changed()
         self.update_row(cid)
         self.status.configure(text="\n".join(i.message for i in validate.validate_card(self.project, cid)))
@@ -697,10 +698,14 @@ class CardsTab(Tab):
         return True
 
     def show_swatch(self):
-        """The colour the frame will be: the chosen one, or the type's."""
+        """The colour the frame will be: the chosen one, or the type's (a
+        monster with effects is orange, as cards.c Cards_FrameColor draws it)."""
         frame = parse_choice(self.vars["frame"].get(), FRAME_CHOICES) - 1
         kind = parse_choice(self.vars["type"].get(), TYPE_NAMES)
-        if frame < 0 and kind >= 0:
+        if frame < 0 and 0 <= kind < TYPE_MAGIC and self.project is not None and self.current in self.project.cards \
+                and self.project.monster_effects_of(self.current)[0]:
+            frame = FRAME_NAMES.index("Orange")
+        elif frame < 0 and kind >= 0:
             frame = type_frame(kind)
         if 0 <= frame < len(FRAME_COLOURS):
             self.swatch.configure(background=FRAME_COLOURS[frame])

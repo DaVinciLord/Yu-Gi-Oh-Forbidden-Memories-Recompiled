@@ -54,7 +54,7 @@ The release ships no card mod; the checks below were made with test mods
 | `attribute` | a number or a name (`"Light"` to `"Wind"`) |
 | `level` | 0 to 12 |
 | `stars` | the two guardian stars, as numbers or names (`"Mars"` to `"Venus"`, and a mod's own up to 15: [Guardian Stars](modding.md#guardian-stars-names-icons-new-stars-and-matchups)); a second of `0` (none) or the same as the first is a card with one star |
-| `frame` | the colour of the card's frame, whatever its type: `"Monster"` (gold), `"Magic"` (green), `"Trap"` (pink), `"Ritual"` (blue), `"Purple"` or `"Orange"`, or a number 0-5 in that order; `"Type"` goes back to its type's ([below](#frame-colour)) |
+| `frame` | the colour of the card's frame, whatever its type: `"Monster"` (gold), `"Magic"` (green), `"Trap"` (pink), `"Ritual"` (blue), `"Purple"` or `"Orange"`, or a number 0-5 in that order; `"Type"` goes back to its type's. Left out, a monster with `monster_effects` is orange ([below](#frame-colour)) |
 | `fusion_groups` | the fusion guides' groups the card is in, for a ritual's `fusion_group` condition ([Gameplay tables](gameplay-tables.md#rituals)): a list such as `["Elf", "Female"]`, `[]` for none; without it, its base's |
 | `drops` | whether the card can be won in its base's place (default `true`, below) |
 | `opponents` | whether an opponent's deck can be dealt it in its base's place (default `false`) |
@@ -175,7 +175,10 @@ two the disc has and never uses, purple and orange:
 Only the colour changes: a monster keeps its ATK/DEF and a magic card its
 MAGIC word. Left out, a replaced card keeps the frame an earlier mod gave
 it and a copy takes its base's; `"Type"` goes back to the type's
-(`Cards_FrameColor`, `src/pc/cards/cards.c`). It shows everywhere the game
+(`Cards_FrameColor`, `src/pc/cards/cards.c`). A monster with
+[monster effects](#monster-effects) and no frame of its own is drawn
+orange, as an effect monster is in the card game; `"Monster"` keeps it
+gold, and `"Type"` gives it its type's. It shows everywhere the game
 colours a card by its type:
 
 - the card view (Library, Build Deck, Trade, Password, the duel's card view,
@@ -290,7 +293,8 @@ A card has up to eight effects, which resolve in the order written, after
 whatever triggered them is over (a destroyed monster's after the battle).
 What the game cannot do is left out with a note in the log and the Mods
 window. Write what the effects do in the card's `description`: the game
-shows only the text.
+shows only the text. The card is drawn with the orange frame unless its
+entry has a `frame` ([Frame colour](#frame-colour)).
 
 Each fires once for each time it happens: a summon once, a draw once a
 turn, a flip each time the card is turned face up. A chain is fine (a summon's Dark Hole

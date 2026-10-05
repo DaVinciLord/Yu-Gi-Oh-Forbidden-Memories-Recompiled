@@ -73,7 +73,8 @@ static unsigned short model_ids[CARD_TABLE_ID_END], effect_ids[CARD_TABLE_ID_END
 static unsigned int trap_thresholds[CARD_TABLE_ID_END];
 static unsigned char not_exodia[EXODIA_PIECE_COUNT];  /* a replaced piece without Exodia's rules */
 /* The frame a card is drawn in when its entry says ("frame"), plus one: 0
- * is its type's (cards.h Cards_FrameColor). */
+ * left out, FRAME_TYPE "Type" (cards.h Cards_FrameColor). */
+#define FRAME_TYPE 0xFF
 static unsigned char frames[CARD_TABLE_ID_END];
 /* "monster_effects" (monster_effects.h): an entry's list, shared by its cards. */
 static const MonsterEffect *monster_effects[CARD_TABLE_ID_END];
@@ -105,7 +106,17 @@ int Cards_TrapThreshold(int id, int fallback)
 }
 static int retail_monster(int id);
 int Cards_HasModel(int id) { return Cards_Valid(id) && retail_monster(Cards_ModelId(id)); }
-int Cards_FrameColor(int id) { return Cards_Valid(id) ? frames[id] - 1 : -1; }
+int Cards_FrameColor(int id)
+{
+    if (!Cards_Valid(id) || frames[id] == FRAME_TYPE) return -1;
+    /* Left out, a monster with effects of its own is drawn orange, as an
+     * effect monster is in the card game. */
+    if (!frames[id]) {
+        const MonsterEffect *effects;
+        return Cards_Type(id) < CARD_TYPE_MAGIC && Cards_MonsterEffects(id, &effects) ? CARD_FRAME_ORANGE : -1;
+    }
+    return frames[id] - 1;
+}
 int Cards_ExodiaPiece(int id)
 {
     return (unsigned)(id - EXODIA_FIRST_CARD_ID) < EXODIA_PIECE_COUNT && !not_exodia[id - EXODIA_FIRST_CARD_ID];
@@ -1259,7 +1270,7 @@ static void add_entry(const char *mod, const char *directory, int index, const J
             Mods_Note(mod, "cards[%d]: \"frame\" is Monster, Magic, Trap, Ritual, Purple, Orange or Type; left out",
                       index);
         } else {
-            frame = (unsigned char)(value == CARD_FRAME_COUNT ? 0 : value + 1);
+            frame = (unsigned char)(value == CARD_FRAME_COUNT ? FRAME_TYPE : value + 1);
         }
     }
     /* What View > Card passwords shows (passwords.h): a copy has none

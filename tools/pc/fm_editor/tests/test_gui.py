@@ -1636,8 +1636,25 @@ class MonsterEffectsGuiTest(GuiTest):
         menu = tk.Menu(text, tearoff=False)
         text_menu.fill(menu, self.app, text, lambda: None)
         labels = [menu.entrycget(i, "label") for i in range(menu.index("end") + 1) if menu.type(i) != "separator"]
-        self.assertEqual(labels, ["Cut", "Copy", "Paste", "Insert icon", "Text colour"])
-        icons = menu.nametowidget(menu.entrycget(4, "menu"))
-        self.assertEqual([icons.entrycget(i, "label") for i in range(4)],
-                         ["Monster types", "Card kinds", "Guardian stars", "Buttons"])
+        self.assertEqual(labels, ["Cut", "Copy", "Paste", "Insert icon...", "Text colour"])
         menu.destroy()
+        # The picker: every icon, no taller than the screen, the icon going
+        # where the cursor was when it opened.
+        text.mark_set("insert", "1.end")
+        picker = text_menu.IconPicker(self.app, text, lambda: None, 0, 0)
+        self.assertEqual(sorted(picker.buttons), list(range(41)))
+        self.assertLessEqual(picker.winfo_reqheight(), picker.winfo_screenheight())
+        text.mark_set("insert", "1.0")
+        picker.pick(0x26)
+        self.assertTrue(text.get("1.0", "end-1c").endswith("a turn.{f8 0B 26}"))
+        self.assertFalse(picker.winfo_exists())
+
+    def test_effect_monster_swatch_is_orange(self):
+        from fm_editor.tabs import FRAME_COLOURS
+        cards = self.app.cards
+        cards.tree.selection_set("1")
+        cards.select()
+        self.assertEqual(cards.swatch.cget("background"), FRAME_COLOURS[0])
+        cards.effects_box.effects.append({"when": "summon", "do": "heal", "amount": 500})
+        cards.effects_box.store()
+        self.assertEqual(cards.swatch.cget("background"), FRAME_COLOURS[5])

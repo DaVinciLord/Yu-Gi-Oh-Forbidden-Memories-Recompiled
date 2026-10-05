@@ -103,16 +103,20 @@ monster it battles, healing or damage. **Remove**, **Up** and **Down**
 change the list; the effects resolve in its order. A change is stored at
 once. An added card shows its base's effects until you change them, which
 gives it a list of its own. Write what the effects do in the card text: the
-game shows only the text. The checks (Conflicts) report an effect the game
+game shows only the text. A monster with effects is drawn with the orange
+frame while its **Frame** is **By type** (the swatch shows it); choose
+**Monster** to keep it gold. The checks (Conflicts) report an effect the game
 would leave out.
 
 ### Icons and colours in card text
 
-Right-click the card text box for **Insert icon** (the monster types, the
-card kinds, the guardian stars and the buttons, each shown as the game draws
-it) and **Text colour** (white, yellow, blue, green, grey, orange, red, each
-with its colour). An icon goes in at the cursor as its code (`{f8 0B 00}`
-the Dragon); a colour with text selected colours the selection and goes back
+Right-click the card text box for **Insert icon...** and **Text colour**.
+**Insert icon...** opens a window of every icon, as the game draws it, by
+group (the monster types, the card kinds, the guardian stars, the buttons);
+it scrolls when the screen is too short for it. A click puts the icon in at
+the cursor as its code (`{f8 0B 00}` the Dragon) and closes it. **Text
+colour** lists white, yellow, blue, green, grey, orange and red, each with
+its colour; a colour with text selected colours the selection and goes back
 to white after it, without one it starts at the cursor. The codes are listed
 in [card text codes](../../../notes/more-cards.md#card-text-codes); an icon
 takes two letters of the line. **Tools > Card text preview** draws them.

@@ -309,7 +309,11 @@ static void monster_effect_entries(void)
         "{\"copy\":20,\"id\":\"inherits\"},"
         "{\"copy\":20,\"id\":\"none\",\"monster_effects\":[]},"
         "{\"replace\":20,\"attack\":1000},"
-        "{\"replace\":21,\"monster_effects\":{\"when\":\"summon\"}}]", error, sizeof(error));
+        "{\"replace\":21,\"monster_effects\":{\"when\":\"summon\"}},"
+        "{\"replace\":22,\"monster_effects\":[{\"when\":\"draw\",\"do\":\"heal\",\"amount\":1}],"
+        " \"frame\":\"Type\"},"
+        "{\"replace\":23,\"monster_effects\":[{\"when\":\"draw\",\"do\":\"heal\",\"amount\":1}],"
+        " \"frame\":\"Monster\"}]", error, sizeof(error));
     assert(doc);
     test_stats[336 - 1] = test_stats[337 - 1] = STATS(CARD_TYPE_MAGIC, 0, 0);
     test_stats[675 - 1] = STATS(CARD_TYPE_RITUAL, 0, 0);
@@ -334,6 +338,15 @@ static void monster_effect_entries(void)
     /* Not a list: noted, the card keeps what it had (none). */
     assert(Cards_MonsterEffects(21, &effects) == 0);
     assert(MonsterEffect_MagicUsable(337) && MonsterEffect_MagicUsable(336) && !MonsterEffect_MagicUsable(675));
+    /* Drawn orange, as an effect monster, unless its "frame" says: "Type"
+     * its type's, "Monster" gold. A monster without effects, its type's. */
+    for (i = 20; i <= 23; i++) gDuel_adwCardStats[i - 1] = (int)STATS(0, SUN, MOON);
+    assert(Cards_FrameColor(20) == CARD_FRAME_ORANGE);
+    assert(Cards_FrameColor(21) == -1);
+    assert(Cards_FrameColor(22) == -1);
+    assert(Cards_FrameColor(23) == CARD_FRAME_MONSTER);
+    gDuel_adwCardStats[20 - 1] = (int)STATS(CARD_TYPE_MAGIC, 0, 0);
+    assert(Cards_FrameColor(20) == -1);      /* not a monster: its type's */
     assert(!MonsterEffect_MagicUsable(300) && !MonsterEffect_MagicUsable(1));
 }
 
