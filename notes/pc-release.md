@@ -167,9 +167,18 @@ tmp/pc/android-arm64-v8a/memories-arm64-v8a.apk: signed with the release key (al
 
 `package.py android-arm64` packs `dist/yfm-redecomp-<version>-android-arm64.apk`
 only with `MEMORIES_ANDROID_KEYSTORE` set. It refuses an APK whose signer is
-the debug certificate (`CN=Android Debug`), and it checks
-`MEMORIES_ANDROID_CERT_SHA256` when set. So a debug-signed APK never reaches
-`dist/` and never becomes a release asset.
+the debug certificate (`CN=Android Debug`), it checks
+`MEMORIES_ANDROID_CERT_SHA256` when set, and it refuses an APK whose
+`versionCode`/`versionName` are not what `--version` makes ("Version" below):
+with `--no-build`, an earlier build's APK is not packed under a new version.
+So a debug-signed or stale APK never reaches `dist/` and never becomes a
+release asset.
+
+The SDK tools are the ones `ANDROID_BUILD_TOOLS` names (a build-tools
+version, `35.0.0` in the workflow) and the platform `android-35` (the target
+SDK). Without them, the newest installed ones are taken, compared by version
+number, passing over previews and extensions (`36.0.0-rc1`,
+`android-36-ext19`, `android-37.2-beta3`).
 
 ```sh
 # A test of the mechanism with a local key (bash; the key and its password
@@ -236,11 +245,16 @@ job's summary: `keytool -list -v -storetype PKCS12 -keystore release.p12
 -alias <alias>` (it asks for the password; the `SHA256:` line), or `apksigner
 verify --print-certs <apk>` on an APK it signed.
 
-In the job, the keystore is decoded into the runner's temporary folder
-(`umask 077`), and only its path goes into the environment. The passwords
-go from the secrets straight to the signing step, and the keystore is
-deleted at the end (`if: always()`). The job prints the signer's DN and
-SHA-256 to its summary. Pull requests never get the release key. Neither do
+In the job, the build (the NDK, cmake, the dependencies' downloaded sources)
+runs with no secret in its environment and makes a debug-signed APK. Only
+then does one step, "Sign the APK with the release key", get the secrets. It
+decodes the keystore into the runner's temporary folder (`umask 077`), with
+its path in that step only, never in `GITHUB_ENV`. It re-packages and signs
+the built APK with `package_android.py <build> arm64-v8a`. Then it packs it
+with `package.py android-arm64 --no-build`, without the passwords in its
+environment. The keystore is deleted when the step ends, and again by a
+last `if: always()` step. The job prints the signer's DN, SHA-256 and the
+APK's version to its summary. Pull requests never get the release key. Neither do
 forks without the secrets. There the APK is built as a check, debug-signed,
 and not uploaded. A version tag without the secrets fails the job, and with
 it the draft release.
@@ -278,14 +292,25 @@ STAGE       = 99 for the release itself
 
 The codes rise in the order the versions compare (semver:
 alpha < beta < preview < rc < release). MINOR and PATCH are 0-99, and N is
-0-19. A tag outside that (`-nightly.1`, `-rc.20`, `v0.100.0`) stops the
-Android build with a message. Change the scheme here only upward: a code
+0-19, LABEL is lowercase (the update check compares labels byte by byte, so
+`RC` would sort before `alpha`), and MAJOR is at most 2099: Google Play
+takes codes up to 2100000000. Change the scheme here only upward: a code
 lower than a published one can never update it.
 
-A development build (`dev-<sha>` in CI, an untagged checkout) takes the code
-of the newest `v*` tag it descends from: an equal code installs over that
+**A tag outside the scheme fails the release.** A version tag like
+`v0.3.0-nightly.1`, `v0.3.0-rc.20`, `v0.3.0-RC.1` or `v0.100.0` stops the
+Android build with a message naming the rule. `draft-release` needs the
+`android` job, so no draft is made for that tag, with no desktop archives
+either. This is on purpose: a release is never published without its APK.
+Delete the tag and tag again within the scheme
+(`git push --delete origin <tag>`, then a new tag).
+
+A development build (`dev-<sha>` in CI, an untagged checkout) takes the
+highest code of the `v*` tags it descends from (`git tag --merged HEAD`;
+tags outside the scheme are left out): an equal code installs over that
 release, and the next release is higher. Its name is `git describe`'s
-(`0.2.0-12-g2dffe92641`). With no tag in reach (a shallow clone), the code is
+(`0.2.0-12-g2dffe92641`), with `-dirty` when the checkout has changes. The
+build's own rewrite of `config/pc/guest_addresses.txt` does not count. With no tag in reach (a shallow clone), the code is
 2 and the name `0.0.0-dev`; the `android` job checks out the whole history
 (`fetch-depth: 0`), so it always has the tags. Every code is above the
 `versionCode` 1 of the APKs made before this (`versionName` `m1`).
