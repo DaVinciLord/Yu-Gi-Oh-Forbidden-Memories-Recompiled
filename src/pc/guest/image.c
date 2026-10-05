@@ -6,6 +6,7 @@
 #include "pc/debug/crash.h"
 #include "pc/debug/log.h"
 #include "pc/debug/profile.h"
+#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,11 +24,15 @@
 #if defined(_WIN32) && defined(__x86_64__)
 /* The 64-bit Windows build keeps the same fixed addresses; the game's stored
  * pointers are 4 bytes wide through G32 (src/port_ptr.h), and the image is
- * linked below 4 GB (tools/pc/build_game32.py --target windows-x64). No
- * other 64-bit target has that yet. */
+ * linked below 4 GB (tools/pc/build_game32.py --target windows-x64). */
 _Static_assert(sizeof(void *) == 8, "the 64-bit Windows guest image model is LLP64");
 /* The faulting instruction, as the messages below name it. */
 #define FAULT_PC "rip"
+#elif defined(__aarch64__)
+/* The Android arm64 build, the same way: G32 pointers, and the game's
+ * library linked below 4 GB (--target android-arm64-v8a). */
+_Static_assert(sizeof(void *) == 8, "the arm64 guest image model is LP64");
+#define FAULT_PC "pc"
 #else
 _Static_assert(sizeof(void *) == 4, "the guest image model requires an ILP32 build");
 #define FAULT_PC "eip"
@@ -48,10 +53,16 @@ static unsigned char *low_memory;
  * Windows holds the others (see there). */
 static unsigned char low_piece_mapped[MEMORIES_GUEST_RAM_SIZE / 0x10000u];
 #endif
+#if defined(__i386__) || defined(__x86_64__)
 static struct {
     int active, reg; /* reg: the ModRM register number, 0 (EAX) to 7 (EDI) */
     uint32_t original, patched;
 } low_fixup;
+#endif
+/* Whether the retail scratchpad view (0x1F800000) is mapped (image.h);
+ * where it is not, an access there takes the same register rebase as the
+ * first 64 KiB, onto the port's view. Windows always maps it. */
+int Memories_ScratchpadRetailView;
 
 static void report_low_access(uint32_t eip, uint32_t address)
 {
@@ -68,11 +79,16 @@ static void report_low_access(uint32_t eip, uint32_t address)
     if (count < sizeof(seen) / sizeof(seen[0])) {
         seen[count++] = eip;
     }
-    length = snprintf(text, sizeof(text), "memories-pc: null-pointer access to 0x%04x at " FAULT_PC " 0x%08x goes to kernel RAM, as on the console\n",
-                      (unsigned)address, (unsigned)eip);
+    if (address >= MEMORIES_GUEST_SCRATCHPAD_RETAIL)
+        length = snprintf(text, sizeof(text), "memories-pc: scratchpad access through 0x%08x at " FAULT_PC " 0x%08x goes to 0x%08x\n",
+                          (unsigned)address, (unsigned)eip, (unsigned)(address | 0x80000000u));
+    else
+        length = snprintf(text, sizeof(text), "memories-pc: null-pointer access to 0x%04x at " FAULT_PC " 0x%08x goes to kernel RAM, as on the console\n",
+                          (unsigned)address, (unsigned)eip);
     (void)!write(2, text, (size_t)length);
 }
 
+#if defined(__i386__) || defined(__x86_64__)
 /* Which register (ModRM number) does the faulting instruction address memory
  * through? -1 for none. */
 #define REGISTER_ESI 6
@@ -105,6 +121,7 @@ static int low_access_register(const unsigned char *code, uint32_t esi)
     }
     return (int)base;
 }
+#endif
 
 /* Tables in the retail data image hold MIPS function addresses, and native
  * code calls through them. The build generates Memories_FunctionMap (guest
@@ -585,6 +602,18 @@ static int view_at(HANDLE section, uint32_t address, size_t length, DWORD offset
     return 0;
 }
 
+/* Everything of a 64 KiB scratchpad view past its first page, inaccessible. */
+static int view_tail_closed(uint32_t address)
+{
+    DWORD old;
+    if (!VirtualProtect((void *)(uintptr_t)(address + 0x1000u), 0xf000u, PAGE_NOACCESS, &old)) {
+        fprintf(stderr, "cannot protect 0x%08x-0x%08x (error %lu)\n", (unsigned)address + 0x1000u,
+                (unsigned)address + 0x10000u, GetLastError());
+        return -1;
+    }
+    return 0;
+}
+
 /* Calls into guest code go through the branch thunks: the game works
  * without DEP. Where DEP is on, guest RAM mapped without execute permission
  * is a second safety net: a call that escaped the thunks faults into
@@ -606,7 +635,8 @@ int Memories_GuestMap(void)
 #endif
     Memories_GuestBranchResolver = guest_branch_target;
     check_code_address();
-    section = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, protection, 0, MEMORIES_GUEST_RAM_SIZE, NULL);
+    /* Guest RAM, then 64 KiB (the view granularity) for the scratchpad. */
+    section = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, protection, 0, MEMORIES_GUEST_RAM_SIZE + 0x10000u, NULL);
     AddVectoredExceptionHandler(1, on_guest_exception);
     if (section == NULL) {
         fprintf(stderr, "guest RAM: CreateFileMapping failed (error %lu)\n", GetLastError());
@@ -628,13 +658,16 @@ int Memories_GuestMap(void)
                     (unsigned)(held / 1024));
         }
     }
+    /* The scratchpad's two views (image.h); Windows leaves 0x1F800000 free.
+     * A view is 64 KiB; past the scratchpad's page it is made inaccessible,
+     * so the I/O registers from 0x1F801000 (and 0x9F801000) fault as before
+     * instead of reading 0. */
     result = view_at(section, MEMORIES_GUEST_RAM, MEMORIES_GUEST_RAM_SIZE, 0) ||
-             view_at(section, 0xa0000000u, MEMORIES_GUEST_RAM_SIZE, 0);
-    if (!result && VirtualAlloc((void *)0x1f800000u, 0x1000, MEM_RESERVE | MEM_COMMIT,
-                                PAGE_READWRITE) != (void *)0x1f800000u) {
-        fprintf(stderr, "cannot map the scratchpad at 0x1f800000 (error %lu)\n", GetLastError());
-        result = -1;
-    }
+             view_at(section, 0xa0000000u, MEMORIES_GUEST_RAM_SIZE, 0) ||
+             view_at(section, MEMORIES_GUEST_SCRATCHPAD, 0x10000u, MEMORIES_GUEST_RAM_SIZE) ||
+             view_at(section, MEMORIES_GUEST_SCRATCHPAD_RETAIL, 0x10000u, MEMORIES_GUEST_RAM_SIZE) ||
+             view_tail_closed(MEMORIES_GUEST_SCRATCHPAD) || view_tail_closed(MEMORIES_GUEST_SCRATCHPAD_RETAIL);
+    Memories_ScratchpadRetailView = !result;
     /* The views keep the section alive. */
     CloseHandle(section);
 #if defined(__x86_64__)
@@ -649,7 +682,7 @@ int Memories_GuestMap(void)
             result = -1;
         }
         if (report && *report && strcmp(report, "0")) {
-            fprintf(stderr, "memories-pc: image %p; guest RAM 0x80000000 and 0xA0000000 %s; scratchpad 0x1F800000\n",
+            fprintf(stderr, "memories-pc: image %p; guest RAM 0x80000000 and 0xA0000000 %s; scratchpad 0x9F800000 and 0x1F800000\n",
                     (void *)base, result ? "NOT mapped" : "mapped");
         }
     }
@@ -673,17 +706,41 @@ int Memories_GuestMap(void)
 #else
 static int view_protection = PROT_READ | PROT_WRITE;
 
+/* What already holds part of [low, high) (/proc/self/maps), for a guest
+ * range that cannot be mapped: in an Android app ART's heap can reach the
+ * guest's ranges (notes/pc-build.md, "Android arm64"). */
+static void say_occupants(uint32_t low, uint64_t high)
+{
+    char text[512];
+    unsigned long long start, end;
+    FILE *maps = fopen("/proc/self/maps", "r");
+    if (!maps) return;
+    while (fgets(text, sizeof(text), maps)) {
+        if (sscanf(text, "%llx-%llx", &start, &end) == 2 && start < high && end > low)
+            fprintf(stderr, "memories-pc: occupied by %s", text);
+    }
+    fclose(maps);
+}
+
 static int map_at(uint32_t address, size_t length, int fd, off_t offset)
 {
-    void *wanted = (void *)(uintptr_t)address;
+    void *wanted = (void *)(uintptr_t)address, *got;
     int flags = MAP_FIXED_NOREPLACE | (fd < 0 ? MAP_PRIVATE | MAP_ANONYMOUS : MAP_SHARED);
-    if (mmap(wanted, length, fd < 0 ? PROT_READ | PROT_WRITE : view_protection, flags, fd, offset) != wanted) {
-        fprintf(stderr, "cannot map guest memory at 0x%08x\n", (unsigned)address);
+    got = mmap(wanted, length, fd < 0 ? PROT_READ | PROT_WRITE : view_protection, flags, fd, offset);
+    if (got != wanted) {
+        /* EEXIST: something holds part of the range; a kernel before 4.17
+         * takes the address as a hint and may map elsewhere. */
+        int error = errno;
+        if (got != MAP_FAILED) munmap(got, length);
+        fprintf(stderr, "cannot map guest memory at 0x%08x: %s\n", (unsigned)address,
+                got == MAP_FAILED ? strerror(error) : "the system mapped it elsewhere");
+        say_occupants(address, (uint64_t)address + length);
         return -1;
     }
     return 0;
 }
 
+#if defined(__i386__)
 /* ModRM/SIB register numbers to gregs[]. */
 static const int register_slot[8] = {REG_EAX, REG_ECX, REG_EDX, REG_EBX, REG_ESP, REG_EBP, REG_ESI, REG_EDI};
 
@@ -715,14 +772,21 @@ static void on_fault(int number, siginfo_t *info, void *context)
     uint32_t address = (uint32_t)(uintptr_t)info->si_addr;
     uint32_t eip = (uint32_t)user->uc_mcontext.gregs[REG_EIP];
     void *target;
-    if (address < 0x10000u && eip != address && low_memory && !low_fixup.active) {
+    /* The first 64 KiB go through the low_memory view of guest RAM; the
+     * retail scratchpad view, where it could not be mapped, through the
+     * port's (image.h). Both are the same register rebase. */
+    if (eip != address && !low_fixup.active &&
+        ((address < 0x10000u && low_memory) ||
+         (!Memories_ScratchpadRetailView && address - MEMORIES_GUEST_SCRATCHPAD_RETAIL < 0x1000u))) {
+        int low = address < 0x10000u;
         int reg = low_access_register((const unsigned char *)(uintptr_t)eip, (uint32_t)user->uc_mcontext.gregs[REG_ESI]);
-        if (reg >= 0 && (uint32_t)user->uc_mcontext.gregs[register_slot[reg]] < 0x10000u) {
+        uint32_t base = reg >= 0 ? (uint32_t)user->uc_mcontext.gregs[register_slot[reg]] : 0;
+        if (reg >= 0 && (low ? base < 0x10000u : base - MEMORIES_GUEST_SCRATCHPAD_RETAIL < 0x1000u)) {
             report_low_access(eip, address);
             low_fixup.active = 1;
             low_fixup.reg = reg;
-            low_fixup.original = (uint32_t)user->uc_mcontext.gregs[register_slot[reg]];
-            low_fixup.patched = low_fixup.original + (uint32_t)(uintptr_t)low_memory;
+            low_fixup.original = base;
+            low_fixup.patched = base + (low ? (uint32_t)(uintptr_t)low_memory : 0x80000000u);
             user->uc_mcontext.gregs[register_slot[reg]] = (greg_t)low_fixup.patched;
             user->uc_mcontext.gregs[REG_EFL] |= 0x100;
             return;
@@ -735,6 +799,210 @@ static void on_fault(int number, siginfo_t *info, void *context)
     report_guest_fault(address, eip);
     Crash_HandleSignal(number, info, context);
 }
+#elif defined(__aarch64__)
+/* 64-bit ARM (AArch64), for the two faults the i386 handler above takes.
+ * AArch64 has no single-step trap, so a fixed-up instruction runs once out
+ * of line instead.
+ *
+ * A low or retail-scratchpad access runs once out of line: the handler
+ * moves the register that addresses the low page (the base Rn, bits 5-9 in
+ * every load/store class, or for a register offset with no shift the index
+ * Rm, bits 16-20) up by 0x80000000, onto the same RAM in KSEG0, and
+ * resumes in a stub: the instruction, then `eor Xr, Xr, #0x80000000`
+ * (which also undoes the move after a writeback), then a `b` back behind
+ * the original. A direct branch, because no register is free at an
+ * arbitrary load (X16/X17 are only scratch at a call); so the stub page is
+ * mapped within the branch's reach (+-128 MiB) of the faulting code, one
+ * page per region the faults come from. When the instruction loads the
+ * moved register the loaded value stands and there is no `eor`. Not
+ * handled, and fatal as before: a store of the moved register itself, an
+ * SP base, and PC-relative loads (which do not fault low).
+ *
+ * A call into guest code: the target of a guest address, as on i386. LR
+ * holds the caller's return address already, and X0-X7 the arguments. */
+#define A64_NOP 0xd503201fu
+#define A64_EOR_2_31 0xd2610000u /* eor Xd, Xn, #0x80000000 (N=1, immr=33, imms=0) */
+#define A64_B 0x14000000u
+
+static struct {
+    uint32_t *page;
+} fixup_pages[8];
+
+static int a64_in_reach(uintptr_t from, uintptr_t to)
+{
+    intptr_t delta = (intptr_t)(to - from);
+    return delta >= -(intptr_t)0x08000000 && delta < (intptr_t)0x08000000;
+}
+
+/* A stub page within reach of `pc` (and of `pc + 4`, where it returns). */
+static uint32_t *fixup_page_near(uintptr_t pc)
+{
+    unsigned i;
+    uintptr_t hint;
+    for (i = 0; i < sizeof(fixup_pages) / sizeof(fixup_pages[0]) && fixup_pages[i].page; i++) {
+        if (a64_in_reach(pc, (uintptr_t)fixup_pages[i].page) &&
+            a64_in_reach((uintptr_t)fixup_pages[i].page + 8, pc + 4)) {
+            return fixup_pages[i].page;
+        }
+    }
+    if (i == sizeof(fixup_pages) / sizeof(fixup_pages[0])) return NULL;
+    /* Below the code first (the image's own gap), then above it. */
+    for (hint = (pc & ~(uintptr_t)0xfffff) - 0x00400000u; hint; hint = 0) {
+        void *page = mmap((void *)hint, 0x10000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (page != MAP_FAILED && a64_in_reach(pc, (uintptr_t)page) && a64_in_reach((uintptr_t)page + 8, pc + 4)) {
+            fixup_pages[i].page = page;
+            return page;
+        }
+        if (page != MAP_FAILED) munmap(page, 0x10000);
+        page = mmap((void *)((pc & ~(uintptr_t)0xfffff) + 0x00400000u), 0x10000, PROT_READ | PROT_WRITE,
+                    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (page != MAP_FAILED && a64_in_reach(pc, (uintptr_t)page) && a64_in_reach((uintptr_t)page + 8, pc + 4)) {
+            fixup_pages[i].page = page;
+            return page;
+        }
+        if (page != MAP_FAILED) munmap(page, 0x10000);
+    }
+    return NULL;
+}
+
+/* The register a load or store addresses memory through that holds
+ * `want(value)`, or -1. Sets *loads_it when the access loads that register,
+ * *stores_it when it stores it. */
+static int a64_access(uint32_t code, const uint64_t *regs, int low, int *loads_it, int *stores_it)
+{
+    unsigned rn = (code >> 5) & 31, rt = code & 31, rt2 = (code >> 10) & 31, rm = (code >> 16) & 31;
+    int vector = (code >> 26) & 1, load, pair = 0, regoff = 0, chosen;
+    if ((code & 0x0a000000u) != 0x08000000u) return -1; /* not the load/store class (op0 x1x0) */
+    if ((code & 0x3a000000u) == 0x28000000u) {          /* LDP/STP/LDNP/STNP and the pre/post-indexed pairs */
+        pair = 1;
+        load = (code >> 22) & 1;
+    } else if ((code & 0x3b000000u) == 0x38000000u) {   /* LDR/STR (immediate pre/post, unscaled, register) */
+        load = ((code >> 22) & 3) != 0;
+        regoff = (code & 0x00200c00u) == 0x00200800u;   /* bit 21 set, bits 11-10 = 10: register offset */
+        /* Only an index taken as unsigned (UXTW, or LSL/UXTX) is rebased below:
+         * SXTW would sign-extend the index moved up by 0x80000000. */
+        if (regoff && ((code >> 12) & 1)) regoff = 2;   /* S: the index is shifted */
+    } else if ((code & 0x3b000000u) == 0x39000000u) {   /* LDR/STR (unsigned immediate) */
+        load = ((code >> 22) & 3) != 0;
+    } else if ((code & 0x3f000000u) == 0x08000000u) {   /* exclusives, acquire/release */
+        load = (code >> 22) & 1;
+        if (!load && rm == rn) return -1;               /* the status register is the base */
+    } else {
+        return -1; /* SIMD structure loads, atomics and the rest: not seen here */
+    }
+    if (rn != 31 && (low ? regs[rn] < 0x10000u : regs[rn] - MEMORIES_GUEST_SCRATCHPAD_RETAIL < 0x1000u)) {
+        chosen = (int)rn;
+    } else if (regoff == 1 && rm != 31 && rm != rn && (((code >> 13) & 7) == 2 || ((code >> 13) & 7) == 3) &&
+               (low ? regs[rm] < 0x10000u : regs[rm] - MEMORIES_GUEST_SCRATCHPAD_RETAIL < 0x1000u)) {
+        chosen = (int)rm;
+    } else {
+        return -1;
+    }
+    if (regoff == 1 && rm == rn) return -1;
+    if (!vector) {
+        int hits = rt == (unsigned)chosen || (pair && rt2 == (unsigned)chosen);
+        *loads_it = load && hits;
+        *stores_it = !load && hits;
+    }
+    return chosen;
+}
+
+/* Returns 1 when the access will run from the stub. */
+static int run_rebased(ucontext_t *user, uint32_t address)
+{
+    uint64_t *regs = (uint64_t *)user->uc_mcontext.regs;
+    uintptr_t pc = (uintptr_t)user->uc_mcontext.pc;
+    uint32_t code, *stub;
+    int reg, loads_it = 0, stores_it = 0, low = address < 0x10000u;
+    code = *(const uint32_t *)pc;
+    reg = a64_access(code, regs, low, &loads_it, &stores_it);
+    if (reg < 0 || stores_it) return 0;
+    if (!(stub = fixup_page_near(pc))) return 0;
+    report_low_access((uint32_t)pc, address);
+    if (mprotect(stub, 0x10000, PROT_READ | PROT_WRITE)) return 0;
+    stub[0] = code;
+    stub[1] = loads_it ? A64_NOP : A64_EOR_2_31 | (uint32_t)reg << 5 | (uint32_t)reg;
+    stub[2] = A64_B | (uint32_t)(((intptr_t)(pc + 4) - (intptr_t)(stub + 2)) >> 2 & 0x03ffffff);
+    if (mprotect(stub, 0x10000, PROT_READ | PROT_EXEC)) return 0;
+    __builtin___clear_cache((char *)stub, (char *)(stub + 3));
+    regs[reg] += 0x80000000u;
+    user->uc_mcontext.pc = (uint64_t)(uintptr_t)stub;
+    return 1;
+}
+
+static void on_fault(int number, siginfo_t *info, void *context)
+{
+    ucontext_t *user = context;
+    uintptr_t full = (uintptr_t)info->si_addr;
+    uint32_t address = (uint32_t)full;
+    uintptr_t pc = (uintptr_t)user->uc_mcontext.pc;
+    void *target;
+    if (pc != full && ((full < 0x10000u) ||
+                       (!Memories_ScratchpadRetailView && full - MEMORIES_GUEST_SCRATCHPAD_RETAIL < 0x1000u))) {
+        if (run_rebased(user, address)) return;
+    }
+    if (pc == full && full < 0x100000000ull && (target = guest_call_target(address)) != NULL) {
+        user->uc_mcontext.pc = (uint64_t)(uintptr_t)target;
+        return;
+    }
+    if (pc == full && full < 0x100000000ull) {
+        report_guest_fault(address, (uint32_t)pc); /* a call into guest code with no native function */
+    } else {
+        /* Whole: a host address is 64 bits here (report_guest_fault's are 32). */
+        char text[160];
+        int length = snprintf(text, sizeof(text), "memories-pc: bad memory access at 0x%llx (pc 0x%llx, lr 0x%llx)\n",
+                              (unsigned long long)full, (unsigned long long)pc,
+                              (unsigned long long)user->uc_mcontext.regs[30]);
+        (void)!write(2, text, (size_t)length);
+    }
+    Crash_HandleSignal(number, info, context);
+}
+#else
+#error "image.c: no fault handler for this architecture"
+#endif
+
+#ifdef MEMORIES_TEST_HOOKS
+/* MEMORIES_TEST_HOLD_SCRATCHPAD=rw or none: a page is held at 0x1F800000
+ * before the guest is mapped, as an Android app's Java heap holds it:
+ * read-write (filled with 0xA5) or with no access. The port then reaches
+ * the scratchpad only at 0x9F800000, and a native access that still used
+ * the retail address would reach the holder (rw) or fault (none). At exit
+ * the port says whether anything wrote the read-write page. A test hook:
+ * not in a release (see guest_ram_executable). */
+static const unsigned char *held_page;
+
+static void report_held_page(void)
+{
+    unsigned i, changed = 0;
+    for (i = 0; i < 0x1000u; i++) changed += held_page[i] != 0xa5;
+    fprintf(stderr, "memories-pc: the held page at 0x%08x: %s (%u bytes changed)\n", MEMORIES_GUEST_SCRATCHPAD_RETAIL,
+            changed ? "WRITTEN" : "untouched", changed);
+}
+
+static void hold_retail_scratchpad(void)
+{
+    const char *value = getenv("MEMORIES_TEST_HOLD_SCRATCHPAD");
+    void *wanted = (void *)(uintptr_t)MEMORIES_GUEST_SCRATCHPAD_RETAIL, *got;
+    int writable;
+    if (!value || !*value || !strcmp(value, "0")) return;
+    writable = !strcmp(value, "rw");
+    got = mmap(wanted, 0x1000, writable ? PROT_READ | PROT_WRITE : PROT_NONE,
+               MAP_FIXED_NOREPLACE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (got != wanted) {
+        if (got != MAP_FAILED) munmap(got, 0x1000);
+        fprintf(stderr, "memories-pc: MEMORIES_TEST_HOLD_SCRATCHPAD: 0x%08x could not be held\n",
+                MEMORIES_GUEST_SCRATCHPAD_RETAIL);
+        return;
+    }
+    fprintf(stderr, "memories-pc: 0x%08x is held %s (MEMORIES_TEST_HOLD_SCRATCHPAD)\n",
+            MEMORIES_GUEST_SCRATCHPAD_RETAIL, writable ? "read-write" : "with no access");
+    if (writable) {
+        memset(got, 0xa5, 0x1000);
+        held_page = got;
+        atexit(report_held_page);
+    }
+}
+#endif
 
 int Memories_GuestMap(void)
 {
@@ -749,22 +1017,56 @@ int Memories_GuestMap(void)
     action.sa_sigaction = on_fault;
     action.sa_flags = SA_SIGINFO | SA_ONSTACK;
     sigaction(SIGSEGV, &action, NULL);
+#if defined(__i386__)
     action.sa_sigaction = on_step;
     sigaction(SIGTRAP, &action, NULL);
+#endif
     fd = memfd_create("memories-ram", 0);
-    if (fd < 0 || ftruncate(fd, MEMORIES_GUEST_RAM_SIZE) != 0) {
+    /* Guest RAM, then a page for the scratchpad. */
+    if (fd >= 0 && ftruncate(fd, MEMORIES_GUEST_RAM_SIZE + 0x1000) != 0) {
+        close(fd);
+        fd = -1;
+    }
+#ifdef __ANDROID__
+    /* Before memfd (Linux 3.17): the ashmem device (android.c). */
+    if (fd < 0) fd = memories_ashmem_create("memories-ram", MEMORIES_GUEST_RAM_SIZE + 0x1000);
+#endif
+    if (fd < 0) {
         perror("guest RAM");
         return -1;
     }
     result = map_at(MEMORIES_GUEST_RAM, MEMORIES_GUEST_RAM_SIZE, fd, 0) ||
              map_at(0xa0000000u, MEMORIES_GUEST_RAM_SIZE, fd, 0) ||
              map_at(0x00010000u, MEMORIES_GUEST_RAM_SIZE - 0x10000u, fd, 0x10000) ||
-             map_at(0x1f800000u, 0x1000, -1, 0);
+             map_at(MEMORIES_GUEST_SCRATCHPAD, 0x1000, fd, MEMORIES_GUEST_RAM_SIZE);
+    /* The retail view where the host allows it (image.h). */
+#ifdef MEMORIES_TEST_HOOKS
+    if (!result) hold_retail_scratchpad();
+#endif
+    if (!result) {
+        void *wanted = (void *)(uintptr_t)MEMORIES_GUEST_SCRATCHPAD_RETAIL;
+        void *got = mmap(wanted, 0x1000, view_protection, MAP_FIXED_NOREPLACE | MAP_SHARED, fd, MEMORIES_GUEST_RAM_SIZE);
+        Memories_ScratchpadRetailView = got == wanted;
+        if (got != MAP_FAILED && got != wanted) munmap(got, 0x1000); /* taken as a hint */
+        if (!Memories_ScratchpadRetailView) {
+            fprintf(stderr, "memories-pc: 0x%08x is taken here; the scratchpad is reached at 0x%08x\n",
+                    MEMORIES_GUEST_SCRATCHPAD_RETAIL, MEMORIES_GUEST_SCRATCHPAD);
+        }
+    }
     low_memory = mmap(NULL, 0x10000, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (low_memory == MAP_FAILED) {
         low_memory = NULL;
     }
     close(fd);
+#if defined(__aarch64__)
+    /* Native function addresses go into 4-byte guest slots: the game must
+     * be where it was linked (android_loader.c), below 4 GB. */
+    if ((uintptr_t)Memories_GuestMap >= 0x100000000ull) {
+        fprintf(stderr, "memories-pc: the game's code is at %p, above 4 GB; the 64-bit game needs its link address\n",
+                (void *)(uintptr_t)Memories_GuestMap);
+        result = -1;
+    }
+#endif
     return result ? -1 : 0;
 }
 #endif /* _WIN32 */

@@ -16,7 +16,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define SCRATCHPAD 0x1F800000u
+/* The scratchpad through the port's view (image.h): something else may
+ * hold the retail 0x1F800000 (an Android app's Java heap). */
+#define SCRATCHPAD MEMORIES_GUEST_SCRATCHPAD
 #define MODE_BYTE 0x8009B26Cu /* D_8009B26C, main_mode_state.h: the active mode and its flags */
 #define WAIT_MS 10            /* how long a blocked wait sleeps before it pumps the window again */
 

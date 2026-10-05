@@ -24,7 +24,7 @@ void func_800177C4(void)
     SetGeomScreen(D_800F2848.projection);
     SetGeomOffset(0xA0, 0x6C);
     GsSetLsMatrix(&D_800FE148);
-    scratch = (SVECTOR *)0x1F8003E0;
+    scratch = (SVECTOR *)SCRATCHPAD_ADDR(0x1F8003E0);
     i = 0;
     projected = &p;
     out = D_800EA070;

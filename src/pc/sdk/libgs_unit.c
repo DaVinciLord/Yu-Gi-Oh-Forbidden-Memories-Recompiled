@@ -31,6 +31,11 @@ typedef struct View2 {
     CoordUnit *G32 super;
 } View2;
 
+/* libhmd.h's GsCOORDUNIT and libgs.h's GsRVIEW2 as the console lays them out;
+ * these mirrors use fixed-width fields, so they hold on LP64 hosts too. */
+_Static_assert(sizeof(MATRIX) == 32 && sizeof(CoordUnit) == 0x50 && sizeof(View2) == 0x20,
+               "GsCOORDUNIT / GsRVIEW2 layouts");
+
 #define WORDS(p) ((u32 *)(uintptr_t)(p))
 
 /* Scratch area handed to primitive drivers. */
@@ -375,12 +380,12 @@ int GsSetRefView2(View2 *view)
     dx = p[3] - p[0];
     dy = p[4] - p[1];
     dz = p[5] - p[2];
-    distance = (s32)SquareRoot0((long)((u32)dx * (u32)dx + (u32)dy * (u32)dy + (u32)dz * (u32)dz));
+    distance = (s32)SquareRoot0((PSXLONG)((u32)dx * (u32)dx + (u32)dy * (u32)dy + (u32)dz * (u32)dz));
     if (!distance) {
         return 1;
     }
     sine = -((s32)((u32)(p[1] - p[4]) << 12) / distance);
-    ground = (s32)SquareRoot0((long)((u32)dx * (u32)dx + (u32)dz * (u32)dz));
+    ground = (s32)SquareRoot0((PSXLONG)((u32)dx * (u32)dx + (u32)dz * (u32)dz));
     cosine = (s32)((u32)ground << 12) / distance;
     axis_matrix(&step, (short)sine, (short)cosine, 'x');
     MulMatrix(&D_800FE148, &step);
@@ -412,6 +417,7 @@ typedef struct FlatLight {
     s32 vx, vy, vz;
     u8 r, g, b;
 } FlatLight;
+_Static_assert(sizeof(FlatLight) == 16, "GsF_LIGHT layout");
 
 /* One of three parallel lights: its direction becomes a row of the light
  * matrix (normalized, pointing at the light) and its colour a column of the
@@ -429,7 +435,7 @@ int GsSetFlatLight(int id, FlatLight *light)
     colour.m[1][1] = (short)words[2]; colour.m[1][2] = (short)(words[2] >> 16);
     colour.m[2][0] = (short)words[3]; colour.m[2][1] = (short)(words[3] >> 16);
     colour.m[2][2] = (short)words[4];
-    length = (s32)SquareRoot0((long)((u32)light->vx * (u32)light->vx + (u32)light->vy * (u32)light->vy +
+    length = (s32)SquareRoot0((PSXLONG)((u32)light->vx * (u32)light->vx + (u32)light->vy * (u32)light->vy +
                                      (u32)light->vz * (u32)light->vz));
     if (!length) {
         return -1;

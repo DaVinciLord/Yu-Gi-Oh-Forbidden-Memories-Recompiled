@@ -1,6 +1,7 @@
 /* Game > Deck slots. See deck_menu.h. */
 #include "pc/compat/fs.h"
 #include "deck_menu.h"
+#include "flow_text.h"
 #include "pc/platform/button_layout.h"
 #include "pc/platform/menu.h"
 #include "deck_slots.h"
@@ -747,6 +748,43 @@ static void centred(MenuCanvas *canvas, int x, int w, int y, const char *line, u
     text(canvas, x + (w - width(line)) / 2, y, line, colour);
 }
 
+/* `line` centred in [x, x + w), on as many lines as it needs, broken at
+ * spaces (a narrow box), `line_h` apart from the middle `y` of the first.
+ * One line that fits is drawn as centred() draws it. Without a canvas it
+ * only counts. Returns the number of lines. */
+static int centred_words(MenuCanvas *canvas, int x, int w, int y, int line_h, const char *line, uint32_t colour)
+{
+    char out[256];
+    int lines = 0;
+    if (width(line) <= w) {
+        if (canvas) centred(canvas, x, w, y, line, colour);
+        return 1;
+    }
+    while (*line) {
+        size_t take = 0, length = strlen(line);
+        const char *p = line;
+        for (;;) {
+            const char *space = strchr(p, ' ');
+            size_t end = space ? (size_t)(space - line) : length;
+            if (end >= sizeof(out)) break;
+            memcpy(out, line, end);
+            out[end] = '\0';
+            if (take && width(out) > w) break;
+            take = end;
+            if (!space) break;
+            p = space + 1;
+        }
+        if (!take) take = length < sizeof(out) - 1 ? length : sizeof(out) - 1;
+        memcpy(out, line, take);
+        out[take] = '\0';
+        if (canvas) centred(canvas, x, w, y + lines * line_h, out, colour);
+        lines++;
+        line += take;
+        while (*line == ' ') line++;
+    }
+    return lines;
+}
+
 static const char *status_text(int slot)
 {
     if (!draft.slots[slot].used) return "Empty";
@@ -759,31 +797,93 @@ static const char *status_text(int slot)
     }
 }
 
+/* The slots take the exchanged pad (pad_bits), so the hints name its buttons. */
+static const char *hints(int jp)
+{
+    if (jp)
+        return picking == PICK_OPEN ? "Circle: edit this deck (an empty slot: a copy of yours)   Triangle: clear   Cross: back"
+                                    : "Circle: use (an empty slot: a copy of yours)   Triangle: clear   Cross: close";
+    return picking == PICK_OPEN ? "Cross: edit this deck (an empty slot: a copy of yours)   Triangle: clear   Circle: back"
+                                : "Cross: use (an empty slot: a copy of yours)   Triangle: clear   Circle: close";
+}
+
+static int flowed(MenuCanvas *canvas, int x, int w, int y, int line_h, const char *line, uint32_t colour, int *widest)
+{
+    return FlowText(canvas, x, w, y, line_h, line, colour, widest, width, text);
+}
+
+/* How the list is set at scale `s` in a box `pw` wide: 0 each slot on one
+ * row (a desktop window's room), 1 a slot's name, cards and state on lines
+ * of their own and the hints wrapped (a narrow window, or a phone's middle
+ * between the touch controls), -1 not even that. Lines per slot in *lines. */
+static int list_layout(int pw, int s, int jp, int *lines)
+{
+    char line[160];
+    int slot, one_row = 1, piece;
+    ui_scale = s;
+    *lines = 1;
+    if (width(menu.title) + 44 * s + (draft.dirty ? width("saved with the game") + 40 * s : 0) > pw ||
+        width(hints(jp)) + 28 * s > pw)
+        one_row = 0;
+    for (slot = 0; slot < DECK_SLOT_COUNT && one_row; slot++) {
+        snprintf(line, sizeof(line), "%2d   %s", slot + 1, menu.label[slot]);
+        if (32 * s + width(line) + 24 * s + width(status_text(slot)) > pw) one_row = 0;
+    }
+    if (one_row) return 0;
+    if (width(menu.title) + 44 * s > pw || width(menu.message) + 32 * s > pw) return -1;
+    flowed(NULL, 0, pw, 0, 0, hints(jp), 0, &piece);
+    if (piece + 28 * s > pw) return -1;
+    for (slot = 0; slot < DECK_SLOT_COUNT; slot++) {
+        int n;
+        snprintf(line, sizeof(line), "%2d   %s", slot + 1, menu.label[slot]);
+        n = flowed(NULL, 0, pw - 32 * s, 0, 0, line, 0, &piece) + (status_text(slot)[0] ? 1 : 0);
+        if (piece + 32 * s > pw || width(status_text(slot)) + 48 * s > pw) return -1;
+        *lines = n > *lines ? n : *lines;
+    }
+    return 1;
+}
+
 void DeckMenu_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
 {
-    int s, row_h, rows, pw, ph, px, py, i, list_y;
+    int s, row_h, rows, pw, ph, px, py, i, list_y, left, right, bar, layout, lines, line_h = 0, hint_lines = 1;
     const int jp = Settings_Get(SET_JP_BUTTONS);
     char line[160];
     *x = *y = *w = *h = 0;
     if (menu.view == VIEW_CLOSED || !canvas || !canvas->pixels) return;
+    /* The free width: the window's, or between the touch controls while
+     * they show (they play this menu). Each slot on one row when that is
+     * wide enough; else its parts on lines of their own; else smaller. */
+    Menu_OverlayArea(canvas, &left, &right, &bar);
     s = canvas->height / 420 > Menu_Scale() ? canvas->height / 420 : Menu_Scale();
+    for (;; s--) {
+        pw = right - left - 16 * s < 640 * s ? right - left - 16 * s : 640 * s;
+        layout = list_layout(pw, s, jp, &lines);
+        if (layout >= 0 || s == 1) break;
+    }
     ui_scale = s;
     row_h = 22 * s;
-    rows = (canvas->height - Menu_Height() - 96 * s) / row_h;
-    rows = rows < 3 ? 3 : rows > DECK_SLOT_COUNT ? DECK_SLOT_COUNT : rows;
+    if (layout > 0) {
+        line_h = 18 * s;
+        row_h = lines * line_h + 6 * s;
+        hint_lines = flowed(NULL, 0, pw - 28 * s, 0, 0, hints(jp), 0, NULL);
+    }
+    rows = (canvas->height - bar - 96 * s - (hint_lines - 1) * line_h) / row_h;
+    rows = rows < (layout > 0 ? 1 : 3) ? (layout > 0 ? 1 : 3) : rows > DECK_SLOT_COUNT ? DECK_SLOT_COUNT : rows;
     if (rows != shown_rows) {
         shown_rows = rows;
         keep_cursor_shown();
     }
-    pw = canvas->width - 16 * s < 640 * s ? canvas->width - 16 * s : 640 * s;
-    ph = 44 * s + rows * row_h + 34 * s;
-    px = (canvas->width - pw) / 2;
-    py = Menu_Height() + (canvas->height - Menu_Height() - ph) / 2;
+    ph = 44 * s + rows * row_h + 34 * s + (hint_lines - 1) * line_h;
+    px = left + (right - left - pw) / 2;
+    py = bar + (canvas->height - bar - ph) / 2;
     frame_box(canvas, px, py, pw, ph, s);
     if (menu.view == VIEW_MESSAGE && menu.close_after) {
-        /* Opened where it cannot be used: only the message. */
-        centred(canvas, px, pw, py + ph / 2, menu.message, COLOUR_TEXT);
-        centred(canvas, px, pw, py + ph / 2 + 22 * s, jp ? "Press Circle" : "Press Cross", COLOUR_DIM);
+        /* Opened where it cannot be used: only the message, on lines of
+         * its own where the box is narrower than it. */
+        int n = centred_words(NULL, px + 14 * s, pw - 28 * s, 0, 18 * s, menu.message, 0);
+        int top = py + ph / 2 - (n - 1) * 9 * s;
+        centred_words(canvas, px + 14 * s, pw - 28 * s, top, 18 * s, menu.message, COLOUR_TEXT);
+        centred(canvas, px, pw, top + (n - 1) * 18 * s + 22 * s, jp ? "Press Circle" : "Press Cross", COLOUR_DIM);
         *x = px, *y = py, *w = pw, *h = ph;
         return;
     }
@@ -791,36 +891,45 @@ void DeckMenu_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
     list_y = py + 38 * s;
     for (i = 0; i < rows && menu.top + i < DECK_SLOT_COUNT; i++) {
         int slot = menu.top + i, ry = list_y + i * row_h, cy = ry + row_h / 2;
-        const char *right = status_text(slot);
+        const char *status = status_text(slot);
         uint32_t colour = draft.slots[slot].used ? COLOUR_TEXT : COLOUR_DIM;
         uint32_t right_colour = menu.current[slot] ? COLOUR_CURRENT
                                 : draft.slots[slot].used && menu.status[slot] != DECK_OK ? COLOUR_WARN : colour;
         if (slot == menu.cursor) fill(canvas, px + 6 * s, ry, pw - 12 * s, row_h - 2 * s, 0x3a5aa8u, 200);
         snprintf(line, sizeof(line), "%2d   %s", slot + 1, menu.label[slot]);
+        if (layout > 0) {
+            int first = ry + 3 * s + line_h / 2;
+            int n = flowed(canvas, px + 16 * s, pw - 32 * s, first, line_h, line, colour, NULL);
+            if (status[0]) text(canvas, px + 32 * s, first + n * line_h, status, right_colour);
+            continue;
+        }
         text(canvas, px + 16 * s, cy, line, colour);
-        text(canvas, px + pw - 16 * s - width(right), cy, right, right_colour);
+        text(canvas, px + pw - 16 * s - width(status), cy, status, right_colour);
     }
     if (menu.top > 0) text(canvas, px + pw - 30 * s, py + 20 * s, "^", COLOUR_DIM);
     if (menu.top + rows < DECK_SLOT_COUNT) text(canvas, px + pw - 18 * s, py + 20 * s, "v", COLOUR_DIM);
-    /* The slots take the exchanged pad (pad_bits), so the hints name its buttons. */
-    if (jp)
-        text(canvas, px + 14 * s, py + ph - 16 * s,
-             picking == PICK_OPEN ? "Circle: edit this deck (an empty slot: a copy of yours)   Triangle: clear   Cross: back"
-                                  : "Circle: use (an empty slot: a copy of yours)   Triangle: clear   Cross: close",
-             COLOUR_DIM);
+    if (layout > 0)
+        flowed(canvas, px + 14 * s, pw - 28 * s, py + ph - 16 * s - (hint_lines - 1) * line_h, line_h, hints(jp),
+               COLOUR_DIM, NULL);
     else
-        text(canvas, px + 14 * s, py + ph - 16 * s,
-             picking == PICK_OPEN ? "Cross: edit this deck (an empty slot: a copy of yours)   Triangle: clear   Circle: back"
-                                  : "Cross: use (an empty slot: a copy of yours)   Triangle: clear   Circle: close",
-             COLOUR_DIM);
+        text(canvas, px + 14 * s, py + ph - 16 * s, hints(jp), COLOUR_DIM);
     if (draft.dirty) {
-        /* Kept with the game: lost with it when it is not saved. */
+        /* Kept with the game: lost with it when it is not saved. Narrow, it
+         * goes under the title. */
         const char *note = "saved with the game";
-        text(canvas, px + pw - 40 * s - width(note), py + 20 * s, note, COLOUR_WARN);
+        if (layout > 0 && width(menu.title) + 44 * s + width(note) + 40 * s > pw)
+            text(canvas, px + 14 * s, py + 20 * s + line_h, note, COLOUR_WARN);
+        else
+            text(canvas, px + pw - 40 * s - width(note), py + 20 * s, note, COLOUR_WARN);
     }
     if (menu.view == VIEW_CONFIRM) {
         int bw = 120 * s, bh = 108 * s, bx0 = px + 24 * s, by = py + (ph - bh) / 2, cw = pw - 48 * s, bx;
         const char *labels[2] = {"Yes", "No"};
+        if (2 * bw + 16 * s > cw) { /* narrow: the menu's width, the buttons share it */
+            bx0 = px + 8 * s;
+            cw = pw - 16 * s;
+            if (2 * bw + 16 * s > cw - 16 * s) bw = (cw - 32 * s) / 2;
+        }
         frame_box(canvas, bx0, by, cw, bh, s);
         snprintf(line, sizeof(line), "Clear slot %d?", menu.cursor + 1);
         centred(canvas, bx0, cw, by + 30 * s, line, COLOUR_TEXT);
@@ -831,10 +940,17 @@ void DeckMenu_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
             centred(canvas, left, bw, by + 74 * s, labels[i], chosen ? COLOUR_TEXT : COLOUR_DIM);
         }
     } else if (menu.view == VIEW_MESSAGE) {
-        int mw = pw - 96 * s, mh = 64 * s, mx = px + 48 * s, my = py + (ph - mh) / 2;
+        int mw = pw - 96 * s, mh = 64 * s, mx = px + 48 * s, my, n;
+        if (width(menu.message) > mw - 16 * s) { /* narrow: the menu's width, and lines if need be */
+            mw = pw - 16 * s;
+            mx = px + 8 * s;
+        }
+        n = centred_words(NULL, mx + 8 * s, mw - 16 * s, 0, 18 * s, menu.message, 0);
+        mh += (n - 1) * 18 * s;
+        my = py + (ph - mh) / 2;
         frame_box(canvas, mx, my, mw, mh, s);
-        centred(canvas, mx, mw, my + 24 * s, menu.message, COLOUR_TEXT);
-        centred(canvas, mx, mw, my + 46 * s, jp ? "Press Circle" : "Press Cross", COLOUR_DIM);
+        centred_words(canvas, mx + 8 * s, mw - 16 * s, my + 24 * s, 18 * s, menu.message, COLOUR_TEXT);
+        centred(canvas, mx, mw, my + 46 * s + (n - 1) * 18 * s, jp ? "Press Circle" : "Press Cross", COLOUR_DIM);
     }
     *x = px;
     *y = py;

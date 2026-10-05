@@ -50,7 +50,7 @@ extern int PadIdentifier;
 #define _PAD(x,y) ((y)<<((x)<<4))
 
 /* scratch pad address 0x1f800000 - 0x1f800400 */
-#define getScratchAddr(offset)  ((u32 *)(0x1f800000+(offset)*4))
+#define getScratchAddr(offset)  ((u32 *)(SCRATCHPAD_ADDR(0x1f800000)+(offset)*4))
 
 /*
  * Video Mode:	NTSC/PAL

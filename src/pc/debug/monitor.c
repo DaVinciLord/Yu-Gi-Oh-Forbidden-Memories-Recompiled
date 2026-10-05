@@ -23,7 +23,9 @@
 #include "crash.h"
 #include "symbols.h"
 #include "pc/platform/paths.h"
+#if defined(__i386__) || defined(__x86_64__)
 #include <cpuid.h>
+#endif
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -125,6 +127,7 @@ static void read_file_line(const char *relative, char *out, size_t size)
     fclose(file);
 }
 
+#if defined(__i386__) || defined(__x86_64__)
 static void cpu_name(char *out, size_t size)
 {
     unsigned words[12], highest = 0, unused, i;
@@ -137,6 +140,27 @@ static void cpu_name(char *out, size_t size)
     while (*start == ' ') start++;
     snprintf(out, size, "%s", start);
 }
+#else
+/* ARM has no instruction that names the processor: the kernel's
+ * /proc/cpuinfo does, as "Hardware" (the SoC, on Android) or "model name". */
+static void cpu_name(char *out, size_t size)
+{
+    char text[256];
+    FILE *file = fopen("/proc/cpuinfo", "r");
+    snprintf(out, size, "unknown");
+    if (!file) return;
+    while (fgets(text, sizeof(text), file)) {
+        char *value = strchr(text, ':');
+        int hardware = !strncmp(text, "Hardware", 8);
+        if (!value || (!hardware && strncmp(text, "model name", 10))) continue;
+        for (value++; *value == ' ' || *value == '\t'; value++) {}
+        value[strcspn(value, "\r\n")] = '\0';
+        if (*value) snprintf(out, size, "%s", value);
+        if (hardware) break;
+    }
+    fclose(file);
+}
+#endif
 
 void Monitor_NoteSystem(void)
 {
@@ -148,7 +172,11 @@ void Monitor_NoteSystem(void)
     strftime(started, sizeof(started), "%Y-%m-%d %H:%M:%S %z", localtime(&now));
     Monitor_Fact("build", "%s (commit %s)", build[0] ? build : "unknown", commit[0] ? commit : "unknown");
     /* The game's own width, which the os line (the system's) does not say. */
+#if defined(__aarch64__)
+    Monitor_Fact("executable", "%s", "64-bit (arm64)");
+#else
     Monitor_Fact("executable", "%s", sizeof(void *) == 8 ? "64-bit (x86-64)" : "32-bit (i386)");
+#endif
     Monitor_Fact("started", "%s", started);
     cpu_name(cpu, sizeof(cpu));
 #ifdef _WIN32
@@ -586,6 +614,9 @@ static void walk_remote(uintptr_t eip, uintptr_t esp, uintptr_t ebp)
 #ifndef _WIN32
 static const char *syscall_name(long number)
 {
+#ifndef __i386__
+    if (number >= 0) return ""; /* the numbers below are i386's */
+#endif
     switch (number) { /* i386 */
     case 3: return "read";
     case 4: return "write";
@@ -635,12 +666,25 @@ static int thread_registers(pid_t tid, uintptr_t *eip, uintptr_t *esp, uintptr_t
             /* An interrupt stop, or a signal on its way (the 1 kHz clock
              * makes that likely), which detaching hands back. */
             int inject = (status >> 16) == PTRACE_EVENT_STOP ? 0 : WSTOPSIG(status);
+#if defined(__aarch64__)
+            /* AArch64 has no PTRACE_GETREGS: the general registers are the
+             * NT_PRSTATUS register set. */
+            struct iovec vector = {&registers, sizeof(registers)};
+            int result = ptrace(PTRACE_GETREGSET, tid, (void *)(uintptr_t)1 /* NT_PRSTATUS */, &vector) ? -1 : 0;
+#else
             int result = ptrace(PTRACE_GETREGS, tid, 0, &registers) ? -1 : 0;
+#endif
             ptrace(PTRACE_DETACH, tid, 0, (void *)(uintptr_t)inject);
             if (result) return -1;
+#if defined(__aarch64__)
+            *eip = (uintptr_t)registers.pc;
+            *esp = (uintptr_t)registers.sp;
+            *ebp = (uintptr_t)registers.regs[29];
+#else
             *eip = (uintptr_t)registers.eip;
             *esp = (uintptr_t)registers.esp;
             *ebp = (uintptr_t)registers.ebp;
+#endif
             return 0;
         }
     }

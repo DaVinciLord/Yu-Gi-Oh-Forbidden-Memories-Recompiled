@@ -51,7 +51,10 @@ static volatile int bus_volume[SPU_BUS_COUNT] = {100, 100, 100};
 
 #define CD_RING 65536u /* frames; power of two */
 static int16_t cd_ring[CD_RING * 2];
+/* cd_tail: the read position in the low 16 bits, a flush count above it
+ * (see Spu_CdFlush). */
 static volatile uint32_t cd_head, cd_tail, cd_rate = 37800;
+_Static_assert(CD_RING == 0x10000u, "cd_tail keeps the position in its low 16 bits");
 static uint32_t cd_phase;
 static int16_t cd_last[2], cd_next[2];
 
@@ -199,7 +202,29 @@ static void envelope(Voice *voice)
     }
 }
 
-size_t Spu_CdSpace(void) { return CD_RING - 1 - ((cd_head - cd_tail) & (CD_RING - 1)); }
+/* The CD/XA ring: the game thread writes samples and moves cd_head
+ * (Spu_CdWrite), its only writer; the audio callback reads them and moves
+ * cd_tail on by one (Spu_Mix). A flush (Spu_CdFlush, the game thread)
+ * moves cd_tail to the head at once, so the next write has the whole ring
+ * and a new stream's start is not cut short. cd_tail therefore changes
+ * only by compare-and-swap, from either side, and neither change is lost:
+ *  - the flush's target is the current head, and the mixer never reads
+ *    past the head, so the tail never moves backwards;
+ *  - a mixer that read a slot and then loses its swap to a flush drops
+ *    that sample (flushed data, which the writer may already be
+ *    overwriting) and reads again from the new tail;
+ *  - each flush also counts up in cd_tail's high 16 bits, so a mixer that
+ *    read the tail before a flush, a lap of writes and another flush that
+ *    landed on the same position cannot have its swap succeed (ABA).
+ * Each side publishes its index with a release and reads the other's with
+ * an acquire: on a weakly ordered CPU (ARM) the reader never sees a head
+ * before the samples behind it, nor the writer a tail before the reader is
+ * done with those slots. On x86 the head and the loads are plain moves,
+ * and moving the tail is one locked cmpxchg per CD sample. */
+size_t Spu_CdSpace(void)
+{
+    return CD_RING - 1 - ((cd_head - __atomic_load_n(&cd_tail, __ATOMIC_ACQUIRE)) & (CD_RING - 1));
+}
 
 size_t Spu_CdWrite(const int16_t *frames, size_t count, unsigned rate)
 {
@@ -213,11 +238,17 @@ size_t Spu_CdWrite(const int16_t *frames, size_t count, unsigned rate)
         cd_ring[at * 2] = frames[i * 2];
         cd_ring[at * 2 + 1] = frames[i * 2 + 1];
     }
-    cd_head = (cd_head + count) & (CD_RING - 1);
+    __atomic_store_n(&cd_head, (cd_head + count) & (CD_RING - 1), __ATOMIC_RELEASE);
     return count;
 }
 
-void Spu_CdFlush(void) { cd_tail = cd_head; }
+void Spu_CdFlush(void)
+{
+    uint32_t tail = __atomic_load_n(&cd_tail, __ATOMIC_ACQUIRE), to;
+    do {
+        to = ((tail & ~(CD_RING - 1)) + CD_RING) | cd_head; /* one more flush; the position at the head */
+    } while (!__atomic_compare_exchange_n(&cd_tail, &tail, to, 0, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE));
+}
 
 void Spu_Mix(int16_t *out, size_t frames)
 {
@@ -350,12 +381,17 @@ void Spu_Mix(int16_t *out, size_t frames)
                 cd_phase -= 44100;
                 cd_last[0] = cd_next[0];
                 cd_last[1] = cd_next[1];
-                if (cd_tail != cd_head) {
-                    cd_next[0] = cd_ring[cd_tail * 2];
-                    cd_next[1] = cd_ring[cd_tail * 2 + 1];
-                    cd_tail = (cd_tail + 1) & (CD_RING - 1);
-                } else {
-                    cd_next[0] = cd_next[1] = 0;
+                uint32_t tail = __atomic_load_n(&cd_tail, __ATOMIC_ACQUIRE), at;
+                cd_next[0] = cd_next[1] = 0;
+                while ((at = tail & (CD_RING - 1)) != __atomic_load_n(&cd_head, __ATOMIC_ACQUIRE)) {
+                    int16_t l = cd_ring[at * 2], r = cd_ring[at * 2 + 1];
+                    uint32_t next = (tail & ~(CD_RING - 1)) | ((at + 1) & (CD_RING - 1));
+                    if (__atomic_compare_exchange_n(&cd_tail, &tail, next, 0, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+                        cd_next[0] = l;
+                        cd_next[1] = r;
+                        break;
+                    }
+                    /* a flush moved the tail: that sample was flushed; read from the new tail */
                 }
             }
             /* A replaced XA clip rides the CD input, under its volume. */

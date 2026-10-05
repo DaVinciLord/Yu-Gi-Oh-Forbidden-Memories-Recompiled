@@ -52,6 +52,7 @@ void Menu_ShowNotice(const char *title, const char *text, const char *const *but
     notices++;
     notice_answer = answer;
 }
+void Menu_Open(void) {} /* quit_prompt.c's Back variant; Back is not a host action */
 int Log_Wanted(LogChannel channel)
 {
     (void)channel;

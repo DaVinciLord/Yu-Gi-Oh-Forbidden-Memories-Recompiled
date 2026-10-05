@@ -350,6 +350,43 @@ void TextureDump_Cleared(int x, int y, int w, int h)
     if (TextureDump_Forget) TextureDump_Forget(x, y, w, h);
 }
 
+size_t TextureDump_TagRuns(uint32_t *runs, size_t max)
+{
+    size_t at, count = 0, words = (size_t)SOFT_GPU_WIDTH * SOFT_GPU_HEIGHT;
+    uint32_t next = 0;
+    if (!TextureDump_Tags) return 0;
+    for (at = 0; at < words; at++) {
+        uint32_t tag = TextureDump_Tags[at];
+        if (count && tag == next) {
+            if (count <= max) runs[count * 2 - 1]++;
+        } else {
+            if (count < max) {
+                runs[count * 2] = tag;
+                runs[count * 2 + 1] = 1;
+            }
+            count++;
+        }
+        next = tag ? tag + 2 : 0;
+    }
+    return count;
+}
+
+void TextureDump_TagsLoaded(const uint32_t *runs, size_t count)
+{
+    size_t i, at = 0, words = (size_t)SOFT_GPU_WIDTH * SOFT_GPU_HEIGHT;
+    TextureDump_Cleared(0, 0, SOFT_GPU_WIDTH, SOFT_GPU_HEIGHT);
+    if (!TextureDump_Tags) return;
+    for (i = 0; runs && i < count && at < words; i++) {
+        uint32_t tag = runs[i * 2], length = runs[i * 2 + 1], k;
+        if (length > words - at) length = (uint32_t)(words - at);
+        if (tag && tag - 1 < TEXTURE_MADE_BASE) {
+            for (k = 0; k < length; k++) TextureDump_Tags[at + k] = tag + k * 2;
+        }
+        at += length;
+    }
+    if (TextureDump_Restored) TextureDump_Restored();
+}
+
 static void write_archives_once(void)
 {
     static const char *const paths[] = {"\\DATA\\WA_MRG.MRG;1", "\\DATA\\SU.MRG;1", "\\DATA\\MODEL.MRG;1"};

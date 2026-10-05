@@ -16,6 +16,8 @@ void Menu_DrawTextScaled(MenuCanvas *c, int x, int y, const char *s, uint32_t co
     (void)sc;
 }
 void Monitor_Modal(int on) { (void)on; }
+int Log_Wanted(LogChannel channel) { (void)channel; return 0; } /* the pump logs keys with MEMORIES_TRACE=input */
+void CrashTest_Present(void) {}
 void ModsWindow_Init(void) {}
 void ModsWindow_Size(int *w, int *h)
 {

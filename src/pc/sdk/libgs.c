@@ -4,12 +4,14 @@
 #include "types.h"
 #include "psyq/libgte.h"
 #include "psyq/libgpu.h"
+#include "psyq/libgs.h" /* the declarations the game calls through */
 #include "pc/compat/libgs_ot.h"
 #include "pc/guest/image.h"
 #include "pc/debug/crash.h"
 #include "pc/compat/pgxp.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <stddef.h>
 #include <string.h>
 
 extern short D_800FE030[2], D_800FE034[2]; /* display buffer x[2], y[2] */
@@ -48,12 +50,12 @@ static void require(MemoriesGsResult result, const char *name)
     }
 }
 
-void GsClearOt(unsigned short offset, unsigned short point, void *ot)
+void GsClearOt(unsigned short offset, unsigned short point, GsOT *ot)
 {
     require(Memories_GsClearOt(IMAGE, offset, point, (uint32_t)(uintptr_t)ot), "GsClearOt");
 }
 
-void *GsSortOt(void *source, void *destination)
+GsOT *GsSortOt(GsOT *source, GsOT *destination)
 {
     require(Memories_GsSortOt(IMAGE, (uint32_t)(uintptr_t)source,
                               (uint32_t)(uintptr_t)destination, SORT_HOP_LIMIT), "GsSortOt");
@@ -191,12 +193,12 @@ int GsGetActiveBuff(void)
     return D_800FE0CC;
 }
 
-void GsSetWorkBase(void *base)
+void GsSetWorkBase(PACKET *base)
 {
-    D_800FE240 = (u32)base;
+    D_800FE240 = (u32)(uintptr_t)base;
 }
 
-void GsSetOrign(int x, int y)
+void GsSetOrign(PSXLONG x, PSXLONG y)
 {
     D_800FE040[0] = (short)x;
     D_800FE040[1] = (short)y;
@@ -212,12 +214,12 @@ void GsInit3D(void)
     D_800FE0D8 = 0x3fff;
 }
 
-void GsSetAmbient(long r, long g, long b)
+void GsSetAmbient(PSXLONG r, PSXLONG g, PSXLONG b)
 {
     SetBackColor(r >> 4, g >> 4, b >> 4);
 }
 
-void GsSetProjection(long h)
+void GsSetProjection(PSXLONG h)
 {
     SetGeomScreen(h);
 }
@@ -245,15 +247,11 @@ static u32 *make_packet(u32 *packet, u32 *ot, unsigned pri, unsigned words)
     return packet + words + 1;
 }
 
-typedef struct BoxFill {
-    u32 attribute;
-    short x, y;
-    u16 w, h;
-    u8 r, g, b;
-} BoxFill;
+typedef GsBOXF BoxFill;
 
-void GsSortBoxFill(BoxFill *box, u32 *ot, unsigned short pri)
+void GsSortBoxFill(BoxFill *box, GsOT *table, unsigned short pri)
 {
+    u32 *ot = (u32 *)table;
     u32 *packet = (u32 *)(uintptr_t)D_800FE240;
     int attribute = (int)box->attribute;
     u8 *bytes = (u8 *)packet;
@@ -281,6 +279,9 @@ typedef struct Line {
     short x0, y0, x1, y1;
     u8 r0, g0, b0, r1, g1, b1;
 } Line;
+_Static_assert(sizeof(Line) == sizeof(GsGLINE) && offsetof(Line, r0) == offsetof(GsLINE, r) &&
+                   offsetof(Line, r1) == offsetof(GsGLINE, r1),
+               "Line covers GsLINE and GsGLINE");
 
 static void sort_line(const Line *line, u32 *ot, unsigned short pri, int shaded)
 {
@@ -299,21 +300,15 @@ static void sort_line(const Line *line, u32 *ot, unsigned short pri, int shaded)
     D_800FE240 = (u32)(uintptr_t)make_packet(packet, ot, pri, shaded ? 5 : 4);
 }
 
-void GsSortLine(Line *line, u32 *ot, unsigned short pri) { sort_line(line, ot, pri, 0); }
-void GsSortGLine(Line *line, u32 *ot, unsigned short pri) { sort_line(line, ot, pri, 1); }
+void GsSortLine(GsLINE *line, GsOT *ot, unsigned short pri) { sort_line((const Line *)line, (u32 *)ot, pri, 0); }
+void GsSortGLine(GsGLINE *line, GsOT *ot, unsigned short pri) { sort_line((const Line *)line, (u32 *)ot, pri, 1); }
 
-typedef struct Sprite {
-    u32 attribute;
-    short x, y;
-    u16 w, h;
-    u16 tpage;
-    u8 u, v;
-    short cx, cy;
-    u8 r, g, b;
-    short mx, my;
-    short scalex, scaley;
-    long rotate;
-} Sprite;
+typedef GsSPRITE Sprite;
+
+/* The console's layouts, which the game's records keep in guest memory. */
+_Static_assert(sizeof(GsOT) == 20 && sizeof(GsSPRITE) == 36 && offsetof(GsSPRITE, rotate) == 32 &&
+                   sizeof(GsLINE) == 16 && sizeof(GsGLINE) == 20 && sizeof(GsBOXF) == 16,
+               "LIBGS records must keep their 32-bit layouts");
 
 static u32 sprite_colour(const Sprite *sprite, u32 code)
 {
@@ -339,15 +334,17 @@ static void sort_plain_sprite(const Sprite *sprite, u32 *ot, unsigned pri, int m
     D_800FE240 = (u32)(uintptr_t)make_packet(packet, ot, pri, 5);
 }
 
-void GsSortFastSprite(Sprite *sprite, u32 *ot, unsigned short pri)
+void GsSortFastSprite(Sprite *sprite, GsOT *table, unsigned short pri)
 {
+    u32 *ot = (u32 *)table;
     if ((int)sprite->attribute >= 0 && sprite->w && sprite->h) {
         sort_plain_sprite(sprite, ot, pri, 0, 0);
     }
 }
 
-void GsSortSprite(Sprite *sprite, u32 *ot, unsigned short pri)
+void GsSortSprite(Sprite *sprite, GsOT *table, unsigned short pri)
 {
+    u32 *ot = (u32 *)table;
     u32 attribute = sprite->attribute, *packet, xy[4];
     MATRIX matrix = D_800FE168;
     int u_left, u_right, v_top, v_bottom, i;
@@ -375,8 +372,8 @@ void GsSortSprite(Sprite *sprite, u32 *ot, unsigned short pri)
     for (i = 0; i < 4; i++) {
         SVECTOR corner = {(short)((i & 1 ? sprite->w : 0) - sprite->mx),
                           (short)((i & 2 ? sprite->h : 0) - sprite->my), 0, 0};
-        long p, flag;
-        RotTransPers(&corner, (long *)&xy[i], &p, &flag);
+        PSXLONG p, flag;
+        RotTransPers(&corner, (PSXLONG *)&xy[i], &p, &flag);
     }
     u_left = attribute & 0x800000 ? sprite->u + sprite->w - 1 : sprite->u;
     u_right = attribute & 0x800000 ? sprite->u : sprite->u + sprite->w - 1;
@@ -399,8 +396,9 @@ void GsSortSprite(Sprite *sprite, u32 *ot, unsigned short pri)
 /* Copy a LIBGPU polygon primitive into the packet area, applying the
  * GTE-mode buffer offset to every vertex. The word order is colour, then per
  * vertex: [next colour when Gouraud], position, [texture word]. */
-void GsSortPoly(u32 *primitive, u32 *ot, unsigned short pri)
+void GsSortPoly(void *pp, GsOT *table, unsigned short pri)
 {
+    u32 *primitive = pp, *ot = (u32 *)table;
     u32 *packet = (u32 *)(uintptr_t)D_800FE240;
     unsigned code = primitive[1] >> 24, words = 1, vertex, vertices = code & 8 ? 4 : 3;
     packet[1] = primitive[1];
@@ -427,8 +425,9 @@ void GsSortPoly(u32 *primitive, u32 *ot, unsigned short pri)
 
 /* Unscaled sprite as a textured quad so either axis can be mirrored. Mirrored
  * axes run from u+w-1 down to u-1, which keeps texels 1:1 with pixels. */
-void GsSortFlipSprite(Sprite *sprite, u32 *ot, unsigned short pri)
+void GsSortFlipSprite(Sprite *sprite, GsOT *table, unsigned short pri)
 {
+    u32 *ot = (u32 *)table;
     u32 attribute = sprite->attribute, *packet, left, right, top, bottom;
     int x, y, u_left, u_right, v_top, v_bottom;
     if ((int)attribute < 0 || !sprite->w || !sprite->h) {

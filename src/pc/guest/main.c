@@ -69,7 +69,7 @@ int Platform_RestartGame(void)
 
 static char **launch_argv;
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__ANDROID__) /* android.c: an app cannot re-execute itself */
 int Platform_RestartGame(void)
 {
     struct itimerval stopped = {0}, previous;
@@ -202,7 +202,11 @@ int main(int argc, char **argv)
     Paths_WatchUserDir(user_dir_fact);
     CrashTest_Init();
     /* Guest globals are linked at fixed addresses: map before touching any. */
-    if (Memories_GuestMap() != 0) return 1;
+    if (Memories_GuestMap() != 0) {
+        char why[600];
+        if (Platform_GuestMemoryHelp(why, sizeof(why))) Platform_ShowError("Yu-Gi-Oh! Forbidden Memories", why);
+        return 1;
+    }
     {
         int loaded = load_game(exe);
         if (loaded) return loaded > 0 ? 0 : 1;

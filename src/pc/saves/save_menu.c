@@ -1,5 +1,6 @@
 /* The save slot menu. See save_menu.h. */
 #include "save_menu.h"
+#include "flow_text.h"
 #include "pc/guest/state.h"
 #include "pc/platform/settings.h"
 #include <stdint.h>
@@ -417,31 +418,120 @@ static const char *title(void)
     return "Load game";
 }
 
+/* The details and the hints on as few lines of `w` as hold them (flow_text.h). */
+static int flowed(MenuCanvas *canvas, int x, int w, int y, int line_h, const char *text, uint32_t colour,
+                  int *widest)
+{
+    return FlowText(canvas, x, w, y, line_h, text, colour, widest, text_width, draw_text);
+}
+
+/* A slot's row: its number and name into `line`, and what goes beside it
+ * (the details of a save, or the slot's state). */
+static const char *slot_text(int slot, char *line, size_t size, char *details, size_t details_size)
+{
+    const SaveSlotInfo *info = &menu.slots[slot];
+    if (info->status == SAVE_SLOT_USED) {
+        snprintf(line, size, "%2d   %s%s%s", slot + 1, info->name[0] ? info->name : "(no name)",
+                 slot == menu.current_slot ? "  (current)" : "",
+                 menu.step == SAVE_MENU_LOAD_PAIR && menu.side == 1 && slot == menu.pair_slot[0] ? "  (player 1)"
+                                                                                                 : "");
+        describe(info, details, details_size);
+        return details;
+    }
+    snprintf(line, size, "%2d", slot + 1);
+    return info->status == SAVE_SLOT_EMPTY ? "Empty" : info->status == SAVE_SLOT_UNREADABLE ? "Cannot read" : "Damaged save";
+}
+
+/* The menu reads the game's pad state, so View > Japanese buttons
+ * (button_layout.h) exchanges its buttons too. */
+static const char *hints(void)
+{
+    if (Settings_Get(SET_JP_BUTTONS))
+        return menu.step == SAVE_MENU_SAVE ? "Circle: save here    Cross: back" : "Circle: load    Cross: back";
+    return menu.step == SAVE_MENU_SAVE ? "Cross: save here    Circle: back" : "Cross: load    Circle: back";
+}
+
+/* How the list is set at scale `s` in a box `pw` wide: 0 each slot on one
+ * row (the layout a desktop window has room for), 1 the details under the
+ * name and the hints wrapped (a narrow window, or the middle of a phone
+ * between the touch controls), -1 not even that. */
+static int list_layout(int pw, int s)
+{
+    char line[160], details[128];
+    int slot, one_row = 1, piece;
+    ui_scale = s;
+    if (text_width(title()) + 44 * s > pw || text_width(hints()) + 28 * s > pw) one_row = 0;
+    for (slot = 0; slot < SAVE_SLOT_COUNT && one_row; slot++) {
+        const char *right = slot_text(slot, line, sizeof(line), details, sizeof(details));
+        if (32 * s + text_width(line) + 24 * s + text_width(right) > pw) one_row = 0;
+    }
+    if (one_row) return 0;
+    if (text_width(title()) + 44 * s > pw) return -1;
+    flowed(NULL, 0, pw, 0, 0, hints(), 0, &piece);
+    if (piece + 28 * s > pw) return -1;
+    for (slot = 0; slot < SAVE_SLOT_COUNT; slot++) {
+        const char *right = slot_text(slot, line, sizeof(line), details, sizeof(details));
+        flowed(NULL, 0, pw, 0, 0, right, 0, &piece);
+        if (32 * s + text_width(line) + (menu.slots[slot].status == SAVE_SLOT_USED ? 0 : 24 * s + piece) > pw ||
+            48 * s + piece > pw)
+            return -1;
+    }
+    return 1;
+}
+
 static void draw_confirm(MenuCanvas *canvas, int px, int pw, int cy, int s)
 {
     const SaveSlotInfo *info = &menu.slots[menu.cursor];
-    char line[160], details[128];
+    char line[160], details[128], first[64];
     int w = pw - 48 * s, h = 132 * s, x = px + 24 * s, y = cy - h / 2, bx, bw = 120 * s;
-    const char *labels[2] = {"Overwrite", "Cancel"};
+    const char *labels[2] = {"Overwrite", "Cancel"}, *warning = NULL;
     int i;
-    frame(canvas, x, y, w, h, s);
-    snprintf(line, sizeof(line), "Slot %d already has a save.", menu.cursor + 1);
-    centred(canvas, x, w, y + 18 * s, line, COLOUR_TEXT);
+    snprintf(first, sizeof(first), "Slot %d already has a save.", menu.cursor + 1);
     if (info->status == SAVE_SLOT_USED) {
         describe(info, details, sizeof(details));
         snprintf(line, sizeof(line), "%s   %s", info->name[0] ? info->name : "(no name)", details);
-        centred(canvas, x, w, y + 38 * s, line, COLOUR_DIM);
         if (info->duelist_code != state_code(menu.buffer)) {
-            centred(canvas, x, w, y + 58 * s, "It belongs to a different duelist.", COLOUR_WARN);
+            warning = "It belongs to a different duelist.";
         } else if (!same_game(info)) {
-            centred(canvas, x, w, y + 58 * s,
-                    info->sequence + 1 > state_sequence(menu.buffer) ? "It is further along than the game you are saving."
-                                                                     : "It is an earlier save of this game.",
-                    COLOUR_WARN);
+            warning = info->sequence + 1 > state_sequence(menu.buffer) ? "It is further along than the game you are saving."
+                                                                       : "It is an earlier save of this game.";
         }
     } else {
-        centred(canvas, x, w, y + 38 * s, "The save in it is damaged.", COLOUR_WARN);
+        line[0] = '\0';
+        warning = "The save in it is damaged.";
     }
+    if (2 * bw + 16 * s > w || text_width(first) > w || text_width(line) > w || (warning && text_width(warning) > w)) {
+        /* Narrow: the box takes the menu's width, the text wraps and the
+         * buttons share what is left. */
+        int line_h = 20 * s, inner, n, top;
+        x = px + 8 * s;
+        w = pw - 16 * s;
+        inner = w - 24 * s;
+        n = wrapped(NULL, x + 12 * s, inner, 0, line_h, first, COLOUR_TEXT) +
+            (line[0] ? wrapped(NULL, x + 12 * s, inner, 0, line_h, line, COLOUR_DIM) : 0) +
+            (warning ? wrapped(NULL, x + 12 * s, inner, 0, line_h, warning, COLOUR_WARN) : 0) +
+            wrapped(NULL, x + 12 * s, inner, 0, line_h, "Overwrite it?", COLOUR_TEXT);
+        h = 18 * s + n * line_h + 8 * s + 24 * s + 12 * s;
+        y = cy - h / 2;
+        frame(canvas, x, y, w, h, s);
+        top = y + 18 * s;
+        top += wrapped(canvas, x + 12 * s, inner, top, line_h, first, COLOUR_TEXT) * line_h;
+        if (line[0]) top += wrapped(canvas, x + 12 * s, inner, top, line_h, line, COLOUR_DIM) * line_h;
+        if (warning) top += wrapped(canvas, x + 12 * s, inner, top, line_h, warning, COLOUR_WARN) * line_h;
+        top += wrapped(canvas, x + 12 * s, inner, top, line_h, "Overwrite it?", COLOUR_TEXT) * line_h;
+        if (2 * bw + 16 * s > inner) bw = (inner - 16 * s) / 2;
+        bx = x + (w - 2 * bw - 16 * s) / 2;
+        for (i = 0; i < 2; i++) {
+            int chosen = i == menu.choice, left = bx + i * (bw + 16 * s);
+            fill(canvas, left, top - line_h / 2 + 8 * s, bw, 24 * s, chosen ? 0x3a5aa8u : 0x22263au, 255);
+            centred(canvas, left, bw, top - line_h / 2 + 20 * s, labels[i], chosen ? COLOUR_TEXT : COLOUR_DIM);
+        }
+        return;
+    }
+    frame(canvas, x, y, w, h, s);
+    centred(canvas, x, w, y + 18 * s, first, COLOUR_TEXT);
+    if (line[0]) centred(canvas, x, w, y + 38 * s, line, COLOUR_DIM);
+    if (warning) centred(canvas, x, w, y + (line[0] ? 58 : 38) * s, warning, COLOUR_WARN);
     centred(canvas, x, w, y + 80 * s, "Overwrite it?", COLOUR_TEXT);
     bx = x + (w - 2 * bw - 16 * s) / 2;
     for (i = 0; i < 2; i++) {
@@ -454,23 +544,44 @@ static void draw_confirm(MenuCanvas *canvas, int px, int pw, int cy, int s)
 
 void SaveMenu_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
 {
-    int s, row_h, rows, pw, ph, px, py, top, i, list_y;
-    char line[160];
+    int s, row_h, rows, pw, ph, px, py, top, i, list_y, left, right, bar, layout, line_h = 0, hint_lines = 1;
+    char line[160], details[128];
     *x = *y = *w = *h = 0;
     if (menu.view == VIEW_CLOSED || !menu.started || !canvas || !canvas->pixels) return;
+    /* The free width: the window's, or between the touch controls while
+     * they show (they play this menu). Each slot on one row when that is
+     * wide enough; else the details under the name; else smaller text. */
+    Menu_OverlayArea(canvas, &left, &right, &bar);
     s = canvas->height / 420 > Menu_Scale() ? canvas->height / 420 : Menu_Scale();
+    for (;; s--) {
+        pw = right - left - 16 * s < 600 * s ? right - left - 16 * s : 600 * s;
+        layout = list_layout(pw, s);
+        if (layout >= 0 || s == 1) break;
+    }
     ui_scale = s;
     row_h = 22 * s;
-    rows = (canvas->height - Menu_Height() - 96 * s) / row_h;
-    rows = rows < 3 ? 3 : rows > SAVE_SLOT_COUNT ? SAVE_SLOT_COUNT : rows;
+    if (layout > 0) {
+        /* Every row as tall as the longest details need. */
+        int most = 0;
+        line_h = 18 * s;
+        for (i = 0; i < SAVE_SLOT_COUNT; i++) {
+            if (menu.slots[i].status != SAVE_SLOT_USED) continue;
+            slot_text(i, line, sizeof(line), details, sizeof(details));
+            top = flowed(NULL, 0, pw - 48 * s, 0, 0, details, 0, NULL);
+            most = top > most ? top : most;
+        }
+        row_h = (1 + most) * line_h + 6 * s;
+        hint_lines = flowed(NULL, 0, pw - 28 * s, 0, 0, hints(), 0, NULL);
+    }
+    rows = (canvas->height - bar - 96 * s - (hint_lines - 1) * line_h) / row_h;
+    rows = rows < (layout > 0 ? 1 : 3) ? (layout > 0 ? 1 : 3) : rows > SAVE_SLOT_COUNT ? SAVE_SLOT_COUNT : rows;
     if (rows != shown_rows) {
         shown_rows = rows;
         keep_cursor_shown();
     }
-    pw = canvas->width - 16 * s < 600 * s ? canvas->width - 16 * s : 600 * s;
-    ph = 44 * s + rows * row_h + 34 * s;
-    px = (canvas->width - pw) / 2;
-    py = Menu_Height() + (canvas->height - Menu_Height() - ph) / 2;
+    ph = 44 * s + rows * row_h + 34 * s + (hint_lines - 1) * line_h;
+    px = left + (right - left - pw) / 2;
+    py = bar + (canvas->height - bar - ph) / 2;
     frame(canvas, px, py, pw, ph, s);
     draw_text(canvas, px + 14 * s, py + 20 * s, title(), COLOUR_TITLE);
     list_y = py + 38 * s;
@@ -479,58 +590,60 @@ void SaveMenu_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
         int slot = top + i, ry = list_y + i * row_h, cy = ry + row_h / 2;
         const SaveSlotInfo *info = &menu.slots[slot];
         uint32_t colour = selectable(slot) ? COLOUR_TEXT : COLOUR_DIM;
-        const char *right;
-        char details[128];
+        uint32_t right_colour =
+            info->status == SAVE_SLOT_DAMAGED || info->status == SAVE_SLOT_UNREADABLE ? COLOUR_WARN : colour;
+        const char *beside = slot_text(slot, line, sizeof(line), details, sizeof(details));
         if (slot == menu.cursor) fill(canvas, px + 6 * s, ry, pw - 12 * s, row_h - 2 * s, 0x3a5aa8u, 200);
-        if (info->status == SAVE_SLOT_USED) {
-            snprintf(line, sizeof(line), "%2d   %s%s%s", slot + 1, info->name[0] ? info->name : "(no name)",
-                     slot == menu.current_slot ? "  (current)" : "",
-                     menu.step == SAVE_MENU_LOAD_PAIR && menu.side == 1 && slot == menu.pair_slot[0]
-                         ? "  (player 1)" : "");
-            describe(info, details, sizeof(details));
-            right = details;
-        } else {
-            snprintf(line, sizeof(line), "%2d", slot + 1);
-            right = info->status == SAVE_SLOT_EMPTY        ? "Empty"
-                    : info->status == SAVE_SLOT_UNREADABLE ? "Cannot read"
-                                                           : "Damaged save";
+        if (layout > 0) {
+            int first = ry + 3 * s + line_h / 2;
+            draw_text(canvas, px + 16 * s, first, line, colour);
+            if (info->status == SAVE_SLOT_USED)
+                flowed(canvas, px + 32 * s, pw - 48 * s, first + line_h, line_h, beside, COLOUR_DIM, NULL);
+            else
+                draw_text(canvas, px + pw - 16 * s - text_width(beside), first, beside, right_colour);
+            continue;
         }
         draw_text(canvas, px + 16 * s, cy, line, colour);
-        draw_text(canvas, px + pw - 16 * s - text_width(right), cy, right,
-                      info->status == SAVE_SLOT_DAMAGED || info->status == SAVE_SLOT_UNREADABLE ? COLOUR_WARN
-                                                                                                : colour);
+        draw_text(canvas, px + pw - 16 * s - text_width(beside), cy, beside, right_colour);
     }
     if (menu.top > 0) draw_text(canvas, px + pw - 30 * s, py + 20 * s, "^", COLOUR_DIM);
     if (menu.top + rows < SAVE_SLOT_COUNT) draw_text(canvas, px + pw - 18 * s, py + 20 * s, "v", COLOUR_DIM);
-    /* The menu reads the game's pad state, so View > Japanese buttons
-     * (button_layout.h) exchanges its buttons too. */
-    if (Settings_Get(SET_JP_BUTTONS))
-        draw_text(canvas, px + 14 * s, py + ph - 16 * s,
-                  menu.step == SAVE_MENU_SAVE ? "Circle: save here    Cross: back" : "Circle: load    Cross: back",
-                  COLOUR_DIM);
+    if (layout > 0)
+        flowed(canvas, px + 14 * s, pw - 28 * s, py + ph - 16 * s - (hint_lines - 1) * line_h, line_h, hints(),
+               COLOUR_DIM, NULL);
     else
-        draw_text(canvas, px + 14 * s, py + ph - 16 * s,
-                  menu.step == SAVE_MENU_SAVE ? "Cross: save here    Circle: back" : "Cross: load    Circle: back",
-                  COLOUR_DIM);
+        draw_text(canvas, px + 14 * s, py + ph - 16 * s, hints(), COLOUR_DIM);
     if (menu.view == VIEW_CONFIRM) {
         draw_confirm(canvas, px, pw, py + ph / 2, s);
     } else if (menu.view == VIEW_MESSAGE && detail[0]) {
         /* A failed save: the message, then where and why, wrapped. */
         int mw = pw - 32 * s, mx = px + 16 * s, line_h = 18 * s;
+        int head = text_width(menu.message) > mw - 16 * s
+                       ? wrapped(NULL, mx + 12 * s, mw - 24 * s, 0, line_h, menu.message, COLOUR_TEXT) - 1 : 0;
         int lines = wrapped(NULL, mx + 12 * s, mw - 24 * s, 0, line_h, detail, COLOUR_DIM);
-        int mh = 64 * s + lines * line_h, my = py + (ph - mh) / 2;
+        int mh = 64 * s + (head + lines) * line_h, my = py + (ph - mh) / 2;
         frame(canvas, mx, my, mw, mh, s);
-        centred(canvas, mx, mw, my + 24 * s, menu.message, COLOUR_TEXT);
-        wrapped(canvas, mx + 12 * s, mw - 24 * s, my + 44 * s, line_h, detail, COLOUR_WARN);
+        if (head) wrapped(canvas, mx + 12 * s, mw - 24 * s, my + 24 * s, line_h, menu.message, COLOUR_TEXT);
+        else centred(canvas, mx, mw, my + 24 * s, menu.message, COLOUR_TEXT);
+        wrapped(canvas, mx + 12 * s, mw - 24 * s, my + 44 * s + head * line_h, line_h, detail, COLOUR_WARN);
         if (menu.message_waits)
             centred(canvas, mx, mw, my + mh - 18 * s, Settings_Get(SET_JP_BUTTONS) ? "Press Circle" : "Press Cross",
                     COLOUR_DIM);
     } else if (menu.view == VIEW_MESSAGE) {
-        int mw = pw - 96 * s, mh = 64 * s, mx = px + 48 * s, my = py + (ph - mh) / 2;
+        int mw = pw - 96 * s, mx = px + 48 * s, line_h = 18 * s, more = 0, mh, my;
+        if (text_width(menu.message) > mw - 16 * s) { /* narrow: the menu's width, wrapped */
+            mw = pw - 32 * s;
+            mx = px + 16 * s;
+            more = wrapped(NULL, mx + 12 * s, mw - 24 * s, 0, line_h, menu.message, COLOUR_TEXT) - 1;
+        }
+        mh = 64 * s + more * line_h;
+        my = py + (ph - mh) / 2;
         frame(canvas, mx, my, mw, mh, s);
-        centred(canvas, mx, mw, my + 24 * s, menu.message, COLOUR_TEXT);
+        if (more) wrapped(canvas, mx + 12 * s, mw - 24 * s, my + 24 * s, line_h, menu.message, COLOUR_TEXT);
+        else centred(canvas, mx, mw, my + 24 * s, menu.message, COLOUR_TEXT);
         if (menu.message_waits)
-            centred(canvas, mx, mw, my + 46 * s, Settings_Get(SET_JP_BUTTONS) ? "Press Circle" : "Press Cross", COLOUR_DIM);
+            centred(canvas, mx, mw, my + 46 * s + more * line_h,
+                    Settings_Get(SET_JP_BUTTONS) ? "Press Circle" : "Press Cross", COLOUR_DIM);
     }
     *x = px;
     *y = py;

@@ -29,7 +29,7 @@
 #include "win32.h"
 #else
 #include <sys/syscall.h>
-#include <ucontext.h>
+#include "signal_context.h"
 #endif
 
 static volatile unsigned vblank_count;
@@ -203,7 +203,7 @@ static void on_alarm(int number, siginfo_t *info, void *context)
     ucontext_t *user = context;
     (void)number;
     (void)info;
-    on_tick((uintptr_t)user->uc_mcontext.gregs[REG_EIP], context);
+    on_tick((uintptr_t)SIGNAL_CONTEXT_PC(user), context);
 }
 #endif
 
@@ -299,6 +299,16 @@ void Platform_SetClockRate(int percent)
 }
 
 int Platform_ClockRate(void) { return rate; }
+
+#ifndef __ANDROID__ /* android.c: GLES only */
+int Platform_HasDesktopGL(void) { return 1; }
+int Platform_GuestMemoryHelp(char *why, size_t size)
+{
+    (void)why;
+    (void)size;
+    return 0;
+}
+#endif
 void Platform_StepFrame(void) { step_pending = 1; }
 
 void Platform_ControlAttach(int attached)

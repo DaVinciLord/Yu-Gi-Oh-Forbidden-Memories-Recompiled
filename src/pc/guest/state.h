@@ -25,12 +25,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* The game stack: the fixed range the game's own code runs on (state.c). */
-#ifdef _WIN32
-#define MEMORIES_GAME_STACK_BASE 0xB0000000u /* 32-bit Windows loads system DLLs around 0x70000000; mods use 0x90000000 */
-#else
-#define MEMORIES_GAME_STACK_BASE 0x70000000u
-#endif
+/* The game stack: the fixed range the game's own code runs on (state.c),
+ * at one address on every system. 32-bit Windows loads system DLLs around
+ * 0x70000000, and an Android app process has ART's boot image there; mods
+ * use 0x90000000. */
+#define MEMORIES_GAME_STACK_BASE 0xB0000000u
 #define MEMORIES_GAME_STACK_SIZE 0x00800000u
 
 typedef struct MemoriesState MemoriesState;
@@ -50,7 +49,13 @@ int Memories_StateLoading(const MemoriesState *state);
  * and entry registers are scanned; native chunks keep their own formats. */
 void Memories_StateRemapRange(MemoriesState *state, uint32_t from, uint32_t to, uint32_t size);
 
-/* Registers on entry to VSync, written by the assembly entry (state_i386.S). */
+/* Registers on entry to VSync, written by the assembly entry (state_i386.S,
+ * state_x86_64.S, state_aarch64.S): what the game caller expects back. The
+ * stack pointer as the caller left it (MEMORIES_STATE_ENTRY_SP), and where
+ * VSync returns to (MEMORIES_STATE_ENTRY_CALLER): on x86 the word the stack
+ * pointer points at, on AArch64 the link register. The layout is the
+ * "entry" chunk of a state, and a state loads only in a build for the
+ * system that saved it. */
 #if defined(__x86_64__)
 /* state_x86_64.S. The stack pointer keeps the i386 name, so the state code
  * reads one name on both. */
@@ -58,15 +63,49 @@ typedef struct MemoriesStateEntry {
     uint64_t rbx, rbp, rdi, rsi, r12, r13, r14, r15, esp; /* esp: rsp, at the return address */
     uint64_t xmm[20]; /* xmm6-xmm15, which Win64 keeps across a call too */
 } MemoriesStateEntry;
+#define MEMORIES_STATE_ENTRY_SP(entry) ((entry).esp)
+#define MEMORIES_STATE_ENTRY_CALLER(entry) (*(const uint64_t *)(uintptr_t)(entry).esp)
+#elif defined(__aarch64__)
+/* state_aarch64.S. `esp` is SP as the caller left it, as on x86-64. */
+typedef struct MemoriesStateEntry {
+    uint64_t x19_x28[10];  /* offsets 0..72 */
+    uint64_t x29, lr, esp; /* 80, 88, 96 */
+    uint64_t d8_d15[8];    /* 104: the low halves of V8-V15 */
+} MemoriesStateEntry;
+#define MEMORIES_STATE_ENTRY_SP(entry) ((entry).esp)
+#define MEMORIES_STATE_ENTRY_CALLER(entry) ((entry).lr)
 #else
 typedef struct MemoriesStateEntry {
     uint32_t ebx, esi, edi, ebp, esp; /* esp points at the return address */
 } MemoriesStateEntry;
+#define MEMORIES_STATE_ENTRY_SP(entry) ((entry).esp)
+#define MEMORIES_STATE_ENTRY_CALLER(entry) (*(const uint32_t *)(uintptr_t)(entry).esp)
 #endif
 extern MemoriesStateEntry Memories_StateEntry;
 
 /* main(): run `entry` on the fixed game stack. Does not return. */
 int Memories_StateRunGame(int (*entry)(void));
+/* function(argument) on the thread's own stack. Android's runtime refuses a
+ * Java call (JNI) from a native stack it does not know, as the game stack
+ * is: on Android arm64 a call made there runs below the suspended process
+ * side of the game thread (the service context) instead. Anywhere else, or
+ * off the game stack, a plain call. */
+void Memories_OnHostStack(void (*function)(void *), void *argument);
+#ifdef __ANDROID__
+/* Android: before an SDL call that may reach Java (platform/jni_guard.h).
+ * On the game stack it logs `name` once ("... which may call Java, ran on
+ * the game stack") and counts it; elsewhere it does nothing. */
+void Memories_JniGuard(const char *name);
+/* How many such calls ran on the game stack since the start. */
+unsigned Memories_JniGuardCount(void);
+#ifdef __aarch64__
+/* MEMORIES_TEST_HOST_STACK=1: the deepest use, in bytes, of the thread's
+ * own stack below the switch point by Memories_OnHostStack's calls since
+ * the first; 0 when not measuring. *painted is the span watched, and
+ * *stack_size the thread's stack. */
+size_t Memories_HostStackUsed(size_t *painted, size_t *stack_size);
+#endif
+#endif
 /* VSync(0), after presenting: act on a pending save or load request. */
 void Memories_StatePoint(unsigned presented_frames);
 /* 1 save, 2 load; taken up at the next state point. Async-signal-safe. */

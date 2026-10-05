@@ -49,12 +49,24 @@ static uint32_t stack_top;   /* 0 until the stack is mapped */
 static uint32_t current_sp;  /* the innermost interpreted frame, or 0 */
 uint32_t Memories_MipsThunkTarget;
 
-static uint32_t l32(uint32_t a) { return *(uint32_t *)(uintptr_t)a; }
-static uint16_t l16(uint32_t a) { return *(uint16_t *)(uintptr_t)a; }
-static uint8_t l8(uint32_t a) { return *(uint8_t *)(uintptr_t)a; }
-static void s32(uint32_t a, uint32_t v) { *(uint32_t *)(uintptr_t)a = v; }
-static void s16(uint32_t a, uint16_t v) { *(uint16_t *)(uintptr_t)a = v; }
-static void s8(uint32_t a, uint8_t v) { *(uint8_t *)(uintptr_t)a = v; }
+/* Retail code reaches the scratchpad at 0x1F800000, which the host may not
+ * let the port map; the port's view of it is 0x9F800000 (image.h). Every
+ * guest address the interpreter dereferences, or hands to native code,
+ * goes through AT(): where something else holds 0x1F800000 (an Android
+ * app's Java heap) an access there would not fault but reach the holder. */
+#define AT(a) ((uintptr_t)MEMORIES_SCRATCHPAD_VIEW(a))
+/* A word the interpreter hands to native code (an argument or a result),
+ * which may or may not be a pointer: translated only where the retail view
+ * is not mapped (an Android app). Where it is (Windows, Linux) both
+ * addresses reach the same page, and the word goes over as it is, so an
+ * integer in 0x1F800000-0x1F8003FF is never changed there. */
+#define HANDED(v) (Memories_ScratchpadRetailView ? (uintptr_t)(v) : AT(v))
+static uint32_t l32(uint32_t a) { return *(uint32_t *)AT(a); }
+static uint16_t l16(uint32_t a) { return *(uint16_t *)AT(a); }
+static uint8_t l8(uint32_t a) { return *(uint8_t *)AT(a); }
+static void s32(uint32_t a, uint32_t v) { *(uint32_t *)AT(a) = v; }
+static void s16(uint32_t a, uint16_t v) { *(uint16_t *)AT(a) = v; }
+static void s8(uint32_t a, uint8_t v) { *(uint8_t *)AT(a) = v; }
 
 /* The bank at 0x80180000 holds the natively linked main-menu overlay, but
  * the credits (func_800507D0) load 16 SU sectors of MIPS there and call
@@ -135,16 +147,16 @@ static uint32_t call_native(State *s, uint32_t address)
     /* libc and libmath routines linked as SDK assembly in the original and
      * therefore absent from the generated native function map. */
     switch (address) {
-    case 0x8008E360u: memset((void *)(uintptr_t)s->r[4], 0, s->r[5]); return s->r[4];
-    case 0x8008E3D0u: memset((void *)(uintptr_t)s->r[4], s->r[5], s->r[6]); return s->r[4];
+    case 0x8008E360u: memset((void *)AT(s->r[4]), 0, s->r[5]); return s->r[4];
+    case 0x8008E3D0u: memset((void *)AT(s->r[4]), s->r[5], s->r[6]); return s->r[4];
     case 0x800866A0u: return (uint32_t)rsin((int)s->r[4]);
     case 0x80086770u: return (uint32_t)rcos((int)s->r[4]);
     case 0x80086920u: return (uint32_t)Psx_ccos((int)s->r[4]);
     case 0x80086BB0u: return (uint32_t)Psx_csin((int)s->r[4]);
     case 0x8008E590u: return Memories_Rand();
     /* The string routines, on guest pointers (guest RAM is mapped at its own address). */
-#define G(reg) ((void *)(uintptr_t)s->r[reg])
-#define GS(reg) ((const char *)(uintptr_t)s->r[reg])
+#define G(reg) ((void *)AT(s->r[reg]))
+#define GS(reg) ((const char *)AT(s->r[reg]))
     case 0x8008E320u: memmove(G(5), G(4), s->r[6]); return 0; /* bcopy(src, dst, n) */
     case 0x8008E390u: memcpy(G(4), G(5), s->r[6]); return s->r[4];
     case 0x8008FA80u: memmove(G(4), G(5), s->r[6]); return s->r[4];
@@ -157,7 +169,7 @@ static uint32_t call_native(State *s, uint32_t address)
 #undef G
 #undef GS
     case 0x8008E870u: /* printf: the modules' debug prints */
-        LOG(LOG_MIPS_PRINTF, "overlay printf: %s", (const char *)(uintptr_t)s->r[4]);
+        LOG(LOG_MIPS_PRINTF, "overlay printf: %s", (const char *)AT(s->r[4]));
         return 0;
     case 0x80058838u: { /* Model_QueueTintRequestForParts(slot, part, start, end, duration, part, ..., -1) */
         /* The variant modules pass up to 18 parts (24 argument words), more
@@ -166,7 +178,7 @@ static uint32_t call_native(State *s, uint32_t address)
         keep = current_sp;
         current_sp = sp;
         Model_QueueTintRequestForPartList((int32_t)s->r[4], (int32_t)s->r[5], s->r[6], s->r[7],
-                                          (int32_t)l32(sp + 16), (const int32_t *)(uintptr_t)(sp + 20));
+                                          (int32_t)l32(sp + 16), (const int32_t *)AT(sp + 20));
         current_sp = keep;
         return 0;
     }
@@ -178,8 +190,15 @@ static uint32_t call_native(State *s, uint32_t address)
     }
     keep = current_sp;
     current_sp = sp;
-    result = (uint32_t)((Call)e->host)(s->r[4], s->r[5], s->r[6], s->r[7], l32(sp + 16), l32(sp + 20), l32(sp + 24),
-                                       l32(sp + 28), l32(sp + 32), l32(sp + 36), l32(sp + 40), l32(sp + 44));
+    /* Where the retail view is not mapped, a retail scratchpad pointer among
+     * the arguments arrives as the port's view, as native game code writes
+     * it (SCRATCHPAD_ADDR). Which words are pointers is not known here, so
+     * an integer argument in that 1 KiB would be changed too; with the
+     * retail view mapped (the desktops) nothing is (HANDED). */
+    result = (uint32_t)((Call)e->host)(HANDED(s->r[4]), HANDED(s->r[5]), HANDED(s->r[6]), HANDED(s->r[7]),
+                                       HANDED(l32(sp + 16)), HANDED(l32(sp + 20)), HANDED(l32(sp + 24)),
+                                       HANDED(l32(sp + 28)), HANDED(l32(sp + 32)), HANDED(l32(sp + 36)),
+                                       HANDED(l32(sp + 40)), HANDED(l32(sp + 44)));
     current_sp = keep;
     return result;
 }
@@ -260,8 +279,8 @@ static void plain(State *s, uint32_t pc)
     case 0x2a: a = s->r[rs] + (uint32_t)im; word = l32(a & ~3u); s32(a & ~3u, (word & (0xffffff00u << ((a & 3) * 8))) | (s->r[rt] >> ((3 - (a & 3)) * 8))); break;
     case 0x2b: s32(s->r[rs] + (uint32_t)im, s->r[rt]); break;
     case 0x2e: a = s->r[rs] + (uint32_t)im; word = l32(a & ~3u); s32(a & ~3u, (word & (0x00ffffffu >> ((3 - (a & 3)) * 8))) | (s->r[rt] << ((a & 3) * 8))); break;
-    case 0x32: Memories_GteLoad(rt, (void *)(uintptr_t)(s->r[rs] + (uint32_t)im)); break;
-    case 0x3a: Memories_GteStore(rt, (void *)(uintptr_t)(s->r[rs] + (uint32_t)im)); break;
+    case 0x32: Memories_GteLoad(rt, (void *)AT(s->r[rs] + (uint32_t)im)); break;
+    case 0x3a: Memories_GteStore(rt, (void *)AT(s->r[rs] + (uint32_t)im)); break;
     default: fail(s, pc, "unsupported instruction", ins);
     }
     s->r[0] = 0;
@@ -363,7 +382,7 @@ int Memories_MipsTry(uint32_t address, const uint32_t *args, unsigned count, uin
         s.pc = take ? s.pc + 4 + ((uint32_t)im << 2) : next;
     }
     current_sp = saved_sp;
-    *result = s.r[2];
+    *result = (uint32_t)HANDED(s.r[2]); /* to native code: as the arguments above */
     return 0;
 }
 

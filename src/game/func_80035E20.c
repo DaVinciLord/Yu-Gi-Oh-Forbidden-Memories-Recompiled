@@ -86,16 +86,16 @@ void func_80035E20(DisplayObject *obj, GsOT *ot)
         x = x - gGraphics_sViewportX;
         y = y - gGraphics_sViewportY;
     }
-    ft4 = (POLY_FT4 *)0x1F800038;
-    vec = (SVECTOR *)0x1F800060;
-    mat = (MATRIX *)0x1F800078;
-    res = (PSXLONG *)0x1F8000A0;
-    gt4 = (POLY_GT4 *)0x1F800000;
-    sprites[0] = (GsSPRITE *)0x1F8000C0;
-    sprites[1] = (GsSPRITE *)0x1F800100;
-    sprites[2] = (GsSPRITE *)0x1F800140;
-    SetPolyGT4((POLY_GT4 *)0x1F800000);
-    SetSemiTrans((void *)0x1F800000, 1);
+    ft4 = (POLY_FT4 *)SCRATCHPAD_ADDR(0x1F800038);
+    vec = (SVECTOR *)SCRATCHPAD_ADDR(0x1F800060);
+    mat = (MATRIX *)SCRATCHPAD_ADDR(0x1F800078);
+    res = (PSXLONG *)SCRATCHPAD_ADDR(0x1F8000A0);
+    gt4 = (POLY_GT4 *)SCRATCHPAD_ADDR(0x1F800000);
+    sprites[0] = (GsSPRITE *)SCRATCHPAD_ADDR(0x1F8000C0);
+    sprites[1] = (GsSPRITE *)SCRATCHPAD_ADDR(0x1F800100);
+    sprites[2] = (GsSPRITE *)SCRATCHPAD_ADDR(0x1F800140);
+    SetPolyGT4((POLY_GT4 *)SCRATCHPAD_ADDR(0x1F800000));
+    SetSemiTrans((void *)SCRATCHPAD_ADDR(0x1F800000), 1);
     *(u32 *)&ft4->r0 = 0x808080;
     setlen(ft4, 9);
     setcode(ft4, 0x2C);

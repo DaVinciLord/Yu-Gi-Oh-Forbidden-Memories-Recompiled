@@ -523,7 +523,7 @@ extern void RotTransPers4_nom(SVECTOR *v0,SVECTOR *v1,SVECTOR *v2,SVECTOR *v3);
 extern void RotTrans_nom(SVECTOR *v0);
 extern void RotAverage3_nom(SVECTOR *v0,SVECTOR *v1,SVECTOR *v2);
 extern void RotNclip3_nom(SVECTOR *v0,SVECTOR *v1,SVECTOR *v2);
-extern void RotAverageNclip3_nom(SVECTOR *v0,SVECTOR *v1,SVECTOR *v2);
+extern PSXLONG RotAverageNclip3_nom(SVECTOR *v0,SVECTOR *v1,SVECTOR *v2); /* the flag word, in v0 */
 extern void RotAverageNclipColorDpq3_nom(SVECTOR *v0,SVECTOR *v1,SVECTOR *v2,
 			SVECTOR *v3,SVECTOR *v4,SVECTOR *v5,CVECTOR *v6);
 extern void RotAverageNclipColorCol3_nom(SVECTOR *v0,SVECTOR *v1,SVECTOR *v2,

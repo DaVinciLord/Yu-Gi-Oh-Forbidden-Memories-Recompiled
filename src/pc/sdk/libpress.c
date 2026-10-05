@@ -4,6 +4,7 @@
  * each followed by the game's callback in interrupt context as on hardware.
  * The IDCT is floating point, so pixels can differ from the MDEC by a step. */
 #include "types.h"
+#include "psyq/libpress.h" /* the declarations the game calls through */
 #include "pc/sdk/disc.h"
 #include <math.h>
 #include <string.h>
@@ -64,7 +65,7 @@ void DecDCTvlcBuild(u16 *table) { (void)table; }
 
 /* Output: [0] = 0x3800_0000 | word count, then 16-bit codes packed in pairs:
  * per block (qscale << 10 | DC), (run << 10 | level)..., 0xFE00. */
-int DecDCTvlc2(u32 *bitstream, u32 *out, void *table)
+int DecDCTvlc2(u32 *bitstream, u32 *out, DECDCTTAB table)
 {
     const u16 *header = (const u16 *)bitstream;
     Bits bits = {header + 4, 0};

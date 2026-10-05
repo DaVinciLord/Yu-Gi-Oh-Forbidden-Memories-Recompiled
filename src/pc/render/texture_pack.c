@@ -712,10 +712,12 @@ static int holds_disc(const uint16_t *vram, uint32_t disc, const unsigned char *
     return same;
 }
 
-/* After a state load VRAM holds its pictures without their tags (what the
- * disc delivered is not in a state): a block that starts with a recalled
- * head and matches the disc throughout is tagged as its upload was, and
- * painted. Between frames, with the entries resolved. */
+/* After a state load VRAM holds its pictures with the disc's tags the state
+ * kept, if it kept them (state.c), but not those of the port's own images
+ * nor any from an older state: a block left untagged that starts with a
+ * recalled head and matches the disc throughout is tagged as its upload
+ * was. Between frames, with the entries resolved; then all of VRAM is
+ * painted. */
 static void rediscover(void)
 {
     const uint16_t *vram = SoftGpu_Vram();
@@ -741,7 +743,6 @@ static void rediscover(void)
             for (j = 0; j < rows; j++)
                 for (i = 0; i < words; i++)
                     TextureDump_Tags[(size_t)(y + j) * SOFT_GPU_WIDTH + x + i] = disc + (uint32_t)(j * words + i) * 2 + 1;
-            paint(x, y, words, rows);
             x += words - 1;
         }
     }
@@ -1044,6 +1045,7 @@ void TexturePack_Service(void)
     if (wanted_rediscover && resolved) {
         wanted_rediscover = 0;
         rediscover();
+        everywhere = 1;
     }
     if (wanted_images && resolved) {
         wanted_images = 0;

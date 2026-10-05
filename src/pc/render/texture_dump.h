@@ -76,9 +76,20 @@ extern void (*TextureDump_Follow)(int sx, int sy, int dx, int dy, int w, int h);
  * recall). Prefer the pack's copy to an unlisted duplicate; 0 unknown. NULL:
  * no pack. */
 extern uint32_t (*TextureDump_Recall)(const uint16_t *pixels, size_t words);
-/* VRAM restored from a state, its tags cleared: the pack finds what it can
- * of its pictures there again. NULL: no pack. */
+/* VRAM restored from a state, with the disc's tags the state kept
+ * (TextureDump_TagsLoaded): the pack finds what it can of the rest there
+ * again and paints it all. NULL: no pack. */
 extern void (*TextureDump_Restored)(void);
+/* The tags in a save state (state.c): runs of words whose tags follow on
+ * from each other by two bytes (one upload's row, or nothing), as pairs of
+ * first tag and word count, in VRAM order. TagRuns writes up to `max` pairs
+ * and returns how many there are (more than `max`: not all were written).
+ * TagsLoaded is VRAM restored: the disc's tags from `runs` (NULL, or 0 pairs:
+ * none, a state without them), the port's own images (TEXTURE_MADE_BASE up,
+ * placed in another order next run) left for the pack to find by their
+ * bytes, then TextureDump_Restored. */
+size_t TextureDump_TagRuns(uint32_t *runs, size_t max);
+void TextureDump_TagsLoaded(const uint32_t *runs, size_t count);
 static inline uint16_t *TextureDump_Cell(int x, int y, int sub)
 {
     return &TextureDump_Shadow[(y & (SOFT_GPU_HEIGHT - 1)) * TEXTURE_SHADOW_WIDTH + (x & (SOFT_GPU_WIDTH - 1)) * 4 + sub];

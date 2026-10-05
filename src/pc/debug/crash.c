@@ -20,16 +20,11 @@
 #ifdef _WIN32
 #include "pc/platform/win32.h"
 #else
-#include <ucontext.h>
+#include "pc/platform/signal_context.h"
 #endif
 
-#ifdef _WIN32
-#define GAME_STACK_LOW 0xB0000000u /* state.c */
+#define GAME_STACK_LOW 0xB0000000u /* state.c, on every system */
 #define GAME_STACK_HIGH 0xB0800000u
-#else
-#define GAME_STACK_LOW 0x70000000u
-#define GAME_STACK_HIGH 0x70800000u
-#endif
 
 /* An address in the report, and the registers line. The 64-bit Windows
  * build's long is 32 bits: its addresses are printed as uintptr_t, whole. */
@@ -37,6 +32,12 @@
 #include <inttypes.h>
 #define ADDRESS "%08" PRIxPTR
 #define REGISTERS "registers: RIP=0x" ADDRESS " RSP=0x" ADDRESS " RBP=0x" ADDRESS "\n"
+#elif defined(__aarch64__)
+/* Android arm64: the program counter, stack pointer, frame pointer (x29),
+ * and the link register on a line of its own (fault_lr), whole. */
+#define ADDRESS "%08lx"
+#define REGISTERS "registers: PC=0x%016lx SP=0x%016lx FP(x29)=0x%016lx\n"
+static uintptr_t fault_lr;
 #else
 #define ADDRESS "%08lx"
 #define REGISTERS "registers: EIP=0x%08lx ESP=0x%08lx EBP=0x%08lx\n"
@@ -73,7 +74,8 @@ static const char *region(uintptr_t address)
 #endif
     if ((address >= 0x80000000u && address < 0x80200000u) ||
         (address >= 0xa0000000u && address < 0xa0200000u) || address < 0x00200000u) return "guest RAM";
-    if (address >= 0x1f800000u && address < 0x1f801000u) return "scratchpad";
+    if ((address >= 0x1f800000u && address < 0x1f801000u) || (address >= 0x9f800000u && address < 0x9f801000u))
+        return "scratchpad";
     if (address >= 0x01000000u && address < 0x0a000000u) return "game section";
     if (address >= GAME_STACK_LOW && address < GAME_STACK_HIGH) return "game stack";
     if (address >= image_low && address < image_high) return "native text";
@@ -134,13 +136,30 @@ __attribute__((noinline)) static void walk_current(void)
 static void walk(uintptr_t eip, uintptr_t ebp)
 {
     int depth = 0;
+#if defined(__aarch64__)
+    int crossed = 0;
+#endif
     symbol_line(depth++, eip);
     while (depth < 32 && valid_frame(ebp)) {
         const uintptr_t *frame = (const uintptr_t *)ebp;
         uintptr_t next = frame[0], return_address = frame[1];
         if (!return_address) break;
         symbol_line(depth++, return_address);
+#if defined(__aarch64__)
+        /* A chain only climbs, but once: Memories_CallOnStack (Android)
+         * runs a call on the thread's own stack and leaves its frame record
+         * on the game stack, below, so from a crash inside a present the
+         * walk goes on there to the game's callers. */
+        if (!valid_frame(next)) break;
+        if (next <= ebp) {
+            if (crossed || next < GAME_STACK_LOW || next >= GAME_STACK_HIGH ||
+                (ebp >= GAME_STACK_LOW && ebp < GAME_STACK_HIGH))
+                break;
+            crossed = 1;
+        }
+#else
         if (next <= ebp || !valid_frame(next)) break;
+#endif
         ebp = next;
     }
 }
@@ -198,6 +217,9 @@ static void report_fatal(const char *what, unsigned long number, uintptr_t fault
     snprintf(text, sizeof(text), strcmp(what, "signal") ? "fatal %s 0x%08lx" : "fatal %s %lu", what, number);
     line("memories-pc: %s at 0x" ADDRESS " (%s)\n", (uintptr_t)text, fault, (uintptr_t)region(fault));
     line(REGISTERS, eip, esp, ebp);
+#if defined(__aarch64__)
+    line("           LR=0x%016lx\n", fault_lr, 0, 0);
+#endif
     WALK(eip, esp, ebp);
     line("frame=%lu vblank=%lu clock=%ld%%\n", Memories_PresentedFrames(), Platform_VBlankCount(),
          (uintptr_t)(long)Platform_ClockRate());
@@ -257,9 +279,12 @@ void Crash_HandleSignal(int number, siginfo_t *info, void *context)
     ucontext_t *user = context;
     struct sigaction action;
     if (reporting++) _exit(128 + number);
+#if defined(__aarch64__)
+    fault_lr = (uintptr_t)user->uc_mcontext.regs[30];
+#endif
     report_fatal("signal", (unsigned long)number, info ? (uintptr_t)info->si_addr : 0,
-                 (uintptr_t)user->uc_mcontext.gregs[REG_EIP], (uintptr_t)user->uc_mcontext.gregs[REG_ESP],
-                 (uintptr_t)user->uc_mcontext.gregs[REG_EBP]);
+                 (uintptr_t)SIGNAL_CONTEXT_PC(user), (uintptr_t)SIGNAL_CONTEXT_SP(user),
+                 (uintptr_t)SIGNAL_CONTEXT_FP(user));
     memset(&action, 0, sizeof(action));
     action.sa_handler = SIG_DFL;
     sigemptyset(&action.sa_mask);
@@ -351,9 +376,12 @@ void Crash_ReportHang(void *context_pointer)
     Win32_ContextRegisters(context_pointer, &eip, &esp, &ebp);
 #else
     ucontext_t *user = context_pointer;
-    eip = (uintptr_t)user->uc_mcontext.gregs[REG_EIP];
-    esp = (uintptr_t)user->uc_mcontext.gregs[REG_ESP];
-    ebp = (uintptr_t)user->uc_mcontext.gregs[REG_EBP];
+    eip = (uintptr_t)SIGNAL_CONTEXT_PC(user);
+    esp = (uintptr_t)SIGNAL_CONTEXT_SP(user);
+    ebp = (uintptr_t)SIGNAL_CONTEXT_FP(user);
+#if defined(__aarch64__)
+    fault_lr = (uintptr_t)user->uc_mcontext.regs[30];
+#endif
 #endif
     report_fd = -1;
     snprintf(path, sizeof(path), "%s/hang-%ld.txt", Crash_ReportDir, (long)getpid());
@@ -362,6 +390,9 @@ void Crash_ReportHang(void *context_pointer)
         static const char message[] = "memories-pc: no VSync for 5 s\n";
         output(message, sizeof(message) - 1);
         line(REGISTERS, eip, esp, ebp);
+#if defined(__aarch64__)
+        line("           LR=0x%016lx\n", fault_lr, 0, 0);
+#endif
         WALK(eip, esp, ebp);
         line("frame=%lu vblank=%lu clock=%ld%%\n", Memories_PresentedFrames(), Platform_VBlankCount(),
              (uintptr_t)(long)Platform_ClockRate());

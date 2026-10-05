@@ -51,6 +51,16 @@ void Platform_SetStateSlot(int slot);
  * resizable/window-mode controls; legacy X11 deliberately reports no support. */
 void Platform_ApplyDisplaySettings(void);
 int Platform_HasWindowModes(void);
+/* Whether the window may use the desktop OpenGL renderer (gl_picture.c and
+ * present_pass.c: desktop GL, #version 130 shaders). 0 where the system's
+ * GL is GLES (Android), whose context SDL would hand over all the same; the
+ * SDL renderer then shows the software GPU's picture instead. */
+int Platform_HasDesktopGL(void);
+/* The fixed-address guest memory could not be mapped (image.c says where on
+ * standard error): 1 with a message for the player in `why` where the
+ * platform can say what it means, 0 where it has nothing to add (the
+ * desktops: that failure is a bug report, not the player's to fix). */
+int Platform_GuestMemoryHelp(char *why, size_t size);
 /* Save the source picture, or the composed window when `window_image` is set. */
 void Platform_Screenshot(int window_image);
 /* Help > System info: puts `text` on the system clipboard; 0 where the
