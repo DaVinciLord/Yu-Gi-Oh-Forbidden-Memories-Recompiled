@@ -5,7 +5,8 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk
 
-from . import monster_effects as fx
+from . import card_icons, monster_effects as fx
+from .icon_choice import IconChoice
 from .gamedata import ATTRIBUTE_NAMES, TYPE_MAGIC, TYPE_NAMES
 from .widgets import FormDialog, px, scrolled_tree
 
@@ -97,7 +98,7 @@ class EffectsBox(ttk.LabelFrame):
     def add(self):
         if self.cid is None:
             return
-        dialog = EffectDialog(self, self.project, None, self.label)
+        dialog = EffectDialog(self, self.project, None, self.label, self.app)
         self.wait_window(dialog)
         if dialog.result is not None:
             self.effects.append(dialog.result)
@@ -107,7 +108,7 @@ class EffectsBox(ttk.LabelFrame):
         n = self.selected()
         if n is None:
             return
-        dialog = EffectDialog(self, self.project, self.effects[n], self.label)
+        dialog = EffectDialog(self, self.project, self.effects[n], self.label, self.app)
         self.wait_window(dialog)
         if dialog.result is not None:
             self.effects[n] = dialog.result
@@ -133,8 +134,9 @@ class EffectDialog(FormDialog):
     """One effect: when, what, and what that needs. result is the entry
     as the game reads it, or None when cancelled."""
 
-    def __init__(self, master, project, effect, label):
-        self.project, self.label = project, label
+    def __init__(self, master, project, effect, label, app=None):
+        """app: the window, whose game files give the lists' icons (none without)."""
+        self.project, self.label, self.app = project, label, app
         self.result = None
         effect = fx.normalize(effect, project.resolve) if effect else None
         self.start = effect or {"when": "summon", "do": "boost", "target": "self", "attack": 500}
@@ -146,7 +148,7 @@ class EffectDialog(FormDialog):
 
     def build(self, dialog, body):
         e = self.start
-        self.vars = {k: tk.StringVar() for k in ("when", "do", "card", "target", "type", "attribute", "attack",
+        self.vars = {k: tk.StringVar(dialog) for k in ("when", "do", "card", "target", "type", "attribute", "attack",
                                                  "defense", "amount")}
         self.rows = {}
         row = 0
@@ -166,17 +168,18 @@ class EffectDialog(FormDialog):
         self.when_hint.grid(row=row, column=0, columnspan=2, sticky="w", pady=(0, 4))
         row += 1
         self.do_box = line("do", "Does", ttk.Combobox(body, textvariable=self.vars["do"], state="readonly", width=30))
-        line("card", "Magic card", ttk.Combobox(body, textvariable=self.vars["card"], state="readonly", width=30,
-                                                values=[self.magic_label(c) for c in fx.MAGIC]))
+        line("card", "Magic card", self.choice(body, "card", [self.magic_label(c) for c in fx.MAGIC], lambda v: 0x14))
         self.target_box = line("target", "Whose", ttk.Combobox(body, textvariable=self.vars["target"],
                                                                state="readonly", width=30))
-        line("type", "Only type", ttk.Combobox(body, textvariable=self.vars["type"], state="readonly", width=30,
-                                               values=[ANY] + TYPE_NAMES[:TYPE_MAGIC]))
-        line("attribute", "Only attribute", ttk.Combobox(body, textvariable=self.vars["attribute"], state="readonly",
-                                                         width=30, values=[ANY] + ATTRIBUTE_NAMES))
+        line("type", "Only type", self.choice(body, "type", [ANY] + TYPE_NAMES[:TYPE_MAGIC],
+                                              lambda v: TYPE_NAMES.index(v) if v in TYPE_NAMES else None))
+        line("attribute", "Only attribute", self.choice(body, "attribute", [ANY] + ATTRIBUTE_NAMES, self.attribute_icon))
+        pictures = card_icons.photos(self.app, body, 2) if self.app is not None else {}
         for key, label in (("attack", "ATK"), ("defense", "DEF")):
             line(key, label, ttk.Spinbox(body, textvariable=self.vars[key], from_=-fx.BOOST_MAX, to=fx.BOOST_MAX,
                                          increment=100, width=10))
+            if pictures.get(key):       # the sword and the shield, as the Cards tab's
+                self.rows[key][0].configure(image=pictures[key], compound="left")
         line("amount", "LP", ttk.Spinbox(body, textvariable=self.vars["amount"], from_=1, to=fx.AMOUNT_MAX,
                                          increment=100, width=10))
         self.vars["when"].set(fx.when_label(e["when"]))
@@ -192,6 +195,18 @@ class EffectDialog(FormDialog):
         self.vars["when"].trace_add("write", lambda *_: self.show_rows())
         self.vars["do"].trace_add("write", lambda *_: self.show_rows())
         self.show_rows()
+
+    def choice(self, body, key, values, icon_of):
+        """A list with the game's icons beside its choices (icon_choice.py),
+        or a plain one without a window to take them from."""
+        if self.app is None:
+            return ttk.Combobox(body, textvariable=self.vars[key], state="readonly", width=30, values=values)
+        return IconChoice(body, self.app, self.vars[key], values, icon_of, width=30)
+
+    def attribute_icon(self, value):
+        if value not in ATTRIBUTE_NAMES:
+            return None
+        return card_icons.photos(self.app, self).get("attribute", {}).get(ATTRIBUTE_NAMES.index(value))
 
     def chosen(self, key, names, labels):
         text = self.vars[key].get()
