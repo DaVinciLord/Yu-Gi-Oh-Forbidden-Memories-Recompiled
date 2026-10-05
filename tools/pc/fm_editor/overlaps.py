@@ -225,10 +225,10 @@ HEX_DIGITS = "0123456789abcdefABCDEF"
 
 def _as_json(text: str) -> str:
     """What json.c reads that Python's json reads otherwise or not at all,
-    written as JSON Python reads the same way: a \\u escape is one byte, the
-    code's when it is under 0x100 (above 0x7F a byte of its own, as
-    surrogateescape keeps it), else "?"; a comma may close a list or an
-    object; \\v and \\f are spaces between values (C's isspace)."""
+    written as JSON Python reads the same way: a \\u escape is the character
+    (a surrogate pair one past U+FFFF) as Python reads it too, but a lone
+    surrogate is U+FFFD; a comma may close a list or an object; \\v and \\f
+    are spaces between values (C's isspace)."""
     out, i, n, last = [], 0, len(text), ""   # last: the last character outside strings and spaces
     while i < n:
         c = text[i]
@@ -239,8 +239,13 @@ def _as_json(text: str) -> str:
                     code = text[j + 2:j + 6]
                     if text[j + 1] == "u" and len(code) == 4 and all(h in HEX_DIGITS for h in code):
                         number = int(code, 16)
-                        part.append(text[j:j + 6] if number < 0x80 else "\\udc%02x" % number if number < 0x100
-                                    else "?")
+                        low = text[j + 8:j + 12] if text[j + 6:j + 8] == "\\u" else ""
+                        if 0xD800 <= number < 0xDC00 and len(low) == 4 and all(h in HEX_DIGITS for h in low) \
+                                and 0xDC00 <= int(low, 16) < 0xE000:
+                            part.append(text[j:j + 12])     # a pair: one character
+                            j += 12
+                            continue
+                        part.append("\\ufffd" if 0xD800 <= number < 0xE000 else text[j:j + 6])
                         j += 6
                         continue
                     part.append(text[j:j + 2])
@@ -275,8 +280,7 @@ def _as_json(text: str) -> str:
 
 def _to_nul(value):
     """A string json.c reads ends at its first NUL (a \\u0000); its bytes are
-    held as _read_json holds a file's (two escaped bytes that are UTF-8 are
-    that character)."""
+    held as _read_json holds a file's."""
     if isinstance(value, str):
         return _bytes(value.split("\x00", 1)[0]).decode("utf-8", "surrogateescape")
     if isinstance(value, list):

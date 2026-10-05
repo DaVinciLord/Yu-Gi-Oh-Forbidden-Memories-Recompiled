@@ -46,12 +46,18 @@ class ScrolledForm(ttk.Frame):
     their own scrolling while they have more content in that direction.
     """
 
-    def __init__(self, parent, **kwargs):
+    def __init__(self, parent, horizontal=False, **kwargs):
+        """horizontal: the form may be narrower than its controls, with a
+        scrollbar along the bottom then (it asks for no width of its own:
+        whatever holds it says how wide it is)."""
         super().__init__(parent, **kwargs)
+        self.horizontal = horizontal
         self.canvas = tk.Canvas(self, width=1, height=1, highlightthickness=0,
-                                yscrollincrement=1)
+                                yscrollincrement=1, xscrollincrement=1)
         self.bar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
         self.canvas.configure(yscrollcommand=self.bar.set)
+        self.xbar = ttk.Scrollbar(self, orient="horizontal", command=self.canvas.xview)
+        self.canvas.configure(xscrollcommand=self.xbar.set)
         self.bar.pack(side="right", fill="y")
         self.canvas.pack(side="left", fill="both", expand=True)
         self.body = ttk.Frame(self.canvas)
@@ -84,12 +90,24 @@ class ScrolledForm(ttk.Frame):
 
     def _layout(self, event=None):
         width = self.body.winfo_reqwidth()
-        if int(self.canvas.cget("width")) != width:
+        if self.horizontal:
+            wide = width > self.canvas.winfo_width() > 1
+            if wide != bool(self.xbar.winfo_manager()):
+                if wide:
+                    self.xbar.pack(side="bottom", fill="x", before=self.canvas)
+                else:
+                    self.xbar.pack_forget()
+                    self.canvas.xview_moveto(0)
+        elif int(self.canvas.cget("width")) != width:
             self.canvas.configure(width=width)
         self.canvas.itemconfigure(self.window, width=max(width, self.canvas.winfo_width()))
-        self.canvas.configure(scrollregion=(0, 0, width, self.body.winfo_reqheight()))
+        self.canvas.configure(scrollregion=(0, 0, max(width, self.canvas.winfo_width()), self.body.winfo_reqheight()))
 
     def _wheel(self, event):
+        if self.horizontal and event.state & 0x1 and self.xbar.winfo_manager():     # Shift: across
+            step = (-1 if getattr(event, "num", None) == 4 or getattr(event, "delta", 0) > 0 else 1) * px(self, 40)
+            self.canvas.xview_scroll(step, "units")
+            return "break"
         if getattr(event, "num", None) in (4, 5):
             units = -3 if event.num == 4 else 3
         else:
@@ -312,7 +330,23 @@ def scrolled_tree(parent, columns, widths, height=20, selectmode="browse", *, so
         horizontal.grid(row=1, column=0, sticky="ew")
     for tag in theme.TAGS:
         tree.tag_configure(tag, foreground=theme.tag_color(tree, tag))
+    tree.bind("<ButtonPress-1>", lambda e: _free_columns(tree, e), add=True)
     return frame, tree
+
+
+def _free_columns(tree, event):
+    """A press on a heading's edge, about to drag a column's width: the
+    columns keep the widths they have and only the last fills what is left.
+    A stretching column (the wide Name) takes back any width taken from it,
+    so a drag snapped back; now each column keeps what it is dragged to."""
+    if tree.identify_region(event.x, event.y) != "separator" or getattr(tree, "columns_free", False):
+        return
+    tree.columns_free = True
+    columns = list(tree["columns"])
+    for key in columns:
+        tree.column(key, width=tree.column(key, "width"), stretch=key == columns[-1])
+    # What a theme change puts back (theme.py): these widths from now on.
+    tree.widths = {key: tree.column(key, "width") for key in columns}
 
 
 class CardPicker(tk.Toplevel):

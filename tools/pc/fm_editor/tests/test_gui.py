@@ -14,7 +14,9 @@ from pathlib import Path
 from fm_editor.tests.test_data import fixture
 
 
-class GuiTest(unittest.TestCase):
+class GuiCase(unittest.TestCase):
+    """The window on the fixture's game files, for each test."""
+
     @classmethod
     def setUpClass(cls):
         if tk is None:
@@ -57,6 +59,9 @@ class GuiTest(unittest.TestCase):
 
     def click_heading(self, tree, column):
         tree.tk.call(tree.heading(column, "command"))
+
+
+class GuiTest(GuiCase):
 
     def test_card_heading_sort_and_pending_edit(self):
         tab, p = self.app.cards, self.app.project
@@ -752,7 +757,8 @@ class GuiTest(unittest.TestCase):
         app.update()
         scroll.canvas.yview_moveto(0)
         buttons = [w for w in cards.form.winfo_children() if w.winfo_class() == "TFrame"]
-        apply = next(w for box in buttons for w in box.winfo_children() if w.cget("text") == "Apply")
+        apply = next(w for box in buttons for w in box.winfo_children()
+                     if w.winfo_class() == "TButton" and w.cget("text") == "Apply")
         apply.focus_force()
         app.update()
         self.assertGreater(scroll.canvas.yview()[0], 0)
@@ -1568,3 +1574,261 @@ class SettingsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MonsterEffectsGuiTest(GuiCase):
+    """The Cards tab's Monster effects box and the card text's right-click
+    menu."""
+
+    def test_effects_box(self):
+        app, cards = self.app, self.app.cards
+        cards.tree.selection_set("1")
+        cards.select()
+        box = cards.effects_box
+        self.assertTrue(box.winfo_manager())
+        self.assertEqual(box.tree.get_children(), ())
+        box.effects.append({"when": "summon", "do": "heal", "amount": 500})
+        box.effects.append({"when": "face_up", "do": "boost", "target": "others", "attack": 300})
+        box.store()
+        self.assertEqual(app.project.monster_effects_of(1)[0][1]["when"], "face_up")
+        self.assertEqual([box.tree.set(i, "when") for i in box.tree.get_children()], ["On summon", "While face up"])
+        box.tree.selection_set("1")
+        box.move(-1)
+        self.assertEqual([e["when"] for e in app.project.monster_effects_of(1)[0]], ["face_up", "summon"])
+        box.tree.selection_set("0")
+        box.remove()
+        self.assertEqual(app.project.monster_effects_of(1)[0], [{"when": "summon", "do": "heal", "amount": 500}])
+        self.assertTrue(app.dirty)
+        # Kept across selecting another card; gone for a magic card.
+        cards.tree.selection_set("2")
+        cards.select()
+        self.assertEqual(box.tree.get_children(), ())
+        cards.tree.selection_set("1")
+        cards.select()
+        self.assertEqual(len(box.tree.get_children()), 1)
+        cards.vars["type"].set("Magic")
+        self.assertFalse(box.winfo_manager())
+
+    def test_copy_of_a_magic_card_made_a_monster(self):
+        from fm_editor import manifest, validate
+        app, cards = self.app, self.app.cards
+        p = app.project
+        magic = next(cid for cid, card in sorted(p.cards.items()) if card.type == 20)
+        cid = p.add_card(magic, "magic-monster")
+        cards.fill()
+        cards.show_card(cid)
+        self.assertFalse(cards.effects_box.winfo_manager())         # a magic card: no monster effects
+        cards.vars["type"].set("Dragon")
+        self.assertTrue(cards.effects_box.winfo_manager())
+        for key, value in (("attack", "1500"), ("defense", "1200"), ("level", "4"), ("star1", "Mars"),
+                           ("star2", "Jupiter")):
+            cards.vars[key].set(value)
+        self.assertTrue(cards.apply())
+        self.assertEqual((p.cards[cid].type, p.cards[cid].attack), (0, 1500))
+        cards.effects_box.effects.append({"when": "summon", "do": "heal", "amount": 500})
+        cards.effects_box.store()
+        self.assertEqual([i.message for i in validate.validate_card(p, cid) if i.level == "error"], [])
+        entry = next(e for e in manifest.build(p)["cards"] if e.get("id") == "magic-monster")
+        self.assertEqual((entry["type"], entry["attack"], entry["monster_effects"][0]["do"]), ("Dragon", 1500, "heal"))
+
+    def test_none_box_for_disc_cards(self):
+        app, cards = self.app, self.app.cards
+        cards.tree.selection_set("2")
+        cards.select()
+        box = cards.effects_box
+        self.assertTrue(box.none_box.winfo_manager())
+        box.none.set(True)
+        box.store()
+        self.assertEqual(app.project.card_extra[2]["monster_effects"], [])
+        cards.tree.selection_set("1")
+        cards.select()
+        cards.tree.selection_set("2")
+        cards.select()
+        self.assertTrue(box.none.get())
+        box.effects.append({"when": "summon", "do": "heal", "amount": 500})
+        box.store()
+        self.assertFalse(box.none_box.winfo_manager())       # a list of its own says it all
+        box.tree.selection_set("0")
+        box.none.set(False)
+        box.remove()
+        self.assertNotIn(2, app.project.card_extra)
+        # An added card's empty list is always its own: no box.
+        cid = app.project.add_card(1, "x")
+        box.show(cid)
+        self.assertFalse(box.none_box.winfo_manager())
+
+    def test_effect_dialog(self):
+        from fm_editor.monster_effects_ui import EffectDialog
+        app = self.app
+        dialog = EffectDialog(app, app.project, {"when": "combat", "do": "boost", "target": "battle",
+                                                 "attack": -700}, str)
+        self.assertEqual(dialog.vars["when"].get(), "Before combat")
+        self.assertEqual(dialog.vars["target"].get(), "The monster it battles")
+        # Combat offers no magic; face up only boosts.
+        self.assertNotIn("Magic card effect", dialog.do_box.cget("values"))
+        dialog.vars["when"].set("While face up")
+        self.assertEqual(list(dialog.do_box.cget("values")), ["Boost ATK/DEF"])
+        self.assertNotIn("The monster it battles", dialog.target_box.cget("values"))
+        dialog.vars["type"].set("Dragon")
+        dialog.ok()
+        self.assertEqual(dialog.result, {"when": "face_up", "do": "boost", "target": "self", "attack": -700,
+                                         "type": "Dragon"})
+
+    def test_text_menu(self):
+        from fm_editor import text_menu
+        cards = self.app.cards
+        cards.tree.selection_set("1")
+        cards.select()
+        text = cards.text
+        text.delete("1.0", "end")
+        text.insert("1.0", "Can attack 2x a turn.")
+        text.mark_set("insert", "1.0")
+        text_menu.insert_code(text, "{f8 0B 00}")
+        text.tag_add("sel", "1.21", "1.23")
+        text_menu.colour(text, 6)
+        self.assertEqual(text.get("1.0", "end-1c"), "{f8 0B 00}Can attack {f8 0A 06}2x{f8 0A 00} a turn.")
+        menu = tk.Menu(text, tearoff=False)
+        text_menu.fill(menu, self.app, text, lambda: None)
+        labels = [menu.entrycget(i, "label") for i in range(menu.index("end") + 1) if menu.type(i) != "separator"]
+        self.assertEqual(labels, ["Cut", "Copy", "Paste", "Insert icon...", "Text colour"])
+        menu.destroy()
+        # The picker: every icon, no taller than the screen, the icon going
+        # where the cursor was when it opened.
+        text.mark_set("insert", "end-1c")
+        picker = text_menu.IconPicker(self.app, text, lambda: None, 0, 0)
+        self.assertEqual(sorted(picker.buttons), list(range(41)))
+        self.assertLessEqual(picker.winfo_reqheight(), picker.winfo_screenheight())
+        text.mark_set("insert", "1.0")
+        picker.pick(0x26)
+        self.assertTrue(text.get("1.0", "end-1c").endswith("a turn.{f8 0B 26}"))
+        self.assertFalse(picker.winfo_exists())
+
+    def test_effect_monster_swatch_is_orange(self):
+        from fm_editor.tabs import FRAME_COLOURS
+        cards = self.app.cards
+        cards.tree.selection_set("1")
+        cards.select()
+        self.assertEqual(cards.swatch.cget("background"), FRAME_COLOURS[0])
+        cards.effects_box.effects.append({"when": "summon", "do": "heal", "amount": 500})
+        cards.effects_box.store()
+        self.assertEqual(cards.swatch.cget("background"), FRAME_COLOURS[5])
+
+
+class CardTextBoxTest(GuiCase):
+    """The card text box shows codes as pictures and gives them back."""
+
+    def test_codes_shown_and_kept(self):
+        cards = self.app.cards
+        cards.tree.selection_set("1")
+        cards.select()
+        box = cards.text
+        # Game files with the Dragon icon (the fixture's have none).
+        from fm_editor.tests.test_card_text import icon_wa
+        with mock.patch.object(self.app.files, "wa", icon_wa()):
+            self.assertTrue(box._pictures())
+        box.delete("1.0", "end")
+        text = "{f8 0A 05}<Effect>{f8 0A 00} {f8 0B 00}x"
+        box.insert("1.0", text)
+        self.assertEqual(box.get("1.0", "end-1c"), text)
+        self.assertEqual(len(box.image_names()), 3)
+        self.assertIn("colour5", box.tag_names("1.2"))
+        # Typed by hand (Tcl's own insert, as a key does): a picture once whole.
+        box.tk.call(box._w, "insert", "end", " {f8 0b 00}")
+        self.assertTrue(box.bind("<KeyRelease>"))      # a key's release runs it (the window is withdrawn here)
+        box.layout()
+        self.assertEqual(box.get("1.0", "end-1c"), text + " {f8 0B 00}")
+        self.assertEqual(len(box.image_names()), 4)
+        # The clipboard carries the codes.
+        box.tag_add("sel", "1.0", "end-1c")
+        box.event_generate("<<Copy>>")
+        self.assertEqual(box.clipboard_get(), text + " {f8 0B 00}")
+        box.delete("1.0", "end")
+        box.event_generate("<<Paste>>")
+        self.assertEqual(box.get("1.0", "end-1c"), text + " {f8 0B 00}")
+        self.assertEqual(len(box.image_names()), 4)
+        # Lines broken where the game breaks them: the space shows as a line's
+        # end and reads back as the space.
+        long = "aaaaaaaaaaaaaaa {f8 0B 00}{f8 0B 00} b"
+        box.delete("1.0", "end")
+        box.insert("1.0", long)
+        self.assertEqual(box.get("1.0", "end-1c"), long)
+        self.assertEqual(box.index("end-1c").split(".")[0], "2")
+        box.delete("1.0", "end")
+        box.insert("1.0", text + " {f8 0B 00}")
+        # Applied as written.
+        self.assertTrue(cards.apply())
+        self.assertEqual(self.app.project.cards[1].description, text + " {f8 0B 00}")
+
+
+class ColumnWidthTest(GuiCase):
+    def test_a_dragged_column_keeps_its_width(self):
+        from types import SimpleNamespace
+        from fm_editor import widgets
+        app = self.app
+        app.deiconify()
+        app.geometry("1400x800")
+        app.update()
+        tree = app.cards.tree
+        x = next(x for x in range(tree.winfo_width()) if tree.identify_region(x, 10) == "separator")
+        widgets._free_columns(tree, SimpleNamespace(x=x, y=10))
+        columns = list(tree["columns"])
+        self.assertEqual([tree.column(c, "stretch") for c in columns],
+                         [False] * (len(columns) - 1) + [True])
+        # Narrower than it stretched to: it stays so (it took the width back before).
+        tree.column("name", width=150)
+        app.update()
+        self.assertEqual(tree.column("name", "width"), 150)
+        app.withdraw()
+
+
+class CardViewPreviewTest(GuiCase):
+    def test_follows_the_form(self):
+        cards = self.app.cards
+        cards.tree.selection_set("1")
+        cards.select()
+        values = cards.card_view_values()
+        self.assertEqual(values[3], self.app.project.cards[1].description)
+        cards.vars["type"].set("Magic")
+        self.assertEqual(cards.card_view_values()[1:3], (0, 0))      # no stars on a magic card
+        cards.card_view.draw()      # the fixture's files: drawn or explained, never an error
+        self.assertTrue(cards.card_view.picture.cget("image") or cards.card_view.note.cget("text") is not None)
+
+
+class IconChoiceTest(GuiCase):
+    def test_type_and_star_lists(self):
+        cards = self.app.cards
+        cards.tree.selection_set("1")
+        cards.select()
+        star = cards.star_boxes[0]
+        self.assertEqual(star.cget("values")[0], "(none)")
+        star.configure(values=("(none)", "Mars"))
+        self.assertEqual(star.cget("values"), ("(none)", "Mars"))
+        star._fill()
+        self.assertEqual(star.menu.index("end"), 1)
+        star.menu.invoke(1)
+        self.assertEqual(cards.vars["star1"].get(), "Mars")
+        self.assertEqual(cards.star_icon("Mars"), 0x18)
+        self.assertIsNone(cards.star_icon("(none)"))
+
+
+class CardsPanesTest(GuiCase):
+    def test_list_and_form_share_the_width(self):
+        app, cards = self.app, self.app.cards
+        app.deiconify()
+        app.geometry("1600x960")
+        cards.tree.selection_set("1")
+        cards.select()
+        for _ in range(5):          # the window takes its size over a few rounds
+            app.update()
+            cards.place_sash()
+        app.update()
+        scroll = cards.card_scroll
+        self.assertGreaterEqual(scroll.canvas.winfo_width(), scroll.body.winfo_reqwidth())   # all of the form
+        self.assertFalse(scroll.xbar.winfo_manager())
+        # Dragged right, the form scrolls across.
+        cards._sash_dragged = True
+        cards.panes.sashpos(0, cards.panes.winfo_width() - 300)
+        for _ in range(3):
+            app.update()
+        self.assertTrue(scroll.xbar.winfo_manager())
+        app.withdraw()

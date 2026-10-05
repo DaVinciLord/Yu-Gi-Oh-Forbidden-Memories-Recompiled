@@ -7,7 +7,12 @@ import json
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from . import bulk_dialog, guardian_stars, manifest, pools as poolmath, validate
+from . import bulk_dialog, guardian_stars, manifest, pools as poolmath, text_menu, validate
+from .card_text_box import CardTextBox
+from .icon_choice import IconChoice
+from . import card_icons
+from .card_view_preview import CardViewPreview
+from .monster_effects_ui import EffectsBox
 from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, DUELIST_NAMES,
                        EQUIP_BONUS_MAX, FRAME_NAMES,
                        POOL_LABELS, POOL_TOTAL, POOLS, STAR_NAMES, STARTER_WEIGHT_LIMIT, TYPE_EQUIP, TYPE_MAGIC, TYPE_NAMES,
@@ -22,7 +27,9 @@ from .widgets import (CardField, FormDialog, ScrolledForm, ScrolledPage, card_ma
 ATTRIBUTE_CHOICES = ATTRIBUTE_NAMES + ["6 (magic)", "7 (trap)"]
 STAR_CHOICES = ["(none)"] + STAR_NAMES[1:]
 EFFECT_NONE = "(none)"
-FRAME_CHOICES = ["By type"] + FRAME_NAMES
+# "By type" leaves "frame" out (a monster with effects is then orange);
+# the last writes "Type": its type's frame even with effects (frame -2).
+FRAME_CHOICES = ["By type"] + FRAME_NAMES + ["Type, never orange"]
 # Each frame's colour, as the hand's frames have it (the duel's palette rows 1-6).
 FRAME_COLOURS = ["#e0a838", "#409830", "#b040a0", "#2848b0", "#8868d8", "#e07000"]
 
@@ -36,7 +43,15 @@ def attribute_label(a: int) -> str:
 
 
 def frame_label(f: int) -> str:
+    if f == -2:
+        return FRAME_CHOICES[-1]
     return FRAME_CHOICES[f + 1] if -1 <= f < len(FRAME_NAMES) else str(f)
+
+
+def frame_value(label: str) -> int:
+    """A Frame choice as card.frame: -1 left out, -2 "Type", else the colour."""
+    i = parse_choice(label, FRAME_CHOICES)
+    return -2 if i == len(FRAME_CHOICES) - 1 else max(-1, i - 1)
 
 
 def star_choices(project=None) -> list:
@@ -105,10 +120,16 @@ class CardsTab(Tab):
         self._shown_bonus = ("", "")
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
-        # The form keeps its width; the list takes what is left, down to this.
-        self.columnconfigure(0, minsize=px(self, 320))
-        left = ttk.Frame(self)
-        left.grid(row=0, column=0, sticky="nsew")
+        # The list and the form side by side, the line between them dragged
+        # where wanted; each scrolls across on its own when it is cut short
+        # (the list its columns, the form its controls). Until it is
+        # dragged, the form has all the width it needs and the list the rest,
+        # down to LIST_LEAST.
+        self.panes = ttk.Panedwindow(self, orient="horizontal")
+        self.panes.grid(row=0, column=0, sticky="nsew")
+        self._sash_dragged = False
+        left = ttk.Frame(self.panes)
+        self.panes.add(left, weight=1)
         top = ttk.Frame(left)
         top.pack(fill="x")
         ttk.Label(top, text="Search").pack(side="left")
@@ -119,7 +140,7 @@ class CardsTab(Tab):
         self.search.trace_add("write", lambda *_: self.fill())
         self.filter.trace_add("write", lambda *_: self.fill())
         frame, self.tree = scrolled_tree(left, [("id", "#"), ("name", "Name"), ("type", "Type"), ("atk", "ATK"),
-                                                ("def", "DEF"), ("state", "")], [50, 160, 100, 50, 50, 60], 10, sort_numeric=("id", "atk", "def"))
+                                                ("def", "DEF"), ("state", "Status")], [50, 160, 100, 50, 50, 60], 10, sort_numeric=("id", "atk", "def"))
         frame.pack(fill="both", expand=True, pady=4)
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.select())
         bottom = ttk.Frame(left)
@@ -128,8 +149,14 @@ class CardsTab(Tab):
         self.count = ttk.Label(bottom)
         self.count.pack(side="right")
 
-        self.card_scroll = ScrolledForm(self)
-        self.card_scroll.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
+        self.card_scroll = ScrolledForm(self.panes, horizontal=True)
+        self.panes.add(self.card_scroll, weight=0)
+        self.panes.bind("<Configure>", lambda e: self.place_sash(), add=True)
+        # Only when the form's width changes: scrolling it up and down moves
+        # it too, and placing the line then shook the list beside it.
+        self._form_width = None
+        self.card_scroll.body.bind("<Configure>", lambda e: self.form_resized(), add=True)
+        self.panes.bind("<B1-Motion>", lambda e: setattr(self, "_sash_dragged", True), add=True)
         form = ttk.LabelFrame(self.card_scroll.body, text="Card", padding=8)
         form.pack(fill="both", expand=True)
         self.form = form
@@ -176,7 +203,8 @@ class CardsTab(Tab):
             return self.hints[key]
 
         line("Name", ttk.Entry(form, textvariable=self.vars["name"], width=26), hint("name"))
-        line("Type", ttk.Combobox(form, textvariable=self.vars["type"], values=TYPE_NAMES, state="readonly", width=18),
+        line("Type", IconChoice(form, app, self.vars["type"], TYPE_NAMES,
+                                lambda label: TYPE_NAMES.index(label) if label in TYPE_NAMES else None, width=18),
              hint("type"))
         # What the card does when played: a disc card of its type whose
         # effect it has (cards.c "effect"), so the game and the CPU play it
@@ -195,18 +223,19 @@ class CardsTab(Tab):
                                     increment=100, width=10), hint(key), self.equip_rows)
         line("Trigger at ATK ≤", ttk.Spinbox(form, textvariable=self.vars["trap_threshold"], from_=0, to=65535,
                                            increment=50, width=10), hint("trap_threshold"), self.trap_rows)
-        line("Attribute", ttk.Combobox(form, textvariable=self.vars["attribute"], values=ATTRIBUTE_CHOICES,
-                                       state="readonly", width=18), hint("attribute"), self.monster_rows)
+        line("Attribute", IconChoice(form, app, self.vars["attribute"], ATTRIBUTE_CHOICES, self.attribute_icon, width=18),
+             hint("attribute"), self.monster_rows)
         line("Level", ttk.Spinbox(form, textvariable=self.vars["level"], from_=0, to=12, width=8), hint("level"),
              self.monster_rows)
         line("ATK", ttk.Spinbox(form, textvariable=self.vars["attack"], from_=0, to=5110, increment=10, width=8),
              hint("attack"), self.monster_rows)
         line("DEF", ttk.Spinbox(form, textvariable=self.vars["defense"], from_=0, to=5110, increment=10, width=8),
              hint("defense"), self.monster_rows)
-        self.star_boxes = [ttk.Combobox(form, textvariable=self.vars[key], values=STAR_CHOICES, state="readonly",
-                                        width=18) for key in ("star1", "star2")]
-        line("Guardian star 1", self.star_boxes[0], hint("star1"), self.monster_rows)
-        line("Guardian star 2", self.star_boxes[1], hint("star2"), self.monster_rows)
+        # With their icons (a mod's stars past the disc's ten have none here).
+        self.star_boxes = [IconChoice(form, app, self.vars[key], STAR_CHOICES, self.star_icon, width=18)
+                           for key in ("star1", "star2")]
+        line("Star 1", self.star_boxes[0], hint("star1"), self.monster_rows)
+        line("Star 2", self.star_boxes[1], hint("star2"), self.monster_rows)
         # Typing past 8 digits, or anything else, does nothing.
         digits = (self.register(lambda text: text == "" or (len(text) <= 8 and text.isascii() and text.isdigit())),
                   "%P")
@@ -216,19 +245,6 @@ class CardsTab(Tab):
         ttk.Label(form, text="0 = free; empty = default price", style="Hint.TLabel").grid(
             row=row, column=1, columnspan=2, sticky="w")
         row += 1
-        self.captions["text"] = ttk.Label(form, text="Card text")
-        self.captions["text"].grid(row=row, column=0, sticky="nw", pady=2)
-        # 21 columns: the game's 20 letters a line and room for the cursor.
-        self.text = tk.Text(form, width=21, height=9, wrap="word", font=("Consolas", 10))
-        self.text.grid(row=row, column=1, sticky="w", pady=2)
-        self.hints["text"] = ttk.Label(form, style="Hint.TLabel", width=HINT_WIDTH)
-        self.hints["text"].grid(row=row, column=2, sticky="nw", padx=6, pady=2)
-        self.hints["text"].bind("<Button-1>", lambda e: self.restore("text"))
-        row += 1
-        self.lines = ttk.Label(form, style="Hint.TLabel")
-        self.lines.grid(row=row, column=1, columnspan=2, sticky="w")
-        row += 1
-        self.text.bind("<KeyRelease>", lambda e: (self.count_lines(), self.mark_later()))
         # The frame the card view, the Library and the duel draw it in: its
         # type's unless the mod picks one (cards.c "frame").
         self.captions["frame"] = ttk.Label(form, text="Frame")
@@ -243,14 +259,44 @@ class CardsTab(Tab):
         self.hints["frame"].pack(side="left", padx=(6, 0))
         self.hints["frame"].bind("<Button-1>", lambda e: self.restore("frame"))
         row += 1
-        self.vars["frame"].trace_add("write", lambda *_: self.show_swatch())
-        self.vars["type"].trace_add("write", lambda *_: self.show_swatch())
-        self.vars["type"].trace_add("write", lambda *_: self.show_kind())
-        self.vars["effect"].trace_add("write", lambda *_: self.show_trap_threshold())
         ttk.Label(form, text="Notes").grid(row=row, column=0, sticky="nw", pady=2)
         self.notes = tk.Text(form, width=36, height=4, wrap="word", undo=True)
         self.notes.grid(row=row, column=1, columnspan=2, sticky="we", pady=2)
         row += 1
+        # What the monster does on the field (cards.c "monster_effects"),
+        # stored as soon as it is changed.
+        self.effects_box = EffectsBox(form, app, self.effects_changed)
+        self.effects_box.grid(row=row, column=0, columnspan=3, sticky="we", pady=4)
+        self.monster_rows.append(self.effects_box)
+        row += 1
+        self.captions["text"] = ttk.Label(form, text="Card text")
+        self.captions["text"].grid(row=row, column=0, sticky="nw", pady=2)
+        # 21 columns: the game's 20 letters a line and room for the cursor.
+        # Drawn as the card view's panel: icons and colours as the game shows them.
+        self.text = CardTextBox(form, app, width=21, height=9, wrap="word", font=("Consolas", 10))
+        self.text.grid(row=row, column=1, sticky="nw", pady=2)
+        # Beside it, the card view's text box as the game draws it, as tall
+        # as the box; the retail text's link under the box.
+        self.card_view = CardViewPreview(form, app, self.card_view_values, lambda: self.text.winfo_height())
+        self.card_view.grid(row=row, column=2, sticky="nw", padx=6, pady=2)
+        self.text.bind("<Configure>", lambda e: self.card_view.later(), add=True)
+        row += 1
+        self.hints["text"] = ttk.Label(form, style="Hint.TLabel")
+        self.hints["text"].grid(row=row, column=1, columnspan=2, sticky="w")
+        self.hints["text"].bind("<Button-1>", lambda e: self.restore("text"))
+        row += 1
+        self.lines = ttk.Label(form, style="Hint.TLabel")
+        self.lines.grid(row=row, column=1, columnspan=2, sticky="w")
+        row += 1
+        self.text.bind("<KeyRelease>", lambda e: (self.count_lines(), self.mark_later()), add=True)
+        # Right-click: insert an icon or a colour, shown as the game draws them.
+        text_menu.install(app, self.text, lambda: (self.count_lines(), self.mark_later()))
+        self.vars["frame"].trace_add("write", lambda *_: self.show_swatch())
+        self.vars["type"].trace_add("write", lambda *_: self.show_swatch())
+        self.vars["type"].trace_add("write", lambda *_: self.show_kind())
+        for key in ("type", "star1", "star2"):
+            self.vars[key].trace_add("write", lambda *_: self.card_view.later())
+        self.vars["effect"].trace_add("write", lambda *_: self.show_trap_threshold())
         self.added_frame = ttk.LabelFrame(form, text="Added card", padding=6)
         self.added_frame.grid(row=row, column=0, columnspan=3, sticky="we", pady=6)
         row += 1
@@ -406,6 +452,7 @@ class CardsTab(Tab):
                 var.set("")
             self.added_frame.grid_remove()
             self.extra.configure(text="")
+            self.effects_box.show(None)
             self.reference = None
             for label in self.hints.values():
                 label.configure(text="")
@@ -446,6 +493,11 @@ class CardsTab(Tab):
         self.text.insert("1.0", card.description)
         self.notes.insert("1.0", self.project.notes.get(cid, ""))
         self.notes.edit_reset()
+        self.effects_box.show(cid)
+        self.caption_icons()
+        # The form may want another width now (a hint, an icon): no event
+        # says so where the panes hold it at a width of their own.
+        self.app.after_idle(self.relayout)
         self.count_lines()
         self.reference = self.project.retail.cards.get(cid) or self.project.cards.get(self.project.base_of(cid))
         self.mark()
@@ -462,7 +514,7 @@ class CardsTab(Tab):
             self.added_frame.grid_remove()
             extra = self.project.card_extra.get(cid, {})
         self._shown_effect = self.vars["effect"].get()
-        kept = sorted(set(extra) - {"effect", "trap_threshold"})
+        kept = sorted(set(extra) - {"effect", "trap_threshold", "monster_effects"})
         self.extra.configure(text=("Kept as written in mod.json: " + ", ".join(kept)) if kept else "")
 
     # What differs from the disc
@@ -481,7 +533,7 @@ class CardsTab(Tab):
             number = ref.attribute if key == "attribute" else getattr(ref, key)
             shown[key] = (values[key], values[key], parse_choice(self.vars[key].get(), choices) != number)
         shown["frame"] = (values["frame"], values["frame"].lower(),
-                          parse_choice(self.vars["frame"].get(), FRAME_CHOICES) - 1 != ref.frame)
+                          frame_value(self.vars["frame"].get()) != ref.frame)
         shown["text"] = (ref.description, "text", self.text.get("1.0", "end-1c") != ref.description)
         # The effect only against the disc card's own type: another type's
         # list has none of its choices.
@@ -622,6 +674,13 @@ class CardsTab(Tab):
         if self.vars["effect"].get() not in choices:
             self.vars["effect"].set(choices[0] if not own else self.effect_label(self.effect_default(self.current)))
 
+    def effects_changed(self, cid):
+        """The Monster effects box stored a change to the card."""
+        self.show_swatch()
+        self.app.changed()
+        self.update_row(cid)
+        self.status.configure(text="\n".join(i.message for i in validate.validate_card(self.project, cid)))
+
     def edit_equips(self):
         """Apply the card and open its target list without another search."""
         if not self.apply() or self.current is None or self.project.cards[self.current].type != TYPE_EQUIP:
@@ -680,10 +739,14 @@ class CardsTab(Tab):
         return True
 
     def show_swatch(self):
-        """The colour the frame will be: the chosen one, or the type's."""
-        frame = parse_choice(self.vars["frame"].get(), FRAME_CHOICES) - 1
+        """The colour the frame will be: the chosen one, or the type's (a
+        monster with effects is orange, as cards.c Cards_FrameColor draws it)."""
+        frame = frame_value(self.vars["frame"].get())
         kind = parse_choice(self.vars["type"].get(), TYPE_NAMES)
-        if frame < 0 and kind >= 0:
+        if frame == -1 and 0 <= kind < TYPE_MAGIC and self.project is not None and self.current in self.project.cards \
+                and self.project.monster_effects_of(self.current)[0]:
+            frame = FRAME_NAMES.index("Orange")
+        elif frame < 0 and kind >= 0:
             frame = type_frame(kind)
         if 0 <= frame < len(FRAME_COLOURS):
             self.swatch.configure(background=FRAME_COLOURS[frame])
@@ -697,6 +760,90 @@ class CardsTab(Tab):
                              style="Error.TLabel" if lines > 8 else "Hint.TLabel")
         if self.app.text_preview is not None:
             self.app.text_preview.later()
+        self.card_view.later()
+
+    def attribute_icon(self, label):
+        """An attribute's ball off the disc (card_icons.py), or None."""
+        return card_icons.photos(self.app, self).get("attribute", {}).get(parse_choice(label, ATTRIBUTE_CHOICES))
+
+    def caption_icons(self):
+        """The level star, the sword and the shield beside their captions,
+        once there are game files to take them from."""
+        shown = card_icons.photos(self.app, self, 2)     # 8 and 9 pixels: doubled, by the 16 of the lists' icons
+        for key, name in (("level", "level"), ("attack", "attack"), ("defense", "defense")):
+            caption = self.captions.get(key)
+            if caption is not None:
+                caption.configure(image=shown.get(name) or "", compound="left")
+        # The starchip: the text's own star icon ({f8 0B 26}, as the pack shop writes prices).
+        icons = text_menu.pictures(self.app, self, 1)
+        if self.captions.get("starchips") is not None:
+            self.captions["starchips"].configure(image=(icons.icons.get(0x26) if icons else None) or "",
+                                                 compound="left")
+
+    LIST_LEAST = 320
+
+    def relayout(self):
+        if self.winfo_exists():
+            self.card_scroll._layout()
+            self.place_sash()
+
+    def form_resized(self):
+        width = self.card_scroll.body.winfo_reqwidth()
+        if width != self._form_width:
+            self._form_width = width
+            self.place_sash()
+
+    def place_sash(self):
+        """The line between the list and the form, until it is dragged: the
+        form as wide as its controls, the list the rest (at least LIST_LEAST)."""
+        if self._sash_dragged or not self.panes.winfo_ismapped():
+            return
+        width = self.panes.winfo_width()
+        scroll = self.card_scroll
+        # The pane's own edges take a few pixels more than the scrollbar:
+        # what the form's canvas still lacks once placed is taken too.
+        form = scroll.body.winfo_reqwidth() + scroll.bar.winfo_reqwidth()
+        at = max(px(self, self.LIST_LEAST), width - form)
+        if abs(self.panes.sashpos(0) - at) > 1:
+            self.panes.sashpos(0, at)
+            self.panes.update_idletasks()
+        short = scroll.body.winfo_reqwidth() - scroll.canvas.winfo_width()
+        if short > 0 and self.panes.sashpos(0) - short >= px(self, self.LIST_LEAST):
+            self.panes.sashpos(0, self.panes.sashpos(0) - short)
+
+    def star_icon(self, label):
+        """A guardian star's icon ({f8 0B 18} Mars ... 21 Venus), or None."""
+        star = parse_choice(label, star_choices(self.project))
+        return 0x17 + star if 1 <= star <= 10 else None
+
+    def card_view_values(self):
+        """What the card view preview draws: the form's type, stars and text,
+        and the mod's colours for the card (card_text_colors)."""
+        if self.current is None or self.project is None or self.current not in self.project.cards:
+            return None
+        values = [parse_choice(self.vars["type"].get(), TYPE_NAMES),
+                  parse_choice(self.vars["star1"].get(), star_choices(self.project)),
+                  parse_choice(self.vars["star2"].get(), star_choices(self.project))]
+        if min(values) < 0:
+            return None
+        card_type, star1, star2 = values
+        if card_type >= TYPE_MAGIC:
+            star1 = star2 = 0
+        elif star2 == star1:
+            star2 = 0           # one star, shown once (stars.c)
+        names = {s: star_label(s, self.project) for s in (star1, star2) if s > 10}
+        return card_type, star1, star2, self.text.get("1.0", "end-1c"), self.text_colours(), names
+
+    def text_colours(self):
+        """The card's own card_text_colors rule: {"description", "guardian_star"}."""
+        rules = self.project.other.get("card_text_colors")
+        out = {}
+        if isinstance(rules, dict) and isinstance(rules.get("cards"), list):
+            for rule in rules["cards"]:
+                if isinstance(rule, dict) and self.project.resolve(rule.get("card")) == self.current:
+                    out.update({k: rule[k] for k in ("description", "guardian_star")
+                                if isinstance(rule.get(k), int) and 0 <= rule[k] < 8})
+        return out
 
     def read_form(self, cid):
         """The card as the form has it, or an error text."""
@@ -721,7 +868,7 @@ class CardsTab(Tab):
             # trap attribute.
             card.attack = card.defense = card.level = card.star1 = card.star2 = 0
             card.attribute = 7 if card.type == TYPE_TRAP else 6
-        card.frame = max(-1, parse_choice(self.vars["frame"].get(), FRAME_CHOICES) - 1)
+        card.frame = frame_value(self.vars["frame"].get())
         return card
 
     def apply(self, quiet=False):

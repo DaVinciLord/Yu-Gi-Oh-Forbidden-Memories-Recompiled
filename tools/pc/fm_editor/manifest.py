@@ -83,7 +83,10 @@ def _card_fields(card, base, everything=False) -> dict:
         out["attribute"] = _attribute_value(card.attribute)
     if everything or card.level != base.level:
         out["level"] = card.level
-    if everything or (card.star1, card.star2) != (base.star1, base.star2):
+    # A card made a monster without "stars" gets default ones in the game
+    # (cards.c default_stars): written, even as none, they stay as shown.
+    if everything or (card.star1, card.star2) != (base.star1, base.star2) or \
+            card.type < TYPE_MAGIC <= base.type:
         out["stars"] = [_star_value(card.star1), _star_value(card.star2)]
     if card.frame != base.frame:
         out["frame"] = FRAME_NAMES[card.frame] if 0 <= card.frame < len(FRAME_NAMES) else "Type"
@@ -115,11 +118,12 @@ def build_cards(project: Project) -> list:
         entry = {"copy": added.base, "id": added.key}
         fields = {"name": card.name}
         fields.update(_card_fields(card, base))     # what is left out is the base's, as the port has it
-        if card.is_monster() != base.is_monster() or (not base.is_monster() and card.type != base.type):
+        if not card.is_monster() and card.type != base.type:
             effect = project.retail.cards.get(project.effect_of(cid))
-            # The port refuses a kind change without a matching effect, but
-            # for an equip, which needs none (cards.c).
-            if card.is_monster() or (card.type != 23 and (effect is None or effect.type != card.type)):
+            # The port refuses a copy made another non-monster without a
+            # matching effect, but for an equip, which needs none; any card
+            # may become a monster (cards.c).
+            if card.type != 23 and (effect is None or effect.type != card.type):
                 fields.pop("type", None)
         entry.update(fields)
         if project.passwords.get(cid):
@@ -615,10 +619,10 @@ def _apply_fields(card, entry: dict, is_replace: bool, messages: list, where: st
         value = _choice(entry["type"], TYPE_NAMES)
         if value >= 0:
             value = _clamp(value, 0, 23)
-            monster = card.type < TYPE_MAGIC
-            if (not is_replace and (value >= TYPE_MAGIC if monster else value != card.type) and
-                    not (value >= TYPE_MAGIC and value == effect_type) and value != 23):     # cards.c
-                messages.append(f"{where}: a copy keeps its base's side (monster or not); \"type\" left out")
+            if (not is_replace and value >= TYPE_MAGIC and value != card.type and value != effect_type and
+                    value != 23):     # cards.c
+                messages.append(f"{where}: a copy becomes a non-monster only with a matching retail effect; "
+                                f"\"type\" left out")
             else:
                 card.type = value
     stars = entry.get("stars")
@@ -649,7 +653,7 @@ def _apply_fields(card, entry: dict, is_replace: bool, messages: list, where: st
     if "frame" in entry:
         value = _choice(entry["frame"], FRAME_NAMES + ["Type"])
         if 0 <= value <= len(FRAME_NAMES):
-            card.frame = -1 if value == len(FRAME_NAMES) else value
+            card.frame = -2 if value == len(FRAME_NAMES) else value  # -2: "Type", never orange
         else:
             messages.append(f"{where}: \"frame\" is Monster, Magic, Trap, Ritual, Purple, Orange or Type; left out")
 
@@ -671,6 +675,19 @@ def _read_notes(entry: dict, messages: list, where: str):
     return None
 
 
+def _default_stars(project: Project, card, entry: dict, was_monster: bool, model_default: int):
+    """As cards.c default_stars: a card made a monster with no "stars" and
+    none of its own takes its model's, or the Sun and the Moon."""
+    if card.type >= TYPE_MAGIC or was_monster or "stars" in entry or card.star1 or card.star2:
+        return
+    model = project.resolve(entry.get("model")) if "model" in entry else model_default
+    source = project.retail.cards.get(model) if 1 <= model <= CARD_COUNT else None
+    if source is not None and source.type < TYPE_MAGIC:
+        card.star1, card.star2 = source.star1, source.star2
+    else:
+        card.star1, card.star2 = STAR_NAMES.index("Sun"), STAR_NAMES.index("Moon")
+
+
 def read_cards(project: Project, entries, messages: list):
     if entries is None:
         return
@@ -689,7 +706,9 @@ def read_cards(project: Project, entries, messages: list):
             continue
         notes = _read_notes(entry, messages, where)
         if is_replace:
+            was_monster = project.cards[base].type < TYPE_MAGIC
             _apply_fields(project.cards[base], entry, True, messages, where, project.other.get("guardian_stars"))
+            _default_stars(project, project.cards[base], entry, was_monster, base)
             if notes:
                 had = project.notes.get(base)
                 project.set_notes(base, f"{had}\n{notes}" if had else notes)
@@ -719,8 +738,10 @@ def read_cards(project: Project, entries, messages: list):
         if not effect_id or effect_id > CARD_COUNT:
             effect_id = project.effect_of(base)
         effect = project.retail.cards.get(effect_id)
+        was_monster = project.cards[cid].type < TYPE_MAGIC
         _apply_fields(project.cards[cid], entry, False, messages, where, project.other.get("guardian_stars"),
                       effect.type if effect else None)
+        _default_stars(project, project.cards[cid], entry, was_monster, base)
         added = project.added[cid]
         added.drops = _json_bool(entry.get("drops"), True)
         added.opponents = _json_bool(entry.get("opponents"), False)

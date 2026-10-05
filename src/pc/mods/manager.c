@@ -518,7 +518,7 @@ static int source_event(int index, int *place, uint64_t *what, char *label, size
 {
     static const char *const names[MEMORIES_EVENT_COUNT] = {
         "INPUT", "DAMAGE", "REWARD",   "FUSION", "EFFECT",    "AI",        "SCENE",    "SAVE",
-        "LOAD",  "SETTINGS", "EQUIP", "SLOT_SAVE", "SLOT_LOAD", "STARCHIP", "MENU"};
+        "LOAD",  "SETTINGS", "EQUIP", "SLOT_SAVE", "SLOT_LOAD", "STARCHIP", "MENU", "MONSTER"};
     int owner;
     unsigned event;
     (void)context;

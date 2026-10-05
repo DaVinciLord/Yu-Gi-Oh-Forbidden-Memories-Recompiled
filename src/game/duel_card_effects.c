@@ -1,4 +1,7 @@
 #ifdef MEMORIES_PC
+#include "pc/cards/monster_effects_duel.h"
+#endif
+#ifdef MEMORIES_PC
 #include "pc/mods/mods.h"
 #endif
 #define gDuel_bEffectRequestStatus_IN_DATA
@@ -261,6 +264,16 @@ head:
     if ((e->flags & DUEL_CARD_FLAG_OCCUPIED) == 0) {
         goto next;
     }
+#ifdef MEMORIES_PC
+    /* A monster's "destroy" plays this removal on the monsters it chose
+       (monster_effects_duel.h). */
+    switch (MonsterEffects_RemovalTakes((s32)(e - D_801A7AD8))) {
+    case 0:
+        goto next;
+    case 1:
+        goto hit;
+    }
+#endif
     if ((gDuel_wCardEffectFlags & 1) != 0) {
         goto arm;
     }

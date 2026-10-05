@@ -43,6 +43,15 @@ CELL_W, CELL_H = 8, 12
 BOOT_SECTOR = 0x1690
 FONT_SECTORS = 16
 RAMP_SECTOR = BOOT_SECTOR + 50
+# The icons and their palettes: the boot package's second font page
+# (notes/more-cards.md, "Card text codes").
+ICON_SECTOR, ICON_CLUT_SECTOR = BOOT_SECTOR + 16, BOOT_SECTOR + 48
+ICON_NAMES = ("Dragon", "Spellcaster", "Zombie", "Warrior", "Beast-Warrior", "Beast", "Winged Beast", "Fiend",
+              "Fairy", "Insect", "Dinosaur", "Reptile", "Fish", "Sea Serpent", "Machine", "Thunder", "Aqua", "Pyro",
+              "Rock", "Plant", "Magic", "Trap", "Ritual", "Equip", "Mars", "Jupiter", "Saturn", "Uranus", "Pluto",
+              "Neptune", "Mercury", "Sun", "Moon", "Venus", "Cross", "Triangle", "Square", "Circle", "Star",
+              "Start (left half)", "Start (right half)")
+COLOUR_NAMES = ("White", "Yellow", "Blue", "Green", "Grey", "Orange", "Red")
 PUNCTUATION = "!\"#$%&'()*+,-./:;<=>?"
 ALIASES = {"\u2019": "'", "\u2018": "'", "\u201d": '"', "\u201c": '"', "\u2212": "-", "\u2013": "-", "\u2014": "-",
            "\u00a0": " "}
@@ -56,7 +65,7 @@ GUTTER, GUTTER_COLOUR = 3, (200, 200, 200)   # texels right of the box, for the 
 
 # --- layout -------------------------------------------------------------------
 
-# cards.c text_code: an icon "{f8 0B NN}" (a letter wide), a colour
+# cards.c text_code: an icon "{f8 0B NN}" (two letters wide), a colour
 # "{f8 0A NN}" (none) or a glyph by number "{g X}" (a letter).
 CODE = re.compile(r"\{f8 *(0[AaBb]) *([0-9A-Fa-f]{1,2})\}|\{g *([0-9A-Fa-f]{1,4})\}")
 
@@ -66,14 +75,16 @@ def code_at(text: str, i: int):
     match = CODE.match(text, i)
     if not match or (match.group(3) and int(match.group(3), 16) >= 0x600):
         return None
-    return match.group(0), 0 if (match.group(1) or "").upper() == "0A" else 1
+    kind = (match.group(1) or "").upper()
+    return match.group(0), 0 if kind == "0A" else 2 if kind == "0B" else 1
 
 
-def encode(text: str) -> list:
+def encode(text: str, colours: bool = False, breaks: list = None) -> list:
     """The glyphs cards.c encode_description writes: characters, " " for
     the space it puts between words, "\\n" for its line breaks (0xFE). An
     icon or numbered glyph is its code as written, in one cell; a colour
-    code takes none and is left out."""
+    code takes none and is left out (kept as written with `colours`).
+    `breaks` gets the index in text of each space the wrapping breaks at."""
     out, column, i = [], 0, 0
     while i < len(text):
         c = text[i]
@@ -98,20 +109,33 @@ def encode(text: str) -> list:
         if column and column + 1 + letters > LINE_LETTERS:
             out.append("\n")
             column = 0
+            if breaks is not None:
+                breaks.append(i - 1)
         elif column:
             out.append(" ")
             column += 1
         for letter, width in word:
             if width and letter >= " ":
                 out.append(letter)
-                column += 1
+                column += width
+            elif colours and not width:
+                out.append(letter)
         i = end
     return out
+
+
+def wrap_points(text: str) -> list:
+    """The spaces of text (indices) where the game's wrapping starts a new
+    line: twenty letters a line, an icon two, a word never split."""
+    breaks = []
+    encode(text, breaks=breaks)
+    return breaks
 
 
 @dataclass
 class Layout:
     glyphs: list = field(default_factory=list)      # (character, column, row)
+    colours: list = field(default_factory=list)     # each glyph's colour ramp ("{f8 0A NN}", 0 white)
     rows: int = 0                                   # rows the text takes
     cut_rows: list = field(default_factory=list)    # rows the box began mid-word (a word past 21 letters)
     lines: int = 0                                  # the port's own count (its "runs to N lines" note)
@@ -124,10 +148,13 @@ class Layout:
 
 def layout(text: str) -> Layout:
     out = Layout()
-    glyphs = encode(text)
+    glyphs = encode(text, colours=True)
     out.lines = 1 + glyphs.count("\n")
-    x = row = 0
+    x = row = colour = 0
     for g in glyphs:
+        if g.startswith("{") and code_at(g, 0)[1] == 0:
+            colour = int(CODE.match(g).group(2), 16)
+            continue
         if g == "\n":
             x = 0
             row += 1
@@ -137,7 +164,8 @@ def layout(text: str) -> Layout:
             row += 1
             out.cut_rows.append(row)
         out.glyphs.append((g, x, row))
-        x += 1
+        out.colours.append(colour)
+        x += 2 if g.startswith("{") and code_at(g, 0)[1] == 2 else 1
     out.rows = row + 1 if glyphs else 0
     return out
 
@@ -152,6 +180,18 @@ def retail_character(c: str) -> str:
         return c
     base = unicodedata.normalize("NFD", c)[:1]
     return base if base.isascii() and base.isalnum() else ""
+
+
+def _rgb15(word: int):
+    return (word & 31) << 3, (word >> 5 & 31) << 3, (word >> 10 & 31) << 3
+
+
+def icon_code(n: int) -> str:
+    return "{f8 0B %02X}" % n
+
+
+def colour_code(n: int) -> str:
+    return "{f8 0A %02X}" % n
 
 
 def _cell_uv(c: str):
@@ -181,12 +221,46 @@ class RetailFont:
         for i, byte in enumerate(page):
             self.texels[2 * i] = byte & 15
             self.texels[2 * i + 1] = byte >> 4
-        self.colours = []
-        for i in range(16):
-            word = wa[ramp + 2 * i] | wa[ramp + 2 * i + 1] << 8
-            self.colours.append(((word & 31) << 3, (word >> 5 & 31) << 3, (word >> 10 & 31) << 3))
+        # The text's colour ramps (gText_abColorSlots: COLOUR_NAMES, then an
+        # unused eighth), 16 colours each; white is the one drawn without a code.
+        self.ramps = [[_rgb15(wa[ramp + 32 * r + 2 * i] | wa[ramp + 32 * r + 2 * i + 1] << 8) for i in range(16)]
+                      for r in range(min(8, (len(wa) - ramp) // 32))]
+        self.colours = self.ramps[0]
+        self._icon_pages = (wa[ICON_SECTOR * 2048:(ICON_SECTOR + 16) * 2048],
+                            wa[ICON_CLUT_SECTOR * 2048:(ICON_CLUT_SECTOR + 2) * 2048])
+        self._icons = {}
         if not any(self.cell("A")):
             raise ValueError("the game files have no font where the retail disc has it")
+
+    def icon(self, n: int):
+        """Icon `n` of "{f8 0B NN}" as func_80035E20 draws it in card text:
+        (16, 16, RGBA bytes), or None past ICON_NAMES or when the disc has
+        none there."""
+        if n not in self._icons:
+            self._icons[n] = self._read_icon(n) if 0 <= n < len(ICON_NAMES) else None
+        return self._icons[n]
+
+    def _read_icon(self, n: int):
+        page, cluts = self._icon_pages
+        if n >= 0x22:
+            u, v = (n * 16 - 0x210) & 0xFF, 0x80
+            cx, cy = (0x210 if u == 0x50 else 0x200), 0xFC
+        else:
+            u, v = ((n & 7) * 16 - 0x80) & 0xFF, (n & 0x38) * 2
+            r = min(n, 0x18)
+            cx, cy = 0x200 + (r & 15) * 16, 0xF9 + (r >> 4)
+        width = 16
+        index = lambda x, y: page[(v + y) * 128 + (u + x) // 2] >> 4 * ((u + x) & 1) & 15
+        clut, at = cluts, (cy - 0xF8) * 512 + (cx - 0x200) * 2
+        if len(clut) < at + 512 or not any(clut[at:at + 32]):
+            return None
+        rgba = bytearray()
+        for y in range(16):
+            for x in range(width):
+                i = index(x, y)
+                word = clut[at + 2 * i] | clut[at + 2 * i + 1] << 8
+                rgba += bytes((*_rgb15(word), 255 if word else 0))
+        return width, 16, bytes(rgba)
 
     def cell(self, c: str):
         """The glyph's 8 x 12 palette indices, row by row (None for none)."""
@@ -577,12 +651,16 @@ class Renderer:
             line = bytes(colour) * box + bytes(GUTTER_COLOUR) * (w - box)
             for y in range(row * CELL_H * f, (row + 1) * CELL_H * f):
                 rgb[y * w * 3:(y + 1) * w * 3] = line
-        colours = self.retail.colours
-        for c, column, row in lay.glyphs:
-            if c == " " or c.startswith("{"):      # an icon or numbered glyph: left empty here
-                continue
+        for (c, column, row), ramp in zip(lay.glyphs, lay.colours):
+            colours = self.retail.ramps[ramp] if ramp < len(self.retail.ramps) else self.retail.colours
             x0, y0 = column * CELL_W * f, row * CELL_H * f
             dim = row >= SHOWN_ROWS
+            match = CODE.match(c) if c.startswith("{") else None
+            if match and match.group(1):        # an icon: 16 texels a side, a letter's width apart as the game sets it
+                self._icon(rgb, w, h, int(match.group(2), 16), x0, y0, f, dim)
+                continue
+            if c == " " or c.startswith("{"):      # a numbered glyph: left empty here
+                continue
             picture = self._hd(c, f) if self.face is not None and f > 1 else None
             if picture is not None:
                 pw = CELL_W * f
@@ -613,6 +691,19 @@ class Renderer:
         rgba[0::4], rgba[1::4], rgba[2::4] = rgb[0::3], rgb[1::3], rgb[2::3]
         rgba[3::4] = b"\xff" * (w * h)
         return pngio.Image(w, h, bytes(rgba)), lay
+
+    def _icon(self, rgb, w, h, n, x0, y0, f, dim):
+        """The card view draws an icon from its cell's top left, 16 texels
+        high (12 a row): it overlaps the cell after it and the row below."""
+        icon = self.retail.icon(n)
+        if icon is None:
+            return
+        width, height, rgba = icon
+        for y in range(height * f):
+            for x in range(width * f):
+                at = ((y // f) * width + x // f) * 4
+                if rgba[at + 3] and x0 + x < w and y0 + y - 2 * f < h and y0 + y - 2 * f >= 0:
+                    self._put(rgb, w, x0 + x, y0 + y - 2 * f, tuple(rgba[at:at + 3]), dim)
 
     @staticmethod
     def _put(rgb, w, x, y, colour, dim):

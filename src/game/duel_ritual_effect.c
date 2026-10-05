@@ -1,3 +1,6 @@
+#ifdef MEMORIES_PC
+#include "pc/cards/monster_effects_duel.h"
+#endif
 #include "../types.h"
 #define GDIALOG_CHOICE_IN_DATA
 #define GINPUT_PAD1_PRESSED_IN_DATA
@@ -220,6 +223,9 @@ void DuelEffect_ApplyRitual(void)
             break;
         }
         func_80024D34(D_8009B19C, ((s8 *)card->data)[2]);
+#ifdef MEMORIES_PC
+        MonsterEffects_Placed(D_8009B19C, 0);
+#endif
         object = card->object;
         D_800E9EF0.slots[0] = object;
         *(s16 *)&object->field_30.h.field_32 = -240;

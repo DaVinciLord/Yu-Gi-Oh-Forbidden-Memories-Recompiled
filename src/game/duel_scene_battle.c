@@ -47,6 +47,9 @@
 #define MAIN_MODE_STATE_ACTIVE_IN_DATA
 #define D_8009B170_AS_SIDE_ARRAY
 #define D_8009B178_AS_SIDE_ARRAY
+#ifdef MEMORIES_PC
+#include "pc/cards/monster_effects_duel.h"
+#endif
 #include "../types.h"
 #include "../psyq/rand.h"
 #include "duel_scene_state.h"
@@ -177,6 +180,9 @@ void DuelScene_UpdateBattle(void)
         if (func_8001F0D0((u8 *)D_800E9EF0[0]) != 0) {
             D_8009B229 = 0;
         }
+#ifdef MEMORIES_PC
+        MonsterEffects_Battle();
+#endif
         cur = (DuelSelectionRecord *)(D_800E9F64 + D_8009B1D5 * 0x70);
         D_8009B1B4 = (DuelCardPickCursor *)cur;
         DisplayObject_ReleaseIfPresent(cur->cursor_object);

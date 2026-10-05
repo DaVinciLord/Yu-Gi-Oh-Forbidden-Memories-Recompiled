@@ -10,6 +10,7 @@
 #include "cards.h"
 #include "art.h"
 #include "card_notes.h"
+#include "monster_effects.h"
 #include "tables.h"
 #include "starter.h"
 #include "stars.h"
@@ -72,8 +73,17 @@ static unsigned short model_ids[CARD_TABLE_ID_END], effect_ids[CARD_TABLE_ID_END
 static unsigned int trap_thresholds[CARD_TABLE_ID_END];
 static unsigned char not_exodia[EXODIA_PIECE_COUNT];  /* a replaced piece without Exodia's rules */
 /* The frame a card is drawn in when its entry says ("frame"), plus one: 0
- * is its type's (cards.h Cards_FrameColor). */
+ * left out, FRAME_TYPE "Type" (cards.h Cards_FrameColor). */
+#define FRAME_TYPE 0xFF
 static unsigned char frames[CARD_TABLE_ID_END];
+/* "monster_effects" (monster_effects.h): an entry's list, shared by its cards. */
+static const MonsterEffect *monster_effects[CARD_TABLE_ID_END];
+static unsigned char monster_effect_counts[CARD_TABLE_ID_END];
+int Cards_MonsterEffects(int id, const MonsterEffect **effects)
+{
+    *effects = Cards_Valid(id) ? monster_effects[id] : NULL;
+    return *effects ? monster_effect_counts[id] : 0;
+}
 /* Explicit secondary fusion groups for modded/replaced cards. Zero means inherit the retail base. */
 static unsigned int fusion_groups[CARD_TABLE_ID_END];
 static unsigned char has_fusion_groups[CARD_TABLE_ID_END];
@@ -96,7 +106,17 @@ int Cards_TrapThreshold(int id, int fallback)
 }
 static int retail_monster(int id);
 int Cards_HasModel(int id) { return Cards_Valid(id) && retail_monster(Cards_ModelId(id)); }
-int Cards_FrameColor(int id) { return Cards_Valid(id) ? frames[id] - 1 : -1; }
+int Cards_FrameColor(int id)
+{
+    if (!Cards_Valid(id) || frames[id] == FRAME_TYPE) return -1;
+    /* Left out, a monster with effects of its own is drawn orange, as an
+     * effect monster is in the card game. */
+    if (!frames[id]) {
+        const MonsterEffect *effects;
+        return Cards_Type(id) < CARD_TYPE_MAGIC && Cards_MonsterEffects(id, &effects) ? CARD_FRAME_ORANGE : -1;
+    }
+    return frames[id] - 1;
+}
 int Cards_ExodiaPiece(int id)
 {
     return (unsigned)(id - EXODIA_FIRST_CARD_ID) < EXODIA_PIECE_COUNT && !not_exodia[id - EXODIA_FIRST_CARD_ID];
@@ -280,7 +300,8 @@ static unsigned char *encode_name(const char *mod, const char *pattern, int n, i
 #define TEXT_LINES 8
 
 /* A code in card text, spelled as the FM Editor and the text listing show
- * it: "{f8 0B NN}" an icon (one letter wide), "{f8 0A NN}" a colour (none),
+ * it: "{f8 0B NN}" an icon (two letters wide: the card view draws it 16
+ * pixels across), "{f8 0A NN}" a colour (none),
  * "{g X}" a glyph by number. Returns the characters it takes, 0 when "at"
  * starts none (and is then read as letters); its bytes go to out. */
 static size_t text_code(const char *at, unsigned char out[3], int *bytes, int *letters)
@@ -289,7 +310,7 @@ static size_t text_code(const char *at, unsigned char out[3], int *bytes, int *l
     int used = 0;
     if (sscanf(at, "{f8 %2x %2x}%n", &kind, &value, &used) == 2 && used && (kind == 0x0A || kind == 0x0B)) {
         out[0] = 0xF8; out[1] = (unsigned char)kind; out[2] = (unsigned char)value;
-        *bytes = 3; *letters = kind == 0x0B;
+        *bytes = 3; *letters = kind == 0x0B ? 2 : 0;
         return (size_t)used;
     }
     used = 0;
@@ -953,6 +974,20 @@ static int retail_monster(int id)
            (int)((((const unsigned *)(uintptr_t)RETAIL_STATS)[id - 1] >> 26) & 0x1F) < CARD_TYPE_MAGIC;
 }
 
+/* A card that was no monster has no guardian stars either: made one (a
+ * replace's or a copy's "type"), unless "stars" gives some, its model's, or
+ * the Sun and the Moon. A monster that "stars" leaves with none, or that was
+ * one before this entry (an earlier mod's no-star card), keeps none
+ * (stars.h). */
+static void default_stars(int id, unsigned *stats, int was_monster, int stars_given)
+{
+    if ((int)((*stats >> 26) & 0x1F) < CARD_TYPE_MAGIC && !was_monster && !stars_given && !(*stats & (0xFFu << 18))) {
+        *stats |= retail_monster(Cards_ModelId(id))
+                      ? ((const unsigned *)(uintptr_t)RETAIL_STATS)[Cards_ModelId(id) - 1] & (0xFFu << 18)
+                      : (8u << 22) | (9u << 18);
+    }
+}
+
 /* A replaced card's 3D model and effect: its own unless the entry names
  * others. Only a card that is a monster on the disc has a model; a magic,
  * trap, ritual or equip card made a monster has none unless "model" names a
@@ -963,7 +998,7 @@ static void replace_model_effect(const char *mod, int index, const JsonValue *en
                                  int was_monster, int stars_given)
 {
     const JsonValue *model = Json_Member(entry, "model"), *effect = Json_Member(entry, "effect");
-    int type = (int)((*stats >> 26) & 0x1F), value;
+    int value;
     if (model) {
         value = Cards_Reference(model);
         if (retail_monster(value)) {
@@ -972,15 +1007,7 @@ static void replace_model_effect(const char *mod, int index, const JsonValue *en
             Mods_Note(mod, "cards[%d]: \"model\" must name a monster of the disc", index);
         }
     }
-    /* A card that was no monster has no guardian stars either: unless
-     * "stars" gives some, its model's, or the Sun and the Moon. A monster
-     * that "stars" leaves with none, or that was one before this entry
-     * (an earlier mod's no-star card), keeps none (stars.h). */
-    if (type < CARD_TYPE_MAGIC && !was_monster && !stars_given && !(*stats & (0xFFu << 18))) {
-        *stats |= retail_monster(Cards_ModelId(id))
-                      ? ((const unsigned *)(uintptr_t)RETAIL_STATS)[Cards_ModelId(id) - 1] & (0xFFu << 18)
-                      : (8u << 22) | (9u << 18);
-    }
+    default_stars(id, stats, was_monster, stars_given);
     if (effect) {
         value = Cards_Reference(effect);
         if (value >= 1 && value <= CARD_COUNT) {
@@ -1083,6 +1110,9 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     unsigned stats, password = CARD_PASSWORD_NONE, entry_fusion_groups = 0;
     int entry_has_fusion_groups = 0;
     int was_monster, stars_given = 0;
+    MonsterEffect read_effects[MONSTER_EFFECTS_MAX];
+    MonsterEffect *own_effects = NULL;
+    int effect_count;
     unsigned int trap_threshold;
     unsigned char level_attr, frame;
     if (Json_TypeOf(entry) != JSON_OBJECT) {
@@ -1117,6 +1147,14 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     if (!replace && count > CARD_TABLE_COUNT - gCard_nCount) {
         Mods_Note(mod, "cards[%d]: only %d more cards fit (%d asked)", index, CARD_TABLE_COUNT - gCard_nCount, count);
         count = CARD_TABLE_COUNT - gCard_nCount;
+    }
+    /* Left out, a copy has its base's monster effects and a replace keeps
+     * the earlier one's; [] or null takes them away. */
+    effect_count = MonsterEffects_Read(mod, index, Json_Member(entry, "monster_effects"), read_effects);
+    if (effect_count > 0) {
+        own_effects = malloc((size_t)effect_count * sizeof(*own_effects));
+        if (own_effects) memcpy(own_effects, read_effects, (size_t)effect_count * sizeof(*own_effects));
+        else effect_count = 0;
     }
     /* What the entry leaves out is the base's. */
     stats = (unsigned)gDuel_adwCardStats[base - 1];
@@ -1158,13 +1196,14 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         /* A copy may become a non-monster when it has a retail effect of
          * that type. The effect names a built-in behavior, even if the
          * source card was itself replaced. An equip needs none: what it
-         * equips and adds are the mod's "equips" rules (tables.h). */
+         * equips and adds are the mod's "equips" rules (tables.h). Any
+         * card may become a monster, as a replaced one may. */
         int monster = ((stats >> 26) & 0x1F) < CARD_TYPE_MAGIC;
         int effect = Cards_Reference(Json_Member(entry, "effect"));
         if (effect <= 0 && Json_Number(Json_Member(entry, "effect"), 0) == 0)
             effect = Cards_EffectId(base);
         value = clamp(value, 0, CARD_TYPE_EQUIP);
-        if (!replace && (monster ? value >= CARD_TYPE_MAGIC : value != (int)((stats >> 26) & 0x1F)) &&
+        if (!replace && value >= CARD_TYPE_MAGIC && value != (int)((stats >> 26) & 0x1F) &&
             !(value >= CARD_TYPE_MAGIC && Cards_RetailType(effect) == value) && value != CARD_TYPE_EQUIP) {
             Mods_Note(mod, "cards[%d]: %s; \"type\" left out", index,
                       monster ? "a copy needs a matching retail effect to become a non-monster" :
@@ -1238,7 +1277,7 @@ static void add_entry(const char *mod, const char *directory, int index, const J
             Mods_Note(mod, "cards[%d]: \"frame\" is Monster, Magic, Trap, Ritual, Purple, Orange or Type; left out",
                       index);
         } else {
-            frame = (unsigned char)(value == CARD_FRAME_COUNT ? 0 : value + 1);
+            frame = (unsigned char)(value == CARD_FRAME_COUNT ? FRAME_TYPE : value + 1);
         }
     }
     /* What View > Card passwords shows (passwords.h): a copy has none
@@ -1324,9 +1363,16 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         if (!identities[id]) { Mods_Note(mod, "out of memory for card identity"); break; }
         gCard_nCount = id;
         definitions[id] = entry;
-        /* A replaced base lends the model and effect it was given. */
-        value = (int)Json_Number(Json_Member(entry, "model"), 0);
+        /* A replaced base lends the model and effect it was given. "model"
+         * is a number or, as a replace's, a monster's name. */
+        value = Cards_Reference(Json_Member(entry, "model"));
+        if (value < 0 || (Json_Member(entry, "model") && Json_TypeOf(Json_Member(entry, "model")) == JSON_STRING &&
+                          !retail_monster(value))) {
+            if (n == 1) Mods_Note(mod, "cards[%d]: \"model\" must name a monster of the disc", index);
+            value = 0;
+        }
         model_ids[id] = (unsigned short)(value >= 1 && value <= CARD_COUNT ? value : Cards_ModelId(base));
+        default_stars(id, &stats, was_monster, stars_given);
         /* A number or a card's name, as a replace's (Cards_Reference); 0,
          * as before names could be given, is the base's effect. */
         value = Json_Number(Json_Member(entry, "effect"), -1) == 0 ? 0 : Cards_Reference(Json_Member(entry, "effect"));
@@ -1336,6 +1382,13 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         gCard_awBaseId[id] = (unsigned short)base;
         gCard_asNameSortKey[id - 1] = gCard_asNameSortKey[base - 1];
     own:
+        if (effect_count >= 0) {
+            monster_effects[id] = own_effects;
+            monster_effect_counts[id] = (unsigned char)effect_count;
+        } else if (!replace) {
+            monster_effects[id] = monster_effects[base];
+            monster_effect_counts[id] = monster_effect_counts[base];
+        }
         trap_thresholds[id] = trap_threshold;
         fusion_groups[id] = entry_fusion_groups;
         has_fusion_groups[id] = (unsigned char)entry_has_fusion_groups;

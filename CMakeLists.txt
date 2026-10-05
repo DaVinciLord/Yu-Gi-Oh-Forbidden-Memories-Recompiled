@@ -414,7 +414,8 @@ if(BUILD_TESTING)
     # that need the game and renderer. ELF linkers resolve symbols after GC;
     # the PE linker reports them before it, so this test is ELF-only.
     if(NOT WIN32 AND NOT MSVC)
-        add_executable(memories_cards_identity_test tests/pc/cards_identity_test.c src/pc/platform/paths.c)
+        add_executable(memories_cards_identity_test tests/pc/cards_identity_test.c src/pc/platform/paths.c
+                       src/pc/cards/monster_effects.c tests/pc/effect_groups_stub.c)
         target_include_directories(memories_cards_identity_test PRIVATE src)
         target_compile_definitions(memories_cards_identity_test PRIVATE MEMORIES_PC)
         target_compile_options(memories_cards_identity_test PRIVATE -ffunction-sections -fdata-sections)
@@ -454,7 +455,7 @@ if(BUILD_TESTING)
     # A card's "stars" through cards.c's own add_entry, on a stand-in for the
     # disc's tables (notes/modding.md, "No star").
     add_executable(memories_cards_stars_test tests/pc/cards_stars_test.c src/pc/cards/stars.c
-                   src/pc/mods/json.c)
+                   src/pc/mods/json.c src/pc/cards/monster_effects.c tests/pc/effect_groups_stub.c)
     target_include_directories(memories_cards_stars_test PRIVATE src)
     target_compile_definitions(memories_cards_stars_test PRIVATE MEMORIES_PC)
     if(WIN32)
@@ -467,7 +468,8 @@ if(BUILD_TESTING)
     # Two mods' "cards" in the load order the settings give, through the real
     # mod loader and cards.c's Cards_Build: once as the folders sort, once
     # with the second moved first (notes/more-cards.md).
-    add_executable(memories_cards_order_test tests/pc/cards_order_test.c src/pc/cards/stars.c ${MOD_TEST_SOURCES})
+    add_executable(memories_cards_order_test tests/pc/cards_order_test.c src/pc/cards/stars.c ${MOD_TEST_SOURCES}
+                   src/pc/cards/monster_effects.c tests/pc/effect_groups_stub.c)
     target_include_directories(memories_cards_order_test PRIVATE src)
     target_compile_definitions(memories_cards_order_test PRIVATE MEMORIES_PC)
     target_link_libraries(memories_cards_order_test PRIVATE m Threads::Threads)

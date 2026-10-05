@@ -163,14 +163,13 @@ class SameAsTheGame(unittest.TestCase):
                                         if mods[m].id in row.split("|")[3].split(", ")], (ids, m))
 
     def test_names_as_the_game_keeps_them(self):
-        # mods_overlap_test.c's: an escape of one byte that is not UTF-8
-        # (U+FFFD where the window shows it), and six names of 95 bytes,
-        # each cut where a letter starts, all in the line.
+        # mods_overlap_test.c's: an escaped letter (its UTF-8), and six
+        # names of 95 bytes, each cut where a letter starts, all in the line.
         escaped = overlaps.parse('"' + chr(92) + 'u00c9clair"')
         names = [escaped] + [f"{m}{0:093d}\u00f1tail" for m in range(1, 6)]
         mods = [overlaps.Mod(f"m{m}", names[m], {"font": "f.ttf"}) for m in range(6)]
         found = overlaps.check(mods[:2])
-        self.assertEqual(found[0].text, f"Fonts (\ufffdclair, 1{0:093d}): both apply and add up "
+        self.assertEqual(found[0].text, f"Fonts (\u00c9clair, 1{0:093d}): both apply and add up "
                                         "(a letter comes from the first font that has it)")
         found = overlaps.check(mods[1:])
         self.assertIn(f", 5{0:093d}): all apply", found[0].text)
@@ -182,7 +181,10 @@ class SameAsTheGame(unittest.TestCase):
         self.assertEqual(overlaps.parse('\v[1e3, 2.50e1, -0]\f'), [1000, 25, 0])
         for refused in ('[,]', '{"a":,}', '[1,,]', '2.5000000000000001e1', '1e-1', '2147483648', 'NaN', '[01]'):
             self.assertIsNone(overlaps.parse(refused), refused)
-        self.assertEqual(overlaps.parse(f'"{b}u00c3{b}u00a9 {b}u4e2d a{b}u0000b"'), "\u00e9 ? a")
+        # A \u escape is its character (json.c writes it as UTF-8), a
+        # surrogate pair one, a lone surrogate U+FFFD; a NUL ends the string.
+        self.assertEqual(overlaps.parse(f'"{b}u00c3{b}u00a9 {b}u4e2d a{b}u0000b"'), "\u00c3\u00a9 \u4e2d a")
+        self.assertEqual(overlaps.parse(f'"{b}ud83d{b}ude00 {b}ud800x"'), "\U0001f600 \ufffdx")
         self.assertEqual(overlaps.parse(f'"{b}{b}u0041"'), f"{b}u0041")
 
     def test_one_mod_is_nothing(self):

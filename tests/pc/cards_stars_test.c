@@ -36,7 +36,8 @@ int gDuel_adwCardStats[CARD_TABLE_ID_END];
 short gCard_asNameSortKey[CARD_TABLE_ID_END];
 unsigned char gDuel_abCardLevelAttr[CARD_TABLE_ID_END];
 
-static int notes[5];     /* per mod, "a" to "e" */
+static int notes[7];     /* per mod, "a" to "g" */
+static int effect_notes; /* of them, about "monster_effects" */
 
 void Mods_Note(const char *id, const char *format, ...)
 {
@@ -46,7 +47,8 @@ void Mods_Note(const char *id, const char *format, ...)
     vsnprintf(note, sizeof(note), format, arguments);
     va_end(arguments);
     fprintf(stderr, "note: %s: %s\n", id, note);
-    if (id[0] >= 'a' && id[0] <= 'e' && !id[1]) notes[id[0] - 'a']++;
+    if (id[0] >= 'a' && id[0] <= 'g' && !id[1]) notes[id[0] - 'a']++;
+    if (strstr(note, "monster_effects")) effect_notes++;
 }
 
 /* What cards.c and stars.c reach that these checks never get to. */
@@ -279,6 +281,122 @@ static void trap_conversions(void)
     assert(Cards_TrapThreshold(1, -1) == -1); /* a reflector never gets an ATK trigger */
 }
 
+/* "monster_effects" (monster_effects.h): read into the card, a copy taking
+ * its base's unless it has its own, [] taking them away, and what the game
+ * cannot do left out with a note. */
+static void monster_effect_entries(void)
+{
+    BuildContext context = {0};
+    char error[128];
+    const JsonValue *entry;
+    const MonsterEffect *effects;
+    int i, copy = gCard_nCount + 1;
+    JsonDocument *doc = Json_Parse(
+        "[{\"replace\":20,\"monster_effects\":["
+        "  {\"when\":\"summon\",\"do\":\"magic\",\"card\":337},"
+        "  {\"when\":\"Face Up\",\"do\":\"boost\",\"target\":\"others\",\"type\":\"Dragon\","
+        "   \"attribute\":\"Light\",\"attack\":300,\"defense\":-200},"
+        "  {\"when\":\"combat\",\"do\":\"boost\",\"target\":\"battle\",\"attack\":-500},"
+        "  {\"when\":\"destroyed\",\"do\":\"damage\",\"amount\":800},"
+        "  {\"when\":\"draw\",\"do\":\"heal\",\"amount\":100},"
+        "  {\"when\":\"flip\",\"do\":\"magic\",\"card\":675},"
+        "  {\"when\":\"face_up\",\"do\":\"magic\",\"card\":337},"
+        "  {\"when\":\"combat\",\"do\":\"boost\",\"target\":\"own\",\"attack\":100},"
+        "  {\"when\":\"destroyed\",\"do\":\"boost\",\"target\":\"self\",\"attack\":100},"
+        "  {\"when\":\"summon\",\"do\":\"heal\",\"amount\":0},"
+        "  {\"when\":\"summon\",\"do\":\"boost\"},"
+        "  {\"when\":\"later\",\"do\":\"heal\",\"amount\":1},"
+        "  {\"when\":\"destroy_opponent\",\"do\":\"heal\",\"amount\":300},"
+        "  {\"when\":\"flip\",\"do\":\"destroy\",\"type\":\"Warrior\"},"
+        "  {\"when\":\"summon\",\"do\":\"destroy\",\"target\":\"own\"},"
+        "  {\"when\":\"summon\",\"do\":\"destroy\",\"target\":\"battle\"}]},"
+        "{\"copy\":20,\"id\":\"inherits\"},"
+        "{\"copy\":20,\"id\":\"none\",\"monster_effects\":[]},"
+        "{\"replace\":20,\"attack\":1000},"
+        "{\"replace\":21,\"monster_effects\":{\"when\":\"summon\"}},"
+        "{\"replace\":22,\"monster_effects\":[{\"when\":\"draw\",\"do\":\"heal\",\"amount\":1}],"
+        " \"frame\":\"Type\"},"
+        "{\"replace\":23,\"monster_effects\":[{\"when\":\"draw\",\"do\":\"heal\",\"amount\":1}],"
+        " \"frame\":\"Monster\"}]", error, sizeof(error));
+    assert(doc);
+    test_stats[336 - 1] = test_stats[337 - 1] = STATS(CARD_TYPE_MAGIC, 0, 0);
+    test_stats[675 - 1] = STATS(CARD_TYPE_RITUAL, 0, 0);
+    for (i = 0, entry = Json_At(Json_Root(doc), 0); entry; i++, entry = Json_Next(entry))
+        add_entry("f", ".", i, entry, &context);
+    /* Seven taken; a ritual's effect, magic while face up, a combat boost of
+       its side, a destroyed card's own boost, no amount, no boost, an
+       unknown "when", a destroy of its own side and one of the monster it
+       battles outside a flip left out, each noted. */
+    assert(Cards_MonsterEffects(20, &effects) == 7);
+    assert(effects[0].when == MONSTER_WHEN_SUMMON && effects[0].action == MONSTER_DO_MAGIC && effects[0].card == 337);
+    assert(effects[1].when == MONSTER_WHEN_FACE_UP && effects[1].action == MONSTER_DO_BOOST);
+    assert(effects[1].target == MONSTER_TARGET_OTHERS && effects[1].type == 0 && effects[1].attribute == 0);
+    assert(effects[1].attack == 300 && effects[1].defense == -200);
+    assert(effects[2].when == MONSTER_WHEN_COMBAT && effects[2].target == MONSTER_TARGET_BATTLE);
+    assert(effects[3].when == MONSTER_WHEN_DESTROYED && effects[3].action == MONSTER_DO_DAMAGE &&
+           effects[3].amount == 800);
+    assert(effects[4].when == MONSTER_WHEN_DRAW && effects[4].action == MONSTER_DO_HEAL && effects[4].amount == 100);
+    assert(effects[5].when == MONSTER_WHEN_DESTROY_OPPONENT && effects[5].action == MONSTER_DO_HEAL);
+    /* A flip's destroy without a target: the monster attacking it. */
+    assert(effects[6].when == MONSTER_WHEN_FLIP && effects[6].action == MONSTER_DO_DESTROY &&
+           effects[6].target == MONSTER_TARGET_BATTLE && effects[6].type == 3);
+    assert(effect_notes == 10);   /* the nine left out, and 21's that is no list */
+    /* A copy has its base's; [] none; a later replace without the key keeps them. */
+    assert(Cards_MonsterEffects(copy, &effects) == 7);
+    assert(Cards_MonsterEffects(copy + 1, &effects) == 0);
+    /* Not a list: noted, the card keeps what it had (none). */
+    assert(Cards_MonsterEffects(21, &effects) == 0);
+    assert(MonsterEffect_MagicUsable(337) && MonsterEffect_MagicUsable(336) && !MonsterEffect_MagicUsable(675));
+    /* Drawn orange, as an effect monster, unless its "frame" says: "Type"
+     * its type's, "Monster" gold. A monster without effects, its type's. */
+    for (i = 20; i <= 23; i++) gDuel_adwCardStats[i - 1] = (int)STATS(0, SUN, MOON);
+    assert(Cards_FrameColor(20) == CARD_FRAME_ORANGE);
+    assert(Cards_FrameColor(21) == -1);
+    assert(Cards_FrameColor(22) == -1);
+    assert(Cards_FrameColor(23) == CARD_FRAME_MONSTER);
+    gDuel_adwCardStats[20 - 1] = (int)STATS(CARD_TYPE_MAGIC, 0, 0);
+    assert(Cards_FrameColor(20) == -1);      /* not a monster: its type's */
+    assert(!MonsterEffect_MagicUsable(300) && !MonsterEffect_MagicUsable(1));
+}
+
+/* Copies of magic cards made monsters (as a replace may be): a monster's
+ * type, ATK and DEF, stars as a replaced card gets them, out of the magic
+ * card's tables; made a Trap without a trap's effect, still refused. */
+static void copies_made_monsters(void)
+{
+    BuildContext context = {0};
+    char error[128];
+    const JsonValue *entry;
+    int i, first = gCard_nCount + 1;
+    JsonDocument *doc = Json_Parse(
+        "[{\"copy\":500,\"id\":\"magic-dragon\",\"type\":\"Dragon\",\"attack\":1500,\"defense\":1200,"
+        "  \"monster_effects\":[{\"when\":\"summon\",\"do\":\"heal\",\"amount\":500}]},"
+        "{\"copy\":500,\"id\":\"with-model\",\"type\":\"fiend\",\"model\":400},"
+        "{\"copy\":500,\"id\":\"no-stars\",\"type\":\"Dragon\",\"stars\":[0,0]},"
+        "{\"copy\":500,\"id\":\"bad-model\",\"type\":\"Dragon\",\"model\":\"Nowhere\"},"
+        "{\"copy\":500,\"id\":\"magic-trap\",\"type\":\"Trap\"}]", error, sizeof(error));
+    const MonsterEffect *effects;
+    assert(doc);
+    test_stats[400 - 1] = STATS(0, MOON, MARS);
+    gDuel_adwCardStats[500 - 1] = (int)(test_stats[500 - 1] = STATS(CARD_TYPE_MAGIC, 0, 0));   /* a clean magic card */
+    for (i = 0, entry = Json_At(Json_Root(doc), 0); entry; i++, entry = Json_Next(entry))
+        add_entry("g", ".", i, entry, &context);
+    assert(gCard_nCount == first + 4);
+    assert(Cards_Type(first) == 0 && Cards_Type(first + 1) == 7 && Cards_Type(first + 2) == 0);
+    assert(((unsigned)gDuel_adwCardStats[first - 1] & 0x1FF) == 150);
+    assert((((unsigned)gDuel_adwCardStats[first - 1] >> 9) & 0x1FF) == 120);
+    expect(first, SUN, MOON);                 /* no model: the Sun and the Moon */
+    expect(first + 1, MOON, MARS);            /* its model's */
+    expect(first + 2, 0, 0);
+    assert(Cards_ModelId(first) == 500 && Cards_ModelId(first + 1) == 400 && !Cards_HasModel(first));
+    assert(Cards_KindChanged(first) && Cards_AiId(first) == -1 && Cards_TrapId(first) == 0);
+    assert(Cards_MonsterEffects(first, &effects) == 1 && effects[0].action == MONSTER_DO_HEAL);
+    /* A "model" naming no monster, and the Trap without a trap's effect: noted. */
+    assert(Cards_ModelId(first + 3) == 500);
+    assert(Cards_Type(first + 4) == CARD_TYPE_MAGIC);
+    assert(notes[6] == 2);
+}
+
 int main(void)
 {
     int id;
@@ -331,6 +449,8 @@ int main(void)
 
     magic_conversions();
     trap_conversions();
+    monster_effect_entries();
+    copies_made_monsters();
     puts("cards stars, magic and trap conversions: ok");
     return 0;
 }

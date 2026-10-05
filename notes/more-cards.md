@@ -43,22 +43,23 @@ The release ships no card mod; the checks below were made with test mods
 | `count` | how many cards this entry adds (default 1) |
 | `count_setting` | read `count` from one of the mod's settings instead, so `MEMORIES_MOD_<ID>_COUNT=5000` or `mod.<id>.count=5000` in the settings file changes it without editing the manifest |
 | `name` | the cards' own name; `{n}` is the card's number within the entry and `{id}` its card id. Without one a card has its base's name. Letters, digits, spaces and ``!"#$%&'()*+,-./:<>?`` are what the game's font has; accented letters and others the port adds ([translations](translation.md)) work too |
-| `description` | the card's own text (UTF-8: accented letters work, [translations](translation.md)), wrapped as the retail texts are (lines of up to twenty letters, broken at spaces; `\n` breaks a line where it stands). The codes the FM Editor shows work too: `{f8 0B NN}` an icon (one letter wide), `{f8 0A NN}` a colour, `{g X}` a glyph by number. Eight lines is the most any retail text has. Without one a card has its base's text |
+| `description` | the card's own text (UTF-8: accented letters work, [translations](translation.md)), wrapped as the retail texts are (lines of up to twenty letters, broken at spaces; `\n` breaks a line where it stands). The codes the FM Editor shows work too: `{f8 0B NN}` an icon (two letters wide), `{f8 0A NN}` a colour ([the tables](#card-text-codes)), `{g X}` a glyph by number. Eight lines is the most any retail text has. Without one a card has its base's text |
 | `art` | a PNG in the mod (a path relative to its directory): the card's picture and, made from the same image, the small one the hand and field show. Any size: the middle of it at the card's shape is taken and scaled to 102x96 and 40x32, and its colours reduced to the 255 and 63 each has. An image bigger than that is also drawn at its own resolution when View > Console resolution is set above 1x (Internal 2x, 4x), as a texture pack's image is ([HD pictures](#hd-pictures)), so 408x384 (4x) or 816x768 (8x) looks best |
 | `thumbnail` | a PNG for the small picture alone, when the scaled-down `art` does not read well at 40x32; bigger than 40x32, it is drawn at its own resolution too |
 | `field_art` | a PNG (same sizing rule as `art`) for the 3D Monsters mod's Card art style cutout alone, on top of the card on the duel field: never patched into the card's own record, so the Library, hand, trade screen and detail panel keep showing `art` (or the base's own picture) untouched. Without one the cutout shows the same picture everything else does |
 | `title` | a PNG for the name plate at the top of the card's picture (96x14; dark ink on white, or on a transparent background). Without one, a card with its own name gets a plate with that name set in Times at the retail plates' size (Times New Roman on Windows, fontconfig's match for `Times` elsewhere, Liberation Serif on most Linux systems), or a blank plate when there is none |
 | `attack`, `defense` | 0 to 5110, in tens, as the game stores them |
-| `type` | a number or a name (`"Dragon"`, `"Winged Beast"`). A copy may become Magic, Trap, Ritual or Equip when `effect` selects a retail behavior of that type. Without a matching effect it keeps its original kind; a non-monster copy cannot become a monster |
+| `type` | a number or a name (`"Dragon"`, `"Winged Beast"`). A copy may become Magic, Trap, Ritual or Equip when `effect` selects a retail behavior of that type. Without a matching effect it keeps its original kind; any copy may become a monster, as a replaced card may (below) |
 | `trap_threshold` | the highest attacker ATK stopped by this card's attack-destruction trap effect, inclusive, 0–65535. Applies only to a Trap with an effect from House of Adhesive Tape through Widespread Ruin. Omitted: keep the earlier replacement's override, or inherit a copy's base override; `null`: clear it and use the effect's global `trap_thresholds` setting or retail default. Other cards sharing the effect keep their own thresholds |
 | `attribute` | a number or a name (`"Light"` to `"Wind"`) |
 | `level` | 0 to 12 |
 | `stars` | the two guardian stars, as numbers or names (`"Mars"` to `"Venus"`, and a mod's own up to 15: [Guardian Stars](modding.md#guardian-stars-names-icons-new-stars-and-matchups)); a second of `0` (none) or the same as the first is a card with one star |
-| `frame` | the colour of the card's frame, whatever its type: `"Monster"` (gold), `"Magic"` (green), `"Trap"` (pink), `"Ritual"` (blue), `"Purple"` or `"Orange"`, or a number 0-5 in that order; `"Type"` goes back to its type's ([below](#frame-colour)) |
+| `frame` | the colour of the card's frame, whatever its type: `"Monster"` (gold), `"Magic"` (green), `"Trap"` (pink), `"Ritual"` (blue), `"Purple"` or `"Orange"`, or a number 0-5 in that order; `"Type"` goes back to its type's. Left out, a monster with `monster_effects` is orange ([below](#frame-colour)) |
 | `fusion_groups` | the fusion guides' groups the card is in, for a ritual's `fusion_group` condition ([Gameplay tables](gameplay-tables.md#rituals)): a list such as `["Elf", "Female"]`, `[]` for none; without it, its base's |
 | `drops` | whether the card can be won in its base's place (default `true`, below) |
 | `opponents` | whether an opponent's deck can be dealt it in its base's place (default `false`) |
 | `password` | the password used by the Password shop and shown on the card by View > Card passwords: up to eight digits as a string (`"08124921"`, leading zeros kept) or a number, `""` or `null` for none. The [gameplay tables'](gameplay-tables.md#passwords-and-prices-on-the-password-screen) `passwords` entry overrides it and sets the price, for added cards as well as replacements. Added cards default to 999999 starchips and allow repeat purchases. A copy without a password has none (its base's would give the base) |
+| `monster_effects` | what the monster does on the field: on summon, on flip, at its owner's draw, before a battle, when destroyed, or while face up ([below](#monster-effects)). Left out, a copy has its base's and a replace keeps an earlier one's; `[]` takes them away |
 | `notes` | text of the modder's own, which the game shows and plays by none of ([below](#notes-on-a-card)) |
 
 What an entry leaves out is its base's. Give entries explicit stable `id` keys. Saves use these identities; runtime
@@ -100,9 +101,10 @@ the disc's). It gets no id of its own, so `id`,
 the card keeps its place in the disc's tables, and the
 [gameplay tables](gameplay-tables.md) change its fusions, equips and rituals.
 
-Unlike a copy, a replaced card may change sides with `type`: a magic, trap,
-ritual or equip card can become a monster, and a monster a magic, trap,
-ritual or equip card. The disc has 3D models for its monsters only, so a card
+A replaced card may change sides with `type`: a magic, trap, ritual or
+equip card can become a monster, and a monster a magic, trap, ritual or equip
+card. A copy may become a monster the same way (a copy of Raigeki made a
+Dragon); it becomes a non-monster only as the `type` row above says. The disc has 3D models for its monsters only, so a card
 made a monster fights without one unless `model` names a monster whose model
 it takes (`"model": "Kuriboh"`), and without `stars` it gets that monster's
 guardian stars, or the Sun and the Moon. A monster made a magic, trap or
@@ -114,7 +116,7 @@ and a copy may become one the same way. An equip whose `effect` is a disc equip 
 the monsters that one fits, with its bonus (Megamorph's +1000 too), and
 `equips` in the [gameplay tables](gameplay-tables.md) may change that. `model`
 and `effect` work the same on a card that stays on its side, and a copy's
-`effect` may name the card as a replace's does.
+`model` and `effect` may name the card as a replace's do.
 
 The CPU plays a magic card as the disc's card its `effect` names, when that is
 a magic card too: its scripts look cards up by the disc's numbers, so a mod
@@ -174,7 +176,10 @@ two the disc has and never uses, purple and orange:
 Only the colour changes: a monster keeps its ATK/DEF and a magic card its
 MAGIC word. Left out, a replaced card keeps the frame an earlier mod gave
 it and a copy takes its base's; `"Type"` goes back to the type's
-(`Cards_FrameColor`, `src/pc/cards/cards.c`). It shows everywhere the game
+(`Cards_FrameColor`, `src/pc/cards/cards.c`). A monster with
+[monster effects](#monster-effects) and no frame of its own is drawn
+orange, as an effect monster is in the card game; `"Monster"` keeps it
+gold, and `"Type"` gives it its type's. It shows everywhere the game
 colours a card by its type:
 
 - the card view (Library, Build Deck, Trade, Password, the duel's card view,
@@ -191,6 +196,152 @@ colours a card by its type:
 
 The Forbidden Memories HD mod's frames cover purple and orange too
 (`tools/pc/hd_assets_pack.py` recolours the monster frame into them).
+
+## Card text codes
+
+A card's `name` and `description` (and any text in a mod's text listing)
+may hold two codes besides letters. The FM Editor's card text box inserts
+both from its right-click menu, with the icons and colours shown, so there
+is no need to look them up.
+
+`{f8 0B XX}` inserts an icon. The card view draws it 16 pixels across, two
+letters wide, and the port wraps the text with that width. `{f8 0B 00}` is the
+Dragon icon:
+
+| XX | Icon | XX | Icon | XX | Icon |
+|---|---|---|---|---|---|
+| `00` | Dragon | `01` | Spellcaster | `02` | Zombie |
+| `03` | Warrior | `04` | Beast-Warrior | `05` | Beast |
+| `06` | Winged Beast | `07` | Fiend | `08` | Fairy |
+| `09` | Insect | `0A` | Dinosaur | `0B` | Reptile |
+| `0C` | Fish | `0D` | Sea Serpent | `0E` | Machine |
+| `0F` | Thunder | `10` | Aqua | `11` | Pyro |
+| `12` | Rock | `13` | Plant | `14` | Magic |
+| `15` | Trap | `16` | Ritual | `17` | Equip |
+| `18` | Mars | `19` | Jupiter | `1A` | Saturn |
+| `1B` | Uranus | `1C` | Pluto | `1D` | Neptune |
+| `1E` | Mercury | `1F` | Sun | `20` | Moon |
+| `21` | Venus | `22` | Cross | `23` | Triangle |
+| `24` | Square | `25` | Circle | `26` | Star |
+| `27` | Start (left half) | `28` | Start (right half) | | |
+
+`{f8 0A XX}` changes the colour of the text after it; `{f8 0A 00}` goes back
+to white:
+
+| XX | Colour | XX | Colour |
+|---|---|---|---|
+| `00` | White (the default) | `04` | Grey |
+| `01` | Yellow | `05` | Orange |
+| `02` | Blue | `06` | Red |
+| `03` | Green | | |
+
+```text
+{f8 0A 05}<Effect>{f8 0A 00}
+Cannot be destroyed by card effects.
+This card can attack {f8 0A 06}2x{f8 0A 00} during the same turn.
+```
+
+The pictures come from the disc. Every icon is a 16x16 cell of the boot
+package's second font page (`WA_MRG.MRG` sectors 0x16A0-0x16AF), and the
+palettes are at sector 0x16C0 (`func_80035E20`). In card text, 14-17 are the
+pictures the card lists show for magic, trap, ritual and equip cards. The
+same function has another path for them that draws the 32x16 words MAGIC,
+TRAP, RITUAL and EQUIP (an 8-bit page at sector 0x16E6), but card text does
+not take it. The colours are the text ramps (`gText_abColorSlots`) at sector
+0x16C2. `tools/pc/fm_editor/card_text.py` reads all of them.
+
+## Monster effects
+
+`"monster_effects"` gives a monster things it does on the field. Each entry
+says when (`when`) and what (`do`):
+
+```json
+{ "replace": "Blue-eyes White Dragon",
+  "description": "{f8 0A 05}<Summon>{f8 0A 00} Raigeki.",
+  "monster_effects": [
+    { "when": "summon", "do": "magic", "card": "Raigeki" },
+    { "when": "face_up", "do": "boost", "target": "others", "type": "Dragon", "attack": 300, "defense": 300 },
+    { "when": "combat", "do": "boost", "target": "battle", "attack": -500 },
+    { "when": "destroyed", "do": "damage", "amount": 800 }
+  ] }
+```
+
+Man-eater Bug as on the cards:
+
+```json
+{ "replace": "Man-eater Bug",
+  "description": "{f8 0A 05}<Flip>{f8 0A 00} Destroys the monster that attacked it.",
+  "monster_effects": [ { "when": "flip", "do": "destroy", "target": "battle" } ] }
+```
+
+| `when` | It happens |
+|---|---|
+| `summon` | the monster is put on the field face up: played from the hand, a fusion's result (onto a field monster too) or a ritual's monster. A face-down play is no summon. The CPU puts a monster with a `summon`, `draw` or `face_up` effect down face up (one with a `flip` and no `summon` face down), so its effects work for it too |
+| `flip` | a face-down monster is attacked. As in Yu-Gi-Oh!, the flip does not stop the battle: the damage is worked out with the cards as they are, then the flip resolves right after the battle, even if the battle destroyed the flipped monster, and before any `destroyed` effect of the battle. Not when a trap stops the attack. Attacking while face down, or a reveal (Dark-piercing Light), is no flip; an equip leaves a face-down monster face down |
+| `draw` | its owner's turn begins, once the hand is drawn, while it is face up |
+| `combat` | it attacks or is attacked, before the damage, when no trap springs |
+| `destroyed` | it leaves the field in a battle or to an effect. Not when it is used as fusion material, a ritual's tribute, or the field is cleared by an Exodia win |
+| `destroy_opponent` | it won a battle that destroyed the other monster and is still on the field: after the battle, after that monster's `destroyed` |
+| `face_up` | all the while it is face up on the field: a boost that goes as soon as the card does |
+
+| `do` | It does | With |
+|---|---|---|
+| `magic` | what a magic card of the disc does, as the monster's owner would play it, on either side's turn. One of the 33 with an effect of their own: Stop Defense, Dragon Capture Jar, the six fields, Dark Hole, Raigeki, the five LP recovery and five damage cards, Swords of Revealing Light, Spellbinding Circle, Dark-piercing Light, the type removals (Warrior Elimination ... Eternal Draught), Cursebreaker, Shadow Spell and Harpie's Feather Duster. Not a ritual, an equip or a trap | `card`: its number or name |
+| `boost` | ATK and DEF up (or down, below 0) | `attack`, `defense` (-9999 to 9999); `target`; `type` and `attribute` keep it to monsters of that type or attribute |
+| `heal` | its owner gains LP, up to the duel's starting LP as the recovery cards do | `amount` (1 to 9999) |
+| `damage` | the other side loses LP | `amount` (1 to 9999) |
+| `destroy` | the other side's monsters are destroyed, shown as Crush Card shows it | `target`: `opponent` (the default) or, on `flip`, `battle` (the monster attacking it, the default there); `type` and `attribute` keep it to those |
+
+`target` is `self` (the default), `own` (its side's monsters, itself too),
+`others` (its side's other monsters), `opponent`, `all`, or `battle` (the
+monster it battles: on `combat`, and on `flip` the monster that attacked it, if it is still there);
+`destroyed` defaults to `own`. A boost
+on `summon`, `flip`, `draw`, `destroyed` or `destroy_opponent` lasts as an equip's does (on the
+monsters on the field then), one on `combat` lasts the battle, and one on
+`face_up` is worked out whenever the game asks a card's ATK and DEF, so the
+field, the battle, traps and the CPU all see it: it reaches each monster it
+names once, those put down later too, and goes with the card. `face_up` takes only
+boosts; `combat` takes a boost of `self` or `battle`, `heal` and `damage`.
+A card has up to eight effects, which resolve in the order written, after
+whatever triggered them is over (a flip's and a destroyed monster's after the battle).
+What the game cannot do is left out with a note in the log and the Mods
+window. Write what the effects do in the card's `description`: the game
+shows only the text. The card is drawn with the orange frame unless its
+entry has a `frame` ([Frame colour](#frame-colour)).
+
+Each fires once for each time it happens: a summon once, a draw once a
+turn, a flip once (a card is put face down only from the hand). A chain is fine (a summon's Dark Hole
+destroys a monster whose `destroyed` effect fires next), and the CPU's
+monsters' effects fire as the player's do. Apart from putting such
+monsters down face up, the CPU plays as it always has: it sees the boosts
+in its view of the board, but it does not plan around a card's effects.
+
+The [FM Editor](../tools/pc/fm_editor/README.md#monster-effects) edits
+them in the Cards tab. A [code mod](modding.md#code-mods) hears every one of
+these occasions, for every monster, from mod API 10 with
+`MEMORIES_EVENT_MONSTER` (`a` the card, `b` its duel record, `c` what
+happened, `MEMORIES_MONSTER_SUMMON` to `MEMORIES_MONSTER_DESTROY_OPPONENT`; before:
+`handled` skips the card's own effects for it, and a mod may start a card
+effect of its own there).
+
+How it is done (`src/pc/cards/monster_effects_duel.c`): the duel has no
+single place where a monster is summoned, flipped or destroyed, so the
+monster zones are looked at as each hand or field phase begins, before its
+first step, with no card effect running. Every way back to those phases
+starts one. What changed since the last look is what happened: placement
+marks the zones it put a card in (`func_8001B170`, the ritual), and a
+ritual's start marks its tributes; the battle's start notes its two
+monsters, so the next look sees which one won, and a face-down defender
+(its saved flags, `D_8009B178`, when no trap sprang), whose flip the next
+look fires before anything else. The CPU's face-up play is
+its hand play's face-down choice (`D_800EAE88[8]`) cleared. A `destroy`
+runs Crush Card's removal (`DuelEffect_ApplyMonsterRemoval`)
+with the monsters chosen in place of its ATK test. A `magic` effect runs through the game's
+card-effect dispatch (`DuelEffect_StartCardEffect`), first handler then
+second, as playing the card does. On the other side's turn, the turn is
+lent to the owner (`D_8009B1D5`, `D_8009B1C8`, `D_8009B22C`) while it runs.
+The state is a game variable (`src/pc/game/trigger_state.c`), so save states
+carry it.
 
 ## Notes on a card
 

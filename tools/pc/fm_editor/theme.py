@@ -199,6 +199,9 @@ class Theme:
                     values = {option: value for option, value in values.items() if option not in BORDERS}
                 call(path, "configure", *[item for option, value in values.items()
                                           for item in (f"-{option}", value)])
+                recolour = getattr(self.widget(path), "recolour", None)
+                if recolour:        # the card text box's colours follow the background (card_text_box.py)
+                    recolour()
             elif cls == "Treeview":
                 for tag, (light, dark_ink) in TAGS.items():
                     call(path, "tag", "configure", tag, "-foreground", dark_ink if dark else light)

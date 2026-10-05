@@ -655,6 +655,20 @@ class Project:
             return named
         return self.effect_of(self.base_of(cid)) if cid in self.added else cid
 
+    def model_of(self, cid: int) -> int:
+        """The disc card whose 3D model it fights with (cards.c
+        Cards_ModelId): the one "model" names, else a copy's base's, else
+        itself."""
+        extra = self.added[cid].extra if cid in self.added else self.card_extra.get(cid, {})
+        named = self.resolve(extra["model"]) if "model" in extra else None
+        if named and named <= CARD_COUNT:
+            return named
+        return self.model_of(self.base_of(cid)) if cid in self.added else cid
+
+    def has_model(self, cid: int) -> bool:
+        card = self.retail.cards.get(self.model_of(cid))
+        return bool(card and card.is_monster())
+
     def trap_threshold_override(self, cid: int):
         extra = self.added[cid].extra if cid in self.added else self.card_extra.get(cid, {})
         if "trap_threshold" in extra:
@@ -687,6 +701,30 @@ class Project:
         # null on a copy explicitly clears an override inherited from its
         # base. Untouched empty fields never write it.
         extra["trap_threshold"] = value
+
+    def monster_effects_of(self, cid: int):
+        """(the card's "monster_effects", whether they are its base's): an
+        added card without its own has its base's, as the game gives it."""
+        extra = self.added[cid].extra if cid in self.added else self.card_extra.get(cid, {})
+        if "monster_effects" in extra:
+            effects = extra["monster_effects"]
+            return (effects if isinstance(effects, list) else []), False
+        if cid in self.added:
+            return self.monster_effects_of(self.base_of(cid))[0], True
+        return [], False
+
+    def set_monster_effects(self, cid: int, effects, keep_empty=False):
+        """A card's own list; None takes it away (an added card then has its
+        base's again). An added card's [] is kept: none, not its base's. A
+        disc card's [] only with keep_empty: none, even where an earlier
+        mod gives it some."""
+        extra = self.added[cid].extra if cid in self.added else self.card_extra.setdefault(cid, {})
+        if effects is None or (not effects and cid not in self.added and not keep_empty):
+            extra.pop("monster_effects", None)
+        else:
+            extra["monster_effects"] = [dict(e) if isinstance(e, dict) else e for e in effects]
+        if cid not in self.added and not extra:
+            self.card_extra.pop(cid, None)
 
     def is_ritual(self, cid: int) -> bool:
         """A ritual card a recipe may be for: typed Ritual and played as a

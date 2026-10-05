@@ -19,7 +19,8 @@ again. It writes mod folders only: never the disc, never `game/`.
     python tools/pc/fm_editor [--game <folder or .bin>] [--mod <mod folder>]
 
 The window opens at 1600x960 (less on a smaller screen) and every tab fits
-it. On a smaller window a tab gets scrollbars instead of being cut off; the
+it. In Cards, drag the line between the list and the card's form to give
+either more room; each scrolls across on its own when it is cut short. On a smaller window a tab gets scrollbars instead of being cut off; the
 mouse wheel scrolls it too, except over lists, text boxes and pictures,
 which keep their own scrolling. The Cards tab's right-hand options and the
 Limits tab also scroll vertically on their own: tabbing to a field brings it
@@ -47,7 +48,7 @@ The window has a tab per table:
 
 | Tab | What you edit |
 |---|---|
-| Cards | search and filter the 722 cards; name, card text (with the game's 20-letter, 8-line wrapping counted, and **Tools > Card text preview** to see it as the card view draws it, below), ATK/DEF, type, attribute, level, guardian stars, password; the retail value beside each field. A magic, trap, ritual or equip card has no ATK, DEF, level, attribute or stars, so the form hides them for one; a magic, trap or ritual card shows **Retail effect** instead (an equip shows its **ATK boost** and **DEF boost**): the disc card of the same type it plays as, for you and for the CPU (`"effect"`, [more cards](../../../notes/more-cards.md)). A monster made magic starts at **(none)**, which does nothing when played; a disc magic card has its own effect, and choosing it writes nothing. A guardian star may be **(none)**, written `0`: both none is a monster with no star at all (no SELECT A GUARDIAN STAR box, no star bonus given or taken, no star drawn), the second none a monster with one star; a first star of none with a second is warned about, because the game takes the second as the card's one star ([no star](../../../notes/modding.md#guardian-stars-names-icons-new-stars-and-matchups)). **Frame**: the colour of the card's frame (by type, or monster, magic, trap, ritual, purple or orange whatever its type), with a swatch of it; the card view, the Library and the duel draw it ([frame colour](../../../notes/more-cards.md#frame-colour)). **Notes**: text of your own on the card (what you changed, what you plan), saved as its `"notes"`; the game shows none of it, and a code mod can read `<tag: value>` tags from it ([notes on a card](../../../notes/more-cards.md#notes-on-a-card)). **Revert to retail** keeps them; the **With notes** filter lists the cards that have some, and the search finds words of them too. **Add a card** copies the selected one as a new card with a stable id; a new card starts in nobody's chest (it is won in its base's place, dealt in a starter deck, or given by Game > Cheats), and its password works in the Password shop and is shown in the card view. Added cards default to 999999 starchips; edit **Starchips** to change the price |
+| Cards | search and filter the 722 cards; name, type, attribute and guardian stars (their lists show the game's icons; the level, ATK and DEF have the game's star, sword and shield), card text (with the game's 20-letter, 8-line wrapping counted, and **Tools > Card text preview** to see it as the card view draws it, below), ATK/DEF, type, attribute, level, guardian stars, password; the retail value beside each field. A magic, trap, ritual or equip card has no ATK, DEF, level, attribute or stars, so the form hides them for one; a magic, trap or ritual card shows **Retail effect** instead (an equip shows its **ATK boost** and **DEF boost**): the disc card of the same type it plays as, for you and for the CPU (`"effect"`, [more cards](../../../notes/more-cards.md)). A monster made magic starts at **(none)**, which does nothing when played; a disc magic card has its own effect, and choosing it writes nothing. A guardian star may be **(none)**, written `0`: both none is a monster with no star at all (no SELECT A GUARDIAN STAR box, no star bonus given or taken, no star drawn), the second none a monster with one star; a first star of none with a second is warned about, because the game takes the second as the card's one star ([no star](../../../notes/modding.md#guardian-stars-names-icons-new-stars-and-matchups)). **Frame**: the colour of the card's frame (by type, or monster, magic, trap, ritual, purple or orange whatever its type), with a swatch of it; the card view, the Library and the duel draw it ([frame colour](../../../notes/more-cards.md#frame-colour)). **Notes**: text of your own on the card (what you changed, what you plan), saved as its `"notes"`; the game shows none of it, and a code mod can read `<tag: value>` tags from it ([notes on a card](../../../notes/more-cards.md#notes-on-a-card)). **Revert to retail** keeps them; the **With notes** filter lists the cards that have some, and the search finds words of them too. **Add a card** copies the selected one as a new card with a stable id; a new card starts in nobody's chest (it is won in its base's place, dealt in a starter deck, or given by Game > Cheats), and its password works in the Password shop and is shown in the card view. Added cards default to 999999 starchips; edit **Starchips** to change the price |
 | Art | a card's picture (102x96), thumbnail (40x32, the hand and the field) and name plate (96x14) as the disc has them, beside what the game will draw at the console's resolution and at Internal 2x/4x; **Import PNG** (up to 4x, 408x384 and 160x128, for detail at Internal 2x/4x, on retail and added cards alike), **Export** the disc's or the mod's (to paint over), **Revert** |
 | Fusions | every pair and its result (search by a card, or show the changed ones); add, change, remove (the pair no longer fuses) or revert; **Remove recipes of...** takes away every disc recipe of a card in one `remove` rule; a pair a card's own `fusions` list makes (no rule of the mod deciding it first) shows that list's result, marked "own list"; **Bulk...** adds or takes away the fusions of every card of one filtered set with every card of another (below) |
 | Equips | per equip card, the monsters it may equip; add one, add or remove a whole type, remove, revert |
@@ -86,6 +87,61 @@ Goblin Fan, Bad Reaction to Simochi, Reverse Trap and Fake Trap use their retail
 triggers and have no ATK threshold field. Changing to one of these effects
 clears the previous threshold when applied. Set traps trigger automatically
 in a duel; the CPU sets converted and added traps as traps too.
+
+### Monster effects
+
+A monster's **Monster effects** box, below its guardian stars, lists what
+it does on the field (`"monster_effects"`, [monster effects](../../../notes/more-cards.md#monster-effects)):
+a row per effect, **When** and what it **Does**. **Add...** and **Edit...**
+(or a double-click) open the effect: **When** (On summon, On flip, On draw
+phase, Before combat, When destroyed, Destroy opponent monster, While face up, each explained under
+it: a summon is face up only, a flip is the face-down card attacked), **Does** (a magic card's effect, a boost of ATK and DEF, healing its
+owner, damage to the opponent, destroying monsters), and what that needs: the magic card, whose
+monsters a boost or destroy reaches (and only of one type or attribute), the ATK and
+DEF, the LP. Only what the game can do for that **When** is offered: while
+face up, only boosts; before combat, a boost of the card itself or of the
+monster it battles, healing or damage. **Remove**, **Up** and **Down**
+change the list; the effects resolve in its order. A change is stored at
+once. An added card shows its base's effects until you change them, which
+gives it a list of its own. Write what the effects do in the card text: the
+game shows only the text. A monster with effects is drawn with the orange
+frame while its **Frame** is **By type** (the swatch shows it); choose
+**Monster** to keep it gold, or **Type, never orange** (`"Type"`) for its
+type's frame. The checks (Conflicts) report an effect the game
+would leave out.
+
+### Icons and colours in card text
+
+The card text box shows an icon as the icon itself, two letters wide as the
+game sets it, and a colour as a thin bar of it, the letters after it in that
+colour (darker on the light look, so they read). Its lines break where the
+game's do (twenty letters, an icon two, a word kept whole; a word too long
+for the box cut at its edge).
+
+Beside it is the card view's **text box** as the game draws it: its stone and
+frame off your disc and the card text in the game's letters and colours,
+following what you type. **Fit** (the default) makes it as tall as the card
+text box, so the form keeps its height; 1x, 2x and 3x are the game's pixels. Its language list has the port's translations found
+beside the editor or the game (`languages/*.txt`): their own layout, type and
+star names, accented letters as the port makes them, and the European
+letter spacing. The language and size are remembered. On the
+retail disc it matches the game's screen pixel for pixel (US, German and
+French checked); a letter the port takes from a system font (Greek,
+Cyrillic) can be a pixel off, as FreeType's hinting is not copied. What
+is saved is still the codes: a code typed or pasted in full becomes its
+picture, and copying puts the codes on the clipboard. Without the game files
+the codes stay as written.
+
+Right-click the card text box for **Insert icon...** and **Text colour**.
+**Insert icon...** opens a window of every icon, as the game draws it, by
+group (the monster types, the card kinds, the guardian stars, the buttons);
+it scrolls when the screen is too short for it. A click puts the icon in at
+the cursor as its code (`{f8 0B 00}` the Dragon) and closes it. **Text
+colour** lists white, yellow, blue, green, grey, orange and red, each with
+its colour; a colour with text selected colours the selection and goes back
+to white after it, without one it starts at the cursor. The codes are listed
+in [card text codes](../../../notes/more-cards.md#card-text-codes); an icon
+takes two letters of the line. **Tools > Card text preview** draws them.
 
 On **Cards**, **Equips**, and **Duelists**, click a column heading to sort
 ascending; click it again to reverse the order. An arrow marks the active
@@ -515,7 +571,7 @@ opens and saves like any other:
 | Changed in the modified game | Becomes |
 |---|---|
 | card stats, names, texts; fusions, equips, rituals; deck and drop pools | `cards`, `fusions`, `equips`, `rituals`, `decks`, `drops`. A name or text that differs only by spaces at line ends stays retail's. Drop pools a mod stores encoded (the TeaOnline drop tool writes `bias + 8 * weight + noise` and makes the draw at `0x80021860` jump to code that undoes it) are decoded as `max(0, (raw - bias) >> shift)`, with the bias and shift read from that code's `addiu` and `sra`, or, when the code is not recognized, the values that make every such pool add up to 2048. Any other pool that does not add up to 2048 is scaled to 2048 keeping each card's share. The report says which |
-| other text: dialogue, menus, types, stars, duelists, places | `text.txt`, a partial [text listing](../../../notes/translation.md) (a bank whose changed strings jump is written whole; a bank that is the mod's code is left out and reported). Card names and texts with colour or icon codes, and texts the mod left empty, go there too (as `{f8 0A 05}...` or a bare `{end}`), since `cards[]` cannot carry them; the editor shows them and writes an edited one to `cards[]`. The name entry's strings (`0xF0`-`0xFF`) stay retail's |
+| other text: dialogue, menus, types, stars, duelists, places | `text.txt`, a partial [text listing](../../../notes/translation.md) (a bank whose changed strings jump is written whole; a bank that is the mod's code is left out and reported). Texts the mod left empty go there too (as a bare `{end}`), and so do card names and texts with colour or icon codes (as `{f8 0A 05}...`), as the import finds them; the editor shows them and writes an edited one to `cards[]`, whose `name` and `description` take the codes too. The name entry's strings (`0xF0`-`0xFF`) stay retail's |
 | other bytes of `WA_MRG.MRG` (pictures, passwords and costs, portraits...) | `data` patches; a run longer than 4 KB becomes whole sectors in `data/`, replaced at the retail disc's LBA. Past 256 patches or 16 sector runs (the port holds 1024 and 64 for all mods together), or when the file's size differs, the whole file is replaced. The tables `mod.json` carries (fusions, equips, rituals, pools) are always retail's in what `data` carries, and so are starter decks written as counts of 40 and the programs the port runs its own code for (Free Duel, name entry, password, overworld), all reported |
 | code and tables of the executable (AI parameters, field bonuses, equip bonuses, the draw...) | nothing, except the rules below: the port runs the executable's code natively. Listed in the report by RAM address, with the `j`/`jal` instructions that reach each place; changed bytes of the text banks that the text listing does not read (a mod's code or tables in the banks' free space, text left over) are listed too |
 
