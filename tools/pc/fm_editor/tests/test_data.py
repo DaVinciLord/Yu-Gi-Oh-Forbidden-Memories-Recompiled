@@ -1218,3 +1218,63 @@ class MonsterEffectsTest(unittest.TestCase):
                             for i in validate.validate_card(p, 2)))
         p.set_monster_effects(2, [{"when": "summon", "do": "heal", "amount": 100}] * 9)
         self.assertTrue(any("at most 8" in i.message for i in validate.validate_card(p, 2)))
+
+    def test_counted_and_named_as_the_game_does(self):
+        from fm_editor import monster_effects as fx
+        heal = {"when": "summon", "do": "heal", "amount": 100}
+        bad = {"when": "face_up", "do": "damage", "amount": 100}
+        # One the game leaves out takes no place: the 9th is the 8th it takes.
+        found = fx.problems([heal, bad] + [heal] * 7)
+        self.assertEqual(len(found), 1)
+        self.assertIn("effect 2 is not", found[0])
+        found = fx.problems([heal] * 8 + [bad, heal])
+        self.assertEqual(found, ["at most 8 monster effects; the rest (from effect 9) are left out"])
+        # Type and attribute names in any case and spacing (cards.c same_letters).
+        for t, a in (("dragon", "light"), ("WingedBeast", "LIGHT"), ("winged-beast", " Dark ")):
+            out = fx.normalize({"when": "face_up", "do": "boost", "type": t, "attribute": a, "attack": 100})
+            self.assertIsNotNone(out, t)
+            self.assertIn(out["type"], ("Dragon", "Winged Beast"))
+        for t in (True, "Magic", "dragons", ""):
+            self.assertIsNone(fx.normalize({"when": "face_up", "do": "boost", "type": t, "attack": 1}), t)
+
+    def test_equip_made_a_monster_has_no_equips_error(self):
+        p = self.project
+        equip = next(cid for cid in sorted(p.retail.equips) if p.retail.equips[cid])
+        copy = p.add_card(equip, "equip-monster")
+        for cid in (equip, copy):
+            p.cards[cid].type, p.cards[cid].attack, p.cards[cid].star1, p.cards[cid].star2 = 0, 1000, 1, 2
+        self.assertEqual([i.message for i in validate.validate(p) if i.area == "Equips"], [])
+        # A list the mod changes for it is still one for a card that is no equip.
+        p.equips[copy] = {next(m for m in p.monsters() if m not in p.retail.equips[equip])}
+        self.assertTrue(any("not an equip card" in i.message for i in validate.validate(p) if i.area == "Equips"))
+
+    def test_disc_card_keeps_none_only_when_asked(self):
+        p = self.project
+        p.set_monster_effects(2, [], keep_empty=True)
+        self.assertEqual(manifest.build_cards(p), [{"replace": 2, "monster_effects": []}])
+        p.set_monster_effects(2, [])
+        self.assertEqual(manifest.build_cards(p), [])
+
+    def test_copy_of_a_magic_card_made_a_monster(self):
+        p = self.project
+        magic = next(cid for cid, card in sorted(p.cards.items()) if card.type == g.TYPE_MAGIC)
+        cid = p.add_card(magic, "magic-monster")
+        card = p.cards[cid]
+        card.type, card.attack, card.defense, card.level, card.star1, card.star2 = 0, 1500, 1200, 4, 1, 2
+        p.set_monster_effects(cid, [{"when": "summon", "do": "heal", "amount": 500}])
+        found = validate.validate_card(p, cid)
+        self.assertEqual([i.message for i in found if i.level == "error"], [])
+        self.assertTrue(any("without a 3D model" in i.message for i in found))
+        p.added[cid].extra["model"] = 1
+        self.assertFalse(any("3D model" in i.message for i in validate.validate_card(p, cid)))
+        data = manifest.build(p)
+        entry = next(e for e in data["cards"] if e.get("id") == "magic-monster")
+        self.assertEqual(entry["type"], "Dragon")
+        again = Project(p.retail)
+        self.assertEqual(manifest.apply(again, data), [])
+        self.assertEqual(again.cards[cid].type, 0)
+        self.assertEqual(again.monster_effects_of(cid)[0], [{"when": "summon", "do": "heal", "amount": 500}])
+        # Made another non-monster without a matching effect: still refused.
+        card.type = g.TYPE_TRAP
+        self.assertTrue(any("matching retail effect" in i.message for i in validate.validate_card(p, cid)))
+        self.assertNotIn("type", next(e for e in manifest.build(p)["cards"] if e.get("id") == "magic-monster"))

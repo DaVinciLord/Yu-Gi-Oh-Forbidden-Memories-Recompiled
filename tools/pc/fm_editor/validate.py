@@ -159,8 +159,10 @@ def _check_card(project: Project, cid: int, out: list):
         matching_effect = not card.is_monster() and (card.type == 23 or (effect and effect.type == card.type))
         if base and base.is_monster() and not card.is_monster() and not matching_effect:
             add("error", "a copy needs a matching retail effect to become a non-monster")
-        elif base and not base.is_monster() and card.type != base.type and not matching_effect:
+        elif base and not base.is_monster() and not card.is_monster() and card.type != base.type and not matching_effect:
             add("error", "a non-monster copy needs a matching retail effect to change type")
+        if card.is_monster() and not project.has_model(cid):
+            add("warning", "a card made a monster fights without a 3D model unless \"model\" names one")
     elif cid in project.retail.cards:
         retail = project.retail.cards[cid]
         extra = project.card_extra.get(cid, {})
@@ -219,6 +221,11 @@ def _check_tables(project: Project, out: list):
         if baseline == monsters:
             continue
         where = project.card_label(equip)
+        # A card made something else keeps the list it had as an equip (its
+        # disc card's, a copy's base's): nothing is written for it.
+        if (valid(equip) and project.cards[equip].type != TYPE_EQUIP and
+                {m for m in monsters if m <= CARD_COUNT} == set(project.retail.equips.get(project.base_of(equip), ()))):
+            continue
         if not valid(equip) or project.cards[equip].type != TYPE_EQUIP:
             out.append(Issue("error", "Equips", where, "\"card\" is not an equip card", equip))
         for m in sorted(monsters - baseline):

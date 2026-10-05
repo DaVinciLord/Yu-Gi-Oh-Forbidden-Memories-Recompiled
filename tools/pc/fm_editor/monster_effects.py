@@ -68,6 +68,13 @@ def default_target(when: str, do: str = "boost") -> str:
     return "own" if when == "destroyed" else "self"
 
 
+def _letters_index(text: str, names) -> int | None:
+    """The index of the name `text` is in letters and digits, any case."""
+    key = "".join(c.lower() for c in text if c.isascii() and c.isalnum())
+    return next((i for i, name in enumerate(names)
+                 if "".join(c.lower() for c in name if c.isalnum()) == key and key), None)
+
+
 def _name(names, value) -> str | None:
     """A game name for `value` as the game reads it ("Face Up" is "face_up")."""
     if not isinstance(value, str):
@@ -102,16 +109,17 @@ def normalize(effect: dict, resolve=None) -> dict | None:
                 out[key] = value
         if do == "boost" and "attack" not in out and "defense" not in out:
             return None
+        # Names in any case and spacing, as cards.c same_letters() takes them.
         if "type" in effect:
             t = effect["type"]
-            t = TYPE_NAMES.index(t) if isinstance(t, str) and t in TYPE_NAMES else t
-            if not isinstance(t, int) or not 0 <= t < TYPE_MAGIC:
+            t = _letters_index(t, TYPE_NAMES) if isinstance(t, str) else t
+            if not isinstance(t, int) or isinstance(t, bool) or not 0 <= t < TYPE_MAGIC:
                 return None
             out["type"] = TYPE_NAMES[t]
         if "attribute" in effect:
             a = effect["attribute"]
-            a = ATTRIBUTE_NAMES.index(a) if isinstance(a, str) and a in ATTRIBUTE_NAMES else a
-            if not isinstance(a, int) or not 0 <= a < 6:
+            a = _letters_index(a, ATTRIBUTE_NAMES) if isinstance(a, str) else a
+            if not isinstance(a, int) or isinstance(a, bool) or not 0 <= a < 6:
                 return None
             out["attribute"] = ATTRIBUTE_NAMES[a]
     else:
@@ -128,12 +136,18 @@ def problems(effects, resolve=None) -> list:
         return []
     if not isinstance(effects, list):
         return ['"monster_effects" must be a list']
-    out = []
-    if len(effects) > MAX_EFFECTS:
-        out.append(f"at most {MAX_EFFECTS} monster effects; the rest are left out")
-    for n, effect in enumerate(effects[:MAX_EFFECTS]):
+    # As the game reads them (monster_effects.c MonsterEffects_Read): one
+    # it leaves out takes no place, and past the MAX_EFFECTS it takes the
+    # rest are left out.
+    out, taken = [], 0
+    for n, effect in enumerate(effects):
+        if taken == MAX_EFFECTS:
+            out.append(f"at most {MAX_EFFECTS} monster effects; the rest (from effect {n + 1}) are left out")
+            break
         if normalize(effect, resolve) is None:
             out.append(f"monster effect {n + 1} is not one the game takes ({describe_raw(effect)})")
+        else:
+            taken += 1
     return out
 
 

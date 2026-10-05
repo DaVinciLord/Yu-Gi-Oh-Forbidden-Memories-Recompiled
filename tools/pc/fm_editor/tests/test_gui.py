@@ -1609,6 +1609,54 @@ class MonsterEffectsGuiTest(GuiCase):
         cards.vars["type"].set("Magic")
         self.assertFalse(box.winfo_manager())
 
+    def test_copy_of_a_magic_card_made_a_monster(self):
+        from fm_editor import manifest, validate
+        app, cards = self.app, self.app.cards
+        p = app.project
+        magic = next(cid for cid, card in sorted(p.cards.items()) if card.type == 20)
+        cid = p.add_card(magic, "magic-monster")
+        cards.fill()
+        cards.show_card(cid)
+        self.assertFalse(cards.effects_box.winfo_manager())         # a magic card: no monster effects
+        cards.vars["type"].set("Dragon")
+        self.assertTrue(cards.effects_box.winfo_manager())
+        for key, value in (("attack", "1500"), ("defense", "1200"), ("level", "4"), ("star1", "Mars"),
+                           ("star2", "Jupiter")):
+            cards.vars[key].set(value)
+        self.assertTrue(cards.apply())
+        self.assertEqual((p.cards[cid].type, p.cards[cid].attack), (0, 1500))
+        cards.effects_box.effects.append({"when": "summon", "do": "heal", "amount": 500})
+        cards.effects_box.store()
+        self.assertEqual([i.message for i in validate.validate_card(p, cid) if i.level == "error"], [])
+        entry = next(e for e in manifest.build(p)["cards"] if e.get("id") == "magic-monster")
+        self.assertEqual((entry["type"], entry["attack"], entry["monster_effects"][0]["do"]), ("Dragon", 1500, "heal"))
+
+    def test_none_box_for_disc_cards(self):
+        app, cards = self.app, self.app.cards
+        cards.tree.selection_set("2")
+        cards.select()
+        box = cards.effects_box
+        self.assertTrue(box.none_box.winfo_manager())
+        box.none.set(True)
+        box.store()
+        self.assertEqual(app.project.card_extra[2]["monster_effects"], [])
+        cards.tree.selection_set("1")
+        cards.select()
+        cards.tree.selection_set("2")
+        cards.select()
+        self.assertTrue(box.none.get())
+        box.effects.append({"when": "summon", "do": "heal", "amount": 500})
+        box.store()
+        self.assertFalse(box.none_box.winfo_manager())       # a list of its own says it all
+        box.tree.selection_set("0")
+        box.none.set(False)
+        box.remove()
+        self.assertNotIn(2, app.project.card_extra)
+        # An added card's empty list is always its own: no box.
+        cid = app.project.add_card(1, "x")
+        box.show(cid)
+        self.assertFalse(box.none_box.winfo_manager())
+
     def test_effect_dialog(self):
         from fm_editor.monster_effects_ui import EffectDialog
         app = self.app

@@ -115,11 +115,12 @@ def build_cards(project: Project) -> list:
         entry = {"copy": added.base, "id": added.key}
         fields = {"name": card.name}
         fields.update(_card_fields(card, base))     # what is left out is the base's, as the port has it
-        if card.is_monster() != base.is_monster() or (not base.is_monster() and card.type != base.type):
+        if not card.is_monster() and card.type != base.type:
             effect = project.retail.cards.get(project.effect_of(cid))
-            # The port refuses a kind change without a matching effect, but
-            # for an equip, which needs none (cards.c).
-            if card.is_monster() or (card.type != 23 and (effect is None or effect.type != card.type)):
+            # The port refuses a copy made another non-monster without a
+            # matching effect, but for an equip, which needs none; any card
+            # may become a monster (cards.c).
+            if card.type != 23 and (effect is None or effect.type != card.type):
                 fields.pop("type", None)
         entry.update(fields)
         if project.passwords.get(cid):
@@ -615,10 +616,10 @@ def _apply_fields(card, entry: dict, is_replace: bool, messages: list, where: st
         value = _choice(entry["type"], TYPE_NAMES)
         if value >= 0:
             value = _clamp(value, 0, 23)
-            monster = card.type < TYPE_MAGIC
-            if (not is_replace and (value >= TYPE_MAGIC if monster else value != card.type) and
-                    not (value >= TYPE_MAGIC and value == effect_type) and value != 23):     # cards.c
-                messages.append(f"{where}: a copy keeps its base's side (monster or not); \"type\" left out")
+            if (not is_replace and value >= TYPE_MAGIC and value != card.type and value != effect_type and
+                    value != 23):     # cards.c
+                messages.append(f"{where}: a copy becomes a non-monster only with a matching retail effect; "
+                                f"\"type\" left out")
             else:
                 card.type = value
     stars = entry.get("stars")

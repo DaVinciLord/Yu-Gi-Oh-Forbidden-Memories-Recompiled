@@ -36,6 +36,12 @@ class EffectsBox(ttk.LabelFrame):
             self.buttons[key].grid(row=1, column=column, sticky="w", pady=(4, 0), padx=(0, 4))
         self.note = ttk.Label(self, style="Hint.TLabel", wraplength=px(self, 380), justify="left")
         self.note.grid(row=2, column=0, columnspan=6, sticky="w", pady=(4, 0))
+        # A disc card with no effects: "monster_effects": [] takes away any
+        # an earlier mod gives it (cards.c), left out leaves them.
+        self.none = tk.BooleanVar(self)
+        self.none_box = ttk.Checkbutton(self, text="None, even where another mod gives it some", variable=self.none,
+                                        command=self.store)
+        self.none_box.grid(row=3, column=0, columnspan=6, sticky="w", pady=(4, 0))
 
     @property
     def project(self):
@@ -50,6 +56,14 @@ class EffectsBox(ttk.LabelFrame):
         else:
             effects, inherited = self.project.monster_effects_of(cid)
             self.effects = [dict(e) for e in effects]
+        retail = cid is not None and self.project is not None and cid in self.project.cards and \
+            cid not in self.project.added
+        extra = self.project.card_extra.get(cid, {}) if retail else {}
+        self.none.set(retail and extra.get("monster_effects") == [])
+        if retail and not self.effects:
+            self.none_box.grid()
+        else:
+            self.none_box.grid_remove()
         self.fill()
         if inherited and self.effects:
             self.note.configure(text="Its base's effects: a change gives this card a list of its own.")
@@ -89,7 +103,9 @@ class EffectsBox(ttk.LabelFrame):
         self.buttons["down"].state(["!disabled"] if n is not None and n < len(self.effects) - 1 else ["disabled"])
 
     def store(self, select=None):
-        self.project.set_monster_effects(self.cid, self.effects)
+        if self.cid is None:
+            return
+        self.project.set_monster_effects(self.cid, self.effects, keep_empty=self.none.get())
         self.on_change(self.cid)
         self.show(self.cid)
         if select is not None and str(select) in self.tree.get_children():
