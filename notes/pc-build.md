@@ -1609,7 +1609,8 @@ grid up to N times, too bright, and at 4x cost the OpenGL replay about
 880,000 vertices a frame (1200 frames of the Library took 30 s, now 2.3 s).
 
 Two renderers draw it. With the SDL backend on OpenGL 3.0 or later
-(`gl_picture.c`) the software GPU only records what it does to VRAM (every
+(`gl_picture.c`; OpenGL ES 3.0 on Android, "OpenGL ES 3" below) the
+software GPU only records what it does to VRAM (every
 GP0 batch, every transfer, `SoftGpuRecorder` in `soft_gpu.h`) and the
 record is replayed at present into a framebuffer: VRAM is an integer
 texture the fragment shader decodes (4, 8 and 16 bits per texel through
@@ -1720,6 +1721,103 @@ the picture is identical to before. In widescreen the centre of a target
 is identical to the 4:3 picture, with it on or off.
 
 It changes nothing at 1x, and nothing in the software picture.
+
+### OpenGL ES 3 (Android)
+
+On Android the picture pass runs on OpenGL ES 3.0 or later, so internal
+2x and 4x are drawn by the GPU (the software picture costs a phone far more
+than a desktop) and HD text, HD numbers and labels, the opponent's name and
+PGXP are there. `gl_picture.c` uses nothing past ES 3.0 (integer textures
+and framebuffers, `texelFetch`, array textures, multisampled
+renderbuffers, blits). Its shaders are one source: on ES (`GL_VERSION`
+starting "OpenGL ES ") `es_source` replaces the `#version 130` line with
+`#version 300 es` and high precision for float, int and the samplers, and
+drops `noperspective`, which GLSL ES does not have. Every vertex's w is 1,
+so the perspective-correct interpolation ES does instead is the same up to
+rounding. The desktop strings are untouched.
+
+There is no context of the game's own there. SDL's renderer (opengles2)
+presents, as it did, but `create_window` asks for an ES 3.0 context
+(`SDL_WINDOW_OPENGL` and the context attributes before
+`SDL_CreateRenderer(window, "opengles2")`), and the pass draws in that
+context between the renderer's batches. `es_enter` flushes the renderer
+(`SDL_FlushRenderer`, which also makes SDL set its own state again) and
+makes the context current; `es_leave` puts back what SDL sets once and
+relies on: the framebuffer it draws into and its pixel alignments of 1. The
+pass's frame reaches the window through a texture of SDL's own, the size of
+the shown area: `GlPicture_CopyInto` blits the picture's area (or the
+widened picture) into it, and the renderer draws it with the menu over it.
+SDL owns that texture and the pass only draws into it, so either side can
+make its textures again without the other. (Wrapping the pass's own
+texture as an SDL texture does not work: SDL's `GLES2_CreateTexture`
+specifies the storage of a texture it is handed, which wipes it.) A
+repaint of the menu over a still frame shows the same texture again.
+`use_gl` stays 0 on this path: the desktop presenter and Video > Color
+(`present_pass.c`, fixed function) are desktop only. A device without
+ES 3 (or a failed context) gets the renderer SDL picks and the software
+picture, as before, and Video > HD text says "needs OpenGL ES 3".
+
+Limits on ES: internal resolution up to 4x (8x is refused: 128 MiB per
+picture texture), anti-aliasing up to 4 samples (8x is given as 4x). The
+GL version, renderer, GLSL version and any shader compile log go to
+standard error, which the app forwards to logcat (`adb logcat -s
+memories`: "OpenGL picture: OpenGL ES 3.2 ... on Adreno ..., OpenGL ES
+GLSL ES 3.20", then "OpenGL picture pass on").
+
+**A lost context.** Android may lose the GL context while the app is in
+the background; SDL then makes a new one and sends
+`SDL_EVENT_RENDER_DEVICE_RESET`. SDL's GLES2 renderer cannot go on (its
+context is the lost one), so `reset_renderer` forgets the pass's GL names
+(`GlPicture_Lost`, nothing deleted), destroys and makes the renderer again,
+starts the pass in the new context and lets the next frame make the
+textures again; the pass's first replay draws the picture again from VRAM
+(as a resync does). Where the pass does not start again, or its frame
+cannot be copied into the renderer's texture, `GlPicture_Stop` takes its
+recorder out of the software GPU, which draws the scaled picture again
+from VRAM, as on a device without ES 3. `MEMORIES_TEST_GL_RESET=<frame>`
+sends that event at a frame, with nothing lost, to try the path anywhere;
+`<frame>fail` also keeps the pass from starting again.
+
+**On a desktop: `MEMORIES_GLES=1`** takes the same path in a desktop
+window, to test it where frame dumps and the desktop renderer can be
+compared on one machine. On Windows the ES context must be the driver's
+own (`WGL_EXT_create_context_es2_profile`): where the driver has none, or
+one older than 3.0, SDL would fall back to an EGL library found on the
+search path (ANGLE's copy from any other program), so the window first
+makes its desktop context, checks the profile as SDL does (the WGL
+extension and `GL_ARB_ES3_compatibility` or later), and stays on desktop
+GL if it is missing. Off Windows it is GLX's ES profile or the system's
+EGL (Mesa).
+
+Checked (2026-10-05), `MEMORIES_GLES=1` against desktop GL on the same
+build, frame dumps of the scaled picture (`MEMORIES_DETERMINISTIC=1`,
+`MEMORIES_DUMP_PICTURE=1`):
+
+- Mesa 21.2.6's llvmpipe (32-bit Linux build, Xvfb; OpenGL ES 3.2 against
+  3.1): the title and the first duel's frame (mods off) at 2x and 4x, and
+  at 2x with HD text, the opponent's name, PGXP and 4x anti-aliasing on,
+  that duel with and without the 3D Monsters mod: identical pixel for
+  pixel. Dropping `noperspective` changed no pixel there. The window (the
+  desktop presenter against the renderer's copy) is identical at the
+  title, also after `MEMORIES_TEST_GL_RESET`.
+- The NVIDIA driver (RTX 3080, its WGL ES 3.2 profile), 32-bit and x64:
+  title, Options, name entry, a story scene, the first duel (hand, field,
+  the 3D field, the 3D Monsters mod on), the map, Library, Free Duel, the
+  credits, a fusion result and Spellbinding, in 4:3 and widescreen, and
+  with HD text, the opponent's name, PGXP, anti-aliasing and xBR on:
+  identical between this build on desktop GL, through the ES path and the
+  base build, apart from a clock shown on one screen and anti-aliasing's
+  one-unit noise that two runs of the base also show. With the present
+  pass's effects on (desktop GL only) the base and this build agree. A widened picture was compared in the window
+  (`MEMORIES_WINDOW_SHOT`, `MEMORIES_ASPECT=2`, half speed so that every
+  frame is presented) as well: the title, the main menu, Options and the
+  duel at 2x and 4x. Forced resets (`MEMORIES_TEST_GL_RESET`) leave the
+  picture as without one; with `<frame>fail` the dumps equal those of the
+  software picture (`MEMORIES_GL_PICTURE=0`).
+- The Android emulator (api35x64, SwiftShader, OpenGL ES 3.0) runs the
+  pass at 2x and 4x with HD text and carries on after the app goes to the
+  background and back (the context was kept there); a phone (Adreno 660)
+  plays at 4x with HD text.
 
 ### HD text
 
@@ -1848,7 +1946,8 @@ over it. With the option off nothing is drawn.
 
 Video > HD text is dimmed when it could not show: "needs OpenGL 3" when
 the picture pass is off (no OpenGL 3, the SDL renderer fallback,
-`MEMORIES_GL_PICTURE=0`, the X11 backend) and "needs Internal 2x" at
+`MEMORIES_GL_PICTURE=0`, the X11 backend; on Android "needs OpenGL ES 3",
+a phone without it) and "needs Internal 2x" at
 console resolution (`Menu_SetHdPicture`, `menu.c`). The opponent's name
 works at 1x with or without OpenGL, so its View item is dimmed only at 2x
 and up without the picture pass ("needs OpenGL 3 or 1x").
@@ -3241,8 +3340,10 @@ Screenshots of the device, never the host: `adb exec-out screencap -p`.
   and Back for the game, and runs the port's `main`. It has the disc picker
   (`Platform_SelectDisc`) and says what a failed guest mapping means
   (`Platform_GuestMemoryHelp`). `Platform_HasDesktopGL` answers 0: the
-  window takes the SDL renderer path (GLES2 underneath) that shows the
-  software GPU's picture. It also stands in for `bzero` and, below API 30,
+  window takes the SDL renderer path (opengles2), in an OpenGL ES 3.0
+  context with the OpenGL picture pass in it where the device has ES 3,
+  else showing the software GPU's picture ("OpenGL ES 3 (Android)"). It
+  also stands in for `bzero` and, below API 30,
   `memfd_create` (the system call), with the ashmem device where the kernel
   has no memfd.
 - `src/pc/compat/android/`: `android_compat.h`, force-included in every
@@ -3351,8 +3452,10 @@ Paused on 2026-09-29 until the 64-bit (relocatable guest) work is done.
 - **Restart:** an app cannot re-execute itself; where the port restarts
   (the end of the credits, Game > Language), it falls back as when a
   restart fails (back to the title; "start the game again").
-- No GLES renderer (Video > Color and the other GL-only options), no update
-  check, no performance work (the soft GPU at internal scale above 1).
+- Video > Color (the present pass, desktop GL's fixed function) and no
+  update check. Internal 2x and 4x, HD text and PGXP are drawn by the GPU
+  on OpenGL ES 3 ("OpenGL ES 3 (Android)"); a phone without ES 3 keeps the
+  software picture, which is slow above 1x.
 - Android TV: out of scope (no document picker there; M3's notes on the TV
   image stay as test findings).
 

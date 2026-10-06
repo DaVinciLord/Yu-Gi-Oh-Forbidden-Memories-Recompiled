@@ -6,8 +6,9 @@
  * GPU records what it did to VRAM (soft_gpu.h, SoftGpuRecorder); at present
  * the record is replayed into a picture of the whole of VRAM at scale x
  * scale pixels per word, kept in a framebuffer. VRAM itself stays the
- * console's. Needs a context of OpenGL 3.0 or later, current on the calling
- * thread; every call below is made with that context current. */
+ * console's. Needs a context of OpenGL 3.0 or OpenGL ES 3.0 or later,
+ * current on the calling thread; every call below is made with that context
+ * current. */
 
 /* Once the window's context exists. Returns 1 when the pass is available,
  * and from then on the software GPU records for it instead of drawing its
@@ -46,4 +47,22 @@ unsigned GlPicture_WideTexture(int x, int y, int w, int h, int *picture_w, int *
  * h * scale), nothing changed. Returns 0 when there is none, or when it is
  * not wide_w words across at `want_scale` (the size `out` holds). */
 int GlPicture_ReadWide(int x, int y, int w, int h, int wide_w, int want_scale, uint32_t *out);
+
+/* OpenGL ES 3 (Android, and MEMORIES_GLES=1 on a desktop): the context is
+ * the SDL renderer's (opengles2, in an ES 3.0 context), which shows the
+ * picture through a texture of its own. Pixels x,y,w,h of `from` (the
+ * picture's texture, GlPicture_Texture, or a widescreen target's,
+ * GlPicture_WideTexture) into texture `to` (RGBA, w x h texels, row 0 their
+ * top), after a Replay. Returns 0 when `from` is neither or `to` cannot be
+ * drawn into. */
+int GlPicture_CopyInto(unsigned from, int x, int y, int w, int h, unsigned to);
+/* The context was lost (Android, the app sent to the background): every
+ * name the pass held is forgotten, not deleted, and the pass is off until
+ * GlPicture_Init in the new context, whose first replay draws the picture
+ * again from VRAM. */
+void GlPicture_Lost(void);
+/* The pass given up for good (OpenGL ES: a failed start after a lost
+ * context, or the presenter's texture cannot be drawn into): off, and the
+ * software GPU draws the picture again, from VRAM, as without the pass. */
+void GlPicture_Stop(void);
 #endif

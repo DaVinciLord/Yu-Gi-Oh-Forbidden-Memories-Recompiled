@@ -89,6 +89,10 @@ GL_FUNCTIONS(DECLARE)
 #undef DECLARE
 static PFNGLGENVERTEXARRAYSPROC glGenVertexArrays_; /* optional: a core profile needs one bound */
 static PFNGLBINDVERTEXARRAYPROC glBindVertexArray_;
+/* The context is OpenGL ES 3 (Android; MEMORIES_GLES=1 on a desktop): the
+ * shaders are made GLSL ES (es_source), and the context is the SDL
+ * renderer's, which sdl.c hands over around every call here. */
+static int es;
 
 static int load_functions(void)
 {
@@ -558,17 +562,59 @@ static const char *fragment_source =
     "    fragment = vec4(c / 255.0, alpha);\n"
     "}\n";
 
+/* GLSL ES 3.00 from a source above: its first line (#version 130) replaced
+ * by ES's, with the precisions ES leaves unset (int, the integer and array
+ * samplers) or low (sampler2D) stated high, and without "noperspective",
+ * which GLSL ES does not have. Every vertex's w is 1.0 (vertex_source), so
+ * the perspective-correct interpolation ES does instead is the same
+ * interpolation, up to rounding. NULL when out of memory. */
+static char *es_source(const char *source)
+{
+    static const char header[] = "#version 300 es\n"
+                                 "precision highp float;\n"
+                                 "precision highp int;\n"
+                                 "precision highp sampler2D;\n"
+                                 "precision highp usampler2D;\n"
+                                 "precision highp usampler2DArray;\n";
+    const char *body = strchr(source, '\n'), *from;
+    char *out, *to;
+    if (!body) return NULL;
+    out = malloc(sizeof(header) + strlen(body));
+    if (!out) return NULL;
+    memcpy(out, header, sizeof(header) - 1);
+    to = out + sizeof(header) - 1;
+    for (from = body + 1; *from;) {
+        if (!strncmp(from, "noperspective ", 14)) {
+            from += 14;
+            continue;
+        }
+        *to++ = *from++;
+    }
+    *to = 0;
+    return out;
+}
+
 static GLuint compile(GLenum kind, const char *source)
 {
     GLuint shader = gl_CreateShader(kind);
     GLint ok = 0;
+    char *converted = es ? es_source(source) : NULL;
+    if (es) {
+        if (!converted) {
+            gl_DeleteShader(shader);
+            return 0;
+        }
+        source = converted;
+    }
     gl_ShaderSource(shader, 1, &source, NULL);
     gl_CompileShader(shader);
+    free(converted);
     gl_GetShaderiv(shader, GL_COMPILE_STATUS, &ok);
     if (!ok) {
         char log[2048];
         gl_GetShaderInfoLog(shader, sizeof(log), NULL, log);
-        fprintf(stderr, "memories-pc: OpenGL picture: shader: %s\n", log);
+        fprintf(stderr, "memories-pc: OpenGL picture: %s shader: %s\n",
+                kind == GL_VERTEX_SHADER ? "vertex" : "fragment", log);
         gl_DeleteShader(shader);
         return 0;
     }
@@ -720,6 +766,12 @@ static int make_picture(int wanted)
     int w = SOFT_GPU_WIDTH * wanted, h = SOFT_GPU_HEIGHT * wanted;
     GLint largest = 0;
     if (wanted == scale) return 1;
+    if (es && wanted > 4) {
+        /* A phone's memory: at 8x the picture and its scratch copy are
+         * 128 MiB each, before anti-aliasing and widescreen's targets. */
+        fprintf(stderr, "memories-pc: OpenGL picture: %dx is beyond OpenGL ES's 4x\n", wanted);
+        return 0;
+    }
     glGetIntegerv(GL_MAX_TEXTURE_SIZE, &largest);
     if (w > largest || h > largest) {
         fprintf(stderr, "memories-pc: OpenGL picture: %dx is beyond the largest texture (%d)\n", wanted, largest);
@@ -752,8 +804,17 @@ int GlPicture_Init(void)
     const char *version = (const char *)glGetString(GL_VERSION), *choice = getenv("MEMORIES_GL_PICTURE");
     int major = 0;
     if (choice && !strcmp(choice, "0")) return 0;
-    if (!version || sscanf(version, "%d", &major) != 1 || major < 3) {
-        fprintf(stderr, "memories-pc: OpenGL picture: needs OpenGL 3.0, have %s\n", version ? version : "none");
+    /* "OpenGL ES 3.2 ..." on ES, "3.3.0 ..." (no prefix) on desktop GL. */
+    es = version && !strncmp(version, "OpenGL ES ", 10);
+    if (es) { /* for a phone's log (logcat): what to look up when the shaders fail there */
+        const char *renderer = (const char *)glGetString(GL_RENDERER);
+        const char *glsl = (const char *)glGetString(GL_SHADING_LANGUAGE_VERSION);
+        fprintf(stderr, "memories-pc: OpenGL picture: %s on %s, %s\n", version, renderer ? renderer : "?",
+                glsl ? glsl : "no GLSL version");
+    }
+    if (!version || sscanf(version + (es ? 10 : 0), "%d", &major) != 1 || major < 3) {
+        fprintf(stderr, "memories-pc: OpenGL picture: needs %s 3.0, have %s\n", es ? "OpenGL ES" : "OpenGL",
+                version ? version : "none");
         return 0;
     }
     if (!load_functions() || !make_program()) return 0;
@@ -764,7 +825,7 @@ int GlPicture_Init(void)
     if (!vram_fbo || !vram_scratch_fbo) return 0;
     gl_GenBuffers(1, &buffer);
     if (glGenVertexArrays_ && glBindVertexArray_) glGenVertexArrays_(1, &vertex_array);
-    arena = malloc(ARENA_WORDS * sizeof(uint32_t));
+    if (!arena) arena = malloc(ARENA_WORDS * sizeof(uint32_t)); /* kept from before a lost context */
     if (!arena) return 0;
     glBindTexture(GL_TEXTURE_2D, 0);
     on = 1;
@@ -2101,22 +2162,24 @@ static void resync(int wanted, const uint32_t words[6])
 /* The anti-aliasing wanted (0, 2, 4 or 8 samples, as the driver allows):
  * made or dropped between replays. The picture carries on from its texture;
  * the widescreen targets are made again from the next primitive. */
+static int samples_asked = -1, samples_clamped_to = -1;
+
 static void set_samples(int wanted)
 {
-    static int asked = -1, clamped_to = -1;
     GLint most = 0;
     int given;
     wanted = wanted >= 8 ? 8 : wanted >= 4 ? 4 : wanted >= 2 ? 2 : 0;
-    if (wanted == asked && scale == samples_scale) return; /* as last time: made, or not to be had */
-    asked = wanted;
+    if (wanted == samples_asked && scale == samples_scale) return; /* as last time: made, or not to be had */
+    samples_asked = wanted;
     samples_scale = scale;
     glGetIntegerv(GL_MAX_SAMPLES, &most);
+    if (es && most > 4) most = 4; /* what every ES 3 GPU has, and a phone's tile GPU does cheaply */
     given = wanted;
     while (given > most) given /= 2;
     if (given < 2) given = 0;
-    if (given != wanted && given != clamped_to) {
+    if (given != wanted && given != samples_clamped_to) {
         fprintf(stderr, "memories-pc: OpenGL picture: %dx anti-aliasing asked, the driver gives %dx\n", wanted, given);
-        clamped_to = given;
+        samples_clamped_to = given;
     }
     wide_free();
     free_multisampled(&picture_ms_fbo, &picture_ms_buffer);
@@ -2386,4 +2449,103 @@ int GlPicture_Read(int x, int y, int w, int h, uint32_t *out)
     }
     free(rgba);
     return 1;
+}
+
+/* The presenter's own texture (OpenGL ES, sdl.c): see gl_picture.h. */
+static GLuint copy_fbo;
+
+int GlPicture_CopyInto(unsigned from, int x, int y, int w, int h, unsigned to)
+{
+    GLuint read = 0;
+    int from_w = 0, from_h = 0, t, ok;
+    if (!on || scale < 2 || !from || !to || w <= 0 || h <= 0) return 0;
+    if (from == picture_texture) {
+        read = picture_fbo;
+        from_w = SOFT_GPU_WIDTH * scale;
+        from_h = SOFT_GPU_HEIGHT * scale;
+    }
+    for (t = 0; !read && t < WIDE_TARGETS; t++) {
+        if (wide[t].fbo && wide[t].texture == from) {
+            read = wide[t].fbo;
+            from_w = wide[t].width;
+            from_h = wide[t].height;
+        }
+    }
+    if (!read) return 0;
+    if (!copy_fbo) gl_GenFramebuffers(1, &copy_fbo);
+    gl_BindFramebuffer(GL_DRAW_FRAMEBUFFER, copy_fbo);
+    gl_FramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, to, 0);
+    ok = gl_CheckFramebufferStatus(GL_DRAW_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+    if (ok) {
+        /* What lies inside the source, and past its edges the edge pixels
+         * stretched, as the desktop presenter's clamp to edge samples an
+         * area that runs past the picture: three bands across by three
+         * down, each from the inside part or the pixel row or column at its
+         * edge. */
+        int x0 = x < 0 ? 0 : x, y0 = y < 0 ? 0 : y;
+        int x1 = x + w < from_w ? x + w : from_w, y1 = y + h < from_h ? y + h : from_h;
+        glDisable(GL_SCISSOR_TEST);
+        gl_BindFramebuffer(GL_READ_FRAMEBUFFER, read);
+        if (x1 > x0 && y1 > y0) {
+            const int sx[3][2] = {{x0, x0 + 1}, {x0, x1}, {x1 - 1, x1}}, sy[3][2] = {{y0, y0 + 1}, {y0, y1}, {y1 - 1, y1}};
+            const int dx[3][2] = {{0, x0 - x}, {x0 - x, x1 - x}, {x1 - x, w}};
+            const int dy[3][2] = {{0, y0 - y}, {y0 - y, y1 - y}, {y1 - y, h}};
+            int i, j;
+            for (j = 0; j < 3; j++) {
+                for (i = 0; i < 3; i++) {
+                    if (dx[i][1] <= dx[i][0] || dy[j][1] <= dy[j][0]) continue;
+                    gl_BlitFramebuffer(sx[i][0], sy[j][0], sx[i][1], sy[j][1], dx[i][0], dy[j][0], dx[i][1], dy[j][1],
+                                       GL_COLOR_BUFFER_BIT, GL_NEAREST);
+                }
+            }
+        }
+    } else {
+        static int told;
+        if (!told++) fprintf(stderr, "memories-pc: OpenGL picture: the presenter's texture cannot be drawn into\n");
+    }
+    /* Not kept attached: the presenter deletes its texture when the size
+     * changes, which would leave this framebuffer holding it. */
+    gl_FramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
+    gl_BindFramebuffer(GL_FRAMEBUFFER, 0);
+    return ok;
+}
+
+void GlPicture_Lost(void)
+{
+    int bank;
+    on = 0;
+    program = buffer = vertex_array = 0;
+    vram_texture = vram_scratch = vram_fbo = vram_scratch_fbo = 0;
+    picture_texture = picture_scratch = picture_fbo = picture_scratch_fbo = 0;
+    picture_ms_fbo = picture_ms_buffer = 0;
+    scale = samples = samples_scale = 0; /* made again at the next resync */
+    samples_asked = samples_clamped_to = -1;
+    banks_texture = 0;
+    for (bank = 0; bank < SOFT_GPU_BANKS; bank++) { /* uploaded again when next sampled */
+        free(bank_copy[bank]);
+        bank_copy[bank] = NULL;
+    }
+    entry_map_texture = place_map_texture = 0;
+    free(entry_textures);
+    entry_textures = NULL;
+    entry_texture_count = 0;
+    pack_generation = map_generation = ~0u;
+    capture_texture = 0;
+    capture_w = capture_h = 0;
+    memset(capture_rect, 0, sizeof(capture_rect));
+    glyphs_texture = 0;
+    glyphs_side = 0;
+    glyphs_generation = ~0u;
+    memset(wide, 0, sizeof(wide));
+    shown_texture = shown_fbo = 0;
+    shown_w = shown_h = 0;
+    copy_fbo = 0;
+    vertex_count = run_count = 0;
+    want_resync = 1; /* VRAM whole into the new picture, at the next replay after Init */
+}
+
+void GlPicture_Stop(void)
+{
+    on = 0;
+    SoftGpu_SetRecorder(NULL); /* the software GPU draws its own picture again, from VRAM */
 }

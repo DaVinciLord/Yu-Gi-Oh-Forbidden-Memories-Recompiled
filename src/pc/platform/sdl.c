@@ -79,6 +79,22 @@ static int gl_pass_shown, gl_pass_rect[4];
 static GLuint gl_pass_texture;
 static int gl_pass_size[2]; /* this frame shows the OpenGL picture pass's texture, this part of it */
 static int use_gl;
+/* OpenGL ES 3 (Android; MEMORIES_GLES=1 on a desktop, which tries that path
+ * there): no context of the game's own and no desktop presenter (use_gl 0,
+ * so neither glBegin nor present_pass.c runs). SDL's renderer (opengles2)
+ * presents, in an ES 3.0 context asked of it, and the OpenGL picture pass
+ * (gl_picture.c) draws in that context between the renderer's batches
+ * (es_enter, es_leave). The pass's frame is shown through a texture of
+ * SDL's own, es_shown, which the pass copies the shown area into. */
+static int es_wanted;           /* ask for an ES 3.0 context for the renderer */
+static SDL_GLContext es_context; /* the renderer's, when it is ES 3 */
+static int es_picture;          /* the pass is on in it */
+static SDL_Texture *es_shown;
+static int es_shown_w, es_shown_h, es_shown_last; /* last: the window's last frame was the pass's */
+static PFNGLBINDFRAMEBUFFERPROC es_bind_framebuffer;
+static GLint es_framebuffer;
+/* The OpenGL picture pass has a context: the desktop's own or the renderer's. */
+static int gl_pass(void) { return use_gl || es_picture; }
 static int picture_w, picture_h;
 static uint32_t *picture_pixels, *overlay_pixels;
 static int picture_scale = 1; /* picture pixels per game pixel (internal resolution) */
@@ -120,6 +136,11 @@ static float known_refresh; /* what the wayland driver reported before a fallbac
 
 static void show(void);
 static void repaint_menu(void);
+static void reset_renderer(void);
+/* MEMORIES_TEST_GL_RESET=<frame>[fail] (reset_renderer): the frame, and
+ * whether the pass is then made not to start again. */
+static long test_reset_at = -2;
+static int test_reset_fails;
 /* Menu changes from events are coalesced: a pointer sweeping the bar
  * reports hundreds of motions a second, and each used to repaint and
  * present a frame. Now they mark the menu dirty and it is repainted once,
@@ -177,6 +198,27 @@ static void restore_game_context(void)
         fprintf(stderr, "memories-pc: restoring game OpenGL context: %s\n", SDL_GetError());
         quit = 1;
     }
+}
+
+/* OpenGL ES: around every call into gl_picture.c. The renderer's queued
+ * drawing goes out first, and SDL_FlushRenderer also marks the state SDL
+ * keeps (program, textures, viewport, blending, scissor) as unknown, so its
+ * next batch sets it again. What SDL sets once and relies on is put back
+ * after: the framebuffer it draws into and its pixel alignments (1). */
+static void es_enter(void)
+{
+    if (!es_context) return;
+    SDL_FlushRenderer(renderer);
+    if (SDL_GL_GetCurrentContext() != es_context) SDL_GL_MakeCurrent(window, es_context);
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &es_framebuffer);
+}
+
+static void es_leave(void)
+{
+    if (!es_context) return;
+    es_bind_framebuffer(GL_FRAMEBUFFER, (GLuint)es_framebuffer);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 }
 static SDL_Window *mods_window;
 static SDL_Renderer *mods_renderer;
@@ -581,16 +623,14 @@ void Platform_Screenshot(int window_image)
     SDL_Surface *surface;
     char path[1024];
     if ((!renderer && !use_gl) || !picture_pixels) return;
-    if (window_image && use_gl) {
-        window_shot_pending = 1; /* taken by the next show(), before its swap */
+    if (window_image) {
+        /* Taken by the next show(), before its swap or present: after a
+         * present the renderer's back buffer holds nothing defined. */
+        window_shot_pending = 1;
         return;
     }
     if (!screenshot_path(path, sizeof(path), "bmp")) return;
-    {
-        surface = window_image ? SDL_RenderReadPixels(renderer, NULL) :
-                  SDL_CreateSurfaceFrom(picture_w, picture_h, SDL_PIXELFORMAT_XRGB8888,
-                                        picture_pixels, picture_w * 4);
-    }
+    surface = SDL_CreateSurfaceFrom(picture_w, picture_h, SDL_PIXELFORMAT_XRGB8888, picture_pixels, picture_w * 4);
     save_surface(surface, path);
 }
 
@@ -1239,6 +1279,53 @@ static void gl_quad(GLuint texture, float x, float y, float w, float h)
     gl_quad_part(texture, x, y, w, h, 0, 0, 1, 1);
 }
 
+/* OpenGL ES: the pass's frame into es_shown, a texture of SDL's own the
+ * size of the shown area (made again when that changes): the area of the
+ * picture, or the widened picture, as the desktop presenter samples them.
+ * SDL owns the texture; the pass only draws into it, so either side can
+ * make its textures again without the other's. 0 when nothing was copied. */
+static int es_copy_shown(void)
+{
+    int w = gl_pass_rect[2], h = gl_pass_rect[3], ok;
+    GLuint from = gl_pass_texture ? gl_pass_texture : (GLuint)GlPicture_Texture(NULL, NULL), to;
+    if (!es_picture || !from || w <= 0 || h <= 0) return 0;
+    if (es_shown && (es_shown_w != w || es_shown_h != h)) {
+        SDL_DestroyTexture(es_shown);
+        es_shown = NULL;
+    }
+    if (!es_shown) {
+        es_shown = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_XBGR8888, SDL_TEXTUREACCESS_STATIC, w, h);
+        if (!es_shown) {
+            fprintf(stderr, "memories-pc: the OpenGL picture's %dx%d texture: %s\n", w, h, SDL_GetError());
+            return 0;
+        }
+        SDL_SetTextureBlendMode(es_shown, SDL_BLENDMODE_NONE);
+        es_shown_w = w;
+        es_shown_h = h;
+    }
+    to = (GLuint)SDL_GetNumberProperty(SDL_GetTextureProperties(es_shown), SDL_PROP_TEXTURE_OPENGLES2_TEXTURE_NUMBER, 0);
+    es_enter();
+    ok = GlPicture_CopyInto(from, gl_pass_rect[0], gl_pass_rect[1], w, h, to);
+    es_leave();
+    return ok;
+}
+
+/* OpenGL ES, before the pass's frame is shown: into es_shown. Where it
+ * cannot be (SDL's texture cannot be made or drawn into) the pass is given
+ * up, so the software GPU draws the picture again, and the caller shows
+ * another picture this time (0). */
+static int es_take_frame(void)
+{
+    es_shown_last = es_copy_shown();
+    if (!es_shown_last) {
+        fprintf(stderr, "memories-pc: the OpenGL picture cannot be shown; the software GPU draws it\n");
+        es_picture = 0;
+        GlPicture_Stop();
+        Menu_SetHdPicture(0);
+    }
+    return es_shown_last;
+}
+
 static void draw_overlay(int *x, int *y, int *w, int *h)
 {
     int hx, hy, hw, hh, tx, ty, tw, th, left, right;
@@ -1346,8 +1433,20 @@ static void show(void)
     physical.h = layout.dst.h * layout.pixel_y;
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
-    SDL_RenderTexture(renderer, picture, NULL, &physical);
+    /* OpenGL ES: the pass's frame (es_take_frame), also when the menu is
+     * repainted over it. */
+    if (es_shown_last && es_shown) {
+        SDL_SetTextureScaleMode(es_shown, Settings_Get(SET_FILTER) ? SDL_SCALEMODE_LINEAR : SDL_SCALEMODE_NEAREST);
+        SDL_RenderTexture(renderer, es_shown, NULL, &physical);
+    } else {
+        SDL_RenderTexture(renderer, picture, NULL, &physical);
+    }
     SDL_RenderTexture(renderer, overlay, NULL, NULL);
+    if (window_shot_pending) {
+        char path[1024];
+        window_shot_pending = 0;
+        if (screenshot_path(path, sizeof(path), "bmp")) save_surface(SDL_RenderReadPixels(renderer, NULL), path);
+    }
     apply_swap_interval();
     SDL_RenderPresent(renderer);
     if (swap_interval == 1) Platform_NotifyPresent(real_now_us(), 1);
@@ -1525,6 +1624,18 @@ static bool SDLCALL app_event(void *userdata, SDL_Event *event)
 static void pump(void)
 {
     SDL_Event event;
+    if (test_reset_at == -2) {
+        const char *at = getenv("MEMORIES_TEST_GL_RESET");
+        test_reset_at = at && *at ? strtol(at, NULL, 10) : -1;
+        test_reset_fails = at && strstr(at, "fail") != NULL;
+    }
+    if (test_reset_at >= 0 && current_frame >= (unsigned long)test_reset_at) {
+        SDL_zero(event);
+        event.type = SDL_EVENT_RENDER_DEVICE_RESET;
+        event.render.windowID = SDL_GetWindowID(window);
+        SDL_PushEvent(&event);
+        test_reset_at = -1;
+    }
     while (SDL_PollEvent(&event)) {
         MenuEvent menu_event;
         translate(&event, &menu_event);
@@ -1630,6 +1741,9 @@ static void pump(void)
         case SDL_EVENT_WINDOW_CLOSE_REQUESTED: QuitPrompt_Request(&quit); break;
         case SDL_EVENT_QUIT: quit = 1; break;
         case SDL_EVENT_WINDOW_EXPOSED: show(); break;
+        case SDL_EVENT_RENDER_DEVICE_RESET:
+            if (renderer && !strcmp(SDL_GetRendererName(renderer), "opengles2")) reset_renderer();
+            break;
         case SDL_EVENT_WINDOW_RESIZED: case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
             relayout();
             menu_dirty = 1;
@@ -1758,21 +1872,149 @@ static void pump(void)
 
 }
 
+#ifdef _WIN32
+/* MEMORIES_GLES=1 on Windows: the ES context must be the driver's own
+ * (WGL_EXT_create_context_es2_profile). Where the driver has no ES profile,
+ * or one older than asked, SDL falls back to an EGL library found on the
+ * search path (WIN_GL_UseEGL), which can be ANGLE's copy from any other
+ * program; so the profile is checked first, from the desktop context, as
+ * SDL checks it (SDL_GL_DeduceMaxSupportedESProfile): 3.0 or later where the
+ * driver has GL_ARB_ES3_compatibility or a later one. */
+typedef const char *(APIENTRY *WglExtensions)(void *hdc);
+
+static int driver_has_es3(void)
+{
+    WglExtensions extensions = (WglExtensions)SDL_GL_GetProcAddress("wglGetExtensionsStringARB");
+    void *hdc = SDL_GetPointerProperty(SDL_GetWindowProperties(window), SDL_PROP_WINDOW_WIN32_HDC_POINTER, NULL);
+    const char *wgl = extensions && hdc ? extensions(hdc) : NULL;
+    return wgl && strstr(wgl, "WGL_EXT_create_context_es2_profile") &&
+           (SDL_GL_ExtensionSupported("GL_ARB_ES3_compatibility") ||
+            SDL_GL_ExtensionSupported("GL_ARB_ES3_1_compatibility") ||
+            SDL_GL_ExtensionSupported("GL_ARB_ES3_2_compatibility"));
+}
+#else
+static int driver_has_es3(void) { return 1; } /* GLX's ES profile, or the system's EGL (Mesa) */
+#endif
+
+/* The ES 3.0 context the renderer is to make (es_wanted). */
+static void ask_for_es3(void)
+{
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+}
+
 static void create_window(const char *title)
 {
+    const char *gles = getenv("MEMORIES_GLES");
+    SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
     update_menu_scale(240 * scale + 26 * Menu_AutoScale(240 * scale));
     /* Desktop GL where the system has it (platform.h); else, or without a
      * context, the SDL renderer. */
     window = Platform_HasDesktopGL() ? SDL_CreateWindow(title, 320 * scale, 240 * scale + Menu_Height(),
-                                                        SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY |
-                                                        SDL_WINDOW_OPENGL) : NULL;
+                                                        flags | SDL_WINDOW_OPENGL) : NULL;
     gl_context = window ? SDL_GL_CreateContext(window) : NULL;
     use_gl = gl_context != NULL;
+    /* OpenGL ES 3 for the renderer: always where the system's GL is GLES,
+     * on a desktop only when asked (MEMORIES_GLES=1) and the driver has it. */
+    es_wanted = !Platform_HasDesktopGL() || (use_gl && gles && *gles && strcmp(gles, "0") != 0);
+    if (use_gl && es_wanted) {
+        if (driver_has_es3()) {
+            SDL_SetHint(SDL_HINT_OPENGL_ES_DRIVER, "0"); /* the driver's ES profile, not an EGL library */
+            SDL_GL_DestroyContext(gl_context);
+            gl_context = NULL;
+            use_gl = 0;
+        } else {
+            fprintf(stderr, "memories-pc: MEMORIES_GLES: this driver has no OpenGL ES 3 profile; desktop OpenGL it is\n");
+            es_wanted = 0;
+        }
+    }
     if (!use_gl) {
         if (window) SDL_DestroyWindow(window);
-        window = SDL_CreateWindow(title, 320 * scale, 240 * scale + Menu_Height(),
-                                  SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
+        window = NULL;
+        if (es_wanted) {
+            ask_for_es3();
+            window = SDL_CreateWindow(title, 320 * scale, 240 * scale + Menu_Height(), flags | SDL_WINDOW_OPENGL);
+            if (!window) {
+                fprintf(stderr, "memories-pc: no window for OpenGL ES 3 (%s)\n", SDL_GetError());
+                SDL_GL_ResetAttributes();
+                es_wanted = 0;
+            }
+        }
+        if (!window) window = SDL_CreateWindow(title, 320 * scale, 240 * scale + Menu_Height(), flags);
     }
+}
+
+/* The renderer's context is OpenGL ES 3: the pass in it. */
+static void es_open(void)
+{
+    es_context = SDL_GL_GetCurrentContext();
+    es_bind_framebuffer = (PFNGLBINDFRAMEBUFFERPROC)SDL_GL_GetProcAddress("glBindFramebuffer");
+    if (!es_context || !es_bind_framebuffer) {
+        es_context = NULL;
+        return;
+    }
+    es_enter();
+    Monitor_Fact("gpu", "%s | %s | %s (SDL renderer %s)", (const char *)glGetString(GL_RENDERER),
+                 (const char *)glGetString(GL_VENDOR), (const char *)glGetString(GL_VERSION),
+                 SDL_GetRendererName(renderer));
+    LOG(LOG_WINDOW, "OpenGL ES renderer %s, version %s, video %s", glGetString(GL_RENDERER), glGetString(GL_VERSION),
+        SDL_GetCurrentVideoDriver());
+    es_picture = GlPicture_Init();
+    es_leave();
+}
+
+/* The SDL renderer. On the OpenGL ES path SDL's opengles2 in the ES 3.0
+ * context create_window asked for, with the pass in it; where that cannot be
+ * had, or off that path, the renderer SDL picks, which shows the software
+ * GPU's picture. */
+static void open_renderer(void)
+{
+    renderer = NULL;
+    if (window && es_wanted) {
+        renderer = SDL_CreateRenderer(window, "opengles2");
+        if (renderer) {
+            es_open();
+        } else {
+            fprintf(stderr, "memories-pc: no OpenGL ES 3 renderer (%s); the software GPU draws the picture\n",
+                    SDL_GetError());
+            SDL_GL_ResetAttributes(); /* else SDL would ask for ES 3.0 again */
+        }
+    }
+    if (!renderer && window && !use_gl) renderer = SDL_CreateRenderer(window, NULL);
+}
+
+/* SDL_EVENT_RENDER_DEVICE_RESET: the GL context was lost while the app was
+ * away (Android), and SDL made a new one. SDL's renderer cannot go on in it
+ * (its own context is the lost one), so it is made again, its textures with
+ * it, and the pass in the new context, whose first replay draws the
+ * picture again from VRAM; where the pass does not start again, the
+ * software GPU draws the picture. MEMORIES_TEST_GL_RESET=<frame> sends the
+ * event at that frame, with nothing lost, to try this anywhere;
+ * <frame>fail also keeps the pass from starting again. */
+static void reset_renderer(void)
+{
+    fprintf(stderr, "memories-pc: the renderer's device was reset (%s); making it again\n",
+            SDL_GetRendererName(renderer));
+    GlPicture_Lost();
+    es_picture = 0;
+    es_context = NULL;
+    SDL_DestroyRenderer(renderer); /* and the textures */
+    picture = overlay = es_shown = NULL;
+    es_shown_last = 0;
+    picture_w = picture_h = 0;
+    if (es_wanted) ask_for_es3();
+    if (test_reset_fails) SDL_setenv_unsafe("MEMORIES_GL_PICTURE", "0", 1); /* the pass does not start again */
+    open_renderer();
+    if (!renderer) {
+        fprintf(stderr, "memories-pc: SDL: %s\n", SDL_GetError());
+        quit = 1;
+        return;
+    }
+    if (!es_picture) GlPicture_Stop(); /* not started again: the software GPU draws the picture */
+    Menu_SetHdPicture(es_picture);
+    swap_interval = -1; /* set again on the new renderer */
+    menu_dirty = 1;
 }
 
 static void destroy_window(void)
@@ -1925,7 +2167,7 @@ int Platform_Open(const char *title)
         SDL_SetWindowPosition(window, x == -1 ? SDL_WINDOWPOS_CENTERED : x,
                               y == -1 ? SDL_WINDOWPOS_CENTERED : y);
     }
-    renderer = window && !use_gl ? SDL_CreateRenderer(window, NULL) : NULL;
+    open_renderer();
     restore_signals(&previous);
     if (!use_gl && !renderer) {
         fprintf(stderr, "memories-pc: SDL: %s\n", SDL_GetError());
@@ -1942,6 +2184,8 @@ int Platform_Open(const char *title)
         LOG(LOG_WINDOW, "OpenGL renderer %s, version %s, video %s", glGetString(GL_RENDERER),
             glGetString(GL_VERSION), SDL_GetCurrentVideoDriver());
         Menu_SetHdPicture(GlPicture_Init());
+    } else if (es_context) {
+        Menu_SetHdPicture(es_picture); /* es_open said the rest */
     } else {
         Monitor_Fact("gpu", "no OpenGL: SDL renderer %s", SDL_GetRendererName(renderer));
         LOG(LOG_WINDOW, "SDL fallback renderer %s, video %s", SDL_GetRendererName(renderer), SDL_GetCurrentVideoDriver());
@@ -1957,6 +2201,17 @@ int Platform_Open(const char *title)
     menu_visible = !covers_screen() || Settings_Get(SET_SHOW_MENU_FULLSCREEN);
     Menu_SetVisible(menu_visible);
     return 0;
+}
+
+/* The OpenGL pass's replay (gl_picture.h), in the renderer's context on
+ * OpenGL ES. */
+static int replay(void)
+{
+    int drawn;
+    es_enter();
+    drawn = GlPicture_Replay();
+    es_leave();
+    return drawn;
 }
 
 /* Before a frame: input and the menu, then any window change. */
@@ -1999,6 +2254,7 @@ static void finish_present(int w, int h)
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_BGRA, GL_UNSIGNED_BYTE, picture_pixels);
     } else {
         SDL_UpdateTexture(picture, NULL, picture_pixels, w * 4);
+        es_shown_last = 0; /* this one shows instead of the pass's */
     }
     compose_menu_if_changed();
     show();
@@ -2010,9 +2266,9 @@ int HERE(Platform_PresentPicture)(const uint32_t *pixels, int stride, int x, int
     if ((!renderer && !use_gl) || w <= 0 || h <= 0 || at_scale < 1) return 0;
     if (!pixels) {
         /* The OpenGL pass's picture: replayed now, shown from its texture. */
-        if (!use_gl) return 0;
+        if (!gl_pass()) return 0;
         begin_present(w, h, at_scale);
-        if (!GlPicture_Replay() || GlPicture_Scale() != at_scale) {
+        if (!replay() || GlPicture_Scale() != at_scale) {
             pumped = 1; /* the caller shows VRAM instead: one pump a frame */
             return 0;
         }
@@ -2021,13 +2277,18 @@ int HERE(Platform_PresentPicture)(const uint32_t *pixels, int stride, int x, int
         gl_pass_rect[1] = y;
         gl_pass_rect[2] = w;
         gl_pass_rect[3] = h;
+        if (es_context && !es_take_frame()) {
+            gl_pass_shown = 0;
+            pumped = 1;
+            return 0;
+        }
         compose_menu_if_changed();
         show();
         gl_pass_shown = 0;
         return 1;
     }
     if (x < 0 || x + w > stride) return 0;
-    if (use_gl) GlPicture_Replay(); /* keep the normal picture current during widescreen */
+    if (gl_pass()) replay(); /* keep the normal picture current during widescreen */
     begin_present(w, h, at_scale);
     for (j = 0; j < h; j++) { /* the picture wraps at the bottom of VRAM, as VRAM does */
         memcpy(picture_pixels + (size_t)j * (size_t)w,
@@ -2043,7 +2304,7 @@ void HERE(Platform_Present)(const uint16_t *vram, int stride, int x, int y, int 
     if ((!renderer && !use_gl) || w <= 0 || h <= 0) {
         return;
     }
-    if (use_gl) GlPicture_Replay(); /* a frame shown from VRAM (a movie, a widescreen frame) still keeps the pass in step */
+    if (gl_pass()) replay(); /* a frame shown from VRAM (a movie, a widescreen frame) still keeps the pass in step */
     begin_present(w, h, 1);
     for (j = 0; j < h; j++) {
         const uint16_t *row = vram + ((y + j) & 511) * stride;
@@ -2064,19 +2325,26 @@ void HERE(Platform_Present)(const uint16_t *vram, int stride, int x, int y, int 
 
 int Platform_ReadPicture(uint32_t *out, int x, int y, int w, int h)
 {
-    if (!use_gl) return 0;
+    int read;
+    if (!gl_pass()) return 0;
+    es_enter();
     GlPicture_Replay(); /* what was recorded since the last present */
-    return GlPicture_Read(x, y, w, h, out);
+    read = GlPicture_Read(x, y, w, h, out);
+    es_leave();
+    return read;
 }
 
 int HERE(Platform_PresentWidePicture)(int x, int y, int w, int h, int wide_w, int at_scale)
 {
-    GLuint texture;
-    int pw, ph;
-    if (!use_gl || at_scale < 2) return 0;
+    GLuint texture = 0;
+    int pw, ph, replayed;
+    if (!gl_pass() || at_scale < 2) return 0;
     begin_present(wide_w * at_scale, h * at_scale, at_scale);
-    if (!GlPicture_Replay() || GlPicture_Scale() != at_scale ||
-        !(texture = (GLuint)GlPicture_WideTexture(x, y, w, h, &pw, &ph))) {
+    es_enter();
+    replayed = GlPicture_Replay() && GlPicture_Scale() == at_scale;
+    if (replayed) texture = (GLuint)GlPicture_WideTexture(x, y, w, h, &pw, &ph);
+    es_leave();
+    if (!texture) {
         pumped = 1; /* the caller shows another picture: one pump a frame */
         return 0;
     }
@@ -2088,6 +2356,12 @@ int HERE(Platform_PresentWidePicture)(int x, int y, int w, int h, int wide_w, in
     gl_pass_rect[1] = 0;
     gl_pass_rect[2] = pw;
     gl_pass_rect[3] = h * at_scale;
+    if (es_context && !es_take_frame()) {
+        gl_pass_shown = 0;
+        gl_pass_texture = 0;
+        pumped = 1;
+        return 0;
+    }
     compose_menu_if_changed();
     show();
     gl_pass_shown = 0;
@@ -2097,9 +2371,13 @@ int HERE(Platform_PresentWidePicture)(int x, int y, int w, int h, int wide_w, in
 
 int Platform_ReadWidePicture(uint32_t *out, int x, int y, int w, int h, int wide_w, int scale)
 {
-    if (!use_gl) return 0;
+    int read;
+    if (!gl_pass()) return 0;
+    es_enter();
     GlPicture_Replay();
-    return GlPicture_ReadWide(x, y, w, h, wide_w, scale, out);
+    read = GlPicture_ReadWide(x, y, w, h, wide_w, scale, out);
+    es_leave();
+    return read;
 }
 
 int Platform_ShouldQuit(void) { return quit; }
@@ -2121,7 +2399,7 @@ void HERE(Platform_PumpEvents)(void)
     pump();
     Update_Frame();
     if (Menu_TakeChanged()) menu_dirty = 1;
-    if (use_gl && GlPicture_Behind()) GlPicture_Replay();
+    if (gl_pass() && GlPicture_Behind()) replay();
     /* A running game shows the change with its next frame; paused, the wait
      * loop pumps every half millisecond, so keep hover repaints to ~120/s. */
     if (menu_dirty && overlay_pixels && Platform_ClockRate() == 0 &&
