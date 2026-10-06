@@ -108,7 +108,6 @@ typedef struct {
     char name[PACK_TEXT_MAX];
     char description[PACK_DESCRIPTION_MAX];
     char image[PACK_PATH_MAX];     /* a PNG, whole path; "" for none */
-    int image_style;               /* PACK_IMAGE_* */
     int cover;                     /* the card whose art stands in for an image */
     unsigned shops;                /* a bit per shop (PackShopRules), all when "shop" is left out */
     long order;
@@ -137,6 +136,7 @@ typedef struct {
     int listed;                    /* in the list; a password pack is not, unless it says */
     int reveal;
     int sounds[PACK_SOUNDS];
+    int image_style;               /* PACK_IMAGE_*; last, so the fields before keep v0.2.0's offsets */
 } Pack;
 
 typedef struct {
