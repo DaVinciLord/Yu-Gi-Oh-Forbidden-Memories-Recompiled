@@ -31,7 +31,7 @@ LABEL = "YFM Re-Decomp"
 KEYSTORE = os.path.join(ROOT, "tmp", "pc", "android-deps", "debug.keystore")
 DEBUG_DN = "CN=Android Debug, O=Android, C=US"
 # The alias of the release key when MEMORIES_ANDROID_KEY_ALIAS is unset.
-RELEASE_ALIAS = "yfm-release"
+RELEASE_ALIAS = "yfm"
 # Where signing_key() hands apksigner the passwords (env:<name>): the
 # child's environment only, never its command line nor a file.
 STORE_PASS_VAR, KEY_PASS_VAR = "MEMORIES_APKSIGNER_STORE_PASS", "MEMORIES_APKSIGNER_KEY_PASS"
@@ -165,7 +165,7 @@ def signing_key():
     MEMORIES_ANDROID_KEYSTORE set: the release key. The keystore (PKCS12 when
     it ends in .p12 or .pfx) and its password, MEMORIES_ANDROID_KEYSTORE_
     PASSWORD or the first line of MEMORIES_ANDROID_KEYSTORE_PASSWORD_FILE;
-    the key's alias, MEMORIES_ANDROID_KEY_ALIAS (default yfm-release), and
+    the key's alias, MEMORIES_ANDROID_KEY_ALIAS (default yfm), and
     its password, MEMORIES_ANDROID_KEY_PASSWORD(_FILE) (default the
     keystore's). Anything missing stops the build: it never falls back to
     the debug key. The passwords reach apksigner as env:<name> in its own

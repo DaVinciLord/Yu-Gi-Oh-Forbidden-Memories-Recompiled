@@ -145,7 +145,7 @@ under `tmp/pc/android-deps/debug.keystore`, as before:
 | `MEMORIES_ANDROID_KEYSTORE` | The keystore's path. Set: the release key signs; unset: the debug key. A `.p12`/`.pfx` file is read as PKCS12. |
 | `MEMORIES_ANDROID_KEYSTORE_PASSWORD_FILE` | A file whose first line is the keystore's password (local builds). |
 | `MEMORIES_ANDROID_KEYSTORE_PASSWORD` | The keystore's password itself (CI, from a secret). Used before the `_FILE` one. |
-| `MEMORIES_ANDROID_KEY_ALIAS` | The key's alias; default `yfm-release`. The CI key's is in the `ANDROID_KEY_ALIAS` secret. |
+| `MEMORIES_ANDROID_KEY_ALIAS` | The key's alias; default `yfm`. The CI key's is in the `ANDROID_KEY_ALIAS` secret. |
 | `MEMORIES_ANDROID_KEY_PASSWORD`, `MEMORIES_ANDROID_KEY_PASSWORD_FILE` | The key's password, as above; default the keystore's (a PKCS12 file has one password). |
 | `MEMORIES_ANDROID_CERT_SHA256` | Optional: the signer's expected certificate SHA-256, the full 64 hex digits (colons and case do not matter) or `PREFIX...SUFFIX`. A mismatch deletes the APK and fails the build. |
 
@@ -162,7 +162,7 @@ second line. After signing, the build runs `apksigner verify --print-certs`
 and prints the signer:
 
 ```text
-tmp/pc/android-arm64-v8a/memories-arm64-v8a.apk: signed with the release key (alias yfm-release in ...), verified (apksigner verify)
+tmp/pc/android-arm64-v8a/memories-arm64-v8a.apk: signed with the release key (alias yfm in ...), verified (apksigner verify)
   certificate: CN=..., O=...
   SHA-256: C8:DA:2D:97:...:4B:8B
 ```
@@ -187,7 +187,7 @@ number, passing over previews and extensions (`36.0.0-rc1`,
 # file live outside the repository):
 export MEMORIES_ANDROID_KEYSTORE=~/.config/yfm/android-release.p12
 export MEMORIES_ANDROID_KEYSTORE_PASSWORD_FILE=~/.config/yfm/android-release.password
-export MEMORIES_ANDROID_KEY_ALIAS=yfm-release
+export MEMORIES_ANDROID_KEY_ALIAS=yfm
 python3 tools/pc/package.py android-arm64 --version dev-signing-test
 ```
 
@@ -209,9 +209,10 @@ In the GitHub repository: **Settings > Secrets and variables > Actions**,
 
 Optionally, on the **Variables** tab, `ANDROID_CERT_SHA256`: the release
 certificate's full SHA-256. The `android` job checks the signer against it.
-Without it, the job checks the known prefix and suffix of the release
-certificate (`C8DA2D97...4B8B`, written in the workflow). The variable is
-public information, not a secret.
+Without it, the job checks the release certificate's full SHA-256, written
+in the workflow
+(`C8DA2D972E42522E9F83139F5D54092F69FB3EE4C0B074FA53F8245DA45A4B8B`). The
+variable is public information, not a secret.
 
 The base64 text of the keystore, on one line, with no header:
 

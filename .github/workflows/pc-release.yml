@@ -283,8 +283,8 @@ jobs:
       # step, and it is deleted when the step ends. package_android.py signs
       # the built APK again with the release key (it checks the signer against
       # MEMORIES_ANDROID_CERT_SHA256: the repository variable
-      # ANDROID_CERT_SHA256 when set, the full digest; else the known prefix
-      # and suffix of the release certificate), and package.py --no-build
+      # ANDROID_CERT_SHA256 when set, else the release certificate's full
+      # digest), and package.py --no-build
       # packs it (release key only, not the debug certificate, the version
       # --version makes), without the passwords.
       - name: Sign the APK with the release key
@@ -294,7 +294,7 @@ jobs:
           MEMORIES_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           MEMORIES_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           MEMORIES_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          MEMORIES_ANDROID_CERT_SHA256: ${{ vars.ANDROID_CERT_SHA256 || 'C8DA2D97...4B8B' }}
+          MEMORIES_ANDROID_CERT_SHA256: ${{ vars.ANDROID_CERT_SHA256 || 'C8DA2D972E42522E9F83139F5D54092F69FB3EE4C0B074FA53F8245DA45A4B8B' }}
         run: |
           umask 077
           keystore="$RUNNER_TEMP/android-release.p12"
