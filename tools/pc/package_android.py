@@ -189,6 +189,10 @@ def signing_key():
         "MEMORIES_ANDROID_KEYSTORE is set but its password is not: set MEMORIES_ANDROID_KEYSTORE_PASSWORD_FILE "
         "(a file whose first line is the password) or MEMORIES_ANDROID_KEYSTORE_PASSWORD")
     key = secret("MEMORIES_ANDROID_KEY_PASSWORD") or store
+    # Out of this process's environment once read: javac, d8, aapt2 and
+    # zipalign do not inherit them; only apksigner's own environment has them.
+    for name in ("MEMORIES_ANDROID_KEYSTORE_PASSWORD", "MEMORIES_ANDROID_KEY_PASSWORD"):
+        os.environ.pop(name, None)
     alias = os.environ.get("MEMORIES_ANDROID_KEY_ALIAS") or RELEASE_ALIAS
     options = ["--ks", keystore, "--ks-key-alias", alias, "--ks-pass", f"env:{STORE_PASS_VAR}",
                "--key-pass", f"env:{KEY_PASS_VAR}"]

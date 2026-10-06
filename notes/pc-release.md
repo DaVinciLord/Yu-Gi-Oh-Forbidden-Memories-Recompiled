@@ -153,7 +153,9 @@ With `MEMORIES_ANDROID_KEYSTORE` set, anything missing or wrong (no password,
 a wrong alias or password, a file that is not a keystore) fails the build:
 it never falls back to the debug key. The passwords are never printed. They
 reach `apksigner` as `env:<name>` in its own environment, so they are on no
-command line and in no file the build writes. Do **not** point both password
+command line and in no file the build writes. Once read, the two password
+variables are removed from the build's environment, so `javac`, `d8`,
+`aapt2` and `zipalign` do not inherit them. Do **not** point both password
 variables at one `_FILE`. That is safe here, but `apksigner`'s own
 `--ks-pass file:X --key-pass file:X` would read the key password from the
 second line. After signing, the build runs `apksigner verify --print-certs`
@@ -254,9 +256,12 @@ the built APK with `package_android.py <build> arm64-v8a`. Then it packs it
 with `package.py android-arm64 --no-build`, without the passwords in its
 environment. The keystore is deleted when the step ends, and again by a
 last `if: always()` step. The job prints the signer's DN, SHA-256 and the
-APK's version to its summary. Pull requests never get the release key. Neither do
-forks without the secrets. There the APK is built as a check, debug-signed,
-and not uploaded. A version tag without the secrets fails the job, and with
+APK's version to its summary. Only a push to `master` or of a `v*` tag, or a
+manual run (workflow_dispatch) on `master` or a `v*` tag, gets the release
+key. The repository is public and anyone can download a run's artifacts, so
+unmerged code is never signed. Pull requests, manual runs on other branches,
+and forks without the secrets build the APK as a check, debug-signed, and
+upload nothing. A version tag without the secrets fails the job, and with
 it the draft release.
 
 GitHub hides every secret's value in the logs. `ANDROID_KEY_ALIAS` is

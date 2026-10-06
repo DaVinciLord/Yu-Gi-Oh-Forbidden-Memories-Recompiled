@@ -190,8 +190,9 @@ jobs:
           retention-days: 14
 
   # The Android app (notes/pc-release.md, "Android signing"): the arm64 APK,
-  # signed with the release key held in this repository's secrets. Pull
-  # requests, and forks without the secrets, build it as a check only
+  # signed with the release key held in this repository's secrets. Only
+  # master and v* tags are signed; every other run (pull requests, manual runs
+  # on other branches, forks without the secrets) builds it as a check only
   # (signed with a debug key, not uploaded); a version tag without the
   # release key fails, so a release never carries a debug-signed APK.
   android:
@@ -199,9 +200,12 @@ jobs:
     timeout-minutes: 60
     env:
       # Whether this run signs with the release key; the secrets themselves
-      # are handed only to the steps that use them. Never on pull requests:
-      # the release key signs reviewed code (master, tags, manual runs).
-      ANDROID_SIGNING: ${{ github.event_name != 'pull_request' && secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' }}
+      # are handed only to the step that uses them. The rule: a push to
+      # master or of a v* tag, or a manual run (workflow_dispatch) on master
+      # or a v* tag, with both secrets set. Never a pull request, nor a manual
+      # run on any other branch: the repository is public, anyone can download
+      # a run's artifacts, and unmerged code is never signed.
+      ANDROID_SIGNING: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')) && secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' }}
       # The tools the Android build was made with locally (notes/pc-build.md,
       # "Android"): NDK r29, build-tools and platform 35, JDK 17.
       ANDROID_NDK_VERSION: 29.0.14206865
@@ -211,8 +215,8 @@ jobs:
       run:
         shell: bash
     steps:
-      # The whole history with its tags: a development APK takes the
-      # versionCode of the newest v* tag it descends from (package_android.py).
+      # The whole history with its tags: a development APK takes the highest
+      # versionCode of the v* tags merged into HEAD (package_android.py).
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -267,7 +271,7 @@ jobs:
             echo "::error title=Android release key::the secrets ANDROID_KEYSTORE_BASE64 and ANDROID_KEYSTORE_PASSWORD are not set: a release never ships a debug-signed APK (notes/pc-release.md, \"Android signing\")"
             exit 1
           else
-            echo "::notice title=Android::no release key in this run (a pull request, or no ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD secrets): the APK is built as a check, signed with a debug key, and not uploaded"
+            echo "::notice title=Android::no release key in this run (only pushes and manual runs on master or a v* tag are signed, with the ANDROID_KEYSTORE_BASE64 and ANDROID_KEYSTORE_PASSWORD secrets): the APK is built as a check, signed with a debug key, and not uploaded"
           fi
       # The build (the NDK, cmake, the dependencies' downloaded sources) runs
       # with no secret in its environment. It signs with the debug key; the
