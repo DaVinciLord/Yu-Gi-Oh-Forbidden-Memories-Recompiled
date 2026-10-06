@@ -4,6 +4,7 @@
 #   baseline TAG                  check this build against release TAG
 #   accept TAG KIND NAME reason   a difference that breaks no mod in use
 baseline v0.1.2
+baseline v0.2.0
 
 # The Cheats menu's functions now say whether they did anything (0 before a
 # game is loaded); a caller built against v0.1.2's void ignores eax.
@@ -38,3 +39,20 @@ accept v0.1.2 record FusionRules grew by two callbacks at its end (bonus, bonuse
 accept v0.1.2 record DuelCardRecord names two of its pad bytes defense_modifier
 accept v0.1.2 record FusionCard grew by defense_modifier at its end
 accept v0.1.2 record FusionLine holds the larger FusionCard
+
+# v0.2.0 (PRs #237-#291 since then). The same RotAverageNclip3_nom return
+# as v0.1.2 above: v0.2.0's SDK still declared it void.
+accept v0.2.0 function RotAverageNclip3_nom returns long (the flag word) where it returned void
+# PR #279 (equips with their own DEF bonus), as for v0.1.2 above: the duel
+# record's unused bytes 0x1A-0x1B hold defense_modifier, the planner's card
+# grew by it at its end, and the rules by `bonuses` at theirs. Only the
+# port's own fusion helper builds these; no v0.2.0 mod calls a Fusion_
+# function.
+accept v0.2.0 record DuelCardRecord names two of its pad bytes defense_modifier
+accept v0.2.0 record FusionCard grew by defense_modifier at its end
+accept v0.2.0 record FusionLine holds the larger FusionCard
+accept v0.2.0 record FusionRules grew by the bonuses callback at its end
+# PR #265 ("image_style": "full"): Pack grew by image_style at its end, so a
+# mod reading Packs_At() still finds every v0.2.0 field where it was. The
+# pack table is the port's own; a mod never allocates a Pack.
+accept v0.2.0 record Pack grew by image_style at its end
