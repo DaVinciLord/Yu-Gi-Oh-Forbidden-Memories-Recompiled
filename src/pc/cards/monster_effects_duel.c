@@ -420,6 +420,14 @@ int MonsterEffects_Update(void)
         S.pause--;
         return 1;
     }
+    /* The battle that just began waits for them (MonsterEffects_Battle). */
+    if (S.battle_life_count) {
+        int side = S.battle_life_side[0], amount = S.battle_life[0];
+        S.battle_life_count--;
+        memmove(S.battle_life, S.battle_life + 1, S.battle_life_count * sizeof(S.battle_life[0]));
+        memmove(S.battle_life_side, S.battle_life_side + 1, S.battle_life_count);
+        return life_effect(side, amount);
+    }
     /* Only as a hand or field phase begins, before its first step: within
      * one the field is not settled (the hand lifts a field monster for a
      * fusion frames before placement takes it). Every way back to them --
@@ -430,7 +438,6 @@ int MonsterEffects_Update(void)
     /* A side out of LP: the field phase ends the duel; no more effects. */
     if (!D_800E9FF0[0].life_points.signed_value || !D_800E9FF0[1].life_points.signed_value) {
         S.count = 0;
-        S.shown_count = 0;
         if (now == PHASE_HAND) gDuel_wSceneStateFlags = PHASE_FIELD;
         return 0;
     }
@@ -442,11 +449,6 @@ int MonsterEffects_Update(void)
         look();
         S.count = 0;
         return 0;
-    }
-    if (S.shown_count) {
-        int amount = S.shown[0];
-        memmove(S.shown, S.shown + 1, (size_t)(--S.shown_count) * sizeof(S.shown[0]));
-        if (start_splash(amount)) return 1;
     }
     look();
     /* A code mod may have started a card effect of its own for what it
@@ -544,12 +546,16 @@ void MonsterEffects_Battle(void)
             trace("battle", card, record, effect);
             played = 1;
             if (effect->action == MONSTER_DO_HEAL || effect->action == MONSTER_DO_DAMAGE) {
-                /* Made now (the battle's damage comes after it); its
-                 * splash shows once the battle is over. */
+                /* Made with its splash at the next frames, before the
+                 * battle goes on (MonsterEffects_Update). */
                 int amount = effect->action == MONSTER_DO_HEAL ? effect->amount : -effect->amount;
-                change_life(effect->action == MONSTER_DO_HEAL ? owner(record) : owner(record) ^ 1, amount, 0);
-                if (S.shown_count < (int)(sizeof(S.shown) / sizeof(S.shown[0])))
-                    S.shown[S.shown_count++] = (short)clamp(amount, -32767, 32767);
+                int side = effect->action == MONSTER_DO_HEAL ? owner(record) : owner(record) ^ 1;
+                if (S.battle_life_count < (int)(sizeof(S.battle_life) / sizeof(S.battle_life[0]))) {
+                    S.battle_life_side[S.battle_life_count] = (unsigned char)side;
+                    S.battle_life[S.battle_life_count++] = (short)clamp(amount, -32767, 32767);
+                } else {
+                    change_life(side, amount, 0);
+                }
             } else if (effect->action == MONSTER_DO_BOOST) {
                 int to = effect->target == MONSTER_TARGET_BATTLE ? other : record;
                 if (!monster_zone(to) || !reaches(&(MonsterEffect){.target = MONSTER_TARGET_ALL, .type = effect->type,

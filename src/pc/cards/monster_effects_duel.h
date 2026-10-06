@@ -63,9 +63,11 @@ typedef struct {
     unsigned char life_pending, life_side;
     int splash_saved, splash_shown;
     int life_amount;
-    /* A battle's heals and damage, made at once: their splashes follow it. */
-    unsigned char shown_count;
-    short shown[4];
+    /* A battle's heals and damage: made, each after its splash, before
+     * the battle goes on. */
+    unsigned char battle_life_count;
+    unsigned char battle_life_side[4];
+    short battle_life[4];
 } MonsterEffectsState;
 
 extern MonsterEffectsState gMonsterEffects;
