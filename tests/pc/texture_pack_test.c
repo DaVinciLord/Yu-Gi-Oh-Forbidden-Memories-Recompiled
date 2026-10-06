@@ -388,7 +388,9 @@ static void shared_word(void)
 {
     char path[1024];
     png_image png;
-    unsigned char pixels[6 * 4];
+    unsigned char pixels[6 * 4], encoded[4096];
+    png_alloc_size_t size;
+    FILE *file;
     int i, x;
     make_dir("share");
     for (i = 0; i < 2; i++) {
@@ -404,7 +406,15 @@ static void shared_word(void)
             pixels[x * 4 + 2] = (unsigned char)(i ? 255 : 0);
             pixels[x * 4 + 3] = 255;
         }
-        assert(png_image_write_to_file(&png, path, 0, pixels, 0, NULL));
+        /* Through fopen (Memories_Fopen, UTF-8) like the other files here,
+         * not libpng's own fopen, which cannot open a path of this kind. */
+        size = sizeof(encoded);
+        assert(png_image_write_to_memory(&png, encoded, &size, 0, pixels, 0, NULL));
+        assert(size <= sizeof(encoded));
+        file = fopen(path, "wb");
+        assert(file);
+        assert(fwrite(encoded, 1, size, file) == size);
+        assert(!fclose(file));
     }
     /* a: words 0-1, texels 0-5.  b: words 1-2, texels 6-11. Word 1 is shared,
      * holding 4 and 5 of a and 6 and 7 of b. */
