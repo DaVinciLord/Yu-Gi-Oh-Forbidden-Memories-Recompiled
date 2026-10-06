@@ -55,6 +55,13 @@ static void make_dir(const char *relative)
     assert(!mkdir(path, 0777));
 }
 
+/* A mod whose settings are named after the catalog's own folders. */
+static int flat_part(const char *setting, void *context)
+{
+    assert(context == root);
+    return !strcmp(setting, "monster_type") ? 1 : !strcmp(setting, "thumbnails") ? 0 : -1;
+}
+
 /* The mod's settings: "on" is on, "off" is off, nothing else is declared. */
 static int part(const char *setting, void *context)
 {
@@ -346,6 +353,20 @@ static void named_folder(void)
      * the ten digit_0 readings under "off" are left out, not reported. */
     assert(TexturePack_LoadAssetFolder(path, 1, part, root, problems, sizeof(problems)) == 13);
     assert(strstr(problems, "unknown asset") && !strstr(problems, "digit_0"));
+    TexturePack_Unload();
+
+    /* A setting named after the folder switches it with nothing to nest:
+     * "on" and "off" above are the mod's own names, but a mod may just as
+     * well call a setting "thumbnails" and switch assets/thumbnails/... */
+    make_dir("flat");
+    make_dir("flat/thumbnails");
+    make_dir("flat/monster_type");
+    write_text("flat/thumbnails/004.png", "\x89PNG\r\n\x1a\n");
+    write_text("flat/monster_type/zombie.png", "\x89PNG\r\n\x1a\n");
+    snprintf(path, sizeof(path), "%s/flat", root);
+    /* flat_part() declares "thumbnails" off and "monster_type" on. */
+    assert(TexturePack_LoadAssetFolder(path, 1, flat_part, root, problems, sizeof(problems)) == 1);
+    assert(!strstr(problems, "unknown"));
     TexturePack_Unload();
 
     /* An empty directory, and one that is not there at all, are not errors

@@ -265,9 +265,11 @@ static int sibling(const Entry *a, const Entry *b);
  * begins in) each own part of it. NULL when none does. */
 static const Entry *shared_owner(size_t at, int texel, int *row, int *word)
 {
-    uint32_t tag = TextureDump_Tags[at];
+    uint32_t tag;
     int i, head;
-    if (!tag || chosen < 0) return NULL;
+    if (!TextureDump_Tags || chosen < 0) return NULL;   /* no tags: nothing to trace */
+    tag = TextureDump_Tags[at];
+    if (!tag) return NULL;
     i = locate_texel(tag - 1, texel, row, word);
     if (i < 0) return NULL;
     head = head_of(i);
@@ -990,7 +992,8 @@ int TexturePack_AddMadeSeeThrough(const void *pixels, int words, int rows, int b
  * catalog, so the directory is walked once and searched per name. */
 typedef struct {
     char **names;            /* the name the file stands for, without ".png" */
-    char **settings;         /* the directory it came from when that is a setting, else NULL */
+    char **paths;            /* where the file is under the directory, without ".png" */
+    char **settings;         /* the setting that switches it, or NULL */
     unsigned char *used;     /* a name the catalog holds: the rest are reported */
     int count, room;
 } Folder;
@@ -1000,9 +1003,11 @@ static void folder_free(Folder *folder)
     int i;
     for (i = 0; i < folder->count; i++) {
         free(folder->names[i]);
+        free(folder->paths[i]);
         free(folder->settings[i]);
     }
     free(folder->names);
+    free(folder->paths);
     free(folder->settings);
     free(folder->used);
     memset(folder, 0, sizeof(*folder));
@@ -1035,23 +1040,30 @@ static int catalog_holds(const char *name)
     return 0;
 }
 
-static int folder_add(Folder *folder, const char *name, const char *setting)
+static int folder_add(Folder *folder, const char *name, const char *path, const char *setting)
 {
     if (folder->count == folder->room) {
         int room = folder->room ? folder->room * 2 : 32;
         char **names = realloc(folder->names, (size_t)room * sizeof(*names));
+        char **paths = realloc(folder->paths, (size_t)room * sizeof(*paths));
         char **settings = realloc(folder->settings, (size_t)room * sizeof(*settings));
         unsigned char *used = realloc(folder->used, (size_t)room);
         if (names) folder->names = names;
+        if (paths) folder->paths = paths;
         if (settings) folder->settings = settings;
         if (used) folder->used = used;
-        if (!names || !settings || !used) return 0;
+        if (!names || !paths || !settings || !used) return 0;
         folder->room = room;
     }
     if (!(folder->names[folder->count] = strdup(name))) return 0;
+    if (!(folder->paths[folder->count] = strdup(path))) {
+        free(folder->names[folder->count]);
+        return 0;
+    }
     folder->settings[folder->count] = NULL;
     if (setting && !(folder->settings[folder->count] = strdup(setting))) {
         free(folder->names[folder->count]);
+        free(folder->paths[folder->count]);
         return 0;
     }
     folder->used[folder->count++] = 0;
@@ -1060,8 +1072,10 @@ static int folder_add(Folder *folder, const char *name, const char *setting)
 
 /* The name a file's path stands for, and the setting that switches it.
  *
- * A path that is a name is that name, switched by nothing. Otherwise its
- * first part may be one of the mod's own settings, and the rest the name:
+ * A path that is a name is that name, switched by the mod's setting of the
+ * same name as its folder if it declares one (assets/attributes/light.png is
+ * attributes/light, switched by "attributes"). Otherwise its first part may
+ * be one of the mod's settings, and the rest the name:
  * assets/card_art/cards/0001.png is cards/0001, switched off with the mod's
  * "card_art". The whole path is tried first, so a directory that is also
  * the start of a name (assets/cards/...) keeps meaning the name.
@@ -1073,7 +1087,21 @@ static int folder_resolve(const char *path, int (*part)(const char *, void *), v
     size_t length;
     *name = path;
     setting[0] = '\0';
-    if (catalog_holds(path)) return 1;
+    if (catalog_holds(path)) {
+        /* A setting named after the folder switches it, with nothing to nest:
+         * a mod declaring "attributes" switches assets/attributes/... The
+         * name is the whole path either way, so this cannot change which
+         * image a file stands for. */
+        if (rest && part) {
+            size_t part_length = (size_t)(rest - path);
+            if (part_length < setting_size) {
+                memcpy(setting, path, part_length);
+                setting[part_length] = '\0';
+                if (part(setting, context) < 0) setting[0] = '\0';   /* not declared */
+            }
+        }
+        return 1;
+    }
     if (!rest || (length = (size_t)(rest - path)) >= setting_size) return 0;
     memcpy(setting, path, length);
     setting[length] = '\0';
@@ -1116,7 +1144,7 @@ static void folder_walk(Folder *folder, const char *root, const char *below, int
             const char *stands_for;
             char setting[64];
             folder_resolve(name, part, context, &stands_for, setting, sizeof(setting));
-            if (!folder_add(folder, stands_for, setting[0] ? setting : NULL)) break;
+            if (!folder_add(folder, stands_for, name, setting[0] ? setting : NULL)) break;
         }
     }
     closedir(directory);
@@ -1128,12 +1156,14 @@ static void folder_sort(Folder *folder)
 {
     int i, j;
     for (i = 1; i < folder->count; i++) {   /* insertion: the setting moves with the name */
-        char *name = folder->names[i], *setting = folder->settings[i];
+        char *name = folder->names[i], *path = folder->paths[i], *setting = folder->settings[i];
         for (j = i; j > 0 && strcmp(folder->names[j - 1], name) > 0; j--) {
             folder->names[j] = folder->names[j - 1];
+            folder->paths[j] = folder->paths[j - 1];
             folder->settings[j] = folder->settings[j - 1];
         }
         folder->names[j] = name;
+        folder->paths[j] = path;
         folder->settings[j] = setting;
     }
     for (i = 0; i < folder->count; i++) folder->used[i] = 0;
@@ -1212,8 +1242,10 @@ static int load_entries(const char *from, const JsonValue *list, int named, Fold
             const char *switched;
             if (at < 0) continue;
             switched = folder->settings[at];
-            if ((size_t)snprintf(shipped, sizeof(shipped), "%s%s%s.png", switched ? switched : "",
-                                 switched ? "/" : "", asset->name) >= sizeof(shipped)) continue;
+            /* The file's own path, not the name: the two differ when a
+             * setting's directory sits above it. */
+            if ((size_t)snprintf(shipped, sizeof(shipped), "%s.png", folder->paths[at]) >= sizeof(shipped))
+                continue;
             file = shipped;
             if (switched) {
                 /* A directory named after one of the mod's settings switches
@@ -1334,7 +1366,7 @@ static int load_entries(const char *from, const JsonValue *list, int named, Fold
     if (folder) {   /* a picture the catalog has no name for: a typo, most likely */
         int i;
         for (i = 0; i < folder->count; i++)
-            if (!folder->used[i]) problem(&unknown, folder->names[i]);
+            if (!folder->used[i]) problem(&unknown, folder->paths[i]);
     }
     if (problems && problems_size) {
         describe(problems, problems_size, &unknown, "unknown asset", "unknown assets");

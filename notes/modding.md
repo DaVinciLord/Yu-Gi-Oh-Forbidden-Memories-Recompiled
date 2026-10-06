@@ -261,8 +261,23 @@ and is not an error.
 
 #### A directory for each part
 
-A directory named after one of the mod's own `settings` switches everything
-under it, as an entry's `"setting"` does:
+A folder of the catalog switches with the mod's own setting of that name:
+declare `attributes` and the player's switch takes `assets/attributes/...`
+out, with nothing to nest.
+
+```
+my-mod/
+├── mod.json                      settings: attributes, monster_type
+└── assets/
+    ├── attributes/light.png          switched by "attributes"
+    └── monster_type/dragon.png       switched by "monster_type"
+```
+
+The name is read from the whole path either way, so a setting named after a
+folder cannot change which image a file stands for.
+
+To put several folders behind one switch, name a directory after the setting
+and keep the names under it, as an entry's `"setting"` does:
 
 ```
 my-ui/
