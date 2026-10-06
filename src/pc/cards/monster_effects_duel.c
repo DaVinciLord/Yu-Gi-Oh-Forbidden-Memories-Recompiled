@@ -13,6 +13,7 @@
 #include "game/duel_scene_state.h"
 #include "game/duel_action_lock.h"
 #include "game/duel_effect.h"
+#include "game/duel_effect_request.h"
 #include "game/duel_check_quit_input.h"
 #include "game/duel_scene_field_actions.h"
 #include "game/duel_magic_effect_dispatch.h"
@@ -47,6 +48,24 @@ extern u16 D_8009B162;
 #define SE_BOOST 0x0C           /* a card put down */
 #define SE_FLIP 0x0B            /* a card turned over */
 #define CRUSH_CARD 661          /* whose removal a "destroy" plays */
+#define SPLASH_HEAL 5           /* the LP recovery cards' effect request */
+#define SPLASH_DAMAGE 6         /* the direct damage cards' */
+
+/* The splashes' configs in the WA effect bank (src/overlays/duel_effects
+ * effect_5.c, effect_6.c: D_8015B450 and D_8015B30C, at these addresses in
+ * the NA bank), one per card in their families. The number each shows is
+ * a word of its own entry (DuelEffect5Config.number, an s32 at +0x1C;
+ * DuelEffect6Config.column_value, an s16 at +0x1C). */
+#define HEAL_CONFIGS 0x8015B4BCu
+#define HEAL_CONFIG_SIZE 0x24
+#define DAMAGE_CONFIGS 0x8015B3D8u
+#define DAMAGE_CONFIG_SIZE 0x1E
+#define CONFIG_NUMBER 0x1C
+static const short heal_steps[] = {DUEL_MOOYAN_CURRY_RECOVERY, DUEL_RED_MEDICINE_RECOVERY,
+                                   DUEL_GOBLINS_SECRET_REMEDY_RECOVERY, DUEL_SOUL_OF_THE_PURE_RECOVERY,
+                                   DUEL_DIAN_KETO_RECOVERY};
+static const short damage_steps[] = {DUEL_SPARKS_DAMAGE, DUEL_HINOTAMA_DAMAGE, DUEL_FINAL_FLAME_DAMAGE,
+                                     DUEL_OOKAZI_DAMAGE, DUEL_TREMENDOUS_FIRE_DAMAGE};
 
 static int monster_zone(int record)
 {
@@ -144,19 +163,106 @@ static void lend_turn(int side)
     D_8009B22C = D_800907D8 + side * DUEL_FIELD_SIDE_GRID_SLOT_COUNT;
 }
 
-static void change_life(int side, int amount)
+static void change_life(int side, int amount, int sound)
 {
     DuelSideState *state = &D_800E9FF0[side];
     int life = state->life_points.signed_value;
     if (amount > 0) {
         int ceiling = state->max_life_points > life ? state->max_life_points : life;
         state->life_points.unsigned_value = (u16)(life + amount > ceiling ? ceiling : life + amount);
-        SD_SEPlayFull(SE_HEAL);
+        if (sound) SD_SEPlayFull(SE_HEAL);
     } else {
         life = Mods_DamageLife(side, life, -amount, 1);
         state->life_points.unsigned_value = (u16)(life < 0 ? 0 : life);
-        SD_SEPlayFull(SE_DAMAGE);
+        if (sound) SD_SEPlayFull(SE_DAMAGE);
     }
+}
+
+static unsigned char *splash_number(int id, int config)
+{
+    return (unsigned char *)(uintptr_t)(id == SPLASH_HEAL ? HEAL_CONFIGS + config * HEAL_CONFIG_SIZE
+                                                          : DAMAGE_CONFIGS + config * DAMAGE_CONFIG_SIZE) +
+           CONFIG_NUMBER;
+}
+
+static int read_number(int id, const unsigned char *number)
+{
+    if (id == SPLASH_HEAL) {
+        int value;
+        memcpy(&value, number, sizeof(value));
+        return value;
+    } else {
+        short value;
+        memcpy(&value, number, sizeof(value));
+        return value;
+    }
+}
+
+static void write_number(int id, unsigned char *number, int value)
+{
+    if (id == SPLASH_HEAL) {
+        memcpy(number, &value, sizeof(value));
+    } else {
+        short narrow = (short)value;
+        memcpy(number, &narrow, sizeof(narrow));
+    }
+}
+
+/* The borrowed config gets its own number back (unless the bank was
+ * delivered again since, with its own). */
+static void end_splash(void)
+{
+    unsigned char *number;
+    if (!S.splash_id) return;
+    number = splash_number(S.splash_id, S.splash_config);
+    if (read_number(S.splash_id, number) == S.splash_shown) write_number(S.splash_id, number, S.splash_saved);
+    S.splash_id = 0;
+}
+
+/* The splash Dian Keto or Hinotama shows, with `amount` (a heal above 0,
+ * damage below) for its number: the config of the family's card with the
+ * largest amount up to it, as the size of the burst. The scene waits for
+ * it (DuelScene_Update). 0 when no request was free. */
+static int start_splash(int amount)
+{
+    int id = amount > 0 ? SPLASH_HEAL : SPLASH_DAMAGE, size = amount > 0 ? amount : -amount, config = 0, saved;
+    const short *steps = id == SPLASH_HEAL ? heal_steps : damage_steps;
+    unsigned char *number;
+    DuelEffectRequest *request;
+    end_splash();
+    while (config + 1 < 5 && steps[config + 1] <= size) config++;
+    number = splash_number(id, config);
+    saved = read_number(id, number);
+    /* Not the retail bank's table (a mod's bank): no splash. */
+    if (saved != steps[config] && saved != -steps[config]) return 0;
+    request = DuelEffect_CreateRequest(id);
+    if (!request) return 0;
+    request->field_00 = 0xA0;
+    request->field_02 = 0x78;
+    request->field_1A = (s16)config;
+    if (size > 32767) size = 32767;
+    S.splash_id = (unsigned char)id;
+    S.splash_config = (unsigned char)config;
+    S.splash_saved = saved;
+    S.splash_shown = saved < 0 ? -size : size;
+    write_number(id, number, S.splash_shown);
+    SD_SEPlayFull(id == SPLASH_HEAL ? SE_HEAL : SE_DAMAGE);
+    return 1;
+}
+
+/* A heal or damage effect: its splash first, then the LP change, as the
+ * retail cards make it. */
+static int life_effect(int side, int amount)
+{
+    if (!start_splash(amount)) {
+        change_life(side, amount, 1);
+        S.pause = PAUSE_FRAMES;
+        return 1;
+    }
+    S.life_pending = 1;
+    S.life_side = (unsigned char)side;
+    S.life_amount = amount;
+    return 1;
 }
 
 /* One effect off the queue: 1 when the duel waits for it. */
@@ -195,11 +301,9 @@ static int resolve(void)
         SD_SEPlayFull(SE_BOOST);
         break;
     case MONSTER_DO_HEAL:
-        change_life(side, effect->amount);
-        break;
+        return life_effect(side, effect->amount);
     case MONSTER_DO_DAMAGE:
-        change_life(side ^ 1, -effect->amount);
-        break;
+        return life_effect(side ^ 1, -effect->amount);
     case MONSTER_DO_DESTROY:
         /* Crush Card's removal, on the monsters chosen here
          * (MonsterEffects_RemovalTakes): it takes the other side's, as
@@ -278,6 +382,7 @@ static void look(void)
 
 static void reset(void)
 {
+    end_splash();
     memset(&S, 0, sizeof(S));
 }
 
@@ -305,6 +410,12 @@ int MonsterEffects_Update(void)
             lend_turn(S.saved_turn);
         }
     }
+    /* Past a splash: the scene ran no step while it was on screen. */
+    end_splash();
+    if (S.life_pending) {
+        S.life_pending = 0;
+        change_life(S.life_side, S.life_amount, 0);
+    }
     if (S.pause) {
         S.pause--;
         return 1;
@@ -319,6 +430,7 @@ int MonsterEffects_Update(void)
     /* A side out of LP: the field phase ends the duel; no more effects. */
     if (!D_800E9FF0[0].life_points.signed_value || !D_800E9FF0[1].life_points.signed_value) {
         S.count = 0;
+        S.shown_count = 0;
         if (now == PHASE_HAND) gDuel_wSceneStateFlags = PHASE_FIELD;
         return 0;
     }
@@ -330,6 +442,11 @@ int MonsterEffects_Update(void)
         look();
         S.count = 0;
         return 0;
+    }
+    if (S.shown_count) {
+        int amount = S.shown[0];
+        memmove(S.shown, S.shown + 1, (size_t)(--S.shown_count) * sizeof(S.shown[0]));
+        if (start_splash(amount)) return 1;
     }
     look();
     /* A code mod may have started a card effect of its own for what it
@@ -426,10 +543,13 @@ void MonsterEffects_Battle(void)
             if (effect->when != MONSTER_WHEN_COMBAT) continue;
             trace("battle", card, record, effect);
             played = 1;
-            if (effect->action == MONSTER_DO_HEAL) {
-                change_life(owner(record), effect->amount);
-            } else if (effect->action == MONSTER_DO_DAMAGE) {
-                change_life(owner(record) ^ 1, -effect->amount);
+            if (effect->action == MONSTER_DO_HEAL || effect->action == MONSTER_DO_DAMAGE) {
+                /* Made now (the battle's damage comes after it); its
+                 * splash shows once the battle is over. */
+                int amount = effect->action == MONSTER_DO_HEAL ? effect->amount : -effect->amount;
+                change_life(effect->action == MONSTER_DO_HEAL ? owner(record) : owner(record) ^ 1, amount, 0);
+                if (S.shown_count < (int)(sizeof(S.shown) / sizeof(S.shown[0])))
+                    S.shown[S.shown_count++] = (short)clamp(amount, -32767, 32767);
             } else if (effect->action == MONSTER_DO_BOOST) {
                 int to = effect->target == MONSTER_TARGET_BATTLE ? other : record;
                 if (!monster_zone(to) || !reaches(&(MonsterEffect){.target = MONSTER_TARGET_ALL, .type = effect->type,

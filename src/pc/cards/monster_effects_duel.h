@@ -56,6 +56,16 @@ typedef struct {
     unsigned char placed[MONSTER_RECORDS];  /* placement put a card here since the last look */
     short battle_attack[MONSTER_RECORDS], battle_defense[MONSTER_RECORDS];
     MonsterTrigger queue[MONSTER_QUEUE_MAX];
+    /* The LP splash on screen (the recovery or damage cards' request, id 5
+     * or 6): the bank's config entry it borrowed, put back when it is over,
+     * and the LP change still to make then. */
+    unsigned char splash_id, splash_config;
+    unsigned char life_pending, life_side;
+    int splash_saved, splash_shown;
+    int life_amount;
+    /* A battle's heals and damage, made at once: their splashes follow it. */
+    unsigned char shown_count;
+    short shown[4];
 } MonsterEffectsState;
 
 extern MonsterEffectsState gMonsterEffects;
