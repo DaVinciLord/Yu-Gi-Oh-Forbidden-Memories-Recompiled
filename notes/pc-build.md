@@ -1771,8 +1771,12 @@ context is the lost one), so `reset_renderer` forgets the pass's GL names
 (`GlPicture_Lost`, nothing deleted), destroys and makes the renderer again,
 starts the pass in the new context and lets the next frame make the
 textures again; the pass's first replay draws the picture again from VRAM
-(as a resync does). `MEMORIES_TEST_GL_RESET=<frame>` sends that event at
-a frame, with nothing lost, to try the path anywhere.
+(as a resync does). Where the pass does not start again, or its frame
+cannot be copied into the renderer's texture, `GlPicture_Stop` takes its
+recorder out of the software GPU, which draws the scaled picture again
+from VRAM, as on a device without ES 3. `MEMORIES_TEST_GL_RESET=<frame>`
+sends that event at a frame, with nothing lost, to try the path anywhere;
+`<frame>fail` also keeps the pass from starting again.
 
 **On a desktop: `MEMORIES_GLES=1`** takes the same path in a desktop
 window, to test it where frame dumps and the desktop renderer can be
@@ -1785,26 +1789,35 @@ extension and `GL_ARB_ES3_compatibility` or later), and stays on desktop
 GL if it is missing. Off Windows it is GLX's ES profile or the system's
 EGL (Mesa).
 
-Checked (2026-10-05). With Mesa 21.2.6's llvmpipe (32-bit Linux build,
-Xvfb), `MEMORIES_GLES=1` (OpenGL ES 3.2) against desktop GL (3.1) on the
-same build, picture dumps (`MEMORIES_DETERMINISTIC=1`,
-`MEMORIES_DUMP_PICTURE=1`) are identical pixel for pixel: the title and
-the 3D Monsters duel case at 2x and 4x, and the 2D duel at 2x with HD
-text, the opponent's name, PGXP and 4x anti-aliasing on; dropping
-`noperspective` changed no pixel. The window (the desktop presenter
-against the renderer's copy) is identical at the title, also after
-`MEMORIES_TEST_GL_RESET`. On the NVIDIA driver (RTX 3080, its WGL ES 3.2
-profile) the same dumps of the title and both duels at 2x and 4x are
-identical between the base build, this one on desktop GL and this one
-with `MEMORIES_GLES=1`. Those dumps are 4:3 pictures, so the widened
-picture was compared in the window (`MEMORIES_WINDOW_SHOT`,
-`MEMORIES_ASPECT=2`, half speed so that every frame is presented): the
-title, the main menu, Options, the 2D duel and the 3D Monsters duel,
-widened, at 2x and 4x, are identical on desktop GL and through the ES
-path. The Android emulator (api35x64, SwiftShader, OpenGL ES 3.0) runs the
-pass at 2x and 4x with HD text and carries on after the app goes to the
-background and back (the context was kept there); a phone (Adreno 660)
-plays at 4x with HD text.
+Checked (2026-10-05), `MEMORIES_GLES=1` against desktop GL on the same
+build, frame dumps of the scaled picture (`MEMORIES_DETERMINISTIC=1`,
+`MEMORIES_DUMP_PICTURE=1`):
+
+- Mesa 21.2.6's llvmpipe (32-bit Linux build, Xvfb; OpenGL ES 3.2 against
+  3.1): the title and the first duel's frame (mods off) at 2x and 4x, and
+  at 2x with HD text, the opponent's name, PGXP and 4x anti-aliasing on,
+  that duel with and without the 3D Monsters mod: identical pixel for
+  pixel. Dropping `noperspective` changed no pixel there. The window (the
+  desktop presenter against the renderer's copy) is identical at the
+  title, also after `MEMORIES_TEST_GL_RESET`.
+- The NVIDIA driver (RTX 3080, its WGL ES 3.2 profile), 32-bit and x64:
+  title, Options, name entry, a story scene, the first duel (hand, field,
+  the 3D field, the 3D Monsters mod on), the map, Library, Free Duel, the
+  credits, a fusion result and Spellbinding, in 4:3 and widescreen, and
+  with HD text, the opponent's name, PGXP, anti-aliasing and xBR on:
+  identical between this build on desktop GL, through the ES path and the
+  base build, apart from a clock shown on one screen and anti-aliasing's
+  one-unit noise that two runs of the base also show. With the present
+  pass's effects on (desktop GL only) the base and this build agree. A widened picture was compared in the window
+  (`MEMORIES_WINDOW_SHOT`, `MEMORIES_ASPECT=2`, half speed so that every
+  frame is presented) as well: the title, the main menu, Options and the
+  duel at 2x and 4x. Forced resets (`MEMORIES_TEST_GL_RESET`) leave the
+  picture as without one; with `<frame>fail` the dumps equal those of the
+  software picture (`MEMORIES_GL_PICTURE=0`).
+- The Android emulator (api35x64, SwiftShader, OpenGL ES 3.0) runs the
+  pass at 2x and 4x with HD text and carries on after the app goes to the
+  background and back (the context was kept there); a phone (Adreno 660)
+  plays at 4x with HD text.
 
 ### HD text
 
