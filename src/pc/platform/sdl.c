@@ -1032,7 +1032,15 @@ int HERE(Platform_StartAudio)(void (*mix)(int16_t *, size_t))
      * keeps it fed. */
     SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "1024");
 #else
-    SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "256");
+    /* SDL's ALSA backend at 256 frames (5.8 ms) ran dry hundreds of times
+     * in 25 seconds on a PipeWire desktop (Arch, no 32-bit libpulse, so SDL
+     * falls back to ALSA; this SDL is built without PipeWire), whatever the
+     * game speed: the music cut in and out. 1024 (23 ms) had none, as on
+     * Android. PulseAudio and the other backends keep 256. */
+    {
+        const char *driver = SDL_GetCurrentAudioDriver();
+        SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, driver && !strcmp(driver, "alsa") ? "1024" : "256");
+    }
 #endif
     block_signals(&previous);
     stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, feed, NULL);
