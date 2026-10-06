@@ -49,8 +49,20 @@ pack's entries as they are (a portraits mod). The result is one mod, in
 parts the player can switch off in the Mods window (PARTS; each merged pack
 is a part of its own, named as that mod is).
 
+--anime-frame-<kind> (monster/magic/trap/ritual/orange) each take a PNG for
+the full-bleed "card_layout" presentation (notes/modding.md, "Card layout"),
+folded in as the mod's own "full_bleed" setting. Each defaults to
+tools/pc/hd_recipes/anime_frame_<kind>.png if present, else
+<assets>/anime_frame_<kind>.png, else nothing for that kind. ritual then
+falls back to magic's file and orange to monster's, whichever that resolved to.
+
 Usage: hd_assets_pack.py --assets <folder> --out <mod folder> [--data game/DATA]
                          [--base <pack> ...] [--merge <pack> ...] [--thumb-crops crops.json]
+                         [--anime-frame-monster tools/pc/hd_recipes/anime_frame_monster.png]
+                         [--anime-frame-magic tools/pc/hd_recipes/anime_frame_magic.png]
+                         [--anime-frame-trap tools/pc/hd_recipes/anime_frame_trap.png]
+                         [--anime-frame-ritual tools/pc/hd_recipes/anime_frame_ritual.png]
+                         [--anime-frame-orange tools/pc/hd_recipes/anime_frame_orange.png]
                          [--id forbidden-memories-hd] [--name "Forbidden Memories HD"]
 """
 import argparse
@@ -81,6 +93,25 @@ PARTS = {
     "build_deck": ("Build Deck screen", "The Build Deck and Trade screen's panels, icons and labels."),
     "duel": ("Duel arena and HUD", "The platform of all seven fields, the cards' frames in the hand, their labels "
              "and numbers, the FIELD box and the life points."),
+}
+# --anime-frame-<kind>'s "card_layout" positions, measured against
+# anime_frame_monster.png/anime_frame_magic.png (notes/modding.md, "Card
+# layout"). No "attribute"/"icon" width/height: those frames cut no hole
+# for them, so they draw at native size, moved off retail's default (the
+# title plate, covered by full-bleed's bigger art) into the stat band.
+# "stars"."x" is the row's centre, not a first-star anchor: a card can
+# carry up to 12 stars, and func_80028B08.c centres them around this point
+# so a wide row never runs past the frame's edge.
+ANIME_FRAME_MONSTER_LAYOUT = {
+    "art": {"x": 4, "y": 3, "width": 134, "height": 138},
+    "attribute": {"x": 114, "y": 149},
+    "atk": {"x": 38, "y": 178},
+    "def": {"x": 104, "y": 178},
+    "stars": {"x": 59, "y": 153},
+}
+ANIME_FRAME_SPELL_LAYOUT = {
+    "art": {"x": 4, "y": 3, "width": 133, "height": 138},
+    "icon": {"x": 62, "y": 163},
 }
 FRAMES = {8: "frame_monster.png", 9: "frame_magic.png", 10: "frame_trap.png", 11: "frame_ritual.png"}
 ATTRIBUTES = ("light", "dark", "earth", "water", "fire", "wind", "magic", "trap")
@@ -479,6 +510,17 @@ def build(args):
     return pack
 
 
+def anime_frame_default(kind, explicit, assets):
+    """explicit, else tools/pc/hd_recipes/, else <assets>/, else None."""
+    if explicit:
+        return explicit
+    for folder in (os.path.join(os.path.dirname(os.path.abspath(__file__)), "hd_recipes"), assets):
+        candidate = os.path.join(folder, f"anime_frame_{kind}.png")
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--assets", required=True)
@@ -487,6 +529,12 @@ def main():
     parser.add_argument("--base", action="append", help="a hd_screen_pack.py pack (repeat for several)")
     parser.add_argument("--merge", action="append")
     parser.add_argument("--thumb-crops")
+    parser.add_argument("--anime-frame-monster", help="full-bleed card_layout frame PNG for monster cards "
+                         "(default: see anime_frame_default)")
+    parser.add_argument("--anime-frame-magic", help="the same, for magic (and equip) cards")
+    parser.add_argument("--anime-frame-trap", help="the same, for trap cards")
+    parser.add_argument("--anime-frame-ritual", help="the same, for ritual cards")
+    parser.add_argument("--anime-frame-orange", help="the same, for an effect monster")
     parser.add_argument("--id", default="forbidden-memories-hd")
     parser.add_argument("--name", default="Forbidden Memories HD")
     parser.add_argument("--author", default="Unchiga, X@nder")
@@ -504,6 +552,27 @@ def main():
                     {"key": key, "label": label, "type": "bool", "default": 1, "description": help}
                     for key, (label, help) in sorted(pack.parts.items(), key=lambda part: (
                         list(PARTS).index(part[0]) if part[0] in PARTS else len(PARTS)))]}
+    anime_frame_sources = {
+        "monster": anime_frame_default("monster", args.anime_frame_monster, args.assets),
+        "magic": anime_frame_default("magic", args.anime_frame_magic, args.assets),
+        "trap": anime_frame_default("trap", args.anime_frame_trap, args.assets),
+    }
+    anime_frame_sources["ritual"] = anime_frame_default(
+        "ritual", args.anime_frame_ritual, args.assets) or anime_frame_sources["magic"]
+    anime_frame_sources["orange"] = anime_frame_default(
+        "orange", args.anime_frame_orange, args.assets) or anime_frame_sources["monster"]
+    if any(anime_frame_sources.values()):
+        frame = {}
+        for kind, source in anime_frame_sources.items():
+            if not source:
+                continue
+            filename = f"anime_frame_{kind}.png"
+            shutil.copyfile(source, os.path.join(args.out, "textures", filename))
+            frame[kind] = {"image": f"textures/{filename}", "width": 140, "height": 196}
+        manifest["card_layout"] = dict(frame=frame, spell=ANIME_FRAME_SPELL_LAYOUT, **ANIME_FRAME_MONSTER_LAYOUT)
+        manifest["settings"].append({
+            "key": "full_bleed", "label": "Anime card frame", "type": "bool", "default": 0,
+            "description": "An anime-style card frame representation, by d02d02 and Hræzlyr."})
     with open(os.path.join(args.out, "mod.json"), "w", encoding="utf-8") as handle:
         json.dump(manifest, handle, indent=4)
     print(f"{args.out}: {len(pack.entries)} entries, {len(pack.images)} images")
