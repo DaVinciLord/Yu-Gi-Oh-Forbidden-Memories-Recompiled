@@ -259,10 +259,6 @@ class CardsTab(Tab):
         self.hints["frame"].pack(side="left", padx=(6, 0))
         self.hints["frame"].bind("<Button-1>", lambda e: self.restore("frame"))
         row += 1
-        ttk.Label(form, text="Notes").grid(row=row, column=0, sticky="nw", pady=2)
-        self.notes = tk.Text(form, width=36, height=4, wrap="word", undo=True)
-        self.notes.grid(row=row, column=1, columnspan=2, sticky="we", pady=2)
-        row += 1
         # What the monster does on the field (cards.c "monster_effects"),
         # stored as soon as it is changed.
         self.effects_box = EffectsBox(form, app, self.effects_changed)
@@ -319,6 +315,11 @@ class CardsTab(Tab):
             row=5, column=0, columnspan=2, sticky="w", pady=(4, 0))
         self.extra = ttk.Label(form, style="Hint.TLabel", wraplength=px(form, 320), justify="left")
         self.extra.grid(row=row, column=0, columnspan=3, sticky="w")
+        row += 1
+        # The modder's own notes, last: the game shows none of them.
+        ttk.Label(form, text="Notes").grid(row=row, column=0, sticky="nw", pady=2)
+        self.notes = tk.Text(form, width=36, height=4, wrap="word", undo=True)
+        self.notes.grid(row=row, column=1, columnspan=2, sticky="we", pady=2)
         row += 1
         buttons = ttk.Frame(form)
         buttons.grid(row=row, column=0, columnspan=3, sticky="we", pady=(8, 0))
