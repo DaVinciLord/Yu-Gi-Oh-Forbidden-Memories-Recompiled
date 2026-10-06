@@ -64,8 +64,11 @@ existing dependency/toolchain fetchers and cache only dependencies. Linux
 selects GCC 14 because the game source build uses C `-fpermissive`.
 
 Every build uploads a Windows ZIP or Linux tar.gz as an Actions
-artifact, retained for 14 days. On a version tag, both jobs must succeed before
-the final job creates a **draft** GitHub release and attaches both packages.
+artifact, retained for 14 days. The `android` job builds the arm64 APK and,
+with the release key (pushes, tags and manual runs; "Android signing" below),
+uploads it signed as `yfm-redecomp-<version>-android-arm64.apk`. On a version
+tag, all jobs must succeed before
+the final job creates a **draft** GitHub release and attaches the packages.
 Reruns can update a draft but refuse to replace an already published release.
 
 Two kinds of tag:
@@ -113,6 +116,232 @@ number, argument list or layout, and add beside it. Only a difference
 that provably breaks no mod goes in `mod_compat.txt` as `accept`, with the
 reason. After publishing a release, add `baseline <tag>` for it to
 `mod_compat.txt`.
+
+## Android signing
+
+> **WARNING: back up the release key, in two places.** Android installs an
+> update only when it is signed with the same key as the app already on the
+> phone. If the release keystore or its password is lost, no later version
+> can ever be installed over the published ones: every player would have to
+> uninstall the app (and lose its files) to get the next one. Keep the
+> keystore file *and* its password backed up in at least two separate places
+> (for example a password manager and an encrypted offline drive), and never
+> put either in the repository, an issue, a chat, a build folder or a log.
+
+**The release key is the one in this repository's Actions secrets, held by
+Unchiga.** Only the `android` job of `pc-release.yml` signs release APKs with
+it. A key kept on a developer's machine (such as
+`%USERPROFILE%\.config\yfm\android-release.p12`) is a test key, for trying
+the mechanism below; an APK signed with it does not install over the
+released app and is never published.
+
+`tools/pc/package_android.py` signs the APK the Android build makes
+(`build_game32.py --target android-arm64-v8a`, and so `package.py
+android-arm64`) with the key the environment names, else with the debug key
+under `tmp/pc/android-deps/debug.keystore`, as before:
+
+| Variable | Meaning |
+| --- | --- |
+| `MEMORIES_ANDROID_KEYSTORE` | The keystore's path. Set: the release key signs; unset: the debug key. A `.p12`/`.pfx` file is read as PKCS12. |
+| `MEMORIES_ANDROID_KEYSTORE_PASSWORD_FILE` | A file whose first line is the keystore's password (local builds). |
+| `MEMORIES_ANDROID_KEYSTORE_PASSWORD` | The keystore's password itself (CI, from a secret). Used before the `_FILE` one. |
+| `MEMORIES_ANDROID_KEY_ALIAS` | The key's alias; default `yfm`. The CI key's is in the `ANDROID_KEY_ALIAS` secret. |
+| `MEMORIES_ANDROID_KEY_PASSWORD`, `MEMORIES_ANDROID_KEY_PASSWORD_FILE` | The key's password, as above; default the keystore's (a PKCS12 file has one password). |
+| `MEMORIES_ANDROID_CERT_SHA256` | Optional: the signer's expected certificate SHA-256, the full 64 hex digits (colons and case do not matter) or `PREFIX...SUFFIX`. A mismatch deletes the APK and fails the build. |
+
+With `MEMORIES_ANDROID_KEYSTORE` set, anything missing or wrong (no password,
+a wrong alias or password, a file that is not a keystore) fails the build:
+it never falls back to the debug key. The passwords are never printed. They
+reach `apksigner` as `env:<name>` in its own environment, so they are on no
+command line and in no file the build writes. Once read, the two password
+variables are removed from the build's environment, so `javac`, `d8`,
+`aapt2` and `zipalign` do not inherit them. Do **not** point both password
+variables at one `_FILE`. That is safe here, but `apksigner`'s own
+`--ks-pass file:X --key-pass file:X` would read the key password from the
+second line. After signing, the build runs `apksigner verify --print-certs`
+and prints the signer:
+
+```text
+tmp/pc/android-arm64-v8a/memories-arm64-v8a.apk: signed with the release key (alias yfm in ...), verified (apksigner verify)
+  certificate: CN=..., O=...
+  SHA-256: C8:DA:2D:97:...:4B:8B
+```
+
+`package.py android-arm64` packs `dist/yfm-redecomp-<version>-android-arm64.apk`
+only with `MEMORIES_ANDROID_KEYSTORE` set. It refuses an APK whose signer is
+the debug certificate (`CN=Android Debug`), it checks
+`MEMORIES_ANDROID_CERT_SHA256` when set, and it refuses an APK whose
+`versionCode`/`versionName` are not what `--version` makes ("Version" below):
+with `--no-build`, an earlier build's APK is not packed under a new version.
+So a debug-signed or stale APK never reaches `dist/` and never becomes a
+release asset.
+
+The SDK tools are the ones `ANDROID_BUILD_TOOLS` names (a build-tools
+version, `35.0.0` in the workflow) and the platform `android-35` (the target
+SDK). Without them, the newest installed ones are taken, compared by version
+number, passing over previews and extensions (`36.0.0-rc1`,
+`android-36-ext19`, `android-37.2-beta3`).
+
+```sh
+# A test of the mechanism with a local key (bash; the key and its password
+# file live outside the repository):
+export MEMORIES_ANDROID_KEYSTORE=~/.config/yfm/android-release.p12
+export MEMORIES_ANDROID_KEYSTORE_PASSWORD_FILE=~/.config/yfm/android-release.password
+export MEMORIES_ANDROID_KEY_ALIAS=yfm
+python3 tools/pc/package.py android-arm64 --version dev-signing-test
+```
+
+### The secrets (CI)
+
+**Done (2026-10):** Unchiga added these four secrets, with his release key,
+to `Unchiga/Yu-Gi-Oh-Forbidden-Memories-Recompiled`. The steps below are kept
+for reference: to replace the key's copy there, or to set up a fork.
+
+In the GitHub repository: **Settings > Secrets and variables > Actions**,
+**Secrets** tab, **New repository secret**, one for each of:
+
+| Secret | Value |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | The PKCS12 keystore file, base64-encoded on one line (below). |
+| `ANDROID_KEYSTORE_PASSWORD` | The keystore's password. |
+| `ANDROID_KEY_ALIAS` | The key's alias in it. |
+| `ANDROID_KEY_PASSWORD` | The key's password (for a PKCS12 file, the keystore's). |
+
+Optionally, on the **Variables** tab, `ANDROID_CERT_SHA256`: the release
+certificate's full SHA-256. The `android` job checks the signer against it.
+Without it, the job checks the release certificate's full SHA-256, written
+in the workflow
+(`C8DA2D972E42522E9F83139F5D54092F69FB3EE4C0B074FA53F8245DA45A4B8B`). The
+variable is public information, not a secret.
+
+The base64 text of the keystore, on one line, with no header:
+
+```powershell
+# Windows PowerShell: copies it to the clipboard, to paste in the secret's box
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\path\to\release.p12")) | Set-Clipboard
+```
+
+```sh
+# Linux (GNU coreutils): -w0 writes one line
+base64 -w0 /path/to/release.p12 > release.p12.b64   # paste its content, then delete the file
+# macOS: base64 -i /path/to/release.p12 | pbcopy
+```
+
+Do not use `certutil -encode`: its `-----BEGIN CERTIFICATE-----` lines would
+be decoded with the key. With the GitHub CLI, the secrets can be set without
+the clipboard. `gh secret set NAME` with no value asks for it without showing
+it:
+
+```sh
+base64 -w0 /path/to/release.p12 | gh secret set ANDROID_KEYSTORE_BASE64 -R Unchiga/Yu-Gi-Oh-Forbidden-Memories-Recompiled
+gh secret set ANDROID_KEYSTORE_PASSWORD -R Unchiga/Yu-Gi-Oh-Forbidden-Memories-Recompiled   # prompts
+gh secret set ANDROID_KEY_ALIAS -R Unchiga/Yu-Gi-Oh-Forbidden-Memories-Recompiled
+gh secret set ANDROID_KEY_PASSWORD -R Unchiga/Yu-Gi-Oh-Forbidden-Memories-Recompiled
+```
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\path\to\release.p12")) | gh secret set ANDROID_KEYSTORE_BASE64 -R Unchiga/Yu-Gi-Oh-Forbidden-Memories-Recompiled
+```
+
+The certificate's SHA-256, for `ANDROID_CERT_SHA256` or to compare with the
+job's summary: `keytool -list -v -storetype PKCS12 -keystore release.p12
+-alias <alias>` (it asks for the password; the `SHA256:` line), or `apksigner
+verify --print-certs <apk>` on an APK it signed.
+
+In the job, the build (the NDK, cmake, the dependencies' downloaded sources)
+runs with no secret in its environment and makes a debug-signed APK. Only
+then does one step, "Sign the APK with the release key", get the secrets. It
+decodes the keystore into the runner's temporary folder (`umask 077`), with
+its path in that step only, never in `GITHUB_ENV`. It re-packages and signs
+the built APK with `package_android.py <build> arm64-v8a`. Then it packs it
+with `package.py android-arm64 --no-build`, without the passwords in its
+environment. The keystore is deleted when the step ends, and again by a
+last `if: always()` step. The job prints the signer's DN, SHA-256 and the
+APK's version to its summary. Only a push to `master` or of a `v*` tag, or a
+manual run (workflow_dispatch) on `master` or a `v*` tag, gets the release
+key. The repository is public and anyone can download a run's artifacts, so
+unmerged code is never signed. Pull requests, manual runs on other branches,
+and forks without the secrets build the APK as a check, debug-signed, and
+upload nothing. A version tag without the secrets fails the job, and with
+it the draft release.
+
+GitHub hides every secret's value in the logs. `ANDROID_KEY_ALIAS` is
+`yfm`, so the job's log shows `***` wherever that word appears
+(`dist/***-redecomp-v0.3.0-android-arm64.apk`). This is only in the log; the
+files and the release assets are named correctly. An alias is not secret: it
+could become a repository variable (`ANDROID_KEY_ALIAS` on the **Variables**
+tab, read as `vars.ANDROID_KEY_ALIAS` in the workflow), and the logs would
+show it plainly.
+
+### Version
+
+`package_android.py` writes the APK's `versionCode` and `versionName` from
+the build's version: `MEMORIES_VERSION` (`package.py --version`, the tag in
+CI), else the `v*` tag the checkout is exactly at, as for the desktop
+games' update check ([updates](updates.md)). Android installs an APK only
+over one with the same or a lower `versionCode`, so codes must rise from
+release to release. For `vMAJOR.MINOR.PATCH[-LABEL.N]`:
+
+```text
+versionCode = MAJOR*1000000 + MINOR*10000 + PATCH*100 + STAGE
+STAGE       = 99 for the release itself
+              alpha+N: 0+N, beta+N: 20+N, preview+N: 40+N, rc+N: 60+N   (N 0-19)
+```
+
+| Tag | versionCode | versionName |
+| --- | --- | --- |
+| `v0.2.0` | 20099 | `0.2.0` |
+| `v0.3.0-preview.1` | 30041 | `0.3.0-preview.1` |
+| `v0.3.0-rc.2` | 30062 | `0.3.0-rc.2` |
+| `v0.3.0` | 30099 | `0.3.0` |
+| `v1.0.0` | 1000099 | `1.0.0` |
+
+The codes rise in the order the versions compare (semver:
+alpha < beta < preview < rc < release). MINOR and PATCH are 0-99, and N is
+0-19, LABEL is lowercase (the update check compares labels byte by byte, so
+`RC` would sort before `alpha`), and MAJOR is at most 2099: Google Play
+takes codes up to 2100000000. Change the scheme here only upward: a code
+lower than a published one can never update it.
+
+**A tag outside the scheme fails the release.** A version tag like
+`v0.3.0-nightly.1`, `v0.3.0-rc.20`, `v0.3.0-RC.1` or `v0.100.0` stops the
+Android build with a message naming the rule. `draft-release` needs the
+`android` job, so no draft is made for that tag, with no desktop archives
+either. This is on purpose: a release is never published without its APK.
+Delete the tag and tag again within the scheme
+(`git push --delete origin <tag>`, then a new tag).
+
+A development build (`dev-<sha>` in CI, an untagged checkout) takes the
+highest code of the `v*` tags it descends from (`git tag --merged HEAD`;
+tags outside the scheme are left out): an equal code installs over that
+release, and the next release is higher. Its name is `git describe`'s
+(`0.2.0-12-g2dffe92641`), with `-dirty` when the checkout has changes. The
+build's own rewrite of `config/pc/guest_addresses.txt` does not count. With no tag in reach (a shallow clone), the code is
+2 and the name `0.0.0-dev`; the `android` job checks out the whole history
+(`fetch-depth: 0`), so it always has the tags. Every code is above the
+`versionCode` 1 of the APKs made before this (`versionName` `m1`).
+`aapt2 dump badging <apk>` (build-tools) shows both:
+
+```text
+package: name='org.yfmredecomp.game' versionCode='30041' versionName='0.3.0-preview.1' ...
+```
+
+### Test APKs signed with the debug key
+
+An APK built without the release key (every local
+`build_game32.py --target android-arm64-v8a`, earlier test builds) is signed
+with a debug key. Android refuses to install the release APK over it:
+
+```text
+adb: failed to install yfm-redecomp-v0.3.0-android-arm64.apk: Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE: Existing package org.yfmredecomp.game signatures do not match newer version; ignoring!]
+```
+
+Uninstall the test app once before the first release APK (`adb uninstall
+org.yfmredecomp.game`, or long-press the icon, then Uninstall). Uninstalling
+deletes the app's folder, `Android/data/org.yfmredecomp.game/files/`. It
+holds the copied disc image, the saves and the settings. Copy it out first if
+they matter (`adb pull /sdcard/Android/data/org.yfmredecomp.game/files`).
+From then on each release installs over the last.
 
 ## Local commands
 

@@ -3168,7 +3168,19 @@ adb install -r tmp/pc/android-x86/memories-x86.apk
   `libSDL3.so` and the build's `buildid`, `commit` and symbol table as
   assets (`assets/build/`), and aligns and signs the APK (`zipalign`,
   `apksigner`) with a debug key it creates under
-  `tmp/pc/android-deps/debug.keystore` (never in the repository). The
+  `tmp/pc/android-deps/debug.keystore` (never in the repository), or, with
+  `MEMORIES_ANDROID_KEYSTORE` and its password set, with that release key.
+  It prints the signer's certificate (DN, SHA-256) and verifies the APK
+  (`apksigner verify`).
+  The variables, the release key (held by Unchiga, in the repository's
+  secrets; releases are signed only by CI) and `package.py android-arm64`
+  (`dist/yfm-redecomp-<version>-android-arm64.apk`, release key only) are
+  in [PC release](pc-release.md), "Android signing". `versionCode` and
+  `versionName` come from the build's version (pc-release.md, "Version":
+  `v0.3.0-preview.1` is 30041, `0.3.0-preview.1`). The release APK does not
+  install over a debug-signed one (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`):
+  uninstall the test app once first, which deletes its files (disc copy,
+  saves). The
   package is `org.yfmredecomp.game`; the activity is SDL's own
   `SDLActivity`, with no Java of ours.
 - `--target android-armeabi-v7a` is refused: 32-bit ARM was removed.

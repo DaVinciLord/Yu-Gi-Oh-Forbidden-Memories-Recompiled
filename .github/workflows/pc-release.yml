@@ -189,9 +189,151 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  # The Android app (notes/pc-release.md, "Android signing"): the arm64 APK,
+  # signed with the release key held in this repository's secrets. Only
+  # master and v* tags are signed; every other run (pull requests, manual runs
+  # on other branches, forks without the secrets) builds it as a check only
+  # (signed with a debug key, not uploaded); a version tag without the
+  # release key fails, so a release never carries a debug-signed APK.
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      # Whether this run signs with the release key; the secrets themselves
+      # are handed only to the step that uses them. The rule: a push to
+      # master or of a v* tag, or a manual run (workflow_dispatch) on master
+      # or a v* tag, with both secrets set. Never a pull request, nor a manual
+      # run on any other branch: the repository is public, anyone can download
+      # a run's artifacts, and unmerged code is never signed.
+      ANDROID_SIGNING: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')) && secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' }}
+      # The tools the Android build was made with locally (notes/pc-build.md,
+      # "Android"): NDK r29, build-tools and platform 35, JDK 17.
+      ANDROID_NDK_VERSION: 29.0.14206865
+      ANDROID_BUILD_TOOLS: 35.0.0
+      ANDROID_PLATFORM: android-35
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # The whole history with its tags: a development APK takes the highest
+      # versionCode of the v* tags merged into HEAD (package_android.py).
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      # The runner's preinstalled SDK (ANDROID_SDK_ROOT), with the pinned
+      # NDK added; ANDROID_NDK_ROOT is set to it, over the image's default.
+      - name: Android SDK and NDK
+        run: |
+          sudo apt-get update && sudo apt-get install --yes --no-install-recommends cmake ninja-build
+          sdkmanager="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          # Its progress bars fill the log: kept aside, and shown when it fails.
+          if ! "$sdkmanager" --install "ndk;$ANDROID_NDK_VERSION" "build-tools;$ANDROID_BUILD_TOOLS" "platforms;$ANDROID_PLATFORM" > "$RUNNER_TEMP/sdkmanager.log" 2>&1; then
+            cat "$RUNNER_TEMP/sdkmanager.log"
+            exit 1
+          fi
+          test -d "$ANDROID_SDK_ROOT/ndk/$ANDROID_NDK_VERSION"
+          echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/$ANDROID_NDK_VERSION" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/$ANDROID_NDK_VERSION" >> "$GITHUB_ENV"
+      # SDL3, libpng and FreeType built for arm64-v8a, and SDL's Java shell
+      # (tools/pc/build_android_deps.py); not tmp/pc/android-deps itself,
+      # which holds the debug key.
+      - name: Cache Android dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            tmp/pc/android-deps/arm64-v8a
+            tmp/pc/android-deps/java
+          key: release-android-${{ env.ANDROID_NDK_VERSION }}-${{ hashFiles('tools/pc/build_android_deps.py', 'tools/pc/build_linux_sysroot.py', 'tools/pc/build_win32_deps.py', 'tools/pc/fetch_tools.py') }}
+      - name: Archive version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$REF_TYPE" = tag ]; then
+            echo "PACKAGE_VERSION=$REF_NAME" >> "$GITHUB_ENV"
+          else
+            echo "PACKAGE_VERSION=dev-${GITHUB_SHA:0:12}" >> "$GITHUB_ENV"
+          fi
+      - name: Release key check
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          if [ "$ANDROID_SIGNING" = true ]; then
+            echo "The APK is signed with the release key after the build."
+          elif [ "$REF_TYPE" = tag ]; then
+            echo "::error title=Android release key::the secrets ANDROID_KEYSTORE_BASE64 and ANDROID_KEYSTORE_PASSWORD are not set: a release never ships a debug-signed APK (notes/pc-release.md, \"Android signing\")"
+            exit 1
+          else
+            echo "::notice title=Android::no release key in this run (only pushes and manual runs on master or a v* tag are signed, with the ANDROID_KEYSTORE_BASE64 and ANDROID_KEYSTORE_PASSWORD secrets): the APK is built as a check, signed with a debug key, and not uploaded"
+          fi
+      # The build (the NDK, cmake, the dependencies' downloaded sources) runs
+      # with no secret in its environment. It signs with the debug key; the
+      # next step signs again with the release key.
+      - name: Build the APK
+        run: MEMORIES_VERSION="$PACKAGE_VERSION" python tools/pc/build_game32.py --target android-arm64-v8a --backend sdl --release --build tmp/pc/android-arm64-v8a
+      # The secrets reach this step only. The keystore goes to the runner's
+      # temporary folder, readable by this user only, its path stays in this
+      # step, and it is deleted when the step ends. package_android.py signs
+      # the built APK again with the release key (it checks the signer against
+      # MEMORIES_ANDROID_CERT_SHA256: the repository variable
+      # ANDROID_CERT_SHA256 when set, else the release certificate's full
+      # digest), and package.py --no-build
+      # packs it (release key only, not the debug certificate, the version
+      # --version makes), without the passwords.
+      - name: Sign the APK with the release key
+        if: env.ANDROID_SIGNING == 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          MEMORIES_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          MEMORIES_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          MEMORIES_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          MEMORIES_ANDROID_CERT_SHA256: ${{ vars.ANDROID_CERT_SHA256 || 'C8DA2D972E42522E9F83139F5D54092F69FB3EE4C0B074FA53F8245DA45A4B8B' }}
+        run: |
+          umask 077
+          keystore="$RUNNER_TEMP/android-release.p12"
+          trap 'rm -f "$keystore"' EXIT
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode --ignore-garbage > "$keystore"
+          unset KEYSTORE_BASE64
+          test -s "$keystore"
+          export MEMORIES_ANDROID_KEYSTORE="$keystore" MEMORIES_VERSION="$PACKAGE_VERSION"
+          python tools/pc/package_android.py tmp/pc/android-arm64-v8a arm64-v8a
+          unset MEMORIES_ANDROID_KEYSTORE_PASSWORD MEMORIES_ANDROID_KEY_PASSWORD
+          python tools/pc/package.py android-arm64 --no-build --version "$PACKAGE_VERSION"
+      - name: APK signer
+        if: env.ANDROID_SIGNING == 'true'
+        run: |
+          apk="dist/yfm-redecomp-$PACKAGE_VERSION-android-arm64.apk"
+          "$ANDROID_SDK_ROOT/build-tools/$ANDROID_BUILD_TOOLS/apksigner" verify --verbose --print-certs "$apk" | tee "$RUNNER_TEMP/apk-signer.txt"
+          {
+            echo "### Android APK ($PACKAGE_VERSION)"
+            echo
+            echo '```'
+            grep -E 'certificate (DN|SHA-256 digest)' "$RUNNER_TEMP/apk-signer.txt"
+            "$ANDROID_SDK_ROOT/build-tools/$ANDROID_BUILD_TOOLS/aapt2" dump badging "$apk" | head -1
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove the release key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/android-release.p12"
+      - name: Upload the APK
+        if: env.ANDROID_SIGNING == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: yfm-redecomp-android-arm64
+          path: dist/*-android-arm64.apk
+          if-no-files-found: error
+          retention-days: 14
+
   draft-release:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: package
+    needs: [package, android]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
