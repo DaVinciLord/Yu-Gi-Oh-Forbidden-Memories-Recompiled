@@ -155,7 +155,10 @@ class CardsTab(Tab):
         # Only when the form's width changes: scrolling it up and down moves
         # it too, and placing the line then shook the list beside it.
         self._form_width = None
-        self.card_scroll.body.bind("<Configure>", lambda e: self.form_resized(), add=True)
+        # The line placed before the form lays out (in place of its own
+        # binding): the other way, a wider card's form flashed its bottom
+        # scrollbar on until the line made room.
+        self.card_scroll.body.bind("<Configure>", lambda e: (self.form_resized(), self.card_scroll._layout()))
         self.panes.bind("<B1-Motion>", lambda e: setattr(self, "_sash_dragged", True), add=True)
         form = ttk.LabelFrame(self.card_scroll.body, text="Card", padding=8)
         form.pack(fill="both", expand=True)
@@ -211,6 +214,10 @@ class CardsTab(Tab):
         # as that card.
         self.effect_box = line("Retail effect", ttk.Combobox(form, textvariable=self.vars["effect"], state="readonly",
                                                        width=26), hint("effect"), self.effect_row)
+        # Its room kept for every card (hidden for a monster, it is the
+        # widest there): the form, and the line beside it, stay put from a
+        # monster to a magic card.
+        form.columnconfigure(1, minsize=self.effect_box.winfo_reqwidth())
         self.edit_equips_button = ttk.Button(form, text="Edit equip targets...", command=self.edit_equips)
         self.edit_equips_button.grid(row=row, column=1, sticky="w", pady=(0, 4))
         self.equip_rows.append(self.edit_equips_button)
@@ -785,6 +792,7 @@ class CardsTab(Tab):
 
     def relayout(self):
         if self.winfo_exists():
+            self.form.columnconfigure(1, minsize=self.effect_box.winfo_reqwidth())
             self.card_scroll._layout()
             self.place_sash()
 
@@ -804,7 +812,11 @@ class CardsTab(Tab):
         # The pane's own edges take a few pixels more than the scrollbar:
         # what the form's canvas still lacks once placed is taken too.
         form = scroll.body.winfo_reqwidth() + scroll.bar.winfo_reqwidth()
-        at = max(px(self, self.LIST_LEAST), width - form)
+        # The line itself is a few pixels wide too: left out, the form came
+        # out that much short, and every card shown moved the line there and
+        # back (with the bottom scrollbar flashing on), shaking the form.
+        line = max(0, scroll.winfo_x() - self.panes.sashpos(0)) if scroll.winfo_ismapped() else 0
+        at = max(px(self, self.LIST_LEAST), width - form - line)
         if abs(self.panes.sashpos(0) - at) > 1:
             self.panes.sashpos(0, at)
             self.panes.update_idletasks()
