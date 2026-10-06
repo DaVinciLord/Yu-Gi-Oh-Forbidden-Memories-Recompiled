@@ -772,6 +772,7 @@ void Menu_LoadSettings(void)
     Platform_SetClockRate(Settings_Get(SET_SPEED));
     Platform_SetPresentCap(Settings_Get(SET_FPS));
     Mods_SetTexturePack(TexturePack_Load, TexturePack_Unload);
+    Mods_SetAssets(TexturePack_LoadAssets, TexturePack_LoadAssetFolder);
     Mods_SetAudio(AudioReplace_Load, AudioReplace_Unload);
     Mods_Load(); /* the mods the settings say are applied, once they are read */
 }

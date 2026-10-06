@@ -23,6 +23,17 @@
 #include <stddef.h>
 int TexturePack_Load(const char *directory, unsigned rank, int (*part)(const char *setting, void *context),
                      void *context, char *problems, size_t problems_size);
+/* Direct mod.json "assets": named {"image": "path.png", "setting": "optional"}
+ * objects, resolved relative to the mod directory. Same lifecycle and rendering
+ * as packs; the engine supplies geometry from its built-in catalog. */
+struct JsonValue;
+int TexturePack_LoadAssets(const char *directory, const struct JsonValue *assets, unsigned rank,
+                           int (*part)(const char *, void *), void *context, char *problems, size_t size);
+/* Or mod.json's "assets": "<directory>", where the pictures are not listed
+ * at all: every PNG under it whose path is a name in the catalog replaces
+ * that image, so assets/deck_ui/type_dragon.png is deck_ui/type_dragon. */
+int TexturePack_LoadAssetFolder(const char *directory, unsigned rank, int (*part)(const char *, void *),
+                                void *context, char *problems, size_t size);
 void TexturePack_Unload(void);
 /* Once a frame, on the main thread: reads what uploads asked for (an
  * upload can come from the interrupt tick, where reading is not safe). */

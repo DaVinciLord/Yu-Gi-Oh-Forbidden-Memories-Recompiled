@@ -36,6 +36,22 @@ static int fake_pack_load(const char *directory, unsigned rank, int (*part)(cons
     return 1;
 }
 static void fake_pack_unload(void) { strcat(pack_calls, "unload "); }
+static int fake_assets_load(const char *directory, const JsonValue *assets, unsigned rank,
+                            int (*part)(const char *, void *), void *context, char *problems, size_t size)
+{
+    assert(Json_TypeOf(assets) == JSON_OBJECT);
+    assert(Json_Member(assets, "monster_type/dragon"));
+    snprintf(pack_parts, sizeof(pack_parts), "%d", part("pictures", context));
+    return fake_pack_load(directory, rank, part, context, problems, size);
+}
+static char folder_seen[1024];
+static int fake_asset_folder_load(const char *directory, unsigned rank, int (*part)(const char *, void *),
+                                  void *context, char *problems, size_t size)
+{
+    snprintf(folder_seen, sizeof(folder_seen), "%s", directory);
+    return fake_pack_load(directory, rank, part, context, problems, size);
+}
+
 int main(void)
 {
     char path[1024], error[256];
@@ -102,6 +118,16 @@ int main(void)
     write_text("mods/newer/mod.json", "{\"id\":\"newer\",\"name\":\"Newer\",\"min_api\":999}");
     make_dir("mods/elsewhere");
     write_text("mods/elsewhere/mod.json", "{\"id\":\"elsewhere\",\"name\":\"Elsewhere\",\"game\":\"slus_00000\"}");
+    make_dir("mods/named");
+    write_text("mods/named/mod.json", "{\"id\":\"named\",\"priority\":1,"
+               "\"assets\":{\"monster_type/dragon\":{\"image\":\"portrait.png\",\"setting\":\"pictures\"}},"
+               "\"settings\":[{\"key\":\"pictures\",\"type\":\"bool\",\"default\":1}]}");
+    make_dir("mods/bad-assets");
+    write_text("mods/bad-assets/mod.json", "{\"id\":\"bad-assets\",\"assets\":[]}");
+    make_dir("mods/shipped");
+    write_text("mods/shipped/mod.json", "{\"id\":\"shipped\",\"assets\":\"pictures\"}");
+    make_dir("mods/escaping");
+    write_text("mods/escaping/mod.json", "{\"id\":\"escaping\",\"assets\":\"../elsewhere\"}");
     snprintf(path, sizeof(path), "%s/mods", root);
     assert(!setenv("MEMORIES_MODS_DIR", path, 1));
     snprintf(path, sizeof(path), "%s/settings.txt", root);
@@ -109,6 +135,7 @@ int main(void)
     assert(!setenv("MEMORIES_USER_DIR", root, 1));
     Settings_Load();
     Mods_SetTexturePack(fake_pack_load, fake_pack_unload);
+    Mods_SetAssets(fake_assets_load, fake_asset_folder_load);
     Mods_Load();
     a = find("a");
     b = find("b");
@@ -149,6 +176,38 @@ int main(void)
         assert(!strcmp(pack_calls, "pack-b/images:2 "));
         Mods_SetEnabled(pack_a, 0);
         Mods_SetEnabled(pack_b, 0);
+    }
+    {
+        int named = find("named"), pack_b = find("pack-b");
+        assert(Mods_Failed(find("bad-assets")));
+        assert(!strstr(Mods_Status(named), "unknown key"));
+        pack_calls[0] = 0;
+        Mods_SetEnabled(named, 1);
+        assert(Mods_Active(named) && !strcmp(pack_calls, "named:1 ") && !strcmp(pack_parts, "1"));
+        Mods_SetEnabled(pack_b, 1);
+        pack_calls[0] = 0;
+        assert(Mods_OptionSet(named, 0, 0));
+        assert(!strcmp(pack_calls, "unload named:1 pack-b/images:2 ") && !strcmp(pack_parts, "0"));
+        pack_calls[0] = 0;
+        Mods_SetEnabled(named, 0);
+        assert(!strcmp(pack_calls, "unload pack-b/images:1 "));
+        Mods_SetEnabled(pack_b, 0);
+        Mods_SetAssets(NULL, NULL);
+        Mods_SetEnabled(named, 1);
+        assert(Mods_Failed(named) && !Mods_Active(named));
+        assert(strstr(Mods_Status(named), "no named asset replacements"));
+        Mods_SetEnabled(named, 0);
+        Mods_SetAssets(fake_assets_load, fake_asset_folder_load);
+    }
+    {   /* "assets": "<directory>": the mod ships the pictures, unlisted. */
+        int shipped = find("shipped");
+        assert(Mods_Failed(find("escaping")));
+        assert(strstr(Mods_Status(find("escaping")), "outside the mod"));
+        folder_seen[0] = pack_calls[0] = 0;
+        Mods_SetEnabled(shipped, 1);
+        assert(Mods_Active(shipped));
+        assert(strstr(folder_seen, "shipped/pictures"));
+        Mods_SetEnabled(shipped, 0);
     }
     {
         int typo = find("typo");

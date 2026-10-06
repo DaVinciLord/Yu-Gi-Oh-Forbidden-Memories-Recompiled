@@ -7,7 +7,9 @@
  * palette whose entries carry the semi-transparency bit (the campaign map's). */
 #include "pc/compat/fs.h"
 #include "pc/render/texture_pack.h"
+#include "pc/mods/json.h"
 #include "pc/render/texture_dump.h"
+#include "pc/render/soft_gpu.h"
 #include <assert.h>
 #include <png.h>
 #include <stdio.h>
@@ -63,7 +65,7 @@ static int part(const char *setting, void *context)
 #define ENTRY(file, offset, extra) \
     "{\"file\":\"" file "\",\"archive\":\"WA_MRG.MRG\",\"offset\":" #offset ",\"words\":1,\"rows\":1,\"bpp\":16" extra "}"
 
-static void field_thumbnail(void)
+static void field_thumbnail(int named)
 {
     uint16_t original[704], duplicate[704], copied[704];
     const unsigned char green[] = {0, 255, 0, 255};
@@ -80,7 +82,7 @@ static void field_thumbnail(void)
     memcpy(disc + 4096, original, sizeof(original));
     disc_ready = 1;
     TextureDump_SetDiscFiles(disc_file);
-    make_dir("field");
+    if (!named) make_dir("field");
     snprintf(path, sizeof(path), "%s/field/thumb.png", root);
     png.version = PNG_IMAGE_VERSION;
     png.width = png.height = 1;
@@ -98,7 +100,12 @@ static void field_thumbnail(void)
     write_text("field/manifest.json", "[{\"file\":\"thumb.png\",\"archive\":\"WA_MRG.MRG\","
                "\"offset\":0,\"words\":20,\"rows\":32,\"bpp\":8,\"clut_offset\":1280,\"clut_entries\":64}]");
     snprintf(path, sizeof(path), "%s/field", root);
-    assert(TexturePack_Load(path, 1, NULL, NULL, NULL, 0) == 1);
+    if (named) {
+        JsonDocument *doc = Json_Parse("{\"thumbnails/001\":{\"image\":\"thumb.png\"}}", NULL, 0);
+        assert(doc);
+        assert(TexturePack_LoadAssets(path, Json_Root(doc), 1, NULL, NULL, NULL, 0) == 1);
+        Json_Free(doc);
+    } else assert(TexturePack_Load(path, 1, NULL, NULL, NULL, 0) == 1);
     TexturePack_Service();
 
     /* Initial hand/field upload from the thumbnail sector. */
@@ -259,6 +266,185 @@ static void stp_palette(void)
     TexturePack_Unload();
 }
 
+static int named_load(const char *json, unsigned rank, char *problems, size_t size)
+{
+    JsonDocument *doc = Json_Parse(json, problems, size);
+    int result;
+    assert(doc);
+    result = TexturePack_LoadAssets(root, Json_Root(doc), rank, part, root, problems, size);
+    Json_Free(doc);
+    return result;
+}
+
+static void named_assets(void)
+{
+    char problems[1024];
+    write_text("named.png", "\x89PNG\r\n\x1a\n");
+    assert(named_load("{\"card_art/001\":{\"image\":\"named.png\"},"
+                      "\"monster_type/dragon\":{\"image\":\"named.png\"},"
+                      "\"duel/field_word\":{\"image\":\"named.png\"},"
+                      "\"attributes/light\":{\"image\":\"named.png\"}}",
+                      1, problems, sizeof(problems)) == 13);
+    assert(!problems[0]);
+    TexturePack_Unload();
+    /* The named sprites: one inside a sheet, cropped to its own rect, and the
+     * card panel's digit, which every card UI package repeats. */
+    assert(named_load("{\"card_frames/digit_7\":{\"image\":\"named.png\"},"
+                      "\"card_frames/label_atk\":{\"image\":\"named.png\"},"
+                      "\"monster_type/dragon\":{\"image\":\"named.png\"},"
+                      "\"build_deck/cursor_bar\":{\"image\":\"named.png\"},"
+                      "\"duel/turn_arrow-00\":{\"image\":\"named.png\"}}",
+                      1, problems, sizeof(problems)) == 23);
+    assert(!problems[0]);
+    TexturePack_Unload();
+    assert(named_load("{\"thumbnails/002\":{\"image\":\"named.png\",\"setting\":\"off\"}}",
+                      1, problems, sizeof(problems)) == 0 && !problems[0]);
+    assert(named_load("{}", 1, problems, sizeof(problems)) == 0 && !problems[0]);
+    assert(named_load("[]", 1, problems, sizeof(problems)) == -1 && strstr(problems, "not an object"));
+    assert(named_load("{\"typo\":{\"image\":\"named.png\"}}", 1, problems, sizeof(problems)) == -1);
+    assert(strstr(problems, "unknown asset") && strstr(problems, "typo"));
+    assert(named_load("{\"thumbnails/002\":{\"image\":\"../named.png\"}}",
+                      1, problems, sizeof(problems)) == -1 && strstr(problems, "outside"));
+    assert(named_load("{\"thumbnails/002\":{\"image\":\"missing.png\"}}",
+                      1, problems, sizeof(problems)) == -1 && strstr(problems, "could not be read"));
+    assert(named_load("{\"thumbnails/002\":42}", 1, problems, sizeof(problems)) == -1);
+    assert(strstr(problems, "invalid asset image object"));
+    TexturePack_Unload();
+}
+
+/* "assets": "<directory>": the PNGs are named by their path under it. */
+static void named_folder(void)
+{
+    char path[1024], problems[1024];
+    make_dir("ship");
+    make_dir("ship/monster_type");
+    make_dir("ship/card_frames");
+    make_dir("ship/thumbnails");
+    make_dir("ship/nested");
+    write_text("ship/monster_type/dragon.png", "\x89PNG\r\n\x1a\n");
+    write_text("ship/card_frames/digit_7.png", "\x89PNG\r\n\x1a\n");
+    write_text("ship/thumbnails/001.png", "\x89PNG\r\n\x1a\n");
+    write_text("ship/monster_type/dragn.png", "\x89PNG\r\n\x1a\n");   /* a typo: reported */
+    write_text("ship/monster_type/notes.txt", "not a picture");                /* ignored */
+    write_text("ship/nested/deep.png", "\x89PNG\r\n\x1a\n");           /* no such name */
+    snprintf(path, sizeof(path), "%s/ship", root);
+    /* digit_7 is in all ten card UI packages, the other two once each. */
+    assert(TexturePack_LoadAssetFolder(path, 1, NULL, NULL, problems, sizeof(problems)) == 12);
+    assert(strstr(problems, "unknown asset") && strstr(problems, "dragn"));
+    TexturePack_Unload();
+    /* A directory named after one of the mod's settings switches everything
+     * under it. "off" is the setting part() reports as switched off; "thumbnails"
+     * is also a family, so the whole path still wins there. */
+    make_dir("ship/off");
+    make_dir("ship/off/card_frames");
+    make_dir("ship/on");
+    make_dir("ship/on/thumbnails");
+    write_text("ship/off/card_frames/digit_0.png", "\x89PNG\r\n\x1a\n");
+    write_text("ship/on/thumbnails/003.png", "\x89PNG\r\n\x1a\n");
+    snprintf(path, sizeof(path), "%s/ship", root);
+    /* The four that loaded before, plus thumbnails/003 under the "on" setting;
+     * the ten digit_0 readings under "off" are left out, not reported. */
+    assert(TexturePack_LoadAssetFolder(path, 1, part, root, problems, sizeof(problems)) == 13);
+    assert(strstr(problems, "unknown asset") && !strstr(problems, "digit_0"));
+    TexturePack_Unload();
+
+    /* An empty directory, and one that is not there at all, are not errors
+     * of the pack's: nothing is replaced. */
+    make_dir("bare");
+    snprintf(path, sizeof(path), "%s/bare", root);
+    assert(TexturePack_LoadAssetFolder(path, 1, NULL, NULL, problems, sizeof(problems)) == 0);
+    snprintf(path, sizeof(path), "%s/no-such-directory", root);
+    assert(TexturePack_LoadAssetFolder(path, 1, NULL, NULL, problems, sizeof(problems)) == 0);
+    TexturePack_Unload();
+}
+
+/* Two 4-bit images that share a VRAM word: the first owns the word's lower
+ * texels and the second its upper ones, as card_frames/digit_0 and digit_1
+ * do (words 4-5 and 5-6 of the card panel). Both must reach their own
+ * texels; a word belongs to one entry, so the renderer has to decide per
+ * texel, not per word. */
+static void shared_word(void)
+{
+    char path[1024];
+    png_image png;
+    unsigned char pixels[6 * 4];
+    int i, x;
+    make_dir("share");
+    for (i = 0; i < 2; i++) {
+        snprintf(path, sizeof(path), "%s/share/%s.png", root, i ? "b" : "a");
+        memset(&png, 0, sizeof(png));
+        png.version = PNG_IMAGE_VERSION;
+        png.width = 6;
+        png.height = 1;
+        png.format = PNG_FORMAT_RGBA;
+        for (x = 0; x < 6; x++) {
+            pixels[x * 4] = (unsigned char)(i ? 0 : 255);
+            pixels[x * 4 + 1] = 0;
+            pixels[x * 4 + 2] = (unsigned char)(i ? 255 : 0);
+            pixels[x * 4 + 3] = 255;
+        }
+        assert(png_image_write_to_file(&png, path, 0, pixels, 0, NULL));
+    }
+    /* a: words 0-1, texels 0-5.  b: words 1-2, texels 6-11. Word 1 is shared,
+     * holding 4 and 5 of a and 6 and 7 of b. */
+    write_text("share/manifest.json",
+               "[{\"file\":\"a.png\",\"archive\":\"WA_MRG.MRG\",\"offset\":0,\"words\":2,\"rows\":1,"
+               "\"bpp\":4,\"stride\":64,\"clut_offset\":1536,\"clut_entries\":16,\"crop_left\":0,\"width\":6},"
+               "{\"file\":\"b.png\",\"archive\":\"WA_MRG.MRG\",\"offset\":2,\"words\":2,\"rows\":1,"
+               "\"bpp\":4,\"stride\":64,\"clut_offset\":1536,\"clut_entries\":16,\"crop_left\":2,\"width\":6}]");
+    memset(disc, 0, sizeof(disc));
+    for (i = 0; i < 2048; i++) disc[2048 + i] = (unsigned char)(0x11 * (i % 15 + 1));
+    for (i = 0; i < 16; i++) {          /* a palette whose every entry shows */
+        disc[2048 + 1536 + i * 2] = (unsigned char)(i * 2 + 1);
+        disc[2048 + 1536 + i * 2 + 1] = 0x10;
+    }
+    disc_ready = 1;
+    TextureDump_SetDiscFiles(disc_file);
+    snprintf(path, sizeof(path), "%s/share", root);
+    assert(TexturePack_Load(path, 1, NULL, NULL, NULL, 0) == 2);
+    TexturePack_Service();
+    TextureDump_Delivered(disc + 2048, 2048, 1, 0);
+    SoftGpu_Load(0, 0, 64, 16, (const uint16_t *)(disc + 2048));
+    TexturePack_Service();
+    for (i = 0; i < 12; i++) {
+        uint16_t cell = *TextureDump_Cell(i / 4, 0, i % 4);
+        if (!cell) fprintf(stderr, "shared_word: texel %d was not replaced\n", i);
+        assert(cell);
+    }
+    /* The scaled picture reads the PNGs themselves: each texel must come from
+     * the image that owns it, including the two of a and the two of b that
+     * share word 1. */
+    assert(TextureDump_Prepare(0, 0, 0, 0, 12, 0, 0) > 0);
+    for (i = 0; i < 12; i++) {
+        uint32_t rgb = 0;
+        int got = TextureDump_Sample(0, 0, 0, i << 16, 0, &rgb);
+        if (got != 1) fprintf(stderr, "shared_word: texel %d is not sampled (%d)\n", i, got);
+        assert(got == 1);
+        if (rgb != (i < 6 ? 0xff0000u : 0x0000ffu))
+            fprintf(stderr, "shared_word: texel %d sampled %06x\n", i, rgb);
+        assert(rgb == (i < 6 ? 0xff0000u : 0x0000ffu));
+    }
+    TexturePack_Unload();
+    disc_ready = 0;
+}
+
+/* The same asset shipped twice, once under a setting that is on and once
+ * under one that is off: the enabled copy must be the one used. */
+static void duplicate_settings(void)
+{
+    char path[1024], problems[512];
+    make_dir("dup");
+    make_dir("dup/on");
+    make_dir("dup/on/monster_type");
+    make_dir("dup/off");
+    make_dir("dup/off/monster_type");
+    write_text("dup/on/monster_type/dragon.png", "\x89PNG\r\n\x1a\n");
+    write_text("dup/off/monster_type/dragon.png", "\x89PNG\r\n\x1a\n");
+    snprintf(path, sizeof(path), "%s/dup", root);
+    assert(TexturePack_LoadAssetFolder(path, 1, part, root, problems, sizeof(problems)) == 1);
+    TexturePack_Unload();
+}
+
 int main(void)
 {
     char path[1024], problems[256];
@@ -286,7 +472,12 @@ int main(void)
     write_text("off/manifest.json", "[]");
     assert(TexturePack_Load(path, 1, part, root, problems, sizeof(problems)) == -1);
     TexturePack_Unload();
-    field_thumbnail();
+    named_assets();
+    named_folder();
+    shared_word();
+    duplicate_settings();
+    field_thumbnail(0);
+    field_thumbnail(1);
     made_image();
     stp_palette();
     puts("texture pack tests passed");
