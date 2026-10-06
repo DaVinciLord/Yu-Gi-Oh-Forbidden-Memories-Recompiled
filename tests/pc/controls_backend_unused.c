@@ -93,11 +93,3 @@ UNUSED_GAME_FUNCTION(TouchPad_TakeMenu)
 UNUSED_GAME_FUNCTION(TouchPad_TakePresses)
 UNUSED_GAME_FUNCTION(TouchPad_Update)
 UNUSED_GAME_FUNCTION(TouchPadArt_Draw)
-
-/* Logging is reached (MEMORIES_TRACE=input names the controllers and keys,
- * sdl.c): off here, so LOG never calls Log_Printf. */
-int Log_Wanted(int channel)
-{
-    (void)channel;
-    return 0;
-}
