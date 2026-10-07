@@ -1377,6 +1377,43 @@ class GuiTest(GuiCase):
         self.assertTrue(info.commit())
         self.assertEqual(app.project.other["text"], {"x": 1})
 
+    def test_equip_types_panel(self):
+        """A type's box ticks every monster of it on or off, shows a half
+        tick for some, and its count lists that type's monsters alone."""
+        from fm_editor.gamedata import TYPE_NAMES
+        app, tab = self.app, self.app.equips
+        p = tab.project
+        equip = tab.current
+        dragon = TYPE_NAMES.index("Dragon")
+        dragons = {c for c in p.monsters() if p.cards[c].type == dragon}
+        box, var = tab.type_boxes[dragon]
+        var.set(1)
+        tab.toggle_type(dragon)
+        self.assertLessEqual(dragons, p.equip_targets(equip))
+        self.assertTrue(var.get() and not box.instate(["alternate"]))
+        self.assertEqual(tab.type_counts[dragon].cget("text"), f"{len(dragons)}/{len(dragons)}")
+        # Take one away by hand: half ticked.
+        one = min(dragons)
+        tab.monsters.selection_set(str(one))
+        tab.remove()
+        self.assertTrue(box.instate(["alternate"]) or len(dragons) == 1)
+        # A half-ticked box clicked ticks them all; clicked again, none.
+        var.set(1)
+        tab.toggle_type(dragon)
+        self.assertLessEqual(dragons, p.equip_targets(equip))
+        var.set(0)
+        tab.toggle_type(dragon)
+        self.assertFalse(dragons & p.equip_targets(equip))
+        # The count lists that type's monsters only, and again all of them.
+        var.set(1)
+        tab.toggle_type(dragon)
+        tab.show_type(dragon)
+        shown = {int(i) for i in tab.monsters.get_children()}
+        self.assertTrue(shown and all(p.cards[c].type == dragon for c in shown))
+        tab.show_type(dragon)
+        self.assertGreater(len(tab.monsters.get_children()), len(shown) - 1)
+        self.assertIsNone(tab.only_type)
+
     def test_ritual_remove_and_revert(self):
         """Remove recipe on a disc ritual and on an added copy (which would
         otherwise keep its base's), the row still selected; revert."""
@@ -1458,13 +1495,19 @@ class GuiTest(GuiCase):
         # Changed only: what the mod changed.
         tab.changed_only.set(True)
         tab.fill()
-        self.assertEqual(tab.tree.get_children(), (f"{new[0]}:{new[1]}",))
+        self.assertEqual(tab.rows(), [f"{new[0]}:{new[1]}"])
         tab.changed_only.set(False)
         # A double-click on a heading is no double-click on the selected row.
         tab.tree.update_idletasks()
-        heading, row = mock.Mock(x=10, y=3), mock.Mock(x=10, y=tab.tree.bbox(tab.tree.get_children()[0])[1] + 2)
+        group = tab.tree.get_children()[0]          # card A's: "... fuses with: N pairs"
+        self.assertTrue(group.startswith("group:"))
+        self.assertIn("fuses with", tab.tree.set(group, "a"))
+        heading = mock.Mock(x=10, y=3)
+        on_group = mock.Mock(x=10, y=tab.tree.bbox(group)[1] + 2)
+        row = mock.Mock(x=10, y=tab.tree.bbox(tab.rows()[0])[1] + 2)
         with mock.patch.object(tab, "edit") as edit:
             tab.double_click(heading)
+            tab.double_click(on_group)
             edit.assert_not_called()
             tab.double_click(row)
             edit.assert_called_once()
@@ -1806,7 +1849,7 @@ class GuiTest(GuiCase):
         app.notebook.select(app.fusions)
         app.update()
         self.assertEqual(app.fusions.search.get(), p.card_label(2))
-        rows = [tuple(int(x) for x in iid.split(":")) for iid in app.fusions.tree.get_children()]
+        rows = [tuple(int(x) for x in iid.split(":")) for iid in app.fusions.rows()]
         self.assertIn((1, 2), rows)
         self.assertTrue(all(2 in pair or p.fusions.get(pair) == 2 for pair in rows))
         # A search of the modder's own is kept.

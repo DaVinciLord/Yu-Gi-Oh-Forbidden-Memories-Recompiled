@@ -102,8 +102,10 @@ def install_all(app):
     p = lambda: app.project     # noqa: E731 -- the project changes when a mod is opened
 
     def fusion_cards(iid):
+        if ":" not in iid or not iid.split(":")[0].isdigit():
+            return []           # a group's row (Fuses with, Made by)
         a, b = (int(x) for x in iid.split(":"))
-        return [a, b, p().fusions.get((a, b))]
+        return [a, b, app.fusions.shown_result((a, b))]
 
     def ritual_cards(iid):
         ritual = int(iid)

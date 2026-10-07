@@ -21,7 +21,7 @@ from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIM
 from . import fixed_decks
 from .fixed_deck_view import FixedDeckView
 from .model import KEY_RE, StarterDeck
-from .widgets import (WrapLabel, CardField, FormDialog, ScrolledForm, ScrolledPage, card_matches, card_named, grab, pick_card, px,
+from .widgets import (WrapLabel, legend, CardField, FormDialog, ScrolledForm, ScrolledPage, card_matches, card_named, grab, pick_card, px,
                       fixed_font, scrolled_tree, show_text, ui_font)
 
 ATTRIBUTE_CHOICES = ATTRIBUTE_NAMES + ["6 (magic)", "7 (trap)"]
@@ -1174,6 +1174,7 @@ class FusionsTab(Tab):
                                                 ("state", "Status")], [260, 260, 260, 80], 24, selectmode="extended")
         frame.pack(fill="both", expand=True, pady=4)
         self.list_frame = frame
+        self.tree.tag_configure("group", font=ui_font(10))
         self.tree.bind("<Double-1>", self.double_click)
         buttons = ttk.Frame(self)
         buttons.pack(fill="x")
@@ -1185,8 +1186,10 @@ class FusionsTab(Tab):
         ttk.Button(buttons, text="Bulk...", command=lambda: bulk_dialog.open_bulk(self)).pack(side="left")
         self.all_button = ttk.Button(buttons, text="Remove all fusions...", command=self.remove_all)
         self.all_button.pack(side="left", padx=4)
-        ttk.Label(self, text="A pair fuses the same in either order. Brown rows are the retail table's "
-                             "\"glitch\" fusions.", style="Hint.TLabel").pack(anchor="w", pady=(2, 0))
+        key = legend(self, ("changed", "changed by the mod"), ("added", "added by the mod"),
+                     ("removed", "no fusion any more"), ("glitch", "the disc's \"glitch\" fusions"))
+        ttk.Label(key, text="  A pair fuses the same in either order.", style="Hint.TLabel").pack(side="left")
+        key.pack(anchor="w", pady=(2, 0))
 
     def refresh(self):
         # A search still naming a whole card (after Undo, another mod) is
@@ -1209,8 +1212,10 @@ class FusionsTab(Tab):
             self.show_card(cid)
 
     def double_click(self, event):
-        """A row's: a heading's double-click is no edit of the selected row."""
-        if self.tree.identify_region(event.x, event.y) in ("cell", "tree"):
+        """A row's: a heading's double-click is no edit of the selected row,
+        nor a group's."""
+        if self.tree.identify_region(event.x, event.y) in ("cell", "tree") and \
+                not self.tree.identify_row(event.y).startswith("group:"):
             self.edit()
 
     def fill_soon(self):
@@ -1252,17 +1257,39 @@ class FusionsTab(Tab):
                 continue
             rows.append((pair, status))
         rows.sort()
-        for pair, status in rows[:self.LIMIT]:
-            result = p.fusions.get(pair)
-            retail = p.retail.fusions.get(pair)
-            if status == "own list":
-                shown = f"{p.card_label(own[pair]) if own[pair] else '(none)'} (a card's own fusions list)"
-            else:
-                shown = p.card_label(result) if result else \
-                    f"(none; retail {p.card_label(retail)})" if retail else "(none: forbidden)"
-            tag = "changed" if status == "own list" else status
-            self.tree.insert("", "end", iid=f"{pair[0]}:{pair[1]}", tags=(tag,) if tag else (),
-                             values=(p.card_label(pair[0]), p.card_label(pair[1]), shown, status))
+        # One card followed: its pairs in two groups, what it fuses with (it
+        # in Card A) and what makes it, each counted.
+        groups = [("", rows[:self.LIMIT])]
+        if exact is not None:
+            groups = [("with", [r for r in rows if exact in r[0]]), ("made", [r for r in rows if exact not in r[0]])]
+            groups = [(g, sorted(members, key=lambda r: (r[0][1] if r[0][0] == exact else r[0][0], r[0])))
+                      for g, members in groups]
+        for group, members in groups:
+            parent = ""
+            if group:
+                fusing = sum(1 for _, status in members if status != "removed")
+                title = (f"{p.cards[exact].name} fuses with" if group == "with" else f"Made by")
+                parent = f"group:{group}"
+                self.tree.insert("", "end", iid=parent, open=True, tags=("group",),
+                                 values=(f"{title}: {fusing} {'pair' if fusing == 1 else 'pairs'}", "", "", ""))
+                if not members:
+                    self.tree.insert(parent, "end", iid=f"{parent}:none", tags=("group",),
+                                     values=("   (none)", "", "", ""))
+            for pair, status in members:
+                result = p.fusions.get(pair)
+                retail = p.retail.fusions.get(pair)
+                if status == "own list":
+                    shown = f"{p.card_label(own[pair]) if own[pair] else '(none)'} (a card's own fusions list)"
+                else:
+                    shown = p.card_label(result) if result else \
+                        f"(none; retail {p.card_label(retail)})" if retail else "(none: forbidden)"
+                tag = "changed" if status == "own list" else status
+                a, b = pair if group != "with" or pair[0] == exact else (pair[1], pair[0])
+                # The followed card in each row of its own group: a ditto mark,
+                # the group's title names it.
+                first = "    \u2033" if group == "with" else p.card_label(a)
+                self.tree.insert(parent, "end", iid=f"{pair[0]}:{pair[1]}", tags=(tag,) if tag else (),
+                                 values=(first, p.card_label(b), shown, status))
         more = f" (first {self.LIMIT} shown; search to narrow)" if len(rows) > self.LIMIT else ""
         removed = sum(1 for _, status in rows if status == "removed")
         gone = f", {removed} removed" if removed else ""
@@ -1280,8 +1307,15 @@ class FusionsTab(Tab):
         else:
             self.all_banner.pack_forget()
 
+    def rows(self) -> list:
+        """The pairs' rows as listed, in a group or not (not the groups')."""
+        out = []
+        for iid in self.tree.get_children():
+            out += list(self.tree.get_children(iid)) if iid.startswith("group:") else [iid]
+        return [iid for iid in out if not iid.startswith("group:")]
+
     def selected(self):
-        return [tuple(int(x) for x in iid.split(":")) for iid in self.tree.selection()]
+        return [tuple(int(x) for x in iid.split(":")) for iid in self.tree.selection() if not iid.startswith("group:")]
 
     def dialog(self, title, pair=None, result=None):
         fields = {}
@@ -1413,29 +1447,50 @@ class EquipsTab(Tab):
         left.pack(side="left", fill="y")
         ttk.Label(left, text="Equip cards").pack(anchor="w")
         frame, self.equips = scrolled_tree(left, [("id", "#"), ("name", "Equip card"), ("n", "Fits")],
-                                           [50, 200, 50], 26, sort_numeric=("id", "n"))
+                                           [50, 250, 50], 26, sort_numeric=("id", "n"))
         frame.pack(fill="y", expand=True)
         self.equips.bind("<<TreeviewSelect>>", lambda e: self.select())
         right = ttk.Frame(self)
         right.pack(side="left", fill="both", expand=True, padx=(8, 0))
         self.heading = ttk.Label(right, font=ui_font(11))
         self.heading.pack(anchor="w")
+        # Every monster type at once: ticked, all of the type may be equipped;
+        # half ticked, some. Its count shows the list's monsters of the type.
+        types = ttk.LabelFrame(right, text="By monster type: tick for every monster of it; click a count to list them",
+                               padding=(6, 2))
+        types.pack(fill="x", pady=(4, 0))
+        self.type_boxes = {}
+        self.type_counts = {}
+        self.only_type = None           # the list shows one type's monsters
+        for t, name in enumerate(TYPE_NAMES[:20]):
+            cell = ttk.Frame(types)
+            cell.grid(row=t // 5, column=t % 5, sticky="w", padx=(0, 10))
+            var = tk.IntVar()
+            box = ttk.Checkbutton(cell, text=name, variable=var, command=lambda t=t: self.toggle_type(t))
+            box.pack(side="left")
+            count = ttk.Label(cell, style="Hint.TLabel", cursor="hand2")
+            count.pack(side="left")
+            count.bind("<Button-1>", lambda e, t=t: self.show_type(t))
+            self.type_boxes[t] = (box, var)
+            self.type_counts[t] = count
+        for column in range(5):
+            types.columnconfigure(column, weight=1)
+        self.type_filter = ttk.Label(right, style="Hint.TLabel", cursor="hand2")
+        self.type_filter.bind("<Button-1>", lambda e: self.show_type(None))
         frame, self.monsters = scrolled_tree(right, [("id", "#"), ("name", "Monster"), ("type", "Type"),
                                                      ("atk", "ATK"), ("def", "DEF"), ("state", "Status")],
-                                                     [50, 220, 100, 50, 50, 80], 22, selectmode="extended",
+                                                     [50, 220, 100, 50, 50, 80], 16, selectmode="extended",
                                                      sort_numeric=("id", "atk", "def"))
         frame.pack(fill="both", expand=True, pady=4)
         buttons = ttk.Frame(right)
         buttons.pack(fill="x")
         self.actions = buttons
         ttk.Button(buttons, text="Add a monster...", command=self.add).pack(side="left")
-        self.type_choice = tk.StringVar(value=TYPE_NAMES[0])
-        ttk.Button(buttons, text="Add every", command=lambda: self.by_type(True)).pack(side="left", padx=(8, 2))
-        ttk.Combobox(buttons, textvariable=self.type_choice, values=TYPE_NAMES[:20], state="readonly",
-                     width=14).pack(side="left")
-        ttk.Button(buttons, text="Remove every", command=lambda: self.by_type(False)).pack(side="left", padx=2)
+        self.type_choice = tk.StringVar(value=TYPE_NAMES[0])     # by_type's (the boxes above use it)
         ttk.Button(buttons, text="Remove selected", command=self.remove).pack(side="left", padx=(8, 0))
         ttk.Button(buttons, text="Revert to retail", command=self.revert).pack(side="left", padx=4)
+        self.monsters.bind("<Delete>", lambda e: self.remove())
+        legend(right, ("added", "added by the mod"), ("removed", "taken away by the mod")).pack(anchor="w", pady=(2, 0))
 
     def refresh(self):
         self.current = None
@@ -1490,17 +1545,40 @@ class EquipsTab(Tab):
         editable = p is not None and self.current in p.equip_cards()
         for action in self.actions.winfo_children():
             action.state(["!disabled"] if editable else ["disabled"])
+        for box, _ in self.type_boxes.values():
+            box.state(["!disabled"] if editable else ["disabled"])
         if not editable:
             self.current = None
             self.heading.configure(text="Select an equip card")
+            for t, (box, var) in self.type_boxes.items():
+                var.set(0)
+                box.state(["!alternate"])
+                self.type_counts[t].configure(text="")
+            self.type_filter.pack_forget()
             return
-        self.heading.configure(text=f"{p.card_label(self.current)} may equip:")
         now = p.equip_targets(self.current)
         retail = p.equip_baseline(self.current)
+        self.heading.configure(text=f"{p.card_label(self.current)} may equip {len(now)} monsters:")
+        monsters = set(p.monsters())
+        for t, (box, var) in self.type_boxes.items():
+            members = {cid for cid in monsters if p.cards[cid].type == t}
+            have = len(now & members)
+            var.set(1 if members and have == len(members) else 0)
+            box.state(["alternate"] if 0 < have < len(members) else ["!alternate"])
+            self.type_counts[t].configure(text=f"{have}/{len(members)}",
+                                          style="Changed.TLabel" if t == self.only_type else "Hint.TLabel")
+        if self.only_type is not None:
+            self.type_filter.configure(text=f"Showing {TYPE_NAMES[self.only_type]} monsters only "
+                                            "(click here to show all)")
+            self.type_filter.pack(anchor="w", before=self.monsters.master)
+        else:
+            self.type_filter.pack_forget()
         for cid in sorted(now | retail):
             state = "" if cid in now and cid in retail else "added" if cid in now else "removed"
             card = p.cards.get(cid)
             if card is None:
+                continue
+            if self.only_type is not None and card.type != self.only_type:
                 continue
             self.monsters.insert("", "end", iid=str(cid), values=(
                 cid, card.name, type_label(card.type), card.attack, card.defense, state),
@@ -1519,6 +1597,19 @@ class EquipsTab(Tab):
         if cid:
             self.project.equips.setdefault(self.current, self.project.equip_targets(self.current)).add(cid)
             self.edited()
+
+    def toggle_type(self, t):
+        """A type's box: ticked, every monster of the type; unticked, none.
+        A half-ticked box clicked ticks."""
+        box, var = self.type_boxes[t]
+        allow = bool(var.get()) or box.instate(["alternate"])
+        self.type_choice.set(TYPE_NAMES[t])
+        self.by_type(allow)
+
+    def show_type(self, t):
+        """The list: one type's monsters (its count clicked), or all."""
+        self.only_type = None if t == self.only_type else t
+        self.fill()
 
     def by_type(self, allow):
         if not self.current:

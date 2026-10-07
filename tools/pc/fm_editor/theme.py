@@ -143,6 +143,8 @@ class Theme:
         self.rescale()
         for name, (light, _) in INKS.items():
             self.style.configure(f"{name}.TLabel", foreground=light)
+        for tag, (light, _) in TAGS.items():       # a legend's words in its rows' colours (widgets.legend)
+            self.style.configure(f"{tag}.Tag.TLabel", foreground=light)
         # Tk's own defaults for the classic widgets, to go back to, and each
         # option's name in the option database (highlightBackground for
         # -highlightbackground: the database is case sensitive).
@@ -406,5 +408,7 @@ class Theme:
                   lightcolor=[("selected", SELECT)], darkcolor=[("selected", SELECT)])
         for name, (_, dark) in INKS.items():
             style.configure(f"{name}.TLabel", foreground=dark)
+        for tag, (_, dark) in TAGS.items():
+            style.configure(f"{tag}.Tag.TLabel", foreground=dark)
         style.theme_use(current)
         style.theme_settings(DARK_THEME, self.sized(True))
