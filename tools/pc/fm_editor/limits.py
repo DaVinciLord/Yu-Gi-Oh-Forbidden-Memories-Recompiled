@@ -95,10 +95,22 @@ def build(flat: dict, kept=None):
     the mod's own "limits" as it was read."""
     kept = kept if isinstance(kept, dict) else {}
     out = {key: value for key, value in kept.items() if key not in TOP_KEYS}
+    # What the form cannot show stays too, for Conflicts to report: a
+    # misspelt key inside "life_points" or "two_player", and a field's value
+    # that is not a whole number (the form shows it empty).
+    for top, known in (("life_points", LIFE_KEYS), ("two_player", TWO_PLAYER_KEYS)):
+        section = kept.get(top)
+        if isinstance(section, dict):
+            for sub, value in section.items():
+                if sub not in known:
+                    out.setdefault(top, {})[sub] = value
     for key, *_ in ALL_FIELDS:
         value = flat.get(key)
         if value is None:
-            continue
+            written = _get(kept, key)
+            if written is None or isinstance(written, int) and not isinstance(written, bool):
+                continue
+            value = written
         top, _, sub = key.partition(".")
         if sub:
             out.setdefault(top, {})[sub] = value

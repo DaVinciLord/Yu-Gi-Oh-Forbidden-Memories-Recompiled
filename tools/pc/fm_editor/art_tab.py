@@ -58,7 +58,7 @@ class ArtTab(Tab):
         self.search.trace_add("write", lambda *_: self.fill())
         self.filter.trace_add("write", lambda *_: self.fill())
         frame, self.tree = scrolled_tree(left, [("id", "#"), ("name", "Name"), ("type", "Type"), ("state", "Art")],
-                                         [50, 200, 100, 110], 28)
+                                         [50, 200, 100, 110], 28, sort_numeric=("id",))
         frame.pack(fill="both", expand=True, pady=4)
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.select())
         self.count = ttk.Label(left, style="Hint.TLabel")
@@ -279,6 +279,7 @@ class ArtTab(Tab):
                 values, tags = self.row(cid)
                 self.tree.insert("", "end", iid=str(cid), values=values, tags=tags)
                 shown += 1
+        self.tree.sorting.apply()       # the order a heading chose
         total = len(self.project.cards)
         self.count.configure(text=f"{total} cards" if shown == total else f"{shown} of {total} cards")
         if self.current in self.project.cards and self.tree.exists(str(self.current)):
@@ -341,7 +342,12 @@ class ArtTab(Tab):
                 row["source"].configure(text="")
                 say(row["info"], "")
                 say(row["where"], "")
+                for button in row["side"].buttons.winfo_children():     # no card: nothing to import or export
+                    button.state(["disabled"])
             return
+        for row in self.rows.values():
+            for button in row["side"].buttons.winfo_children():
+                button.state(["!disabled"])     # Revert and Export mod's follow below, by what the mod owns
         project = self.project
         self.app.current_card = cid
         base = project.base_of(cid)
@@ -481,7 +487,11 @@ class ArtTab(Tab):
                                             initialfile=f"{cid:04d}-{name}{suffix}.png",
                                             filetypes=[("PNG images", "*.png")])
         if path:
-            pngio.write(path, image)
+            try:
+                pngio.write(path, image)
+            except OSError as problem:      # a folder it may not write, a full disk
+                messagebox.showerror("FM Editor", f"Could not write {path}: {problem}", parent=self)
+                return
             self.app.say(f"Wrote {path}")
 
     def revert(self, part):

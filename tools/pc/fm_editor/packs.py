@@ -1183,7 +1183,9 @@ def tiers_of(entry: dict) -> list:
     """[(name, tier dict)] of a pack: its "tiers", or its one pool as tier
     "cards" (a dict that is not in the entry)."""
     if isinstance(entry.get("tiers"), dict):
-        return [(k, v) for k, v in entry["tiers"].items() if isinstance(v, dict)]
+        tiers = [(k, v) for k, v in entry["tiers"].items() if isinstance(v, dict)]
+        if tiers:       # none (a mod's own "tiers": {}): its one pool, so a tier is always there to pick
+            return tiers
     return [("cards", {"odds": 1, "cards": entry.get("cards", [])})]
 
 

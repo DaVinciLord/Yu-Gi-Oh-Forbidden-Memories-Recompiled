@@ -310,6 +310,9 @@ class GuardianStarsTab(Tab):
             self.project.files.pop(self.model.stars[star].icon, None)
         self.model.remove_star(star)
         self.icon_images.pop(star, None)
+        if self.cell and not all(self._exists(s) for s in self.cell):
+            self.cell = None            # its row or column is gone with the star
+            self.value.set("")
         self.fill()
         self.commit()
 
@@ -437,8 +440,12 @@ class GuardianStarsTab(Tab):
         self.value.set(str(self.model.grid[a][d]))
         self.draw()
 
+    def _exists(self, star) -> bool:
+        """A disc star, or one the mod declares."""
+        return 1 <= star <= gs.RETAIL_COUNT or star in self.model.stars
+
     def set_cell(self, value=None):
-        if not self.cell:
+        if not self.cell or not all(self._exists(s) for s in self.cell):
             return
         if value is None:
             try:

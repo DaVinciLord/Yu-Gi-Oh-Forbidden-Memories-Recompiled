@@ -110,6 +110,21 @@ class LimitsTabTest(unittest.TestCase):
         self.assertFalse(tab.commit())
         tab.clear()
         self.assertNotIn("limits", app.project.other)
+        # A section the form cannot show all of: committing it untouched (as
+        # every tab switch does) leaves it as written and the mod unchanged,
+        # so Conflicts still sees the misspelt key and the bad value.
+        odd = {"stats": "30000", "life_points": {"start": 9000, "strat": 1}, "two_player": {"foo": 2}}
+        app.project.other["limits"] = json.loads(json.dumps(odd))
+        tab.refresh()
+        changes = app.changes
+        self.assertTrue(tab.commit())
+        self.assertEqual(app.project.other["limits"], odd)
+        self.assertEqual(app.changes, changes)
+        # Edited, what the form cannot show is still kept.
+        tab.vars["chest"].set("200")
+        self.assertTrue(tab.commit())
+        self.assertEqual(app.project.other["limits"], dict(odd, chest=200))
+        self.assertGreater(app.changes, changes)
         json.dumps(manifest.build(app.project))
 
 

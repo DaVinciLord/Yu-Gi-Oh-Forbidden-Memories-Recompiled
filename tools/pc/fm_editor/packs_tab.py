@@ -769,7 +769,10 @@ class PacksTab(Tab):
             return
         if not messagebox.askyesno("Remove pack", f"Remove {entry.get('name', packmath.pack_id(entry))}?", parent=self):
             return
+        image = entry.get("image")
         self.project.packs.pop(self.index)
+        if isinstance(image, str) and not self.image_shared(image, entry):
+            self.project.files.pop(image, None)     # else saved as a file nothing names
         self.index = max(0, self.index - 1)
         self.edited()
 
@@ -1017,11 +1020,35 @@ class PacksTab(Tab):
         entry, t = self.current(), self.selected_tier()
         if entry is None or t is None or not isinstance(entry.get("tiers"), dict):
             return
-        name = packmath.tiers_of(entry)[t][0]
-        if not messagebox.askyesno("Remove tier", f"Remove the tier {name} and its cards?", parent=self):
+        tiers = packmath.tiers_of(entry)
+        name = tiers[t][0]
+        if len(tiers) < 2:
+            messagebox.showinfo("Remove tier", "A pack deals from one tier at least: add another before "
+                                "removing this one.", parent=self)
+            return
+        if not self.commit() or not messagebox.askyesno("Remove tier", f"Remove the tier {name} and its cards?",
+                                                        parent=self):
             return
         del entry["tiers"][name]
+        self.forget_tier(entry, name, packmath.tiers_of(entry)[0][0])
         self.edited()
+
+    @staticmethod
+    def forget_tier(entry, gone, first):
+        """A tier removed: the guarantee and pity name it no more, and a slot
+        that dealt from it alone deals from the first tier left."""
+        for key in ("guarantee", "pity"):
+            if isinstance(entry.get(key), dict):
+                entry[key].pop(gone, None)
+                if not entry[key]:
+                    del entry[key]
+        for s, slot in enumerate(entry.get("slots") or []):
+            if slot == gone:
+                entry["slots"][s] = first
+            elif isinstance(slot, dict) and isinstance(slot.get("tiers"), dict):
+                slot["tiers"].pop(gone, None)
+                if not slot["tiers"]:
+                    entry["slots"][s] = first
 
     def move_tier(self, step):
         entry, t = self.current(), self.selected_tier()
@@ -1029,7 +1056,7 @@ class PacksTab(Tab):
             return
         items = list(entry["tiers"].items())
         other = t + step
-        if not 0 <= other < len(items):
+        if not 0 <= other < len(items) or not self.commit():
             return
         items[t], items[other] = items[other], items[t]
         entry["tiers"] = dict(items)
@@ -1041,6 +1068,9 @@ class PacksTab(Tab):
     def toggle_slots(self):
         entry = self.current()
         if entry is None:
+            return
+        if not self.commit():           # the count typed, not the one stored
+            self.adv["use_slots"].set(not self.adv["use_slots"].get())
             return
         if self.adv["use_slots"].get():
             first = packmath.tiers_of(entry)[0][0]
@@ -1145,7 +1175,7 @@ class PacksTab(Tab):
 
     def remove_slot(self):
         entry, s = self.current(), self.selected_slot()
-        if entry is None or s is None or not isinstance(entry.get("slots"), list):
+        if entry is None or s is None or not isinstance(entry.get("slots"), list) or not self.commit():
             return
         entry["slots"].pop(s)
         if not entry["slots"]:
@@ -1158,7 +1188,7 @@ class PacksTab(Tab):
         if entry is None or s is None or not isinstance(entry.get("slots"), list):
             return
         other = s + step
-        if 0 <= other < len(entry["slots"]):
+        if 0 <= other < len(entry["slots"]) and self.commit():
             entry["slots"][s], entry["slots"][other] = entry["slots"][other], entry["slots"][s]
             self.edited()
             self.slots.selection_set(str(other))
@@ -1268,7 +1298,7 @@ class PacksTab(Tab):
 
     def revert_png(self):
         entry = self.current()
-        if entry is None or not isinstance(entry.get("image"), str):
+        if entry is None or not isinstance(entry.get("image"), str) or not self.commit():
             return
         image = entry.pop("image")
         if not self.image_shared(image, entry):

@@ -157,6 +157,12 @@ class LimitsTab(Tab):
                 return False
         before = self.project.other.get("limits")
         after = limits.build(flat, before)
+        # Untouched, the section stays as the mod wrote it: every tab switch
+        # commits, and rebuilding it would drop what the form cannot show
+        # (a misspelt key, a value that is not a number, which Conflicts
+        # should still report) and mark the mod changed.
+        if after == limits.build(limits.flatten(before), before):
+            after = before
         if after is None:
             self.project.other.pop("limits", None)
         else:

@@ -260,9 +260,10 @@ def build_rituals(project: Project) -> list:
     retail = project.retail.rituals
     for ritual in sorted(set(retail) | set(project.rituals)):
         now = project.rituals.get(ritual)
-        if retail.get(ritual) == now and ritual not in project.ritual_requirements:
+        if retail.get(ritual) == now and ritual not in project.ritual_requirements and \
+                not (now is None and project.ritual_removed(ritual)):
             continue
-        if now is None:
+        if now is None:     # a disc ritual's taken away, or an added copy's (its base's too)
             entries.append({"card": project.ref(ritual), "result": None})
         else:
             requirements = project.ritual_requirements.get(ritual)
@@ -961,8 +962,7 @@ def read_rituals(project: Project, entries, messages: list):
                             "or \"effect\" naming one); left out")
             continue
         if "result" in entry and entry["result"] is None:
-            project.rituals.pop(ritual, None)
-            project.ritual_requirements.pop(ritual, None)
+            project.remove_ritual(ritual)
             continue
         tributes = entry.get("tributes")
         if not isinstance(tributes, list) or len(tributes) != 3:

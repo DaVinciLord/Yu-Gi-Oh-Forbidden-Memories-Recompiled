@@ -457,9 +457,35 @@ class CardsTab(Tab):
             self.show_card(cid)
 
     # the form
+    def idle_form(self, idle: bool):
+        """No card: every control of the form greyed (the buttons, the icon
+        lists, an added card's boxes), not only its first row of fields; a
+        card again: those back as they were. The effects box sees to its own."""
+        if not idle:
+            for widget, state in getattr(self, "_idled", ()):
+                if widget.winfo_exists():
+                    widget.state(state)
+            self._idled = []
+            return
+        if getattr(self, "_idled", None):
+            return
+        idled = []
+
+        def walk(widget):
+            for child in widget.winfo_children():
+                if child is self.effects_box:
+                    continue
+                if isinstance(child, (ttk.Button, ttk.Menubutton, ttk.Checkbutton)) and not child.instate(["disabled"]):
+                    idled.append((child, ["!disabled"]))
+                    child.state(["disabled"])
+                walk(child)
+        walk(self.form)
+        self._idled = idled
+
     def show(self, cid):
         self.current = cid
         self.status.configure(text="")
+        self.idle_form(not cid)
         state = "normal" if cid else "disabled"
         for child in self.form.winfo_children():
             try:
@@ -1130,7 +1156,10 @@ class FusionsTab(Tab):
         ttk.Entry(top, textvariable=self.search, width=28).pack(side="left", padx=4)
         self.changed_only = tk.BooleanVar()
         ttk.Checkbutton(top, text="Changed only", variable=self.changed_only, command=self.fill).pack(side="left")
-        self.search.trace_add("write", lambda *_: self.fill())
+        # The list is filled again once the typing stops: 25,000 pairs a key
+        # made typing a name lag.
+        self._fill_job = None
+        self.search.trace_add("write", lambda *_: self.fill_soon())
         self.count = ttk.Label(top)
         self.count.pack(side="right")
         # {"remove": "all"}: the disc's pairs are no fusions; they are left
@@ -1145,7 +1174,7 @@ class FusionsTab(Tab):
                                                 ("state", "Status")], [260, 260, 260, 80], 24, selectmode="extended")
         frame.pack(fill="both", expand=True, pady=4)
         self.list_frame = frame
-        self.tree.bind("<Double-1>", lambda e: self.edit())
+        self.tree.bind("<Double-1>", self.double_click)
         buttons = ttk.Frame(self)
         buttons.pack(fill="x")
         ttk.Button(buttons, text="Add fusion...", command=self.add).pack(side="left")
@@ -1169,6 +1198,7 @@ class FusionsTab(Tab):
         """The fusions the card is in or makes."""
         self.followed = cid
         self.search.set(self.project.card_label(cid))
+        self.fill()
 
     def follow(self, cid):
         """The window's card, when it changed, unless the search is the
@@ -1178,9 +1208,25 @@ class FusionsTab(Tab):
         if cid != followed and cid in self.project.cards and (not text or labelled_card(self.project, text) == followed):
             self.show_card(cid)
 
-    def fill(self):
+    def double_click(self, event):
+        """A row's: a heading's double-click is no edit of the selected row."""
+        if self.tree.identify_region(event.x, event.y) in ("cell", "tree"):
+            self.edit()
+
+    def fill_soon(self):
+        if self._fill_job is not None:
+            self.after_cancel(self._fill_job)
+        self._fill_job = self.after(200, self.fill)
+
+    def fill(self, select=()):
+        """The list again, the rows selected before (or `select`) still
+        selected where they are listed."""
+        if self._fill_job is not None:
+            self.after_cancel(self._fill_job)
+            self._fill_job = None
         if self.project is None:
             return
+        chosen = [f"{a}:{b}" for a, b in select] or list(self.tree.selection())
         self.tree.delete(*self.tree.get_children())
         p = self.project
         text = self.search.get().strip()
@@ -1218,7 +1264,13 @@ class FusionsTab(Tab):
             self.tree.insert("", "end", iid=f"{pair[0]}:{pair[1]}", tags=(tag,) if tag else (),
                              values=(p.card_label(pair[0]), p.card_label(pair[1]), shown, status))
         more = f" (first {self.LIMIT} shown; search to narrow)" if len(rows) > self.LIMIT else ""
-        self.count.configure(text=f"{len(rows)} fusions{more}")
+        removed = sum(1 for _, status in rows if status == "removed")
+        gone = f", {removed} removed" if removed else ""
+        self.count.configure(text=f"{len(rows) - removed} fusions{gone}{more}")
+        kept = [iid for iid in chosen if self.tree.exists(iid)]
+        if kept:
+            self.tree.selection_set(kept)
+            self.tree.see(kept[0])
         self.all_button.configure(text="Restore disc fusions" if p.fusion_remove_all else "Remove all fusions...")
         if p.fusion_remove_all:
             shown = "shown in red" if self.show_removed.get() else f"{hidden} hidden here"
@@ -1253,20 +1305,34 @@ class FusionsTab(Tab):
                 self.project.set_fusion(pair[0], pair[1], None)     # the fusion moved to other cards
             self.project.set_fusion(a, b, r)
             self.app.changed()
-            self.search.set(self.project.card_label(a).split(" ", 1)[1] if " " in self.project.card_label(a) else "")
-            self.fill()
+            made = self.project.pair(a, b)
+            self.fill(select=[made])
+            if not self.tree.exists(f"{made[0]}:{made[1]}"):
+                # The search or "Changed only" leaves it out: show card A's.
+                self.changed_only.set(False)
+                self.show_card(made[0])
+                self.fill(select=[made])
             return None
 
-        FormDialog(self, title, build, ok)
+        dialog = FormDialog(self, title, build, ok)
+        dialog.fields = fields
+        return dialog
 
     def add(self):
-        self.dialog("Add fusion")
+        return self.dialog("Add fusion")
+
+    def shown_result(self, pair):
+        """What the row shows the pair making: a card's own list's, the
+        mod's, or the disc's."""
+        p = self.project
+        own = fusion_pairs(p)[0].get(pair) if pair not in p.fusions else None
+        return own or p.fusions.get(pair) or p.retail.fusions.get(pair)
 
     def edit(self):
         chosen = self.selected()
         if chosen:
             pair = chosen[0]
-            self.dialog("Change fusion", pair, self.project.fusions.get(pair) or self.project.retail.fusions.get(pair))
+            return self.dialog("Change fusion", pair, self.shown_result(pair))
 
     def remove(self):
         if not self.selected():
@@ -1315,7 +1381,7 @@ class FusionsTab(Tab):
             fields["r"] = CardField(body, lambda: self.project, width=36)
             fields["r"].grid(row=0, column=1, sticky="we", pady=2)
             if chosen:
-                fields["r"].set(self.project.fusions.get(chosen[0]) or self.project.retail.fusions.get(chosen[0]))
+                fields["r"].set(self.shown_result(chosen[0]))
             ttk.Label(body, text="No recipe on the disc makes this card any more: one \"remove\" rule in place of\n"
                                  "a rule per pair. The mod's own fusions, and an added card's own recipes, still\n"
                                  "make it. Revert a pair to bring that recipe back.",
@@ -1489,7 +1555,8 @@ class RitualsTab(Tab):
                                                 ("t3", "Tribute 3"), ("result", "Summons"), ("state", "Status")],
                                          [210, 170, 170, 170, 200, 70], 24)
         frame.pack(fill="both", expand=True)
-        self.tree.bind("<Double-1>", lambda e: self.edit())
+        self.tree.bind("<Double-1>", lambda e: self.edit() if self.tree.identify_region(e.x, e.y) in ("cell", "tree")
+                       else None)
         buttons = ttk.Frame(self)
         buttons.pack(fill="x", pady=(4, 0))
         ttk.Button(buttons, text="Edit recipe...", command=self.edit).pack(side="left")
@@ -1506,6 +1573,7 @@ class RitualsTab(Tab):
         if self.project is None:
             return
         p = self.project
+        chosen = self.tree.selection()
         self.tree.delete(*self.tree.get_children())
         for ritual in sorted(set(p.ritual_cards()) | set(p.rituals) | set(p.retail.rituals)):
             if ritual not in p.cards:
@@ -1544,6 +1612,10 @@ class RitualsTab(Tab):
                     labels[i] = " & ".join(parts) or "-"
             self.tree.insert("", "end", iid=str(ritual), values=[p.card_label(ritual)] + labels + [state],
                              tags=(state,) if state else ())
+        kept = [iid for iid in chosen if self.tree.exists(iid)]
+        if kept:                        # the row acted on stays selected
+            self.tree.selection_set(kept)
+            self.tree.see(kept[0])
 
     def selected(self):
         selection = self.tree.selection()
@@ -1796,8 +1868,7 @@ class RitualsTab(Tab):
     def remove(self):
         ritual = self.selected()
         if ritual:
-            self.project.rituals.pop(ritual, None)
-            self.project.ritual_requirements.pop(ritual, None)
+            self.project.remove_ritual(ritual)
             self.app.changed()
             self.fill()
 
@@ -2099,7 +2170,9 @@ class StarterTab(Tab):
 
     # --- decks -------------------------------------------------------------
 
-    def deck_dialog(self, title, deck):
+    def deck_dialog(self, title, deck, adding=False):
+        """A deck's name and weight; `adding`: a new deck, put in the mod only
+        when the dialog is OKed."""
         fields = {}
 
         def build(dialog, body):
@@ -2119,28 +2192,27 @@ class StarterTab(Tab):
                 return f"a weight is a whole number, 0 to {STARTER_WEIGHT_LIMIT}"
             deck.name = fields["name"].get().strip()
             deck.weight = int(text)
+            if adding:
+                self.project.starter.append(deck)
+                self.deck = len(self.decks()) - 1
             self.app.changed()
-            self.fill()
             self.fill_list()
+            self.fill()
+            if adding and self.list.exists(str(self.deck)):
+                self.list.selection_set(str(self.deck))
             return None
 
-        FormDialog(self, title, build, ok)
+        return FormDialog(self, title, build, ok)
 
     def add_deck(self):
         if self.project is None:
             return
-        deck = StarterDeck(name=f"Deck {len(self.decks()) + 1}")
-        self.project.starter.append(deck)
-        self.deck = len(self.decks()) - 1
-        self.edited()
-        if self.list.exists(str(self.deck)):
-            self.list.selection_set(str(self.deck))
-        self.deck_dialog("Add starter deck", deck)
+        return self.deck_dialog("Add starter deck", StarterDeck(name=f"Deck {len(self.decks()) + 1}"), adding=True)
 
     def edit_deck(self):
         deck = self.current()
         if deck:
-            self.deck_dialog("Starter deck", deck)
+            return self.deck_dialog("Starter deck", deck)
 
     def remove_deck(self):
         deck = self.current()

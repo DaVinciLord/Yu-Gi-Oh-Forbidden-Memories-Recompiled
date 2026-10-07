@@ -29,6 +29,8 @@ Starter decks tab turns it into `Pool`s (`read`) and back (`build`).
 """
 from __future__ import annotations
 
+import json
+
 import copy
 from dataclasses import dataclass, field
 
@@ -117,9 +119,12 @@ def build(pools, ref) -> list:
 def state(project) -> list:
     """The pools the project holds, read once and kept on it."""
     found = getattr(project, "starter_pool_state", None)
-    if found is None:
+    # Read again when the section changed under it (Mod info's other keys).
+    source = json.dumps(project.other.get("starter_pools"), sort_keys=True, default=str)
+    if found is None or getattr(project, "starter_pool_source", None) != source:
         found = read(project.other.get("starter_pools"), project.resolve)
         project.starter_pool_state = found
+        project.starter_pool_source = source
     return found
 
 
@@ -130,6 +135,7 @@ def store(project):
         project.other.pop("starter_pools", None)
     else:
         project.other["starter_pools"] = built
+    project.starter_pool_source = json.dumps(project.other.get("starter_pools"), sort_keys=True, default=str)
 
 
 def drawn(project) -> int:

@@ -208,6 +208,45 @@ class TabTest(unittest.TestCase):
         tab.set_copies()
         self.assertEqual(app.project.starter[0].cards, {})
 
+    def test_add_edit_and_remove_a_deck(self):
+        from unittest import mock
+        app, tab = self.app, self.app.starter
+        # Cancelled, Add deck adds nothing.
+        dialog = tab.add_deck()
+        dialog.destroy()
+        self.assertEqual(app.project.starter, [])
+        self.assertFalse(app.dirty)
+        # OKed, the deck is there, selected, with the name and weight typed.
+        dialog = tab.add_deck()
+        entries = [w for w in dialog.winfo_children()[0].winfo_children() if w.winfo_class() == "TEntry"]
+        entries[0].delete(0, "end")
+        entries[0].insert(0, "Dragons")
+        entries[1].delete(0, "end")
+        entries[1].insert(0, "3")
+        dialog.ok()
+        self.assertEqual([(d.name, d.weight) for d in app.project.starter], [("Dragons", 3)])
+        self.assertEqual(tab.list.selection(), ("0",))
+        self.assertTrue(app.dirty)
+        # A weight out of range is refused, the deck as it was.
+        dialog = tab.edit_deck()
+        entries = [w for w in dialog.winfo_children()[0].winfo_children() if w.winfo_class() == "TEntry"]
+        entries[1].delete(0, "end")
+        entries[1].insert(0, "-1")
+        dialog.ok()
+        self.assertIn("weight", dialog.error.cget("text"))
+        dialog.destroy()
+        self.assertEqual(app.project.starter[0].weight, 3)
+        with mock.patch("fm_editor.tabs.messagebox.askyesno", return_value=True):
+            tab.remove_deck()
+        self.assertEqual(app.project.starter, [])
+
+    def test_a_deck_naming_an_unknown_card_is_not_complete(self):
+        tab = self.app.starter
+        self.app.project.starter.append(StarterDeck(name="d", cards={2: 3, 3: 36}, kept={"Nobody's card": 1}))
+        tab.refresh()
+        self.assertFalse(self.app.project.starter[0].complete())
+        self.assertIn("error", tab.list.item("0", "tags"))
+
     def test_an_empty_tab_shows_no_deck(self):
         tab = self.app.starter
         tab.refresh()

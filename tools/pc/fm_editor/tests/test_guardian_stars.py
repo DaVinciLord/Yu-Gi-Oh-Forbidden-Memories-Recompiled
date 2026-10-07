@@ -12,6 +12,7 @@ against the same files, so the editor and the game agree on every pair.
 import copy
 import json
 import unittest
+from unittest import mock
 from pathlib import Path
 
 try:
@@ -353,6 +354,15 @@ class GuardianStarsTabTest(unittest.TestCase):
         self.assertIn(COLOURS["plus"][0], fills())
         tab.remove_icon()
         self.assertNotIn("icons/star-11.png", app.project.files)
+        # A cell of the star removed is no cell any more: the bonus buttons
+        # write no matchup for a star that is gone.
+        tab.pick_cell(11, 1)
+        with mock.patch("fm_editor.guardian_stars_tab.messagebox.askokcancel", return_value=True):
+            tab.remove_star()
+        self.assertIsNone(tab.cell)
+        tab.set_cell(500)
+        self.assertFalse([m for m in app.project.other["guardian_stars"].get("matchups", [])
+                          if 11 in (m["attacker"], m["defender"])])
         tab.preset_clear()
         self.assertTrue(app.project.other["guardian_stars"]["replace"])
         self.assertGreater(app.changes, 0)

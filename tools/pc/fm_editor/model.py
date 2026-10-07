@@ -119,8 +119,9 @@ class StarterDeck:
         return sum(self.cards.values()) + sum(self.kept.values())
 
     def complete(self) -> bool:
-        """A deck the port will deal: the save holds exactly forty."""
-        return self.total() == DECK_SIZE
+        """A deck the port will deal: the save holds exactly forty, every one
+        a card it knows (a name it cannot place leaves the deck short)."""
+        return not self.kept and self.total() == DECK_SIZE
 
     def copy(self) -> "StarterDeck":
         return StarterDeck(self.name, self.weight, dict(self.cards), dict(self.kept), copy.deepcopy(self.extra))
@@ -371,7 +372,7 @@ class Project:
         self.equips.pop(cid, None)
         for monsters in self.equips.values():
             monsters.discard(cid)
-        self.rituals = {r: rec for r, rec in self.rituals.items() if cid not in rec and r != cid}
+        self.rituals = {r: rec for r, rec in self.rituals.items() if cid not in (rec or ()) and r != cid}
         self.ritual_requirements.pop(cid, None)
         for ritual, slots in list(self.ritual_requirements.items()):
             if ritual not in self.rituals or any(req.get("card") == cid for req in slots):
@@ -614,12 +615,27 @@ class Project:
             return "added"
         return "changed"
 
+    def ritual_removed(self, ritual: int) -> bool:
+        """An added copy written {"card": it, "result": null}: no recipe, not
+        its base's either (a disc ritual card is removed by having none)."""
+        return ritual in self.rituals and self.rituals[ritual] is None
+
+    def remove_ritual(self, ritual: int):
+        """No recipe makes the ritual card summon anything."""
+        self.ritual_requirements.pop(ritual, None)
+        if ritual in self.retail.rituals:
+            self.rituals.pop(ritual, None)
+        else:
+            self.rituals[ritual] = None
+
     def ritual_status(self, ritual: int) -> str:
         """The recipe against the disc's: "" the same, or "added", "removed" or
         "changed"."""
         now, retail = self.rituals.get(ritual), self.retail.rituals.get(ritual)
         if ritual in self.ritual_requirements:
             return "added" if retail is None else "changed"
+        if self.ritual_removed(ritual) and retail is None:
+            return "removed"            # an added copy that has no recipe, not even its base's
         return "" if now == retail else "added" if retail is None else "removed" if now is None else "changed"
 
     def revert_ritual(self, ritual: int):

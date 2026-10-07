@@ -14,6 +14,13 @@ from pathlib import Path
 from fm_editor.tests.test_data import fixture
 
 
+def entry_count(entry):
+    """The cards a pack deals at a time (packs.py's DEFAULT_COUNT unless set)."""
+    from fm_editor import packs
+    count = entry.get("count", packs.DEFAULT_COUNT)
+    return count if isinstance(count, int) and count > 0 else packs.DEFAULT_COUNT
+
+
 class GuiCase(unittest.TestCase):
     """The window on the fixture's game files, for each test."""
 
@@ -862,6 +869,112 @@ class GuiTest(GuiCase):
         scroll.canvas.yview_moveto(1)
         self.assertGreater(scroll.canvas.yview()[0], 0)
 
+    def test_conflicts_go_to_what_another_mod_changes_too(self):
+        """A line about another mod goes to the tab that edits the thing, on
+        its card; a starter pools line to Mod info, where they are kept."""
+        import json as json_
+        app = self.app
+        p = app.project
+        other = Path(self.tmp.name) / "other-mods"
+        mod = other / "rival"
+        mod.mkdir(parents=True, exist_ok=True)
+        (mod / "mod.json").write_text(json_.dumps({
+            "id": "rival", "name": "Rival", "version": "1",
+            "cards": [{"replace": 5, "attack": 100}],
+            "fusions": [{"with": [1, 2], "result": 3}],
+            "equips": [{"card": 651, "add": [7]}]}))
+        p.cards[5] = p.cards[5].copy(attack=4000)
+        p.set_fusion(1, 2, 400)
+        p.equips[651].add(9)
+        app.conflicts.set_folder(str(other))
+        issues = [i for i in app.conflicts.run() if i.area == "Other mods"]
+        self.assertTrue(issues, [str(i) for i in app.conflicts.issues])
+        for issue in issues:
+            app.go_to(issue)
+            app.update()
+            kind = issue.target[0]
+            tab = app.notebook.nametowidget(app.notebook.select()).tab
+            if issue.where.startswith("Card"):
+                self.assertIs(tab, app.cards)
+                self.assertEqual(app.cards.current, 5)
+            elif issue.where.startswith("Fusion"):
+                self.assertIs(tab, app.fusions)
+                self.assertTrue(app.fusions.tree.exists("1:2"), (issue.target, app.fusions.search.get(), app.fusions.tree.get_children()[:5]))
+            elif issue.where.startswith("Equip"):
+                self.assertIs(tab, app.equips)
+                self.assertEqual(app.equips.current, 651)
+            else:
+                self.assertIsNotNone(kind)
+        from fm_editor import validate as v
+        app.go_to(v.Issue("error", "Starter pools", "pool 1", "x", 0))
+        app.update()
+        self.assertIs(app.notebook.nametowidget(app.notebook.select()).tab, app.info)
+
+    def test_pack_tiers_slots_and_remove(self):
+        """Tiers and slots keep a pack whole: the last tier stays, a removed
+        tier leaves no guarantee, pity or slot naming it, an action keeps
+        what the form holds, and a removed pack takes its picture along."""
+        from fm_editor import pngio
+        from fm_editor.tests.test_art import gradient
+        app = self.app
+        tab = app.packs
+        app.notebook.select(tab)
+        app.update()
+        tab.add_pack()
+        tab.add_cards([1, 2])
+        entry = tab.current()
+        tier = lambda name: (lambda title, n, t, on_ok: on_ok(name, {"odds": 1}))
+        with mock.patch.object(tab, "tier_dialog", tier("rare")):
+            tab.add_tier()
+        self.assertEqual([n for n, _ in __import__("fm_editor.packs", fromlist=["x"]).tiers_of(entry)], ["cards", "rare"])
+        tab.toggle_advanced()
+        tab.adv["guarantee"].set("rare=1")
+        self.assertTrue(tab.commit())
+        # Slots: ticking them keeps the name typed (the form is stored first).
+        tab.vars["name"].set("Typed name")
+        tab.adv["use_slots"].set(True)
+        tab.toggle_slots()
+        self.assertEqual(entry["name"], "Typed name")
+        self.assertEqual(entry["slots"], ["cards"] * entry_count(entry))
+        with mock.patch.object(tab, "slot_dialog", lambda title, rule, on_ok: on_ok("rare")):
+            tab.add_slot()
+        self.assertEqual(entry["slots"][-1], "rare")
+        tab.slots.selection_set("0")
+        tab.move_slot(1)
+        self.assertEqual(entry["slots"][1], "cards")
+        tab.slots.selection_set(str(len(entry["slots"]) - 1))
+        tab.remove_slot()
+        # Removing "rare": no guarantee or slot names it any more.
+        tab.fill()
+        tab.tiers.selection_set("1")
+        with mock.patch("fm_editor.packs_tab.messagebox.askyesno", return_value=True):
+            tab.remove_tier()
+        self.assertNotIn("rare", entry["tiers"])
+        self.assertNotIn("guarantee", entry)
+        self.assertNotIn("rare", entry["slots"])
+        # The last tier stays: a pack deals from one at least, and adding a
+        # card still works.
+        tab.tiers.selection_set("0")
+        with mock.patch("fm_editor.packs_tab.messagebox.showinfo") as told:
+            tab.remove_tier()
+        told.assert_called_once()
+        self.assertEqual(len(entry["tiers"]), 1)
+        tab.add_cards([3])
+        # A pack of the mod's own with "tiers": {} opens and takes cards.
+        entry["tiers"] = {}
+        tab.fill()
+        tab.add_cards([4])
+        # A removed pack takes its picture along; one another pack shares stays.
+        picture = Path(self.tmp.name) / "pack.png"
+        pngio.write(picture, gradient(204, 192))
+        tab.use_file(str(picture))
+        image = tab.current()["image"]
+        self.assertIn(image, app.project.files)
+        with mock.patch("fm_editor.packs_tab.messagebox.askyesno", return_value=True):
+            tab.remove()
+        self.assertEqual(app.project.packs, [])
+        self.assertNotIn(image, app.project.files)
+
     def test_packs(self):
         from fm_editor import pngio
         from fm_editor.packs_tab import SimulateDialog
@@ -1121,6 +1234,7 @@ class GuiTest(GuiCase):
             app.notebook.select(tab)
             app.update()
         app.fusions.search.set("Blue Dragon")
+        app.fusions.fill()
         self.assertTrue(app.fusions.tree.get_children())
         app.equips.equips.selection_set("651")
         app.equips.select()
@@ -1147,6 +1261,7 @@ class GuiTest(GuiCase):
         p.card_extra[1] = {"fusions": [{"with": 2, "result": 500}]}
         p._own_pairs = None
         tab.search.set("Blue Dragon")
+        tab.fill()
         self.assertEqual(tab.tree.set("1:2", "state"), "own list")
         self.assertIn("Card 500", tab.tree.set("1:2", "result"))
         del p.card_extra[1]
@@ -1169,6 +1284,145 @@ class GuiTest(GuiCase):
         tab.search.set("")
         tab.fill()
         self.assertFalse(tab.tree.exists(f"2:{copy}"))
+
+    def test_icon_lists_count_as_form_edits_and_no_card_greys_the_form(self):
+        from tkinter import ttk
+        app, cards = self.app, self.app.cards
+        cards.goto(1)
+        app.update()
+        self.assertNotIn(cards, app._pending)
+        box = cards.star_boxes[0]
+        app._remember_input(box)                    # pressed: what it held before the pick
+        box._fill()
+        other = next(i for i in range(1, box.menu.index("end") + 1) if box.menu.entrycget(i, "label") != box.get())
+        box.menu.invoke(other)                      # another star picked from the menu
+        app.update()
+        self.assertIn(cards, app._pending)
+        self.assertIn("Unapplied", app.edit_state.cget("text"))
+        self.assertTrue(cards.apply())
+        # No card: Apply, Revert, the icon lists are greyed; a card again,
+        # they are back.
+        cards.show(None)
+        greyed = [w for w, _ in cards._idled]
+        self.assertIn(box, greyed)
+        self.assertTrue(any(isinstance(w, ttk.Button) and w.cget("text") == "Apply" for w in greyed))
+        self.assertTrue(all(w.instate(["disabled"]) for w in greyed))
+        cards.show(1)
+        self.assertTrue(all(w.instate(["!disabled"]) for w in greyed))
+
+    def test_art_tab_keeps_its_card_through_undo(self):
+        from fm_editor import pngio
+        from fm_editor.tests.test_art import gradient
+        app, tab = self.app, self.app.art
+        app.notebook.select(tab)
+        app.update()
+        tab.goto(2)
+        picture = Path(self.tmp.name) / "art2.png"
+        pngio.write(picture, gradient(102, 96))
+        tab.use_file("art", str(picture))
+        app.update()
+        app.undo()
+        app.update()
+        self.assertEqual(app.art.current, 2)
+        self.assertEqual(app.art.tree.selection(), ("2",))
+        # No card: the import and export buttons are greyed.
+        tab.show(None)
+        buttons = [b for row in tab.rows.values() for b in row["side"].buttons.winfo_children()]
+        self.assertTrue(all(b.instate(["disabled"]) for b in buttons))
+        tab.show(2)
+        self.assertTrue(any(b.instate(["!disabled"]) for b in buttons))
+
+    def test_ritual_remove_and_revert(self):
+        """Remove recipe on a disc ritual and on an added copy (which would
+        otherwise keep its base's), the row still selected; revert."""
+        from fm_editor import manifest
+        app = self.app
+        tab = app.rituals
+        p = tab.project
+        p.info.id = "rit"
+        ritual = sorted(p.retail.rituals)[0]
+        copy = p.add_card(ritual, "copy")
+        tab.fill()
+        self.assertEqual(tab.tree.set(str(copy), "state"), "as base")
+        for card in (ritual, copy):
+            tab.tree.selection_set(str(card))
+            tab.remove()
+            self.assertEqual(tab.tree.selection(), (str(card),))
+            self.assertEqual(tab.tree.set(str(card), "state"), "removed")
+        built = manifest.build_rituals(p)
+        self.assertIn({"card": p.ref(ritual), "result": None}, built)
+        self.assertIn({"card": p.ref(copy), "result": None}, built)
+        from fm_editor.model import Project
+        again = Project(p.retail)
+        manifest.apply(again, json.loads(manifest.dumps(manifest.build(p))))
+        self.assertEqual(again.ritual_status(copy), "removed")
+        self.assertEqual(manifest.build_rituals(again), built)
+        # Reverted, the copy is its base's ritual again; the disc's is back.
+        for card in (ritual, copy):
+            tab.tree.selection_set(str(card))
+            tab.revert()
+        self.assertEqual(tab.tree.set(str(copy), "state"), "as base")
+        self.assertEqual(manifest.build_rituals(p), [])
+        from fm_editor import validate
+        validate.validate(p)
+
+    def test_fusion_actions_keep_the_search_and_selection(self):
+        """Add, change, remove and revert from the Fusions tab: the modder's
+        search stays, the pair acted on stays selected, a typing pause
+        refills the list, and a header double-click opens nothing."""
+        from fm_editor import manifest
+        app = self.app
+        tab = app.fusions
+        p = tab.project
+        app.notebook.select(tab)
+        app.update()
+        tab.search.set("Mystic")
+        self.assertTrue(tab._fill_job)            # waiting for the typing to stop
+        app.after(250)
+        app.update()
+        self.assertIsNone(tab._fill_job)
+        rows = tab.tree.get_children()
+        self.assertTrue(rows)
+        pair = tuple(int(x) for x in rows[0].split(":"))
+        # Change result: prefilled with what the row shows, the row kept.
+        tab.tree.selection_set(rows[0])
+        dialog = tab.edit()
+        self.assertEqual(dialog.fields["r"].get(), p.fusions.get(pair) or p.retail.fusions.get(pair))
+        dialog.fields["r"].set(500)
+        dialog.ok()
+        self.assertEqual(p.fusions[pair], 500)
+        self.assertEqual(tab.search.get(), "Mystic")
+        self.assertEqual(tab.tree.selection(), (rows[0],))
+        # Remove, then revert: still selected, back to the disc's.
+        tab.remove()
+        self.assertEqual(tab.tree.selection(), (rows[0],))
+        self.assertEqual(tab.tree.set(rows[0], "state"), "removed")
+        self.assertIn(", 1 removed", tab.count.cget("text"))
+        tab.revert()
+        self.assertEqual(tab.tree.selection(), (rows[0],))
+        self.assertEqual(p.fusions.get(pair), p.retail.fusions.get(pair))
+        # Add a pair the search does not show: the tab shows card A's.
+        new = next((a, b) for a in range(1, 40) for b in range(a, 40) if (a, b) not in p.retail.fusions)
+        dialog = tab.add()
+        for key, value in zip("abr", (new[0], new[1], 600)):
+            dialog.fields[key].set(value)
+        dialog.ok()
+        self.assertEqual(p.fusions[new], 600)
+        self.assertEqual(tab.tree.selection(), (f"{new[0]}:{new[1]}",))
+        self.assertIn({"with": [p.ref(new[0]), p.ref(new[1])], "result": p.ref(600)}, manifest.build_fusions(p))
+        # Changed only: what the mod changed.
+        tab.changed_only.set(True)
+        tab.fill()
+        self.assertEqual(tab.tree.get_children(), (f"{new[0]}:{new[1]}",))
+        tab.changed_only.set(False)
+        # A double-click on a heading is no double-click on the selected row.
+        tab.tree.update_idletasks()
+        heading, row = mock.Mock(x=10, y=3), mock.Mock(x=10, y=tab.tree.bbox(tab.tree.get_children()[0])[1] + 2)
+        with mock.patch.object(tab, "edit") as edit:
+            tab.double_click(heading)
+            edit.assert_not_called()
+            tab.double_click(row)
+            edit.assert_called_once()
 
     def test_remove_all_fusions(self):
         from fm_editor import manifest
@@ -1197,6 +1451,7 @@ class GuiTest(GuiCase):
         self.assertTrue(tab.count.cget("text").startswith("0 fusions"))
         tab.changed_only.set(False)
         tab.search.set("Blue Dragon")
+        tab.fill()
         self.assertFalse(tab.tree.exists("1:2"))
         tab.show_removed.set(True)
         tab.fill()
@@ -1511,6 +1766,7 @@ class GuiTest(GuiCase):
         self.assertTrue(all(2 in pair or p.fusions.get(pair) == 2 for pair in rows))
         # A search of the modder's own is kept.
         app.fusions.search.set("zzz")
+        app.fusions.fill()
         app.notebook.select(app.cards)
         app.cards.show_card(3)
         app.notebook.select(app.fusions)

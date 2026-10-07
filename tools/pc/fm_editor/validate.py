@@ -234,6 +234,8 @@ def _check_tables(project: Project, out: list):
             elif not project.cards[m].is_monster():
                 out.append(Issue("warning", "Equips", where, f"{project.card_label(m)} is not a monster", equip))
     for ritual, recipe in project.rituals.items():
+        if recipe is None:      # an added copy with no recipe (Project.remove_ritual)
+            continue
         conditional = project.ritual_requirements.get(ritual)
         if project.retail.rituals.get(ritual) == recipe and not conditional:
             continue
@@ -628,7 +630,11 @@ def cross_mod(project: Project, folders=None, settings_path=None) -> tuple:
     for overlap in overlaps.check(order, _ProjectSource(project, settings, order), involving=place):
         where = overlap.label + (" (with a mod off now)" if any(m in off for m in overlap.mods) else "")
         message = overlap.text[len(overlap.label) + 1:]
-        issues.append(Issue("warning" if overlap.severity else "note", "Other mods", where, message, overlap.label))
+        # The target: what the overlap is about (overlaps.KINDS) and its key,
+        # for Conflicts to go to the tab that edits it.
+        key = overlap.claims[0].key if overlap.claims else None
+        issues.append(Issue("warning" if overlap.severity else "note", "Other mods", where, message,
+                            (overlap.kind, key)))
     summary = f"Checked against {len(order) - 1} installed mods in " + ", ".join(str(f) for f in folders) + \
         f", in the order the game loads them; this mod loads {place + 1} of {len(order)}."
     if off:

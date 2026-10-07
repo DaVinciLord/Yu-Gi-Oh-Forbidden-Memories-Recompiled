@@ -490,8 +490,9 @@ class App(Editing, tk.Tk):
             if target:
                 self.art.goto(target)
         elif issue.area == "Fusions" and target:
+            self.current_card = target[0]       # what the tab follows once it is up
             self.notebook.select(self.fusions)
-            self.fusions.search.set(str(target[0]))
+            self.fusions.show_card(target[0])
         elif issue.area == "Equips" and target:
             self.notebook.select(self.equips)
             if self.equips.equips.exists(str(target)):
@@ -518,6 +519,45 @@ class App(Editing, tk.Tk):
             self.notebook.select(self.limits)
         elif issue.area == "Guardian Stars":
             self.notebook.select(self.stars)
+        elif issue.area == "Starter pools":     # no tab of their own: Mod info's other keys hold them
+            self.notebook.select(self.info)
+        elif issue.area == "Other mods" and isinstance(target, tuple):
+            self.go_to_overlap(*target)
+
+    def go_to_overlap(self, kind, key):
+        """The tab that edits what another mod changes too (overlaps.KINDS),
+        on the card when the overlap is about one."""
+        from . import overlaps as ov
+        card = key if isinstance(key, int) and not isinstance(key, bool) else None
+        if kind == ov.CARDS and card in self.project.cards:
+            self.notebook.select(self.cards)
+            self.cards.goto(card)
+        elif kind == ov.FUSIONS:
+            pair = [k for k in key[1:] if isinstance(k, int)] if isinstance(key, tuple) else []
+            if pair and pair[0] in self.project.cards:
+                self.current_card = pair[0]
+            self.notebook.select(self.fusions)
+            pair = [k for k in key[1:] if isinstance(k, int)] if isinstance(key, tuple) else []
+            if pair and pair[0] in self.project.cards:
+                self.current_card = pair[0]     # what the tab follows once it is up
+                self.fusions.show_card(pair[0])
+        elif kind == ov.EQUIPS:
+            self.notebook.select(self.equips)
+            equip = card & (ov.EQUIP_CARDS - 1) if card is not None else None
+            if equip in self.project.cards:
+                self.current_card = equip
+            if equip and self.equips.equips.exists(str(equip)):
+                self.equips.show_card(equip)
+        elif kind == ov.RITUALS:
+            self.notebook.select(self.rituals)
+            if card is not None and self.rituals.tree.exists(str(card)):
+                self.rituals.tree.selection_set(str(card))
+                self.rituals.tree.see(str(card))
+        else:
+            tab = {ov.POOLS: self.duelists, ov.DUELISTS: self.duelists, ov.STARTER: self.starter,
+                   ov.PACKS: self.packs, ov.PASSWORDS: self.packs, ov.STARS: self.stars, ov.LIMITS: self.limits,
+                   ov.TEXTURES: self.art}.get(kind, self.info)
+            self.notebook.select(tab)
 
     def about(self):
         messagebox.showinfo(APP_TITLE, "FM Editor\n\nMakes mods for the PC port of Yu-Gi-Oh! Forbidden Memories. "
