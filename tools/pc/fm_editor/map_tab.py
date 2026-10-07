@@ -55,7 +55,7 @@ class MapTab(Tab):
         self.hint = ttk.Label(left, style="Hint.TLabel", wraplength=px(left, 270), justify="left")
         self.hint.pack(anchor="w", pady=(6, 0))
 
-        middle = ttk.Frame(self, padding=(8, 0))
+        middle = ttk.Frame(self, padding=(4, 0))
         middle.pack(side="left", fill="y")
         top = ttk.Frame(middle)
         top.pack(fill="x")
@@ -151,7 +151,7 @@ class MapTab(Tab):
                                 variable=evar(name, tk.BooleanVar)).grid(row=row, column=column)
             ttk.Label(box, text="When").grid(row=1, column=1, sticky="w")
             ttk.Combobox(box, textvariable=evar("kind", tk.StringVar), values=CONDITIONS, state="readonly",
-                         width=20).grid(row=1, column=2, columnspan=2, sticky="w")
+                         width=19).grid(row=1, column=2, columnspan=2, sticky="w")
             ttk.Label(box, text="Flag").grid(row=2, column=1, sticky="w")
             flag = self.spin(box, evar("flag"), 0, FLAG_MAX)
             flag.grid(row=2, column=2, sticky="w")

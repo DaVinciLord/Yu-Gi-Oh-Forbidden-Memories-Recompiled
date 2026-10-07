@@ -1438,6 +1438,27 @@ class GuiTest(GuiCase):
         app.packs.forget_tier(entry, "rare", "common")
         self.assertEqual(entry["slots"], ["common"])
 
+    def test_every_tab_fits_a_1280_window(self):
+        """No tab asks for more than a 1280x800 window gives it across: the
+        bottom scrollbar shows on none (a long hint, three fields to a row
+        or panes asking for their own sizes once made the Map, Packs,
+        Rituals, Conflicts and Cards tabs wider)."""
+        app = self.app
+        app.deiconify()
+        app.geometry("1280x800")
+        app.update()
+        if app.winfo_width() < 1280:
+            self.skipTest("the screen is smaller than 1280 wide")
+        wide = []
+        for tab in app.tabs:
+            app.notebook.select(tab)
+            for _ in range(3):
+                app.update()
+                app.after(50)
+            if tab.page.xbar.winfo_ismapped():
+                wide.append((app.notebook.tab(tab.page, "text"), tab.winfo_reqwidth()))
+        self.assertEqual(wide, [])
+
     def test_cards_tab_fits_the_window_in_both_looks(self):
         """The Cards tab asks for what its list and form ask, not for its
         panes' sizes as they are: at 1400 wide no bottom scrollbar, light or
