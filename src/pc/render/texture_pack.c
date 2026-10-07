@@ -1076,9 +1076,9 @@ static int folder_add(Folder *folder, const char *name, const char *path, const 
  * same name as its folder if it declares one (assets/attributes/light.png is
  * attributes/light, switched by "attributes"). Otherwise its first part may
  * be one of the mod's settings, and the rest the name:
- * assets/card_art/cards/0001.png is cards/0001, switched off with the mod's
- * "card_art". The whole path is tried first, so a directory that is also
- * the start of a name (assets/cards/...) keeps meaning the name.
+ * assets/hd_art/card_art/001.png is card_art/001, switched off with the
+ * mod's "hd_art". The whole path is tried first, so a directory that is
+ * also a folder of the catalog (assets/card_art/...) keeps meaning it.
  * 0 when the path is neither, which is reported. */
 static int folder_resolve(const char *path, int (*part)(const char *, void *), void *context,
                           const char **name, char *setting, size_t setting_size)

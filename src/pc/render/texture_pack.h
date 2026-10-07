@@ -31,7 +31,7 @@ int TexturePack_LoadAssets(const char *directory, const struct JsonValue *assets
                            int (*part)(const char *, void *), void *context, char *problems, size_t size);
 /* Or mod.json's "assets": "<directory>", where the pictures are not listed
  * at all: every PNG under it whose path is a name in the catalog replaces
- * that image, so assets/deck_ui/type_dragon.png is deck_ui/type_dragon. */
+ * that image, so assets/monster_type/dragon.png is monster_type/dragon. */
 int TexturePack_LoadAssetFolder(const char *directory, unsigned rank, int (*part)(const char *, void *),
                                 void *context, char *problems, size_t size);
 void TexturePack_Unload(void);
