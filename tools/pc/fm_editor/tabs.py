@@ -322,7 +322,7 @@ class CardsTab(Tab):
         line("Password", ttk.Entry(form, textvariable=self.vars["password"], width=12, validate="key",
                                    validatecommand=digits), hint("password"))
         self.price = line("Starchips", ttk.Entry(form, textvariable=self.vars["starchips"], width=12), hint("starchips"))
-        ttk.Label(form, text="0 = free; empty = default price", style="Hint.TLabel").grid(
+        ttk.Label(form, text="Password shop price: 0 = free; empty = the game's", style="Hint.TLabel").grid(
             row=row, column=1, columnspan=2, sticky="w")
         row += 1
         # The frame the card view, the Library and the duel draw it in: its
@@ -711,7 +711,7 @@ class CardsTab(Tab):
             value, words, differs = shown.get(key, (None, "", False))
             hint, caption = self.hints[key], self.captions.get(key)
             if key == "password" and value is None and shown:
-                hint.configure(text="Card view only", style="Hint.TLabel", cursor="")
+                hint.configure(text="Disc: no password", style="Hint.TLabel", cursor="")
             elif differs:
                 text = f"{what}: {words} (restore)" if key != "text" else f"Restore {what.lower()} text"
                 if len(text) > HINT_WIDTH:
@@ -1284,7 +1284,8 @@ class FusionsTab(Tab):
         ttk.Button(buttons, text="Remove (no fusion)", command=self.remove).pack(side="left")
         ttk.Button(buttons, text="Remove recipes of...", command=self.remove_result).pack(side="left", padx=(4, 0))
         ttk.Button(buttons, text="Revert to retail", command=self.revert).pack(side="left", padx=4)
-        ttk.Button(buttons, text="Bulk...", command=lambda: bulk_dialog.open_bulk(self)).pack(side="left")
+        # Most disc fusions are by type (a Dragon with a Thunder...): many pairs at once.
+        ttk.Button(buttons, text="Bulk (many pairs)...", command=lambda: bulk_dialog.open_bulk(self)).pack(side="left")
         self.all_button = ttk.Button(buttons, text="Remove all fusions...", command=self.remove_all)
         self.all_button.pack(side="left", padx=4)
         key = legend(self, ("changed", "changed by the mod"), ("added", "added by the mod"),
@@ -1566,6 +1567,8 @@ class EquipsTab(Tab):
         right.pack(side="left", fill="both", expand=True, padx=(8, 0))
         self.heading = ttk.Label(right, font=ui_font(11))
         self.heading.pack(anchor="w")
+        ttk.Label(right, style="Hint.TLabel", text="What it adds to a monster's ATK and DEF is set on the Cards "
+                                                  "tab (the equip card's ATK and DEF boost).").pack(anchor="w")
         # Every monster type at once: ticked, all of the type may be equipped;
         # half ticked, some. Its count shows the list's monsters of the type.
         types = ttk.LabelFrame(right, text="By monster type: tick for every monster of it; click a count to list them",
@@ -1993,7 +1996,7 @@ class RitualsTab(Tab):
         def show_panel(index):
             open_index.set(index)
             for i, (button, panel) in enumerate(panels):
-                button.configure(text=("▼ " if i == index else "▶ ") + f"TRIBUTE {i + 1}")
+                button.configure(text=("▼ " if i == index else "▶ ") + f"Tribute {i + 1}")
                 if i == index:
                     panel.pack(fill="x", padx=(18, 0), pady=(2, 8))
                     render(i)
@@ -2128,10 +2131,12 @@ class DuelistsTab(Tab):
         entry.bind("<Return>", lambda e: self.set_weight())
         ttk.Button(edit, text="Set", command=self.set_weight).pack(side="left", padx=2)
         ttk.Button(edit, text="Remove selected", command=self.remove).pack(side="left", padx=(8, 0))
-        ttk.Button(edit, text="Normalize to 2048", command=self.normalize).pack(side="left", padx=4)
+        ttk.Button(edit, text="Scale to 2048 (100%)", command=self.normalize).pack(side="left", padx=4)
         ttk.Button(edit, text="Revert pool", command=self.revert).pack(side="left")
-        ttk.Label(right, text="Weights are chances out of 2048. A deck is 40 cards dealt from at least 14; "
-                              "a drop pool needs one card left.", style="Hint.TLabel").pack(anchor="w", pady=(4, 0))
+        # Above the list: below it, a window 800 high cut it off.
+        WrapLabel(right, text="Weights are chances out of 2048. A deck is 40 cards dealt from at least 14; "
+                              "a drop pool needs one card left.", style="Hint.TLabel").pack(
+            fill="x", before=self.tree.master)
 
     def refresh(self):
         self.fill_list()
@@ -2277,7 +2282,7 @@ class StarterTab(Tab):
         self.pages = ttk.Notebook(self)
         self.pages.pack(fill="both", expand=True)
         written = ttk.Frame(self.pages, padding=4)
-        self.pages.add(written, text="Written decks")
+        self.pages.add(written, text="Fixed decks")
         self.pools = StarterPoolsPage(self.pages, self)
         self.pages.add(self.pools, text="Weighted pools")
         self.pages.bind("<<NotebookTabChanged>>", lambda e: self.pools.fill() if self.pages.select() == str(self.pools)
@@ -2615,7 +2620,7 @@ class ModInfoTab(Tab):
         ttk.Label(form, text="Description").grid(row=4, column=0, sticky="nw", pady=2)
         self.description = tk.Text(form, width=70, height=4, wrap="word")
         self.description.grid(row=4, column=1, sticky="w", pady=2)
-        self.folder = ttk.Label(form, style="Hint.TLabel")
+        self.folder = ttk.Label(form, style="Hint.TLabel", wraplength=px(self, 560), justify="left")
         self.folder.grid(row=5, column=1, sticky="w")
         boxes = ttk.Frame(self)
         boxes.pack(fill="both", expand=True, pady=(8, 0))
@@ -2673,7 +2678,9 @@ class ModInfoTab(Tab):
             box.insert("1.0", value)
         self._shown = json.loads(json.dumps(self.shown_other()))     # what the box shows, as it reads back
         source = self.project.source_dir
-        self.folder.configure(text=f"Folder: {source}" if source else "Not saved yet")
+        self.folder.configure(text=f"Folder: {source}" if source else
+                              "Not saved yet: File > Save (Ctrl+S) makes its folder, File > Export puts it in "
+                              "the game's mods folder; the player turns it on in Game > Mods.")
         self.status.configure(text="")
         self.fill_settings()
 

@@ -519,8 +519,14 @@ class PacksTab(Tab):
         style = entry.get("image_style", "card")
         self.vars["image_style"].set(style if style in packmath.IMAGE_STYLES else "card")
         errors = [m for level, m in notes if level == "error"]
+        self.problem.configure(style="Error.TLabel")
         if errors:
-            self.problem.configure(text=errors[0])
+            empty = not any(packmath.tier_pool(entry, name) for name, _ in packmath.tiers_of(entry))
+            if empty and "none of its cards are here" in errors[0]:
+                # A pack just made: not a mistake, a next step.
+                self.problem.configure(text="Add cards: a pack with none is not sold.", style="Hint.TLabel")
+            else:
+                self.problem.configure(text=errors[0])
         chances = packmath.card_chances(pack) if pack else {}
         resolve = validate.pack_resolver(self.project)
         names = []

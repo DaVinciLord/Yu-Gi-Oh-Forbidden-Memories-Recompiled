@@ -34,7 +34,7 @@ STARCHIPS_MAX = 99999999    # eight digits on screen
 FIELDS = (
     ("stats", "ATK and DEF cap", 9999, 0, STAT_MAX, "a 16-bit number in every card record"),
     ("life_points.start", "Starting LP (both sides)", 8000, 1, LIFE_POINTS_MAX, "a 16-bit number in each side's record"),
-    ("life_points.max", "Most LP healing reaches", None, 1, LIFE_POINTS_MAX, "a 16-bit number in each side's record"),
+    ("life_points.max", "LP cap (healing stops there)", None, 1, LIFE_POINTS_MAX, "a 16-bit number in each side's record"),
 )
 ADVANCED = (
     ("attack", "ATK cap", 9999, 0, STAT_MAX, "a 16-bit number in every card record"),
@@ -46,7 +46,7 @@ ADVANCED = (
     ("two_player.max", "2P duel: most LP to pick", 8000, 1, LIFE_POINTS_MAX, "a 16-bit number in each side's record"),
     ("two_player.step", "2P duel: LP a step", 500, 1, LIFE_POINTS_MAX, "a 16-bit number in each side's record"),
     ("starchips", "Most starchips", 999999, 0, STARCHIPS_MAX, "eight digits on screen"),
-    ("chest", "Copies of a card in the chest", 250, 1, CHEST_MAX, "a byte a card in the memory card's save"),
+    ("chest", "Copies of a card in the Trunk", 250, 1, CHEST_MAX, "a byte a card in the memory card's save"),
     ("free_duel_record", "Free Duel wins/losses", 999, 1, RECORD_MAX, "a 16-bit number in the save"),
     ("two_player_record", "2P wins/losses", 9999, 1, TWO_PLAYER_RECORD_MAX, "a 16-bit number in the save"),
 )

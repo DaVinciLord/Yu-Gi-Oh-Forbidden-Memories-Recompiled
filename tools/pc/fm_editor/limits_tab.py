@@ -64,7 +64,7 @@ class LimitsTab(Tab):
         buttons = ttk.Frame(body)
         buttons.pack(fill="x")
         ttk.Button(buttons, text="Apply", command=self.commit).pack(side="left")
-        ttk.Button(buttons, text="Game's numbers", command=self.clear).pack(side="left", padx=4)
+        ttk.Button(buttons, text="Reset to the game's", command=self.clear).pack(side="left", padx=4)
         self.per_duelist = {}
 
     def _fields(self, parent, fields):

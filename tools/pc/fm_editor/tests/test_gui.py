@@ -946,6 +946,16 @@ class GuiTest(GuiCase):
         self.assertFalse(tab.empty.winfo_manager())
         self.assertTrue(any(w.instate(["!disabled"]) for w in tab.right.winfo_children()[0].winfo_children()))
 
+    def test_a_new_pack_asks_for_cards_not_an_error(self):
+        app, tab = self.app, self.app.packs
+        app.notebook.select(tab)
+        app.update()
+        tab.add_pack()
+        self.assertEqual(str(tab.problem.cget("style")), "Hint.TLabel")
+        self.assertIn("Add cards", tab.problem.cget("text"))
+        tab.add_cards([1])
+        self.assertNotIn("Add cards", tab.problem.cget("text"))
+
     def test_pack_tiers_slots_and_remove(self):
         """Tiers and slots keep a pack whole: the last tier stays, a removed
         tier leaves no guarantee, pity or slot naming it, an action keeps

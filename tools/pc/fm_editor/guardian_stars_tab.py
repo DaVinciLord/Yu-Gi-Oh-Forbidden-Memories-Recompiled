@@ -123,7 +123,7 @@ class GuardianStarsTab(Tab):
         self.bind("<<ThemeChanged>>", lambda e: self.draw(), add="+")
         edit = ttk.Frame(right)
         edit.pack(fill="x", pady=(6, 0))
-        self.cell_label = ttk.Label(edit, text="Click a cell")
+        self.cell_label = ttk.Label(edit, text="Click a cell, then its bonus:")
         self.cell_label.pack(side="left")
         self.value = tk.StringVar()
         value_entry = ttk.Entry(edit, textvariable=self.value, width=8)
@@ -230,7 +230,7 @@ class GuardianStarsTab(Tab):
             tags = ("added",) if star > gs.RETAIL_COUNT else ("changed",) if entry else ()
             self.tree.insert("", "end", iid=str(star), tags=tags,
                              values=(star, self.model.name(star), "mod's" if entry and entry.icon else
-                                     ("disc's" if star <= gs.RETAIL_COUNT else "plain"), counts.get(star, 0)))
+                                     ("game's" if star <= gs.RETAIL_COUNT else "plain"), counts.get(star, 0)))
         if chosen and self.tree.exists(str(chosen)):
             self.tree.selection_set(str(chosen))
         self.draw()
@@ -352,7 +352,7 @@ class GuardianStarsTab(Tab):
         star = self.selected_star
         image = self._icon_image(star) if star else None
         if image is None:
-            self.icon_label.configure(image="", text="disc's" if star and star <= gs.RETAIL_COUNT else "no icon",
+            self.icon_label.configure(image="", text="game's" if star and star <= gs.RETAIL_COUNT else "no icon",
                                       width=8)
             return
         photo = self._photo(pngio.resample(image, 16, 16), 16)
