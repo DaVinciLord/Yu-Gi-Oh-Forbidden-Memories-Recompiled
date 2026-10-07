@@ -14,9 +14,9 @@ i386-pc-linux-gnu and for i686-w64-mingw32 (with the Windows build's
 compared structure by structure. A header that does not compile on its own is
 reported and skipped; one whose structures differ fails the check.
 
-src/pc/platform is left out: window, settings and controls state, which is
-never in guest memory, never saved as bytes, and not part of what a mod
-builds against."""
+src/pc/platform and the native translated-runtime/ARM64-context headers are
+left out: their host records are not shared guest layouts or part of the
+portable i386 mod ABI."""
 import argparse, concurrent.futures, glob, os, re, subprocess, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -32,6 +32,15 @@ TARGETS = {"linux": ["--target=i386-pc-linux-gnu"], "windows": ["--target=i686-w
 
 TAGS = None  # struct and union tags defined under src/
 PORT_PRIVATE = os.path.join("src", "pc", "platform") + os.sep
+NATIVE_HEADERS = {
+    os.path.join("src", "pc", "guest", "translated_runtime.h"),
+    os.path.join("src", "pc", "guest", "state_arm64.h"),
+}
+
+
+def native_only(path):
+    path = os.path.normpath(path)
+    return path.startswith(PORT_PRIVATE) or path in NATIVE_HEADERS
 
 
 def ours(name):
@@ -41,7 +50,7 @@ def ours(name):
     unnamed = re.search(r"\(unnamed at ([^:]+)(:\d+:\d+)\)", name)
     if unnamed:
         path = os.path.relpath(os.path.normpath(os.path.join(ROOT, unnamed.group(1))), ROOT)
-        if not path.startswith("src" + os.sep) or path.startswith(PORT_PRIVATE):
+        if not path.startswith("src" + os.sep) or native_only(path):
             return None
         return name.replace(unnamed.group(0), f"(unnamed at {path}{unnamed.group(2)})")
     tag = name.split("::")[0].split()
@@ -91,12 +100,12 @@ def main():
     global TAGS
     TAGS = set()
     for path in glob.glob("src/**/*.h", recursive=True, root_dir=ROOT):
-        if os.path.normpath(path).startswith(PORT_PRIVATE):
+        if native_only(path):
             continue
         with open(os.path.join(ROOT, path), errors="replace") as handle:
             TAGS.update(re.findall(r"\b(?:struct|union)\s+(\w+)\s*\{", handle.read()))
     headers = options.headers or sorted(path for path in glob.glob("src/**/*.h", recursive=True, root_dir=ROOT)
-                                        if not os.path.normpath(path).startswith(PORT_PRIVATE))
+                                        if not native_only(path))
     skipped, records, differing = [], set(), {}
     with concurrent.futures.ThreadPoolExecutor(os.cpu_count()) as pool:
         for header, count, differences in pool.map(check, headers):

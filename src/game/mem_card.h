@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef MEMORIES_DECOMP_MEM_CARD_H
 #define MEMORIES_DECOMP_MEM_CARD_H
 
@@ -134,7 +135,7 @@ extern u8 D_8009B3EF;
  * D_8009B3D4_IN_DATA to take the .data arm below; the memory-card units keep
  * the plain arm. fade.h does the same for D_8009B141. */
 #ifdef D_8009B3D4_IN_DATA
-extern u8 D_8009B3D4 __attribute__((section(".data")));
+extern u8 D_8009B3D4 PSX_SECTION(".data");
 #else
 extern u8 D_8009B3D4;
 #endif
@@ -270,12 +271,12 @@ extern s32 D_801D5648[];
  * plain arm. Initial value not read. notes/fm-online.md:177-187 records the
  * D_8009B3EA store at 0x8003FAE8 and leaves its meaning unresolved. */
 #ifdef D_8009B3EA_IN_DATA
-extern u8 D_8009B3EA __attribute__((section(".data")));
+extern u8 D_8009B3EA PSX_SECTION(".data");
 #else
 extern u8 D_8009B3EA;
 #endif
 #ifdef D_8009B3ED_IN_DATA
-extern u8 D_8009B3ED __attribute__((section(".data")));
+extern u8 D_8009B3ED PSX_SECTION(".data");
 #else
 extern u8 D_8009B3ED;
 #endif

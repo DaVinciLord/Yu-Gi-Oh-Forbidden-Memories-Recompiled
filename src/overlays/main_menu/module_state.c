@@ -1,7 +1,8 @@
+#include "../../port_ptr.h"
 #include "../../types.h"
 #include "module_state.h"
 
-#define MAIN_MENU_LOADED_DATA __attribute__((section(".data")))
+#define MAIN_MENU_LOADED_DATA PSX_SECTION(".data")
 
 MainMenuFrontendState gMainMenu_FrontendState MAIN_MENU_LOADED_DATA = {
     0,

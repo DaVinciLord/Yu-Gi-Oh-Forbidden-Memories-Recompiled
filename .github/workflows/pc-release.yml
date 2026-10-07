@@ -6,6 +6,15 @@ on:
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Packages to build for a manual run
+        required: true
+        type: choice
+        options:
+          - all
+          - macos-arm64
+        default: all
 
 permissions:
   contents: read
@@ -16,6 +25,7 @@ concurrency:
 
 jobs:
   package:
+    if: github.event_name != 'workflow_dispatch' || inputs.platform != 'macos-arm64'
     strategy:
       fail-fast: false
       matrix:
@@ -189,6 +199,53 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  # Native Apple Silicon application. The ad-hoc signature needs no secret;
+  # this job is safe on pull requests and fork workflow_dispatch runs.
+  package-macos:
+    name: package (macos, macos-15)
+    runs-on: macos-15
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            tmp/pc/llvm-macos
+            tmp/pc/tools/macos
+            tmp/pc/macos-deps
+          key: macos-arm64-llvm21.1.8-${{ hashFiles('tools/pc/macos_toolchain.json', 'tools/pc/macos_deps.py', 'tools/pc/dependency_archives.py', 'tools/pc/fetch_tools.py') }}
+      - name: Archive version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$REF_TYPE" = tag ]; then
+            echo "PACKAGE_VERSION=$REF_NAME" >> "$GITHUB_ENV"
+          else
+            echo "PACKAGE_VERSION=dev-${GITHUB_SHA:0:12}" >> "$GITHUB_ENV"
+          fi
+      - name: Build the complete macOS ARM64 game without a disc
+        run: MEMORIES_VERSION="$PACKAGE_VERSION" python tools/pc/build.py --target macos
+      - name: Package and verify the macOS app
+        run: |
+          python3 tools/pc/package_macos.py --binary tmp/pc/macos/memories-arm64 --out tmp/pc-release/macos-arm64 --version "$PACKAGE_VERSION"
+          python3 tools/pc/test_package_macos.py --archive "tmp/pc-release/macos-arm64/yfm-redecomp-$PACKAGE_VERSION-macos-arm64.zip"
+      - name: Upload installable macOS application
+        uses: actions/upload-artifact@v4
+        with:
+          name: yfm-redecomp-macos-arm64
+          path: |
+            tmp/pc-release/macos-arm64/yfm-redecomp-*.zip
+            tmp/pc-release/macos-arm64/yfm-redecomp-*.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+
   # The Android app (notes/pc-release.md, "Android signing"): the arm64 APK,
   # signed with the release key held in this repository's secrets. Only
   # master and v* tags are signed; every other run (pull requests, manual runs
@@ -196,6 +253,7 @@ jobs:
   # (signed with a debug key, not uploaded); a version tag without the
   # release key fails, so a release never carries a debug-signed APK.
   android:
+    if: github.event_name != 'workflow_dispatch' || inputs.platform != 'macos-arm64'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:

@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #include "../types.h"
 #include "mem_card_work.h"
 #include "mem_card_directory.h"
@@ -33,17 +34,17 @@
 
 /* Used only by the still-unmatched function at 0x8002E41C, which passes it
  * to a print routine. */
-char D_8009AF6C[4] __attribute__((section(".sdata"))) = "%s\n";
+char D_8009AF6C[4] PSX_SECTION(".sdata") = "%s\n";
 
 /* Read by MemCardDialog_UpdateSave (mem_card_dialog_load_save.c). */
-u8 D_8009AF70[4] __attribute__((section(".sdata"))) = "*";
+u8 D_8009AF70[4] PSX_SECTION(".sdata") = "*";
 
 /* Indexed by a display object's ot_index. Declared in
  * display_object_helpers.h, which explains the volatile qualifier and why
  * elements [1] and [3] used to carry private names of their own. The
  * qualifier is load-bearing in display_object_helpers.c, so it belongs on
  * the definition too. */
-volatile u16 D_8009AF74[4] __attribute__((section(".sdata"))) = {
+volatile u16 D_8009AF74[4] PSX_SECTION(".sdata") = {
     0x0000,
     0x0020,
     0x0800,
@@ -53,9 +54,9 @@ volatile u16 D_8009AF74[4] __attribute__((section(".sdata"))) = {
 /* Read by MemCard_DoLoadDirectory as the pattern that lists every file. Same
  * single character as D_8009AF70, but a separate object in the image, so it
  * stays separate here. */
-u8 D_8009AF7C[4] __attribute__((section(".sdata"))) = "*";
+u8 D_8009AF7C[4] PSX_SECTION(".sdata") = "*";
 
 /* The MIDI track chunk tag. SD_FindMidiTrackChunk compares against it
  * while walking a sequence, which is what the tag means in a standard MIDI
  * file: the four bytes that introduce each track. */
-u8 D_8009AF80[8] __attribute__((section(".sdata"))) = "MTrk";
+u8 D_8009AF80[8] PSX_SECTION(".sdata") = "MTrk";

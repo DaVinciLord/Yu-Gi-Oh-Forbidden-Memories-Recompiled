@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #include "../types.h"
 #include "movie_frame_pipeline.h"
 
@@ -27,14 +28,14 @@
  * unassigned neighbour above this block, were never given linker aliases,
  * which is the same conclusion reached from the other direction. */
 
-u8 D_8009B060 __attribute__((section(".sdata"))) = 0;
-u8 D_8009B061 __attribute__((section(".sdata"))) = 0;
-u8 D_8009B062 __attribute__((section(".sdata"))) = 0;
-u8 D_8009B063 __attribute__((section(".sdata"))) = 0;
-u8 D_8009B064 __attribute__((section(".sdata"))) = 0;
-u8 D_8009B065 __attribute__((section(".sdata"))) = 0;
-u8 D_8009B066 __attribute__((section(".sdata"))) = 0;
-u8 D_8009B067 __attribute__((section(".sdata"))) = 0;
-u32 D_8009B068 __attribute__((section(".sdata"))) = 0;
-u32 D_8009B06C __attribute__((section(".sdata"))) = 0;
-u32 D_8009B070 __attribute__((section(".sdata"))) = 0;
+u8 D_8009B060 PSX_SECTION(".sdata") = 0;
+u8 D_8009B061 PSX_SECTION(".sdata") = 0;
+u8 D_8009B062 PSX_SECTION(".sdata") = 0;
+u8 D_8009B063 PSX_SECTION(".sdata") = 0;
+u8 D_8009B064 PSX_SECTION(".sdata") = 0;
+u8 D_8009B065 PSX_SECTION(".sdata") = 0;
+u8 D_8009B066 PSX_SECTION(".sdata") = 0;
+u8 D_8009B067 PSX_SECTION(".sdata") = 0;
+u32 D_8009B068 PSX_SECTION(".sdata") = 0;
+u32 D_8009B06C PSX_SECTION(".sdata") = 0;
+u32 D_8009B070 PSX_SECTION(".sdata") = 0;

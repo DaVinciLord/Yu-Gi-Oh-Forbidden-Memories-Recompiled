@@ -1,6 +1,9 @@
 #include "pc/compat/fs.h"
 #include "texture_dump.h"
 #include "soft_gpu.h"
+#ifdef MEMORIES_TRANSLATED
+#include "pc/guest/translated_runtime.h"
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,6 +44,58 @@ static unsigned delivery_head;
  * writes game memory without telling anyone, so a word is traced to the disc
  * only while it still holds the bytes the disc put there. */
 static unsigned char *delivery_copies;
+
+/* TextureDump_Delivered is reached by native SDK code with the guest token
+ * passed by translated game code. SoftGpu_Load resolves that same token
+ * before TextureDump_Loaded sees it. Keep provenance keyed by the stable guest
+ * address so both sides agree and a host-memory rebase does not invalidate the
+ * ring; resolve only when bytes must actually be read. Native helper buffers
+ * outside registered guest storage stay keyed by their host address. */
+static uintptr_t address_key(const void *address, size_t length)
+{
+    uintptr_t host = (uintptr_t)address;
+#ifdef MEMORIES_TRANSLATED
+    if (!GuestRuntime_IsBound()) return host;
+    if (host <= UINT32_MAX ||
+        ((host >> 32) == UINT32_MAX && (host & 0x80000000u))) {
+        host = (uintptr_t)GuestRuntime_ResolveData((void *)address, length);
+    }
+    {
+        const MemoriesMemory *memory = GuestRuntime_Memory();
+        unsigned i;
+        if (memory) {
+            uintptr_t base = (uintptr_t)memory->ram;
+            if (host >= base && host - base < MEMORIES_RAM_SIZE &&
+                length <= MEMORIES_RAM_SIZE - (host - base)) return GuestRuntime_EncodePointer((void *)host);
+            base = (uintptr_t)memory->scratchpad;
+            if (host >= base && host - base < MEMORIES_SCRATCHPAD_SIZE &&
+                length <= MEMORIES_SCRATCHPAD_SIZE - (host - base)) return GuestRuntime_EncodePointer((void *)host);
+        }
+        for (i = 0; i < GuestRuntime_RegionCount(); i++) {
+            const GuestRuntimeRegion *region = GuestRuntime_Region(i);
+            size_t offset;
+            if (!region || host < region->host) continue;
+            offset = host - region->host;
+            if (offset < region->length && length <= region->length - offset) return GuestRuntime_EncodePointer((void *)host);
+        }
+    }
+#else
+    (void)length;
+#endif
+    return host;
+}
+
+static const void *address_bytes(uintptr_t key, size_t length)
+{
+#ifdef MEMORIES_TRANSLATED
+    if (key <= UINT32_MAX || ((key >> 32) == UINT32_MAX && (key & 0x80000000u))) {
+        return GuestRuntime_IsBound() ? GuestRuntime_ResolveData((void *)key, length) : NULL;
+    }
+#else
+    (void)length;
+#endif
+    return (const void *)key;
+}
 
 /* Hashes already written, in an open-addressed table that doubles. */
 static uint64_t *seen;
@@ -182,8 +237,10 @@ static void forget(uintptr_t first, uintptr_t last)
 
 void TextureDump_Written(const void *destination, unsigned bytes)
 {
+    uintptr_t key;
     if (!TextureDump_Tags || !bytes) return;
-    forget((uintptr_t)destination, (uintptr_t)destination + bytes);
+    key = address_key(destination, bytes);
+    forget(key, key + bytes);
 }
 
 int TextureDump_DiscFile(const char *path, int *lba, unsigned *size)
@@ -195,13 +252,16 @@ void TextureDump_Delivered(const void *destination, unsigned bytes, int lba, uns
 {
     Delivery *delivery;
     unsigned slot;
+    uintptr_t key;
     if (!TextureDump_Tags || lba < 0 || !bytes) return;
-    forget((uintptr_t)destination, (uintptr_t)destination + bytes);
+    key = address_key(destination, bytes);
+    if (!address_bytes(key, bytes)) return;
+    forget(key, key + bytes);
     if (bytes > DELIVERY_BYTES) return;
     slot = delivery_head++ % DELIVERIES;
     delivery = &deliveries[slot];
-    memcpy(delivery_copies + (size_t)slot * DELIVERY_BYTES, destination, bytes);
-    delivery->destination = (uintptr_t)destination;
+    memcpy(delivery_copies + (size_t)slot * DELIVERY_BYTES, address_bytes(key, bytes), bytes);
+    delivery->destination = key;
     delivery->bytes = bytes;
     delivery->disc_offset = (uint32_t)lba * 2048u + offset_in_sector;
     delivery->copy_offset = 0;
@@ -217,7 +277,7 @@ static uint32_t traced(const Delivery *delivery, uintptr_t address)
     size_t length = delivery->bytes - at < 2 ? delivery->bytes - at : 2;
     const unsigned char *copy =
         delivery_copies + (size_t)(delivery - deliveries) * DELIVERY_BYTES + delivery->copy_offset + at;
-    if (memcmp((const void *)address, copy, length) != 0) return 0; /* rewritten since */
+    if (memcmp(address_bytes(address, length), copy, length) != 0) return 0; /* rewritten since */
     return delivery->disc_offset + (uint32_t)at + 1;
 }
 
@@ -294,15 +354,24 @@ void TextureDump_Loaded(int x, int y, int w, int h, const uint16_t *pixels)
 {
     int i, j;
     uint32_t disc = 0;
+    size_t words, bytes;
+    uintptr_t pixels_key;
+    const uint16_t *host_pixels;
     if (!TextureDump_Tags) return;
-    if (!delivered((uintptr_t)pixels, (uintptr_t)(pixels + (size_t)w * h)) ||
-        (!provenance((uintptr_t)pixels) && !provenance((uintptr_t)&pixels[(size_t)w * h - 1]))) {
+    if (w <= 0 || h <= 0) return;
+    words = (size_t)w * (size_t)h;
+    bytes = words * sizeof(*pixels);
+    pixels_key = address_key(pixels, bytes);
+    host_pixels = address_bytes(pixels_key, bytes);
+    if (!host_pixels) return;
+    if (!delivered(pixels_key, pixels_key + bytes) ||
+        (!provenance(pixels_key) && !provenance(pixels_key + bytes - sizeof(*pixels)))) {
         /* Prefer the pack's verified block to an arbitrary recent copy.
          * Card thumbnails also live in the full-art records read for
          * battles/effects. After a readback or deck-table copy, the newest
          * delivery can name that duplicate, which the pack does not cover. */
-        if (TextureDump_Recall) disc = TextureDump_Recall(pixels, (size_t)w * h);
-        if (!disc) disc = found_by_content(pixels, (size_t)w * h);
+        if (TextureDump_Recall) disc = TextureDump_Recall(host_pixels, words);
+        if (!disc) disc = found_by_content(host_pixels, words);
         if (!disc) {
             TextureDump_Cleared(x, y, w, h);
             return;
@@ -311,7 +380,7 @@ void TextureDump_Loaded(int x, int y, int w, int h, const uint16_t *pixels)
     for (j = 0; j < h; j++) {
         for (i = 0; i < w; i++) {
             *tag_at(x + i, y + j) = disc ? disc + (uint32_t)((size_t)j * w + i) * 2 + 1
-                                         : provenance((uintptr_t)&pixels[j * w + i]);
+                                         : provenance(pixels_key + ((size_t)j * (size_t)w + (size_t)i) * sizeof(*pixels));
         }
     }
     if (TextureDump_Shadow) {

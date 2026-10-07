@@ -1141,6 +1141,15 @@ static void register_symbols(Mod *mod)
 /* The mod's object file, read whole and handed to the loader. */
 static void *load_object(Mod *mod, const char *path)
 {
+#if defined(__APPLE__) && defined(__aarch64__) && defined(MEMORIES_TRANSLATED)
+    char error[STATUS_MAX];
+    if (ObjectLoader_LoadPath(path, &mod->object, error, sizeof(error))) {
+        note(mod, "%s %s", mod->library, error);
+        return NULL;
+    }
+    mod->code_hash = mod->object.hash;
+    return ObjectLoader_Symbol(&mod->object, "MemoriesModInit");
+#else
     FILE *file = fopen(path, "rb");
     unsigned char *data = NULL;
     long size;
@@ -1173,6 +1182,7 @@ static void *load_object(Mod *mod, const char *path)
     }
     register_symbols(mod);
     return entry;
+#endif
 }
 
 static int load_library(Mod *mod)
@@ -1181,7 +1191,7 @@ static int load_library(Mod *mod)
     MemoriesModEntry entry;
     union { void *pointer; int (*function)(const MemoriesModHost *, MemoriesMod *); } symbol;
     if (!mod->library[0]) return 1;   /* data only: nothing to load */
-    if (mod->object.image) return 1;
+    if (mod->object.image || mod->object.native_handle) return 1;
     if (snprintf(path, sizeof(path), "%s/%s", mod->directory, mod->library) >= (int)sizeof(path)) return 0;
     symbol.pointer = load_object(mod, path);
     if (!symbol.pointer) return 0;
@@ -1309,9 +1319,19 @@ static int read_manifest(Mod *mod, const char *directory, const char *origin)
             mod->broken = 1;
             note(mod, "\"library\": %s is outside the mod", text);
         } else if (strchr(text, '.')) {
+#if defined(__APPLE__) && defined(__aarch64__) && defined(MEMORIES_TRANSLATED)
+            size_t length = strlen(text);
+            if (length >= 2 && !strcmp(text + length - 2, ".o"))
+                snprintf(mod->library, sizeof(mod->library), "%.*s.dylib", (int)(length - 2), text);
+            else
+#endif
             copy_text(mod->library, sizeof(mod->library), text);
         } else {
+#if defined(__APPLE__) && defined(__aarch64__) && defined(MEMORIES_TRANSLATED)
+            snprintf(mod->library, sizeof(mod->library), "%s.dylib", text);
+#else
             snprintf(mod->library, sizeof(mod->library), "%s.o", text);   /* one object for every system */
+#endif
         }
     }
     mod->restart = Json_Bool(Json_Member(root, "restart"), 0);

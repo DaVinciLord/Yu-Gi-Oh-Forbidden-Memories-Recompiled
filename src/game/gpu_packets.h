@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef MEMORIES_DECOMP_GPU_PACKETS_H
 #define MEMORIES_DECOMP_GPU_PACKETS_H
 
@@ -13,9 +14,9 @@
  * The model-capacity query needs the same storage loaded as a forced-.data
  * integer address to preserve its retail address construction. */
 #ifdef GPU_PACKET_CURSOR_AS_ADDRESS
-extern s32 D_800FE240 __attribute__((section(".data")));
+extern s32 D_800FE240 PSX_SECTION(".data");
 #else
-extern u32 *G32 D_800FE240 __attribute__((section(".data")));
+extern u32 *G32 D_800FE240 PSX_SECTION(".data");
 #endif
 
 /* Copies a primitive, adds draw mode, and links it into the ordering table. */

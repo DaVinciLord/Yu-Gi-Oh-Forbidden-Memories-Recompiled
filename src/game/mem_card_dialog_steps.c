@@ -10,7 +10,7 @@
  * an unmasked byte index, so the array stays unsized for the same reason as
  * the command table above. */
 
-void (*D_80090F9C[])(void) = {
+void (*TRANSLATED_G32 D_80090F9C[])(void) = {
     MemCardDialog_StepLoad,
     MemCardDialog_StepLoadUnprompted,
     MemCardDialog_StepSave,

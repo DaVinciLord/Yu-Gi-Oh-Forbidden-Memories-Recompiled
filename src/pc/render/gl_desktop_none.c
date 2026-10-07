@@ -9,6 +9,13 @@
 #include "present_pass.h"
 #include <SDL3/SDL_opengl.h>
 
+int PresentPass_InitCore(void) { return 0; }
+
+void PresentPass_Quad(float x, float y, float w, float h, float s0, float t0, float s1, float t1)
+{
+    (void)x; (void)y; (void)w; (void)h; (void)s0; (void)t0; (void)s1; (void)t1;
+}
+
 int PresentPass_Wanted(void)
 {
     return 0;

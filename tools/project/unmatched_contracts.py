@@ -525,6 +525,7 @@ def extern_object_symbols(statement: str) -> list[str]:
         statement.rstrip(";"),
         "__attribute__",
     )
+    declaration = remove_parenthesized_annotation(declaration, "PSX_SECTION")
     result: list[str] = []
     for declarator in split_declarators(declaration):
         pointer = re.search(
@@ -563,10 +564,13 @@ def extern_object_declarations(
 
 
 def declaration_name(statement: str) -> str | None:
-    if re.search(r"\(\s*\*\s*(?:G32\s+)?[A-Za-z_]\w*\s*\)", statement):
-        return None
+    statement = remove_parenthesized_annotation(statement, "__attribute__")
+    statement = remove_parenthesized_annotation(statement, "PSX_SECTION")
     match = FUNCTION_DECLARATION.search(statement)
     if match is None or match.group("name") in DECLARATION_KEYWORDS:
+        return None
+    pointer = re.search(r"\(\s*\*\s*(?:G32\s+)?[A-Za-z_]\w*\s*\)", statement)
+    if pointer is not None and pointer.start() < match.end():
         return None
     return match.group("name")
 

@@ -1,10 +1,11 @@
+#include "../port_ptr.h"
 #ifndef MEMORIES_DECOMP_DEBUG_FONT_FORMAT_DATA_H
 #define MEMORIES_DECOMP_DEBUG_FONT_FORMAT_DATA_H
 
 #include "../types.h"
 
 /* The two debug FntPrint format strings. debug_font_format_data.c defines
- * them as `char D_8009AF54[4] __attribute__((section(".sdata"))) = "\n";`
+ * them as `char D_8009AF54[4] PSX_SECTION(".sdata") = "\n";`
  * and `char D_8009AF58[4] ... = "%s\n";`, so `char` is the element type of
  * the definitions and an incomplete extern array is a compatible declaration
  * for them -- the defining unit consumes this header too.

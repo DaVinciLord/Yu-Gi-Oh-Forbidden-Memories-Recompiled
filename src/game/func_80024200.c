@@ -68,7 +68,7 @@ void DuelScene_Update(void)
             }
         }
     } else {
-        void (**callbacks)(void);
+        void (*TRANSLATED_G32 *callbacks)(void);
         u16 index;
 
 #ifdef MEMORIES_PC
@@ -79,7 +79,7 @@ void DuelScene_Update(void)
 #endif
         callbacks = gDuel_apfnSceneStateHandler;
         index = gDuel_wSceneStateFlags;
-        callbacks[index & DUEL_SCENE_PHASE_MASK]();
+        CALL32(void (*)(void), callbacks[index & DUEL_SCENE_PHASE_MASK])();
         if (!(gDuel_wSceneStateFlags & DUEL_SCENE_FLAG_INITIALIZED)) {
             D_8009B174 = 0;
         }

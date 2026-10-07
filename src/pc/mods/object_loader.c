@@ -3,12 +3,20 @@
  * indexes against their tables, strings against their sections. Values are
  * copied out with memcpy, so nothing in the file needs to be aligned. */
 #define _DEFAULT_SOURCE   /* MAP_ANONYMOUS */
+#if defined(__APPLE__) && defined(__aarch64__) && defined(MEMORIES_TRANSLATED)
+#define MEMORIES_TRANSLATED_MMAN_IMPLEMENTATION
+#endif
 #include "object_loader.h"
 #include "pc/compat/mman.h"
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#if defined(__APPLE__) && defined(__aarch64__) && defined(MEMORIES_TRANSLATED)
+#include <dlfcn.h>
+#include <mach-o/loader.h>
+#include "pc/compat/fs.h"
+#endif
 
 #define PAGE 4096u
 #define IMAGE_MAX (64u << 20)   /* far more than any mod; keeps the arithmetic small */
@@ -390,6 +398,13 @@ static uint32_t fingerprint(const Loader *loader)
 int ObjectLoader_Load(const void *data, size_t size, ObjectResolver resolve, void *context,
                       LoadedObject *object, char *error, size_t error_size)
 {
+#if defined(__APPLE__) && defined(__aarch64__) && defined(MEMORIES_TRANSLATED)
+    /* This loader's object format and relocations are i386. */
+    (void)data; (void)size; (void)resolve; (void)context;
+    memset(object, 0, sizeof(*object));
+    if (error_size) snprintf(error, error_size, "requires a macOS ARM64 dylib (build_mod.py --target macos)");
+    return -1;
+#else
     Loader loader;
     unsigned char *image = NULL;
     size_t code_size = 0, total = 0;
@@ -444,10 +459,14 @@ done:
     free(loader.values);
     free(loader.bound);
     return result;
+#endif
 }
 
 void *ObjectLoader_Symbol(const LoadedObject *object, const char *name)
 {
+#if defined(__APPLE__) && defined(__aarch64__) && defined(MEMORIES_TRANSLATED)
+    if (object && object->native_handle && name) return dlsym(object->native_handle, name);
+#endif
     size_t i;
     for (i = 0; object && name && i < object->symbol_count; i++) {
         if (object->symbols[i].global && !strcmp(object->symbols[i].name, name)) {
@@ -459,8 +478,63 @@ void *ObjectLoader_Symbol(const LoadedObject *object, const char *name)
 
 void ObjectLoader_Free(LoadedObject *object)
 {
+#if defined(__APPLE__) && defined(__aarch64__) && defined(MEMORIES_TRANSLATED)
+    if (object->native_handle) {
+        void (*cleanup)(void) = dlsym(object->native_handle, "MemoriesModUnregisterGlobals");
+        if (cleanup) cleanup();
+        dlclose(object->native_handle);
+    }
+#endif
     if (object->image) munmap(object->image, object->size);
     free(object->symbols);
     free(object->strings);
     memset(object, 0, sizeof(*object));
 }
+
+#if defined(__APPLE__) && defined(__aarch64__) && defined(MEMORIES_TRANSLATED)
+int ObjectLoader_LoadPath(const char *path, LoadedObject *object, char *error, size_t error_size)
+{
+    struct mach_header_64 header;
+    unsigned char buffer[4096];
+    size_t count;
+    size_t total = sizeof(header);
+    uint32_t hash = 2166136261u;
+    FILE *file;
+    memset(object, 0, sizeof(*object));
+    if (error_size) error[0] = 0;
+    file = fopen(path, "rb");
+    if (!file) goto invalid;
+    if (fread(&header, 1, sizeof(header), file) != sizeof(header) ||
+        header.magic != MH_MAGIC_64 || header.cputype != CPU_TYPE_ARM64 || header.filetype != MH_DYLIB) {
+        fclose(file);
+        goto invalid;
+    }
+    hash = mix(hash, (const unsigned char *)&header, sizeof(header));
+    while ((count = fread(buffer, 1, sizeof(buffer), file))) {
+        if (count > IMAGE_MAX - total) { fclose(file); goto invalid; }
+        total += count;
+        hash = mix(hash, buffer, count);
+    }
+    int failed = ferror(file);
+    fclose(file);
+    if (failed) goto invalid;
+    object->native_handle = dlopen(path, RTLD_NOW | RTLD_LOCAL);
+    if (!object->native_handle) {
+        if (error_size) snprintf(error, error_size, "cannot load ARM64 code: %s", dlerror());
+        return -1;
+    }
+    void (*registration)(void) = dlsym(object->native_handle, "MemoriesModRegisterGlobals");
+    if (!registration || !dlsym(object->native_handle, "MemoriesModInit")) {
+        if (error_size) snprintf(error, error_size, "missing ARM64 mod entry/registration; rebuild with build_mod.py --target macos");
+        dlclose(object->native_handle);
+        memset(object, 0, sizeof(*object));
+        return -1;
+    }
+    registration();
+    object->hash = hash;
+    return 0;
+invalid:
+    if (error_size) snprintf(error, error_size, "requires a macOS ARM64 dylib (build_mod.py --target macos)");
+    return -1;
+}
+#endif

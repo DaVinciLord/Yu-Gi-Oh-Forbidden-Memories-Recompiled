@@ -3,6 +3,9 @@
 #include "pc/guest/state.h"
 #include "pc/text/text.h"
 #include "pc/debug/log.h"
+#ifdef MEMORIES_TRANSLATED
+#include "pc/guest/translated_runtime.h"
+#endif
 #include "types.h"
 #include <assert.h>
 #include <string.h>
@@ -12,6 +15,17 @@ u16 D_8009B27C;
 s8 gDialog_bChoiceCount, gDialog_bChoice;
 static int enabled = 1, remapped;
 static unsigned char text[128];
+#ifdef MEMORIES_TRANSLATED
+static uint32_t guest_text_base = 0xD1000000u;
+uint32_t GuestRuntime_EncodePointer(void *pointer)
+{
+    assert(pointer == text);
+    return guest_text_base;
+}
+#define EXPECTED_TEXT_ADDRESS guest_text_base
+#else
+#define EXPECTED_TEXT_ADDRESS ((uint32_t)(uintptr_t)text)
+#endif
 
 int Settings_Get(SettingId id) { assert(id == SET_DECK_SLOTS); return enabled; }
 const unsigned char *Text_Own(int id)
@@ -96,7 +110,13 @@ int Memories_StateChunk(MemoriesState *state, const char *tag, const MemoriesSta
 }
 void Memories_StateRemapRange(MemoriesState *state, uint32_t from, uint32_t to, uint32_t size)
 {
-    assert(state->loading && from && to == (uint32_t)(uintptr_t)text && size == sizeof(text));
+#ifdef MEMORIES_TRANSLATED
+    if (!remapped) assert(from == 0xD1000000u && to == 0xD2000000u);
+    else assert(from == 0xD2000000u && to == 0xD2000000u);
+#else
+    assert(from == EXPECTED_TEXT_ADDRESS && to == EXPECTED_TEXT_ADDRESS);
+#endif
+    assert(state->loading && from && to == EXPECTED_TEXT_ADDRESS && size == sizeof(text));
     remapped++;
 }
 
@@ -119,6 +139,14 @@ int main(void)
     DeckMenu_ShopRestore();
     assert(gDialog_bChoice == 3 && gDialog_bChoiceEnabled == 31);
     DeckMenu_ShopState(&five);
+#ifdef MEMORIES_TRANSLATED
+    {
+        uint32_t saved_base;
+        memcpy(&saved_base, five.data + sizeof(int), sizeof(saved_base));
+        assert(saved_base == 0xD1000000u); /* save the guest token, not the host pointer's low bits */
+        guest_text_base = 0xD2000000u;     /* a fresh guest-visible allocation after restart */
+    }
+#endif
 
     enabled = 0;
     assert(!DeckMenu_ShopMenu());

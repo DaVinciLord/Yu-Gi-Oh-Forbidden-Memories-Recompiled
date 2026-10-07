@@ -41,7 +41,11 @@
 #ifdef _WIN32
 #include "pc/platform/win32.h"
 #else
+#ifdef __APPLE__
+#include "pc/platform/macos_fonts.h"
+#else
 #include <fontconfig/fontconfig.h>
+#endif
 #endif
 
 typedef struct { unsigned char r, g, b; } Rgb;
@@ -667,6 +671,8 @@ static const char *serif_file(void)
 {
 #ifdef _WIN32
     return Win32_SerifFontPath();
+#elif defined(__APPLE__)
+    return MacOS_FontPath(MEMORIES_FONT_SERIF);
 #else
     static char path[1024];
     FcPattern *pattern, *match;

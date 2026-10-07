@@ -1,9 +1,8 @@
 /* The present pass (present_pass.h).
  *
- * One fragment program over the picture's quad, in the compatibility
- * profile the presenter already draws with (immediate mode, glOrtho), so the
- * quad's own texture coordinates and the bound picture texture are what it
- * samples. Effects, each a setting that is off at its default:
+ * One fragment program over the picture's quad. macOS uses a core-profile
+ * vertex buffer; other platforms use the compatibility presenter. Both
+ * supply the quad's texture coordinates and bound picture texture. Effects, each a setting that is off at its default:
  *   Sharp bilinear (Video > Filtering): each texel is drawn as a flat
  *   block of whole window pixels, and only the window pixel a texel edge
  *   falls inside blends its two neighbours, so an uneven scale (4:3 at
@@ -46,6 +45,7 @@
     X(PFNGLGETSHADERINFOLOGPROC, GetShaderInfoLog) \
     X(PFNGLCREATEPROGRAMPROC, CreateProgram) \
     X(PFNGLATTACHSHADERPROC, AttachShader) \
+    X(PFNGLBINDATTRIBLOCATIONPROC, BindAttribLocation) \
     X(PFNGLLINKPROGRAMPROC, LinkProgram) \
     X(PFNGLGETPROGRAMIVPROC, GetProgramiv) \
     X(PFNGLGETPROGRAMINFOLOGPROC, GetProgramInfoLog) \
@@ -82,12 +82,34 @@ FLASH_FUNCTIONS(DECLARE)
  * measure_source. */
 #define FLASH_STEP "0.35"
 
+#ifdef __APPLE__
+#define FRAGMENT_HEADER "#version 150\n" \
+    "#define texture2D texture\n" \
+    "in vec2 uv;\nout vec4 fragment;\n" \
+    "#define gl_FragColor fragment\n"
+static const char *vertex_source =
+    "#version 150\n"
+    "in vec2 position, texcoord;\nout vec2 uv;\n"
+    "void main() { gl_Position = vec4(position, 0.0, 1.0); uv = texcoord; }\n";
+#define QUAD_FUNCTIONS(X) \
+    X(PFNGLGENVERTEXARRAYSPROC, GenVertexArrays) \
+    X(PFNGLBINDVERTEXARRAYPROC, BindVertexArray) \
+    X(PFNGLGENBUFFERSPROC, GenBuffers) \
+    X(PFNGLBINDBUFFERPROC, BindBuffer) \
+    X(PFNGLBUFFERDATAPROC, BufferData) \
+    X(PFNGLENABLEVERTEXATTRIBARRAYPROC, EnableVertexAttribArray) \
+    X(PFNGLVERTEXATTRIBPOINTERPROC, VertexAttribPointer)
+#define DECLARE(type, name) static type pp_##name;
+QUAD_FUNCTIONS(DECLARE)
+#undef DECLARE
+static GLuint plain, quad_array, quad_buffer;
+#else
+#define FRAGMENT_HEADER "#version 120\n" "varying vec2 uv;\n"
 static const char *vertex_source =
     "#version 120\n"
-    "void main() {\n"
-    "    gl_Position = ftransform();\n"
-    "    gl_TexCoord[0] = gl_MultiTexCoord0;\n"
-    "}\n";
+    "varying vec2 uv;\n"
+    "void main() { gl_Position = ftransform(); uv = gl_MultiTexCoord0.xy; }\n";
+#endif
 
 /* xBR, level 2, written from the published rules: for each corner of a
  * texel E (here the one towards F, H and I; the others are mirrors), an edge
@@ -156,22 +178,22 @@ static const char *vertex_source =
     "}\n"
 
 static const char *fragment_source =
-    "#version 120\n"
+    FRAGMENT_HEADER
     "uniform sampler2D picture, level;\n"
     "uniform float brightness, contrast, saturation, gamma;\n"
     "uniform int crt, flash, scaler;\n"
     "uniform float lines, t0, t1;\n"
     XBR_SOURCE
     "void main() {\n"
-    "    vec3 c = scaler == 1 ? xbr(gl_TexCoord[0].xy)\n"
-    "           : texture2D(picture, scaler == 2 ? sharp(gl_TexCoord[0].xy) : gl_TexCoord[0].xy).rgb;\n"
+    "    vec3 c = scaler == 1 ? xbr(uv)\n"
+    "           : texture2D(picture, scaler == 2 ? sharp(uv) : uv).rgb;\n"
     "    if (flash != 0) c *= texture2D(level, vec2(0.5)).g;\n"
     "    c = pow(c, vec3(1.0 / gamma));\n"
     "    c = (c - 0.5) * contrast + 0.5;\n"
     "    c *= brightness;\n"
     "    c = mix(vec3(dot(c, vec3(0.299, 0.587, 0.114))), c, saturation);\n"
     "    if (crt != 0) {\n"
-    "        float s = sin(3.14159265 * (gl_TexCoord[0].y - t0) / (t1 - t0) * lines);\n"
+    "        float s = sin(3.14159265 * (uv.y - t0) / (t1 - t0) * lines);\n"
     "        float m = mod(gl_FragCoord.x, 3.0);\n"
     "        c *= mix(0.55, 1.0, s * s);\n"
     "        c *= (m < 1.0 ? vec3(1.0, 0.8, 0.8) : m < 2.0 ? vec3(0.8, 1.0, 0.8) : vec3(0.8, 0.8, 1.0)) * 1.3;\n"
@@ -184,7 +206,7 @@ static const char *fragment_source =
  * picture up at `rise` and down at once); from those the level now (red)
  * and the gain (green) that keeps the picture within FLASH_STEP of it. */
 static const char *measure_source =
-    "#version 120\n"
+    FRAGMENT_HEADER
     "uniform sampler2D picture, history;\n"
     "uniform vec4 area;\n"
     "uniform float rise;\n"
@@ -239,6 +261,10 @@ static GLuint link(const char *fragment_text)
     linked = pp_CreateProgram();
     pp_AttachShader(linked, vertex);
     pp_AttachShader(linked, fragment);
+#ifdef __APPLE__
+    pp_BindAttribLocation(linked, 0, "position");
+    pp_BindAttribLocation(linked, 1, "texcoord");
+#endif
     pp_LinkProgram(linked);
     pp_DeleteShader(vertex);
     pp_DeleteShader(fragment);
@@ -250,6 +276,50 @@ static GLuint link(const char *fragment_text)
         return 0;
     }
     return linked;
+}
+
+/* Core-profile quads for the picture, effects and UI, in clip space. */
+int PresentPass_InitCore(void)
+{
+#ifdef __APPLE__
+#define LOAD(type, name) \
+    pp_##name = (type)SDL_GL_GetProcAddress("gl" #name); \
+    if (!pp_##name) return 0;
+    PASS_FUNCTIONS(LOAD)
+    QUAD_FUNCTIONS(LOAD)
+#undef LOAD
+    plain = link(FRAGMENT_HEADER
+                 "uniform sampler2D picture;\n"
+                 "void main() { gl_FragColor = texture2D(picture, uv); }\n");
+    if (!plain) return 0;
+    pp_UseProgram(plain);
+    pp_Uniform1i(pp_GetUniformLocation(plain, "picture"), 0);
+    pp_UseProgram(0);
+    pp_GenVertexArrays(1, &quad_array);
+    pp_BindVertexArray(quad_array);
+    pp_GenBuffers(1, &quad_buffer);
+    pp_BindBuffer(GL_ARRAY_BUFFER, quad_buffer);
+    pp_EnableVertexAttribArray(0);
+    pp_EnableVertexAttribArray(1);
+    pp_VertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)0);
+    pp_VertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)(2 * sizeof(float)));
+#endif
+    return 1;
+}
+
+void PresentPass_Quad(float x, float y, float w, float h, float s0, float t0, float s1, float t1)
+{
+#ifdef __APPLE__
+    const float vertices[] = {x,y,s0,t0, x+w,y,s1,t0, x,y+h,s0,t1, x+w,y+h,s1,t1};
+    GLint previous = 0;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &previous);
+    if (!previous) pp_UseProgram(plain);
+    pp_BindVertexArray(quad_array);
+    pp_BindBuffer(GL_ARRAY_BUFFER, quad_buffer);
+    pp_BufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STREAM_DRAW);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    if (!previous) pp_UseProgram(0);
+#endif
 }
 
 static int build(void)
@@ -331,12 +401,14 @@ static void measure_level(GLuint picture, GLint unit, float s0, float t0, float 
     glGetIntegerv(GL_VIEWPORT, viewport);
     pp_BindFramebuffer(GL_FRAMEBUFFER, level_fbo[next]);
     glViewport(0, 0, 1, 1);
+#ifndef __APPLE__
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
     glLoadIdentity();
     glMatrixMode(GL_MODELVIEW);
     glPushMatrix();
     glLoadIdentity();
+#endif
     pp_UseProgram(measure);
     glBindTexture(GL_TEXTURE_2D, picture);
     pp_ActiveTexture(GL_TEXTURE1);
@@ -347,6 +419,9 @@ static void measure_level(GLuint picture, GLint unit, float s0, float t0, float 
     pp_Uniform4f(m_area, s0, t0, s1, t1);
     /* First measure of this run: nothing was shown to rise from. */
     pp_Uniform1f(m_rise, primed ? FLASH_RISE * seconds : 2.0f);
+#ifdef __APPLE__
+    PresentPass_Quad(-1, -1, 2, 2, 0, 0, 1, 1);
+#else
     glBegin(GL_QUADS);
     glVertex2f(-1, -1);
     glVertex2f(1, -1);
@@ -357,6 +432,7 @@ static void measure_level(GLuint picture, GLint unit, float s0, float t0, float 
     glMatrixMode(GL_PROJECTION);
     glPopMatrix();
     glMatrixMode(GL_MODELVIEW);
+#endif
     pp_BindFramebuffer(GL_FRAMEBUFFER, (GLuint)framebuffer);
     glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
     current = next;

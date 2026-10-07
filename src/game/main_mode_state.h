@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef MEMORIES_DECOMP_MAIN_MODE_STATE_H
 #define MEMORIES_DECOMP_MAIN_MODE_STATE_H
 
@@ -21,7 +22,7 @@
  * defaults explicitly. Legacy address-based selectors remain compatible;
  * .data takes precedence, as it did in unmatched.h. */
 #ifdef D_8009B0D1_IN_DATA
-extern u8 D_8009B0D1 __attribute__((section(".data")));
+extern u8 D_8009B0D1 PSX_SECTION(".data");
 #elif defined(D_8009B0D1_IS_VOLATILE)
 extern volatile u8 D_8009B0D1;
 #else
@@ -29,7 +30,7 @@ extern u8 D_8009B0D1;
 #endif
 
 #if defined(MAIN_MODE_STATE_NEXT_IN_DATA) || defined(D_8009B269_AS_SCALAR_DATA)
-extern u8 D_8009B269 __attribute__((section(".data")));
+extern u8 D_8009B269 PSX_SECTION(".data");
 #elif defined(MAIN_MODE_STATE_NEXT_AS_ARRAY) || defined(D_8009B269_AS_ARRAY)
 extern u8 D_8009B269[];
 #else
@@ -37,7 +38,7 @@ extern u8 D_8009B269;
 #endif
 
 #if defined(MAIN_MODE_STATE_ACTIVE_IN_DATA) || defined(D_8009B26C_AS_SCALAR_DATA)
-extern u8 D_8009B26C __attribute__((section(".data")));
+extern u8 D_8009B26C PSX_SECTION(".data");
 #elif defined(MAIN_MODE_STATE_ACTIVE_AS_SCALAR) || defined(D_8009B26C_AS_SCALAR)
 extern u8 D_8009B26C;
 #else

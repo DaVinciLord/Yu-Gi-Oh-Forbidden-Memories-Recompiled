@@ -50,7 +50,7 @@ editors write, is fine):
 |---|---|
 | `id` | the name the settings and the user directory use; the directory's name when it is left out |
 | `name` | what the Mods window shows |
-| `library` | the mod's code: an object file relative to its directory (a subdirectory is fine), `.o` added when the name has no `.` anywhere in it (`rules` is `rules.o`, `rules.v2` stays `rules.v2`); `build_mod.py` writes it under the same name. The same file serves every system. Leave it out for a mod that is only data |
+| `library` | the mod's code: an object file relative to its directory (a subdirectory is fine), `.o` added when the name has no `.` anywhere in it (`rules` is `rules.o`, `rules.v2` stays `rules.v2`); `build_mod.py` writes it under the same name. Linux and 32-bit Windows share one `.o`; macOS ARM64 needs a separately built `.dylib` (see [Native macOS ARM64 code mods](#native-macos-arm64-code-mods)). Leave it out for a mod that is only data |
 | `enabled` | whether the mod is applied the first time the game sees it |
 | `restart` | whether changing it needs a fresh process. Data overrides default to `true`, because the game reads most of what they change while it starts; code mods and `audio` default to `false` |
 | `legacy_setting` | an older settings key to read the player's choice from, once |
@@ -1422,7 +1422,10 @@ line and in order (`pc_mods_overlap`, `test_overlaps.py`).
 ## Code mods
 
 A code mod is **one object file**, `<library>.o`, that runs on both the
-Linux and the Windows game. Nobody builds a mod twice. Both games are 32-bit
+Linux and the 32-bit Windows game. macOS ARM64 needs a separate
+`<library>.dylib` build; mod authors supporting all three platforms must
+ship both files. See [Native macOS ARM64 code mods](#native-macos-arm64-code-mods)
+for the build command and manifest selection. Both i386 games are 32-bit
 x86 code with the same calling convention, so the machine code is the same;
 the game reads the file with its own loader
 ([`src/pc/mods/object_loader.c`](../src/pc/mods/object_loader.c)) rather than
@@ -1431,8 +1434,9 @@ the system's, so the container is the same too.
 The 64-bit Windows game (`-windows-x64.zip`) loads data mods only: a code
 mod is 32-bit code, so it stays off there with "needs a 64-bit build of
 this mod" in the Mods window, and the 32-bit game is the one to play it
-with. A 64-bit mod SDK, for 64-bit Windows and the arm64 targets, is a
-later milestone (`notes/pc-build.md`, "64-bit Windows").
+with. A 64-bit Windows code-mod SDK is a later milestone (`notes/pc-build.md`,
+"64-bit Windows"). macOS ARM64 code mods use the separate native build
+described below.
 
 The mod exports one function, described in
 [`src/pc/mods/modapi.h`](../src/pc/mods/modapi.h):
@@ -1757,3 +1761,36 @@ not alter actual drops or duel rules.
 These features originate in yamyi's PRs #68, #70 and #77. Their overlapping
 Library panels are combined into one panel here; do not also install the old
 `menu-back-confirm`, `card-name-color` or `drop-odds` packages.
+
+## Native macOS ARM64 code mods
+
+The macOS port loads an ARM64 `.dylib` compiled with guest-memory
+translation; Linux and 32-bit Windows retain the shared i386 ELF `.o`. In a source checkout, build the macOS game first,
+then run:
+
+```sh
+python3 tools/pc/build_mod.py /path/to/mod --target macos
+```
+
+This preserves the existing `.o` and produces `<library>.dylib` alongside it.
+A manifest with `"library": "life-points"` selects `life-points.dylib` on
+macOS and `life-points.o` on Linux/Windows. Copy the whole mod folder into
+`~/Library/Application Support/YFM Re-Decomp/mods/` on macOS and apply it in
+the Mods menu.
+
+The compiler uses the same structured LLVM guest-memory translation as the
+game. Mods should include the game's annotated headers (`G32`, `PSXLONG`)
+for guest records; a plain LP64 recompile is insufficient. Imported function
+ABIs are checked against the current build's `mod_signatures.json`; missing
+imports are rejected. Constructors/destructors, TLS and machine assembly
+are unsupported. Initialize through `MemoriesModInit` and release through
+`shutdown` instead.
+
+ARM64 hooks use typed wrappers around translated game routines, including
+native game overrides. They preserve the original call signature and chain
+in mod order without patching executable memory. Variadic functions,
+`returns_twice` routines and ordinary host helpers are not hook targets.
+Existing x86 objects do not run on ARM64; other source mods still need
+compilation and individual validation. The optional `test_arm64_life_points.py` runner checks separate
+player/opponent LP, campaign/free-duel scope, both sound timings, sound
+disabled and fresh-process save-state replay against a supplied source mod.

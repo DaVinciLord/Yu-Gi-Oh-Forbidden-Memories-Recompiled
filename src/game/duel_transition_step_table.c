@@ -23,7 +23,7 @@
    their own. They are transcribed as they stand rather than named, because
    moving them out of the blob is what #2602 asks for and a name for them is
    not yet supported by anything. */
-void (*D_80090DF8[])(BuildDeckTransitionState *) = {
+void (*TRANSLATED_G32 D_80090DF8[])(BuildDeckTransitionState *) = {
     BuildDeck_UpdatePaneTransition,
     BuildDeck_UpdatePaneTransition,
     BuildDeck_UpdateChestPaneInput,

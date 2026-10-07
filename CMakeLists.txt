@@ -11,6 +11,11 @@ if(WIN32)
 endif()
 include(CTest)
 option(MEMORIES_SANITIZERS "Enable host address/undefined behavior checks" OFF)
+if(APPLE)
+    include(tools/pc/cmake/macos.cmake)
+    return()
+endif()
+
 set(MEMORIES_PSYZ_ROOT "" CACHE PATH "Optional pinned PSY-Z checkout (repository root)")
 
 add_library(memories_pc_core STATIC
@@ -130,13 +135,14 @@ if(BUILD_TESTING)
     add_executable(memories_deck_shop_test tests/pc/deck_shop_test.c src/pc/saves/deck_shop.c)
     add_executable(memories_entry_layout_test tests/pc/entry_layout_test.c src/pc/text/entry_layout.c)
     add_executable(memories_state_remap_test tests/pc/state_remap_test.c src/pc/guest/state_remap.c)
+    add_executable(memories_state_io_test tests/pc/state_io_test.c src/pc/guest/state_io.c)
     add_executable(memories_control_protocol_test tests/pc/control_protocol_test.c src/pc/debug/control_protocol.c)
     add_executable(memories_control_net_test tests/pc/control_net_test.c src/pc/debug/control_net.c)
     if(WIN32)
         target_link_libraries(memories_control_net_test PRIVATE ws2_32)
     endif()
     foreach(target memories_deck_shop_test memories_entry_layout_test memories_state_remap_test
-            memories_control_protocol_test memories_control_net_test)
+            memories_state_io_test memories_control_protocol_test memories_control_net_test)
         target_include_directories(${target} PRIVATE src)
         if(NOT MSVC)
             target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -Werror)
@@ -149,6 +155,7 @@ if(BUILD_TESTING)
     add_test(NAME pc_deck_shop COMMAND memories_deck_shop_test)
     add_test(NAME pc_entry_layout COMMAND memories_entry_layout_test)
     add_test(NAME pc_state_remap COMMAND memories_state_remap_test)
+    add_test(NAME pc_state_io COMMAND memories_state_io_test)
     add_test(NAME pc_control_protocol COMMAND memories_control_protocol_test)
     add_test(NAME pc_control_net COMMAND memories_control_net_test)
     set_tests_properties(pc_control_net PROPERTIES TIMEOUT 15)
@@ -225,6 +232,23 @@ if(BUILD_TESTING)
     add_executable(memories_libgs_ot_test tests/pc/libgs_ot_test.c)
     target_link_libraries(memories_libgs_ot_test PRIVATE memories_pc_core)
     add_test(NAME pc_libgs_ot COMMAND memories_libgs_ot_test)
+    # The translated runtime models a 64-bit host; 32-bit native targets
+    # retain their existing direct-memory contracts and test inventory.
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        add_executable(memories_texture_dump_guest_pointer_test tests/pc/texture_dump_guest_pointer_test.c
+            src/pc/render/texture_dump.c)
+        target_include_directories(memories_texture_dump_guest_pointer_test PRIVATE src)
+        target_compile_definitions(memories_texture_dump_guest_pointer_test PRIVATE MEMORIES_TRANSLATED)
+        if(WIN32)
+            target_link_libraries(memories_texture_dump_guest_pointer_test PRIVATE memories_pc_fs)
+        endif()
+        if(NOT MSVC)
+            target_compile_options(memories_texture_dump_guest_pointer_test PRIVATE
+                -Wall -Wextra -Wpedantic -Werror -Wno-strict-prototypes)
+        endif()
+        add_test(NAME pc_texture_dump_guest_pointer COMMAND memories_texture_dump_guest_pointer_test)
+    endif()
+
     add_executable(memories_pgxp_test tests/pc/pgxp_test.c)
     target_link_libraries(memories_pgxp_test PRIVATE memories_pc_core)
     add_test(NAME pc_pgxp COMMAND memories_pgxp_test)
@@ -237,6 +261,20 @@ if(BUILD_TESTING)
     add_executable(memories_libgpu_test tests/pc/libgpu_test.c)
     target_include_directories(memories_libgpu_test PRIVATE src)
     add_test(NAME pc_libgpu COMMAND memories_libgpu_test)
+    # Clang's per-file fp-contract pragma in libpress must preserve its
+    # reference pixels even when the caller enables FMA contraction.
+    if(CMAKE_C_COMPILER_ID MATCHES "Clang")
+        foreach(contract fast off)
+            add_executable(memories_libpress_${contract}_test tests/pc/libpress_test.c src/pc/sdk/libpress.c)
+            target_include_directories(memories_libpress_${contract}_test PRIVATE src)
+            target_compile_options(memories_libpress_${contract}_test PRIVATE
+                -O2 -Wall -Wextra -Wpedantic -Werror -Wno-strict-prototypes -ffp-contract=${contract})
+            if(UNIX)
+                target_link_libraries(memories_libpress_${contract}_test PRIVATE m)
+            endif()
+            add_test(NAME pc_libpress_contract_${contract} COMMAND memories_libpress_${contract}_test)
+        endforeach()
+    endif()
     add_executable(memories_soft_gpu_test tests/pc/soft_gpu_test.c)
     target_link_libraries(memories_soft_gpu_test PRIVATE memories_pc_core)
     add_test(NAME pc_soft_gpu COMMAND memories_soft_gpu_test)
@@ -730,6 +768,18 @@ endif()
 
 find_package(Python3 COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
+    if(WIN32)
+        set(memories_default_game_target windows)
+    else()
+        set(memories_default_game_target linux)
+    endif()
+    set(MEMORIES_GAME_TARGET "${memories_default_game_target}" CACHE STRING "Game target: linux, windows, windows-x64 or macos")
+    set_property(CACHE MEMORIES_GAME_TARGET PROPERTY STRINGS linux windows windows-x64 macos)
+    add_custom_target(pc_game
+        COMMAND "${Python3_EXECUTABLE}" tools/pc/build.py --target "${MEMORIES_GAME_TARGET}"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        USES_TERMINAL
+        COMMENT "Build the native ${MEMORIES_GAME_TARGET} game")
     add_custom_target(pc_audit
         COMMAND "${Python3_EXECUTABLE}" tools/pc/audit.py
             --output "${CMAKE_BINARY_DIR}/port-audit.json"

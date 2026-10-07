@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef MEMORIES_DECOMP_LIBRARY_RUNTIME_H
 #define MEMORIES_DECOMP_LIBRARY_RUNTIME_H
 
@@ -27,8 +28,8 @@ extern u8 D_800EA1E8[];
 /* Signed coordinate views in the Library overlay work area. The dispatcher
  * compares the copied slot coordinate at 0x80181012 with its reference at
  * 0x80181002 while converging the shared view state. */
-extern s16 D_80181002 __attribute__((section(".data")));
-extern s16 D_80181012 __attribute__((section(".data")));
+extern s16 D_80181002 PSX_SECTION(".data");
+extern s16 D_80181012 PSX_SECTION(".data");
 
 /* Library screen state 2, the card view: opens the view, slides the model
  * and text box in, rotates the model light with the view angle and walks the

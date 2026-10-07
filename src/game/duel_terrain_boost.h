@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef MEMORIES_DECOMP_DUEL_TERRAIN_BOOST_H
 #define MEMORIES_DECOMP_DUEL_TERRAIN_BOOST_H
 
@@ -38,7 +39,7 @@
          src/game/duel_init_scene.c, func_80024E58.c (gcc_2_8_1_g8_split),
          main_run_animated_battle.c (gcc_2_8_1_g8_split_comm),
          ai_script_load_duel_globals.c (gcc_2_8_1_g8_split)
-             extern u8 gDuel_bTerrain __attribute__((section(".data")));
+             extern u8 gDuel_bTerrain PSX_SECTION(".data");
 
      func_80024E58 once needed a NUMBER instead. It matched under a profile
      that compiled at -G8 but assembled at -G4 (gcc_2_8_1_cc_g8_as_g4_split),
@@ -58,7 +59,7 @@
 #ifdef DUEL_TERRAIN_AS_ARRAY
 extern u8 gDuel_bTerrain[];
 #elif defined(DUEL_TERRAIN_SCALAR_IN_DATA)
-extern u8 gDuel_bTerrain __attribute__((section(".data")));
+extern u8 gDuel_bTerrain PSX_SECTION(".data");
 #endif
 
 /* Attack modifier in CARD_STAT_SCALE units, one row per monster card type and

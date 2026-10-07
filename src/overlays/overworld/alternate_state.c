@@ -1,5 +1,6 @@
+#include "../../port_ptr.h"
 #include "../../types.h"
 #include "alternate_location.h"
 
 AlternateLocationState gCampaignMap_AlternateState
-    __attribute__((section(".data"))) = {0};
+    PSX_SECTION(".data") = {0};

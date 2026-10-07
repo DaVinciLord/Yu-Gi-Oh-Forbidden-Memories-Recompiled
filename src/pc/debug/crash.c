@@ -8,6 +8,13 @@
 #include "pc/platform/platform.h"
 #include "pc/sdk/display.h"
 #include "pc/platform/paths.h"
+#ifdef __APPLE__
+#include "pc/platform/darwin_image.h"
+#ifdef MEMORIES_TRANSLATED
+#include "pc/guest/translated_state_backend.h"
+#include "pc/guest/translated_runtime.h"
+#endif
+#endif
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <pthread.h>
@@ -33,9 +40,9 @@
 #define ADDRESS "%08" PRIxPTR
 #define REGISTERS "registers: RIP=0x" ADDRESS " RSP=0x" ADDRESS " RBP=0x" ADDRESS "\n"
 #elif defined(__aarch64__)
-/* Android arm64: the program counter, stack pointer, frame pointer (x29),
+/* AArch64: the program counter, stack pointer, frame pointer (x29),
  * and the link register on a line of its own (fault_lr), whole. */
-#define ADDRESS "%08lx"
+#define ADDRESS "%016lx"
 #define REGISTERS "registers: PC=0x%016lx SP=0x%016lx FP(x29)=0x%016lx\n"
 static uintptr_t fault_lr;
 #else
@@ -68,6 +75,9 @@ static const char *region(uintptr_t address)
 #ifdef _WIN32
     uintptr_t image_low, image_high;
     Win32_ImageRange(&image_low, &image_high);
+#elif defined(__APPLE__)
+    uintptr_t image_low, image_high;
+    DarwinImage_TextRange(&image_low, &image_high);
 #else
     extern char __executable_start[], etext[];
     uintptr_t image_low = (uintptr_t)__executable_start, image_high = (uintptr_t)etext;
@@ -84,6 +94,11 @@ static const char *region(uintptr_t address)
 
 static int valid_frame(uintptr_t address)
 {
+#ifdef MEMORIES_TRANSLATED
+    uintptr_t low, high;
+    if (Memories_NativeStateStackRange(&low, &high) && address >= low &&
+        address <= high && high - address >= 2 * sizeof(uintptr_t)) return 1;
+#endif
     return (address >= GAME_STACK_LOW && address + 2 * sizeof(uintptr_t) <= GAME_STACK_HIGH) ||
            (address >= main_stack_low && address + 2 * sizeof(uintptr_t) <= main_stack_high);
 }
@@ -221,9 +236,28 @@ static void report_fatal(const char *what, unsigned long number, uintptr_t fault
     line("           LR=0x%016lx\n", fault_lr, 0, 0);
 #endif
     WALK(eip, esp, ebp);
+#ifdef __APPLE__
+    uintptr_t text_first, text_last;
+    if (DarwinImage_TextRange(&text_first, &text_last))
+        line("Mach-O text: 0x%lx..0x%lx (PC offset 0x%lx)\n", text_first, text_last,
+             eip >= text_first && eip < text_last ? eip - text_first : 0);
+#endif
+#ifdef __APPLE__
+    line("Mach-O UUID: %s\n", (uintptr_t)DarwinImage_UUID(), 0, 0);
+#endif
     line("frame=%lu vblank=%lu clock=%ld%%\n", Memories_PresentedFrames(), Platform_VBlankCount(),
          (uintptr_t)(long)Platform_ClockRate());
     line("last loaded state slot=%ld\n", (uintptr_t)(long)Memories_LastStateSlot(), 0, 0);
+#ifdef MEMORIES_TRANSLATED
+    extern const char Memories_BuildIdentity[];
+    line("build: %s\n", (uintptr_t)Memories_BuildIdentity, 0, 0);
+    const char *detail = GuestRuntime_FatalDetail();
+    if (*detail) {
+        output("translated runtime: ", 20);
+        output(detail, strnlen(detail, 512));
+        output("\n", 1);
+    }
+#endif
     context();
     if (report_fd >= 0) close(report_fd);
     report_fd = -1;
@@ -280,7 +314,11 @@ void Crash_HandleSignal(int number, siginfo_t *info, void *context)
     struct sigaction action;
     if (reporting++) _exit(128 + number);
 #if defined(__aarch64__)
+#ifdef __APPLE__
+    fault_lr = (uintptr_t)user->uc_mcontext->__ss.__lr;
+#else
     fault_lr = (uintptr_t)user->uc_mcontext.regs[30];
+#endif
 #endif
     report_fatal("signal", (unsigned long)number, info ? (uintptr_t)info->si_addr : 0,
                  (uintptr_t)SIGNAL_CONTEXT_PC(user), (uintptr_t)SIGNAL_CONTEXT_SP(user),
@@ -307,10 +345,18 @@ void Crash_Init(void)
     size_t size;
     unsigned i;
     Crash_ChooseReportDir();
+#ifdef __APPLE__
+    uintptr_t text_first, text_last;
+    DarwinImage_TextRange(&text_first, &text_last); /* populate cache outside handlers */
+#endif
     stack.ss_sp = alternate_stack;
     stack.ss_size = sizeof(alternate_stack);
     stack.ss_flags = 0;
     sigaltstack(&stack, NULL);
+#ifdef __APPLE__
+    main_stack_high = (uintptr_t)pthread_get_stackaddr_np(pthread_self());
+    main_stack_low = main_stack_high - pthread_get_stacksize_np(pthread_self());
+#else
     if (!pthread_getattr_np(pthread_self(), &attributes)) {
         if (!pthread_attr_getstack(&attributes, &address, &size)) {
             main_stack_low = (uintptr_t)address;
@@ -318,6 +364,7 @@ void Crash_Init(void)
         }
         pthread_attr_destroy(&attributes);
     }
+#endif
     memset(&action, 0, sizeof(action));
     action.sa_sigaction = installed_handler;
     action.sa_flags = SA_SIGINFO | SA_ONSTACK;
@@ -376,11 +423,15 @@ void Crash_ReportHang(void *context_pointer)
     Win32_ContextRegisters(context_pointer, &eip, &esp, &ebp);
 #else
     ucontext_t *user = context_pointer;
-    eip = (uintptr_t)SIGNAL_CONTEXT_PC(user);
-    esp = (uintptr_t)SIGNAL_CONTEXT_SP(user);
-    ebp = (uintptr_t)SIGNAL_CONTEXT_FP(user);
+    eip = context_pointer ? (uintptr_t)SIGNAL_CONTEXT_PC(user) : 0;
+    esp = context_pointer ? (uintptr_t)SIGNAL_CONTEXT_SP(user) : 0;
+    ebp = context_pointer ? (uintptr_t)SIGNAL_CONTEXT_FP(user) : 0;
 #if defined(__aarch64__)
-    fault_lr = (uintptr_t)user->uc_mcontext.regs[30];
+#ifdef __APPLE__
+    fault_lr = context_pointer ? (uintptr_t)user->uc_mcontext->__ss.__lr : 0;
+#else
+    fault_lr = context_pointer ? (uintptr_t)user->uc_mcontext.regs[30] : 0;
+#endif
 #endif
 #endif
     report_fd = -1;
@@ -394,6 +445,12 @@ void Crash_ReportHang(void *context_pointer)
         line("           LR=0x%016lx\n", fault_lr, 0, 0);
 #endif
         WALK(eip, esp, ebp);
+#ifdef __APPLE__
+    uintptr_t text_first, text_last;
+    if (DarwinImage_TextRange(&text_first, &text_last))
+        line("Mach-O text: 0x%lx..0x%lx (PC offset 0x%lx)\n", text_first, text_last,
+             eip >= text_first && eip < text_last ? eip - text_first : 0);
+#endif
         line("frame=%lu vblank=%lu clock=%ld%%\n", Memories_PresentedFrames(), Platform_VBlankCount(),
              (uintptr_t)(long)Platform_ClockRate());
         context();

@@ -6,7 +6,7 @@ void DisplayObjectStream_ReadNextCommand(DisplayObjectStreamState *object)
 {
     u8 *p;
     s32 op;
-    s32 (**table)(DisplayObjectStreamState *, const u8 *);
+    s32 (*TRANSLATED_G32 *table)(DisplayObjectStreamState *, const u8 *);
     s32 value;
 
     p = object->current + (u16)object->field_58;
@@ -16,7 +16,7 @@ void DisplayObjectStream_ReadNextCommand(DisplayObjectStreamState *object)
     if (op >= 0xF0) {
         table = D_80090FEC;
         do {
-            if (table[op ^ 0xFF](object, p) == -1) {
+            if (CALL32(s32 (*)(DisplayObjectStreamState *, const u8 *), table[op ^ 0xFF])(object, p) == -1) {
                 return;
             }
             p = object->current + (u16)object->field_58;
