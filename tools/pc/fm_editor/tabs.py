@@ -970,6 +970,12 @@ class CardsTab(Tab):
         form as wide as its controls, the list the rest (at least LIST_LEAST)."""
         if not self.panes.winfo_exists() or not self.panes.winfo_ismapped():
             return
+        if not int(self.panes.cget("width")):
+            # Asked for what the list and the form ask, not for the panes'
+            # sizes as they are (rescaled): the tab is then never wider than
+            # the window, with a bottom scrollbar a few pixels long.
+            self.panes.configure(width=sum(self.nametowidget(p).winfo_reqwidth() for p in self.panes.panes())
+                                 + px(self, 6))
         width = self.panes.winfo_width()
         if self._sash_dragged:
             # Once ttk has shared the change out by the panes' weights.

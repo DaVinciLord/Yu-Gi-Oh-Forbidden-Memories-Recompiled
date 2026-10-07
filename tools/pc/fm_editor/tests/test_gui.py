@@ -1353,6 +1353,31 @@ class GuiTest(GuiCase):
         cards.show(None)
         self.assertFalse(str(cards.picture.cget("image")))
 
+    def test_cards_tab_fits_the_window_in_both_looks(self):
+        """The Cards tab asks for what its list and form ask, not for its
+        panes' sizes as they are: at 1400 wide no bottom scrollbar, light or
+        dark; and a half-ticked box shows in the dark look too."""
+        from tkinter import ttk
+        from fm_editor import theme
+        app = self.app
+        app.deiconify()
+        app.geometry("1400x900")
+        app.cards.goto(1)
+        for dark in (False, True):
+            app.dark.set(dark)
+            app.toggle_dark()
+            for _ in range(3):
+                app.update()
+                app.after(100)
+            if app.winfo_width() >= 1400:
+                self.assertFalse(app.cards.page.xbar.winfo_ismapped(), dark)
+            self.assertLess(app.cards.winfo_reqwidth(), 1000)
+        style = ttk.Style(app)
+        self.assertEqual(style.theme_use(), theme.DARK_THEME)
+        self.assertIn("alternate", str(style.map("TCheckbutton", "indicatorbackground")))
+        app.dark.set(False)
+        app.toggle_dark()
+
     def test_art_tab_keeps_its_card_through_undo(self):
         from fm_editor import pngio
         from fm_editor.tests.test_art import gradient

@@ -396,7 +396,9 @@ class Theme:
         for toggle in ("TCheckbutton", "TRadiobutton"):
             style.configure(toggle, indicatorbackground=FIELD, indicatorforeground=FG, upperbordercolor=BORDER,
                             lowerbordercolor=BORDER, indicatormargin=self.px(1, 1, 4, 1), padding=self.px(2))
-            style.map(toggle, indicatorbackground=[("pressed", BG), ("disabled", BG)],
+            # Half ticked ("alternate": some of a set, the Equips tab's types)
+            # filled, as clam's light look does: it showed as empty here.
+            style.map(toggle, indicatorbackground=[("pressed", BG), ("disabled", BG), ("alternate", FOCUS)],
                       background=[("active", BG)])
         # A toggle drawn as a button (the Map tab's D-pad): pressed shows.
         style.configure("Toolbutton", background=BG, lightcolor=BG, darkcolor=BG, bordercolor=BORDER,
