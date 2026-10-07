@@ -1007,6 +1007,13 @@ card's own `guardian_star` rule takes precedence. When two enabled mods set
 the same card part or guardian star, the later mod in load order wins. The
 rules are read when cards are built, so changing them requires a restart.
 
+Yamyi Mods has an optional **Rarity card-name colours** setting for compatibility
+with its older `card_name_color.ini` system. It is off by default. When enabled,
+that INI may name or define colour slots and assign colours by rarity tier or
+per-card override; those colours are applied after `card_text_colors` and
+therefore override the manifest colour for the card name only. Description and
+guardian-star colours continue to use `card_text_colors`.
+
 ## When mods overlap
 
 Two enabled mods may change the same thing. Nothing stops that, and nothing
@@ -1433,10 +1440,13 @@ use its highest drop weight. A weight of `w/2048` is the chance per win at that 
 The first Library display creates `mod-data/yamyi-mods/card_name_color.ini`
 in the player's directory. Its rarity tiers and duelist/rank multipliers give
 the panel's score; restart after editing it. Lower scores mean rarer cards; an
-explicit zero multiplier is respected. Its colour slots and card overrides
-are no longer read: card-name colours are a `card_text_colors` declaration
-(above), in this or any other mod. The package is disabled by default and does
-not alter actual drops or duel rules.
+explicit zero multiplier is respected. By default, card-name colours come from
+`card_text_colors` declarations (above), in this or any other mod. Turn on
+**Rarity card-name colours** to also read the INI's colour slots, tiers and
+card overrides; while enabled, its assigned rarity colour temporarily
+overrides the manifest colour for the card name only. Description and guardian
+star colours still come from `card_text_colors`. The package is disabled by
+default and does not alter actual drops or duel rules.
 
 These features originate in yamyi's PRs #68, #70 and #77. Their overlapping
 Library panels are combined into one panel here; do not also install the old
