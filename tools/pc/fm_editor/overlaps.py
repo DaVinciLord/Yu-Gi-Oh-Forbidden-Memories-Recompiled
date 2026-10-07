@@ -42,6 +42,7 @@ STARTER_WEIGHT_LIMIT = 32767      # a deck's weight (starter.c)
 STARTER_POOL_WEIGHT_LIMIT = 65535
 ALL = ("all",)
 DEFAULT_EQUIP_BONUS = ("default",)
+ALL_RECIPES = ("every disc recipe",)   # {"remove": "all"} (overlap.c ALL_RECIPES)
 EQUIP_CARDS = 1 << 20   # overlap.c EQUIP_CARDS
 STAR_RETAIL = ["", "Mars", "Jupiter", "Saturn", "Uranus", "Pluto", "Neptune", "Mercury", "Sun", "Moon", "Venus"]
 TERRAINS = ["", "Forest", "Wasteland", "Mountain", "Sogen", "Umi", "Yami"]
@@ -655,13 +656,20 @@ class _Check:
             if key is not None and (isinstance(key, tuple) or key <= CARD_COUNT):
                 self.claim(CARDS, mod, key, SET, canonical(entry), entry)
 
+    def removes_all(self, value) -> bool:
+        """{"remove": "all"} (tables.c): every disc recipe, unless a card is named "all"."""
+        if value != "all":
+            return False
+        cid = self.source.card("all", 0) if self.source.card else None
+        return not cid or cid <= 0
+
     def read_fusions(self, mod):
         for rule in _list(self.member(mod, "fusions")):
             if not self.switched_on(mod, rule):
                 continue
             rule = _obj(rule)
             if "remove" in rule:
-                key = self.card_key(rule["remove"])
+                key = ALL_RECIPES if self.removes_all(rule["remove"]) else self.card_key(rule["remove"])
                 if key is not None:
                     self.claim(FUSIONS, mod, ("remove", key), ADD, 0, rule)
                 continue
@@ -1506,6 +1514,8 @@ class _Check:
         if kind == CARDS:
             return f"Card {self.card_words(src.get('replace'))}"
         if kind == FUSIONS:
+            if c.key == ("remove", ALL_RECIPES):
+                return "Every disc recipe removed"
             if "remove" in src:
                 return f"Disc recipes for {self.card_words(src['remove'])} removed"
             with_ = src["with"]

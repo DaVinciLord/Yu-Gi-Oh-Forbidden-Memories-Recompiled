@@ -1089,7 +1089,7 @@ def fusion_pairs(p):
     # A card's own "fusions" list makes what no rule of the mod decides
     # first: the row shows what the game plays. A copy's pair its base's
     # rule decides is no row of its own (it would read "forbidden").
-    removes = set(p.active_removes()) if named else set()
+    removes = p.removed_results() if named else set()
     own = {pair: p.own_fusion(pair, removes) for pair in named}
     pairs = set(p.fusions) | set(p.retail.fusions) | p.fusion_explicit | \
         {pair for pair, made in own.items() if made is not None}
@@ -1119,9 +1119,18 @@ class FusionsTab(Tab):
         self.search.trace_add("write", lambda *_: self.fill())
         self.count = ttk.Label(top)
         self.count.pack(side="right")
+        # {"remove": "all"}: the disc's pairs are no fusions; they are left
+        # out of the list unless asked for, so it shows what still fuses.
+        self.all_banner = ttk.Frame(self)
+        self.all_note = ttk.Label(self.all_banner, style="Warning.TLabel")
+        self.all_note.pack(side="left")
+        self.show_removed = tk.BooleanVar()
+        ttk.Checkbutton(self.all_banner, text="Show the removed disc fusions", variable=self.show_removed,
+                        command=self.fill).pack(side="left", padx=8)
         frame, self.tree = scrolled_tree(self, [("a", "Card A"), ("b", "Card B"), ("result", "Result"),
                                                 ("state", "")], [260, 260, 260, 80], 24, selectmode="extended")
         frame.pack(fill="both", expand=True, pady=4)
+        self.list_frame = frame
         self.tree.bind("<Double-1>", lambda e: self.edit())
         buttons = ttk.Frame(self)
         buttons.pack(fill="x")
@@ -1131,8 +1140,10 @@ class FusionsTab(Tab):
         ttk.Button(buttons, text="Remove recipes of...", command=self.remove_result).pack(side="left", padx=(4, 0))
         ttk.Button(buttons, text="Revert to retail", command=self.revert).pack(side="left", padx=4)
         ttk.Button(buttons, text="Bulk...", command=lambda: bulk_dialog.open_bulk(self)).pack(side="left")
-        ttk.Label(buttons, text="A pair fuses the same in either order. Brown rows are the retail table's "
-                                "\"glitch\" fusions.", style="Hint.TLabel").pack(side="right")
+        self.all_button = ttk.Button(buttons, text="Remove all fusions...", command=self.remove_all)
+        self.all_button.pack(side="left", padx=4)
+        ttk.Label(self, text="A pair fuses the same in either order. Brown rows are the retail table's "
+                             "\"glitch\" fusions.", style="Hint.TLabel").pack(anchor="w", pady=(2, 0))
 
     def refresh(self):
         # A search still naming a whole card (after Undo, another mod) is
@@ -1163,10 +1174,14 @@ class FusionsTab(Tab):
         # A card's whole label ("1 Blue-eyes White Dragon", as the right-click
         # menu and the Add dialog put it) finds that card only.
         exact = labelled_card(p, text)
-        rows = []
+        rows, hidden = [], 0
+        hide = p.fusion_remove_all and not self.show_removed.get()
         for pair in pairs:
             status = "own list" if own.get(pair) is not None else p.fusion_status(pair)
             if self.changed_only.get() and status in ("", "glitch"):
+                continue
+            if hide and status == "removed" and not p.fusions.get(pair) and pair not in p.fusion_explicit:
+                hidden += 1
                 continue
             result = own.get(pair) if status == "own list" else p.fusions.get(pair) or p.retail.fusions.get(pair)
             if exact is not None:
@@ -1190,6 +1205,14 @@ class FusionsTab(Tab):
                              values=(p.card_label(pair[0]), p.card_label(pair[1]), shown, status))
         more = f" (first {self.LIMIT} shown; search to narrow)" if len(rows) > self.LIMIT else ""
         self.count.configure(text=f"{len(rows)} fusions{more}")
+        self.all_button.configure(text="Restore disc fusions" if p.fusion_remove_all else "Remove all fusions...")
+        if p.fusion_remove_all:
+            shown = "shown in red" if self.show_removed.get() else f"{hidden} hidden here"
+            self.all_note.configure(text="Every disc fusion is removed: only the fusions listed here work "
+                                         f"(the disc's are {shown}).")
+            self.all_banner.pack(fill="x", pady=(4, 0), before=self.list_frame)
+        else:
+            self.all_banner.pack_forget()
 
     def selected(self):
         return [tuple(int(x) for x in iid.split(":")) for iid in self.tree.selection()]
@@ -1244,6 +1267,26 @@ class FusionsTab(Tab):
             return
         for pair in self.selected():
             self.project.revert_fusion(pair)
+        self.app.changed()
+        self.fill()
+
+    def remove_all(self):
+        """{"remove": "all"} (notes/gameplay-tables.md): no fusion at all, or,
+        once that is on, the disc's table back."""
+        p = self.project
+        if p.fusion_remove_all:
+            if not messagebox.askyesno("Restore disc fusions", "Bring back every fusion of the disc's table?\n\n"
+                                       "Fusions the mod adds or changes since stay as they are.", parent=self):
+                return
+            p.restore_disc_fusions()
+        else:
+            if not messagebox.askyesno("Remove all fusions", "Remove every fusion?\n\n"
+                                       "No recipe on the disc makes anything any more (one \"remove\": \"all\" "
+                                       "rule), the mod's own fusion rules are dropped, and the recipes an added "
+                                       "card's own list makes are blocked. Fusions added afterwards still work.\n\n"
+                                       "Undo, or Restore disc fusions, brings the disc's back.", parent=self):
+                return
+            p.remove_all_fusions()
         self.app.changed()
         self.fill()
 

@@ -65,6 +65,9 @@
         },
         {
             "remove": "Celtic Guardian"
+        },
+        {
+            "remove": "all"
         }
     ],
     "equips": [

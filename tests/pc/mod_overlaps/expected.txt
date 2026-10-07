@@ -8,6 +8,7 @@ Cards|warning|keys|alpha, beta|Card 'Blue-eyes White Dragon'	Card 'Blue-eyes Whi
 Fusions|warning|later|alpha, beta, gamma|Fusion 'Kuriboh' + 'Mystical Elf'	Fusion 'Kuriboh' + 'Mystical Elf' (Alpha, Beta, Gamma): Gamma wins (later in load order)
 Fusions|info|agree|alpha, beta|Fusion 'Baby Dragon' + 'Ryu-kishin'	Fusion 'Baby Dragon' + 'Ryu-kishin' (Alpha, Beta): the same in each, so no difference
 Fusions|info|add|alpha, beta|Disc recipes for 'Celtic Guardian' removed	Disc recipes for 'Celtic Guardian' removed (Alpha, Beta): both apply and add up
+Fusions|info|add|alpha, beta|Every disc recipe removed	Every disc recipe removed (Alpha, Beta): both apply and add up
 Equips|warning|reset|alpha, beta, gamma|Equip 'Legendary Sword'	Equip 'Legendary Sword' (Alpha, Beta, Gamma): Gamma's "replace" clears what the earlier mods set
 Equips|warning|later|alpha, beta, gamma, delta|Equip 'Legendary Sword II'	Equip 'Legendary Sword II' (Alpha, Beta, Gamma, Delta é 😀 � 中 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx): Delta é 😀 � 中 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx wins (later in load order)
 Equips|warning|later|alpha, beta|Equip 'Megamorph'	Equip 'Megamorph' (Alpha, Beta): Beta wins (later in load order)

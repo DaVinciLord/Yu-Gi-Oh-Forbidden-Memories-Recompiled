@@ -211,6 +211,33 @@ class PlanTest(unittest.TestCase):
         bulk.apply(self.p, plan)
         self.assertEqual(bulk.rule_count(self.p), rules)
 
+    def test_rule_count_with_remove_all(self):
+        self.p.retail.fusions = {(1, 2): 3, (4, 5): 3, (6, 7): 8}
+        self.p.fusions = dict(self.p.retail.fusions)
+        self.p.remove_recipes(3)
+        self.p.remove_disc_fusions()           # one "all" rule in place of the remove
+        self.assertEqual(manifest.build_fusions(self.p), [{"remove": "all"}])
+        self.assertEqual(bulk.rule_count(self.p), 1)
+        # a disc pair made again is a rule of its own; taken away, back under "all"
+        plan = bulk.plan(self.p, pairs_spec("6", "7", result=8, stronger=False, overwrite=True))
+        self.assertEqual(plan.rules_after, 2)
+        batch = bulk.apply(self.p, plan)
+        self.assertEqual(bulk.rule_count(self.p), len(manifest.build_fusions(self.p)))
+        self.assertEqual(manifest.build_fusions(self.p),
+                         [{"remove": "all"}, {"with": [self.p.ref(6), self.p.ref(7)], "result": self.p.ref(8)}])
+        plan = bulk.plan(self.p, pairs_spec("6", "7", mode="remove"))
+        self.assertEqual(plan.rules_after, 1)
+        bulk.apply(self.p, plan)
+        self.assertEqual(manifest.build_fusions(self.p), [{"remove": "all"}])
+        bulk.undo(self.p, batch)
+        self.assertTrue(self.p.fusion_remove_all)
+        # putting every recipe of a card back keeps "all"
+        for pair in ((1, 2), (4, 5)):
+            self.p.revert_fusion(pair)
+        self.assertTrue(self.p.fusion_remove_all)
+        self.assertEqual(len(manifest.build_fusions(self.p)), 3)
+        self.assertEqual(bulk.rule_count(self.p), 3)
+
     def test_rule_count_after_every_recipe_back(self):
         self.p.retail.fusions = {(1, 2): 3, (4, 5): 3, (6, 7): 8}
         self.p.fusions = dict(self.p.retail.fusions)

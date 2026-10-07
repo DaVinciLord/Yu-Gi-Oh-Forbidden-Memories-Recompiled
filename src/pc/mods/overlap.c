@@ -638,6 +638,15 @@ static void read_cards(ModsOverlaps *x, int mod)
     }
 }
 
+/* {"remove": "all"} (tables.c): every disc recipe, unless a card is named "all". */
+#define ALL_RECIPES (1ull << 62)
+static int removes_all(ModsOverlaps *x, const JsonValue *removed)
+{
+    const char *text = Json_String(removed, NULL);
+    if (!text || strcmp(text, "all")) return 0;
+    return !x->source.card || x->source.card(text, 0, x->source.context) <= 0;
+}
+
 /* "fusions": a pair in either order, the later mod's rule winning;
  * "remove"s add up (a mod's own recipes still make the card). */
 static void read_fusions(ModsOverlaps *x, int mod)
@@ -646,7 +655,7 @@ static void read_fusions(ModsOverlaps *x, int mod)
         const JsonValue *with = Json_Member(rule, "with"), *removed = Json_Member(rule, "remove");
         if (!switched_on(x, mod, rule)) continue;
         if (removed) {
-            uint64_t key = card_key(x, removed);
+            uint64_t key = removes_all(x, removed) ? ALL_RECIPES : card_key(x, removed);
             if (key) claim(x, MODS_OVERLAP_FUSIONS, mod, (1ull << 63) | key, ADD, 0, rule);
         } else if (Json_Count(with) == 2) {
             uint64_t a = card_key(x, Json_At(with, 0)), b = card_key(x, Json_Next(Json_At(with, 0)));
@@ -2169,7 +2178,9 @@ void Mods_OverlapLabel(const ModsOverlaps *x, int index, char *out, size_t size)
         snprintf(out, size, "Card %s", a);
         return;
     case MODS_OVERLAP_FUSIONS:
-        if (Json_Member(c->src, "remove")) {
+        if (c->key == ((1ull << 63) | ALL_RECIPES)) {
+            snprintf(out, size, "Every disc recipe removed");
+        } else if (Json_Member(c->src, "remove")) {
             card_words(x, Json_Member(c->src, "remove"), a, sizeof(a));
             snprintf(out, size, "Disc recipes for %s removed", a);
         } else {
