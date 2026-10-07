@@ -203,11 +203,12 @@ def uses(app, cid) -> list:
         if isinstance(unlock, dict) and "card" in unlock and resolve(unlock["card"]) == cid:
             add("Packs", entry.get("name", packmath.pack_id(entry)) + ": unlocked by owning it",
                 lambda i=i: app.open_pack(i))
-    # No tab edits "starter_pools" (kept as written in mod.json): listed, no link.
+    # The Starter decks tab's Weighted pools page.
     for i, pool in enumerate(starter_pools.state(p)):
         weight = pool.cards.get(cid, 0)
         if weight:
-            add("Starter pools", f"{pool.name or f'pool {i + 1}'}: weight {weight} (mod.json only)", None)
+            add("Starter pools", f"{pool.name or f'pool {i + 1}'}: weight {weight}",
+                lambda i=i: app.open_starter_pool(i, cid))
     return lines
 
 

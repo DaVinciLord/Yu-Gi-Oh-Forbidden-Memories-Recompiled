@@ -2353,11 +2353,15 @@ class StarterTab(Tab):
     def refresh(self):
         self.fill_list()
         self.fill()
-        self.pools.index = 0
         self.pools.fill()
-        # The page the mod uses: its pools when it weights some and writes no deck.
-        if starter_pools.state(self.project) and not self.decks():
-            self.pages.select(self.pools)
+        # A mod opened: the page it uses, its pools when it weights some and
+        # writes no deck (not at every Undo, which refreshes the tab too).
+        if getattr(self, "_opened", None) is not self.project.retail or self.project.source_dir != getattr(
+                self, "_opened_dir", None):
+            self._opened, self._opened_dir = self.project.retail, self.project.source_dir
+            self.pools.index = 0
+            self.pools.fill()
+            self.pages.select(self.pools if starter_pools.state(self.project) and not self.decks() else 0)
 
     @staticmethod
     def type_name(card) -> str:
@@ -2705,8 +2709,9 @@ class ModInfoTab(Tab):
         # box having shown them as they were when it was filled.
         shown = getattr(self, "_shown", {})
         merged = dict(self.project.other)
+        missing = object()              # not the box's null: a key typed as null is a key
         for key in set(shown) | set(other):
-            if shown.get(key) != other.get(key):
+            if shown.get(key, missing) != other.get(key, missing):
                 if key in other:
                     merged[key] = other[key]
                 else:
@@ -2951,11 +2956,14 @@ class ModInfoTab(Tab):
         dialog.fields = fields
         return dialog
 
-    TAB_KEYS = ("limits", "guardian_stars", "starter_pools")    # kept in `other`, edited on their tabs
+    TAB_KEYS = ("limits", "guardian_stars")     # kept in `other`, edited on their tabs
 
     def shown_other(self) -> dict:
-        """The other keys this box shows: all but those other tabs edit."""
-        return {key: value for key, value in self.project.other.items() if key not in self.TAB_KEYS}
+        """The other keys this box shows: all but those other tabs edit
+        (starter pools the Weighted pools page can read are its; a section it
+        cannot is shown here, to mend by hand)."""
+        return {key: value for key, value in self.project.other.items() if key not in self.TAB_KEYS
+                and not (key == "starter_pools" and starter_pools.readable(value))}
 
     def preview(self):
         if self.app.commit_all():

@@ -372,6 +372,15 @@ class Project:
         self.equips.pop(cid, None)
         for monsters in self.equips.values():
             monsters.discard(cid)
+        if getattr(self, "starter_pool_state", None) is not None:
+            # Out of the starter pools too: else the next card added, given
+            # its number, would take its place there.
+            from . import starter_pools as sp
+            pools = sp.state(self)
+            if any(cid in pool.cards for pool in pools):
+                for pool in pools:
+                    pool.cards.pop(cid, None)
+                sp.store(self)
         self.rituals = {r: rec for r, rec in self.rituals.items() if cid not in (rec or ()) and r != cid}
         self.ritual_requirements.pop(cid, None)
         for ritual, slots in list(self.ritual_requirements.items()):

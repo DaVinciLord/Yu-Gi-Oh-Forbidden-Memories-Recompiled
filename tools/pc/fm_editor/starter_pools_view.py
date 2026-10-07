@@ -157,11 +157,14 @@ class StarterPoolsPage(ttk.Frame):
                                                                         pady=(6, 0))
 
         def ok(dialog):
-            text = fields["draws"].get().strip()
-            if not text.isdigit() or int(text) > sp.DRAW_MAX:
+            try:
+                draws = int(fields["draws"].get().strip())
+            except ValueError:
+                draws = -1
+            if not 0 <= draws <= sp.DRAW_MAX:
                 return f"draws are a whole number, 0 to {sp.DRAW_MAX}"
             pool.name = fields["name"].get().strip() or None
-            pool.draws = int(text)
+            pool.draws = draws
             if adding:
                 self.pools().append(pool)
                 self.index = len(self.pools()) - 1

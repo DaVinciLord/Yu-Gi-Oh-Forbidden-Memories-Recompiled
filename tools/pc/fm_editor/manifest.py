@@ -432,6 +432,17 @@ def build(project: Project) -> dict:
         if getattr(info, key):
             manifest[key] = getattr(info, key)
     manifest.update(project.other)
+    # Starter pools by their cards as they are named now (the mod's id, an
+    # added card's key may have changed since the Weighted pools page wrote
+    # them), as the written decks are.
+    if getattr(project, "starter_pool_state", None) is not None and \
+            isinstance(project.other.get("starter_pools"), (list, dict)):
+        from . import starter_pools as sp
+        pools = sp.build(sp.state(project), project.ref)
+        if pools is None:
+            manifest.pop("starter_pools", None)
+        else:
+            manifest["starter_pools"] = pools
     passwords = build_passwords(project)
     if passwords:
         manifest["passwords"] = passwords

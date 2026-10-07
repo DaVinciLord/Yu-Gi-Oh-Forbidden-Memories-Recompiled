@@ -918,7 +918,8 @@ class GuiTest(GuiCase):
         from fm_editor import validate as v
         app.go_to(v.Issue("error", "Starter pools", "pool 1", "x", 0))
         app.update()
-        self.assertIs(app.notebook.nametowidget(app.notebook.select()).tab, app.info)
+        self.assertIs(app.notebook.nametowidget(app.notebook.select()).tab, app.starter)
+        self.assertEqual(app.starter.pages.select(), str(app.starter.pools))
 
     def test_packs_empty_tab_and_a_pack_of_drops(self):
         """No pack: the tab says what packs are, only the ways to make one
@@ -1717,11 +1718,51 @@ class GuiTest(GuiCase):
         self.assertNotIn("text", app.project.other)
         self.assertIn("starter_pools", app.project.other)       # not the box's to take away
 
+    def test_pools_follow_renames_and_removed_cards_and_null_keys(self):
+        """Starter pools are written by their cards as named at save (the
+        mod's id or an added card's key changed since); a removed added card
+        leaves them; a key typed as null in Mod info is a key."""
+        from fm_editor import manifest, starter_pools as sp
+        app, p = self.app, self.app.project
+        p.info.id = "mymod"
+        added = p.add_card(2, "card-1")
+        page = app.starter.pools
+        dialog = page.add_pool()
+        dialog.fields["draws"].set("40")
+        dialog.ok()
+        with mock.patch("fm_editor.starter_pools_view.pick_card", return_value=added):
+            page.weight.set("5")
+            page.add_card()
+        with mock.patch("fm_editor.starter_pools_view.pick_card", return_value=3):
+            page.add_card()
+        p.info.id = "renamed"
+        built = manifest.build(p)["starter_pools"]
+        self.assertIn("renamed:card-1:1", built[0]["cards"])
+        self.assertNotIn("mymod:card-1:1", built[0]["cards"])
+        # Removed, the card leaves the pools; the next card added is not in them.
+        p.remove_card(added)
+        self.assertEqual(sp.state(p)[0].cards, {3: 5})
+        again = p.add_card(2, "card-2")
+        self.assertNotIn(again, sp.state(p)[0].cards)
+        # Mod info: null is a value; a readable pools section is the page's.
+        info = app.info
+        info.refresh()
+        self.assertNotIn("starter_pools", info.other.get("1.0", "end"))
+        info.other.delete("1.0", "end")
+        info.other.insert("1.0", json.dumps({"foo": None, "bar": 1}))
+        self.assertTrue(info.commit())
+        self.assertIn("foo", p.other)
+        self.assertIsNone(p.other["foo"])
+        # A section the page cannot read shows in the box, to mend by hand.
+        p.other["starter_pools"] = "pools.json"
+        info.refresh()
+        self.assertIn("pools.json", info.other.get("1.0", "end"))
+
     def test_mod_info_refuses_keys_the_tabs_write(self):
         app = self.app
         info = app.info
         info.refresh()
-        for key in ("packs", "starter", "pack_shop", "fusions", "limits"):
+        for key in ("packs", "starter", "pack_shop", "fusions", "limits", "guardian_stars"):
             info.other.delete("1.0", "end")
             info.other.insert("1.0", json.dumps({key: []}))
             self.assertFalse(info.commit(), key)
@@ -2288,7 +2329,7 @@ class GuiTest(GuiCase):
         lines = card_links.uses(app, 5)
         whats = {(w, t) for w, t, _ in lines}
         self.assertIn(("Packs", "Locked: unlocked by owning it"), whats)
-        self.assertIn(("Starter pools", "Mine: weight 7 (mod.json only)"), whats)
+        self.assertIn(("Starter pools", "Mine: weight 7"), whats)          # a link to the Weighted pools page
         window = card_links.UsesWindow(app, 5)
         row = next(i for i, (w, _, _) in enumerate(window.lines) if w == "Starter pools")
         window.tree.selection_set(str(row))

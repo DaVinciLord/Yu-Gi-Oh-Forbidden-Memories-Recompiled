@@ -98,6 +98,21 @@ def read(section, resolve) -> list:
     return out
 
 
+def readable(section) -> bool:
+    """Whether the Weighted pools page reads all of a section: a pool or a
+    list of them, each an object with whole-number draws and weights."""
+    pools = [section] if isinstance(section, dict) else section
+    if not isinstance(pools, list):
+        return False
+    for entry in pools:
+        if not isinstance(entry, dict) or ("draws" in entry and not _is_int(entry["draws"])):
+            return False
+        cards = entry.get("cards", {})
+        if not isinstance(cards, dict) or not all(_is_int(w) for w in cards.values()):
+            return False
+    return True
+
+
 def build(pools, ref) -> list:
     """"starter_pools" for mod.json; None when no pool is offered. `ref` names
     a card as the manifest names one."""

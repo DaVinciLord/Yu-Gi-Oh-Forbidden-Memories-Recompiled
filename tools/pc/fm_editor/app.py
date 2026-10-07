@@ -386,6 +386,19 @@ class App(Editing, tk.Tk):
         if self.open_tab(tab):
             tab.show_card(cid)
 
+    def open_starter_pool(self, index, cid=None):
+        """The Starter decks tab's Weighted pools page, on pool `index` (and
+        the card's row)."""
+        if not self.open_tab(self.starter):
+            return
+        page = self.starter.pools
+        self.starter.pages.select(page)
+        page.index = index
+        page.fill()
+        if cid is not None and page.tree.exists(str(cid)):
+            page.tree.selection_set(str(cid))
+            page.tree.see(str(cid))
+
     def open_pool(self, d, pool, cid=None):
         if self.open_tab(self.duelists):
             self.duelists.goto((d, pool))
@@ -571,8 +584,8 @@ class App(Editing, tk.Tk):
             self.notebook.select(self.limits)
         elif issue.area == "Guardian Stars":
             self.notebook.select(self.stars)
-        elif issue.area == "Starter pools":     # no tab of their own: Mod info's other keys hold them
-            self.notebook.select(self.info)
+        elif issue.area == "Starter pools":
+            self.open_starter_pool(target if isinstance(target, int) else 0)
         elif issue.area == "Other mods" and isinstance(target, tuple):
             self.go_to_overlap(*target)
 
