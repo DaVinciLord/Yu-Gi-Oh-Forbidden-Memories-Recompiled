@@ -105,10 +105,21 @@ class WrapLabel(ttk.Label):
             return
         view = self._viewport()
         right = view.winfo_rootx() + view.winfo_width()
+        # A panel placed with a size of its own (an empty tab's) is a fixed
+        # edge too: its width is not the label's doing.
+        widget = self.master
+        while widget is not None and widget is not view:
+            if widget.winfo_manager() == "place":
+                right = min(right, widget.winfo_rootx() + widget.winfo_width() - px(self, 12))
+                break
+            widget = widget.master
         wrap = max(px(self, self.least), right - self.winfo_rootx() - px(self, 8))
         if abs(int(float(str(self.cget("wraplength")) or 0)) - wrap) > 2:
             self.configure(wraplength=wrap)
             # The viewport may be resized without the label moving.
+        if isinstance(widget, tk.Misc) and widget is not view and not getattr(widget, "_wraps", False):
+            widget._wraps = True        # the placed panel resized: wrap again
+            widget.bind("<Configure>", lambda e: self._later(), add="+")
         if not getattr(view, "_wrap_labels", None):
             view._wrap_labels = []
             view.bind("<Configure>", lambda e, v=view: [label._later() for label in v._wrap_labels

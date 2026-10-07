@@ -910,6 +910,31 @@ class GuiTest(GuiCase):
         app.update()
         self.assertIs(app.notebook.nametowidget(app.notebook.select()).tab, app.info)
 
+    def test_packs_empty_tab_and_a_pack_of_drops(self):
+        """No pack: the tab says what packs are, only the ways to make one
+        work; a pack of an opponent's drops deals its cards at their drop
+        weights."""
+        from fm_editor import packs as packmath
+        app, tab = self.app, self.app.packs
+        app.notebook.select(tab)
+        app.update()
+        self.assertTrue(tab.empty.winfo_manager())
+        self.assertTrue(tab.add_button.instate(["!disabled"]))
+        self.assertTrue(all(w.instate(["disabled"]) for w in (tab.export_button, tab.revert_button)))
+        dialog = tab.add_from_drops()
+        fields = [w for w in dialog.winfo_children()[0].winfo_children() if w.winfo_class() == "TCombobox"]
+        fields[0].set(f"{1} {__import__('fm_editor.gamedata', fromlist=['x']).DUELIST_NAMES[1]}")
+        fields[1].set("B/C/D drops")
+        dialog.ok()
+        self.assertEqual(len(app.project.packs), 1)
+        entry = app.project.packs[0]
+        want = {c: w for c, w in app.project.pools[1]["bcd"].items() if w > 0}
+        got = {app.project.resolve(ref): w for ref, w in packmath.tier_pool(entry, "cards")}
+        self.assertEqual(got, want)
+        self.assertLessEqual(len(entry["name"]), packmath.NAME_LETTERS)
+        self.assertFalse(tab.empty.winfo_manager())
+        self.assertTrue(any(w.instate(["!disabled"]) for w in tab.right.winfo_children()[0].winfo_children()))
+
     def test_pack_tiers_slots_and_remove(self):
         """Tiers and slots keep a pack whole: the last tier stays, a removed
         tier leaves no guarantee, pity or slot naming it, an action keeps

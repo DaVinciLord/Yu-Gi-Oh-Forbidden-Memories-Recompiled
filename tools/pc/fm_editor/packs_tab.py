@@ -23,7 +23,7 @@ from . import art, packs as packmath, pngio, validate
 from .bulk_dialog import FilterPanel
 from .gamedata import DUELIST_NAMES
 from .tabs import Tab
-from .widgets import CardField, FormDialog, pick_card, px, scrolled_tree, show_text
+from .widgets import CardField, FormDialog, WrapLabel, pick_card, px, scrolled_tree, show_text, ui_font
 
 ZOOMS = (1, 2, 4)
 LISTED = ("(default)", "yes", "no")
@@ -142,7 +142,10 @@ class PacksTab(Tab):
         buttons.pack(fill="x", pady=(4, 0))
         for text, command in (("Add pack", self.add_pack), ("Duplicate", self.duplicate), ("Remove", self.remove),
                               ("Up", lambda: self.move(-1)), ("Down", lambda: self.move(1))):
-            ttk.Button(buttons, text=text, command=command, width=len(text) + 1).pack(side="left", padx=(0, 2))
+            button = ttk.Button(buttons, text=text, command=command, width=len(text) + 1)
+            button.pack(side="left", padx=(0, 2))
+            if command == self.add_pack:
+                self.add_button = button
         more = ttk.Frame(left)
         more.pack(fill="x", pady=(4, 0))
         self.shop_button = ttk.Button(more, text="Shop settings...", command=self.shop_settings)
@@ -234,6 +237,15 @@ class PacksTab(Tab):
                                          selectmode="extended")
         frame.pack(fill="both", expand=True, pady=4)
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.pick_row())
+        self.tree.bind("<Delete>", lambda e: self.remove_cards())
+        # No pack: what packs are, and ways to start one.
+        self.empty = ttk.Frame(frame, padding=20)
+        WrapLabel(self.empty, 420, font=ui_font(10),
+                  text="This mod sells no card packs. A pack is bought in the shop for starchips and deals its "
+                       "cards by their weights (in tiers, slots and guarantees under Advanced).").pack(fill="x")
+        ttk.Button(self.empty, text="Empty pack", command=self.add_pack).pack(anchor="w", pady=(8, 0))
+        ttk.Button(self.empty, text="A pack of an opponent's drops...", command=self.add_from_drops).pack(
+            anchor="w", pady=(6, 0))
 
     # --- the advanced part ------------------------------------------------------
 
@@ -412,22 +424,28 @@ class PacksTab(Tab):
         self.file_note.configure(text=f"\"packs\" names the file {self.project.packs_file}: the editor keeps it as "
                                       "written and does not edit it." if in_file else "")
         self.set_editable(not in_file)
+        for button in self.empty.winfo_children():     # the empty tab's ways to start a pack
+            if isinstance(button, ttk.Button):
+                button.state(["disabled"] if in_file else ["!disabled"])
 
     # What does nothing while "packs" names a file: every field and button of
     # a pack, and the list's own but Shop settings ("pack_shop" stays the
     # manifest's).
     EDITABLE = (ttk.Button, ttk.Entry, ttk.Spinbox, ttk.Combobox, ttk.Checkbutton, ttk.Radiobutton)
 
-    def set_editable(self, editable: bool):
+    def set_editable(self, editable: bool, keep=()):
+        """Every control greyed, or back; `keep`: those left as they are."""
         def walk(widget):
             for child in widget.winfo_children():
+                if child is self.empty:
+                    continue
                 if isinstance(child, self.EDITABLE) and child not in keep:
                     if not editable:
                         child.state(["disabled"])
                     elif child not in (self.export_button, self.revert_button):   # show_picture's to set
                         child.state(["!disabled"])
                 walk(child)
-        keep = {self.shop_button}
+        keep = {self.shop_button, *keep}
         walk(self.right)
         walk(self.list_buttons)
 
@@ -470,7 +488,15 @@ class PacksTab(Tab):
             self.identity.configure(text="No pack: Add pack makes one")
             self.picture.configure(image="")
             self.picture_note.configure(text="")
+            if self.project.packs_file is None:
+                self.empty.place(relx=0.5, rely=0.4, anchor="center", relwidth=0.7)
+                # No pack: nothing but Add pack does anything.
+                self.set_editable(False, keep={self.add_button})
             return
+        if self.empty.winfo_manager():
+            self.empty.place_forget()
+            if self.project.packs_file is None:
+                self.set_editable(True)
         pack, notes = self.parsed(entry)
         pid = packmath.pack_id(entry)
         self.identity.configure(text=f"{self.project.info.id}:{pid}")
@@ -737,6 +763,40 @@ class PacksTab(Tab):
         self.project.packs.append(packmath.new_pack(name, self.ids()))
         self.index = len(self.entries()) - 1
         self.edited()
+
+    def add_from_drops(self):
+        """A pack of the cards an opponent drops, at their drop weights: the
+        start of a "Seto's rare cards" pack."""
+        if self.project is None or self.project.packs_file is not None or not self.commit():
+            return None
+        names = [f"{d} {DUELIST_NAMES[d]}" for d in range(1, len(self.project.pools))]
+        pools = {"S/A-POW drops": "pow", "B/C/D drops": "bcd", "S/A-TEC drops": "tec", "Deck": "deck"}
+        fields = {}
+
+        def build(dialog, body):
+            for row, (key, label, values) in enumerate((("who", "Opponent", names), ("pool", "Pool", list(pools)))):
+                ttk.Label(body, text=label).grid(row=row, column=0, sticky="w", pady=2)
+                fields[key] = tk.StringVar(value=values[0])
+                ttk.Combobox(body, textvariable=fields[key], values=values, state="readonly", width=30).grid(
+                    row=row, column=1, sticky="w", padx=(6, 0), pady=2)
+            ttk.Label(body, text="Each card at its weight in that pool: the pack deals them as the duel drops them.",
+                      style="Hint.TLabel").grid(row=2, column=0, columnspan=2, sticky="w", pady=(6, 0))
+
+        def ok(dialog):
+            d = int(fields["who"].get().split(" ", 1)[0])
+            pool = pools[fields["pool"].get()]
+            items = [(self.project.ref(c), w) for c, w in sorted(self.project.pools[d][pool].items()) if w > 0]
+            if not items:
+                return "that pool has no card"
+            name = f"{DUELIST_NAMES[d]} {pool.upper()}"[:packmath.NAME_LETTERS]
+            entry = packmath.new_pack(name, self.ids())
+            packmath.set_tier_pool(entry, "cards", items)
+            self.project.packs.append(entry)
+            self.index = len(self.entries()) - 1
+            self.edited()
+            return None
+
+        return FormDialog(self, "A pack of an opponent's drops", build, ok)
 
     def duplicate(self):
         entry = self.current()
