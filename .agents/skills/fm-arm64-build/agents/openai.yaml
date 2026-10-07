@@ -1,0 +1,4 @@
+interface:
+  display_name: "FM ARM64 Build"
+  short_description: "Build and package the FM macOS ARM64 port"
+  default_prompt: "Use $fm-arm64-build to build and verify the FM macOS ARM64 artifact."

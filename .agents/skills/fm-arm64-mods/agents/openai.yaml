@@ -1,0 +1,4 @@
+interface:
+  display_name: "FM ARM64 Mods"
+  short_description: "Build and validate translated FM macOS code mods"
+  default_prompt: "Use $fm-arm64-mods to build and validate this FM macOS ARM64 code mod."
