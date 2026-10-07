@@ -52,7 +52,8 @@ class ArtTab(Tab):
         top.pack(fill="x")
         ttk.Label(top, text="Search").pack(side="left")
         self.search = tk.StringVar()
-        ttk.Entry(top, textvariable=self.search, width=20).pack(side="left", padx=4)
+        self.search_entry = ttk.Entry(top, textvariable=self.search, width=20)     # Ctrl+F
+        self.search_entry.pack(side="left", padx=4)
         self.filter = tk.StringVar(value=self.FILTERS[0])
         ttk.Combobox(top, textvariable=self.filter, values=self.FILTERS, state="readonly", width=16).pack(side="left")
         self.search.trace_add("write", lambda *_: self.fill())

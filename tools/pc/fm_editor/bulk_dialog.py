@@ -6,7 +6,7 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from . import bulk_fusions as bulk
+from . import bulk_fusions as bulk, theme
 from .gamedata import ATTRIBUTE_NAMES, STAR_NAMES, TYPE_NAMES
 from .widgets import CardField, grab, px, scrolled_tree, show_text
 
@@ -72,7 +72,7 @@ class FilterPanel(ttk.LabelFrame):
                                                                          sticky="we", pady=1)
             if hint:
                 row += 1
-                ttk.Label(self, text=hint, foreground="#777").grid(row=row, column=1, columnspan=3, sticky="w")
+                ttk.Label(self, text=hint, style="Hint.TLabel").grid(row=row, column=1, columnspan=3, sticky="w")
             row += 1
         ttk.Checkbutton(self, text="Only cards a fusion makes", variable=self.results_only,
                         command=on_change).grid(row=row, column=0, columnspan=3, sticky="w", pady=(2, 0))
@@ -177,7 +177,7 @@ class BulkFusionsDialog(tk.Toplevel):
         ttk.Radiobutton(top, text="Take fusions away", value="remove", variable=self.mode,
                         command=self.mode_changed).pack(side="left", padx=8)
         ttk.Label(top, text="Every card of A with every card of B; empty filters mean any card. A+B and B+A "
-                            "are one pair.", foreground="#777").pack(side="left", padx=8)
+                            "are one pair.", style="Hint.TLabel").pack(side="left", padx=8)
 
         sides = ttk.Frame(self, padding=(10, 6))
         sides.pack(fill="x")
@@ -228,16 +228,16 @@ class BulkFusionsDialog(tk.Toplevel):
         preview.pack(fill="both", expand=True, padx=10, pady=6)
         self.summary = ttk.Label(preview, justify="left")
         self.summary.pack(fill="x")
-        self.budget = ttk.Label(preview, foreground="#777")
+        self.budget = ttk.Label(preview, style="Hint.TLabel")
         self.budget.pack(fill="x")
-        self.problem = ttk.Label(preview, foreground="#c01c28", justify="left")
+        self.problem = ttk.Label(preview, style="Error.TLabel", justify="left")
         self.problem.pack(fill="x")
-        self.warning = ttk.Label(preview, foreground="#9c6500", justify="left")
+        self.warning = ttk.Label(preview, style="Warning.TLabel", justify="left")
         self.warning.pack(fill="x")
         frame, self.tree = scrolled_tree(preview, [("a", "Card A"), ("b", "Card B"), ("before", "Now"),
                                                    ("after", "After"), ("what", "Change")],
                                          [220, 220, 220, 220, 70], 9)
-        self.tree.tag_configure("kept", foreground="#777")
+        self.tree.tag_configure("kept", foreground=theme.tag_color(self.tree, "note"))  # the theme's grey, dark too
         frame.pack(fill="both", expand=True, pady=(4, 0))
 
         buttons = ttk.Frame(self, padding=(10, 0, 10, 10))
@@ -247,7 +247,7 @@ class BulkFusionsDialog(tk.Toplevel):
         self.apply_button.pack(side="right", padx=4)
         self.undo_button = ttk.Button(buttons, text="Undo last batch", command=self.undo)
         self.undo_button.pack(side="left")
-        self.undo_note = ttk.Label(buttons, foreground="#777")
+        self.undo_note = ttk.Label(buttons, style="Hint.TLabel")
         self.undo_note.pack(side="left", padx=6)
         self.bind("<Escape>", lambda e: self.destroy())
         self.minsize(px(self, 900), px(self, 640))

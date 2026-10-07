@@ -185,7 +185,8 @@ class CardsTab(Tab):
         top.pack(fill="x")
         ttk.Label(top, text="Search").pack(side="left")
         self.search = tk.StringVar()
-        ttk.Entry(top, textvariable=self.search, width=24).pack(side="left", padx=4)
+        self.search_entry = ttk.Entry(top, textvariable=self.search, width=24)     # Ctrl+F
+        self.search_entry.pack(side="left", padx=4)
         self.filter = tk.StringVar(value=self.FILTERS[0])
         ttk.Combobox(top, textvariable=self.filter, values=self.FILTERS, state="readonly", width=16).pack(side="left")
         self.search.trace_add("write", lambda *_: self.fill())
@@ -1242,7 +1243,8 @@ class FusionsTab(Tab):
         top.pack(fill="x")
         ttk.Label(top, text="Card (name or #)").pack(side="left")
         self.search = tk.StringVar()
-        ttk.Entry(top, textvariable=self.search, width=28).pack(side="left", padx=4)
+        self.search_entry = ttk.Entry(top, textvariable=self.search, width=28)     # Ctrl+F
+        self.search_entry.pack(side="left", padx=4)
         self.changed_only = tk.BooleanVar()
         ttk.Checkbutton(top, text="Changed only", variable=self.changed_only, command=self.fill).pack(side="left")
         # The list is filled again once the typing stops: 25,000 pairs a key
@@ -1308,15 +1310,24 @@ class FusionsTab(Tab):
             self.edit()
 
     def fill_soon(self):
+        # One Tcl command, made once: an after() a keystroke registered a new
+        # one each time, named by the bound method's id, which Python reuses,
+        # and a name made twice was left behind for destroy() to trip on.
+        if getattr(self, "_fill_command", None) is None:
+            self._fill_command = self.register(self._fill_due)
         if self._fill_job is not None:
-            self.after_cancel(self._fill_job)
-        self._fill_job = self.after(200, self.fill)
+            self.tk.call("after", "cancel", self._fill_job)
+        self._fill_job = self.tk.call("after", 200, self._fill_command)
+
+    def _fill_due(self):
+        self._fill_job = None           # the job that runs is not one fill() cancels
+        self.fill()
 
     def fill(self, select=()):
         """The list again, the rows selected before (or `select`) still
         selected where they are listed."""
         if self._fill_job is not None:
-            self.after_cancel(self._fill_job)
+            self.tk.call("after", "cancel", self._fill_job)
             self._fill_job = None
         if self.project is None:
             return

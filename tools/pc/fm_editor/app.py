@@ -86,9 +86,18 @@ class App(Editing, tk.Tk):
         # own Ctrl+O inserts a line, so the text boxes get the shortcut too.
         self.bind("<Control-s>", lambda e: self.shortcut(self.save))
         self.bind("<Control-o>", lambda e: self.shortcut(self.open_mod))
+        self.bind("<Control-f>", lambda e: self.shortcut(self.find))
         self.bind_class("Text", "<Control-o>", lambda e: self.shortcut(self.open_mod))
         if autostart:
             self.after(50, lambda: self.start(game, mod, ask))
+
+    def find(self):
+        """Ctrl+F: the tab's search box (Cards, Art, Fusions), its text picked."""
+        entry = getattr(self.notebook.current(), "search_entry", None)
+        if entry is not None:
+            entry.focus_set()
+            entry.selection_range(0, "end")
+            entry.icursor("end")
 
     def shortcut(self, action):
         if self.grab_current() is None:     # not while a dialog is up
@@ -581,9 +590,12 @@ class App(Editing, tk.Tk):
 
     def destroy(self):
         self.cancel_edit_jobs()
-        # Also stop widget/dialog idle callbacks before their Tcl commands disappear.
+        # Also stop widget/dialog idle callbacks before their Tcl commands
+        # disappear. Cancelled only: after_cancel() also deletes a job's
+        # command, which a widget registered and deletes itself on destroy
+        # ("can't delete Tcl command" then).
         for job in self.tk.call("after", "info"):
-            self.after_cancel(job)
+            self.tk.call("after", "cancel", job)
         super().destroy()
 
 

@@ -1353,6 +1353,22 @@ class GuiTest(GuiCase):
         cards.show(None)
         self.assertFalse(str(cards.picture.cget("image")))
 
+    def test_ctrl_f_goes_to_the_search(self):
+        app = self.app
+        app.deiconify()
+        for tab in (app.cards, app.art, app.fusions):
+            app.notebook.select(tab)
+            app.update()
+            tab.search.set("Dragon")
+            app.find()
+            app.update()
+            self.assertIs(app.focus_get(), tab.search_entry)
+            self.assertTrue(tab.search_entry.selection_present())
+            tab.search.set("")
+        app.notebook.select(app.limits)
+        app.update()
+        app.find()                      # a tab with no search: nothing happens
+
     def test_undo_keeps_the_card_the_window_follows(self):
         app, cards = self.app, self.app.cards
         cards.goto(50)
