@@ -1436,6 +1436,17 @@ class GuiTest(GuiCase):
         for url in urls:                    # each a file of the repository
             self.assertTrue((root / url.split("/blob/master/")[1]).exists(), url)
 
+    def test_ctrl_tab_goes_from_tab_to_tab(self):
+        app = self.app
+        app.notebook.select(app.cards)
+        app.update()
+        app.tk.call("ttk::notebook::CycleTab", str(app.notebook), 1)     # what Ctrl+Tab calls
+        app.update()
+        self.assertIs(app.notebook.current(), app.art)
+        app.tk.call("ttk::notebook::CycleTab", str(app.notebook), -1)
+        app.update()
+        self.assertIs(app.notebook.current(), app.cards)
+
     def test_ctrl_f_goes_to_the_search(self):
         app = self.app
         app.deiconify()

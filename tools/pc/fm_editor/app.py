@@ -61,6 +61,7 @@ class App(Editing, tk.Tk):
         self.build_menu()
         self.notebook = Pages(self)
         self.notebook.pack(fill="both", expand=True)
+        self.notebook.enable_traversal()        # Ctrl+Tab and Ctrl+Shift+Tab go from tab to tab
         # Over the tabs until there is a game to read: what the editor needs.
         self.welcome = ttk.Frame(self, padding=24, relief="ridge", borderwidth=2)
         ttk.Label(self.welcome, text="The FM Editor makes mods for the PC port of Yu-Gi-Oh! Forbidden Memories.",
