@@ -1171,7 +1171,15 @@ class CardsTab(Tab):
         cid = self.current
         if not cid:
             return
-        self.project.revert_card(cid)
+        p = self.project
+        what = "its base as the mod has it" if cid in p.added else "the disc's card"
+        # Every field of the card at once, the per-field links being the
+        # precise way back: asked first, as Remove this card is.
+        if (cid in p.added or p.card_changed(cid)) and not messagebox.askyesno(
+                "Revert to retail", f"Put {p.card_label(cid)} back as {what}? Its name, type, stats, text, "
+                "password, price and effect go back; its notes stay.", parent=self):
+            return
+        p.revert_card(cid)
         self.app.changed()
         self.update_row(cid)
         self.show(cid)

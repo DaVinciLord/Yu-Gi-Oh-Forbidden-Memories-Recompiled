@@ -1360,6 +1360,22 @@ class GuiTest(GuiCase):
         cards.show(None)
         self.assertFalse(str(cards.picture.cget("image")))
 
+    def test_card_revert_asks_first(self):
+        app, cards = self.app, self.app.cards
+        cards.goto(3)
+        cards.vars["attack"].set("2999")
+        self.assertTrue(cards.apply())
+        with mock.patch("fm_editor.tabs.messagebox.askyesno", return_value=False) as asked:
+            cards.revert()
+        asked.assert_called_once()
+        self.assertEqual(app.project.cards[3].attack, 2999)
+        with mock.patch("fm_editor.tabs.messagebox.askyesno", return_value=True):
+            cards.revert()
+        self.assertEqual(app.project.cards[3].attack, app.project.retail.cards[3].attack)
+        with mock.patch("fm_editor.tabs.messagebox.askyesno") as asked:
+            cards.revert()                  # as the disc has it: nothing to ask
+        asked.assert_not_called()
+
     def test_help_opens_the_guides(self):
         from pathlib import Path as P
         app = self.app
