@@ -1407,6 +1407,34 @@ class GuiTest(GuiCase):
         asked.assert_not_called()
         self.assertEqual(tab.list.set("0", "state"), "not used")
 
+    def test_conflicts_levels_and_clean_state_and_pool_summary(self):
+        from fm_editor import validate as v
+        app = self.app
+        tab = app.conflicts
+        tab.issues = []
+        tab.show_issues()
+        self.assertTrue(tab.clean.winfo_manager())
+        tab.issues = [v.Issue("error", "Cards", "#1", "bad", 1), v.Issue("note", "Cards", "#2", "fine", 2),
+                      v.Issue("warning", "Cards", "#3", "hm", 3)]
+        tab.level.set("error")
+        tab.show_issues()
+        self.assertEqual(tab.tree.get_children(), ("0",))
+        self.assertFalse(tab.clean.winfo_manager())
+        tab.level.set("all")
+        tab.show_issues()
+        self.assertEqual(len(tab.tree.get_children()), 3)
+        # Duelists: a line of what the pool deals, and the disc's once changed.
+        duel = app.duelists
+        duel.goto((1, "deck"))
+        self.assertTrue(duel.summary.cget("text").startswith("The 40 it deals most often: Monsters"))
+        self.assertNotIn("the disc's", duel.summary.cget("text"))
+        strongest = max(app.project.monsters(), key=lambda c: app.project.cards[c].attack)
+        app.project.pools[1]["deck"][strongest] = 900
+        duel.fill()
+        self.assertIn("the disc's", duel.summary.cget("text"))
+        duel.goto((1, "bcd"))
+        self.assertTrue(duel.summary.cget("text").startswith("A drop: monsters"))
+
     def test_mod_info_settings_list(self):
         """Settings by a list and a dialog, written into the JSON (and the
         mod) at once; a key unknown to the dialog stays; a setting entries

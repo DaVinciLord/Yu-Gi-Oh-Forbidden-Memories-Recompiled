@@ -57,6 +57,33 @@ def deck_makeup(p, cards: dict) -> str:
     return " \u00b7 ".join(parts)
 
 
+def pool_summary(p, kind: str, pool: dict, retail: dict) -> str:
+    """A line of what a pool deals: a deck pool, the forty it deals most
+    often; a drop pool, the chance of each kind of card and its strongest
+    monster; with the disc's beside it when the mod changed it."""
+    def line(weights):
+        weights = {c: w for c, w in weights.items() if w > 0 and c in p.cards}
+        if not weights:
+            return "nothing"
+        if kind == "deck":
+            return deck_makeup(p, fixed_decks.most_likely(weights))
+        total = sum(weights.values())
+        monsters = {c: w for c, w in weights.items() if p.cards[c].is_monster()}
+        parts = [f"monsters {round(100 * sum(monsters.values()) / total)}%"]
+        other = round(100 * (total - sum(monsters.values())) / total)
+        if other:
+            parts.append(f"other cards {other}%")
+        if monsters:
+            best = max(monsters, key=lambda c: (p.cards[c].attack, -c))
+            parts.append(f"strongest {p.cards[best].name} ({p.cards[best].attack} ATK, "
+                         f"{100 * monsters[best] / total:.2f}%)")
+        return ", ".join(parts)
+    now = line(pool)
+    what = "The 40 it deals most often: " if kind == "deck" else "A drop: "
+    before = line(retail)
+    return what + now + ("" if before == now else f"   (the disc's: {before})")
+
+
 def type_label(t: int) -> str:
     return TYPE_NAMES[t] if 0 <= t < len(TYPE_NAMES) else str(t)
 
@@ -1710,6 +1737,9 @@ class RitualsTab(Tab):
         WrapLabel(buttons, text="A ritual is a ritual card (an added copy has its base's recipe until given its "
                                 "own); the three tributes are monsters on the field; custom recipes may use conditions.",
                   style="Hint.TLabel").pack(side="left", fill="x", expand=True, padx=(8, 0))
+        legend(self, ("changed", "changed by the mod"), ("added", "added by the mod"),
+               ("removed", "no recipe any more")).pack(anchor="w", pady=(2, 0))
+        self.tree.bind("<Delete>", lambda e: self.remove())
 
     def refresh(self):
         self.fill()
@@ -2034,7 +2064,7 @@ class DuelistsTab(Tab):
         left = ttk.Frame(self)
         left.pack(side="left", fill="y")
         frame, self.list = scrolled_tree(left, [("id", "#"), ("name", "Opponent"), ("state", "Status")],
-                                         [36, 170, 60], 26, sort_numeric=("id",))
+                                         [36, 170, 72], 26, sort_numeric=("id",))
         frame.pack(fill="y", expand=True)
         self.list.bind("<<TreeviewSelect>>", lambda e: self.select())
         right = ttk.Frame(self)
@@ -2047,6 +2077,8 @@ class DuelistsTab(Tab):
                             command=self.fill).pack(side="left", padx=(0, 8))
         self.total = ttk.Label(top, font=ui_font(10))
         self.total.pack(side="right")
+        self.summary = ttk.Label(right, style="Hint.TLabel")     # what the pool deals, against the disc's
+        self.summary.pack(anchor="w", pady=(2, 0))
         frame, self.tree = scrolled_tree(right, [("id", "#"), ("name", "Card"), ("type", "Type"),
                                                  ("atk", "ATK"), ("def", "DEF"), ("w", "Weight"),
                                                  ("pct", "Chance"), ("retail", "Retail"), ("state", "Status")],
@@ -2121,6 +2153,7 @@ class DuelistsTab(Tab):
         cards = sum(1 for w in pool.values() if w)
         self.total.configure(text=f"{DUELIST_NAMES[self.duelist]}: {cards} cards, total {total} / {POOL_TOTAL}",
                              style="Ok.TLabel" if total == POOL_TOTAL else "Error.TLabel")
+        self.summary.configure(text=pool_summary(p, self.pool.get(), pool, retail))
 
     def pick_row(self):
         selection = self.tree.selection()
@@ -2874,13 +2907,19 @@ class ConflictsTab(Tab):
         ttk.Button(top, text="Check now", command=self.run).pack(side="left")
         self.summary = ttk.Label(top)
         self.summary.pack(side="left", padx=8)
+        # Which lines to list: a mod with many notes hid its one error.
+        self.level = tk.StringVar(value="all")
+        for value, text in (("all", "All"), ("error", "Errors"), ("warning", "Warnings"), ("note", "Notes")):
+            ttk.Radiobutton(top, text=text, value=value, variable=self.level, style="Segment.Toolbutton",
+                            command=self.show_issues).pack(side="left")
         ttk.Label(top, text="Double-click a line to go to it.", style="Hint.TLabel").pack(side="right")
         # The other installed mods this one is checked against (validate.cross_mod):
         # the player's mods folder, or one chosen here (kept in the editor's settings).
         other = ttk.Frame(self)
         other.pack(fill="x", pady=(4, 0))
         ttk.Button(other, text="Other mods folder...", command=self.choose_folder).pack(side="left")
-        ttk.Button(other, text="Player's folder", command=lambda: self.set_folder(None)).pack(side="left", padx=4)
+        ttk.Button(other, text="The game's mods folder", command=lambda: self.set_folder(None)).pack(side="left",
+                                                                                                  padx=4)
         self.others = ttk.Label(other, style="Hint.TLabel", wraplength=900, justify="left")
         self.others.pack(side="left", padx=8, fill="x", expand=True)
         from . import settings
@@ -2889,7 +2928,11 @@ class ConflictsTab(Tab):
                                                 ("message", "Conflict")], [70, 90, 260, 560], 26)
         frame.pack(fill="both", expand=True, pady=4)
         self.tree.bind("<Double-1>", lambda e: self.go())
+        self.tree.bind("<Return>", lambda e: self.go())
         self.issues = []
+        self.clean = ttk.Label(frame, style="Ok.TLabel", font=ui_font(10), justify="center",
+                               text="Nothing to fix: the game reads the mod as it is, and no other installed mod\n"
+                                    "changes what it changes.")
 
     def choose_folder(self):
         from tkinter import filedialog
@@ -2927,15 +2970,27 @@ class ConflictsTab(Tab):
             others, said = [], f"The other mods could not be checked: {type(problem).__name__}: {problem}"
         self.issues += others
         self.others.configure(text=said)
-        self.tree.delete(*self.tree.get_children())
-        for i, issue in enumerate(self.issues):
-            self.tree.insert("", "end", iid=str(i), values=(issue.level, issue.area, issue.where, issue.message),
-                             tags=(issue.level,))
+        self.show_issues()
         errors = len(validate.errors(self.issues))
         notes = sum(1 for issue in self.issues if issue.level == "note")
         self.summary.configure(text=f"{errors} errors, {len(self.issues) - errors - notes} warnings, {notes} notes",
                                style="Error.TLabel" if errors else "Ok.TLabel")
         return self.issues
+
+    def show_issues(self):
+        """The lines of the level chosen (all, or errors, warnings, notes)."""
+        self.tree.delete(*self.tree.get_children())
+        level = self.level.get()
+        for i, issue in enumerate(self.issues):
+            if level == "all" or issue.level == level:
+                self.tree.insert("", "end", iid=str(i), values=(issue.level, issue.area, issue.where, issue.message),
+                                 tags=(issue.level,))
+        if self.issues:
+            self.clean.place_forget()
+        else:
+            # On the list's own ground, light or dark.
+            self.clean.configure(background=ttk.Style(self).lookup("Treeview", "background") or "white")
+            self.clean.place(relx=0.5, rely=0.3, anchor="center")
 
     def go(self):
         selection = self.tree.selection()
