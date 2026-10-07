@@ -160,9 +160,6 @@ typedef struct {
 } SavedNameColor;
 static SavedNameColor saved_colors[TRACKED_BOXES];
 
-/* Colour declarations moved to the core manifest framework.  Keep this
- * module's drop-odds machinery, but never revive its old private INI hook
- * for a profile that still contains the former setting. */
 /*
  * The core card_text_colors system now runs inside func_80037DA4().
  *
@@ -181,7 +178,7 @@ static SavedNameColor saved_colors[TRACKED_BOXES];
  */
 static int legacy_colors_enabled(void)
 {
-    return host && host->setting(host, "legacy_card_name_colors", 0);
+    return host && host->setting(host, "rarity_name_colors", 0);
 }
 /* ---- small helpers ------------------------------------------------------- */
 
