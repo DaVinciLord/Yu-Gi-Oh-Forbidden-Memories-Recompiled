@@ -219,7 +219,10 @@ class PacksTab(Tab):
         self.advanced_open = tk.BooleanVar(value=False)
         bottom = ttk.Frame(right)
         bottom.pack(side="bottom", fill="x")
-        self.advanced_button = ttk.Button(bottom, text="Advanced >", command=self.toggle_advanced)
+        # As Limits and Guardian Stars have it: a box, not a button.
+        self.advanced_shown = tk.BooleanVar(self, value=False)
+        self.advanced_button = ttk.Checkbutton(bottom, text="Show advanced", variable=self.advanced_shown,
+                                               command=self.show_advanced)
         self.advanced_button.pack(anchor="w", pady=(4, 0))
         self.advanced = ttk.LabelFrame(bottom, text="Advanced", padding=4)
         self.build_advanced(self.advanced)
@@ -381,12 +384,14 @@ class PacksTab(Tab):
         ttk.Label(line, text="Unknown keys of a pack stay as written.", style="Hint.TLabel").pack(side="left", padx=8)
 
     def toggle_advanced(self):
-        if self.advanced.winfo_manager():
-            self.advanced.pack_forget()
-            self.advanced_button.configure(text="Advanced >")
-        else:
+        self.advanced_shown.set(not self.advanced_shown.get())
+        self.show_advanced()
+
+    def show_advanced(self):
+        if self.advanced_shown.get():
             self.advanced.pack(fill="x")
-            self.advanced_button.configure(text="Advanced v")
+        else:
+            self.advanced.pack_forget()
 
     # --- the list -------------------------------------------------------------
 
