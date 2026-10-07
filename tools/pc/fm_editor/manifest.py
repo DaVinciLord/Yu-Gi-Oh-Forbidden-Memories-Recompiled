@@ -474,7 +474,11 @@ def _format(value, indent: int) -> str:
     if isinstance(value, list):
         items = [pad + _format(item, indent + 4) for item in value]
         return "[\n" + ",\n".join(items) + "\n" + " " * indent + "]"
-    items = [pad + json.dumps(key, ensure_ascii=False) + ": " + _format(item, indent + 4) for key, item in value.items()]
+    # A key is a string in JSON: a card named by its number (480, Kuwagata α,
+    # whose name does not name it back) was written 480: and the game read
+    # no mod.json at all.
+    items = [pad + json.dumps(str(key), ensure_ascii=False) + ": " + _format(item, indent + 4)
+             for key, item in value.items()]
     return "{\n" + ",\n".join(items) + "\n" + " " * indent + "}"
 
 
