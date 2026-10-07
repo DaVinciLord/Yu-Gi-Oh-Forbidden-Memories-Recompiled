@@ -22,7 +22,7 @@ from . import fixed_decks
 from .fixed_deck_view import FixedDeckView
 from .model import KEY_RE, StarterDeck
 from .widgets import (CardField, FormDialog, ScrolledForm, ScrolledPage, card_matches, card_named, grab, pick_card, px,
-                      scrolled_tree, show_text, ui_font)
+                      fixed_font, scrolled_tree, show_text, ui_font)
 
 ATTRIBUTE_CHOICES = ATTRIBUTE_NAMES + ["6 (magic)", "7 (trap)"]
 STAR_CHOICES = ["(none)"] + STAR_NAMES[1:]
@@ -160,6 +160,12 @@ class CardsTab(Tab):
         # scrollbar on until the line made room.
         self.card_scroll.body.bind("<Configure>", lambda e: (self.form_resized(), self.card_scroll._layout()))
         self.panes.bind("<B1-Motion>", lambda e: setattr(self, "_sash_dragged", True), add=True)
+        self.panes.bind("<ButtonRelease-1>", lambda e: self.keep_share(), add=True)
+        # Resized while another tab was shown, the line was left where it
+        # was: placed again when the tab shows (on the window: its destroy
+        # cancels what waits).
+        self.panes.bind("<Map>", lambda e: self.app.after_idle(self.place_sash), add=True)
+        self._sash_share = None
         form = ttk.LabelFrame(self.card_scroll.body, text="Card", padding=8)
         form.pack(fill="both", expand=True)
         self.form = form
@@ -276,7 +282,7 @@ class CardsTab(Tab):
         self.captions["text"].grid(row=row, column=0, sticky="nw", pady=2)
         # 21 columns: the game's 20 letters a line and room for the cursor.
         # Drawn as the card view's panel: icons and colours as the game shows them.
-        self.text = CardTextBox(form, app, width=21, height=9, wrap="word", font=("Consolas", 10))
+        self.text = CardTextBox(form, app, width=21, height=9, wrap="word", font=fixed_font())
         self.text.grid(row=row, column=1, sticky="nw", pady=2)
         # Beside it, the card view's text box as the game draws it, as tall
         # as the box; the retail text's link under the box.
@@ -796,6 +802,42 @@ class CardsTab(Tab):
             self.card_scroll._layout()
             self.place_sash()
 
+    def keep_share(self):
+        """A dragged line keeps its share of the width as the window grows
+        and shrinks: ttk gave all of a change to the list, and a window
+        maximized and restored squeezed the form to nothing."""
+        width = self.panes.winfo_width()
+        if self._sash_dragged and width > 1:
+            self._sash_share = self.panes.sashpos(0) / width
+
+    def keep_line(self, tries=10):
+        """The dragged line at its share. ttk may still be laying the panes
+        out (and holds the line within the size it had): checked, and tried
+        again a little later, a few times at most."""
+        width = self.panes.winfo_width()
+        if self._sash_share is None or width <= 1 or not self.panes.winfo_ismapped():
+            return
+        at = round(width * self._sash_share)
+        if abs(self.panes.sashpos(0) - at) > 1:
+            self.panes.sashpos(0, at)
+            if abs(self.panes.sashpos(0) - at) > 1 and tries > 1:
+                self.app.after(20, lambda: self.keep_line(tries - 1))
+
+    def rescaled(self):
+        """A ttk Panedwindow asks for its panes' sizes as they are now, so
+        View > Interface size's fonts (zoom.py) made it ask for a maximized
+        window's width and, restored, it stayed that wide, the form off to
+        the right: asked instead what the list and the form ask."""
+        want = sum(self.nametowidget(pane).winfo_reqwidth() for pane in self.panes.panes()) + px(self, 6)
+        if int(self.panes.cget("width")) != want:
+            self.panes.configure(width=want)     # which puts the line at 0
+        self.panes.update_idletasks()
+        if self._sash_dragged:
+            # Once the window is laid out: ttk moves it as it goes.
+            self.app.after(0, self.keep_line)
+        else:
+            self.place_sash()
+
     def form_resized(self):
         width = self.card_scroll.body.winfo_reqwidth()
         if width != self._form_width:
@@ -805,9 +847,14 @@ class CardsTab(Tab):
     def place_sash(self):
         """The line between the list and the form, until it is dragged: the
         form as wide as its controls, the list the rest (at least LIST_LEAST)."""
-        if self._sash_dragged or not self.panes.winfo_ismapped():
+        if not self.panes.winfo_exists() or not self.panes.winfo_ismapped():
             return
         width = self.panes.winfo_width()
+        if self._sash_dragged:
+            # Once ttk has shared the change out by the panes' weights.
+            if self._sash_share is not None and width > 1:
+                self.app.after_idle(self.keep_line)
+            return
         scroll = self.card_scroll
         # The pane's own edges take a few pixels more than the scrollbar:
         # what the form's canvas still lacks once placed is taken too.
@@ -2126,12 +2173,12 @@ class ModInfoTab(Tab):
         boxes.pack(fill="both", expand=True, pady=(8, 0))
         left = ttk.LabelFrame(boxes, text="Settings (JSON list; see notes/modding.md)", padding=4)
         left.pack(side="left", fill="both", expand=True)
-        self.settings = tk.Text(left, width=50, height=14, wrap="none", font=("Consolas", 10))
+        self.settings = tk.Text(left, width=50, height=14, wrap="none", font=fixed_font())
         self.settings.pack(fill="both", expand=True)
         right = ttk.LabelFrame(boxes, text="Other mod.json keys, kept as written (data, text, textures, audio, "
                                            "requires...)", padding=4)
         right.pack(side="left", fill="both", expand=True, padx=(8, 0))
-        self.other = tk.Text(right, width=60, height=14, wrap="none", font=("Consolas", 10))
+        self.other = tk.Text(right, width=60, height=14, wrap="none", font=fixed_font())
         self.other.pack(fill="both", expand=True)
         self.status = ttk.Label(self, style="Error.TLabel")
         self.status.pack(anchor="w")

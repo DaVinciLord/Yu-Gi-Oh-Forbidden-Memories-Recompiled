@@ -344,6 +344,26 @@ def scale_nearest(image: Image, factor: int) -> Image:
     return Image(image.width * factor, image.height * factor, b"".join(rows))
 
 
+def scale_to(image: Image, width: int, height: int) -> Image:
+    """The image at any size, each pixel the nearest source one (no
+    blending: pixel art stays sharp, a pixel a few wider than its
+    neighbour at fractional sizes)."""
+    if (width, height) == image.size:
+        return image
+    stride = image.width * 4
+    columns = [min(image.width - 1, x * image.width // width) * 4 for x in range(width)]
+    lines = {}
+    rows = []
+    for y in range(height):
+        source = min(image.height - 1, y * image.height // height)
+        line = lines.get(source)
+        if line is None:
+            row = image.rgba[source * stride:(source + 1) * stride]
+            line = lines[source] = b"".join(row[x:x + 4] for x in columns)
+        rows.append(line)
+    return Image(width, height, b"".join(rows))
+
+
 def ppm(image: Image, background=(0x55, 0x55, 0x55)) -> bytes:
     """The image as a binary PPM over a background (what Tk's PhotoImage
     takes without a PNG decoder)."""
