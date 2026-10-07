@@ -628,7 +628,7 @@ class GuiTest(GuiCase):
         tab.vars["trap_threshold"].set("1234")
         self.assertTrue(tab.apply())
         self.assertEqual(p.cards[copy].attribute, 7)
-        self.assertEqual(tab.row(copy)[0][3:5], ("", ""))
+        self.assertEqual(tab.row(copy)[0][4:6], ("", ""))
         self.assertEqual((p.cards[copy].attack, p.cards[copy].defense, p.cards[copy].star1, p.cards[copy].star2), (0, 0, 0, 0))
         self.assertFalse([i for i in validate.validate_card(p, copy) if i.level == "error"])
         built = manifest.build(p)

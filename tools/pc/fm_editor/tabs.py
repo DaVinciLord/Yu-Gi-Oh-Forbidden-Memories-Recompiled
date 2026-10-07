@@ -191,8 +191,12 @@ class CardsTab(Tab):
         ttk.Combobox(top, textvariable=self.filter, values=self.FILTERS, state="readonly", width=16).pack(side="left")
         self.search.trace_add("write", lambda *_: self.fill())
         self.filter.trace_add("write", lambda *_: self.fill())
-        frame, self.tree = scrolled_tree(left, [("id", "#"), ("name", "Name"), ("type", "Type"), ("atk", "ATK"),
-                                                ("def", "DEF"), ("state", "Status")], [50, 160, 100, 50, 50, 60], 10, sort_numeric=("id", "atk", "def"))
+        # A dot between the number and the name marks a card the mod changes,
+        # in its row's colour (blue changed, green added); no Status column.
+        frame, self.tree = scrolled_tree(left, [("id", "#"), ("mark", ""), ("name", "Name"), ("type", "Type"),
+                                                ("atk", "ATK"), ("def", "DEF")], [50, 22, 160, 100, 50, 50], 10,
+                                         sort_numeric=("id", "atk", "def"))
+        self.tree.column("mark", anchor="center")
         frame.pack(fill="both", expand=True, pady=4)
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.select())
         bottom = ttk.Frame(left)
@@ -438,7 +442,8 @@ class CardsTab(Tab):
         state = ("added" if cid in self.project.added else "changed" if self.project.card_changed(cid)
                  else "notes" if cid in self.project.notes else "")
         attack, defense = (card.attack, card.defense) if card.is_monster() else ("", "")
-        return (cid, card.name, type_label(card.type), attack, defense, state), (state,) if state else ()
+        return (cid, "●" if state else "", card.name, type_label(card.type), attack, defense), \
+            (state,) if state else ()
 
     def fill(self):
         if not hasattr(self, "tree") or self.project is None:

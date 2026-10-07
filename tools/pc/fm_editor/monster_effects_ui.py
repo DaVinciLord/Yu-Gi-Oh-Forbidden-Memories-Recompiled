@@ -40,7 +40,7 @@ class EffectsBox(ttk.LabelFrame):
         # A disc card with no effects: "monster_effects": [] takes away any
         # an earlier mod gives it (cards.c), left out leaves them.
         self.none = tk.BooleanVar(self)
-        self.none_box = ttk.Checkbutton(self, text="None, even where another mod gives it some", variable=self.none,
+        self.none_box = ttk.Checkbutton(self, text="Force no effects", variable=self.none,
                                         command=self.store)
         self.none_box.grid(row=3, column=0, columnspan=6, sticky="w", pady=(4, 0))
 
@@ -51,11 +51,10 @@ class EffectsBox(ttk.LabelFrame):
     def show(self, cid):
         """The card's list (an added card's base's, until it has its own)."""
         self.cid = cid
-        inherited = False
         if cid is None or self.project is None or cid not in self.project.cards:
             self.effects = []
         else:
-            effects, inherited = self.project.monster_effects_of(cid)
+            effects, _ = self.project.monster_effects_of(cid)
             # An entry that is not an object stays as written (the game leaves it out).
             self.effects = [dict(e) if isinstance(e, dict) else e for e in effects]
         retail = cid is not None and self.project is not None and cid in self.project.cards and \
@@ -77,15 +76,15 @@ class EffectsBox(ttk.LabelFrame):
             for key in ("edit", "remove", "up", "down"):
                 self.buttons[key].grid_remove()
         if not self.effects and cid is not None:
-            self.note.configure(text="None: the monster does what its stats do. Add... gives it one (it resolves "
-                                     "as the card text says it should).")
-        elif inherited and self.effects:
-            self.note.configure(text="Its base's effects: a change gives this card a list of its own.")
+            self.note.configure(text="No effects")
         else:
+            # Only what is wrong with the list; nothing when it is fine.
             problems = fx.problems(self.effects, self.project.resolve if self.project else None)
-            self.note.configure(text="\n".join(problems) if problems else
-                                "Effects resolve one after another, in this order. Write what they do in the "
-                                "card text: the game shows only the text.")
+            self.note.configure(text="\n".join(problems))
+        if self.note.cget("text"):
+            self.note.grid()
+        else:
+            self.note.grid_remove()
 
     def label(self, cid):
         card = self.project.cards.get(cid) if self.project else None

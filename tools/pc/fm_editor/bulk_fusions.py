@@ -237,6 +237,27 @@ class Plan:
                 parts.append(f"{count} {label}")
         return head + ": " + ", ".join(parts) + "."
 
+    def headline(self) -> str:
+        """What applying does, in a few words (the window's big line)."""
+        if self.mode == "add":
+            return f"{self.added} to add  ·  {self.replaced} to replace"
+        return f"{self.removed} to take away"
+
+    def details(self) -> str:
+        """The rest of summary(): the pairs looked at and those left alone."""
+        parts = [f"{self.pairs} pairs of {self.a_count} × {self.b_count} cards"]
+        if self.mode == "add" and self.kept:
+            parts.append(f"{self.kept} already fuse (kept)")
+        if self.mode == "remove" and self.not_fusing:
+            parts.append(f"{self.not_fusing} do not " + ("make that card" if self.only_result else "fuse"))
+        for count, label in ((self.same, "already make that card"), (self.weaker, "result not stronger"),
+                             (self.no_result, "no card of the list beats both"),
+                             (self.self_pairs, "card with itself"),
+                             (self.duplicates, "B+A duplicates counted once")):
+            if count:
+                parts.append(f"{count} {label}")
+        return "  ·  ".join(parts)
+
     def budget_line(self) -> str:
         size = self.rules_after * BYTES_PER_RULE
         size = f"{size / 1e6:.1f} MB" if size >= 1e6 else f"{round(size / 1e3)} KB"
