@@ -222,5 +222,21 @@ def retail(wa: bytes) -> list:
     return out
 
 
+def deal(pools, rng=None) -> dict:
+    """One deck the pools could deal ({card: copies}): each pool draws its
+    number of cards, each draw by the weights (an example, as a new game's
+    is random)."""
+    import random
+    rng = rng or random.Random()
+    deck = {}
+    for pool in pools:
+        cards = [c for c, w in pool.cards.items() if w > 0]
+        if not cards:
+            continue
+        for cid in rng.choices(cards, weights=[pool.cards[c] for c in cards], k=pool.draws):
+            deck[cid] = deck.get(cid, 0) + 1
+    return deck
+
+
 def retail_drawn(pools) -> int:
     return sum(pool.draws for pool in pools)

@@ -240,6 +240,37 @@ class TabTest(unittest.TestCase):
             tab.remove_deck()
         self.assertEqual(app.project.starter, [])
 
+    def test_ways_to_start_a_deck(self):
+        """Add deck's menu (and the empty tab's buttons): an opponent's most
+        likely 40, a deal of the disc's starter pools, a copy; each named in
+        the dialog, which cancelled adds nothing."""
+        from unittest import mock
+        from fm_editor import fixed_decks, starter_pools
+        app, tab = self.app, self.app.starter
+        tab.refresh()
+        self.assertTrue(tab.empty.winfo_manager())          # the empty tab says what a new game deals
+        with mock.patch.object(tab, "ask_opponent", return_value=17):
+            dialog = tab.add_deck("opponent")
+        dialog.ok()
+        deck = app.project.starter[0]
+        self.assertEqual(deck.cards, fixed_decks.most_likely(app.project.pools[17]["deck"]))
+        self.assertIn("deck", deck.name)
+        self.assertFalse(tab.empty.winfo_manager())
+        self.assertIn("Monsters", tab.makeup.cget("text"))
+        dialog = tab.add_deck("copy")
+        dialog.ok()
+        self.assertEqual(app.project.starter[1].cards, deck.cards)
+        self.assertIsNot(app.project.starter[1].cards, deck.cards)
+        pools = starter_pools.retail(app.files.wa)
+        if pools:
+            dialog = tab.add_deck("retail")
+            dialog.destroy()                                # cancelled: no deck
+            self.assertEqual(len(app.project.starter), 2)
+            dealt = starter_pools.deal(pools)
+            self.assertEqual(sum(dealt.values()), starter_pools.retail_drawn(pools))
+        with mock.patch.object(tab, "ask_opponent", return_value=None):
+            self.assertIsNone(tab.add_deck("opponent"))
+
     def test_a_deck_naming_an_unknown_card_is_not_complete(self):
         tab = self.app.starter
         self.app.project.starter.append(StarterDeck(name="d", cards={2: 3, 3: 36}, kept={"Nobody's card": 1}))

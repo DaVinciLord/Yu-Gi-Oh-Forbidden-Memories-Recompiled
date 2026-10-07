@@ -18,7 +18,7 @@ from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIM
                        POOL_LABELS, POOL_TOTAL, POOLS, STAR_NAMES, STARTER_WEIGHT_LIMIT, TYPE_EQUIP, TYPE_MAGIC, TYPE_NAMES,
                        TYPE_RITUAL, TYPE_TRAP,
                        exodia_piece, type_frame)
-from . import fixed_decks
+from . import fixed_decks, starter_pools
 from .fixed_deck_view import FixedDeckView
 from .model import KEY_RE, StarterDeck
 from .widgets import (WrapLabel, legend, CardField, FormDialog, ScrolledForm, ScrolledPage, card_matches, card_named, grab, pick_card, px,
@@ -32,6 +32,28 @@ EFFECT_NONE = "(none)"
 FRAME_CHOICES = ["By type"] + FRAME_NAMES + ["Type, never orange"]
 # Each frame's colour, as the hand's frames have it (the duel's palette rows 1-6).
 FRAME_COLOURS = ["#e0a838", "#409830", "#b040a0", "#2848b0", "#8868d8", "#e07000"]
+
+
+def deck_makeup(p, cards: dict) -> str:
+    """What a deck ({card: copies}) is made of: its monsters (and their
+    average ATK) and each other kind."""
+    kinds = {"Magic": TYPE_MAGIC, "Trap": TYPE_MAGIC + 1, "Ritual": TYPE_MAGIC + 2, "Equip": TYPE_EQUIP}
+    counts = {name: 0 for name in kinds}
+    monsters = attack = 0
+    for cid, copies in cards.items():
+        card = p.cards.get(cid)
+        if card is None:
+            continue
+        if card.is_monster():
+            monsters += copies
+            attack += card.attack * copies
+        else:
+            for name, t in kinds.items():
+                if card.type == t:
+                    counts[name] += copies
+    parts = [f"Monsters {monsters}" + (f" (average ATK {round(attack / monsters)})" if monsters else "")]
+    parts += [f"{name} {n}" for name, n in counts.items() if n]
+    return " \u00b7 ".join(parts)
 
 
 def type_label(t: int) -> str:
@@ -2160,9 +2182,15 @@ class StarterTab(Tab):
                                          [30, 150, 55, 60], 22)
         frame.pack(fill="y", expand=True)
         self.list.bind("<<TreeviewSelect>>", lambda e: self.select())
+        self.list.bind("<Double-1>", lambda e: self.edit_deck())
         buttons = ttk.Frame(left)
         buttons.pack(fill="x", pady=(4, 0))
-        ttk.Button(buttons, text="Add deck", command=self.add_deck).pack(side="left")
+        adding = ttk.Menubutton(buttons, text="Add deck")
+        menu = tk.Menu(adding, tearoff=False)
+        for label, start in self.STARTS:
+            menu.add_command(label=label, command=lambda s=start: self.add_deck(s))
+        adding["menu"] = menu
+        adding.pack(side="left")
         ttk.Button(buttons, text="Edit...", command=self.edit_deck).pack(side="left", padx=2)
         ttk.Button(buttons, text="Remove", command=self.remove_deck).pack(side="left")
         right = ttk.Frame(self)
@@ -2173,10 +2201,22 @@ class StarterTab(Tab):
         self.title.pack(side="left")
         self.total = ttk.Label(top, font=ui_font(10))
         self.total.pack(side="right")
+        self.makeup = ttk.Label(right, style="Hint.TLabel")       # what the deck is made of
+        self.makeup.pack(anchor="w")
         frame, self.tree = scrolled_tree(right, [("id", "#"), ("name", "Card"), ("type", "Type"),
                                                  ("copies", "Copies"), ("state", "Status")],
                                          [50, 260, 110, 60, 150], 20, selectmode="extended")
         frame.pack(fill="both", expand=True, pady=4)
+        self.tree.bind("<Delete>", lambda e: self.remove_card())
+        # No deck: what a new game deals then, and ways to start one.
+        self.empty = ttk.Frame(frame, padding=20)
+        WrapLabel(self.empty, 420, font=ui_font(10),
+                  text="This mod has no starter deck: a new game deals the disc's, drawn from its seven starter "
+                       "pools. Add decks to deal one of yours instead (by their weights).").pack(fill="x")
+        for label, start in self.STARTS:
+            if start != "copy":         # nothing to copy yet
+                ttk.Button(self.empty, text=label, command=lambda s=start: self.add_deck(s)).pack(anchor="w",
+                                                                                                  pady=(6, 0))
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.pick_row())
         edit = ttk.Frame(right)
         edit.pack(fill="x")
@@ -2188,10 +2228,14 @@ class StarterTab(Tab):
         entry.bind("<Return>", lambda e: self.set_copies())
         ttk.Button(edit, text="Set", command=self.set_copies).pack(side="left", padx=2)
         ttk.Button(edit, text="Remove selected", command=self.remove_card).pack(side="left", padx=(8, 0))
-        ttk.Label(right, text=f"A deck is exactly {DECK_SIZE} cards written down, so it may hold a card the mod "
+        WrapLabel(right, text=f"A deck is exactly {DECK_SIZE} cards written down, so it may hold a card the mod "
                               f"adds. More than {DECK_COPY_LIMIT} copies, or more than one Exodia piece, is dealt "
-                              "as written but Build Deck will not take it back.",
-                  style="Hint.TLabel", wraplength=px(self, 520), justify="left").pack(anchor="w", pady=(4, 0))
+                              "as written, but the player cannot put the extra copies back in Build Deck.",
+                  style="Hint.TLabel").pack(fill="x", pady=(4, 0))
+
+    # The ways to start a deck (Add deck's menu, and the empty tab's buttons).
+    STARTS = (("Empty deck", "empty"), ("An opponent's deck (its most likely 40)...", "opponent"),
+              ("One deal of the disc's starter pools", "retail"), ("A copy of the selected deck", "copy"))
 
     # --- the list ----------------------------------------------------------
 
@@ -2232,7 +2276,10 @@ class StarterTab(Tab):
         if deck is None:
             self.title.configure(text="No starter deck")
             self.total.configure(text="", style="TLabel")
+            self.makeup.configure(text="")
+            self.empty.place(relx=0.5, rely=0.4, anchor="center", relwidth=0.6)
             return
+        self.empty.place_forget()
         p = self.project
         for cid in sorted(deck.cards):
             copies = deck.cards[cid]
@@ -2250,6 +2297,7 @@ class StarterTab(Tab):
             self.tree.insert("", "end", iid=f"kept:{name}", tags=("removed",),
                              values=("", name, "", copies, "no such card; kept as written"))
         self.title.configure(text=deck.name or "(unnamed)")
+        self.makeup.configure(text=deck_makeup(p, deck.cards))
         total = deck.total()
         self.total.configure(text=f"{total} / {DECK_SIZE} cards",
                              style="Ok.TLabel" if total == DECK_SIZE else "Error.TLabel")
@@ -2305,10 +2353,53 @@ class StarterTab(Tab):
 
         return FormDialog(self, title, build, ok)
 
-    def add_deck(self):
+    def add_deck(self, start="empty"):
+        """A new deck, `start`ed as STARTS says, in the mod once named."""
         if self.project is None:
-            return
-        return self.deck_dialog("Add starter deck", StarterDeck(name=f"Deck {len(self.decks()) + 1}"), adding=True)
+            return None
+        deck = StarterDeck(name=f"Deck {len(self.decks()) + 1}")
+        if start == "copy":
+            if self.current() is None:
+                messagebox.showinfo("Starter decks", "Select a deck to copy first.", parent=self)
+                return None
+            deck = self.current().copy()
+            deck.name = f"{deck.name or 'Deck'} copy"
+        elif start == "opponent":
+            d = self.ask_opponent()
+            if d is None:
+                return None
+            deck.cards = fixed_decks.most_likely(self.project.pools[d]["deck"])
+            deck.name = f"{DUELIST_NAMES[d]}'s deck"
+        elif start == "retail":
+            pools = starter_pools.retail(self.app.files.wa if self.app.files else None)
+            if not pools:
+                messagebox.showinfo("Starter decks", "The game files have not got the disc's starter pools.",
+                                    parent=self)
+                return None
+            deck.cards = starter_pools.deal(pools)
+            deck.name = "A deal of the disc's pools"
+        return self.deck_dialog("Add starter deck", deck, adding=True)
+
+    def ask_opponent(self):
+        """An opponent of the campaign or Free Duel, by name; None if none."""
+        names = [f"{d} {DUELIST_NAMES[d]}" for d in range(1, len(self.project.pools))]
+        chosen = {}
+
+        def build(dialog, body):
+            ttk.Label(body, text="Opponent").grid(row=0, column=0, sticky="w")
+            chosen["var"] = tk.StringVar(value=names[0])
+            ttk.Combobox(body, textvariable=chosen["var"], values=names, state="readonly", width=30).grid(
+                row=0, column=1, sticky="w", padx=(6, 0))
+            ttk.Label(body, text="The deck is the 40 cards its weighted deck pool deals most often.",
+                      style="Hint.TLabel").grid(row=1, column=0, columnspan=2, sticky="w", pady=(6, 0))
+
+        def ok(dialog):
+            chosen["d"] = int(chosen["var"].get().split(" ", 1)[0])
+            return None
+
+        dialog = FormDialog(self, "A deck from an opponent's", build, ok)
+        self.wait_window(dialog)
+        return chosen.get("d")
 
     def edit_deck(self):
         deck = self.current()
