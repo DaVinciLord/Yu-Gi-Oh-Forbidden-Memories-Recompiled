@@ -7,18 +7,34 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from . import art, pngio
+from . import art, pngio, settings
 from .tabs import Tab, type_label
 from .widgets import card_matches, px, scrolled_tree, ui_font
 
-# Each part shown at a zoom, and the internal resolution its third view draws.
+# Each part shown at a zoom of its size on the disc (times ArtTab.k, as
+# room allows), and the internal resolution its third view draws.
 ZOOM = {"art": 2, "thumbnail": 4, "title": 2}
 INTERNAL = {"art": 2, "thumbnail": 4}
+MOST = 4        # ArtTab.k, at most
+STEP = 8        # ArtTab.k in eighths: a window a little bigger draws nothing again
+# What the View switch shows: the disc's, the game's at the console's
+# resolution, or at Internal 2x (the picture) and 4x (the thumbnail; the
+# name plate has none, so the game's 1x).
+VIEWS = (("disc", "Disc"), ("game", "In game"), ("internal", "Internal 2x/4x"))
 
 
-def photo(master, image: pngio.Image, zoom: int = 1):
-    """A Tk image of `image`, `zoom` times its size (nearest)."""
-    return tk.PhotoImage(master=master, data=pngio.ppm(pngio.scale_nearest(image, zoom)), format="PPM")
+def photo(master, image: pngio.Image, width: int, height: int):
+    """A Tk image of `image` at width x height (nearest)."""
+    return tk.PhotoImage(master=master, data=pngio.ppm(pngio.scale_to(image, width, height)), format="PPM")
+
+
+def say(label, text):
+    """A label under a part's source line, shown only with text."""
+    label.configure(text=text)
+    if text and not label.winfo_manager():
+        label.pack(anchor="w", pady=(2, 0), before=label.master.buttons)
+    elif not text and label.winfo_manager():
+        label.pack_forget()
 
 
 class ArtTab(Tab):
@@ -28,6 +44,8 @@ class ArtTab(Tab):
         super().__init__(notebook, app, "Art")
         self.current = None
         self.photos = {}
+        self.k = 1.0            # the pictures' zoom over ZOOM, grown to the room the tab has (fit())
+        self.fit_job = None
         left = ttk.Frame(self)
         left.pack(side="left", fill="y")
         top = ttk.Frame(left)
@@ -46,53 +64,189 @@ class ArtTab(Tab):
         self.count = ttk.Label(left, style="Hint.TLabel")
         self.count.pack(anchor="w")
 
-        right = ttk.Frame(self, padding=(10, 0, 0, 0))
+        right = self.right = ttk.Frame(self, padding=(10, 0, 0, 0))
         right.pack(side="left", fill="both", expand=True)
         self.heading = ttk.Label(right, font=ui_font(11))
         self.heading.pack(anchor="w")
         self.how = ttk.Label(right, style="Note.TLabel", wraplength=px(right, 720), justify="left")
         self.how.pack(anchor="w", pady=(0, 4))
+        # One picture a part, in the view chosen here; a part the mod changes
+        # shows the disc's beside it (before, after). Three of each, most
+        # alike, took most of the tab and said little.
+        switch = ttk.Frame(right)
+        switch.pack(anchor="w", pady=(0, 4))
+        ttk.Label(switch, text="View").pack(side="left", padx=(0, 6))
+        chosen = settings.load().get("art_view")
+        self.view = tk.StringVar(value=chosen if chosen in dict(VIEWS) else "game")
+        for value, text in VIEWS:
+            ttk.Radiobutton(switch, text=text, value=value, variable=self.view, style="Segment.Toolbutton",
+                            command=self.view_changed).pack(side="left")
         self.rows = {}
+        # The parts' boxes, stacked or the two small ones side by side under
+        # the picture, whichever lets the pictures be bigger (fit()).
+        self.parts = ttk.Frame(right)
+        self.parts.pack(fill="x")
+        self.parts.columnconfigure(1, weight=1)
+        self.side_by_side = False
         for part in art.PARTS:
-            box = ttk.LabelFrame(right, text=art.LABELS[part], padding=6)
-            box.pack(fill="x", pady=3)
+            w, h = art.SIZES[part]
+            box = ttk.LabelFrame(self.parts, text=f"{art.LABELS[part]}  ({w}x{h} on the disc)", padding=6)
+            # At the top: beside the taller buttons the name plate's sat
+            # lower than the pictures above it.
             views = ttk.Frame(box)
-            views.pack(side="left")
-            titles = ["Disc", "In game (1x)"] + ([f"Internal {INTERNAL[part]}x"] if part in INTERNAL else [])
-            labels = []
-            for column, title in enumerate(titles):
-                ttk.Label(views, text=title, style="Note.TLabel").grid(row=0, column=column, padx=4)
-                label = ttk.Label(views, relief="sunken")
-                label.grid(row=1, column=column, padx=4)
+            views.pack(side="left", anchor="n")
+            labels, captions = [], []
+            for column in range(2):         # the view; the disc's beside it when they differ
+                caption = ttk.Label(views, style="Note.TLabel")
+                caption.grid(row=0, column=column, padx=4)
+                label = ttk.Label(views, relief="sunken", cursor="hand2")
+                label.grid(row=1, column=column, padx=4, sticky="n")
+                label.bind("<Double-1>", lambda e, p=part: self.import_png(p))
                 labels.append(label)
+                captions.append(caption)
             side = ttk.Frame(box, padding=(10, 0, 0, 0))
-            side.pack(side="left", fill="both", expand=True)
+            side.pack(side="left", fill="both", expand=True, anchor="n")
+            source = ttk.Label(side, font=ui_font(10))
+            source.pack(anchor="w")
+            # Packed only while they say something (say()): an empty label
+            # still takes a line.
             info = ttk.Label(side, wraplength=px(side, 330), justify="left")
-            info.pack(anchor="w")
             where = ttk.Label(side, style="Hint.TLabel", wraplength=px(side, 330), justify="left")
-            where.pack(anchor="w", pady=(2, 4))
             # Two rows of two: in one row the last were cut off beside three
-            # pictures at 1440 wide, or at 125-150% on a 1080p screen.
+            # pictures at 1440 wide, or at 125-150% on a 1080p screen. What
+            # changes the mod above, what writes a file below.
             buttons = ttk.Frame(side)
-            buttons.pack(anchor="w")
+            buttons.pack(anchor="w", pady=(6, 0))
+            side.buttons = buttons
             ttk.Button(buttons, text="Import PNG...", command=lambda p=part: self.import_png(p)).grid(
                 row=0, column=0, sticky="we")
+            revert = ttk.Button(buttons, text="Revert to disc", command=lambda p=part: self.revert(p))
+            revert.grid(row=0, column=1, sticky="we", padx=(4, 0))
             ttk.Button(buttons, text="Export disc's...", command=lambda p=part: self.export_png(p, False)).grid(
-                row=0, column=1, sticky="we", padx=(4, 0))
+                row=1, column=0, sticky="we", pady=(4, 0))
             export_mod = ttk.Button(buttons, text="Export mod's...", command=lambda p=part: self.export_png(p, True))
             export_mod.grid(row=1, column=1, sticky="we", padx=(4, 0), pady=(4, 0))
-            revert = ttk.Button(buttons, text="Revert", command=lambda p=part: self.revert(p))
-            revert.grid(row=1, column=0, sticky="we", pady=(4, 0))
-            self.rows[part] = {"labels": labels, "info": info, "where": where, "export": export_mod, "revert": revert}
+            self.rows[part] = {"labels": labels, "captions": captions, "shown": 1, "source": source, "info": info, "where": where,
+                               "export": export_mod, "revert": revert, "views": views, "side": side,
+                               "box": box}
+        self.arrange(False)
+        self.tip = ttk.Label(right, style="Hint.TLabel", text="Double-click a picture to import a PNG for it.")
+        self.tip.pack(anchor="w", pady=(2, 0))
         self.status = ttk.Label(right, style="Warning.TLabel", wraplength=px(right, 720), justify="left")
         self.status.pack(anchor="w", pady=4)
-        # The long lines wrap at the width the tab has, not a fixed one that
-        # ran past the window's edge at 150%: asked small, then widened.
+        # The long lines wrap at the room the page has (room()), not at the
+        # column's own width: a label asks for its wrap length, so wrapped at
+        # what the column had, it never let it narrow again (a window
+        # restored from maximized scrolled sideways).
         for label in (self.how, self.status):
             label.configure(wraplength=px(right, 480))
-        right.bind("<Configure>", lambda e: [label.configure(wraplength=max(px(right, 300), e.width - px(right, 12)))
-                                             for label in (self.how, self.status)], add=True)
+        # The pictures grow with the room: the window's, the page's.
+        self.page.canvas.bind("<Configure>", lambda e: self.fit_later(), add=True)
         self.fill()
+
+    def fit_later(self):
+        # On the window: its destroy() cancels what is still waiting.
+        if self.fit_job is None:
+            self.fit_job = self.app.after(100, self.fit)
+
+    def fit(self):
+        """The biggest zoom (k, in eighths) at which the pictures fit the
+        page beside the list, the buttons and the text, so they take the
+        same share of it at any window size (in whole steps, a window short
+        of the next step kept them small): shown again when it changed."""
+        self.fit_job = None
+        if self.current is None or not self.photos:
+            return
+        page = self.page.canvas
+        width = self.room()
+        height = page.winfo_height() - px(self, 12)
+        if width <= 1 or height <= 1:
+            return
+        for label in (self.how, self.status):
+            label.configure(wraplength=max(px(self, 300), width - px(self, 4)))
+        rows = self.rows
+        gap = px(self, 6)           # between two boxes, across or down (arrange())
+        metrics = {}
+        for part in art.PARTS:
+            box, views, side = rows[part]["box"], rows[part]["views"], rows[part]["side"]
+            tall_now = max(views.winfo_reqheight(), side.winfo_reqheight())
+            metrics[part] = {
+                "frame": box.winfo_reqheight() - tall_now,              # the box's own frame and title
+                "captions": views.winfo_reqheight() - self.part_height(part),
+                "side": side.winfo_reqheight(),                         # the source line, the buttons
+                "across": box.winfo_reqwidth() - self.part_width(part),  # all but the pictures
+            }
+        other = self.right.winfo_reqheight() - self.parts.winfo_reqheight()
+
+        def box_height(part, k):
+            m = metrics[part]
+            return m["frame"] + max(m["captions"] + round(art.SIZES[part][1] * ZOOM[part] * k), m["side"])
+
+        def box_width(part, k):
+            return metrics[part]["across"] + rows[part]["shown"] * round(art.SIZES[part][0] * ZOOM[part] * k)
+
+        def fits(k, side_by_side):
+            if side_by_side:
+                wide = max(box_width("art", k), box_width("thumbnail", k) + gap + box_width("title", k))
+                tall = box_height("art", k) + max(box_height("thumbnail", k), box_height("title", k)) + 2 * gap
+            else:
+                wide = max(box_width(part, k) for part in art.PARTS)
+                tall = sum(box_height(part, k) for part in art.PARTS) + 3 * gap
+            return wide <= width - self.parts.winfo_x() and other + tall <= height   # less the column's padding
+
+        def biggest(side_by_side):
+            k = MOST
+            while k > 1.0 and not fits(k, side_by_side):
+                k -= 1 / STEP
+            return k
+
+        stacked, beside = biggest(False), biggest(True)
+        side_by_side = beside > stacked
+        k = beside if side_by_side else stacked
+        if side_by_side != self.side_by_side:
+            self.arrange(side_by_side)
+        if k != self.k:
+            self.k = k
+            self.show(self.current, keep_status=True)
+
+    def arrange(self, side_by_side):
+        """The boxes stacked, or the thumbnail's and the name plate's side by
+        side under the picture's."""
+        self.side_by_side = side_by_side
+        gap = px(self, 6)
+        art_box, thumb, plate = (self.rows[part]["box"] for part in art.PARTS)
+        art_box.grid(row=0, column=0, columnspan=2, sticky="we", pady=(0, gap))
+        if side_by_side:
+            thumb.grid(row=1, column=0, columnspan=1, sticky="nwe", pady=(0, gap), padx=(0, gap))
+            plate.grid(row=1, column=1, columnspan=1, sticky="nwe", pady=(0, gap))
+        else:
+            thumb.grid(row=1, column=0, columnspan=2, sticky="we", pady=(0, gap), padx=0)
+            plate.grid(row=2, column=0, columnspan=2, sticky="we", pady=(0, gap))
+
+    def view_changed(self):
+        """The View switch: every part again, remembered for the next start."""
+        settings.save("art_view", self.view.get())
+        if self.current is not None:
+            self.show(self.current, keep_status=True)
+
+    def room(self):
+        """How wide the right side may be: the page less the list beside it."""
+        page = self.page.canvas
+        return page.winfo_width() - (self.right.winfo_rootx() - page.winfo_rootx()) - px(self, 8)
+
+    def part_width(self, part):
+        """The width of the part's pictures shown now, side by side."""
+        return sum(image.width() for (p, _), image in self.photos.items() if p == part)
+
+    def part_height(self, part):
+        """The height of the part's tallest picture shown now."""
+        heights = [image.height() for (p, _), image in self.photos.items() if p == part]
+        return max(heights, default=0)
+
+    def rescaled(self):
+        """View > Interface size changed: the captions grew, the room too.
+        Fitted now, laid out (zoom.Zoom.apply), not a moment after."""
+        self.fit()
 
     @property
     def wa(self):
@@ -125,7 +279,8 @@ class ArtTab(Tab):
                 values, tags = self.row(cid)
                 self.tree.insert("", "end", iid=str(cid), values=values, tags=tags)
                 shown += 1
-        self.count.configure(text=f"{shown} cards")
+        total = len(self.project.cards)
+        self.count.configure(text=f"{total} cards" if shown == total else f"{shown} of {total} cards")
         if self.current in self.project.cards and self.tree.exists(str(self.current)):
             self.tree.selection_set(str(self.current))
             self.tree.see(str(self.current))
@@ -164,19 +319,22 @@ class ArtTab(Tab):
             self.show(cid)
 
     # the card
-    def show(self, cid):
+    def show(self, cid, keep_status=False):
         self.current = cid
-        self.status.configure(text="")
+        if not keep_status:
+            self.status.configure(text="")
         self.photos = {}
         if cid is None or self.project is None or cid not in self.project.cards or self.wa is None:
             self.heading.configure(text="Choose a card" if self.wa is not None or self.project is None
                                    else "The Art tab needs the game files (File > Game files...)")
             self.how.configure(text="")
             for row in self.rows.values():
-                for label in row["labels"]:
+                for label, caption in zip(row["labels"], row["captions"]):
                     label.configure(image="")
-                row["info"].configure(text="")
-                row["where"].configure(text="")
+                    caption.configure(text="")
+                row["source"].configure(text="")
+                say(row["info"], "")
+                say(row["where"], "")
             return
         project = self.project
         self.app.current_card = cid
@@ -195,34 +353,59 @@ class ArtTab(Tab):
         self.how.configure(text=how + " The name plate is the entry's \"title\" PNG (dark ink on white).")
         for part in art.PARTS:
             self.show_part(cid, part)
+        self.fit_later()
 
     def show_part(self, cid, part):
         project, wa, row = self.project, self.wa, self.rows[part]
-        zoom = ZOOM[part]
+        w, h = art.SIZES[part]
+        size = (round(w * ZOOM[part] * self.k), round(h * ZOOM[part] * self.k))   # every view as big
         base = project.base_of(cid)
         views = []
         try:
             disc = art.disc_image(wa, base, part)
             if part == "title":
                 disc = art.plate_image(art.disc_plate_inks(wa, base), background=art.GOLD)
-            views.append(disc)
-            views.append(art.in_game(project, wa, cid, part, 1))
-            if part in INTERNAL:
-                views.append(art.in_game(project, wa, cid, part, INTERNAL[part]))
+            game = art.in_game(project, wa, cid, part, 1)
+            view = self.view.get()
+            if view == "disc" or game is None:
+                chosen = (disc, "Disc")
+            elif view == "internal" and part in INTERNAL:
+                chosen = (art.in_game(project, wa, cid, part, INTERNAL[part]), f"Internal {INTERNAL[part]}x")
+            else:
+                chosen = (game, "In game (1x)")
+            # The disc's beside it when the game shows something else.
+            changed = game is not None and game.rgba != disc.rgba
+            views = [(disc, "Disc (before)"), chosen] if changed and chosen[0] is not disc else [chosen]
             _, where = art.shown_image(project, wa, cid, part)
         except (OSError, pngio.PngError, ValueError) as problem:
             views, where = [], str(problem)
-        for i, label in enumerate(row["labels"]):
-            image = views[i] if i < len(views) else None
+        row["shown"] = max(1, len(views))
+        for i, (label, caption) in enumerate(zip(row["labels"], row["captions"])):
+            image, title = views[i] if i < len(views) else (None, "")
             if image is None:
                 label.configure(image="")
+                label.grid_remove()
+                caption.grid_remove()
                 continue
-            factor = zoom if i < 2 else max(1, zoom // INTERNAL.get(part, zoom))
-            self.photos[(part, i)] = photo(self, image, factor)
+            label.grid()
+            caption.grid()
+            caption.configure(text=title)
+            self.photos[(part, i)] = photo(self, image, *size)
             label.configure(image=self.photos[(part, i)])
-        row["info"].configure(text=art.describe(project, cid, part))
-        row["where"].configure(text=f"The game shows {where}.")
         owned = (cid, part) in art.state(project).images
+        # Where it comes from at a glance; the details below it.
+        if not views:
+            source, style = "Cannot be shown", "Warning.TLabel"
+        elif owned:
+            source, style = "Replaced by the mod", "Changed.TLabel"
+        elif where == "the disc":
+            source, style = "As on the disc", "Hint.TLabel"
+        else:
+            source, style = f"The game shows {where}", "TLabel"
+        row["source"].configure(text=source, style=style)
+        info = art.describe(project, cid, part)
+        say(row["info"], "" if info == "As the disc has it." else info)
+        say(row["where"], where if not views else "")
         row["export"].state(["!disabled"] if owned else ["disabled"])
         row["revert"].state(["!disabled"] if owned else ["disabled"])
 

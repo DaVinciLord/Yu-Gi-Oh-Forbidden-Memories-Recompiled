@@ -11,6 +11,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <dirent.h>
 
 typedef struct Entry {
     uint32_t offset, clut_offset, stride; /* disc bytes once resolved; stride in words, 0 with row_offsets */
@@ -30,6 +32,17 @@ typedef struct Entry {
     int see_through; /* a made image that keeps the PNG's alpha (TexturePack_AddMadeSeeThrough) */
     int source_x, source_y, source_w, source_h;
 } Entry;
+
+/* Named replacements use the extractor's layouts, compiled into the game. */
+typedef struct AssetSpec {
+    const char *name, *archive;
+    unsigned offset;
+    int words, rows, bpp;
+    unsigned clut_offset;
+    int clut_entries, stride, crop_left, width;
+} AssetSpec;
+#include "asset_catalog.inc"
+#define ASSET_COUNT ((int)(sizeof(asset_specs) / sizeof(asset_specs[0])))
 
 static Entry *entries;
 static int entry_count, resolved; /* offsets are absolute on the disc, entries sorted */
@@ -242,6 +255,34 @@ static int load_pixels(Entry *entry)
  * transparent. A colour's pixel may be partly transparent (a letter's
  * smoothed edge): bits 24-30 say how much, 0 opaque to 127 all but clear,
  * and the picture mixes it over what lies beneath. */
+static int locate_texel(uint32_t offset, int texel, int *row, int *word);
+static int head_of(int index);
+static int sibling(const Entry *a, const Entry *b);
+
+/* The entry whose crop covers one texel of a word its own entry does not,
+ * read the way prepare picked: the same depth and the same palette. Two
+ * images sharing a word (card_frames/digit_0 ends in the word digit_1
+ * begins in) each own part of it. NULL when none does. */
+static const Entry *shared_owner(size_t at, int texel, int *row, int *word)
+{
+    uint32_t tag;
+    int i, head;
+    if (!TextureDump_Tags || chosen < 0) return NULL;   /* no tags: nothing to trace */
+    tag = TextureDump_Tags[at];
+    if (!tag) return NULL;
+    i = locate_texel(tag - 1, texel, row, word);
+    if (i < 0) return NULL;
+    head = head_of(i);
+    for (i = head; i < entry_count && (i == head || sibling(&entries[head], &entries[i])); i++) {
+        const Entry *entry = &entries[i];
+        if (entry->bpp == entries[chosen].bpp && entry->clut_offset == entries[chosen].clut_offset
+            && entry->image) {
+            return entry;
+        }
+    }
+    return NULL;
+}
+
 static int sample(int page_x, int page_y, int depth, int u, int v, uint32_t *rgb)
 {
     int per = depth == 0 ? 4 : depth == 1 ? 2 : 1;
@@ -249,16 +290,29 @@ static int sample(int page_x, int page_y, int depth, int u, int v, uint32_t *rgb
     int vx = (page_x + tu / per) & (SOFT_GPU_WIDTH - 1), vy = (page_y + tv) & (SOFT_GPU_HEIGHT - 1);
     size_t at = (size_t)vy * SOFT_GPU_WIDTH + vx;
     uint16_t index = entry_of[at];
-    const Entry *entry;
+    const Entry *entry = NULL;
     const unsigned char *p;
     int64_t px, py;
-    int row, word, texel_x;
-    if (!index || index - 1 != chosen_head) return 0; /* prepare's pick: its words, its reading */
+    int row = 0, word = 0, texel_x;
+    if (!index) return 0;
     if (!*TextureDump_Cell(vx, vy, (tu % per) * (4 / per))) return 0; /* drawn over since */
-    entry = &entries[chosen];
-    if (!entry->image || per != per_word(entry->bpp)) return 0;
-    row = (int)(place_of[at] >> 16);
-    word = (int)(place_of[at] & 0xffff);
+    if (index - 1 == chosen_head && chosen >= 0) {   /* prepare's pick: its words, its reading */
+        entry = &entries[chosen];
+        row = (int)(place_of[at] >> 16);
+        word = (int)(place_of[at] & 0xffff);
+        if (!entry->image || per != per_word(entry->bpp) ||
+            word * per + (tu % per) - entry->crop_left < 0 ||
+            word * per + (tu % per) - entry->crop_left >= entry->crop_width) {
+            entry = NULL;       /* its crop stops short of this texel */
+        }
+    }
+    if (!entry) {
+        /* Two images can share a word, so the neighbour's crop may cover what
+         * this one's does not; the picture is still read the way prepare
+         * picked, so the primitive's palette decides. */
+        entry = shared_owner(at, tu % per, &row, &word);
+        if (!entry || per != per_word(entry->bpp)) return 0;
+    }
     /* The texel within the image, with the fraction the picture carries. */
     texel_x = word * per + (tu % per) - entry->crop_left;
     if (texel_x < 0 || texel_x >= entry->crop_width) return 0;
@@ -307,6 +361,50 @@ static int locate(uint32_t offset, int *row, int *word)
                 return i;
             }
         }
+    }
+    return -1;
+}
+
+/* The entry whose replacement covers texel `texel` of the word at disc byte
+ * `offset`, and where that texel sits in it. A word holds up to four texels
+ * and two images can share it -- card_frames/digit_0 ends in the word
+ * digit_1 begins in -- so the owner is asked for per texel, not per word.
+ * -1 when no entry's crop covers it. */
+static int locate_texel(uint32_t offset, int texel, int *row, int *word)
+{
+    int low = 0, high = entry_count, i;
+    while (low < high) {
+        int middle = (low + high) / 2;
+        if (entries[middle].offset <= offset) low = middle + 1;
+        else high = middle;
+    }
+    for (i = low - 1; i >= 0 && i >= low - 64; i--) {
+        const Entry *entry = &entries[i];
+        uint32_t delta = offset - entry->offset;
+        int r = -1, c = 0, x;
+        if (entry->row_offsets) {
+            int at;
+            for (at = 0; at < entry->rows; at++) {
+                int32_t start = entry->row_offsets[at];
+                if ((int32_t)delta >= start && (int32_t)delta < start + entry->words * 2) {
+                    r = at;
+                    c = (int)(((int32_t)delta - start) / 2);
+                    break;
+                }
+            }
+        } else if (entry->stride) {
+            uint32_t rows = delta / (entry->stride * 2), words = (delta % (entry->stride * 2)) / 2;
+            if (rows < (uint32_t)entry->rows && words < (uint32_t)entry->words) {
+                r = (int)rows;
+                c = (int)words;
+            }
+        }
+        if (r < 0) continue;
+        x = c * per_word(entry->bpp) + texel;
+        if (x < entry->crop_left || x >= entry->crop_left + entry->crop_width) continue;
+        *row = r;
+        *word = c;
+        return i;
     }
     return -1;
 }
@@ -533,8 +631,25 @@ static void paint(int x, int y, int w, int h)
             entry_of[at] = (uint16_t)(index + 1);
             place_of[at] = place;
             for (k = 0; k < per; k++) {
-                uint16_t colour = entry->pixels[row * entry->words * per + word * per + k];
-                int sub = k * (4 / per), s;
+                /* Usually the word's own entry owns the texel; where two
+                 * images share the word, each owns part of it. */
+                const Entry *owner = entry;
+                int orow = row, oword = word, x = word * per + k, sub = k * (4 / per), s;
+                uint16_t colour;
+                if (x < entry->crop_left || x >= entry->crop_left + entry->crop_width) {
+                    int other = locate_texel(tag - 1, k, &orow, &oword);
+                    if (other < 0) continue;            /* nobody replaces this texel */
+                    owner = &entries[head_of(other)];
+                    if (!owner->pixels) {
+                        if (!owner->failed) {
+                            ((Entry *)owner)->wanted = 1;
+                            wanted_images = 1;
+                            asked = 1;
+                        }
+                        continue;
+                    }
+                }
+                colour = owner->pixels[orow * owner->words * per + oword * per + k];
                 for (s = 0; s < 4 / per; s++) *TextureDump_Cell(vx, vy, sub + s) = colour;
             }
         }
@@ -871,39 +986,298 @@ int TexturePack_AddMadeSeeThrough(const void *pixels, int words, int rows, int b
     return add_made_entry(pixels, words, rows, bpp, clut, clut_entries, file, x, y, w, h, 1);
 }
 
-int TexturePack_Load(const char *from, unsigned rank, int (*part)(const char *setting, void *context), void *context,
-                     char *problems, size_t problems_size)
+/* A mod that writes "assets": "<directory>" ships the pictures instead of
+ * listing them: every PNG under it whose path is a name in the catalog
+ * replaces that image. The names a mod ships are far fewer than the
+ * catalog, so the directory is walked once and searched per name. */
+typedef struct {
+    char **names;            /* the name the file stands for, without ".png" */
+    char **paths;            /* where the file is under the directory, without ".png" */
+    char **settings;         /* the setting that switches it, or NULL */
+    unsigned char *used;     /* a name the catalog holds: the rest are reported */
+    int count, room;
+} Folder;
+
+static void folder_free(Folder *folder)
 {
-    char path[1200], error[256];
-    JsonDocument *manifest;
-    const JsonValue *list, *item;
-    int count, before = entry_count, position = 0, full = 0, off = 0;
+    int i;
+    for (i = 0; i < folder->count; i++) {
+        free(folder->names[i]);
+        free(folder->paths[i]);
+        free(folder->settings[i]);
+    }
+    free(folder->names);
+    free(folder->paths);
+    free(folder->settings);
+    free(folder->used);
+    memset(folder, 0, sizeof(*folder));
+}
+
+/* The catalog's names in order, so a path can be tested against them by
+ * halving. Built once; the table is constant. */
+static int by_name(const void *a, const void *b)
+{
+    return strcmp(asset_specs[*(const int *)a].name, asset_specs[*(const int *)b].name);
+}
+
+static int catalog_holds(const char *name)
+{
+    static int order[ASSET_COUNT], ready;
+    int low = 0, high = ASSET_COUNT - 1;
+    if (!ready) {
+        int i;
+        for (i = 0; i < ASSET_COUNT; i++) order[i] = i;
+        qsort(order, ASSET_COUNT, sizeof(*order), by_name);
+        ready = 1;
+    }
+    while (low <= high) {
+        int middle = low + (high - low) / 2;
+        int which = strcmp(asset_specs[order[middle]].name, name);
+        if (!which) return 1;
+        if (which < 0) low = middle + 1;
+        else high = middle - 1;
+    }
+    return 0;
+}
+
+static int folder_add(Folder *folder, const char *name, const char *path, const char *setting)
+{
+    if (folder->count == folder->room) {
+        int room = folder->room ? folder->room * 2 : 32;
+        char **names = realloc(folder->names, (size_t)room * sizeof(*names));
+        char **paths = realloc(folder->paths, (size_t)room * sizeof(*paths));
+        char **settings = realloc(folder->settings, (size_t)room * sizeof(*settings));
+        unsigned char *used = realloc(folder->used, (size_t)room);
+        if (names) folder->names = names;
+        if (paths) folder->paths = paths;
+        if (settings) folder->settings = settings;
+        if (used) folder->used = used;
+        if (!names || !paths || !settings || !used) return 0;
+        folder->room = room;
+    }
+    if (!(folder->names[folder->count] = strdup(name))) return 0;
+    if (!(folder->paths[folder->count] = strdup(path))) {
+        free(folder->names[folder->count]);
+        return 0;
+    }
+    folder->settings[folder->count] = NULL;
+    if (setting && !(folder->settings[folder->count] = strdup(setting))) {
+        free(folder->names[folder->count]);
+        free(folder->paths[folder->count]);
+        return 0;
+    }
+    folder->used[folder->count++] = 0;
+    return 1;
+}
+
+/* The name a file's path stands for, and the setting that switches it.
+ *
+ * A path that is a name is that name, switched by the mod's setting of the
+ * same name as its folder if it declares one (assets/attributes/light.png is
+ * attributes/light, switched by "attributes"). Otherwise its first part may
+ * be one of the mod's settings, and the rest the name:
+ * assets/hd_art/card_art/001.png is card_art/001, switched off with the
+ * mod's "hd_art". The whole path is tried first, so a directory that is
+ * also a folder of the catalog (assets/card_art/...) keeps meaning it.
+ * 0 when the path is neither, which is reported. */
+static int folder_resolve(const char *path, int (*part)(const char *, void *), void *context,
+                          const char **name, char *setting, size_t setting_size)
+{
+    const char *rest = strchr(path, '/');
+    size_t length;
+    *name = path;
+    setting[0] = '\0';
+    if (catalog_holds(path)) {
+        /* A setting named after the folder switches it, with nothing to nest:
+         * a mod declaring "attributes" switches assets/attributes/... The
+         * name is the whole path either way, so this cannot change which
+         * image a file stands for. */
+        if (rest && part) {
+            size_t part_length = (size_t)(rest - path);
+            if (part_length < setting_size) {
+                memcpy(setting, path, part_length);
+                setting[part_length] = '\0';
+                if (part(setting, context) < 0) setting[0] = '\0';   /* not declared */
+            }
+        }
+        return 1;
+    }
+    if (!rest || (length = (size_t)(rest - path)) >= setting_size) return 0;
+    memcpy(setting, path, length);
+    setting[length] = '\0';
+    /* part() tells a setting the mod declares (1 or 0) from one it does not (-1). */
+    if (!part || part(setting, context) < 0 || !catalog_holds(rest + 1)) {
+        setting[0] = '\0';
+        return 0;
+    }
+    *name = rest + 1;
+    return 1;
+}
+
+/* Every PNG under `root`, named by its path below `base` without the
+ * suffix. Depth is bounded: the longest name the catalog holds is four
+ * parts, one more for a setting's directory, and a link loop would
+ * otherwise never end. */
+static void folder_walk(Folder *folder, const char *root, const char *below, int depth,
+                        int (*part)(const char *, void *), void *context)
+{
+    char path[1200], name[256];
+    DIR *directory;
+    struct dirent *entry;
+    if (depth > 5 || !(directory = opendir(root))) return;
+    while ((entry = readdir(directory))) {
+        struct stat info;
+        size_t length;
+        if (entry->d_name[0] == '.') continue;
+        if ((size_t)snprintf(path, sizeof(path), "%s/%s", root, entry->d_name) >= sizeof(path)) continue;
+        if ((size_t)snprintf(name, sizeof(name), "%s%s%s", below, *below ? "/" : "", entry->d_name) >= sizeof(name))
+            continue;
+        if (stat(path, &info) != 0) continue;
+        if (S_ISDIR(info.st_mode)) {
+            folder_walk(folder, path, name, depth + 1, part, context);
+            continue;
+        }
+        length = strlen(name);
+        if (length < 5 || strcmp(name + length - 4, ".png")) continue;
+        name[length - 4] = '\0';
+        {
+            const char *stands_for;
+            char setting[64];
+            folder_resolve(name, part, context, &stands_for, setting, sizeof(setting));
+            if (!folder_add(folder, stands_for, name, setting[0] ? setting : NULL)) break;
+        }
+    }
+    closedir(directory);
+}
+
+/* The folder sorted, so a name is found by halving rather than by walking
+ * the catalog against every file. `used` follows its name. */
+static void folder_sort(Folder *folder)
+{
+    int i, j;
+    for (i = 1; i < folder->count; i++) {   /* insertion: the setting moves with the name */
+        char *name = folder->names[i], *path = folder->paths[i], *setting = folder->settings[i];
+        for (j = i; j > 0 && strcmp(folder->names[j - 1], name) > 0; j--) {
+            folder->names[j] = folder->names[j - 1];
+            folder->paths[j] = folder->paths[j - 1];
+            folder->settings[j] = folder->settings[j - 1];
+        }
+        folder->names[j] = name;
+        folder->paths[j] = path;
+        folder->settings[j] = setting;
+    }
+    for (i = 0; i < folder->count; i++) folder->used[i] = 0;
+}
+
+/* The file to use for a name, and every file that stands for it marked as
+ * used. A mod can ship the same asset under two settings -- one part of it
+ * redrawn, another left alone -- so the one whose setting is on is the one
+ * taken; otherwise the first, which is then left out as switched off. */
+static int folder_find(Folder *folder, const char *name, int (*part)(const char *, void *), void *context)
+{
+    int low = 0, high = folder->count - 1, first, i, chosen = -1;
+    while (low <= high) {
+        int middle = low + (high - low) / 2, order = strcmp(folder->names[middle], name);
+        if (order < 0) low = middle + 1;
+        else high = middle - 1;
+    }
+    first = low;        /* the first name not less than `name` */
+    if (first >= folder->count || strcmp(folder->names[first], name)) return -1;
+    for (i = first; i < folder->count && !strcmp(folder->names[i], name); i++) {
+        const char *setting = folder->settings[i];
+        folder->used[i] = 1;
+        if (chosen < 0) chosen = i;
+        if (setting && part && part(setting, context) == 0) continue;   /* switched off */
+        return i;
+    }
+    return chosen;      /* every copy is switched off: the first says so */
+}
+
+static int load_entries(const char *from, const JsonValue *list, int named, Folder *folder, unsigned rank,
+                        int (*part)(const char *setting, void *context), void *context,
+                        char *problems, size_t problems_size)
+{
+    char path[1200];
+    const JsonValue *item;
+    int count, room, before = entry_count, position = 0, full = 0, off = 0;
     Problem unreadable = {0}, outside = {0}, measures = {0}, unaddressed = {0}, row_count = {0}, undeclared = {0};
+    Problem unknown = {0}, malformed = {0};
     Entry *more;
     if (problems && problems_size) problems[0] = '\0';
-    /* Packs add up: each enabled mod's joins the entries already loaded. */
-    snprintf(path, sizeof(path), "%s/manifest.json", from);
-    manifest = Json_ParseFile(path, error, sizeof(error));
-    if (!manifest) {
-        fprintf(stderr, "memories-pc: texture pack %s: %s\n", path, error);
-        if (problems && problems_size) snprintf(problems, problems_size, "manifest.json %s", error);
-        return -1;
+    if (named && !folder) {
+        for (item = Json_At(list, 0); item; item = Json_Next(item)) {
+            int i;
+            for (i = 0; i < ASSET_COUNT; i++) if (!strcmp(Json_Name(item), asset_specs[i].name)) break;
+            if (i == ASSET_COUNT) problem(&unknown, Json_Name(item));
+        }
     }
-    list = Json_Root(manifest);
-    count = Json_Count(list);
-    more = realloc(entries, (size_t)(entry_count + (count ? count : 1)) * sizeof(*entries));
+    count = named ? ASSET_COUNT : Json_Count(list);
+    /* Named loads walk the whole catalog but only the specs the mod asked for
+     * become entries, and one name can cover several (a card UI sprite that
+     * every package repeats): room for those, not for all of the catalog. */
+    room = count;
+    if (named) {
+        int i;
+        for (room = 0, i = 0; i < ASSET_COUNT; i++)
+            if (folder ? folder_find(folder, asset_specs[i].name, part, context) >= 0
+                       : Json_Member(list, asset_specs[i].name) != NULL) room++;
+    }
+    if (folder) memset(folder->used, 0, (size_t)folder->count);   /* the count pass marked them */
+    more = realloc(entries, (size_t)(entry_count + (room ? room : 1)) * sizeof(*entries));
     if (more) {
         entries = more;
-        memset(entries + entry_count, 0, (size_t)(count ? count : 1) * sizeof(*entries));
+        memset(entries + entry_count, 0, (size_t)(room ? room : 1) * sizeof(*entries));
     }
     /* Walked in one pass: a pack can list tens of thousands of images. */
-    for (item = more ? Json_At(list, 0) : NULL; item; item = Json_Next(item), position++) {
-        const JsonValue *rows = Json_Member(item, "row_offsets"), *row;
-        const char *file = Json_String(Json_Member(item, "file"), NULL);
-        const char *archive = Json_String(Json_Member(item, "archive"), NULL);
-        const JsonValue *setting = Json_Member(item, "setting");
+    item = Json_At(list, 0);
+    for (; more && position < count; position++, item = named ? item : Json_Next(item)) {
+        const AssetSpec *asset = named ? &asset_specs[position] : NULL;
+        const JsonValue *rows = NULL, *row, *setting = NULL;
+        const char *file = NULL, *archive;
+        char shipped[260];
         Entry *entry = &entries[entry_count];
         double offset, clut_offset, words, rows_count, bpp, stride, crop_left, crop_width;
+        if (folder) {   /* the name is the picture's own path under the directory */
+            int at = folder_find(folder, asset->name, part, context);
+            const char *switched;
+            if (at < 0) continue;
+            switched = folder->settings[at];
+            /* The file's own path, not the name: the two differ when a
+             * setting's directory sits above it. */
+            if ((size_t)snprintf(shipped, sizeof(shipped), "%s.png", folder->paths[at]) >= sizeof(shipped))
+                continue;
+            file = shipped;
+            if (switched) {
+                /* A directory named after one of the mod's settings switches
+                 * everything under it, as an entry's "setting" does. */
+                int on = part ? part(switched, context) : -1;
+                if (!on) {
+                    off++;
+                    continue;
+                }
+                if (on < 0) problem(&undeclared, switched);
+            }
+        } else {
+            if (asset) item = Json_Member(list, asset->name);
+            if (!item) continue;
+            rows = Json_Member(item, "row_offsets");
+            file = Json_String(Json_Member(item, named ? "image" : "file"), NULL);
+            setting = Json_Member(item, "setting");
+            if (asset) {
+                const JsonValue *member;
+                if (Json_TypeOf(item) != JSON_OBJECT || !file || !*file ||
+                    (setting && Json_TypeOf(setting) != JSON_STRING)) {
+                    problem(&malformed, asset->name);
+                    continue;
+                }
+                for (member = Json_At(item, 0); member; member = Json_Next(member)) {
+                    const char *key = Json_Name(member);
+                    if (strcmp(key, "image") && strcmp(key, "setting")) problem(&malformed, asset->name);
+                }
+                rows = NULL;
+            }
+        }
+        archive = asset ? asset->archive : Json_String(Json_Member(item, "archive"), NULL);
         if (setting) { /* a part of the pack the mod's settings switch off, or a setting it lacks: then used */
             const char *key = Json_String(setting, "");
             int on = part && *key ? part(key, context) : -1;
@@ -925,13 +1299,13 @@ int TexturePack_Load(const char *from, unsigned rank, int (*part)(const char *se
             full = 1;
             break;
         }
-        offset = Json_Number(Json_Member(item, "offset"), -1);
-        words = Json_Number(Json_Member(item, "words"), 0);
-        rows_count = Json_Number(Json_Member(item, "rows"), 0);
-        bpp = Json_Number(Json_Member(item, "bpp"), 0);
-        clut_offset = Json_Number(Json_Member(item, "clut_offset"), 0);
-        stride = Json_Number(Json_Member(item, "stride"), words); /* rows contiguous unless said */
-        crop_left = Json_Number(Json_Member(item, "crop_left"), 0);
+        offset = asset ? asset->offset : Json_Number(Json_Member(item, "offset"), -1);
+        words = asset ? asset->words : Json_Number(Json_Member(item, "words"), 0);
+        rows_count = asset ? asset->rows : Json_Number(Json_Member(item, "rows"), 0);
+        bpp = asset ? asset->bpp : Json_Number(Json_Member(item, "bpp"), 0);
+        clut_offset = asset ? asset->clut_offset : Json_Number(Json_Member(item, "clut_offset"), 0);
+        stride = asset ? asset->stride : Json_Number(Json_Member(item, "stride"), words); /* rows contiguous unless said */
+        crop_left = asset ? asset->crop_left : Json_Number(Json_Member(item, "crop_left"), 0);
         /* What the game could upload: a texture page at most 1024 words
          * wide, 512 rows, from an offset on a CD. */
         if (!(offset >= 0 && offset < 1e9) || !(clut_offset >= 0 && clut_offset < 1e9) ||
@@ -941,7 +1315,7 @@ int TexturePack_Load(const char *from, unsigned rank, int (*part)(const char *se
             problem(&measures, file);
             continue;
         }
-        crop_width = Json_Number(Json_Member(item, "width"), words * per_word((int)bpp) - crop_left);
+        crop_width = asset ? asset->width : Json_Number(Json_Member(item, "width"), words * per_word((int)bpp) - crop_left);
         if (!(crop_width >= 1 && crop_left + crop_width <= words * per_word((int)bpp))) {
             problem(&measures, file);
             continue;
@@ -956,7 +1330,7 @@ int TexturePack_Load(const char *from, unsigned rank, int (*part)(const char *se
         entry->words = (int)words;
         entry->rows = (int)rows_count;
         entry->bpp = (int)bpp;
-        entry->clut_entries = (int)Json_Number(Json_Member(item, "clut_entries"), 0);
+        entry->clut_entries = asset ? asset->clut_entries : (int)Json_Number(Json_Member(item, "clut_entries"), 0);
         entry->clut_offset = entry->clut_entries ? (uint32_t)clut_offset : 0;
         entry->stride = (uint32_t)stride;
         entry->crop_left = (int)crop_left;
@@ -989,8 +1363,14 @@ int TexturePack_Load(const char *from, unsigned rank, int (*part)(const char *se
         sprintf(entry->file, "%s/%s", from, file);
         entry_count++;
     }
-    Json_Free(manifest);
+    if (folder) {   /* a picture the catalog has no name for: a typo, most likely */
+        int i;
+        for (i = 0; i < folder->count; i++)
+            if (!folder->used[i]) problem(&unknown, folder->paths[i]);
+    }
     if (problems && problems_size) {
+        describe(problems, problems_size, &unknown, "unknown asset", "unknown assets");
+        describe(problems, problems_size, &malformed, "invalid asset image object", "invalid asset image objects");
         describe(problems, problems_size, &unreadable, "image could not be read", "images could not be read");
         describe(problems, problems_size, &outside, "image is outside the pack", "images are outside the pack");
         describe(problems, problems_size, &measures, "image has measures out of range",
@@ -1011,7 +1391,7 @@ int TexturePack_Load(const char *from, unsigned rank, int (*part)(const char *se
     }
     if (entry_count == before) {
         if (!entry_count) free_entries();
-        if (off) { /* the player switched every part off: nothing wrong with the pack */
+        if (off || (named && (folder ? !folder->count : !Json_Count(list)))) { /* every part off: nothing wrong with the pack */
             fprintf(stderr, "memories-pc: texture pack %s: every image is switched off\n", from);
             return 0;
         }
@@ -1024,6 +1404,47 @@ int TexturePack_Load(const char *from, unsigned rank, int (*part)(const char *se
     }
     fprintf(stderr, "memories-pc: texture pack %s: %d images\n", from, entry_count - before);
     return entry_count - before;
+}
+
+int TexturePack_Load(const char *from, unsigned rank, int (*part)(const char *, void *), void *context,
+                     char *problems, size_t problems_size)
+{
+    char path[1200], error[256];
+    JsonDocument *manifest;
+    int result;
+    snprintf(path, sizeof(path), "%s/manifest.json", from);
+    manifest = Json_ParseFile(path, error, sizeof(error));
+    if (!manifest || Json_TypeOf(Json_Root(manifest)) != JSON_ARRAY) {
+        if (problems && problems_size)
+            snprintf(problems, problems_size, "manifest.json %s", manifest ? "is not an array" : error);
+        Json_Free(manifest);
+        return -1;
+    }
+    result = load_entries(from, Json_Root(manifest), 0, NULL, rank, part, context, problems, problems_size);
+    Json_Free(manifest);
+    return result;
+}
+
+int TexturePack_LoadAssets(const char *from, const JsonValue *assets, unsigned rank,
+                           int (*part)(const char *, void *), void *context, char *problems, size_t size)
+{
+    if (Json_TypeOf(assets) != JSON_OBJECT) {
+        if (problems && size) snprintf(problems, size, "assets is not an object");
+        return -1;
+    }
+    return load_entries(from, assets, 1, NULL, rank, part, context, problems, size);
+}
+
+int TexturePack_LoadAssetFolder(const char *directory, unsigned rank, int (*part)(const char *, void *),
+                                void *context, char *problems, size_t size)
+{
+    Folder folder = {0};
+    int result;
+    folder_walk(&folder, directory, "", 0, part, context);
+    folder_sort(&folder);
+    result = load_entries(directory, NULL, 1, &folder, rank, part, context, problems, size);
+    folder_free(&folder);
+    return result;
 }
 
 /* Between frames, on the main thread with the clock held: the disc's

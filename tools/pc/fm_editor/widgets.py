@@ -12,30 +12,62 @@ from .gamedata import TYPE_NAMES
 from .model import card_matches  # noqa: F401 (model.py's; tabs.py and art_tab.py import it from here)
 
 
+def desktop_scale(widget) -> float:
+    """How much bigger than at 96 dpi the desktop draws the default font: a
+    desktop set to 144 dpi (Xft.dpi) enlarges the text but not Tk's pixel
+    sizes, so widths, wrap lengths and row heights given in pixels grow by
+    this. On Windows the program is dpi aware (theme.dpi_awareness): Tk's
+    scaling (pixels a point) is the dpi's, 4/3 at 100%, and the fonts in
+    points follow it, so the pixel sizes do too. Measured once a window,
+    before View > Interface size (zoom.py) grows the fonts."""
+    root = widget._root()
+    scale = getattr(root, "fm_desktop_scale", None)
+    if scale is None:
+        if sys.platform == "win32":
+            scale = max(1.0, float(widget.tk.call("tk", "scaling")) * 72 / 96)
+        else:
+            scale = max(1.0, tkfont.nametofont("TkDefaultFont", root=root).metrics("linespace") / 19)
+        root.fm_desktop_scale = scale
+    return scale
+
+
 def ui_scale(widget) -> float:
-    """How much bigger than at 96 dpi the default font is drawn: a desktop
-    set to 144 dpi (Xft.dpi) enlarges the text but not Tk's pixel sizes, so
-    widths, wrap lengths and row heights given in pixels grow by this.
-    On Windows the program is dpi aware (theme.dpi_awareness): Tk's scaling
-    (pixels a point) is the dpi's, 4/3 at 100%, and the fonts in points
-    follow it, so the pixel sizes do too."""
-    if sys.platform == "win32":
-        return max(1.0, float(widget.tk.call("tk", "scaling")) * 72 / 96)
-    return max(1.0, tkfont.nametofont("TkDefaultFont", root=widget).metrics("linespace") / 19)
+    """The desktop's scale times View > Interface size's (zoom.py)."""
+    return desktop_scale(widget) * getattr(widget._root(), "fm_zoom", 1.0)
 
 
 def px(widget, pixels: int) -> int:
-    """`pixels` at 96 dpi, at the desktop's size (ui_scale)."""
+    """`pixels` at 96 dpi, at the desktop's size and the interface size
+    (ui_scale)."""
     return round(pixels * ui_scale(widget))
+
+
+def _named_font(key: str, **options) -> str:
+    """A named font made once a window, so View > Interface size (zoom.py)
+    resizes it with the others: its name."""
+    root = tk._get_default_root("use a font")
+    fonts = root.__dict__.setdefault("fm_fonts", {})
+    if key not in fonts:
+        base = options["size"]
+        options["size"] = int(base * getattr(root, "fm_zoom", 1.0) + 0.5)
+        fonts[key] = tkfont.Font(root=root, name=key, **options)
+        base_sizes = getattr(root, "fm_font_base", None)
+        if base_sizes is not None:
+            base_sizes[key] = base
+    return key
 
 
 def ui_font(size: int, weight: str = "bold"):
     """The default font's face at another size (a heading): ("TkDefaultFont",
     size, weight) names no face, which X11 matches to its default sans but
-    Windows to Arial, so there the face is TkDefaultFont's own."""
-    if sys.platform == "win32":
-        return (tkfont.nametofont("TkDefaultFont").actual("family"), size, weight)
-    return ("TkDefaultFont", size, weight)
+    Windows to Arial, so the face is TkDefaultFont's own."""
+    family = tkfont.nametofont("TkDefaultFont").actual("family")
+    return _named_font(f"FMUi{size}{weight}", family=family, size=size, weight=weight)
+
+
+def fixed_font(size: int = 10):
+    """The text boxes' fixed-width font (Consolas, as they always asked)."""
+    return _named_font(f"FMFixed{size}", family="Consolas", size=size)
 
 
 class ScrolledForm(ttk.Frame):
@@ -511,7 +543,7 @@ class FormDialog(tk.Toplevel):
 def show_text(master, title, text, width=100, height=36):
     window = tk.Toplevel(master)
     window.title(title)
-    box = tk.Text(window, width=width, height=height, wrap="none", font=("Consolas", 10))
+    box = tk.Text(window, width=width, height=height, wrap="none", font=fixed_font())
     bar = ttk.Scrollbar(window, orient="vertical", command=box.yview)
     box.configure(yscrollcommand=bar.set)
     box.insert("1.0", text)

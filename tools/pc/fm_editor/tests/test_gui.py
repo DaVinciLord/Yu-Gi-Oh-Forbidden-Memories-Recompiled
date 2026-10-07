@@ -1625,9 +1625,6 @@ class SettingsTest(unittest.TestCase):
                 self.assertEqual(settings.load(), {})
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class MonsterEffectsGuiTest(GuiCase):
     """The Cards tab's Monster effects box and the card text's right-click
@@ -1885,3 +1882,166 @@ class CardsPanesTest(GuiCase):
             app.update()
         self.assertTrue(scroll.xbar.winfo_manager())
         app.withdraw()
+
+
+class ZoomTest(unittest.TestCase):
+    def setUp(self):
+        if tk is None:          # zoom.py sizes Tk's fonts: no Tk, no zoom
+            raise unittest.SkipTest("this Python has no Tk")
+
+    def test_fit_and_sizes(self):
+        from fm_editor import zoom
+        self.assertEqual(zoom.fit_factor(1600, 960, 1.0), 1.0)
+        self.assertEqual(zoom.fit_factor(1000, 600, 1.0), 1.0)          # never below 1
+        self.assertEqual(zoom.fit_factor(3840, 2100, 1.0), 2.125)       # the smaller stretch, in eighths
+        self.assertEqual(zoom.fit_factor(3840, 2100, 1.5), 1.375)       # over the desktop's own scale
+        self.assertEqual(zoom.fit_factor(20000, 20000, 1.0), zoom.MOST)
+        self.assertEqual(zoom.font_size(10, 1.25), 13)
+        self.assertEqual(zoom.font_size(-12, 1.5), -18)                 # pixels stay pixels
+        self.assertEqual([zoom.parse(v) for v in ("fit", 150, "150", 140, None)],
+                         [zoom.FIT, 150, 150, zoom.FIT, zoom.FIT])
+
+
+class InterfaceSizeTest(GuiCase):
+    def test_a_size_grows_text_lists_and_pictures(self):
+        import tkinter.font as tkfont
+        from fm_editor import settings, widgets
+        app = self.app
+        font = tkfont.nametofont("TkDefaultFont", root=app)
+        size, row = font.cget("size"), app.theme.row_height
+        widths = dict(app.cards.tree.widths)
+        heading = tkfont.nametofont(widgets.ui_font(11), root=app).cget("size")
+        app.zoom.choose(200)
+        self.assertEqual(settings.load()["ui_size"], 200)
+        self.assertEqual(font.cget("size"), zoom_size(size, 2))
+        self.assertEqual(tkfont.nametofont(widgets.ui_font(11), root=app).cget("size"), zoom_size(heading, 2))
+        self.assertGreater(app.theme.row_height, row)
+        self.assertEqual(widgets.px(app, 100), round(100 * app.zoom.desktop * 2))
+        self.assertEqual(app.cards.tree.widths, {key: width * 2 for key, width in widths.items()})
+        # A font made at 200% goes back with the others.
+        made = tkfont.nametofont(widgets.fixed_font(13), root=app)
+        self.assertEqual(made.cget("size"), 26)
+        app.zoom.step(-1)
+        self.assertEqual(app.zoom.factor, 1.75)
+        app.zoom.choose(100)
+        self.assertEqual(font.cget("size"), size)
+        self.assertEqual(made.cget("size"), 13)
+        self.assertEqual(app.cards.tree.widths, widths)
+
+    def test_fit_to_window_follows_the_window(self):
+        app = self.app
+        app.zoom.choose("fit")
+        with mock.patch.object(app, "winfo_ismapped", return_value=True), \
+                mock.patch.object(app, "winfo_width", return_value=round(3200 * app.zoom.desktop)), \
+                mock.patch.object(app, "winfo_height", return_value=round(1920 * app.zoom.desktop)):
+            app.zoom.update()
+        self.assertEqual(app.zoom.factor, 2.0)
+        self.assertIn("200%", app.zoom.menu.entrycget(0, "label"))
+
+    def test_restored_window_gives_the_card_form_its_room(self):
+        """Maximized, then restored: the Cards list went back to its width
+        (a Panedwindow asked for the maximized width once the fonts changed)."""
+        import time
+        app = self.app
+        app.deiconify()
+
+        def size(geometry):
+            app.geometry(geometry)
+            end = time.monotonic() + 0.5       # Fit to window's wait for a drag to settle, too
+            while time.monotonic() < end:
+                app.update()
+                time.sleep(0.01)
+
+        app.notebook.select(app.cards)
+        size("1400x850")
+        page, panes = app.cards.page, app.cards.panes
+        size("3600x2000")
+        if app.winfo_width() < 3000:
+            # Windows keeps a window within the screen (1024x768 on CI).
+            self.skipTest("the screen is too small for a window this big")
+        self.assertGreater(app.zoom.factor, 1.0)
+        app.notebook.select(app.art)        # other tabs on the way, as a user goes
+        size("3600x2000")
+        app.notebook.select(app.cards)
+        size("1400x850")
+        self.assertEqual(app.zoom.factor, 1.0)
+        self.assertFalse(page.xbar.winfo_ismapped())
+        self.assertLessEqual(panes.winfo_width(), page.canvas.winfo_width())
+        scroll = app.cards.card_scroll           # the form as wide as it asks
+        self.assertGreaterEqual(scroll.canvas.winfo_width(), scroll.body.winfo_reqwidth())
+        # Restored while another tab shows: the line is placed when it shows.
+        size("3600x2000")
+        app.notebook.select(app.art)
+        size("1400x850")
+        app.notebook.select(app.cards)
+        size("1400x850")
+        self.assertFalse(page.xbar.winfo_ismapped())
+        self.assertGreaterEqual(scroll.canvas.winfo_width(), scroll.body.winfo_reqwidth())
+        app.withdraw()
+
+    def test_art_view_switch(self):
+        """One picture a part in the chosen view; the disc's beside it once
+        the mod changes it; the choice remembered."""
+        from fm_editor import pngio, settings
+        from fm_editor.tests.test_art import gradient
+        app, tab = self.app, self.app.art
+        app.notebook.select(tab)
+        tab.goto(2)
+
+        def captions(part):
+            return [c.cget("text") for c in tab.rows[part]["captions"] if c.winfo_manager()]
+
+        self.assertEqual(tab.view.get(), "game")
+        self.assertEqual(captions("art"), ["In game (1x)"])
+        picture = Path(self.tmp.name) / "view.png"
+        pngio.write(picture, gradient(204, 192))
+        self.assertTrue(tab.use_file("art", str(picture)))
+        self.assertEqual(captions("art"), ["Disc (before)", "In game (1x)"])
+        tab.view.set("internal")
+        tab.view_changed()
+        self.assertEqual(captions("art"), ["Disc (before)", "Internal 2x"])
+        self.assertEqual(captions("title"), ["In game (1x)"])      # a plate has no internal view
+        self.assertEqual(settings.load()["art_view"], "internal")
+        tab.view.set("disc")
+        tab.view_changed()
+        self.assertEqual(captions("art"), ["Disc"])
+
+    def test_art_pictures_grow_with_the_room(self):
+        """The pictures take the room the page has, in eighths, at any
+        window size, and never push the page into scrolling sideways."""
+        import time
+        app = self.app
+        app.deiconify()
+
+        def size(geometry):
+            app.geometry(geometry)
+            end = time.monotonic() + 0.5       # Fit to window's wait for a drag, the tab's fit
+            while time.monotonic() < end:
+                app.update()
+                time.sleep(0.01)
+
+        app.notebook.select(app.art)
+        app.art.goto(2)
+        shares = []
+        for geometry in ("1900x1050", "3800x2100", "1900x1050"):
+            size(geometry)
+            if app.winfo_width() < int(geometry.split("x")[0]) - 40:
+                # Windows keeps a window within the screen (1024x768 on CI).
+                self.skipTest("the screen is too small for a window this big")
+            k = app.art.k
+            self.assertEqual(k * 8, int(k * 8))
+            widths = {image.width() for (part, _), image in app.art.photos.items() if part == "art"}
+            self.assertEqual(widths, {round(102 * 2 * k)})       # the three views alike
+            self.assertFalse(app.art.page.xbar.winfo_ismapped())
+            shares.append(round(102 * 2 * k) / app.winfo_width())
+        self.assertGreater(shares[1], shares[0] * 0.8)           # about the same share, maximized or not
+        self.assertEqual(shares[2], shares[0])                   # and back as it was
+        app.withdraw()
+
+def zoom_size(size, factor):
+    from fm_editor.zoom import font_size
+    return font_size(size, factor)
+
+
+if __name__ == "__main__":
+    unittest.main()
