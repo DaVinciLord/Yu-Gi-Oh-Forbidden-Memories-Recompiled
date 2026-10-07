@@ -1376,6 +1376,27 @@ class GuiTest(GuiCase):
             cards.revert()                  # as the disc has it: nothing to ask
         asked.assert_not_called()
 
+    def test_welcome_without_game_files(self):
+        """No game files: a panel over the tabs says what the editor needs,
+        with a button to choose them; gone once a game is read."""
+        from fm_editor.app import App
+        with mock.patch("fm_editor.disc.find_game", return_value=None):
+            app = App(ask=False, autostart=False)
+            try:
+                app.update()
+                app.start(None, None, False)
+                app.update()
+                self.assertTrue(app.welcome.winfo_manager())
+                buttons = [w.cget("text") for w in app.welcome.winfo_children() if w.winfo_class() == "TButton"]
+                self.assertIn("Choose the game files...", buttons)
+                app.start(str(self.game), None, False)
+                app.update()
+                self.assertFalse(app.welcome.winfo_manager())
+            finally:
+                app.dirty = False
+                app.destroy()
+        self.assertFalse(self.app.welcome.winfo_manager())      # the usual window: game files read
+
     def test_help_opens_the_guides(self):
         from pathlib import Path as P
         app = self.app

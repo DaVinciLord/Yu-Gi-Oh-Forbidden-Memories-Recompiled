@@ -584,6 +584,7 @@ class CardsTab(Tab):
         if not cid:
             self.title.configure(text="Select a card")
             self.show_picture(None)
+            self.art_link.pack_forget()         # no card, no art to go to
             for var in self.vars.values():
                 var.set("")
             self.added_frame.grid_remove()
@@ -603,6 +604,7 @@ class CardsTab(Tab):
         self.app.current_card = cid
         self.title.configure(text=f"#{cid}" + ("  (added by the mod)" if cid in self.project.added else ""))
         self.show_picture(cid)
+        self.art_link.pack(anchor="w")
         self.vars["name"].set(card.name)
         self.vars["attack"].set(card.attack)
         self.vars["defense"].set(card.defense)

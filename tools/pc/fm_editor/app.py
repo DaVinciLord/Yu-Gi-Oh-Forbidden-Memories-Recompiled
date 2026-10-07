@@ -16,7 +16,7 @@ from .guardian_stars_tab import GuardianStarsTab
 from .packs_tab import PacksTab
 from .tabs import (CardsTab, DuelistsTab, EquipsTab, FusionsTab, ModInfoTab, ConflictsTab, RitualsTab,
                    StarterTab)
-from .widgets import Pages, px
+from .widgets import Pages, px, ui_font
 
 APP_TITLE = "FM Editor"
 HISTORY_PAUSE = 350      # ms of no change before an undo step is taken
@@ -61,6 +61,19 @@ class App(Editing, tk.Tk):
         self.build_menu()
         self.notebook = Pages(self)
         self.notebook.pack(fill="both", expand=True)
+        # Over the tabs until there is a game to read: what the editor needs.
+        self.welcome = ttk.Frame(self, padding=24, relief="ridge", borderwidth=2)
+        ttk.Label(self.welcome, text="The FM Editor makes mods for the PC port of Yu-Gi-Oh! Forbidden Memories.",
+                  font=ui_font(12)).pack(anchor="w")
+        ttk.Label(self.welcome, justify="left", wraplength=px(self, 620), text=(
+            "It reads the cards, fusions, equips, rituals, decks and drops from your own copy of the game, and "
+            "saves a mod folder whose mod.json holds only what you change. It never writes the game itself.\n\n"
+            "Choose the game's disc image (.bin), or a folder with SLUS_014.11 and DATA/WA_MRG.MRG (the "
+            "game/ folder the port plays from).")).pack(anchor="w", pady=(10, 0))
+        ttk.Button(self.welcome, text="Choose the game files...", command=self.choose_game).pack(anchor="w",
+                                                                                                pady=(14, 0))
+        ttk.Button(self.welcome, text="The FM Editor guide",
+                   command=lambda: self.open_guide("tools/pc/fm_editor/README.md")).pack(anchor="w", pady=(6, 0))
         self.cards = CardsTab(self.notebook, self)
         self.art = ArtTab(self.notebook, self)
         self.fusions = FusionsTab(self.notebook, self)
@@ -187,6 +200,7 @@ class App(Editing, tk.Tk):
             files = None
             if not ask:
                 self.say("No game files: File > Game files... to choose them.")
+                self.show_welcome()
                 return
             answer = messagebox.askokcancel(
                 APP_TITLE, "The editor reads the retail tables from your own copy of Yu-Gi-Oh! Forbidden "
@@ -215,6 +229,13 @@ class App(Editing, tk.Tk):
         except (disc.GameFilesError, OSError) as problem:
             messagebox.showerror(APP_TITLE, str(problem), parent=self)
             return None
+
+    def show_welcome(self):
+        if self.project is None:
+            self.welcome.place(relx=0.5, rely=0.4, anchor="center")
+            self.welcome.lift()
+        else:
+            self.welcome.place_forget()
 
     def use_game(self, files):
         try:
@@ -245,6 +266,7 @@ class App(Editing, tk.Tk):
         self._recovered = False
         self._recovered_from = None
         self.project = project
+        self.welcome.place_forget()
         self.current_card = None
         self.dirty = False
         self._refreshing = True
