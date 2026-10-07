@@ -55,6 +55,7 @@ editors write, is fine):
 | `restart` | whether changing it needs a fresh process. Data overrides default to `true`, because the game reads most of what they change while it starts; code mods and `audio` default to `false` |
 | `legacy_setting` | an older settings key to read the player's choice from, once |
 | `data` | what the mod changes on the disc, below |
+| `assets` | images the mod replaces by name: an entry each, or the name of a directory holding them, below |
 | `textures` | a directory inside the mod holding a texture pack, below |
 | `cards` | cards the mod adds after the disc's 722, and changes to the disc's own cards, below |
 | `audio` | songs, XA clips and sound effects the mod replaces with WAV or Ogg files, below |
@@ -187,6 +188,181 @@ Overrides stand in for the disc for every reader in the port: the drive
 model, the bulk reads a mod makes, and the file lookup itself. Nothing on the
 real disc image is touched, and removing the mod puts the game back exactly
 as it was.
+
+## Named assets: an image and the name of what it replaces
+
+`assets` replaces one of the game's images with one of yours, named, with
+nothing else to write: no directory to lay out and no `manifest.json`. The
+engine already knows where every name sits on the disc, how wide it is, how
+deep and which palette it is read through, so the mod only says which name
+and which file:
+
+```json
+{
+    "id": "my-ui",
+    "name": "My UI",
+    "assets": {
+        "card_frames/frame_monster/column-0": {"image": "frames/monster-left.png"},
+        "card_frames/frame_monster/column-1": {"image": "frames/monster-right.png"},
+        "card_frames/level_star": {"image": "star.png"},
+        "build_deck/cursor_bar": {"image": "cursor.png"},
+        "duel/life_points_you": {"image": "life-points.png"}
+    }
+}
+```
+
+```
+my-ui/
+├── mod.json
+├── star.png
+├── cursor.png
+├── life-points.png
+└── frames/
+    ├── monster-left.png
+    └── monster-right.png
+```
+
+Each entry takes an `image`, a path relative to the mod's own directory (a
+subdirectory is fine; a path that leaves the mod is refused), and an
+optional `setting`, the key of one of the mod's `settings` that switches
+that one image off, exactly as a pack entry's does.
+
+### Or a directory, and nothing to list
+
+`"assets"` may instead name a directory, and then the mod ships the pictures
+rather than listing them: every PNG under it whose path is a name replaces
+that image.
+
+```json
+{
+    "id": "my-ui",
+    "name": "My UI",
+    "assets": "assets"
+}
+```
+
+```
+my-ui/
+├── mod.json
+└── assets/
+    ├── build_deck/type_dragon.png       -> build_deck/type_dragon
+    ├── card_frames/level_star.png       -> card_frames/level_star
+    └── card_art/001.png               -> card_art/001
+```
+
+So `assets/build_deck/type_dragon.png` is `build_deck/type_dragon`: the path under
+the directory, without `.png`. Nothing else is read, and nothing has to be
+kept in step with the files — adding a picture adds the replacement, removing
+it gives the image back to the disc. A file whose path is not a name is left
+alone and counted in the mod's line in the Mods window, so a misspelt name is
+told rather than silently ignored, and anything that is not a `.png` is
+passed over. A directory that is empty, or not there yet, replaces nothing
+and is not an error.
+
+#### A directory for each part
+
+A folder of the catalog switches with the mod's own setting of that name:
+declare `attributes` and the player's switch takes `assets/attributes/...`
+out, with nothing to nest.
+
+```
+my-mod/
+├── mod.json                      settings: attributes, monster_type
+└── assets/
+    ├── attributes/light.png          switched by "attributes"
+    └── monster_type/dragon.png       switched by "monster_type"
+```
+
+The name is read from the whole path either way, so a setting named after a
+folder cannot change which image a file stands for.
+
+To put several folders behind one switch, name a directory after the setting
+and keep the names under it, as an entry's `"setting"` does:
+
+```
+my-ui/
+├── mod.json                              settings: hd_art, hd_ui
+└── assets/
+    ├── hd_art/card_frames/level_star.png     switched by hd_art
+    ├── hd_ui/monster_type/dragon.png         switched by hd_ui
+    └── card_art/001.png                     no setting, always on
+```
+
+The whole path is tried as a name first, so a directory that is also a
+folder of the catalog (`assets/card_art/...`) keeps meaning that folder; only
+when the rest of the path is a name as well does the first part count as a
+setting. A player turning the part off in the Mods window takes those
+pictures out without a restart, exactly as a pack's entries go.
+
+The two forms do the same thing and a mod picks one: the object when it wants
+a `setting` on one image or its files laid out its own way, the directory
+when it would rather just drop pictures in and switch them by folder. The FM Editor reads both, and writes
+into the directory a mod already ships rather than converting it. A name the catalog does
+not hold is an error naming it, not a silent no-op, so a typo is found when
+the mod is applied rather than looked for on screen.
+
+Everything the next section says about a pack's images holds for these:
+any size, resampled at the console's resolution and sampled at its own at
+Internal 2x and up, the palette rule, the alpha rule, and the load order
+when two mods replace the same image. A mod may carry both `assets` and
+`textures`; its own `assets` are applied over its own pack, and a mod later
+in the load order still wins over both.
+
+### The names
+
+`docs/asset-catalog.json` is the catalog: every name with the geometry the
+engine reads it by and a line saying what it is. `tools/pc/asset_catalog.py`
+generates it, and `src/pc/render/asset_catalog.inc` beside it, from the same
+layouts `tools/pc/extract_images.py` extracts by, so the two can never
+disagree about where an image lives; `make check-asset-catalog` verifies the
+tracked pair is current.
+
+The folders are the parts a mod thinks in, not the shapes the disc keeps
+them in: a card's picture, its thumbnail and its name plate share one record
+on the disc but are three things to replace, so they are three folders.
+
+| Folder | What it holds |
+|---|---|
+| `card_art/NNN` | the picture on a card |
+| `thumbnails/NNN` | the small picture in the duel hand and on the field |
+| `nameplate/NNN` | the card's name, written |
+| `card_frames/...` | the card panel: the six frames, the card back, the level star, the ten ATK/DEF digits and the five words |
+| `attributes/...` | the eight attribute balls |
+| `star_guardians/...` | the ten Guardian Star symbols |
+| `monster_type/...` | all twenty-four monster type icons, `dragon` to `equip` |
+| `build_deck/...` | the Build Deck and Trade screens: the ATK and DEF marks, the count digits in six colours, the eight sort icons, the CHEST and ORDER boxes and the cursor bar |
+| `duel/...` | the duel's HUD: the FIELD box, both life points panels and the turn arrows |
+| `UI/...` | the sprites nearly every screen draws from one shared sheet: the pad glyphs, the arrows, the starchip, the DECK box, the 1P/2P badges |
+
+Every name is one picture: a sprite cropped to its own rectangle of the
+sheet it sits in, read through the one palette it is drawn with. The
+screens' sheets themselves are not named, nor the duellists' portraits or
+the story's scenes -- a column of a sheet is a slab many sprites share, and
+each of its palettes is the key to a different set of them, so there is no
+one picture to replace. A mod that wants those uses a texture pack, which
+can address any words at all (below). The crop is per texel, so repainting
+`monster_type/zombie` leaves the icon beside it in the same word alone, and
+a sprite can be replaced without touching the screen around it.
+
+A sprite is named for what it is, not for where it sits: the monster type
+icons are `monster_type/dragon` to `monster_type/equip`, the Guardian
+Stars `star_guardians/mars` to `star_guardians/venus` in the game's own
+numbering, the sort icons `build_deck/sort_card_number`, `sort_attack` and the
+rest by the order each one sorts the list into. A few are numbered because
+nothing else would be honest: the turn arrow's eight frames
+(`duel/turn_arrow-00`) are one picture's animation, and `build_deck/panel-NN`
+is the Build Deck screen's furniture, which has no names of its own beyond
+`build_deck/chest_box` and `build_deck/order_box`.
+
+One name can stand for several readings of the same picture. Every
+`card_frames` name covers all ten card UI packages the disc repeats — the Build
+Deck screen's, the Library's, the Password screen's and one per duel terrain
+— so a single `card_frames/level_star` repaints the star everywhere it is drawn.
+The count the Mods window reports for such a mod is the images it replaced,
+which is larger than the entries it wrote.
+
+The images the names stand for are the game's own, so a mod ships painted
+images or a way to make them from the player's disc, never the originals.
 
 ## Texture packs: images by origin
 
@@ -1055,7 +1231,7 @@ decides it:
 |---|---|---|
 | `data` | a disc file, by name as the disc's lookup takes it (letter case counts; leading backslashes and the `;1` aside), or raw sectors, which meet where their runs of sectors do (raw sectors and a file by name never meet, though the game reads a raw replacement over that file's sectors: the window does not know where the disc's files lie) | replacements: the later is read; patches: the later's bytes where two patch the same bytes, else both apply; a patch over another mod's replacement is written into it, at the disc's offsets (a warning) |
 | `audio` | a `music`, `xa` or `sfx` id | the later is heard; two files are never the same sound, whatever their names, each being its mod's own |
-| `textures` | an image read the same way: archive, offset, size, stride (none for one read row by row, `row_offsets`), depth and palette (an entry the loader leaves out, or whose part is switched off, is not counted) | the later is drawn; one line per image |
+| `textures`, `assets` | an image read the same way: archive, offset, size, stride (none for one read row by row, `row_offsets`), depth and palette (an entry the loader leaves out, or whose part is switched off, is not counted); a named asset and a pack entry over the same reading are the same image | the later is drawn; one line per image |
 | `cards` | one of the disc's 722 a `replace` names (an added card's identity cannot be replaced) | the later in load order; the line names whose keys are used and whose are dropped. Its stats, stars, frame, model and effect go over the earlier's; its name, text, password, art, plate (`title`), field art and fusion groups too, and when it leaves one out the earlier's is dropped all the same: every replace of a card starts those from the disc; notes add up |
 | `fusions` | a pair, in either order | the later's result; `remove`s add up |
 | `equips` | an equip card, and its copies (a rule for the card is one for each copy of it, as the game matches the card or its base) | for each monster, the latest entry that says something about it decides (a card before a type before `"replace"` within an entry), so a later rule for a type, or a plain `bonus`, goes over an earlier rule for a card of it, or an earlier `bonus_if`; entries about other monsters add up |
