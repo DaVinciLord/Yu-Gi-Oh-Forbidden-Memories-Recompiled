@@ -637,6 +637,20 @@ int main(void)
     add("lim7", "{\"limits\": {\"life_points\": {\"strat\": 9000}, \"two_player\": {\"stpe\": 100}}}");
     assert(notes == 6 && Tables_StartingLifePoints(1, 9, 8000) == 32767);
 
+    /* {"remove": "all"}: no disc recipe makes anything, while the mods'
+     * own rules still do (they come before the filtered disc table), and a
+     * "setting" switches it like any other entry; a clear brings it back. */
+    Tables_Clear();
+    notes = 0;
+    add("s", "{\"fusions\": [{\"remove\": \"all\", \"setting\": \"off\"}]}");
+    assert(notes == 0 && Tables_FilterFusion(51) == 51);
+    add("wipe", "{\"fusions\": [{\"remove\": \"all\"}, {\"with\": [10, 11], \"result\": 12}]}");
+    assert(notes == 0);
+    assert(Tables_FilterFusion(51) == 0 && Tables_FilterFusion(1) == 0 && Tables_FilterFusion(CARD_COUNT) == 0);
+    assert(fusion(11, 10) == 12 && fusion(10, 12) == -1);
+    Tables_Clear();
+    assert(Tables_FilterFusion(51) == 51);
+
     Tables_Clear();
     assert(Tables_StatCap(0) == 9999 && Tables_StartingLifePoints(1, 8, 8000) == 8000);
     assert(Tables_MaxLifePoints(8000) == 8000 && Tables_StarchipCap() == 999999 && Tables_ChestLimit() == 250);

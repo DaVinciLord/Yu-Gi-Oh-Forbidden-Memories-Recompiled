@@ -1166,6 +1166,59 @@ class GuiTest(GuiCase):
         tab.fill()
         self.assertFalse(tab.tree.exists(f"2:{copy}"))
 
+    def test_remove_all_fusions(self):
+        from fm_editor import manifest
+        app = self.app
+        tab = app.fusions
+        p = tab.project
+        p.set_fusion(1, 2, 500)
+        app.changed()
+        app.update()
+        tab.fill()
+        self.assertEqual(tab.all_button.cget("text"), "Remove all fusions...")
+        with mock.patch("fm_editor.tabs.messagebox.askyesno", return_value=False):
+            tab.all_button.invoke()
+        self.assertFalse(p.fusion_remove_all)
+        with mock.patch("fm_editor.tabs.messagebox.askyesno", return_value=True):
+            tab.all_button.invoke()
+        self.assertTrue(p.fusion_remove_all and app.dirty)
+        self.assertEqual(manifest.build_fusions(p), [{"remove": "all"}])
+        self.assertFalse([pair for pair, made in p.fusions.items() if made])
+        self.assertEqual(tab.all_button.cget("text"), "Restore disc fusions")
+        app.update()
+        self.assertTrue(tab.all_banner.winfo_ismapped())
+        self.assertIn("Every disc fusion is removed", tab.all_note.cget("text"))
+        # The disc's pairs are hidden: the list is what still fuses.
+        self.assertEqual(tab.tree.get_children(), ())
+        self.assertTrue(tab.count.cget("text").startswith("0 fusions"))
+        tab.changed_only.set(False)
+        tab.search.set("Blue Dragon")
+        self.assertFalse(tab.tree.exists("1:2"))
+        tab.show_removed.set(True)
+        tab.fill()
+        self.assertEqual(tab.tree.set("1:2", "state"), "removed")
+        tab.show_removed.set(False)
+        p.set_fusion(1, 2, 500)
+        tab.fill()
+        self.assertEqual(tab.tree.get_children(), ("1:2",))
+        p.set_fusion(1, 2, None)
+        # Undo brings it all back, the button too.
+        app.update()
+        app.undo()
+        app.update()
+        p = app.project
+        self.assertFalse(p.fusion_remove_all)
+        self.assertEqual(p.fusions[(1, 2)], 500)
+        self.assertEqual(tab.all_button.cget("text"), "Remove all fusions...")
+        app.update()
+        self.assertFalse(tab.all_banner.winfo_ismapped())
+        with mock.patch("fm_editor.tabs.messagebox.askyesno", return_value=True):
+            tab.all_button.invoke()
+            tab.all_button.invoke()             # Restore disc fusions
+        self.assertFalse(p.fusion_remove_all)
+        self.assertEqual(manifest.build_fusions(p), [])
+        self.assertEqual(p.fusions, p.retail.fusions)
+
     def test_dark_mode(self):
         from fm_editor import theme
         from fm_editor.app import App

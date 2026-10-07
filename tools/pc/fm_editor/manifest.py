@@ -145,9 +145,9 @@ def build_fusions(project: Project) -> list:
     keeps (or changes) is written, as the remove would take it away too.
     A rule the mod wrote (or an own "fusions" list needs) is written even
     where the result alone needs none, as it comes before such a list."""
-    active = project.active_removes()
-    rules = [{"remove": project.ref(result)} for result in active]
-    active = set(active)
+    rules = [{"remove": "all"}] if project.fusion_remove_all else []
+    rules += [{"remove": project.ref(result)} for result in project.active_removes()]
+    active = project.removed_results()
     retail = project.retail.fusions
     for pair in sorted(set(retail) | set(project.fusions) | project.fusion_explicit):
         now = project.fusions.get(pair)
@@ -767,7 +767,7 @@ def read_fusions(project: Project, rules, messages: list):
     if not isinstance(rules, list):
         messages.append("\"fusions\" is not an array; left out")
         return
-    set_rules, removed = {}, []
+    set_rules, removed, remove_all = {}, [], False
     project._own_pairs = None           # read_cards has read the own "fusions" lists
     for i, rule in enumerate(rules):
         where = f"fusions[{i}]"
@@ -780,7 +780,9 @@ def read_fusions(project: Project, rules, messages: list):
             continue
         if "remove" in rule:
             cid = project.resolve(rule["remove"])
-            if cid:
+            if project.removes_all(rule["remove"]):
+                remove_all = True
+            elif cid:
                 removed.append(cid)
             else:
                 messages.append(f"{where}: no card {rule['remove']!r}; kept as written")
@@ -803,7 +805,9 @@ def read_fusions(project: Project, rules, messages: list):
         set_rules[Project.pair(a, b)] = made
     # The removes first: a rule of the mod's for one of the pairs still
     # makes the card (Tables_Fusion is asked before the filtered disc table).
-    for result in removed:
+    if remove_all:
+        project.remove_disc_fusions()
+    for result in removed if not remove_all else ():
         project.remove_recipes(result)
     for pair, made in set_rules.items():
         project.set_fusion(pair[0], pair[1], made)

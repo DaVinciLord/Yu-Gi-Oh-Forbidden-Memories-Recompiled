@@ -196,6 +196,7 @@ static FusionRule *fusions;
 static int fusion_count, fusion_room;
 static unsigned char *removed_results;   /* by card id: no retail recipe makes it */
 static int removed_room;
+static int removed_all;                  /* {"remove": "all"}: no retail recipe makes anything */
 static EquipRule *equips;
 static int equip_count, equip_room;
 /* An equip's bonus: for any monster, or one of a type or an attribute. */
@@ -325,6 +326,12 @@ static void add_fusion(int a, int b, int result)
     fusions_sorted = 0;
 }
 
+static int removes_all(const JsonValue *removed)
+{
+    return Json_TypeOf(removed) == JSON_STRING && !strcmp(Json_String(removed, ""), "all") &&
+           Cards_Reference(removed) <= 0;
+}
+
 static void read_fusions(const char *mod, const JsonValue *list)
 {
     int i;
@@ -345,8 +352,15 @@ static void read_fusions(const char *mod, const JsonValue *list)
         snprintf(where, sizeof(where), "fusions[%d]", i);
         if (!Mods_EntryUsed(mod, rule, where)) continue;
         if (removed) {
-            /* { "remove": card }: no recipe on the disc makes it any more. */
-            int id = card(mod, where, removed);
+            /* { "remove": card }: no recipe on the disc makes it any more;
+             * { "remove": "all" }: none makes anything (a card of that
+             * name first, as a type name for an equip's target). */
+            int id;
+            if (removes_all(removed)) {
+                removed_all = 1;
+                continue;
+            }
+            id = card(mod, where, removed);
             if (!id) continue;
             if (id >= removed_room) {
                 int room = gCard_nCount + 1 > id + 1 ? gCard_nCount + 1 : id + 1;
@@ -431,6 +445,7 @@ int Tables_Fusion(int a, int b, int *result)
 
 int Tables_FilterFusion(int result)
 {
+    if (removed_all) return 0;
     return result > 0 && result < removed_room && removed_results[result] ? 0 : result;
 }
 
@@ -2263,6 +2278,7 @@ void Tables_Clear(void)
     memset(trap_listed, 0, sizeof(trap_listed));
     memset(trap_from, 0, sizeof(trap_from));
     if (removed_results) memset(removed_results, 0, (size_t)removed_room);
+    removed_all = 0;
     if (edited) memset(edited, 0, (size_t)edited_room * TABLES_POOL_COUNT);
     if (rank_given) memset(rank_given, 0, (size_t)rank_room * TABLES_RANK_RULE_COUNT);
     forget_pools();
@@ -2288,6 +2304,7 @@ void Tables_Build(void)
         LOG(LOG_MODS, "tables: %d fusion rules, %d equip rules, %d equip bonuses, %d rituals, %d pool edits, "
             "%d fixed decks, a chest of %d with %ld starchips a card past it", fusion_count, equip_count,
             bonus_count, ritual_count, edit_count, fixed_count, Tables_ChestLimit(), overflow_starchips);
+    if (removed_all) LOG(LOG_MODS, "tables: every disc fusion removed");
     if (shop_count) LOG(LOG_MODS, "tables: %d Password screen entries", shop_count);
     if (limits_set())
         LOG(LOG_MODS, "tables: limits: ATK %d, DEF %d, LP %d/%d (max %d, %d duelists), two-player %d-%d by %d, "
