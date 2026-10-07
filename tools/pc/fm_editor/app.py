@@ -310,6 +310,8 @@ class App(Editing, tk.Tk):
             current.fill()
         elif current in (self.fusions, self.rituals, self.cards):
             current.fill()
+            if current is self.cards:
+                current.show_picture(current.current)   # the Art tab may have changed it
         elif current is self.art:
             current.fill()
             current.show(current.current)

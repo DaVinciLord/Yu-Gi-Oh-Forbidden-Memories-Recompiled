@@ -766,9 +766,12 @@ class GuiTest(GuiCase):
         cards.price.event_generate("<Button-4>")
         app.update()
         scroll.canvas.yview_moveto(0)
-        buttons = [w for w in cards.form.winfo_children() if w.winfo_class() == "TFrame"]
-        apply = next(w for box in buttons for w in box.winfo_children()
-                     if w.winfo_class() == "TButton" and w.cget("text") == "Apply")
+        # Apply is at the top, beside the card's number; the Notes, last,
+        # scroll into view when they get the focus.
+        heads = [w for w in cards.form.winfo_children() if w.winfo_class() == "TFrame"]
+        self.assertTrue(any(w.winfo_class() == "TButton" and w.cget("text") == "Apply"
+                            for w in heads[0].winfo_children()))
+        apply = cards.notes
         apply.focus_force()
         app.update()
         self.assertGreater(scroll.canvas.yview()[0], 0)
@@ -1334,6 +1337,21 @@ class GuiTest(GuiCase):
         self.assertTrue(all(w.instate(["disabled"]) for w in greyed))
         cards.show(1)
         self.assertTrue(all(w.instate(["!disabled"]) for w in greyed))
+
+    def test_card_heading_shows_the_picture_and_opens_the_art(self):
+        app, cards = self.app, self.app.cards
+        cards.goto(3)
+        app.update()
+        self.assertIsNotNone(cards._picture)         # the fixture's game files have pictures
+        self.assertIn(str(cards._picture), str(cards.picture.cget("image")))
+        cards.art_link.event_generate("<Button-1>")
+        app.update()
+        self.assertIs(app.notebook.current(), app.art)
+        self.assertEqual(app.art.current, 3)
+        # No effect: Add... and a line, no empty list.
+        self.assertFalse(cards.effects_box.list_frame.winfo_ismapped() and not cards.effects_box.effects)
+        cards.show(None)
+        self.assertFalse(str(cards.picture.cget("image")))
 
     def test_art_tab_keeps_its_card_through_undo(self):
         from fm_editor import pngio

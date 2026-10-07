@@ -18,7 +18,7 @@ from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIM
                        POOL_LABELS, POOL_TOTAL, POOLS, STAR_NAMES, STARTER_WEIGHT_LIMIT, TYPE_EQUIP, TYPE_MAGIC, TYPE_NAMES,
                        TYPE_RITUAL, TYPE_TRAP,
                        exodia_piece, type_frame)
-from . import fixed_decks, starter_pools
+from . import art, fixed_decks, pngio, starter_pools
 from .fixed_deck_view import FixedDeckView
 from .model import KEY_RE, StarterDeck
 from .widgets import (WrapLabel, legend, CardField, FormDialog, ScrolledForm, ScrolledPage, card_matches, card_named, grab, pick_card, px,
@@ -218,8 +218,23 @@ class CardsTab(Tab):
             row += 1
             return widget
 
-        self.title = ttk.Label(form, font=ui_font(11))
-        self.title.grid(row=row, column=0, columnspan=3, sticky="w", pady=(0, 6))
+        # The card's picture (a click opens it on the Art tab), its number,
+        # and Apply and Revert, where they show without scrolling the form.
+        head = ttk.Frame(form)
+        head.grid(row=row, column=0, columnspan=3, sticky="we", pady=(0, 6))
+        self.picture = ttk.Label(head, cursor="hand2")
+        self.picture.pack(side="left", padx=(0, 8))
+        self.picture.bind("<Button-1>", lambda e: self.current and self.app.open_card(self.app.art, self.current))
+        self._picture = None
+        words = ttk.Frame(head)
+        words.pack(side="left", fill="y")
+        self.title = ttk.Label(words, font=ui_font(11))
+        self.title.pack(anchor="w")
+        self.art_link = ttk.Label(words, text="Its art on the Art tab", style="Changed.TLabel", cursor="hand2")
+        self.art_link.pack(anchor="w")
+        self.art_link.bind("<Button-1>", lambda e: self.current and self.app.open_card(self.app.art, self.current))
+        ttk.Button(head, text="Revert to retail", command=self.revert).pack(side="right")
+        ttk.Button(head, text="Apply", command=self.apply).pack(side="right", padx=4)
         row += 1
         self.hints = {}
 
@@ -356,12 +371,8 @@ class CardsTab(Tab):
         self.notes = tk.Text(form, width=36, height=4, wrap="word", undo=True)
         self.notes.grid(row=row, column=1, columnspan=2, sticky="we", pady=2)
         row += 1
-        buttons = ttk.Frame(form)
-        buttons.grid(row=row, column=0, columnspan=3, sticky="we", pady=(8, 0))
-        ttk.Button(buttons, text="Apply", command=self.apply).pack(side="left")
-        ttk.Button(buttons, text="Revert to retail", command=self.revert).pack(side="left", padx=4)
         self.status = ttk.Label(form, style="Error.TLabel", wraplength=px(form, 320), justify="left")
-        self.status.grid(row=row + 1, column=0, columnspan=3, sticky="w", pady=(6, 0))
+        self.status.grid(row=row, column=0, columnspan=3, sticky="w", pady=(6, 0))
         for child in form.winfo_children():
             if isinstance(child, (ttk.Entry, ttk.Spinbox)):
                 child.bind("<Return>", lambda e: self.apply())
@@ -479,6 +490,24 @@ class CardsTab(Tab):
             self.show_card(cid)
 
     # the form
+    def show_picture(self, cid):
+        """The card's picture as the game draws it (the mod's, else the
+        disc's), small, beside its number; none without the game files."""
+        image = None
+        files = getattr(self.app, "files", None)
+        if cid is not None and files is not None and getattr(files, "wa", None):
+            try:
+                image, _ = art.shown_image(self.project, files.wa, cid, "art")
+            except (OSError, ValueError, KeyError, IndexError):
+                image = None
+        if image is None:
+            self._picture = None
+            self.picture.configure(image="")
+            return
+        self._picture = tk.PhotoImage(master=self, data=pngio.ppm(pngio.scale_to(image, px(self, 68), px(self, 64))),
+                                      format="PPM")
+        self.picture.configure(image=self._picture)
+
     def idle_form(self, idle: bool):
         """No card: every control of the form greyed (the buttons, the icon
         lists, an added card's boxes), not only its first row of fields; a
@@ -524,6 +553,7 @@ class CardsTab(Tab):
         self.notes.edit_reset()
         if not cid:
             self.title.configure(text="Select a card")
+            self.show_picture(None)
             for var in self.vars.values():
                 var.set("")
             self.added_frame.grid_remove()
@@ -542,6 +572,7 @@ class CardsTab(Tab):
         card = self.project.cards[cid]
         self.app.current_card = cid
         self.title.configure(text=f"#{cid}" + ("  (added by the mod)" if cid in self.project.added else ""))
+        self.show_picture(cid)
         self.vars["name"].set(card.name)
         self.vars["attack"].set(card.attack)
         self.vars["defense"].set(card.defense)

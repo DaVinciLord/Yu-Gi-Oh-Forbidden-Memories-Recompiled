@@ -24,6 +24,7 @@ class EffectsBox(ttk.LabelFrame):
         self.effects = []
         frame, self.tree = scrolled_tree(self, [("when", "When"), ("what", "Does")], [110, 250], 4)
         frame.grid(row=0, column=0, columnspan=6, sticky="we")
+        self.list_frame = frame         # shown once there is an effect: an empty list took a quarter of the form
         self.columnconfigure(5, weight=1)
         self.tree.bind("<Double-1>", lambda e: self.edit())
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.show_buttons())
@@ -66,7 +67,19 @@ class EffectsBox(ttk.LabelFrame):
         else:
             self.none_box.grid_remove()
         self.fill()
-        if inherited and self.effects:
+        # No effect: Add... and a line, not an empty list and greyed buttons.
+        if self.effects:
+            self.list_frame.grid()
+            for key in ("edit", "remove", "up", "down"):
+                self.buttons[key].grid()
+        else:
+            self.list_frame.grid_remove()
+            for key in ("edit", "remove", "up", "down"):
+                self.buttons[key].grid_remove()
+        if not self.effects and cid is not None:
+            self.note.configure(text="None: the monster does what its stats do. Add... gives it one (it resolves "
+                                     "as the card text says it should).")
+        elif inherited and self.effects:
             self.note.configure(text="Its base's effects: a change gives this card a list of its own.")
         else:
             problems = fx.problems(self.effects, self.project.resolve if self.project else None)
