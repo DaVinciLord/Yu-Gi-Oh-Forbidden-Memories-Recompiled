@@ -482,10 +482,17 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("directory", help="the mod's directory (its mod.json and .c files)")
     parser.add_argument("--out", help="where the .o goes (default: the mod's directory)")
+    parser.add_argument("--target", choices=("i386", "macos"), default="i386",
+                        help="i386 ELF (Linux/Windows), or translated macOS ARM64 dylib")
     parser.add_argument("--game", action="append",
                         help="a game build directory to check the mod's names against (repeatable; "
                              "default: tmp/pc/game32 and tmp/pc/win32 when they exist)")
     options = parser.parse_args()
+    if options.target == "macos":
+        from build_mod_arm64 import build as build_arm64_mod
+        build_arm64_mod(options.directory, options.out,
+                        game=options.game[0] if options.game else None)
+        return
     output = build(options.directory, options.out, games=options.game or GAME_BUILDS)
     if not output:
         print(f"{options.directory}: no C sources; a data-only mod needs no build")

@@ -22,7 +22,7 @@ python -c "import sys; sys.exit(sys.version_info < (3, 8))" >nul 2>&1 && set PYT
 if not defined PYTHON if exist tmp\pc\tools\python\python.exe set "PYTHON=%CD%\tmp\pc\tools\python\python.exe"
 if not defined PYTHON call :fetch_python || goto :failed
 
-"%PYTHON%" tools\pc\build_game32.py || goto :failed
+"%PYTHON%" tools\pc\build.py --target windows || goto :failed
 if /i "%~1"=="trace" set MEMORIES_STUB_TRACE=1
 if /i "%~1"=="load" (
     if "%~2"=="" (set MEMORIES_LOAD_STATE=1) else (set "MEMORIES_LOAD_STATE=%~2")
