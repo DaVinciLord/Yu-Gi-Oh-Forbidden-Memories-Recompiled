@@ -21,6 +21,13 @@
             "default": 1
         },
         {
+            "key": "rarity_name_colors",
+            "label": "Rarity card-name colours",
+            "type": "bool",
+            "default": 0,
+            "description": "Colour card names by drop rarity using card_name_color.ini. These colours override manifest card-name colours while enabled."
+        }
+        {
             "key": "drops",
             "label": "Show drop odds in the Library",
             "type": "bool",
