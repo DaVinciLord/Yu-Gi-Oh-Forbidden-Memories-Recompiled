@@ -8,7 +8,7 @@ from tkinter import filedialog, messagebox, ttk
 from . import disc, gamedata, manifest, settings, theme, validate
 from .model import KEY_RE, Project
 from .editing import Editing
-from . import card_links, history, recovery, screen
+from . import card_links, history, recovery, screen, zoom
 from .art_tab import ArtTab
 from .map_tab import MapTab
 from .limits_tab import LimitsTab
@@ -43,6 +43,10 @@ class App(Editing, tk.Tk):
         self.geometry(initial_geometry(self, area))
         width, height = area[2:]
         self.minsize(min(px(self, 1000), width * 9 // 10), min(px(self, 640), height * 9 // 10))
+        # View > Interface size: a fixed one from the start, built at it;
+        # Fit to window once the window shows.
+        self.zoom = zoom.Zoom(self)
+        self.zoom.update()
         self.retail = None
         self.files = None
         self.project = None
@@ -122,6 +126,8 @@ class App(Editing, tk.Tk):
         bar.add_cascade(label="Tools", menu=tools)
         view = tk.Menu(bar, tearoff=False)
         view.add_checkbutton(label="Dark mode", variable=self.dark, command=self.toggle_dark)
+        view.add_separator()
+        self.zoom.build_menu(view)
         bar.add_cascade(label="View", menu=view)
         helps = tk.Menu(bar, tearoff=False)
         helps.add_command(label="About", command=self.about)

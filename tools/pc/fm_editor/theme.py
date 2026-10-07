@@ -130,13 +130,6 @@ class Theme:
     def __init__(self, root: tk.Tk):
         self.root = root
         windows_fonts(root)       # before the row height is measured
-        # fm-dark's elements sized in pixels (arrows, check boxes), grown
-        # with the dpi on Windows (widgets.ui_scale); kept elsewhere.
-        if sys.platform == "win32":
-            from .widgets import ui_scale
-            self.scale = ui_scale(root)
-        else:
-            self.scale = 1.0
         self.style = ttk.Style(root)
         try:
             self.style.theme_use("vista" if os.name == "nt" else "clam")
@@ -144,9 +137,10 @@ class Theme:
             pass
         self.light = self.style.theme_use()
         self.dark = False
-        # A row as tall as a line of text, in either theme.
-        self.row_height = tkfont.nametofont("TkDefaultFont", root=root).metrics("linespace") + 4
-        self.style.configure("Treeview", rowheight=self.row_height)
+        if self.light == "clam":
+            # clam shows a pressed toolbutton by its relief alone, barely: tinted.
+            self.style.map("Segment.Toolbutton", background=[("selected", "#bcd0ea"), ("active", "#ececec")])
+        self.rescale()
         for name, (light, _) in INKS.items():
             self.style.configure(f"{name}.TLabel", foreground=light)
         # Tk's own defaults for the classic widgets, to go back to, and each
@@ -166,11 +160,54 @@ class Theme:
         root.bind("<Alt-KeyPress>", self.alt_key, add="+")
         root.bind("<F10>", self.alt_key, add="+")
 
+    @property
+    def scale(self):
+        """The desktop's scale times View > Interface size's (widgets.ui_scale)."""
+        from .widgets import ui_scale
+        return ui_scale(self.root)
+
     def px(self, *pixels):
-        """Pixel sizes at 96 dpi, at the desktop's (self.scale): one, or a
-        tuple of them. Unchanged where the scale is 1."""
+        """Pixel sizes at 96 dpi, at the desktop's and the interface size
+        (self.scale): one, or a tuple of them. Unchanged where the scale is 1."""
         sized = tuple(round(value * self.scale) for value in pixels)
         return sized[0] if len(sized) == 1 else sized
+
+    def rescale(self):
+        """The sizes that follow the fonts and the scale, in both themes: a
+        row as tall as a line of text, and the pixel sizes (sized())."""
+        self.row_height = tkfont.nametofont("TkDefaultFont", root=self.root).metrics("linespace") + 4
+        self.style.theme_settings(self.light, self.sized(False))
+        if DARK_THEME in self.style.theme_names():
+            self.style.theme_settings(DARK_THEME, self.sized(True))
+
+    def sized(self, dark):
+        """theme_settings for the sizes in pixels: the row height; clam's
+        own sizes (its check boxes 10, scrollbar and drop-down arrows 14,
+        spin arrows 10, sashes 6) at the scale, in the light clam and
+        fm-dark (vista's are Windows' own); fm-dark's paddings."""
+        settings = {"Treeview": {"configure": {"rowheight": self.row_height}},
+                    # A switch of a few toggles (the Art tab's View): each
+                    # one a button, the chosen one pressed in.
+                    "Segment.Toolbutton": {"configure": {"padding": self.px(10, 3), "relief": "raised"},
+                                           "map": {"relief": [("selected", "sunken"), ("!selected", "raised")]}}}
+        if not dark and self.light != "clam":
+            return settings
+        for toggle in ("TCheckbutton", "TRadiobutton"):
+            settings[toggle] = {"configure": {"indicatorsize": self.px(10)}}
+        settings["TScrollbar"] = {"configure": {"arrowsize": self.px(14)}}
+        settings["TCombobox"] = {"configure": {"arrowsize": self.px(14)}}
+        settings["TSpinbox"] = {"configure": {"arrowsize": self.px(10)}}
+        settings["Sash"] = {"configure": {"sashthickness": self.px(6)}}
+        if dark:
+            settings["TButton"] = {"configure": {"padding": self.px(5)}}
+            settings["TNotebook"] = {"configure": {"tabmargins": self.px(2, 2, 2, 0)}}
+            settings["TNotebook.Tab"] = {"configure": {"padding": self.px(6, 2, 6, 2)},
+                                         "map": {"padding": [("selected", self.px(6, 4, 6, 2))]}}
+            settings["TLabelframe"] = {"configure": {"labelmargins": self.px(6, 0, 6, 2)}}
+            settings["Toolbutton"] = {"configure": {"padding": self.px(2)}}
+            for toggle in ("TCheckbutton", "TRadiobutton"):
+                settings[toggle]["configure"].update(indicatormargin=self.px(1, 1, 4, 1), padding=self.px(2))
+        return settings
 
     def use(self, dark: bool):
         if dark and DARK_THEME not in self.style.theme_names():
@@ -364,15 +401,10 @@ class Theme:
                         padding=self.px(2), relief="flat")
         style.map("Toolbutton", background=[("disabled", BG), ("selected", SELECT), ("active", HOVER)],
                   relief=[("selected", "sunken")], foreground=[("disabled", DISABLED)])
-        if self.scale != 1.0:
-            # clam's own sizes (its check boxes 10, scrollbar and drop-down
-            # arrows 14, spin arrows 10, sashes 6), at the dpi.
-            for toggle in ("TCheckbutton", "TRadiobutton"):
-                style.configure(toggle, indicatorsize=self.px(10))
-            style.configure("TScrollbar", arrowsize=self.px(14))
-            style.configure("TCombobox", arrowsize=self.px(14))
-            style.configure("TSpinbox", arrowsize=self.px(10))
-            style.configure("Sash", sashthickness=self.px(6))
+        style.configure("Segment.Toolbutton", background=RAISED, lightcolor=HOVER, darkcolor=RAISED)
+        style.map("Segment.Toolbutton", background=[("selected", SELECT), ("active", HOVER)],
+                  lightcolor=[("selected", SELECT)], darkcolor=[("selected", SELECT)])
         for name, (_, dark) in INKS.items():
             style.configure(f"{name}.TLabel", foreground=dark)
         style.theme_use(current)
+        style.theme_settings(DARK_THEME, self.sized(True))
