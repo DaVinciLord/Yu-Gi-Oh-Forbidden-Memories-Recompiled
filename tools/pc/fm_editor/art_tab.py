@@ -289,6 +289,12 @@ class ArtTab(Tab):
         self.current = None
         self.fill()
         self.show(None)
+        rows = self.tree.get_children()
+        if rows:                        # the first card: never an empty tab
+            chosen = self.app.current_card   # not one the modder chose: nothing follows it
+            self.tree.selection_set(rows[0])
+            self.show(int(rows[0]))
+            self.app.current_card = chosen
 
     def select(self):
         selection = self.tree.selection()

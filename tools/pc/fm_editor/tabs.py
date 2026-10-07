@@ -21,7 +21,7 @@ from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIM
 from . import fixed_decks
 from .fixed_deck_view import FixedDeckView
 from .model import KEY_RE, StarterDeck
-from .widgets import (CardField, FormDialog, ScrolledForm, ScrolledPage, card_matches, card_named, grab, pick_card, px,
+from .widgets import (WrapLabel, CardField, FormDialog, ScrolledForm, ScrolledPage, card_matches, card_named, grab, pick_card, px,
                       fixed_font, scrolled_tree, show_text, ui_font)
 
 ATTRIBUTE_CHOICES = ATTRIBUTE_NAMES + ["6 (magic)", "7 (trap)"]
@@ -397,6 +397,17 @@ class CardsTab(Tab):
         self.current = None
         self.fill()
         self.show(None)
+        self.show_first()
+
+    def show_first(self):
+        """The list's first card, so the tab never opens on an empty form."""
+        rows = self.tree.get_children()
+        if rows:
+            # Not a card the modder chose: the other tabs do not follow it.
+            chosen = self.app.current_card
+            self.tree.selection_set(rows[0])
+            self.show(int(rows[0]))
+            self.app.current_card = chosen
 
     def update_row(self, cid):
         if self.tree.exists(str(cid)):
@@ -408,6 +419,9 @@ class CardsTab(Tab):
         selection = self.tree.selection()
         cid = int(selection[0]) if selection else None
         if cid == self.current:
+            # The card shown before the window was (the first, on opening):
+            # its form may have grown since the line was placed.
+            self.form_resized()
             return
         if self.current is not None and not self.apply(quiet=True):
             self.tree.selection_set(str(self.current))    # stay on the card whose form cannot be stored
@@ -1128,7 +1142,7 @@ class FusionsTab(Tab):
         ttk.Checkbutton(self.all_banner, text="Show the removed disc fusions", variable=self.show_removed,
                         command=self.fill).pack(side="left", padx=8)
         frame, self.tree = scrolled_tree(self, [("a", "Card A"), ("b", "Card B"), ("result", "Result"),
-                                                ("state", "")], [260, 260, 260, 80], 24, selectmode="extended")
+                                                ("state", "Status")], [260, 260, 260, 80], 24, selectmode="extended")
         frame.pack(fill="both", expand=True, pady=4)
         self.list_frame = frame
         self.tree.bind("<Double-1>", lambda e: self.edit())
@@ -1341,7 +1355,7 @@ class EquipsTab(Tab):
         self.heading = ttk.Label(right, font=ui_font(11))
         self.heading.pack(anchor="w")
         frame, self.monsters = scrolled_tree(right, [("id", "#"), ("name", "Monster"), ("type", "Type"),
-                                                     ("atk", "ATK"), ("def", "DEF"), ("state", "")],
+                                                     ("atk", "ATK"), ("def", "DEF"), ("state", "Status")],
                                                      [50, 220, 100, 50, 50, 80], 22, selectmode="extended",
                                                      sort_numeric=("id", "atk", "def"))
         frame.pack(fill="both", expand=True, pady=4)
@@ -1361,6 +1375,11 @@ class EquipsTab(Tab):
         self.current = None
         self.followed = None
         self.fill_equips()
+        rows = self.equips.get_children()
+        if rows:                        # the first equip card: never an empty tab
+            self.current = int(rows[0])
+            self.equips.selection_set(rows[0])
+            self.fill_equips()
         self.fill()
 
     def show_card(self, cid):
@@ -1467,7 +1486,7 @@ class RitualsTab(Tab):
     def __init__(self, notebook, app):
         super().__init__(notebook, app, "Rituals")
         frame, self.tree = scrolled_tree(self, [("ritual", "Ritual card"), ("t1", "Tribute 1"), ("t2", "Tribute 2"),
-                                                ("t3", "Tribute 3"), ("result", "Summons"), ("state", "")],
+                                                ("t3", "Tribute 3"), ("result", "Summons"), ("state", "Status")],
                                          [210, 170, 170, 170, 200, 70], 24)
         frame.pack(fill="both", expand=True)
         self.tree.bind("<Double-1>", lambda e: self.edit())
@@ -1476,9 +1495,9 @@ class RitualsTab(Tab):
         ttk.Button(buttons, text="Edit recipe...", command=self.edit).pack(side="left")
         ttk.Button(buttons, text="Remove recipe", command=self.remove).pack(side="left", padx=4)
         ttk.Button(buttons, text="Revert to retail", command=self.revert).pack(side="left")
-        ttk.Label(buttons, text="A ritual is a ritual card (an added copy has its base's recipe until given its "
+        WrapLabel(buttons, text="A ritual is a ritual card (an added copy has its base's recipe until given its "
                                 "own); the three tributes are monsters on the field; custom recipes may use conditions.",
-                  style="Hint.TLabel").pack(side="right")
+                  style="Hint.TLabel").pack(side="left", fill="x", expand=True, padx=(8, 0))
 
     def refresh(self):
         self.fill()
@@ -1798,7 +1817,7 @@ class DuelistsTab(Tab):
         self.duelist = 1
         left = ttk.Frame(self)
         left.pack(side="left", fill="y")
-        frame, self.list = scrolled_tree(left, [("id", "#"), ("name", "Opponent"), ("state", "")],
+        frame, self.list = scrolled_tree(left, [("id", "#"), ("name", "Opponent"), ("state", "Status")],
                                          [36, 170, 60], 26, sort_numeric=("id",))
         frame.pack(fill="y", expand=True)
         self.list.bind("<<TreeviewSelect>>", lambda e: self.select())
@@ -1814,7 +1833,7 @@ class DuelistsTab(Tab):
         self.total.pack(side="right")
         frame, self.tree = scrolled_tree(right, [("id", "#"), ("name", "Card"), ("type", "Type"),
                                                  ("atk", "ATK"), ("def", "DEF"), ("w", "Weight"),
-                                                 ("pct", "Chance"), ("retail", "Retail"), ("state", "")],
+                                                 ("pct", "Chance"), ("retail", "Retail"), ("state", "Status")],
                                          [50, 220, 100, 50, 50, 60, 60, 60, 70], 22, selectmode="extended",
                                          sort_numeric=("id", "atk", "def", "w", "pct", "retail"))
         frame.pack(fill="both", expand=True, pady=4)
@@ -1983,7 +2002,7 @@ class StarterTab(Tab):
         self.total = ttk.Label(top, font=ui_font(10))
         self.total.pack(side="right")
         frame, self.tree = scrolled_tree(right, [("id", "#"), ("name", "Card"), ("type", "Type"),
-                                                 ("copies", "Copies"), ("state", "")],
+                                                 ("copies", "Copies"), ("state", "Status")],
                                          [50, 260, 110, 60, 150], 20, selectmode="extended")
         frame.pack(fill="both", expand=True, pady=4)
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.pick_row())

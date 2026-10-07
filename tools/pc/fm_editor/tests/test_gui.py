@@ -318,6 +318,7 @@ class GuiTest(GuiCase):
         app = self.app
         cards = app.cards
         # A trap's effect on a magic card: shown as none, kept unless changed.
+        cards.show(None)                # the model changes under no form
         app.project.cards[1] = app.project.cards[1].copy(type=20, attack=0, defense=0, level=0, star1=0, star2=0,
                                                          attribute=6)
         app.project.card_extra[1] = {"effect": 701}
@@ -423,7 +424,9 @@ class GuiTest(GuiCase):
 
     def test_edit_equips_shortcut_applies_and_selects_the_card(self):
         app, cards = self.app, self.app.cards
-        self.assertTrue(all(w.instate(["disabled"]) for w in app.equips.actions.winfo_children()))
+        # Equips opens on its first equip card, its buttons ready.
+        self.assertEqual(app.equips.current, int(app.equips.equips.get_children()[0]))
+        self.assertTrue(all(not w.instate(["disabled"]) for w in app.equips.actions.winfo_children()))
         cards.goto(1)
         app.update()
         self.assertEqual(cards.edit_equips_button.winfo_manager(), "")
@@ -1049,6 +1052,7 @@ class GuiTest(GuiCase):
         from fm_editor import card_text
         from fm_editor.tests.test_card_text import synthetic_wa
         app = self.app
+        app.cards.show(None)
         app.show_text_preview()
         preview = app.text_preview
         app.update()

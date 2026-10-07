@@ -235,7 +235,7 @@ class BulkFusionsDialog(tk.Toplevel):
         self.warning = ttk.Label(preview, foreground="#9c6500", justify="left")
         self.warning.pack(fill="x")
         frame, self.tree = scrolled_tree(preview, [("a", "Card A"), ("b", "Card B"), ("before", "Now"),
-                                                   ("after", "After"), ("what", "")],
+                                                   ("after", "After"), ("what", "Change")],
                                          [220, 220, 220, 220, 70], 9)
         self.tree.tag_configure("kept", foreground="#777")
         frame.pack(fill="both", expand=True, pady=(4, 0))

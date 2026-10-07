@@ -44,7 +44,7 @@ class FixedDeckView:
         self.panel = ttk.Frame(right)
         frame, self.tree = scrolled_tree(self.panel, [("id", "#"), ("name", "Card"), ("type", "Type"),
                                                       ("atk", "ATK"), ("def", "DEF"),
-                                                      ("copies", "Copies"), ("weight", "Weighted"), ("note", "")],
+                                                      ("copies", "Copies"), ("weight", "Weighted"), ("note", "Note")],
                                          [50, 220, 100, 50, 50, 60, 70, 170], 20, selectmode="extended",
                                          sort_numeric=("id", "atk", "def", "copies", "weight"))
         frame.pack(fill="both", expand=True, pady=4)

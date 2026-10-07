@@ -70,6 +70,53 @@ def fixed_font(size: int = 10):
     return _named_font(f"FMFixed{size}", family="Consolas", size=size)
 
 
+class WrapLabel(ttk.Label):
+    """A label whose text wraps to the room the window shows it, so a long
+    hint never asks the window to be wider: it wraps at the right edge of
+    the scrolled page (or form) it is in, or of the window, however wide
+    the page's content is (that content is as wide as it asks, which a
+    label wrapped to its own width would feed back into), at `width`
+    pixels (at 96 dpi) at least."""
+
+    def __init__(self, master, width: int = 360, **options):
+        options.setdefault("justify", "left")
+        self.least = width
+        super().__init__(master, wraplength=px(master, width), **options)
+        self._job = None
+        self.bind("<Configure>", lambda e: self._later(), add="+")
+        self.bind("<Map>", lambda e: self._later(), add="+")
+
+    def _later(self):
+        if self._job is None:
+            self._job = self.after_idle(self._wrap)
+
+    def _viewport(self):
+        widget = self.master
+        while widget is not None:
+            canvas = getattr(widget, "canvas", None)
+            if isinstance(canvas, tk.Canvas):
+                return canvas
+            widget = widget.master
+        return self.winfo_toplevel()
+
+    def _wrap(self):
+        self._job = None
+        if not self.winfo_exists() or not self.winfo_ismapped():
+            return
+        view = self._viewport()
+        right = view.winfo_rootx() + view.winfo_width()
+        wrap = max(px(self, self.least), right - self.winfo_rootx() - px(self, 8))
+        if abs(int(float(str(self.cget("wraplength")) or 0)) - wrap) > 2:
+            self.configure(wraplength=wrap)
+            # The viewport may be resized without the label moving.
+        if not getattr(view, "_wrap_labels", None):
+            view._wrap_labels = []
+            view.bind("<Configure>", lambda e, v=view: [label._later() for label in v._wrap_labels
+                                                       if label.winfo_exists()], add="+")
+        if self not in view._wrap_labels:
+            view._wrap_labels.append(self)
+
+
 class ScrolledForm(ttk.Frame):
     """A form with a vertical scrollbar, wheel support and focus visibility.
 

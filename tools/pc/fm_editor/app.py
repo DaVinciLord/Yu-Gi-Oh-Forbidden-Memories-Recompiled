@@ -292,6 +292,9 @@ class App(Editing, tk.Tk):
         if not self.commit_all():
             return
         current = self.notebook.current()
+        # The card to follow, before the tab shows its own again (Art's
+        # show() makes its card the window's).
+        card = self.current_card
         # Other tabs may have changed what this one shows (a card's name or
         # type): fill it again, keeping its selection.
         if current is self.conflicts:
@@ -312,9 +315,10 @@ class App(Editing, tk.Tk):
             current.show(current.current)
         elif current is self.stars:
             current.fill()          # the cards' stars may have changed
+        self.current_card = card
         follow = getattr(current, "follow", None)
-        if follow is not None and self.current_card is not None:
-            follow(self.current_card)
+        if follow is not None and card is not None:
+            follow(card)
 
     # --- a card in another tab (card_links) -------------------------------------
 

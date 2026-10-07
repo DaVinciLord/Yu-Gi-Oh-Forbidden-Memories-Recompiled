@@ -12,7 +12,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from . import guardian_stars as gs, pngio, theme
 from .tabs import Tab
-from .widgets import px, scrolled_tree, ui_font
+from .widgets import WrapLabel, px, scrolled_tree, ui_font
 
 CELL = 44           # a grid cell's side at 96 dpi
 HEAD = 78           # the header row's and column's
@@ -63,10 +63,10 @@ class GuardianStarsTab(Tab):
         self.cell = None          # (attacker, defender) the grid has picked
         self.photos = {}
         self.icon_images = {}     # star -> pngio.Image of the mod's icon, as loaded
-        ttk.Label(self, style="Hint.TLabel", wraplength=px(self, 1000), justify="left",
+        WrapLabel(self, style="Hint.TLabel",
                   text="Each cell is what the attacker's star (row) gets against the defender's star (column): "
                        "the disc gives +500 to the star just before in its cycle and -500 to the one just after, "
-                       "0 otherwise. A card holds its stars in 4 bits, so 15 stars at most.").pack(anchor="w")
+                       "0 otherwise. A card holds its stars in 4 bits, so 15 stars at most.").pack(fill="x")
 
         body = ttk.Frame(self)
         body.pack(fill="both", expand=True, pady=(6, 0))
@@ -159,12 +159,12 @@ class GuardianStarsTab(Tab):
                               width=7)
         choice.pack(side="left", padx=4)
         choice.bind("<<ComboboxSelected>>", lambda e: self.set_choice())
-        ttk.Label(self.advanced, style="Hint.TLabel",
+        WrapLabel(self.advanced, style="Hint.TLabel",
                   text="ask: the SELECT A GUARDIAN STAR box (the disc's); first: always the first star; best: the "
                        "star that does best against the opponent's face-up monsters. A card with one star (the "
-                       "second none, or the same) never asks.").pack(side="left")
-        self.status = ttk.Label(self, style="Warning.TLabel", wraplength=px(self, 1000), justify="left")
-        self.status.pack(anchor="w", pady=(6, 0))
+                       "second none, or the same) never asks.").pack(side="left", fill="x", expand=True)
+        self.status = WrapLabel(self, style="Warning.TLabel")
+        self.status.pack(fill="x", pady=(6, 0))
 
     # --- the model and the project ---------------------------------------------
 
