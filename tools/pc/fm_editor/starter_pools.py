@@ -120,7 +120,7 @@ def state(project) -> list:
     """The pools the project holds, read once and kept on it."""
     found = getattr(project, "starter_pool_state", None)
     # Read again when the section changed under it (Mod info's other keys).
-    source = json.dumps(project.other.get("starter_pools"), sort_keys=True, default=str)
+    source = json.dumps(project.other.get("starter_pools"), default=str)
     if found is None or getattr(project, "starter_pool_source", None) != source:
         found = read(project.other.get("starter_pools"), project.resolve)
         project.starter_pool_state = found
@@ -135,7 +135,7 @@ def store(project):
         project.other.pop("starter_pools", None)
     else:
         project.other["starter_pools"] = built
-    project.starter_pool_source = json.dumps(project.other.get("starter_pools"), sort_keys=True, default=str)
+    project.starter_pool_source = json.dumps(project.other.get("starter_pools"), default=str)
 
 
 def drawn(project) -> int:

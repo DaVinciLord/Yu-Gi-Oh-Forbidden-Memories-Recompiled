@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "tmp/pc/fm-editor-mod"
 EXECUTABLE = ROOT / "tmp/pc/game32/memories-pc"
 MOD = "editor-round-trip"
+POOLS_MOD = "editor-round-trip-pools"
 FRAMES = 6600     # past the new game's starter deck, into the first duel (tests/pc/smoke/duel-hand-camera.json)
 
 
@@ -140,6 +141,56 @@ def make_mod(game: Path, out: Path) -> list:
     return done
 
 
+def make_pools_mod(game: Path, out: Path):
+    """A second mod, a new game's deck drawn from weighted pools (the
+    Starter decks tab's Weighted pools page): the disc's seven, one card's
+    weight changed. A written deck would be dealt first, so it is alone."""
+    from fm_editor.app import App
+    answers = [mock.patch("tkinter.messagebox." + n, return_value=True) for n in ("askyesno", "askokcancel")]
+    for patch in answers:
+        patch.start()
+    app = App(ask=False, autostart=False)
+    app.withdraw()
+    app.update()
+    app.start(str(game), None, False)
+    app.update()
+    app.info.vars["id"].set(POOLS_MOD)
+    assert app.info.commit()
+    page = app.starter.pools
+    page.from_retail()
+    page.tree.selection_set(page.tree.get_children()[0])
+    page.weight.set("500")
+    page.set_weight()
+    app.update()
+    with mock.patch("tkinter.filedialog.askdirectory", return_value=str(out / "pool-mods")):
+        assert app.save(ask=True, export=True)
+    app.dirty = False
+    app.destroy()
+    for patch in answers:
+        patch.stop()
+
+
+def play(executable: Path, mods: Path, out: Path, mod: str) -> str:
+    """A new game into the first duel on the mods; what the game said."""
+    opening = json.loads((ROOT / "tests/pc/smoke/duel-hand-camera.json").read_text())["input"]
+    settings = out / f"{mod}.settings.txt"
+    settings.write_text(f"mod.3d-monsters=0\nmod.hand-camera=0\nmod.ai-hard-mode=0\nmod.{mod}=1\n")
+    env = {key: value for key, value in os.environ.items() if not key.startswith("MEMORIES_")}
+    env.update(MEMORIES_HEADLESS="1", MEMORIES_NO_AUDIO="1", MEMORIES_NO_GAMEPAD="1", MEMORIES_SPEED="-1",
+               MEMORIES_NO_MONITOR="1", MEMORIES_DETERMINISTIC="1", MEMORIES_SETTINGS=str(settings),
+               MEMORIES_USER_DIR=str(out / f"{mod}.user"), MEMORIES_INPUT=opening, MEMORIES_DUMP_FRAME=str(FRAMES),
+               MEMORIES_DUMP_PATH=str(out / f"{mod}.ppm"), MEMORIES_TRACE="mods",
+               MEMORIES_LOG=str(out / f"{mod}.trace.log"), MEMORIES_MODS_DIR=str(mods))
+    with (out / f"{mod}.run.log").open("w") as log:
+        subprocess.run([str(executable)], cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT,
+                       check=True, timeout=600)
+    said = (out / f"{mod}.run.log").read_text(errors="replace") + \
+        (out / f"{mod}.trace.log").read_text(errors="replace")
+    complaints = [line for line in said.splitlines() if f"mod {mod}:" in line]
+    assert not complaints, f"the game said of the editor's {mod}:\n" + "\n".join(complaints)
+    return said
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--executable", type=Path, default=EXECUTABLE)
@@ -152,21 +203,7 @@ def main():
     done = make_mod(game, out)
     manifest = json.loads((out / "mods" / MOD / "mod.json").read_text(encoding="utf-8"))
 
-    opening = json.loads((ROOT / "tests/pc/smoke/duel-hand-camera.json").read_text())["input"]
-    settings = out / "settings.txt"
-    settings.write_text(f"mod.3d-monsters=0\nmod.hand-camera=0\nmod.ai-hard-mode=0\nmod.{MOD}=1\n")
-    env = {key: value for key, value in os.environ.items() if not key.startswith("MEMORIES_")}
-    env.update(MEMORIES_HEADLESS="1", MEMORIES_NO_AUDIO="1", MEMORIES_NO_GAMEPAD="1", MEMORIES_SPEED="-1",
-               MEMORIES_NO_MONITOR="1", MEMORIES_DETERMINISTIC="1", MEMORIES_SETTINGS=str(settings),
-               MEMORIES_USER_DIR=str(out / "user"), MEMORIES_INPUT=opening, MEMORIES_DUMP_FRAME=str(FRAMES),
-               MEMORIES_DUMP_PATH=str(out / "frame.ppm"), MEMORIES_TRACE="mods", MEMORIES_LOG=str(out / "trace.log"),
-               MEMORIES_MODS_DIR=str(out / "mods"))
-    with (out / "run.log").open("w") as log:
-        subprocess.run([str(arguments.executable)], cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT,
-                       check=True, timeout=600)
-    said = (out / "run.log").read_text(errors="replace") + (out / "trace.log").read_text(errors="replace")
-    complaints = [line for line in said.splitlines() if f"mod {MOD}:" in line]
-    assert not complaints, "the game said of the editor's mod:\n" + "\n".join(complaints)
+    said = play(arguments.executable, out / "mods", out, MOD)
     expected = [f"{MOD}: 0 replaced regions, 2 patched runs",                      # the map
                 "texture pack", "2 images",                                       # the art
                 "card 3 Hitotsu-me Giant replaced", "cards 723-723 are copies of 1",
@@ -177,6 +214,10 @@ def main():
     assert not missing, f"not read by the game: {missing} (see {out})"
     for key in ("guardian_stars", "packs", "settings"):
         assert key in manifest, key
+    make_pools_mod(game, out)
+    said = play(arguments.executable, out / "pool-mods", out, POOLS_MOD)
+    assert "starter: dealt from 7 pools" in said, f"the pools were not dealt from (see {out})"
+    done.append("Starter decks, Weighted pools: the disc's seven, one weight changed (dealt from 7 pools)")
     print("fm editor mod: the game read every tab's part, without a note:\n  " + "\n  ".join(done))
 
 

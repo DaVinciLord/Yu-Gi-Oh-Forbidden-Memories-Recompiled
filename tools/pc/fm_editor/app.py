@@ -317,6 +317,8 @@ class App(Editing, tk.Tk):
             current.show(current.current)
         elif current is self.stars:
             current.fill()          # the cards' stars may have changed
+        elif current is self.info and current not in self._pending:
+            current.refresh()       # other tabs keep keys beside its box's (starter_pools...)
         self.current_card = card
         follow = getattr(current, "follow", None)
         if follow is not None and card is not None:

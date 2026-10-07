@@ -1599,6 +1599,27 @@ class GuiTest(GuiCase):
         info.fill_settings()
         self.assertIn("does not read", info.settings_note.cget("text"))
 
+    def test_mod_info_keeps_what_other_tabs_put_beside_its_box(self):
+        """Mod info's other keys were rebuilt from its box as it was filled:
+        a key another tab wrote since (starter_pools, a password taken out
+        with a removed card) was lost on the next commit, a save included.
+        Only what is typed in the box changes the mod now."""
+        app, info = self.app, self.app.info
+        info.refresh()
+        app.project.other["text"] = {"a": 1}                     # as if another tab wrote it
+        app.project.other["starter_pools"] = [{"draws": 40, "cards": {"2": 1}}]
+        self.assertTrue(info.commit())
+        self.assertEqual(app.project.other["text"], {"a": 1})
+        self.assertIn("starter_pools", app.project.other)
+        # What is typed is applied, and a key taken out of the box goes.
+        info.refresh()
+        info.other.delete("1.0", "end")
+        info.other.insert("1.0", json.dumps({"audio": {"x": 2}}))
+        self.assertTrue(info.commit())
+        self.assertEqual(app.project.other.get("audio"), {"x": 2})
+        self.assertNotIn("text", app.project.other)
+        self.assertIn("starter_pools", app.project.other)       # not the box's to take away
+
     def test_mod_info_refuses_keys_the_tabs_write(self):
         app = self.app
         info = app.info

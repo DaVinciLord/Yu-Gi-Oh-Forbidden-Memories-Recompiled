@@ -280,6 +280,60 @@ class TabTest(unittest.TestCase):
         with mock.patch.object(tab, "ask_opponent", return_value=None):
             self.assertIsNone(tab.add_deck("opponent"))
 
+    def test_weighted_pools_page(self):
+        """starter_pools on their own page: pools added, named and given their
+        draws, cards weighted, the draws counted against forty, written as
+        the game reads them; the disc's seven as a start."""
+        from unittest import mock
+        from fm_editor import starter_pools as sp
+        app, tab = self.app, self.app.starter
+        page = tab.pools
+        tab.pages.select(page)
+        app.update()
+        self.assertTrue(page.empty.winfo_manager())
+        dialog = page.add_pool()
+        dialog.fields["name"].set("Weak")
+        dialog.fields["draws"].set("30")
+        dialog.ok()
+        with mock.patch("fm_editor.starter_pools_view.pick_card", return_value=2):
+            page.weight.set("100")
+            page.add_card()
+        with mock.patch("fm_editor.starter_pools_view.pick_card", return_value=3):
+            page.add_card()
+        self.assertEqual(page.total.cget("text"), "Draws 30 / 40")
+        self.assertEqual(str(page.total.cget("style")), "Error.TLabel")
+        dialog = page.add_pool()                    # the draws left, offered
+        self.assertEqual(dialog.fields["draws"].get(), "10")
+        dialog.ok()
+        with mock.patch("fm_editor.starter_pools_view.pick_card", return_value=4):
+            page.add_card()
+        self.assertEqual(page.total.cget("text"), "Draws 40 / 40")
+        self.assertTrue(sp.deals(app.project))
+        # Weights set and cards removed on the selection.
+        page.list.selection_set("0")
+        page.select()
+        page.tree.selection_set("3")
+        page.weight.set("7")
+        page.set_weight()
+        self.assertEqual(sp.state(app.project)[0].cards, {2: 100, 3: 7})
+        page.tree.selection_set("3")
+        page.remove_cards()
+        written = app.project.other["starter_pools"]
+        self.assertEqual(written[0], {"name": "Weak", "draws": 30, "cards": {app.project.ref(2): 100}})
+        self.assertEqual(written[1]["draws"], 10)
+        self.assertTrue(app.dirty)
+        # The disc's seven pools, in place of these (asked first).
+        if sp.retail(app.files.wa):
+            with mock.patch("fm_editor.starter_pools_view.messagebox.askyesno", return_value=True):
+                page.from_retail()
+            self.assertEqual(len(app.project.other["starter_pools"]), 7)
+            self.assertEqual(sum(p["draws"] for p in app.project.other["starter_pools"]),
+                             sp.retail_drawn(sp.retail(app.files.wa)))
+        with mock.patch("fm_editor.starter_pools_view.messagebox.askyesno", return_value=True):
+            while sp.state(app.project):
+                page.remove_pool()
+        self.assertNotIn("starter_pools", app.project.other)
+
     def test_a_deck_naming_an_unknown_card_is_not_complete(self):
         tab = self.app.starter
         self.app.project.starter.append(StarterDeck(name="d", cards={2: 3, 3: 36}, kept={"Nobody's card": 1}))

@@ -20,6 +20,7 @@ from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIM
                        TYPE_RITUAL, TYPE_TRAP,
                        exodia_piece, type_frame)
 from . import art, fixed_decks, pngio, starter_pools
+from .starter_pools_view import StarterPoolsPage
 from .fixed_deck_view import FixedDeckView
 from .model import KEY_RE, StarterDeck
 from .widgets import (WrapLabel, legend, CardField, FormDialog, ScrolledForm, ScrolledPage, card_matches, card_named, grab, pick_card, px,
@@ -2248,7 +2249,17 @@ class StarterTab(Tab):
     def __init__(self, notebook, app):
         super().__init__(notebook, app, "Starter decks")
         self.deck = 0
-        left = ttk.Frame(self)
+        # A new game deals a written deck, or one drawn from weighted pools:
+        # a page each ("starter", "starter_pools").
+        self.pages = ttk.Notebook(self)
+        self.pages.pack(fill="both", expand=True)
+        written = ttk.Frame(self.pages, padding=4)
+        self.pages.add(written, text="Written decks")
+        self.pools = StarterPoolsPage(self.pages, self)
+        self.pages.add(self.pools, text="Weighted pools")
+        self.pages.bind("<<NotebookTabChanged>>", lambda e: self.pools.fill() if self.pages.select() == str(self.pools)
+                        else None)
+        left = ttk.Frame(written)
         left.pack(side="left", fill="y")
         frame, self.list = scrolled_tree(left, [("n", "#"), ("name", "Deck"), ("w", "Weight"), ("cards", "Cards")],
                                          [30, 150, 55, 60], 22)
@@ -2265,7 +2276,7 @@ class StarterTab(Tab):
         adding.pack(side="left")
         ttk.Button(buttons, text="Edit...", command=self.edit_deck).pack(side="left", padx=2)
         ttk.Button(buttons, text="Remove", command=self.remove_deck).pack(side="left")
-        right = ttk.Frame(self)
+        right = ttk.Frame(written)
         right.pack(side="left", fill="both", expand=True, padx=(8, 0))
         top = ttk.Frame(right)
         top.pack(fill="x")
@@ -2321,6 +2332,15 @@ class StarterTab(Tab):
     def refresh(self):
         self.fill_list()
         self.fill()
+        self.pools.index = 0
+        self.pools.fill()
+        # The page the mod uses: its pools when it weights some and writes no deck.
+        if starter_pools.state(self.project) and not self.decks():
+            self.pages.select(self.pools)
+
+    @staticmethod
+    def type_name(card) -> str:
+        return type_label(card.type)
 
     def fill_list(self):
         if self.project is None:
@@ -2624,6 +2644,7 @@ class ModInfoTab(Tab):
                             if self.shown_other() else "")):
             box.delete("1.0", "end")
             box.insert("1.0", value)
+        self._shown = json.loads(json.dumps(self.shown_other()))     # what the box shows, as it reads back
         source = self.project.source_dir
         self.folder.configure(text=f"Folder: {source}" if source else "Not saved yet")
         self.status.configure(text="")
@@ -2645,8 +2666,7 @@ class ModInfoTab(Tab):
                 raise ValueError("the other keys are a JSON object")
             # The keys the editor writes from its own tabs (manifest.TABLE_KEYS
             # and the like): one typed here would be overwritten on save.
-            reserved = set(other) & (set(manifest.INFO_KEYS) | set(manifest.TABLE_KEYS) |
-                                     {"limits", "guardian_stars"})
+            reserved = set(other) & (set(manifest.INFO_KEYS) | set(manifest.TABLE_KEYS) | set(self.TAB_KEYS))
             if reserved:
                 raise ValueError(f"edit {', '.join(sorted(reserved))} in the editor's own tabs")
         except ValueError as problem:
@@ -2658,12 +2678,20 @@ class ModInfoTab(Tab):
         info.author = self.vars["author"].get()
         info.description = self.description.get("1.0", "end-1c")
         info.settings = settings
-        # "limits" is the Limits tab's (limits_tab.py), "guardian_stars" the
-        # Guardian Stars tab's (guardian_stars_tab.py), not this box's.
-        for key in ("limits", "guardian_stars"):
-            if key in self.project.other:
-                other[key] = self.project.other[key]
-        self.project.other = other
+        # Only what was typed in the box: the keys other tabs keep in the same
+        # place ("limits", "guardian_stars", "starter_pools", a password an
+        # added card's removal took out) stay as those tabs left them, the
+        # box having shown them as they were when it was filled.
+        shown = getattr(self, "_shown", {})
+        merged = dict(self.project.other)
+        for key in set(shown) | set(other):
+            if shown.get(key) != other.get(key):
+                if key in other:
+                    merged[key] = other[key]
+                else:
+                    merged.pop(key, None)
+        self._shown = other
+        self.project.other = merged
         self.status.configure(text="")
         after = (info.id, info.name, info.version, info.author, info.description, info.settings, self.project.other)
         if after != before:
@@ -2902,9 +2930,11 @@ class ModInfoTab(Tab):
         dialog.fields = fields
         return dialog
 
+    TAB_KEYS = ("limits", "guardian_stars", "starter_pools")    # kept in `other`, edited on their tabs
+
     def shown_other(self) -> dict:
-        """The other keys this box shows: all but the Limits and Guardian Stars tabs'."""
-        return {key: value for key, value in self.project.other.items() if key not in ("limits", "guardian_stars")}
+        """The other keys this box shows: all but those other tabs edit."""
+        return {key: value for key, value in self.project.other.items() if key not in self.TAB_KEYS}
 
     def preview(self):
         if self.app.commit_all():

@@ -1253,6 +1253,17 @@ class PasswordTest(unittest.TestCase):
         self.assertEqual(validate.errors(validate.validate(p)), [])
 
 
+
+class DumpsTest(unittest.TestCase):
+    def test_a_number_key_is_written_as_a_string(self):
+        """A card named by its number (two share its name) is a key like any:
+        a long object laid over lines wrote it bare, which no JSON reader
+        takes."""
+        written = manifest.dumps({"starter_pools": [{"draws": 40, "cards": {
+            **{f"Card name number {n}": n for n in range(12)}, 480: 5}}]})
+        self.assertEqual(json.loads(written)["starter_pools"][0]["cards"]["480"], 5)
+
+
 if __name__ == "__main__":
     unittest.main()
 
