@@ -54,6 +54,24 @@ class MapGuiTest(unittest.TestCase):
         self.app.dirty = False
         self.app.destroy()
 
+    def test_a_field_that_does_not_read_is_said(self):
+        """Out of range or not a number: nothing of the place is stored, and
+        the tab says which field (it was kept as it was without a word)."""
+        app, tab = self.app, self.app.map
+        tab.select(13)
+        before = cm.state(app.project).locations[13]
+        tab.vars["distance"].set(40000)
+        self.assertIn("Distance", tab.problems.cget("text"))
+        self.assertEqual(str(tab.problems.cget("style")), "Error.TLabel")
+        self.assertEqual(cm.state(app.project).locations[13].distance, before.distance)
+        tab.vars["distance"].set(before.distance)
+        self.assertNotIn("Not stored", tab.problems.cget("text"))
+        # An exit's flag past the 11 bits the game reads.
+        tab.exit_vars[0]["flag"].set(0x800)
+        self.assertIn("flag", tab.problems.cget("text"))
+        tab.exit_vars[0]["flag"].set(5)
+        self.assertNotIn("Not stored", tab.problems.cget("text"))
+
     def test_edit_drag_save(self):
         app, tab = self.app, self.app.map
         self.assertEqual(tab.tree.item("0", "values")[1], "Place A")

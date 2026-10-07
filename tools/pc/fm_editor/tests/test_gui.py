@@ -1332,6 +1332,51 @@ class GuiTest(GuiCase):
         tab.show(2)
         self.assertTrue(any(b.instate(["!disabled"]) for b in buttons))
 
+    def test_conflicts_check_only_when_shown_and_pool_revert_asks(self):
+        app = self.app
+        app.notebook.select(app.cards)
+        app.update()
+        with mock.patch("fm_editor.validate.validate", return_value=[]) as checked:
+            app.conflicts.refresh()             # as Undo does, the tab not up
+            checked.assert_not_called()
+            self.assertIn("Not checked", app.conflicts.summary.cget("text"))
+            app.show_conflicts()
+            app.update()
+            self.assertEqual(checked.call_count, 1)     # once, not twice
+            app.show_conflicts()
+            self.assertEqual(checked.call_count, 2)
+        # Revert pool asks first, and does nothing to a pool as the disc has it.
+        tab = app.duelists
+        d = 1
+        tab.goto((d, "deck"))
+        card = next(iter(app.project.pools[d]["deck"]))
+        app.project.pools[d]["deck"][card] = 7
+        with mock.patch("fm_editor.tabs.messagebox.askyesno", return_value=False) as asked:
+            tab.revert()
+        asked.assert_called_once()
+        self.assertEqual(app.project.pools[d]["deck"][card], 7)
+        with mock.patch("fm_editor.tabs.messagebox.askyesno", return_value=True):
+            tab.revert()
+        self.assertEqual({c: w for c, w in app.project.pools[d]["deck"].items() if w},
+                         app.project.retail.pools[d]["deck"])
+        with mock.patch("fm_editor.tabs.messagebox.askyesno") as asked:
+            tab.revert()
+        asked.assert_not_called()
+        self.assertEqual(tab.list.set("0", "state"), "not used")
+
+    def test_mod_info_refuses_keys_the_tabs_write(self):
+        app = self.app
+        info = app.info
+        info.refresh()
+        for key in ("packs", "starter", "pack_shop", "fusions", "limits"):
+            info.other.delete("1.0", "end")
+            info.other.insert("1.0", json.dumps({key: []}))
+            self.assertFalse(info.commit(), key)
+        info.other.delete("1.0", "end")
+        info.other.insert("1.0", json.dumps({"text": {"x": 1}}))
+        self.assertTrue(info.commit())
+        self.assertEqual(app.project.other["text"], {"x": 1})
+
     def test_ritual_remove_and_revert(self):
         """Remove recipe on a disc ritual and on an added copy (which would
         otherwise keep its base's), the row still selected; revert."""

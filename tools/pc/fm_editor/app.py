@@ -477,8 +477,10 @@ class App(Editing, tk.Tk):
         return True
 
     def show_conflicts(self):
-        self.notebook.select(self.conflicts)
-        self.conflicts.run()
+        if self.notebook.current() is self.conflicts:
+            self.conflicts.run()
+        else:
+            self.notebook.select(self.conflicts)    # the tab switch checks
 
     def go_to(self, issue):
         target = issue.target

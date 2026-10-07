@@ -1937,7 +1937,10 @@ class DuelistsTab(Tab):
             changed = any({c: w for c, w in self.project.pools[d][p].items() if w} != self.project.retail.pools[d][p]
                           for p in POOLS)
             state = "fixed" if fixed_decks.deck_of(self.project, d) else "changed" if changed else ""
-            self.list.insert("", "end", iid=str(d), values=(d, name, state), tags=("changed",) if state else ())
+            if d == 0 and not state:
+                state = "not used"      # no duel is fought against it
+            self.list.insert("", "end", iid=str(d), values=(d, name, state),
+                             tags=("changed",) if state not in ("", "not used") else ("note",) if state else ())
         self.list.sorting.apply()
         if self.list.exists(str(self.duelist)):
             self.list.selection_set(str(self.duelist))
@@ -2030,7 +2033,14 @@ class DuelistsTab(Tab):
         self.edited()
 
     def revert(self):
-        self.project.revert_pool(self.duelist, self.pool.get())
+        p, d, pool = self.project, self.duelist, self.pool.get()
+        now = {c: w for c, w in p.pools[d][pool].items() if w}
+        if now == p.retail.pools[d][pool]:
+            return
+        if not messagebox.askyesno("Revert pool", f"Put {DUELIST_NAMES[d]}'s {POOL_LABELS.get(pool, pool)} back "
+                                   "as the disc has it? The mod's changes to it are lost.", parent=self):
+            return
+        p.revert_pool(d, pool)
         self.edited()
 
     def goto(self, target):
@@ -2351,8 +2361,10 @@ class ModInfoTab(Tab):
             other = json.loads(other_text) if other_text else {}
             if not isinstance(other, dict):
                 raise ValueError("the other keys are a JSON object")
-            reserved = set(other) & {"id", "name", "version", "author", "description", "settings", "cards",
-                                     "fusions", "equips", "rituals", "drops", "decks", "limits", "guardian_stars"}
+            # The keys the editor writes from its own tabs (manifest.TABLE_KEYS
+            # and the like): one typed here would be overwritten on save.
+            reserved = set(other) & (set(manifest.INFO_KEYS) | set(manifest.TABLE_KEYS) |
+                                     {"limits", "guardian_stars"})
             if reserved:
                 raise ValueError(f"edit {', '.join(sorted(reserved))} in the editor's own tabs")
         except ValueError as problem:
@@ -2427,7 +2439,14 @@ class ConflictsTab(Tab):
         self.run()
 
     def refresh(self):
-        self.run()
+        # Checking reads every installed mod: only when the tab is up (a tab
+        # switch to it checks again), not on every Undo behind it.
+        if self.app.notebook.select() == str(self.page):
+            self.run()
+        else:
+            self.tree.delete(*self.tree.get_children())
+            self.summary.configure(text="Not checked since the last change: open this tab to check",
+                                   style="Hint.TLabel")
 
     def run(self):
         if self.project is None:

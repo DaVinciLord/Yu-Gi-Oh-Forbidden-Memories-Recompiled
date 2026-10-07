@@ -19,6 +19,7 @@ from .widgets import px, scrolled_tree, ui_font
 
 ZOOM = 2
 CANVAS = (cm.SCREEN[0] * ZOOM, cm.SCREEN[1] * ZOOM)
+FLAG_MAX = 0x7FF         # an exit's flag: the game reads 11 bits (campaign_map.check)
 CONFIRM_SCENE = "(enter the place's own scene)"
 CONDITIONS = ("always", "while the flag is set", "while the flag is clear")
 CONDITION_KINDS = ("always", "set", "clear")
@@ -152,7 +153,7 @@ class MapTab(Tab):
             ttk.Combobox(box, textvariable=evar("kind", tk.StringVar), values=CONDITIONS, state="readonly",
                          width=20).grid(row=1, column=2, columnspan=2, sticky="w")
             ttk.Label(box, text="Flag").grid(row=2, column=1, sticky="w")
-            flag = self.spin(box, evar("flag"), 0, 0x7FFF)
+            flag = self.spin(box, evar("flag"), 0, FLAG_MAX)
             flag.grid(row=2, column=2, sticky="w")
             ttk.Label(box, text="Frames").grid(row=3, column=1, sticky="w")
             self.spin(box, evar("steps"), 0, 255, 4).grid(row=3, column=2, sticky="w")
@@ -309,10 +310,12 @@ class MapTab(Tab):
         if self.filling or self.project is None or not cm.available(self.project):
             return
         loc = self.map.locations[self.index].copy()
+        names = {"distance": "Distance", "heading": "Heading", "pitch": "Pitch", "target_x": "Looks at x",
+                 "target_z": "Looks at z", "marker_x": "Marker x", "marker_y": "Marker y"}
         for key in ("distance", "heading", "pitch", "target_x", "target_z", "marker_x", "marker_y"):
             value = self.number(self.vars[key])
             if value is None or not -32768 <= value <= 32767:
-                return
+                return self.refused(f"{names[key]} is a whole number, -32768 to 32767")
             setattr(loc, key, value)
         gate = bool(self.vars["gate"].get())
         loc.gate = (loc.gate or 1) if gate else 0
@@ -342,23 +345,32 @@ class MapTab(Tab):
                     buttons |= bit
             e.buttons = buttons
             flag = self.number(v["flag"])
-            if flag is None or not 0 <= flag <= 0x7FFF:
-                return
+            if flag is None or not 0 <= flag <= FLAG_MAX:
+                return self.refused(f"Exit {n + 1}'s flag is a whole number, 0 to {FLAG_MAX} (the game reads 11 bits)")
             e.condition = cm.condition_value(CONDITION_KINDS[CONDITIONS.index(v["kind"].get())]
                                              if v["kind"].get() in CONDITIONS else "always", flag)
-            for key in ("steps", "x", "y"):
+            for key, name in (("steps", "Frames"), ("x", "arrow x"), ("y", "arrow y")):
                 value = self.number(v[key])
                 if value is None:
-                    return
+                    return self.refused(f"Exit {n + 1}'s {name} is a whole number")
                 setattr(e, key, value)
-            if not 0 <= e.steps <= 255 or not -32768 <= e.x <= 32767 or not -32768 <= e.y <= 32767:
-                return
+            if not 0 <= e.steps <= 255:
+                return self.refused(f"Exit {n + 1}'s Frames is 0 to 255")
+            if not -32768 <= e.x <= 32767 or not -32768 <= e.y <= 32767:
+                return self.refused(f"Exit {n + 1}'s arrow x and y are -32768 to 32767")
             arrow = self.index_of(v["arrow"].get())
             if arrow is not None:
                 e.arrow = arrow
+        self.problems.configure(style="Warning.TLabel")
         self.store(loc)
+        self.show_problems()
         if refill:
             self.after_idle(self.fill_form)
+
+    def refused(self, why):
+        """A field that does not read: nothing of the place is stored until
+        it does, and the tab says which (it was silently kept as it was)."""
+        self.problems.configure(text=f"Not stored: {why}.", style="Error.TLabel")
 
     def store(self, loc):
         if loc == self.map.locations[self.index]:
