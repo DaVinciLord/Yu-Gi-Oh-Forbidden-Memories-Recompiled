@@ -34,12 +34,12 @@ typedef struct {
 
 static const char *const names[LOG_COUNT] = {
     "frames", "disc", "spu", "input", "menu", "memcard", "mods", "model",
-    "duel_effects", "mips_printf", "stub", "state", "clock", "window", "audio"
+    "duel_effects", "mips_printf", "stub", "state", "clock", "window", "audio", "card_layout"
 };
 static const char *const legacy_env[LOG_COUNT] = {
     "MEMORIES_TRACE_FRAMES", "MEMORIES_TRACE_DISC", "MEMORIES_TRACE_SPU", "MEMORIES_TRACE_INPUT",
     "MEMORIES_TRACE_MENU", "MEMORIES_TRACE_MEMCARD", "MEMORIES_TRACE_MODS", "MEMORIES_TRACE_MODEL_MODULES",
-    "MEMORIES_TRACE_DUEL_EFFECTS", "MEMORIES_TRACE_MIPS_PRINTF", NULL, "MEMORIES_TRACE_STATE", NULL, NULL, NULL
+    "MEMORIES_TRACE_DUEL_EFFECTS", "MEMORIES_TRACE_MIPS_PRINTF", NULL, "MEMORIES_TRACE_STATE", NULL, NULL, NULL, NULL
 };
 static volatile uint32_t enabled;
 static SignalRecord signal_ring[SIGNAL_RECORDS];

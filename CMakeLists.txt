@@ -525,6 +525,15 @@ if(BUILD_TESTING)
         target_compile_options(memories_title_config_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
     endif()
     add_test(NAME pc_title_config COMMAND memories_title_config_test)
+    # The mods' "card_layout" key as read (src/pc/cards/card_layout.c):
+    # manifests only, none of the game's own rendering.
+    add_executable(memories_card_layout_test tests/pc/card_layout_test.c src/pc/mods/json.c)
+    target_include_directories(memories_card_layout_test PRIVATE src)
+    target_compile_definitions(memories_card_layout_test PRIVATE MEMORIES_PC)
+    if(NOT MSVC)
+        target_compile_options(memories_card_layout_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(NAME pc_card_layout COMMAND memories_card_layout_test)
     # Card packs (src/pc/cards/packs.c): the reader, the dealer and the
     # golden deals the FM Editor's Simulate is held to (packs_golden.txt).
     add_executable(memories_packs_test tests/pc/packs_test.c src/pc/mods/json.c)

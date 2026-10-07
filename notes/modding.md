@@ -883,6 +883,139 @@ opens. How it is done: [`src/pc/platform/title_menu.c`](../src/pc/platform/title
 the labels in `menu_label.c`; the manifest is read by `title_config.c` and
 checked by `tests/pc/title_config_test.c`.
 
+## Card layout: repositioning or hiding the big-card display
+
+A mod may change where the elements of the "big card" display -- the card
+viewer, and every other screen that shows one full card -- sit, or leave
+some of them out, with a `"card_layout"` object, no code needed:
+
+```json
+"card_layout": {
+    "frame": {
+        "monster": {"image": "anime_frame_monster.png", "width": 140, "height": 196},
+        "magic": {"image": "anime_frame_magic.png", "width": 140, "height": 196},
+        "trap": {"image": "anime_frame_trap.png", "width": 140, "height": 196},
+        "ritual": {"image": "anime_frame_ritual.png", "width": 140, "height": 196},
+        "orange": {"image": "anime_frame_orange.png", "width": 140, "height": 196}
+    },
+    "art": {"x": 4, "y": 3, "width": 134, "height": 138},
+    "attribute": {"x": 114, "y": 149},
+    "atk": {"x": 38, "y": 178},
+    "def": {"x": 104, "y": 178},
+    "stars": {"x": 59, "y": 153},
+    "spell": {
+        "art": {"x": 4, "y": 3, "width": 133, "height": 138},
+        "icon": {"x": 62, "y": 163}
+    }
+}
+```
+
+`attribute`/`spell`'s `icon` give a position but no `width`/`height`: those
+frames cut no hole for them, so they draw at native size. Leave `attribute`
+out entirely, though, and it inherits retail's title-plate spot -- now
+covered by full-bleed's bigger art -- so it ends up hidden; giving it a
+position in the stat band keeps it clear of `art`'s own rect.
+
+`stars`'s `x`/`y` is the row's *centre*, like `atk`/`def`'s box centre
+above, not retail's right-anchored first-star position: a card can carry
+up to 12 stars at a fixed 9px each, and `func_80028B08.c` centres however
+many a card has around this point so a wide row never runs past the frame.
+
+Retail draws a small frame with a title plate, the card's picture at its
+own fixed size, and ATK/DEF stacked under a separate plaque -- none of
+which `"card_layout"` can change on its own. What it does is answer a mod's
+own `full_bleed` setting (a `bool` the mod declares, as every setting is):
+while that setting is on, the frame and title plate are left out, and the
+rest move to the place given, in the same pixel neighbourhood retail draws
+them in (`x`/`y`, with `width`/`height` on `art` and `attribute` stretching
+the picture there instead of drawing it at its own size). Any key left out
+-- the whole object included -- keeps retail's own place; a mod that only
+sets `full_bleed` and gives no positions gets retail's own layout with
+nothing hidden, which is a no-op, not a half-finished look. The description
+box is always shown -- its own backdrop panel is on screen either way, so
+there is nothing to gain by leaving its text out.
+
+`frame` names a PNG per card kind (`image`, relative to the mod's directory,
+as a `title` mod's pictures are), drawn as one textured quad behind
+everything else, at `width`/`height` (140x196 with neither given) --
+monster's own key, and `magic`/`trap`/`ritual`/`purple`/`orange`
+(`cards.h`'s `CARD_FRAME_*`, the same six a card's own explicit frame
+colour picks from -- `Cards_FrameColor`, read whatever a card's real type
+is). A kind with no key of its own falls back to `monster`'s frame, not
+none -- a mod that has only drawn one frame still gets a frame for every
+kind, the same "missing stays retail-shaped, not half-finished" rule the
+rest of this object follows. With no `frame` key at all, nothing is drawn
+where the retail frame was, which is a deliberate, supported look (a mod may want the art
+and stats floating with no backing at all). The PNG is stretched to the
+texture's own resolution regardless of its native size, the same rule a
+`title` mod's `image` follows.
+
+Whatever size the source art is, it lands on a fixed 177x254 texture
+(`src/pc/cards/card_layout_art.c`'s `FRAME_W`/`FRAME_H`, the largest size
+POLY_GT4's own UV coordinates can address) -- 919x1319, the size
+`tools/pc/hd_recipes/anime_frame_*.png` are drawn at, is already a ~27x
+reduction in area by the time it's on screen. That's a plain box-filter
+average, which is lossless of whatever contrast is actually there (not a
+quantizer bug -- checked by reimplementing the exact algorithm and by
+running a bold checkerboard through the same pipeline, which stayed
+perfectly crisp), but low-amplitude texture -- fine marbling, a soft
+gradient a few pixels wide -- is exactly what that average erases first,
+no matter how good it looks at full size. Draw frame art bolder than
+looks necessary up close; `anime_frame_*.png` needed a contrast pass
+(HSV-space unsharp mask plus a touch of marbling) after the first version
+read as a flat colour once actually in the game.
+
+Magic, trap, ritual and equip cards have no level, ATK or DEF to draw --
+`art`/`atk`/`def`/`stars` keep monster's (and purple's and orange's, the
+monster frame recoloured) layout, and `CARD_LAYOUT_ART`/`CARD_LAYOUT_
+ATTRIBUTE` instead answer from `spell`'s `art`/`icon` for those four kinds:
+a different place for the same elements, not different ones --
+func_80028B08.c still draws retail's own art/attribute textures there,
+unchanged, just stretched into `spell`'s box instead of `art`'s/
+`attribute`'s. Retail's elemental-attribute texture is not meaningful for
+a non-monster card, so what actually shows in `icon`'s box today is
+whatever that read happens to be -- a mod wanting something deliberate
+there (a card-kind badge, say) has nowhere resident to read one from yet;
+a Build Deck badge sheet and a duel-resident word texture were both tried
+and backed out (wrong VRAM residency and wrong shape, respectively).
+
+Only one mod's `card_layout` is read at a time -- the last applied one that
+declares it, the same "a later mod wins" rule other singular keys follow --
+so two layout mods together is the last one's layout, not a merge of both.
+Forbidden Memories HD carries this as its own `full_bleed` setting, no code
+of its own needed: `tools/pc/hd_assets_pack.py`'s `--anime-frame-<kind>`
+flags default to `tools/pc/hd_recipes/anime_frame_<kind>.png` if present,
+so a normal build picks this up with nothing extra to pass. A kind with no
+art of its own yet (`ritual`, `orange`) borrows another's at read time. A
+model for writing another: a pure data mod, no `library`, with one
+`full_bleed` setting, a frame per kind and the positions above.
+
+**Known limitation**: the frame image itself does not render in the duel's
+own card viewer (opened from the hand) -- `CardLayout_DrawFrame` submits
+through a raw depth value that bypasses this codebase's usual depth-sorting,
+so it silently draws at the wrong depth there. Everything else (art, stats,
+attribute, description) renders correctly in every viewer; only the
+decorative backdrop is affected, and only in that one screen.
+
+How it is done: the three retail call sites each ask one place
+(`src/pc/cards/card_layout.c`'s `CardLayout_Get`/`CardLayout_FullBleed`/
+`CardLayout_IsSpell`) for an element's place instead of carrying a mod's
+logic themselves -- `src/game/func_80028B08.c` (title, stats, stars,
+attribute, art, frame), `src/game/func_800283F4.c` (the description box,
+always left visible today) and `src/game/duel_effect_resource_setup.c`'s
+`func_800291E0` (the frame's own list membership). Each of the first two
+call `CardLayout_SetCard` with the card it is about to draw before asking
+for anything else -- its frame kind is `Cards_FrameColor` if a mod gave the
+card one (whatever its real type), else bucketed from `Cards_Type` (equip
+takes magic's), monster with no card named yet. None of those three change
+at all with no `card_layout` mod applied -- `CardLayout_Get` answers with
+retail's own constants, byte for byte. The frame texture is decoded once
+into a VRAM bank by `src/pc/cards/card_layout_art.c`, the same shape
+`src/pc/cards/star_icons.c` and `src/pc/text/glyphs.c` use for theirs,
+re-decoding whenever `CardLayout_FramePath` answers a different file --
+which a kind change already does, nothing further to invalidate. The
+manifest key itself is checked by `tests/pc/card_layout_test.c`.
+
 ## Rules: fusions, equips, rituals, drops, decks and more
 
 A mod may change what fuses into what, what an equip card may equip, what a
