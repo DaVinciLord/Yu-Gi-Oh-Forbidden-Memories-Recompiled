@@ -160,11 +160,26 @@ typedef struct {
 } SavedNameColor;
 static SavedNameColor saved_colors[TRACKED_BOXES];
 
-/* Colour declarations moved to the core manifest framework.  Keep this
- * module's drop-odds machinery, but never revive its old private INI hook
- * for a profile that still contains the former setting. */
-static int legacy_colors_enabled(void) { return 0; }
-
+/*
+ * The core card_text_colors system now runs inside func_80037DA4().
+ *
+ * Our hook deliberately wraps that implementation:
+ *
+ *   1. restore our previous name override
+ *   2. call the game's original func_80037DA4()
+ *      - CardTextColors_Restore() runs there
+ *      - CardTextColors_Apply() applies manifest colours
+ *   3. for a card-name command, save whatever colour the core selected
+ *   4. apply the rarity/name colour on top
+ *
+ * Therefore card_name_color only overrides the NAME while it is being
+ * rendered. Description and guardian-star colours from card_text_colors
+ * remain untouched.
+ */
+static int legacy_colors_enabled(void)
+{
+    return host && host->setting(host, "rarity_name_colors", 0);
+}
 /* ---- small helpers ------------------------------------------------------- */
 
 /* Compare letters and digits only, ignoring case, spaces and punctuation, so
