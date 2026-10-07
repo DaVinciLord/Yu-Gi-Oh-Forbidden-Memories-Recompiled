@@ -843,8 +843,13 @@ into isolated folders and play real duels (no changes to your saves or mods):
     python3 tests/pc/trap_effects_runtime.py --hard-mode
     python3 tests/pc/editor_mods_runtime.py
     python3 tests/pc/editor_mods_runtime.py --hard-mode
+    python3 tests/pc/editor_round_trip_runtime.py
 
-They cover every monster type, converted equips and rituals, all 33 retail
+The last makes a mod through every tab's own buttons and dialogs (cards,
+art, fusions, equips, rituals, duelists, starter decks, limits, Guardian
+Stars, packs, the map, a setting), exports it, and starts a new game into
+a duel on it: the game must read each part and note nothing against it.
+The others cover every monster type, converted equips and rituals, all 33 retail
 magic effects, trap thresholds and special triggers, and CPU spell decisions
 and outcomes compared with retail after saving and reopening the mod. Pass
 `--out <folder>` to retain their logs. The AI adapter's native regression

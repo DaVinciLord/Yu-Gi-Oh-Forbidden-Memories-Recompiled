@@ -1187,6 +1187,7 @@ class CardsTab(Tab):
         self.current = None
         self.tree.selection_set(str(cid))
         self.tree.see(str(cid))
+        self.show(cid)                  # now, not when the list's selection event comes round
 
     def remove_card(self):
         cid = self.current
