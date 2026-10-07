@@ -71,7 +71,8 @@ def fixed_font(size: int = 10):
 
 
 class WrapLabel(ttk.Label):
-    """A label whose text wraps to the room the window shows it, so a long
+    """For a hint across a whole tab (not one beside other panes: it takes
+    the room to the page's right edge). A label whose text wraps to the room the window shows it, so a long
     hint never asks the window to be wider: it wraps at the right edge of
     the scrolled page (or form) it is in, or of the window, however wide
     the page's content is (that content is as wide as it asks, which a

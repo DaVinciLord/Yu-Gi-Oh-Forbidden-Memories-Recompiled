@@ -1407,6 +1407,76 @@ class GuiTest(GuiCase):
         asked.assert_not_called()
         self.assertEqual(tab.list.set("0", "state"), "not used")
 
+    def test_mod_info_settings_list(self):
+        """Settings by a list and a dialog, written into the JSON (and the
+        mod) at once; a key unknown to the dialog stays; a setting entries
+        use asks before it goes."""
+        app, info = self.app, self.app.info
+        p = app.project
+        info.refresh()
+        dialog = info.add_setting()
+        dialog.fields["key"].set("hard")
+        dialog.fields["label"].set("Hard fusions")
+        dialog.ok()
+        self.assertEqual(p.info.settings, [{"key": "hard", "label": "Hard fusions", "type": "bool", "default": 0}])
+        self.assertTrue(app.dirty)
+        # A choice: two choices at least, its default one of them.
+        dialog = info.add_setting()
+        dialog.fields["key"].set("mode")
+        dialog.fields["type"].set("choice")
+        dialog.fields["choices"].insert("1.0", "Classic")
+        dialog.ok()
+        self.assertIn("two choices", dialog.error.cget("text"))
+        dialog.fields["choices"].insert("end", "\nCustom")
+        dialog.fields["default"].set("5")
+        dialog.ok()
+        self.assertIn("number of a choice", dialog.error.cget("text"))
+        dialog.fields["default"].set("1")
+        dialog.ok()
+        self.assertEqual(p.info.settings[1]["choices"], ["Classic", "Custom"])
+        self.assertEqual(info.settings_tree.set("1", "default"), "Custom")
+        # The same key twice is refused.
+        dialog = info.add_setting()
+        dialog.fields["key"].set("hard")
+        dialog.ok()
+        self.assertIn("another setting", dialog.error.cget("text"))
+        dialog.destroy()
+        # Edited as an int; a key the dialog has no field for is kept.
+        p.info.settings[0]["later_key"] = 7
+        info.refresh()
+        info.settings_tree.selection_set("0")
+        dialog = info.edit_setting()
+        dialog.fields["type"].set("int")
+        dialog.fields["min"].set("10")
+        dialog.fields["max"].set("5")
+        dialog.ok()
+        self.assertIn("Lowest", dialog.error.cget("text"))
+        dialog.fields["max"].set("300")
+        dialog.fields["suffix"].set("%")
+        dialog.ok()
+        self.assertEqual(p.info.settings[0], {"key": "hard", "label": "Hard fusions", "type": "int", "default": 0,
+                                              "later_key": 7, "min": 10, "max": 300, "suffix": "%"})
+        # Up and Down; Remove asks when an entry is switched by it.
+        info.settings_tree.selection_set("1")
+        info.move_setting(-1)
+        self.assertEqual([s["key"] for s in p.info.settings], ["mode", "hard"])
+        p.kept["fusions"].append({"with": [1, 2], "result": 3, "setting": "hard"})
+        info.fill_settings()
+        self.assertEqual(info.settings_tree.set("1", "used"), "1 entry")
+        info.settings_tree.selection_set("1")
+        with mock.patch("fm_editor.tabs.messagebox.askyesno", return_value=False) as asked:
+            info.remove_setting()
+        asked.assert_called_once()
+        self.assertEqual(len(p.info.settings), 2)
+        info.settings_tree.selection_set("0")
+        info.remove_setting()               # "mode" switches nothing: no question
+        self.assertEqual([s["key"] for s in p.info.settings], ["hard"])
+        # The JSON page is the same list; one that does not read is said.
+        info.settings.delete("1.0", "end")
+        info.settings.insert("1.0", "[{")
+        info.fill_settings()
+        self.assertIn("does not read", info.settings_note.cget("text"))
+
     def test_mod_info_refuses_keys_the_tabs_write(self):
         app = self.app
         info = app.info

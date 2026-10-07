@@ -4,6 +4,7 @@ edit."""
 from __future__ import annotations
 
 import json
+import re
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -2528,10 +2529,34 @@ class ModInfoTab(Tab):
         self.folder.grid(row=5, column=1, sticky="w")
         boxes = ttk.Frame(self)
         boxes.pack(fill="both", expand=True, pady=(8, 0))
-        left = ttk.LabelFrame(boxes, text="Settings (JSON list; see notes/modding.md)", padding=4)
+        left = ttk.LabelFrame(boxes, text="Settings: the player's options for this mod (Game > Mods)", padding=4)
         left.pack(side="left", fill="both", expand=True)
-        self.settings = tk.Text(left, width=50, height=14, wrap="none", font=fixed_font())
+        # A list to edit them by, and the JSON they are (what is saved, and
+        # where a key the list has no field for is written by hand).
+        self.settings_pages = ttk.Notebook(left)
+        self.settings_pages.pack(fill="both", expand=True)
+        page = ttk.Frame(self.settings_pages, padding=4)
+        self.settings_pages.add(page, text="List")
+        frame, self.settings_tree = scrolled_tree(page, [("key", "Key"), ("label", "Label"), ("type", "Type"),
+                                                         ("default", "Default"), ("used", "Used by")],
+                                                  [110, 150, 60, 70, 110], 10)
+        frame.pack(fill="both", expand=True)
+        self.settings_tree.bind("<Double-1>", lambda e: self.edit_setting())
+        self.settings_tree.bind("<Delete>", lambda e: self.remove_setting())
+        line = ttk.Frame(page)
+        line.pack(fill="x", pady=(4, 0))
+        for text, command in (("Add...", self.add_setting), ("Edit...", self.edit_setting),
+                              ("Remove", self.remove_setting), ("Up", lambda: self.move_setting(-1)),
+                              ("Down", lambda: self.move_setting(1))):
+            ttk.Button(line, text=text, command=command).pack(side="left", padx=(0, 4))
+        # A half of the tab: a fixed wrap (WrapLabel wraps at the page's edge).
+        self.settings_note = ttk.Label(page, style="Hint.TLabel", wraplength=px(self, 480), justify="left")
+        self.settings_note.pack(anchor="w", pady=(4, 0))
+        page = ttk.Frame(self.settings_pages, padding=4)
+        self.settings_pages.add(page, text="JSON")
+        self.settings = tk.Text(page, width=50, height=14, wrap="none", font=fixed_font())
         self.settings.pack(fill="both", expand=True)
+        self.settings_pages.bind("<<NotebookTabChanged>>", lambda e: self.fill_settings())
         right = ttk.LabelFrame(boxes, text="Other mod.json keys, kept as written (data, text, textures, audio, "
                                            "requires...)", padding=4)
         right.pack(side="left", fill="both", expand=True, padx=(8, 0))
@@ -2559,6 +2584,7 @@ class ModInfoTab(Tab):
         source = self.project.source_dir
         self.folder.configure(text=f"Folder: {source}" if source else "Not saved yet")
         self.status.configure(text="")
+        self.fill_settings()
 
     def commit(self):
         if self.project is None:
@@ -2601,6 +2627,233 @@ class ModInfoTab(Tab):
             self.app.changed()
         self.applied()
         return True
+
+    # --- settings, as a list ------------------------------------------------------
+
+    SETTING_TYPES = ("bool", "int", "choice", "key")
+
+    def typed_settings(self):
+        """The settings as the JSON box has them; None when it does not read."""
+        text = self.settings.get("1.0", "end").strip()
+        try:
+            settings = json.loads(text) if text else []
+        except ValueError:
+            return None
+        return settings if isinstance(settings, list) else None
+
+    def setting_users(self) -> dict:
+        """Setting key -> how many of the mod's entries it switches ("setting")."""
+        counts = {}
+
+        def walk(value):
+            if isinstance(value, dict):
+                key = value.get("setting")
+                if isinstance(key, str):
+                    counts[key] = counts.get(key, 0) + 1
+                for item in value.values():
+                    walk(item)
+            elif isinstance(value, list):
+                for item in value:
+                    walk(item)
+        try:
+            built = manifest.build(self.project)
+        except Exception:       # a half-made form elsewhere: count what the project holds
+            built = {}
+        built.pop("settings", None)
+        walk(built)
+        return counts
+
+    def fill_settings(self):
+        if self.project is None:
+            return
+        tree = self.settings_tree
+        chosen = tree.selection()
+        tree.delete(*tree.get_children())
+        settings = self.typed_settings()
+        if settings is None:
+            self.settings_note.configure(text="The JSON page does not read as a list: fix it there.",
+                                         style="Error.TLabel")
+            return
+        users = self.setting_users()
+        for i, setting in enumerate(settings):
+            if not isinstance(setting, dict):
+                tree.insert("", "end", iid=str(i), values=("?", "(not an object: edit the JSON)", "", "", ""))
+                continue
+            kind = setting.get("type", "int")
+            default = setting.get("default", 0)
+            if kind == "bool":
+                default = "on" if default else "off"
+            elif kind == "choice" and isinstance(setting.get("choices"), list) and \
+                    isinstance(default, int) and 0 <= default < len(setting["choices"]):
+                default = setting["choices"][default]
+            used = users.get(setting.get("key"), 0)
+            tree.insert("", "end", iid=str(i), values=(
+                setting.get("key", ""), setting.get("label", ""), kind, default,
+                f"{used} {'entry' if used == 1 else 'entries'}" if used else ""))
+        kept = [iid for iid in chosen if tree.exists(iid)]
+        if kept:
+            tree.selection_set(kept)
+        self.settings_note.configure(
+            style="Hint.TLabel",
+            text="An entry of fusions, equips or rituals with \"setting\": its key is used only while that "
+                 "setting is on. Code mods read them with host->setting.")
+
+    def write_settings(self, settings, select=None):
+        """The list into the JSON box, and into the mod."""
+        self.settings.delete("1.0", "end")
+        if settings:
+            self.settings.insert("1.0", json.dumps(settings, indent=2, ensure_ascii=False))
+        self.commit()
+        self.fill_settings()
+        if select is not None and self.settings_tree.exists(str(select)):
+            self.settings_tree.selection_set(str(select))
+            self.settings_tree.see(str(select))
+
+    def chosen_setting(self):
+        selection = self.settings_tree.selection()
+        return int(selection[0]) if selection else None
+
+    def add_setting(self):
+        settings = self.typed_settings()
+        if settings is None:
+            return None
+        taken = {s.get("key") for s in settings if isinstance(s, dict)}
+        n = 1
+        while f"option{n}" in taken:
+            n += 1
+        return self.setting_dialog("Add a setting", {"key": f"option{n}", "label": f"Option {n}", "type": "bool",
+                                                     "default": 0}, None)
+
+    def edit_setting(self):
+        settings, i = self.typed_settings(), self.chosen_setting()
+        if settings is None or i is None or not isinstance(settings[i], dict):
+            return None
+        return self.setting_dialog("Setting", dict(settings[i]), i)
+
+    def remove_setting(self):
+        settings, i = self.typed_settings(), self.chosen_setting()
+        if settings is None or i is None:
+            return
+        key = settings[i].get("key") if isinstance(settings[i], dict) else None
+        used = self.setting_users().get(key, 0)
+        if used and not messagebox.askyesno("Remove setting", f"{used} of the mod's entries name \"{key}\"; "
+                                            "without the setting they are never used. Remove it?", parent=self):
+            return
+        settings.pop(i)
+        self.write_settings(settings, min(i, len(settings) - 1))
+
+    def move_setting(self, step):
+        settings, i = self.typed_settings(), self.chosen_setting()
+        if settings is None or i is None or not 0 <= i + step < len(settings):
+            return
+        settings[i], settings[i + step] = settings[i + step], settings[i]
+        self.write_settings(settings, i + step)
+
+    def setting_dialog(self, title, setting, index):
+        """A setting's fields; keys the dialog has none for stay as written."""
+        fields = {}
+        rows = {}
+
+        def build(dialog, body):
+            def row(r, key, label, widget):
+                ttk.Label(body, text=label).grid(row=r, column=0, sticky="nw", pady=2)
+                widget.grid(row=r, column=1, sticky="we", pady=2)
+                rows[key] = (body.grid_slaves(row=r, column=0)[0], widget)
+            for r, (key, label) in enumerate((("key", "Key"), ("label", "Label"))):
+                fields[key] = tk.StringVar(value=str(setting.get(key, "")))
+                row(r, key, label, ttk.Entry(body, textvariable=fields[key], width=32))
+            fields["type"] = tk.StringVar(value=setting.get("type", "int"))
+            kinds = ttk.Combobox(body, textvariable=fields["type"], values=self.SETTING_TYPES, state="readonly",
+                                 width=10)
+            row(2, "type", "Type", kinds)
+            fields["default"] = tk.StringVar(value=str(setting.get("default", 0)))
+            row(3, "default", "Default", ttk.Entry(body, textvariable=fields["default"], width=12))
+            for r, key, label in ((4, "min", "Lowest"), (5, "max", "Highest"), (6, "step", "Step"),
+                                  (7, "suffix", "Shown after it")):
+                fields[key] = tk.StringVar(value=str(setting.get(key, "")))
+                row(r, key, label, ttk.Entry(body, textvariable=fields[key], width=12))
+            choices = tk.Text(body, width=32, height=4, wrap="none")
+            choices.insert("1.0", "\n".join(str(c) for c in setting.get("choices", []) or []))
+            fields["choices"] = choices
+            row(8, "choices", "Choices (a line each)", choices)
+            fields["description"] = tk.StringVar(value=str(setting.get("description", "")))
+            row(9, "description", "Help", ttk.Entry(body, textvariable=fields["description"], width=40))
+            fields["restart"] = tk.BooleanVar(value=bool(setting.get("restart")))
+            ttk.Checkbutton(body, text="Takes effect only after a restart", variable=fields["restart"]).grid(
+                row=10, column=1, sticky="w", pady=2)
+            hint = ttk.Label(body, style="Hint.TLabel", justify="left")
+            hint.grid(row=11, column=0, columnspan=2, sticky="w", pady=(6, 0))
+
+            def kind_changed(*_):
+                kind = fields["type"].get()
+                for key in ("min", "max", "step", "suffix"):
+                    for w in rows[key]:
+                        w.grid() if kind == "int" else w.grid_remove()
+                for w in rows["choices"]:
+                    w.grid() if kind == "choice" else w.grid_remove()
+                hint.configure(text={"bool": "Default: 1 is on, 0 off.",
+                                     "int": "A whole number from Lowest to Highest (0-100 when left empty).",
+                                     "choice": "Default: the number of the choice, from 0.",
+                                     "key": "Default: a pad-button mask (Select 1 ... Square 32768)."}[kind])
+            fields["type"].trace_add("write", kind_changed)
+            kind_changed()
+
+        def ok(dialog):
+            key = fields["key"].get().strip()
+            if not re.fullmatch(r"[A-Za-z0-9_-]{1,63}", key) or key == "order":
+                return "the key is 1-63 letters, digits, _ or - (not \"order\")"
+            settings = self.typed_settings()
+            if settings is None:
+                return "the JSON page does not read as a list: fix it there first"
+            if any(isinstance(s, dict) and s.get("key") == key for n, s in enumerate(settings) if n != index):
+                return f"another setting has the key \"{key}\""
+            kind = fields["type"].get()
+            out = dict(setting)
+            out.update(key=key, label=fields["label"].get().strip() or key, type=kind)
+            for name in ("default", "min", "max", "step"):
+                text = fields[name].get().strip()
+                if name != "default" and (kind != "int" or not text):
+                    out.pop(name, None)
+                    continue
+                try:
+                    out[name] = int(text or "0")
+                except ValueError:
+                    return f"{name} is a whole number"
+            choices = [line.strip() for line in fields["choices"].get("1.0", "end").splitlines() if line.strip()]
+            if kind == "choice":
+                if len(choices) < 2:
+                    return "a choice setting has two choices at least"
+                if not 0 <= out["default"] < len(choices):
+                    return f"the default is the number of a choice, 0 to {len(choices) - 1}"
+                out["choices"] = choices
+            else:
+                out.pop("choices", None)
+            if kind == "int" and fields["suffix"].get().strip():
+                out["suffix"] = fields["suffix"].get().strip()
+            else:
+                out.pop("suffix", None)
+            if kind == "int" and "min" in out and "max" in out and out["min"] > out["max"]:
+                return "Lowest is more than Highest"
+            for name in ("description",):
+                text = fields[name].get().strip()
+                if text:
+                    out[name] = text
+                else:
+                    out.pop(name, None)
+            if fields["restart"].get():
+                out["restart"] = True
+            else:
+                out.pop("restart", None)
+            if index is None:
+                settings.append(out)
+            else:
+                settings[index] = out
+            self.write_settings(settings, len(settings) - 1 if index is None else index)
+            return None
+
+        dialog = FormDialog(self, title, build, ok)
+        dialog.fields = fields
+        return dialog
 
     def shown_other(self) -> dict:
         """The other keys this box shows: all but the Limits and Guardian Stars tabs'."""
