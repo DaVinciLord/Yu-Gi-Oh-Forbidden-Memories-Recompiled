@@ -1,4 +1,0 @@
-interface:
-  display_name: "FM Guest ABI"
-  short_description: "Diagnose FM guest/native pointer and ABI boundaries"
-  default_prompt: "Use $fm-arm64-guest-abi to diagnose and validate this FM guest/native boundary."

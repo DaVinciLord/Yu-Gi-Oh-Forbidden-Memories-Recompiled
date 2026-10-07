@@ -50,7 +50,7 @@ editors write, is fine):
 |---|---|
 | `id` | the name the settings and the user directory use; the directory's name when it is left out |
 | `name` | what the Mods window shows |
-| `library` | the mod's code: an object file relative to its directory (a subdirectory is fine), `.o` added when the name has no `.` anywhere in it (`rules` is `rules.o`, `rules.v2` stays `rules.v2`); `build_mod.py` writes it under the same name. The same file serves every system. Leave it out for a mod that is only data |
+| `library` | the mod's code: an object file relative to its directory (a subdirectory is fine), `.o` added when the name has no `.` anywhere in it (`rules` is `rules.o`, `rules.v2` stays `rules.v2`); `build_mod.py` writes it under the same name. Linux and 32-bit Windows share one `.o`; macOS ARM64 needs a separately built `.dylib` (see [Native macOS ARM64 code mods](#native-macos-arm64-code-mods)). Leave it out for a mod that is only data |
 | `enabled` | whether the mod is applied the first time the game sees it |
 | `restart` | whether changing it needs a fresh process. Data overrides default to `true`, because the game reads most of what they change while it starts; code mods and `audio` default to `false` |
 | `legacy_setting` | an older settings key to read the player's choice from, once |
@@ -1113,7 +1113,10 @@ line and in order (`pc_mods_overlap`, `test_overlaps.py`).
 ## Code mods
 
 A code mod is **one object file**, `<library>.o`, that runs on both the
-Linux and the Windows game. Nobody builds a mod twice. Both games are 32-bit
+Linux and the 32-bit Windows game. macOS ARM64 needs a separate
+`<library>.dylib` build; mod authors supporting all three platforms must
+ship both files. See [Native macOS ARM64 code mods](#native-macos-arm64-code-mods)
+for the build command and manifest selection. Both i386 games are 32-bit
 x86 code with the same calling convention, so the machine code is the same;
 the game reads the file with its own loader
 ([`src/pc/mods/object_loader.c`](../src/pc/mods/object_loader.c)) rather than

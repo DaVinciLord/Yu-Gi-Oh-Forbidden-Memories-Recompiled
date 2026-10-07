@@ -74,6 +74,27 @@ int main(void)
         reader.image_size--;
         assert(!Memories_StateIntegrity(&reader));
     }
+    {
+        const char *tags[] = {"", "12345678901234", "123456789012345",
+                              "1234567890123456", "12345678901234567890"};
+        for (size_t i = 0; i < sizeof(tags) / sizeof(tags[0]); ++i) {
+            uint8_t tagged[36];
+            MemoriesState writer = {0, state_file(), NULL, 0};
+            MemoriesState reader = {1, NULL, tagged, sizeof(tagged)};
+            size_t tag_length = strlen(tags[i]);
+            size_t stored = tag_length < 15 ? tag_length : 15;
+            assert(writer.file);
+            Memories_StateWrite(&writer, zero, sizeof(zero));
+            Memories_StateChunk(&writer, tags[i], NULL, 0);
+            rewind(writer.file);
+            assert(fread(tagged, 1, sizeof(tagged), writer.file) == sizeof(tagged));
+            fclose(writer.file);
+            assert(!memcmp(tagged + 16, tags[i], stored));
+            for (size_t at = stored; at < 16; ++at) assert(tagged[16 + at] == 0);
+            assert(Memories_StateFindChunk(&reader, tags[i], &size) == tagged + 36);
+            assert(size == 0);
+        }
+    }
     puts("State chunks: round trip, field ordering, truncation, layout mismatch and overflow passed");
     return 0;
 }

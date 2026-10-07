@@ -56,8 +56,12 @@ const uint8_t *Memories_StateFindChunk(const MemoriesState *state, const char *t
     size_t at = 16;
     if (!state || !tag || !size || !state->image || state->image_size < at) return NULL;
     char padded[16];
+    size_t tag_length = 0;
+    while (tag_length < sizeof(padded) - 1 && tag[tag_length] != '\0') {
+        ++tag_length;
+    }
     memset(padded, 0, sizeof(padded));
-    strncpy(padded, tag, sizeof(padded) - 1);
+    memcpy(padded, tag, tag_length);
     while (at <= state->image_size && state->image_size - at >= 20) {
         uint32_t length;
         memcpy(&length, state->image + at + 16, 4);
@@ -88,9 +92,13 @@ int Memories_StateChunk(MemoriesState *state, const char *tag, const MemoriesSta
     if (!state->loading && !state->file) { errno = EINVAL; return 0; }
     if (!state->loading) {
         char padded[16];
+        size_t tag_length = 0;
+        while (tag_length < sizeof(padded) - 1 && tag[tag_length] != '\0') {
+            ++tag_length;
+        }
         uint32_t length = (uint32_t)total;
         memset(padded, 0, sizeof(padded));
-        strncpy(padded, tag, sizeof(padded) - 1);
+        memcpy(padded, tag, tag_length);
         Memories_StateWrite(state, padded, 16);
         Memories_StateWrite(state, &length, 4);
         for (i = 0; i < count; i++) {

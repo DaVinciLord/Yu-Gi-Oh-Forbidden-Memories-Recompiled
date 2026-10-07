@@ -1,4 +1,0 @@
-interface:
-  display_name: "FM ARM64 Validation"
-  short_description: "Verify FM gameplay, saves and visible HD rendering"
-  default_prompt: "Use $fm-arm64-validation to validate this FM scenario with the current binary."
