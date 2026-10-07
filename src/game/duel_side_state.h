@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef MEMORIES_DECOMP_DUEL_SIDE_STATE_H
 #define MEMORIES_DECOMP_DUEL_SIDE_STATE_H
 
@@ -104,7 +105,7 @@ s8 Cheats_CardViewMode(const DuelSideState *side);
 #ifdef D_8009B1D5_IS_AGGREGATE
 extern u8 D_8009B1D5[];
 #elif defined(D_8009B1D5_IS_ABSOLUTE_SCALAR)
-extern u8 D_8009B1D5 __attribute__((section(".data")));
+extern u8 D_8009B1D5 PSX_SECTION(".data");
 #elif defined(D_8009B1D5_IS_VOLATILE)
 extern volatile u8 D_8009B1D5;
 #else
@@ -193,7 +194,7 @@ extern u8 *G32 D_8009B22C;
  * main_run_two_player_duel_setup.c and src/game/main_init.c reach it through
  * %hi/%lo and define the .data arm. */
 #ifdef D_8009B230_IN_DATA
-extern u16 D_8009B230 __attribute__((section(".data")));
+extern u16 D_8009B230 PSX_SECTION(".data");
 #else
 extern u16 D_8009B230;
 #endif
@@ -212,12 +213,12 @@ extern u16 D_8009B230;
  * declarations; main_run_two_player_duel_setup.c reaches both through %hi/%lo
  * defines the two .data arms, one control each. */
 #ifdef D_8009B234_IN_DATA
-extern u16 D_8009B234 __attribute__((section(".data")));
+extern u16 D_8009B234 PSX_SECTION(".data");
 #else
 extern u16 D_8009B234;
 #endif
 #ifdef D_8009B236_IN_DATA
-extern u16 D_8009B236 __attribute__((section(".data")));
+extern u16 D_8009B236 PSX_SECTION(".data");
 #else
 extern u16 D_8009B236;
 #endif
@@ -243,9 +244,9 @@ extern u16 D_8009B236;
  * Its array view describes those two bytes without changing the scalar
  * view used by the existing setup code. */
 #ifdef D_8009B360_AS_SIDE_ARRAY
-extern s8 D_8009B360[DUEL_SIDE_COUNT] __attribute__((section(".data")));
+extern s8 D_8009B360[DUEL_SIDE_COUNT] PSX_SECTION(".data");
 #elif defined(D_8009B360_IN_DATA)
-extern s8 D_8009B360 __attribute__((section(".data")));
+extern s8 D_8009B360 PSX_SECTION(".data");
 #else
 extern s8 D_8009B360;
 #endif
@@ -280,7 +281,7 @@ extern s8 D_8009B238;
  * main_run_duel_and_library.c used to declare reached the same form; as the
  * note on D_8009B360 says, such a size is a threshold, not a length. */
 #ifdef D_8009B362_IN_DATA
-extern u8 D_8009B362 __attribute__((section(".data")));
+extern u8 D_8009B362 PSX_SECTION(".data");
 #else
 extern u8 D_8009B362;
 #endif
@@ -304,7 +305,7 @@ extern u8 D_8009B362;
  * were accessed only at [0]; as the notes on D_8009B360 and D_8009B362
  * say, such a size is a threshold, not a length. */
 #ifdef D_8009B368_IN_DATA
-extern u8 D_8009B368 __attribute__((section(".data")));
+extern u8 D_8009B368 PSX_SECTION(".data");
 #else
 extern u8 D_8009B368;
 #endif
@@ -329,7 +330,7 @@ extern u8 D_8009B368;
  * the move. Which of the two reasons above puts it on this arm is not
  * re-derived here -- the spelling it already had is what is preserved. */
 #ifdef D_8009B369_IN_DATA
-extern u8 D_8009B369 __attribute__((section(".data")));
+extern u8 D_8009B369 PSX_SECTION(".data");
 #else
 extern u8 D_8009B369;
 #endif
@@ -343,7 +344,7 @@ extern u8 D_8009B369;
  * the .data arm below; func_80024DC8.c and src/candidates/func_80038530.c
  * compile with nothing in small data and take the plain arm. */
 #ifdef GDUEL_WBGMID_IN_DATA
-extern u16 gDuel_wBgmId __attribute__((section(".data")));
+extern u16 gDuel_wBgmId PSX_SECTION(".data");
 #else
 extern u16 gDuel_wBgmId;
 #endif

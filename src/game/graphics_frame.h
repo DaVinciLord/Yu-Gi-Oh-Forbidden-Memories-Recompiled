@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef YUGIOH_GAME_GRAPHICS_FRAME_H
 #define YUGIOH_GAME_GRAPHICS_FRAME_H
 
@@ -49,13 +50,13 @@
  * gp-relative form. Each arm reproduces exactly what that file already
  * wrote. */
 #ifdef D_8009B318_IN_DATA
-extern u8 D_8009B318 __attribute__((section(".data")));
+extern u8 D_8009B318 PSX_SECTION(".data");
 #else
 extern u8 D_8009B318;
 #endif
 
 #ifdef D_8009B0D8_IN_DATA
-extern s32 D_8009B0D8 __attribute__((section(".data")));
+extern s32 D_8009B0D8 PSX_SECTION(".data");
 #elif defined(D_8009B0D8_IS_VOLATILE)
 extern volatile s32 D_8009B0D8;
 #else
@@ -97,9 +98,9 @@ extern s32 D_8009B0D8;
  * main_reset_frontend_runtime.c (-G0) and the main_menu overlay take the
  * plain byte. */
 #ifdef D_8009B0C0_IN_DATA_VOLATILE
-extern volatile u8 D_8009B0C0 __attribute__((section(".data")));
+extern volatile u8 D_8009B0C0 PSX_SECTION(".data");
 #elif defined(D_8009B0C0_IN_DATA)
-extern u8 D_8009B0C0 __attribute__((section(".data")));
+extern u8 D_8009B0C0 PSX_SECTION(".data");
 #elif defined(D_8009B0C0_IS_VOLATILE)
 extern volatile u8 D_8009B0C0;
 #else
@@ -128,7 +129,7 @@ extern u8 D_8009B0C0;
  * plain form builds byte-identical (measured by the PR that added this
  * block). */
 #ifdef D_8009B0C1_IN_DATA
-extern u8 D_8009B0C1 __attribute__((section(".data")));
+extern u8 D_8009B0C1 PSX_SECTION(".data");
 #else
 extern u8 D_8009B0C1;
 #endif
@@ -163,7 +164,7 @@ extern u8 D_8009B0C3;
  * justified by a control build recorded in the PR that added this
  * block. */
 #ifdef D_8009B0C8_IN_DATA
-extern s32 D_8009B0C8 __attribute__((section(".data")));
+extern s32 D_8009B0C8 PSX_SECTION(".data");
 #else
 extern volatile s32 D_8009B0C8;
 #endif
@@ -179,7 +180,7 @@ extern volatile s32 D_8009B0C8;
  * (& 1, & 0x7F, ++, = 0), so s32 follows D_8009B0C8 above and is not
  * established. */
 #ifdef D_8009B0CC_IN_DATA
-extern s32 D_8009B0CC __attribute__((section(".data")));
+extern s32 D_8009B0CC PSX_SECTION(".data");
 #else
 extern volatile s32 D_8009B0CC;
 #endif
@@ -202,7 +203,7 @@ extern volatile s32 D_8009B0CC;
  * widget_update_pulse_colour.c (-G0) and the password overlay's
  * name_entry_main.c take the plain form. */
 #ifdef D_8009B09C_IN_DATA
-extern s32 D_8009B09C __attribute__((section(".data")));
+extern s32 D_8009B09C PSX_SECTION(".data");
 #else
 extern volatile s32 D_8009B09C;
 #endif
@@ -223,7 +224,7 @@ extern volatile s32 D_8009B09C;
  * while reaching another symbol through $gp, so save_data_payload.c, which
  * holds both, defines the .data arm. */
 #ifdef D_8009B0C4_IN_DATA
-extern s32 D_8009B0C4 __attribute__((section(".data")));
+extern s32 D_8009B0C4 PSX_SECTION(".data");
 #else
 extern volatile s32 D_8009B0C4;
 #endif
@@ -248,7 +249,7 @@ extern volatile s32 D_8009B0C4;
  * main_run_boot_sequence.c
  * defines the .data arm. */
 #ifdef D_8009B098_IN_DATA
-extern u16 D_8009B098 __attribute__((section(".data")));
+extern u16 D_8009B098 PSX_SECTION(".data");
 #else
 extern u16 D_8009B098;
 #endif
@@ -259,7 +260,7 @@ extern DISPENV gGraphics_DispEnv;
  * GPU readback and Script_OpShowImage reach it absolutely rather than
  * through the small-data base. */
 #ifdef GRAPHICS_ACTIVE_BUFFER_IN_DATA
-extern u8 gGraphics_bActiveBuffer __attribute__((section(".data")));
+extern u8 gGraphics_bActiveBuffer PSX_SECTION(".data");
 #else
 extern u8 gGraphics_bActiveBuffer;
 #endif
@@ -320,13 +321,13 @@ extern RECT D_800E9D70[2];
  *   _IS_AGGREGATE     -- unsized array, read as [0]
  */
 #ifdef D_8009B142_IN_DATA_VOLATILE
-extern volatile u8 D_8009B142 __attribute__((section(".data")));
-extern volatile u8 D_8009B143 __attribute__((section(".data")));
-extern volatile u8 D_8009B144 __attribute__((section(".data")));
+extern volatile u8 D_8009B142 PSX_SECTION(".data");
+extern volatile u8 D_8009B143 PSX_SECTION(".data");
+extern volatile u8 D_8009B144 PSX_SECTION(".data");
 #elif defined(D_8009B142_IN_DATA)
-extern u8 D_8009B142 __attribute__((section(".data")));
-extern u8 D_8009B143 __attribute__((section(".data")));
-extern u8 D_8009B144 __attribute__((section(".data")));
+extern u8 D_8009B142 PSX_SECTION(".data");
+extern u8 D_8009B143 PSX_SECTION(".data");
+extern u8 D_8009B144 PSX_SECTION(".data");
 #elif defined(D_8009B142_IS_AGGREGATE)
 extern u8 D_8009B142[];
 extern u8 D_8009B143[];
@@ -341,17 +342,17 @@ extern u8 D_8009B144;
    sprite position and DisplayObject_RenderSpriteList subtracts it from a primitive's, and both
    results have to be able to go negative.
 
-   Files that reach these through `__attribute__((section(".data")))`, or as an
+   Files that reach these through `PSX_SECTION(".data")`, or as an
    unsized or [4] array, select the guarded view below because those spellings
    change how the address is materialised, not just how the value reads. */
 #ifdef GGRAPHICS_VIEWPORT_SIZED_UNSIGNED_IN_DATA
 extern u16 gGraphics_uViewportX[4] asm("gGraphics_sViewportX")
-    __attribute__((section(".data")));
+    PSX_SECTION(".data");
 extern u16 gGraphics_uViewportY[4] asm("gGraphics_sViewportY")
-    __attribute__((section(".data")));
+    PSX_SECTION(".data");
 #elif defined(GRAPHICS_VIEWPORT_IN_DATA)
-extern s16 gGraphics_sViewportX __attribute__((section(".data")));
-extern s16 gGraphics_sViewportY __attribute__((section(".data")));
+extern s16 gGraphics_sViewportX PSX_SECTION(".data");
+extern s16 gGraphics_sViewportY PSX_SECTION(".data");
 #else
 extern s16 gGraphics_sViewportX;
 extern s16 gGraphics_sViewportY;

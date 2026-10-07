@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef YUGIOH_GAME_FADE_H
 #define YUGIOH_GAME_FADE_H
 
@@ -18,7 +19,7 @@ extern u8 D_800E9ECC[];
    units reach it through small data; Script_OpShowImage defines the arm below
    to preserve its measured absolute-addressing form. */
 #ifdef D_8009B145_IN_DATA
-extern u8 D_8009B145 __attribute__((section(".data")));
+extern u8 D_8009B145 PSX_SECTION(".data");
 #else
 extern u8 D_8009B145;
 #endif
@@ -35,13 +36,13 @@ extern u8 D_8009B145;
  * graphics_frame.c reaches D_8009B141 with %hi/%lo as well and takes its
  * .data arm below; every other user keeps the plain small-data arm. */
 #ifdef D_8009B140_IN_DATA
-extern u8 D_8009B140 __attribute__((section(".data")));
+extern u8 D_8009B140 PSX_SECTION(".data");
 #else
 extern u8 D_8009B140;
 #endif
 
 #ifdef D_8009B141_IN_DATA
-extern u8 D_8009B141 __attribute__((section(".data")));
+extern u8 D_8009B141 PSX_SECTION(".data");
 #else
 extern u8 D_8009B141;
 #endif
@@ -60,9 +61,9 @@ extern u8 D_8009B141;
  * source order, which is what `.data` and `volatile` give. The three fade
  * units store them gp-relative and take the plain arm. */
 #ifdef D_8009B14A_IN_DATA_VOLATILE
-extern volatile u8 D_8009B14A __attribute__((section(".data")));
-extern volatile u8 D_8009B14B __attribute__((section(".data")));
-extern volatile u8 D_8009B14C __attribute__((section(".data")));
+extern volatile u8 D_8009B14A PSX_SECTION(".data");
+extern volatile u8 D_8009B14B PSX_SECTION(".data");
+extern volatile u8 D_8009B14C PSX_SECTION(".data");
 #else
 extern u8 D_8009B14A;
 extern u8 D_8009B14B;

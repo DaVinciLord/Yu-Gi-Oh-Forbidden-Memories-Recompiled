@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #include "../types.h"
 #include "../game/graphics_frame.h"
 #include "startup_data.h"
@@ -5,8 +6,8 @@
 
 extern void entrypoint(void);
 
-u32 D_800906E0 __attribute__((section(".data"))) = 0;
-u32 D_800906E4 __attribute__((section(".data"))) = 0;
+u32 D_800906E0 PSX_SECTION(".data") = 0;
+u32 D_800906E4 PSX_SECTION(".data") = 0;
 u32 D_800906E8[7] = {
     0,
     (u32)entrypoint,

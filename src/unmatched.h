@@ -1,3 +1,4 @@
+#include "port_ptr.h"
 #ifndef MEMORIES_DECOMP_UNMATCHED_H
 #define MEMORIES_DECOMP_UNMATCHED_H
 
@@ -135,9 +136,9 @@ extern const char D_80011918[];
  * D_8009B118_IN_DATA and D_8009B118_IS_POINTER_IN_DATA, the same shape
  * input.h and sound.h use, rather than by re-declaring the symbol locally. */
 #ifdef D_8009B118_IS_POINTER_IN_DATA
-extern u8 *G32 D_8009B118 __attribute__((section(".data")));
+extern u8 *G32 D_8009B118 PSX_SECTION(".data");
 #elif defined(D_8009B118_IN_DATA)
-extern s32 D_8009B118 __attribute__((section(".data")));
+extern s32 D_8009B118 PSX_SECTION(".data");
 #else
 extern s32 D_8009B118;
 #endif
@@ -293,7 +294,7 @@ extern u16 D_8009B1D0;   /* four declarers */
  * Script_OpSavePrompt also clears it, spelled with a .data section
  * attribute because it addresses the byte outside small data. */
 #ifdef D_8009B34C_IN_DATA
-extern u8 D_8009B34C __attribute__((section(".data")));
+extern u8 D_8009B34C PSX_SECTION(".data");
 #else
 extern u8 D_8009B34C;
 #endif
@@ -528,7 +529,7 @@ extern u16 D_8009B372;
 /* DuelScene_UpdateBattle (src/game/duel_scene_battle.c) reads it through a
  * %hi/%lo pair into the load's own register, which is the .data form. */
 #ifdef D_8009B374_IN_DATA
-extern u16 D_8009B374 __attribute__((section(".data")));
+extern u16 D_8009B374 PSX_SECTION(".data");
 #else
 extern u16 D_8009B374;
 #endif
@@ -574,14 +575,14 @@ extern u8 D_801D160C[];
 extern u8 D_801D1880[];
 extern u8 D_801D9174[];
 extern u8 D_801D9174_b[];
-extern u8 D_801E27F8 __attribute__((section(".data")));
-extern u8 D_801E8FF8 __attribute__((section(".data")));
+extern u8 D_801E27F8 PSX_SECTION(".data");
+extern u8 D_801E8FF8 PSX_SECTION(".data");
 #ifdef GCAMPAIGN_SCENE_INDEX_AS_ARRAY
 extern u8 gCampaignSceneIndex[];
 #elif defined(GCAMPAIGN_SCENE_INDEX_AS_SCALAR)
 extern u8 gCampaignSceneIndex;
 #else
-extern u8 gCampaignSceneIndex __attribute__((section(".data")));
+extern u8 gCampaignSceneIndex PSX_SECTION(".data");
 #endif
 extern u8 gDuel_bTerrainCodegenAlias[];
 extern u8 gFile_szSuMrgPath[];

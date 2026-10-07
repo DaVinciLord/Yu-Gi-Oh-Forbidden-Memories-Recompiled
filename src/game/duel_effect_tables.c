@@ -17,7 +17,7 @@
 
 /* Initialized data at 0x80090A5C: two handlers per effect group, in group
    order. */
-DuelEffectHandler gDuelEffect_apfnGroupHandler
+DuelEffectHandler TRANSLATED_G32 gDuelEffect_apfnGroupHandler
     [DUEL_EFFECT_GROUP_COUNT * DUEL_CARD_EFFECT_HANDLERS_PER_GROUP] = {
     DuelEffect_ClearCardEffect, DuelEffect_ClearCardEffect,
     DuelEffect_ClearCardEffect, DuelEffect_ApplyTerrain,
@@ -98,7 +98,7 @@ u8 gDuelEffect_abGroupByEffectId[DUEL_EFFECT_ID_COUNT] = {
 };
 
 /* The five effect-state handlers DuelEffect_UpdateState runs. */
-DuelEffectHandler
+DuelEffectHandler TRANSLATED_G32
     gDuelEffect_apfnStateHandler[DUEL_EFFECT_STATE_HANDLER_COUNT] = {
     DuelEffect_UpdateDialogState,
     DuelEffect_UpdateDialogState,

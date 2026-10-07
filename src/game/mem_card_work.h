@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef MEMORIES_DECOMP_MEM_CARD_WORK_H
 #define MEMORIES_DECOMP_MEM_CARD_WORK_H
 
@@ -85,12 +86,12 @@ extern void (*G32 D_80090F88[MEM_CARD_WORK_CALLBACK_COUNT])(
  * Existing absolute linker symbols supply those identities. No RAM-mirror
  * equivalence with other addresses is assumed by this view. */
 extern u8 D_80210000[MEM_CARD_WORK_FRAME_SIZE];
-extern u8 D_8021007A __attribute__((section(".data")));
-extern u8 D_8021007B __attribute__((section(".data")));
-extern u8 D_8021007C __attribute__((section(".data")));
-extern u8 D_8021007D __attribute__((section(".data")));
-extern u8 D_8021007E __attribute__((section(".data")));
-extern u8 D_8021007F __attribute__((section(".data")));
+extern u8 D_8021007A PSX_SECTION(".data");
+extern u8 D_8021007B PSX_SECTION(".data");
+extern u8 D_8021007C PSX_SECTION(".data");
+extern u8 D_8021007D PSX_SECTION(".data");
+extern u8 D_8021007E PSX_SECTION(".data");
+extern u8 D_8021007F PSX_SECTION(".data");
 
 extern char D_8009AF6C[];
 extern char D_80010378[];

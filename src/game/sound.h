@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef YUGIOH_GAME_SOUND_H
 #define YUGIOH_GAME_SOUND_H
 
@@ -725,7 +726,7 @@ typedef char SDSecondaryState_field_0844_offset_must_be_0x844[
  * there is that the absolute spelling is load-bearing in that unit; that
  * claim lives in a comment in that file and is not re-measured here. */
 #ifdef G_SDVALUE_IN_DATA
-extern SDValue *G32 g_SDValue __attribute__((section(".data")));
+extern SDValue *G32 g_SDValue PSX_SECTION(".data");
 #elif defined(G_SDVALUE_AGGREGATE)
 extern SDValue *G32 g_SDValue[];
 #elif defined(G_SDVALUE_VOLATILE)
@@ -739,7 +740,7 @@ extern SDValue *G32 g_SDValue;
  * loads. The note-start candidate retains byte-based addressing; other
  * resident consumers use the shared layout. */
 #ifdef D_8009B458_IN_DATA
-extern SDSecondaryState *G32 D_8009B458 __attribute__((section(".data")));
+extern SDSecondaryState *G32 D_8009B458 PSX_SECTION(".data");
 #elif defined(SDSECONDARYSTATE_AS_BYTES)
 extern u8 *G32 D_8009B458;
 #else
@@ -965,7 +966,7 @@ extern u32 gSD_dwCurrentBgmCommand;
  * copied from is u32, so the word is declared u32; s32 builds
  * byte-identical. */
 #ifdef D_8009B404_IN_DATA
-extern u32 D_8009B404 __attribute__((section(".data")));
+extern u32 D_8009B404 PSX_SECTION(".data");
 #else
 extern u32 D_8009B404;
 #endif
@@ -988,7 +989,7 @@ extern u32 D_8009B404;
  * .data arm, and sound_frontend.c, whose store is gp-relative
  * (func_8003FE80.s:12), takes the plain one. */
 #ifdef GSD_BOUTPUTTYPE_IN_DATA
-extern s8 gSD_bOutputType __attribute__((section(".data")));
+extern s8 gSD_bOutputType PSX_SECTION(".data");
 #else
 extern s8 gSD_bOutputType;
 #endif

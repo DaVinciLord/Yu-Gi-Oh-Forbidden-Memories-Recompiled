@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef MEMORIES_DECOMP_DUEL_CARD_VIEWER_H
 #define MEMORIES_DECOMP_DUEL_CARD_VIEWER_H
 
@@ -31,7 +32,7 @@
  * DuelScene_UpdateHandActions addresses it with %hi/%lo and defines
  * GDUEL_WVIEWERCARDID_IN_DATA to take the .data arm. */
 #ifdef GDUEL_WVIEWERCARDID_IN_DATA
-extern u16 gDuel_wViewerCardID __attribute__((section(".data")));
+extern u16 gDuel_wViewerCardID PSX_SECTION(".data");
 #else
 extern u16 gDuel_wViewerCardID;
 #endif
@@ -58,7 +59,7 @@ extern u16 gDuel_wViewerCardID;
  * GDUEL_BCARDVIEWERYOFFSET_IN_DATA to take the .data arm. */
 extern DisplayObject *G32 gDuel_pCardViewerBackground;
 #ifdef GDUEL_BCARDVIEWERYOFFSET_IN_DATA
-extern u8 gDuel_bCardViewerYOffset __attribute__((section(".data")));
+extern u8 gDuel_bCardViewerYOffset PSX_SECTION(".data");
 #else
 extern u8 gDuel_bCardViewerYOffset;
 #endif

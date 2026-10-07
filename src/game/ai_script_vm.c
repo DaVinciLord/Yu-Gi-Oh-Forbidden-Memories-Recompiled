@@ -42,7 +42,7 @@ s32 AiScript_Run(void)
 {
     for (;;) {
         s32 idx;
-        AiScriptHandler handler;
+        AiScriptHandler TRANSLATED_G32 handler;
 
         gAiScript_State.previous_cursor = gAiScript_State.script_cursor;
         idx = AiScript_ReadByte();

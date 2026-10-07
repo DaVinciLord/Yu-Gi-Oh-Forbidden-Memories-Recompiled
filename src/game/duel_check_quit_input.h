@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef MEMORIES_DECOMP_DUEL_CHECK_QUIT_INPUT_H
 #define MEMORIES_DECOMP_DUEL_CHECK_QUIT_INPUT_H
 
@@ -46,7 +47,7 @@ extern u8 gDuel_bQuitDialogState;
 #ifdef D_8009B16C_AS_BYTE_ARRAY
 extern u8 D_8009B16C[4];
 #elif defined(D_8009B16C_IN_DATA)
-extern u16 D_8009B16C __attribute__((section(".data")));
+extern u16 D_8009B16C PSX_SECTION(".data");
 #else
 extern u16 D_8009B16C;
 #endif

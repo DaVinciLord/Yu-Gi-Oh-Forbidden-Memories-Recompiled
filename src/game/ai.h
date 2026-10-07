@@ -246,7 +246,7 @@ typedef char AiSelection_field_09_offset_must_be_0x09[
 #undef AI_SCRIPT_STATE_OFFSET
 
 extern s32 gAiScript_aMemory[AI_SCRIPT_MEMORY_COUNT];
-extern AiScriptHandler gAiScript_apfnCommand[];
+extern AiScriptHandler TRANSLATED_G32 gAiScript_apfnCommand[];
 extern AiActiveCard gDuel_aActiveCards[];
 
 void AiScript_Init(u8 *script);

@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #define GINPUT_PAD1_HELD_IN_DATA_VOLATILE
 #define GINPUT_PAD1_REPEAT_IN_DATA_VOLATILE
 #define GINPUT_PAD1_PRESSED_IN_DATA_VOLATILE
@@ -35,7 +36,7 @@
 /* One packed small-data window: byte 0 selects one of the two coordinate
    bytes at 2..3, byte 4 selects the preview page, and bytes 1 and 5 are
    unused. Keeping it as one object preserves the retail interior gap. */
-u8 gDebugEffect_abPreviewState[6] __attribute__((section(".sdata"))) = {0};
+u8 gDebugEffect_abPreviewState[6] PSX_SECTION(".sdata") = {0};
 #define gDebugEffect_bCoordinateAxis gDebugEffect_abPreviewState[0]
 #define gDebugEffect_abCoordinates (&gDebugEffect_abPreviewState[2])
 #define gDebugEffect_bPage gDebugEffect_abPreviewState[4]

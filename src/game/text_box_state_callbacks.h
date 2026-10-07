@@ -4,6 +4,6 @@
 #include "../types.h"
 #include "../ygo_types.h"
 
-extern TextBoxStateCallback D_80090E64[];
+extern TextBoxStateCallback TRANSLATED_G32 D_80090E64[];
 
 #endif

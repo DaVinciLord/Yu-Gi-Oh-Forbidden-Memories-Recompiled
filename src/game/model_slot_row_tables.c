@@ -364,7 +364,7 @@ void func_8004D58C(s32 arg0, u8 *arg1)
             }
         }
         e = *(u8 *G32 *)e;
-    } while (e != (u8 *G32)-1);
+    } while (e != (u8 *G32)PSX_POINTER_END);
     if (p3 != (u8 *)0) {
         p3 += 8;
         k = *(u8 *G32 *)p3;
