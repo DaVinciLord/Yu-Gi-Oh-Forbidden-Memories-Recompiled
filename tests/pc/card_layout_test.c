@@ -212,7 +212,7 @@ static void partial_manifest_falls_back(void)
 static void frame_outside_mod_refused(void)
 {
     reset();
-    add_mod("x", "/mods/x", "{\"id\": \"x\", \"card_layout\": {\"frame\": {\"image\": \"../x.png\"}}}", 1,
+    add_mod("x", "/mods/x", "{\"id\": \"x\", \"card_layout\": {\"frame\": {\"monster\": {\"image\": \"../x.png\"}}}}", 1,
             "full_bleed", 1);
     CHECK(!*CardLayout_FramePath());
     CHECK(notes == 1 && strstr(note, "outside the mod"));
