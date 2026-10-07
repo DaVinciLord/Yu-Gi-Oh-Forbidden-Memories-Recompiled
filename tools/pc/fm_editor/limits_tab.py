@@ -68,15 +68,26 @@ class LimitsTab(Tab):
         self.per_duelist = {}
 
     def _fields(self, parent, fields):
+        if not hasattr(self, "captions"):
+            self.captions = {}
         for row, (key, label, retail, low, high, _) in enumerate(fields):
-            ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", pady=1)
+            caption = ttk.Label(parent, text=label)
+            caption.grid(row=row, column=0, sticky="w", pady=1)
+            self.captions[key] = caption
             var = self.vars[key] = tk.StringVar()
+            # A field the mod sets in the colour of a change (as the Cards
+            # tab marks what differs from the disc).
+            var.trace_add("write", lambda *_, k=key: self._mark(k))
             entry = ttk.Entry(parent, textvariable=var, width=10)
             entry.grid(row=row, column=1, sticky="w", pady=1, padx=(6, 0))
             entry.bind("<FocusOut>", lambda e: self.commit())
+            entry.bind("<Return>", lambda e: self.commit())
             own = "the start" if retail is None else str(retail)
             ttk.Label(parent, style="Hint.TLabel", text=f"({own}; {low}-{high})").grid(row=row, column=2, sticky="w",
                                                                                       padx=(6, 0))
+
+    def _mark(self, key):
+        self.captions[key].configure(style="Changed.TLabel" if self.vars[key].get().strip() else "TLabel")
 
     def _show_advanced(self):
         if self.advanced_shown.get():
@@ -136,6 +147,10 @@ class LimitsTab(Tab):
             var.set(str(flat[key]) if key in flat else "")
         self.per_duelist = dict(flat.get("duelists", {}))
         self._fill_duelists()
+        # What the mod sets is shown, advanced or not.
+        if self.per_duelist or any(key in flat for key, *_ in limits.ADVANCED):
+            self.advanced_shown.set(True)
+            self._show_advanced()
         self._report()
 
     def _report(self):

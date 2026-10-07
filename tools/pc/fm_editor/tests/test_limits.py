@@ -96,6 +96,11 @@ class LimitsTabTest(unittest.TestCase):
         tab = LimitsTab(notebook, app)
         tab.refresh()
         self.assertEqual(tab.vars["life_points.start"].get(), "16000")
+        # What the mod sets: its fields marked, and the per-duelist LP shown
+        # without asking for the advanced part.
+        self.assertTrue(tab.advanced_shown.get())
+        self.assertEqual(str(tab.captions["life_points.start"].cget("style")), "Changed.TLabel")
+        self.assertEqual(str(tab.captions["stats"].cget("style")), "TLabel")
         self.assertEqual(tab.vars["stats"].get(), "")
         tab.vars["stats"].set("30000")
         tab.duelist_name.set("Seto")
