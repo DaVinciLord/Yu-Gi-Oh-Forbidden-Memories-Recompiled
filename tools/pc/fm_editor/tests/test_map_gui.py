@@ -66,11 +66,23 @@ class MapGuiTest(unittest.TestCase):
         self.assertEqual(cm.state(app.project).locations[13].distance, before.distance)
         tab.vars["distance"].set(before.distance)
         self.assertNotIn("Not stored", tab.problems.cget("text"))
-        # An exit's flag past the 11 bits the game reads.
-        tab.exit_vars[0]["flag"].set(0x800)
+        # An exit's flag past what can be kept is refused; past the 11 bits
+        # the game reads, kept and warned about.
+        tab.exit_vars[0]["used"].set(True)
+        tab.exit_vars[0]["kind"].set("while the flag is set")
+        tab.exit_vars[0]["flag"].set(0x8000)
         self.assertIn("flag", tab.problems.cget("text"))
+        self.assertIn("Not stored", tab.problems.cget("text"))
+        tab.exit_vars[0]["flag"].set(0x800)
+        self.assertNotIn("Not stored", tab.problems.cget("text"))
+        self.assertIn("0x7FF", tab.problems.cget("text"))
         tab.exit_vars[0]["flag"].set(5)
         self.assertNotIn("Not stored", tab.problems.cget("text"))
+        # One bad field of an exit not used does not stop the place's edits.
+        tab.exit_vars[3]["used"].set(False)
+        tab.exit_vars[3]["flag"].set(0x8000)
+        tab.vars["distance"].set(before.distance + 10)
+        self.assertEqual(cm.state(app.project).locations[13].distance, before.distance + 10)
 
     def test_marker_only_for_a_town_and_short_exit_tabs(self):
         app, tab = self.app, self.app.map

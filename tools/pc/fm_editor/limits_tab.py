@@ -148,9 +148,8 @@ class LimitsTab(Tab):
         self.per_duelist = dict(flat.get("duelists", {}))
         self._fill_duelists()
         # What the mod sets is shown, advanced or not.
-        if self.per_duelist or any(key in flat for key, *_ in limits.ADVANCED):
-            self.advanced_shown.set(True)
-            self._show_advanced()
+        self.advanced_shown.set(bool(self.per_duelist or any(key in flat for key, *_ in limits.ADVANCED)))
+        self._show_advanced()
         self._report()
 
     def _report(self):

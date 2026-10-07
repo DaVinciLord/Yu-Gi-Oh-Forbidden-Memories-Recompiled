@@ -162,6 +162,7 @@ class Editing:
 
     def refresh_editors(self):
         card, equip, pack, picture = self.cards.current, self.equips.current, self.packs.index, self.art.current
+        followed = self.current_card         # Art's show() makes its card the window's: kept as it was
         self._refreshing = True
         try:
             for tab in self.tabs:
@@ -179,6 +180,7 @@ class Editing:
                 if self.art.tree.exists(str(picture)):
                     self.art.tree.selection_set(str(picture))
                     self.art.tree.see(str(picture))
+            self.current_card = followed if followed in self.project.cards else None
             self.packs.goto(pack)
         finally:
             self._refreshing = False

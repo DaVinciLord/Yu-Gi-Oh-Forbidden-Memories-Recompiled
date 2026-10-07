@@ -222,19 +222,24 @@ def retail(wa: bytes) -> list:
     return out
 
 
-def deal(pools, rng=None) -> dict:
+def deal(pools, rng=None, cap: int = 3) -> dict:
     """One deck the pools could deal ({card: copies}): each pool draws its
-    number of cards, each draw by the weights (an example, as a new game's
-    is random)."""
+    number of cards by the weights, a card already dealt `cap` times drawn
+    again, as the disc's deal does (name_entry_main.c); an example, as a new
+    game's is random."""
     import random
     rng = rng or random.Random()
     deck = {}
     for pool in pools:
         cards = [c for c, w in pool.cards.items() if w > 0]
-        if not cards:
-            continue
-        for cid in rng.choices(cards, weights=[pool.cards[c] for c in cards], k=pool.draws):
+        drawn = 0
+        while drawn < pool.draws:
+            free = [c for c in cards if deck.get(c, 0) < cap]
+            if not free:
+                break           # a pool too small for its draws: what it has
+            cid = rng.choices(free, weights=[pool.cards[c] for c in free])[0]
             deck[cid] = deck.get(cid, 0) + 1
+            drawn += 1
     return deck
 
 

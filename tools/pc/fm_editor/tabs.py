@@ -2440,7 +2440,10 @@ class StarterTab(Tab):
             d = self.ask_opponent()
             if d is None:
                 return None
-            deck.cards = fixed_decks.most_likely(self.project.pools[d]["deck"])
+            fixed = fixed_decks.deck_of(self.project, d)
+            # The deck it is dealt: a fixed one the mod gives it, else the
+            # forty its weighted pool deals most often.
+            deck.cards = dict(fixed.cards) if fixed else fixed_decks.most_likely(self.project.pools[d]["deck"])
             deck.name = f"{DUELIST_NAMES[d]}'s deck"
         elif start == "retail":
             pools = starter_pools.retail(self.app.files.wa if self.app.files else None)
@@ -2743,11 +2746,14 @@ class ModInfoTab(Tab):
         self.settings.delete("1.0", "end")
         if settings:
             self.settings.insert("1.0", json.dumps(settings, indent=2, ensure_ascii=False))
-        self.commit()
+        applied = self.commit()
+        if not applied:
+            self.app.form_edited(self)  # in the box, not the mod: the window says so
         self.fill_settings()
         if select is not None and self.settings_tree.exists(str(select)):
             self.settings_tree.selection_set(str(select))
             self.settings_tree.see(str(select))
+        return applied
 
     def chosen_setting(self):
         selection = self.settings_tree.selection()
@@ -2888,7 +2894,8 @@ class ModInfoTab(Tab):
                 settings.append(out)
             else:
                 settings[index] = out
-            self.write_settings(settings, len(settings) - 1 if index is None else index)
+            if not self.write_settings(settings, len(settings) - 1 if index is None else index):
+                return self.status.cget("text") or "Mod info's other fields cannot be applied"
             return None
 
         dialog = FormDialog(self, title, build, ok)
@@ -2927,7 +2934,7 @@ class ConflictsTab(Tab):
         ttk.Button(other, text="Other mods folder...", command=self.choose_folder).pack(side="left")
         ttk.Button(other, text="The game's mods folder", command=lambda: self.set_folder(None)).pack(side="left",
                                                                                                   padx=4)
-        self.others = ttk.Label(other, style="Hint.TLabel", wraplength=900, justify="left")
+        self.others = WrapLabel(other, style="Hint.TLabel")       # to the window's edge, whatever its width
         self.others.pack(side="left", padx=8, fill="x", expand=True)
         from . import settings
         self.other_folder = settings.load().get("other_mods")

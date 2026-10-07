@@ -202,8 +202,9 @@ class PacksTab(Tab):
                              state="readonly", width=6)
         style.pack(side="left", padx=4)
         style.bind("<<ComboboxSelected>>", lambda e: self.show_picture())
-        ttk.Label(line, text="card: in the card's frame; full: the whole picture", style="Hint.TLabel").pack(
-            side="left")
+        # Under the list, not beside it: beside, it made the tab wider than a 1280 window.
+        ttk.Label(picture, text="card: in the card's frame; full: the whole picture", style="Hint.TLabel",
+                  wraplength=px(self, 240), justify="left").pack()
         self.picture_note = ttk.Label(picture, style="Hint.TLabel", wraplength=px(self, 240), justify="left")
         self.picture_note.pack()
 
@@ -492,6 +493,8 @@ class PacksTab(Tab):
                 self.empty.place(relx=0.5, rely=0.4, anchor="center", relwidth=0.7)
                 # No pack: nothing but Add pack does anything.
                 self.set_editable(False, keep={self.add_button})
+            else:
+                self.empty.place_forget()       # the packs are in a file: there are some
             return
         if self.empty.winfo_manager():
             self.empty.place_forget()
@@ -1107,7 +1110,8 @@ class PacksTab(Tab):
                 entry["slots"][s] = first
             elif isinstance(slot, dict) and isinstance(slot.get("tiers"), dict):
                 slot["tiers"].pop(gone, None)
-                if not slot["tiers"]:
+                weights = [w for w in slot["tiers"].values() if isinstance(w, (int, float))]
+                if not slot["tiers"] or not sum(weights):       # nothing it could deal any more
                     entry["slots"][s] = first
 
     def move_tier(self, step):

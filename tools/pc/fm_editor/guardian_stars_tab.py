@@ -449,8 +449,9 @@ class GuardianStarsTab(Tab):
         self.draw()
 
     def _exists(self, star) -> bool:
-        """A disc star, or one the mod declares."""
-        return 1 <= star <= gs.RETAIL_COUNT or star in self.model.stars
+        """A star the grid shows: a disc star, one the mod declares, or a gap
+        below the last declared (its matchups are written like any star's)."""
+        return 1 <= star <= self.model.count
 
     def set_cell(self, value=None):
         if not self.cell or not all(self._exists(s) for s in self.cell):

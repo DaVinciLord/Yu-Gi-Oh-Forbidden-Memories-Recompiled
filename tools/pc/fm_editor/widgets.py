@@ -114,7 +114,9 @@ class WrapLabel(ttk.Label):
                 right = min(right, widget.winfo_rootx() + widget.winfo_width() - px(self, 12))
                 break
             widget = widget.master
-        wrap = max(px(self, self.least), right - self.winfo_rootx() - px(self, 8))
+        # The margin: the label's own padding and the frames' around it
+        # (a tab's 6 a side), which would otherwise push the page past its edge.
+        wrap = max(px(self, self.least), right - self.winfo_rootx() - px(self, 28))
         if abs(int(float(str(self.cget("wraplength")) or 0)) - wrap) > 2:
             self.configure(wraplength=wrap)
             # The viewport may be resized without the label moving.
@@ -123,8 +125,10 @@ class WrapLabel(ttk.Label):
             widget.bind("<Configure>", lambda e: self._later(), add="+")
         if not getattr(view, "_wrap_labels", None):
             view._wrap_labels = []
+            # Its own Configure only: a toplevel's binding sees every child's.
             view.bind("<Configure>", lambda e, v=view: [label._later() for label in v._wrap_labels
-                                                       if label.winfo_exists()], add="+")
+                                                       if label.winfo_exists()] if e.widget is v else None,
+                      add="+")
         if self not in view._wrap_labels:
             view._wrap_labels.append(self)
 

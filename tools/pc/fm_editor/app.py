@@ -533,9 +533,12 @@ class App(Editing, tk.Tk):
         on the card when the overlap is about one."""
         from . import overlaps as ov
         card = key if isinstance(key, int) and not isinstance(key, bool) else None
-        if kind == ov.CARDS and card in self.project.cards:
+        if kind == ov.EQUIPS and isinstance(key, tuple) and key and key[0] == "equip":
+            card = key[-1] if isinstance(key[-1], int) else None     # ("equip", base, card): overlaps.py
+        if kind == ov.CARDS:
             self.notebook.select(self.cards)
-            self.cards.goto(card)
+            if card in self.project.cards:
+                self.cards.goto(card)
         elif kind == ov.FUSIONS:
             pair = [k for k in key[1:] if isinstance(k, int)] if isinstance(key, tuple) else []
             if pair and pair[0] in self.project.cards:
@@ -547,7 +550,7 @@ class App(Editing, tk.Tk):
                 self.fusions.show_card(pair[0])
         elif kind == ov.EQUIPS:
             self.notebook.select(self.equips)
-            equip = card & (ov.EQUIP_CARDS - 1) if card is not None else None
+            equip = card
             if equip in self.project.cards:
                 self.current_card = equip
             if equip and self.equips.equips.exists(str(equip)):

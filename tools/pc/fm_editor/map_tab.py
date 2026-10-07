@@ -45,7 +45,7 @@ class MapTab(Tab):
 
         left = ttk.Frame(self)
         left.pack(side="left", fill="y")
-        frame, self.tree = scrolled_tree(left, [("id", "#"), ("name", "Place"), ("area", "Area")], [34, 170, 56], 18)
+        frame, self.tree = scrolled_tree(left, [("id", "#"), ("name", "Place"), ("area", "Area")], [30, 158, 50], 18)
         frame.pack(fill="both", expand=True)
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.picked())
         buttons = ttk.Frame(left)
@@ -104,14 +104,12 @@ class MapTab(Tab):
         camera = ttk.LabelFrame(parent, text="Camera", padding=4)
         camera.pack(fill="x", pady=2)
         self.camera_frame = camera
-        for column, (key, text, low, high) in enumerate((("distance", "Distance", -32768, 32767),
-                                                         ("heading", "Heading", -32768, 32767),
-                                                         ("pitch", "Pitch", -32768, 32767))):
-            ttk.Label(camera, text=text).grid(row=0, column=column * 2, sticky="w")
-            self.spin(camera, var(key), low, high).grid(row=0, column=column * 2 + 1, padx=(2, 8))
-        for column, (key, text) in enumerate((("target_x", "Looks at x"), ("target_z", "z"))):
-            ttk.Label(camera, text=text).grid(row=1, column=column * 2, sticky="w")
-            self.spin(camera, var(key), -32768, 32767).grid(row=1, column=column * 2 + 1, padx=(2, 8), pady=2)
+        # Two to a row: three across made the tab wider than a 1280 window.
+        for n, (key, text) in enumerate((("distance", "Distance"), ("heading", "Heading"), ("pitch", "Pitch"),
+                                         ("target_x", "Looks at x"), ("target_z", "Looks at z"))):
+            row, column = divmod(n, 2)
+            ttk.Label(camera, text=text).grid(row=row, column=column * 2, sticky="w")
+            self.spin(camera, var(key), -32768, 32767).grid(row=row, column=column * 2 + 1, padx=(2, 8), pady=1)
         marker = ttk.LabelFrame(parent, text="Millennium Puzzle marker (the town)", padding=4)
         marker.pack(fill="x", pady=2)
         self.marker_frame = marker      # a town's only: the world map draws none
@@ -351,18 +349,26 @@ class MapTab(Tab):
                     buttons |= bit
             e.buttons = buttons
             flag = self.number(v["flag"])
-            if flag is None or not 0 <= flag <= FLAG_MAX:
-                return self.refused(f"Exit {n + 1}'s flag is a whole number, 0 to {FLAG_MAX} (the game reads 11 bits)")
+            # Past 0x7FF the game reads another flag: a warning (the check
+            # below the screen), not a refusal; past 0x7FFF it cannot be kept.
+            if flag is None or not 0 <= flag <= 0x7FFF:
+                if not v["used"].get():
+                    continue            # an exit not used: what its fields say does not matter
+                return self.refused(f"Exit {n + 1}'s flag is a whole number, 0 to 32767 (past {FLAG_MAX} the game "
+                                    "reads another flag)")
             e.condition = cm.condition_value(CONDITION_KINDS[CONDITIONS.index(v["kind"].get())]
                                              if v["kind"].get() in CONDITIONS else "always", flag)
+            used = v["used"].get()
             for key, name in (("steps", "Frames"), ("x", "arrow x"), ("y", "arrow y")):
                 value = self.number(v[key])
                 if value is None:
+                    if not used:
+                        break
                     return self.refused(f"Exit {n + 1}'s {name} is a whole number")
                 setattr(e, key, value)
-            if not 0 <= e.steps <= 255:
+            if used and not 0 <= e.steps <= 255:
                 return self.refused(f"Exit {n + 1}'s Frames is 0 to 255")
-            if not -32768 <= e.x <= 32767 or not -32768 <= e.y <= 32767:
+            if used and (not -32768 <= e.x <= 32767 or not -32768 <= e.y <= 32767):
                 return self.refused(f"Exit {n + 1}'s arrow x and y are -32768 to 32767")
             arrow = self.index_of(v["arrow"].get())
             if arrow is not None:

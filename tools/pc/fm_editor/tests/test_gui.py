@@ -1353,6 +1353,75 @@ class GuiTest(GuiCase):
         cards.show(None)
         self.assertFalse(str(cards.picture.cget("image")))
 
+    def test_undo_keeps_the_card_the_window_follows(self):
+        app, cards = self.app, self.app.cards
+        cards.goto(50)
+        cards.vars["attack"].set("1234")
+        self.assertTrue(cards.apply())
+        app.update()
+        app.undo()
+        app.update()
+        self.assertEqual(app.current_card, 50)      # not the Art tab's card
+        app.notebook.select(app.fusions)
+        app.update()
+        self.assertEqual(app.fusions.search.get(), app.project.card_label(50))
+
+    def test_conflicts_go_to_an_equip_another_mod_changes(self):
+        from fm_editor import overlaps as ov, validate as v
+        app = self.app
+        equip = app.project.equip_cards()[-1]          # not the first, which the tab opens on
+        app.go_to(v.Issue("warning", "Other mods", "Equip", "x", (ov.EQUIPS, ("equip", equip, equip))))
+        app.update()
+        self.assertIs(app.notebook.current(), app.equips)
+        self.assertEqual(app.equips.current, equip)
+        app.go_to(v.Issue("warning", "Other mods", "Card", "x", (ov.CARDS, ("text", 5))))
+        app.update()
+        self.assertIs(app.notebook.current(), app.cards)
+
+    def test_settings_dialog_stays_open_when_mod_info_cannot_apply(self):
+        app, info = self.app, self.app.info
+        info.refresh()
+        info.other.insert("1.0", '{"cards": 1}')         # a key the tabs write: refused
+        dialog = info.add_setting()
+        dialog.ok()
+        self.assertTrue(dialog.winfo_exists())
+        self.assertTrue(dialog.error.cget("text"))
+        self.assertIn(info, app._pending)
+        dialog.destroy()
+
+    def test_review_fixes_packs_file_stars_gap_limits_and_slots(self):
+        from fm_editor import guardian_stars as gs
+        app = self.app
+        # A mod whose packs are in a file: not "This mod sells no card packs".
+        app.packs.refresh()
+        self.assertTrue(app.packs.empty.winfo_manager())
+        app.project.packs_file = "packs.json"
+        app.packs.refresh()
+        self.assertFalse(app.packs.empty.winfo_manager())
+        app.project.packs_file = None
+        # Guardian Stars: a gap below the last declared star is a star the
+        # grid shows, its matchups kept.
+        stars = app.stars
+        app.project.other["guardian_stars"] = {"stars": [{"id": 11}, {"id": 13}]}
+        stars.refresh()
+        stars.pick_cell(12, 1)
+        stars.value.set("300")
+        stars.set_cell()
+        self.assertEqual(gs.read(app.project.other["guardian_stars"]).grid[12][1], 300)
+        # Limits: the advanced part as the opened mod uses it, each time.
+        app.project.other["limits"] = {"two_player": {"step": 1000}}
+        app.limits.refresh()
+        self.assertTrue(app.limits.advanced_shown.get())
+        app.project.other.pop("limits")
+        app.limits.refresh()
+        self.assertFalse(app.limits.advanced_shown.get())
+        # A slot left with weights that add up to nothing deals from the first tier.
+        entry = {"tiers": {"common": {"cards": []}, "rare": {"cards": []}},
+                 "slots": [{"tiers": {"common": 0, "rare": 5}}]}
+        del entry["tiers"]["rare"]
+        app.packs.forget_tier(entry, "rare", "common")
+        self.assertEqual(entry["slots"], ["common"])
+
     def test_cards_tab_fits_the_window_in_both_looks(self):
         """The Cards tab asks for what its list and form ask, not for its
         panes' sizes as they are: at 1400 wide no bottom scrollbar, light or

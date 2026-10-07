@@ -135,6 +135,20 @@ class CheckTest(unittest.TestCase):
         self.assertTrue(any(i.area == "Starter pools" for i in issues))
 
 
+class DealTest(unittest.TestCase):
+    def test_a_deal_never_has_four_of_a_card(self):
+        """As the disc's deal: a card dealt three times is drawn again."""
+        import random
+        pools = [sp.Pool(draws=40, cards={1: 1000, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1, 10: 1, 11: 1,
+                                          12: 1, 13: 1, 14: 1})]
+        for seed in range(50):
+            deck = sp.deal(pools, random.Random(seed))
+            self.assertEqual(sum(deck.values()), 40)
+            self.assertLessEqual(max(deck.values()), 3)
+        # A pool too small for its draws deals what it has.
+        self.assertEqual(sum(sp.deal([sp.Pool(draws=10, cards={1: 5})]).values()), 3)
+
+
 if __name__ == "__main__":
     unittest.main()
 
