@@ -83,6 +83,19 @@ static inline int mprotect(void *address, size_t length, int prot)
                                                : ((prot & PROT_WRITE) ? PAGE_READWRITE : PAGE_READONLY);
     return VirtualProtect(address, (unsigned long)length, protect, &old) ? 0 : -1;
 }
+#elif defined(__APPLE__) && defined(MEMORIES_TRANSLATED)
+#include <sys/mman.h>
+/* These requests allocate high host memory with a registered guest token.
+ * They never replace an existing virtual-memory mapping. */
+#define MAP_FIXED_NOREPLACE 0x40000000
+void *Memories_TranslatedMmap(void *, size_t, int, int, int, off_t);
+int Memories_TranslatedMunmap(void *, size_t);
+int Memories_TranslatedMprotect(void *, size_t, int);
+#ifndef MEMORIES_TRANSLATED_MMAN_IMPLEMENTATION
+#define mmap Memories_TranslatedMmap
+#define munmap Memories_TranslatedMunmap
+#define mprotect Memories_TranslatedMprotect
+#endif
 #else
 #include <sys/mman.h>
 #endif

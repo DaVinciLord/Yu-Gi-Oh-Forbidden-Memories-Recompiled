@@ -10,6 +10,13 @@
 #include <string.h>
 #include "pc/guest/state.h"
 
+#ifdef __clang__
+/* Keep the IDCT multiply/add rounding identical to the existing i386
+ * decoder. ARM64 fused operations otherwise change movie pixels and VRAM
+ * replay hashes at quantization boundaries. */
+#pragma clang fp contract(off)
+#endif
+
 typedef struct Vlc { u16 code; u8 bits, run, level; } Vlc;
 
 /* MPEG-1 table B.14 without the sign bit; EOB and escape are handled first. */
@@ -157,7 +164,8 @@ static int decode_block(float *block)
         return 0;
     }
     qscale = *input >> 10;
-    value = ((int)(*input++ << 22)) >> 22;
+    value = (int)(*input++ & 0x3ffu);
+    if (value & 0x200) value -= 0x400;
     coefficients[0] = value * quant[0];
     while (input < input_end) {
         unsigned code = *input++;
@@ -168,7 +176,8 @@ static int decode_block(float *block)
         if (index > 63) {
             break;
         }
-        value = ((int)(code << 22)) >> 22;
+        value = (int)(code & 0x3ffu);
+        if (value & 0x200) value -= 0x400;
         value = qscale ? (value * quant[index] * qscale + 4) / 8 : value * 2;
         coefficients[zigzag[index]] = value < -0x400 ? -0x400 : value > 0x3ff ? 0x3ff : value;
     }

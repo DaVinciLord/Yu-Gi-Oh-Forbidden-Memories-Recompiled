@@ -217,9 +217,11 @@ int Platform_StartTimers(void (*tick)(uint64_t, uint64_t), void (*vblank)(void))
 {
 #ifndef _WIN32
     struct sigaction action;
+ #ifndef __APPLE__
     struct sigevent event;
     struct itimerspec spec;
     timer_t timer;
+ #endif
 #endif
     tick_handler = tick;
     vblank_handler = vblank;
@@ -266,6 +268,7 @@ int Platform_StartTimers(void (*tick)(uint64_t, uint64_t), void (*vblank)(void))
     if (sigaction(SIGALRM, &action, NULL)) {
         return -1;
     }
+ #ifndef __APPLE__
     memset(&event, 0, sizeof(event));
     event.sigev_notify = SIGEV_THREAD_ID;
     event.sigev_signo = SIGALRM;
@@ -275,6 +278,7 @@ int Platform_StartTimers(void (*tick)(uint64_t, uint64_t), void (*vblank)(void))
     if (timer_create(CLOCK_MONOTONIC, &event, &timer) == 0 && timer_settime(timer, 0, &spec, NULL) == 0) {
         return 0;
     }
+ #endif
     {
         struct itimerval fallback;
         fallback.it_interval.tv_sec = fallback.it_value.tv_sec = 0;

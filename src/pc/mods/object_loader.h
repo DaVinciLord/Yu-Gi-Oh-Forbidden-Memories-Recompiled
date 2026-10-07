@@ -33,6 +33,7 @@ typedef struct {
      * holds the build folder and each header's MD5) and .comment are left
      * out, so a rebuild that makes the same code hashes the same. */
     uint32_t hash;
+    void *native_handle;   /* macOS ARM64 dylib, retained while callbacks exist */
 } LoadedObject;
 
 /* Returns 0 and fills `object`, or -1 with the reason in `error`. */
@@ -43,5 +44,8 @@ void *ObjectLoader_Symbol(const LoadedObject *object, const char *name);
 /* Gives the memory back. The game never does this for a mod (code it may
  * still hold pointers into); the tests do. */
 void ObjectLoader_Free(LoadedObject *object);
+#if defined(__APPLE__) && defined(__aarch64__) && defined(MEMORIES_TRANSLATED)
+int ObjectLoader_LoadPath(const char *path, LoadedObject *object, char *error, size_t error_size);
+#endif
 
 #endif

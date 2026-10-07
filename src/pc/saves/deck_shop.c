@@ -4,6 +4,9 @@
 #include "pc/text/text.h"
 #include "pc/text/entry_layout.h"
 #include "pc/guest/state.h"
+#ifdef MEMORIES_TRANSLATED
+#include "pc/guest/translated_runtime.h"
+#endif
 #include "pc/debug/log.h"
 #include "types.h"
 #include <stdint.h>
@@ -192,18 +195,27 @@ static const unsigned char *shop_text(void)
     return text;
 }
 
+static uintptr_t shop_text_address(const unsigned char *pointer)
+{
+#ifdef MEMORIES_TRANSLATED
+    return GuestRuntime_EncodePointer((void *)pointer);
+#else
+    return (uintptr_t)pointer;
+#endif
+}
+
 /* Restore this before the game image: its text streams contain pointers
  * into the compiled listing, whose heap address changes between sessions. */
 void DeckMenu_ShopState(MemoriesState *state)
 {
-    uint32_t base = shop_text_size ? (uint32_t)(uintptr_t)shop_text() : 0;
+    uint32_t base = shop_text_size ? (uint32_t)shop_text_address(shop_text()) : 0;
     uint32_t size = (uint32_t)shop_text_size;
     MemoriesStateField fields[] = {{&shop_extra, sizeof(shop_extra)}, {&base, sizeof(base)}, {&size, sizeof(size)}};
     if (Memories_StateLoading(state)) shop_extra = 0; /* older states had four entries */
     if (Memories_StateChunk(state, "deck-shop", fields, 3) && base && size) {
         const unsigned char *text = shop_text();
         if (text && size == shop_text_size) {
-            Memories_StateRemapRange(state, base, (uint32_t)(uintptr_t)text, size);
+            Memories_StateRemapRange(state, base, (uint32_t)shop_text_address(text), size);
         }
     }
 }
