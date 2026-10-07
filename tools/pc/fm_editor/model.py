@@ -147,6 +147,9 @@ class Project:
         # {"remove": C} rules, in the mod's order: no recipe on the disc makes
         # C (tables.c Tables_FilterFusion); their pairs are out of `fusions`.
         self.fusion_removes = []
+        # {"remove": "all"}: no recipe on the disc makes anything; the
+        # disc's pairs are out of `fusions` (but those the mod writes back).
+        self.fusion_remove_all = False
         self._recipes = None            # retail result -> the disc's pairs that make it
         # Pairs the mod writes a rule for even where the result alone needs
         # none (the disc's own, or a recipe a remove takes away): the rules a
@@ -462,7 +465,7 @@ class Project:
         """What a card's own "fusions" list makes of the pair in the game,
         0 for none, when no rule the mod writes decides it first (tables.c
         Tables_Fusion, a copy falling back on its base's pair; `removes` is
-        a set of active_removes()); None when no list decides it."""
+        a removed_results()); None when no list decides it."""
         a, b = pair
         base_a, base_b = self.base_of(a), self.base_of(b)
         ask = [pair]
@@ -528,10 +531,57 @@ class Project:
                 del self.fusions[pair]
                 self.fusion_explicit.discard(pair)
 
+    def removes_all(self, value) -> bool:
+        """Whether {"remove": value} is {"remove": "all"} (tables.c: a card
+        named "all" comes first)."""
+        return value == "all" and not self.resolve(value)
+
+    def remove_disc_fusions(self):
+        """{"remove": "all"}: no recipe on the disc makes anything any more.
+        The mod's own rules still fuse, and so does a card's own list."""
+        self.fusion_remove_all = True
+        self.fusion_removes = []
+        for pair, made in self.retail.fusions.items():
+            if self.fusions.get(pair) == made and pair not in self.fusion_explicit:
+                del self.fusions[pair]
+
+    def remove_all_fusions(self):
+        """No fusion at all: the disc's table gone, every rule of the mod's
+        dropped (those it keeps as written too), and a null rule for each
+        pair a card's own "fusions" list makes, which comes before the list."""
+        self.remove_disc_fusions()
+        self.fusions = {}
+        self.fusion_explicit = set()
+        self.kept["fusions"] = []
+        removes = self.removed_results()
+        named = self.own_fusion_pairs()[0]
+        for pair in sorted(named):
+            if pair[0] in self.cards and pair[1] in self.cards and self.own_fusion(pair, removes):
+                self.fusions[pair] = 0
+                self.fusion_explicit.add(pair)
+
+    def restore_disc_fusions(self):
+        """The disc's table back: each of its pairs the mod writes no rule
+        for fuses as on the disc again."""
+        self.fusion_remove_all = False
+        for pair, made in self.retail.fusions.items():
+            if pair not in self.fusions:
+                self.fusions[pair] = made
+
+    def removed_results(self) -> set:
+        """The cards no disc recipe makes: every one under {"remove": "all"},
+        else those of active_removes()."""
+        if self.fusion_remove_all:
+            return set(self.retail.fusions.values())
+        return set(self.active_removes())
+
     def active_removes(self) -> list:
         """The removes the mod still writes, in its order: all but those of
-        a card whose every disc recipe is back. One for a card no disc
-        recipe makes does nothing in the game, and stays as the mod wrote it."""
+        a card whose every disc recipe is back (none under {"remove": "all"},
+        which takes them all). One for a card no disc recipe makes does
+        nothing in the game, and stays as the mod wrote it."""
+        if self.fusion_remove_all:
+            return []
         out = []
         for result in self.fusion_removes:
             recipes = self.retail_recipes(result)
@@ -541,7 +591,7 @@ class Project:
 
     def fusion_rule(self, pair, value, removes, explicit=None) -> bool:
         """Whether the mod writes a rule for a pair holding `value` (None: no
-        entry); `removes` is a set of active_removes(), `explicit` whether
+        entry); `removes` is removed_results(), `explicit` whether
         the pair is in fusion_explicit (None: as it is now). A disc recipe
         of a removed card needs no rule to be gone, and one to stay."""
         if pair in self.fusion_explicit if explicit is None else explicit:

@@ -32,7 +32,8 @@ void Tables_Clear(void);
  * bases): 1 with its result in *result, which is 0 when the rule forbids
  * the fusion; 0, leaving *result alone, when no rule applies. */
 int Tables_Fusion(int a, int b, int *result);
-/* What a retail recipe makes, unless a mod removed every recipe for it. */
+/* What a retail recipe makes, unless a mod removed every recipe for it (or
+ * every recipe at all, {"remove": "all"}). */
 int Tables_FilterFusion(int result);
 
 /* Whether `equip` may equip `monster`: 1 or 0 by a mod's rule, -1 when no

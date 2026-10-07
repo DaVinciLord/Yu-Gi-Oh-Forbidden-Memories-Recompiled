@@ -66,6 +66,22 @@ a card by its number.
 | `{"with": [A, B], "result": C}` | A and B fuse into C, in either order. It adds a fusion the disc lacks, or changes one it has |
 | `{"with": [A, B], "result": null}` | A and B do not fuse |
 | `{"remove": C}` | no recipe from the disc makes C any more. Recipes from mods still do |
+| `{"remove": "all"}` | no recipe from the disc makes anything: the disc's fusion table is off. Recipes from mods still do |
+
+`{"remove": "all"}` is the way to start fusions from nothing: the one rule
+takes the disc's whole table away, and the mod's own `with` rules (and an
+added card's own `fusions` list) are then the only fusions there are, for
+the player and the AI alike:
+
+```json
+"fusions": [
+    {"remove": "all"},
+    {"with": ["Kuriboh", "Thunder Dragon"], "result": "Blue-eyes White Dragon"}
+]
+```
+
+Other mods' rules still fuse too; a `"setting"` on the rule makes it a
+switch in the Mods window. A card named `all` (a mod's) is that card here.
 
 A rule for a retail card also holds for the copies of it a mod adds, as the
 disc's table does; a rule that names a copy itself is surer, and comes
