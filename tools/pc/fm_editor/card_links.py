@@ -48,6 +48,7 @@ def install(app, tab, tree, cards_of=None):
         return [int(value)] if value.isdigit() else []
 
     cards_of = cards_of or default
+    tree.cards_of = cards_of        # what the menu lists for a row (tests ask too)
 
     def popup(event):
         iid = tree.identify_row(event.y)
@@ -109,7 +110,15 @@ def install_all(app):
 
     def ritual_cards(iid):
         ritual = int(iid)
-        return [ritual] + [c for c in (p().rituals.get(ritual) or ()) if c]
+        project = p()
+        recipe = project.rituals.get(ritual)
+        if recipe is None and ritual in project.added and not project.ritual_removed(ritual):
+            recipe = project.rituals.get(project.base_of(ritual))      # a copy is its base's ritual
+        cards = [c for c in (recipe or ()) if c]
+        for req in project.ritual_requirements.get(ritual, ()):       # a conditional recipe's cards
+            if req.get("card") and req["card"] not in cards:
+                cards.append(req["card"])
+        return [ritual] + cards
 
     for tab, tree, cards_of in ((app.cards, app.cards.tree, None), (app.art, app.art.tree, None),
                                 (app.fusions, app.fusions.tree, fusion_cards),

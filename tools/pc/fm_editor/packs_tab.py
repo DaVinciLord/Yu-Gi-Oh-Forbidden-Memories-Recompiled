@@ -163,7 +163,13 @@ class PacksTab(Tab):
         form.pack(side="left", fill="x", expand=True)
         self.vars = {k: tk.StringVar() for k in ("name", "description", "price", "count", "image_style")}
         ttk.Label(form, text="Name").grid(row=0, column=0, sticky="w", pady=1)
-        ttk.Entry(form, textvariable=self.vars["name"], width=26).grid(row=0, column=1, sticky="w", pady=1)
+        named = ttk.Frame(form)
+        named.grid(row=0, column=1, sticky="w", pady=1)
+        ttk.Entry(named, textvariable=self.vars["name"], width=26).pack(side="left")
+        # The shop shows NAME_LETTERS letters of a name: the count as it is typed.
+        self.name_count = ttk.Label(named, style="Hint.TLabel", width=6)
+        self.name_count.pack(side="left", padx=(4, 0))
+        self.vars["name"].trace_add("write", lambda *_: self.count_name())
         self.identity = ttk.Label(form, style="Hint.TLabel")
         self.identity.grid(row=0, column=2, sticky="w", padx=6)
         ttk.Label(form, text="Description").grid(row=1, column=0, sticky="w", pady=1)
@@ -748,6 +754,11 @@ class PacksTab(Tab):
             self.app.changed()
         self.baseline = now
         self.applied()
+
+    def count_name(self):
+        n = len(self.vars["name"].get())
+        self.name_count.configure(text=f"{n}/{packmath.NAME_LETTERS}" if n else "",
+                                  style="Error.TLabel" if n > packmath.NAME_LETTERS else "Hint.TLabel")
 
     def edited(self):
         self.app.changed()

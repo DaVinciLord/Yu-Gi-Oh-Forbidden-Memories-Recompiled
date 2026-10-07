@@ -1361,6 +1361,28 @@ class GuiTest(GuiCase):
         cards.show(None)
         self.assertFalse(str(cards.picture.cget("image")))
 
+    def test_small_checks_fusion_result_ritual_menu_pack_name(self):
+        app, p = self.app, self.app.project
+        # A fusion makes a monster: a magic card as the result is refused.
+        magic = next(c for c in sorted(p.cards) if not p.cards[c].is_monster())
+        dialog = app.fusions.add()
+        for key, value in zip("abr", (1, 2, magic)):
+            dialog.fields[key].set(value)
+        dialog.ok()
+        self.assertIn("makes a monster", dialog.error.cget("text"))
+        dialog.destroy()
+        # A ritual copy's right-click lists its base's tributes.
+        ritual = sorted(p.retail.rituals)[0]
+        copy = p.add_card(ritual, "rit")
+        app.rituals.fill()
+        cards = [c for c in p.rituals[ritual] if c]
+        self.assertEqual(app.rituals.tree.cards_of(str(copy)), [copy] + cards)
+        # A pack's name: its letters counted against what the shop shows.
+        app.packs.add_pack()
+        app.packs.vars["name"].set("A" * 20)
+        self.assertEqual(app.packs.name_count.cget("text"), "20/16")
+        self.assertEqual(str(app.packs.name_count.cget("style")), "Error.TLabel")
+
     def test_card_revert_asks_first(self):
         app, cards = self.app, self.app.cards
         cards.goto(3)

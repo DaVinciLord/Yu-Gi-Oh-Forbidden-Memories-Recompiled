@@ -1445,6 +1445,8 @@ class FusionsTab(Tab):
             a, b, r = fields["a"].get(), fields["b"].get(), fields["r"].get()
             if not (a and b and r):
                 return "name three cards (a number, a name, or pick one with ...)"
+            if not self.project.cards[r].is_monster():
+                return f"a fusion makes a monster: {self.project.card_label(r)} is not one"
             if pair and self.project.pair(a, b) != pair:
                 self.project.set_fusion(pair[0], pair[1], None)     # the fusion moved to other cards
             self.project.set_fusion(a, b, r)
