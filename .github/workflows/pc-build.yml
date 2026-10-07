@@ -63,6 +63,59 @@ jobs:
       - run: python tools/pc/test_controls_backend.py --target windows --software
       - run: python tools/pc/test_path_layout.py --build tmp/pc/tests
       - run: cmake --build tmp/pc/tests --target pc_audit
+  core-macos:
+    # The standard macos-15 image is ARM64; the Intel image has a distinct
+    # macos-15-intel label (actions/runner-images).
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            tmp/pc/llvm-macos
+            tmp/pc/tools/macos
+            tmp/pc/macos-deps
+          key: macos-arm64-llvm21.1.8-${{ hashFiles('tools/pc/macos_toolchain.json', 'tools/pc/macos_deps.py', 'tools/pc/dependency_archives.py', 'tools/pc/fetch_tools.py') }}
+      - name: Build the complete macOS ARM64 game without a disc
+        run: python tools/pc/build.py --target macos
+      - name: Verify LLVM transformations and native linkage
+        run: |
+          python tools/pc/test_guest_store_canary.py
+          python tools/pc/test_llvm_guest.py
+          python tools/pc/test_translated_ir.py --case ir
+          python tools/pc/test_translated_ir.py --case ir --optimize
+          python tools/pc/test_native_call_marshalling.py
+          python tools/pc/test_direct_overlay_bridge.py
+          python tools/pc/test_ps1_layouts.py
+          python tools/pc/test_guest_storage_layout.py
+          python tools/pc/test_libgs_sprite_guest.py
+          python tools/pc/test_macos_linkage.py --binary tmp/pc/macos/memories-arm64
+      - name: Native components and sanitizers with Apple Clang
+        run: |
+          # LLVM 21 remains the pinned guest-IR frontend and game toolchain.
+          # Use Apple's runtime for host sanitizer harnesses: LLVM 21's
+          # macOS ASan runtime deadlocks during shadow-memory initialization.
+          # Guest fixtures become native objects with pinned LLVM before
+          # Apple Clang compiles/instruments host units and links its runtime.
+          # Guest objects are unsanitized (ASan runtime ABIs differ); guest
+          # accesses remain covered by the dedicated IR/layout canaries.
+          export CC=/usr/bin/clang
+          export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
+          python tools/pc/test_native.py
+          python tools/pc/test_native.py --sanitize
+          python tools/pc/test_guest_contracts.py --sanitize
+          python tools/pc/test_arm64_mod_loader.py --sanitize
+          python tools/pc/test_macos_fonts.py --sanitize
+          python tools/pc/test_translated_ir.py --case ir --optimize --sanitize
+          python tools/pc/test_native_call_marshalling.py --sanitize
+          python tools/pc/test_direct_overlay_bridge.py --sanitize
+          python tools/pc/test_libgs_sprite_guest.py --sanitize
+      - name: Source contracts
+        run: make basic-types check-g32
   sanitizers:
     runs-on: ubuntu-latest
     steps:

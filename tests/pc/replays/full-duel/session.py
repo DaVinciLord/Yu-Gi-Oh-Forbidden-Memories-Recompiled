@@ -26,7 +26,7 @@ def hand_ids(game):
     return [card and card["id"] for card in game.duel()[0]["hand"]]
 
 
-def attack_all(game):
+def attack_all(game, animated=True):
     """Every monster of the player's that has not attacked: at the
     opponent's weakest monster, or directly when they have none."""
     for column in range(5):
@@ -43,10 +43,10 @@ def attack_all(game):
         target = None
         if theirs:
             target = theirs[0][1]
-        attack_3d(game, column, target)
+        attack_3d(game, column, target, animated=animated)
 
 
-def attack_3d(game, column, target):
+def attack_3d(game, column, target, animated=True):
     """Game.attack, with a monster target committed by Square: the 3D battle,
     where the attacker's MODEL variant module runs (notes/pc-build.md, MIPS-only
     effects); Cross commits it without the presentation."""
@@ -74,7 +74,7 @@ def attack_3d(game, column, target):
     # Until the battle starts: the target screen takes a press only once its
     # camera has come round. A direct attack takes Cross only.
     game.press_until(lambda g: g.mode() != DUEL or g.phase() != 5,
-                     "square" if target is not None else "cross", every=40, timeout=1200, what="the battle")
+                     "square" if target is not None and animated else "cross", every=40, timeout=1200, what="the battle")
     settle(game)
 
 

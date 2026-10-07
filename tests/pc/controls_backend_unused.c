@@ -39,6 +39,9 @@ UNUSED_GAME_FUNCTION(GlPicture_Stop)
 UNUSED_GAME_FUNCTION(Platform_NotifyPresent)
 UNUSED_GAME_FUNCTION(GlPicture_Read)
 UNUSED_GAME_FUNCTION(GlPicture_Behind)
+/* The software-controls fixture has no GL core presenter; as on the
+ * unsupported backend, report unavailable so SDL can keep its plain path. */
+int PresentPass_InitCore(void) { return 0; }
 UNUSED_GAME_FUNCTION(ModsWindow_Event)
 UNUSED_GAME_FUNCTION(ModsWindow_Redraws)
 UNUSED_GAME_FUNCTION(ModsWindow_RequestClose)
