@@ -20,6 +20,7 @@ from .widgets import Pages, px
 
 APP_TITLE = "FM Editor"
 HISTORY_PAUSE = 350      # ms of no change before an undo step is taken
+PROJECT_URL = "https://github.com/Unchiga/Yu-Gi-Oh-Forbidden-Memories-Recompiled"
 
 
 def initial_geometry(window, area=None) -> str:
@@ -140,6 +141,14 @@ class App(Editing, tk.Tk):
         self.zoom.build_menu(view)
         bar.add_cascade(label="View", menu=view)
         helps = tk.Menu(bar, tearoff=False)
+        # The guides, as GitHub shows them (the notes are Markdown).
+        for label, path in (("FM Editor guide", "tools/pc/fm_editor/README.md"),
+                            ("Fusions, equips, rituals, drops and limits", "notes/gameplay-tables.md"),
+                            ("New cards and changed ones", "notes/more-cards.md"),
+                            ("Starter decks and pools", "notes/starter-deck.md"),
+                            ("Making mods", "notes/modding.md")):
+            helps.add_command(label=label, command=lambda path=path: self.open_guide(path))
+        helps.add_separator()
         helps.add_command(label="About", command=self.about)
         bar.add_cascade(label="Help", menu=helps)
         self.config(menu=bar)
@@ -582,6 +591,10 @@ class App(Editing, tk.Tk):
                    ov.PACKS: self.packs, ov.PASSWORDS: self.packs, ov.STARS: self.stars, ov.LIMITS: self.limits,
                    ov.TEXTURES: self.art}.get(kind, self.info)
             self.notebook.select(tab)
+
+    def open_guide(self, path):
+        import webbrowser
+        webbrowser.open(f"{PROJECT_URL}/blob/master/{path}")
 
     def about(self):
         messagebox.showinfo(APP_TITLE, "FM Editor\n\nMakes mods for the PC port of Yu-Gi-Oh! Forbidden Memories. "

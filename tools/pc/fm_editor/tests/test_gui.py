@@ -1360,6 +1360,22 @@ class GuiTest(GuiCase):
         cards.show(None)
         self.assertFalse(str(cards.picture.cget("image")))
 
+    def test_help_opens_the_guides(self):
+        from pathlib import Path as P
+        app = self.app
+        helps = app.nametowidget(app.nametowidget(app.cget("menu")).entrycget("end", "menu"))
+        labels = [helps.entrycget(i, "label") for i in range(helps.index("end") + 1) if helps.type(i) == "command"]
+        self.assertIn("FM Editor guide", labels)
+        root = P(__file__).resolve().parents[4]
+        with mock.patch("webbrowser.open") as opened:
+            for i in range(helps.index("end") + 1):
+                if helps.type(i) == "command" and helps.entrycget(i, "label") != "About":
+                    helps.invoke(i)
+        urls = [call.args[0] for call in opened.call_args_list]
+        self.assertEqual(len(urls), len(labels) - 1)
+        for url in urls:                    # each a file of the repository
+            self.assertTrue((root / url.split("/blob/master/")[1]).exists(), url)
+
     def test_ctrl_f_goes_to_the_search(self):
         app = self.app
         app.deiconify()
