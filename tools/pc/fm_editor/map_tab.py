@@ -103,6 +103,7 @@ class MapTab(Tab):
         self.heading.pack(anchor="w")
         camera = ttk.LabelFrame(parent, text="Camera", padding=4)
         camera.pack(fill="x", pady=2)
+        self.camera_frame = camera
         for column, (key, text, low, high) in enumerate((("distance", "Distance", -32768, 32767),
                                                          ("heading", "Heading", -32768, 32767),
                                                          ("pitch", "Pitch", -32768, 32767))):
@@ -113,6 +114,7 @@ class MapTab(Tab):
             self.spin(camera, var(key), -32768, 32767).grid(row=1, column=column * 2 + 1, padx=(2, 8), pady=2)
         marker = ttk.LabelFrame(parent, text="Millennium Puzzle marker (the town)", padding=4)
         marker.pack(fill="x", pady=2)
+        self.marker_frame = marker      # a town's only: the world map draws none
         ttk.Label(marker, text="x").grid(row=0, column=0)
         self.marker_x = self.spin(marker, var("marker_x"), -32768, 32767)
         self.marker_x.grid(row=0, column=1, padx=(2, 8))
@@ -256,8 +258,11 @@ class MapTab(Tab):
             town = self.index >= cm.TOWN_FIRST
             for box in (self.marker_x, self.marker_y):
                 box.state(["!disabled"] if town else ["disabled"])
-            self.marker_note.configure(text="" if town else "The world map draws no marker: these are kept as "
-                                                            "the disc has them.")
+            self.marker_note.configure(text="")
+            if town:
+                self.marker_frame.pack(fill="x", pady=2, after=self.camera_frame)
+            else:                       # the world map draws no marker: not a greyed box of numbers
+                self.marker_frame.pack_forget()
             for n, e in enumerate(loc.exits):
                 v = self.exit_vars[n]
                 v["used"].set(e.used)
@@ -281,11 +286,12 @@ class MapTab(Tab):
         loc = self.map.locations[self.index]
         for n, e in enumerate(loc.exits):
             if e.used:
-                where = cm.name(self.project, e.destination).split(" / ")[0] if e.destination < cm.COUNT else "?"
                 glyphs = "".join(ARROW_GLYPHS[d] for d in cm.direction_names(e.buttons))
-                text = f"{n + 1} {glyphs} {where}"
+                # Short, so the four tabs fit: the exit's form names the place,
+                # as the screen's arrows do.
+                text = f"Exit {n + 1} {glyphs}"
             else:
-                text = f"{n + 1} (none)"
+                text = f"Exit {n + 1} \u2014"     # not used
             self.exit_book.tab(n, text=text)
 
     def confirm_text(self, value):

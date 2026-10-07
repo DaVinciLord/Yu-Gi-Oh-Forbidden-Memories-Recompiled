@@ -310,6 +310,9 @@ class GuardianStarsTabTest(unittest.TestCase):
         tab = GuardianStarsTab(notebook, app)
         tab.refresh()
         self.assertEqual(tab.default.get(), "700")
+        # A star is picked from the start, its button saying what it does.
+        self.assertEqual(tab.selected_star, 1)
+        self.assertEqual(tab.remove_button.cget("text"), "Reset")
         self.assertEqual(len(tab.tree.get_children()), 10)
         tab.pick_cell(1, 2)
         self.assertEqual(tab.value.get(), "700")
@@ -322,6 +325,7 @@ class GuardianStarsTabTest(unittest.TestCase):
         self.assertEqual(len(tab.tree.get_children()), 11)
         tab.tree.selection_set("11")
         tab._pick_star()
+        self.assertEqual(tab.remove_button.cget("text"), "Remove")
         tab.name.set("Fire")
         tab.set_name()
         with tempfile.TemporaryDirectory() as folder:

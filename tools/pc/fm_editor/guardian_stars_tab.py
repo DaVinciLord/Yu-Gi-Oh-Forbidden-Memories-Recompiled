@@ -80,7 +80,8 @@ class GuardianStarsTab(Tab):
         row = ttk.Frame(left)
         row.pack(fill="x", pady=(4, 0))
         ttk.Button(row, text="Add star", command=self.add_star).pack(side="left")
-        ttk.Button(row, text="Remove", command=self.remove_star).pack(side="left", padx=4)
+        self.remove_button = ttk.Button(row, text="Remove", command=self.remove_star, width=8)
+        self.remove_button.pack(side="left", padx=4)
         form = ttk.Frame(left)
         form.pack(fill="x", pady=(6, 0))
         self.name = tk.StringVar()
@@ -177,6 +178,11 @@ class GuardianStarsTab(Tab):
         self.choice.set(self.model.choice or "ask")
         self.cell = None
         self.fill()
+        # A star picked, so its name and icon show (an empty form, else).
+        star = self.selected_star if self.tree.exists(str(self.selected_star or 0)) else 1
+        if self.tree.exists(str(star)):
+            self.tree.selection_set(str(star))
+            self._pick_star()
 
     def commit(self):
         if self.project is None:
@@ -241,6 +247,8 @@ class GuardianStarsTab(Tab):
         self.names.set(_names_text(name))
         self.palette.set(entry.palette if entry and entry.palette else "game")
         self._show_icon()
+        # A disc star is not removed, only given back its disc name and icon.
+        self.remove_button.configure(text="Reset" if self.selected_star <= gs.RETAIL_COUNT else "Remove")
 
     def _star_entry(self, star: int) -> gs.Star:
         return self.model.stars.setdefault(star, gs.Star(star))

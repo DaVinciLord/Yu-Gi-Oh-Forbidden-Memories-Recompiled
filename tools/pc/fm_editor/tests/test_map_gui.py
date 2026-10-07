@@ -72,6 +72,18 @@ class MapGuiTest(unittest.TestCase):
         tab.exit_vars[0]["flag"].set(5)
         self.assertNotIn("Not stored", tab.problems.cget("text"))
 
+    def test_marker_only_for_a_town_and_short_exit_tabs(self):
+        app, tab = self.app, self.app.map
+        app.update()
+        tab.select(0)                   # a world place: no marker box
+        app.update()
+        self.assertFalse(tab.marker_frame.winfo_ismapped())
+        tab.select(13)                  # a town's
+        app.update()
+        self.assertTrue(tab.marker_frame.winfo_ismapped())
+        titles = [tab.exit_book.tab(n, "text") for n in range(len(tab.exit_vars))]
+        self.assertTrue(all(t.startswith(f"Exit {n + 1}") for n, t in enumerate(titles)), titles)
+
     def test_edit_drag_save(self):
         app, tab = self.app, self.app.map
         self.assertEqual(tab.tree.item("0", "values")[1], "Place A")
