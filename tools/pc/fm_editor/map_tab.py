@@ -374,7 +374,7 @@ class MapTab(Tab):
             if arrow is not None:
                 e.arrow = arrow
         self.problems.configure(style="Warning.TLabel")
-        self.store(loc)
+        self.store(loc, soon=True)
         self.show_problems()
         if refill:
             self.after_idle(self.fill_form)
@@ -384,15 +384,32 @@ class MapTab(Tab):
         it does, and the tab says which (it was silently kept as it was)."""
         self.problems.configure(text=f"Not stored: {why}.", style="Error.TLabel")
 
-    def store(self, loc):
+    def store(self, loc, soon=False):
+        """The place as the form or a drag has it; `soon`: drawn once the
+        typing stops (a camera field drew the 3D model at every key)."""
         if loc == self.map.locations[self.index]:
             return
         self.map.locations[self.index] = loc
         self.exit_titles()
         self.update_row(self.index)
         self.app.changed()
-        self.draw()
+        if soon:
+            self.draw_soon()
+        else:
+            self.draw()
         self.show_problems()
+
+    def draw_soon(self):
+        # One Tcl command made once (see FusionsTab.fill_soon).
+        if getattr(self, "_draw_command", None) is None:
+            self._draw_command = self.register(self._draw_due)
+        if getattr(self, "_draw_job", None) is not None:
+            self.tk.call("after", "cancel", self._draw_job)
+        self._draw_job = self.tk.call("after", 150, self._draw_command)
+
+    def _draw_due(self):
+        self._draw_job = None
+        self.draw()
 
     def show_problems(self):
         issues = []
@@ -487,6 +504,9 @@ class MapTab(Tab):
         return picture, f"drawn from the disc's map model, {self.package.get()}"
 
     def draw(self):
+        if getattr(self, "_draw_job", None) is not None:     # drawn now: the waiting draw is not needed
+            self.tk.call("after", "cancel", self._draw_job)
+            self._draw_job = None
         self.canvas.delete("all")
         if self.project is not None and getattr(self, "drawn_version", None) != (id(self.project), self.version()):
             self.photos.clear()         # the pictures of another mod, or before an import
@@ -671,6 +691,8 @@ class MapTab(Tab):
         return None
 
     def press(self, event):
+        if getattr(self, "_draw_job", None) is not None:
+            self.draw()                 # the screen as the form has it, before picking what is under the mouse
         if self.project is None or not cm.available(self.project):
             return
         found = self.hit(event)

@@ -84,6 +84,28 @@ class MapGuiTest(unittest.TestCase):
         tab.vars["distance"].set(before.distance + 10)
         self.assertEqual(cm.state(app.project).locations[13].distance, before.distance + 10)
 
+    def test_typing_draws_and_records_once_it_pauses(self):
+        """A camera field applies at each key: the 3D screen is drawn, and
+        the undo step taken, once the typing stops, not at every key."""
+        from unittest import mock
+        from fm_editor.app import HISTORY_PAUSE
+        app, tab = self.app, self.app.map
+        tab.select(0)
+        app.update()
+        start = int(tab.vars["distance"].get())
+        with mock.patch.object(tab, "draw_screen") as drawn, \
+                mock.patch.object(app.history, "record", wraps=app.history.record) as recorded:
+            for n in range(1, 6):
+                tab.vars["distance"].set(start + n)
+                app.update()
+            self.assertEqual((drawn.call_count, recorded.call_count), (0, 0))
+            app.after(HISTORY_PAUSE + 100)
+            app.update()
+            self.assertEqual((drawn.call_count, recorded.call_count), (1, 1))
+        self.assertEqual(cm.state(app.project).locations[0].distance, start + 5)
+        app.undo()
+        self.assertEqual(cm.state(app.project).locations[0].distance, start)   # one step for the five keys
+
     def test_marker_only_for_a_town_and_short_exit_tabs(self):
         app, tab = self.app, self.app.map
         app.update()

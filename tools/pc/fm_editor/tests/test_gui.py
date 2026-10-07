@@ -64,6 +64,13 @@ class GuiCase(unittest.TestCase):
         self.app.dirty = False
         self.app.destroy()
 
+    def pause(self):
+        """As a person pauses between two edits: the undo step is taken."""
+        from fm_editor.app import HISTORY_PAUSE
+        self.app.update()
+        self.app.after(HISTORY_PAUSE + 50)
+        self.app.update()
+
     def click_heading(self, tree, column):
         tree.tk.call(tree.heading(column, "command"))
 
@@ -1812,7 +1819,7 @@ class GuiTest(GuiCase):
         p = tab.project
         p.set_fusion(1, 2, 500)
         app.changed()
-        app.update()
+        self.pause()
         tab.fill()
         self.assertEqual(tab.all_button.cget("text"), "Remove all fusions...")
         with mock.patch("fm_editor.tabs.messagebox.askyesno", return_value=False):
@@ -1903,13 +1910,13 @@ class GuiTest(GuiCase):
         app.cards.show_kind()
         app.cards.vars["effect"].set(app.cards.effect_label(301))
         self.assertTrue(app.cards.apply(quiet=True))
-        app.update()
+        self.pause()
         app.notebook.select(app.equips)
         app.update()
         self.assertTrue(app.equips.equips.exists("1"))
         app.project.equips[1] = {2, 3}
         app.changed()
-        app.update()
+        self.pause()
         app.undo()
         app.update()
         self.assertNotIn(1, app.project.equips)
@@ -2042,7 +2049,7 @@ class GuiTest(GuiCase):
 
         app.project.cards[1].name = "Recorded"
         app.changed()
-        app.update()                        # the history records it when idle
+        self.pause()                        # the history records it once the changes pause
         self.assertIsNone(app._history_job)
         with mock.patch.object(recovery, "Snapshot", side_effect=AssertionError("snapshot taken twice")):
             app.autosave()

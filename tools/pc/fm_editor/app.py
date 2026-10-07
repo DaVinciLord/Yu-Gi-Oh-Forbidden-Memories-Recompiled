@@ -19,6 +19,7 @@ from .tabs import (CardsTab, DuelistsTab, EquipsTab, FusionsTab, ModInfoTab, Con
 from .widgets import Pages, px
 
 APP_TITLE = "FM Editor"
+HISTORY_PAUSE = 350      # ms of no change before an undo step is taken
 
 
 def initial_geometry(window, area=None) -> str:
@@ -252,8 +253,13 @@ class App(Editing, tk.Tk):
             return
         self.dirty = True
         self.update_title()
-        if self._history_job is None:
-            self._history_job = self.after_idle(self.record_edit)
+        # The undo step once the changes pause: a snapshot of the whole mod
+        # takes a quarter second with the disc's tables, and a field that
+        # applies as it is typed (the Map's camera) made one at every key.
+        # Undo and the like take a waiting one first (flush_history).
+        if self._history_job is not None:
+            self.after_cancel(self._history_job)
+        self._history_job = self.after(HISTORY_PAUSE, self.record_edit)
         self.schedule_recovery()
         self.update_edit_state()
 
