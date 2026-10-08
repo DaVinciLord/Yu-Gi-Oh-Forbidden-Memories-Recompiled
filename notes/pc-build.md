@@ -1215,8 +1215,13 @@ Three independent controls (`platform.h`, `platform_common.c`):
   the game while game frames come no faster than the display refreshes;
   above that (200% on a 60 Hz display, or uncapped) the backend presents
   unsynced and the frame-rate cap alone limits presents. At 100% on a 60 Hz
-  display the game's VBlank is re-phased to the display so the two rates do
-  not beat.
+  display the swap paces the game: the game's VBlank comes when a swap that
+  waited for the display returns, and the next a refresh later (less a 64th,
+  so a driver that queues swaps fills its queue and starts to wait), and a
+  cap at the refresh or above drops nothing. It used to come a refresh less
+  1.5 ms after every swap, which added whatever the game and the present
+  took past 1.5 ms to every frame: 45 fps with widescreen, the CRT pass and
+  a model mod on an older PC.
 
 `VSync(0)` presents, then waits for the next VBlank after entry. It must
 not return at once because a VBlank passed since the previous call:
