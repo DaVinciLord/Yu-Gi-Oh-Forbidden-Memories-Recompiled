@@ -52,7 +52,7 @@ The window has a tab per table:
 | Art | a card's picture (102x96), thumbnail (40x32, the hand and the field) and name plate (96x14), one picture each in the view chosen at the top: **Disc**, **In game** (the console's resolution) or **Internal 2x/4x**; a part the mod changes shows the disc's beside it (before, after). **Import PNG** (up to 4x, 408x384 and 160x128, for detail at Internal 2x/4x, on retail and added cards alike; or double-click a picture), **Export** the disc's or the mod's (to paint over), **Revert to disc**. The pictures grow to the room the window gives them, the thumbnail and name plate side by side under the picture when that makes them bigger |
 | Fusions | every pair and its result (search by a card, or show the changed ones); add, change, remove (the pair no longer fuses) or revert; **Remove recipes of...** takes away every disc recipe of a card in one `remove` rule; **Remove all fusions...** leaves none at all (the disc's table goes in one `{"remove": "all"}` rule, the mod's own fusion rules are dropped and an added card's own recipes blocked), so fusions added after it are the only ones, and the button then reads **Restore disc fusions** to bring the disc's table back; a pair a card's own `fusions` list makes (no rule of the mod deciding it first) shows that list's result, marked "own list"; **Bulk (many pairs)...** adds or takes away the fusions of every card of one filtered set with every card of another (below) |
 | Equips | per equip card, the monsters it may equip; add one, remove (Delete), revert; **By monster type**: a box a type, ticked when the equip fits every monster of it and half ticked for some, beside the count (Warrior 33/73): ticking adds the type, unticking takes it away, and a count lists that type's monsters alone |
-| Rituals | per ritual card, its three tributes and the monster it summons; **Remove recipe** takes a disc ritual's away, or an added copy's (which otherwise has its base's), as `"result": null` |
+| Rituals | every ritual card in a list (search, **Changed only**); the chosen one's recipe as cards in a row, with their pictures: the ritual card + its tributes → what it summons, and the same in a sentence. **Tributes come from** **On the field** (the game's), **In the hand** or **Both** (`"tributes_from"`); one to five tributes (**Add a tribute**, the × on a tribute). A click on a card edits it below: a tribute is **A specific card** (a copy counts too) or **Any monster that...** meets conditions (type, fusion group, ATK, DEF, level, DEF above ATK); the result a monster. Changes are the mod's at once (Undo takes them back). **Remove recipe** takes a disc ritual's away, or an added copy's (which otherwise has its base's), as `"result": null`; **Give it its own recipe** starts a copy's from its base's ([rituals](../../../notes/gameplay-tables.md#rituals)) |
 | Duelists | per opponent, the deck pool and the S/A-POW, B/C/D and S/A-TEC drop pools: weights, their chance, the retail weight, and the total against 2048 (**Scale to 2048 (100%)** scales a pool back to 2048 the way the port does). The deck is either the **Weighted deck (retail)** or a **Fixed deck (40 cards)**: forty specific cards by their copies, counted against 40, each beside its weighted chance; **Copy the weighted deck's most likely 40**, **Clear**, **Revert to retail**; a line says what the pool deals (a deck pool, the forty it deals most often; a drop pool, the chance of a monster and its strongest one), beside the disc's once changed |
 | Starter decks | the decks a new game may be dealt in place of the disc's weighted pools: a deck's name, its weight against the other decks offered, and its cards by their copies, counted against the forty a deck holds, with a line of what it is made of (monsters and their average ATK, magic, traps...). **Add deck**: an empty deck, an opponent's (its fixed deck, or the forty its weighted deck deals most often), one deal of the disc's seven starter pools, or a copy of the selected one. **Weighted pools** (`starter_pools`): pools of the mod's own a new game's deck is drawn from, each its number of cards by its weights, the draws counted against forty; **Start from the disc's seven pools** to change them |
 | Map | the campaign map's sixteen places (below): each exit's destination, direction, story-flag condition, length and arrow on the screen, the Millennium Puzzle marker's place in the town, Confirm's destination and each place's camera, over pictures of the map drawn from your disc; **Reset place**, **Reset all**; **Pictures...**: the marker, arrows and name panel, and the terrain's textures |
@@ -844,8 +844,12 @@ into isolated folders and play real duels (no changes to your saves or mods):
     python3 tests/pc/editor_mods_runtime.py
     python3 tests/pc/editor_mods_runtime.py --hard-mode
     python3 tests/pc/editor_round_trip_runtime.py
+    python3 tests/pc/ritual_tributes_runtime.py --editor --interpreter
 
-The last makes a mod through every tab's own buttons and dialogs (cards,
+`ritual_tributes_runtime.py` plays rituals of one to five tributes from the
+field, the hand and both, by the player and the CPU, natively and with the
+duel effects interpreted (its docstring lists every check). The
+`editor_round_trip_runtime.py` run makes a mod through every tab's own buttons and dialogs (cards,
 art, fusions, equips, rituals, duelists, starter decks, limits, Guardian
 Stars, packs, the map, a setting), exports it, and starts a new game into
 a duel on it: the game must read each part and note nothing against it.
@@ -943,8 +947,12 @@ the engine keeps no undo (a front end may keep `project.clone()`s).
   (`own_fusion_pairs`, `explicit_after_edit`).
   Bulk: `bulk_fusions.plan(project, BulkSpec(...))`, then `apply` and `undo`.
 * Equips: `project.equips[equip]` is a set of monsters; `equip_baseline`
-  is what the disc gives it. Rituals: `project.rituals[ritual] = (t1, t2,
-  t3, result)`; `ritual_status`, `revert_ritual`.
+  is what the disc gives it. Rituals: `project.set_ritual(ritual, tributes,
+  result, origin)` (one to five requirement dictionaries, `{"card": id}` a
+  plain one; origin `"field"`, `"hand"` or `"both"`) and
+  `project.ritual_recipe(ritual)`; underneath, `project.rituals[ritual] =
+  (tribute, ..., result)`, `ritual_requirements` and `ritual_from`;
+  `ritual_status`, `revert_ritual`.
 * Duelists: `project.pools[duelist][pool]` is `{card: weight}` for the
   pools `gamedata.POOLS` (`"deck"`, `"pow"`, `"bcd"`, `"tec"`), out of
   2048; `pools.normalize`, `revert_pool`. A fixed deck:
