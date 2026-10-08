@@ -18,6 +18,7 @@ const char *const MonsterEffect_WhenNames[MONSTER_WHEN_COUNT] = {"summon", "flip
 const char *const MonsterEffect_DoNames[MONSTER_DO_COUNT] = {"magic", "boost", "heal", "damage", "destroy"};
 const char *const MonsterEffect_TargetNames[MONSTER_TARGET_COUNT] = {"self", "own", "others", "opponent", "all",
                                                                      "battle"};
+const char *const MonsterEffect_EachNames[MONSTER_EACH_COUNT] = {"", "own", "opponent", "all"};
 #define AMOUNT_MAX 9999
 #define BOOST_MAX 9999
 
@@ -48,6 +49,11 @@ int MonsterEffect_Allowed(int when, int action, int target)
     if (action != MONSTER_DO_BOOST) return 1;
     /* A destroyed card has no self to boost. */
     return !(when == MONSTER_WHEN_DESTROYED && target == MONSTER_TARGET_SELF);
+}
+
+int MonsterEffect_EachAllowed(int action)
+{
+    return action == MONSTER_DO_BOOST || action == MONSTER_DO_HEAL || action == MONSTER_DO_DAMAGE;
 }
 
 int MonsterEffect_DefaultTarget(int when, int action)
@@ -89,12 +95,67 @@ static int number(const char *mod, int index, int n, const JsonValue *entry, con
     return 1;
 }
 
+/* An object's "type" and "attribute" (`where` names it in the notes):
+ * 0 when one is wrong. */
+static int filter(const char *mod, int index, int n, const char *where, const JsonValue *object, signed char *type,
+                  signed char *attribute)
+{
+    const JsonValue *value = Json_Member(object, "type");
+    int v;
+    if (value) {
+        v = Json_TypeOf(value) == JSON_NUMBER ? (int)Json_Number(value, -1) : Cards_TypeNamed(Json_String(value, ""));
+        if (v < 0 || v >= CARD_TYPE_MAGIC) {
+            Mods_Note(mod, "cards[%d]: monster_effects[%d]: %s\"type\" must be a monster type", index, n, where);
+            return 0;
+        }
+        *type = (signed char)v;
+    }
+    value = Json_Member(object, "attribute");
+    if (value) {
+        v = Json_TypeOf(value) == JSON_NUMBER ? (int)Json_Number(value, -1)
+                                              : Cards_AttributeNamed(Json_String(value, ""));
+        if (v < 0 || v > 5) {
+            Mods_Note(mod, "cards[%d]: monster_effects[%d]: %s\"attribute\" must be Light, Dark, Earth, Water, "
+                      "Fire or Wind", index, n, where);
+            return 0;
+        }
+        *attribute = (signed char)v;
+    }
+    return 1;
+}
+
+/* "for_each": what is counted. 0 when it is wrong. */
+static int read_each(const char *mod, int index, int n, const JsonValue *each, int action, MonsterEffect *out)
+{
+    const JsonValue *whose = Json_Member(each, "whose");
+    if (!MonsterEffect_EachAllowed(action)) {
+        Mods_Note(mod, "cards[%d]: monster_effects[%d]: \"for_each\" goes only with boost, heal or damage", index,
+                  n);
+        return 0;
+    }
+    if (Json_TypeOf(each) != JSON_OBJECT) {
+        Mods_Note(mod, "cards[%d]: monster_effects[%d]: \"for_each\" must be an object", index, n);
+        return 0;
+    }
+    out->each = MONSTER_EACH_ALL;
+    if (whose) {
+        int v = named(Json_String(whose, NULL), MonsterEffect_EachNames + 1, MONSTER_EACH_COUNT - 1);
+        if (v < 0) {
+            Mods_Note(mod, "cards[%d]: monster_effects[%d]: \"for_each\": \"whose\" must be own, opponent or all",
+                      index, n);
+            return 0;
+        }
+        out->each = (unsigned char)(v + 1);
+    }
+    return filter(mod, index, n, "\"for_each\": ", each, &out->each_type, &out->each_attribute);
+}
+
 static int read_one(const char *mod, int index, int n, const JsonValue *entry, MonsterEffect *out)
 {
     const JsonValue *value;
     int when, action, target, v;
     memset(out, 0, sizeof(*out));
-    out->type = out->attribute = -1;
+    out->type = out->attribute = out->each_type = out->each_attribute = -1;
     if (Json_TypeOf(entry) != JSON_OBJECT) {
         Mods_Note(mod, "cards[%d]: monster_effects[%d] is not an object", index, n);
         return 0;
@@ -156,26 +217,7 @@ static int read_one(const char *mod, int index, int n, const JsonValue *entry, M
         }
         out->attack = (short)attack;
         out->defense = (short)defense;
-        value = Json_Member(entry, "type");
-        if (value) {
-            v = Json_TypeOf(value) == JSON_NUMBER ? (int)Json_Number(value, -1) : Cards_TypeNamed(Json_String(value, ""));
-            if (v < 0 || v >= CARD_TYPE_MAGIC) {
-                Mods_Note(mod, "cards[%d]: monster_effects[%d]: \"type\" must be a monster type", index, n);
-                return 0;
-            }
-            out->type = (signed char)v;
-        }
-        value = Json_Member(entry, "attribute");
-        if (value) {
-            v = Json_TypeOf(value) == JSON_NUMBER ? (int)Json_Number(value, -1)
-                                                  : Cards_AttributeNamed(Json_String(value, ""));
-            if (v < 0 || v > 5) {
-                Mods_Note(mod, "cards[%d]: monster_effects[%d]: \"attribute\" must be Light, Dark, Earth, Water, "
-                          "Fire or Wind", index, n);
-                return 0;
-            }
-            out->attribute = (signed char)v;
-        }
+        if (!filter(mod, index, n, "", entry, &out->type, &out->attribute)) return 0;
         break;
     }
     default:
@@ -188,6 +230,8 @@ static int read_one(const char *mod, int index, int n, const JsonValue *entry, M
         out->amount = v;
         break;
     }
+    value = Json_Member(entry, "for_each");
+    if (value && !read_each(mod, index, n, value, action, out)) return 0;
     return 1;
 }
 

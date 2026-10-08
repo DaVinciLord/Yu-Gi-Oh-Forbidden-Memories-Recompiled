@@ -12,7 +12,7 @@ import sys
 import tkinter as tk
 from tkinter import ttk
 
-from . import fixed_decks, packs as packmath, starter_pools, validate
+from . import fixed_decks, packs as packmath, roster, starter_pools, validate
 from .gamedata import DUELIST_NAMES, POOL_LABELS, POOL_TOTAL, POOLS, TYPE_EQUIP
 from .widgets import px, scrolled_tree
 
@@ -48,6 +48,7 @@ def install(app, tab, tree, cards_of=None):
         return [int(value)] if value.isdigit() else []
 
     cards_of = cards_of or default
+    tree.cards_of = cards_of        # what the menu lists for a row (tests ask too)
 
     def popup(event):
         iid = tree.identify_row(event.y)
@@ -102,12 +103,22 @@ def install_all(app):
     p = lambda: app.project     # noqa: E731 -- the project changes when a mod is opened
 
     def fusion_cards(iid):
+        if ":" not in iid or not iid.split(":")[0].isdigit():
+            return []           # a group's row (Fuses with, Made by)
         a, b = (int(x) for x in iid.split(":"))
-        return [a, b, p().fusions.get((a, b))]
+        return [a, b, app.fusions.shown_result((a, b))]
 
     def ritual_cards(iid):
         ritual = int(iid)
-        return [ritual] + [c for c in (p().rituals.get(ritual) or ()) if c]
+        project = p()
+        recipe = project.rituals.get(ritual)
+        if recipe is None and ritual in project.added and not project.ritual_removed(ritual):
+            recipe = project.rituals.get(project.base_of(ritual))      # a copy is its base's ritual
+        cards = [c for c in (recipe or ()) if c]
+        for req in project.ritual_requirements.get(ritual, ()):       # a conditional recipe's cards
+            if req.get("card") and req["card"] not in cards:
+                cards.append(req["card"])
+        return [ritual] + cards
 
     for tab, tree, cards_of in ((app.cards, app.cards.tree, None), (app.art, app.art.tree, None),
                                 (app.fusions, app.fusions.tree, fusion_cards),
@@ -159,13 +170,13 @@ def uses(app, cid) -> list:
         if ritual not in p.cards:
             continue
         recipe = list(p.rituals.get(ritual) or ())
-        tributes = recipe[:3] + [req.get("card") for req in p.ritual_requirements.get(ritual, [])]
+        tributes = recipe[:-1] + [req.get("card") for req in p.ritual_requirements.get(ritual, [])]
         go = lambda r=ritual: app.open_card(app.rituals, r)     # noqa: E731
         if ritual == cid:
             add("Rituals", "Its ritual", go)
         if cid in tributes:
             add("Rituals", f"Tribute for {p.card_label(ritual)}", go)
-        if len(recipe) > 3 and recipe[3] == cid:
+        if recipe and recipe[-1] == cid:
             add("Rituals", f"Summoned by {p.card_label(ritual)}", go)
     for d, pools in enumerate(p.pools):
         name = DUELIST_NAMES[d] if d < len(DUELIST_NAMES) else str(d)
@@ -183,6 +194,13 @@ def uses(app, cid) -> list:
             if weight:
                 add("Duelists", f"{name}: {POOL_LABELS[pool]}, {weight * 100 / POOL_TOTAL:.2f}%",
                     lambda d=d, pool=pool: app.open_pool(d, pool, cid))
+    for e in roster.copies(p):          # the duelists the mod adds
+        for pool in POOLS:
+            weight = e.pools[pool].get(cid, 0)
+            if weight:
+                add("Duelists", f"{roster.shown_name(p, e)} (added): {POOL_LABELS[pool]}, "
+                                f"{weight * 100 / POOL_TOTAL:.2f}%",
+                    lambda key=e.key, pool=pool: app.open_pool(key, pool, cid))
     for i, deck in enumerate(p.starter):
         copies = deck.cards.get(cid, 0)
         if copies:
@@ -201,11 +219,12 @@ def uses(app, cid) -> list:
         if isinstance(unlock, dict) and "card" in unlock and resolve(unlock["card"]) == cid:
             add("Packs", entry.get("name", packmath.pack_id(entry)) + ": unlocked by owning it",
                 lambda i=i: app.open_pack(i))
-    # No tab edits "starter_pools" (kept as written in mod.json): listed, no link.
+    # The Starter decks tab's Weighted pools page.
     for i, pool in enumerate(starter_pools.state(p)):
         weight = pool.cards.get(cid, 0)
         if weight:
-            add("Starter pools", f"{pool.name or f'pool {i + 1}'}: weight {weight} (mod.json only)", None)
+            add("Starter pools", f"{pool.name or f'pool {i + 1}'}: weight {weight}",
+                lambda i=i: app.open_starter_pool(i, cid))
     return lines
 
 

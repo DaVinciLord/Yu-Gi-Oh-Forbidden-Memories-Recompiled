@@ -237,7 +237,16 @@ class GuiTest(unittest.TestCase):
         cls.tmp.cleanup()
 
     def setUp(self):
+        from unittest import mock
+        from fm_editor import settings
         from fm_editor.app import App
+        # Never the user's own settings (a dark mode or interface size they
+        # chose): a settings file of the test's own.
+        own = Path(self.tmp.name) / "config" / "settings.json"
+        own.unlink(missing_ok=True)
+        patcher = mock.patch.object(settings, "path", lambda: own)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.app = App(ask=False, autostart=False)
         self.app.withdraw()
         self.app.update()
@@ -265,7 +274,7 @@ class GuiTest(unittest.TestCase):
         deck = fixed_decks.deck_of(app.project, 1)
         self.assertEqual(deck.cards, fixed_decks.most_likely(app.project.pools[1]["deck"]))
         self.assertIn("40 / 40", tab.total.cget("text"))
-        self.assertEqual(tab.list.item("1", "values")[2], "fixed")
+        self.assertEqual(tab.list.set("1", "state"), "fixed deck")
         # Clear, add a card with its copies, then another.
         view.clear()
         self.assertIn("0 / 40", tab.total.cget("text"))

@@ -554,8 +554,9 @@ added card, unless the entry has a `title` PNG.
 
 A monster's `monster_effects` make it do something on the field: on summon,
 on flip, at its owner's draw, before a battle, when destroyed or while face
-up, a magic card's effect, a boost, healing or damage
-([Monster effects](more-cards.md#monster-effects)). A `description` may
+up, a magic card's effect, a boost, healing or damage, which `for_each`
+makes once per face-up monster counted ("+300 for each Dragon on your
+field") ([Monster effects](more-cards.md#monster-effects)). A `description` may
 hold icons and colours ([Card text codes](more-cards.md#card-text-codes)).
 
 ## Audio: songs, voices and sounds from files
@@ -708,6 +709,7 @@ window and stays centred in widescreen.
 | `entries` | the menu entries by name: `new_game`, `load`, `duel`, `trade`, `options` before a game is loaded; `campaign`, `free_duel`, `build_deck`, `library`, `password`, `save` after (or their numbers, 0 to 10). Each may have `hide`, `x` (moved from the middle), `y` (its place) and `tint`, and all the keys of [the menus](#the-titles-menus)' items |
 | `spacing` | how far apart the entries stand (retail 32) |
 | `text` | lines drawn over the title, each `{"text", "x", "y", "align", "color", "size", "show"}`: `x` and `y` its place (default 160, 220, `y` the line's middle; `wide_x`, `wide_y` in widescreen), `align` `left`, `center` or `right` of `x`, `size` 1 to 8 (1 about the game's own letters), `show` `always`, `press_start` or `menu`; at most 16 |
+| `images` | pictures of the mod's own over the title, each `{"image", "x", "y", "width", "height", "tint", "show"}`: `x` and `y` its middle (default 160, 120; `wide_x`, `wide_y` in widescreen), its size as the pictures' below (at most 320 x 240), `tint` its colours, `show` as a line's; at most 8. They go over the background, the logo and the copyright line, and under the menu's dimming, PUSH START BUTTON and the menus; the first given lowest |
 
 A hidden entry is left out of its menu and the cursor steps over it; the
 others close up, `spacing` apart around the middle of the retail menu,
@@ -718,8 +720,8 @@ one as it is and a colour can only darken what is there; on PUSH START
 BUTTON the tint goes over its pulse.
 
 Every applied mod's `title` is read in load order each time the title
-opens, a later mod's value winning key by key and the `text` lines of all of
-them shown, so applying or removing a mod shows the next time the title
+opens, a later mod's value winning key by key and the `text` lines and
+`images` of all of them shown, so applying or removing a mod shows the next time the title
 opens, with no restart. A key the title does not know, a colour that is not
 `#RRGGBB` or an entry that does not exist is noted beside the mod in the
 Mods window. How it is done: [`src/pc/platform/title_screen.c`](../src/pc/platform/title_screen.c),
@@ -783,7 +785,8 @@ game's entries changed, the order of both, and a background of their own.
 | `buttons` | buttons the mod adds, at most 16 in all: each an `id` of its own (letters, digits, `_`, `-`), `menu` `first` (the default) or `second`, and the item keys below. A button is known to others as `"<mod id>:<id>"`: a later mod changes or hides one with that as its `id` |
 | `entries` | the game's entries by name, as the title's `entries`, with the item keys below |
 | `order` | the items top to bottom, as the cursor goes: `{"first": [...], "second": [...]}`, or a list alone for the first. A name is an entry's, a button's id (the mod's own) or `"<mod id>:<id>"`; the items it leaves out follow in the game's order, then the buttons as the mods made them. A later mod's list replaces an earlier one's |
-| `spacing` | how far apart the items stand (retail 32; the same as the title's `spacing`) |
+| `spacing` | how far apart the items stand at their size 100 (retail 32; the same as the title's `spacing`) |
+| `scale` | every item's size in percent, 25 to 400, but those with a `scale` of their own (100 as the game has it) |
 | `background` | the background while a menu is up, as the title's `background` (`image`, `picture`, `shade`, `tint`, `color`, `dim`); what it leaves out is the title's |
 
 Each item -- button or entry -- may have:
@@ -797,6 +800,7 @@ Each item -- button or entry -- may have:
 | `value` | a number handed to a code mod with `event` |
 | `hide`, `x`, `y`, `tint` | as the title's entries: left out, moved from the middle (160), its middle's place, its colours multiplied |
 | `wide_x`, `wide_y` | its `x` and `y` in widescreen, [below](#widescreen) |
+| `scale` | its size in percent, 25 to 400, about its middle: the menu's `scale` without one. Words, frame and the cursor's look alike; a picture at that much of its size above |
 
 The actions:
 
@@ -820,13 +824,26 @@ are the game's sprites still, and a texture pack of `sheets/menu` changes
 their words. Places are in the game's 320 x 240, as on the title. The shown
 items stand `spacing` apart around the middle of the retail menu, closer
 together when they would not fit between y 16 and 204; a `y` of the mod's
-own stands. Fresh from PUSH START BUTTON the first menu opens on its top
-row; back from a screen a choice opened, on the item it was chosen from.
+own stands. Each takes room as its size: two items' middles are `spacing`
+times the half of each one's `scale` apart (32 between two at 100, 48
+between two at 150, 40 between one at 100 and one at 150), so bigger
+buttons push the others apart rather than run into them -- until the menu
+would not fit, when all stand closer alike: kept between y 2 and 218 as
+the game's 28-row entries are, the top one's middle half of 28 rows at
+its size below y 2 (16 at 100) and the bottom one's as far above 218.
+Fresh from PUSH START BUTTON the first menu opens on its top row; back
+from a screen a choice opened, on the item it was chosen from.
 
-A label's frame is made once as a PNG four times its size, under the user
-directory's `cache/menu-labels/`, and like an `image` is drawn at the
-console's resolution as the game's own kind of texture and above it
-(View > Internal 2x, 4x) from the PNG itself. The items' pictures share the
+A label's frame is made once as a PNG four times its size (more for one
+drawn bigger: four times its size drawn), under the user directory's
+`cache/menu-labels/`, and like an `image` is drawn at the console's
+resolution as the game's own kind of texture and above it (View > Internal
+2x, 4x) from the PNG itself. A `scale` other than 100 draws an item at
+that size: a picture or a label made at it (at most 256 x 64 texels at the
+console's resolution, stretched past that), and an entry of the game's own
+by the port from the game's sprites -- the one it has while the cursor is
+on it too -- each stretched about the entry's middle, with its afterimages.
+A `scale` out of 25 to 400 is noted beside the mod and left out. The items' pictures share the
 VRAM the title's pictures leave: about a dozen items with two pictures
 each, more when the title has no background or logo picture of the mod's
 own; one that finds no room is noted beside the mod.
@@ -1016,6 +1033,113 @@ re-decoding whenever `CardLayout_FramePath` answers a different file --
 which a kind change already does, nothing further to invalidate. The
 manifest key itself is checked by `tests/pc/card_layout_test.c`.
 
+## The duel's pictures
+
+A mod may move, size, colour, hide or replace the duel's pictures with a
+`"ui"` object: each half of the life-point panel with its digits, the FIELD
+box, the card bar and the two cursors, and rearrange what the card bar
+shows -- the card's name, its ATK and DEF, its icons. The FM Editor's UI
+tab draws them from your disc and drags them about.
+
+```json
+"ui": {
+    "duel": {
+        "lp_opponent": {"y": 24, "tint": "#FF9090", "digits": "#FFE040", "label": "RIVAL"},
+        "lp_player": {"y": -28, "scale": 120, "image": "art/lp.png"},
+        "field": {"y": 40, "scale": 110, "tint": "#80C0FF"},
+        "card_bar": {"tint": "#C0C0FF",
+                     "name": {"x": 40, "tint": "#FFE040", "spacing": 1},
+                     "atk": {"x": 55}, "def": {"x": 55},
+                     "type": {"x": -237}, "stars": {"x": -237}, "kind": {"x": -237}},
+        "hand_cursor": {"tint": "#FFFF40", "scale": 150},
+        "field_cursor": {"hide": true}
+    }
+}
+```
+
+| Picture | What it is |
+|---|---|
+| `lp_opponent` | the panel's top half: LP, COM and the opponent's life points and deck count; up and down only, at most 161 % (201 % drawn from an `image`) |
+| `lp_player` | its bottom half: YOU and the player's; the same |
+| `field` | the FIELD box, with the terrain's name; up and down only, at most 130 % |
+| `card_bar` | the strip under the hand; the hand's cards slide in and out with it, so it stays where the game has it, at its size: only its colours, a picture of its own or none. What it shows are its parts, below |
+| `hand_cursor` | the red arrow under the card the cursor is on |
+| `field_cursor` | the frame round the zone a card is going to |
+
+| Key | Meaning |
+|---|---|
+| `x`, `y` | moved by so many of the game's pixels, -400 to 400 across (the cursors only), -300 to 300 down |
+| `scale` | its size in percent, 25 to 400, about its middle (100 as it is; less for the panel's halves and the box, below) |
+| `tint` | its colours multiplied, `#RRGGBB` (`#FFFFFF` as they are; a colour can only darken what is there) |
+| `hide` | `true`: not drawn |
+| `image` | a PNG in the mod drawn instead, over the picture's place (moved and sized with it), `width` and `height` its size in the game's pixels instead of the picture's |
+| `digits` | the LP halves: the colour of their digits, over the game's (lit on that side's turn, dimmed on the other's) |
+| `label` | the LP halves: words in place of COM or YOU, at most 15 letters, set in the font the card names are (with View > Opponent's name for COM the opponent's name shows there; a label wins) |
+
+### The card bar's parts
+
+What the card bar shows is not part of its picture: the game writes it over
+the bar as one line of text (the card's name, the sword and ATK, the shield
+and DEF, the icons), each time the cursor moves. Its parts are keys of
+`card_bar`, each moved, coloured or hidden on its own:
+
+| Part | What it is, where the game puts it |
+|---|---|
+| `name` | the card's name, 8 x 12 letters from (16, 212); a monster's at most 24 letters, another card's 28 |
+| `atk` | the sword and the ATK digits, from (211, 210) |
+| `def` | the shield and the DEF digits, a row down |
+| `type` | the icon of the card's type (Dragon, Spellcaster, Magic...), at (253, 210) |
+| `stars` | a monster's two guardian stars at (271, 210) and (289, 210); on the field, the one it has on at (279, 210), and only that for an opponent's face-down monster |
+| `kind` | a magic, trap, equip or ritual card's word, at (271, 210) |
+
+Each takes `x` and `y` (moved by so many of the game's pixels), `tint`,
+`hide`, and the name `spacing`: pixels added between its letters, -3 to 2
+(each letter's place counts the spaces before it). A part stays on the
+bar's dark panel, the same under the hand and on the bar's higher look
+(over the hand, while a card is placed, a target chosen or the field
+looked at from the hand; its words 87 higher): under the hand from x 14 to
+306 and y 208 to 228, the name at its longest (28 letters, spread by its
+`spacing`). The letters' cells are dark, so off the panel they would show
+as dark boxes; a part moved further is drawn at the nearest place on it,
+noted. The parts move as the bar does when it slides in and out. What is
+left where the game has it: the Swords of Revealing Light line and the
+GUARDIAN STAR words the bar shows over the field when a card is aimed at,
+and the bar's own place and size. The parts can overlap: a long name runs
+into what is moved where it reaches (the editor says so). The bar's own
+`tint`, `hide` and `image` are its picture's only; its parts are drawn over
+whichever it is.
+
+Everything is done as the game draws the pictures, never to the game's own
+objects, so its slides, the turn's colours and the cursors' moves go on as
+they do. The game hides the panel and the FIELD box by sliding them off the
+side of the screen (the panel right, the box left, for each battle and the
+duel's end, and for Exodia a shorter way), so those move up and down only:
+moved so, a half or the box slides with the game's, pixel for pixel, and is
+off the screen when the game's is. An `x` for them is left out, and a size
+that would still reach onto the screen where the game slides them to is
+brought down to the most that does not (an LP half reaches 8 further with
+a fifth digit, LP over 9999; a picture by its own `width`), both noted. A
+piece of a sized one goes off the edge as the game's own would, where it is
+drawn. The
+digits and the label go with their half; the label is not drawn over a
+half's `image`,
+which has words of its own if it wants them, and the digits are. A moved
+picture keeps its place among the others: the panel is still under the hand.
+The pictures are drawn as the game draws them at the console's resolution;
+above it (View > Internal 2x, 4x) a sized picture is not blurred, and the
+mod's PNG is drawn at up to four times the size it takes (as many times as
+fit in 1536 x 256 texels), as a texture of its own (the software GPU's
+texture bank 14: nothing of the duel's VRAM is used). A PNG with no more
+detail than the size it takes is drawn at that size.
+
+Every applied mod's `ui` is read when a duel starts, a later mod's value
+winning key by key. A key the game does not know, a value out of range or
+a PNG it cannot read is noted beside the mod in the Mods window. How it is
+done: [`src/pc/cards/duel_ui.c`](../src/pc/cards/duel_ui.c) (the card bar's
+parts as its text is laid out, `DuelUi_TagEntry`, and drawn, `DuelUi_BarEntry`),
+read by `src/pc/platform/ui_config.c`, checked by `tests/pc/ui_config_test.c`;
+in a duel by `tests/pc/editor_cardbar_runtime.py`.
+
 ## Rules: fusions, equips, rituals, drops, decks and more
 
 A mod may change what fuses into what, what an equip card may equip, what a
@@ -1026,6 +1150,8 @@ from, with no code and naming cards by name:
 "fusions": [ {"with": ["Kuriboh", "Mystical Elf"], "result": "Celtic Guardian"},
              {"with": ["Baby Dragon", "Time Wizard"], "result": null} ],
 "equips":  [ {"card": "Legendary Sword", "add": ["Dragon"]} ],
+"rituals": [ {"card": "Black Luster Ritual", "tributes": ["Gaia the Fierce Knight"],
+              "tributes_from": "hand", "result": "Black Luster Soldier"} ],
 "drops":   { "Simon Muran": {"pow": {"Blue-eyes White Dragon": 20}} },
 "decks":   { "Heishin": {"Dark Magician": 60, "Kuriboh": 0} }
 ```
@@ -1037,6 +1163,8 @@ copies with no limit of three (`{"fixed": true, "Kuriboh": 4, ...}`).
 the chest and makes each card past them worth 3 starchips instead of lost.
 `"terrain_bonus": {"Forest": {"Beast": 300, "Fairy": -200}}` sets, in points,
 what a terrain gives a monster type.
+A ritual takes one to five tributes, from the field (as on the disc), the
+hand (`"tributes_from": "hand"`) or both (`"both"`).
 An equip entry's `"bonus": 800` and `"bonus_if": {"Dragon": 1000, "Light": 700}`
 set what it adds, in place of the disc's +500 (`"bonus_attack"` and
 `"bonus_defense"` set ATK and DEF apart), and a top-level
@@ -1376,7 +1504,7 @@ decides it:
 | `fusions` | a pair, in either order | the later's result; `remove`s add up |
 | `equips` | an equip card, and its copies (a rule for the card is one for each copy of it, as the game matches the card or its base) | for each monster, the latest entry that says something about it decides (a card before a type before `"replace"` within an entry), so a later rule for a type, or a plain `bonus`, goes over an earlier rule for a card of it, or an earlier `bonus_if`; entries about other monsters add up |
 | `equip_bonus_default` | | the later |
-| `rituals` | a ritual card | the later's recipe |
+| `rituals` | a ritual card | the later's recipe (its tributes, where they come from, and its result) |
 | `drops`, `decks` | an opponent's pool, named by name, number, `"all"` (every opponent another mod names) or, in a mod's `drops/` and `decks/` folders, by a duelist of the mod's own (whom it replaces, and the line names him as the mod did, or itself); a pool that is not an object of cards is left out, as the game leaves it | edits add up, each on the pool as the mods before left it; a later `"replace": true` empties it first, and an earlier `"all"` with `"replace": true` empties every pool, so it meets a later mod's edit of any one; a fixed deck (exactly 40 cards) wins over every weighted edit, the later fixed deck over an earlier |
 | `starter` | | the decks add up |
 | `starter_pools` | every mod's pools, and any mod's written `starter` deck beside them (one the game would deal: forty cards it knows, a `weight` above 0) | the pools add up, and are dealt from only when their `draws` together make the 40 cards of a deck; at any other total they are dropped and the disc's starter decks are used (a warning, even for one mod's pools, when two mods or more are listed; the mod itself also carries a note, with one mod or many); a written deck in any mod wins over every mod's pools (a warning naming whose) |
@@ -1476,7 +1604,7 @@ the player's settings file as `mod.<id>.<key>`, and read from
 `MEMORIES_MOD_<ID>_<KEY>` first when that is set; a key is letters, digits,
 `_` and `-`, and `order` is the manager's), `disc_file_start`/
 `disc_read`, `pad`, and from mod API 2 `now_us` (a clock) and `map_fixed`
-(memory at an address the mod chooses, as 3D Monsters' model arenas need). API 4 adds `hook`/`unhook`/`symbol`, below; API 5 adds `duelist_id`, which resolves an added duelist's identity to the id it has this run as `card_id` does for a card. API 7 adds `card_notes` and `card_tag`, a card's [notes](more-cards.md#notes-on-a-card) and the `<tag: value>` tags in them. API 8 adds `limit`, the numbers the game caps as the mods' `limits` set them ([Gameplay tables](gameplay-tables.md#limits-atk-def-lp-starchips-and-more)): `host->limit(host, "attack")` is 9999 without such a mod. API 9 adds `menu_item`, the name of an item of the title's menus, and the event `MEMORIES_EVENT_MENU` ([The title's menus](#the-titles-menus)). API 10 adds the event `MEMORIES_EVENT_MONSTER`: a monster summoned, flipped, at its owner's draw, in a battle, destroyed or destroying the monster it battled, for every monster, with `handled` to skip a card's own `monster_effects` ([Monster effects](more-cards.md#monster-effects)).
+(memory at an address the mod chooses, as 3D Monsters' model arenas need). API 4 adds `hook`/`unhook`/`symbol`, below; API 5 adds `duelist_id`, which resolves an added duelist's identity to the id it has this run as `card_id` does for a card. API 7 adds `card_notes` and `card_tag`, a card's [notes](more-cards.md#notes-on-a-card) and the `<tag: value>` tags in them. API 8 adds `limit`, the numbers the game caps and its other values as the mods' `limits` set them ([Gameplay tables](gameplay-tables.md#values-atk-def-lp-starchips-and-more)): `host->limit(host, "attack")` is 9999 without such a mod, `host->limit(host, "deck_copies")` 3. API 9 adds `menu_item`, the name of an item of the title's menus, and the event `MEMORIES_EVENT_MENU` ([The title's menus](#the-titles-menus)). API 10 adds the event `MEMORIES_EVENT_MONSTER`: a monster summoned, flipped, at its owner's draw, in a battle, destroyed or destroying the monster it battled, for every monster, with `handled` to skip a card's own `monster_effects` ([Monster effects](more-cards.md#monster-effects)).
 A mod that uses an entry newer than API 1 should refuse to start when
 `host->api` is older.
 

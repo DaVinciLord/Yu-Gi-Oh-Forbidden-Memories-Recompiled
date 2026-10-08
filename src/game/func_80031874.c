@@ -8,6 +8,9 @@
 #include "card_type_icon_table.h"
 #include "build_deck_transition_state.h"
 #include "color_constants.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/tables.h"
+#endif
 #include "duel_card_stat_display.h"
 #include "func_80031784.h"
 #define GRAPHICS_VIEWPORT_IN_DATA
@@ -155,7 +158,13 @@ void func_80031874(DisplayObject *obj, GsOT *ot)
                 n = gBuildDeck_pState->deck_card_quantities[id];
                 /* Red once the deck holds the limit: three copies, or one of
                    ids 0x11-0x15. */
+#ifdef MEMORIES_PC
+                /* At a mod's "deck_copies" (tables.h), else the three. */
+                if (n >= Tables_Value(TABLES_VALUE_DECK_COPIES, 3) ||
+                    ((u32)(id - 0x11) < 5 && n != 0)) {
+#else
                 if (n >= 3 || ((u32)(id - 0x11) < 5 && n != 0)) {
+#endif
                     GS_SPRITE_COLOR_WORD(sprite) = 0x2020FF;
                 }
                 sprite->x = x + 0x122;

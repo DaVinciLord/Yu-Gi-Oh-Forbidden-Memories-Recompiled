@@ -64,6 +64,9 @@ int SoftGpu_WideRastered(void);
  * resolution (hd_text.h, HdText_NamePixels): set while View > Opponent's
  * name for COM is on (libgpu.c), NULL otherwise, when nothing changes. */
 extern const uint8_t *(*SoftGpu_PanelName)(int which, int *x, int *y, int *width, int *height, int *stride);
+/* With it, whether the panel is drawn in pieces at any size (a mod's "ui",
+ * pc/cards/duel_ui.h): the names then go over its quads too. */
+extern int SoftGpu_PanelCut;
 /* Scaled widened picture, SOFT_GPU_WIDTH * scale pixels per row. NULL at
  * console resolution, while a recorder draws the picture (it draws the
  * widened ones too), or if allocation failed. Call after WideFrame to also

@@ -18,6 +18,7 @@ import tkinter.font as tkfont
 from tkinter import ttk
 
 DARK_THEME = "fm-dark"
+PORTRAIT_ROW = 38       # the Duelists list's rows: a 32-pixel face and its margin
 
 # The dark palette. Text and every ink below are at least 4.5:1 against the
 # backgrounds they are drawn on (WCAG AA); disabled text is dimmer, as
@@ -143,6 +144,8 @@ class Theme:
         self.rescale()
         for name, (light, _) in INKS.items():
             self.style.configure(f"{name}.TLabel", foreground=light)
+        for tag, (light, _) in TAGS.items():       # a legend's words in its rows' colours (widgets.legend)
+            self.style.configure(f"{tag}.Tag.TLabel", foreground=light)
         # Tk's own defaults for the classic widgets, to go back to, and each
         # option's name in the option database (highlightBackground for
         # -highlightbackground: the database is case sensitive).
@@ -186,6 +189,9 @@ class Theme:
         spin arrows 10, sashes 6) at the scale, in the light clam and
         fm-dark (vista's are Windows' own); fm-dark's paddings."""
         settings = {"Treeview": {"configure": {"rowheight": self.row_height}},
+                    # The Duelists tab's list: a row as tall as the small
+                    # portrait beside each name.
+                    "Portrait.Treeview": {"configure": {"rowheight": max(self.row_height, self.px(PORTRAIT_ROW))}},
                     # A switch of a few toggles (the Art tab's View): each
                     # one a button, the chosen one pressed in.
                     "Segment.Toolbutton": {"configure": {"padding": self.px(10, 3), "relief": "raised"},
@@ -394,7 +400,9 @@ class Theme:
         for toggle in ("TCheckbutton", "TRadiobutton"):
             style.configure(toggle, indicatorbackground=FIELD, indicatorforeground=FG, upperbordercolor=BORDER,
                             lowerbordercolor=BORDER, indicatormargin=self.px(1, 1, 4, 1), padding=self.px(2))
-            style.map(toggle, indicatorbackground=[("pressed", BG), ("disabled", BG)],
+            # Half ticked ("alternate": some of a set, the Equips tab's types)
+            # filled, as clam's light look does: it showed as empty here.
+            style.map(toggle, indicatorbackground=[("pressed", BG), ("disabled", BG), ("alternate", FOCUS)],
                       background=[("active", BG)])
         # A toggle drawn as a button (the Map tab's D-pad): pressed shows.
         style.configure("Toolbutton", background=BG, lightcolor=BG, darkcolor=BG, bordercolor=BORDER,
@@ -406,5 +414,7 @@ class Theme:
                   lightcolor=[("selected", SELECT)], darkcolor=[("selected", SELECT)])
         for name, (_, dark) in INKS.items():
             style.configure(f"{name}.TLabel", foreground=dark)
+        for tag, (_, dark) in TAGS.items():
+            style.configure(f"{tag}.Tag.TLabel", foreground=dark)
         style.theme_use(current)
         style.theme_settings(DARK_THEME, self.sized(True))

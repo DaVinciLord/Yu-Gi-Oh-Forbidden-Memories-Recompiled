@@ -17,6 +17,8 @@
 #include "game/duel_side_state.h"
 #include "game/duel_init_scene.h"
 #include "game/display_object.h"
+#include "duel_ui.h"
+#include "pc/platform/ui_config.h"
 #include <stdio.h>
 
 extern unsigned char D_8009B26C, D_8009B26E;
@@ -72,6 +74,13 @@ static void update(void)
     view.box_x = (s16)D_8009B214->field_30.h.field_30;
     view.box_y = (s16)D_8009B214->field_30.h.field_32;
     if (view.box_x < 0 || view.box_y < 0) return;
+    /* A mod's "ui" moving the box (duel_ui.h): the plate goes with it. */
+    {
+        int dx, dy;
+        DuelUi_Offset(UI_FIELD, &dx, &dy);
+        view.box_x += dx;
+        view.box_y += dy;
+    }
     adjustment = D_800E9FF0[0].rank.result_adjustment;
     score = Rank_Score(&D_800E9FF0[0], adjustment ? adjustment : ADJUST_LP_WIN);
     if (score == RANK_SCORE_UNKNOWN) return;

@@ -15,6 +15,7 @@
 #include "starter.h"
 #include "stars.h"
 #include "packs.h"
+#include "pc/platform/ui_config.h"
 #include "pc/free_duel/duelists.h"
 #include "pc/text/glyphs.h"
 #include "pc/text/text.h"
@@ -1524,6 +1525,9 @@ void Cards_Build(void)
      * mod signature covers. */
     Packs_Build();
     Mods_SetPackSignature(Packs_Signature());
+    /* The duel's pictures (ui_config.h), read now so that a mistake in a
+     * mod's "ui" is noted in the Mods window before any duel. */
+    UiConfig_Load();
 }
 
 /* --- what the game asks -------------------------------------------- */

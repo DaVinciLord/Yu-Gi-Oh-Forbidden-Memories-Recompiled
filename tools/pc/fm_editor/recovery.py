@@ -15,7 +15,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import manifest, settings
+from . import manifest, roster, settings
 from .history import Snapshot
 
 
@@ -89,8 +89,10 @@ class Recovery:
             source = project.source_dir
             if source and Path(source).is_dir():
                 # What save_mod would copy first; the files it wrote win.
+                # The roster's files it read are its own to write (roster.py):
+                # a duelist taken out must not come back with its file.
                 fill(source, generation, self.folder / previous if previous else None, settled,
-                     skip=lambda rel: rel.name == "mod.json")
+                     skip=lambda rel: rel.name == "mod.json" or roster.owned(project, rel.as_posix()))
             record = {"name": project.info.name, "time": stamp(), "generation": generation.name,
                       "source": str(project.source_dir or ""), "forms": forms or {}}
             temporary = index.with_suffix(".tmp")

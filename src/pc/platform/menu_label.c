@@ -17,7 +17,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum { F = MENU_LABEL_FACTOR, H = MENU_LABEL_HEIGHT, PAD = 14, MIN_WIDTH = 64, MAX_WIDTH = 240, TEXT_PX = 17 };
+enum { H = MENU_LABEL_HEIGHT, PAD = 14, MIN_WIDTH = 64, MAX_WIDTH = 240, TEXT_PX = 17 };
+/* How many times the drawn size the PNG is made: MENU_LABEL_FACTOR, more
+ * for a button drawn bigger (MenuLabel_Make's `factor`). */
+static int F = MENU_LABEL_FACTOR;
 /* Bumped when the drawing changes, so an old file is not used. */
 enum { STYLE = 1 };
 
@@ -177,21 +180,29 @@ static uint32_t fnv(const char *text, uint32_t hash)
     return hash;
 }
 
-int MenuLabel_Make(const char *text, int selected, char *path, size_t size, int *width, int *height, char *why,
-                   size_t why_size)
+int MenuLabel_Make(const char *text, int selected, int factor, char *path, size_t size, int *width, int *height,
+                   char *why, size_t why_size)
 {
-    char relative[96];
-    int words = set_words(text, NULL, 0), w;
+    char relative[96], larger[16] = "";
+    int words, w;
     unsigned char *rgba;
     png_image image;
     FILE *file;
     FT_Face face = label_face();
+    /* Its width as at 100, whatever size it is made at: measured at
+     * MENU_LABEL_FACTOR, then the words set again at `factor`. */
+    F = MENU_LABEL_FACTOR;
+    words = set_words(text, NULL, 0);
     /* No face at all: the frame alone, so the button is still there. */
     if (words < 0) {
         fprintf(stderr, "memories-pc: menu: no font for the label \"%s\"; its frame is drawn empty\n", text);
         words = 0;
     }
     w = words / F + 2 * PAD;
+    if (factor > MENU_LABEL_FACTOR && words > 0) {
+        F = factor;
+        words = set_words(text, NULL, 0);
+    }
     if (w < MIN_WIDTH) w = MIN_WIDTH;
     if (w > MAX_WIDTH) w = MAX_WIDTH;
     w = (w + 1) & ~1;
@@ -199,9 +210,10 @@ int MenuLabel_Make(const char *text, int selected, char *path, size_t size, int 
     *height = H;
     /* Named by the words, the face and the style: another face (a serif
      * installed since) makes another file. */
-    snprintf(relative, sizeof(relative), "cache/menu-labels/%08x-%d-%d.png",
+    if (F != MENU_LABEL_FACTOR) snprintf(larger, sizeof(larger), "-x%d", F);
+    snprintf(relative, sizeof(relative), "cache/menu-labels/%08x-%d-%d%s.png",
              (unsigned)fnv(text, fnv(face && face->family_name ? face->family_name : "-", 2166136261u + STYLE)),
-             selected ? 1 : 0, w);
+             selected ? 1 : 0, w, larger);
     if (Paths_User(path, size, relative) != 0) {
         snprintf(why, why_size, "the user directory's path is too long");
         return 0;

@@ -1017,6 +1017,10 @@ static void set_page(uint32_t value)
     }
 }
 
+static int panel_piece(int u0, int v0, int w, int h);
+static void name_over_panel(int x, int y, int width, int height, int u0, int v0, int w, int h, const Vertex *colour,
+                            int flags);
+
 static size_t polygon(const uint32_t *words, size_t count)
 {
     uint32_t command = words[0] >> 24;
@@ -1082,25 +1086,66 @@ static size_t polygon(const uint32_t *words, size_t count)
         triangle(v[1], v[2], v[3], flags);
     }
     fade = 0;
+    /* A piece of the life-point panel a mod's "ui" draws at another size. */
+    if (quad && textured && SoftGpu_PanelCut) {
+        int x0 = v[0].x, y0 = v[0].y, x1 = v[0].x, y1 = v[0].y, u0 = v[0].u, v0 = v[0].v, u1 = v[0].u, v1 = v[0].v;
+        for (i = 1; i < 4; i++) {
+            if (v[i].x < x0) x0 = v[i].x;
+            if (v[i].y < y0) y0 = v[i].y;
+            if (v[i].x > x1) x1 = v[i].x;
+            if (v[i].y > y1) y1 = v[i].y;
+            if (v[i].u < u0) u0 = v[i].u;
+            if (v[i].v < v0) v0 = v[i].v;
+            if (v[i].u > u1) u1 = v[i].u;
+            if (v[i].v > v1) v1 = v[i].v;
+        }
+        if (panel_piece(u0, v0, u1 - u0, v1 - v0))
+            name_over_panel(x0, y0, x1 - x0, y1 - y0, u0, v0, u1 - u0, v1 - v0, &v[0], (int)(command & 3) | 4);
+    }
     return need;
 }
 
 const uint8_t *(*SoftGpu_PanelName)(int which, int *x, int *y, int *width, int *height, int *stride);
+int SoftGpu_PanelCut;
 
 /* The opponent's name over the life-point panel just drawn, and the
  * player's for YOU, at the console's resolution (the OpenGL picture draws
  * them above it): the boxes' palette indices through the panel's CLUT, as
- * the panel's own texels would be, so the inactive side's dimming applies. */
-static void name_over_panel(const Vertex *base, int flags)
+ * the panel's own texels would be, so the inactive side's dimming applies.
+ * The panel whole, or a piece of it drawn at any size (a mod's "ui"): its
+ * texels u0, v0 on (w x h) over x, y to x + width, y + height; a box goes
+ * with the piece that has its rows and the column it meets the panel at. */
+static int panel_piece(int u0, int v0, int w, int h)
 {
-    int which, x, y, width, height, stride, i, j;
+    return SoftGpu_PanelName && scale == 1 && texture_source == vram && gpu.depth == 0 && gpu.page_x == 704 &&
+           gpu.page_y == 0 && (gpu.clut_x == 736 || gpu.clut_x == 752) && gpu.clut_y == 252 && w > 0 && h > 0 &&
+           u0 >= 128 && v0 >= 128 && u0 + w <= 192 && v0 + h <= 168;
+}
+
+static void name_over_panel(int x, int y, int width, int height, int u0, int v0, int w, int h, const Vertex *colour,
+                            int flags)
+{
+    int which, bx, by, bw, bh, stride, i, j;
     for (which = 0; which < 2; which++) {
-        const uint8_t *box = SoftGpu_PanelName(which, &x, &y, &width, &height, &stride);
-        if (!box) return;
-        for (j = 0; j < height; j++) {
-            for (i = 0; i < width; i++) {
-                uint16_t word = vram[gpu.clut_y * SOFT_GPU_WIDTH + gpu.clut_x + box[(size_t)j * stride + i]];
-                plot(base->x + x + i, base->y + y + j, base->r, base->g, base->b, word, 0, (flags & 3) | 4 | 16);
+        const uint8_t *box = SoftGpu_PanelName(which, &bx, &by, &bw, &bh, &stride);
+        int left, top, right, bottom;
+        /* As ever, no player's box without the opponent's; but a mod's
+         * label may be for YOU alone. */
+        if (!box) {
+            if (!SoftGpu_PanelCut) return;
+            continue;
+        }
+        if (by < v0 - 128 || by + bh > v0 - 128 + h || bx + bw <= u0 - 128 || bx + bw > u0 - 128 + w) continue;
+        left = x + (bx - (u0 - 128)) * width / w;
+        top = y + (by - (v0 - 128)) * height / h;
+        right = x + (bx + bw - (u0 - 128)) * width / w;
+        bottom = y + (by + bh - (v0 - 128)) * height / h;
+        for (j = top; j < bottom; j++) {
+            for (i = left; i < right; i++) {
+                /* Each pixel the box texel under it, as a quad samples. */
+                int tx = (i - left) * bw / (right - left), ty = (j - top) * bh / (bottom - top);
+                uint16_t word = vram[gpu.clut_y * SOFT_GPU_WIDTH + gpu.clut_x + box[(size_t)ty * stride + tx]];
+                plot(i, j, colour->r, colour->g, colour->b, word, 0, (flags & 3) | 4 | 16);
             }
         }
     }
@@ -1159,11 +1204,11 @@ static size_t rectangle(const uint32_t *words, size_t count)
     CASE(0) CASE(1) CASE(2) CASE(3) CASE(4) CASE(5) CASE(6) CASE(7)
 #undef CASE
     }
-    /* The life-point panel (gl_picture.c's name_over_panel finds it so). */
-    if (SoftGpu_PanelName && scale == 1 && textured && texture_source == vram && gpu.depth == 0 &&
-        gpu.page_x == 704 && gpu.page_y == 0 && (gpu.clut_x == 736 || gpu.clut_x == 752) && gpu.clut_y == 252 &&
-        base.u == 128 && base.v == 128 && w == 64 && h == 40) {
-        name_over_panel(&base, flags);
+    /* The life-point panel (gl_picture.c's name_over_panel finds it so):
+     * whole, or a piece of it a mod's "ui" draws apart. */
+    if (textured && panel_piece(base.u, base.v, w, h) &&
+        ((base.u == 128 && base.v == 128 && w == 64 && h == 40) || SoftGpu_PanelCut)) {
+        name_over_panel(base.x, base.y, w, h, base.u, base.v, w, h, &base, flags);
     }
     return need;
 }

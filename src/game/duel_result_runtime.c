@@ -455,10 +455,23 @@ void Duel_CalcRankScore(void) {
         p->page_text_ids[1] = DUEL_RESULT_TEXT_SELECTOR_DECK_OUT;
     }
 
+#ifdef MEMORIES_PC
+    /* 50, or a mod's "rank_score" "start" (tables.h). */
+    p->side_scores[1] = (s32)Tables_Value(TABLES_VALUE_RANK_START, DUEL_RANK_SCORE_INITIAL);
+    p->side_scores[0] = p->side_scores[1];
+#else
     p->side_scores[1] = DUEL_RANK_SCORE_INITIAL;
     p->side_scores[0] = DUEL_RANK_SCORE_INITIAL;
+#endif
     for (i = 0; i < DUEL_SIDE_COUNT; i++, e++, q++) {
+#ifdef MEMORIES_PC
+        /* The end's tag (an Exodia or empty-deck win) stays what it is:
+           the game tells the ends apart by it. A mod's "rank_score" changes
+           only what it adds (Tables_RankAdjustment). */
+        p->side_scores[i] += Tables_RankAdjustment(e->rank.result_adjustment);
+#else
         p->side_scores[i] += e->rank.result_adjustment;
+#endif
         v = e->deck_draw_cursor; q[0 * DUEL_SIDE_COUNT] = v;
         p->side_scores[i] +=
             Duel_CalcRankScoreChange(DUEL_RANK_RULE_CARDS_USED, v);

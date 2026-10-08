@@ -264,6 +264,45 @@ int main(void)
         add("condition-empty", "{\"rituals\": [{\"card\": 21, \"tributes\": [{}, 1, 2], \"result\": 12}]}");
         assert(notes == 1);
     }
+    /* One to five tributes, from the field, the hand or both: such a
+     * ritual is the search's (Tables_RitualRule), a plain card a
+     * requirement for it; three from the field stays the disc's kind. */
+    {
+        TablesRitualRule rule;
+        TablesRitualRequirement req[3];
+        unsigned short result = 0;
+        notes = 0;
+        add("one", "{\"rituals\": [{\"card\": 21, \"tributes\": [1], \"result\": 12}]}");
+        assert(Tables_RitualRule(21, &rule) == 1 && rule.count == 1 && rule.from == TABLES_TRIBUTES_FIELD);
+        assert(rule.result == 12 && rule.requirements[0].card == 1 && rule.requirements[0].type == -1);
+        assert(Tables_Ritual(21, own) == -1 && Tables_RitualRequirements(21, req, &result) == 0);
+        add("five", "{\"rituals\": [{\"card\": 21, \"tributes_from\": \"both\", \"tributes\": [1, 2, "
+            "\"test:copy:1\", {\"type\": \"Dragon\"}, {\"min_attack\": 0}], \"result\": 13}]}");
+        assert(Tables_RitualRule(21, &rule) == 1 && rule.count == 5 && rule.from == TABLES_TRIBUTES_BOTH);
+        assert(rule.result == 13 && rule.requirements[2].card == 723 && rule.requirements[3].type == 0);
+        assert(rule.requirements[4].card == 0 && rule.requirements[4].min_attack == 0);
+        add("hand", "{\"rituals\": [{\"card\": 21, \"tributes_from\": \"hand\", \"tributes\": [1, 2, 3], "
+            "\"result\": 12}]}");
+        assert(Tables_RitualRule(21, &rule) == 1 && rule.count == 3 && rule.from == TABLES_TRIBUTES_HAND);
+        assert(Tables_Ritual(21, own) == -1);
+        assert(notes == 0);
+        /* Written out, "field" with three is the disc's kind again. */
+        add("field", "{\"rituals\": [{\"card\": 21, \"tributes_from\": \"field\", \"tributes\": [1, 2, 3], "
+            "\"result\": 12}]}");
+        assert(Tables_RitualRule(21, &rule) == 0 && Tables_Ritual(21, own) == 1 && own[3] == 3 && own[4] == 12);
+        /* Six, none, or a place the game does not know leave the entry
+         * out (the one before stands), each with a note. */
+        add("bad", "{\"rituals\": [{\"card\": 21, \"tributes\": [1, 2, 3, 4, 5, 6], \"result\": 13},"
+            "{\"card\": 21, \"tributes\": [], \"result\": 13},"
+            "{\"card\": 21, \"tributes_from\": \"deck\", \"tributes\": [1], \"result\": 13},"
+            "{\"card\": 21, \"tributes_from\": 1, \"tributes\": [1], \"result\": 13}]}");
+        assert(notes == 4 && !strcmp(noted, "bad"));
+        assert(Tables_RitualRule(21, &rule) == 0 && Tables_Ritual(21, own) == 1 && own[4] == 12);
+        /* Taken away, it is no rule of either kind. */
+        add("gone", "{\"rituals\": [{\"card\": 21, \"tributes\": [1], \"result\": 12},"
+            "{\"card\": 21, \"result\": null}]}");
+        assert(Tables_RitualRule(21, &rule) == 0 && Tables_Ritual(21, own) == 0);
+    }
     add("b", "{\"rituals\": [{\"card\": 21, \"result\": null}]}");
     assert(Tables_Ritual(21, own) == 0);
     /* A mod's own ritual card (a copy of one) takes a recipe of its own;
@@ -636,6 +675,53 @@ int main(void)
     /* A key misspelt inside life_points or two_player is said too. */
     add("lim7", "{\"limits\": {\"life_points\": {\"strat\": 9000}, \"two_player\": {\"stpe\": 100}}}");
     assert(notes == 6 && Tables_StartingLifePoints(1, 9, 8000) == 32767);
+
+    /* Values: the disc's until a mod says (the retail argument comes back
+     * untouched); the latest mod wins each; past what the game keeps or
+     * shows is held there with a note; a misspelt member is noted. */
+    Tables_Clear();
+    {
+        int which;
+        for (which = 0; which < TABLES_VALUE_COUNT; which++) assert(Tables_Value(which, 1234) == 1234);
+        assert(Tables_Value(-1, 7) == 7 && Tables_Value(TABLES_VALUE_COUNT, 7) == 7);
+        assert(Tables_RankAdjustment(40) == 40 && Tables_RankAdjustment(-40) == -40 && Tables_RankAdjustment(2) == 2);
+        assert(Tables_Limit("deck_copies") == 3 && Tables_Limit("rank_score.start") == 50);
+        assert(Tables_Limit("starchip_prize.S") == 5 && Tables_Limit("new_game_starchips") == 0);
+    }
+    notes = 0;
+    add("val1", "{\"limits\": {\"deck_copies\": 40, \"swords_turns\": 5, \"crush_card\": 2000,"
+                " \"spellbinding_circle\": 800, \"shadow_spell\": 0,"
+                " \"rank_score\": {\"start\": 60, \"exodia\": -10, \"deck_out\": 30},"
+                " \"starchip_prize\": {\"S\": 8, \"D\": 0}, \"new_game_starchips\": 500}}");
+    assert(notes == 0);
+    assert(Tables_Value(TABLES_VALUE_DECK_COPIES, 3) == 40 && Tables_Value(TABLES_VALUE_SWORDS_TURNS, 3) == 5);
+    assert(Tables_Value(TABLES_VALUE_CRUSH_CARD, 1500) == 2000 && Tables_Value(TABLES_VALUE_SPELLBINDING, 500) == 800);
+    assert(Tables_Value(TABLES_VALUE_SHADOW_SPELL, 1000) == 0);
+    assert(Tables_Value(TABLES_VALUE_RANK_START, 50) == 60);
+    assert(Tables_RankAdjustment(40) == -10 && Tables_RankAdjustment(-40) == 30 && Tables_RankAdjustment(2) == 2);
+    assert(Tables_Value(TABLES_VALUE_PRIZE + 4, 5) == 8 && Tables_Value(TABLES_VALUE_PRIZE + 0, 1) == 0);
+    assert(Tables_Value(TABLES_VALUE_PRIZE + 2, 3) == 3);     /* B: not given */
+    assert(Tables_Value(TABLES_VALUE_NEW_GAME_STARCHIPS, 0) == 500 && Tables_Limit("swords_turns") == 5);
+    add("val2", "{\"limits\": {\"deck_copies\": 1, \"rank_score\": {\"deck_out\": -5}}}");
+    assert(notes == 0 && Tables_Value(TABLES_VALUE_DECK_COPIES, 3) == 1 && Tables_RankAdjustment(-40) == -5);
+    assert(Tables_RankAdjustment(40) == -10);                  /* val1's still */
+    notes = 0;
+    add("val3", "{\"limits\": {\"deck_copies\": 41, \"swords_turns\": 0, \"starchip_prize\": {\"S\": 20, \"Z\": 1},"
+                " \"rank_score\": {\"start\": 150, \"exodia\": \"lots\"}, \"crush_card\": 40000,"
+                " \"spellbinding_circle\": 12000, \"new_game_starchips\": -1}}");
+    /* deck_copies 41, swords 0, S 20, "Z", start 150, "lots", crush 40000,
+     * spellbinding 12000, starchips -1 */
+    assert(notes == 9);
+    assert(Tables_Value(TABLES_VALUE_DECK_COPIES, 3) == 40);    /* held at the forty a deck holds */
+    assert(Tables_Value(TABLES_VALUE_SWORDS_TURNS, 3) == 5);    /* 0 left out */
+    assert(Tables_Value(TABLES_VALUE_PRIZE + 4, 5) == TABLES_VALUE_PRIZE_MAX);
+    assert(Tables_Value(TABLES_VALUE_RANK_START, 50) == 60);    /* past 99 left out */
+    assert(Tables_Value(TABLES_VALUE_CRUSH_CARD, 1500) == 32767 && Tables_Value(TABLES_VALUE_SPELLBINDING, 500) == 9999);
+    add("val4", "{\"limits\": {\"rank_score\": 5, \"starchip_prize\": [1]}}");
+    assert(notes == 11);
+    Tables_Clear();
+    assert(Tables_Value(TABLES_VALUE_DECK_COPIES, 3) == 3 && Tables_RankAdjustment(40) == 40);
+    assert(Tables_Value(TABLES_VALUE_PRIZE + 4, 5) == 5);
 
     /* {"remove": "all"}: no disc recipe makes anything, while the mods'
      * own rules still do (they come before the filtered disc table), and a

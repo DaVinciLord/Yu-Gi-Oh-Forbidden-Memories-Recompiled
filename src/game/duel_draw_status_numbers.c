@@ -15,6 +15,7 @@
 #include "display_object_layout.h"
 #include "display_object_packet_submit.h"
 #include "display_object_render_sprite_sheet.h"
+#include "pc/cards/duel_ui.h"
 #endif
 
 /* The duel screen's life-point and deck-count readout: func_80016D2C sorts
@@ -184,6 +185,7 @@ void Duel_DrawLifePointsAndDeckCounts(DisplayObject *arg0)
     u32 tmp10;
 #ifdef MEMORIES_PC
     s32 digits;
+    s32 own;
 #endif
 
     Duel_UpdateLifePointDisplay(&D_800E9FF0[0]);
@@ -191,6 +193,9 @@ void Duel_DrawLifePointsAndDeckCounts(DisplayObject *arg0)
     pos = (DisplayObject *G32)arg0->field_50.word;
 #ifdef MEMORIES_PC
     digits = Duel_LifePointDigits();
+    /* A mod's "ui" moving the panel's halves draws their digits with them
+       (pc/cards/duel_ui.h), and widens them itself for a fifth. */
+    own = DuelUi_PanelDrawn(digits);
 #endif
 
     scratch = SCRATCH;
@@ -209,7 +214,8 @@ void Duel_DrawLifePointsAndDeckCounts(DisplayObject *arg0)
     scratch->field_06 = pos->field_30.h.field_32 - 0xD;
 #ifdef MEMORIES_PC
     scratch->field_04 -= (digits - 4) * LIFE_POINT_DIGIT_WIDTH;
-    func_80016D2C(pos, GS_SPRITE_VIEW(scratch), D_800E9FF0[1].displayed_life_points, digits);
+    if (!own || !DuelUi_DrawDigits(1, pos, scratch, D_800E9FF0[1].displayed_life_points, digits))
+        func_80016D2C(pos, GS_SPRITE_VIEW(scratch), D_800E9FF0[1].displayed_life_points, digits);
 #else
     func_80016D2C(
         pos,
@@ -221,6 +227,9 @@ void Duel_DrawLifePointsAndDeckCounts(DisplayObject *arg0)
 
     scratch->field_04 = pos->field_30.h.field_30 + 0xE;
     scratch->field_06 = pos->field_30.h.field_32 - 5;
+#ifdef MEMORIES_PC
+    if (!own || !DuelUi_DrawDigits(1, pos, scratch, DECK_SIZE - D_800E9FF0[1].deck_draw_cursor, 2))
+#endif
     func_80016D2C(
         pos,
         GS_SPRITE_VIEW(scratch),
@@ -237,7 +246,8 @@ void Duel_DrawLifePointsAndDeckCounts(DisplayObject *arg0)
     scratch->field_06 = pos->field_30.h.field_32 + 0xD;
 #ifdef MEMORIES_PC
     scratch->field_04 -= (digits - 4) * LIFE_POINT_DIGIT_WIDTH;
-    func_80016D2C(pos, GS_SPRITE_VIEW(scratch), D_800E9FF0[0].displayed_life_points, digits);
+    if (!own || !DuelUi_DrawDigits(0, pos, scratch, D_800E9FF0[0].displayed_life_points, digits))
+        func_80016D2C(pos, GS_SPRITE_VIEW(scratch), D_800E9FF0[0].displayed_life_points, digits);
 #else
     func_80016D2C(
         pos,
@@ -249,6 +259,9 @@ void Duel_DrawLifePointsAndDeckCounts(DisplayObject *arg0)
 
     scratch->field_04 = pos->field_30.h.field_30 + 0xE;
     scratch->field_06 = pos->field_30.h.field_32 + 5;
+#ifdef MEMORIES_PC
+    if (!own || !DuelUi_DrawDigits(0, pos, scratch, DECK_SIZE - D_800E9FF0[0].deck_draw_cursor, 2))
+#endif
     func_80016D2C(
         pos,
         GS_SPRITE_VIEW(scratch),
@@ -256,7 +269,7 @@ void Duel_DrawLifePointsAndDeckCounts(DisplayObject *arg0)
         2
     );
 #ifdef MEMORIES_PC
-    if (digits > 4) {
+    if (digits > 4 && !own) {
         Duel_DrawWideLifePointPanel(pos);
     }
 #endif

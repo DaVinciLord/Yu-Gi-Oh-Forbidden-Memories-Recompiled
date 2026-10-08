@@ -751,13 +751,19 @@ The Free Duel grid's slot is tiny: 48×48 pixels, 8 bits a pixel, through a
 Your PNG becomes both of these:
 
 1. **The console's portrait.** Centre-cropped to a square, box-averaged down to
-   48×48, and reduced to a palette of 64 colours. This is what the game draws at
-   View → Internal 1x, and it is what the grid's cell genuinely contains.
-2. **The picture itself, kept whole.** At Internal 2x and above, the renderer
-   draws your file at its own resolution instead of the 48×48 cell.
+   48×48, and reduced to a palette of 64 colours. It is what the grid's cell
+   genuinely contains, and what the game draws when your picture is 48×48 or
+   smaller.
+2. **The picture itself, kept whole.** A picture bigger than 48×48 is
+   registered the way a texture pack's image is, and a pack's image stands in
+   for the cell's texels at every scale: at View → Internal 1x its middle
+   square averaged down to 48×48 in the console's 15-bit colour (not reduced
+   to 64), and at Internal 2x and above drawn at its own resolution.
 
 So a portrait is as sharp as the file you give it, with no second image and no
-"hd" folder. Give it one good picture.
+"hd" folder. Give it one good picture. The FM Editor's Duelists tab shows each
+of these as the game draws it, and `tests/pc/editor_duelists_runtime.py`
+holds its 1x picture to the game's frames pixel for pixel.
 
 #### What to give it
 
@@ -767,8 +773,9 @@ So a portrait is as sharp as the file you give it, with no second image and no
 - **Large is fine.** 512×512 or more is drawn at its own size when the internal
   resolution is high enough.
 - Transparency is not kept: the portrait slot has no alpha.
-- Strong, flat colour survives the 64-colour reduction better than a soft
-  gradient, which can band at 1x. The full-size picture is unaffected.
+- A picture of 48×48 or less is shown in its 64 colours: strong, flat colour
+  survives that reduction better than a soft gradient, which can band. A
+  bigger picture is unaffected.
 
 ---
 
@@ -1216,8 +1223,12 @@ What the rest of the port does with a roster it cannot see is covered too.
 `pc_tables`, `pc_free_duel_progress`, `pc_card_drops` and `pc_rank` link units
 this touches, and share `tests/pc/duelists_stubs.c`: the list as a run with no
 duelist mod, the disc's forty, which is what their cases are written against.
-`pc_fm_editor` keeps a `decks` or `drops` entry naming an added duelist, or
-either table named as a file, exactly as the mod wrote it.
+`pc_fm_editor` reads a mod's own roster as duelists to edit and writes it back
+in these folders (`fm_editor/tests/test_roster.py`), and keeps a `decks` or
+`drops` entry naming another mod's duelist, or either table named as a file,
+exactly as the mod wrote it. `tests/pc/editor_duelists_runtime.py` plays a
+roster the FM Editor made: the pages, the portraits against the game's frames,
+a duel's deck and its drop.
 
 `tests/pc/duelists_test.c` (`ctest -R pc_duelists`) covers what is settled
 without a screen: slots and their collisions, replacement precedence, the AI

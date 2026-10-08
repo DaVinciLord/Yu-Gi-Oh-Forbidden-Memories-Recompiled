@@ -160,5 +160,5 @@ says which it is (`MEMORIES_TRACE=mods`). With two mods or more, the Mods
 window's overlaps and the FM Editor's Conflicts tab say it as well
 (notes/modding.md, "When mods overlap").
 
-The editor's Starter decks tab writes `starter` on its *Written decks* tab and
-`starter_pools` on its *Weighted pools* tab.
+The editor's Starter decks tab writes `starter` on its *Fixed decks* page and
+`starter_pools` on its *Weighted pools* page.

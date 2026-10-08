@@ -19,6 +19,7 @@ int Tables_RitualRequirements(int id, TablesRitualRequirement *req, unsigned sho
     (void)id; (void)req; (void)out; return 0;
 }
 int Tables_Ritual(int id, unsigned short *out) { (void)id; (void)out; return -1; }
+int Tables_RitualRule(int id, TablesRitualRule *rule) { (void)id; (void)rule; return 0; }
 int Tables_TrapThreshold(int id, int retail) { (void)id; return retail; }
 int Tables_StatCap(int defense) { (void)defense; return 9999; }
 extern s32 Duel_SelectAttackTrap(u8 *);

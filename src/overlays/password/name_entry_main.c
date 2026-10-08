@@ -13,6 +13,7 @@
 #include "pc/cards/cards.h"
 #include "pc/cards/starter.h"
 #include "pc/platform/title_jump.h"
+#include "pc/cards/tables.h"
 
 /* The game's own generator, handed to Starter_DealPools so the numbers a new
  * game spends stay the ones the game spends. */
@@ -132,6 +133,14 @@ void NameEntry_Main(void)
     } while (NameEntry_PollCompletion() == 0);
     NameEntry_BuildStarterDeck();
     state = (SaveDataState *)gDuel_awPlayerDeck;
+#ifdef MEMORIES_PC
+    /* The cleared save's 0, or a mod's "new_game_starchips" (tables.h),
+       at most the starchips the save holds. */
+    {
+        u32 starchips = (u32)Tables_Value(TABLES_VALUE_NEW_GAME_STARCHIPS, 0);
+        state->starchips = starchips > Tables_StarchipCap() ? Tables_StarchipCap() : starchips;
+    }
+#endif
     checksum = 0;
     entry = state->player_name_sjis;
     for (i = SAVE_DATA_PLAYER_NAME_SIZE - 1; i >= 0; i--) {

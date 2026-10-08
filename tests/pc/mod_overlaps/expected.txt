@@ -27,10 +27,10 @@ Card packs|warning|later|alpha, beta|Pack shop 'main'	Pack shop 'main' (Alpha, B
 Card packs|warning|sold|alpha, gamma|Password 00000001	Password 00000001 (Alpha, Gamma): the digits give Gamma's card 'Mystical Elf', not the others' card or pack
 Guardian Stars|warning|later|alpha, beta|The name of star 11, Fire	The name of star 11, Fire (Alpha, Beta): Beta wins (later in load order)
 Guardian Stars|warning|reset|alpha, beta|Matchup Mars attacking Jupiter	Matchup Mars attacking Jupiter (Alpha, Beta): Beta's "replace" clears what the earlier mods set
-Limits|warning|later|alpha, beta|Limit attack	Limit attack (Alpha, Beta): Beta wins (later in load order)
-Limits|warning|later|alpha, beta|Limit life_points	Limit life_points (Alpha, Beta): Beta wins (later in load order)
-Limits|warning|later|alpha, beta|Limit chest_overflow.limit	Limit chest_overflow.limit (Alpha, Beta): Beta wins (later in load order)
-Limits|info|after|beta, gamma|Limit life_points.duelists.all	Limit life_points.duelists.all (Beta, Gamma): Gamma wins (it loads after Beta on purpose: after/requires)
+Values|warning|later|alpha, beta|Value attack	Value attack (Alpha, Beta): Beta wins (later in load order)
+Values|warning|later|alpha, beta|Value life_points	Value life_points (Alpha, Beta): Beta wins (later in load order)
+Values|warning|later|alpha, beta|Value chest_overflow.limit	Value chest_overflow.limit (Alpha, Beta): Beta wins (later in load order)
+Values|info|after|beta, gamma|Value life_points.duelists.all	Value life_points.duelists.all (Beta, Gamma): Gamma wins (it loads after Beta on purpose: after/requires)
 Terrain bonuses|warning|reset|alpha, beta|Forest bonus of Beast	Forest bonus of Beast (Alpha, Beta): Beta's "replace" clears what the earlier mods set
 Attack traps|warning|later|alpha, delta|Attack trap 'Bear Trap'	Attack trap 'Bear Trap' (Alpha, Delta é 😀 � 中 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx): Delta é 😀 � 中 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx wins (later in load order)
 Duelists|warning|later|alpha, beta, gamma|Duelist 'Heishin' replaced	Duelist 'Heishin' replaced (Alpha, Beta, Gamma): Gamma wins (later in load order)
@@ -41,5 +41,8 @@ Fonts|info|add|alpha, delta|Fonts	Fonts (Alpha, Delta é 😀 � 中 xxxxxxxxxx
 Title screen and menus|warning|later|alpha, beta|title.logo.tint	title.logo.tint (Alpha, Beta): Beta wins (later in load order)
 Title screen and menus|warning|later|alpha, beta|title.entries.load.hide	title.entries.load.hide (Alpha, Beta): Beta wins (later in load order)
 Title screen and menus|info|add|alpha, beta|title.text (lines)	title.text (lines) (Alpha, Beta): both apply and add up
+Title screen and menus|info|add|alpha, beta|title.images (pictures)	title.images (pictures) (Alpha, Beta): both apply and add up
 Title screen and menus|info|aimed|alpha, beta|menu.buttons.alpha:credits.label	menu.buttons.alpha:credits.label (Alpha, Beta): Beta changes Alpha's own on purpose
 Title screen and menus|info|after|beta, gamma|menu.spacing	menu.spacing (Beta, Gamma): Gamma wins (it loads after Beta on purpose: after/requires)
+Duel pictures|warning|later|alpha, beta|ui.duel.lp_player.x	ui.duel.lp_player.x (Alpha, Beta): Beta wins (later in load order)
+Duel pictures|info|agree|alpha, beta|ui.duel.lp_player.tint	ui.duel.lp_player.tint (Alpha, Beta): the same in each, so no difference

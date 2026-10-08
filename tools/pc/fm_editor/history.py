@@ -8,7 +8,7 @@ import pickle
 import zlib
 from pathlib import Path, PurePath
 
-from . import art, guardian_stars, map_art, pngio
+from . import art, board_art, guardian_stars, map_art, pngio
 from .model import Project, RetailNames
 
 
@@ -42,6 +42,7 @@ class Snapshot:
         maps = map_art.state(project)
         for pic in list(maps.strips.values()) + list(maps.textures.values()):
             map_art.picture(project, pic)
+        board_art.freeze(project)
         memo = {id(project.retail): project.retail, id(project.names): project.names}
         map_data = getattr(project.retail, "campaign_map", None)
         if map_data is not None:
@@ -60,7 +61,10 @@ class Snapshot:
                         data["files"][name] = (Path(project.source_dir) / name).read_bytes()
                     except OSError:
                         data["files"].pop(name, None)
-        for key in ("retail", "names", "source_dir", "_recipes", "_own_pairs"):
+        # The roster's files in the mod folder (roster.py) are what is on
+        # disk, not an edit: an undo must not bring back an older idea of
+        # them, or a save after it would leave a file it wrote behind.
+        for key in ("retail", "names", "source_dir", "_recipes", "_own_pairs", "roster_owned"):
             data.pop(key, None)
         cloned_art = data["art_state"]
         # Ownership uses object IDs: store entry positions instead.
@@ -75,6 +79,10 @@ class Snapshot:
         data["map_art"].version = 0
         for pic in list(data["map_art"].strips.values()) + list(data["map_art"].textures.values()):
             pic.pending = False
+        if "board_art" in data:
+            data["board_art"].version = 0
+            for pic in data["board_art"].pictures.values():
+                pic.pending = False
         comparison = io.BytesIO()
         encoder = pickle.Pickler(comparison, protocol=5)
         encoder.fast = True  # compare values, not incidental shared-object identities
@@ -82,7 +90,7 @@ class Snapshot:
         self.key = hashlib.sha256(comparison.getvalue()).digest()
         self.data = zlib.compress(pickle.dumps(data, protocol=5), 1)
 
-    def restore(self, retail, source_dir=None):
+    def restore(self, retail, source_dir=None, roster_owned=()):
         # Only bytes produced by Snapshot above enter pickle.loads. Recovery
         # files use the ordinary JSON mod reader, never this representation.
         project = Project.__new__(Project)
@@ -90,16 +98,21 @@ class Snapshot:
         project.retail = retail
         project.names = RetailNames(retail.cards)
         project.source_dir = source_dir
+        project.roster_owned = set(roster_owned)
         project._recipes = project._own_pairs = None
         st = project.art_state
         st.owned = {id(st.entries[i]): owner for i, owner in st.owned.items()}
         st.folder = source_dir
-        st.changed = bool(st.entries or st.images or project.map_art.strips or project.map_art.textures)
+        boards = board_art.state(project)
+        st.changed = bool(st.entries or st.images or project.map_art.strips or project.map_art.textures or
+                          boards.pictures)
         for rep in st.images.values():
             rep.pending = rep.image is not None
         if hasattr(project, "map_state"):
             project.map_state.retail = getattr(retail, "campaign_map", None)
         for pic in list(project.map_art.strips.values()) + list(project.map_art.textures.values()):
+            pic.pending = pic.image is not None
+        for pic in boards.pictures.values():
             pic.pending = pic.image is not None
         return project
 
@@ -137,4 +150,4 @@ class History:
         if not 0 <= target < len(self.items):
             return None
         self.position = target
-        return self.items[target].restore(project.retail, project.source_dir)
+        return self.items[target].restore(project.retail, project.source_dir, getattr(project, "roster_owned", ()))

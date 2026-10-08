@@ -44,7 +44,16 @@ class IconChoice(ttk.Menubutton):
         for i, value in enumerate(self._values):
             image = self._image(value)
             self.menu.add_radiobutton(label=value, variable=self.variable, value=value, image=image or "",
-                                      compound="left" if image else "none", columnbreak=i and i % ROWS == 0)
+                                      compound="left" if image else "none", columnbreak=i and i % ROWS == 0,
+                                      command=self._picked)
+
+    def _picked(self):
+        """As a Combobox says a choice was made: the window counts it as an
+        edit of the form (editing.py)."""
+        self.event_generate("<<ComboboxSelected>>")
+
+    def get(self):
+        return self.variable.get()
 
     def configure(self, cnf=None, **options):
         if "values" in options:

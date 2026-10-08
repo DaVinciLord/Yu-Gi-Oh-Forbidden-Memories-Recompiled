@@ -73,6 +73,24 @@ typedef struct {
 } TablesRitualRequirement;
 int Tables_RitualRequirements(int ritual, TablesRitualRequirement requirements[3], unsigned short *result);
 
+/* A ritual a mod gave other than three tributes from the field: one to
+ * five of them ("tributes"), from the field, the hand or both
+ * ("tributes_from"). Its tributes are always requirements (a plain card
+ * is {"card": id}, met by the card or a copy of it). Tables_Ritual and
+ * Tables_RitualRequirements answer -1 and 0 for such a ritual, so a
+ * caller asks this first. */
+#define TABLES_RITUAL_TRIBUTE_MAX 5
+enum { TABLES_TRIBUTES_FIELD, TABLES_TRIBUTES_HAND, TABLES_TRIBUTES_BOTH };
+typedef struct {
+    int count;     /* 1 to TABLES_RITUAL_TRIBUTE_MAX */
+    int from;      /* TABLES_TRIBUTES_* */
+    unsigned short result;
+    TablesRitualRequirement requirements[TABLES_RITUAL_TRIBUTE_MAX];
+} TablesRitualRule;
+/* 1 and the rule when the latest entry for this ritual card is such a
+ * ritual, 0 otherwise (none, removed, or three from the field). */
+int Tables_RitualRule(int ritual, TablesRitualRule *rule);
+
 /* A weighted pool as the running opponent's mods have it: TABLES_POOL_DECK
  * (the cards an opponent's deck is dealt from), or a drop pool (S/A-POW,
  * B/C/D, S/A-TEC, in Duel_SelectCardDrop's order). `retail` is the pool the
@@ -114,7 +132,7 @@ int Tables_ChestRoom(void);
 int Tables_ChestFull(unsigned quantity);
 int Tables_ChestOverflow(unsigned quantity, unsigned *starchips);
 
-/* --- limits (notes/gameplay-tables.md, "Limits") ---------------------------
+/* --- limits (notes/gameplay-tables.md, "Values") ---------------------------
  *
  * A mod's "limits" raise or lower the numbers the game caps: a monster's ATK
  * and DEF, the life points a duel starts with and may heal up to, the
@@ -166,6 +184,48 @@ int Tables_TwoPlayerRecordCap(void);
  * "two_player_max", "two_player_step", "starchips", "chest",
  * "free_duel_record", "two_player_record". -1 for a name it does not know. */
 long Tables_Limit(const char *name);
+
+/* The game's other numbers a mod's "limits" may set (the FM Editor's Values
+ * tab; notes/gameplay-tables.md, "Values"): each is `retail`, the disc's,
+ * until a mod says, so without one nothing changes.
+ *
+ *   TABLES_VALUE_DECK_COPIES     copies of a card Build Deck lets in (3)
+ *   TABLES_VALUE_SWORDS_TURNS    the opponent's turns Swords of Revealing
+ *                                Light holds them for (3)
+ *   TABLES_VALUE_CRUSH_CARD      the ATK at or above which Crush Card
+ *                                destroys a monster (1500)
+ *   TABLES_VALUE_SPELLBINDING    what Spellbinding Circle takes off each
+ *                                monster's ATK and DEF (500)
+ *   TABLES_VALUE_SHADOW_SPELL    the same for Shadow Spell (1000)
+ *   TABLES_VALUE_RANK_START      the rank score a duel starts at (50)
+ *   TABLES_VALUE_RANK_EXODIA     what a win by Exodia adds to it (40)
+ *   TABLES_VALUE_RANK_DECK_OUT   what a win by the opponent's empty deck
+ *                                adds (-40)
+ *   TABLES_VALUE_PRIZE + tier    the starchips a win at rank tier 0 (D) to
+ *                                4 (S), POW or TEC, gives (tier + 1)
+ *   TABLES_VALUE_NEW_GAME_STARCHIPS  the starchips a new game starts with (0) */
+enum {
+    TABLES_VALUE_DECK_COPIES,
+    TABLES_VALUE_SWORDS_TURNS,
+    TABLES_VALUE_CRUSH_CARD,
+    TABLES_VALUE_SPELLBINDING,
+    TABLES_VALUE_SHADOW_SPELL,
+    TABLES_VALUE_RANK_START,
+    TABLES_VALUE_RANK_EXODIA,
+    TABLES_VALUE_RANK_DECK_OUT,
+    TABLES_VALUE_PRIZE,
+    TABLES_VALUE_NEW_GAME_STARCHIPS = TABLES_VALUE_PRIZE + 5,
+    TABLES_VALUE_COUNT
+};
+/* The most the game shows or keeps for some of them. */
+#define TABLES_VALUE_SWORDS_MAX 9      /* one digit on the field's card bar */
+#define TABLES_VALUE_PRIZE_MAX 8       /* a starchip picture each, eight in the results' row */
+long Tables_Value(int which, long retail);
+/* What a duel's end adds to the winner's rank score: `tag` is the side's
+ * result_adjustment, 40 (DUEL_RANK_ADJUST_EXODIA_WIN) and -40
+ * (DUEL_RANK_ADJUST_DECK_OUT_WIN) the mod's "exodia" and "deck_out" when it
+ * sets them, any other tag itself. */
+int Tables_RankAdjustment(int tag);
 
 /* A mod's "terrain_bonus" for a monster of `type` (0-19) on `terrain`
  * (gDuel_bTerrain: 1 Forest to 6 Yami): 1 with the points, signed, in

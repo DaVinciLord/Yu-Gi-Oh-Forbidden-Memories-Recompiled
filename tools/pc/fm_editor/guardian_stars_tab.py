@@ -12,7 +12,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from . import guardian_stars as gs, pngio, theme
 from .tabs import Tab
-from .widgets import px, scrolled_tree, ui_font
+from .widgets import WrapLabel, px, scrolled_tree, ui_font
 
 CELL = 44           # a grid cell's side at 96 dpi
 HEAD = 78           # the header row's and column's
@@ -63,10 +63,10 @@ class GuardianStarsTab(Tab):
         self.cell = None          # (attacker, defender) the grid has picked
         self.photos = {}
         self.icon_images = {}     # star -> pngio.Image of the mod's icon, as loaded
-        ttk.Label(self, style="Hint.TLabel", wraplength=px(self, 1000), justify="left",
+        WrapLabel(self, style="Hint.TLabel",
                   text="Each cell is what the attacker's star (row) gets against the defender's star (column): "
                        "the disc gives +500 to the star just before in its cycle and -500 to the one just after, "
-                       "0 otherwise. A card holds its stars in 4 bits, so 15 stars at most.").pack(anchor="w")
+                       "0 otherwise. A card holds its stars in 4 bits, so 15 stars at most.").pack(fill="x")
 
         body = ttk.Frame(self)
         body.pack(fill="both", expand=True, pady=(6, 0))
@@ -80,7 +80,8 @@ class GuardianStarsTab(Tab):
         row = ttk.Frame(left)
         row.pack(fill="x", pady=(4, 0))
         ttk.Button(row, text="Add star", command=self.add_star).pack(side="left")
-        ttk.Button(row, text="Remove", command=self.remove_star).pack(side="left", padx=4)
+        self.remove_button = ttk.Button(row, text="Remove", command=self.remove_star, width=8)
+        self.remove_button.pack(side="left", padx=4)
         form = ttk.Frame(left)
         form.pack(fill="x", pady=(6, 0))
         self.name = tk.StringVar()
@@ -122,7 +123,7 @@ class GuardianStarsTab(Tab):
         self.bind("<<ThemeChanged>>", lambda e: self.draw(), add="+")
         edit = ttk.Frame(right)
         edit.pack(fill="x", pady=(6, 0))
-        self.cell_label = ttk.Label(edit, text="Click a cell")
+        self.cell_label = ttk.Label(edit, text="Click a cell, then its bonus:")
         self.cell_label.pack(side="left")
         self.value = tk.StringVar()
         value_entry = ttk.Entry(edit, textvariable=self.value, width=8)
@@ -159,12 +160,12 @@ class GuardianStarsTab(Tab):
                               width=7)
         choice.pack(side="left", padx=4)
         choice.bind("<<ComboboxSelected>>", lambda e: self.set_choice())
-        ttk.Label(self.advanced, style="Hint.TLabel",
+        WrapLabel(self.advanced, style="Hint.TLabel",
                   text="ask: the SELECT A GUARDIAN STAR box (the disc's); first: always the first star; best: the "
                        "star that does best against the opponent's face-up monsters. A card with one star (the "
-                       "second none, or the same) never asks.").pack(side="left")
-        self.status = ttk.Label(self, style="Warning.TLabel", wraplength=px(self, 1000), justify="left")
-        self.status.pack(anchor="w", pady=(6, 0))
+                       "second none, or the same) never asks.").pack(side="left", fill="x", expand=True)
+        self.status = WrapLabel(self, style="Warning.TLabel")
+        self.status.pack(fill="x", pady=(6, 0))
 
     # --- the model and the project ---------------------------------------------
 
@@ -177,6 +178,11 @@ class GuardianStarsTab(Tab):
         self.choice.set(self.model.choice or "ask")
         self.cell = None
         self.fill()
+        # A star picked, so its name and icon show (an empty form, else).
+        star = self.selected_star if self.tree.exists(str(self.selected_star or 0)) else 1
+        if self.tree.exists(str(star)):
+            self.tree.selection_set(str(star))
+            self._pick_star()
 
     def commit(self):
         if self.project is None:
@@ -224,7 +230,7 @@ class GuardianStarsTab(Tab):
             tags = ("added",) if star > gs.RETAIL_COUNT else ("changed",) if entry else ()
             self.tree.insert("", "end", iid=str(star), tags=tags,
                              values=(star, self.model.name(star), "mod's" if entry and entry.icon else
-                                     ("disc's" if star <= gs.RETAIL_COUNT else "plain"), counts.get(star, 0)))
+                                     ("game's" if star <= gs.RETAIL_COUNT else "plain"), counts.get(star, 0)))
         if chosen and self.tree.exists(str(chosen)):
             self.tree.selection_set(str(chosen))
         self.draw()
@@ -241,6 +247,8 @@ class GuardianStarsTab(Tab):
         self.names.set(_names_text(name))
         self.palette.set(entry.palette if entry and entry.palette else "game")
         self._show_icon()
+        # A disc star is not removed, only given back its disc name and icon.
+        self.remove_button.configure(text="Reset" if self.selected_star <= gs.RETAIL_COUNT else "Remove")
 
     def _star_entry(self, star: int) -> gs.Star:
         return self.model.stars.setdefault(star, gs.Star(star))
@@ -310,6 +318,9 @@ class GuardianStarsTab(Tab):
             self.project.files.pop(self.model.stars[star].icon, None)
         self.model.remove_star(star)
         self.icon_images.pop(star, None)
+        if self.cell and not all(self._exists(s) for s in self.cell):
+            self.cell = None            # its row or column is gone with the star
+            self.value.set("")
         self.fill()
         self.commit()
 
@@ -341,7 +352,7 @@ class GuardianStarsTab(Tab):
         star = self.selected_star
         image = self._icon_image(star) if star else None
         if image is None:
-            self.icon_label.configure(image="", text="disc's" if star and star <= gs.RETAIL_COUNT else "no icon",
+            self.icon_label.configure(image="", text="game's" if star and star <= gs.RETAIL_COUNT else "no icon",
                                       width=8)
             return
         photo = self._photo(pngio.resample(image, 16, 16), 16)
@@ -437,8 +448,13 @@ class GuardianStarsTab(Tab):
         self.value.set(str(self.model.grid[a][d]))
         self.draw()
 
+    def _exists(self, star) -> bool:
+        """A star the grid shows: a disc star, one the mod declares, or a gap
+        below the last declared (its matchups are written like any star's)."""
+        return 1 <= star <= self.model.count
+
     def set_cell(self, value=None):
-        if not self.cell:
+        if not self.cell or not all(self._exists(s) for s in self.cell):
             return
         if value is None:
             try:

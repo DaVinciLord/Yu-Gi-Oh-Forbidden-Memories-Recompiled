@@ -4,10 +4,11 @@ edit."""
 from __future__ import annotations
 
 import json
+import re
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from . import bulk_dialog, guardian_stars, manifest, pools as poolmath, text_menu, validate
+from . import bulk_dialog, guardian_stars, manifest, text_menu, validate
 from .card_text_box import CardTextBox
 from .icon_choice import IconChoice
 from . import card_icons
@@ -15,13 +16,13 @@ from .card_view_preview import CardViewPreview
 from .monster_effects_ui import EffectsBox
 from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, DUELIST_NAMES,
                        EQUIP_BONUS_MAX, FRAME_NAMES,
-                       POOL_LABELS, POOL_TOTAL, POOLS, STAR_NAMES, STARTER_WEIGHT_LIMIT, TYPE_EQUIP, TYPE_MAGIC, TYPE_NAMES,
+                       STAR_NAMES, STARTER_WEIGHT_LIMIT, TYPE_EQUIP, TYPE_MAGIC, TYPE_NAMES,
                        TYPE_RITUAL, TYPE_TRAP,
                        exodia_piece, type_frame)
-from . import fixed_decks
-from .fixed_deck_view import FixedDeckView
+from . import art, fixed_decks, pngio, starter_pools
+from .starter_pools_view import StarterPoolsPage
 from .model import KEY_RE, StarterDeck
-from .widgets import (CardField, FormDialog, ScrolledForm, ScrolledPage, card_matches, card_named, grab, pick_card, px,
+from .widgets import (WrapLabel, legend, CardField, FormDialog, ScrolledForm, ScrolledPage, card_matches, pick_card, px,
                       fixed_font, scrolled_tree, show_text, ui_font)
 
 ATTRIBUTE_CHOICES = ATTRIBUTE_NAMES + ["6 (magic)", "7 (trap)"]
@@ -32,6 +33,55 @@ EFFECT_NONE = "(none)"
 FRAME_CHOICES = ["By type"] + FRAME_NAMES + ["Type, never orange"]
 # Each frame's colour, as the hand's frames have it (the duel's palette rows 1-6).
 FRAME_COLOURS = ["#e0a838", "#409830", "#b040a0", "#2848b0", "#8868d8", "#e07000"]
+
+
+def deck_makeup(p, cards: dict) -> str:
+    """What a deck ({card: copies}) is made of: its monsters (and their
+    average ATK) and each other kind."""
+    kinds = {"Magic": TYPE_MAGIC, "Trap": TYPE_MAGIC + 1, "Ritual": TYPE_MAGIC + 2, "Equip": TYPE_EQUIP}
+    counts = {name: 0 for name in kinds}
+    monsters = attack = 0
+    for cid, copies in cards.items():
+        card = p.cards.get(cid)
+        if card is None:
+            continue
+        if card.is_monster():
+            monsters += copies
+            attack += card.attack * copies
+        else:
+            for name, t in kinds.items():
+                if card.type == t:
+                    counts[name] += copies
+    parts = [f"Monsters {monsters}" + (f" (average ATK {round(attack / monsters)})" if monsters else "")]
+    parts += [f"{name} {n}" for name, n in counts.items() if n]
+    return " \u00b7 ".join(parts)
+
+
+def pool_summary(p, kind: str, pool: dict, retail: dict) -> str:
+    """A line of what a pool deals: a deck pool, the forty it deals most
+    often; a drop pool, the chance of each kind of card and its strongest
+    monster; with the disc's beside it when the mod changed it."""
+    def line(weights):
+        weights = {c: w for c, w in weights.items() if w > 0 and c in p.cards}
+        if not weights:
+            return "nothing"
+        if kind == "deck":
+            return deck_makeup(p, fixed_decks.most_likely(weights))
+        total = sum(weights.values())
+        monsters = {c: w for c, w in weights.items() if p.cards[c].is_monster()}
+        parts = [f"monsters {round(100 * sum(monsters.values()) / total)}%"]
+        other = round(100 * (total - sum(monsters.values())) / total)
+        if other:
+            parts.append(f"other cards {other}%")
+        if monsters:
+            best = max(monsters, key=lambda c: (p.cards[c].attack, -c))
+            parts.append(f"strongest {p.cards[best].name} ({p.cards[best].attack} ATK, "
+                         f"{100 * monsters[best] / total:.2f}%)")
+        return ", ".join(parts)
+    now = line(pool)
+    what = "The 40 it deals most often: " if kind == "deck" else "A drop: "
+    before = line(retail)
+    return what + now + ("" if before == now else f"   (the disc's: {before})")
 
 
 def type_label(t: int) -> str:
@@ -134,13 +184,18 @@ class CardsTab(Tab):
         top.pack(fill="x")
         ttk.Label(top, text="Search").pack(side="left")
         self.search = tk.StringVar()
-        ttk.Entry(top, textvariable=self.search, width=24).pack(side="left", padx=4)
+        self.search_entry = ttk.Entry(top, textvariable=self.search, width=24)     # Ctrl+F
+        self.search_entry.pack(side="left", padx=4)
         self.filter = tk.StringVar(value=self.FILTERS[0])
         ttk.Combobox(top, textvariable=self.filter, values=self.FILTERS, state="readonly", width=16).pack(side="left")
         self.search.trace_add("write", lambda *_: self.fill())
         self.filter.trace_add("write", lambda *_: self.fill())
-        frame, self.tree = scrolled_tree(left, [("id", "#"), ("name", "Name"), ("type", "Type"), ("atk", "ATK"),
-                                                ("def", "DEF"), ("state", "Status")], [50, 160, 100, 50, 50, 60], 10, sort_numeric=("id", "atk", "def"))
+        # A dot between the number and the name marks a card the mod changes,
+        # in its row's colour (blue changed, green added); no Status column.
+        frame, self.tree = scrolled_tree(left, [("id", "#"), ("mark", ""), ("name", "Name"), ("type", "Type"),
+                                                ("atk", "ATK"), ("def", "DEF")], [50, 22, 160, 100, 50, 50], 10,
+                                         sort_numeric=("id", "atk", "def"))
+        self.tree.column("mark", anchor="center")
         frame.pack(fill="both", expand=True, pady=4)
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.select())
         bottom = ttk.Frame(left)
@@ -196,8 +251,23 @@ class CardsTab(Tab):
             row += 1
             return widget
 
-        self.title = ttk.Label(form, font=ui_font(11))
-        self.title.grid(row=row, column=0, columnspan=3, sticky="w", pady=(0, 6))
+        # The card's picture (a click opens it on the Art tab), its number,
+        # and Apply and Revert, where they show without scrolling the form.
+        head = ttk.Frame(form)
+        head.grid(row=row, column=0, columnspan=3, sticky="we", pady=(0, 6))
+        self.picture = ttk.Label(head, cursor="hand2")
+        self.picture.pack(side="left", padx=(0, 8))
+        self.picture.bind("<Button-1>", lambda e: self.current and self.app.open_card(self.app.art, self.current))
+        self._picture = None
+        words = ttk.Frame(head)
+        words.pack(side="left", fill="y")
+        self.title = ttk.Label(words, font=ui_font(11))
+        self.title.pack(anchor="w")
+        self.art_link = ttk.Label(words, text="Its art on the Art tab", style="Changed.TLabel", cursor="hand2")
+        self.art_link.pack(anchor="w")
+        self.art_link.bind("<Button-1>", lambda e: self.current and self.app.open_card(self.app.art, self.current))
+        ttk.Button(head, text="Revert to retail", command=self.revert).pack(side="right")
+        ttk.Button(head, text="Apply", command=self.apply).pack(side="right", padx=4)
         row += 1
         self.hints = {}
 
@@ -255,7 +325,7 @@ class CardsTab(Tab):
         line("Password", ttk.Entry(form, textvariable=self.vars["password"], width=12, validate="key",
                                    validatecommand=digits), hint("password"))
         self.price = line("Starchips", ttk.Entry(form, textvariable=self.vars["starchips"], width=12), hint("starchips"))
-        ttk.Label(form, text="0 = free; empty = default price", style="Hint.TLabel").grid(
+        ttk.Label(form, text="Password shop price: 0 = free; empty = the game's", style="Hint.TLabel").grid(
             row=row, column=1, columnspan=2, sticky="w")
         row += 1
         # The frame the card view, the Library and the duel draw it in: its
@@ -334,12 +404,8 @@ class CardsTab(Tab):
         self.notes = tk.Text(form, width=36, height=4, wrap="word", undo=True)
         self.notes.grid(row=row, column=1, columnspan=2, sticky="we", pady=2)
         row += 1
-        buttons = ttk.Frame(form)
-        buttons.grid(row=row, column=0, columnspan=3, sticky="we", pady=(8, 0))
-        ttk.Button(buttons, text="Apply", command=self.apply).pack(side="left")
-        ttk.Button(buttons, text="Revert to retail", command=self.revert).pack(side="left", padx=4)
         self.status = ttk.Label(form, style="Error.TLabel", wraplength=px(form, 320), justify="left")
-        self.status.grid(row=row + 1, column=0, columnspan=3, sticky="w", pady=(6, 0))
+        self.status.grid(row=row, column=0, columnspan=3, sticky="w", pady=(6, 0))
         for child in form.winfo_children():
             if isinstance(child, (ttk.Entry, ttk.Spinbox)):
                 child.bind("<Return>", lambda e: self.apply())
@@ -375,7 +441,8 @@ class CardsTab(Tab):
         state = ("added" if cid in self.project.added else "changed" if self.project.card_changed(cid)
                  else "notes" if cid in self.project.notes else "")
         attack, defense = (card.attack, card.defense) if card.is_monster() else ("", "")
-        return (cid, card.name, type_label(card.type), attack, defense, state), (state,) if state else ()
+        return (cid, "●" if state else "", card.name, type_label(card.type), attack, defense), \
+            (state,) if state else ()
 
     def fill(self):
         if not hasattr(self, "tree") or self.project is None:
@@ -397,6 +464,17 @@ class CardsTab(Tab):
         self.current = None
         self.fill()
         self.show(None)
+        self.show_first()
+
+    def show_first(self):
+        """The list's first card, so the tab never opens on an empty form."""
+        rows = self.tree.get_children()
+        if rows:
+            # Not a card the modder chose: the other tabs do not follow it.
+            chosen = self.app.current_card
+            self.tree.selection_set(rows[0])
+            self.show(int(rows[0]))
+            self.app.current_card = chosen
 
     def update_row(self, cid):
         if self.tree.exists(str(cid)):
@@ -408,6 +486,9 @@ class CardsTab(Tab):
         selection = self.tree.selection()
         cid = int(selection[0]) if selection else None
         if cid == self.current:
+            # The card shown before the window was (the first, on opening):
+            # its form may have grown since the line was placed.
+            self.form_resized()
             return
         if self.current is not None and not self.apply(quiet=True):
             self.tree.selection_set(str(self.current))    # stay on the card whose form cannot be stored
@@ -443,9 +524,53 @@ class CardsTab(Tab):
             self.show_card(cid)
 
     # the form
+    def show_picture(self, cid):
+        """The card's picture as the game draws it (the mod's, else the
+        disc's), small, beside its number; none without the game files."""
+        image = None
+        files = getattr(self.app, "files", None)
+        if cid is not None and files is not None and getattr(files, "wa", None):
+            try:
+                image, _ = art.shown_image(self.project, files.wa, cid, "art")
+            except (OSError, ValueError, KeyError, IndexError):
+                image = None
+        if image is None:
+            self._picture = None
+            self.picture.configure(image="")
+            return
+        self._picture = tk.PhotoImage(master=self, data=pngio.ppm(pngio.scale_to(image, px(self, 68), px(self, 64))),
+                                      format="PPM")
+        self.picture.configure(image=self._picture)
+
+    def idle_form(self, idle: bool):
+        """No card: every control of the form greyed (the buttons, the icon
+        lists, an added card's boxes), not only its first row of fields; a
+        card again: those back as they were. The effects box sees to its own."""
+        if not idle:
+            for widget, state in getattr(self, "_idled", ()):
+                if widget.winfo_exists():
+                    widget.state(state)
+            self._idled = []
+            return
+        if getattr(self, "_idled", None):
+            return
+        idled = []
+
+        def walk(widget):
+            for child in widget.winfo_children():
+                if child is self.effects_box:
+                    continue
+                if isinstance(child, (ttk.Button, ttk.Menubutton, ttk.Checkbutton)) and not child.instate(["disabled"]):
+                    idled.append((child, ["!disabled"]))
+                    child.state(["disabled"])
+                walk(child)
+        walk(self.form)
+        self._idled = idled
+
     def show(self, cid):
         self.current = cid
         self.status.configure(text="")
+        self.idle_form(not cid)
         state = "normal" if cid else "disabled"
         for child in self.form.winfo_children():
             try:
@@ -462,6 +587,8 @@ class CardsTab(Tab):
         self.notes.edit_reset()
         if not cid:
             self.title.configure(text="Select a card")
+            self.show_picture(None)
+            self.art_link.pack_forget()         # no card, no art to go to
             for var in self.vars.values():
                 var.set("")
             self.added_frame.grid_remove()
@@ -480,6 +607,8 @@ class CardsTab(Tab):
         card = self.project.cards[cid]
         self.app.current_card = cid
         self.title.configure(text=f"#{cid}" + ("  (added by the mod)" if cid in self.project.added else ""))
+        self.show_picture(cid)
+        self.art_link.pack(anchor="w")
         self.vars["name"].set(card.name)
         self.vars["attack"].set(card.attack)
         self.vars["defense"].set(card.defense)
@@ -586,7 +715,7 @@ class CardsTab(Tab):
             value, words, differs = shown.get(key, (None, "", False))
             hint, caption = self.hints[key], self.captions.get(key)
             if key == "password" and value is None and shown:
-                hint.configure(text="Card view only", style="Hint.TLabel", cursor="")
+                hint.configure(text="Disc: no password", style="Hint.TLabel", cursor="")
             elif differs:
                 text = f"{what}: {words} (restore)" if key != "text" else f"Restore {what.lower()} text"
                 if len(text) > HINT_WIDTH:
@@ -849,6 +978,12 @@ class CardsTab(Tab):
         form as wide as its controls, the list the rest (at least LIST_LEAST)."""
         if not self.panes.winfo_exists() or not self.panes.winfo_ismapped():
             return
+        if not int(self.panes.cget("width")):
+            # Asked for what the list and the form ask, not for the panes'
+            # sizes as they are (rescaled): the tab is then never wider than
+            # the window, with a bottom scrollbar a few pixels long.
+            self.panes.configure(width=sum(self.nametowidget(p).winfo_reqwidth() for p in self.panes.panes())
+                                 + px(self, 6))
         width = self.panes.winfo_width()
         if self._sash_dragged:
             # Once ttk has shared the change out by the panes' weights.
@@ -1042,7 +1177,15 @@ class CardsTab(Tab):
         cid = self.current
         if not cid:
             return
-        self.project.revert_card(cid)
+        p = self.project
+        what = "its base as the mod has it" if cid in p.added else "the disc's card"
+        # Every field of the card at once, the per-field links being the
+        # precise way back: asked first, as Remove this card is.
+        if (cid in p.added or p.card_changed(cid)) and not messagebox.askyesno(
+                "Revert to retail", f"Put {p.card_label(cid)} back as {what}? Its name, type, stats, text, "
+                "password, price and effect go back; its notes stay.", parent=self):
+            return
+        p.revert_card(cid)
         self.app.changed()
         self.update_row(cid)
         self.show(cid)
@@ -1066,6 +1209,7 @@ class CardsTab(Tab):
         self.current = None
         self.tree.selection_set(str(cid))
         self.tree.see(str(cid))
+        self.show(cid)                  # now, not when the list's selection event comes round
 
     def remove_card(self):
         cid = self.current
@@ -1113,10 +1257,14 @@ class FusionsTab(Tab):
         top.pack(fill="x")
         ttk.Label(top, text="Card (name or #)").pack(side="left")
         self.search = tk.StringVar()
-        ttk.Entry(top, textvariable=self.search, width=28).pack(side="left", padx=4)
+        self.search_entry = ttk.Entry(top, textvariable=self.search, width=28)     # Ctrl+F
+        self.search_entry.pack(side="left", padx=4)
         self.changed_only = tk.BooleanVar()
         ttk.Checkbutton(top, text="Changed only", variable=self.changed_only, command=self.fill).pack(side="left")
-        self.search.trace_add("write", lambda *_: self.fill())
+        # The list is filled again once the typing stops: 25,000 pairs a key
+        # made typing a name lag.
+        self._fill_job = None
+        self.search.trace_add("write", lambda *_: self.fill_soon())
         self.count = ttk.Label(top)
         self.count.pack(side="right")
         # {"remove": "all"}: the disc's pairs are no fusions; they are left
@@ -1128,10 +1276,11 @@ class FusionsTab(Tab):
         ttk.Checkbutton(self.all_banner, text="Show the removed disc fusions", variable=self.show_removed,
                         command=self.fill).pack(side="left", padx=8)
         frame, self.tree = scrolled_tree(self, [("a", "Card A"), ("b", "Card B"), ("result", "Result"),
-                                                ("state", "")], [260, 260, 260, 80], 24, selectmode="extended")
+                                                ("state", "Status")], [260, 260, 260, 80], 24, selectmode="extended")
         frame.pack(fill="both", expand=True, pady=4)
         self.list_frame = frame
-        self.tree.bind("<Double-1>", lambda e: self.edit())
+        self.tree.tag_configure("group", font=ui_font(10))
+        self.tree.bind("<Double-1>", self.double_click)
         buttons = ttk.Frame(self)
         buttons.pack(fill="x")
         ttk.Button(buttons, text="Add fusion...", command=self.add).pack(side="left")
@@ -1139,11 +1288,14 @@ class FusionsTab(Tab):
         ttk.Button(buttons, text="Remove (no fusion)", command=self.remove).pack(side="left")
         ttk.Button(buttons, text="Remove recipes of...", command=self.remove_result).pack(side="left", padx=(4, 0))
         ttk.Button(buttons, text="Revert to retail", command=self.revert).pack(side="left", padx=4)
-        ttk.Button(buttons, text="Bulk...", command=lambda: bulk_dialog.open_bulk(self)).pack(side="left")
+        # Most disc fusions are by type (a Dragon with a Thunder...): many pairs at once.
+        ttk.Button(buttons, text="Bulk (many pairs)...", command=lambda: bulk_dialog.open_bulk(self)).pack(side="left")
         self.all_button = ttk.Button(buttons, text="Remove all fusions...", command=self.remove_all)
         self.all_button.pack(side="left", padx=4)
-        ttk.Label(self, text="A pair fuses the same in either order. Brown rows are the retail table's "
-                             "\"glitch\" fusions.", style="Hint.TLabel").pack(anchor="w", pady=(2, 0))
+        key = legend(self, ("changed", "changed by the mod"), ("added", "added by the mod"),
+                     ("removed", "no fusion any more"), ("glitch", "the disc's \"glitch\" fusions"))
+        ttk.Label(key, text="  A pair fuses the same in either order.", style="Hint.TLabel").pack(side="left")
+        key.pack(anchor="w", pady=(2, 0))
 
     def refresh(self):
         # A search still naming a whole card (after Undo, another mod) is
@@ -1155,6 +1307,7 @@ class FusionsTab(Tab):
         """The fusions the card is in or makes."""
         self.followed = cid
         self.search.set(self.project.card_label(cid))
+        self.fill()
 
     def follow(self, cid):
         """The window's card, when it changed, unless the search is the
@@ -1164,9 +1317,36 @@ class FusionsTab(Tab):
         if cid != followed and cid in self.project.cards and (not text or labelled_card(self.project, text) == followed):
             self.show_card(cid)
 
-    def fill(self):
+    def double_click(self, event):
+        """A row's: a heading's double-click is no edit of the selected row,
+        nor a group's."""
+        if self.tree.identify_region(event.x, event.y) in ("cell", "tree") and \
+                not self.tree.identify_row(event.y).startswith("group:"):
+            self.edit()
+
+    def fill_soon(self):
+        # One Tcl command, made once: an after() a keystroke registered a new
+        # one each time, named by the bound method's id, which Python reuses,
+        # and a name made twice was left behind for destroy() to trip on.
+        if getattr(self, "_fill_command", None) is None:
+            self._fill_command = self.register(self._fill_due)
+        if self._fill_job is not None:
+            self.tk.call("after", "cancel", self._fill_job)
+        self._fill_job = self.tk.call("after", 200, self._fill_command)
+
+    def _fill_due(self):
+        self._fill_job = None           # the job that runs is not one fill() cancels
+        self.fill()
+
+    def fill(self, select=()):
+        """The list again, the rows selected before (or `select`) still
+        selected where they are listed."""
+        if self._fill_job is not None:
+            self.tk.call("after", "cancel", self._fill_job)
+            self._fill_job = None
         if self.project is None:
             return
+        chosen = [f"{a}:{b}" for a, b in select] or list(self.tree.selection())
         self.tree.delete(*self.tree.get_children())
         p = self.project
         text = self.search.get().strip()
@@ -1192,19 +1372,47 @@ class FusionsTab(Tab):
                 continue
             rows.append((pair, status))
         rows.sort()
-        for pair, status in rows[:self.LIMIT]:
-            result = p.fusions.get(pair)
-            retail = p.retail.fusions.get(pair)
-            if status == "own list":
-                shown = f"{p.card_label(own[pair]) if own[pair] else '(none)'} (a card's own fusions list)"
-            else:
-                shown = p.card_label(result) if result else \
-                    f"(none; retail {p.card_label(retail)})" if retail else "(none: forbidden)"
-            tag = "changed" if status == "own list" else status
-            self.tree.insert("", "end", iid=f"{pair[0]}:{pair[1]}", tags=(tag,) if tag else (),
-                             values=(p.card_label(pair[0]), p.card_label(pair[1]), shown, status))
+        # One card followed: its pairs in two groups, what it fuses with (it
+        # in Card A) and what makes it, each counted.
+        groups = [("", rows[:self.LIMIT])]
+        if exact is not None:
+            groups = [("with", [r for r in rows if exact in r[0]]), ("made", [r for r in rows if exact not in r[0]])]
+            groups = [(g, sorted(members, key=lambda r: (r[0][1] if r[0][0] == exact else r[0][0], r[0])))
+                      for g, members in groups]
+        for group, members in groups:
+            parent = ""
+            if group:
+                fusing = sum(1 for _, status in members if status != "removed")
+                title = (f"{p.cards[exact].name} fuses with" if group == "with" else f"Made by")
+                parent = f"group:{group}"
+                self.tree.insert("", "end", iid=parent, open=True, tags=("group",),
+                                 values=(f"{title}: {fusing} {'pair' if fusing == 1 else 'pairs'}", "", "", ""))
+                if not members:
+                    self.tree.insert(parent, "end", iid=f"{parent}:none", tags=("group",),
+                                     values=("   (none)", "", "", ""))
+            for pair, status in members:
+                result = p.fusions.get(pair)
+                retail = p.retail.fusions.get(pair)
+                if status == "own list":
+                    shown = f"{p.card_label(own[pair]) if own[pair] else '(none)'} (a card's own fusions list)"
+                else:
+                    shown = p.card_label(result) if result else \
+                        f"(none; retail {p.card_label(retail)})" if retail else "(none: forbidden)"
+                tag = "changed" if status == "own list" else status
+                a, b = pair if group != "with" or pair[0] == exact else (pair[1], pair[0])
+                # The followed card in each row of its own group: a ditto mark,
+                # the group's title names it.
+                first = "    \u2033" if group == "with" else p.card_label(a)
+                self.tree.insert(parent, "end", iid=f"{pair[0]}:{pair[1]}", tags=(tag,) if tag else (),
+                                 values=(first, p.card_label(b), shown, status))
         more = f" (first {self.LIMIT} shown; search to narrow)" if len(rows) > self.LIMIT else ""
-        self.count.configure(text=f"{len(rows)} fusions{more}")
+        removed = sum(1 for _, status in rows if status == "removed")
+        gone = f", {removed} removed" if removed else ""
+        self.count.configure(text=f"{len(rows) - removed} fusions{gone}{more}")
+        kept = [iid for iid in chosen if self.tree.exists(iid)]
+        if kept:
+            self.tree.selection_set(kept)
+            self.tree.see(kept[0])
         self.all_button.configure(text="Restore disc fusions" if p.fusion_remove_all else "Remove all fusions...")
         if p.fusion_remove_all:
             shown = "shown in red" if self.show_removed.get() else f"{hidden} hidden here"
@@ -1214,8 +1422,15 @@ class FusionsTab(Tab):
         else:
             self.all_banner.pack_forget()
 
+    def rows(self) -> list:
+        """The pairs' rows as listed, in a group or not (not the groups')."""
+        out = []
+        for iid in self.tree.get_children():
+            out += list(self.tree.get_children(iid)) if iid.startswith("group:") else [iid]
+        return [iid for iid in out if not iid.startswith("group:")]
+
     def selected(self):
-        return [tuple(int(x) for x in iid.split(":")) for iid in self.tree.selection()]
+        return [tuple(int(x) for x in iid.split(":")) for iid in self.tree.selection() if not iid.startswith("group:")]
 
     def dialog(self, title, pair=None, result=None):
         fields = {}
@@ -1235,24 +1450,40 @@ class FusionsTab(Tab):
             a, b, r = fields["a"].get(), fields["b"].get(), fields["r"].get()
             if not (a and b and r):
                 return "name three cards (a number, a name, or pick one with ...)"
+            if not self.project.cards[r].is_monster():
+                return f"a fusion makes a monster: {self.project.card_label(r)} is not one"
             if pair and self.project.pair(a, b) != pair:
                 self.project.set_fusion(pair[0], pair[1], None)     # the fusion moved to other cards
             self.project.set_fusion(a, b, r)
             self.app.changed()
-            self.search.set(self.project.card_label(a).split(" ", 1)[1] if " " in self.project.card_label(a) else "")
-            self.fill()
+            made = self.project.pair(a, b)
+            self.fill(select=[made])
+            if not self.tree.exists(f"{made[0]}:{made[1]}"):
+                # The search or "Changed only" leaves it out: show card A's.
+                self.changed_only.set(False)
+                self.show_card(made[0])
+                self.fill(select=[made])
             return None
 
-        FormDialog(self, title, build, ok)
+        dialog = FormDialog(self, title, build, ok)
+        dialog.fields = fields
+        return dialog
 
     def add(self):
-        self.dialog("Add fusion")
+        return self.dialog("Add fusion")
+
+    def shown_result(self, pair):
+        """What the row shows the pair making: a card's own list's, the
+        mod's, or the disc's."""
+        p = self.project
+        own = fusion_pairs(p)[0].get(pair) if pair not in p.fusions else None
+        return own or p.fusions.get(pair) or p.retail.fusions.get(pair)
 
     def edit(self):
         chosen = self.selected()
         if chosen:
             pair = chosen[0]
-            self.dialog("Change fusion", pair, self.project.fusions.get(pair) or self.project.retail.fusions.get(pair))
+            return self.dialog("Change fusion", pair, self.shown_result(pair))
 
     def remove(self):
         if not self.selected():
@@ -1301,7 +1532,7 @@ class FusionsTab(Tab):
             fields["r"] = CardField(body, lambda: self.project, width=36)
             fields["r"].grid(row=0, column=1, sticky="we", pady=2)
             if chosen:
-                fields["r"].set(self.project.fusions.get(chosen[0]) or self.project.retail.fusions.get(chosen[0]))
+                fields["r"].set(self.shown_result(chosen[0]))
             ttk.Label(body, text="No recipe on the disc makes this card any more: one \"remove\" rule in place of\n"
                                  "a rule per pair. The mod's own fusions, and an added card's own recipes, still\n"
                                  "make it. Revert a pair to bring that recipe back.",
@@ -1333,34 +1564,62 @@ class EquipsTab(Tab):
         left.pack(side="left", fill="y")
         ttk.Label(left, text="Equip cards").pack(anchor="w")
         frame, self.equips = scrolled_tree(left, [("id", "#"), ("name", "Equip card"), ("n", "Fits")],
-                                           [50, 200, 50], 26, sort_numeric=("id", "n"))
+                                           [50, 250, 50], 26, sort_numeric=("id", "n"))
         frame.pack(fill="y", expand=True)
         self.equips.bind("<<TreeviewSelect>>", lambda e: self.select())
         right = ttk.Frame(self)
         right.pack(side="left", fill="both", expand=True, padx=(8, 0))
         self.heading = ttk.Label(right, font=ui_font(11))
         self.heading.pack(anchor="w")
+        ttk.Label(right, style="Hint.TLabel", text="What it adds to a monster's ATK and DEF is set on the Cards "
+                                                  "tab (the equip card's ATK and DEF boost).").pack(anchor="w")
+        # Every monster type at once: ticked, all of the type may be equipped;
+        # half ticked, some. Its count shows the list's monsters of the type.
+        types = ttk.LabelFrame(right, text="By monster type: tick for every monster of it; click a count to list them",
+                               padding=(6, 2))
+        types.pack(fill="x", pady=(4, 0))
+        self.type_boxes = {}
+        self.type_counts = {}
+        self.only_type = None           # the list shows one type's monsters
+        for t, name in enumerate(TYPE_NAMES[:20]):
+            cell = ttk.Frame(types)
+            cell.grid(row=t // 5, column=t % 5, sticky="w", padx=(0, 10))
+            var = tk.IntVar()
+            box = ttk.Checkbutton(cell, text=name, variable=var, command=lambda t=t: self.toggle_type(t))
+            box.pack(side="left")
+            count = ttk.Label(cell, style="Hint.TLabel", cursor="hand2")
+            count.pack(side="left")
+            count.bind("<Button-1>", lambda e, t=t: self.show_type(t))
+            self.type_boxes[t] = (box, var)
+            self.type_counts[t] = count
+        for column in range(5):
+            types.columnconfigure(column, weight=1)
+        self.type_filter = ttk.Label(right, style="Hint.TLabel", cursor="hand2")
+        self.type_filter.bind("<Button-1>", lambda e: self.show_type(None))
         frame, self.monsters = scrolled_tree(right, [("id", "#"), ("name", "Monster"), ("type", "Type"),
-                                                     ("atk", "ATK"), ("def", "DEF"), ("state", "")],
-                                                     [50, 220, 100, 50, 50, 80], 22, selectmode="extended",
+                                                     ("atk", "ATK"), ("def", "DEF"), ("state", "Status")],
+                                                     [50, 220, 100, 50, 50, 80], 16, selectmode="extended",
                                                      sort_numeric=("id", "atk", "def"))
         frame.pack(fill="both", expand=True, pady=4)
         buttons = ttk.Frame(right)
         buttons.pack(fill="x")
         self.actions = buttons
         ttk.Button(buttons, text="Add a monster...", command=self.add).pack(side="left")
-        self.type_choice = tk.StringVar(value=TYPE_NAMES[0])
-        ttk.Button(buttons, text="Add every", command=lambda: self.by_type(True)).pack(side="left", padx=(8, 2))
-        ttk.Combobox(buttons, textvariable=self.type_choice, values=TYPE_NAMES[:20], state="readonly",
-                     width=14).pack(side="left")
-        ttk.Button(buttons, text="Remove every", command=lambda: self.by_type(False)).pack(side="left", padx=2)
+        self.type_choice = tk.StringVar(value=TYPE_NAMES[0])     # by_type's (the boxes above use it)
         ttk.Button(buttons, text="Remove selected", command=self.remove).pack(side="left", padx=(8, 0))
         ttk.Button(buttons, text="Revert to retail", command=self.revert).pack(side="left", padx=4)
+        self.monsters.bind("<Delete>", lambda e: self.remove())
+        legend(right, ("added", "added by the mod"), ("removed", "taken away by the mod")).pack(anchor="w", pady=(2, 0))
 
     def refresh(self):
         self.current = None
         self.followed = None
         self.fill_equips()
+        rows = self.equips.get_children()
+        if rows:                        # the first equip card: never an empty tab
+            self.current = int(rows[0])
+            self.equips.selection_set(rows[0])
+            self.fill_equips()
         self.fill()
 
     def show_card(self, cid):
@@ -1405,17 +1664,40 @@ class EquipsTab(Tab):
         editable = p is not None and self.current in p.equip_cards()
         for action in self.actions.winfo_children():
             action.state(["!disabled"] if editable else ["disabled"])
+        for box, _ in self.type_boxes.values():
+            box.state(["!disabled"] if editable else ["disabled"])
         if not editable:
             self.current = None
             self.heading.configure(text="Select an equip card")
+            for t, (box, var) in self.type_boxes.items():
+                var.set(0)
+                box.state(["!alternate"])
+                self.type_counts[t].configure(text="")
+            self.type_filter.pack_forget()
             return
-        self.heading.configure(text=f"{p.card_label(self.current)} may equip:")
         now = p.equip_targets(self.current)
         retail = p.equip_baseline(self.current)
+        self.heading.configure(text=f"{p.card_label(self.current)} may equip {len(now)} monsters:")
+        monsters = set(p.monsters())
+        for t, (box, var) in self.type_boxes.items():
+            members = {cid for cid in monsters if p.cards[cid].type == t}
+            have = len(now & members)
+            var.set(1 if members and have == len(members) else 0)
+            box.state(["alternate"] if 0 < have < len(members) else ["!alternate"])
+            self.type_counts[t].configure(text=f"{have}/{len(members)}",
+                                          style="Changed.TLabel" if t == self.only_type else "Hint.TLabel")
+        if self.only_type is not None:
+            self.type_filter.configure(text=f"Showing {TYPE_NAMES[self.only_type]} monsters only "
+                                            "(click here to show all)")
+            self.type_filter.pack(anchor="w", before=self.monsters.master)
+        else:
+            self.type_filter.pack_forget()
         for cid in sorted(now | retail):
             state = "" if cid in now and cid in retail else "added" if cid in now else "removed"
             card = p.cards.get(cid)
             if card is None:
+                continue
+            if self.only_type is not None and card.type != self.only_type:
                 continue
             self.monsters.insert("", "end", iid=str(cid), values=(
                 cid, card.name, type_label(card.type), card.attack, card.defense, state),
@@ -1434,6 +1716,19 @@ class EquipsTab(Tab):
         if cid:
             self.project.equips.setdefault(self.current, self.project.equip_targets(self.current)).add(cid)
             self.edited()
+
+    def toggle_type(self, t):
+        """A type's box: ticked, every monster of the type; unticked, none.
+        A half-ticked box clicked ticks."""
+        box, var = self.type_boxes[t]
+        allow = bool(var.get()) or box.instate(["alternate"])
+        self.type_choice.set(TYPE_NAMES[t])
+        self.by_type(allow)
+
+    def show_type(self, t):
+        """The list: one type's monsters (its count clicked), or all."""
+        self.only_type = None if t == self.only_type else t
+        self.fill()
 
     def by_type(self, allow):
         if not self.current:
@@ -1463,494 +1758,10 @@ class EquipsTab(Tab):
 
 # --- Rituals ---------------------------------------------------------------------
 
-class RitualsTab(Tab):
-    def __init__(self, notebook, app):
-        super().__init__(notebook, app, "Rituals")
-        frame, self.tree = scrolled_tree(self, [("ritual", "Ritual card"), ("t1", "Tribute 1"), ("t2", "Tribute 2"),
-                                                ("t3", "Tribute 3"), ("result", "Summons"), ("state", "")],
-                                         [210, 170, 170, 170, 200, 70], 24)
-        frame.pack(fill="both", expand=True)
-        self.tree.bind("<Double-1>", lambda e: self.edit())
-        buttons = ttk.Frame(self)
-        buttons.pack(fill="x", pady=(4, 0))
-        ttk.Button(buttons, text="Edit recipe...", command=self.edit).pack(side="left")
-        ttk.Button(buttons, text="Remove recipe", command=self.remove).pack(side="left", padx=4)
-        ttk.Button(buttons, text="Revert to retail", command=self.revert).pack(side="left")
-        ttk.Label(buttons, text="A ritual is a ritual card (an added copy has its base's recipe until given its "
-                                "own); the three tributes are monsters on the field; custom recipes may use conditions.",
-                  style="Hint.TLabel").pack(side="right")
-
-    def refresh(self):
-        self.fill()
-
-    def fill(self):
-        if self.project is None:
-            return
-        p = self.project
-        self.tree.delete(*self.tree.get_children())
-        for ritual in sorted(set(p.ritual_cards()) | set(p.rituals) | set(p.retail.rituals)):
-            if ritual not in p.cards:
-                continue
-            conditional = ritual in p.ritual_requirements
-            state = p.ritual_status(ritual)
-            recipe = p.rituals.get(ritual) or (None, None, None, None)
-            if ritual in p.added and ritual not in p.rituals and not conditional:
-                # Without a recipe of its own, a copy is its base's ritual.
-                recipe = p.rituals.get(p.base_of(ritual)) or recipe
-                state = state or "as base"
-            labels = [p.card_label(c) if c else "-" for c in recipe]
-            if conditional:
-                for i, req in enumerate(p.ritual_requirements[ritual]):
-                    parts = []
-                    if req.get("card"):
-                        parts.append(p.card_label(req["card"]))
-                    if req.get("type") is not None:
-                        parts.append(str(req["type"]))
-                    if req.get("fusion_group") is not None:
-                        parts.append(f'Group: {req["fusion_group"]}')
-                    if req.get("min_attack") is not None:
-                        parts.append(f'ATK ≥ {req["min_attack"]}')
-                    if req.get("min_defense") is not None:
-                        parts.append(f'DEF ≥ {req["min_defense"]}')
-                    if req.get("max_attack") is not None:
-                        parts.append(f'ATK ≤ {req["max_attack"]}')
-                    if req.get("max_defense") is not None:
-                        parts.append(f'DEF ≤ {req["max_defense"]}')
-                    if req.get("min_level") is not None:
-                        parts.append(f'Level ≥ {req["min_level"]}')
-                    if req.get("max_level") is not None:
-                        parts.append(f'Level ≤ {req["max_level"]}')
-                    if req.get("defense_gt_attack"):
-                        parts.append("DEF > ATK")
-                    labels[i] = " & ".join(parts) or "-"
-            self.tree.insert("", "end", iid=str(ritual), values=[p.card_label(ritual)] + labels + [state],
-                             tags=(state,) if state else ())
-
-    def selected(self):
-        selection = self.tree.selection()
-        return int(selection[0]) if selection else None
-
-    def show_card(self, cid):
-        if self.tree.exists(str(cid)):
-            self.tree.selection_set(str(cid))
-            self.tree.see(str(cid))
-
-    def edit(self):
-        ritual = self.selected()
-        if not ritual:
-            return
-        p = self.project
-        recipe = (p.rituals.get(ritual) or p.retail.rituals.get(ritual) or p.rituals.get(p.base_of(ritual))
-                  or (0, 0, 0, 0))      # an added copy starts from its base's
-        saved = p.ritual_requirements.get(ritual)
-        requirements = [dict(r) for r in saved] if saved else [{"card": recipe[i]} if recipe[i] else {} for i in range(3)]
-
-        dialog = tk.Toplevel(self)
-        dialog.title("Ritual recipe")
-        dialog.transient(self)
-        dialog.resizable(True, False)
-        dialog.minsize(px(dialog, 620), 0)
-        grab(dialog)
-        dialog.bind("<Escape>", lambda e: dialog.destroy())
-        dialog.protocol("WM_DELETE_WINDOW", dialog.destroy)
-        body = ttk.Frame(dialog, padding=12)
-        body.pack(fill="both", expand=True)
-        ttk.Label(body, text=self.project.card_label(ritual), font=ui_font(10)).pack(
-            anchor="w", pady=(0, 8))
-
-        panels = []
-        numeric_inputs = [dict(), dict(), dict()]
-        card_inputs = [None, None, None]   # a Specific Card's text, read on Save
-        open_index = tk.IntVar(value=0)
-
-        def describe(req):
-            parts = []
-            if req.get("card"):
-                parts.append("Specific Card")
-            if req.get("type") is not None:
-                parts.append("Monster Type")
-            if req.get("fusion_group") is not None:
-                parts.append("Fusion Group")
-            if req.get("min_attack") is not None:
-                parts.append("Minimum ATK")
-            if req.get("min_defense") is not None:
-                parts.append("Minimum DEF")
-            if req.get("max_attack") is not None:
-                parts.append("Maximum ATK")
-            if req.get("max_defense") is not None:
-                parts.append("Maximum DEF")
-            if req.get("min_level") is not None:
-                parts.append("Minimum Level")
-            if req.get("max_level") is not None:
-                parts.append("Maximum Level")
-            if req.get("defense_gt_attack"):
-                parts.append("DEF > ATK")
-            return parts
-
-        def render(index):
-            panel = panels[index][1]
-            for child in panel.winfo_children():
-                child.destroy()
-            req = requirements[index]
-            kinds = describe(req)
-            for kind in kinds:
-                row = ttk.Frame(panel)
-                row.pack(fill="x", pady=2)
-                ttk.Label(row, text=kind, width=18).pack(side="left")
-                if kind == "Specific Card":
-                    field = CardField(row, lambda: self.project, width=36,
-                                      only=lambda c: 0 <= self.project.cards[c].type < 20)
-                    field.pack(side="left", fill="x", expand=True)
-                    # Typed text survives a redraw, as the numbers' does.
-                    if card_inputs[index] is not None:
-                        field.var.set(card_inputs[index].get())
-                    else:
-                        field.set(req["card"])
-                    card_inputs[index] = field.var
-                elif kind == "Monster Type":
-                    value = tk.StringVar(value=req["type"])
-                    combo = ttk.Combobox(row, textvariable=value, values=TYPE_NAMES[:20], state="readonly", width=22)
-                    combo.pack(side="left")
-                    combo.bind("<<ComboboxSelected>>", lambda e, v=value, r=req: r.__setitem__("type", v.get()))
-                elif kind == "Fusion Group":
-                    value = tk.StringVar(value=req["fusion_group"])
-                    combo = ttk.Combobox(row, textvariable=value, values=FUSION_GROUPS, state="readonly", width=22)
-                    combo.pack(side="left")
-                    combo.bind("<<ComboboxSelected>>",
-                               lambda e, v=value, r=req: r.__setitem__("fusion_group", v.get()))
-                elif kind in ("Minimum ATK", "Minimum DEF", "Maximum ATK", "Maximum DEF", "Minimum Level", "Maximum Level"):
-                    if kind == "Minimum ATK":
-                        key, limit = "min_attack", 9999
-                    elif kind == "Minimum DEF":
-                        key, limit = "min_defense", 9999
-                    elif kind == "Maximum ATK":
-                        key, limit = "max_attack", 9999
-                    elif kind == "Maximum DEF":
-                        key, limit = "max_defense", 9999
-                    elif kind == "Minimum Level":
-                        key, limit = "min_level", 12
-                    else:
-                        key, limit = "max_level", 12
-                    # Keep pending edits when changing panels or adding another
-                    # condition rebuilds the widgets. Save validates the text.
-                    previous = numeric_inputs[index].get(key)
-                    value = previous[0] if previous else tk.StringVar(value=str(req[key]))
-                    entry = ttk.Entry(row, textvariable=value, width=10)
-                    entry.pack(side="left")
-                    numeric_inputs[index][key] = (value, limit)
-                else:
-                    ttk.Label(row, text="Required").pack(side="left")
-                def delete(k=kind, r=req, n=index):
-                    keys = {"Specific Card": "card", "Monster Type": "type", "Fusion Group": "fusion_group",
-                            "Minimum ATK": "min_attack", "Minimum DEF": "min_defense",
-                            "Maximum ATK": "max_attack", "Maximum DEF": "max_defense",
-                            "Minimum Level": "min_level", "Maximum Level": "max_level",
-                            "DEF > ATK": "defense_gt_attack"}
-                    if len(describe(r)) <= 1:
-                        return
-                    r.pop(keys[k], None)
-                    numeric_inputs[n].pop(keys[k], None)
-                    if keys[k] == "card":
-                        card_inputs[n] = None
-                    render(n)
-                ttk.Button(row, text="Remove", command=delete,
-                           state="normal" if len(kinds) > 1 else "disabled").pack(side="right", padx=(6, 0))
-            ttk.Button(panel, text="+ Add requirement", command=lambda n=index: add_requirement(n)).pack(
-                anchor="w", pady=(6, 0))
-
-        def add_requirement(index):
-            req = requirements[index]
-            menu = tk.Menu(dialog, tearoff=False)
-            choices = [("Specific Card", "card"), ("Monster Type", "type"), ("Fusion Group", "fusion_group"),
-                       ("Minimum ATK", "min_attack"), ("Minimum DEF", "min_defense"),
-                       ("Maximum ATK", "max_attack"), ("Maximum DEF", "max_defense"),
-                       ("Minimum Level", "min_level"), ("Maximum Level", "max_level"),
-                       ("DEF > ATK", "defense_gt_attack")]
-            def add(key):
-                if key in req:
-                    return
-                if key == "card":
-                    cid = pick_card(dialog, self.project, "Specific ritual tribute",
-                                    only=lambda c: 0 <= self.project.cards[c].type < 20)
-                    if not cid: return
-                    req[key] = cid
-                elif key == "type":
-                    req[key] = TYPE_NAMES[0]
-                elif key == "fusion_group":
-                    req[key] = "Elf"
-                elif key in ("min_attack", "min_defense", "max_attack", "max_defense"):
-                    req[key] = 1000
-                elif key == "min_level":
-                    req[key] = 1
-                elif key == "max_level":
-                    req[key] = 12
-                else:
-                    req[key] = True
-                render(index)
-            for label, key in choices:
-                menu.add_command(label=label, state="disabled" if key in req else "normal",
-                                 command=lambda k=key: add(k))
-            widget = panels[index][1].winfo_children()[-1]
-            menu.tk_popup(widget.winfo_rootx(), widget.winfo_rooty() + widget.winfo_height())
-
-        def show_panel(index):
-            open_index.set(index)
-            for i, (button, panel) in enumerate(panels):
-                button.configure(text=("▼ " if i == index else "▶ ") + f"TRIBUTE {i + 1}")
-                if i == index:
-                    panel.pack(fill="x", padx=(18, 0), pady=(2, 8))
-                    render(i)
-                else:
-                    panel.pack_forget()
-
-        for i in range(3):
-            section = ttk.Frame(body)
-            section.pack(fill="x")
-            header = ttk.Button(section, command=lambda n=i: show_panel(n))
-            header.pack(fill="x")
-            panel = ttk.Frame(section, padding=(4, 4))
-            panels.append((header, panel))
-        show_panel(0)
-
-        ttk.Separator(body).pack(fill="x", pady=(4, 8))
-        summon = ttk.Frame(body)
-        summon.pack(fill="x")
-        ttk.Label(summon, text="Summons", width=18).pack(side="left")
-        result = CardField(summon, lambda: self.project, width=38, only=lambda c: 0 <= self.project.cards[c].type < 20)
-        result.pack(side="left", fill="x", expand=True)
-        if recipe[3]:
-            result.set(recipe[3])
-        error = ttk.Label(body, style="Error.TLabel")
-        error.pack(fill="x", pady=(6, 0))
-        buttons = ttk.Frame(body)
-        buttons.pack(fill="x", pady=(8, 0))
-
-        def fail(index, text):
-            error.configure(text=f"Tribute {index + 1}: {text}")
-            show_panel(index)
-
-        def save():
-            for index, req in enumerate(requirements):
-                if "card" in req and card_inputs[index] is not None:
-                    text = card_inputs[index].get().strip()
-                    cid = card_named(self.project, text)
-                    if text and not cid:
-                        return fail(index, f"no card \"{text}\".")
-                    if cid:
-                        req["card"] = cid
-                    else:
-                        req.pop("card")
-                for key, (value, limit) in numeric_inputs[index].items():
-                    try:
-                        number = int(value.get())
-                    except ValueError:
-                        return fail(index, "ATK, DEF and Level requirements must be whole numbers.")
-                    if not 0 <= number <= limit:
-                        return fail(index, f"{key.replace('_', ' ').title()} must be between 0 and {limit}.")
-                    req[key] = number
-            result_id = result.get()
-            for index, req in enumerate(requirements):
-                for low, high, what in (("min_attack", "max_attack", "ATK"), ("min_defense", "max_defense", "DEF"),
-                                        ("min_level", "max_level", "Level")):
-                    if req.get(low) is not None and req.get(high) is not None and req[low] > req[high]:
-                        return fail(index, f"Minimum {what} cannot be greater than Maximum {what}.")
-                if not req:
-                    return fail(index, "needs at least one requirement.")
-            if not result_id:
-                error.configure(text="Summons must name a monster.")
-                return
-            display = [req.get("card", 0) for req in requirements]
-            self.project.rituals[ritual] = tuple(display + [result_id])
-            traditional = all(set(req) == {"card"} for req in requirements)
-            if traditional:
-                self.project.ritual_requirements.pop(ritual, None)
-            else:
-                self.project.ritual_requirements[ritual] = [dict(req) for req in requirements]
-            self.app.changed()
-            self.fill()
-            dialog.destroy()
-
-        ttk.Button(buttons, text="Save", command=save).pack(side="right")
-        ttk.Button(buttons, text="Cancel", command=dialog.destroy).pack(side="right", padx=4)
-        dialog.bind("<Control-s>", lambda e: save())
-
-    def remove(self):
-        ritual = self.selected()
-        if ritual:
-            self.project.rituals.pop(ritual, None)
-            self.project.ritual_requirements.pop(ritual, None)
-            self.app.changed()
-            self.fill()
-
-    def revert(self):
-        ritual = self.selected()
-        if ritual:
-            self.project.revert_ritual(ritual)
-            self.app.changed()
-            self.fill()
+# rituals_tab.py
 
 
-# --- Duelists ---------------------------------------------------------------------
-
-class DuelistsTab(Tab):
-    def __init__(self, notebook, app):
-        super().__init__(notebook, app, "Duelists")
-        self.duelist = 1
-        left = ttk.Frame(self)
-        left.pack(side="left", fill="y")
-        frame, self.list = scrolled_tree(left, [("id", "#"), ("name", "Opponent"), ("state", "")],
-                                         [36, 170, 60], 26, sort_numeric=("id",))
-        frame.pack(fill="y", expand=True)
-        self.list.bind("<<TreeviewSelect>>", lambda e: self.select())
-        right = ttk.Frame(self)
-        right.pack(side="left", fill="both", expand=True, padx=(8, 0))
-        top = ttk.Frame(right)
-        top.pack(fill="x")
-        self.pool = tk.StringVar(value="deck")
-        for pool in POOLS:
-            ttk.Radiobutton(top, text=POOL_LABELS[pool], value=pool, variable=self.pool,
-                            command=self.fill).pack(side="left", padx=(0, 8))
-        self.total = ttk.Label(top, font=ui_font(10))
-        self.total.pack(side="right")
-        frame, self.tree = scrolled_tree(right, [("id", "#"), ("name", "Card"), ("type", "Type"),
-                                                 ("atk", "ATK"), ("def", "DEF"), ("w", "Weight"),
-                                                 ("pct", "Chance"), ("retail", "Retail"), ("state", "")],
-                                         [50, 220, 100, 50, 50, 60, 60, 60, 70], 22, selectmode="extended",
-                                         sort_numeric=("id", "atk", "def", "w", "pct", "retail"))
-        frame.pack(fill="both", expand=True, pady=4)
-        self.tree.bind("<<TreeviewSelect>>", lambda e: self.pick_row())
-        edit = ttk.Frame(right)
-        edit.pack(fill="x")
-        self.fixed = FixedDeckView(self, right, top)     # the deck pool may be forty cards written down
-        ttk.Button(edit, text="Add a card...", command=self.add).pack(side="left")
-        ttk.Label(edit, text="Weight").pack(side="left", padx=(10, 2))
-        self.weight = tk.StringVar()
-        entry = ttk.Entry(edit, textvariable=self.weight, width=7)
-        entry.pack(side="left")
-        entry.bind("<Return>", lambda e: self.set_weight())
-        ttk.Button(edit, text="Set", command=self.set_weight).pack(side="left", padx=2)
-        ttk.Button(edit, text="Remove selected", command=self.remove).pack(side="left", padx=(8, 0))
-        ttk.Button(edit, text="Normalize to 2048", command=self.normalize).pack(side="left", padx=4)
-        ttk.Button(edit, text="Revert pool", command=self.revert).pack(side="left")
-        ttk.Label(right, text="Weights are chances out of 2048. A deck is 40 cards dealt from at least 14; "
-                              "a drop pool needs one card left.", style="Hint.TLabel").pack(anchor="w", pady=(4, 0))
-
-    def refresh(self):
-        self.fill_list()
-        self.fill()
-
-    def fill_list(self):
-        if self.project is None:
-            return
-        self.list.delete(*self.list.get_children())
-        for d, name in enumerate(DUELIST_NAMES[:len(self.project.pools)]):
-            changed = any({c: w for c, w in self.project.pools[d][p].items() if w} != self.project.retail.pools[d][p]
-                          for p in POOLS)
-            state = "fixed" if fixed_decks.deck_of(self.project, d) else "changed" if changed else ""
-            self.list.insert("", "end", iid=str(d), values=(d, name, state), tags=("changed",) if state else ())
-        self.list.sorting.apply()
-        if self.list.exists(str(self.duelist)):
-            self.list.selection_set(str(self.duelist))
-
-    def select(self):
-        selection = self.list.selection()
-        if selection:
-            self.duelist = int(selection[0])
-            self.fill()
-
-    def current_pool(self):
-        return self.project.pools[self.duelist][self.pool.get()]
-
-    def fill(self):
-        if self.project is None or self.fixed.fill():
-            return
-        p = self.project
-        self.tree.delete(*self.tree.get_children())
-        pool = self.current_pool()
-        retail = p.retail.pools[self.duelist][self.pool.get()]
-        for cid in sorted(set(pool) | set(retail), key=lambda c: (-pool.get(c, 0), c)):
-            weight, before = pool.get(cid, 0), retail.get(cid, 0)
-            if not weight and not before:
-                continue
-            state = "" if weight == before else "added" if not before else "removed" if not weight else "changed"
-            card = p.cards.get(cid)
-            self.tree.insert("", "end", iid=str(cid), tags=(state,) if state else (), values=(
-                cid, card.name if card else "?", type_label(card.type) if card else "",
-                card.attack if card else "", card.defense if card else "", weight,
-                f"{weight * 100 / POOL_TOTAL:.2f}%", before, state))
-        self.tree.sorting.apply()
-        total = sum(pool.values())
-        cards = sum(1 for w in pool.values() if w)
-        self.total.configure(text=f"{DUELIST_NAMES[self.duelist]}: {cards} cards, total {total} / {POOL_TOTAL}",
-                             style="Ok.TLabel" if total == POOL_TOTAL else "Error.TLabel")
-
-    def pick_row(self):
-        selection = self.tree.selection()
-        if len(selection) == 1:
-            self.weight.set(str(self.current_pool().get(int(selection[0]), 0)))
-
-    def edited(self):
-        pool = self.current_pool()
-        for cid in [c for c, w in pool.items() if not w]:
-            del pool[cid]
-        self.app.changed()
-        self.fill()
-        self.fill_list()
-
-    def add(self):
-        cid = pick_card(self, self.project, "Card to add to the pool")
-        if not cid:
-            return
-        try:
-            weight = int(self.weight.get() or "0")
-        except ValueError:
-            weight = 0
-        self.current_pool()[cid] = weight if weight > 0 else 1
-        self.edited()
-        if self.tree.exists(str(cid)):
-            self.tree.selection_set(str(cid))
-            self.tree.see(str(cid))
-
-    def set_weight(self):
-        try:
-            weight = int(self.weight.get())
-        except ValueError:
-            messagebox.showerror("Weight", "A weight is a whole number, 0 or more.", parent=self)
-            return
-        if weight < 0 or weight > 0xFFFF:
-            messagebox.showerror("Weight", "A weight is 0 to 65535 (out of 2048).", parent=self)
-            return
-        pool = self.current_pool()
-        chosen = [int(i) for i in self.tree.selection()]
-        for cid in chosen:
-            pool[cid] = weight
-        self.edited()
-        for cid in chosen:
-            if self.tree.exists(str(cid)):
-                self.tree.selection_add(str(cid))
-
-    def remove(self):
-        pool = self.current_pool()
-        for iid in self.tree.selection():
-            pool.pop(int(iid), None)
-        self.edited()
-
-    def normalize(self):
-        self.project.pools[self.duelist][self.pool.get()] = poolmath.normalize(self.current_pool())
-        self.edited()
-
-    def revert(self):
-        self.project.revert_pool(self.duelist, self.pool.get())
-        self.edited()
-
-    def goto(self, target):
-        d, pool = target
-        self.duelist = d
-        self.pool.set(pool)
-        self.fill_list()
-        self.list.see(str(d))
-        self.fill()
-
+# --- Duelists: duelists_tab.py ---------------------------------------------------
 
 # --- Starter decks ---------------------------------------------------------------
 
@@ -1963,18 +1774,34 @@ class StarterTab(Tab):
     def __init__(self, notebook, app):
         super().__init__(notebook, app, "Starter decks")
         self.deck = 0
-        left = ttk.Frame(self)
+        # A new game deals a written deck, or one drawn from weighted pools:
+        # a page each ("starter", "starter_pools").
+        self.pages = ttk.Notebook(self)
+        self.pages.pack(fill="both", expand=True)
+        written = ttk.Frame(self.pages, padding=4)
+        self.pages.add(written, text="Fixed decks")
+        self.pools = StarterPoolsPage(self.pages, self)
+        self.pages.add(self.pools, text="Weighted pools")
+        self.pages.bind("<<NotebookTabChanged>>", lambda e: self.pools.fill() if self.pages.select() == str(self.pools)
+                        else None)
+        left = ttk.Frame(written)
         left.pack(side="left", fill="y")
         frame, self.list = scrolled_tree(left, [("n", "#"), ("name", "Deck"), ("w", "Weight"), ("cards", "Cards")],
                                          [30, 150, 55, 60], 22)
         frame.pack(fill="y", expand=True)
         self.list.bind("<<TreeviewSelect>>", lambda e: self.select())
+        self.list.bind("<Double-1>", lambda e: self.edit_deck())
         buttons = ttk.Frame(left)
         buttons.pack(fill="x", pady=(4, 0))
-        ttk.Button(buttons, text="Add deck", command=self.add_deck).pack(side="left")
+        adding = ttk.Menubutton(buttons, text="Add deck")
+        menu = tk.Menu(adding, tearoff=False)
+        for label, start in self.STARTS:
+            menu.add_command(label=label, command=lambda s=start: self.add_deck(s))
+        adding["menu"] = menu
+        adding.pack(side="left")
         ttk.Button(buttons, text="Edit...", command=self.edit_deck).pack(side="left", padx=2)
         ttk.Button(buttons, text="Remove", command=self.remove_deck).pack(side="left")
-        right = ttk.Frame(self)
+        right = ttk.Frame(written)
         right.pack(side="left", fill="both", expand=True, padx=(8, 0))
         top = ttk.Frame(right)
         top.pack(fill="x")
@@ -1982,10 +1809,22 @@ class StarterTab(Tab):
         self.title.pack(side="left")
         self.total = ttk.Label(top, font=ui_font(10))
         self.total.pack(side="right")
+        self.makeup = ttk.Label(right, style="Hint.TLabel")       # what the deck is made of
+        self.makeup.pack(anchor="w")
         frame, self.tree = scrolled_tree(right, [("id", "#"), ("name", "Card"), ("type", "Type"),
-                                                 ("copies", "Copies"), ("state", "")],
+                                                 ("copies", "Copies"), ("state", "Status")],
                                          [50, 260, 110, 60, 150], 20, selectmode="extended")
         frame.pack(fill="both", expand=True, pady=4)
+        self.tree.bind("<Delete>", lambda e: self.remove_card())
+        # No deck: what a new game deals then, and ways to start one.
+        self.empty = ttk.Frame(frame, padding=20)
+        WrapLabel(self.empty, 420, font=ui_font(10),
+                  text="This mod has no starter deck: a new game deals the disc's, drawn from its seven starter "
+                       "pools. Add decks to deal one of yours instead (by their weights).").pack(fill="x")
+        for label, start in self.STARTS:
+            if start != "copy":         # nothing to copy yet
+                ttk.Button(self.empty, text=label, command=lambda s=start: self.add_deck(s)).pack(anchor="w",
+                                                                                                  pady=(6, 0))
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.pick_row())
         edit = ttk.Frame(right)
         edit.pack(fill="x")
@@ -1997,10 +1836,14 @@ class StarterTab(Tab):
         entry.bind("<Return>", lambda e: self.set_copies())
         ttk.Button(edit, text="Set", command=self.set_copies).pack(side="left", padx=2)
         ttk.Button(edit, text="Remove selected", command=self.remove_card).pack(side="left", padx=(8, 0))
-        ttk.Label(right, text=f"A deck is exactly {DECK_SIZE} cards written down, so it may hold a card the mod "
+        WrapLabel(right, text=f"A deck is exactly {DECK_SIZE} cards written down, so it may hold a card the mod "
                               f"adds. More than {DECK_COPY_LIMIT} copies, or more than one Exodia piece, is dealt "
-                              "as written but Build Deck will not take it back.",
-                  style="Hint.TLabel", wraplength=px(self, 520), justify="left").pack(anchor="w", pady=(4, 0))
+                              "as written, but the player cannot put the extra copies back in Build Deck.",
+                  style="Hint.TLabel").pack(fill="x", pady=(4, 0))
+
+    # The ways to start a deck (Add deck's menu, and the empty tab's buttons).
+    STARTS = (("Empty deck", "empty"), ("An opponent's deck (its most likely 40)...", "opponent"),
+              ("One deal of the disc's starter pools", "retail"), ("A copy of the selected deck", "copy"))
 
     # --- the list ----------------------------------------------------------
 
@@ -2014,6 +1857,19 @@ class StarterTab(Tab):
     def refresh(self):
         self.fill_list()
         self.fill()
+        self.pools.fill()
+        # A mod opened: the page it uses, its pools when it weights some and
+        # writes no deck (not at every Undo, which refreshes the tab too).
+        if getattr(self, "_opened", None) is not self.project.retail or self.project.source_dir != getattr(
+                self, "_opened_dir", None):
+            self._opened, self._opened_dir = self.project.retail, self.project.source_dir
+            self.pools.index = 0
+            self.pools.fill()
+            self.pages.select(self.pools if starter_pools.state(self.project) and not self.decks() else 0)
+
+    @staticmethod
+    def type_name(card) -> str:
+        return type_label(card.type)
 
     def fill_list(self):
         if self.project is None:
@@ -2041,7 +1897,10 @@ class StarterTab(Tab):
         if deck is None:
             self.title.configure(text="No starter deck")
             self.total.configure(text="", style="TLabel")
+            self.makeup.configure(text="")
+            self.empty.place(relx=0.5, rely=0.4, anchor="center", relwidth=0.6)
             return
+        self.empty.place_forget()
         p = self.project
         for cid in sorted(deck.cards):
             copies = deck.cards[cid]
@@ -2059,6 +1918,7 @@ class StarterTab(Tab):
             self.tree.insert("", "end", iid=f"kept:{name}", tags=("removed",),
                              values=("", name, "", copies, "no such card; kept as written"))
         self.title.configure(text=deck.name or "(unnamed)")
+        self.makeup.configure(text=deck_makeup(p, deck.cards))
         total = deck.total()
         self.total.configure(text=f"{total} / {DECK_SIZE} cards",
                              style="Ok.TLabel" if total == DECK_SIZE else "Error.TLabel")
@@ -2080,7 +1940,9 @@ class StarterTab(Tab):
 
     # --- decks -------------------------------------------------------------
 
-    def deck_dialog(self, title, deck):
+    def deck_dialog(self, title, deck, adding=False):
+        """A deck's name and weight; `adding`: a new deck, put in the mod only
+        when the dialog is OKed."""
         fields = {}
 
         def build(dialog, body):
@@ -2100,28 +1962,73 @@ class StarterTab(Tab):
                 return f"a weight is a whole number, 0 to {STARTER_WEIGHT_LIMIT}"
             deck.name = fields["name"].get().strip()
             deck.weight = int(text)
+            if adding:
+                self.project.starter.append(deck)
+                self.deck = len(self.decks()) - 1
             self.app.changed()
-            self.fill()
             self.fill_list()
+            self.fill()
+            if adding and self.list.exists(str(self.deck)):
+                self.list.selection_set(str(self.deck))
             return None
 
-        FormDialog(self, title, build, ok)
+        return FormDialog(self, title, build, ok)
 
-    def add_deck(self):
+    def add_deck(self, start="empty"):
+        """A new deck, `start`ed as STARTS says, in the mod once named."""
         if self.project is None:
-            return
+            return None
         deck = StarterDeck(name=f"Deck {len(self.decks()) + 1}")
-        self.project.starter.append(deck)
-        self.deck = len(self.decks()) - 1
-        self.edited()
-        if self.list.exists(str(self.deck)):
-            self.list.selection_set(str(self.deck))
-        self.deck_dialog("Add starter deck", deck)
+        if start == "copy":
+            if self.current() is None:
+                messagebox.showinfo("Starter decks", "Select a deck to copy first.", parent=self)
+                return None
+            deck = self.current().copy()
+            deck.name = f"{deck.name or 'Deck'} copy"
+        elif start == "opponent":
+            d = self.ask_opponent()
+            if d is None:
+                return None
+            fixed = fixed_decks.deck_of(self.project, d)
+            # The deck it is dealt: a fixed one the mod gives it, else the
+            # forty its weighted pool deals most often.
+            deck.cards = dict(fixed.cards) if fixed else fixed_decks.most_likely(self.project.pools[d]["deck"])
+            deck.name = f"{DUELIST_NAMES[d]}'s deck"
+        elif start == "retail":
+            pools = starter_pools.retail(self.app.files.wa if self.app.files else None)
+            if not pools:
+                messagebox.showinfo("Starter decks", "The game files have not got the disc's starter pools.",
+                                    parent=self)
+                return None
+            deck.cards = starter_pools.deal(pools)
+            deck.name = "A deal of the disc's pools"
+        return self.deck_dialog("Add starter deck", deck, adding=True)
+
+    def ask_opponent(self):
+        """An opponent of the campaign or Free Duel, by name; None if none."""
+        names = [f"{d} {DUELIST_NAMES[d]}" for d in range(1, len(self.project.pools))]
+        chosen = {}
+
+        def build(dialog, body):
+            ttk.Label(body, text="Opponent").grid(row=0, column=0, sticky="w")
+            chosen["var"] = tk.StringVar(value=names[0])
+            ttk.Combobox(body, textvariable=chosen["var"], values=names, state="readonly", width=30).grid(
+                row=0, column=1, sticky="w", padx=(6, 0))
+            ttk.Label(body, text="The deck is the 40 cards its weighted deck pool deals most often.",
+                      style="Hint.TLabel").grid(row=1, column=0, columnspan=2, sticky="w", pady=(6, 0))
+
+        def ok(dialog):
+            chosen["d"] = int(chosen["var"].get().split(" ", 1)[0])
+            return None
+
+        dialog = FormDialog(self, "A deck from an opponent's", build, ok)
+        self.wait_window(dialog)
+        return chosen.get("d")
 
     def edit_deck(self):
         deck = self.current()
         if deck:
-            self.deck_dialog("Starter deck", deck)
+            return self.deck_dialog("Starter deck", deck)
 
     def remove_deck(self):
         deck = self.current()
@@ -2210,14 +2117,38 @@ class ModInfoTab(Tab):
         ttk.Label(form, text="Description").grid(row=4, column=0, sticky="nw", pady=2)
         self.description = tk.Text(form, width=70, height=4, wrap="word")
         self.description.grid(row=4, column=1, sticky="w", pady=2)
-        self.folder = ttk.Label(form, style="Hint.TLabel")
+        self.folder = ttk.Label(form, style="Hint.TLabel", wraplength=px(self, 560), justify="left")
         self.folder.grid(row=5, column=1, sticky="w")
         boxes = ttk.Frame(self)
         boxes.pack(fill="both", expand=True, pady=(8, 0))
-        left = ttk.LabelFrame(boxes, text="Settings (JSON list; see notes/modding.md)", padding=4)
+        left = ttk.LabelFrame(boxes, text="Settings: the player's options for this mod (Game > Mods)", padding=4)
         left.pack(side="left", fill="both", expand=True)
-        self.settings = tk.Text(left, width=50, height=14, wrap="none", font=fixed_font())
+        # A list to edit them by, and the JSON they are (what is saved, and
+        # where a key the list has no field for is written by hand).
+        self.settings_pages = ttk.Notebook(left)
+        self.settings_pages.pack(fill="both", expand=True)
+        page = ttk.Frame(self.settings_pages, padding=4)
+        self.settings_pages.add(page, text="List")
+        frame, self.settings_tree = scrolled_tree(page, [("key", "Key"), ("label", "Label"), ("type", "Type"),
+                                                         ("default", "Default"), ("used", "Used by")],
+                                                  [110, 150, 60, 70, 110], 10)
+        frame.pack(fill="both", expand=True)
+        self.settings_tree.bind("<Double-1>", lambda e: self.edit_setting())
+        self.settings_tree.bind("<Delete>", lambda e: self.remove_setting())
+        line = ttk.Frame(page)
+        line.pack(fill="x", pady=(4, 0))
+        for text, command in (("Add...", self.add_setting), ("Edit...", self.edit_setting),
+                              ("Remove", self.remove_setting), ("Up", lambda: self.move_setting(-1)),
+                              ("Down", lambda: self.move_setting(1))):
+            ttk.Button(line, text=text, command=command).pack(side="left", padx=(0, 4))
+        # A half of the tab: a fixed wrap (WrapLabel wraps at the page's edge).
+        self.settings_note = ttk.Label(page, style="Hint.TLabel", wraplength=px(self, 480), justify="left")
+        self.settings_note.pack(anchor="w", pady=(4, 0))
+        page = ttk.Frame(self.settings_pages, padding=4)
+        self.settings_pages.add(page, text="JSON")
+        self.settings = tk.Text(page, width=50, height=14, wrap="none", font=fixed_font())
         self.settings.pack(fill="both", expand=True)
+        self.settings_pages.bind("<<NotebookTabChanged>>", lambda e: self.fill_settings())
         right = ttk.LabelFrame(boxes, text="Other mod.json keys, kept as written (data, text, textures, audio, "
                                            "requires...)", padding=4)
         right.pack(side="left", fill="both", expand=True, padx=(8, 0))
@@ -2242,9 +2173,13 @@ class ModInfoTab(Tab):
                             if self.shown_other() else "")):
             box.delete("1.0", "end")
             box.insert("1.0", value)
+        self._shown = json.loads(json.dumps(self.shown_other()))     # what the box shows, as it reads back
         source = self.project.source_dir
-        self.folder.configure(text=f"Folder: {source}" if source else "Not saved yet")
+        self.folder.configure(text=f"Folder: {source}" if source else
+                              "Not saved yet: File > Save (Ctrl+S) makes its folder, File > Export puts it in "
+                              "the game's mods folder; the player turns it on in Game > Mods.")
         self.status.configure(text="")
+        self.fill_settings()
 
     def commit(self):
         if self.project is None:
@@ -2260,8 +2195,9 @@ class ModInfoTab(Tab):
             other = json.loads(other_text) if other_text else {}
             if not isinstance(other, dict):
                 raise ValueError("the other keys are a JSON object")
-            reserved = set(other) & {"id", "name", "version", "author", "description", "settings", "cards",
-                                     "fusions", "equips", "rituals", "drops", "decks", "limits", "guardian_stars"}
+            # The keys the editor writes from its own tabs (manifest.TABLE_KEYS
+            # and the like): one typed here would be overwritten on save.
+            reserved = set(other) & (set(manifest.INFO_KEYS) | set(manifest.TABLE_KEYS) | set(self.TAB_KEYS))
             if reserved:
                 raise ValueError(f"edit {', '.join(sorted(reserved))} in the editor's own tabs")
         except ValueError as problem:
@@ -2273,12 +2209,21 @@ class ModInfoTab(Tab):
         info.author = self.vars["author"].get()
         info.description = self.description.get("1.0", "end-1c")
         info.settings = settings
-        # "limits" is the Limits tab's (limits_tab.py), "guardian_stars" the
-        # Guardian Stars tab's (guardian_stars_tab.py), not this box's.
-        for key in ("limits", "guardian_stars"):
-            if key in self.project.other:
-                other[key] = self.project.other[key]
-        self.project.other = other
+        # Only what was typed in the box: the keys other tabs keep in the same
+        # place ("limits", "guardian_stars", "starter_pools", a password an
+        # added card's removal took out) stay as those tabs left them, the
+        # box having shown them as they were when it was filled.
+        shown = getattr(self, "_shown", {})
+        merged = dict(self.project.other)
+        missing = object()              # not the box's null: a key typed as null is a key
+        for key in set(shown) | set(other):
+            if shown.get(key, missing) != other.get(key, missing):
+                if key in other:
+                    merged[key] = other[key]
+                else:
+                    merged.pop(key, None)
+        self._shown = other
+        self.project.other = merged
         self.status.configure(text="")
         after = (info.id, info.name, info.version, info.author, info.description, info.settings, self.project.other)
         if after != before:
@@ -2286,9 +2231,245 @@ class ModInfoTab(Tab):
         self.applied()
         return True
 
+    # --- settings, as a list ------------------------------------------------------
+
+    SETTING_TYPES = ("bool", "int", "choice", "key")
+
+    def typed_settings(self):
+        """The settings as the JSON box has them; None when it does not read."""
+        text = self.settings.get("1.0", "end").strip()
+        try:
+            settings = json.loads(text) if text else []
+        except ValueError:
+            return None
+        return settings if isinstance(settings, list) else None
+
+    def setting_users(self) -> dict:
+        """Setting key -> how many of the mod's entries it switches ("setting")."""
+        counts = {}
+
+        def walk(value):
+            if isinstance(value, dict):
+                key = value.get("setting")
+                if isinstance(key, str):
+                    counts[key] = counts.get(key, 0) + 1
+                for item in value.values():
+                    walk(item)
+            elif isinstance(value, list):
+                for item in value:
+                    walk(item)
+        try:
+            built = manifest.build(self.project)
+        except Exception:       # a half-made form elsewhere: count what the project holds
+            built = {}
+        built.pop("settings", None)
+        walk(built)
+        return counts
+
+    def fill_settings(self):
+        if self.project is None:
+            return
+        tree = self.settings_tree
+        chosen = tree.selection()
+        tree.delete(*tree.get_children())
+        settings = self.typed_settings()
+        if settings is None:
+            self.settings_note.configure(text="The JSON page does not read as a list: fix it there.",
+                                         style="Error.TLabel")
+            return
+        users = self.setting_users()
+        for i, setting in enumerate(settings):
+            if not isinstance(setting, dict):
+                tree.insert("", "end", iid=str(i), values=("?", "(not an object: edit the JSON)", "", "", ""))
+                continue
+            kind = setting.get("type", "int")
+            default = setting.get("default", 0)
+            if kind == "bool":
+                default = "on" if default else "off"
+            elif kind == "choice" and isinstance(setting.get("choices"), list) and \
+                    isinstance(default, int) and 0 <= default < len(setting["choices"]):
+                default = setting["choices"][default]
+            used = users.get(setting.get("key"), 0)
+            tree.insert("", "end", iid=str(i), values=(
+                setting.get("key", ""), setting.get("label", ""), kind, default,
+                f"{used} {'entry' if used == 1 else 'entries'}" if used else ""))
+        kept = [iid for iid in chosen if tree.exists(iid)]
+        if kept:
+            tree.selection_set(kept)
+        self.settings_note.configure(
+            style="Hint.TLabel",
+            text="An entry of fusions, equips or rituals with \"setting\": its key is used only while that "
+                 "setting is on. Code mods read them with host->setting.")
+
+    def write_settings(self, settings, select=None):
+        """The list into the JSON box, and into the mod."""
+        self.settings.delete("1.0", "end")
+        if settings:
+            self.settings.insert("1.0", json.dumps(settings, indent=2, ensure_ascii=False))
+        applied = self.commit()
+        if not applied:
+            self.app.form_edited(self)  # in the box, not the mod: the window says so
+        self.fill_settings()
+        if select is not None and self.settings_tree.exists(str(select)):
+            self.settings_tree.selection_set(str(select))
+            self.settings_tree.see(str(select))
+        return applied
+
+    def chosen_setting(self):
+        selection = self.settings_tree.selection()
+        return int(selection[0]) if selection else None
+
+    def add_setting(self):
+        settings = self.typed_settings()
+        if settings is None:
+            return None
+        taken = {s.get("key") for s in settings if isinstance(s, dict)}
+        n = 1
+        while f"option{n}" in taken:
+            n += 1
+        return self.setting_dialog("Add a setting", {"key": f"option{n}", "label": f"Option {n}", "type": "bool",
+                                                     "default": 0}, None)
+
+    def edit_setting(self):
+        settings, i = self.typed_settings(), self.chosen_setting()
+        if settings is None or i is None or not isinstance(settings[i], dict):
+            return None
+        return self.setting_dialog("Setting", dict(settings[i]), i)
+
+    def remove_setting(self):
+        settings, i = self.typed_settings(), self.chosen_setting()
+        if settings is None or i is None:
+            return
+        key = settings[i].get("key") if isinstance(settings[i], dict) else None
+        used = self.setting_users().get(key, 0)
+        if used and not messagebox.askyesno("Remove setting", f"{used} of the mod's entries name \"{key}\"; "
+                                            "without the setting they are never used. Remove it?", parent=self):
+            return
+        settings.pop(i)
+        self.write_settings(settings, min(i, len(settings) - 1))
+
+    def move_setting(self, step):
+        settings, i = self.typed_settings(), self.chosen_setting()
+        if settings is None or i is None or not 0 <= i + step < len(settings):
+            return
+        settings[i], settings[i + step] = settings[i + step], settings[i]
+        self.write_settings(settings, i + step)
+
+    def setting_dialog(self, title, setting, index):
+        """A setting's fields; keys the dialog has none for stay as written."""
+        fields = {}
+        rows = {}
+
+        def build(dialog, body):
+            def row(r, key, label, widget):
+                ttk.Label(body, text=label).grid(row=r, column=0, sticky="nw", pady=2)
+                widget.grid(row=r, column=1, sticky="we", pady=2)
+                rows[key] = (body.grid_slaves(row=r, column=0)[0], widget)
+            for r, (key, label) in enumerate((("key", "Key"), ("label", "Label"))):
+                fields[key] = tk.StringVar(value=str(setting.get(key, "")))
+                row(r, key, label, ttk.Entry(body, textvariable=fields[key], width=32))
+            fields["type"] = tk.StringVar(value=setting.get("type", "int"))
+            kinds = ttk.Combobox(body, textvariable=fields["type"], values=self.SETTING_TYPES, state="readonly",
+                                 width=10)
+            row(2, "type", "Type", kinds)
+            fields["default"] = tk.StringVar(value=str(setting.get("default", 0)))
+            row(3, "default", "Default", ttk.Entry(body, textvariable=fields["default"], width=12))
+            for r, key, label in ((4, "min", "Lowest"), (5, "max", "Highest"), (6, "step", "Step"),
+                                  (7, "suffix", "Shown after it")):
+                fields[key] = tk.StringVar(value=str(setting.get(key, "")))
+                row(r, key, label, ttk.Entry(body, textvariable=fields[key], width=12))
+            choices = tk.Text(body, width=32, height=4, wrap="none")
+            choices.insert("1.0", "\n".join(str(c) for c in setting.get("choices", []) or []))
+            fields["choices"] = choices
+            row(8, "choices", "Choices (a line each)", choices)
+            fields["description"] = tk.StringVar(value=str(setting.get("description", "")))
+            row(9, "description", "Help", ttk.Entry(body, textvariable=fields["description"], width=40))
+            fields["restart"] = tk.BooleanVar(value=bool(setting.get("restart")))
+            ttk.Checkbutton(body, text="Takes effect only after a restart", variable=fields["restart"]).grid(
+                row=10, column=1, sticky="w", pady=2)
+            hint = ttk.Label(body, style="Hint.TLabel", justify="left")
+            hint.grid(row=11, column=0, columnspan=2, sticky="w", pady=(6, 0))
+
+            def kind_changed(*_):
+                kind = fields["type"].get()
+                for key in ("min", "max", "step", "suffix"):
+                    for w in rows[key]:
+                        w.grid() if kind == "int" else w.grid_remove()
+                for w in rows["choices"]:
+                    w.grid() if kind == "choice" else w.grid_remove()
+                hint.configure(text={"bool": "Default: 1 is on, 0 off.",
+                                     "int": "A whole number from Lowest to Highest (0-100 when left empty).",
+                                     "choice": "Default: the number of the choice, from 0.",
+                                     "key": "Default: a pad-button mask (Select 1 ... Square 32768)."}[kind])
+            fields["type"].trace_add("write", kind_changed)
+            kind_changed()
+
+        def ok(dialog):
+            key = fields["key"].get().strip()
+            if not re.fullmatch(r"[A-Za-z0-9_-]{1,63}", key) or key == "order":
+                return "the key is 1-63 letters, digits, _ or - (not \"order\")"
+            settings = self.typed_settings()
+            if settings is None:
+                return "the JSON page does not read as a list: fix it there first"
+            if any(isinstance(s, dict) and s.get("key") == key for n, s in enumerate(settings) if n != index):
+                return f"another setting has the key \"{key}\""
+            kind = fields["type"].get()
+            out = dict(setting)
+            out.update(key=key, label=fields["label"].get().strip() or key, type=kind)
+            for name in ("default", "min", "max", "step"):
+                text = fields[name].get().strip()
+                if name != "default" and (kind != "int" or not text):
+                    out.pop(name, None)
+                    continue
+                try:
+                    out[name] = int(text or "0")
+                except ValueError:
+                    return f"{name} is a whole number"
+            choices = [line.strip() for line in fields["choices"].get("1.0", "end").splitlines() if line.strip()]
+            if kind == "choice":
+                if len(choices) < 2:
+                    return "a choice setting has two choices at least"
+                if not 0 <= out["default"] < len(choices):
+                    return f"the default is the number of a choice, 0 to {len(choices) - 1}"
+                out["choices"] = choices
+            else:
+                out.pop("choices", None)
+            if kind == "int" and fields["suffix"].get().strip():
+                out["suffix"] = fields["suffix"].get().strip()
+            else:
+                out.pop("suffix", None)
+            if kind == "int" and "min" in out and "max" in out and out["min"] > out["max"]:
+                return "Lowest is more than Highest"
+            for name in ("description",):
+                text = fields[name].get().strip()
+                if text:
+                    out[name] = text
+                else:
+                    out.pop(name, None)
+            if fields["restart"].get():
+                out["restart"] = True
+            else:
+                out.pop("restart", None)
+            if index is None:
+                settings.append(out)
+            else:
+                settings[index] = out
+            if not self.write_settings(settings, len(settings) - 1 if index is None else index):
+                return self.status.cget("text") or "Mod info's other fields cannot be applied"
+            return None
+
+        dialog = FormDialog(self, title, build, ok)
+        dialog.fields = fields
+        return dialog
+
+    TAB_KEYS = ("limits", "guardian_stars", "title", "menu", "ui")     # kept in `other`, edited on their tabs
+
     def shown_other(self) -> dict:
-        """The other keys this box shows: all but the Limits and Guardian Stars tabs'."""
-        return {key: value for key, value in self.project.other.items() if key not in ("limits", "guardian_stars")}
+        """The other keys this box shows: all but those other tabs edit
+        (starter pools the Weighted pools page can read are its; a section it
+        cannot is shown here, to mend by hand)."""
+        return {key: value for key, value in self.project.other.items() if key not in self.TAB_KEYS
+                and not (key == "starter_pools" and starter_pools.readable(value))}
 
     def preview(self):
         if self.app.commit_all():
@@ -2305,14 +2486,20 @@ class ConflictsTab(Tab):
         ttk.Button(top, text="Check now", command=self.run).pack(side="left")
         self.summary = ttk.Label(top)
         self.summary.pack(side="left", padx=8)
+        # Which lines to list: a mod with many notes hid its one error.
+        self.level = tk.StringVar(value="all")
+        for value, text in (("all", "All"), ("error", "Errors"), ("warning", "Warnings"), ("note", "Notes")):
+            ttk.Radiobutton(top, text=text, value=value, variable=self.level, style="Segment.Toolbutton",
+                            command=self.show_issues).pack(side="left")
         ttk.Label(top, text="Double-click a line to go to it.", style="Hint.TLabel").pack(side="right")
         # The other installed mods this one is checked against (validate.cross_mod):
         # the player's mods folder, or one chosen here (kept in the editor's settings).
         other = ttk.Frame(self)
         other.pack(fill="x", pady=(4, 0))
         ttk.Button(other, text="Other mods folder...", command=self.choose_folder).pack(side="left")
-        ttk.Button(other, text="Player's folder", command=lambda: self.set_folder(None)).pack(side="left", padx=4)
-        self.others = ttk.Label(other, style="Hint.TLabel", wraplength=900, justify="left")
+        ttk.Button(other, text="The game's mods folder", command=lambda: self.set_folder(None)).pack(side="left",
+                                                                                                  padx=4)
+        self.others = WrapLabel(other, style="Hint.TLabel")       # to the window's edge, whatever its width
         self.others.pack(side="left", padx=8, fill="x", expand=True)
         from . import settings
         self.other_folder = settings.load().get("other_mods")
@@ -2320,7 +2507,11 @@ class ConflictsTab(Tab):
                                                 ("message", "Conflict")], [70, 90, 260, 560], 26)
         frame.pack(fill="both", expand=True, pady=4)
         self.tree.bind("<Double-1>", lambda e: self.go())
+        self.tree.bind("<Return>", lambda e: self.go())
         self.issues = []
+        self.clean = ttk.Label(frame, style="Ok.TLabel", font=ui_font(10), justify="center",
+                               text="Nothing to fix: the game reads the mod as it is, and no other installed mod\n"
+                                    "changes what it changes.")
 
     def choose_folder(self):
         from tkinter import filedialog
@@ -2336,7 +2527,14 @@ class ConflictsTab(Tab):
         self.run()
 
     def refresh(self):
-        self.run()
+        # Checking reads every installed mod: only when the tab is up (a tab
+        # switch to it checks again), not on every Undo behind it.
+        if self.app.notebook.select() == str(self.page):
+            self.run()
+        else:
+            self.tree.delete(*self.tree.get_children())
+            self.summary.configure(text="Not checked since the last change: open this tab to check",
+                                   style="Hint.TLabel")
 
     def run(self):
         if self.project is None:
@@ -2351,15 +2549,27 @@ class ConflictsTab(Tab):
             others, said = [], f"The other mods could not be checked: {type(problem).__name__}: {problem}"
         self.issues += others
         self.others.configure(text=said)
-        self.tree.delete(*self.tree.get_children())
-        for i, issue in enumerate(self.issues):
-            self.tree.insert("", "end", iid=str(i), values=(issue.level, issue.area, issue.where, issue.message),
-                             tags=(issue.level,))
+        self.show_issues()
         errors = len(validate.errors(self.issues))
         notes = sum(1 for issue in self.issues if issue.level == "note")
         self.summary.configure(text=f"{errors} errors, {len(self.issues) - errors - notes} warnings, {notes} notes",
                                style="Error.TLabel" if errors else "Ok.TLabel")
         return self.issues
+
+    def show_issues(self):
+        """The lines of the level chosen (all, or errors, warnings, notes)."""
+        self.tree.delete(*self.tree.get_children())
+        level = self.level.get()
+        for i, issue in enumerate(self.issues):
+            if level == "all" or issue.level == level:
+                self.tree.insert("", "end", iid=str(i), values=(issue.level, issue.area, issue.where, issue.message),
+                                 tags=(issue.level,))
+        if self.issues:
+            self.clean.place_forget()
+        else:
+            # On the list's own ground, light or dark.
+            self.clean.configure(background=ttk.Style(self).lookup("Treeview", "background") or "white")
+            self.clean.place(relx=0.5, rely=0.3, anchor="center")
 
     def go(self):
         selection = self.tree.selection()

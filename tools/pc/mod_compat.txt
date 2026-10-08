@@ -56,3 +56,11 @@ accept v0.2.0 record FusionRules grew by the bonuses callback at its end
 # mod reading Packs_At() still finds every v0.2.0 field where it was. The
 # pack table is the port's own; a mod never allocates a Pack.
 accept v0.2.0 record Pack grew by image_style at its end
+# PR #297 (the title menus' buttons take a "scale"): the title screen's own
+# label maker takes the button's factor, and its config and image tables
+# grew. Mods set these through the "title" and "menu" keys; no mod calls
+# MenuLabel_Make or reads a TitleConfig, which are the port's title code's.
+accept v0.2.0 function MenuLabel_Make takes the button's factor after selected
+accept v0.2.0 record TitleConfig holds the larger TitleItem
+accept v0.2.0 record TitleItem gained scale before wide
+accept v0.2.0 enum TITLE_IMAGES counts the scaled buttons' images
