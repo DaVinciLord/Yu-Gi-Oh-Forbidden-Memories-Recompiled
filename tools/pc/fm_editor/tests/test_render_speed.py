@@ -488,6 +488,9 @@ class PageTest(GuiCase):
         scales = ui_board_module().DRAG_SCALES
         width, height = page.canvas_size()
         frame = ui_board_module().FRAME
+        # Only the timings below: the page's own pictures on opening were
+        # timed on this machine, as busy as it happened to be.
+        page.rate = None
 
         def took(scale, rate):
             return rate * (width // scale) * (height // scale)
