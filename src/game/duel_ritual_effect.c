@@ -81,9 +81,15 @@ void DuelEffect_ApplyRitual(void)
     u16 flags;
 
     if (!DuelEffect_MarkInitialized()) {
+#ifdef MEMORIES_PC
+        Duel_RitualEnd();
+#endif
         D_8009B1A0 = Duel_CheckRitual(
             &D_800E9EF0.ritual.result, RITUAL_PLAYED);
         if (D_8009B1A0) {
+#ifdef MEMORIES_PC
+            Duel_RitualBegin();
+#endif
             func_80019CC8((void *G32)(s32)D_8009B1A0);
             D_8009B17C = DuelEffect_AllocateRequest(22);
             D_8009B210 = 0;
@@ -97,6 +103,19 @@ void DuelEffect_ApplyRitual(void)
     switch (D_8009B210 & 0xF) {
     case 0:
         if (((DuelEffectRequest *)D_8009B17C)->field_1D) {
+#ifdef MEMORIES_PC
+            /* A mod's ritual of other than three field monsters spends
+               its own tributes (duel_check_ritual.h); the disc's kind
+               spends the three the work slots hold, as on the disc. */
+            const DuelRitualMatch *match = Duel_RitualActive();
+
+            if (match && match->extended) {
+                D_8009B19C = Duel_RitualSpend();
+                D_8009B210 = 1;
+                break;
+            }
+            Duel_RitualEnd();
+#endif
             D_8009B19C = D_800E9EF0.slots[3]->field_6A;
             DuelCard_DeactivateRecord(&D_801A7AD8[D_800E9EF0.slots[2]->field_6A]);
             DuelCard_DeactivateRecord(&D_801A7AD8[D_800E9EF0.slots[3]->field_6A]);

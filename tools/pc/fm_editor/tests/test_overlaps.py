@@ -136,6 +136,17 @@ class SameAsTheGame(unittest.TestCase):
         found = overlaps.check(mods, FixtureSource(setup))
         self.assertEqual([o.text for o in found], [DUELISTS_64])
 
+    def test_ritual_tributes_from(self):
+        # Where a ritual's tributes come from is part of its recipe; "field"
+        # written out is the default (mods_overlap_test.c too).
+        setup, _ = fixture_mods()
+        entry = {"card": "Black Luster Ritual", "tributes": ["Kuriboh"], "result": "Black Luster Soldier"}
+        plain = overlaps.Mod("r1", "r1", {"id": "r1", "rituals": [entry]}, FIXTURE)
+        for origin, outcome in (("field", "agree"), ("hand", "later")):
+            other = overlaps.Mod("r2", "r2", {"id": "r2", "rituals": [dict(entry, tributes_from=origin)]}, FIXTURE)
+            found = overlaps.check([plain, other], FixtureSource(setup))
+            self.assertEqual([o.outcome for o in found], [outcome], origin)
+
     def test_starter_pools(self):
         # tests/pc/mod_overlaps/starter-pools: each "# a, b" a set of its mods
         # in load order, then the lines it makes (mods_overlap_test.c too).

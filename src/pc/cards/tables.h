@@ -73,6 +73,24 @@ typedef struct {
 } TablesRitualRequirement;
 int Tables_RitualRequirements(int ritual, TablesRitualRequirement requirements[3], unsigned short *result);
 
+/* A ritual a mod gave other than three tributes from the field: one to
+ * five of them ("tributes"), from the field, the hand or both
+ * ("tributes_from"). Its tributes are always requirements (a plain card
+ * is {"card": id}, met by the card or a copy of it). Tables_Ritual and
+ * Tables_RitualRequirements answer -1 and 0 for such a ritual, so a
+ * caller asks this first. */
+#define TABLES_RITUAL_TRIBUTE_MAX 5
+enum { TABLES_TRIBUTES_FIELD, TABLES_TRIBUTES_HAND, TABLES_TRIBUTES_BOTH };
+typedef struct {
+    int count;     /* 1 to TABLES_RITUAL_TRIBUTE_MAX */
+    int from;      /* TABLES_TRIBUTES_* */
+    unsigned short result;
+    TablesRitualRequirement requirements[TABLES_RITUAL_TRIBUTE_MAX];
+} TablesRitualRule;
+/* 1 and the rule when the latest entry for this ritual card is such a
+ * ritual, 0 otherwise (none, removed, or three from the field). */
+int Tables_RitualRule(int ritual, TablesRitualRule *rule);
+
 /* A weighted pool as the running opponent's mods have it: TABLES_POOL_DECK
  * (the cards an opponent's deck is dealt from), or a drop pool (S/A-POW,
  * B/C/D, S/A-TEC, in Duel_SelectCardDrop's order). `retail` is the pool the

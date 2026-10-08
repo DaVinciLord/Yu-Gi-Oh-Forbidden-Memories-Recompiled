@@ -264,6 +264,45 @@ int main(void)
         add("condition-empty", "{\"rituals\": [{\"card\": 21, \"tributes\": [{}, 1, 2], \"result\": 12}]}");
         assert(notes == 1);
     }
+    /* One to five tributes, from the field, the hand or both: such a
+     * ritual is the search's (Tables_RitualRule), a plain card a
+     * requirement for it; three from the field stays the disc's kind. */
+    {
+        TablesRitualRule rule;
+        TablesRitualRequirement req[3];
+        unsigned short result = 0;
+        notes = 0;
+        add("one", "{\"rituals\": [{\"card\": 21, \"tributes\": [1], \"result\": 12}]}");
+        assert(Tables_RitualRule(21, &rule) == 1 && rule.count == 1 && rule.from == TABLES_TRIBUTES_FIELD);
+        assert(rule.result == 12 && rule.requirements[0].card == 1 && rule.requirements[0].type == -1);
+        assert(Tables_Ritual(21, own) == -1 && Tables_RitualRequirements(21, req, &result) == 0);
+        add("five", "{\"rituals\": [{\"card\": 21, \"tributes_from\": \"both\", \"tributes\": [1, 2, "
+            "\"test:copy:1\", {\"type\": \"Dragon\"}, {\"min_attack\": 0}], \"result\": 13}]}");
+        assert(Tables_RitualRule(21, &rule) == 1 && rule.count == 5 && rule.from == TABLES_TRIBUTES_BOTH);
+        assert(rule.result == 13 && rule.requirements[2].card == 723 && rule.requirements[3].type == 0);
+        assert(rule.requirements[4].card == 0 && rule.requirements[4].min_attack == 0);
+        add("hand", "{\"rituals\": [{\"card\": 21, \"tributes_from\": \"hand\", \"tributes\": [1, 2, 3], "
+            "\"result\": 12}]}");
+        assert(Tables_RitualRule(21, &rule) == 1 && rule.count == 3 && rule.from == TABLES_TRIBUTES_HAND);
+        assert(Tables_Ritual(21, own) == -1);
+        assert(notes == 0);
+        /* Written out, "field" with three is the disc's kind again. */
+        add("field", "{\"rituals\": [{\"card\": 21, \"tributes_from\": \"field\", \"tributes\": [1, 2, 3], "
+            "\"result\": 12}]}");
+        assert(Tables_RitualRule(21, &rule) == 0 && Tables_Ritual(21, own) == 1 && own[3] == 3 && own[4] == 12);
+        /* Six, none, or a place the game does not know leave the entry
+         * out (the one before stands), each with a note. */
+        add("bad", "{\"rituals\": [{\"card\": 21, \"tributes\": [1, 2, 3, 4, 5, 6], \"result\": 13},"
+            "{\"card\": 21, \"tributes\": [], \"result\": 13},"
+            "{\"card\": 21, \"tributes_from\": \"deck\", \"tributes\": [1], \"result\": 13},"
+            "{\"card\": 21, \"tributes_from\": 1, \"tributes\": [1], \"result\": 13}]}");
+        assert(notes == 4 && !strcmp(noted, "bad"));
+        assert(Tables_RitualRule(21, &rule) == 0 && Tables_Ritual(21, own) == 1 && own[4] == 12);
+        /* Taken away, it is no rule of either kind. */
+        add("gone", "{\"rituals\": [{\"card\": 21, \"tributes\": [1], \"result\": 12},"
+            "{\"card\": 21, \"result\": null}]}");
+        assert(Tables_RitualRule(21, &rule) == 0 && Tables_Ritual(21, own) == 0);
+    }
     add("b", "{\"rituals\": [{\"card\": 21, \"result\": null}]}");
     assert(Tables_Ritual(21, own) == 0);
     /* A mod's own ritual card (a copy of one) takes a recipe of its own;
