@@ -137,15 +137,19 @@ class GuiTest(GuiCase):
         equips.remove()
         self.assertEqual(p.equips[equip], {100})
         self.assertTrue(equips.monsters.heading("atk", "text").endswith("▼"))
-        # The left-hand lists sort too, retaining their order on refill.
-        for tree, refill in ((equips.equips, equips.fill_equips), (duelists.list, duelists.fill_list)):
+        # The left-hand lists sort too, retaining their order on refill (the
+        # duelists within each Free Duel page, the pages staying in order).
+        for tree, refill, rows in ((equips.equips, equips.fill_equips, lambda t: t.get_children()),
+                                   (duelists.list, duelists.fill_list, lambda t: t.get_children("page:1"))):
             self.click_heading(tree, "id")
             self.click_heading(tree, "id")
-            expected = tuple(sorted(tree.get_children(), key=int, reverse=True))
+            expected = tuple(sorted(rows(tree), key=int, reverse=True))
             refill()
-            self.assertEqual(tree.get_children(), expected)
-            self.click_heading(tree, "name")
-            names = [tree.set(iid, "name").casefold() for iid in tree.get_children()]
+            self.assertEqual(rows(tree), expected)
+            name = "name" if tree is equips.equips else "#0"
+            self.click_heading(tree, name)
+            names = [(tree.set(iid, name) if name != "#0" else tree.item(iid, "text")).strip().casefold()
+                     for iid in rows(tree)]
             self.assertEqual(names, sorted(names))
         for pool in ("deck", "pow", "bcd", "tec"):
             p.pools[duelists.duelist][pool] = {2: 100, 10: 900, 100: 1048}

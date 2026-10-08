@@ -182,6 +182,15 @@ class Project:
         self.packs = []
         self.packs_file = None
         self.pack_shop = None
+        # The duelists the mod adds or takes over (roster.py): roster.RosterDuelist,
+        # in the order they were read; "duelists" naming a file, the file;
+        # entries the editor cannot read, kept as written; and the files of the
+        # mod folder it read them from, which a save writes afresh.
+        self.roster = []
+        self.roster_file = None
+        self.roster_kept = []
+        self.roster_raw = None
+        self.roster_owned = set()
         self.kept_opponents = {}        # "decks"/"drops" -> {name: entry} naming a duelist it cannot place
         self.pool_files = {}            # "decks"/"drops" -> the file the mod names in place of the table
         self.source_dir = None
@@ -388,6 +397,9 @@ class Project:
                 self.ritual_requirements.pop(ritual, None)
         for pools in self.pools:
             for pool in pools.values():
+                pool.pop(cid, None)
+        for duelist in self.roster:
+            for pool in (duelist.pools or {}).values():
                 pool.pop(cid, None)
 
     def set_notes(self, cid: int, text: str):

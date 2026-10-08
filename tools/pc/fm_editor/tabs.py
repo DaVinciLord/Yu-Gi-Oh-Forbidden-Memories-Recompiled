@@ -8,7 +8,7 @@ import re
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from . import bulk_dialog, guardian_stars, manifest, pools as poolmath, text_menu, validate
+from . import bulk_dialog, guardian_stars, manifest, text_menu, validate
 from .card_text_box import CardTextBox
 from .icon_choice import IconChoice
 from . import card_icons
@@ -21,7 +21,6 @@ from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIM
                        exodia_piece, type_frame)
 from . import art, fixed_decks, pngio, starter_pools
 from .starter_pools_view import StarterPoolsPage
-from .fixed_deck_view import FixedDeckView
 from .model import KEY_RE, StarterDeck
 from .widgets import (WrapLabel, legend, CardField, FormDialog, ScrolledForm, ScrolledPage, card_matches, card_named, grab, pick_card, px,
                       fixed_font, scrolled_tree, show_text, ui_font)
@@ -2094,182 +2093,7 @@ class RitualsTab(Tab):
             self.fill()
 
 
-# --- Duelists ---------------------------------------------------------------------
-
-class DuelistsTab(Tab):
-    def __init__(self, notebook, app):
-        super().__init__(notebook, app, "Duelists")
-        self.duelist = 1
-        left = ttk.Frame(self)
-        left.pack(side="left", fill="y")
-        frame, self.list = scrolled_tree(left, [("id", "#"), ("name", "Opponent"), ("state", "Status")],
-                                         [36, 170, 72], 26, sort_numeric=("id",))
-        frame.pack(fill="y", expand=True)
-        self.list.bind("<<TreeviewSelect>>", lambda e: self.select())
-        right = ttk.Frame(self)
-        right.pack(side="left", fill="both", expand=True, padx=(8, 0))
-        top = ttk.Frame(right)
-        top.pack(fill="x")
-        self.pool = tk.StringVar(value="deck")
-        for pool in POOLS:
-            ttk.Radiobutton(top, text=POOL_LABELS[pool], value=pool, variable=self.pool,
-                            command=self.fill).pack(side="left", padx=(0, 8))
-        self.total = ttk.Label(top, font=ui_font(10))
-        self.total.pack(side="right")
-        self.summary = ttk.Label(right, style="Hint.TLabel")     # what the pool deals, against the disc's
-        self.summary.pack(anchor="w", pady=(2, 0))
-        frame, self.tree = scrolled_tree(right, [("id", "#"), ("name", "Card"), ("type", "Type"),
-                                                 ("atk", "ATK"), ("def", "DEF"), ("w", "Weight"),
-                                                 ("pct", "Chance"), ("retail", "Retail"), ("state", "Status")],
-                                         [50, 220, 100, 50, 50, 60, 60, 60, 70], 22, selectmode="extended",
-                                         sort_numeric=("id", "atk", "def", "w", "pct", "retail"))
-        frame.pack(fill="both", expand=True, pady=4)
-        self.tree.bind("<<TreeviewSelect>>", lambda e: self.pick_row())
-        edit = ttk.Frame(right)
-        edit.pack(fill="x")
-        self.fixed = FixedDeckView(self, right, top)     # the deck pool may be forty cards written down
-        ttk.Button(edit, text="Add a card...", command=self.add).pack(side="left")
-        ttk.Label(edit, text="Weight").pack(side="left", padx=(10, 2))
-        self.weight = tk.StringVar()
-        entry = ttk.Entry(edit, textvariable=self.weight, width=7)
-        entry.pack(side="left")
-        entry.bind("<Return>", lambda e: self.set_weight())
-        ttk.Button(edit, text="Set", command=self.set_weight).pack(side="left", padx=2)
-        ttk.Button(edit, text="Remove selected", command=self.remove).pack(side="left", padx=(8, 0))
-        ttk.Button(edit, text="Scale to 2048 (100%)", command=self.normalize).pack(side="left", padx=4)
-        ttk.Button(edit, text="Revert pool", command=self.revert).pack(side="left")
-        # Above the list: below it, a window 800 high cut it off.
-        WrapLabel(right, text="Weights are chances out of 2048. A deck is 40 cards dealt from at least 14; "
-                              "a drop pool needs one card left.", style="Hint.TLabel").pack(
-            fill="x", before=self.tree.master)
-
-    def refresh(self):
-        self.fill_list()
-        self.fill()
-
-    def fill_list(self):
-        if self.project is None:
-            return
-        self.list.delete(*self.list.get_children())
-        for d, name in enumerate(DUELIST_NAMES[:len(self.project.pools)]):
-            changed = any({c: w for c, w in self.project.pools[d][p].items() if w} != self.project.retail.pools[d][p]
-                          for p in POOLS)
-            state = "fixed" if fixed_decks.deck_of(self.project, d) else "changed" if changed else ""
-            if d == 0 and not state:
-                state = "not used"      # no duel is fought against it
-            self.list.insert("", "end", iid=str(d), values=(d, name, state),
-                             tags=("changed",) if state not in ("", "not used") else ("note",) if state else ())
-        self.list.sorting.apply()
-        if self.list.exists(str(self.duelist)):
-            self.list.selection_set(str(self.duelist))
-
-    def select(self):
-        selection = self.list.selection()
-        if selection:
-            self.duelist = int(selection[0])
-            self.fill()
-
-    def current_pool(self):
-        return self.project.pools[self.duelist][self.pool.get()]
-
-    def fill(self):
-        if self.project is None or self.fixed.fill():
-            return
-        p = self.project
-        self.tree.delete(*self.tree.get_children())
-        pool = self.current_pool()
-        retail = p.retail.pools[self.duelist][self.pool.get()]
-        for cid in sorted(set(pool) | set(retail), key=lambda c: (-pool.get(c, 0), c)):
-            weight, before = pool.get(cid, 0), retail.get(cid, 0)
-            if not weight and not before:
-                continue
-            state = "" if weight == before else "added" if not before else "removed" if not weight else "changed"
-            card = p.cards.get(cid)
-            self.tree.insert("", "end", iid=str(cid), tags=(state,) if state else (), values=(
-                cid, card.name if card else "?", type_label(card.type) if card else "",
-                card.attack if card else "", card.defense if card else "", weight,
-                f"{weight * 100 / POOL_TOTAL:.2f}%", before, state))
-        self.tree.sorting.apply()
-        total = sum(pool.values())
-        cards = sum(1 for w in pool.values() if w)
-        self.total.configure(text=f"{DUELIST_NAMES[self.duelist]}: {cards} cards, total {total} / {POOL_TOTAL}",
-                             style="Ok.TLabel" if total == POOL_TOTAL else "Error.TLabel")
-        self.summary.configure(text=pool_summary(p, self.pool.get(), pool, retail))
-
-    def pick_row(self):
-        selection = self.tree.selection()
-        if len(selection) == 1:
-            self.weight.set(str(self.current_pool().get(int(selection[0]), 0)))
-
-    def edited(self):
-        pool = self.current_pool()
-        for cid in [c for c, w in pool.items() if not w]:
-            del pool[cid]
-        self.app.changed()
-        self.fill()
-        self.fill_list()
-
-    def add(self):
-        cid = pick_card(self, self.project, "Card to add to the pool")
-        if not cid:
-            return
-        try:
-            weight = int(self.weight.get() or "0")
-        except ValueError:
-            weight = 0
-        self.current_pool()[cid] = weight if weight > 0 else 1
-        self.edited()
-        if self.tree.exists(str(cid)):
-            self.tree.selection_set(str(cid))
-            self.tree.see(str(cid))
-
-    def set_weight(self):
-        try:
-            weight = int(self.weight.get())
-        except ValueError:
-            messagebox.showerror("Weight", "A weight is a whole number, 0 or more.", parent=self)
-            return
-        if weight < 0 or weight > 0xFFFF:
-            messagebox.showerror("Weight", "A weight is 0 to 65535 (out of 2048).", parent=self)
-            return
-        pool = self.current_pool()
-        chosen = [int(i) for i in self.tree.selection()]
-        for cid in chosen:
-            pool[cid] = weight
-        self.edited()
-        for cid in chosen:
-            if self.tree.exists(str(cid)):
-                self.tree.selection_add(str(cid))
-
-    def remove(self):
-        pool = self.current_pool()
-        for iid in self.tree.selection():
-            pool.pop(int(iid), None)
-        self.edited()
-
-    def normalize(self):
-        self.project.pools[self.duelist][self.pool.get()] = poolmath.normalize(self.current_pool())
-        self.edited()
-
-    def revert(self):
-        p, d, pool = self.project, self.duelist, self.pool.get()
-        now = {c: w for c, w in p.pools[d][pool].items() if w}
-        if now == p.retail.pools[d][pool]:
-            return
-        if not messagebox.askyesno("Revert pool", f"Put {DUELIST_NAMES[d]}'s {POOL_LABELS.get(pool, pool)} back "
-                                   "as the disc has it? The mod's changes to it are lost.", parent=self):
-            return
-        p.revert_pool(d, pool)
-        self.edited()
-
-    def goto(self, target):
-        d, pool = target
-        self.duelist = d
-        self.pool.set(pool)
-        self.fill_list()
-        self.list.see(str(d))
-        self.fill()
-
+# --- Duelists: duelists_tab.py ---------------------------------------------------
 
 # --- Starter decks ---------------------------------------------------------------
 

@@ -95,7 +95,7 @@ class FixedDeckView:
 
     def deck(self):
         p = self.tab.project
-        if p is None or self.tab.pool.get() != "deck":
+        if p is None or self.tab.pool.get() != "deck" or not isinstance(self.tab.duelist, int):
             return None
         return fixed_decks.deck_of(p, self.tab.duelist)
 
@@ -105,7 +105,9 @@ class FixedDeckView:
         p = self.tab.project
         if p is not self.stash_of:
             self.stash, self.stash_of = {}, p
-        if self.tab.pool.get() == "deck":
+        # A duelist the mod adds has its deck in a file of its own
+        # (roster.py): weighted only, here.
+        if self.tab.pool.get() == "deck" and isinstance(self.tab.duelist, int):
             self.bar.pack(fill="x", after=self.top, pady=(4, 0))
         else:
             self.bar.pack_forget()
@@ -155,7 +157,7 @@ class FixedDeckView:
 
     def switch(self):
         p, d = self.tab.project, self.tab.duelist
-        if p is None or self.tab.pool.get() != "deck":
+        if p is None or self.tab.pool.get() != "deck" or not isinstance(d, int):
             return
         if self.mode.get() == "fixed":
             if fixed_decks.deck_of(p, d) is None:
@@ -193,7 +195,7 @@ class FixedDeckView:
     def revert(self):
         """Back to the disc's: no fixed deck, and the weighted deck retail's."""
         p, d = self.tab.project, self.tab.duelist
-        if p is None:
+        if p is None or not isinstance(d, int):
             return
         if not messagebox.askyesno("Revert to retail", f"Deal {DUELIST_NAMES[d]} the disc's weighted deck again? "
                                    "The fixed deck and the weighted deck's edits are taken out.", parent=self.tab):

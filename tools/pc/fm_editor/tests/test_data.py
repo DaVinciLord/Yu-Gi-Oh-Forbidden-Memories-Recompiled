@@ -904,22 +904,32 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(p.fixed["Simon Muran"].duelist, 1)
         self.assertEqual(p.fixed["Simon Muran"].kept, {"Card 1": 40})
 
-    def test_a_mods_own_duelists_are_kept_as_written(self):
-        """The editor knows the forty the disc lays out; a duelist a mod added
-        exists only at run time (notes/more-duelists.md), so an entry naming
-        one survives a round trip untouched rather than being dropped."""
+    def test_a_mods_own_duelists_are_its_own_to_edit(self):
+        """A duelist the mod adds is one of the editor's (roster.py): "decks"
+        and "drops" naming it by its identity or its slot reach it, and it
+        goes back into "duelists" as written, its pools into its own files;
+        one naming another mod's duelist is still kept as written."""
         p = Project(self.retail)
         data = {"id": "t", "duelists": [{"id": "dark-simon", "copy": "Heishin", "slot": 45}],
-                "decks": {"t:dark-simon": {"replace": True, "Card 1": 200},
+                "decks": {"t:dark-simon": {"replace": True, "Blue Dragon": 200},
+                          "other:somebody": {"Card 3": 9},
                           "Heishin": {"Card 2": 100}},
-                "drops": {"45": {"tec": {"replace": True, "Card 1": 1}}}}
+                "drops": {"45": {"tec": {"replace": True, "Blue Dragon": 1}}}}
         messages = manifest.apply(p, data)
         built = manifest.build(p)
-        self.assertEqual(built["duelists"], data["duelists"])          # an unknown key, kept
-        self.assertEqual(built["decks"]["t:dark-simon"], data["decks"]["t:dark-simon"])
-        self.assertEqual(built["drops"]["45"], data["drops"]["45"])
+        self.assertEqual(built["duelists"], data["duelists"])
+        e = p.roster[0]
+        self.assertEqual((e.key, e.base, e.slot), ("dark-simon", 8, 45))
+        self.assertEqual(e.pools["tec"], {1: 2048})
+        # One card is no deck: the game refuses the edit, and so the deck stays Heishin's.
+        self.assertEqual(e.pools["deck"], p.retail.pools[8]["deck"])
+        self.assertTrue(any("refuses" in m for m in messages))
+        self.assertNotIn("t:dark-simon", built["decks"])
+        self.assertNotIn("45", built.get("drops", {}))
+        self.assertEqual(built["decks"]["other:somebody"], {"Card 3": 9})
         self.assertIn("Card 2", str(built["decks"]["Heishin"]))        # and the disc's own is edited
-        self.assertTrue(any("t:dark-simon" in m for m in messages))
+        drops, decks = manifest._pool_tables(p)
+        self.assertEqual(drops[e], {"tec": {"replace": True, "Blue Dragon": 2048}})
 
     def test_a_table_named_as_a_file_stays_that_file(self):
         """"decks": "tables/decks.json" is a file the editor does not read, so

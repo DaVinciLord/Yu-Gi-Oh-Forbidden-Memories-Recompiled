@@ -14,7 +14,8 @@ from .map_tab import MapTab
 from .limits_tab import LimitsTab
 from .guardian_stars_tab import GuardianStarsTab
 from .packs_tab import PacksTab
-from .tabs import (CardsTab, DuelistsTab, EquipsTab, FusionsTab, ModInfoTab, ConflictsTab, RitualsTab,
+from .duelists_tab import DuelistsTab
+from .tabs import (CardsTab, EquipsTab, FusionsTab, ModInfoTab, ConflictsTab, RitualsTab,
                    StarterTab)
 from .widgets import Pages, px, ui_font
 

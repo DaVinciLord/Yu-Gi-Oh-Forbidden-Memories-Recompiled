@@ -14,14 +14,15 @@ from pathlib import Path
 from .gamedata import (CARD_COUNT, DECK_COPY_LIMIT, DECK_POOL_MIN_CARDS, DECK_SIZE, DUELIST_NAMES, POOLS,
                        POOL_LABELS, POOL_TOTAL, TYPE_MAGIC, TYPE_EQUIP, TYPE_NAMES, TYPE_RITUAL, exodia_piece)
 from . import art, campaign_map, card_text, fixed_decks, guardian_stars, limits, packs as packmath
-from . import monster_effects, starter_pools
+from . import monster_effects, roster, starter_pools
 from .model import KEY_RE, Project, duelist_named
 
 MOD_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,63}$")
 SETTING_TYPES = ("int", "bool", "choice", "key")
 MANIFEST_KEYS = ("id", "name", "version", "author", "description", "library", "enabled", "restart",
                  "legacy_setting", "data", "textures", "cards", "audio", "min_api", "game", "requires", "after",
-                 "conflicts", "priority", "settings", "fusions", "equips", "rituals", "drops", "decks", "text", "font",
+                 "conflicts", "priority", "settings", "fusions", "equips", "rituals", "drops", "decks", "duelists", "text",
+                 "font",
                  "chest_overflow", "terrain_bonus", "trap_thresholds", "equip_bonus_default", "passwords",
                  "starter", "starter_pools", "limits", "guardian_stars", "packs", "pack_shop", "card_text_colors")
 HOST_API = 8
@@ -419,6 +420,7 @@ def validate(project: Project) -> list:
         out.append(Issue(level, "Guardian Stars", where, message))
     _check_packs(project, out)
     fixed_decks.check(project, out)
+    roster.check(project, out)
     art.check(project, out)
     campaign_map.check(project, out)
     starter_pools.check(project, out)

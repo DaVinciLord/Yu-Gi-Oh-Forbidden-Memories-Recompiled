@@ -18,6 +18,7 @@ import tkinter.font as tkfont
 from tkinter import ttk
 
 DARK_THEME = "fm-dark"
+PORTRAIT_ROW = 38       # the Duelists list's rows: a 32-pixel face and its margin
 
 # The dark palette. Text and every ink below are at least 4.5:1 against the
 # backgrounds they are drawn on (WCAG AA); disabled text is dimmer, as
@@ -188,6 +189,9 @@ class Theme:
         spin arrows 10, sashes 6) at the scale, in the light clam and
         fm-dark (vista's are Windows' own); fm-dark's paddings."""
         settings = {"Treeview": {"configure": {"rowheight": self.row_height}},
+                    # The Duelists tab's list: a row as tall as the small
+                    # portrait beside each name.
+                    "Portrait.Treeview": {"configure": {"rowheight": max(self.row_height, self.px(PORTRAIT_ROW))}},
                     # A switch of a few toggles (the Art tab's View): each
                     # one a button, the chosen one pressed in.
                     "Segment.Toolbutton": {"configure": {"padding": self.px(10, 3), "relief": "raised"},

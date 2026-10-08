@@ -60,7 +60,10 @@ class Snapshot:
                         data["files"][name] = (Path(project.source_dir) / name).read_bytes()
                     except OSError:
                         data["files"].pop(name, None)
-        for key in ("retail", "names", "source_dir", "_recipes", "_own_pairs"):
+        # The roster's files in the mod folder (roster.py) are what is on
+        # disk, not an edit: an undo must not bring back an older idea of
+        # them, or a save after it would leave a file it wrote behind.
+        for key in ("retail", "names", "source_dir", "_recipes", "_own_pairs", "roster_owned"):
             data.pop(key, None)
         cloned_art = data["art_state"]
         # Ownership uses object IDs: store entry positions instead.
@@ -82,7 +85,7 @@ class Snapshot:
         self.key = hashlib.sha256(comparison.getvalue()).digest()
         self.data = zlib.compress(pickle.dumps(data, protocol=5), 1)
 
-    def restore(self, retail, source_dir=None):
+    def restore(self, retail, source_dir=None, roster_owned=()):
         # Only bytes produced by Snapshot above enter pickle.loads. Recovery
         # files use the ordinary JSON mod reader, never this representation.
         project = Project.__new__(Project)
@@ -90,6 +93,7 @@ class Snapshot:
         project.retail = retail
         project.names = RetailNames(retail.cards)
         project.source_dir = source_dir
+        project.roster_owned = set(roster_owned)
         project._recipes = project._own_pairs = None
         st = project.art_state
         st.owned = {id(st.entries[i]): owner for i, owner in st.owned.items()}
@@ -137,4 +141,4 @@ class History:
         if not 0 <= target < len(self.items):
             return None
         self.position = target
-        return self.items[target].restore(project.retail, project.source_dir)
+        return self.items[target].restore(project.retail, project.source_dir, getattr(project, "roster_owned", ()))
