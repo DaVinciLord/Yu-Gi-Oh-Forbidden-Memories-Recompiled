@@ -1,63 +1,27 @@
 """The UI tab's Duel board page: the textures of the duel's 3D board (the
 floor's rows of zones and the platform's walls), field by field, drawn from
 the user's own disc (board_art.py has where each is and what the mod
-writes). On the left a sketch of the board as the duel's camera sees it at
-the start of a turn, flat-shaded (the game's own light and camera
-differ); clicking a part there or in the list chooses it. Beside them the
+writes). On the left the board itself, the game's model with the mod's
+textures (board_model.py), from the duel's camera at first: the middle
+mouse button turns it round (Shift or Ctrl: moves it), the wheel brings it
+nearer, a double middle click or "Game's view" puts the duel's camera
+back. Clicking a part there or in the list chooses it. Beside them the
 chosen texture: replace it with a PNG, export the game's to paint over,
 tint the game's, or put it back."""
 from __future__ import annotations
 
-import base64
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from . import board_art as ba, pngio
+from . import board_art as ba, board_model as bm, pngio
 from .pngio import Image
 from .ui_tab import ColourButton
 from .widgets import px, ui_font
 
 FLOOR_ITEM = "floor"            # the whole floor, one picture
 GROUPS = (("Floor", ba.FLOOR), ("Walls and trim", ba.WALLS))
-SKETCH_W, SKETCH_H = 320, 240   # the sketch's own units, the game's screen
-# The floor in perspective: depth z from 2.2 (far) to 1 (near); a row at depth
-# z is at y = Y0 + YK / z and half as wide as HW / z.
-Z_FAR, Z_NEAR, Y0, YK, HW = 2.2, 1.0, -35.8, 210.8, 128.0
-# The board seen from above, far to near: (part, turned round, depth in texels).
-# The centre strip twice, the near half turned round, as the game draws it,
-# and the face of the step up to it between.
-BOARD_ROWS = [("opponent_back", False, 52), ("opponent_front", False, 52), ("centre_step", False, 10),
-              ("centre", False, 46), ("centre", True, 46), ("your_front", False, 52), ("your_back", False, 52)]
-# The near wall below the floor (y from, to) and its pieces left to right.
-TRIM_Y, WALL_Y, WALL_BOTTOM = 175, 179, 214
-WALL_X0, WALL_X1 = 18, 302
-WALL_PIECES = [("wall_corners", False), ("wall_left", False), ("wall_middle", False), ("wall_right", False),
-               ("wall_corners", True)]
-SIDE = 12                        # the long sides' width at the near end, beside the floor
-
-
-def depth(s: float) -> float:
-    return Z_FAR + (Z_NEAR - Z_FAR) * s
-
-
-def floor_point(u: float, s: float):
-    """The sketch's point of the floor's (u in -1..1 across, s 0 far .. 1 near)."""
-    z = depth(s)
-    return 160 + u * HW / z, Y0 + YK / z
-
-
-def turned(image: Image) -> Image:
-    """The picture turned half round."""
-    px_ = [image.rgba[i:i + 4] for i in range(0, len(image.rgba), 4)]
-    return Image(image.width, image.height, b"".join(reversed(px_)))
-
-
-def mirrored(image: Image) -> Image:
-    rows = []
-    for y in range(image.height):
-        line = image.rgba[y * image.width * 4:(y + 1) * image.width * 4]
-        rows.append(b"".join(line[x * 4:x * 4 + 4] for x in range(image.width - 1, -1, -1)))
-    return Image(image.width, image.height, b"".join(rows))
+DRAG_SCALE = 3                  # while the camera moves: a picture a third the size, enlarged
+HINT = "Middle drag turns the board, Shift+middle drag moves it, the wheel zooms."
 
 
 def checker(w: int, h: int, cell: int = 6) -> Image:
@@ -83,131 +47,6 @@ def over(base: Image, piece: Image) -> Image:
     return Image(base.width, base.height, bytes(out))
 
 
-class Sketch:
-    """The board drawn at a size: the picture and, for each part, the
-    outline it takes (the sketch's units) to choose it by."""
-
-    def __init__(self, width: int, height: int):
-        self.width, self.height = width, height
-        self.k = width / SKETCH_W
-        self.out = bytearray(bytes((5, 6, 10, 255)) * (width * height))
-        self.shapes = []            # (part key, [(x, y), ...]) last drawn on top
-
-    def _put(self, x: int, y: int, rgba, light: float = 1.0):
-        if rgba[3] < 128:
-            return
-        at = (y * self.width + x) * 4
-        self.out[at:at + 4] = bytes((min(255, int(rgba[0] * light)), min(255, int(rgba[1] * light)),
-                                     min(255, int(rgba[2] * light)), 255))
-
-    def floor(self, rows: dict):
-        """rows: part key -> its picture (any scale)."""
-        pictures = [(key, turned(rows[key]) if flip else rows[key]) for key, flip, _ in BOARD_ROWS]
-        heights = [h for _, _, h in BOARD_ROWS]
-        total = sum(heights)
-        starts, at = [], 0
-        for h in heights:
-            starts.append(at)
-            at += h
-        k = self.k
-        top, bottom = int(floor_point(0, 0)[1] * k), int(floor_point(0, 1)[1] * k)
-        for sy in range(max(0, top), min(self.height, bottom)):
-            z = YK / ((sy + 0.5) / k - Y0)
-            s = (Z_FAR - z) / (Z_FAR - Z_NEAR)
-            if not 0 <= s < 1:
-                continue
-            v = s * total
-            index = max(i for i, start in enumerate(starts) if start <= v)
-            key, image = pictures[index]
-            ty = min(image.height - 1, int((v - starts[index]) / heights[index] * image.height))
-            half = HW / z * k
-            light = 0.55 + 0.45 * s
-            row = ty * image.width * 4
-            for sx in range(max(0, int(160 * k - half)), min(self.width, int(160 * k + half) + 1)):
-                u = (sx + 0.5 - 160 * k) / half
-                if not -1 <= u < 1:
-                    continue
-                tx = min(image.width - 1, int((u + 1) / 2 * image.width))
-                self._put(sx, sy, image.rgba[row + tx * 4:row + tx * 4 + 4], light)
-        for (key, _, _), start, h in zip(BOARD_ROWS, starts, heights):
-            s0, s1 = start / total, (start + h) / total
-            self.shapes.append((key, [floor_point(-1, s0), floor_point(1, s0), floor_point(1, s1),
-                                      floor_point(-1, s1)]))
-
-    def rect(self, key: str, image: Image, x0: float, y0: float, x1: float, y1: float, tile: int = 1,
-             light: float = 1.0):
-        """`image` stretched over a rectangle (`tile` times across)."""
-        k = self.k
-        for sy in range(max(0, int(y0 * k)), min(self.height, int(y1 * k))):
-            ty = max(0, min(image.height - 1, int((sy + 0.5 - y0 * k) / ((y1 - y0) * k) * image.height)))
-            row = ty * image.width * 4
-            for sx in range(max(0, int(x0 * k)), min(self.width, int(x1 * k))):
-                f = max(0.0, (sx + 0.5 - x0 * k) / ((x1 - x0) * k)) * tile % 1
-                tx = min(image.width - 1, int(f * image.width))
-                self._put(sx, sy, image.rgba[row + tx * 4:row + tx * 4 + 4], light)
-        self.shapes.append((key, [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]))
-
-    def side(self, key: str, image: Image, left: bool):
-        """A long side: a band beside the floor's edge, the wall's picture
-        along it (its length across the picture, far to near)."""
-        k = self.k
-        sign = -1 if left else 1
-        top, bottom = floor_point(0, 0)[1], floor_point(0, 1)[1]
-        for sy in range(max(0, int(top * k)), min(self.height, int(bottom * k))):
-            z = YK / ((sy + 0.5) / k - Y0)
-            s = (Z_FAR - z) / (Z_FAR - Z_NEAR)
-            if not 0 <= s < 1:
-                continue
-            edge = 160 + sign * HW / z
-            width = SIDE * Z_NEAR / z
-            tx = min(image.width - 1, int(s * image.width))
-            for sx in range(int(min(edge, edge + sign * width) * k), int(max(edge, edge + sign * width) * k)):
-                if 0 <= sx < self.width:
-                    f = abs(sx / k - edge) / width
-                    ty = min(image.height - 1, int(f * image.height))
-                    self._put(sx, sy, image.rgba[(ty * image.width + tx) * 4:(ty * image.width + tx) * 4 + 4],
-                              0.45 + 0.4 * s)
-        x_far, y_far = floor_point(sign, 0)
-        x_near, y_near = floor_point(sign, 1)
-        self.shapes.append((key, [(x_far, y_far), (x_far + sign * SIDE * Z_NEAR / Z_FAR, y_far),
-                                  (x_near + sign * SIDE, y_near), (x_near, y_near)]))
-
-    def image(self) -> Image:
-        return Image(self.width, self.height, bytes(self.out))
-
-    def part_at(self, x: float, y: float):
-        """The part whose outline holds the point (the sketch's units)."""
-        for key, points in reversed(self.shapes):
-            inside = False
-            j = len(points) - 1
-            for i, (xi, yi) in enumerate(points):
-                xj, yj = points[j]
-                if (yi > y) != (yj > y) and x < (xj - xi) * (y - yi) / (yj - yi) + xi:
-                    inside = not inside
-                j = i
-            if inside:
-                return key
-        return None
-
-
-def draw_board(pieces: dict, width: int, height: int) -> Sketch:
-    """The sketch of a field with `pieces` (part key -> picture)."""
-    sketch = Sketch(width, height)
-    sketch.side("wall_left", pieces["wall_left"], True)
-    sketch.side("wall_right", pieces["wall_right"], False)
-    sketch.floor(pieces)
-    near_left, near_right = floor_point(-1, 1)[0], floor_point(1, 1)[0]
-    sketch.rect("trim", pieces["trim"], near_left - SIDE, TRIM_Y, near_right + SIDE, WALL_Y, tile=2)
-    total = sum(ba.BY_KEY[key].w for key, _ in WALL_PIECES)
-    x = WALL_X0
-    for key, flip in WALL_PIECES:
-        w = (WALL_X1 - WALL_X0) * ba.BY_KEY[key].w / total
-        image = mirrored(pieces[key]) if flip else pieces[key]
-        sketch.rect(key, image, x, WALL_Y, x + w, WALL_BOTTOM, light=0.8)
-        x += w
-    return sketch
-
-
 class BoardPage(ttk.Frame):
     def __init__(self, master, tab):
         super().__init__(master)
@@ -215,11 +54,15 @@ class BoardPage(ttk.Frame):
         self.terrain = ba.TERRAINS[0]
         self.chosen = FLOOR_ITEM
         self.loading = False
-        self.sketch = None
+        self.camera = bm.CAMERA
+        self.picture = None         # board_model.Picture shown, and its scale on the canvas
+        self.scale = 1
         self.offset = (0, 0)
         self.photos = []
         self._job = None
+        self._drag_job = None
         self._drawn = None
+        self.drag = None            # (kind, x, y, camera at the press) while the middle button is down
 
         top = ttk.Frame(self)
         top.pack(fill="x", pady=(0, 6))
@@ -237,7 +80,7 @@ class BoardPage(ttk.Frame):
 
         body = ttk.Frame(self)
         body.pack(fill="both", expand=True)
-        # The sketch takes the room the list and the texture leave.
+        # The board takes the room the list and the texture leave.
         left = ttk.Frame(body)
         middle = ttk.Frame(body, padding=(10, 0, 0, 0))
         side = ttk.Frame(body, padding=(12, 0, 0, 0), width=px(self, 330))
@@ -245,12 +88,22 @@ class BoardPage(ttk.Frame):
         side.pack_propagate(False)
         middle.pack(side="right", fill="y")
         left.pack(side="left", fill="both", expand=True)
-        ttk.Label(left, text="A sketch: the game's camera and light differ.", style="Hint.TLabel").pack(
-            side="bottom", anchor="w", pady=(4, 0))
+        under = ttk.Frame(left)
+        under.pack(side="bottom", fill="x", pady=(4, 0))
+        self.game_view = ttk.Button(under, text="Game's view", command=self.reset_camera)
+        self.game_view.pack(side="right")
+        ttk.Label(under, text=HINT, style="Hint.TLabel").pack(side="left", anchor="w")
         self.canvas = tk.Canvas(left, width=px(self, 480), height=px(self, 360), highlightthickness=0,
-                                background="#05060a", cursor="hand2")
+                                background="#000000", cursor="hand2")
         self.canvas.pack(fill="both", expand=True)
         self.canvas.bind("<Button-1>", self.clicked)
+        self.canvas.bind("<ButtonPress-2>", self.press)
+        self.canvas.bind("<B2-Motion>", self.motion)
+        self.canvas.bind("<ButtonRelease-2>", self.release)
+        self.canvas.bind("<Double-Button-2>", lambda e: self.reset_camera())
+        self.canvas.bind("<MouseWheel>", self.wheel)
+        self.canvas.bind("<Button-4>", self.wheel)
+        self.canvas.bind("<Button-5>", self.wheel)
 
         self.tree = ttk.Treeview(middle, columns=("state",), show="tree", selectmode="browse",
                                  height=len(ba.PARTS) + 3)
@@ -334,68 +187,141 @@ class BoardPage(ttk.Frame):
             self.tree.see(self.chosen)
             self.loading = False
 
-    def draw_later(self):
+    def draw_later(self, delay: int = 120):
         if self._job is not None:
             self.after_cancel(self._job)
-        self._job = self.after(120, self.draw)
+        self._job = self.after(delay, self.draw)
 
-    def draw(self):
+    def canvas_size(self):
+        canvas = self.canvas
+        width = canvas.winfo_width() if canvas.winfo_width() > 1 else int(canvas["width"])
+        height = canvas.winfo_height() if canvas.winfo_height() > 1 else int(canvas["height"])
+        return max(160, width), max(120, height)
+
+    def draw(self, scale: int = 1):
+        """The board as the camera sees it, at the canvas's size (`scale`:
+        that many times smaller, enlarged, while the camera moves)."""
+        if self._job is not None and scale == 1:
+            self.after_cancel(self._job)
         self._job = None
         canvas = self.canvas
         if self.project is None:
             return
-        data = ba.disc(self.project)
-        width = max(160, canvas.winfo_width() if canvas.winfo_width() > 1 else int(canvas["width"]))
-        height = max(120, canvas.winfo_height() if canvas.winfo_height() > 1 else int(canvas["height"]))
-        k = min(width / SKETCH_W, height / SKETCH_H)
-        size = (int(SKETCH_W * k), int(SKETCH_H * k))
-        canvas.delete("all")
-        self.photos = []
-        if not data.ok:
-            self.sketch = None
+        width, height = self.canvas_size()
+        if not bm.available(self.project):
+            self.picture = None
+            canvas.delete("all")
             canvas.create_text(width // 2, height // 2, fill="#ccc", width=width - 40,
-                               text="The board's textures come from the game files (File > Game files...).")
+                               text="The board comes from the game files (File > Game files...).")
             return
         # The tab's "Hold: the game's": the board without the mod's pictures and tints.
         comparing = getattr(self.tab, "comparing", False)
         held = self.project.board_art if comparing else None
         if comparing:
             self.project.board_art = ba.BoardArt()
+        size = (max(1, width // scale), max(1, height // scale))
         try:
-            signature = (self.terrain, size, comparing, ba.state(self.project).version, ba.digest(self.project))
+            st = ba.state(self.project)
+            # The state itself, not its id: held here, no other can take its place.
+            signature = (self.terrain, size, self.camera, None if comparing else st, st.version)
             if self._drawn is None or self._drawn[0] != signature:
-                pieces = {part.key: ba.shown(self.project, self.terrain, part) for part in ba.PARTS}
-                sketch = draw_board(pieces, *size)
-                self._drawn = (signature, sketch, self.photo(sketch.image()))
+                try:
+                    picture = bm.render(bm.board(ba.disc(self.project), self.terrain),
+                                        bm.pieces_of(self.project, self.terrain), self.camera, size)
+                except Exception as problem:        # noqa: BLE001 -- a disc whose model is not the game's
+                    self.picture = None
+                    canvas.delete("all")
+                    canvas.create_text(width // 2, height // 2, fill="#ccc", width=width - 40,
+                                       text=f"The board's model cannot be read from these game files ({problem}).")
+                    return
+                self._drawn = (signature, picture)
         finally:
             if comparing:
                 self.project.board_art = held
-        _, self.sketch, photo = self._drawn
-        self.photos.append(photo)
-        self.offset = ((width - size[0]) // 2, (height - size[1]) // 2)
+        self.picture, self.scale = self._drawn[1], scale
+        self.show()
+
+    def show(self):
+        """The picture on the canvas, the chosen parts outlined (not while
+        the tab holds the game's up)."""
+        canvas = self.canvas
+        canvas.delete("all")
+        if self.picture is None:
+            return
+        comparing = getattr(self.tab, "comparing", False)
+        thickness = max(1, round(self.game_pixels() / 1.5 / self.scale))
+        image = self.picture.image if comparing else bm.outline(self.picture, [p.key for p in self.parts()],
+                                                                thickness)
+        photo = self.photo(image)
+        if self.scale > 1:
+            photo = photo.zoom(self.scale)
+        self.photos = [photo]
         canvas.create_image(*self.offset, image=photo, anchor="nw")
         if comparing:
             canvas.create_rectangle(0, 0, px(canvas, 96), px(canvas, 22), fill="#000", outline="#ffd34d")
             canvas.create_text(px(canvas, 48), px(canvas, 11), text="The game's", fill="#ffd34d", font=ui_font(10))
-        else:
-            self.outline()
-
-    def outline(self):
-        """The chosen parts' outlines, dashed, over the sketch."""
-        self.canvas.delete("chosen")
-        if self.sketch is None:
-            return
-        keys = {p.key for p in self.parts()}
-        k = self.sketch.k
-        ox, oy = self.offset
-        for key, points in self.sketch.shapes:
-            if key in keys:
-                flat = [c for x, y in points for c in (ox + x * k, oy + y * k)]
-                self.canvas.create_polygon(*flat, fill="", outline="#000", width=3, tags="chosen")
-                self.canvas.create_polygon(*flat, fill="", outline="#ffd34d", width=1, dash=(4, 3), tags="chosen")
 
     def photo(self, image: Image):
-        return tk.PhotoImage(master=self, data=base64.b64encode(pngio.encode(image)), format="png")
+        """A PhotoImage of the picture (PPM: no compressing, quick for the
+        canvas's large ones)."""
+        rgb = bytearray(image.width * image.height * 3)
+        for c in range(3):
+            rgb[c::3] = image.rgba[c::4]
+        return tk.PhotoImage(master=self, data=b"P6 %d %d 255\n" % image.size + bytes(rgb), format="ppm")
+
+    # --- the camera, by the mouse ------------------------------------------------------------
+
+    def game_pixels(self) -> float:
+        """Canvas pixels to one of the game's screen."""
+        return bm.frame(self.canvas_size())[0]
+
+    def press(self, event):
+        if self.picture is None:
+            return
+        kind = "pan" if event.state & 0x5 else "turn"      # Shift or Ctrl held
+        self.drag = (kind, event.x, event.y, self.camera)
+
+    def motion(self, event):
+        if self.drag is None:
+            return
+        kind, x, y, camera = self.drag
+        k = self.game_pixels()
+        dx, dy = (event.x - x) / k, (event.y - y) / k
+        self.camera = bm.pan(camera, dx, dy) if kind == "pan" else bm.orbit(camera, dx, dy)
+        self.draw_small()
+
+    def draw_small(self):
+        """The small picture, once the events waiting are handled: one
+        picture for the motions that came while the last was drawn."""
+        if self._drag_job is None:
+            self._drag_job = self.after_idle(self._draw_small)
+
+    def _draw_small(self):
+        self._drag_job = None
+        self.draw(DRAG_SCALE)
+
+    def release(self, event):
+        if self.drag is None:
+            return
+        self.drag = None
+        if self._drag_job is not None:
+            self.after_cancel(self._drag_job)
+            self._drag_job = None
+        self.draw_later(1)
+
+    def wheel(self, event):
+        if self.picture is None:
+            return "break"
+        nearer = getattr(event, "num", None) == 4 or getattr(event, "delta", 0) > 0
+        self.camera = bm.zoom(self.camera, 1 if nearer else -1)
+        self.draw_small()
+        self.draw_later(250)
+        return "break"
+
+    def reset_camera(self):
+        """The duel's own camera again."""
+        self.camera = bm.CAMERA
+        self.draw()
 
     def current_image(self):
         if self.chosen == FLOOR_ITEM:
@@ -462,7 +388,7 @@ class BoardPage(ttk.Frame):
         self.status.configure(text="")
         self.mark()
         self.fill_form()
-        self.outline()
+        self.show()
 
     def tree_selected(self, event=None):
         if self.loading:
@@ -472,10 +398,10 @@ class BoardPage(ttk.Frame):
             self.select(chosen[0])
 
     def clicked(self, event):
-        if self.sketch is None:
+        if self.picture is None:
             return
         ox, oy = self.offset
-        key = self.sketch.part_at((event.x - ox) / self.sketch.k, (event.y - oy) / self.sketch.k)
+        key = self.picture.part_at(int((event.x - ox) // self.scale), int((event.y - oy) // self.scale))
         if key is not None:
             self.select(key)
 

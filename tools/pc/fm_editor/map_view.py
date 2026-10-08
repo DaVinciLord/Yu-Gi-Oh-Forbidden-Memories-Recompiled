@@ -47,8 +47,10 @@ class MapModel:
     """The terrain of one overworld package: vertices, normals, polygons,
     and VRAM as its image uploads leave it."""
 
-    def __init__(self, blob: bytes):
+    def __init__(self, blob: bytes, scale: float = SCALE, header: bool = True):
         self.blob = blob
+        self.scale = scale
+        self.header = header        # the HMD's own first word (0x50); the duel board's holds its size
         self.vram = array("H", bytes(1024 * 512 * 2))
         self.polygons = []          # (uvs, clut, tpage, vertices, normals)
         self.images = []            # dicts: the image uploads (x, y, words, rows, offset, clut...)
@@ -63,7 +65,7 @@ class MapModel:
 
     def parse(self):
         blob, word = self.blob, self.word
-        if len(blob) < 64 or word(0) != 0x50:
+        if len(blob) < 64 or (self.header and word(0) != 0x50):
             raise ModelError("the map block is not an HMD")
         # The primitive header section: a count, then per header its
         # section count and the sections' word offsets (top bit set).
@@ -155,7 +157,7 @@ class MapModel:
 
     def world(self, v):
         m, t = self.matrix, self.translation
-        return tuple(sum(m[i][j] * v[j] for j in range(3)) * SCALE + t[i] for i in range(3))
+        return tuple(sum(m[i][j] * v[j] for j in range(3)) * self.scale + t[i] for i in range(3))
 
     def shades(self):
         """The light each normal gets, turned with the model."""
@@ -224,11 +226,14 @@ def _texel(vram, tpage, clut, u, v):
     return None if index == 0 and word == 0 else word
 
 
-def _rasterize(size, faces, vram, out, depth):
-    """Draw faces: ((x, y, z, u, v, shade) * 3, tpage, clut), nearest z first
-    kept; shade multiplies the texel."""
+def _rasterize(size, faces, vram, out, depth, ids=None):
+    """Draw faces: ((x, y, z, u, v, shade) * 3, tpage, clut, override[, id]),
+    nearest z first kept; shade multiplies the texel. `ids` (a byte per
+    pixel) takes the drawn face's id."""
     width, height = size
-    for corners, tpage, clut, override in faces:
+    for face in faces:
+        corners, tpage, clut, override = face[:4]
+        tag = face[4] if ids is not None else 0
         (x0, y0, z0, u0, v0, s0), (x1, y1, z1, u1, v1, s1), (x2, y2, z2, u2, v2, s2) = corners
         area = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)
         if area == 0:
@@ -264,6 +269,8 @@ def _rasterize(size, faces, vram, out, depth):
                         continue
                     red, green, blue = (word & 31) * 8, ((word >> 5) & 31) * 8, ((word >> 10) & 31) * 8
                 depth[at] = z
+                if ids is not None:
+                    ids[at] = tag
                 shade = a * s0 + b * s1 + c * s2
                 o = at * 4
                 out[o] = min(255, int(red * shade))
