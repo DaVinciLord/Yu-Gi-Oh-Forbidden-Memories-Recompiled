@@ -37,6 +37,7 @@ UNUSED_GAME_FUNCTION(GlPicture_CopyInto)
 UNUSED_GAME_FUNCTION(GlPicture_Lost)
 UNUSED_GAME_FUNCTION(GlPicture_Stop)
 UNUSED_GAME_FUNCTION(Platform_NotifyPresent)
+UNUSED_GAME_FUNCTION(Platform_SetVSync)
 UNUSED_GAME_FUNCTION(GlPicture_Read)
 UNUSED_GAME_FUNCTION(GlPicture_Behind)
 /* The software-controls fixture has no GL core presenter; as on the
