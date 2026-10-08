@@ -160,7 +160,7 @@ class RosterTest(unittest.TestCase):
         roster.set_name(p, 8, "Heishin the Elder")
         p.pools[8]["pow"] = {1: 2048}
         manifest.save_mod(p, self.folder)
-        files = sorted(str(f.relative_to(self.folder)) for f in self.folder.rglob("*") if f.is_file())
+        files = sorted(f.relative_to(self.folder).as_posix() for f in self.folder.rglob("*") if f.is_file())
         self.assertEqual(files, ["decks/dark-simon.json", "drops/dark-simon.json", "duelists/dark-simon.json",
                                  "duelists/heishin.json", "duelists/pegasus-prime.json", "mod.json",
                                  "portraits/dark-simon.png", "portraits/heishin.png"])
@@ -195,7 +195,7 @@ class RosterTest(unittest.TestCase):
         roster.remove(again, mine["dark-simon"])
         roster.revert_portrait(again, 8)
         manifest.save_mod(again, self.folder)
-        files = sorted(str(f.relative_to(self.folder)) for f in self.folder.rglob("*") if f.is_file())
+        files = sorted(f.relative_to(self.folder).as_posix() for f in self.folder.rglob("*") if f.is_file())
         self.assertEqual(files, ["duelists/heishin.json", "duelists/pegasus-prime.json", "mod.json"])
 
     def test_a_written_roster_is_read_as_written(self):

@@ -15,7 +15,7 @@ from unittest import mock
 from fm_editor import manifest, pngio, ui_assets, ui_rules, validate
 from fm_editor.model import Project
 from fm_editor.tests.test_data import fixture
-from fm_editor.tests.test_gui import GuiCase
+from fm_editor.tests.test_gui import GuiCase, tk
 
 
 def project(other=None) -> Project:
@@ -30,6 +30,7 @@ def png(path: Path, width=16, height=8, colour=(200, 40, 40, 255)) -> Path:
     return path
 
 
+@unittest.skipIf(tk is None, "ui_title needs Tk")
 class SceneTest(unittest.TestCase):
     """ui_title.Scene against tests/pc/title_config_test.c's layout cases."""
 

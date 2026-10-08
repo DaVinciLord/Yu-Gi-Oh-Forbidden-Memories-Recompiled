@@ -12,11 +12,12 @@ import json
 import random
 import struct
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
 
-from fm_editor import board_art as ba, board_model as bm, gamedata, manifest, pngio, ui_board, validate
+from fm_editor import board_art as ba, board_model as bm, gamedata, manifest, pngio, validate
 from fm_editor.model import Project
 from fm_editor.tests.test_data import fixture
 from fm_editor.tests.test_gui import GuiCase
@@ -435,6 +436,12 @@ class BoardPageTest(GuiCase):
     def test_edits(self):
         page = self.page
         self.assertIsNotNone(page.picture)
+        # The full picture first: a slow machine shows a small one a while, where a wall is a few pixels.
+        start = time.perf_counter()
+        while (page._work is not None or page.scale != 1) and time.perf_counter() - start < 20:
+            self.app.update()
+            time.sleep(0.002)
+        self.assertEqual(page.scale, 1)
         # Clicking the board's near wall chooses it.
         self.click(centre_of("wall_middle"))
         self.assertEqual(page.chosen, "wall_middle")
@@ -493,6 +500,7 @@ class BoardPageTest(GuiCase):
         self.assertEqual(full.image.size, page.canvas_size())
         k = page.game_pixels()
         small = page.drag_scale             # as small as this machine draws quickly (ui_board.adapt)
+        from fm_editor import ui_board      # Tk: not imported where the pages are skipped
         self.assertIn(small, ui_board.DRAG_SCALES)
         page.press(mock.Mock(x=100, y=100, state=0))
         drawn = []
