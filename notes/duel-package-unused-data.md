@@ -7,8 +7,8 @@ This note resolves two regions previously left as generic unknowns:
 - terrain-package phase 11, the `0x2800` bytes loaded to `0x80100000`;
 - the final `0x68` bytes of every `0x1800`-byte per-duelist block.
 
-The conclusions are deliberately different. Phase 11 contains structured,
-non-fill data but no byte consumer has been established. The duelist tail is
+The conclusions are deliberately different. Phase 11 is the duel board's
+3D model (see the correction below). The duelist tail is
 uniform `0xFF` fill, ends exactly at a sector boundary, and has no addressable
 consumer.
 
@@ -35,33 +35,33 @@ SHA-256:
 4d7c12766dec03a2d8faca71801dbc336db55144d52b2aad2f95efc263a2e237
 ```
 
-The only duel initialization call that appears to hand this arena to another
-routine is:
+**Correction (2026-10-08): phase 11 is the duel board's 3D model.** It is an
+HMD (its first word holds the size rather than the usual `0x50`) of 78 lit,
+fogged triangles and 64 quads, drawn as model slot 2 every frame by
+`Duel_DrawFieldCards` (`src/game/func_800164FC.c`). The consumer is this call:
 
 ```c
 func_80056250(2, D_80010000[0].payload_bases[0], 0x63000, 4);
 ```
 
-That call does not consume the phase. Matching `func_80056250` checks whether
-its second argument is null, then operates entirely on model slot 2. It never
-dereferences that argument and never uses the `0x63000` or `4` arguments.
-Thus the loaded pointer enables the model-slot layout pass, but the pass does
-not read the loaded bytes.
+`func_80056250` (`src/game/model_slot_setup.c`) starts with
+`func_8004CB0C()`, written there without arguments, but on MIPS `a0`-`a3`
+still hold the caller's four, so `func_8004CB0C` receives the slot, the
+loaded pointer, `0x63000` and `4` and sets slot 2 up from the bytes (the PC
+build passes them explicitly, `#ifdef MEMORIES_PC`). The earlier reading
+below missed that pass-through. The FM Editor's `board_model.py` parses the
+phase from the player's disc and renders it; at the duel's own camera its
+picture lines up with the game's frames to about a pixel, and every polygon
+uses one of the board textures `board_art.py` names. All seven terrain
+packages carry the same model; only the textures differ.
 
-A MIPS scan of the complete `0x80146000` duel overlay found no instruction
-forming or accessing an address in `0x80100000-0x801027FF`, and no aligned
-pointer literal into that range. The exact `0x2800`-byte payload occurs at
-the same phase in each of the seven terrain records and nowhere else on a
-sector boundary in WA. Its first `0x80` bytes also do not occur in `MODEL.MRG`
-or `SU.MRG`.
+The earlier analysis, kept for its scans:
 
-The defensible conclusion is therefore:
-
-- the transfer is real and terrain-invariant;
-- the bytes are structured rather than zero/`0xFF` fill;
-- the current retail path uses only the destination pointer's non-null value;
-- no semantic payload name is justified without a byte consumer or external
-  format evidence.
+> That call does not consume the phase. Matching `func_80056250` checks whether
+> its second argument is null, then operates entirely on model slot 2. A MIPS
+> scan of the complete `0x80146000` duel overlay found no instruction forming
+> or accessing an address in `0x80100000-0x801027FF` (true: the reader is in
+> the resident `func_8004CB0C`, not the overlay).
 
 ## Per-duelist `0xFF` tail
 
