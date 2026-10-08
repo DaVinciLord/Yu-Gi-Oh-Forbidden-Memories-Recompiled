@@ -17,6 +17,11 @@
  * card image the older builds used (memcard1.mcd, memcard2.mcd) is copied
  * into slots 1 and 2. The card images are only read.
  *
+ * A memory card file from an emulator or a card manager put in the saves
+ * folder is imported whenever the slot menu opens (SaveSlots_ImportFolder):
+ * each save of the game on it goes into an empty slot, and the file is
+ * renamed so it is not imported twice.
+ *
  * Nothing here touches game memory; the caller passes the game's integrity
  * check in, so the storage can be tested on its own. */
 #include <stddef.h>
@@ -86,6 +91,22 @@ int SaveSlots_ReadToken(int slot, unsigned *token);
 /* Copy the save named `name` off the memory card images into slots 1 and
  * 2, once: only when the saves directory does not exist yet. */
 void SaveSlots_ImportMemoryCards(const char *name);
+/* Where in `data` the next save of the game starts, at or after `from`: a
+ * block that opens with the "SC" title header and holds a state that passes
+ * `check` (either copy) and has a deck (zeros pass the check). -1 when there is none. Every format the emulators
+ * and card managers use (raw .mcr/.mcd/.srm images, .gme, .vgs, .vmp, and
+ * the single saves .mcs/.psx/.psv) keeps the game's one block whole, after
+ * a header of its own size, so this finds it without knowing the format. */
+long SaveSlots_FindSave(unsigned char *data, size_t size, size_t from, SaveSlotCheck check);
+/* Nonzero for a file name the import takes: a memory card or single-save
+ * extension (SaveSlots_ImportFolder), in any case. */
+int SaveSlots_ImportName(const char *name);
+/* Import the saves in the memory card files in the saves folder into empty
+ * slots, the same block the game would read off a card. A file whose saves
+ * are all in slots now (copied, or there already) is renamed to
+ * <name>.imported. `message` gets what to tell the player, or "" when there
+ * was no such file. Returns the first slot filled, or -1. */
+int SaveSlots_ImportFolder(SaveSlotCheck check, char *message, size_t size);
 /* The player name of a state, in ASCII (full-width letters, digits and the
  * usual punctuation; anything else becomes '?'). */
 void SaveSlots_StateName(const unsigned char *state, char *out, size_t size);
