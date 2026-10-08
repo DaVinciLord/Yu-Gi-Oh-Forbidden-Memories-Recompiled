@@ -149,7 +149,7 @@ static void CardLayout_DrawArt(SpritePrim *src, s32 x, s32 y, s32 w, s32 h,
  * type-icon sheet's 0xB -- confirmed by research after the badge drew
  * nothing). */
 static void CardLayout_DrawCell(s32 x, s32 y, s32 w, s32 h, s32 tpage, s32 u, s32 v, s32 clut,
-                                s32 cell_w, s32 cell_h, s32 ot, s32 mode, Func80028B08Extra *EXT)
+                                s32 cell_w, s32 cell_h, s32 ot, s32 mode, u32 rgb, Func80028B08Extra *EXT)
 {
     POLY_GT4 art;
     s32 projected = ((u32)mode >> 16) == 0xF;
@@ -162,10 +162,13 @@ static void CardLayout_DrawCell(s32 x, s32 y, s32 w, s32 h, s32 tpage, s32 u, s3
      * without this it is whatever the stack held. */
     art.pad2 = 0;
     art.pad3 = 0;
-    setRGB0(&art, 128, 128, 128);
-    setRGB1(&art, 128, 128, 128);
-    setRGB2(&art, 128, 128, 128);
-    setRGB3(&art, 128, 128, 128);
+    /* The card's own colour (the object's colour word, which is what the art
+     * and the stars are drawn with): the whole card fades together at the end
+     * of an attack, so this quad has to take it, not a fixed neutral grey. */
+    setRGB0(&art, (u8)rgb, (u8)(rgb >> 8), (u8)(rgb >> 16));
+    setRGB1(&art, (u8)rgb, (u8)(rgb >> 8), (u8)(rgb >> 16));
+    setRGB2(&art, (u8)rgb, (u8)(rgb >> 8), (u8)(rgb >> 16));
+    setRGB3(&art, (u8)rgb, (u8)(rgb >> 8), (u8)(rgb >> 16));
     art.clut = (u16)clut;
     art.tpage = (u16)tpage;
     art.u0 = art.u2 = (u8)u;
@@ -178,7 +181,7 @@ static void CardLayout_DrawCell(s32 x, s32 y, s32 w, s32 h, s32 tpage, s32 u, s3
                                ot, art_mode, EXT);
 }
 
-static void CardLayout_DrawFrame(s32 x, s32 y, s32 w, s32 h, s32 ot, s32 mode, Func80028B08Extra *EXT)
+static void CardLayout_DrawFrame(s32 x, s32 y, s32 w, s32 h, s32 ot, s32 mode, u32 rgb, Func80028B08Extra *EXT)
 {
     int col, row, tpage, clut, tile_w, tile_h;
 
@@ -190,7 +193,7 @@ static void CardLayout_DrawFrame(s32 x, s32 y, s32 w, s32 h, s32 ot, s32 mode, F
             s32 y0 = y + h * row / CARD_LAYOUT_FRAME_ROWS, y1 = y + h * (row + 1) / CARD_LAYOUT_FRAME_ROWS;
 
             if (!CardLayoutArt_FrameTile(col, row, &tpage, &clut, &tile_w, &tile_h)) return;
-            CardLayout_DrawCell(x0, y0, x1 - x0, y1 - y0, tpage, 0, 0, clut, tile_w, tile_h, ot, mode, EXT);
+            CardLayout_DrawCell(x0, y0, x1 - x0, y1 - y0, tpage, 0, 0, clut, tile_w, tile_h, ot, mode, rgb, EXT);
         }
     }
 }
@@ -201,7 +204,7 @@ static void CardLayout_DrawFrame(s32 x, s32 y, s32 w, s32 h, s32 ot, s32 mode, F
  * one to four digits always centred on the box.
  * 0, nothing drawn, when the strip is not there. */
 static int CardLayout_DrawDigits(s32 base_x, s32 base_y, s32 cx, s32 cy, const u8 *buf, s32 count, s32 dim,
-                                 s32 ot, s32 mode, Func80028B08Extra *EXT)
+                                 s32 ot, s32 mode, u32 rgb, Func80028B08Extra *EXT)
 {
     char path[1024];
     s32 dw, dh, step, tpage, u, v, clut, cw, ch, i, shown = 0, x;
@@ -218,7 +221,7 @@ static int CardLayout_DrawDigits(s32 base_x, s32 base_y, s32 cx, s32 cy, const u
     x = base_x + cx - ((shown - 1) * step + dw) / 2;
     for (i = shown - 1; i >= 0; i--) {
         CardLayoutArt_DigitCell(buf[i], dim, &tpage, &u, &v, &clut, &cw, &ch);
-        CardLayout_DrawCell(x, base_y + cy - dh / 2, dw, dh, tpage, u, v, clut, cw, ch, ot, mode, EXT);
+        CardLayout_DrawCell(x, base_y + cy - dh / 2, dw, dh, tpage, u, v, clut, cw, ch, ot, mode, rgb, EXT);
         x += step;
     }
     return 1;
@@ -462,10 +465,10 @@ void func_80028B08(DisplayObject *obj, s32 arg1) {
             if (CardLayout_FullBleed() &&
                 CardLayout_DrawDigits(win->field_30.h.field_30, win->field_30.h.field_32,
                                       atk_layout.x, atk_layout.y, buf1, digits, (rec->field_3C & 0x80) != 0,
-                                      arg1, arg, EXT)) {
+                                      arg1, arg, win->field_0C, EXT)) {
                 CardLayout_DrawDigits(win->field_30.h.field_30, win->field_30.h.field_32,
                                       def_layout.x, def_layout.y, buf2, digits, (rec->field_3C & 0x40) != 0,
-                                      arg1, arg, EXT);
+                                      arg1, arg, win->field_0C, EXT);
             } else {
 
             PRM->uv.b.hi = (PRM->uv.b.hi & 0x80) + 0x10;
@@ -606,7 +609,7 @@ void func_80028B08(DisplayObject *obj, s32 arg1) {
             win->field_30.h.field_30, win->field_30.h.field_32, frame_layout.w, frame_layout.h,
             (int)arg1, (unsigned)arg);
         CardLayout_DrawFrame(win->field_30.h.field_30, win->field_30.h.field_32,
-                             frame_layout.w, frame_layout.h, arg1, arg, EXT);
+                             frame_layout.w, frame_layout.h, arg1, arg, win->field_0C, EXT);
     }
 #endif
 }
