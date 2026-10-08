@@ -16,6 +16,7 @@
 #include "pc/text/number_width.h"
 #include "pc/cards/stars.h"
 #include "pc/cards/card_text_colors.h"
+#include "pc/cards/duel_ui.h"
 
 /* A star's second name, left out: an empty string in the names bank. */
 static const u8 no_star_name[] = {0xFF};
@@ -50,6 +51,7 @@ void func_80037DA4(DuelEffectChannel *object)
     u8 *G32 *slot;
 #ifdef MEMORIES_PC
     s32 star = 0;   /* the guardian star an icon stands for (stars.h) */
+    s32 naming = 0; /* the card's name: its letters are the card bar's "name" (duel_ui.h) */
 #endif
 
     text = (u8 *G32)(s32)object->stream_58;
@@ -76,6 +78,7 @@ void func_80037DA4(DuelEffectChannel *object)
     if (op & 0x20) {
 #ifdef MEMORIES_PC
         CardTextColors_Apply(object, CARD_TEXT_COLOR_NAME, 0);
+        naming = 1;
 #endif
 #ifdef MEMORIES_PC
         /* A card past the disc's has a name of its own, from its mod, or
@@ -187,6 +190,11 @@ void func_80037DA4(DuelEffectChannel *object)
 store:
     slot = &TEXT_STREAM_OWNER(object)->streams[object->stream_58];
     *slot = text;
+#ifdef MEMORIES_PC
+    if (naming) {
+        DuelUi_NameStream(object, 1);
+    }
+#endif
     return;
 plain:
     object->flags_34 |= 0x80;

@@ -43,4 +43,21 @@ const char *DuelUi_Label(int which);
 /* How far an element is moved this duel (rank_meter.c follows the FIELD
  * box); 0, 0 for one left alone. */
 void DuelUi_Offset(int element, int *x, int *y);
+
+/* The card bar's parts (ui_config.h, UI_PART_*): the words, numbers and
+ * icons func_80023144 has written over the bar as one text (strings 0x50
+ * to 0x55). Each glyph of a text is an entry (DuelEffectEntry) laid out
+ * once, as the text is built; a mod's parts are found there and kept in the
+ * entry's spare bytes (pad_19: the part + 1, a name letter's place), and
+ * moved, coloured or left out as func_80035E20 draws the entries, every
+ * frame. Without such a mod none of it does anything.
+ *
+ * func_80037DA4 as it gives `channel` (a DuelEffectChannel) the card's name
+ * to read (on 1), TextBox_BuildStep as a text starts again (on 0). */
+void DuelUi_NameStream(void *channel, int on);
+/* DuelEffect_AppendEntry, `entry` laid out for `channel`. */
+void DuelUi_TagEntry(void *channel, void *entry);
+/* func_80035E20, the entry's sprite placed (a GsSPRITE, its colour the
+ * text's): 1 to leave it out; else moved and coloured as its part is. */
+int DuelUi_BarEntry(DisplayObject *text, const void *entry, void *sprite);
 #endif

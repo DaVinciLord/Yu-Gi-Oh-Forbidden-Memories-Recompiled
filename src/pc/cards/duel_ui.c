@@ -6,7 +6,9 @@
  * palette at the turn, the cursor's animation -- shows through. The
  * life-point panel is one 64 x 40 sprite of both sides; it is cut into its
  * halves here, each with its own digits (Duel_DrawLifePointsAndDeckCounts
- * asks DuelUi_DrawDigits).
+ * asks DuelUi_DrawDigits). The card bar's words, numbers and icons are
+ * not the bar's but a text's, written over it: its parts are moved as
+ * that text is drawn (the end of this file).
  *
  * A mod's picture is made into 8-bit texels at the size it is drawn, and
  * again up to four times that for an internal resolution above the
@@ -14,6 +16,7 @@
  * mods' star icons: none of the duel's VRAM is touched. */
 #include "duel_ui.h"
 #include "art.h"
+#include "stars.h"
 #include "pc/mods/mods.h"
 #include "pc/platform/settings.h"
 #include "pc/platform/ui_config.h"
@@ -25,6 +28,7 @@
 #include "game/display_object_layout.h"
 #include "game/display_object_packet_submit.h"
 #include "game/display_object_render_sprite_sheet.h"
+#include "game/duel_effect.h"
 #include "game/duel_init_scene.h"
 #include "game/ordering_tables.h"
 #include "game/text_encode_decimal_digits.h"
@@ -589,4 +593,85 @@ int DuelUi_DrawDigits(int side, DisplayObject *panel, void *digit_sprite, int va
         digit->x += 8;
     }
     return 1;
+}
+
+/* --- the card bar's parts --------------------------------------------------- */
+
+/* The strings func_80023144 writes the bar with: the hand's and the
+ * field's, a monster's and another card's, with the Swords' turns and the
+ * GUARDIAN STAR line over them (0x52 to 0x55). */
+enum { BAR_TEXT_FIRST = 0x50, BAR_TEXT_LAST = 0x55 };
+/* The 8 x 8 font's sword and shield, each at the head of its row of
+ * digits (the strings' L09D3). */
+enum { SJIS_SWORD = 0x8189, SJIS_SHIELD = 0x818A };
+/* An icon past the type icons: the stars' are 0x18 to 0x21 (star + 0x17);
+ * a word is 0x17 with the card's type, 0x14 to 0x17, beside it
+ * (func_80035E20). */
+enum { STAR_ICON_FIRST = 0x18, KIND_TYPE_FIRST = 0x14 };
+
+/* Per channel: the depth of the name's stream while it is read (0 for
+ * none), and the row of the 8 x 8 font being laid out. */
+static int name_depth[DUEL_EFFECT_CHANNEL_COUNT];
+static int stats_row[DUEL_EFFECT_CHANNEL_COUNT];
+
+static int bar_text(const DuelEffectChannel *channel)
+{
+    return channel->field_36 >= BAR_TEXT_FIRST && channel->field_36 <= BAR_TEXT_LAST;
+}
+
+static int parts_on(void)
+{
+    return prepared && config->parts && in_duel();
+}
+
+void DuelUi_NameStream(void *at, int on)
+{
+    DuelEffectChannel *channel = at;
+    if (channel->index_57 >= DUEL_EFFECT_CHANNEL_COUNT) return;
+    name_depth[channel->index_57] = on ? channel->stream_58 + 1 : 0;
+    if (!on) stats_row[channel->index_57] = 0;
+}
+
+void DuelUi_TagEntry(void *at, void *added)
+{
+    DuelEffectChannel *channel = at;
+    DuelEffectEntry *entry = added;
+    int index = channel->index_57, part = -1;
+    if (!parts_on() || index >= DUEL_EFFECT_CHANNEL_COUNT || !bar_text(channel)) return;
+    if (name_depth[index] && channel->stream_58 + 1 < name_depth[index]) name_depth[index] = 0;
+    if (entry->flags_11 == 0xC0) {
+        /* The 8 x 8 font: the sword and the shield each begin their row. */
+        if (entry->code_00 == SJIS_SWORD) stats_row[index] = 1 + UI_PART_ATK;
+        else if (entry->code_00 == SJIS_SHIELD) stats_row[index] = 1 + UI_PART_DEF;
+        part = stats_row[index] - 1;
+    } else if (entry->flags_11 == 0xA0) {
+        if (entry->field_17 >= KIND_TYPE_FIRST && entry->field_10 < STAR_ICON_FIRST) part = UI_PART_KIND;
+        else if (entry->field_10 >= STAR_ICON_FIRST || (entry->code_00 & 0xFFF0) == STARS_ICON_CODE)
+            part = UI_PART_STARS;
+        else part = UI_PART_TYPE;
+    } else if (entry->flags_11 == 0x80 && name_depth[index]) {
+        part = UI_PART_NAME;
+    }
+    entry->pad_19[0] = (u8)(part + 1);
+    /* Letters since F8 07, the name's limit, just before it. */
+    entry->pad_19[1] = channel->field_60;
+}
+
+int DuelUi_BarEntry(DisplayObject *text, const void *at, void *drawn)
+{
+    const DuelEffectEntry *entry = at;
+    GsSPRITE *sprite = drawn;
+    const UiPart *part;
+    int which;
+    if (!parts_on() || text->field_67 >= DUEL_EFFECT_CHANNEL_COUNT || !bar_text(&D_800EB0F8[text->field_67]))
+        return 0;
+    which = entry->pad_19[0] - 1;
+    if (which < 0 || which >= UI_PARTS || !(part = &config->part[which])->set) return 0;
+    if (part->hidden) return 1;
+    sprite->x = (short)(sprite->x + part->x + (which == UI_PART_NAME ? part->spacing * entry->pad_19[1] : 0));
+    sprite->y = (short)(sprite->y + part->y);
+    sprite->r = tinted(sprite->r, part->tint, 16);
+    sprite->g = tinted(sprite->g, part->tint, 8);
+    sprite->b = tinted(sprite->b, part->tint, 0);
+    return 0;
 }
