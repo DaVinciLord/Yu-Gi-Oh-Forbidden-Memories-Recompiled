@@ -6,6 +6,7 @@ recompile. The existing ELF object is preserved for Linux/Windows.
 
 import hashlib
 import json
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -155,6 +156,15 @@ def link_library(folder, library_name, objects, routines, compiler, sdk, exporte
         ],
         check=True,
     )
+    # System-linked imports (e.g. sin from libSystem) are resolved by dyld,
+    # rather than the game's export table. Keep checking every lookup import.
+    rows = subprocess.check_output(["nm", "-u", "-m", str(staged)], text=True).splitlines()
+    system_imports = set()
+    for line in rows:
+        match = re.search(r' external (\S+) \(from libSystem\)$', line)
+        if match:
+            name = match.group(1)
+            system_imports.add(name[1:] if name.startswith('_') else name)
     # Mach-O prepends one underscore; preserve names beginning with one.
     imports = {
         line.strip()[1:] if line.strip().startswith("_") else line.strip()
@@ -163,7 +173,7 @@ def link_library(folder, library_name, objects, routines, compiler, sdk, exporte
         ).splitlines()
         if line.strip()
     }
-    missing = imports - exported - {"abort", "dyld_stub_binder"}
+    missing = imports - exported - system_imports - {"abort", "dyld_stub_binder"}
     if missing:
         raise SystemExit("ARM64 game does not provide: " + ", ".join(sorted(missing)))
     return staged

@@ -43,6 +43,9 @@
 #include "game/duel_screen_tables.h"
 #include "game/view_state.h"
 #include "game/main_services.h"
+#ifdef MEMORIES_TRANSLATED
+#include "game/ordering_tables.h"
+#endif
 #include "game/duel_display.h"
 #include "game/model.h"
 #include "game/card_constants.h"
@@ -58,7 +61,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef MEMORIES_TRANSLATED
 extern GsOT *D_800E9D90[4];    /* the four ordering tables of the frame */
+#endif
 extern MATRIX D_800FE148;      /* GsWSMATRIX: GsSetRefView2's world-screen matrix */
 
 static const MemoriesModHost *host;

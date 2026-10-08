@@ -59,6 +59,11 @@
 #include "game/duel_screen_tables.h"
 #include "game/view_state.h"
 #include "game/graphics_frame.h"
+#ifdef MEMORIES_TRANSLATED
+#include "game/main_services.h"
+#define ORDERING_TABLE_SLOT2_ARRAY
+#include "game/ordering_tables.h"
+#endif
 #include "game/graphics_frame_buffer.h"
 #define MODEL_SLOT_SETUP_EXPLICIT_TRANSFER_ARGS
 #include "game/model_slot_setup.h"
@@ -91,9 +96,11 @@
 #include <math.h>
 
 extern u8 D_8009B1D5;          /* the side the view belongs to */
+#ifndef MEMORIES_TRANSLATED
 extern void *D_800E9D98[];     /* D_800E9D90[2]: func_800540B4's table */
 extern GsOT *D_800E9D90[4];    /* the four ordering tables of the frame */
 extern void (*D_800E9DB0[4])(void); /* the frame service callbacks */
+#endif
 extern u32 D_800FE240;         /* GsSetWorkBase */
 
 /* One monster's private RAM. 96 sectors of model data, then the module

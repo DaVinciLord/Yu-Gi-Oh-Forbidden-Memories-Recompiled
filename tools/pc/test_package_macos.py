@@ -16,7 +16,7 @@ import zipfile
 import uuid
 
 from build_game32 import VERSION_PATTERN
-from package_macos import APP, EXECUTABLE, MINIMUM, ROOT, inspect_binary, inspect_icon
+from package_macos import APP, EXECUTABLE, MINIMUM, ROOT, inspect_binary, inspect_icon, shipped_mod_files
 
 LANGUAGES = {f'{name}.txt' for name in ('en-eu', 'fr', 'de', 'it', 'es')}
 LICENSES = {'SDL3.txt', 'libpng.txt', 'zlib.txt', 'FreeType.txt'}
@@ -84,6 +84,18 @@ def check_archive(path):
             expected.add(f'{root}/Contents/Resources/{icon_name}')
         expected |= {f'{root}/Contents/Resources/languages/{name}' for name in LANGUAGES}
         expected |= {f'{root}/Contents/Resources/licenses/{name}' for name in LICENSES}
+        mod_files = shipped_mod_files()
+        mod_paths = {str(path) for path in mod_files}
+        for relative in mod_files:
+            if relative.name == 'mod.json':
+                mod = json.loads((ROOT / relative).read_text(encoding='utf-8-sig'))
+                library = mod.get('library')
+                if library:
+                    name = library if '.' in library and not library.endswith('.o') else \
+                        (library[:-2] if library.endswith('.o') else library) + '.dylib'
+                    mod_paths.add(str(relative.parent / name))
+        expected |= {f'{root}/Contents/Resources/{name}' for name in mod_paths}
+        # codesign seals nested Mach-O libraries as well as the executable.
         assert set(names) == expected, (
             f'archive contents differ; missing={sorted(expected - set(names))}, '
             f'unexpected={sorted(set(names) - expected)}'
@@ -98,6 +110,18 @@ def check_archive(path):
 
         binary = archive.read(executable_rel)
         manifest = json.loads(archive.read(build_rel))
+        assert set(manifest.get('mod_files', {})) == mod_paths, 'bundled mod inventory differs'
+        for name in mod_paths:
+            data = archive.read(f'{root}/Contents/Resources/{name}')
+            assert hashlib.sha256(data).hexdigest() == manifest['mod_files'][name], \
+                f'bundled mod checksum differs: {name}'
+            if name.endswith('.dylib'):
+                assert struct.unpack_from('<4I', data)[:2] == (0xfeedfacf, 0x0100000c), \
+                    f'mod is not native ARM64: {name}'
+                assert struct.unpack_from('<4I', data)[3] == 6, f'mod is not a dylib: {name}'
+        for relative in mod_files:
+            assert archive.read(f'{root}/Contents/Resources/{relative}') == (ROOT / relative).read_bytes(), \
+                f'bundled mod resource differs: {relative}'
         expected_version = manifest['version'] if re.fullmatch(VERSION_PATTERN, manifest['version']) else ''
         assert manifest['game_version'] == expected_version, 'incoherent game/package version'
         assert re.fullmatch(r'[0-9a-f]{64}', manifest['build_fingerprint']), 'missing build identity'
