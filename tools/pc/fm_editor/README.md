@@ -494,7 +494,14 @@ out).
   what that menu allows), its colour and its place (**In line** puts it back
   in the column). **Menu background**, the list's first row, is the menus'
   own background, as the title's. **Spacing**, under the picture, is how far
-  apart they stand.
+  apart they stand at 100 %. Each button has a **Size**, 25 to 400 % about
+  its middle (the slider, or the mouse wheel over it on the picture: 10 % a
+  notch); **All buttons**, under the picture, sizes every one without a
+  size of its own. A bigger button takes more room, so the others stand
+  further from it, as the game stands them. The words, the frame and the
+  cursor's look grow with it, as the game draws them. A ⚠ under the form
+  says when buttons run into each other (the menu squeezed to fit the
+  screen, or a place of your own) or one reaches past the screen's edge.
 * **Duel**: the life-point panel's two halves (**Opponent's LP**, **Your
   LP**: each with its digits; **Words** in place of COM or YOU, the
   **Digits**' colour), the **FIELD box**, the **Card bar** (its colours or a
@@ -1076,6 +1083,7 @@ into isolated folders and play real duels (no changes to your saves or mods):
     xvfb-run -a python3 tests/pc/editor_values_runtime.py
     xvfb-run -a python3 tests/pc/editor_ui_runtime.py [--baseline <a build before>]
     xvfb-run -a python3 tests/pc/editor_board_runtime.py [--out DIR]
+    xvfb-run -a -s "-screen 0 1600x1000x24" python3 tests/pc/editor_menu_runtime.py [--baseline <a build before>]
 
 `editor_ui_runtime.py` makes a title, menus and duel pictures through the UI
 tab, then plays them: the title and menu with and without the mod, an added
@@ -1091,6 +1099,13 @@ and without the mod: duels begun on Normal, Forest and Wasteland, the
 camera's sweep round the board, Forest and Wasteland played mid-duel, a
 duel to its end, the effect bank still native, and the frames with the mod
 off as with no mods at all; each picture is checked by its colours.
+`editor_menu_runtime.py` sizes the menus' buttons through the Menus page
+(the game's entries, words and pictures, bigger and smaller, All buttons)
+and plays them at Internal 1x and 2x, 4:3 and widescreen: the cursor on
+every item of both menus, each item measured where the game drew it
+against the page's preview, the cursor's look about each one's middle;
+resized buttons pressed; and, given `--baseline`, the frames without the
+mod against another build's.
 
 `ritual_tributes_runtime.py` plays rituals of one to five tributes from the
 field, the hand and both, by the player and the CPU, natively and with the

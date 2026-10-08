@@ -16,8 +16,8 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from . import pngio, ui_assets as ua
-from .ui_tab import (ColourButton, as_int, colour_text, ensure, import_image, mod_image, page_layout, section, set_member,
-                     sized)
+from .ui_tab import (WARN, ColourButton, as_int, colour_text, ensure, import_image, mod_image, page_layout, section,
+                     set_member, sized)
 from .widgets import px
 
 LAYER_NAMES = ("logo", "copyright", "prompt")
@@ -32,10 +32,12 @@ ACTION_TITLES = {"back": "Back", "notice": "Show a notice", "quit": "Quit the ga
 SHOW = ["always", "press_start", "menu"]
 SHOW_TITLES = {"always": "Always", "press_start": "With PUSH START", "menu": "With a menu up"}
 # title_config.c: the entries 32 apart around y 114 (first menu) and 122 (second),
-# between y 16 and 204.
-SPACING, MIDDLES, TOP, MOST = 32, (114, 122), 16, 188
+# between y 16 and 204 (an entry's 28 rows, HALF either side, between 2 and 218).
+SPACING, MIDDLES, TOP, MOST, HALF = 32, (114, 122), 16, 188, 14
 MAX_PICTURES, MAX_LINES, MAX_BUTTONS = 8, 16, 16
 LABEL_H, LABEL_PAD, LABEL_MIN, LABEL_MAX = 28, 14, 64, 240
+# title_config.h: an item's "scale", in percent, about its middle.
+SCALE_MIN, SCALE_MAX = 25, 400
 
 
 def menu_of(item) -> int:
@@ -55,6 +57,43 @@ def allowed(action, menu: int) -> bool:
         return True
     index = ENTRY_NAMES.index(action) if action in ENTRY_NAMES else -1
     return index < 5 if menu == 0 else index >= 5
+
+
+def a_scale(value) -> bool:
+    """A "scale" title_config.c takes: a whole number from 25 to 400."""
+    return isinstance(value, int) and not isinstance(value, bool) and SCALE_MIN <= value <= SCALE_MAX
+
+
+def cdiv(a: int, b: int) -> int:
+    """a / b as C divides: toward 0."""
+    q = abs(a) // abs(b)
+    return q if (a >= 0) == (b > 0) else -q
+
+
+def scaled(d: int, scale: int) -> int:
+    """title_menu.c scaled(): d * scale / 100, rounded half away from 0."""
+    t = d * scale
+    return (t + 50) // 100 if t >= 0 else -((-t + 50) // 100)
+
+
+def opaque(image: pngio.Image) -> tuple:
+    """(x0, y0, x1, y1) of the picture's drawn texels (alpha above 0), its
+    whole when it has none."""
+    key = (image.width, image.height, hash(image.rgba))
+    if key not in _opaque:
+        if len(_opaque) > 400:
+            _opaque.clear()
+        alpha = image.rgba[3::4]
+        rows = [y for y in range(image.height) if any(alpha[y * image.width:(y + 1) * image.width])]
+        if not rows:
+            _opaque[key] = (0, 0, image.width, image.height)
+        else:
+            columns = [x for x in range(image.width) if any(alpha[x::image.width])]
+            _opaque[key] = (columns[0], rows[0], columns[-1] + 1, rows[-1] + 1)
+    return _opaque[key]
+
+
+_opaque = {}
 
 
 def fit(width: int, height: int, max_w: int, max_h: int, want_w=0, want_h=0, guess_h=None):
@@ -148,27 +187,47 @@ class Scene:
             shown = [i for i in listed if i["entry"]]
         return [(i, i in shown) for i in listed]
 
+    def menu_scale(self) -> int:
+        """The menu's "scale": every item's without its own (100)."""
+        return self.menu["scale"] if a_scale(self.menu.get("scale")) else 100
+
+    def scale(self, item) -> int:
+        """An item's size in percent: its own "scale", else the menu's."""
+        return item["scale"] if a_scale(item.get("scale")) else self.menu_scale()
+
     def places(self, menu: int) -> dict:
-        """Each shown item's middle (x, y), as stack() puts them."""
+        """Each shown item's middle (x, y), as stack() puts them: `spacing`
+        apart at 100, each taking room as its size."""
         shown = [i for i, on in self.order(menu) if on]
         spacing = as_int(self.menu.get("spacing"), as_int(self.title.get("spacing"), SPACING))
         count = len(shown)
-        if count > 1 and (count - 1) * spacing > MOST:
-            spacing = MOST // (count - 1)
-        first = MIDDLES[menu] - (count - 1) * spacing // 2
-        first = max(first, TOP)
-        if first + (count - 1) * spacing > TOP + MOST:
-            first = TOP + MOST - (count - 1) * spacing
+        scales = [self.scale(i) for i in shown]
+        reach = [0]
+        for a, b in zip(scales, scales[1:]):
+            reach.append(reach[-1] + a + b)
+        # The ends: an entry's 28 rows between y 2 and 218, moved by the
+        # first's and the last's size.
+        top, most = TOP, MOST
+        if count:
+            top = TOP - HALF + (HALF * scales[0] + 50) // 100
+            most = TOP + MOST + HALF - (HALF * scales[-1] + 50) // 100 - top
+        if count > 1 and cdiv(spacing * reach[-1], 200) > most:
+            spacing = cdiv(most * 200, reach[-1])
+        total = cdiv(spacing * reach[-1], 200) if count > 1 else 0
+        first = MIDDLES[menu] - cdiv(total, 2)
+        first = max(first, top)
+        if first + total > top + most:
+            first = top + most - total
         out = {}
         for row, item in enumerate(shown):
-            y = as_int(item.get("y"), first + row * spacing) if "y" in item else first + row * spacing
+            at = first + cdiv(spacing * reach[row], 200)
+            y = as_int(item.get("y"), at) if "y" in item else at
             out[item["name"]] = (160 + as_int(item.get("x")), y)
         return out
 
 
-def label_button(text: str, selected: bool) -> pngio.Image:
-    """menu_label.c's frame for a label, at the console's size, the words
-    left to the canvas (drawn over it in Times): (picture, width)."""
+def label_width(text: str) -> int:
+    """menu_label.c's width for a label's frame at 100."""
     import tkinter.font as tkfont
     try:
         font = tkfont.Font(family="Times", size=-17, weight="bold")
@@ -176,7 +235,13 @@ def label_button(text: str, selected: bool) -> pngio.Image:
     except tk.TclError:
         words = 8 * len(text)
     w = max(LABEL_MIN, min(LABEL_MAX, words + 2 * LABEL_PAD))
-    w = (w + 1) & ~1
+    return (w + 1) & ~1
+
+
+def label_button(text: str, selected: bool) -> pngio.Image:
+    """menu_label.c's frame for a label, at the console's size, the words
+    left to the canvas (drawn over it in Times)."""
+    w = label_width(text)
     h = LABEL_H
     rgba = bytearray(w * h * 4)
 
@@ -201,6 +266,87 @@ def label_button(text: str, selected: bool) -> pngio.Image:
     return pngio.Image(w, h, bytes(rgba))
 
 
+def item_look(scene: Scene, item: dict, selected: bool, title_art):
+    """An item as the game draws it, at its size ("scale", about its
+    middle): (picture, left, top, words) with left, top from its middle and
+    words (text, colour, size, shadow) for a label, drawn over it; None
+    for an entry without the disc's pictures."""
+    scale = scene.scale(item)
+    tint = ua.parse_colour(item.get("tint"))
+    name = item.get("selected_image" if selected else "image")
+    image = mod_image(scene.project, name) if name else None
+    if selected and image is None and item.get("image"):
+        image = mod_image(scene.project, item.get("image"))
+        level = 255
+    else:
+        level = 255 if selected or item.get("selected_image") or not item.get("image") else 0x60 * 255 // 0x80
+    if image is not None:
+        # title_images.c: its size at 100 (measure()), then at its scale.
+        w, h = fit(image.width, image.height, 256, 64, as_int(item.get("width")), as_int(item.get("height")),
+                   guess_h=32)
+        w, h = max(1, (w * scale + 50) // 100), max(1, (h * scale + 50) // 100)
+        return ua.tint(sized(image, w, h), tint, level), -(w // 2), -(h // 2), None
+    if isinstance(item.get("label"), str) and item["label"] or not item["entry"]:
+        text = item.get("label") or item["name"].split(":", 1)[-1]
+        frame = label_button(text, selected)
+        w, h = max(1, (frame.width * scale + 50) // 100), max(1, (frame.height * scale + 50) // 100)
+        level = 255 if selected else 0x60 * 255 // 0x80
+        ink = "#e0f8d8" if selected else "#b0b0b0"
+        return (ua.tint(sized(frame, w, h), tint, level), -(w // 2), -(h // 2),
+                (text, ink, 17 * scale / 100, not selected))
+    if not title_art.ok:
+        return None
+    if scale == 100:
+        picture, dx, dy = title_art.entry(item["index"], selected)
+        return ua.tint(picture, tint), dx, dy, None
+    return (ua.tint(sized_entry(title_art, item["index"], selected, scale), tint),
+            scaled(min(p[0] for p in ua.ENTRY_SPRITES[item["index"]][1 if selected else 0]), scale),
+            scaled(min(p[1] for p in ua.ENTRY_SPRITES[item["index"]][1 if selected else 0]), scale), None)
+
+
+def sized_entry(title_art, index: int, selected: bool, scale: int) -> pngio.Image:
+    """An entry of the game's at `scale`, as title_menu.c draws it: each of
+    its sprites scaled about the entry's middle, its edges rounded there."""
+    parts = ua.ENTRY_SPRITES[index][1 if selected else 0]
+    left = scaled(min(p[0] for p in parts), scale)
+    top = scaled(min(p[1] for p in parts), scale)
+    right = max(scaled(p[0] + p[2], scale) for p in parts)
+    bottom = max(scaled(p[1] + p[3], scale) for p in parts)
+    out = ua.blank(right - left, bottom - top)
+    for dx, dy, w, h, u, v in parts:
+        piece = title_art.vram.sprite(512, 256, 8, 0, 240, u, v, w, h)
+        x0, y0 = scaled(dx, scale), scaled(dy, scale)
+        size = (max(1, scaled(dx + w, scale) - x0), max(1, scaled(dy + h, scale) - y0))
+        out = ua.paste(out, pngio.scale_to(piece, *size), x0 - left, y0 - top)
+    return out
+
+
+def menu_warnings(scene: Scene, menu: int, boxes: dict) -> dict:
+    """What can look off in a menu as drawn (boxes: TitleCanvas.item_boxes):
+    for each item, its lines -- running into another item, or past the
+    screen's edge."""
+    out = {}
+    titles = {}
+    for item, shown in scene.order(menu):
+        titles[item["name"]] = item.get("label") or (ENTRY_TITLES[item["index"]] if item["entry"] else
+                                                     item["name"].split(":", 1)[-1])
+    names = list(boxes)
+    for name in names:
+        x, y, w, h = boxes[name]
+        lines = []
+        for other in names:
+            if other == name:
+                continue
+            ox, oy, ow, oh = boxes[other]
+            if x < ox + ow and ox < x + w and y < oy + oh and oy < y + h:
+                lines.append(f"runs into {titles.get(other, other)}")
+        if x < 0 or y < 0 or x + w > 320 or y + h > 240:
+            lines.append("reaches past the edge of the screen (cut off there)")
+        if lines:
+            out[name] = lines
+    return out
+
+
 class TitleCanvas:
     """Draws a Scene on a Stage: the title, or a menu up with an item
     chosen. Keys: "background", a layer's name, ("picture", i),
@@ -208,6 +354,7 @@ class TitleCanvas:
 
     def __init__(self, tab, stage: Stage):
         self.tab, self.stage = tab, stage
+        self.item_boxes = {}
 
     def draw(self, scene: Scene, menu=None, cursor=None, chosen=None):
         stage = self.stage
@@ -305,40 +452,34 @@ class TitleCanvas:
         return out
 
     def draw_menu(self, scene: Scene, menu: int, cursor, title_art):
+        """The menu's items at their places and sizes; self.item_boxes gets
+        each one's drawn box (what of it shows) in the game's pixels."""
         stage = self.stage
         places = scene.places(menu)
+        self.item_boxes = {}
         for item, shown in scene.order(menu):
             if not shown:
                 continue
             x, y = places[item["name"]]
             selected = item["name"] == cursor
-            tint = ua.parse_colour(item.get("tint"))
             key = ("item", item["name"])
-            image = mod_image(scene.project, item.get("selected_image" if selected else "image")) \
-                if item.get("selected_image" if selected else "image") else None
-            if selected and image is None and item.get("image"):
-                image = mod_image(scene.project, item.get("image"))
-                level = 255
-            else:
-                level = 255 if selected or item.get("selected_image") or not item.get("image") else 0x60 * 255 // 0x80
-            if image is not None:
-                w, h = fit(image.width, image.height, 256, 64, as_int(item.get("width")), as_int(item.get("height")),
-                           guess_h=32)
-                stage.picture(key, ua.tint(sized(image, w, h), tint, level), x - w // 2, y - h // 2)
-            elif isinstance(item.get("label"), str) and item["label"] or not item["entry"]:
-                text = item.get("label") or item["name"].split(":", 1)[-1]
-                frame = label_button(text, selected)
-                level = 255 if selected else 0x60 * 255 // 0x80
-                stage.picture(key, ua.tint(frame, tint, level), x - frame.width // 2, y - frame.height // 2)
-                ink = "#e0f8d8" if selected else "#b0b0b0"
-                stage.text(None, x, y, text, ink, 17, anchor="center", font_family="Times", drag=False,
-                           shadow=not selected)
-            elif title_art.ok:
-                picture, dx, dy = title_art.entry(item["index"], selected)
-                stage.picture(key, ua.tint(picture, tint), x + dx, y + dy)
-            else:
-                stage.rectangle(key, x - 48, y - 14, 96, 28, fill="#28201f", outline="#606008", drag=True)
-                stage.text(None, x, y, ENTRY_TITLES[item["index"]], "#ddd", 12, anchor="center", drag=False)
+            drawn = item_look(scene, item, selected, title_art)
+            if drawn is None:
+                scale = scene.scale(item)
+                box = (x + scaled(-48, scale), y + scaled(-14, scale), scaled(96, scale), scaled(28, scale))
+                stage.rectangle(key, *box, fill="#28201f", outline="#606008", drag=True)
+                stage.text(None, x, y, ENTRY_TITLES[item["index"]], "#ddd", 12 * scale / 100, anchor="center",
+                           drag=False)
+                self.item_boxes[item["name"]] = box
+                continue
+            picture, left, top, words = drawn
+            stage.picture(key, picture, x + left, y + top)
+            if words:
+                text, ink, size, shadow = words
+                stage.text(None, x, y, text, ink, size, anchor="center", font_family="Times", drag=False,
+                           shadow=shadow)
+            x0, y0, x1, y1 = opaque(picture)
+            self.item_boxes[item["name"]] = (x + left + x0, y + top + y0, x1 - x0, y1 - y0)
 
     def draw_text(self, scene: Scene, menu):
         lines = scene.title.get("text")
@@ -1017,7 +1158,7 @@ class MenuPage(ttk.Frame):
         self.chosen = "new_game"
         self.loading = False
         page_layout(self, self.draw, columns=(("#0", "Button", 190), ("does", "Does", 150)), list_height=7,
-                    on_select=self.select_stage, on_move=self.moved, on_drag=self.dragging)
+                    on_select=self.select_stage, on_move=self.moved, on_drag=self.dragging, on_wheel=self.wheel)
         self.canvas = TitleCanvas(tab, self.stage)
         ttk.Label(self.view.tools, text="Spacing").pack(side="left", padx=(0, 4))
         self.spacing = tk.StringVar()
@@ -1025,6 +1166,18 @@ class MenuPage(ttk.Frame):
                               command=self.spaced)
         spacing.pack(side="left")
         spacing.bind("<Return>", lambda e: self.spaced())
+        # Every item's size but those with their own (the menu's "scale").
+        ttk.Label(self.view.tools, text="All buttons").pack(side="left", padx=(12, 4))
+        self.all_scale = tk.StringVar()
+        self.all_slider = ttk.Scale(self.view.tools, from_=SCALE_MIN, to=SCALE_MAX, length=px(self, 110),
+                                    command=lambda v: self.all_slid(v))
+        self.all_slider.pack(side="left")
+        all_box = ttk.Spinbox(self.view.tools, from_=SCALE_MIN, to=SCALE_MAX, increment=5, width=4,
+                              textvariable=self.all_scale, command=self.all_typed)
+        all_box.pack(side="left", padx=(4, 0))
+        all_box.bind("<Return>", lambda e: self.all_typed())
+        all_box.bind("<FocusOut>", lambda e: self.all_typed())
+        ttk.Label(self.view.tools, text="%").pack(side="left")
         ttk.Button(self.list_tools, text="\u25b2", width=3, command=lambda: self.move(-1)).pack(side="left")
         ttk.Button(self.list_tools, text="\u25bc", width=3, command=lambda: self.move(1)).pack(side="left",
                                                                                             padx=(2, 8))
@@ -1038,8 +1191,11 @@ class MenuPage(ttk.Frame):
         self.item_form = self.make_item_form(self.form_box)
         self.background = BackgroundForm(self.form_box, self, menu=True)
         self.background.columnconfigure(0, minsize=px(self, 110))
+        # What can look off with the sizes and places set (menu_warnings()).
+        self.warning = ttk.Label(self.side, style="Warning.TLabel", wraplength=px(self, 440), justify="left")
+        self.warning.grid(row=5, column=0, sticky="w", pady=(8, 0))
         self.status = ttk.Label(self.side, style="Hint.TLabel", wraplength=px(self, 440), justify="left")
-        self.status.grid(row=5, column=0, sticky="w", pady=(8, 0))
+        self.status.grid(row=6, column=0, sticky="w", pady=(6, 0))
 
     @property
     def project(self):
@@ -1054,7 +1210,8 @@ class MenuPage(ttk.Frame):
 
     def make_item_form(self, parent):
         frame = ttk.Frame(parent)
-        self.item_vars = {key: tk.StringVar() for key in ("label", "notice_title", "notice", "value", "x", "y")}
+        self.item_vars = {key: tk.StringVar() for key in ("label", "notice_title", "notice", "value", "x", "y",
+                                                          "scale")}
         frame.columnconfigure(0, minsize=px(frame, 110))
         row = 0
 
@@ -1096,7 +1253,18 @@ class MenuPage(ttk.Frame):
         y.pack(side="left")
         ttk.Button(places, text="In line", command=self.in_line).pack(side="left", padx=(6, 0))
         line("Middle at", places)
-        for widget, key in ((label, "label"), (x, "x"), (y, "y"), (self.value_box, "value")):
+        sizes = ttk.Frame(frame)
+        self.scale_slider = ttk.Scale(sizes, from_=SCALE_MIN, to=SCALE_MAX, length=px(frame, 150),
+                                      command=self.slid)
+        self.scale_slider.pack(side="left")
+        scale = ttk.Spinbox(sizes, from_=SCALE_MIN, to=SCALE_MAX, increment=5, width=4,
+                            textvariable=self.item_vars["scale"], command=lambda: self.item_typed("scale"))
+        scale.pack(side="left", padx=(6, 0))
+        ttk.Label(sizes, text="%").pack(side="left")
+        self.scale_note = ttk.Label(sizes, style="Hint.TLabel")
+        self.scale_note.pack(side="left", padx=(6, 0))
+        line("Size", sizes)
+        for widget, key in ((label, "label"), (x, "x"), (y, "y"), (self.value_box, "value"), (scale, "scale")):
             widget.bind("<Return>", lambda e, k=key: self.item_typed(k))
             widget.bind("<FocusOut>", lambda e, k=key: self.item_typed(k))
         for child in notice.winfo_children():
@@ -1165,6 +1333,31 @@ class MenuPage(ttk.Frame):
                                                               cursor=self.chosen, chosen=chosen))
         spacing = as_int(scene.menu.get("spacing"), as_int(scene.title.get("spacing"), SPACING))
         self.spacing.set(str(spacing))
+        self.all_scale.set(str(scene.menu_scale()))
+        self.loading, held = True, self.loading
+        self.all_slider.set(scene.menu_scale())
+        self.loading = held
+        self.warn()
+
+    def warn(self):
+        """The chosen item's rough edges in the menu drawn, and the others'."""
+        if self.project is None or self.tab.comparing:
+            self.warning.configure(text="")
+            return
+        scene = self.scene()
+        # Not the logo or the copyright line: the game's own menus stand
+        # over both (SAVE over the copyright line).
+        found = menu_warnings(scene, self.menu.get(), self.canvas.item_boxes)
+        titles = {item["name"]: item.get("label") or (ENTRY_TITLES[item["index"]] if item["entry"] else
+                                                      self.short(item["name"]))
+                  for item, _ in scene.order(self.menu.get())}
+        lines = [WARN + line[0].upper() + line[1:] for line in found.get(self.chosen, [])]
+        rest = [titles.get(name, name) for name in found if name != self.chosen]
+        if rest:
+            lines.append(WARN + "Also: " + ", ".join(rest) + (" runs into something or past the screen's edge"
+                                                              if len(rest) == 1 else
+                                                              " run into something or past the screen's edge"))
+        self.warning.configure(text="\n".join(lines))
 
     def fill_list(self):
         """The menu background, then both menus' items in their order: the
@@ -1276,6 +1469,10 @@ class MenuPage(ttk.Frame):
         place = self.scene().places(menu).get(item["name"])
         self.item_vars["x"].set(str(as_int(item.get("x"))))
         self.item_vars["y"].set(str(as_int(item.get("y"))) if "y" in item else str(place[1]) if place else "")
+        scale = self.scene().scale(item)
+        self.item_vars["scale"].set(str(scale))
+        self.scale_slider.set(scale)
+        self.scale_note.configure(text="" if a_scale(item.get("scale")) else "all buttons'")
         self.hide_button.configure(text="Show" if item.get("hide") is True else "Hide")
         self.remove_button.state(["disabled"] if item.get("entry") or not item.get("own", True) else ["!disabled"])
         self.status.configure(text="")
@@ -1310,8 +1507,74 @@ class MenuPage(ttk.Frame):
                 return
             if key == "y":
                 target["y"] = value
+            elif key == "scale":
+                self.sized(target, value)
             else:
                 set_member(target, key, value, 0)
+        self.edited()
+
+    def sized(self, target: dict, value: int):
+        """An item's own size, or none when it is the menu's."""
+        value = max(SCALE_MIN, min(SCALE_MAX, value))
+        set_member(target, "scale", value, self.scene().menu_scale())
+
+    def slid(self, value):
+        if self.loading or self.chosen == "background" or self.project is None:
+            return
+        value = int(round(float(value)))
+        if value == self.scene().scale(self.item() or {}):
+            return
+        self.item_vars["scale"].set(str(value))
+        self.sized(self.target(), value)
+        self.scale_note.configure(text="" if a_scale(self.target().get("scale")) else "all buttons'")
+        self.edited(redraw_form=False)
+
+    def wheel(self, key, step):
+        """The mouse wheel over an item: 10 % bigger or smaller."""
+        if self.project is None or not (isinstance(key, tuple) and key[0] == "item"):
+            return
+        self.chosen = key[1]
+        item = self.item()
+        if item is None:
+            return
+        self.sized(self.target(), self.scene().scale(item) + 10 * step)
+        self.edited()
+        self.list.show(self.chosen)
+
+    def set_all(self, value: int):
+        """The menu's "scale": every item's but those with their own."""
+        value = max(SCALE_MIN, min(SCALE_MAX, value))
+        menu = ensure(self.project, "menu")
+        set_member(menu, "scale", value, 100)
+        # An item at the new size needs none of its own.
+        held = [menu.get("entries"), section(self.project, "title").get("entries")]
+        places = [v for d in held if isinstance(d, dict) for v in d.values()]
+        places += menu.get("buttons") if isinstance(menu.get("buttons"), list) else []
+        for target in places:
+            if isinstance(target, dict) and target.get("scale") == value:
+                target.pop("scale")
+
+    def all_slid(self, value):
+        if self.loading or self.project is None:
+            return
+        value = int(round(float(value)))
+        if value == self.scene().menu_scale():
+            return
+        self.all_scale.set(str(value))
+        self.set_all(value)
+        self.edited()
+
+    def all_typed(self):
+        if self.loading or self.project is None:
+            return
+        try:
+            value = int(self.all_scale.get().strip() or 100)
+        except ValueError:
+            self.status.configure(text="A whole number.")
+            return
+        if value == self.scene().menu_scale():
+            return
+        self.set_all(value)
         self.edited()
 
     def set_action(self):
