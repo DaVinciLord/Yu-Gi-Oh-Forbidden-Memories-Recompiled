@@ -331,6 +331,38 @@ static void widescreen(void)
     CHECK(notes == 1 && strstr(note, "unknown key \"wide_imag\""));
 }
 
+/* "images": pictures of the mods' own, adding up across mods, each centred
+ * at its x and y (160, 120 unless given). */
+static void added_pictures(void)
+{
+    const TitleConfig *config = one("{\"title\": {\"images\": [{\"image\": \"art/seal.png\", \"x\": 40, \"y\": 30,"
+                                    " \"width\": 64, \"tint\": \"#FF8000\", \"show\": \"menu\", \"wide_x\": -10},"
+                                    " {\"image\": \"art/b.png\"}]}}");
+    CHECK(notes == 0);
+    CHECK(config->pictures == 2);
+    CHECK(!strcmp(config->picture[0].image.file, "/mods/test/art/seal.png") && config->picture[0].image.width == 64);
+    CHECK(config->picture[0].x == 40 && config->picture[0].y == 30 && config->picture[0].tint == 0xFF8000);
+    CHECK(config->picture[0].show == TITLE_SHOW_MENU && config->picture[0].wide.set_x && config->picture[0].wide.x == -10);
+    CHECK(config->picture[1].x == 160 && config->picture[1].y == 120 && config->picture[1].tint == 0xFFFFFF);
+    CHECK(config->picture[1].show == TITLE_SHOW_ALWAYS);
+    /* A second mod's add to the first's. */
+    add_as("other", "{\"title\": {\"images\": [{\"image\": \"c.png\", \"y\": 200}]}}");
+    CHECK(config->pictures == 3 && config->picture[2].y == 200);
+    /* Mistakes: no image, outside the mod, an unknown key, a bad show, too many. */
+    one("{\"title\": {\"images\": [{\"x\": 3}]}}");
+    CHECK(notes == 1 && TitleConfig_Get()->pictures == 0);
+    one("{\"title\": {\"images\": [{\"image\": \"../x.png\"}]}}");
+    CHECK(notes == 1 && TitleConfig_Get()->pictures == 0);
+    one("{\"title\": {\"images\": [{\"image\": \"a.png\", \"spin\": 1, \"show\": \"never\"}]}}");
+    CHECK(notes == 2 && TitleConfig_Get()->pictures == 1);
+    one("{\"title\": {\"images\": [{\"image\": \"1.png\"}, {\"image\": \"2.png\"}, {\"image\": \"3.png\"},"
+        " {\"image\": \"4.png\"}, {\"image\": \"5.png\"}, {\"image\": \"6.png\"}, {\"image\": \"7.png\"},"
+        " {\"image\": \"8.png\"}, {\"image\": \"9.png\"}]}}");
+    CHECK(notes == 1 && TitleConfig_Get()->pictures == TITLE_MAX_PICTURES);
+    one("{\"title\": {\"images\": {\"image\": \"a.png\"}}}");
+    CHECK(notes == 1 && TitleConfig_Get()->pictures == 0);
+}
+
 int main(void)
 {
     retail();
@@ -344,6 +376,7 @@ int main(void)
     buttons_across_mods();
     menu_background();
     widescreen();
+    added_pictures();
     while (document_count) Json_Free(documents[--document_count]);
     printf("title config: ok\n");
     return 0;

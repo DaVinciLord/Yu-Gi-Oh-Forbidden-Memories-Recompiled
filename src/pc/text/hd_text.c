@@ -32,6 +32,7 @@
 #include "pc/cards/art.h"
 #include "pc/cards/cards.h"
 #include "pc/cards/tables.h"
+#include "pc/cards/duel_ui.h"
 #include "pc/saves/save_slots.h"
 #include "game/save_data.h"
 #include <ft2build.h>
@@ -39,6 +40,7 @@
 #include FT_OUTLINE_H
 #include FT_BBOX_H
 #include <ctype.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -1609,7 +1611,7 @@ static const struct {
 } name_boxes[2] = {{1, 9, 0, 3, 64}, {2, 21, 24, 0, 64}};
 static int name_duelist, name_width[2];
 static unsigned name_made[2];
-static char name_player[16];
+static char name_player[16], name_opponent[64];
 
 /* The player's name as the save has it (SaveSlots_StateName), else You. */
 const char *HdText_PlayerName(void)
@@ -1706,6 +1708,12 @@ int HdText_NameBox(int wanted, int which, int *atlas_u, int *atlas_v, int *x, in
     const uint16_t *words = SoftGpu_Vram();
     int duelist = Tables_OpponentId();
     const char *name = Text_OpponentName(duelist);
+    /* A mod's "ui" may put words of its own in place of COM or YOU
+     * (pc/cards/duel_ui.h); without View > Opponent's name for COM only
+     * those show. */
+    const char *label = which >= 0 && which <= 1 ? DuelUi_Label(which) : NULL;
+    if (!label && !Settings_Get(SET_OPPONENT_NAME)) return 0;
+    if (label && !which) name = label;
     if (!name || which < 0 || which > 1 || wanted < 1 || wanted > MAX_FACTOR || !words ||
         panel_sum(words) != PANEL_SUM) {
         return 0;
@@ -1715,8 +1723,12 @@ int HdText_NameBox(int wanted, int which, int *atlas_u, int *atlas_v, int *x, in
         name_duelist = duelist;
         name_made[0] = name_made[1] = 0;
     }
+    if (!which && strncmp(name_opponent, name, sizeof(name_opponent) - 1)) {
+        snprintf(name_opponent, sizeof(name_opponent), "%s", name);
+        name_made[0] = 0;
+    }
     if (which) {
-        const char *player = HdText_PlayerName();
+        const char *player = label ? label : HdText_PlayerName();
         if (strcmp(name_player, player)) {
             strcpy(name_player, player);
             name_made[1] = 0;
@@ -1724,7 +1736,7 @@ int HdText_NameBox(int wanted, int which, int *atlas_u, int *atlas_v, int *x, in
     }
     if (name_made[which] != generation) {
         name_made[which] = generation;
-        if (!make_name(words, which ? name_player : name, which, &name_width[which])) name_width[which] = 0;
+        if (!make_name(words, which ? name_player : name_opponent, which, &name_width[which])) name_width[which] = 0;
     }
     if (!name_width[which]) return 0;
     *atlas_u = name_boxes[which].column * CELL;
@@ -1746,7 +1758,12 @@ const uint8_t *HdText_NamePixels(int which, int *x, int *y, int *width, int *hei
 
 int HdText_NameEnabled(void)
 {
-    return Settings_Get(SET_OPPONENT_NAME) != 0;
+    return Settings_Get(SET_OPPONENT_NAME) != 0 || DuelUi_Label(0) || DuelUi_Label(1);
+}
+
+int HdText_PanelCut(void)
+{
+    return DuelUi_PanelCut();
 }
 
 int HdText_HudEnabled(void)
@@ -1760,13 +1777,19 @@ int HdText_Hud(int depth, int page_x, int page_y, int clut_x, int clut_y, int u,
     const uint16_t *words = SoftGpu_Vram();
     unsigned i;
     if (wanted < 2 || wanted > MAX_FACTOR || !words || w < 1 || h < 1) return 0;
-    /* The whole panel, or its right half: a mod's "limits" past 9999 LP draw
-     * that half again beside a copy to widen it (duel_draw_status_numbers.c,
-     * LIFE_POINT_PANEL_SPLIT), and it must come from the same picture as the
-     * rest. Only that half: no other sprite of the panel's texels changes. */
+    /* The whole panel or a piece of it: a mod's "limits" past 9999 LP draw
+     * its right half again beside a copy to widen it
+     * (duel_draw_status_numbers.c, LIFE_POINT_PANEL_SPLIT), and a mod's "ui"
+     * draws its top and bottom halves apart (pc/cards/duel_ui.c); each must
+     * come from the same picture as the rest. Without that mod, only the
+     * whole and that right half: no other sprite of the panel's texels
+     * changes. */
     if (!depth && page_x == PANEL_PAGE_X && page_y == PANEL_PAGE_Y &&
-        (clut_x == PANEL_CLUT_X || clut_x == PANEL_CLUT_X_TURN) && clut_y == PANEL_CLUT_Y && v == PANEL_V &&
-        h == PANEL_H && ((u == PANEL_U && w == PANEL_W) || (u == PANEL_U + PANEL_SPLIT && w == PANEL_W - PANEL_SPLIT))) {
+        (clut_x == PANEL_CLUT_X || clut_x == PANEL_CLUT_X_TURN) && clut_y == PANEL_CLUT_Y &&
+        (DuelUi_PanelCut() ? u >= PANEL_U && v >= PANEL_V && u + w <= PANEL_U + PANEL_W && v + h <= PANEL_V + PANEL_H
+                           : v == PANEL_V && h == PANEL_H &&
+                                 ((u == PANEL_U && w == PANEL_W) ||
+                                  (u == PANEL_U + PANEL_SPLIT && w == PANEL_W - PANEL_SPLIT)))) {
         if (panel_sum(words) != PANEL_SUM) return 0;
         if (wanted != factor && !make_atlas(wanted)) return 0;
         if (panel_made != generation) {

@@ -40,6 +40,10 @@ static const struct { int x, y, clut_y, max_w, max_h; } fixed[TITLE_IMAGE_ITEMS]
     {0, 256, 506, TITLE_WIDE_WIDTH, 240},      /* the menus', widescreen */
 };
 enum { CLUT_X = 768, STRIP = 128, ITEM_MAX_W = 256, ITEM_MAX_H = 64, ITEM_GUESS_H = 32, SHARED_WORDS = 224 };
+/* An added picture ("images") at most this size: what the widest region
+ * below holds without the backgrounds (448 texels), and the screen's
+ * height. Without them a picture fits in 192 texels across. */
+enum { PICTURE_MAX_W = 320, PICTURE_MAX_H = 240 };
 
 /* The items' pictures go where the others leave room: beside the logo in
  * the movie's picture, and right of the copyright line, and in the
@@ -80,8 +84,9 @@ static int resident = -1;
  * logo lands at the console's size). Even across: two texels a word. */
 static void measure(int which, const TitleImage *image, int png_w, int png_h, int *w, int *h)
 {
-    int factor = 1, max_w = which < TITLE_IMAGE_ITEMS ? fixed[which].max_w : ITEM_MAX_W;
-    int max_h = which < TITLE_IMAGE_ITEMS ? fixed[which].max_h : ITEM_MAX_H;
+    int picture = which >= TITLE_IMAGE_PICTURES;
+    int factor = 1, max_w = which < TITLE_IMAGE_ITEMS ? fixed[which].max_w : picture ? PICTURE_MAX_W : ITEM_MAX_W;
+    int max_h = which < TITLE_IMAGE_ITEMS ? fixed[which].max_h : picture ? PICTURE_MAX_H : ITEM_MAX_H;
     if (TitleImages_IsBackground(which)) {
         *w = max_w;
         *h = 240;
@@ -99,7 +104,7 @@ static void measure(int which, const TitleImage *image, int png_w, int png_h, in
     } else {
         /* An item's is taken for one drawn at a whole multiple of the
          * retail entries' size, 28 rows (up to ITEM_GUESS_H). */
-        int guess_h = which < TITLE_IMAGE_ITEMS ? max_h : ITEM_GUESS_H;
+        int guess_h = which < TITLE_IMAGE_ITEMS || picture ? max_h : ITEM_GUESS_H;
         while (png_w / factor > max_w || png_h / factor > guess_h) factor++;
         *w = png_w / factor;
         *h = png_h / factor;
@@ -245,6 +250,21 @@ void TitleImages_Prepare(const TitleConfig *config)
             cluts++;
             picture->ready = 1;
         }
+    }
+    /* The added pictures where the items leave room, after them: the
+     * menus come first. */
+    for (i = 0; i < config->pictures; i++) {
+        const TitlePicture *added = &config->picture[i];
+        Picture *picture = &pictures[TITLE_IMAGE_PICTURE(i)];
+        if (!make(TITLE_IMAGE_PICTURE(i), &added->image)) continue;
+        if (cluts == ITEM_CLUTS || !place(shelves, usable, picture->width, picture->height, &picture->x, &picture->y)) {
+            Mods_Note(added->image.mod, "title: no room left for the picture %s", added->image.file);
+            continue;
+        }
+        picture->clut_x = item_cluts[cluts].x;
+        picture->clut_y = item_cluts[cluts].y;
+        cluts++;
+        picture->ready = 1;
     }
     /* A picture made just now is known by its bytes only once the packs
      * have sorted it in, which they do between frames: now, before the

@@ -155,7 +155,23 @@
             {
                 "text": "Beta"
             }
+        ],
+        "images": [
+            {
+                "image": "eye.png"
+            }
         ]
+    },
+    "ui": {
+        "duel": {
+            "lp_player": {
+                "x": -20,
+                "tint": "#FF0000"
+            },
+            "field": {
+                "hide": true
+            }
+        }
     },
     "menu": {
         "buttons": [

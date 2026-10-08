@@ -5,14 +5,17 @@
  * game's; the menus' background; the two backgrounds' widescreen pictures,
  * TITLE_WIDE_WIDTH across; and the menus' items drawn by the port, a
  * mod's PNG or a button of words (menu_label.h), each as it is and with the
- * cursor on it. */
+ * cursor on it; and the pictures a mod adds ("images"). */
 #include "title_config.h"
 
 enum { TITLE_IMAGE_BACKGROUND, TITLE_IMAGE_LOGO, TITLE_IMAGE_COPYRIGHT, TITLE_IMAGE_PROMPT,
        TITLE_IMAGE_MENU_BACKGROUND, TITLE_IMAGE_WIDE_BACKGROUND, TITLE_IMAGE_WIDE_MENU_BACKGROUND, TITLE_IMAGE_ITEMS,
-       TITLE_IMAGES = TITLE_IMAGE_ITEMS + 2 * TITLE_ITEMS };
+       TITLE_IMAGE_PICTURES = TITLE_IMAGE_ITEMS + 2 * TITLE_ITEMS,
+       TITLE_IMAGES = TITLE_IMAGE_PICTURES + TITLE_MAX_PICTURES };
 /* Item `i`'s picture, as it is or with the cursor on it. */
 #define TITLE_IMAGE_ITEM(i, selected) (TITLE_IMAGE_ITEMS + 2 * (i) + ((selected) ? 1 : 0))
+/* The title's added picture `i` ("images"). */
+#define TITLE_IMAGE_PICTURE(i) (TITLE_IMAGE_PICTURES + (i))
 
 /* Made from `config` and put in VRAM, once the title's own pictures are
  * there (MainMenu_InitFrontendMenu); one that cannot be read, or finds no

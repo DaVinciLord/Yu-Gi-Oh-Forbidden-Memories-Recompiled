@@ -177,6 +177,11 @@
                 "text": "Alpha"
             }
         ],
+        "images": [
+            {
+                "image": "seal.png"
+            }
+        ],
         "entries": {
             "load": {
                 "hide": true
@@ -190,6 +195,14 @@
                 "label": "CREDITS"
             }
         ]
+    },
+    "ui": {
+        "duel": {
+            "lp_player": {
+                "x": -10,
+                "tint": "#FF0000"
+            }
+        }
     },
     "pack_shop": {
         "password": "both",

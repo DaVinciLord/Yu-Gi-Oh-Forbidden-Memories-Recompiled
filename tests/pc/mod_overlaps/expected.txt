@@ -41,5 +41,8 @@ Fonts|info|add|alpha, delta|Fonts	Fonts (Alpha, Delta é 😀 � 中 xxxxxxxxxx
 Title screen and menus|warning|later|alpha, beta|title.logo.tint	title.logo.tint (Alpha, Beta): Beta wins (later in load order)
 Title screen and menus|warning|later|alpha, beta|title.entries.load.hide	title.entries.load.hide (Alpha, Beta): Beta wins (later in load order)
 Title screen and menus|info|add|alpha, beta|title.text (lines)	title.text (lines) (Alpha, Beta): both apply and add up
+Title screen and menus|info|add|alpha, beta|title.images (pictures)	title.images (pictures) (Alpha, Beta): both apply and add up
 Title screen and menus|info|aimed|alpha, beta|menu.buttons.alpha:credits.label	menu.buttons.alpha:credits.label (Alpha, Beta): Beta changes Alpha's own on purpose
 Title screen and menus|info|after|beta, gamma|menu.spacing	menu.spacing (Beta, Gamma): Gamma wins (it loads after Beta on purpose: after/requires)
+Duel pictures|warning|later|alpha, beta|ui.duel.lp_player.x	ui.duel.lp_player.x (Alpha, Beta): Beta wins (later in load order)
+Duel pictures|info|agree|alpha, beta|ui.duel.lp_player.tint	ui.duel.lp_player.tint (Alpha, Beta): the same in each, so no difference

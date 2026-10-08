@@ -406,6 +406,49 @@ static void read_lines(const char *mod, const JsonValue *list)
     }
 }
 
+/* "images": pictures of the mods' own over the title, adding up. */
+static void read_pictures(const char *mod, const char *directory, const JsonValue *list)
+{
+    static const char *const known[] = {"image", "x", "y", "width", "height", "tint", "show", "wide_x", "wide_y"};
+    const JsonValue *item;
+    if (!list) return;
+    if (Json_TypeOf(list) != JSON_ARRAY) {
+        Mods_Note(mod, "title: \"images\" is a list of pictures ({\"image\": \"art/seal.png\", \"x\": 160, \"y\": 120})");
+        return;
+    }
+    for (item = Json_At(list, 0); item; item = Json_Next(item)) {
+        TitlePicture *picture;
+        const char *show;
+        if (Json_TypeOf(item) != JSON_OBJECT || !Json_String(Json_Member(item, "image"), NULL)) {
+            Mods_Note(mod, "title: a picture in \"images\" without an \"image\"");
+            continue;
+        }
+        if (config.pictures >= TITLE_MAX_PICTURES) {
+            Mods_Note(mod, "title: more than %d pictures in \"images\"; the rest are left out", TITLE_MAX_PICTURES);
+            return;
+        }
+        picture = &config.picture[config.pictures];
+        memset(picture, 0, sizeof(*picture));
+        picture->x = 160;
+        picture->y = 120;
+        picture->tint = 0xFFFFFF;
+        read_image(mod, directory, "images", item, "image", &picture->image);
+        if (!picture->image.file[0]) continue;   /* noted: outside the mod */
+        config.pictures++;
+        int_member(item, "x", &picture->x);
+        int_member(item, "y", &picture->y);
+        read_wide(item, &picture->wide);
+        colour_member(mod, item, "tint", &picture->tint);
+        if ((show = Json_String(Json_Member(item, "show"), NULL))) {
+            if (!strcmp(show, "always")) picture->show = TITLE_SHOW_ALWAYS;
+            else if (!strcmp(show, "press_start")) picture->show = TITLE_SHOW_PROMPT;
+            else if (!strcmp(show, "menu")) picture->show = TITLE_SHOW_MENU;
+            else Mods_Note(mod, "title: a picture's \"show\" is always, press_start or menu");
+        }
+        only(mod, "images", item, known, sizeof(known) / sizeof(known[0]));
+    }
+}
+
 /* A "background" object into `background`; `set` gets the parts it gave. */
 static void read_background(const char *mod, const char *directory, const JsonValue *part, TitleBackground *background,
                             unsigned *set)
@@ -450,7 +493,7 @@ static void read_background(const char *mod, const char *directory, const JsonVa
 static void read_title(const char *mod, const char *directory, const JsonValue *title)
 {
     static const char *const known[] = {"music", "skip_intro", "press_start", "idle_seconds", "background",
-                                        "logo", "copyright", "prompt", "spacing", "entries", "text"};
+                                        "logo", "copyright", "prompt", "spacing", "entries", "text", "images"};
     static const char *const layer_keys[] = {"hide", "x", "y", "tint", "image", "width", "height", "show", "wide_x",
                                              "wide_y"};
     const JsonValue *part;
@@ -491,6 +534,7 @@ static void read_title(const char *mod, const char *directory, const JsonValue *
     int_member(title, "spacing", &config.spacing);
     read_entries(mod, directory, Json_Member(title, "entries"));
     read_lines(mod, Json_Member(title, "text"));
+    read_pictures(mod, directory, Json_Member(title, "images"));
     only(mod, "", title, known, sizeof(known) / sizeof(known[0]));
 }
 

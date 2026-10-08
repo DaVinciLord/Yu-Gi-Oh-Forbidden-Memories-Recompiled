@@ -37,6 +37,8 @@ enum { ENTRY_X = 0xA0 };   /* frontend.c: the entries' middle */
  * layer's x and y. */
 static const struct { int x, y; } middles[TITLE_LAYERS] = {{162, 90}, {163, 207}, {160, 185}};
 enum { OFF_SCREEN = -400 };
+/* The added pictures' place in the background's ordering table. */
+enum { PICTURE_DEPTH = 1024 };
 
 static int open;                /* between TitleScreen_Opened and _Closed */
 /* View > Aspect 16:9: the picture has TITLE_WIDE_MARGIN more either side. */
@@ -289,6 +291,20 @@ void TitleScreen_DrawImages(void *ot)
                        ? -TITLE_WIDE_MARGIN : 0;
         TitleScreen_BackgroundTint(&r, &g, &b);
         TitleImages_Draw(picture, ot, 4095, left, 0, r, g, b, 0);
+    }
+    /* The added pictures over the logo and the copyright line (the game's,
+     * at 2048 and 2047, and a mod's own) and under the menu's dimming (0),
+     * PUSH START BUTTON and the menus (another table, drawn after this
+     * one); the first given lowest (a slot draws what was added to it last
+     * first). */
+    for (i = config->pictures - 1; i >= 0; i--) {
+        const TitlePicture *added = &config->picture[i];
+        if (!TitleImages_Ready(TITLE_IMAGE_PICTURE(i), &w, &h)) continue;
+        if (added->show == TITLE_SHOW_PROMPT && shown_background()) continue;
+        if (added->show == TITLE_SHOW_MENU && !shown_background()) continue;
+        TitleImages_Draw(TITLE_IMAGE_PICTURE(i), ot, PICTURE_DEPTH, TitleWide_X(&added->wide, added->x, wide()) - w / 2,
+                         TitleWide_Y(&added->wide, added->y, wide()) - h / 2, scale(added->tint, 16, 128),
+                         scale(added->tint, 8, 128), scale(added->tint, 0, 128), 0);
     }
     for (i = 0; i < TITLE_LAYERS; i++) {
         DisplayObject *object = layer(i);

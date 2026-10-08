@@ -13,7 +13,7 @@ struct JsonValue;
  * (main_menu_selection.h), then the buttons the mods add. */
 enum { TITLE_LAYERS = 3, TITLE_ENTRIES = 11, TITLE_FIRST_MENU = 5, TITLE_MAX_LINES = 16, TITLE_LINE_TEXT = 96,
        TITLE_PATH = 1024, TITLE_MAX_BUTTONS = 16, TITLE_ITEMS = TITLE_ENTRIES + TITLE_MAX_BUTTONS,
-       TITLE_LABEL = 32, TITLE_NOTICE = 512, TITLE_NAME = 96, TITLE_MENUS = 2 };
+       TITLE_LABEL = 32, TITLE_NOTICE = 512, TITLE_NAME = 96, TITLE_MENUS = 2, TITLE_MAX_PICTURES = 8 };
 enum { TITLE_SHOW_ALWAYS, TITLE_SHOW_PROMPT, TITLE_SHOW_MENU };
 enum { TITLE_ALIGN_LEFT, TITLE_ALIGN_CENTRE, TITLE_ALIGN_RIGHT };
 /* A hidden entry's y: off the screen, afterimages and all. */
@@ -96,6 +96,16 @@ typedef struct {
     char notice[TITLE_NOTICE];
 } TitleItem;
 
+/* A picture a mod adds to the title ("images"): its middle's place in the
+ * game's 320 x 240 (TitleWide in widescreen), its colours multiplied, and
+ * when it shows (TITLE_SHOW_*). */
+typedef struct {
+    TitleImage image;
+    int x, y, show;
+    uint32_t tint;
+    TitleWide wide;
+} TitlePicture;
+
 typedef struct {
     int song;                  /* 0x000 retail */
     int skip_movie, press_start;
@@ -109,6 +119,8 @@ typedef struct {
     TitleItem items[TITLE_ITEMS];
     int spacing, lines;
     TitleLine line[TITLE_MAX_LINES];
+    int pictures;              /* every mod's "images", in load order */
+    TitlePicture picture[TITLE_MAX_PICTURES];
     /* Worked out by TitleConfig_Finish: each menu's shown items, top to
      * bottom as the cursor goes, and how many. */
     int order[TITLE_MENUS][TITLE_ITEMS], shown[TITLE_MENUS];

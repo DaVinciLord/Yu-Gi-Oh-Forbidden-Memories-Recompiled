@@ -2462,7 +2462,7 @@ class ModInfoTab(Tab):
         dialog.fields = fields
         return dialog
 
-    TAB_KEYS = ("limits", "guardian_stars")     # kept in `other`, edited on their tabs
+    TAB_KEYS = ("limits", "guardian_stars", "title", "menu", "ui")     # kept in `other`, edited on their tabs
 
     def shown_other(self) -> dict:
         """The other keys this box shows: all but those other tabs edit
