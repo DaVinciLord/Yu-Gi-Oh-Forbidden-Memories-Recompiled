@@ -39,14 +39,32 @@ int Log_Wanted(LogChannel channel) { (void)channel; return 0; }
 void Log_Printf(LogChannel channel, const char *format, ...) { (void)channel; (void)format; }
 
 /* cards.c stand-ins: a handful of ids CardLayout_SetCard's tests name, each
- * either an explicit frame colour (cards.h's "whatever its type") or a
- * type to bucket (card_constants.h). -1/CARD_TYPE_DRAGON ("monster") is
- * every id's default until a test sets otherwise. */
+ * with an explicit frame colour (a cards mod's "frame"), a type
+ * (card_constants.h), effects, and tags. CARD_TYPE_DRAGON ("monster") with
+ * none of the rest is every id's default until a test sets otherwise. */
 #define FAKE_CARD_COUNT 8
 static int fake_frame_color[FAKE_CARD_COUNT];
 static int fake_card_type[FAKE_CARD_COUNT];
-int Cards_FrameColor(int id) { return (unsigned)id < FAKE_CARD_COUNT ? fake_frame_color[id] : -1; }
+static int fake_effects[FAKE_CARD_COUNT];
+static char fake_tag[FAKE_CARD_COUNT][16];
+int Cards_FrameOverride(int id) { return (unsigned)id < FAKE_CARD_COUNT ? fake_frame_color[id] : -1; }
 int Cards_Type(int id) { return (unsigned)id < FAKE_CARD_COUNT ? fake_card_type[id] : CARD_TYPE_DRAGON; }
+int Cards_Class(int id)
+{
+    int type = Cards_Type(id);
+    if (type == CARD_TYPE_MAGIC) return CARD_CLASS_SPELL;
+    if (type == CARD_TYPE_EQUIP) return CARD_CLASS_EQUIP;
+    if (type == CARD_TYPE_RITUAL) return CARD_CLASS_RITUAL_SPELL;
+    if (type == CARD_TYPE_TRAP) return CARD_CLASS_TRAP;
+    return (unsigned)id < FAKE_CARD_COUNT && fake_effects[id] ? CARD_CLASS_EFFECT_MONSTER : CARD_CLASS_MONSTER;
+}
+const char *Cards_ClassName(int cls)
+{
+    static const char *const names[CARD_CLASS_COUNT] = {"monster", "effect_monster", "spell", "equip",
+                                                        "ritual_spell", "trap"};
+    return cls >= 0 && cls < CARD_CLASS_COUNT ? names[cls] : "";
+}
+int Cards_HasTag(int id, const char *tag) { return (unsigned)id < FAKE_CARD_COUNT && !strcmp(fake_tag[id], tag); }
 
 #define MAX_MODS 4
 static struct {
@@ -56,6 +74,8 @@ static struct {
     int active;
     const char *setting_key;
     int setting_value;
+    const char *setting_key2;
+    int setting_value2;
 } fake_mods[MAX_MODS];
 static int fake_mod_count;
 
@@ -72,6 +92,7 @@ int Mods_Setting(const char *id, const char *key, int fallback)
     for (m = 0; m < fake_mod_count; m++) {
         if (strcmp(fake_mods[m].id, id)) continue;
         if (fake_mods[m].setting_key && !strcmp(fake_mods[m].setting_key, key)) return fake_mods[m].setting_value;
+        if (fake_mods[m].setting_key2 && !strcmp(fake_mods[m].setting_key2, key)) return fake_mods[m].setting_value2;
     }
     return fallback;
 }
@@ -86,6 +107,8 @@ static void reset(void)
     for (i = 0; i < FAKE_CARD_COUNT; i++) {
         fake_frame_color[i] = -1;
         fake_card_type[i] = CARD_TYPE_DRAGON;
+        fake_effects[i] = 0;
+        fake_tag[i][0] = 0;
     }
     CardLayout_SetCard(0);   /* back to the monster bucket between tests */
 }
@@ -104,6 +127,7 @@ static void add_mod(const char *id, const char *directory, const char *text, int
     fake_mods[fake_mod_count].active = active;
     fake_mods[fake_mod_count].setting_key = setting_key;
     fake_mods[fake_mod_count].setting_value = setting_value;
+    fake_mods[fake_mod_count].setting_key2 = NULL;
     fake_mod_count++;
 }
 
@@ -117,6 +141,14 @@ static const char *const FULL_MANIFEST =
     "\"stars\": {\"x\": 80, \"y\": 153},"
     "\"spell\": {\"art\": {\"x\": 4, \"y\": 3, \"width\": 133, \"height\": 138},"
                "\"icon\": {\"x\": 62, \"y\": 163, \"width\": 16, \"height\": 15}}}}";
+
+/* The frame picture of the monster card id 0, after a mod was added: a card's
+ * style is picked by CardLayout_SetCard, as the card view does. */
+static const char *frame_path(void)
+{
+    CardLayout_SetCard(0);
+    return CardLayout_FramePath();
+}
 
 static void retail_defaults(void)
 {
@@ -136,7 +168,7 @@ static void retail_defaults(void)
     p = CardLayout_Get(CARD_LAYOUT_ATTRIBUTE);
     CHECK(p.x == 0x6E && p.y == 0xD && p.w == 0 && p.h == 0);
     CHECK(CardLayout_Get(CARD_LAYOUT_ART).w == 0);
-    CHECK(!*CardLayout_FramePath());
+    CHECK(!*frame_path());
 }
 
 static void full_bleed_mod(void)
@@ -160,7 +192,7 @@ static void full_bleed_mod(void)
     CHECK(p.x == 104 && p.y == 178);
     p = CardLayout_Get(CARD_LAYOUT_LEVEL_STARS);
     CHECK(p.x == 80 && p.y == 153);
-    CHECK(!strcmp(CardLayout_FramePath(), "/mods/anime-card-frame/frame.png"));
+    CHECK(!strcmp(frame_path(), "/mods/anime-card-frame/frame.png"));
 }
 
 /* The same manifest, but the mod's own full_bleed setting is off: every
@@ -205,7 +237,7 @@ static void partial_manifest_falls_back(void)
     CHECK(p.x == 80 && p.y == 153);
     p = CardLayout_Get(CARD_LAYOUT_ATK);
     CHECK(p.x == 0x61 && p.y == 0x9D);
-    CHECK(!*CardLayout_FramePath());
+    CHECK(!*frame_path());
     CHECK(notes == 0);
 }
 
@@ -214,7 +246,7 @@ static void frame_outside_mod_refused(void)
     reset();
     add_mod("x", "/mods/x", "{\"id\": \"x\", \"card_layout\": {\"frame\": {\"monster\": {\"image\": \"../x.png\"}}}}", 1,
             "full_bleed", 1);
-    CHECK(!*CardLayout_FramePath());
+    CHECK(!*frame_path());
     CHECK(notes == 1 && strstr(note, "outside the mod"));
 }
 
@@ -285,17 +317,17 @@ static void spell_frame_equip_uses_magic(void)
     CHECK(!strcmp(CardLayout_FramePath(), "/mods/x/frame_magic.png"));
 }
 
-/* FULL_MANIFEST gives "frame" no "ritual" of its own: a ritual card's frame
- * falls back to "monster"'s, same as any kind a mod has not drawn yet --
- * still a real frame, not none. */
-static void spell_frame_ritual_falls_back_to_monster_frame(void)
+/* FULL_MANIFEST gives "frame" no "ritual" of its own: a ritual card wears
+ * magic's frame (the legacy rule), the picture its colour in the hand
+ * matches. */
+static void spell_frame_ritual_wears_magic_frame(void)
 {
     reset();
     add_mod("x", "/mods/x", FULL_MANIFEST, 1, "full_bleed", 1);
     fake_card_type[1] = CARD_TYPE_RITUAL;
     CardLayout_SetCard(1);
     CHECK(CardLayout_IsSpell());
-    CHECK(!strcmp(CardLayout_FramePath(), "/mods/x/frame.png"));
+    CHECK(!strcmp(CardLayout_FramePath(), "/mods/x/frame_magic.png"));
 }
 
 /* Cards_FrameColor is an explicit per-card override "whatever its type"
@@ -308,8 +340,133 @@ static void frame_color_override_wins_over_type(void)
     fake_card_type[1] = CARD_TYPE_DRAGON;
     fake_frame_color[1] = CARD_FRAME_TRAP;
     CardLayout_SetCard(1);
-    CHECK(CardLayout_IsSpell());
+    CHECK(!CardLayout_IsSpell());   /* laid out by what the card is: a monster still has its ATK/DFD and stars */
     CHECK(!strcmp(CardLayout_FramePath(), "/mods/x/frame_trap.png"));
+}
+
+/* "frame_styles", "frame_for" and "default_style" (card_layout.h's
+ * CardLayoutStyle): the names the whole feature is built on. */
+static const char *const STYLES_MANIFEST =
+    "{\"id\": \"x\", \"card_layout\": {"
+    "\"frame_styles\": {"
+        "\"gold\": {\"image\": \"gold.png\", \"hand_colour\": \"gold\"},"
+        "\"green\": {\"image\": \"green.png\", \"hand_colour\": \"green\"},"
+        "\"pink\": {\"image\": \"pink.png\", \"hand_colour\": \"pink\"},"
+        "\"orange\": {\"image\": \"orange.png\", \"hand_colour\": \"orange\"},"
+        "\"blue\": {\"image\": \"blue.png\", \"hand_colour\": \"blue\"},"
+        "\"godly\": {\"image\": \"god.png\", \"hand_colour\": \"purple\", \"width\": 150, \"height\": 200}},"
+    "\"frame_for\": ["
+        "{\"tag\": \"god\", \"style\": \"godly\"},"
+        "{\"class\": \"ritual_spell\", \"style\": \"blue\", \"setting\": \"ritual_own_frame\"},"
+        "{\"class\": \"ritual_spell\", \"style\": \"green\"},"
+        "{\"class\": \"effect_monster\", \"style\": \"orange\"},"
+        "{\"class\": \"spell\", \"style\": \"green\"},"
+        "{\"class\": \"equip\", \"style\": \"green\"},"
+        "{\"class\": \"trap\", \"style\": \"pink\"}],"
+    "\"default_style\": \"gold\"}}";
+
+static void add_styles_mod(int own_ritual_frame)
+{
+    add_mod("x", "/mods/x", STYLES_MANIFEST, 1, "full_bleed", 1);
+    fake_mods[0].setting_key2 = "ritual_own_frame";
+    fake_mods[0].setting_value2 = own_ritual_frame;
+}
+
+static int style_of(int id, const char *want_path)
+{
+    CardLayoutStyle style;
+    CHECK(CardLayout_StyleOf(id, &style));
+    CardLayout_SetCard(id);
+    CHECK(!strcmp(CardLayout_FramePath(), want_path));
+    return style.colour;
+}
+
+static void styles_by_class(void)
+{
+    CardLayoutStyle style;
+    reset();
+    CHECK(!CardLayout_StyleOf(1, &style));   /* no layout: retail */
+    add_styles_mod(0);
+    CHECK(style_of(1, "/mods/x/gold.png") == CARD_FRAME_MONSTER);
+    fake_effects[2] = 1;
+    CHECK(style_of(2, "/mods/x/orange.png") == CARD_FRAME_ORANGE);
+    fake_card_type[3] = CARD_TYPE_MAGIC;
+    CHECK(style_of(3, "/mods/x/green.png") == CARD_FRAME_MAGIC);
+    fake_card_type[4] = CARD_TYPE_EQUIP;
+    CHECK(style_of(4, "/mods/x/green.png") == CARD_FRAME_MAGIC);
+    fake_card_type[5] = CARD_TYPE_TRAP;
+    CHECK(style_of(5, "/mods/x/pink.png") == CARD_FRAME_TRAP);
+    fake_card_type[6] = CARD_TYPE_RITUAL;
+    CHECK(style_of(6, "/mods/x/green.png") == CARD_FRAME_MAGIC);   /* anime: a ritual spell is green */
+    CHECK(CardLayout_IsSpell());                                    /* and laid out as a spell */
+    CHECK(notes == 0);
+}
+
+static void styles_by_tag_and_size(void)
+{
+    reset();
+    add_styles_mod(0);
+    fake_tag[1][0] = 'g'; fake_tag[1][1] = 'o'; fake_tag[1][2] = 'd';
+    fake_effects[1] = 1;   /* a god with effects: the tag rule comes first */
+    CHECK(style_of(1, "/mods/x/god.png") == CARD_FRAME_PURPLE);
+    CHECK(!CardLayout_IsSpell());
+    CHECK(CardLayout_Get(CARD_LAYOUT_FRAME).w == 150 && CardLayout_Get(CARD_LAYOUT_FRAME).h == 200);
+}
+
+static void styles_rule_setting(void)
+{
+    reset();
+    add_styles_mod(1);
+    fake_card_type[1] = CARD_TYPE_RITUAL;
+    CHECK(style_of(1, "/mods/x/blue.png") == CARD_FRAME_RITUAL);   /* the sub-option on: its own frame */
+    CHECK(CardLayout_IsSpell());
+    reset();
+    add_styles_mod(0);
+    fake_card_type[1] = CARD_TYPE_RITUAL;
+    CHECK(style_of(1, "/mods/x/green.png") == CARD_FRAME_MAGIC);   /* off: the next rule */
+}
+
+static void styles_card_frame_and_default(void)
+{
+    reset();
+    add_styles_mod(0);
+    fake_frame_color[1] = CARD_FRAME_ORANGE;   /* a cards mod's "frame": Orange, on a plain monster */
+    CHECK(style_of(1, "/mods/x/orange.png") == CARD_FRAME_ORANGE);
+    fake_frame_color[2] = CARD_FRAME_PURPLE;   /* no "purple" style: the rules, then the default */
+    CHECK(style_of(2, "/mods/x/gold.png") == CARD_FRAME_MONSTER);
+    CHECK(notes == 0);
+}
+
+static void styles_unusable_is_retail(void)
+{
+    CardLayoutStyle style;
+    reset();
+    add_mod("x", "/mods/x",
+            "{\"id\": \"x\", \"card_layout\": {\"frame_styles\": {\"gold\": {\"image\": \"g.png\", \"hand_colour\": \"lilac\"}}}}",
+            1, "full_bleed", 1);
+    CHECK(!CardLayout_StyleOf(1, &style) && notes == 1);   /* a "hand_colour" the disc has no row for */
+    reset();
+    add_mod("x", "/mods/x",
+            "{\"id\": \"x\", \"card_layout\": {\"frame_styles\": {\"gold\": {\"image\": \"g.png\"}}, \"default_style\": \"nothing\"}}",
+            1, "full_bleed", 1);
+    CHECK(!CardLayout_StyleOf(1, &style) && notes == 1);   /* a style that is not there */
+    reset();
+    add_mod("x", "/mods/x", STYLES_MANIFEST, 1, "full_bleed", 0);
+    CHECK(!CardLayout_StyleOf(1, &style));                  /* anime frame off */
+}
+
+static void legacy_ritual_wears_magic(void)
+{
+    reset();
+    add_mod("a", "/mods/a", FULL_MANIFEST, 1, "full_bleed", 1);   /* "frame" per kind, no ritual picture */
+    fake_card_type[1] = CARD_TYPE_RITUAL;
+    CHECK(style_of(1, "/mods/a/frame_magic.png") == CARD_FRAME_MAGIC);
+    reset();
+    add_mod("a", "/mods/a",
+            "{\"id\": \"x\", \"card_layout\": {\"frame\": {\"monster\": {\"image\": \"m.png\"},"
+            "\"magic\": {\"image\": \"g.png\"}, \"ritual\": {\"image\": \"r.png\"}}}}", 1, "full_bleed", 1);
+    fake_card_type[1] = CARD_TYPE_RITUAL;
+    CHECK(style_of(1, "/mods/a/r.png") == CARD_FRAME_RITUAL);      /* its own ritual picture stays */
 }
 
 int main(void)
@@ -325,8 +482,14 @@ int main(void)
     spell_frame_magic();
     spell_frame_trap();
     spell_frame_equip_uses_magic();
-    spell_frame_ritual_falls_back_to_monster_frame();
+    spell_frame_ritual_wears_magic_frame();
     frame_color_override_wins_over_type();
+    styles_by_class();
+    styles_by_tag_and_size();
+    styles_rule_setting();
+    styles_card_frame_and_default();
+    styles_unusable_is_retail();
+    legacy_ritual_wears_magic();
     reset();
     printf("card layout: ok\n");
     return 0;

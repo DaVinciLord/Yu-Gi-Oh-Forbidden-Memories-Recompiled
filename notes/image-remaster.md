@@ -237,6 +237,31 @@ the card assets were mapped from a set of redrawn HD images. Two tools:
   draws them, over a `hd_screen_pack.py` pack (`--base`), and merges other
   packs (`--merge`) into one mod.
 
+### Building the Forbidden Memories HD mod
+
+The same command as for any rebuild (run from the repository root; the paths
+in angle brackets are the maintainer's own):
+
+```
+python tools/pc/hd_assets_pack.py \
+    --assets <folder of redrawn assets> \
+    --out <mods>/forbidden-memories-hd \
+    --data game/DATA \
+    --base <hd_screen_pack.py's Build Deck pack> \
+    --base <hd_screen_pack.py's duel pack> \
+    --merge <portraits pack> \
+    --thumb-crops tools/pc/hd_recipes/thumb_crops.json
+```
+
+- The anime frame needs no flag. Its frames (`anime_frame_<kind>.png`) are in
+  `tools/pc/hd_recipes/` and are copied in; `--anime-frame-<kind> none` gives a kind
+  no picture even where `hd_recipes` has one (effect monsters then wear the monster frame).
+- To try the frame styles and rules on a mod that is already built, without the art
+  folder: `python tools/pc/anime_frame_patch.py <mod folder>` edits its `mod.json`
+  (the first original is kept as `.bak`).
+- Then zip the mod folder and upload it as before. A player needs the new
+  engine and the new zip, and turns on **Anime card frame** in the Mods window.
+
 What was found on the way:
 
 1. **Build Deck's package was never extracted.** `extract_images.py` listed

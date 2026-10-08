@@ -891,13 +891,21 @@ some of them out, with a `"card_layout"` object, no code needed:
 
 ```json
 "card_layout": {
-    "frame": {
-        "monster": {"image": "anime_frame_monster.png", "width": 140, "height": 197},
-        "magic": {"image": "anime_frame_magic.png", "width": 140, "height": 197},
-        "trap": {"image": "anime_frame_trap.png", "width": 140, "height": 197},
-        "ritual": {"image": "anime_frame_ritual.png", "width": 140, "height": 197},
-        "orange": {"image": "anime_frame_orange.png", "width": 140, "height": 197}
+    "frame_styles": {
+        "gold":   {"image": "anime_frame_monster.png", "hand_colour": "gold"},
+        "green":  {"image": "anime_frame_magic.png",   "hand_colour": "green"},
+        "pink":   {"image": "anime_frame_trap.png",    "hand_colour": "pink"},
+        "orange": {"image": "anime_frame_orange.png",  "hand_colour": "orange"}
     },
+    "frame_for": [
+        {"class": "ritual_spell",   "style": "green"},
+        {"class": "effect_monster", "style": "orange"},
+        {"class": "spell",          "style": "green"},
+        {"class": "equip",          "style": "green"},
+        {"class": "trap",           "style": "pink"},
+        {"class": "monster",        "style": "gold"}
+    ],
+    "default_style": "gold",
     "art": {"x": 3, "y": 3, "width": 134, "height": 139},
     "attribute": {"x": 114, "y": 149},
     "atk": {"x": 38, "y": 178},
@@ -935,20 +943,59 @@ nothing hidden, which is a no-op, not a half-finished look. The description
 box is always shown -- its own backdrop panel is on screen either way, so
 there is nothing to gain by leaving its text out.
 
-`frame` names a PNG per card kind (`image`, relative to the mod's directory,
-as a `title` mod's pictures are), drawn as one textured quad behind
-everything else, at `width`/`height` (140x196 with neither given) --
-monster's own key, and `magic`/`trap`/`ritual`/`purple`/`orange`
-(`cards.h`'s `CARD_FRAME_*`, the same six a card's own explicit frame
-colour picks from -- `Cards_FrameColor`, read whatever a card's real type
-is). A kind with no key of its own falls back to `monster`'s frame, not
-none -- a mod that has only drawn one frame still gets a frame for every
-kind, the same "missing stays retail-shaped, not half-finished" rule the
-rest of this object follows. With no `frame` key at all, nothing is drawn
-where the retail frame was, which is a deliberate, supported look (a mod may want the art
-and stats floating with no backing at all). The PNG is stretched to the
-texture's own resolution regardless of its native size, the same rule a
-`title` mod's `image` follows.
+### Frame styles and the rules that pick them
+
+A card is drawn in a frame **style**: a picture and the colour its small card
+wears in the hand, together, so the card view and the hand can never
+disagree. Three keys say it:
+
+- `frame_styles`: name -> `{"image", "hand_colour", "width", "height"}`.
+  `image` is relative to the mod's directory, as a `title` mod's pictures
+  are, drawn as one textured quad behind everything else, at `width`/`height`
+  (140x196 with neither given). `hand_colour` is one of the disc's six frame
+  colours, `gold`, `green`, `pink`, `blue`, `purple` or `orange` (the colours
+  its palette rows have: a monster is gold, magic and equip green, a trap
+  pink, a ritual blue; purple and orange the disc never uses). Name a style
+  as you like; a style named for a colour (`gold`, ...) is also what a card
+  whose own `frame` (a cards mod's, [Frame colour](more-cards.md#frame-colour))
+  is that colour wears.
+- `frame_for`: a list of rules, the first that applies to a card wins. A rule
+  says `"style"` and, to limit it, any of `"class"` (what the card is, below),
+  `"tag"` (one of the card's [`tags`](more-cards.md#tags)) and `"setting"` (a
+  `bool` the mod declares: the rule counts only while it is on, which is how a
+  player gets a sub-option in the Mods window). A rule that names none applies
+  to every card.
+- `default_style`: the style of a card no rule picks (`gold` if left out).
+
+The class of a card is worked out by the engine from its type and its
+`monster_effects`, never written by a mod: `monster`, `effect_monster`,
+`spell`, `equip`, `ritual_spell` or `trap`. It also decides the layout, not
+the style: a spell, equip, ritual spell or trap has no ATK, DEF or level, and
+reads `spell`'s `art` and `icon` below; a monster of any style keeps its ATK
+and DEF.
+
+Forbidden Memories HD follows the anime: a ritual spell is **green**, in the card
+view and in the hand. Give the build a ritual picture (`--anime-frame-ritual`)
+and it adds the style `blue` and the sub-option "Ritual spells: own frame" (off).
+To keep ritual spells blue by default, put that rule's `"setting"` on and
+declare its `default` as `1`, or delete the rule above it. A mod that adds
+god monsters tags them (`"tags": ["god"]`) and adds a style and a rule for the
+tag, before the class rules:
+
+```json
+"frame_styles": { "god": {"image": "god_frame.png", "hand_colour": "purple"} },
+"frame_for": [ {"tag": "god", "style": "god"} ]
+```
+
+An older layout with a `frame` per kind (`monster`, `magic`, `trap`, `ritual`,
+`purple`, `orange`) and no `frame_styles` is read as before: the card's kind is
+its own frame colour, else its class's, a kind with no picture falls back to
+`monster`'s, and a ritual spell with no ritual picture of its own (or magic's)
+wears magic's. With no frame at all, nothing is drawn where the retail frame
+was, which is a deliberate, supported look (a mod may want the art and stats
+floating with no backing). The PNG is stretched to the texture's own
+resolution regardless of its native size, the same rule a `title` mod's
+`image` follows.
 
 Whatever size the source art is, it lands on a fixed 177x254 texture
 (`src/pc/cards/card_layout_art.c`'s `FRAME_W`/`FRAME_H`, the largest size
@@ -966,9 +1013,8 @@ looks necessary up close; `anime_frame_*.png` needed a contrast pass
 read as a flat colour once actually in the game.
 
 Magic, trap, ritual and equip cards have no level, ATK or DEF to draw --
-`art`/`atk`/`def`/`stars` keep monster's (and purple's and orange's, the
-monster frame recoloured) layout, and `CARD_LAYOUT_ART`/`CARD_LAYOUT_
-ATTRIBUTE` instead answer from `spell`'s `art`/`icon` for those four kinds:
+`art`/`atk`/`def`/`stars` keep the monster layout, and `CARD_LAYOUT_ART`/`CARD_LAYOUT_
+ATTRIBUTE` instead answer from `spell`'s `art`/`icon` for those four classes:
 a different place for the same elements, not different ones --
 func_80028B08.c still draws retail's own art/attribute textures there,
 unchanged, just stretched into `spell`'s box instead of `art`'s/
@@ -985,10 +1031,11 @@ so two layout mods together is the last one's layout, not a merge of both.
 Forbidden Memories HD carries this as its own `full_bleed` setting, no code
 of its own needed: `tools/pc/hd_assets_pack.py`'s `--anime-frame-<kind>`
 flags default to `tools/pc/hd_recipes/anime_frame_<kind>.png` if present,
-so a normal build picks this up with nothing extra to pass. A kind with no
-art of its own yet (`ritual`, `orange`) borrows another's at read time. A
-model for writing another: a pure data mod, no `library`, with one
-`full_bleed` setting, a frame per kind and the positions above.
+so a normal build picks this up with nothing extra to pass. `--anime-frame-<kind>
+none` gives a kind no picture even where `hd_recipes` has one (effect monsters
+then wear the monster frame). A model for writing another: a pure data mod, no
+`library`, with one `full_bleed` setting, frame styles and rules, and the
+positions above.
 
 **Known limitation**: the frame image itself does not render in the duel's
 own card viewer (opened from the hand) -- `CardLayout_DrawFrame` submits

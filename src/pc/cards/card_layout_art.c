@@ -37,8 +37,8 @@
  * 512 halfwords, two pages down. The palette row, FRAME_TILE_H, is free in
  * every page (a tile is FRAME_TILE_H tall). Keep FRAME_TEXELS in
  * tools/pc/card_frame_window.py in sync with FRAME_W/FRAME_H. */
-#define FRAME_COLS 3
-#define FRAME_ROWS 3
+#define FRAME_COLS CARD_LAYOUT_FRAME_COLS   /* card_layout_art.h: the one place the grid is set */
+#define FRAME_ROWS CARD_LAYOUT_FRAME_ROWS
 #define FRAME_TILE_W 177
 #define FRAME_TILE_H 254
 #define FRAME_W (FRAME_COLS * FRAME_TILE_W)

@@ -21,6 +21,8 @@
  * (win->field_30's own position, or a per-star cursor), never an
  * independent origin. */
 
+#include <stddef.h>
+
 typedef enum {
     CARD_LAYOUT_FRAME,
     CARD_LAYOUT_TITLE,
@@ -63,6 +65,31 @@ const char *CardLayout_FramePath(void);
  * directory, into `paths`; 0 when no mod's layout is on. For
  * CardLayoutArt_Prewarm. */
 int CardLayout_FramePaths(char (*paths)[1024], int max);
+
+/* A card's frame style: what the layout draws for it, picked once for the
+ * card view's big frame and the hand's small one alike, so they cannot
+ * disagree. `colour` is the style's "hand_colour" (cards.h CARD_FRAME_*, the
+ * palette row of every small frame); `spell_layout` is whether the card is
+ * laid out as a spell (no ATK/DFD/level; its "spell" art and icon), which
+ * follows the card's class, never its style. `image` is the picture's path,
+ * filled only for the current card (CardLayout_SetCard). */
+typedef struct {
+    int colour;
+    int spell_layout;
+    int width, height;
+    char name[32];
+    char image[1024];
+} CardLayoutStyle;
+
+/* The style the layout gives `card_id`, into `style` (its `image` empty); 1,
+ * or 0 when the anime frame is off or the layout has none to give (retail's
+ * frame colours then). A layout says it in "frame_styles" (name -> {"image",
+ * "hand_colour", "width", "height"}), "frame_for" (rules, first that applies
+ * wins: {"class" | "tag", "setting", "style"}) and "default_style"; a
+ * card's own "frame" colour takes the style named for it first. A layout
+ * with a "frame" per kind and no "frame_styles" is read as before: the kind
+ * of the card, and a ritual spell with no picture of its own wears magic's. */
+int CardLayout_StyleOf(int card_id, CardLayoutStyle *style);
 
 /* Which card the next CardLayout_Get/CardLayout_FramePath/CardLayout_IsSpell
  * answer for: its frame (monster/magic/trap/ritual/purple/orange, cards.h

@@ -7,8 +7,16 @@
  * and src/pc/text/glyphs.c already do for theirs, then read back as an
  * ordinary tpage/u/v/clut cell. */
 
-/* The frame is FRAME_COLS x FRAME_ROWS tiles (card_layout_art.c explains
- * why), drawn as that many abutting quads. */
+/* The frame is drawn as COLS x ROWS abutting tiles, each one quad on its own
+ * texture page (card_layout_art.c explains why: a quad reads at most 255
+ * texels an axis). This is the one place the grid is set: func_80028B08.c's
+ * CardLayout_DrawFrame loops over it, card_layout_art.c's tile layout and
+ * its FRAME_W/FRAME_H follow it, and tools/pc/card_frame_window.py's
+ * FRAME_TEXELS is the same grid of 177x254 texel tiles (3x3 = 531x762).
+ * A row or column left out of the loop is a part of the frame never drawn:
+ * with ROWS 2 the bottom third, the stat band, went missing. Changing
+ * either number means changing all of those; the tile pages also have room
+ * for at most 9. */
 #define CARD_LAYOUT_FRAME_COLS 3
 #define CARD_LAYOUT_FRAME_ROWS 3
 

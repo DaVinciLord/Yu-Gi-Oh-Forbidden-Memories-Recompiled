@@ -78,6 +78,28 @@ static unsigned char not_exodia[EXODIA_PIECE_COUNT];  /* a replaced piece withou
  * left out, FRAME_TYPE "Type" (cards.h Cards_FrameColor). */
 #define FRAME_TYPE 0xFF
 static unsigned char frames[CARD_TABLE_ID_END];
+/* A card's "tags" (cards.h's Cards_HasTag): one bit a tag, in the order the
+ * tags were first met; 32 is room for a mod pack, more are noted and left out. */
+#define MAX_TAGS 32
+#define MAX_TAG_LENGTH 32
+static char tag_names[MAX_TAGS][MAX_TAG_LENGTH];
+static int tag_count;
+static unsigned int tag_masks[CARD_TABLE_ID_END];
+static int tag_bit(const char *name, int create)
+{
+    int i;
+    for (i = 0; i < tag_count; i++) {
+        if (!strcmp(tag_names[i], name)) return i;
+    }
+    if (!create || tag_count >= MAX_TAGS || strlen(name) >= MAX_TAG_LENGTH) return -1;
+    snprintf(tag_names[tag_count], MAX_TAG_LENGTH, "%s", name);
+    return tag_count++;
+}
+int Cards_HasTag(int id, const char *tag)
+{
+    int bit = tag ? tag_bit(tag, 0) : -1;
+    return Cards_Valid(id) && bit >= 0 && (tag_masks[id] >> bit & 1);
+}
 /* "monster_effects" (monster_effects.h): an entry's list, shared by its cards. */
 static const MonsterEffect *monster_effects[CARD_TABLE_ID_END];
 static unsigned char monster_effect_counts[CARD_TABLE_ID_END];
@@ -108,21 +130,48 @@ int Cards_TrapThreshold(int id, int fallback)
 }
 static int retail_monster(int id);
 int Cards_HasModel(int id) { return Cards_Valid(id) && retail_monster(Cards_ModelId(id)); }
+int Cards_FrameOverride(int id)
+{
+    return Cards_Valid(id) && frames[id] && frames[id] != FRAME_TYPE ? frames[id] - 1 : -1;
+}
+int Cards_Class(int id)
+{
+    const MonsterEffect *effects;
+    int type = Cards_Type(id);
+    if (type == CARD_TYPE_MAGIC) return CARD_CLASS_SPELL;
+    if (type == CARD_TYPE_EQUIP) return CARD_CLASS_EQUIP;
+    if (type == CARD_TYPE_RITUAL) return CARD_CLASS_RITUAL_SPELL;
+    if (type == CARD_TYPE_TRAP) return CARD_CLASS_TRAP;
+    return Cards_MonsterEffects(id, &effects) ? CARD_CLASS_EFFECT_MONSTER : CARD_CLASS_MONSTER;
+}
+const char *Cards_ClassName(int cls)
+{
+    static const char *const names[CARD_CLASS_COUNT] = {"monster", "effect_monster", "spell", "equip",
+                                                        "ritual_spell", "trap"};
+    return cls >= 0 && cls < CARD_CLASS_COUNT ? names[cls] : "";
+}
+/* The colour of the frame the disc draws for `id` by its type. */
+static int type_frame_color(int id)
+{
+    int type = Cards_Type(id);
+    if (type == CARD_TYPE_MAGIC || type == CARD_TYPE_EQUIP) return CARD_FRAME_MAGIC;
+    if (type == CARD_TYPE_TRAP) return CARD_FRAME_TRAP;
+    if (type == CARD_TYPE_RITUAL) return CARD_FRAME_RITUAL;
+    return CARD_FRAME_MONSTER;
+}
 int Cards_FrameColor(int id)
 {
-    if (!Cards_Valid(id) || frames[id] == FRAME_TYPE) return -1;
+    CardLayoutStyle style;
+    const MonsterEffect *effects;
+    if (!Cards_Valid(id)) return -1;
+    /* The anime frame on: the colour of the style the layout picked, so a
+     * card's hand frame and its card view always agree. */
+    if (CardLayout_StyleOf(id, &style)) return style.colour == type_frame_color(id) ? -1 : style.colour;
+    if (Cards_FrameOverride(id) >= 0) return Cards_FrameOverride(id);
     /* Left out, a monster with effects of its own is drawn orange, as an
      * effect monster is in the card game. */
-    if (!frames[id]) {
-        const MonsterEffect *effects;
-        /* With the anime frame on (card_layout.h's CardLayout_FullBleed) a
-         * ritual spell wears the magic frame's colour, as the card viewer's
-         * frame does (hd_assets_pack.py draws no ritual frame of its own), so
-         * its hand card and the viewer agree. */
-        if (Cards_Type(id) == CARD_TYPE_RITUAL && CardLayout_FullBleed()) return CARD_FRAME_MAGIC;
-        return Cards_Type(id) < CARD_TYPE_MAGIC && Cards_MonsterEffects(id, &effects) ? CARD_FRAME_ORANGE : -1;
-    }
-    return frames[id] - 1;
+    if (frames[id] == FRAME_TYPE) return -1;
+    return Cards_Type(id) < CARD_TYPE_MAGIC && Cards_MonsterEffects(id, &effects) ? CARD_FRAME_ORANGE : -1;
 }
 int Cards_ExodiaPiece(int id)
 {
@@ -445,6 +494,9 @@ static const char *const attribute_names[] = {"Light", "Dark", "Earth", "Water",
 /* The frames, in the order of their palettes (CARD_FRAME_*); "type" is the
  * card's own type's again. */
 static const char *const frame_names[] = {"Monster", "Magic", "Trap", "Ritual", "Purple", "Orange", "Type"};
+/* The same frames by the colour they are: Gold, Green, Pink and Blue are
+ * Monster, Magic, Trap and Ritual (the disc's own labels for them). */
+static const char *const frame_colour_names[] = {"Gold", "Green", "Pink", "Blue"};
 
 static int same_words(const char *a, const char *b)
 {
@@ -1122,6 +1174,7 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     int effect_count;
     unsigned int trap_threshold;
     unsigned char level_attr, frame;
+    unsigned int tags;
     if (Json_TypeOf(entry) != JSON_OBJECT) {
         Mods_Note(mod, "cards[%d] is not an object", index);
         return;
@@ -1281,10 +1334,27 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     if (Json_Member(entry, "frame")) {
         value = choice(Json_Member(entry, "frame"), frame_names, CARD_FRAME_COUNT + 1);
         if (value < 0 || value > CARD_FRAME_COUNT) {
-            Mods_Note(mod, "cards[%d]: \"frame\" is Monster, Magic, Trap, Ritual, Purple, Orange or Type; left out",
+            value = choice(Json_Member(entry, "frame"), frame_colour_names, 4);
+            if (value >= 4) value = -1;
+        }
+        if (value < 0 || value > CARD_FRAME_COUNT) {
+            Mods_Note(mod, "cards[%d]: \"frame\" is Gold, Green, Pink, Blue, Purple, Orange or Type (or the disc's Monster, Magic, Trap, Ritual); left out",
                       index);
         } else {
             frame = (unsigned char)(value == CARD_FRAME_COUNT ? FRAME_TYPE : value + 1);
+        }
+    }
+    /* Left out, the tags are the base's; "tags": [] clears them. */
+    tags = tag_masks[base];
+    if (Json_Member(entry, "tags")) {
+        const JsonValue *t;
+        tags = 0;
+        for (t = Json_At(Json_Member(entry, "tags"), 0); t; t = Json_Next(t)) {
+            const char *text = Json_String(t, NULL);
+            int bit = text && *text ? tag_bit(text, 1) : -1;
+            if (bit < 0) Mods_Note(mod, "cards[%d]: a \"tags\" entry is empty, too long (%d letters at most) or the %dth tag",
+                                   index, MAX_TAG_LENGTH - 1, MAX_TAGS + 1);
+            else tags |= 1u << bit;
         }
     }
     /* What View > Card passwords shows (passwords.h): a copy has none
@@ -1404,6 +1474,7 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         if (((stats >> 26) & 0x1F) < CARD_TYPE_MAGIC && !(stats & (0xFu << 22))) Stars_NoteNoStar();
         gDuel_abCardLevelAttr[id] = level_attr;
         frames[id] = frame;
+        tag_masks[id] = tags;
         names[id] = name && *name ? encode_name(mod, name, n, id) : NULL;
         descriptions[id] = description && *description ? encode_description(mod, description, id) : NULL;
         add_notes(mod, index, id, Json_Member(entry, "notes"));

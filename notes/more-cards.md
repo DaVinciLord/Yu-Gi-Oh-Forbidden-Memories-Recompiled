@@ -54,7 +54,8 @@ The release ships no card mod; the checks below were made with test mods
 | `attribute` | a number or a name (`"Light"` to `"Wind"`) |
 | `level` | 0 to 12 |
 | `stars` | the two guardian stars, as numbers or names (`"Mars"` to `"Venus"`, and a mod's own up to 15: [Guardian Stars](modding.md#guardian-stars-names-icons-new-stars-and-matchups)); a second of `0` (none) or the same as the first is a card with one star |
-| `frame` | the colour of the card's frame, whatever its type: `"Monster"` (gold), `"Magic"` (green), `"Trap"` (pink), `"Ritual"` (blue), `"Purple"` or `"Orange"`, or a number 0-5 in that order; `"Type"` goes back to its type's. Left out, a monster with `monster_effects` is orange ([below](#frame-colour)) |
+| `frame` | the colour of the card's frame, whatever its type: `"Gold"` (the disc's `"Monster"`), `"Green"` (`"Magic"`), `"Pink"` (`"Trap"`), `"Blue"` (`"Ritual"`), `"Purple"` or `"Orange"`, or a number 0-5 in that order; `"Type"` goes back to its type's. Left out, a monster with `monster_effects` is orange ([below](#frame-colour)) |
+| `tags` | words for the card, a list such as `["god"]` (31 letters at most; 32 different in all). They mean nothing to the game: a [card layout](modding.md#card-layout-repositioning-or-hiding-the-big-card-display) may give each tag a frame of its own. A copy has its base's unless it says; `[]` clears them ([below](#tags)) |
 | `fusion_groups` | the fusion guides' groups the card is in, for a ritual's `fusion_group` condition ([Gameplay tables](gameplay-tables.md#rituals)): a list such as `["Elf", "Female"]`, `[]` for none; without it, its base's |
 | `drops` | whether the card can be won in its base's place (default `true`, below) |
 | `opponents` | whether an opponent's deck can be dealt it in its base's place (default `false`) |
@@ -196,6 +197,17 @@ colours a card by its type:
 
 The Forbidden Memories HD mod's frames cover purple and orange too
 (`tools/pc/hd_assets_pack.py` recolours the monster frame into them).
+
+## Tags
+
+`"tags": ["god"]` on a card entry labels it, so that a mod that draws card
+frames (`card_layout`'s `frame_for`, [modding.md](modding.md#frame-styles-and-the-rules-that-pick-them))
+can give it a frame of its own without the card naming a colour: the cards mod
+says *what the card is*, the layout mod says *how that looks*. Tags are free
+words (letters, digits, `-`, `_`); a card may have any number of them. There is
+no tag the game itself reads; the anime frame's own classes (`monster`,
+`effect_monster`, `spell`, `equip`, `ritual_spell`, `trap`) are worked out, not
+tagged.
 
 ## Card text codes
 
