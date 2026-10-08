@@ -2513,6 +2513,41 @@ class MonsterEffectsGuiTest(GuiCase):
         self.assertEqual(dialog.result, {"when": "face_up", "do": "boost", "target": "self", "attack": -700,
                                          "type": "Dragon"})
 
+    def test_effect_dialog_for_each(self):
+        from fm_editor import monster_effects as fx
+        from fm_editor.monster_effects_ui import EffectDialog
+        app = self.app
+        dialog = EffectDialog(app, app.project, {"when": "summon", "do": "magic", "card": 337}, str)
+        # Off by default, and not offered for a magic card's effect.
+        self.assertEqual(dialog.vars["each"].get(), fx.NO_EACH)
+        self.assertFalse(dialog.rows["each"][1].winfo_manager())
+        dialog.vars["when"].set("While face up")
+        self.assertTrue(dialog.rows["each"][1].winfo_manager())
+        self.assertFalse(dialog.rows["each_type"][1].winfo_manager())
+        dialog.vars["each"].set("On its owner's field")
+        self.assertTrue(dialog.rows["each_type"][1].winfo_manager())
+        dialog.vars["attack"].set("300")
+        dialog.vars["defense"].set("300")
+        dialog.vars["each_type"].set("Dragon")
+        dialog.ok()
+        self.assertEqual(dialog.result, {"when": "face_up", "do": "boost", "target": "self", "attack": 300,
+                                         "defense": 300, "for_each": {"whose": "own", "type": "Dragon"}})
+        # Opened again, it shows what it counts; "—" takes it away.
+        dialog = EffectDialog(app, app.project, dialog.result, str)
+        self.assertEqual((dialog.vars["each"].get(), dialog.vars["each_type"].get()),
+                         ("On its owner's field", "Dragon"))
+        dialog.vars["each"].set(fx.NO_EACH)
+        dialog.ok()
+        self.assertNotIn("for_each", dialog.result)
+        # Changed to a destroy, the row goes and so does what it said.
+        dialog = EffectDialog(app, app.project, {"when": "summon", "do": "heal", "amount": 200,
+                                                 "for_each": {"whose": "all"}}, str)
+        self.assertTrue(dialog.rows["each"][1].winfo_manager())
+        dialog.vars["do"].set("Destroy monsters")
+        self.assertFalse(dialog.rows["each"][1].winfo_manager())
+        dialog.ok()
+        self.assertEqual(dialog.result, {"when": "summon", "do": "destroy", "target": "opponent"})
+
     def test_text_menu(self):
         from fm_editor import text_menu
         cards = self.app.cards

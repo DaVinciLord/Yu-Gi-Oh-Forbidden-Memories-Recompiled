@@ -179,7 +179,7 @@ class EffectDialog(FormDialog):
     def build(self, dialog, body):
         e = self.start
         self.vars = {k: tk.StringVar(dialog) for k in ("when", "do", "card", "target", "type", "attribute", "attack",
-                                                 "defense", "amount")}
+                                                 "defense", "amount", "each", "each_type", "each_attribute")}
         self.rows = {}
         row = 0
 
@@ -212,6 +212,13 @@ class EffectDialog(FormDialog):
                 self.rows[key][0].configure(image=pictures[key], compound="left")
         line("amount", "LP", ttk.Spinbox(body, textvariable=self.vars["amount"], from_=1, to=fx.AMOUNT_MAX,
                                          increment=100, width=10))
+        # "for_each": the number above made once per face-up monster counted.
+        line("each", "For each", ttk.Combobox(body, textvariable=self.vars["each"], state="readonly", width=30,
+                                              values=[fx.NO_EACH] + list(fx.EACH_LABELS)))
+        line("each_type", "Counting type", self.choice(body, "each_type", [ANY] + TYPE_NAMES[:TYPE_MAGIC],
+                                                       lambda v: TYPE_NAMES.index(v) if v in TYPE_NAMES else None))
+        line("each_attribute", "Counting attribute", self.choice(body, "each_attribute", [ANY] + ATTRIBUTE_NAMES,
+                                                                 self.attribute_icon))
         self.vars["when"].set(fx.when_label(e["when"]))
         self.vars["do"].set(fx.DO_LABELS[fx.DO.index(e["do"])])
         self.vars["card"].set(self.magic_label(e.get("card", 337)))
@@ -222,8 +229,12 @@ class EffectDialog(FormDialog):
         self.vars["attack"].set(e.get("attack", 0))
         self.vars["defense"].set(e.get("defense", 0))
         self.vars["amount"].set(e.get("amount", 500))
-        self.vars["when"].trace_add("write", lambda *_: self.show_rows())
-        self.vars["do"].trace_add("write", lambda *_: self.show_rows())
+        each = e.get("for_each")
+        self.vars["each"].set(fx.EACH_LABELS[fx.EACH.index(each["whose"])] if each else fx.NO_EACH)
+        self.vars["each_type"].set((each or {}).get("type", ANY))
+        self.vars["each_attribute"].set((each or {}).get("attribute", ANY))
+        for key in ("when", "do", "each"):
+            self.vars[key].trace_add("write", lambda *_: self.show_rows())
         self.show_rows()
 
     def choice(self, body, key, values, icon_of):
@@ -259,6 +270,10 @@ class EffectDialog(FormDialog):
         shown = {"when", "do"} | {"magic": {"card"}, "boost": {"target", "type", "attribute", "attack", "defense"},
                                   "heal": {"amount"}, "damage": {"amount"},
                                   "destroy": {"target", "type", "attribute"}}[do]
+        if do in fx.EACH_DO:
+            shown.add("each")
+            if self.vars["each"].get() in fx.EACH_LABELS:
+                shown |= {"each_type", "each_attribute"}
         for key, widgets in self.rows.items():
             for widget in widgets:
                 widget.grid() if key in shown else widget.grid_remove()
@@ -296,6 +311,12 @@ class EffectDialog(FormDialog):
                 return "LP is a whole number."
             if not 0 < effect["amount"] <= fx.AMOUNT_MAX:
                 return f"LP is 1 to {fx.AMOUNT_MAX}."
+        whose = self.chosen("each", fx.EACH, fx.EACH_LABELS)
+        if whose and do in fx.EACH_DO:
+            effect["for_each"] = {"whose": whose}
+            for key in ("type", "attribute"):
+                if self.vars["each_" + key].get() not in ("", ANY):
+                    effect["for_each"][key] = self.vars["each_" + key].get()
         effect = fx.normalize(effect, self.project.resolve)
         if effect is None:
             return "The game cannot do that."

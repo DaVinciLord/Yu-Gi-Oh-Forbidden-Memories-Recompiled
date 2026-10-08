@@ -98,7 +98,11 @@ phase, Before combat, When destroyed, Destroy opponent monster, While face up, e
 it: a summon is face up only, a flip is the face-down card attacked), **Does** (a magic card's effect, a boost of ATK and DEF, healing its
 owner, damage to the opponent, destroying monsters), and what that needs: the magic card, whose
 monsters a boost or destroy reaches (and only of one type or attribute), the ATK and
-DEF, the LP. Only what the game can do for that **When** is offered: while
+DEF, the LP. **For each** (off, "—", by default) makes a boost, heal
+or damage once per face-up monster on its owner's field, the opponent's or
+the whole field, with **Counting type** and **Counting attribute** to count
+only those; the list then reads, for example, "This card: +300 ATK +300 DEF
+for each face-up Dragon on its owner's field". Only what the game can do for that **When** is offered: while
 face up, only boosts; before combat, a boost of the card itself or of the
 monster it battles, healing or damage. **Remove**, **Up** and **Down**
 change the list; the effects resolve in its order. A change is stored at
