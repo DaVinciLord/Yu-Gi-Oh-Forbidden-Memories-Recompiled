@@ -478,7 +478,7 @@ def edges(locations, index: int) -> list:
     out = []
     for n, e in enumerate(loc.exits):
         if e.used and 0 <= e.destination < COUNT:
-            out.append((f"exit {n + 1}", e.destination, e.condition))
+            out.append((f"arrow {n + 1}", e.destination, e.condition))
     if 0 < loc.confirm < COUNT:
         out.append(("confirm", loc.confirm, loc.exits[0].condition if loc.gate else 0))
     if index >= TOWN_FIRST:
@@ -515,9 +515,9 @@ def check(project, out: list):
         for n, e in enumerate(loc.exits):
             if not e.used:
                 continue
-            what = f"exit {n + 1}"
+            what = f"arrow {n + 1}"   # an exit, as the Map tab names it
             if e.destination > NO_EXIT:
-                add("error", index, f"{what} leads to {e.destination}: there are only places 0-15 (16 is no exit)")
+                add("error", index, f"{what} leads to {e.destination}: there are only places 0-15 (16 is none)")
                 continue
             if e.steps == 0:
                 add("error", index, f"{what} takes 0 frames: the move divides by its length, so it must be 1 or more")
@@ -537,15 +537,15 @@ def check(project, out: list):
                 add("warning", index, f"{what}'s arrow picture {e.arrow} is not one of the eight the map has")
             for m, other in seen:
                 if other.buttons & e.buttons & DIRECTION_BITS and (other.condition == 0 or other.condition == e.condition):
-                    add("warning", index, f"{what} is never taken while exit {m + 1} is: the game takes the first "
-                                          "exit whose direction is held")
+                    add("warning", index, f"{what} is never taken while arrow {m + 1} is: the game takes the first "
+                                          "arrow whose direction is held")
                     break
             seen.append((n, e))
         if index >= TOWN_FIRST and not (0 <= loc.marker_x < SCREEN[0] and 0 <= loc.marker_y < SCREEN[1]):
             add("warning", index, f"the marker at {loc.marker_x},{loc.marker_y} is off the screen")
     lost = [i for i in unreachable(locations) if i not in unreachable(st.retail.locations)]
     for index in lost:
-        add("warning", index, "no exit, Confirm or Cancel of another place leads here any more")
+        add("warning", index, "no arrow, Confirm or Cancel of another place leads here any more")
 
 
 # --- sprites -------------------------------------------------------------------------------
