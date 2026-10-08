@@ -525,6 +525,15 @@ if(BUILD_TESTING)
         target_compile_options(memories_title_config_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
     endif()
     add_test(NAME pc_title_config COMMAND memories_title_config_test)
+    # The mods' "ui" key as read (src/pc/platform/ui_config.c): manifests only,
+    # so at the host's own width too.
+    add_executable(memories_ui_config_test tests/pc/ui_config_test.c src/pc/mods/json.c)
+    target_include_directories(memories_ui_config_test PRIVATE src)
+    target_compile_definitions(memories_ui_config_test PRIVATE MEMORIES_PC)
+    if(NOT MSVC)
+        target_compile_options(memories_ui_config_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(NAME pc_ui_config COMMAND memories_ui_config_test)
     # Card packs (src/pc/cards/packs.c): the reader, the dealer and the
     # golden deals the FM Editor's Simulate is held to (packs_golden.txt).
     add_executable(memories_packs_test tests/pc/packs_test.c src/pc/mods/json.c)

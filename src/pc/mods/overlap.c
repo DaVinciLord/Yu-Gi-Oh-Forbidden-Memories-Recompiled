@@ -1244,7 +1244,7 @@ static void read_text(ModsOverlaps *x, int mod)
 
 /* "title" and "menu": each key the latest mod's (title_config.c). Both say
  * "spacing" and "entries", which are one setting: an entry by its name or
- * its number 0-10. The title's "text" lines add up. A button belongs to the
+ * its number 0-10. The title's "text" lines and "images" add up. A button belongs to the
  * mod that makes it; another changes it by naming it "<mod id>:<id>", and
  * only when it loads after that mod. */
 static const char *const entry_names[] = {"new_game", "load",       "duel",    "trade",    "options", "campaign",
@@ -1292,9 +1292,10 @@ static void read_title(ModsOverlaps *x, int mod)
         char path[128];
         const char *name = name_of(m);
         snprintf(path, sizeof(path), "title.%.60s", name);
-        if (!strcmp(name, "text")) {
+        if (!strcmp(name, "text") || !strcmp(name, "images")) {
             if (Json_TypeOf(m) == JSON_ARRAY)
-                labelled(x, claim(x, MODS_OVERLAP_TITLE, mod, hash_text(path), ADD, 0, m), "title.text (lines)");
+                labelled(x, claim(x, MODS_OVERLAP_TITLE, mod, hash_text(path), ADD, 0, m),
+                         !strcmp(name, "text") ? "title.text (lines)" : "title.images (pictures)");
         } else if (!strcmp(name, "entries"))
             title_entries(x, mod, path, m);
         else
@@ -1395,6 +1396,19 @@ static void pack_passwords(ModsOverlaps *x, int mod, const JsonValue *list)
         }
     }
 }
+/* "ui": each element's keys the latest mod's (ui_config.c). */
+static void read_ui(ModsOverlaps *x, int mod)
+{
+    const JsonValue *duel = object_of(Json_Member(object_of(member(x, mod, "ui")), "duel"));
+    for (const JsonValue *e = Json_At(duel, 0); e; e = Json_Next(e)) {
+        for (const JsonValue *k = Json_At(object_of(e), 0); k; k = Json_Next(k)) {
+            char path[160];
+            snprintf(path, sizeof(path), "ui.duel.%.60s.%.60s", name_of(e), name_of(k));
+            labelled(x, claim(x, MODS_OVERLAP_UI, mod, hash_text(path), SET, value_of(k), k), path);
+        }
+    }
+}
+
 static void read_packs(ModsOverlaps *x, int mod)
 {
     const JsonValue *packs = member(x, mod, "packs");
@@ -2070,6 +2084,7 @@ ModsOverlaps *Mods_OverlapCompute(const ModsOverlapMod *mods, int count, const M
         if (having(x, "font") >= 2 && member(x, mod, "font"))
             claim(x, MODS_OVERLAP_FONT, mod, 0, ADD, 0, member(x, mod, "font"));
         if (having(x, "title") + having(x, "menu") >= 2) read_title(x, mod);
+        if (having(x, "ui") >= 2) read_ui(x, mod);
     }
     read_code(x);
     sector_runs(x);
@@ -2127,7 +2142,8 @@ const char *Mods_OverlapKindName(int kind)
     static const char *const names[MODS_OVERLAP_KINDS] = {
         "Disc data", "Sounds",   "Texture images", "Cards",        "Fusions",  "Equips",          "Rituals",
         "Drops and decks", "Starter decks", "Passwords", "Card packs", "Guardian Stars", "Limits", "Terrain bonuses",
-        "Attack traps", "Duelists", "Text", "Fonts", "Title screen and menus", "Code hooks", "Game events"};
+        "Attack traps", "Duelists", "Text", "Fonts", "Title screen and menus", "Duel pictures", "Code hooks",
+        "Game events"};
     return kind >= 0 && kind < MODS_OVERLAP_KINDS ? names[kind] : "";
 }
 

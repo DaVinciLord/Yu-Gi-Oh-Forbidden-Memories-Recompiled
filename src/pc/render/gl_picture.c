@@ -1097,11 +1097,15 @@ static void set_page(uint32_t value)
     state.glyph = (value & HD_TEXT_MARK) != 0;
 }
 
+static void name_over_panel(int x, int y, int width, int height, int u0, int v0, int w, int h, const Vertex *colour,
+                            int flags);
+
 static size_t polygon(const uint32_t *words, size_t count)
 {
     uint32_t command = words[0] >> 24;
     int quad = command & 8, textured = command & 4, shaded = command & 0x10;
     int vertices_n = quad ? 4 : 3, i;
+    int piece[8];   /* a quad's place and texels, before HD text moves them: x0, y0, x1, y1, u0, v0, u1, v1 */
     size_t need = (size_t)vertices_n * (1 + (textured ? 1 : 0)) + (shaded ? (size_t)vertices_n : 1);
     size_t at = 0;
     int flags = (command & 3) | (textured ? 4 : 0);
@@ -1135,6 +1139,20 @@ static size_t polygon(const uint32_t *words, size_t count)
     }
     /* Only a primitive sampling a bank can fade: retail never names one. */
     state.fade = textured && state.bank ? SoftGpu_FadeOf((uint32_t)state.fade) : 0;
+    piece[0] = piece[2] = v[0].x;
+    piece[1] = piece[3] = v[0].y;
+    piece[4] = piece[6] = v[0].u;
+    piece[5] = piece[7] = v[0].v;
+    for (i = 1; i < vertices_n; i++) {
+        if (v[i].x < piece[0]) piece[0] = v[i].x;
+        if (v[i].y < piece[1]) piece[1] = v[i].y;
+        if (v[i].x > piece[2]) piece[2] = v[i].x;
+        if (v[i].y > piece[3]) piece[3] = v[i].y;
+        if (v[i].u < piece[4]) piece[4] = v[i].u;
+        if (v[i].v < piece[5]) piece[5] = v[i].v;
+        if (v[i].u > piece[6]) piece[6] = v[i].u;
+        if (v[i].v > piece[7]) piece[7] = v[i].v;
+    }
     state.pack = textured && !state.bank
                      ? TexturePack_EntryFor(state.page_x, state.page_y, state.depth, state.clut_x, state.clut_y,
                                             v[0].u, v[0].v)
@@ -1201,24 +1219,43 @@ static size_t polygon(const uint32_t *words, size_t count)
     triangle(&v[0], &v[1], &v[2], flags);
     if (quad) triangle(&v[1], &v[2], &v[3], flags);
     state.fade = 0;
+    /* A piece of the life-point panel drawn at another size (a mod's "ui"). */
+    if (quad && textured && !state.bank && HdText_PanelCut())
+        name_over_panel(piece[0], piece[1], piece[2] - piece[0], piece[3] - piece[1], piece[4], piece[5],
+                        piece[6] - piece[4], piece[7] - piece[5], &v[0], (int)(command & 3) | 4);
     return need;
 }
 
 /* The opponent's name over the life-point panel just drawn, and the
  * player's for YOU (hd_text.h): in the panel's colour, drawn from the atlas whatever
- * drew the panel. */
-static void name_over_panel(const Vertex *base, int w, int h, int flags)
+ * drew the panel. The panel may be drawn whole or in pieces, at any size
+ * (a mod's "ui", pc/cards/duel_ui.h): texels u0, v0 on (w x h of them) drawn
+ * over x, y to x + width, y + height of the game's pixels. A name's box goes
+ * with the piece that has its rows and the column it joins the panel at. */
+static void name_over_panel(int x, int y, int width, int height, int u0, int v0, int w, int h, const Vertex *colour,
+                            int flags)
 {
-    int atlas_u, atlas_v, x, y, width, height, which;
+    int atlas_u, atlas_v, bx, by, bw, bh, which;
     if (!opponent_name || state.bank || state.depth != 0 || state.page_x != 704 || state.page_y != 0 ||
-        (state.clut_x != 736 && state.clut_x != 752) || state.clut_y != 252 || base->u != 128 || base->v != 128 || w != 64 || h != 40) {
+        (state.clut_x != 736 && state.clut_x != 752) || state.clut_y != 252 || w < 1 || h < 1 || u0 < 128 ||
+        v0 < 128 || u0 + w > 192 || v0 + h > 168) {
         return;
     }
+    /* Without a mod's "ui", the whole panel only, as ever. */
+    if (!HdText_PanelCut() && (u0 != 128 || v0 != 128 || w != 64 || h != 40)) return;
     for (which = 0; which < 2; which++) {
-        if (!HdText_NameBox(scale, which, &atlas_u, &atlas_v, &x, &y, &width, &height)) return;
+        if (!HdText_NameBox(scale, which, &atlas_u, &atlas_v, &bx, &by, &bw, &bh)) {
+            /* As ever, no player's box without the opponent's; but a mod's
+             * label may be for YOU alone. */
+            if (!HdText_PanelCut()) return;
+            continue;
+        }
+        /* In the piece: its rows, and where it meets the panel (column 25). */
+        if (by < v0 - 128 || by + bh > v0 - 128 + h || bx + bw <= u0 - 128 || bx + bw > u0 - 128 + w) continue;
         state.pack = 0;
-        block((base->x + x) * scale, (base->y + y) * scale, width * scale, height * scale, atlas_u, atlas_v,
-              atlas_u + width, atlas_v + height, base, flags | 16);
+        block((x * w + (bx - (u0 - 128)) * width) * scale / w, (y * h + (by - (v0 - 128)) * height) * scale / h,
+              bw * width * scale / w, bh * height * scale / h, atlas_u, atlas_v, atlas_u + bw, atlas_v + bh, colour,
+              flags | 16);
     }
 }
 
@@ -1257,7 +1294,7 @@ static size_t rectangle(const uint32_t *words, size_t count)
                        &atlas_u, &atlas_v)) {
             block(base.x * scale, base.y * scale, w * scale, h * scale, atlas_u, atlas_v, atlas_u + w, atlas_v + h,
                   &base, flags | 16);
-            name_over_panel(&base, w, h, flags);
+            name_over_panel(base.x, base.y, w, h, base.u, base.v, w, h, &base, flags);
             return need;
         }
     }
@@ -1283,7 +1320,7 @@ static size_t rectangle(const uint32_t *words, size_t count)
     if (w && h) {
         block(base.x * scale, base.y * scale, w * scale, h * scale, base.u, base.v, base.u + w, base.v + h, &base,
               flags);
-        if (textured) name_over_panel(&base, w, h, flags);
+        if (textured) name_over_panel(base.x, base.y, w, h, base.u, base.v, w, h, &base, flags);
     }
     return need;
 }

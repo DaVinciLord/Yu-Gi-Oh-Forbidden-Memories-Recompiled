@@ -532,6 +532,7 @@ window and stays centred in widescreen.
 | `entries` | the menu entries by name: `new_game`, `load`, `duel`, `trade`, `options` before a game is loaded; `campaign`, `free_duel`, `build_deck`, `library`, `password`, `save` after (or their numbers, 0 to 10). Each may have `hide`, `x` (moved from the middle), `y` (its place) and `tint`, and all the keys of [the menus](#the-titles-menus)' items |
 | `spacing` | how far apart the entries stand (retail 32) |
 | `text` | lines drawn over the title, each `{"text", "x", "y", "align", "color", "size", "show"}`: `x` and `y` its place (default 160, 220, `y` the line's middle; `wide_x`, `wide_y` in widescreen), `align` `left`, `center` or `right` of `x`, `size` 1 to 8 (1 about the game's own letters), `show` `always`, `press_start` or `menu`; at most 16 |
+| `images` | pictures of the mod's own over the title, each `{"image", "x", "y", "width", "height", "tint", "show"}`: `x` and `y` its middle (default 160, 120; `wide_x`, `wide_y` in widescreen), its size as the pictures' below (at most 320 x 240), `tint` its colours, `show` as a line's; at most 8. They go over the background, the logo and the copyright line, and under the menu's dimming, PUSH START BUTTON and the menus; the first given lowest |
 
 A hidden entry is left out of its menu and the cursor steps over it; the
 others close up, `spacing` apart around the middle of the retail menu,
@@ -542,8 +543,8 @@ one as it is and a colour can only darken what is there; on PUSH START
 BUTTON the tint goes over its pulse.
 
 Every applied mod's `title` is read in load order each time the title
-opens, a later mod's value winning key by key and the `text` lines of all of
-them shown, so applying or removing a mod shows the next time the title
+opens, a later mod's value winning key by key and the `text` lines and
+`images` of all of them shown, so applying or removing a mod shows the next time the title
 opens, with no restart. A key the title does not know, a colour that is not
 `#RRGGBB` or an entry that does not exist is noted beside the mod in the
 Mods window. How it is done: [`src/pc/platform/title_screen.c`](../src/pc/platform/title_screen.c),
@@ -706,6 +707,65 @@ opens. How it is done: [`src/pc/platform/title_menu.c`](../src/pc/platform/title
 (the cursor, the actions, the slides), the pictures in `title_images.c`,
 the labels in `menu_label.c`; the manifest is read by `title_config.c` and
 checked by `tests/pc/title_config_test.c`.
+
+## The duel's pictures
+
+A mod may move, size, colour, hide or replace the duel's pictures with a
+`"ui"` object: each half of the life-point panel with its digits, the FIELD
+box, the card bar and the two cursors. The FM Editor's UI tab draws them
+from your disc and drags them about.
+
+```json
+"ui": {
+    "duel": {
+        "lp_opponent": {"x": -236, "tint": "#FF9090", "digits": "#FFE040", "label": "RIVAL"},
+        "lp_player": {"x": -236, "y": 30, "scale": 150, "image": "art/lp.png"},
+        "field": {"x": 240, "tint": "#80C0FF"},
+        "card_bar": {"tint": "#C0C0FF"},
+        "hand_cursor": {"tint": "#FFFF40", "scale": 150},
+        "field_cursor": {"hide": true}
+    }
+}
+```
+
+| Picture | What it is |
+|---|---|
+| `lp_opponent` | the panel's top half: LP, COM and the opponent's life points and deck count |
+| `lp_player` | its bottom half: YOU and the player's |
+| `field` | the FIELD box, with the terrain's name |
+| `card_bar` | the strip under the hand: the card's name, ATK/DEF and stars are drawn over it, and the hand goes with it, so it stays where the game has it: only its colours, a picture of its own or none |
+| `hand_cursor` | the red arrow under the card the cursor is on |
+| `field_cursor` | the frame round the zone a card is going to |
+
+| Key | Meaning |
+|---|---|
+| `x`, `y` | moved by so many of the game's pixels, -400 to 400 across, -300 to 300 down |
+| `scale` | its size in percent, 25 to 400, about its middle (100 as it is) |
+| `tint` | its colours multiplied, `#RRGGBB` (`#FFFFFF` as they are; a colour can only darken what is there) |
+| `hide` | `true`: not drawn |
+| `image` | a PNG in the mod drawn instead, over the picture's place (moved and sized with it), `width` and `height` its size in the game's pixels instead of the picture's |
+| `digits` | the LP halves: the colour of their digits, over the game's (lit on that side's turn, dimmed on the other's) |
+| `label` | the LP halves: words in place of COM or YOU, at most 15 letters, set in the font the card names are (with View > Opponent's name for COM the opponent's name shows there; a label wins) |
+
+Everything is done as the game draws the pictures, never to the game's own
+objects, so its slides (the panel and the box leave the screen for a
+battle), the turn's colours and the cursors' moves go on as they do. The
+digits and the label go with their half; the label is not drawn over a
+half's `image`,
+which has words of its own if it wants them, and the digits are. A moved
+picture keeps its place among the others: the panel is still under the hand.
+The pictures are drawn as the game draws them at the console's resolution;
+above it (View > Internal 2x, 4x) a sized picture is not blurred, and the
+mod's PNG is drawn at up to four times the size it takes (as many times as
+fit in 1536 x 256 texels), as a texture of its own (the software GPU's
+texture bank 14: nothing of the duel's VRAM is used). A PNG with no more
+detail than the size it takes is drawn at that size.
+
+Every applied mod's `ui` is read when a duel starts, a later mod's value
+winning key by key. A key the game does not know, a value out of range or
+a PNG it cannot read is noted beside the mod in the Mods window. How it is
+done: [`src/pc/cards/duel_ui.c`](../src/pc/cards/duel_ui.c), read by
+`src/pc/platform/ui_config.c`, checked by `tests/pc/ui_config_test.c`.
 
 ## Rules: fusions, equips, rituals, drops, decks and more
 
