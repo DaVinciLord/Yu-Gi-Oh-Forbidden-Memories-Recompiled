@@ -1,6 +1,6 @@
-"""What the game accepts in a mod's "ui" key and the title's "images"
-(src/pc/platform/ui_config.c, title_config.c), checked before saving as
-the Mods window would note it."""
+"""What the game accepts in a mod's "ui" key, the title's "images" and the
+menus' sizes (src/pc/platform/ui_config.c, title_config.c), checked before
+saving as the Mods window would note it."""
 from __future__ import annotations
 
 from pathlib import PurePosixPath
@@ -148,6 +148,25 @@ def check(project, has_file) -> list:
                     out.append(("warning", where, "\"image\" is too wide to leave the screen with the game's; "
                                                   "it is drawn narrower"))
     title = project.other.get("title")
+    # The menus' sizes (title_config.c scale_member): a whole number from 25 to 400.
+    menu = project.other.get("menu")
+    sized = []
+    if isinstance(menu, dict):
+        sized.append(("menu", menu))
+        for where, holder in (("menu.entries", menu.get("entries")),):
+            if isinstance(holder, dict):
+                sized += [(f"{where}.{name}", item) for name, item in holder.items()]
+        buttons = menu.get("buttons")
+        if isinstance(buttons, list):
+            sized += [(f"menu.buttons.{b.get('id')}", b) for b in buttons if isinstance(b, dict)]
+    if isinstance(title, dict) and isinstance(title.get("entries"), dict):
+        sized += [(f"title.entries.{name}", item) for name, item in title["entries"].items()]
+    for where, holder in sized:
+        value = holder.get("scale") if isinstance(holder, dict) else None
+        if value is not None and (isinstance(value, bool) or not isinstance(value, int) or
+                                  not SCALE_MIN <= value <= SCALE_MAX):
+            out.append(("warning", where, f"\"scale\" is a whole number from {SCALE_MIN} to {SCALE_MAX} (percent); "
+                                          "the game leaves it out"))
     images = title.get("images") if isinstance(title, dict) else None
     if images is not None:
         if not isinstance(images, list):

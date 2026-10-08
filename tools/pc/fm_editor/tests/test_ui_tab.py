@@ -67,6 +67,34 @@ class SceneTest(unittest.TestCase):
         self.assertEqual([i["name"] for i, _ in scene.order(1)][-1], "uimod:quick")
         self.assertEqual(scene.places(0)["uimod:credits"], (160, 50 + 1 * 32 - 16))
 
+    def test_sizes(self):
+        """Each item's "scale", its own or the menu's, and the room it takes:
+        the numbers tests/pc/title_config_test.c sizes() holds the game to."""
+        from fm_editor.ui_title import Scene
+        places = self.places({"menu": {"scale": 120}})
+        self.assertEqual([places[n][1] for n in ("new_game", "load", "duel", "trade", "options")],
+                         [38, 76, 114, 153, 191])
+        places = self.places({"menu": {"scale": 120}}, 1)
+        self.assertEqual((places["campaign"][1], places["free_duel"][1], places["save"][1]), (21, 57, 201))
+        other = {"menu": {"scale": 80, "entries": {"load": {"scale": 150}},
+                          "buttons": [{"id": "big", "label": "BIG", "menu": "second", "scale": 60}]}}
+        scene = Scene(project(other))
+        self.assertEqual([scene.scale(i) for i, _ in scene.order(0)][:2], [80, 150])
+        places = scene.places(0)
+        self.assertEqual([places[n][1] for n in ("new_game", "load", "duel", "trade", "options")],
+                         [52, 88, 125, 151, 176])
+        places = scene.places(1)
+        self.assertEqual((places["campaign"][1], places["free_duel"][1], places["uimod:big"][1]), (47, 72, 197))
+        places = self.places({"menu": {"entries": {"trade": {"scale": 300, "hide": True}}}})
+        self.assertEqual((places["new_game"][1], places["load"][1], places["options"][1]), (66, 98, 162))
+        places = self.places({"menu": {"scale": 150, "spacing": 20}})
+        self.assertEqual((places["new_game"][1], places["load"][1], places["options"][1]), (54, 84, 174))
+        places = self.places({"title": {"spacing": 24}, "menu": {"scale": 150}})
+        self.assertEqual((places["new_game"][1], places["load"][1], places["options"][1]), (42, 78, 186))
+        # One out of 25 to 400 is left out: the menu's, or 100.
+        scene = Scene(project({"menu": {"scale": 500, "entries": {"load": {"scale": "big"}, "duel": {"scale": 10}}}}))
+        self.assertEqual([scene.scale(i) for i, _ in scene.order(0)][:3], [100, 100, 100])
+
     def test_fit(self):
         from fm_editor.ui_title import fit
         self.assertEqual(fit(1280, 960, 320, 240), (320, 240))          # 4x a whole screen
@@ -112,6 +140,18 @@ class RulesTest(unittest.TestCase):
         self.assertIn(("ui.duel.field_cursor", "ui/missing.png"), found)
         self.assertIn(("title.images", "at"), found)
         self.assertIn(("title.images[0]", "a"), found)
+
+    def test_menu_sizes(self):
+        p = project({"menu": {"scale": 120, "entries": {"load": {"scale": 400}},
+                              "buttons": [{"id": "a", "label": "A", "scale": 25}]},
+                     "title": {"entries": {"options": {"scale": 90}}}})
+        self.assertEqual(ui_rules.check(p, lambda name: True), [])
+        p = project({"menu": {"scale": 401, "entries": {"load": {"scale": True}},
+                              "buttons": [{"id": "a", "label": "A", "scale": 24}]},
+                     "title": {"entries": {"options": {"scale": "90"}}}})
+        found = [(where, message.split(" ")[0]) for _, where, message in ui_rules.check(p, lambda name: True)]
+        self.assertEqual(found, [("menu", "\"scale\""), ("menu.entries.load", "\"scale\""),
+                                 ("menu.buttons.a", "\"scale\""), ("title.entries.options", "\"scale\"")])
 
     def test_validate_takes_the_keys(self):
         p = project({"title": {"logo": {"tint": "#FF0000"}}, "menu": {"spacing": 28}, "ui": {"duel": {}}})
@@ -269,6 +309,64 @@ class UiTabTest(GuiCase):
         page.remove()
         self.assertNotIn("buttons", self.app.project.other["menu"])
         self.assertNotIn("button1", self.app.project.other["menu"]["order"]["first"])
+
+    def test_menu_sizes(self):
+        """Sizes through the page's own controls: an item's Size, the wheel
+        over it, All buttons; what can look off said so; saved and opened."""
+        page = self.page("menu")
+        page.chosen = "load"
+        page.fill_form()
+        self.assertEqual(page.item_vars["scale"].get(), "100")
+        page.item_vars["scale"].set("150")
+        page.item_typed("scale")
+        menu = self.app.project.other["menu"]
+        self.assertEqual(menu["entries"]["load"], {"scale": 150})
+        page.wheel(("item", "load"), 1)
+        page.wheel(("item", "load"), 1)
+        self.assertEqual(menu["entries"]["load"]["scale"], 170)
+        page.slid("60")
+        self.assertEqual(menu["entries"]["load"]["scale"], 60)
+        page.item_vars["scale"].set("999")
+        page.item_typed("scale")
+        self.assertEqual(menu["entries"]["load"]["scale"], 400)
+        # All buttons: every item's size but those with their own; one at the
+        # new size needs none of its own.
+        page.add_button()
+        button = page.chosen
+        page.all_scale.set("120")
+        page.all_typed()
+        self.assertEqual(menu["scale"], 120)
+        page.chosen = button
+        page.fill_form()
+        self.assertEqual(page.item_vars["scale"].get(), "120")
+        self.assertEqual(page.scale_note.cget("text"), "all buttons'")
+        page.all_scale.set("400")
+        page.all_typed()
+        self.assertNotIn("load", menu.get("entries", {}))   # at 400 like all the others: nothing of its own
+        # At 400 the menu's items run into each other, and LOAD past the screen.
+        page.chosen = "load"
+        page.draw()
+        text = page.warning.cget("text")
+        self.assertIn("Runs into", text)
+        self.assertIn("\u26a0", text)
+        page.all_scale.set("100")
+        page.all_typed()
+        self.assertNotIn("scale", menu)
+        page.draw()
+        self.assertEqual(page.warning.cget("text"), "")
+        # A button too wide for the screen at 300, moved right.
+        page.chosen = button
+        page.fill_form()
+        page.item_vars["x"].set("120")
+        page.item_typed("x")
+        page.item_vars["scale"].set("300")
+        page.item_typed("scale")
+        self.assertIn("past the edge of the screen", page.warning.cget("text"))
+        folder = self.folder / "sized"
+        manifest.save_mod(self.app.project, folder)
+        opened, messages = manifest.open_mod(self.app.retail, folder)
+        self.assertEqual(opened.other["menu"], self.app.project.other["menu"])
+        self.assertFalse([i for i in validate.validate(opened) if i.area == "UI"], messages)
 
     def test_saved_and_opened_again(self):
         page = self.page("duel")

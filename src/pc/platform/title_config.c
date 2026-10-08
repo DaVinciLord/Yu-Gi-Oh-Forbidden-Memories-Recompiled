@@ -14,8 +14,11 @@
 
 /* The retail layout (frontend.c): the entries 32 apart, the first menu's
  * from y 50 (its middle 114), the second's from 42 (122). A menu's items
- * stay between TOP and TOP + MOST, closer together when they would not fit. */
-enum { SPACING = 32, FIRST_MIDDLE = 50 + 2 * SPACING, SECOND_MIDDLE = 42 + 5 * SPACING / 2, TOP = 16, MOST = 188 };
+ * stay between TOP and TOP + MOST, closer together when they would not fit:
+ * an entry's 28 rows (HALF either side of its middle) between y 2 and 218.
+ * A bigger or smaller first or last item moves that end by as much. */
+enum { SPACING = 32, FIRST_MIDDLE = 50 + 2 * SPACING, SECOND_MIDDLE = 42 + 5 * SPACING / 2, TOP = 16, MOST = 188,
+       HALF = 14 };
 /* About a minute at the title's 60 frames a second before the retail
  * counter, 3000 of D_8009B0D8's ticks, plays the movie again. */
 enum { FRAMES_PER_SECOND = 60 };
@@ -57,6 +60,7 @@ static void defaults(void)
         item->menu = i >= TITLE_FIRST_MENU;
     }
     config.spacing = SPACING;
+    config.scale = 100;
 }
 
 /* "#RRGGBB", "RRGGBB" or a number; -1 when it is none of those. */
@@ -95,6 +99,22 @@ static void int_member(const JsonValue *object, const char *key, int *out)
 {
     const JsonValue *value = Json_Member(object, key);
     if (value) *out = (int)Json_Number(value, *out);
+}
+
+/* "scale": a size in percent, TITLE_SCALE_MIN to TITLE_SCALE_MAX; any
+ * other is noted and left out. */
+static void scale_member(const char *mod, const char *where, const JsonValue *object, int *out)
+{
+    const JsonValue *value = Json_Member(object, "scale");
+    long number;
+    if (!value) return;
+    number = Json_Number(value, TITLE_SCALE_MIN - 1);
+    if (Json_TypeOf(value) != JSON_NUMBER || number < TITLE_SCALE_MIN || number > TITLE_SCALE_MAX) {
+        Mods_Note(mod, "%s: %s%s\"scale\" is a whole number from %d to %d (percent)", reading, where, *where ? " " : "",
+                  TITLE_SCALE_MIN, TITLE_SCALE_MAX);
+        return;
+    }
+    *out = (int)number;
 }
 
 /* "wide_x", "wide_y": a place for widescreen. */
@@ -209,7 +229,7 @@ static int action_index(const char *name)
 
 /* The keys an entry and a button share. */
 static const char *const item_keys[] = {"hide", "x", "y", "tint", "image", "selected_image", "width", "height",
-                                        "label", "action", "value", "notice", "wide_x", "wide_y"};
+                                        "label", "action", "value", "notice", "wide_x", "wide_y", "scale"};
 
 static void read_item(const char *mod, const char *directory, const JsonValue *part, TitleItem *item)
 {
@@ -222,6 +242,7 @@ static void read_item(const char *mod, const char *directory, const JsonValue *p
         item->set_y = 1;
     }
     read_wide(part, &item->wide);
+    scale_member(mod, item->name, part, &item->scale);
     colour_member(mod, part, "tint", &item->tint);
     read_image(mod, directory, item->name, part, "image", &item->image);
     read_image(mod, directory, item->name, part, "selected_image", &item->selected);
@@ -302,7 +323,7 @@ static void read_buttons(const char *mod, const char *directory, const JsonValue
     for (part = Json_At(list, 0); part; part = Json_Next(part)) {
         static const char *const button_keys[] = {"id", "menu", "hide", "x", "y", "tint", "image", "selected_image",
                                                   "width", "height", "label", "action", "value", "notice", "wide_x",
-                                                  "wide_y"};
+                                                  "wide_y", "scale"};
         const char *id = Json_String(Json_Member(part, "id"), ""), *menu = Json_String(Json_Member(part, "menu"), NULL);
         const char *colon = strchr(id, ':');
         int i = item_index(mod, id);
@@ -540,11 +561,12 @@ static void read_title(const char *mod, const char *directory, const JsonValue *
 
 static void read_menu(const char *mod, const char *directory, const JsonValue *menu)
 {
-    static const char *const known[] = {"background", "spacing", "entries", "buttons", "order"};
+    static const char *const known[] = {"background", "spacing", "scale", "entries", "buttons", "order"};
     const JsonValue *part;
     reading = "menu";
     if ((part = Json_Member(menu, "background"))) read_background(mod, directory, part, &config.background[1], &config.menu_set);
     int_member(menu, "spacing", &config.spacing);
+    scale_member(mod, "", menu, &config.scale);
     read_entries(mod, directory, Json_Member(menu, "entries"));
     read_buttons(mod, directory, Json_Member(menu, "buttons"));
     read_order(mod, Json_Member(menu, "order"));
@@ -620,22 +642,37 @@ static void arrange(int menu)
     }
 }
 
-/* The shown items one under another, `spacing` apart (closer when they
- * would not fit), around the middle of the retail menu; a "y" of the mod's
- * own stands. */
+/* The shown items one under another around the middle of the retail
+ * menu, `spacing` apart at their size 100: each takes room as its size,
+ * two the halves of theirs between their middles (all closer together
+ * when they would not fit between TOP and TOP + MOST -- the ends moved by
+ * the first's and the last's size -- by the most `spacing` that fits). A
+ * "y" of the mod's own stands. With every item at 100 that is `spacing`
+ * apart between TOP and TOP + MOST, as it always was. */
 static void stack(int menu, int middle)
 {
-    int shown = config.shown[menu], spacing = config.spacing, first, row, i;
-    if (shown > 1 && (shown - 1) * spacing > MOST) spacing = MOST / (shown - 1);
-    first = middle - (shown - 1) * spacing / 2;
-    if (first < TOP) first = TOP;
-    if (first + (shown - 1) * spacing > TOP + MOST) first = TOP + MOST - (shown - 1) * spacing;
+    int shown = config.shown[menu], spacing = config.spacing, first, row, i, total, top = TOP, most = MOST;
+    /* reach[row]: the halves of the sizes, in percent, from the first's middle to the row's. */
+    int reach[TITLE_ITEMS];
+    reach[0] = 0;
+    for (row = 1; row < shown; row++)
+        reach[row] = reach[row - 1] + config.items[config.order[menu][row - 1]].scale +
+                     config.items[config.order[menu][row]].scale;
+    if (shown) {
+        top = TOP - HALF + (HALF * config.items[config.order[menu][0]].scale + 50) / 100;
+        most = TOP + MOST + HALF - (HALF * config.items[config.order[menu][shown - 1]].scale + 50) / 100 - top;
+    }
+    if (shown > 1 && spacing * reach[shown - 1] / 200 > most) spacing = most * 200 / reach[shown - 1];
+    total = shown > 1 ? spacing * reach[shown - 1] / 200 : 0;
+    first = middle - total / 2;
+    if (first < top) first = top;
+    if (first + total > top + most) first = top + most - total;
     for (i = 0; i < TITLE_ITEMS; i++) {
         if (config.items[i].used && config.items[i].menu == menu && config.items[i].hidden) config.items[i].y = TITLE_PARKED_Y;
     }
     for (row = 0; row < shown; row++) {
         TitleItem *item = &config.items[config.order[menu][row]];
-        if (!item->set_y) item->y = first + row * spacing;
+        if (!item->set_y) item->y = first + spacing * reach[row] / 200;
     }
 }
 
@@ -661,6 +698,7 @@ void TitleConfig_Finish(void)
             snprintf(item->label, sizeof(item->label), "%s", strchr(item->name, ':') + 1);
         }
         if (i >= TITLE_ENTRIES && item->action == TITLE_ACTION_OWN) item->action = TITLE_ACTION_NONE;
+        if (!item->scale) item->scale = config.scale;
     }
     arrange(0);
     arrange(1);

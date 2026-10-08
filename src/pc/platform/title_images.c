@@ -68,7 +68,8 @@ int TitleImages_IsBackground(int which)
 
 typedef struct {
     char file[TITLE_PATH];
-    int width, height, ready;
+    int width, height, ready;    /* its texels */
+    int draw_w, draw_h;          /* the size it is drawn at, in the game's pixels: an item's at its "scale" */
     int x, y, clut_x, clut_y;    /* where it is in VRAM */
     unsigned char *texels;
     unsigned short clut[256];
@@ -117,17 +118,42 @@ static void measure(int which, const TitleImage *image, int png_w, int png_h, in
     if (*h < 1) *h = 1;
 }
 
-/* Remade only when the file or its size changes. */
-static int make(int which, const TitleImage *image)
+/* An item's size at `scale` percent of w x h, rounded, and the texels it
+ * is made of: as many, or, past what an item's place holds (ITEM_MAX_W x
+ * ITEM_MAX_H), the most that keep its shape, drawn stretched to the size
+ * at the console's resolution (the PNG itself above it). */
+static void scaled(int w, int h, int scale, int *draw_w, int *draw_h, int *texels_w, int *texels_h)
+{
+    *draw_w = (w * scale + 50) / 100;
+    *draw_h = (h * scale + 50) / 100;
+    if (*draw_w < 1) *draw_w = 1;
+    if (*draw_h < 1) *draw_h = 1;
+    *texels_w = *draw_w;
+    *texels_h = *draw_h;
+    if (*texels_w > ITEM_MAX_W) { *texels_h = *texels_h * ITEM_MAX_W / *texels_w; *texels_w = ITEM_MAX_W; }
+    if (*texels_h > ITEM_MAX_H) { *texels_w = *texels_w * ITEM_MAX_H / *texels_h; *texels_h = ITEM_MAX_H; }
+    *texels_w = (*texels_w + 1) & ~1;
+    if (*texels_w < 2) *texels_w = 2;
+    if (*texels_h < 1) *texels_h = 1;
+}
+
+/* Remade only when the file or its size changes. `scale` is an item's
+ * size in percent (100 for the rest). */
+static int make(int which, const TitleImage *image, int scale)
 {
     Picture *picture = &pictures[which];
-    int png_w, png_h, w, h;
+    int png_w, png_h, w, h, draw_w, draw_h;
     char why[1300];
     if (!CardArt_ImageSize(image->file, &png_w, &png_h)) {
         Mods_Note(image->mod, "title: %s is not a PNG it could read", image->file);
         return 0;
     }
     measure(which, image, png_w, png_h, &w, &h);
+    draw_w = w;
+    draw_h = h;
+    if (scale != 100) scaled(draw_w, draw_h, scale, &draw_w, &draw_h, &w, &h);
+    picture->draw_w = draw_w;
+    picture->draw_h = draw_h;
     if (picture->texels && picture->width == w && picture->height == h && !strcmp(picture->file, image->file))
         return 1;
     free(picture->texels);
@@ -143,6 +169,8 @@ static int make(int which, const TitleImage *image)
     snprintf(picture->file, sizeof(picture->file), "%s", image->file);
     picture->width = w;
     picture->height = h;
+    picture->draw_w = draw_w;
+    picture->draw_h = draw_h;
     /* Above the console's resolution, the PNG itself: known by these bytes
      * when they are uploaded below. */
     if ((png_w > w || png_h > h) &&
@@ -169,8 +197,10 @@ static int item_image(const TitleItem *item, int selected, TitleImage *out)
     if (item->image.file[0] || !item->label[0]) return 0;
     memset(out, 0, sizeof(*out));
     snprintf(out->mod, sizeof(out->mod), "%s", item->mod);
-    if (!MenuLabel_Make(item->label, selected, out->file, sizeof(out->file), &out->width, &out->height, why,
-                        sizeof(why))) {
+    /* Its PNG as sharp at the item's size as at 100 at the highest
+     * internal resolution. */
+    if (!MenuLabel_Make(item->label, selected, (MENU_LABEL_FACTOR * item->scale + 99) / 100, out->file,
+                        sizeof(out->file), &out->width, &out->height, why, sizeof(why))) {
         Mods_Note(item->mod, "menu: %s: %s", item->name, why);
         return 0;
     }
@@ -216,7 +246,7 @@ void TitleImages_Prepare(const TitleConfig *config)
         if (which == TITLE_IMAGE_MENU_BACKGROUND && !strcmp(image->file, config->background[0].image.file)) continue;
         if (which == TITLE_IMAGE_WIDE_MENU_BACKGROUND && !strcmp(image->file, config->background[0].wide_image.file))
             continue;
-        pictures[which].ready = image->file[0] && make(which, image);
+        pictures[which].ready = image->file[0] && make(which, image, 100);
         pictures[which].x = fixed[which].x;
         pictures[which].y = fixed[which].y;
         pictures[which].clut_x = CLUT_X;
@@ -240,7 +270,8 @@ void TitleImages_Prepare(const TitleConfig *config)
         for (selected = 0; selected < 2; selected++) {
             TitleImage image;
             Picture *picture = &pictures[TITLE_IMAGE_ITEM(i, selected)];
-            if (!item_image(item, selected, &image) || !make(TITLE_IMAGE_ITEM(i, selected), &image)) continue;
+            if (!item_image(item, selected, &image) || !make(TITLE_IMAGE_ITEM(i, selected), &image, item->scale))
+                continue;
             if (cluts == ITEM_CLUTS || !place(shelves, usable, picture->width, picture->height, &picture->x, &picture->y)) {
                 Mods_Note(item->mod, "menu: no room left for %s's pictures", item->name);
                 continue;
@@ -256,7 +287,7 @@ void TitleImages_Prepare(const TitleConfig *config)
     for (i = 0; i < config->pictures; i++) {
         const TitlePicture *added = &config->picture[i];
         Picture *picture = &pictures[TITLE_IMAGE_PICTURE(i)];
-        if (!make(TITLE_IMAGE_PICTURE(i), &added->image)) continue;
+        if (!make(TITLE_IMAGE_PICTURE(i), &added->image, 100)) continue;
         if (cluts == ITEM_CLUTS || !place(shelves, usable, picture->width, picture->height, &picture->x, &picture->y)) {
             Mods_Note(added->image.mod, "title: no room left for the picture %s", added->image.file);
             continue;
@@ -302,13 +333,14 @@ void TitleImages_Prepare(const TitleConfig *config)
 int TitleImages_Ready(int which, int *width, int *height)
 {
     if (which < 0 || which >= TITLE_IMAGES || !pictures[which].ready) return 0;
-    if (width) *width = pictures[which].width;
-    if (height) *height = pictures[which].height;
+    if (width) *width = pictures[which].draw_w;
+    if (height) *height = pictures[which].draw_h;
     return 1;
 }
 
 /* In strips of at most STRIP texels, each inside one texture page, as the
- * game draws its own background (MainMenu_DrawFrontendBackground). */
+ * game draws its own background (MainMenu_DrawFrontendBackground); at its
+ * size (TitleImages_Ready), each strip's share of it. */
 void TitleImages_Draw(int which, void *ot, int depth, int x, int y, int r, int g, int b, int blend)
 {
     const Picture *picture;
@@ -336,10 +368,10 @@ void TitleImages_Draw(int which, void *ot, int depth, int x, int y, int r, int g
         int word = picture->x + left / 2, page = word & ~63, u = (word - page) * 2;
         int v = picture->y - 256;
         strip.tpage = getTPage(1, blend ? 1 : 0, page, 256);
-        strip.x0 = strip.x2 = (short)(x + left);
-        strip.x1 = strip.x3 = (short)(x + left + width);
+        strip.x0 = strip.x2 = (short)(x + left * picture->draw_w / picture->width);
+        strip.x1 = strip.x3 = (short)(x + (left + width) * picture->draw_w / picture->width);
         strip.y0 = strip.y1 = (short)y;
-        strip.y2 = strip.y3 = (short)(y + picture->height);
+        strip.y2 = strip.y3 = (short)(y + picture->draw_h);
         strip.u0 = strip.u2 = (u8)u;
         /* The far edge is the texel after the last, as a polygon's is not
          * drawn: one to one, no texel twice. A strip starts at most 126

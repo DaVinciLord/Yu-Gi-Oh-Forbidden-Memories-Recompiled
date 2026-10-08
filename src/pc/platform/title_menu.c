@@ -20,7 +20,12 @@
  * title slides the entries out as the game's own do, with the game
  * returning its carrier and this the choice instead. Entries and buttons
  * drawn here are the entries' size and place and slide the game's way,
- * with afterimages of their own. */
+ * with afterimages of their own.
+ *
+ * An item's "scale" sizes it about its middle: a picture or a label is
+ * drawn at that size (title_images.c), and an entry of the game's own is
+ * drawn here too, its sprites -- as the game sorts them, the cursor's
+ * look or not -- each a quad that size. */
 #include "title_menu.h"
 #include "title_config.h"
 #include "title_images.h"
@@ -32,10 +37,14 @@
 #include "game/display_object.h"
 #include "game/display_object_helpers.h"
 #include "game/display_object_config.h"
+#include "game/display_object_render_sprite_sheet.h"
+#include "pc/cards/duel_ui.h"
 #include "game/input.h"
 #include "game/sound.h"
 #include "game/ordering_tables.h"
 #include "psyq/libgte.h"
+#include "psyq/libgpu.h"
+#include "psyq/libgs.h"
 #include "overlays/main_menu/frontend.h"
 #include <stdio.h>
 #include <string.h>
@@ -75,10 +84,18 @@ static DisplayObject *entry(int i) { return (DisplayObject *)gMain_apMenuEntries
 static int menu_of(int id) { return id >= TITLE_FIRST_MENU; }
 static int base_of(int menu) { return menu ? TITLE_FIRST_MENU : 0; }
 
-/* Drawn here: an item with a picture made for it this time. */
+/* One of the game's entries at a size of a mod's: drawn here from its
+ * sprites (draw_sized). */
+static int sized_entry(int i)
+{
+    return i < TITLE_ENTRIES && config()->items[i].scale != 100 && entry(i) &&
+           !TitleImages_Ready(TITLE_IMAGE_ITEM(i, 0), NULL, NULL);
+}
+
+/* Drawn here: an item with a picture made for it this time, or a sized entry. */
 static int drawn_here(int i)
 {
-    return TitleImages_Ready(TITLE_IMAGE_ITEM(i, 0), NULL, NULL);
+    return TitleImages_Ready(TITLE_IMAGE_ITEM(i, 0), NULL, NULL) || sized_entry(i);
 }
 
 static int prompt_up(void)
@@ -358,6 +375,82 @@ int TitleMenu_After(int result)
     return result;
 }
 
+/* d * scale / 100, rounded half away from 0: a point's place from an
+ * item's middle at its size. */
+static int scaled(int d, int scale)
+{
+    int t = d * scale;
+    return t >= 0 ? (t + 50) / 100 : -((-t + 50) / 100);
+}
+
+/* One sprite the game sorts for an entry as a quad from x0, y0 to x1, y1,
+ * its far edges the texel after its last (at a page's edge, 255, the
+ * last), as duel_ui.c draws a sized one. */
+static void sized_quad(const GsSPRITE *sprite, u32 attribute, int x0, int y0, int x1, int y1, int r, int g, int b,
+                       void *ot, int depth)
+{
+    POLY_FT4 quad;
+    int u0 = sprite->u, v0 = sprite->v, u1 = u0 + sprite->w > 255 ? u0 + sprite->w - 1 : u0 + sprite->w,
+        v1 = v0 + sprite->h > 255 ? v0 + sprite->h - 1 : v0 + sprite->h;
+    if (x1 <= x0 || y1 <= y0) return;
+    memset(&quad, 0, sizeof(quad));
+    setPolyFT4(&quad);
+    if (attribute & 0x40000000) setSemiTrans(&quad, 1);
+    /* Its colours as they are: unmodulated, so not dithered, as the sprite
+     * it stands for is not. */
+    if ((attribute & 0x40) || (r == 0x80 && g == 0x80 && b == 0x80)) setShadeTex(&quad, 1);
+    quad.r0 = (u8)r;
+    quad.g0 = (u8)g;
+    quad.b0 = (u8)b;
+    quad.tpage = (u16)((sprite->tpage & 0x1F) | ((attribute >> 17) & 0x180) | ((attribute >> 23) & 0x60));
+    quad.clut = getClut(sprite->cx, sprite->cy);
+    quad.x0 = quad.x2 = (short)x0;
+    quad.x1 = quad.x3 = (short)x1;
+    quad.y0 = quad.y1 = (short)y0;
+    quad.y2 = quad.y3 = (short)y1;
+    quad.u0 = quad.u2 = (u8)u0;
+    quad.u1 = quad.u3 = (u8)u1;
+    quad.v0 = quad.v1 = (u8)v0;
+    quad.v2 = quad.v3 = (u8)v1;
+    GsSortPoly(&quad, (GsOT *)ot, (unsigned short)depth);
+}
+
+/* Entry `i` at its size, its middle at x, y: the sprites the game would
+ * sort for it, taken with it where the screen keeps them all (the middle
+ * of it), each scaled about its place. `fade` 0 for the entry itself, else
+ * how much darker an afterimage of it is: added, as the game's own
+ * (MainMenu_SpawnFrontendEntryAfterimage), each colour down by that. */
+static void draw_sized(int i, void *ot, int depth, int x, int y, int fade)
+{
+    DisplayObject *object = entry(i);
+    DisplayObjectCapture caught;
+    int scale = config()->items[i].scale, saved_x = object->field_30.h.field_30, saved_y = object->field_30.h.field_32,
+        n;
+    if (!object->field_4C) return;
+    object->field_30.h.field_30 = MIDDLE;
+    object->field_30.h.field_32 = 120;
+    caught.count = 0;
+    DisplayObject_Capture = &caught;
+    DisplayObject_RenderSpriteSheet(object, (s32)ot, depth);
+    DisplayObject_Capture = NULL;
+    object->field_30.h.field_30 = (u16)saved_x;
+    object->field_30.h.field_32 = (u16)saved_y;
+    for (n = 0; n < caught.count; n++) {
+        const GsSPRITE *sprite = (const GsSPRITE *)&caught.sprite[n];
+        int left = sprite->x - MIDDLE, top = sprite->y - 120, r = sprite->r, g = sprite->g, b = sprite->b;
+        u32 attribute = sprite->attribute;
+        if (fade) {
+            attribute = (attribute & ~0x30000000u) | 0x50000000u;
+            r = r > fade ? r - fade : 0;
+            g = g > fade ? g - fade : 0;
+            b = b > fade ? b - fade : 0;
+            if (!r && !g && !b) continue;
+        }
+        sized_quad(sprite, attribute, x + scaled(left, scale), y + scaled(top, scale), x + scaled(left + sprite->w, scale),
+                   y + scaled(top + sprite->h, scale), r, g, b, ot, depth);
+    }
+}
+
 void TitleMenu_Draw(void)
 {
     int menu = TitleMenu_Showing(), row, depth;
@@ -370,6 +463,15 @@ void TitleMenu_Draw(void)
         int item = config()->order[menu][row], selected = cursor_item(menu) == item, w, h, which, level, g;
         const TitleItem *it = &config()->items[item];
         if (!drawn_here(item)) continue;
+        if (sized_entry(item)) {
+            draw_sized(item, D_800E9D90[1], depth, run.x[item], item_y(it), 0);
+            for (g = 0; g < GHOSTS; g++) {
+                if (run.ghosts[item][g].level > 0)
+                    draw_sized(item, D_800E9D90[1], depth + 1, run.ghosts[item][g].x, item_y(it),
+                               FULL - run.ghosts[item][g].level);
+            }
+            continue;
+        }
         which = TITLE_IMAGE_ITEM(item, 1);
         /* Without a picture for the cursor, the one picture, darker off it. */
         if (!selected || !TitleImages_Ready(which, NULL, NULL)) which = TITLE_IMAGE_ITEM(item, 0);
