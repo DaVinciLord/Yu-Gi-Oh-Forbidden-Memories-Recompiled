@@ -832,35 +832,123 @@ static int holds_disc(const uint16_t *vram, uint32_t disc, const unsigned char *
  * nor any from an older state: a block left untagged that starts with a
  * recalled head and matches the disc throughout is tagged as its upload
  * was. Between frames, with the entries resolved; then all of VRAM is
- * painted. */
+ * painted.
+ *
+ * The disc holds some pictures twice, byte for byte: 21 of the Free Duel
+ * portraits (and their palettes) are also campaign portraits, each pair a
+ * separate entry of the pack (issue #278). Such a block is settled by its
+ * neighbours: a screen's pictures are uploaded side by side from one file,
+ * so the copy whose disc offset lies nearest the tags around the block
+ * (once the unique ones are known) is the one that was uploaded. */
+#define TWINS_MAX 4
+typedef struct {
+    int x, y, count;
+    uint32_t disc[TWINS_MAX];
+    int words[TWINS_MAX], rows[TWINS_MAX];
+} Twins;
+
+static void tag_block(int x, int y, uint32_t disc, int words, int rows)
+{
+    int i, j;
+    for (j = 0; j < rows; j++)
+        for (i = 0; i < words; i++)
+            TextureDump_Tags[(size_t)(y + j) * SOFT_GPU_WIDTH + x + i] = disc + (uint32_t)(j * words + i) * 2 + 1;
+}
+
+/* How far `disc` lies from the disc offsets tagged just around the block at
+ * x,y (words x rows): the row above and below and the word either side.
+ * 0xFFFFFFFF with none tagged. */
+static uint32_t neighbour_distance(int x, int y, int words, int rows, uint32_t disc)
+{
+    uint32_t best = 0xFFFFFFFFu;
+    int i, j;
+    for (j = -1; j <= rows; j++) {
+        int inside = j >= 0 && j < rows;
+        if (y + j < 0 || y + j >= SOFT_GPU_HEIGHT) continue;
+        for (i = -1; i <= words; i++) {
+            uint32_t tag, at, gap;
+            if (inside && i >= 0 && i < words) i = words; /* the block's own words */
+            if (x + i < 0 || x + i >= SOFT_GPU_WIDTH) continue;
+            tag = TextureDump_Tags[(size_t)(y + j) * SOFT_GPU_WIDTH + x + i];
+            if (!tag || tag - 1 >= TEXTURE_MADE_BASE) continue;
+            at = tag - 1;
+            gap = at > disc ? at - disc : disc - at;
+            if (gap < best) best = gap;
+        }
+    }
+    return best;
+}
+
 static void rediscover(void)
 {
     const uint16_t *vram = SoftGpu_Vram();
-    int x, y, i, j;
+    Twins *twins = NULL;
+    int x, y, twin_count = 0, twin_room = 0, progress;
     if (!recalled_count || !vram || !TextureDump_Tags) return;
     for (y = 0; y < SOFT_GPU_HEIGHT; y++) {
         for (x = 0; x + RECALL_BYTES / 2 <= SOFT_GPU_WIDTH; x++) {
             const uint16_t *at = vram + (size_t)y * SOFT_GPU_WIDTH + x;
-            uint32_t disc = 0;
-            int words = 0, rows = 0, w, r, k, places = 0;
+            Twins found;
+            int w, r, k;
             if (TextureDump_Tags[(size_t)y * SOFT_GPU_WIDTH + x] || (k = recalled_first(at)) < 0) continue;
-            /* The one place sharing the head whose bytes the block holds. */
+            /* The places sharing the head whose bytes the block holds. */
+            found.x = x;
+            found.y = y;
+            found.count = 0;
             for (; k < recalled_count && !memcmp(at, recalled[k].head, RECALL_BYTES); k++) {
-                if (recalled[k].disc == disc || !block_at(recalled[k].disc, &w, &r) || x + w > SOFT_GPU_WIDTH ||
+                int seen = 0, n;
+                for (n = 0; n < found.count && n < TWINS_MAX; n++) seen |= found.disc[n] == recalled[k].disc;
+                if (seen || !block_at(recalled[k].disc, &w, &r) || x + w > SOFT_GPU_WIDTH ||
                     y + r > SOFT_GPU_HEIGHT || !holds_disc(vram, recalled[k].disc, recalled[k].data, x, y, w, r))
                     continue;
-                disc = recalled[k].disc;
-                words = w;
-                rows = r;
-                places++;
+                if (found.count < TWINS_MAX) {
+                    found.disc[found.count] = recalled[k].disc;
+                    found.words[found.count] = w;
+                    found.rows[found.count] = r;
+                }
+                found.count++;
             }
-            if (places != 1) continue;
-            for (j = 0; j < rows; j++)
-                for (i = 0; i < words; i++)
-                    TextureDump_Tags[(size_t)(y + j) * SOFT_GPU_WIDTH + x + i] = disc + (uint32_t)(j * words + i) * 2 + 1;
-            x += words - 1;
+            if (found.count == 1) {
+                tag_block(x, y, found.disc[0], found.words[0], found.rows[0]);
+                x += found.words[0] - 1;
+            } else if (found.count > 1 && found.count <= TWINS_MAX) {
+                if (twin_count == twin_room) {
+                    int room = twin_room ? twin_room * 2 : 64;
+                    Twins *grown = realloc(twins, sizeof(*twins) * (size_t)room);
+                    if (!grown) continue;
+                    twins = grown;
+                    twin_room = room;
+                }
+                twins[twin_count++] = found;
+            }
         }
     }
+    /* The twins, nearest neighbours first: one settled can settle the next. */
+    do {
+        int i, n;
+        progress = 0;
+        for (i = 0; i < twin_count; i++) {
+            Twins *block = &twins[i];
+            uint32_t best = 0xFFFFFFFFu, second = 0xFFFFFFFFu;
+            int chosen = -1;
+            if (!block->count || TextureDump_Tags[(size_t)block->y * SOFT_GPU_WIDTH + block->x]) continue;
+            for (n = 0; n < block->count; n++) {
+                uint32_t gap = neighbour_distance(block->x, block->y, block->words[n], block->rows[n], block->disc[n]);
+                if (gap < best) {
+                    second = best;
+                    best = gap;
+                    chosen = n;
+                } else if (gap < second) {
+                    second = gap;
+                }
+            }
+            if (chosen < 0 || best == second) continue; /* no neighbours, or no nearer copy */
+            tag_block(block->x, block->y, block->disc[chosen], block->words[chosen], block->rows[chosen]);
+            block->count = 0;
+            progress = 1;
+        }
+    } while (progress);
+    free(twins);
 }
 
 static void restored(void) { wanted_rediscover = 1; }
