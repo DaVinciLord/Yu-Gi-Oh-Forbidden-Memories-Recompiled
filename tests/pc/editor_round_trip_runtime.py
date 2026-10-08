@@ -5,7 +5,7 @@ Makes a mod through every tab of the FM Editor the way a modder would (the
 tabs' own buttons and dialogs: a card renamed and one added, a picture
 imported, a fusion added and one taken away, an equip given every Dragon, a
 ritual's recipe removed, a duelist's deck reweighted, a starter deck from
-Kaiba's, a limit, a Guardian Star matchup, a pack of Heishin's drops, the
+Kaiba's, a value, a Guardian Star matchup, a pack of Heishin's drops, the
 map's camera, a setting), exports it as File > Export would, and starts the
 game on it into the first duel: the game must read every part of it and
 say nothing against any. Artifacts stay in tmp/pc/fm-editor-mod (or --out).
@@ -110,9 +110,9 @@ def make_mod(game: Path, out: Path) -> list:
         app.starter.add_deck("opponent").ok()
     done.append("Starter decks: Kaiba's likeliest forty")
 
-    app.limits.vars["stats"].set("12000")
-    assert app.limits.commit()
-    done.append("Limits: ATK/DEF cap 12000")
+    app.values.vars["stats"].set("12000")
+    assert app.values.commit()
+    done.append("Values: ATK/DEF cap 12000")
 
     stars = app.stars
     stars.pick_cell(1, 2)

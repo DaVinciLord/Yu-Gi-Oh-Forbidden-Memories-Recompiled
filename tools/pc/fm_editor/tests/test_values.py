@@ -176,6 +176,13 @@ class ValuesTabTest(unittest.TestCase):
         self.assertTrue(tab.commit())
         self.assertEqual(app.project.other["limits"], dict(odd, chest=200))
         self.assertGreater(app.changes, changes)
+        # A value past what the game keeps: its name in red, the line why below.
+        tab.vars["swords_turns"].set("12")
+        self.assertTrue(tab.commit())
+        self.assertEqual(str(tab.captions["swords_turns"].cget("style")), "Error.TLabel")
+        self.assertIn("swords_turns", tab.status.cget("text"))
+        tab.revert("swords_turns")
+        self.assertEqual(str(tab.captions["swords_turns"].cget("style")), "TLabel")
         json.dumps(manifest.build(app.project))
 
 

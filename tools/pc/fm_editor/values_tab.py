@@ -32,7 +32,7 @@ class ValuesTab(Tab):
             side="left")
         ttk.Button(top, text="Reset all to the game's", command=self.clear).pack(side="right")
         self.status = ttk.Label(body, style="Error.TLabel", wraplength=1100, justify="left")
-        self.vars, self.captions, self.reverts = {}, {}, {}
+        self.vars, self.captions, self.reverts, self.wrong = {}, {}, {}, set()
         columns = ttk.Frame(body)
         columns.pack(fill="x")
         groups = dict(values.GROUPS)
@@ -100,7 +100,8 @@ class ValuesTab(Tab):
 
     def _mark(self, key):
         changed = bool(self.vars[key].get().strip())
-        self.captions[key].configure(style="Changed.TLabel" if changed else "TLabel")
+        style = "Error.TLabel" if key in self.wrong else "Changed.TLabel" if changed else "TLabel"
+        self.captions[key].configure(style=style)
         self.reverts[key].configure(state="normal" if changed else "disabled")
 
     def revert(self, key):
@@ -165,6 +166,10 @@ class ValuesTab(Tab):
     def _report(self):
         problems = values.check(self.project.other.get("limits")) if self.project else []
         self.status.configure(text="\n".join(f"{level}: {where}: {message}" for level, where, message in problems))
+        # A value the game would hold back or leave out: its name in red.
+        self.wrong = {where for _, where, _ in problems if where in self.captions}
+        for key in self.captions:
+            self._mark(key)
 
     def commit(self):
         if self.project is None:
