@@ -609,7 +609,8 @@ game's entries changed, the order of both, and a background of their own.
 | `buttons` | buttons the mod adds, at most 16 in all: each an `id` of its own (letters, digits, `_`, `-`), `menu` `first` (the default) or `second`, and the item keys below. A button is known to others as `"<mod id>:<id>"`: a later mod changes or hides one with that as its `id` |
 | `entries` | the game's entries by name, as the title's `entries`, with the item keys below |
 | `order` | the items top to bottom, as the cursor goes: `{"first": [...], "second": [...]}`, or a list alone for the first. A name is an entry's, a button's id (the mod's own) or `"<mod id>:<id>"`; the items it leaves out follow in the game's order, then the buttons as the mods made them. A later mod's list replaces an earlier one's |
-| `spacing` | how far apart the items stand (retail 32; the same as the title's `spacing`) |
+| `spacing` | how far apart the items stand at their size 100 (retail 32; the same as the title's `spacing`) |
+| `scale` | every item's size in percent, 25 to 400, but those with a `scale` of their own (100 as the game has it) |
 | `background` | the background while a menu is up, as the title's `background` (`image`, `picture`, `shade`, `tint`, `color`, `dim`); what it leaves out is the title's |
 
 Each item -- button or entry -- may have:
@@ -623,6 +624,7 @@ Each item -- button or entry -- may have:
 | `value` | a number handed to a code mod with `event` |
 | `hide`, `x`, `y`, `tint` | as the title's entries: left out, moved from the middle (160), its middle's place, its colours multiplied |
 | `wide_x`, `wide_y` | its `x` and `y` in widescreen, [below](#widescreen) |
+| `scale` | its size in percent, 25 to 400, about its middle: the menu's `scale` without one. Words, frame and the cursor's look alike; a picture at that much of its size above |
 
 The actions:
 
@@ -646,13 +648,26 @@ are the game's sprites still, and a texture pack of `sheets/menu` changes
 their words. Places are in the game's 320 x 240, as on the title. The shown
 items stand `spacing` apart around the middle of the retail menu, closer
 together when they would not fit between y 16 and 204; a `y` of the mod's
-own stands. Fresh from PUSH START BUTTON the first menu opens on its top
-row; back from a screen a choice opened, on the item it was chosen from.
+own stands. Each takes room as its size: two items' middles are `spacing`
+times the half of each one's `scale` apart (32 between two at 100, 48
+between two at 150, 40 between one at 100 and one at 150), so bigger
+buttons push the others apart rather than run into them -- until the menu
+would not fit, when all stand closer alike: kept between y 2 and 218 as
+the game's 28-row entries are, the top one's middle half of 28 rows at
+its size below y 2 (16 at 100) and the bottom one's as far above 218.
+Fresh from PUSH START BUTTON the first menu opens on its top row; back
+from a screen a choice opened, on the item it was chosen from.
 
-A label's frame is made once as a PNG four times its size, under the user
-directory's `cache/menu-labels/`, and like an `image` is drawn at the
-console's resolution as the game's own kind of texture and above it
-(View > Internal 2x, 4x) from the PNG itself. The items' pictures share the
+A label's frame is made once as a PNG four times its size (more for one
+drawn bigger: four times its size drawn), under the user directory's
+`cache/menu-labels/`, and like an `image` is drawn at the console's
+resolution as the game's own kind of texture and above it (View > Internal
+2x, 4x) from the PNG itself. A `scale` other than 100 draws an item at
+that size: a picture or a label made at it (at most 256 x 64 texels at the
+console's resolution, stretched past that), and an entry of the game's own
+by the port from the game's sprites -- the one it has while the cursor is
+on it too -- each stretched about the entry's middle, with its afterimages.
+A `scale` out of 25 to 400 is noted beside the mod and left out. The items' pictures share the
 VRAM the title's pictures leave: about a dozen items with two pictures
 each, more when the title has no background or logo picture of the mod's
 own; one that finds no room is noted beside the mod.

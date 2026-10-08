@@ -363,6 +363,60 @@ static void added_pictures(void)
     CHECK(notes == 1 && TitleConfig_Get()->pictures == 0);
 }
 
+/* "scale": each item's size, its own or the menu's, and the room each
+ * takes in the menu: `spacing` at 100, as its size, two the halves of
+ * theirs apart. */
+static void sizes(void)
+{
+    const TitleConfig *config = one("{\"id\": \"x\"}");
+    int i;
+    CHECK(config->scale == 100);
+    for (i = 0; i < TITLE_ENTRIES; i++) CHECK(config->items[i].scale == 100);
+    /* The whole menu at 120: 38.4 apart, from the middle (114) out. */
+    config = one("{\"menu\": {\"scale\": 120}}");
+    CHECK(notes == 0 && config->scale == 120);
+    for (i = 0; i < TITLE_ENTRIES; i++) CHECK(config->items[i].scale == 120);
+    CHECK(config->items[0].y == 38 && config->items[1].y == 76 && config->items[2].y == 114);
+    CHECK(config->items[3].y == 153 && config->items[4].y == 191);
+    /* The second menu's six would not fit: 30 apart at 100 (36 at 120),
+     * the ends 17 in (14 at 120 %) from y 2 and 218, ending at 201. */
+    CHECK(config->items[5].y == 21 && config->items[6].y == 57 && config->items[10].y == 201);
+    /* One entry's own size over the menu's: only it takes more room. */
+    config = one("{\"menu\": {\"scale\": 80, \"entries\": {\"load\": {\"scale\": 150}},"
+                 " \"buttons\": [{\"id\": \"big\", \"label\": \"BIG\", \"menu\": \"second\", \"scale\": 60}]}}");
+    CHECK(notes == 0);
+    CHECK(config->items[1].scale == 150 && config->items[0].scale == 80 && config->items[TITLE_ENTRIES].scale == 60);
+    CHECK(config->items[0].y == 52 && config->items[1].y == 88 && config->items[2].y == 125);
+    CHECK(config->items[3].y == 151 && config->items[4].y == 176);
+    CHECK(config->items[5].y == 47 && config->items[6].y == 72 && config->items[TITLE_ENTRIES].y == 197);
+    /* A hidden item's size takes no room. */
+    config = one("{\"menu\": {\"entries\": {\"trade\": {\"scale\": 300, \"hide\": true}}}}");
+    CHECK(config->items[0].y == 66 && config->items[1].y == 98 && config->items[4].y == 162);
+    /* A mod's "spacing", the title's or the menu's, is the room at 100. */
+    config = one("{\"menu\": {\"scale\": 150, \"spacing\": 20}}");
+    CHECK(config->items[0].y == 54 && config->items[1].y == 84 && config->items[4].y == 174);
+    config = one("{\"title\": {\"spacing\": 24}, \"menu\": {\"scale\": 150}}");
+    CHECK(config->items[0].y == 42 && config->items[1].y == 78 && config->items[4].y == 186);
+    /* "entries" under "title" take a "scale" too. */
+    config = one("{\"title\": {\"entries\": {\"options\": {\"scale\": 90}}}}");
+    CHECK(notes == 0 && config->items[4].scale == 90 && config->items[0].scale == 100);
+    /* A later mod's menu size leaves an earlier one's own sizes be. */
+    while (document_count) Json_Free(documents[--document_count]);
+    TitleConfig_Reset();
+    add_as("a", "{\"menu\": {\"entries\": {\"load\": {\"scale\": 70}}}}");
+    add_as("b", "{\"menu\": {\"scale\": 130}}");
+    TitleConfig_Finish();
+    config = TitleConfig_Get();
+    CHECK(config->items[1].scale == 70 && config->items[0].scale == 130);
+    /* Out of 25 to 400, or not a number: noted and left out. */
+    config = one("{\"menu\": {\"scale\": 500}}");
+    CHECK(notes == 1 && strstr(note, "\"scale\" is a whole number from 25 to 400") && config->scale == 100);
+    config = one("{\"menu\": {\"entries\": {\"load\": {\"scale\": \"big\"}}}}");
+    CHECK(notes == 1 && strstr(note, "load \"scale\"") && config->items[1].scale == 100);
+    config = one("{\"menu\": {\"buttons\": [{\"id\": \"b\", \"label\": \"B\", \"scale\": 10}]}}");
+    CHECK(notes == 1 && strstr(note, "test:b \"scale\"") && config->items[TITLE_ENTRIES].scale == 100);
+}
+
 int main(void)
 {
     retail();
@@ -377,6 +431,7 @@ int main(void)
     menu_background();
     widescreen();
     added_pictures();
+    sizes();
     while (document_count) Json_Free(documents[--document_count]);
     printf("title config: ok\n");
     return 0;
