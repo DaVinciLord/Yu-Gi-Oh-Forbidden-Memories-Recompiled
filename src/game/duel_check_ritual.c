@@ -132,17 +132,6 @@ static void fill_out(const DuelRitualMatch *m, DuelRitualResult *out)
  * first. The result goes to the middle field tribute's zone (the second of
  * three, as on the disc), or with tributes only from the hand to the first
  * free monster zone; with none free the ritual cannot take place. */
-typedef struct {
-    TablesRitualRule rule;          /* a copy: no pointer in it (check_g32) */
-    s16 record[2 * DUEL_FIELD_ROW_SIZE];
-    s8 hand_slot[2 * DUEL_FIELD_ROW_SIZE];
-    s32 candidates;
-    s32 order[DUEL_RITUAL_TRIBUTE_MAX];
-    s32 pick[DUEL_RITUAL_TRIBUTE_MAX];
-    s32 best[DUEL_RITUAL_TRIBUTE_MAX];
-    s32 found, free_zone, prefer_defense;
-} RitualSearch;
-
 static s32 candidate_id(const RitualSearch *x, s32 c) { return D_801A7AD8[x->record[c]].card_id; }
 
 static s32 better(const RitualSearch *x)

@@ -18,7 +18,14 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     units = []
     for source, names in [
-        ("duel_check_ritual", {"Duel_CheckRitual", "disc_recipe"}),
+        (
+            "duel_check_ritual",
+            {
+                "Duel_CheckRitual", "disc_recipe", "printed_attack", "printed_defense", "meets",
+                "specificity", "remember_field", "field_objects", "fill_out", "candidate_id",
+                "better", "search", "extended_match",
+            },
+        ),
         (
             "duel_trap_resolution",
             {"Duel_SelectAttackTrap", "select_custom_attack_trap"},
