@@ -59,7 +59,8 @@ The window has a tab per table:
 | Limits | the numbers the game caps (`limits`, [gameplay tables](../../../notes/gameplay-tables.md#limits-atk-def-lp-starchips-and-more)). The simple part: the ATK and DEF cap, the LP a duel starts with, and how far healing goes. **Show advanced**: ATK and DEF apart, each side's starting LP, the two-player LP choice (start, most, step), the most starchips, the chest's copies, the Free Duel and two-player records, and a table of duelists with the LP each side starts with against them. An empty field is the game's own number (beside it, with the range the game keeps); a value past that range is warned about and held at the most the game keeps |
 | Guardian Stars | the stars (`guardian_stars`, [Guardian Stars](../../../notes/modding.md#guardian-stars-names-icons-new-stars-and-matchups)): the list of stars with a name and an icon each (**Import icon (PNG)...**, with a preview; the game makes it 16x16 in the disc's stars' colours), **Add star** for 11 to 15 (a card holds its stars in 4 bits, so fifteen at most), and the full grid of matchups: a row is the attacker's star, a column the defender's, a cell the bonus the attacker's side gets, green above 0 and red below; click a cell, type a bonus or use **+ default**, **- default** or **0** (with **Reverse pair gets the opposite** on, the reverse cell takes the opposite sign). **Default bonus** moves the disc's 500 in both cycles, **Retail cycles** and **Clear all** are presets, **Revert to retail** takes the whole key away. **Set stars by rule...** sets many cards' first or second star from their attribute or type through a table you fill in (a Fire monster's first star is Fire), or one star for all, **(none)** included (a first star of none leaves the second as the card's one star, as the game reads it; both none, no star), over a filter of cards like Bulk fusions', with a preview and **Undo last batch**. **Show advanced**: a name per language (`fr=Feu, de=Feuer`), an icon's colours (`game` or its own), and what happens at a summon (`ask`, `first`, `best`). The Cards tab's star lists show the mod's stars as they are named here |
 | Packs | the card packs the mod sells for starchips on the Password screen: each pack's name, description, price, cards a pack and picture (shown as a card's art or, `image_style` `full`, the whole picture), its cards with their tier, weight and chance; a **Show advanced** part for everything else; **Shop settings...** and **Simulate...** (below); with no pack, an empty one or **a pack of an opponent's drops** (its cards at their drop weights) |
-| Mod info | id, name, version, author, description, `settings`, and the other `mod.json` keys, kept as written (`limits` is the Limits tab's, `guardian_stars` the Guardian Stars tab's). The settings are a list (key, label, type, default, and how many of the mod's entries each switches with `"setting"`) with a dialog a setting that shows what its type takes and checks it as the game does; their JSON is a page beside it |
+| UI | the title screen, its two menus and the duel's pictures, drawn from your disc as the game draws them: drag a picture to move it, the side has the rest (below, [The UI tab](#the-ui-tab)) |
+| Mod info | id, name, version, author, description, `settings`, and the other `mod.json` keys, kept as written (`limits` is the Limits tab's, `guardian_stars` the Guardian Stars tab's, `title`, `menu` and `ui` the UI tab's). The settings are a list (key, label, type, default, and how many of the mod's entries each switches with `"setting"`) with a dialog a setting that shows what its type takes and checks it as the game does; their JSON is a page beside it |
 | Conflicts | the loader's checks, all or one level (errors, warnings, notes); double-click a line (or Return) to go to it, a line about another mod to the tab and card it is about. Below them, where this mod meets the **other mods installed** (beside the game and in the player's mods folder, or a folder chosen with **Other mods folder...**): the same lines as the game's Mods window, a warning where only one mod's change is used and a note where the changes add up or agree ([When mods overlap](../../../notes/modding.md#when-mods-overlap)) |
 
 **Retail effect** selects a built-in behavior by its original retail name.
@@ -412,6 +413,55 @@ out, its cell ringed; the arrows look at the other pages.
 A duelist's other properties (`ai`, `unlock`, `ranks`, anything else) have
 no field: they are kept exactly as written, and the tab names them
 ("Kept as written: unlocks after: beat Dark Simon 2 times; ...").
+
+### The UI tab
+
+Three pages, picked at the top: **Title screen**, **Menus** and **Duel**.
+Each is the screen as the game draws it, from your own disc (the title's
+pictures are in `DATA/SU.MRG`, the duel's in `WA_MRG.MRG`; nothing of the
+game's art is kept with the editor), twice its size, with what the mod
+changes on it; beside it, what the chosen thing has. A picture is moved by
+dragging it; on the Duel page the mouse wheel sizes it. A row of chips
+under the picture chooses what the picture hides, a dot on those the mod
+changes. What the pages write is the mod's `"title"`, `"menu"` and `"ui"`
+([the title screen](../../../notes/modding.md#the-title-screen), [the
+title's menus](../../../notes/modding.md#the-titles-menus), [the duel's
+pictures](../../../notes/modding.md#the-duels-pictures)); a PNG you choose is
+put in the mod's `ui/` folder.
+
+* **Title screen**: the **Background** (click the picture where nothing
+  else is): the game's wall or not, its colour, the dark-to-light shade, a
+  colour under it, a **Picture** of your own over the whole screen, how far
+  a menu dims it; and the screen's song, the intro, PUSH START BUTTON. The
+  **Logo**, **Copyright line** and **PUSH START BUTTON**: moved, coloured,
+  shown always or only with or without a menu, a PNG in their place, hidden
+  (a dashed box then, to choose it again). **+ Picture** adds a picture of
+  your own (up to eight), **+ Words** a line of words (up to sixteen; the
+  port draws these over the picture, in its own letters). **With the menu
+  up** shows the screen as the first menu leaves it.
+* **Menus**: the first menu, or the second (once a game is loaded); its
+  buttons top to bottom, the hidden ones greyed, ▲ ▼ to reorder them.
+  **+ Button** adds a button of your own; each, the game's included, has
+  **Words** (drawn on a frame in the entries' look) or a **Picture** (and
+  one while the cursor is on it), what it **Does** (an entry's choice,
+  back, a notice, quit, the debug menu, a code mod's event, nothing; only
+  what that menu allows), its colour and its place (**In line** puts it back
+  in the column). **Menu background** is the menus' own background, as the
+  title's.
+* **Duel**: the life-point panel's two halves (**Opponent's LP**, **Your
+  LP**: each with its digits; **Words** in place of COM or YOU, the
+  **Digits**' colour), the **FIELD box**, the **Card bar** (its colours or a
+  picture only: its words and the hand go with it), the **Hand cursor** and
+  the **Field cursor**. Each is **Moved by**, a **Size** (25 to 400 %, about
+  its middle), a **Colour** (multiplied: white leaves it as it is), a
+  **Picture** of your own, **Hidden**; **Back to the game's** for one, **Reset
+  every picture** for all. **Opponent's turn** shows the panel in the
+  other turn's colours. The field and the hand behind them are a sketch: the
+  3D field is the game's.
+
+Colours are the game's: a tint multiplies, so it can only darken what is
+there. The pictures are the console's size here; the game draws a PNG of
+yours at up to four times that above the console's resolution.
 
 ## Game files
 
@@ -902,6 +952,15 @@ into isolated folders and play real duels (no changes to your saves or mods):
     python3 tests/pc/editor_round_trip_runtime.py
     xvfb-run -a python3 tests/pc/editor_duelists_runtime.py
     python3 tests/pc/ritual_tributes_runtime.py --editor --interpreter
+    xvfb-run -a python3 tests/pc/editor_ui_runtime.py [--baseline <a build before>]
+
+`editor_ui_runtime.py` makes a title, menus and duel pictures through the UI
+tab, then plays them: the title and menu with and without the mod, an added
+button pressed, a whole duel (a fusion, a magic card, battles, the
+opponent's turns, the results) with the moved panel and its digits checked
+in each picture, the same at Internal 2x in a window and with the duel
+effects interpreted, and, given `--baseline`, the frames without the mod
+against another build's.
 
 `ritual_tributes_runtime.py` plays rituals of one to five tributes from the
 field, the hand and both, by the player and the CPU, natively and with the

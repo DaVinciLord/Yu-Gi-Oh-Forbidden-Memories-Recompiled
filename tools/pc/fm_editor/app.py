@@ -16,6 +16,7 @@ from .guardian_stars_tab import GuardianStarsTab
 from .packs_tab import PacksTab
 from .duelists_tab import DuelistsTab
 from .rituals_tab import RitualsTab
+from .ui_tab import UiTab
 from .tabs import CardsTab, EquipsTab, FusionsTab, ModInfoTab, ConflictsTab, StarterTab
 from .widgets import Pages, px, ui_font
 
@@ -87,10 +88,11 @@ class App(Editing, tk.Tk):
         self.limits = LimitsTab(self.notebook, self)
         self.stars = GuardianStarsTab(self.notebook, self)
         self.packs = PacksTab(self.notebook, self)
+        self.ui = UiTab(self.notebook, self)
         self.info = ModInfoTab(self.notebook, self)
         self.conflicts = ConflictsTab(self.notebook, self)
         self.tabs = [self.cards, self.art, self.fusions, self.equips, self.rituals, self.duelists, self.starter,
-                     self.map, self.limits, self.stars, self.packs, self.info, self.conflicts]
+                     self.map, self.limits, self.stars, self.packs, self.ui, self.info, self.conflicts]
         self.status = ttk.Label(self, relief="sunken", anchor="w", padding=(6, 2))
         self.status.pack(fill="x", side="bottom", before=self.notebook)
         self.install_editing()
