@@ -43,6 +43,8 @@
 #define FRAME_TILE_H 254
 #define FRAME_W (FRAME_COLS * FRAME_TILE_W)
 #define FRAME_H (FRAME_ROWS * FRAME_TILE_H)
+/* The tiles take pages 0 to FRAME_COLS * FRAME_ROWS - 1 of the bank; the digit strip is on page 9. */
+typedef char frame_tiles_fit_before_the_digits[FRAME_COLS * FRAME_ROWS <= 9 ? 1 : -1];
 #define FRAME_CLUT_Y FRAME_TILE_H   /* right after the first tile's last pixel row, same bank, no overlap */
 
 /* Each frame image's built texels (FRAME_W x FRAME_H palette indices and its
@@ -133,13 +135,78 @@ int CardLayoutArt_FrameTile(int col, int row, int *tpage, int *clut, int *w, int
     return 1;
 }
 
+/* The digit strip: one image, one page of the frame's bank. The frame fills
+ * the first tile row's pages and the first of the second row's (tile 8);
+ * the digits are on the second row's next page, tile slot 9, their palette
+ * right under them. */
+#define DIGITS_SLOT 9
+#define DIGITS_W (CARD_LAYOUT_DIGIT_COLS * CARD_LAYOUT_DIGIT_CELL_W)
+#define DIGITS_H (CARD_LAYOUT_DIGIT_ROWS * CARD_LAYOUT_DIGIT_CELL_H)
+static char digits_path[1024];          /* the strip built (or failed) */
+static unsigned char *digits_indices;
+static unsigned short digits_clut[256];
+static char digits_bank_path[1024];     /* the strip the bank holds now */
+
+static void digits_build(const char *path)
+{
+    char why[128];
+
+    if (!strcmp(digits_path, path)) return;
+    free(digits_indices);
+    snprintf(digits_path, sizeof(digits_path), "%s", path);
+    digits_bank_path[0] = 0;
+    digits_indices = malloc((size_t)DIGITS_W * DIGITS_H);
+    if (digits_indices &&
+        !CardArt_IndexedImage(path, DIGITS_W, DIGITS_H, digits_indices, digits_clut, why, sizeof(why))) {
+        LOG(LOG_CARD_LAYOUT, "digits: %s: %s", path, why);
+        free(digits_indices);
+        digits_indices = NULL;
+    }
+}
+
+int CardLayoutArt_DigitCell(int digit, int dim, int *tpage, int *u, int *v, int *clut, int *w, int *h)
+{
+    char path[1024];
+    int dw, dh, step, x, y;
+    uint16_t *bank, *page;
+
+    if (digit < 0 || digit > 9) return 0;
+    if (!CardLayout_Digits(path, sizeof(path), &dw, &dh, &step)) return 0;
+    if (!(bank = SoftGpu_Bank(FRAME_BANK))) return 0;
+    digits_build(path);
+    if (!digits_indices) return 0;
+    page = bank + (DIGITS_SLOT / 8 * 256) * SOFT_GPU_WIDTH + DIGITS_SLOT % 8 * 128;
+    if (strcmp(digits_bank_path, path)) {
+        for (y = 0; y < DIGITS_H; y++) {
+            for (x = 0; x < DIGITS_W; x += 2) {
+                page[y * SOFT_GPU_WIDTH + x / 2] =
+                    (uint16_t)(digits_indices[y * DIGITS_W + x] | (digits_indices[y * DIGITS_W + x + 1] << 8));
+            }
+        }
+        memcpy(&page[DIGITS_H * SOFT_GPU_WIDTH], digits_clut, 256 * sizeof(uint16_t));
+        snprintf(digits_bank_path, sizeof(digits_bank_path), "%s", path);
+    }
+    *tpage = 0x80 | (FRAME_BANK << 11) | (DIGITS_SLOT % 8 * 2) | (DIGITS_SLOT / 8 << 4);
+    *clut = ((DIGITS_SLOT / 8 * 256 + DIGITS_H) << 6) | (DIGITS_SLOT % 8 * 128 / 16);
+    *u = digit % CARD_LAYOUT_DIGIT_COLS * CARD_LAYOUT_DIGIT_CELL_W;
+    *v = (digit / CARD_LAYOUT_DIGIT_COLS + (dim ? 2 : 0)) * CARD_LAYOUT_DIGIT_CELL_H;
+    *w = CARD_LAYOUT_DIGIT_CELL_W;
+    *h = CARD_LAYOUT_DIGIT_CELL_H;
+    return 1;
+}
+
 void CardLayoutArt_Prewarm(void)
 {
     static unsigned int frame;
     char paths[FRAME_CACHE][1024];
-    int i, count;
+    char digits[1024];
+    int i, count, dw, dh, dstep;
 
     if (++frame % 30) return;   /* the layout changes with a setting, not a frame */
+    if (CardLayout_Digits(digits, sizeof(digits), &dw, &dh, &dstep) && strcmp(digits_path, digits)) {
+        digits_build(digits);
+        return;
+    }
     count = CardLayout_FramePaths(paths, FRAME_CACHE);
     for (i = 0; i < count; i++) {
         if (!image_for(paths[i], 0)) {

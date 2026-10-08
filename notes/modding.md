@@ -908,8 +908,8 @@ some of them out, with a `"card_layout"` object, no code needed:
     "default_style": "gold",
     "art": {"x": 3, "y": 3, "width": 134, "height": 139},
     "attribute": {"x": 114, "y": 149},
-    "atk": {"x": 38, "y": 178},
-    "def": {"x": 104, "y": 178},
+    "atk": {"x": 38, "y": 179},
+    "def": {"x": 102, "y": 179},
     "stars": {"x": 59, "y": 153},
     "spell": {
         "art": {"x": 3, "y": 3, "width": 134, "height": 139},
@@ -923,6 +923,18 @@ frames cut no hole for them, so they draw at native size. Leave `attribute`
 out entirely, though, and it inherits retail's title-plate spot -- now
 covered by full-bleed's bigger art -- so it ends up hidden; giving it a
 position in the stat band keeps it clear of `art`'s own rect.
+
+`digits` (optional) replaces the ATK/DFD numbers with the mod's own while the
+layout is on: `{"image": "digits.png", "width": 10, "height": 12, "step": 10}`.
+The image is a strip of 5 x 4 cells of 40 x 48 texels: digit d in column
+`d % 5` and row `d / 5`, and the same ten greyed two rows further down
+(200 x 192; `tools/pc/card_digits.py` draws one from a font). The greyed ones
+are the stat the attack screen dims, which keeps the card's own box and the
+mod's font. `width`/`height` are one digit's size on the card, `step` the
+distance between two digits' left edges (default `width`). Each number is
+centred on its `atk`/`def` point. Left out, the retail digits are drawn.
+`hd_assets_pack.py` copies `tools/pc/hd_recipes/anime_digits.png` in for the HD
+mod (`--digit-font <ttf>` draws a new one).
 
 `stars`'s `x`/`y` is the row's *centre*, like `atk`/`def`'s box centre
 above, not retail's right-anchored first-star position: a card can carry

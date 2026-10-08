@@ -78,6 +78,27 @@ def measure_window(png):
     return (x0 * sx, y0 * sy, x1 * sx, y1 * sy)
 
 
+def stat_box_centres(png):
+    """The two stat boxes' centres ("atk", "def"), in card pixels, from the
+    boxes' red corner studs: where the numbers must be centred. A frame with
+    no such boxes (fewer than four studs below the art) gives None."""
+    im = np.array(Image.open(png).convert("RGB")).astype(int)
+    kx, ky = im.shape[1] / CARD_SIZE[0], im.shape[0] / CARD_SIZE[1]
+    red = (im[..., 0] > 150) & (im[..., 1] < 60) & (im[..., 2] < 60)
+    top = int(160 * ky)
+    ys, xs = np.nonzero(red[top:, :])
+    if len(xs) < 4:
+        return None
+    ys = ys + top
+    centres = {}
+    for name, side in (("atk", xs < im.shape[1] / 2), ("def", xs >= im.shape[1] / 2)):
+        if not side.any():
+            return None
+        centres[name] = {"x": round((xs[side].min() + xs[side].max()) / 2 / kx),
+                         "y": round((ys[side].min() + ys[side].max()) / 2 / ky)}
+    return centres
+
+
 def art_rect(windows):
     """The smallest whole-pixel art rect covering every window given."""
     x0 = math.floor(min(w[0] for w in windows) + 1e-6)

@@ -469,6 +469,31 @@ static void legacy_ritual_wears_magic(void)
     CHECK(style_of(1, "/mods/a/r.png") == CARD_FRAME_RITUAL);      /* its own ritual picture stays */
 }
 
+static void digits_from_mod(void)
+{
+    char path[1024];
+    int w = 0, h = 0, step = 0;
+
+    reset();
+    CHECK(!CardLayout_Digits(path, sizeof(path), &w, &h, &step) && !path[0]);   /* no layout */
+    add_mod("a", "/mods/a", FULL_MANIFEST, 1, "full_bleed", 1);
+    CHECK(!CardLayout_Digits(path, sizeof(path), &w, &h, &step) && !path[0]);   /* no "digits" */
+    reset();
+    add_mod("a", "/mods/a",
+            "{\"id\": \"x\", \"card_layout\": {\"digits\": {\"image\": \"d.png\", \"width\": 9, \"height\": 10}}}",
+            1, "full_bleed", 1);
+    CHECK(CardLayout_Digits(path, sizeof(path), &w, &h, &step));
+    CHECK(!strcmp(path, "/mods/a/d.png") && w == 9 && h == 10 && step == 9);   /* step defaults to width */
+    reset();
+    add_mod("a", "/mods/a",
+            "{\"id\": \"x\", \"card_layout\": {\"digits\": {\"image\": \"d.png\"}}}", 1, "full_bleed", 0);
+    CHECK(!CardLayout_Digits(path, sizeof(path), &w, &h, &step));   /* full-bleed off */
+    reset();
+    add_mod("a", "/mods/a",
+            "{\"id\": \"x\", \"card_layout\": {\"digits\": {\"image\": \"../d.png\"}}}", 1, "full_bleed", 1);
+    CHECK(!CardLayout_Digits(path, sizeof(path), &w, &h, &step) && notes == 1);   /* outside the mod */
+}
+
 int main(void)
 {
     retail_defaults();
@@ -490,6 +515,7 @@ int main(void)
     styles_card_frame_and_default();
     styles_unusable_is_retail();
     legacy_ritual_wears_magic();
+    digits_from_mod();
     reset();
     printf("card layout: ok\n");
     return 0;

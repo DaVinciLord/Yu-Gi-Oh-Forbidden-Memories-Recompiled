@@ -70,7 +70,19 @@ Usage: hd_assets_pack.py --assets <folder> --out <mod folder> [--data game/DATA]
                          [--anime-frame-trap tools/pc/hd_recipes/anime_frame_trap.png]
                          [--anime-frame-ritual tools/pc/hd_recipes/anime_frame_ritual.png]
                          [--anime-frame-orange tools/pc/hd_recipes/anime_frame_orange.png]
+                         [--digit-font <.ttf> | none] [--digit-stretch 1.25]
                          [--id forbidden-memories-hd] [--name "Forbidden Memories HD"]
+
+The anime frame's ATK/DFD digits are one picture, textures/anime_digits.png (a
+200x192 strip), and the card_layout "digits" key that points at it
+(notes/modding.md). It is tools/pc/hd_recipes/anime_digits.png (else
+<assets>/anime_digits.png) copied in, as the frames are: drawn once, committed,
+no font needed to build. --digit-font draws a new one from a .ttf
+(tools/pc/card_digits.py), the font read here and never shipped; --digit-font
+none leaves the digits retail. --digit-stretch is how much wider than the font's own
+shape they are drawn (default 1.25, the look chosen for Matrix Regular Small
+Caps). The digits are centred on the stat boxes measured from the monster
+frame's corner studs (card_frame_window.stat_box_centres).
 """
 import argparse
 import json
@@ -84,6 +96,7 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import extract_images as X  # noqa: E402
 import card_frame_window as W  # noqa: E402
+import card_digits  # noqa: E402
 import anime_frame_layout  # noqa: E402
 
 S = 4
@@ -116,8 +129,8 @@ PARTS = {
 # so a wide row never runs past the frame's edge.
 ANIME_FRAME_MONSTER_LAYOUT = {
     "attribute": {"x": 114, "y": 149},
-    "atk": {"x": 38, "y": 178},
-    "def": {"x": 104, "y": 178},
+    "atk": {"x": 38, "y": 179},   # the stat boxes' centres, measured from the frame (card_frame_window.stat_box_centres)
+    "def": {"x": 102, "y": 179},
     "stars": {"x": 59, "y": 153},
 }
 ANIME_FRAME_SPELL_LAYOUT = {
@@ -545,6 +558,10 @@ def main():
     parser.add_argument("--anime-frame-trap", help="the same, for trap cards")
     parser.add_argument("--anime-frame-ritual", help="the same, for ritual cards")
     parser.add_argument("--anime-frame-orange", help="the same, for an effect monster")
+    parser.add_argument("--digit-font", help="a .ttf (Yu-Gi-Oh. Matrix Regular Small Caps) the anime frame's "
+                        "ATK/DFD digits are drawn from; read, never committed. Without it the retail digits stay")
+    parser.add_argument("--digit-stretch", type=float, default=card_digits.STRETCH,
+                        help="how much wider than the font's own shape the digits are drawn (default %(default)s)")
     parser.add_argument("--id", default="forbidden-memories-hd")
     parser.add_argument("--name", default="Forbidden Memories HD")
     parser.add_argument("--author", default="Unchiga, X@nder")
@@ -599,12 +616,31 @@ def main():
             spell["art"] = spell_art
         if art:
             monster["art"] = art
+        if "monster" in frame:   # the numbers are centred on the boxes the frame draws, not where retail's were
+            centres = W.stat_box_centres(os.path.join(args.out, "textures", "anime_frame_monster.png"))
+            if centres:
+                monster.update(centres)
         # Styles and the rules that pick them (anime_frame_layout.py): a ritual spell is green, as in
         # the anime, unless a ritual PNG was given, which becomes a sub-option; effect monsters orange
         # when there is an orange PNG, else gold. The card view and the hand follow the same style.
         styles, extra_settings = anime_frame_layout.build(frame)
         manifest["card_layout"] = dict(spell=spell, **styles, **monster)
         manifest["settings"] += extra_settings
+        digits = os.path.join(args.out, "textures", "anime_digits.png")
+        ready = next((c for c in (os.path.join(os.path.dirname(os.path.abspath(__file__)), "hd_recipes", "anime_digits.png"),
+                                  os.path.join(args.assets, "anime_digits.png")) if os.path.isfile(c)), None)
+        if args.digit_font and args.digit_font.lower() != "none":
+            card_digits.render(args.digit_font, digits, args.digit_stretch,
+                               card_digits.paper_of(os.path.join(args.out, "textures", "anime_frame_monster.png"))
+                               if "monster" in frame else None)
+        elif ready and not args.digit_font:
+            shutil.copyfile(ready, digits)   # the strip drawn once and committed: no font needed
+        else:
+            digits = None
+        if digits:
+            # One digit's draw size and step, in the card's own units (10 x 12 is the strip's cell shape).
+            manifest["card_layout"]["digits"] = {"image": "textures/anime_digits.png", "width": 10,
+                                                 "height": 12, "step": 10}
         manifest["settings"].append({
             "key": "full_bleed", "label": "Anime card frame", "type": "bool", "default": 0,
             "description": "An anime-style card frame representation, by d02d02 and Hræzlyr."})

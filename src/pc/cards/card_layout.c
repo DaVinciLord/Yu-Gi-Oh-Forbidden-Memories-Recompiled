@@ -140,6 +140,22 @@ static void rect(const JsonValue *layout, const char *key, int *x, int *y, int *
     *h = (int)Json_Number(Json_Member(part, "height"), dh);
 }
 
+int CardLayout_Digits(char *path, size_t size, int *w, int *h, int *step)
+{
+    LayoutSource source = find_source();
+    const JsonValue *digits;
+
+    path[0] = 0;
+    if (source.mod < 0 || !full_bleed_of(&source)) return 0;
+    digits = Json_Member(source.layout, "digits");
+    mod_file(source.mod, Json_String(Json_Member(digits, "image"), NULL), "\"digits\"", path, size);
+    if (!path[0]) return 0;
+    *w = (int)Json_Number(Json_Member(digits, "width"), 10);
+    *h = (int)Json_Number(Json_Member(digits, "height"), 12);
+    *step = (int)Json_Number(Json_Member(digits, "step"), *w);
+    return *w > 0 && *h > 0 && *step > 0;
+}
+
 /* Why a layout's frame choice could not be made, said once a layout. */
 static const JsonValue *noted_layout;
 static char noted_what[96];
