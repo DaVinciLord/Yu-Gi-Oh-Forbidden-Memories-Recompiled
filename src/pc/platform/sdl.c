@@ -508,6 +508,7 @@ static void apply_swap_interval(void)
     swap_interval = wanted;
     if (use_gl) SDL_GL_SetSwapInterval(wanted);
     else if (renderer) SDL_SetRenderVSync(renderer, wanted);
+    Platform_SetVSync(wanted);
     LOG(LOG_WINDOW, "vsync %s (game %.2f Hz, display %.2f Hz)", wanted ? "on" : "off",
         Platform_GameHz(), Platform_PresentRefresh());
 }
