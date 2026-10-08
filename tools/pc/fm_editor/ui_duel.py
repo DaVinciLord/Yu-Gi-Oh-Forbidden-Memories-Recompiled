@@ -8,13 +8,16 @@ colours, its words (the life-point halves), a picture of the mod's own,
 hidden, back to the game's. What the game slides off the screen sideways
 (the LP halves, the FIELD box) moves up and down only and is sized no
 larger than still leaves the screen with the game's; the card bar stays
-where it is, at its size (ui_rules.MOVES, as ui_config.c reads them)."""
+where it is, at its size (ui_rules.MOVES, as ui_config.c reads them), but
+its parts -- the card's name, ATK, DEF, the type's icon, the stars, a
+magic card's word -- are listed under it and move about on it, each
+coloured or hidden, the name's letters spread (ui_rules.PARTS)."""
 from __future__ import annotations
 
 import tkinter as tk
 from tkinter import ttk
 
-from . import card_text, duel_screen, pngio, ui_assets as ua, ui_rules
+from . import card_text, duel_screen, gamedata, pngio, ui_assets as ua, ui_rules
 from .ui_tab import (WARN, ColourButton, Stage, as_int, colour_text, ensure, import_image, mod_image, page_layout,
                      section, set_member, sized)
 from .widgets import px
@@ -36,6 +39,64 @@ SCALE_MIN, SCALE_MAX = ui_rules.SCALE_MIN, ui_rules.SCALE_MAX
 # The hand shown: the five cards the first duel deals (deck 1-40, as the runtime
 # tests play), the cursor on the first.
 HAND = [9, 20, 27, 31, 28]
+# The card bar's parts, listed under it as "card_bar.<part>".
+PART_NAMES = {"name": "Name", "atk": "ATK", "def": "DEF", "type": "Type icon", "stars": "Guardian stars",
+              "kind": "Magic/trap word"}
+PART_WHAT = {
+    "name": "The card's name. Its letters can be spread or drawn together; a magic card's name has up to 28 "
+            "letters, a monster's 24.",
+    "atk": "The sword and the ATK digits.",
+    "def": "The shield and the DEF digits.",
+    "type": "The icon of the card's type (Dragon, Spellcaster, Magic...).",
+    "stars": "A monster's two guardian stars; on the field, the one it has on.",
+    "kind": "Magic, Trap, Equip or Ritual, beside a non-monster's icon."}
+BAR_SHOWS = ("Monster", "Magic card")
+
+
+def part_of(key):
+    """The part a list key names ("card_bar.name" -> "name"), else None."""
+    if isinstance(key, str) and key.startswith("card_bar."):
+        part = key[len("card_bar."):]
+        return part if part in ui_rules.PARTS else None
+    return None
+
+
+def part_rough_edges(part: str, parts: dict, picture: bool = False) -> list:
+    """What the game does not quite do with a part where it is: drawn over
+    (or under) the name where a long one reaches -- a monster's has up to 24
+    letters (ATK, DEF and the stars are a monster's), another card's 28 (the
+    type's icon and the word are a magic card's too); and over a picture of
+    the mod's own for the bar, the letters' and digits' dark cells."""
+    out = []
+    if parts.get(part, {}).get("hide") is True:
+        return out
+    if picture and part in ("name", "atk", "def"):
+        out.append("Its letters' cells are dark: over a lighter bar picture of yours they show as dark boxes.")
+
+    def rect(name, letters=ui_rules.NAME_LETTERS):
+        spacing = ui_rules.part_spacing(parts.get(name, {})) if name == "name" else 0
+        x, y, w, h = ui_rules.part_home(name, spacing)
+        if name == "name":
+            w = letters * ui_rules.LETTER + (letters - 1) * spacing
+        dx, dy = ui_rules.part_offset(name, parts.get(name, {}))
+        return x + dx, y + dy, w, h
+
+    def meet(a, b):
+        return a[0] < b[0] + b[2] and b[0] < a[0] + a[2] and a[1] < b[1] + b[3] and b[1] < a[1] + a[3]
+
+    def letters(other):
+        return 24 if other in ("atk", "def", "stars") else ui_rules.NAME_LETTERS
+    shown = [n for n in ui_rules.PARTS if n != part and parts.get(n, {}).get("hide") is not True]
+    if part == "name":
+        hit = [PART_NAMES[n] for n in shown if meet(rect("name", letters(n)), rect(n))]
+        if hit:
+            out.append("A long name runs into " + ", ".join(hit) + " (a monster's has up to 24 letters, another "
+                       "card's 28).")
+    elif "name" in shown and meet(rect(part), rect("name", letters(part))):
+        out.append("A long name runs into it (a monster's has up to 24 letters, another card's 28).")
+    return out
+
+
 # The words' boxes in a half (hd_text.c name_boxes): their rows from the half's
 # top, and where they meet the panel.
 LABEL_TOP = {"lp_opponent": 9, "lp_player": 1}
@@ -105,12 +166,17 @@ class DuelPage(ttk.Frame):
         self.opponent_turn = tk.BooleanVar(value=False)
         ttk.Checkbutton(self.view.tools, text="Opponent's turn", variable=self.opponent_turn,
                         command=self.draw).pack(side="left")
+        ttk.Label(self.view.tools, text="Bar shows").pack(side="left", padx=(px(self, 12), 4))
+        self.bar_shows = tk.StringVar(value=BAR_SHOWS[0])
+        ttk.Combobox(self.view.tools, textvariable=self.bar_shows, values=BAR_SHOWS, state="readonly",
+                     width=12).pack(side="left")
+        self.bar_shows.trace_add("write", lambda *a: self.draw())
         side = self.side
         self.title = self.heading
         form = ttk.Frame(side)
         form.grid(row=4, column=0, sticky="new", pady=(6, 0))
         form.columnconfigure(0, minsize=px(self, 110))
-        self.vars = {key: tk.StringVar() for key in ("x", "y", "scale", "label", "width", "height")}
+        self.vars = {key: tk.StringVar() for key in ("x", "y", "scale", "label", "width", "height", "spacing")}
         row = 0
 
         def line(text, widget):
@@ -144,12 +210,18 @@ class DuelPage(ttk.Frame):
         self.size_row = line("Size", sizes)
         self.size_caption = form.grid_slaves(row=row - 1, column=0)[0]
         self.tint = line("Colour", ColourButton(form, lambda v: self.set_colour("tint", v), multiplies=True))
+        self.tint_caption = form.grid_slaves(row=row - 1, column=0)[0]
         self.digits = line("Digits", ColourButton(form, lambda v: self.set_colour("digits", v), multiplies=True))
         self.digits_label = form.grid_slaves(row=row - 1, column=0)[0]
         self.label_entry = line("Words", ttk.Entry(form, textvariable=self.vars["label"], width=16))
         self.label_caption = form.grid_slaves(row=row - 1, column=0)[0]
-        for key in ("x", "y", "scale", "label", "width", "height"):
-            entry = {"x": self.x_box, "y": self.y_box, "scale": self.scale_box, "label": self.label_entry}.get(key)
+        self.spacing_box = line("Letter spacing", ttk.Spinbox(form, from_=ui_rules.SPACING_MIN, to=ui_rules.SPACING_MAX,
+                                                              width=4, textvariable=self.vars["spacing"],
+                                                              command=lambda: self.typed("spacing")))
+        self.spacing_caption = form.grid_slaves(row=row - 1, column=0)[0]
+        for key in ("x", "y", "scale", "label", "width", "height", "spacing"):
+            entry = {"x": self.x_box, "y": self.y_box, "scale": self.scale_box, "label": self.label_entry,
+                     "spacing": self.spacing_box}.get(key)
             if entry is not None:
                 entry.bind("<Return>", lambda e, k=key: self.typed(k))
                 entry.bind("<FocusOut>", lambda e, k=key: self.typed(k))
@@ -157,7 +229,8 @@ class DuelPage(ttk.Frame):
         ttk.Button(pictures, text="Choose PNG...", command=self.choose_image).pack(side="left")
         self.remove_image = ttk.Button(pictures, text="Game's", command=self.clear_image)
         self.remove_image.pack(side="left", padx=(4, 0))
-        line("Picture", pictures)
+        self.picture_row = line("Picture", pictures)
+        self.picture_caption = form.grid_slaves(row=row - 1, column=0)[0]
         self.image_name = ttk.Label(form, style="Hint.TLabel")
         self.image_name.grid(row=row, column=1, sticky="w")
         row += 1
@@ -180,11 +253,19 @@ class DuelPage(ttk.Frame):
         return self.tab.project
 
     def element(self, name: str) -> dict:
+        """An element's object in the mod, or a card bar part's
+        ("card_bar.name"); {} for none."""
+        part = part_of(name)
         value = section(self.project, "ui").get("duel", {})
-        value = value.get(name) if isinstance(value, dict) else None
+        value = value.get("card_bar" if part else name) if isinstance(value, dict) else None
+        if part and isinstance(value, dict):
+            value = value.get(part)
         return value if isinstance(value, dict) else {}
 
     def edit(self, name: str) -> dict:
+        part = part_of(name)
+        if part:
+            return ensure(self.project, "ui", "duel", "card_bar", part)
         return ensure(self.project, "ui", "duel", name)
 
     def done(self):
@@ -229,18 +310,53 @@ class DuelPage(ttk.Frame):
         for i, (x, y) in enumerate(duel_screen.HAND_AT):
             stage.picture(("hand", i), duel_screen.hand_card(self.project, wa, duel, HAND[i]), x, y, drag=False)
 
+    def bar_card(self) -> int:
+        """The card the bar shows: the hand's first, or (Bar shows: Magic
+        card) the first magic card there is."""
+        if self.bar_shows.get() == BAR_SHOWS[1]:
+            cards = getattr(self.project, "cards", None) or {}
+            magic = next((cid for cid in sorted(cards) if cards[cid].type == gamedata.TYPE_MAGIC), None)
+            if magic is not None:
+                return magic
+        return HAND[0]
+
     def bar_words(self, stage: Stage, duel):
-        """The card bar's words for the card the cursor is on (the first)."""
+        """The card bar's words, numbers and icons for the card the cursor is
+        on, each part where the mod puts it (duel_screen.bar_words): a part
+        is dragged by any of its pieces; a hidden one is a dashed box where
+        it would be."""
         wa = getattr(getattr(self.tab.app, "files", None), "wa", None)
-        for picture, x, y in duel_screen.bar_words(self.project, wa, duel, self.font(), HAND[0]):
-            stage.picture(("bar words", x, y), picture, x, y, drag=False)
+        card_bar = self.element("card_bar")
+        cid = self.bar_card()
+        shown = duel_screen.bar_words(self.project, wa, duel, self.font(), cid, card_bar)
+        # Where each part is, hidden or not: the same pieces with none hidden.
+        unhidden = {name: dict(value, hide=False) for name, value in ui_rules.bar_parts(card_bar).items()}
+        boxes = {}
+        for picture, x, y, part in duel_screen.bar_words(self.project, wa, duel, self.font(), cid,
+                                                         dict(card_bar, **unhidden)):
+            x0, y0, x1, y1 = boxes.get(part, (x, y, x + picture.width, y + picture.height))
+            boxes[part] = (min(x0, x), min(y0, y), max(x1, x + picture.width), max(y1, y + picture.height))
+        for part, (x0, y0, x1, y1) in boxes.items():
+            key = f"card_bar.{part}"
+            stage.axes[key] = "xy"
+            box = (x0, y0, x1 - x0, y1 - y0)
+            if self.element(key).get("hide") is True:
+                stage.rectangle(key, *box, outline="#9a9a9a", width=1, drag=True, dash=(3, 3))
+            stage.boxes[key] = box
+        for picture, x, y, part in shown:
+            stage.picture(f"card_bar.{part}", picture, x, y, box=stage.boxes.get(f"card_bar.{part}"))
 
     def fill_list(self):
         """The pictures in groups, a dot on each the mod changes."""
         rows = []
         for group, text, names in GROUPS:
             rows.append((group, "", text, (), False, ("group",)))
-            rows += [(name, group, NAMES[name], (), bool(self.element(name)), ()) for name in names]
+            for name in names:
+                own = {k: v for k, v in self.element(name).items() if name != "card_bar" or k not in ui_rules.PARTS}
+                rows.append((name, group, NAMES[name], (), bool(own), ()))
+                if name == "card_bar":
+                    rows += [(f"card_bar.{part}", name, PART_NAMES[part], (), bool(self.element(f"card_bar.{part}")),
+                              ()) for part in ui_rules.PARTS]
         self.list.fill(rows, self.chosen)
 
     def draw(self):
@@ -356,16 +472,39 @@ class DuelPage(ttk.Frame):
         self.fill_form()
 
     def dragging(self, key, dx, dy):
+        part = part_of(key)
+        if key == self.chosen and part:
+            x, y = self.part_moved(key, dx, dy)
+            self.vars["x"].set(str(x))
+            self.vars["y"].set(str(y))
+            return
         if key == self.chosen and MOVES.get(key):
             element = self.element(key)
             if "x" in MOVES[key]:
                 self.vars["x"].set(str(max(-400, min(400, as_int(element.get("x")) + dx))))
             self.vars["y"].set(str(max(-300, min(300, as_int(element.get("y")) + dy))))
 
+    def part_moved(self, key, dx, dy):
+        """A part's place moved by dx, dy, kept on the bar (ui_rules.part_range)."""
+        part = part_of(key)
+        element = self.element(key)
+        x, y = ui_rules.part_offset(part, element)
+        x0, x1, y0, y1 = ui_rules.part_range(part, ui_rules.part_spacing(element) if part == "name" else 0)
+        return max(x0, min(x1, x + dx)), max(y0, min(y1, y + dy))
+
     def moved(self, key, dx, dy):
         """A drag or the arrow keys: only the ways it moves (the stage keeps
         to them too); one that moves up and down only loses an "x" a
-        hand-written mod gave it, which the game leaves out."""
+        hand-written mod gave it, which the game leaves out. A card bar part
+        stays on the bar."""
+        if part_of(key):
+            x, y = self.part_moved(key, dx, dy)
+            element = self.edit(key)
+            set_member(element, "x", x, 0)
+            set_member(element, "y", y, 0)
+            self.select(key)
+            self.done()
+            return
         moves = MOVES.get(key, "")
         if not moves:
             return
@@ -398,6 +537,14 @@ class DuelPage(ttk.Frame):
         self.loading = True
         name = self.chosen
         element = self.element(name)
+        if part_of(name):
+            self.fill_part(name, element)
+            self.loading = False
+            return
+        for widget in (self.picture_row, self.picture_caption, self.image_name, self.tint, self.tint_caption):
+            widget.grid()
+        for widget in (self.spacing_box, self.spacing_caption):
+            widget.grid_remove()
         self.title.configure(text=NAMES[name])
         self.what.configure(text={
             "lp_opponent": "The panel's top half: the opponent's LP, COM and their deck count. It moves up and "
@@ -406,8 +553,8 @@ class DuelPage(ttk.Frame):
                          "game slides it off the side for battles, and it slides with it.",
             "field": "The terrain's name, top left. It moves up and down: the game slides it off the side for "
                      "battles, and it slides with it.",
-            "card_bar": "The strip under the hand. It stays put, at its size: its words, the cards and the stars "
-                        "are drawn over it. Its colours and picture are yours.",
+            "card_bar": "The strip under the hand. It stays put, at its size: the hand's cards slide in and out with "
+                        "it. Its colours and picture are yours, and its parts, listed under it, move about on it.",
             "hand_cursor": "The arrow under the card you are on.",
             "field_cursor": "The frame on the zone you are choosing."}[name])
         moves = MOVES[name]
@@ -456,6 +603,9 @@ class DuelPage(ttk.Frame):
         if self.loading or self.project is None:
             return
         name = self.chosen
+        if part_of(name):
+            self.typed_part(name, key)
+            return
         if (key == "x" and "x" not in MOVES[name]) or (key == "y" and not MOVES[name]) or \
                 (key == "scale" and name not in SIZED):
             return
@@ -516,5 +666,66 @@ class DuelPage(ttk.Frame):
 
     def reset(self):
         duel = ensure(self.project, "ui", "duel")
-        duel.pop(self.chosen, None)
+        part = part_of(self.chosen)
+        if part:
+            bar = duel.get("card_bar")
+            if isinstance(bar, dict):
+                bar.pop(part, None)
+                if not bar:
+                    duel.pop("card_bar", None)
+        else:
+            duel.pop(self.chosen, None)
+        self.done()
+
+    # --- the card bar's parts ----------------------------------------------------------
+
+    def fill_part(self, name, element):
+        """The form for a card bar part: its place, colour, hidden, the
+        name's letter spacing; no size or picture of its own."""
+        part = part_of(name)
+        self.title.configure(text=f"Card bar: {PART_NAMES[part]}")
+        self.what.configure(text=PART_WHAT[part] + " It moves about on the bar's dark panel, under the hand "
+                                                   "and on the bar's higher look over it.")
+        x, y = ui_rules.part_offset(part, element)
+        self.vars["x"].set(str(x))
+        self.vars["y"].set(str(y))
+        self.vars["spacing"].set(str(ui_rules.part_spacing(element)))
+        for widget in (self.place_row, self.place_caption, self.tint, self.tint_caption):
+            widget.grid()
+        self.x_part.pack(side="left", before=self.x_part.master.winfo_children()[1])
+        for widget in (self.size_row, self.size_caption, self.digits, self.digits_label, self.label_entry,
+                       self.label_caption, self.picture_row, self.picture_caption, self.image_name):
+            widget.grid_remove()
+        for widget in (self.spacing_box, self.spacing_caption):
+            if part == "name":
+                widget.grid()
+            else:
+                widget.grid_remove()
+        self.tint.set(ua.parse_colour(element.get("tint")))
+        self.hidden.set(element.get("hide") is True)
+        bar = self.element("card_bar")
+        picture = isinstance(bar.get("image"), str) and bool(bar.get("image"))
+        self.warning.configure(text="\n".join(WARN + line for line in
+                                               part_rough_edges(part, ui_rules.bar_parts(bar), picture)))
+        self.status.configure(text="")
+
+    def typed_part(self, name, key):
+        part = part_of(name)
+        if key not in ("x", "y", "spacing") or (key == "spacing" and part != "name"):
+            return
+        try:
+            value = int(self.vars[key].get().strip() or 0)
+        except ValueError:
+            self.status.configure(text="A whole number.")
+            return
+        element = self.edit(name)
+        if key == "spacing":
+            set_member(element, "spacing", max(ui_rules.SPACING_MIN, min(ui_rules.SPACING_MAX, value)), 0)
+            # Spread, the name may reach off the bar: brought back on it.
+            x, y = ui_rules.part_offset(part, element)
+            set_member(element, "x", x, 0)
+        else:
+            x0, x1, y0, y1 = ui_rules.part_range(part, ui_rules.part_spacing(element) if part == "name" else 0)
+            low, high = (x0, x1) if key == "x" else (y0, y1)
+            set_member(element, key, max(low, min(high, value)), 0)
         self.done()
