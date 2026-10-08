@@ -492,6 +492,8 @@ class BoardPageTest(GuiCase):
         full = page.picture
         self.assertEqual(full.image.size, page.canvas_size())
         k = page.game_pixels()
+        small = page.drag_scale             # as small as this machine draws quickly (ui_board.adapt)
+        self.assertIn(small, ui_board.DRAG_SCALES)
         page.press(mock.Mock(x=100, y=100, state=0))
         drawn = []
         real = page.draw
@@ -504,8 +506,8 @@ class BoardPageTest(GuiCase):
             page.motion(mock.Mock(x=100 + step * k * 3.2, y=100))
         self.app.update()
         self.assertEqual(page.camera[1], (bm.CAMERA[1] - 1024) % 4096)
-        self.assertEqual(drawn, [ui_board.DRAG_SCALE])
-        self.assertEqual(page.scale, ui_board.DRAG_SCALE)
+        self.assertEqual(drawn, [small])
+        self.assertEqual(page.scale, small)
         page.release(mock.Mock(x=0, y=0))
         self.pause()
         self.assertEqual(drawn[-1], 1)

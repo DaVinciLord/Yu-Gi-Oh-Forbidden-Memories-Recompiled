@@ -41,6 +41,7 @@ the Duel board page picks by."""
 from __future__ import annotations
 
 import math
+import re
 from array import array
 
 from . import board_art as ba, map_view, pngio
@@ -233,6 +234,18 @@ def render(mdl: Board, pieces: dict, camera=None, size=SCREEN) -> Picture:
     """The board as `camera` (None: the duel's) sees it, `pieces` (part
     key -> picture, any scale) its textures; a part missing is the disc's
     own texels."""
+    steps = render_steps(mdl, pieces, camera, size)
+    while True:
+        try:
+            next(steps)
+        except StopIteration as done:
+            return done.value
+
+
+def render_steps(mdl: Board, pieces: dict, camera=None, size=SCREEN, step: int = map_view.STEP):
+    """render() a little at a time (map_view.raster_steps): a generator
+    pausing every `step` pixels or so, its value (StopIteration's) the
+    Picture."""
     to_screen = projector(camera, size)
     near, far = FOG
     projected = []
@@ -267,10 +280,10 @@ def render(mdl: Board, pieces: dict, camera=None, size=SCREEN) -> Picture:
             if (xb - xa) * (yc - ya) - (xc - xa) * (yb - ya) <= 0:
                 continue            # a back face (NCLIP)
             faces.append((corners, tpage, clut, overrides.get(key), tag))
-    out = bytearray(bytes((*BACKGROUND, 255)) * (width * height))
     ids = bytearray(width * height)
-    map_view._rasterize(size, faces, mdl.model.vram, out, [1e30] * (width * height), ids)
-    return Picture(pngio.Image(width, height, bytes(out)), ids, KEYS)
+    pixels = [bytes((*BACKGROUND, 255))] * (width * height)
+    yield from map_view.raster_steps(size, faces, mdl.model.vram, pixels, ids, step)
+    return Picture(pngio.Image(width, height, b"".join(pixels)), ids, KEYS)
 
 
 _PIECES = {}
@@ -315,7 +328,15 @@ def render_board(project, terrain: str = "normal", camera=None, size=SCREEN) -> 
 def outline(picture: Picture, keys, thickness: int = 1, colour=(0x40, 0xE0, 0xFF), dark=(0, 0, 0)) -> pngio.Image:
     """The picture with the edge of what `keys` cover drawn round: a line
     of `colour` `thickness` pixels wide inside it and one of `dark`
-    outside."""
+    outside.
+
+    A row at a time, a byte a pixel as one number: a pixel of the mask is
+    on its edge when a neighbour (or the picture's edge) is not. The line
+    inside is the mask's pixels within thickness - 1 (across, down or
+    diagonally) of an edge pixel; outside, those not in the mask within
+    thickness of one, which are those within thickness of the mask (the
+    nearest of it is an edge). Both are the rows widened by shifts and
+    or-ed with their neighbours, painted a run at a time."""
     image = picture.image
     width, height = image.width, image.height
     wanted = {picture.keys.index(k) + 1 for k in keys if k in picture.keys}
@@ -323,36 +344,40 @@ def outline(picture: Picture, keys, thickness: int = 1, colour=(0x40, 0xE0, 0xFF
     out = bytearray(image.rgba)
     if not wanted or 1 not in mask:
         return pngio.Image(width, height, bytes(out))
-    # A row at a time, a byte a pixel as one number: a pixel of the mask is
-    # on its edge when a neighbour (or the picture's edge) is not.
     ones = int.from_bytes(b"\1" * width, "big")
     rows = [int.from_bytes(mask[y * width:(y + 1) * width], "big") for y in range(height)]
     edges = []
     for y, row in enumerate(rows):
         if not row:
+            edges.append(0)
             continue
         above = rows[y - 1] if y > 0 else 0
         below = rows[y + 1] if y + 1 < height else 0
         outside = (ones ^ (row >> 8)) | (ones ^ (row << 8 & (ones * 255))) | (ones ^ above) | (ones ^ below) | 1 | 1 << 8 * (width - 1)
-        line = (row & outside).to_bytes(width, "big")
-        x = line.find(1)
-        while x >= 0:
-            edges.append((x, y))
-            x = line.find(1, x + 1)
-    inner, outer = bytes(colour), bytes(dark)
-    reach = range(-thickness, thickness + 1)
-    for x, y in edges:
-        for dy in reach:
-            ny = y + dy
-            if not 0 <= ny < height:
+        edges.append(row & outside)
+    for lines, reach, paint, inside in ((edges, thickness - 1, bytes(colour), True),
+                                        (rows, thickness, bytes(dark), False)):
+        if reach < 0:
+            continue
+        across = []
+        for line in lines:
+            wide = line
+            for k in range(1, reach + 1):
+                wide |= line >> 8 * k | line << 8 * k
+            across.append(wide & ones)
+        for y in range(height):
+            near = 0
+            for ny in range(max(0, y - reach), min(height, y + reach + 1)):
+                near |= across[ny]
+            near = near & rows[y] if inside else near & ~rows[y]
+            if not near:
                 continue
-            for dx in reach:
-                nx = x + dx
-                if 0 <= nx < width:
-                    at = ny * width + nx
-                    if mask[at]:
-                        if abs(dx) < thickness and abs(dy) < thickness:
-                            out[at * 4:at * 4 + 3] = inner
-                    else:
-                        out[at * 4:at * 4 + 3] = outer
+            base = y * width * 4
+            for run in _RUN.finditer(near.to_bytes(width, "big")):
+                first, last = run.span()
+                for c in range(3):
+                    out[base + first * 4 + c:base + last * 4:4] = paint[c:c + 1] * (last - first)
     return pngio.Image(width, height, bytes(out))
+
+
+_RUN = re.compile(b"\1+")

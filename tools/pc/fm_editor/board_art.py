@@ -261,19 +261,16 @@ def common_tint(project, terrain: str, parts) -> int:
 
 def piece_image(data: BoardData, terrain: str, part: Part, tint: int = WHITE) -> Image:
     """A piece as the game draws it at the console's resolution, through
-    its palette (tinted): a colour word of 0 is clear."""
+    its palette (tinted): a colour word of 0 is clear. A byte holds two
+    texels, the low four bits first; the pieces start and end on a whole
+    byte, so a row is its bytes each turned into two pixels."""
     blob = data.phases[terrain]
-    palette = [colour(w) for w in tinted(palette_words(data, terrain, part), tint)]
-    base = part.column * COLUMN_BYTES
-    out = bytearray(part.w * part.h * 4)
-    for y in range(part.h):
-        row = base + (part.y + y) * ROW_BYTES
-        for x in range(part.w):
-            byte = blob[row + (part.x + x) // 2]
-            index = byte >> 4 if (part.x + x) & 1 else byte & 15
-            at = (y * part.w + x) * 4
-            out[at:at + 4] = bytes(palette[index])
-    return Image(part.w, part.h, bytes(out))
+    palette = [bytes(colour(w)) for w in tinted(palette_words(data, terrain, part), tint)]
+    pairs = [palette[byte & 15] + palette[byte >> 4] for byte in range(256)]
+    base = part.column * COLUMN_BYTES + part.x // 2
+    out = b"".join(b"".join(map(pairs.__getitem__, blob[row:row + part.w // 2]))
+                   for row in range(base + part.y * ROW_BYTES, base + (part.y + part.h) * ROW_BYTES, ROW_BYTES))
+    return Image(part.w, part.h, out)
 
 
 # --- the mod's state -----------------------------------------------------------------------

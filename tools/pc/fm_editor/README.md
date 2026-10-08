@@ -540,7 +540,12 @@ the **middle mouse button** to turn it round (it stays above the floor),
 **Shift** (or **Ctrl**) and the middle button to move it, the **wheel** to
 come nearer; **Game's view** (or a double middle click) puts the duel's
 camera back. Click a part there or in the list to choose it; it is outlined
-on the board. The list is the field's textures:
+on the board. A field, a camera or an edit not seen yet shows a smaller
+picture of it at once and the full one a moment later, drawn a little at a
+time so the window never waits on it; left alone, the page draws the
+other fields ahead, so the next one chosen is there at once (the last seven
+are kept). While the camera moves, the picture is as small as your machine
+draws quickly enough. The list is the field's textures:
 
 * **Floor**: all five rows of zones as one picture, 256x254 texels, far to
   near (the opponent's back row at the top, the centre strip once, your
@@ -1092,6 +1097,11 @@ opponent's turns, the results) with the moved panel and its digits checked
 in each picture, the same at Internal 2x in a window and with the duel
 effects interpreted, and, given `--baseline`, the frames without the mod
 against another build's.
+`tools/pc/bench_board.py` times the board's and the map's renders and every
+use of the Duel board page (`--slow N`: as on a machine N times slower; run
+it under `taskset -c 0` for one core). `tests/test_render_speed.py` holds
+the plain rasterizer the renders replaced and checks them against it pixel
+for pixel.
 `editor_board_runtime.py` makes a duel board through the Duel board page
 (floors replaced at 4x and 1x, one tinted, the walls' wings, trim and
 corner triangles on every field) and plays it at Internal 1x and 2x with
