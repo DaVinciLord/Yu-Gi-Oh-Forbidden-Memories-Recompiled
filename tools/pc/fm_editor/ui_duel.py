@@ -12,11 +12,14 @@ import tkinter as tk
 from tkinter import ttk
 
 from . import art, pngio, ui_assets as ua
-from .ui_tab import (ColourButton, Stage, as_int, colour_text, ensure, import_image, mod_image, section, set_member,
-                     sized)
+from .ui_tab import (WARN, ColourButton, Stage, as_int, colour_text, ensure, import_image, mod_image, page_layout,
+                     section, set_member, sized)
 from .widgets import px
 
 ELEMENTS = ["lp_opponent", "lp_player", "field", "card_bar", "hand_cursor", "field_cursor"]
+GROUPS = [("life", "Life points", ["lp_opponent", "lp_player"]), ("board", "Field", ["field", "field_cursor"]),
+          ("hand", "Hand", ["card_bar", "hand_cursor"])]
+SLIDES = {"lp_opponent", "lp_player", "field"}      # what the game slides away for a battle
 NAMES = {"lp_opponent": "Opponent's LP", "lp_player": "Your LP", "field": "FIELD box", "card_bar": "Card bar",
          "hand_cursor": "Hand cursor", "field_cursor": "Field cursor"}
 # What ui_config.c lets each take (its `takes`).
@@ -48,38 +51,37 @@ def place(rect, element: dict):
     return at
 
 
+def rough_edges(name: str, element: dict) -> list:
+    """What the game does not quite do with these settings (duel_ui.c,
+    hd_text.c make_name): a short line each."""
+    out = []
+    if name in SLIDES and (as_int(element.get("x")) or as_int(element.get("y"))):
+        out.append("Moved: it can vanish at once when the game slides it off (battles, duel end).")
+    label = element.get("label")
+    if name in LABELLED and isinstance(label, str) and label:
+        if any(not " " <= c <= "~" for c in label):
+            out.append("Only plain A-Z, 0-9 and signs: another letter brings back COM or YOU.")
+        if element.get("image"):
+            out.append("The words are not drawn over a picture of yours.")
+    return out
+
+
 class DuelPage(ttk.Frame):
     def __init__(self, master, tab):
         super().__init__(master)
         self.tab = tab
         self.chosen = "lp_player"
         self.loading = False
-        left = ttk.Frame(self)
-        left.pack(side="left", fill="y")
-        self.stage = Stage(left, zoom=2, on_select=self.select, on_move=self.moved, on_wheel=self.wheel)
-        self.stage.pack(anchor="nw")
-        chips = ttk.Frame(left)
-        chips.pack(fill="x", pady=(6, 0))
-        self.chip = tk.StringVar(value=self.chosen)
-        self.chips = {}
-        for name in ELEMENTS:
-            self.chips[name] = ttk.Radiobutton(chips, text=NAMES[name], value=name, variable=self.chip,
-                                               style="Toolbutton", command=lambda: self.select(self.chip.get()))
-            self.chips[name].pack(side="left", padx=(0, 2))
-        views = ttk.Frame(left)
-        views.pack(fill="x", pady=(4, 0))
+        page_layout(self, self.draw, on_select=self.select, on_move=self.moved, on_wheel=self.wheel,
+                    on_drag=self.dragging)
         self.opponent_turn = tk.BooleanVar(value=False)
-        ttk.Checkbutton(views, text="Opponent's turn", variable=self.opponent_turn,
+        ttk.Checkbutton(self.view.tools, text="Opponent's turn", variable=self.opponent_turn,
                         command=self.draw).pack(side="left")
-
-        side = ttk.Frame(self, padding=(12, 0, 0, 0))
-        side.pack(side="left", fill="both", expand=True)
-        self.title = ttk.Label(side, font=("TkDefaultFont", 12, "bold"))
-        self.title.pack(anchor="w")
-        self.what = ttk.Label(side, style="Hint.TLabel", wraplength=px(self, 330), justify="left")
-        self.what.pack(anchor="w", pady=(0, 8))
+        side = self.side
+        self.title = self.heading
         form = ttk.Frame(side)
-        form.pack(anchor="w", fill="x")
+        form.grid(row=4, column=0, sticky="new", pady=(6, 0))
+        form.columnconfigure(0, minsize=px(self, 110))
         self.vars = {key: tk.StringVar() for key in ("x", "y", "scale", "label", "width", "height")}
         row = 0
 
@@ -91,16 +93,17 @@ class DuelPage(ttk.Frame):
             return widget
 
         places = ttk.Frame(form)
+        ttk.Label(places, text="x").pack(side="left", padx=(0, 4))
         self.x_box = ttk.Spinbox(places, from_=-400, to=400, width=5, textvariable=self.vars["x"],
                                  command=lambda: self.typed("x"))
         self.x_box.pack(side="left")
-        ttk.Label(places, text="  y").pack(side="left")
+        ttk.Label(places, text="y").pack(side="left", padx=(8, 4))
         self.y_box = ttk.Spinbox(places, from_=-300, to=300, width=5, textvariable=self.vars["y"],
                                  command=lambda: self.typed("y"))
-        self.y_box.pack(side="left", padx=(4, 0))
-        self.place_row = line("Moved by  x", places)
+        self.y_box.pack(side="left")
+        self.place_row = line("Moved by", places)
         sizes = ttk.Frame(form)
-        self.scale_slider = ttk.Scale(sizes, from_=SCALE_MIN, to=SCALE_MAX, length=px(self, 150),
+        self.scale_slider = ttk.Scale(sizes, from_=SCALE_MIN, to=SCALE_MAX, length=px(self, 180),
                                       command=self.slid)
         self.scale_slider.pack(side="left")
         self.scale_box = ttk.Spinbox(sizes, from_=SCALE_MIN, to=SCALE_MAX, increment=5, width=4,
@@ -108,8 +111,8 @@ class DuelPage(ttk.Frame):
         self.scale_box.pack(side="left", padx=(6, 0))
         ttk.Label(sizes, text="%").pack(side="left")
         self.size_row = line("Size", sizes)
-        self.tint = line("Colour", ColourButton(form, lambda v: self.set_colour("tint", v)))
-        self.digits = line("Digits", ColourButton(form, lambda v: self.set_colour("digits", v)))
+        self.tint = line("Colour", ColourButton(form, lambda v: self.set_colour("tint", v), multiplies=True))
+        self.digits = line("Digits", ColourButton(form, lambda v: self.set_colour("digits", v), multiplies=True))
         self.digits_label = form.grid_slaves(row=row - 1, column=0)[0]
         self.label_entry = line("Words", ttk.Entry(form, textvariable=self.vars["label"], width=16))
         self.label_caption = form.grid_slaves(row=row - 1, column=0)[0]
@@ -130,12 +133,13 @@ class DuelPage(ttk.Frame):
         hide = ttk.Checkbutton(form, text="Hidden", variable=self.hidden, command=self.set_hidden)
         hide.grid(row=row, column=1, sticky="w", pady=(6, 0))
         row += 1
-        buttons = ttk.Frame(side)
-        buttons.pack(anchor="w", pady=(12, 0))
-        ttk.Button(buttons, text="Back to the game's", command=self.reset).pack(side="left")
-        ttk.Button(buttons, text="Reset every picture", command=self.reset_all).pack(side="left", padx=(6, 0))
-        self.status = ttk.Label(side, style="Hint.TLabel", wraplength=px(self, 330), justify="left")
-        self.status.pack(anchor="w", pady=(10, 0))
+        ttk.Button(form, text="Back to the game's", command=self.reset).grid(row=row, column=1, sticky="w",
+                                                                          pady=(10, 0))
+        # The game's rough edges with what is set (rough_edges()).
+        self.warning = ttk.Label(side, style="Warning.TLabel", wraplength=px(self, 440), justify="left")
+        self.warning.grid(row=5, column=0, sticky="w", pady=(8, 0))
+        self.status = ttk.Label(side, style="Hint.TLabel", wraplength=px(self, 440), justify="left")
+        self.status.grid(row=6, column=0, sticky="w", pady=(6, 0))
 
     # --- the mod -------------------------------------------------------------------
 
@@ -159,8 +163,16 @@ class DuelPage(ttk.Frame):
     # --- the picture -------------------------------------------------------------------
 
     def fill(self):
+        if self.project is None:
+            return
         self.draw()
         self.fill_form()
+
+    def reset_choice(self):
+        self.chosen = "lp_player"
+
+    def pick(self, iid, group=None):
+        self.select(iid)
 
     def sketch(self, stage: Stage):
         """The field and the hand, roughly: the 3D field is the game's."""
@@ -195,16 +207,24 @@ class DuelPage(ttk.Frame):
                 if picture:
                     stage.picture(("hand", i), sized(picture, 36, 29), x + 2, y + 2, drag=False)
 
-    def mark_chips(self):
-        """A dot on each picture the mod changes."""
-        for name, chip in self.chips.items():
-            chip.configure(text=NAMES[name] + (" \u2022" if self.element(name) else ""))
+    def fill_list(self):
+        """The pictures in groups, a dot on each the mod changes."""
+        rows = []
+        for group, text, names in GROUPS:
+            rows.append((group, "", text, (), False, ("group",)))
+            rows += [(name, group, NAMES[name], (), bool(self.element(name)), ()) for name in names]
+        self.list.fill(rows, self.chosen)
 
     def draw(self):
+        if self.project is None:
+            self.paint()
+            return
+        self.tab.draw_compared(self, self.paint)
+        self.fill_list()
+
+    def paint(self):
         stage = self.stage
         stage.clear()
-        if self.project is not None:
-            self.mark_chips()
         duel = self.tab.duel_art()
         self.sketch(stage)
         if not duel.ok:
@@ -298,9 +318,15 @@ class DuelPage(ttk.Frame):
         if isinstance(key, tuple) or key is None:
             return
         self.chosen = key
-        self.chip.set(key)
+        self.list.show(key)
         self.stage.outline(key)
         self.fill_form()
+
+    def dragging(self, key, dx, dy):
+        if key == self.chosen and key in PLACED:
+            element = self.element(key)
+            self.vars["x"].set(str(max(-400, min(400, as_int(element.get("x")) + dx))))
+            self.vars["y"].set(str(max(-300, min(300, as_int(element.get("y")) + dy))))
 
     def moved(self, key, dx, dy):
         if key not in PLACED:
@@ -362,6 +388,7 @@ class DuelPage(ttk.Frame):
                 widget.grid()
             else:
                 widget.grid_remove()
+        self.warning.configure(text="\n".join(WARN + line for line in rough_edges(name, element)))
         self.status.configure(text="")
         self.loading = False
 
@@ -426,10 +453,4 @@ class DuelPage(ttk.Frame):
     def reset(self):
         duel = ensure(self.project, "ui", "duel")
         duel.pop(self.chosen, None)
-        self.done()
-
-    def reset_all(self):
-        ui = section(self.project, "ui")
-        if isinstance(ui.get("duel"), dict):
-            ui.pop("duel")
         self.done()

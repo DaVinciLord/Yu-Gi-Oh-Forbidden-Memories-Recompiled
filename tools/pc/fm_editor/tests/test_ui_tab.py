@@ -181,8 +181,10 @@ class UiTabTest(GuiCase):
         page.select("field_cursor")
         page.reset()
         self.assertNotIn("field_cursor", self.app.project.other["ui"]["duel"])
-        page.reset_all()
+        with mock.patch("fm_editor.ui_tab.messagebox.askyesno", return_value=True):
+            self.tab.revert_page(page)
         self.assertNotIn("ui", self.app.project.other)
+        self.assertNotIn("ui/duel-lp-player.png", self.app.project.files)
 
     def test_title_page(self):
         page = self.page("title")
@@ -263,6 +265,115 @@ class UiTabTest(GuiCase):
         self.app.set_project(opened)
         self.page("duel").draw()
         self.page("title").draw()
+
+    def edit_every_page(self):
+        duel = self.page("duel")
+        duel.select("field")
+        duel.moved("field", 40, 0)
+        with self.choose(self.picture):
+            duel.choose_image()
+        title = self.page("title")
+        with self.choose(self.picture):
+            title.add_picture()
+        title.select("logo")
+        title.moved("logo", 0, -10)
+        menu = self.page("menu")
+        menu.add_button()
+        menu.chosen = "trade"
+        menu.toggle_hidden()
+        self.app.project.other["keep"] = {"a": 1}
+        self.app.flush_history()
+
+    def test_revert_to_retail_and_undo(self):
+        self.edit_every_page()
+        other = self.app.project.other
+        before = {key: other[key] for key in ("title", "menu", "ui")}
+        self.assertEqual(sorted(n for n in self.app.project.files if n.startswith("ui/")),
+                         ["ui/duel-field.png", "ui/title-picture.png"])
+        self.assertEqual(self.tab.revert_button.instate(["disabled"]), False)
+        with mock.patch("fm_editor.ui_tab.messagebox.askyesno", return_value=False) as asked:
+            self.tab.revert_all()
+        self.assertIn("2 picture(s) in ui/", asked.call_args[0][1])
+        self.assertIn("1 button(s) of the mod's own", asked.call_args[0][1])
+        self.assertEqual(self.app.project.other["ui"], before["ui"])           # said no: nothing changed
+        with mock.patch("fm_editor.ui_tab.messagebox.askyesno", return_value=True):
+            self.tab.revert_all()
+        self.assertEqual(list(self.app.project.other), ["keep"])               # the tab's keys only
+        self.assertFalse([n for n in self.app.project.files if n.startswith("ui/")])
+        self.assertTrue(self.tab.revert_button.instate(["disabled"]))
+        for name in ("title", "menu", "duel"):
+            self.page(name)                                                      # each draws as the game's
+        # One undo step brings all of it back, the pictures too.
+        self.app.undo()
+        self.app.update()
+        self.assertEqual({key: self.app.project.other[key] for key in ("title", "menu", "ui")}, before)
+        self.assertIn("ui/duel-field.png", self.app.project.files)
+        self.assertIn("ui/title-picture.png", self.app.project.files)
+        self.app.redo()
+        self.assertEqual(list(self.app.project.other), ["keep"])
+
+    def test_revert_page(self):
+        self.edit_every_page()
+        menu_before = self.app.project.other["menu"]
+        self.app.project.other["title"]["spacing"] = 40          # the menus' own, under "title"
+        with mock.patch("fm_editor.ui_tab.messagebox.askyesno", return_value=True):
+            self.tab.revert_page(self.tab.pages["title"])
+        self.assertEqual(self.app.project.other["title"], {"spacing": 40})
+        self.assertEqual(self.app.project.other["menu"], menu_before)
+        self.assertNotIn("ui/title-picture.png", self.app.project.files)
+        self.assertIn("ui/duel-field.png", self.app.project.files)
+        with mock.patch("fm_editor.ui_tab.messagebox.askyesno", return_value=True):
+            self.tab.revert_page(self.tab.pages["menu"])
+        self.assertNotIn("menu", self.app.project.other)
+        self.assertNotIn("title", self.app.project.other)
+        self.assertIn("ui", self.app.project.other)
+        self.assertTrue(self.tab.pages["menu"].revert_page.instate(["disabled"]))
+
+    def test_drag_at_a_bigger_zoom(self):
+        """The preview grows with the room; a drag is in the game's pixels at any zoom."""
+        from types import SimpleNamespace as Event
+        page = self.page("duel")
+        with mock.patch.object(page.view, "winfo_width", return_value=1000), \
+                mock.patch.object(page.view, "winfo_height", return_value=800):
+            page.view.seen = None
+            page.view.fit()
+        self.assertEqual(page.stage.zoom, 3)
+        x, y, w, h = page.stage.boxes["field"]
+        at = (int((x + w / 2) * 3), int((y + h / 2) * 3))
+        page.stage._press(Event(x=at[0], y=at[1]))
+        self.assertEqual(page.chosen, "field")
+        page.stage._motion(Event(x=at[0] + 31, y=at[1] - 14))      # 10.3 and -4.7 of the game's pixels
+        self.assertEqual((page.vars["x"].get(), page.vars["y"].get()), ("10", "-5"))   # the form, live
+        page.stage._release(Event(x=at[0] + 31, y=at[1] - 14))
+        self.assertEqual(self.app.project.other["ui"]["duel"]["field"], {"x": 10, "y": -5})
+        page.stage._nudge(Event(state=0), 1, 0)                    # an arrow: one pixel
+        page.stage._nudge(Event(state=1), 0, 1)                    # Shift: eight
+        self.assertEqual(self.app.project.other["ui"]["duel"]["field"], {"x": 11, "y": 3})
+        with mock.patch.object(page.view, "winfo_width", return_value=700), \
+                mock.patch.object(page.view, "winfo_height", return_value=2000):
+            page.view.seen = None
+            page.view.fit()
+        self.assertEqual(page.stage.zoom, 2)
+
+    def test_hold_the_games(self):
+        page = self.page("duel")
+        page.moved("lp_player", -40, 0)
+        self.tab.comparing_now(True)
+        self.assertEqual(self.app.project.other["ui"]["duel"]["lp_player"], {"x": -40})   # drawn without it only
+        self.assertEqual(page.stage.boxes["lp_player"][0], ui_assets.DUEL_RECTS["lp_player"][0])
+        self.tab.comparing_now(False)
+        self.assertEqual(page.stage.boxes["lp_player"][0], ui_assets.DUEL_RECTS["lp_player"][0] - 40)
+
+    def test_rough_edges(self):
+        from fm_editor.ui_duel import rough_edges
+        from fm_editor.ui_tab import brightens
+        self.assertEqual(rough_edges("lp_player", {}), [])
+        self.assertEqual(len(rough_edges("lp_player", {"x": 4})), 1)
+        self.assertEqual(rough_edges("hand_cursor", {"x": 4}), [])
+        self.assertEqual(len(rough_edges("lp_opponent", {"label": "RIVAL\u00c9", "image": "ui/a.png"})), 2)
+        self.assertTrue(brightens(0xFFFF40))
+        self.assertFalse(brightens(0xFFFFFF))
+        self.assertFalse(brightens(0x404040))
 
     def test_pages_draw_without_the_disc(self):
         for name in ("title", "menu", "duel"):

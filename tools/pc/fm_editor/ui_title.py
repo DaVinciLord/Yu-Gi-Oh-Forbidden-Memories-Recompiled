@@ -16,7 +16,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from . import pngio, ui_assets as ua
-from .ui_tab import (ColourButton, Stage, as_int, colour_text, ensure, import_image, mod_image, section, set_member,
+from .ui_tab import (ColourButton, as_int, colour_text, ensure, import_image, mod_image, page_layout, section, set_member,
                      sized)
 from .widgets import px
 
@@ -36,6 +36,10 @@ SHOW_TITLES = {"always": "Always", "press_start": "With PUSH START", "menu": "Wi
 SPACING, MIDDLES, TOP, MOST = 32, (114, 122), 16, 188
 MAX_PICTURES, MAX_LINES, MAX_BUTTONS = 8, 16, 16
 LABEL_H, LABEL_PAD, LABEL_MIN, LABEL_MAX = 28, 14, 64, 240
+
+
+def menu_of(item) -> int:
+    return item.get("menu", 0)
 
 
 def action_title(action: str) -> str:
@@ -353,6 +357,22 @@ class TitleCanvas:
 
 # --- the pages -------------------------------------------------------------------------
 
+def rows(frame):
+    """line(caption, widget): the form's next row, the captions one column
+    as wide as the others' forms have it."""
+    frame.columnconfigure(0, minsize=px(frame, 110))
+    row = 0
+
+    def line(text, widget, pady=2):
+        nonlocal row
+        if text:
+            ttk.Label(frame, text=text).grid(row=row, column=0, sticky="w", pady=pady, padx=(0, 8))
+        widget.grid(row=row, column=1, sticky="w", pady=pady)
+        row += 1
+        return widget
+    return line
+
+
 class BackgroundForm(ttk.Frame):
     """A "background" object's keys: the game's wall or a picture, its
     colour, the shade, a colour under it, the menu's dimming."""
@@ -369,7 +389,8 @@ class BackgroundForm(ttk.Frame):
         ttk.Checkbutton(self, text="Dark-to-light shade", variable=self.shade,
                         command=lambda: self.set("shade", self.shade.get(), True)).grid(row=0, column=1, sticky="w")
         ttk.Label(self, text="Wall colour").grid(row=1, column=0, sticky="w", pady=2)
-        self.tint = ColourButton(self, lambda v: self.set("tint", colour_text(v) if v is not None else None, "#FFFFFF"))
+        self.tint = ColourButton(self, lambda v: self.set("tint", colour_text(v) if v is not None else None, "#FFFFFF"),
+                                 multiplies=True)
         self.tint.grid(row=1, column=1, sticky="w")
         ttk.Label(self, text="Colour under it").grid(row=2, column=0, sticky="w", pady=2)
         self.colour = ColourButton(self, lambda v: self.set("color", colour_text(v) if v is not None else None),
@@ -383,8 +404,9 @@ class BackgroundForm(ttk.Frame):
         self.image = ttk.Label(self, style="Hint.TLabel")
         self.image.grid(row=4, column=1, sticky="w")
         ttk.Label(self, text="Menu dimming").grid(row=5, column=0, sticky="w", pady=2)
-        self.dim = ttk.Scale(self, from_=0, to=128, length=px(self, 150), command=self.dimmed)
+        self.dim = ttk.Scale(self, from_=0, to=128, length=px(self, 200), command=self.dimmed)
         self.dim.grid(row=5, column=1, sticky="w")
+        self.columnconfigure(0, minsize=px(self, 130))
 
     def target(self) -> dict:
         return ensure(self.page.project, "menu" if self.menu else "title", "background")
@@ -426,39 +448,36 @@ class BackgroundForm(ttk.Frame):
             self.page.edited(redraw_form=False)
 
 
+WHAT = {"background": "Behind everything: the game's wall, a colour, or a picture of yours.",
+        "logo": "The game's logo.", "copyright": "The \u00a9 1996 line.",
+        "prompt": "Blinks until a button is pressed.", "picture": "A picture of yours, by its middle.",
+        "text": "A line of words, drawn by the port in its own letters."}
+
+
 class TitlePage(ttk.Frame):
     def __init__(self, master, tab):
         super().__init__(master)
         self.tab = tab
         self.chosen = "background"
         self.loading = False
-        left = ttk.Frame(self)
-        left.pack(side="left", fill="y")
-        self.stage = Stage(left, zoom=2, on_select=self.select, on_move=self.moved)
-        self.stage.pack(anchor="nw")
+        page_layout(self, self.draw, on_select=self.select, on_move=self.moved, on_drag=self.dragging)
         self.canvas = TitleCanvas(tab, self.stage)
-        tools = ttk.Frame(left)
-        tools.pack(fill="x", pady=(6, 0))
-        ttk.Button(tools, text="+ Picture", command=self.add_picture).pack(side="left")
-        ttk.Button(tools, text="+ Words", command=self.add_text).pack(side="left", padx=(4, 0))
         self.menu_up = tk.BooleanVar(value=False)
-        ttk.Checkbutton(tools, text="With the menu up", variable=self.menu_up, command=self.draw).pack(side="left",
-                                                                                                    padx=(12, 0))
-        # Everything on the title, to choose what the picture hides.
-        self.chips = ttk.Frame(left)
-        self.chips.pack(fill="x", pady=(6, 0))
-        self.chip = tk.StringVar(value="background")
-        self.side = ttk.Frame(self, padding=(12, 0, 0, 0))
-        self.side.pack(side="left", fill="both", expand=True)
-        self.heading = ttk.Label(self.side, font=("TkDefaultFont", 12, "bold"))
-        self.heading.pack(anchor="w")
+        ttk.Checkbutton(self.view.tools, text="With the menu up", variable=self.menu_up,
+                        command=self.draw).pack(side="left")
+        self.add_picture_button = ttk.Button(self.list_tools, text="+ Picture", command=self.add_picture)
+        self.add_picture_button.pack(side="left")
+        self.add_text_button = ttk.Button(self.list_tools, text="+ Words", command=self.add_text)
+        self.add_text_button.pack(side="left", padx=(4, 0))
+        self.form_box = ttk.Frame(self.side)
+        self.form_box.grid(row=4, column=0, sticky="new")
         self.forms = {}
         self.forms["background"] = self.background_form()
         self.forms["layer"] = self.layer_form()
         self.forms["picture"] = self.picture_form()
         self.forms["text"] = self.text_form()
-        self.status = ttk.Label(self.side, style="Hint.TLabel", wraplength=px(self, 330), justify="left")
-        self.status.pack(side="bottom", anchor="w")
+        self.status = ttk.Label(self.side, style="Hint.TLabel", wraplength=px(self, 440), justify="left")
+        self.status.grid(row=5, column=0, sticky="w", pady=(8, 0))
 
     @property
     def project(self):
@@ -476,10 +495,10 @@ class TitlePage(ttk.Frame):
     # --- the forms ----------------------------------------------------------------
 
     def background_form(self):
-        frame = ttk.Frame(self.side)
+        frame = ttk.Frame(self.form_box)
         self.background = BackgroundForm(frame, self, menu=False)
         self.background.pack(anchor="w", fill="x")
-        screen = ttk.LabelFrame(frame, text="The screen", padding=6)
+        screen = ttk.LabelFrame(frame, text="Start-up", padding=6)
         screen.pack(anchor="w", fill="x", pady=(10, 0))
         self.skip = tk.BooleanVar()
         self.press = tk.BooleanVar()
@@ -502,54 +521,52 @@ class TitlePage(ttk.Frame):
             entry.bind("<FocusOut>", lambda e: self.screen_typed())
         return frame
 
-    def layer_form(self):
-        frame = ttk.Frame(self.side)
-        self.layer_vars = {"x": tk.StringVar(), "y": tk.StringVar(), "show": tk.StringVar()}
-        ttk.Label(frame, text="Moved by  x").grid(row=0, column=0, sticky="w", pady=2)
+    def place_fields(self, frame, variables, typed, centre=None):
+        """x and y boxes (Return, leaving or the arrows apply), and a
+        Centre button when there is one: a frame for the form's row."""
         places = ttk.Frame(frame)
-        places.grid(row=0, column=1, sticky="w")
         for key in ("x", "y"):
-            if key == "y":
-                ttk.Label(places, text="  y").pack(side="left")
-            box = ttk.Spinbox(places, from_=-320, to=320, width=5, textvariable=self.layer_vars[key],
-                              command=lambda k=key: self.layer_typed(k))
-            box.pack(side="left", padx=(4, 0))
-            box.bind("<Return>", lambda e, k=key: self.layer_typed(k))
-            box.bind("<FocusOut>", lambda e, k=key: self.layer_typed(k))
-        ttk.Label(frame, text="Colour").grid(row=1, column=0, sticky="w", pady=2)
-        self.layer_tint = ColourButton(frame, lambda v: self.set_layer("tint", colour_text(v) if v is not None else None,
-                                                                       "#FFFFFF"))
-        self.layer_tint.grid(row=1, column=1, sticky="w")
-        ttk.Label(frame, text="Shown").grid(row=2, column=0, sticky="w", pady=2)
-        self.show_box = ttk.Combobox(frame, state="readonly", width=18, values=[SHOW_TITLES[s] for s in SHOW])
-        self.show_box.grid(row=2, column=1, sticky="w")
+            ttk.Label(places, text=key).pack(side="left", padx=(0 if key == "x" else 8, 4))
+            box = ttk.Spinbox(places, from_=-320, to=640, width=5, textvariable=variables[key],
+                              command=lambda k=key: typed(k))
+            box.pack(side="left")
+            box.bind("<Return>", lambda e, k=key: typed(k))
+            box.bind("<FocusOut>", lambda e, k=key: typed(k))
+        if centre:
+            ttk.Button(places, text="Centre", command=centre).pack(side="left", padx=(8, 0))
+        return places
+
+    def layer_form(self):
+        frame = ttk.Frame(self.form_box)
+        line = rows(frame)
+        self.layer_vars = {"x": tk.StringVar(), "y": tk.StringVar(), "show": tk.StringVar()}
+        line("Moved by", self.place_fields(frame, self.layer_vars, self.layer_typed))
+        self.layer_tint = line("Colour", ColourButton(frame, lambda v: self.set_layer(
+            "tint", colour_text(v) if v is not None else None, "#FFFFFF"), multiplies=True))
+        self.show_box = line("Shown", ttk.Combobox(frame, state="readonly", width=18,
+                                                    values=[SHOW_TITLES[s] for s in SHOW]))
         self.show_box.bind("<<ComboboxSelected>>", lambda e: self.set_layer(
             "show", SHOW[self.show_box.current()], "always"))
-        ttk.Label(frame, text="Picture").grid(row=3, column=0, sticky="w", pady=2)
         buttons = ttk.Frame(frame)
-        buttons.grid(row=3, column=1, sticky="w")
         ttk.Button(buttons, text="Choose PNG...", command=self.layer_image).pack(side="left")
         ttk.Button(buttons, text="Game's", command=lambda: self.set_layer("image", None)).pack(side="left", padx=(4, 0))
-        self.layer_image_name = ttk.Label(frame, style="Hint.TLabel")
-        self.layer_image_name.grid(row=4, column=1, sticky="w")
+        line("Picture", buttons)
+        self.layer_image_name = line("", ttk.Label(frame, style="Hint.TLabel"))
         self.layer_hidden = tk.BooleanVar()
-        ttk.Checkbutton(frame, text="Hidden", variable=self.layer_hidden,
-                        command=lambda: self.set_layer("hide", True if self.layer_hidden.get() else None)).grid(
-            row=5, column=1, sticky="w", pady=(6, 0))
-        ttk.Button(frame, text="Back to the game's", command=self.reset_layer).grid(row=6, column=1, sticky="w",
-                                                                                 pady=(10, 0))
+        line("", ttk.Checkbutton(frame, text="Hidden", variable=self.layer_hidden,
+                                 command=lambda: self.set_layer("hide", True if self.layer_hidden.get() else None)))
+        line("", ttk.Button(frame, text="Back to the game's", command=self.reset_layer), pady=(10, 0))
         return frame
 
     def picture_form(self):
-        frame = ttk.Frame(self.side)
-        self.picture_vars = {"width": tk.StringVar(), "height": tk.StringVar()}
-        ttk.Label(frame, text="Colour").grid(row=0, column=0, sticky="w", pady=2)
-        self.picture_tint = ColourButton(frame, lambda v: self.set_picture(
-            "tint", colour_text(v) if v is not None else None, "#FFFFFF"))
-        self.picture_tint.grid(row=0, column=1, sticky="w")
-        ttk.Label(frame, text="Size").grid(row=1, column=0, sticky="w", pady=2)
+        frame = ttk.Frame(self.form_box)
+        line = rows(frame)
+        self.picture_vars = {key: tk.StringVar() for key in ("width", "height", "x", "y")}
+        line("Middle at", self.place_fields(frame, self.picture_vars, self.picture_place,
+                                            centre=lambda: self.centre("picture")))
+        self.picture_tint = line("Colour", ColourButton(frame, lambda v: self.set_picture(
+            "tint", colour_text(v) if v is not None else None, "#FFFFFF"), multiplies=True))
         sizes = ttk.Frame(frame)
-        sizes.grid(row=1, column=1, sticky="w")
         for key in ("width", "height"):
             if key == "height":
                 ttk.Label(sizes, text=" x ").pack(side="left")
@@ -558,42 +575,36 @@ class TitlePage(ttk.Frame):
             box.pack(side="left")
             box.bind("<Return>", lambda e, k=key: self.picture_typed(k))
             box.bind("<FocusOut>", lambda e, k=key: self.picture_typed(k))
-        ttk.Label(frame, text="0 its own", style="Hint.TLabel").grid(row=2, column=1, sticky="w")
-        ttk.Label(frame, text="Shown").grid(row=3, column=0, sticky="w", pady=2)
-        self.picture_show = ttk.Combobox(frame, state="readonly", width=18, values=[SHOW_TITLES[s] for s in SHOW])
-        self.picture_show.grid(row=3, column=1, sticky="w")
+        ttk.Label(sizes, text="  0: its own", style="Hint.TLabel").pack(side="left")
+        line("Size", sizes)
+        self.picture_show = line("Shown", ttk.Combobox(frame, state="readonly", width=18,
+                                                        values=[SHOW_TITLES[s] for s in SHOW]))
         self.picture_show.bind("<<ComboboxSelected>>", lambda e: self.set_picture(
             "show", SHOW[self.picture_show.current()], "always"))
         buttons = ttk.Frame(frame)
-        buttons.grid(row=4, column=1, sticky="w", pady=(10, 0))
         ttk.Button(buttons, text="Another PNG...", command=self.replace_picture).pack(side="left")
         ttk.Button(buttons, text="Remove", command=self.remove_picture).pack(side="left", padx=(4, 0))
+        line("", buttons, pady=(10, 0))
         return frame
 
     def text_form(self):
-        frame = ttk.Frame(self.side)
-        self.text_vars = {"text": tk.StringVar(), "size": tk.StringVar()}
-        ttk.Label(frame, text="Words").grid(row=0, column=0, sticky="w", pady=2)
-        words = ttk.Entry(frame, textvariable=self.text_vars["text"], width=30)
-        words.grid(row=0, column=1, sticky="w")
-        ttk.Label(frame, text="Colour").grid(row=1, column=0, sticky="w", pady=2)
-        self.text_colour = ColourButton(frame, lambda v: self.set_text(
-            "color", colour_text(v) if v is not None else None, "#FFFFFF"))
-        self.text_colour.grid(row=1, column=1, sticky="w")
-        ttk.Label(frame, text="Size").grid(row=2, column=0, sticky="w", pady=2)
-        size = ttk.Spinbox(frame, from_=1, to=8, width=4, textvariable=self.text_vars["size"],
-                           command=lambda: self.text_typed("size"))
-        size.grid(row=2, column=1, sticky="w")
-        ttk.Label(frame, text="Lined up").grid(row=3, column=0, sticky="w", pady=2)
-        self.align_box = ttk.Combobox(frame, state="readonly", width=10, values=["left", "center", "right"])
-        self.align_box.grid(row=3, column=1, sticky="w")
+        frame = ttk.Frame(self.form_box)
+        line = rows(frame)
+        self.text_vars = {"text": tk.StringVar(), "size": tk.StringVar(), "x": tk.StringVar(), "y": tk.StringVar()}
+        words = line("Words", ttk.Entry(frame, textvariable=self.text_vars["text"], width=34))
+        line("At", self.place_fields(frame, self.text_vars, self.text_place, centre=lambda: self.centre("text")))
+        self.text_colour = line("Colour", ColourButton(frame, lambda v: self.set_text(
+            "color", colour_text(v) if v is not None else None, "#FFFFFF")))
+        size = line("Size", ttk.Spinbox(frame, from_=1, to=8, width=4, textvariable=self.text_vars["size"],
+                                        command=lambda: self.text_typed("size")))
+        self.align_box = line("Lined up", ttk.Combobox(frame, state="readonly", width=10,
+                                                       values=["left", "center", "right"]))
         self.align_box.bind("<<ComboboxSelected>>", lambda e: self.set_text("align", self.align_box.get(), "center"))
-        ttk.Label(frame, text="Shown").grid(row=4, column=0, sticky="w", pady=2)
-        self.text_show = ttk.Combobox(frame, state="readonly", width=18, values=[SHOW_TITLES[s] for s in SHOW])
-        self.text_show.grid(row=4, column=1, sticky="w")
+        self.text_show = line("Shown", ttk.Combobox(frame, state="readonly", width=18,
+                                                     values=[SHOW_TITLES[s] for s in SHOW]))
         self.text_show.bind("<<ComboboxSelected>>", lambda e: self.set_text(
             "show", SHOW[self.text_show.current()], "always"))
-        ttk.Button(frame, text="Remove", command=self.remove_text).grid(row=5, column=1, sticky="w", pady=(10, 0))
+        line("", ttk.Button(frame, text="Remove", command=self.remove_text), pady=(10, 0))
         for widget, key in ((words, "text"), (size, "size")):
             widget.bind("<Return>", lambda e, k=key: self.text_typed(k))
             widget.bind("<FocusOut>", lambda e, k=key: self.text_typed(k))
@@ -602,38 +613,64 @@ class TitlePage(ttk.Frame):
     # --- drawing and choosing ---------------------------------------------------------
 
     def fill(self):
+        if self.project is None:
+            return
+        self.check_choice()
         self.draw()
         self.fill_form()
+
+    def reset_choice(self):
+        self.chosen = "background"
+
+    def check_choice(self):
+        """The chosen thing still there (an undo may have taken it)."""
+        if isinstance(self.chosen, tuple):
+            title = section(self.project, "title")
+            listed = title.get("images" if self.chosen[0] == "picture" else "text")
+            if not isinstance(listed, list) or self.chosen[1] >= len(listed):
+                self.chosen = "background"
 
     def draw(self):
         if self.project is None:
             return
-        scene = Scene(self.project)
-        self.canvas.draw(scene, menu=0 if self.menu_up.get() else None, cursor="new_game",
-                         chosen=self.chosen)
-        self.fill_chips(scene)
+        self.tab.draw_compared(self, lambda: self.canvas.draw(Scene(self.project), menu=0 if self.menu_up.get()
+                                                              else None, cursor="new_game", chosen=self.chosen))
+        self.fill_list()
 
     @staticmethod
     def chip_key(key) -> str:
         return key if isinstance(key, str) else f"{key[0]}:{key[1]}"
 
-    def fill_chips(self, scene):
-        """A chip for each thing on the title, a dot on those the mod changes."""
-        for child in self.chips.winfo_children():
-            child.destroy()
-        title = scene.title
-        entries = [("background", "Background", bool(title.get("background")))]
-        entries += [(name, LAYER_TITLES[name], bool(title.get(name))) for name in LAYER_NAMES]
+    @staticmethod
+    def key_of(iid: str):
+        kind, _, index = iid.partition(":")
+        return (kind, int(index)) if index else kind
+
+    def fill_list(self):
+        """Everything on the title, grouped, a dot on what the mod changes."""
+        title = section(self.project, "title")
+        rows = [("screen", "", "The screen", (), False, ("group",)),
+                ("background", "screen", "Background", (), bool(title.get("background")), ())]
+        rows += [(name, "screen", LAYER_TITLES[name], (), bool(title.get(name)), ()) for name in LAYER_NAMES]
         images = title.get("images") if isinstance(title.get("images"), list) else []
-        entries += [(("picture", i), f"Picture {i + 1}", True) for i in range(len(images))]
+        if images:
+            rows.append(("pictures", "", "Pictures", (), False, ("group",)))
+        for i, entry in enumerate(images):
+            name = entry.get("image") if isinstance(entry, dict) else None
+            label = f"Picture {i + 1}" + (f"  {name.rsplit('/', 1)[-1]}" if isinstance(name, str) else "")
+            rows.append((f"picture:{i}", "pictures", label, (), True, ()))
         lines = title.get("text") if isinstance(title.get("text"), list) else []
-        entries += [(("text", i), f"Words {i + 1}", True) for i in range(len(lines))]
-        self.chip.set(self.chip_key(self.chosen))
-        for i, (key, text, changed) in enumerate(entries):
-            ttk.Radiobutton(self.chips, text=text + (" \u2022" if changed else ""), value=self.chip_key(key),
-                            variable=self.chip, style="Toolbutton",
-                            command=lambda k=key: self.select(k)).grid(row=i // 6, column=i % 6, sticky="w",
-                                                                       padx=(0, 2), pady=(0, 2))
+        if lines:
+            rows.append(("lines", "", "Words", (), False, ("group",)))
+        for i, line in enumerate(lines):
+            text = line.get("text") if isinstance(line, dict) else ""
+            rows.append((f"text:{i}", "lines", f"\u201c{text}\u201d" if text else f"Words {i + 1}", (), True, ()))
+        self.list.fill(rows, self.chip_key(self.chosen))
+        self.add_picture_button.state(["disabled"] if len(images) >= MAX_PICTURES else ["!disabled"])
+        self.add_text_button.state(["disabled"] if len(lines) >= MAX_LINES else ["!disabled"])
+
+    def pick(self, iid, group=None):
+        self.select(self.key_of(iid))
 
     def select(self, key):
         if key is None:
@@ -642,6 +679,7 @@ class TitlePage(ttk.Frame):
             return
         self.chosen = key
         self.stage.outline(key if key != "background" else None)
+        self.list.show(self.chip_key(key))
         self.fill_form()
 
     def kind(self):
@@ -654,6 +692,7 @@ class TitlePage(ttk.Frame):
     def fill_form(self):
         if self.project is None:
             return
+        self.check_choice()
         self.loading = True
         kind = self.kind()
         for name, form in self.forms.items():
@@ -662,6 +701,7 @@ class TitlePage(ttk.Frame):
             else:
                 form.pack_forget()
         title = section(self.project, "title")
+        self.what.configure(text=WHAT[self.chosen if kind == "layer" else kind])
         if kind == "background":
             self.heading.configure(text="Background")
             self.background.fill()
@@ -684,23 +724,71 @@ class TitlePage(ttk.Frame):
             self.layer_hidden.set(layer.get("hide") is True)
         elif kind == "picture":
             entry = self.picture_entry()
-            self.heading.configure(text=f"Picture {self.chosen[1] + 1}: {entry.get('image', '')}")
+            self.heading.configure(text=f"Picture {self.chosen[1] + 1}")
+            self.what.configure(text=entry.get("image", ""))
             self.picture_tint.set(ua.parse_colour(entry.get("tint")))
-            self.picture_vars["width"].set(str(as_int(entry.get("width"))))
-            self.picture_vars["height"].set(str(as_int(entry.get("height"))))
+            for key, default in (("width", 0), ("height", 0), ("x", 160), ("y", 120)):
+                self.picture_vars[key].set(str(as_int(entry.get(key), default)))
             show = entry.get("show", "always")
             self.picture_show.current(SHOW.index(show) if show in SHOW else 0)
         elif kind == "text":
             line = self.text_entry()
-            self.heading.configure(text="Words")
+            self.heading.configure(text=f"Words {self.chosen[1] + 1}")
             self.text_vars["text"].set(line.get("text", ""))
             self.text_vars["size"].set(str(as_int(line.get("size"), 1)))
+            self.text_vars["x"].set(str(as_int(line.get("x"), 160)))
+            self.text_vars["y"].set(str(as_int(line.get("y"), 220)))
             self.text_colour.set(ua.parse_colour(line.get("color")))
             self.align_box.set(line.get("align", "center"))
             show = line.get("show", "always")
             self.text_show.current(SHOW.index(show) if show in SHOW else 0)
         self.status.configure(text="")
         self.loading = False
+
+    def dragging(self, key, dx, dy):
+        """The form's place as the drag has it, before it lands."""
+        if key != self.chosen:
+            return
+        if key in LAYER_NAMES:
+            layer = section(self.project, "title").get(key)
+            layer = layer if isinstance(layer, dict) else {}
+            fields, start = self.layer_vars, (as_int(layer.get("x")), as_int(layer.get("y")))
+        elif isinstance(key, tuple) and key[0] in ("picture", "text"):
+            entry = self.picture_entry(key[1]) if key[0] == "picture" else self.text_entry(key[1])
+            fields = self.picture_vars if key[0] == "picture" else self.text_vars
+            start = (as_int(entry.get("x"), 160), as_int(entry.get("y"), 120 if key[0] == "picture" else 220))
+        else:
+            return
+        fields["x"].set(str(start[0] + dx))
+        fields["y"].set(str(start[1] + dy))
+
+    def centre(self, kind):
+        if self.kind() != kind:
+            return
+        entry = self.picture_entry() if kind == "picture" else self.text_entry()
+        entry["x"] = 160
+        if kind == "text":
+            entry.pop("align", None)
+        self.edited()
+
+    def picture_place(self, key):
+        self.placed(key, self.picture_vars, "picture", self.picture_entry)
+
+    def text_place(self, key):
+        self.placed(key, self.text_vars, "text", self.text_entry)
+
+    def placed(self, key, fields, kind, entry):
+        if self.kind() != kind or self.loading:
+            return
+        try:
+            value = int(fields[key].get().strip())
+        except ValueError:
+            self.status.configure(text="A whole number.")
+            return
+        target = entry()
+        if target.get(key) != value:
+            target[key] = max(-320, min(640, value))
+            self.edited()
 
     def moved(self, key, dx, dy):
         if key in LAYER_NAMES:
@@ -928,50 +1016,30 @@ class MenuPage(ttk.Frame):
         self.menu = tk.IntVar(value=0)
         self.chosen = "new_game"
         self.loading = False
-        left = ttk.Frame(self)
-        left.pack(side="left", fill="y")
-        self.stage = Stage(left, zoom=2, on_select=self.select_stage, on_move=self.moved)
-        self.stage.pack(anchor="nw")
+        page_layout(self, self.draw, columns=(("#0", "Button", 190), ("does", "Does", 150)), list_height=7,
+                    on_select=self.select_stage, on_move=self.moved, on_drag=self.dragging)
         self.canvas = TitleCanvas(tab, self.stage)
-        tools = ttk.Frame(left)
-        tools.pack(fill="x", pady=(6, 0))
-        for value, text in ((0, "First menu"), (1, "Second menu (a game loaded)")):
-            ttk.Radiobutton(tools, text=text, value=value, variable=self.menu, style="Toolbutton",
-                            command=self.switch_menu).pack(side="left", padx=(0, 2))
-        ttk.Label(tools, text="Spacing").pack(side="left", padx=(12, 4))
+        ttk.Label(self.view.tools, text="Spacing").pack(side="left", padx=(0, 4))
         self.spacing = tk.StringVar()
-        spacing = ttk.Spinbox(tools, from_=8, to=64, width=4, textvariable=self.spacing, command=self.spaced)
+        spacing = ttk.Spinbox(self.view.tools, from_=8, to=64, width=4, textvariable=self.spacing,
+                              command=self.spaced)
         spacing.pack(side="left")
         spacing.bind("<Return>", lambda e: self.spaced())
-        side = ttk.Frame(self, padding=(12, 0, 0, 0))
-        side.pack(side="left", fill="both", expand=True)
-        listing = ttk.Frame(side)
-        listing.pack(fill="x")
-        self.tree = ttk.Treeview(listing, columns=("does",), height=9, selectmode="browse", show="tree headings")
-        self.tree.heading("#0", text="Button")
-        self.tree.heading("does", text="Does")
-        self.tree.column("#0", width=px(self, 170))
-        self.tree.column("does", width=px(self, 150))
-        self.tree.pack(side="left", fill="x", expand=True)
-        self.tree.bind("<<TreeviewSelect>>", lambda e: self.picked())
-        order = ttk.Frame(listing)
-        order.pack(side="left", fill="y", padx=(4, 0))
-        ttk.Button(order, text="▲", width=3, command=lambda: self.move(-1)).pack()
-        ttk.Button(order, text="▼", width=3, command=lambda: self.move(1)).pack(pady=(2, 0))
-        actions = ttk.Frame(side)
-        actions.pack(fill="x", pady=(4, 0))
-        ttk.Button(actions, text="+ Button", command=self.add_button).pack(side="left")
-        self.hide_button = ttk.Button(actions, text="Hide", command=self.toggle_hidden)
+        ttk.Button(self.list_tools, text="\u25b2", width=3, command=lambda: self.move(-1)).pack(side="left")
+        ttk.Button(self.list_tools, text="\u25bc", width=3, command=lambda: self.move(1)).pack(side="left",
+                                                                                            padx=(2, 8))
+        ttk.Button(self.list_tools, text="+ Button", command=self.add_button).pack(side="left")
+        self.hide_button = ttk.Button(self.list_tools, text="Hide", command=self.toggle_hidden)
         self.hide_button.pack(side="left", padx=(4, 0))
-        self.remove_button = ttk.Button(actions, text="Remove", command=self.remove)
+        self.remove_button = ttk.Button(self.list_tools, text="Remove", command=self.remove)
         self.remove_button.pack(side="left", padx=(4, 0))
-        ttk.Button(actions, text="Menu background", command=self.background_chosen).pack(side="left", padx=(4, 0))
-        self.heading = ttk.Label(side, font=("TkDefaultFont", 12, "bold"))
-        self.heading.pack(anchor="w", pady=(8, 0))
-        self.item_form = self.make_item_form(side)
-        self.background = BackgroundForm(side, self, menu=True)
-        self.status = ttk.Label(side, style="Hint.TLabel", wraplength=px(self, 360), justify="left")
-        self.status.pack(side="bottom", anchor="w")
+        self.form_box = ttk.Frame(self.side)
+        self.form_box.grid(row=4, column=0, sticky="new")
+        self.item_form = self.make_item_form(self.form_box)
+        self.background = BackgroundForm(self.form_box, self, menu=True)
+        self.background.columnconfigure(0, minsize=px(self, 110))
+        self.status = ttk.Label(self.side, style="Hint.TLabel", wraplength=px(self, 440), justify="left")
+        self.status.grid(row=5, column=0, sticky="w", pady=(8, 0))
 
     @property
     def project(self):
@@ -987,6 +1055,7 @@ class MenuPage(ttk.Frame):
     def make_item_form(self, parent):
         frame = ttk.Frame(parent)
         self.item_vars = {key: tk.StringVar() for key in ("label", "notice_title", "notice", "value", "x", "y")}
+        frame.columnconfigure(0, minsize=px(frame, 110))
         row = 0
 
         def line(text, widget):
@@ -1006,7 +1075,7 @@ class MenuPage(ttk.Frame):
         self.value_box = line("Event value", ttk.Entry(frame, textvariable=self.item_vars["value"], width=8))
         self.value_caption = frame.grid_slaves(row=row - 1, column=0)[0]
         self.item_tint = line("Colour", ColourButton(frame, lambda v: self.set_item(
-            "tint", colour_text(v) if v is not None else None, "#FFFFFF")))
+            "tint", colour_text(v) if v is not None else None, "#FFFFFF"), multiplies=True))
         pictures = ttk.Frame(frame)
         ttk.Button(pictures, text="PNG...", command=lambda: self.item_image("image")).pack(side="left")
         ttk.Button(pictures, text="With cursor...", command=lambda: self.item_image("selected_image")).pack(
@@ -1017,15 +1086,16 @@ class MenuPage(ttk.Frame):
         self.item_image_name.grid(row=row, column=1, sticky="w")
         row += 1
         places = ttk.Frame(frame)
+        ttk.Label(places, text="x").pack(side="left", padx=(0, 4))
         x = ttk.Spinbox(places, from_=-214, to=214, width=5, textvariable=self.item_vars["x"],
                         command=lambda: self.item_typed("x"))
         x.pack(side="left")
-        ttk.Label(places, text="  y").pack(side="left")
+        ttk.Label(places, text="y").pack(side="left", padx=(8, 4))
         y = ttk.Spinbox(places, from_=-40, to=280, width=5, textvariable=self.item_vars["y"],
                         command=lambda: self.item_typed("y"))
-        y.pack(side="left", padx=(4, 0))
+        y.pack(side="left")
         ttk.Button(places, text="In line", command=self.in_line).pack(side="left", padx=(6, 0))
-        line("Place  x", places)
+        line("Middle at", places)
         for widget, key in ((label, "label"), (x, "x"), (y, "y"), (self.value_box, "value")):
             widget.bind("<Return>", lambda e, k=key: self.item_typed(k))
             widget.bind("<FocusOut>", lambda e, k=key: self.item_typed(k))
@@ -1069,9 +1139,16 @@ class MenuPage(ttk.Frame):
         return name[len(own):] if name.startswith(own) else name
 
     def fill(self):
+        if self.project is None:
+            return
+        if self.chosen != "background" and self.item() is None:
+            self.reset_choice()
         self.draw()
         self.fill_list()
         self.fill_form()
+
+    def reset_choice(self):
+        self.chosen = "new_game" if self.menu.get() == 0 else "campaign"
 
     def switch_menu(self):
         order = self.scene().order(self.menu.get())
@@ -1084,49 +1161,72 @@ class MenuPage(ttk.Frame):
             return
         scene = self.scene()
         chosen = ("item", self.chosen) if self.chosen != "background" else None
-        self.canvas.draw(scene, menu=self.menu.get(), cursor=self.chosen, chosen=chosen)
+        self.tab.draw_compared(self, lambda: self.canvas.draw(self.scene(), menu=self.menu.get(),
+                                                              cursor=self.chosen, chosen=chosen))
         spacing = as_int(scene.menu.get("spacing"), as_int(scene.title.get("spacing"), SPACING))
         self.spacing.set(str(spacing))
 
     def fill_list(self):
+        """The menu background, then both menus' items in their order: the
+        hidden greyed, a dot on what the mod changes."""
         if self.project is None:
             return
-        self.tree.delete(*self.tree.get_children())
-        for item, shown in self.scene().order(self.menu.get()):
-            text = item.get("label") or (ENTRY_TITLES[item["index"]] if item["entry"] else self.short(item["name"]))
-            action = item.get("action") or (item["name"] if item["entry"] else
-                                            ("notice" if item.get("notice") else "none"))
-            does = action_title(action) + ("" if allowed(action, self.menu.get()) else " (not here)")
-            self.tree.insert("", "end", iid=item["name"], text=("" if shown else "◌ ") + text,
-                             values=(does,), tags=() if shown else ("hidden",))
-        self.tree.tag_configure("hidden", foreground="#888")
-        if self.tree.exists(self.chosen):
-            self.loading = True
-            self.tree.selection_set(self.chosen)
-            self.tree.see(self.chosen)
-            self.loading = False
+        scene = self.scene()
+        bg = scene.menu.get("background")
+        rows = [("background", "", "Menu background", ("",), bool(bg), ())]
+        for menu, group, text in ((0, "first", "First menu"), (1, "second", "Second menu (a game loaded)")):
+            rows.append((group, "", text, ("",), False, ("group",)))
+            for item, shown in scene.order(menu):
+                label = item.get("label") or (ENTRY_TITLES[item["index"]] if item["entry"] else
+                                              self.short(item["name"]))
+                action = item.get("action") or (item["name"] if item["entry"] else
+                                                ("notice" if item.get("notice") else "none"))
+                does = action_title(action) + ("" if allowed(action, menu) else " (not here)")
+                changed = not item["entry"] or any(k not in ("name", "index", "menu", "own", "entry") for k in item)
+                rows.append((item["name"], group, ("" if shown else "\u25cc ") + label, (does,), changed,
+                             () if shown else ("note",)))
+        self.list.fill(rows, self.chosen)
+
+    def pick(self, iid, group=None):
+        if iid == "background":
+            self.background_chosen()
+            return
+        item = self.item(iid)
+        if item is None:
+            return
+        self.chosen = iid
+        if item["menu"] != self.menu.get():
+            self.menu.set(item["menu"])
+        self.draw()
+        self.list.show(iid)
+        self.fill_form()
 
     def picked(self):
-        if self.loading:
-            return
-        selection = self.tree.selection()
+        selection = self.list.tree.selection()
         if selection:
-            self.chosen = selection[0]
-            self.draw()
-            self.fill_form()
+            self.pick(selection[0])
 
     def select_stage(self, key):
         if isinstance(key, tuple) and key[0] == "item":
             self.chosen = key[1]
             self.draw()
-            self.fill_list()
+            self.list.show(self.chosen)
             self.fill_form()
 
     def background_chosen(self):
         self.chosen = "background"
-        self.tree.selection_remove(*self.tree.selection())
         self.draw()
+        self.list.show("background")
         self.fill_form()
+
+    def dragging(self, key, dx, dy):
+        if not (isinstance(key, tuple) and key[0] == "item") or key[1] != self.chosen:
+            return
+        item = self.item()
+        place = self.scene().places(self.menu.get()).get(self.chosen)
+        if item and place:
+            self.item_vars["x"].set(str(as_int(item.get("x")) + dx))
+            self.item_vars["y"].set(str(place[1] + dy))
 
     def fill_form(self):
         if self.project is None:
@@ -1135,7 +1235,8 @@ class MenuPage(ttk.Frame):
         if self.chosen == "background":
             self.item_form.pack_forget()
             self.background.pack(anchor="w", fill="x", pady=(6, 0))
-            self.heading.configure(text="Menu background (what it leaves out is the title's)")
+            self.heading.configure(text="Menu background")
+            self.what.configure(text="Behind a menu. What it leaves out is the title's.")
             self.background.fill()
             self.loading = False
             return
@@ -1144,6 +1245,8 @@ class MenuPage(ttk.Frame):
         item = self.item() or {"name": self.chosen, "entry": False, "menu": 0}
         self.heading.configure(text=ENTRY_TITLES[item["index"]] if item.get("entry") else
                                f"Button {self.short(item['name'])}")
+        self.what.configure(text=("The game's entry" if item.get("entry") else "A button of the mod's own")
+                            + (", in the second menu (a game loaded)." if menu_of(item) else ", in the first menu."))
         self.item_vars["label"].set(item.get("label") or "")
         menu = item["menu"]
         choices = [a for a in ACTIONS if allowed(a, menu)]
