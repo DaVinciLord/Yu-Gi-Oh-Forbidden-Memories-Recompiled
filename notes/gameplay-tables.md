@@ -159,12 +159,33 @@ disc's ritual cards, a mod's copy of one (`"copy"` of a ritual card,
 with `"effect"` naming a ritual card, whose effect it is played with). A
 card only typed Ritual does nothing when played and takes no recipe. A
 copy or "effect" card without an entry of its own is summoned by that
-ritual card's recipe. `tributes` names the three monsters it takes, and
-`result` what it summons. `"result": null` takes the ritual away. A tribute
-may be a copy a mod added; a retail tribute is also met by a copy of it.
-Every tribute takes a monster that is exactly it before any takes a copy,
-so a recipe naming both a retail monster and a copy of it is met whatever
-order they stand in on the field.
+ritual card's recipe. `tributes` names the monsters it takes, one to five
+(the disc's rituals take three), and `result` what it summons. `"result":
+null` takes the ritual away. A tribute may be a copy a mod added; a retail
+tribute is also met by a copy of it. Every tribute takes a monster that is
+exactly it before any takes a copy, so a recipe naming both a retail
+monster and a copy of it is met whatever order they stand in on the field.
+
+`tributes_from` says where the tributes may be: `"field"` (the default, as
+on the disc: monsters on the side's field), `"hand"` (monsters in its hand)
+or `"both"`:
+
+```json
+{"card": "Black Luster Ritual", "result": "Black Luster Soldier", "tributes_from": "hand",
+ "tributes": ["Gaia the Fierce Knight", {"type": "Warrior"}]}
+```
+
+A hand tribute leaves the hand as a played card does. The result takes the
+zone of the middle field tribute (the second of three, as on the disc), or,
+when every tribute came from the hand, the first free monster zone; with the
+field full such a ritual cannot take place, and the card is spent as a
+ritual without tributes is. With `"both"`, a monster in the hand is spent
+before one on the field that would do as well. The ritual card itself is
+never one of its tributes, so a hand ritual played from the hand has at most
+four (five when it was set face down first). The CPU plays these rituals as
+it plays the disc's (its field script activates a set ritual once it can
+take place), the 3D effect flies every field tribute into the portal, and a
+recipe of three from the field is matched exactly as before.
 
 A tribute may also be an object of conditions, all of which the monster
 must meet:
@@ -187,12 +208,12 @@ must meet:
 
 Printed means the card's own stats, a mod's `cards` edits included, not what
 equips or the terrain add in the duel. `{"min_attack": 0}` is any monster.
-The three tributes may be plain cards and objects mixed; they are three
-different monsters of the side's field, and the ritual takes place when any
-three of them meet the three tributes. When more monsters would do, it
+The tributes may be plain cards and objects mixed; they are different
+monsters of the side's (field, hand or both), and the ritual takes place
+when as many of them meet the tributes. When more monsters would do, it
 spends the weakest: tribute by tribute, the narrowest first (a `card`
-first), the lowest DEF when the result has more DEF than ATK, the lowest ATK
-otherwise. A key it does not know is noted in the Mods window and left out,
+first, and the card itself before a copy of it), the lowest DEF when the
+result has more DEF than ATK, the lowest ATK otherwise. A key it does not know is noted in the Mods window and left out,
 and an object with no key it knows leaves the entry out.
 
 A card's groups are the disc card's, as the fusion guides list them (Marcelo
@@ -594,7 +615,7 @@ each table ask it first:
 | `Duel_CheckFusion` (`duel_card_checks.c`) | fusion table, `0x8017C2D8` | `Tables_Fusion`, then `Tables_FilterFusion` over the disc's answer |
 | `Duel_CheckEquip` (`duel_card_checks.c`) | equip table, `0x8017A1D8` | `Tables_Equip` |
 | `DuelScene_UpdateCardPlacement` (`duel_scene_card_placement.c`) | +500, +1000 for Megamorph | `Tables_EquipBonus` |
-| `Duel_CheckRitual` (`duel_check_ritual.c`) | ritual table, `0x801799D8` | `Tables_RitualRequirements` for conditions, else `Tables_Ritual`, whose recipe is laid out like the disc's |
+| `Duel_CheckRitual` (`duel_check_ritual.c`) | ritual table, `0x801799D8` | `Tables_RitualRule` for one to five tributes or the hand, then `Tables_RitualRequirements` for conditions, else `Tables_Ritual`, whose recipe is laid out like the disc's |
 | `Duel_ShuffleDeck` (`duel_shuffle_deck.c`) | deck pool, `0x801781D8` | `Tables_FixedDeck`, then `Tables_Pool(TABLES_POOL_DECK)` |
 | `Duel_SelectCardDrop` (`duel_result_runtime.c`) | drop pools, `0x8017878C` | `Tables_Pool(TABLES_POOL_POW + pool)` |
 | `Duel_GetTerrainBoost` (`duel_card_record_lifecycle.c`) | terrain table, `0x800909D4` | `Tables_TerrainBonus` |

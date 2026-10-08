@@ -694,14 +694,20 @@ static void read_equips(ModsOverlaps *x, int mod)
     if (bonus) claim(x, MODS_OVERLAP_EQUIPS, mod, DEFAULT_EQUIP_BONUS, SET, value_of(bonus), bonus);
 }
 
-/* "rituals": the latest recipe of a ritual card is the one used. */
+/* "rituals": the latest recipe of a ritual card is the one used. Where its
+ * tributes come from is part of it; "field", the default, written out or
+ * not, is the same recipe. */
 static void read_rituals(ModsOverlaps *x, int mod)
 {
     for (const JsonValue *e = Json_At(list_of(member(x, mod, "rituals")), 0); e; e = Json_Next(e)) {
         uint64_t key = card_key(x, Json_Member(e, "card"));
-        if (key && switched_on(x, mod, e))
-            claim(x, MODS_OVERLAP_RITUALS, mod, key, SET,
-                  hash_json(value_of(Json_Member(e, "tributes")), Json_Member(e, "result"), 0), e);
+        const JsonValue *from = Json_Member(e, "tributes_from");
+        uint32_t value;
+        if (!key || !switched_on(x, mod, e)) continue;
+        value = hash_json(value_of(Json_Member(e, "tributes")), Json_Member(e, "result"), 0);
+        if (from && !(Json_TypeOf(from) == JSON_STRING && !strcmp(Json_String(from, ""), "field")))
+            value = hash_json(value, from, 0);
+        claim(x, MODS_OVERLAP_RITUALS, mod, key, SET, value, e);
     }
 }
 

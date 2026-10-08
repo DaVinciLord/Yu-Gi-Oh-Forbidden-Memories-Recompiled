@@ -22,7 +22,7 @@ import re
 import shutil
 from pathlib import Path
 
-from .gamedata import (FUSION_GROUPS, RITUAL_REQUIREMENT_KEYS, fusion_group_named, ATTRIBUTE_NAMES, CARD_COUNT, DECK_SIZE, DUELIST_NAMES, FRAME_NAMES, POOLS, STAR_NAMES,
+from .gamedata import (FUSION_GROUPS, RITUAL_ORIGINS, RITUAL_REQUIREMENT_KEYS, RITUAL_TRIBUTE_MAX, fusion_group_named, ATTRIBUTE_NAMES, CARD_COUNT, DECK_SIZE, DUELIST_NAMES, FRAME_NAMES, POOLS, STAR_NAMES,
                        EQUIP_BONUS_MAX, STARTER_WEIGHT_LIMIT, TYPE_NAMES, TYPE_MAGIC, GameData)
 from .model import AddedCard, ModInfo, Project, StarterDeck, duelist_named, type_named, KEY_RE
 from . import art, campaign_map, fixed_decks, guardian_stars, packs as packmath, pools as poolmath, roster
@@ -260,25 +260,29 @@ def build_rituals(project: Project) -> list:
     for ritual in sorted(set(retail) | set(project.rituals)):
         now = project.rituals.get(ritual)
         if retail.get(ritual) == now and ritual not in project.ritual_requirements and \
-                not (now is None and project.ritual_removed(ritual)):
+                ritual not in project.ritual_from and not (now is None and project.ritual_removed(ritual)):
             continue
         if now is None:     # a disc ritual's taken away, or an added copy's (its base's too)
             entries.append({"card": project.ref(ritual), "result": None})
+            continue
+        entry = {"card": project.ref(ritual)}
+        if ritual in project.ritual_from:
+            entry["tributes_from"] = project.ritual_from[ritual]
+        requirements = project.ritual_requirements.get(ritual)
+        if requirements:
+            tributes = []
+            for req in requirements:
+                body = dict(req)
+                if body.get("card"):
+                    body["card"] = project.ref(body["card"])
+                else:
+                    body.pop("card", None)
+                tributes.append(body)
+            entry["tributes"] = tributes
         else:
-            requirements = project.ritual_requirements.get(ritual)
-            if requirements:
-                tributes = []
-                for req in requirements:
-                    body = dict(req)
-                    if body.get("card"):
-                        body["card"] = project.ref(body["card"])
-                    else:
-                        body.pop("card", None)
-                    tributes.append(body)
-                entries.append({"card": project.ref(ritual), "tributes": tributes, "result": project.ref(now[3])})
-            else:
-                entries.append({"card": project.ref(ritual), "tributes": [project.ref(t) for t in now[:3]],
-                                "result": project.ref(now[3])})
+            entry["tributes"] = [project.ref(t) for t in now[:-1]]
+        entry["result"] = project.ref(now[-1])
+        entries.append(entry)
     return entries + project.kept["rituals"]
 
 
@@ -993,8 +997,12 @@ def read_rituals(project: Project, entries, messages: list):
             project.remove_ritual(ritual)
             continue
         tributes = entry.get("tributes")
-        if not isinstance(tributes, list) or len(tributes) != 3:
-            messages.append(f"{where}: \"tributes\" names three monsters; left out")
+        if not isinstance(tributes, list) or not 1 <= len(tributes) <= RITUAL_TRIBUTE_MAX:
+            messages.append(f"{where}: \"tributes\" names one to five monsters; left out")
+            continue
+        origin = entry.get("tributes_from", "field")
+        if origin not in RITUAL_ORIGINS:
+            messages.append(f"{where}: \"tributes_from\" is \"field\", \"hand\" or \"both\"; left out")
             continue
         result = project.resolve(entry.get("result"))
         conditional = any(isinstance(t, dict) for t in tributes)
@@ -1065,16 +1073,15 @@ def read_rituals(project: Project, entries, messages: list):
                 messages.append(f"{where}: has a ritual requirement the editor cannot place; kept as written")
                 project.kept["rituals"].append(entry)
                 continue
-            project.ritual_requirements[ritual] = requirements
-            project.rituals[ritual] = tuple(display_ids + [result])
+            project.set_ritual(ritual, requirements, result, origin, objects=True)
         else:
             ids = [project.resolve(t) for t in tributes] + [result]
             if not all(ids):
                 messages.append(f"{where}: names a card the editor cannot place; kept as written")
                 project.kept["rituals"].append(entry)
                 continue
-            project.rituals[ritual] = tuple(ids)
-            project.ritual_requirements.pop(ritual, None)   # a later mod's plain recipe wins
+            # A later mod's plain recipe wins over conditions and a place.
+            project.set_ritual(ritual, [{"card": c} for c in ids[:-1]], result, origin)
 
 
 def _read_pool(project: Project, where, duelists, pool, body, messages):

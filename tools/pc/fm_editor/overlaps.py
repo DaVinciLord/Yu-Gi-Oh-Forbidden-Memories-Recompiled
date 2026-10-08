@@ -707,8 +707,12 @@ class _Check:
             e = _obj(entry)
             key = self.card_key(e.get("card"))
             if key is not None and self.switched_on(mod, entry):
+                # Where the tributes come from is part of the recipe; "field"
+                # written out is the default left out (overlap.c).
+                origin = e.get("tributes_from", "field")
                 value = (canonical(e["tributes"]) if "tributes" in e else "~",
-                         canonical(e["result"]) if "result" in e else "~")
+                         canonical(e["result"]) if "result" in e else "~",
+                         "" if origin == "field" else canonical(origin))
                 self.claim(RITUALS, mod, key, SET, value, e)
 
     # duelists, then the pools that may name them

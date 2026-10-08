@@ -717,6 +717,8 @@ from, with no code and naming cards by name:
 "fusions": [ {"with": ["Kuriboh", "Mystical Elf"], "result": "Celtic Guardian"},
              {"with": ["Baby Dragon", "Time Wizard"], "result": null} ],
 "equips":  [ {"card": "Legendary Sword", "add": ["Dragon"]} ],
+"rituals": [ {"card": "Black Luster Ritual", "tributes": ["Gaia the Fierce Knight"],
+              "tributes_from": "hand", "result": "Black Luster Soldier"} ],
 "drops":   { "Simon Muran": {"pow": {"Blue-eyes White Dragon": 20}} },
 "decks":   { "Heishin": {"Dark Magician": 60, "Kuriboh": 0} }
 ```
@@ -728,6 +730,8 @@ copies with no limit of three (`{"fixed": true, "Kuriboh": 4, ...}`).
 the chest and makes each card past them worth 3 starchips instead of lost.
 `"terrain_bonus": {"Forest": {"Beast": 300, "Fairy": -200}}` sets, in points,
 what a terrain gives a monster type.
+A ritual takes one to five tributes, from the field (as on the disc), the
+hand (`"tributes_from": "hand"`) or both (`"both"`).
 An equip entry's `"bonus": 800` and `"bonus_if": {"Dragon": 1000, "Light": 700}`
 set what it adds, in place of the disc's +500 (`"bonus_attack"` and
 `"bonus_defense"` set ATK and DEF apart), and a top-level
@@ -1060,7 +1064,7 @@ decides it:
 | `fusions` | a pair, in either order | the later's result; `remove`s add up |
 | `equips` | an equip card, and its copies (a rule for the card is one for each copy of it, as the game matches the card or its base) | for each monster, the latest entry that says something about it decides (a card before a type before `"replace"` within an entry), so a later rule for a type, or a plain `bonus`, goes over an earlier rule for a card of it, or an earlier `bonus_if`; entries about other monsters add up |
 | `equip_bonus_default` | | the later |
-| `rituals` | a ritual card | the later's recipe |
+| `rituals` | a ritual card | the later's recipe (its tributes, where they come from, and its result) |
 | `drops`, `decks` | an opponent's pool, named by name, number, `"all"` (every opponent another mod names) or, in a mod's `drops/` and `decks/` folders, by a duelist of the mod's own (whom it replaces, and the line names him as the mod did, or itself); a pool that is not an object of cards is left out, as the game leaves it | edits add up, each on the pool as the mods before left it; a later `"replace": true` empties it first, and an earlier `"all"` with `"replace": true` empties every pool, so it meets a later mod's edit of any one; a fixed deck (exactly 40 cards) wins over every weighted edit, the later fixed deck over an earlier |
 | `starter` | | the decks add up |
 | `starter_pools` | every mod's pools, and any mod's written `starter` deck beside them (one the game would deal: forty cards it knows, a `weight` above 0) | the pools add up, and are dealt from only when their `draws` together make the 40 cards of a deck; at any other total they are dropped and the disc's starter decks are used (a warning, even for one mod's pools, when two mods or more are listed; the mod itself also carries a note, with one mod or many); a written deck in any mod wins over every mod's pools (a warning naming whose) |

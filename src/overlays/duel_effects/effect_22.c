@@ -1,6 +1,30 @@
 #include "../../types.h"
 #include "effect_22.h"
 
+#ifdef MEMORIES_PC
+/* A mod's ritual may spend one to five monsters of the field, or only
+ * cards of the hand (duel_check_ritual.h). Every field tribute flies into
+ * the portal, one after another as the disc's three do; the work area has
+ * room for three, so a fourth and fifth keep their motion in the resident
+ * game's DuelRitualFlight. With none on the field the three the check
+ * returns are its stand-in, already where a card ends, and the effect goes
+ * straight on. */
+#define FLIGHT (Duel_RitualFlight())
+#define CARD(i) ((DisplayObject *)FLIGHT->cards[i])
+#define CARD_COUNT (FLIGHT->count)
+#define CARD_VELOCITY(i) (*((i) < 3 ? &work->card_velocities[i] : &FLIGHT->velocities[(i) - 3]))
+#define CARD_ROTATION(i) (*((i) < 3 ? &work->card_rotations[i] : &FLIGHT->rotations[(i) - 3]))
+#define CARD_STATE(i) (*((i) < 3 ? &work->card_states[i] : &FLIGHT->states[(i) - 3]))
+#define LAST_CARD_STATE CARD_STATE(CARD_COUNT - 1)
+#else
+#define CARD(i) ((DisplayObject *)D_8015B7A0[i])
+#define CARD_COUNT 3
+#define CARD_VELOCITY(i) work->card_velocities[i]
+#define CARD_ROTATION(i) work->card_rotations[i]
+#define CARD_STATE(i) work->card_states[i]
+#define LAST_CARD_STATE work->card_states[2]
+#endif
+
 void func_8014A8E4(void *buffer, s32 phase)
 {
     MATRIX world;
@@ -66,21 +90,30 @@ void func_8014A8E4(void *buffer, s32 phase)
             return;
         }
         Duel_CheckRitual((DuelRitualResult *)D_8015B7A0, phase);
+#ifdef MEMORIES_PC
+        FLIGHT->count = Duel_RitualFieldObjects(FLIGHT->cards);
+        if (FLIGHT->count <= 0) {
+            for (i = 0; i < 3; i++) {
+                FLIGHT->cards[i] = (void *G32)D_8015B7A0[i];
+            }
+            FLIGHT->count = 3;
+        }
+#endif
         setVector(&work->positions[0], 70, -48,
                   (s16)((DisplayObject *)D_8015B7A0[0])->field_34.h.field_34 >= 0 ? 190 : -190);
         setVector(&work->positions[1], -70, -48,
                   (s16)((DisplayObject *)D_8015B7A0[0])->field_34.h.field_34 >= 0 ? 190 : -190);
         work->texture_frames[0] = rand() % 4;
         work->texture_frames[1] = rand() % 4;
-        for (i = 0; i < 3; i++) {
-            setVector(&work->card_velocities[i],
-                      -(s16)((DisplayObject *)D_8015B7A0[i])->field_30.h.field_30 / 32,
-                      (-96 - (s16)((DisplayObject *)D_8015B7A0[i])->field_30.h.field_32) / 32,
-                      -(s16)((DisplayObject *)D_8015B7A0[i])->field_34.h.field_34 / 32);
-            setVector(&work->card_rotations[i], 2,
-                      -((DisplayObject *)D_8015B7A0[i])->field_20.b.field_21 / 32,
-                      -((DisplayObject *)D_8015B7A0[i])->field_20.b.field_22 / 32);
-            work->card_states[i] = 0;
+        for (i = 0; i < CARD_COUNT; i++) {
+            setVector(&CARD_VELOCITY(i),
+                      -(s16)CARD(i)->field_30.h.field_30 / 32,
+                      (-96 - (s16)CARD(i)->field_30.h.field_32) / 32,
+                      -(s16)CARD(i)->field_34.h.field_34 / 32);
+            setVector(&CARD_ROTATION(i), 2,
+                      -CARD(i)->field_20.b.field_21 / 32,
+                      -CARD(i)->field_20.b.field_22 / 32);
+            CARD_STATE(i) = 0;
         }
         for (i = 0; i < 2; i++) {
             func_8014EB1C(24 + 6 * i, 28 + 6 * i, work->rings[i], 4);
@@ -216,31 +249,31 @@ void func_8014A8E4(void *buffer, s32 phase)
         if (work->flame_color.r == 128 && work->flame_color.g == 128 && work->flame_color.b == 128 &&
             work->stage == 0) {
             for (i = 0; i < work->active_cards; i++) {
-                if ((s16)((DisplayObject *)D_8015B7A0[i])->field_30.h.field_32 <= -96) {
-                    if (work->card_states[i] == 0) {
-                        ((DisplayObject *)D_8015B7A0[i])->field_30.h.field_30 = 0;
-                        *(s16 *)&((DisplayObject *)D_8015B7A0[i])->field_30.h.field_32 = -96;
-                        ((DisplayObject *)D_8015B7A0[i])->field_34.h.field_34 = 0;
-                        work->card_states[i] = 1;
+                if ((s16)CARD(i)->field_30.h.field_32 <= -96) {
+                    if (CARD_STATE(i) == 0) {
+                        CARD(i)->field_30.h.field_30 = 0;
+                        *(s16 *)&CARD(i)->field_30.h.field_32 = -96;
+                        CARD(i)->field_34.h.field_34 = 0;
+                        CARD_STATE(i) = 1;
                         work->active_cards++;
-                        if (work->active_cards > 3) {
-                            work->active_cards = 3;
+                        if (work->active_cards > CARD_COUNT) {
+                            work->active_cards = CARD_COUNT;
                         }
                     }
                 } else {
-                    ((DisplayObject *)D_8015B7A0[i])->field_30.h.field_30 += work->card_velocities[i].vx;
-                    ((DisplayObject *)D_8015B7A0[i])->field_30.h.field_32 += work->card_velocities[i].vy;
-                    ((DisplayObject *)D_8015B7A0[i])->field_34.h.field_34 += work->card_velocities[i].vz;
-                    ((DisplayObject *)D_8015B7A0[i])->field_20.b.field_20 += work->card_rotations[i].vx;
-                    ((DisplayObject *)D_8015B7A0[i])->field_20.b.field_21 += work->card_rotations[i].vy;
-                    ((DisplayObject *)D_8015B7A0[i])->field_20.b.field_22 += work->card_rotations[i].vz;
+                    CARD(i)->field_30.h.field_30 += CARD_VELOCITY(i).vx;
+                    CARD(i)->field_30.h.field_32 += CARD_VELOCITY(i).vy;
+                    CARD(i)->field_34.h.field_34 += CARD_VELOCITY(i).vz;
+                    CARD(i)->field_20.b.field_20 += CARD_ROTATION(i).vx;
+                    CARD(i)->field_20.b.field_21 += CARD_ROTATION(i).vy;
+                    CARD(i)->field_20.b.field_22 += CARD_ROTATION(i).vz;
                 }
             }
-            if (work->card_states[2] == 1) {
-                for (i = 0; i < 3; i++) {
-                    ((DisplayObject *)D_8015B7A0[i])->field_44.h.field_44 = 0;
-                    ((DisplayObject *)D_8015B7A0[i])->field_44.h.field_46 = 0;
-                    ((DisplayObject *)D_8015B7A0[i])->flags &= ~0x40;
+            if (LAST_CARD_STATE == 1) {
+                for (i = 0; i < CARD_COUNT; i++) {
+                    CARD(i)->field_44.h.field_44 = 0;
+                    CARD(i)->field_44.h.field_46 = 0;
+                    CARD(i)->flags &= ~0x40;
                     work->stage = 1;
                 }
             }

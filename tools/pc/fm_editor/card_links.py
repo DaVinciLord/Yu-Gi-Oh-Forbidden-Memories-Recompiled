@@ -170,13 +170,13 @@ def uses(app, cid) -> list:
         if ritual not in p.cards:
             continue
         recipe = list(p.rituals.get(ritual) or ())
-        tributes = recipe[:3] + [req.get("card") for req in p.ritual_requirements.get(ritual, [])]
+        tributes = recipe[:-1] + [req.get("card") for req in p.ritual_requirements.get(ritual, [])]
         go = lambda r=ritual: app.open_card(app.rituals, r)     # noqa: E731
         if ritual == cid:
             add("Rituals", "Its ritual", go)
         if cid in tributes:
             add("Rituals", f"Tribute for {p.card_label(ritual)}", go)
-        if len(recipe) > 3 and recipe[3] == cid:
+        if recipe and recipe[-1] == cid:
             add("Rituals", f"Summoned by {p.card_label(ritual)}", go)
     for d, pools in enumerate(p.pools):
         name = DUELIST_NAMES[d] if d < len(DUELIST_NAMES) else str(d)

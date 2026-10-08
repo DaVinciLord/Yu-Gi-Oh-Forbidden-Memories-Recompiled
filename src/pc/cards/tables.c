@@ -177,8 +177,11 @@ typedef struct {
 
 typedef struct {
     unsigned short recipe[6];   /* ritual, three tributes, result, 0 */
-    TablesRitualRequirement requirements[DUEL_RITUAL_TRIBUTE_COUNT];
+    TablesRitualRequirement requirements[TABLES_RITUAL_TRIBUTE_MAX];
     unsigned char removed, conditional;
+    /* How many tributes and from where (TABLES_TRIBUTES_*); `extended`
+     * when that is not three from the field (Tables_RitualRule). */
+    unsigned char count, from, extended;
 } RitualRule;
 
 typedef struct {
@@ -811,9 +814,10 @@ static void read_rituals(const char *mod, const JsonValue *list)
         const JsonValue *entry = Json_At(list, i);
         const JsonValue *tributes = Json_Member(entry, "tributes");
         const JsonValue *result = Json_Member(entry, "result");
+        const JsonValue *from = Json_Member(entry, "tributes_from");
         RitualRule rule;
         RitualRule *slot;
-        int ritual, ok = 1;
+        int ritual, count, ok = 1;
         memset(&rule, 0, sizeof(rule));
         snprintf(where, sizeof(where), "rituals[%d]", i);
         if (!Mods_EntryUsed(mod, entry, where)) continue;
@@ -831,19 +835,37 @@ static void read_rituals(const char *mod, const JsonValue *list)
         if (result && Json_TypeOf(result) == JSON_NULL) {
             rule.removed = 1;
         } else {
-            if (Json_Count(tributes) != DUEL_RITUAL_TRIBUTE_COUNT) {
-                Mods_Note(mod, "%s: \"tributes\" names three monsters or requirement objects", where);
+            count = Json_TypeOf(tributes) == JSON_ARRAY ? Json_Count(tributes) : 0;
+            if (count < 1 || count > TABLES_RITUAL_TRIBUTE_MAX) {
+                Mods_Note(mod, "%s: \"tributes\" names one to five monsters or requirement objects", where);
                 continue;
             }
-            for (j = 0; j < DUEL_RITUAL_TRIBUTE_COUNT && ok; j++) {
+            rule.count = (unsigned char)count;
+            rule.from = TABLES_TRIBUTES_FIELD;
+            if (from) {
+                const char *name = Json_String(from, "");
+                if (Json_TypeOf(from) == JSON_STRING && !strcmp(name, "field")) rule.from = TABLES_TRIBUTES_FIELD;
+                else if (Json_TypeOf(from) == JSON_STRING && !strcmp(name, "hand")) rule.from = TABLES_TRIBUTES_HAND;
+                else if (Json_TypeOf(from) == JSON_STRING && !strcmp(name, "both")) rule.from = TABLES_TRIBUTES_BOTH;
+                else {
+                    Mods_Note(mod, "%s: \"tributes_from\" is \"field\", \"hand\" or \"both\"", where);
+                    continue;
+                }
+            }
+            /* Three from the field is the disc's kind of ritual, which the
+             * game's own two paths take (a recipe, or conditions); any other
+             * is matched by Duel_CheckRitual's search of the field and hand. */
+            rule.extended = count != DUEL_RITUAL_TRIBUTE_COUNT || rule.from != TABLES_TRIBUTES_FIELD;
+            for (j = 0; j < count && ok; j++) {
                 const JsonValue *tribute = Json_At(tributes, j);
                 ok = ritual_requirement(mod, where, tribute, &rule.requirements[j]);
                 if (Json_TypeOf(tribute) == JSON_OBJECT) rule.conditional = 1;
-                if (rule.requirements[j].card) rule.recipe[1 + j] = rule.requirements[j].card;
+                if (rule.requirements[j].card && j < DUEL_RITUAL_TRIBUTE_COUNT)
+                    rule.recipe[1 + j] = rule.requirements[j].card;
             }
             rule.recipe[4] = (unsigned short)(ok ? card(mod, where, result) : 0);
             if (!ok || !rule.recipe[4]) continue;
-            if (!rule.conditional) {
+            if (!rule.conditional && !rule.extended) {
                 for (j = 0; j < DUEL_RITUAL_TRIBUTE_COUNT; j++)
                     if (!rule.recipe[1 + j]) ok = 0;
                 if (!ok) continue;
@@ -870,7 +892,7 @@ int Tables_Ritual(int ritual, unsigned short recipe[6])
     for (i = ritual_count - 1; i >= 0; i--) {
         if (rituals[i].recipe[0] != ritual) continue;
         if (rituals[i].removed) return 0;
-        if (rituals[i].conditional) return -1;
+        if (rituals[i].conditional || rituals[i].extended) return -1;
         memcpy(recipe, rituals[i].recipe, sizeof(rituals[i].recipe));
         return 1;
     }
@@ -882,9 +904,25 @@ int Tables_RitualRequirements(int ritual, TablesRitualRequirement requirements[3
     int i;
     for (i = ritual_count - 1; i >= 0; i--) {
         if (rituals[i].recipe[0] != ritual) continue;
-        if (rituals[i].removed || !rituals[i].conditional) return 0;
-        memcpy(requirements, rituals[i].requirements, sizeof(rituals[i].requirements));
+        if (rituals[i].removed || !rituals[i].conditional || rituals[i].extended) return 0;
+        memcpy(requirements, rituals[i].requirements, DUEL_RITUAL_TRIBUTE_COUNT * sizeof(*requirements));
         if (result) *result = rituals[i].recipe[4];
+        return 1;
+    }
+    return 0;
+}
+
+int Tables_RitualRule(int ritual, TablesRitualRule *rule)
+{
+    int i;
+    for (i = ritual_count - 1; i >= 0; i--) {
+        if (rituals[i].recipe[0] != ritual) continue;
+        if (rituals[i].removed || !rituals[i].extended) return 0;
+        memset(rule, 0, sizeof(*rule));
+        rule->count = rituals[i].count;
+        rule->from = rituals[i].from;
+        rule->result = rituals[i].recipe[4];
+        memcpy(rule->requirements, rituals[i].requirements, sizeof(rule->requirements));
         return 1;
     }
     return 0;

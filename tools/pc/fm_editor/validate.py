@@ -12,7 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .gamedata import (CARD_COUNT, DECK_COPY_LIMIT, DECK_POOL_MIN_CARDS, DECK_SIZE, DUELIST_NAMES, POOLS,
-                       POOL_LABELS, POOL_TOTAL, TYPE_MAGIC, TYPE_EQUIP, TYPE_NAMES, TYPE_RITUAL, exodia_piece)
+                       POOL_LABELS, POOL_TOTAL, RITUAL_ORIGINS, RITUAL_TRIBUTE_MAX, TYPE_MAGIC, TYPE_EQUIP, TYPE_NAMES,
+                       TYPE_RITUAL, exodia_piece)
 from . import art, campaign_map, card_text, fixed_decks, guardian_stars, limits, packs as packmath
 from . import monster_effects, roster, starter_pools
 from .model import KEY_RE, Project, duelist_named
@@ -238,28 +239,37 @@ def _check_tables(project: Project, out: list):
         if recipe is None:      # an added copy with no recipe (Project.remove_ritual)
             continue
         conditional = project.ritual_requirements.get(ritual)
-        if project.retail.rituals.get(ritual) == recipe and not conditional:
+        origin = project.ritual_from.get(ritual, "field")
+        if project.retail.rituals.get(ritual) == recipe and not conditional and origin == "field":
             continue
         where = project.card_label(ritual)
         if not valid(ritual) or not project.is_ritual(ritual):
             out.append(Issue("error", "Rituals", where, "\"card\" must be a ritual card whose effect is a ritual's "
                              "(a copy of one, or \"effect\" naming one)", ritual))
-        if len(recipe) != 4 or not valid(recipe[3]):
-            out.append(Issue("error", "Rituals", where, "a valid result card is required", ritual))
+        if not 2 <= len(recipe) <= RITUAL_TRIBUTE_MAX + 1 or not valid(recipe[-1]):
+            out.append(Issue("error", "Rituals", where, "one to five tributes and a valid result card are required",
+                             ritual))
             continue
+        if origin not in RITUAL_ORIGINS:
+            out.append(Issue("error", "Rituals", where, "tributes come from the field, the hand or both", ritual))
+        tributes = len(recipe) - 1
+        if origin == "hand" and tributes == RITUAL_TRIBUTE_MAX:
+            # The ritual card is in the hand too when played from it.
+            out.append(Issue("warning", "Rituals", where, "five tributes from the hand: only when the ritual card was "
+                             "set face down first (played from the hand, four other cards are there)", ritual))
         if conditional:
-            if len(conditional) != 3 or any(not req for req in conditional):
-                out.append(Issue("error", "Rituals", where, "three nonempty tribute requirements are required", ritual))
+            if len(conditional) != tributes or any(not req for req in conditional):
+                out.append(Issue("error", "Rituals", where, "every tribute needs a requirement", ritual))
             for req in conditional:
                 cid = req.get("card")
                 if cid and not valid(cid):
                     out.append(Issue("error", "Rituals", where, f"no card {cid}", ritual))
                 elif cid and not project.cards[cid].is_monster():
                     out.append(Issue("warning", "Rituals", where, f"{project.card_label(cid)} is not a monster", ritual))
-            if not project.cards[recipe[3]].is_monster():
+            if not project.cards[recipe[-1]].is_monster():
                 out.append(Issue("warning", "Rituals", where, "the result should be a monster", ritual))
         elif not all(valid(c) for c in recipe):
-            out.append(Issue("error", "Rituals", where, "three tributes and a result, all cards", ritual))
+            out.append(Issue("error", "Rituals", where, "every tribute and the result must be a card", ritual))
         elif not all(project.cards[c].is_monster() for c in recipe):
             out.append(Issue("warning", "Rituals", where, "tributes and result should be monsters", ritual))
     for d, pools in enumerate(project.pools):

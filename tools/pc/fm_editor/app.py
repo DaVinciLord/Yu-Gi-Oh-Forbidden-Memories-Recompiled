@@ -15,8 +15,8 @@ from .limits_tab import LimitsTab
 from .guardian_stars_tab import GuardianStarsTab
 from .packs_tab import PacksTab
 from .duelists_tab import DuelistsTab
-from .tabs import (CardsTab, EquipsTab, FusionsTab, ModInfoTab, ConflictsTab, RitualsTab,
-                   StarterTab)
+from .rituals_tab import RitualsTab
+from .tabs import CardsTab, EquipsTab, FusionsTab, ModInfoTab, ConflictsTab, StarterTab
 from .widgets import Pages, px, ui_font
 
 APP_TITLE = "FM Editor"

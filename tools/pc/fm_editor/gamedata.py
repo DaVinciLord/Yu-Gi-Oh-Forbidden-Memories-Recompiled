@@ -67,6 +67,10 @@ FUSION_GROUPS = ("AngelWinged", "Bugrothian", "Egg", "Elf", "FeatherFromBear", "
                  "Mirror", "MusKingian", "MystElfian", "Rainbow", "Sheepian", "Thronian", "Turtle", "UsableBeast")
 RITUAL_REQUIREMENT_KEYS = ("card", "type", "fusion_group", "min_attack", "min_defense", "max_attack", "max_defense",
                            "min_level", "max_level", "defense_gt_attack")
+# A mod's ritual takes one to five tributes (the disc's take three), from
+# the field, the hand or both: its "tributes_from" (tables.c read_rituals).
+RITUAL_TRIBUTE_MAX = 5
+RITUAL_ORIGINS = ("field", "hand", "both")
 
 
 def fusion_group_named(text) -> str:
