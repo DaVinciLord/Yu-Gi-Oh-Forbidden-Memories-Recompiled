@@ -1,99 +1,112 @@
-"""The Limits tab: a mod's "limits" (limits.py, notes/gameplay-tables.md): the
-numbers the game caps. The simple part is what most mods change (the ATK and
-DEF cap, the LP a duel starts with, how far healing goes); the advanced part
-has every other limit and each duelist's own LP. An empty field is the game's
-own number."""
+"""The Values tab: the game's numbers a mod may change (values.py,
+notes/gameplay-tables.md, "Values"), written as the mod's "limits". Each
+value in its group, with the game's own beside it, marked when the mod
+changes it, a button that puts the game's back, and a line that says what it
+does. An empty field is the game's own number. Below, the LP each side
+starts with against a given duelist."""
 from __future__ import annotations
 
 import tkinter as tk
 from tkinter import ttk
 
-from . import limits
+from . import values
 from .gamedata import DUELIST_NAMES
 from .tabs import Tab
 from .widgets import ScrolledForm
 
+# The groups in each of the two columns, by title; the LP by duelist goes
+# under the second.
+COLUMNS = (("Duel", "Magic", "Deck and Trunk", "Rank"), ("Rewards", "Records and 2P"))
 
-class LimitsTab(Tab):
+
+class ValuesTab(Tab):
     def __init__(self, notebook, app):
-        super().__init__(notebook, app, "Limits")
+        super().__init__(notebook, app, "Values")
         self.scroll = ScrolledForm(self)
         self.scroll.pack(fill="both", expand=True)
         body = self.scroll.body
-        ttk.Label(body, style="Hint.TLabel", wraplength=900, justify="left",
-                  text="The numbers the game caps. Leave a field empty for the game's own number (in brackets). "
-                       "ATK, DEF and LP are kept in 16 bits, so 32767 is as high as they go; the duel's numbers "
-                       "take a fifth digit past 9999.").pack(anchor="w", pady=(0, 6))
-        self.vars = {}
-        simple = ttk.LabelFrame(body, text="Limits", padding=6)
-        simple.pack(fill="x")
-        self._fields(simple, limits.FIELDS)
-        self.advanced_shown = tk.BooleanVar(self, value=False)
-        ttk.Checkbutton(body, text="Show advanced", variable=self.advanced_shown,
-                        command=self._show_advanced).pack(anchor="w", pady=(6, 0))
-        self.advanced = ttk.Frame(body)
-        numbers = ttk.LabelFrame(self.advanced, text="Advanced", padding=6)
-        numbers.pack(side="left", fill="y")
-        self._fields(numbers, limits.ADVANCED)
-        per = ttk.LabelFrame(self.advanced, text="Starting LP by duelist (empty: the side's own)", padding=6)
-        per.pack(side="left", fill="both", expand=True, padx=(8, 0))
-        self.duelists = ttk.Treeview(per, columns=("player", "opponent"), height=8)
+        top = ttk.Frame(body)
+        top.pack(fill="x", pady=(0, 2))
+        ttk.Label(top, style="Hint.TLabel",
+                  text="Empty: the game's own value (grey). Changed values are blue; ↺ puts the game's back.").pack(
+            side="left")
+        ttk.Button(top, text="Reset all to the game's", command=self.clear).pack(side="right")
+        self.status = ttk.Label(body, style="Error.TLabel", wraplength=1100, justify="left")
+        self.vars, self.captions, self.reverts = {}, {}, {}
+        columns = ttk.Frame(body)
+        columns.pack(fill="x")
+        groups = dict(values.GROUPS)
+        self.group_frames = {}
+        for number, titles in enumerate(COLUMNS):
+            column = ttk.Frame(columns)
+            column.grid(row=0, column=number, sticky="nw", padx=(0, 8) if number == 0 else 0)
+            # One width for the captions of a column, so its groups line up.
+            width = max(len(field[1]) for title in titles for field in groups[title])
+            for title in titles:
+                frame = ttk.LabelFrame(column, text=title, padding=(6, 0, 6, 2))
+                frame.pack(fill="x", pady=(0, 2))
+                self.group_frames[title] = frame
+                self._fields(frame, groups[title], width)
+            if number == 1:
+                self._duelist_table(column)
+        self.status.pack(anchor="w", pady=(2, 0))
+        self.per_duelist = {}
+
+    def _fields(self, parent, fields, width):
+        for row, (key, label, retail, low, high, hint, _) in enumerate(fields):
+            caption = ttk.Label(parent, text=label, width=width)
+            caption.grid(row=row, column=0, sticky="w")
+            self.captions[key] = caption
+            var = self.vars[key] = tk.StringVar()
+            var.trace_add("write", lambda *_, k=key: self._mark(k))
+            entry = ttk.Entry(parent, textvariable=var, width=8)
+            entry.grid(row=row, column=1, sticky="w", padx=(4, 0), pady=1)
+            entry.bind("<FocusOut>", lambda e: self.commit())
+            entry.bind("<Return>", lambda e: self.commit())
+            ttk.Label(parent, style="Hint.TLabel", width=6, anchor="e",
+                      text=values.retail_text(key)).grid(row=row, column=2, sticky="e", padx=(4, 0))
+            revert = ttk.Button(parent, text="↺", width=2, style="Toolbutton", state="disabled",
+                                command=lambda k=key: self.revert(k))
+            revert.grid(row=row, column=3, padx=(2, 0))
+            self.reverts[key] = revert
+            ttk.Label(parent, style="Hint.TLabel", text=f"{hint}, {low} to {high}").grid(
+                row=row, column=4, sticky="w", padx=(4, 0))
+
+    def _duelist_table(self, parent):
+        per = ttk.LabelFrame(parent, text="Starting LP by duelist", padding=(6, 2))
+        per.pack(fill="x")
+        self.duelists = ttk.Treeview(per, columns=("player", "opponent"), height=3)
         self.duelists.heading("#0", text="Duelist")
-        self.duelists.heading("player", text="Player's LP")
+        self.duelists.heading("player", text="Your LP")
         self.duelists.heading("opponent", text="Duelist's LP")
         self.duelists.column("#0", width=180)
-        self.duelists.column("player", width=90, anchor="e")
+        self.duelists.column("player", width=80, anchor="e")
         self.duelists.column("opponent", width=90, anchor="e")
-        self.duelists.pack(fill="both", expand=True)
+        self.duelists.pack(fill="x")
         self.duelists.bind("<<TreeviewSelect>>", lambda e: self._pick_duelist())
         row = ttk.Frame(per)
-        row.pack(fill="x", pady=(4, 0))
+        row.pack(fill="x", pady=(4, 2))
         self.duelist_name = tk.StringVar()
         self.duelist_player = tk.StringVar()
         self.duelist_opponent = tk.StringVar()
         ttk.Combobox(row, textvariable=self.duelist_name, values=["all"] + DUELIST_NAMES[1:],
-                     width=22).pack(side="left")
-        ttk.Label(row, text="Player").pack(side="left", padx=(6, 2))
-        ttk.Entry(row, textvariable=self.duelist_player, width=7).pack(side="left")
+                     width=16).pack(side="left")
+        ttk.Label(row, text="You").pack(side="left", padx=(6, 2))
+        ttk.Entry(row, textvariable=self.duelist_player, width=6).pack(side="left")
         ttk.Label(row, text="Duelist").pack(side="left", padx=(6, 2))
-        ttk.Entry(row, textvariable=self.duelist_opponent, width=7).pack(side="left")
+        ttk.Entry(row, textvariable=self.duelist_opponent, width=6).pack(side="left")
         ttk.Button(row, text="Set", command=self._set_duelist).pack(side="left", padx=(6, 0))
         ttk.Button(row, text="Remove", command=self._remove_duelist).pack(side="left", padx=(4, 0))
-        self.status = ttk.Label(body, style="Error.TLabel", wraplength=900, justify="left")
-        self.status.pack(anchor="w", pady=(6, 0))
-        buttons = ttk.Frame(body)
-        buttons.pack(fill="x")
-        ttk.Button(buttons, text="Apply", command=self.commit).pack(side="left")
-        ttk.Button(buttons, text="Reset to the game's", command=self.clear).pack(side="left", padx=4)
-        self.per_duelist = {}
-
-    def _fields(self, parent, fields):
-        if not hasattr(self, "captions"):
-            self.captions = {}
-        for row, (key, label, retail, low, high, _) in enumerate(fields):
-            caption = ttk.Label(parent, text=label)
-            caption.grid(row=row, column=0, sticky="w", pady=1)
-            self.captions[key] = caption
-            var = self.vars[key] = tk.StringVar()
-            # A field the mod sets in the colour of a change (as the Cards
-            # tab marks what differs from the disc).
-            var.trace_add("write", lambda *_, k=key: self._mark(k))
-            entry = ttk.Entry(parent, textvariable=var, width=10)
-            entry.grid(row=row, column=1, sticky="w", pady=1, padx=(6, 0))
-            entry.bind("<FocusOut>", lambda e: self.commit())
-            entry.bind("<Return>", lambda e: self.commit())
-            own = "the start" if retail is None else str(retail)
-            ttk.Label(parent, style="Hint.TLabel", text=f"({own}; {low}-{high})").grid(row=row, column=2, sticky="w",
-                                                                                      padx=(6, 0))
 
     def _mark(self, key):
-        self.captions[key].configure(style="Changed.TLabel" if self.vars[key].get().strip() else "TLabel")
+        changed = bool(self.vars[key].get().strip())
+        self.captions[key].configure(style="Changed.TLabel" if changed else "TLabel")
+        self.reverts[key].configure(state="normal" if changed else "disabled")
 
-    def _show_advanced(self):
-        if self.advanced_shown.get():
-            self.advanced.pack(fill="both", expand=True, pady=(4, 0), before=self.status)
-        else:
-            self.advanced.pack_forget()
+    def revert(self, key):
+        """The game's own value back in field `key`."""
+        self.vars[key].set("")
+        self.commit()
 
     def _fill_duelists(self):
         self.duelists.delete(*self.duelists.get_children())
@@ -113,16 +126,16 @@ class LimitsTab(Tab):
     def _set_duelist(self):
         name = self.duelist_name.get().strip()
         try:
-            values = [int(v.get()) if v.get().strip() else None for v in (self.duelist_player, self.duelist_opponent)]
+            numbers = [int(v.get()) if v.get().strip() else None for v in (self.duelist_player, self.duelist_opponent)]
         except ValueError:
             self.status.configure(text="A duelist's LP is a whole number")
             return
         if not name:
             return
-        if values == [None, None]:
+        if numbers == [None, None]:
             self.per_duelist.pop(name, None)
         else:
-            self.per_duelist[name] = tuple(values)
+            self.per_duelist[name] = tuple(numbers)
         self._fill_duelists()
         self.commit()
 
@@ -142,18 +155,15 @@ class LimitsTab(Tab):
     def refresh(self):
         if self.project is None:
             return
-        flat = limits.flatten(self.project.other.get("limits"))
+        flat = values.flatten(self.project.other.get("limits"))
         for key, var in self.vars.items():
             var.set(str(flat[key]) if key in flat else "")
         self.per_duelist = dict(flat.get("duelists", {}))
         self._fill_duelists()
-        # What the mod sets is shown, advanced or not.
-        self.advanced_shown.set(bool(self.per_duelist or any(key in flat for key, *_ in limits.ADVANCED)))
-        self._show_advanced()
         self._report()
 
     def _report(self):
-        problems = limits.check(self.project.other.get("limits")) if self.project else []
+        problems = values.check(self.project.other.get("limits")) if self.project else []
         self.status.configure(text="\n".join(f"{level}: {where}: {message}" for level, where, message in problems))
 
     def commit(self):
@@ -167,15 +177,15 @@ class LimitsTab(Tab):
             try:
                 flat[key] = int(text)
             except ValueError:
-                self.status.configure(text=f"Not applied: {key} is a whole number")
+                self.status.configure(text=f"Not applied: {values.FIELD[key][1]} is a whole number")
                 return False
         before = self.project.other.get("limits")
-        after = limits.build(flat, before)
+        after = values.build(flat, before)
         # Untouched, the section stays as the mod wrote it: every tab switch
         # commits, and rebuilding it would drop what the form cannot show
         # (a misspelt key, a value that is not a number, which Conflicts
         # should still report) and mark the mod changed.
-        if after == limits.build(limits.flatten(before), before):
+        if after == values.build(values.flatten(before), before):
             after = before
         if after is None:
             self.project.other.pop("limits", None)

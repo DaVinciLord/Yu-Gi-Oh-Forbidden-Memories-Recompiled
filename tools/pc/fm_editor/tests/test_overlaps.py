@@ -230,7 +230,7 @@ class ConflictsTab(unittest.TestCase):
         project.other["limits"] = {"stats": 12000}
         (self.folder / "settings.txt").write_text("mod.alpha=1\nmod.beta=0\n", encoding="utf-8")
         issues, summary = validate.cross_mod(project, [self.folder], self.folder / "settings.txt")
-        stats = [i for i in issues if i.where.startswith("Limit stats")]
+        stats = [i for i in issues if i.where.startswith("Value stats")]
         self.assertEqual(len(stats), 1)
         self.assertEqual(stats[0].level, "warning")
         self.assertIn("Mine wins (later in load order)", stats[0].message)

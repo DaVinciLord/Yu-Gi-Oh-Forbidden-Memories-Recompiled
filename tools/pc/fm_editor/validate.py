@@ -14,7 +14,7 @@ from pathlib import Path
 from .gamedata import (CARD_COUNT, DECK_COPY_LIMIT, DECK_POOL_MIN_CARDS, DECK_SIZE, DUELIST_NAMES, POOLS,
                        POOL_LABELS, POOL_TOTAL, RITUAL_ORIGINS, RITUAL_TRIBUTE_MAX, TYPE_MAGIC, TYPE_EQUIP, TYPE_NAMES,
                        TYPE_RITUAL, exodia_piece)
-from . import art, campaign_map, card_text, fixed_decks, guardian_stars, limits, packs as packmath
+from . import art, campaign_map, card_text, fixed_decks, guardian_stars, packs as packmath, values
 from . import monster_effects, roster, starter_pools
 from .model import KEY_RE, Project, duelist_named
 
@@ -414,15 +414,15 @@ def validate(project: Project) -> list:
             _check_card(project, cid, out)
     _check_tables(project, out)
     _check_starter(project, out)
-    for level, where, message in limits.check(project.other.get("limits")):
-        out.append(Issue(level, "Limits", where, message))
+    for level, where, message in values.check(project.other.get("limits")):
+        out.append(Issue(level, "Values", where, message))
     stars = {}
     for card in project.cards.values():
         if card.is_monster():
             for star in (card.star1, card.star2):
                 stars[star] = stars.get(star, 0) + 1
-    # The ATK/DEF cap a bonus is measured against: the Limits tab's, else 9999.
-    flat = limits.flatten(project.other.get("limits"))
+    # The ATK/DEF cap a bonus is measured against: the Values tab's, else 9999.
+    flat = values.flatten(project.other.get("limits"))
     caps = [flat[key] for key in ("stats", "attack", "defense") if isinstance(flat.get(key), int)]
     cap = max(caps) if caps else guardian_stars.STAT_CAP
     for level, where, message in guardian_stars.check(project.other.get("guardian_stars"), stat_cap=cap,

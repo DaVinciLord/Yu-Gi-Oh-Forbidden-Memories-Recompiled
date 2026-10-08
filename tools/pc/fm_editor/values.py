@@ -1,7 +1,10 @@
-"""A mod's "limits" (notes/gameplay-tables.md, "Limits"): the numbers the game
-caps, which a mod may raise or lower. The port reads them in
-src/pc/cards/tables.c (read_limits); the checks here are that file's, so a
-problem shows in the editor rather than as a line in the Mods window.
+"""The game's numbers a mod may change (notes/gameplay-tables.md, "Values"):
+the caps (ATK, DEF, LP, starchips...) and the other values the port reads in
+place of the disc's (a Build Deck's copies, Swords of Revealing Light's
+turns, the rank score, the starchips a win gives...). They are a mod's
+"limits", as the port has always read them: src/pc/cards/tables.c
+(read_limits, read_values). The checks here are that file's, so a problem
+shows in the editor rather than as a line in the Mods window.
 
 The mod.json shape:
 
@@ -11,15 +14,19 @@ The mod.json shape:
         "life_points": {"start": 16000, "player": 8000, "opponent": 16000, "max": 30000,
                         "duelists": {"Heishin": 20000, "Seto": {"player": 8000, "opponent": 12000}}},
         "two_player": {"start": 8000, "max": 30000, "step": 500},
-        "starchips": 999999, "chest": 250, "free_duel_record": 999, "two_player_record": 9999
+        "starchips": 999999, "chest": 250, "free_duel_record": 999, "two_player_record": 9999,
+        "deck_copies": 3, "swords_turns": 3, "crush_card": 1500, "spellbinding_circle": 500, "shadow_spell": 1000,
+        "rank_score": {"start": 50, "exodia": 40, "deck_out": -40},
+        "starchip_prize": {"S": 5, "A": 4, "B": 3, "C": 2, "D": 1},
+        "new_game_starchips": 0
     }
 
-The editor keeps it in Project.other["limits"] as written; the Limits tab
+The editor keeps it in Project.other["limits"] as written; the Values tab
 turns it into a form (`flatten`) and back (`build`).
 """
 from __future__ import annotations
 
-from .model import duelist_named, same_letters
+from .model import duelist_named
 
 STAT_MAX = 32767            # s16 ATK/DEF in the duel's card records
 LIFE_POINTS_MAX = 32767     # s16 LP in each side's record
@@ -27,34 +34,83 @@ CHEST_MAX = 255             # a byte a card in the chest
 RECORD_MAX = 32767          # s16 Free Duel wins and losses
 TWO_PLAYER_RECORD_MAX = 65535
 STARCHIPS_MAX = 99999999    # eight digits on screen
+DECK_SIZE = 40
+SWORDS_MAX = 9              # one digit on the field's card bar
+PRIZE_MAX = 8               # a starchip picture each, eight in the results' row
+EFFECT_MAX = 9999           # four digits in the effect's number
 
-# The simple fields and the advanced ones, in the form's order: key, label,
-# the game's own value (what an empty field means), lowest, highest, and what
-# keeping more than the highest would take.
-FIELDS = (
-    ("stats", "ATK and DEF cap", 9999, 0, STAT_MAX, "a 16-bit number in every card record"),
-    ("life_points.start", "Starting LP (both sides)", 8000, 1, LIFE_POINTS_MAX, "a 16-bit number in each side's record"),
-    ("life_points.max", "LP cap (healing stops there)", None, 1, LIFE_POINTS_MAX, "a 16-bit number in each side's record"),
+STAT = "a 16-bit number in every card record"
+LIFE = "a 16-bit number in each side's record"
+
+# The groups, in the tab's order: their title and their fields. A field is
+# key ("a.b" for a member of a section), label, the game's own value (what
+# an empty field means; None: the side's start), lowest, highest, a one-line
+# hint, and what keeping more than the highest would take (None: more means
+# nothing, and is left out as the game leaves it).
+GROUPS = (
+    ("Duel", (
+        ("life_points.start", "Starting LP", 8000, 1, LIFE_POINTS_MAX, "Both sides vs the CPU", LIFE),
+        ("life_points.player", "Your starting LP", 8000, 1, LIFE_POINTS_MAX, "Yours alone", LIFE),
+        ("life_points.opponent", "CPU's starting LP", 8000, 1, LIFE_POINTS_MAX, "The CPU's alone", LIFE),
+        ("life_points.max", "LP cap", None, 1, LIFE_POINTS_MAX, "Healing stops here", LIFE),
+        ("stats", "ATK/DEF cap", 9999, 0, STAT_MAX, "With every bonus", STAT),
+        ("attack", "ATK cap", 9999, 0, STAT_MAX, "ATK alone", STAT),
+        ("defense", "DEF cap", 9999, 0, STAT_MAX, "DEF alone", STAT),
+    )),
+    ("Magic", (
+        ("swords_turns", "Swords of Revealing Light", 3, 1, SWORDS_MAX, "Turns with no attack",
+         "one digit on the field's card bar"),
+        ("crush_card", "Crush Card", 1500, 0, STAT_MAX, "Destroys ATK from", STAT),
+        ("spellbinding_circle", "Spellbinding Circle", 500, 0, EFFECT_MAX, "ATK/DEF taken off",
+         "four digits in the effect's number"),
+        ("shadow_spell", "Shadow Spell", 1000, 0, EFFECT_MAX, "ATK/DEF taken off", "four digits in the effect's number"),
+    )),
+    ("Deck and Trunk", (
+        ("deck_copies", "Copies in a deck", 3, 1, DECK_SIZE, "Build Deck allows", "a deck of forty"),
+        ("chest", "Copies in the Trunk", 250, 1, CHEST_MAX, "Kept of each card",
+         "a byte a card in the memory card's save"),
+    )),
+    ("Rewards", (
+        ("starchip_prize.S", "Starchips for S", 5, 0, PRIZE_MAX, "Per win", "eight pictures in a row"),
+        ("starchip_prize.A", "Starchips for A", 4, 0, PRIZE_MAX, "Per win", "eight pictures in a row"),
+        ("starchip_prize.B", "Starchips for B", 3, 0, PRIZE_MAX, "Per win", "eight pictures in a row"),
+        ("starchip_prize.C", "Starchips for C", 2, 0, PRIZE_MAX, "Per win", "eight pictures in a row"),
+        ("starchip_prize.D", "Starchips for D", 1, 0, PRIZE_MAX, "Per win", "eight pictures in a row"),
+        ("new_game_starchips", "New game starchips", 0, 0, STARCHIPS_MAX, "A new save has",
+         "eight digits on screen"),
+        ("starchips", "Most starchips", 999999, 0, STARCHIPS_MAX, "The save holds", "eight digits on screen"),
+    )),
+    ("Rank", (
+        ("rank_score.start", "Score at the start", 50, 0, 99, "Below 50 is TEC", None),
+        ("rank_score.exodia", "Exodia win", 40, -99, 99, "Added to the score", None),
+        ("rank_score.deck_out", "Win by empty deck", -40, -99, 99, "Added to the score", None),
+    )),
+    ("Records and 2P", (
+        ("two_player.start", "2P starting LP", 8000, 1, LIFE_POINTS_MAX, "The choice starts at", LIFE),
+        ("two_player.max", "2P most LP", 8000, 1, LIFE_POINTS_MAX, "Highest to pick", LIFE),
+        ("two_player.step", "2P LP step", 500, 1, LIFE_POINTS_MAX, "Each press", LIFE),
+        ("free_duel_record", "Free Duel record", 999, 1, RECORD_MAX, "Most wins, losses", "a 16-bit number in the save"),
+        ("two_player_record", "2P record", 9999, 1, TWO_PLAYER_RECORD_MAX, "Most wins, losses",
+         "a 16-bit number in the save"),
+    )),
 )
-ADVANCED = (
-    ("attack", "ATK cap", 9999, 0, STAT_MAX, "a 16-bit number in every card record"),
-    ("defense", "DEF cap", 9999, 0, STAT_MAX, "a 16-bit number in every card record"),
-    ("life_points.player", "Player's starting LP", 8000, 1, LIFE_POINTS_MAX, "a 16-bit number in each side's record"),
-    ("life_points.opponent", "Opponent's starting LP", 8000, 1, LIFE_POINTS_MAX,
-     "a 16-bit number in each side's record"),
-    ("two_player.start", "2P duel: LP it starts at", 8000, 1, LIFE_POINTS_MAX, "a 16-bit number in each side's record"),
-    ("two_player.max", "2P duel: most LP to pick", 8000, 1, LIFE_POINTS_MAX, "a 16-bit number in each side's record"),
-    ("two_player.step", "2P duel: LP a step", 500, 1, LIFE_POINTS_MAX, "a 16-bit number in each side's record"),
-    ("starchips", "Most starchips", 999999, 0, STARCHIPS_MAX, "eight digits on screen"),
-    ("chest", "Copies of a card in the Trunk", 250, 1, CHEST_MAX, "a byte a card in the memory card's save"),
-    ("free_duel_record", "Free Duel wins/losses", 999, 1, RECORD_MAX, "a 16-bit number in the save"),
-    ("two_player_record", "2P wins/losses", 9999, 1, TWO_PLAYER_RECORD_MAX, "a 16-bit number in the save"),
-)
-ALL_FIELDS = FIELDS + ADVANCED
+ALL_FIELDS = tuple(field for _, fields in GROUPS for field in fields)
+FIELD = {field[0]: field for field in ALL_FIELDS}
 TOP_KEYS = ("stats", "attack", "defense", "life_points", "two_player", "starchips", "chest", "free_duel_record",
-            "two_player_record")
+            "two_player_record", "deck_copies", "swords_turns", "crush_card", "spellbinding_circle", "shadow_spell",
+            "rank_score", "starchip_prize", "new_game_starchips")
 LIFE_KEYS = ("start", "player", "opponent", "max", "duelists")
-TWO_PLAYER_KEYS = ("start", "max", "step")
+# The sections whose members are all fields: their keys, and the example a
+# wrong kind of value is told.
+SECTIONS = {
+    "two_player": (("start", "max", "step"), "{\"start\": 8000, \"max\": 8000, \"step\": 500}"),
+    "rank_score": (("start", "exodia", "deck_out"), "{\"start\": 50, \"exodia\": 40, \"deck_out\": -40}"),
+    "starchip_prize": (("S", "A", "B", "C", "D"), "{\"S\": 5, \"A\": 4, \"B\": 3, \"C\": 2, \"D\": 1}"),
+}
+
+
+def _int(value) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
 
 
 def _get(limits: dict, path: str):
@@ -63,9 +119,15 @@ def _get(limits: dict, path: str):
     value = limits.get(top) if isinstance(limits, dict) else None
     if not sub:
         return value
-    if top == "life_points" and isinstance(value, int) and not isinstance(value, bool):
+    if top == "life_points" and _int(value):
         return value if sub == "start" else None
     return value.get(sub) if isinstance(value, dict) else None
+
+
+def retail_text(key) -> str:
+    """The game's own value as the form shows it."""
+    retail = FIELD[key][2]
+    return "start" if retail is None else str(retail)
 
 
 def flatten(limits) -> dict:
@@ -75,14 +137,14 @@ def flatten(limits) -> dict:
     flat = {}
     for key, *_ in ALL_FIELDS:
         value = _get(limits, key)
-        if isinstance(value, int) and not isinstance(value, bool):
+        if _int(value):
             flat[key] = value
     life = limits.get("life_points")
     duelists = life.get("duelists") if isinstance(life, dict) else None
     flat["duelists"] = {}
     if isinstance(duelists, dict):
         for name, entry in duelists.items():
-            if isinstance(entry, int) and not isinstance(entry, bool):
+            if _int(entry):
                 flat["duelists"][name] = (None, entry)
             elif isinstance(entry, dict):
                 flat["duelists"][name] = (entry.get("player"), entry.get("opponent"))
@@ -96,19 +158,20 @@ def build(flat: dict, kept=None):
     kept = kept if isinstance(kept, dict) else {}
     out = {key: value for key, value in kept.items() if key not in TOP_KEYS}
     # What the form cannot show stays too, for Conflicts to report: a
-    # misspelt key inside "life_points" or "two_player", and a field's value
-    # that is not a whole number (the form shows it empty).
-    for top, known in (("life_points", LIFE_KEYS), ("two_player", TWO_PLAYER_KEYS)):
+    # misspelt key inside a section, and a field's value that is not a whole
+    # number (the form shows it empty).
+    known = dict({"life_points": LIFE_KEYS}, **{name: keys for name, (keys, _) in SECTIONS.items()})
+    for top, keys in known.items():
         section = kept.get(top)
         if isinstance(section, dict):
             for sub, value in section.items():
-                if sub not in known:
+                if sub not in keys:
                     out.setdefault(top, {})[sub] = value
     for key, *_ in ALL_FIELDS:
         value = flat.get(key)
         if value is None:
             written = _get(kept, key)
-            if written is None or isinstance(written, int) and not isinstance(written, bool):
+            if written is None or _int(written):
                 continue
             value = written
         top, _, sub = key.partition(".")
@@ -141,15 +204,25 @@ def check(limits) -> list:
         return [("error", "limits", "\"limits\" is an object: {\"stats\": 30000, \"life_points\": 16000, ...}")]
     for key in limits:
         if key not in TOP_KEYS:
-            out.append(("error", key, f"no limit \"{key}\" ({', '.join(TOP_KEYS)})"))
+            out.append(("error", key, f"no value \"{key}\" ({', '.join(TOP_KEYS)})"))
     life = limits.get("life_points")
     if life is not None and (isinstance(life, bool) or not isinstance(life, (int, dict))):
         out.append(("error", "life_points", "a number (both sides' start) or an object of start, player, opponent, "
                                            "max and duelists"))
-    two = limits.get("two_player")
-    if two is not None and not isinstance(two, dict):
-        out.append(("error", "two_player", "an object: {\"start\": 8000, \"max\": 8000, \"step\": 500}"))
-    for key, label, retail, low, high, storage in ALL_FIELDS:
+    for name, (keys, example) in SECTIONS.items():
+        section = limits.get(name)
+        if section is None:
+            continue
+        if not isinstance(section, dict):
+            out.append(("error", name, f"an object: {example}"))
+            continue
+        for key in section:
+            if key not in keys:
+                out.append(("error", f"{name}.{key}", f"no \"{key}\" ({', '.join(keys)})"))
+    for key, label, retail, low, high, hint, storage in ALL_FIELDS:
+        top = key.partition(".")[0]
+        if top in SECTIONS and not isinstance(limits.get(top), dict):
+            continue
         value = _get(limits, key)
         if value is None:
             continue
@@ -169,27 +242,40 @@ def check(limits) -> list:
             if isinstance(entry, dict):
                 for side in ("player", "opponent"):
                     if side in entry:
-                        out += _number(f"{where} {side}", entry[side], 1, LIFE_POINTS_MAX,
-                                       "a 16-bit number in each side's record")
+                        out += _number(f"{where} {side}", entry[side], 1, LIFE_POINTS_MAX, LIFE)
             else:
-                out += _number(where, entry, 1, LIFE_POINTS_MAX, "a 16-bit number in each side's record")
+                out += _number(where, entry, 1, LIFE_POINTS_MAX, LIFE)
+    two = limits.get("two_player")
     if isinstance(two, dict):
-        for key in two:
-            if key not in TWO_PLAYER_KEYS:
-                out.append(("error", f"two_player.{key}", f"no \"{key}\" (start, max, step)"))
         start, top, step = two.get("start", 8000), two.get("max", 8000), two.get("step", 500)
-        if isinstance(start, int) and isinstance(top, int) and start > top:
+        if _int(start) and _int(top) and start > top:
             out.append(("warning", "two_player.start", f"past the most to pick ({top}): the choice starts at {top}"))
-        if isinstance(step, int) and isinstance(top, int) and step > top:
+        if _int(step) and _int(top) and step > top:
             out.append(("warning", "two_player.step", f"past the most to pick ({top}): a step is {top}"))
     return out
 
 
+def problem(key, text) -> str | None:
+    """What is wrong with `text` typed in field `key`, or None: the form's
+    own check, before the value is applied."""
+    text = text.strip()
+    if not text:
+        return None
+    try:
+        value = int(text)
+    except ValueError:
+        return f"{FIELD[key][1]}: a whole number"
+    found = _number(key, value, *FIELD[key][3:5], FIELD[key][6])
+    return found[0][2] if found else None
+
+
 def _number(where, value, low, high, storage) -> list:
-    if not isinstance(value, int) or isinstance(value, bool):
+    if not _int(value):
         return [("error", where, f"a whole number, {low} to {high}, without quotes; left out")]
     if value < low:
         return [("error", where, f"at least {low}; left out")]
     if value > high:
+        if storage is None:
+            return [("error", where, f"at most {high}; left out")]
         return [("warning", where, f"{value} is past the {high} the game keeps ({storage}); {high} is used")]
     return []

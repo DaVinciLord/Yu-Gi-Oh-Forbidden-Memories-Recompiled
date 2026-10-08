@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 KINDS = ["Disc data", "Sounds", "Texture images", "Cards", "Fusions", "Equips", "Rituals", "Drops and decks",
-         "Starter decks", "Passwords", "Card packs", "Guardian Stars", "Limits", "Terrain bonuses", "Attack traps",
+         "Starter decks", "Passwords", "Card packs", "Guardian Stars", "Values", "Terrain bonuses", "Attack traps",
          "Duelists", "Text", "Fonts", "Title screen and menus", "Code hooks", "Game events"]
 (DATA, AUDIO, TEXTURES, CARDS, FUSIONS, EQUIPS, RITUALS, POOLS, STARTER, PASSWORDS, PACKS, STARS, LIMITS, TERRAIN,
  TRAPS, DUELISTS, TEXT, FONT, TITLE, HOOKS, EVENTS) = range(len(KINDS))
@@ -967,7 +967,7 @@ class _Check:
                 self.star_pair(mod, d, a, -points, m)
 
     def limit_claim(self, mod, path, key, value, src) -> Claim:
-        return self.claim(LIMITS, mod, key if key is not None else path, SET, value, src, f"Limit {path}")
+        return self.claim(LIMITS, mod, key if key is not None else path, SET, value, src, f"Value {path}")
 
     def limit_both(self, mod, path, key, one, two, via, value):
         c = self.limit_claim(mod, path, key, canonical(value), value)
