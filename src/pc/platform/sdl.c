@@ -508,6 +508,7 @@ static void apply_swap_interval(void)
     swap_interval = wanted;
     if (use_gl) SDL_GL_SetSwapInterval(wanted);
     else if (renderer) SDL_SetRenderVSync(renderer, wanted);
+    Platform_SetVSync(wanted);
     LOG(LOG_WINDOW, "vsync %s (game %.2f Hz, display %.2f Hz)", wanted ? "on" : "off",
         Platform_GameHz(), Platform_PresentRefresh());
 }
@@ -1403,18 +1404,22 @@ static void show(void)
         glDisable(GL_BLEND);
         if (gl_pass_shown) {
             int pw = gl_pass_size[0], ph = gl_pass_size[1], x = gl_pass_rect[0], y = gl_pass_rect[1];
-            GLuint texture = gl_pass_texture ? gl_pass_texture : (GLuint)GlPicture_Texture(&pw, &ph), shown;
+            GLuint texture = gl_pass_texture, shown;
             /* Every filter reads the shown area alone: past its edges lies
              * the rest of VRAM, which bilinear would blend in (gl_picture.h),
              * and the area moves between the game's two buffers every frame,
              * so nearest at a scale that is not whole would round its edge
-             * texels one way, then the other, and the picture would shake. */
+             * texels one way, then the other, and the picture would shake.
+             * The whole picture only when that area runs past its edge
+             * (with anti-aliasing it is then resolved whole). */
             if (!gl_pass_texture &&
                 (shown = (GLuint)GlPicture_ShownTexture(x, y, gl_pass_rect[2], gl_pass_rect[3]))) {
                 texture = shown;
                 pw = gl_pass_rect[2];
                 ph = gl_pass_rect[3];
                 x = y = 0;
+            } else if (!gl_pass_texture) {
+                texture = (GLuint)GlPicture_Texture(&pw, &ph);
             }
             glBindTexture(GL_TEXTURE_2D, texture);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, Settings_Get(SET_FILTER) ? GL_LINEAR : GL_NEAREST);

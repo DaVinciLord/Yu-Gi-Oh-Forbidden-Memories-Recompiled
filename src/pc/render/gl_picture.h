@@ -19,7 +19,9 @@ int GlPicture_Init(void);
  * is then the picture. Returns 0 when the pass is off or the scale is 1. */
 int GlPicture_Replay(void);
 /* The picture's texture (RGBA, picture_w x picture_h texels; texel row 0
- * is the top of VRAM), after Replay. */
+ * is the top of VRAM), after Replay. With anti-aliasing this resolves the
+ * whole picture: to show part of it, GlPicture_ShownTexture resolves that
+ * part alone. */
 unsigned GlPicture_Texture(int *picture_w, int *picture_h);
 /* Pixels x,y,w,h of that texture copied into one of their own (w x h, row
  * 0 their top), after Replay, for the presenter: in the whole picture the

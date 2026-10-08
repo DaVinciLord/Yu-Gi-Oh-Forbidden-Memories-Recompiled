@@ -159,6 +159,8 @@ int Platform_VSyncPacesGame(void);
 /* The backend reports each vsynced present; at 100% on a 60 Hz display the
  * game's VBlank is re-phased to the display so the two rates do not beat. */
 void Platform_NotifyPresent(uint64_t real_now_us, int vsynced);
+/* The backend's presents wait for the display (swap interval 1), or not. */
+void Platform_SetVSync(int on);
 void Platform_SetVBlankPeriod(unsigned us);
 void Platform_SetPresentRefresh(float hz);
 float Platform_PresentRefresh(void);

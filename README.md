@@ -24,6 +24,16 @@ extract it and run `memories-pc.exe` (Windows) or `./memories-pc` (Linux). On fi
 launch, pick your USA disc's `.bin`. The game can tell you when a newer release is out
 (**Help > Check for updates at start** turns it off; see [Updates](notes/updates.md)).
 
+### Bring your save from an emulator
+
+Your save from the original game (an emulator's memory card, or a PS1 card copied to a PC)
+loads in the port. Copy the memory card file (`.mcr`, `.mcd`, `.srm`, `.gme`, `.mcs`, `.psv`,
+...; DuckStation keeps its cards in its `memcards` folder, ePSXe in `memcards`) into the
+port's `saves` folder: `Documents\My Games\YFM Re-Decomp\saves` on Windows,
+`~/.local/share/YFM Re-Decomp/saves` on Linux. Then pick **LOAD** on the title screen: the
+save is copied into an empty slot (the card file is renamed `.imported`) and you can load it.
+Emulator save states are not memory cards and cannot be imported; save in game first.
+
 ### HD pack
 
 1. From the same release, download `yfm-redecomp-hd-mod-<version>.zip`.
