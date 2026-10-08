@@ -55,7 +55,7 @@ The window has a tab per table:
 | Rituals | every ritual card in a list (search, **Changed only**); the chosen one's recipe as cards in a row, with their pictures: the ritual card + its tributes → what it summons, and the same in a sentence. **Tributes come from** **On the field** (the game's), **In the hand** or **Both** (`"tributes_from"`); one to five tributes (**Add a tribute**, the × on a tribute). A click on a card edits it below: a tribute is **A specific card** (a copy counts too) or **Any monster that...** meets conditions (type, fusion group, ATK, DEF, level, DEF above ATK); the result a monster. Changes are the mod's at once (Undo takes them back). **Remove recipe** takes a disc ritual's away, or an added copy's (which otherwise has its base's), as `"result": null`; **Give it its own recipe** starts a copy's from its base's ([rituals](../../../notes/gameplay-tables.md#rituals)) |
 | Duelists | every opponent of the Free Duel grid, a small portrait beside each name, grouped by the grid's pages: page 1 the disc's forty, page 2 and on the duelists the mod adds (**Add duelist...**, **Duplicate**, **Remove**). The one chosen shows its picture and the two the game draws of it (Internal 1x and 2x and up), where it sits on its page (a map of the page; a click on a face goes to that duelist), **Name and place...** (its name, id, base and slot) and **Picture...**/**Disc's face** (below, [Duelists](#duelists-added-duelists-and-portraits)). Then, per opponent, the deck pool and the S/A-POW, B/C/D and S/A-TEC drop pools: weights, their chance, the retail weight, and the total against 2048 (**Scale to 2048 (100%)** scales a pool back to 2048 the way the port does). The deck is either the **Weighted deck (retail)** or a **Fixed deck (40 cards)**: forty specific cards by their copies, counted against 40, each beside its weighted chance; **Copy the weighted deck's most likely 40**, **Clear**, **Revert to retail**; a line says what the pool deals (a deck pool, the forty it deals most often; a drop pool, the chance of a monster and its strongest one), beside the disc's once changed |
 | Starter decks | the decks a new game may be dealt in place of the disc's weighted pools: a deck's name, its weight against the other decks offered, and its cards by their copies, counted against the forty a deck holds, with a line of what it is made of (monsters and their average ATK, magic, traps...). **Add deck**: an empty deck, an opponent's (its fixed deck, or the forty its weighted deck deals most often), one deal of the disc's seven starter pools, or a copy of the selected one. **Weighted pools** (`starter_pools`): pools of the mod's own a new game's deck is drawn from, each its number of cards by its weights, the draws counted against forty; **Start from the disc's seven pools** to change them |
-| Map | the campaign map's sixteen places (below): each exit's destination, direction, story-flag condition, length and arrow on the screen, the Millennium Puzzle marker's place in the town, Confirm's destination and each place's camera, over pictures of the map drawn from your disc; **Reset place**, **Reset all**; **Pictures...**: the marker, arrows and name panel, and the terrain's textures |
+| Map | how the player gets around the campaign map (below): at each of its sixteen places, its arrows (where each goes, the direction pressed, when it is open, its picture and spot), Confirm, the camera and, in the town, the Millennium Puzzle marker, edited on the place's screen drawn from your disc (drag the arrows, the marker and the map itself); **All routes**; the numbers under **Show advanced**; a way back for each changed part and **Revert every place**; **Map pictures...**: the marker, arrows and name panel, and the terrain's textures |
 | Limits | the numbers the game caps (`limits`, [gameplay tables](../../../notes/gameplay-tables.md#limits-atk-def-lp-starchips-and-more)). The simple part: the ATK and DEF cap, the LP a duel starts with, and how far healing goes. **Show advanced**: ATK and DEF apart, each side's starting LP, the two-player LP choice (start, most, step), the most starchips, the chest's copies, the Free Duel and two-player records, and a table of duelists with the LP each side starts with against them. An empty field is the game's own number (beside it, with the range the game keeps); a value past that range is warned about and held at the most the game keeps |
 | Guardian Stars | the stars (`guardian_stars`, [Guardian Stars](../../../notes/modding.md#guardian-stars-names-icons-new-stars-and-matchups)): the list of stars with a name and an icon each (**Import icon (PNG)...**, with a preview; the game makes it 16x16 in the disc's stars' colours), **Add star** for 11 to 15 (a card holds its stars in 4 bits, so fifteen at most), and the full grid of matchups: a row is the attacker's star, a column the defender's, a cell the bonus the attacker's side gets, green above 0 and red below; click a cell, type a bonus or use **+ default**, **- default** or **0** (with **Reverse pair gets the opposite** on, the reverse cell takes the opposite sign). **Default bonus** moves the disc's 500 in both cycles, **Retail cycles** and **Clear all** are presets, **Revert to retail** takes the whole key away. **Set stars by rule...** sets many cards' first or second star from their attribute or type through a table you fill in (a Fire monster's first star is Fire), or one star for all, **(none)** included (a first star of none leaves the second as the card's one star, as the game reads it; both none, no star), over a filter of cards like Bulk fusions', with a preview and **Undo last batch**. **Show advanced**: a name per language (`fr=Feu, de=Feuer`), an icon's colours (`game` or its own), and what happens at a summon (`ask`, `first`, `best`). The Cards tab's star lists show the mod's stars as they are named here |
 | Packs | the card packs the mod sells for starchips on the Password screen: each pack's name, description, price, cards a pack and picture (shown as a card's art or, `image_style` `full`, the whole picture), its cards with their tier, weight and chance; a **Show advanced** part for everything else; **Shop settings...** and **Simulate...** (below); with no pack, an empty one or **a pack of an opponent's drops** (its cards at their drop weights) |
@@ -290,53 +290,74 @@ about a minute); use a current build.
 
 ### The Map tab
 
-The campaign map (`campaign_map.py`) is the overworld module's table of
-sixteen places: 0-9 the world map's sites, 10-15 the town's, named as the
-game names them (strings `0x8350` + place; two town places read "before /
-after" when their label changes once the tournament is over). A place is
-what the game shows while the player stands there, so it is edited as a
-screen:
+What it changes: how the player gets around the campaign map. At each of
+its sixteen places, which arrows show, where each leads, which direction
+takes it and when it is open; what Confirm does; how the camera frames the
+place; and, in the town, where the Millennium Puzzle marker stands.
 
-* **Screen**: the place at 2x, over the map as its camera sees it (drawn
-  from the disc's own 3D map, `map_view.py`: the terrain model, its
-  textures, the camera of `ViewState_ApplyOrbit`, the game's fog and, on the
-  world map, its spotlight; close to the game's frame, not exact, because
-  the light is a fit). The name panel, each used exit's arrow (the game's
-  own sprite from the map's strip, `field_08`) and, in the town, the
-  Millennium Puzzle marker are drawn where the game draws them; drag an
-  arrow or the marker to move it. Exits at the same spot share one label,
-  with the flag each needs.
-* **Overview**: the world map from straight above (turned as its cameras
+The map (`campaign_map.py`) is the overworld module's table of sixteen
+places: 0-9 the world map's sites, 10-15 the town's, named as the game
+names them (strings `0x8350` + place; two town places read "before /
+after" when their label changes once the tournament is over). The list
+groups them under **World map** and **Town**, a changed one in the
+changed colour. A place is edited as the screen the game shows there:
+
+* **This place**: the place's screen, as big as the interface size allows
+  (2x, 3x from 150%, 4x from 200%), over the map as its camera sees it
+  (drawn from the disc's own 3D map, `map_view.py`: the terrain model, its
+  textures, the camera of `ViewState_ApplyOrbit`, the game's fog and, on
+  the world map, its spotlight; close to the game's frame, not exact,
+  because the light is a fit). The name panel, each arrow (the game's own
+  sprite from the map's strip, `field_08`) and, in the town, the marker
+  are drawn where the game draws them. Drag an arrow or the marker to move
+  it (a click on an arrow picks it); drag the map itself to move the
+  camera (the ground under the mouse stays under it), the wheel zooms, a
+  right drag (or Shift and drag) turns it. A drag draws the map small as
+  it goes and in full once dropped; each is one undo step.
+* **All routes**: the world map from straight above (turned as its cameras
   mostly look: -x up) with each world site where its camera looks, the town
   (place 10's camera) with its places where the marker stands, and every
-  exit as an arrow to its destination: green always, amber while a flag is
-  set, blue while it is clear, dashed for Confirm; thicker for the selected
-  place. Dragging a world site moves its camera's target; dragging a town
-  place moves its marker. **Map** chooses the model before or after the
-  coup (the terrain changes; the table is one for both). A **Reference
-  picture...** (a screenshot of the game at this place) replaces the drawn
-  map for this camera while the editor is open.
-* The form: the camera (distance, heading, pitch in 4096ths of a turn, and
-  the x and z it looks at); the marker (the town only: the world map draws
-  none, so a world site's are kept as they are); Confirm's destination
-  ("enter the place's own scene" is the disc's 0) and whether it waits for
-  exit 1's condition (the record's gate); and four exits, each **Used** or
-  not (destination 16 on the disc), its destination by name, the direction
-  held as a D-pad (any of the four), **When**: always, while a story flag
-  is set, or while it is clear (the flag number is the one the game tests,
-  `0x8000` set in the record for "clear"), **Frames** (the move's length:
-  the camera and the marker take that many frames), the arrow's picture
-  (one of the eight the map has) and its x, y on the screen. A new exit
-  starts at 16 frames, the disc's usual length.
+  arrow as a line to where it leads: green always open, amber after a
+  flag, blue before it, dashed for Confirm; thicker for the place picked.
+  Dragging a world site moves its camera's target; dragging a town place
+  moves its marker.
+* **Map: Before the coup / After the coup** chooses which of the disc's two
+  models the pictures are drawn from (the terrain changes; the table is one
+  for both).
+* The panel: the place's name, then what differs from the disc, each part
+  with its own way back (**↺ Arrow 2**, **↺ Camera**, **↺ Marker**,
+  **↺ Confirm**, **↺ All**; "As in the game" otherwise). **Arrows** lists
+  the arrows used (the disc's slots with a destination other than 16) by
+  the direction pressed, where each goes and when it is open; **+ Add**
+  takes the first free slot (a direction no other arrow takes, the arrow
+  picture and spot that go with it, a place none leads to yet, 16 frames,
+  the disc's usual length), **Remove** sets the slot's destination to 16.
+  The arrow picked: **Goes to**, **Press** (any of the four directions),
+  **Open**: always, after a story flag is set, or before it is (the flag
+  the game tests, `0x8000` set in the record for "before"; flag `0x47`
+  reads "the coup", the flag that swaps the town's map), and **Picture**
+  (the eight arrows the map has). **Confirm**: where Confirm leads
+  ("Enter this place" is the disc's 0, the place's own scene).
+* **Show advanced**: the numbers behind the drags. The arrow's x, y and
+  **Walk frames** (the move's length: the camera and the marker take that
+  many frames); under the screen the camera (distance; **Turn** and
+  **Tilt**, heading and pitch in 4096ths of a turn; and the x and z it
+  looks at); the marker's x, y (the town only: the world map draws none,
+  so a world site's are kept as they are); **Confirm only while arrow 1 is
+  open** (the record's gate); and **Compare with a screenshot...** (a
+  screenshot of the game at this place replaces the drawn map for this
+  camera while the editor is open). A number that differs from the disc's
+  has its caption in the changed colour. Show advanced only shows: what
+  the mod writes is the same either way.
 
-The game takes the first exit whose direction is held and whose condition
-holds, so two exits may share a direction under opposite conditions (the
-disc does that); Cancel in the town, once the tournament is over
+The game takes the first arrow whose direction is held and whose condition
+holds, so two may share a direction under opposite conditions (the disc
+does that); Cancel in the town, once the tournament is over
 (flag `0x47`), always leads back to the world map at Metropolis.
 
-**Pictures...** (`map_art.py`) replaces the map's own pictures, as
+**Map pictures...** (`map_art.py`) replaces the map's own pictures, as
 texture pack entries in the mod's pack (the Art tab's pack, `textures/`,
-the map's PNGs under `textures/map/`); the Screen and Overview draw them
+the map's PNGs under `textures/map/`); This place and All routes draw them
 at once:
 
 * **Sprites**: the map's one strip of sprites (WA sector `+141` of each
@@ -569,7 +590,7 @@ record are shown as retail fusions and marked.
   takes its patches of the two tables back into the map (a run across a
   table's edge stays as written, with a note), and a mod whose two tables
   differ opens with the one before the coup and saves both alike.
-* The map's pictures (the Map tab's **Pictures...**, `map_art.py`): texture
+* The map's pictures (the Map tab's **Map pictures...**, `map_art.py`): texture
   pack entries in the same `textures/manifest.json`, after the Art tab's,
   PNGs under `textures/map/`: the sprite strip as one entry per palette and
   package (`archive` `WA_MRG.MRG`, `offset` the strip's sector `+141`,
@@ -711,13 +732,13 @@ the file inside the pack and there, its measures (offset, words 1-1024,
 rows 1-512, depth 4/8/16, stride, `crop_left` and `width` within the row),
 `row_offsets` as long as `rows`, and a `setting` the mod declares; and the
 cards' `art`, `thumbnail` and `title`: inside the mod, there, and PNGs.
-For the map: a destination past 15 (16 is "no exit") or Confirm past 15,
-and a move of 0 frames (the game divides by it) are errors; an exit that
-leads back to its own place, needs no direction or other buttons, is
-shadowed by an earlier exit in the same direction under the same condition,
-has a flag past `0x7FF` or its arrow off the screen, a marker off the
-screen, and a place no exit, Confirm or Cancel leads to any more are
-warnings.
+For the map: a destination past 15 (16 is none) or Confirm past 15,
+and a move of 0 frames (the game divides by it) are errors; an arrow (an
+exit of the table) that leads back to its own place, needs no direction or
+other buttons, is shadowed by an earlier arrow in the same direction under
+the same condition, has a flag past `0x7FF` or is off the screen, a marker
+off the screen, and a place no arrow, Confirm or Cancel leads to any more
+are warnings.
 
 ## Card text preview
 
@@ -1137,10 +1158,11 @@ engine first):
 * `ModInfoTab.commit`: `settings` and the other keys parsed as JSON, and
   the keys the tabs own refused there.
 * `MapTab`: the fields' ranges (-32768 to 32767, a flag up to `0x7FFF`,
-  frames up to 255), a new exit's 16 frames; the Screen put together from
-  the map picture, the name panel at `campaign_map.PANEL_AT`, the arrows
-  and the marker at their sprite offsets; the Overview's geometry, and
-  turning a drag into coordinates.
+  frames up to 255), a new arrow's slot, direction, place and 16 frames;
+  the screen put together from the map picture, the name panel at
+  `campaign_map.PANEL_AT`, the arrows and the marker at their sprite
+  offsets; All routes' geometry, turning a drag into coordinates, and a
+  drag of the map into the camera that keeps the ground under the mouse.
 * `importers.ask_modded_files`: a modified `SLUS_014.11`'s `WA_MRG.MRG`
   looked for in `DATA/` beside it, then beside it.
 * `preview.describe`: the card-text layout's marks in words.
