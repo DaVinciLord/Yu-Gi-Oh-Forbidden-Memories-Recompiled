@@ -47,6 +47,7 @@ ARCHIVE = "WA_MRG.MRG"
 ARCHIVE_FILE = "\\DATA\\WA_MRG.MRG;1"
 FIRST_SECTOR, PACKAGE_SECTORS = 0x16C6, 235
 PHASE_SECTOR, PHASE_BYTES = 203, 32 * SECTOR
+MODEL_SECTOR, MODEL_BYTES = 198, 5 * SECTOR    # phase 11: the board's model (board_model.py)
 COLUMN_BYTES = 16 * SECTOR      # 64 words x 256 rows
 ROW_BYTES = 128
 MAX_SCALE = 4
@@ -151,6 +152,7 @@ def entry(terrain: str, part: Part, file: str) -> dict:
 class BoardData:
     """The seven boards as the disc has them (the phases' bytes)."""
     phases: dict = field(default_factory=dict, repr=False)     # terrain -> 64 KiB
+    models: dict = field(default_factory=dict, repr=False)     # terrain -> the model's 10 KiB
 
     @property
     def ok(self) -> bool:
@@ -163,6 +165,9 @@ def read(wa: bytes) -> BoardData:
         start = phase_offset(terrain)
         if len(wa) >= start + PHASE_BYTES:
             data.phases[terrain] = bytes(wa[start:start + PHASE_BYTES])
+        start = (FIRST_SECTOR + TERRAINS.index(terrain) * PACKAGE_SECTORS + MODEL_SECTOR) * SECTOR
+        if len(wa) >= start + MODEL_BYTES:
+            data.models[terrain] = bytes(wa[start:start + MODEL_BYTES])
     return data
 
 

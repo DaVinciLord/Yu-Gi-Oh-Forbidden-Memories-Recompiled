@@ -513,10 +513,14 @@ yours at up to four times that above the console's resolution.
 **Duel board** (`ui_board.py`, `board_art.py`) changes the textures of the
 duel's 3D board, field by field: **Normal**, **Forest**, **Wasteland**,
 **Mountain**, **Sogen**, **Umi**, **Yami** across the top, a dot on those the
-mod changes. On the left a sketch of the board drawn from your disc's
-textures and the mod's (flat light, a fixed camera: the game's own differ);
-click a part there or in the list to choose it. The list is the field's
-textures:
+mod changes. On the left the board itself: the game's 3D model of it read
+from your disc (`board_model.py`), with your disc's textures and the mod's,
+lit and seen as the duel's camera sees it at the start of a turn. Drag with
+the **middle mouse button** to turn it round (it stays above the floor),
+**Shift** (or **Ctrl**) and the middle button to move it, the **wheel** to
+come nearer; **Game's view** (or a double middle click) puts the duel's
+camera back. Click a part there or in the list to choose it; it is outlined
+on the board. The list is the field's textures:
 
 * **Floor**: all five rows of zones as one picture, 256x254 texels, far to
   near (the opponent's back row at the top, the centre strip once, your
@@ -1112,7 +1116,7 @@ only the window; it does not rewrite the engine, whose rules are the port's
 | `pools.py`, `fixed_decks.py`, `bulk_fusions.py` | the port's pool arithmetic, fixed decks, bulk fusions |
 | `roster.py`, `portrait.py` | the duelists a mod adds or takes over (reading and writing their files, their places on the grid, checks), and Free Duel portraits: the disc's, and the one the game makes of a PNG |
 | `art.py`, `campaign_map.py`, `map_art.py`, `map_view.py` | card art, the campaign map's table and pictures, the map drawn from the disc's 3D model (`map_view.py` has no Tk despite its name) |
-| `board_art.py` | the duel board's textures: where each is on the disc, a mod's replacements (pack entries) and tints (palette patches) |
+| `board_art.py`, `board_model.py` | the duel board's textures: where each is on the disc, a mod's replacements (pack entries) and tints (palette patches); the board drawn from the disc's 3D model with them (no Tk) |
 | `guardian_stars.py`, `star_rules.py` | a mod's `guardian_stars` (the stars, the matchup grid, presets, checks) and setting many cards' stars by a rule |
 | `card_text.py`, `ttf.py`, `pngio.py` | the card-text layout and picture, TrueType outlines, PNGs and the `Image` type every picture is |
 | `importer.py`, `kit.py`, `ygomods.py` | importing a modified game (experimental), and converting a `.ygomods` package |
@@ -1294,6 +1298,12 @@ engine's.
   `MARKER`) and `arrow_image(data, arrow, strips)`, with `data`
   `campaign_map.state(project).retail` and `strips` the mod's strips,
   `{p: map_art.strip_override(project, p)}` for the palettes that have one.
+* The duel board: `board_model.render_board(project, terrain, camera, size)`
+  with the mod's textures and tints, `camera` `None` for the duel's own
+  (at 320x240 the game's screen: what sits at the game's coordinates lines
+  up), else `(distance, heading, pitch, target_x, target_z)`; kept until
+  the board changes. `board_model.render` gives each pixel's texture too
+  (`Picture.part_at`).
 
 **Still in the Tk layer** (a new front end redoes these, or they move to the
 engine first):
