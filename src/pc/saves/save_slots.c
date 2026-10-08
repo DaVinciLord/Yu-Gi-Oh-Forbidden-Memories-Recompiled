@@ -2,6 +2,8 @@
 #define _POSIX_C_SOURCE 200809L
 #include "save_slots.h"
 #include "pc/platform/paths.h"
+#include <ctype.h>
+#include <dirent.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -348,4 +350,201 @@ void SaveSlots_ImportMemoryCards(const char *name)
     if (import_card(0, name) | import_card(1, name)) return;
     touch(done);
     remove(pending);
+}
+
+/* A copy the game would load that is a save of its own: zeros pass the
+ * game's check too (every checksum of nothing is 0), and another game's
+ * block may well hold zeros there. The game's saves always have a deck. */
+static int real_state(unsigned char *state, SaveSlotCheck check)
+{
+    int i;
+    for (i = 0; i < STATE_DECK_SIZE; i++) {
+        if (read_u16(state + STATE_DECK + 2 * i)) return check(state);
+    }
+    return 0;
+}
+
+long SaveSlots_FindSave(unsigned char *data, size_t size, size_t from, SaveSlotCheck check)
+{
+    size_t at;
+    if (size < SAVE_SLOT_HEADER_SIZE + SAVE_SLOT_STATE_SIZE) return -1;
+    for (at = from; at <= size - (SAVE_SLOT_HEADER_SIZE + SAVE_SLOT_STATE_SIZE); at++) {
+        size_t left = size - at;
+        if (data[at] != 'S' || data[at + 1] != 'C') continue;
+        if (real_state(data + at + SAVE_SLOT_HEADER_SIZE, check) ||
+            (left >= SAVE_SLOT_DUPLICATE_OFFSET + SAVE_SLOT_STATE_SIZE &&
+             real_state(data + at + SAVE_SLOT_DUPLICATE_OFFSET, check)))
+            return (long)at;
+    }
+    return -1;
+}
+
+/* Raw card images (ePSXe, PCSX, mednafen, DuckStation, RetroArch, PS2/PS3
+ * virtual cards), DexDrive, VGS, PSP, and single saves (MemcardRex, Action
+ * Replay, PS3). */
+static const char *const import_extensions[] = {"mcr", "mcd", "mc", "srm", "mem", "ddf", "vm1", "vgs", "gme",
+                                                "vmp", "mcs", "psx", "ps1", "mcb", "psv"};
+
+int SaveSlots_ImportName(const char *name)
+{
+    const char *dot = strrchr(name, '.');
+    size_t i, k;
+    if (!dot || dot == name || name[0] == '.') return 0;
+    for (i = 0; i < sizeof(import_extensions) / sizeof(import_extensions[0]); i++) {
+        const char *want = import_extensions[i];
+        for (k = 0; want[k] && tolower((unsigned char)dot[1 + k]) == want[k]; k++) {}
+        if (!want[k] && !dot[1 + k]) return 1;
+    }
+    return 0;
+}
+
+#define IMPORT_FILES 32
+#define IMPORT_MAX_SIZE 0x100000 /* a card with a header is 128 KiB and a bit */
+
+static int compare_names(const void *a, const void *b) { return strcmp((const char *)a, (const char *)b); }
+
+/* The slot that holds `state` already, or -1. */
+static int slot_holding(const unsigned char *state, SaveSlotCheck check)
+{
+    static unsigned char other[SAVE_SLOT_STATE_SIZE];
+    int slot;
+    for (slot = 0; slot < SAVE_SLOT_COUNT; slot++) {
+        if (!SaveSlots_ReadState(slot, other, check) && !memcmp(other, state, SAVE_SLOT_STATE_SIZE)) return slot;
+    }
+    return -1;
+}
+
+static int empty_slot(void)
+{
+    static unsigned char image[SAVE_SLOT_FILE_SIZE];
+    int slot;
+    for (slot = 0; slot < SAVE_SLOT_COUNT; slot++) {
+        if (read_file(slot, image, NULL) == -1) return slot;
+    }
+    return -1;
+}
+
+/* Rename an imported file out of the import's way, never over another. */
+static void mark_imported(const char *path)
+{
+    char target[1200];
+    int n;
+    for (n = 1; n < 100; n++) {
+        struct stat info;
+        if (n == 1) snprintf(target, sizeof(target), "%s.imported", path);
+        else snprintf(target, sizeof(target), "%s.%d.imported", path, n);
+        if (stat(target, &info) == 0) continue;
+        if (rename(path, target) != 0)
+            fprintf(stderr, "memories-pc: could not rename %s after importing it: %s\n", path, strerror(errno));
+        return;
+    }
+}
+
+/* Import the saves in one file. Counts what became of them; returns -1 when
+ * the file could not be read. */
+typedef struct {
+    int first, already;          /* the first slot filled, the first that had a save already */
+    int copied, present, no_room;
+    const char *from;            /* the file the first copy came from */
+} ImportCount;
+
+static int import_file(const char *path, const char *name, SaveSlotCheck check, ImportCount *count)
+{
+    static unsigned char block[SAVE_SLOT_FILE_SIZE];
+    unsigned char *data;
+    FILE *file = fopen(path, "rb");
+    long size, at;
+    int found = 0, left_out = 0;
+    if (!file) return -1;
+    data = malloc(IMPORT_MAX_SIZE);
+    size = data ? (long)fread(data, 1, IMPORT_MAX_SIZE, file) : -1;
+    if (size >= 0 && ferror(file)) size = -1;
+    fclose(file);
+    if (size < 0) {
+        free(data);
+        return -1;
+    }
+    for (at = SaveSlots_FindSave(data, (size_t)size, 0, check); at >= 0;
+         at = SaveSlots_FindSave(data, (size_t)size, (size_t)at + SAVE_SLOT_FILE_SIZE, check)) {
+        size_t bytes = (size_t)size - (size_t)at < SAVE_SLOT_FILE_SIZE ? (size_t)size - (size_t)at : SAVE_SLOT_FILE_SIZE;
+        int sound_first, slot;
+        memset(block, 0, sizeof(block));
+        memcpy(block, data + at, bytes);
+        sound_first = real_state(block + SAVE_SLOT_HEADER_SIZE, check);
+        found++;
+        slot = slot_holding(block + (sound_first ? SAVE_SLOT_HEADER_SIZE : SAVE_SLOT_DUPLICATE_OFFSET), check);
+        if (slot >= 0) {
+            count->present++;
+            if (count->already < 0) count->already = slot;
+            continue;
+        }
+        slot = empty_slot();
+        /* Only the game's block: past the duplicate is the port's token,
+         * which WriteFile makes afresh. */
+        if (slot < 0 || SaveSlots_WriteFile(slot, block, SAVE_SLOT_TAG_OFFSET)) {
+            left_out++;
+            continue;
+        }
+        fprintf(stderr, "memories-pc: imported the save at offset 0x%lx of %s into save slot %d\n", at, path,
+                slot + 1);
+        if (!count->copied++) {
+            count->first = slot;
+            count->from = name;
+        }
+    }
+    free(data);
+    count->no_room += left_out;
+    if (found && !left_out) mark_imported(path);
+    return found;
+}
+
+int SaveSlots_ImportFolder(SaveSlotCheck check, char *message, size_t size)
+{
+    static char names[IMPORT_FILES][256];
+    char directory[1024], path[1300];
+    const char *with_saves = NULL, *empty_file = NULL, *unreadable = NULL;
+    ImportCount done = {-1, -1, 0, 0, 0, NULL};
+    int count = 0, i, files = 0;
+    DIR *folder;
+    struct dirent *item;
+    if (size) message[0] = '\0';
+    if (Paths_User(directory, sizeof(directory), "saves") || !(folder = opendir(directory))) return -1;
+    while ((item = readdir(folder)) != NULL && count < IMPORT_FILES) {
+        if (!SaveSlots_ImportName(item->d_name) || strlen(item->d_name) >= sizeof(names[0])) continue;
+        snprintf(names[count++], sizeof(names[0]), "%s", item->d_name);
+    }
+    closedir(folder);
+    qsort(names, (size_t)count, sizeof(names[0]), compare_names);
+    for (i = 0; i < count; i++) {
+        struct stat info;
+        int found;
+        snprintf(path, sizeof(path), "%s/%s", directory, names[i]);
+        if (stat(path, &info) != 0 || !S_ISREG(info.st_mode)) continue;
+        files++;
+        if (info.st_size > IMPORT_MAX_SIZE) {
+            if (!empty_file) empty_file = names[i];
+            continue;
+        }
+        found = import_file(path, names[i], check, &done);
+        if (found < 0 && !unreadable) unreadable = names[i];
+        if (found == 0 && !empty_file) empty_file = names[i];
+        if (found > 0 && !with_saves) with_saves = names[i];
+    }
+    if (size && files) {
+        if (done.no_room)
+            snprintf(message, size, "No empty slot for %d save%s in %s. Free a slot to import %s.", done.no_room,
+                     done.no_room == 1 ? "" : "s", with_saves, done.no_room == 1 ? "it" : "them");
+        else if (done.copied == 1)
+            snprintf(message, size, "Imported the save in %s into slot %d.", done.from, done.first + 1);
+        else if (done.copied)
+            snprintf(message, size, "Imported %d saves from memory card files, the first into slot %d.",
+                     done.copied, done.first + 1);
+        else if (done.present)
+            snprintf(message, size, "The save in %s is already in slot %d.", with_saves, done.already + 1);
+        else if (unreadable)
+            snprintf(message, size, "Could not read %s.", unreadable);
+        else if (empty_file)
+            snprintf(message, size, "No save of this game found in %s.", empty_file);
+    }
+    return done.copied ? done.first : -1;
 }

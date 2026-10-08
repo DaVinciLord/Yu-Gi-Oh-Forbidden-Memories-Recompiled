@@ -647,6 +647,7 @@ under it:
 | `controls.txt` | the control bindings (`MEMORIES_CONTROLS`) |
 | `saves/slot01.sav` ... `slot10.sav` | the game saves, one per slot (see "Saves" below) |
 | `memcard1.mcd`, `memcard2.mcd` | memory cards of older builds, only read now (`MEMORIES_MEMCARD1/2`) |
+| `saves/*.mcr`, `*.mcd`, `*.gme`, `*.mcs`, ... | memory card files to import, renamed `*.imported` once imported (see "Saves") |
 | `states/slot1.state` ... | save states (`MEMORIES_STATE_DIR`) |
 | `screenshots/` | F12 and **File > Screenshot** (`MEMORIES_SCREENSHOT_DIR`) |
 | `mods/` | mods the player installed (`notes/modding.md`) |
@@ -2652,6 +2653,36 @@ defaults, pair selection, trade validation and backup consistency. The
 menu's own state is a save-state chunk (`save-menu`), so a state taken with
 the menu open resumes in it; each poll supplies the current build's
 integrity callback, including after loading a state in a fresh process.
+
+**Saves from an emulator or a PS1 memory card** (issue #299): a memory card
+file put in the `saves` folder is imported each time the slot menu opens
+(`SaveSlots_ImportFolder`, called from the menu's `start`). Taken by
+extension, in any case: raw card images `.mcr` `.mcd` `.mc` `.srm` `.mem`
+`.ddf` `.vm1` (ePSXe, PCSX, mednafen, DuckStation, RetroArch, PCSX2), and
+`.gme` (DexDrive), `.vgs`, `.vmp` (PSP), and the single saves `.mcs` `.psx`
+`.ps1` `.mcb` `.psv` (MemcardRex, Action Replay, PS3). The format is not
+parsed: each keeps the game's one 8 KiB block whole after a header of its
+own, so `SaveSlots_FindSave` looks for a block that opens with `SC` and
+holds a copy that passes `SaveData_ValidateIntegrity` and has a deck (an
+all-zero state passes the check, and other games' blocks may hold zeros
+there). Each save found goes into the first empty slot through
+`SaveSlots_WriteFile`, as the game's own save would, so loading it is the
+ordinary slot load with the game's check. A save already in a slot (the
+same state, byte for byte) is not copied again. When every save in a file
+is in a slot the file is renamed `<name>.imported` (`<name>.2.imported`
+...), so it is imported once; with no empty slot it stays and the menu says
+how many did not fit. The menu shows one message for the lot ("Imported the
+save in epsxe000.mcr into slot 2.", "No save of this game found in
+blank.mcd.", ...), Cross closes it. Emulator save states (`.sstate`,
+`.ss0`...) are not memory cards and are not read. Only the USA release's
+saves were checked; another region's loads if it passes the same check.
+`pc_save_slots` tests the finder on each container shape and the folder
+import; `pc_save_menu` the menu's message and load. Checked in game
+(Linux, and the Windows build under Wine): a 128 KiB `.mcr` with another
+game's save in block 1 and the game's in block 2, a `.gme`, a `.mcs` and a
+`.psv` each, put in a fresh user folder; LOAD on the title imported it to
+slot 1 and loaded it with the save's deck, 711 kinds of cards and 25
+starchips.
 
 Checked on Linux and under Wine: LOAD on the title imports the card's save
 and loads it, SAVE writes an empty slot at once and asks before overwriting

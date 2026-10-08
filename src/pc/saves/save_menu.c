@@ -140,10 +140,14 @@ static int write_pair(void)
 
 static void start(int channel)
 {
+    char imported[sizeof(menu.message)];
     int slot, any = 0;
     menu.started = 1;
     menu.side = channel >> 4 ? 1 : 0;
     if (menu.step == SAVE_MENU_LOAD_PAIR && menu.side == 0) menu.pair_slot[0] = menu.pair_slot[1] = -1;
+    /* Memory card files put in the saves folder (an emulator's, say)
+     * become slots first, so the list shows them. */
+    SaveSlots_ImportFolder(check, imported, sizeof(imported));
     SaveSlots_Scan(menu.slots, check);
     for (slot = 0; slot < SAVE_SLOT_COUNT; slot++) any |= selectable(slot);
     menu.cursor = first_cursor();
@@ -151,7 +155,10 @@ static void start(int channel)
     keep_cursor_shown();
     menu.view = VIEW_LIST;
     changed();
-    if (!any && *SaveSlots_ReadError()) {
+    if (imported[0]) {
+        show_message(any ? BACK_TO_LIST : 2, 1, "", 0);
+        snprintf(menu.message, sizeof(menu.message), "%s", imported);
+    } else if (!any && *SaveSlots_ReadError()) {
         /* Not "no saved games" when they could not be read: they may all be
          * there, behind a folder the system refuses. */
         show_message(2, 1, "Could not read your saved games.", 0);
