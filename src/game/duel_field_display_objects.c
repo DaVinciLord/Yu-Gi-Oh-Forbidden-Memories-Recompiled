@@ -28,6 +28,10 @@
 #include "duel_side_view_angles.h"
 #include "func_80022D94.h"
 #include "view_state.h"
+#include "duel_swords_effect.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/tables.h"
+#endif
 #include "../unmatched.h"
 
 s32 func_80023090(DuelFieldCursor *cursor_a, DuelFieldCursor *cursor_b)
@@ -131,9 +135,17 @@ void func_80023144(DuelFieldDisplaySource *source, s32 index)
         rank = D_800E9FF0[D_8009B1D5 ^ 1].swords_turns_remaining;
         dst->card_stats.rank = rank;
         if (rank != 0) {
+#ifdef MEMORIES_PC
+            /* The turns left, at most a mod's "swords_turns" (tables.h). */
+            if (rank < 0 || rank > Tables_Value(TABLES_VALUE_SWORDS_TURNS, DUEL_SWORDS_DURATION_TURNS)) {
+                dst->card_stats.rank =
+                    (s32)Tables_Value(TABLES_VALUE_SWORDS_TURNS, DUEL_SWORDS_DURATION_TURNS);
+            }
+#else
             if (rank < 0 || rank > 3) {
                 dst->card_stats.rank = 3;
             }
+#endif
             D_8009B355 = 1;
         }
         if (D_8009B34E != 0) {
@@ -158,9 +170,17 @@ void func_80023144(DuelFieldDisplaySource *source, s32 index)
         rank = D_800E9FF0[side].swords_turns_remaining;
         dst->card_stats.rank = rank;
         if (rank != 0) {
+#ifdef MEMORIES_PC
+            /* The turns left, at most a mod's "swords_turns" (tables.h). */
+            if (rank < 0 || rank > Tables_Value(TABLES_VALUE_SWORDS_TURNS, DUEL_SWORDS_DURATION_TURNS)) {
+                dst->card_stats.rank =
+                    (s32)Tables_Value(TABLES_VALUE_SWORDS_TURNS, DUEL_SWORDS_DURATION_TURNS);
+            }
+#else
             if (rank < 0 || rank > 3) {
                 dst->card_stats.rank = 3;
             }
+#endif
             D_8009B355 = 1;
         }
         style += 2;

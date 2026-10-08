@@ -16,6 +16,9 @@
 #include "duel_card_effects.h"
 #include "duel_field_effect_steps.h"
 #include "duel_swords_effect.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/tables.h"
+#endif
 
 #define DUEL_FIELD_EFFECT_OBJECT_VIEW(object) \
     ((DuelFieldEffectObject *)(object))
@@ -61,8 +64,15 @@ void DuelEffect_ApplySwords(void)
         }
     } else if (DisplayObject_FindAllocatedByTag(1) == 0 &&
                DUEL_FIELD_EFFECT_OBJECT_VIEW(D_8009B17C)->count >= 2) {
+#ifdef MEMORIES_PC
+        /* A mod's "swords_turns" (tables.h): one more than the turns, as
+           the console's 4 for 3, since the opponent's next turn takes one. */
+        D_800E9FF0[D_8009B1D5 ^ 1].swords_turns_remaining =
+            (s8)(Tables_Value(TABLES_VALUE_SWORDS_TURNS, DUEL_SWORDS_DURATION_TURNS) + 1);
+#else
         D_800E9FF0[D_8009B1D5 ^ 1].swords_turns_remaining =
             DUEL_SWORDS_INITIAL_COUNTER;
+#endif
         gDuel_wCardEffectFlags = 0;
     }
 }

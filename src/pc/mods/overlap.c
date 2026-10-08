@@ -1041,7 +1041,7 @@ static Claim *limit_claim(ModsOverlaps *x, int mod, const char *path, const char
 {
     char label[200];
     Claim *c = claim(x, MODS_OVERLAP_LIMITS, mod, hash_text(key ? key : path), SET, value, v);
-    snprintf(label, sizeof(label), "Limit %s", path);
+    snprintf(label, sizeof(label), "Value %s", path);
     labelled(x, c, label);
     return c;
 }
@@ -2126,7 +2126,7 @@ const char *Mods_OverlapKindName(int kind)
 {
     static const char *const names[MODS_OVERLAP_KINDS] = {
         "Disc data", "Sounds",   "Texture images", "Cards",        "Fusions",  "Equips",          "Rituals",
-        "Drops and decks", "Starter decks", "Passwords", "Card packs", "Guardian Stars", "Limits", "Terrain bonuses",
+        "Drops and decks", "Starter decks", "Passwords", "Card packs", "Guardian Stars", "Values", "Terrain bonuses",
         "Attack traps", "Duelists", "Text", "Fonts", "Title screen and menus", "Code hooks", "Game events"};
     return kind >= 0 && kind < MODS_OVERLAP_KINDS ? names[kind] : "";
 }

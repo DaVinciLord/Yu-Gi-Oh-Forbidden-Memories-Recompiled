@@ -128,7 +128,14 @@ void DuelScene_UpdateResultRewards(void)
         if (D_8009B360[0] < 0 && gDuel_bOpponentID >= 0) {
             if (gDuel_bWinnerSide)
                 goto side_result;
+#ifdef MEMORIES_PC
+            /* One for D to five for S, or a mod's "starchip_prize"
+               (tables.h), at most the eight pictures the row holds. */
+            D_8009B1E8->starchip_prize = (u8)Tables_Value(TABLES_VALUE_PRIZE + D_8009B1E8->rank_tier,
+                                                          D_8009B1E8->rank_tier + 1);
+#else
             D_8009B1E8->starchip_prize = D_8009B1E8->rank_tier + 1;
+#endif
             score = 2 * (D_8009B1E8->is_tec_rank != 0);
             if (D_8009B1E8->rank_tier < 3)
                 score = 1;

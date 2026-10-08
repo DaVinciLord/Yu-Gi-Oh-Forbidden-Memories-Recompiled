@@ -415,7 +415,13 @@ already held more than `limit` of a card (a save from before the mod) keeps
 them; only new copies are turned away. The latest mod that sets it wins.
 Without the key the chest is the disc's in every case.
 
-## Limits: ATK, DEF, LP, starchips and more
+## Values: ATK, DEF, LP, starchips and more
+
+A mod's `"limits"` hold the game's numbers a mod may change: the caps below,
+and [other values](#other-values) the game reads (a deck's copies, three
+magic cards' numbers, the rank score, the starchips a win gives). The FM
+Editor's **Values** tab writes them; the key is still `limits`, as mods have
+always written it.
 
 The game caps some numbers: a monster's ATK and DEF at 9999, whatever its
 bonuses; a duel's life points at 8000 to start and, when healing, at what
@@ -492,8 +498,53 @@ still wins, start from the cap of the stat they rank by rather than from
 9999, so they go on finding one when monsters pass 9999; at the disc's cap
 they are the disc's.
 
-**Code mods** read the limits in force with the mod API's `limit` (API 8):
-`host->limit(host, "attack")`.
+### Other values
+
+The same `"limits"` take the game's other numbers. Each is the disc's while
+no mod sets it, so without one nothing changes:
+
+```json
+"limits": {
+    "deck_copies": 5,
+    "swords_turns": 4, "crush_card": 2000, "spellbinding_circle": 700, "shadow_spell": 1200,
+    "rank_score": {"start": 50, "exodia": 40, "deck_out": -40},
+    "starchip_prize": {"S": 8, "A": 6, "B": 4, "C": 2, "D": 1},
+    "new_game_starchips": 500
+}
+```
+
+| Key | Meaning | The game's | Range |
+|---|---|---|---|
+| `deck_copies` | the copies of a card Build Deck lets into the deck (the count turns red there); an Exodia piece stays one, and the CPU's decks keep three | 3 | 1-40 |
+| `swords_turns` | the opponent's turns Swords of Revealing Light stops their attacks for (the field's card bar counts them down) | 3 | 1-9 |
+| `crush_card` | Crush Card destroys the opponent's monsters with this ATK or more | 1500 | 0-32767 |
+| `spellbinding_circle` | what Spellbinding Circle takes off each of the opponent's monsters' ATK and DEF (and shows) | 500 | 0-9999 |
+| `shadow_spell` | the same for Shadow Spell | 1000 | 0-9999 |
+| `rank_score` `start` | the rank score both sides start the sum at: 50 and up ends POW, below it TEC, ten points a letter | 50 | 0-99 |
+| `rank_score` `exodia` | what a win by Exodia adds to it | 40 | -99-99 |
+| `rank_score` `deck_out` | what a win by the opponent's empty deck adds | -40 | -99-99 |
+| `starchip_prize` `S` to `D` | the starchips a win against the CPU gives at that rank, POW or TEC; the results show a starchip each | 5, 4, 3, 2, 1 | 0-8 |
+| `new_game_starchips` | the starchips a new game's save starts with (at most the `starchips` cap) | 0 | 0-99999999 |
+
+**What holds them back.** Build Deck counts a card's copies up to the forty
+a deck holds. The field's card bar shows the Swords' turns as one digit.
+Spellbinding Circle and Shadow Spell show their number in the effect's four
+digits; the monsters' lowered stats add up in 32 bits and stop at the
+16-bit record's -32768 rather than wrap. The results' prize is a row of
+starchip pictures, eight at most (the ninth would run off the screen and
+over the rank's own sum in `DuelResultDisplayState`). A value past its
+range is noted in the Mods window and held at the most the game shows; a
+rank value past its range means nothing and is left out with a note.
+
+The rank's end tags stay the disc's (40 for Exodia and -40 for an empty
+deck in `DuelSideState.rank.result_adjustment`): the duel's end and the
+results' message tell the ends apart by them, so `rank_score` changes only
+what Duel_CalcRankScore (and View > Duel rank) adds for each. The drop pool
+still follows the letter, as the disc's does.
+
+**Code mods** read the values in force with the mod API's `limit` (API 8):
+`host->limit(host, "attack")`, `host->limit(host, "deck_copies")`,
+`host->limit(host, "rank_score.start")`, `host->limit(host, "starchip_prize.S")`.
 
 ## Passwords and prices on the Password screen
 
@@ -631,6 +682,13 @@ each table ask it first:
 | `Main_RunTwoPlayerDuelSetup`, the setup screen (`overlays/main_menu/value_setup.c`) | 8000, by 500 | `Tables_TwoPlayerLifePoints` |
 | `func_800218F0` (the duel's end), `Mods_AwardStarchips`, `Cheats_SetStarchips` | 999999 starchips; 9999 two-player wins | `Tables_StarchipCap` (`Mods_Limit`), `Tables_TwoPlayerRecordCap` |
 | the Free Duel screen (`overlays/free_duel/screen_runtime.c`) | 999 wins or losses | `Tables_FreeDuelRecordCap` |
+| `BuildDeck_UpdateDeckPaneInput` (`build_deck_pane_input.c`), the card list's count (`func_80031874.c`) | three copies | `Tables_Value(TABLES_VALUE_DECK_COPIES)` |
+| `DuelEffect_ApplySwords` (`duel_field_effect_steps.c`), the card bar (`duel_field_display_objects.c`) | 3 turns (a counter of 4), shown at most 3 | `Tables_Value(TABLES_VALUE_SWORDS_TURNS)` |
+| `DuelEffect_ApplyMonsterRemoval` (`duel_card_effects.c`) | Crush Card's 150 (x10) at `0x80090A4C` | `Tables_Value(TABLES_VALUE_CRUSH_CARD)` |
+| `DuelEffect_ApplyStatPenalty` (`duel_card_effects.c`) | 500 and 1000 | `Tables_Value(TABLES_VALUE_SPELLBINDING)`, `TABLES_VALUE_SHADOW_SPELL` |
+| `Duel_CalcRankScore` (`duel_result_runtime.c`), `Rank_Score` (`pc/cards/rank.c`) | 50, +40, -40 | `Tables_Value(TABLES_VALUE_RANK_START)`, `Tables_RankAdjustment` |
+| `DuelScene_UpdateResultRewards` (`func_800218F0.c`) | the rank tier + 1 starchips | `Tables_Value(TABLES_VALUE_PRIZE + tier)` |
+| `NameEntry_Main` (`overlays/password/name_entry_main.c`) | a cleared save's 0 starchips | `Tables_Value(TABLES_VALUE_NEW_GAME_STARCHIPS)` |
 | `Duel_AwardCard`, `BuildDeck_ReturnCardToChest`, the trade screen | 250 copies | `Tables_ChestRoom` |
 | `Duel_DrawLifePointsAndDeckCounts`, `func_80016784`, `func_80028B08`, `func_80038148` | four digits | the layouts above (`pc/text/number_width.h` for the text) |
 
@@ -643,4 +701,6 @@ mods the random sequence, and every recorded run, is unchanged. The console
 build has none of this (`#ifdef MEMORIES_PC`).
 
 `tests/pc/tables_test.c` (ctest `pc_tables`) covers the rules, their order
-between mods, the weights, the limits and the refusals.
+between mods, the weights, the limits, the values and the refusals;
+`tests/pc/editor_values_runtime.py` makes a mod of every value through the
+FM Editor and plays it in the game.
