@@ -10,11 +10,16 @@ controls, the file dialogs answered with pictures drawn here):
 * the menus: TRADE hidden, OPTION renamed SETTINGS, a button of its own that
   opens the options screen and one that shows a notice, put in among the
   game's entries;
-* the duel: the opponent's half of the life-point panel moved to the top
-  left, recoloured, with RIVAL for COM and yellow digits; the player's half
-  under it, larger, drawn from a picture, green digits; the FIELD box moved
-  right, larger, bluer; the card bar drawn from a picture; the hand's
-  cursor larger and yellow; the field's cursor recoloured.
+* the duel: the life-point panel's halves swapped -- the opponent's moved
+  down under the player's, recoloured, with RIVAL for COM and yellow
+  digits; the player's moved up, larger, drawn from a picture, green
+  digits; the FIELD box moved down, larger, bluer; the card bar drawn from
+  a picture; the hand's cursor larger, yellow and moved; the field's cursor
+  recoloured. The LP halves and the FIELD box move up and down only (the
+  game slides them off the side), so the page is asked to drag them across
+  too and must not; then, as an old hand-written mod would, the saved
+  manifest is given an "x" for them and a size too large to leave the
+  screen, which the game must leave out and note.
 
 Then plays it through tools/pc/yfm_control.py and takes pictures of each:
 
@@ -24,7 +29,10 @@ Then plays it through tools/pc/yfm_control.py and takes pictures of each:
    opponent's LP, battles, the opponent's turns, until it is won -- with a
    picture at each step, each checked: the panel is drawn where the mod
    put it and not where the game has it, its digits are the LP the game
-   holds, and the panel leaves with the game's for each battle;
+   holds (five of them too: LP over 9999 widen each half), lit on the
+   opponent's turn, and for the first battle a picture every frame of the
+   slide: the moved halves and the FIELD box slide with the game's,
+   pixel for pixel, and leave the screen when it does;
 4. the duel's results;
 5. at Internal 2x in a window (the OpenGL picture, with HD text), the title,
    the menu and a duel; the title's words and the notice there too (the
@@ -42,7 +50,9 @@ Needs a display for Tk (xvfb-run works) and ImageMagick's `import` for the
 window pictures.
 """
 import argparse
+import json
 import math
+import struct
 import os
 from pathlib import Path
 import shutil
@@ -56,14 +66,20 @@ sys.path.insert(0, str(ROOT / "tools/pc"))
 EXECUTABLE = ROOT / "tmp/pc/game32/memories-pc"
 MOD = "uitab-test"
 OPPONENT = 1                    # Simon Muran: a duel the player's deck wins
-# The panel as the game has it (Duel_InitScene): its 64 x 40 at 248, 16.
+# The panel as the game has it (Duel_InitScene): its 64 x 40 at 248, 16; its halves.
 PANEL = (248, 16, 64, 40)
-# Where the mod puts the halves: the opponent's 236 left and 2 up; the
-# player's 236 left and 18 down, at 120 %.
-OPPONENT_HALF = (12, 14, 64, 20)
-PLAYER_HALF = (6, 52, 77, 24)     # 64 x 20 at 120 % about its middle (280, 46), moved by (-236, 18)
+GAME_OPPONENT_HALF = (248, 16, 64, 20)
+# Where the mod puts the halves: the opponent's 24 down; the player's 28 up, at 120 %.
+OPPONENT_HALF = (248, 40, 64, 20)
+PLAYER_HALF = (242, 6, 76, 24)    # 64 x 20 at 120 % about its middle (280, 46), moved by (0, -28)
+OPPONENT_DIGITS = (277, 43)       # the panel's (277, 19), moved with the half
+# The FIELD box (12, 24, 56 x 24) 40 down, at 130 % (the most that leaves the
+# screen with the game's: the mod asks 300) about its middle (40, 36 + 40).
+FIELD_BOX = (4, 60, 72, 32)
+GAME_FIELD_BOX = (12, 24, 56, 24)
 
 results = []
+SLIDE_FRAMES = 24       # the slide off takes 16 (func_8001ED20), after the attack is chosen
 
 
 def check(name, ok, detail=""):
@@ -205,21 +221,26 @@ def make_mod(game: Path, folder: Path, art: dict) -> list:
 
     duel = page("duel")
     duel.select("lp_opponent")
-    duel.moved("lp_opponent", -236, -2)
+    duel.moved("lp_opponent", -236, 24)         # across is left out: the game slides it off the side
     duel.set_colour("tint", 0xFF9090)
     duel.set_colour("digits", 0xFFE040)
     duel.vars["label"].set("RIVAL")
     duel.typed("label")
     duel.select("lp_player")
-    duel.moved("lp_player", -236, 18)
+    duel.moved("lp_player", 0, -28)
     duel.wheel("lp_player", 1)
     duel.wheel("lp_player", 1)
     with choose(art["panel"]):
         duel.choose_image()
     duel.set_colour("digits", 0x80FF80)
     duel.select("field")
-    duel.moved("field", 170, 0)
+    duel.moved("field", 170, 40)
     duel.wheel("field", 1)
+    for _ in range(4):
+        duel.wheel("field", 1)                  # no larger than 130 %: it would not leave the screen
+    sizes = duel.element("field").get("scale")
+    for _ in range(2):
+        duel.wheel("field", -1)
     duel.set_colour("tint", 0x80C0FF)
     duel.select("card_bar")
     with choose(art["bar"]):
@@ -227,16 +248,36 @@ def make_mod(game: Path, folder: Path, art: dict) -> list:
     duel.select("hand_cursor")
     duel.vars["scale"].set("150")
     duel.typed("scale")
+    duel.moved("hand_cursor", 2, -4)
     duel.set_colour("tint", 0xFFFF40)
     duel.select("field_cursor")
     duel.set_colour("tint", 0x40E0FF)
     done.append("duel: both LP halves, the FIELD box, the card bar and both cursors")
+    elements = app.project.other["ui"]["duel"]
+    check("the page moves the LP halves and the FIELD box up and down only",
+          all("x" not in elements[n] for n in ("lp_opponent", "lp_player", "field")) and
+          elements["lp_opponent"].get("y") == 24 and elements["field"].get("y") == 40,
+          f"{ {n: elements[n].get('x') for n in ('lp_opponent', 'lp_player', 'field')} }")
+    check("the page sizes the FIELD box no larger than leaves the screen with the game's",
+          sizes == 130 and elements["field"].get("scale") == 110, f"at most {sizes}, then {elements['field'].get('scale')}")
+    check("the hand's cursor moves both ways", (elements["hand_cursor"].get("x"), elements["hand_cursor"].get("y"))
+          == (2, -4), str(elements["hand_cursor"]))
     from fm_editor import validate
     issues = [str(i) for i in validate.validate(app.project) if i.area in ("UI", "Mod info")]
     check("the editor finds nothing wrong with the mod", not issues, "; ".join(issues))
     manifest.save_mod(app.project, folder)
     app.dirty = False
     app.destroy()
+    # An old hand-written mod: an "x" for what the game slides off the side,
+    # a size that would not leave the screen with it. The game leaves out
+    # the first and draws the second at the most that does, and notes both.
+    path = folder / "mod.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["ui"]["duel"]["lp_opponent"]["x"] = -236
+    data["ui"]["duel"]["field"]["x"] = 170
+    data["ui"]["duel"]["field"]["scale"] = 300
+    path.write_text(json.dumps(data, indent=4), encoding="utf-8")
+    done.append("then by hand: lp_opponent x -236, field x 170 and scale 300")
     return done
 
 
@@ -318,13 +359,15 @@ def title_and_menu(executable, out, mods, shots):
             check("the added button opens the options screen", g.mode() == 11, f"mode {g.mode()}")
 
 
-def digits_wrong(image, art, value, lit):
+def digits_wrong(image, art, value, lit, count=4):
     """Pixels of the opponent's LP digits that are not the game's digits for
     `value`, yellow (#FFE040) and lit or dimmed, where the mod moved them:
-    the panel's (277, 19) moved by (-236, -2). Clear texels are skipped."""
+    the panel's (277, 19) moved with its half (a fifth digit one more to
+    the left). Clear texels are skipped."""
     from fm_editor import ui_assets
     wrong = 0
-    for i, ch in enumerate(str(value).rjust(4)):
+    left = OPPONENT_DIGITS[0] - 8 * (count - 4)
+    for i, ch in enumerate(str(value).rjust(count)):
         if ch == " ":
             continue
         digit = ui_assets.tint(art.digit(int(ch)), 0xFFE040, 255 if lit else 128)
@@ -333,10 +376,40 @@ def digits_wrong(image, art, value, lit):
                 want = digit.pixel(x, y)
                 if not want[3]:
                     continue
-                got = image.pixel(41 + 8 * i + x, 17 + y)
+                got = image.pixel(left + 8 * i + x, OPPONENT_DIGITS[1] + y)
                 if any(abs(got[c] - want[c]) > 24 for c in range(3)):
                     wrong += 1
     return wrong
+
+
+def pink(r, g, b):
+    """The opponent's half's rim and words, white made pink by its #FF9090."""
+    return r > 200 and 100 < g < 190 and 100 < b < 190
+
+
+def light_blue(r, g, b):
+    """The FIELD box's rim and words through its #80C0FF."""
+    return b > 200 and r < 150 and g > 90
+
+
+def plate(r, g, b):
+    """The player's half's picture (a teal plate)."""
+    return r < 60 and g > 70 and b > 90
+
+
+def extent(image, rows, test, columns=(0, 320)):
+    """The first and last column (x) in rows (y0, y1) and columns (x0, x1) of
+    the game's 320 x 240 with a pixel passing `test`, or None."""
+    xs = [x for y in range(*rows) for x in range(*columns) if test(*image.pixel(x, y)[:3])]
+    return (min(xs), max(xs)) if xs else None
+
+
+def object_x(g, name):
+    """Where the game has its panel (D_8009B21C) or FIELD box (D_8009B214):
+    the object's x (DisplayObject field_30)."""
+    import struct
+    at = g.u32(name)
+    return struct.unpack("<h", g.peek(at, 0x34)[0x30:0x32])[0] if at else None
 
 
 def settle_lp(g):
@@ -345,9 +418,10 @@ def settle_lp(g):
                  what="the LP readouts")
 
 
-def attack(g, column, target, shoot):
+def attack(g, column, target, shoot, slide=None):
     """Game.attack, with pictures while the battle plays: the panel leaves
-    with the game's for it."""
+    with the game's for it. slide(g) is asked after each of the first
+    frames once the attack is chosen (the panel and the box sliding off)."""
     from yfm_control import DUEL_PHASES, FIELD_CURSOR, TARGET_CURSOR, ControlError
     g.wait_turn()
     if g.phase() != DUEL_PHASES["field"] or not g.field()[2][column]:
@@ -361,10 +435,60 @@ def attack(g, column, target, shoot):
     g.press("cross", hold=4, after=40)
     if target is not None:
         g._cursor_to(TARGET_CURSOR, target, "target")
-    g.press("cross", hold=4, after=10)
+    if slide:
+        g.press("cross", hold=1, after=0)
+        for _ in range(SLIDE_FRAMES):
+            g.step(1)
+            slide(g)
+    else:
+        g.press("cross", hold=4, after=10)
     pictures = [shoot(f"battle-{k}") for k in range(3) if not g.step(25) or True]
     g._settle()
     return pictures
+
+
+def slid_with_the_game(name, frames):
+    """Frame by frame as the game slides its panel right and its FIELD box
+    left off the screen for a battle: each moved one exactly as far as the
+    game's has gone (where it is drawn less where the game has it the same
+    every frame), and gone once wholly off the screen. A picture shows the
+    game's places of two frames before (the game moves its objects for the
+    frame after the one it draws, and the picture is the one shown)."""
+    # (rows, its pixels, which edge is followed (0 its left, 1 its right), the
+    # game's object (1 the panel, 2 the box), how far that edge is from the
+    # object's x: the halves' left edges (the panel's middle less half their
+    # width), the box's right (its middle 28 right of its x, plus 36 at 130 %).
+    rows = {"the opponent's half": ((40, 60), pink, (0, 320), 0, 1, -32),
+            "the player's half": ((6, 30), plate, (0, 320), 0, 1, -38),
+            "the FIELD box": ((FIELD_BOX[1], FIELD_BOX[1] + FIELD_BOX[3]), light_blue, (0, 160), 1, 2, 64)}
+    lag = 2
+    for what, (band, test, columns, edge, which, reach) in rows.items():
+        bad, seen, gone, inset = [], 0, 0, None
+        for i, (image, _, _, path) in enumerate(frames):
+            if i < lag:
+                continue
+            _, panel_x, box_x, _ = frames[i - lag]
+            at = panel_x if which == 1 else box_x
+            drawn = extent(image, band, test, columns)
+            if inset is None and drawn is not None:
+                inset = drawn[edge] - (at + reach)      # its first pixel of that kind from its edge
+            if inset is None:
+                bad.append(f"{path.name}: not drawn")
+                continue
+            geometric = at + reach
+            off = geometric >= 320 if edge == 0 else geometric <= 0
+            want = geometric + inset
+            if off:
+                gone += 1
+                if drawn is not None:
+                    bad.append(f"{path.name}: still at {drawn} with the game's at {at}")
+            elif (want < 320 if edge == 0 else want >= 0):
+                seen += 1
+                if drawn is None or drawn[edge] != want:
+                    bad.append(f"{path.name}: {drawn}, want {'left' if edge == 0 else 'right'} {want} "
+                               f"(the game's at {at})")
+        check(f"{name}: {what} slides with the game's and leaves with it, frame by frame",
+              not bad and seen > 2 and gone > 2, f"{seen} frames on, {gone} off; " + "; ".join(bad[:4]))
 
 
 def play_duel(executable, out, mods, shots, name, env=None, settings=None, prefix="10"):
@@ -397,15 +521,42 @@ def play_duel(executable, out, mods, shots, name, env=None, settings=None, prefi
         g.duel_ready(before_deal=lambda g: g.arrange_deck(0, hand))
         start = shot("duel-start")
         image = read_png(start)
-        check(f"{name}: the opponent's half drawn where the mod put it", rim_in(image, OPPONENT_HALF) > 40,
-              f"{rim_in(image, OPPONENT_HALF)} pixels")
-        check(f"{name}: no panel left where the game has it", panel_blue_in(image, PANEL) < 10,
-              f"{panel_blue_in(image, PANEL)} pixels")
+        check(f"{name}: the opponent's half drawn where the mod put it (its x left out)",
+              rim_in(image, OPPONENT_HALF) > 40 and rim_in(image, GAME_OPPONENT_HALF) == 0 and
+              extent(image, (40, 60), pink)[1] == OPPONENT_HALF[0] + OPPONENT_HALF[2] - 1,
+              f"{rim_in(image, OPPONENT_HALF)} pixels there, {rim_in(image, GAME_OPPONENT_HALF)} at the game's place, "
+              f"from x {extent(image, (40, 60), pink)}")
         check(f"{name}: the player's half is the mod's picture", plate_in(image, PLAYER_HALF) > 200,
               f"{plate_in(image, PLAYER_HALF)} plate pixels")
         wrong = digits_wrong(image, art, g.duel()[1]["displayed_lp"], g.turn() == 1)
         check(f"{name}: the opponent's LP digits are the game's, yellow, where the mod put them", wrong == 0,
               f"{wrong} pixels differ")
+        box = extent(image, (FIELD_BOX[1], FIELD_BOX[1] + FIELD_BOX[3]), light_blue, (0, 160))
+        # Its rim one in from its edges: 130 % reaches 3 further each side than 110 % would.
+        check(f"{name}: the FIELD box 40 down at 130 % (its x left out, its 300 % brought down)",
+              box is not None and FIELD_BOX[0] <= box[0] <= FIELD_BOX[0] + 2 and
+              FIELD_BOX[0] + FIELD_BOX[2] - 3 <= box[1] < FIELD_BOX[0] + FIELD_BOX[2] and
+              count_in(image, GAME_FIELD_BOX, light_blue) == 0, f"x {box}, want {FIELD_BOX}")
+        log = (out / name / "game.log").read_text(errors="replace")
+        for what in ("duel lp_opponent is slid off the screen sideways", "duel field is slid off the screen sideways",
+                     "duel field at 300% would not leave the screen with the game's; drawn at 130%"):
+            check(f"{name}: the Mods window notes \"{what}...\"", what in log)
+        # A fifth digit: LP over 9999 widen each half by a digit to the left, as the game widens the panel.
+        sides = g.address("D_800E9FF0")
+        lp = g.duel()[0]["lp"]
+        for side_at in (sides, sides + 0x20):
+            g.poke(side_at + 0x12, struct.pack("<hH", 12000, 12000))
+        g.step(4)
+        wide = shot("five-digits")
+        image = read_png(wide)
+        wrong = digits_wrong(image, art, 12000, g.turn() == 1, 5)
+        before = extent(read_png(start), (40, 60), pink)
+        check(f"{name}: with 12000 LP each half widens a digit and the digits read 12000",
+              extent(image, (40, 60), pink) == (before[0] - 8, before[1]) and wrong == 0,
+              f"from x {extent(image, (40, 60), pink)} (with four digits {before}), {wrong} digit pixels differ")
+        for side_at, value in ((sides, lp), (sides + 0x20, 8000)):
+            g.poke(side_at + 0x12, struct.pack("<hH", value, value))
+        g.step(4)
         g.fuse([0, 1], face_up=True)
         shot("fused")
         turns, lp_seen, battles = 0, set(), 0
@@ -438,17 +589,25 @@ def play_duel(executable, out, mods, shots, name, env=None, settings=None, prefi
                 if not mine or g.phase() != DUEL_PHASES["field"]:
                     continue
                 theirs = [i for i, c in enumerate(g.field()[1]) if c]
+                frames = []
+
+                def slide(g):
+                    path = shot("slide")
+                    frames.append((read_png(path), object_x(g, "D_8009B21C"), object_x(g, "D_8009B214"), path))
                 try:
-                    during = attack(g, column, theirs[0] if theirs else None, shot)
+                    during = attack(g, column, theirs[0] if theirs else None, shot, slide if not battles else None)
                     battles += 1
                 except Exception as problem:     # noqa: BLE001 -- a monster that cannot attack
                     print(f"    (no attack from column {column}: {problem})", flush=True)
                     continue
                 if g.duel_over():
                     break
+                if frames:
+                    slid_with_the_game(name, frames)
                 image = read_png(during[-1])
+                # (A battle's cards are drawn there now: a pixel or two of theirs can be pink.)
                 check(f"{name}: during battle {battles}, the moved panel gone with the game's",
-                      rim_in(image, OPPONENT_HALF) == 0, f"{rim_in(image, OPPONENT_HALF)} of its pixels")
+                      rim_in(image, OPPONENT_HALF) < 4, f"{rim_in(image, OPPONENT_HALF)} of its pixels")
                 g.step(60)                      # the panel slides back in
                 settle_lp(g)
                 lp = [s["lp"] for s in g.duel()]
@@ -458,8 +617,8 @@ def play_duel(executable, out, mods, shots, name, env=None, settings=None, prefi
                     break                       # the duel's end: the panel leaves for the outro
                 image = read_png(path)
                 check(f"{name}: after battle {battles}, the panel back where the mod put it",
-                      rim_in(image, OPPONENT_HALF) > 40 and panel_blue_in(image, PANEL) < 10,
-                      f"moved {rim_in(image, OPPONENT_HALF)}, game's place {panel_blue_in(image, PANEL)}")
+                      rim_in(image, OPPONENT_HALF) > 40 and rim_in(image, GAME_OPPONENT_HALF) == 0,
+                      f"moved {rim_in(image, OPPONENT_HALF)}, game's place {rim_in(image, GAME_OPPONENT_HALF)}")
                 wrong = digits_wrong(image, art, lp[1], False)
                 check(f"{name}: after battle {battles}, the digits read the opponent's {lp[1]} LP", wrong == 0,
                       f"{wrong} pixels differ")
@@ -470,7 +629,13 @@ def play_duel(executable, out, mods, shots, name, env=None, settings=None, prefi
             g.wait_until(lambda g: g.duel_over() or g.turn() == 1, 600, what="the opponent's turn")
             if not g.duel_over():
                 g.step(90)
-                shot(f"turn{turns}-opponent")
+                image = read_png(shot(f"turn{turns}-opponent"))
+                if g.turn() == 1 and not g.duel_over() and turns == 1:
+                    # The opponent's turn: the panel in its turn's palette, their digits lit.
+                    value = g.duel()[1]["displayed_lp"]
+                    wrong = digits_wrong(image, art, value, True)
+                    check(f"{name}: on the opponent's turn their digits are lit, where the mod put them",
+                          wrong == 0, f"{wrong} pixels differ from {value} lit")
             g.wait_turn(("hand",), 30000)
             if not g.duel_over():
                 shot(f"turn{turns + 1}-hand")
@@ -522,8 +687,8 @@ def window_shots(executable, out, mods, shots):
         image = read_png(folder / "24-duel-2x.png")
         check("internal 2x: the opponent's half where the mod put it", rim_in(image, OPPONENT_HALF, 2) > 160,
               f"{rim_in(image, OPPONENT_HALF, 2)} pixels")
-        check("internal 2x: no panel where the game has it", panel_blue_in(image, PANEL, 2) < 40,
-              f"{panel_blue_in(image, PANEL, 2)} pixels")
+        check("internal 2x: not where the game has it", rim_in(image, GAME_OPPONENT_HALF, 2) == 0,
+              f"{rim_in(image, GAME_OPPONENT_HALF, 2)} pixels")
         g.play_card(3, face_up=True)
         g.shot(folder / "25-duel-played-2x.png")
 
