@@ -1357,6 +1357,44 @@ class MonsterEffectsTest(unittest.TestCase):
         p.set_monster_effects(2, [{"when": "summon", "do": "heal", "amount": 100}] * 9)
         self.assertTrue(any("at most 8" in i.message for i in validate.validate_card(p, 2)))
 
+    def test_for_each(self):
+        """"for_each": a boost, heal or damage made once per face-up monster
+        counted, as monster_effects.c read_each() takes it."""
+        from fm_editor import monster_effects as fx
+        boost = {"when": "face_up", "do": "boost", "target": "self", "attack": 300, "defense": 300,
+                 "for_each": {"whose": "Own", "type": "dragon"}}
+        self.assertEqual(fx.normalize(boost)["for_each"], {"whose": "own", "type": "Dragon"})
+        self.assertEqual(fx.describe(fx.normalize(boost)),
+                         "This card: +300 ATK +300 DEF for each face-up Dragon on its owner's field")
+        # "whose" left out: both sides'.
+        heal = {"when": "summon", "do": "heal", "amount": 200, "for_each": {"attribute": "Light"}}
+        self.assertEqual(fx.normalize(heal)["for_each"], {"whose": "all", "attribute": "Light"})
+        self.assertEqual(fx.describe(fx.normalize(heal)),
+                         "Its owner gains 200 LP for each face-up Light monster on the field")
+        combat = {"when": "combat", "do": "boost", "target": "battle", "attack": -100,
+                  "for_each": {"whose": "opponent", "type": "Dragon", "attribute": "Light"}}
+        self.assertEqual(fx.describe(fx.normalize(combat)),
+                         "The monster it battles: -100 ATK for each face-up Light Dragon on the opponent's field "
+                         "for the battle")
+        # Not on a magic or destroy, nor whose it does not know, nor a Trap counted.
+        for effect in ({"when": "summon", "do": "magic", "card": 337, "for_each": {}},
+                       {"when": "summon", "do": "destroy", "for_each": {}},
+                       {"when": "summon", "do": "heal", "amount": 1, "for_each": {"whose": "mine"}},
+                       {"when": "summon", "do": "heal", "amount": 1, "for_each": "Dragon"},
+                       {"when": "summon", "do": "heal", "amount": 1, "for_each": None},
+                       {"when": "summon", "do": "heal", "amount": 1, "for_each": {"type": "Trap"}}):
+            self.assertIsNone(fx.normalize(effect), effect)
+        # Kept through the manifest, checked by validate.
+        p = self.project
+        p.set_monster_effects(1, [fx.normalize(boost), fx.normalize(heal)])
+        data = manifest.build(p)
+        again = Project(p.retail)
+        self.assertEqual(manifest.apply(again, data), [])
+        self.assertEqual(again.monster_effects_of(1)[0], [fx.normalize(boost), fx.normalize(heal)])
+        self.assertEqual([i.message for i in validate.validate_card(again, 1) if i.level == "error"], [])
+        p.set_monster_effects(2, [{"when": "summon", "do": "destroy", "for_each": {}}])
+        self.assertTrue(any("not one the game takes" in i.message for i in validate.validate_card(p, 2)))
+
     def test_counted_and_named_as_the_game_does(self):
         from fm_editor import monster_effects as fx
         heal = {"when": "summon", "do": "heal", "amount": 100}
