@@ -15,13 +15,13 @@ from . import card_icons
 from .card_view_preview import CardViewPreview
 from .monster_effects_ui import EffectsBox
 from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, DUELIST_NAMES,
-                       EQUIP_BONUS_MAX, FRAME_NAMES,
+                       EQUIP_BONUS_MAX, FRAME_COLOUR_NAMES, FRAME_NAMES,
                        STAR_NAMES, STARTER_WEIGHT_LIMIT, TYPE_EQUIP, TYPE_MAGIC, TYPE_NAMES,
                        TYPE_RITUAL, TYPE_TRAP,
                        exodia_piece, type_frame)
 from . import art, fixed_decks, pngio, starter_pools
 from .starter_pools_view import StarterPoolsPage
-from .model import KEY_RE, StarterDeck
+from .model import KEY_RE, StarterDeck, parse_tags, tags_text
 from .widgets import (WrapLabel, legend, CardField, FormDialog, ScrolledForm, ScrolledPage, card_matches, pick_card, px,
                       fixed_font, scrolled_tree, show_text, ui_font)
 
@@ -29,8 +29,10 @@ ATTRIBUTE_CHOICES = ATTRIBUTE_NAMES + ["6 (magic)", "7 (trap)"]
 STAR_CHOICES = ["(none)"] + STAR_NAMES[1:]
 EFFECT_NONE = "(none)"
 # "By type" leaves "frame" out (a monster with effects is then orange);
-# the last writes "Type": its type's frame even with effects (frame -2).
-FRAME_CHOICES = ["By type"] + FRAME_NAMES + ["Type, never orange"]
+# the last writes "Type": its type's frame even with effects (frame -2). The
+# first four with the colour a mod may also call them by ("Monster (gold)").
+FRAME_CHOICES = (["By type"] + [f"{name} ({colour.lower()})" for name, colour in zip(FRAME_NAMES, FRAME_COLOUR_NAMES)]
+                 + FRAME_NAMES[len(FRAME_COLOUR_NAMES):] + ["Type, never orange"])
 # Each frame's colour, as the hand's frames have it (the duel's palette rows 1-6).
 FRAME_COLOURS = ["#e0a838", "#409830", "#b040a0", "#2848b0", "#8868d8", "#e07000"]
 
@@ -101,6 +103,8 @@ def frame_label(f: int) -> str:
 def frame_value(label: str) -> int:
     """A Frame choice as card.frame: -1 left out, -2 "Type", else the colour."""
     i = parse_choice(label, FRAME_CHOICES)
+    if i < 0 and label.split(" ", 1)[0] in FRAME_NAMES:
+        i = FRAME_NAMES.index(label.split(" ", 1)[0]) + 1      # the name alone, as earlier editors showed it
     return -2 if i == len(FRAME_CHOICES) - 1 else max(-1, i - 1)
 
 
@@ -159,7 +163,7 @@ class CardsTab(Tab):
     # The fields whose disc value (a copy's base's) is shown, as a link
     # putting it back, only while the form differs from it (mark).
     MARKED = ("name", "type", "effect", "equip_attack", "equip_defense", "attribute", "level", "attack", "defense", "star1", "star2",
-              "password", "starchips", "text", "frame")
+              "password", "starchips", "text", "frame", "tags")
 
     def __init__(self, notebook, app):
         super().__init__(notebook, app, "Cards")
@@ -167,6 +171,7 @@ class CardsTab(Tab):
         self._shown_price = ""
         self._shown_effect = ""
         self._shown_threshold = ""
+        self._shown_tags = ""
         self._shown_bonus = ("", "")
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
@@ -227,7 +232,7 @@ class CardsTab(Tab):
         self.vars = {k: tk.StringVar() for k in ("name", "attack", "defense", "type", "attribute", "level",
                                                   "star1", "star2", "password", "starchips", "key", "frame",
                                                   "effect", "trap_threshold", "equip_attack",
-                                                  "equip_defense")}
+                                                  "equip_defense", "tags")}
         row = 0
         # Only a monster has these; a magic, trap, ritual or equip card has
         # an effect instead (show_kind).
@@ -342,6 +347,12 @@ class CardsTab(Tab):
         self.hints["frame"].pack(side="left", padx=(6, 0))
         self.hints["frame"].bind("<Button-1>", lambda e: self.restore("frame"))
         row += 1
+        # Words a card layout may give a frame of its own by (cards.c "tags");
+        # the game itself reads none.
+        line("Tags", ttk.Entry(form, textvariable=self.vars["tags"], width=26), hint("tags"))
+        ttk.Label(form, text="Comma-separated (god, fiend); blank: the base's; [] for none",
+                  style="Hint.TLabel").grid(row=row, column=1, columnspan=2, sticky="w")
+        row += 1
         # What the monster does on the field (cards.c "monster_effects"),
         # stored as soon as it is changed.
         self.effects_box = EffectsBox(form, app, self.effects_changed)
@@ -433,8 +444,11 @@ class CardsTab(Tab):
         if f in TYPE_NAMES and card.type != TYPE_NAMES.index(f):
             return False
         search = self.search.get()
-        return card_matches(self.project, cid, search) or (
-            bool(search.strip()) and search.lower().strip() in self.project.notes.get(cid, "").lower())
+        if card_matches(self.project, cid, search):
+            return True
+        text = search.lower().strip()
+        return bool(text) and (text in self.project.notes.get(cid, "").lower() or
+                               any(text in str(tag).lower() for tag in self.project.tags_of(cid)[0]))
 
     def row(self, cid):
         card = self.project.cards[cid]
@@ -628,6 +642,9 @@ class CardsTab(Tab):
         self.vars["star1"].set(star_label(card.star1, self.project))
         self.vars["star2"].set(star_label(card.star2, self.project))
         self.vars["frame"].set(frame_label(card.frame))
+        own = self.project.added[cid].extra if cid in self.project.added else self.project.card_extra.get(cid, {})
+        self._shown_tags = tags_text(self.project.tags_of(cid)[0]) if "tags" in own else ""
+        self.vars["tags"].set(self._shown_tags)
         self.vars["password"].set(self.project.password(cid))
         price = self.project.starchip_cost(cid)
         self._shown_price = "" if price is None else str(price)
@@ -657,7 +674,7 @@ class CardsTab(Tab):
             self.added_frame.grid_remove()
             extra = self.project.card_extra.get(cid, {})
         self._shown_effect = self.vars["effect"].get()
-        kept = sorted(set(extra) - {"effect", "trap_threshold", "monster_effects"})
+        kept = sorted(set(extra) - {"effect", "trap_threshold", "monster_effects", "tags"})
         self.extra.configure(text=("Kept as written in mod.json: " + ", ".join(kept)) if kept else "")
 
     # What differs from the disc
@@ -678,6 +695,10 @@ class CardsTab(Tab):
         shown["frame"] = (values["frame"], values["frame"].lower(),
                           frame_value(self.vars["frame"].get()) != ref.frame)
         shown["text"] = (ref.description, "text", self.text.get("1.0", "end-1c") != ref.description)
+        # Blank is the base's (a disc card has none): the link blanks the field.
+        tags = p.tags_of(p.base_of(cid))[0] if cid in p.added else []
+        typed = parse_tags(self.vars["tags"].get())
+        shown["tags"] = ("", ", ".join(map(str, tags)) or "none", typed is not None and typed != tags)
         # The effect only against the disc card's own type: another type's
         # list has none of its choices.
         default = self.effect_default(cid)
@@ -721,6 +742,11 @@ class CardsTab(Tab):
                 if len(text) > HINT_WIDTH:
                     text = f"{what}: {words[:HINT_WIDTH - len(what) - 13]}… (restore)"
                 hint.configure(text=text, style="Changed.TLabel", cursor="hand2")
+            elif key == "tags" and shown and not self.vars["tags"].get().strip() and words != "none":
+                # Blank, an added card has its base's: said, not a link.
+                text = f"Base's: {words}"
+                hint.configure(text=text if len(text) <= HINT_WIDTH else text[:HINT_WIDTH - 1] + "…",
+                               style="Hint.TLabel", cursor="")
             else:
                 hint.configure(text="", style="Hint.TLabel", cursor="")
             if caption is not None:
@@ -1131,6 +1157,16 @@ class CardsTab(Tab):
         if notes != self.project.notes.get(cid, "") and (notes.strip() or cid in self.project.notes):
             self.project.set_notes(cid, notes)
             changed = True
+        # Untouched, the tags stay as written (an empty one, say, which the
+        # field cannot hold); typed, as the field reads them.
+        if self.vars["tags"].get().strip() != self._shown_tags.strip():
+            tags = parse_tags(self.vars["tags"].get())
+            own = self.project.added[cid].extra if cid in self.project.added else self.project.card_extra.get(cid, {})
+            if tags != own.get("tags", None):
+                self.project.set_tags(cid, tags)
+                changed = True
+            self._shown_tags = tags_text(tags)
+            self.vars["tags"].set(self._shown_tags)
         if password != self.project.password(cid):
             self.project.set_password(cid, password)
             self.vars["password"].set(password)

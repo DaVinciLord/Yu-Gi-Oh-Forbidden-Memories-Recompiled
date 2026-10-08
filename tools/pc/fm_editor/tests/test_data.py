@@ -855,10 +855,10 @@ class ManifestTest(unittest.TestCase):
         other = Project(self.retail)
         messages = manifest.apply(other, {"id": "t", "cards": [
             {"replace": 3, "frame": "ritual"}, {"replace": 4, "frame": 1}, {"replace": 4, "frame": "Type"},
-            {"replace": 5, "frame": "Gold"}]})
+            {"replace": 5, "frame": "Mauve"}]})
         self.assertEqual([other.cards[c].frame for c in (3, 4, 5)], [3, -2, -1])
-        self.assertEqual(messages, ["cards[3]: \"frame\" is Monster, Magic, Trap, Ritual, Purple, Orange or Type; "
-                                    "left out"])
+        self.assertEqual(messages, ["cards[3]: \"frame\" is Gold, Green, Pink, Blue, Purple, Orange or Type (or the "
+                                    "disc's Monster, Magic, Trap, Ritual); left out"])
         self.assertEqual(other.cards[4].shown_frame(), g.type_frame(other.cards[4].type))
         # "Type" (an effect monster kept gold) is not the same as leaving it out (orange): kept through a save.
         typed = Project(self.retail)
@@ -866,6 +866,60 @@ class ManifestTest(unittest.TestCase):
         typed.set_monster_effects(1, [{"when": "summon", "do": "heal", "amount": 100}])
         self.assertEqual(manifest.build(typed)["cards"][0]["frame"], "Type")
         self.assertEqual(self.reopen(typed).cards[1].frame, -2)
+
+    def test_frame_colour_names(self):
+        # cards.c frame_colour_names: Gold, Green, Pink and Blue are Monster,
+        # Magic, Trap and Ritual, in any case; saved as the disc's names.
+        p = Project(self.retail)
+        messages = manifest.apply(p, {"id": "t", "cards": [
+            {"replace": 1, "frame": "Gold"}, {"replace": 2, "frame": "green"}, {"replace": 3, "frame": "PINK"},
+            {"replace": 4, "frame": "Blue"}, {"copy": 5, "id": "c", "frame": "Gold"}, {"replace": 6, "frame": 7}]})
+        self.assertEqual([p.cards[c].frame for c in (1, 2, 3, 4, max(p.added), 6)], [0, 1, 2, 3, 0, -1])
+        self.assertEqual(len(messages), 1)
+        self.assertIn("cards[5]", messages[0])
+        cards = manifest.build(p)["cards"]
+        self.assertEqual([e.get("frame") for e in cards], ["Monster", "Magic", "Trap", "Ritual", "Monster"])
+
+    def test_tags_round_trip(self):
+        """A card's "tags" (cards.c): the editor's own field, written back as
+        read; left out an added card has its base's, [] is none."""
+        from fm_editor.model import parse_tags, tags_text
+        written = {"id": "t", "cards": [
+            {"replace": 1, "tags": ["god", "dragon"]},
+            {"replace": 2, "frame": "Gold", "tags": []},
+            {"copy": 1, "id": "own", "name": "A", "tags": ["fiend"]},
+            {"copy": 1, "id": "inherits", "name": "B"},
+            {"copy": 1, "id": "none", "name": "C", "tags": []}]}
+        p = Project(self.retail)
+        self.assertEqual(manifest.apply(p, json.loads(json.dumps(written))), [])
+        own, inherits, none = sorted(p.added)
+        self.assertEqual(p.tags_of(1), (["god", "dragon"], False))
+        self.assertEqual(p.tags_of(2), ([], False))
+        self.assertEqual(p.tags_of(own), (["fiend"], False))
+        self.assertEqual(p.tags_of(inherits), (["god", "dragon"], True))
+        self.assertEqual(p.tags_of(none), ([], False))
+        self.assertEqual(p.tags_of(3), ([], False))
+        built = manifest.build(p)
+        self.assertEqual(built["cards"], [
+            {"replace": 1, "tags": ["god", "dragon"]}, {"replace": 2, "frame": "Monster", "tags": []},
+            {"copy": 1, "id": "own", "name": "A", "tags": ["fiend"]}, {"copy": 1, "id": "inherits", "name": "B"},
+            {"copy": 1, "id": "none", "name": "C", "tags": []}])
+        self.assertEqual(manifest.build(self.reopen(p)), built)
+        # Set and taken away: a disc card's entry goes with its last key.
+        p.set_tags(3, ["x"])
+        self.assertIn({"replace": 3, "tags": ["x"]}, manifest.build(p)["cards"])
+        p.set_tags(3, None)
+        self.assertNotIn(3, p.card_extra)
+        p.set_tags(none, None)
+        self.assertEqual(p.tags_of(none), (["god", "dragon"], True))
+        # Revert: a disc card loses them, an added card has its base's again.
+        p.revert_card(1)
+        p.revert_card(own)
+        self.assertEqual((p.tags_of(1), p.tags_of(own)), (([], False), ([], True)))
+        # The form's text.
+        self.assertEqual([tags_text(t) for t in (None, [], ["a", "b c"])], ["", "[]", "a, b c"])
+        self.assertEqual([parse_tags(t) for t in ("", " ", "[]", ",", " god ,fiend, god,")],
+                         [None, None, [], None, ["god", "fiend"]])
 
     def test_unnamed_copy_keeps_the_disc_name(self):
         p = Project(self.retail)
@@ -955,6 +1009,27 @@ class ManifestTest(unittest.TestCase):
 
 
 class ValidateTest(unittest.TestCase):
+    def test_tags(self):
+        p = Project(fixture().game())
+        p.set_tags(1, ["", "x" * 31, "y" * 32, 7])
+        found = [i.message for i in validate.validate_card(p, 1)]
+        self.assertEqual(sum("empty tag" in m for m in found), 2)
+        self.assertEqual([m for m in found if "over 31 letters" in m], [f'the tag "{"y" * 32}" is over 31 letters: '
+                                                                        "the game notes it and leaves it out"])
+        p.card_extra[1]["tags"] = "god"         # as a mod may write it
+        self.assertTrue(any('"tags" is a list' in i.message for i in validate.validate_card(p, 1)))
+        # 32 different in all; the 33rd met (cards in the order written) is left out.
+        p.set_tags(1, [f"t{n}" for n in range(30)])
+        p.set_tags(2, ["t0", "t30", "t31"])
+        self.assertFalse([i for i in validate.validate(p) if "different tags" in i.message])
+        added = p.add_card(3)
+        p.set_tags(added, ["t5", "t32", "t33"])
+        over = [i for i in validate.validate(p) if "different tags" in i.message]
+        self.assertEqual(len(over), 1)
+        self.assertEqual((over[0].level, over[0].target), ("warning", added))
+        self.assertIn("34 different tags", over[0].message)
+        self.assertIn("t32, t33 left out", over[0].message)
+
     def test_trap_threshold_inheritance_and_effect_defaults(self):
         p = Project(fixture().game())
         p.retail.cards[681].type = p.cards[681].type = g.TYPE_TRAP

@@ -22,7 +22,7 @@ import re
 import shutil
 from pathlib import Path
 
-from .gamedata import (FUSION_GROUPS, RITUAL_ORIGINS, RITUAL_REQUIREMENT_KEYS, RITUAL_TRIBUTE_MAX, fusion_group_named, ATTRIBUTE_NAMES, CARD_COUNT, DECK_SIZE, DUELIST_NAMES, FRAME_NAMES, POOLS, STAR_NAMES,
+from .gamedata import (FUSION_GROUPS, RITUAL_ORIGINS, RITUAL_REQUIREMENT_KEYS, RITUAL_TRIBUTE_MAX, fusion_group_named, ATTRIBUTE_NAMES, CARD_COUNT, DECK_SIZE, DUELIST_NAMES, FRAME_COLOUR_NAMES, FRAME_NAMES, POOLS, STAR_NAMES,
                        EQUIP_BONUS_MAX, STARTER_WEIGHT_LIMIT, TYPE_NAMES, TYPE_MAGIC, GameData)
 from .model import AddedCard, ModInfo, Project, StarterDeck, duelist_named, type_named, KEY_RE
 from . import art, board_art, campaign_map, fixed_decks, guardian_stars, packs as packmath, pools as poolmath, roster
@@ -687,10 +687,16 @@ def _apply_fields(card, entry: dict, is_replace: bool, messages: list, where: st
             card.attribute = _clamp(value, 0, 15)
     if "frame" in entry:
         value = _choice(entry["frame"], FRAME_NAMES + ["Type"])
+        if not 0 <= value <= len(FRAME_NAMES):
+            # Gold, Green, Pink and Blue: Monster, Magic, Trap and Ritual by their colour.
+            value = _choice(entry["frame"], FRAME_COLOUR_NAMES)
+            if value >= len(FRAME_COLOUR_NAMES):
+                value = -1
         if 0 <= value <= len(FRAME_NAMES):
             card.frame = -2 if value == len(FRAME_NAMES) else value  # -2: "Type", never orange
         else:
-            messages.append(f"{where}: \"frame\" is Monster, Magic, Trap, Ritual, Purple, Orange or Type; left out")
+            messages.append(f"{where}: \"frame\" is Gold, Green, Pink, Blue, Purple, Orange or Type (or the disc's "
+                            f"Monster, Magic, Trap, Ritual); left out")
 
 
 def _base_id(project: Project, value) -> int:

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .gamedata import (CARD_COUNT, DECK_COPY_LIMIT, DECK_POOL_MIN_CARDS, DECK_SIZE, DUELIST_NAMES, POOLS,
-                       POOL_LABELS, POOL_TOTAL, RITUAL_ORIGINS, RITUAL_TRIBUTE_MAX, TYPE_MAGIC, TYPE_EQUIP, TYPE_NAMES,
+                       POOL_LABELS, POOL_TOTAL, RITUAL_ORIGINS, RITUAL_TRIBUTE_MAX, TAG_LENGTH_MAX, TAGS_MAX, TYPE_MAGIC, TYPE_EQUIP, TYPE_NAMES,
                        TYPE_RITUAL, exodia_piece)
 from . import art, board_art, campaign_map, card_text, fixed_decks, guardian_stars, packs as packmath, values
 from . import monster_effects, roster, starter_pools, ui_rules
@@ -185,10 +185,43 @@ def _check_card(project: Project, cid: int, out: list):
             add("error", problem)
         if extra["monster_effects"] and not card.is_monster():
             add("warning", "monster effects only work for a monster on the field; this card is not one")
+    if "tags" in extra:
+        tags = extra["tags"]
+        if not isinstance(tags, list):
+            add("warning", '"tags" is a list of words, such as ["god"]; the game reads none from this')
+        else:
+            for tag in tags:
+                if not isinstance(tag, str) or not tag:
+                    add("warning", "an empty tag (or not text): the game notes it and leaves it out")
+                elif len(tag.encode()) > TAG_LENGTH_MAX:
+                    add("warning", f'the tag "{tag}" is over {TAG_LENGTH_MAX} letters: the game notes it and '
+                                   "leaves it out")
     effect = project.retail.cards.get(project.effect_of(cid)) if "effect" in extra else None
     if effect and not card.is_monster() and effect.type != card.type:
         add("warning", f"its effect is {effect.name}'s, a {TYPE_NAMES[effect.type]} card's: the CPU does not play it, "
                        f"and as a {TYPE_NAMES[card.type]} card it may do nothing")
+
+
+def _check_tags(project: Project, out: list):
+    """More than the 32 different tags the game has room for (cards.c
+    tag_bit): those met after them, in the order the mod's cards are
+    written, are left out. Another mod's own count too."""
+    seen, over = [], {}
+    owners = [(cid, project.card_extra[cid]) for cid in sorted(project.card_extra)]
+    owners += [(cid, project.added[cid].extra) for cid in sorted(project.added)]
+    for cid, extra in owners:
+        tags = extra.get("tags")
+        for tag in tags if isinstance(tags, list) else ():
+            if not isinstance(tag, str) or not tag or len(tag.encode()) > TAG_LENGTH_MAX or tag in seen:
+                continue
+            if len(seen) < TAGS_MAX:
+                seen.append(tag)
+            elif tag not in over:
+                over[tag] = cid
+    if over:
+        out.append(Issue("warning", "Cards", project.card_label(next(iter(over.values()))),
+                         f"{len(seen) + len(over)} different tags, past the {TAGS_MAX} the game has room for "
+                         f"(with every mod's): {', '.join(over)} left out", next(iter(over.values()))))
 
 
 def _check_password(project: Project, cid: int, add):
@@ -413,6 +446,7 @@ def validate(project: Project) -> list:
     for cid in sorted(project.cards):
         if project.card_changed(cid):
             _check_card(project, cid, out)
+    _check_tags(project, out)
     _check_tables(project, out)
     _check_starter(project, out)
     for level, where, message in values.check(project.other.get("limits")):

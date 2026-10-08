@@ -91,6 +91,30 @@ def card_matches(project, cid: int, text: str) -> bool:
     return text == str(cid) or text in card.name.lower()
 
 
+def tags_text(tags) -> str:
+    """A card's "tags" as the Cards form's Tags field shows them: the words
+    with commas between, "[]" for none written (None, left out: blank)."""
+    if tags is None:
+        return ""
+    return ", ".join(str(t) for t in tags) if tags else "[]"
+
+
+def parse_tags(text: str):
+    """The Tags field as a card's "tags": None when it has no words (left
+    out), [] for "[]", else the words between the commas, each once, in order."""
+    text = text.strip()
+    if not text:
+        return None
+    if text == "[]":
+        return []
+    out = []
+    for word in text.split(","):
+        word = word.strip()
+        if word and word not in out:
+            out.append(word)
+    return out or None
+
+
 @dataclass
 class AddedCard:
     """A card the mod adds ("copy"): its stable key, its base, and the entry
@@ -421,6 +445,7 @@ class Project:
         self.equip_bonus.pop(cid, None)
         if cid in self.added:
             self.cards[cid] = self.cards[self.added[cid].base].copy(id=cid)
+            self.added[cid].extra.pop("tags", None)     # its base's again
             self.passwords.pop(cid, None)
             if self.starchip_rule(cid, own_only=True) is not None:
                 self.set_starchips(cid, None)
@@ -852,6 +877,28 @@ class Project:
             extra.pop("monster_effects", None)
         else:
             extra["monster_effects"] = [dict(e) if isinstance(e, dict) else e for e in effects]
+        if cid not in self.added and not extra:
+            self.card_extra.pop(cid, None)
+
+    def tags_of(self, cid: int):
+        """(the card's "tags", whether they are its base's): left out, an
+        added card has its base's, as the game gives it; [] is none."""
+        extra = self.added[cid].extra if cid in self.added else self.card_extra.get(cid, {})
+        if "tags" in extra:
+            tags = extra["tags"]
+            return (list(tags) if isinstance(tags, list) else []), False
+        if cid in self.added:
+            return self.tags_of(self.base_of(cid))[0], True
+        return [], False
+
+    def set_tags(self, cid: int, tags):
+        """A card's own tags; None takes them away (an added card then has
+        its base's again), [] is kept: none, even where the base has some."""
+        extra = self.added[cid].extra if cid in self.added else self.card_extra.setdefault(cid, {})
+        if tags is None:
+            extra.pop("tags", None)
+        else:
+            extra["tags"] = list(tags)
         if cid not in self.added and not extra:
             self.card_extra.pop(cid, None)
 

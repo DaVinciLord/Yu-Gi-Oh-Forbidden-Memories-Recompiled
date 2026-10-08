@@ -180,7 +180,9 @@ it and a copy takes its base's; `"Type"` goes back to the type's
 (`Cards_FrameColor`, `src/pc/cards/cards.c`). A monster with
 [monster effects](#monster-effects) and no frame of its own is drawn
 orange, as an effect monster is in the card game; `"Monster"` keeps it
-gold, and `"Type"` gives it its type's. It shows everywhere the game
+gold, and `"Type"` gives it its type's. The FM Editor's **Frame** list
+names both (**Monster (gold)**...) and writes the disc's names, which builds
+older than the colour names read too. It shows everywhere the game
 colours a card by its type:
 
 - the card view (Library, Build Deck, Trade, Password, the duel's card view,
@@ -208,6 +210,10 @@ words (letters, digits, `-`, `_`); a card may have any number of them. There is
 no tag the game itself reads; the anime frame's own classes (`monster`,
 `effect_monster`, `spell`, `equip`, `ritual_spell`, `trap`) are worked out, not
 tagged.
+
+The [FM Editor](../tools/pc/fm_editor/README.md)'s Cards tab edits them as the
+card's **Tags**, comma-separated: blank leaves the key out (a copy has its
+base's), `[]` writes none. Its checks warn of a tag the game would leave out.
 
 ## Card text codes
 
