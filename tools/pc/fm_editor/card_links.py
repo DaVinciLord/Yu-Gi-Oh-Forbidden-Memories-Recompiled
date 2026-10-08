@@ -12,7 +12,7 @@ import sys
 import tkinter as tk
 from tkinter import ttk
 
-from . import fixed_decks, packs as packmath, starter_pools, validate
+from . import fixed_decks, packs as packmath, roster, starter_pools, validate
 from .gamedata import DUELIST_NAMES, POOL_LABELS, POOL_TOTAL, POOLS, TYPE_EQUIP
 from .widgets import px, scrolled_tree
 
@@ -194,6 +194,13 @@ def uses(app, cid) -> list:
             if weight:
                 add("Duelists", f"{name}: {POOL_LABELS[pool]}, {weight * 100 / POOL_TOTAL:.2f}%",
                     lambda d=d, pool=pool: app.open_pool(d, pool, cid))
+    for e in roster.copies(p):          # the duelists the mod adds
+        for pool in POOLS:
+            weight = e.pools[pool].get(cid, 0)
+            if weight:
+                add("Duelists", f"{roster.shown_name(p, e)} (added): {POOL_LABELS[pool]}, "
+                                f"{weight * 100 / POOL_TOTAL:.2f}%",
+                    lambda key=e.key, pool=pool: app.open_pool(key, pool, cid))
     for i, deck in enumerate(p.starter):
         copies = deck.cards.get(cid, 0)
         if copies:

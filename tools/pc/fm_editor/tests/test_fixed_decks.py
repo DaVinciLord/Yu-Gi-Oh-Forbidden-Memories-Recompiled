@@ -274,7 +274,7 @@ class GuiTest(unittest.TestCase):
         deck = fixed_decks.deck_of(app.project, 1)
         self.assertEqual(deck.cards, fixed_decks.most_likely(app.project.pools[1]["deck"]))
         self.assertIn("40 / 40", tab.total.cget("text"))
-        self.assertEqual(tab.list.item("1", "values")[2], "fixed")
+        self.assertEqual(tab.list.set("1", "state"), "fixed deck")
         # Clear, add a card with its copies, then another.
         view.clear()
         self.assertIn("0 / 40", tab.total.cget("text"))
