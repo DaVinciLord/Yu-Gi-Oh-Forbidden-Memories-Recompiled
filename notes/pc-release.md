@@ -2,7 +2,8 @@
 
 The release is an unpack-and-run folder. Windows uses a GUI executable
 (no console window); Linux uses the SDL executable, built against the
-existing Debian 11 i386 sysroot. Both remain 32-bit builds.
+existing Debian 11 i386 sysroot. Both remain 32-bit builds. macOS ships a
+native Apple Silicon application bundle inside a ZIP.
 
 ```text
 yfm-redecomp-<version>/
@@ -19,10 +20,27 @@ yfm-redecomp-<version>/
   symbols/                    # this build's crash/save-state symbol tables
 ```
 
-GitHub shows each release asset's SHA-256 itself, so there are no
-`.sha256` files beside the archives. No ROM, extracted game data, user
-settings, saves, reports or personal HD packs belong in the archive. Release
-builds omit the optional executable icon extracted from a local disc.
+The macOS ZIP contains the app bundle at its root, alongside its short
+launch/readme and license files:
+
+```text
+YFM Re-Decomp.app/             # ad-hoc signed, native Apple Silicon
+  Contents/MacOS/memories-arm64
+  Contents/Resources/          # languages, build metadata, dependency licenses
+README.txt
+LICENSE.txt
+```
+
+GitHub shows each release asset's SHA-256. The macOS ZIP also ships a
+`.zip.sha256` sidecar for independent verification. No ROM, extracted game
+data, user settings, saves, reports or personal HD packs belong in the
+archive. Release builds omit the optional executable icon extracted from a
+local disc.
+
+The macOS app is signed ad hoc for bundle integrity, without an Apple
+Developer ID signature or notarization. Gatekeeper may block a downloaded
+copy; the bundled README explains how to open it through Privacy & Security
+without disabling Gatekeeper globally.
 
 The Windows executable is what virus scanners' heuristics judge, so the
 release keeps it plain: `package.py` strips the symbol table and debug
@@ -59,17 +77,33 @@ a failed picker explains the `game/` folder fallback. See the
 ## GitHub build flow
 
 `.github/workflows/pc-release.yml` builds on pull requests, pushes to `master`,
-`v*` tags and manual dispatch. Native Ubuntu and Windows runners use the
-existing dependency/toolchain fetchers and cache only dependencies. Linux
-selects GCC 14 because the game source build uses C `-fpermissive`.
+`v*` tags and manual dispatch. Native Ubuntu, Windows and Apple Silicon
+runners use the existing dependency/toolchain fetchers and cache only
+dependencies. Linux selects GCC 14 because the game source build uses C
+`-fpermissive`. The macOS job builds the ARM64 game without a disc, wraps it
+in an ad-hoc signed `.app`, and checks the ZIP contents; it needs no signing
+secret and also runs on fork pull requests or manual dispatch.
 
-Every build uploads a Windows ZIP or Linux tar.gz as an Actions
-artifact, retained for 14 days. The `android` job builds the arm64 APK and,
-with the release key (pushes, tags and manual runs; "Android signing" below),
-uploads it signed as `yfm-redecomp-<version>-android-arm64.apk`. On a version
-tag, all jobs must succeed before
-the final job creates a **draft** GitHub release and attaches the packages.
+Standard runs upload the Windows ZIP and Linux tar.gz as Actions artifacts.
+The macOS ARM64 job uploads its ZIP and SHA-256 sidecar as an artifact on every
+run. Artifacts are retained for 14 days; downloading one requires a GitHub
+sign-in and read access to the repository. A manual run offers `all` (the
+default) or `macos-arm64`; selecting the latter skips Windows, Linux and
+Android packaging, so a fork can make the Mac artifact without Android release
+secrets. Manual runs only make Actions artifacts. The workflow must already exist on
+the default branch with `workflow_dispatch`; select the support branch in the
+Branch dropdown. See [GitHub manual workflow instructions](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow). The `android` job builds the
+arm64 APK and, with the release key (pushes, tags and manual runs; "Android
+signing" below), uploads it signed as
+`yfm-redecomp-<version>-android-arm64.apk`. On a version tag, all jobs must
+succeed before the final job creates a **draft** GitHub release and attaches
+the packages.
 Reruns can update a draft but refuse to replace an already published release.
+Draft assets are not public until the draft is published; published release
+assets are the persistent download, subject to the repository's visibility.
+A fork without the Android release key can still make the manual Mac artifact,
+but cannot complete the tag-triggered draft release, which requires every job
+to succeed.
 
 Two kinds of tag:
 

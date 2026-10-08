@@ -47,7 +47,7 @@ void TextBox_BuildStep(DuelEffectChannel *object)
     u8 *script;
     DuelEffectEntry *entry;
     s32 op;
-    void (*G32 *handlers)(u8 *);
+    void (*TRANSLATED_G32 *handlers)(u8 *);
 #ifdef MEMORIES_PC
     int pal_shift, pal_advance, pal_done;
 #endif

@@ -382,6 +382,25 @@ extern s32 data;
 
         self.assertEqual(self.errors(), [])
 
+    def test_function_annotations_preserve_symbol_names(self) -> None:
+        for declaration in (
+            'PSX_SECTION(".text") void func_test(s32 value);',
+            'void func_test(s32 value) PSX_SECTION(".text");',
+            '__attribute__((section(".text"))) void func_test(s32 value);',
+            'void func_test(s32 value) __attribute__((alias("other")));',
+            'PSX_SECTION(".text") void func_test(void (*callback)(void));',
+        ):
+            self.assertEqual(unmatched_contracts.declarations(declaration),
+                             [("func_test", declaration)])
+        self.assertEqual(unmatched_contracts.declarations(
+            'PSX_SECTION(".data") extern void (*callback)(void);'), [])
+
+    def test_section_annotated_objects_keep_conflict_checks(self) -> None:
+        self.assertEqual(unmatched_contracts.extern_object_symbols(
+            'extern PSX_SECTION(".data") s32 data;'), ['data'])
+        self.assertEqual(unmatched_contracts.extern_object_symbols(
+            'extern PSX_SECTION(".data") void (*callback)(void);'), ['callback'])
+
     def test_function_pointer_data_is_not_a_function_prototype(self) -> None:
         self.write_linker_symbols("D_80010000 = 0x80010000;\n")
         self.write(

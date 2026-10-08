@@ -25,7 +25,7 @@
  * than implying every masked value is valid.
  */
 
-ScriptCommandHandler D_80090C50[] = {
+ScriptCommandHandler TRANSLATED_G32 D_80090C50[] = {
     Script_OpHalt,
     Script_OpLoadImageScene,
     Script_OpShowDialog,

@@ -20,6 +20,9 @@
 #define _GNU_SOURCE
 #include "mips.h"
 #include "image.h"
+#ifdef MEMORIES_TRANSLATED
+#include "translated_runtime.h"
+#endif
 #include "pc/compat/gte.h"
 #include "pc/rng.h"
 #include "pc/debug/log.h"
@@ -48,6 +51,15 @@ extern void Model_QueueTintRequestForPartList(int32_t slot, int32_t part, uint32
 static uint32_t stack_top;   /* 0 until the stack is mapped */
 static uint32_t current_sp;  /* the innermost interpreted frame, or 0 */
 uint32_t Memories_MipsThunkTarget;
+#ifdef MEMORIES_TRANSLATED
+#include "state.h"
+void Memories_MipsState(MemoriesState *state)
+{
+    MemoriesStateField fields[] = {{&stack_top, sizeof(stack_top)}, {&current_sp, sizeof(current_sp)},
+                                  {&Memories_MipsThunkTarget, sizeof(Memories_MipsThunkTarget)}};
+    Memories_StateChunk(state, "arm64-mips", fields, sizeof(fields) / sizeof(fields[0]));
+}
+#endif
 
 /* Retail code reaches the scratchpad at 0x1F800000, which the host may not
  * let the port map; the port's view of it is 0x9F800000 (image.h). Every
@@ -138,10 +150,12 @@ static const MemoriesGuestFunction *find_native(uint32_t address)
 static uint32_t call_native(State *s, uint32_t address)
 {
     const MemoriesGuestFunction *e;
+#ifndef MEMORIES_TRANSLATED
     /* uintptr_t: a 64-bit callee reads whole registers, and a guest pointer
      * argument must arrive zero-extended (the same types on i386). */
     typedef uintptr_t (*Call)(uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t,
                               uintptr_t, uintptr_t, uintptr_t, uintptr_t);
+#endif
     uint32_t sp = s->r[29], keep, result;
 
     /* libc and libmath routines linked as SDK assembly in the original and
@@ -190,6 +204,14 @@ static uint32_t call_native(State *s, uint32_t address)
     }
     keep = current_sp;
     current_sp = sp;
+#ifdef MEMORIES_TRANSLATED
+    {
+        uint32_t arguments[12] = {s->r[4], s->r[5], s->r[6], s->r[7]};
+        unsigned i;
+        for (i = 4; i < 12; i++) arguments[i] = l32(sp + i * 4);
+        result = GuestRuntime_InvokeNative((unsigned)(e - Memories_FunctionMap), arguments);
+    }
+#else
     /* Where the retail view is not mapped, a retail scratchpad pointer among
      * the arguments arrives as the port's view, as native game code writes
      * it (SCRATCHPAD_ADDR). Which words are pointers is not known here, so
@@ -199,6 +221,7 @@ static uint32_t call_native(State *s, uint32_t address)
                                        HANDED(l32(sp + 16)), HANDED(l32(sp + 20)), HANDED(l32(sp + 24)),
                                        HANDED(l32(sp + 28)), HANDED(l32(sp + 32)), HANDED(l32(sp + 36)),
                                        HANDED(l32(sp + 40)), HANDED(l32(sp + 44)));
+#endif
     current_sp = keep;
     return result;
 }

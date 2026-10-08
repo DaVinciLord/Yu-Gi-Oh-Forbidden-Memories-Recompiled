@@ -29,6 +29,9 @@
 #include "pc/text/glyphs.h"
 #include "pc/text/text.h"
 #include "pc/guest/state.h"
+#ifdef MEMORIES_TRANSLATED
+#include "pc/guest/translated_runtime.h"
+#endif
 #include "pc/saves/save_menu.h"
 #include "pc/saves/save_slots.h"
 #include "pc/platform/paths.h"
@@ -910,9 +913,20 @@ const unsigned char *PackShop_Text(int id)
     return s.arena + text_at[id == TEXT_NAME_ID ? TEXT_NAME : id == TEXT_MESSAGE_ID ? TEXT_MESSAGE : TEXT_CONFIRM];
 }
 
+static uintptr_t text_address(const unsigned char *pointer)
+{
+#ifdef MEMORIES_TRANSLATED
+    return GuestRuntime_EncodePointer((void *)pointer);
+#else
+    return (uintptr_t)pointer;
+#endif
+}
+
 unsigned char *PackShop_Retarget(const unsigned char *cursor)
 {
-    if (cursor >= s.arena && cursor < s.arena + ARENA_SIZE) {
+    /* Text cursors can be guest tokens while the arena is a native global. */
+    uintptr_t address = text_address(cursor), base = text_address(s.arena);
+    if (address >= base && address - base < ARENA_SIZE) {
         s.arena[0] = 0xFF;
         return s.arena;
     }
@@ -2133,7 +2147,7 @@ static void foreign_state(MemoriesState *state)
 
 void PackShop_State(MemoriesState *state)
 {
-    uint32_t base = (uint32_t)(uintptr_t)s.arena, size = ARENA_SIZE;
+    uint32_t base = (uint32_t)text_address(s.arena), size = ARENA_SIZE;
     MemoriesStateField fields[] = {{&s, sizeof(s)}, {&base, sizeof(base)}, {&size, sizeof(size)}};
     s.version = STATE_VERSION;
     if (!Packs_Count()) return;
@@ -2164,10 +2178,10 @@ void PackShop_State(MemoriesState *state)
                 build_art();
                 if (pictures[s.card_pack_art]) picture_rearm = s.card_pack_art;
             }
-            if (base != (uint32_t)(uintptr_t)s.arena) {
+            if (base != (uint32_t)text_address(s.arena)) {
                 LOG(LOG_MODS, "packs: the screen's text moved from %08X to %08X since the state was saved",
-                    (unsigned)base, (unsigned)(uintptr_t)s.arena);
-                Memories_StateRemapRange(state, base, (uint32_t)(uintptr_t)s.arena, ARENA_SIZE);
+                    (unsigned)base, (unsigned)text_address(s.arena));
+                Memories_StateRemapRange(state, base, (uint32_t)text_address(s.arena), ARENA_SIZE);
             }
             hint_ready = 0;
             foreign_state(state);

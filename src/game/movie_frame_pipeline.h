@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef MEMORIES_DECOMP_MOVIE_FRAME_PIPELINE_H
 #define MEMORIES_DECOMP_MOVIE_FRAME_PIPELINE_H
 
@@ -60,7 +61,7 @@ extern u32 D_8009B070;
  * reaches them with lui/%lo. Unlike the guarded symbols elsewhere in this
  * tree there is no second group to serve -- no other source names them --
  * so one spelling carries. */
-extern s16 D_800FE0CC __attribute__((section(".data")));
+extern s16 D_800FE0CC PSX_SECTION(".data");
 typedef union {
     u16 pixels;
     s32 word;
@@ -71,16 +72,16 @@ typedef char GraphicsDimension_size_must_be_4[
 ];
 
 extern GraphicsDimension gGraphics_CurrentWidth asm("D_800FE0D0")
-    __attribute__((section(".data")));
+    PSX_SECTION(".data");
 extern GraphicsDimension gGraphics_CurrentHeight asm("D_800FE0D4")
-    __attribute__((section(".data")));
+    PSX_SECTION(".data");
 
 /* The pending-interrupt word func_8005C1F4 tests, and clears after calling
  * StCdInterrupt, while the stream is running (D_8009B060). Four bytes, so at
  * -G8 a plain declaration would land in sdata and both accesses would come out
  * gp-relative; retail reaches it through lui %hi / %lo, which the .data
  * section attribute keeps. func_8005C1F4 is its only C consumer. */
-extern s32 D_800F5D44 __attribute__((section(".data")));
+extern s32 D_800F5D44 PSX_SECTION(".data");
 
 /* The movie work area lives at D_8009B498 + 0x40000. Only its tail
  * is reached by name here. LoadImage is handed

@@ -1,5 +1,5 @@
 /* The two roots the port reads and writes through (paths.h). Both are
- * resolved once and cached: the program directory from /proc/self/exe, the
+ * resolved once and cached: the program directory from the running executable, the
  * user directory from MEMORIES_USER_DIR, else portable.txt beside the
  * executable (portable mode), else the platform's own convention for a
  * game's files. */
@@ -16,6 +16,9 @@
 #endif
 #include "pc/compat/posix.h" /* mkdir, and readlink of /proc/self/exe, on Windows */
 #include <sys/stat.h>
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
 
 #define PATH_MAX_ 1024
 #define APP_NAME "YFM Re-Decomp"
@@ -75,20 +78,70 @@ static void directory_of(char *path)
     else path[0] = '\0';
 }
 
+#ifdef __APPLE__
+/* A packaged macOS app keeps immutable game data in Contents/Resources.
+ * Only use that layout when the executable really belongs to a conventional
+ * .app bundle; command-line builds and ad-hoc directory layouts stay beside
+ * their executable. */
+static int darwin_bundle_resources(char *directory, size_t size)
+{
+    static const char executable_directory[] = "/Contents/MacOS";
+    char bundle[PATH_MAX_], info[PATH_MAX_], resources[PATH_MAX_];
+    struct stat info_stat, resources_stat;
+    size_t length = strlen(directory), suffix = sizeof(executable_directory) - 1;
+
+    if (length <= suffix || strcmp(directory + length - suffix, executable_directory)) return 0;
+    length -= suffix;
+    if (length < 4 || memcmp(directory + length - 4, ".app", 4)) return 0;
+    if (length >= sizeof(bundle)) return 0;
+    memcpy(bundle, directory, length);
+    bundle[length] = '\0';
+
+    if (snprintf(info, sizeof(info), "%s/Contents/Info.plist", bundle) >= (int)sizeof(info) ||
+        snprintf(resources, sizeof(resources), "%s/Contents/Resources", bundle) >= (int)sizeof(resources) ||
+        stat(info, &info_stat) || !S_ISREG(info_stat.st_mode) ||
+        stat(resources, &resources_stat) || !S_ISDIR(resources_stat.st_mode) ||
+        strlen(resources) >= size)
+        return 0;
+    memcpy(directory, resources, strlen(resources) + 1);
+    return 1;
+}
+#endif
+
 const char *Paths_ProgramDir(void)
 {
-    ssize_t length;
     const char *named = getenv("MEMORIES_PROGRAM_DIR");
     if (program_dir[0]) return program_dir;
     if (named && *named && strlen(named) < sizeof(program_dir)) {
         snprintf(program_dir, sizeof(program_dir), "%s", named);
         return program_dir;
     }
+#ifdef __APPLE__
+    uint32_t capacity = sizeof(program_dir);
+    char *executable = malloc(capacity);
+    if (executable && _NSGetExecutablePath(executable, &capacity)) {
+        free(executable);
+        executable = malloc(capacity);
+        if (executable && _NSGetExecutablePath(executable, &capacity)) { free(executable); executable = NULL; }
+    }
+    if (executable) {
+        char *canonical = realpath(executable, NULL);
+        const char *path = canonical ? canonical : executable;
+        if (strlen(path) < sizeof(program_dir)) {
+            memcpy(program_dir, path, strlen(path) + 1);
+            directory_of(program_dir);
+            darwin_bundle_resources(program_dir, sizeof(program_dir));
+        }
+        free(canonical); free(executable);
+    }
+#else
+    ssize_t length;
     length = readlink("/proc/self/exe", program_dir, sizeof(program_dir) - 1);
     if (length > 0 && (size_t)length < sizeof(program_dir)) {
         program_dir[length] = '\0';
         directory_of(program_dir);
     }
+ #endif
     if (!program_dir[0]) snprintf(program_dir, sizeof(program_dir), ".");
     return program_dir;
 }
@@ -238,6 +291,9 @@ const char *Paths_UserDir(void)
         }
         else
             snprintf(root, sizeof(root), "%s/Documents/My Games", profile && *profile ? profile : ".");
+#elif defined(__APPLE__)
+        const char *home = getenv("HOME");
+        if (home && *home) snprintf(root, sizeof(root), "%s/Library/Application Support", home);
 #else
         const char *home = getenv("HOME"), *xdg = getenv("XDG_DATA_HOME");
         if (xdg && *xdg == '/') snprintf(root, sizeof(root), "%s", xdg);

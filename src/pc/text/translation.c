@@ -30,6 +30,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef MEMORIES_TRANSLATED
+#include "pc/guest/translated_runtime.h"
+#endif
 
 #define NOTES_PER_FILE 20
 
@@ -684,15 +687,27 @@ int Text_CutsMenuGlyph(int id, int x, int width, int y, int line_height, int hei
     return 1;
 }
 
+static uintptr_t text_address(const unsigned char *pointer)
+{
+#ifdef MEMORIES_TRANSLATED
+    /* Channels store guest tokens, while a native global may still be a
+     * host pointer. Compare both in the guest address space. */
+    return GuestRuntime_EncodePointer((void *)pointer);
+#else
+    return (uintptr_t)pointer;
+#endif
+}
+
 unsigned char *Text_Retarget(unsigned char *cursor, unsigned target)
 {
     int i;
+    uintptr_t address = text_address(cursor), results_at = text_address(results);
     {   /* The card packs' question: its answer ends the text (pack_shop.h). */
         unsigned char *packs = PackShop_Retarget(cursor);
         if (packs) return packs;
     }
-    int copied = cursor >= results && cursor < results + sizeof(results);
-    if (copied || ((uintptr_t)cursor & 0xFFFF0000u) == bases[TEXT_BANK_DIALOG]) {
+    int copied = address >= results_at && address - results_at < sizeof(results);
+    if (copied || (address & 0xFFFF0000u) == bases[TEXT_BANK_DIALOG]) {
         /* The retail result screens calling YOU, COM or the winner (COM
          * only when its column made room for the name). */
         int id = target == TEXT_COM_AT ? TEXT_COM
@@ -721,13 +736,13 @@ unsigned char *Text_Retarget(unsigned char *cursor, unsigned target)
     }
     for (i = -1; i < unit_count; i++) {
         TextUnit *unit = i < 0 ? language_unit : units[i];
-        if (unit && cursor >= unit->data && cursor <= unit->data + unit->size) {
+        if (unit && address >= text_address(unit->data) && address - text_address(unit->data) <= unit->size) {
             /* An operand past the unit's targets (a hand-edited byte) ends
              * the stream rather than jumping anywhere. */
             return target < (unsigned)unit->target_count ? unit->targets[target] : unit->data + unit->size - 1;
         }
     }
-    return (unsigned char *)(((uintptr_t)cursor & 0xFFFF0000u) | (target & 0xFFFF));
+    return (unsigned char *)((address & 0xFFFF0000u) | (target & 0xFFFF));
 }
 
 /* --- the order of the card names --------------------------------------- */

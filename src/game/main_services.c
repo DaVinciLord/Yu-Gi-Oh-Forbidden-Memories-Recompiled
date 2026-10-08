@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #define D_8009B0A3_IS_VOLATILE_SCALAR
 #define D_8009B142_IN_DATA_VOLATILE
 #define GRAPHICS_DRAW_ENV_IS_VOLATILE
@@ -34,7 +35,7 @@
    pad-driven screen-offset adjustment loop follow in this unit. The last
    clears the D_800E9DB0 slots and D_8009B0B8 callback that the pump runs. */
 
-s32 runtime_gp __attribute__((section(".sdata"))) = 0x3C;
+s32 runtime_gp PSX_SECTION(".sdata") = 0x3C;
 
 /* Per-frame dispatcher: runs the two fixed housekeeping calls, then each of
    the 4 slots in D_800E9DB0 and the single D_8009B0B8 callback if set. If

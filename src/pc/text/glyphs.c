@@ -8,6 +8,8 @@
 #include FT_FREETYPE_H
 #ifdef _WIN32
 #include "pc/platform/win32.h"
+#elif defined(__APPLE__)
+#include "pc/platform/macos_fonts.h"
 #else
 #include <fontconfig/fontconfig.h>
 #endif
@@ -186,6 +188,8 @@ static void open_system_face(void)
     system_tried = 1;
 #ifdef _WIN32
     open_face(Win32_FontPath(0));
+#elif defined(__APPLE__)
+    open_face(MacOS_FontPath(MEMORIES_FONT_BOLD));
 #else
     {
         FcPattern *pattern, *match;

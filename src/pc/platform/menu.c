@@ -36,7 +36,11 @@
 #ifdef _WIN32
 #include "win32.h"
 #else
+#ifdef __APPLE__
+#include "macos_fonts.h"
+#else
 #include <fontconfig/fontconfig.h>
+#endif
 #endif
 #include "pc/debug/crash.h"
 #include "pc/text/glyphs.h"
@@ -422,8 +426,12 @@ static void load_font(void)
 {
     FT_Library library;
     FT_Face face;
+#if defined(_WIN32) || defined(__APPLE__)
 #ifdef _WIN32
     const char *file = Win32_FontPath(0);
+#else
+    const char *file = MacOS_FontPath(MEMORIES_FONT_UI);
+#endif
 #else
     FcPattern *pattern, *match;
     FcResult result;
@@ -436,7 +444,7 @@ static void load_font(void)
     }
     free_extra_glyphs();
     font_loaded = 0;
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__APPLE__)
     if (!file || FT_Init_FreeType(&library)) {
         return;
     }
@@ -462,7 +470,7 @@ static void load_font(void)
     font_ascent = (int)(face->size->metrics.ascender >> 6);
     font_descent = (int)(-face->size->metrics.descender >> 6);
     font_loaded = 1;
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__APPLE__)
     FcPatternDestroy(pattern);
     FcPatternDestroy(match);
 #endif
@@ -772,6 +780,7 @@ void Menu_LoadSettings(void)
     Platform_SetClockRate(Settings_Get(SET_SPEED));
     Platform_SetPresentCap(Settings_Get(SET_FPS));
     Mods_SetTexturePack(TexturePack_Load, TexturePack_Unload);
+    Mods_SetAssets(TexturePack_LoadAssets, TexturePack_LoadAssetFolder);
     Mods_SetAudio(AudioReplace_Load, AudioReplace_Unload);
     Mods_Load(); /* the mods the settings say are applied, once they are read */
 }

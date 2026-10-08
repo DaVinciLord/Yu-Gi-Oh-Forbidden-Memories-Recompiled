@@ -263,7 +263,11 @@ static unsigned glyphs_generation = ~0u;
 static GLint u_glyphs;
 
 static const char *vertex_source =
+#ifdef __APPLE__
+    "#version 150\n"
+#else
     "#version 130\n"
+#endif
     "uniform vec2 picture_size;\n"
     "in vec2 position;\n"
     "in vec2 texcoord;\n"
@@ -377,7 +381,11 @@ static const char *vertex_source =
  * them. pass: 0 every fragment, 1 the opaque ones, 2 the semi-transparent.
  * op 1: VRAM into the picture. op 2: the scratch copy into the picture. */
 static const char *fragment_source =
+#ifdef __APPLE__
+    "#version 150\n"
+#else
     "#version 130\n"
+#endif
     "uniform usampler2D vram;\n"
     "uniform usampler2DArray banks;\n"
     "uniform sampler2D scratch;\n"
@@ -2365,7 +2373,7 @@ int GlPicture_Replay(void)
             replays = total_us = 0;
         }
     }
-    /* Back to the fixed-function state the window's own drawing expects. */
+    /* Release the game program and targets before the window draws its quad. */
     gl_UseProgram(0);
     gl_BindFramebuffer(GL_FRAMEBUFFER, 0);
     gl_ActiveTexture(GL_TEXTURE1);

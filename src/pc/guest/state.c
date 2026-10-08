@@ -1,5 +1,7 @@
 #define _GNU_SOURCE
 #include "state.h"
+#include "state_io.h"
+#include "state_subsystems.h"
 #include "state_remap.h"
 #include "pc/platform/settings.h"
 #include "pc/platform/paths.h"
@@ -34,7 +36,11 @@
 #ifdef _WIN32
 #include "pc/platform/win32.h"
 #elif !defined(__ANDROID__)
+#ifdef __APPLE__
+#include <sys/ucontext.h>
+#else
 #include <ucontext.h>
+#endif
 #endif
 
 /* The game stack is at the same address on every system (state.h). Linux
@@ -79,16 +85,9 @@ typedef struct Region {
     char *startup; /* the data as linked, before the game ran */
 } Region;
 
-struct MemoriesState {
-    int loading;
-    FILE *file;              /* saving to a file */
-    const uint8_t *image;    /* loading: the whole file */
-    size_t image_size;
-};
-
 static Region *regions;
 static unsigned region_count;
-#if defined(_WIN32) || defined(__ANDROID__) || defined(__aarch64__)
+#if defined(_WIN32) || defined(__ANDROID__) || (defined(__aarch64__) && !defined(MEMORIES_TRANSLATED))
 /* Windows has no ucontext, and neither has Android's C library (bionic).
  * A context there is the stack pointer of a suspended
  * Memories_ContextSwitch (state_i386.S, state_x86_64.S, state_aarch64.S),
@@ -159,7 +158,7 @@ static void set_stack_bounds(const uint32_t *bounds)
 #define set_stack_bounds(bounds) ((void)0)
 #endif
 
-#if defined(__x86_64__) || defined(__aarch64__)
+#if defined(__x86_64__) || (defined(__aarch64__) && !defined(MEMORIES_TRANSLATED))
 /* setjmp_x86_64.S, setjmp_aarch64.S: where the registers for a game jmp_buf
  * are kept. The game's buffer (the Psy-Q int[12] at 0x800E9DC0) is too
  * small for them, so each buffer address gets a host slot of 240 bytes. The
@@ -182,13 +181,21 @@ void *Memories_JumpSlot(void *buffer)
     jump_slots[i].buffer = buffer;
     return jump_slots[i].words;
 }
+
+void Memories_StateJumps(MemoriesState *state)
+{
+    MemoriesStateField jumps = {jump_slots, sizeof(jump_slots)};
+    Memories_StateChunk(state, "jump-slots", &jumps, 1);
+}
 #endif
 
+#ifdef ASM_CONTEXT_SWITCH
 static void leave_game_stack(void)
 {
     set_stack_bounds(process_bounds);
     Memories_ContextSwitch(&game_context, &service_context);
 }
+#endif
 
 #if defined(__x86_64__)
 /* What Memories_ContextSwitch (state_x86_64.S) pops to start `function` on
@@ -204,7 +211,7 @@ static uintptr_t switch_frame(uintptr_t limit, void (*function)(void))
     *slot = (uintptr_t)function;
     return (uintptr_t)frame;
 }
-#elif defined(__aarch64__)
+#elif defined(__aarch64__) && !defined(MEMORIES_TRANSLATED)
 /* A frame for Memories_ContextSwitch (state_aarch64.S) to resume `function`
  * from, below `limit`: what it pops (D8-D15, X19-X28, X29), then LR, which
  * it returns to. `function` never returns (it would start over). It starts
@@ -347,7 +354,6 @@ static uint8_t *pending_image;
 static uint32_t build_id; /* from the `buildid` file beside the executable */
 static size_t pending_size;
 
-int Memories_StateLoading(const MemoriesState *state) { return state->loading; }
 int Memories_LastStateSlot(void) { return last_loaded_slot; }
 
 void Memories_StateRequest(int what, int slot)
@@ -358,116 +364,9 @@ void Memories_StateRequest(int what, int slot)
     requested = what;
 }
 
-static void emit(MemoriesState *state, const void *data, size_t size)
-{
-    fwrite(data, 1, size, state->file);
-}
-
-/* Chunk: 16-byte tag, 32-bit size, payload. */
-static const uint8_t *find_chunk(const MemoriesState *state, const char *tag, size_t *size)
-{
-    size_t at = 16;
-    char padded[16];
-    memset(padded, 0, sizeof(padded));
-    strncpy(padded, tag, sizeof(padded) - 1);
-    while (at + 20 <= state->image_size) {
-        uint32_t length;
-        memcpy(&length, state->image + at + 16, 4);
-        if (length > state->image_size - at - 20) {
-            return NULL;
-        }
-        if (!memcmp(state->image + at, padded, 16)) {
-            *size = length;
-            return state->image + at + 20;
-        }
-        at += 20 + length;
-    }
-    return NULL;
-}
-
 void Memories_StateRemapRange(MemoriesState *state, uint32_t from, uint32_t to, uint32_t size)
 {
     if (state->loading) Memories_StateRemapImage((uint8_t *)state->image, state->image_size, from, to, size);
-}
-
-int Memories_StateChunk(MemoriesState *state, const char *tag, const MemoriesStateField *fields, size_t count)
-{
-    size_t total = 0, i, size;
-    const uint8_t *from;
-    for (i = 0; i < count; i++) {
-        total += fields[i].size;
-    }
-    if (!state->loading) {
-        char padded[16];
-        uint32_t length = (uint32_t)total;
-        memset(padded, 0, sizeof(padded));
-        strncpy(padded, tag, sizeof(padded) - 1);
-        emit(state, padded, 16);
-        emit(state, &length, 4);
-        for (i = 0; i < count; i++) {
-            emit(state, fields[i].data, fields[i].size);
-        }
-        return 0;
-    }
-    from = find_chunk(state, tag, &size);
-    if (!from) {
-        fprintf(stderr, "memories-pc: state: no chunk '%s' (%lu bytes in this build); that part keeps its current state\n",
-                tag, (unsigned long)total);
-        return 0;
-    }
-    if (size != total) {
-        fprintf(stderr, "memories-pc: state: layout changed for '%s' (%lu bytes in the state, %lu in this build); that part keeps its current state\n",
-                tag, (unsigned long)size, (unsigned long)total);
-        return 0;
-    }
-    for (i = 0; i < count; i++) {
-        memcpy(fields[i].data, from, fields[i].size);
-        from += fields[i].size;
-    }
-    return 1;
-}
-
-typedef struct { MemoriesState *state; int valid; } ModStateCheck;
-static void mod_state_tag(char *tag, size_t size, int owner)
-{
-    int ordinal = 0;
-    /* Rank by stable identity, independent of discovery and activation order. */
-    for (int i = 0; i < Mods_Count(); i++)
-        if (Mods_Active(i) && strcmp(Mods_Id(i), Mods_Id(owner)) < 0)
-            ordinal++;
-    snprintf(tag, size, "mod:%d", ordinal);
-}
-static void mod_state_visit(int owner, void *data, size_t size, unsigned version, void *context)
-{
-    MemoriesState *state = context;
-    char tag[16];
-    MemoriesStateField fields[] = {{&version, sizeof(version)}, {data, size}};
-    mod_state_tag(tag, sizeof(tag), owner);
-    Memories_StateChunk(state, tag, fields, 2);
-}
-static void mod_state_check(int owner, void *data, size_t size, unsigned version, void *context)
-{
-    ModStateCheck *check = context;
-    char tag[16]; size_t have = 0; unsigned saved = 0;
-    const uint8_t *chunk;
-    (void)data;
-    mod_state_tag(tag, sizeof(tag), owner);
-    chunk = find_chunk(check->state, tag, &have);
-    if (chunk && have >= sizeof(saved)) memcpy(&saved, chunk, sizeof(saved));
-    if (!chunk || have != size + sizeof(version) || saved != version) check->valid = 0;
-}
-static int compatible_mods(MemoriesState *state)
-{
-    size_t size = 0;
-    const uint8_t *chunk = find_chunk(state, "mod-set", &size);
-    unsigned saved = 0, current = Mods_Signature();
-    ModStateCheck check = {state, 1};
-    if (chunk && size == sizeof(saved)) memcpy(&saved, chunk, size);
-    /* Old vanilla states remain usable; old modded states have no way to
-     * establish card identity or native callback compatibility. */
-    if ((!chunk && current != 2166136261u) || (chunk && (size != sizeof(saved) || saved != current))) return 0;
-    Mods_VisitState(mod_state_check, &check);
-    return check.valid;
 }
 
 /* Why a state was not loaded: on stderr, and in a notice over the picture
@@ -491,203 +390,25 @@ static void refuse(const char *format, ...)
     else Menu_ShowNotice("Save state not loaded", text, ok, 1, 0, NULL);
 }
 
-/* The language the game's text is in (Game > Language), and where that
- * text lay. The game holds pointers into the text the port compiled (a
- * language, a translation mod: translation.c), so a state loads only with
- * the same language and the same compiled text at the same place. The mods'
- * signature ("mod-set") does not cover their text files, nor the language's
- * pack or the port's own strings; the layout does. A state without this
- * chunk predates it and is English (US), whose layout is not checked; kept
- * apart from "mod-set" so that such states keep loading.
- *
- * The chunk: the language's code (16 bytes, NUL-padded), then a version and
- * the layout (Text_Layout). A later version appends to it, so the code and
- * the layout stay where they are. */
-#define LANGUAGE_CODE_SIZE 16
-#define LANGUAGE_CHUNK_VERSION 1u
-typedef struct {
-    char code[LANGUAGE_CODE_SIZE];
-    uint32_t version;
-    uint32_t base, used, crc; /* TextLayout */
-} LanguageChunk;
-/* Written as it lies in memory, in the machine's byte order like the rest
- * of the state (which loads only on the system that saved it): 32 bytes,
- * no padding between the fields. */
-_Static_assert(sizeof(LanguageChunk) == LANGUAGE_CODE_SIZE + 4 * sizeof(uint32_t), "LanguageChunk is padded");
-
-/* The state's chunk: 1 with the layout, 0 with the code only, -1 with no
- * chunk (English US). */
-static int state_language(const MemoriesState *state, LanguageChunk *saved)
-{
-    size_t size = 0;
-    const uint8_t *chunk = find_chunk(state, "language", &size);
-    memset(saved, 0, sizeof(*saved));
-    if (!chunk || size < LANGUAGE_CODE_SIZE) {
-        snprintf(saved->code, sizeof(saved->code), "%s", Language_Code(LANGUAGE_US));
-        return -1;
-    }
-    memcpy(saved->code, chunk, LANGUAGE_CODE_SIZE - 1);
-    if (size < sizeof(*saved)) return 0;
-    memcpy(&saved->version, chunk + LANGUAGE_CODE_SIZE, sizeof(*saved) - LANGUAGE_CODE_SIZE);
-    return saved->version >= 1;
-}
-
-static const char *language_label(const char *code)
-{
-    int language;
-    for (language = 0; language < LANGUAGE_COUNT; language++) {
-        if (!strcmp(code, Language_Code(language))) return Language_Label(language);
-    }
-    return code;
-}
-
 static int compatible_language(const MemoriesState *state, const char *path)
 {
-    LanguageChunk saved;
-    int found = state_language(state, &saved);
-    TextLayout now = Text_Layout();
-    const char *name = path, *at;
-    for (at = path; *at; at++) {
-        if (*at == '/' || *at == '\\') name = at + 1; /* MEMORIES_LOAD_STATE may give a Windows path */
-    }
-    if (strcmp(saved.code, Language_Code(Language_Current()))) {
-        refuse("%s was made with the game in %s%s, and the game is in %s now. Choose %s in Game > Language, "
-               "restart, and load it again.", name, language_label(saved.code),
-               found < 0 ? " (it is older than the language setting)" : "", Language_Label(Language_Current()),
-               language_label(saved.code));
-        return 0;
-    }
-    if (found < 1) {
-        /* No layout to check: only the game's own text (English US, no
-         * translation mod) is where it was. */
-        if (!now.used) return 1;
-        refuse("%s is older than this version's text check, and the game has text of its own compiled now (a "
-               "language or a translation mod), which the state cannot be checked against. Loading it could show "
-               "the wrong lines or crash.", name);
-        return 0;
-    }
-    if (saved.used && !saved.base) {
-        refuse("%s was made while the game's text could not be placed at its fixed address, so the text it "
-               "points into is gone.", name);
-        return 0;
-    }
-    if (saved.base != now.base || saved.used != now.used || saved.crc != now.crc) {
-        refuse("%s was made with other game text: a language pack, a translation mod's text or this version's "
-               "own words changed since (%u bytes at 0x%08X, CRC %08X then; %u bytes at 0x%08X, CRC %08X now). "
-               "Loading it would show the wrong lines or crash.",
-               name, (unsigned)saved.used, (unsigned)saved.base, (unsigned)saved.crc, now.used, now.base, now.crc);
-        return 0;
-    }
-    return 1;
+    char why[900];
+    if (Memories_StateCompatibleLanguage(state, path, why, sizeof(why))) return 1;
+    refuse("%s", why);
+    return 0;
 }
 
-/* Where VRAM's words came from on the disc (texture_dump.h), which a
- * texture pack goes by. Without them a loaded state showed retail textures
- * wherever the pack could not find its pictures again by their bytes alone:
- * a page the game had drawn into since its upload (the duel's card frames,
- * digits and panels). As runs (TextureDump_TagRuns), a few thousand pairs
- * where the tags themselves are 2 MiB. */
-static void texture_tags(MemoriesState *state)
+#if defined(__ANDROID__) && defined(__aarch64__)
+static void state_subsystems(MemoriesState *state)
 {
-    const size_t max = (size_t)SOFT_GPU_WIDTH * SOFT_GPU_HEIGHT;
-    uint32_t count = 0, *runs = NULL;
-    MemoriesStateField counted = {&count, sizeof(count)}, data;
-    if (!Memories_StateLoading(state)) {
-        if (!TextureDump_Tags || !(runs = malloc(max * 2 * sizeof(*runs)))) return;
-        count = (uint32_t)TextureDump_TagRuns(runs, max);
-        data.data = runs;
-        data.size = (size_t)count * 2 * sizeof(*runs);
-        Memories_StateChunk(state, "vram-tags", &counted, 1);
-        Memories_StateChunk(state, "vram-tag-runs", &data, 1);
-        free(runs);
-        return;
-    }
-    if (TextureDump_Tags && Memories_StateChunk(state, "vram-tags", &counted, 1) && count && count <= max &&
-        (runs = malloc((size_t)count * 2 * sizeof(*runs)))) {
-        data.data = runs;
-        data.size = (size_t)count * 2 * sizeof(*runs);
-        if (!Memories_StateChunk(state, "vram-tag-runs", &data, 1)) count = 0;
-    } else {
-        count = 0;
-    }
-    TextureDump_TagsLoaded(runs, count); /* VRAM restored: the rest the pack finds again */
-    free(runs);
+    /* Android's native AArch64 setjmp buffers are hosted outside game RAM. */
+    extern void Memories_StateJumps(MemoriesState *state);
+    Memories_StateJumps(state);
+    Memories_StateSubsystems(state);
 }
-
-static void subsystems(MemoriesState *state)
-{
-    unsigned signature = Mods_Signature();
-    MemoriesStateField mod_set = {&signature, sizeof(signature)};
-    MemoriesStateField gpu[2], gte[1];
-    LanguageChunk language;
-    MemoriesStateField language_field = {&language, sizeof(language)};
-    if (!Memories_StateLoading(state)) {
-        TextLayout layout = Text_Layout();
-        Memories_StateChunk(state, "mod-set", &mod_set, 1);
-        memset(&language, 0, sizeof(language));
-        snprintf(language.code, sizeof(language.code), "%s", Language_Code(Language_Current()));
-        language.version = LANGUAGE_CHUNK_VERSION;
-        language.base = layout.base;
-        language.used = layout.used;
-        language.crc = layout.crc;
-        Memories_StateChunk(state, "language", &language_field, 1);
-    }
-    Mods_VisitState(mod_state_visit, state);
-    unsigned gte_size;
-    gpu[0].data = SoftGpu_StateData(0, &gpu[0].size);
-    gpu[1].data = SoftGpu_StateData(1, &gpu[1].size);
-    gte[0].data = Gte_StateData(&gte_size);
-    gte[0].size = gte_size;
-    if (Memories_StateChunk(state, "soft_gpu", gpu, 2) || !Memories_StateLoading(state)) {
-        texture_tags(state);
-        if (Memories_StateLoading(state)) SoftGpu_PictureFromVram();
-    }
-    Memories_StateChunk(state, "gte", gte, 1);
-    {
-        /* The game's random seed (src/pc/rng.c, which `rand` and `srand`
-         * are renamed to): native, so in no game section, yet the deck's
-         * shuffle, the CPU's choices and a pack's cards all follow it. On
-         * the console it sits in RAM, which a state holds. Without it a
-         * state loaded in a running game drew other numbers than the game
-         * that saved it. */
-        MemoriesStateField seed = {&gRand_dwSeed, sizeof(gRand_dwSeed)};
-        Memories_StateChunk(state, "rng", &seed, 1);
-    }
-    {
-        /* The mods' rand seed (mod_libc.c): the same kind of number, one
-         * sequence for every mod, which a mod's choices follow. */
-        unsigned size;
-        MemoriesStateField seed;
-        seed.data = Mods_RandSeed(&size);
-        seed.size = size;
-        Memories_StateChunk(state, "mod-rng", &seed, 1);
-    }
-#if defined(__x86_64__) || defined(__aarch64__)
-    {
-        /* The game's jmp_buf lives in a host slot here (Memories_JumpSlot),
-         * outside guest RAM, which carries it on 32-bit: Main_Init's setjmp,
-         * which the Game Over and debug-menu longjmps return to. */
-        MemoriesStateField jumps = {jump_slots, sizeof(jump_slots)};
-        Memories_StateChunk(state, "jump-slots", &jumps, 1);
-    }
+#else
+#define state_subsystems Memories_StateSubsystems
 #endif
-    RetailImage_State(state);
-    Spu_State(state);
-    LibSpu_State(state);
-    LibDs_State(state);
-    LibEtc_State(state);
-    LibGpu_State(state);
-    LibGte_State(state);
-    LibPress_State(state);
-    LibMcrd_State(state);
-    SaveMenu_State(state);
-    if (!Memories_StateLoading(state)) DeckMenu_ShopState(state);
-    if (!Memories_StateLoading(state)) PackShop_State(state);
-    TitleJump_State(state);
-    TitleScreen_State(state);
-    Platform_State(state);
-    DeckMenu_State(state); /* the decks' draft, kept with the save */
-}
 
 static void tagged(char *out, size_t size, const char *kind, const char *name)
 {
@@ -725,8 +446,8 @@ static void serialize(MemoriesState *state)
     unsigned i;
     hold_signals(1);
     Spu_Hold(1);
-    emit(state, "YFMSTATE", 8);
-    emit(state, header, 8);
+    Memories_StateWrite(state, "YFMSTATE", 8);
+    Memories_StateWrite(state, header, 8);
     {
         MemoriesStateField fields[] = {{&entry, sizeof(entry)}};
         Memories_StateChunk(state, "entry", fields, 1);
@@ -755,7 +476,7 @@ static void serialize(MemoriesState *state)
         MemoriesModEvent event = {MEMORIES_EVENT_SAVE, MEMORIES_BEFORE, 0, 0, 0, 0, 0};
         Mods_Dispatch(&event);
     }
-    subsystems(state);
+    state_subsystems(state);
     {
         MemoriesStateField fields[] = {{(void *)(uintptr_t)MEMORIES_STATE_ENTRY_SP(entry), STACK_TOP - MEMORIES_STATE_ENTRY_SP(entry)}};
         Memories_StateChunk(state, "stack", fields, 1);
@@ -813,14 +534,14 @@ static void apply(void)
     Spu_Hold(1);
     DeckMenu_ShopState(&state);
     PackShop_State(&state); /* its text, like the shop's menu, remapped first */
-    chunk = find_chunk(&state, "memory", &size);
+    chunk = Memories_StateFindChunk(&state, "memory", &size);
     memcpy((void *)(uintptr_t)MEMORIES_GUEST_RAM, chunk, MEMORIES_GUEST_RAM_SIZE);
     memcpy((void *)(uintptr_t)SCRATCHPAD, chunk + MEMORIES_GUEST_RAM_SIZE, SCRATCHPAD_SIZE);
     for (i = 0; i < region_count; i++) {
         Region *region = &regions[i];
         size_t length = (size_t)(region->data_end - region->data), word, saved;
         tagged(tag, sizeof(tag), "data", region->name);
-        chunk = find_chunk(&state, tag, &size);
+        chunk = Memories_StateFindChunk(&state, tag, &size);
         /* A shorter chunk is a state from before the variables that now
          * end the section (the Windows build's small data, which came in
          * after the rest: build_game32.py): those keep their values. Only
@@ -842,17 +563,17 @@ static void apply(void)
             fprintf(stderr, "memories-pc: state: variables of '%s' do not match this build\n", region->name);
         }
         tagged(tag, sizeof(tag), "bss", region->name);
-        chunk = find_chunk(&state, tag, &size);
+        chunk = Memories_StateFindChunk(&state, tag, &size);
         if (chunk && size == (size_t)(region->bss_end - region->bss)) {
             memcpy(region->bss, chunk, size);
         } else if (chunk) {
             fprintf(stderr, "memories-pc: state: zeroed variables of '%s' do not match this build\n", region->name);
         }
     }
-    subsystems(&state);
-    chunk = find_chunk(&state, "entry", &size);
+    state_subsystems(&state);
+    chunk = Memories_StateFindChunk(&state, "entry", &size);
     memcpy(&entry, chunk, sizeof(entry));
-    chunk = find_chunk(&state, "stack", &size);
+    chunk = Memories_StateFindChunk(&state, "stack", &size);
     memcpy((void *)(uintptr_t)MEMORIES_STATE_ENTRY_SP(entry), chunk, size);
     free(pending_image);
     pending_image = NULL;
@@ -1120,7 +841,7 @@ static int load(const char *path)
     memcpy(header, image + 8, 8);
     state.image = image;
     state.image_size = (size_t)length;
-    chunk = find_chunk(&state, "entry", &size);
+    chunk = Memories_StateFindChunk(&state, "entry", &size);
     if (header[0] < VERSION) {
         refuse("%s was made by an older version of the game; save states don't carry over across this update "
                "(memory card saves do)", path);
@@ -1149,7 +870,7 @@ static int load(const char *path)
         /* The state holds the game stack, return addresses into the game code
          * as the other system's compiler laid it out: nothing here to resume. */
         char saved_by[16] = "";
-        const uint8_t *system = find_chunk(&state, "system", &size);
+        const uint8_t *system = Memories_StateFindChunk(&state, "system", &size);
         if (system && size == sizeof(saved_by)) {
             memcpy(saved_by, system, sizeof(saved_by) - 1);
         } else if (MEMORIES_STATE_ENTRY_SP(entry) >= OLD_LINUX_STACK_BASE &&
@@ -1168,10 +889,10 @@ static int load(const char *path)
             return -1;
         }
     }
-    chunk = find_chunk(&state, "stack", &size);
+    chunk = Memories_StateFindChunk(&state, "stack", &size);
     if (!chunk || MEMORIES_STATE_ENTRY_SP(entry) < STACK_BASE || MEMORIES_STATE_ENTRY_SP(entry) >= STACK_TOP ||
         size != STACK_TOP - MEMORIES_STATE_ENTRY_SP(entry) ||
-        !find_chunk(&state, "memory", &size) || size != MEMORIES_GUEST_RAM_SIZE + SCRATCHPAD_SIZE) {
+        !Memories_StateFindChunk(&state, "memory", &size) || size != MEMORIES_GUEST_RAM_SIZE + SCRATCHPAD_SIZE) {
         refuse("%s: damaged state", path);
         free(image);
         return -1;
@@ -1181,7 +902,7 @@ static int load(const char *path)
         free(image);
         return -1;
     }
-    if (!compatible_mods(&state)) {
+    if (!Memories_StateCompatibleMods(&state)) {
         refuse("save state uses different mods, card definitions or mod state layouts; restore its mod profile first");
         free(image); return -1;
     }

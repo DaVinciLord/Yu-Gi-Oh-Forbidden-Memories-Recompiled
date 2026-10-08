@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef MEMORIES_DECOMP_SORTED_ENTRY_H
 #define MEMORIES_DECOMP_SORTED_ENTRY_H
 
@@ -58,20 +59,20 @@ typedef char SortedEntry_sorted_position_must_be_at_6[
  * small data: it defines D_8009B300_IN_DATA to take the .data arm, the same
  * arrangement the state pointers below use. */
 #ifdef D_8009B300_IN_DATA
-extern u32 D_8009B300 __attribute__((section(".data")));
+extern u32 D_8009B300 PSX_SECTION(".data");
 #else
 extern u32 D_8009B300;
 #endif
 
 #ifdef SORTED_ENTRY_STATE_IN_DATA
-extern SortedEntry *G32 D_8009B304 __attribute__((section(".data")));
+extern SortedEntry *G32 D_8009B304 PSX_SECTION(".data");
 #else
 extern SortedEntry *G32 D_8009B304;
 #endif
 /* The entry count, saved by SortedEntry_SortAndRelink across the sort and
  * compared against D_8009B314 by the walk in Duel_DrawFieldCards. */
 #ifdef SORTED_ENTRY_STATE_IN_DATA
-extern u32 D_8009B308 __attribute__((section(".data")));
+extern u32 D_8009B308 PSX_SECTION(".data");
 #else
 extern u32 D_8009B308;
 #endif
@@ -81,11 +82,11 @@ extern u32 D_8009B308;
  * raises the flag it tests is not known here.  func_80035668 writes the word
  * wholesale, and both of its call sites pass 0. */
 #ifdef D_8009B30C_AS_SIGNED_DATA
-extern s32 D_8009B30C __attribute__((section(".data")));
+extern s32 D_8009B30C PSX_SECTION(".data");
 #elif defined(SORTED_ENTRY_STATE_IN_DATA)
-extern u32 D_8009B30C __attribute__((section(".data")));
-extern SortedEntry *G32 D_8009B310 __attribute__((section(".data")));
-extern u32 D_8009B314 __attribute__((section(".data")));
+extern u32 D_8009B30C PSX_SECTION(".data");
+extern SortedEntry *G32 D_8009B310 PSX_SECTION(".data");
+extern u32 D_8009B314 PSX_SECTION(".data");
 #else
 extern u32 D_8009B30C;
 extern SortedEntry *G32 D_8009B310;

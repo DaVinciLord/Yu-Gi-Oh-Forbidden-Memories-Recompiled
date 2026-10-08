@@ -1,4 +1,7 @@
 #include "memory.h"
+#ifdef MEMORIES_TRANSLATED
+#include "guest/translated_runtime.h"
+#endif
 
 void *Memories_Resolve(MemoriesMemory *memory, uint32_t address,
                        size_t length, size_t alignment)
@@ -6,6 +9,10 @@ void *Memories_Resolve(MemoriesMemory *memory, uint32_t address,
     uint8_t *base;
     uint32_t physical;
     size_t offset, capacity;
+#ifdef MEMORIES_TRANSLATED
+    /* Native LIBGS/render adapters pass the original mapped-image token. */
+    if ((uintptr_t)memory <= UINT32_MAX) memory = GuestRuntime_Memory();
+#endif
     if (!memory || !alignment || alignment > 16 ||
         (alignment & (alignment - 1)) || (address & (alignment - 1))) {
         return NULL;

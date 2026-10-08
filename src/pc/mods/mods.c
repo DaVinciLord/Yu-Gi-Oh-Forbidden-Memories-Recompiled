@@ -91,6 +91,8 @@ typedef struct {
     const JsonValue *data;       /* the "data" array, applied when enabled */
     const JsonValue *cards;      /* the "cards" array: cards the mod adds (src/pc/cards) */
     char textures[PATH_MAX_];    /* a texture pack directory inside the mod, or empty */
+    const JsonValue *assets;     /* named image replacements from mod.json, or NULL */
+    char asset_dir[PATH_MAX_];   /* "assets": a directory whose PNGs are named by their path */
     const JsonValue *audio;      /* the "audio" object: replacement sounds (src/pc/audio/replace.h) */
 } Mod;
 
@@ -1139,6 +1141,15 @@ static void register_symbols(Mod *mod)
 /* The mod's object file, read whole and handed to the loader. */
 static void *load_object(Mod *mod, const char *path)
 {
+#if defined(__APPLE__) && defined(__aarch64__) && defined(MEMORIES_TRANSLATED)
+    char error[STATUS_MAX];
+    if (ObjectLoader_LoadPath(path, &mod->object, error, sizeof(error))) {
+        note(mod, "%s %s", mod->library, error);
+        return NULL;
+    }
+    mod->code_hash = mod->object.hash;
+    return ObjectLoader_Symbol(&mod->object, "MemoriesModInit");
+#else
     FILE *file = fopen(path, "rb");
     unsigned char *data = NULL;
     long size;
@@ -1171,6 +1182,7 @@ static void *load_object(Mod *mod, const char *path)
     }
     register_symbols(mod);
     return entry;
+#endif
 }
 
 static int load_library(Mod *mod)
@@ -1179,7 +1191,7 @@ static int load_library(Mod *mod)
     MemoriesModEntry entry;
     union { void *pointer; int (*function)(const MemoriesModHost *, MemoriesMod *); } symbol;
     if (!mod->library[0]) return 1;   /* data only: nothing to load */
-    if (mod->object.image) return 1;
+    if (mod->object.image || mod->object.native_handle) return 1;
     if (snprintf(path, sizeof(path), "%s/%s", mod->directory, mod->library) >= (int)sizeof(path)) return 0;
     symbol.pointer = load_object(mod, path);
     if (!symbol.pointer) return 0;
@@ -1213,11 +1225,11 @@ static int load_library(Mod *mod)
  * that would leave the mod doing nothing, so it is a warning, not an error. */
 static const char *const manifest_keys[] = {
     "id", "name", "version", "author", "description", "library", "enabled", "restart", "legacy_setting",
-    "data", "textures", "cards", "audio", "min_api", "game", "requires", "after", "conflicts", "priority",
+    "data", "textures", "assets", "cards", "audio", "min_api", "game", "requires", "after", "conflicts", "priority",
     "settings", "fusions", "equips", "rituals", "drops", "decks", "duelists", "text", "font",
     "chest_overflow", "terrain_bonus", "trap_thresholds", "equip_bonus_default", "passwords", "starter",
     "starter_pools", "title", "menu", "limits", "guardian_stars", "packs", "pack_shop",
-    "card_text_colors", "ui",
+    "card_text_colors", "card_layout", "ui",
 };
 
 /* How many letters to add, remove or change to turn one word into the
@@ -1307,9 +1319,19 @@ static int read_manifest(Mod *mod, const char *directory, const char *origin)
             mod->broken = 1;
             note(mod, "\"library\": %s is outside the mod", text);
         } else if (strchr(text, '.')) {
+#if defined(__APPLE__) && defined(__aarch64__) && defined(MEMORIES_TRANSLATED)
+            size_t length = strlen(text);
+            if (length >= 2 && !strcmp(text + length - 2, ".o"))
+                snprintf(mod->library, sizeof(mod->library), "%.*s.dylib", (int)(length - 2), text);
+            else
+#endif
             copy_text(mod->library, sizeof(mod->library), text);
         } else {
+#if defined(__APPLE__) && defined(__aarch64__) && defined(MEMORIES_TRANSLATED)
+            snprintf(mod->library, sizeof(mod->library), "%s.dylib", text);
+#else
             snprintf(mod->library, sizeof(mod->library), "%s.o", text);   /* one object for every system */
+#endif
         }
     }
     mod->restart = Json_Bool(Json_Member(root, "restart"), 0);
@@ -1323,6 +1345,27 @@ static int read_manifest(Mod *mod, const char *directory, const char *origin)
             mod->broken = 1;
             note(mod, "\"textures\": %s is too long", text);
         }
+    }
+    mod->assets = Json_Member(root, "assets");
+    if (mod->assets && Json_TypeOf(mod->assets) == JSON_STRING) {
+        /* "assets": "<directory>" ships the pictures instead of listing
+         * them; each PNG's path under it is the name it replaces. */
+        text = Json_String(mod->assets, "");
+        mod->assets = NULL;
+        if (!*text) {
+            mod->broken = 1;
+            note(mod, "\"assets\" names no directory");
+        } else if (!Paths_Contained(text)) {
+            mod->broken = 1;
+            note(mod, "\"assets\": %s is outside the mod", text);
+        } else if (snprintf(mod->asset_dir, sizeof(mod->asset_dir), "%s/%s", directory, text) >=
+                   (int)sizeof(mod->asset_dir)) {
+            mod->broken = 1;
+            note(mod, "\"assets\": %s is too long", text);
+        }
+    } else if (mod->assets && Json_TypeOf(mod->assets) != JSON_OBJECT) {
+        mod->broken = 1;
+        note(mod, "\"assets\" is not an object or the name of a directory");
     }
     mod->data = Json_Member(root, "data");
     if (mod->data && Json_TypeOf(mod->data) != JSON_ARRAY) {
@@ -1458,6 +1501,18 @@ static void scan(const char *root, const char *origin)
 /* Turn a mod on or off for real: its library, its overrides, its hook. */
 static int (*texture_pack_load)(const char *directory, unsigned rank, int (*part)(const char *, void *),
                                 void *context, char *problems, size_t size);
+static int (*assets_load)(const char *, const JsonValue *, unsigned,
+                          int (*)(const char *, void *), void *, char *, size_t);
+static int (*asset_folder_load)(const char *, unsigned, int (*)(const char *, void *), void *, char *, size_t);
+
+void Mods_SetAssets(int (*load)(const char *, const JsonValue *, unsigned,
+                                int (*)(const char *, void *), void *, char *, size_t),
+                    int (*folder)(const char *, unsigned, int (*)(const char *, void *), void *, char *, size_t))
+{
+    assets_load = load;
+    asset_folder_load = folder;
+}
+
 static void (*texture_pack_unload)(void);
 static unsigned texture_rank;   /* the highest rank a loaded pack has */
 static int (*audio_load)(int, const char *, const char *, const JsonValue *, char *, size_t);
@@ -1556,22 +1611,52 @@ int Mods_File(int index, const char *key, int entry_index, char *path, size_t si
  * comes last, as each does while the game starts, goes on top of those
  * loaded; otherwise they are all loaded again. Returns what loading `with`
  * returned (-1 it could not load), its problems in `problems`. */
+static int has_images(const Mod *mod) { return mod->textures[0] || mod->assets || mod->asset_dir[0]; }
+
+static int load_mod_images(Mod *mod, char *problems, size_t size)
+{
+    int loaded = 0, got;
+    char error[STATUS_MAX] = "";
+    if (problems && size) problems[0] = '\0';
+    if (mod->textures[0]) {
+        if (!texture_pack_load) return -1;
+        loaded = texture_pack_load(mod->textures, ++texture_rank, texture_part, mod, problems, size);
+        if (loaded < 0) return loaded;
+    }
+    if (mod->assets || mod->asset_dir[0]) {
+        if (!assets_load || !asset_folder_load) {
+            if (problems && size) snprintf(problems, size, "this build has no named asset replacements");
+            return -1;
+        }
+        /* Direct images override the same mod's pack; the next mod still wins. */
+        got = mod->asset_dir[0]
+            ? asset_folder_load(mod->asset_dir, ++texture_rank, texture_part, mod, error, sizeof(error))
+            : assets_load(mod->directory, mod->assets, ++texture_rank, texture_part, mod, error, sizeof(error));
+        if (problems && size && error[0]) {
+            size_t used = strlen(problems);
+            if (used < size) snprintf(problems + used, size - used, "%s%s", used ? "; " : "", error);
+        }
+        if (got < 0) return got;
+        loaded += got;
+    }
+    return loaded;
+}
+
 static int load_texture_packs(int with, int without, char *problems, size_t size)
 {
     int wanted[MODS_MAX], order[MODS_MAX], i, n, loaded = with < 0 ? 0 : -1;
     char ignored[STATUS_MAX];
     for (i = 0; i < mod_count; i++)
-        wanted[i] = i != without && mods[i].textures[0] && (mods[i].active || i == with);
+        wanted[i] = i != without && has_images(&mods[i]) && (mods[i].active || i == with);
     n = Mods_Order(wanted, order, ignored, sizeof(ignored));
     if (n < 0) for (n = 0; order[n] >= 0; n++) continue;   /* a cycle: the packs that could be placed */
     if (with >= 0 && n > 0 && order[n - 1] == with) {
-        return texture_pack_load(mods[with].textures, ++texture_rank, texture_part, &mods[with], problems, size);
+        return load_mod_images(&mods[with], problems, size);
     }
     texture_pack_unload();
     texture_rank = 0;
     for (i = 0; i < n; i++) {
-        int got = texture_pack_load(mods[order[i]].textures, ++texture_rank, texture_part, &mods[order[i]],
-                                    order[i] == with ? problems : NULL, size);
+        int got = load_mod_images(&mods[order[i]], order[i] == with ? problems : NULL, size);
         if (order[i] == with) loaded = got;
     }
     return loaded;
@@ -1620,13 +1705,13 @@ static void activate_once(int index, int on)
         if (!mod->data_prepared) copy_text(mod->status, sizeof(mod->status), mod->warnings);
         if (!mod->data_prepared && !apply_overrides(mod, index)) { mod->failed = 1; return; }
         mod->data_prepared = 1;
-        if (mod->textures[0]) {
+        if (has_images(mod)) {
             char problems[STATUS_MAX] = "";
-            if (!texture_pack_load || !texture_pack_unload || load_texture_packs(index, -1, problems, sizeof(problems)) < 0) {
+            if (!texture_pack_unload || load_texture_packs(index, -1, problems, sizeof(problems)) < 0) {
                 mod->failed = 1;
                 note(mod, "texture pack could not load%s%s", problems[0] ? ": " : "", problems);
                 drop_overrides(index);
-                if (texture_pack_load && texture_pack_unload) load_texture_packs(-1, index, NULL, 0);
+                if (texture_pack_unload) load_texture_packs(-1, index, NULL, 0);
                 return;
             }
             if (problems[0]) warn(mod, 0, "texture pack: %s", problems);
@@ -1648,7 +1733,7 @@ static void activate_once(int index, int on)
     } else {
         drop_overrides(index);
         if (mod->audio && audio_unload) audio_unload(index);
-        if (mod->textures[0] && texture_pack_load && texture_pack_unload) {
+        if (has_images(mod) && texture_pack_unload) {
             /* The packs add up: the others' come back without this one's. */
             load_texture_packs(-1, index, NULL, 0);
         }
@@ -1931,7 +2016,7 @@ unsigned Mods_Sequence(int index) { return at(index) ? mods[index].sequence : 0;
 void Mods_OptionChanged(int index, int option)
 {
     const JsonValue *spec = Mods_Option(index, option);
-    if (!at(index) || !mods[index].active || !mods[index].textures[0] || !texture_pack_load || !texture_pack_unload) return;
+    if (!at(index) || !mods[index].active || !has_images(&mods[index]) || !texture_pack_unload) return;
     /* A setting that waits for a restart keeps the value it was applied with (Mods_RuntimeOption). */
     if (mods[index].restart || Json_Bool(Json_Member(spec, "restart"), 0)) return;
     load_texture_packs(-1, -1, NULL, 0);

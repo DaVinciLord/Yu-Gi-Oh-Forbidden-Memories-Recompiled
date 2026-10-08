@@ -8,11 +8,20 @@ set -eu
 cd -- "$(dirname -- "$0")"
 
 missing=""
-for tool in python3 gcc ld objcopy nm readelf objdump; do
+if [ "$(uname -s)" = Darwin ]; then
+    required_tools="python3 xcrun"
+else
+    required_tools="python3 gcc ld objcopy nm readelf objdump"
+fi
+for tool in $required_tools; do
     command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
 done
 if [ -n "$missing" ]; then
     echo "Building the game needs:$missing"
+    if [ "$(uname -s)" = Darwin ]; then
+        echo "Install Python 3 and the Xcode developer tools (xcode-select --install)."
+        exit 1
+    fi
     echo "  Debian/Ubuntu: sudo apt install gcc python3"
     echo "  Fedora:        sudo dnf install gcc python3"
     echo "  Arch:          sudo pacman -S gcc python"

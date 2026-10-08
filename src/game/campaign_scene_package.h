@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef MEMORIES_DECOMP_CAMPAIGN_SCENE_PACKAGE_H
 #define MEMORIES_DECOMP_CAMPAIGN_SCENE_PACKAGE_H
 
@@ -55,7 +56,7 @@ void Campaign_LoadScenePackageStage(
  * screen, and the inline-assembly event driver updates the same slot.
  * DebugMenu_UpdateCampaignEntry selects the DATA view for its absolute load/store. */
 #ifdef CAMPAIGN_PRIMARY_OBJECT_IN_DATA
-extern DisplayObject *G32 D_8009B2A0 __attribute__((section(".data")));
+extern DisplayObject *G32 D_8009B2A0 PSX_SECTION(".data");
 #else
 extern DisplayObject *G32 D_8009B2A0;
 #endif

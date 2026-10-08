@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef MEMORIES_DECOMP_AI_OPPONENT_DATA_H
 #define MEMORIES_DECOMP_AI_OPPONENT_DATA_H
 
@@ -28,7 +29,7 @@ extern s8 gDuel_bOpponentID[AI_OPPONENT_DATA_FIELD_COUNT];
 #elif defined(GDUEL_BOPPONENTID_AS_ARRAY)
 extern s8 gDuel_bOpponentID[];
 #else
-extern s8 gDuel_bOpponentID __attribute__((section(".data")));
+extern s8 gDuel_bOpponentID PSX_SECTION(".data");
 #endif
 
 #endif

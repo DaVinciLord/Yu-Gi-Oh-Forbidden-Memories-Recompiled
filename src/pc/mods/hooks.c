@@ -19,6 +19,24 @@
 #include "../compat/mman.h"
 #include <stdint.h>
 #include <string.h>
+#include <stdlib.h>
+
+#if defined(__APPLE__) && defined(__aarch64__) && defined(MEMORIES_TRANSLATED)
+#define ARM64_HOOKS 1
+#define ENTRY_BYTES 0
+static struct { void *function, *body; } registered[8192];
+static unsigned registered_count;
+void Hooks_Register(void *function, void *body)
+{
+    for (unsigned i = 0; i < registered_count; i++)
+        if (registered[i].function == function) return;
+    if (registered_count == 8192) abort();
+    registered[registered_count].function = function;
+    registered[registered_count++].body = body;
+}
+#else
+#define ENTRY_BYTES 2
+#endif
 
 #define PRE 6     /* nops before the entry */
 #define TARGETS_MAX 1024
@@ -63,6 +81,15 @@ static int find_target(unsigned char *entry)
 {
     int i;
     for (i = 0; i < target_count; i++) if (targets[i].entry == entry) return i;
+#ifdef ARM64_HOOKS
+    if (target_count == TARGETS_MAX) return -1;
+    for (unsigned r = 0; r < registered_count; r++) if (registered[r].function == entry) {
+        targets[i].entry = entry;
+        targets[i].slot = registered[r].body;
+        return target_count++;
+    }
+    return -1;
+#else
     if (target_count == TARGETS_MAX || !patchable(entry)) return -1;
     targets[i].entry = entry;
     memcpy(targets[i].saved, entry, 2);
@@ -79,10 +106,14 @@ static int find_target(unsigned char *entry)
     }
     writable(entry - PRE, PRE + 2, 0);
     return target_count++;
+#endif
 }
 
 static void set_entry(Target *target, int hooked)
 {
+#ifdef ARM64_HOOKS
+    target->patched = hooked;
+#else
     uint16_t value;
     if (hooked == target->patched) return;
     if (hooked) value = (uint16_t)(0xEB | (0xF8 << 8));   /* jmp -8: back to the jmp *[slot] */
@@ -91,12 +122,34 @@ static void set_entry(Target *target, int hooked)
     __atomic_store_n((uint16_t *)target->entry, value, __ATOMIC_SEQ_CST);
     writable(target->entry, 2, 0);
     target->patched = hooked;
+#endif
 }
+
+static void *original_body(Target *target)
+{
+#ifdef ARM64_HOOKS
+    for (unsigned r = 0; r < registered_count; r++)
+        if (registered[r].function == target->entry) return registered[r].body;
+    abort();
+#else
+    return target->entry + ENTRY_BYTES;
+#endif
+}
+
+#ifdef ARM64_HOOKS
+void *Hooks_Resolve(void *function, void *body)
+{
+    for (int t = 0; t < target_count; t++) if (targets[t].entry == function)
+        return __atomic_load_n(&targets[t].slot, __ATOMIC_SEQ_CST);
+    return body;
+}
+#endif
 
 void Hooks_Relink(void)
 {
     for (int t = 0; t < target_count; t++) {
-        void *next = targets[t].entry + 2;   /* the game's own code, after the nops */
+        void *body = original_body(&targets[t]);
+        void *next = body;
         for (int h = 0; h < hook_count; h++) {
             if (hooks[h].target != t || !Mods_Active(hooks[h].owner)) continue;
             if (hooks[h].original) __atomic_store_n(hooks[h].original, next, __ATOMIC_SEQ_CST);
@@ -105,10 +158,10 @@ void Hooks_Relink(void)
         /* An unapplied mod's `original` still leads somewhere real. */
         for (int h = 0; h < hook_count; h++) {
             if (hooks[h].target == t && !Mods_Active(hooks[h].owner) && hooks[h].original)
-                __atomic_store_n(hooks[h].original, (void *)(targets[t].entry + 2), __ATOMIC_SEQ_CST);
+                __atomic_store_n(hooks[h].original, body, __ATOMIC_SEQ_CST);
         }
         __atomic_store_n(&targets[t].slot, next, __ATOMIC_SEQ_CST);
-        set_entry(&targets[t], next != (void *)(targets[t].entry + 2));
+        set_entry(&targets[t], next != body);
     }
 }
 
@@ -118,7 +171,7 @@ int Hooks_Add(int owner, void *function, void *replacement, void **original)
     if (!function || !replacement || function == replacement || hook_count == HOOKS_MAX || serial == 0x7fffffff) return 0;
     target = find_target(function);
     if (target < 0) return 0;
-    if (original) *original = targets[target].entry + 2;
+    if (original) *original = original_body(&targets[target]);
     hooks[hook_count++] = (Hook){owner, ++serial, target, replacement, original};
     Hooks_Relink();
     return serial;

@@ -1,3 +1,4 @@
+#include "../port_ptr.h"
 #ifndef MEMORIES_DECOMP_SCRIPT_STATE_H
 #define MEMORIES_DECOMP_SCRIPT_STATE_H
 
@@ -19,9 +20,9 @@
 #if defined(SCRIPT_STATE_TEXT_CALLBACK_VIEWS)
 extern u16 D_8009B27C[];
 extern s16 D_8009B27C_scalar asm("D_8009B27C")
-    __attribute__((section(".data")));
+    PSX_SECTION(".data");
 #elif defined(SCRIPT_STATE_COMMAND_IN_DATA)
-extern u16 D_8009B27C __attribute__((section(".data")));
+extern u16 D_8009B27C PSX_SECTION(".data");
 #else
 extern u16 D_8009B27C;
 #endif
@@ -85,15 +86,15 @@ extern u8 D_801A8000[];
  *
  * The text callback arm keeps its signed, absolute spelling. */
 #ifdef SCRIPT_STATE_TEXT_CALLBACK_VIEWS
-extern s16 D_8009B29C __attribute__((section(".data")));
+extern s16 D_8009B29C PSX_SECTION(".data");
 extern u16 D_8009B2A8[];
 extern u16 D_8009B2AA[];
 extern u16 Base2_8009B2A8[];
 extern u16 Base2_8009B2AA[];
 extern s16 D_8009B2A8_scalar asm("D_8009B2A8")
-    __attribute__((section(".data")));
+    PSX_SECTION(".data");
 extern s16 D_8009B2AA_scalar asm("D_8009B2AA")
-    __attribute__((section(".data")));
+    PSX_SECTION(".data");
 #else
 extern u16 D_8009B29C;
 extern u16 D_8009B2A8;

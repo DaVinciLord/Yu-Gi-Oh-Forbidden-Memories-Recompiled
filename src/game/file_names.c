@@ -12,7 +12,7 @@ u8 gFile_szDiscSdSeDatPath[20] = "\\DATA\\SD_SE.DAT;1";
 u8 gFile_szDiscSdBgmDatPath[20] = "\\DATA\\SD_BGM.DAT;1";
 u8 gFile_szDiscMasterXaPath[20] = "\\DATA\\MASTER.XA;1";
 
-u8 *gFile_apszName[8] = {
+u8 *TRANSLATED_G32 gFile_apszName[8] = {
     gFile_szDiscWaMrgPath,
     gFile_szDiscSuMrgPath,
     gFile_szDiscModelMrgPath,

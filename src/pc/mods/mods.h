@@ -23,6 +23,13 @@ void Mods_SetTexturePack(int (*load)(const char *directory, unsigned rank,
                                      int (*part)(const char *setting, void *context), void *context,
                                      char *problems, size_t size),
                          void (*unload)(void));
+/* Named "assets" use the texture pack unload/rebuild lifecycle: `load` for
+ * an object listing the pictures, `folder` for a directory of them. */
+void Mods_SetAssets(int (*load)(const char *directory, const struct JsonValue *assets, unsigned rank,
+                                int (*part)(const char *, void *), void *context, char *problems, size_t size),
+                    int (*folder)(const char *directory, unsigned rank,
+                                  int (*part)(const char *, void *), void *context,
+                                  char *problems, size_t size));
 /* The audio replacement an "audio" mod goes through (src/pc/audio/replace.h):
  * `load` decodes a mod's files and returns how many it added, or -1 when the
  * object is malformed, with the first failure in `error`; `unload` drops

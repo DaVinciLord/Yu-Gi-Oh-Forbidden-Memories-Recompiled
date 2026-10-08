@@ -50,11 +50,12 @@ editors write, is fine):
 |---|---|
 | `id` | the name the settings and the user directory use; the directory's name when it is left out |
 | `name` | what the Mods window shows |
-| `library` | the mod's code: an object file relative to its directory (a subdirectory is fine), `.o` added when the name has no `.` anywhere in it (`rules` is `rules.o`, `rules.v2` stays `rules.v2`); `build_mod.py` writes it under the same name. The same file serves every system. Leave it out for a mod that is only data |
+| `library` | the mod's code: an object file relative to its directory (a subdirectory is fine), `.o` added when the name has no `.` anywhere in it (`rules` is `rules.o`, `rules.v2` stays `rules.v2`); `build_mod.py` writes it under the same name. Linux and 32-bit Windows share one `.o`; macOS ARM64 needs a separately built `.dylib` (see [Native macOS ARM64 code mods](#native-macos-arm64-code-mods)). Leave it out for a mod that is only data |
 | `enabled` | whether the mod is applied the first time the game sees it |
 | `restart` | whether changing it needs a fresh process. Data overrides default to `true`, because the game reads most of what they change while it starts; code mods and `audio` default to `false` |
 | `legacy_setting` | an older settings key to read the player's choice from, once |
 | `data` | what the mod changes on the disc, below |
+| `assets` | images the mod replaces by name: an entry each, or the name of a directory holding them, below |
 | `textures` | a directory inside the mod holding a texture pack, below |
 | `cards` | cards the mod adds after the disc's 722, and changes to the disc's own cards, below |
 | `audio` | songs, XA clips and sound effects the mod replaces with WAV or Ogg files, below |
@@ -187,6 +188,181 @@ Overrides stand in for the disc for every reader in the port: the drive
 model, the bulk reads a mod makes, and the file lookup itself. Nothing on the
 real disc image is touched, and removing the mod puts the game back exactly
 as it was.
+
+## Named assets: an image and the name of what it replaces
+
+`assets` replaces one of the game's images with one of yours, named, with
+nothing else to write: no directory to lay out and no `manifest.json`. The
+engine already knows where every name sits on the disc, how wide it is, how
+deep and which palette it is read through, so the mod only says which name
+and which file:
+
+```json
+{
+    "id": "my-ui",
+    "name": "My UI",
+    "assets": {
+        "card_frames/frame_monster/column-0": {"image": "frames/monster-left.png"},
+        "card_frames/frame_monster/column-1": {"image": "frames/monster-right.png"},
+        "card_frames/level_star": {"image": "star.png"},
+        "build_deck/cursor_bar": {"image": "cursor.png"},
+        "duel/life_points_you": {"image": "life-points.png"}
+    }
+}
+```
+
+```
+my-ui/
+├── mod.json
+├── star.png
+├── cursor.png
+├── life-points.png
+└── frames/
+    ├── monster-left.png
+    └── monster-right.png
+```
+
+Each entry takes an `image`, a path relative to the mod's own directory (a
+subdirectory is fine; a path that leaves the mod is refused), and an
+optional `setting`, the key of one of the mod's `settings` that switches
+that one image off, exactly as a pack entry's does.
+
+### Or a directory, and nothing to list
+
+`"assets"` may instead name a directory, and then the mod ships the pictures
+rather than listing them: every PNG under it whose path is a name replaces
+that image.
+
+```json
+{
+    "id": "my-ui",
+    "name": "My UI",
+    "assets": "assets"
+}
+```
+
+```
+my-ui/
+├── mod.json
+└── assets/
+    ├── build_deck/type_dragon.png       -> build_deck/type_dragon
+    ├── card_frames/level_star.png       -> card_frames/level_star
+    └── card_art/001.png               -> card_art/001
+```
+
+So `assets/build_deck/type_dragon.png` is `build_deck/type_dragon`: the path under
+the directory, without `.png`. Nothing else is read, and nothing has to be
+kept in step with the files — adding a picture adds the replacement, removing
+it gives the image back to the disc. A file whose path is not a name is left
+alone and counted in the mod's line in the Mods window, so a misspelt name is
+told rather than silently ignored, and anything that is not a `.png` is
+passed over. A directory that is empty, or not there yet, replaces nothing
+and is not an error.
+
+#### A directory for each part
+
+A folder of the catalog switches with the mod's own setting of that name:
+declare `attributes` and the player's switch takes `assets/attributes/...`
+out, with nothing to nest.
+
+```
+my-mod/
+├── mod.json                      settings: attributes, monster_type
+└── assets/
+    ├── attributes/light.png          switched by "attributes"
+    └── monster_type/dragon.png       switched by "monster_type"
+```
+
+The name is read from the whole path either way, so a setting named after a
+folder cannot change which image a file stands for.
+
+To put several folders behind one switch, name a directory after the setting
+and keep the names under it, as an entry's `"setting"` does:
+
+```
+my-ui/
+├── mod.json                              settings: hd_art, hd_ui
+└── assets/
+    ├── hd_art/card_frames/level_star.png     switched by hd_art
+    ├── hd_ui/monster_type/dragon.png         switched by hd_ui
+    └── card_art/001.png                     no setting, always on
+```
+
+The whole path is tried as a name first, so a directory that is also a
+folder of the catalog (`assets/card_art/...`) keeps meaning that folder; only
+when the rest of the path is a name as well does the first part count as a
+setting. A player turning the part off in the Mods window takes those
+pictures out without a restart, exactly as a pack's entries go.
+
+The two forms do the same thing and a mod picks one: the object when it wants
+a `setting` on one image or its files laid out its own way, the directory
+when it would rather just drop pictures in and switch them by folder. The FM Editor reads both, and writes
+into the directory a mod already ships rather than converting it. A name the catalog does
+not hold is an error naming it, not a silent no-op, so a typo is found when
+the mod is applied rather than looked for on screen.
+
+Everything the next section says about a pack's images holds for these:
+any size, resampled at the console's resolution and sampled at its own at
+Internal 2x and up, the palette rule, the alpha rule, and the load order
+when two mods replace the same image. A mod may carry both `assets` and
+`textures`; its own `assets` are applied over its own pack, and a mod later
+in the load order still wins over both.
+
+### The names
+
+`docs/asset-catalog.json` is the catalog: every name with the geometry the
+engine reads it by and a line saying what it is. `tools/pc/asset_catalog.py`
+generates it, and `src/pc/render/asset_catalog.inc` beside it, from the same
+layouts `tools/pc/extract_images.py` extracts by, so the two can never
+disagree about where an image lives; `make check-asset-catalog` verifies the
+tracked pair is current.
+
+The folders are the parts a mod thinks in, not the shapes the disc keeps
+them in: a card's picture, its thumbnail and its name plate share one record
+on the disc but are three things to replace, so they are three folders.
+
+| Folder | What it holds |
+|---|---|
+| `card_art/NNN` | the picture on a card |
+| `thumbnails/NNN` | the small picture in the duel hand and on the field |
+| `nameplate/NNN` | the card's name, written |
+| `card_frames/...` | the card panel: the six frames, the card back, the level star, the ten ATK/DEF digits and the five words |
+| `attributes/...` | the eight attribute balls |
+| `star_guardians/...` | the ten Guardian Star symbols |
+| `monster_type/...` | all twenty-four monster type icons, `dragon` to `equip` |
+| `build_deck/...` | the Build Deck and Trade screens: the ATK and DEF marks, the count digits in six colours, the eight sort icons, the CHEST and ORDER boxes and the cursor bar |
+| `duel/...` | the duel's HUD: the FIELD box, both life points panels and the turn arrows |
+| `UI/...` | the sprites nearly every screen draws from one shared sheet: the pad glyphs, the arrows, the starchip, the DECK box, the 1P/2P badges |
+
+Every name is one picture: a sprite cropped to its own rectangle of the
+sheet it sits in, read through the one palette it is drawn with. The
+screens' sheets themselves are not named, nor the duellists' portraits or
+the story's scenes -- a column of a sheet is a slab many sprites share, and
+each of its palettes is the key to a different set of them, so there is no
+one picture to replace. A mod that wants those uses a texture pack, which
+can address any words at all (below). The crop is per texel, so repainting
+`monster_type/zombie` leaves the icon beside it in the same word alone, and
+a sprite can be replaced without touching the screen around it.
+
+A sprite is named for what it is, not for where it sits: the monster type
+icons are `monster_type/dragon` to `monster_type/equip`, the Guardian
+Stars `star_guardians/mars` to `star_guardians/venus` in the game's own
+numbering, the sort icons `build_deck/sort_card_number`, `sort_attack` and the
+rest by the order each one sorts the list into. A few are numbered because
+nothing else would be honest: the turn arrow's eight frames
+(`duel/turn_arrow-00`) are one picture's animation, and `build_deck/panel-NN`
+is the Build Deck screen's furniture, which has no names of its own beyond
+`build_deck/chest_box` and `build_deck/order_box`.
+
+One name can stand for several readings of the same picture. Every
+`card_frames` name covers all ten card UI packages the disc repeats — the Build
+Deck screen's, the Library's, the Password screen's and one per duel terrain
+— so a single `card_frames/level_star` repaints the star everywhere it is drawn.
+The count the Mods window reports for such a mod is the images it replaced,
+which is larger than the entries it wrote.
+
+The images the names stand for are the game's own, so a mod ships painted
+images or a way to make them from the player's disc, never the originals.
 
 ## Texture packs: images by origin
 
@@ -724,6 +900,139 @@ opens. How it is done: [`src/pc/platform/title_menu.c`](../src/pc/platform/title
 the labels in `menu_label.c`; the manifest is read by `title_config.c` and
 checked by `tests/pc/title_config_test.c`.
 
+## Card layout: repositioning or hiding the big-card display
+
+A mod may change where the elements of the "big card" display -- the card
+viewer, and every other screen that shows one full card -- sit, or leave
+some of them out, with a `"card_layout"` object, no code needed:
+
+```json
+"card_layout": {
+    "frame": {
+        "monster": {"image": "anime_frame_monster.png", "width": 140, "height": 196},
+        "magic": {"image": "anime_frame_magic.png", "width": 140, "height": 196},
+        "trap": {"image": "anime_frame_trap.png", "width": 140, "height": 196},
+        "ritual": {"image": "anime_frame_ritual.png", "width": 140, "height": 196},
+        "orange": {"image": "anime_frame_orange.png", "width": 140, "height": 196}
+    },
+    "art": {"x": 4, "y": 3, "width": 134, "height": 138},
+    "attribute": {"x": 114, "y": 149},
+    "atk": {"x": 38, "y": 178},
+    "def": {"x": 104, "y": 178},
+    "stars": {"x": 59, "y": 153},
+    "spell": {
+        "art": {"x": 4, "y": 3, "width": 133, "height": 138},
+        "icon": {"x": 62, "y": 163}
+    }
+}
+```
+
+`attribute`/`spell`'s `icon` give a position but no `width`/`height`: those
+frames cut no hole for them, so they draw at native size. Leave `attribute`
+out entirely, though, and it inherits retail's title-plate spot -- now
+covered by full-bleed's bigger art -- so it ends up hidden; giving it a
+position in the stat band keeps it clear of `art`'s own rect.
+
+`stars`'s `x`/`y` is the row's *centre*, like `atk`/`def`'s box centre
+above, not retail's right-anchored first-star position: a card can carry
+up to 12 stars at a fixed 9px each, and `func_80028B08.c` centres however
+many a card has around this point so a wide row never runs past the frame.
+
+Retail draws a small frame with a title plate, the card's picture at its
+own fixed size, and ATK/DEF stacked under a separate plaque -- none of
+which `"card_layout"` can change on its own. What it does is answer a mod's
+own `full_bleed` setting (a `bool` the mod declares, as every setting is):
+while that setting is on, the frame and title plate are left out, and the
+rest move to the place given, in the same pixel neighbourhood retail draws
+them in (`x`/`y`, with `width`/`height` on `art` and `attribute` stretching
+the picture there instead of drawing it at its own size). Any key left out
+-- the whole object included -- keeps retail's own place; a mod that only
+sets `full_bleed` and gives no positions gets retail's own layout with
+nothing hidden, which is a no-op, not a half-finished look. The description
+box is always shown -- its own backdrop panel is on screen either way, so
+there is nothing to gain by leaving its text out.
+
+`frame` names a PNG per card kind (`image`, relative to the mod's directory,
+as a `title` mod's pictures are), drawn as one textured quad behind
+everything else, at `width`/`height` (140x196 with neither given) --
+monster's own key, and `magic`/`trap`/`ritual`/`purple`/`orange`
+(`cards.h`'s `CARD_FRAME_*`, the same six a card's own explicit frame
+colour picks from -- `Cards_FrameColor`, read whatever a card's real type
+is). A kind with no key of its own falls back to `monster`'s frame, not
+none -- a mod that has only drawn one frame still gets a frame for every
+kind, the same "missing stays retail-shaped, not half-finished" rule the
+rest of this object follows. With no `frame` key at all, nothing is drawn
+where the retail frame was, which is a deliberate, supported look (a mod may want the art
+and stats floating with no backing at all). The PNG is stretched to the
+texture's own resolution regardless of its native size, the same rule a
+`title` mod's `image` follows.
+
+Whatever size the source art is, it lands on a fixed 177x254 texture
+(`src/pc/cards/card_layout_art.c`'s `FRAME_W`/`FRAME_H`, the largest size
+POLY_GT4's own UV coordinates can address) -- 919x1319, the size
+`tools/pc/hd_recipes/anime_frame_*.png` are drawn at, is already a ~27x
+reduction in area by the time it's on screen. That's a plain box-filter
+average, which is lossless of whatever contrast is actually there (not a
+quantizer bug -- checked by reimplementing the exact algorithm and by
+running a bold checkerboard through the same pipeline, which stayed
+perfectly crisp), but low-amplitude texture -- fine marbling, a soft
+gradient a few pixels wide -- is exactly what that average erases first,
+no matter how good it looks at full size. Draw frame art bolder than
+looks necessary up close; `anime_frame_*.png` needed a contrast pass
+(HSV-space unsharp mask plus a touch of marbling) after the first version
+read as a flat colour once actually in the game.
+
+Magic, trap, ritual and equip cards have no level, ATK or DEF to draw --
+`art`/`atk`/`def`/`stars` keep monster's (and purple's and orange's, the
+monster frame recoloured) layout, and `CARD_LAYOUT_ART`/`CARD_LAYOUT_
+ATTRIBUTE` instead answer from `spell`'s `art`/`icon` for those four kinds:
+a different place for the same elements, not different ones --
+func_80028B08.c still draws retail's own art/attribute textures there,
+unchanged, just stretched into `spell`'s box instead of `art`'s/
+`attribute`'s. Retail's elemental-attribute texture is not meaningful for
+a non-monster card, so what actually shows in `icon`'s box today is
+whatever that read happens to be -- a mod wanting something deliberate
+there (a card-kind badge, say) has nowhere resident to read one from yet;
+a Build Deck badge sheet and a duel-resident word texture were both tried
+and backed out (wrong VRAM residency and wrong shape, respectively).
+
+Only one mod's `card_layout` is read at a time -- the last applied one that
+declares it, the same "a later mod wins" rule other singular keys follow --
+so two layout mods together is the last one's layout, not a merge of both.
+Forbidden Memories HD carries this as its own `full_bleed` setting, no code
+of its own needed: `tools/pc/hd_assets_pack.py`'s `--anime-frame-<kind>`
+flags default to `tools/pc/hd_recipes/anime_frame_<kind>.png` if present,
+so a normal build picks this up with nothing extra to pass. A kind with no
+art of its own yet (`ritual`, `orange`) borrows another's at read time. A
+model for writing another: a pure data mod, no `library`, with one
+`full_bleed` setting, a frame per kind and the positions above.
+
+**Known limitation**: the frame image itself does not render in the duel's
+own card viewer (opened from the hand) -- `CardLayout_DrawFrame` submits
+through a raw depth value that bypasses this codebase's usual depth-sorting,
+so it silently draws at the wrong depth there. Everything else (art, stats,
+attribute, description) renders correctly in every viewer; only the
+decorative backdrop is affected, and only in that one screen.
+
+How it is done: the three retail call sites each ask one place
+(`src/pc/cards/card_layout.c`'s `CardLayout_Get`/`CardLayout_FullBleed`/
+`CardLayout_IsSpell`) for an element's place instead of carrying a mod's
+logic themselves -- `src/game/func_80028B08.c` (title, stats, stars,
+attribute, art, frame), `src/game/func_800283F4.c` (the description box,
+always left visible today) and `src/game/duel_effect_resource_setup.c`'s
+`func_800291E0` (the frame's own list membership). Each of the first two
+call `CardLayout_SetCard` with the card it is about to draw before asking
+for anything else -- its frame kind is `Cards_FrameColor` if a mod gave the
+card one (whatever its real type), else bucketed from `Cards_Type` (equip
+takes magic's), monster with no card named yet. None of those three change
+at all with no `card_layout` mod applied -- `CardLayout_Get` answers with
+retail's own constants, byte for byte. The frame texture is decoded once
+into a VRAM bank by `src/pc/cards/card_layout_art.c`, the same shape
+`src/pc/cards/star_icons.c` and `src/pc/text/glyphs.c` use for theirs,
+re-decoding whenever `CardLayout_FramePath` answers a different file --
+which a kind change already does, nothing further to invalidate. The
+manifest key itself is checked by `tests/pc/card_layout_test.c`.
+
 ## The duel's pictures
 
 A mod may move, size, colour, hide or replace the duel's pictures with a
@@ -1142,6 +1451,13 @@ card's own `guardian_star` rule takes precedence. When two enabled mods set
 the same card part or guardian star, the later mod in load order wins. The
 rules are read when cards are built, so changing them requires a restart.
 
+Yamyi Mods has an optional **Rarity card-name colours** setting for compatibility
+with its older `card_name_color.ini` system. It is off by default. When enabled,
+that INI may name or define colour slots and assign colours by rarity tier or
+per-card override; those colours are applied after `card_text_colors` and
+therefore override the manifest colour for the card name only. Description and
+guardian-star colours continue to use `card_text_colors`.
+
 ## When mods overlap
 
 Two enabled mods may change the same thing. Nothing stops that, and nothing
@@ -1183,7 +1499,7 @@ decides it:
 |---|---|---|
 | `data` | a disc file, by name as the disc's lookup takes it (letter case counts; leading backslashes and the `;1` aside), or raw sectors, which meet where their runs of sectors do (raw sectors and a file by name never meet, though the game reads a raw replacement over that file's sectors: the window does not know where the disc's files lie) | replacements: the later is read; patches: the later's bytes where two patch the same bytes, else both apply; a patch over another mod's replacement is written into it, at the disc's offsets (a warning) |
 | `audio` | a `music`, `xa` or `sfx` id | the later is heard; two files are never the same sound, whatever their names, each being its mod's own |
-| `textures` | an image read the same way: archive, offset, size, stride (none for one read row by row, `row_offsets`), depth and palette (an entry the loader leaves out, or whose part is switched off, is not counted) | the later is drawn; one line per image |
+| `textures`, `assets` | an image read the same way: archive, offset, size, stride (none for one read row by row, `row_offsets`), depth and palette (an entry the loader leaves out, or whose part is switched off, is not counted); a named asset and a pack entry over the same reading are the same image | the later is drawn; one line per image |
 | `cards` | one of the disc's 722 a `replace` names (an added card's identity cannot be replaced) | the later in load order; the line names whose keys are used and whose are dropped. Its stats, stars, frame, model and effect go over the earlier's; its name, text, password, art, plate (`title`), field art and fusion groups too, and when it leaves one out the earlier's is dropped all the same: every replace of a card starts those from the disc; notes add up |
 | `fusions` | a pair, in either order | the later's result; `remove`s add up |
 | `equips` | an equip card, and its copies (a rule for the card is one for each copy of it, as the game matches the card or its base) | for each monster, the latest entry that says something about it decides (a card before a type before `"replace"` within an entry), so a later rule for a type, or a plain `bonus`, goes over an earlier rule for a card of it, or an earlier `bonus_if`; entries about other monsters add up |
@@ -1241,7 +1557,10 @@ line and in order (`pc_mods_overlap`, `test_overlaps.py`).
 ## Code mods
 
 A code mod is **one object file**, `<library>.o`, that runs on both the
-Linux and the Windows game. Nobody builds a mod twice. Both games are 32-bit
+Linux and the 32-bit Windows game. macOS ARM64 needs a separate
+`<library>.dylib` build; mod authors supporting all three platforms must
+ship both files. See [Native macOS ARM64 code mods](#native-macos-arm64-code-mods)
+for the build command and manifest selection. Both i386 games are 32-bit
 x86 code with the same calling convention, so the machine code is the same;
 the game reads the file with its own loader
 ([`src/pc/mods/object_loader.c`](../src/pc/mods/object_loader.c)) rather than
@@ -1250,8 +1569,9 @@ the system's, so the container is the same too.
 The 64-bit Windows game (`-windows-x64.zip`) loads data mods only: a code
 mod is 32-bit code, so it stays off there with "needs a 64-bit build of
 this mod" in the Mods window, and the 32-bit game is the one to play it
-with. A 64-bit mod SDK, for 64-bit Windows and the arm64 targets, is a
-later milestone (`notes/pc-build.md`, "64-bit Windows").
+with. A 64-bit Windows code-mod SDK is a later milestone (`notes/pc-build.md`,
+"64-bit Windows"). macOS ARM64 code mods use the separate native build
+described below.
 
 The mod exports one function, described in
 [`src/pc/mods/modapi.h`](../src/pc/mods/modapi.h):
@@ -1568,11 +1888,47 @@ use its highest drop weight. A weight of `w/2048` is the chance per win at that 
 The first Library display creates `mod-data/yamyi-mods/card_name_color.ini`
 in the player's directory. Its rarity tiers and duelist/rank multipliers give
 the panel's score; restart after editing it. Lower scores mean rarer cards; an
-explicit zero multiplier is respected. Its colour slots and card overrides
-are no longer read: card-name colours are a `card_text_colors` declaration
-(above), in this or any other mod. The package is disabled by default and does
-not alter actual drops or duel rules.
+explicit zero multiplier is respected. By default, card-name colours come from
+`card_text_colors` declarations (above), in this or any other mod. Turn on
+**Rarity card-name colours** to also read the INI's colour slots, tiers and
+card overrides; while enabled, its assigned rarity colour temporarily
+overrides the manifest colour for the card name only. Description and guardian
+star colours still come from `card_text_colors`. The package is disabled by
+default and does not alter actual drops or duel rules.
 
 These features originate in yamyi's PRs #68, #70 and #77. Their overlapping
 Library panels are combined into one panel here; do not also install the old
 `menu-back-confirm`, `card-name-color` or `drop-odds` packages.
+
+## Native macOS ARM64 code mods
+
+The macOS port loads an ARM64 `.dylib` compiled with guest-memory
+translation; Linux and 32-bit Windows retain the shared i386 ELF `.o`. In a source checkout, build the macOS game first,
+then run:
+
+```sh
+python3 tools/pc/build_mod.py /path/to/mod --target macos
+```
+
+This preserves the existing `.o` and produces `<library>.dylib` alongside it.
+A manifest with `"library": "life-points"` selects `life-points.dylib` on
+macOS and `life-points.o` on Linux/Windows. Copy the whole mod folder into
+`~/Library/Application Support/YFM Re-Decomp/mods/` on macOS and apply it in
+the Mods menu.
+
+The compiler uses the same structured LLVM guest-memory translation as the
+game. Mods should include the game's annotated headers (`G32`, `PSXLONG`)
+for guest records; a plain LP64 recompile is insufficient. Imported function
+ABIs are checked against the current build's `mod_signatures.json`; missing
+imports are rejected. Constructors/destructors, TLS and machine assembly
+are unsupported. Initialize through `MemoriesModInit` and release through
+`shutdown` instead.
+
+ARM64 hooks use typed wrappers around translated game routines, including
+native game overrides. They preserve the original call signature and chain
+in mod order without patching executable memory. Variadic functions,
+`returns_twice` routines and ordinary host helpers are not hook targets.
+Existing x86 objects do not run on ARM64; other source mods still need
+compilation and individual validation. The optional `test_arm64_life_points.py` runner checks separate
+player/opponent LP, campaign/free-duel scope, both sound timings, sound
+disabled and fresh-process save-state replay against a supplied source mod.

@@ -1274,12 +1274,17 @@ static void upload_overlay(int x, int y, int w, int h)
 static void gl_quad_part(GLuint texture, float x, float y, float w, float h, float s0, float t0, float s1, float t1)
 {
     glBindTexture(GL_TEXTURE_2D, texture);
+#ifdef __APPLE__
+    PresentPass_Quad(2 * x / layout.win_w - 1, 1 - 2 * y / layout.win_h,
+                     2 * w / layout.win_w, -2 * h / layout.win_h, s0, t0, s1, t1);
+#else
     glBegin(GL_QUADS);
     glTexCoord2f(s0, t0); glVertex2f(x, y);
     glTexCoord2f(s1, t0); glVertex2f(x + w, y);
     glTexCoord2f(s1, t1); glVertex2f(x + w, y + h);
     glTexCoord2f(s0, t1); glVertex2f(x, y + h);
     glEnd();
+#endif
 }
 
 static void gl_quad(GLuint texture, float x, float y, float w, float h)
@@ -1382,16 +1387,20 @@ static void show(void)
         int output_w, output_h, effects;
         if (!gl_picture || !gl_overlay || !SDL_GetWindowSizeInPixels(window, &output_w, &output_h)) return;
         glViewport(0, 0, output_w, output_h);
+#ifndef __APPLE__
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
         glOrtho(0, layout.win_w, layout.win_h, 0, -1, 1);
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
+#endif
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT);
+#ifndef __APPLE__
         glEnable(GL_TEXTURE_2D);
-        glDisable(GL_BLEND);
         glColor4f(1, 1, 1, 1);
+#endif
+        glDisable(GL_BLEND);
         if (gl_pass_shown) {
             int pw = gl_pass_size[0], ph = gl_pass_size[1], x = gl_pass_rect[0], y = gl_pass_rect[1];
             GLuint texture = gl_pass_texture ? gl_pass_texture : (GLuint)GlPicture_Texture(&pw, &ph), shown;
@@ -1900,6 +1909,8 @@ static int driver_has_es3(void)
             SDL_GL_ExtensionSupported("GL_ARB_ES3_1_compatibility") ||
             SDL_GL_ExtensionSupported("GL_ARB_ES3_2_compatibility"));
 }
+#elif defined(__APPLE__)
+static int driver_has_es3(void) { return 0; } /* macOS supplies desktop GL, not a native ES profile */
 #else
 static int driver_has_es3(void) { return 1; } /* GLX's ES profile, or the system's EGL (Mesa) */
 #endif
@@ -1917,6 +1928,14 @@ static void create_window(const char *title)
     const char *gles = getenv("MEMORIES_GLES");
     SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
     update_menu_scale(240 * scale + 26 * Menu_AutoScale(240 * scale));
+#ifdef __APPLE__
+    /* The default macOS context is 2.1. Integer textures need 3.2 core,
+     * with shader-based presentation instead of immediate-mode quads. */
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+#endif
     /* Desktop GL where the system has it (platform.h); else, or without a
      * context, the SDL renderer. */
     window = Platform_HasDesktopGL() ? SDL_CreateWindow(title, 320 * scale, 240 * scale + Menu_Height(),
@@ -1936,6 +1955,14 @@ static void create_window(const char *title)
             fprintf(stderr, "memories-pc: MEMORIES_GLES: this driver has no OpenGL ES 3 profile; desktop OpenGL it is\n");
             es_wanted = 0;
         }
+    }
+    /* macOS needs the core-profile quad presenter; the ES renderer uses its
+     * own texture path and must not initialize desktop presentation state. */
+    if (use_gl && !es_wanted && !PresentPass_InitCore()) {
+        fprintf(stderr, "memories-pc: core presenter unavailable; falling back to SDL\n");
+        SDL_GL_DestroyContext(gl_context);
+        gl_context = NULL;
+        use_gl = 0;
     }
     if (!use_gl) {
         if (window) SDL_DestroyWindow(window);
@@ -2481,6 +2508,7 @@ static void run_event_script(unsigned frame)
                           : strncmp(name, "f3", n) == 0 ? SDLK_F3
                           : strncmp(name, "f5", n) == 0 ? SDLK_F5
                           : strncmp(name, "f6", n) == 0 ? SDLK_F6
+                          : strncmp(name, "f7", n) == 0 ? SDLK_F7
                           : strncmp(name, "f8", n) == 0 ? SDLK_F8
                           : strncmp(name, "f11", n) == 0 ? SDLK_F11
                           : strncmp(name, "f12", n) == 0 ? SDLK_F12

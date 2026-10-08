@@ -1,7 +1,7 @@
 # Yu-Gi-Oh! Forbidden Memories Recompiled
 
 **Yu-Gi-Oh! Forbidden Memories** (PS1, USA) rebuilt from its decompiled source as a
-native PC game for Windows and Linux. Bring your own disc image; no game data is
+native PC game for Windows and Linux, with a macOS ARM64 source build. Bring your own disc image; no game data is
 included but the text of the European translations (below).
 
 ![Your field at 4x resolution with 3D Monsters](docs/screenshots/field.jpg)
@@ -35,6 +35,14 @@ launch, pick your USA disc's `.bin`. The game can tell you when a newer release 
 
 **From source:** put the `.bin` in `game/` and run `play.bat` or `./play.sh`. The first
 run builds everything (Linux needs `gcc` and `python3`). See [PC build](notes/pc-build.md).
+
+On Apple Silicon, `./play.sh` builds and runs the macOS target using Python 3,
+Xcode command-line tools, and verified dependencies installed under `tmp/`.
+See [macOS build](notes/macos-build.md) and the [ARM64 runtime guide](notes/macos-arm64.md).
+Native save states use F5/F7 and have build and platform compatibility limits;
+see [save-state compatibility](notes/macos-arm64.md#save-state-use-and-compatibility). Code mods
+need a macOS ARM64 build; existing i386 code-mod binaries cannot be loaded.
+See [macOS code mods](notes/modding.md#native-macos-arm64-code-mods).
 
 **Languages:** `languages/*.txt` is the text of the five European releases, read off the
 PAL discs by the port itself. With the discs in `game/pal`, `python3 tools/pc/export_languages.py`
