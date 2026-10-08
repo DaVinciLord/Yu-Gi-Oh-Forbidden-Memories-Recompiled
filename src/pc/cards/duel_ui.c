@@ -155,9 +155,9 @@ static void draw_piece(const GsSPRITE *sprite, int mode, int du, int dv, int w, 
     if (place->scale == 100 || mode == 3) {
         piece.x = (short)x0;
         piece.y = (short)y0;
-        if (mode == 2) GsSortFlipSprite(&piece, (GsOT *)ot, (u16)depth);
-        else if (mode == 3) GsSortSprite(&piece, (GsOT *)ot, (u16)depth);
-        else GsSortFastSprite(&piece, (GsOT *)ot, (u16)depth);
+        if (mode == 2) GsSortFlipSprite(&piece, (GsOT *G32)ot, (u16)depth);
+        else if (mode == 3) GsSortSprite(&piece, (GsOT *G32)ot, (u16)depth);
+        else GsSortFastSprite(&piece, (GsOT *G32)ot, (u16)depth);
         return;
     }
     if (x1 <= x0 || y1 <= y0) return;
@@ -197,7 +197,7 @@ static void draw_piece(const GsSPRITE *sprite, int mode, int du, int dv, int w, 
     quad.u1 = quad.u3 = (u8)u1;
     quad.v0 = quad.v1 = (u8)v0;
     quad.v2 = quad.v3 = (u8)v1;
-    GsSortPoly(&quad, (GsOT *)ot, (u16)depth);
+    GsSortPoly(&quad, (GsOT *G32)ot, (u16)depth);
 }
 
 /* --- the mods' pictures ---------------------------------------------------- */
@@ -338,7 +338,7 @@ static int draw_picture(int which, int x, int y, int w, int h, const Place *plac
         strip.v0 = strip.v1 = (u8)(bank_picture->y & (BAND - 1));
         strip.v2 = strip.v3 = (u8)((bank_picture->y & (BAND - 1)) + bank_picture->h > 255
                                        ? 255 : (bank_picture->y & (BAND - 1)) + bank_picture->h);
-        GsSortPoly(&strip, (GsOT *)ot, (u16)depth);
+        GsSortPoly(&strip, (GsOT *G32)ot, (u16)depth);
     }
     return 1;
 }
