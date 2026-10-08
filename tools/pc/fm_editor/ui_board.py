@@ -10,7 +10,9 @@ chosen texture: replace it with a PNG, export the game's to paint over,
 tint the game's, or put it back."""
 from __future__ import annotations
 
+import time
 import tkinter as tk
+from collections import OrderedDict
 from tkinter import filedialog, messagebox, ttk
 
 from . import board_art as ba, board_model as bm, pngio
@@ -20,23 +22,28 @@ from .widgets import px, ui_font
 
 FLOOR_ITEM = "floor"            # the whole floor, one picture
 GROUPS = (("Floor", ba.FLOOR), ("Walls and trim", ba.WALLS))
-DRAG_SCALE = 3                  # while the camera moves: a picture a third the size, enlarged
+DRAG_SCALE = 3                  # while the camera moves: a picture a third the size, enlarged...
+DRAG_SCALES = (2, 3, 4, 5, 6, 8)    # ...or as small as this machine draws in FRAME
+FRAME = 0.030                   # seconds a picture may take while the camera moves
+SLICE = 0.025                   # the full picture is drawn this long at a time, the window live between
+KEPT = 7                        # full pictures kept (some 8 MB each at 1600x960): the fields seen
+AHEAD = 500                     # ms the page is left alone before it draws the other fields ahead
+GAME = ("the game's",)          # a view's board while the tab holds the game's up
 HINT = "Middle drag turns the board, Shift+middle drag moves it, the wheel zooms."
 
 
 def checker(w: int, h: int, cell: int = 6) -> Image:
-    out = bytearray(w * h * 4)
-    for y in range(h):
-        for x in range(w):
-            v = 0x6a if (x // cell + y // cell) & 1 else 0x50
-            out[(y * w + x) * 4:(y * w + x) * 4 + 4] = bytes((v, v, v, 255))
-    return Image(w, h, bytes(out))
+    dark, light = bytes((0x50, 0x50, 0x50, 255)), bytes((0x6a, 0x6a, 0x6a, 255))
+    rows = [b"".join(light if (x // cell + y) & 1 else dark for x in range(w)) for y in (0, 1)]
+    return Image(w, h, b"".join(rows[(y // cell) & 1] for y in range(h)))
 
 
 def over(base: Image, piece: Image) -> Image:
     """`piece` (as large as `base`) over it, alpha-mixed."""
-    out = bytearray(base.rgba)
     src = piece.rgba
+    if src[3::4].count(255) == len(src) // 4:
+        return Image(base.width, base.height, src)          # opaque all over: the piece itself
+    out = bytearray(base.rgba)
     for i in range(0, len(src), 4):
         a = src[i + 3]
         if a == 255:
@@ -61,8 +68,15 @@ class BoardPage(ttk.Frame):
         self.photos = []
         self._job = None
         self._drag_job = None
-        self._drawn = None
         self.drag = None            # (kind, x, y, camera at the press) while the middle button is down
+        self.drag_scale = DRAG_SCALE
+        self.rate = None            # seconds a small picture's pixel takes, about (adapt)
+        self.shown_view = None      # (field, camera, the mod's board) the picture shows
+        self.pictures = OrderedDict()   # view + (size,) -> the full picture, the latest last
+        self._disc = None           # the game files the pictures are of
+        self._work = None           # (view + (size,), board_model.render_steps) being drawn
+        self._work_job = None
+        self._ahead_job = None
 
         top = ttk.Frame(self)
         top.pack(fill="x", pady=(0, 6))
@@ -198,9 +212,40 @@ class BoardPage(ttk.Frame):
         height = canvas.winfo_height() if canvas.winfo_height() > 1 else int(canvas["height"])
         return max(160, width), max(120, height)
 
+    def view_key(self, terrain: str = None):
+        """What a picture shows: the field, the camera and the mod's board
+        (its state and version, or the game's while the tab holds it up)."""
+        st = ba.state(self.project)
+        held = GAME if getattr(self.tab, "comparing", False) else (st, st.version)
+        return (terrain or self.terrain, self.camera) + held
+
+    def sources(self, terrain: str):
+        """The field's board and its pieces' pictures (the game's while the
+        tab holds them up: its "Hold: the game's")."""
+        comparing = getattr(self.tab, "comparing", False)
+        held = self.project.board_art if comparing else None
+        if comparing:
+            self.project.board_art = ba.BoardArt()
+        try:
+            return bm.board(ba.disc(self.project), terrain), bm.pieces_of(self.project, terrain)
+        finally:
+            if comparing:
+                self.project.board_art = held
+
+    def cannot(self, problem):
+        """The model cannot be read: said where the board would be."""
+        width, height = self.canvas_size()
+        self.picture = self.shown_view = None
+        self.canvas.delete("all")
+        self.canvas.create_text(width // 2, height // 2, fill="#ccc", width=width - 40,
+                                text=f"The board's model cannot be read from these game files ({problem}).")
+
     def draw(self, scale: int = 1):
         """The board as the camera sees it, at the canvas's size (`scale`:
-        that many times smaller, enlarged, while the camera moves)."""
+        that many times smaller, enlarged, while the camera moves). A full
+        picture not drawn yet is drawn a little at a time (render_later),
+        a small one shown first when the board shown is another field,
+        camera or edit: a click never holds the window for long."""
         if self._job is not None and scale == 1:
             self.after_cancel(self._job)
         self._job = None
@@ -209,37 +254,147 @@ class BoardPage(ttk.Frame):
             return
         width, height = self.canvas_size()
         if not bm.available(self.project):
-            self.picture = None
+            self.stop_work()
+            self.picture = self.shown_view = None
             canvas.delete("all")
             canvas.create_text(width // 2, height // 2, fill="#ccc", width=width - 40,
                                text="The board comes from the game files (File > Game files...).")
             return
-        # The tab's "Hold: the game's": the board without the mod's pictures and tints.
-        comparing = getattr(self.tab, "comparing", False)
-        held = self.project.board_art if comparing else None
-        if comparing:
-            self.project.board_art = ba.BoardArt()
-        size = (max(1, width // scale), max(1, height // scale))
+        if ba.disc(self.project) is not self._disc:
+            self._disc = ba.disc(self.project)
+            self.pictures.clear()
+        view = self.view_key()
+        if scale > 1:
+            self.stop_work()            # the camera is moving: no picture of where it was
+            self.show_small(view, scale)
+            return
+        key = view + ((width, height),)
+        picture = self.pictures.get(key)
+        if picture is not None:
+            self.pictures.move_to_end(key)
+            self.picture, self.scale, self.shown_view = picture, 1, view
+            self.show()
+            self.ahead_later()
+            return
+        if self.shown_view != view and not self.show_small(view, self.drag_scale):
+            return
+        self.render_later(key)
+
+    def show_small(self, view, scale: int) -> bool:
+        """A picture `scale` times smaller than the canvas, drawn now; how
+        long it took sets the next one's scale (adapt)."""
+        width, height = self.canvas_size()
+        start = time.perf_counter()
         try:
-            st = ba.state(self.project)
-            # The state itself, not its id: held here, no other can take its place.
-            signature = (self.terrain, size, self.camera, None if comparing else st, st.version)
-            if self._drawn is None or self._drawn[0] != signature:
-                try:
-                    picture = bm.render(bm.board(ba.disc(self.project), self.terrain),
-                                        bm.pieces_of(self.project, self.terrain), self.camera, size)
-                except Exception as problem:        # noqa: BLE001 -- a disc whose model is not the game's
-                    self.picture = None
-                    canvas.delete("all")
-                    canvas.create_text(width // 2, height // 2, fill="#ccc", width=width - 40,
-                                       text=f"The board's model cannot be read from these game files ({problem}).")
-                    return
-                self._drawn = (signature, picture)
-        finally:
-            if comparing:
-                self.project.board_art = held
-        self.picture, self.scale = self._drawn[1], scale
+            board, pieces = self.sources(self.terrain)
+            picture = bm.render(board, pieces, self.camera, (max(1, width // scale), max(1, height // scale)))
+        except Exception as problem:        # noqa: BLE001 -- a disc whose model is not the game's
+            self.cannot(problem)
+            return False
+        self.picture, self.scale, self.shown_view = picture, scale, view
         self.show()
+        self.adapt(scale, time.perf_counter() - start)
+        return True
+
+    def adapt(self, scale: int, took: float):
+        """The small pictures' scale from how long this one took a pixel
+        (the mean with the last ones', so one slow picture, the first of a
+        field, does not set it alone): the largest picture this machine
+        draws within FRAME."""
+        width, height = self.canvas_size()
+        rate = took / max(1, (width // scale) * (height // scale))
+        self.rate = rate if self.rate is None else (self.rate + rate) / 2
+        for choice in DRAG_SCALES:
+            if self.rate * (width // choice) * (height // choice) <= FRAME:
+                break
+        self.drag_scale = choice
+
+    # --- the full picture, a little at a time ------------------------------------------------
+
+    def render_later(self, key):
+        """The full picture of `key` (a view and the canvas's size) drawn in
+        SLICE-long steps, the window's events handled between them; shown
+        when done if it is still the one wanted."""
+        if self._work is not None and self._work[0] == key:
+            return
+        terrain, camera, size = key[0], key[1], key[-1]
+        try:
+            board, pieces = self.sources(terrain)
+        except Exception as problem:        # noqa: BLE001 -- a disc whose model is not the game's
+            self.cannot(problem)
+            return
+        self._work = (key, bm.render_steps(board, pieces, camera, size))
+        if self._work_job is None:
+            self._work_job = self.after_idle(self._step)
+
+    def _step(self):
+        self._work_job = None
+        if self._work is None:
+            return
+        key, steps = self._work
+        start = time.perf_counter()
+        try:
+            next(steps)
+            while time.perf_counter() - start < SLICE:
+                next(steps)
+        except StopIteration as done:
+            self._work = None
+            wanted = self.project is not None and key == self.view_key() + (self.canvas_size(),)
+            self.keep(key, done.value)
+            if wanted and self.drag is None:
+                self.picture, self.scale, self.shown_view = done.value, 1, key[:-1]
+                self.show()
+            # The next field ahead soon after one drawn ahead; after the one
+            # wanted, once the page is left alone.
+            self.ahead_later(AHEAD if wanted else 1)
+            return
+        except Exception as problem:        # noqa: BLE001 -- a disc whose model is not the game's
+            self._work = None
+            self.cannot(problem)
+            return
+        # Idle again: what came meanwhile (a click, a drag) first.
+        self._work_job = self.after_idle(self._step)
+
+    def keep(self, key, picture):
+        """A full picture kept (KEPT at most, the latest), those of the
+        mod's board before an edit let go."""
+        if self.project is not None:
+            boards = (self.view_key()[2:], GAME)
+            for old in [k for k in self.pictures if k[2:-1] not in boards]:
+                del self.pictures[old]
+        self.pictures[key] = picture
+        while len(self.pictures) > KEPT:
+            self.pictures.popitem(last=False)
+
+    def stop_work(self):
+        self._work = None
+        if self._work_job is not None:
+            self.after_cancel(self._work_job)
+            self._work_job = None
+        if self._ahead_job is not None:
+            self.after_cancel(self._ahead_job)
+            self._ahead_job = None
+
+    def ahead_later(self, delay: int = AHEAD):
+        """Once the page is left alone a while: the other fields drawn
+        ahead at this camera and size, one after another, so a field
+        chosen next is there at once."""
+        if self._ahead_job is not None:
+            self.after_cancel(self._ahead_job)
+        self._ahead_job = self.after(delay, self.draw_ahead)
+
+    def draw_ahead(self):
+        self._ahead_job = None
+        if self.project is None or self._work is not None or self.drag is not None or \
+                getattr(self.tab, "comparing", False) or not self.winfo_ismapped() or not bm.available(self.project):
+            return
+        order = list(ba.TERRAINS)
+        at = order.index(self.terrain)
+        for terrain in order[at + 1:] + order[:at]:
+            key = self.view_key(terrain) + (self.canvas_size(),)
+            if key not in self.pictures:
+                self.render_later(key)
+                return
 
     def show(self):
         """The picture on the canvas, the chosen parts outlined (not while
@@ -298,7 +453,7 @@ class BoardPage(ttk.Frame):
 
     def _draw_small(self):
         self._drag_job = None
-        self.draw(DRAG_SCALE)
+        self.draw(self.drag_scale)
 
     def release(self, event):
         if self.drag is None:
@@ -394,7 +549,8 @@ class BoardPage(ttk.Frame):
         if self.loading:
             return
         chosen = self.tree.selection()
-        if chosen:
+        # A selection the page made itself (mark) comes back as an event: no second drawing.
+        if chosen and chosen[0] != self.chosen:
             self.select(chosen[0])
 
     def clicked(self, event):
