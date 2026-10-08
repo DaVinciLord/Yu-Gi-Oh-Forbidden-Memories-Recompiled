@@ -59,7 +59,7 @@ The window has a tab per table:
 | Values | the game's numbers a mod may change (written as `limits`, [gameplay tables](../../../notes/gameplay-tables.md#values-atk-def-lp-starchips-and-more)), in groups: **Duel** (starting LP for both sides or each, the LP healing stops at, the ATK and DEF cap), **Magic** (Swords of Revealing Light's turns, Crush Card's ATK, what Spellbinding Circle and Shadow Spell take off), **Deck and Trunk** (copies of a card in a deck, copies the Trunk keeps), **Rank** (the score a duel starts at, what an Exodia win and a win by the opponent's empty deck add), **Rewards** (the starchips a win gives at S to D, a new game's starchips, the most the save holds) and **Records and 2P** (the two-player LP choice and the records), and a table of duelists with the LP each side starts with against them. Each row shows the game's own value in grey (an empty field is it), turns blue when the mod changes it, has ↺ to put the game's back, and a line that says what it does with the range the game keeps; a value past that range turns its name red, with the reason under the groups, and the game holds it at the most it keeps or shows. **Reset all to the game's** empties every field |
 | Guardian Stars | the stars (`guardian_stars`, [Guardian Stars](../../../notes/modding.md#guardian-stars-names-icons-new-stars-and-matchups)): the list of stars with a name and an icon each (**Import icon (PNG)...**, with a preview; the game makes it 16x16 in the disc's stars' colours), **Add star** for 11 to 15 (a card holds its stars in 4 bits, so fifteen at most), and the full grid of matchups: a row is the attacker's star, a column the defender's, a cell the bonus the attacker's side gets, green above 0 and red below; click a cell, type a bonus or use **+ default**, **- default** or **0** (with **Reverse pair gets the opposite** on, the reverse cell takes the opposite sign). **Default bonus** moves the disc's 500 in both cycles, **Retail cycles** and **Clear all** are presets, **Revert to retail** takes the whole key away. **Set stars by rule...** sets many cards' first or second star from their attribute or type through a table you fill in (a Fire monster's first star is Fire), or one star for all, **(none)** included (a first star of none leaves the second as the card's one star, as the game reads it; both none, no star), over a filter of cards like Bulk fusions', with a preview and **Undo last batch**. **Show advanced**: a name per language (`fr=Feu, de=Feuer`), an icon's colours (`game` or its own), and what happens at a summon (`ask`, `first`, `best`). The Cards tab's star lists show the mod's stars as they are named here |
 | Packs | the card packs the mod sells for starchips on the Password screen: each pack's name, description, price, cards a pack and picture (shown as a card's art or, `image_style` `full`, the whole picture), its cards with their tier, weight and chance; a **Show advanced** part for everything else; **Shop settings...** and **Simulate...** (below); with no pack, an empty one or **a pack of an opponent's drops** (its cards at their drop weights) |
-| UI | the title screen, its two menus and the duel's pictures, drawn from your disc as the game draws them: drag a picture to move it, the side has the rest (below, [The UI tab](#the-ui-tab)) |
+| UI | the title screen, its two menus and the duel's pictures, drawn from your disc as the game draws them: drag a picture to move it, the side has the rest; **Revert to retail...** puts the whole tab back (below, [The UI tab](#the-ui-tab)) |
 | Mod info | id, name, version, author, description, `settings`, and the other `mod.json` keys, kept as written (`limits` is the Values tab's, `guardian_stars` the Guardian Stars tab's). The settings are a list (key, label, type, default, and how many of the mod's entries each switches with `"setting"`) with a dialog a setting that shows what its type takes and checks it as the game does; their JSON is a page beside it |
 | Conflicts | the loader's checks, all or one level (errors, warnings, notes); double-click a line (or Return) to go to it, a line about another mod to the tab and card it is about. Below them, where this mod meets the **other mods installed** (beside the game and in the player's mods folder, or a folder chosen with **Other mods folder...**): the same lines as the game's Mods window, a warning where only one mod's change is used and a note where the changes add up or agree ([When mods overlap](../../../notes/modding.md#when-mods-overlap)) |
 
@@ -444,43 +444,63 @@ no field: they are kept exactly as written, and the tab names them
 Three pages, picked at the top: **Title screen**, **Menus** and **Duel**.
 Each is the screen as the game draws it, from your own disc (the title's
 pictures are in `DATA/SU.MRG`, the duel's in `WA_MRG.MRG`; nothing of the
-game's art is kept with the editor), twice its size, with what the mod
-changes on it; beside it, what the chosen thing has. A picture is moved by
-dragging it; on the Duel page the mouse wheel sizes it. A row of chips
-under the picture chooses what the picture hides, a dot on those the mod
-changes. What the pages write is the mod's `"title"`, `"menu"` and `"ui"`
+game's art is kept with the editor), as big as the window leaves room for
+(a whole number of times the game's 320 x 240, so its pixels stay sharp),
+with what the mod changes on it. Beside it is the page's list, grouped, a
+dot on what the mod changes (in the editor's changed colour); under the
+list, what the chosen thing is and its form. A picture is moved by dragging
+it -- its place in the form follows as you drag -- or by the arrow keys
+once the picture has been clicked (Shift: 8 pixels); under the picture is
+where the mouse is, in the game's pixels. On the Duel page the mouse wheel
+sizes it. What the pages write is the mod's `"title"`, `"menu"` and `"ui"`
 ([the title screen](../../../notes/modding.md#the-title-screen), [the
 title's menus](../../../notes/modding.md#the-titles-menus), [the duel's
 pictures](../../../notes/modding.md#the-duels-pictures)); a PNG you choose is
 put in the mod's `ui/` folder.
 
+**Hold: the game's** shows the page as the game has it while the button is
+held down: before and after. **Revert to retail...** puts the whole tab back
+(it takes out the mod's `"title"`, `"menu"` and `"ui"`, and the PNGs in
+`ui/` nothing names any more), **Revert page** one page; both say what is
+lost first, and **Edit > Undo** brings it back in one step. A thing's own
+**Back to the game's** puts that one back. A colour that multiplies (every
+"Colour" but a line of words' and the colour under the background) can only
+darken; a bright one says so. Settings the game does not quite follow are
+noted in the form, only while they are set (a moved life-point half or FIELD
+box can vanish at once when the game slides it off for a battle, rather
+than slide; a life-point label with a letter outside plain A-Z, digits and
+signs shows COM or YOU instead, and is not drawn over a picture of yours).
+
 * **Title screen**: the **Background** (click the picture where nothing
-  else is): the game's wall or not, its colour, the dark-to-light shade, a
+  else is, or its row): the game's wall or not, its colour, the dark-to-light shade, a
   colour under it, a **Picture** of your own over the whole screen, how far
   a menu dims it; and the screen's song, the intro, PUSH START BUTTON. The
   **Logo**, **Copyright line** and **PUSH START BUTTON**: moved, coloured,
   shown always or only with or without a menu, a PNG in their place, hidden
   (a dashed box then, to choose it again). **+ Picture** adds a picture of
   your own (up to eight), **+ Words** a line of words (up to sixteen; the
-  port draws these over the picture, in its own letters). **With the menu
+  port draws these over the picture, in its own letters); each has its place
+  (**Centre** puts it in the middle across). **With the menu
   up** shows the screen as the first menu leaves it.
-* **Menus**: the first menu, or the second (once a game is loaded); its
-  buttons top to bottom, the hidden ones greyed, ▲ ▼ to reorder them.
+* **Menus**: the first menu and the second (once a game is loaded), each a
+  group of its buttons top to bottom, the hidden ones greyed, ▲ ▼ to reorder
+  them; choosing a button shows its menu.
   **+ Button** adds a button of your own; each, the game's included, has
   **Words** (drawn on a frame in the entries' look) or a **Picture** (and
   one while the cursor is on it), what it **Does** (an entry's choice,
   back, a notice, quit, the debug menu, a code mod's event, nothing; only
   what that menu allows), its colour and its place (**In line** puts it back
-  in the column). **Menu background** is the menus' own background, as the
-  title's.
+  in the column). **Menu background**, the list's first row, is the menus'
+  own background, as the title's. **Spacing**, under the picture, is how far
+  apart they stand.
 * **Duel**: the life-point panel's two halves (**Opponent's LP**, **Your
   LP**: each with its digits; **Words** in place of COM or YOU, the
   **Digits**' colour), the **FIELD box**, the **Card bar** (its colours or a
   picture only: its words and the hand go with it), the **Hand cursor** and
   the **Field cursor**. Each is **Moved by**, a **Size** (25 to 400 %, about
   its middle), a **Colour** (multiplied: white leaves it as it is), a
-  **Picture** of your own, **Hidden**; **Back to the game's** for one, **Reset
-  every picture** for all. **Opponent's turn** shows the panel in the
+  **Picture** of your own, **Hidden**; **Back to the game's** for one,
+  **Revert page** for all. **Opponent's turn** shows the panel in the
   other turn's colours. The field and the hand behind them are a sketch: the
   3D field is the game's.
 
