@@ -133,7 +133,7 @@ static void fill_out(const DuelRitualMatch *m, DuelRitualResult *out)
  * three, as on the disc), or with tributes only from the hand to the first
  * free monster zone; with none free the ritual cannot take place. */
 typedef struct {
-    const TablesRitualRule *rule;
+    TablesRitualRule rule;          /* a copy: no pointer in it (check_g32) */
     s16 record[2 * DUEL_FIELD_ROW_SIZE];
     s8 hand_slot[2 * DUEL_FIELD_ROW_SIZE];
     s32 candidates;
@@ -148,12 +148,12 @@ static s32 candidate_id(const RitualSearch *x, s32 c) { return D_801A7AD8[x->rec
 static s32 better(const RitualSearch *x)
 {
     s32 i;
-    for (i = 0; i < x->rule->count; i++) {
+    for (i = 0; i < x->rule.count; i++) {
         s32 slot = x->order[i], a = x->pick[slot], b = x->best[slot];
-        s32 card = x->rule->requirements[slot].card;
+        s32 card = x->rule.requirements[slot].card;
         s32 a_id = candidate_id(x, a), b_id = candidate_id(x, b);
         if (card && (a_id == card) != (b_id == card)) return a_id == card;
-        if (x->rule->from == TABLES_TRIBUTES_BOTH && (x->hand_slot[a] >= 0) != (x->hand_slot[b] >= 0))
+        if (x->rule.from == TABLES_TRIBUTES_BOTH && (x->hand_slot[a] >= 0) != (x->hand_slot[b] >= 0))
             return x->hand_slot[a] >= 0;
         if (x->prefer_defense) {
             if (printed_defense(a_id) != printed_defense(b_id)) return printed_defense(a_id) < printed_defense(b_id);
@@ -170,9 +170,9 @@ static s32 better(const RitualSearch *x)
 static void search(RitualSearch *x, s32 depth, u32 used)
 {
     s32 c, slot;
-    if (depth == x->rule->count) {
+    if (depth == x->rule.count) {
         s32 j, on_field = 0;
-        for (j = 0; j < x->rule->count; j++) on_field += x->hand_slot[x->pick[j]] < 0;
+        for (j = 0; j < x->rule.count; j++) on_field += x->hand_slot[x->pick[j]] < 0;
         if (!on_field && x->free_zone < 0) return;
         if (!x->found || better(x)) {
             memcpy(x->best, x->pick, sizeof(x->best));
@@ -182,7 +182,7 @@ static void search(RitualSearch *x, s32 depth, u32 used)
     }
     slot = x->order[depth];
     for (c = 0; c < x->candidates; c++) {
-        if (used & (1u << c) || !meets(&x->rule->requirements[slot], candidate_id(x, c))) continue;
+        if (used & (1u << c) || !meets(&x->rule.requirements[slot], candidate_id(x, c))) continue;
         x->pick[slot] = c;
         search(x, depth + 1, used | (1u << c));
     }
@@ -196,7 +196,7 @@ static s32 extended_match(const TablesRitualRule *rule, DuelRitualResult *out)
     s32 i, j, fields[DUEL_RITUAL_TRIBUTE_MAX], on_field = 0;
 
     memset(&x, 0, sizeof(x));
-    x.rule = rule;
+    x.rule = *rule;
     x.free_zone = -1;
     if (rule->from != TABLES_TRIBUTES_HAND)
         for (i = 0; i < DUEL_FIELD_ROW_SIZE; i++)
