@@ -76,9 +76,25 @@ class SceneTest(unittest.TestCase):
 
 class RulesTest(unittest.TestCase):
     def test_clean(self):
-        p = project({"ui": {"duel": {"lp_player": {"x": -20, "scale": 150, "tint": "#FF0000", "label": "ME",
-                                                   "digits": 0x00FF00, "hide": False}}}})
+        p = project({"ui": {"duel": {"lp_player": {"y": -20, "scale": 150, "tint": "#FF0000", "label": "ME",
+                                                   "digits": 0x00FF00, "hide": False},
+                                     "hand_cursor": {"x": 12, "y": -30, "scale": 400}}}})
         self.assertEqual(ui_rules.check(p, lambda name: True), [])
+
+    def test_sliding_ones(self):
+        """What the game slides off the screen sideways moves up and down
+        only, no larger than leaves the screen with the game's (the numbers
+        tests/pc/ui_config_test.c holds the game to)."""
+        self.assertEqual([ui_rules.scale_max(n) for n in ui_rules.ELEMENTS], [161, 161, 130, 100, 400, 400])
+        self.assertEqual(ui_rules.scale_max("lp_player", True), 201)
+        self.assertEqual(ui_rules.scale_max("field", True, 144, 48), 50)
+        self.assertEqual((ui_rules.reach("lp_player", 161), ui_rules.reach("lp_player", 162)), (64, 65))
+        p = project({"ui": {"duel": {"field": {"x": 170, "scale": 200}, "lp_player": {"scale": 161},
+                                     "lp_opponent": {"image": "a.png", "scale": 201}}}})
+        found = [(where, message) for _, where, message in ui_rules.check(p, lambda name: True)]
+        self.assertEqual([w for w, _ in found], ["ui.duel.field", "ui.duel.field"])
+        self.assertIn("\"x\" is left out", found[0][1])
+        self.assertIn("drawn at 130%", found[1][1])
 
     def test_mistakes(self):
         p = project({"ui": {"duel": {"card_bar": {"x": 4}, "field": {"label": "F", "scale": 999},
@@ -133,6 +149,16 @@ class AssetsTest(unittest.TestCase):
         self.assertEqual(ui_assets.parse_colour("nope", 7), 7)
 
 
+class DuelScreenTest(unittest.TestCase):
+    """duel_screen.py: the duel's opening screen under the Duel page's pictures."""
+
+    def test_without_the_disc(self):
+        from fm_editor import duel_screen
+        image = duel_screen.board_backdrop(None)
+        self.assertEqual(image.size, (320, 240))
+        self.assertEqual(image.pixel(160, 120), (0, 0, 0, 255))
+
+
 class UiTabTest(GuiCase):
     def setUp(self):
         super().setUp()
@@ -154,7 +180,7 @@ class UiTabTest(GuiCase):
     def test_duel_page(self):
         page = self.page("duel")
         page.select("lp_player")
-        page.moved("lp_player", -230, 12)
+        page.moved("lp_player", -230, 12)       # up and down only: the x is left out
         page.wheel("lp_player", 1)
         page.wheel("lp_player", 1)
         page.tint.set(0xFF8080)
@@ -165,13 +191,13 @@ class UiTabTest(GuiCase):
         with self.choose(self.picture):
             page.choose_image()
         page.select("card_bar")
-        page.moved("card_bar", 10, 10)          # stays put: noted, nothing written
+        page.moved("card_bar", 10, 10)          # stays put: nothing written
         page.set_colour("tint", 0xC0C0FF)
         page.select("field_cursor")
         page.hidden.set(True)
         page.set_hidden()
         duel = self.app.project.other["ui"]["duel"]
-        self.assertEqual(duel["lp_player"], {"x": -230, "y": 12, "scale": 120, "tint": "#FF8080", "digits": "#80FF80",
+        self.assertEqual(duel["lp_player"], {"y": 12, "scale": 120, "tint": "#FF8080", "digits": "#80FF80",
                                              "label": "ME", "image": "ui/duel-lp-player.png"})
         self.assertEqual(duel["card_bar"], {"tint": "#C0C0FF"})
         self.assertEqual(duel["field_cursor"], {"hide": True})
@@ -269,7 +295,7 @@ class UiTabTest(GuiCase):
     def edit_every_page(self):
         duel = self.page("duel")
         duel.select("field")
-        duel.moved("field", 40, 0)
+        duel.moved("field", 0, 40)
         with self.choose(self.picture):
             duel.choose_image()
         title = self.page("title")
@@ -343,12 +369,25 @@ class UiTabTest(GuiCase):
         page.stage._press(Event(x=at[0], y=at[1]))
         self.assertEqual(page.chosen, "field")
         page.stage._motion(Event(x=at[0] + 31, y=at[1] - 14))      # 10.3 and -4.7 of the game's pixels
-        self.assertEqual((page.vars["x"].get(), page.vars["y"].get()), ("10", "-5"))   # the form, live
+        self.assertEqual(page.vars["y"].get(), "-5")                # the form, live; up and down only
         page.stage._release(Event(x=at[0] + 31, y=at[1] - 14))
-        self.assertEqual(self.app.project.other["ui"]["duel"]["field"], {"x": 10, "y": -5})
-        page.stage._nudge(Event(state=0), 1, 0)                    # an arrow: one pixel
+        self.assertEqual(self.app.project.other["ui"]["duel"]["field"], {"y": -5})
+        page.stage._nudge(Event(state=0), 1, 0)                    # an arrow across: nothing
         page.stage._nudge(Event(state=1), 0, 1)                    # Shift: eight
-        self.assertEqual(self.app.project.other["ui"]["duel"]["field"], {"x": 11, "y": 3})
+        self.assertEqual(self.app.project.other["ui"]["duel"]["field"], {"y": 3})
+        # The hand's cursor moves both ways; the card bar not at all.
+        x, y, w, h = page.stage.boxes["hand_cursor"]
+        at = (int((x + w / 2) * 3), int((y + h / 2) * 3))
+        page.stage._press(Event(x=at[0], y=at[1]))
+        page.stage._motion(Event(x=at[0] + 30, y=at[1] - 15))
+        page.stage._release(Event(x=at[0] + 30, y=at[1] - 15))
+        self.assertEqual(self.app.project.other["ui"]["duel"]["hand_cursor"], {"x": 10, "y": -5})
+        page.stage._press(Event(x=160 * 3, y=230 * 3))
+        self.assertEqual(page.chosen, "card_bar")
+        page.stage._motion(Event(x=170 * 3, y=200 * 3))
+        page.stage._release(Event(x=170 * 3, y=200 * 3))
+        page.stage._nudge(Event(state=0), 1, 1)
+        self.assertNotIn("card_bar", self.app.project.other["ui"]["duel"])
         with mock.patch.object(page.view, "winfo_width", return_value=700), \
                 mock.patch.object(page.view, "winfo_height", return_value=2000):
             page.view.seen = None
@@ -357,19 +396,21 @@ class UiTabTest(GuiCase):
 
     def test_hold_the_games(self):
         page = self.page("duel")
-        page.moved("lp_player", -40, 0)
+        page.moved("lp_player", 0, 40)
         self.tab.comparing_now(True)
-        self.assertEqual(self.app.project.other["ui"]["duel"]["lp_player"], {"x": -40})   # drawn without it only
-        self.assertEqual(page.stage.boxes["lp_player"][0], ui_assets.DUEL_RECTS["lp_player"][0])
+        self.assertEqual(self.app.project.other["ui"]["duel"]["lp_player"], {"y": 40})   # drawn without it only
+        self.assertEqual(page.stage.boxes["lp_player"][1], ui_assets.DUEL_RECTS["lp_player"][1])
         self.tab.comparing_now(False)
-        self.assertEqual(page.stage.boxes["lp_player"][0], ui_assets.DUEL_RECTS["lp_player"][0] - 40)
+        self.assertEqual(page.stage.boxes["lp_player"][1], ui_assets.DUEL_RECTS["lp_player"][1] + 40)
 
     def test_rough_edges(self):
         from fm_editor.ui_duel import rough_edges
         from fm_editor.ui_tab import brightens
         self.assertEqual(rough_edges("lp_player", {}), [])
-        self.assertEqual(len(rough_edges("lp_player", {"x": 4})), 1)
-        self.assertEqual(rough_edges("hand_cursor", {"x": 4}), [])
+        self.assertEqual(rough_edges("lp_player", {"y": 40, "scale": 161}), [])     # slides with the game's
+        self.assertEqual(len(rough_edges("lp_player", {"x": 4})), 1)                # a hand-written x
+        self.assertEqual(len(rough_edges("field", {"scale": 200})), 1)               # drawn at 130 %
+        self.assertEqual(rough_edges("hand_cursor", {"x": 4, "scale": 400}), [])
         self.assertEqual(len(rough_edges("lp_opponent", {"label": "RIVAL\u00c9", "image": "ui/a.png"})), 2)
         self.assertTrue(brightens(0xFFFF40))
         self.assertFalse(brightens(0xFFFFFF))

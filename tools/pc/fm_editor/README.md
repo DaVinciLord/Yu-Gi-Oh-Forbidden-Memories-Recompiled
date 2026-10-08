@@ -466,10 +466,10 @@ lost first, and **Edit > Undo** brings it back in one step. A thing's own
 **Back to the game's** puts that one back. A colour that multiplies (every
 "Colour" but a line of words' and the colour under the background) can only
 darken; a bright one says so. Settings the game does not quite follow are
-noted in the form, only while they are set (a moved life-point half or FIELD
-box can vanish at once when the game slides it off for a battle, rather
-than slide; a life-point label with a letter outside plain A-Z, digits and
-signs shows COM or YOU instead, and is not drawn over a picture of yours).
+noted in the form, only while they are set (a life-point label with a
+letter outside plain A-Z, digits and signs shows COM or YOU instead, and is
+not drawn over a picture of yours; an "x" or a size a hand-written mod gave
+that the game leaves out).
 
 * **Title screen**: the **Background** (click the picture where nothing
   else is, or its row): the game's wall or not, its colour, the dark-to-light shade, a
@@ -497,12 +497,23 @@ signs shows COM or YOU instead, and is not drawn over a picture of yours).
   LP**: each with its digits; **Words** in place of COM or YOU, the
   **Digits**' colour), the **FIELD box**, the **Card bar** (its colours or a
   picture only: its words and the hand go with it), the **Hand cursor** and
-  the **Field cursor**. Each is **Moved by**, a **Size** (25 to 400 %, about
-  its middle), a **Colour** (multiplied: white leaves it as it is), a
-  **Picture** of your own, **Hidden**; **Back to the game's** for one,
+  the **Field cursor**. Each has a **Colour** (multiplied: white leaves it
+  as it is), a **Picture** of your own and **Hidden**; the cursors are
+  **Moved by** any way and sized 25 to 400 % about their middle. The game
+  slides the life-point halves and the FIELD box off the side of the screen
+  (for a battle, the duel's end), so they move **up and down only** -- they
+  slide with the game's and leave the screen with it -- and are sized no
+  larger than still leaves it (161 % for a half, 201 % drawn from your
+  picture, 130 % for the box); the pointer over them shows the up-and-down
+  arrow, and dragging across does nothing. The **Card bar** stays where it
+  is, at its size (its words and the hand are drawn over it): no move, no
+  size, the pointer shows it cannot move. **Back to the game's** for one,
   **Revert page** for all. **Opponent's turn** shows the panel in the
-  other turn's colours. The field and the hand behind them are a sketch: the
-  3D field is the game's.
+  other turn's colours. Behind them is the duel's screen as it opens, as the
+  game draws it: the board (the Duel board page's 3D board from the duel's
+  own camera, with the mod's board), the hand's five cards in their frames
+  with ATK and DEF, and the card bar's name, stats and icons for the card the
+  cursor is on.
 
 Colours are the game's: a tint multiplies, so it can only darken what is
 there. The pictures are the console's size here; the game draws a PNG of
