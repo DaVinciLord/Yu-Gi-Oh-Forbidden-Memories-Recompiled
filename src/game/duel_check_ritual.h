@@ -94,6 +94,21 @@ typedef struct {
     u16 states[DUEL_RITUAL_TRIBUTE_MAX - DUEL_RITUAL_TRIBUTE_COUNT];
 } DuelRitualFlight;
 DuelRitualFlight *Duel_RitualFlight(void);
+
+/* Duel_CheckRitual's search over the tributes of a ritual with its own rule
+ * (duel_check_ritual.c, extended_match). */
+#include "duel_grid.h"
+#include "../pc/cards/tables.h"
+typedef struct {
+    TablesRitualRule rule;          /* a copy: no pointer in it (check_g32) */
+    s16 record[2 * DUEL_FIELD_ROW_SIZE];
+    s8 hand_slot[2 * DUEL_FIELD_ROW_SIZE];
+    s32 candidates;
+    s32 order[DUEL_RITUAL_TRIBUTE_MAX];
+    s32 pick[DUEL_RITUAL_TRIBUTE_MAX];
+    s32 best[DUEL_RITUAL_TRIBUTE_MAX];
+    s32 found, free_zone, prefer_defense;
+} RitualSearch;
 #endif
 
 #endif

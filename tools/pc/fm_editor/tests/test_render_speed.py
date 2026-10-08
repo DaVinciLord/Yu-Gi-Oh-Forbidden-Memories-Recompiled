@@ -98,7 +98,7 @@ def reference_rasterize(size, faces, vram, out, depth, ids=None):
                 out[o + 3] = 255
 
 
-def reference_outline(picture: Picture, keys, thickness: int = 1, colour=(0x40, 0xE0, 0xFF), dark=(0, 0, 0)) -> pngio.Image:
+def reference_outline(picture: bm.Picture, keys, thickness: int = 1, colour=(0x40, 0xE0, 0xFF), dark=(0, 0, 0)) -> pngio.Image:
     """The picture with the edge of what `keys` cover drawn round: a line
     of `colour` `thickness` pixels wide inside it and one of `dark`
     outside."""

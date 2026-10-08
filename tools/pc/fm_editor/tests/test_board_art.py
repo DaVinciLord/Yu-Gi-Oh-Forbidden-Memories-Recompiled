@@ -486,7 +486,9 @@ class BoardPageTest(GuiCase):
 
     def click(self, point, button=1):
         page = self.page
-        x, y, _ = bm.projector(page.camera, page.canvas_size())(point)
+        # Projected at the size of the picture shown (the canvas may have been resized since it was drawn).
+        width, height = page.picture.image.size
+        x, y, _ = bm.projector(page.camera, (width * page.scale, height * page.scale))(point)
         page.clicked(mock.Mock(x=x, y=y))
 
     def test_camera(self):
