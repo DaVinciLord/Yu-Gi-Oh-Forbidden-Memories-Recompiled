@@ -42,10 +42,10 @@ enum { PANEL_W = 64, PANEL_H = 40, HALF_H = 20, PANEL_SPLIT = 32, DIGIT_W = 8 };
 /* Bank 14 (star_icons.c keeps x 0-63 and the palette rows 256-271): the
  * pictures on shelves from x 256 to the right edge, each starting on a page
  * (64 words) and inside one of the two rows of pages, their palettes in rows
- * 500-511 at x 0. A picture is drawn in strips of 128 texels, each inside
+ * 480-511 at x 0. A picture is drawn in strips of 128 texels, each inside
  * its page, as title_images.c draws the title's. */
-enum { BANK = 14, SHELF_X = 256, PAGE_WORDS = 64, BAND = 256, CLUT_ROW = 500, CLUT_ROWS = 12, STRIP = 128,
-       MAX_W = (SOFT_GPU_WIDTH - SHELF_X) * 2, MAX_H = BAND };
+enum { BANK = 14, SHELF_X = 256, PAGE_WORDS = 64, BAND = 256, CLUT_ROW = 480, CLUT_ROWS = 32, STRIP = 128,
+       MAX_W = (SOFT_GPU_WIDTH - SHELF_X) * 2, MAX_H = BAND, SIZES = 4 };
 
 DisplayObjectCapture *DisplayObject_Capture = NULL;
 
@@ -56,7 +56,9 @@ typedef struct {
     int made, ready, w, h;         /* made: tried for this w x h */
     int x, y, clut_y;              /* its place in the bank (words) and its palette's row */
 } BankPicture;
-static BankPicture pictures[UI_ELEMENTS][2];   /* at the console's resolution, and above it */
+/* Each element's at the console's resolution and above it, at up to SIZES
+ * sizes (the card bar has two looks, the hand's and the field's). */
+static BankPicture pictures[UI_ELEMENTS][2][SIZES];
 /* The shelves: in each band of 256 rows, the next free x and the shelf's
  * top and height. */
 static struct { int x, top, height; } shelves[2];
@@ -159,9 +161,12 @@ static void draw_piece(const GsSPRITE *sprite, int mode, int du, int dv, int w, 
         return;
     }
     if (x1 <= x0 || y1 <= y0) return;
+    memset(&quad, 0, sizeof(quad));
     setPolyFT4(&quad);
     if (attribute & 0x40000000) setSemiTrans(&quad, 1);
-    if (attribute & 0x40) setShadeTex(&quad, 1);
+    /* Its colours as they are: unmodulated, so not dithered, as the sprite
+     * it stands for is not. */
+    if ((attribute & 0x40) || (piece.r == 0x80 && piece.g == 0x80 && piece.b == 0x80)) setShadeTex(&quad, 1);
     quad.r0 = piece.r;
     quad.g0 = piece.g;
     quad.b0 = piece.b;
@@ -228,7 +233,7 @@ static int shelve(int w, int h, int *x, int *y)
  * (hd 1, the internal resolution's), in the bank; NULL when it cannot be. */
 static const BankPicture *picture(int which, int w, int h, int hd)
 {
-    BankPicture *picture = &pictures[which][hd];
+    BankPicture *picture = NULL;
     const UiImage *image = &element(which)->image;
     unsigned char *texels;
     unsigned short clut[256];
@@ -241,7 +246,15 @@ static const BankPicture *picture(int which, int w, int h, int hd)
         while (factor > 1 && (w * factor > MAX_W || h * factor > MAX_H)) factor--;
         if (factor < 2) return NULL;
     }
-    if (picture->made && picture->w == w * factor && picture->h == h * factor) return picture->ready ? picture : NULL;
+    for (x = 0; x < SIZES; x++) {
+        BankPicture *size = &pictures[which][hd][x];
+        if (size->made && size->w == w * factor && size->h == h * factor) return size->ready ? size : NULL;
+        if (!size->made && !picture) picture = size;
+    }
+    if (!picture) {
+        Mods_Note(image->mod, "ui: %s is drawn at more than %d sizes", image->file, SIZES);
+        return NULL;
+    }
     picture->made = 1;
     picture->ready = 0;
     picture->w = w * factor;
@@ -301,11 +314,15 @@ static int draw_picture(int which, int x, int y, int w, int h, const Place *plac
     if (x1 <= x0 || y1 <= y0) return 1;
     bank_picture = internal_scale() > 1 ? picture(which, x1 - x0, y1 - y0, 1) : NULL;
     if (!bank_picture && !(bank_picture = picture(which, x1 - x0, y1 - y0, 0))) return 0;
+    /* The pads too: a bank's polygon reads its third one as a fade
+     * (soft_gpu.h, SOFT_GPU_FADE). */
+    memset(&strip, 0, sizeof(strip));
     setPolyFT4(&strip);
     strip.r0 = tinted(0x80, place->tint, 16);
     strip.g0 = tinted(0x80, place->tint, 8);
     strip.b0 = tinted(0x80, place->tint, 0);
     strip.clut = getClut(0, bank_picture->clut_y);
+    if (place->tint == 0xFFFFFF) setShadeTex(&strip, 1);    /* as it is: not dithered */
     /* Each strip from its first texel to the one after its last: one texel
      * to a pixel when the picture is drawn at its own size. */
     for (left = 0; left < bank_picture->w; left += STRIP) {
@@ -455,17 +472,33 @@ int DuelUi_RenderObject(DisplayObject *object, s32 ot, s32 depth)
     /* Off the screen where the game has it (a slide away): gone here too.
      * On it, its sprites are taken where it is moved to, so the screen cuts
      * what is off it there, not where the game has it. */
-    if (!sheet_extent(object, &x0, &y0, &x1, &y1)) return 0;
-    if (x1 <= 0 || x0 >= 320 || y1 <= 0 || y0 >= 240) return 1;
-    dx = e->x;
-    dy = e->y;
-    object->field_30.h.field_30 += dx;
-    object->field_30.h.field_32 += dy;
-    capture(object, ot, depth, &caught);
-    object->field_30.h.field_30 -= dx;
-    object->field_30.h.field_32 -= dy;
-    make_place(which, (x0 + x1) / 2 + dx, (y0 + y1) / 2 + dy, &place);
-    place.dx = place.dy = 0;
+    if (sheet_extent(object, &x0, &y0, &x1, &y1)) {
+        if (x1 <= 0 || x0 >= 320 || y1 <= 0 || y0 >= 240) return 1;
+        dx = e->x;
+        dy = e->y;
+        object->field_30.h.field_30 += dx;
+        object->field_30.h.field_32 += dy;
+        capture(object, ot, depth, &caught);
+        object->field_30.h.field_30 -= dx;
+        object->field_30.h.field_32 -= dy;
+        make_place(which, (x0 + x1) / 2 + dx, (y0 + y1) / 2 + dy, &place);
+        place.dx = place.dy = 0;
+    } else {
+        /* Any other kind of sheet (a variant the bar takes in some views):
+         * its sprites where the game puts them, all of them its place. */
+        if (!capture(object, ot, depth, &caught)) return 1;
+        x0 = y0 = 0x7FFF;
+        x1 = y1 = -0x8000;
+        for (i = 0; i < caught.count; i++) {
+            const GsSPRITE *sprite = (const GsSPRITE *)&caught.sprite[i];
+            if (sprite->x < x0) x0 = sprite->x;
+            if (sprite->y < y0) y0 = sprite->y;
+            if (sprite->x + sprite->w > x1) x1 = sprite->x + sprite->w;
+            if (sprite->y + sprite->h > y1) y1 = sprite->y + sprite->h;
+        }
+        make_place(which, (x0 + x1) / 2, (y0 + y1) / 2, &place);
+        dx = dy = 0;
+    }
     if (draw_picture(which, x0 + dx, y0 + dy, x1 - x0, y1 - y0, &place, ot, depth)) return 1;
     for (i = 0; i < caught.count; i++) {
         const GsSPRITE *s = (const GsSPRITE *)&caught.sprite[i];
