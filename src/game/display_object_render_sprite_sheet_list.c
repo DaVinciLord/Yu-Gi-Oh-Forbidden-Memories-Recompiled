@@ -8,6 +8,9 @@
 #include "display_object_render_sprite_sheet_list.h"
 
 #include "ordering_tables.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/duel_ui.h"
+#endif
 
 void DisplayObject_RenderSpriteSheetList(void) {
     s32 i = D_800EFE3C;
@@ -31,6 +34,10 @@ void DisplayObject_RenderSpriteSheetList(void) {
             if (((p->flags & DISPLAY_OBJECT_RENDERABLE_MASK) ^
                  DISPLAY_OBJECT_RENDERABLE_MASK) == 0) {
                 DisplayObject_UpdateCommandStream((DisplayObject *)q);
+#ifdef MEMORIES_PC
+                /* A mod's "ui" draws some of the duel's pictures itself. */
+                if (!DuelUi_RenderObject((DisplayObject *)q, (s32)t[p->ot_index], (s16)p->field_14))
+#endif
                 DisplayObject_RenderSpriteSheet(
                     (DisplayObject *)q, (s32)t[p->ot_index],
                     (s16)p->field_14

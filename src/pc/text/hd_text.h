@@ -58,6 +58,9 @@ int HdText_Hud(int depth, int page_x, int page_y, int clut_x, int clut_y, int u,
  * its picture at atlas_u, atlas_v; `which` 1 is YOU's box with the
  * player's name from name entry, or You. 0 with no opponent (2P) or no retail panel. */
 int HdText_NameEnabled(void);
+/* A mod's "ui" draws the panel in pieces, at any size (pc/cards/duel_ui.h):
+ * the names then go over pieces drawn as quads too. */
+int HdText_PanelCut(void);
 int HdText_NameBox(int factor, int which, int *atlas_u, int *atlas_v, int *x, int *y, int *width, int *height);
 /* The same box at the console's resolution (soft_gpu.c draws it there):
  * width x height palette indices of the panel's CLUT, `stride` apart, to

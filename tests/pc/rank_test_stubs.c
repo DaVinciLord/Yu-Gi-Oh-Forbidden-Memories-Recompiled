@@ -12,6 +12,10 @@ int Duelists_BaseId(int duelist);
 int Duelists_BaseId(int duelist) { return duelist; }
 const short *Tables_Rank(int rule);
 const short *Tables_Rank(int rule) { (void)rule; return 0; }   /* the disc's own row stands */
+long Tables_Value(int which, long retail);
+long Tables_Value(int which, long retail) { (void)which; return retail; }   /* no mod's "limits" */
+int Tables_RankAdjustment(int tag);
+int Tables_RankAdjustment(int tag) { return tag; }
 
 STUB(CardDrops_ComposePage) STUB(Cards_ChestSlot) STUB(Cards_PickVariant) STUB(Cards_Valid)
 STUB(DisplayObject_AcquireSlot) STUB(DisplayObject_ConfigureSpriteAtPositionWithResource)

@@ -119,8 +119,9 @@ class StarterDeck:
         return sum(self.cards.values()) + sum(self.kept.values())
 
     def complete(self) -> bool:
-        """A deck the port will deal: the save holds exactly forty."""
-        return self.total() == DECK_SIZE
+        """A deck the port will deal: the save holds exactly forty, every one
+        a card it knows (a name it cannot place leaves the deck short)."""
+        return not self.kept and self.total() == DECK_SIZE
 
     def copy(self) -> "StarterDeck":
         return StarterDeck(self.name, self.weight, dict(self.cards), dict(self.kept), copy.deepcopy(self.extra))
@@ -162,10 +163,16 @@ class Project:
         # "bonus_attack" and "bonus_defense"); one with "bonus_if" stays in
         # kept["equips"].
         self.equip_bonus = {}
+        # ritual id -> (tribute, ..., result): one to five tributes (the
+        # disc's three), 0 for a tribute only conditions name; None an added
+        # copy's recipe taken away.
         self.rituals = dict(retail.rituals)
-        # ritual id -> three requirement dictionaries. Empty means the traditional
-        # three-specific-card recipe represented by self.rituals.
+        # ritual id -> a requirement dictionary per tribute. None means the
+        # plain recipe of specific cards self.rituals holds.
         self.ritual_requirements = {}
+        # ritual id -> "hand" or "both" ("tributes_from"); none: the field,
+        # as on the disc.
+        self.ritual_from = {}
         self.pools = [{p: dict(retail.pools[d][p]) for p in POOLS} for d in range(len(retail.pools))]
         self.info = ModInfo()
         self.other = {}                 # top-level keys the editor keeps as written (data, text, audio...)
@@ -181,6 +188,15 @@ class Project:
         self.packs = []
         self.packs_file = None
         self.pack_shop = None
+        # The duelists the mod adds or takes over (roster.py): roster.RosterDuelist,
+        # in the order they were read; "duelists" naming a file, the file;
+        # entries the editor cannot read, kept as written; and the files of the
+        # mod folder it read them from, which a save writes afresh.
+        self.roster = []
+        self.roster_file = None
+        self.roster_kept = []
+        self.roster_raw = None
+        self.roster_owned = set()
         self.kept_opponents = {}        # "decks"/"drops" -> {name: entry} naming a duelist it cannot place
         self.pool_files = {}            # "decks"/"drops" -> the file the mod names in place of the table
         self.source_dir = None
@@ -371,13 +387,26 @@ class Project:
         self.equips.pop(cid, None)
         for monsters in self.equips.values():
             monsters.discard(cid)
-        self.rituals = {r: rec for r, rec in self.rituals.items() if cid not in rec and r != cid}
+        if getattr(self, "starter_pool_state", None) is not None:
+            # Out of the starter pools too: else the next card added, given
+            # its number, would take its place there.
+            from . import starter_pools as sp
+            pools = sp.state(self)
+            if any(cid in pool.cards for pool in pools):
+                for pool in pools:
+                    pool.cards.pop(cid, None)
+                sp.store(self)
+        self.rituals = {r: rec for r, rec in self.rituals.items() if cid not in (rec or ()) and r != cid}
         self.ritual_requirements.pop(cid, None)
         for ritual, slots in list(self.ritual_requirements.items()):
             if ritual not in self.rituals or any(req.get("card") == cid for req in slots):
                 self.ritual_requirements.pop(ritual, None)
+        self.ritual_from = {r: o for r, o in self.ritual_from.items() if r in self.rituals}
         for pools in self.pools:
             for pool in pools.values():
+                pool.pop(cid, None)
+        for duelist in self.roster:
+            for pool in (duelist.pools or {}).values():
                 pool.pop(cid, None)
 
     def set_notes(self, cid: int, text: str):
@@ -614,16 +643,33 @@ class Project:
             return "added"
         return "changed"
 
+    def ritual_removed(self, ritual: int) -> bool:
+        """An added copy written {"card": it, "result": null}: no recipe, not
+        its base's either (a disc ritual card is removed by having none)."""
+        return ritual in self.rituals and self.rituals[ritual] is None
+
+    def remove_ritual(self, ritual: int):
+        """No recipe makes the ritual card summon anything."""
+        self.ritual_requirements.pop(ritual, None)
+        self.ritual_from.pop(ritual, None)
+        if ritual in self.retail.rituals:
+            self.rituals.pop(ritual, None)
+        else:
+            self.rituals[ritual] = None
+
     def ritual_status(self, ritual: int) -> str:
         """The recipe against the disc's: "" the same, or "added", "removed" or
         "changed"."""
         now, retail = self.rituals.get(ritual), self.retail.rituals.get(ritual)
-        if ritual in self.ritual_requirements:
+        if ritual in self.ritual_requirements or ritual in self.ritual_from:
             return "added" if retail is None else "changed"
+        if self.ritual_removed(ritual) and retail is None:
+            return "removed"            # an added copy that has no recipe, not even its base's
         return "" if now == retail else "added" if retail is None else "removed" if now is None else "changed"
 
     def revert_ritual(self, ritual: int):
         self.ritual_requirements.pop(ritual, None)
+        self.ritual_from.pop(ritual, None)
         if ritual in self.retail.rituals:
             self.rituals[ritual] = self.retail.rituals[ritual]
         else:
@@ -694,6 +740,39 @@ class Project:
 
     def ritual_cards(self):
         return sorted(cid for cid in self.cards if self.is_ritual(cid))
+
+    def ritual_recipe(self, ritual: int):
+        """What the ritual card summons by: (tributes, result, origin), each
+        tribute a requirement dictionary ({"card": id} for a plain one) and
+        origin "field", "hand" or "both"; an added copy without a recipe of
+        its own has its base's. None when it has none."""
+        recipe, owner = self.rituals.get(ritual), ritual
+        if ritual not in self.rituals and ritual in self.added:
+            owner = self.base_of(ritual)
+            recipe = self.rituals.get(owner)
+        if not recipe:
+            return None
+        requirements = self.ritual_requirements.get(owner)
+        tributes = ([dict(r) for r in requirements] if requirements
+                    else [{"card": c} if c else {} for c in recipe[:-1]])
+        return tributes, recipe[-1], self.ritual_from.get(owner, "field")
+
+    def set_ritual(self, ritual: int, tributes: list, result: int, origin: str = "field", objects=None):
+        """Give the ritual card a recipe: one to five tributes (requirement
+        dictionaries, {"card": id} a plain one), what it summons, and where
+        its tributes come from ("field", as on the disc, "hand" or "both").
+        Plain cards are written as a plain recipe unless `objects` (a mod
+        that wrote {"card": ...} objects: the game matches those as
+        conditions)."""
+        self.rituals[ritual] = tuple([t.get("card", 0) for t in tributes] + [result])
+        if not objects and all(set(t) == {"card"} for t in tributes):
+            self.ritual_requirements.pop(ritual, None)
+        else:
+            self.ritual_requirements[ritual] = [dict(t) for t in tributes]
+        if origin == "field":
+            self.ritual_from.pop(ritual, None)
+        else:
+            self.ritual_from[ritual] = origin
 
     def effect_of(self, cid: int) -> int:
         """The disc card whose effect this one has when played (cards.c

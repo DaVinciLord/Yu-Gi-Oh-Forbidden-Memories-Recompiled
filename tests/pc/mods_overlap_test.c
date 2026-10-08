@@ -482,6 +482,40 @@ int main(void)
         free(text);
     }
 
+    /* Where a ritual's tributes come from is part of its recipe: two mods
+     * agree only when that does too, "field" written out or left out. */
+    {
+        static const char *const texts[3] = {
+            "{\"id\":\"r1\",\"rituals\":[{\"card\":\"Black Luster Ritual\",\"tributes\":[\"Kuriboh\"],"
+            "\"result\":\"Black Luster Soldier\"}]}",
+            "{\"id\":\"r2\",\"rituals\":[{\"card\":\"Black Luster Ritual\",\"tributes_from\":\"field\","
+            "\"tributes\":[\"Kuriboh\"],\"result\":\"Black Luster Soldier\"}]}",
+            "{\"id\":\"r3\",\"rituals\":[{\"card\":\"Black Luster Ritual\",\"tributes_from\":\"hand\","
+            "\"tributes\":[\"Kuriboh\"],\"result\":\"Black Luster Soldier\"}]}"};
+        static const char *const expect[2] = {"agree", "later"};
+        JsonDocument *docs[3];
+        ModsOverlapMod pair[2];
+        for (int m = 0; m < 3; m++) {
+            docs[m] = Json_Parse(texts[m], error, sizeof(error));
+            assert(docs[m]);
+        }
+        for (int other = 1; other <= 2; other++) {
+            for (int m = 0; m < 2; m++) {
+                const JsonValue *root = Json_Root(docs[m ? other : 0]);
+                pair[m].id = Json_String(Json_Member(root, "id"), "");
+                pair[m].name = pair[m].id;
+                pair[m].directory = MEMORIES_SOURCE_DIR;
+                pair[m].manifest = root;
+            }
+            found = Mods_OverlapCompute(pair, 2, &source);
+            assert(found && Mods_OverlapCount(found) == 1);
+            printf("rituals r1, r%d: %s\n", other + 1, Mods_OverlapOutcome(found, 0));
+            assert(!strcmp(Mods_OverlapOutcome(found, 0), expect[other - 1]));
+            Mods_OverlapFree(found);
+        }
+        for (int m = 0; m < 3; m++) Json_Free(docs[m]);
+    }
+
     for (int i = 0; i < n; i++) free(lines[i]);
     for (int i = 0; i < count; i++) {
         free((void *)list[i].directory);

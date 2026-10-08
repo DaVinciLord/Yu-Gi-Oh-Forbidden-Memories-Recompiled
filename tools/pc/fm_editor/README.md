@@ -23,7 +23,7 @@ it. In Cards, drag the line between the list and the card's form to give
 either more room; each scrolls across on its own when it is cut short. On a smaller window a tab gets scrollbars instead of being cut off; the
 mouse wheel scrolls it too, except over lists, text boxes and pictures,
 which keep their own scrolling. The Cards tab's right-hand options and the
-Limits tab also scroll vertically on their own: tabbing to a field brings it
+Values tab also scroll vertically on their own: tabbing to a field brings it
 into view.
 
 **ATK boost** and **DEF boost**, for an equip card, are what it adds to the
@@ -48,19 +48,20 @@ The window has a tab per table:
 
 | Tab | What you edit |
 |---|---|
-| Cards | search and filter the 722 cards; name, type, attribute and guardian stars (their lists show the game's icons; the level, ATK and DEF have the game's star, sword and shield), card text (with the game's 20-letter, 8-line wrapping counted, and **Tools > Card text preview** to see it as the card view draws it, below), ATK/DEF, type, attribute, level, guardian stars, password; the retail value beside each field. A magic, trap, ritual or equip card has no ATK, DEF, level, attribute or stars, so the form hides them for one; a magic, trap or ritual card shows **Retail effect** instead (an equip shows its **ATK boost** and **DEF boost**): the disc card of the same type it plays as, for you and for the CPU (`"effect"`, [more cards](../../../notes/more-cards.md)). A monster made magic starts at **(none)**, which does nothing when played; a disc magic card has its own effect, and choosing it writes nothing. A guardian star may be **(none)**, written `0`: both none is a monster with no star at all (no SELECT A GUARDIAN STAR box, no star bonus given or taken, no star drawn), the second none a monster with one star; a first star of none with a second is warned about, because the game takes the second as the card's one star ([no star](../../../notes/modding.md#guardian-stars-names-icons-new-stars-and-matchups)). **Frame**: the colour of the card's frame (by type, or monster, magic, trap, ritual, purple or orange whatever its type), with a swatch of it; the card view, the Library and the duel draw it ([frame colour](../../../notes/more-cards.md#frame-colour)). **Notes** (at the bottom of the form): text of your own on the card (what you changed, what you plan), saved as its `"notes"`; the game shows none of it, and a code mod can read `<tag: value>` tags from it ([notes on a card](../../../notes/more-cards.md#notes-on-a-card)). **Revert to retail** keeps them; the **With notes** filter lists the cards that have some, and the search finds words of them too. **Add a card** copies the selected one as a new card with a stable id; a new card starts in nobody's chest (it is won in its base's place, dealt in a starter deck, or given by Game > Cheats), and its password works in the Password shop and is shown in the card view. Added cards default to 999999 starchips; edit **Starchips** to change the price |
+| Cards | search and filter the 722 cards; name, type, attribute and guardian stars (their lists show the game's icons; the level, ATK and DEF have the game's star, sword and shield), card text (with the game's 20-letter, 8-line wrapping counted, and **Tools > Card text preview** to see it as the card view draws it, below), ATK/DEF, type, attribute, level, guardian stars, password; the retail value beside each field. A magic, trap, ritual or equip card has no ATK, DEF, level, attribute or stars, so the form hides them for one; a magic, trap or ritual card shows **Retail effect** instead (an equip shows its **ATK boost** and **DEF boost**): the disc card of the same type it plays as, for you and for the CPU (`"effect"`, [more cards](../../../notes/more-cards.md)). A monster made magic starts at **(none)**, which does nothing when played; a disc magic card has its own effect, and choosing it writes nothing. A guardian star may be **(none)**, written `0`: both none is a monster with no star at all (no SELECT A GUARDIAN STAR box, no star bonus given or taken, no star drawn), the second none a monster with one star; a first star of none with a second is warned about, because the game takes the second as the card's one star ([no star](../../../notes/modding.md#guardian-stars-names-icons-new-stars-and-matchups)). **Frame**: the colour of the card's frame (by type, or monster, magic, trap, ritual, purple or orange whatever its type), with a swatch of it; the card view, the Library and the duel draw it ([frame colour](../../../notes/more-cards.md#frame-colour)). **Notes** (at the bottom of the form): text of your own on the card (what you changed, what you plan), saved as its `"notes"`; the game shows none of it, and a code mod can read `<tag: value>` tags from it ([notes on a card](../../../notes/more-cards.md#notes-on-a-card)). **Revert to retail** keeps them; the **With notes** filter lists the cards that have some, and the search finds words of them too. **Add a card** copies the selected one as a new card with a stable id; a new card starts in nobody's chest (it is won in its base's place, dealt in a starter deck, or given by Game > Cheats), and its password works in the Password shop and is shown in the card view. Added cards default to 999999 starchips; edit **Starchips** to change the price; the form starts with the card's picture as the game draws it (a click opens it on the Art tab) and **Apply** and **Revert to retail** |
 | Art | a card's picture (102x96), thumbnail (40x32, the hand and the field) and name plate (96x14), one picture each in the view chosen at the top: **Disc**, **In game** (the console's resolution) or **Internal 2x/4x**; a part the mod changes shows the disc's beside it (before, after). **Import PNG** (up to 4x, 408x384 and 160x128, for detail at Internal 2x/4x, on retail and added cards alike; or double-click a picture), **Export** the disc's or the mod's (to paint over), **Revert to disc**. The pictures grow to the room the window gives them, the thumbnail and name plate side by side under the picture when that makes them bigger |
-| Fusions | every pair and its result (search by a card, or show the changed ones); add, change, remove (the pair no longer fuses) or revert; **Remove recipes of...** takes away every disc recipe of a card in one `remove` rule; **Remove all fusions...** leaves none at all (the disc's table goes in one `{"remove": "all"}` rule, the mod's own fusion rules are dropped and an added card's own recipes blocked), so fusions added after it are the only ones, and the button then reads **Restore disc fusions** to bring the disc's table back; a pair a card's own `fusions` list makes (no rule of the mod deciding it first) shows that list's result, marked "own list"; **Bulk...** adds or takes away the fusions of every card of one filtered set with every card of another (below) |
-| Equips | per equip card, the monsters it may equip; add one, add or remove a whole type, remove, revert |
-| Rituals | per ritual card, its three tributes and the monster it summons |
-| Duelists | per opponent, the deck pool and the S/A-POW, B/C/D and S/A-TEC drop pools: weights, their chance, the retail weight, and the total against 2048 (**Normalize** scales a pool back to 2048 the way the port does). The deck is either the **Weighted deck (retail)** or a **Fixed deck (40 cards)**: forty specific cards by their copies, counted against 40, each beside its weighted chance; **Copy the weighted deck's most likely 40**, **Clear**, **Revert to retail** |
-| Starter decks | the decks a new game may be dealt in place of the disc's weighted pools: a deck's name, its weight against the other decks offered, and its cards by their copies, counted against the forty a deck holds |
-| Map | the campaign map's sixteen places (below): each exit's destination, direction, story-flag condition, length and arrow on the screen, the Millennium Puzzle marker's place in the town, Confirm's destination and each place's camera, over pictures of the map drawn from your disc; **Reset place**, **Reset all**; **Pictures...**: the marker, arrows and name panel, and the terrain's textures |
-| Limits | the numbers the game caps (`limits`, [gameplay tables](../../../notes/gameplay-tables.md#limits-atk-def-lp-starchips-and-more)). The simple part: the ATK and DEF cap, the LP a duel starts with, and how far healing goes. **Show advanced**: ATK and DEF apart, each side's starting LP, the two-player LP choice (start, most, step), the most starchips, the chest's copies, the Free Duel and two-player records, and a table of duelists with the LP each side starts with against them. An empty field is the game's own number (beside it, with the range the game keeps); a value past that range is warned about and held at the most the game keeps |
+| Fusions | every pair and its result (search by a card, or show the changed ones); add, change, remove (the pair no longer fuses) or revert; **Remove recipes of...** takes away every disc recipe of a card in one `remove` rule; **Remove all fusions...** leaves none at all (the disc's table goes in one `{"remove": "all"}` rule, the mod's own fusion rules are dropped and an added card's own recipes blocked), so fusions added after it are the only ones, and the button then reads **Restore disc fusions** to bring the disc's table back; a pair a card's own `fusions` list makes (no rule of the mod deciding it first) shows that list's result, marked "own list"; **Bulk (many pairs)...** adds or takes away the fusions of every card of one filtered set with every card of another (below) |
+| Equips | per equip card, the monsters it may equip; add one, remove (Delete), revert; **By monster type**: a box a type, ticked when the equip fits every monster of it and half ticked for some, beside the count (Warrior 33/73): ticking adds the type, unticking takes it away, and a count lists that type's monsters alone |
+| Rituals | every ritual card in a list (search, **Changed only**); the chosen one's recipe as cards in a row, with their pictures: the ritual card + its tributes → what it summons, and the same in a sentence. **Tributes come from** **On the field** (the game's), **In the hand** or **Both** (`"tributes_from"`); one to five tributes (**Add a tribute**, the × on a tribute). A click on a card edits it below: a tribute is **A specific card** (a copy counts too) or **Any monster that...** meets conditions (type, fusion group, ATK, DEF, level, DEF above ATK); the result a monster. Changes are the mod's at once (Undo takes them back). **Remove recipe** takes a disc ritual's away, or an added copy's (which otherwise has its base's), as `"result": null`; **Give it its own recipe** starts a copy's from its base's ([rituals](../../../notes/gameplay-tables.md#rituals)) |
+| Duelists | every opponent of the Free Duel grid, a small portrait beside each name, grouped by the grid's pages: page 1 the disc's forty, page 2 and on the duelists the mod adds (**Add duelist...**, **Duplicate**, **Remove**). The one chosen shows its picture and the two the game draws of it (Internal 1x and 2x and up), where it sits on its page (a map of the page; a click on a face goes to that duelist), **Name and place...** (its name, id, base and slot) and **Picture...**/**Disc's face** (below, [Duelists](#duelists-added-duelists-and-portraits)). Then, per opponent, the deck pool and the S/A-POW, B/C/D and S/A-TEC drop pools: weights, their chance, the retail weight, and the total against 2048 (**Scale to 2048 (100%)** scales a pool back to 2048 the way the port does). The deck is either the **Weighted deck (retail)** or a **Fixed deck (40 cards)**: forty specific cards by their copies, counted against 40, each beside its weighted chance; **Copy the weighted deck's most likely 40**, **Clear**, **Revert to retail**; a line says what the pool deals (a deck pool, the forty it deals most often; a drop pool, the chance of a monster and its strongest one), beside the disc's once changed |
+| Starter decks | the decks a new game may be dealt in place of the disc's weighted pools: a deck's name, its weight against the other decks offered, and its cards by their copies, counted against the forty a deck holds, with a line of what it is made of (monsters and their average ATK, magic, traps...). **Add deck**: an empty deck, an opponent's (its fixed deck, or the forty its weighted deck deals most often), one deal of the disc's seven starter pools, or a copy of the selected one. **Weighted pools** (`starter_pools`): pools of the mod's own a new game's deck is drawn from, each its number of cards by its weights, the draws counted against forty; **Start from the disc's seven pools** to change them |
+| Map | how the player gets around the campaign map (below): at each of its sixteen places, its arrows (where each goes, the direction pressed, when it is open, its picture and spot), Confirm, the camera and, in the town, the Millennium Puzzle marker, edited on the place's screen drawn from your disc (drag the arrows, the marker and the map itself); **All routes**; the numbers under **Show advanced**; a way back for each changed part and **Revert every place**; **Map pictures...**: the marker, arrows and name panel, and the terrain's textures |
+| Values | the game's numbers a mod may change (written as `limits`, [gameplay tables](../../../notes/gameplay-tables.md#values-atk-def-lp-starchips-and-more)), in groups: **Duel** (starting LP for both sides or each, the LP healing stops at, the ATK and DEF cap), **Magic** (Swords of Revealing Light's turns, Crush Card's ATK, what Spellbinding Circle and Shadow Spell take off), **Deck and Trunk** (copies of a card in a deck, copies the Trunk keeps), **Rank** (the score a duel starts at, what an Exodia win and a win by the opponent's empty deck add), **Rewards** (the starchips a win gives at S to D, a new game's starchips, the most the save holds) and **Records and 2P** (the two-player LP choice and the records), and a table of duelists with the LP each side starts with against them. Each row shows the game's own value in grey (an empty field is it), turns blue when the mod changes it, has ↺ to put the game's back, and a line that says what it does with the range the game keeps; a value past that range turns its name red, with the reason under the groups, and the game holds it at the most it keeps or shows. **Reset all to the game's** empties every field |
 | Guardian Stars | the stars (`guardian_stars`, [Guardian Stars](../../../notes/modding.md#guardian-stars-names-icons-new-stars-and-matchups)): the list of stars with a name and an icon each (**Import icon (PNG)...**, with a preview; the game makes it 16x16 in the disc's stars' colours), **Add star** for 11 to 15 (a card holds its stars in 4 bits, so fifteen at most), and the full grid of matchups: a row is the attacker's star, a column the defender's, a cell the bonus the attacker's side gets, green above 0 and red below; click a cell, type a bonus or use **+ default**, **- default** or **0** (with **Reverse pair gets the opposite** on, the reverse cell takes the opposite sign). **Default bonus** moves the disc's 500 in both cycles, **Retail cycles** and **Clear all** are presets, **Revert to retail** takes the whole key away. **Set stars by rule...** sets many cards' first or second star from their attribute or type through a table you fill in (a Fire monster's first star is Fire), or one star for all, **(none)** included (a first star of none leaves the second as the card's one star, as the game reads it; both none, no star), over a filter of cards like Bulk fusions', with a preview and **Undo last batch**. **Show advanced**: a name per language (`fr=Feu, de=Feuer`), an icon's colours (`game` or its own), and what happens at a summon (`ask`, `first`, `best`). The Cards tab's star lists show the mod's stars as they are named here |
-| Packs | the card packs the mod sells for starchips on the Password screen: each pack's name, description, price, cards a pack and picture (shown as a card's art or, `image_style` `full`, the whole picture), its cards with their tier, weight and chance; an **Advanced** part for everything else; **Shop settings...** and **Simulate...** (below) |
-| Mod info | id, name, version, author, description, `settings`, and the other `mod.json` keys, kept as written (`limits` is the Limits tab's, `guardian_stars` the Guardian Stars tab's) |
-| Conflicts | the loader's checks; double-click a line to go to it. Below them, where this mod meets the **other mods installed** (beside the game and in the player's mods folder, or a folder chosen with **Other mods folder...**): the same lines as the game's Mods window, a warning where only one mod's change is used and a note where the changes add up or agree ([When mods overlap](../../../notes/modding.md#when-mods-overlap)) |
+| Packs | the card packs the mod sells for starchips on the Password screen: each pack's name, description, price, cards a pack and picture (shown as a card's art or, `image_style` `full`, the whole picture), its cards with their tier, weight and chance; a **Show advanced** part for everything else; **Shop settings...** and **Simulate...** (below); with no pack, an empty one or **a pack of an opponent's drops** (its cards at their drop weights) |
+| UI | the title screen, its two menus and the duel's pictures, drawn from your disc as the game draws them: drag a picture to move it, the side has the rest; **Revert to retail...** puts the whole tab back (below, [The UI tab](#the-ui-tab)) |
+| Mod info | id, name, version, author, description, `settings`, and the other `mod.json` keys, kept as written (`limits` is the Values tab's, `guardian_stars` the Guardian Stars tab's). The settings are a list (key, label, type, default, and how many of the mod's entries each switches with `"setting"`) with a dialog a setting that shows what its type takes and checks it as the game does; their JSON is a page beside it |
+| Conflicts | the loader's checks, all or one level (errors, warnings, notes); double-click a line (or Return) to go to it, a line about another mod to the tab and card it is about. Below them, where this mod meets the **other mods installed** (beside the game and in the player's mods folder, or a folder chosen with **Other mods folder...**): the same lines as the game's Mods window, a warning where only one mod's change is used and a note where the changes add up or agree ([When mods overlap](../../../notes/modding.md#when-mods-overlap)) |
 
 **Retail effect** selects a built-in behavior by its original retail name.
 The saved number identifies that behavior, independently of the card currently
@@ -98,7 +99,11 @@ phase, Before combat, When destroyed, Destroy opponent monster, While face up, e
 it: a summon is face up only, a flip is the face-down card attacked), **Does** (a magic card's effect, a boost of ATK and DEF, healing its
 owner, damage to the opponent, destroying monsters), and what that needs: the magic card, whose
 monsters a boost or destroy reaches (and only of one type or attribute), the ATK and
-DEF, the LP. Only what the game can do for that **When** is offered: while
+DEF, the LP. **For each** (off, "—", by default) makes a boost, heal
+or damage once per face-up monster on its owner's field, the opponent's or
+the whole field, with **Counting type** and **Counting attribute** to count
+only those; the list then reads, for example, "This card: +300 ATK +300 DEF
+for each face-up Dragon on its owner's field". Only what the game can do for that **When** is offered: while
 face up, only boosts; before combat, a boost of the card itself or of the
 monster it battles, healing or damage. **Remove**, **Up** and **Down**
 change the list; the effects resolve in its order. A change is stored at
@@ -204,7 +209,7 @@ write that restored version. Dialogs keep their own keyboard behavior.
 
 **Recovery and backups:** After two seconds without another edit, the editor
 updates a separate recovery copy of the working mod and its assets. Unapplied
-Cards, Mod info, Limits and Packs fields are included, even incomplete input.
+Cards, Mod info, Values and Packs fields are included, even incomplete input.
 This does not save or change the original mod folder. The editor offers to
 review leftover drafts on startup; **File > Recover work...** lists drafts and
 save backups, with their date and original folder. **Open copy** opens a separate
@@ -253,7 +258,7 @@ Consolas for the fixed one. None of this runs elsewhere.
 
 ### Bulk fusions
 
-**Bulk...** in the Fusions tab (`bulk_dialog.py`, the rules in
+**Bulk (many pairs)...** in the Fusions tab (`bulk_dialog.py`, the rules in
 `bulk_fusions.py`) pairs every card of **Material A** with every card of
 **Material B**. Each side is chosen by filters that must all hold, empty
 meaning any card: kind (monster, magic, trap, ritual, equip), monster type,
@@ -290,53 +295,74 @@ about a minute); use a current build.
 
 ### The Map tab
 
-The campaign map (`campaign_map.py`) is the overworld module's table of
-sixteen places: 0-9 the world map's sites, 10-15 the town's, named as the
-game names them (strings `0x8350` + place; two town places read "before /
-after" when their label changes once the tournament is over). A place is
-what the game shows while the player stands there, so it is edited as a
-screen:
+What it changes: how the player gets around the campaign map. At each of
+its sixteen places, which arrows show, where each leads, which direction
+takes it and when it is open; what Confirm does; how the camera frames the
+place; and, in the town, where the Millennium Puzzle marker stands.
 
-* **Screen**: the place at 2x, over the map as its camera sees it (drawn
-  from the disc's own 3D map, `map_view.py`: the terrain model, its
-  textures, the camera of `ViewState_ApplyOrbit`, the game's fog and, on the
-  world map, its spotlight; close to the game's frame, not exact, because
-  the light is a fit). The name panel, each used exit's arrow (the game's
-  own sprite from the map's strip, `field_08`) and, in the town, the
-  Millennium Puzzle marker are drawn where the game draws them; drag an
-  arrow or the marker to move it. Exits at the same spot share one label,
-  with the flag each needs.
-* **Overview**: the world map from straight above (turned as its cameras
+The map (`campaign_map.py`) is the overworld module's table of sixteen
+places: 0-9 the world map's sites, 10-15 the town's, named as the game
+names them (strings `0x8350` + place; two town places read "before /
+after" when their label changes once the tournament is over). The list
+groups them under **World map** and **Town**, a changed one in the
+changed colour. A place is edited as the screen the game shows there:
+
+* **This place**: the place's screen, as big as the interface size allows
+  (2x, 3x from 150%, 4x from 200%), over the map as its camera sees it
+  (drawn from the disc's own 3D map, `map_view.py`: the terrain model, its
+  textures, the camera of `ViewState_ApplyOrbit`, the game's fog and, on
+  the world map, its spotlight; close to the game's frame, not exact,
+  because the light is a fit). The name panel, each arrow (the game's own
+  sprite from the map's strip, `field_08`) and, in the town, the marker
+  are drawn where the game draws them. Drag an arrow or the marker to move
+  it (a click on an arrow picks it); drag the map itself to move the
+  camera (the ground under the mouse stays under it), the wheel zooms, a
+  right drag (or Shift and drag) turns it. A drag draws the map small as
+  it goes and in full once dropped; each is one undo step.
+* **All routes**: the world map from straight above (turned as its cameras
   mostly look: -x up) with each world site where its camera looks, the town
   (place 10's camera) with its places where the marker stands, and every
-  exit as an arrow to its destination: green always, amber while a flag is
-  set, blue while it is clear, dashed for Confirm; thicker for the selected
-  place. Dragging a world site moves its camera's target; dragging a town
-  place moves its marker. **Map** chooses the model before or after the
-  coup (the terrain changes; the table is one for both). A **Reference
-  picture...** (a screenshot of the game at this place) replaces the drawn
-  map for this camera while the editor is open.
-* The form: the camera (distance, heading, pitch in 4096ths of a turn, and
-  the x and z it looks at); the marker (the town only: the world map draws
-  none, so a world site's are kept as they are); Confirm's destination
-  ("enter the place's own scene" is the disc's 0) and whether it waits for
-  exit 1's condition (the record's gate); and four exits, each **Used** or
-  not (destination 16 on the disc), its destination by name, the direction
-  held as a D-pad (any of the four), **When**: always, while a story flag
-  is set, or while it is clear (the flag number is the one the game tests,
-  `0x8000` set in the record for "clear"), **Frames** (the move's length:
-  the camera and the marker take that many frames), the arrow's picture
-  (one of the eight the map has) and its x, y on the screen. A new exit
-  starts at 16 frames, the disc's usual length.
+  arrow as a line to where it leads: green always open, amber after a
+  flag, blue before it, dashed for Confirm; thicker for the place picked.
+  Dragging a world site moves its camera's target; dragging a town place
+  moves its marker.
+* **Map: Before the coup / After the coup** chooses which of the disc's two
+  models the pictures are drawn from (the terrain changes; the table is one
+  for both).
+* The panel: the place's name, then what differs from the disc, each part
+  with its own way back (**↺ Arrow 2**, **↺ Camera**, **↺ Marker**,
+  **↺ Confirm**, **↺ All**; "As in the game" otherwise). **Arrows** lists
+  the arrows used (the disc's slots with a destination other than 16) by
+  the direction pressed, where each goes and when it is open; **+ Add**
+  takes the first free slot (a direction no other arrow takes, the arrow
+  picture and spot that go with it, a place none leads to yet, 16 frames,
+  the disc's usual length), **Remove** sets the slot's destination to 16.
+  The arrow picked: **Goes to**, **Press** (any of the four directions),
+  **Open**: always, after a story flag is set, or before it is (the flag
+  the game tests, `0x8000` set in the record for "before"; flag `0x47`
+  reads "the coup", the flag that swaps the town's map), and **Picture**
+  (the eight arrows the map has). **Confirm**: where Confirm leads
+  ("Enter this place" is the disc's 0, the place's own scene).
+* **Show advanced**: the numbers behind the drags. The arrow's x, y and
+  **Walk frames** (the move's length: the camera and the marker take that
+  many frames); under the screen the camera (distance; **Turn** and
+  **Tilt**, heading and pitch in 4096ths of a turn; and the x and z it
+  looks at); the marker's x, y (the town only: the world map draws none,
+  so a world site's are kept as they are); **Confirm only while arrow 1 is
+  open** (the record's gate); and **Compare with a screenshot...** (a
+  screenshot of the game at this place replaces the drawn map for this
+  camera while the editor is open). A number that differs from the disc's
+  has its caption in the changed colour. Show advanced only shows: what
+  the mod writes is the same either way.
 
-The game takes the first exit whose direction is held and whose condition
-holds, so two exits may share a direction under opposite conditions (the
-disc does that); Cancel in the town, once the tournament is over
+The game takes the first arrow whose direction is held and whose condition
+holds, so two may share a direction under opposite conditions (the disc
+does that); Cancel in the town, once the tournament is over
 (flag `0x47`), always leads back to the world map at Metropolis.
 
-**Pictures...** (`map_art.py`) replaces the map's own pictures, as
+**Map pictures...** (`map_art.py`) replaces the map's own pictures, as
 texture pack entries in the mod's pack (the Art tab's pack, `textures/`,
-the map's PNGs under `textures/map/`); the Screen and Overview draw them
+the map's PNGs under `textures/map/`); This place and All routes draw them
 at once:
 
 * **Sprites**: the map's one strip of sprites (WA sector `+141` of each
@@ -371,6 +397,182 @@ At the console's resolution a bigger picture is averaged down to the
 texture (the game's 4 or 8 bits are gone: any colour goes); Internal 2x
 and 4x draw it at its own resolution. The game reads a pack at start, like
 the table, so the mod needs a restart.
+
+### Duelists: added duelists and portraits
+
+The Free Duel grid shows forty duelists a page. The disc's Deck Build and
+thirty-nine are page 1; a mod's own duelists ([more
+duelists](../../../notes/more-duelists.md)) fill page 2 and on, and the
+game turns the page with L1 and R1. The tab's list is those pages, each
+duelist with a small portrait of its face as the grid draws it, and its id
+(its place: page 2 starts at 40) beside it.
+
+**Add duelist...** makes a copy of one of the disc's duelists (the one
+chosen, or another under **Copy of**): its deck, drops, face and way of
+playing, under a **Name** of its own. Its **Id** names its files and is what
+a save knows it by; **Place** is the first free place, or a **Slot** from 40
+to 127 (page = slot / 40 + 1, five cells a row: 45 is page 2, row 2,
+column 1), with a line saying where that is and who has it already. It
+starts with its base's pools as the mod has them, and they are its own from
+then on, edited like any duelist's (the **Base** column is its base's on the
+disc, which **Revert pool** goes back to). **Duplicate** makes another with
+everything it has; **Remove** takes it out, files and all. **Name and
+place...** (or a double-click) changes them later; for one of the disc's it
+is the name alone, which is written as a `"replace"` entry taking that
+duelist over, as is a new face for one.
+
+**Picture...** gives any duelist a face from a PNG of any size (a
+double-click on **Your picture** too), and **Disc's face** takes it away. The
+three pictures are the file itself, with the square the game takes from it
+marked (the middle one: a wide picture loses its sides), and what the game
+draws, worked out as the game does: **In game (1x)** is the 48x48 the grid
+shows at View > Internal 1x, and **Internal 2x+** what it shows above that.
+A picture bigger than 48x48 is drawn from the file itself: averaged to
+48x48 at 1x in the console's colours, at its own resolution above. One of
+48x48 or less is made into the console's 64-colour portrait and that is
+what shows, at any scale.
+
+The page map beside them is the chosen duelist's page as the game lays it
+out, its cell ringed; the arrows look at the other pages.
+
+A duelist's other properties (`ai`, `unlock`, `ranks`, anything else) have
+no field: they are kept exactly as written, and the tab names them
+("Kept as written: unlocks after: beat Dark Simon 2 times; ...").
+
+### The UI tab
+
+Three pages, picked at the top: **Title screen**, **Menus** and **Duel**.
+Each is the screen as the game draws it, from your own disc (the title's
+pictures are in `DATA/SU.MRG`, the duel's in `WA_MRG.MRG`; nothing of the
+game's art is kept with the editor), as big as the window leaves room for
+(a whole number of times the game's 320 x 240, so its pixels stay sharp),
+with what the mod changes on it. Beside it is the page's list, grouped, a
+dot on what the mod changes (in the editor's changed colour); under the
+list, what the chosen thing is and its form. A picture is moved by dragging
+it -- its place in the form follows as you drag -- or by the arrow keys
+once the picture has been clicked (Shift: 8 pixels); under the picture is
+where the mouse is, in the game's pixels. On the Duel page the mouse wheel
+sizes it. What the pages write is the mod's `"title"`, `"menu"` and `"ui"`
+([the title screen](../../../notes/modding.md#the-title-screen), [the
+title's menus](../../../notes/modding.md#the-titles-menus), [the duel's
+pictures](../../../notes/modding.md#the-duels-pictures)); a PNG you choose is
+put in the mod's `ui/` folder.
+
+**Hold: the game's** shows the page as the game has it while the button is
+held down: before and after. **Revert to retail...** puts the whole tab back
+(it takes out the mod's `"title"`, `"menu"` and `"ui"`, and the PNGs in
+`ui/` nothing names any more), **Revert page** one page; both say what is
+lost first, and **Edit > Undo** brings it back in one step. A thing's own
+**Back to the game's** puts that one back. A colour that multiplies (every
+"Colour" but a line of words' and the colour under the background) can only
+darken; a bright one says so. Settings the game does not quite follow are
+noted in the form, only while they are set (a life-point label with a
+letter outside plain A-Z, digits and signs shows COM or YOU instead, and is
+not drawn over a picture of yours; a life-point half or the FIELD box moved
+down over the field, where the cards are drawn over or under it in the
+game's order; an "x" or a size a hand-written mod gave that the game leaves
+out).
+
+* **Title screen**: the **Background** (click the picture where nothing
+  else is, or its row): the game's wall or not, its colour, the dark-to-light shade, a
+  colour under it, a **Picture** of your own over the whole screen, how far
+  a menu dims it; and the screen's song, the intro, PUSH START BUTTON. The
+  **Logo**, **Copyright line** and **PUSH START BUTTON**: moved, coloured,
+  shown always or only with or without a menu, a PNG in their place, hidden
+  (a dashed box then, to choose it again). **+ Picture** adds a picture of
+  your own (up to eight), **+ Words** a line of words (up to sixteen; the
+  port draws these over the picture, in its own letters); each has its place
+  (**Centre** puts it in the middle across). **With the menu
+  up** shows the screen as the first menu leaves it.
+* **Menus**: the first menu and the second (once a game is loaded), each a
+  group of its buttons top to bottom, the hidden ones greyed, ▲ ▼ to reorder
+  them; choosing a button shows its menu.
+  **+ Button** adds a button of your own; each, the game's included, has
+  **Words** (drawn on a frame in the entries' look) or a **Picture** (and
+  one while the cursor is on it), what it **Does** (an entry's choice,
+  back, a notice, quit, the debug menu, a code mod's event, nothing; only
+  what that menu allows), its colour and its place (**In line** puts it back
+  in the column). **Menu background**, the list's first row, is the menus'
+  own background, as the title's. **Spacing**, under the picture, is how far
+  apart they stand at 100 %. Each button has a **Size**, 25 to 400 % about
+  its middle (the slider, or the mouse wheel over it on the picture: 10 % a
+  notch); **All buttons**, under the picture, sizes every one without a
+  size of its own. A bigger button takes more room, so the others stand
+  further from it, as the game stands them. The words, the frame and the
+  cursor's look grow with it, as the game draws them. A ⚠ under the form
+  says when buttons run into each other (the menu squeezed to fit the
+  screen, or a place of your own) or one reaches past the screen's edge.
+* **Duel**: the life-point panel's two halves (**Opponent's LP**, **Your
+  LP**: each with its digits; **Words** in place of COM or YOU, the
+  **Digits**' colour), the **FIELD box**, the **Card bar** (its colours or a
+  picture only: its words and the hand go with it), the **Hand cursor** and
+  the **Field cursor**. Each has a **Colour** (multiplied: white leaves it
+  as it is), a **Picture** of your own and **Hidden**; the cursors are
+  **Moved by** any way and sized 25 to 400 % about their middle. The game
+  slides the life-point halves and the FIELD box off the side of the screen
+  (for a battle, the duel's end), so they move **up and down only** -- they
+  slide with the game's and leave the screen with it -- and are sized no
+  larger than still leaves it (161 % for a half, 201 % drawn from your
+  picture, 130 % for the box); the pointer over them shows the up-and-down
+  arrow, and dragging across does nothing. The **Card bar** stays where it
+  is, at its size (its words and the hand are drawn over it): no move, no
+  size, the pointer shows it cannot move. **Back to the game's** for one,
+  **Revert page** for all. **Opponent's turn** shows the panel in the
+  other turn's colours. Behind them is the duel's screen as it opens, as the
+  game draws it: the board (the Duel board page's 3D board from the duel's
+  own camera, with the mod's board), the hand's five cards in their frames
+  with ATK and DEF, and the card bar's name, stats and icons for the card the
+  cursor is on.
+
+Colours are the game's: a tint multiplies, so it can only darken what is
+there. The pictures are the console's size here; the game draws a PNG of
+yours at up to four times that above the console's resolution.
+
+### The UI tab's Duel board page
+
+**Duel board** (`ui_board.py`, `board_art.py`) changes the textures of the
+duel's 3D board, field by field: **Normal**, **Forest**, **Wasteland**,
+**Mountain**, **Sogen**, **Umi**, **Yami** across the top, a dot on those the
+mod changes. On the left the board itself: the game's 3D model of it read
+from your disc (`board_model.py`), with your disc's textures and the mod's,
+lit and seen as the duel's camera sees it at the start of a turn. Drag with
+the **middle mouse button** to turn it round (it stays above the floor),
+**Shift** (or **Ctrl**) and the middle button to move it, the **wheel** to
+come nearer; **Game's view** (or a double middle click) puts the duel's
+camera back. Click a part there or in the list to choose it; it is outlined
+on the board. A field, a camera or an edit not seen yet shows a smaller
+picture of it at once and the full one a moment later, drawn a little at a
+time so the window never waits on it; left alone, the page draws the
+other fields ahead, so the next one chosen is there at once (the last seven
+are kept). While the camera moves, the picture is as small as your machine
+draws quickly enough. The list is the field's textures:
+
+* **Floor**: all five rows of zones as one picture, 256x254 texels, far to
+  near (the opponent's back row at the top, the centre strip once, your
+  back row at the bottom); and each row on its own, 256x52 (the centre
+  strip 256x46): five 51x51 tiles side by side. The game draws the centre
+  strip twice, the near half turned round.
+* **Walls and trim**: the platform's walls (the sun disc's **left** and
+  **right wing**, 128x64 each, the **middle** block between them on the
+  end walls, and the **corners**), the **top trim**, the
+  **triangles** (at the corners and the centre strip's ends) and their
+  **edges**, and the raised centre strip's **step**, **sides** and **side
+  ends**.
+
+Beside them the chosen texture as the mod has it, its size and:
+**Replace...** with a PNG of yours (any size: at the texture's shape it is
+used as it is up to 4x, the game drawing it sharp at Internal 2x and 4x and
+averaged to the texture's own texels at 1x; another shape is stretched to
+fit), **Export game's...** (the disc's texture as a PNG to paint over),
+**Revert**, and a **Tint** of the game's own picture (each colour of its
+palette multiplied: exact at every size; a replaced texture keeps its own
+colours, and the tint shows as the palette reads it back, #60FF60 perhaps as
+#60FF7F, the same colours). **All seven fields** makes Replace, Tint and
+Revert apply to that texture on every field (one PNG for them all). **Revert
+to retail** puts every field's board back. A ⚠ marks what to know about the
+texture: the centre strip drawn twice, the wings apart, the trim drawn in
+slices, and that a field card (Forest ... Yami) changes the floor only, the
+walls staying those of the field the duel began on.
 
 ## Game files
 
@@ -444,7 +646,7 @@ record are shown as retail fusions and marked.
   the rest of the key already gives; a mod's `beats` and `mirror` are read
   into the grid and written back as those pairs. Icons are written to
   `icons/star-<id>.png` in the mod folder.
-* `limits`: what the Limits tab sets, a key per field that is not empty
+* `limits`: what the Values tab sets, a key per field that is not empty
   (`"life_points": 16000` when only both sides' start is set); a key the tab
   does not show is kept as written.
 * `drops` and `decks`: per opponent and pool, the fewest listed weights that
@@ -492,14 +694,29 @@ record are shown as retail fusions and marked.
   {"starchips": n}` alone as `"price"`. A pack's picture goes in the mod's
   `packs/` folder. `"packs"` given as the name of a file stays that filename
   (the tab then edits nothing).
-* The duelists the editor knows are the forty the disc lays out, since it
-  reads the game's own files. A mod may add its own
-  ([more duelists](../../../notes/more-duelists.md)), and which of those exist
-  depends on the mods applied at run time, so an entry of `drops` or `decks`
-  naming one is kept as written rather than resolved — as is either table
-  given as the name of a file (`"decks": "tables/decks.json"`), which the
-  editor does not read. A roster's `duelists/`, `decks/`, `drops/` and
-  `portraits/` folders are copied with the mod's other files.
+* The duelists the mod adds or takes over (`roster.py`,
+  [more duelists](../../../notes/more-duelists.md)): each written back where
+  it was read — a `duelists/<id>.json` file, mod.json's `"duelists"` list, or
+  the file that key names — and one made in the editor as
+  `duelists/<id>.json`. An entry holds `copy` (or `replace`), `name`, `slot`
+  and `portrait` as the tab has them and every other key as written; one
+  that says what it said when read is written as it was. A face is
+  `portraits/<id>.png` (or the path its `"portrait"` names). An added
+  duelist's pools are its own files, `decks/<id>.json` and
+  `drops/<id>.json`, written against its base's disc pools (which the game
+  edits for it) and only when they differ; a disc duelist's go in mod.json's
+  `decks` and `drops` by its disc name as before, whether or not a
+  replacement renames it. `"all"` reaches the added duelists too, as it does
+  in the game. A list entry without an `"id"` is given one (a save's record
+  of it under its place in the list does not follow). Opening a mod reads
+  `decks/` and `drops/` files as the game does, after mod.json's tables; one
+  naming a disc duelist moves into mod.json, one holding a fixed deck, or
+  naming a duelist neither the disc nor the mod has (another mod's), stays
+  the file it was, untouched. The roster's files the editor read are its to
+  write: a duelist removed, renamed or back as its base takes its files with
+  it on the next save. An entry of `drops` or `decks` naming another mod's
+  duelist is kept as written, as is either table given as the name of a file
+  (`"decks": "tables/decks.json"`), which the editor does not read.
 * `data` (the Map tab): one entry patching `\DATA\WA_MRG.MRG;1` where the
   map differs from the disc, the same bytes in both overworld packages'
   tables (`0xFEC800 + 0x11A8` and `0x103B800 + 0x11A8`, each 1056 bytes),
@@ -513,7 +730,7 @@ record are shown as retail fusions and marked.
   takes its patches of the two tables back into the map (a run across a
   table's edge stays as written, with a note), and a mod whose two tables
   differ opens with the one before the coup and saves both alike.
-* The map's pictures (the Map tab's **Pictures...**, `map_art.py`): texture
+* The map's pictures (the Map tab's **Map pictures...**, `map_art.py`): texture
   pack entries in the same `textures/manifest.json`, after the Art tab's,
   PNGs under `textures/map/`: the sprite strip as one entry per palette and
   package (`archive` `WA_MRG.MRG`, `offset` the strip's sector `+141`,
@@ -523,6 +740,24 @@ record are shown as retail fusions and marked.
   or 8 bits, and the palette the polygons name, as the last upload to that
   place in VRAM leaves it). Opening a mod takes such entries back into the
   map; the pack's other entries are kept as written.
+* The duel board (the UI tab's **Duel board**, `board_art.py`): texture pack
+  entries in the same `textures/manifest.json`, PNGs under
+  `textures/board/<field>/` (or `board/all/` for one picture on every
+  field). Each field's board is the last phase of its package, 32 sectors
+  from WA sector `0x16C6 + 235 * field + 203`, two 64-word columns at 4 bits
+  (VRAM 640,256). A texture is one entry per field: its rectangle (`offset`
+  the rectangle's first word, `words` and `rows` its size, `stride` 64)
+  read through its own palette (`clut_offset`: the floor rows' at
+  `+0x7F00 + 0x20 * row` of the phase, the walls' from `+0xF120`), so no
+  two entries share a word and each shows at Internal 1x too. A tint is a
+  `data` patch of that palette in `\DATA\WA_MRG.MRG;1`, after the map's:
+  each colour times the tint, the clear colour kept, one that becomes black
+  written as the opaque black the packs use (`0x8000` with the
+  semi-transparency bit, `0x0001` without). Opening a mod takes these
+  entries and patches back into the board; a patch of a palette that no
+  tint makes stays as written, with a note. With the Forbidden Memories HD
+  mod's Duel part on, its board is drawn for some of the floor's rows (its
+  entries cover whole columns): switch that part off.
 * Art (the Art tab, `art.py`): a retail card's picture and thumbnail go in
   a texture pack, `textures/manifest.json` with PNGs under
   `textures/cards/`, one entry each addressed as `extract_images.py` and
@@ -550,7 +785,7 @@ record are shown as retail fusions and marked.
   are written on save. A card's `art` that can't be read stops the import
   that would move it, instead of losing it.
 * Every other key of an opened mod (`data`, `text`, `textures`, `audio`,
-  `requires`, `duelists`...) is kept as written, and the folder's other files
+  `requires`...) is kept as written, and the folder's other files
   are copied when the mod is saved somewhere new.
 
 Cards are named by their retail name when that finds the card again in the
@@ -655,13 +890,17 @@ the file inside the pack and there, its measures (offset, words 1-1024,
 rows 1-512, depth 4/8/16, stride, `crop_left` and `width` within the row),
 `row_offsets` as long as `rows`, and a `setting` the mod declares; and the
 cards' `art`, `thumbnail` and `title`: inside the mod, there, and PNGs.
-For the map: a destination past 15 (16 is "no exit") or Confirm past 15,
-and a move of 0 frames (the game divides by it) are errors; an exit that
-leads back to its own place, needs no direction or other buttons, is
-shadowed by an earlier exit in the same direction under the same condition,
-has a flag past `0x7FF` or its arrow off the screen, a marker off the
-screen, and a place no exit, Confirm or Cancel leads to any more are
-warnings.
+For the map: a destination past 15 (16 is none) or Confirm past 15,
+and a move of 0 frames (the game divides by it) are errors; an arrow (an
+exit of the table) that leads back to its own place, needs no direction or
+other buttons, is shadowed by an earlier arrow in the same direction under
+the same condition, has a flag past `0x7FF` or is off the screen, a marker
+off the screen, and a place no arrow, Confirm or Cancel leads to any more
+are warnings.
+For the duel board: a picture that is not a PNG is an error; one not in its
+texture's shape (the game stretches it), one with see-through pixels (the
+board shows black there), and a texture both replaced and tinted (the tint
+shows nowhere) are warnings.
 
 ## Card text preview
 
@@ -843,8 +1082,54 @@ into isolated folders and play real duels (no changes to your saves or mods):
     python3 tests/pc/trap_effects_runtime.py --hard-mode
     python3 tests/pc/editor_mods_runtime.py
     python3 tests/pc/editor_mods_runtime.py --hard-mode
+    python3 tests/pc/editor_round_trip_runtime.py
+    xvfb-run -a python3 tests/pc/editor_duelists_runtime.py
+    python3 tests/pc/ritual_tributes_runtime.py --editor --interpreter
+    xvfb-run -a python3 tests/pc/editor_values_runtime.py
+    xvfb-run -a python3 tests/pc/editor_ui_runtime.py [--baseline <a build before>]
+    xvfb-run -a python3 tests/pc/editor_board_runtime.py [--out DIR]
+    xvfb-run -a -s "-screen 0 1600x1000x24" python3 tests/pc/editor_menu_runtime.py [--baseline <a build before>]
 
-They cover every monster type, converted equips and rituals, all 33 retail
+`editor_ui_runtime.py` makes a title, menus and duel pictures through the UI
+tab, then plays them: the title and menu with and without the mod, an added
+button pressed, a whole duel (a fusion, a magic card, battles, the
+opponent's turns, the results) with the moved panel and its digits checked
+in each picture, the same at Internal 2x in a window and with the duel
+effects interpreted, and, given `--baseline`, the frames without the mod
+against another build's.
+`tools/pc/bench_board.py` times the board's and the map's renders and every
+use of the Duel board page (`--slow N`: as on a machine N times slower; run
+it under `taskset -c 0` for one core). `tests/test_render_speed.py` holds
+the plain rasterizer the renders replaced and checks them against it pixel
+for pixel.
+`editor_board_runtime.py` makes a duel board through the Duel board page
+(floors replaced at 4x and 1x, one tinted, the walls' wings, trim and
+corner triangles on every field) and plays it at Internal 1x and 2x with
+and without the mod: duels begun on Normal, Forest and Wasteland, the
+camera's sweep round the board, Forest and Wasteland played mid-duel, a
+duel to its end, the effect bank still native, and the frames with the mod
+off as with no mods at all; each picture is checked by its colours.
+`editor_menu_runtime.py` sizes the menus' buttons through the Menus page
+(the game's entries, words and pictures, bigger and smaller, All buttons)
+and plays them at Internal 1x and 2x, 4:3 and widescreen: the cursor on
+every item of both menus, each item measured where the game drew it
+against the page's preview, the cursor's look about each one's middle;
+resized buttons pressed; and, given `--baseline`, the frames without the
+mod against another build's.
+
+`ritual_tributes_runtime.py` plays rituals of one to five tributes from the
+field, the hand and both, by the player and the CPU, natively and with the
+duel effects interpreted (its docstring lists every check). The
+`editor_round_trip_runtime.py` run makes a mod through every tab's own buttons and dialogs (cards,
+art, fusions, equips, rituals, duelists, starter decks, values, Guardian
+Stars, packs, the map, a setting), exports it, and starts a new game into
+a duel on it: the game must read each part and note nothing against it.
+`editor_values_runtime.py` types every new value into the Values tab and
+plays the mod and the game without it: a duel to its end and results (LP,
+Crush Card, Spellbinding Circle, Shadow Spell, the Swords' turns, the rank
+score and the starchip prize), an Exodia and an empty-deck win, Build
+Deck's copies and a new game's starchips, with pictures of each.
+The others cover every monster type, converted equips and rituals, all 33 retail
 magic effects, trap thresholds and special triggers, and CPU spell decisions
 and outcomes compared with retail after saving and reopening the mod. Pass
 `--out <folder>` to retain their logs. The AI adapter's native regression
@@ -867,7 +1152,9 @@ only the window; it does not rewrite the engine, whose rules are the port's
 | `manifest.py` | reading a mod folder (`open_mod`, `apply`) and writing one (`build`, `dumps`, `save_mod`) |
 | `validate.py` | the loader's checks: `validate(project)` → `Issue` list |
 | `pools.py`, `fixed_decks.py`, `bulk_fusions.py` | the port's pool arithmetic, fixed decks, bulk fusions |
+| `roster.py`, `portrait.py` | the duelists a mod adds or takes over (reading and writing their files, their places on the grid, checks), and Free Duel portraits: the disc's, and the one the game makes of a PNG |
 | `art.py`, `campaign_map.py`, `map_art.py`, `map_view.py` | card art, the campaign map's table and pictures, the map drawn from the disc's 3D model (`map_view.py` has no Tk despite its name) |
+| `board_art.py`, `board_model.py` | the duel board's textures: where each is on the disc, a mod's replacements (pack entries) and tints (palette patches); the board drawn from the disc's 3D model with them (no Tk) |
 | `guardian_stars.py`, `star_rules.py` | a mod's `guardian_stars` (the stars, the matchup grid, presets, checks) and setting many cards' stars by a rule |
 | `card_text.py`, `ttf.py`, `pngio.py` | the card-text layout and picture, TrueType outlines, PNGs and the `Image` type every picture is |
 | `importer.py`, `kit.py`, `ygomods.py` | importing a modified game (experimental), and converting a `.ygomods` package |
@@ -875,7 +1162,7 @@ only the window; it does not rewrite the engine, whose rules are the port's
 
 It needs `tools/pc/text_listing.py` beside the package (`gamedata.py`
 finds it). **The Tk front end** is `app.py`, `tabs.py`, `widgets.py`,
-`theme.py`, `art_tab.py`, `map_tab.py`, `fixed_deck_view.py`,
+`theme.py`, `art_tab.py`, `map_tab.py`, `duelists_tab.py`, `fixed_deck_view.py`,
 `bulk_dialog.py`, `guardian_stars_tab.py`, `star_rules_dialog.py`,
 `preview.py`, `importers.py` (the File menu's import
 dialogs) and `settings.py` (the window's own settings, no Tk).
@@ -938,13 +1225,26 @@ the engine keeps no undo (a front end may keep `project.clone()`s).
   (`own_fusion_pairs`, `explicit_after_edit`).
   Bulk: `bulk_fusions.plan(project, BulkSpec(...))`, then `apply` and `undo`.
 * Equips: `project.equips[equip]` is a set of monsters; `equip_baseline`
-  is what the disc gives it. Rituals: `project.rituals[ritual] = (t1, t2,
-  t3, result)`; `ritual_status`, `revert_ritual`.
+  is what the disc gives it. Rituals: `project.set_ritual(ritual, tributes,
+  result, origin)` (one to five requirement dictionaries, `{"card": id}` a
+  plain one; origin `"field"`, `"hand"` or `"both"`) and
+  `project.ritual_recipe(ritual)`; underneath, `project.rituals[ritual] =
+  (tribute, ..., result)`, `ritual_requirements` and `ritual_from`;
+  `ritual_status`, `revert_ritual`.
 * Duelists: `project.pools[duelist][pool]` is `{card: weight}` for the
   pools `gamedata.POOLS` (`"deck"`, `"pow"`, `"bcd"`, `"tec"`), out of
   2048; `pools.normalize`, `revert_pool`. A fixed deck:
   `fixed_decks.deck_of`, `set_deck(project, d, {card: copies})`,
-  `most_likely`, `remove`.
+  `most_likely`, `remove`. The duelists a mod adds: `project.roster`, a
+  list of `roster.RosterDuelist` (`key`, `base`, `replace`, `name`, `slot`,
+  `portrait` as PNG bytes, a copy's `pools` like `project.pools[d]`, and
+  `extra`, the keys kept as written); `roster.add_copy(project, base,
+  name, slot)`, `duplicate`, `remove`, `set_name(project, d_or_entry,
+  name)`, `set_portrait(project, d_or_entry, png_bytes)`,
+  `revert_portrait`; `roster.placement(project)` is where each lands
+  (`slot_of`, `page_of`, `cell_of`, `where`). `roster.face(project, wa,
+  d_or_entry, scale)` is a portrait as the grid draws it
+  (`portrait.in_game`, `portrait.record_from` for the game's own record).
 * Starter decks: `project.starter`, a list of `model.StarterDeck`.
 * Guardian Stars: `guardian_stars.read(project.other.get("guardian_stars"))`
   → a `Stars` to edit (`add_star`, `remove_star`, `set_default`,
@@ -1036,6 +1336,12 @@ engine's.
   `MARKER`) and `arrow_image(data, arrow, strips)`, with `data`
   `campaign_map.state(project).retail` and `strips` the mod's strips,
   `{p: map_art.strip_override(project, p)}` for the palettes that have one.
+* The duel board: `board_model.render_board(project, terrain, camera, size)`
+  with the mod's textures and tints, `camera` `None` for the duel's own
+  (at 320x240 the game's screen: what sits at the game's coordinates lines
+  up), else `(distance, heading, pitch, target_x, target_z)`; kept until
+  the board changes. `board_model.render` gives each pixel's texture too
+  (`Picture.part_at`).
 
 **Still in the Tk layer** (a new front end redoes these, or they move to the
 engine first):
@@ -1057,10 +1363,11 @@ engine first):
 * `ModInfoTab.commit`: `settings` and the other keys parsed as JSON, and
   the keys the tabs own refused there.
 * `MapTab`: the fields' ranges (-32768 to 32767, a flag up to `0x7FFF`,
-  frames up to 255), a new exit's 16 frames; the Screen put together from
-  the map picture, the name panel at `campaign_map.PANEL_AT`, the arrows
-  and the marker at their sprite offsets; the Overview's geometry, and
-  turning a drag into coordinates.
+  frames up to 255), a new arrow's slot, direction, place and 16 frames;
+  the screen put together from the map picture, the name panel at
+  `campaign_map.PANEL_AT`, the arrows and the marker at their sprite
+  offsets; All routes' geometry, turning a drag into coordinates, and a
+  drag of the map into the camera that keeps the ground under the mouse.
 * `importers.ask_modded_files`: a modified `SLUS_014.11`'s `WA_MRG.MRG`
   looked for in `DATA/` beside it, then beside it.
 * `preview.describe`: the card-text layout's marks in words.
@@ -1068,8 +1375,8 @@ engine first):
 **The tests a front end keeps passing** (the command above): `test_data`
 (tables, the diff to `mod.json` and back, the pools' arithmetic, the
 checks), `test_family` and `test_importer` (imports), `test_ygomods`,
-`test_art`, `test_card_text`, `test_campaign_map` and `test_map_art` need no
-Tk. `test_bulk_fusions`, `test_fixed_decks` and `test_starter` test the
+`test_art`, `test_card_text`, `test_campaign_map`, `test_map_art` and
+`test_board_art` (but its page's tests) need no Tk. `test_bulk_fusions`, `test_fixed_decks` and `test_starter` test the
 engine and then the Tk dialogs, and `test_gui` and `test_map_gui` drive the
 window; those Tk parts skip where Tk cannot start. A new front end adds its
 own tests beside them and leaves the engine's as they are.

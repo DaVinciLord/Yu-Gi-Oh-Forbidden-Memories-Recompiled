@@ -183,7 +183,7 @@ class CheckTest(unittest.TestCase):
         self.assertIn("takes 0 frames", text)
         self.assertIn("leads to 17", text)
         self.assertIn("Confirm leads to 16", text)
-        self.assertIn("never taken while exit 1 is", text)
+        self.assertIn("never taken while arrow 1 is", text)
         self.assertIn("needs no direction", text)
         self.assertIn("off the screen", text)
         self.assertTrue(all(isinstance(i.target, int) for i in issues))

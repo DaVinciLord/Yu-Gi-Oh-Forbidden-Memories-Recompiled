@@ -7,6 +7,7 @@
  *         { "when": "summon", "do": "magic", "card": "Raigeki" },
  *         { "when": "face_up", "do": "boost", "target": "others", "type": "Dragon", "attack": 300 },
  *         { "when": "combat", "do": "boost", "target": "battle", "attack": -500, "defense": -500 },
+ *         { "when": "face_up", "do": "boost", "attack": 300, "for_each": { "whose": "own", "type": "Dragon" } },
  *         { "when": "destroyed", "do": "damage", "amount": 500 }
  *     ]
  *
@@ -42,6 +43,15 @@ enum {
     MONSTER_TARGET_BATTLE,   /* "combat" and "flip": the monster it battles (that attacks it) */
     MONSTER_TARGET_COUNT
 };
+/* "for_each": whose face-up monsters are counted, the amount or boost
+ * made that many times. */
+enum {
+    MONSTER_EACH_NONE,
+    MONSTER_EACH_OWN,        /* its owner's, itself too */
+    MONSTER_EACH_OPPONENT,   /* the other side's */
+    MONSTER_EACH_ALL,        /* both sides' */
+    MONSTER_EACH_COUNT
+};
 #define MONSTER_EFFECTS_MAX 8
 
 typedef struct {
@@ -50,11 +60,14 @@ typedef struct {
     unsigned short card;             /* MONSTER_DO_MAGIC: the retail magic card */
     short attack, defense;           /* MONSTER_DO_BOOST */
     int amount;                      /* MONSTER_DO_HEAL, MONSTER_DO_DAMAGE */
+    unsigned char each;              /* MONSTER_EACH_*: a boost, heal or damage made once per monster counted */
+    signed char each_type, each_attribute;   /* what is counted: -1 any */
 } MonsterEffect;
 
 extern const char *const MonsterEffect_WhenNames[MONSTER_WHEN_COUNT];
 extern const char *const MonsterEffect_DoNames[MONSTER_DO_COUNT];
 extern const char *const MonsterEffect_TargetNames[MONSTER_TARGET_COUNT];
+extern const char *const MonsterEffect_EachNames[MONSTER_EACH_COUNT];
 
 /* Whether `card` is a retail magic card whose effect a monster may use: a
  * Magic card of the disc with play-time work that asks the player nothing
@@ -62,6 +75,9 @@ extern const char *const MonsterEffect_TargetNames[MONSTER_TARGET_COUNT];
 int MonsterEffect_MagicUsable(int card);
 /* Whether `action` (and `target`) can go with `when`. */
 int MonsterEffect_Allowed(int when, int action, int target);
+/* Whether `action` may have a "for_each": a boost, heal or damage (a
+ * number to multiply), on any "when" that takes it. */
+int MonsterEffect_EachAllowed(int action);
 /* The target an entry without one has. */
 int MonsterEffect_DefaultTarget(int when, int action);
 

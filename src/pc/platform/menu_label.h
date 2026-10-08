@@ -12,8 +12,10 @@
 enum { MENU_LABEL_FACTOR = 4, MENU_LABEL_HEIGHT = 28 };
 
 /* Writes the button (under the user directory's cache) unless it is there
- * already, and gives its path and its size in the game's pixels. 0 when
- * there is no serif face or the file cannot be written; `why` says which. */
-int MenuLabel_Make(const char *text, int selected, char *path, size_t size, int *width, int *height, char *why,
-                   size_t why_size);
+ * already, and gives its path and its size in the game's pixels (at 100%).
+ * The PNG is `factor` times that size (MENU_LABEL_FACTOR at least): more
+ * for a button drawn bigger ("scale"), so it is as sharp. 0 when there is
+ * no serif face or the file cannot be written; `why` says which. */
+int MenuLabel_Make(const char *text, int selected, int factor, char *path, size_t size, int *width, int *height,
+                   char *why, size_t why_size);
 #endif

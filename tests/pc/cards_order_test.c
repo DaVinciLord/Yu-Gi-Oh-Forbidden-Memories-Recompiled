@@ -118,6 +118,7 @@ void Library_UpdateCardUsedFlag(int flag) { (void)flag; }
 int Memories_Rand(void) { return 0; }
 void Starter_Build(void) {}
 void Packs_Build(void) {}
+const UiConfig *UiConfig_Load(void) { return NULL; }
 unsigned Packs_Signature(void) { return 0; }
 void Tables_Build(void) {}
 long Tables_Limit(const char *name) { (void)name; return -1; }

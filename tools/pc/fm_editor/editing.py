@@ -8,6 +8,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 from . import manifest, recovery
+from .icon_choice import IconChoice
 from .widgets import scrolled_tree
 
 
@@ -38,14 +39,16 @@ class Editing:
         walk(self.notebook)
         # Only actual form inputs, not searches, filters or navigation, count
         # as pending edits. Capture user events rather than programmatic fills.
-        for tab in (self.cards, self.info, self.limits, self.packs):
+        for tab in (self.cards, self.info, self.values, self.packs):
             variables = {str(v) for v in getattr(tab, "vars", {}).values()}
             variables.update(str(v) for v in getattr(tab, "adv", {}).values())
             if tab is self.packs:
                 variables.add(str(tab.unlock_card.var))
+            if tab is self.cards:       # an added card's two boxes
+                variables.update((str(tab.drops), str(tab.opponents)))
             texts = [getattr(tab, key, None) for key in ("text", "notes", "description", "settings", "other")]
             def watch(widget):
-                tracked = widget in texts or (isinstance(widget, (ttk.Entry, ttk.Combobox, ttk.Spinbox))
+                tracked = widget in texts or (isinstance(widget, (ttk.Entry, ttk.Combobox, ttk.Spinbox, IconChoice))
                                                and str(widget.cget("textvariable")) in variables) or (
                     isinstance(widget, ttk.Checkbutton) and str(widget.cget("variable")) in variables)
                 if tracked:
@@ -158,7 +161,8 @@ class Editing:
             self.say("Edits applied. Ctrl+S saves the mod folder.")
 
     def refresh_editors(self):
-        card, equip, pack = self.cards.current, self.equips.current, self.packs.index
+        card, equip, pack, picture = self.cards.current, self.equips.current, self.packs.index, self.art.current
+        followed = self.current_card         # Art's show() makes its card the window's: kept as it was
         self._refreshing = True
         try:
             for tab in self.tabs:
@@ -171,6 +175,12 @@ class Editing:
             if equip and self.equips.equips.exists(str(equip)):
                 self.equips.equips.selection_set(str(equip))
                 self.equips.select()
+            if picture in self.project.cards:       # the Art tab stays on its card (Undo showed the first)
+                self.art.show(picture)
+                if self.art.tree.exists(str(picture)):
+                    self.art.tree.selection_set(str(picture))
+                    self.art.tree.see(str(picture))
+            self.current_card = followed if followed in self.project.cards else None
             self.packs.goto(pack)
         finally:
             self._refreshing = False
@@ -216,7 +226,7 @@ class Editing:
 
     def form_drafts(self):
         drafts = {}
-        for name in ("cards", "info", "limits", "packs"):
+        for name in ("cards", "info", "values", "packs"):
             tab = getattr(self, name)
             if tab not in self._pending:
                 continue
@@ -236,8 +246,10 @@ class Editing:
     def restore_drafts(self, drafts):
         if not isinstance(drafts, dict):
             return
-        for name in ("cards", "info", "limits", "packs"):
+        for name in ("cards", "info", "values", "packs"):
             row = drafts.get(name)
+            if row is None and name == "values":
+                row = drafts.get("limits")      # a draft from before the tab was Values
             if not isinstance(row, dict):
                 continue
             tab = getattr(self, name)

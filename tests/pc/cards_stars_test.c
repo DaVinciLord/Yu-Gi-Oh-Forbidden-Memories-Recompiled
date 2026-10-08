@@ -169,6 +169,7 @@ const char *Paths_WriteError(char *out, size_t size, const char *path) { (void)s
 int Settings_Get(SettingId id) { (void)id; return 0; }
 void Starter_Build(void) {}
 void Packs_Build(void) {}
+const UiConfig *UiConfig_Load(void) { return NULL; }
 unsigned Packs_Signature(void) { return 0; }
 void Mods_SetPackSignature(unsigned signature) { (void)signature; }
 void Tables_Build(void) {}
@@ -362,6 +363,43 @@ static void monster_effect_entries(void)
     assert(!MonsterEffect_MagicUsable(300) && !MonsterEffect_MagicUsable(1));
 }
 
+/* "for_each": whose monsters a boost, heal or damage counts, "all" when
+ * unsaid; not on a magic or destroy, nor whose it does not know. */
+static void monster_effect_for_each(void)
+{
+    BuildContext context = {0};
+    char error[128];
+    const JsonValue *entry;
+    const MonsterEffect *effects;
+    int i, before = effect_notes;
+    JsonDocument *doc = Json_Parse(
+        "[{\"replace\":24,\"monster_effects\":["
+        "  {\"when\":\"face_up\",\"do\":\"boost\",\"attack\":300,\"defense\":300,"
+        "   \"for_each\":{\"whose\":\"own\",\"type\":\"Dragon\"}},"
+        "  {\"when\":\"summon\",\"do\":\"heal\",\"amount\":200,\"for_each\":{\"attribute\":\"Light\"}},"
+        "  {\"when\":\"combat\",\"do\":\"damage\",\"amount\":100,\"for_each\":{\"whose\":\"Opponent\"}},"
+        "  {\"when\":\"draw\",\"do\":\"boost\",\"target\":\"own\",\"attack\":100},"
+        "  {\"when\":\"summon\",\"do\":\"magic\",\"card\":337,\"for_each\":{}},"
+        "  {\"when\":\"summon\",\"do\":\"destroy\",\"for_each\":{}},"
+        "  {\"when\":\"summon\",\"do\":\"heal\",\"amount\":1,\"for_each\":{\"whose\":\"mine\"}},"
+        "  {\"when\":\"summon\",\"do\":\"heal\",\"amount\":1,\"for_each\":\"Dragon\"},"
+        "  {\"when\":\"summon\",\"do\":\"heal\",\"amount\":1,\"for_each\":{\"type\":\"Trap\"}}]}]",
+        error, sizeof(error));
+    assert(doc);
+    for (i = 0, entry = Json_At(Json_Root(doc), 0); entry; i++, entry = Json_Next(entry))
+        add_entry("f", ".", i, entry, &context);
+    assert(Cards_MonsterEffects(24, &effects) == 4);
+    assert(effects[0].each == MONSTER_EACH_OWN && effects[0].each_type == 0 && effects[0].each_attribute == -1);
+    assert(effects[0].type == -1 && effects[0].attack == 300 && effects[0].defense == 300);
+    assert(effects[1].each == MONSTER_EACH_ALL && effects[1].each_type == -1 && effects[1].each_attribute == 0);
+    assert(effects[2].each == MONSTER_EACH_OPPONENT && effects[2].action == MONSTER_DO_DAMAGE);
+    assert(effects[3].each == MONSTER_EACH_NONE && effects[3].each_type == -1);
+    assert(effect_notes == before + 5);   /* magic, destroy, "mine", no object, a Trap counted */
+    assert(MonsterEffect_EachAllowed(MONSTER_DO_BOOST) && MonsterEffect_EachAllowed(MONSTER_DO_HEAL) &&
+           MonsterEffect_EachAllowed(MONSTER_DO_DAMAGE));
+    assert(!MonsterEffect_EachAllowed(MONSTER_DO_MAGIC) && !MonsterEffect_EachAllowed(MONSTER_DO_DESTROY));
+}
+
 /* Copies of magic cards made monsters (as a replace may be): a monster's
  * type, ATK and DEF, stars as a replaced card gets them, out of the magic
  * card's tables; made a Trap without a trap's effect, still refused. */
@@ -453,6 +491,7 @@ int main(void)
     magic_conversions();
     trap_conversions();
     monster_effect_entries();
+    monster_effect_for_each();
     copies_made_monsters();
     puts("cards stars, magic and trap conversions: ok");
     return 0;

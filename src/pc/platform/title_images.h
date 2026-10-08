@@ -5,14 +5,17 @@
  * game's; the menus' background; the two backgrounds' widescreen pictures,
  * TITLE_WIDE_WIDTH across; and the menus' items drawn by the port, a
  * mod's PNG or a button of words (menu_label.h), each as it is and with the
- * cursor on it. */
+ * cursor on it; and the pictures a mod adds ("images"). */
 #include "title_config.h"
 
 enum { TITLE_IMAGE_BACKGROUND, TITLE_IMAGE_LOGO, TITLE_IMAGE_COPYRIGHT, TITLE_IMAGE_PROMPT,
        TITLE_IMAGE_MENU_BACKGROUND, TITLE_IMAGE_WIDE_BACKGROUND, TITLE_IMAGE_WIDE_MENU_BACKGROUND, TITLE_IMAGE_ITEMS,
-       TITLE_IMAGES = TITLE_IMAGE_ITEMS + 2 * TITLE_ITEMS };
+       TITLE_IMAGE_PICTURES = TITLE_IMAGE_ITEMS + 2 * TITLE_ITEMS,
+       TITLE_IMAGES = TITLE_IMAGE_PICTURES + TITLE_MAX_PICTURES };
 /* Item `i`'s picture, as it is or with the cursor on it. */
 #define TITLE_IMAGE_ITEM(i, selected) (TITLE_IMAGE_ITEMS + 2 * (i) + ((selected) ? 1 : 0))
+/* The title's added picture `i` ("images"). */
+#define TITLE_IMAGE_PICTURE(i) (TITLE_IMAGE_PICTURES + (i))
 
 /* Made from `config` and put in VRAM, once the title's own pictures are
  * there (MainMenu_InitFrontendMenu); one that cannot be read, or finds no
@@ -21,8 +24,8 @@ enum { TITLE_IMAGE_BACKGROUND, TITLE_IMAGE_LOGO, TITLE_IMAGE_COPYRIGHT, TITLE_IM
 void TitleImages_Prepare(const TitleConfig *config);
 /* One of the backgrounds (4:3 or wide, the title's or the menus'). */
 int TitleImages_IsBackground(int which);
-/* Whether picture `which` is the mod's this time, and its size in the
- * game's pixels. */
+/* Whether picture `which` is the mod's this time, and the size it is drawn
+ * at in the game's pixels (an item's at its "scale"). */
 int TitleImages_Ready(int which, int *width, int *height);
 /* Draws it at x, y (its top left, in the game's 320 x 240) in colour r, g,
  * b (128 each as it is) into ordering table `ot` at `depth`; `blend` 1

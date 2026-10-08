@@ -165,7 +165,16 @@ class TabTest(unittest.TestCase):
         cls.tmp.cleanup()
 
     def setUp(self):
+        from unittest import mock
+        from fm_editor import settings
         from fm_editor.app import App
+        # Never the user's own settings (a dark mode or interface size they
+        # chose): a settings file of the test's own.
+        own = Path(self.tmp.name) / "config" / "settings.json"
+        own.unlink(missing_ok=True)
+        patcher = mock.patch.object(settings, "path", lambda: own)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.app = App(ask=False, autostart=False)
         self.app.withdraw()
         self.app.update()
@@ -207,6 +216,130 @@ class TabTest(unittest.TestCase):
         tab.copies.set("0")
         tab.set_copies()
         self.assertEqual(app.project.starter[0].cards, {})
+
+    def test_add_edit_and_remove_a_deck(self):
+        from unittest import mock
+        app, tab = self.app, self.app.starter
+        # Cancelled, Add deck adds nothing.
+        dialog = tab.add_deck()
+        dialog.destroy()
+        self.assertEqual(app.project.starter, [])
+        self.assertFalse(app.dirty)
+        # OKed, the deck is there, selected, with the name and weight typed.
+        dialog = tab.add_deck()
+        entries = [w for w in dialog.winfo_children()[0].winfo_children() if w.winfo_class() == "TEntry"]
+        entries[0].delete(0, "end")
+        entries[0].insert(0, "Dragons")
+        entries[1].delete(0, "end")
+        entries[1].insert(0, "3")
+        dialog.ok()
+        self.assertEqual([(d.name, d.weight) for d in app.project.starter], [("Dragons", 3)])
+        self.assertEqual(tab.list.selection(), ("0",))
+        self.assertTrue(app.dirty)
+        # A weight out of range is refused, the deck as it was.
+        dialog = tab.edit_deck()
+        entries = [w for w in dialog.winfo_children()[0].winfo_children() if w.winfo_class() == "TEntry"]
+        entries[1].delete(0, "end")
+        entries[1].insert(0, "-1")
+        dialog.ok()
+        self.assertIn("weight", dialog.error.cget("text"))
+        dialog.destroy()
+        self.assertEqual(app.project.starter[0].weight, 3)
+        with mock.patch("fm_editor.tabs.messagebox.askyesno", return_value=True):
+            tab.remove_deck()
+        self.assertEqual(app.project.starter, [])
+
+    def test_ways_to_start_a_deck(self):
+        """Add deck's menu (and the empty tab's buttons): an opponent's most
+        likely 40, a deal of the disc's starter pools, a copy; each named in
+        the dialog, which cancelled adds nothing."""
+        from unittest import mock
+        from fm_editor import fixed_decks, starter_pools
+        app, tab = self.app, self.app.starter
+        tab.refresh()
+        self.assertTrue(tab.empty.winfo_manager())          # the empty tab says what a new game deals
+        with mock.patch.object(tab, "ask_opponent", return_value=17):
+            dialog = tab.add_deck("opponent")
+        dialog.ok()
+        deck = app.project.starter[0]
+        self.assertEqual(deck.cards, fixed_decks.most_likely(app.project.pools[17]["deck"]))
+        self.assertIn("deck", deck.name)
+        self.assertFalse(tab.empty.winfo_manager())
+        self.assertIn("Monsters", tab.makeup.cget("text"))
+        dialog = tab.add_deck("copy")
+        dialog.ok()
+        self.assertEqual(app.project.starter[1].cards, deck.cards)
+        self.assertIsNot(app.project.starter[1].cards, deck.cards)
+        pools = starter_pools.retail(app.files.wa)
+        if pools:
+            dialog = tab.add_deck("retail")
+            dialog.destroy()                                # cancelled: no deck
+            self.assertEqual(len(app.project.starter), 2)
+            dealt = starter_pools.deal(pools)
+            self.assertEqual(sum(dealt.values()), starter_pools.retail_drawn(pools))
+        with mock.patch.object(tab, "ask_opponent", return_value=None):
+            self.assertIsNone(tab.add_deck("opponent"))
+
+    def test_weighted_pools_page(self):
+        """starter_pools on their own page: pools added, named and given their
+        draws, cards weighted, the draws counted against forty, written as
+        the game reads them; the disc's seven as a start."""
+        from unittest import mock
+        from fm_editor import starter_pools as sp
+        app, tab = self.app, self.app.starter
+        page = tab.pools
+        tab.pages.select(page)
+        app.update()
+        self.assertTrue(page.empty.winfo_manager())
+        dialog = page.add_pool()
+        dialog.fields["name"].set("Weak")
+        dialog.fields["draws"].set("30")
+        dialog.ok()
+        with mock.patch("fm_editor.starter_pools_view.pick_card", return_value=2):
+            page.weight.set("100")
+            page.add_card()
+        with mock.patch("fm_editor.starter_pools_view.pick_card", return_value=3):
+            page.add_card()
+        self.assertEqual(page.total.cget("text"), "Draws 30 / 40")
+        self.assertEqual(str(page.total.cget("style")), "Error.TLabel")
+        dialog = page.add_pool()                    # the draws left, offered
+        self.assertEqual(dialog.fields["draws"].get(), "10")
+        dialog.ok()
+        with mock.patch("fm_editor.starter_pools_view.pick_card", return_value=4):
+            page.add_card()
+        self.assertEqual(page.total.cget("text"), "Draws 40 / 40")
+        self.assertTrue(sp.deals(app.project))
+        # Weights set and cards removed on the selection.
+        page.list.selection_set("0")
+        page.select()
+        page.tree.selection_set("3")
+        page.weight.set("7")
+        page.set_weight()
+        self.assertEqual(sp.state(app.project)[0].cards, {2: 100, 3: 7})
+        page.tree.selection_set("3")
+        page.remove_cards()
+        written = app.project.other["starter_pools"]
+        self.assertEqual(written[0], {"name": "Weak", "draws": 30, "cards": {app.project.ref(2): 100}})
+        self.assertEqual(written[1]["draws"], 10)
+        self.assertTrue(app.dirty)
+        # The disc's seven pools, in place of these (asked first).
+        if sp.retail(app.files.wa):
+            with mock.patch("fm_editor.starter_pools_view.messagebox.askyesno", return_value=True):
+                page.from_retail()
+            self.assertEqual(len(app.project.other["starter_pools"]), 7)
+            self.assertEqual(sum(p["draws"] for p in app.project.other["starter_pools"]),
+                             sp.retail_drawn(sp.retail(app.files.wa)))
+        with mock.patch("fm_editor.starter_pools_view.messagebox.askyesno", return_value=True):
+            while sp.state(app.project):
+                page.remove_pool()
+        self.assertNotIn("starter_pools", app.project.other)
+
+    def test_a_deck_naming_an_unknown_card_is_not_complete(self):
+        tab = self.app.starter
+        self.app.project.starter.append(StarterDeck(name="d", cards={2: 3, 3: 36}, kept={"Nobody's card": 1}))
+        tab.refresh()
+        self.assertFalse(self.app.project.starter[0].complete())
+        self.assertIn("error", tab.list.item("0", "tags"))
 
     def test_an_empty_tab_shows_no_deck(self):
         tab = self.app.starter

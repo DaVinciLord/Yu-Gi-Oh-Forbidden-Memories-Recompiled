@@ -314,6 +314,27 @@ monsters on the field then), one on `combat` lasts the battle, and one on
 field, the battle, traps and the CPU all see it: it reaches each monster it
 names once, those put down later too, and goes with the card. `face_up` takes only
 boosts; `combat` takes a boost of `self` or `battle`, `heal` and `damage`.
+`for_each` makes a `boost`, `heal` or `damage` once for each face-up
+monster it counts, on any `when` that takes the effect; the count is
+taken when the effect is made, and a `face_up` boost follows it as it
+changes (a monster summoned, flipped, fused, destroyed):
+
+```json
+{ "replace": "Baby Dragon",
+  "description": "Gains 300 ATK and DEF for each face-up Dragon on your field.",
+  "monster_effects": [
+    { "when": "face_up", "do": "boost", "target": "self", "attack": 300, "defense": 300,
+      "for_each": { "whose": "own", "type": "Dragon" } } ] }
+```
+
+`whose` is `own` (its owner's monsters, the card itself too when it
+matches), `opponent` or `all` (the default); `type` and `attribute` keep
+the count to monsters of that type or attribute (neither: every face-up
+monster). A face-down monster is not counted (its type is hidden) until it
+is turned face up; the two monsters of a battle count as face up from its
+start. With none counted the effect does nothing; `magic` and `destroy`
+take no `for_each`. The total is held within the stat cap as every boost is.
+
 A card has up to eight effects, which resolve in the order written, after
 whatever triggered them is over (a flip's and a destroyed monster's after the battle).
 What the game cannot do is left out with a note in the log and the Mods

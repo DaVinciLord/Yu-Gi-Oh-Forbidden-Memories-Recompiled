@@ -1,6 +1,7 @@
 /* View > Duel rank's numbers (rank.h): Duel_CalcRankScore's sum, read-only. */
 #include "rank.h"
 #include "game/duel_rank.h"
+#include "tables.h"
 
 #define RANK_RULE_COUNT 10
 
@@ -19,7 +20,10 @@ static int change(int rule, int value, int *known)
 
 int Rank_Score(const DuelSideState *side, int adjustment)
 {
-    int known = 1, score = DUEL_RANK_SCORE_INITIAL + adjustment;
+    /* The start and the end's points as Duel_CalcRankScore takes them,
+     * a mod's "rank_score" included (tables.h). */
+    int known = 1,
+        score = (int)Tables_Value(TABLES_VALUE_RANK_START, DUEL_RANK_SCORE_INITIAL) + Tables_RankAdjustment(adjustment);
     score += change(DUEL_RANK_RULE_CARDS_USED, side->deck_draw_cursor, &known);
     score += change(DUEL_RANK_RULE_REMAINING_LP, side->life_points.signed_value, &known);
     score += change(DUEL_RANK_RULE_EFFECTIVE_ATTACKS, side->rank.effective_attacks, &known);

@@ -296,6 +296,31 @@ int main(void)
         assert(!SaveSlots_Path(i, path, sizeof(path)));
         remove(path);
     }
+
+    /* An emulator's card in the saves folder: imported as the menu opens,
+     * said so, then loaded like any slot. */
+    {
+        static unsigned char card[0x20000];
+        FILE *file;
+        make_image(image, 7);
+        image[SAVE_SLOT_HEADER_SIZE] = image[SAVE_SLOT_DUPLICATE_OFFSET] = 1; /* a deck */
+        card[0] = 'M';
+        card[1] = 'C';
+        memcpy(card + 0x2000 * 2, image, sizeof(image));
+        snprintf(path, sizeof(path), "%s/saves/duckstation_shared_card_1.mcd", directory);
+        file = fopen(path, "wb");
+        assert(file && fwrite(card, 1, sizeof(card), file) == sizeof(card) && !fclose(file));
+        memset(left, 0, sizeof(left));
+        begin(SAVE_MENU_LOAD, left, NULL, sizeof(left), 0);
+        assert(!poll(SAVE_MENU_PAD_CONFIRM, 0)); /* the message closes */
+        assert(poll(SAVE_MENU_PAD_CONFIRM, 0) == 1);
+        assert(left[0x334] == 7 && !memcmp(left, image + SAVE_SLOT_HEADER_SIZE, sizeof(left)));
+        assert(SaveMenu_CurrentSlot() == 0);
+        assert(access(path, F_OK) == -1);
+        snprintf(path, sizeof(path), "%s/saves/duckstation_shared_card_1.mcd.imported", directory);
+        assert(!remove(path));
+        assert(!SaveSlots_Path(0, path, sizeof(path)) && !remove(path));
+    }
     snprintf(path, sizeof(path), "%s/saves/.cards-imported", directory);
     remove(path);
     snprintf(path, sizeof(path), "%s/saves", directory);

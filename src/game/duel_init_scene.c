@@ -4,6 +4,7 @@
 #include "../types.h"
 #ifdef MEMORIES_PC
 #include "pc/free_duel/duelists.h"
+#include "pc/cards/duel_ui.h"
 #endif
 #include "duel_scene_state.h"
 #include "duel_shuffle_both_decks.h"
@@ -61,6 +62,10 @@ void Duel_InitScene(void)
     s8 *pid;
 
     pid = &gDuel_bOpponentID;
+#ifdef MEMORIES_PC
+    /* The mods' "ui" for this duel's pictures (pc/cards/duel_ui.h). */
+    DuelUi_Prepare();
+#endif
     func_8004763C();
     func_80047AD0(1);
     Main_AdvanceFrames(4);

@@ -400,6 +400,7 @@ static void flush_drawing(void)
     }
     clock_gettime(CLOCK_MONOTONIC, &t0);
     SoftGpu_PanelName = HdText_NameEnabled() ? HdText_NamePixels : NULL;
+    SoftGpu_PanelCut = SoftGpu_PanelName && HdText_PanelCut();
     SoftGpu_SetPrecise(frame_precise, pending_precise);
     pending_precise = 0;
     SoftGpu_Gp0(frame_words, count);

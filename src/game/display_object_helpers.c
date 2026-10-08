@@ -9,6 +9,9 @@
 #include "display_object_layout.h"
 #include "display_object_lifecycle.h"
 #include "display_object_packet_submit.h"
+#ifdef MEMORIES_PC
+#include "pc/cards/duel_ui.h"
+#endif
 
 /* Scratchpad work areas: the four quad vertices at 0x1F800300, the
  * RotAverageNclip4 depth/flag results at 0x1F8002E0, and the DivideFT4
@@ -33,6 +36,16 @@ void DisplayObject_SubmitPacket(SpritePrim *sprite, u8 *packet, s32 ot, s32 mode
     PSXLONG *otz;
     DisplayObjectPacketOrigin *origin = (DisplayObjectPacketOrigin *)extra;
     s32 pri = (s16)mode;
+
+#ifdef MEMORIES_PC
+    /* Kept for the port to draw itself (pc/cards/duel_ui.h). */
+    if (DisplayObject_Capture && (u32)mode >> 16 >= 1 && (u32)mode >> 16 <= 3 &&
+        DisplayObject_Capture->count < DISPLAY_OBJECT_CAPTURE_MAX) {
+        DisplayObject_Capture->sprite[DisplayObject_Capture->count] = *sprite;
+        DisplayObject_Capture->mode[DisplayObject_Capture->count++] = mode;
+        return;
+    }
+#endif
 
     switch ((u32)mode >> 16) {
     case 1:

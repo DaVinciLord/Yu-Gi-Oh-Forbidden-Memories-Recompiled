@@ -11,14 +11,18 @@ from .editing import Editing
 from . import card_links, history, recovery, screen, zoom
 from .art_tab import ArtTab
 from .map_tab import MapTab
-from .limits_tab import LimitsTab
+from .values_tab import ValuesTab
 from .guardian_stars_tab import GuardianStarsTab
 from .packs_tab import PacksTab
-from .tabs import (CardsTab, DuelistsTab, EquipsTab, FusionsTab, ModInfoTab, ConflictsTab, RitualsTab,
-                   StarterTab)
-from .widgets import Pages, px
+from .duelists_tab import DuelistsTab
+from .rituals_tab import RitualsTab
+from .ui_tab import UiTab
+from .tabs import CardsTab, EquipsTab, FusionsTab, ModInfoTab, ConflictsTab, StarterTab
+from .widgets import Pages, px, ui_font
 
 APP_TITLE = "FM Editor"
+HISTORY_PAUSE = 350      # ms of no change before an undo step is taken
+PROJECT_URL = "https://github.com/Unchiga/Yu-Gi-Oh-Forbidden-Memories-Recompiled"
 
 
 def initial_geometry(window, area=None) -> str:
@@ -59,21 +63,36 @@ class App(Editing, tk.Tk):
         self.build_menu()
         self.notebook = Pages(self)
         self.notebook.pack(fill="both", expand=True)
+        self.notebook.enable_traversal()        # Ctrl+Tab and Ctrl+Shift+Tab go from tab to tab
+        # Over the tabs until there is a game to read: what the editor needs.
+        self.welcome = ttk.Frame(self, padding=24, relief="ridge", borderwidth=2)
+        ttk.Label(self.welcome, text="The FM Editor makes mods for the PC port of Yu-Gi-Oh! Forbidden Memories.",
+                  font=ui_font(12)).pack(anchor="w")
+        ttk.Label(self.welcome, justify="left", wraplength=px(self, 620), text=(
+            "It reads the cards, fusions, equips, rituals, decks and drops from your own copy of the game, and "
+            "saves a mod folder whose mod.json holds only what you change. It never writes the game itself.\n\n"
+            "Choose the game's disc image (.bin), or a folder with SLUS_014.11 and DATA/WA_MRG.MRG (the "
+            "game/ folder the port plays from).")).pack(anchor="w", pady=(10, 0))
+        ttk.Button(self.welcome, text="Choose the game files...", command=self.choose_game).pack(anchor="w",
+                                                                                                pady=(14, 0))
+        ttk.Button(self.welcome, text="The FM Editor guide",
+                   command=lambda: self.open_guide("tools/pc/fm_editor/README.md")).pack(anchor="w", pady=(6, 0))
         self.cards = CardsTab(self.notebook, self)
         self.art = ArtTab(self.notebook, self)
         self.fusions = FusionsTab(self.notebook, self)
         self.equips = EquipsTab(self.notebook, self)
         self.rituals = RitualsTab(self.notebook, self)
         self.duelists = DuelistsTab(self.notebook, self)
+        self.ui = UiTab(self.notebook, self)
         self.starter = StarterTab(self.notebook, self)
         self.map = MapTab(self.notebook, self)
-        self.limits = LimitsTab(self.notebook, self)
+        self.values = ValuesTab(self.notebook, self)
         self.stars = GuardianStarsTab(self.notebook, self)
         self.packs = PacksTab(self.notebook, self)
         self.info = ModInfoTab(self.notebook, self)
         self.conflicts = ConflictsTab(self.notebook, self)
-        self.tabs = [self.cards, self.art, self.fusions, self.equips, self.rituals, self.duelists, self.starter,
-                     self.map, self.limits, self.stars, self.packs, self.info, self.conflicts]
+        self.tabs = [self.cards, self.art, self.fusions, self.equips, self.rituals, self.duelists, self.ui,
+                     self.starter, self.map, self.values, self.stars, self.packs, self.info, self.conflicts]
         self.status = ttk.Label(self, relief="sunken", anchor="w", padding=(6, 2))
         self.status.pack(fill="x", side="bottom", before=self.notebook)
         self.install_editing()
@@ -86,9 +105,18 @@ class App(Editing, tk.Tk):
         # own Ctrl+O inserts a line, so the text boxes get the shortcut too.
         self.bind("<Control-s>", lambda e: self.shortcut(self.save))
         self.bind("<Control-o>", lambda e: self.shortcut(self.open_mod))
+        self.bind("<Control-f>", lambda e: self.shortcut(self.find))
         self.bind_class("Text", "<Control-o>", lambda e: self.shortcut(self.open_mod))
         if autostart:
             self.after(50, lambda: self.start(game, mod, ask))
+
+    def find(self):
+        """Ctrl+F: the tab's search box (Cards, Art, Fusions), its text picked."""
+        entry = getattr(self.notebook.current(), "search_entry", None)
+        if entry is not None:
+            entry.focus_set()
+            entry.selection_range(0, "end")
+            entry.icursor("end")
 
     def shortcut(self, action):
         if self.grab_current() is None:     # not while a dialog is up
@@ -130,6 +158,14 @@ class App(Editing, tk.Tk):
         self.zoom.build_menu(view)
         bar.add_cascade(label="View", menu=view)
         helps = tk.Menu(bar, tearoff=False)
+        # The guides, as GitHub shows them (the notes are Markdown).
+        for label, path in (("FM Editor guide", "tools/pc/fm_editor/README.md"),
+                            ("Fusions, equips, rituals, drops and values", "notes/gameplay-tables.md"),
+                            ("New cards and changed ones", "notes/more-cards.md"),
+                            ("Starter decks and pools", "notes/starter-deck.md"),
+                            ("Making mods", "notes/modding.md")):
+            helps.add_command(label=label, command=lambda path=path: self.open_guide(path))
+        helps.add_separator()
         helps.add_command(label="About", command=self.about)
         bar.add_cascade(label="Help", menu=helps)
         self.config(menu=bar)
@@ -168,6 +204,7 @@ class App(Editing, tk.Tk):
             files = None
             if not ask:
                 self.say("No game files: File > Game files... to choose them.")
+                self.show_welcome()
                 return
             answer = messagebox.askokcancel(
                 APP_TITLE, "The editor reads the retail tables from your own copy of Yu-Gi-Oh! Forbidden "
@@ -196,6 +233,13 @@ class App(Editing, tk.Tk):
         except (disc.GameFilesError, OSError) as problem:
             messagebox.showerror(APP_TITLE, str(problem), parent=self)
             return None
+
+    def show_welcome(self):
+        if self.project is None:
+            self.welcome.place(relx=0.5, rely=0.4, anchor="center")
+            self.welcome.lift()
+        else:
+            self.welcome.place_forget()
 
     def use_game(self, files):
         try:
@@ -226,6 +270,7 @@ class App(Editing, tk.Tk):
         self._recovered = False
         self._recovered_from = None
         self.project = project
+        self.welcome.place_forget()
         self.current_card = None
         self.dirty = False
         self._refreshing = True
@@ -243,8 +288,13 @@ class App(Editing, tk.Tk):
             return
         self.dirty = True
         self.update_title()
-        if self._history_job is None:
-            self._history_job = self.after_idle(self.record_edit)
+        # The undo step once the changes pause: a snapshot of the whole mod
+        # takes a quarter second with the disc's tables, and a field that
+        # applies as it is typed (the Map's camera) made one at every key.
+        # Undo and the like take a waiting one first (flush_history).
+        if self._history_job is not None:
+            self.after_cancel(self._history_job)
+        self._history_job = self.after(HISTORY_PAUSE, self.record_edit)
         self.schedule_recovery()
         self.update_edit_state()
 
@@ -292,6 +342,9 @@ class App(Editing, tk.Tk):
         if not self.commit_all():
             return
         current = self.notebook.current()
+        # The card to follow, before the tab shows its own again (Art's
+        # show() makes its card the window's).
+        card = self.current_card
         # Other tabs may have changed what this one shows (a card's name or
         # type): fill it again, keeping its selection.
         if current is self.conflicts:
@@ -307,14 +360,19 @@ class App(Editing, tk.Tk):
             current.fill()
         elif current in (self.fusions, self.rituals, self.cards):
             current.fill()
+            if current is self.cards:
+                current.show_picture(current.current)   # the Art tab may have changed it
         elif current is self.art:
             current.fill()
             current.show(current.current)
         elif current is self.stars:
             current.fill()          # the cards' stars may have changed
+        elif current is self.info and current not in self._pending:
+            current.refresh()       # other tabs keep keys beside its box's (starter_pools...)
+        self.current_card = card
         follow = getattr(current, "follow", None)
-        if follow is not None and self.current_card is not None:
-            follow(self.current_card)
+        if follow is not None and card is not None:
+            follow(card)
 
     # --- a card in another tab (card_links) -------------------------------------
 
@@ -331,6 +389,19 @@ class App(Editing, tk.Tk):
         self.current_card = cid
         if self.open_tab(tab):
             tab.show_card(cid)
+
+    def open_starter_pool(self, index, cid=None):
+        """The Starter decks tab's Weighted pools page, on pool `index` (and
+        the card's row)."""
+        if not self.open_tab(self.starter):
+            return
+        page = self.starter.pools
+        self.starter.pages.select(page)
+        page.index = index
+        page.fill()
+        if cid is not None and page.tree.exists(str(cid)):
+            page.tree.selection_set(str(cid))
+            page.tree.see(str(cid))
 
     def open_pool(self, d, pool, cid=None):
         if self.open_tab(self.duelists):
@@ -473,8 +544,10 @@ class App(Editing, tk.Tk):
         return True
 
     def show_conflicts(self):
-        self.notebook.select(self.conflicts)
-        self.conflicts.run()
+        if self.notebook.current() is self.conflicts:
+            self.conflicts.run()
+        else:
+            self.notebook.select(self.conflicts)    # the tab switch checks
 
     def go_to(self, issue):
         target = issue.target
@@ -486,8 +559,9 @@ class App(Editing, tk.Tk):
             if target:
                 self.art.goto(target)
         elif issue.area == "Fusions" and target:
+            self.current_card = target[0]       # what the tab follows once it is up
             self.notebook.select(self.fusions)
-            self.fusions.search.set(str(target[0]))
+            self.fusions.show_card(target[0])
         elif issue.area == "Equips" and target:
             self.notebook.select(self.equips)
             if self.equips.equips.exists(str(target)):
@@ -510,10 +584,56 @@ class App(Editing, tk.Tk):
             self.packs.goto(target)
         elif issue.area == "Mod info":
             self.notebook.select(self.info)
-        elif issue.area == "Limits":
-            self.notebook.select(self.limits)
+        elif issue.area == "Values":
+            self.notebook.select(self.values)
         elif issue.area == "Guardian Stars":
             self.notebook.select(self.stars)
+        elif issue.area == "Starter pools":
+            self.open_starter_pool(target if isinstance(target, int) else 0)
+        elif issue.area == "Other mods" and isinstance(target, tuple):
+            self.go_to_overlap(*target)
+
+    def go_to_overlap(self, kind, key):
+        """The tab that edits what another mod changes too (overlaps.KINDS),
+        on the card when the overlap is about one."""
+        from . import overlaps as ov
+        card = key if isinstance(key, int) and not isinstance(key, bool) else None
+        if kind == ov.EQUIPS and isinstance(key, tuple) and key and key[0] == "equip":
+            card = key[-1] if isinstance(key[-1], int) else None     # ("equip", base, card): overlaps.py
+        if kind == ov.CARDS:
+            self.notebook.select(self.cards)
+            if card in self.project.cards:
+                self.cards.goto(card)
+        elif kind == ov.FUSIONS:
+            pair = [k for k in key[1:] if isinstance(k, int)] if isinstance(key, tuple) else []
+            if pair and pair[0] in self.project.cards:
+                self.current_card = pair[0]
+            self.notebook.select(self.fusions)
+            pair = [k for k in key[1:] if isinstance(k, int)] if isinstance(key, tuple) else []
+            if pair and pair[0] in self.project.cards:
+                self.current_card = pair[0]     # what the tab follows once it is up
+                self.fusions.show_card(pair[0])
+        elif kind == ov.EQUIPS:
+            self.notebook.select(self.equips)
+            equip = card
+            if equip in self.project.cards:
+                self.current_card = equip
+            if equip and self.equips.equips.exists(str(equip)):
+                self.equips.show_card(equip)
+        elif kind == ov.RITUALS:
+            self.notebook.select(self.rituals)
+            if card is not None and self.rituals.tree.exists(str(card)):
+                self.rituals.tree.selection_set(str(card))
+                self.rituals.tree.see(str(card))
+        else:
+            tab = {ov.POOLS: self.duelists, ov.DUELISTS: self.duelists, ov.STARTER: self.starter,
+                   ov.PACKS: self.packs, ov.PASSWORDS: self.packs, ov.STARS: self.stars, ov.LIMITS: self.values,
+                   ov.TEXTURES: self.art}.get(kind, self.info)
+            self.notebook.select(tab)
+
+    def open_guide(self, path):
+        import webbrowser
+        webbrowser.open(f"{PROJECT_URL}/blob/master/{path}")
 
     def about(self):
         messagebox.showinfo(APP_TITLE, "FM Editor\n\nMakes mods for the PC port of Yu-Gi-Oh! Forbidden Memories. "
@@ -528,9 +648,12 @@ class App(Editing, tk.Tk):
 
     def destroy(self):
         self.cancel_edit_jobs()
-        # Also stop widget/dialog idle callbacks before their Tcl commands disappear.
+        # Also stop widget/dialog idle callbacks before their Tcl commands
+        # disappear. Cancelled only: after_cancel() also deletes a job's
+        # command, which a widget registered and deletes itself on destroy
+        # ("can't delete Tcl command" then).
         for job in self.tk.call("after", "info"):
-            self.after_cancel(job)
+            self.tk.call("after", "cancel", job)
         super().destroy()
 
 

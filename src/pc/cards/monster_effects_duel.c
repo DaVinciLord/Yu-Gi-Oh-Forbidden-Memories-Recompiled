@@ -141,6 +141,24 @@ static int reaches(const MonsterEffect *effect, int source, int target, int card
     return 1;
 }
 
+/* How many times `effect` of the card at `source` is made: 1, or with a
+ * "for_each" the face-up monsters it counts as the field was last looked
+ * at (the battle's two as face up once it begins), the card too. */
+static int times(const MonsterEffect *effect, int source)
+{
+    int record, n = 0;
+    if (effect->each == MONSTER_EACH_NONE) return 1;
+    for (record = 0; record < MONSTER_RECORDS; record++) {
+        if (!monster_zone(record) || !S.card[record] || !S.face_up[record]) continue;
+        if (effect->each == MONSTER_EACH_OWN && owner(record) != owner(source)) continue;
+        if (effect->each == MONSTER_EACH_OPPONENT && owner(record) == owner(source)) continue;
+        if (effect->each_type >= 0 && Cards_Type(S.card[record]) != effect->each_type) continue;
+        if (effect->each_attribute >= 0 && Cards_Attribute(S.card[record]) != effect->each_attribute) continue;
+        n++;
+    }
+    return n;
+}
+
 static int clamp(int value, int low, int high) { return value < low ? low : value > high ? high : value; }
 
 /* A lasting boost: the modifiers equips use (both stats share
@@ -270,12 +288,14 @@ static int resolve(void)
 {
     MonsterTrigger trigger = S.queue[0];
     const MonsterEffect *effects, *effect;
-    int n = Cards_MonsterEffects(trigger.card, &effects), side = owner(trigger.record), record, hit = 0;
+    int n = Cards_MonsterEffects(trigger.card, &effects), side = owner(trigger.record), record, hit = 0, count;
     memmove(S.queue, S.queue + 1, (size_t)(--S.count) * sizeof(S.queue[0]));
     if (trigger.effect >= n) return 0;
     effect = &effects[trigger.effect];
     trace("resolving", trigger.card, trigger.record, effect);
     S.chain++;
+    count = times(effect, trigger.record);
+    if (effect->each) LOG(LOG_DUEL_EFFECTS, "monster effects: for each: %d counted", count);
     switch (effect->action) {
     case MONSTER_DO_MAGIC:
         /* Played as its owner would play it: on the other side's turn the
@@ -290,20 +310,21 @@ static int resolve(void)
         DuelEffect_StartRetailCardEffect(effect->card, 0);
         return 1;
     case MONSTER_DO_BOOST:
+        if (!count) return 0;
         for (record = 0; record < MONSTER_RECORDS; record++) {
             DuelCardRecord *card = &D_801A7AD8[record];
             if (!monster_zone(record) || !(card->flags & DUEL_CARD_FLAG_OCCUPIED)) continue;
             if (!reaches(effect, trigger.record, record, card->card_id)) continue;
-            boost(card, effect->attack, effect->defense);
+            boost(card, effect->attack * count, effect->defense * count);
             hit = 1;
         }
         if (!hit) return 0;
         SD_SEPlayFull(SE_BOOST);
         break;
     case MONSTER_DO_HEAL:
-        return life_effect(side, effect->amount);
+        return count ? life_effect(side, effect->amount * count) : 0;
     case MONSTER_DO_DAMAGE:
-        return life_effect(side ^ 1, -effect->amount);
+        return count ? life_effect(side ^ 1, -effect->amount * count) : 0;
     case MONSTER_DO_DESTROY:
         /* Crush Card's removal, on the monsters chosen here
          * (MonsterEffects_RemovalTakes): it takes the other side's, as
@@ -532,23 +553,28 @@ void MonsterEffects_Battle(void)
         S.fight[i] = (unsigned char)(monster_zone(records[i]) ? records[i] : 0);
         S.fight_card[i] = (short)(monster_zone(records[i]) ? D_801A7AD8[records[i]].card_id : 0);
     }
+    /* Face up from here: their face_up boosts count in the battle, and
+     * they are counted for a "for_each". */
+    for (i = 0; i < 2; i++)
+        if (monster_zone(records[i]) && D_801A7AD8[records[i]].card_id == S.card[records[i]])
+            S.face_up[records[i]] = 1;
     for (i = 0; i < 2; i++) {
         const MonsterEffect *effects;
-        int record = records[i], other = records[i ^ 1], card, n, e;
+        int record = records[i], other = records[i ^ 1], card, n, e, count;
         if (!monster_zone(record)) continue;
         card = D_801A7AD8[record].card_id;
-        /* Face up from here: its face_up boosts count in the battle. */
-        if (card == S.card[record]) S.face_up[record] = 1;
         n = announce(card, record, MONSTER_WHEN_COMBAT, MEMORIES_BEFORE) ? 0 : Cards_MonsterEffects(card, &effects);
         for (e = 0; e < n; e++) {
             const MonsterEffect *effect = &effects[e];
             if (effect->when != MONSTER_WHEN_COMBAT) continue;
             trace("battle", card, record, effect);
+            count = times(effect, record);
+            if (!count) continue;
             played = 1;
             if (effect->action == MONSTER_DO_HEAL || effect->action == MONSTER_DO_DAMAGE) {
                 /* Made with its splash at the next frames, before the
                  * battle goes on (MonsterEffects_Update). */
-                int amount = effect->action == MONSTER_DO_HEAL ? effect->amount : -effect->amount;
+                int amount = (effect->action == MONSTER_DO_HEAL ? effect->amount : -effect->amount) * count;
                 int side = effect->action == MONSTER_DO_HEAL ? owner(record) : owner(record) ^ 1;
                 if (S.battle_life_count < (int)(sizeof(S.battle_life) / sizeof(S.battle_life[0]))) {
                     S.battle_life_side[S.battle_life_count] = (unsigned char)side;
@@ -562,10 +588,10 @@ void MonsterEffects_Battle(void)
                                                                   .attribute = effect->attribute},
                                                   record, to, D_801A7AD8[to].card_id))
                     continue;
-                S.battle_attack[to] = (short)clamp(S.battle_attack[to] + effect->attack, -TABLES_LIMIT_STAT_MAX,
-                                                   TABLES_LIMIT_STAT_MAX);
-                S.battle_defense[to] = (short)clamp(S.battle_defense[to] + effect->defense, -TABLES_LIMIT_STAT_MAX,
-                                                    TABLES_LIMIT_STAT_MAX);
+                S.battle_attack[to] = (short)clamp(S.battle_attack[to] + effect->attack * count,
+                                                   -TABLES_LIMIT_STAT_MAX, TABLES_LIMIT_STAT_MAX);
+                S.battle_defense[to] = (short)clamp(S.battle_defense[to] + effect->defense * count,
+                                                    -TABLES_LIMIT_STAT_MAX, TABLES_LIMIT_STAT_MAX);
             }
         }
         announce(card, record, MONSTER_WHEN_COMBAT, MEMORIES_AFTER);
@@ -588,10 +614,13 @@ void MonsterEffects_Stats(const void *pointer, int *attack, int *defense)
         if (!S.card[source] || !S.face_up[source]) continue;
         n = Cards_MonsterEffects(S.card[source], &effects);
         for (e = 0; e < n; e++) {
+            int count;
             if (effects[e].when != MONSTER_WHEN_FACE_UP || !reaches(&effects[e], source, target, card->card_id))
                 continue;
-            *attack += effects[e].attack;
-            *defense += effects[e].defense;
+            /* Counted as it is asked: the boost follows the field. */
+            count = times(&effects[e], source);
+            *attack += effects[e].attack * count;
+            *defense += effects[e].defense * count;
         }
     }
 }

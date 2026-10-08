@@ -29,6 +29,8 @@ Starter decks tab turns it into `Pool`s (`read`) and back (`build`).
 """
 from __future__ import annotations
 
+import json
+
 import copy
 from dataclasses import dataclass, field
 
@@ -96,6 +98,21 @@ def read(section, resolve) -> list:
     return out
 
 
+def readable(section) -> bool:
+    """Whether the Weighted pools page reads all of a section: a pool or a
+    list of them, each an object with whole-number draws and weights."""
+    pools = [section] if isinstance(section, dict) else section
+    if not isinstance(pools, list):
+        return False
+    for entry in pools:
+        if not isinstance(entry, dict) or ("draws" in entry and not _is_int(entry["draws"])):
+            return False
+        cards = entry.get("cards", {})
+        if not isinstance(cards, dict) or not all(_is_int(w) for w in cards.values()):
+            return False
+    return True
+
+
 def build(pools, ref) -> list:
     """"starter_pools" for mod.json; None when no pool is offered. `ref` names
     a card as the manifest names one."""
@@ -117,9 +134,12 @@ def build(pools, ref) -> list:
 def state(project) -> list:
     """The pools the project holds, read once and kept on it."""
     found = getattr(project, "starter_pool_state", None)
-    if found is None:
+    # Read again when the section changed under it (Mod info's other keys).
+    source = json.dumps(project.other.get("starter_pools"), default=str)
+    if found is None or getattr(project, "starter_pool_source", None) != source:
         found = read(project.other.get("starter_pools"), project.resolve)
         project.starter_pool_state = found
+        project.starter_pool_source = source
     return found
 
 
@@ -130,6 +150,7 @@ def store(project):
         project.other.pop("starter_pools", None)
     else:
         project.other["starter_pools"] = built
+    project.starter_pool_source = json.dumps(project.other.get("starter_pools"), default=str)
 
 
 def drawn(project) -> int:
@@ -214,6 +235,27 @@ def retail(wa: bytes) -> list:
                 pool.cards[index + 1] = weight
         out.append(pool)
     return out
+
+
+def deal(pools, rng=None, cap: int = 3) -> dict:
+    """One deck the pools could deal ({card: copies}): each pool draws its
+    number of cards by the weights, a card already dealt `cap` times drawn
+    again, as the disc's deal does (name_entry_main.c); an example, as a new
+    game's is random."""
+    import random
+    rng = rng or random.Random()
+    deck = {}
+    for pool in pools:
+        cards = [c for c, w in pool.cards.items() if w > 0]
+        drawn = 0
+        while drawn < pool.draws:
+            free = [c for c in cards if deck.get(c, 0) < cap]
+            if not free:
+                break           # a pool too small for its draws: what it has
+            cid = rng.choices(free, weights=[pool.cards[c] for c in free])[0]
+            deck[cid] = deck.get(cid, 0) + 1
+            drawn += 1
+    return deck
 
 
 def retail_drawn(pools) -> int:

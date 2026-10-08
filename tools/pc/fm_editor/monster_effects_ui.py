@@ -24,6 +24,7 @@ class EffectsBox(ttk.LabelFrame):
         self.effects = []
         frame, self.tree = scrolled_tree(self, [("when", "When"), ("what", "Does")], [110, 250], 4)
         frame.grid(row=0, column=0, columnspan=6, sticky="we")
+        self.list_frame = frame         # shown once there is an effect: an empty list took a quarter of the form
         self.columnconfigure(5, weight=1)
         self.tree.bind("<Double-1>", lambda e: self.edit())
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.show_buttons())
@@ -39,7 +40,7 @@ class EffectsBox(ttk.LabelFrame):
         # A disc card with no effects: "monster_effects": [] takes away any
         # an earlier mod gives it (cards.c), left out leaves them.
         self.none = tk.BooleanVar(self)
-        self.none_box = ttk.Checkbutton(self, text="None, even where another mod gives it some", variable=self.none,
+        self.none_box = ttk.Checkbutton(self, text="Force no effects", variable=self.none,
                                         command=self.store)
         self.none_box.grid(row=3, column=0, columnspan=6, sticky="w", pady=(4, 0))
 
@@ -50,11 +51,10 @@ class EffectsBox(ttk.LabelFrame):
     def show(self, cid):
         """The card's list (an added card's base's, until it has its own)."""
         self.cid = cid
-        inherited = False
         if cid is None or self.project is None or cid not in self.project.cards:
             self.effects = []
         else:
-            effects, inherited = self.project.monster_effects_of(cid)
+            effects, _ = self.project.monster_effects_of(cid)
             # An entry that is not an object stays as written (the game leaves it out).
             self.effects = [dict(e) if isinstance(e, dict) else e for e in effects]
         retail = cid is not None and self.project is not None and cid in self.project.cards and \
@@ -66,13 +66,25 @@ class EffectsBox(ttk.LabelFrame):
         else:
             self.none_box.grid_remove()
         self.fill()
-        if inherited and self.effects:
-            self.note.configure(text="Its base's effects: a change gives this card a list of its own.")
+        # No effect: Add... and a line, not an empty list and greyed buttons.
+        if self.effects:
+            self.list_frame.grid()
+            for key in ("edit", "remove", "up", "down"):
+                self.buttons[key].grid()
         else:
+            self.list_frame.grid_remove()
+            for key in ("edit", "remove", "up", "down"):
+                self.buttons[key].grid_remove()
+        if not self.effects and cid is not None:
+            self.note.configure(text="No effects")
+        else:
+            # Only what is wrong with the list; nothing when it is fine.
             problems = fx.problems(self.effects, self.project.resolve if self.project else None)
-            self.note.configure(text="\n".join(problems) if problems else
-                                "Effects resolve one after another, in this order. Write what they do in the "
-                                "card text: the game shows only the text.")
+            self.note.configure(text="\n".join(problems))
+        if self.note.cget("text"):
+            self.note.grid()
+        else:
+            self.note.grid_remove()
 
     def label(self, cid):
         card = self.project.cards.get(cid) if self.project else None
@@ -167,7 +179,7 @@ class EffectDialog(FormDialog):
     def build(self, dialog, body):
         e = self.start
         self.vars = {k: tk.StringVar(dialog) for k in ("when", "do", "card", "target", "type", "attribute", "attack",
-                                                 "defense", "amount")}
+                                                 "defense", "amount", "each", "each_type", "each_attribute")}
         self.rows = {}
         row = 0
 
@@ -200,6 +212,13 @@ class EffectDialog(FormDialog):
                 self.rows[key][0].configure(image=pictures[key], compound="left")
         line("amount", "LP", ttk.Spinbox(body, textvariable=self.vars["amount"], from_=1, to=fx.AMOUNT_MAX,
                                          increment=100, width=10))
+        # "for_each": the number above made once per face-up monster counted.
+        line("each", "For each", ttk.Combobox(body, textvariable=self.vars["each"], state="readonly", width=30,
+                                              values=[fx.NO_EACH] + list(fx.EACH_LABELS)))
+        line("each_type", "Counting type", self.choice(body, "each_type", [ANY] + TYPE_NAMES[:TYPE_MAGIC],
+                                                       lambda v: TYPE_NAMES.index(v) if v in TYPE_NAMES else None))
+        line("each_attribute", "Counting attribute", self.choice(body, "each_attribute", [ANY] + ATTRIBUTE_NAMES,
+                                                                 self.attribute_icon))
         self.vars["when"].set(fx.when_label(e["when"]))
         self.vars["do"].set(fx.DO_LABELS[fx.DO.index(e["do"])])
         self.vars["card"].set(self.magic_label(e.get("card", 337)))
@@ -210,8 +229,12 @@ class EffectDialog(FormDialog):
         self.vars["attack"].set(e.get("attack", 0))
         self.vars["defense"].set(e.get("defense", 0))
         self.vars["amount"].set(e.get("amount", 500))
-        self.vars["when"].trace_add("write", lambda *_: self.show_rows())
-        self.vars["do"].trace_add("write", lambda *_: self.show_rows())
+        each = e.get("for_each")
+        self.vars["each"].set(fx.EACH_LABELS[fx.EACH.index(each["whose"])] if each else fx.NO_EACH)
+        self.vars["each_type"].set((each or {}).get("type", ANY))
+        self.vars["each_attribute"].set((each or {}).get("attribute", ANY))
+        for key in ("when", "do", "each"):
+            self.vars[key].trace_add("write", lambda *_: self.show_rows())
         self.show_rows()
 
     def choice(self, body, key, values, icon_of):
@@ -247,6 +270,10 @@ class EffectDialog(FormDialog):
         shown = {"when", "do"} | {"magic": {"card"}, "boost": {"target", "type", "attribute", "attack", "defense"},
                                   "heal": {"amount"}, "damage": {"amount"},
                                   "destroy": {"target", "type", "attribute"}}[do]
+        if do in fx.EACH_DO:
+            shown.add("each")
+            if self.vars["each"].get() in fx.EACH_LABELS:
+                shown |= {"each_type", "each_attribute"}
         for key, widgets in self.rows.items():
             for widget in widgets:
                 widget.grid() if key in shown else widget.grid_remove()
@@ -284,6 +311,12 @@ class EffectDialog(FormDialog):
                 return "LP is a whole number."
             if not 0 < effect["amount"] <= fx.AMOUNT_MAX:
                 return f"LP is 1 to {fx.AMOUNT_MAX}."
+        whose = self.chosen("each", fx.EACH, fx.EACH_LABELS)
+        if whose and do in fx.EACH_DO:
+            effect["for_each"] = {"whose": whose}
+            for key in ("type", "attribute"):
+                if self.vars["each_" + key].get() not in ("", ANY):
+                    effect["for_each"][key] = self.vars["each_" + key].get()
         effect = fx.normalize(effect, self.project.resolve)
         if effect is None:
             return "The game cannot do that."

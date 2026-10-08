@@ -3,17 +3,15 @@
 The schema is the one the port reads (notes/modding.md, notes/more-cards.md,
 notes/gameplay-tables.md; src/pc/mods/mods.c, src/pc/cards/cards.c and
 tables.c, starter.c and packs.c): "cards" (replace and copy), "fusions",
-"equips", "rituals", "drops", "decks", "starter", "packs" and "pack_shop".
-Every other top-level key a mod
-has (data, text, textures, audio, library, requires..., and "duelists") is
-kept as it was written.
+"equips", "rituals", "drops", "decks", "starter", "packs", "pack_shop" and
+"duelists". Every other top-level key a mod has (data, text, textures, audio,
+library, requires...) is kept as it was written.
 
-The duelists the editor knows are the forty the disc lays out, because it
-reads the game's own files; a mod's own duelists (notes/more-duelists.md) are
-made at run time, from whichever mods are applied. So a "decks" or "drops"
-entry naming one of those, or either table given as the name of a file, is
-kept as it was written rather than resolved -- and the four roster folders
-beside the manifest are copied with the rest of the mod's files (save_mod).
+The duelists a mod adds (notes/more-duelists.md) are roster.py's: its own,
+from "duelists" and the duelists/, decks/, drops/ and portraits/ folders,
+are read and written back as editable duelists. A "decks" or "drops" entry
+naming a duelist neither the disc nor this mod has -- another mod's -- or
+either table given as the name of a file, is kept as it was written.
 """
 from __future__ import annotations
 
@@ -24,13 +22,14 @@ import re
 import shutil
 from pathlib import Path
 
-from .gamedata import (FUSION_GROUPS, RITUAL_REQUIREMENT_KEYS, fusion_group_named, ATTRIBUTE_NAMES, CARD_COUNT, DECK_SIZE, DUELIST_NAMES, FRAME_NAMES, POOLS, STAR_NAMES,
+from .gamedata import (FUSION_GROUPS, RITUAL_ORIGINS, RITUAL_REQUIREMENT_KEYS, RITUAL_TRIBUTE_MAX, fusion_group_named, ATTRIBUTE_NAMES, CARD_COUNT, DECK_SIZE, DUELIST_NAMES, FRAME_NAMES, POOLS, STAR_NAMES,
                        EQUIP_BONUS_MAX, STARTER_WEIGHT_LIMIT, TYPE_NAMES, TYPE_MAGIC, GameData)
 from .model import AddedCard, ModInfo, Project, StarterDeck, duelist_named, type_named, KEY_RE
-from . import art, campaign_map, fixed_decks, guardian_stars, packs as packmath, pools as poolmath
+from . import art, board_art, campaign_map, fixed_decks, guardian_stars, packs as packmath, pools as poolmath, roster
 
 INFO_KEYS = ("id", "name", "version", "author", "description")
-TABLE_KEYS = ("settings", "cards", "fusions", "equips", "rituals", "drops", "decks", "starter", "packs", "pack_shop")
+TABLE_KEYS = ("settings", "cards", "fusions", "equips", "rituals", "drops", "decks", "starter", "packs", "pack_shop",
+              "duelists")
 REPLACE_EXTRA = ("art", "thumbnail", "title", "model", "effect", "exodia")
 POOL_ALIASES = {"deck": "deck", "pow": "pow", "sapow": "pow", "bcd": "bcd", "tec": "tec", "satec": "tec"}
 
@@ -260,25 +259,30 @@ def build_rituals(project: Project) -> list:
     retail = project.retail.rituals
     for ritual in sorted(set(retail) | set(project.rituals)):
         now = project.rituals.get(ritual)
-        if retail.get(ritual) == now and ritual not in project.ritual_requirements:
+        if retail.get(ritual) == now and ritual not in project.ritual_requirements and \
+                ritual not in project.ritual_from and not (now is None and project.ritual_removed(ritual)):
             continue
-        if now is None:
+        if now is None:     # a disc ritual's taken away, or an added copy's (its base's too)
             entries.append({"card": project.ref(ritual), "result": None})
+            continue
+        entry = {"card": project.ref(ritual)}
+        if ritual in project.ritual_from:
+            entry["tributes_from"] = project.ritual_from[ritual]
+        requirements = project.ritual_requirements.get(ritual)
+        if requirements:
+            tributes = []
+            for req in requirements:
+                body = dict(req)
+                if body.get("card"):
+                    body["card"] = project.ref(body["card"])
+                else:
+                    body.pop("card", None)
+                tributes.append(body)
+            entry["tributes"] = tributes
         else:
-            requirements = project.ritual_requirements.get(ritual)
-            if requirements:
-                tributes = []
-                for req in requirements:
-                    body = dict(req)
-                    if body.get("card"):
-                        body["card"] = project.ref(body["card"])
-                    else:
-                        body.pop("card", None)
-                    tributes.append(body)
-                entries.append({"card": project.ref(ritual), "tributes": tributes, "result": project.ref(now[3])})
-            else:
-                entries.append({"card": project.ref(ritual), "tributes": [project.ref(t) for t in now[:3]],
-                                "result": project.ref(now[3])})
+            entry["tributes"] = [project.ref(t) for t in now[:-1]]
+        entry["result"] = project.ref(now[-1])
+        entries.append(entry)
     return entries + project.kept["rituals"]
 
 
@@ -295,13 +299,16 @@ def _pool_body(project: Project, listed: dict, replace: bool, kept: dict) -> dic
 
 
 def _pool_edits(project: Project, pool: str):
-    """{duelist key: body} for one kind of pool. An edit that turns every
-    opponent's pool into the edited one (say, one card taken out
-    everywhere) is written once, as "all", before the opponents' own."""
+    """{duelist key: body} for one kind of pool: a disc duelist's by its
+    name, a copy the mod adds by its roster entry (its own file). An edit
+    that turns every opponent's pool into the edited one (say, one card
+    taken out everywhere) is written once, as "all", before the opponents'
+    own; "all" reaches the mod's own duelists too, as it does in the game."""
     deck = pool == "deck"
-    count = len(project.pools)
-    retail = [project.retail.pools[d][pool] for d in range(count)]
-    edited = [{c: w for c, w in project.pools[d][pool].items() if w} for d in range(count)]
+    subjects = roster.subjects(project)
+    count = len(subjects)
+    retail = [roster.retail_pool(project, s, pool) for s in subjects]
+    edited = [{c: w for c, w in roster.pools_of(project, s)[pool].items() if w} for s in subjects]
     edits = [poolmath.edit_for(retail[d], edited[d], deck) for d in range(count)]
     out = {}
     bases = retail
@@ -327,16 +334,18 @@ def _pool_edits(project: Project, pool: str):
         body = out.get("all", {})
         body.update(kept_all)
         out["all"] = body
-    for d in range(count):
-        kept = project.kept_pools.get((d, pool), {})
+    for d, s in enumerate(subjects):
+        kept = roster.kept_of(project, s, pool)
         if edits[d] is None and not kept:
             continue
         listed, replace = edits[d] if edits[d] else ({}, False)
-        out[_duelist_key(d)] = _pool_body(project, listed, replace, kept)
+        out[_duelist_key(s) if isinstance(s, int) else s] = _pool_body(project, listed, replace, kept)
     return out
 
 
-def build_pools(project: Project):
+def _pool_tables(project: Project):
+    """(drops, decks) by duelist: mod.json's keys, and a copy's roster entry
+    for what goes in its own files (roster.files)."""
     decks = _pool_edits(project, "deck")
     decks.update(fixed_decks.build(project))     # a fixed deck wins over weighted edits of it anyway
     if "all" in decks:
@@ -347,7 +356,14 @@ def build_pools(project: Project):
             drops.setdefault(name, {})[pool] = body
     if "all" in drops:     # "all" first, so the opponents' own edits go over it
         drops = {"all": drops.pop("all"), **drops}
-    # Entries naming a duelist the editor could not place -- one a mod added --
+    return drops, decks
+
+
+def build_pools(project: Project):
+    drops, decks = _pool_tables(project)
+    drops = {k: v for k, v in drops.items() if isinstance(k, str)}
+    decks = {k: v for k, v in decks.items() if isinstance(k, str)}
+    # Entries naming a duelist the editor could not place -- another mod's --
     # go back after the ones it wrote, where the mod had them.
     decks.update(project.kept_opponents.get("decks", {}))
     drops.update(project.kept_opponents.get("drops", {}))
@@ -431,6 +447,17 @@ def build(project: Project) -> dict:
         if getattr(info, key):
             manifest[key] = getattr(info, key)
     manifest.update(project.other)
+    # Starter pools by their cards as they are named now (the mod's id, an
+    # added card's key may have changed since the Weighted pools page wrote
+    # them), as the written decks are.
+    if getattr(project, "starter_pool_state", None) is not None and \
+            isinstance(project.other.get("starter_pools"), (list, dict)):
+        from . import starter_pools as sp
+        pools = sp.build(sp.state(project), project.ref)
+        if pools is None:
+            manifest.pop("starter_pools", None)
+        else:
+            manifest["starter_pools"] = pools
     passwords = build_passwords(project)
     if passwords:
         manifest["passwords"] = passwords
@@ -445,6 +472,9 @@ def build(project: Project) -> dict:
         rules = builder(project)
         if rules:
             manifest[key] = rules
+    duelists = roster.manifest_value(project)
+    if duelists is not None:
+        manifest["duelists"] = duelists
     drops, decks = build_pools(project)
     if drops:
         manifest["drops"] = drops
@@ -454,6 +484,7 @@ def build(project: Project) -> dict:
     if starter:
         manifest["starter"] = starter
     campaign_map.build_into(project, manifest)
+    board_art.build_into(project, manifest)
     packs = build_packs(project)
     if packs:
         manifest["packs"] = packs
@@ -965,12 +996,15 @@ def read_rituals(project: Project, entries, messages: list):
                             "or \"effect\" naming one); left out")
             continue
         if "result" in entry and entry["result"] is None:
-            project.rituals.pop(ritual, None)
-            project.ritual_requirements.pop(ritual, None)
+            project.remove_ritual(ritual)
             continue
         tributes = entry.get("tributes")
-        if not isinstance(tributes, list) or len(tributes) != 3:
-            messages.append(f"{where}: \"tributes\" names three monsters; left out")
+        if not isinstance(tributes, list) or not 1 <= len(tributes) <= RITUAL_TRIBUTE_MAX:
+            messages.append(f"{where}: \"tributes\" names one to five monsters; left out")
+            continue
+        origin = entry.get("tributes_from", "field")
+        if origin not in RITUAL_ORIGINS:
+            messages.append(f"{where}: \"tributes_from\" is \"field\", \"hand\" or \"both\"; left out")
             continue
         result = project.resolve(entry.get("result"))
         conditional = any(isinstance(t, dict) for t in tributes)
@@ -1041,16 +1075,15 @@ def read_rituals(project: Project, entries, messages: list):
                 messages.append(f"{where}: has a ritual requirement the editor cannot place; kept as written")
                 project.kept["rituals"].append(entry)
                 continue
-            project.ritual_requirements[ritual] = requirements
-            project.rituals[ritual] = tuple(display_ids + [result])
+            project.set_ritual(ritual, requirements, result, origin, objects=True)
         else:
             ids = [project.resolve(t) for t in tributes] + [result]
             if not all(ids):
                 messages.append(f"{where}: names a card the editor cannot place; kept as written")
                 project.kept["rituals"].append(entry)
                 continue
-            project.rituals[ritual] = tuple(ids)
-            project.ritual_requirements.pop(ritual, None)   # a later mod's plain recipe wins
+            # A later mod's plain recipe wins over conditions and a place.
+            project.set_ritual(ritual, [{"card": c} for c in ids[:-1]], result, origin)
 
 
 def _read_pool(project: Project, where, duelists, pool, body, messages):
@@ -1075,16 +1108,19 @@ def _read_pool(project: Project, where, duelists, pool, body, messages):
     if kept:
         # Kept under the name they were written for: an "all" edit's own
         # stays one body, before the opponents' edits.
-        key = "all" if len(duelists) > 1 else duelists[0]
-        project.kept_pools.setdefault((key, pool), {}).update(kept)
+        if len(duelists) > 1:
+            project.kept_pools.setdefault(("all", pool), {}).update(kept)
+        else:
+            roster.keep(project, duelists[0], pool, kept)
     for d in duelists:
         if not listed and not replace:
             continue
-        result = poolmath.apply_edit(project.pools[d][pool], listed, replace, pool == "deck")
+        pools = roster.pools_of(project, d)
+        result = poolmath.apply_edit(pools[pool], listed, replace, pool == "deck")
         if result is None:
-            messages.append(f"{where}: {DUELIST_NAMES[d]}'s {pool} left as it was (the port refuses this edit)")
+            messages.append(f"{where}: {roster.label(project, d)}'s {pool} left as it was (the port refuses this edit)")
         else:
-            project.pools[d][pool] = result
+            pools[pool] = result
 
 
 def read_pools(project: Project, table, decks: bool, messages: list):
@@ -1106,12 +1142,15 @@ def read_pools(project: Project, table, decks: bool, messages: list):
             fixed_decks.read_entry(project, name, entry, messages)
             continue
         if same_all(name):
-            duelists = list(range(len(project.pools)))
+            duelists = roster.subjects(project)
         else:
             d = duelist_named(name)
             if d < 0:
-                # A duelist a mod added, or a misspelling: either way the
-                # editor cannot place it, and dropping it would throw away
+                d = roster.named(project, name)
+                d = -1 if d is None else d
+            if isinstance(d, int) and d < 0:
+                # A duelist another mod adds, or a misspelling: either way
+                # the editor cannot place it, and dropping it would throw away
                 # somebody else's roster. Kept exactly as written.
                 project.kept_opponents.setdefault(label, {})[name] = entry
                 messages.append(f"{label}: \"{name}\" is no duelist the disc has; kept as written")
@@ -1258,10 +1297,11 @@ def same_all(name: str) -> bool:
     return "".join(c for c in name.lower() if c.isalnum()) == "all"
 
 
-def apply(project: Project, manifest: dict, messages: list = None, default_id: str = None) -> list:
+def apply(project: Project, manifest: dict, messages: list = None, default_id: str = None, folder=None) -> list:
     """Lay a mod.json over the project (which should be retail): what the
     editor understands becomes edits, the rest is kept as written. A mod
-    with no "id" is named after its folder, as the port does."""
+    with no "id" is named after its folder, as the port does. With the
+    folder, the files beside mod.json the roster is made of are read too."""
     messages = [] if messages is None else messages
     if not isinstance(manifest, dict):
         raise ValueError("mod.json is not a JSON object")
@@ -1280,12 +1320,17 @@ def apply(project: Project, manifest: dict, messages: list = None, default_id: s
     read_fusions(project, manifest.get("fusions"), messages)
     read_equips(project, manifest.get("equips"), messages)
     read_rituals(project, manifest.get("rituals"), messages)
+    # The duelists before the pools, which may name them; the folders' pools
+    # after the manifest's, as tables.c reads them.
+    roster.read(project, manifest.get("duelists"), folder, messages)
     read_pools(project, manifest.get("drops"), False, messages)
     read_pools(project, manifest.get("decks"), True, messages)
+    roster.read_pool_folders(project, folder, messages)
     read_starter(project, manifest.get("starter"), messages)
     read_packs(project, manifest, messages)
     read_passwords(project, messages)
     campaign_map.read_mod(project, messages)
+    board_art.read_patches(project, messages)
     return messages
 
 
@@ -1321,7 +1366,7 @@ def open_mod(retail: GameData, folder) -> tuple:
     """(project, messages): retail with the mod folder's mod.json on top."""
     folder = Path(folder)
     project = Project(retail)
-    messages = apply(project, read_json(folder / "mod.json"), default_id=folder.name)
+    messages = apply(project, read_json(folder / "mod.json"), default_id=folder.name, folder=folder)
     read_text_cards(project, folder, messages)
     project.source_dir = folder
     art.read_mod(project, folder, messages)
@@ -1353,7 +1398,10 @@ def save_mod(project: Project, folder, manifest: dict = None, copy_source: bool 
             subdirs[:] = [name for name in subdirs if (directory / name).resolve() != destination]
             for name in files:
                 item = directory / name
-                if item.is_file() and item.name != "mod.json":
+                # The roster's files it read are written afresh below, or
+                # are gone with the duelist they were for.
+                if item.is_file() and item.name != "mod.json" and \
+                        not roster.owned(project, item.relative_to(source).as_posix()):
                     target = folder / item.relative_to(source)
                     target.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(item, target)
@@ -1362,6 +1410,8 @@ def save_mod(project: Project, folder, manifest: dict = None, copy_source: bool 
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(blob)
     art.write_mod(project, folder)     # the art's PNGs and texture pack, and "textures" in mod.json
+    drops, decks = _pool_tables(project)
+    roster.write(project, folder, decks, drops)
     manifest = build(project) if manifest is None else manifest
     path = folder / "mod.json"
     temporary = folder / "mod.json.tmp"

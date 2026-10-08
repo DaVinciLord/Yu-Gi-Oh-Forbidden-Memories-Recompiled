@@ -23,7 +23,7 @@ from . import art, packs as packmath, pngio, validate
 from .bulk_dialog import FilterPanel
 from .gamedata import DUELIST_NAMES
 from .tabs import Tab
-from .widgets import CardField, FormDialog, pick_card, px, scrolled_tree, show_text
+from .widgets import CardField, FormDialog, WrapLabel, pick_card, px, scrolled_tree, show_text, ui_font
 
 ZOOMS = (1, 2, 4)
 LISTED = ("(default)", "yes", "no")
@@ -142,7 +142,10 @@ class PacksTab(Tab):
         buttons.pack(fill="x", pady=(4, 0))
         for text, command in (("Add pack", self.add_pack), ("Duplicate", self.duplicate), ("Remove", self.remove),
                               ("Up", lambda: self.move(-1)), ("Down", lambda: self.move(1))):
-            ttk.Button(buttons, text=text, command=command, width=len(text) + 1).pack(side="left", padx=(0, 2))
+            button = ttk.Button(buttons, text=text, command=command, width=len(text) + 1)
+            button.pack(side="left", padx=(0, 2))
+            if command == self.add_pack:
+                self.add_button = button
         more = ttk.Frame(left)
         more.pack(fill="x", pady=(4, 0))
         self.shop_button = ttk.Button(more, text="Shop settings...", command=self.shop_settings)
@@ -160,7 +163,13 @@ class PacksTab(Tab):
         form.pack(side="left", fill="x", expand=True)
         self.vars = {k: tk.StringVar() for k in ("name", "description", "price", "count", "image_style")}
         ttk.Label(form, text="Name").grid(row=0, column=0, sticky="w", pady=1)
-        ttk.Entry(form, textvariable=self.vars["name"], width=26).grid(row=0, column=1, sticky="w", pady=1)
+        named = ttk.Frame(form)
+        named.grid(row=0, column=1, sticky="w", pady=1)
+        ttk.Entry(named, textvariable=self.vars["name"], width=26).pack(side="left")
+        # The shop shows NAME_LETTERS letters of a name: the count as it is typed.
+        self.name_count = ttk.Label(named, style="Hint.TLabel", width=6)
+        self.name_count.pack(side="left", padx=(4, 0))
+        self.vars["name"].trace_add("write", lambda *_: self.count_name())
         self.identity = ttk.Label(form, style="Hint.TLabel")
         self.identity.grid(row=0, column=2, sticky="w", padx=6)
         ttk.Label(form, text="Description").grid(row=1, column=0, sticky="w", pady=1)
@@ -199,8 +208,9 @@ class PacksTab(Tab):
                              state="readonly", width=6)
         style.pack(side="left", padx=4)
         style.bind("<<ComboboxSelected>>", lambda e: self.show_picture())
-        ttk.Label(line, text="card: in the card's frame; full: the whole picture", style="Hint.TLabel").pack(
-            side="left")
+        # Under the list, not beside it: beside, it made the tab wider than a 1280 window.
+        ttk.Label(picture, text="card: in the card's frame; full: the whole picture", style="Hint.TLabel",
+                  wraplength=px(self, 240), justify="left").pack()
         self.picture_note = ttk.Label(picture, style="Hint.TLabel", wraplength=px(self, 240), justify="left")
         self.picture_note.pack()
 
@@ -209,7 +219,10 @@ class PacksTab(Tab):
         self.advanced_open = tk.BooleanVar(value=False)
         bottom = ttk.Frame(right)
         bottom.pack(side="bottom", fill="x")
-        self.advanced_button = ttk.Button(bottom, text="Advanced >", command=self.toggle_advanced)
+        # As Guardian Stars has it: a box, not a button.
+        self.advanced_shown = tk.BooleanVar(self, value=False)
+        self.advanced_button = ttk.Checkbutton(bottom, text="Show advanced", variable=self.advanced_shown,
+                                               command=self.show_advanced)
         self.advanced_button.pack(anchor="w", pady=(4, 0))
         self.advanced = ttk.LabelFrame(bottom, text="Advanced", padding=4)
         self.build_advanced(self.advanced)
@@ -234,6 +247,15 @@ class PacksTab(Tab):
                                          selectmode="extended")
         frame.pack(fill="both", expand=True, pady=4)
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.pick_row())
+        self.tree.bind("<Delete>", lambda e: self.remove_cards())
+        # No pack: what packs are, and ways to start one.
+        self.empty = ttk.Frame(frame, padding=20)
+        WrapLabel(self.empty, 420, font=ui_font(10),
+                  text="This mod sells no card packs. A pack is bought in the shop for starchips and deals its "
+                       "cards by their weights (in tiers, slots and guarantees under Advanced).").pack(fill="x")
+        ttk.Button(self.empty, text="Empty pack", command=self.add_pack).pack(anchor="w", pady=(8, 0))
+        ttk.Button(self.empty, text="A pack of an opponent's drops...", command=self.add_from_drops).pack(
+            anchor="w", pady=(6, 0))
 
     # --- the advanced part ------------------------------------------------------
 
@@ -362,12 +384,14 @@ class PacksTab(Tab):
         ttk.Label(line, text="Unknown keys of a pack stay as written.", style="Hint.TLabel").pack(side="left", padx=8)
 
     def toggle_advanced(self):
-        if self.advanced.winfo_manager():
-            self.advanced.pack_forget()
-            self.advanced_button.configure(text="Advanced >")
-        else:
+        self.advanced_shown.set(not self.advanced_shown.get())
+        self.show_advanced()
+
+    def show_advanced(self):
+        if self.advanced_shown.get():
             self.advanced.pack(fill="x")
-            self.advanced_button.configure(text="Advanced v")
+        else:
+            self.advanced.pack_forget()
 
     # --- the list -------------------------------------------------------------
 
@@ -412,22 +436,28 @@ class PacksTab(Tab):
         self.file_note.configure(text=f"\"packs\" names the file {self.project.packs_file}: the editor keeps it as "
                                       "written and does not edit it." if in_file else "")
         self.set_editable(not in_file)
+        for button in self.empty.winfo_children():     # the empty tab's ways to start a pack
+            if isinstance(button, ttk.Button):
+                button.state(["disabled"] if in_file else ["!disabled"])
 
     # What does nothing while "packs" names a file: every field and button of
     # a pack, and the list's own but Shop settings ("pack_shop" stays the
     # manifest's).
     EDITABLE = (ttk.Button, ttk.Entry, ttk.Spinbox, ttk.Combobox, ttk.Checkbutton, ttk.Radiobutton)
 
-    def set_editable(self, editable: bool):
+    def set_editable(self, editable: bool, keep=()):
+        """Every control greyed, or back; `keep`: those left as they are."""
         def walk(widget):
             for child in widget.winfo_children():
+                if child is self.empty:
+                    continue
                 if isinstance(child, self.EDITABLE) and child not in keep:
                     if not editable:
                         child.state(["disabled"])
                     elif child not in (self.export_button, self.revert_button):   # show_picture's to set
                         child.state(["!disabled"])
                 walk(child)
-        keep = {self.shop_button}
+        keep = {self.shop_button, *keep}
         walk(self.right)
         walk(self.list_buttons)
 
@@ -470,7 +500,17 @@ class PacksTab(Tab):
             self.identity.configure(text="No pack: Add pack makes one")
             self.picture.configure(image="")
             self.picture_note.configure(text="")
+            if self.project.packs_file is None:
+                self.empty.place(relx=0.5, rely=0.4, anchor="center", relwidth=0.7)
+                # No pack: nothing but Add pack does anything.
+                self.set_editable(False, keep={self.add_button})
+            else:
+                self.empty.place_forget()       # the packs are in a file: there are some
             return
+        if self.empty.winfo_manager():
+            self.empty.place_forget()
+            if self.project.packs_file is None:
+                self.set_editable(True)
         pack, notes = self.parsed(entry)
         pid = packmath.pack_id(entry)
         self.identity.configure(text=f"{self.project.info.id}:{pid}")
@@ -484,8 +524,14 @@ class PacksTab(Tab):
         style = entry.get("image_style", "card")
         self.vars["image_style"].set(style if style in packmath.IMAGE_STYLES else "card")
         errors = [m for level, m in notes if level == "error"]
+        self.problem.configure(style="Error.TLabel")
         if errors:
-            self.problem.configure(text=errors[0])
+            empty = not any(packmath.tier_pool(entry, name) for name, _ in packmath.tiers_of(entry))
+            if empty and "none of its cards are here" in errors[0]:
+                # A pack just made: not a mistake, a next step.
+                self.problem.configure(text="Add cards: a pack with none is not sold.", style="Hint.TLabel")
+            else:
+                self.problem.configure(text=errors[0])
         chances = packmath.card_chances(pack) if pack else {}
         resolve = validate.pack_resolver(self.project)
         names = []
@@ -720,6 +766,11 @@ class PacksTab(Tab):
         self.baseline = now
         self.applied()
 
+    def count_name(self):
+        n = len(self.vars["name"].get())
+        self.name_count.configure(text=f"{n}/{packmath.NAME_LETTERS}" if n else "",
+                                  style="Error.TLabel" if n > packmath.NAME_LETTERS else "Hint.TLabel")
+
     def edited(self):
         self.app.changed()
         self.fill_list()
@@ -737,6 +788,40 @@ class PacksTab(Tab):
         self.project.packs.append(packmath.new_pack(name, self.ids()))
         self.index = len(self.entries()) - 1
         self.edited()
+
+    def add_from_drops(self):
+        """A pack of the cards an opponent drops, at their drop weights: the
+        start of a "Seto's rare cards" pack."""
+        if self.project is None or self.project.packs_file is not None or not self.commit():
+            return None
+        names = [f"{d} {DUELIST_NAMES[d]}" for d in range(1, len(self.project.pools))]
+        pools = {"S/A-POW drops": "pow", "B/C/D drops": "bcd", "S/A-TEC drops": "tec", "Deck": "deck"}
+        fields = {}
+
+        def build(dialog, body):
+            for row, (key, label, values) in enumerate((("who", "Opponent", names), ("pool", "Pool", list(pools)))):
+                ttk.Label(body, text=label).grid(row=row, column=0, sticky="w", pady=2)
+                fields[key] = tk.StringVar(value=values[0])
+                ttk.Combobox(body, textvariable=fields[key], values=values, state="readonly", width=30).grid(
+                    row=row, column=1, sticky="w", padx=(6, 0), pady=2)
+            ttk.Label(body, text="Each card at its weight in that pool: the pack deals them as the duel drops them.",
+                      style="Hint.TLabel").grid(row=2, column=0, columnspan=2, sticky="w", pady=(6, 0))
+
+        def ok(dialog):
+            d = int(fields["who"].get().split(" ", 1)[0])
+            pool = pools[fields["pool"].get()]
+            items = [(self.project.ref(c), w) for c, w in sorted(self.project.pools[d][pool].items()) if w > 0]
+            if not items:
+                return "that pool has no card"
+            name = f"{DUELIST_NAMES[d]} {pool.upper()}"[:packmath.NAME_LETTERS]
+            entry = packmath.new_pack(name, self.ids())
+            packmath.set_tier_pool(entry, "cards", items)
+            self.project.packs.append(entry)
+            self.index = len(self.entries()) - 1
+            self.edited()
+            return None
+
+        return FormDialog(self, "A pack of an opponent's drops", build, ok)
 
     def duplicate(self):
         entry = self.current()
@@ -769,7 +854,10 @@ class PacksTab(Tab):
             return
         if not messagebox.askyesno("Remove pack", f"Remove {entry.get('name', packmath.pack_id(entry))}?", parent=self):
             return
+        image = entry.get("image")
         self.project.packs.pop(self.index)
+        if isinstance(image, str) and not self.image_shared(image, entry):
+            self.project.files.pop(image, None)     # else saved as a file nothing names
         self.index = max(0, self.index - 1)
         self.edited()
 
@@ -1017,11 +1105,36 @@ class PacksTab(Tab):
         entry, t = self.current(), self.selected_tier()
         if entry is None or t is None or not isinstance(entry.get("tiers"), dict):
             return
-        name = packmath.tiers_of(entry)[t][0]
-        if not messagebox.askyesno("Remove tier", f"Remove the tier {name} and its cards?", parent=self):
+        tiers = packmath.tiers_of(entry)
+        name = tiers[t][0]
+        if len(tiers) < 2:
+            messagebox.showinfo("Remove tier", "A pack deals from one tier at least: add another before "
+                                "removing this one.", parent=self)
+            return
+        if not self.commit() or not messagebox.askyesno("Remove tier", f"Remove the tier {name} and its cards?",
+                                                        parent=self):
             return
         del entry["tiers"][name]
+        self.forget_tier(entry, name, packmath.tiers_of(entry)[0][0])
         self.edited()
+
+    @staticmethod
+    def forget_tier(entry, gone, first):
+        """A tier removed: the guarantee and pity name it no more, and a slot
+        that dealt from it alone deals from the first tier left."""
+        for key in ("guarantee", "pity"):
+            if isinstance(entry.get(key), dict):
+                entry[key].pop(gone, None)
+                if not entry[key]:
+                    del entry[key]
+        for s, slot in enumerate(entry.get("slots") or []):
+            if slot == gone:
+                entry["slots"][s] = first
+            elif isinstance(slot, dict) and isinstance(slot.get("tiers"), dict):
+                slot["tiers"].pop(gone, None)
+                weights = [w for w in slot["tiers"].values() if isinstance(w, (int, float))]
+                if not slot["tiers"] or not sum(weights):       # nothing it could deal any more
+                    entry["slots"][s] = first
 
     def move_tier(self, step):
         entry, t = self.current(), self.selected_tier()
@@ -1029,7 +1142,7 @@ class PacksTab(Tab):
             return
         items = list(entry["tiers"].items())
         other = t + step
-        if not 0 <= other < len(items):
+        if not 0 <= other < len(items) or not self.commit():
             return
         items[t], items[other] = items[other], items[t]
         entry["tiers"] = dict(items)
@@ -1041,6 +1154,9 @@ class PacksTab(Tab):
     def toggle_slots(self):
         entry = self.current()
         if entry is None:
+            return
+        if not self.commit():           # the count typed, not the one stored
+            self.adv["use_slots"].set(not self.adv["use_slots"].get())
             return
         if self.adv["use_slots"].get():
             first = packmath.tiers_of(entry)[0][0]
@@ -1145,7 +1261,7 @@ class PacksTab(Tab):
 
     def remove_slot(self):
         entry, s = self.current(), self.selected_slot()
-        if entry is None or s is None or not isinstance(entry.get("slots"), list):
+        if entry is None or s is None or not isinstance(entry.get("slots"), list) or not self.commit():
             return
         entry["slots"].pop(s)
         if not entry["slots"]:
@@ -1158,7 +1274,7 @@ class PacksTab(Tab):
         if entry is None or s is None or not isinstance(entry.get("slots"), list):
             return
         other = s + step
-        if 0 <= other < len(entry["slots"]):
+        if 0 <= other < len(entry["slots"]) and self.commit():
             entry["slots"][s], entry["slots"][other] = entry["slots"][other], entry["slots"][s]
             self.edited()
             self.slots.selection_set(str(other))
@@ -1268,7 +1384,7 @@ class PacksTab(Tab):
 
     def revert_png(self):
         entry = self.current()
-        if entry is None or not isinstance(entry.get("image"), str):
+        if entry is None or not isinstance(entry.get("image"), str) or not self.commit():
             return
         image = entry.pop("image")
         if not self.image_shared(image, entry):

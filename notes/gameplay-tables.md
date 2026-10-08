@@ -159,12 +159,33 @@ disc's ritual cards, a mod's copy of one (`"copy"` of a ritual card,
 with `"effect"` naming a ritual card, whose effect it is played with). A
 card only typed Ritual does nothing when played and takes no recipe. A
 copy or "effect" card without an entry of its own is summoned by that
-ritual card's recipe. `tributes` names the three monsters it takes, and
-`result` what it summons. `"result": null` takes the ritual away. A tribute
-may be a copy a mod added; a retail tribute is also met by a copy of it.
-Every tribute takes a monster that is exactly it before any takes a copy,
-so a recipe naming both a retail monster and a copy of it is met whatever
-order they stand in on the field.
+ritual card's recipe. `tributes` names the monsters it takes, one to five
+(the disc's rituals take three), and `result` what it summons. `"result":
+null` takes the ritual away. A tribute may be a copy a mod added; a retail
+tribute is also met by a copy of it. Every tribute takes a monster that is
+exactly it before any takes a copy, so a recipe naming both a retail
+monster and a copy of it is met whatever order they stand in on the field.
+
+`tributes_from` says where the tributes may be: `"field"` (the default, as
+on the disc: monsters on the side's field), `"hand"` (monsters in its hand)
+or `"both"`:
+
+```json
+{"card": "Black Luster Ritual", "result": "Black Luster Soldier", "tributes_from": "hand",
+ "tributes": ["Gaia the Fierce Knight", {"type": "Warrior"}]}
+```
+
+A hand tribute leaves the hand as a played card does. The result takes the
+zone of the middle field tribute (the second of three, as on the disc), or,
+when every tribute came from the hand, the first free monster zone; with the
+field full such a ritual cannot take place, and the card is spent as a
+ritual without tributes is. With `"both"`, a monster in the hand is spent
+before one on the field that would do as well. The ritual card itself is
+never one of its tributes, so a hand ritual played from the hand has at most
+four (five when it was set face down first). The CPU plays these rituals as
+it plays the disc's (its field script activates a set ritual once it can
+take place), the 3D effect flies every field tribute into the portal, and a
+recipe of three from the field is matched exactly as before.
 
 A tribute may also be an object of conditions, all of which the monster
 must meet:
@@ -187,12 +208,12 @@ must meet:
 
 Printed means the card's own stats, a mod's `cards` edits included, not what
 equips or the terrain add in the duel. `{"min_attack": 0}` is any monster.
-The three tributes may be plain cards and objects mixed; they are three
-different monsters of the side's field, and the ritual takes place when any
-three of them meet the three tributes. When more monsters would do, it
+The tributes may be plain cards and objects mixed; they are different
+monsters of the side's (field, hand or both), and the ritual takes place
+when as many of them meet the tributes. When more monsters would do, it
 spends the weakest: tribute by tribute, the narrowest first (a `card`
-first), the lowest DEF when the result has more DEF than ATK, the lowest ATK
-otherwise. A key it does not know is noted in the Mods window and left out,
+first, and the card itself before a copy of it), the lowest DEF when the
+result has more DEF than ATK, the lowest ATK otherwise. A key it does not know is noted in the Mods window and left out,
 and an object with no key it knows leaves the entry out.
 
 A card's groups are the disc card's, as the fusion guides list them (Marcelo
@@ -394,7 +415,13 @@ already held more than `limit` of a card (a save from before the mod) keeps
 them; only new copies are turned away. The latest mod that sets it wins.
 Without the key the chest is the disc's in every case.
 
-## Limits: ATK, DEF, LP, starchips and more
+## Values: ATK, DEF, LP, starchips and more
+
+A mod's `"limits"` hold the game's numbers a mod may change: the caps below,
+and [other values](#other-values) the game reads (a deck's copies, three
+magic cards' numbers, the rank score, the starchips a win gives). The FM
+Editor's **Values** tab writes them; the key is still `limits`, as mods have
+always written it.
 
 The game caps some numbers: a monster's ATK and DEF at 9999, whatever its
 bonuses; a duel's life points at 8000 to start and, when healing, at what
@@ -471,8 +498,53 @@ still wins, start from the cap of the stat they rank by rather than from
 9999, so they go on finding one when monsters pass 9999; at the disc's cap
 they are the disc's.
 
-**Code mods** read the limits in force with the mod API's `limit` (API 8):
-`host->limit(host, "attack")`.
+### Other values
+
+The same `"limits"` take the game's other numbers. Each is the disc's while
+no mod sets it, so without one nothing changes:
+
+```json
+"limits": {
+    "deck_copies": 5,
+    "swords_turns": 4, "crush_card": 2000, "spellbinding_circle": 700, "shadow_spell": 1200,
+    "rank_score": {"start": 50, "exodia": 40, "deck_out": -40},
+    "starchip_prize": {"S": 8, "A": 6, "B": 4, "C": 2, "D": 1},
+    "new_game_starchips": 500
+}
+```
+
+| Key | Meaning | The game's | Range |
+|---|---|---|---|
+| `deck_copies` | the copies of a card Build Deck lets into the deck (the count turns red there); an Exodia piece stays one, and the CPU's decks keep three | 3 | 1-40 |
+| `swords_turns` | the opponent's turns Swords of Revealing Light stops their attacks for (the field's card bar counts them down) | 3 | 1-9 |
+| `crush_card` | Crush Card destroys the opponent's monsters with this ATK or more | 1500 | 0-32767 |
+| `spellbinding_circle` | what Spellbinding Circle takes off each of the opponent's monsters' ATK and DEF (and shows) | 500 | 0-9999 |
+| `shadow_spell` | the same for Shadow Spell | 1000 | 0-9999 |
+| `rank_score` `start` | the rank score both sides start the sum at: 50 and up ends POW, below it TEC, ten points a letter | 50 | 0-99 |
+| `rank_score` `exodia` | what a win by Exodia adds to it | 40 | -99-99 |
+| `rank_score` `deck_out` | what a win by the opponent's empty deck adds | -40 | -99-99 |
+| `starchip_prize` `S` to `D` | the starchips a win against the CPU gives at that rank, POW or TEC; the results show a starchip each | 5, 4, 3, 2, 1 | 0-8 |
+| `new_game_starchips` | the starchips a new game's save starts with (at most the `starchips` cap) | 0 | 0-99999999 |
+
+**What holds them back.** Build Deck counts a card's copies up to the forty
+a deck holds. The field's card bar shows the Swords' turns as one digit.
+Spellbinding Circle and Shadow Spell show their number in the effect's four
+digits; the monsters' lowered stats add up in 32 bits and stop at the
+16-bit record's -32768 rather than wrap. The results' prize is a row of
+starchip pictures, eight at most (the ninth would run off the screen and
+over the rank's own sum in `DuelResultDisplayState`). A value past its
+range is noted in the Mods window and held at the most the game shows; a
+rank value past its range means nothing and is left out with a note.
+
+The rank's end tags stay the disc's (40 for Exodia and -40 for an empty
+deck in `DuelSideState.rank.result_adjustment`): the duel's end and the
+results' message tell the ends apart by them, so `rank_score` changes only
+what Duel_CalcRankScore (and View > Duel rank) adds for each. The drop pool
+still follows the letter, as the disc's does.
+
+**Code mods** read the values in force with the mod API's `limit` (API 8):
+`host->limit(host, "attack")`, `host->limit(host, "deck_copies")`,
+`host->limit(host, "rank_score.start")`, `host->limit(host, "starchip_prize.S")`.
 
 ## Passwords and prices on the Password screen
 
@@ -594,7 +666,7 @@ each table ask it first:
 | `Duel_CheckFusion` (`duel_card_checks.c`) | fusion table, `0x8017C2D8` | `Tables_Fusion`, then `Tables_FilterFusion` over the disc's answer |
 | `Duel_CheckEquip` (`duel_card_checks.c`) | equip table, `0x8017A1D8` | `Tables_Equip` |
 | `DuelScene_UpdateCardPlacement` (`duel_scene_card_placement.c`) | +500, +1000 for Megamorph | `Tables_EquipBonus` |
-| `Duel_CheckRitual` (`duel_check_ritual.c`) | ritual table, `0x801799D8` | `Tables_RitualRequirements` for conditions, else `Tables_Ritual`, whose recipe is laid out like the disc's |
+| `Duel_CheckRitual` (`duel_check_ritual.c`) | ritual table, `0x801799D8` | `Tables_RitualRule` for one to five tributes or the hand, then `Tables_RitualRequirements` for conditions, else `Tables_Ritual`, whose recipe is laid out like the disc's |
 | `Duel_ShuffleDeck` (`duel_shuffle_deck.c`) | deck pool, `0x801781D8` | `Tables_FixedDeck`, then `Tables_Pool(TABLES_POOL_DECK)` |
 | `Duel_SelectCardDrop` (`duel_result_runtime.c`) | drop pools, `0x8017878C` | `Tables_Pool(TABLES_POOL_POW + pool)` |
 | `Duel_GetTerrainBoost` (`duel_card_record_lifecycle.c`) | terrain table, `0x800909D4` | `Tables_TerrainBonus` |
@@ -610,6 +682,13 @@ each table ask it first:
 | `Main_RunTwoPlayerDuelSetup`, the setup screen (`overlays/main_menu/value_setup.c`) | 8000, by 500 | `Tables_TwoPlayerLifePoints` |
 | `func_800218F0` (the duel's end), `Mods_AwardStarchips`, `Cheats_SetStarchips` | 999999 starchips; 9999 two-player wins | `Tables_StarchipCap` (`Mods_Limit`), `Tables_TwoPlayerRecordCap` |
 | the Free Duel screen (`overlays/free_duel/screen_runtime.c`) | 999 wins or losses | `Tables_FreeDuelRecordCap` |
+| `BuildDeck_UpdateDeckPaneInput` (`build_deck_pane_input.c`), the card list's count (`func_80031874.c`) | three copies | `Tables_Value(TABLES_VALUE_DECK_COPIES)` |
+| `DuelEffect_ApplySwords` (`duel_field_effect_steps.c`), the card bar (`duel_field_display_objects.c`) | 3 turns (a counter of 4), shown at most 3 | `Tables_Value(TABLES_VALUE_SWORDS_TURNS)` |
+| `DuelEffect_ApplyMonsterRemoval` (`duel_card_effects.c`) | Crush Card's 150 (x10) at `0x80090A4C` | `Tables_Value(TABLES_VALUE_CRUSH_CARD)` |
+| `DuelEffect_ApplyStatPenalty` (`duel_card_effects.c`) | 500 and 1000 | `Tables_Value(TABLES_VALUE_SPELLBINDING)`, `TABLES_VALUE_SHADOW_SPELL` |
+| `Duel_CalcRankScore` (`duel_result_runtime.c`), `Rank_Score` (`pc/cards/rank.c`) | 50, +40, -40 | `Tables_Value(TABLES_VALUE_RANK_START)`, `Tables_RankAdjustment` |
+| `DuelScene_UpdateResultRewards` (`func_800218F0.c`) | the rank tier + 1 starchips | `Tables_Value(TABLES_VALUE_PRIZE + tier)` |
+| `NameEntry_Main` (`overlays/password/name_entry_main.c`) | a cleared save's 0 starchips | `Tables_Value(TABLES_VALUE_NEW_GAME_STARCHIPS)` |
 | `Duel_AwardCard`, `BuildDeck_ReturnCardToChest`, the trade screen | 250 copies | `Tables_ChestRoom` |
 | `Duel_DrawLifePointsAndDeckCounts`, `func_80016784`, `func_80028B08`, `func_80038148` | four digits | the layouts above (`pc/text/number_width.h` for the text) |
 
@@ -622,4 +701,6 @@ mods the random sequence, and every recorded run, is unchanged. The console
 build has none of this (`#ifdef MEMORIES_PC`).
 
 `tests/pc/tables_test.c` (ctest `pc_tables`) covers the rules, their order
-between mods, the weights, the limits and the refusals.
+between mods, the weights, the limits, the values and the refusals;
+`tests/pc/editor_values_runtime.py` makes a mod of every value through the
+FM Editor and plays it in the game.
