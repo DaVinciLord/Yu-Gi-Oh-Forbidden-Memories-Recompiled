@@ -83,16 +83,16 @@ class App(Editing, tk.Tk):
         self.equips = EquipsTab(self.notebook, self)
         self.rituals = RitualsTab(self.notebook, self)
         self.duelists = DuelistsTab(self.notebook, self)
+        self.ui = UiTab(self.notebook, self)
         self.starter = StarterTab(self.notebook, self)
         self.map = MapTab(self.notebook, self)
         self.values = ValuesTab(self.notebook, self)
         self.stars = GuardianStarsTab(self.notebook, self)
         self.packs = PacksTab(self.notebook, self)
-        self.ui = UiTab(self.notebook, self)
         self.info = ModInfoTab(self.notebook, self)
         self.conflicts = ConflictsTab(self.notebook, self)
-        self.tabs = [self.cards, self.art, self.fusions, self.equips, self.rituals, self.duelists, self.starter,
-                     self.map, self.values, self.stars, self.packs, self.ui, self.info, self.conflicts]
+        self.tabs = [self.cards, self.art, self.fusions, self.equips, self.rituals, self.duelists, self.ui,
+                     self.starter, self.map, self.values, self.stars, self.packs, self.info, self.conflicts]
         self.status = ttk.Label(self, relief="sunken", anchor="w", padding=(6, 2))
         self.status.pack(fill="x", side="bottom", before=self.notebook)
         self.install_editing()
