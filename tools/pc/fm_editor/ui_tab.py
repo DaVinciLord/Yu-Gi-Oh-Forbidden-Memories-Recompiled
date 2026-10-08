@@ -364,15 +364,16 @@ class UiTab(Tab):
         top = ttk.Frame(self)
         top.pack(fill="x")
         self.page_name = tk.StringVar(value="title")
-        for value, text in (("title", "Title screen"), ("menu", "Menus"), ("duel", "Duel")):
+        for value, text in (("title", "Title screen"), ("menu", "Menus"), ("duel", "Duel"), ("board", "Duel board")):
             ttk.Radiobutton(top, text=text, value=value, variable=self.page_name, style="Toolbutton",
                             command=self.show_page).pack(side="left", padx=(0, 2))
         self.hint = ttk.Label(top, style="Hint.TLabel")
         self.hint.pack(side="left", padx=(12, 0))
         self.body = ttk.Frame(self)
         self.body.pack(fill="both", expand=True, pady=(6, 0))
+        from .ui_board import BoardPage
         self.pages = {"title": TitlePage(self.body, self), "menu": MenuPage(self.body, self),
-                      "duel": DuelPage(self.body, self)}
+                      "duel": DuelPage(self.body, self), "board": BoardPage(self.body, self)}
         self.assets = {}
         self.show_page()
 
@@ -400,7 +401,8 @@ class UiTab(Tab):
                 page.pack_forget()
         self.hint.configure(text={"title": "Drag a picture to move it. Click the background for its colours.",
                                   "menu": "Drag a button to place it; the list sets the order.",
-                                  "duel": "Drag to move, wheel to size. Each half of the life points is its own."}[name])
+                                  "duel": "Drag to move, wheel to size. Each half of the life points is its own.",
+                                  "board": "Click a part of the board or the list to choose it."}[name])
         if self.project is not None:
             self.pages[name].fill()
 

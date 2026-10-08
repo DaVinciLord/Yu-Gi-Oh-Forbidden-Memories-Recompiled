@@ -14,7 +14,7 @@ from pathlib import Path
 from .gamedata import (CARD_COUNT, DECK_COPY_LIMIT, DECK_POOL_MIN_CARDS, DECK_SIZE, DUELIST_NAMES, POOLS,
                        POOL_LABELS, POOL_TOTAL, RITUAL_ORIGINS, RITUAL_TRIBUTE_MAX, TYPE_MAGIC, TYPE_EQUIP, TYPE_NAMES,
                        TYPE_RITUAL, exodia_piece)
-from . import art, campaign_map, card_text, fixed_decks, guardian_stars, packs as packmath, values
+from . import art, board_art, campaign_map, card_text, fixed_decks, guardian_stars, packs as packmath, values
 from . import monster_effects, roster, starter_pools, ui_rules
 from .model import KEY_RE, Project, duelist_named
 
@@ -434,6 +434,7 @@ def validate(project: Project) -> list:
     roster.check(project, out)
     art.check(project, out)
     campaign_map.check(project, out)
+    board_art.check(project, out)
     starter_pools.check(project, out)
 
     def has_file(name):
