@@ -468,8 +468,10 @@ lost first, and **Edit > Undo** brings it back in one step. A thing's own
 darken; a bright one says so. Settings the game does not quite follow are
 noted in the form, only while they are set (a life-point label with a
 letter outside plain A-Z, digits and signs shows COM or YOU instead, and is
-not drawn over a picture of yours; an "x" or a size a hand-written mod gave
-that the game leaves out).
+not drawn over a picture of yours; a life-point half or the FIELD box moved
+down over the field, where the cards are drawn over or under it in the
+game's order; an "x" or a size a hand-written mod gave that the game leaves
+out).
 
 * **Title screen**: the **Background** (click the picture where nothing
   else is, or its row): the game's wall or not, its colour, the dark-to-light shade, a

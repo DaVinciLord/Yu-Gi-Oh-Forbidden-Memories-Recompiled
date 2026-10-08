@@ -29,6 +29,9 @@ NAMES = {"lp_opponent": "Opponent's LP", "lp_player": "Your LP", "field": "FIELD
 MOVES = ui_rules.MOVES
 SIZED = set(ui_rules.SIZED)
 LABELLED = {"lp_opponent", "lp_player"}
+# Below this the field's view has its first row of cards (the game's own LP
+# panel and FIELD box end above it, at 56 and 48).
+FIELD_TOP = 60
 SCALE_MIN, SCALE_MAX = ui_rules.SCALE_MIN, ui_rules.SCALE_MAX
 # The hand shown: the five cards the first duel deals (deck 1-40, as the runtime
 # tests play), the cursor on the first.
@@ -77,6 +80,11 @@ def rough_edges(name: str, element: dict) -> list:
             as_int(element.get("scale"), 100) > scale_of(name, element):
         out.append(f"Larger than {scale_of(name, element)}% would not leave the screen with the game's: "
                    f"drawn at {scale_of(name, element)}%.")
+    if MOVES[name] == "y":
+        x, y, w, h = ua.DUEL_RECTS[name]
+        bottom = place(ua.DUEL_RECTS[name], element, name)(x, y + h)[1]
+        if bottom > FIELD_TOP:
+            out.append("Down over the field: the cards there are drawn over or under it, in the game's order.")
     label = element.get("label")
     if name in LABELLED and isinstance(label, str) and label:
         if any(not " " <= c <= "~" for c in label):

@@ -407,7 +407,8 @@ class UiTabTest(GuiCase):
         from fm_editor.ui_duel import rough_edges
         from fm_editor.ui_tab import brightens
         self.assertEqual(rough_edges("lp_player", {}), [])
-        self.assertEqual(rough_edges("lp_player", {"y": 40, "scale": 161}), [])     # slides with the game's
+        self.assertEqual(rough_edges("lp_player", {"y": -10, "scale": 161}), [])    # slides with the game's
+        self.assertEqual(len(rough_edges("field", {"y": 40})), 1)                    # over the field's cards
         self.assertEqual(len(rough_edges("lp_player", {"x": 4})), 1)                # a hand-written x
         self.assertEqual(len(rough_edges("field", {"scale": 200})), 1)               # drawn at 130 %
         self.assertEqual(rough_edges("hand_cursor", {"x": 4, "scale": 400}), [])
