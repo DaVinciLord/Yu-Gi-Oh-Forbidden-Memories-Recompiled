@@ -21,6 +21,8 @@
  * (win->field_30's own position, or a per-star cursor), never an
  * independent origin. */
 
+#include <stddef.h>
+
 typedef enum {
     CARD_LAYOUT_FRAME,
     CARD_LAYOUT_TITLE,
@@ -55,8 +57,47 @@ int CardLayout_FullBleed(void);
  * already joined with its directory and validated the way a "title" mod's
  * image is -- card_layout_art.c just opens it), or "" when no mod applies
  * one. Decode failure there is not an error here: the caller (func_80028B08.c,
- * through CardLayoutArt_FrameCell) simply does not draw a frame. */
+ * through CardLayoutArt_FrameTile) simply does not draw a frame. */
 const char *CardLayout_FramePath(void);
+
+/* Every distinct frame image the active full-bleed layout can draw (one per
+ * card kind, kinds sharing an image counted once), joined with the mod's
+ * directory, into `paths`; 0 when no mod's layout is on. For
+ * CardLayoutArt_Prewarm. */
+int CardLayout_FramePaths(char (*paths)[1024], int max);
+
+/* The full-bleed layout's own ATK/DFD digits ("digits": {"image", "width",
+ * "height", "step"}): `path` is the image (joined with the mod's directory,
+ * card_layout_art.h's digit strip), `w`x`h` one digit's draw size in the
+ * card's own units, `step` the distance between two digits' left edges.
+ * 0, with `path` empty, when the layout gives none (or full-bleed is off):
+ * the retail digits are drawn then. */
+int CardLayout_Digits(char *path, size_t size, int *w, int *h, int *step);
+
+/* A card's frame style: what the layout draws for it, picked once for the
+ * card view's big frame and the hand's small one alike, so they cannot
+ * disagree. `colour` is the style's "hand_colour" (cards.h CARD_FRAME_*, the
+ * palette row of every small frame); `spell_layout` is whether the card is
+ * laid out as a spell (no ATK/DFD/level; its "spell" art and icon), which
+ * follows the card's class, never its style. `image` is the picture's path,
+ * filled only for the current card (CardLayout_SetCard). */
+typedef struct {
+    int colour;
+    int spell_layout;
+    int width, height;
+    char name[32];
+    char image[1024];
+} CardLayoutStyle;
+
+/* The style the layout gives `card_id`, into `style` (its `image` empty); 1,
+ * or 0 when the anime frame is off or the layout has none to give (retail's
+ * frame colours then). A layout says it in "frame_styles" (name -> {"image",
+ * "hand_colour", "width", "height"}), "frame_for" (rules, first that applies
+ * wins: {"class" | "tag", "setting", "style"}) and "default_style"; a
+ * card's own "frame" colour takes the style named for it first. A layout
+ * with a "frame" per kind and no "frame_styles" is read as before: the kind
+ * of the card, and a ritual spell with no picture of its own wears magic's. */
+int CardLayout_StyleOf(int card_id, CardLayoutStyle *style);
 
 /* Which card the next CardLayout_Get/CardLayout_FramePath/CardLayout_IsSpell
  * answer for: its frame (monster/magic/trap/ritual/purple/orange, cards.h

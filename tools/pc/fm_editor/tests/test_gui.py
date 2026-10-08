@@ -2277,6 +2277,73 @@ class GuiTest(GuiCase):
         self.assertEqual(str(self.app.edit_state.cget("style")),
                          "Changed.TLabel" if self.app.dirty else "TLabel")
 
+    def test_card_tags_field(self):
+        from fm_editor import manifest, tabs
+        app, cards, p = self.app, self.app.cards, self.app.project
+        # The frames by their colour too.
+        cards.goto(1)
+        self.assertEqual(cards.vars["frame"].get(), "By type")
+        cards.vars["frame"].set("Monster (gold)")
+        cards.vars["tags"].set(" god ,dragon, god")
+        app.update()
+        self.assertEqual(cards.hints["tags"].cget("text"), "Retail: none (restore)")
+        self.assertEqual(str(cards.captions["tags"].cget("style")), "Changed.TLabel")
+        self.assertTrue(cards.apply())
+        self.assertEqual(cards.vars["tags"].get(), "god, dragon")
+        self.assertEqual(p.tags_of(1), (["god", "dragon"], False))
+        self.assertIn({"replace": 1, "frame": "Monster", "tags": ["god", "dragon"]}, manifest.build(p)["cards"])
+        self.assertNotIn("tags", cards.extra.cget("text"))     # a field of its own, not kept as written
+        self.assertEqual(tabs.frame_value("Ritual (blue)"), 3)
+        self.assertEqual(tabs.frame_value("Ritual"), 3)          # as earlier editors showed it
+        # The search finds them.
+        cards.search.set("drag")
+        app.update()
+        self.assertTrue(cards.tree.exists("1"))
+        cards.search.set("")
+        # An added card: blank is its base's, said beside it; [] is none.
+        cards.add_card()
+        added = cards.current
+        app.update()
+        self.assertEqual(cards.vars["tags"].get(), "")
+        self.assertEqual(cards.hints["tags"].cget("text"), "Base's: god, dragon")
+        self.assertEqual(p.tags_of(added), (["god", "dragon"], True))
+        cards.vars["tags"].set("[]")
+        app.update()
+        self.assertEqual(cards.hints["tags"].cget("text"), "Base: god, dragon (restore)")
+        self.assertTrue(cards.apply())
+        self.assertEqual(p.tags_of(added), ([], False))
+        self.assertEqual(manifest.build(p)["cards"][-1]["tags"], [])
+        # The link blanks the field: the base's again.
+        cards.restore("tags")
+        self.assertEqual(cards.vars["tags"].get(), "")
+        self.assertTrue(cards.apply())
+        self.assertEqual(p.tags_of(added), (["god", "dragon"], True))
+        self.assertNotIn("tags", manifest.build(p)["cards"][-1])
+        # Undo puts the form back; Revert to retail takes them away.
+        self.pause()
+        cards.goto(1)
+        cards.vars["tags"].set("fiend")
+        self.assertTrue(cards.apply())
+        self.pause()
+        app.undo()
+        app.update()
+        self.assertEqual(app.project.tags_of(1), (["god", "dragon"], False))
+        cards.goto(1)
+        self.assertEqual(cards.vars["tags"].get(), "god, dragon")
+        with mock.patch("fm_editor.tabs.messagebox.askyesno", return_value=True):
+            cards.revert()
+        self.assertEqual(app.project.tags_of(1), ([], False))
+        self.assertEqual(cards.vars["tags"].get(), "")
+        # Left untouched, what a mod wrote stays as written; validate says what the game leaves out.
+        app.project.card_extra[2] = {"tags": ["", "x" * 32]}
+        cards.goto(2)
+        self.assertTrue(cards.apply())
+        self.assertEqual(app.project.card_extra[2]["tags"], ["", "x" * 32])
+        cards.vars["attack"].set("1230")
+        self.assertTrue(cards.apply())
+        self.assertIn("empty tag", cards.status.cget("text"))
+        self.assertIn("over 31 letters", cards.status.cget("text"))
+
     def test_card_links_between_tabs(self):
         from fm_editor import card_links
         app, p = self.app, self.app.project

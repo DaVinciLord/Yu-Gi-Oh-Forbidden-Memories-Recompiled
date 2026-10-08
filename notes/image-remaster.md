@@ -237,6 +237,38 @@ the card assets were mapped from a set of redrawn HD images. Two tools:
   draws them, over a `hd_screen_pack.py` pack (`--base`), and merges other
   packs (`--merge`) into one mod.
 
+### Building the Forbidden Memories HD mod
+
+The same command as for any rebuild (run from the repository root; the paths
+in angle brackets are the maintainer's own):
+
+```
+python tools/pc/hd_assets_pack.py \
+    --assets <folder of redrawn assets> \
+    --out <mods>/forbidden-memories-hd \
+    --data game/DATA \
+    --base <hd_screen_pack.py's Build Deck pack> \
+    --base <hd_screen_pack.py's duel pack> \
+    --merge <portraits pack> \
+    --thumb-crops tools/pc/hd_recipes/thumb_crops.json
+```
+
+- The anime frame needs no flag. Its frames (`anime_frame_<kind>.png`) and its
+  ATK/DFD digits (`anime_digits.png`, one 200x192 picture) are in
+  `tools/pc/hd_recipes/` and are copied in. No font is needed to build.
+- `--digit-font <file.ttf>` draws a new digit picture from a font instead
+  (the card game's ATK/DFD font, Yu-Gi-Oh! Matrix Regular Small Caps), with
+  `--digit-stretch <n>` (default 1.25) for how wide; the font is read, never
+  shipped. `--digit-font none` leaves the digits retail's.
+- To look at a font's digits alone: `python tools/pc/card_digits.py <font.ttf>
+  <out.png>`; commit the result as `tools/pc/hd_recipes/anime_digits.png` to
+  change the default.
+- To try the frame kinds and digits on a mod that is already built, without the
+  art folder: `python tools/pc/anime_frame_patch.py <mod folder>` edits its
+  `mod.json` (a `.bak` is kept) and adds `textures/anime_digits.png`.
+- Then zip the mod folder and upload it as before. A player needs the new
+  engine and the new zip, and turns on **Anime card frame** in the Mods window.
+
 What was found on the way:
 
 1. **Build Deck's package was never extracted.** `extract_images.py` listed

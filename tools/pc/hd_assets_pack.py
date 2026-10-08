@@ -53,8 +53,15 @@ is a part of its own, named as that mod is).
 the full-bleed "card_layout" presentation (notes/modding.md, "Card layout"),
 folded in as the mod's own "full_bleed" setting. Each defaults to
 tools/pc/hd_recipes/anime_frame_<kind>.png if present, else
-<assets>/anime_frame_<kind>.png, else nothing for that kind. ritual then
-falls back to magic's file and orange to monster's, whichever that resolved to.
+<assets>/anime_frame_<kind>.png, else nothing for that kind.
+
+Each PNG is a frame STYLE (gold, green, pink, blue, orange) and the mod's
+card_layout "frame_for" rules say which cards wear which (anime_frame_layout.py;
+notes/modding.md): ritual spells are green, as in the anime, effect monsters
+orange. A ritual PNG does not replace that: it becomes the player's sub-option
+"Ritual spells: own frame" (off). "none" as a flag's value gives a kind no PNG
+even where tools/pc/hd_recipes has one (--anime-frame-orange none: effect
+monsters wear the monster frame).
 
 Usage: hd_assets_pack.py --assets <folder> --out <mod folder> [--data game/DATA]
                          [--base <pack> ...] [--merge <pack> ...] [--thumb-crops crops.json]
@@ -63,7 +70,19 @@ Usage: hd_assets_pack.py --assets <folder> --out <mod folder> [--data game/DATA]
                          [--anime-frame-trap tools/pc/hd_recipes/anime_frame_trap.png]
                          [--anime-frame-ritual tools/pc/hd_recipes/anime_frame_ritual.png]
                          [--anime-frame-orange tools/pc/hd_recipes/anime_frame_orange.png]
+                         [--digit-font <.ttf> | none] [--digit-stretch 1.25]
                          [--id forbidden-memories-hd] [--name "Forbidden Memories HD"]
+
+The anime frame's ATK/DFD digits are one picture, textures/anime_digits.png (a
+200x192 strip), and the card_layout "digits" key that points at it
+(notes/modding.md). It is tools/pc/hd_recipes/anime_digits.png (else
+<assets>/anime_digits.png) copied in, as the frames are: drawn once, committed,
+no font needed to build. --digit-font draws a new one from a .ttf
+(tools/pc/card_digits.py), the font read here and never shipped; --digit-font
+none leaves the digits retail. --digit-stretch is how much wider than the font's own
+shape they are drawn (default 1.25, the look chosen for Matrix Regular Small
+Caps). The digits are centred on the stat boxes measured from the monster
+frame's corner studs (card_frame_window.stat_box_centres).
 """
 import argparse
 import json
@@ -76,6 +95,9 @@ from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import extract_images as X  # noqa: E402
+import card_frame_window as W  # noqa: E402
+import card_digits  # noqa: E402
+import anime_frame_layout  # noqa: E402
 
 S = 4
 SECTOR = 2048
@@ -96,21 +118,22 @@ PARTS = {
 }
 # --anime-frame-<kind>'s "card_layout" positions, measured against
 # anime_frame_monster.png/anime_frame_magic.png (notes/modding.md, "Card
-# layout"). No "attribute"/"icon" width/height: those frames cut no hole
+# layout"). Not "art": that rect is derived from each frame's own window
+# (card_frame_window.py: measured as the game draws it, covered whole-pixel,
+# verified) so it cannot drift from the PNG.
+# No "attribute"/"icon" width/height: those frames cut no hole
 # for them, so they draw at native size, moved off retail's default (the
 # title plate, covered by full-bleed's bigger art) into the stat band.
 # "stars"."x" is the row's centre, not a first-star anchor: a card can
 # carry up to 12 stars, and func_80028B08.c centres them around this point
 # so a wide row never runs past the frame's edge.
 ANIME_FRAME_MONSTER_LAYOUT = {
-    "art": {"x": 4, "y": 3, "width": 134, "height": 138},
     "attribute": {"x": 114, "y": 149},
-    "atk": {"x": 38, "y": 178},
-    "def": {"x": 104, "y": 178},
+    "atk": {"x": 38, "y": 179},   # the stat boxes' centres, measured from the frame (card_frame_window.stat_box_centres)
+    "def": {"x": 102, "y": 179},
     "stars": {"x": 59, "y": 153},
 }
 ANIME_FRAME_SPELL_LAYOUT = {
-    "art": {"x": 4, "y": 3, "width": 133, "height": 138},
     "icon": {"x": 62, "y": 163},
 }
 FRAMES = {8: "frame_monster.png", 9: "frame_magic.png", 10: "frame_trap.png", 11: "frame_ritual.png"}
@@ -513,7 +536,7 @@ def build(args):
 def anime_frame_default(kind, explicit, assets):
     """explicit, else tools/pc/hd_recipes/, else <assets>/, else None."""
     if explicit:
-        return explicit
+        return None if explicit.lower() == "none" else explicit
     for folder in (os.path.join(os.path.dirname(os.path.abspath(__file__)), "hd_recipes"), assets):
         candidate = os.path.join(folder, f"anime_frame_{kind}.png")
         if os.path.isfile(candidate):
@@ -535,6 +558,10 @@ def main():
     parser.add_argument("--anime-frame-trap", help="the same, for trap cards")
     parser.add_argument("--anime-frame-ritual", help="the same, for ritual cards")
     parser.add_argument("--anime-frame-orange", help="the same, for an effect monster")
+    parser.add_argument("--digit-font", help="a .ttf (Yu-Gi-Oh. Matrix Regular Small Caps) the anime frame's "
+                        "ATK/DFD digits are drawn from; read, never committed. Without it the retail digits stay")
+    parser.add_argument("--digit-stretch", type=float, default=card_digits.STRETCH,
+                        help="how much wider than the font's own shape the digits are drawn (default %(default)s)")
     parser.add_argument("--id", default="forbidden-memories-hd")
     parser.add_argument("--name", default="Forbidden Memories HD")
     parser.add_argument("--author", default="Unchiga, X@nder")
@@ -557,10 +584,11 @@ def main():
         "magic": anime_frame_default("magic", args.anime_frame_magic, args.assets),
         "trap": anime_frame_default("trap", args.anime_frame_trap, args.assets),
     }
-    anime_frame_sources["ritual"] = anime_frame_default(
-        "ritual", args.anime_frame_ritual, args.assets) or anime_frame_sources["magic"]
-    anime_frame_sources["orange"] = anime_frame_default(
-        "orange", args.anime_frame_orange, args.assets) or anime_frame_sources["monster"]
+    # No ritual PNG, no "ritual" frame: a copy of magic's file under another name
+    # would read as a ritual frame of its own (card_layout.c), and the hand's
+    # small ritual frame would stay blue beside a green big one.
+    anime_frame_sources["ritual"] = anime_frame_default("ritual", args.anime_frame_ritual, args.assets)
+    anime_frame_sources["orange"] = anime_frame_default("orange", args.anime_frame_orange, args.assets)
     if any(anime_frame_sources.values()):
         frame = {}
         for kind, source in anime_frame_sources.items():
@@ -568,8 +596,51 @@ def main():
                 continue
             filename = f"anime_frame_{kind}.png"
             shutil.copyfile(source, os.path.join(args.out, "textures", filename))
-            frame[kind] = {"image": f"textures/{filename}", "width": 140, "height": 196}
-        manifest["card_layout"] = dict(frame=frame, spell=ANIME_FRAME_SPELL_LAYOUT, **ANIME_FRAME_MONSTER_LAYOUT)
+            frame[kind] = {"image": f"textures/{filename}", "width": 140, "height": 197}
+        windows = {kind: W.measure_window(os.path.join(args.out, "textures", f"anime_frame_{kind}.png"))
+                   for kind in frame}
+        monster_kinds = [kind for kind in windows if kind in ("monster", "orange")]
+        spell_kinds = [kind for kind in windows if kind in ("magic", "trap", "ritual")]
+        art = W.art_rect([windows[kind] for kind in monster_kinds]) if monster_kinds else None
+        spell_art = W.art_rect([windows[kind] for kind in spell_kinds]) if spell_kinds else None
+        problems = []
+        for kinds, rect in ((monster_kinds, art), (spell_kinds, spell_art)):
+            for kind in kinds:
+                print(W.describe(kind, rect, windows[kind]))
+                problems += W.check(kind, rect, windows[kind])
+        if problems:
+            sys.exit("anime frame art placement failed:\n  " + "\n  ".join(problems))
+        spell = dict(ANIME_FRAME_SPELL_LAYOUT)
+        monster = dict(ANIME_FRAME_MONSTER_LAYOUT)
+        if spell_art:
+            spell["art"] = spell_art
+        if art:
+            monster["art"] = art
+        if "monster" in frame:   # the numbers are centred on the boxes the frame draws, not where retail's were
+            centres = W.stat_box_centres(os.path.join(args.out, "textures", "anime_frame_monster.png"))
+            if centres:
+                monster.update(centres)
+        # Styles and the rules that pick them (anime_frame_layout.py): a ritual spell is green, as in
+        # the anime, unless a ritual PNG was given, which becomes a sub-option; effect monsters orange
+        # when there is an orange PNG, else gold. The card view and the hand follow the same style.
+        styles, extra_settings = anime_frame_layout.build(frame)
+        manifest["card_layout"] = dict(spell=spell, **styles, **monster)
+        manifest["settings"] += extra_settings
+        digits = os.path.join(args.out, "textures", "anime_digits.png")
+        ready = next((c for c in (os.path.join(os.path.dirname(os.path.abspath(__file__)), "hd_recipes", "anime_digits.png"),
+                                  os.path.join(args.assets, "anime_digits.png")) if os.path.isfile(c)), None)
+        if args.digit_font and args.digit_font.lower() != "none":
+            card_digits.render(args.digit_font, digits, args.digit_stretch,
+                               card_digits.paper_of(os.path.join(args.out, "textures", "anime_frame_monster.png"))
+                               if "monster" in frame else None)
+        elif ready and not args.digit_font:
+            shutil.copyfile(ready, digits)   # the strip drawn once and committed: no font needed
+        else:
+            digits = None
+        if digits:
+            # One digit's draw size and step, in the card's own units (10 x 12 is the strip's cell shape).
+            manifest["card_layout"]["digits"] = {"image": "textures/anime_digits.png", "width": 10,
+                                                 "height": 12, "step": 10}
         manifest["settings"].append({
             "key": "full_bleed", "label": "Anime card frame", "type": "bool", "default": 0,
             "description": "An anime-style card frame representation, by d02d02 and Hræzlyr."})
