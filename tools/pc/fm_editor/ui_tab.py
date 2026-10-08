@@ -16,7 +16,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, ttk
 
-from . import pngio, theme, ui_assets
+from . import board_art, pngio, theme, ui_assets
 from .tabs import Tab
 from .widgets import px, ui_font
 
@@ -648,7 +648,9 @@ class UiTab(Tab):
               "Click the background for its colours."),
              ("menu", "Menus", ("ui_title", "MenuPage"), "Drag a button to place it; the list sets the order."),
              ("duel", "Duel", ("ui_duel", "DuelPage"), "Drag to move, wheel to size, arrows nudge. "
-              "Each half of the life points is its own.")]
+              "Each half of the life points is its own."),
+             ("board", "Duel board", ("ui_board", "BoardPage"), "Click a part of the board or the list; Replace "
+              "puts your PNG in its place.")]
 
     def __init__(self, notebook, app):
         super().__init__(notebook, app, "UI")
@@ -716,7 +718,8 @@ class UiTab(Tab):
 
     def rescaled(self):
         for page in self.pages.values():
-            page.view.fit_later()
+            if hasattr(page, "view"):        # the board's sketch fits itself
+                page.view.fit_later()
 
     def changed(self, key: str):
         """After an edit of project.other[key]: empty objects out, the window told."""
@@ -728,10 +731,13 @@ class UiTab(Tab):
         """The revert buttons usable only when there is something to put back."""
         if self.project is None:
             return
-        self.revert_button.state(["!disabled"] if owned(self.project, [(k, None) for k in KEYS]) else ["disabled"])
+        anything = owned(self.project, [(k, None) for k in KEYS]) or board_art.changed(self.project)
+        self.revert_button.state(["!disabled"] if anything else ["disabled"])
         for key, page in self.pages.items():
             if key in PAGE_KEYS:
                 page.revert_page.state(["!disabled"] if owned(self.project, PAGE_KEYS[key]) else ["disabled"])
+            elif key == "board":
+                page.revert_page.state(["!disabled"] if board_art.changed(self.project) else ["disabled"])
 
     # --- before and after -------------------------------------------------------------
 
@@ -767,17 +773,23 @@ class UiTab(Tab):
 
     def revert_all(self):
         self.revert([(k, None) for k in KEYS], "Revert to retail",
-                    "Put the title screen, its menus and the duel's pictures back as the game has them?")
+                    "Put the title screen, its menus, the duel's pictures and the duel board back as the game "
+                    "has them?", board=True)
 
     def revert_page(self, page):
         key = next(k for k, p in self.pages.items() if p is page)
         text = next(t for k, t, _, _ in self.PAGES if k == key)
         self.revert(PAGE_KEYS[key], "Revert page", f"Put the {text.lower()} page back as the game has it?")
 
-    def revert(self, keys, title, question):
-        if self.project is None or not owned(self.project, keys):
+    def revert(self, keys, title, question, board=False):
+        """keys back as the game has them, and, with board, every field's
+        board textures (board_art: the texture pack and the palette patches)."""
+        board = board and board_art.changed(self.project) if self.project is not None else False
+        if self.project is None or not (owned(self.project, keys) or board):
             return
         lost = describe(self.project, keys)
+        if board:
+            lost.append("the duel board's textures")
         files = orphans(self.project, stripped(self.project.other, keys))
         text = question + "\n\nLost: " + "; ".join(lost or ["the tab's settings"])
         if files:
@@ -787,6 +799,8 @@ class UiTab(Tab):
             return
         self.app.flush_history()         # what was before: an undo step of its own
         revert(self.project, keys)
+        if board:
+            board_art.revert_all(self.project)
         for page in self.pages.values():
             page.reset_choice()
         self.app.changed()

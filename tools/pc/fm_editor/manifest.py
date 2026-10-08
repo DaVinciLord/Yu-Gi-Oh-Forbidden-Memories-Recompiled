@@ -25,7 +25,7 @@ from pathlib import Path
 from .gamedata import (FUSION_GROUPS, RITUAL_ORIGINS, RITUAL_REQUIREMENT_KEYS, RITUAL_TRIBUTE_MAX, fusion_group_named, ATTRIBUTE_NAMES, CARD_COUNT, DECK_SIZE, DUELIST_NAMES, FRAME_NAMES, POOLS, STAR_NAMES,
                        EQUIP_BONUS_MAX, STARTER_WEIGHT_LIMIT, TYPE_NAMES, TYPE_MAGIC, GameData)
 from .model import AddedCard, ModInfo, Project, StarterDeck, duelist_named, type_named, KEY_RE
-from . import art, campaign_map, fixed_decks, guardian_stars, packs as packmath, pools as poolmath, roster
+from . import art, board_art, campaign_map, fixed_decks, guardian_stars, packs as packmath, pools as poolmath, roster
 
 INFO_KEYS = ("id", "name", "version", "author", "description")
 TABLE_KEYS = ("settings", "cards", "fusions", "equips", "rituals", "drops", "decks", "starter", "packs", "pack_shop",
@@ -484,6 +484,7 @@ def build(project: Project) -> dict:
     if starter:
         manifest["starter"] = starter
     campaign_map.build_into(project, manifest)
+    board_art.build_into(project, manifest)
     packs = build_packs(project)
     if packs:
         manifest["packs"] = packs
@@ -1328,6 +1329,7 @@ def apply(project: Project, manifest: dict, messages: list = None, default_id: s
     read_packs(project, manifest, messages)
     read_passwords(project, messages)
     campaign_map.read_mod(project, messages)
+    board_art.read_patches(project, messages)
     return messages
 
 

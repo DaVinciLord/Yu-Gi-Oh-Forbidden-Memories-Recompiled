@@ -8,7 +8,7 @@ import pickle
 import zlib
 from pathlib import Path, PurePath
 
-from . import art, guardian_stars, map_art, pngio
+from . import art, board_art, guardian_stars, map_art, pngio
 from .model import Project, RetailNames
 
 
@@ -42,6 +42,7 @@ class Snapshot:
         maps = map_art.state(project)
         for pic in list(maps.strips.values()) + list(maps.textures.values()):
             map_art.picture(project, pic)
+        board_art.freeze(project)
         memo = {id(project.retail): project.retail, id(project.names): project.names}
         map_data = getattr(project.retail, "campaign_map", None)
         if map_data is not None:
@@ -78,6 +79,10 @@ class Snapshot:
         data["map_art"].version = 0
         for pic in list(data["map_art"].strips.values()) + list(data["map_art"].textures.values()):
             pic.pending = False
+        if "board_art" in data:
+            data["board_art"].version = 0
+            for pic in data["board_art"].pictures.values():
+                pic.pending = False
         comparison = io.BytesIO()
         encoder = pickle.Pickler(comparison, protocol=5)
         encoder.fast = True  # compare values, not incidental shared-object identities
@@ -98,12 +103,16 @@ class Snapshot:
         st = project.art_state
         st.owned = {id(st.entries[i]): owner for i, owner in st.owned.items()}
         st.folder = source_dir
-        st.changed = bool(st.entries or st.images or project.map_art.strips or project.map_art.textures)
+        boards = board_art.state(project)
+        st.changed = bool(st.entries or st.images or project.map_art.strips or project.map_art.textures or
+                          boards.pictures)
         for rep in st.images.values():
             rep.pending = rep.image is not None
         if hasattr(project, "map_state"):
             project.map_state.retail = getattr(retail, "campaign_map", None)
         for pic in list(project.map_art.strips.values()) + list(project.map_art.textures.values()):
+            pic.pending = pic.image is not None
+        for pic in boards.pictures.values():
             pic.pending = pic.image is not None
         return project
 

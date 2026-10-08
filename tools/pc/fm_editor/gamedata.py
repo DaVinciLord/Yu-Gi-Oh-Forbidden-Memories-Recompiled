@@ -181,6 +181,7 @@ class GameData:
     starchips: dict = field(default_factory=dict)      # id -> the disc's Password shop price
     notes: list = field(default_factory=list)          # oddities found while reading
     campaign_map: object = None                        # campaign_map.MapData, None without the overworld packages
+    board: object = None                               # board_art.BoardData: the duel board's textures
 
 
 # --- reading the executable ----------------------------------------------
@@ -428,8 +429,9 @@ def read_game(slus: bytes, wa: bytes) -> GameData:
     if data.passwords:
         data.starchips = {cid: struct.unpack_from("<I", wa, PASSWORD_TABLE + 8 * cid)[0]
                           for cid in data.passwords}
-    from . import campaign_map
+    from . import board_art, campaign_map
     data.campaign_map = campaign_map.read(slus, wa)
+    data.board = board_art.read(wa)
     if data.campaign_map is not None:
         data.notes.extend(data.campaign_map.notes)
     return data

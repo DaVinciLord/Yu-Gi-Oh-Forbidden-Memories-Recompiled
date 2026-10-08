@@ -508,6 +508,43 @@ Colours are the game's: a tint multiplies, so it can only darken what is
 there. The pictures are the console's size here; the game draws a PNG of
 yours at up to four times that above the console's resolution.
 
+### The UI tab's Duel board page
+
+**Duel board** (`ui_board.py`, `board_art.py`) changes the textures of the
+duel's 3D board, field by field: **Normal**, **Forest**, **Wasteland**,
+**Mountain**, **Sogen**, **Umi**, **Yami** across the top, a dot on those the
+mod changes. On the left a sketch of the board drawn from your disc's
+textures and the mod's (flat light, a fixed camera: the game's own differ);
+click a part there or in the list to choose it. The list is the field's
+textures:
+
+* **Floor**: all five rows of zones as one picture, 256x254 texels, far to
+  near (the opponent's back row at the top, the centre strip once, your
+  back row at the bottom); and each row on its own, 256x52 (the centre
+  strip 256x46): five 51x51 tiles side by side. The game draws the centre
+  strip twice, the near half turned round.
+* **Walls and trim**: the platform's walls (the sun disc's **left** and
+  **right wing**, 128x64 each, the **middle** block between them on the
+  end walls, and the **corners**), the **top trim**, the
+  **triangles** (at the corners and the centre strip's ends) and their
+  **edges**, and the raised centre strip's **step**, **sides** and **side
+  ends**.
+
+Beside them the chosen texture as the mod has it, its size and:
+**Replace...** with a PNG of yours (any size: at the texture's shape it is
+used as it is up to 4x, the game drawing it sharp at Internal 2x and 4x and
+averaged to the texture's own texels at 1x; another shape is stretched to
+fit), **Export game's...** (the disc's texture as a PNG to paint over),
+**Revert**, and a **Tint** of the game's own picture (each colour of its
+palette multiplied: exact at every size; a replaced texture keeps its own
+colours, and the tint shows as the palette reads it back, #60FF60 perhaps as
+#60FF7F, the same colours). **All seven fields** makes Replace, Tint and
+Revert apply to that texture on every field (one PNG for them all). **Revert
+to retail** puts every field's board back. A ⚠ marks what to know about the
+texture: the centre strip drawn twice, the wings apart, the trim drawn in
+slices, and that a field card (Forest ... Yami) changes the floor only, the
+walls staying those of the field the duel began on.
+
 ## Game files
 
 The editor looks for the game where the port does: `MEMORIES_DISC`, the disc
@@ -674,6 +711,24 @@ record are shown as retail fusions and marked.
   or 8 bits, and the palette the polygons name, as the last upload to that
   place in VRAM leaves it). Opening a mod takes such entries back into the
   map; the pack's other entries are kept as written.
+* The duel board (the UI tab's **Duel board**, `board_art.py`): texture pack
+  entries in the same `textures/manifest.json`, PNGs under
+  `textures/board/<field>/` (or `board/all/` for one picture on every
+  field). Each field's board is the last phase of its package, 32 sectors
+  from WA sector `0x16C6 + 235 * field + 203`, two 64-word columns at 4 bits
+  (VRAM 640,256). A texture is one entry per field: its rectangle (`offset`
+  the rectangle's first word, `words` and `rows` its size, `stride` 64)
+  read through its own palette (`clut_offset`: the floor rows' at
+  `+0x7F00 + 0x20 * row` of the phase, the walls' from `+0xF120`), so no
+  two entries share a word and each shows at Internal 1x too. A tint is a
+  `data` patch of that palette in `\DATA\WA_MRG.MRG;1`, after the map's:
+  each colour times the tint, the clear colour kept, one that becomes black
+  written as the opaque black the packs use (`0x8000` with the
+  semi-transparency bit, `0x0001` without). Opening a mod takes these
+  entries and patches back into the board; a patch of a palette that no
+  tint makes stays as written, with a note. With the Forbidden Memories HD
+  mod's Duel part on, its board is drawn for some of the floor's rows (its
+  entries cover whole columns): switch that part off.
 * Art (the Art tab, `art.py`): a retail card's picture and thumbnail go in
   a texture pack, `textures/manifest.json` with PNGs under
   `textures/cards/`, one entry each addressed as `extract_images.py` and
@@ -813,6 +868,10 @@ other buttons, is shadowed by an earlier arrow in the same direction under
 the same condition, has a flag past `0x7FF` or is off the screen, a marker
 off the screen, and a place no arrow, Confirm or Cancel leads to any more
 are warnings.
+For the duel board: a picture that is not a PNG is an error; one not in its
+texture's shape (the game stretches it), one with see-through pixels (the
+board shows black there), and a texture both replaced and tinted (the tint
+shows nowhere) are warnings.
 
 ## Card text preview
 
@@ -999,6 +1058,7 @@ into isolated folders and play real duels (no changes to your saves or mods):
     python3 tests/pc/ritual_tributes_runtime.py --editor --interpreter
     xvfb-run -a python3 tests/pc/editor_values_runtime.py
     xvfb-run -a python3 tests/pc/editor_ui_runtime.py [--baseline <a build before>]
+    xvfb-run -a python3 tests/pc/editor_board_runtime.py [--out DIR]
 
 `editor_ui_runtime.py` makes a title, menus and duel pictures through the UI
 tab, then plays them: the title and menu with and without the mod, an added
@@ -1007,6 +1067,13 @@ opponent's turns, the results) with the moved panel and its digits checked
 in each picture, the same at Internal 2x in a window and with the duel
 effects interpreted, and, given `--baseline`, the frames without the mod
 against another build's.
+`editor_board_runtime.py` makes a duel board through the Duel board page
+(floors replaced at 4x and 1x, one tinted, the walls' wings, trim and
+corner triangles on every field) and plays it at Internal 1x and 2x with
+and without the mod: duels begun on Normal, Forest and Wasteland, the
+camera's sweep round the board, Forest and Wasteland played mid-duel, a
+duel to its end, the effect bank still native, and the frames with the mod
+off as with no mods at all; each picture is checked by its colours.
 
 `ritual_tributes_runtime.py` plays rituals of one to five tributes from the
 field, the hand and both, by the player and the CPU, natively and with the
@@ -1045,6 +1112,7 @@ only the window; it does not rewrite the engine, whose rules are the port's
 | `pools.py`, `fixed_decks.py`, `bulk_fusions.py` | the port's pool arithmetic, fixed decks, bulk fusions |
 | `roster.py`, `portrait.py` | the duelists a mod adds or takes over (reading and writing their files, their places on the grid, checks), and Free Duel portraits: the disc's, and the one the game makes of a PNG |
 | `art.py`, `campaign_map.py`, `map_art.py`, `map_view.py` | card art, the campaign map's table and pictures, the map drawn from the disc's 3D model (`map_view.py` has no Tk despite its name) |
+| `board_art.py` | the duel board's textures: where each is on the disc, a mod's replacements (pack entries) and tints (palette patches) |
 | `guardian_stars.py`, `star_rules.py` | a mod's `guardian_stars` (the stars, the matchup grid, presets, checks) and setting many cards' stars by a rule |
 | `card_text.py`, `ttf.py`, `pngio.py` | the card-text layout and picture, TrueType outlines, PNGs and the `Image` type every picture is |
 | `importer.py`, `kit.py`, `ygomods.py` | importing a modified game (experimental), and converting a `.ygomods` package |
@@ -1259,8 +1327,8 @@ engine first):
 **The tests a front end keeps passing** (the command above): `test_data`
 (tables, the diff to `mod.json` and back, the pools' arithmetic, the
 checks), `test_family` and `test_importer` (imports), `test_ygomods`,
-`test_art`, `test_card_text`, `test_campaign_map` and `test_map_art` need no
-Tk. `test_bulk_fusions`, `test_fixed_decks` and `test_starter` test the
+`test_art`, `test_card_text`, `test_campaign_map`, `test_map_art` and
+`test_board_art` (but its page's tests) need no Tk. `test_bulk_fusions`, `test_fixed_decks` and `test_starter` test the
 engine and then the Tk dialogs, and `test_gui` and `test_map_gui` drive the
 window; those Tk parts skip where Tk cannot start. A new front end adds its
 own tests beside them and leaves the engine's as they are.
