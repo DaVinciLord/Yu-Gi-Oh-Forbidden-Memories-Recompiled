@@ -378,8 +378,9 @@ added card, unless the entry has a `title` PNG.
 
 A monster's `monster_effects` make it do something on the field: on summon,
 on flip, at its owner's draw, before a battle, when destroyed or while face
-up, a magic card's effect, a boost, healing or damage
-([Monster effects](more-cards.md#monster-effects)). A `description` may
+up, a magic card's effect, a boost, healing or damage, which `for_each`
+makes once per face-up monster counted ("+300 for each Dragon on your
+field") ([Monster effects](more-cards.md#monster-effects)). A `description` may
 hold icons and colours ([Card text codes](more-cards.md#card-text-codes)).
 
 ## Audio: songs, voices and sounds from files

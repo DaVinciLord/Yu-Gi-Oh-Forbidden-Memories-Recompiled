@@ -20,7 +20,9 @@
  * the battle; "face_up" boosts are worked out whenever the
  * game asks a card's ATK/DEF (Duel_CalcCardStats), so the field, the
  * battle, traps and the CPU's view of the board all see them, each source
- * once on each monster it reaches, newcomers too.
+ * once on each monster it reaches, newcomers too. A "for_each" counts the
+ * face-up monsters of the last look (and a battle's two): a face_up boost
+ * as it is asked, the others as they are made.
  *
  * The state is the game's (src/pc/game/trigger_state.c), in save states. */
 #include "monster_effects.h"
