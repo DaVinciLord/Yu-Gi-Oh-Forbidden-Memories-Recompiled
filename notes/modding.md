@@ -728,8 +728,9 @@ checked by `tests/pc/title_config_test.c`.
 
 A mod may move, size, colour, hide or replace the duel's pictures with a
 `"ui"` object: each half of the life-point panel with its digits, the FIELD
-box, the card bar and the two cursors. The FM Editor's UI tab draws them
-from your disc and drags them about.
+box, the card bar and the two cursors, and rearrange what the card bar
+shows -- the card's name, its ATK and DEF, its icons. The FM Editor's UI
+tab draws them from your disc and drags them about.
 
 ```json
 "ui": {
@@ -737,7 +738,10 @@ from your disc and drags them about.
         "lp_opponent": {"y": 24, "tint": "#FF9090", "digits": "#FFE040", "label": "RIVAL"},
         "lp_player": {"y": -28, "scale": 120, "image": "art/lp.png"},
         "field": {"y": 40, "scale": 110, "tint": "#80C0FF"},
-        "card_bar": {"tint": "#C0C0FF"},
+        "card_bar": {"tint": "#C0C0FF",
+                     "name": {"x": 40, "tint": "#FFE040", "spacing": 1},
+                     "atk": {"x": 55}, "def": {"x": 55},
+                     "type": {"x": -237}, "stars": {"x": -237}, "kind": {"x": -237}},
         "hand_cursor": {"tint": "#FFFF40", "scale": 150},
         "field_cursor": {"hide": true}
     }
@@ -749,7 +753,7 @@ from your disc and drags them about.
 | `lp_opponent` | the panel's top half: LP, COM and the opponent's life points and deck count; up and down only, at most 161 % (201 % drawn from an `image`) |
 | `lp_player` | its bottom half: YOU and the player's; the same |
 | `field` | the FIELD box, with the terrain's name; up and down only, at most 130 % |
-| `card_bar` | the strip under the hand: the card's name, ATK/DEF and stars are drawn over it, and the hand goes with it, so it stays where the game has it, at its size: only its colours, a picture of its own or none |
+| `card_bar` | the strip under the hand; the hand's cards slide in and out with it, so it stays where the game has it, at its size: only its colours, a picture of its own or none. What it shows are its parts, below |
 | `hand_cursor` | the red arrow under the card the cursor is on |
 | `field_cursor` | the frame round the zone a card is going to |
 
@@ -762,6 +766,39 @@ from your disc and drags them about.
 | `image` | a PNG in the mod drawn instead, over the picture's place (moved and sized with it), `width` and `height` its size in the game's pixels instead of the picture's |
 | `digits` | the LP halves: the colour of their digits, over the game's (lit on that side's turn, dimmed on the other's) |
 | `label` | the LP halves: words in place of COM or YOU, at most 15 letters, set in the font the card names are (with View > Opponent's name for COM the opponent's name shows there; a label wins) |
+
+### The card bar's parts
+
+What the card bar shows is not part of its picture: the game writes it over
+the bar as one line of text (the card's name, the sword and ATK, the shield
+and DEF, the icons), each time the cursor moves. Its parts are keys of
+`card_bar`, each moved, coloured or hidden on its own:
+
+| Part | What it is, where the game puts it |
+|---|---|
+| `name` | the card's name, 8 x 12 letters from (16, 212); a monster's at most 24 letters, another card's 28 |
+| `atk` | the sword and the ATK digits, from (211, 210) |
+| `def` | the shield and the DEF digits, a row down |
+| `type` | the icon of the card's type (Dragon, Spellcaster, Magic...), at (253, 210) |
+| `stars` | a monster's two guardian stars at (271, 210) and (289, 210); on the field, the one it has on at (279, 210), and only that for an opponent's face-down monster |
+| `kind` | a magic, trap, equip or ritual card's word, at (271, 210) |
+
+Each takes `x` and `y` (moved by so many of the game's pixels), `tint`,
+`hide`, and the name `spacing`: pixels added between its letters, -3 to 2
+(each letter's place counts the spaces before it). A part stays on the
+bar's dark panel, the same under the hand and on the bar's higher look
+(over the hand, while a card is placed, a target chosen or the field
+looked at from the hand; its words 87 higher): under the hand from x 14 to
+306 and y 208 to 228, the name at its longest (28 letters, spread by its
+`spacing`). The letters' cells are dark, so off the panel they would show
+as dark boxes; a part moved further is drawn at the nearest place on it,
+noted. The parts move as the bar does when it slides in and out. What is
+left where the game has it: the Swords of Revealing Light line and the
+GUARDIAN STAR words the bar shows over the field when a card is aimed at,
+and the bar's own place and size. The parts can overlap: a long name runs
+into what is moved where it reaches (the editor says so). The bar's own
+`tint`, `hide` and `image` are its picture's only; its parts are drawn over
+whichever it is.
 
 Everything is done as the game draws the pictures, never to the game's own
 objects, so its slides, the turn's colours and the cursors' moves go on as
@@ -789,8 +826,10 @@ detail than the size it takes is drawn at that size.
 Every applied mod's `ui` is read when a duel starts, a later mod's value
 winning key by key. A key the game does not know, a value out of range or
 a PNG it cannot read is noted beside the mod in the Mods window. How it is
-done: [`src/pc/cards/duel_ui.c`](../src/pc/cards/duel_ui.c), read by
-`src/pc/platform/ui_config.c`, checked by `tests/pc/ui_config_test.c`.
+done: [`src/pc/cards/duel_ui.c`](../src/pc/cards/duel_ui.c) (the card bar's
+parts as its text is laid out, `DuelUi_TagEntry`, and drawn, `DuelUi_BarEntry`),
+read by `src/pc/platform/ui_config.c`, checked by `tests/pc/ui_config_test.c`;
+in a duel by `tests/pc/editor_cardbar_runtime.py`.
 
 ## Rules: fusions, equips, rituals, drops, decks and more
 

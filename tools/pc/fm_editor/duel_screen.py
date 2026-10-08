@@ -19,12 +19,13 @@ exactly where they do in the game.
   and (211, 218) with its ATK and DEF (u 128 + 8 d, v 112) from x 219, its
   kind's icon at (253, 210) and its guardian stars' at (271, 210) and
   (289, 210); another card's kind icon and word (its frame's palette) at
-  (253, 210) and (271, 210)."""
+  (253, 210) and (271, 210). A mod's "card_bar" parts (ui_rules.PARTS)
+  move, colour, hide and spread them as duel_ui.c does."""
 from __future__ import annotations
 
 import struct
 
-from . import art, board_model, card_text, gamedata, map_view, pngio, ui_assets as ua
+from . import art, board_model, card_text, gamedata, map_view, pngio, ui_assets as ua, ui_rules
 
 TERRAIN = "normal"
 
@@ -109,9 +110,11 @@ def _icon(font, n):
     return pngio.Image(*icon) if icon else None
 
 
-def bar_words(project, wa, duel: ua.DuelArt, font, cid: int) -> list:
+def bar_words(project, wa, duel: ua.DuelArt, font, cid: int, card_bar=None) -> list:
     """What the game draws over the card bar for the card the cursor is on:
-    (picture, x, y) each."""
+    (picture, x, y, part) each, part one of ui_rules.PARTS; with a mod's
+    "card_bar", its parts moved, coloured, hidden and the name's letters
+    spread as duel_ui.c draws them."""
     card = _card(project, cid)
     if card is None:
         return []
@@ -119,38 +122,50 @@ def bar_words(project, wa, duel: ua.DuelArt, font, cid: int) -> list:
     if font is not None:
         x, y = BAR_NAME_AT
         ink = font.colours
-        for c in card.name:
+        # At most 24 letters of a monster's name, 28 of another card's (the
+        # strings' F8 07); a letter's place counts the spaces too.
+        for index, c in enumerate(card.name[:24 if card.is_monster() else 28]):
             cell = font.cell(c) if c != " " else None
             if cell:
                 rgba = bytearray()
-                for index in cell:
-                    colour = ink[index]
-                    rgba += bytes((*colour, 255)) if index and colour else b"\0\0\0\0"
-                out.append((pngio.Image(card_text.CELL_W, card_text.CELL_H, bytes(rgba)), x, y))
-            x += 8
-            if x > 200:
-                break
+                for colour_index in cell:
+                    colour = ink[colour_index]
+                    rgba += bytes((*colour, 255)) if colour_index and colour else b"\0\0\0\0"
+                out.append((pngio.Image(card_text.CELL_W, card_text.CELL_H, bytes(rgba)), x + 8 * index, y, "name",
+                            index))
     page, clut = BAR_PAGE[:3], BAR_PAGE[3:]
     if card.is_monster():
-        out.append((duel.vram.sprite(*page, *clut, 208, 88, 8, 8), BAR_STATS_X - 8, BAR_Y))
-        out.append((duel.vram.sprite(*page, *clut, 216, 88, 8, 8), BAR_STATS_X - 8, BAR_Y + 8))
-        for row, value in ((0, card.attack), (8, card.defense)):
+        out.append((duel.vram.sprite(*page, *clut, 208, 88, 8, 8), BAR_STATS_X - 8, BAR_Y, "atk", 0))
+        out.append((duel.vram.sprite(*page, *clut, 216, 88, 8, 8), BAR_STATS_X - 8, BAR_Y + 8, "def", 0))
+        for row, value, part in ((0, card.attack, "atk"), (8, card.defense, "def")):
             text = str(max(0, value))[-4:].rjust(4)
             for i, c in enumerate(text):
                 if c != " ":
                     out.append((duel.vram.sprite(*page, *clut, 128 + 8 * int(c), 112, 8, 8),
-                                BAR_STATS_X + 8 * i, BAR_Y + row))
-        icons = [card.type] + [card_text.ICON_NAMES.index(gamedata.STAR_NAMES[s]) for s in (card.star1, card.star2)
-                               if 0 < s < len(gamedata.STAR_NAMES)]
-        for n, x in zip(icons, (BAR_ICON_X,) + BAR_STAR_X):
+                                BAR_STATS_X + 8 * i, BAR_Y + row, part, 0))
+        icons = [(card.type, "type")] + [(card_text.ICON_NAMES.index(gamedata.STAR_NAMES[s]), "stars")
+                                         for s in (card.star1, card.star2) if 0 < s < len(gamedata.STAR_NAMES)]
+        for (n, part), x in zip(icons, (BAR_ICON_X,) + BAR_STAR_X):
             icon = _icon(font, n)
             if icon is not None:
-                out.append((icon, x, BAR_Y))
+                out.append((icon, x, BAR_Y, part, 0))
     else:
         icon = _icon(font, card.type)
         if icon is not None:
-            out.append((icon, BAR_ICON_X, BAR_Y))
+            out.append((icon, BAR_ICON_X, BAR_Y, "type", 0))
         word = KIND_WORD.get(card.type, 0)
         out.append((duel.vram.sprite(*HAND_FRAME[:3], HAND_CLUT[0], HAND_CLUT[1] + card.shown_frame(), 32 * word,
-                                     96, 32, 16), BAR_STAR_X[0], BAR_Y))
-    return out
+                                     96, 32, 16), BAR_STAR_X[0], BAR_Y, "kind", 0))
+    parts = ui_rules.bar_parts(card_bar)
+    drawn = []
+    for picture, x, y, part, letter in out:
+        element = parts.get(part)
+        if element is None:
+            drawn.append((picture, x, y, part))
+            continue
+        if element.get("hide") is True:
+            continue
+        dx, dy = ui_rules.part_offset(part, element)
+        spacing = ui_rules.part_spacing(element) if part == "name" else 0
+        drawn.append((ua.tint(picture, ua.parse_colour(element.get("tint"))), x + dx + spacing * letter, y + dy, part))
+    return drawn

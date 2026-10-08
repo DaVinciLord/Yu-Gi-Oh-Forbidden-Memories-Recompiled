@@ -153,6 +153,33 @@ class RulesTest(unittest.TestCase):
         self.assertEqual(found, [("menu", "\"scale\""), ("menu.entries.load", "\"scale\""),
                                  ("menu.buttons.a", "\"scale\""), ("title.entries.options", "\"scale\"")])
 
+    def test_card_bar_parts(self):
+        """The card bar's parts kept on the bar as ui_config.c keeps them
+        (the numbers tests/pc/ui_config_test.c holds the game to)."""
+        self.assertEqual(ui_rules.part_home("name"), (0, 2, 224, 12))
+        self.assertEqual(ui_rules.part_home("name", 2), (0, 2, 224 + 54, 12))
+        self.assertEqual(ui_rules.part_range("name"), (-2, 66, -4, 4))
+        self.assertEqual(ui_rules.part_range("atk"), (-197, 55, -2, 10))
+        self.assertEqual(ui_rules.part_range("def")[2:], (-10, 2))
+        self.assertEqual(ui_rules.part_range("stars"), (-257, 1, -2, 2))
+        self.assertEqual(ui_rules.part_range("name", ui_rules.SPACING_MAX)[:2], (-2, 12))
+        self.assertEqual(ui_rules.part_offset("atk", {"x": 200, "y": -30}), (55, -2))
+        self.assertEqual(ui_rules.part_offset("name", {"x": 80, "spacing": 1}), (39, 0))
+        self.assertEqual(ui_rules.part_offset("name", {"x": 999}), (0, 0))         # out of range: left out
+        clean = project({"ui": {"duel": {"card_bar": {"tint": "#C0C0FF", "name": {"x": 30, "spacing": 1,
+                                                                                   "tint": "#FFE040"},
+                                                      "atk": {"x": 55}, "stars": {"hide": True}}}}})
+        self.assertEqual(ui_rules.check(clean, lambda name: True), [])
+        wrong = project({"ui": {"duel": {"card_bar": {"name": 3, "atk": {"spacing": 1, "spin": 2, "x": 200},
+                                                      "def": {"tint": "blue"}, "type": {"hide": 1},
+                                                      "kind": {"y": 9999}}}}})
+        found = [(where, message) for _, where, message in ui_rules.check(wrong, lambda name: True)]
+        self.assertEqual([w for w, _ in found], ["ui.duel.card_bar.name", "ui.duel.card_bar.atk",
+                                                 "ui.duel.card_bar.atk", "ui.duel.card_bar.atk",
+                                                 "ui.duel.card_bar.def", "ui.duel.card_bar.type",
+                                                 "ui.duel.card_bar.kind"])
+        self.assertIn("moved by 55, 0 instead", found[3][1])
+
     def test_validate_takes_the_keys(self):
         p = project({"title": {"logo": {"tint": "#FF0000"}}, "menu": {"spacing": 28}, "ui": {"duel": {}}})
         issues = validate.validate(p)
@@ -197,6 +224,52 @@ class DuelScreenTest(unittest.TestCase):
         image = duel_screen.board_backdrop(None)
         self.assertEqual(image.size, (320, 240))
         self.assertEqual(image.pixel(160, 120), (0, 0, 0, 255))
+
+
+class BarWordsTest(unittest.TestCase):
+    """duel_screen.bar_words: the card bar's parts moved, coloured, hidden
+    and the name's letters spread as duel_ui.c draws them."""
+
+    def words(self, card_bar=None, cid=None):
+        from types import SimpleNamespace
+        from fm_editor import duel_screen
+
+        class Font:
+            colours = [None, (255, 255, 255)]
+
+            def cell(self, c):
+                return [1] * (8 * 12)
+
+            def icon(self, n):
+                return (16, 16, bytes((255, 255, 255, 255)) * 256)
+        p = project()
+        vram = SimpleNamespace(sprite=lambda *a, **k: pngio.Image(a[-2] if len(a) > 8 else 8, 8,
+                                                                  bytes((255, 255, 255, 255)) * 64 *
+                                                                  (a[-2] // 8 if len(a) > 8 else 1)))
+        duel = SimpleNamespace(vram=vram)
+        cid = cid or next(c for c in sorted(p.cards) if p.cards[c].is_monster() and len(p.cards[c].name) > 4)
+        return p.cards[cid], duel_screen.bar_words(p, None, duel, Font(), cid, card_bar)
+
+    def test_parts(self):
+        card, retail = self.words()
+        places = {part: [(x, y) for _, x, y, p in retail if p == part] for part in ui_rules.PARTS}
+        self.assertEqual(places["name"][0], (16, 212))
+        self.assertEqual(places["atk"][0], (211, 210))
+        self.assertEqual(places["def"][0], (211, 218))
+        self.assertEqual(places["type"], [(253, 210)])
+        self.assertEqual(places["stars"][0], (271, 210))
+        bar = {"name": {"x": 10, "y": 2, "spacing": 2, "tint": "#808080"}, "atk": {"x": -195}, "stars": {"hide": True},
+               "type": {"x": 999}}
+        _, moved = self.words(bar)
+        got = {part: [(x, y) for _, x, y, p in moved if p == part] for part in ui_rules.PARTS}
+        name = [i for i, c in enumerate(card.name[:24]) if c != " "]
+        self.assertEqual(got["name"], [(16 + 10 + 10 * i, 214) for i in name])    # 8 + 2 a letter, spaces too
+        self.assertEqual(got["atk"][0], (16, 210))
+        self.assertEqual(got["def"], places["def"])
+        self.assertEqual(got["stars"], [])
+        self.assertEqual(got["type"], [(253, 210)])                                  # out of range: left out
+        picture = next(pic for pic, _, _, p in moved if p == "name")
+        self.assertEqual(picture.pixel(0, 0)[:3], (128, 128, 128))
 
 
 class UiTabTest(GuiCase):
@@ -251,6 +324,47 @@ class UiTabTest(GuiCase):
             self.tab.revert_page(page)
         self.assertNotIn("ui", self.app.project.other)
         self.assertNotIn("ui/duel-lp-player.png", self.app.project.files)
+
+    def test_card_bar_parts(self):
+        """The card bar's parts, listed under it: each moved on the bar only,
+        coloured, hidden, the name spread; back to the game's one by one."""
+        page = self.page("duel")
+        rows = page.list.tree.get_children("card_bar")
+        self.assertEqual(rows, tuple(f"card_bar.{p}" for p in ui_rules.PARTS))
+        page.select("card_bar.name")
+        self.assertEqual(page.title.cget("text"), "Card bar: Name")
+        self.assertTrue(page.spacing_box.winfo_ismapped() or page.spacing_box.grid_info())
+        self.assertFalse(page.size_row.grid_info())
+        self.assertFalse(page.picture_row.grid_info())
+        page.moved("card_bar.name", 300, 1)              # kept on the bar
+        page.set_colour("tint", 0xFFE040)
+        page.vars["spacing"].set("2")
+        page.typed("spacing")                            # spread: brought back on the bar
+        page.select("card_bar.atk")
+        self.assertFalse(page.spacing_box.grid_info())
+        page.moved("card_bar.atk", -195, 0)
+        page.vars["y"].set("-40")
+        page.typed("y")
+        page.select("card_bar.stars")
+        page.hidden.set(True)
+        page.set_hidden()
+        page.select("card_bar")
+        page.set_colour("tint", 0xC0C0FF)
+        bar = self.app.project.other["ui"]["duel"]["card_bar"]
+        self.assertEqual(bar, {"name": {"x": 12, "y": 1, "tint": "#FFE040", "spacing": 2},
+                               "atk": {"x": -195, "y": -2}, "stars": {"hide": True}, "tint": "#C0C0FF"})
+        self.assertEqual(ui_rules.check(self.app.project, lambda name: True), [])
+        self.assertTrue(page.list.tree.item("card_bar.name", "values")[-1])
+        page.select("card_bar.name")
+        page.reset()
+        page.select("card_bar.atk")
+        page.reset()
+        page.select("card_bar.stars")
+        page.reset()
+        self.assertEqual(self.app.project.other["ui"]["duel"]["card_bar"], {"tint": "#C0C0FF"})
+        page.select("card_bar")
+        page.reset()
+        self.assertNotIn("card_bar", self.app.project.other.get("ui", {}).get("duel", {}))
 
     def test_title_page(self):
         page = self.page("title")
@@ -511,6 +625,15 @@ class UiTabTest(GuiCase):
         self.assertEqual(len(rough_edges("field", {"scale": 200})), 1)               # drawn at 130 %
         self.assertEqual(rough_edges("hand_cursor", {"x": 4, "scale": 400}), [])
         self.assertEqual(len(rough_edges("lp_opponent", {"label": "RIVAL\u00c9", "image": "ui/a.png"})), 2)
+        from fm_editor.ui_duel import part_rough_edges
+        self.assertEqual(part_rough_edges("atk", {}), [])
+        self.assertEqual(len(part_rough_edges("atk", {"atk": {"x": -100}})), 1)     # where a long name reaches
+        self.assertEqual(part_rough_edges("atk", {"atk": {"x": -2}}), [])           # a monster's: 24 letters
+        self.assertEqual(len(part_rough_edges("type", {"type": {"x": -14}})), 1)    # a magic card's: 28
+        self.assertEqual(part_rough_edges("atk", {"atk": {"x": -100}, "name": {"hide": True}}), [])
+        self.assertEqual(len(part_rough_edges("name", {"type": {"x": -100}})), 1)
+        self.assertEqual(len(part_rough_edges("def", {}, picture=True)), 1)       # dark cells over a picture
+        self.assertEqual(part_rough_edges("type", {}, picture=True), [])
         self.assertTrue(brightens(0xFFFF40))
         self.assertFalse(brightens(0xFFFFFF))
         self.assertFalse(brightens(0x404040))

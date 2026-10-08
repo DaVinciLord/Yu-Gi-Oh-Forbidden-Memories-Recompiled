@@ -32,6 +32,7 @@
 #include "pc/text/glyphs.h"
 #include "pc/text/hd_text.h"
 #include "pc/cards/stars.h"
+#include "pc/cards/duel_ui.h"
 
 /* A glyph past the retail font's is in a texture bank (glyphs.h), which a
    sprite packet names in bits the sprite's own tpage cannot carry through
@@ -419,6 +420,13 @@ placed:
                 spr->y = *(u16 *)(p - 8) + y + 2;
             }
         }
+#ifdef MEMORIES_PC
+        /* The card bar's parts a mod's "ui" moves, colours or hides
+           (duel_ui.h); its colour goes back after. */
+        if (DuelUi_BarEntry(obj, code, spr)) {
+            goto next_entry;
+        }
+#endif
         switch (p[-1]) {
         case 0:
             GsSortFastSprite(spr, ot, pri);
@@ -532,6 +540,10 @@ placed:
             GsSortPoly(gt4, ot, pri);
             break;
         }
+#ifdef MEMORIES_PC
+        GS_SPRITE_COLOR_WORD(spr) = obj->field_0C;
+    next_entry:
+#endif
         p += 0x1C;
         code += 0xE;
     }

@@ -75,6 +75,11 @@ static void retail(void)
         CHECK(!e->set && !e->x && !e->y && e->scale == 100 && e->tint == 0xFFFFFF && e->digits == 0xFFFFFF);
         CHECK(!e->hidden && !e->image.file[0] && !e->label[0]);
     }
+    CHECK(!config->parts);
+    for (i = 0; i < UI_PARTS; i++) {
+        const UiPart *part = &config->part[i];
+        CHECK(!part->set && !part->x && !part->y && part->tint == 0xFFFFFF && !part->hidden && !part->spacing);
+    }
 }
 
 static void keys(void)
@@ -157,6 +162,65 @@ static void sliding_ones_leave_the_screen(void)
     CHECK(notes == 1 && config->element[UI_FIELD].scale == 101);
 }
 
+/* The card bar's parts: each moved, coloured, hidden; kept on the bar (the
+ * nearest place that is, noted); only the name's letters are spread. */
+static void card_bar_parts(void)
+{
+    const UiConfig *config;
+    const UiPart *p;
+    int x, y, w, h, x0, x1, y0, y1;
+    UiConfig_PartHome(UI_PART_NAME, 0, &x, &y, &w, &h);
+    CHECK(x == 0 && y == 2 && w == 224 && h == 12);
+    UiConfig_PartHome(UI_PART_NAME, 2, &x, &y, &w, &h);
+    CHECK(w == 224 + 27 * 2);
+    UiConfig_PartRange(UI_PART_NAME, 0, &x0, &x1, &y0, &y1);
+    CHECK(x0 == -2 && x1 == 66 && y0 == -4 && y1 == 4);
+    UiConfig_PartRange(UI_PART_ATK, 0, &x0, &x1, &y0, &y1);
+    CHECK(x0 == -197 && x1 == 55 && y0 == -2 && y1 == 10);
+    UiConfig_PartRange(UI_PART_DEF, 0, &x0, &x1, &y0, &y1);
+    CHECK(y0 == -10 && y1 == 2);
+    UiConfig_PartRange(UI_PART_STARS, 0, &x0, &x1, &y0, &y1);
+    CHECK(x0 == -257 && x1 == 1 && y0 == -2 && y1 == 2);
+    UiConfig_PartRange(UI_PART_NAME, UI_SPACING_MAX, &x0, &x1, &y0, &y1);
+    CHECK(x0 == -2 && x1 == 12);
+    config = one("{\"ui\": {\"duel\": {\"card_bar\": {\"tint\": \"#C0C0FF\","
+                 " \"name\": {\"x\": 30, \"y\": 2, \"tint\": \"#FFE040\", \"spacing\": 1},"
+                 " \"atk\": {\"x\": 55, \"tint\": \"FF8080\"}, \"def\": {\"x\": 55, \"hide\": false},"
+                 " \"type\": {\"x\": -237}, \"stars\": {\"x\": -237, \"hide\": true}, \"kind\": {\"y\": 2}}}}}");
+    p = config->part;
+    CHECK(notes == 0 && config->parts && config->any && config->element[UI_CARD_BAR].tint == 0xC0C0FF);
+    CHECK(p[UI_PART_NAME].set && p[UI_PART_NAME].x == 30 && p[UI_PART_NAME].y == 2);
+    CHECK(p[UI_PART_NAME].tint == 0xFFE040 && p[UI_PART_NAME].spacing == 1 && !strcmp(p[UI_PART_NAME].mod, "test"));
+    CHECK(p[UI_PART_ATK].x == 55 && p[UI_PART_ATK].tint == 0xFF8080 && p[UI_PART_DEF].x == 55);
+    CHECK(!p[UI_PART_DEF].hidden && p[UI_PART_TYPE].x == -237 && p[UI_PART_STARS].hidden);
+    CHECK(p[UI_PART_KIND].y == 2 && p[UI_PART_KIND].tint == 0xFFFFFF);
+    /* The bar itself is left as the game draws it with only its parts set. */
+    config = one("{\"ui\": {\"duel\": {\"card_bar\": {\"type\": {\"tint\": \"#808080\"}}}}}");
+    CHECK(notes == 0 && config->parts && config->element[UI_CARD_BAR].set);
+    CHECK(config->element[UI_CARD_BAR].tint == 0xFFFFFF);
+    /* A later mod wins key by key. */
+    config = one("{\"ui\": {\"duel\": {\"card_bar\": {\"name\": {\"x\": 10, \"tint\": \"#808080\"}}}}}");
+    add_as("later", "{\"ui\": {\"duel\": {\"card_bar\": {\"name\": {\"y\": -2}}}}}");
+    CHECK(notes == 0 && config->part[UI_PART_NAME].x == 10 && config->part[UI_PART_NAME].y == -2);
+    CHECK(config->part[UI_PART_NAME].tint == 0x808080 && !strcmp(config->part[UI_PART_NAME].mod, "later"));
+    /* Off the bar's panel: the nearest place on it, noted; so with letters
+     * spread (the name at its longest is 251 wide at 1). */
+    config = one("{\"ui\": {\"duel\": {\"card_bar\": {\"atk\": {\"x\": 200, \"y\": -30}}}}}");
+    CHECK(notes == 1 && strstr(note, "would leave the bar; moved by 55, -2"));
+    CHECK(config->part[UI_PART_ATK].x == 55 && config->part[UI_PART_ATK].y == -2);
+    config = one("{\"ui\": {\"duel\": {\"card_bar\": {\"name\": {\"x\": 80, \"spacing\": 1}}}}}");
+    CHECK(notes == 1 && config->part[UI_PART_NAME].x == 39);
+    /* Mistakes: a part not an object, spacing past its range or on another
+     * part, an unknown key; the bar still not moved. */
+    config = one("{\"ui\": {\"duel\": {\"card_bar\": {\"name\": 3, \"atk\": {\"spacing\": 1, \"spin\": 2},"
+                 " \"def\": {\"tint\": \"blue\"}, \"x\": 4}}}}");
+    CHECK(notes == 5 && strstr(note, "the hand's cards slide with it"));
+    CHECK(!config->part[UI_PART_NAME].set && config->part[UI_PART_ATK].set && !config->part[UI_PART_ATK].spacing);
+    CHECK(config->part[UI_PART_DEF].tint == 0xFFFFFF && config->element[UI_CARD_BAR].x == 0);
+    config = one("{\"ui\": {\"duel\": {\"card_bar\": {\"name\": {\"spacing\": 3}}}}}");
+    CHECK(notes == 1 && config->part[UI_PART_NAME].spacing == 0);
+}
+
 static void mistakes(void)
 {
     const UiConfig *config;
@@ -185,6 +249,7 @@ int main(void)
     mods_win_key_by_key();
     sliding_ones_move_up_and_down();
     sliding_ones_leave_the_screen();
+    card_bar_parts();
     mistakes();
     while (document_count) Json_Free(documents[--document_count]);
     printf("ui config: ok\n");

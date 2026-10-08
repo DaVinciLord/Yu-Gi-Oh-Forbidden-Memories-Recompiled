@@ -5,6 +5,7 @@
 #ifdef MEMORIES_PC
 #include "pc/text/glyphs.h"
 #include "pc/cards/stars.h"
+#include "pc/cards/duel_ui.h"
 #endif
 
 /* D_801D9174: a lookup table of 0x1E-byte records, each prefixed by a
@@ -126,6 +127,10 @@ void DuelEffect_AppendEntry(DuelEffectChannel *p, s32 a)
     }
     q->x_0C = p->field_38;
     q->y_0E = p->field_3A;
+#ifdef MEMORIES_PC
+    /* Which of the card bar's parts it is, for a mod's "ui" (duel_ui.h). */
+    DuelUi_TagEntry(p, q);
+#endif
     q++;
     q->flags_11 = 0;
     p->entry_end_20 = q;

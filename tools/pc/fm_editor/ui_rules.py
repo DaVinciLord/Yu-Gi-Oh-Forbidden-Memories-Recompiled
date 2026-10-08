@@ -69,6 +69,63 @@ def element_scale_max(name: str, element: dict) -> int:
 LABEL_MAX = 15
 PICTURES_MAX = 8
 
+# The card bar's parts (ui_config.h UI_PART_*, ui_config.c part_home): the
+# words, numbers and icons the game writes over the bar as one text, each
+# where the game puts it in that text's box (16, 210 under the hand; x, y,
+# w, h): the name's 8 x 12 letters from 0 (drawn 2 down), at most 28; the
+# sword and four ATK digits from 195, the shield and DEF a row down; the
+# type's icon; the stars' (the field's one at 263); a magic card's word.
+PARTS = ("name", "atk", "def", "type", "stars", "kind")
+PART_KEYS = ("x", "y", "tint", "hide", "spacing")
+NAME_LETTERS, LETTER = 28, 8
+PART_HOME = {"name": (0, 2, NAME_LETTERS * LETTER, 12), "atk": (195, 0, 40, 8), "def": (195, 8, 40, 8),
+             "type": (237, 0, 16, 16), "stars": (255, 0, 34, 16), "kind": (255, 0, 32, 16)}
+# Where a part stays, in the box's own pixels: the bar's dark panel, the same
+# under the hand and on the bar's higher look (UI_BAR_*; the letters' cells
+# are dark, and would show off it); how far the name's letters spread
+# (UI_SPACING_*: by 2 the longest name just fits).
+BAR_BOX = (16, 210)
+BAR_REGION = (-2, 290, -2, 18)
+SPACING_MIN, SPACING_MAX = -3, 2
+
+
+def part_home(part: str, spacing: int = 0):
+    """UiConfig_PartHome: (x, y, w, h) in the bar's text box, the name at its
+    longest and spread by `spacing`."""
+    x, y, w, h = PART_HOME[part]
+    return x, y, w + ((NAME_LETTERS - 1) * spacing if part == "name" else 0), h
+
+
+def part_range(part: str, spacing: int = 0):
+    """UiConfig_PartRange: (x0, x1, y0, y1), how far it moves and stays on
+    the bar."""
+    x, y, w, h = part_home(part, spacing)
+    left, right, top, bottom = BAR_REGION
+    return left - x, right - (x + w), top - y, bottom - (y + h)
+
+
+def part_spacing(element: dict) -> int:
+    value = _int(element.get("spacing"))
+    return value if SPACING_MIN <= value <= SPACING_MAX else 0
+
+
+def part_offset(part: str, element: dict):
+    """Where the game moves a part (ui_config.c read_part): its x and y (0
+    for one out of -400..400, -300..300), brought onto the bar."""
+    spacing = part_spacing(element) if part == "name" else 0
+    x0, x1, y0, y1 = part_range(part, spacing)
+    x, y = _int(element.get("x")), _int(element.get("y"))
+    x = x if -400 <= x <= 400 else 0
+    y = y if -300 <= y <= 300 else 0
+    return max(x0, min(x1, x)), max(y0, min(y1, y))
+
+
+def bar_parts(card_bar) -> dict:
+    """The card bar's parts a mod's "card_bar" has (objects only)."""
+    if not isinstance(card_bar, dict):
+        return {}
+    return {name: card_bar[name] for name in PARTS if isinstance(card_bar.get(name), dict)}
+
 
 def _colour(value) -> bool:
     if isinstance(value, bool):
@@ -84,6 +141,33 @@ def _colour(value) -> bool:
 def _contained(name: str) -> bool:
     """paths.c Paths_Contained: relative, inside the mod."""
     return bool(name) and not name.startswith("/") and ".." not in PurePosixPath(name).parts and "\\" not in name
+
+
+def _check_part(where: str, part: str, value) -> list:
+    """read_part's notes for one of the card bar's parts."""
+    where = f"{where}.{part}"
+    if not isinstance(value, dict):
+        return [("warning", where, "an object of keys")]
+    out = []
+    for key, member in value.items():
+        if key not in PART_KEYS:
+            out.append(("warning", where, f"unknown key \"{key}\""))
+        elif key == "spacing" and part != "name":
+            out.append(("warning", where, "has no \"spacing\" (the name's letters have)"))
+        elif key == "spacing" and (isinstance(member, bool) or not isinstance(member, int) or
+                                   not SPACING_MIN <= member <= SPACING_MAX):
+            out.append(("warning", where, f"\"spacing\" is a whole number from {SPACING_MIN} to {SPACING_MAX}"))
+        elif key in ("x", "y") and (isinstance(member, bool) or not isinstance(member, int) or
+                                    not RANGES[key][0] <= member <= RANGES[key][1]):
+            out.append(("warning", where, f"\"{key}\" is a whole number from {RANGES[key][0]} to {RANGES[key][1]}"))
+        elif key == "tint" and not _colour(member):
+            out.append(("warning", where, "\"tint\" is a colour, \"#RRGGBB\""))
+        elif key == "hide" and not isinstance(member, bool):
+            out.append(("warning", where, "\"hide\" is true or false"))
+    x, y = _int(value.get("x")), _int(value.get("y"))
+    if (x, y) != part_offset(part, value) and -400 <= x <= 400 and -300 <= y <= 300:
+        out.append(("warning", where, "would leave the bar; moved by %d, %d instead" % part_offset(part, value)))
+    return out
 
 
 def check(project, has_file) -> list:
@@ -111,10 +195,13 @@ def check(project, has_file) -> list:
                 out.append(("warning", where, "an object of keys"))
                 continue
             for key, value in element.items():
-                if key not in KEYS:
+                if name == "card_bar" and key in PARTS:
+                    out += _check_part(where, key, value)
+                elif key not in KEYS:
                     out.append(("warning", where, f"unknown key \"{key}\""))
                 elif key in ("x", "y", "scale") and not MOVES[name]:
-                    out.append(("warning", where, f"the card bar stays where the game has it; \"{key}\" is left out"))
+                    out.append(("warning", where, f"the card bar stays where the game has it (the hand's cards slide "
+                                                  f"with it); \"{key}\" is left out (its parts move)"))
                 elif key == "x" and "x" not in MOVES[name]:
                     out.append(("warning", where, "the game slides it off the screen sideways, so it keeps its "
                                                   "place across; \"x\" is left out (\"y\" moves it)"))

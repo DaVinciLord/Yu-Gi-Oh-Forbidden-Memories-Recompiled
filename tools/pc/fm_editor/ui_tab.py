@@ -672,8 +672,7 @@ class UiTab(Tab):
     PAGES = [("title", "Title screen", ("ui_title", "TitlePage"), "Drag to move, arrows nudge (Shift: 8). "
               "Click the background for its colours."),
              ("menu", "Menus", ("ui_title", "MenuPage"), "Drag a button to place it; the list sets the order."),
-             ("duel", "Duel", ("ui_duel", "DuelPage"), "Drag to move, wheel to size, arrows nudge. "
-              "The LP and FIELD move up and down only; the card bar stays put."),
+             ("duel", "Duel", ("ui_duel", "DuelPage"), "Drag to move, wheel to size, arrows nudge."),
              ("board", "Duel board", ("ui_board", "BoardPage"), "Click a part of the board or the list; Replace "
               "puts your PNG in its place.")]
 
