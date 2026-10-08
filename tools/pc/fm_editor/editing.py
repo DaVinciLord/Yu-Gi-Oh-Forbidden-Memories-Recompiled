@@ -39,7 +39,7 @@ class Editing:
         walk(self.notebook)
         # Only actual form inputs, not searches, filters or navigation, count
         # as pending edits. Capture user events rather than programmatic fills.
-        for tab in (self.cards, self.info, self.limits, self.packs):
+        for tab in (self.cards, self.info, self.values, self.packs):
             variables = {str(v) for v in getattr(tab, "vars", {}).values()}
             variables.update(str(v) for v in getattr(tab, "adv", {}).values())
             if tab is self.packs:
@@ -226,7 +226,7 @@ class Editing:
 
     def form_drafts(self):
         drafts = {}
-        for name in ("cards", "info", "limits", "packs"):
+        for name in ("cards", "info", "values", "packs"):
             tab = getattr(self, name)
             if tab not in self._pending:
                 continue
@@ -246,8 +246,10 @@ class Editing:
     def restore_drafts(self, drafts):
         if not isinstance(drafts, dict):
             return
-        for name in ("cards", "info", "limits", "packs"):
+        for name in ("cards", "info", "values", "packs"):
             row = drafts.get(name)
+            if row is None and name == "values":
+                row = drafts.get("limits")      # a draft from before the tab was Values
             if not isinstance(row, dict):
                 continue
             tab = getattr(self, name)

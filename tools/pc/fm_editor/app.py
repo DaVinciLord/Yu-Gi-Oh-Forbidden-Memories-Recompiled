@@ -11,7 +11,7 @@ from .editing import Editing
 from . import card_links, history, recovery, screen, zoom
 from .art_tab import ArtTab
 from .map_tab import MapTab
-from .limits_tab import LimitsTab
+from .values_tab import ValuesTab
 from .guardian_stars_tab import GuardianStarsTab
 from .packs_tab import PacksTab
 from .duelists_tab import DuelistsTab
@@ -84,13 +84,13 @@ class App(Editing, tk.Tk):
         self.duelists = DuelistsTab(self.notebook, self)
         self.starter = StarterTab(self.notebook, self)
         self.map = MapTab(self.notebook, self)
-        self.limits = LimitsTab(self.notebook, self)
+        self.values = ValuesTab(self.notebook, self)
         self.stars = GuardianStarsTab(self.notebook, self)
         self.packs = PacksTab(self.notebook, self)
         self.info = ModInfoTab(self.notebook, self)
         self.conflicts = ConflictsTab(self.notebook, self)
         self.tabs = [self.cards, self.art, self.fusions, self.equips, self.rituals, self.duelists, self.starter,
-                     self.map, self.limits, self.stars, self.packs, self.info, self.conflicts]
+                     self.map, self.values, self.stars, self.packs, self.info, self.conflicts]
         self.status = ttk.Label(self, relief="sunken", anchor="w", padding=(6, 2))
         self.status.pack(fill="x", side="bottom", before=self.notebook)
         self.install_editing()
@@ -158,7 +158,7 @@ class App(Editing, tk.Tk):
         helps = tk.Menu(bar, tearoff=False)
         # The guides, as GitHub shows them (the notes are Markdown).
         for label, path in (("FM Editor guide", "tools/pc/fm_editor/README.md"),
-                            ("Fusions, equips, rituals, drops and limits", "notes/gameplay-tables.md"),
+                            ("Fusions, equips, rituals, drops and values", "notes/gameplay-tables.md"),
                             ("New cards and changed ones", "notes/more-cards.md"),
                             ("Starter decks and pools", "notes/starter-deck.md"),
                             ("Making mods", "notes/modding.md")):
@@ -582,8 +582,8 @@ class App(Editing, tk.Tk):
             self.packs.goto(target)
         elif issue.area == "Mod info":
             self.notebook.select(self.info)
-        elif issue.area == "Limits":
-            self.notebook.select(self.limits)
+        elif issue.area == "Values":
+            self.notebook.select(self.values)
         elif issue.area == "Guardian Stars":
             self.notebook.select(self.stars)
         elif issue.area == "Starter pools":
@@ -625,7 +625,7 @@ class App(Editing, tk.Tk):
                 self.rituals.tree.see(str(card))
         else:
             tab = {ov.POOLS: self.duelists, ov.DUELISTS: self.duelists, ov.STARTER: self.starter,
-                   ov.PACKS: self.packs, ov.PASSWORDS: self.packs, ov.STARS: self.stars, ov.LIMITS: self.limits,
+                   ov.PACKS: self.packs, ov.PASSWORDS: self.packs, ov.STARS: self.stars, ov.LIMITS: self.values,
                    ov.TEXTURES: self.art}.get(kind, self.info)
             self.notebook.select(tab)
 

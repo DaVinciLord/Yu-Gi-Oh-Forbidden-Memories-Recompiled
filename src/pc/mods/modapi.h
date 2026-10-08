@@ -207,8 +207,12 @@ struct MemoriesModHost {
      * a monster has, 9999 on the disc), "life_points" (the start against the
      * CPU), "life_points_max" (how far healing goes; 0 while it stops at the
      * start), "two_player_start", "two_player_max", "two_player_step",
-     * "starchips", "chest", "free_duel_record" and "two_player_record".
-     * -1 for a name it does not know. Answers once the card tables are
+     * "starchips", "chest", "free_duel_record" and "two_player_record";
+     * and the other values by their keys (the FM Editor's Values tab):
+     * "deck_copies", "swords_turns", "crush_card", "spellbinding_circle",
+     * "shadow_spell", "rank_score.start", "rank_score.exodia",
+     * "rank_score.deck_out", "starchip_prize.S" to "starchip_prize.D" and
+     * "new_game_starchips". -1 for a name it does not know. Answers once the card tables are
      * built, which is before the title. A mod that deals damage or bonuses of
      * its own reads the caps here rather than assume 9999. */
     long (*limit)(const MemoriesModHost *, const char *name);

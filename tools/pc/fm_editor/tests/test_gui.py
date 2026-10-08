@@ -868,11 +868,9 @@ class GuiTest(GuiCase):
         app.toggle_dark()
         app.update()
         self.assertEqual(cards.card_scroll.canvas.cget("background"), ttk.Style(app).lookup("TFrame", "background"))
-        app.notebook.select(app.limits)
-        app.limits.advanced_shown.set(True)
-        app.limits._show_advanced()
+        app.notebook.select(app.values)
         app.update()
-        scroll = app.limits.scroll
+        scroll = app.values.scroll
         # Windows fonts can fit the whole form at 640px. Size the viewport
         # from the form itself so this exercises overflowing content there too.
         chrome_height = app.winfo_height() - scroll.canvas.winfo_height()
@@ -1473,7 +1471,7 @@ class GuiTest(GuiCase):
             self.assertIs(app.focus_get(), tab.search_entry)
             self.assertTrue(tab.search_entry.selection_present())
             tab.search.set("")
-        app.notebook.select(app.limits)
+        app.notebook.select(app.values)
         app.update()
         app.find()                      # a tab with no search: nothing happens
 
@@ -1532,13 +1530,14 @@ class GuiTest(GuiCase):
         stars.value.set("300")
         stars.set_cell()
         self.assertEqual(gs.read(app.project.other["guardian_stars"]).grid[12][1], 300)
-        # Limits: the advanced part as the opened mod uses it, each time.
+        # Values: what the opened mod sets, each time, with ↺ for it alone.
         app.project.other["limits"] = {"two_player": {"step": 1000}}
-        app.limits.refresh()
-        self.assertTrue(app.limits.advanced_shown.get())
-        app.project.other.pop("limits")
-        app.limits.refresh()
-        self.assertFalse(app.limits.advanced_shown.get())
+        app.values.refresh()
+        self.assertEqual(app.values.vars["two_player.step"].get(), "1000")
+        self.assertEqual(str(app.values.reverts["two_player.step"].cget("state")), "normal")
+        app.values.revert("two_player.step")
+        self.assertNotIn("limits", app.project.other)
+        self.assertEqual(str(app.values.reverts["two_player.step"].cget("state")), "disabled")
         # A slot left with weights that add up to nothing deals from the first tier.
         entry = {"tiers": {"common": {"cards": []}, "rare": {"cards": []}},
                  "slots": [{"tiers": {"common": 0, "rare": 5}}]}

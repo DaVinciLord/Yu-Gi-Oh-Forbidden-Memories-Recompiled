@@ -3,6 +3,7 @@
 #endif
 #ifdef MEMORIES_PC
 #include "pc/mods/mods.h"
+#include "pc/cards/tables.h"
 #endif
 #define gDuel_bEffectRequestStatus_IN_DATA
 #define DUEL_FIELD_GRID_ALIASES
@@ -232,7 +233,12 @@ void DuelEffect_ApplyMonsterRemoval(void) {
         n = m;
         D_8009B1AC = m;
         if (n >= 0x15) {
+#ifdef MEMORIES_PC
+            /* Crush Card's 1500, or a mod's "crush_card" (tables.h). */
+            D_8009B1AC = (s16)Tables_Value(TABLES_VALUE_CRUSH_CARD, n * CARD_STAT_SCALE);
+#else
             D_8009B1AC = n * CARD_STAT_SCALE;
+#endif
             gDuel_wCardEffectFlags = gDuel_wCardEffectFlags | 1;
         }
         D_8009B1AE = 5;
@@ -594,6 +600,22 @@ void DuelEffect_ApplyStatPenalty(void) {
         object->y = card->field_30.h.field_32;
         object->field_04 = *(u16 *)&card->field_34;
         object->field_14 = object->field_14 + ((s16)D_8009B1D0 << 14);
+#ifdef MEMORIES_PC
+        /* 500 and 1000, or a mod's "spellbinding_circle" and
+           "shadow_spell" (tables.h); the number shown is the same. In 32
+           bits: a large one used again must not wrap the 16-bit sum. */
+        {
+            s32 spellbinding = gDuel_wEffectCardID == DUEL_SPELLBINDING_CIRCLE_CARD_ID;
+            s32 penalty = spellbinding
+                ? (s32)Tables_Value(TABLES_VALUE_SPELLBINDING, DUEL_STAT_PENALTY_PER_LEVEL)
+                : (s32)Tables_Value(TABLES_VALUE_SHADOW_SPELL, 2 * DUEL_STAT_PENALTY_PER_LEVEL);
+            s32 lowered = record->stat_modifier - penalty;
+
+            object->field_1A = spellbinding ? 2 : 1;
+            record->stat_modifier = (s16)(lowered < -32768 ? -32768 : lowered);
+            object->field_12 = -penalty;
+        }
+#else
         if (gDuel_wEffectCardID == DUEL_SPELLBINDING_CIRCLE_CARD_ID) {
             object->field_1A = 2;
             record->stat_modifier =
@@ -605,6 +627,7 @@ void DuelEffect_ApplyStatPenalty(void) {
                 record->stat_modifier - 2 * DUEL_STAT_PENALTY_PER_LEVEL;
             object->field_12 = -2 * DUEL_STAT_PENALTY_PER_LEVEL;
         }
+#endif
         SD_SEPlayFull(0x21);
     }
 

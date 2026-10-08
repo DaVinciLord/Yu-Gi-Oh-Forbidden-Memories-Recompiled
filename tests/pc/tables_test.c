@@ -676,6 +676,53 @@ int main(void)
     add("lim7", "{\"limits\": {\"life_points\": {\"strat\": 9000}, \"two_player\": {\"stpe\": 100}}}");
     assert(notes == 6 && Tables_StartingLifePoints(1, 9, 8000) == 32767);
 
+    /* Values: the disc's until a mod says (the retail argument comes back
+     * untouched); the latest mod wins each; past what the game keeps or
+     * shows is held there with a note; a misspelt member is noted. */
+    Tables_Clear();
+    {
+        int which;
+        for (which = 0; which < TABLES_VALUE_COUNT; which++) assert(Tables_Value(which, 1234) == 1234);
+        assert(Tables_Value(-1, 7) == 7 && Tables_Value(TABLES_VALUE_COUNT, 7) == 7);
+        assert(Tables_RankAdjustment(40) == 40 && Tables_RankAdjustment(-40) == -40 && Tables_RankAdjustment(2) == 2);
+        assert(Tables_Limit("deck_copies") == 3 && Tables_Limit("rank_score.start") == 50);
+        assert(Tables_Limit("starchip_prize.S") == 5 && Tables_Limit("new_game_starchips") == 0);
+    }
+    notes = 0;
+    add("val1", "{\"limits\": {\"deck_copies\": 40, \"swords_turns\": 5, \"crush_card\": 2000,"
+                " \"spellbinding_circle\": 800, \"shadow_spell\": 0,"
+                " \"rank_score\": {\"start\": 60, \"exodia\": -10, \"deck_out\": 30},"
+                " \"starchip_prize\": {\"S\": 8, \"D\": 0}, \"new_game_starchips\": 500}}");
+    assert(notes == 0);
+    assert(Tables_Value(TABLES_VALUE_DECK_COPIES, 3) == 40 && Tables_Value(TABLES_VALUE_SWORDS_TURNS, 3) == 5);
+    assert(Tables_Value(TABLES_VALUE_CRUSH_CARD, 1500) == 2000 && Tables_Value(TABLES_VALUE_SPELLBINDING, 500) == 800);
+    assert(Tables_Value(TABLES_VALUE_SHADOW_SPELL, 1000) == 0);
+    assert(Tables_Value(TABLES_VALUE_RANK_START, 50) == 60);
+    assert(Tables_RankAdjustment(40) == -10 && Tables_RankAdjustment(-40) == 30 && Tables_RankAdjustment(2) == 2);
+    assert(Tables_Value(TABLES_VALUE_PRIZE + 4, 5) == 8 && Tables_Value(TABLES_VALUE_PRIZE + 0, 1) == 0);
+    assert(Tables_Value(TABLES_VALUE_PRIZE + 2, 3) == 3);     /* B: not given */
+    assert(Tables_Value(TABLES_VALUE_NEW_GAME_STARCHIPS, 0) == 500 && Tables_Limit("swords_turns") == 5);
+    add("val2", "{\"limits\": {\"deck_copies\": 1, \"rank_score\": {\"deck_out\": -5}}}");
+    assert(notes == 0 && Tables_Value(TABLES_VALUE_DECK_COPIES, 3) == 1 && Tables_RankAdjustment(-40) == -5);
+    assert(Tables_RankAdjustment(40) == -10);                  /* val1's still */
+    notes = 0;
+    add("val3", "{\"limits\": {\"deck_copies\": 41, \"swords_turns\": 0, \"starchip_prize\": {\"S\": 20, \"Z\": 1},"
+                " \"rank_score\": {\"start\": 150, \"exodia\": \"lots\"}, \"crush_card\": 40000,"
+                " \"spellbinding_circle\": 12000, \"new_game_starchips\": -1}}");
+    /* deck_copies 41, swords 0, S 20, "Z", start 150, "lots", crush 40000,
+     * spellbinding 12000, starchips -1 */
+    assert(notes == 9);
+    assert(Tables_Value(TABLES_VALUE_DECK_COPIES, 3) == 40);    /* held at the forty a deck holds */
+    assert(Tables_Value(TABLES_VALUE_SWORDS_TURNS, 3) == 5);    /* 0 left out */
+    assert(Tables_Value(TABLES_VALUE_PRIZE + 4, 5) == TABLES_VALUE_PRIZE_MAX);
+    assert(Tables_Value(TABLES_VALUE_RANK_START, 50) == 60);    /* past 99 left out */
+    assert(Tables_Value(TABLES_VALUE_CRUSH_CARD, 1500) == 32767 && Tables_Value(TABLES_VALUE_SPELLBINDING, 500) == 9999);
+    add("val4", "{\"limits\": {\"rank_score\": 5, \"starchip_prize\": [1]}}");
+    assert(notes == 11);
+    Tables_Clear();
+    assert(Tables_Value(TABLES_VALUE_DECK_COPIES, 3) == 3 && Tables_RankAdjustment(40) == 40);
+    assert(Tables_Value(TABLES_VALUE_PRIZE + 4, 5) == 5);
+
     /* {"remove": "all"}: no disc recipe makes anything, while the mods'
      * own rules still do (they come before the filtered disc table), and a
      * "setting" switches it like any other entry; a clear brings it back. */

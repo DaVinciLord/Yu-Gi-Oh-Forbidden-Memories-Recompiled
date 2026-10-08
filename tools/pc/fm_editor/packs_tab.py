@@ -219,7 +219,7 @@ class PacksTab(Tab):
         self.advanced_open = tk.BooleanVar(value=False)
         bottom = ttk.Frame(right)
         bottom.pack(side="bottom", fill="x")
-        # As Limits and Guardian Stars have it: a box, not a button.
+        # As Guardian Stars has it: a box, not a button.
         self.advanced_shown = tk.BooleanVar(self, value=False)
         self.advanced_button = ttk.Checkbutton(bottom, text="Show advanced", variable=self.advanced_shown,
                                                command=self.show_advanced)

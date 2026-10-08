@@ -23,7 +23,7 @@ it. In Cards, drag the line between the list and the card's form to give
 either more room; each scrolls across on its own when it is cut short. On a smaller window a tab gets scrollbars instead of being cut off; the
 mouse wheel scrolls it too, except over lists, text boxes and pictures,
 which keep their own scrolling. The Cards tab's right-hand options and the
-Limits tab also scroll vertically on their own: tabbing to a field brings it
+Values tab also scroll vertically on their own: tabbing to a field brings it
 into view.
 
 **ATK boost** and **DEF boost**, for an equip card, are what it adds to the
@@ -56,10 +56,10 @@ The window has a tab per table:
 | Duelists | every opponent of the Free Duel grid, a small portrait beside each name, grouped by the grid's pages: page 1 the disc's forty, page 2 and on the duelists the mod adds (**Add duelist...**, **Duplicate**, **Remove**). The one chosen shows its picture and the two the game draws of it (Internal 1x and 2x and up), where it sits on its page (a map of the page; a click on a face goes to that duelist), **Name and place...** (its name, id, base and slot) and **Picture...**/**Disc's face** (below, [Duelists](#duelists-added-duelists-and-portraits)). Then, per opponent, the deck pool and the S/A-POW, B/C/D and S/A-TEC drop pools: weights, their chance, the retail weight, and the total against 2048 (**Scale to 2048 (100%)** scales a pool back to 2048 the way the port does). The deck is either the **Weighted deck (retail)** or a **Fixed deck (40 cards)**: forty specific cards by their copies, counted against 40, each beside its weighted chance; **Copy the weighted deck's most likely 40**, **Clear**, **Revert to retail**; a line says what the pool deals (a deck pool, the forty it deals most often; a drop pool, the chance of a monster and its strongest one), beside the disc's once changed |
 | Starter decks | the decks a new game may be dealt in place of the disc's weighted pools: a deck's name, its weight against the other decks offered, and its cards by their copies, counted against the forty a deck holds, with a line of what it is made of (monsters and their average ATK, magic, traps...). **Add deck**: an empty deck, an opponent's (its fixed deck, or the forty its weighted deck deals most often), one deal of the disc's seven starter pools, or a copy of the selected one. **Weighted pools** (`starter_pools`): pools of the mod's own a new game's deck is drawn from, each its number of cards by its weights, the draws counted against forty; **Start from the disc's seven pools** to change them |
 | Map | how the player gets around the campaign map (below): at each of its sixteen places, its arrows (where each goes, the direction pressed, when it is open, its picture and spot), Confirm, the camera and, in the town, the Millennium Puzzle marker, edited on the place's screen drawn from your disc (drag the arrows, the marker and the map itself); **All routes**; the numbers under **Show advanced**; a way back for each changed part and **Revert every place**; **Map pictures...**: the marker, arrows and name panel, and the terrain's textures |
-| Limits | the numbers the game caps (`limits`, [gameplay tables](../../../notes/gameplay-tables.md#limits-atk-def-lp-starchips-and-more)). The simple part: the ATK and DEF cap, the LP a duel starts with, and how far healing goes. **Show advanced**: ATK and DEF apart, each side's starting LP, the two-player LP choice (start, most, step), the most starchips, the chest's copies, the Free Duel and two-player records, and a table of duelists with the LP each side starts with against them. An empty field is the game's own number (beside it, with the range the game keeps); a value past that range is warned about and held at the most the game keeps |
+| Values | the game's numbers a mod may change (written as `limits`, [gameplay tables](../../../notes/gameplay-tables.md#values-atk-def-lp-starchips-and-more)), in groups: **Duel** (starting LP for both sides or each, the LP healing stops at, the ATK and DEF cap), **Magic** (Swords of Revealing Light's turns, Crush Card's ATK, what Spellbinding Circle and Shadow Spell take off), **Deck and Trunk** (copies of a card in a deck, copies the Trunk keeps), **Rank** (the score a duel starts at, what an Exodia win and a win by the opponent's empty deck add), **Rewards** (the starchips a win gives at S to D, a new game's starchips, the most the save holds) and **Records and 2P** (the two-player LP choice and the records), and a table of duelists with the LP each side starts with against them. Each row shows the game's own value in grey (an empty field is it), turns blue when the mod changes it, has ↺ to put the game's back, and a line that says what it does with the range the game keeps; a value past that range turns its name red, with the reason under the groups, and the game holds it at the most it keeps or shows. **Reset all to the game's** empties every field |
 | Guardian Stars | the stars (`guardian_stars`, [Guardian Stars](../../../notes/modding.md#guardian-stars-names-icons-new-stars-and-matchups)): the list of stars with a name and an icon each (**Import icon (PNG)...**, with a preview; the game makes it 16x16 in the disc's stars' colours), **Add star** for 11 to 15 (a card holds its stars in 4 bits, so fifteen at most), and the full grid of matchups: a row is the attacker's star, a column the defender's, a cell the bonus the attacker's side gets, green above 0 and red below; click a cell, type a bonus or use **+ default**, **- default** or **0** (with **Reverse pair gets the opposite** on, the reverse cell takes the opposite sign). **Default bonus** moves the disc's 500 in both cycles, **Retail cycles** and **Clear all** are presets, **Revert to retail** takes the whole key away. **Set stars by rule...** sets many cards' first or second star from their attribute or type through a table you fill in (a Fire monster's first star is Fire), or one star for all, **(none)** included (a first star of none leaves the second as the card's one star, as the game reads it; both none, no star), over a filter of cards like Bulk fusions', with a preview and **Undo last batch**. **Show advanced**: a name per language (`fr=Feu, de=Feuer`), an icon's colours (`game` or its own), and what happens at a summon (`ask`, `first`, `best`). The Cards tab's star lists show the mod's stars as they are named here |
 | Packs | the card packs the mod sells for starchips on the Password screen: each pack's name, description, price, cards a pack and picture (shown as a card's art or, `image_style` `full`, the whole picture), its cards with their tier, weight and chance; a **Show advanced** part for everything else; **Shop settings...** and **Simulate...** (below); with no pack, an empty one or **a pack of an opponent's drops** (its cards at their drop weights) |
-| Mod info | id, name, version, author, description, `settings`, and the other `mod.json` keys, kept as written (`limits` is the Limits tab's, `guardian_stars` the Guardian Stars tab's). The settings are a list (key, label, type, default, and how many of the mod's entries each switches with `"setting"`) with a dialog a setting that shows what its type takes and checks it as the game does; their JSON is a page beside it |
+| Mod info | id, name, version, author, description, `settings`, and the other `mod.json` keys, kept as written (`limits` is the Values tab's, `guardian_stars` the Guardian Stars tab's). The settings are a list (key, label, type, default, and how many of the mod's entries each switches with `"setting"`) with a dialog a setting that shows what its type takes and checks it as the game does; their JSON is a page beside it |
 | Conflicts | the loader's checks, all or one level (errors, warnings, notes); double-click a line (or Return) to go to it, a line about another mod to the tab and card it is about. Below them, where this mod meets the **other mods installed** (beside the game and in the player's mods folder, or a folder chosen with **Other mods folder...**): the same lines as the game's Mods window, a warning where only one mod's change is used and a note where the changes add up or agree ([When mods overlap](../../../notes/modding.md#when-mods-overlap)) |
 
 **Retail effect** selects a built-in behavior by its original retail name.
@@ -208,7 +208,7 @@ write that restored version. Dialogs keep their own keyboard behavior.
 
 **Recovery and backups:** After two seconds without another edit, the editor
 updates a separate recovery copy of the working mod and its assets. Unapplied
-Cards, Mod info, Limits and Packs fields are included, even incomplete input.
+Cards, Mod info, Values and Packs fields are included, even incomplete input.
 This does not save or change the original mod folder. The editor offers to
 review leftover drafts on startup; **File > Recover work...** lists drafts and
 save backups, with their date and original folder. **Open copy** opens a separate
@@ -510,7 +510,7 @@ record are shown as retail fusions and marked.
   the rest of the key already gives; a mod's `beats` and `mirror` are read
   into the grid and written back as those pairs. Icons are written to
   `icons/star-<id>.png` in the mod folder.
-* `limits`: what the Limits tab sets, a key per field that is not empty
+* `limits`: what the Values tab sets, a key per field that is not empty
   (`"life_points": 16000` when only both sides' start is set); a key the tab
   does not show is kept as written.
 * `drops` and `decks`: per opponent and pool, the fewest listed weights that
@@ -927,14 +927,20 @@ into isolated folders and play real duels (no changes to your saves or mods):
     python3 tests/pc/editor_round_trip_runtime.py
     xvfb-run -a python3 tests/pc/editor_duelists_runtime.py
     python3 tests/pc/ritual_tributes_runtime.py --editor --interpreter
+    xvfb-run -a python3 tests/pc/editor_values_runtime.py
 
 `ritual_tributes_runtime.py` plays rituals of one to five tributes from the
 field, the hand and both, by the player and the CPU, natively and with the
 duel effects interpreted (its docstring lists every check). The
 `editor_round_trip_runtime.py` run makes a mod through every tab's own buttons and dialogs (cards,
-art, fusions, equips, rituals, duelists, starter decks, limits, Guardian
+art, fusions, equips, rituals, duelists, starter decks, values, Guardian
 Stars, packs, the map, a setting), exports it, and starts a new game into
 a duel on it: the game must read each part and note nothing against it.
+`editor_values_runtime.py` types every new value into the Values tab and
+plays the mod and the game without it: a duel to its end and results (LP,
+Crush Card, Spellbinding Circle, Shadow Spell, the Swords' turns, the rank
+score and the starchip prize), an Exodia and an empty-deck win, Build
+Deck's copies and a new game's starchips, with pictures of each.
 The others cover every monster type, converted equips and rituals, all 33 retail
 magic effects, trap thresholds and special triggers, and CPU spell decisions
 and outcomes compared with retail after saving and reopening the mod. Pass

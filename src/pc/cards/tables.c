@@ -24,6 +24,7 @@
 #include "pc/platform/paths.h"
 #include "pc/compat/fs.h"
 #include "game/card_constants.h"
+#include "game/duel_rank.h"
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1869,6 +1870,113 @@ static void read_life_points(const char *mod, const JsonValue *value)
     }
 }
 
+/* --- values ----------------------------------------------------------
+ *
+ * The game's other numbers, in "limits" beside the caps:
+ *
+ *     "deck_copies": n, "swords_turns": n, "crush_card": n,
+ *     "spellbinding_circle": n, "shadow_spell": n,
+ *     "rank_score": {"start": n, "exodia": n, "deck_out": n},
+ *     "starchip_prize": {"S": n, "A": n, "B": n, "C": n, "D": n},
+ *     "new_game_starchips": n
+ *
+ * Each key's latest mod wins. A section is the key, a "." and the member. */
+
+static const struct {
+    const char *key;
+    long retail, low, high;
+    const char *storage;            /* what keeping more would take; NULL: past `high` is meaningless */
+} value_keys[TABLES_VALUE_COUNT] = {
+    {"deck_copies", DECK_CARD_COPY_LIMIT, 1, DECK_SIZE, "a deck holds (forty cards)"},
+    {"swords_turns", 3, 1, TABLES_VALUE_SWORDS_MAX, "the field's card bar shows (one digit)"},
+    {"crush_card", DUEL_CRUSH_CARD_ATTACK_THRESHOLD, 0, TABLES_LIMIT_STAT_MAX, "an ATK reaches (a 16-bit number)"},
+    {"spellbinding_circle", 500, 0, CARD_STAT_MAX, "the effect's number shows (four digits)"},
+    {"shadow_spell", 1000, 0, CARD_STAT_MAX, "the effect's number shows (four digits)"},
+    {"rank_score.start", DUEL_RANK_SCORE_INITIAL, 0, 99, NULL},
+    {"rank_score.exodia", DUEL_RANK_ADJUST_EXODIA_WIN, -99, 99, NULL},
+    {"rank_score.deck_out", DUEL_RANK_ADJUST_DECK_OUT_WIN, -99, 99, NULL},
+    {"starchip_prize.D", 1, 0, TABLES_VALUE_PRIZE_MAX, "the results show (a starchip picture each, eight in a row)"},
+    {"starchip_prize.C", 2, 0, TABLES_VALUE_PRIZE_MAX, "the results show (a starchip picture each, eight in a row)"},
+    {"starchip_prize.B", 3, 0, TABLES_VALUE_PRIZE_MAX, "the results show (a starchip picture each, eight in a row)"},
+    {"starchip_prize.A", 4, 0, TABLES_VALUE_PRIZE_MAX, "the results show (a starchip picture each, eight in a row)"},
+    {"starchip_prize.S", 5, 0, TABLES_VALUE_PRIZE_MAX, "the results show (a starchip picture each, eight in a row)"},
+    {"new_game_starchips", 0, 0, TABLES_LIMIT_STARCHIPS_MAX, "the game shows (eight digits)"},
+};
+static long value_set[TABLES_VALUE_COUNT];
+static unsigned char value_given[TABLES_VALUE_COUNT];
+
+static void read_values(const char *mod, const JsonValue *limits)
+{
+    static const char *const sections[][2] = {{"rank_score", "start, exodia, deck_out"},
+                                              {"starchip_prize", "S, A, B, C, D"}};
+    char where[80];
+    long n;
+    int i, s;
+    for (s = 0; s < 2; s++) {
+        const JsonValue *section = Json_Member(limits, sections[s][0]);
+        size_t length = strlen(sections[s][0]);
+        if (!section) continue;
+        if (Json_TypeOf(section) != JSON_OBJECT) {
+            Mods_Note(mod, "limits: \"%s\" is an object of %s", sections[s][0], sections[s][1]);
+            continue;
+        }
+        for (i = 0; i < Json_Count(section); i++) {
+            const char *name = Json_Name(Json_At(section, i));
+            int k, known = 0;
+            for (k = 0; k < TABLES_VALUE_COUNT && !known; k++)
+                known = !strncmp(value_keys[k].key, sections[s][0], length) && value_keys[k].key[length] == '.' &&
+                        !strcmp(value_keys[k].key + length + 1, name);
+            if (!known) Mods_Note(mod, "limits: %s has no \"%s\" (%s)", sections[s][0], name, sections[s][1]);
+        }
+    }
+    for (i = 0; i < TABLES_VALUE_COUNT; i++) {
+        const char *key = value_keys[i].key, *dot = strchr(key, '.');
+        const JsonValue *value;
+        if (dot) {
+            char section[32];
+            snprintf(section, sizeof(section), "%.*s", (int)(dot - key), key);
+            value = Json_Member(Json_Member(limits, section), dot + 1);
+            if (value && Json_TypeOf(Json_Member(limits, section)) != JSON_OBJECT) value = NULL;
+            snprintf(where, sizeof(where), "%s \"%s\"", section, dot + 1);
+        } else {
+            value = Json_Member(limits, key);
+            snprintf(where, sizeof(where), "\"%s\"", key);
+        }
+        if (!value) continue;
+        if (!value_keys[i].storage && Json_TypeOf(value) == JSON_NUMBER &&
+            Json_Number(value, 0) > value_keys[i].high) {
+            Mods_Note(mod, "limits: %s is at most %ld; left out", where, value_keys[i].high);
+            continue;
+        }
+        if (limit_number(mod, where, value, value_keys[i].low, value_keys[i].high,
+                         value_keys[i].storage ? value_keys[i].storage : "", &n)) {
+            value_set[i] = n;
+            value_given[i] = 1;
+        }
+    }
+}
+
+long Tables_Value(int which, long retail)
+{
+    if (which < 0 || which >= TABLES_VALUE_COUNT || !value_given[which]) return retail;
+    return value_set[which];
+}
+
+int Tables_RankAdjustment(int tag)
+{
+    if (tag == DUEL_RANK_ADJUST_EXODIA_WIN) return (int)Tables_Value(TABLES_VALUE_RANK_EXODIA, tag);
+    if (tag == DUEL_RANK_ADJUST_DECK_OUT_WIN) return (int)Tables_Value(TABLES_VALUE_RANK_DECK_OUT, tag);
+    return tag;
+}
+
+static int values_set(void)
+{
+    int i;
+    for (i = 0; i < TABLES_VALUE_COUNT; i++)
+        if (value_given[i]) return 1;
+    return 0;
+}
+
 static void read_limits(const char *mod, const JsonValue *limits)
 {
     static const char *const two_player_keys[3] = {"start", "max", "step"};
@@ -1883,13 +1991,16 @@ static void read_limits(const char *mod, const JsonValue *limits)
     }
     for (i = 0; i < Json_Count(limits); i++) {
         static const char *const keys[] = {"stats", "attack", "defense", "life_points", "two_player", "starchips",
-                                            "chest", "free_duel_record", "two_player_record"};
+                                            "chest", "free_duel_record", "two_player_record", "deck_copies",
+                                            "swords_turns", "crush_card", "spellbinding_circle", "shadow_spell",
+                                            "rank_score", "starchip_prize", "new_game_starchips"};
         const char *name = Json_Name(Json_At(limits, i));
         size_t k;
         for (k = 0; k < sizeof(keys) / sizeof(keys[0]) && strcmp(name, keys[k]); k++) {}
         if (k == sizeof(keys) / sizeof(keys[0]))
             Mods_Note(mod, "limits: no limit \"%s\" (stats, attack, defense, life_points, two_player, starchips, chest, "
-                      "free_duel_record, two_player_record)", name);
+                      "free_duel_record, two_player_record, deck_copies, swords_turns, crush_card, "
+                      "spellbinding_circle, shadow_spell, rank_score, starchip_prize, new_game_starchips)", name);
     }
 #define STAT_STORAGE "the game keeps (a 16-bit number; more would mean widening every card record)"
     if (limit_number(mod, "\"stats\"", Json_Member(limits, "stats"), 0, TABLES_LIMIT_STAT_MAX, STAT_STORAGE, &n))
@@ -1928,6 +2039,7 @@ static void read_limits(const char *mod, const JsonValue *limits)
     if (limit_number(mod, "\"two_player_record\"", Json_Member(limits, "two_player_record"), 1,
                      TABLES_LIMIT_TWO_PLAYER_RECORD_MAX, "the save keeps (a 16-bit number)", &n))
         limit_two_player_record = (int)n;
+    read_values(mod, limits);
 }
 
 int Tables_StatCap(int defense)
@@ -2007,6 +2119,12 @@ long Tables_Limit(const char *name)
     if (same_letters(name, "chest")) return Tables_ChestLimit();
     if (same_letters(name, "free_duel_record")) return Tables_FreeDuelRecordCap();
     if (same_letters(name, "two_player_record")) return Tables_TwoPlayerRecordCap();
+    {
+        /* The values by their keys: "deck_copies", "rank_score.start"... */
+        int i;
+        for (i = 0; i < TABLES_VALUE_COUNT; i++)
+            if (same_letters(name, value_keys[i].key)) return Tables_Value(i, value_keys[i].retail);
+    }
     return -1;
 }
 
@@ -2311,6 +2429,7 @@ void Tables_Clear(void)
     memset(limit_two_player, 0, sizeof(limit_two_player));
     limit_life_max = limit_record = limit_two_player_record = duelist_life_count = 0;
     limit_starchips = -1;
+    memset(value_given, 0, sizeof(value_given));
     memset(terrain_bonus, 0, sizeof(terrain_bonus));
     memset(terrain_listed, 0, sizeof(terrain_listed));
     memset(trap_listed, 0, sizeof(trap_listed));
@@ -2353,4 +2472,9 @@ void Tables_Build(void)
             Tables_TwoPlayerLifePoints(TABLES_TWO_PLAYER_MAX, DUEL_STARTING_LIFE_POINTS),
             Tables_TwoPlayerLifePoints(TABLES_TWO_PLAYER_STEP, DUEL_LIFE_POINT_SELECTION_STEP), Tables_StarchipCap(),
             Tables_ChestLimit(), Tables_FreeDuelRecordCap());
+    if (values_set()) {
+        int i;
+        for (i = 0; i < TABLES_VALUE_COUNT; i++)
+            if (value_given[i]) LOG(LOG_MODS, "tables: value %s %ld", value_keys[i].key, value_set[i]);
+    }
 }
