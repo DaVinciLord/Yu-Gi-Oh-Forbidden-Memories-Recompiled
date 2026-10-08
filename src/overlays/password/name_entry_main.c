@@ -137,8 +137,8 @@ void NameEntry_Main(void)
     /* The cleared save's 0, or a mod's "new_game_starchips" (tables.h),
        at most the starchips the save holds. */
     {
-        unsigned long starchips = (unsigned long)Tables_Value(TABLES_VALUE_NEW_GAME_STARCHIPS, 0);
-        state->starchips = starchips > Tables_StarchipCap() ? Tables_StarchipCap() : (u32)starchips;
+        u32 starchips = (u32)Tables_Value(TABLES_VALUE_NEW_GAME_STARCHIPS, 0);
+        state->starchips = starchips > Tables_StarchipCap() ? Tables_StarchipCap() : starchips;
     }
 #endif
     checksum = 0;

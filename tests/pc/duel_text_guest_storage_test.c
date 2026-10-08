@@ -20,6 +20,7 @@ void func_80036C14(DuelEffectChannel *p, s32 id) { (void)p; (void)id; abort(); }
 void CardTextColors_Apply(DuelEffectChannel *channel, int part, int star)
 { (void)channel; (void)part; (void)star; }
 void CardTextColors_Restore(DuelEffectChannel *channel) { (void)channel; }
+void DuelUi_NameStream(void *channel, int on) { (void)channel; (void)on; }
 int main(void) {
     MemoriesMemory *memory = calloc(1, sizeof(*memory)); assert(memory && !GuestRuntime_Bind(memory));
     DuelEffectChannel *channel = Memories_Resolve(memory, 0x801b1000, sizeof(*channel), 4);
