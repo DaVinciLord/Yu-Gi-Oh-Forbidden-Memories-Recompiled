@@ -211,12 +211,21 @@ def brightens(value) -> bool:
     return isinstance(value, int) and value != 0xFFFFFF and max(value >> 16, value >> 8 & 255, value & 255) >= 0xC0
 
 
+def fixed_cursor(widget) -> str:
+    """The mouse pointer over a thing that is chosen but cannot be moved."""
+    system = widget.tk.call("tk", "windowingsystem")
+    return {"win32": "no", "aqua": "notallowed"}.get(system, "X_cursor")
+
+
 class Stage(tk.Canvas):
     """The game's 320 x 240 at a whole zoom: pictures placed in the game's
     pixels, dragged with the mouse (the game's pixels again, on release;
     on_drag hears each step on the way) or nudged with the arrow keys (8
     with Shift), one chosen at a time with a dashed box round it. Pictures
-    are pngio images, kept as Tk photos (zoomed by Tk) until they change."""
+    are pngio images, kept as Tk photos (zoomed by Tk) until they change.
+    axes[key] says which ways a thing moves ("xy" unless set: "y" up and
+    down only, "" not at all, though it is still chosen by a click); the
+    pointer over it says so."""
 
     def __init__(self, master, zoom: int = 2, on_select=None, on_move=None, on_wheel=None, on_drag=None,
                  on_hover=None):
@@ -230,6 +239,7 @@ class Stage(tk.Canvas):
         self.items = {}           # key -> canvas items
         self.boxes = {}           # key -> (x, y, w, h) in the game's pixels
         self.draggable = set()
+        self.axes = {}
         self.chosen = None
         self.drag = None
         self.bind("<ButtonPress-1>", self._press)
@@ -271,6 +281,7 @@ class Stage(tk.Canvas):
         self.items.clear()
         self.boxes.clear()
         self.draggable.clear()
+        self.axes.clear()
 
     def picture(self, key, image: pngio.Image, x: int, y: int, drag=True, box=None):
         """`image` with its top left at x, y; `box` (x, y, w, h) is what
@@ -337,14 +348,26 @@ class Stage(tk.Canvas):
                 return key
         return None
 
+    def moves(self, key) -> str:
+        return self.axes.get(key, "xy")
+
     def _hover(self, event):
-        self.configure(cursor="fleur" if self.key_at(event.x, event.y) is not None else "arrow")
+        key = self.key_at(event.x, event.y)
+        if key is None:
+            cursor = "arrow"
+        else:
+            cursor = {"xy": "fleur", "y": "sb_v_double_arrow", "x": "sb_h_double_arrow"}.get(self.moves(key)) or \
+                fixed_cursor(self)
+        if str(self.cget("cursor")) != cursor:
+            self.configure(cursor=cursor)
         if self.on_hover and not self.drag:
             self.on_hover((event.x // self.zoom, event.y // self.zoom))
 
     def _nudge(self, event, dx, dy):
         step = 8 if event.state & 1 else 1          # Shift
-        if self.chosen in self.draggable and self.on_move:
+        moves = self.moves(self.chosen)
+        dx, dy = (dx if "x" in moves else 0), (dy if "y" in moves else 0)
+        if self.chosen in self.draggable and self.on_move and (dx or dy):
             self.on_move(self.chosen, dx * step, dy * step)
         return "break"
 
@@ -360,7 +383,9 @@ class Stage(tk.Canvas):
             return
         key, x0, y0, moved_x, moved_y = self.drag
         z = self.zoom
-        dx, dy = round((event.x - x0) / z), round((event.y - y0) / z)
+        moves = self.moves(key)
+        dx = round((event.x - x0) / z) if "x" in moves else 0
+        dy = round((event.y - y0) / z) if "y" in moves else 0
         if (dx, dy) != (moved_x, moved_y):
             for item in self.items.get(key, ()):
                 self.move(item, (dx - moved_x) * z, (dy - moved_y) * z)
@@ -648,7 +673,7 @@ class UiTab(Tab):
               "Click the background for its colours."),
              ("menu", "Menus", ("ui_title", "MenuPage"), "Drag a button to place it; the list sets the order."),
              ("duel", "Duel", ("ui_duel", "DuelPage"), "Drag to move, wheel to size, arrows nudge. "
-              "Each half of the life points is its own."),
+              "The LP and FIELD move up and down only; the card bar stays put."),
              ("board", "Duel board", ("ui_board", "BoardPage"), "Click a part of the board or the list; Replace "
               "puts your PNG in its place.")]
 

@@ -719,9 +719,9 @@ from your disc and drags them about.
 ```json
 "ui": {
     "duel": {
-        "lp_opponent": {"x": -236, "tint": "#FF9090", "digits": "#FFE040", "label": "RIVAL"},
-        "lp_player": {"x": -236, "y": 30, "scale": 150, "image": "art/lp.png"},
-        "field": {"x": 240, "tint": "#80C0FF"},
+        "lp_opponent": {"y": 24, "tint": "#FF9090", "digits": "#FFE040", "label": "RIVAL"},
+        "lp_player": {"y": -28, "scale": 120, "image": "art/lp.png"},
+        "field": {"y": 40, "scale": 110, "tint": "#80C0FF"},
         "card_bar": {"tint": "#C0C0FF"},
         "hand_cursor": {"tint": "#FFFF40", "scale": 150},
         "field_cursor": {"hide": true}
@@ -731,17 +731,17 @@ from your disc and drags them about.
 
 | Picture | What it is |
 |---|---|
-| `lp_opponent` | the panel's top half: LP, COM and the opponent's life points and deck count |
-| `lp_player` | its bottom half: YOU and the player's |
-| `field` | the FIELD box, with the terrain's name |
-| `card_bar` | the strip under the hand: the card's name, ATK/DEF and stars are drawn over it, and the hand goes with it, so it stays where the game has it: only its colours, a picture of its own or none |
+| `lp_opponent` | the panel's top half: LP, COM and the opponent's life points and deck count; up and down only, at most 161 % (201 % drawn from an `image`) |
+| `lp_player` | its bottom half: YOU and the player's; the same |
+| `field` | the FIELD box, with the terrain's name; up and down only, at most 130 % |
+| `card_bar` | the strip under the hand: the card's name, ATK/DEF and stars are drawn over it, and the hand goes with it, so it stays where the game has it, at its size: only its colours, a picture of its own or none |
 | `hand_cursor` | the red arrow under the card the cursor is on |
 | `field_cursor` | the frame round the zone a card is going to |
 
 | Key | Meaning |
 |---|---|
-| `x`, `y` | moved by so many of the game's pixels, -400 to 400 across, -300 to 300 down |
-| `scale` | its size in percent, 25 to 400, about its middle (100 as it is) |
+| `x`, `y` | moved by so many of the game's pixels, -400 to 400 across (the cursors only), -300 to 300 down |
+| `scale` | its size in percent, 25 to 400, about its middle (100 as it is; less for the panel's halves and the box, below) |
 | `tint` | its colours multiplied, `#RRGGBB` (`#FFFFFF` as they are; a colour can only darken what is there) |
 | `hide` | `true`: not drawn |
 | `image` | a PNG in the mod drawn instead, over the picture's place (moved and sized with it), `width` and `height` its size in the game's pixels instead of the picture's |
@@ -749,8 +749,17 @@ from your disc and drags them about.
 | `label` | the LP halves: words in place of COM or YOU, at most 15 letters, set in the font the card names are (with View > Opponent's name for COM the opponent's name shows there; a label wins) |
 
 Everything is done as the game draws the pictures, never to the game's own
-objects, so its slides (the panel and the box leave the screen for a
-battle), the turn's colours and the cursors' moves go on as they do. The
+objects, so its slides, the turn's colours and the cursors' moves go on as
+they do. The game hides the panel and the FIELD box by sliding them off the
+side of the screen (the panel right, the box left, for each battle and the
+duel's end, and for Exodia a shorter way), so those move up and down only:
+moved so, a half or the box slides with the game's, pixel for pixel, and is
+off the screen when the game's is. An `x` for them is left out, and a size
+that would still reach onto the screen where the game slides them to is
+brought down to the most that does not (an LP half reaches 8 further with
+a fifth digit, LP over 9999; a picture by its own `width`), both noted. A
+piece of a sized one goes off the edge as the game's own would, where it is
+drawn. The
 digits and the label go with their half; the label is not drawn over a
 half's `image`,
 which has words of its own if it wants them, and the digits are. A moved

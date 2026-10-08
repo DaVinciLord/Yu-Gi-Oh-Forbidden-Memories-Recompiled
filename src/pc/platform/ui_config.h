@@ -46,6 +46,15 @@ typedef struct {
     int any;                    /* some element is set */
 } UiConfig;
 
+/* Elements the game slides off the screen sideways (the LP halves, the
+ * FIELD box) are moved up or down only and sized no more than leaves the
+ * screen with the game's (ui_config.c). How far an element drawn at
+ * `scale` (its own pieces, or a picture of the mod's own with its "width"
+ * and "height", 0 for the element's) reaches from its middle; the most
+ * size at which it still leaves the screen (UI_SCALE_MAX for one that does
+ * not slide, 100 for one that cannot be sized). */
+int UiConfig_Reach(int which, int scale, int picture, int width, int height);
+int UiConfig_ScaleMax(int which, int picture, int width, int height);
 /* The retail duel, then each applied mod's "ui" over it, a later mod's
  * value winning key by key. */
 const UiConfig *UiConfig_Load(void);

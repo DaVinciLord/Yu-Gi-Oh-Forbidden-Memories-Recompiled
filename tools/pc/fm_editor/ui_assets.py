@@ -114,9 +114,6 @@ FIELD_CURSOR_PARTS = [(33, 53, 32, 8, 176, 8, False), (33, 109, 32, 8, 208, 8, F
                       (57, 93, 8, 16, 192, 32, False), (2, 53, 32, 8, 176, 8, True), (2, 61, 8, 16, 184, 32, True),
                       (2, 93, 8, 16, 192, 32, True), (2, 109, 32, 8, 208, 8, True), (2, 77, 32, 16, 176, 16, True)]
 FIELD_CURSOR_PAGE = (960, 256, 4, 304, 240)
-# The hand's five cards (func_800235C0: 60 apart from x 14 under the bar's top).
-HAND_AT = [(14 + 60 * i, 146) for i in range(5)]
-
 # Each element's place in the game's 320 x 240 (x, y, w, h), its middle the point a
 # "scale" sizes it about (duel_ui.c).
 DUEL_RECTS = {"lp_opponent": (248, 16, 64, 20), "lp_player": (248, 36, 64, 20), "field": (12, 24, 56, 24),

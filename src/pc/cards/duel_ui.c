@@ -133,6 +133,15 @@ static u8 tinted(int level, uint32_t tint, int shift)
     return (u8)(level * (int)(tint >> shift & 0xFF) / 0xFF);
 }
 
+/* The screen's rule for a sprite (DisplayObject_RenderSpriteSheet's, for
+ * the screen's sprites): one wholly off the 320 x 240 is not drawn, one
+ * partly on is drawn whole (widescreen shows past the sides). Here it is
+ * applied to where a piece is drawn, not where the game has it. */
+static int off_screen(int x0, int y0, int x1, int y1)
+{
+    return x1 <= 0 || x0 >= 320 || y1 <= 0 || y0 >= 240;
+}
+
 /* A sprite's texels u, v (w x h of them, from its own u, v) drawn at x, y
  * (the game's place for that corner) as `place` puts them: the game's own
  * fast sprite at its own size, else a quad whose far edges are the texel
@@ -153,6 +162,7 @@ static void draw_piece(const GsSPRITE *sprite, int mode, int du, int dv, int w, 
     piece.g = tinted(sprite->g, place->tint, 8);
     piece.b = tinted(sprite->b, place->tint, 0);
     if (place->scale == 100 || mode == 3) {
+        if (off_screen(x0, y0, x0 + w, y0 + h)) return;
         piece.x = (short)x0;
         piece.y = (short)y0;
         if (mode == 2) GsSortFlipSprite(&piece, (GsOT *G32)ot, (u16)depth);
@@ -160,7 +170,7 @@ static void draw_piece(const GsSPRITE *sprite, int mode, int du, int dv, int w, 
         else GsSortFastSprite(&piece, (GsOT *G32)ot, (u16)depth);
         return;
     }
-    if (x1 <= x0 || y1 <= y0) return;
+    if (x1 <= x0 || y1 <= y0 || off_screen(x0, y0, x1, y1)) return;
     memset(&quad, 0, sizeof(quad));
     setPolyFT4(&quad);
     if (attribute & 0x40000000) setSemiTrans(&quad, 1);
@@ -311,7 +321,7 @@ static int draw_picture(int which, int x, int y, int w, int h, const Place *plac
     y0 = place_y(place, y);
     x1 = place_x(place, x + w);
     y1 = place_y(place, y + h);
-    if (x1 <= x0 || y1 <= y0) return 1;
+    if (x1 <= x0 || y1 <= y0 || off_screen(x0, y0, x1, y1)) return 1;
     bank_picture = internal_scale() > 1 ? picture(which, x1 - x0, y1 - y0, 1) : NULL;
     if (!bank_picture && !(bank_picture = picture(which, x1 - x0, y1 - y0, 0))) return 0;
     /* The pads too: a bank's polygon reads its third one as a fade
@@ -386,6 +396,34 @@ static int capture(DisplayObject *object, s32 ot, s32 depth, DisplayObjectCaptur
     return caught->count;
 }
 
+static int sheet_extent(DisplayObject *object, int *x0, int *y0, int *x1, int *y1);
+
+/* All of a screen sprite sheet's sprites, wherever the game has it, moved
+ * by dx, dy: taken with the object where the screen keeps them all (the
+ * game leaves out a sprite only when it is wholly off the screen) and put
+ * back, so the screen's rule is applied where each is drawn (draw_piece),
+ * as a slide carries a moved or sized one off. Any other kind of object:
+ * its sprites as the game sorts them. */
+static int capture_all(DisplayObject *object, s32 ot, s32 depth, int dx, int dy, DisplayObjectCapture *caught)
+{
+    int x0, y0, x1, y1, sx = 0, sy = 0, i;
+    if (sheet_extent(object, &x0, &y0, &x1, &y1)) {
+        if (x0 < 0 || x1 > 320) sx = 160 - (x0 + x1) / 2;
+        if (y0 < 0 || y1 > 240) sy = 120 - (y0 + y1) / 2;
+    }
+    object->field_30.h.field_30 += sx;
+    object->field_30.h.field_32 += sy;
+    capture(object, ot, depth, caught);
+    object->field_30.h.field_30 -= sx;
+    object->field_30.h.field_32 -= sy;
+    for (i = 0; i < caught->count; i++) {
+        GsSPRITE *sprite = (GsSPRITE *)&caught->sprite[i];
+        sprite->x = (short)(sprite->x + dx - sx);
+        sprite->y = (short)(sprite->y + dy - sy);
+    }
+    return caught->count;
+}
+
 /* The panel as its two halves, each moved, sized and coloured on its own,
  * or a picture, or nothing; widened a digit for a fifth (as
  * Duel_DrawWideLifePointPanel widens the whole). Submitted last first, as
@@ -395,12 +433,15 @@ static void draw_panel(DisplayObject *object, s32 ot, s32 depth)
     DisplayObjectCapture caught;
     const GsSPRITE *sprite;
     int half;
-    if (capture(object, ot, depth, &caught) != 1 || caught.sprite[0].extent.wh.w.word != PANEL_W ||
+    if (capture_all(object, ot, depth, 0, 0, &caught) != 1 || caught.sprite[0].extent.wh.w.word != PANEL_W ||
         caught.sprite[0].extent.wh.h != PANEL_H) {
-        /* Not the plain panel (off screen, culled): the game's own. */
+        /* Not the plain panel: the game's own, as the game leaves them out. */
         int i;
-        for (i = 0; i < caught.count; i++)
-            DisplayObject_SubmitPacket(&caught.sprite[i], 0, ot, caught.mode[i], 0);
+        for (i = 0; i < caught.count; i++) {
+            const GsSPRITE *s = (const GsSPRITE *)&caught.sprite[i];
+            if (!off_screen(s->x, s->y, s->x + s->w, s->y + s->h))
+                DisplayObject_SubmitPacket(&caught.sprite[i], 0, ot, caught.mode[i], 0);
+        }
         return;
     }
     sprite = (const GsSPRITE *)&caught.sprite[0];
@@ -457,7 +498,7 @@ int DuelUi_RenderObject(DisplayObject *object, s32 ot, s32 depth)
 {
     DisplayObjectCapture caught;
     const UiElement *e;
-    int which, i, x0, y0, x1, y1, dx, dy;
+    int which, i, x0, y0, x1, y1;
     Place place;
     if (!prepared) DuelUi_Prepare();
     if (!config->any || !in_duel() || (which = element_of(object)) < 0) return 0;
@@ -468,25 +509,15 @@ int DuelUi_RenderObject(DisplayObject *object, s32 ot, s32 depth)
     }
     if (!changed(which)) return 0;
     e = element(which);
-    if (e->hidden) return 1;
-    /* Off the screen where the game has it (a slide away): gone here too.
-     * On it, its sprites are taken where it is moved to, so the screen cuts
-     * what is off it there, not where the game has it. */
+    if (e->hidden || !capture_all(object, ot, depth, e->x, e->y, &caught)) return 1;
+    /* Its place, moved: where all of a sheet's parts go, or where all of
+     * its sprites are (a variant the bar takes in some views). */
     if (sheet_extent(object, &x0, &y0, &x1, &y1)) {
-        if (x1 <= 0 || x0 >= 320 || y1 <= 0 || y0 >= 240) return 1;
-        dx = e->x;
-        dy = e->y;
-        object->field_30.h.field_30 += dx;
-        object->field_30.h.field_32 += dy;
-        capture(object, ot, depth, &caught);
-        object->field_30.h.field_30 -= dx;
-        object->field_30.h.field_32 -= dy;
-        make_place(which, (x0 + x1) / 2 + dx, (y0 + y1) / 2 + dy, &place);
-        place.dx = place.dy = 0;
+        x0 += e->x;
+        x1 += e->x;
+        y0 += e->y;
+        y1 += e->y;
     } else {
-        /* Any other kind of sheet (a variant the bar takes in some views):
-         * its sprites where the game puts them, all of them its place. */
-        if (!capture(object, ot, depth, &caught)) return 1;
         x0 = y0 = 0x7FFF;
         x1 = y1 = -0x8000;
         for (i = 0; i < caught.count; i++) {
@@ -496,10 +527,10 @@ int DuelUi_RenderObject(DisplayObject *object, s32 ot, s32 depth)
             if (sprite->x + sprite->w > x1) x1 = sprite->x + sprite->w;
             if (sprite->y + sprite->h > y1) y1 = sprite->y + sprite->h;
         }
-        make_place(which, (x0 + x1) / 2, (y0 + y1) / 2, &place);
-        dx = dy = 0;
     }
-    if (draw_picture(which, x0 + dx, y0 + dy, x1 - x0, y1 - y0, &place, ot, depth)) return 1;
+    make_place(which, (x0 + x1) / 2, (y0 + y1) / 2, &place);
+    place.dx = place.dy = 0;
+    if (draw_picture(which, x0, y0, x1 - x0, y1 - y0, &place, ot, depth)) return 1;
     for (i = 0; i < caught.count; i++) {
         const GsSPRITE *s = (const GsSPRITE *)&caught.sprite[i];
         draw_piece(s, (int)((u32)caught.mode[i] >> 16), 0, 0, s->w, s->h, s->x, s->y, &place, ot, depth);
@@ -545,8 +576,9 @@ int DuelUi_DrawDigits(int side, DisplayObject *panel, void *digit_sprite, int va
     Place place;
     if (!panel_changed() || !changed(which) || !panel_corner(panel, &x, &y)) return 0;
     e = element(which);
-    /* Gone with the panel when the game's is off the screen (a slide away). */
-    if (e->hidden || x + PANEL_W <= 0 || x >= 320 || y + PANEL_H <= 0 || y >= 240) return 1;
+    if (e->hidden) return 1;
+    /* Each digit by the screen's rule where it is drawn (draw_piece): off
+     * it with its half on a slide away. */
     make_place(which, x + PANEL_W / 2, y + half * HALF_H + HALF_H / 2, &place);
     place.tint = e->digits;
     Text_EncodeDecimalDigits(value, count, temp);
