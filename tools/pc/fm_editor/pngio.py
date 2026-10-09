@@ -6,6 +6,7 @@ top to bottom.
 """
 from __future__ import annotations
 
+import hashlib
 import struct
 import zlib
 
@@ -17,7 +18,9 @@ class PngError(Exception):
 
 
 class Image:
-    __slots__ = ("width", "height", "rgba")
+    """Never changed once made: a copy is the image itself, so the undo
+    history's snapshots share one picture rather than storing it each time."""
+    __slots__ = ("width", "height", "rgba", "_digest")
 
     def __init__(self, width: int, height: int, rgba: bytes):
         if len(rgba) != width * height * 4:
@@ -27,6 +30,22 @@ class Image:
     @property
     def size(self):
         return self.width, self.height
+
+    def __copy__(self):
+        return self
+
+    def __deepcopy__(self, memo):
+        return self
+
+    def digest(self) -> bytes:
+        """SHA-256 of its size and pixels, worked out once."""
+        try:
+            return self._digest
+        except AttributeError:
+            h = hashlib.sha256(struct.pack("<II", self.width, self.height))
+            h.update(self.rgba)
+            self._digest = h.digest()
+            return self._digest
 
     def __eq__(self, other):
         return isinstance(other, Image) and self.size == other.size and self.rgba == other.rgba

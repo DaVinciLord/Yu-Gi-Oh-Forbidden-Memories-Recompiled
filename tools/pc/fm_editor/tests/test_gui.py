@@ -2144,7 +2144,7 @@ class GuiTest(GuiCase):
         app.restore_drafts(forms)
         self.assertEqual(app.cards.vars["attack"].get(), "unfinished")
         self.assertTrue(widget.get("1.0", "end-1c").endswith("Draft text"))
-        with mock.patch.object(app.recovery, "write", side_effect=OSError("disk full")):
+        with mock.patch.object(app.recovery, "write_job", side_effect=OSError("disk full")):
             app.autosave()
         self.assertIn("Recovery copy failed", app.edit_state.cget("text"))
         self.assertTrue(rows[0][1].exists())

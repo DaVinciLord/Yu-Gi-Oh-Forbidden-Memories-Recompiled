@@ -7,7 +7,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from . import disc, gamedata, manifest, settings, theme, validate
 from .model import KEY_RE, Project
-from .editing import Editing
+from .editing import RECOVERY_CHOICES, Editing, recovery_label
 from . import card_links, history, recovery, screen, zoom
 from .art_tab import ArtTab
 from .map_tab import MapTab
@@ -134,6 +134,11 @@ class App(Editing, tk.Tk):
         self.file_menu.add_command(label="Save as...", command=lambda: self.save(ask=True))
         self.file_menu.add_command(label="Export mod...", command=lambda: self.save(ask=True, export=True))
         self.file_menu.add_command(label="Recover work...", command=self.recover_work)
+        recovery_menu = tk.Menu(self.file_menu, tearoff=False)
+        for minutes in RECOVERY_CHOICES:
+            recovery_menu.add_radiobutton(label=recovery_label(minutes), variable=self.recovery_choice,
+                                          value=minutes, command=self.choose_recovery)
+        self.file_menu.add_cascade(label="Recovery copy", menu=recovery_menu)
         self.file_menu.add_separator()
         self.import_index = self.file_menu.index("end")
         self.file_menu.add_command(label="Game files...", command=self.choose_game)
@@ -531,6 +536,8 @@ class App(Editing, tk.Tk):
             path = manifest.save_mod(self.project, folder)
         except (ValueError, OSError) as problem:
             messagebox.showerror(APP_TITLE, str(problem), parent=self)
+            if self.recovery_choice.get():
+                self.autosave(wait=False)       # the work is not on disk: a copy of it now
             return False
         self.dirty = False
         self._recovered = False
@@ -650,6 +657,8 @@ class App(Editing, tk.Tk):
 
     def destroy(self):
         self.cancel_edit_jobs()
+        if self._recovery_writer is not None:      # a copy being written: not cut off half-way
+            self._recovery_writer.wait()
         # Also stop widget/dialog idle callbacks before their Tcl commands
         # disappear. Cancelled only: after_cancel() also deletes a job's
         # command, which a widget registered and deletes itself on destroy
