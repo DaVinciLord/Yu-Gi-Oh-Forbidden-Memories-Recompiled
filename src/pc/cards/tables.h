@@ -219,7 +219,7 @@ enum {
 };
 /* The most the game shows or keeps for some of them. */
 #define TABLES_VALUE_SWORDS_MAX 9      /* one digit on the field's card bar */
-#define TABLES_VALUE_PRIZE_MAX 8       /* a starchip picture each, eight in the results' row */
+#define TABLES_VALUE_PRIZE_MAX 1000    /* past the row's eight pictures, one and "xN" (starchip_prize.h) */
 long Tables_Value(int which, long retail);
 /* What a duel's end adds to the winner's rank score: `tag` is the side's
  * result_adjustment, 40 (DUEL_RANK_ADJUST_EXODIA_WIN) and -40

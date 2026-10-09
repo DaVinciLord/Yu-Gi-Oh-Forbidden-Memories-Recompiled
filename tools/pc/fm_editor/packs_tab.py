@@ -19,7 +19,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from . import art, packs as packmath, pngio, validate
+from . import art, duelist_rules, packs as packmath, pngio, roster, validate
 from .bulk_dialog import FilterPanel
 from .gamedata import DUELIST_NAMES
 from .tabs import Tab
@@ -333,8 +333,11 @@ class PacksTab(Tab):
         book.add(page, text="Unlock")
         v["beat"] = tk.StringVar()
         ttk.Label(page, text="Beat").grid(row=0, column=0, sticky="w")
-        ttk.Combobox(page, textvariable=v["beat"], values=[""] + DUELIST_NAMES[1:], width=24).grid(row=0, column=1,
-                                                                                                    sticky="w")
+        # The disc's and the mod's own, as the game finds them (Duelists_Named),
+        # listed afresh as it opens: the roster changes on another tab.
+        self.beat_box = ttk.Combobox(page, textvariable=v["beat"], values=[""] + DUELIST_NAMES[1:], width=24,
+                                     postcommand=self.beat_choices)
+        self.beat_box.grid(row=0, column=1, sticky="w")
         for r, (key, label, hint) in enumerate((("wins", "Wins", "against Beat, or in all without it"),
                                                 ("story", "Story flag", "a campaign story flag: 0x6E0 + n is the n-th "
                                                                         "duelist beaten in the campaign"),
@@ -412,6 +415,10 @@ class PacksTab(Tab):
     def refresh(self):
         self.fill_list()
         self.fill()
+
+    def beat_choices(self):
+        if self.project is not None:
+            self.beat_box.configure(values=[""] + duelist_rules.references(self.project))
 
     def fill_list(self):
         if self.project is None:
@@ -794,7 +801,8 @@ class PacksTab(Tab):
         start of a "Seto's rare cards" pack."""
         if self.project is None or self.project.packs_file is not None or not self.commit():
             return None
-        names = [f"{d} {DUELIST_NAMES[d]}" for d in range(1, len(self.project.pools))]
+        who = dict(roster.opponents(self.project))      # the disc's and the mod's own
+        names = list(who)
         pools = {"S/A-POW drops": "pow", "B/C/D drops": "bcd", "S/A-TEC drops": "tec", "Deck": "deck"}
         fields = {}
 
@@ -808,12 +816,13 @@ class PacksTab(Tab):
                       style="Hint.TLabel").grid(row=2, column=0, columnspan=2, sticky="w", pady=(6, 0))
 
         def ok(dialog):
-            d = int(fields["who"].get().split(" ", 1)[0])
+            d = who[fields["who"].get()]
             pool = pools[fields["pool"].get()]
-            items = [(self.project.ref(c), w) for c, w in sorted(self.project.pools[d][pool].items()) if w > 0]
+            items = [(self.project.ref(c), w) for c, w in sorted(roster.pools_of(self.project, d)[pool].items())
+                     if w > 0]
             if not items:
                 return "that pool has no card"
-            name = f"{DUELIST_NAMES[d]} {pool.upper()}"[:packmath.NAME_LETTERS]
+            name = f"{roster.shown_name(self.project, d)} {pool.upper()}"[:packmath.NAME_LETTERS]
             entry = packmath.new_pack(name, self.ids())
             packmath.set_tier_pool(entry, "cards", items)
             self.project.packs.append(entry)

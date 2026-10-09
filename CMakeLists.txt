@@ -544,6 +544,18 @@ if(BUILD_TESTING)
         target_compile_options(memories_card_drops_test PRIVATE -mno-ms-bitfields)
     endif()
     add_test(NAME pc_card_drops COMMAND memories_card_drops_test)
+    # A win's starchips past the results row's eight (src/pc/cards/starchip_prize.c):
+    # the results record's layout is 32-bit.
+    add_executable(memories_starchip_prize_test tests/pc/starchip_prize_test.c)
+    target_include_directories(memories_starchip_prize_test PRIVATE src)
+    target_compile_definitions(memories_starchip_prize_test PRIVATE MEMORIES_PC)
+    if(NOT WIN32)
+        target_compile_options(memories_starchip_prize_test PRIVATE -m32)
+        target_link_options(memories_starchip_prize_test PRIVATE -m32)
+    else()
+        target_compile_options(memories_starchip_prize_test PRIVATE -mno-ms-bitfields)
+    endif()
+    add_test(NAME pc_starchip_prize COMMAND memories_starchip_prize_test)
     # The decks a mod offers a new game (src/pc/cards/starter.c). It reads
     # manifests and its own records only, with none of the game's 32-bit
     # layouts, so this one builds at the host's own width.

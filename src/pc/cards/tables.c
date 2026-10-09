@@ -1895,11 +1895,11 @@ static const struct {
     {"rank_score.start", DUEL_RANK_SCORE_INITIAL, 0, 99, NULL},
     {"rank_score.exodia", DUEL_RANK_ADJUST_EXODIA_WIN, -99, 99, NULL},
     {"rank_score.deck_out", DUEL_RANK_ADJUST_DECK_OUT_WIN, -99, 99, NULL},
-    {"starchip_prize.D", 1, 0, TABLES_VALUE_PRIZE_MAX, "the results show (a starchip picture each, eight in a row)"},
-    {"starchip_prize.C", 2, 0, TABLES_VALUE_PRIZE_MAX, "the results show (a starchip picture each, eight in a row)"},
-    {"starchip_prize.B", 3, 0, TABLES_VALUE_PRIZE_MAX, "the results show (a starchip picture each, eight in a row)"},
-    {"starchip_prize.A", 4, 0, TABLES_VALUE_PRIZE_MAX, "the results show (a starchip picture each, eight in a row)"},
-    {"starchip_prize.S", 5, 0, TABLES_VALUE_PRIZE_MAX, "the results show (a starchip picture each, eight in a row)"},
+    {"starchip_prize.D", 1, 0, TABLES_VALUE_PRIZE_MAX, "a win gives"},
+    {"starchip_prize.C", 2, 0, TABLES_VALUE_PRIZE_MAX, "a win gives"},
+    {"starchip_prize.B", 3, 0, TABLES_VALUE_PRIZE_MAX, "a win gives"},
+    {"starchip_prize.A", 4, 0, TABLES_VALUE_PRIZE_MAX, "a win gives"},
+    {"starchip_prize.S", 5, 0, TABLES_VALUE_PRIZE_MAX, "a win gives"},
     {"new_game_starchips", 0, 0, TABLES_LIMIT_STARCHIPS_MAX, "the game shows (eight digits)"},
 };
 static long value_set[TABLES_VALUE_COUNT];

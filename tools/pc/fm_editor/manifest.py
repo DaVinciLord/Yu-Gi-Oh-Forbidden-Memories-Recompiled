@@ -25,7 +25,7 @@ from pathlib import Path
 from .gamedata import (FUSION_GROUPS, RITUAL_ORIGINS, RITUAL_REQUIREMENT_KEYS, RITUAL_TRIBUTE_MAX, fusion_group_named, ATTRIBUTE_NAMES, CARD_COUNT, DECK_SIZE, DUELIST_NAMES, FRAME_COLOUR_NAMES, FRAME_NAMES, POOLS, STAR_NAMES,
                        EQUIP_BONUS_MAX, STARTER_WEIGHT_LIMIT, TYPE_NAMES, TYPE_MAGIC, GameData)
 from .model import AddedCard, ModInfo, Project, StarterDeck, duelist_named, type_named, KEY_RE
-from . import art, board_art, campaign_map, fixed_decks, guardian_stars, packs as packmath, pools as poolmath, roster
+from . import art, board_art, campaign_map, compat, fixed_decks, guardian_stars, packs as packmath, pools as poolmath, roster
 
 INFO_KEYS = ("id", "name", "version", "author", "description")
 TABLE_KEYS = ("settings", "cards", "fusions", "equips", "rituals", "drops", "decks", "starter", "packs", "pack_shop",
@@ -491,7 +491,9 @@ def build(project: Project) -> dict:
     rules = packmath.minimize_rules(project.pack_shop) if project.pack_shop is not None else None
     if rules:
         manifest["pack_shop"] = rules
-    return manifest
+    # A game older than a feature used would play the mod without it: the
+    # mod says which game it needs (compat.py), and an older one refuses it.
+    return compat.stamp(manifest, project)
 
 
 def _format(value, indent: int) -> str:

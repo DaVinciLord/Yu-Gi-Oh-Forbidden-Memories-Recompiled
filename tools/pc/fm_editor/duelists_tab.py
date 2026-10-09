@@ -11,13 +11,15 @@ Internal 1x, the picture itself at 2x and above), where it sits on its page
 """
 from __future__ import annotations
 
+import copy as _copy
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from . import fixed_decks, pngio, pools as poolmath, portrait, roster
+from . import duelist_rules, fixed_decks, pngio, pools as poolmath, portrait, roster
 from .fixed_deck_view import FixedDeckView
-from .gamedata import DUELIST_COUNT, DUELIST_NAMES, POOL_LABELS, POOL_TOTAL, POOLS
+from .gamedata import (AI_FIELD_LABELS, AI_FIELDS, AI_SEARCH, DUELIST_COUNT, DUELIST_NAMES, POOL_LABELS, POOL_TOTAL,
+                       POOLS, RANK_ABOVE, RANK_RETAIL, RANK_RULES, RANK_STEPS, SIGHT_DUELISTS, STORY_FREE_DUEL)
 from .tabs import Tab, pool_summary, type_label
 from .widgets import FormDialog, WrapLabel, pick_card, px, scrolled_tree, ui_font
 
@@ -181,7 +183,12 @@ class DuelistsTab(Tab):
         actions.pack(anchor="w", pady=(10, 0))
         self.edit_button = ttk.Button(actions, text="Name and place...", command=self.edit)
         self.edit_button.pack(side="left")
-        ttk.Button(actions, text="Picture...", command=self.choose_picture).pack(side="left", padx=4)
+        self.rules_button = ttk.Button(actions, text="Unlock, play, ranks...", command=self.edit_rules)
+        self.rules_button.pack(side="left", padx=(4, 0))
+        # Two rows: the tab must fit 1280 across.
+        actions = ttk.Frame(info)
+        actions.pack(anchor="w", pady=(4, 0))
+        ttk.Button(actions, text="Picture...", command=self.choose_picture).pack(side="left", padx=(0, 4))
         self.revert_face_button = ttk.Button(actions, text="Disc's face", command=self.revert_picture)
         self.revert_face_button.pack(side="left")
         page = ttk.Frame(header)
@@ -331,17 +338,26 @@ class DuelistsTab(Tab):
                 parts.append("fixed deck")
             elif any({c: w for c, w in p.pools[s][pool].items() if w} != p.retail.pools[s][pool] for pool in POOLS):
                 parts.append("pools")
+            parts += self.rules_state(e)
             if s == 0 and not parts:
                 return "not used"   # no duel is fought against it
             return ", ".join(parts)
         # Its page row says it is added: what it has of its own beside its base's.
         if s.portrait is not None or s.portrait_path:
             parts.append("face")
-        if any({c: w for c, w in s.pools[pool].items() if w} != p.retail.pools[s.base][pool] for pool in POOLS):
+        if fixed_decks.deck_of(p, s):
+            parts.append("fixed deck")
+        elif any({c: w for c, w in s.pools[pool].items() if w} != p.retail.pools[s.base][pool] for pool in POOLS):
             parts.append("pools")
-        if "unlock" in s.extra:
-            parts.append("locked")
+        parts += self.rules_state(s)
         return ", ".join(parts) or "a copy"
+
+    @staticmethod
+    def rules_state(e) -> list:
+        """The Status words for what an entry's unlock, ai and ranks change."""
+        if e is None:
+            return []
+        return [word for key, word in (("unlock", "locked"), ("ai", "plays"), ("ranks", "ranks")) if key in e.extra]
 
     def select(self):
         selection = self.list.selection()
@@ -393,38 +409,31 @@ class DuelistsTab(Tab):
             where = f"Id {e.key} · " + {"folder": f"duelists/{e.key}.json", "manifest": "in mod.json's \"duelists\"",
                                          "file": f"in {p.roster_file}"}[e.origin]
         self.file_label.configure(text=where)
-        self.kept_label.configure(text=self.kept_text(e))
+        self.kept_label.configure(text=self.kept_text(p, e))
         self.edit_button.state(["disabled"] if s == 0 else ["!disabled"])
+        self.rules_button.state(["disabled"] if s == 0 else ["!disabled"])
         self.revert_face_button.state(["!disabled"] if roster.has_portrait(p, s) else ["disabled"])
         self.fill_pictures(s)
         self.page_shown = roster.page_of(slot) if slot is not None else self.page_shown
         self.fill_map()
 
     @staticmethod
-    def kept_text(e) -> str:
-        """The entry's keys the editor has no field for, said plainly."""
+    def kept_text(p, e) -> str:
+        """The entry's unlock, way of playing and rank scoring said plainly,
+        then the keys the editor has no field for."""
         if e is None or not e.extra:
             return ""
-        parts = []
-        unlock = e.extra.get("unlock")
-        if isinstance(unlock, dict):
-            said = []
-            if unlock.get("beat") is not None:
-                wins = unlock.get("wins", 1)
-                said.append(f"beat {unlock['beat']}" + (f" {wins} times" if isinstance(wins, int) and wins > 1 else ""))
-            elif unlock.get("wins"):
-                said.append(f"{unlock['wins']} wins in all")
-            if unlock.get("story") is not None:
-                flag = unlock["story"]
-                said.append(f"story flag {flag}" + (f" (0x{flag:X})" if isinstance(flag, int) else ""))
-            if unlock.get("card") is not None:
-                copies = unlock.get("copies", 1)
-                said.append(f"hold {unlock['card']}" + (f" x{copies}" if isinstance(copies, int) and copies > 1 else ""))
-            parts.append("unlocks after: " + (", ".join(said) or "nothing"))
-        for key in e.extra:
-            if key != "unlock":
-                parts.append({"ai": "its own way of playing (ai)", "ranks": "its own rank scoring (ranks)"}.get(key, key))
-        return "Kept as written: " + "; ".join(parts)
+        lines = []
+        if "unlock" in e.extra:
+            lines.append("Unlocks after: " + duelist_rules.unlock_text(e))
+        if "ai" in e.extra:
+            lines.append("Plays: " + duelist_rules.ai_text(p, e))
+        if "ranks" in e.extra:
+            lines.append("Own rank scoring: " + (duelist_rules.ranks_text(e) or "none the game reads"))
+        rest = [key for key in e.extra if key not in ("unlock", "ai", "ranks")]
+        if rest:
+            lines.append("Kept as written: " + ", ".join(rest))
+        return "\n".join(lines)
 
     def fill_pictures(self, s):
         p = self.project
@@ -670,6 +679,227 @@ class DuelistsTab(Tab):
         title = "Add a duelist" if adding else f"{roster.shown_name(p, s)}: name and place"
         return FormDialog(self, title, build, ok)
 
+    def edit_rules(self):
+        if self.project is None:
+            return None
+        s = self.subject()
+        if s == 0:
+            return None
+        return self.rules_dialog(s)
+
+    def rules_dialog(self, s):
+        """A duelist's "unlock", "ai" and "ranks" (duelist_rules.py): when the
+        grid shows it, how it plays, how a duel against it is scored. A disc
+        duelist's go on its replacement."""
+        p = self.project
+        e = roster.replacement(p, s) if isinstance(s, int) else s
+        holder = e if e is not None else roster.RosterDuelist(key="", base=s, replace=True)
+        base = s if isinstance(s, int) else s.base
+        others = [""] + duelist_rules.references(p, but=holder)
+        if isinstance(s, int):
+            others.remove(duelist_rules.reference(p, s))
+        unlock, ai, ranks = duelist_rules.unlock_of(holder), duelist_rules.ai_of(holder), duelist_rules.ranks_of(holder)
+        fields = {}
+
+        def number_text(value):
+            return "" if value is None else str(value)
+
+        def story_hint(*_):
+            text = fields["story"].get().strip()
+            try:
+                flag = int(text, 0) if text else None
+            except ValueError:
+                fields["story_hint"].configure(text="A number: 1762, or 0x6E2")
+                return
+            n = None if flag is None else flag - STORY_FREE_DUEL
+            fields["story_hint"].configure(text="" if flag is None else f"0x{flag:X}" + (
+                f": {DUELIST_NAMES[n]} unlocked in Free Duel" if n is not None and 0 < n < DUELIST_COUNT else ""))
+
+        def under_hint(*_):
+            row = duelist_rules.under_row(p, s, fields["copy"].get().strip())
+            for i, label in enumerate(fields["under"]):
+                label.configure(text=f"else {row[i]}")
+            mine = fields["copy"].get().strip()
+            fields["copy_hint"].configure(text=f"blank: {DUELIST_NAMES[base]}'s, its base" if not mine else
+                                          "" if roster.named(p, mine) is not None else
+                                          "no duelist here: unless another mod adds it, its base's")
+
+        def own_rule(rule):
+            on = fields["own"][rule].get()
+            for k, (threshold, change) in enumerate(fields["pairs"][rule]):
+                if not on:
+                    threshold.set(str(RANK_RETAIL[rule][k][0]) if k < RANK_STEPS - 1 else "above")
+                    change.set(str(RANK_RETAIL[rule][k][1]))
+            for widget in fields["rank_widgets"][rule]:
+                widget.state(["!disabled"] if on else ["disabled"])
+
+        def pick(dialog):
+            cid = pick_card(dialog, p, "Card the player must hold")
+            if cid:
+                fields["card"].set(str(p.ref(cid)))
+
+        def build(dialog, body):
+            book = ttk.Notebook(body)
+            book.pack(fill="both", expand=True)
+            fields["book"] = book
+            # Unlock: every condition given must hold.
+            page = ttk.Frame(book, padding=8)
+            book.add(page, text="Unlock")
+            ttk.Label(page, text="Beat").grid(row=0, column=0, sticky="w", pady=3)
+            fields["beat"] = tk.StringVar(value=unlock["beat"])
+            ttk.Combobox(page, textvariable=fields["beat"], values=others, width=30).grid(row=0, column=1, sticky="w")
+            ttk.Label(page, text="a duelist to beat first: by name, number or identity",
+                      style="Hint.TLabel").grid(row=0, column=2, sticky="w", padx=6)
+            ttk.Label(page, text="Wins").grid(row=1, column=0, sticky="w", pady=3)
+            fields["wins"] = tk.StringVar(value=number_text(unlock["wins"] or None))
+            ttk.Spinbox(page, textvariable=fields["wins"], from_=0, to=9999, width=6).grid(row=1, column=1, sticky="w")
+            ttk.Label(page, text="against Beat (1 by default), or against everyone together without it",
+                      style="Hint.TLabel").grid(row=1, column=2, sticky="w", padx=6)
+            ttk.Label(page, text="Story flag").grid(row=2, column=0, sticky="w", pady=3)
+            fields["story"] = tk.StringVar(value="" if unlock["story"] is None else f"0x{unlock['story']:X}")
+            ttk.Entry(page, textvariable=fields["story"], width=8).grid(row=2, column=1, sticky="w")
+            fields["story_hint"] = ttk.Label(page, style="Hint.TLabel")
+            fields["story_hint"].grid(row=2, column=2, sticky="w", padx=6)
+            fields["story"].trace_add("write", story_hint)
+            ttk.Label(page, text="Card").grid(row=3, column=0, sticky="w", pady=3)
+            cell = ttk.Frame(page)
+            cell.grid(row=3, column=1, columnspan=2, sticky="w")
+            fields["card"] = tk.StringVar(value=unlock["card"])
+            ttk.Entry(cell, textvariable=fields["card"], width=30).pack(side="left")
+            ttk.Button(cell, text="Pick...", command=lambda: pick(dialog)).pack(side="left", padx=4)
+            ttk.Label(cell, text="in the trunk or deck", style="Hint.TLabel").pack(side="left", padx=2)
+            ttk.Label(page, text="Copies").grid(row=4, column=0, sticky="w", pady=3)
+            fields["copies"] = tk.StringVar(value=number_text(unlock["copies"] or None))
+            ttk.Spinbox(page, textvariable=fields["copies"], from_=0, to=999, width=6).grid(row=4, column=1, sticky="w")
+            ttk.Label(page, text="of Card (1 by default)", style="Hint.TLabel").grid(row=4, column=2, sticky="w", padx=6)
+            ttk.Label(page, style="Hint.TLabel", justify="left", wraplength=px(page, 560), text=(
+                "Every condition given must hold; with none it is shown from the start. Read from the save "
+                "each time the Free Duel grid is built: nothing is stored." + (
+                    " For one of the disc's duelists this stands in place of the campaign flag that shows it."
+                    if isinstance(s, int) else ""))).grid(row=5, column=0, columnspan=3, sticky="w", pady=(10, 0))
+            story_hint()
+            # Way of playing: nine numbers over another's row or its base's.
+            page = ttk.Frame(book, padding=8)
+            book.add(page, text="Way of playing")
+            ttk.Label(page, text="Play like").grid(row=0, column=0, sticky="w", pady=3)
+            fields["copy"] = tk.StringVar(value=ai["copy"])
+            ttk.Combobox(page, textvariable=fields["copy"], values=others, width=30).grid(
+                row=0, column=1, columnspan=2, sticky="w")
+            fields["copy_hint"] = ttk.Label(page, style="Hint.TLabel")
+            fields["copy_hint"].grid(row=0, column=3, sticky="w", padx=6)
+            fields["values"], fields["under"] = [], []
+            for i, label in enumerate(AI_FIELD_LABELS):
+                ttk.Label(page, text=f"{i}  {label}").grid(row=i + 1, column=0, sticky="w", pady=1)
+                var = tk.StringVar(value=number_text(ai["values"][i]))
+                ttk.Entry(page, textvariable=var, width=6).grid(row=i + 1, column=1, sticky="w")
+                under = ttk.Label(page, style="Hint.TLabel")
+                under.grid(row=i + 1, column=2, sticky="w", padx=6)
+                fields["values"].append(var)
+                fields["under"].append(under)
+            ttk.Label(page, style="Hint.TLabel", justify="left", text=(
+                f"Blank: the number of the row above it.\nSearch is {AI_SEARCH[0]} to {AI_SEARCH[1]} cards deep; "
+                "the LP threshold\nis ÷100 (20 is 2000). Fusion depth 3\nfuses from the hand.")).grid(
+                row=2, column=3, rowspan=6, sticky="nw", padx=6)
+            fields["copy"].trace_add("write", under_hint)
+            fields["sight"] = tk.StringVar(value={None: "base", True: "yes", False: "no"}[ai["sight"]])
+            sight = ttk.Frame(page)
+            sight.grid(row=AI_FIELDS + 1, column=0, columnspan=4, sticky="w", pady=(8, 0))
+            ttk.Label(sight, text="Face-down cards").pack(side="left", padx=(0, 6))
+            sees = "sees them" if base in SIGHT_DUELISTS else "does not see them"
+            for value, text in (("base", f"its base's ({sees})"), ("yes", "sees them"), ("no", "does not")):
+                ttk.Radiobutton(sight, text=text, value=value, variable=fields["sight"]).pack(side="left", padx=(0, 8))
+            under_hint()
+            # Rank scoring: five [threshold, change] pairs a rule.
+            page = ttk.Frame(book, padding=8)
+            book.add(page, text="Rank scoring")
+            ttk.Label(page, text="Rule").grid(row=0, column=0, sticky="w")
+            ttk.Label(page, text="Own").grid(row=0, column=1)
+            for k in range(RANK_STEPS):
+                ttk.Label(page, text=f"below · change {k + 1}", style="Hint.TLabel").grid(
+                    row=0, column=2 + k * 2, columnspan=2)
+            fields["own"], fields["pairs"], fields["rank_widgets"] = [], [], []
+            for rule, name in enumerate(RANK_RULES):
+                ttk.Label(page, text=name).grid(row=rule + 1, column=0, sticky="w", pady=1)
+                own = tk.BooleanVar(value=rule in ranks)
+                ttk.Checkbutton(page, variable=own, command=lambda r=rule: own_rule(r)).grid(row=rule + 1, column=1)
+                pairs, widgets = [], []
+                given = ranks.get(rule, RANK_RETAIL[rule])
+                for k in range(RANK_STEPS):
+                    threshold = tk.StringVar(value=str(given[k][0]) if k < RANK_STEPS - 1 else "above")
+                    change = tk.StringVar(value=str(given[k][1]))
+                    left = ttk.Entry(page, textvariable=threshold, width=6)
+                    left.grid(row=rule + 1, column=2 + k * 2, padx=(6, 0))
+                    right = ttk.Entry(page, textvariable=change, width=4)
+                    right.grid(row=rule + 1, column=3 + k * 2)
+                    if k < RANK_STEPS - 1:
+                        widgets.append(left)
+                    else:
+                        left.state(["disabled"])        # "and above": the game makes it 32767
+                    widgets.append(right)
+                    pairs.append((threshold, change))
+                fields["own"].append(own)
+                fields["pairs"].append(pairs)
+                fields["rank_widgets"].append(widgets)
+                own_rule(rule)
+            ttk.Label(page, style="Hint.TLabel", justify="left", wraplength=px(page, 620), text=(
+                "A duel's score starts at 50; for each rule, what you managed walks the pairs until a threshold "
+                "is above it, and that pair's change is added. 50 and up is POW, below 50 TEC, and the further "
+                "from 50 the better the letter: S and A roll the POW or TEC drops, B to D the B/C/D drops. "
+                "Unticked: the disc's, the same for every duelist.")).grid(
+                row=len(RANK_RULES) + 1, column=0, columnspan=2 + RANK_STEPS * 2, sticky="w", pady=(10, 0))
+
+        def whole(text, what, low, high, blank=None):
+            text = text.strip()
+            if not text:
+                return blank
+            try:
+                value = int(text, 0)
+            except ValueError:
+                raise ValueError(f"{what} is a whole number")
+            if not low <= value <= high:
+                raise ValueError(f"{what} is {low} to {high}")
+            return value
+
+        def ok(dialog):
+            try:
+                beat, card = fields["beat"].get().strip(), fields["card"].get().strip()
+                wins = whole(fields["wins"].get(), "Wins", 0, 0x7FFFFFFF, 0)
+                story = whole(fields["story"].get(), "A story flag", 0, 0xFFFF)
+                copies = whole(fields["copies"].get(), "Copies", 0, 0x7FFFFFFF, 0)
+                values = [whole(v.get(), f"Number {i} of the way of playing", -128, 127)
+                          for i, v in enumerate(fields["values"])]
+                if values[0] is not None and not AI_SEARCH[0] <= values[0] <= AI_SEARCH[1]:
+                    raise ValueError(f"Deck search is {AI_SEARCH[0]} to {AI_SEARCH[1]}")
+                rules = {}
+                for rule, pairs in enumerate(fields["pairs"]):
+                    if not fields["own"][rule].get():
+                        continue
+                    rules[rule] = tuple(
+                        (whole(t.get(), f"{RANK_RULES[rule]}: threshold {k + 1}", -0x8000, 0x7FFF, 0)
+                         if k < RANK_STEPS - 1 else RANK_ABOVE,
+                         whole(c.get(), f"{RANK_RULES[rule]}: change {k + 1}", -0x8000, 0x7FFF, 0))
+                        for k, (t, c) in enumerate(pairs))
+            except ValueError as problem:
+                return str(problem)
+            if beat and roster.named(p, beat) in (s, holder):
+                return "It cannot be unlocked by beating itself"
+            copy = fields["copy"].get().strip()
+            sight = {"base": None, "yes": True, "no": False}[fields["sight"].get()]
+            before = _copy.deepcopy(holder.extra)
+            under = duelist_rules.under_row(p, s, copy)
+            made = (duelist_rules.unlock_value(holder, beat, wins, story, card, copies),
+                    duelist_rules.ai_value(holder, copy, values, sight, under),
+                    duelist_rules.ranks_value(holder, rules))
+            changed = {k: v for k, v in zip(("unlock", "ai", "ranks"), made) if v is not None} != \
+                {k: before[k] for k in ("unlock", "ai", "ranks") if k in before}
+            if changed:
+                duelist_rules.set_rules(p, s, *made)
+                self.changed(s)
+            return None
+
+        title = f"{roster.shown_name(p, s)}: unlock, way of playing and ranks"
+        return FormDialog(self, title, build, ok)
+
     def duplicate(self):
         s = self.subject()
         if self.project is None or isinstance(s, int):
@@ -754,8 +984,6 @@ class DuelistsTab(Tab):
         summary = pool_summary(p, self.pool.get(), pool, retail)
         if not isinstance(s, int):
             summary = summary.replace("(the disc's:", f"({DUELIST_NAMES[s.base]}'s on the disc:")
-            if s.fixed_deck and self.pool.get() == "deck":
-                summary = f"Its deck is the fixed deck in {s.fixed_deck}, kept as written: these weights are not dealt."
         self.summary.configure(text=summary)
 
     def pick_row(self):

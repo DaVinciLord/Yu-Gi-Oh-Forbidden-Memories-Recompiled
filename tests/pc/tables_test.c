@@ -701,15 +701,24 @@ int main(void)
     assert(Tables_RankAdjustment(40) == -10 && Tables_RankAdjustment(-40) == 30 && Tables_RankAdjustment(2) == 2);
     assert(Tables_Value(TABLES_VALUE_PRIZE + 4, 5) == 8 && Tables_Value(TABLES_VALUE_PRIZE + 0, 1) == 0);
     assert(Tables_Value(TABLES_VALUE_PRIZE + 2, 3) == 3);     /* B: not given */
+    /* A win's starchips up to 1000: past the results row's eight is a
+     * number like any other (one picture and "xN", starchip_prize.h). */
+    notes = 0;
+    add("prize", "{\"limits\": {\"starchip_prize\": {\"A\": 9, \"C\": 250, \"S\": 1000}}}");
+    assert(notes == 0 && TABLES_VALUE_PRIZE_MAX == 1000);
+    assert(Tables_Value(TABLES_VALUE_PRIZE + 3, 4) == 9 && Tables_Value(TABLES_VALUE_PRIZE + 1, 2) == 250);
+    assert(Tables_Value(TABLES_VALUE_PRIZE + 4, 5) == 1000 && Tables_Limit("starchip_prize.C") == 250);
+    add("prize-low", "{\"limits\": {\"starchip_prize\": {\"S\": 8}}}");
+    assert(notes == 0 && Tables_Value(TABLES_VALUE_PRIZE + 4, 5) == 8);
     assert(Tables_Value(TABLES_VALUE_NEW_GAME_STARCHIPS, 0) == 500 && Tables_Limit("swords_turns") == 5);
     add("val2", "{\"limits\": {\"deck_copies\": 1, \"rank_score\": {\"deck_out\": -5}}}");
     assert(notes == 0 && Tables_Value(TABLES_VALUE_DECK_COPIES, 3) == 1 && Tables_RankAdjustment(-40) == -5);
     assert(Tables_RankAdjustment(40) == -10);                  /* val1's still */
     notes = 0;
-    add("val3", "{\"limits\": {\"deck_copies\": 41, \"swords_turns\": 0, \"starchip_prize\": {\"S\": 20, \"Z\": 1},"
+    add("val3", "{\"limits\": {\"deck_copies\": 41, \"swords_turns\": 0, \"starchip_prize\": {\"S\": 2000, \"Z\": 1},"
                 " \"rank_score\": {\"start\": 150, \"exodia\": \"lots\"}, \"crush_card\": 40000,"
                 " \"spellbinding_circle\": 12000, \"new_game_starchips\": -1}}");
-    /* deck_copies 41, swords 0, S 20, "Z", start 150, "lots", crush 40000,
+    /* deck_copies 41, swords 0, S 2000, "Z", start 150, "lots", crush 40000,
      * spellbinding 12000, starchips -1 */
     assert(notes == 9);
     assert(Tables_Value(TABLES_VALUE_DECK_COPIES, 3) == 40);    /* held at the forty a deck holds */

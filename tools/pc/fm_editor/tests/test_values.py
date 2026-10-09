@@ -62,7 +62,7 @@ class ValuesTest(unittest.TestCase):
         self.assertEqual(values.build(flat), written)
         self.assertEqual(values.check(written), [])
         found = {(level, where) for level, where, _ in values.check(
-            {"deck_copies": 41, "swords_turns": 0, "starchip_prize": {"S": 20, "Z": 1},
+            {"deck_copies": 41, "swords_turns": 0, "starchip_prize": {"S": 2000, "Z": 1},
              "rank_score": {"start": 150, "exodia": "lots"}, "crush_card": 40000, "new_game_starchips": -1})}
         self.assertEqual(found, {("warning", "deck_copies"), ("error", "swords_turns"), ("warning", "starchip_prize.S"),
                                  ("error", "starchip_prize.Z"), ("error", "rank_score.start"),
@@ -76,6 +76,24 @@ class ValuesTest(unittest.TestCase):
         self.assertIn("whole number", values.problem("deck_copies", "x"))
         self.assertIn("left out", values.problem("rank_score.start", "100"))
 
+    def test_starchip_prize_range(self):
+        """A win's starchips, 0 to 1000 for each rank: past the eight the
+        results' row draws is fine (one picture and "xN"), past 1000 is held
+        at 1000, below 0 is left out."""
+        for letter in "SABCD":
+            key = f"starchip_prize.{letter}"
+            self.assertEqual(values.FIELD[key][3:5], (0, 1000), key)
+            for fine in ("0", "8", "9", "250", "1000"):
+                self.assertIsNone(values.problem(key, fine), (key, fine))
+            self.assertIn("1000 is used", values.problem(key, "1001"))
+            self.assertIn("left out", values.problem(key, "-1"))
+        written = {"starchip_prize": {"S": 1000, "A": 250, "B": 9, "C": 8, "D": 0}}
+        self.assertEqual(values.check(written), [])
+        self.assertEqual(values.build(values.flatten(written)), written)
+        self.assertEqual([(level, where) for level, where, _ in values.check({"starchip_prize": {"S": 1001}})],
+                         [("warning", "starchip_prize.S")])
+        self.assertIn("xN", values.GROUP_NOTES["Rewards"])
+
     def test_same_as_the_game(self):
         """Every value's key, the game's own value and its range as tables.c
         reads them (value_keys), so the editor checks what the game does."""
@@ -87,7 +105,7 @@ class ValuesTest(unittest.TestCase):
         constants = {"DECK_CARD_COPY_LIMIT": 3, "DECK_SIZE": 40, "TABLES_VALUE_SWORDS_MAX": 9,
                      "DUEL_CRUSH_CARD_ATTACK_THRESHOLD": 1500, "TABLES_LIMIT_STAT_MAX": 32767, "CARD_STAT_MAX": 9999,
                      "DUEL_RANK_SCORE_INITIAL": 50, "DUEL_RANK_ADJUST_EXODIA_WIN": 40,
-                     "DUEL_RANK_ADJUST_DECK_OUT_WIN": -40, "TABLES_VALUE_PRIZE_MAX": 8,
+                     "DUEL_RANK_ADJUST_DECK_OUT_WIN": -40, "TABLES_VALUE_PRIZE_MAX": 1000,
                      "TABLES_LIMIT_STARCHIPS_MAX": 99999999}
         rows = re.findall(r'\{"([\w.]+)", ([-\w]+), ([-\w]+), ([-\w]+), (NULL|")', table)
         self.assertEqual(len(rows), 14)
@@ -183,6 +201,19 @@ class ValuesTabTest(unittest.TestCase):
         self.assertIn("swords_turns", tab.status.cget("text"))
         tab.revert("swords_turns")
         self.assertEqual(str(tab.captions["swords_turns"].cget("style")), "TLabel")
+        # A win's starchips: 0 to 1000 in the hint, the note on "xN" under
+        # the group, and 250 taken without a mark.
+        hints = [w.cget("text") for w in tab.group_frames["Rewards"].winfo_children() if isinstance(w, ttk.Label)]
+        self.assertIn("Per win, 0 to 1000", hints)
+        self.assertIn(values.GROUP_NOTES["Rewards"], hints)
+        tab.vars["starchip_prize.S"].set("250")
+        self.assertTrue(tab.commit())
+        self.assertEqual(str(tab.captions["starchip_prize.S"].cget("style")), "Changed.TLabel")
+        self.assertEqual(app.project.other["limits"]["starchip_prize"], {"S": 250})
+        tab.vars["starchip_prize.S"].set("1001")
+        self.assertTrue(tab.commit())
+        self.assertEqual(str(tab.captions["starchip_prize.S"].cget("style")), "Error.TLabel")
+        tab.revert("starchip_prize.S")
         json.dumps(manifest.build(app.project))
 
 

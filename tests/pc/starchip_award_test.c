@@ -48,6 +48,12 @@ int main(void)
     chips = 10;
     assert(Mods_AwardStarchips(&chips, -3) == 10 && chips == 10);
 
+    /* A mod's largest prize (starchip_prize 1000), up to the cap. */
+    chips = 0;
+    assert(Mods_AwardStarchips(&chips, 1000) == 1000 && chips == 1000);
+    chips = 999500;
+    assert(Mods_AwardStarchips(&chips, 1000) == 999999 && chips == 999999);
+
     chips = 999997;
     assert(Mods_AwardStarchips(&chips, 5) == 999999 && chips == 999999);
 
