@@ -8,18 +8,18 @@ import re
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from . import bulk_dialog, guardian_stars, manifest, text_menu, validate
+from . import bulk_dialog, compat, guardian_stars, manifest, text_menu, validate
 from .card_text_box import CardTextBox
 from .icon_choice import IconChoice
 from . import card_icons
 from .card_view_preview import CardViewPreview
 from .monster_effects_ui import EffectsBox
-from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, DUELIST_NAMES,
+from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE,
                        EQUIP_BONUS_MAX, FRAME_COLOUR_NAMES, FRAME_NAMES,
                        STAR_NAMES, STARTER_WEIGHT_LIMIT, TYPE_EQUIP, TYPE_MAGIC, TYPE_NAMES,
                        TYPE_RITUAL, TYPE_TRAP,
                        exodia_piece, type_frame)
-from . import art, fixed_decks, pngio, starter_pools
+from . import art, fixed_decks, pngio, roster, starter_pools
 from .starter_pools_view import StarterPoolsPage
 from .model import KEY_RE, StarterDeck, parse_tags, tags_text
 from .widgets import (WrapLabel, legend, CardField, FormDialog, ScrolledForm, ScrolledPage, card_matches, pick_card, px,
@@ -2028,8 +2028,9 @@ class StarterTab(Tab):
             fixed = fixed_decks.deck_of(self.project, d)
             # The deck it is dealt: a fixed one the mod gives it, else the
             # forty its weighted pool deals most often.
-            deck.cards = dict(fixed.cards) if fixed else fixed_decks.most_likely(self.project.pools[d]["deck"])
-            deck.name = f"{DUELIST_NAMES[d]}'s deck"
+            deck.cards = dict(fixed.cards) if fixed else fixed_decks.most_likely(
+                roster.pools_of(self.project, d)["deck"])
+            deck.name = f"{roster.shown_name(self.project, d)}'s deck"
         elif start == "retail":
             pools = starter_pools.retail(self.app.files.wa if self.app.files else None)
             if not pools:
@@ -2041,8 +2042,10 @@ class StarterTab(Tab):
         return self.deck_dialog("Add starter deck", deck, adding=True)
 
     def ask_opponent(self):
-        """An opponent of the campaign or Free Duel, by name; None if none."""
-        names = [f"{d} {DUELIST_NAMES[d]}" for d in range(1, len(self.project.pools))]
+        """An opponent of the campaign or Free Duel, the disc's or one the mod
+        adds (roster.opponents); None if none."""
+        choices = dict(roster.opponents(self.project))
+        names = list(choices)
         chosen = {}
 
         def build(dialog, body):
@@ -2050,11 +2053,12 @@ class StarterTab(Tab):
             chosen["var"] = tk.StringVar(value=names[0])
             ttk.Combobox(body, textvariable=chosen["var"], values=names, state="readonly", width=30).grid(
                 row=0, column=1, sticky="w", padx=(6, 0))
-            ttk.Label(body, text="The deck is the 40 cards its weighted deck pool deals most often.",
+            ttk.Label(body, text="The deck is its fixed deck, or the 40 cards its weighted deck pool deals most "
+                                 "often.\nPage 2 and on (40 and up) are the duelists this mod adds.",
                       style="Hint.TLabel").grid(row=1, column=0, columnspan=2, sticky="w", pady=(6, 0))
 
         def ok(dialog):
-            chosen["d"] = int(chosen["var"].get().split(" ", 1)[0])
+            chosen["d"] = choices[chosen["var"].get()]
             return None
 
         dialog = FormDialog(self, "A deck from an opponent's", build, ok)
@@ -2155,6 +2159,10 @@ class ModInfoTab(Tab):
         self.description.grid(row=4, column=1, sticky="w", pady=2)
         self.folder = ttk.Label(form, style="Hint.TLabel", wraplength=px(self, 560), justify="left")
         self.folder.grid(row=5, column=1, sticky="w")
+        # The game the mod needs (compat.py): "min_api", raised on save to
+        # what the mod uses, and why.
+        self.api = ttk.Label(form, style="Hint.TLabel", wraplength=px(self, 560), justify="left")
+        self.api.grid(row=6, column=1, sticky="w")
         boxes = ttk.Frame(self)
         boxes.pack(fill="both", expand=True, pady=(8, 0))
         left = ttk.LabelFrame(boxes, text="Settings: the player's options for this mod (Game > Mods)", padding=4)
@@ -2216,6 +2224,31 @@ class ModInfoTab(Tab):
                               "the game's mods folder; the player turns it on in Game > Mods.")
         self.status.configure(text="")
         self.fill_settings()
+        self.fill_api()
+
+    def api_text(self) -> str:
+        """Which game the mod needs, as the Mod info tab says it."""
+        try:
+            built = manifest.build(self.project)
+        except Exception:       # a half-made form elsewhere: said when it is applied
+            return ""
+        needed, reasons = compat.required(built, self.project)
+        written = built.get("min_api")
+        if isinstance(written, bool) or not isinstance(written, int):
+            written = None
+        if not needed and written is None:
+            return "Mod API: it uses nothing newer than the game v0.2.0 has, so it needs no \"min_api\"."
+        api = max(needed, written or 0)
+        text = f"Mod API {api} (\"min_api\"): {compat.release_text(api)}; an older game refuses it as needing a newer one."
+        if needed and needed >= api:
+            text += " Raised on save to what the mod uses: " + "; ".join(reasons) + "."
+        else:
+            text += " As written in the other keys."
+        return text
+
+    def fill_api(self):
+        if self.project is not None:
+            self.api.configure(text=self.api_text())
 
     def commit(self):
         if self.project is None:
@@ -2264,6 +2297,7 @@ class ModInfoTab(Tab):
         after = (info.id, info.name, info.version, info.author, info.description, info.settings, self.project.other)
         if after != before:
             self.app.changed()
+            self.fill_api()
         self.applied()
         return True
 

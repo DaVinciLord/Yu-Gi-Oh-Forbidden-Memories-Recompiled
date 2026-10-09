@@ -95,6 +95,31 @@ Two folders in one mods directory with the same `id` do not replace each
 other: the first by name is kept and says which one was left out. Across
 directories the player's copy still replaces the shipped one.
 
+### Which game a mod needs
+
+A game that does not know a key, or a value of one, plays the mod without
+it: an unknown top-level key is a warning, an unknown value inside one is at
+most a note, and the rest of the mod loads. That is a half-working mod. So a
+mod that uses something newer than the oldest game it should run on says so
+with `min_api`, and a game whose mod API is lower refuses the whole mod,
+data mods included, with a line in the Mods window: `needs a newer game: mod
+API 11, this one has 10. Update the game`. A code mod's `api` (below) is
+checked as well, when it starts.
+
+| `min_api` | Game | What a mod needs it for |
+|---|---|---|
+| 9 or less | v0.2.0 | everything not listed below; added cards, duelists, starter pools, packs, the title's menus |
+| 10 | v0.2.1-preview.1 | `card_text_colors`; a card's `monster_effects` or `trap_threshold`; an equip's `bonus_attack`/`bonus_defense`; a pack's `image_style`; an added card (`copy`) of another kind than its base (a monster made a magic card, a magic card a monster or a trap), or whose `model` or `effect` is a card's name; the `MEMORIES_EVENT_MONSTER` event |
+| 11 | the release after v0.2.1-preview.1 | `assets`, `ui`, `card_layout`; a card's `tags`, or a `frame` of `Gold`, `Green`, `Pink` or `Blue`; a monster effect's `for_each`; `{"remove": "all"}` in `fusions`; a ritual of other than three tributes, or with `tributes_from` `hand` or `both`; the title's `images`, a `scale` in `title` or `menu`; the `limits` `deck_copies`, `swords_turns`, `crush_card`, `spellbinding_circle`, `shadow_spell`, `rank_score`, `starchip_prize` and `new_game_starchips` |
+
+The FM Editor writes `min_api` on save as the lowest one of these that has
+everything the mod uses, never lowering one written higher, and its Mod
+info tab says which game that is and why (`tools/pc/fm_editor/compat.py`).
+A mod written by hand should do the same. A release that adds a mod.json
+feature an older game would leave out raises `MEMORIES_MOD_API`
+(`src/pc/mods/mod_types.h`), lists the feature here and in `compat.py`,
+and keeps every lower `min_api` loading.
+
 ## Data mods: no code at all
 
 `data` is a list of entries, each naming a file on the disc by its retail
@@ -1663,7 +1688,7 @@ the player's settings file as `mod.<id>.<key>`, and read from
 `MEMORIES_MOD_<ID>_<KEY>` first when that is set; a key is letters, digits,
 `_` and `-`, and `order` is the manager's), `disc_file_start`/
 `disc_read`, `pad`, and from mod API 2 `now_us` (a clock) and `map_fixed`
-(memory at an address the mod chooses, as 3D Monsters' model arenas need). API 4 adds `hook`/`unhook`/`symbol`, below; API 5 adds `duelist_id`, which resolves an added duelist's identity to the id it has this run as `card_id` does for a card. API 7 adds `card_notes` and `card_tag`, a card's [notes](more-cards.md#notes-on-a-card) and the `<tag: value>` tags in them. API 8 adds `limit`, the numbers the game caps and its other values as the mods' `limits` set them ([Gameplay tables](gameplay-tables.md#values-atk-def-lp-starchips-and-more)): `host->limit(host, "attack")` is 9999 without such a mod, `host->limit(host, "deck_copies")` 3. API 9 adds `menu_item`, the name of an item of the title's menus, and the event `MEMORIES_EVENT_MENU` ([The title's menus](#the-titles-menus)). API 10 adds the event `MEMORIES_EVENT_MONSTER`: a monster summoned, flipped, at its owner's draw, in a battle, destroyed or destroying the monster it battled, for every monster, with `handled` to skip a card's own `monster_effects` ([Monster effects](more-cards.md#monster-effects)).
+(memory at an address the mod chooses, as 3D Monsters' model arenas need). API 4 adds `hook`/`unhook`/`symbol`, below; API 5 adds `duelist_id`, which resolves an added duelist's identity to the id it has this run as `card_id` does for a card. API 7 adds `card_notes` and `card_tag`, a card's [notes](more-cards.md#notes-on-a-card) and the `<tag: value>` tags in them. API 8 adds `limit`, the numbers the game caps and its other values as the mods' `limits` set them ([Gameplay tables](gameplay-tables.md#values-atk-def-lp-starchips-and-more)): `host->limit(host, "attack")` is 9999 without such a mod, `host->limit(host, "deck_copies")` 3. API 9 adds `menu_item`, the name of an item of the title's menus, and the event `MEMORIES_EVENT_MENU` ([The title's menus](#the-titles-menus)). API 10 adds the event `MEMORIES_EVENT_MONSTER`: a monster summoned, flipped, at its owner's draw, in a battle, destroyed or destroying the monster it battled, for every monster, with `handled` to skip a card's own `monster_effects` ([Monster effects](more-cards.md#monster-effects)). API 11 adds no entry or event; it marks the mod.json features a game of API 10 leaves out ([Which game a mod needs](#which-game-a-mod-needs)).
 A mod that uses an entry newer than API 1 should refuse to start when
 `host->api` is older.
 
