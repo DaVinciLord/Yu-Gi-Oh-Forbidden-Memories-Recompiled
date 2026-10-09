@@ -146,21 +146,28 @@ int MonsterEffects_BattleAbortMask(void)
     return aborted;
 }
 
-static void finish_attack_trap(void)
+static int finish_attack_trap(void)
 {
-    int i;
+    int i, abort = 0;
 
-    if (!S.trap_pending) return;
+    if (!S.trap_pending) return 0;
     /* Replacement traps run before combat. Once their custom work has
      * drained, cancel that combat only if it actually removed one of its
      * original participants; heals and boosts leave it to proceed. */
     for (i = 0; i < 2; i++) {
         int record = S.trap_battle_record[i];
         if (record >= 0 && record < MONSTER_RECORDS &&
-            !(D_801A7AD8[record].flags & DUEL_CARD_FLAG_OCCUPIED))
+            !(D_801A7AD8[record].flags & DUEL_CARD_FLAG_OCCUPIED)) {
             S.battle_abort |= 1 << i;
+            abort = 1;
+        }
     }
     S.trap_pending = 0;
+    /* A harmless replacement only postpones combat while its own queue is
+     * handled. Now that it is safe to continue, run the participants' normal
+     * combat triggers once; the abort path has no combat to resume. */
+    if (!abort) MonsterEffects_Battle();
+    return S.count || S.battle_life_count;
 }
 
 /* MEMORIES_EVENT_MONSTER, before: whether a code mod took the occasion
@@ -571,7 +578,7 @@ int MonsterEffects_Update(void)
     if (now != PHASE_HAND && now != PHASE_FIELD) {
         waiting = 0;
         while (S.count && !waiting) waiting = resolve();
-        if (!waiting && !S.count) finish_attack_trap();
+        if (!waiting && !S.count && finish_attack_trap()) return 1;
         return waiting;
     }
     look();
