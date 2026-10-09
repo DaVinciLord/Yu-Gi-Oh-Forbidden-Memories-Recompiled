@@ -32,7 +32,7 @@
 
 typedef struct {
     short card;
-    unsigned char record, effect;
+    unsigned char record, effect, card_effect;
 } MonsterTrigger;
 
 typedef struct {
@@ -76,6 +76,8 @@ extern MonsterEffectsState gMonsterEffects;
 
 /* DuelScene_Update, before the scene's step: 1 to skip the step this frame. */
 int MonsterEffects_Update(void);
+/* Queue a Magic/Trap card's data-defined effects. `side` is its owner. */
+void MonsterEffects_CardPlayed(int card, int side);
 /* Placement committed a card to `record` (func_8001B170, the ritual):
  * `equip` when it put a field monster back on its zone (an equip, or a
  * fusion onto it). */

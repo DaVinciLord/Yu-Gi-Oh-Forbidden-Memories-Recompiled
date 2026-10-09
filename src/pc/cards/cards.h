@@ -22,6 +22,7 @@
  * its stats in the tables, and its own name, text and artwork here, which
  * the game's lookups of the retail ones (Text_Resolve) then give. */
 #include "game/card_constants.h"
+struct MonsterEffect;
 
 /* The number of cards this run has: CARD_COUNT without a card mod. */
 extern int gCard_nCount;
@@ -45,6 +46,10 @@ const char *Cards_Identity(int id);
 int Cards_FindIdentity(const char *identity);
 int Cards_ModelId(int id);
 int Cards_EffectId(int id);
+/* Data-defined effects for a Magic or Trap card.  "card_effects" either
+ * supplements its retail/aliased effect or replaces it entirely. */
+int Cards_CardEffects(int id, const struct MonsterEffect **effects);
+int Cards_CardEffectsReplace(int id);
 /* The trap a card set on the field springs as: a trap card's effect (its
  * own, its base's or the one "effect" names), 0 for a card of another type,
  * which springs as none even where it was a trap on the disc. */
@@ -62,8 +67,8 @@ int Cards_RetailType(int id);
 int Cards_KindChanged(int id);
 /* The disc card the opponent's scripts take `id` for when they look a card up
  * by number: its effect (Cards_EffectId) while it is still that card's kind,
- * -1 when a "replace" made it another kind. Reshiram replacing Dark Hole is
- * no Dark Hole to play; a magic card whose "effect" is Dark Hole is one. */
+ * or an explicit card_effects replacement's "ai_effect". -1 means the CPU
+ * must not confuse this card with a retail behavior. */
 int Cards_AiId(int id);
 /* Whether the disc has a 3D model for `id` to stand as: a magic, trap, ritual
  * or equip card a mod made a monster has none unless it borrows one. */

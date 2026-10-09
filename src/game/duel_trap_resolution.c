@@ -17,6 +17,7 @@
 #include "duel_trap_resolution.h"
 #ifdef MEMORIES_PC
 #include "pc/cards/cards.h"
+#include "pc/cards/monster_effects_duel.h"
 #include "pc/cards/tables.h"
 #endif
 
@@ -304,6 +305,12 @@ m3:
         return 1;
     }
     q = &D_800E9FF0[D_8009B1D5 ^ 1];
+#ifdef MEMORIES_PC
+    /* The selected field record is the actual trap, while D_8009B22A is
+     * the retail behavior it borrowed.  Queue the former's data-defined
+     * actions once its normal trap presentation has completed. */
+    MonsterEffects_CardPlayed(D_801A7AD8[D_8009B1B8].card_id, D_8009B1D5);
+#endif
     q->rank.traps_triggered = q->rank.traps_triggered + 1;
     return 0;
 }

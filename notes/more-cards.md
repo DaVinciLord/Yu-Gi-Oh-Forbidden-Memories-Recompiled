@@ -268,6 +268,37 @@ TRAP, RITUAL and EQUIP (an 8-bit page at sector 0x16E6), but card text does
 not take it. The colors are the text ramps (`gText_abColorSlots`) at sector
 0x16C2. `tools/pc/fm_editor/card_text.py` reads all of them.
 
+## Spell and trap effects
+
+`"card_effects"` gives a Magic or Trap card data-defined work when it is
+played or springs.  Its entries use the same `do`, `card`, `attack`,
+`defense`, `amount`, `target`, `type`, `attribute` and `for_each` values as
+a [monster effect](#monster-effects), but have no `when`: the card itself is
+the occasion.  A spell or trap may target `own`, `opponent` (the default for
+`destroy`) or `all`; it cannot target `self`, `others` or `battle` because it
+is not a monster on the field.
+
+```json
+{ "replace": "Hinotama", "card_effects_mode": "replace",
+  "card_effects": [ { "do": "damage", "amount": 800 } ] }
+```
+
+`"card_effects_mode"` is `"add"` by default, which keeps the normal card
+effect (including one selected by `"effect"`) and then runs the listed
+effects.  `"replace"` takes the normal spell effect away and runs only the
+data-defined list.  Copies inherit both fields from their base unless they
+give their own list.  `"effect"` remains the way to copy a retail spell or
+trap behavior.
+
+The scripted CPU cannot infer a new effect's strategy from its text. A
+`"replace"` card is therefore not treated as its old retail behavior. Give
+it `"ai_effect": "Hinotama"` (a retail card of the same type) when that
+card is the appropriate tactical analogue; its scripts then find, value and
+play the custom card as that effect. Without it, the CPU never identifies a
+replacement as a retail spell/trap effect, rather than using it as the wrong
+one. Card types remain authoritative, so spells and traps never enter monster
+fusion or attack selection.
+
 ## Monster effects
 
 `"monster_effects"` gives a monster things it does on the field. Each entry

@@ -94,8 +94,30 @@ static void queue(int card, int record, int when)
         S.queue[S.count].card = (short)card;
         S.queue[S.count].record = (unsigned char)record;
         S.queue[S.count].effect = (unsigned char)i;
+        S.queue[S.count].card_effect = 0;
         S.count++;
         trace("queued", card, record, &effects[i]);
+    }
+}
+
+void MonsterEffects_CardPlayed(int card, int side)
+{
+    const MonsterEffect *effects;
+    int n = Cards_CardEffects(card, &effects), i;
+    /* Any monster-zone record supplies the owning side to the shared target
+     * and LP helpers. CardEffects_Read rejects targets that would identify
+     * the made-up source as a real monster. */
+    int record = side * DUEL_FIELD_SIDE_GRID_SLOT_COUNT + DUEL_FIELD_ROW_SIZE;
+    for (i = 0; i < n; i++) {
+        if (S.count == MONSTER_QUEUE_MAX) {
+            LOG(LOG_DUEL_EFFECTS, "card effects: queue full: card %d's effect dropped", card);
+            return;
+        }
+        S.queue[S.count].card = (short)card;
+        S.queue[S.count].record = (unsigned char)record;
+        S.queue[S.count].effect = (unsigned char)i;
+        S.queue[S.count].card_effect = 1;
+        S.count++;
     }
 }
 
@@ -288,11 +310,12 @@ static int resolve(void)
 {
     MonsterTrigger trigger = S.queue[0];
     const MonsterEffect *effects, *effect;
-    int n = Cards_MonsterEffects(trigger.card, &effects), side = owner(trigger.record), record, hit = 0, count;
+    int n = trigger.card_effect ? Cards_CardEffects(trigger.card, &effects) : Cards_MonsterEffects(trigger.card, &effects);
+    int side = owner(trigger.record), record, hit = 0, count;
     memmove(S.queue, S.queue + 1, (size_t)(--S.count) * sizeof(S.queue[0]));
     if (trigger.effect >= n) return 0;
     effect = &effects[trigger.effect];
-    trace("resolving", trigger.card, trigger.record, effect);
+    trace(trigger.card_effect ? "resolving card" : "resolving", trigger.card, trigger.record, effect);
     S.chain++;
     count = times(effect, trigger.record);
     if (effect->each) LOG(LOG_DUEL_EFFECTS, "monster effects: for each: %d counted", count);
@@ -453,7 +476,7 @@ int MonsterEffects_Update(void)
      * one the field is not settled (the hand lifts a field monster for a
      * fusion frames before placement takes it). Every way back to them --
      * a card put down, a battle, a card's effect, a new turn -- starts one. */
-    if ((now != PHASE_HAND && now != PHASE_FIELD) || (gDuel_wSceneStateFlags & DUEL_SCENE_FLAG_INITIALIZED) ||
+    if (((now != PHASE_HAND && now != PHASE_FIELD) && !S.count) || (gDuel_wSceneStateFlags & DUEL_SCENE_FLAG_INITIALIZED) ||
         gDuel_bEffectState || gDuel_wCardEffectFlags || gDuel_bQuitDialogState)
         return 0;
     /* A side out of LP: the field phase ends the duel; no more effects. */
@@ -470,6 +493,14 @@ int MonsterEffects_Update(void)
         look();
         S.count = 0;
         return 0;
+    }
+    /* A trap springs in battle. Its queued card effects may run there, but
+     * that is not a stable field boundary, so do not infer summons,
+     * destruction or draw triggers from this intermediate board. */
+    if (now != PHASE_HAND && now != PHASE_FIELD) {
+        waiting = 0;
+        while (S.count && !waiting) waiting = resolve();
+        return waiting;
     }
     look();
     /* A code mod may have started a card effect of its own for what it
