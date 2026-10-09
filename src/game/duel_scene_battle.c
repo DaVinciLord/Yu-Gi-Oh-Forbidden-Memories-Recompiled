@@ -148,7 +148,9 @@ void DuelScene_UpdateBattle(void)
              * before releasing their still-live battle objects. */
             if (abort_mask & 1) D_800E9EF0[0] = D_800E9EF0[2] = 0;
             if (abort_mask & 2) D_800E9EF0[1] = D_800E9EF0[3] = 0;
-            D_8009B174 = 0xB;
+            /* Bit 0x10 distinguishes cleanup before presentation from the
+             * retail post-battle cleanup (which relies on slots 2 and 3). */
+            D_8009B174 = 0x1B;
         }
     }
 #endif
@@ -194,8 +196,10 @@ void DuelScene_UpdateBattle(void)
         } else {
             D_8009B229 = 0;
         }
+#ifdef MEMORIES_PC
         MonsterEffects_TrackBattleParticipants(D_800E9EF0[0]->field_6A,
                                                D_800E9EF0[1] ? D_800E9EF0[1]->field_6A : -1);
+#endif
         if (func_8001F0D0((u8 *)D_800E9EF0[0]) != 0) {
             D_8009B229 = 0;
         }
@@ -741,7 +745,7 @@ void DuelScene_UpdateBattle(void)
     case 11:
         if (!(D_8009B174 & 0x80)) {
             D_8009B174 |= 0x80;
-            if (D_800E9EF0[0] != 0) {
+            if (((D_8009B174 & 0x10) || D_800E9EF0[2] != 0) && D_800E9EF0[0] != 0) {
                 func_80024D34(D_800E9EF0[0]->field_6A, D_800E9EF0[0]->field_6B);
                 left = &D_801A7AD8[D_800E9EF0[0]->field_6A];
                 left->flags |= (D_8009B178[0] & 0xA00) | 0x4000;
@@ -751,7 +755,7 @@ void DuelScene_UpdateBattle(void)
 #endif
                 Duel_ApplyCardObjectFlags((DuelCardDisplayObject *)left->object);
             }
-            if (D_800E9EF0[1] != 0) {
+            if (((D_8009B174 & 0x10) || D_800E9EF0[3] != 0) && D_800E9EF0[1] != 0) {
                 func_80024D34(D_800E9EF0[1]->field_6A, D_800E9EF0[1]->field_6B);
                 left = &D_801A7AD8[D_800E9EF0[1]->field_6A];
                 left->flags |= D_8009B178[1] & 0xA00;
