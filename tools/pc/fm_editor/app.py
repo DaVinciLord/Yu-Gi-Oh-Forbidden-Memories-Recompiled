@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import messagebox, ttk
 
-from . import disc, gamedata, manifest, settings, theme, validate
+from . import disc, file_dialogs, gamedata, manifest, settings, theme, validate
 from .model import KEY_RE, Project
 from .editing import Editing
 from . import card_links, history, recovery, screen, zoom
@@ -223,11 +223,11 @@ class App(Editing, tk.Tk):
                 self.recover_work()
 
     def ask_game_files(self):
-        path = filedialog.askopenfilename(parent=self, title="The game's disc image",
-                                          filetypes=[("Disc image", "*.bin *.iso *.img"), ("SLUS_014.11", "SLUS_014.11"),
-                                                     ("All files", "*.*")])
+        path = file_dialogs.askopenfilename(parent=self, title="The game's disc image",
+                                            filetypes=[("Disc image", "*.bin *.iso *.img"), ("SLUS_014.11", "SLUS_014.11"),
+                                                       ("All files", "*.*")])
         if not path:
-            path = filedialog.askdirectory(parent=self, title="Or a folder with SLUS_014.11 and DATA/WA_MRG.MRG")
+            path = file_dialogs.askdirectory(parent=self, title="Or a folder with SLUS_014.11 and DATA/WA_MRG.MRG")
         if not path:
             return None
         try:
@@ -451,8 +451,8 @@ class App(Editing, tk.Tk):
     def open_mod(self):
         if not self.need_game() or not self.confirm_discard():
             return
-        folder = filedialog.askdirectory(parent=self, title="A mod folder (the one holding mod.json)",
-                                         initialdir=str(self.mods_dir()))
+        folder = file_dialogs.askdirectory(parent=self, title="A mod folder (the one holding mod.json)",
+                                           initialdir=str(self.mods_dir()))
         if folder:
             self.load_mod(folder)
 
@@ -505,7 +505,7 @@ class App(Editing, tk.Tk):
             title = (f"Export to: a folder \"{self.project.info.id}\" is made in the one you choose (the game's "
                      "mods folder, say)" if export else f"Where to save: an empty folder, or its parent (a folder "
                      f"\"{self.project.info.id}\" is made)")
-            chosen = filedialog.askdirectory(parent=self, initialdir=str(self.mods_dir()), title=title)
+            chosen = file_dialogs.askdirectory(parent=self, initialdir=str(self.mods_dir()), title=title)
             if not chosen:
                 return False
             chosen = Path(chosen)

@@ -14,9 +14,9 @@ import base64
 import os
 import tkinter as tk
 from pathlib import Path
-from tkinter import colorchooser, filedialog, messagebox, ttk
+from tkinter import colorchooser, messagebox, ttk
 
-from . import board_art, pngio, theme, ui_assets
+from . import board_art, file_dialogs, pngio, theme, ui_assets
 from .tabs import Tab
 from .widgets import px, ui_font
 
@@ -143,8 +143,8 @@ def add_image_file(project, path, stem: str) -> str:
 
 def import_image(widget, project, stem: str):
     """A PNG the user chooses, put in the mod (add_image_file); its name or None."""
-    path = filedialog.askopenfilename(parent=widget, title="Choose a PNG",
-                                      filetypes=[("PNG pictures", "*.png"), ("All files", "*")])
+    path = file_dialogs.askopenfilename(parent=widget, title="Choose a PNG",
+                                        filetypes=[("PNG pictures", "*.png"), ("All files", "*")])
     if not path:
         return None
     try:

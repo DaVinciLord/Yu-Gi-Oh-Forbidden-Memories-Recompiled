@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import messagebox, ttk
 
-from . import guardian_stars as gs, pngio, theme
+from . import file_dialogs, guardian_stars as gs, pngio, theme
 from .tabs import Tab
 from .widgets import WrapLabel, px, scrolled_tree, ui_font
 
@@ -378,8 +378,8 @@ class GuardianStarsTab(Tab):
         star = self.selected_star
         if not star:
             return
-        path = filedialog.askopenfilename(parent=self, title="A guardian star's icon",
-                                          filetypes=[("PNG images", "*.png"), ("All files", "*.*")])
+        path = file_dialogs.askopenfilename(parent=self, title="A guardian star's icon",
+                                            filetypes=[("PNG images", "*.png"), ("All files", "*.*")])
         if not path:
             return
         try:

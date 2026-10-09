@@ -8,7 +8,7 @@ import re
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from . import bulk_dialog, compat, guardian_stars, manifest, text_menu, validate
+from . import bulk_dialog, compat, file_dialogs, guardian_stars, manifest, text_menu, validate
 from .card_text_box import CardTextBox
 from .icon_choice import IconChoice
 from . import card_icons
@@ -2584,9 +2584,8 @@ class ConflictsTab(Tab):
                                     "changes what it changes.")
 
     def choose_folder(self):
-        from tkinter import filedialog
-        folder = filedialog.askdirectory(parent=self, title="A folder of mods to check this one against",
-                                         initialdir=self.other_folder or str(self.app.mods_dir()))
+        folder = file_dialogs.askdirectory(parent=self, title="A folder of mods to check this one against",
+                                           initialdir=self.other_folder or str(self.app.mods_dir()))
         if folder:
             self.set_folder(folder)
 
