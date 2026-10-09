@@ -27,6 +27,7 @@ int Cards_TrapId(int id) { return effects[id]; }
 int Cards_TrapThreshold(int id, int fallback) { return thresholds[id] >= 0 ? thresholds[id] : fallback; }
 int Cards_CardEffectsReplace(int id) { (void)id; return 0; }
 void MonsterEffects_CardPlayed(int card, int side) { (void)card; (void)side; }
+void MonsterEffects_TrapPlayed(int card, int side) { (void)card; (void)side; }
 int Tables_TrapThreshold(int index, int retail) { (void)index; return retail; }
 s32 Duel_CalcCardStats(DuelCardRecord *card) { (void)card; return attack; }
 

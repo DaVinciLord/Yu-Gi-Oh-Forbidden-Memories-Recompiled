@@ -46,7 +46,7 @@ static int resolve_replacement_attack_trap(void)
     DuelCardRecord *card = &D_801A7AD8[D_8009B1B8];
     int owner = (int)(card - D_801A7AD8) / DUEL_FIELD_SIDE_GRID_SLOT_COUNT;
     if (!Cards_CardEffectsReplace(card->card_id)) return 1;
-    MonsterEffects_CardPlayed(card->card_id, owner);
+    MonsterEffects_TrapPlayed(card->card_id, owner);
     DuelCard_RemoveFromField(card);
     D_8009B22A = 0;
     D_8009B1B8 = 0;
@@ -202,14 +202,22 @@ s32 Duel_SelectAttackTrap(u8 *p) {
             j2 = sel + 0x10;
             D_8009B1B8 =
                 *(u8 *)(b4 + (u32)&((u16 *)0)[j2] + off4 + 0x3C68);
+#ifdef MEMORIES_PC
             return resolve_replacement_attack_trap();
+#else
+            return 1;
+#endif
         }
         if (0) {
         hit:
             w = e->object;
             D_8009B22A = v;
             D_8009B1B8 = w->field_6A;
+#ifdef MEMORIES_PC
             return resolve_replacement_attack_trap();
+#else
+            return 1;
+#endif
         }
     }
     i = 0;

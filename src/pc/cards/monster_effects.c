@@ -176,7 +176,8 @@ static int read_one(const char *mod, int index, int n, const JsonValue *entry, M
     }
     value = Json_Member(entry, "target");
     target = value ? named(Json_String(value, NULL), MonsterEffect_TargetNames, MONSTER_TARGET_COUNT)
-                   : card_effect ? (action == MONSTER_DO_DESTROY ? MONSTER_TARGET_OPPONENT : MONSTER_TARGET_OWN)
+                   : card_effect ? ((action == MONSTER_DO_DAMAGE || action == MONSTER_DO_DESTROY)
+                                        ? MONSTER_TARGET_OPPONENT : MONSTER_TARGET_OWN)
                                  : MonsterEffect_DefaultTarget(when, action);
     if (target < 0) {
         Mods_Note(mod, "cards[%d]: monster_effects[%d]: \"target\" must be self, own, others, opponent, all or battle",

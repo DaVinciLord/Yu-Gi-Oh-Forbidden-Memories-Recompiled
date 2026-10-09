@@ -8,6 +8,7 @@
 #include "pc/debug/log.h"
 #include "game/card_constants.h"
 #include "game/duel_card.h"
+#include "game/duel_card_record_lifecycle.h"
 #include "game/duel_grid.h"
 #include "game/duel_side_state.h"
 #include "game/duel_scene_state.h"
@@ -119,6 +120,12 @@ void MonsterEffects_CardPlayed(int card, int side)
         S.queue[S.count].card_effect = 1;
         S.count++;
     }
+}
+
+void MonsterEffects_TrapPlayed(int card, int side)
+{
+    S.trap_pending = 1;
+    MonsterEffects_CardPlayed(card, side);
 }
 
 /* MEMORIES_EVENT_MONSTER, before: whether a code mod took the occasion
@@ -363,11 +370,26 @@ static int resolve(void)
          * its owner plays it. */
         S.destroy_mask = 0;
         for (record = 0; record < MONSTER_RECORDS; record++) {
-            const DuelCardRecord *card = &D_801A7AD8[record];
+            DuelCardRecord *card = &D_801A7AD8[record];
             if (!monster_zone(record) || !(card->flags & DUEL_CARD_FLAG_OCCUPIED)) continue;
-            if (reaches(effect, trigger.record, record, card->card_id)) S.destroy_mask |= 1u << record;
+            if (!reaches(effect, trigger.record, record, card->card_id)) continue;
+            /* Crush Card only walks the opposing physical row.  A data
+             * effect which explicitly names its owner (or all monsters)
+             * removes that row here; the retail sequencer still presents
+             * the opposing row below. */
+            if (trigger.card_effect && owner(record) == side) {
+                DuelCard_RemoveFromField(card);
+                hit = 1;
+            } else {
+                S.destroy_mask |= 1u << record;
+            }
         }
-        if (!S.destroy_mask) return 0;
+        if (!S.destroy_mask) {
+            if (!hit) return 0;
+            SD_SEPlayFull(SE_BOOST);
+            S.pause = PAUSE_FRAMES;
+            return 1;
+        }
         if (side != D_8009B1D5) {
             S.swapped = 1;
             S.saved_turn = D_8009B1D5;
@@ -485,7 +507,8 @@ int MonsterEffects_Update(void)
      * one the field is not settled (the hand lifts a field monster for a
      * fusion frames before placement takes it). Every way back to them --
      * a card put down, a battle, a card's effect, a new turn -- starts one. */
-    if (((now != PHASE_HAND && now != PHASE_FIELD) && !S.count) || (gDuel_wSceneStateFlags & DUEL_SCENE_FLAG_INITIALIZED) ||
+    if (((now != PHASE_HAND && now != PHASE_FIELD) && !S.count) ||
+        ((gDuel_wSceneStateFlags & DUEL_SCENE_FLAG_INITIALIZED) && !(now == PHASE_BATTLE && S.count)) ||
         gDuel_bEffectState || gDuel_wCardEffectFlags || gDuel_bQuitDialogState)
         return 0;
     /* A side out of LP: the field phase ends the duel; no more effects. */
@@ -509,6 +532,7 @@ int MonsterEffects_Update(void)
     if (now != PHASE_HAND && now != PHASE_FIELD) {
         waiting = 0;
         while (S.count && !waiting) waiting = resolve();
+        if (!waiting && !S.count) S.trap_pending = 0;
         return waiting;
     }
     look();
@@ -575,7 +599,7 @@ void MonsterEffects_Battle(void)
     const DisplayObject *attacker = (const DisplayObject *)D_800E9EF0[0];
     const DisplayObject *defender = (const DisplayObject *)D_800E9EF0[1];
     int records[2], i, played = 0;
-    if (!S.ready || D_8009B22A || !attacker) return;
+    if (!S.ready || D_8009B22A || S.trap_pending || !attacker) return;
     records[0] = attacker->field_6A;
     records[1] = defender ? defender->field_6A : -1;
     /* A face-down defender is flipped by the battle: as Yu-Gi-Oh! has it,

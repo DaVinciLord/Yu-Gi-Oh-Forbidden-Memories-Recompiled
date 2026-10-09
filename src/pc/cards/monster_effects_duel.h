@@ -43,8 +43,8 @@ typedef struct {
     unsigned char turn_side, turn_count;   /* the turn the last look was in */
     unsigned char ritual;       /* a ritual ran since the last look: who left were its tributes */
     unsigned char pause;        /* frames the duel waits after a boost or LP change */
+    unsigned char trap_pending; /* a replacement attack trap paused this battle */
     unsigned char count;        /* queue */
-    unsigned char pad;
     unsigned char attacker, defender;   /* the last battle's records */
     unsigned short chain;       /* effects resolved since the field last settled */
     short flipped;              /* the card that battle flipped (the defender), its flip still to fire */
@@ -78,6 +78,7 @@ extern MonsterEffectsState gMonsterEffects;
 int MonsterEffects_Update(void);
 /* Queue a Magic/Trap card's data-defined effects. `side` is its owner. */
 void MonsterEffects_CardPlayed(int card, int side);
+void MonsterEffects_TrapPlayed(int card, int side);
 /* Placement committed a card to `record` (func_8001B170, the ritual):
  * `equip` when it put a field monster back on its zone (an equip, or a
  * fusion onto it). */
