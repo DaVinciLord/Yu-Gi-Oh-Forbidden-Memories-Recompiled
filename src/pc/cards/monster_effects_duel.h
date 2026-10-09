@@ -44,7 +44,7 @@ typedef struct {
     unsigned char ritual;       /* a ritual ran since the last look: who left were its tributes */
     unsigned char pause;        /* frames the duel waits after a boost or LP change */
     unsigned char trap_pending; /* a replacement attack trap paused this battle */
-    unsigned char battle_abort; /* a replacement removed an attack participant */
+    unsigned char battle_abort; /* bit mask: replacement removed battle participant(s) */
     unsigned char count;        /* queue */
     unsigned char attacker, defender;   /* the last battle's records */
     unsigned short chain;       /* effects resolved since the field last settled */
@@ -71,6 +71,7 @@ typedef struct {
     unsigned char battle_life_count;
     unsigned char battle_life_side[4];
     short battle_life[4];
+    short trap_battle_record[2]; /* attacker and defender while a trap resolves */
 } MonsterEffectsState;
 
 extern MonsterEffectsState gMonsterEffects;
@@ -80,8 +81,9 @@ int MonsterEffects_Update(void);
 /* Queue a Magic/Trap card's data-defined effects. `side` is its owner. */
 void MonsterEffects_CardPlayed(int card, int side);
 void MonsterEffects_TrapPlayed(int card, int side);
-void MonsterEffects_AbortBattle(void *removed_object);
-int MonsterEffects_BattleAborted(void);
+void MonsterEffects_AttackTrapPlayed(int card, int side);
+void MonsterEffects_TrackBattleParticipants(int attacker, int defender);
+int MonsterEffects_BattleAbortMask(void);
 /* Placement committed a card to `record` (func_8001B170, the ritual):
  * `equip` when it put a field monster back on its zone (an equip, or a
  * fusion onto it). */

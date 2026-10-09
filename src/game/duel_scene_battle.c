@@ -140,8 +140,17 @@ void DuelScene_UpdateBattle(void)
     /* An attack replacement can remove a participant while the battle scene
      * is starting. Its slot is cleared before the field object is released,
      * so use the explicit marker rather than dereferencing it here. */
-    if ((gDuel_wSceneStateFlags & 0x8000) && MonsterEffects_BattleAborted())
-        D_8009B174 = 0xB;
+    if (gDuel_wSceneStateFlags & 0x8000) {
+        int abort_mask = MonsterEffects_BattleAbortMask();
+        if (abort_mask) {
+            /* Removed records released their field objects. Clear only those
+             * stale battle slots; state 11 recreates surviving field cards
+             * before releasing their still-live battle objects. */
+            if (abort_mask & 1) D_800E9EF0[0] = D_800E9EF0[2] = 0;
+            if (abort_mask & 2) D_800E9EF0[1] = D_800E9EF0[3] = 0;
+            D_8009B174 = 0xB;
+        }
+    }
 #endif
 
     if (!(gDuel_wSceneStateFlags & 0x8000)) {
@@ -185,6 +194,8 @@ void DuelScene_UpdateBattle(void)
         } else {
             D_8009B229 = 0;
         }
+        MonsterEffects_TrackBattleParticipants(D_800E9EF0[0]->field_6A,
+                                               D_800E9EF0[1] ? D_800E9EF0[1]->field_6A : -1);
         if (func_8001F0D0((u8 *)D_800E9EF0[0]) != 0) {
             D_8009B229 = 0;
         }
@@ -730,7 +741,7 @@ void DuelScene_UpdateBattle(void)
     case 11:
         if (!(D_8009B174 & 0x80)) {
             D_8009B174 |= 0x80;
-            if (D_800E9EF0[2] != 0 && D_800E9EF0[0] != 0) {
+            if (D_800E9EF0[0] != 0) {
                 func_80024D34(D_800E9EF0[0]->field_6A, D_800E9EF0[0]->field_6B);
                 left = &D_801A7AD8[D_800E9EF0[0]->field_6A];
                 left->flags |= (D_8009B178[0] & 0xA00) | 0x4000;
@@ -740,7 +751,7 @@ void DuelScene_UpdateBattle(void)
 #endif
                 Duel_ApplyCardObjectFlags((DuelCardDisplayObject *)left->object);
             }
-            if (D_800E9EF0[3] != 0 && D_800E9EF0[1] != 0) {
+            if (D_800E9EF0[1] != 0) {
                 func_80024D34(D_800E9EF0[1]->field_6A, D_800E9EF0[1]->field_6B);
                 left = &D_801A7AD8[D_800E9EF0[1]->field_6A];
                 left->flags |= D_8009B178[1] & 0xA00;

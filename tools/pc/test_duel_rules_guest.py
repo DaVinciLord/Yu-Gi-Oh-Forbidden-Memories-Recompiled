@@ -28,7 +28,7 @@ def main():
         ),
         (
             "duel_trap_resolution",
-            {"Duel_SelectAttackTrap", "select_custom_attack_trap"},
+            {"Duel_SelectAttackTrap", "select_custom_attack_trap", "resolve_replacement_attack_trap"},
         ),
         ("duel_calc_card_stats", {"Duel_CalcCardStats"}),
     ]:

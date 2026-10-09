@@ -124,28 +124,43 @@ void MonsterEffects_CardPlayed(int card, int side)
 
 void MonsterEffects_TrapPlayed(int card, int side)
 {
+    MonsterEffects_CardPlayed(card, side);
+}
+
+void MonsterEffects_AttackTrapPlayed(int card, int side)
+{
     S.trap_pending = 1;
     MonsterEffects_CardPlayed(card, side);
 }
 
-void MonsterEffects_AbortBattle(void *removed_object)
+void MonsterEffects_TrackBattleParticipants(int attacker, int defender)
 {
-    int i;
-
-    S.battle_abort = 1;
-    for (i = 0; i < 2; i++) {
-        if (D_800E9EF0[i] == removed_object) {
-            D_800E9EF0[i] = 0;
-            D_800E9EF0[i + 2] = 0;
-        }
-    }
+    S.trap_battle_record[0] = (short)attacker;
+    S.trap_battle_record[1] = (short)defender;
 }
 
-int MonsterEffects_BattleAborted(void)
+int MonsterEffects_BattleAbortMask(void)
 {
     int aborted = S.battle_abort;
     S.battle_abort = 0;
     return aborted;
+}
+
+static void finish_attack_trap(void)
+{
+    int i;
+
+    if (!S.trap_pending) return;
+    /* Replacement traps run before combat. Once their custom work has
+     * drained, cancel that combat only if it actually removed one of its
+     * original participants; heals and boosts leave it to proceed. */
+    for (i = 0; i < 2; i++) {
+        int record = S.trap_battle_record[i];
+        if (record >= 0 && record < MONSTER_RECORDS &&
+            !(D_801A7AD8[record].flags & DUEL_CARD_FLAG_OCCUPIED))
+            S.battle_abort |= 1 << i;
+    }
+    S.trap_pending = 0;
 }
 
 /* MEMORIES_EVENT_MONSTER, before: whether a code mod took the occasion
@@ -514,7 +529,7 @@ int MonsterEffects_Update(void)
     /* A replacement trap only suppresses the battle where it sprang.  Do
      * not leave that marker behind after its queue, magic handler, splash or
      * pause has drained. */
-    if (!S.count && !S.running && !S.life_pending && !S.pause) S.trap_pending = 0;
+    if (!S.count && !S.running && !S.life_pending && !S.pause) finish_attack_trap();
     if (S.pause) {
         S.pause--;
         return 1;
@@ -556,7 +571,7 @@ int MonsterEffects_Update(void)
     if (now != PHASE_HAND && now != PHASE_FIELD) {
         waiting = 0;
         while (S.count && !waiting) waiting = resolve();
-        if (!waiting && !S.count) S.trap_pending = 0;
+        if (!waiting && !S.count) finish_attack_trap();
         return waiting;
     }
     look();

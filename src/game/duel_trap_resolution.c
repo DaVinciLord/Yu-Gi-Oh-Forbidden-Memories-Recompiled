@@ -46,8 +46,7 @@ static int resolve_replacement_attack_trap(void)
     DuelCardRecord *card = &D_801A7AD8[D_8009B1B8];
     int owner = (int)(card - D_801A7AD8) / DUEL_FIELD_SIDE_GRID_SLOT_COUNT;
     if (!Cards_CardEffectsReplace(card->card_id)) return 1;
-    MonsterEffects_TrapPlayed(card->card_id, owner);
-    MonsterEffects_AbortBattle(card->object);
+    MonsterEffects_AttackTrapPlayed(card->card_id, owner);
     DuelCard_RemoveFromField(card);
     D_800E9FF0[owner].rank.traps_triggered++;
     D_8009B22A = 0;
