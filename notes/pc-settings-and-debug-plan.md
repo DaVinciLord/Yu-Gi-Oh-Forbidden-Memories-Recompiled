@@ -248,7 +248,7 @@ int Platform_HasWindowModes(void);
 - Mouse coordinates: run every mouse event through
   `SDL_ConvertEventToRenderCoordinates(renderer, &event)` before `translate`
   so high-DPI windows keep the menu hit-tests right.
-- Black bars are the renderer clear colour; keep it black.
+- Black bars are the renderer clear color; keep it black.
 
 Acceptance: drag the window corner; the picture stays pixel-perfect at the
 largest integer scale that fits, centered, menu bar on top. `View > 3x`
@@ -676,7 +676,7 @@ behind `MEMORIES_HANG_TEST=1` (now `src/pc/debug/crash_test.c`) yields the hang 
 Create `src/pc/debug/hud.c`/`.h` drawing onto the menu overlay canvas after
 `Menu_Draw` (call `Hud_Draw(&canvas)` from `Platform_Present` in both
 backends; the HUD needs `menu.c`'s text routines, so export
-`Menu_DrawText(MenuCanvas *, int x, int y, const char *, uint32_t colour)` and
+`Menu_DrawText(MenuCanvas *, int x, int y, const char *, uint32_t color)` and
 `Menu_TextWidth`). Levels (`SET_SHOW_HUD`, toggled by **F3**):
 
 1. `fps`: `59.9 fps` top-right, plus `[paused]`/`[200%]`.

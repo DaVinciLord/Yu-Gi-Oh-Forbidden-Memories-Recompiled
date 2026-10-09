@@ -16,7 +16,7 @@ alike, so they stay one style.
                        the card-frame sheet (two 8-bit columns, 256x256
                        texels at 4x), one per palette row 8-11; rows 12
                        and 13 (purple, orange) are the monster frame
-                       recoloured as the game's rows recolour it
+                       recolored as the game's rows recolor it
   backcard/Back.png    the card back, 144x200 pixels as the card view
                        draws it from five pieces (BACK_PIECES): most of it
                        at the foot of the frame sheet's second column and
@@ -139,7 +139,7 @@ ANIME_FRAME_SPELL_LAYOUT = {
 FRAMES = {8: "frame_monster.png", 9: "frame_magic.png", 10: "frame_trap.png", 11: "frame_ritual.png"}
 ATTRIBUTES = ("light", "dark", "earth", "water", "fire", "wind", "magic", "trap")
 # The game's ball has a one-texel rim it subtracts from the name bar (a
-# shade); an HD ball of another colour cannot be made by subtracting, so it
+# shade); an HD ball of another color cannot be made by subtracting, so it
 # sits inside the rim (the largest circle clear of it) and the rim is left out.
 BALL_DIAMETER = 12.8
 STAR_PALETTE, LABEL_PALETTE = 0x1180, 0x11E0
@@ -165,7 +165,7 @@ class Pack:
 
     def add(self, name, image, offset, words, rows, bpp, clut, entries, alias, paletted=False):
         """One entry; the same pixels already written are the same file.
-        `paletted`: an opaque picture kept as 256 colours of its own
+        `paletted`: an opaque picture kept as 256 colors of its own
         (libimagequant, dithered), as the game keeps its card art; about a
         third of the size, and decoded to the same pixels' worth in game;
         "alpha" keeps the transparency (the duel's sheets)."""
@@ -240,8 +240,8 @@ def column_base(pack, bases, offset, bpp, clut):
     return image.resize((image.width * S, image.height * S), Image.NEAREST)
 
 
-def recolour(hd, original_row, original_ref):
-    """The monster frame in another row's colours: each pixel times the
+def recolor(hd, original_row, original_ref):
+    """The monster frame in another row's colors: each pixel times the
     game's ratio of the two rows there (smoothed to the HD size)."""
     a = np.array(original_row.convert("RGB").resize(hd.size, Image.BILINEAR), dtype=np.float64)
     b = np.array(original_ref.convert("RGB").resize(hd.size, Image.BILINEAR), dtype=np.float64)
@@ -252,7 +252,7 @@ def recolour(hd, original_row, original_ref):
 
 def semi_texels(wa, offset, words, rows, clut, stride=None):
     """Which texels of a 4-bit image the game blends (their palette entry has
-    the semi-transparency bit): the pack's colour there is what the blend
+    the semi-transparency bit): the pack's color there is what the blend
     uses, and the bit is always the original's (texture_pack.c)."""
     palette = X.read_palette(wa, clut, 16)
     stride = stride or words
@@ -260,8 +260,8 @@ def semi_texels(wa, offset, words, rows, clut, stride=None):
     for y in range(rows):
         for x in range(words * 4):
             word = wa[offset + y * stride * 2 + (x // 4) * 2] | wa[offset + y * stride * 2 + (x // 4) * 2 + 1] << 8
-            colour = palette[(word >> ((x % 4) * 4)) & 15]
-            out[y, x] = colour != 0 and colour & 0x8000
+            color = palette[(word >> ((x % 4) * 4)) & 15]
+            out[y, x] = color != 0 and color & 0x8000
     return out
 
 
@@ -279,7 +279,7 @@ def blend_ready(image, semi, rect, text, original=None):
     transparent as it leaves the pixel (the picture mixes it over the card).
     How much a pixel is letter comes from its alpha and its darkness, so the
     letters' smoothed edges and shading stay smooth. Anything else keeps the
-    game's own colour on those texels (a star's or ball's rim)."""
+    game's own color on those texels (a star's or ball's rim)."""
     x0, y0, w, h = rect
     a = np.array(image)
     for ty in range(y0, y0 + h):
@@ -419,7 +419,7 @@ def build(args):
                 refboth = Image.new("RGBA", (256, 256))
                 refboth.paste(ref[0], (0, 0))
                 refboth.paste(ref[1], (128, 0))
-                hd = recolour(hd, both, refboth)
+                hd = recolor(hd, both, refboth)
             hd = scribble(hd, ref[0])
             for c in (0, 1):
                 offset = phase + c * 0x8000

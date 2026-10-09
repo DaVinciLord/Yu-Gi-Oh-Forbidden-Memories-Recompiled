@@ -61,7 +61,7 @@ DisplayObject *func_80031574(s32 index, s32 arg1, s32 arg2, s32 arg3, s32 arg4)
         break;
     }
 #ifdef MEMORIES_PC
-    /* A mod's frame colour (Cards_FrameColor): the icon's palettes follow
+    /* A mod's frame color (Cards_FrameColor): the icon's palettes follow
      * the frames' order, with orange next after ritual; this package has no
      * purple, so a purple frame keeps its type's icon. */
     if (Cards_FrameColor(index) >= 0 && Cards_FrameColor(index) != CARD_FRAME_PURPLE) {

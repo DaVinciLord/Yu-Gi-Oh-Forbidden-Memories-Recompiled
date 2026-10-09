@@ -27,7 +27,7 @@ int TitleImages_IsBackground(int which);
 /* Whether picture `which` is the mod's this time, and the size it is drawn
  * at in the game's pixels (an item's at its "scale"). */
 int TitleImages_Ready(int which, int *width, int *height);
-/* Draws it at x, y (its top left, in the game's 320 x 240) in colour r, g,
+/* Draws it at x, y (its top left, in the game's 320 x 240) in color r, g,
  * b (128 each as it is) into ordering table `ot` at `depth`; `blend` 1
  * adds it to what is under it, as the entries' afterimages are. The
  * backgrounds share their VRAM: the one drawn is put there first. */

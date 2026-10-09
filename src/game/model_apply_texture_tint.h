@@ -3,7 +3,7 @@
 
 #include "../types.h"
 
-/* Recolours one duel side's 256x8 VRAM strip while copying it up from y=0xF8
+/* Recolors one duel side's 256x8 VRAM strip while copying it up from y=0xF8
  * to y=0xF0. side selects the half of the framebuffer through `side << 8`, so
  * 0 reads x=0 and 1 reads x=256, and the function returns without drawing for
  * any other value.
@@ -12,7 +12,7 @@
  * into a local buffer, every one of its 0x400 pixels goes through
  * Color_TintBgr555Pixel(pixel, tint, level), and LoadImage2 writes the
  * result back eight rows higher. When the tint keeps the hue, is not
- * inverted, and level is at or above COLOR_FIXED_ONE the recolour is the
+ * inverted, and level is at or above COLOR_FIXED_ONE the recolor is the
  * identity apart from the tint's zero-channel clamp, so the whole strip moves
  * in one MoveImage instead; notes/color-transform-runtime.md measures that
  * difference.

@@ -1359,7 +1359,7 @@ or otherwise un-eliminable object is read.
 
 A range test that emits `lbu` with `sltiu` and then `lb` with `bgez` is reading
 the same byte twice with two different signednesses, not once with one
-comparison. In `MainMenu_DrawTradeOffersAndHighlights` the colour channel
+comparison. In `MainMenu_DrawTradeOffersAndHighlights` the color channel
 leaves the range `0x41` to
 `0x7F`, written as
 

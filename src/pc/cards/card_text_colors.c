@@ -41,7 +41,7 @@ static void set_colors(const char *mod, const JsonValue *entry, int card, const 
         const JsonValue *value = Json_Member(entry, keys[i]);
         if (!value) continue;
         if (color(value) < 0)
-            Mods_Note(mod, "card_text_colors: card '%s': \"%s\" must be a colour from 0 to 7",
+            Mods_Note(mod, "card_text_colors: card '%s': \"%s\" must be a color from 0 to 7",
                       label, keys[i]);
         else *into[i] = (unsigned char)(color(value) + 1);
     }

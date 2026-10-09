@@ -36,13 +36,13 @@ int Memories_DiscReadSectors(int lba, int sectors, void *out)
 }
 
 /* The opaque canvas's blend of overlay_text.c. */
-void OverlayText_Blend(const MenuCanvas *canvas, int x, int y, uint32_t colour, unsigned alpha)
+void OverlayText_Blend(const MenuCanvas *canvas, int x, int y, uint32_t color, unsigned alpha)
 {
     uint32_t *at, under;
     if (x < 0 || y < 0 || x >= canvas->width || y >= canvas->height || !alpha) return;
     at = canvas->pixels + (size_t)y * (size_t)canvas->stride + (size_t)x;
     under = *at;
-#define MIX(shift) ((((colour >> shift) & 255) * alpha + ((under >> shift) & 255) * (255 - alpha)) / 255)
+#define MIX(shift) ((((color >> shift) & 255) * alpha + ((under >> shift) & 255) * (255 - alpha)) / 255)
     *at = 0xFF000000u | MIX(16) << 16 | MIX(8) << 8 | MIX(0);
 #undef MIX
 }

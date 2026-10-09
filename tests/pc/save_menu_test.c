@@ -23,9 +23,9 @@ void Menu_OverlayArea(const MenuCanvas *canvas, int *left, int *right, int *top)
     *top = Menu_Height();
 }
 int Menu_TextWidthScaled(const char *text, int scale) { return (int)strlen(text) * 6 * scale; }
-void Menu_DrawTextScaled(MenuCanvas *canvas, int x, int y, const char *text, uint32_t colour, int scale)
+void Menu_DrawTextScaled(MenuCanvas *canvas, int x, int y, const char *text, uint32_t color, int scale)
 {
-    (void)canvas; (void)x; (void)y; (void)text; (void)colour; (void)scale;
+    (void)canvas; (void)x; (void)y; (void)text; (void)color; (void)scale;
 }
 
 struct MemoriesState { int loading; unsigned char chunk[4096]; size_t size; };

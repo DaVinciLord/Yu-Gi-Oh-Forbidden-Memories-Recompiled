@@ -176,7 +176,7 @@ static void made_image(void)
     char path[1024];
     uint32_t rgb;
     int i, entry;
-    /* The first rows one colour (a plain sky): the whole block tells it apart. */
+    /* The first rows one color (a plain sky): the whole block tells it apart. */
     for (i = 0; i < 640; i++) pixels[i] = i < 60 ? 0x0505 : (uint16_t)((i * 7 + 3) % 63 + 1) * 0x101;
     for (i = 0; i < 64; i++) clut[i] = (uint16_t)(0x4000 + i * 3);
     make_dir("made");
@@ -267,7 +267,7 @@ static void stp_palette(void)
     TexturePack_Service();
     assert(TexturePack_EntryFor(768, 0, 0, 768, 400, 0, 0) != 0);
     assert(TextureDump_Sample(768, 0, 0, 2 << 16, 2 << 16, &rgb) == 1 && rgb == 0xff0000);
-    block[32] ^= 0x0001;                                          /* a colour of its own: not the disc's */
+    block[32] ^= 0x0001;                                          /* a color of its own: not the disc's */
     SoftGpu_Load(768, 400, 16, 1, block + 32);
     assert(TexturePack_EntryFor(768, 0, 0, 768, 400, 0, 0) == 0);
     TexturePack_Unload();

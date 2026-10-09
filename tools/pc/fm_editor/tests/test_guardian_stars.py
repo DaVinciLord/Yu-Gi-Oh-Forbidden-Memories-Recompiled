@@ -114,7 +114,7 @@ class TableTest(unittest.TestCase):
         bad = {"stars": [{"id": 16}, {"id": 0}, {"name": "x"}],
                "matchups": [{"attacker": 1, "defender": 2, "bonus": 40000}, {"attacker": "Nowhere", "defender": 2},
                             {"attacker": 1, "defender": 2, "bonus": "a"}],
-               "default_bonus": 99999, "colour": 1, "choice": "sometimes"}
+               "default_bonus": 99999, "color": 1, "choice": "sometimes"}
         errors = [m for level, where, m in gs.check(bad) if level == "error"]
         self.assertEqual(len(errors), 9, errors)            # stars.c's eight notes, and "choice"
         self.assertTrue(any("4 bits" in m for m in errors))
@@ -340,10 +340,10 @@ class GuardianStarsTabTest(unittest.TestCase):
         self.assertEqual(app.project.other["guardian_stars"]["choice"], "best")
         tab.draw()                              # the grid, 11 by 11
         self.assertGreater(len(tab.canvas.find_all()), 11 * 11)
-        # Dark mode: the grid redraws itself in the dark colours when the
+        # Dark mode: the grid redraws itself in the dark colors when the
         # theme changes, and back.
         from fm_editor import theme
-        from fm_editor.guardian_stars_tab import COLOURS
+        from fm_editor.guardian_stars_tab import COLORS
         looks = theme.Theme(self.root)
         looks.make_dark()
         light = looks.style.theme_use()
@@ -351,11 +351,11 @@ class GuardianStarsTabTest(unittest.TestCase):
                          if tab.canvas.type(item) == "rectangle"}
         looks.style.theme_use(theme.DARK_THEME)
         self.root.update()
-        self.assertIn(COLOURS["plus"][1], fills())
-        self.assertNotIn(COLOURS["plus"][0], fills())
+        self.assertIn(COLORS["plus"][1], fills())
+        self.assertNotIn(COLORS["plus"][0], fills())
         looks.style.theme_use(light)
         self.root.update()
-        self.assertIn(COLOURS["plus"][0], fills())
+        self.assertIn(COLORS["plus"][0], fills())
         tab.remove_icon()
         self.assertNotIn("icons/star-11.png", app.project.files)
         # A cell of the star removed is no cell any more: the bonus buttons

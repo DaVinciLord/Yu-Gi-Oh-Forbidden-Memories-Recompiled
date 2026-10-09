@@ -29,7 +29,7 @@ typedef char CardCountEntry_size_must_be_4[
     sizeof(CardCountEntry) == 4 ? 1 : -1
 ];
 
-/* Unpacked colour channels used by the tint pipeline. Most callers keep the
+/* Unpacked color channels used by the tint pipeline. Most callers keep the
  * BGR555 0..31 range; the inverse transform may clamp a channel to 0xFF. */
 typedef struct {
     u8 r;
@@ -1252,7 +1252,7 @@ typedef char Pair_size_must_be_8[
     sizeof(Pair) == 8 ? 1 : -1
 ];
 
-/* One colour triple with a carried fourth byte. game/triangle_subdivision.c
+/* One color triple with a carried fourth byte. game/triangle_subdivision.c
    subdivides a triangle and writes its corners through this type; the four
    functions in that unit read and write three bytes each and none of them
    reads a fourth byte or a stride, so the fourth is carried by the stride of

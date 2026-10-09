@@ -638,9 +638,9 @@ def exe_icon(build, windres):
 
     def bgra(x, y):  # frame 0, 16x16 at 4 bits, the low nibble first
         byte = header[0x80 + (y * 16 + x) // 2]
-        colour = clut[byte >> 4 if x & 1 else byte & 15]
-        return ((colour >> 10 & 31) * 255 // 31, (colour >> 5 & 31) * 255 // 31, (colour & 31) * 255 // 31,
-                255 if colour else 0)
+        color = clut[byte >> 4 if x & 1 else byte & 15]
+        return ((color >> 10 & 31) * 255 // 31, (color >> 5 & 31) * 255 // 31, (color & 31) * 255 // 31,
+                255 if color else 0)
 
     entries = []
     for size in (16, 32, 48, 64):  # pixel-doubled, bottom-up 32-bit DIBs with an empty AND mask

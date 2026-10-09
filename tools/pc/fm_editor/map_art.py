@@ -5,7 +5,7 @@ pack, next to the Art tab's (art.py keeps the pack's manifest; this module
 owns the map's entries in it).
 
 * The sprites are one 256x256 four-bit strip in each overworld package
-  (sector +141, uploaded to VRAM 448,256), drawn through four 16-colour
+  (sector +141, uploaded to VRAM 448,256), drawn through four 16-color
   palettes of the package's sector +157: 0 the name panel, 2 the marker, 3
   the arrows (campaign_map.sprite_parts); a texture dump of the map shows
   the strip read through palette 1 as well. The mod replaces the
@@ -188,7 +188,7 @@ def textures(wa: bytes, package: str) -> list:
 def texture_image(wa: bytes, texture: Texture) -> Image:
     """A texture as the disc has it, through its palette."""
     blob = wa[texture.offset:texture.offset + texture.words * 2 * texture.rows]
-    palette = [cm.colour(wa[texture.clut_offset + 2 * i] | (wa[texture.clut_offset + 2 * i + 1] << 8))
+    palette = [cm.color(wa[texture.clut_offset + 2 * i] | (wa[texture.clut_offset + 2 * i + 1] << 8))
                for i in range(texture.entries)]
     # Every entry but the first is drawn opaque (the game sets its STP bit).
     palette = [palette[0]] + [c if c[3] else (0, 0, 0, 255) for c in palette[1:]]
@@ -208,12 +208,12 @@ def texture_image(wa: bytes, texture: Texture) -> Image:
 
 def strip_image(data: cm.MapData, palette: int) -> Image:
     """The disc's sprite strip through one palette, 256x256."""
-    colours = cm.palette_colours(data.palettes, palette)
+    colors = cm.palette_colors(data.palettes, palette)
     out = bytearray(STRIP_SIZE * STRIP_SIZE * 4)
     for v in range(STRIP_SIZE):
         for u in range(STRIP_SIZE):
             at = (v * STRIP_SIZE + u) * 4
-            out[at:at + 4] = bytes(colours[cm.strip_index(data.strip, u, v)])
+            out[at:at + 4] = bytes(colors[cm.strip_index(data.strip, u, v)])
     return Image(STRIP_SIZE, STRIP_SIZE, bytes(out))
 
 
@@ -356,11 +356,11 @@ def set_sprite(project, animation: int, variant: int, image: Image) -> list:
                     tu = part.u * s + (part.width * s - 1 - i if part.mirror else i)
                     tv = part.v * s + j
                     if 0 <= sx < source.width and 0 <= sy < source.height:
-                        colour = source.rgba[(sy * source.width + sx) * 4:(sy * source.width + sx) * 4 + 4]
+                        color = source.rgba[(sy * source.width + sx) * 4:(sy * source.width + sx) * 4 + 4]
                     else:
-                        colour = b"\x00\x00\x00\x00"
+                        color = b"\x00\x00\x00\x00"
                     at = (tv * base.width + tu) * 4
-                    pixels[at:at + 4] = colour
+                    pixels[at:at + 4] = color
         state(project).strips[palette] = Picture(f"{DIR}/sprites-p{palette}.png",
                                                  Image(base.width, base.height, bytes(pixels)), pending=True)
     touched(project)

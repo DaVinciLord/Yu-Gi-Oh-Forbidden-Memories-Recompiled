@@ -47,7 +47,7 @@ extern u8 D_8009B141 PSX_SECTION(".data");
 extern u8 D_8009B141;
 #endif
 
-/* The colour a fade is heading for. Fade_Update copies the three into the
+/* The color a fade is heading for. Fade_Update copies the three into the
  * tint at D_8009B142/143/144 (graphics_frame.h) in address order, with no
  * arithmetic on the way, so the roles follow the tint's: D_8009B14A is the
  * blue target, D_8009B14B green, D_8009B14C red. Three writers and no

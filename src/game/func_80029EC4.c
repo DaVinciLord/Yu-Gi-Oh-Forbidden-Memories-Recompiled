@@ -22,7 +22,7 @@
    is still below CARD_ID_END, ten more on the right at column 0xA8. A cell is drawn
    only when Library_GetCardFlags reports bit 0x80, tinted 0x808080 or 0x404040 on
    bit 0, and the run stops as soon as a line falls off the bottom of the
-   screen. The tail then builds the cursor box at 0x1F800000, colouring it from
+   screen. The tail then builds the cursor box at 0x1F800000, coloring it from
    the low seven bits of D_8009B09C through a four-way ramp, and draws its four
    edges with GsSortGLine.
 

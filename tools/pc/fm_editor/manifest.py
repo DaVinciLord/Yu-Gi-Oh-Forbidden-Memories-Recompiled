@@ -22,7 +22,7 @@ import re
 import shutil
 from pathlib import Path
 
-from .gamedata import (FUSION_GROUPS, RITUAL_ORIGINS, RITUAL_REQUIREMENT_KEYS, RITUAL_TRIBUTE_MAX, fusion_group_named, ATTRIBUTE_NAMES, CARD_COUNT, DECK_SIZE, DUELIST_NAMES, FRAME_COLOUR_NAMES, FRAME_NAMES, POOLS, STAR_NAMES,
+from .gamedata import (FUSION_GROUPS, RITUAL_ORIGINS, RITUAL_REQUIREMENT_KEYS, RITUAL_TRIBUTE_MAX, fusion_group_named, ATTRIBUTE_NAMES, CARD_COUNT, DECK_SIZE, DUELIST_NAMES, FRAME_COLOR_NAMES, FRAME_NAMES, POOLS, STAR_NAMES,
                        EQUIP_BONUS_MAX, STARTER_WEIGHT_LIMIT, TYPE_NAMES, TYPE_MAGIC, GameData)
 from .model import AddedCard, ModInfo, Project, StarterDeck, duelist_named, type_named, KEY_RE
 from . import art, board_art, campaign_map, compat, fixed_decks, guardian_stars, packs as packmath, pools as poolmath, roster
@@ -557,7 +557,7 @@ def item_ids(key: str) -> list:
 
 def listing_plain(item: str) -> str:
     """An item's text as the editor shows it: the key line and the end
-    left out, line breaks as lines; colour and icon codes kept as spelled."""
+    left out, line breaks as lines; color and icon codes kept as spelled."""
     body = item.split("\n", 1)[1] if "\n" in item else ""
     for code in ("{end}", "{cont}"):
         body = body.replace(code, "")
@@ -584,7 +584,7 @@ def card_texts(listing: str) -> dict:
 
 def read_text_cards(project: Project, folder: Path, messages: list):
     """Cards whose name or text the mod's "text" file carries (an imported
-    mod's coloured names, texts with codes, texts empty on purpose): shown
+    mod's colored names, texts with codes, texts empty on purpose): shown
     in the editor, and left to the file while unchanged."""
     name = project.other.get("text")
     if not isinstance(name, str) or not (folder / name).is_file():
@@ -690,9 +690,9 @@ def _apply_fields(card, entry: dict, is_replace: bool, messages: list, where: st
     if "frame" in entry:
         value = _choice(entry["frame"], FRAME_NAMES + ["Type"])
         if not 0 <= value <= len(FRAME_NAMES):
-            # Gold, Green, Pink and Blue: Monster, Magic, Trap and Ritual by their colour.
-            value = _choice(entry["frame"], FRAME_COLOUR_NAMES)
-            if value >= len(FRAME_COLOUR_NAMES):
+            # Gold, Green, Pink and Blue: Monster, Magic, Trap and Ritual by their color.
+            value = _choice(entry["frame"], FRAME_COLOR_NAMES)
+            if value >= len(FRAME_COLOR_NAMES):
                 value = -1
         if 0 <= value <= len(FRAME_NAMES):
             card.frame = -2 if value == len(FRAME_NAMES) else value  # -2: "Type", never orange

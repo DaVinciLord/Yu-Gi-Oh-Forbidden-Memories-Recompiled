@@ -54,18 +54,18 @@ arbitrary corrupt records, null pointers, or oversized table lengths are safe.
 
 ## SDK objects and load-bearing initialization
 
-The source uses actual ILP32 SDK types: five `CVECTOR` colours, eight
+The source uses actual ILP32 SDK types: five `CVECTOR` colors, eight
 `SVECTOR` vertices, one `GsSPRITE`, three `POLY_G4` packets, four `long`
 projection outputs, and the `BackgroundNormals` wrapper owned by
-`src/game/model_background.h`. The 20-byte automatic colour
+`src/game/model_background.h`. The 20-byte automatic color
 initializer precedes a function-local 16-byte static normal initializer, then
 the automatic aggregate copy. Keeping that sequence preserves the private
 36-byte data region and the retail stack frame. A direct automatic normal
 array emitted a clearing call and did not preserve the data region.
 
 `NormalColorCol` always receives all three SDK arguments; the light-matrix
-setter receives one. The colour outputs are the sprite RGB bytes and the
-twelve polygon vertex colours. `RotAverage4` receives four actual vertices,
+setter receives one. The color outputs are the sprite RGB bytes and the
+twelve polygon vertex colors. `RotAverage4` receives four actual vertices,
 four packed-XY output pointers and two `long *` outputs.
 
 Unused sprite transformation fields and vertex pad members remain

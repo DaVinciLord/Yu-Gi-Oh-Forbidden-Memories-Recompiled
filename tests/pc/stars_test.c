@@ -186,7 +186,7 @@ int main(void)
     document = Json_Parse("{\"guardian_stars\": {\"stars\": [{\"id\": 16}, {\"id\": 0}, {\"name\": \"x\"}],"
                           " \"matchups\": [{\"attacker\": 1, \"defender\": 2, \"bonus\": 40000},"
                           " {\"attacker\": \"Nowhere\", \"defender\": 2}, {\"attacker\": 1, \"defender\": 2, \"bonus\": \"a\"}],"
-                          " \"default_bonus\": 99999, \"colour\": 1}}", NULL, 0);
+                          " \"default_bonus\": 99999, \"color\": 1}}", NULL, 0);
     Stars_Clear();
     notes = 0;
     Stars_Add("bad", Json_Root(document));

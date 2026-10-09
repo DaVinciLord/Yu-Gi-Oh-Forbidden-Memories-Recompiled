@@ -2,7 +2,7 @@
  * object the game draws through DisplayObject_RenderSpriteSheet; the ones a
  * mod changes are drawn here instead, from the very sprites the game would
  * have sorted (DisplayObject_Capture catches them), moved, sized and
- * coloured, so whatever the game does to them -- its slides, the panel's
+ * colored, so whatever the game does to them -- its slides, the panel's
  * palette at the turn, the cursor's animation -- shows through. The
  * life-point panel is one 64 x 40 sprite of both sides; it is cut into its
  * halves here, each with its own digits (Duel_DrawLifePointsAndDeckCounts
@@ -178,7 +178,7 @@ static void draw_piece(const GsSPRITE *sprite, int mode, int du, int dv, int w, 
     memset(&quad, 0, sizeof(quad));
     setPolyFT4(&quad);
     if (attribute & 0x40000000) setSemiTrans(&quad, 1);
-    /* Its colours as they are: unmodulated, so not dithered, as the sprite
+    /* Its colors as they are: unmodulated, so not dithered, as the sprite
      * it stands for is not. */
     if ((attribute & 0x40) || (piece.r == 0x80 && piece.g == 0x80 && piece.b == 0x80)) setShadeTex(&quad, 1);
     quad.r0 = piece.r;
@@ -428,7 +428,7 @@ static int capture_all(DisplayObject *object, s32 ot, s32 depth, int dx, int dy,
     return caught->count;
 }
 
-/* The panel as its two halves, each moved, sized and coloured on its own,
+/* The panel as its two halves, each moved, sized and colored on its own,
  * or a picture, or nothing; widened a digit for a fifth (as
  * Duel_DrawWideLifePointPanel widens the whole). Submitted last first, as
  * the ordering table draws them the other way round. */

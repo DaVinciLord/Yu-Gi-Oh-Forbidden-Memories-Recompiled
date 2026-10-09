@@ -2,9 +2,9 @@
 #define MEMORIES_PC_PLATFORM_UI_CONFIG_H
 /* The mods' "ui" key as read (ui_config.c): the duel's pictures -- the two
  * halves of the life-point panel, the FIELD box, the card bar and the
- * cursors -- moved, sized, coloured, hidden or drawn from a PNG of the
+ * cursors -- moved, sized, colored, hidden or drawn from a PNG of the
  * mod's own; pc/cards/duel_ui.h draws them so. Places are in the game's
- * 320 x 240, colours 0xRRGGBB. Only the reading is here, so
+ * 320 x 240, colors 0xRRGGBB. Only the reading is here, so
  * tests/pc/ui_config_test.c checks it at the host's own width. */
 #include <stdint.h>
 
@@ -34,8 +34,8 @@ typedef struct {
     char mod[64];               /* the last mod that did */
     int x, y;                   /* moved by, in the game's pixels */
     int scale;                  /* percent of its size, about its middle (100 as it is) */
-    uint32_t tint;              /* its colours multiplied, 0xFFFFFF as they are */
-    uint32_t digits;            /* the LP and deck digits' colours (the LP halves) */
+    uint32_t tint;              /* its colors multiplied, 0xFFFFFF as they are */
+    uint32_t digits;            /* the LP and deck digits' colors (the LP halves) */
     int hidden;
     UiImage image;
     char label[UI_LABEL];       /* the LP halves: words in place of COM or YOU */
@@ -43,7 +43,7 @@ typedef struct {
 
 /* The card bar's parts, in "ui"."duel"."card_bar" (UiConfig_PartNames):
  * the words, numbers and icons the game writes over the bar as one text
- * (func_80023144), each moved within the bar, coloured or hidden as it is
+ * (func_80023144), each moved within the bar, colored or hidden as it is
  * drawn (duel_ui.c). Places are from where the game puts them, in the
  * game's pixels. */
 enum {
@@ -69,7 +69,7 @@ typedef struct {
     int set;                    /* a mod changed it */
     char mod[64];
     int x, y;                   /* moved by, kept on the bar (UiConfig_PartRange) */
-    uint32_t tint;              /* its colours multiplied, 0xFFFFFF as they are */
+    uint32_t tint;              /* its colors multiplied, 0xFFFFFF as they are */
     int hidden;
     int spacing;                /* the name: pixels more (or fewer) between its letters */
 } UiPart;

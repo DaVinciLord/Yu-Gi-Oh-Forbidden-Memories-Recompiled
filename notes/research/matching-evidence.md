@@ -3465,7 +3465,7 @@ must be measured.
   filling, and then one field converts and the rest do not.**
   `func_80016784` builds two sprites in scratchpad through pointers of their
   own while reading its display object's fields between the stores. Typing
-  the object floated all three reads of the colour word at `0x0C` across
+  the object floated all three reads of the color word at `0x0C` across
   those stores; retail keeps every one of them where the source puts it. The
   parameter and the other ten offsets convert freely -- it is only the reads
   that sit *between* stores through the other pointer. The tell is a field

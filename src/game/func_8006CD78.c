@@ -40,7 +40,7 @@
 #define BURST_ABS(x) ((x) >= 0 ? (x) : -(x))
 #define VECTOR_VIEW(value) ((VECTOR *)(value))
 #define PACKET_WORD_VIEW(packet) ((u32 *)(packet))
-/* The red and green bytes of a colour, read as the high half of the word that
+/* The red and green bytes of a color, read as the high half of the word that
  * starts two bytes before it. */
 #define HI16(p, o) (*(u32 *)((u8 *)(p) + (o)) & 0xFFFF0000)
 

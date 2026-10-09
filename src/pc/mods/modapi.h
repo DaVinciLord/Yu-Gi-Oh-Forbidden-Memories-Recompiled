@@ -161,7 +161,7 @@ struct MemoriesModHost {
     /* Overlay drawing, for MemoriesMod.overlay: the canvas's size in pixels
      * and the scale the port draws its own menus at (1 at 480 lines, more in
      * a bigger window); text (ASCII) with `middle` its vertical centre and
-     * its width; a rectangle blended in at `alpha` (0-255). Colours are
+     * its width; a rectangle blended in at `alpha` (0-255). Colors are
      * 0xRRGGBB. Outside the overlay callback these do nothing. */
     void (*overlay_size)(const MemoriesModHost *, int *width, int *height, int *scale);
     void (*draw_text)(const MemoriesModHost *, int x, int middle, const char *text, uint32_t rgb, int scale);

@@ -1,6 +1,6 @@
 """The card text box's right-click menu: cut, copy and paste, an icon
 ("{f8 0B NN}", from a picker window that scrolls, as the forty-one do not
-fit a menu on a short screen) or a colour ("{f8 0A NN}") inserted where the
+fit a menu on a short screen) or a color ("{f8 0A NN}") inserted where the
 cursor is, each shown as the game draws it (notes/more-cards.md, "Card text
 codes"), so the codes need not be looked up."""
 from __future__ import annotations
@@ -21,7 +21,7 @@ ZOOM = 2
 
 
 class Pictures:
-    """The icons and colour swatches of one set of game files, made once."""
+    """The icons and color swatches of one set of game files, made once."""
 
     def __init__(self, master, wa, zoom=ZOOM):
         self.icons, self.swatches = {}, {}
@@ -34,7 +34,7 @@ class Pictures:
             if icon is not None:
                 image = pngio.scale_nearest(pngio.Image(*icon), zoom)
                 self.icons[n] = tk.PhotoImage(master=master, data=base64.b64encode(pngio.encode(image)), format="png")
-        for n in range(len(card_text.COLOUR_NAMES)):
+        for n in range(len(card_text.COLOR_NAMES)):
             rgb = font.ramps[n][15]
             image = pngio.Image(16 * zoom, 12 * zoom, bytes((*rgb, 255)) * (16 * 12 * zoom * zoom))
             self.swatches[n] = tk.PhotoImage(master=master, data=base64.b64encode(pngio.encode(image)), format="png")
@@ -61,16 +61,16 @@ def insert_code(text: tk.Text, code: str):
     text.insert("insert", code)
 
 
-def colour(text: tk.Text, n: int):
-    """A selection is coloured and the text after it goes back to white;
-    without one, the colour starts at the cursor."""
+def color(text: tk.Text, n: int):
+    """A selection is colored and the text after it goes back to white;
+    without one, the color starts at the cursor."""
     if text.tag_ranges("sel") and n:
         first, last = text.index("sel.first"), text.index("sel.last")
-        text.insert(last, card_text.colour_code(0))
-        text.insert(first, card_text.colour_code(n))
+        text.insert(last, card_text.color_code(0))
+        text.insert(first, card_text.color_code(n))
         text.tag_remove("sel", "1.0", "end")
     else:
-        insert_code(text, card_text.colour_code(n))
+        insert_code(text, card_text.color_code(n))
 
 
 class IconPicker(tk.Toplevel):
@@ -144,13 +144,13 @@ def fill(menu: tk.Menu, app, text: tk.Text, after):
     menu.add_separator()
     shown = pictures(app, text)
     menu.add_command(label="Insert icon...", state=state, command=lambda: IconPicker(app, text, after))
-    colours = tk.Menu(menu, tearoff=False)
-    for n, name in enumerate(card_text.COLOUR_NAMES):
+    colors = tk.Menu(menu, tearoff=False)
+    for n, name in enumerate(card_text.COLOR_NAMES):
         image = shown.swatches.get(n) if shown else None
-        label = f"{name}{' (back to normal)' if n == 0 else ''}   {card_text.colour_code(n)}"
-        colours.add_command(label=label, image=image or "", compound="left" if image else "none",
-                            command=run(lambda n=n: colour(text, n)))
-    menu.add_cascade(label="Text colour" + (" (of the selection)" if has_selection else ""), menu=colours,
+        label = f"{name}{' (back to normal)' if n == 0 else ''}   {card_text.color_code(n)}"
+        colors.add_command(label=label, image=image or "", compound="left" if image else "none",
+                            command=run(lambda n=n: color(text, n)))
+    menu.add_cascade(label="Text color" + (" (of the selection)" if has_selection else ""), menu=colors,
                      state=state)
 
 

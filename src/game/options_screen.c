@@ -20,7 +20,7 @@
 #include "text_constants.h"
 #include "../unmatched.h"
 
-/* The options screen: its text-colour and text-box setup, the layout pass
+/* The options screen: its text-color and text-box setup, the layout pass
    that places its two cursor objects, the init that creates them, and the
    input handler and per-frame dispatcher that drive it. All five work on the
    gOptions_* state options.h describes, and each is reached from the one

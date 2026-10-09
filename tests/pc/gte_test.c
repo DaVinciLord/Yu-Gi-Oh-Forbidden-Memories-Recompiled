@@ -91,7 +91,7 @@ int main(void)
     CHECK(Memories_GteCommand(AVSZ3) && Memories_GteReadData(7) == 0xffff);
     CHECK((Memories_GteReadControl(31) & 0x80040000u) == 0x80040000u);
 
-    /* Lit grey facing the light, then fully depth-cued to the far colour. */
+    /* Lit grey facing the light, then fully depth-cued to the far color. */
     Memories_GteWriteControl(8, 0);
     Memories_GteWriteControl(9, 0x1000); /* L13 */
     Memories_GteWriteControl(10, 0);

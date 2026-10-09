@@ -56,9 +56,9 @@ void func_800383B0(DuelEffectChannel *object);
  * although the generic command table discards that result. */
 u32 *func_800383DC(DuelEffectChannel *channel);
 
-/* D_80090EAC entry: sets the object's colour slot at +0x54 from a one-byte
+/* D_80090EAC entry: sets the object's color slot at +0x54 from a one-byte
  * operand. With bit 7 set the low nibble indexes gText_abColorSlots instead of
- * being used directly, so a palette entry and a literal colour share one
+ * being used directly, so a palette entry and a literal color share one
  * opcode. */
 void func_80038498(DuelEffectChannel *object);
 

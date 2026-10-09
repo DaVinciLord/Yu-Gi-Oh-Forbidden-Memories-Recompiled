@@ -44,7 +44,7 @@ extern u16 D_8009B32E PSX_SECTION(".data");
 extern u16 D_8009B32E;
 #endif
 
-/* The text colour slots, indexed by the low nibble of a colour command:
+/* The text color slots, indexed by the low nibble of a color command:
  * func_80038498 reads `gText_abColorSlots[v & 0xF]`. func_800611D0.c sets
  * the first three to 4 and clears one chosen by its argument, and
  * Options_InitTextDisplay in options_screen.c walks the table from its base.
@@ -86,7 +86,7 @@ extern u32 D_801D9000[];
  */
 extern u16 D_800EAFF8[];
 
-/* Seeds the colour slots above for a two-choice prompt and puts the box on
+/* Seeds the color slots above for a two-choice prompt and puts the box on
  * screen: it fills the first five with 4, clears the one its argument selects,
  * marks slot 3 or slot 4 depending on that argument, then calls TextBox_Create
  * and func_80039A14.

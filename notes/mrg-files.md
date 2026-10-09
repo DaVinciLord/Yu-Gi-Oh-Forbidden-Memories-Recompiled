@@ -130,7 +130,7 @@ which is archive range `0xED5800-0xEE6800`. Matching callback
 
 The palette sector has SHA-256
 `bc1bbeb55e28cef036ec35e90d232b070df8221d5d114b4116a9743498fe7776`.
-Its 16-colour slots cover the result, rank, statistics, card, and player
+Its 16-color slots cover the result, rank, statistics, card, and player
 win/lose graphics described in
 [`modding-tutorial-evidence.md`](modding-tutorial-evidence.md). Those visual
 labels come from the tutorial; the package boundaries, upload geometry, and
@@ -148,8 +148,8 @@ which is archive range `0xFD3800-0xFEC800`. Matching callback
 | `0xFEB800-0xFEC000` | `0x800` / 1 sector | Stages palette data; the callback uploads its first `0x400` bytes as a `256 x 2` rectangle to VRAM `(0, 244)`. The remaining half-sector is not assigned a role. |
 | `0xFEC000-0xFEC800` | `0x800` / 1 sector | Schedules a transfer to `0x801AF000`; its later role remains unnamed. |
 
-The tutorial places a 256-colour background palette at `0xFEB800` and a
-16-colour symbol palette at `0xFEBA00`, which map to the first full VRAM row
+The tutorial places a 256-color background palette at `0xFEB800` and a
+16-color symbol palette at `0xFEBA00`, which map to the first full VRAM row
 and the first 16 entries of the second row. Their exact spans are
 `0x200 = 256 * 2` bytes and `0x20 = 16 * 2` bytes. Paired with the two image
 ranges, `0x10000` bytes at 8 bits per pixel and `0x8000` bytes at 4 bits per
@@ -174,7 +174,7 @@ Matching `Main_RunBootSequence` requests 54 WA sectors beginning at sector
 
 Tutorial offsets place the shared card-pointer and fusion-number graphics
 inside the first phase, their palettes inside the second, and eight
-16-colour UI ramps at `0xB61000-0xB61100` in the third. See
+16-color UI ramps at `0xB61000-0xB61100` in the third. See
 [`modding-tutorial-evidence.md`](modding-tutorial-evidence.md) for the
 resource-level offsets, hashes, and visual-label confidence, and
 [`boot-frontend-sequence.md`](boot-frontend-sequence.md) for the complete
@@ -196,7 +196,7 @@ which is archive range `0xF2B800-0xF44000`. Matching callback
 | `0xF35000-0xF44000` | `0xF000` / 30 sectors | Transfers to the primary arena at `0x80100000`. The first `0xED80` bytes are 25 dialog-portrait records of `0x980` bytes each; the final `0x280` bytes are an unused prefix of another portrait record introduced by sector rounding. |
 
 Each portrait record contains a `48 x 48` 8-bit image (`0x900` bytes)
-followed by a 64-colour CLUT (`0x80` bytes). Text control `F6` selects these
+followed by a 64-color CLUT (`0x80` bytes). Text control `F6` selects these
 portraits through values `0x41`-`0x59`. The four phase sizes total the
 requested `0x18800` bytes exactly, and none supplies an executable module.
 See the [complete upload and F6 selection contract](dialog-portrait-bank.md).
@@ -224,7 +224,7 @@ which is archive range `0xF44000-0xF6F800`. Resident callback
 | `0xF6D000-0xF6F800` | `0x2800` / 5 sectors | Transfers through `D_800101D8` to `0x80168000`, producing the tracked Free Duel executable overlay. |
 
 Each portrait record contains a `48 x 48` 8-bit image (`0x900` bytes)
-followed by a 64-colour CLUT (`0x80` bytes). The executable phase has SHA-256
+followed by a 64-color CLUT (`0x80` bytes). The executable phase has SHA-256
 `e5091e1a5df0287dbd3561915ca53c0f91d359d7eb0ec4156c5734361b55c1f2`,
 and the five phase sizes total the requested `0x2B800` bytes exactly.
 
@@ -234,7 +234,7 @@ through a `24 x 48` VRAM rectangle, which represents `48 x 48` 8-bit indices,
 then sends the `0x80` bytes at `+0x900` through a `64 x 1` CLUT rectangle.
 Successive records begin exactly `0x980` bytes apart. Records `0`-`24` fill a
 `5 x 5` image bank beginning at VRAM `(128, 256)`, records `25`-`39` continue
-at x `256`, and the 64-colour palettes occupy rows `496`-`511` before wrapping
+at x `256`, and the 64-color palettes occupy rows `496`-`511` before wrapping
 to the next 64-entry CLUT column.
 
 ### Name-entry screen package

@@ -1,7 +1,7 @@
 # Duel-result controller caller views
 
 `func_800218F0` keeps its address name and the existing reward/display helper
-interfaces. Its source ordering is measured, particularly the adjacent colour
+interfaces. Its source ordering is measured, particularly the adjacent color
 slot stores after the viewport and display-flag stores. Rank division remains
 signed 32-bit, and the starchip-object X coordinate is also signed 32-bit.
 
@@ -29,7 +29,7 @@ signed 32-bit, and the starchip-object X coordinate is also signed 32-bit.
 - `D_801D56A8` is a separate text-staging word, beyond the existing
   `D_801D5608` union's measured `0x80` bytes. Only element zero of its
   `s32 []` view is established. `0x801D56A8..0x801D56AB` lies in
-  `tail_data`, before the colour slots at `0x801D5708`. The gap does not
+  `tail_data`, before the color slots at `0x801D5708`. The gap does not
   establish a larger array. Its incomplete-array spelling retains the
   split absolute store; a scalar `.data` declaration changes code generation.
 - `D_801AF000` is an image-backed, reused display-resource bank, passed to
@@ -49,7 +49,7 @@ compatible includes.
 The final scratch source is normalized with
 `centralize_basic_types.update_source` using its intended `src/game` path
 before the exact probe and terminal evidence. Header migration does not
-permit reordering the load-bearing viewport, flag, or colour writes.
+permit reordering the load-bearing viewport, flag, or color writes.
 
 ## Existing candidate contract migration
 

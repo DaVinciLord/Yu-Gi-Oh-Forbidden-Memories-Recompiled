@@ -5,7 +5,7 @@ Library's in WA_MRG.MRG), and the sword and shield the duel's info bar puts
 before ATK and DEF (its 8x8 letters ♂ and ♀, func_80035E20).
 
 Each sheet is 4 bits a texel, 128 bytes a row; a palette entry is 15-bit
-colour, 0 transparent."""
+color, 0 transparent."""
 from __future__ import annotations
 
 import base64

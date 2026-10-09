@@ -252,7 +252,7 @@ DuelCardDisplayObject *func_80024C1C(s32 cardId, s32 x, s32 y) {
 
 end:
 #ifdef MEMORIES_PC
-    /* A mod's frame colour (Cards_FrameColor): the palette row
+    /* A mod's frame color (Cards_FrameColor): the palette row
      * func_80015EF4 draws the field card through. */
     if (Cards_FrameColor(cardId) >= 0) {
         obj->icon_variant = Cards_FrameColor(cardId);

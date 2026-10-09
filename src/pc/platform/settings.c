@@ -98,7 +98,7 @@ static const SettingInfo info[SET_COUNT] = {
     [SET_INTERNAL_SCALE] = {"internal_scale", NULL, "MEMORIES_INTERNAL_SCALE", NULL, 1, 1, 8},
     /* 1: Game > Deck slots and F6 keep and switch decks (src/pc/saves/deck_menu.c). */
     [SET_DECK_SLOTS] = {"deck_slots", NULL, "MEMORIES_DECK_SLOTS", NULL, 1, 0, 1},
-    /* Percent, the present pass's colour (src/pc/render/present_pass.c); 100 leaves the picture alone. */
+    /* Percent, the present pass's color (src/pc/render/present_pass.c); 100 leaves the picture alone. */
     [SET_BRIGHTNESS] = {"brightness", NULL, "MEMORIES_BRIGHTNESS", NULL, 100, 50, 150},
     [SET_CONTRAST] = {"contrast", NULL, "MEMORIES_CONTRAST", NULL, 100, 50, 150},
     [SET_SATURATION] = {"saturation", NULL, "MEMORIES_SATURATION", NULL, 100, 0, 200},

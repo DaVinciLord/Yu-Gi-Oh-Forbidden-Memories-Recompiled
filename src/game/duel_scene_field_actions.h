@@ -19,7 +19,7 @@
 /* The scene-state 5 callback, entry 4 of duel_scene_callbacks.c's table. */
 void DuelScene_UpdateFieldActions(void);
 
-/* The target colour of the field dim ramp: one grey level repeated in three
+/* The target color of the field dim ramp: one grey level repeated in three
  * channels. The pass that dims the field sets it to 0x202020
  * (duel_scene_field_actions.c) and a second site sets it to 0x808080 while starting
  * the same walk over the D_801A7AD8 card records (:616). The ramp moves

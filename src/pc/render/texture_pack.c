@@ -142,9 +142,9 @@ static int compare(const void *a, const void *b)
     return x->position < y->position ? -1 : x->position > y->position;
 }
 
-/* The PNG, as the texture's own grid of 15-bit colours: each texel takes
+/* The PNG, as the texture's own grid of 15-bit colors: each texel takes
  * the average of the image pixels that fall on it (a pack image is any
- * size), alpha below half is the transparent colour. */
+ * size), alpha below half is the transparent color. */
 static int load_pixels(Entry *entry)
 {
     png_image image;
@@ -236,9 +236,9 @@ static int load_pixels(Entry *entry)
                 }
             }
             if (n && a / n >= 128) {
-                uint16_t colour = (uint16_t)(((r / n) >> 3) | (((g / n) >> 3) << 5) | (((b / n) >> 3) << 10));
+                uint16_t color = (uint16_t)(((r / n) >> 3) | (((g / n) >> 3) << 5) | (((b / n) >> 3) << 10));
                 /* Black stays opaque: 0x8000 alone is transparent. */
-                entry->pixels[y * width + x] = colour ? (uint16_t)(colour | 0x8000) : TEXTURE_SHADOW_BLACK;
+                entry->pixels[y * width + x] = color ? (uint16_t)(color | 0x8000) : TEXTURE_SHADOW_BLACK;
             } else {
                 entry->pixels[y * width + x] = 0x8000; /* painted transparent: replaced, by nothing */
             }
@@ -251,8 +251,8 @@ static int load_pixels(Entry *entry)
 }
 
 /* The pack's image at its own resolution for the scaled picture: u and v
- * are 16.16 texels within the page. 0 not replaced, 1 a colour, 2 painted
- * transparent. A colour's pixel may be partly transparent (a letter's
+ * are 16.16 texels within the page. 0 not replaced, 1 a color, 2 painted
+ * transparent. A color's pixel may be partly transparent (a letter's
  * smoothed edge): bits 24-30 say how much, 0 opaque to 127 all but clear,
  * and the picture mixes it over what lies beneath. */
 static int locate_texel(uint32_t offset, int texel, int *row, int *word);
@@ -635,7 +635,7 @@ static void paint(int x, int y, int w, int h)
                  * images share the word, each owns part of it. */
                 const Entry *owner = entry;
                 int orow = row, oword = word, x = word * per + k, sub = k * (4 / per), s;
-                uint16_t colour;
+                uint16_t color;
                 if (x < entry->crop_left || x >= entry->crop_left + entry->crop_width) {
                     int other = locate_texel(tag - 1, k, &orow, &oword);
                     if (other < 0) continue;            /* nobody replaces this texel */
@@ -649,8 +649,8 @@ static void paint(int x, int y, int w, int h)
                         continue;
                     }
                 }
-                colour = owner->pixels[orow * owner->words * per + oword * per + k];
-                for (s = 0; s < 4 / per; s++) *TextureDump_Cell(vx, vy, sub + s) = colour;
+                color = owner->pixels[orow * owner->words * per + oword * per + k];
+                for (s = 0; s < 4 / per; s++) *TextureDump_Cell(vx, vy, sub + s) = color;
             }
         }
     }
@@ -694,7 +694,7 @@ static void follow(int sx, int sy, int dx, int dy, int w, int h)
 /* Once per textured primitive: a pack image applies if the word of a texel
  * it samples was painted from one and the primitive reads it at that
  * image's depth with its palette. Among the readings of the same words the
- * one whose palette this is: 1 when it is the head, whose colours the
+ * one whose palette this is: 1 when it is the head, whose colors the
  * shadow holds, so the 1x picture shows them too; 2 for another reading,
  * for the scaled picture alone (sample). */
 static int prepare(int page_x, int page_y, int depth, int clut_x, int clut_y, int u, int v)
@@ -715,7 +715,7 @@ static int prepare(int page_x, int page_y, int depth, int clut_x, int clut_y, in
         if (entry->bpp != bpp) continue;
         if (entry->clut_entries && (!clut || clut - 1 != entry->clut_offset)) continue;
         if (!entry->image) {
-            /* Read between frames (TexturePack_Service); the head's colours
+            /* Read between frames (TexturePack_Service); the head's colors
              * are not this reading's, so nothing replaces until then. */
             if (!entry->failed && !entry->wanted) {
                 entry->wanted = 1;

@@ -70,7 +70,7 @@ typedef struct {
     unsigned odds;
     PackPool pool;
     char label[PACK_TEXT_MAX];     /* "ULTRA RARE!", or "" for none */
-    int color;                     /* the game's text colour ({f8 0A n}), -1 for the default */
+    int color;                     /* the game's text color ({f8 0A n}), -1 for the default */
     int sound;                     /* a sound effect id, -1 for the pack's reveal sound */
     int reveal;                    /* PACK_REVEAL_*, -1 for the pack's */
 } PackTier;

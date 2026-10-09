@@ -162,7 +162,7 @@ static void CardLayout_DrawCell(s32 x, s32 y, s32 w, s32 h, s32 tpage, s32 u, s3
      * without this it is whatever the stack held. */
     art.pad2 = 0;
     art.pad3 = 0;
-    /* The card's own colour (the object's colour word, which is what the art
+    /* The card's own color (the object's color word, which is what the art
      * and the stars are drawn with): the whole card fades together at the end
      * of an attack, so this quad has to take it, not a fixed neutral grey. */
     setRGB0(&art, (u8)rgb, (u8)(rgb >> 8), (u8)(rgb >> 16));

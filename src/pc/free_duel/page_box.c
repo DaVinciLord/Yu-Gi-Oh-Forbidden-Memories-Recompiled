@@ -1,18 +1,18 @@
 /* The Free Duel grid's page indicator (page_box.h).
  *
  * Composed in the game's text codes, as cards/drops.c composes its added
- * result pages: 0xF8 begins a command, 0x0A sets the colour, 0x04 the cell
+ * result pages: 0xF8 begins a command, 0x0A sets the color, 0x04 the cell
  * size, 0x02 steps along the line and 0x06 moves to a column. The letters are
  * the game's own, through Glyphs_Code.
  *
- * The size command matters as much as the colour: 0x04 with 1 is the 8x8 the
+ * The size command matters as much as the color: 0x04 with 1 is the 8x8 the
  * card counts are drawn in, which is a sheet of its own and not the font --
  * its entries never take the glyph path, so HD text cannot set them
  * (func_80035E20, hd_text.h). 2 is the letters every other box uses.
  *
  * It sits along the top of the picture, above the FREE DUEL artwork: the
  * button to go back at the left, the page in the middle, the button to go on
- * at the right. All three are one string in one box, since a colour and a
+ * at the right. All three are one string in one box, since a color and a
  * column are both runs within a string; the box is on channel 2, and channel
  * 3 is left to Build Deck and the Library, whose stale entries would
  * otherwise be what the screen finds there. The arrow beside each button is
@@ -44,10 +44,10 @@
 
 enum { WHITE = 0x00, GOLD = 0x01 };
 
-/* 0xF8 commands: the colour, and the cell size (1 is the counts' 8x8 sheet,
+/* 0xF8 commands: the color, and the cell size (1 is the counts' 8x8 sheet,
  * 2 the font's letters). duel_effect_command.c: func_800382A8 sets the box's
  * step from the size and marks it, which is why it cannot be guessed at. */
-#define COMMAND_COLOUR 0x0A
+#define COMMAND_COLOR 0x0A
 #define COMMAND_SIZE 0x04
 #define SIZE_LETTERS 2
 
@@ -174,15 +174,15 @@ void FreeDuelPage_Compose(int page, int pages)
      * regard to one another's width: the button to go back at the left, the
      * page on the picture's centre, the button to go on at the right. */
     at_x(&out, LEFT_COLUMN);
-    command(&out, COMMAND_COLOUR, WHITE);
+    command(&out, COMMAND_COLOR, WHITE);
     words(&out, "L1");
 
     at_x(&out, (FREE_DUEL_PAGE_BOX_WIDTH - page_text(NULL, page + 1, pages)) / 2 - PAGE_NUDGE);
-    command(&out, COMMAND_COLOUR, GOLD);
+    command(&out, COMMAND_COLOR, GOLD);
     page_text(&out, page + 1, pages);
 
     at_x(&out, RIGHT_COLUMN);
-    command(&out, COMMAND_COLOUR, WHITE);
+    command(&out, COMMAND_COLOR, WHITE);
     words(&out, "R1");
     *out.at = 0xFF; /* in the byte kept for it, however long the line ran */
     showing = 1;

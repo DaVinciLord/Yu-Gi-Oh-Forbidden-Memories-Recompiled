@@ -4,18 +4,18 @@
 Makes a mod through the UI tab the way a modder would (its pages' own
 controls, the file dialogs answered with pictures drawn here):
 
-* the title: a picture of its own for the background over a colour, the
-  logo and the copyright line recoloured and moved, PUSH START BUTTON
+* the title: a picture of its own for the background over a color, the
+  logo and the copyright line recolored and moved, PUSH START BUTTON
   moved, two pictures added and a line of words;
 * the menus: TRADE hidden, OPTION renamed SETTINGS, a button of its own that
   opens the options screen and one that shows a notice, put in among the
   game's entries;
 * the duel: the life-point panel's halves swapped -- the opponent's moved
-  down under the player's, recoloured, with RIVAL for COM and yellow
+  down under the player's, recolored, with RIVAL for COM and yellow
   digits; the player's moved up, larger, drawn from a picture, green
   digits; the FIELD box moved down, larger, bluer; the card bar drawn from
   a picture; the hand's cursor larger, yellow and moved; the field's cursor
-  recoloured. The LP halves and the FIELD box move up and down only (the
+  recolored. The LP halves and the FIELD box move up and down only (the
   game slides them off the side), so the page is asked to drag them across
   too and must not; then, as an old hand-written mod would, the saved
   manifest is given an "x" for them and a size too large to leave the
@@ -171,7 +171,7 @@ def make_mod(game: Path, folder: Path, art: dict) -> list:
     title.select("background")
     with choose(art["night"]):
         title.background.choose()
-    title.background.colour.set(0x102040)
+    title.background.color.set(0x102040)
     title.background.set("color", "#102040")
     title.select("logo")
     title.moved("logo", 0, -14)
@@ -191,7 +191,7 @@ def make_mod(game: Path, folder: Path, art: dict) -> list:
     title.text_vars["text"].set("UI TAB TEST")
     title.text_typed("text")
     title.set_text("color", "#FFE060", "#FFFFFF")
-    done.append("title: background picture over #102040, logo and copyright recoloured and moved, PUSH START "
+    done.append("title: background picture over #102040, logo and copyright recolored and moved, PUSH START "
                 "moved, two seals added, a line of words")
 
     menu = page("menu")
@@ -222,8 +222,8 @@ def make_mod(game: Path, folder: Path, art: dict) -> list:
     duel = page("duel")
     duel.select("lp_opponent")
     duel.moved("lp_opponent", -236, 24)         # across is left out: the game slides it off the side
-    duel.set_colour("tint", 0xFF9090)
-    duel.set_colour("digits", 0xFFE040)
+    duel.set_color("tint", 0xFF9090)
+    duel.set_color("digits", 0xFFE040)
     duel.vars["label"].set("RIVAL")
     duel.typed("label")
     duel.select("lp_player")
@@ -232,7 +232,7 @@ def make_mod(game: Path, folder: Path, art: dict) -> list:
     duel.wheel("lp_player", 1)
     with choose(art["panel"]):
         duel.choose_image()
-    duel.set_colour("digits", 0x80FF80)
+    duel.set_color("digits", 0x80FF80)
     duel.select("field")
     duel.moved("field", 170, 40)
     duel.wheel("field", 1)
@@ -241,7 +241,7 @@ def make_mod(game: Path, folder: Path, art: dict) -> list:
     sizes = duel.element("field").get("scale")
     for _ in range(2):
         duel.wheel("field", -1)
-    duel.set_colour("tint", 0x80C0FF)
+    duel.set_color("tint", 0x80C0FF)
     duel.select("card_bar")
     with choose(art["bar"]):
         duel.choose_image()
@@ -249,9 +249,9 @@ def make_mod(game: Path, folder: Path, art: dict) -> list:
     duel.vars["scale"].set("150")
     duel.typed("scale")
     duel.moved("hand_cursor", 2, -4)
-    duel.set_colour("tint", 0xFFFF40)
+    duel.set_color("tint", 0xFFFF40)
     duel.select("field_cursor")
-    duel.set_colour("tint", 0x40E0FF)
+    duel.set_color("tint", 0x40E0FF)
     done.append("duel: both LP halves, the FIELD box, the card bar and both cursors")
     elements = app.project.other["ui"]["duel"]
     check("the page moves the LP halves and the FIELD box up and down only",
@@ -315,7 +315,7 @@ def count_in(image, box, test, scale=1):
 
 def rim_in(image, box, scale=1):
     """The opponent's half's rim and words, white made pink by its #FF9090:
-    nothing else on the duel's screen is that colour (the field is yellow)."""
+    nothing else on the duel's screen is that color (the field is yellow)."""
     return count_in(image, box, lambda r, g, b: r > 200 and 100 < g < 190 and 100 < b < 190, scale)
 
 

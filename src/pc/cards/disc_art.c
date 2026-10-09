@@ -93,10 +93,10 @@ int DiscArt_Read(int sector, void *out, int bytes)
     return 1;
 }
 
-static uint32_t colour(uint16_t word)
+static uint32_t color(uint16_t word)
 {
     unsigned r = word & 31, g = word >> 5 & 31, b = word >> 10 & 31;
-    /* 0x0000 is the one transparent colour; 0x8000 is opaque black. */
+    /* 0x0000 is the one transparent color; 0x8000 is opaque black. */
     if (!word) return 0;
     return 0xFF000000u | (r << 3 | r >> 2) << 16 | (g << 3 | g >> 2) << 8 | (b << 3 | b >> 2);
 }
@@ -122,7 +122,7 @@ int DiscArt_Cut(DiscArt *art, int page_x, int page_y, int depth, int u, int v, i
                 word = DiscArt_Word(page_x + tu / 2, page_y + v + y);
                 index = word >> (tu % 2 * 8) & 0xFF;
             }
-            art->pixels[y * w + x] = colour(DiscArt_Word(clut_x + index, clut_y));
+            art->pixels[y * w + x] = color(DiscArt_Word(clut_x + index, clut_y));
         }
     }
     return 1;

@@ -8,7 +8,7 @@
 /* Particle state for func_8006CD78, a handler in the D_800114E8 model effect
  * table. Three expanding rings, 64 dust particles, 32 sparks with drift and
  * rise vectors, 32 embers and 64 smoke particles, each with its frame and
- * colour. */
+ * color. */
 typedef struct {
     u8 r;
     u8 g;
@@ -16,7 +16,7 @@ typedef struct {
     u8 pad;
 } ModelBurstColor;
 
-/* The ring colours `table` points at, D_800916D4 in model_geometry_tables.c:
+/* The ring colors `table` points at, D_800916D4 in model_geometry_tables.c:
  * one byte per ring for each channel. */
 typedef struct {
     u8 r[3];
@@ -25,7 +25,7 @@ typedef struct {
 } ModelBurstPalette;
 
 /* One texture record of D_80091610 in model_geometry_tables.c: the pixel mode
- * and the frame-buffer rectangles of the image and of its colour table. */
+ * and the frame-buffer rectangles of the image and of its color table. */
 typedef struct {
     u16 mode;
     u16 unk_02;
@@ -35,7 +35,7 @@ typedef struct {
     u32 *G32 caddr;
 } ModelBurstImage;
 
-/* The texture page and colour table words built from a ModelBurstImage. */
+/* The texture page and color table words built from a ModelBurstImage. */
 typedef struct {
     u16 tpage;
     u16 clut;

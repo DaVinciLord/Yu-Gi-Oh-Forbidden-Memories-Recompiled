@@ -70,3 +70,8 @@ accept v0.2.0 enum TITLE_IMAGES counts the scaled buttons' images
 # same through the low byte, so a mod reading the old byte still sees them.
 accept v0.1.2 record DuelResultDisplayState reads starchip_prize and its pad byte as one halfword
 accept v0.2.0 record DuelResultDisplayState reads starchip_prize and its pad byte as one halfword
+# American spelling: the title records' `colour` fields are `color` (same
+# offset, type and size; a mod built against v0.2.0 still reads them). The
+# enumerators TITLE_BACKGROUND_COLOUR and FONT_ART_COLOURS stay as aliases.
+accept v0.2.0 record TitleBackground names its colour field color
+accept v0.2.0 record TitleLine names its colour field color

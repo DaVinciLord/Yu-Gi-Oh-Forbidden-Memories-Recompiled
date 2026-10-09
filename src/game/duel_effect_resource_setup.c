@@ -189,7 +189,7 @@ shared_tail:
 #endif
     );
 #ifdef MEMORIES_PC
-    /* A mod's frame colour (Cards_FrameColor) is the frame's palette row;
+    /* A mod's frame color (Cards_FrameColor) is the frame's palette row;
      * the layout stays the type's. */
     if (Cards_FrameColor(card_id) >= 0) {
         setup = 0x100 + Cards_FrameColor(card_id);

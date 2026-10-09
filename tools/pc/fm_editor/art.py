@@ -18,7 +18,7 @@ A mod replaces them two ways, and the editor uses one per card:
 * a card the mod adds (a copy) has the disc offsets of its base, so a pack
   cannot tell them apart: its picture and thumbnail are the entry's "art"
   and "thumbnail" PNGs (cards.c), made into 102x96 and 40x32 at 255 and 63
-  colours when the game starts; one bigger than that is also drawn at its
+  colors when the game starts; one bigger than that is also drawn at its
   own resolution at Internal 2x and 4x, as a pack's is.
 * the name plate of any card: the entry's "title" PNG (a retail card gets a
   "replace" entry for it).
@@ -123,8 +123,8 @@ def entry_card(entry) -> tuple:
 
 # --- the disc's pictures ------------------------------------------------------------
 
-def _colour(word: int) -> bytes:
-    """A 15-bit VRAM word as RGBA; 0 is the transparent colour
+def _color(word: int) -> bytes:
+    """A 15-bit VRAM word as RGBA; 0 is the transparent color
     (extract_images.expand)."""
     if word == 0:
         return b"\x00\x00\x00\x00"
@@ -133,14 +133,14 @@ def _colour(word: int) -> bytes:
 
 
 def _paletted(wa: bytes, at: int, width: int, height: int, clut_at: int, entries: int) -> Image:
-    palette = [_colour(wa[clut_at + i * 2] | wa[clut_at + i * 2 + 1] << 8) for i in range(entries)]
+    palette = [_color(wa[clut_at + i * 2] | wa[clut_at + i * 2 + 1] << 8) for i in range(entries)]
     palette += [b"\x00\x00\x00\x00"] * (256 - entries)     # an index past a short palette
     return Image(width, height, b"".join(palette[i] for i in wa[at:at + width * height]))
 
 
 def plate_image(inks, width=96, height=14, background=None) -> Image:
     """Plate inks (0-7, a list of width*height) as a picture: dark ink on
-    white (what a "title" PNG is), or over a colour as the card view shows
+    white (what a "title" PNG is), or over a color as the card view shows
     it."""
     out = bytearray()
     for ink in inks:

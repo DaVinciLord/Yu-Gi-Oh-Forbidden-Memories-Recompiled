@@ -238,7 +238,7 @@ How it works:
   `src/pc/compat/inline_c_native.h` natively, backed by the software GTE in
   `src/pc/compat/gte.c` (all COP2 commands found in the retail executable:
   RTPS, RTPT, MVMVA, SQR, NCDS, NCCS, NCCT, NCLIP, AVSZ3/4, GPF, plus the
-  remaining colour commands). `pc_gte` holds hand-computed known answers;
+  remaining color commands). `pc_gte` holds hand-computed known answers;
   it has **not** been compared against hardware or an emulator yet.
 
 ### Guest-width pointers (G32, CALL32, PSXLONG)
@@ -269,7 +269,7 @@ Triangle: turn animation, art, name, level, attribute, type, guardian stars,
 text, ATK/DEF, from either pane), and the post-LOAD menu with LIBRARY: the
 722-card grid, crosshair and scrolling, the card view, and the 3D model view
 (Square or Cross in the card view): the monster stands on the wireframe floor
-and animates. Checked with Ryu-Kishin only; its colours have not been compared
+and animates. Checked with Ryu-Kishin only; its colors have not been compared
 with hardware. The Free Duel `0x80168000` module is integrated; its opponent
 grid initializes from the save's unlock flags and accepts cursor input.
 The duel's 3D battle presentation loads and renders both monster models, the
@@ -279,7 +279,7 @@ control modules are retail MIPS overlays with no C source, and by default
 decomp's native C when the disc delivered the retail bytes, else as MIPS: see
 [MIPS-only effects](#mips-only-effects) below. Every duel effect id and every
 monster's own attack choreography therefore plays with its retail timing,
-colours and particles.
+colors and particles.
 Music tempo was checked by measurement: the retail `SetRCnt` (read from the
 resident assembly) programs counter 2 as mode `0x248`, sysclk/8, so target
 `0xE000` is 73.83 Hz; `MEMORIES_TRACE_FRAMES=1` reports 73.7-74.0 delivered
@@ -1174,7 +1174,7 @@ settings that are off at their defaults:
 - xBR pixel smoothing (Video > Effects, `xbr`). The picture is read through
   xBR level 2 (written from its published rules, in the same program). A
   texel's corner is cut along a 45, 30 or 60 degree edge found in its
-  neighbours and filled with the nearer neighbour's colour. The cut is
+  neighbours and filled with the nearer neighbour's color. The cut is
   antialiased over one window pixel, so it works at any window size.
   - At internal resolution 1x it works on the finished picture's texels,
     and replaces Smooth and Sharp bilinear filtering while it is on.
@@ -1183,7 +1183,7 @@ settings that are off at their defaults:
     rules as it is drawn, so sprites, fonts and 3D textures are smoothed
     at the internal resolution, over whatever lies under them, and the
     picture is not smoothed again (Filtering still applies to it).
-    Transparent texels count as one colour
+    Transparent texels count as one color
     far from all others, so a sprite's outline rounds too, and where a
     corner is filled with transparency nothing is drawn. A primitive only
     sees its own rectangle of texture (the edge repeats past it), so a
@@ -1490,18 +1490,18 @@ respect:
   through it for the rest of the presentation, so the pass puts the GTE
   registers and the world-screen matrices back as it found them (without
   that the numbers were never seen);
-- the dimming is the card's own colour word, which the presentation's last
+- the dimming is the card's own color word, which the presentation's last
   step turns down to fade the cards out: everything printed on the card goes
   darker with it (`battle_dim`, 50%), the fade starts from there, and the
-  colour goes back to retail's whenever the pass lets go of a card that is
+  color goes back to retail's whenever the pass lets go of a card that is
   still up.
 
 Each stands 8 pixels back from the middle of its card, away from the
 other. The monsters appear once the cards have faded in, the loser's goes
 as its card starts to burn (the card stays dimmed until the game releases
 it, or it lit up for the frames before the flames covered it), when the attack is over the monsters fade out over 16 frames while
-the surviving cards light up to their full colour again, and only then does
-the game's own fade take the cards away (the pass sets each card's colour to
+the surviving cards light up to their full color again, and only then does
+the game's own fade take the cards away (the pass sets each card's color to
 what the step will take 8 off the next frame, which holds the cards up that
 long), and none appear when the attack goes on to the 3D arena
 (the cards are up only a few frames before the fade there). Checked with the
@@ -1562,7 +1562,7 @@ draws as a PNG named by its hash (`src/pc/render/texture_dump.c`), a
 discovery tool: what a screen is made of, at what size and depth, through
 which palette. A texture is the rectangle of texels one textured primitive
 covers, decoded through its palette, so a sprite comes out at its own size
-and colours and the same one drawn again is the same file; the hash covers
+and colors and the same one drawn again is the same file; the hash covers
 the texel indices and the palette entries, so a palette swap is another
 image. `textures.txt` in the directory lists each hash with its size, depth,
 page and palette coordinates. Dumping costs a hash per primitive, so it is
@@ -1592,7 +1592,7 @@ ones loaded after it.
 
 View > Console resolution / Internal 2x, 4x (the `internal_scale`
 setting, `MEMORIES_INTERNAL_SCALE=N`, 1, 2, 4 or 8) shows a picture of the
-whole of VRAM at N x N pixels per VRAM word in 24-bit colour instead of
+whole of VRAM at N x N pixels per VRAM word in 24-bit color instead of
 VRAM. VRAM itself stays exactly what the console's would be: the game reads
 it back and states hold it, and the 1x frame the smoke fixtures hash is
 byte-identical at any scale. No dithering in the picture; the mask bits
@@ -1604,7 +1604,7 @@ battle, `DuelCard_CaptureRoundedTexture` reads the card back from the screen
 console's resolution, so the burn showed the card without its pack image or
 HD text. The function now also calls `Memories_PictureCapture` (under
 `MEMORIES_PC`): the OpenGL picture copies that part of its scaled picture
-when the record reaches it, and 16-bit texels in the rect take their colour
+when the record reaches it, and 16-bit texels in the rect take their color
 from the copy while their word still decides transparency and
 semi-transparency. A load, copy or fill over the rect, a resync or a new
 scale drops the copy. The software picture and 1x keep VRAM's texels there. A line is the console's one-pixel line made N
@@ -1624,7 +1624,7 @@ the palette) as the software GPU samples it, a mod's texture banks are an
 array texture uploaded when a replay finds them changed, and a pack's
 images are textures of their own with the pack's word-to-entry maps beside
 them. Opaque pixels and blending modes 0, 1 and 3 share one draw (the
-colour comes out pre-multiplied, the destination's factor in alpha); mode
+color comes out pre-multiplied, the destination's factor in alpha); mode
 2 draws its opaque texels, then its semi-transparent ones subtracted.
 What a primitive draws is not sampled by a later one of the same frame
 (the game never renders to a texture); across frames VRAM is uploaded
@@ -1835,7 +1835,7 @@ in widescreen too. The software picture (`MEMORIES_GL_PICTURE=0`) and 1x
 are as before.
 
 The retail font is anti-aliased in its indices, which the text palettes run
-from black up to the text's colour. The dark outline is the lowest index
+from black up to the text's color. The dark outline is the lowest index
 (1, and 2-3 in the large font). Above it, an index is how bright the texel
 is, and the letters are shaded brightest at the top of the cell. An HD
 letter is made the same way at N pixels per texel:
@@ -1864,11 +1864,11 @@ letter is made the same way at N pixels per texel:
   pack that replaces the font leaves the i and l the port's then;
 - each pixel's coverage goes onto the run from the outline's index to the
   row's shading (half-way from its average stroke to its brightest, so the
-  colour is the cell's), and the outline's index goes in a band a texel
+  color is the cell's), and the outline's index goes in a band a texel
   wide round it.
 
 The shader samples the HD indices in place of the cell's, and the glyph's
-palette does the rest. So colours, fades, flashes, semi-transparency and
+palette does the rest. So colors, fades, flashes, semi-transparency and
 the order the game draws in are the game's, including turned and leaning
 letters and the letters translations add (texture bank 15).
 
@@ -1891,7 +1891,7 @@ the one that makes the plates of added cards: Times at 13 pixels, the
 baseline under row 11, squeezed past 90 columns) at N times the size, and
 its coverage goes onto the plate's inks, 1 the darkest to 7 the faintest.
 The card view subtracts those inks from the frame, so through the plate's
-palette the letters come out dark with smooth edges on every frame colour.
+palette the letters come out dark with smooth edges on every frame color.
 func_800289BC notes where each plate went (`HdText_TitleUploaded`); a 4-bit
 primitive sampling those words while they still hold the plate (the flat
 strip, or a piece of the turning card) samples the picture instead. Twenty
@@ -1913,14 +1913,14 @@ and the software picture never change.
   - Each sheet is measured from its own ten digits: the outline (the index
     next to nothing), the fill (the commonest inside), the ramp of indices
     between them, their feet, heads and stroke weight.
-  - A digit is then set in the text's font like an HD glyph and coloured
-    through the ramp, so the game's palettes still decide the colours (the
+  - A digit is then set in the text's font like an HD glyph and colored
+    through the ramp, so the game's palettes still decide the colors (the
     inactive side's dimming too).
-  - A colour off the way from outline to fill, like the purple the duel's
+  - A color off the way from outline to fill, like the purple the duel's
     digits have in a few corners, is left out.
 - **Labels.**
   - The life-point panel's LP, COM and YOU are set anew in the font, over
-    the panel's own texels made larger, in the box's colours. Only where
+    the panel's own texels made larger, in the box's colors. Only where
     the retail panel is (a hash of its words); a mod's own panel is left as
     it is.
   - The card kinds (Magic, Equip, Trap, Ritual), in the hand and on the
@@ -1969,7 +1969,7 @@ and up without the picture pass ("needs OpenGL 3 or 1x").
 - The box is COM's, made from the panel's own texels: its left end, then its
   rows' border and background, as long as the name needs, growing leftwards
   from where it meets the panel. The name is set in the text's font in COM's
-  colours, through the panel's palette, so the inactive side's dimming still
+  colors, through the panel's palette, so the inactive side's dimming still
   applies.
 - It is drawn over the panel whatever drew the panel: the retail panel, HD
   numbers and labels, or a texture pack's image.
@@ -2014,8 +2014,8 @@ master's.
   WA sector `0x1690` (`Main_RunBootSequence`, `Main_LoadBootPackageStage`):
   not a TIM but raw VRAM words, one sector a 64 x 16 block placed down a
   column from 0x280, 0 (`File_StepActiveTransfer`), so the font's page is
-  its first 16 sectors; the text colour ramps are the first 0x100 bytes of
-  its sector 50, a 16 x 8 `LoadImage` at 0x280, 0xE8, one row a colour in
+  its first 16 sectors; the text color ramps are the first 0x100 bytes of
+  its sector 50, a 16 x 8 `LoadImage` at 0x280, 0xE8, one row a color in
   the order of `gText_abColorSlots`' values (0 white, 1 yellow, 2 blue, 3
   green, 4 grey, 5 orange, 6 red). The glyphs are 4-bit 8 x 12 cells where
   `func_80035E20` finds them (`retail_cell` in `glyphs.c`): '0' at 120, 0,
@@ -2057,7 +2057,7 @@ zero weight and the deck pool left out, deck and trunk counted once per
 card, a mod's added and removed cards (a mod card among them), an edit of
 `all`, and a disc without the file. `pc_font_art` (`tests/pc/font_art_test.c`)
 reads the real `game/DATA/WA_MRG.MRG` (skipped without it), checks the
-glyphs against the hand decode above in all seven colours and draws counts
+glyphs against the hand decode above in all seven colors and draws counts
 through `FontArt_Draw`; `MEMORIES_FONT_ART_SHEET=<file.ppm>` saves them.
 Not done: a frame on the portraits of opponents whose cards are all owned.
 
@@ -2069,7 +2069,7 @@ would end with: **Rank** (1) the letter and axis, S-POW to S-TEC, and
 **Rank and score** (2) also the score, 0-99 as the rank uses it (below 50
 is TEC). It is drawn with the result screen's own pictures, right of the
 FIELD box and as tall as it: the stone plate with the rank letter on it (D
-blue, C green, B yellow, A red, S magenta, the colours the result screen
+blue, C green, B yellow, A red, S magenta, the colors the result screen
 gives them) and the POW or TEC badge behind the letter's top left; the
 score follows in the cards' ATK/DEF digits. Off, nothing is drawn, nothing
 is computed and the disc is not read: `update()` returns before reading
@@ -2115,7 +2115,7 @@ anything.
     `DisplayObject_UpdateCommandStream` and drawn as
     `DisplayObject_RenderSpriteSheet` does (the objects set flag 0x20, so
     the sheet's own palette step is added). That gives, on page 0, 256 in
-    4-bit colour: the badge 24 x 24 at 184, 312 (POW, palette 112, 248) or
+    4-bit color: the badge 24 x 24 at 184, 312 (POW, palette 112, 248) or
     184, 288 (TEC, 96, 248), the plate 56 x 48 at 128, 288 (16, 248), and
     the letter 40 x 40 at 0/40/80, 128/168 with a palette for each (S 144
     ... D 208). `pc_rank_art` checks each against this hand decode.
@@ -2123,7 +2123,7 @@ anything.
     (`Duel_LoadPackageStage`, all seven are the same here): 64 sectors of
     image to 0x300, 0x100 and four of palette to 0x100, 0xF0 (256 x 16);
     `Duel_DrawCardFrame` draws them from page 0x1E, v 0x58, 8 x 8 in
-    8-bit colour, palette 0x100, 0xF1.
+    8-bit color, palette 0x100, 0xF1.
   If the disc cannot give them the rank is not drawn and the log says so
   once; there is no fallback to other lettering.
 - **Drawing** is the host overlay, like the fusion helper's (`hud.c`,
@@ -2729,7 +2729,7 @@ Native pieces (all under `src/pc/`):
 | XA/STR/MDEC | `sdk/libds.c`, `sdk/libpress.c` | XA ADPCM sectors decode into the SPU's CD input; streaming reads run at the drive's real rate (75/150 sectors per second). `St*` assembles STR frames in host slots; `DecDCTvlc2` emits genuine MDEC run-level words (bitstream v2), and the software MDEC fills each `DecDCTout` strip and then runs the game's callback. Floating-point IDCT; 15- and 24-bit output; 24-bit display mode is presented |
 | LIBGTE | `sdk/libgte.c` | Register setters, and ports of the resident routines: `rsin`/`rcos` and the matrix builders read the library's own tables from the resident image (`0x80094938` quarter sine, `0x80095638` sin/cos pairs, `0x800951A8` square roots); `RotMatrix`, `RotMatrix_gte`, `RotMatrixZYX_gte`, `RotMatrixYXZ_gte` (each keeps the retail rounding: some negate before the shift, the GTE ones after), `MulMatrix`/`MulMatrix2`/`ApplyMatrixLV` issued as the same MVMVA commands, `TransposeMatrix`, `SquareRoot0`, `ratan2` (table at `0x80099638`), `RotAverage3/4`, `RotAverageNclip3/4` and `_nom`, `AverageZ3`, `NormalClip`, `RotTrans`, `RotTransSV`, `RotTransPersN`, `RotColorDpq`, `NormalColorCol`, and `DivideFT4` with its recursive subdivider and packet emitter (`RCpolyFT4A`, `func_80089910`) over the caller's `DIVPOLYGON4` work area: the card viewer draws the large card with it. The earlier `RotMatrix` was the Z-Y-X formula under the wrong name |
 | LIBGS units | `sdk/libgs_unit.c` | The HMD path the town map uses: `GsMapUnit`, `GsMapCoordUnit`, `GsScanUnit`, `GsSortUnit` (primitive drivers are function pointers the game installs), the library's null and image-upload drivers, `GsGetLwUnit`/`GsGetLsUnit`/`GsGetLwsUnit` with their per-frame coordinate cache, `GsMulCoord2/3`, `GsSetRefView2`, `GsSetLightMatrix`, `GsSetFlatLight`, `GsLinkAnim`, `GsScanAnim`; `GsSortLine`/`GsSortGLine` are in `libgs.c`. `tests`: a scratch harness checked that the reference point lands on the view axis at the right distance and `ApplyMatrixLV` against 64-bit math; not yet a CTest |
-| Model drivers | `overrides/model_polygon_drivers.c` | The 61 hand-written GTE routines at `0x800612C0`-`0x8006ADE8` are HMD primitive drivers, and one algorithm under switches: triangle/quad x flat/Gouraud, back-face culled (`0x0020xxxx`) or both-sided (`0x0030xxxx`), plain or tiled (`0x02xx`: each polygon wrapped in its texture-window word and a reset), a second bank that forces semi-transparency, a shared-vertex bank (`0x012x/0x013x`) fed by a pre-calculation pass at `0x80067220`, and twelve outline drivers. Record layouts, the lighting modes of `D_8009AFE4`, the colour cache and the translucent second pass are described at the top of the file. Read in full for each shape and by diff for each variant; the outline drivers and most variants have not been seen running yet |
+| Model drivers | `overrides/model_polygon_drivers.c` | The 61 hand-written GTE routines at `0x800612C0`-`0x8006ADE8` are HMD primitive drivers, and one algorithm under switches: triangle/quad x flat/Gouraud, back-face culled (`0x0020xxxx`) or both-sided (`0x0030xxxx`), plain or tiled (`0x02xx`: each polygon wrapped in its texture-window word and a reset), a second bank that forces semi-transparency, a shared-vertex bank (`0x012x/0x013x`) fed by a pre-calculation pass at `0x80067220`, and twelve outline drivers. Record layouts, the lighting modes of `D_8009AFE4`, the color cache and the translucent second pass are described at the top of the file. Read in full for each shape and by diff for each variant; the outline drivers and most variants have not been seen running yet |
 | Null page | `guest/image.c` | Retail code dereferences null pointers that land in kernel RAM on the console (`CardList_CreateSlotTextBox` clears a flag through `box->field_28` one call before that object is created; it made BUILD DECK fault). A faulting access below 64 KiB is redirected: the handler decodes the instruction's base register, points it at a mapping of guest RAM's first 64 KiB, single-steps (trap flag) and restores the register. Each site is reported once on stderr, which makes these bugs visible instead of fatal |
 | Guest calls | `guest/branch_thunks.c`, `guest/image.c` | Every unit's indirect calls and jumps go through `__x86_indirect_thunk_<reg>`; a MIPS address stored in the data image resolves to the native function via the generated `Memories_FunctionMap` (or to the MIPS interpreter). Guest RAM is also non-executable, so a call that escaped the thunks faults and the handler redirects it the same way where DEP is on |
 | Overrides | `overlays/boot_check.c`, `sdk/deferred.c` | The boot package's console-modification check has no source and is passed. `GsSetFlatLight` and the debug font log once and do nothing |
@@ -2740,10 +2740,10 @@ weakens the game's symbol). Sources that still use address-based names
 does. `src/overlays/main_menu` is linked in because its load address
 (`0x80180000`) is private.
 
-Software GTE fix found through the map camera: MVMVA and the light-colour
+Software GTE fix found through the map camera: MVMVA and the light-color
 stage take IR1-IR3 as input and write them row by row; the inputs are now
 latched first (`pc_gte` has the regression case). Before it, every
-`ApplyMatrixLV` translation and every lit colour was wrong in rows 2 and 3.
+`ApplyMatrixLV` translation and every lit color was wrong in rows 2 and 3.
 
 Pointer-sign tests: retail tells a callback from a small number by the sign,
 every console address being negative. `func_80041F90`
@@ -3207,7 +3207,7 @@ drifted.
   baseline release's mods there and requires that note for each code mod.
   A replay recorded on 32-bit with two data mods on (the card-pack example
   with its two cards in the deck, and a texture pack of the screens'
-  sheets with every colour turned, made from the disc at play time) plays
+  sheets with every color turned, made from the disc at play time) plays
   on 64-bit with all 1145 frame hashes the same, also with
   `MEMORIES_X64_HIGH_HEAP=1`: `tests/pc/replays/x64-data-mods`, whose
   `mods.py` makes the two mods in the play's folder (`tools/pc/replay.py`

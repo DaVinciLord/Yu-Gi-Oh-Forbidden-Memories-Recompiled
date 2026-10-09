@@ -254,7 +254,7 @@ int main(void)
          * group's name is it, and a key the game does not know is noted. */
         notes = 0;
         add("condition-any", "{\"rituals\": [{\"card\": 21, \"tributes\": ["
-            "{\"min_attack\": 0}, {\"fusion_group\": \"female\"}, {\"card\": 11, \"colour\": 1}],"
+            "{\"min_attack\": 0}, {\"fusion_group\": \"female\"}, {\"card\": 11, \"color\": 1}],"
             " \"result\": 12}]}");
         assert(notes == 1);
         assert(Tables_RitualRequirements(21, req, &result) == 1 && result == 12);

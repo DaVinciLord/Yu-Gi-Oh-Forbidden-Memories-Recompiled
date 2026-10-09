@@ -246,7 +246,7 @@ static void FreeDuel_ShowPage(int page)
         /* The red arrow either side, which is the game's own: the card viewer
          * puts the same one at the foot of its page, and the hand's card
          * cycling puts the pair around a card. The last operand before the
-         * colour is which way it faces. */
+         * color is which way it faces. */
         for (cell = 0; cell < 2; cell++) {
             DisplayObject *arrow =
                 DisplayObject_AcquireSlot(DisplayObject_FindFreeGeneralSlot(), 2);

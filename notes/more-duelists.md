@@ -113,7 +113,7 @@ You may give one pool, two or all three. A pool you leave out stays the base's.
 ### Its own face
 
 **`portraits/dark-simon.png`** — any size, any proportions. The middle of it is
-taken at the portrait's shape and reduced to the 48×48 of 64 colours the
+taken at the portrait's shape and reduced to the 48×48 of 64 colors the
 console's slot holds, **and** the file itself is kept whole for the scaled
 picture. So one file gives both: the portrait is as sharp as your image is at
 View → Internal 2x and above, and correct at 1x.
@@ -751,13 +751,13 @@ The Free Duel grid's slot is tiny: 48×48 pixels, 8 bits a pixel, through a
 Your PNG becomes both of these:
 
 1. **The console's portrait.** Centre-cropped to a square, box-averaged down to
-   48×48, and reduced to a palette of 64 colours. It is what the grid's cell
+   48×48, and reduced to a palette of 64 colors. It is what the grid's cell
    genuinely contains, and what the game draws when your picture is 48×48 or
    smaller.
 2. **The picture itself, kept whole.** A picture bigger than 48×48 is
    registered the way a texture pack's image is, and a pack's image stands in
    for the cell's texels at every scale: at View → Internal 1x its middle
-   square averaged down to 48×48 in the console's 15-bit colour (not reduced
+   square averaged down to 48×48 in the console's 15-bit color (not reduced
    to 64), and at Internal 2x and above drawn at its own resolution.
 
 So a portrait is as sharp as the file you give it, with no second image and no
@@ -773,7 +773,7 @@ holds its 1x picture to the game's frames pixel for pixel.
 - **Large is fine.** 512×512 or more is drawn at its own size when the internal
   resolution is high enough.
 - Transparency is not kept: the portrait slot has no alpha.
-- A picture of 48×48 or less is shown in its 64 colours: strong, flat colour
+- A picture of 48×48 or less is shown in its 64 colors: strong, flat color
   survives that reduction better than a soft gradient, which can band. A
   bigger picture is unaffected.
 
@@ -1060,7 +1060,7 @@ along the top of the picture, above the FREE DUEL artwork: the button to go
 back at the left, "PAGE n/m" centred, the button to go on at the right, and
 beside each button the game's own red arrow — the sprite the card viewer puts
 at the foot of its page and the hand's card cycling puts either side of a card
-(texture `0x20C`, the operand before the colour choosing which way it faces).
+(texture `0x20C`, the operand before the color choosing which way it faces).
 A single page says nothing at all.
 
 All three runs are one string in one box on channel 2. Channel 3 is Build
@@ -1075,7 +1075,7 @@ number goes, and the English when a translation gives anything else. "L1" and
 "R1" are the buttons' own names and stay as they are.
 
 **The size command decides whether a box is drawn from the font.** `0xF8 0x04`
-is the cell size, not the colour — the colour is `0x0A`. Size 1 is the 8x8
+is the cell size, not the color — the color is `0x0A`. Size 1 is the 8x8
 sheet the card counts are drawn in and it sets `flags_34`'s `0x100`, after
 which `DuelEffect_AppendEntry` stamps every entry `flags_11 = 0xC0` and
 `func_80035E20` draws them through `sprites[2]` from that sheet. Those entries

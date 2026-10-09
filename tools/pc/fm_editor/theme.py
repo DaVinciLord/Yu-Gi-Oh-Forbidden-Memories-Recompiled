@@ -144,7 +144,7 @@ class Theme:
         self.rescale()
         for name, (light, _) in INKS.items():
             self.style.configure(f"{name}.TLabel", foreground=light)
-        for tag, (light, _) in TAGS.items():       # a legend's words in its rows' colours (widgets.legend)
+        for tag, (light, _) in TAGS.items():       # a legend's words in its rows' colors (widgets.legend)
             self.style.configure(f"{tag}.Tag.TLabel", foreground=light)
         # Tk's own defaults for the classic widgets, to go back to, and each
         # option's name in the option database (highlightBackground for
@@ -242,9 +242,9 @@ class Theme:
                     values = {option: value for option, value in values.items() if option not in BORDERS}
                 call(path, "configure", *[item for option, value in values.items()
                                           for item in (f"-{option}", value)])
-                recolour = getattr(self.widget(path), "recolour", None)
-                if recolour:        # the card text box's colours follow the background (card_text_box.py)
-                    recolour()
+                recolor = getattr(self.widget(path), "recolor", None)
+                if recolor:        # the card text box's colors follow the background (card_text_box.py)
+                    recolor()
             elif cls == "Treeview":
                 for tag, (light, dark_ink) in TAGS.items():
                     call(path, "tag", "configure", tag, "-foreground", dark_ink if dark else light)

@@ -9,7 +9,7 @@ tools/pc/yfm_control.py, and checks what the editor said the game would do:
 
 1. the Free Duel grid has a second page, the added duelists on it;
 2. each portrait is the editor's own 1x picture of it, pixel for pixel (at
-   the console's 15-bit colour), and at Internal 2x the PNG itself;
+   the console's 15-bit color), and at Internal 2x the PNG itself;
 3. the disc duelist wears its new face, and the disc's again once the
    editor reverts it;
 4. a duel against an added duelist is dealt from its own deck pool;
@@ -71,7 +71,7 @@ RIVAL_SLOT = 47                                                     # Victor Riv
 
 # --- pictures -------------------------------------------------------------------
 
-def drawn(w, h, kind, colour):
+def drawn(w, h, kind, color):
     """A test portrait, drawn rather than kept: rings, stripes or a face."""
     from fm_editor import pngio
     out = bytearray(w * h * 4)
@@ -87,7 +87,7 @@ def drawn(w, h, kind, colour):
             else:
                 v = 1 if d < 0.8 and not any(math.hypot(dx - ex, dy + 0.25) < 0.12 for ex in (-0.3, 0.3)) and \
                     not (0.35 < math.hypot(dx, dy + 0.05) < 0.48 and dy > 0.12) else 0.1
-            out[(y * w + x) * 4:(y * w + x) * 4 + 4] = bytes((*(int(c * v) for c in colour), 255))
+            out[(y * w + x) * 4:(y * w + x) * 4 + 4] = bytes((*(int(c * v) for c in color), 255))
     return pngio.Image(w, h, bytes(out))
 
 

@@ -32,7 +32,7 @@ def memory(path):
 TEXT = {b"\xf8\xf6\xf2": "white", b"\xa0\xd6\x8f": "green", b"\x7c\x86\xe8": "red"}
 
 
-def panel_pixels(path, colour="white"):
+def panel_pixels(path, color="white"):
     data = path.read_bytes()
     offset, = struct.unpack_from("<I", data, 10)
     width, height = struct.unpack_from("<ii", data, 18)
@@ -40,11 +40,11 @@ def panel_pixels(path, colour="white"):
     assert data[:2] == b"BM" and bits in (24, 32)
     stride = ((width * bits + 31) // 32) * 4
     return sum(data[offset + y * stride + x * (bits // 8):
-                    offset + y * stride + x * (bits // 8) + 3] == next(k for k, v in TEXT.items() if v == colour)
+                    offset + y * stride + x * (bits // 8) + 3] == next(k for k, v in TEXT.items() if v == color)
                for y in range(abs(height)) for x in range(width))
 
 
-def run(label, frame, sequence="", state=None, mode=1, mods=None, colour="white"):
+def run(label, frame, sequence="", state=None, mode=1, mods=None, color="white"):
     folder = OUT / label
     folder.mkdir(parents=True, exist_ok=True)
     settings = folder / "settings.txt"
@@ -67,7 +67,7 @@ def run(label, frame, sequence="", state=None, mode=1, mods=None, colour="white"
         subprocess.run([str(ROOT / "tmp/pc/game32/memories-pc")], cwd=ROOT, env=env,
                        stdout=log, stderr=subprocess.STDOUT, check=True, timeout=120)
     shot = max(folder.glob("*.bmp"), key=lambda p: p.stat().st_mtime_ns)
-    return memory(folder / "end.state"), panel_pixels(shot, colour)
+    return memory(folder / "end.state"), panel_pixels(shot, color)
 
 
 def main():
@@ -82,9 +82,9 @@ def main():
     assert on[0x1A7AD8:0x1A7AD8 + 30 * 28] == off[0x1A7AD8:0x1A7AD8 + 30 * 28], "Helper changed cards"
     selected, pixels = run("selected", 6640, PICKS.split(",6590")[0], state)
     assert pixels > 100 and selected[0xEA039] == 1, "Target not white after one right pick"
-    _, pixels = run("picked", 6640, PICKS, state, colour="green")
+    _, pixels = run("picked", 6640, PICKS, state, color="green")
     assert pixels > 100, "Target not green once the picks make it"
-    _, pixels = run("wrong", 6660, WRONG, state, colour="red")
+    _, pixels = run("wrong", 6660, WRONG, state, color="red")
     assert pixels > 100, "Target not red once the picks miss it"
     summoned, pixels = run("summoned", 7500, SUMMON, state)
     assert pixels == 0, "Helper remained visible during summoning"

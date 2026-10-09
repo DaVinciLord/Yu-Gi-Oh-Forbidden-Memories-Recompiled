@@ -108,9 +108,9 @@ static void picture_from_words(int x, int y, int w, int h)
     if (!picture) return;
     for (j = 0; j < h; j++) {
         for (i = 0; i < w; i++) {
-            uint32_t colour = expand(vram[((y + j) & 511) * SOFT_GPU_WIDTH + ((x + i) & 1023)]);
+            uint32_t color = expand(vram[((y + j) & 511) * SOFT_GPU_WIDTH + ((x + i) & 1023)]);
             for (sy = 0; sy < scale; sy++) {
-                for (sx = 0; sx < scale; sx++) *picture_pixel((x + i) * scale + sx, (y + j) * scale + sy) = colour;
+                for (sx = 0; sx < scale; sx++) *picture_pixel((x + i) * scale + sx, (y + j) * scale + sy) = color;
             }
         }
     }
@@ -251,10 +251,10 @@ static void wide_picture_words(WideTarget *wt, int x, int y, int w, int h)
     if (!wt->picture) return;
     for (int row = y; row < y + h; row++) {
         for (int col = x; col < x + w; col++) {
-            uint32_t colour = expand(wt->pixels[row * SOFT_GPU_WIDTH + col]);
+            uint32_t color = expand(wt->pixels[row * SOFT_GPU_WIDTH + col]);
             for (int sy = 0; sy < scale; sy++) {
                 uint32_t *out = wt->picture + (size_t)(row * scale + sy) * PICTURE_WIDTH + col * scale;
-                for (int sx = 0; sx < scale; sx++) out[sx] = colour;
+                for (int sx = 0; sx < scale; sx++) out[sx] = color;
             }
         }
     }
@@ -271,7 +271,7 @@ static void wide_picture_prepare(WideTarget *wt)
 /* Copies what VRAM now holds in x,y,w,h into the centre of every
  * widescreen target it overlaps. A fill spanning a target's whole width
  * also fills its sides, as a cleared screen is cleared edge to edge. */
-static void wide_mirror(int x, int y, int w, int h, int fill, uint16_t colour)
+static void wide_mirror(int x, int y, int w, int h, int fill, uint16_t color)
 {
     int t;
     for (t = 0; t < WIDE_TARGETS; t++) {
@@ -287,8 +287,8 @@ static void wide_mirror(int x, int y, int w, int h, int fill, uint16_t colour)
             memcpy(out + x1 + wt->margin, vram + row * SOFT_GPU_WIDTH + x1, (size_t)(x2 - x1 + 1) * 2);
             if (fill && x <= wt->x1 && x + w - 1 >= wt->x2) {
                 for (column = 0; column < wt->margin; column++) {
-                    out[wt->x1 + column] = colour;
-                    out[wt->x2 + wt->margin + 1 + column] = colour;
+                    out[wt->x1 + column] = color;
+                    out[wt->x2 + wt->margin + 1 + column] = color;
                 }
             }
         }
@@ -508,14 +508,14 @@ static uint16_t pack(uint32_t rgb24)
 static void fill_words(int x, int y, int w, int h, uint32_t rgb24)
 {
     int i, j;
-    uint16_t colour = pack(rgb24);
+    uint16_t color = pack(rgb24);
     if (TextureDump_Tags) TextureDump_Cleared(x, y, w, h);
     for (j = 0; j < h; j++) {
         for (i = 0; i < w; i++) {
-            *vram_pixel(x + i, y + j) = colour;
+            *vram_pixel(x + i, y + j) = color;
         }
     }
-    wide_mirror(x, y, w, h, 1, colour);
+    wide_mirror(x, y, w, h, 1, color);
     picture_from_words(x, y, w, h);
 }
 
@@ -567,10 +567,10 @@ static inline __attribute__((always_inline)) uint16_t texel(int u, int v)
         word = sample(gpu.page_x + u, y);
     }
     if (shadow_on == 1) {
-        /* A replaced texel: the pack's colour, 0 for one painted transparent.
+        /* A replaced texel: the pack's color, 0 for one painted transparent.
          * The texel's own semi-transparency bit stays: a pack replaces the
-         * colour, not how the game draws it. Black is 0x8000 with that bit
-         * and the darkest non-zero colour without it (texture_dump.h).
+         * color, not how the game draws it. Black is 0x8000 with that bit
+         * and the darkest non-zero color without it (texture_dump.h).
          * (2: the primitive reads the words with another palette than the
          * shadow's image; the scaled picture has that image, VRAM stays.) */
         uint16_t cell = gpu.depth == 0 ? *TextureDump_Cell(gpu.page_x + u / 4, y, u & 3)
@@ -675,7 +675,7 @@ static inline __attribute__((always_inline)) int picture_texel(int u, int v, uin
     if (shadow_on && TextureDump_Sample) {
         int got = TextureDump_Sample(gpu.page_x, gpu.page_y, gpu.depth, u, v, rgb);
         if (got == 1) {
-            /* The pack's colour and how much it covers; the texel's own
+            /* The pack's color and how much it covers; the texel's own
              * semi-transparency bit. */
             *rgb = (*rgb & 0x7fffffffu) | ((uint32_t)(texel(u >> 16, v >> 16) & 0x8000) << 16);
             return 1;
@@ -991,7 +991,7 @@ static void line(Vertex a, Vertex b, int flags)
     }
 }
 
-static void set_colour(Vertex *vertex, uint32_t word)
+static void set_color(Vertex *vertex, uint32_t word)
 {
     vertex->r = word & 0xff;
     vertex->g = (word >> 8) & 0xff;
@@ -1018,7 +1018,7 @@ static void set_page(uint32_t value)
 }
 
 static int panel_piece(int u0, int v0, int w, int h);
-static void name_over_panel(int x, int y, int width, int height, int u0, int v0, int w, int h, const Vertex *colour,
+static void name_over_panel(int x, int y, int width, int height, int u0, int v0, int w, int h, const Vertex *color,
                             int flags);
 
 static size_t polygon(const uint32_t *words, size_t count)
@@ -1039,7 +1039,7 @@ static size_t polygon(const uint32_t *words, size_t count)
     memset(v, 0, sizeof(v));
     for (i = 0; i < vertices; i++) {
         if (i == 0 || shaded) {
-            set_colour(&v[i], words[at++]);
+            set_color(&v[i], words[at++]);
         } else {
             v[i].r = v[0].r; v[i].g = v[0].g; v[i].b = v[0].b;
         }
@@ -1122,7 +1122,7 @@ static int panel_piece(int u0, int v0, int w, int h)
            u0 >= 128 && v0 >= 128 && u0 + w <= 192 && v0 + h <= 168;
 }
 
-static void name_over_panel(int x, int y, int width, int height, int u0, int v0, int w, int h, const Vertex *colour,
+static void name_over_panel(int x, int y, int width, int height, int u0, int v0, int w, int h, const Vertex *color,
                             int flags)
 {
     int which, bx, by, bw, bh, stride, i, j;
@@ -1145,7 +1145,7 @@ static void name_over_panel(int x, int y, int width, int height, int u0, int v0,
                 /* Each pixel the box texel under it, as a quad samples. */
                 int tx = (i - left) * bw / (right - left), ty = (j - top) * bh / (bottom - top);
                 uint16_t word = vram[gpu.clut_y * SOFT_GPU_WIDTH + gpu.clut_x + box[(size_t)ty * stride + tx]];
-                plot(i, j, colour->r, colour->g, colour->b, word, 0, (flags & 3) | 4 | 16);
+                plot(i, j, color->r, color->g, color->b, word, 0, (flags & 3) | 4 | 16);
             }
         }
     }
@@ -1163,7 +1163,7 @@ static size_t rectangle(const uint32_t *words, size_t count)
         return 0;
     }
     memset(&base, 0, sizeof(base));
-    set_colour(&base, words[0]);
+    set_color(&base, words[0]);
     set_position(&base, words[1]);
     if (textured) {
         base.u = words[at] & 0xff;
@@ -1223,7 +1223,7 @@ static size_t lines(const uint32_t *words, size_t count)
     if (count < (shaded ? 4u : 3u)) {
         return 0;
     }
-    set_colour(&previous, words[at++]);
+    set_color(&previous, words[at++]);
     set_position(&previous, words[at++]);
     for (;;) {
         if (poly && at < count && (words[at] & 0xf000f000u) == 0x50005000u) {
@@ -1232,7 +1232,7 @@ static size_t lines(const uint32_t *words, size_t count)
         next = previous;
         if (shaded) {
             if (at >= count) { return 0; }
-            set_colour(&next, words[at++]);
+            set_color(&next, words[at++]);
         }
         if (at >= count) { return 0; }
         set_position(&next, words[at++]);

@@ -55,7 +55,7 @@ static Letter *letter(uint32_t character, int pixels)
     return entry;
 }
 
-void OverlayText_Blend(const MenuCanvas *canvas, int x, int y, uint32_t colour, unsigned alpha)
+void OverlayText_Blend(const MenuCanvas *canvas, int x, int y, uint32_t color, unsigned alpha)
 {
     uint32_t *at, under;
     unsigned back, total, r, g, b;
@@ -66,9 +66,9 @@ void OverlayText_Blend(const MenuCanvas *canvas, int x, int y, uint32_t colour, 
     back = canvas->alpha ? (under >> 24) * (255 - alpha) / 255 : 255 - alpha;
     total = alpha + back;
     if (!total) return;
-    r = ((colour >> 16 & 255) * alpha + (under >> 16 & 255) * back) / total;
-    g = ((colour >> 8 & 255) * alpha + (under >> 8 & 255) * back) / total;
-    b = ((colour & 255) * alpha + (under & 255) * back) / total;
+    r = ((color >> 16 & 255) * alpha + (under >> 16 & 255) * back) / total;
+    g = ((color >> 8 & 255) * alpha + (under >> 8 & 255) * back) / total;
+    b = ((color & 255) * alpha + (under & 255) * back) / total;
     *at = (canvas->alpha ? total : 255) << 24 | r << 16 | g << 8 | b;
 }
 
@@ -79,7 +79,7 @@ int OverlayText_Width(const char *text, int pixels)
     return width;
 }
 
-void OverlayText_Draw(MenuCanvas *canvas, int x, int middle, int right, const char *text, int pixels, uint32_t colour)
+void OverlayText_Draw(MenuCanvas *canvas, int x, int middle, int right, const char *text, int pixels, uint32_t color)
 {
     char clipped[1024];
     int baseline = middle + pixels / 3;
@@ -110,7 +110,7 @@ void OverlayText_Draw(MenuCanvas *canvas, int x, int middle, int right, const ch
             if (y < 0 || y >= canvas->height) continue;
             for (col = 0; col < g->width; col++) {
                 int xx = x + g->left + col;
-                if (xx < right) OverlayText_Blend(canvas, xx, y, colour, g->coverage[row * g->width + col]);
+                if (xx < right) OverlayText_Blend(canvas, xx, y, color, g->coverage[row * g->width + col]);
             }
         }
         x += g->advance;

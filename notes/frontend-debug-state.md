@@ -69,7 +69,7 @@ and writes its existing `field_5A`/`field_5B` members. The cursor object is
 `DisplayObject *`, consistent with every consumer of `D_8009B2E4`.
 The four byte stores at offsets `0x45, 0x3D, 0x35, 0x2D` address byte 1
 within the existing `field_44`, `field_3C`, `field_34`, and `field_2C` words.
-They must remain byte stores, not whole-word colour assignments.
+They must remain byte stores, not whole-word color assignments.
 
 Matching `func_80030294` owns its three initialized local tables as `0x38`
 bytes of `.rodata` at ROM `0xA50`. Its uniform G8 object, declarations, and

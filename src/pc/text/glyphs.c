@@ -367,7 +367,7 @@ static int ink(const Cell *cell, int *top, int *bottom, int *left, int *right)
     return any;
 }
 
-/* The letter's own colour: the most common of its bright indices. */
+/* The letter's own color: the most common of its bright indices. */
 static int bright(const Cell *cell)
 {
     int count[16] = {0}, x, y, best = 14;
@@ -435,10 +435,10 @@ static void drop_rows(Cell *cell, int top, int bottom, int count, int outline)
     }
 }
 
-/* The 8x8 font's colours, which are not the others' (its outline is 15):
+/* The 8x8 font's colors, which are not the others' (its outline is 15):
  * the outline is the index most pixels next to nothing have, the letter the
  * most common of the rest. */
-static void tiny_colours(const Cell *cell, int *fill, int *outline)
+static void tiny_colors(const Cell *cell, int *fill, int *outline)
 {
     int edge[16] = {0}, inner[16] = {0}, x, y, i;
     for (y = 0; y < cell->height; y++) {
@@ -462,7 +462,7 @@ static void tiny_colours(const Cell *cell, int *fill, int *outline)
     }
 }
 
-/* Mark pixels in the fill colour, and the outline round them. */
+/* Mark pixels in the fill color, and the outline round them. */
 static void stamp(Cell *cell, const int (*points)[2], int count, int fill, int outline)
 {
     int i, dx, dy;
@@ -568,7 +568,7 @@ static void compose(const Added *glyph, int font_page, int size, Cell *cell)
     int serifs = size != FONT_TINY && serifed(glyph->letter, glyph->mark, glyph->tone);
     read_cell(font_page, glyph->letter, size, cell);
     if (!ink(cell, &top, &bottom, &left, &right)) return;
-    if (size == FONT_TINY) tiny_colours(cell, &fill, &outline);
+    if (size == FONT_TINY) tiny_colors(cell, &fill, &outline);
     else fill = bright(cell);
     if ((glyph->letter == 'i' || glyph->letter == 'j') && glyph->mark != MARK_CEDILLA && glyph->mark != MARK_OGONEK &&
         glyph->mark != MARK_DOT_BELOW) {
@@ -890,7 +890,7 @@ static void copy_palettes(uint16_t *bank)
         memcpy(&bank[y * SOFT_GPU_WIDTH + 640], &vram[y * SOFT_GPU_WIDTH + 640], 16 * sizeof(uint16_t));
     }
     memcpy(&bank[0xFF * SOFT_GPU_WIDTH + 544], &vram[0xFF * SOFT_GPU_WIDTH + 544], 16 * sizeof(uint16_t));
-    /* The 8x8 font's, at 0x290 + 16 per colour on row 0xFA. */
+    /* The 8x8 font's, at 0x290 + 16 per color on row 0xFA. */
     memcpy(&bank[0xFA * SOFT_GPU_WIDTH + 656], &vram[0xFA * SOFT_GPU_WIDTH + 656], 256 * sizeof(uint16_t));
 }
 
@@ -918,7 +918,7 @@ static void write_sheet(int font_page)
             if (size == FONT_TINY && !added[n].letter) continue;
             if (!added[n].letter) render(&added[n], font_page, size, &cell);
             else compose(&added[n], size == FONT_TINY ? TINY_PAGE : font_page, size, &cell);
-            if (size == FONT_TINY) tiny_colours(&cell, &fill, &outline);
+            if (size == FONT_TINY) tiny_colors(&cell, &fill, &outline);
             for (y = 0; y < cell.height; y++) {
                 for (x = 0; x < cell.width; x++) {
                     unsigned char *at = &rgb[((size_t)(at_y + y) * width + 1 + n * 17 + x) * 3];
@@ -1033,7 +1033,7 @@ int Glyphs_Cell(uint32_t sjis, int large, int font_page, int *tpage, int *u, int
 }
 
 /* ':' in the 8x8 font, which has none: two of its '·', in the letters'
- * colours (the '·' has its own). */
+ * colors (the '·' has its own). */
 static void tiny_colon(Cell *cell)
 {
     Cell dot, letter;
@@ -1044,8 +1044,8 @@ static void tiny_colon(Cell *cell)
     cell->width = 8;
     cell->height = 8;
     if (!ink(&dot, &top, &bottom, &left, &right) || bottom - top > 2 || !ink(&letter, &y, &y, &y, &y)) return;
-    tiny_colours(&dot, &dot_fill, &dot_outline);
-    tiny_colours(&letter, &fill, &outline);
+    tiny_colors(&dot, &dot_fill, &dot_outline);
+    tiny_colors(&letter, &fill, &outline);
     for (y = top; y <= bottom; y++) {
         for (x = 0; x < 8; x++) {
             int index = dot.pixels[y][x];

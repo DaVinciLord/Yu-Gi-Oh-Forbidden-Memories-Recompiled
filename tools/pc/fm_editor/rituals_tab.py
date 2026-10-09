@@ -42,8 +42,8 @@ NUMBERS = {"min_attack": 9999, "max_attack": 9999, "min_defense": 9999, "max_def
 NUMBER_DEFAULTS = {"min_attack": 1000, "max_attack": 2000, "min_defense": 1000, "max_defense": 2000,
                    "min_level": 1, "max_level": 12}
 
-# The recipe row's colours: light, dark (theme.py's palettes).
-COLOURS = {
+# The recipe row's colors: light, dark (theme.py's palettes).
+COLORS = {
     "tile": ("#ffffff", "#2a2b2f"),
     "line": ("#b8bcc2", "#55585e"),
     "group": ("#e8ecf2", "#25272b"),
@@ -58,8 +58,8 @@ COLOURS = {
 }
 
 
-def colour(widget, key: str) -> str:
-    light, dark = COLOURS[key]
+def color(widget, key: str) -> str:
+    light, dark = COLORS[key]
     return dark if theme.is_dark(widget) else light
 
 
@@ -196,7 +196,7 @@ class RecipeRow(tk.Canvas):
             background = ttk.Style(self).lookup("TFrame", "background")
         except tk.TclError:
             background = ""
-        self.configure(background=background or colour(self, "group"))
+        self.configure(background=background or color(self, "group"))
         if not self.recipe:
             self.configure(height=1)
             return
@@ -215,22 +215,22 @@ class RecipeRow(tk.Canvas):
         top = px(self, 22)
         self.tab.images = []        # the pictures of this drawing, kept while it shows
         x = edge
-        self._tile(x, top, w, h, tall, "ritual", ritual, "RITUAL", colour(self, "ritual"))
+        self._tile(x, top, w, h, tall, "ritual", ritual, "RITUAL", color(self, "ritual"))
         x += w
         self._operator(x, top + h // 2, plus, "+")
         x += plus
         add_w = int(w * 0.6) if adding else 0
         group_w = pad * 2 + len(tributes) * w + gap * (len(tributes) - 1 + adding) + add_w
         self.create_rectangle(x, top - px(self, 6), x + group_w, top + h + px(self, 6),
-                              fill=colour(self, "group"), outline=colour(self, "line"))
+                              fill=color(self, "group"), outline=color(self, "line"))
         count = f"{len(tributes)} TRIBUTE{'S' if len(tributes) != 1 else ''}"
-        self.create_text(x + px(self, 2), top - px(self, 9), anchor="sw", fill=colour(self, "hint"),
+        self.create_text(x + px(self, 2), top - px(self, 9), anchor="sw", fill=color(self, "hint"),
                          font=ui_font(*self.LABEL), text=f"{count} \u00b7 {WHERE[origin].upper()}")
         tx = x + pad
         for index, req in enumerate(tributes):
             plain = set(req) == {"card"}
             self._tile(tx, top, w, h, tall, index, req["card"] if plain else None, f"TRIBUTE {index + 1}",
-                       colour(self, "pick"), None if plain else req)
+                       color(self, "pick"), None if plain else req)
             if editable and len(tributes) > 1:
                 self._remove_button(tx + w - px(self, 9), top + px(self, 11), index)
             tx += w + gap
@@ -239,21 +239,21 @@ class RecipeRow(tk.Canvas):
         x += group_w
         self._operator(x, top + h // 2, arrow, "\u2192")
         x += arrow
-        self._tile(x, top, w, h, tall, "result", result, "SUMMONS", colour(self, "result"))
+        self._tile(x, top, w, h, tall, "result", result, "SUMMONS", color(self, "result"))
         self.configure(height=top + h + px(self, 10))
 
     def _operator(self, x, y, width, text):
-        self.create_text(x + width // 2, y, text=text, fill=colour(self, "hint"), font=ui_font(16))
+        self.create_text(x + width // 2, y, text=text, fill=color(self, "hint"), font=ui_font(16))
 
     def _tile(self, x, y, w, h, tall, key, cid, label, accent, req=None):
         project = self.tab.project
         picked = key == self.picked
         tag = f"tile:{key}"
-        self.create_rectangle(x, y, x + w, y + h, fill=colour(self, "tile"),
-                              outline=colour(self, "pick") if picked else colour(self, "line"),
+        self.create_rectangle(x, y, x + w, y + h, fill=color(self, "tile"),
+                              outline=color(self, "pick") if picked else color(self, "line"),
                               width=px(self, 3) if picked else 1, tags=(tag,))
         self.create_rectangle(x + 1, y + 1, x + w, y + px(self, 4), fill=accent, outline="", tags=(tag,))
-        self.create_text(x + px(self, 5), y + px(self, 11), text=label, fill=colour(self, "hint"),
+        self.create_text(x + px(self, 5), y + px(self, 11), text=label, fill=color(self, "hint"),
                          font=ui_font(*self.LABEL), anchor="w", tags=(tag,))
         inner = w - px(self, 10)
         py = y + px(self, 18)
@@ -262,7 +262,7 @@ class RecipeRow(tk.Canvas):
             self.tab.images.append(image)
             self.create_image(x + w // 2, py, image=image, anchor="n", tags=(tag,))
         else:
-            self.create_rectangle(x + px(self, 5), py, x + w - px(self, 5), py + tall, fill=colour(self, "picture"),
+            self.create_rectangle(x + px(self, 5), py, x + w - px(self, 5), py + tall, fill=color(self, "picture"),
                                   outline="", tags=(tag,))
             icon = self.tab.type_icon(req.get("type"), 3 if w >= px(self, 96) else 2) if req else None
             if icon is not None:
@@ -270,7 +270,7 @@ class RecipeRow(tk.Canvas):
                 self.create_image(x + w // 2, py + tall // 2, image=icon, tags=(tag,))
             else:
                 self.create_text(x + w // 2, py + tall // 2, text="?" if req is not None else "-",
-                                 fill=colour(self, "hint"), font=ui_font(20), tags=(tag,))
+                                 fill=color(self, "hint"), font=ui_font(20), tags=(tag,))
         name_font, small_font = ui_font(*self.NAME), ui_font(*self.SMALL)
         width = w - px(self, 8)
         stats = None
@@ -285,10 +285,10 @@ class RecipeRow(tk.Canvas):
         ty = py + tall + px(self, 4)
         for n, (text, font) in enumerate(lines):
             self.create_text(x + w // 2, ty, text=text, anchor="n", font=font, tags=(tag,),
-                             fill=colour(self, "ink") if font == name_font else colour(self, "hint"))
+                             fill=color(self, "ink") if font == name_font else color(self, "hint"))
             ty += tkfont.nametofont(font).metrics("linespace")
         if stats:   # ATK / DEF at the card's foot, as the game's cards have them
-            self.create_text(x + w // 2, y + h - px(self, 4), text=stats, anchor="s", fill=colour(self, "hint"),
+            self.create_text(x + w // 2, y + h - px(self, 4), text=stats, anchor="s", fill=color(self, "hint"),
                              font=ui_font(*self.LABEL), tags=(tag,))
         self.tag_bind(tag, "<Button-1>", lambda e, k=key: self.on_pick(k))
         self._hand(tag)
@@ -299,12 +299,12 @@ class RecipeRow(tk.Canvas):
 
     def _add_tile(self, x, y, w, h):
         tag = "add"
-        self.create_rectangle(x, y, x + w, y + h, outline=colour(self, "add"), dash=(4, 3),
-                              fill=colour(self, "group"), width=1, tags=(tag,))
-        self.create_text(x + w // 2, y + h // 2 - px(self, 10), text="+", fill=colour(self, "add"), font=ui_font(20),
+        self.create_rectangle(x, y, x + w, y + h, outline=color(self, "add"), dash=(4, 3),
+                              fill=color(self, "group"), width=1, tags=(tag,))
+        self.create_text(x + w // 2, y + h // 2 - px(self, 10), text="+", fill=color(self, "add"), font=ui_font(20),
                          tags=(tag,))
         for n, text in enumerate(("Add a", "tribute")):
-            self.create_text(x + w // 2, y + h // 2 + px(self, 14 + 13 * n), text=text, fill=colour(self, "hint"),
+            self.create_text(x + w // 2, y + h // 2 + px(self, 14 + 13 * n), text=text, fill=color(self, "hint"),
                              font=ui_font(*self.SMALL), tags=(tag,))
         self.tag_bind(tag, "<Button-1>", lambda e: self.on_add())
         self._hand(tag)
@@ -312,9 +312,9 @@ class RecipeRow(tk.Canvas):
     def _remove_button(self, x, y, index):
         tag = f"remove:{index}"
         r = px(self, 7)
-        self.create_oval(x - r, y - r, x + r, y + r, fill=colour(self, "tile"), outline=colour(self, "remove"),
+        self.create_oval(x - r, y - r, x + r, y + r, fill=color(self, "tile"), outline=color(self, "remove"),
                          tags=(tag,))
-        self.create_text(x, y, text="\u00d7", fill=colour(self, "remove"), font=ui_font(9), tags=(tag,))
+        self.create_text(x, y, text="\u00d7", fill=color(self, "remove"), font=ui_font(9), tags=(tag,))
         self.tag_bind(tag, "<Button-1>", lambda e, i=index: self.on_remove(i))
         self._hand(tag)
 

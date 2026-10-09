@@ -127,7 +127,7 @@ def bar_parts(card_bar) -> dict:
     return {name: card_bar[name] for name in PARTS if isinstance(card_bar.get(name), dict)}
 
 
-def _colour(value) -> bool:
+def _color(value) -> bool:
     if isinstance(value, bool):
         return False
     if isinstance(value, int):
@@ -160,8 +160,8 @@ def _check_part(where: str, part: str, value) -> list:
         elif key in ("x", "y") and (isinstance(member, bool) or not isinstance(member, int) or
                                     not RANGES[key][0] <= member <= RANGES[key][1]):
             out.append(("warning", where, f"\"{key}\" is a whole number from {RANGES[key][0]} to {RANGES[key][1]}"))
-        elif key == "tint" and not _colour(member):
-            out.append(("warning", where, "\"tint\" is a colour, \"#RRGGBB\""))
+        elif key == "tint" and not _color(member):
+            out.append(("warning", where, "\"tint\" is a color, \"#RRGGBB\""))
         elif key == "hide" and not isinstance(member, bool):
             out.append(("warning", where, "\"hide\" is true or false"))
     x, y = _int(value.get("x")), _int(value.get("y"))
@@ -211,8 +211,8 @@ def check(project, has_file) -> list:
                                         not RANGES[key][0] <= value <= RANGES[key][1]):
                     out.append(("warning", where, f"\"{key}\" is a whole number from {RANGES[key][0]} to "
                                                   f"{RANGES[key][1]}"))
-                elif key in ("tint", "digits") and not _colour(value):
-                    out.append(("warning", where, f"\"{key}\" is a colour, \"#RRGGBB\""))
+                elif key in ("tint", "digits") and not _color(value):
+                    out.append(("warning", where, f"\"{key}\" is a color, \"#RRGGBB\""))
                 elif key == "label" and (not isinstance(value, str) or len(value) > LABEL_MAX):
                     out.append(("warning", where, f"\"label\" is at most {LABEL_MAX} letters"))
                 elif key == "hide" and not isinstance(value, bool):

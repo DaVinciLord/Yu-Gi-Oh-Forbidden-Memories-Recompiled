@@ -698,11 +698,11 @@ unsigned DeckMenu_Signature(void)
 
 /* Drawing, in the save slot menu's look (save_menu.c). */
 
-#define COLOUR_TEXT 0xf2f2f4u
-#define COLOUR_DIM 0x8a8a92u
-#define COLOUR_WARN 0xf0a070u
-#define COLOUR_TITLE 0xffd870u
-#define COLOUR_CURRENT 0x90d890u
+#define COLOR_TEXT 0xf2f2f4u
+#define COLOR_DIM 0x8a8a92u
+#define COLOR_WARN 0xf0a070u
+#define COLOR_TITLE 0xffd870u
+#define COLOR_CURRENT 0x90d890u
 
 static int ui_scale;
 
@@ -716,13 +716,13 @@ static uint32_t blend(uint32_t under, uint32_t over, unsigned alpha)
     return a << 24 | r << 16 | g << 8 | b;
 }
 
-static void fill(MenuCanvas *canvas, int x, int y, int w, int h, uint32_t colour, unsigned alpha)
+static void fill(MenuCanvas *canvas, int x, int y, int w, int h, uint32_t color, unsigned alpha)
 {
     int row, column;
     for (row = y < 0 ? 0 : y; row < y + h && row < canvas->height; row++) {
         for (column = x < 0 ? 0 : x; column < x + w && column < canvas->width; column++) {
             uint32_t *pixel = canvas->pixels + (size_t)row * (size_t)canvas->stride + (size_t)column;
-            *pixel = blend(*pixel, colour, alpha);
+            *pixel = blend(*pixel, color, alpha);
         }
     }
 }
@@ -736,28 +736,28 @@ static void frame_box(MenuCanvas *canvas, int x, int y, int w, int h, int s)
     fill(canvas, x + w - s, y, s, h, 0x6078c0u, 255);
 }
 
-static void text(MenuCanvas *canvas, int x, int y, const char *line, uint32_t colour)
+static void text(MenuCanvas *canvas, int x, int y, const char *line, uint32_t color)
 {
-    Menu_DrawTextScaled(canvas, x, y, line, colour, ui_scale);
+    Menu_DrawTextScaled(canvas, x, y, line, color, ui_scale);
 }
 
 static int width(const char *line) { return Menu_TextWidthScaled(line, ui_scale); }
 
-static void centred(MenuCanvas *canvas, int x, int w, int y, const char *line, uint32_t colour)
+static void centred(MenuCanvas *canvas, int x, int w, int y, const char *line, uint32_t color)
 {
-    text(canvas, x + (w - width(line)) / 2, y, line, colour);
+    text(canvas, x + (w - width(line)) / 2, y, line, color);
 }
 
 /* `line` centred in [x, x + w), on as many lines as it needs, broken at
  * spaces (a narrow box), `line_h` apart from the middle `y` of the first.
  * One line that fits is drawn as centred() draws it. Without a canvas it
  * only counts. Returns the number of lines. */
-static int centred_words(MenuCanvas *canvas, int x, int w, int y, int line_h, const char *line, uint32_t colour)
+static int centred_words(MenuCanvas *canvas, int x, int w, int y, int line_h, const char *line, uint32_t color)
 {
     char out[256];
     int lines = 0;
     if (width(line) <= w) {
-        if (canvas) centred(canvas, x, w, y, line, colour);
+        if (canvas) centred(canvas, x, w, y, line, color);
         return 1;
     }
     while (*line) {
@@ -777,7 +777,7 @@ static int centred_words(MenuCanvas *canvas, int x, int w, int y, int line_h, co
         if (!take) take = length < sizeof(out) - 1 ? length : sizeof(out) - 1;
         memcpy(out, line, take);
         out[take] = '\0';
-        if (canvas) centred(canvas, x, w, y + lines * line_h, out, colour);
+        if (canvas) centred(canvas, x, w, y + lines * line_h, out, color);
         lines++;
         line += take;
         while (*line == ' ') line++;
@@ -807,9 +807,9 @@ static const char *hints(int jp)
                                 : "Cross: use (an empty slot: a copy of yours)   Triangle: clear   Circle: close";
 }
 
-static int flowed(MenuCanvas *canvas, int x, int w, int y, int line_h, const char *line, uint32_t colour, int *widest)
+static int flowed(MenuCanvas *canvas, int x, int w, int y, int line_h, const char *line, uint32_t color, int *widest)
 {
-    return FlowText(canvas, x, w, y, line_h, line, colour, widest, width, text);
+    return FlowText(canvas, x, w, y, line_h, line, color, widest, width, text);
 }
 
 /* How the list is set at scale `s` in a box `pw` wide: 0 each slot on one
@@ -882,45 +882,45 @@ void DeckMenu_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
          * its own where the box is narrower than it. */
         int n = centred_words(NULL, px + 14 * s, pw - 28 * s, 0, 18 * s, menu.message, 0);
         int top = py + ph / 2 - (n - 1) * 9 * s;
-        centred_words(canvas, px + 14 * s, pw - 28 * s, top, 18 * s, menu.message, COLOUR_TEXT);
-        centred(canvas, px, pw, top + (n - 1) * 18 * s + 22 * s, jp ? "Press Circle" : "Press Cross", COLOUR_DIM);
+        centred_words(canvas, px + 14 * s, pw - 28 * s, top, 18 * s, menu.message, COLOR_TEXT);
+        centred(canvas, px, pw, top + (n - 1) * 18 * s + 22 * s, jp ? "Press Circle" : "Press Cross", COLOR_DIM);
         *x = px, *y = py, *w = pw, *h = ph;
         return;
     }
-    text(canvas, px + 14 * s, py + 20 * s, menu.title, COLOUR_TITLE);
+    text(canvas, px + 14 * s, py + 20 * s, menu.title, COLOR_TITLE);
     list_y = py + 38 * s;
     for (i = 0; i < rows && menu.top + i < DECK_SLOT_COUNT; i++) {
         int slot = menu.top + i, ry = list_y + i * row_h, cy = ry + row_h / 2;
         const char *status = status_text(slot);
-        uint32_t colour = draft.slots[slot].used ? COLOUR_TEXT : COLOUR_DIM;
-        uint32_t right_colour = menu.current[slot] ? COLOUR_CURRENT
-                                : draft.slots[slot].used && menu.status[slot] != DECK_OK ? COLOUR_WARN : colour;
+        uint32_t color = draft.slots[slot].used ? COLOR_TEXT : COLOR_DIM;
+        uint32_t right_color = menu.current[slot] ? COLOR_CURRENT
+                                : draft.slots[slot].used && menu.status[slot] != DECK_OK ? COLOR_WARN : color;
         if (slot == menu.cursor) fill(canvas, px + 6 * s, ry, pw - 12 * s, row_h - 2 * s, 0x3a5aa8u, 200);
         snprintf(line, sizeof(line), "%2d   %s", slot + 1, menu.label[slot]);
         if (layout > 0) {
             int first = ry + 3 * s + line_h / 2;
-            int n = flowed(canvas, px + 16 * s, pw - 32 * s, first, line_h, line, colour, NULL);
-            if (status[0]) text(canvas, px + 32 * s, first + n * line_h, status, right_colour);
+            int n = flowed(canvas, px + 16 * s, pw - 32 * s, first, line_h, line, color, NULL);
+            if (status[0]) text(canvas, px + 32 * s, first + n * line_h, status, right_color);
             continue;
         }
-        text(canvas, px + 16 * s, cy, line, colour);
-        text(canvas, px + pw - 16 * s - width(status), cy, status, right_colour);
+        text(canvas, px + 16 * s, cy, line, color);
+        text(canvas, px + pw - 16 * s - width(status), cy, status, right_color);
     }
-    if (menu.top > 0) text(canvas, px + pw - 30 * s, py + 20 * s, "^", COLOUR_DIM);
-    if (menu.top + rows < DECK_SLOT_COUNT) text(canvas, px + pw - 18 * s, py + 20 * s, "v", COLOUR_DIM);
+    if (menu.top > 0) text(canvas, px + pw - 30 * s, py + 20 * s, "^", COLOR_DIM);
+    if (menu.top + rows < DECK_SLOT_COUNT) text(canvas, px + pw - 18 * s, py + 20 * s, "v", COLOR_DIM);
     if (layout > 0)
         flowed(canvas, px + 14 * s, pw - 28 * s, py + ph - 16 * s - (hint_lines - 1) * line_h, line_h, hints(jp),
-               COLOUR_DIM, NULL);
+               COLOR_DIM, NULL);
     else
-        text(canvas, px + 14 * s, py + ph - 16 * s, hints(jp), COLOUR_DIM);
+        text(canvas, px + 14 * s, py + ph - 16 * s, hints(jp), COLOR_DIM);
     if (draft.dirty) {
         /* Kept with the game: lost with it when it is not saved. Narrow, it
          * goes under the title. */
         const char *note = "saved with the game";
         if (layout > 0 && width(menu.title) + 44 * s + width(note) + 40 * s > pw)
-            text(canvas, px + 14 * s, py + 20 * s + line_h, note, COLOUR_WARN);
+            text(canvas, px + 14 * s, py + 20 * s + line_h, note, COLOR_WARN);
         else
-            text(canvas, px + pw - 40 * s - width(note), py + 20 * s, note, COLOUR_WARN);
+            text(canvas, px + pw - 40 * s - width(note), py + 20 * s, note, COLOR_WARN);
     }
     if (menu.view == VIEW_CONFIRM) {
         int bw = 120 * s, bh = 108 * s, bx0 = px + 24 * s, by = py + (ph - bh) / 2, cw = pw - 48 * s, bx;
@@ -932,12 +932,12 @@ void DeckMenu_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
         }
         frame_box(canvas, bx0, by, cw, bh, s);
         snprintf(line, sizeof(line), "Clear slot %d?", menu.cursor + 1);
-        centred(canvas, bx0, cw, by + 30 * s, line, COLOUR_TEXT);
+        centred(canvas, bx0, cw, by + 30 * s, line, COLOR_TEXT);
         bx = bx0 + (cw - 2 * bw - 16 * s) / 2;
         for (i = 0; i < 2; i++) {
             int chosen = i == menu.choice, left = bx + i * (bw + 16 * s);
             fill(canvas, left, by + 62 * s, bw, 24 * s, chosen ? 0x3a5aa8u : 0x22263au, 255);
-            centred(canvas, left, bw, by + 74 * s, labels[i], chosen ? COLOUR_TEXT : COLOUR_DIM);
+            centred(canvas, left, bw, by + 74 * s, labels[i], chosen ? COLOR_TEXT : COLOR_DIM);
         }
     } else if (menu.view == VIEW_MESSAGE) {
         int mw = pw - 96 * s, mh = 64 * s, mx = px + 48 * s, my, n;
@@ -949,8 +949,8 @@ void DeckMenu_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
         mh += (n - 1) * 18 * s;
         my = py + (ph - mh) / 2;
         frame_box(canvas, mx, my, mw, mh, s);
-        centred_words(canvas, mx + 8 * s, mw - 16 * s, my + 24 * s, 18 * s, menu.message, COLOUR_TEXT);
-        centred(canvas, mx, mw, my + 46 * s + (n - 1) * 18 * s, jp ? "Press Circle" : "Press Cross", COLOUR_DIM);
+        centred_words(canvas, mx + 8 * s, mw - 16 * s, my + 24 * s, 18 * s, menu.message, COLOR_TEXT);
+        centred(canvas, mx, mw, my + 46 * s + (n - 1) * 18 * s, jp ? "Press Circle" : "Press Cross", COLOR_DIM);
     }
     *x = px;
     *y = py;

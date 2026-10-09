@@ -396,7 +396,7 @@ static void sized_quad(const GsSPRITE *sprite, u32 attribute, int x0, int y0, in
     memset(&quad, 0, sizeof(quad));
     setPolyFT4(&quad);
     if (attribute & 0x40000000) setSemiTrans(&quad, 1);
-    /* Its colours as they are: unmodulated, so not dithered, as the sprite
+    /* Its colors as they are: unmodulated, so not dithered, as the sprite
      * it stands for is not. */
     if ((attribute & 0x40) || (r == 0x80 && g == 0x80 && b == 0x80)) setShadeTex(&quad, 1);
     quad.r0 = (u8)r;
@@ -419,7 +419,7 @@ static void sized_quad(const GsSPRITE *sprite, u32 attribute, int x0, int y0, in
  * sort for it, taken with it where the screen keeps them all (the middle
  * of it), each scaled about its place. `fade` 0 for the entry itself, else
  * how much darker an afterimage of it is: added, as the game's own
- * (MainMenu_SpawnFrontendEntryAfterimage), each colour down by that. */
+ * (MainMenu_SpawnFrontendEntryAfterimage), each color down by that. */
 static void draw_sized(int i, void *ot, int depth, int x, int y, int fade)
 {
     DisplayObject *object = entry(i);

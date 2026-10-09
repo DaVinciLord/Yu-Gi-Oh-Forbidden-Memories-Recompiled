@@ -1,4 +1,4 @@
-/* A menu button of words (menu_label.h). The frames' colours are the retail
+/* A menu button of words (menu_label.h). The frames' colors are the retail
  * entries' own, read off the title at the console's resolution
  * (2026-09-30): LOAD's dark rim, olive border (96, 96, 8), fill about
  * (40, 32, 32) and grey lines (128, 120, 120) five rows in; NEW GAME's red,
@@ -24,9 +24,9 @@ static int F = MENU_LABEL_FACTOR;
 /* Bumped when the drawing changes, so an old file is not used. */
 enum { STYLE = 1 };
 
-typedef struct { unsigned char r, g, b; } Colour;
+typedef struct { unsigned char r, g, b; } Color;
 
-static void fill(unsigned char *rgba, int width, int x0, int y0, int x1, int y1, Colour c)
+static void fill(unsigned char *rgba, int width, int x0, int y0, int x1, int y1, Color c)
 {
     int x, y;
     for (y = y0 * F; y < y1 * F; y++) {
@@ -41,7 +41,7 @@ static void fill(unsigned char *rgba, int width, int x0, int y0, int x1, int y1,
 }
 
 /* The ink over what is there at coverage `cover`. */
-static void blend(unsigned char *p, Colour c, int cover)
+static void blend(unsigned char *p, Color c, int cover)
 {
     p[0] = (unsigned char)((p[0] * (255 - cover) + c.r * cover) / 255);
     p[1] = (unsigned char)((p[1] * (255 - cover) + c.g * cover) / 255);
@@ -127,10 +127,10 @@ static void spread(const unsigned char *cover, unsigned char *out, int wide, int
 
 static void draw(const char *text, int selected, int width, int words, unsigned char *rgba)
 {
-    const Colour rim = {16, 8, 16}, olive = {96, 96, 8}, body = {40, 32, 32}, grey_line = {128, 120, 120};
-    const Colour red = {168, 16, 16}, orange = {232, 136, 0}, dark = {40, 24, 24};
-    const Colour blue_a = {104, 96, 200}, white_line = {224, 224, 248}, blue_b = {48, 64, 184};
-    const Colour grey = {176, 176, 176}, shadow = {8, 0, 8}, green = {56, 144, 48}, heart = {224, 248, 216};
+    const Color rim = {16, 8, 16}, olive = {96, 96, 8}, body = {40, 32, 32}, grey_line = {128, 120, 120};
+    const Color red = {168, 16, 16}, orange = {232, 136, 0}, dark = {40, 24, 24};
+    const Color blue_a = {104, 96, 200}, white_line = {224, 224, 248}, blue_b = {48, 64, 184};
+    const Color grey = {176, 176, 176}, shadow = {8, 0, 8}, green = {56, 144, 48}, heart = {224, 248, 216};
     int wide = width * F, high = H * F, i;
     unsigned char *cover = calloc((size_t)wide * high, 1), *around = calloc((size_t)wide * high, 1);
     if (!cover || !around) {

@@ -14,7 +14,7 @@ Layout, in two steps as in the port and the game:
   the box stops before the tenth, which the card view never shows.
 
 Drawing: the retail 8x12 font off the player's disc (font_art.c: the boot
-package, WA sector 0x1690, raw VRAM words from 0x280, 0; the text colours
+package, WA sector 0x1690, raw VRAM words from 0x280, 0; the text colors
 at its 51st sector), or a TrueType face set into each glyph's cell the way
 the port's HD text sets it (src/pc/text/hd_text.c render_span): the font's
 baseline, x-height, capitals, ascenders and descenders onto the retail
@@ -51,7 +51,7 @@ ICON_NAMES = ("Dragon", "Spellcaster", "Zombie", "Warrior", "Beast-Warrior", "Be
               "Rock", "Plant", "Magic", "Trap", "Ritual", "Equip", "Mars", "Jupiter", "Saturn", "Uranus", "Pluto",
               "Neptune", "Mercury", "Sun", "Moon", "Venus", "Cross", "Triangle", "Square", "Circle", "Star",
               "Start (left half)", "Start (right half)")
-COLOUR_NAMES = ("White", "Yellow", "Blue", "Green", "Grey", "Orange", "Red")
+COLOR_NAMES = ("White", "Yellow", "Blue", "Green", "Grey", "Orange", "Red")
 PUNCTUATION = "!\"#$%&'()*+,-./:;<=>?"
 ALIASES = {"\u2019": "'", "\u2018": "'", "\u201d": '"', "\u201c": '"', "\u2212": "-", "\u2013": "-", "\u2014": "-",
            "\u00a0": " "}
@@ -60,12 +60,12 @@ PANEL = (16, 24, 48)       # the card view's panel, about (it is a stone texture
 FRAME = (92, 84, 70)       # its frame
 HIDDEN = (40, 40, 40)      # rows the game never shows
 MARK = (230, 40, 40)
-GUTTER, GUTTER_COLOUR = 3, (200, 200, 200)   # texels right of the box, for the marks
+GUTTER, GUTTER_COLOR = 3, (200, 200, 200)   # texels right of the box, for the marks
 
 
 # --- layout -------------------------------------------------------------------
 
-# cards.c text_code: an icon "{f8 0B NN}" (two letters wide), a colour
+# cards.c text_code: an icon "{f8 0B NN}" (two letters wide), a color
 # "{f8 0A NN}" (none) or a glyph by number "{g X}" (a letter).
 CODE = re.compile(r"\{f8 *(0[AaBb]) *([0-9A-Fa-f]{1,2})\}|\{g *([0-9A-Fa-f]{1,4})\}")
 
@@ -79,11 +79,11 @@ def code_at(text: str, i: int):
     return match.group(0), 0 if kind == "0A" else 2 if kind == "0B" else 1
 
 
-def encode(text: str, colours: bool = False, breaks: list = None) -> list:
+def encode(text: str, colors: bool = False, breaks: list = None) -> list:
     """The glyphs cards.c encode_description writes: characters, " " for
     the space it puts between words, "\\n" for its line breaks (0xFE). An
-    icon or numbered glyph is its code as written, in one cell; a colour
-    code takes none and is left out (kept as written with `colours`).
+    icon or numbered glyph is its code as written, in one cell; a color
+    code takes none and is left out (kept as written with `colors`).
     `breaks` gets the index in text of each space the wrapping breaks at."""
     out, column, i = [], 0, 0
     while i < len(text):
@@ -118,7 +118,7 @@ def encode(text: str, colours: bool = False, breaks: list = None) -> list:
             if width and letter >= " ":
                 out.append(letter)
                 column += width
-            elif colours and not width:
+            elif colors and not width:
                 out.append(letter)
         i = end
     return out
@@ -135,7 +135,7 @@ def wrap_points(text: str) -> list:
 @dataclass
 class Layout:
     glyphs: list = field(default_factory=list)      # (character, column, row)
-    colours: list = field(default_factory=list)     # each glyph's colour ramp ("{f8 0A NN}", 0 white)
+    colors: list = field(default_factory=list)     # each glyph's color ramp ("{f8 0A NN}", 0 white)
     rows: int = 0                                   # rows the text takes
     cut_rows: list = field(default_factory=list)    # rows the box began mid-word (a word past 21 letters)
     lines: int = 0                                  # the port's own count (its "runs to N lines" note)
@@ -148,12 +148,12 @@ class Layout:
 
 def layout(text: str) -> Layout:
     out = Layout()
-    glyphs = encode(text, colours=True)
+    glyphs = encode(text, colors=True)
     out.lines = 1 + glyphs.count("\n")
-    x = row = colour = 0
+    x = row = color = 0
     for g in glyphs:
         if g.startswith("{") and code_at(g, 0)[1] == 0:
-            colour = int(CODE.match(g).group(2), 16)
+            color = int(CODE.match(g).group(2), 16)
             continue
         if g == "\n":
             x = 0
@@ -164,7 +164,7 @@ def layout(text: str) -> Layout:
             row += 1
             out.cut_rows.append(row)
         out.glyphs.append((g, x, row))
-        out.colours.append(colour)
+        out.colors.append(color)
         x += 2 if g.startswith("{") and code_at(g, 0)[1] == 2 else 1
     out.rows = row + 1 if glyphs else 0
     return out
@@ -190,7 +190,7 @@ def icon_code(n: int) -> str:
     return "{f8 0B %02X}" % n
 
 
-def colour_code(n: int) -> str:
+def color_code(n: int) -> str:
     return "{f8 0A %02X}" % n
 
 
@@ -208,7 +208,7 @@ def _cell_uv(c: str):
 
 
 class RetailFont:
-    """The 8x12 font and the white text's colours off the disc."""
+    """The 8x12 font and the white text's colors off the disc."""
 
     def __init__(self, wa: bytes):
         start, end = BOOT_SECTOR * 2048, (BOOT_SECTOR + FONT_SECTORS) * 2048
@@ -221,11 +221,11 @@ class RetailFont:
         for i, byte in enumerate(page):
             self.texels[2 * i] = byte & 15
             self.texels[2 * i + 1] = byte >> 4
-        # The text's colour ramps (gText_abColorSlots: COLOUR_NAMES, then an
-        # unused eighth), 16 colours each; white is the one drawn without a code.
+        # The text's color ramps (gText_abColorSlots: COLOR_NAMES, then an
+        # unused eighth), 16 colors each; white is the one drawn without a code.
         self.ramps = [[_rgb15(wa[ramp + 32 * r + 2 * i] | wa[ramp + 32 * r + 2 * i + 1] << 8) for i in range(16)]
                       for r in range(min(8, (len(wa) - ramp) // 32))]
-        self.colours = self.ramps[0]
+        self.colors = self.ramps[0]
         self._icon_pages = (wa[ICON_SECTOR * 2048:(ICON_SECTOR + 16) * 2048],
                             wa[ICON_CLUT_SECTOR * 2048:(ICON_CLUT_SECTOR + 2) * 2048])
         self._icons = {}
@@ -647,12 +647,12 @@ class Renderer:
         w, h = box + GUTTER * f, rows * CELL_H * f
         rgb = bytearray(w * h * 3)
         for row in range(rows):
-            colour = PANEL if row < CLEAR_ROWS else FRAME if row < SHOWN_ROWS else HIDDEN
-            line = bytes(colour) * box + bytes(GUTTER_COLOUR) * (w - box)
+            color = PANEL if row < CLEAR_ROWS else FRAME if row < SHOWN_ROWS else HIDDEN
+            line = bytes(color) * box + bytes(GUTTER_COLOR) * (w - box)
             for y in range(row * CELL_H * f, (row + 1) * CELL_H * f):
                 rgb[y * w * 3:(y + 1) * w * 3] = line
-        for (c, column, row), ramp in zip(lay.glyphs, lay.colours):
-            colours = self.retail.ramps[ramp] if ramp < len(self.retail.ramps) else self.retail.colours
+        for (c, column, row), ramp in zip(lay.glyphs, lay.colors):
+            colors = self.retail.ramps[ramp] if ramp < len(self.retail.ramps) else self.retail.colors
             x0, y0 = column * CELL_W * f, row * CELL_H * f
             dim = row >= SHOWN_ROWS
             match = CODE.match(c) if c.startswith("{") else None
@@ -666,7 +666,7 @@ class Renderer:
                 pw = CELL_W * f
                 for i, index in enumerate(picture):
                     if index:
-                        self._put(rgb, w, x0 + i % pw, y0 + i // pw, colours[index], dim)
+                        self._put(rgb, w, x0 + i % pw, y0 + i // pw, colors[index], dim)
                 continue
             cell = self.retail.cell(c)
             if cell is None:        # no glyph: the port may make one (glyphs.c); a red box stands in
@@ -680,7 +680,7 @@ class Renderer:
                     for dy in range(f):
                         for dx in range(f):
                             self._put(rgb, w, x0 + (i % CELL_W) * f + dx, y0 + (i // CELL_W) * f + dy,
-                                      colours[index], dim)
+                                      colors[index], dim)
         # A red tick past the box's right edge where it cut a word.
         for row in lay.cut_rows:
             y0 = (row - 1) * CELL_H * f
@@ -706,8 +706,8 @@ class Renderer:
                     self._put(rgb, w, x0 + x, y0 + y - 2 * f, tuple(rgba[at:at + 3]), dim)
 
     @staticmethod
-    def _put(rgb, w, x, y, colour, dim):
+    def _put(rgb, w, x, y, color, dim):
         at = (y * w + x) * 3
         if dim:
-            colour = tuple(v // 2 for v in colour)
-        rgb[at:at + 3] = bytes(colour)
+            color = tuple(v // 2 for v in color)
+        rgb[at:at + 3] = bytes(color)

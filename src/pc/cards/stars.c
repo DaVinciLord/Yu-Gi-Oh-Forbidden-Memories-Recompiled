@@ -252,7 +252,7 @@ static void read_stars(const char *mod, const char *directory, const JsonValue *
             } else if (same_letters(palette, "game")) {
                 star->own_palette = 0;
             } else {
-                Mods_Note(mod, "guardian_stars: star %d: \"palette\" is \"game\" (the stars' colours) or \"own\"", id);
+                Mods_Note(mod, "guardian_stars: star %d: \"palette\" is \"game\" (the stars' colors) or \"own\"", id);
             }
         }
     }

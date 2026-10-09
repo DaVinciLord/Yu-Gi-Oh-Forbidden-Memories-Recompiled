@@ -11,7 +11,7 @@ gDuel_bTerrain counts them), and its last phase, 32 sectors from sector
 (640, 256), four bits a texel.
 
 * The first column is the floor: five rows of tiles, each read through its
-  own 16-colour palette, the palettes at +0x7F00 of the column itself (rows
+  own 16-color palette, the palettes at +0x7F00 of the column itself (rows
   254 and 255, where the game reads them in VRAM). Seen from the player,
   far to near: the opponent's back row, their front row, the centre strip
   (drawn twice, the near half turned round), your front row, your back
@@ -20,16 +20,16 @@ gDuel_bTerrain counts them), and its last phase, 32 sectors from sector
   package (DUEL_TERRAIN_EFFECT_DATA_SECTOR_COUNT, 16 sectors).
 * The second column is the platform's walls and trim, ten pieces through
   ten palettes from +0xF120 of the phase. Where each is drawn was found
-  with a pack painting each its own colour (2026-10-07). The duel keeps
+  with a pack painting each its own color (2026-10-07). The duel keeps
   the walls of the field it began on.
 
 A replacement is a pack entry per piece: the words of its rectangle read
 through its palette, nothing else, so no two entries share a word and each
 shows at the console's resolution as well (texture_pack.c draws only the
 first reading of shared words there). A tint rewrites the piece's palette on
-the disc ("data" patch of WA_MRG.MRG): every colour multiplied by the tint,
+the disc ("data" patch of WA_MRG.MRG): every color multiplied by the tint,
 exact at every resolution, the game's art never in the mod. A replaced
-piece draws the mod's colours, so a tint is for the game's own picture.
+piece draws the mod's colors, so a tint is for the game's own picture.
 
 The floor is also one picture, the five rows in the board's order (far to
 near, the centre strip once), split into the rows' textures."""
@@ -181,8 +181,8 @@ def palette_words(data: BoardData, terrain: str, part: Part) -> list:
     return [blob[part.palette + 2 * i] | blob[part.palette + 2 * i + 1] << 8 for i in range(16)]
 
 
-def colour(word: int):
-    """RGBA of a VRAM colour word; 0 is transparent."""
+def color(word: int):
+    """RGBA of a VRAM color word; 0 is transparent."""
     if word == 0:
         return 0, 0, 0, 0
     r, g, b = word & 31, (word >> 5) & 31, (word >> 10) & 31
@@ -190,9 +190,9 @@ def colour(word: int):
 
 
 def tint_word(word: int, tint: int) -> int:
-    """A palette colour multiplied by the tint (0xRRGGBB, 255 a channel as
-    it is), its semi-transparency bit kept. The clear colour stays clear,
-    and a colour the tint takes to black becomes the opaque black the
+    """A palette color multiplied by the tint (0xRRGGBB, 255 a channel as
+    it is), its semi-transparency bit kept. The clear color stays clear,
+    and a color the tint takes to black becomes the opaque black the
     texture packs use (0x8000 with the bit, 0x0001 without; 0 is clear)."""
     if word == 0 or tint == WHITE:
         return word
@@ -261,11 +261,11 @@ def common_tint(project, terrain: str, parts) -> int:
 
 def piece_image(data: BoardData, terrain: str, part: Part, tint: int = WHITE) -> Image:
     """A piece as the game draws it at the console's resolution, through
-    its palette (tinted): a colour word of 0 is clear. A byte holds two
+    its palette (tinted): a color word of 0 is clear. A byte holds two
     texels, the low four bits first; the pieces start and end on a whole
     byte, so a row is its bytes each turned into two pixels."""
     blob = data.phases[terrain]
-    palette = [bytes(colour(w)) for w in tinted(palette_words(data, terrain, part), tint)]
+    palette = [bytes(color(w)) for w in tinted(palette_words(data, terrain, part), tint)]
     pairs = [palette[byte & 15] + palette[byte >> 4] for byte in range(256)]
     base = part.column * COLUMN_BYTES + part.x // 2
     out = b"".join(b"".join(map(pairs.__getitem__, blob[row:row + part.w // 2]))
@@ -390,7 +390,7 @@ def _file(terrains, part: Part) -> str:
 
 def set_piece(project, terrains, part: Part, image: Image) -> list:
     """The picture for a piece of the fields named (one file for them all);
-    their tints go, the picture having its own colours."""
+    their tints go, the picture having its own colors."""
     image, notes = fit(image, part.w, part.h)
     st = state(project)
     pic = Picture(_file(list(terrains), part), image, pending=True)
@@ -580,7 +580,7 @@ def _palettes():
 def read_patches(project, messages: list = None):
     """Take the mod's patches of the board's palettes out of its "data"
     into tints (manifest.apply, after the map's). A palette whose patched
-    colours are no tint of the disc's, and every run that also writes
+    colors are no tint of the disc's, and every run that also writes
     outside the palettes, stay as they were written."""
     from .campaign_map import _hex_bytes, _is_wa, _number
     messages = [] if messages is None else messages

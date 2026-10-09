@@ -3,7 +3,7 @@ preview (card_text.py): the retail letters, and the letters the port makes
 (src/pc/text/glyphs.c) for a translation's accented and other characters.
 
 GlyphCells(retail, face=None, european=False).cell(c) gives a character's
-cell: 96 palette indices of the text's colours, 8 across and 12 down, row by
+cell: 96 palette indices of the text's colors, 8 across and 12 down, row by
 row, 0 transparent; None when the port can make no letter for it (cards.c
 then leaves the character out of the text, with a mod note, and the letters
 after it close up: it takes no cell).
@@ -19,7 +19,7 @@ glyphs.c built on its own, on the retail font, character for character):
   glyphs (the table lacks them) and come from a font as other characters do.
 * accented letters (accents.inc and the extra list: ¿ ¡ ı ø Ø ł Ł đ Đ ħ Ħ):
   compose(), exactly: the retail letter, its i/j dot taken off, its mark
-  stamped on in the letter's colour with the dark outline round it; a
+  stamped on in the letter's color with the dark outline round it; a
   capital gives up rows for a mark (drop_rows); Vietnamese's two marks side
   by side; dot below, cedilla, ogonek, horn, slash and bar; ¿ ¡ turned.
 * the drawn letters (letters.inc: ß æ Æ œ Œ ð Ð þ Þ º ª ° € ẞ): render(),

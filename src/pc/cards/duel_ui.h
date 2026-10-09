@@ -3,7 +3,7 @@
 /* The mods' "ui" key in the duel (notes/modding.md, "The duel's pictures";
  * read by pc/platform/ui_config.h): the life-point panel's two halves with
  * their digits, the FIELD box, the card bar and the two cursors, each moved,
- * sized about its middle, coloured, hidden or drawn from a PNG of the mod's
+ * sized about its middle, colored, hidden or drawn from a PNG of the mod's
  * own. All of it is done as they are drawn: the game's objects keep their
  * places, so its own slides and turns go on as they do, and without such a
  * mod nothing here draws. */
@@ -33,7 +33,7 @@ int DuelUi_PanelDrawn(int digits);
 /* One row of the panel's digits for side 0 (the player's, the bottom half)
  * or 1 (the opponent's, the top), as func_80016D2C draws them from `digit`
  * (a GsSPRITE at their first place): 1 when it drew them, moved, sized and
- * coloured with their half. */
+ * colored with their half. */
 int DuelUi_DrawDigits(int side, DisplayObject *panel, void *digit, int value, int count);
 /* Whether a mod's "ui" draws the panel itself this duel (the renderers
  * then put the names over its pieces, hd_text.h). */
@@ -49,7 +49,7 @@ void DuelUi_Offset(int element, int *x, int *y);
  * to 0x55). Each glyph of a text is an entry (DuelEffectEntry) laid out
  * once, as the text is built; a mod's parts are found there and kept in the
  * entry's spare bytes (pad_19: the part + 1, a name letter's place), and
- * moved, coloured or left out as func_80035E20 draws the entries, every
+ * moved, colored or left out as func_80035E20 draws the entries, every
  * frame. Without such a mod none of it does anything.
  *
  * func_80037DA4 as it gives `channel` (a DuelEffectChannel) the card's name
@@ -57,7 +57,7 @@ void DuelUi_Offset(int element, int *x, int *y);
 void DuelUi_NameStream(void *channel, int on);
 /* DuelEffect_AppendEntry, `entry` laid out for `channel`. */
 void DuelUi_TagEntry(void *channel, void *entry);
-/* func_80035E20, the entry's sprite placed (a GsSPRITE, its colour the
- * text's): 1 to leave it out; else moved and coloured as its part is. */
+/* func_80035E20, the entry's sprite placed (a GsSPRITE, its color the
+ * text's): 1 to leave it out; else moved and colored as its part is. */
 int DuelUi_BarEntry(DisplayObject *text, const void *entry, void *sprite);
 #endif

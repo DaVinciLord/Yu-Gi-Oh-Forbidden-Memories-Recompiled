@@ -4,9 +4,9 @@ the disc's own pictures (ui_assets.TitleArt) and the mod's "title" and
 "menu" over them, as title_config.c reads them and title_screen.c and
 title_menu.c lay them out.
 
-Title screen: the background (the game's wall, a colour, a picture of the
+Title screen: the background (the game's wall, a color, a picture of the
 mod's own), the logo, the copyright line and PUSH START BUTTON (moved,
-coloured, hidden, or a picture instead), pictures the mod adds and lines of
+colored, hidden, or a picture instead), pictures the mod adds and lines of
 words. Menus: both menus' buttons in their order -- the game's entries and
 the mod's own -- each with its words or picture, what it does and where it
 stands, and the menus' own background."""
@@ -16,7 +16,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from . import pngio, ui_assets as ua
-from .ui_tab import (WARN, ColourButton, as_int, colour_text, ensure, import_image, mod_image, page_layout, section,
+from .ui_tab import (WARN, ColorButton, as_int, color_text, ensure, import_image, mod_image, page_layout, section,
                      set_member, sized)
 from .widgets import px
 
@@ -245,18 +245,18 @@ def label_button(text: str, selected: bool) -> pngio.Image:
     h = LABEL_H
     rgba = bytearray(w * h * 4)
 
-    def fill(x0, y0, x1, y1, colour):
+    def fill(x0, y0, x1, y1, color):
         for y in range(y0, y1):
             for x in range(x0, x1):
-                rgba[(y * w + x) * 4:(y * w + x) * 4 + 4] = bytes(colour + (255,))
+                rgba[(y * w + x) * 4:(y * w + x) * 4 + 4] = bytes(color + (255,))
     if selected:
         fill(0, 0, w, h, (168, 16, 16))
         fill(1, 1, w - 1, h - 1, (232, 136, 0))
         fill(2, 2, w - 2, h - 2, (168, 16, 16))
         fill(3, 3, w - 3, h - 3, (40, 24, 24))
-        for y, colour in ((4, (104, 96, 200)), (5, (224, 224, 248)), (6, (48, 64, 184)), (h - 7, (104, 96, 200)),
+        for y, color in ((4, (104, 96, 200)), (5, (224, 224, 248)), (6, (48, 64, 184)), (h - 7, (104, 96, 200)),
                           (h - 6, (224, 224, 248)), (h - 5, (48, 64, 184))):
-            fill(5, y, w - 5, y + 1, colour)
+            fill(5, y, w - 5, y + 1, color)
     else:
         fill(0, 0, w, h, (16, 8, 16))
         fill(1, 1, w - 1, h - 1, (96, 96, 8))
@@ -269,10 +269,10 @@ def label_button(text: str, selected: bool) -> pngio.Image:
 def item_look(scene: Scene, item: dict, selected: bool, title_art):
     """An item as the game draws it, at its size ("scale", about its
     middle): (picture, left, top, words) with left, top from its middle and
-    words (text, colour, size, shadow) for a label, drawn over it; None
+    words (text, color, size, shadow) for a label, drawn over it; None
     for an entry without the disc's pictures."""
     scale = scene.scale(item)
-    tint = ua.parse_colour(item.get("tint"))
+    tint = ua.parse_color(item.get("tint"))
     name = item.get("selected_image" if selected else "image")
     image = mod_image(scene.project, name) if name else None
     if selected and image is None and item.get("image"):
@@ -364,17 +364,17 @@ class TitleCanvas:
         background = scene.background(menu is not None)
         dim = background["dim"] if menu is not None else 0
         base = ua.blank(320, 240, (0, 0, 0, 255))
-        colour = background.get("color")
-        if colour is not None:
-            c = ua.parse_colour(colour, -1)
+        color = background.get("color")
+        if color is not None:
+            c = ua.parse_color(color, -1)
             if c >= 0:
                 base = ua.blank(320, 240, (c >> 16, c >> 8 & 255, c & 255, 255))
         image = mod_image(project, background.get("image")) if background.get("image") else None
         if background.get("picture") is not False:
             if image is not None:
-                base = ua.paste(base, ua.tint(sized(image, 320, 240), ua.parse_colour(background.get("tint"))), 0, 0)
+                base = ua.paste(base, ua.tint(sized(image, 320, 240), ua.parse_color(background.get("tint"))), 0, 0)
             elif title_art.ok:
-                base = ua.paste(base, ua.tint(title_art.wall(), ua.parse_colour(background.get("tint"))), 0, 0)
+                base = ua.paste(base, ua.tint(title_art.wall(), ua.parse_color(background.get("tint"))), 0, 0)
         if background.get("shade") is not False:
             rows = []
             for y in range(240):
@@ -384,7 +384,7 @@ class TitleCanvas:
                 line[3::4] = b"\xff" * 320
                 rows.append(bytes(line))
             base = pngio.Image(320, 240, b"".join(rows))
-        if not title_art.ok and image is None and colour is None:
+        if not title_art.ok and image is None and color is None:
             stage.create_text(160 * stage.zoom, 228 * stage.zoom, fill="#999",
                               text="The game's title pictures come from DATA/SU.MRG beside the game files.")
         # The layers and the pictures under the menu's dimming: drawn into the background's picture
@@ -421,7 +421,7 @@ class TitleCanvas:
             if show == "menu" and menu is None or show == "press_start" and menu is not None:
                 continue
             dx, dy = as_int(layer.get("x")), as_int(layer.get("y"))
-            tint = ua.parse_colour(layer.get("tint"))
+            tint = ua.parse_color(layer.get("tint"))
             level = 0x58 * 255 // 0x80 if name == "prompt" else 255     # PUSH START's pulse, at its middle
             own = mod_image(scene.project, layer.get("image")) if layer.get("image") else None
             if own is not None:
@@ -448,7 +448,7 @@ class TitleCanvas:
                 continue
             w, h = fit(own.width, own.height, 320, 240, as_int(entry.get("width")), as_int(entry.get("height")))
             x, y = as_int(entry.get("x"), 160), as_int(entry.get("y"), 120)
-            out.append((ua.tint(sized(own, w, h), ua.parse_colour(entry.get("tint"))), x - w // 2, y - h // 2))
+            out.append((ua.tint(sized(own, w, h), ua.parse_color(entry.get("tint"))), x - w // 2, y - h // 2))
         return out
 
     def draw_menu(self, scene: Scene, menu: int, cursor, title_art):
@@ -491,9 +491,9 @@ class TitleCanvas:
                 continue
             size = max(1, min(8, as_int(line.get("size"), 1)))
             align = {"left": "w", "right": "e"}.get(line.get("align"), "center")
-            colour = colour_text(ua.parse_colour(line.get("color")))
+            color = color_text(ua.parse_color(line.get("color")))
             self.stage.text(("text", i), as_int(line.get("x"), 160), as_int(line.get("y"), 220), line["text"],
-                            colour, 12 * size, anchor=align)
+                            color, 12 * size, anchor=align)
 
 
 # --- the pages -------------------------------------------------------------------------
@@ -516,7 +516,7 @@ def rows(frame):
 
 class BackgroundForm(ttk.Frame):
     """A "background" object's keys: the game's wall or a picture, its
-    colour, the shade, a colour under it, the menu's dimming."""
+    color, the shade, a color under it, the menu's dimming."""
 
     def __init__(self, master, page, menu: bool):
         super().__init__(master)
@@ -529,14 +529,14 @@ class BackgroundForm(ttk.Frame):
                                                                                          sticky="w")
         ttk.Checkbutton(self, text="Dark-to-light shade", variable=self.shade,
                         command=lambda: self.set("shade", self.shade.get(), True)).grid(row=0, column=1, sticky="w")
-        ttk.Label(self, text="Wall colour").grid(row=1, column=0, sticky="w", pady=2)
-        self.tint = ColourButton(self, lambda v: self.set("tint", colour_text(v) if v is not None else None, "#FFFFFF"),
+        ttk.Label(self, text="Wall color").grid(row=1, column=0, sticky="w", pady=2)
+        self.tint = ColorButton(self, lambda v: self.set("tint", color_text(v) if v is not None else None, "#FFFFFF"),
                                  multiplies=True)
         self.tint.grid(row=1, column=1, sticky="w")
-        ttk.Label(self, text="Colour under it").grid(row=2, column=0, sticky="w", pady=2)
-        self.colour = ColourButton(self, lambda v: self.set("color", colour_text(v) if v is not None else None),
+        ttk.Label(self, text="Color under it").grid(row=2, column=0, sticky="w", pady=2)
+        self.color = ColorButton(self, lambda v: self.set("color", color_text(v) if v is not None else None),
                                    default=None, allow_none=True)
-        self.colour.grid(row=2, column=1, sticky="w")
+        self.color.grid(row=2, column=1, sticky="w")
         ttk.Label(self, text="Picture").grid(row=3, column=0, sticky="w", pady=2)
         buttons = ttk.Frame(self)
         buttons.grid(row=3, column=1, sticky="w")
@@ -562,9 +562,9 @@ class BackgroundForm(ttk.Frame):
         bg = self.current()
         self.picture.set(bg.get("picture") is not False)
         self.shade.set(bg.get("shade") is not False)
-        self.tint.set(ua.parse_colour(bg.get("tint")))
-        colour = bg.get("color")
-        self.colour.set(ua.parse_colour(colour, 0) if colour is not None else None)
+        self.tint.set(ua.parse_color(bg.get("tint")))
+        color = bg.get("color")
+        self.color.set(ua.parse_color(color, 0) if color is not None else None)
         self.image.configure(text=bg.get("image") or ("the title's" if self.menu else "none"))
         self.dim.set(as_int(bg.get("dim"), 128))
         self.loading = False
@@ -589,7 +589,7 @@ class BackgroundForm(ttk.Frame):
             self.page.edited(redraw_form=False)
 
 
-WHAT = {"background": "Behind everything: the game's wall, a colour, or a picture of yours.",
+WHAT = {"background": "Behind everything: the game's wall, a color, or a picture of yours.",
         "logo": "The game's logo.", "copyright": "The \u00a9 1996 line.",
         "prompt": "Blinks until a button is pressed.", "picture": "A picture of yours, by its middle.",
         "text": "A line of words, drawn by the port in its own letters."}
@@ -682,8 +682,8 @@ class TitlePage(ttk.Frame):
         line = rows(frame)
         self.layer_vars = {"x": tk.StringVar(), "y": tk.StringVar(), "show": tk.StringVar()}
         line("Moved by", self.place_fields(frame, self.layer_vars, self.layer_typed))
-        self.layer_tint = line("Colour", ColourButton(frame, lambda v: self.set_layer(
-            "tint", colour_text(v) if v is not None else None, "#FFFFFF"), multiplies=True))
+        self.layer_tint = line("Color", ColorButton(frame, lambda v: self.set_layer(
+            "tint", color_text(v) if v is not None else None, "#FFFFFF"), multiplies=True))
         self.show_box = line("Shown", ttk.Combobox(frame, state="readonly", width=18,
                                                     values=[SHOW_TITLES[s] for s in SHOW]))
         self.show_box.bind("<<ComboboxSelected>>", lambda e: self.set_layer(
@@ -705,8 +705,8 @@ class TitlePage(ttk.Frame):
         self.picture_vars = {key: tk.StringVar() for key in ("width", "height", "x", "y")}
         line("Middle at", self.place_fields(frame, self.picture_vars, self.picture_place,
                                             centre=lambda: self.centre("picture")))
-        self.picture_tint = line("Colour", ColourButton(frame, lambda v: self.set_picture(
-            "tint", colour_text(v) if v is not None else None, "#FFFFFF"), multiplies=True))
+        self.picture_tint = line("Color", ColorButton(frame, lambda v: self.set_picture(
+            "tint", color_text(v) if v is not None else None, "#FFFFFF"), multiplies=True))
         sizes = ttk.Frame(frame)
         for key in ("width", "height"):
             if key == "height":
@@ -734,8 +734,8 @@ class TitlePage(ttk.Frame):
         self.text_vars = {"text": tk.StringVar(), "size": tk.StringVar(), "x": tk.StringVar(), "y": tk.StringVar()}
         words = line("Words", ttk.Entry(frame, textvariable=self.text_vars["text"], width=34))
         line("At", self.place_fields(frame, self.text_vars, self.text_place, centre=lambda: self.centre("text")))
-        self.text_colour = line("Colour", ColourButton(frame, lambda v: self.set_text(
-            "color", colour_text(v) if v is not None else None, "#FFFFFF")))
+        self.text_color = line("Color", ColorButton(frame, lambda v: self.set_text(
+            "color", color_text(v) if v is not None else None, "#FFFFFF")))
         size = line("Size", ttk.Spinbox(frame, from_=1, to=8, width=4, textvariable=self.text_vars["size"],
                                         command=lambda: self.text_typed("size")))
         self.align_box = line("Lined up", ttk.Combobox(frame, state="readonly", width=10,
@@ -857,7 +857,7 @@ class TitlePage(ttk.Frame):
             layer = title.get(self.chosen) if isinstance(title.get(self.chosen), dict) else {}
             self.layer_vars["x"].set(str(as_int(layer.get("x"))))
             self.layer_vars["y"].set(str(as_int(layer.get("y"))))
-            self.layer_tint.set(ua.parse_colour(layer.get("tint")))
+            self.layer_tint.set(ua.parse_color(layer.get("tint")))
             show = layer.get("show", "always")
             self.show_box.configure(values=[SHOW_TITLES[s] for s in SHOW if self.chosen != "prompt" or s != "menu"])
             self.show_box.current(SHOW.index(show) if show in SHOW else 0)
@@ -867,7 +867,7 @@ class TitlePage(ttk.Frame):
             entry = self.picture_entry()
             self.heading.configure(text=f"Picture {self.chosen[1] + 1}")
             self.what.configure(text=entry.get("image", ""))
-            self.picture_tint.set(ua.parse_colour(entry.get("tint")))
+            self.picture_tint.set(ua.parse_color(entry.get("tint")))
             for key, default in (("width", 0), ("height", 0), ("x", 160), ("y", 120)):
                 self.picture_vars[key].set(str(as_int(entry.get(key), default)))
             show = entry.get("show", "always")
@@ -879,7 +879,7 @@ class TitlePage(ttk.Frame):
             self.text_vars["size"].set(str(as_int(line.get("size"), 1)))
             self.text_vars["x"].set(str(as_int(line.get("x"), 160)))
             self.text_vars["y"].set(str(as_int(line.get("y"), 220)))
-            self.text_colour.set(ua.parse_colour(line.get("color")))
+            self.text_color.set(ua.parse_color(line.get("color")))
             self.align_box.set(line.get("align", "center"))
             show = line.get("show", "always")
             self.text_show.current(SHOW.index(show) if show in SHOW else 0)
@@ -1231,8 +1231,8 @@ class MenuPage(ttk.Frame):
         self.notice_caption = frame.grid_slaves(row=row - 1, column=0)[0]
         self.value_box = line("Event value", ttk.Entry(frame, textvariable=self.item_vars["value"], width=8))
         self.value_caption = frame.grid_slaves(row=row - 1, column=0)[0]
-        self.item_tint = line("Colour", ColourButton(frame, lambda v: self.set_item(
-            "tint", colour_text(v) if v is not None else None, "#FFFFFF"), multiplies=True))
+        self.item_tint = line("Color", ColorButton(frame, lambda v: self.set_item(
+            "tint", color_text(v) if v is not None else None, "#FFFFFF"), multiplies=True))
         pictures = ttk.Frame(frame)
         ttk.Button(pictures, text="PNG...", command=lambda: self.item_image("image")).pack(side="left")
         ttk.Button(pictures, text="With cursor...", command=lambda: self.item_image("selected_image")).pack(
@@ -1462,7 +1462,7 @@ class MenuPage(ttk.Frame):
             widget.grid() if shown_action == "notice" else widget.grid_remove()
         for widget in (self.value_box, self.value_caption):
             widget.grid() if shown_action == "event" else widget.grid_remove()
-        self.item_tint.set(ua.parse_colour(item.get("tint")))
+        self.item_tint.set(ua.parse_color(item.get("tint")))
         pictures = [item.get("image"), item.get("selected_image")]
         self.item_image_name.configure(text=" / ".join(p for p in pictures if p) or "the game's own" if item.get(
             "entry") else " / ".join(p for p in pictures if p) or "words on a frame")

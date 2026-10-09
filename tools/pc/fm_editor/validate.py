@@ -45,7 +45,7 @@ class Issue:
 def text_lines(text: str) -> int:
     """How many lines the port's card-text wrapping makes (cards.c
     encode_description): 20 letters a line, broken at spaces and at \\n;
-    an icon code is two letters, a colour code none."""
+    an icon code is two letters, a color code none."""
     return 1 + card_text.encode(text).count("\n")
 
 

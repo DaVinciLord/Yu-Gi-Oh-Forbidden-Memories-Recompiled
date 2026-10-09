@@ -29,7 +29,7 @@ range `0xB48000..0xB63000`. The four stage lengths sum exactly to the request:
 |---:|---:|---:|---|---|
 | 0 | `0xB48000-0xB60000` | `0x18000` / 48 sectors | Uploads 48 sector-sized `64 x 16` rectangles, filling VRAM `(640,0)-(831,255)` | `422291574b4541bb7f6098f2a11ee5d78188ba6209a1b65165f728b910823f00` |
 | 1 | `0xB60000-0xB61000` | `0x1000` / 2 sectors | Stages then uploads a `256 x 8` palette rectangle at VRAM `(512,248)` | `5442ea26fdc7604068636df5f893e291b8acfa9a0291967dd7958567479e7547` |
-| 2 | `0xB61000-0xB61800` | `0x800` / 1 sector | Uploads its first `0x100` bytes as eight `16`-colour rows at VRAM `(640,232)`; the remaining `0x700` bytes are zero | `d9ee64f5cb45bb97a45630957fd937d0db94646ad65e47f99e4f7decc0f1f7e3` |
+| 2 | `0xB61000-0xB61800` | `0x800` / 1 sector | Uploads its first `0x100` bytes as eight `16`-color rows at VRAM `(640,232)`; the remaining `0x700` bytes are zero | `d9ee64f5cb45bb97a45630957fd937d0db94646ad65e47f99e4f7decc0f1f7e3` |
 | 3 | `0xB61800-0xB63000` | `0x1800` / 3 sectors | Loads module ID `0x16` at `0x80168000..0x80169800` | `83d49e3fde2dca5e60961ac9bcf31fd1ce918c885f6b88fcab01496691581d3a` |
 
 For stage 0, the resident CD callback copies the stored `(640,0)` position
@@ -39,7 +39,7 @@ moves 64 pixels right, producing the complete `192 x 256` destination.
 
 The first three phases contain persistent frontend resources. Tutorial
 offsets identify the shared card-pointer and fusion-number images inside
-stage 0, their palettes inside stage 1, and seven populated text/UI colour
+stage 0, their palettes inside stage 1, and seven populated text/UI color
 ramps plus one empty row in the first `0x100` bytes of stage 2. Those visual
 labels are tutorial-derived; the boundaries, upload geometry, and retail
 bytes are established independently by matching loader code.

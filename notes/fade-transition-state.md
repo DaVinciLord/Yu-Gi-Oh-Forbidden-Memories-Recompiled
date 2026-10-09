@@ -150,9 +150,9 @@ reading them as a grid is what makes the unnamed ones tractable:
 
 - which initializer runs -- `Fade_InitIn*` or `Fade_InitOut*` (default step
   `0x0C`, no band mode) or `Fade_Start*` (band mode requested, then possibly
-  replaced by the colour helper as described above);
+  replaced by the color helper as described above);
 - whether the wrapper ends with `Fade_Wait`, i.e. whether it blocks;
-- whether it ORs extra bits into `flags` and calls a colour helper.
+- whether it ORs extra bits into `flags` and calls a color helper.
 
 | Address | Name | Init | Waits | Extra flags |
 |---|---|---|---|---|
@@ -181,7 +181,7 @@ the finished frame:
   table 0. `Fade_DrawOverlay` sorts its boxes into table 1 (`D_800E9D94[0]`),
   so a hidden-secondary frame still shows the fade cover.
 - zero: it skips `GsSortOt` and `GsDrawOt` entirely. That leaves only the
-  draw environment's background clear, whose colour the same function copies
+  draw environment's background clear, whose color the same function copies
   from the latched fade tint `D_8009B142..D_8009B144`.
 
 `Fade_EnableOrderingTables` (`0x80015CFC`) writes `FADE_ORDERING_TABLE_ACTIVE`
@@ -336,7 +336,7 @@ Matching pure-C users migrated to this shared header include:
   `Fade_StartOutKeepOverlay`,
   `Fade_StartOutKeepOverlayAndHideSecondaryTables`.
 
-The colour initializers and their blocking wrappers now carry an explicit
+The color initializers and their blocking wrappers now carry an explicit
 `s32 color` parameter, replacing the old reliance on an incoming `$a0`.
 `Fade_StartOutKeepOverlay` deliberately keeps an unspecified parameter list: one exact
 caller passes the white-mode byte and another passes nothing, while the

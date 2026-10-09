@@ -26,7 +26,7 @@ static int last_set[CARD_LAYOUT_ELEMENT_COUNT];
 
 /* The card CardLayout_SetCard last named: its frame style (the layout's
  * "frame_styles" entry the "frame_for" rules picked, or, for a layout with no
- * styles, the "frame" of its kind) -- its colour, the picture's path and
+ * styles, the "frame" of its kind) -- its color, the picture's path and
  * size, and whether it is laid out as a spell. A monster with no frame until
  * a call site sets a real card, as every call site that never draws one. */
 static CardLayoutStyle current;
@@ -38,7 +38,7 @@ typedef struct {
 
 /* "frame"'s sub-object for `kind`, falling back to "monster" when `kind`
  * has none of its own -- the OLD layout form, before "frame_styles": purple/
- * orange are recolours of the monster frame (hd_assets_pack.py), and a mod
+ * orange are recolors of the monster frame (hd_assets_pack.py), and a mod
  * that has not drawn magic/trap/ritual's own yet still gets a frame, not
  * none. */
 static const JsonValue *frame_for_kind(const JsonValue *layout, int kind)
@@ -48,15 +48,15 @@ static const JsonValue *frame_for_kind(const JsonValue *layout, int kind)
     return frame ? frame : Json_Member(frame_set, frame_kind_names[CARD_FRAME_MONSTER]);
 }
 
-/* The six frame colours a style's "hand_colour" names. The disc's own labels
+/* The six frame colors a style's "hand_color" names. The disc's own labels
  * (monster, magic, trap, ritual) are accepted too. */
-static const char *const colour_names[CARD_FRAME_COUNT] = {"gold", "green", "pink", "blue", "purple", "orange"};
-static int colour_named(const char *text)
+static const char *const color_names[CARD_FRAME_COUNT] = {"gold", "green", "pink", "blue", "purple", "orange"};
+static int color_named(const char *text)
 {
     int i;
     if (!text) return -1;
     for (i = 0; i < CARD_FRAME_COUNT; i++) {
-        if (!strcmp(text, colour_names[i]) || !strcmp(text, frame_kind_names[i])) return i;
+        if (!strcmp(text, color_names[i]) || !strcmp(text, frame_kind_names[i])) return i;
     }
     return -1;
 }
@@ -191,7 +191,7 @@ static int resolve_style(const LayoutSource *source, int card, CardLayoutStyle *
 {
     int cls = Cards_Class(card);
     const JsonValue *styles = Json_Member(source->layout, "frame_styles");
-    const JsonValue *style = NULL;
+    const JsonValue *style = NULL, *hand;
     const char *name = NULL;
     const JsonValue *rule;
     int override = Cards_FrameOverride(card);
@@ -204,7 +204,7 @@ static int resolve_style(const LayoutSource *source, int card, CardLayoutStyle *
     if (!styles) {
         /* A layout from before "frame_styles": "frame" holds a picture a kind
          * (monster, magic, trap, ritual, purple, orange). The kind is the
-         * card's own frame colour, else its class's; a ritual spell with no
+         * card's own frame color, else its class's; a ritual spell with no
          * ritual picture of its own (or magic's) wears magic's. */
         const JsonValue *frame_set = Json_Member(source->layout, "frame");
         const JsonValue *frame;
@@ -221,7 +221,7 @@ static int resolve_style(const LayoutSource *source, int card, CardLayoutStyle *
         magic = Json_String(Json_Member(frame_for_kind(source->layout, CARD_FRAME_MAGIC), "image"), NULL);
         if (kind == CARD_FRAME_RITUAL && (!own || !*own || (magic && !strcmp(own, magic)))) kind = CARD_FRAME_MAGIC;
         frame = frame_for_kind(source->layout, kind);
-        out->colour = kind;
+        out->color = kind;
         snprintf(out->name, sizeof(out->name), "%s", frame_kind_names[kind]);
         out->width = (int)Json_Number(Json_Member(frame, "width"), 140);
         out->height = (int)Json_Number(Json_Member(frame, "height"), 196);
@@ -230,10 +230,10 @@ static int resolve_style(const LayoutSource *source, int card, CardLayoutStyle *
                      sizeof(out->image));
         return 1;
     }
-    /* A card with a frame colour of its own (a cards mod's "frame") takes the
-     * style of that colour's name when the layout has one; otherwise the
+    /* A card with a frame color of its own (a cards mod's "frame") takes the
+     * style of that color's name when the layout has one; otherwise the
      * first rule that applies; otherwise the layout's "default_style". */
-    if (override >= 0 && Json_Member(styles, colour_names[override])) name = colour_names[override];
+    if (override >= 0 && Json_Member(styles, color_names[override])) name = color_names[override];
     for (rule = Json_At(Json_Member(source->layout, "frame_for"), 0); !name && rule; rule = Json_Next(rule)) {
         if (rule_applies(source, rule, card, cls)) name = Json_String(Json_Member(rule, "style"), NULL);
     }
@@ -243,9 +243,12 @@ static int resolve_style(const LayoutSource *source, int card, CardLayoutStyle *
         note_once(source, "no \"frame_styles\" entry named", name);
         return 0;
     }
-    out->colour = colour_named(Json_String(Json_Member(style, "hand_colour"), name));
-    if (out->colour < 0) {
-        note_once(source, "\"hand_colour\" is not gold, green, pink, blue, purple or orange in style", name);
+    /* "hand_colour", the key's first spelling, is still read; "hand_color" wins when both are there. */
+    hand = Json_Member(style, "hand_color");
+    if (!hand) hand = Json_Member(style, "hand_colour");
+    out->color = color_named(Json_String(hand, name));
+    if (out->color < 0) {
+        note_once(source, "\"hand_color\" is not gold, green, pink, blue, purple or orange in style", name);
         return 0;
     }
     snprintf(out->name, sizeof(out->name), "%s", name);

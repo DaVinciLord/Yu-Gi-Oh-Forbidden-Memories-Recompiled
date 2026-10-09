@@ -68,7 +68,7 @@ void func_80037DA4(DuelEffectChannel *object)
     }
     n = 0;
 #ifdef MEMORIES_PC
-    /* A previous inserted card field may have borrowed this box's colour. */
+    /* A previous inserted card field may have borrowed this box's color. */
     CardTextColors_Restore(object);
 #endif
     if (op & 0x10) {

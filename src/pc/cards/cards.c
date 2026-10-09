@@ -151,7 +151,7 @@ const char *Cards_ClassName(int cls)
                                                         "ritual_spell", "trap"};
     return cls >= 0 && cls < CARD_CLASS_COUNT ? names[cls] : "";
 }
-/* The colour of the frame the disc draws for `id` by its type. */
+/* The color of the frame the disc draws for `id` by its type. */
 static int type_frame_color(int id)
 {
     int type = Cards_Type(id);
@@ -165,9 +165,9 @@ int Cards_FrameColor(int id)
     CardLayoutStyle style;
     const MonsterEffect *effects;
     if (!Cards_Valid(id)) return -1;
-    /* The anime frame on: the colour of the style the layout picked, so a
+    /* The anime frame on: the color of the style the layout picked, so a
      * card's hand frame and its card view always agree. */
-    if (CardLayout_StyleOf(id, &style)) return style.colour == type_frame_color(id) ? -1 : style.colour;
+    if (CardLayout_StyleOf(id, &style)) return style.color == type_frame_color(id) ? -1 : style.color;
     if (Cards_FrameOverride(id) >= 0) return Cards_FrameOverride(id);
     /* Left out, a monster with effects of its own is drawn orange, as an
      * effect monster is in the card game. */
@@ -358,7 +358,7 @@ static unsigned char *encode_name(const char *mod, const char *pattern, int n, i
 
 /* A code in card text, spelled as the FM Editor and the text listing show
  * it: "{f8 0B NN}" an icon (two letters wide: the card view draws it 16
- * pixels across), "{f8 0A NN}" a colour (none),
+ * pixels across), "{f8 0A NN}" a color (none),
  * "{g X}" a glyph by number. Returns the characters it takes, 0 when "at"
  * starts none (and is then read as letters); its bytes go to out. */
 static size_t text_code(const char *at, unsigned char out[3], int *bytes, int *letters)
@@ -495,9 +495,9 @@ static const char *const attribute_names[] = {"Light", "Dark", "Earth", "Water",
 /* The frames, in the order of their palettes (CARD_FRAME_*); "type" is the
  * card's own type's again. */
 static const char *const frame_names[] = {"Monster", "Magic", "Trap", "Ritual", "Purple", "Orange", "Type"};
-/* The same frames by the colour they are: Gold, Green, Pink and Blue are
+/* The same frames by the color they are: Gold, Green, Pink and Blue are
  * Monster, Magic, Trap and Ritual (the disc's own labels for them). */
-static const char *const frame_colour_names[] = {"Gold", "Green", "Pink", "Blue"};
+static const char *const frame_color_names[] = {"Gold", "Green", "Pink", "Blue"};
 
 static int same_words(const char *a, const char *b)
 {
@@ -1335,7 +1335,7 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     if (Json_Member(entry, "frame")) {
         value = choice(Json_Member(entry, "frame"), frame_names, CARD_FRAME_COUNT + 1);
         if (value < 0 || value > CARD_FRAME_COUNT) {
-            value = choice(Json_Member(entry, "frame"), frame_colour_names, 4);
+            value = choice(Json_Member(entry, "frame"), frame_color_names, 4);
             if (value >= 4) value = -1;
         }
         if (value < 0 || value > CARD_FRAME_COUNT) {

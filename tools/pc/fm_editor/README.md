@@ -317,12 +317,12 @@ mod's `all` rule, or the disc's price if there is none. Unedited percentage
 prices stay as percentages. Added cards use a default price of 999999 and
 stable identities in the `passwords` table.
 
-**Frame**: the colour of the card's frame (**By type**, or **Monster
+**Frame**: the color of the card's frame (**By type**, or **Monster
 (gold)**, **Magic (green)**, **Trap (pink)**, **Ritual (blue)**, **Purple**
 or **Orange** whatever its type, or **Type, never orange**), with a swatch
 of it; the card view, the Library and the duel draw it
-([frame colour](../../../notes/more-cards.md#frame-colour)). A mod may write
-the colour (`"Gold"`) or the disc's name (`"Monster"`); the editor reads both
+([frame color](../../../notes/more-cards.md#frame-color)). A mod may write
+the color (`"Gold"`) or the disc's name (`"Monster"`); the editor reads both
 and writes the disc's, which older builds of the game read too.
 
 **Tags**: words a [card layout](../../../notes/modding.md#frame-styles-and-the-rules-that-pick-them)
@@ -378,16 +378,16 @@ effects is drawn with the orange frame while its **Frame** is **By type**
 
 ![An effect: +300 ATK and DEF for each face-up Dragon on its owner's field](../../../docs/screenshots/fm-editor/monster-effect.png)
 
-#### Icons and colours in card text
+#### Icons and colors in card text
 
 The card text box shows an icon as the icon itself, two letters wide as the
-game sets it, and a colour as a thin bar of it, the letters after it in that
-colour (darker on the light look, so they read). Its lines break where the
+game sets it, and a color as a thin bar of it, the letters after it in that
+color (darker on the light look, so they read). Its lines break where the
 game's do (twenty letters, an icon two, a word kept whole; a word too long
 for the box cut at its edge).
 
 Beside it is the card view's **text box** as the game draws it: its stone and
-frame off your disc and the card text in the game's letters and colours,
+frame off your disc and the card text in the game's letters and colors,
 following what you type. **Fit** (the default) makes it as tall as the card
 text box, so the form keeps its height; 1x, 2x and 3x are the game's pixels. Its language list has the port's translations found
 beside the editor or the game (`languages/*.txt`): their own layout, type and
@@ -400,13 +400,13 @@ is saved is still the codes: a code typed or pasted in full becomes its
 picture, and copying puts the codes on the clipboard. Without the game files
 the codes stay as written.
 
-Right-click the card text box for **Insert icon...** and **Text colour**.
+Right-click the card text box for **Insert icon...** and **Text color**.
 **Insert icon...** opens a window of every icon, as the game draws it, by
 group (the monster types, the card kinds, the guardian stars, the buttons);
 it scrolls when the screen is too short for it. A click puts the icon in at
 the cursor as its code (`{f8 0B 00}` the Dragon) and closes it. **Text
-colour** lists white, yellow, blue, green, grey, orange and red, each with
-its colour; a colour with text selected colours the selection and goes back
+color** lists white, yellow, blue, green, grey, orange and red, each with
+its color; a color with text selected colors the selection and goes back
 to white after it, without one it starts at the cursor. The codes are listed
 in [card text codes](../../../notes/more-cards.md#card-text-codes); an icon
 takes two letters of the line. **Tools > Card text preview** draws them.
@@ -590,8 +590,8 @@ marked (the middle one: a wide picture loses its sides), and what the game
 draws, worked out as the game does: **In game (1x)** is the 48x48 the grid
 shows at View > Internal 1x, and **Internal 2x+** what it shows above that.
 A picture bigger than 48x48 is drawn from the file itself: averaged to
-48x48 at 1x in the console's colours, at its own resolution above. One of
-48x48 or less is made into the console's 64-colour portrait and that is
+48x48 at 1x in the console's colors, at its own resolution above. One of
+48x48 or less is made into the console's 64-color portrait and that is
 what shows, at any scale.
 
 An added duelist's deck pool and drop pools are edited as a disc duelist's
@@ -634,7 +634,7 @@ your own disc (the title's pictures are in `DATA/SU.MRG`, the duel's in
 the window leaves room for (a whole number of times the game's 320 x 240, so
 its pixels stay sharp), with what the mod changes on it. Beside it is the
 page's list, grouped, a dot on what the mod changes (in the editor's changed
-colour); under the list, what the chosen thing is and its form. A picture is
+color); under the list, what the chosen thing is and its form. A picture is
 moved by dragging it -- its place in the form follows as you drag -- or by
 the arrow keys once the picture has been clicked (Shift: 8 pixels); under
 the picture is where the mouse is, in the game's pixels. On the Duel page
@@ -650,7 +650,7 @@ held down: before and after. **Revert to retail...** puts the whole tab back
 textures and tints, and the PNGs in `ui/` nothing names any more), **Revert
 page** one page; both say what is lost first, and **Edit > Undo** brings it
 back in one step. A thing's own **Back to the game's** puts that one back. A
-colour that multiplies (every "Colour" but a line of words' and the colour
+color that multiplies (every "Color" but a line of words' and the color
 under the background) can only darken; a bright one says so. Settings the
 game does not quite follow are noted in the form, only while they are set (a
 life-point label with a letter outside plain A-Z, digits and signs shows COM
@@ -662,13 +662,13 @@ that the game leaves out).
 ![The UI tab's Title screen page, a line of words added](../../../docs/screenshots/fm-editor/ui-title.png)
 
 * **Title screen**: the **Background** (click the picture where nothing
-  else is, or its row): **The game's wall** or not, its **Wall colour**, the
-  **Dark-to-light shade**, a **Colour under it**, a **Picture** of your own
+  else is, or its row): **The game's wall** or not, its **Wall color**, the
+  **Dark-to-light shade**, a **Color under it**, a **Picture** of your own
   over the whole screen, how far a menu dims it (**Menu dimming**); and,
   under **Start-up**, **Skip the intro movie**, **PUSH START BUTTON first**,
   the screen's **Song** and **Intro again after** (seconds idle, 0 never).
   The **Logo**, **Copyright line** and **PUSH START BUTTON**: moved,
-  coloured, shown always or only with or without a menu, a PNG in their
+  colored, shown always or only with or without a menu, a PNG in their
   place, hidden (a dashed box then, to choose it again). **+ Picture** adds
   a picture of your own (up to eight), **+ Words** a line of words (up to
   sixteen; the port draws these over the picture, in its own letters); each
@@ -685,7 +685,7 @@ that the game leaves out).
   or a **Picture** (**PNG...**, and **With cursor...** for one while the
   cursor is on it), what it **Does** (an entry's choice, back, a notice,
   quit, the debug menu, a code mod's event, nothing; only what that menu
-  allows), its **Colour** and its place (**Middle at**; **In line** puts it
+  allows), its **Color** and its place (**Middle at**; **In line** puts it
   back in the column). **Menu background**, the list's first row, is the
   menus' own background, as the title's. **Spacing**, under the picture, is
   how far apart they stand at 100 %. Each button has a **Size**, 25 to 400 %
@@ -701,11 +701,11 @@ that the game leaves out).
 
 * **Duel**: the life-point panel's two halves (**Opponent's LP**, **Your
   LP**: each with its digits; **Words** in place of COM or YOU, the
-  **Digits**' colour), the **FIELD box**, the **Field cursor**, the **Card
-  bar** (its colours or a picture), its parts (**Name**, **ATK**, **DEF**,
+  **Digits**' color), the **FIELD box**, the **Field cursor**, the **Card
+  bar** (its colors or a picture), its parts (**Name**, **ATK**, **DEF**,
   **Type icon**, **Guardian stars**, **Magic/trap word**: each dragged on
-  the bar, coloured or hidden, the name's letters spread or drawn together)
-  and the **Hand cursor**. Each has a **Colour** (multiplied: white leaves it
+  the bar, colored or hidden, the name's letters spread or drawn together)
+  and the **Hand cursor**. Each has a **Color** (multiplied: white leaves it
   as it is), a **Picture** of your own and **Hidden**; the cursors are
   **Moved by** any way and sized 25 to 400 % about their middle. The game
   slides the life-point halves and the FIELD box off the side of the screen
@@ -717,14 +717,14 @@ that the game leaves out).
   where it is, at its size (its parts and the hand are drawn over it): no
   move, no size, the pointer shows it cannot move. **Back to the game's**
   for one, **Revert page** for all. **Opponent's turn** shows the panel in
-  the other turn's colours; **Bar shows** a monster or a magic card on the
+  the other turn's colors; **Bar shows** a monster or a magic card on the
   bar. Behind them is the duel's screen as it opens, as the game draws it:
   the board (the Duel board page's 3D board from the duel's own camera,
   with the mod's board), the hand's five cards in their frames with ATK and
   DEF, and the card bar's name, stats and icons for the card the cursor is
   on.
 
-Colours are the game's: a tint multiplies, so it can only darken what is
+Colors are the game's: a tint multiplies, so it can only darken what is
 there. The pictures are the console's size here; the game draws a PNG of
 yours at up to four times that above the console's resolution.
 
@@ -766,10 +766,10 @@ Beside them the chosen texture as the mod has it, its size and:
 used as it is up to 4x, the game drawing it sharp at Internal 2x and 4x and
 averaged to the texture's own texels at 1x; another shape is stretched to
 fit), **Export game's...** (the disc's texture as a PNG to paint over),
-**Revert**, and a **Tint** of the game's own picture (each colour of its
+**Revert**, and a **Tint** of the game's own picture (each color of its
 palette multiplied: exact at every size; a replaced texture keeps its own
-colours, and the tint shows as the palette reads it back, #60FF60 perhaps as
-#60FF7F, the same colours). **All seven fields** makes Replace, Tint and
+colors, and the tint shows as the palette reads it back, #60FF60 perhaps as
+#60FF7F, the same colors). **All seven fields** makes Replace, Tint and
 Revert apply to that texture on every field (one PNG for them all).
 **Revert page** puts every field's board back. A ⚠ marks what to know about
 the texture: the centre strip drawn twice, the wings apart, the trim drawn
@@ -821,7 +821,7 @@ places: 0-9 the world map's sites, 10-15 the town's, named as the game
 names them (strings `0x8350` + place; two town places read "before /
 after" when their label changes once the tournament is over). The list
 groups them under **World map** and **Town**, a changed one in the
-changed colour; **Revert every place** under it puts the whole map back. A
+changed color; **Revert every place** under it puts the whole map back. A
 place is edited as the screen the game shows there:
 
 * **This place**: the place's screen, as big as the interface size allows
@@ -869,7 +869,7 @@ place is edited as the screen the game shows there:
   open** (the record's gate); and **Compare with a screenshot...** (a
   screenshot of the game at this place replaces the drawn map for this
   camera while the editor is open). A number that differs from the disc's
-  has its caption in the changed colour. Show advanced only shows: what
+  has its caption in the changed color. Show advanced only shows: what
   the mod writes is the same either way.
 
 ![All routes: every place and where its arrows lead](../../../docs/screenshots/fm-editor/map-routes.png)
@@ -885,7 +885,7 @@ the map's PNGs under `textures/map/`); This place and All routes draw them
 at once:
 
 * **Sprites**: the map's one strip of sprites (WA sector `+141` of each
-  package, 256x256 at four bits, drawn through four 16-colour palettes:
+  package, 256x256 at four bits, drawn through four 16-color palettes:
   0 the name panel, 2 the marker, 3 the arrows; a dump shows palette 1
   read too). **Import picture...**
   for one sprite (the marker, the name panel, an arrow) pastes it into every
@@ -915,7 +915,7 @@ at once:
   the texture's, and kept at up to 4x.
 
 At the console's resolution a bigger picture is averaged down to the
-texture (the game's 4 or 8 bits are gone: any colour goes); Internal 2x
+texture (the game's 4 or 8 bits are gone: any color goes); Internal 2x
 and 4x draw it at its own resolution. The game reads a pack at start, like
 the table, so the mod needs a restart.
 
@@ -949,7 +949,7 @@ field.
 
 The stars (`guardian_stars`, [Guardian Stars](../../../notes/modding.md#guardian-stars-names-icons-new-stars-and-matchups)):
 the list of stars with a name and an icon each (**Import icon (PNG)...**,
-with a preview; the game makes it 16x16 in the disc's stars' colours;
+with a preview; the game makes it 16x16 in the disc's stars' colors;
 **Remove icon**), **Add star** for 11 to 15 (a card holds its stars in 4
 bits, so fifteen at most; **Remove** takes an added one away, **Reset** gives
 a disc star back its name and icon), and the full grid of **Matchups (row
@@ -965,7 +965,7 @@ Fire monster's first star is Fire), or one star for all, **(none)** included
 (a first star of none leaves the second as the card's one star, as the game
 reads it; both none, no star), over a filter of cards like Bulk fusions',
 with a preview and **Undo last batch**. **Show advanced**: a name per
-language (`fr=Feu, de=Feuer`), an icon's colours (`game` or its own), and
+language (`fr=Feu, de=Feuer`), an icon's colors (`game` or its own), and
 what happens at a summon (`ask`, `first`, `best`). The Cards tab's star
 lists show the mod's stars as they are named here.
 
@@ -1003,8 +1003,8 @@ weight typed, **Tier**/**Set** moves the selected rows, **Weight**/**Set**,
 
 **Show advanced** (closed at first):
 
-* **Tiers**: name, odds (and their share), label (`"ULTRA RARE!"`), colour
-  (the game's text colours, 0-15), sound, reveal and how many cards; **Add
+* **Tiers**: name, odds (and their share), label (`"ULTRA RARE!"`), color
+  (the game's text colors, 0-15), sound, reveal and how many cards; **Add
   tier**, **Edit...**, **Remove**, **Up**/**Down**: the order is the rarity,
   commonest first. A one-pool pack becomes a pack of tiers with its pool the
   tier `cards`. A renamed tier is renamed in the slots, guarantee and pity.
@@ -1149,7 +1149,7 @@ Choose **Monster (gold)**, or **Type, never orange** for its type's frame.
 
 **The card text shows codes such as `{f8 0B 04}` in the game.** The game is
 older than the codes: update it. The codes are the editor's icons and
-colours ([card text codes](../../../notes/more-cards.md#card-text-codes)).
+colors ([card text codes](../../../notes/more-cards.md#card-text-codes)).
 
 **I changed what a card is (a magic card made a monster, say) and the CPU
 misbehaves.** Update the game: builds up to v0.2.0 had the CPU look for
@@ -1200,7 +1200,7 @@ What it reads (layouts in `gamedata.py`):
 | equips, fusions, rituals | `WA_MRG.MRG`, the duel package at `0xB63000` (+0x22000, +0x24800, +0x34800) |
 | deck and drop pools | `WA_MRG.MRG` `0xE99800 + 0x1800 * opponent` |
 | the Password screen's passwords | `WA_MRG.MRG` `0xFB9800 + 8 * card`: price, then the password as BCD digits (`0xFFFFFFFE` for none) |
-| the text font and its colours (the card-text preview only) | `WA_MRG.MRG` sector `0x1690` (16 sectors, the 8x12 font's page) and the first 32 bytes of sector `0x16C2`, as `src/pc/cards/font_art.c` reads them |
+| the text font and its colors (the card-text preview only) | `WA_MRG.MRG` sector `0x1690` (16 sectors, the 8x12 font's page) and the first 32 bytes of sector `0x16C2`, as `src/pc/cards/font_art.c` reads them |
 | the campaign map (the Map tab) | `WA_MRG.MRG`, the two overworld packages at sectors 8153 (before the coup) and 8311 (after): the module's first word `0x14`, the table at `+0x11A8` (16 x 66 bytes), the display resource bank at sector `+140`, the sprite strip `+141` (16 sectors, 256x256 at four bits) and its palettes `+157`; the terrain model at `+6` (134 sectors, an HMD) |
 
 The 15 "glitch" fusions the game's table reader makes by reading past an odd
@@ -1364,7 +1364,7 @@ record are shown as retail fusions and marked.
   `+0x7F00 + 0x20 * row` of the phase, the walls' from `+0xF120`), so no
   two entries share a word and each shows at Internal 1x too. A tint is a
   `data` patch of that palette in `\DATA\WA_MRG.MRG;1`, after the map's:
-  each colour times the tint, the clear colour kept, one that becomes black
+  each color times the tint, the clear color kept, one that becomes black
   written as the opaque black the packs use (`0x8000` with the
   semi-transparency bit, `0x0001` without). Opening a mod takes these
   entries and patches back into the board; a patch of a palette that no
@@ -1381,7 +1381,7 @@ record are shown as retail fusions and marked.
   averages it down, Internal 2x and 4x draw its detail. A card the mod
   adds has its base's place on the disc, so a pack cannot tell the two
   apart: its picture and thumbnail are the entry's `art` and `thumbnail`
-  PNGs (under `art/`), made into 102x96 and 40x32 at 255 and 63 colours when
+  PNGs (under `art/`), made into 102x96 and 40x32 at 255 and 63 colors when
   the game starts; a bigger one is drawn at its own resolution at Internal
   2x and 4x (`cards.c`, `add_full_picture`). The name plate of any
   card is the entry's `title` PNG (dark ink on white; a retail card gets a
@@ -1429,7 +1429,7 @@ opens and saves like any other:
 | Changed in the modified game | Becomes |
 |---|---|
 | card stats, names, texts; fusions, equips, rituals; deck and drop pools | `cards`, `fusions`, `equips`, `rituals`, `decks`, `drops`. A name or text that differs only by spaces at line ends stays retail's. Drop pools a mod stores encoded (the TeaOnline drop tool writes `bias + 8 * weight + noise` and makes the draw at `0x80021860` jump to code that undoes it) are decoded as `max(0, (raw - bias) >> shift)`, with the bias and shift read from that code's `addiu` and `sra`, or, when the code is not recognized, the values that make every such pool add up to 2048. Any other pool that does not add up to 2048 is scaled to 2048 keeping each card's share. The report says which |
-| other text: dialogue, menus, types, stars, duelists, places | `text.txt`, a partial [text listing](../../../notes/translation.md) (a bank whose changed strings jump is written whole; a bank that is the mod's code is left out and reported). Texts the mod left empty go there too (as a bare `{end}`), and so do card names and texts with colour or icon codes (as `{f8 0A 05}...`), as the import finds them; the editor shows them and writes an edited one to `cards[]`, whose `name` and `description` take the codes too. The name entry's strings (`0xF0`-`0xFF`) stay retail's |
+| other text: dialogue, menus, types, stars, duelists, places | `text.txt`, a partial [text listing](../../../notes/translation.md) (a bank whose changed strings jump is written whole; a bank that is the mod's code is left out and reported). Texts the mod left empty go there too (as a bare `{end}`), and so do card names and texts with color or icon codes (as `{f8 0A 05}...`), as the import finds them; the editor shows them and writes an edited one to `cards[]`, whose `name` and `description` take the codes too. The name entry's strings (`0xF0`-`0xFF`) stay retail's |
 | other bytes of `WA_MRG.MRG` (pictures, passwords and costs, portraits...) | `data` patches; a run longer than 4 KB becomes whole sectors in `data/`, replaced at the retail disc's LBA. Past 256 patches or 16 sector runs (the port holds 1024 and 64 for all mods together), or when the file's size differs, the whole file is replaced. The tables `mod.json` carries (fusions, equips, rituals, pools) are always retail's in what `data` carries, and so are starter decks written as counts of 40 and the programs the port runs its own code for (Free Duel, name entry, password, overworld), all reported |
 | code and tables of the executable (AI parameters, field bonuses, equip bonuses, the draw...) | nothing, except the rules below: the port runs the executable's code natively. Listed in the report by RAM address, with the `j`/`jal` instructions that reach each place; changed bytes of the text banks that the text listing does not read (a mod's code or tables in the banks' free space, text left over) are listed too |
 
@@ -1452,7 +1452,7 @@ mod's own code and tables (the addresses of its code move from mod to mod):
 | `DuelScene_UpdateCardPlacement` walks a table of bonuses (A7) | `"bonus"` on the equips' entries |
 
 What has no key (the 30000 cap, terrains past six or by attribute, each
-opponent's home field, the AI's commands, the frame colour, monster effects,
+opponent's home field, the AI's commands, the frame color, monster effects,
 equips with an effect of their own) is listed in the report and in the
 imported mod's `README.txt`, in the game's terms.
 
@@ -1484,7 +1484,7 @@ listed in the report, so check the result in the game before sharing it.
 
 Listed in the report and left out, as the port has no data key for them:
 scripted monster and magic effects (`on_flip`, `battle`, `effect`...),
-card and name colours, the nine AI bytes, scripted rewards and StarChip
+card and name colors, the nine AI bytes, scripted rewards and StarChip
 rules, the recomp's card shop and its settings, and `dialogue.txt`, whose
 code numbering is the recomp's own (translate with `text_listing.py`).
 The importer was written from the packages' own file layout; no code of the
@@ -1535,15 +1535,15 @@ into the mod. `card_text.py` does the work:
   in the game with a test text, in Build Deck's card view, whose box has
   255 glyph sprites; the duel's viewer has 160, so a long text may stop
   sooner there). The preview marks each: the 9th row on the
-  frame's colour, the rows the game never shows dimmed on grey, a red tick
+  frame's color, the rows the game never shows dimmed on grey, a red tick
   right of a row the box cut mid-word, and a red box for a character with
   no retail letter (the port sets those from a font); an accented letter is
   drawn plain (the port draws its mark on).
 * **Font**, at 1x to 4x:
-  * *Retail font*: the game's own 8x12 font and text colours, read off the
+  * *Retail font*: the game's own 8x12 font and text colors, read off the
     player's disc each time (nothing of it is kept or saved), each texel
     made `scale` pixels square. At 1x the letters are the game's pixel for
-    pixel (the panel behind them is a flat colour, not the game's stone).
+    pixel (the panel behind them is a flat color, not the game's stone).
   * *HD text: the port's face*: what Video > HD text draws at Internal 2x-4x,
     set in the face the port uses when no mod gives one (on Windows the
     first of Segoe UI, Arial and Tahoma in the Fonts folder; elsewhere
@@ -1565,7 +1565,7 @@ into the mod. `card_text.py` does the work:
   and fills them in plain Python (non-zero winding, 4 sub-rows a pixel),
   in place of FreeType, so the result is close to the game's, not identical:
   against the game's own 4x picture about half the text's pixels are the
-  same colour and 96-97% within one or two steps of the palette. A face
+  same color and 96-97% within one or two steps of the palette. A face
   whose lines cannot be measured (no x-height, no descenders) is not used by
   the port, which keeps the retail letters; the preview says so and does too.
 
@@ -1647,7 +1647,7 @@ corner triangles on every field) and plays it at Internal 1x and 2x with
 and without the mod: duels begun on Normal, Forest and Wasteland, the
 camera's sweep round the board, Forest and Wasteland played mid-duel, a
 duel to its end, the effect bank still native, and the frames with the mod
-off as with no mods at all; each picture is checked by its colours.
+off as with no mods at all; each picture is checked by its colors.
 `editor_menu_runtime.py` sizes the menus' buttons through the Menus page
 (the game's entries, words and pictures, bigger and smaller, All buttons)
 and plays them at Internal 1x and 2x, 4:3 and widescreen: the cursor on

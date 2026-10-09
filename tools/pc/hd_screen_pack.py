@@ -13,7 +13,7 @@ rectangles of the reading), and how each reading is enlarged:
           a piece the game cuts out on its own (cut_stands_out, from
           upscale_pack.py) is then redone alone, so its edge rows are not
           its sheet neighbours'.
-  pixel   few-colour UI art (icons, symbols, boxes): xBR
+  pixel   few-color UI art (icons, symbols, boxes): xBR
           (ffmpeg's xbr filter), which keeps every shape and only rounds
           the steps. Each opaque region of the reading is done alone.
   tile    a picture the game repeats (a background tile): the model on
@@ -29,7 +29,7 @@ its `part` is written into each entry as the HD mod's setting
 (hd_assets_pack.py).
 
 Every result is then pulled back to the original: each 4x4 block's average
-is made the texel it came from (a few rounds of back-projection), so colours
+is made the texel it came from (a few rounds of back-projection), so colors
 and shading stay the game's and only the detail is new. Transparency keeps
 the texels' own edges, except in regions no bigger than 40 pixels (icons,
 arrows), whose outline is smoothed with xBR and anti-aliased. Only the regions a piece
@@ -42,7 +42,7 @@ after the rest they are set anew in a bold sans (--font; by default the one
 HD text uses), each fitted to the game's letters and drawn in the reading's
 own palette entries: `shadow` style, a word with its shadow a texel down
 and right (over clear texels when `background` is entry 0, with an `edge`
-colour round the fill if given); `outline` style, one character (or word,
+color round the fill if given); `outline` style, one character (or word,
 when `text` is a list) a cell inside a texel of outline;
 `strip` style, a word the game cuts into pieces drawn side by side, set once
 across them and anti-aliased from the background to the fill. A label names
@@ -171,7 +171,7 @@ def readable(path):
 
 
 def fill_transparent(rgb, mask):
-    """Transparent texels take the colour of the nearest opaque ones, so a
+    """Transparent texels take the color of the nearest opaque ones, so a
     scaler sees no black or magenta round a shape."""
     rgb, known = rgb.astype(np.float64), mask.copy()
     while not known.all() and known.any():
@@ -352,7 +352,7 @@ def build_unique(readings):
             jobs.append((rgb, "edge"))
     for (reading, x, y, w, h, region, rgb), big in zip(cuts, SCALER.models_run(jobs)):
         reading.out[y * S:(y + h) * S, x * S:(x + w) * S, :3] = back_project(big, rgb, region)
-    # few-colour pieces on a painted sheet (an icon beside a frame): xBR, each region alone
+    # few-color pieces on a painted sheet (an icon beside a frame): xBR, each region alone
     for reading in readings:
         for x, y, w, h in reading.pixel:
             labels, count = regions(reading.mask[y:y + h, x:x + w])
@@ -422,17 +422,17 @@ def indices(data, entry, rect):
     return out
 
 
-def colours(data, clut, entries=16):
+def colors(data, clut, entries=16):
     return np.frombuffer(b"".join(extract_images.expand(c) for c in extract_images.read_palette(data, clut, entries)),
                          np.uint8).reshape(entries, 4).astype(np.float64)
 
 
-def paint(picture, cover, colour):
-    """`colour` over the picture (straight alpha) as much as `cover`."""
-    a = cover[..., None] * colour[3] / 255
+def paint(picture, cover, color):
+    """`color` over the picture (straight alpha) as much as `cover`."""
+    a = cover[..., None] * color[3] / 255
     under = picture[..., 3:4] / 255
     alpha = a + under * (1 - a)
-    rgb = (colour[:3] * a + picture[..., :3] * under * (1 - a)) / np.maximum(alpha, 1e-6)
+    rgb = (color[:3] * a + picture[..., :3] * under * (1 - a)) / np.maximum(alpha, 1e-6)
     picture[..., :3] = np.where(alpha > 0, rgb, 0)
     picture[..., 3:4] = alpha * 255
 
@@ -447,7 +447,7 @@ def draw_label(label, data, entry, reading, font_file):
     the transparent entry 0. `outline`: characters, or words when `text` is a
     list, one per cell, in `fill` inside a texel of `outline`, each as tall
     as the game's."""
-    palette = colours(data, entry["clut_offset"], 256 if entry["bpp"] == 8 else 16)
+    palette = colors(data, entry["clut_offset"], 256 if entry["bpp"] == 8 else 16)
     if label["style"] == "strip":
         # A word the game cuts into pieces drawn side by side (MEAD + OW),
         # some through a letter: set once across the pieces laid in a row,

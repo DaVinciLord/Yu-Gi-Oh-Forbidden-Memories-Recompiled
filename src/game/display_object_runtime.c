@@ -27,7 +27,7 @@
  * packet is a libgpu primitive: the two bytes each one writes into the tag
  * word are setlen and setcode, 8 and 0x38 here, which is setPolyG4, and 12
  * and 0x3C in DisplayObject_RenderTexturedGouraudQuadList, which is setPolyGT4. The offsets agree member by
- * member -- each x/y pair lands on xN/yN, each colour word on rN, and in the
+ * member -- each x/y pair lands on xN/yN, each color word on rN, and in the
  * textured form each halfword on uN -- so the cursor is typed as the
  * primitive. The constants stay in `eight`/`hi` rather than setPolyG4's
  * literals because retail holds them in s8/s7 across the loop.

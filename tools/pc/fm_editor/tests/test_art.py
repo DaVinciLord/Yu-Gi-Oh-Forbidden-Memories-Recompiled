@@ -14,7 +14,7 @@ from pathlib import Path
 from fm_editor import art, manifest, pngio, validate
 from fm_editor.model import Project
 from fm_editor.pngio import Image
-from fm_editor.tests.fixtures import art_colour
+from fm_editor.tests.fixtures import art_color
 from fm_editor.tests.test_data import fixture
 
 
@@ -28,9 +28,9 @@ def chunk(kind, body):
     return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body) & 0xFFFFFFFF)
 
 
-def png(width, height, colour, bits, rows, extra=b"", interlace=0):
+def png(width, height, color, bits, rows, extra=b"", interlace=0):
     """A PNG from already-filtered row data (each row its filter byte first)."""
-    return (pngio.SIGNATURE + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, bits, colour, 0, 0, interlace)) +
+    return (pngio.SIGNATURE + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, bits, color, 0, 0, interlace)) +
             extra + chunk(b"IDAT", zlib.compress(b"".join(rows))) + chunk(b"IEND", b""))
 
 
@@ -118,11 +118,11 @@ class DiscArtTest(unittest.TestCase):
         wa = fixture().wa
         picture = art.disc_image(wa, 2, "art")
         self.assertEqual(picture.size, (102, 96))
-        self.assertEqual(picture.pixel(0, 0), expand(art_colour(2, 1 + 2 % 255)))
-        self.assertEqual(picture.pixel(5, 3), expand(art_colour(2, 1 + (5 + 6 + 2) % 255)))
+        self.assertEqual(picture.pixel(0, 0), expand(art_color(2, 1 + 2 % 255)))
+        self.assertEqual(picture.pixel(5, 3), expand(art_color(2, 1 + (5 + 6 + 2) % 255)))
         thumb = art.disc_image(wa, 2, "thumbnail")
         self.assertEqual(thumb.size, (40, 32))
-        self.assertEqual(thumb.pixel(4, 1), expand(art_colour(3, 1 + (12 + 1 + 2) % 63)))
+        self.assertEqual(thumb.pixel(4, 1), expand(art_color(3, 1 + (12 + 1 + 2) % 63)))
         inks = art.disc_plate_inks(wa, 2)
         self.assertEqual(len(inks), 96 * 14)
         self.assertEqual(inks[:4], [0, (0 + 2) % 8, 1, (1 + 2) % 8])

@@ -17,7 +17,7 @@ from tkinter import messagebox, ttk
 
 from . import board_art as ba, board_model as bm, file_dialogs, pngio
 from .pngio import Image
-from .ui_tab import ColourButton
+from .ui_tab import ColorButton
 from .widgets import px, ui_font
 
 FLOOR_ITEM = "floor"            # the whole floor, one picture
@@ -149,7 +149,7 @@ class BoardPage(ttk.Frame):
         tints = ttk.Frame(side)
         tints.pack(anchor="w", pady=(8, 0))
         ttk.Label(tints, text="Tint").pack(side="left", padx=(0, 8))
-        self.tint = ColourButton(tints, self.set_tint)
+        self.tint = ColorButton(tints, self.set_tint)
         self.tint.pack(side="left")
         self.all_fields = tk.BooleanVar(value=False)
         ttk.Checkbutton(side, text="All seven fields", variable=self.all_fields).pack(anchor="w", pady=(8, 0))
@@ -524,7 +524,7 @@ class BoardPage(ttk.Frame):
             widget.configure(cursor="arrow" if replaced else "hand2")
         self.tint.reset.state(["disabled"] if replaced or self.tint.value == ba.WHITE else ["!disabled"])
         if replaced:
-            warnings.append("Replaced: the picture has its own colours, so the tint is off.")
+            warnings.append("Replaced: the picture has its own colors, so the tint is off.")
         self.revert_button.state(["!disabled"] if replaced or any(k in st.tints for k in keys) else ["disabled"])
         self.warnings.configure(text="\n".join("⚠ " + w for w in warnings))
         self.loading = False

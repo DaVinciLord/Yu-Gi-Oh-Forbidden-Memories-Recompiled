@@ -4,7 +4,7 @@
 /* Initialized data at 0x800915E8 through 0x800916E0, previously a generated
    blob (#2602).
 
-   model_subdivided_effect.c reads D_800915E8 as three six-byte colour
+   model_subdivided_effect.c reads D_800915E8 as three six-byte color
    channels followed by signed height/radius minima and growth/fade
    durations. The four-byte element view remains the storage owner; the
    consumer describes the measured 28-byte record locally.
@@ -13,10 +13,10 @@
    D_80091604 is stored as the ModelDiscEffectConfig record it reads.
    func_8006CD78.c, which reads D_80091610 and D_800916D4, is matching C as
    well. It reads
-   D_800916D4 as three ring colours stored a channel at a time
+   D_800916D4 as three ring colors stored a channel at a time
    (ModelBurstPalette in model_burst_effect.h), and the head of D_80091610 as
    one 28-byte image record (ModelBurstImage): a pixel mode and the
-   frame-buffer rectangles of the image and its colour table. Only that first
+   frame-buffer rectangles of the image and its color table. Only that first
    record is ever read, so the storage keeps its flat halfword view.
 
    The other element widths are the ones the extractor assigned from the

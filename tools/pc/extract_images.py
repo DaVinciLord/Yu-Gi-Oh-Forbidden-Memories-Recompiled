@@ -78,13 +78,13 @@ def write_png(path: str, width: int, height: int, rgba: bytes) -> None:
         handle.write(chunk(b"IEND", b""))
 
 
-def expand(colour: int) -> bytes:
-    """A 15-bit VRAM word as RGBA; 0 is the transparent colour."""
-    if colour == 0:
+def expand(color: int) -> bytes:
+    """A 15-bit VRAM word as RGBA; 0 is the transparent color."""
+    if color == 0:
         return b"\x00\x00\x00\x00"
     # As the picture expands a word (soft_gpu.c, gl_picture.c): a pack made
     # of these PNGs as they are draws exactly what the disc's words draw.
-    r, g, b = colour & 0x1F, (colour >> 5) & 0x1F, (colour >> 10) & 0x1F
+    r, g, b = color & 0x1F, (color >> 5) & 0x1F, (color >> 10) & 0x1F
     return bytes((r << 3 | r >> 2, g << 3 | g >> 2, b << 3 | b >> 2, 255))
 
 
@@ -298,7 +298,7 @@ class Extractor:
                        f"card {card} strip below")
             self.image(WA, base + 0x2AE0, 0x08, 0x58, 8, clut, f"cards/{stem}.side.png",
                        f"card {card} strip beside")
-            # The 40x32 thumbnail with its 64-colour palette, 0x580 bytes at
+            # The 40x32 thumbnail with its 64-color palette, 0x580 bytes at
             # +0x2AE0 of the record and again as the card's own sector n-1
             # (the first 722 sectors), which the duel reads for the hand
             # (Duel_RequestCombinedDeckData).
@@ -319,7 +319,7 @@ class Extractor:
     # from each loader's stage callback (notes/mrg-files.md and the sources
     # named), and the readings dumps have shown: (bpp, palette offset).
     # A palette offset is the palette block's plus row * 0x200 plus, at
-    # 4 bpp, the 16-colour CLUT's column * 0x20.
+    # 4 bpp, the 16-color CLUT's column * 0x20.
     def sheets_family(self) -> None:
         def sheet(archive: str, base: int, sectors: int, x: int, y: int, stem: str, alias: str,
                   variants: list[tuple[int, int]], group: str | None = None) -> None:
@@ -335,7 +335,7 @@ class Extractor:
         sheet(SU, 0, 64, 0x200, 0x100, "sheets/menu/a", "main menu image A", rows8(0x30000, 0, 1, 2, 3))
         sheet(SU, 64 * SECTOR, 32, 0x380, 0, "sheets/menu/b", "main menu image B", cluts4(0x30000, 0x800))
         # Main_LoadBootPackageStage: WA 0xB48000, 48 sectors at (640, 0); palette 256x8 at (512, 248)
-        # from 0xB60000 and the eight colour ramps 16x8 at (640, 232) from 0xB61000.
+        # from 0xB60000 and the eight color ramps 16x8 at (640, 232) from 0xB61000.
         sheet(WA, 0xB48000, 48, 0x280, 0, "sheets/boot/a", "boot UI image",
               cluts4(0xB60000, 0, 0x40, 0x80, 0x200, 0x220, 0x240, 0x260, 0x280, 0x2A0, 0x2C0, 0x2E0, 0x300, 0x320, 0x340, 0x360, 0x3E0, 0x420, 0x440, 0x460, 0x500, 0x520, 0x540, 0x560, 0x580, 0x5A0, 0x5E0, 0x600, 0x620,
                      0x640, 0x660, 0x680, 0x6A0, 0x6C0, 0x6E0, 0x820, 0x840, 0x880, 0x9A0, 0x9C0, 0x9E0, 0xE40)
@@ -350,7 +350,7 @@ class Extractor:
         sheet(WA, 0xF2B800, 16, 0x340, 0, "sheets/campaign/ui", "campaign UI", cluts4(0xF33800, 0, 0x20))
         # FreeDuel_LoadPackageStage: 32 sectors at (0, 256); palette 256x4 at (0, 240) from 0xF54000.
         # The screens below have not been dumped yet: their readings are the first palette row at
-        # 8 bpp and the first 16-colour palette at 4 bpp, a guess until a dump (--variants) says.
+        # 8 bpp and the first 16-color palette at 4 bpp, a guess until a dump (--variants) says.
         sheet(WA, 0xF44000, 32, 0, 0x100, "sheets/freeduel/a", "free duel image",
               rows8(0xF54000, 0) + cluts4(0xF54000, 0))
         # NameEntry_LoadPackageStage: 48 sectors at (256, 256), 16 at (448, 256); palette 256x4 at (256, 240).
@@ -387,7 +387,7 @@ class Extractor:
         # Duel_LoadPackageStage, one record of 235 sectors per terrain from WA sector 0x16C6: phase 0
         # 64 sectors at (768, 256) with phase 1's palette 256x16 at (256, 240); phase 6 32 sectors at
         # (512, 256) with phase 5's palette 256x8 at (0, 240); phase 10 8 sectors at (832, 0); phase 12
-        # 32 sectors at (640, 256), whose 16-colour palettes are rows of the image itself (the game
+        # 32 sectors at (640, 256), whose 16-color palettes are rows of the image itself (the game
         # reads them where they landed in VRAM).
         terrains = ("normal", "forest", "wasteland", "mountain", "meadow", "sea", "dark")
         for index, name in enumerate(terrains):

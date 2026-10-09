@@ -81,7 +81,7 @@ def cover(app):
         source = app.winfo_id()
         pixmap = x.XCreatePixmap(display, source, width, height, app.winfo_depth())
         gc = x.XCreateGC(display, source, 0, None)
-        # What the window grew by (maximized) in its background colour, not
+        # What the window grew by (maximized) in its background color, not
         # black: the copy holds only what was drawn.
         red, green, blue = (value >> 8 for value in app.winfo_rgb(app.cget("background")))
         x.XSetForeground(display, gc, red << 16 | green << 8 | blue)

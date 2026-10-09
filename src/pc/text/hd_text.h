@@ -5,7 +5,7 @@
  * set in a font at that resolution instead of the retail 8x12 and 16x16
  * cells. The pictures are 4-bit indices like the cells, with the cells'
  * dark outline and their shading row by row, so they go through
- * the text's own palettes: colours, fades, flashes and semi-transparency are
+ * the text's own palettes: colors, fades, flashes and semi-transparency are
  * the game's. func_80035E20 marks the glyph primitives (HD_TEXT_MARK), and
  * only those are drawn from the pictures; a glyph no font can set (an icon)
  * stays as it was. The software picture, and 1x, never change. */
@@ -40,9 +40,9 @@ int HdText_Title(int page_x, int page_y, int u, int v, int factor, int *atlas_u,
  * the menus'), the life-point panel's LP, COM and YOU, the card kinds, the
  * FIELD box and the terrains' names, which are sprites from sheets of their
  * own, not the font's cells. A digit's picture is set in the font like a
- * glyph's, to the lines, weight and colours measured from its sheet's ten
+ * glyph's, to the lines, weight and colors measured from its sheet's ten
  * digits; the panel's is its texels made larger with the labels set anew;
- * a word's is set over its sprites in their colours. Only where the retail
+ * a word's is set over its sprites in their colors. Only where the retail
  * sheets and panel are: a sheet whose digits cannot be measured, or another
  * panel (a mod's), stays. The
  * picture of the sprite at u, v, w x h of a page (depth 0 4-bit, 1 8-bit)

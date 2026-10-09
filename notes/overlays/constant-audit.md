@@ -65,10 +65,10 @@ and in resident `card_list_render_deck_box_stats.c`. The only constant with
 that value is
 `DUEL_DISPLAY_COLOR_DIMMED` in [`../../src/game/duel_display.h`](../../src/game/duel_display.h).
 
-All three sites write a colour field — two through `*(u32 *)&obj->r` and
+All three sites write a color field — two through `*(u32 *)&obj->r` and
 `*(u32 *)&sp->r`, packing an RGB triple, and the third through
-`*(s32 *)(obj + 0xC)`, the offset documented as the colour word. So these are
-positively display-layer colour writes.
+`*(s32 *)(obj + 0xC)`, the offset documented as the color word. So these are
+positively display-layer color writes.
 
 That is precisely why the duel constant does not fit.
 `Duel_DrawLifePointsAndDeckCounts` (`src/game/duel_draw_status_numbers.c`) documents `0x404040` as the *dim* member of a
@@ -81,7 +81,7 @@ The shared grey is now named `COLOR_RGB24_DIM_GREY` in
 `src/game/color_constants.h`, alongside the active/neutral
 `COLOR_RGB24_NEUTRAL_GREY`. The duel names remain as subsystem aliases rather
 than owning the values, so unrelated display objects can use the neutral
-colour vocabulary without importing duel semantics.
+color vocabulary without importing duel semantics.
 
 ### The common bit values are unusable by value alone
 

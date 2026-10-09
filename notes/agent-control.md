@@ -363,7 +363,7 @@ CI can hold retail inputs.
   loaded again in the same game, must replay its 600 frames; it failed at
   the first before "Port: a loaded state finishes the VSync(0) it resumes
   in", and passes with it), and `x64-data-mods` (recorded with two data
-  mods, a card pack and a recoloured texture pack, made by its `mods.py`:
+  mods, a card pack and a recolored texture pack, made by its `mods.py`:
   the 64-bit build's data mods gate), `dark-hole` and `spellbinding` (the
   bolt effect, 17 and 13, which crashed the 64-bit build until its vertex
   step stopped sign-extending a guest address; recorded on 32-bit, they

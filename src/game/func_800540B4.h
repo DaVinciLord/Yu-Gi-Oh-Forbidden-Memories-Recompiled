@@ -4,7 +4,7 @@
 #include "../types.h"
 
 /* Per-frame draw pass for model slot `index` (0 and 1 are the two duel sides,
- * 2 the shared scene slot): lights, colour fade into the primitive templates,
+ * 2 the shared scene slot): lights, color fade into the primitive templates,
  * unit sort, bounding volume, ground shadow and palette flash. It returns
  * early while the slot is unloaded or fully faded out.
  *

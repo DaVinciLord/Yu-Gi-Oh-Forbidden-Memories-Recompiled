@@ -30,7 +30,7 @@ GAME_WA = ROOT / "game" / "DATA" / "WA_MRG.MRG"
 # --- the code replaced, as it was (2026-10-07) ----------------------------------------------
 
 def reference_texel(vram, tpage, clut, u, v):
-    """The colour word a polygon's texture has at u, v; None where clear."""
+    """The color word a polygon's texture has at u, v; None where clear."""
     px, py, depth = (tpage & 15) * 64, ((tpage >> 4) & 1) * 256, (tpage >> 7) & 3
     if depth == 0:
         index = (vram[(py + v) * 1024 + px + (u >> 2)] >> ((u & 3) * 4)) & 15
@@ -98,9 +98,9 @@ def reference_rasterize(size, faces, vram, out, depth, ids=None):
                 out[o + 3] = 255
 
 
-def reference_outline(picture: bm.Picture, keys, thickness: int = 1, colour=(0x40, 0xE0, 0xFF), dark=(0, 0, 0)) -> pngio.Image:
+def reference_outline(picture: bm.Picture, keys, thickness: int = 1, color=(0x40, 0xE0, 0xFF), dark=(0, 0, 0)) -> pngio.Image:
     """The picture with the edge of what `keys` cover drawn round: a line
-    of `colour` `thickness` pixels wide inside it and one of `dark`
+    of `color` `thickness` pixels wide inside it and one of `dark`
     outside."""
     image = picture.image
     width, height = image.width, image.height
@@ -125,7 +125,7 @@ def reference_outline(picture: bm.Picture, keys, thickness: int = 1, colour=(0x4
         while x >= 0:
             edges.append((x, y))
             x = line.find(1, x + 1)
-    inner, outer = bytes(colour), bytes(dark)
+    inner, outer = bytes(color), bytes(dark)
     reach = range(-thickness, thickness + 1)
     for x, y in edges:
         for dy in reach:
@@ -146,9 +146,9 @@ def reference_outline(picture: bm.Picture, keys, thickness: int = 1, colour=(0x4
 
 def reference_piece_image(data, terrain: str, part, tint: int = ba.WHITE) -> Image:
     """A piece as the game draws it at the console's resolution, through
-    its palette (tinted): a colour word of 0 is clear."""
+    its palette (tinted): a color word of 0 is clear."""
     blob = data.phases[terrain]
-    palette = [ba.colour(w) for w in ba.tinted(ba.palette_words(data, terrain, part), tint)]
+    palette = [ba.color(w) for w in ba.tinted(ba.palette_words(data, terrain, part), tint)]
     base = part.column * ba.COLUMN_BYTES
     out = bytearray(part.w * part.h * 4)
     for y in range(part.h):

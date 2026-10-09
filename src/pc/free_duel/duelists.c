@@ -875,7 +875,7 @@ static void read_one_duelist(const char *mod, const char *mod_directory, const J
     {   /* Its own face, over its base's: "portraits/<id>.png" beside the
          * manifest, or the path "portrait" names. A PNG of any size: the
          * middle of it is taken at the portrait's shape and reduced to
-         * the 64 colours the console's slot holds, and the file itself is
+         * the 64 colors the console's slot holds, and the file itself is
          * kept for the scaled picture to draw at its own size
          * (duelists.h). One file, both pictures. */
         const char *art = Json_String(Json_Member(entry, "portrait"), NULL);

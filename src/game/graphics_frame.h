@@ -188,10 +188,10 @@ extern volatile s32 D_8009B0CC;
 /* A frame counter ticked by Main_VBlankCB in the same block as D_8009B0C8.
  * Main_Init zeroes it and reads it into a local it stores to D_8009B0C4 at
  * the end of its block; func_80033BE8 and Widget_UpdatePulseColour fold its
- * low six and seven bits into a triangle wave for a pulsing colour; the
+ * low six and seven bits into a triangle wave for a pulsing color; the
  * password overlay's NameEntry_Main shifts it left by eight and ors it
  * above a name checksum into the save block's stamped word; Library_DrawCardGrid
- * masks its low seven bits for the Library cursor's colour ramp. Sign is not visible in any use (& 0x3F,
+ * masks its low seven bits for the Library cursor's color ramp. Sign is not visible in any use (& 0x3F,
  * & 0x7F, << 8, ++, = 0), so s32 follows D_8009B0C8 and is not established.
  *
  * main_frame.c and src/game/main_init.c reach it gp-relative and
@@ -303,7 +303,7 @@ typedef char GraphicsDispEnvSize[sizeof(DISPENV) == 0x14 ? 1 : -1];
  * gp-relative. */
 extern RECT D_800E9D70[2];
 
-/* The tint colour, three consecutive bytes with the components in address
+/* The tint color, three consecutive bytes with the components in address
  * order blue, green, red. func_8005B8A0 and Movie_StopStream pass them straight
  * to ClearImage(RECT *, u8 r, u8 g, u8 b) as r = D_8009B144, g = D_8009B143,
  * b = D_8009B142, which is what fixes the roles; graphics_frame.c copies the

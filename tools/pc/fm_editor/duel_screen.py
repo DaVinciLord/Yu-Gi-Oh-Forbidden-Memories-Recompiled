@@ -20,7 +20,7 @@ exactly where they do in the game.
   kind's icon at (253, 210) and its guardian stars' at (271, 210) and
   (289, 210); another card's kind icon and word (its frame's palette) at
   (253, 210) and (271, 210). A mod's "card_bar" parts (ui_rules.PARTS)
-  move, colour, hide and spread them as duel_ui.c does."""
+  move, color, hide and spread them as duel_ui.c does."""
 from __future__ import annotations
 
 import struct
@@ -113,7 +113,7 @@ def _icon(font, n):
 def bar_words(project, wa, duel: ua.DuelArt, font, cid: int, card_bar=None) -> list:
     """What the game draws over the card bar for the card the cursor is on:
     (picture, x, y, part) each, part one of ui_rules.PARTS; with a mod's
-    "card_bar", its parts moved, coloured, hidden and the name's letters
+    "card_bar", its parts moved, colored, hidden and the name's letters
     spread as duel_ui.c draws them."""
     card = _card(project, cid)
     if card is None:
@@ -121,16 +121,16 @@ def bar_words(project, wa, duel: ua.DuelArt, font, cid: int, card_bar=None) -> l
     out = []
     if font is not None:
         x, y = BAR_NAME_AT
-        ink = font.colours
+        ink = font.colors
         # At most 24 letters of a monster's name, 28 of another card's (the
         # strings' F8 07); a letter's place counts the spaces too.
         for index, c in enumerate(card.name[:24 if card.is_monster() else 28]):
             cell = font.cell(c) if c != " " else None
             if cell:
                 rgba = bytearray()
-                for colour_index in cell:
-                    colour = ink[colour_index]
-                    rgba += bytes((*colour, 255)) if colour_index and colour else b"\0\0\0\0"
+                for color_index in cell:
+                    color = ink[color_index]
+                    rgba += bytes((*color, 255)) if color_index and color else b"\0\0\0\0"
                 out.append((pngio.Image(card_text.CELL_W, card_text.CELL_H, bytes(rgba)), x + 8 * index, y, "name",
                             index))
     page, clut = BAR_PAGE[:3], BAR_PAGE[3:]
@@ -167,5 +167,5 @@ def bar_words(project, wa, duel: ua.DuelArt, font, cid: int, card_bar=None) -> l
             continue
         dx, dy = ui_rules.part_offset(part, element)
         spacing = ui_rules.part_spacing(element) if part == "name" else 0
-        drawn.append((ua.tint(picture, ua.parse_colour(element.get("tint"))), x + dx + spacing * letter, y + dy, part))
+        drawn.append((ua.tint(picture, ua.parse_color(element.get("tint"))), x + dx + spacing * letter, y + dy, part))
     return drawn

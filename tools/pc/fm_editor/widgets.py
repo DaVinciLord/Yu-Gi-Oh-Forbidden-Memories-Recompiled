@@ -134,10 +134,10 @@ class WrapLabel(ttk.Label):
 
 
 def legend(parent, *rows) -> ttk.Frame:
-    """What a list's colours say, in those colours: rows are (tag, words),
+    """What a list's colors say, in those colors: rows are (tag, words),
     a tag of theme.TAGS ("changed", "added", "removed", "glitch"...)."""
     frame = ttk.Frame(parent)
-    ttk.Label(frame, text="Colours:", style="Hint.TLabel").pack(side="left")
+    ttk.Label(frame, text="Colors:", style="Hint.TLabel").pack(side="left")
     for tag, words in rows:
         ttk.Label(frame, text=f"\u25a0 {words}", style=f"{tag}.Tag.TLabel").pack(side="left", padx=(8, 0))
     return frame

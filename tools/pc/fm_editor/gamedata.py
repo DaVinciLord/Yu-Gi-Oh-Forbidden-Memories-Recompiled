@@ -83,9 +83,9 @@ def fusion_group_named(text) -> str:
 # A card's "frame" (cards.c frame_names): the palette rows the game draws a
 # card through. Retail picks one by type; purple and orange it never uses.
 FRAME_NAMES = ["Monster", "Magic", "Trap", "Ritual", "Purple", "Orange"]
-# The first four by the colour they are (cards.c frame_colour_names): a mod may
+# The first four by the color they are (cards.c frame_color_names): a mod may
 # write either; the editor writes the disc's names, which older builds read too.
-FRAME_COLOUR_NAMES = ["Gold", "Green", "Pink", "Blue"]
+FRAME_COLOR_NAMES = ["Gold", "Green", "Pink", "Blue"]
 # A card's "tags" (cards.c tag_bit): 32 different ones in all the mods, each
 # at most 31 letters (bytes, as the game counts them); more are left out.
 TAGS_MAX = 32
@@ -268,7 +268,7 @@ def decode_text(image, address: int, glyphs: dict, limit: int = 1024) -> str:
             out.append("{g %X}" % (((code - 0xF0) << 8) | image.bytes(at + 1, 1)[0]))
             at += 2
         elif code == 0xF8 and image.bytes(at + 1, 1) and image.bytes(at + 1, 1)[0] in (0x0A, 0x0B):
-            out.append("{f8 %02X %02X}" % tuple(image.bytes(at + 1, 2)))      # a colour or an icon, as the listing
+            out.append("{f8 %02X %02X}" % tuple(image.bytes(at + 1, 2)))      # a color or an icon, as the listing
             at += 3
         else:
             out.append("{%02X}" % code)
@@ -277,7 +277,7 @@ def decode_text(image, address: int, glyphs: dict, limit: int = 1024) -> str:
 
 
 def plain_names(image, glyphs: dict) -> dict:
-    """Card names as text: a colour or icon code (F8 0A NN, F8 0B NN) at
+    """Card names as text: a color or icon code (F8 0A NN, F8 0B NN) at
     the start or inside, as community mods write them, is skipped."""
     names = {}
     for cid in range(1, CARD_COUNT + 1):

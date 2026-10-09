@@ -176,7 +176,7 @@ last:
 #include "model.h"
 
 /* Per-frame tint pass over the ten requests at D_800F2B50. A live request
- * interpolates its start colour towards its end colour, redraws the slot with
+ * interpolates its start color towards its end color, redraws the slot with
  * the requested part id, then restores the slot and advances the request.
  *
  * What the allocation rests on: the shifted flag word `v` is masked into its

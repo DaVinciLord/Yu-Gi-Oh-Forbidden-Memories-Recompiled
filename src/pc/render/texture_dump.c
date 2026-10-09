@@ -637,17 +637,17 @@ static uint64_t fnv(uint64_t hash, const void *data, size_t length)
     return hash;
 }
 
-static void expand(unsigned char *out, uint16_t colour)
+static void expand(unsigned char *out, uint16_t color)
 {
-    if (colour == 0) {
-        out[0] = out[1] = out[2] = out[3] = 0; /* the transparent colour */
+    if (color == 0) {
+        out[0] = out[1] = out[2] = out[3] = 0; /* the transparent color */
         return;
     }
     /* As the picture expands a word (soft_gpu.c): the PNG is what the game
      * shows, and extract_images.py writes the same bytes from the disc. */
-    out[0] = (unsigned char)(((colour & 0x1f) << 3) | ((colour & 0x1f) >> 2));
-    out[1] = (unsigned char)((((colour >> 5) & 0x1f) << 3) | (((colour >> 5) & 0x1f) >> 2));
-    out[2] = (unsigned char)((((colour >> 10) & 0x1f) << 3) | (((colour >> 10) & 0x1f) >> 2));
+    out[0] = (unsigned char)(((color & 0x1f) << 3) | ((color & 0x1f) >> 2));
+    out[1] = (unsigned char)((((color >> 5) & 0x1f) << 3) | (((color >> 5) & 0x1f) >> 2));
+    out[2] = (unsigned char)((((color >> 10) & 0x1f) << 3) | (((color >> 10) & 0x1f) >> 2));
     out[3] = 255;
 }
 

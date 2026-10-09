@@ -55,7 +55,7 @@ STAT_CAP = 9999             # the game's ATK/DEF cap; a mod's "limits" moves it
 KEYS = ("stars", "matchups", "default_bonus", "replace", "choice")
 STAR_KEYS = ("id", "name", "icon", "palette", "beats")
 CHOICES = ("ask", "first", "best")         # "choice": how a summoned monster's star is picked
-PALETTES = ("game", "own")                 # an icon's colours: the disc's stars', or the PNG's
+PALETTES = ("game", "own")                 # an icon's colors: the disc's stars', or the PNG's
 # Where the widening past 15 would have to start: every card's record.
 PAST_15 = "a card holds a star in 4 bits, so there are 15 at most"
 
@@ -361,7 +361,7 @@ class Star:
     id: int
     name: object = None          # str, {language: str}, or None (the disc's / "Star N")
     icon: str = None             # a PNG's path inside the mod
-    palette: str = None          # "own" keeps the PNG's colours; None/"game" the disc's stars'
+    palette: str = None          # "own" keeps the PNG's colors; None/"game" the disc's stars'
     extra: dict = field(default_factory=dict)   # keys the editor does not show, kept
 
 

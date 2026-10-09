@@ -2,7 +2,7 @@
 #define MEMORIES_PC_PLATFORM_TITLE_CONFIG_H
 /* The mods' "title" and "menu" keys as read (title_config.c); title_screen.h
  * puts them on the screen and title_menu.h runs the menus. Places are in the
- * game's 320 x 240, colours 0xRRGGBB. */
+ * game's 320 x 240, colors 0xRRGGBB. */
 #include <stdint.h>
 
 struct JsonValue;
@@ -50,7 +50,7 @@ static inline int TitleWide_Y(const TitleWide *wide, int y, int on) { return on 
 typedef struct {
     char text[TITLE_LINE_TEXT];
     int x, y, align, show, size;
-    uint32_t colour;
+    uint32_t color;
     TitleWide wide;
 } TitleLine;
 
@@ -64,22 +64,24 @@ typedef struct {
 } TitleImage;
 
 /* The background: the game's tiled picture of hieroglyphs and a shade over
- * it, or a picture of the mod's own, over a solid colour. */
+ * it, or a picture of the mod's own, over a solid color. */
 typedef struct {
     int picture, shade;        /* the picture (the game's or the mod's), the dark-to-light shade */
-    long colour;               /* under the picture, or -1 */
+    long color;               /* under the picture, or -1 */
     uint32_t tint;             /* 0xFFFFFF unchanged */
     TitleImage image;          /* the mod's picture, "" for the game's */
     /* Widescreen: whether it fills the sides (the game's wall tiles on, the
-     * shade and colour widen; a 4:3 picture keeps its shape, with the colour
+     * shade and color widen; a 4:3 picture keeps its shape, with the color
      * beside it), and a picture 4/3 as wide drawn instead. */
     int wide;
     TitleImage wide_image;
 } TitleBackground;
 
-enum { TITLE_BACKGROUND_PICTURE = 1, TITLE_BACKGROUND_SHADE = 2, TITLE_BACKGROUND_COLOUR = 4,
+enum { TITLE_BACKGROUND_PICTURE = 1, TITLE_BACKGROUND_SHADE = 2, TITLE_BACKGROUND_COLOR = 4,
        TITLE_BACKGROUND_TINT = 8, TITLE_BACKGROUND_IMAGE = 16, TITLE_BACKGROUND_WIDE = 32,
-       TITLE_BACKGROUND_WIDE_IMAGE = 64 };
+       TITLE_BACKGROUND_WIDE_IMAGE = 64,
+       /* The British spelling released SDKs had (v0.2.0); kept for mods built against them. */
+       TITLE_BACKGROUND_COLOUR = TITLE_BACKGROUND_COLOR };
 
 /* One thing a menu offers: one of the eleven entries, or a button a mod
  * adds. An entry is the game's sprite unless it is given a picture or a
@@ -101,7 +103,7 @@ typedef struct {
 } TitleItem;
 
 /* A picture a mod adds to the title ("images"): its middle's place in the
- * game's 320 x 240 (TitleWide in widescreen), its colours multiplied, and
+ * game's 320 x 240 (TitleWide in widescreen), its colors multiplied, and
  * when it shows (TITLE_SHOW_*). */
 typedef struct {
     TitleImage image;

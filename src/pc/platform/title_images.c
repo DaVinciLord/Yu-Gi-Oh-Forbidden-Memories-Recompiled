@@ -1,5 +1,5 @@
 /* The title's pictures of a mod's own (title_images.h). Each PNG is made
- * into the game's kind of texture -- 8 bits a texel through a 256-colour
+ * into the game's kind of texture -- 8 bits a texel through a 256-color
  * palette, entry 0 clear -- at the size it is drawn, put in VRAM the title
  * leaves unused, and drawn with the game's own polygons in the place of the
  * picture it replaces, so what the game draws over it (the menu, the dimming)

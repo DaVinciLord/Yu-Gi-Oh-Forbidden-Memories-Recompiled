@@ -25,8 +25,8 @@ def project(other=None) -> Project:
     return p
 
 
-def png(path: Path, width=16, height=8, colour=(200, 40, 40, 255)) -> Path:
-    pngio.write(path, pngio.Image(width, height, bytes(colour) * (width * height)))
+def png(path: Path, width=16, height=8, color=(200, 40, 40, 255)) -> Path:
+    pngio.write(path, pngio.Image(width, height, bytes(color) * (width * height)))
     return path
 
 
@@ -213,8 +213,8 @@ class AssetsTest(unittest.TestCase):
         image = pngio.Image(1, 1, bytes((200, 100, 50, 255)))
         self.assertEqual(ui_assets.tint(image, 0x808080).pixel(0, 0)[:3], (100, 50, 25))
         self.assertEqual(ui_assets.subtract(image, 64).pixel(0, 0), (136, 36, 0, 255))
-        self.assertEqual(ui_assets.parse_colour("#80c0ff"), 0x80C0FF)
-        self.assertEqual(ui_assets.parse_colour("nope", 7), 7)
+        self.assertEqual(ui_assets.parse_color("#80c0ff"), 0x80C0FF)
+        self.assertEqual(ui_assets.parse_color("nope", 7), 7)
 
 
 class DuelScreenTest(unittest.TestCase):
@@ -228,7 +228,7 @@ class DuelScreenTest(unittest.TestCase):
 
 
 class BarWordsTest(unittest.TestCase):
-    """duel_screen.bar_words: the card bar's parts moved, coloured, hidden
+    """duel_screen.bar_words: the card bar's parts moved, colored, hidden
     and the name's letters spread as duel_ui.c draws them."""
 
     def words(self, card_bar=None, cid=None):
@@ -236,7 +236,7 @@ class BarWordsTest(unittest.TestCase):
         from fm_editor import duel_screen
 
         class Font:
-            colours = [None, (255, 255, 255)]
+            colors = [None, (255, 255, 255)]
 
             def cell(self, c):
                 return [1] * (8 * 12)
@@ -298,15 +298,15 @@ class UiTabTest(GuiCase):
         page.wheel("lp_player", 1)
         page.wheel("lp_player", 1)
         page.tint.set(0xFF8080)
-        page.set_colour("tint", 0xFF8080)
-        page.set_colour("digits", 0x80FF80)
+        page.set_color("tint", 0xFF8080)
+        page.set_color("digits", 0x80FF80)
         page.vars["label"].set("ME")
         page.typed("label")
         with self.choose(self.picture):
             page.choose_image()
         page.select("card_bar")
         page.moved("card_bar", 10, 10)          # stays put: nothing written
-        page.set_colour("tint", 0xC0C0FF)
+        page.set_color("tint", 0xC0C0FF)
         page.select("field_cursor")
         page.hidden.set(True)
         page.set_hidden()
@@ -328,7 +328,7 @@ class UiTabTest(GuiCase):
 
     def test_card_bar_parts(self):
         """The card bar's parts, listed under it: each moved on the bar only,
-        coloured, hidden, the name spread; back to the game's one by one."""
+        colored, hidden, the name spread; back to the game's one by one."""
         page = self.page("duel")
         rows = page.list.tree.get_children("card_bar")
         self.assertEqual(rows, tuple(f"card_bar.{p}" for p in ui_rules.PARTS))
@@ -338,7 +338,7 @@ class UiTabTest(GuiCase):
         self.assertFalse(page.size_row.grid_info())
         self.assertFalse(page.picture_row.grid_info())
         page.moved("card_bar.name", 300, 1)              # kept on the bar
-        page.set_colour("tint", 0xFFE040)
+        page.set_color("tint", 0xFFE040)
         page.vars["spacing"].set("2")
         page.typed("spacing")                            # spread: brought back on the bar
         page.select("card_bar.atk")
@@ -350,7 +350,7 @@ class UiTabTest(GuiCase):
         page.hidden.set(True)
         page.set_hidden()
         page.select("card_bar")
-        page.set_colour("tint", 0xC0C0FF)
+        page.set_color("tint", 0xC0C0FF)
         bar = self.app.project.other["ui"]["duel"]["card_bar"]
         self.assertEqual(bar, {"name": {"x": 12, "y": 1, "tint": "#FFE040", "spacing": 2},
                                "atk": {"x": -195, "y": -2}, "stars": {"hide": True}, "tint": "#C0C0FF"})

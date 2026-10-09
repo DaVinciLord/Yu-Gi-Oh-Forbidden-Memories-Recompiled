@@ -58,7 +58,7 @@ class LayoutTest(unittest.TestCase):
 
 
 def synthetic_wa():
-    """The boot package's font page and colours where the retail disc has
+    """The boot package's font page and colors where the retail disc has
     them: an 'A' that is a 6 x 9 block (index 15, its outline index 1) and
     a ramp from black to white."""
     wa = bytearray((card_text.RAMP_SECTOR + 1) * 2048)
@@ -94,7 +94,7 @@ def icon_wa():
 
 class IconTest(unittest.TestCase):
     """{f8 0B NN} and {f8 0A NN}: the icon off the disc, two letters wide, and
-    the colour ramps (notes/more-cards.md, "Card text codes")."""
+    the color ramps (notes/more-cards.md, "Card text codes")."""
 
     def test_icon_and_widths(self):
         font = card_text.RetailFont(icon_wa())
@@ -110,11 +110,11 @@ class IconTest(unittest.TestCase):
         self.assertEqual(card_text.layout("x" * 15 + " {f8 0B 00} y").rows, 1)
         self.assertEqual(card_text.layout("x" * 16 + " {f8 0B 00} y").rows, 2)
 
-    def test_colours_and_picture(self):
+    def test_colors_and_picture(self):
         font = card_text.RetailFont(icon_wa())
         self.assertEqual(len(font.ramps), 8)
         lay = card_text.layout("A{f8 0A 02}A{f8 0A 00}A")
-        self.assertEqual(lay.colours, [0, 2, 0])
+        self.assertEqual(lay.colors, [0, 2, 0])
         image, _ = card_text.Renderer(font).render("{f8 0B 00}", 1)
         # Drawn 2 texels up from its cell (its red top left is off the box),
         # 16 across: past its own cell into the next.
@@ -124,13 +124,13 @@ class IconTest(unittest.TestCase):
 
 
 class RetailFontTest(unittest.TestCase):
-    def test_cells_and_colours(self):
+    def test_cells_and_colors(self):
         font = card_text.RetailFont(synthetic_wa())
         cell = font.cell("A")
         self.assertEqual(cell[1 * 8 + 1], 15)
         self.assertEqual(cell[0], 1)
         self.assertEqual(cell[11 * 8], 0)
-        self.assertEqual(font.colours[15], (248, 248, 248))
+        self.assertEqual(font.colors[15], (248, 248, 248))
         self.assertEqual(font.cell("À"), cell)          # drawn as its plain letter
         self.assertIsNone(font.cell("☺"))
 
@@ -145,7 +145,7 @@ class RetailFontTest(unittest.TestCase):
         # The A is the second glyph: its block, each texel 2 x 2 pixels.
         self.assertEqual(image.pixel(8 * 2 + 2, 2)[:3], (248, 248, 248))
         self.assertEqual(image.pixel(8 * 2 + 3, 3)[:3], (248, 248, 248))
-        self.assertEqual(image.pixel(8 * 2, 0)[:3], font.colours[1])
+        self.assertEqual(image.pixel(8 * 2, 0)[:3], font.colors[1])
         self.assertEqual(image.pixel(30 * 2, 30)[:3], card_text.PANEL)
         # The ninth row is the frame's; the smiley has no retail glyph: a red box.
         self.assertEqual(image.pixel(100, 8 * 24 + 5)[:3], card_text.FRAME)
@@ -270,7 +270,7 @@ class GlyphCellsTest(unittest.TestCase):
     def test_a_capital_gives_up_a_row_for_its_mark(self):
         cell = glyph_cells.GlyphCells(self.retail).cell("Á")
         a = self.retail.cell("A")
-        # The acute's two pixels in the letter's colour, over its middle, the
+        # The acute's two pixels in the letter's color, over its middle, the
         # outline round them; the block a row shorter, its foot where it was.
         self.assertEqual((cell[0 * 8 + 5], cell[1 * 8 + 4]), (15, 15))
         self.assertEqual((cell[0 * 8 + 4], cell[0 * 8 + 6]), (1, 1))

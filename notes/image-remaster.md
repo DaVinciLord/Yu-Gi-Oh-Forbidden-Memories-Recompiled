@@ -77,8 +77,8 @@ otherwise.
    enables. `TextureDump_EnableTags` allocates both.
 
 2. **A glow became an opaque disc.** A replaced texel took the pack's
-   colour and lost the word's semi-transparency bit. The pack replaces the
-   colour; the bit always comes from the original word (both renderers).
+   color and lost the word's semi-transparency bit. The pack replaces the
+   color; the bit always comes from the original word (both renderers).
 
 3. **25x made the game crawl.** The game keeps every pack image in memory
    at full size, and each one is also a GL texture; a 3200x3200 image is
@@ -94,11 +94,11 @@ otherwise.
    told apart by the lookup. Dump assets below 32 pixels are skipped
    (`--min-size`); sheets replaced dump assets altogether.
 
-6. **A sheet read with another palette showed the wrong colours** (the boot
-   UI's colour ramps, a terrain's palettes). A pack now holds one entry per
+6. **A sheet read with another palette showed the wrong colors** (the boot
+   UI's color ramps, a terrain's palettes). A pack now holds one entry per
    reading of the same words; `prepare()` in `texture_pack.c` picks the one
    whose palette the primitive uses. At 1x only the first reading shows
-   (the shadow VRAM holds one set of colours); the scaled picture shows all.
+   (the shadow VRAM holds one set of colors); the scaled picture shows all.
 
 7. **The "1:1 pack" was not 1:1** (thousands of pixels off by one level):
    the extractor rounded 5-bit channels (`c*255/31`) while the renderers
@@ -165,7 +165,7 @@ otherwise.
 The engine drew what the pack said; the pack was the problem. With
 `high-fidelity-4x` on everything:
 
-- UI art, fonts and icons are 4-bit, few colours, hard edges. The model
+- UI art, fonts and icons are 4-bit, few colors, hard edges. The model
   turns them soft and painterly; text becomes blurry and loses its outline.
 - Dithered and noisy backgrounds come out smeared, with invented texture.
 - The story pictures and card arts fared better, but still look filtered
@@ -226,10 +226,10 @@ the card assets were mapped from a set of redrawn HD images. Two tools:
 - `tools/pc/hd_screen_pack.py <recipe>` enlarges a screen's sheet readings
   from the player's disc by a recipe (`tools/pc/hd_recipes/build_deck.json`):
   painted art through Real-ESRGAN (`realesrgan-x4plus`, 60 % mixed with a
-  Lanczos enlargement so the model's invented grain goes), few-colour UI art
+  Lanczos enlargement so the model's invented grain goes), few-color UI art
   through xBR (ffmpeg's `xbr` filter), a repeated tile wrapped at its edges.
   Every result is back-projected so each 4x4 block averages to its texel:
-  colours and shading stay the game's. A recipe lists only the pieces a
+  colors and shading stay the game's. A recipe lists only the pieces a
   capture saw drawn; the rest of a reading stays the texels, four times.
 - `tools/pc/hd_assets_pack.py --assets <folder>` places redrawn assets
   (card art, thumbnails, frames, back, attribute balls, level star, digits and
@@ -303,7 +303,7 @@ What was found on the way:
    stored at exactly 4x (408x384) rather than larger.
 8. **Small lettering cannot be scaled clean.** xBR turned CHEST, ORDER and
    the outlined digits into wobbly, bloated letters (their 1-texel
-   anti-aliasing and shadow read as shapes), and rebuilding each colour's
+   anti-aliasing and shadow read as shapes), and rebuilding each color's
    region as a smooth shape came out ragged. The recipe's `labels` set them
    anew in the bold sans HD text uses, fitted to the game's letters, through
    every palette the game reads them with: the digits through six (white,
@@ -340,7 +340,7 @@ set once the duel began, then every field was drawn by setting
 3. **Letters were choppy** because a pack pixel was either drawn or clear
    (alpha at half). The scaled picture now mixes a partly clear pack pixel
    over what lies beneath as much as it covers, in software
-   (`picture_plot_in`) and GL (the shader scales the colour by the
+   (`picture_plot_in`) and GL (the shader scales the color by the
    coverage under the same blend), so a font's smoothed edge stays smooth;
    below alpha 8 a pixel is clear, and the 1x picture still goes by half.
    The labels keep their edges, and small xBR icons get an anti-aliased
@@ -360,7 +360,7 @@ set once the duel began, then every field was drawn by setting
    readings of one sheet cropped differently took each other's words. Every
    entry keeps the whole sheet; `trim` instead leaves what a reading never
    draws as its texels four times, and the duel's images are stored as 256
-   colours with transparency. The part adds 13 MB to the mod.
+   colors with transparency. The part adds 13 MB to the mod.
 6. The upscaler has twice left a truncated output on a full tmpfs `/tmp`;
    the tool checks every output and runs again (`TMPDIR` on a disk helps).
 

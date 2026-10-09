@@ -12,7 +12,7 @@
  * and the thumbnail block (+0x2AE0, 0x580 bytes) is also the card's own sector
  * the duel reads for the hand and field. This file makes those bytes from a
  * PNG: cropped to the shape, averaged down to the size, and reduced to the
- * colours by median cut. The plate is the card's name set in Times (the
+ * colors by median cut. The plate is the card's name set in Times (the
  * system's; the retail plates' own face is not available as a font), or a
  * PNG the mod gives.
  *
@@ -131,14 +131,14 @@ static void resample(const Rgb *source, int sw, int sh, Rgb *out, int w, int h)
     }
 }
 
-/* --- colours --------------------------------------------------------- */
+/* --- colors --------------------------------------------------------- */
 
 typedef struct { int first, count; } Box;
 
 static unsigned short to555(int r, int g, int b)
 {
     unsigned short c = (unsigned short)((r >> 3) | ((g >> 3) << 5) | ((b >> 3) << 10));
-    return c ? c : 0x8000;   /* 0 is the transparent colour; this is black */
+    return c ? c : 0x8000;   /* 0 is the transparent color; this is black */
 }
 
 static int channel(const Rgb *c, int axis) { return axis == 0 ? c->r : axis == 1 ? c->g : c->b; }
@@ -152,9 +152,9 @@ static int by_axis(const void *a, const void *b)
     return d;
 }
 
-/* Median cut of the pixels to `colours` entries, written to `clut` from
+/* Median cut of the pixels to `colors` entries, written to `clut` from
  * entry 1 on, and each pixel's entry to `indices`. */
-static void quantize(const Rgb *pixels, int count, int colours, unsigned short *clut, unsigned char *indices)
+static void quantize(const Rgb *pixels, int count, int colors, unsigned short *clut, unsigned char *indices)
 {
     Rgb *sorted = malloc((size_t)count * sizeof(*sorted)), palette[256];
     Box boxes[256];
@@ -163,7 +163,7 @@ static void quantize(const Rgb *pixels, int count, int colours, unsigned short *
     memcpy(sorted, pixels, (size_t)count * sizeof(*sorted));
     boxes[0].first = 0;
     boxes[0].count = count;
-    while (box_count < colours) {
+    while (box_count < colors) {
         int best = -1, best_range = 0, axis = 0;
         for (i = 0; i < box_count; i++) {
             int a, low[3] = {255, 255, 255}, high[3] = {0, 0, 0};
@@ -198,7 +198,7 @@ static void quantize(const Rgb *pixels, int count, int colours, unsigned short *
         palette[i].b = (unsigned char)(b / n);
         clut[i + 1] = to555(palette[i].r, palette[i].g, palette[i].b);
     }
-    for (; i < colours; i++) clut[i + 1] = 0x8000;
+    for (; i < colors; i++) clut[i + 1] = 0x8000;
     clut[0] = 0x8000;
     for (k = 0; k < count; k++) {
         int best = 0;
@@ -364,7 +364,7 @@ int CardArt_FieldArtFromImage(const char *path, unsigned char *record, char *why
     quantize(art, CARD_ART_WIDTH * CARD_ART_HEIGHT, 255, clut, record + CARD_ART_PIXELS);
     /* A texel this transparent is written as index 0 (never quantize's own
      * output: every real pixel is 1-255), and its CLUT entry set to the
-     * PS1's own transparent colour, 0x0000 (to555's own comment) -- unlike
+     * PS1's own transparent color, 0x0000 (to555's own comment) -- unlike
      * quantize's own default for it, 0x8000, opaque black, since index 0
      * never reaches a real pixel anywhere else a card's art is drawn. */
     clut[0] = 0;
@@ -404,9 +404,9 @@ int CardArt_PortraitFromImage(const char *path, unsigned char *record, char *why
 }
 
 /* A guardian star's icon (stars.h): 16x16 at 4 bits a pixel, index 0 where
- * the PNG is less than half covered. With `palette` (16 colours, 0 the
+ * the PNG is less than half covered. With `palette` (16 colors, 0 the
  * transparent one) each pixel takes the nearest of its entries 1-15, as the
- * disc's stars are drawn; without, the PNG's own 15 colours go to `clut`.
+ * disc's stars are drawn; without, the PNG's own 15 colors go to `clut`.
  * The image is taken whole, squeezed to a square if it is not one. */
 int CardArt_IconFromImage(const char *path, const unsigned short *palette, unsigned char *pixels,
                           unsigned short *clut, char *why, size_t why_size)
@@ -533,7 +533,7 @@ int CardArt_Crop(const char *path, int w, int h, int *x, int *y, int *cw, int *c
 /* A PNG with see-through parts as 8-bit texels (title_images.c): stretched
  * to `w` x `h`, each texel the average of the pixels under it, a texel under
  * half covered clear (entry 0, the PS1's transparent 0x0000) and the rest
- * reduced to 255 colours by median cut from entry 1. */
+ * reduced to 255 colors by median cut from entry 1. */
 int CardArt_IndexedImage(const char *path, int w, int h, unsigned char *indices, unsigned short *clut, char *why,
                          size_t why_size)
 {

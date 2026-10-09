@@ -2,7 +2,7 @@
  * before a PGXP table lookup. A stored word packs two int16_t screen
  * coordinates; the GTE never projects past -1024..1023, and LIBGS adds at
  * most a screen's offset (well under 1024 more), so a real vertex's x and y
- * both stay within +-2048. Colour, texture and OT command words routinely do
+ * both stay within +-2048. Color, texture and OT command words routinely do
  * not. This is the boundary itself, checked directly rather than only
  * through DrawOTag's own behaviour. */
 #include "pc/compat/pgxp.h"
@@ -34,7 +34,7 @@ int main(void)
     assert(!Pgxp_MaybeVertexWord(word(2048, -2048)));
     assert(!Pgxp_MaybeVertexWord(word(-2048, 2048)));
 
-    /* Realistic non-vertex words: a POLY_FT4's colour word and its
+    /* Realistic non-vertex words: a POLY_FT4's color word and its
      * tpage/clut word, both far outside on at least one half. Checked by
      * hand against the same halves Pgxp_MaybeVertexWord decodes, not
      * assumed: an OT link/count word was tried here first and turned out to

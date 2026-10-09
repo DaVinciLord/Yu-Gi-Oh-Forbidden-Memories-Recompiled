@@ -5,10 +5,10 @@
 
 /* Prototype GPU primitive words the model handlers stamp copies of.
  *
- * Each word carries a GPU command byte in its top position over a colour in
+ * Each word carries a GPU command byte in its top position over a color in
  * the low three: 0x24, 0x2C, 0x34 and 0x3C are the textured polygon opcodes,
  * 0x4A and 0x4E the line opcodes, and the run closes with an 0xE1 draw-mode
- * word and three zero words. Two colour families appear, 0x808080 and
+ * word and three zero words. Two color families appear, 0x808080 and
  * 0x404040, which is a full-brightness template and a half-brightness one.
  *
  * These are declared as separate u32 objects rather than one array because
@@ -18,7 +18,7 @@
  * so no array shape is claimed here.
  *
  * What this does NOT claim: which handler uses which word. The opcode and
- * colour fields are legible from the values themselves, but the mapping from
+ * color fields are legible from the values themselves, but the mapping from
  * template to caller is not established, and none of the readers is matched C
  * yet. */
 extern u32 D_8009AFAC;

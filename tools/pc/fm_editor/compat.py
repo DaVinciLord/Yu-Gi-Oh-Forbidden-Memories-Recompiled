@@ -14,7 +14,7 @@ tests/test_compat.py holds it to that header.
 """
 from __future__ import annotations
 
-from .gamedata import FRAME_COLOUR_NAMES, TYPE_MAGIC
+from .gamedata import FRAME_COLOR_NAMES, TYPE_MAGIC
 from .model import type_named
 
 HOST_API = 11
@@ -83,7 +83,7 @@ def features(manifest: dict, project=None) -> list:
     add = lambda api, what: out.append((api, what))
     # --- API 10: v0.2.1-preview.1 -------------------------------------------
     if "card_text_colors" in manifest:
-        add(10, "card text colours (\"card_text_colors\")")
+        add(10, "card text colors (\"card_text_colors\")")
     for entry in _entries(manifest.get("cards")):
         if "monster_effects" in entry:
             add(10, "monster effects")
@@ -98,7 +98,7 @@ def features(manifest: dict, project=None) -> list:
         if "tags" in entry:
             add(11, "card tags")
         frame = entry.get("frame")
-        if isinstance(frame, str) and frame.lower() in (name.lower() for name in FRAME_COLOUR_NAMES):
+        if isinstance(frame, str) and frame.lower() in (name.lower() for name in FRAME_COLOR_NAMES):
             add(11, f"the frame name \"{frame}\"")
         for effect in _entries(entry.get("monster_effects")):
             if "for_each" in effect:

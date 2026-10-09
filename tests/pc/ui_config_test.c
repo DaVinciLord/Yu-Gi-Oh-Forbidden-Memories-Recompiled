@@ -162,7 +162,7 @@ static void sliding_ones_leave_the_screen(void)
     CHECK(notes == 1 && config->element[UI_FIELD].scale == 101);
 }
 
-/* The card bar's parts: each moved, coloured, hidden; kept on the bar (the
+/* The card bar's parts: each moved, colored, hidden; kept on the bar (the
  * nearest place that is, noted); only the name's letters are spread. */
 static void card_bar_parts(void)
 {

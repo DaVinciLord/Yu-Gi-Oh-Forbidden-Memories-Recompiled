@@ -7,9 +7,9 @@
    Model_UpdateDiscEffect consumes D_80091604 and func_8006CD78 consumes
    D_80091610 and D_800916D4; all three are matching C. */
 /* The parameter record Model_UpdateDiscEffect points its `table` at: the rim
-   colour, the smallest radius the disc is built with, the level it starts at
+   color, the smallest radius the disc is built with, the level it starts at
    and fades from, and the scale it grows to. The last two are also the
-   divisors of the colour ramp. D_80091604 is the only instance, and its last
+   divisors of the color ramp. D_80091604 is the only instance, and its last
    halfword is zero and unread. */
 typedef struct {
     u8 r;

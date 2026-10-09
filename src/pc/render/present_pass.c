@@ -25,7 +25,7 @@
  *   board barely moves the average and is never dimmed, and darkening is
  *   never held back. (Darkening only the blocks that brighten leaves blotches
  *   on the picture.) Applied first, to the picture as the game drew it.
- *   Colour (Video > Color): gamma, then contrast about mid grey, then
+ *   Color (Video > Color): gamma, then contrast about mid grey, then
  *   brightness, then saturation against Rec. 601 luma.
  *   CRT (Video > Effects): a scanline per line of the console's picture
  *   (240: the source's height over its nearest multiple of 240) darkened
@@ -113,12 +113,12 @@ static const char *vertex_source =
 
 /* xBR, level 2, written from the published rules: for each corner of a
  * texel E (here the one towards F, H and I; the others are mirrors), an edge
- * across that corner is found when the colours along the anti-diagonal
+ * across that corner is found when the colors along the anti-diagonal
  * differ less than along the diagonal, weighted as xBR does, and a 2:1
  * shallow or steep edge when the next texels continue it. The corner is then
  * cut by that edge's line and filled with F or H, whichever is closer to E;
- * the line is antialiased over one window pixel. Colour distance is in YUV
- * weighted 48:7:6, and colours closer than EQUAL count as the same. Texels
+ * the line is antialiased over one window pixel. Color distance is in YUV
+ * weighted 48:7:6, and colors closer than EQUAL count as the same. Texels
  * outside the picture's rectangle repeat its edge. The neighbourhood (x
  * right, y down):
  *        B  C
@@ -463,7 +463,7 @@ int PresentPass_Begin(unsigned texture, int source_h, float s0, float t0, float 
     int xbr = Settings_Get(SET_XBR) && !textures_smoothed;
     if (!state) {
         state = build() ? 1 : -1;
-        if (state < 0) fprintf(stderr, "memories-pc: present pass unavailable; colour settings do nothing\n");
+        if (state < 0) fprintf(stderr, "memories-pc: present pass unavailable; color settings do nothing\n");
     }
     if (state < 0) return 0;
     /* The picture is bound on whichever unit is active (the presenter's

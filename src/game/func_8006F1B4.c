@@ -3,7 +3,7 @@
  * a non-negative mode it seeds 32 sparks, 32 flashes and 64 dust particles
  * from rand(); otherwise it draws the sparks (a fan of four quads and a
  * growing Gouraud quad each), the flashes and the dust as quads through
- * RotAverage4, fades every colour, respawns spent sparks and flashes, and
+ * RotAverage4, fades every color, respawns spent sparks and flashes, and
  * once every spark is lit hands over to the dust. It returns 2 once the
  * first flash and the dust have faded to black.
  *

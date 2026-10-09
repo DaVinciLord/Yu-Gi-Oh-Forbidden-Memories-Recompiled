@@ -102,10 +102,10 @@ int Menu_AutoScale(int window_h);
 void Menu_Draw(MenuCanvas *canvas);
 /* Text is UTF-8: a character the face has no glyph for, or a byte that is
  * not UTF-8, is drawn as "?". */
-void Menu_DrawText(MenuCanvas *canvas, int x, int y, const char *text, uint32_t colour);
+void Menu_DrawText(MenuCanvas *canvas, int x, int y, const char *text, uint32_t color);
 int Menu_TextWidth(const char *text);
 /* Auxiliary windows can fit their UI without changing the game menu scale. */
-void Menu_DrawTextScaled(MenuCanvas *canvas, int x, int y, const char *text, uint32_t colour, int scale);
+void Menu_DrawTextScaled(MenuCanvas *canvas, int x, int y, const char *text, uint32_t color, int scale);
 int Menu_TextWidthScaled(const char *text, int scale);
 
 /* For code that cuts UTF-8 text to fit, so a cut never splits a character.

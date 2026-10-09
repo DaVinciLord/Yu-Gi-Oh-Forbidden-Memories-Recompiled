@@ -222,19 +222,19 @@ def eye(camera):
 
 # The textures as the rasterizer reads them: per texture (a page and
 # palette, or a mod's picture) 256 rows of 256 texels, each (red, green,
-# blue, n) or None where clear, so a pixel costs two lookups; n numbers the texture's colours (below 0: not numbered,
-# the 16-bit pages') for the rasterizer's shaded colours. Kept across
+# blue, n) or None where clear, so a pixel costs two lookups; n numbers the texture's colors (below 0: not numbered,
+# the 16-bit pages') for the rasterizer's shaded colors. Kept across
 # renders while the VRAM or picture they come from lives (a model's VRAM
 # is not changed once it is built).
 _TABLES = {}
 
 
 class _Texture:
-    __slots__ = ("rows", "colours", "never")
+    __slots__ = ("rows", "colors", "never")
 
-    def __init__(self, rows, colours):
-        self.rows, self.colours = rows, colours     # colours: how many n's there are
-        self.never = [False] * (colours + 1)         # its shaded colours where none is ever the same
+    def __init__(self, rows, colors):
+        self.rows, self.colors = rows, colors     # colors: how many n's there are
+        self.never = [False] * (colors + 1)         # its shaded colors where none is ever the same
 
 
 def _texture(vram, tpage, clut, override) -> _Texture:
@@ -297,7 +297,7 @@ _WORD = next(code for code in "IL" if array(code).itemsize == 4)
 def _vram_row(vram, tpage, clut, v) -> list:
     """Row v of a page's texture: 4 or 8 bits a texel through the palette
     at `clut` (an entry clear only when it is the first and 0: the game
-    uploads every other with the semi-transparency bit), or 16-bit colour
+    uploads every other with the semi-transparency bit), or 16-bit color
     words (0 clear)."""
     px, py, depth = (tpage & 15) * 64, ((tpage >> 4) & 1) * 256, (tpage >> 7) & 3
     if depth >= 2:
@@ -380,7 +380,7 @@ def raster_steps(size, faces, vram, pixels, ids=None, step: int = STEP):
     * a row is tried from where the triangle starts to where it ends
       (_span), not across its bounding box, and a column's and a row's own
       terms are worked out once;
-    * the texels come from tables (_texture), and a texel's colour under a
+    * the texels come from tables (_texture), and a texel's color under a
       face's shades once per face, where the face's lightest and darkest
       shade give it the same (_shaded): most of the board's faces are lit
       alike all over;
@@ -395,7 +395,7 @@ def raster_steps(size, faces, vram, pixels, ids=None, step: int = STEP):
         ids = bytearray(width * height)
     owner = [0] * (width * height)                      # 1 + the face drawn at each pixel, 0: none yet
     drawn = []                                          # the faces drawn, for their depths
-    colours = {}                                        # (texture, shades) -> its colours shaded (_shaded)
+    colors = {}                                        # (texture, shades) -> its colors shaded (_shaded)
     budget = step
     for face in faces:
         corners, tpage, clut, override = face[:4]
@@ -413,11 +413,11 @@ def raster_steps(size, faces, vram, pixels, ids=None, step: int = STEP):
         rows = texture.rows
         low, high = min(s0, s1, s2), max(s0, s1, s2)
         if (high - low) * 255 >= 1:
-            lut = texture.never         # shades too far apart: a bright texel's colour changes across the face
+            lut = texture.never         # shades too far apart: a bright texel's color changes across the face
         else:
-            lut = colours.get((texture, low, high))
+            lut = colors.get((texture, low, high))
             if lut is None:
-                lut = colours[texture, low, high] = [None] * texture.colours + [False]     # n -1: never shaded once
+                lut = colors[texture, low, high] = [None] * texture.colors + [False]     # n -1: never shaded once
         drawn.append((x0, y0, z0, x1, y1, z1, x2, y2, z2, inv))
         mark = len(drawn)
         ax, bx = (y1 - y2) * inv, (y2 - y0) * inv

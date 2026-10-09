@@ -60,5 +60,5 @@ int main(void) {
     assert(GuestRuntime_InvokeNative(5,a)==1);
     a[0]=0xff; a[1]=0xfffe;
     assert(GuestRuntime_InvokeNative(6,a)==0xfffffffdu);
-    assert(calls==6); puts("Typed native calls: pointer stack, mixed widths, signed small values, colours, longs and pointer return pass");
+    assert(calls==6); puts("Typed native calls: pointer stack, mixed widths, signed small values, colors, longs and pointer return pass");
 }

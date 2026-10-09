@@ -1,8 +1,8 @@
 /* View > Free Duel progress's font (src/pc/cards/font_art.c) off the real
  * WA_MRG.MRG under game/DATA (skipped when it is not there): each glyph
- * must be the cell found by hand (notes/pc-build.md) in its colour ramp,
+ * must be the cell found by hand (notes/pc-build.md) in its color ramp,
  * and a count is drawn through the real path.
- * MEMORIES_FONT_ART_SHEET=<file.ppm> writes counts in each colour. */
+ * MEMORIES_FONT_ART_SHEET=<file.ppm> writes counts in each color. */
 #include "pc/cards/font_art.h"
 #include "pc/sdk/disc.h"
 #include "pc/text/overlay_text.h"
@@ -36,13 +36,13 @@ int Memories_DiscReadSectors(int lba, int sectors, void *out)
 }
 
 /* The opaque canvas's blend of overlay_text.c. */
-void OverlayText_Blend(const MenuCanvas *canvas, int x, int y, uint32_t colour, unsigned alpha)
+void OverlayText_Blend(const MenuCanvas *canvas, int x, int y, uint32_t color, unsigned alpha)
 {
     uint32_t *at, under;
     if (x < 0 || y < 0 || x >= canvas->width || y >= canvas->height || !alpha) return;
     at = canvas->pixels + (size_t)y * (size_t)canvas->stride + (size_t)x;
     under = *at;
-#define MIX(shift) ((((colour >> shift) & 255) * alpha + ((under >> shift) & 255) * (255 - alpha)) / 255)
+#define MIX(shift) ((((color >> shift) & 255) * alpha + ((under >> shift) & 255) * (255 - alpha)) / 255)
     *at = 0xFF000000u | MIX(16) << 16 | MIX(8) << 8 | MIX(0);
 #undef MIX
 }
@@ -57,7 +57,7 @@ static uint16_t word_at(long offset)
 
 /* The hand decode: the font's page is the boot package's first 16 sectors
  * (0x1690), 64 words by 16 rows each, 4-bit; the ramps are the first 0x100
- * bytes of its sector 50, 16 colours a row. */
+ * bytes of its sector 50, 16 colors a row. */
 static uint32_t expected(int u, int v, int ramp)
 {
     uint16_t word = word_at(0x1690L * 2048 + (long)(v / 16) * 2048 + ((v % 16) * 64 + u / 4) * 2), c;
@@ -91,7 +91,7 @@ static void write_sheet(const char *path)
     FILE *out;
     int i, x, y, w, h;
     for (i = 0; i < SHEET_W * SHEET_H; i++) pixels[i] = 0xFF2A3A34u;
-    for (i = 0; i < FONT_ART_COLOURS; i++) {
+    for (i = 0; i < FONT_ART_COLORS; i++) {
         FontArt_Draw(&canvas, &view, 300, 12 + i * 20, counts[i], i, &x, &y, &w, &h);
         assert(w == FontArt_Width(counts[i]) && h == 12);
     }
@@ -130,7 +130,7 @@ int main(void)
 
     /* '0' ends row 0 after the first fifteen marks, '/' the last of them;
      * '1'-'9' then ':' start row 1. White and yellow ramps 0 and 1. */
-    for (i = 0; i < FONT_ART_COLOURS; i++) {
+    for (i = 0; i < FONT_ART_COLORS; i++) {
         check('0', 120, 0, i);
         check('/', 112, 0, i);
         check('1', 0, 12, i);

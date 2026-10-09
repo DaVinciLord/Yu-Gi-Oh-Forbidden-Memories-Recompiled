@@ -421,8 +421,8 @@ placed:
             }
         }
 #ifdef MEMORIES_PC
-        /* The card bar's parts a mod's "ui" moves, colours or hides
-           (duel_ui.h); its colour goes back after. */
+        /* The card bar's parts a mod's "ui" moves, colors or hides
+           (duel_ui.h); its color goes back after. */
         if (DuelUi_BarEntry(obj, code, spr)) {
             goto next_entry;
         }

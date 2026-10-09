@@ -24,7 +24,7 @@ void func_80058938(
 
 #ifdef MEMORIES_PC
 /* Model_QueueTintRequestForParts with its part list (ending at the first
-   negative word) passed as a pointer and each colour as the word a MIPS
+   negative word) passed as a pointer and each color as the word a MIPS
    register carries it in: how the interpreter (src/pc/guest/mips.c, which
    cannot include the game's types) bridges the MODEL.MRG modules' calls,
    whose lists outrun the argument words it forwards. */

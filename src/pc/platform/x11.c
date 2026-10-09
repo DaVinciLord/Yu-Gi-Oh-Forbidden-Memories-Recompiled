@@ -308,17 +308,17 @@ static void scale_game(int top, int bottom)
         int first = menu + j * scale, k, i;
         uint32_t *line = canvas.pixels + (size_t)first * (size_t)canvas.stride, *at = line;
         for (i = 0; i < last.w; i++) {
-            uint32_t colour;
+            uint32_t color;
             if (last.rgb24) {
                 const uint8_t *bytes = (const uint8_t *)(row + last.x) + i * 3;
-                colour = ((uint32_t)bytes[0] << 16) | ((uint32_t)bytes[1] << 8) | bytes[2];
+                color = ((uint32_t)bytes[0] << 16) | ((uint32_t)bytes[1] << 8) | bytes[2];
             } else {
                 uint16_t c = row[(last.x + i) & 1023];
                 uint32_t r = c & 0x1f, g = (c >> 5) & 0x1f, b = (c >> 10) & 0x1f;
-                colour = ((r << 3 | r >> 2) << 16) | ((g << 3 | g >> 2) << 8) | (b << 3 | b >> 2);
+                color = ((r << 3 | r >> 2) << 16) | ((g << 3 | g >> 2) << 8) | (b << 3 | b >> 2);
             }
             for (k = 0; k < scale; k++) {
-                *at++ = colour;
+                *at++ = color;
             }
         }
         for (k = 1; k < scale && first + k < bottom; k++) {
