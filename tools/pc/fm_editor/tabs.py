@@ -8,7 +8,7 @@ import re
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from . import bulk_dialog, guardian_stars, manifest, text_menu, validate
+from . import bulk_dialog, compat, guardian_stars, manifest, text_menu, validate
 from .card_text_box import CardTextBox
 from .icon_choice import IconChoice
 from . import card_icons
@@ -2155,6 +2155,10 @@ class ModInfoTab(Tab):
         self.description.grid(row=4, column=1, sticky="w", pady=2)
         self.folder = ttk.Label(form, style="Hint.TLabel", wraplength=px(self, 560), justify="left")
         self.folder.grid(row=5, column=1, sticky="w")
+        # The game the mod needs (compat.py): "min_api", raised on save to
+        # what the mod uses, and why.
+        self.api = ttk.Label(form, style="Hint.TLabel", wraplength=px(self, 560), justify="left")
+        self.api.grid(row=6, column=1, sticky="w")
         boxes = ttk.Frame(self)
         boxes.pack(fill="both", expand=True, pady=(8, 0))
         left = ttk.LabelFrame(boxes, text="Settings: the player's options for this mod (Game > Mods)", padding=4)
@@ -2216,6 +2220,31 @@ class ModInfoTab(Tab):
                               "the game's mods folder; the player turns it on in Game > Mods.")
         self.status.configure(text="")
         self.fill_settings()
+        self.fill_api()
+
+    def api_text(self) -> str:
+        """Which game the mod needs, as the Mod info tab says it."""
+        try:
+            built = manifest.build(self.project)
+        except Exception:       # a half-made form elsewhere: said when it is applied
+            return ""
+        needed, reasons = compat.required(built, self.project)
+        written = built.get("min_api")
+        if isinstance(written, bool) or not isinstance(written, int):
+            written = None
+        if not needed and written is None:
+            return "Mod API: it uses nothing newer than the game v0.2.0 has, so it needs no \"min_api\"."
+        api = max(needed, written or 0)
+        text = f"Mod API {api} (\"min_api\"): {compat.release_text(api)}; an older game refuses it as needing a newer one."
+        if needed and needed >= api:
+            text += " Raised on save to what the mod uses: " + "; ".join(reasons) + "."
+        else:
+            text += " As written in the other keys."
+        return text
+
+    def fill_api(self):
+        if self.project is not None:
+            self.api.configure(text=self.api_text())
 
     def commit(self):
         if self.project is None:
@@ -2264,6 +2293,7 @@ class ModInfoTab(Tab):
         after = (info.id, info.name, info.version, info.author, info.description, info.settings, self.project.other)
         if after != before:
             self.app.changed()
+            self.fill_api()
         self.applied()
         return True
 
