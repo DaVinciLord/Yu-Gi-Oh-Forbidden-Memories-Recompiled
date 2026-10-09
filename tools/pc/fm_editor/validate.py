@@ -16,6 +16,7 @@ from .gamedata import (CARD_COUNT, DECK_COPY_LIMIT, DECK_POOL_MIN_CARDS, DECK_SI
                        TYPE_RITUAL, exodia_piece)
 from . import art, board_art, campaign_map, card_text, fixed_decks, guardian_stars, packs as packmath, values
 from . import monster_effects, roster, starter_pools, ui_rules
+from .compat import HOST_API
 from .model import KEY_RE, Project, duelist_named
 
 MOD_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,63}$")
@@ -27,7 +28,6 @@ MANIFEST_KEYS = ("id", "name", "version", "author", "description", "library", "e
                  "chest_overflow", "terrain_bonus", "trap_thresholds", "equip_bonus_default", "passwords",
                  "starter", "starter_pools", "limits", "guardian_stars", "packs", "pack_shop", "card_text_colors", "card_layout",
                  "title", "menu", "ui")
-HOST_API = 8
 
 
 @dataclass

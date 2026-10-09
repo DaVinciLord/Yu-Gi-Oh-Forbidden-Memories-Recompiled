@@ -644,6 +644,9 @@ def main():
         manifest["settings"].append({
             "key": "full_bleed", "label": "Anime card frame", "type": "bool", "default": 0,
             "description": "An anime-style card frame representation, by d02d02 and Hræzlyr."})
+        # A game before "card_layout" would draw the pack without it: it
+        # refuses the pack instead (notes/modding.md, "Which game a mod needs").
+        manifest["min_api"] = 11
     with open(os.path.join(args.out, "mod.json"), "w", encoding="utf-8") as handle:
         json.dump(manifest, handle, indent=4)
     print(f"{args.out}: {len(pack.entries)} entries, {len(pack.images)} images")

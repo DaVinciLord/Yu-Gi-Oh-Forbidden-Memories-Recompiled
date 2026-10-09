@@ -1817,6 +1817,27 @@ class GuiTest(GuiCase):
         self.assertTrue(info.commit())
         self.assertEqual(app.project.other["text"], {"x": 1})
 
+    def test_mod_info_says_the_game_it_needs(self):
+        """Mod info names the mod API a save writes as "min_api", and why;
+        one the author wrote higher stays."""
+        app = self.app
+        info = app.info
+        info.refresh()
+        self.assertIn("needs no \"min_api\"", info.api.cget("text"))
+        app.project.set_tags(1, ["dragon"])
+        info.refresh()
+        text = info.api.cget("text")
+        self.assertIn("Mod API 11", text)
+        self.assertIn("card tags", text)
+        self.assertIn("newer than v0.2.1-preview.1", text)
+        app.project.set_tags(1, None)
+        info.other.delete("1.0", "end")
+        info.other.insert("1.0", json.dumps({"min_api": 10}))
+        self.assertTrue(info.commit())
+        text = info.api.cget("text")
+        self.assertIn("Mod API 10", text)
+        self.assertIn("As written", text)
+
     def test_equip_types_panel(self):
         """A type's box ticks every monster of it on or off, shows a half
         tick for some, and its count lists that type's monsters alone."""
