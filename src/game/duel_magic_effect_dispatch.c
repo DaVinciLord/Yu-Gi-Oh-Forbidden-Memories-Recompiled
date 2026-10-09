@@ -129,7 +129,10 @@ void DuelEffect_StartCardEffect(int value, int flag)
          * once, on the first of the retail effect's two dispatch calls. */
         if (!start_retail && !flag && Cards_CardEffects(card, &card_effects))
             MonsterEffects_CardPlayed(card, D_8009B1D5);
-        if (!start_retail && !flag && Cards_CardEffectsReplace(card)) {
+        /* The controller enters this dispatcher for both handlers. A
+         * replacement owns both phases; custom effects themselves were
+         * queued above only for the first one. */
+        if (!start_retail && Cards_CardEffectsReplace(card)) {
             event.phase = MEMORIES_AFTER; Mods_Dispatch(&event);
             return;
         }

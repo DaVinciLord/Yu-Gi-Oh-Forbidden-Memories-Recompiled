@@ -54,7 +54,12 @@ void AiScript_LoadCardID(void)
     {
         s32 id = gDuel_aActiveCards[index].card_id;
         s32 type = id ? Cards_Type(id) : 0;
-        if ((type == CARD_TYPE_MAGIC || type == CARD_TYPE_TRAP) && Cards_AiId(id) > 0) id = Cards_AiId(id);
+        if (type == CARD_TYPE_MAGIC || type == CARD_TYPE_TRAP) {
+            int ai_id = Cards_AiId(id);
+            /* Do not hand a script a replaced retail id when there is no
+             * declared retail analogue: 0 is the existing no-card value. */
+            id = ai_id > 0 ? ai_id : 0;
+        }
         memory[AiScript_ReadByte()] = id;
         return;
     }

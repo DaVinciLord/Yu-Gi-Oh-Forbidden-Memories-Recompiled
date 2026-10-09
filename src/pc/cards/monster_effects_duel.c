@@ -183,6 +183,15 @@ static int times(const MonsterEffect *effect, int source)
 
 static int clamp(int value, int low, int high) { return value < low ? low : value > high ? high : value; }
 
+/* A spell/trap has no source monster. Its supported LP targets name the
+ * owner or the other duelist explicitly; monster effects retain their
+ * original owner/heal and opponent/damage meanings. */
+static int life_side(const MonsterEffect *effect, int side, int card_effect)
+{
+    if (!card_effect) return effect->action == MONSTER_DO_HEAL ? side : side ^ 1;
+    return effect->target == MONSTER_TARGET_OPPONENT ? side ^ 1 : side;
+}
+
 /* A lasting boost: the modifiers equips use (both stats share
  * stat_modifier; defense_modifier is DEF's own on top), kept within what
  * their 16 bits and the stat cap leave room for. */
@@ -345,9 +354,9 @@ static int resolve(void)
         SD_SEPlayFull(SE_BOOST);
         break;
     case MONSTER_DO_HEAL:
-        return count ? life_effect(side, effect->amount * count) : 0;
+        return count ? life_effect(life_side(effect, side, trigger.card_effect), effect->amount * count) : 0;
     case MONSTER_DO_DAMAGE:
-        return count ? life_effect(side ^ 1, -effect->amount * count) : 0;
+        return count ? life_effect(life_side(effect, side, trigger.card_effect), -effect->amount * count) : 0;
     case MONSTER_DO_DESTROY:
         /* Crush Card's removal, on the monsters chosen here
          * (MonsterEffects_RemovalTakes): it takes the other side's, as
@@ -355,7 +364,7 @@ static int resolve(void)
         S.destroy_mask = 0;
         for (record = 0; record < MONSTER_RECORDS; record++) {
             const DuelCardRecord *card = &D_801A7AD8[record];
-            if (!monster_zone(record) || owner(record) == side || !(card->flags & DUEL_CARD_FLAG_OCCUPIED)) continue;
+            if (!monster_zone(record) || !(card->flags & DUEL_CARD_FLAG_OCCUPIED)) continue;
             if (reaches(effect, trigger.record, record, card->card_id)) S.destroy_mask |= 1u << record;
         }
         if (!S.destroy_mask) return 0;
