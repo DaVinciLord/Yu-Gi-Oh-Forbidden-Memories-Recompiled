@@ -599,8 +599,7 @@ if(BUILD_TESTING)
     target_include_directories(memories_palette_ramps_test PRIVATE src)
     target_compile_definitions(memories_palette_ramps_test PRIVATE MEMORIES_PC)
     if(NOT MSVC)
-        target_compile_options(memories_palette_ramps_test PRIVATE -Wall -Wextra -Wpedantic -Werror
-                               -Wno-builtin-declaration-mismatch)
+        target_compile_options(memories_palette_ramps_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
     endif()
     add_test(NAME pc_palette_ramps COMMAND memories_palette_ramps_test)
     # Card packs (src/pc/cards/packs.c): the reader, the dealer and the

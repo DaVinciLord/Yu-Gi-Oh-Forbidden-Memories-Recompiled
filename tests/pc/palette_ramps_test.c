@@ -4,6 +4,17 @@
  * goes into VRAM only when PaletteRamps_Load asks, where it is asked to;
  * the transparent entry, the semi-transparency bit and black steps; and
  * bad keys and values being noted, not applied. */
+/* The Psy-Q headers do not build under the tests' warnings (clang): what
+ * palette_ramps.c takes from them, here. */
+#define _LIBGTE_H_
+#define _LIBGPU_H_
+#include "types.h"
+typedef struct {
+    short x, y;
+    short w, h;
+} RECT;
+int LoadImage(RECT *rect, u32 *p);
+int DrawSync(int mode);
 #include "../../src/pc/mods/palette_ramps.c"
 #include <stdarg.h>
 #include <stdlib.h>
