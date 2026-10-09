@@ -9,6 +9,11 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+try:
+    import tkinter  # noqa: F401
+except ImportError:     # a Python built without Tk: editing needs it
+    raise unittest.SkipTest("this Python has no Tk")
+
 from fm_editor import art, editing, history, manifest, pngio, recovery, settings
 from fm_editor.model import Project
 from fm_editor.tests.test_data import fixture
@@ -242,7 +247,7 @@ class TimerGuiTest(GuiCase):
             self.assertIs(app._recovery_writer, first)
             self.assertEqual(write.call_count, 1)
             folder = Path(self.tmp.name) / "timer-save"
-            with mock.patch("fm_editor.app.filedialog.askdirectory", return_value=str(folder)):
+            with mock.patch("fm_editor.file_dialogs.askdirectory", return_value=str(folder)):
                 self.assertTrue(app.save())
             gate.set()
             self.wait_writer()
@@ -254,7 +259,7 @@ class TimerGuiTest(GuiCase):
         self.edit("Unsaved")
         with mock.patch.object(recovery, "backup", side_effect=OSError("no space")), \
                 mock.patch("fm_editor.app.messagebox.showerror"), \
-                mock.patch("fm_editor.app.filedialog.askdirectory",
+                mock.patch("fm_editor.file_dialogs.askdirectory",
                            return_value=str(Path(self.tmp.name) / "failing-save")):
             self.assertFalse(app.save())
         self.assertIsNotNone(app._recovery_writer)
