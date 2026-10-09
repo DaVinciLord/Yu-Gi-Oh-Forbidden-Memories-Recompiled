@@ -2,6 +2,7 @@
 #include "palette_ramps.h"
 #include "json.h"
 #include "mods.h"
+#include "psyq/libgte.h"
 #include "psyq/libgpu.h"
 #include <stdlib.h>
 #include <stdio.h>
