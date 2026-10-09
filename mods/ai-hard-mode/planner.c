@@ -427,7 +427,10 @@ HmDecision Hm_PlanHand(const HmBoard *b, const HmOptions *o, const HmRules *r)
             if (c.type == 22 && slot < 0) continue;
             target = 0;
             score = o->spells ? spell(b, o, r, c, &target) : 0;
-            immediate = score > 0 && c.type != 22;
+            /* Traps are reactive even when ai_effect gives them a useful
+             * tactical analogue: set them for the duel's trigger logic,
+             * never try to cast them as a Magic card. */
+            immediate = score > 0 && c.type != 21 && c.type != 22;
             if (score <= 0) {
                 if (slot < 0) continue;
                 score = c.type == 21 ? 500 : 50;
