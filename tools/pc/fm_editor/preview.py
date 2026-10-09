@@ -6,9 +6,9 @@ from __future__ import annotations
 
 import struct
 import tkinter as tk
-from tkinter import filedialog, ttk
+from tkinter import ttk
 
-from . import card_text, pngio, ttf
+from . import card_text, file_dialogs, pngio, ttf
 from .widgets import px
 
 # A font file cut short or damaged: ttf reads it with struct.
@@ -65,9 +65,9 @@ class CardTextPreview(tk.Toplevel):
         super().destroy()
 
     def choose_font(self):
-        path = filedialog.askopenfilename(parent=self, title="A TrueType font file (your own copy; never saved in the mod)",
-                                          initialdir=card_text.fonts_folder(),
-                                          filetypes=[("TrueType fonts", "*.ttf *.ttc *.otf"), ("All files", "*.*")])
+        path = file_dialogs.askopenfilename(parent=self, title="A TrueType font file (your own copy; never saved in the mod)",
+                                            initialdir=card_text.fonts_folder(),
+                                            filetypes=[("TrueType fonts", "*.ttf *.ttc *.otf"), ("All files", "*.*")])
         if path:
             self.font_path = path
             if self.mode.get() != FILE:
