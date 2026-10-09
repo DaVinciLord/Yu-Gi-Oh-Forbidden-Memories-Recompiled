@@ -27,7 +27,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-/* Bumped when this header changes shape. A mod records the version it was
+/* Bumped for new host services, events or manifest features. A mod records the version it was
  * built against; the host refuses a mod built against a later one. New host
  * entries only ever go at the end, so a mod built against an earlier version
  * keeps working, and one built against a later version can check host->api
@@ -41,7 +41,11 @@
  *   5  duelist_id
  *   6  the STARCHIP event
  *   7  card_notes, card_tag: a card's notes and the tags in them
- *   8  limit: the numbers the game caps, as the mods' "limits" set them */
+ *   8  limit: the numbers the game caps, as the mods' "limits" set them
+ *   9  menu_item and the MENU event
+ *  10  the MONSTER event and manifest features listed in notes/modding.md
+ *  11  manifest features only; no host layout or event change
+ * A data mod declares its required version with min_api in mod.json. */
 #include "mod_types.h"
 
 typedef struct MemoriesModHost MemoriesModHost;

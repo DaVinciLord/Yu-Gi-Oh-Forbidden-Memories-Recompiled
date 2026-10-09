@@ -1054,6 +1054,9 @@ it: opening a mod and moving through its packs changes nothing of it (a
 either pack leaves the other's. When `packs` names a file of the mod, the
 tab keeps it as written: a pack's fields and buttons are grey, and only
 **Shop settings...** (the manifest's `pack_shop`) is offered.
+The file is still inspected for the mod's required API on save. If it cannot
+be read, Conflicts reports an error and Mod info says compatibility is
+incomplete; fix the file before sharing the mod.
 
 ### Mod info
 
@@ -1574,6 +1577,12 @@ into the mod. `card_text.py` does the work:
 
 ## Command line
 
+    python tools/pc/fm_editor --version
+
+prints the editor version, source commit and supported mod API. **Help > About**
+shows the same information. Packaged builds keep the identity recorded at build
+time, including whether the source checkout had changes.
+
     python tools/pc/fm_editor check <mod folder> [--game <folder or .bin>] [--print]
 
 opens a mod over retail, lists what the loader would complain about, and
@@ -1600,6 +1609,20 @@ the source as above works too.
 
 
 ## Tests
+
+Release archives are extracted and launched with
+`python tools/pc/test_editor_package.py <archive> --version <release>`
+(on Linux, prefix it with `xvfb-run -a -s "-screen 0 1600x1000x24"`).
+This runs the packaged editor's `self-test --output <report.json>`: synthetic
+game files, every tab and UI page, a card and art edit, export and reopen.
+It requires a working display and fails on Tk callback errors; it needs no ROM.
+Windows writes its result to JSON because the windowed executable has no console.
+Both release platforms run this before uploading their archives; Linux's normal
+CI runs the editor suite with Xvfb so GUI tests execute too.
+
+These checks verify the editor and its packaging. The live-game checks below
+remain necessary for gameplay and rendering; passing a packaging check does not
+verify every mod combination or replace testing the release on supported systems.
 
     python -m unittest discover -s tools/pc/fm_editor/tests -t tools/pc
 

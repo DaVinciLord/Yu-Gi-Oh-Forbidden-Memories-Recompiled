@@ -50,7 +50,7 @@ jobs:
           python-version: '3.12'
       - name: Linux build tools
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends gcc-14 gcc-multilib clang lld cmake ninja-build libpng-dev
+        run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends gcc-14 gcc-multilib clang lld cmake ninja-build libpng-dev xvfb xauth
       - name: Use GCC 14 for the game sources
         if: runner.os == 'Linux'
         run: |
@@ -169,9 +169,9 @@ jobs:
       - name: FM Editor (Linux)
         if: runner.os == 'Linux'
         run: |
-          docker run --rm -v "$PWD:/src" -w /src -e PACKAGE_VERSION -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" python:3.12-bullseye sh -ec '
+          docker run --rm -v "$PWD:/src" -w /src -e PACKAGE_VERSION -e GITHUB_SHA -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" python:3.12-bullseye sh -ec '
             python -m pip install --root-user-action=ignore pyinstaller==6.18.0
-            python tools/pc/fm_editor/build_exe.py --dist tmp/fm-editor
+            python tools/pc/fm_editor/build_exe.py --dist tmp/fm-editor --version "$PACKAGE_VERSION"
             python - <<EOF
           import os, tarfile
           version = os.environ["PACKAGE_VERSION"]
@@ -183,6 +183,12 @@ jobs:
               archive.add("tools/pc/fm_editor/README.md", f"{folder}/fm-editor-README.md", filter=mode(0o644))
           EOF
             chown -R "$HOST_UID:$HOST_GID" tmp/fm-editor dist'
+      - name: Test shipped FM Editor (Windows)
+        if: runner.os == 'Windows'
+        run: python tools/pc/test_editor_package.py "dist/fm-editor-$PACKAGE_VERSION-windows.zip" --version "$PACKAGE_VERSION"
+      - name: Test shipped FM Editor (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a -s '-screen 0 1600x1000x24' python tools/pc/test_editor_package.py "dist/fm-editor-$PACKAGE_VERSION-linux.tar.gz" --version "$PACKAGE_VERSION"
       - name: ROM setup tests (Linux)
         if: runner.os == 'Linux'
         run: |

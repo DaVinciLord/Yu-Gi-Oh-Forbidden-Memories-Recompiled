@@ -4,6 +4,8 @@
     python -m unittest discover -s tools/pc/fm_editor/tests -t tools/pc
 """
 import re
+import json
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -162,6 +164,55 @@ class StampTest(unittest.TestCase):
         self.assertIn("v0.2.0", compat.release_text(9))
         self.assertIn("v0.2.1-preview.1 or newer", compat.release_text(10))
         self.assertIn("newer than v0.2.1-preview.1", compat.release_text(11))
+
+
+class ExternalPacksTest(unittest.TestCase):
+    def test_external_list_and_wrapper_survive_save_as(self):
+        pack = {"id": "p", "image_style": "full"}
+        for value in ([pack], {"packs": [pack], "pack_shop": {"open": False}}):
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as temporary:
+                source, target = Path(temporary) / "source", Path(temporary) / "target"
+                source.mkdir()
+                (source / "mod.json").write_text(json.dumps({"id": "external", "packs": "packs.json"}))
+                contents = json.dumps(value).encode()
+                (source / "packs.json").write_bytes(contents)
+                p, _ = manifest.open_mod(fixture().game(), source)
+                self.assertEqual(manifest.build(p)["min_api"], 10)
+                manifest.save_mod(p, target)
+                self.assertEqual((target / "packs.json").read_bytes(), contents)
+                again, _ = manifest.open_mod(fixture().game(), target)
+                self.assertEqual(manifest.build(again)["min_api"], 10)
+                self.assertEqual(manifest.build(again)["packs"], "packs.json")
+
+    def test_staged_file_wins_and_requirement_is_never_lowered(self):
+        p = Project(fixture().game())
+        p.packs_file = "packs.json"
+        p.files["packs.json"] = b'[{"image_style":"full"}]'
+        self.assertEqual(manifest.build(p)["min_api"], 10)
+        p.other["min_api"] = 11
+        self.assertEqual(manifest.build(p)["min_api"], 11)
+
+    def test_unreadable_or_invalid_file_is_not_claimed_compatible(self):
+        p = Project(fixture().game())
+        p.packs_file = "missing.json"
+        self.assertTrue(compat.problems(manifest.build(p), p))
+        self.assertTrue(any(i.area == "Packs" and i.level == "error" for i in validate.validate(p)))
+        for contents in (b'{', b'null', b'{"packs": "recursive.json"}'):
+            p.files[p.packs_file] = contents
+            self.assertTrue(compat.problems(manifest.build(p), p))
+        for name in ("../packs.json", "/packs.json", "C:\\packs.json", "..\\packs.json",
+                     "packs\\list.json", "./packs.json", "packs//list.json", "packs/"):
+            p.packs_file = name
+            p.files[name] = b'[]'
+            self.assertTrue(compat.problems(manifest.build(p), p))
+
+    def test_game_json_syntax_and_old_packs(self):
+        p = Project(fixture().game())
+        p.packs_file = "packs.json"
+        p.files[p.packs_file] = b'[{"image_style":"full",},]'
+        self.assertEqual(manifest.build(p)["min_api"], 10)
+        p.files[p.packs_file] = b'[{"id":"old"}]'
+        self.assertNotIn("min_api", manifest.build(p))
 
 
 if __name__ == "__main__":

@@ -126,7 +126,7 @@ def make_mod(game: Path, folder: Path, art: dict, editor_shots: Path) -> dict:
         return tab.pages[name]
 
     def choose(path):
-        return mock.patch("fm_editor.ui_tab.filedialog.askopenfilename", return_value=str(path))
+        return mock.patch("fm_editor.file_dialogs.askopenfilename", return_value=str(path))
 
     def shoot(name):
         app.update()

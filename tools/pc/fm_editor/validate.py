@@ -16,7 +16,7 @@ from .gamedata import (CARD_COUNT, DECK_COPY_LIMIT, DECK_POOL_MIN_CARDS, DECK_SI
                        TYPE_RITUAL, exodia_piece)
 from . import art, board_art, campaign_map, card_text, fixed_decks, guardian_stars, packs as packmath, values
 from . import monster_effects, roster, starter_pools, ui_rules
-from .compat import HOST_API
+from .compat import HOST_API, external_packs
 from .model import KEY_RE, Project, duelist_named
 
 MOD_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,63}$")
@@ -376,6 +376,9 @@ def _check_packs(project: Project, out: list):
     for level, message in packmath.check_rules(project.pack_shop):
         out.append(Issue(level, "Packs", "pack_shop", message, None))
     if project.packs_file is not None:
+        _, problem = external_packs(project.packs_file, project)
+        if problem:
+            out.append(Issue("error", "Packs", "packs", problem + "; compatibility cannot be determined"))
         return
     resolve = pack_resolver(project)
     ids, passwords = set(), {}

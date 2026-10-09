@@ -645,7 +645,8 @@ class App(Editing, tk.Tk):
         webbrowser.open(f"{PROJECT_URL}/blob/master/{path}")
 
     def about(self):
-        messagebox.showinfo(APP_TITLE, "FM Editor\n\nMakes mods for the PC port of Yu-Gi-Oh! Forbidden Memories. "
+        from .build_info import description
+        messagebox.showinfo(APP_TITLE, description() + "\n\nMakes mods for the PC port of Yu-Gi-Oh! Forbidden Memories. "
                             "It reads the retail tables from your own game files and saves a mod folder whose "
                             "mod.json holds only what you changed. It never writes the disc or game/.\n\n"
                             "tools/pc/fm_editor/README.md", parent=self)

@@ -21,9 +21,12 @@ enum {
      * named after the token (open_data), so each slot has its own. */
     MEMORIES_EVENT_SLOT_SAVE, MEMORIES_EVENT_SLOT_LOAD,
     /* API 6: end-of-duel StarChip prize about to be added to the save
-     * (Mods_AwardStarchips). a is the retail prize (rank tier + 1); edit it
+     * (Mods_AwardStarchips). a is the configured prize (limits.starchip_prize,
+     * otherwise rank tier + 1); edit it
      * to change the award, or handle to skip adding. After observes result
-     * as the amount actually credited. On-screen star icons stay retail. */
+     * as the amount actually credited, capped by limits.starchips. The
+     * results display shows the configured prize (one icon and xN past 8);
+     * changing a here does not change that already displayed prize. */
     MEMORIES_EVENT_STARCHIP,
     /* API 9: an item of the title's menus chosen (notes/modding.md, "The
      * title's menus"): a the item (0-10 the game's entries, as

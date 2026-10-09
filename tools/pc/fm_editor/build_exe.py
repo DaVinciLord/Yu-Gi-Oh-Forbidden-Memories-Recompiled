@@ -16,6 +16,7 @@ Trojan:Win32/Wacatac.B!ml). The folder build carries version information
 too, which scanners also like to see.
 """
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -54,13 +55,19 @@ def main() -> int:
     parser.add_argument("--dist", type=Path, default=ROOT / "tmp" / "pc" / "fm-editor")
     parser.add_argument("--console", action="store_true", help="keep a console window (for the command line)")
     parser.add_argument("--version", default="", help="the release, vX.Y.Z[-PRE], for the version information")
+    parser.add_argument("--commit", default=os.environ.get("GITHUB_SHA"), help="source commit (default: Git checkout)")
     arguments = parser.parse_args()
     dist = arguments.dist.resolve()
     work = dist / "build"
     work.mkdir(parents=True, exist_ok=True)
+    sys.path.insert(0, str(HERE.parent))
+    from fm_editor.build_info import source_info
+    identity = work / "build-info.json"
+    identity.write_text(json.dumps(source_info(arguments.version, arguments.commit)), encoding="utf-8")
     build = ["--noconfirm", "--clean", "--distpath", str(dist), "--workpath", str(work)]
     program = ["--name", "fm-editor", "--specpath", str(work), "--paths", str(HERE.parent),
-               "--hidden-import", "text_listing", "--collect-submodules", "fm_editor"]
+               "--hidden-import", "text_listing", "--collect-submodules", "fm_editor",
+               "--add-data", f"{identity}{os.pathsep}fm_editor"]
     if sys.platform == "win32":
         version_file = work / "version.txt"
         version_file.write_text(version_info(arguments.version), encoding="utf-8")

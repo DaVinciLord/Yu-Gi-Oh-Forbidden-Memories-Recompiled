@@ -13,10 +13,14 @@ jobs:
       # The controls window test draws the pad picture through libpng; the
       # object loader test builds 32-bit (gcc -m32) and its mods with clang
       # and lld, as a player's build_mod.py does.
-      - run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends libpng-dev gcc-multilib lld
+      - run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends libpng-dev gcc-multilib lld xvfb xauth python3-tk
       - run: cmake -S . -B tmp/pc -DBUILD_TESTING=ON
       - run: cmake --build tmp/pc --config Release
-      - run: python tools/pc/test_path_layout.py --build tmp/pc
+      - name: Tests including the editor GUI
+        run: |
+          xvfb-run -a -s '-screen 0 1600x1000x24' sh -ec '
+            python -c "import tkinter; root = tkinter.Tk(); root.destroy()"
+            python tools/pc/test_path_layout.py --build tmp/pc'
       - run: cmake --build tmp/pc --target pc_audit
       - run: python tools/pc/test_vt_check.py
   # The Windows game is built with llvm-mingw for i686 (play.bat,

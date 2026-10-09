@@ -14,6 +14,8 @@ tests/test_compat.py holds it to that header.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from .gamedata import FRAME_COLOR_NAMES, TYPE_MAGIC
 from .model import type_named
 
@@ -41,6 +43,52 @@ def release_text(api: int) -> str:
 def _entries(value):
     """The objects of a list key (a file name or anything else: none)."""
     return [entry for entry in value if isinstance(entry, dict)] if isinstance(value, list) else []
+
+
+def external_packs(name: str, project=None) -> tuple:
+    """(pack list, problem) for packs.c's external list or wrapper object.
+
+    Read staged files before the source folder, just as Save writes them.
+    Failure is explicit: an unreadable file cannot establish compatibility.
+    The original file and manifest reference are never changed.
+    """
+    from .overlaps import parse
+    # Match paths.c Paths_Contained, including its rejection of backslashes
+    # and empty/dot components even on Windows.
+    parts = name.split("/")
+    if not name or "\\" in name or name.startswith("/") or name[1:2] == ":" or \
+            any(part in ("", ".", "..") for part in parts):
+        return [], f"packs file {name!r} must be inside the mod"
+    try:
+        files = getattr(project, "files", {})
+        if name in files:
+            blob = files[name]
+        else:
+            source = getattr(project, "source_dir", None)
+            if source is None:
+                return [], f"packs file {name!r} has no source folder"
+            source = Path(source).resolve()
+            path = source.joinpath(*parts).resolve()
+            if not path.is_relative_to(source):
+                return [], f"packs file {name!r} must be inside the mod"
+            blob = path.read_bytes()
+        value = parse(blob.decode("utf-8", errors="surrogateescape"))
+    except (OSError, ValueError) as problem:
+        return [], f"cannot read packs file {name!r}: {problem}"
+    if isinstance(value, dict):
+        value = value.get("packs", [])
+    if not isinstance(value, list):
+        return [], f"packs file {name!r} must contain a pack list or an object with a packs list"
+    return value, None
+
+
+def problems(manifest: dict, project=None) -> list:
+    """Reasons the editor cannot determine all feature requirements."""
+    value = manifest.get("packs")
+    if isinstance(value, str):
+        _, problem = external_packs(value, project)
+        return [problem] if problem else []
+    return []
 
 
 def _has_key(value, key: str) -> bool:
@@ -106,7 +154,10 @@ def features(manifest: dict, project=None) -> list:
     for entry in _entries(manifest.get("equips")):
         if "bonus_attack" in entry or "bonus_defense" in entry:
             add(10, "separate equip ATK and DEF boosts")
-    for entry in _entries(manifest.get("packs")):
+    pack_list = manifest.get("packs")
+    if isinstance(pack_list, str):
+        pack_list, _ = external_packs(pack_list, project)
+    for entry in _entries(pack_list):
         if "image_style" in entry:
             add(10, "a pack's \"image_style\"")
     # --- API 11 -------------------------------------------------------------

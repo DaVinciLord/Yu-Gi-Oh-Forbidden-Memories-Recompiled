@@ -159,7 +159,7 @@ def make_mod(game: Path, folder: Path, art: dict) -> list:
     page = tab.pages["board"]
 
     def choose(path):
-        return mock.patch("fm_editor.ui_board.filedialog.askopenfilename", return_value=str(path))
+        return mock.patch("fm_editor.file_dialogs.askopenfilename", return_value=str(path))
 
     def field(terrain):
         page.field.set(terrain)
