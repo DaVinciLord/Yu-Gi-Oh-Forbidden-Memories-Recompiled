@@ -154,8 +154,9 @@ static void hand_cases(void)
     d = Hm_PlanHand(&b,&o,&rules); assert(d.selection[0] == 11 && !d.selection[8]);
     b.hand[0].effect = 0;
     d = Hm_PlanHand(&b,&o,&rules); assert(d.selection[0] == 11 && d.selection[8]);
-    b.hand[0] = (HmCard){501,347,21,0,0,0,0,0};
-    d = Hm_PlanHand(&b,&o,&rules); assert(d.selection[0] == 11 && d.selection[8]);
+    b.hand[0] = (HmCard){501,681,21,0,0,0,0,0};
+    d = Hm_PlanHand(&b,&o,&rules);
+    assert(d.selection[0] == 11 && d.selection[6] == 6 && d.selection[8]);
     b = empty(); b.hand_count = 1; b.hand[0] = magic(657,23);
     b.own[0] = monster(10,1800,1000); b.own[0].star = 2;
     b.enemy[0] = monster(20,2600,1000); b.enemy[0].star = 3;
