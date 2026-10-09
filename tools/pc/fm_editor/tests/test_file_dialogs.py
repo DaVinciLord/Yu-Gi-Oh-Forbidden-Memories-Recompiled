@@ -8,8 +8,8 @@ from unittest import mock
 
 try:
     import tkinter as tk
-except ImportError:     # a Python built without Tk
-    tk = None
+except ImportError:     # a Python built without Tk: file_dialogs needs it
+    raise unittest.SkipTest("this Python has no Tk")
 
 from fm_editor import file_dialogs as fd
 
@@ -73,7 +73,6 @@ class RoutingTest(unittest.TestCase):
             parent.winfo_toplevel.assert_not_called()
 
 
-@unittest.skipIf(tk is None, "this Python has no Tk")
 class DialogWindowTest(unittest.TestCase):
     """The real Tk dialog, on a display."""
 
@@ -138,6 +137,8 @@ class DialogWindowTest(unittest.TestCase):
 
     def test_a_size_the_user_drags_to_is_remembered(self):
         from fm_editor import settings
+        if self.root.winfo_screenwidth() < 1100 or self.root.winfo_screenheight() < 800:
+            self.skipTest("the screen is too small to drag the dialog to 1000x700")
 
         def drag(path):
             self.root.tk.call("wm", "geometry", path, "1000x700")
