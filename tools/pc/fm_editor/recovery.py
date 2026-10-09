@@ -3,7 +3,11 @@
 A copy hard-links each file unchanged since the previous copy (same size and
 time, and settled before that copy was made) instead of copying it again, so
 a large mod's art costs its disk space once and an autosave takes no time.
-Copies are never written into after they are made, so sharing is safe."""
+Copies are never written into after they are made, so sharing is safe.
+
+The editor takes what a copy needs from the project on its own thread
+(Recovery.prepare: the undo history's snapshot, a few names) and writes it
+on another (Writer), so a big mod's copy does not stop the window."""
 from __future__ import annotations
 
 import hashlib
@@ -11,11 +15,13 @@ import itertools
 import json
 import os
 import shutil
+import threading
 import uuid
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import manifest, roster, settings
+from . import manifest, settings
 from .history import Snapshot
 
 
@@ -63,15 +69,36 @@ def fill(source, destination, previous=None, settled=0.0, skip=lambda rel: False
             shutil.copy2(item, target)
 
 
+@dataclass
+class Job:
+    """Everything a copy reads from the live project, taken beforehand: the
+    write needs nothing else of it and can run on another thread."""
+    snapshot: Snapshot
+    retail: object
+    source: object                  # the mod folder it was read from, or None
+    owned: set = field(default_factory=set)     # roster.owned's files of that folder
+    name: str = ""
+    forms: dict = field(default_factory=dict)
+
+
 class Recovery:
     def __init__(self):
         self.folder = root() / ("session-" + uuid.uuid4().hex)
 
-    def write(self, project, forms=None, snapshot=None):
-        """snapshot: the project's state already taken (the history's
-        current one), so a big mod is not pickled twice."""
+    def prepare(self, project, forms=None, snapshot=None) -> Job:
+        """On the editor's thread. snapshot: the project's state already
+        taken (the history's current one), so a big mod is not pickled twice."""
         if project.source_dir and self.folder.resolve().is_relative_to(Path(project.source_dir).resolve()):
             raise ValueError("The recovery folder is inside this mod; choose a different mod folder.")
+        return Job(snapshot or Snapshot(project), project.retail, project.source_dir,
+                   set(getattr(project, "roster_owned", ()) or ()), project.info.name,
+                   json.loads(json.dumps(forms or {})))
+
+    def write(self, project, forms=None, snapshot=None):
+        return self.write_job(self.prepare(project, forms, snapshot))
+
+    def write_job(self, job: Job):
+        """The copy itself: on any thread, one at a time for this folder."""
         self.folder.mkdir(parents=True, exist_ok=True)
         generation = self.folder / uuid.uuid4().hex
         previous = None
@@ -84,17 +111,17 @@ class Recovery:
             if not isinstance(previous, str) or len(previous) != 32 or any(c not in "0123456789abcdef" for c in previous):
                 raise ValueError("The previous recovery index is invalid; its files were left untouched.")
         try:
-            clone = (snapshot or Snapshot(project)).restore(project.retail, project.source_dir)
+            clone = job.snapshot.restore(job.retail, job.source)
             manifest.save_mod(clone, generation, copy_source=False)
-            source = project.source_dir
+            source = job.source
             if source and Path(source).is_dir():
                 # What save_mod would copy first; the files it wrote win.
                 # The roster's files it read are its own to write (roster.py):
                 # a duelist taken out must not come back with its file.
                 fill(source, generation, self.folder / previous if previous else None, settled,
-                     skip=lambda rel: rel.name == "mod.json" or roster.owned(project, rel.as_posix()))
-            record = {"name": project.info.name, "time": stamp(), "generation": generation.name,
-                      "source": str(project.source_dir or ""), "forms": forms or {}}
+                     skip=lambda rel: rel.name == "mod.json" or rel.as_posix() in job.owned)
+            record = {"name": job.name, "time": stamp(), "generation": generation.name,
+                      "source": str(job.source or ""), "forms": job.forms}
             temporary = index.with_suffix(".tmp")
             temporary.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
             temporary.replace(index)
@@ -107,6 +134,46 @@ class Recovery:
 
     def clear(self):
         shutil.rmtree(self.folder, ignore_errors=True)
+
+
+class Writer:
+    """One copy written on a thread of its own. The window asks done() from
+    its own thread (Tk is never called from this one); cancel() (the mod was
+    saved or closed meanwhile) has the copy removed once it is written."""
+
+    def __init__(self, recovery: Recovery, job: Job):
+        self.recovery, self.job = recovery, job
+        self.error = None
+        self._lock = threading.Lock()
+        self._cancelled = False
+        self._thread = threading.Thread(target=self._run, name="FM Editor recovery copy")
+
+    def start(self):
+        self._thread.start()
+        return self
+
+    def _run(self):
+        try:
+            self.recovery.write_job(self.job)
+        except Exception as problem:        # reported by the window, on its thread
+            self.error = problem
+        with self._lock:
+            if self._cancelled:
+                self.recovery.clear()
+
+    def cancel(self):
+        with self._lock:
+            self._cancelled = True
+
+    @property
+    def cancelled(self) -> bool:
+        return self._cancelled
+
+    def done(self) -> bool:
+        return not self._thread.is_alive()
+
+    def wait(self):
+        self._thread.join()
 
 
 def backup(folder, keep=5):

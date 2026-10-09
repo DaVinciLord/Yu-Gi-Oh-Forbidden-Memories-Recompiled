@@ -3,13 +3,41 @@ from __future__ import annotations
 
 import json
 import shutil
+import time
 import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, ttk
 
-from . import manifest, recovery
+from . import manifest, recovery, settings
 from .icon_choice import IconChoice
 from .widgets import scrolled_tree
+
+
+# File > Recovery copy: how often, in minutes, a copy of unsaved work is
+# written (0: never). A copy of a big mod takes seconds, so not at each edit.
+RECOVERY_CHOICES = (0, 1, 5, 10, 30)
+RECOVERY_DEFAULT = 5
+RECOVERY_ON_APPLY = 60          # seconds: Apply edits writes one when the last is older
+RECOVERY_RETRY = 500            # ms: a copy waiting on the undo step or another copy
+
+
+def recovery_label(minutes: int) -> str:
+    return "Off" if not minutes else "Every minute" if minutes == 1 else f"Every {minutes} minutes"
+
+
+def recovery_minutes(value) -> int:
+    """The setting as stored, or the default for anything else."""
+    return value if type(value) is int and value in RECOVERY_CHOICES else RECOVERY_DEFAULT
+
+
+def recovery_delay(minutes: int, now: float, copied, since) -> float | None:
+    """Seconds until the next copy is due, or None for none: at most one
+    every `minutes`, counted from the last copy, else from the first change
+    it would hold."""
+    if not minutes:
+        return None
+    start = copied if copied is not None else since if since is not None else now
+    return max(0.0, start + minutes * 60 - now)
 
 
 class Editing:
@@ -17,6 +45,12 @@ class Editing:
         self.history = None
         self.recovery = recovery.Recovery()
         self._history_job = self._recovery_job = None
+        self.recovery_choice = tk.IntVar(self, value=recovery_minutes(settings.load().get("recovery_minutes")))
+        self._recovery_stale = False    # changes the last copy does not hold
+        self._recovery_since = None     # time.monotonic() of the first of them
+        self._recovery_copied = None    # ... of the last copy started
+        self._recovery_writer = None    # recovery.Writer running now
+        self._recovery_poll = None
         self._refreshing = False
         self._pending = set()
         self._recovered = False
@@ -130,12 +164,22 @@ class Editing:
         self._recovered_from = None
 
     def clear_recovery(self):
+        """No copy of this session is wanted any more (saved, or closed)."""
+        writer = self._recovery_writer
+        if writer is not None and writer.recovery is self.recovery:
+            writer.cancel()             # it removes what it wrote once done
         self.recovery.clear()
+        self._recovery_stale = False
+        self._recovery_since = self._recovery_copied = None
+        if self._recovery_job is not None:
+            self.after_cancel(self._recovery_job)
+            self._recovery_job = None
         if self._recovery_source is not None:
             self._recovery_source.clear()
             self._recovery_source = None
 
     def cancel_edit_jobs(self):
+        # Not the check on a copy being written: it finishes on its own.
         for name in ("_history_job", "_recovery_job"):
             job = getattr(self, name, None)
             if job is not None:
@@ -159,6 +203,9 @@ class Editing:
         if self.commit_all(show=True):
             self.flush_history()
             self.say("Edits applied. Ctrl+S saves the mod folder.")
+            if self.recovery_choice.get() and self._recovery_stale and (
+                    self._recovery_copied is None or time.monotonic() - self._recovery_copied >= RECOVERY_ON_APPLY):
+                self.autosave(wait=False)
 
     def refresh_editors(self):
         card, equip, pack, picture = self.cards.current, self.equips.current, self.packs.index, self.art.current
@@ -216,13 +263,54 @@ class Editing:
         self.say("Undid edit." if delta < 0 else "Redid edit.")
 
     def schedule_recovery(self):
+        """Something changed: the next copy holds it, when it is due
+        (File > Recovery copy), not now."""
+        if self.project is None:
+            return
+        self._recovery_stale = True
+        if self._recovery_since is None:
+            self._recovery_since = time.monotonic()
+        self._arm_recovery()
+
+    def _arm_recovery(self, delay_ms=None):
         if self._recovery_job is not None:
+            if delay_ms is None:
+                return          # already counting down
             self.after_cancel(self._recovery_job)
-        self._recovery_job = self.after(2000, self._autosave_due)
+            self._recovery_job = None
+        if not self.recovery_choice.get():
+            return              # File > Recovery copy > Off
+        if delay_ms is None:
+            seconds = recovery_delay(self.recovery_choice.get(), time.monotonic(),
+                                     self._recovery_copied, self._recovery_since)
+            if seconds is None or not self._recovery_stale:
+                return
+            delay_ms = int(seconds * 1000)
+        self._recovery_job = self.after(max(delay_ms, 1), self._autosave_due)
 
     def _autosave_due(self):
         self._recovery_job = None
-        self.autosave()
+        if self._history_job is not None:
+            # In the middle of edits: after their undo step, whose snapshot
+            # the copy uses rather than taking one of its own.
+            self._arm_recovery(RECOVERY_RETRY)
+            return
+        self.autosave(wait=False)
+
+    def choose_recovery(self):
+        """File > Recovery copy, remembered for the next start."""
+        minutes = recovery_minutes(self.recovery_choice.get())
+        problem = settings.save("recovery_minutes", minutes)
+        if self._recovery_job is not None:
+            self.after_cancel(self._recovery_job)
+            self._recovery_job = None
+        self._arm_recovery()
+        if problem:
+            self.say(f"Could not remember the recovery copy setting: {problem}")
+        elif minutes:
+            self.say(f"Recovery copy: {recovery_label(minutes).lower()} while there are unsaved changes.")
+        else:
+            self.say("Recovery copy off: only Ctrl+S keeps your work if the editor closes unexpectedly.")
 
     def form_drafts(self):
         drafts = {}
@@ -293,24 +381,73 @@ class Editing:
         self.update_title()
         self.update_edit_state()
 
-    def autosave(self):
+    def autosave(self, wait=True):
+        """Write a recovery copy now: what it needs is taken here, the
+        writing is done on another thread (recovery.Writer). wait: until it
+        is written; the timer and Apply edits do not wait."""
         if self._recovery_job is not None:
             self.after_cancel(self._recovery_job)
             self._recovery_job = None
         if not self.project:
             return
         if not self.dirty and not self._pending:
-            self.recovery.clear()
+            self.clear_recovery()
             return
+        if self._recovery_writer is not None:
+            if not wait and not self._recovery_writer.done():
+                # Never two at once: the next when it is due after that one.
+                self._recovery_stale = True
+                return
+            self.finish_recovery()
         # The history records each edit when idle; with none waiting, its
         # current snapshot is this project.
         snapshot = self.history.items[self.history.position] if self.history and self._history_job is None else None
         try:
-            self.recovery.write(self.project, self.form_drafts(), snapshot)
+            job = self.recovery.prepare(self.project, self.form_drafts(), snapshot)
         except (OSError, ValueError) as problem:
-            self.edit_state.configure(text=f"Recovery copy failed: {problem}. Use Ctrl+S to save.")
+            self._recovery_failed(problem)
+            return
+        self._recovery_stale = False
+        self._recovery_since = None
+        self._recovery_copied = time.monotonic()
+        self._recovery_writer = recovery.Writer(self.recovery, job).start()
+        if wait:
+            self.finish_recovery()
         else:
+            self._recovery_poll = self.after(100, self._check_recovery)
+
+    def _check_recovery(self):
+        self._recovery_poll = None
+        if self._recovery_writer is not None and not self._recovery_writer.done():
+            self._recovery_poll = self.after(100, self._check_recovery)
+            return
+        self.finish_recovery()
+
+    def finish_recovery(self):
+        """Wait for a copy being written, and say how it went."""
+        writer, self._recovery_writer = self._recovery_writer, None
+        if self._recovery_poll is not None:
+            self.after_cancel(self._recovery_poll)
+            self._recovery_poll = None
+        if writer is None:
+            return
+        writer.wait()
+        if writer.cancelled or writer.recovery is not self.recovery:
+            return
+        if writer.error is not None:
+            self._recovery_failed(writer.error)
+        elif hasattr(self, "edit_state"):
             self.edit_state.configure(text="Recovery copy updated • Ctrl+S saves the mod folder")
+        if self._recovery_stale:
+            self._arm_recovery()
+
+    def _recovery_failed(self, problem):
+        if hasattr(self, "edit_state"):
+            self.edit_state.configure(text=f"Recovery copy failed: {problem}. Use Ctrl+S to save.")
+        self._recovery_stale = True
+        if self._recovery_since is None:
+            self._recovery_since = time.monotonic()
+        self._arm_recovery()
 
     def recover_work(self):
         if not self.need_game():
