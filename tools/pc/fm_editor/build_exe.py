@@ -16,6 +16,7 @@ Trojan:Win32/Wacatac.B!ml). The folder build carries version information
 too, which scanners also like to see.
 """
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -69,9 +70,14 @@ def main() -> int:
     if not arguments.console:
         program.append("--windowed")
     program.append(str(HERE / "__main__.py"))
+    # The spec's collect_submodules imports fm_editor before --paths is in
+    # effect; without this it finds nothing and the pages the UI tab loads
+    # by name (ui_title, ui_duel, ui_board) are left out of the program.
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(HERE.parent), env.get("PYTHONPATH")]))
     makespec = [sys.executable, "-m", "PyInstaller.utils.cliutils.makespec", *program]
     print(" ".join(makespec))
-    if subprocess.run(makespec, cwd=str(ROOT)).returncode != 0:
+    if subprocess.run(makespec, cwd=str(ROOT), env=env).returncode != 0:
         return 1
     spec = work / "fm-editor.spec"
     text = spec.read_text()
@@ -90,7 +96,7 @@ def main() -> int:
     spec.write_text(text)
     command = [sys.executable, "-m", "PyInstaller", *build, str(spec)]
     print(" ".join(command))
-    result = subprocess.run(command, cwd=str(ROOT))
+    result = subprocess.run(command, cwd=str(ROOT), env=env)
     if result.returncode == 0:
         built = dist / "fm-editor" / "fm-editor.exe" if sys.platform == "win32" else dist / "fm-editor"
         print(f"built {built}")
