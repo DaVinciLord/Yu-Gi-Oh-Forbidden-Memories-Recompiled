@@ -91,7 +91,7 @@ The menus:
 
 | Menu | Entries |
 |---|---|
-| File | **New mod**, **Open mod folder...** (Ctrl+O), **Save** (Ctrl+S), **Save as...**, **Export mod...**, **Recover work...**, **Convert an old recomp's .ygomods package (one way)...** ([below](#converting-an-old-recomps-ygomods-package-one-way)), **Game files...**, **Exit** |
+| File | **New mod**, **Open mod folder...** (Ctrl+O), **Save** (Ctrl+S), **Save as...**, **Export mod...**, **Recover work...**, **Recovery copy** (how often), **Convert an old recomp's .ygomods package (one way)...** ([below](#converting-an-old-recomps-ygomods-package-one-way)), **Game files...**, **Exit** |
 | Edit | **Undo** (Ctrl+Z), **Redo** (Ctrl+Y), **Apply edits**, **Discard form edits** |
 | Tools | **Check the mod** (the Conflicts tab), **Preview mod.json** (the file Save would write), **Card text preview** ([below](#card-text-preview)) |
 | View | **Dark mode**, **Interface size** |
@@ -156,13 +156,20 @@ edits** drops unapplied form input while keeping changes already applied.
 applied edits across tabs, including card conversions, equip targets, tables,
 and imported card/map artwork, pack pictures and Guardian Star icons. Undo first applies a valid pending form, so that
 form can be undone too. Invalid input must be corrected or discarded first.
-History retains up to 50 edits, with a 64 MiB snapshot budget (at least the
-current and previous snapshot). It lasts until a different mod or game is
+History retains up to 50 edits, with a 64 MiB budget for what older states
+hold beyond the mod as it is now (at least the current and previous snapshot);
+pictures are shared between snapshots, so a big mod's art costs the history
+nothing until a picture is changed. It lasts until a different mod or game is
 opened; saving keeps it. Undoing a save changes the working mod: save again to
 write that restored version. Dialogs keep their own keyboard behavior.
 
-**Recovery and backups:** After two seconds without another edit, the editor
-updates a separate recovery copy of the working mod and its assets. Unapplied
+**Recovery and backups:** While there are unsaved changes, the editor
+updates a separate recovery copy of the working mod and its assets every five
+minutes, and when **Apply edits** comes more than a minute after the last copy
+(or a save fails). **File > Recovery copy** sets how often: **Off**, **Every
+minute**, or every 5, 10 or 30 minutes; the choice is remembered. The copy is
+written in the background, so editing goes on while a big mod's copy is
+made. Unapplied
 Cards, Mod info, Values and Packs fields are included, even incomplete input.
 This does not save or change the original mod folder. The editor offers to
 review leftover drafts on startup; **File > Recover work...** lists drafts and

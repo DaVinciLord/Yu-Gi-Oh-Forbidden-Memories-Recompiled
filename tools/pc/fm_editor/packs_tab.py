@@ -17,9 +17,9 @@ import json
 import time
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import messagebox, ttk
 
-from . import art, duelist_rules, packs as packmath, pngio, roster, validate
+from . import art, duelist_rules, file_dialogs, packs as packmath, pngio, roster, validate
 from .bulk_dialog import FilterPanel
 from .gamedata import DUELIST_NAMES
 from .tabs import Tab
@@ -1359,8 +1359,8 @@ class PacksTab(Tab):
         entry = self.current()
         if entry is None or not self.commit():
             return
-        path = filedialog.askopenfilename(parent=self, title="Picture for the pack",
-                                          filetypes=[("PNG", "*.png"), ("All files", "*")])
+        path = file_dialogs.askopenfilename(parent=self, title="Picture for the pack",
+                                            filetypes=[("PNG", "*.png"), ("All files", "*")])
         if path:
             self.use_file(path)
 
@@ -1386,8 +1386,8 @@ class PacksTab(Tab):
         blob = self.image_bytes(entry)
         if blob is None:
             return
-        path = filedialog.asksaveasfilename(parent=self, title="Export the pack's picture", defaultextension=".png",
-                                            initialfile=f"{packmath.pack_id(entry)}.png", filetypes=[("PNG", "*.png")])
+        path = file_dialogs.asksaveasfilename(parent=self, title="Export the pack's picture", defaultextension=".png",
+                                              initialfile=f"{packmath.pack_id(entry)}.png", filetypes=[("PNG", "*.png")])
         if path:
             Path(path).write_bytes(blob)
 

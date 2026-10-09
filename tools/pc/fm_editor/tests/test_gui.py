@@ -519,7 +519,7 @@ class GuiTest(GuiCase):
         app = self.app
         app.info.vars["id"].set("export-test")
         with tempfile.TemporaryDirectory() as where, \
-                mock.patch("fm_editor.app.filedialog.askdirectory", return_value=where):
+                mock.patch("fm_editor.file_dialogs.askdirectory", return_value=where):
             self.assertTrue(app.save(ask=True, export=True))
             self.assertTrue((Path(where) / "export-test" / "mod.json").is_file())
             self.assertEqual(Path(app.project.source_dir), Path(where) / "export-test")
@@ -2144,7 +2144,7 @@ class GuiTest(GuiCase):
         app.restore_drafts(forms)
         self.assertEqual(app.cards.vars["attack"].get(), "unfinished")
         self.assertTrue(widget.get("1.0", "end-1c").endswith("Draft text"))
-        with mock.patch.object(app.recovery, "write", side_effect=OSError("disk full")):
+        with mock.patch.object(app.recovery, "write_job", side_effect=OSError("disk full")):
             app.autosave()
         self.assertIn("Recovery copy failed", app.edit_state.cget("text"))
         self.assertTrue(rows[0][1].exists())
@@ -2243,7 +2243,7 @@ class GuiTest(GuiCase):
         self.assertTrue(row[1].exists(), "original recovery copy remains until saved")
         source = app.project.source_dir
         destination = Path(self.tmp.name) / "recovered-save"
-        with mock.patch("fm_editor.app.filedialog.askdirectory", return_value=str(destination)) as choose:
+        with mock.patch("fm_editor.file_dialogs.askdirectory", return_value=str(destination)) as choose:
             self.assertTrue(app.save())
         choose.assert_called_once()
         self.assertFalse(app._recovered)

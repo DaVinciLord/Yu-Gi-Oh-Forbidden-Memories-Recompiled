@@ -5,9 +5,9 @@ from __future__ import annotations
 import re
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import messagebox, ttk
 
-from . import art, pngio, settings
+from . import art, file_dialogs, pngio, settings
 from .tabs import Tab, type_label
 from .widgets import card_matches, px, scrolled_tree, ui_font
 
@@ -432,8 +432,8 @@ class ArtTab(Tab):
         cid = self.current
         if cid is None:
             return
-        path = filedialog.askopenfilename(parent=self, title=f"{art.LABELS[part]} for {self.project.card_label(cid)}",
-                                          filetypes=[("PNG images", "*.png"), ("All files", "*.*")])
+        path = file_dialogs.askopenfilename(parent=self, title=f"{art.LABELS[part]} for {self.project.card_label(cid)}",
+                                            filetypes=[("PNG images", "*.png"), ("All files", "*.*")])
         if not path:
             return
         self.use_file(part, path)
@@ -484,9 +484,9 @@ class ArtTab(Tab):
             return
         name = re.sub(r"[^a-z0-9]+", "-", project.cards[cid].name.lower()).strip("-")
         suffix = {"art": "", "thumbnail": ".small", "title": ".title"}[part]
-        path = filedialog.asksaveasfilename(parent=self, defaultextension=".png",
-                                            initialfile=f"{cid:04d}-{name}{suffix}.png",
-                                            filetypes=[("PNG images", "*.png")])
+        path = file_dialogs.asksaveasfilename(parent=self, defaultextension=".png",
+                                              initialfile=f"{cid:04d}-{name}{suffix}.png",
+                                              filetypes=[("PNG images", "*.png")])
         if path:
             try:
                 pngio.write(path, image)

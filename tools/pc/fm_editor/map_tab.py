@@ -17,10 +17,10 @@ from __future__ import annotations
 import base64
 import copy
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import messagebox, ttk
 
 from . import campaign_map as cm
-from . import map_art, pngio
+from . import file_dialogs, map_art, pngio
 from .tabs import Tab
 from .widgets import WrapLabel, legend, px, ui_font, ui_scale
 
@@ -1107,8 +1107,8 @@ class MapTab(Tab):
     def choose_reference(self):
         if self.project is None or not cm.available(self.project):
             return
-        path = filedialog.askopenfilename(parent=self, title="A screenshot of this place in the game",
-                                          filetypes=[("PNG", "*.png"), ("All files", "*.*")])
+        path = file_dialogs.askopenfilename(parent=self, title="A screenshot of this place in the game",
+                                            filetypes=[("PNG", "*.png"), ("All files", "*.*")])
         if not path:
             return
         try:
@@ -1240,8 +1240,8 @@ class MapPictures(tk.Toplevel):
     def import_sprite(self, path=None):
         label = self.sprite.get()
         _, animation, variant = next(s for s in map_art.SPRITES if s[0] == label)
-        path = path or filedialog.askopenfilename(parent=self, title=f"A picture for the {label.lower()}",
-                                                  filetypes=[("PNG", "*.png"), ("All files", "*.*")])
+        path = path or file_dialogs.askopenfilename(parent=self, title=f"A picture for the {label.lower()}",
+                                                    filetypes=[("PNG", "*.png"), ("All files", "*.*")])
         if not path:
             return
         try:
@@ -1252,13 +1252,13 @@ class MapPictures(tk.Toplevel):
         self.done(notes, f"{label}: {path}")
 
     def export_sprites(self, folder=None):
-        folder = folder or filedialog.askdirectory(parent=self, title="A folder for the sprites")
+        folder = folder or file_dialogs.askdirectory(parent=self, title="A folder for the sprites")
         if folder:
             written = map_art.export_sprites(self.project, folder)
             self.status.configure(text=f"Wrote {len(written)} files to {folder}")
 
     def import_sprites(self, folder=None):
-        folder = folder or filedialog.askdirectory(parent=self, title="The folder with sprites-p0.png to p3.png")
+        folder = folder or file_dialogs.askdirectory(parent=self, title="The folder with sprites-p0.png to p3.png")
         if not folder:
             return
         try:
@@ -1273,13 +1273,13 @@ class MapPictures(tk.Toplevel):
         self.done([], "The sprites are the disc's again.")
 
     def export_textures(self, folder=None):
-        folder = folder or filedialog.askdirectory(parent=self, title="A folder for the textures")
+        folder = folder or file_dialogs.askdirectory(parent=self, title="A folder for the textures")
         if folder:
             written = map_art.export_textures(self.project, self.package_name(), folder)
             self.status.configure(text=f"Wrote {len(written)} textures to {folder}")
 
     def import_textures(self, folder=None):
-        folder = folder or filedialog.askdirectory(parent=self, title="The folder with the textures")
+        folder = folder or file_dialogs.askdirectory(parent=self, title="The folder with the textures")
         if not folder:
             return
         try:

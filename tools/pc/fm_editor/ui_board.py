@@ -13,9 +13,9 @@ from __future__ import annotations
 import time
 import tkinter as tk
 from collections import OrderedDict
-from tkinter import filedialog, messagebox, ttk
+from tkinter import messagebox, ttk
 
-from . import board_art as ba, board_model as bm, pngio
+from . import board_art as ba, board_model as bm, file_dialogs, pngio
 from .pngio import Image
 from .ui_tab import ColorButton
 from .widgets import px, ui_font
@@ -566,8 +566,8 @@ class BoardPage(ttk.Frame):
     def replace(self, path=None):
         if self.project is None:
             return
-        path = path or filedialog.askopenfilename(parent=self, title="Choose a PNG",
-                                                  filetypes=[("PNG pictures", "*.png"), ("All files", "*")])
+        path = path or file_dialogs.askopenfilename(parent=self, title="Choose a PNG",
+                                                    filetypes=[("PNG pictures", "*.png"), ("All files", "*")])
         if not path:
             return
         try:
@@ -585,9 +585,9 @@ class BoardPage(ttk.Frame):
         if self.project is None or not ba.disc(self.project).ok:
             return
         name = f"{self.terrain}-{self.chosen}.png"
-        path = path or filedialog.asksaveasfilename(parent=self, title="Export the game's texture",
-                                                    initialfile=name, defaultextension=".png",
-                                                    filetypes=[("PNG pictures", "*.png")])
+        path = path or file_dialogs.asksaveasfilename(parent=self, title="Export the game's texture",
+                                                      initialfile=name, defaultextension=".png",
+                                                      filetypes=[("PNG pictures", "*.png")])
         if not path:
             return
         data = ba.disc(self.project)

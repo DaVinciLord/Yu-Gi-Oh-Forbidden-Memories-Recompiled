@@ -283,7 +283,7 @@ class UiTabTest(GuiCase):
         self.picture = png(self.folder / "art.png", 64, 20)
 
     def choose(self, path):
-        return mock.patch("fm_editor.ui_tab.filedialog.askopenfilename", return_value=str(path))
+        return mock.patch("fm_editor.file_dialogs.askopenfilename", return_value=str(path))
 
     def page(self, name):
         self.tab.page_name.set(name)

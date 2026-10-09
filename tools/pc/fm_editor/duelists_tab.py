@@ -14,9 +14,9 @@ from __future__ import annotations
 import copy as _copy
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import messagebox, ttk
 
-from . import duelist_rules, fixed_decks, pngio, pools as poolmath, portrait, roster
+from . import duelist_rules, file_dialogs, fixed_decks, pngio, pools as poolmath, portrait, roster
 from .fixed_deck_view import FixedDeckView
 from .gamedata import (AI_FIELD_LABELS, AI_FIELDS, AI_SEARCH, DUELIST_COUNT, DUELIST_NAMES, POOL_LABELS, POOL_TOTAL,
                        POOLS, RANK_ABOVE, RANK_RETAIL, RANK_RULES, RANK_STEPS, SIGHT_DUELISTS, STORY_FREE_DUEL)
@@ -924,8 +924,8 @@ class DuelistsTab(Tab):
         s = self.subject()
         if self.project is None or s == 0:
             return
-        path = filedialog.askopenfilename(parent=self, title=f"A picture for {roster.shown_name(self.project, s)}",
-                                          filetypes=[("PNG pictures", "*.png"), ("All files", "*")])
+        path = file_dialogs.askopenfilename(parent=self, title=f"A picture for {roster.shown_name(self.project, s)}",
+                                            filetypes=[("PNG pictures", "*.png"), ("All files", "*")])
         if path:
             self.use_picture(path)
 
