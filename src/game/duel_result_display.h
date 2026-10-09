@@ -21,8 +21,15 @@ typedef struct {
     u8 page_index;
     u8 rank_tier;
     u8 is_tec_rank;
+#ifdef MEMORIES_PC
+    /* A mod's "starchip_prize" may give up to 1000 (pc/cards/tables.h): the
+       byte and the pad after it, which the results screen never reads,
+       hold it as one halfword. The disc's 1 to 5 read the same either way. */
+    u16 starchip_prize;
+#else
     u8 starchip_prize;
     u8 pad_3B;
+#endif
     s16 dropped_card_id;
     u8 pad_3E[2];
 } DuelResultDisplayState;

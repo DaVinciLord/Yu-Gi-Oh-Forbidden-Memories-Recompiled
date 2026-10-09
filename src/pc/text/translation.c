@@ -13,6 +13,7 @@
 #include "pc/platform/settings.h"
 #include "pc/cards/tables.h"
 #include "pc/cards/drops.h"
+#include "pc/cards/starchip_prize.h"
 #include "pc/cards/passwords.h"
 #include "pc/cards/stars.h"
 #include "pc/cards/pack_shop.h"
@@ -650,6 +651,7 @@ const unsigned char *Text_Resolve(int id, const unsigned char *retail)
     if (page) return page;   /* the Free Duel grid's page (free_duel/page_box.h) */
     if (packs) return packs; /* the card packs on the Password screen (cards/pack_shop.h) */
     if (drops) return drops; /* the results screen's added pages (drops.h) */
+    if (StarchipPrize_Text(id)) return StarchipPrize_Text(id); /* a prize past eight (starchip_prize.h) */
     if (shop) return shop;   /* the card shop's menu with DECK SLOTS (deck_menu.h) */
     if (CardPassword_Text(id)) return CardPassword_Text(id); /* View > Card passwords (passwords.h) */
     if (side) return side;

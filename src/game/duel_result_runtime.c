@@ -50,6 +50,8 @@
 #include "pc/cards/cards.h"
 #include "pc/cards/tables.h"
 #include "pc/cards/drops.h"
+#include "pc/cards/starchip_prize.h"
+#include "duel_effect.h"
 #endif
 
 #define DUEL_RESULT_ORBIT_ANGLE_STEP 0x30
@@ -352,6 +354,16 @@ void DuelScene_UpdateResultOutro(void)
    and gcc_2_8_1_g0_split and compile to identical objects at this unit's
    gcc_2_8_1_g8_split. */
 
+#ifdef MEMORIES_PC
+void Duel_HideStarchipCount(void)
+{
+    DuelEffectChannel *box = &D_800EB0F8[STARCHIP_PRIZE_CHANNEL];
+
+    if ((box->flags_34 & DUEL_EFFECT_CHANNEL_FLAG_ACTIVE) && box->field_36 == STARCHIP_PRIZE_TEXT_ID)
+        TextBox_Destroy(box);
+}
+#endif
+
 void Duel_ShowResultPage(s32 page)
 {
     s32 i;
@@ -397,6 +409,19 @@ void Duel_ShowResultPage(s32 page)
         0, D_8009B1E8->page_text_ids[page], 0x1A, 0x28, 0x120, 0x120
     );
     func_80039A14(object);
+#ifdef MEMORIES_PC
+    /* A prize past the eight pictures SPOILS has room for: the one picture
+       DuelScene_UpdateResultRewards drew, and its count beside it in a box
+       of its own, shown with the page's pictures (starchip_prize.h). The
+       disc's 1 to 8 never come here. */
+    Duel_HideStarchipCount();
+    if (page == 0 && D_8009B1E8->children[2] != 0 &&
+        StarchipPrize_Counted(D_8009B1E8->starchip_prize)) {
+        object = TextBox_Create(STARCHIP_PRIZE_CHANNEL, STARCHIP_PRIZE_TEXT_ID, STARCHIP_PRIZE_BOX_X,
+                                STARCHIP_PRIZE_BOX_Y, STARCHIP_PRIZE_BOX_WIDTH, STARCHIP_PRIZE_BOX_HEIGHT);
+        func_80039A14(object);
+    }
+#endif
 }
 
 s32 Duel_CalcRankScoreChange(s32 arg0, s32 arg1)

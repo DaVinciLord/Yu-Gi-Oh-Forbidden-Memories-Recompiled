@@ -523,7 +523,7 @@ no mod sets it, so without one nothing changes:
 | `rank_score` `start` | the rank score both sides start the sum at: 50 and up ends POW, below it TEC, ten points a letter | 50 | 0-99 |
 | `rank_score` `exodia` | what a win by Exodia adds to it | 40 | -99-99 |
 | `rank_score` `deck_out` | what a win by the opponent's empty deck adds | -40 | -99-99 |
-| `starchip_prize` `S` to `D` | the starchips a win against the CPU gives at that rank, POW or TEC; the results show a starchip each | 5, 4, 3, 2, 1 | 0-8 |
+| `starchip_prize` `S` to `D` | the starchips a win against the CPU gives at that rank, POW or TEC; the results show a starchip each, or past 8 one starchip with "xN" beside it | 5, 4, 3, 2, 1 | 0-1000 |
 | `new_game_starchips` | the starchips a new game's save starts with (at most the `starchips` cap) | 0 | 0-99999999 |
 
 **What holds them back.** Build Deck counts a card's copies up to the forty
@@ -531,8 +531,14 @@ a deck holds. The field's card bar shows the Swords' turns as one digit.
 Spellbinding Circle and Shadow Spell show their number in the effect's four
 digits; the monsters' lowered stats add up in 32 bits and stop at the
 16-bit record's -32768 rather than wrap. The results' prize is a row of
-starchip pictures, eight at most (the ninth would run off the screen and
-over the rank's own sum in `DuelResultDisplayState`). A value past its
+starchip pictures with room for eight (a ninth would run off the screen and
+over the rank's own sum in `DuelResultDisplayState`), so up to 8 the row is
+the disc's, and past 8 it is one starchip with "xN" beside it (`x250`), in
+the game's letters through a text box of its own on the SPOILS page
+(`src/pc/cards/starchip_prize.h`), so it scales and takes HD text like the
+rest of the page. The prize itself is kept in the record's byte and the pad
+after it as one halfword on the PC, and is added to the save's starchips up
+to the `starchips` cap (999999, or the mod's). A value past its
 range is noted in the Mods window and held at the most the game shows; a
 rank value past its range means nothing and is left out with a note.
 

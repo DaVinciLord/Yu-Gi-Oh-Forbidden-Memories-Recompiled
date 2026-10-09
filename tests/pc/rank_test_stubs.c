@@ -23,12 +23,12 @@ STUB(DisplayObject_FadeBrightnessAndRelease) STUB(DisplayObject_FindAllocatedByT
 STUB(DisplayObject_FindFreeGeneralSlot) STUB(DisplayObject_MarkInitialized) STUB(DisplayObject_ReleaseIfPresent)
 STUB(DisplayObject_SelectOrderingTable1) STUB(DisplayObject_SetDepthOffset) STUB(DisplayObject_SetResourceVariant)
 STUB(File_RequestAsyncTransfer) STUB(Mods_Dispatch) STUB(Rand_GetInterval) STUB(SD_BGMFadeOut) STUB(SD_BGMPlay)
-STUB(SD_GetStatusFlags) STUB(Tables_ChestFull) STUB(Tables_ChestLimit) STUB(Tables_ChestOverflow) STUB(Tables_ChestRoom) STUB(Tables_Pool) STUB(TextBox_Create) STUB(func_8001EC70) STUB(func_80020BE4)
+STUB(SD_GetStatusFlags) STUB(StarchipPrize_Counted) STUB(Tables_ChestFull) STUB(Tables_ChestLimit) STUB(Tables_ChestOverflow) STUB(Tables_ChestRoom) STUB(Tables_Pool) STUB(TextBox_Create) STUB(TextBox_Destroy) STUB(func_8001EC70) STUB(func_80020BE4)
 STUB(func_80039A14) STUB(func_800472A8) STUB(rcos) STUB(rsin)
 
 /* Sized generously: only their names are used. */
 #define DATA(name) unsigned char name[0x1000];
-DATA(D_80090928) DATA(D_80090960) DATA(D_8009B0CC) DATA(D_8009B0F4_abs) DATA(D_8009B134_abs) DATA(D_8009B162)
+DATA(D_80090928) DATA(D_80090960) DATA(D_800EB0F8) DATA(D_8009B0CC) DATA(D_8009B0F4_abs) DATA(D_8009B134_abs) DATA(D_8009B162)
 DATA(D_8009B174) DATA(D_8009B1D0) DATA(D_8009B1E0) DATA(D_8009B214) DATA(D_8009B21C) DATA(D_8009B238)
 DATA(D_8009B362) DATA(D_801AF000) DATA(gCard_nCount) DATA(gDuel_awPlayerDeck) DATA(gDuel_awRitualData)
 DATA(gDuel_awSaPowCardDrops) DATA(gDuel_bOpponentID) DATA(gDuel_wSceneStateFlags) DATA(gFade_State)
