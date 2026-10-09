@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from tkinter import filedialog, messagebox
+from tkinter import messagebox
 
-from . import disc, importer, settings, ygomods
+from . import disc, file_dialogs, importer, settings, ygomods
 from .importer import slug
 
 
@@ -17,7 +17,7 @@ def _failed(app, problem: Exception):
 def ask_modded_files(app):
     """A modified game: its .bin, or its SLUS_014.11 (WA_MRG.MRG found in
     DATA/ beside it or asked for)."""
-    path = filedialog.askopenfilename(
+    path = file_dialogs.askopenfilename(
         parent=app, title="The modified game: its .bin disc image, or its SLUS_014.11",
         filetypes=[("Disc image or executable", "*.bin *.iso *.img SLUS_014.11 *.11"), ("All files", "*.*")])
     if not path:
@@ -30,8 +30,8 @@ def ask_modded_files(app):
         if not wa.is_file():
             wa = path.parent / "WA_MRG.MRG"
         if not wa.is_file():
-            chosen = filedialog.askopenfilename(parent=app, title="The modified game's WA_MRG.MRG",
-                                                filetypes=[("WA_MRG.MRG", "*.MRG"), ("All files", "*.*")])
+            chosen = file_dialogs.askopenfilename(parent=app, title="The modified game's WA_MRG.MRG",
+                                                  filetypes=[("WA_MRG.MRG", "*.MRG"), ("All files", "*.*")])
             if not chosen:
                 return None, None
             wa = Path(chosen)
@@ -69,8 +69,8 @@ def import_modded_game(app):
 def import_ygomods(app):
     if not app.need_game() or not app.confirm_discard():
         return
-    path = filedialog.askopenfilename(parent=app, title="An old recomp's .ygomods package, to convert",
-                                      filetypes=[(".ygomods package", "*.ygomods"), ("All files", "*.*")])
+    path = file_dialogs.askopenfilename(parent=app, title="An old recomp's .ygomods package, to convert",
+                                        filetypes=[(".ygomods package", "*.ygomods"), ("All files", "*.*")])
     if not path:
         return
     try:
