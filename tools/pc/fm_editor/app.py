@@ -163,6 +163,8 @@ class App(Editing, tk.Tk):
                             ("Fusions, equips, rituals, drops and values", "notes/gameplay-tables.md"),
                             ("New cards and changed ones", "notes/more-cards.md"),
                             ("Starter decks and pools", "notes/starter-deck.md"),
+                            ("Card packs", "notes/card-packs.md"),
+                            ("Added duelists and portraits", "notes/more-duelists.md"),
                             ("Making mods", "notes/modding.md")):
             helps.add_command(label=label, command=lambda path=path: self.open_guide(path))
         helps.add_separator()

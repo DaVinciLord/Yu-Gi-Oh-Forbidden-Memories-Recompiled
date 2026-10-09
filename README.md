@@ -12,6 +12,7 @@ included but the text of the European translations (below).
 - **3D Monsters**: face-up monsters stand on the field as their battle models
 - Optional **Forbidden Memories HD** pack: redrawn cards, frames and portraits
 - Mods: framework for new cards past the original 722, fusions, textures, music, gameplay tables
+- **FM Editor**: make mods without writing JSON: cards, art, fusions, duelists, decks, packs, the title screen and more ([guide](tools/pc/fm_editor/README.md))
 - Save slots, fusion helper, card drop rates, rebindable controls
 - **Game > Language**: the European releases' own English, French, German, Italian and Spanish
 
@@ -102,7 +103,7 @@ _Generated from `config/slus_01411/functions.csv` and `config/slus_01411/overlay
 
 ## Docs
 
-[Modding](notes/modding.md) · [More cards](notes/more-cards.md) · [Fusion helper](notes/fusion-helper.md) ·
+[Modding](notes/modding.md) · [FM Editor](tools/pc/fm_editor/README.md) · [More cards](notes/more-cards.md) · [Fusion helper](notes/fusion-helper.md) ·
 [Card drops](notes/card-drops.md) · [Card packs](notes/card-packs.md) · [Translations](notes/translation.md) · [Updates](notes/updates.md) · [Setup](notes/setup.md) · [Build](notes/build.md) ·
 [Releases](notes/pc-release.md)
 
