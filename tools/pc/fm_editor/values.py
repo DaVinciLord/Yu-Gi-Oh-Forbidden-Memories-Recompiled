@@ -36,10 +36,12 @@ TWO_PLAYER_RECORD_MAX = 65535
 STARCHIPS_MAX = 99999999    # eight digits on screen
 DECK_SIZE = 40
 SWORDS_MAX = 9              # one digit on the field's card bar
-PRIZE_MAX = 8               # a starchip picture each, eight in the results' row
+PRIZE_MAX = 1000            # a win's starchips; past PRIZE_ROW the results show one picture and "xN"
+PRIZE_ROW = 8               # the starchip pictures the results' row draws
 EFFECT_MAX = 9999           # four digits in the effect's number
 
 STAT = "a 16-bit number in every card record"
+PRIZE_STORAGE = "the starchips a win gives"
 LIFE = "a 16-bit number in each side's record"
 
 # The groups, in the tab's order: their title and their fields. A field is
@@ -71,11 +73,11 @@ GROUPS = (
          "a byte a card in the memory card's save"),
     )),
     ("Rewards", (
-        ("starchip_prize.S", "Starchips for S", 5, 0, PRIZE_MAX, "Per win", "eight pictures in a row"),
-        ("starchip_prize.A", "Starchips for A", 4, 0, PRIZE_MAX, "Per win", "eight pictures in a row"),
-        ("starchip_prize.B", "Starchips for B", 3, 0, PRIZE_MAX, "Per win", "eight pictures in a row"),
-        ("starchip_prize.C", "Starchips for C", 2, 0, PRIZE_MAX, "Per win", "eight pictures in a row"),
-        ("starchip_prize.D", "Starchips for D", 1, 0, PRIZE_MAX, "Per win", "eight pictures in a row"),
+        ("starchip_prize.S", "Starchips for S", 5, 0, PRIZE_MAX, "Per win", PRIZE_STORAGE),
+        ("starchip_prize.A", "Starchips for A", 4, 0, PRIZE_MAX, "Per win", PRIZE_STORAGE),
+        ("starchip_prize.B", "Starchips for B", 3, 0, PRIZE_MAX, "Per win", PRIZE_STORAGE),
+        ("starchip_prize.C", "Starchips for C", 2, 0, PRIZE_MAX, "Per win", PRIZE_STORAGE),
+        ("starchip_prize.D", "Starchips for D", 1, 0, PRIZE_MAX, "Per win", PRIZE_STORAGE),
         ("new_game_starchips", "New game starchips", 0, 0, STARCHIPS_MAX, "A new save has",
          "eight digits on screen"),
         ("starchips", "Most starchips", 999999, 0, STARCHIPS_MAX, "The save holds", "eight digits on screen"),
@@ -94,6 +96,10 @@ GROUPS = (
          "a 16-bit number in the save"),
     )),
 )
+# A line under a group, for what its hints have no room to say.
+GROUP_NOTES = {
+    "Rewards": f"Past {PRIZE_ROW} starchips a win, the results show one starchip with \"xN\" beside it.",
+}
 ALL_FIELDS = tuple(field for _, fields in GROUPS for field in fields)
 FIELD = {field[0]: field for field in ALL_FIELDS}
 TOP_KEYS = ("stats", "attack", "defense", "life_points", "two_player", "starchips", "chest", "free_duel_record",

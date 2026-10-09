@@ -47,6 +47,9 @@ class ValuesTab(Tab):
                 frame.pack(fill="x", pady=(0, 2))
                 self.group_frames[title] = frame
                 self._fields(frame, groups[title], width)
+                if title in values.GROUP_NOTES:
+                    ttk.Label(frame, style="Hint.TLabel", text=values.GROUP_NOTES[title]).grid(
+                        row=len(groups[title]), column=0, columnspan=5, sticky="w", pady=(1, 0))
             if number == 1:
                 self._duelist_table(column)
         self.status.pack(anchor="w", pady=(2, 0))

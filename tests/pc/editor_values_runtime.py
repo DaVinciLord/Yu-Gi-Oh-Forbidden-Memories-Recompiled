@@ -285,7 +285,8 @@ class Run:
         graded = score if score >= 50 else 99 - max(score, 0)
         assert tec == (score < 50) and tier == (min(graded, 99) - 50) // 10, (score, tec, tier)
         prize = want[f"starchip_prize.{LETTERS[tier]}"]
-        assert data[PRIZE] == prize, (data[PRIZE], prize)
+        shown = struct.unpack_from("<H", data, PRIZE)[0]   # a halfword on the PC (duel_result_display.h)
+        assert shown == prize, (shown, prize)
         self.shot(g, f"{name}-results")
         self.ok(f"{name}: rank score {score} (start {want['rank_score.start']}, end tag {tag} adds {added}), "
                 f"{'TEC' if tec else 'POW'} {LETTERS[tier]}, {prize} starchips shown")

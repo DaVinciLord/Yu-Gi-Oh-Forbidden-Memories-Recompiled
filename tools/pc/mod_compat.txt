@@ -64,3 +64,9 @@ accept v0.2.0 function MenuLabel_Make takes the button's factor after selected
 accept v0.2.0 record TitleConfig holds the larger TitleItem
 accept v0.2.0 record TitleItem gained scale before wide
 accept v0.2.0 enum TITLE_IMAGES counts the scaled buttons' images
+# A win's starchips up to 1000 ("starchip_prize"): the results record's
+# starchip_prize byte and the unread pad byte after it are one halfword on
+# the PC (offset 0x3A and size 0x40 unchanged). The disc's 1 to 8 read the
+# same through the low byte, so a mod reading the old byte still sees them.
+accept v0.1.2 record DuelResultDisplayState reads starchip_prize and its pad byte as one halfword
+accept v0.2.0 record DuelResultDisplayState reads starchip_prize and its pad byte as one halfword

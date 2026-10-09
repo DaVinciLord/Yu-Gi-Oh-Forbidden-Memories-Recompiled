@@ -35,6 +35,7 @@
 #include "pc/free_duel/duelists.h"
 #include "pc/mods/mods.h"
 #include "pc/cards/tables.h"
+#include "pc/cards/starchip_prize.h"
 #endif
 
 void DuelScene_UpdateResultRewards(void)
@@ -130,9 +131,10 @@ void DuelScene_UpdateResultRewards(void)
                 goto side_result;
 #ifdef MEMORIES_PC
             /* One for D to five for S, or a mod's "starchip_prize"
-               (tables.h), at most the eight pictures the row holds. */
-            D_8009B1E8->starchip_prize = (u8)Tables_Value(TABLES_VALUE_PRIZE + D_8009B1E8->rank_tier,
-                                                          D_8009B1E8->rank_tier + 1);
+               (tables.h), up to 1000: past the eight pictures the row
+               holds, one with its count beside it (starchip_prize.h). */
+            D_8009B1E8->starchip_prize = (u16)Tables_Value(TABLES_VALUE_PRIZE + D_8009B1E8->rank_tier,
+                                                           D_8009B1E8->rank_tier + 1);
 #else
             D_8009B1E8->starchip_prize = D_8009B1E8->rank_tier + 1;
 #endif
@@ -161,7 +163,11 @@ void DuelScene_UpdateResultRewards(void)
                     object->flags |= 0x20;
                     *(DisplayObject *G32 *)((u8 *)D_8009B1E8 + offset + 4) = object;
                     offset += 4;
+#ifdef MEMORIES_PC
+                } while (count < StarchipPrize_Pictures(D_8009B1E8->starchip_prize));
+#else
                 } while (count < D_8009B1E8->starchip_prize);
+#endif
             }
         }
 side_result:
@@ -196,6 +202,11 @@ side_result:
                    window pointer (106 differences through `save`). */
                 SaveDataState *save = D_8009B1D8[gDuel_bWinnerSide];
                 D_8009B16C |= 0x2000;
+#ifdef MEMORIES_PC
+                /* The count beside a prize past the row's eight goes with
+                   the screen (Duel_ShowResultPage). */
+                Duel_HideStarchipCount();
+#endif
                 if (save) {
                     if (D_8009B360[0] < 0 && gDuel_bOpponentID >= 0) {
 #ifdef MEMORIES_PC

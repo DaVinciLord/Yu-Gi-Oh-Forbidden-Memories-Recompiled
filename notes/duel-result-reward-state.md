@@ -22,8 +22,8 @@ starchip prize, and the selected card drop.
 | `+0x37` | `page_index` | Initialized to zero, cycled modulo three by directional repeat, passed to `Duel_ShowResultPage` |
 | `+0x38` | `rank_tier` | Derived as distance from the D rank, producing `0..4` |
 | `+0x39` | `is_tec_rank` | Set when the original score is below 50 |
-| `+0x3A` | `starchip_prize` | Set to `rank_tier + 1`, producing `1..5` |
-| `+0x3B` | padding | No independent field semantics established |
+| `+0x3A` | `starchip_prize` | Set to `rank_tier + 1`, producing `1..5`. The PC port reads it as a halfword over `+0x3A..0x3B` so a mod's `starchip_prize` can reach 1000 (notes/gameplay-tables.md) |
+| `+0x3B` | padding | No independent field semantics established (the PC port's high byte of `starchip_prize`) |
 | `+0x3C` | `dropped_card_id` | Receives `Duel_SelectCardDrop` and is later passed to `Duel_AwardCard` |
 | `+0x3E` | padding | Rounds the observed record to `0x40` bytes |
 
