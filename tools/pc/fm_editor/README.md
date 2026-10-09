@@ -53,12 +53,12 @@ The window has a tab per table:
 | Fusions | every pair and its result (search by a card, or show the changed ones); add, change, remove (the pair no longer fuses) or revert; **Remove recipes of...** takes away every disc recipe of a card in one `remove` rule; **Remove all fusions...** leaves none at all (the disc's table goes in one `{"remove": "all"}` rule, the mod's own fusion rules are dropped and an added card's own recipes blocked), so fusions added after it are the only ones, and the button then reads **Restore disc fusions** to bring the disc's table back; a pair a card's own `fusions` list makes (no rule of the mod deciding it first) shows that list's result, marked "own list"; **Bulk (many pairs)...** adds or takes away the fusions of every card of one filtered set with every card of another (below) |
 | Equips | per equip card, the monsters it may equip; add one, remove (Delete), revert; **By monster type**: a box a type, ticked when the equip fits every monster of it and half ticked for some, beside the count (Warrior 33/73): ticking adds the type, unticking takes it away, and a count lists that type's monsters alone |
 | Rituals | every ritual card in a list (search, **Changed only**); the chosen one's recipe as cards in a row, with their pictures: the ritual card + its tributes → what it summons, and the same in a sentence. **Tributes come from** **On the field** (the game's), **In the hand** or **Both** (`"tributes_from"`); one to five tributes (**Add a tribute**, the × on a tribute). A click on a card edits it below: a tribute is **A specific card** (a copy counts too) or **Any monster that...** meets conditions (type, fusion group, ATK, DEF, level, DEF above ATK); the result a monster. Changes are the mod's at once (Undo takes them back). **Remove recipe** takes a disc ritual's away, or an added copy's (which otherwise has its base's), as `"result": null`; **Give it its own recipe** starts a copy's from its base's ([rituals](../../../notes/gameplay-tables.md#rituals)) |
-| Duelists | every opponent of the Free Duel grid, a small portrait beside each name, grouped by the grid's pages: page 1 the disc's forty, page 2 and on the duelists the mod adds (**Add duelist...**, **Duplicate**, **Remove**). The one chosen shows its picture and the two the game draws of it (Internal 1x and 2x and up), where it sits on its page (a map of the page; a click on a face goes to that duelist), **Name and place...** (its name, id, base and slot) and **Picture...**/**Disc's face** (below, [Duelists](#duelists-added-duelists-and-portraits)). Then, per opponent, the deck pool and the S/A-POW, B/C/D and S/A-TEC drop pools: weights, their chance, the retail weight, and the total against 2048 (**Scale to 2048 (100%)** scales a pool back to 2048 the way the port does). The deck is either the **Weighted deck (retail)** or a **Fixed deck (40 cards)**: forty specific cards by their copies, counted against 40, each beside its weighted chance; **Copy the weighted deck's most likely 40**, **Clear**, **Revert to retail**; a line says what the pool deals (a deck pool, the forty it deals most often; a drop pool, the chance of a monster and its strongest one), beside the disc's once changed |
-| Starter decks | the decks a new game may be dealt in place of the disc's weighted pools: a deck's name, its weight against the other decks offered, and its cards by their copies, counted against the forty a deck holds, with a line of what it is made of (monsters and their average ATK, magic, traps...). **Add deck**: an empty deck, an opponent's (its fixed deck, or the forty its weighted deck deals most often), one deal of the disc's seven starter pools, or a copy of the selected one. **Weighted pools** (`starter_pools`): pools of the mod's own a new game's deck is drawn from, each its number of cards by its weights, the draws counted against forty; **Start from the disc's seven pools** to change them |
+| Duelists | every opponent of the Free Duel grid, a small portrait beside each name, grouped by the grid's pages: page 1 the disc's forty, page 2 and on the duelists the mod adds (**Add duelist...**, **Duplicate**, **Remove**). The one chosen shows its picture and the two the game draws of it (Internal 1x and 2x and up), where it sits on its page (a map of the page; a click on a face goes to that duelist), **Name and place...** (its name, id, base and slot), **Unlock, play, ranks...** (when the grid shows it, how it plays, how a duel against it is scored) and **Picture...**/**Disc's face** (below, [Duelists](#duelists-added-duelists-and-portraits)). Then, per opponent (the mod's own as well as the disc's), the deck pool and the S/A-POW, B/C/D and S/A-TEC drop pools: weights, their chance, the retail weight, and the total against 2048 (**Scale to 2048 (100%)** scales a pool back to 2048 the way the port does). The deck is either the **Weighted deck (retail)** or a **Fixed deck (40 cards)**: forty specific cards by their copies, counted against 40, each beside its weighted chance; **Copy the weighted deck's most likely 40**, **Clear**, **Revert to retail**; a line says what the pool deals (a deck pool, the forty it deals most often; a drop pool, the chance of a monster and its strongest one), beside the disc's once changed |
+| Starter decks | the decks a new game may be dealt in place of the disc's weighted pools: a deck's name, its weight against the other decks offered, and its cards by their copies, counted against the forty a deck holds, with a line of what it is made of (monsters and their average ATK, magic, traps...). **Add deck**: an empty deck, an opponent's, the disc's or one the mod adds (its fixed deck, or the forty its weighted deck deals most often), one deal of the disc's seven starter pools, or a copy of the selected one. **Weighted pools** (`starter_pools`): pools of the mod's own a new game's deck is drawn from, each its number of cards by its weights, the draws counted against forty; **Start from the disc's seven pools** to change them |
 | Map | how the player gets around the campaign map (below): at each of its sixteen places, its arrows (where each goes, the direction pressed, when it is open, its picture and spot), Confirm, the camera and, in the town, the Millennium Puzzle marker, edited on the place's screen drawn from your disc (drag the arrows, the marker and the map itself); **All routes**; the numbers under **Show advanced**; a way back for each changed part and **Revert every place**; **Map pictures...**: the marker, arrows and name panel, and the terrain's textures |
-| Values | the game's numbers a mod may change (written as `limits`, [gameplay tables](../../../notes/gameplay-tables.md#values-atk-def-lp-starchips-and-more)), in groups: **Duel** (starting LP for both sides or each, the LP healing stops at, the ATK and DEF cap), **Magic** (Swords of Revealing Light's turns, Crush Card's ATK, what Spellbinding Circle and Shadow Spell take off), **Deck and Trunk** (copies of a card in a deck, copies the Trunk keeps), **Rank** (the score a duel starts at, what an Exodia win and a win by the opponent's empty deck add), **Rewards** (the starchips a win gives at S to D, a new game's starchips, the most the save holds) and **Records and 2P** (the two-player LP choice and the records), and a table of duelists with the LP each side starts with against them. Each row shows the game's own value in grey (an empty field is it), turns blue when the mod changes it, has ↺ to put the game's back, and a line that says what it does with the range the game keeps; a value past that range turns its name red, with the reason under the groups, and the game holds it at the most it keeps or shows. **Reset all to the game's** empties every field |
+| Values | the game's numbers a mod may change (written as `limits`, [gameplay tables](../../../notes/gameplay-tables.md#values-atk-def-lp-starchips-and-more)), in groups: **Duel** (starting LP for both sides or each, the LP healing stops at, the ATK and DEF cap), **Magic** (Swords of Revealing Light's turns, Crush Card's ATK, what Spellbinding Circle and Shadow Spell take off), **Deck and Trunk** (copies of a card in a deck, copies the Trunk keeps), **Rank** (the score a duel starts at, what an Exodia win and a win by the opponent's empty deck add), **Rewards** (the starchips a win gives at S to D, a new game's starchips, the most the save holds) and **Records and 2P** (the two-player LP choice and the records), and a table of duelists with the LP each side starts with against them (the disc's, or one the mod adds, by its name). Each row shows the game's own value in grey (an empty field is it), turns blue when the mod changes it, has ↺ to put the game's back, and a line that says what it does with the range the game keeps; a value past that range turns its name red, with the reason under the groups, and the game holds it at the most it keeps or shows. **Reset all to the game's** empties every field |
 | Guardian Stars | the stars (`guardian_stars`, [Guardian Stars](../../../notes/modding.md#guardian-stars-names-icons-new-stars-and-matchups)): the list of stars with a name and an icon each (**Import icon (PNG)...**, with a preview; the game makes it 16x16 in the disc's stars' colours), **Add star** for 11 to 15 (a card holds its stars in 4 bits, so fifteen at most), and the full grid of matchups: a row is the attacker's star, a column the defender's, a cell the bonus the attacker's side gets, green above 0 and red below; click a cell, type a bonus or use **+ default**, **- default** or **0** (with **Reverse pair gets the opposite** on, the reverse cell takes the opposite sign). **Default bonus** moves the disc's 500 in both cycles, **Retail cycles** and **Clear all** are presets, **Revert to retail** takes the whole key away. **Set stars by rule...** sets many cards' first or second star from their attribute or type through a table you fill in (a Fire monster's first star is Fire), or one star for all, **(none)** included (a first star of none leaves the second as the card's one star, as the game reads it; both none, no star), over a filter of cards like Bulk fusions', with a preview and **Undo last batch**. **Show advanced**: a name per language (`fr=Feu, de=Feuer`), an icon's colours (`game` or its own), and what happens at a summon (`ask`, `first`, `best`). The Cards tab's star lists show the mod's stars as they are named here |
-| Packs | the card packs the mod sells for starchips on the Password screen: each pack's name, description, price, cards a pack and picture (shown as a card's art or, `image_style` `full`, the whole picture), its cards with their tier, weight and chance; a **Show advanced** part for everything else; **Shop settings...** and **Simulate...** (below); with no pack, an empty one or **a pack of an opponent's drops** (its cards at their drop weights) |
+| Packs | the card packs the mod sells for starchips on the Password screen: each pack's name, description, price, cards a pack and picture (shown as a card's art or, `image_style` `full`, the whole picture), its cards with their tier, weight and chance; a **Show advanced** part for everything else; **Shop settings...** and **Simulate...** (below); with no pack, an empty one or **a pack of an opponent's drops** (its cards at their drop weights; the opponents the mod adds are listed after the disc's) |
 | UI | the title screen, its two menus and the duel's pictures, drawn from your disc as the game draws them: drag a picture to move it, the side has the rest; **Revert to retail...** puts the whole tab back (below, [The UI tab](#the-ui-tab)) |
 | Mod info | id, name, version, author, description, `settings`, and the other `mod.json` keys, kept as written (`limits` is the Values tab's, `guardian_stars` the Guardian Stars tab's). The settings are a list (key, label, type, default, and how many of the mod's entries each switches with `"setting"`) with a dialog a setting that shows what its type takes and checks it as the game does; their JSON is a page beside it |
 | Conflicts | the loader's checks, all or one level (errors, warnings, notes); double-click a line (or Return) to go to it, a line about another mod to the tab and card it is about. Below them, where this mod meets the **other mods installed** (beside the game and in the player's mods folder, or a folder chosen with **Other mods folder...**): the same lines as the game's Mods window, a warning where only one mod's change is used and a note where the changes add up or agree ([When mods overlap](../../../notes/modding.md#when-mods-overlap)) |
@@ -435,9 +435,36 @@ what shows, at any scale.
 The page map beside them is the chosen duelist's page as the game lays it
 out, its cell ringed; the arrows look at the other pages.
 
-A duelist's other properties (`ai`, `unlock`, `ranks`, anything else) have
-no field: they are kept exactly as written, and the tab names them
-("Kept as written: unlocks after: beat Dark Simon 2 times; ...").
+An added duelist's deck pool and drop pools are edited as a disc duelist's
+are, and its deck may be a **Fixed deck** too; they are saved in
+`decks/<id>.json` and `drops/<id>.json`.
+
+**Unlock, play, ranks...** edits what the game reads beside these
+(`duelist_rules.py`), on three pages:
+
+* **Unlock**: **Beat** (a duelist, the disc's or the mod's own), **Wins**
+  (against it, or against everyone without one), **Story flag** (`0x6E0` + n
+  is duelist n unlocked in Free Duel; the line beside it says whose), **Card**
+  (**Pick...**) and **Copies** of it in the trunk or deck. Every condition
+  given must hold; with none it is shown from the start. For one of the
+  disc's duelists this stands in place of the campaign flag that shows it.
+* **Way of playing** (`ai`): **Play like** another duelist (its row of nine
+  numbers), then any of the nine numbers over it, each with the one it
+  replaces beside it (deck search 5 to 20, the LP threshold ÷100, the
+  low-deck threshold, the two fusion depths, the duster and blind-attack
+  percentages); and whether it reads face-down cards (its base's, yes or no).
+* **Rank scoring** (`ranks`): the ten rules, each the disc's (unticked,
+  shown greyed) or five [threshold, change] pairs of its own, the last
+  threshold "above".
+
+What it writes is the shortest form that says the same (`{"search": 12}`
+for byte 0 alone), and an entry's own while it still reads the same; a key
+of these the game does not read stays as written. The header says what is
+set ("Unlocks after: beat Dark Simon 2 times", "Plays: plays like Nitemare,
+search 20"), and the Status column `locked`, `plays` and `ranks`. Anything
+else an entry carries is kept as written and named there; Conflicts checks
+the rest (a beat or card that names nothing here, a search past 5-20, a
+rule the game does not have).
 
 ### The UI tab
 
@@ -673,8 +700,11 @@ record are shown as retail fusions and marked.
   was while it is untouched (and still names the same cards: a card named by
   an added card's identity follows a new mod id); a changed or new one is
   written as `"fixed": true`, the cards in id order, then any name it could
-  not place. An entry for `"all"`, or for a duelist a mod adds, is kept as
-  written. Drops and the other duelist data are not touched by any of this.
+  not place. An entry for `"all"`, or for another mod's duelist, is kept as
+  written. A duelist this mod adds has its fixed deck in `decks/<id>.json`
+  (or in mod.json's `decks` under its name or identity, where the mod wrote
+  it there), edited the same way. Drops and the other duelist data are not
+  touched by any of this.
 * `starter`: the decks a new game may be dealt
   ([the starter deck](../../../notes/starter-deck.md)), each written down as
   its cards and their copies rather than as weights — which is what lets one
@@ -710,9 +740,10 @@ record are shown as retail fusions and marked.
   in the game. A list entry without an `"id"` is given one (a save's record
   of it under its place in the list does not follow). Opening a mod reads
   `decks/` and `drops/` files as the game does, after mod.json's tables; one
-  naming a disc duelist moves into mod.json, one holding a fixed deck, or
-  naming a duelist neither the disc nor the mod has (another mod's), stays
-  the file it was, untouched. The roster's files the editor read are its to
+  naming a disc duelist moves into mod.json, one holding a disc duelist's
+  fixed deck, or naming a duelist neither the disc nor the mod has (another
+  mod's), stays the file it was, untouched. An added duelist's
+  `"unlock"`, `"ai"` and `"ranks"` are edited (`duelist_rules.py`). The roster's files the editor read are its to
   write: a duelist removed, renamed or back as its base takes its files with
   it on the next save. An entry of `drops` or `decks` naming another mod's
   duelist is kept as written, as is either table given as the name of a file
@@ -1022,7 +1053,7 @@ selected rows, **Weight**/**Set**, **Remove selected**.
   player holds that many of every card, `refuse` the pack (ALL OWNED on the
   screen, nothing paid) or `sell` it anyway, or `(shop's)` for Shop
   settings' rule.
-* **Unlock**: beat (a duelist), wins, story flag (`0x6E0` + n is the n-th
+* **Unlock**: beat (a duelist, the disc's or the mod's own), wins, story flag (`0x6E0` + n is the n-th
   campaign duelist beaten), card and copies, starchips spent on packs, packs
   opened, opened (`pack=n`), and whether a locked pack is hidden or shown.
 * **Password and sounds**: a password (said when a card has it too: the card
@@ -1153,6 +1184,7 @@ only the window; it does not rewrite the engine, whose rules are the port's
 | `validate.py` | the loader's checks: `validate(project)` → `Issue` list |
 | `pools.py`, `fixed_decks.py`, `bulk_fusions.py` | the port's pool arithmetic, fixed decks, bulk fusions |
 | `roster.py`, `portrait.py` | the duelists a mod adds or takes over (reading and writing their files, their places on the grid, checks), and Free Duel portraits: the disc's, and the one the game makes of a PNG |
+| `duelist_rules.py` | a duelist's `unlock`, `ai` and `ranks`: read as `duelists.c` reads them, written back in the shortest form, checked; how a manifest names a duelist (`reference`) |
 | `art.py`, `campaign_map.py`, `map_art.py`, `map_view.py` | card art, the campaign map's table and pictures, the map drawn from the disc's 3D model (`map_view.py` has no Tk despite its name) |
 | `board_art.py`, `board_model.py` | the duel board's textures: where each is on the disc, a mod's replacements (pack entries) and tints (palette patches); the board drawn from the disc's 3D model with them (no Tk) |
 | `guardian_stars.py`, `star_rules.py` | a mod's `guardian_stars` (the stars, the matchup grid, presets, checks) and setting many cards' stars by a rule |
@@ -1235,7 +1267,7 @@ the engine keeps no undo (a front end may keep `project.clone()`s).
   pools `gamedata.POOLS` (`"deck"`, `"pow"`, `"bcd"`, `"tec"`), out of
   2048; `pools.normalize`, `revert_pool`. A fixed deck:
   `fixed_decks.deck_of`, `set_deck(project, d, {card: copies})`,
-  `most_likely`, `remove`. The duelists a mod adds: `project.roster`, a
+  `most_likely`, `remove` (`d` a disc id or an added duelist's entry). The duelists a mod adds: `project.roster`, a
   list of `roster.RosterDuelist` (`key`, `base`, `replace`, `name`, `slot`,
   `portrait` as PNG bytes, a copy's `pools` like `project.pools[d]`, and
   `extra`, the keys kept as written); `roster.add_copy(project, base,
@@ -1245,6 +1277,13 @@ the engine keeps no undo (a front end may keep `project.clone()`s).
   (`slot_of`, `page_of`, `cell_of`, `where`). `roster.face(project, wa,
   d_or_entry, scale)` is a portrait as the grid draws it
   (`portrait.in_game`, `portrait.record_from` for the game's own record).
+  `roster.opponents(project)` lists every opponent, the mod's own after the
+  disc's. A duelist's unlock, way of playing and rank scoring:
+  `duelist_rules.unlock_of`/`ai_of`/`ranks_of(entry)` read them,
+  `unlock_value`, `ai_value`, `ranks_value` make the values and
+  `set_rules(project, d_or_entry, unlock, ai, ranks)` puts them on it (a
+  disc duelist's on its replacement); `ai_row(project, d_or_entry)` is the
+  row it plays by.
 * Starter decks: `project.starter`, a list of `model.StarterDeck`.
 * Guardian Stars: `guardian_stars.read(project.other.get("guardian_stars"))`
   → a `Stars` to edit (`add_star`, `remove_star`, `set_default`,

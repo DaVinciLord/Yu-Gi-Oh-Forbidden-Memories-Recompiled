@@ -14,12 +14,12 @@ from .icon_choice import IconChoice
 from . import card_icons
 from .card_view_preview import CardViewPreview
 from .monster_effects_ui import EffectsBox
-from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE, DUELIST_NAMES,
+from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE,
                        EQUIP_BONUS_MAX, FRAME_COLOUR_NAMES, FRAME_NAMES,
                        STAR_NAMES, STARTER_WEIGHT_LIMIT, TYPE_EQUIP, TYPE_MAGIC, TYPE_NAMES,
                        TYPE_RITUAL, TYPE_TRAP,
                        exodia_piece, type_frame)
-from . import art, fixed_decks, pngio, starter_pools
+from . import art, fixed_decks, pngio, roster, starter_pools
 from .starter_pools_view import StarterPoolsPage
 from .model import KEY_RE, StarterDeck, parse_tags, tags_text
 from .widgets import (WrapLabel, legend, CardField, FormDialog, ScrolledForm, ScrolledPage, card_matches, pick_card, px,
@@ -2028,8 +2028,9 @@ class StarterTab(Tab):
             fixed = fixed_decks.deck_of(self.project, d)
             # The deck it is dealt: a fixed one the mod gives it, else the
             # forty its weighted pool deals most often.
-            deck.cards = dict(fixed.cards) if fixed else fixed_decks.most_likely(self.project.pools[d]["deck"])
-            deck.name = f"{DUELIST_NAMES[d]}'s deck"
+            deck.cards = dict(fixed.cards) if fixed else fixed_decks.most_likely(
+                roster.pools_of(self.project, d)["deck"])
+            deck.name = f"{roster.shown_name(self.project, d)}'s deck"
         elif start == "retail":
             pools = starter_pools.retail(self.app.files.wa if self.app.files else None)
             if not pools:
@@ -2041,8 +2042,10 @@ class StarterTab(Tab):
         return self.deck_dialog("Add starter deck", deck, adding=True)
 
     def ask_opponent(self):
-        """An opponent of the campaign or Free Duel, by name; None if none."""
-        names = [f"{d} {DUELIST_NAMES[d]}" for d in range(1, len(self.project.pools))]
+        """An opponent of the campaign or Free Duel, the disc's or one the mod
+        adds (roster.opponents); None if none."""
+        choices = dict(roster.opponents(self.project))
+        names = list(choices)
         chosen = {}
 
         def build(dialog, body):
@@ -2050,11 +2053,12 @@ class StarterTab(Tab):
             chosen["var"] = tk.StringVar(value=names[0])
             ttk.Combobox(body, textvariable=chosen["var"], values=names, state="readonly", width=30).grid(
                 row=0, column=1, sticky="w", padx=(6, 0))
-            ttk.Label(body, text="The deck is the 40 cards its weighted deck pool deals most often.",
+            ttk.Label(body, text="The deck is its fixed deck, or the 40 cards its weighted deck pool deals most "
+                                 "often.\nPage 2 and on (40 and up) are the duelists this mod adds.",
                       style="Hint.TLabel").grid(row=1, column=0, columnspan=2, sticky="w", pady=(6, 0))
 
         def ok(dialog):
-            chosen["d"] = int(chosen["var"].get().split(" ", 1)[0])
+            chosen["d"] = choices[chosen["var"].get()]
             return None
 
         dialog = FormDialog(self, "A deck from an opponent's", build, ok)

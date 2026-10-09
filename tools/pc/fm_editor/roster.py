@@ -21,8 +21,13 @@ name, face and way of playing: its pools stay Project.pools[d], written in
 mod.json's "decks" and "drops" by the disc's name as before, which still
 reaches it.
 
-What the editor has no field for -- "ai", "unlock", "ranks" and anything
-else an entry carries -- is kept as written (RosterDuelist.extra).
+A copy's fixed deck (decks/<id>.json with "fixed": true) is a
+fixed_decks.FixedDeck in Project.fixed naming its entry, edited as a disc
+duelist's is and written back to that file.
+
+"unlock", "ai" and "ranks" stay in RosterDuelist.extra as written;
+duelist_rules.py reads and edits them there. Anything else an entry carries
+is kept as written too.
 
 Where an added duelist lands on the Free Duel grid is worked out as
 place_pending does for this mod alone: the entries that ask for a "slot"
@@ -70,7 +75,6 @@ class RosterDuelist:
     portrait_path: str = None       # "portrait" as written, when the PNG is not portraits/<key>.png
     pools: dict = field(default=None, repr=False)       # a copy's {pool: {card: weight}}, as the game deals them
     kept: dict = field(default_factory=dict)    # pool -> {name as written: weight} naming no card here
-    fixed_deck: str = None          # decks/<key>.json holding a fixed deck: kept as written, not edited
     extra: dict = field(default_factory=dict)   # the entry's other keys (ai, unlock, ranks...) as written
     origin: str = "folder"          # "folder", "manifest" (mod.json's list) or "file" (the file it names)
     written: dict = field(default=None, repr=False)     # the entry as it was read; None when made here
@@ -152,6 +156,15 @@ def shown_name(project, s) -> str:
         e = replacement(project, s)
         return e.name if e is not None and e.name else DUELIST_NAMES[s] if s < len(DUELIST_NAMES) else str(s)
     return s.name or DUELIST_NAMES[s.base]
+
+
+def opponents(project) -> list:
+    """[(label, duelist)] of every opponent, for a list to pick from: the
+    disc's 1 to 39 by number, then the mod's own by the id they get on the
+    grid ("40 Dark Simon"); one with no place is in no duel."""
+    out = [(f"{d} {shown_name(project, d)}", d) for d in range(1, len(project.pools))]
+    placed = sorted((slot, e) for e, slot in placement(project).items() if slot is not None)
+    return out + [(f"{slot} {shown_name(project, e)}", e) for slot, e in placed]
 
 
 def named(project, text):
@@ -293,18 +306,24 @@ def duplicate(project, e: RosterDuelist) -> RosterDuelist:
     other.origin = "folder"
     other.written = None
     other.slot = None
-    other.fixed_deck = None
     other.portrait_path = None
     other.name = (e.name or DUELIST_NAMES[e.base]) + " 2"
     other.key = free_key(project, slug(other.name))
     if other.pools is None:
         other.pools = {pool: dict(project.pools[e.base][pool]) for pool in POOLS}
     project.roster.append(other)
+    from . import fixed_decks
+    deck = fixed_decks.deck_of(project, e) if e.copy else None
+    if deck is not None:        # its fixed deck too, in a file of its own
+        fixed_decks.set_deck(project, other, deck.cards).kept = dict(deck.kept)
     return other
 
 
 def remove(project, e: RosterDuelist):
+    """Out of the mod, with its fixed deck."""
+    from . import fixed_decks
     project.roster.remove(e)
+    fixed_decks.remove(project, e)
 
 
 def take_over(project, d: int) -> RosterDuelist:
@@ -599,9 +618,11 @@ def read_pool_folders(project, folder, messages: list):
                 messages.append(f"{rel}: {problem}; left as it is")
                 continue
             if kind == "decks" and isinstance(body, dict) and _json_bool(body.get("fixed"), False):
-                for s in target:
-                    if not isinstance(s, int):
-                        s.fixed_deck = rel
+                if len(target) == 1 and not isinstance(target[0], int):
+                    from . import fixed_decks
+                    fixed_decks.read_file(project, rel, target[0], body, messages)
+                    project.roster_owned.add(rel)
+                    continue
                 messages.append(f"{rel}: a fixed deck; left as it is (the editor edits fixed decks of the disc's "
                                 "duelists in mod.json)")
                 continue
@@ -722,6 +743,7 @@ def owned(project, rel) -> bool:
 
 def check(project, out: list):
     """What the game would refuse, or place other than meant (validate)."""
+    from . import duelist_rules, fixed_decks
     from .gamedata import DECK_POOL_MIN_CARDS, POOL_LABELS
     from .validate import Issue
     keys = {}
@@ -761,6 +783,7 @@ def check(project, out: list):
             add("error", f"no room left: the grid holds ids up to {LAST_SLOT}")
         if e.portrait is not None and picture(e.portrait) is None:
             add("error", "its portrait is not a PNG the game can read")
+        duelist_rules.check(project, e, add)
         if e.copy and e.pools is not None:
             for pool in POOLS:
                 weights = {c: w for c, w in e.pools[pool].items() if w}
@@ -773,7 +796,7 @@ def check(project, out: list):
                     issue("error", "names a card that does not exist")
                 if any(w < 0 or w > 0xFFFF for w in weights.values()):
                     issue("error", "a weight is a whole number, 0 to 65535")
-                if pool == "deck" and e.fixed_deck is None and len(weights) < DECK_POOL_MIN_CARDS:
+                if pool == "deck" and fixed_decks.deck_of(project, e) is None and len(weights) < DECK_POOL_MIN_CARDS:
                     issue("error", f"a deck is dealt from at least {DECK_POOL_MIN_CARDS} cards; it has {len(weights)} "
                                    "(the game deals its base's deck instead)")
                 elif pool != "deck" and not weights:

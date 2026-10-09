@@ -16,7 +16,16 @@ tools/pc/yfm_control.py, and checks what the editor said the game would do:
 5. winning it gives a card of its own drop pools;
 6. slot 45 is page 2's sixth cell (row 2, column 1), and an "unlock" written
    by hand keeps the duelist hidden until it is met, through an editor save;
-7. the saved mod, opened and saved again, is the same files.
+7. the saved mod, opened and saved again, is the same files;
+8. an added duelist's fixed deck, made on its deck pool, is the deck a duel
+   against it deals, card for card;
+9. an unlock made in the tab's Unlock, play, ranks... dialog ("beat Dark
+   Simon") hides a duelist until Dark Simon is beaten, then shows it;
+10. rank scoring made in that dialog (every change 0, so the score stays at
+    50: D-POW, where the disc's scoring makes a quick win an S-POW) makes
+    the drop come from Dark Simon's B/C/D pool;
+11. the Values tab's starting LP for an added duelist, by its name, is the
+    LP it starts the duel with.
 
 The test portraits are drawn here; nothing is kept in the repository.
 Screenshots and logs stay in tmp/pc/editor-duelists (or --out), the
@@ -55,6 +64,9 @@ DROPPED_CARD = 0x3C
 CELL_X, CELL_Y, STEP_X, STEP_Y = 20, 40, 56, 52
 DECK = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]      # Dark Simon's own deck pool
 DROPS = {"pow": 19, "bcd": 20, "tec": 21}                           # one card a drop pool
+FIXED = {cid: 4 for cid in range(22, 32)}                           # Pegasus Prime's fixed deck: ten cards, 4 each
+DARK_SIMON_LP = 1234                                                # its starting LP (Values tab)
+RIVAL_SLOT = 47                                                     # Victor Rival: shown once Dark Simon is beaten
 
 
 # --- pictures -------------------------------------------------------------------
@@ -83,7 +95,8 @@ def pictures(folder: Path) -> dict:
     from fm_editor import pngio
     folder.mkdir(parents=True, exist_ok=True)
     made = {"rings": drawn(512, 512, "rings", (255, 120, 40)), "stripes": drawn(640, 400, "stripes", (60, 200, 255)),
-            "face": drawn(256, 256, "face", (250, 210, 40)), "small": drawn(48, 48, "face", (60, 220, 90))}
+            "face": drawn(256, 256, "face", (250, 210, 40)), "small": drawn(48, 48, "face", (60, 220, 90)),
+            "rival": drawn(200, 200, "stripes", (200, 60, 255))}
     paths = {}
     for name, image in made.items():
         paths[name] = folder / f"{name}.png"
@@ -136,10 +149,10 @@ def editor(game: Path, mod: Path = None):
     return app
 
 
-def fields(dialog) -> dict:
+def fields(dialog, key="name") -> dict:
     """The fields a Duelists tab dialog made (kept in its OK's closure)."""
     for cell in dialog.on_ok.__closure__ or ():
-        if isinstance(cell.cell_contents, dict) and "name" in cell.cell_contents:
+        if isinstance(cell.cell_contents, dict) and key in cell.cell_contents:
             return cell.cell_contents
     raise AssertionError("no fields in the dialog")
 
@@ -181,6 +194,23 @@ def make_mod(game: Path, out: Path, faces: dict) -> list:
             tab.weight.set("2048")
             tab.add_card()
     done.append("Dark Simon: a copy of Simon Muran, a 512x512 picture, its own 16-card deck and one card a drop pool")
+    # Its own rank scoring: every rule ticked, every change 0, so the score
+    # stays at 50, a D-POW (a score below 50 is TEC, mirrored).
+    dialog = tab.edit_rules()
+    given = fields(dialog, "beat")
+    for rule, own in enumerate(given["own"]):
+        own.set(True)
+        for _, change in given["pairs"][rule]:
+            change.set("0")
+    dialog.ok()
+    assert not dialog.winfo_exists() and len(simon.extra["ranks"]) == 10, simon.extra
+    done.append("Dark Simon: rank scoring of its own, every rule's change 0 (Unlock, play, ranks...)")
+    # Its starting LP, on the Values tab, by its name.
+    app.values.duelist_name.set("Dark Simon")
+    app.values.duelist_opponent.set(str(DARK_SIMON_LP))
+    app.values._set_duelist()
+    assert p.other["limits"]["life_points"]["duelists"] == {"Dark Simon": DARK_SIMON_LP}, p.other["limits"]
+    done.append(f"Values: Dark Simon starts with {DARK_SIMON_LP} LP")
 
     tab.goto((15, "deck"))
     dialog = tab.add()
@@ -190,7 +220,37 @@ def make_mod(game: Path, out: Path, faces: dict) -> list:
     given["slot"].set("45")
     dialog.ok()
     tab.use_picture(str(faces["stripes"]))
-    done.append("Pegasus Prime: a copy of Pegasus at slot 45, a 640x400 picture (its middle square is used)")
+    # A fixed deck, on its deck pool: Fixed, Clear, then ten cards four times.
+    from fm_editor import fixed_deck_view, fixed_decks
+    pegasus = roster.find(p, "pegasus-prime")
+    tab.pool.set("deck")
+    tab.fill()
+    tab.fixed.mode.set("fixed")
+    tab.fixed.switch()
+    tab.fixed.clear()
+    for cid, copies in FIXED.items():
+        with mock.patch.object(fixed_deck_view, "pick_card", return_value=cid):
+            tab.fixed.copies.set(str(copies))
+            tab.fixed.add_card()
+    assert fixed_decks.deck_of(p, pegasus).cards == FIXED, fixed_decks.deck_of(p, pegasus).cards
+    done.append("Pegasus Prime: a copy of Pegasus at slot 45, a 640x400 picture (its middle square is used), and a "
+                "fixed deck of ten cards four times each")
+
+    tab.goto((7, "deck"))
+    dialog = tab.add()
+    given = fields(dialog)
+    given["name"].set("Victor Rival")
+    given["auto"].set(False)
+    given["slot"].set(str(RIVAL_SLOT))
+    dialog.ok()
+    tab.use_picture(str(faces["rival"]))
+    dialog = tab.edit_rules()
+    fields(dialog, "beat")["beat"].set("Dark Simon")
+    dialog.ok()
+    rival = roster.find(p, "victor-rival")
+    assert rival.extra["unlock"] == {"beat": "Dark Simon"}, rival.extra
+    done.append(f"Victor Rival: a copy of Seto at slot {RIVAL_SLOT}, unlocked by beating Dark Simon "
+                "(Unlock, play, ranks...)")
 
     tab.goto((2, "deck"))
     dialog = tab.add()
@@ -259,7 +319,7 @@ def expected_faces(game: Path, folder: Path) -> dict:
     files = disc.load(game)
     project, _ = manifest.open_mod(gamedata.load_game(files), folder)
     out = {}
-    for key in ("dark-simon", "pegasus-prime", "teana-locked"):
+    for key in ("dark-simon", "pegasus-prime", "teana-locked", "victor-rival"):
         e = roster.find(project, key)
         out[key] = (roster.face(project, files.wa, e, 1), roster.face(project, files.wa, e, 2), roster.slot_of(project, e))
     for d in (1, 2):
@@ -319,7 +379,7 @@ def main():
     parser.add_argument("--out", type=Path, default=OUT)
     arguments = parser.parse_args()
     out = arguments.out.resolve()
-    for name in ("mods", "shots", "pictures", "again", "game1x", "game2x", "locked", "reverted"):
+    for name in ("mods", "shots", "pictures", "again", "game1x", "game2x", "locked", "reverted", "fixed"):
         shutil.rmtree(out / name, ignore_errors=True)
         (out / f"{name}.trace.log").unlink(missing_ok=True)
     (out / "mods").mkdir(parents=True)
@@ -377,6 +437,9 @@ def main():
         teana = expect["teana-locked"]
         check(results, teana[2] == 41 and mismatch(page2, teana[0], 41) > 1000,
               "Teana Locked (slot 41) is hidden while its hand-written unlock is not met")
+        rival = expect["victor-rival"]
+        check(results, rival[2] == RIVAL_SLOT and mismatch(page2, rival[0], RIVAL_SLOT) > 1000,
+              f"Victor Rival (slot {RIVAL_SLOT}) is hidden until Dark Simon is beaten")
         # Into a duel against Dark Simon, page 2's first cell. The jump's
         # save has no deck, and the screen wants one.
         for _ in range(5):
@@ -393,6 +456,8 @@ def main():
               f"the duel against Dark Simon deals its own deck pool (opponent {g.u8('gDuel_bOpponentID')}, "
               f"its 40 from {sorted(set(deck))})")
         check(results, g.u8("gDuel_bOpponentID") == 40, "the duel's opponent is id 40")
+        life = g.u16(OPPONENT_LP)
+        check(results, life == DARK_SIMON_LP, f"Dark Simon starts with the Values tab's {DARK_SIMON_LP} LP ({life})")
         # 5. Won: its life points to nothing, a card played and the turn ended.
         chest = g.peek("gLibrary_abCardChest", 722)
         g.wait_turn()
@@ -416,6 +481,33 @@ def main():
         won = [cid + 1 for cid, n in enumerate(gained) if n > 0]
         check(results, dropped in DROPS.values() and won == [dropped],
               f"the win drops a card of Dark Simon's own pools: card {dropped}, chest gained {won}")
+        check(results, dropped == DROPS["bcd"],
+              f"its own rank scoring (every change 0) makes the win a D-POW: the drop is its B/C/D card "
+              f"{DROPS['bcd']} ({dropped})")
+        # Dark Simon beaten: Victor Rival is on the grid now.
+        open_free_duel(g)
+        g.press("r1", after=60)
+        g.press("right", hold=2, after=30)
+        g.press("right", hold=2, after=30)
+        page2 = shot(g, out, "1x-page2-rival-unlocked")
+        check(results, mismatch(page2, rival[0], RIVAL_SLOT) == 0,
+              f"with Dark Simon beaten, Victor Rival appears at slot {RIVAL_SLOT} with the editor's 1x picture")
+    # 8. A duel against Pegasus Prime deals its fixed deck.
+    with game_for(arguments.executable, out, "fixed") as g:
+        open_free_duel(g)
+        g.press("r1", after=60)
+        g.press("down", hold=2, after=30)          # slot 45: row 2, column 1
+        g.poke("gDuel_awPlayerDeck", struct.pack("<40H", *player_deck))
+        g.press("cross", after=30)
+        g.wait_until(lambda game: game.u8("D_8009B26E") == 0x80, 6000, what="the deck screen")
+        g.step(120)
+        g.duel_ready()
+        shot(g, out, "1x-duel-pegasus-prime")
+        deck = g.decks()[1]
+        dealt = {cid: deck.count(cid) for cid in set(deck)}
+        check(results, g.u8("gDuel_bOpponentID") == 45 and dealt == FIXED,
+              f"the duel against Pegasus Prime (opponent {g.u8('gDuel_bOpponentID')}) deals its fixed deck, card "
+              f"for card: {sorted(dealt.items())}")
     # The hand-written unlock met: shown.
     with game_for(arguments.executable, out, "locked") as g:
         open_free_duel(g, flags=[LOCK_FLAG])
@@ -457,11 +549,11 @@ def main():
     check(results, not (folder / "duelists/simon-muran.json").exists() and
           not (folder / "portraits/simon-muran.png").exists(),
           "name and face both back: the replacement's files are gone from the mod")
-    for label in ("game1x", "locked", "game2x", "reverted"):
+    for label in ("game1x", "locked", "game2x", "reverted", "fixed"):
         text = said(out, label)
         notes = [line for line in text.splitlines() if f"mod {MOD}:" in line]
-        added = "duelists: 3 added, 1 replaced" in text
-        check(results, added and not notes, f"{label}: the game read 3 added duelists and 1 replaced, and said nothing "
+        added = "duelists: 4 added, 1 replaced" in text
+        check(results, added and not notes, f"{label}: the game read 4 added duelists and 1 replaced, and said nothing "
                                             "against the mod" + (f": {notes}" if notes else ""))
     for patch in answers:
         patch.stop()
