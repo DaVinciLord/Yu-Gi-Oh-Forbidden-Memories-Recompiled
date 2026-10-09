@@ -41,6 +41,9 @@ def run(executable, out):
         traps.append(cid)
     built = manifest.build(project)
     built["decks"] = decks
+    # The healing case deliberately distinguishes one combat trigger from
+    # none or two. Keep the retail 8,000 start, but leave room for its +200.
+    built["limits"] = {"life_points": {"max": 9999}}
     mod = out / "mods/replacement-trap-combat-test"
     mod.mkdir(parents=True, exist_ok=True)
     (mod / "mod.json").write_text(json.dumps(built), encoding="utf-8")
@@ -53,7 +56,7 @@ def run(executable, out):
             game.duel_ready(before_deal=lambda g: g.arrange_deck(0, [5, 4, 6, 7]))
             game.play_card(0, face_up=True)
             game.end_turn()
-            assert any(c for c in game.duel()[1]["spells"]), game.duel()
+            assert any(c and c["id"] == traps[opponent - 1] for c in game.duel()[1]["spells"]), game.duel()
             before = game.duel()
             attack_direct(game)
             game.step(180)
