@@ -2018,3 +2018,25 @@ Existing x86 objects do not run on ARM64; other source mods still need
 compilation and individual validation. The optional `test_arm64_life_points.py` runner checks separate
 player/opponent LP, campaign/free-duel scope, both sound timings, sound
 disabled and fresh-process save-state replay against a supplied source mod.
+
+## Palette ramps
+
+`palette_ramps` turns one RGB value into the game's 16-color brightness ramp,
+preserving the transparent pixel and dark glyph outline. It is a top-level
+`mod.json` object and does not need a library. A numeric key from `0` through
+`7` changes the corresponding retail text ramp. Any other key creates a named
+ramp in a separate 256-row VRAM bank, so it is not restricted to the eight
+text colors. Values may be an RGB array or a hexadecimal RGB string.
+
+```json
+"palette_ramps": {
+  "0": "#FFFFFF",
+  "rare": "#54C8FF",
+  "legendary": [255, 184, 56]
+}
+```
+
+Code that draws a 4-bit texture can select a named ramp with
+`PaletteRamps_Clut("your-mod:rare")`; the name is always prefixed with the
+declaring mod's ID. This returns the CLUT value to assign directly to the
+primitive's `clut` field, or zero if the ramp was not declared. A declaration
