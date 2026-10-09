@@ -128,6 +128,26 @@ void MonsterEffects_TrapPlayed(int card, int side)
     MonsterEffects_CardPlayed(card, side);
 }
 
+void MonsterEffects_AbortBattle(void *removed_object)
+{
+    int i;
+
+    S.battle_abort = 1;
+    for (i = 0; i < 2; i++) {
+        if (D_800E9EF0[i] == removed_object) {
+            D_800E9EF0[i] = 0;
+            D_800E9EF0[i + 2] = 0;
+        }
+    }
+}
+
+int MonsterEffects_BattleAborted(void)
+{
+    int aborted = S.battle_abort;
+    S.battle_abort = 0;
+    return aborted;
+}
+
 /* MEMORIES_EVENT_MONSTER, before: whether a code mod took the occasion
  * (the card's own effects are then skipped). */
 static int announce(int card, int record, int when, unsigned phase)
@@ -491,6 +511,10 @@ int MonsterEffects_Update(void)
         S.life_pending = 0;
         change_life(S.life_side, S.life_amount, 0);
     }
+    /* A replacement trap only suppresses the battle where it sprang.  Do
+     * not leave that marker behind after its queue, magic handler, splash or
+     * pause has drained. */
+    if (!S.count && !S.running && !S.life_pending && !S.pause) S.trap_pending = 0;
     if (S.pause) {
         S.pause--;
         return 1;

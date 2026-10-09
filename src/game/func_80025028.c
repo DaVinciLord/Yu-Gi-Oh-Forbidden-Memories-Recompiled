@@ -41,8 +41,10 @@ s32 Duel_SelectTrapByCardId(s32 arg0)
                     /* It springs under the same condition, but its custom
                      * work replaces the retail reaction. Return no retail
                      * trap so the caller keeps its ordinary spell path. */
-                    MonsterEffects_TrapPlayed(record->card_id, D_8009B1D5);
+                    int owner = (int)(record - D_801A7AD8) / DUEL_FIELD_SIDE_GRID_SLOT_COUNT;
+                    MonsterEffects_TrapPlayed(record->card_id, owner);
                     DuelCard_RemoveFromField(record);
+                    D_800E9FF0[owner].rank.traps_triggered++;
                     return 0;
                 }
 #else

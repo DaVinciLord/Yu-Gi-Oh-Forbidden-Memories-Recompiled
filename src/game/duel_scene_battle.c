@@ -136,6 +136,14 @@ void DuelScene_UpdateBattle(void)
     u8 *pw;
     DuelEffectResourceRecord *effects;
 
+#ifdef MEMORIES_PC
+    /* An attack replacement can remove a participant while the battle scene
+     * is starting. Its slot is cleared before the field object is released,
+     * so use the explicit marker rather than dereferencing it here. */
+    if ((gDuel_wSceneStateFlags & 0x8000) && MonsterEffects_BattleAborted())
+        D_8009B174 = 0xB;
+#endif
+
     if (!(gDuel_wSceneStateFlags & 0x8000)) {
         big = 0x48000;
         gDuel_wSceneStateFlags |= 0x8000;
@@ -722,7 +730,7 @@ void DuelScene_UpdateBattle(void)
     case 11:
         if (!(D_8009B174 & 0x80)) {
             D_8009B174 |= 0x80;
-            if (D_800E9EF0[2] != 0) {
+            if (D_800E9EF0[2] != 0 && D_800E9EF0[0] != 0) {
                 func_80024D34(D_800E9EF0[0]->field_6A, D_800E9EF0[0]->field_6B);
                 left = &D_801A7AD8[D_800E9EF0[0]->field_6A];
                 left->flags |= (D_8009B178[0] & 0xA00) | 0x4000;
@@ -732,20 +740,18 @@ void DuelScene_UpdateBattle(void)
 #endif
                 Duel_ApplyCardObjectFlags((DuelCardDisplayObject *)left->object);
             }
-            if (D_800E9EF0[3] != 0) {
-                if (D_800E9EF0[1] != 0) {
-                    func_80024D34(D_800E9EF0[1]->field_6A, D_800E9EF0[1]->field_6B);
-                    left = &D_801A7AD8[D_800E9EF0[1]->field_6A];
-                    left->flags |= D_8009B178[1] & 0xA00;
-                    left->stat_modifier = D_8009B170[1];
+            if (D_800E9EF0[3] != 0 && D_800E9EF0[1] != 0) {
+                func_80024D34(D_800E9EF0[1]->field_6A, D_800E9EF0[1]->field_6B);
+                left = &D_801A7AD8[D_800E9EF0[1]->field_6A];
+                left->flags |= D_8009B178[1] & 0xA00;
+                left->stat_modifier = D_8009B170[1];
 #ifdef MEMORIES_PC
-                    left->defense_modifier = gDuel_awSavedDefenseModifier[1];
+                left->defense_modifier = gDuel_awSavedDefenseModifier[1];
 #endif
-                    if (D_8009B22A != 0) {
-                        left->flags |= D_8009B178[1] & 0x3000;
-                    }
-                    Duel_ApplyCardObjectFlags((DuelCardDisplayObject *)left->object);
+                if (D_8009B22A != 0) {
+                    left->flags |= D_8009B178[1] & 0x3000;
                 }
+                Duel_ApplyCardObjectFlags((DuelCardDisplayObject *)left->object);
             }
             DisplayObject_ReleaseIfPresent(D_800E9EF0[0]);
             DisplayObject_ReleaseIfPresent(D_800E9EF0[1]);
