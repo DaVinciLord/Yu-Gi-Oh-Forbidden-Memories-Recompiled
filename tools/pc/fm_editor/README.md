@@ -1618,6 +1618,7 @@ into isolated folders and play real duels (no changes to your saves or mods):
     python3 tests/pc/card_types_runtime.py
     python3 tests/pc/magic_effects_runtime.py
     python3 tests/pc/trap_effects_runtime.py
+    python3 tests/pc/replacement_trap_combat_runtime.py
     python3 tests/pc/trap_effects_runtime.py --hard-mode
     python3 tests/pc/editor_mods_runtime.py
     python3 tests/pc/editor_mods_runtime.py --hard-mode
