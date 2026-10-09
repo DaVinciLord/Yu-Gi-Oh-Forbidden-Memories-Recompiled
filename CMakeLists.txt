@@ -593,6 +593,16 @@ if(BUILD_TESTING)
         target_compile_options(memories_card_layout_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
     endif()
     add_test(NAME pc_card_layout COMMAND memories_card_layout_test)
+    # The mods' "palette_ramps" key (src/pc/mods/palette_ramps.c), VRAM
+    # uploads caught.
+    add_executable(memories_palette_ramps_test tests/pc/palette_ramps_test.c src/pc/mods/json.c)
+    target_include_directories(memories_palette_ramps_test PRIVATE src)
+    target_compile_definitions(memories_palette_ramps_test PRIVATE MEMORIES_PC)
+    if(NOT MSVC)
+        target_compile_options(memories_palette_ramps_test PRIVATE -Wall -Wextra -Wpedantic -Werror
+                               -Wno-builtin-declaration-mismatch)
+    endif()
+    add_test(NAME pc_palette_ramps COMMAND memories_palette_ramps_test)
     # Card packs (src/pc/cards/packs.c): the reader, the dealer and the
     # golden deals the FM Editor's Simulate is held to (packs_golden.txt).
     add_executable(memories_packs_test tests/pc/packs_test.c src/pc/mods/json.c)

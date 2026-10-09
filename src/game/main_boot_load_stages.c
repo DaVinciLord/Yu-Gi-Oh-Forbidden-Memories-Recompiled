@@ -56,7 +56,7 @@ void Main_LoadBootPackageStage(FileTransferDescriptor *obj, s32 stage) {
         LoadImage2((RECT *)obj, (u32 *G32)(D_8009B118 + 2 * FILE_SECTOR_SIZE));
         obj->phase_size = 3 * FILE_SECTOR_SIZE;
 #ifdef MEMORIES_PC
-        PaletteRamps_ApplyManifest((const unsigned short *)(D_8009B118 + 2 * FILE_SECTOR_SIZE));
+        PaletteRamps_ApplyManifest((const unsigned short *G32)(D_8009B118 + 2 * FILE_SECTOR_SIZE));
 #endif
         D_8009B0F4 &= 0xFFDCFFFF;
         obj->value_0C = (s32)D_800101D8;

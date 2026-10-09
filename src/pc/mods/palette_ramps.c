@@ -1,28 +1,50 @@
-/* Manifest-defined text palette ramps. */
+/* The mods' "palette_ramps" (palette_ramps.h). */
 #include "palette_ramps.h"
 #include "json.h"
 #include "mods.h"
 #include "psyq/libgte.h"
 #include "psyq/libgpu.h"
-#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
-enum { RETAIL_RAMP_SLOTS = 8, RAMP_ENTRIES = 16, RAMP_X = 640, RAMP_Y = 232, RAMP_BANK_Y = 240, RAMP_BANK_SLOTS = 256, RAMP_NAME_MAX = 64 };
+enum { RETAIL_RAMPS = 8, RAMP_ENTRIES = 16, RAMP_X = 640, RAMP_Y = 232, NAMED_MAX = 256, NAME_MAX = 64 };
 
 typedef struct {
-    char name[RAMP_NAME_MAX];
-    unsigned short clut;
+    char name[NAME_MAX];
+    unsigned short ramp[RAMP_ENTRIES];
 } NamedRamp;
 
-static NamedRamp named[RAMP_BANK_SLOTS];
+static NamedRamp named[NAMED_MAX];
 static int named_count;
 
-unsigned short PaletteRamps_Clut(const char *name)
+static const NamedRamp *find(const char *name)
 {
     int i;
-    for (i = 0; i < named_count; i++) if (!strcmp(named[i].name, name)) return named[i].clut;
-    return 0;
+    for (i = 0; name && i < named_count; i++) {
+        if (!strcmp(named[i].name, name)) return &named[i];
+    }
+    return NULL;
+}
+
+int PaletteRamps_Ramp(const char *name, unsigned short ramp[16])
+{
+    const NamedRamp *found = find(name);
+    if (!found) return 0;
+    memcpy(ramp, found->ramp, sizeof(found->ramp));
+    return 1;
+}
+
+unsigned short PaletteRamps_Load(const char *name, int x, int y)
+{
+    const NamedRamp *found = find(name);
+    RECT rect;
+    if (!found || x < 0 || x > 1024 - RAMP_ENTRIES || x % 16 || y < 0 || y >= 512) return 0;
+    rect.x = (short)x;
+    rect.y = (short)y;
+    rect.w = RAMP_ENTRIES;
+    rect.h = 1;
+    LoadImage(&rect, (u32 *)found->ramp);
+    return (unsigned short)(y << 6 | x >> 4);
 }
 
 static int byte(const JsonValue *value, unsigned *out)
@@ -33,72 +55,96 @@ static int byte(const JsonValue *value, unsigned *out)
     return 1;
 }
 
-static int rgb(const JsonValue *value, unsigned *out)
+static int hex(char c)
+{
+    return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
+}
+
+/* "#RRGGBB" or [red, green, blue], 0-255 each. */
+static int rgb(const JsonValue *value, unsigned out[3])
 {
     const char *text = Json_String(value, NULL);
     int i;
-    if (text && text[0] == '#' && strlen(text) == 7) {
-        for (i = 0; i < 6; i++) {
-            int d = text[i + 1] >= '0' && text[i + 1] <= '9' ? text[i + 1] - '0' :
-                    text[i + 1] >= 'a' && text[i + 1] <= 'f' ? text[i + 1] - 'a' + 10 :
-                    text[i + 1] >= 'A' && text[i + 1] <= 'F' ? text[i + 1] - 'A' + 10 : -1;
-            if (d < 0) return 0;
-            out[i / 2] = (out[i / 2] << 4) | (unsigned)d;
+    if (text) {
+        if (text[0] != '#' || strlen(text) != 7) return 0;
+        for (i = 0; i < 3; i++) {
+            int high = hex(text[1 + 2 * i]), low = hex(text[2 + 2 * i]);
+            if (high < 0 || low < 0) return 0;
+            out[i] = (unsigned)(high << 4 | low);
         }
         return 1;
     }
     return Json_TypeOf(value) == JSON_ARRAY && Json_Count(value) == 3 &&
-           byte(Json_At(value, 0), &out[0]) && byte(Json_At(value, 1), &out[1]) &&
-           byte(Json_At(value, 2), &out[2]);
+           byte(Json_At(value, 0), &out[0]) && byte(Json_At(value, 1), &out[1]) && byte(Json_At(value, 2), &out[2]);
 }
 
-static void apply(const unsigned short *base, int y, const unsigned *color)
+/* The white ramp's brightness steps in the color: the transparent entry stays
+ * transparent, the semi-transparency bit stays as it was, and a step that
+ * comes out black stays opaque (0x8000) rather than turning transparent. */
+static void make(const unsigned short *base, const unsigned color[3], unsigned short *ramp)
 {
-    unsigned short ramp[RAMP_ENTRIES];
-    RECT rect = {RAMP_X, y, RAMP_ENTRIES, 1};
     int i;
     for (i = 0; i < RAMP_ENTRIES; i++) {
-        unsigned lum = base[i] & 31u;
-        ramp[i] = base[i] ? (unsigned short)((lum * color[2] / 255u << 10) |
-                                              (lum * color[1] / 255u << 5) |
-                                               lum * color[0] / 255u) : 0;
-        if (base[i] && !ramp[i]) ramp[i] = 0x8000;
+        unsigned step = base[i] & 31u;
+        unsigned short word = (unsigned short)((step * color[2] / 255u) << 10 | (step * color[1] / 255u) << 5 |
+                                               step * color[0] / 255u);
+        ramp[i] = base[i] ? (unsigned short)(word | (base[i] & 0x8000u)) : 0;
+        if (base[i] && !(ramp[i] & 0x7FFF)) ramp[i] |= 0x8000;
     }
-    LoadImage(&rect, (u32 *)ramp);
+}
+
+/* "0" to "7": a retail ramp's row; -1 for a name; -2 for other digits. */
+static int retail_slot(const char *key)
+{
+    const char *c;
+    if (!*key) return -1;
+    for (c = key; *c; c++) {
+        if (*c < '0' || *c > '9') return -1;
+    }
+    return key[1] == '\0' && key[0] < '0' + RETAIL_RAMPS ? key[0] - '0' : -2;
 }
 
 void PaletteRamps_ApplyManifest(const unsigned short *base)
 {
-    int i;
-    if (!base) return;
+    int i, uploaded = 0;
     named_count = 0;
+    if (!base) return;
     for (i = 0; i < Mods_LoadedCount(); i++) {
         const int mod = Mods_Loaded(i);
-        const JsonValue *entry;
+        const JsonValue *section, *entry;
         if (!Mods_Active(mod)) continue;
-        for (entry = Json_At(Json_Member(Mods_Manifest(mod), "palette_ramps"), 0);
-             entry; entry = Json_Next(entry)) {
-            char *end;
-            long slot = strtol(Json_Name(entry), &end, 10);
+        section = Json_Member(Mods_Manifest(mod), "palette_ramps");
+        if (!section) continue;
+        if (Json_TypeOf(section) != JSON_OBJECT) {
+            Mods_Note(Mods_Id(mod), "palette_ramps: must be an object of names and colors");
+            continue;
+        }
+        for (entry = Json_At(section, 0); entry; entry = Json_Next(entry)) {
+            const char *key = Json_Name(entry);
             unsigned color[3] = {0, 0, 0};
-            char full_name[RAMP_NAME_MAX];
+            unsigned short ramp[RAMP_ENTRIES];
+            int slot = retail_slot(key);
             if (!rgb(entry, color)) {
-                Mods_Note(Mods_Id(mod), "palette_ramps: '%s' must be [red, green, blue] or #RRGGBB", Json_Name(entry));
-            } else if (!*end) {
-                if (slot < 0 || slot >= RETAIL_RAMP_SLOTS)
-                    Mods_Note(Mods_Id(mod), "palette_ramps: built-in slot %ld must be from 0 to 7", slot);
-                else apply(base, RAMP_Y + (int)slot, color);
-            } else if (named_count == RAMP_BANK_SLOTS ||
-                       snprintf(full_name, sizeof(full_name), "%s:%s", Mods_Id(mod), Json_Name(entry)) >=
-                       (int)sizeof(full_name)) {
-                Mods_Note(Mods_Id(mod), "palette_ramps: cannot add '%s'", Json_Name(entry));
+                Mods_Note(Mods_Id(mod), "palette_ramps: '%s' must be [red, green, blue] or #RRGGBB", key);
+            } else if (slot == -2) {
+                Mods_Note(Mods_Id(mod), "palette_ramps: '%s': the game's own ramps are 0 to 7", key);
+            } else if (slot >= 0) {
+                /* The later mod in load order wins, as it uploads last. */
+                RECT rect = {RAMP_X, (short)(RAMP_Y + slot), RAMP_ENTRIES, 1};
+                make(base, color, ramp);
+                LoadImage(&rect, (u32 *)ramp);
+                uploaded = 1;
+            } else if (named_count == NAMED_MAX ||
+                       snprintf(named[named_count].name, NAME_MAX, "%s:%s", Mods_Id(mod), key) >= NAME_MAX) {
+                Mods_Note(Mods_Id(mod), "palette_ramps: cannot add '%s' (%d named ramps at most, %d letters "
+                          "with the mod's id)", key, NAMED_MAX, NAME_MAX - 1);
+            } else if (find(named[named_count].name)) {
+                Mods_Note(Mods_Id(mod), "palette_ramps: '%s' is declared twice; the first is kept", key);
             } else {
-                snprintf(named[named_count].name, sizeof(named[named_count].name), "%s", full_name);
-                named[named_count].clut = (unsigned short)((RAMP_BANK_Y + named_count) << 6 | (RAMP_X >> 4));
-                apply(base, RAMP_BANK_Y + named_count, color);
+                make(base, color, named[named_count].ramp);
                 named_count++;
             }
         }
     }
-    DrawSync(0);
+    if (uploaded) DrawSync(0);
 }
