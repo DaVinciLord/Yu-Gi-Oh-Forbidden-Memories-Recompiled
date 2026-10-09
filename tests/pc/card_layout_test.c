@@ -39,7 +39,7 @@ int Log_Wanted(LogChannel channel) { (void)channel; return 0; }
 void Log_Printf(LogChannel channel, const char *format, ...) { (void)channel; (void)format; }
 
 /* cards.c stand-ins: a handful of ids CardLayout_SetCard's tests name, each
- * with an explicit frame colour (a cards mod's "frame"), a type
+ * with an explicit frame color (a cards mod's "frame"), a type
  * (card_constants.h), effects, and tags. CARD_TYPE_DRAGON ("monster") with
  * none of the rest is every id's default until a test sets otherwise. */
 #define FAKE_CARD_COUNT 8
@@ -318,7 +318,7 @@ static void spell_frame_equip_uses_magic(void)
 }
 
 /* FULL_MANIFEST gives "frame" no "ritual" of its own: a ritual card wears
- * magic's frame (the legacy rule), the picture its colour in the hand
+ * magic's frame (the legacy rule), the picture its color in the hand
  * matches. */
 static void spell_frame_ritual_wears_magic_frame(void)
 {
@@ -331,7 +331,7 @@ static void spell_frame_ritual_wears_magic_frame(void)
 }
 
 /* Cards_FrameColor is an explicit per-card override "whatever its type"
- * (cards.h): a monster card a mod recoloured to the trap frame is still
+ * (cards.h): a monster card a mod recolored to the trap frame is still
  * drawn as the trap frame under full-bleed, not its real monster type. */
 static void frame_color_override_wins_over_type(void)
 {
@@ -349,12 +349,12 @@ static void frame_color_override_wins_over_type(void)
 static const char *const STYLES_MANIFEST =
     "{\"id\": \"x\", \"card_layout\": {"
     "\"frame_styles\": {"
-        "\"gold\": {\"image\": \"gold.png\", \"hand_colour\": \"gold\"},"
-        "\"green\": {\"image\": \"green.png\", \"hand_colour\": \"green\"},"
-        "\"pink\": {\"image\": \"pink.png\", \"hand_colour\": \"pink\"},"
-        "\"orange\": {\"image\": \"orange.png\", \"hand_colour\": \"orange\"},"
-        "\"blue\": {\"image\": \"blue.png\", \"hand_colour\": \"blue\"},"
-        "\"godly\": {\"image\": \"god.png\", \"hand_colour\": \"purple\", \"width\": 150, \"height\": 200}},"
+        "\"gold\": {\"image\": \"gold.png\", \"hand_color\": \"gold\"},"
+        "\"green\": {\"image\": \"green.png\", \"hand_color\": \"green\"},"
+        "\"pink\": {\"image\": \"pink.png\", \"hand_color\": \"pink\"},"
+        "\"orange\": {\"image\": \"orange.png\", \"hand_color\": \"orange\"},"
+        "\"blue\": {\"image\": \"blue.png\", \"hand_color\": \"blue\"},"
+        "\"godly\": {\"image\": \"god.png\", \"hand_color\": \"purple\", \"width\": 150, \"height\": 200}},"
     "\"frame_for\": ["
         "{\"tag\": \"god\", \"style\": \"godly\"},"
         "{\"class\": \"ritual_spell\", \"style\": \"blue\", \"setting\": \"ritual_own_frame\"},"
@@ -378,7 +378,7 @@ static int style_of(int id, const char *want_path)
     CHECK(CardLayout_StyleOf(id, &style));
     CardLayout_SetCard(id);
     CHECK(!strcmp(CardLayout_FramePath(), want_path));
-    return style.colour;
+    return style.color;
 }
 
 static void styles_by_class(void)
@@ -442,9 +442,9 @@ static void styles_unusable_is_retail(void)
     CardLayoutStyle style;
     reset();
     add_mod("x", "/mods/x",
-            "{\"id\": \"x\", \"card_layout\": {\"frame_styles\": {\"gold\": {\"image\": \"g.png\", \"hand_colour\": \"lilac\"}}}}",
+            "{\"id\": \"x\", \"card_layout\": {\"frame_styles\": {\"gold\": {\"image\": \"g.png\", \"hand_color\": \"lilac\"}}}}",
             1, "full_bleed", 1);
-    CHECK(!CardLayout_StyleOf(1, &style) && notes == 1);   /* a "hand_colour" the disc has no row for */
+    CHECK(!CardLayout_StyleOf(1, &style) && notes == 1);   /* a "hand_color" the disc has no row for */
     reset();
     add_mod("x", "/mods/x",
             "{\"id\": \"x\", \"card_layout\": {\"frame_styles\": {\"gold\": {\"image\": \"g.png\"}}, \"default_style\": \"nothing\"}}",
@@ -453,6 +453,31 @@ static void styles_unusable_is_retail(void)
     reset();
     add_mod("x", "/mods/x", STYLES_MANIFEST, 1, "full_bleed", 0);
     CHECK(!CardLayout_StyleOf(1, &style));                  /* anime frame off */
+}
+
+/* "hand_colour", the key's first spelling, still names the color, and
+ * "hand_color" wins over it when a style has both. */
+static void styles_hand_colour_alias(void)
+{
+    CardLayoutStyle style;
+    reset();
+    add_mod("x", "/mods/x",
+            "{\"id\": \"x\", \"card_layout\": {\"frame_styles\": {\"old\": {\"image\": \"o.png\", \"hand_colour\": \"pink\"}},"
+            " \"default_style\": \"old\"}}",
+            1, "full_bleed", 1);
+    CHECK(CardLayout_StyleOf(1, &style) && style.color == CARD_FRAME_TRAP && notes == 0);
+    reset();
+    add_mod("x", "/mods/x",
+            "{\"id\": \"x\", \"card_layout\": {\"frame_styles\": {\"both\": {\"image\": \"b.png\","
+            " \"hand_colour\": \"pink\", \"hand_color\": \"orange\"}}, \"default_style\": \"both\"}}",
+            1, "full_bleed", 1);
+    CHECK(CardLayout_StyleOf(1, &style) && style.color == CARD_FRAME_ORANGE && notes == 0);
+    reset();
+    add_mod("x", "/mods/x",
+            "{\"id\": \"x\", \"card_layout\": {\"frame_styles\": {\"old\": {\"image\": \"o.png\", \"hand_colour\": \"lilac\"}},"
+            " \"default_style\": \"old\"}}",
+            1, "full_bleed", 1);
+    CHECK(!CardLayout_StyleOf(1, &style) && notes == 1);   /* checked as the new spelling is */
 }
 
 static void legacy_ritual_wears_magic(void)
@@ -514,6 +539,7 @@ int main(void)
     styles_rule_setting();
     styles_card_frame_and_default();
     styles_unusable_is_retail();
+    styles_hand_colour_alias();
     legacy_ritual_wears_magic();
     digits_from_mod();
     reset();

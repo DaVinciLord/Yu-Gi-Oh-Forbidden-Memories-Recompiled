@@ -31,10 +31,10 @@
  * the card face, resetting the fields it needs between submissions.
  *
  * The third scratch record, at 0x1F800344, is the POLY_FT4 the clip path
- * primes (len 9, code 0x2C) with the object's colour, and the record at
+ * primes (len 9, code 0x2C) with the object's color, and the record at
  * 0x1F8003E0 is CardFrameScratch above.
  *
- * All three reads of the colour word at 0x0C sit between scratchpad stores,
+ * All three reads of the color word at 0x0C sit between scratchpad stores,
  * and the target keeps every one of them where the source puts it. That used
  * to need the read spelled through a cast, because a member read is a struct
  * reference and GCC 2.8.1 floats one across stores that are not. With the
@@ -208,7 +208,7 @@ void func_80016784(DisplayObject *object, s32 arg1, s32 arg2, s32 arg3) {
                         break;
                     }
 #ifdef MEMORIES_PC
-                    /* A mod's frame colour (Cards_FrameColor): the face's
+                    /* A mod's frame color (Cards_FrameColor): the face's
                      * palette row, after the type's kind word or stats. */
                     if (Cards_FrameColor(card->card_id) >= 0) {
                         k->cxcy.h.cy = 0xF1 + Cards_FrameColor(card->card_id);

@@ -1063,7 +1063,7 @@ just been consumed.
 
 That call enters the shared model pipeline, not a battle-only helper. Matching
 `func_800528AC` processes up to ten active timed tint requests: it interpolates
-three colour bytes, temporarily applies the result and requested part values to
+three color bytes, temporarily applies the result and requested part values to
 one of two model slots, redraws that slot, then restores the previous model
 state. Its request clock advances by the shared frame factor and clears the
 active bit at the recorded duration. An inactive model pauses the request
@@ -1382,7 +1382,7 @@ effect that could touch the record.
 `Duel_DrawLifePointsAndDeckCounts` also reads `deck_draw_cursor`, through a
 signed-byte view, to display `DECK_SIZE - deck_draw_cursor` for each side.
 The remaining-card readouts retain their two-digit format and existing
-side/colour order.
+side/color order.
 The calculation is not clamped or redefined as cards played; its neighboring
 LP readouts still use the interpolated display value at `+0x12`.
 
@@ -2150,7 +2150,7 @@ dialogs or their button handling.
 `FreeDuel_UpdateCursorTween` can allocate one object into the highest free
 slot of the 16-entry `gFreeDuel_apSparklePool`. The matching updater initializes
 that `DisplayObject` to additive grey `0x404040` with a 16-update timer,
-subtracts four from each colour channel per update, and releases the object
+subtracts four from each color channel per update, and releases the object
 and clears its slot when the timer reaches zero. This is a visual
 display-object effect, separate from the screen's audio startup.
 

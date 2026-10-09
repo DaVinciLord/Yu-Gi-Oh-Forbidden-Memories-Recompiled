@@ -34,7 +34,7 @@ int DiscArt_LoadRect(int sector, int offset, int x, int y, int w, int h);
 int DiscArt_Read(int sector, void *out, int bytes);
 
 /* w x h texels at u, v of the texture page at page_x (words), page_y, in
- * 4- or 8-bit colour through the palette at clut_x, clut_y. 0 if `depth` is
+ * 4- or 8-bit color through the palette at clut_x, clut_y. 0 if `depth` is
  * neither or memory runs out. Free with DiscArt_Free. */
 int DiscArt_Cut(DiscArt *art, int page_x, int page_y, int depth, int u, int v, int w, int h, int clut_x,
                 int clut_y);

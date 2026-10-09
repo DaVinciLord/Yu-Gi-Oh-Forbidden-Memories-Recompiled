@@ -7,7 +7,7 @@
 
 /* One row of the credits table at D_80181D38. `group` is the page the row
  * belongs to and a negative group ends the table; the low nibble of `flags`
- * picks the colour and the high nibble the paragraph inside the page. */
+ * picks the color and the high nibble the paragraph inside the page. */
 typedef struct {
     s8 group;
     u8 flags;

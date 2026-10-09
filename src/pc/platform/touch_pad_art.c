@@ -8,7 +8,7 @@
 
 /* Main_RunBootSequence's package (font_art.c has its layout): 48 sectors of
  * image from VRAM 0x280, 0, then two sectors of palettes loaded at 0x200,
- * 0xF8 (256 x 8), then the text colour ramps at 0x280, 0xE8. The buttons
+ * 0xF8 (256 x 8), then the text color ramps at 0x280, 0xE8. The buttons
  * are 4-bit on the page at 0x2C0 (page 11) with the palette at 0x200, 0xFC,
  * the same the password screen's OK/END row and the duel's help use; the
  * text font is on the page at 0x280. */

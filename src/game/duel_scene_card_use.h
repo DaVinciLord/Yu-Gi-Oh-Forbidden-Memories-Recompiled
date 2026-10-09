@@ -23,7 +23,7 @@
  *   3  builds two Duel_CreateCardEffectOverlay copies of the window,
  *      one GsALON | GsAONE
  *      and one GsALON | GsATWO, sweeps their +0x44/+0x46 pair and their
- *      0xC colour word down together, and releases both when it reaches 0
+ *      0xC color word down together, and releases both when it reaches 0
  *   4  repeats DuelEffect_StartCardEffect with flag 1 and returns to state 5
  *
  * The previous comment here described a hand-refresh phase that walks the

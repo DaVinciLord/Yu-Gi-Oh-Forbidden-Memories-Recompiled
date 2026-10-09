@@ -448,7 +448,7 @@ def text_changes(retail_slus: bytes, modded_slus: bytes, report: list, modded_wa
     if not out:
         return None, carried
     head = ("# Text of a modified game that differs from retail, written by the FM Editor's importer\n"
-            "# (notes/translation.md). Card names and texts are in mod.json, except those with colour\n"
+            "# (notes/translation.md). Card names and texts are in mod.json, except those with color\n"
             "# or icon codes and those the mod left empty, which only this file can carry.\n\n")
     return head + "\n".join(out), carried
 
@@ -465,7 +465,7 @@ def _has_codes(text: bytes) -> bool:
 
 def coded_card_texts(retail_files, modded_files) -> dict:
     """{field: card ids} of the names and texts that only a text listing can
-    carry: changed ones with a colour or icon code in them, and texts the
+    carry: changed ones with a color or icon code in them, and texts the
     mod left empty (cards.c reads "" as "not set")."""
     from .gamedata import _tl
     image, retail_image = g._image(modded_files.slus), g._image(retail_files.slus)
@@ -779,7 +779,7 @@ def kit_rules(project: Project, modded, retail_files, modded_files) -> tuple:
         missing.append(f"the opponents' play (AI): {len(changed)} of its script commands are the mod's code, and "
                        "the mod's scripts in WA_MRG.MRG expect them, so they play by the disc's commands")
     if memory.bytes(CARD_FRAME, 16) != retail.bytes(CARD_FRAME, 16):
-        missing.append("each card's frame colour by its class (Effect, Union...)")
+        missing.append("each card's frame color by its class (Effect, Union...)")
     if any(slus[0x88:0x800]):
         notes.append("rules: the executable's header holds code (0x8000B070 and up): a mod made with the kit "
                      "that patches the duel in MIPS (A16)")
@@ -880,7 +880,7 @@ def import_modded(retail_files, modded_files, mod_id: str = "imported-mod", name
         ids = [cid for cid in card_fields.get(field, ()) if (cid, field) in carried]
         empty = [cid for cid in ids if field == "description" and not project.cards[cid].description]
         if ids:
-            report.append(f"cards: {len(ids)} card {label} carry colour or icon codes"
+            report.append(f"cards: {len(ids)} card {label} carry color or icon codes"
                           + (f" or are empty on purpose ({len(empty)} empty)" if empty else "")
                           + "; text.txt carries them (cards[] cannot)")
     blank = [cid for cid, card in project.cards.items() if cid <= g.CARD_COUNT and not card.name

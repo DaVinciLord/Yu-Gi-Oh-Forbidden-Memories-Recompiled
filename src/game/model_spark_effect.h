@@ -5,7 +5,7 @@
 #include "../psyq/libgte.h"
 
 /* Particle state for func_8006F1B4, the fourth handler in D_800114E8. It
- * holds 32 sparks with their sizes and colours, 32 flashes and 64 dust
+ * holds 32 sparks with their sizes and colors, 32 flashes and 64 dust
  * particles with their speeds and frames. */
 typedef struct {
     u16 size;

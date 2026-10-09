@@ -12,7 +12,7 @@ copy reads eight bytes from the view buffer at `0x80181000`. Its literal
 retail unaligned load/store pairs. `SVECTOR`'s alignment of 2 lowers to the
 same two `lwl`/`lwr` and `swl`/`swr` pairs as the alignment-one `Bytes8` spelling
 it replaced. The packet, vectors and control words are written through their
-`LINE_G3`, `SVECTOR` and `long` members. Three exceptions remain: the colour
+`LINE_G3`, `SVECTOR` and `long` members. Three exceptions remain: the color
 words, written through `*(s32 *)&prim->rN`; the three scratch `vy` clears,
 kept on absolute addresses because member stores through the vector pointers
 reorder the setup; and the unsigned `(u16)` first read of `y0`, which is

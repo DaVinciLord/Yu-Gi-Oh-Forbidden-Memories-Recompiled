@@ -152,8 +152,8 @@ def password_of(cid: int) -> str:
 ART_CARDS = (1, 2, 3, 5)
 
 
-def art_colour(cid: int, index: int) -> int:
-    """The synthetic palette: a 15-bit colour per entry (never 0, the
+def art_color(cid: int, index: int) -> int:
+    """The synthetic palette: a 15-bit color per entry (never 0, the
     transparent one)."""
     return ((index * 7 + cid) & 0x1F) | (((index * 3) & 0x1F) << 5) | (((cid * 5 + index) & 0x1F) << 10) | 0x8000
 
@@ -166,7 +166,7 @@ def paint_art(data: bytearray, cid: int):
         for x in range(102):
             data[base + y * 102 + x] = 1 + (x + y * 2 + cid) % 255
     for i in range(256):
-        struct.pack_into("<H", data, base + 0x2640 + i * 2, art_colour(cid, i))
+        struct.pack_into("<H", data, base + 0x2640 + i * 2, art_color(cid, i))
     for i in range(48 * 14):
         data[base + 0x2840 + i] = (i % 8) | (((i + cid) % 8) << 4)
     small = (cid - 1) * 2048
@@ -174,20 +174,20 @@ def paint_art(data: bytearray, cid: int):
         for x in range(40):
             data[small + y * 40 + x] = 1 + (x * 3 + y + cid) % 63
     for i in range(64):
-        struct.pack_into("<H", data, small + 0x500 + i * 2, art_colour(cid + 1, i))
+        struct.pack_into("<H", data, small + 0x500 + i * 2, art_color(cid + 1, i))
 
 
 PORTRAITS = 0xF55000     # portrait.BASE: a 0x980-byte Free Duel portrait to a duelist
 
 
 def paint_portrait(data: bytearray, d: int):
-    """Duelist d's Free Duel portrait: 48x48 bands through a 64-colour
+    """Duelist d's Free Duel portrait: 48x48 bands through a 64-color
     palette of its own."""
     at = PORTRAITS + d * 0x980
     for i in range(48 * 48):
         data[at + i] = (i // 48 + d) % 64
     for i in range(64):
-        struct.pack_into("<H", data, at + 0x900 + i * 2, art_colour(d + 40, i))
+        struct.pack_into("<H", data, at + 0x900 + i * 2, art_color(d + 40, i))
 
 
 class Fixture:

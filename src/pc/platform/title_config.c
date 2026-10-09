@@ -35,7 +35,7 @@ static void background_defaults(TitleBackground *background)
 {
     memset(background, 0, sizeof(*background));
     background->picture = background->shade = 1;
-    background->colour = -1;
+    background->color = -1;
     background->tint = 0xFFFFFF;
 }
 
@@ -64,35 +64,35 @@ static void defaults(void)
 }
 
 /* "#RRGGBB", "RRGGBB" or a number; -1 when it is none of those. */
-static long read_colour(const JsonValue *value)
+static long read_color(const JsonValue *value)
 {
     const char *text;
     char *end;
-    long colour;
+    long color;
     if (!value) return -1;
     if (Json_TypeOf(value) == JSON_NUMBER) {
-        colour = Json_Number(value, -1);
-        return colour >= 0 && colour <= 0xFFFFFF ? colour : -1;
+        color = Json_Number(value, -1);
+        return color >= 0 && color <= 0xFFFFFF ? color : -1;
     }
     text = Json_String(value, NULL);
     if (!text) return -1;
     if (*text == '#') text++;
     if (strlen(text) != 6) return -1;
-    colour = strtol(text, &end, 16);
-    return *end ? -1 : colour;
+    color = strtol(text, &end, 16);
+    return *end ? -1 : color;
 }
 
 /* The key being read, "title" or "menu", for the notes. */
 static const char *reading = "title";
 
-static void colour_member(const char *mod, const JsonValue *object, const char *key, uint32_t *out)
+static void color_member(const char *mod, const JsonValue *object, const char *key, uint32_t *out)
 {
     const JsonValue *value = Json_Member(object, key);
-    long colour;
+    long color;
     if (!value) return;
-    colour = read_colour(value);
-    if (colour < 0) Mods_Note(mod, "%s: \"%s\" is a colour, \"#RRGGBB\"", reading, key);
-    else *out = (uint32_t)colour;
+    color = read_color(value);
+    if (color < 0) Mods_Note(mod, "%s: \"%s\" is a color, \"#RRGGBB\"", reading, key);
+    else *out = (uint32_t)color;
 }
 
 static void int_member(const JsonValue *object, const char *key, int *out)
@@ -243,7 +243,7 @@ static void read_item(const char *mod, const char *directory, const JsonValue *p
     }
     read_wide(part, &item->wide);
     scale_member(mod, item->name, part, &item->scale);
-    colour_member(mod, part, "tint", &item->tint);
+    color_member(mod, part, "tint", &item->tint);
     read_image(mod, directory, item->name, part, "image", &item->image);
     read_image(mod, directory, item->name, part, "selected_image", &item->selected);
     if ((value = Json_Member(part, "label"))) {
@@ -412,14 +412,14 @@ static void read_lines(const char *mod, const JsonValue *list)
         line->x = 160;
         line->y = 220;
         line->size = 1;
-        line->colour = 0xFFFFFF;
+        line->color = 0xFFFFFF;
         int_member(item, "x", &line->x);
         int_member(item, "y", &line->y);
         read_wide(item, &line->wide);
         int_member(item, "size", &line->size);
         if (line->size < 1) line->size = 1;
         if (line->size > 8) line->size = 8;
-        colour_member(mod, item, "color", &line->colour);
+        color_member(mod, item, "color", &line->color);
         align = Json_String(Json_Member(item, "align"), "center");
         line->align = !strcmp(align, "left") ? TITLE_ALIGN_LEFT : !strcmp(align, "right") ? TITLE_ALIGN_RIGHT : TITLE_ALIGN_CENTRE;
         show = Json_String(Json_Member(item, "show"), "always");
@@ -459,7 +459,7 @@ static void read_pictures(const char *mod, const char *directory, const JsonValu
         int_member(item, "x", &picture->x);
         int_member(item, "y", &picture->y);
         read_wide(item, &picture->wide);
-        colour_member(mod, item, "tint", &picture->tint);
+        color_member(mod, item, "tint", &picture->tint);
         if ((show = Json_String(Json_Member(item, "show"), NULL))) {
             if (!strcmp(show, "always")) picture->show = TITLE_SHOW_ALWAYS;
             else if (!strcmp(show, "press_start")) picture->show = TITLE_SHOW_PROMPT;
@@ -494,14 +494,14 @@ static void read_background(const char *mod, const char *directory, const JsonVa
     }
     bool_member(part, "picture", &background->picture);
     bool_member(part, "shade", &background->shade);
-    colour_member(mod, part, "tint", &background->tint);
+    color_member(mod, part, "tint", &background->tint);
     if (Json_Member(part, "color")) {
-        long colour = read_colour(Json_Member(part, "color"));
-        if (colour < 0) {
-            Mods_Note(mod, "%s: \"color\" is a colour, \"#RRGGBB\"", reading);
+        long color = read_color(Json_Member(part, "color"));
+        if (color < 0) {
+            Mods_Note(mod, "%s: \"color\" is a color, \"#RRGGBB\"", reading);
         } else {
-            background->colour = colour;
-            *set |= TITLE_BACKGROUND_COLOUR;
+            background->color = color;
+            *set |= TITLE_BACKGROUND_COLOR;
         }
     }
     int_member(part, "dim", &config.dim);
@@ -541,7 +541,7 @@ static void read_title(const char *mod, const char *directory, const JsonValue *
         int_member(part, "x", &config.layers[i].x);
         int_member(part, "y", &config.layers[i].y);
         read_wide(part, &config.layers[i].wide);
-        colour_member(mod, part, "tint", &config.layers[i].tint);
+        color_member(mod, part, "tint", &config.layers[i].tint);
         read_image(mod, directory, TitleConfig_LayerNames[i], part, "image", &config.layers[i].image);
         if ((show = Json_String(Json_Member(part, "show"), NULL))) {
             if (!strcmp(show, "always")) config.layers[i].show = TITLE_SHOW_ALWAYS;
@@ -707,7 +707,7 @@ void TitleConfig_Finish(void)
     /* The menus' background: the title's, but for what "menu" set. */
     if (config.menu_set & TITLE_BACKGROUND_PICTURE) menu.picture = given->picture;
     if (config.menu_set & TITLE_BACKGROUND_SHADE) menu.shade = given->shade;
-    if (config.menu_set & TITLE_BACKGROUND_COLOUR) menu.colour = given->colour;
+    if (config.menu_set & TITLE_BACKGROUND_COLOR) menu.color = given->color;
     if (config.menu_set & TITLE_BACKGROUND_TINT) menu.tint = given->tint;
     if (config.menu_set & TITLE_BACKGROUND_IMAGE) menu.image = given->image;
     if (config.menu_set & TITLE_BACKGROUND_WIDE) menu.wide = given->wide;

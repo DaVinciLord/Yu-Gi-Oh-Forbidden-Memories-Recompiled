@@ -18,7 +18,7 @@ enum {
     RESULTS_RESOURCE_SECTOR = RESULTS_PALETTE_SECTOR + 1, RESOURCE_BYTES = FILE_SECTOR_SIZE
 };
 /* func_800218F0's two result objects: resource indices 0, 5, is_tec_rank
- * (the badge and plate) and 0, 6, rank_tier (the letter), colour word 16
+ * (the badge and plate) and 0, 6, rank_tier (the letter), color word 16
  * (page 16, u and v 0) and texture 8 (palette 0, 248), with flag 0x20, which
  * adds the sheet's own palette step. */
 enum { RECORD_BADGE = 5, RECORD_LETTER = 6, OBJECT_PAGE = 16, OBJECT_CLUT_X = 0, OBJECT_CLUT_Y = 0xF8 };
@@ -26,7 +26,7 @@ enum { RECORD_BADGE = 5, RECORD_LETTER = 6, OBJECT_PAGE = 16, OBJECT_CLUT_X = 0,
  * the same here): 64 sectors of image from 0x300, 0x100, then four of
  * palette as a 256 x 16 LoadImage at 0x100, 0xF0. Duel_DrawCardFrame draws
  * a card's ATK/DEF digits from page 0x1E, v 0x58, u 8 a digit, 8 x 8 in
- * 8-bit colour, palette 0x100, 0xF1. */
+ * 8-bit color, palette 0x100, 0xF1. */
 enum {
     DUEL_IMAGE_SECTORS = 64, DUEL_IMAGE_X = 0x300, DUEL_IMAGE_Y = 0x100,
     DUEL_PALETTE_SECTOR = DUEL_TERRAIN_PACKAGE_FIRST_SECTOR + DUEL_IMAGE_SECTORS,

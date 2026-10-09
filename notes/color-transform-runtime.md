@@ -2,7 +2,7 @@
 
 ## Scope
 
-Five matching helpers at `0x8005A98C-0x8005B260` form one fixed-point colour
+Five matching helpers at `0x8005A98C-0x8005B260` form one fixed-point color
 conversion and tint translation unit in `src/game/color_transform.c`.
 `func_8005B054` produces the same object under its historical
 `gcc_2_8_1_g0` profile and the unit's `gcc_2_8_1_g8` profile, so the recorded
@@ -12,8 +12,8 @@ profile difference is not a real boundary.
 |---|---|---|---|
 | `Color_RgbToHsl` (`0x8005A98C`) | three channels plus their maximum value | `{h, lightness, saturation}` | RGB to fixed-point HSL |
 | `Color_HslToRgb` (`0x8005ABA0`) | fixed-point HSL plus a channel maximum | three channels | fixed-point HSL to RGB |
-| `Color_TintBgr555Pixel` (`0x8005AE68`) | one BGR555 colour, flags, scale | one BGR555 colour | hue/saturation transform preserving bit `0x8000` |
-| `func_8005B054` | fixed-point HSL | one BGR555 colour | direct HSL-to-BGR555 packing |
+| `Color_TintBgr555Pixel` (`0x8005AE68`) | one BGR555 color, flags, scale | one BGR555 color | hue/saturation transform preserving bit `0x8000` |
+| `func_8005B054` | fixed-point HSL | one BGR555 color | direct HSL-to-BGR555 packing |
 | `func_8005B0B4` | three channels, flags, scale, maximum | three channels | the same transform on an unpacked RGB triple |
 
 The shared game type remains named `HsvT`, but the formulas are HSL, not HSV.
@@ -51,7 +51,7 @@ else:
 
 Hue uses a full turn of `0x6000`, with `0x1000` per RGB edge:
 
-| Hue | Colour |
+| Hue | Color |
 |---:|---|
 | `0x0000` | red |
 | `0x1000` | yellow |
@@ -98,7 +98,7 @@ to HSL:
 
 Both wrappers replace a zero output channel with one. The BGR555 wrapper has
 two additional rules: input zero returns zero immediately, and bit `0x8000`
-is copied unchanged from the input colour to the repacked result.
+is copied unchanged from the input color to the repacked result.
 
 ### Measured over every BGR555 input
 
@@ -110,7 +110,7 @@ settles what each control does, rather than inferring it from the arithmetic:
 |---|---|
 | Forced sectors `0-5` each leave one hue family dominant | Sector 0 leaves red dominant, 1 red and green, 2 green, 3 green and blue, 4 blue, 5 red and blue. The only other outcome is all three equal, which is the zero-saturation case. |
 | `COLOR_TINT_GRAYSCALE` emits a grey | All three output channels are equal for every input. A zero `scale` does the same under any hue selector. |
-| `COLOR_TINT_INVERT` is a complement | Before the zero clamp, `flags = f \| 8` is exactly the three-sector rotation of the same colour with every channel subtracted from `31`. The rotation is what cancels the complement's own three-sector hue shift, which is why `f` and `f \| 8` leave the same channels dominant. |
+| `COLOR_TINT_INVERT` is a complement | Before the zero clamp, `flags = f \| 8` is exactly the three-sector rotation of the same color with every channel subtracted from `31`. The rotation is what cancels the complement's own three-sector hue shift, which is why `f` and `f \| 8` leave the same channels dominant. |
 | Bit `0x8000` is copied, not computed | Holds for every input under flags `0`, `3`, `6`, `7`, `0xE` and `0xF`. |
 | `scale` only removes saturation | The spread between the brightest and dimmest output channel never falls as `scale` rises through `0`, `0x400`, `0x800`, `0xC00` and `0x1000`. |
 
@@ -123,11 +123,11 @@ mask (`31`), green shift (`5`), blue shift (`10`), and STP mask (`0x8000`).
 Red occupies bits `0-4`, green bits `5-9`, and blue bits `10-14`. The channel
 mask is also the maximum passed to HSL conversion. Both packing paths use
 these constants, but only `Color_TintBgr555Pixel` copies the input STP bit; the direct
-packer has no input colour from which to preserve it.
+packer has no input color from which to preserve it.
 
 ## VRAM application
 
-Matching `Model_ApplyTextureTint` applies the BGR555 transform to VRAM colour bands.
+Matching `Model_ApplyTextureTint` applies the BGR555 transform to VRAM color bands.
 For buffer selector `0` or `1`, it processes two `256 x 4` rectangles:
 
 1. Read from x `selector * 256`, y `248` and `252` through `StoreImage2`.
@@ -137,7 +137,7 @@ For buffer selector `0` or `1`, it processes two `256 x 4` rectangles:
 
 When the full flags argument is at least `COLOR_TINT_KEEP_HUE` (`7`),
 `COLOR_TINT_INVERT` (bit `3`) is clear, and the saturation scale is at least
-`COLOR_FIXED_ONE` (`0x1000`), the function skips per-colour conversion and
+`COLOR_FIXED_ONE` (`0x1000`), the function skips per-color conversion and
 moves the complete `256 x 8` source band from y `248` to y `240` with
 `MoveImage`. The first comparison deliberately remains against the full
 argument, not `flags & COLOR_TINT_HUE_MASK`; the two tests are not equivalent

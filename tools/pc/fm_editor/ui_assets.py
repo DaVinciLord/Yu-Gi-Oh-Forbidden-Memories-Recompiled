@@ -72,7 +72,7 @@ ENTRY_SPRITES = {
 
 # --- the duel ----------------------------------------------------------------------------
 # The boot package (Main_LoadBootPackageStage): 48 sectors from WA 0xB48000 at VRAM
-# (640, 0); its palettes 256 x 8 at (512, 248) from 0xB60000, then eight colour ramps
+# (640, 0); its palettes 256 x 8 at (512, 248) from 0xB60000, then eight color ramps
 # 16 x 8 at (640, 232) from 0xB61000.
 BOOT_SHEET = (0xB48000, 48, 640, 0)
 BOOT_RECTS = ((0xB60000, 512, 248, 256, 8), (0xB61000, 640, 232, 16, 8))
@@ -214,16 +214,16 @@ def paste(canvas: pngio.Image, piece: pngio.Image, x: int, y: int) -> pngio.Imag
     return pngio.Image(canvas.width, canvas.height, bytes(out))
 
 
-def blank(w: int, h: int, colour=(0, 0, 0, 0)) -> pngio.Image:
-    return pngio.Image(w, h, bytes(colour) * (w * h))
+def blank(w: int, h: int, color=(0, 0, 0, 0)) -> pngio.Image:
+    return pngio.Image(w, h, bytes(color) * (w * h))
 
 
-def tint(image: pngio.Image, colour: int, level: int = 255) -> pngio.Image:
-    """Colours multiplied by 0xRRGGBB (as the game's 0x80 grey is), and by
+def tint(image: pngio.Image, color: int, level: int = 255) -> pngio.Image:
+    """Colors multiplied by 0xRRGGBB (as the game's 0x80 grey is), and by
     level/255 (the menu's dimming, PUSH START BUTTON's pulse)."""
-    if colour == 0xFFFFFF and level == 255:
+    if color == 0xFFFFFF and level == 255:
         return image
-    factors = [(colour >> 16 & 255) * level, (colour >> 8 & 255) * level, (colour & 255) * level]
+    factors = [(color >> 16 & 255) * level, (color >> 8 & 255) * level, (color & 255) * level]
     out = bytearray(image.rgba)
     for c in range(3):
         f = factors[c]
@@ -242,8 +242,8 @@ def subtract(image: pngio.Image, level: int) -> pngio.Image:
     return pngio.Image(image.width, image.height, bytes(out))
 
 
-def parse_colour(text, default: int = 0xFFFFFF) -> int:
-    """"#RRGGBB", "RRGGBB" or a number, as the game reads a colour."""
+def parse_color(text, default: int = 0xFFFFFF) -> int:
+    """"#RRGGBB", "RRGGBB" or a number, as the game reads a color."""
     if isinstance(text, bool):
         return default
     if isinstance(text, int):

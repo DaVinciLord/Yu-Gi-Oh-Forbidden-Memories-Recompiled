@@ -341,7 +341,7 @@ static void add_full_picture(const char *path, const unsigned char *record)
  *
  * The pack's whole picture where the big card is drawn: the PNG fitted
  * inside the card's 140x196 with its shape kept and centred, made into the
- * game's kind of texture (8 bits a texel through a 256-colour palette,
+ * game's kind of texture (8 bits a texel through a 256-color palette,
  * entry 0 clear, as the title's pictures are, title_images.c), put in VRAM
  * the Password screen leaves unused, and drawn by the card view's own
  * drawing (func_80028B08) in the place of the card's art, plates and frame,
@@ -497,7 +497,7 @@ int PackShop_HidesFrame(const void *frame)
 }
 
 /* Each pack's picture: its "image" made as a card's art (102x96 of 256
- * colours), with its name on the title plate as a mod card's is, or with
+ * colors), with its name on the title plate as a mod card's is, or with
  * "image_style": "full" the whole picture (above); without one, the plate
  * alone, over its cover card's art. */
 static void build_art(void)
@@ -583,7 +583,7 @@ static void icon_row(Out *out)
     out->x = 0;
 }
 
-static void colour(Out *out, int ink) { command(out, 0x0A, ink); }
+static void color(Out *out, int ink) { command(out, 0x0A, ink); }
 
 static void at_x(Out *out, int x)
 {
@@ -1057,9 +1057,9 @@ static void nothing_left_note(Out *out)
     if (x < out->x + NOTE_MARGIN) x = out->x + NOTE_MARGIN;
     at_x(out, x);
     out->limit = BOX_WIDTH - NOTE_MARGIN;
-    colour(out, GREY);
+    color(out, GREY);
     own(out, TEXT_OWN_PACK_ALL_OWNED, "ALL OWNED", NULL, NULL);
-    colour(out, WHITE);
+    color(out, WHITE);
     out->limit = limit;
 }
 
@@ -1081,17 +1081,17 @@ static void compose_list(void)
     int place = 0, total = listed_count(s.shop, &place, s.pack), lines_left = top - 1, stock;
     int written = 0;
     if (shops_open() > 1) {
-        colour(&out, BLUE);
+        color(&out, BLUE);
         codes(&out, shop_name(s.shop), BOX_LETTERS);
-        colour(&out, WHITE);
+        color(&out, WHITE);
         written++;
         lines_left--;
     }
     if (locked) {
         if (written) newline(&out);
-        colour(&out, GREY);
+        color(&out, GREY);
         own(&out, TEXT_OWN_PACK_LOCKED, "LOCKED", NULL, NULL);
-        colour(&out, WHITE);
+        color(&out, WHITE);
         written++;
         lines_left--;
         /* Up to the line before the buttons (with two rows of them, the one
@@ -1118,9 +1118,9 @@ static void compose_list(void)
         if (stock == 0 || (pack->once && s.progress.packs[s.pack].used)) {
             int width = own(NULL, TEXT_OWN_PACK_SOLD_OUT, "SOLD OUT", NULL, NULL);
             at_x(&out, BOX_WIDTH - width);
-            colour(&out, GREY);
+            color(&out, GREY);
             own(&out, TEXT_OWN_PACK_SOLD_OUT, "SOLD OUT", NULL, NULL);
-            colour(&out, WHITE);
+            color(&out, WHITE);
         } else if (nothing_left(s.pack)) {
             nothing_left_note(&out);
         } else if (stock > 0) {
@@ -1202,12 +1202,12 @@ static void compose_confirm(int pack)
     newline(&out);
     price_line(&out, pack);
     if (nothing_left(pack)) nothing_left_note(&out);
-    if (!can) colour(&out, GREY);
+    if (!can) color(&out, GREY);
     newline(&out);
     space(&out);
     own(&out, TEXT_OWN_PACK_BUY, "BUY", NULL, NULL);
     newline(&out);
-    colour(&out, WHITE);
+    color(&out, WHITE);
     space(&out);
     own(&out, TEXT_OWN_PACK_QUIT, "QUIT", NULL, NULL);
     newline(&out);
@@ -1235,7 +1235,7 @@ static int reveal_style(int slot)
     return pack ? pack->reveal : PACK_REVEAL_FLIP;
 }
 
-/* The card just turned over: its name, its tier's label in its colour and
+/* The card just turned over: its name, its tier's label in its color and
  * which of how many, NEW, and the buttons. */
 static void compose_reveal(int slot)
 {
@@ -1251,17 +1251,17 @@ static void compose_reveal(int slot)
     newline(&out);
     if (tier && tier->label[0]) {
         unsigned char *label = encode(tier->label);
-        colour(&out, tier->color >= 0 ? tier->color : WHITE);
+        color(&out, tier->color >= 0 ? tier->color : WHITE);
         codes(&out, label, BOX_LETTERS - 6);
-        colour(&out, WHITE);
+        color(&out, WHITE);
         free(label);
     }
     count_at_right(&out, (unsigned)at, (unsigned)shown);
     newline(&out);
     if (s.fresh[slot]) {
-        colour(&out, GOLD);
+        color(&out, GOLD);
         own(&out, TEXT_OWN_NEW, "NEW", NULL, NULL);
-        colour(&out, WHITE);
+        color(&out, WHITE);
     }
     icon_row(&out);
     if (reveal_style(slot) == PACK_REVEAL_FLIP) {
@@ -1294,9 +1294,9 @@ static void compose_summary(void)
               s.fresh[slots[row]] ? (BOX_WIDTH - new_width - 8) / 8 : BOX_LETTERS);
         if (s.fresh[slots[row]]) {
             at_x(&out, BOX_WIDTH - new_width);
-            colour(&out, GOLD);
+            color(&out, GOLD);
             own(&out, TEXT_OWN_NEW, "NEW", NULL, NULL);
-            colour(&out, WHITE);
+            color(&out, WHITE);
         }
     }
     icon_row(&out);
@@ -1361,9 +1361,9 @@ static void build_info(void)
         char percent[24];
         unsigned char *label = encode(pack->tiers[t].label[0] ? pack->tiers[t].label : pack->tiers[t].name);
         out = info_line();
-        if (pack->tiers[t].color >= 0) colour(&out, pack->tiers[t].color);
+        if (pack->tiers[t].color >= 0) color(&out, pack->tiers[t].color);
         codes(&out, label, BOX_LETTERS - 8);
-        colour(&out, WHITE);
+        color(&out, WHITE);
         snprintf(percent, sizeof(percent), "%u.%u%%", chance / 10000, chance / 1000 % 10);
         at_x(&out, BOX_WIDTH - 8 * (int)strlen(percent));
         words(&out, percent);
@@ -1397,16 +1397,16 @@ static void build_info(void)
     }
     if (nothing_left(s.pack)) {   /* why BUY is refused */
         out = info_line();
-        colour(&out, GREY);
+        color(&out, GREY);
         own(&out, TEXT_OWN_PACK_ALL_OWNED, "ALL OWNED", NULL, NULL);
-        colour(&out, WHITE);
+        color(&out, WHITE);
         info_done(&out);
     }
     if (!unlocked(s.pack)) {
         out = info_line();
-        colour(&out, GREY);
+        color(&out, GREY);
         own(&out, TEXT_OWN_PACK_LOCKED, "LOCKED", NULL, NULL);
-        colour(&out, WHITE);
+        color(&out, WHITE);
         info_done(&out);
         {   /* Every condition still unmet, a line each. */
             u8 buffer[INFO_LINE_BYTES * 8];

@@ -249,7 +249,7 @@ void CampaignMap_SetLocation(s32 index)
     u8 *marker;
     MapObject *panel;
     u16 flags;
-    s32 colour[3];
+    s32 color[3];
 
     gCampaignMap_Location = index;
     D_80169619 = 0;
@@ -263,10 +263,10 @@ void CampaignMap_SetLocation(s32 index)
     func_800533D8();
     func_80056250(2, (u8 *)D_80010000, 0x43000, 0);
     obj = (u8 *)Model_GetCurrentDataEntry(2);
-    colour[0] = 1365;
-    colour[1] = 1365;
-    colour[2] = 1365;
-    func_8005922C((struct _GsCOORDUNIT *)obj, (VECTOR *)colour);
+    color[0] = 1365;
+    color[1] = 1365;
+    color[2] = 1365;
+    func_8005922C((struct _GsCOORDUNIT *)obj, (VECTOR *)color);
     CampaignMap_ResetCamera();
     SetFarColor(0, 0, 0);
     SetFogNearFar(6000, 8000, D_800F2848.projection);

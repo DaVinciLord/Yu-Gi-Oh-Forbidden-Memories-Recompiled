@@ -325,10 +325,10 @@ unsigned SaveMenu_Signature(void)
 
 /* Drawing. */
 
-#define COLOUR_TEXT 0xf2f2f4u
-#define COLOUR_DIM 0x8a8a92u
-#define COLOUR_WARN 0xf0a070u
-#define COLOUR_TITLE 0xffd870u
+#define COLOR_TEXT 0xf2f2f4u
+#define COLOR_DIM 0x8a8a92u
+#define COLOR_WARN 0xf0a070u
+#define COLOR_TITLE 0xffd870u
 
 static uint32_t blend(uint32_t under, uint32_t over, unsigned alpha)
 {
@@ -340,13 +340,13 @@ static uint32_t blend(uint32_t under, uint32_t over, unsigned alpha)
     return a << 24 | r << 16 | g << 8 | b;
 }
 
-static void fill(MenuCanvas *canvas, int x, int y, int w, int h, uint32_t colour, unsigned alpha)
+static void fill(MenuCanvas *canvas, int x, int y, int w, int h, uint32_t color, unsigned alpha)
 {
     int row, column;
     for (row = y < 0 ? 0 : y; row < y + h && row < canvas->height; row++) {
         for (column = x < 0 ? 0 : x; column < x + w && column < canvas->width; column++) {
             uint32_t *pixel = canvas->pixels + (size_t)row * (size_t)canvas->stride + (size_t)column;
-            *pixel = blend(*pixel, colour, alpha);
+            *pixel = blend(*pixel, color, alpha);
         }
     }
 }
@@ -364,22 +364,22 @@ static void frame(MenuCanvas *canvas, int x, int y, int w, int h, int s)
  * the game picture in a large window. */
 static int ui_scale;
 
-static void draw_text(MenuCanvas *canvas, int x, int y, const char *text, uint32_t colour)
+static void draw_text(MenuCanvas *canvas, int x, int y, const char *text, uint32_t color)
 {
-    Menu_DrawTextScaled(canvas, x, y, text, colour, ui_scale);
+    Menu_DrawTextScaled(canvas, x, y, text, color, ui_scale);
 }
 
 static int text_width(const char *text) { return Menu_TextWidthScaled(text, ui_scale); }
 
-static void centred(MenuCanvas *canvas, int x, int w, int y, const char *text, uint32_t colour)
+static void centred(MenuCanvas *canvas, int x, int w, int y, const char *text, uint32_t color)
 {
-    draw_text(canvas, x + (w - text_width(text)) / 2, y, text, colour);
+    draw_text(canvas, x + (w - text_width(text)) / 2, y, text, color);
 }
 
 /* `text` word-wrapped to `w`, each line centred, `line_h` apart from `y`;
  * a word wider than a line (a long folder name) breaks inside. Without a
  * canvas it only counts. Returns the number of lines. */
-static int wrapped(MenuCanvas *canvas, int x, int w, int y, int line_h, const char *text, uint32_t colour)
+static int wrapped(MenuCanvas *canvas, int x, int w, int y, int line_h, const char *text, uint32_t color)
 {
     char line[256];
     int lines = 0;
@@ -400,7 +400,7 @@ static int wrapped(MenuCanvas *canvas, int x, int w, int y, int line_h, const ch
             for (fit = 1; ((unsigned char)text[fit] & 0xC0) == 0x80; fit++) {}
         memcpy(line, text, fit);
         line[fit] = '\0';
-        if (canvas) centred(canvas, x, w, y + lines * line_h, line, colour);
+        if (canvas) centred(canvas, x, w, y + lines * line_h, line, color);
         lines++;
         text += fit;
         while (*text == ' ') text++;
@@ -426,10 +426,10 @@ static const char *title(void)
 }
 
 /* The details and the hints on as few lines of `w` as hold them (flow_text.h). */
-static int flowed(MenuCanvas *canvas, int x, int w, int y, int line_h, const char *text, uint32_t colour,
+static int flowed(MenuCanvas *canvas, int x, int w, int y, int line_h, const char *text, uint32_t color,
                   int *widest)
 {
-    return FlowText(canvas, x, w, y, line_h, text, colour, widest, text_width, draw_text);
+    return FlowText(canvas, x, w, y, line_h, text, color, widest, text_width, draw_text);
 }
 
 /* A slot's row: its number and name into `line`, and what goes beside it
@@ -514,38 +514,38 @@ static void draw_confirm(MenuCanvas *canvas, int px, int pw, int cy, int s)
         x = px + 8 * s;
         w = pw - 16 * s;
         inner = w - 24 * s;
-        n = wrapped(NULL, x + 12 * s, inner, 0, line_h, first, COLOUR_TEXT) +
-            (line[0] ? wrapped(NULL, x + 12 * s, inner, 0, line_h, line, COLOUR_DIM) : 0) +
-            (warning ? wrapped(NULL, x + 12 * s, inner, 0, line_h, warning, COLOUR_WARN) : 0) +
-            wrapped(NULL, x + 12 * s, inner, 0, line_h, "Overwrite it?", COLOUR_TEXT);
+        n = wrapped(NULL, x + 12 * s, inner, 0, line_h, first, COLOR_TEXT) +
+            (line[0] ? wrapped(NULL, x + 12 * s, inner, 0, line_h, line, COLOR_DIM) : 0) +
+            (warning ? wrapped(NULL, x + 12 * s, inner, 0, line_h, warning, COLOR_WARN) : 0) +
+            wrapped(NULL, x + 12 * s, inner, 0, line_h, "Overwrite it?", COLOR_TEXT);
         h = 18 * s + n * line_h + 8 * s + 24 * s + 12 * s;
         y = cy - h / 2;
         frame(canvas, x, y, w, h, s);
         top = y + 18 * s;
-        top += wrapped(canvas, x + 12 * s, inner, top, line_h, first, COLOUR_TEXT) * line_h;
-        if (line[0]) top += wrapped(canvas, x + 12 * s, inner, top, line_h, line, COLOUR_DIM) * line_h;
-        if (warning) top += wrapped(canvas, x + 12 * s, inner, top, line_h, warning, COLOUR_WARN) * line_h;
-        top += wrapped(canvas, x + 12 * s, inner, top, line_h, "Overwrite it?", COLOUR_TEXT) * line_h;
+        top += wrapped(canvas, x + 12 * s, inner, top, line_h, first, COLOR_TEXT) * line_h;
+        if (line[0]) top += wrapped(canvas, x + 12 * s, inner, top, line_h, line, COLOR_DIM) * line_h;
+        if (warning) top += wrapped(canvas, x + 12 * s, inner, top, line_h, warning, COLOR_WARN) * line_h;
+        top += wrapped(canvas, x + 12 * s, inner, top, line_h, "Overwrite it?", COLOR_TEXT) * line_h;
         if (2 * bw + 16 * s > inner) bw = (inner - 16 * s) / 2;
         bx = x + (w - 2 * bw - 16 * s) / 2;
         for (i = 0; i < 2; i++) {
             int chosen = i == menu.choice, left = bx + i * (bw + 16 * s);
             fill(canvas, left, top - line_h / 2 + 8 * s, bw, 24 * s, chosen ? 0x3a5aa8u : 0x22263au, 255);
-            centred(canvas, left, bw, top - line_h / 2 + 20 * s, labels[i], chosen ? COLOUR_TEXT : COLOUR_DIM);
+            centred(canvas, left, bw, top - line_h / 2 + 20 * s, labels[i], chosen ? COLOR_TEXT : COLOR_DIM);
         }
         return;
     }
     frame(canvas, x, y, w, h, s);
-    centred(canvas, x, w, y + 18 * s, first, COLOUR_TEXT);
-    if (line[0]) centred(canvas, x, w, y + 38 * s, line, COLOUR_DIM);
-    if (warning) centred(canvas, x, w, y + (line[0] ? 58 : 38) * s, warning, COLOUR_WARN);
-    centred(canvas, x, w, y + 80 * s, "Overwrite it?", COLOUR_TEXT);
+    centred(canvas, x, w, y + 18 * s, first, COLOR_TEXT);
+    if (line[0]) centred(canvas, x, w, y + 38 * s, line, COLOR_DIM);
+    if (warning) centred(canvas, x, w, y + (line[0] ? 58 : 38) * s, warning, COLOR_WARN);
+    centred(canvas, x, w, y + 80 * s, "Overwrite it?", COLOR_TEXT);
     bx = x + (w - 2 * bw - 16 * s) / 2;
     for (i = 0; i < 2; i++) {
         int chosen = i == menu.choice;
         int left = bx + i * (bw + 16 * s);
         fill(canvas, left, y + 96 * s, bw, 24 * s, chosen ? 0x3a5aa8u : 0x22263au, 255);
-        centred(canvas, left, bw, y + 108 * s, labels[i], chosen ? COLOUR_TEXT : COLOUR_DIM);
+        centred(canvas, left, bw, y + 108 * s, labels[i], chosen ? COLOR_TEXT : COLOR_DIM);
     }
 }
 
@@ -590,67 +590,67 @@ void SaveMenu_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
     px = left + (right - left - pw) / 2;
     py = bar + (canvas->height - bar - ph) / 2;
     frame(canvas, px, py, pw, ph, s);
-    draw_text(canvas, px + 14 * s, py + 20 * s, title(), COLOUR_TITLE);
+    draw_text(canvas, px + 14 * s, py + 20 * s, title(), COLOR_TITLE);
     list_y = py + 38 * s;
     top = menu.top;
     for (i = 0; i < rows && top + i < SAVE_SLOT_COUNT; i++) {
         int slot = top + i, ry = list_y + i * row_h, cy = ry + row_h / 2;
         const SaveSlotInfo *info = &menu.slots[slot];
-        uint32_t colour = selectable(slot) ? COLOUR_TEXT : COLOUR_DIM;
-        uint32_t right_colour =
-            info->status == SAVE_SLOT_DAMAGED || info->status == SAVE_SLOT_UNREADABLE ? COLOUR_WARN : colour;
+        uint32_t color = selectable(slot) ? COLOR_TEXT : COLOR_DIM;
+        uint32_t right_color =
+            info->status == SAVE_SLOT_DAMAGED || info->status == SAVE_SLOT_UNREADABLE ? COLOR_WARN : color;
         const char *beside = slot_text(slot, line, sizeof(line), details, sizeof(details));
         if (slot == menu.cursor) fill(canvas, px + 6 * s, ry, pw - 12 * s, row_h - 2 * s, 0x3a5aa8u, 200);
         if (layout > 0) {
             int first = ry + 3 * s + line_h / 2;
-            draw_text(canvas, px + 16 * s, first, line, colour);
+            draw_text(canvas, px + 16 * s, first, line, color);
             if (info->status == SAVE_SLOT_USED)
-                flowed(canvas, px + 32 * s, pw - 48 * s, first + line_h, line_h, beside, COLOUR_DIM, NULL);
+                flowed(canvas, px + 32 * s, pw - 48 * s, first + line_h, line_h, beside, COLOR_DIM, NULL);
             else
-                draw_text(canvas, px + pw - 16 * s - text_width(beside), first, beside, right_colour);
+                draw_text(canvas, px + pw - 16 * s - text_width(beside), first, beside, right_color);
             continue;
         }
-        draw_text(canvas, px + 16 * s, cy, line, colour);
-        draw_text(canvas, px + pw - 16 * s - text_width(beside), cy, beside, right_colour);
+        draw_text(canvas, px + 16 * s, cy, line, color);
+        draw_text(canvas, px + pw - 16 * s - text_width(beside), cy, beside, right_color);
     }
-    if (menu.top > 0) draw_text(canvas, px + pw - 30 * s, py + 20 * s, "^", COLOUR_DIM);
-    if (menu.top + rows < SAVE_SLOT_COUNT) draw_text(canvas, px + pw - 18 * s, py + 20 * s, "v", COLOUR_DIM);
+    if (menu.top > 0) draw_text(canvas, px + pw - 30 * s, py + 20 * s, "^", COLOR_DIM);
+    if (menu.top + rows < SAVE_SLOT_COUNT) draw_text(canvas, px + pw - 18 * s, py + 20 * s, "v", COLOR_DIM);
     if (layout > 0)
         flowed(canvas, px + 14 * s, pw - 28 * s, py + ph - 16 * s - (hint_lines - 1) * line_h, line_h, hints(),
-               COLOUR_DIM, NULL);
+               COLOR_DIM, NULL);
     else
-        draw_text(canvas, px + 14 * s, py + ph - 16 * s, hints(), COLOUR_DIM);
+        draw_text(canvas, px + 14 * s, py + ph - 16 * s, hints(), COLOR_DIM);
     if (menu.view == VIEW_CONFIRM) {
         draw_confirm(canvas, px, pw, py + ph / 2, s);
     } else if (menu.view == VIEW_MESSAGE && detail[0]) {
         /* A failed save: the message, then where and why, wrapped. */
         int mw = pw - 32 * s, mx = px + 16 * s, line_h = 18 * s;
         int head = text_width(menu.message) > mw - 16 * s
-                       ? wrapped(NULL, mx + 12 * s, mw - 24 * s, 0, line_h, menu.message, COLOUR_TEXT) - 1 : 0;
-        int lines = wrapped(NULL, mx + 12 * s, mw - 24 * s, 0, line_h, detail, COLOUR_DIM);
+                       ? wrapped(NULL, mx + 12 * s, mw - 24 * s, 0, line_h, menu.message, COLOR_TEXT) - 1 : 0;
+        int lines = wrapped(NULL, mx + 12 * s, mw - 24 * s, 0, line_h, detail, COLOR_DIM);
         int mh = 64 * s + (head + lines) * line_h, my = py + (ph - mh) / 2;
         frame(canvas, mx, my, mw, mh, s);
-        if (head) wrapped(canvas, mx + 12 * s, mw - 24 * s, my + 24 * s, line_h, menu.message, COLOUR_TEXT);
-        else centred(canvas, mx, mw, my + 24 * s, menu.message, COLOUR_TEXT);
-        wrapped(canvas, mx + 12 * s, mw - 24 * s, my + 44 * s + head * line_h, line_h, detail, COLOUR_WARN);
+        if (head) wrapped(canvas, mx + 12 * s, mw - 24 * s, my + 24 * s, line_h, menu.message, COLOR_TEXT);
+        else centred(canvas, mx, mw, my + 24 * s, menu.message, COLOR_TEXT);
+        wrapped(canvas, mx + 12 * s, mw - 24 * s, my + 44 * s + head * line_h, line_h, detail, COLOR_WARN);
         if (menu.message_waits)
             centred(canvas, mx, mw, my + mh - 18 * s, Settings_Get(SET_JP_BUTTONS) ? "Press Circle" : "Press Cross",
-                    COLOUR_DIM);
+                    COLOR_DIM);
     } else if (menu.view == VIEW_MESSAGE) {
         int mw = pw - 96 * s, mx = px + 48 * s, line_h = 18 * s, more = 0, mh, my;
         if (text_width(menu.message) > mw - 16 * s) { /* narrow: the menu's width, wrapped */
             mw = pw - 32 * s;
             mx = px + 16 * s;
-            more = wrapped(NULL, mx + 12 * s, mw - 24 * s, 0, line_h, menu.message, COLOUR_TEXT) - 1;
+            more = wrapped(NULL, mx + 12 * s, mw - 24 * s, 0, line_h, menu.message, COLOR_TEXT) - 1;
         }
         mh = 64 * s + more * line_h;
         my = py + (ph - mh) / 2;
         frame(canvas, mx, my, mw, mh, s);
-        if (more) wrapped(canvas, mx + 12 * s, mw - 24 * s, my + 24 * s, line_h, menu.message, COLOUR_TEXT);
-        else centred(canvas, mx, mw, my + 24 * s, menu.message, COLOUR_TEXT);
+        if (more) wrapped(canvas, mx + 12 * s, mw - 24 * s, my + 24 * s, line_h, menu.message, COLOR_TEXT);
+        else centred(canvas, mx, mw, my + 24 * s, menu.message, COLOR_TEXT);
         if (menu.message_waits)
             centred(canvas, mx, mw, my + 46 * s + more * line_h,
-                    Settings_Get(SET_JP_BUTTONS) ? "Press Circle" : "Press Cross", COLOUR_DIM);
+                    Settings_Get(SET_JP_BUTTONS) ? "Press Circle" : "Press Cross", COLOR_DIM);
     }
     *x = px;
     *y = py;

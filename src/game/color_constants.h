@@ -18,7 +18,7 @@
 #define COLOR_BGR555_BLUE_SHIFT (2 * COLOR_BGR555_CHANNEL_BITS)
 #define COLOR_BGR555_STP_MASK (1 << (3 * COLOR_BGR555_CHANNEL_BITS))
 
-/* Neutral greys stored in the low 24 bits of SDK sprite/object colour words.
+/* Neutral greys stored in the low 24 bits of SDK sprite/object color words.
  * Equal channels make the byte order irrelevant. */
 #define COLOR_RGB24_NEUTRAL_GREY 0x808080
 #define COLOR_RGB24_DIM_GREY 0x404040

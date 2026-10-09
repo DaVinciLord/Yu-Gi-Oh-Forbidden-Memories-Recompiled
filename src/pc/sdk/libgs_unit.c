@@ -420,21 +420,21 @@ typedef struct FlatLight {
 _Static_assert(sizeof(FlatLight) == 16, "GsF_LIGHT layout");
 
 /* One of three parallel lights: its direction becomes a row of the light
- * matrix (normalized, pointing at the light) and its colour a column of the
- * GTE colour matrix, which is read back so the other two lights stay. */
+ * matrix (normalized, pointing at the light) and its color a column of the
+ * GTE color matrix, which is read back so the other two lights stay. */
 int GsSetFlatLight(int id, FlatLight *light)
 {
-    MATRIX colour;
+    MATRIX color;
     s32 length, i;
     u32 words[5];
     for (i = 0; i < 5; i++) {
         words[i] = Memories_GteReadControl(16 + (unsigned)i);
     }
-    colour.m[0][0] = (short)words[0]; colour.m[0][1] = (short)(words[0] >> 16);
-    colour.m[0][2] = (short)words[1]; colour.m[1][0] = (short)(words[1] >> 16);
-    colour.m[1][1] = (short)words[2]; colour.m[1][2] = (short)(words[2] >> 16);
-    colour.m[2][0] = (short)words[3]; colour.m[2][1] = (short)(words[3] >> 16);
-    colour.m[2][2] = (short)words[4];
+    color.m[0][0] = (short)words[0]; color.m[0][1] = (short)(words[0] >> 16);
+    color.m[0][2] = (short)words[1]; color.m[1][0] = (short)(words[1] >> 16);
+    color.m[1][1] = (short)words[2]; color.m[1][2] = (short)(words[2] >> 16);
+    color.m[2][0] = (short)words[3]; color.m[2][1] = (short)(words[3] >> 16);
+    color.m[2][2] = (short)words[4];
     length = (s32)SquareRoot0((PSXLONG)((u32)light->vx * (u32)light->vx + (u32)light->vy * (u32)light->vy +
                                      (u32)light->vz * (u32)light->vz));
     if (!length) {
@@ -444,10 +444,10 @@ int GsSetFlatLight(int id, FlatLight *light)
         D_800FE0E8.m[id][0] = (short)((s32)((u32)-light->vx << 12) / length);
         D_800FE0E8.m[id][1] = (short)((s32)((u32)-light->vy << 12) / length);
         D_800FE0E8.m[id][2] = (short)((s32)((u32)-light->vz << 12) / length);
-        colour.m[0][id] = (short)((light->r << 12) / 255);
-        colour.m[1][id] = (short)((light->g << 12) / 255);
-        colour.m[2][id] = (short)((light->b << 12) / 255);
+        color.m[0][id] = (short)((light->r << 12) / 255);
+        color.m[1][id] = (short)((light->g << 12) / 255);
+        color.m[2][id] = (short)((light->b << 12) / 255);
     }
-    SetColorMatrix(&colour);
+    SetColorMatrix(&color);
     return 0;
 }

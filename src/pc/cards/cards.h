@@ -72,11 +72,11 @@ int Cards_HasModel(int id);
  * each in a deck, all five in hand win): a piece a mod replaced is not,
  * unless its entry says "exodia": true. */
 int Cards_ExodiaPiece(int id);
-/* The disc's six frame colours, in the order of their palette rows: the card
+/* The disc's six frame colors, in the order of their palette rows: the card
  * view's frame sheet (rows 8-13), the duel hand's (rows 1-6) and the
- * Library's grid. A card's frame colour is one of these, or the type's. The
+ * Library's grid. A card's frame color is one of these, or the type's. The
  * disc draws monster gold, magic and equip green, trap pink and ritual blue;
- * purple and orange it never uses. (The names are of the colours: the enum's
+ * purple and orange it never uses. (The names are of the colors: the enum's
  * MONSTER, MAGIC, TRAP and RITUAL are the disc's own labels for gold, green,
  * pink and blue, and a cards mod's "frame" accepts either.) */
 enum { CARD_FRAME_MONSTER, CARD_FRAME_MAGIC, CARD_FRAME_TRAP, CARD_FRAME_RITUAL, CARD_FRAME_PURPLE,
@@ -93,15 +93,15 @@ const char *Cards_ClassName(int cls);
  * card is free to carry any, and a layout may give each its own frame
  * ("tag" in card_layout's "frame_for"). A copy has its base's unless it says. */
 int Cards_HasTag(int id, const char *tag);
-/* The colour a mod's "frame" chose for `id`, CARD_FRAME_*, or -1 (left out,
+/* The color a mod's "frame" chose for `id`, CARD_FRAME_*, or -1 (left out,
  * or "Type"). */
 int Cards_FrameOverride(int id);
-/* The frame colour `id` is drawn in when it is not its type's (-1: its
+/* The frame color `id` is drawn in when it is not its type's (-1: its
  * type's, which is what the disc does). With the anime frame on this is the
- * colour of the frame style the layout picked (card_layout.h); otherwise a
+ * color of the frame style the layout picked (card_layout.h); otherwise a
  * mod's "frame", or orange for a monster with "monster_effects". The card
  * view, the duel's hand and field cards and the Library's grid draw it
- * through that colour's palette row. */
+ * through that color's palette row. */
 int Cards_FrameColor(int id);
 int Cards_Fusion(int a, int b, int *result);
 

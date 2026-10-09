@@ -26,8 +26,8 @@ void Menu_OverlayArea(const MenuCanvas *canvas, int *left, int *right, int *top)
     *right = canvas->width;
     *top = 26;
 }
-void Menu_DrawTextScaled(MenuCanvas *canvas, int x, int y, const char *text, uint32_t colour, int scale)
-{ (void)canvas; (void)x; (void)y; (void)text; (void)colour; (void)scale; assert(0); }
+void Menu_DrawTextScaled(MenuCanvas *canvas, int x, int y, const char *text, uint32_t color, int scale)
+{ (void)canvas; (void)x; (void)y; (void)text; (void)color; (void)scale; assert(0); }
 int Menu_TextWidthScaled(const char *text, int scale) { (void)text; (void)scale; assert(0); return 0; }
 int Cards_Valid(int id) { (void)id; assert(0); return 0; }
 unsigned char *Cards_ChestSlot(void *state, int id) { (void)state; (void)id; assert(0); return NULL; }

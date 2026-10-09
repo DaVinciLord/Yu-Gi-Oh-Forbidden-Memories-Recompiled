@@ -64,7 +64,7 @@ def set_member(target: dict, key: str, value, default=None):
         target[key] = value
 
 
-def colour_text(value: int) -> str:
+def color_text(value: int) -> str:
     return f"#{value:06X}"
 
 
@@ -156,9 +156,9 @@ def import_image(widget, project, stem: str):
 
 # --- widgets ---------------------------------------------------------------------------
 
-class ColourButton(ttk.Frame):
+class ColorButton(ttk.Frame):
     """A swatch and its #RRGGBB; a click picks another, the x puts it back.
-    multiplies: the colour is a tint (it multiplies the picture's), so a
+    multiplies: the color is a tint (it multiplies the picture's), so a
     bright one gets a note that it can only darken."""
 
     def __init__(self, master, on_change, default=0xFFFFFF, allow_none=False, multiplies=False):
@@ -185,14 +185,14 @@ class ColourButton(ttk.Frame):
             self.swatch.create_line(0, px(self, 18), px(self, 34), 0, fill="#c01c28", width=2)
             self.text.configure(text="none")
         else:
-            self.swatch.configure(background=colour_text(value))
-            self.text.configure(text=colour_text(value))
+            self.swatch.configure(background=color_text(value))
+            self.text.configure(text=color_text(value))
         self.reset.state(["disabled"] if value == self.default else ["!disabled"])
         self.note.configure(text=WARN + "only darkens" if self.multiplies and brightens(value) else "")
 
     def pick(self):
-        start = colour_text(self.value if self.value is not None else self.default)
-        chosen = colorchooser.askcolor(color=start, parent=self, title="Choose a colour")
+        start = color_text(self.value if self.value is not None else self.default)
+        chosen = colorchooser.askcolor(color=start, parent=self, title="Choose a color")
         if chosen and chosen[1]:
             self.set(int(chosen[1][1:], 16))
             self.on_change(self.value)
@@ -306,13 +306,13 @@ class Stage(tk.Canvas):
                 self.draggable.add(key)
         return item
 
-    def text(self, key, x, y, text, colour, size, anchor="w", font_family="TkDefaultFont", drag=True, shadow=True):
+    def text(self, key, x, y, text, color, size, anchor="w", font_family="TkDefaultFont", drag=True, shadow=True):
         z = self.zoom
         font = (font_family, -max(6, int(size * z)), "bold")
         items = []
         if shadow:
             items.append(self.create_text(x * z + z, y * z + z, text=text, fill="#000", font=font, anchor=anchor))
-        items.append(self.create_text(x * z, y * z, text=text, fill=colour, font=font, anchor=anchor))
+        items.append(self.create_text(x * z, y * z, text=text, fill=color, font=font, anchor=anchor))
         if key is not None:
             self.items.setdefault(key, []).extend(items)
             x0, y0, x1, y1 = self.bbox(items[-1])
@@ -457,7 +457,7 @@ class StageView(ttk.Frame):
 
 
 class ElementList(ttk.Frame):
-    """A page's things in groups, a dot (and the editor's changed colour) on
+    """A page's things in groups, a dot (and the editor's changed color) on
     each the mod changes. rows: (iid, parent, text, values, changed, tags);
     a group's row chooses its first."""
 
@@ -670,7 +670,7 @@ class UiTab(Tab):
 
     # (key, button, its module and class, hint): a page more is a line more.
     PAGES = [("title", "Title screen", ("ui_title", "TitlePage"), "Drag to move, arrows nudge (Shift: 8). "
-              "Click the background for its colours."),
+              "Click the background for its colors."),
              ("menu", "Menus", ("ui_title", "MenuPage"), "Drag a button to place it; the list sets the order."),
              ("duel", "Duel", ("ui_duel", "DuelPage"), "Drag to move, wheel to size, arrows nudge."),
              ("board", "Duel board", ("ui_board", "BoardPage"), "Click a part of the board or the list; Replace "

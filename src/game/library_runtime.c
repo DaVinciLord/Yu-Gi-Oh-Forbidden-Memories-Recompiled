@@ -819,7 +819,7 @@ void func_8002BFCC(void) {
             break;
         }
 #ifdef MEMORIES_PC
-        /* A mod's frame colour (Cards_FrameColor): the grid's palettes
+        /* A mod's frame color (Cards_FrameColor): the grid's palettes
          * follow the frames' order, purple and orange after ritual. */
         if (Cards_FrameColor(n) >= 0) {
             *(s16 *G32)(rb + n * 4 + 0x54) = LIBRARY_CARD_SELECTOR_DEFAULT + Cards_FrameColor(n) * 0x10;

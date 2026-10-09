@@ -15,7 +15,7 @@ from . import card_icons
 from .card_view_preview import CardViewPreview
 from .monster_effects_ui import EffectsBox
 from .gamedata import (FUSION_GROUPS, ATTRIBUTE_NAMES, CARD_COUNT, DECK_COPY_LIMIT, DECK_SIZE,
-                       EQUIP_BONUS_MAX, FRAME_COLOUR_NAMES, FRAME_NAMES,
+                       EQUIP_BONUS_MAX, FRAME_COLOR_NAMES, FRAME_NAMES,
                        STAR_NAMES, STARTER_WEIGHT_LIMIT, TYPE_EQUIP, TYPE_MAGIC, TYPE_NAMES,
                        TYPE_RITUAL, TYPE_TRAP,
                        exodia_piece, type_frame)
@@ -30,11 +30,11 @@ STAR_CHOICES = ["(none)"] + STAR_NAMES[1:]
 EFFECT_NONE = "(none)"
 # "By type" leaves "frame" out (a monster with effects is then orange);
 # the last writes "Type": its type's frame even with effects (frame -2). The
-# first four with the colour a mod may also call them by ("Monster (gold)").
-FRAME_CHOICES = (["By type"] + [f"{name} ({colour.lower()})" for name, colour in zip(FRAME_NAMES, FRAME_COLOUR_NAMES)]
-                 + FRAME_NAMES[len(FRAME_COLOUR_NAMES):] + ["Type, never orange"])
-# Each frame's colour, as the hand's frames have it (the duel's palette rows 1-6).
-FRAME_COLOURS = ["#e0a838", "#409830", "#b040a0", "#2848b0", "#8868d8", "#e07000"]
+# first four with the color a mod may also call them by ("Monster (gold)").
+FRAME_CHOICES = (["By type"] + [f"{name} ({color.lower()})" for name, color in zip(FRAME_NAMES, FRAME_COLOR_NAMES)]
+                 + FRAME_NAMES[len(FRAME_COLOR_NAMES):] + ["Type, never orange"])
+# Each frame's color, as the hand's frames have it (the duel's palette rows 1-6).
+FRAME_COLORS = ["#e0a838", "#409830", "#b040a0", "#2848b0", "#8868d8", "#e07000"]
 
 
 def deck_makeup(p, cards: dict) -> str:
@@ -101,7 +101,7 @@ def frame_label(f: int) -> str:
 
 
 def frame_value(label: str) -> int:
-    """A Frame choice as card.frame: -1 left out, -2 "Type", else the colour."""
+    """A Frame choice as card.frame: -1 left out, -2 "Type", else the color."""
     i = parse_choice(label, FRAME_CHOICES)
     if i < 0 and label.split(" ", 1)[0] in FRAME_NAMES:
         i = FRAME_NAMES.index(label.split(" ", 1)[0]) + 1      # the name alone, as earlier editors showed it
@@ -196,7 +196,7 @@ class CardsTab(Tab):
         self.search.trace_add("write", lambda *_: self.fill())
         self.filter.trace_add("write", lambda *_: self.fill())
         # A dot between the number and the name marks a card the mod changes,
-        # in its row's colour (blue changed, green added); no Status column.
+        # in its row's color (blue changed, green added); no Status column.
         frame, self.tree = scrolled_tree(left, [("id", "#"), ("mark", ""), ("name", "Name"), ("type", "Type"),
                                                 ("atk", "ATK"), ("def", "DEF")], [50, 22, 160, 100, 50, 50], 10,
                                          sort_numeric=("id", "atk", "def"))
@@ -362,7 +362,7 @@ class CardsTab(Tab):
         self.captions["text"] = ttk.Label(form, text="Card text")
         self.captions["text"].grid(row=row, column=0, sticky="nw", pady=2)
         # 21 columns: the game's 20 letters a line and room for the cursor.
-        # Drawn as the card view's panel: icons and colours as the game shows them.
+        # Drawn as the card view's panel: icons and colors as the game shows them.
         self.text = CardTextBox(form, app, width=21, height=9, wrap="word", font=fixed_font())
         self.text.grid(row=row, column=1, sticky="nw", pady=2)
         # Beside it, the card view's text box as the game draws it, as tall
@@ -379,7 +379,7 @@ class CardsTab(Tab):
         self.lines.grid(row=row, column=1, columnspan=2, sticky="w")
         row += 1
         self.text.bind("<KeyRelease>", lambda e: (self.count_lines(), self.mark_later()), add=True)
-        # Right-click: insert an icon or a colour, shown as the game draws them.
+        # Right-click: insert an icon or a color, shown as the game draws them.
         text_menu.install(app, self.text, lambda: (self.count_lines(), self.mark_later()))
         self.vars["frame"].trace_add("write", lambda *_: self.show_swatch())
         self.vars["type"].trace_add("write", lambda *_: self.show_swatch())
@@ -725,7 +725,7 @@ class CardsTab(Tab):
 
     def mark(self):
         """A field that differs from the disc: its caption in the changed
-        colour and, beside it, the disc's value, a click putting it back.
+        color and, beside it, the disc's value, a click putting it back.
         The disc's value is not repeated beside the fields that have it."""
         if self._mark_job is not None:
             self.app.after_cancel(self._mark_job)
@@ -908,7 +908,7 @@ class CardsTab(Tab):
         return True
 
     def show_swatch(self):
-        """The colour the frame will be: the chosen one, or the type's (a
+        """The color the frame will be: the chosen one, or the type's (a
         monster with effects is orange, as cards.c Cards_FrameColor draws it)."""
         frame = frame_value(self.vars["frame"].get())
         kind = parse_choice(self.vars["type"].get(), TYPE_NAMES)
@@ -917,8 +917,8 @@ class CardsTab(Tab):
             frame = FRAME_NAMES.index("Orange")
         elif frame < 0 and kind >= 0:
             frame = type_frame(kind)
-        if 0 <= frame < len(FRAME_COLOURS):
-            self.swatch.configure(background=FRAME_COLOURS[frame])
+        if 0 <= frame < len(FRAME_COLORS):
+            self.swatch.configure(background=FRAME_COLORS[frame])
         else:
             self.swatch.configure(background=self.swatch.master.winfo_toplevel().cget("background"))
 
@@ -1039,7 +1039,7 @@ class CardsTab(Tab):
 
     def card_view_values(self):
         """What the card view preview draws: the form's type, stars and text,
-        and the mod's colours for the card (card_text_colors)."""
+        and the mod's colors for the card (card_text_colors)."""
         if self.current is None or self.project is None or self.current not in self.project.cards:
             return None
         values = [parse_choice(self.vars["type"].get(), TYPE_NAMES),
@@ -1053,9 +1053,9 @@ class CardsTab(Tab):
         elif star2 == star1:
             star2 = 0           # one star, shown once (stars.c)
         names = {s: star_label(s, self.project) for s in (star1, star2) if s > 10}
-        return card_type, star1, star2, self.text.get("1.0", "end-1c"), self.text_colours(), names
+        return card_type, star1, star2, self.text.get("1.0", "end-1c"), self.text_colors(), names
 
-    def text_colours(self):
+    def text_colors(self):
         """The card's own card_text_colors rule: {"description", "guardian_star"}."""
         rules = self.project.other.get("card_text_colors")
         out = {}

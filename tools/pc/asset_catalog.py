@@ -436,8 +436,8 @@ def catalog():
             name = path.removesuffix('.png')
             # cards/NNNN.side is not a picture: those 1408 bytes are the card
             # record's second copy of the 40x32 thumbnail followed by its
-            # 64-colour palette, which extract_images.py reads as a 16x88
-            # image through the art's 256-colour palette instead, so it comes
+            # 64-color palette, which extract_images.py reads as a 16x88
+            # image through the art's 256-color palette instead, so it comes
             # out as noise. There is nothing there for a mod to replace.
             if name.endswith('.side'):
                 return
@@ -464,7 +464,7 @@ def catalog():
                  for i in range(7)]
     for base, palette in packages:
         # Six palettes of the one frame sheet: the four kinds, then the two
-        # extra colourings the game also draws it in.
+        # extra colorings the game also draws it in.
         for row, frame in enumerate(('monster', 'magic', 'trap', 'ritual', 'purple', 'orange'), 8):
             for column in range(2):
                 add(f'card_ui/frame_{frame}/column-{column}', X.WA, base + column * X.COLUMN,

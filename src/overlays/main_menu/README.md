@@ -495,7 +495,7 @@ same alternation.
 | `+0x38` | end x | centered `160` on entrance; parked `-160`/`480` on exit |
 | `+0x60` | `0x10` | sixteen-update animation countdown |
 | `+0x08` | `0x0088` | flags |
-| `+0x0C` | `0x808080` | colour, mid grey |
+| `+0x0C` | `0x808080` | color, mid grey |
 
 Both modes animate x at `+0x30`; `+0x36` and `+0x38` are not separate
 axes. `MainMenu_StartFrontendEntryTransition` selects entrance for zero and exit for nonzero by
@@ -785,7 +785,7 @@ Only the palette changes with the type, so all four kinds share one texture:
 The type ids are the ones documented in
 [`../../../notes/research/the-game.md`](../../../notes/research/the-game.md):
 twenty monster types followed by Magic, Trap, Ritual and Equip. Magic and
-Equip sharing a colour is consistent with the game, where equips are drawn as
+Equip sharing a color is consistent with the game, where equips are drawn as
 green magic cards. The implementation also falls back to column `0x260` for
 other numeric type values; it does not validate card IDs or invent a separate
 graphic for each monster subtype. Only the palette changes, not the texture.

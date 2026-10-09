@@ -867,8 +867,8 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(manifest.build(typed)["cards"][0]["frame"], "Type")
         self.assertEqual(self.reopen(typed).cards[1].frame, -2)
 
-    def test_frame_colour_names(self):
-        # cards.c frame_colour_names: Gold, Green, Pink and Blue are Monster,
+    def test_frame_color_names(self):
+        # cards.c frame_color_names: Gold, Green, Pink and Blue are Monster,
         # Magic, Trap and Ritual, in any case; saved as the disc's names.
         p = Project(self.retail)
         messages = manifest.apply(p, {"id": "t", "cards": [
@@ -1082,7 +1082,7 @@ class ValidateTest(unittest.TestCase):
         self.assertEqual(validate.text_lines("a b"), 1)
         self.assertEqual(validate.text_lines("x" * 20 + " y"), 2)
         self.assertEqual(validate.text_lines("a\nb\nc"), 3)
-        # An icon is two letters of the line, a colour none (cards.c text_code).
+        # An icon is two letters of the line, a color none (cards.c text_code).
         self.assertEqual(validate.text_lines("x" * 15 + " {f8 0B 04} y"), 1)
         self.assertEqual(validate.text_lines("x" * 16 + " {f8 0B 04} y"), 2)
         self.assertEqual(validate.text_lines("{f8 0A 02}" + "x" * 18 + " y"), 1)

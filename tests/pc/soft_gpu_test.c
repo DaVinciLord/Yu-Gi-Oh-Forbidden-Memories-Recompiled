@@ -6,11 +6,11 @@
 } } while (0)
 #define AT(x, y) (SoftGpu_Vram()[(y) * SOFT_GPU_WIDTH + (x)])
 
-static int count(uint16_t colour)
+static int count(uint16_t color)
 {
     int n = 0, i;
     for (i = 0; i < SOFT_GPU_WIDTH * SOFT_GPU_HEIGHT; i++) {
-        n += SoftGpu_Vram()[i] == colour;
+        n += SoftGpu_Vram()[i] == color;
     }
     return n;
 }
@@ -32,7 +32,7 @@ int main(void)
     /* Flat quad (2,3)-(12,13): top-left rule gives exactly 10x10 pixels, and
      * the shared diagonal is drawn once (semi-transparency would show twice). */
     const uint32_t quad[] = {0xe1000000u, 0x2a0000f8u, 0x00030002u, 0x0003000cu, 0x000d0002u, 0x000d000cu};
-    /* 4bpp sprite through a CLUT, texel 0 transparent, raw colours. */
+    /* 4bpp sprite through a CLUT, texel 0 transparent, raw colors. */
     const uint32_t sprite[] = {0xe1000001u, 0x65808080u, 0x00200020u, 0x00500000u, 0x00020004u};
     const uint16_t clut[16] = {0, 0x001f, 0x03e0, 0x7c00};
     const uint16_t texture[2] = {0x3210, 0x0123};

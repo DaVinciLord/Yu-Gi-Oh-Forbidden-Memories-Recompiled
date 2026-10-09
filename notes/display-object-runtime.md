@@ -261,7 +261,7 @@ The concrete differences are:
 The length and code bytes are libgpu's `setPolyG4` and `setPolyGT4`, so list
 key `4` draws gouraud quads (`POLY_G4`) and list key `5` gouraud-textured quads
 (`POLY_GT4`). The slot layout agrees: list `4` objects carry an x/y word and a
-colour word per vertex at stride `8` from `+0x28`, and list `5` objects add a
+color word per vertex at stride `8` from `+0x28`, and list `5` objects add a
 texture-coordinate halfword at stride `0xC`. Both renderers type the scratchpad
 cursor as that primitive.
 
@@ -294,7 +294,7 @@ them:
 
 | Bit | libgs.h | Meaning |
 |---|---|---|
-| `DISPLAY_OBJECT_ATTRIBUTE_8BPP` / `DISPLAY_OBJECT_ATTRIBUTE_16BPP` | `0x01000000` / `0x02000000` | colour mode; the page step of 1, 2, 4 is 4bpp, 8bpp, 16bpp |
+| `DISPLAY_OBJECT_ATTRIBUTE_8BPP` / `DISPLAY_OBJECT_ATTRIBUTE_16BPP` | `0x01000000` / `0x02000000` | color mode; the page step of 1, 2, 4 is 4bpp, 8bpp, 16bpp |
 | `0x04000000` | `GsPERS` | perspective |
 | `0x08000000` | `GsROTOFF` | rotation off |
 | `0x10000000` | `GsAONE` | semi-transparency rate, bit 0 |
@@ -314,7 +314,7 @@ unchanged from the object.
 
 The step values are the texture-page advance applied when a strip's `u`
 coordinate wraps past `0x100`, so `DISPLAY_OBJECT_ATTRIBUTE_8BPP` and
-`DISPLAY_OBJECT_ATTRIBUTE_16BPP` are the colour depth: 1, 2 and 4 pages
+`DISPLAY_OBJECT_ATTRIBUTE_16BPP` are the color depth: 1, 2 and 4 pages
 correspond to 4bpp, 8bpp and 16bpp. `DisplayObject_RenderSpriteStrips` already describes them as
 "the depth bits of the tag"; what is new here is the connection to the overlay
 writes.

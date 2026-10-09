@@ -9,7 +9,7 @@
  * the state word. */
 void func_800339D0(BuildDeckTransitionState *record);
 
-/* The per-frame Build Deck driver. It pulses the two pane colours with a
+/* The per-frame Build Deck driver. It pulses the two pane colors with a
  * triangle wave, dispatches D_80090DF8[gBuildDeck_pState->state & 0x3F] once
  * DuelEffect_UpdateState reports idle, and returns the state word. The exit
  * step above clears that word when it commits the deck, and both callers

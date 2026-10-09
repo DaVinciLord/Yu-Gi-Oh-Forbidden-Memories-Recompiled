@@ -29,7 +29,7 @@ FLAG_MAX = 0x7FF         # an exit's flag: the game reads 11 bits (campaign_map.
 CONFIRM_SCENE = "Enter this place"
 # An exit's condition, as the panel's switch names it: value, words.
 CONDITIONS = (("always", "Always"), ("set", "After"), ("clear", "Before"))
-EDGE_COLOURS = {"always": "#4fc36b", "set": "#f2c04c", "clear": "#6fb1ff"}
+EDGE_COLORS = {"always": "#4fc36b", "set": "#f2c04c", "clear": "#6fb1ff"}
 ARROW_GLYPHS = {"up": "▲", "down": "▼", "left": "◀", "right": "▶"}
 PICKED = "#f2c04c"       # the arrow picked, on the screen
 # A new arrow by its direction: the arrow picture (cm.ARROWS) and where on
@@ -173,7 +173,7 @@ class MapTab(Tab):
         return v
 
     def field(self, box, key, text, row, column, low=-32768, high=32767, width=6):
-        """A caption and its number, the caption in the colour of a change
+        """A caption and its number, the caption in the color of a change
         once the number differs from the disc's."""
         caption = ttk.Label(box, text=text)
         caption.grid(row=row, column=column * 2, sticky="w", pady=1)
@@ -890,7 +890,7 @@ class MapTab(Tab):
         legend_ = [("always", "always open"), ("set", "after a flag"), ("clear", "before a flag")]
         for n, (kind, text) in enumerate(legend_):
             y = (204 + n * 16) * k
-            c.create_line(tx0, y, tx0 + 24 * k, y, fill=EDGE_COLOURS[kind], width=2, arrow="last")
+            c.create_line(tx0, y, tx0 + 24 * k, y, fill=EDGE_COLORS[kind], width=2, arrow="last")
             c.create_text(tx0 + 30 * k, y, text=text, anchor="w", fill="#c4c8cd", font=ui_font(9, "normal"))
         c.create_line(tx0, 252 * k, tx0 + 24 * k, 252 * k, fill="#c4c8cd", width=2, arrow="last", dash=(4, 3))
         c.create_text(tx0 + 30 * k, 252 * k, text="Confirm", anchor="w", fill="#c4c8cd", font=ui_font(9, "normal"))
@@ -907,7 +907,7 @@ class MapTab(Tab):
                 dx, dy = by - ay, ax - bx
                 length = max((dx * dx + dy * dy) ** 0.5, 1)
                 sx, sy = dx / length * 3, dy / length * 3
-                c.create_line(ax + sx, ay + sy, bx + sx, by + sy, fill=EDGE_COLOURS[kind], width=width,
+                c.create_line(ax + sx, ay + sy, bx + sx, by + sy, fill=EDGE_COLORS[kind], width=width,
                               arrow="last", arrowshape=(10, 12, 4), dash=() if what != "confirm" else (4, 3))
         for index in range(cm.COUNT):
             x, y = self.node(index)

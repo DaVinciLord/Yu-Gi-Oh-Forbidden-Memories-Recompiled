@@ -72,7 +72,7 @@ A tier:
 | `odds` | 1 | its weight when a slot deals by the tiers' odds; 0 for a tier only `slots`, `guarantee` or `pity` reach |
 | `cards` | | its pool, as above |
 | `label` | none | what the card's line says when one of this tier turns over (`"ULTRA RARE!"`) |
-| `color` | white | the label's colour, the game's text colours `{f8 0A n}`: 0 white, 1 yellow, 2 blue, and so on to 15 |
+| `color` | white | the label's color, the game's text colors `{f8 0A n}`: 0 white, 1 yellow, 2 blue, and so on to 15 |
 | `sound` | the pack's `reveal` | the sound a card of this tier turns over with |
 | `reveal` | the pack's | how a card of this tier turns over: `flip` waits for ✕ even in a quick pack (an ultra rare worth stopping for), `quick` (or `list`) turns it and goes on |
 
@@ -253,7 +253,7 @@ The Password screen's own, with nothing drawn by the port over it:
 * **Paying**: the starchip count runs down as a password's does.
 * **The reveal**: the big card turns over each card as it turns over a
   password's, with the tier's sound; the message box has the card's name,
-  the tier's label in its colour, `2/5`, NEW (gold, as card drops has it)
+  the tier's label in its color, `2/5`, NEW (gold, as card drops has it)
   when the player had no copy in the chest or the deck, and `✕NEXT □SKIP`.
 * **The list of what came**: three cards to a page with NEW, ←/→ between
   pages, `✕OK`.
@@ -266,7 +266,7 @@ A pack's password typed on the digits turns the big card to the pack and
 asks BUY / QUIT the same way, and afterwards the screen is the digits again.
 
 **The pack's picture.** The big card is the game's card view, which draws the
-art record of a card: its picture (102x96, 256 colours), the title plate
+art record of a card: its picture (102x96, 256 colors), the title plate
 with its name, and the frame of its kind. A pack is shown as a card of the
 first Magic card's kind, so its frame has no ATK or DEF, whose record the
 load gives the pack's own picture — the PNG made the way a mod card's art is
@@ -287,7 +287,7 @@ the rest opaque; at 2x and 4x the PNG itself is drawn, of any size (a small
 one smoothly scaled), with its own transparency.
 
 It is made into the game's kind of texture, 8 bits a texel through 256
-colours with entry 0 clear, as the title's pictures are
+colors with entry 0 clear, as the title's pictures are
 (`CardArt_IndexedImage`), and put in VRAM the Password screen leaves unused:
 the 8-bit page at (384,256)-(511,511), its palette at (128,511) (empty in
 dumps of every state of the screen: the digits, the list, BUY / QUIT,

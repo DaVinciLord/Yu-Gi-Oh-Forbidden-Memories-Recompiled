@@ -4,7 +4,7 @@ One PNG for the engine (src/pc/cards/card_layout_art.h's digit strip):
 5 x 4 cells of 40 x 48 texels (200 x 192, one texture page), digit d in
 column d % 5, row d / 5, the same ten greyed (the stat the attack screen
 dims) two rows further down: 4 texels a card unit, one a screen pixel at
-Internal 4x, anti-aliased against the stat box's own colour, in the
+Internal 4x, anti-aliased against the stat box's own color, in the
 same 10 x 12 unit proportion the layout draws a digit at ("digits" in
 card_layout). The font is the maker's own file (a Yu-Gi-Oh. Matrix Regular
 Small Caps .ttf, the card game's ATK/DEF font): it is read from --digit-font
@@ -13,7 +13,7 @@ and never committed.
 from PIL import Image, ImageDraw, ImageFont
 
 COLS, ROWS = 5, 4   # the ten digits (two rows), then the same ten greyed (two rows)
-DIM = 0.55           # how far the greyed digits' ink is mixed into the box colour
+DIM = 0.55           # how far the greyed digits' ink is mixed into the box color
 CELL_W, CELL_H = 40, 48
 GLYPH_H = 40          # the digits' height in texels: 10 of the box's 17 units (4 texels a unit)
 LIFT = 3              # texels the digits sit above the cell's middle: the stat boxes' cream is about half a unit above their studs' centre
@@ -24,7 +24,7 @@ STRETCH = 1.25        # the game draws these digits wide: a zero is about as wid
 
 
 def paper_of(frame_png):
-    """The stat box's own colour (its middle, between the digits' rows), where the PNG is the monster frame."""
+    """The stat box's own color (its middle, between the digits' rows), where the PNG is the monster frame."""
     import numpy as np
     import card_frame_window as W
     centres = W.stat_box_centres(frame_png)
@@ -62,7 +62,7 @@ def render(font_path, out_path, stretch=STRETCH, paper=None):
                 for xx in range(CELL_W):
                     a = src[xx, yy] / 255
                     if a >= 0.04:   # the game's texture has one transparent index, no partial alpha: the edge is
-                        # blended into the box's own colour instead
+                        # blended into the box's own color instead
                         px[xx, yy] = tuple(round(ink[i] * a + paper[i] * (1 - a)) for i in range(3)) + (255,)
             sheet.paste(cell, (d % COLS * CELL_W, (d // COLS + 2 * dim) * CELL_H))
     sheet.save(out_path)

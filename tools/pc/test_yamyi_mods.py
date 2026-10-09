@@ -49,7 +49,7 @@ def pixels(path, rgb):
     width, height = struct.unpack_from("<ii", data, 18)
     bits, = struct.unpack_from("<H", data, 28)
     stride = ((width * bits + 31) // 32) * 4
-    # Menu text is antialiased: identify the score colour by its RGB ratios.
+    # Menu text is antialiased: identify the score color by its RGB ratios.
     result = 0
     for y in range(abs(height)):
         for x in range(width):

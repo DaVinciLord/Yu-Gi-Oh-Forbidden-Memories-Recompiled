@@ -1,7 +1,7 @@
 """The card view's right-hand panel as the game draws it, for the Cards
 tab's preview: its stone and frame off the disc, the type line, GUARDIAN
 STAR and the stars, and the card text, in the game's letters (glyph_cells:
-the port's own accented and drawn letters too) and colours, US or one of
+the port's own accented and drawn letters too) and colors, US or one of
 the port's translations (languages/*.txt) with the European spacing.
 
 Where everything comes from (checked against the game's screen):
@@ -18,7 +18,7 @@ Where everything comes from (checked against the game's screen):
   puts in the type's icon (00) and name (80), the stars' icons (01, 02) and
   names (81, 82), and the card text (40); F8 01 starts a line further down,
   F8 02 moves right, F8 04/05 the letter size and line height, F8 0A the
-  colour; names from the name bank's strings 0x8300 + type and 0x8317 +
+  color; names from the name bank's strings 0x8300 + type and 0x8317 +
   star. Letters are 8 apart (the European spacing narrows some), icons 16;
   a line wraps once x reaches 168, and no row starts below 192 - 12.
 * the card text is first wrapped as cards.c wraps a mod's (card_text.encode)."""
@@ -32,7 +32,7 @@ from . import card_text, glyph_cells, pngio
 
 FRAME_AT = 0x19CED2                 # SLUS file offset of the panel's sprite frame
 TEXELS_AT, TEXELS_SIZE = 0x10E4800, 8 * 2048
-PALETTES_AT = 0x10E9600             # frame's 16 colours; the stone's follow
+PALETTES_AT = 0x10E9600             # frame's 16 colors; the stone's follow
 BOX_W, BOX_H = 0xA8, 0xC0
 LEFT, TOP = 8, 8                    # the panel's corner in the picture (the frame reaches 8 past it)
 WIDTH, HEIGHT = 180, 200             # to 192 below the corner: the ninth row's letters pass the frame
@@ -100,22 +100,22 @@ def panel_picture(slus: bytes, wa: bytes):
         parts.append((dx, dy, (cell & 0x1F) << 3, (cell & 0x3E0) >> 2, ((size >> 2) & 0x78) + 8,
                       ((size >> 6) & 0x78) + 8, step, bool(cell & 0x2000)))
     for dx, dy, u, v, w, h, step, flip in reversed(parts):      # the first is drawn last, on top
-        colours = palettes[min(step, 1)]
+        colors = palettes[min(step, 1)]
         for y in range(h):
             row = (v + y) * 128
             for x in range(w):
                 tu = u + (w - 1 - x if flip else x)
                 if row + tu // 2 >= len(texels):
                     continue
-                colour = colours[texels[row + tu // 2] >> 4 * (tu & 1) & 15]
+                color = colors[texels[row + tu // 2] >> 4 * (tu & 1) & 15]
                 X, Y = LEFT + dx + x, TOP + dy + y
-                if colour and 0 <= X < WIDTH and 0 <= Y < HEIGHT:
-                    rgba[(Y * WIDTH + X) * 4:(Y * WIDTH + X) * 4 + 4] = bytes((*colour, 255))
+                if color and 0 <= X < WIDTH and 0 <= Y < HEIGHT:
+                    rgba[(Y * WIDTH + X) * 4:(Y * WIDTH + X) * 4 + 4] = bytes((*color, 255))
     return rgba
 
 
 def flat_panel():
-    """Without the panel's pictures: its colours, as the old preview drew it."""
+    """Without the panel's pictures: its colors, as the old preview drew it."""
     rgba = bytearray()
     for y in range(HEIGHT):
         for x in range(WIDTH):
@@ -316,24 +316,24 @@ class CardView:
         return self._game_string(NAME_TABLE, NAME_BASE, 0x300 + index)
 
     def render(self, card_type: int, star1: int, star2: int, text: str, language: str = "en-us",
-               colours: dict | None = None, scale: int = 1, star_names: dict | None = None,
+               colors: dict | None = None, scale: int = 1, star_names: dict | None = None,
                text_only: bool = False):
         """The panel with the card's lines, as pngio.Image at `scale`.
-        colours: a card_text_colors rule's {"description", "guardian_star"} ramps;
+        colors: a card_text_colors rule's {"description", "guardian_star"} ramps;
         star_names: a mod's names for its stars (past the disc's ten: no icon);
         text_only: just the card text's box (its frame, stone and letters)."""
         european = language != "en-us"
         picture = Drawing(bytearray(self.panel), self.retail, self.glyphs(european), european)
         monster = card_type < 20
-        colours = colours or {}
-        description = text_tokens("".join(card_text.encode(text, colours=True)))
+        colors = colors or {}
+        description = text_tokens("".join(card_text.encode(text, colors=True)))
         inserts = {0x00: [("icon", card_type)], 0x80: self.name(card_type, language),
-                   0x40: [("colour", colours.get("description", 0))] + description}
+                   0x40: [("color", colors.get("description", 0))] + description}
         for n, star in ((1, star1), (2, star2)):
             if star:
                 named = (star_names or {}).get(star)
                 inserts[n] = [("icon", star + 0x17)] if star <= 10 else [("char", " "), ("char", " ")]
-                inserts[0x80 + n] = [("colour", colours.get("guardian_star", 0))] + (
+                inserts[0x80 + n] = [("color", colors.get("guardian_star", 0))] + (
                     text_tokens(named) if named is not None else self.name(star + 0x17, language))
             else:
                 inserts[n], inserts[0x80 + n] = [], []
@@ -352,19 +352,19 @@ class Drawing:
 
     def __init__(self, rgba, retail, glyphs, european):
         self.rgba, self.retail, self.glyphs, self.european = rgba, retail, glyphs, european
-        self.letters = {}       # (x, y) -> the text's colour there, the first put down
+        self.letters = {}       # (x, y) -> the text's color there, the first put down
         self.x = self.y = 0
         self.line = 12
-        self.colour = 0
+        self.color = 0
         self.done = False
 
-    def put(self, X, Y, colour):
+    def put(self, X, Y, color):
         if 0 <= X < WIDTH and 0 <= Y < HEIGHT:
-            self.rgba[(Y * WIDTH + X) * 4:(Y * WIDTH + X) * 4 + 4] = bytes((*colour, 255))
+            self.rgba[(Y * WIDTH + X) * 4:(Y * WIDTH + X) * 4 + 4] = bytes((*color, 255))
 
     def finish(self):
-        for (X, Y), colour in self.letters.items():
-            self.put(X, Y, colour)
+        for (X, Y), color in self.letters.items():
+            self.put(X, Y, color)
 
     def newline(self, down=None):
         self.x = 0
@@ -382,7 +382,7 @@ class Drawing:
             cell = self.glyphs.cell(c)
             if cell is None:
                 return      # the port has no letter for it: it takes no room
-            ramp = self.retail.ramps[self.colour] if self.colour < len(self.retail.ramps) else self.retail.ramps[0]
+            ramp = self.retail.ramps[self.color] if self.color < len(self.retail.ramps) else self.retail.ramps[0]
             for i, index in enumerate(cell):
                 if index:
                     self.letters.setdefault((LEFT + self.x + shift + i % 8, TOP + self.y + GLYPH_DOWN + i // 8),
@@ -416,8 +416,8 @@ class Drawing:
                 self.newline()
             elif kind == "icon":
                 self.icon(token[1], 0)       # a type's or a star's, put in by F8 00
-            elif kind == "colour":
-                self.colour = token[1]
+            elif kind == "color":
+                self.color = token[1]
             elif kind == "code" and token[1][0] == "f8" and len(token[1]) >= 2:
                 op = int(token[1][1], 16)
                 args = [int(w, 16) for w in token[1][2:]]
@@ -431,7 +431,7 @@ class Drawing:
                     # The PAL's 13-pixel lines are the US's 12 here (pal_text.c).
                     self.line = 12 if args[1] == 0x0D else args[1]
                 elif op == 0x0A and args:
-                    self.colour = args[0]
+                    self.color = args[0]
                 elif op == 0x0B and args:
                     self.icon(args[0])
             elif kind == "code" and token[1][0] == "g" and len(token[1]) > 1:

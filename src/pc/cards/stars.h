@@ -116,7 +116,7 @@ int Stars_Named(int star);
 const char *Stars_Name(int star);
 
 /* The mod's icon for `star`, a PNG's full path, or NULL; and whether it
- * keeps the PNG's own colours ("palette": "own") rather than taking the
+ * keeps the PNG's own colors ("palette": "own") rather than taking the
  * disc's stars' ("game", the default). */
 const char *Stars_Icon(int star);
 int Stars_IconOwnPalette(int star);

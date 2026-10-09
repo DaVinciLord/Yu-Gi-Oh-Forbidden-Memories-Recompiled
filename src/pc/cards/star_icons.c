@@ -8,7 +8,7 @@
  * with one palette at (0x280, 0xFA); an icon id past them is a controller
  * button, and the battle effect draws an error cross. A star with no icon
  * of the mod's stays the disc's (1-10) or, past them, is a plain disc in the
- * stars' own colours. Nothing of the console's VRAM is used. */
+ * stars' own colors. Nothing of the console's VRAM is used. */
 #include "stars.h"
 #include "art.h"
 #include "pc/mods/mods.h"
@@ -61,7 +61,7 @@ static void star_palette(unsigned short palette[16])
     memcpy(palette, &SoftGpu_Vram()[STAR_CLUT_Y * SOFT_GPU_WIDTH + STAR_CLUT_X], 16 * sizeof(*palette));
 }
 
-/* A star with no icon: a disc in the stars' colours, its edge in the one
+/* A star with no icon: a disc in the stars' colors, its edge in the one
  * the disc's icons outline with and its face in the one they fill with. */
 static void plain_disc(unsigned char *pixels)
 {

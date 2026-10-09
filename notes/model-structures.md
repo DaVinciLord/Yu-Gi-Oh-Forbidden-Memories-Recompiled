@@ -53,7 +53,7 @@ Verified shared fields and partial arrays are:
 | `0xD70` | `field_D70[3]`, `GsF_LIGHT`-shaped | `Model_InitLightTriplet` writes three `0x10`-byte records; `func_800540B4` and `func_8004DE24` pass `+0xD70`, `+0xD80` and `+0xD90` to `GsSetFlatLight(0)`, `(1)` and `(2)`; `Model_GetFlatLight` returns one of them |
 | `0xDA0` | `field_DA0[3]` | three adjacent clamped `s32` writes in `func_800595C8` |
 | `0xDB0` | `field_DB0` | four-word copy/reset block in `func_800594C0` |
-| `0xDC0` | `field_DC0[8]` | target colour/mode writes in `Model_SetSlotTintTarget` and selection in `func_80059520` |
+| `0xDC0` | `field_DC0[8]` | target color/mode writes in `Model_SetSlotTintTarget` and selection in `func_80059520` |
 | `0xDC8` | `field_DC8[4]` | exact eight-byte copies in `func_80057E20` and `func_80059000`; element 3 is cleared by `func_800597C8` |
 | `0xDD0` | `field_DD0[4]` | four adjacent `u16` reads in `Model_CopySlotU16Values` |
 | `0xDF8` | `field_DF8` | first property in `Model_SetSlotProperties`; mirrored to `D_8009B488[index]` for all three slots when non-negative |
@@ -167,7 +167,7 @@ Matching `func_80058938` and `func_800528AC` establish a ten-entry request
 array at `D_800F2B50`, with `0x18` bytes per entry. The constructor scans from
 entry zero and fills the first record whose low active bit is clear; if all ten
 are active, it reaches the end without replacing one. It records one of model
-slots 0 or 1, two four-byte colour values, an initial elapsed value of zero,
+slots 0 or 1, two four-byte color values, an initial elapsed value of zero,
 and a duration equal to twice its fifth argument. Optional variadic indices
 become an eight-byte part-selection bitset. These are storage and control
 relationships, not names for the remaining offset-based fields.
@@ -176,10 +176,10 @@ The shared model tick `Model_UpdateScene` calls `func_800528AC` after the ordina
 slot draw/update helpers. For each active request whose selected model slot is
 active, the processor:
 
-1. computes three colour bytes as linear integer interpolation from entry
+1. computes three color bytes as linear integer interpolation from entry
    bytes `+0x10..+0x12` toward `+0x14..+0x16`, using elapsed `+0x0C` over
    duration `+0x0E`, while retaining byte `+0x13` as the fourth channel;
-2. saves the slot colour at `field_DC0`, `field_BF5`, `field_E06`, and the
+2. saves the slot color at `field_DC0`, `field_BF5`, `field_E06`, and the
    affected per-part bytes, installs the request values, and redraws the slot;
 3. clears the two draw-context globals, restores every saved model value, and
    restores the prior `Model_SetSlotShadowEnabled` state;
@@ -191,7 +191,7 @@ unchanged. `Model_HasInsufficientBufferSpace` takes a different path: it skips
 the temporary mutation and redraw but still advances elapsed and can expire the
 request. The processor restores model state after each successful redraw, so
 the matching code proves a temporary render override rather than a persistent
-slot-colour assignment. Although animated battle reaches this processor through `Model_UpdateScene`,
+slot-color assignment. Although animated battle reaches this processor through `Model_UpdateScene`,
 the pipeline is shared; current matching callers do not justify calling the
 queue battle-exclusive.
 

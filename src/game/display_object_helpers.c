@@ -15,7 +15,7 @@
 
 /* Scratchpad work areas: the four quad vertices at 0x1F800300, the
  * RotAverageNclip4 depth/flag results at 0x1F8002E0, and the DivideFT4
- * inputs - its DIVPOLYGON4 at 0x1F800000, the colour at 0x1F800280 and the
+ * inputs - its DIVPOLYGON4 at 0x1F800000, the color at 0x1F800280 and the
  * four texture coordinates from 0x1F800290. */
 #define SCRATCH_VERTEX(i) ((SVECTOR *)SCRATCHPAD_ADDR(0x1F800300) + (i))
 #define GS_SPRITE_VIEW(sprite) ((GsSPRITE *)(sprite))
@@ -129,7 +129,7 @@ void DisplayObject_SubmitPacket(SpritePrim *sprite, u8 *packet, s32 ot, s32 mode
         v = SCRATCH_VERTEX(0);
         attribute = sprite->attribute;
 
-        /* GsSPRITE's colour-mode bits (24-25) and semi-transparency rate
+        /* GsSPRITE's color-mode bits (24-25) and semi-transparency rate
          * (28-29) go into the tpage's mode and rate fields. */
         POLY_FT4_VIEW(packet)->tpage =
             sprite->tpage | (((attribute >> 17) & 0x180) | ((attribute >> 23) & 0x60));

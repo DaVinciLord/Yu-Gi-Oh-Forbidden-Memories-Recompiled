@@ -67,7 +67,7 @@ editors write, is fine):
 | `passwords` | each card's password and starchip price on the Password screen, below |
 | `limits` | the numbers the game caps (ATK and DEF, life points, starchips, the chest, the records), below |
 | `guardian_stars` | the stars' names and icons, stars 11 to 15, and what each star gets against each other, below |
-| `card_text_colors` | the colour a card's name, description and guardian star are written in on its details, below |
+| `card_text_colors` | the color a card's name, description and guardian star are written in on its details, below |
 | `starter` | the forty cards a new game begins with, one deck or a list of them, below |
 | `packs`, `pack_shop` | card packs sold for starchips on the Password screen, and the shop's rules, below |
 | `title`, `menu` | the title screen, and its two menus: their entries, buttons of the mod's own and their background, below |
@@ -355,7 +355,7 @@ on the disc but are three things to replace, so they are three folders.
 | `attributes/...` | the eight attribute balls |
 | `star_guardians/...` | the ten Guardian Star symbols |
 | `monster_type/...` | all twenty-four monster type icons, `dragon` to `equip` |
-| `build_deck/...` | the Build Deck and Trade screens: the ATK and DEF marks, the count digits in six colours, the eight sort icons, the CHEST and ORDER boxes and the cursor bar |
+| `build_deck/...` | the Build Deck and Trade screens: the ATK and DEF marks, the count digits in six colors, the eight sort icons, the CHEST and ORDER boxes and the cursor bar |
 | `duel/...` | the duel's HUD: the FIELD box, both life points panels and the turn arrows |
 | `UI/...` | the sprites nearly every screen draws from one shared sheet: the pad glyphs, the arrows, the starchip, the DECK box, the 1P/2P badges |
 
@@ -446,7 +446,7 @@ alpha below half is transparent and every other pixel is drawn, black
 included; there a replaced texel keeps the
 game's semi-transparency bit, as on the PS1, so opaque black is the word
 0x8000 where the game's texel has that bit and the darkest red, 0x0001,
-where it has not (0x0000 is the PS1's transparent colour).
+where it has not (0x0000 is the PS1's transparent color).
 
 When two enabled packs replace the same image read the same way (the same
 archive offset, size, depth and palette), the one later in the mods' load
@@ -582,7 +582,7 @@ on flip, at its owner's draw, before a battle, when destroyed or while face
 up, a magic card's effect, a boost, healing or damage, which `for_each`
 makes once per face-up monster counted ("+300 for each Dragon on your
 field") ([Monster effects](more-cards.md#monster-effects)). A `description` may
-hold icons and colours ([Card text codes](more-cards.md#card-text-codes)).
+hold icons and colors ([Card text codes](more-cards.md#card-text-codes)).
 
 ## Audio: songs, voices and sounds from files
 
@@ -697,7 +697,7 @@ MEMORIES_INPUT="700:0008,706:0000" tmp/pc/game32/memories-pc
 
 A mod may change the title screen with a `"title"` object: its song, the
 intro before it, its background, its pictures -- the logo, PUSH START
-BUTTON and the copyright line, moved, coloured or replaced with the mod's
+BUTTON and the copyright line, moved, colored or replaced with the mod's
 own -- which menu entries it offers, and lines of text of the mod's own.
 
 ```json
@@ -729,25 +729,25 @@ window and stays centred in widescreen.
 | `skip_intro` | `true`: go past the intro movie to the title at start-up and after a title jump |
 | `press_start` | `false`: open on the menu, without PUSH START BUTTON |
 | `idle_seconds` | seconds at PUSH START BUTTON before the intro plays again, `0` never (retail a little under a minute) |
-| `background` | `image` (a PNG drawn over the whole screen instead of the hieroglyph wall), `picture` and `shade` (`false` leaves out the wall, or the mod's image, and the dark-to-light shade over it), `tint` (the wall's colour, `#FFFFFF` as it is), `color` (a solid colour under them, seen where they are left out or see-through), `dim` (how far the menu darkens the screen, `0` to `128`, retail `128`), `wide` and `wide_image` (widescreen, [below](#widescreen)) |
-| `logo`, `copyright`, `prompt` | the three pictures: the logo, the (c) 1996 line and PUSH START BUTTON. `image` a PNG drawn instead, `width` and `height` its size, `x`, `y` move one from its place (`wide_x`, `wide_y` in widescreen), `tint` colours it, `hide` leaves it out (hiding `prompt` is `"press_start": false`), `show` when: `always`, `press_start` (not while a menu is up) or, for the logo and the copyright line, `menu` (only while one is) |
+| `background` | `image` (a PNG drawn over the whole screen instead of the hieroglyph wall), `picture` and `shade` (`false` leaves out the wall, or the mod's image, and the dark-to-light shade over it), `tint` (the wall's color, `#FFFFFF` as it is), `color` (a solid color under them, seen where they are left out or see-through), `dim` (how far the menu darkens the screen, `0` to `128`, retail `128`), `wide` and `wide_image` (widescreen, [below](#widescreen)) |
+| `logo`, `copyright`, `prompt` | the three pictures: the logo, the (c) 1996 line and PUSH START BUTTON. `image` a PNG drawn instead, `width` and `height` its size, `x`, `y` move one from its place (`wide_x`, `wide_y` in widescreen), `tint` colors it, `hide` leaves it out (hiding `prompt` is `"press_start": false`), `show` when: `always`, `press_start` (not while a menu is up) or, for the logo and the copyright line, `menu` (only while one is) |
 | `entries` | the menu entries by name: `new_game`, `load`, `duel`, `trade`, `options` before a game is loaded; `campaign`, `free_duel`, `build_deck`, `library`, `password`, `save` after (or their numbers, 0 to 10). Each may have `hide`, `x` (moved from the middle), `y` (its place) and `tint`, and all the keys of [the menus](#the-titles-menus)' items |
 | `spacing` | how far apart the entries stand (retail 32) |
 | `text` | lines drawn over the title, each `{"text", "x", "y", "align", "color", "size", "show"}`: `x` and `y` its place (default 160, 220, `y` the line's middle; `wide_x`, `wide_y` in widescreen), `align` `left`, `center` or `right` of `x`, `size` 1 to 8 (1 about the game's own letters), `show` `always`, `press_start` or `menu`; at most 16 |
-| `images` | pictures of the mod's own over the title, each `{"image", "x", "y", "width", "height", "tint", "show"}`: `x` and `y` its middle (default 160, 120; `wide_x`, `wide_y` in widescreen), its size as the pictures' below (at most 320 x 240), `tint` its colours, `show` as a line's; at most 8. They go over the background, the logo and the copyright line, and under the menu's dimming, PUSH START BUTTON and the menus; the first given lowest |
+| `images` | pictures of the mod's own over the title, each `{"image", "x", "y", "width", "height", "tint", "show"}`: `x` and `y` its middle (default 160, 120; `wide_x`, `wide_y` in widescreen), its size as the pictures' below (at most 320 x 240), `tint` its colors, `show` as a line's; at most 8. They go over the background, the logo and the copyright line, and under the menu's dimming, PUSH START BUTTON and the menus; the first given lowest |
 
 A hidden entry is left out of its menu and the cursor steps over it; the
 others close up, `spacing` apart around the middle of the retail menu,
 unless given their own `y`. A menu with every entry hidden shows them all.
 Hiding `load` hides the way to the second menu too, since loading a save is
-what opens it. The tints multiply the picture's colours, so `#FFFFFF` leaves
-one as it is and a colour can only darken what is there; on PUSH START
+what opens it. The tints multiply the picture's colors, so `#FFFFFF` leaves
+one as it is and a color can only darken what is there; on PUSH START
 BUTTON the tint goes over its pulse.
 
 Every applied mod's `title` is read in load order each time the title
 opens, a later mod's value winning key by key and the `text` lines and
 `images` of all of them shown, so applying or removing a mod shows the next time the title
-opens, with no restart. A key the title does not know, a colour that is not
+opens, with no restart. A key the title does not know, a color that is not
 `#RRGGBB` or an entry that does not exist is noted beside the mod in the
 Mods window. How it is done: [`src/pc/platform/title_screen.c`](../src/pc/platform/title_screen.c),
 the pictures in `title_images.c`; the manifest is read by `title_config.c`,
@@ -772,12 +772,12 @@ wants `"width": 200`. A see-through part of the PNG shows what is under
 it.
 
 At the console's resolution the picture is made into the game's own kind
-of texture, 256 colours with anything under half covered clear, at the size
+of texture, 256 colors with anything under half covered clear, at the size
 it is drawn; at an internal resolution above it (View > Internal 2x, 4x)
 the PNG itself is drawn, at its own resolution and with soft edges, as a
 mod card's art is. It is drawn where the game draws its own, so the menu
 still goes over the logo and dims it, and PUSH START BUTTON still pulses
-(its colour is the game's pulse times its `tint`) and goes when START is
+(its color is the game's pulse times its `tint`) and goes when START is
 pressed. A PNG that cannot be read is noted beside the mod, and the game's
 own picture shows. The pictures take VRAM the intro movie uses and the
 title does not, uploaded again each time the title opens.
@@ -823,7 +823,7 @@ Each item -- button or entry -- may have:
 | `action` | what choosing it does: an entry's name (what that entry does), `back`, `notice`, `quit`, `debug_menu`, `event` or `none`. An entry does its own unless given one; a button without one does nothing, or shows its `notice` |
 | `notice` | the words of a `notice` action's box: text, or `{"title", "text"}` |
 | `value` | a number handed to a code mod with `event` |
-| `hide`, `x`, `y`, `tint` | as the title's entries: left out, moved from the middle (160), its middle's place, its colours multiplied |
+| `hide`, `x`, `y`, `tint` | as the title's entries: left out, moved from the middle (160), its middle's place, its colors multiplied |
 | `wide_x`, `wide_y` | its `x` and `y` in widescreen, [below](#widescreen) |
 | `scale` | its size in percent, 25 to 400, about its middle: the menu's `scale` without one. Words, frame and the cursor's look alike; a picture at that much of its size above |
 
@@ -889,7 +889,7 @@ wants the room says so:
 ```
 
 - **`wide`** on a `background` fills the sides: the game's hieroglyph wall
-  tiles on into them, and the shade, the solid colour and the menu's
+  tiles on into them, and the shade, the solid color and the menu's
   dimming widen with it. A 4:3 `image` is never stretched: it stays in the
   middle with the background's `color` (or black) beside it.
 - **`wide_image`** is the background's picture for widescreen, drawn over
@@ -934,10 +934,10 @@ some of them out, with a `"card_layout"` object, no code needed:
 ```json
 "card_layout": {
     "frame_styles": {
-        "gold":   {"image": "anime_frame_monster.png", "hand_colour": "gold"},
-        "green":  {"image": "anime_frame_magic.png",   "hand_colour": "green"},
-        "pink":   {"image": "anime_frame_trap.png",    "hand_colour": "pink"},
-        "orange": {"image": "anime_frame_orange.png",  "hand_colour": "orange"}
+        "gold":   {"image": "anime_frame_monster.png", "hand_color": "gold"},
+        "green":  {"image": "anime_frame_magic.png",   "hand_color": "green"},
+        "pink":   {"image": "anime_frame_trap.png",    "hand_color": "pink"},
+        "orange": {"image": "anime_frame_orange.png",  "hand_color": "orange"}
     },
     "frame_for": [
         {"class": "ritual_spell",   "style": "green"},
@@ -999,20 +999,22 @@ there is nothing to gain by leaving its text out.
 
 ### Frame styles and the rules that pick them
 
-A card is drawn in a frame **style**: a picture and the colour its small card
+A card is drawn in a frame **style**: a picture and the color its small card
 wears in the hand, together, so the card view and the hand can never
 disagree. Three keys say it:
 
-- `frame_styles`: name -> `{"image", "hand_colour", "width", "height"}`.
+- `frame_styles`: name -> `{"image", "hand_color", "width", "height"}`.
   `image` is relative to the mod's directory, as a `title` mod's pictures
   are, drawn as one textured quad behind everything else, at `width`/`height`
-  (140x196 with neither given). `hand_colour` is one of the disc's six frame
-  colours, `gold`, `green`, `pink`, `blue`, `purple` or `orange` (the colours
+  (140x196 with neither given). `hand_color` (the older spelling
+  `hand_colour` is still read; `hand_color` wins when a style has both)
+  is one of the disc's six frame
+  colors, `gold`, `green`, `pink`, `blue`, `purple` or `orange` (the colors
   its palette rows have: a monster is gold, magic and equip green, a trap
   pink, a ritual blue; purple and orange the disc never uses). Name a style
-  as you like; a style named for a colour (`gold`, ...) is also what a card
-  whose own `frame` (a cards mod's, [Frame colour](more-cards.md#frame-colour))
-  is that colour wears.
+  as you like; a style named for a color (`gold`, ...) is also what a card
+  whose own `frame` (a cards mod's, [Frame color](more-cards.md#frame-color))
+  is that color wears.
 - `frame_for`: a list of rules, the first that applies to a card wins. A rule
   says `"style"` and, to limit it, any of `"class"` (what the card is, below),
   `"tag"` (one of the card's [`tags`](more-cards.md#tags)) and `"setting"` (a
@@ -1037,13 +1039,13 @@ god monsters tags them (`"tags": ["god"]`) and adds a style and a rule for the
 tag, before the class rules:
 
 ```json
-"frame_styles": { "god": {"image": "god_frame.png", "hand_colour": "purple"} },
+"frame_styles": { "god": {"image": "god_frame.png", "hand_color": "purple"} },
 "frame_for": [ {"tag": "god", "style": "god"} ]
 ```
 
 An older layout with a `frame` per kind (`monster`, `magic`, `trap`, `ritual`,
 `purple`, `orange`) and no `frame_styles` is read as before: the card's kind is
-its own frame colour, else its class's, a kind with no picture falls back to
+its own frame color, else its class's, a kind with no picture falls back to
 `monster`'s, and a ritual spell with no ritual picture of its own (or magic's)
 wears magic's. With no frame at all, nothing is drawn where the retail frame
 was, which is a deliberate, supported look (a mod may want the art and stats
@@ -1064,7 +1066,7 @@ gradient a few pixels wide -- is exactly what that average erases first,
 no matter how good it looks at full size. Draw frame art bolder than
 looks necessary up close; `anime_frame_*.png` needed a contrast pass
 (HSV-space unsharp mask plus a touch of marbling) after the first version
-read as a flat colour once actually in the game.
+read as a flat color once actually in the game.
 
 Magic, trap, ritual and equip cards have no level, ATK or DEF to draw --
 `art`/`atk`/`def`/`stars` keep the monster layout, and `CARD_LAYOUT_ART`/`CARD_LAYOUT_
@@ -1119,7 +1121,7 @@ manifest key itself is checked by `tests/pc/card_layout_test.c`.
 
 ## The duel's pictures
 
-A mod may move, size, colour, hide or replace the duel's pictures with a
+A mod may move, size, color, hide or replace the duel's pictures with a
 `"ui"` object: each half of the life-point panel with its digits, the FIELD
 box, the card bar and the two cursors, and rearrange what the card bar
 shows -- the card's name, its ATK and DEF, its icons. The FM Editor's UI
@@ -1146,7 +1148,7 @@ tab draws them from your disc and drags them about.
 | `lp_opponent` | the panel's top half: LP, COM and the opponent's life points and deck count; up and down only, at most 161 % (201 % drawn from an `image`) |
 | `lp_player` | its bottom half: YOU and the player's; the same |
 | `field` | the FIELD box, with the terrain's name; up and down only, at most 130 % |
-| `card_bar` | the strip under the hand; the hand's cards slide in and out with it, so it stays where the game has it, at its size: only its colours, a picture of its own or none. What it shows are its parts, below |
+| `card_bar` | the strip under the hand; the hand's cards slide in and out with it, so it stays where the game has it, at its size: only its colors, a picture of its own or none. What it shows are its parts, below |
 | `hand_cursor` | the red arrow under the card the cursor is on |
 | `field_cursor` | the frame round the zone a card is going to |
 
@@ -1154,10 +1156,10 @@ tab draws them from your disc and drags them about.
 |---|---|
 | `x`, `y` | moved by so many of the game's pixels, -400 to 400 across (the cursors only), -300 to 300 down |
 | `scale` | its size in percent, 25 to 400, about its middle (100 as it is; less for the panel's halves and the box, below) |
-| `tint` | its colours multiplied, `#RRGGBB` (`#FFFFFF` as they are; a colour can only darken what is there) |
+| `tint` | its colors multiplied, `#RRGGBB` (`#FFFFFF` as they are; a color can only darken what is there) |
 | `hide` | `true`: not drawn |
 | `image` | a PNG in the mod drawn instead, over the picture's place (moved and sized with it), `width` and `height` its size in the game's pixels instead of the picture's |
-| `digits` | the LP halves: the colour of their digits, over the game's (lit on that side's turn, dimmed on the other's) |
+| `digits` | the LP halves: the color of their digits, over the game's (lit on that side's turn, dimmed on the other's) |
 | `label` | the LP halves: words in place of COM or YOU, at most 15 letters, set in the font the card names are (with View > Opponent's name for COM the opponent's name shows there; a label wins) |
 
 ### The card bar's parts
@@ -1165,7 +1167,7 @@ tab draws them from your disc and drags them about.
 What the card bar shows is not part of its picture: the game writes it over
 the bar as one line of text (the card's name, the sword and ATK, the shield
 and DEF, the icons), each time the cursor moves. Its parts are keys of
-`card_bar`, each moved, coloured or hidden on its own:
+`card_bar`, each moved, colored or hidden on its own:
 
 | Part | What it is, where the game puts it |
 |---|---|
@@ -1194,7 +1196,7 @@ into what is moved where it reaches (the editor says so). The bar's own
 whichever it is.
 
 Everything is done as the game draws the pictures, never to the game's own
-objects, so its slides, the turn's colours and the cursors' moves go on as
+objects, so its slides, the turn's colors and the cursors' moves go on as
 they do. The game hides the panel and the FIELD box by sliding them off the
 side of the screen (the panel right, the box left, for each battle and the
 duel's end, and for Exodia a shorter way), so those move up and down only:
@@ -1315,7 +1317,7 @@ backwards is its own entry, so a matchup may be one-sided.
 | `matchups` | pairs: `attacker` and `defender` (a star's number or any of its names), `bonus` (points, -32767 to 32767; the default bonus when left out), `"mirror": true` to set the reverse pair to the opposite as well |
 | `default_bonus` | what the disc's two cycles give instead of 500 (both signs), and what `beats` and a matchup with no `bonus` give |
 | `replace` | `true`: every pair starts at 0, the disc's cycles gone |
-| `stars` | declares a star: `id` 1 to 15, `name` (a string, or one per language: `en-us`, `en-eu`, `fr`, `de`, `it`, `es`, and `default`), `icon` (a PNG in the mod), `palette` (`game`, the default: the disc's stars' own 16 colours, as the game draws them; `own`: the PNG's, up to 15), and `beats` (stars it is strong against: +default for it, -default for them) |
+| `stars` | declares a star: `id` 1 to 15, `name` (a string, or one per language: `en-us`, `en-eu`, `fr`, `de`, `it`, `es`, and `default`), `icon` (a PNG in the mod), `palette` (`game`, the default: the disc's stars' own 16 colors, as the game draws them; `own`: the PNG's, up to 15), and `beats` (stars it is strong against: +default for it, -default for them) |
 | `choice` | at a summon: `ask` (the disc's SELECT A GUARDIAN STAR box), `first` (no box: the first star), `best` (no box: the star that does better against the opponent's face-up monsters, what it gains attacking them less what they gain attacking it; the first on a tie or with none) |
 
 A minimal mod is one matchup; everything left out is the disc's. Where two
@@ -1323,7 +1325,7 @@ mods set the same pair the later one wins. Stars 11 to 15 are neutral against
 every star until something says otherwise. A new star without a `name` is
 "Star 11" (a translation's `[8322]` stands over that, since the names bank
 has star N's name at `0x8317 + N`), and without an `icon` a plain disc in
-the stars' colours. A card names them in its `stars` as it names the disc's
+the stars' colors. A card names them in its `stars` as it names the disc's
 (`"stars": ["Fire", "Sun"]`, or `[11, 8]`).
 
 One star. A card whose second star is none (`"stars": ["Fire", 0]`) or the
@@ -1508,14 +1510,14 @@ change to any of its settings (the setting may still say `"restart": true`,
 which shows "Requires a restart" beside it). A `setting` the mod does not
 declare is noted beside the mod and the file read.
 
-## Card text colours
+## Card text colors
 
-Every mod may give card-detail text its own one of the game's eight colour
+Every mod may give card-detail text its own one of the game's eight color
 ramps. Put `card_text_colors` at the top level of `mod.json`; it needs no
 library, setting, or extra file. `cards` is a list of rules. `card` accepts a
 card number, its displayed name, or an added card identity. Each of `name`,
-`description`, and `guardian_star` is optional, so a rule can colour any one
-or all three parts. Colours are ramp numbers 0 through 7: white, yellow,
+`description`, and `guardian_star` is optional, so a rule can color any one
+or all three parts. Colors are ramp numbers 0 through 7: white, yellow,
 blue, green, grey, orange, red, and the unused eighth ramp respectively.
 
 ```json
@@ -1530,17 +1532,17 @@ blue, green, grey, orange, red, and the unused eighth ramp respectively.
 }
 ```
 
-`guardian_stars` is optional. It colours that star wherever it appears; a
+`guardian_stars` is optional. It colors that star wherever it appears; a
 card's own `guardian_star` rule takes precedence. When two enabled mods set
 the same card part or guardian star, the later mod in load order wins. The
 rules are read when cards are built, so changing them requires a restart.
 
-Yamyi Mods has an optional **Rarity card-name colours** setting for compatibility
+Yamyi Mods has an optional **Rarity card-name colors** setting for compatibility
 with its older `card_name_color.ini` system. It is off by default. When enabled,
-that INI may name or define colour slots and assign colours by rarity tier or
-per-card override; those colours are applied after `card_text_colors` and
-therefore override the manifest colour for the card name only. Description and
-guardian-star colours continue to use `card_text_colors`.
+that INI may name or define color slots and assign colors by rarity tier or
+per-card override; those colors are applied after `card_text_colors` and
+therefore override the manifest color for the card name only. Description and
+guardian-star colors continue to use `card_text_colors`.
 
 ## When mods overlap
 
@@ -1552,7 +1554,7 @@ everything the selected mod changes that another enabled mod changes too,
 one line each: what it is, which mods, and how it comes out. The first four
 lines of a kind show; **and N more** shows the rest (up to 200 at a time). The
 header counts the overlaps between all enabled mods. A line is in the warning
-colour when only one mod's change is used, and dim when the changes add up,
+color when only one mod's change is used, and dim when the changes add up,
 agree, or follow an order the winning mod asked for:
 
 ```
@@ -1972,12 +1974,12 @@ use its highest drop weight. A weight of `w/2048` is the chance per win at that 
 The first Library display creates `mod-data/yamyi-mods/card_name_color.ini`
 in the player's directory. Its rarity tiers and duelist/rank multipliers give
 the panel's score; restart after editing it. Lower scores mean rarer cards; an
-explicit zero multiplier is respected. By default, card-name colours come from
+explicit zero multiplier is respected. By default, card-name colors come from
 `card_text_colors` declarations (above), in this or any other mod. Turn on
-**Rarity card-name colours** to also read the INI's colour slots, tiers and
-card overrides; while enabled, its assigned rarity colour temporarily
-overrides the manifest colour for the card name only. Description and guardian
-star colours still come from `card_text_colors`. The package is disabled by
+**Rarity card-name colors** to also read the INI's color slots, tiers and
+card overrides; while enabled, its assigned rarity color temporarily
+overrides the manifest color for the card name only. Description and guardian
+star colors still come from `card_text_colors`. The package is disabled by
 default and does not alter actual drops or duel rules.
 
 These features originate in yamyi's PRs #68, #70 and #77. Their overlapping

@@ -144,7 +144,7 @@ void Duelists_Frame(void);
  * A mod gives one by putting a PNG at "portraits/<id>.png" beside its
  * manifest, named for the entry's own "id"; "portrait" names a path instead
  * for anything that does not suit. The one file serves both pictures: it is
- * reduced to the 48x48 of 64 colours the console's slot holds, and kept whole
+ * reduced to the 48x48 of 64 colors the console's slot holds, and kept whole
  * for the scaled picture, which draws it at its own size through the texture
  * pack (TexturePack_AddMade), which knows the upload by the record's bytes.
  * So a portrait is as sharp as the file is, and nothing more is asked of the

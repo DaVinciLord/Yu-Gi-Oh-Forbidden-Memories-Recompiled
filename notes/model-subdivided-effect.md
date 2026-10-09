@@ -19,15 +19,15 @@ diagnostic prints that same size in decimal and hexadecimal.
 | 0x0034 | 24 x 4 | Eight ordered triples of corner pointers |
 | 0x0094 | 384 x 8 | Subdivided corners for 128 triangles |
 | 0x0C94 | 6 x 4 | Six RGB triplets; fourth bytes are preserved |
-| 0x0CAC | 24 x 4 | Eight ordered triples of colour pointers |
-| 0x0D0C | 384 x 4 | Subdivided colour triplets |
+| 0x0CAC | 24 x 4 | Eight ordered triples of color pointers |
+| 0x0D0C | 384 x 4 | Subdivided color triplets |
 | 0x130C | 2 | Two bytes cleared by initialization; semantics remain unnamed |
 | 0x130E | 2 | Preserved padding |
 | 0x1310 | 4 | Elapsed counter |
 | 0x1314 | 4 | Remaining counter |
 
 `D_800915E8` retains its existing 28-byte initialized-data owner. The
-consumer's measured view consists of three six-byte colour channels, signed
+consumer's measured view consists of three six-byte color channels, signed
 height and radius minima, signed growth and fade durations, and one trailing
 halfword. The retail minima are 300, with growth 10 and fade 90.
 
@@ -37,7 +37,7 @@ Each clamp tests its lower bound before the upper bound of 700: a configured
 minimum above 700 is not silently changed into an upper-bound-first clamp.
 The six axial corners form four faces above and four below the equatorial
 ring. Both subdivision helpers are called at depth two on every face.
-Their real vertex and colour strides are eight and four bytes respectively.
+Their real vertex and color strides are eight and four bytes respectively.
 
 ## Rendering and lifetimes
 
@@ -53,11 +53,11 @@ publication. `RotTrans` writes three words, so its output fits the twelve
 bytes of `MATRIX.t`; this is not a claim that a sixteen-byte VECTOR fits
 there. The rotation narrows a wrapped 32-bit shift to its halfword.
 
-Fading takes priority over growth. Fade scales all three vertex colours
-independently. During growth, the second subdivided colour is deliberately
+Fading takes priority over growth. Fade scales all three vertex colors
+independently. During growth, the second subdivided color is deliberately
 used for both the second and third triangle vertices, while all three input
 triplets are consumed. Outside either active interval, the three original
-colours are copied. Projection rejection uses the signs of depth and flags
+colors are copied. Projection rejection uses the signs of depth and flags
 and requires a positive clipping result; submitted depth is narrowed to
 sixteen bits. The eight original faces are projected again for three outline
 lines apiece.
@@ -100,7 +100,7 @@ record type or clamp macro. Each optimization executes:
 The corpus crosses signed extent boundaries, lower bounds above 700, zero
 and negative durations, fade/growth endpoints, zero retirement, full-word
 timing values, depth narrowing, and projection rejection. Four actual-source
-mutations (colour stride, early retirement, face wrap, and late configuration
+mutations (color stride, early retirement, face wrap, and late configuration
 capture) must reject with semantic exit 79 at both optimization levels.
 
 SDK operations are deterministic stubs, not a hardware GTE accuracy test.

@@ -8,7 +8,7 @@
 /* State for Model_UpdateDiscEffect, one of the four handlers in the pointer
    table at D_800114E8. arg1 >= 0 builds a disc of 67 points: a centre at a
    third of the radius and two 33-point rings at the radius and at four fifths
-   of it, with the three decimal digits of arg1 turned into the centre colour.
+   of it, with the three decimal digits of arg1 turned into the centre color.
    Negative arg1 draws the disc as 32 Gouraud triangles and advances level
    (-2) or scale (any other value). */
 typedef struct {

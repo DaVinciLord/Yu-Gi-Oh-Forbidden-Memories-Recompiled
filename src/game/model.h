@@ -363,9 +363,9 @@ typedef struct {
 
 /* One end of a tint ramp. Model_QueueTintRequest takes a whole one by value and stores
  * it as a single word, so all four bytes are live even though only b0..b2 are
- * the colour: func_800528AC interpolates those three and copies b3 of the
- * start colour straight through as the part id it draws with. The end
- * colour's b3 at +0x17 is written and never read, which is why it is a member
+ * the color: func_800528AC interpolates those three and copies b3 of the
+ * start color straight through as the part id it draws with. The end
+ * color's b3 at +0x17 is written and never read, which is why it is a member
  * here and not padding -- func_800528AC used to call it pad_17. */
 typedef struct {
     u8 b0;

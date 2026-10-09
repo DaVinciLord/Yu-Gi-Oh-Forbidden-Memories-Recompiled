@@ -80,7 +80,7 @@ states from earlier builds fail to load ("game variable ... moved").
 
 The page uses the text codes the result strings use: `f8 01 dy` (new line
 `dy` pixels down, signed), `f8 06 x16` (x), `f8 02 dx`, `f8 04 1|2` (the
-small or large letters) and `f8 0A` colour. Spaces are `f8 02 08` steps, not
+small or large letters) and `f8 0A` color. Spaces are `f8 02 08` steps, not
 glyphs. The text box can hold 255 glyphs, and a page keeps under 240.
 
 ## Verification

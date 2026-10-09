@@ -23,7 +23,7 @@ def main():
     layout, settings = L.build(frames("monster", "magic", "trap", "orange"))
     assert settings == []
     assert set(layout["frame_styles"]) == {"gold", "green", "pink", "orange"}
-    assert layout["frame_styles"]["green"]["hand_colour"] == "green"
+    assert layout["frame_styles"]["green"]["hand_color"] == "green"
     assert layout["default_style"] == "gold"
     assert ("ritual_spell", "green") in rule_styles(layout)
     assert ("effect_monster", "orange") in rule_styles(layout)
@@ -42,7 +42,7 @@ def main():
     rules = layout["frame_for"]
     assert rules[0] == {"class": "ritual_spell", "style": "blue", "setting": "ritual_own_frame"}
     assert rules[1] == {"class": "ritual_spell", "style": "green"}
-    assert layout["frame_styles"]["blue"]["hand_colour"] == "blue"
+    assert layout["frame_styles"]["blue"]["hand_color"] == "blue"
     print("anime_frame_layout: ok")
 
 

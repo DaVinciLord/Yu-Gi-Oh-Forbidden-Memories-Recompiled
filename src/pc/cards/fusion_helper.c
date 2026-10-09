@@ -151,11 +151,11 @@ unsigned FusionHelper_Signature(void)
     return view.visible ? hash : 0;
 }
 
-static void fill(MenuCanvas *canvas, int x, int y, int w, int h, uint32_t colour, unsigned alpha)
+static void fill(MenuCanvas *canvas, int x, int y, int w, int h, uint32_t color, unsigned alpha)
 {
     int row, col;
     for (row = y; row < y + h; row++)
-        for (col = x; col < x + w; col++) OverlayText_Blend(canvas, col, row, colour, alpha);
+        for (col = x; col < x + w; col++) OverlayText_Blend(canvas, col, row, color, alpha);
 }
 
 /* Game picture coordinates (320x240; 2D stays centred when widened) to window pixels. */
@@ -177,7 +177,7 @@ static void describe(char *out, size_t size, const char *label, const char *card
 void FusionHelper_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
 {
     char lines[2][512] = {"", ""};
-    uint32_t colour = 0xf2f6f8u;
+    uint32_t color = 0xf2f6f8u;
     int i, rows = 1, font, badge, pad, row, width, height, margin, gap;
     *x = *y = *w = *h = 0;
     update();
@@ -192,8 +192,8 @@ void FusionHelper_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
         /* Green only when going ahead now gives it. Two or more picks that
          * give anything else (even on the way) are red; so is a first pick
          * that is not one of its materials. */
-        if (view.picked >= 2) colour = view.status == 2 ? 0x8fd6a0u : 0xe8867cu;
-        else if (view.picked && !view.status) colour = 0xe8867cu;
+        if (view.picked >= 2) color = view.status == 2 ? 0x8fd6a0u : 0xe8867cu;
+        else if (view.picked && !view.status) color = 0xe8867cu;
         if (view.picked >= 2) describe(lines[rows++], sizeof(lines[1]), "Result: ", view.current_name, view.current.card);
     }
     if (lines[0][0]) {
@@ -219,7 +219,7 @@ void FusionHelper_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
         fill(canvas, *x, *y, width, height, 0x0b0f18u, 150);
         for (i = 0; i < rows; i++)
             OverlayText_Draw(canvas, *x + pad, *y + font / 4 + row * i + row / 2, *x + width - pad, lines[i], font,
-                             i ? 0xc4ccd2u : colour);
+                             i ? 0xc4ccd2u : color);
     }
     if (!view.unsupported && view.status == 1) {
         /* Pick-order badges in each hand card's top-right corner (the game's

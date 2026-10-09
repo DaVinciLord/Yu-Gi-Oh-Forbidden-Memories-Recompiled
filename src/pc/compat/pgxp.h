@@ -57,7 +57,7 @@ void Pgxp_AddPrimMoved(const void *packet, int dx, int dy);
 void Pgxp_NextFrame(void);
 /* Whether a stored word's halves could be a projected vertex's screen x, y at
  * all: the GTE clamps a projection to -1024..1023, and LIBGS adds at most a
- * screen's offset to it, so a genuine vertex never reaches +-2048; colour,
+ * screen's offset to it, so a genuine vertex never reaches +-2048; color,
  * texture and OT command words routinely do. DrawOTag (libgpu.c) skips
  * Pgxp_FindAt/Pgxp_Find for a word this rejects, sparing both lookups.
  * `static inline`: pure and free of any dependency on this file's own state,

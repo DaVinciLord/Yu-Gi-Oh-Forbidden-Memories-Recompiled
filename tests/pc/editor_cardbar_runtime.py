@@ -4,7 +4,7 @@
 The duel's card bar shows the card under the cursor: its name, the sword
 and ATK, the shield and DEF, the type's icon, the guardian stars (one on
 the field), a magic or trap card's word. A mod's "ui"."duel"."card_bar"
-moves each of them about on the bar, colours, hides them and spreads the
+moves each of them about on the bar, colors, hides them and spreads the
 name's letters (notes/modding.md, "The card bar's parts"). Two mods are
 made through the FM Editor's UI > Duel page, with its own controls:
 
@@ -27,8 +27,8 @@ results. For each step, from where the game holds the bar's text boxes:
 * without the parts ("hidden") the frame is the retail one except where
   the parts are, and there nothing of theirs is drawn;
 * "rearranged" is "hidden" with each part's own pixels (where retail and
-  hidden differ by more than a step of the GPU's colour) put where the mod moved
-  them, in its colour, the name's letters spread, within the GPU's 5-bit
+  hidden differ by more than a step of the GPU's color) put where the mod moved
+  them, in its color, the name's letters spread, within the GPU's 5-bit
   rounding; where a part was or went and none of its own lands, the bar
   as "hidden" has it (a glyph's dark half-transparent texels blend with
   what is under them); the rest of the frame exactly the retail one;
@@ -62,8 +62,8 @@ PARTS = ("name", "atk", "def", "type", "stars", "kind")
 # the name's rows are 2 to 14, its letters 8 apart.
 CHANNELS, CHANNEL_SIZE = 4, 0x64
 BAR_TEXTS = range(0x50, 0x56)
-TOLERANCE = 24                  # a tinted texel: the GPU's 5-bit colour against ours
-STEP = 8                        # one step of the GPU's 5-bit colour: a part's pixel differs by more
+TOLERANCE = 24                  # a tinted texel: the GPU's 5-bit color against ours
+STEP = 8                        # one step of the GPU's 5-bit color: a part's pixel differs by more
 REARRANGED = {"atk": (-195, 0, 0xFF8080), "def": (-195, 0, 0x80C0FF), "type": (35, 0, None),
               "stars": (-18, 0, 0xA0FFA0), "kind": (-18, 0, 0x80FF80)}
 NAME = {"x": 44, "y": 1, "tint": 0xFFE040}
@@ -116,13 +116,13 @@ def make_mods(game: Path, mods: Path, editor: Path) -> dict:
                   page.element("card_bar.name").get("x") == ui_rules.part_range("name", SPACED)[1] == 12,
                   str(page.element("card_bar.name")))
             page.moved("card_bar.name", -400, 0)
-            page.set_colour("tint", NAME["tint"])
+            page.set_color("tint", NAME["tint"])
         else:
             for part, (x, y, tint) in REARRANGED.items():
                 page.select(f"card_bar.{part}")
                 page.moved(f"card_bar.{part}", x, y)
                 if tint is not None:
-                    page.set_colour("tint", tint)
+                    page.set_color("tint", tint)
             page.select("card_bar.name")
             page.moved("card_bar.name", 300, NAME["y"])        # as far right as it stays on the bar
             check("the page keeps the name on the bar's panel (28 letters from x 66 reach its right)",
@@ -130,7 +130,7 @@ def make_mods(game: Path, mods: Path, editor: Path) -> dict:
                   str(page.element("card_bar.name")))
             page.vars["x"].set(str(NAME["x"]))
             page.typed("x")
-            page.set_colour("tint", NAME["tint"])
+            page.set_color("tint", NAME["tint"])
         bar = app.project.other["ui"]["duel"]["card_bar"]
         made[mod] = json.loads(json.dumps(bar))
         from fm_editor import validate
@@ -411,7 +411,7 @@ def moved_rect(part, bar):
 
 def tint_of(part, bar):
     from fm_editor import ui_assets
-    return ui_assets.parse_colour(bar.get(part, {}).get("tint"))
+    return ui_assets.parse_color(bar.get(part, {}).get("tint"))
 
 
 def compare_step(step, retail, hidden, rearranged, bar):
@@ -453,7 +453,7 @@ def compare_step(step, retail, hidden, rearranged, bar):
             continue
         factors = (tint >> 16 & 255, tint >> 8 & 255, tint & 255)
         here, there, drawn = b.pixel(x, y)[:3], b.pixel(*at)[:3], a.pixel(x, y)[:3]
-        # An opaque texel is its own colour wherever it goes; a half-transparent
+        # An opaque texel is its own color wherever it goes; a half-transparent
         # one (the icons' dark edges) is half what is under it: its own half is
         # what it added at home.
         opaque = tuple(drawn[i] * factors[i] // 255 for i in range(3))

@@ -3,7 +3,7 @@
 
 /* The save header template, 0x200 bytes (save_data.h). A PlayStation save
  * header: "SC", the icon's display flag (0x11 to 0x13: one to three frames),
- * the title, then at 0x60 a 16-colour CLUT and from 0x80 the frames, 16x16
+ * the title, then at 0x60 a 16-color CLUT and from 0x80 the frames, 16x16
  * at 4 bits a pixel, the low nibble first. */
 extern unsigned char gSaveData_aHeaderTemplate[];
 #define ICON_FLAG 2
@@ -21,11 +21,11 @@ int SaveIcon_Rgba(int frame, uint8_t rgba[SAVE_ICON_SIZE * SAVE_ICON_SIZE * 4])
     pixels = header + ICON_FRAMES + frame * ICON_FRAME_BYTES;
     for (i = 0; i < SAVE_ICON_SIZE * SAVE_ICON_SIZE; i++) {
         int index = i & 1 ? pixels[i / 2] >> 4 : pixels[i / 2] & 15;
-        unsigned colour = header[ICON_CLUT + index * 2] | header[ICON_CLUT + index * 2 + 1] << 8;
-        rgba[i * 4 + 0] = (uint8_t)((colour & 31) * 255 / 31);
-        rgba[i * 4 + 1] = (uint8_t)((colour >> 5 & 31) * 255 / 31);
-        rgba[i * 4 + 2] = (uint8_t)((colour >> 10 & 31) * 255 / 31);
-        rgba[i * 4 + 3] = colour ? 255 : 0; /* 0x0000 is the card's transparent colour */
+        unsigned color = header[ICON_CLUT + index * 2] | header[ICON_CLUT + index * 2 + 1] << 8;
+        rgba[i * 4 + 0] = (uint8_t)((color & 31) * 255 / 31);
+        rgba[i * 4 + 1] = (uint8_t)((color >> 5 & 31) * 255 / 31);
+        rgba[i * 4 + 2] = (uint8_t)((color >> 10 & 31) * 255 / 31);
+        rgba[i * 4 + 3] = color ? 255 : 0; /* 0x0000 is the card's transparent color */
     }
     return 1;
 }

@@ -44,7 +44,7 @@ extern int rcos(int angle);
 extern int Psx_csin(int angle);
 extern int Psx_ccos(int angle);
 /* src/game/func_80058938.h, whose types this file cannot include (its s32 is
- * a store here): the colours are the words their registers hold. */
+ * a store here): the colors are the words their registers hold. */
 extern void Model_QueueTintRequestForPartList(int32_t slot, int32_t part, uint32_t start, uint32_t end,
                                               int32_t duration, const int32_t *parts);
 

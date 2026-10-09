@@ -153,7 +153,7 @@ conformity with the Windows recording used as the `menus` golden; use
 runner writes its two process outputs under `--out` and never updates replay
 fixtures or goldens.
 
-The `x64-data-mods` replay builds a recoloured texture mod with Pillow. Install
+The `x64-data-mods` replay builds a recolored texture mod with Pillow. Install
 Pillow into the Python environment used to run replays (`python3 -m pip install
 Pillow`) before running `python3 tools/pc/replay.py play
 tests/pc/replays/x64-data-mods --check`; other replay fixtures do not need it.

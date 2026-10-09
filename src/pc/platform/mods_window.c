@@ -48,7 +48,7 @@ static Rect rect(int x, int y, int w, int h)
 static int inside(Rect r, int x, int y) { return x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h; }
 static int max(int a, int b) { return a > b ? a : b; }
 static int min(int a, int b) { return a < b ? a : b; }
-static int wrap(MenuCanvas *c, int x, int y, int w, const char *s, unsigned colour);
+static int wrap(MenuCanvas *c, int x, int y, int w, const char *s, unsigned color);
 /* The lines a status too long for one (a save's path and reason) needs
  * beyond the first; the footer grows by them. */
 static int status_extra(void)
@@ -197,7 +197,7 @@ void ModsWindow_Size(int *w, int *h)
     *w = width;
     *h = height;
 }
-static void fill(MenuCanvas *c, Rect r, unsigned colour)
+static void fill(MenuCanvas *c, Rect r, unsigned color)
 {
     int x0 = max(0, r.x), y0 = max(0, r.y), x1 = r.x + r.w, y1 = r.y + r.h;
     if (!c)
@@ -208,9 +208,9 @@ static void fill(MenuCanvas *c, Rect r, unsigned colour)
         y1 = c->height;
     for (int y = y0; y < y1; y++)
         for (int x = x0; x < x1; x++)
-            c->pixels[y * c->stride + x] = 0xff000000u | colour;
+            c->pixels[y * c->stride + x] = 0xff000000u | color;
 }
-static void text(MenuCanvas *c, int x, int y, int w, const char *s, unsigned colour)
+static void text(MenuCanvas *c, int x, int y, int w, const char *s, unsigned color)
 {
     char line[512];
     size_t n = strlen(s);
@@ -226,7 +226,7 @@ static void text(MenuCanvas *c, int x, int y, int w, const char *s, unsigned col
         if (n + 3 < sizeof(line))
             strcat(line, "...");
     }
-    Menu_DrawTextScaled(c, x, y, line, colour, unit);
+    Menu_DrawTextScaled(c, x, y, line, color, unit);
 }
 static void button(MenuCanvas *c, Rect r, const char *label, int accent)
 {
@@ -236,13 +236,13 @@ static void button(MenuCanvas *c, Rect r, const char *label, int accent)
     fill(c, r, accent ? ACCENT : EDGE);
     text(c, r.x + pad, r.y + r.h / 2, r.w - 2 * pad, label, TEXT);
 }
-static void centred(MenuCanvas *c, Rect r, const char *s, unsigned colour)
+static void centred(MenuCanvas *c, Rect r, const char *s, unsigned color)
 {
-    text(c, r.x + max(6 * unit, (r.w - width_text(s)) / 2), r.y + r.h / 2, r.w - 12 * unit, s, colour);
+    text(c, r.x + max(6 * unit, (r.w - width_text(s)) / 2), r.y + r.h / 2, r.w - 12 * unit, s, color);
 }
 /* Word-wraps `s` into `w` pixels, its first line's top at `y`, and returns the
  * top of the line after it. Without a canvas it only measures. */
-static int wrap(MenuCanvas *c, int x, int y, int w, const char *s, unsigned colour)
+static int wrap(MenuCanvas *c, int x, int y, int w, const char *s, unsigned color)
 {
     char line[512];
     int n = 0;
@@ -263,7 +263,7 @@ static int wrap(MenuCanvas *c, int x, int y, int w, const char *s, unsigned colo
                 n = split;
                 line[n] = 0;
             }
-            text(c, x, y + LINE / 2, w, line, colour);
+            text(c, x, y + LINE / 2, w, line, color);
             y += LINE;
             n = 0;
             while (*s == ' ' || *s == '\n')
@@ -358,7 +358,7 @@ static void option(MenuCanvas *c, int index, int w, int y, OptionBox *o)
 /* What the selected mod changes that another enabled mod changes too
  * (overlap.h), by kind: a heading with the count, the first few lines, and
  * "and N more" to show the rest (at most OVERLAPS_OPEN), the log having them
- * all. A real override is in the warning colour; what adds up, agrees or
+ * all. A real override is in the warning color; what adds up, agrees or
  * follows an `after` is dim. Where each "more" line is, for the press that
  * opens it, is kept in more_top/more_bottom. */
 #define OVERLAPS_SHOWN 4

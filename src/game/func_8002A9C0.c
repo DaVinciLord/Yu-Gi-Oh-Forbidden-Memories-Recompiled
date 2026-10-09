@@ -8,7 +8,7 @@
 
 /* The update callback func_8002ABB4 installs at 0x4C on the object it
    builds: it fades the object out over its own field_60 countdown, projects
-   it, and emits a four-vertex flat polyline (one colour word, length 6)
+   it, and emits a four-vertex flat polyline (one color word, length 6)
    and then, with the length cut to 3 and x3/y3 copied into x1/y1, a single
    flat line from the first vertex to the last, both through func_8005B260.
    The record is the canonical DisplayObject.

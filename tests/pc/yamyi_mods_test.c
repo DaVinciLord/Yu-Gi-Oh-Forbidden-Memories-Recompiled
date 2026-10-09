@@ -1,4 +1,4 @@
-/* Synthetic drop tables verify that colours and the Library agree after
+/* Synthetic drop tables verify that colors and the Library agree after
  * other mods change pools, including added cards and unequal rank scores. */
 #include "../../mods/yamyi-mods/card_name_color.c"
 #include <assert.h>

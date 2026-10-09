@@ -7,7 +7,7 @@
 /* Every texture the software GPU draws, as a PNG named by its hash, for
  * texture packs: MEMORIES_DUMP_TEXTURES=<directory> turns it on. A texture
  * is the rectangle of texels one textured primitive covers, decoded through
- * its palette; the hash covers the texel indices (or 16-bit colours) and the
+ * its palette; the hash covers the texel indices (or 16-bit colors) and the
  * palette entries, so the same sprite drawn with another palette is another
  * image, and the same one drawn again is the same file. The directory also
  * gets textures.txt, one line per image: hash, size, depth, page and palette
@@ -38,7 +38,7 @@ int TextureDump_EnableTags(void);
 
 /* The shadow a texture pack draws from: one cell per 4-bit texel of VRAM
  * (four per word; an 8-bit texel is two cells, a 16-bit one four), holding
- * the replacement colour as a 15-bit word with bit 15 set, 0 where nothing
+ * the replacement color as a 15-bit word with bit 15 set, 0 where nothing
  * replaces the texel. 0x8000 alone is a texel painted transparent, so
  * opaque black, which a PS1 word can only be with its semi-transparency
  * bit, is TEXTURE_SHADOW_BLACK: the renderer draws it as 0x8000 where the
@@ -50,7 +50,7 @@ int TextureDump_EnableTags(void);
  * and says whether this primitive may take from the shadow (1: its palette
  * is the one the shadow's image was painted for) or only from the scaled
  * picture's sampler (2: the words have an image for its palette too, but
- * the shadow holds another reading's colours). Both NULL when no pack is
+ * the shadow holds another reading's colors). Both NULL when no pack is
  * loaded. */
 #define TEXTURE_SHADOW_WIDTH (SOFT_GPU_WIDTH * 4)
 #define TEXTURE_SHADOW_BLACK 0x8001
@@ -61,7 +61,7 @@ int TextureDump_EnableShadow(void);
 /* The pack's image at its own resolution, for the scaled picture: u and v
  * are texel coordinates within the page in 16.16, page_x/page_y/depth the
  * primitive's page. Returns 0 when the texel is not replaced, 1 with the
- * colour as 0x00RRGGBB, 2 when it is painted transparent. NULL: no pack. */
+ * color as 0x00RRGGBB, 2 when it is painted transparent. NULL: no pack. */
 /* Below this alpha a pack pixel is clear in the scaled picture; above it,
  * it is mixed over what lies beneath as much as it covers (texture_pack.c). */
 #define PACK_ALPHA_CLEAR 8

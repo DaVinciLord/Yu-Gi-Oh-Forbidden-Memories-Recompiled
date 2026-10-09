@@ -2,7 +2,7 @@
  * module's (src/overlays/main_menu): three sprites from its resource bank --
  * the logo, the "(c) 1996 KAZUKI TAKAHASHI" line and PUSH START BUTTON -- over a tiled picture and a shade
  * drawn by MainMenu_DrawFrontendBackground, and the eleven entries of its
- * two menus, sprites too. Nothing on it is text, and every place and colour
+ * two menus, sprites too. Nothing on it is text, and every place and color
  * is a number in the code, so what a mod changes is applied here to the
  * objects the game made, after it made them and after each update; what
  * they show is a texture pack's (notes/modding.md). */
@@ -66,10 +66,10 @@ static int scale(uint32_t tint, int shift, int level)
 
 static void paint(DisplayObject *object, uint32_t tint, int level)
 {
-    u8 *colour = (u8 *)&object->field_0C;
-    colour[0] = (u8)scale(tint, 16, level);
-    colour[1] = (u8)scale(tint, 8, level);
-    colour[2] = (u8)scale(tint, 0, level);
+    u8 *color = (u8 *)&object->field_0C;
+    color[0] = (u8)scale(tint, 16, level);
+    color[1] = (u8)scale(tint, 8, level);
+    color[2] = (u8)scale(tint, 0, level);
 }
 
 static DisplayObject *layer(int i)
@@ -171,14 +171,14 @@ int TitleScreen_Update(void)
 {
     DisplayObject *prompt = D_80184560;
     int tinted = TitleConfig_Get()->layers[2].tint != 0xFFFFFF, prompting = prompt_showing(), result;
-    u8 *colour;
+    u8 *color;
     unsigned short repeat = gInput_wPad1Repeat, pressed = gInput_wPad1Pressed;
     unsigned hidden;
 
     /* The pulse runs on the game's grey; the tint goes on after. */
     if (prompting && tinted) {
-        colour = (u8 *)&prompt->field_0C;
-        colour[0] = colour[1] = colour[2] = (u8)prompt_level;
+        color = (u8 *)&prompt->field_0C;
+        color[0] = color[1] = color[2] = (u8)prompt_level;
     }
     if (prompting && TitleConfig_Get()->idle_frames >= 0) prompt->field_34.h.field_36 = 0;
 
@@ -203,8 +203,8 @@ int TitleScreen_Update(void)
     if (result != -1) return result;
 
     if (prompt_showing() && tinted) {
-        colour = (u8 *)&prompt->field_0C;
-        prompt_level = colour[2];
+        color = (u8 *)&prompt->field_0C;
+        prompt_level = color[2];
         paint(prompt, TitleConfig_Get()->layers[2].tint, prompt_level);
     }
     if (prompting && prompt_showing() && TitleConfig_Get()->idle_frames > 0 && ++idle >= TitleConfig_Get()->idle_frames) {
@@ -308,15 +308,15 @@ void TitleScreen_DrawImages(void *ot)
     }
     for (i = 0; i < TITLE_LAYERS; i++) {
         DisplayObject *object = layer(i);
-        const u8 *colour;
+        const u8 *color;
         if (!object || !TitleImages_Ready(TITLE_IMAGE_LOGO + i, &w, &h) || config->layers[i].hidden) continue;
         if (!(object->flags & DISPLAY_OBJECT_FLAG_RENDERABLE)) continue;
-        /* The game's colour for it: the tint, and PUSH START BUTTON's pulse. */
-        colour = (const u8 *)&object->field_0C;
+        /* The game's color for it: the tint, and PUSH START BUTTON's pulse. */
+        color = (const u8 *)&object->field_0C;
         TitleImages_Draw(TITLE_IMAGE_LOGO + i, ot, 4093,
                          middles[i].x + TitleWide_X(&config->layers[i].wide, config->layers[i].x, wide()) - w / 2,
                          middles[i].y + TitleWide_Y(&config->layers[i].wide, config->layers[i].y, wide()) - h / 2,
-                         colour[0], colour[1], colour[2], 0);
+                         color[0], color[1], color[2], 0);
     }
 }
 
@@ -325,7 +325,7 @@ void TitleScreen_DrawMenu(void)
     if (open) TitleMenu_Draw();
 }
 int TitleScreen_ShowShade(void) { return background()->shade; }
-long TitleScreen_BackgroundColour(void) { return background()->colour; }
+long TitleScreen_BackgroundColour(void) { return background()->color; }
 int TitleScreen_Dim(int level) { return level * TitleConfig_Get()->dim / 0x80; }
 
 /* --- the text lines ------------------------------------------------------ */
@@ -375,7 +375,7 @@ void TitleScreen_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)
         else if (line->align == TITLE_ALIGN_RIGHT) left -= width;
         middle = vy + TitleWide_Y(&line->wide, line->y, wide()) * vh / 240;
         Menu_DrawTextScaled(canvas, left + size, middle + size, line->text, 0x000000, size);
-        Menu_DrawTextScaled(canvas, left, middle, line->text, line->colour, size);
+        Menu_DrawTextScaled(canvas, left, middle, line->text, line->color, size);
         if (x0 >= x1) { x0 = left; y0 = middle - 10 * size; x1 = left + width + size; y1 = middle + 11 * size; }
         if (left < x0) x0 = left;
         if (middle - 10 * size < y0) y0 = middle - 10 * size;

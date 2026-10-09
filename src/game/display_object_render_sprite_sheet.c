@@ -27,7 +27,7 @@
  * 9-word semi-transparent quad at 0x1F800344. Otherwise each part either
  * goes out as a plain sprite, culled against the 320x240 screen when the
  * attribute's 0x08000000 bit asked for that, or as a rotated/scaled sprite
- * about the object's +0x48 pivot. The scale and colour are written through
+ * about the object's +0x48 pivot. The scale and color are written through
  * GsSPRITE's own members, which is the view libgs gives the record. */
 void DisplayObject_RenderSpriteSheet(DisplayObject *object, s32 ot, s32 depth)
 {

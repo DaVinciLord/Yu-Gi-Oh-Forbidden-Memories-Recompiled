@@ -9,7 +9,7 @@
  *
  * Replay, at present, with the clock held. VRAM is a 16-bit integer texture
  * that the fragment shader decodes (4, 8 and 16 bits per texel through the
- * palette) exactly as the software GPU samples it; the picture is a colour
+ * palette) exactly as the software GPU samples it; the picture is a color
  * texture on a framebuffer, scale x scale pixels per word. Loads, fills and
  * copies are applied to both in order; primitives are drawn into the
  * picture only, and after the replay VRAM as the software GPU left it is
@@ -17,7 +17,7 @@
  * would be (what a primitive draws is not sampled by a later primitive of
  * the same frame: that would be render-to-texture, which the game does
  * only through a read-back and a load, and where it matters the game code
- * says so: SoftGpu_Capture, below). Blending: a fragment's colour comes out pre-multiplied and its alpha
+ * says so: SoftGpu_Capture, below). Blending: a fragment's color comes out pre-multiplied and its alpha
  * is the destination's factor, so opaque pixels and modes 0, 1 and 3 share
  * one draw; mode 2 (subtractive) draws its opaque texels first and then
  * its semi-transparent ones with a subtracting equation. No dithering, and
@@ -266,7 +266,7 @@ static GLint u_entry_map, u_place_map, u_pack, u_pack_entry, u_pack_size;
 static int hd_text, hd_hud, opponent_name;
 /* A capture (SoftGpu_Capture): the scaled picture of what the game loaded
  * at capture_rect (x, y, w, h in VRAM words; w 0 for none), on unit 7,
- * which 16-bit textures there take their colour from. It holds until a
+ * which 16-bit textures there take their color from. It holds until a
  * load, copy or fill reaches that rect, a resync or a new scale. */
 static GLuint capture_texture;
 static int capture_rect[4], capture_w, capture_h;
@@ -286,7 +286,7 @@ static const char *vertex_source =
     "uniform vec2 picture_size;\n"
     "in vec2 position;\n"
     "in vec2 texcoord;\n"
-    "in vec4 colour;\n"
+    "in vec4 color;\n"
     "in ivec4 texture_page;\n"
     "in ivec4 texture_mode;\n"
     "in float persp;\n"
@@ -302,10 +302,10 @@ static const char *vertex_source =
     "    gl_Position = vec4(position.x / picture_size.x * 2.0 - 1.0, position.y / picture_size.y * 2.0 - 1.0, 0.0, 1.0);\n"
     /* PGXP: a triangle with its depths (flag 32) interpolates uv / w and
      * 1 / w across the screen, and divides back, which is perspective. */
-    "    uv = (int(colour.a) & 32) != 0 ? texcoord * persp : texcoord;\n"
+    "    uv = (int(color.a) & 32) != 0 ? texcoord * persp : texcoord;\n"
     "    q = persp;\n"
-    "    rgb = colour.rgb;\n"
-    "    flags = int(colour.a);\n"
+    "    rgb = color.rgb;\n"
+    "    flags = int(color.a);\n"
     "    page = texture_page;\n"
     "    mode = texture_mode;\n"
     "    bounds = texture_bounds;\n"
@@ -315,12 +315,12 @@ static const char *vertex_source =
  * level 2, on the texels of each textured primitive instead of the finished
  * picture, so a sprite's edges are smoothed at the internal resolution and
  * against what lies under it. The same rules and neighbourhood (see there),
- * with three changes. A texel is its word: transparent (0) is one colour,
+ * with three changes. A texel is its word: transparent (0) is one color,
  * as far from every other as black from white, so outlines against
  * transparency round too, and where the fill is transparent the pixel is
  * not drawn. Texels are those of the primitive's rectangle of texture
  * (bounds: first u, v, last u, v); past it the edge repeats, so a picture
- * put together from several rectangles shows no seams. And the colours
+ * put together from several rectangles shows no seams. And the colors
  * blend by coverage only between two opaque texels. centre_word and
  * near_word are the texel's word and its fill's. Compiled in only while it
  * is on (TEXTURE_XBR, make_program): its 25-texel neighbourhood made the
@@ -526,7 +526,7 @@ static const char *fragment_source =
     "                }\n"
     "            }\n"
     "        }\n"
-    /* The texel's own word: its colour unless replaced, and its
+    /* The texel's own word: its color unless replaced, and its
      * semi-transparency bit either way. */
     "        if ((flags & 16) != 0) {\n"
     /* HD text (hd_text.h): the index from the glyph's picture, through the
@@ -535,7 +535,7 @@ static const char *fragment_source =
     "            word = word_at(page.z + int(texelFetch(glyphs, at, 0).r), page.w);\n"
     /* A capture (SoftGpu_Capture): a 16-bit texel there keeps its word,
      * which says whether it is transparent and semi-transparent, and takes
-     * its colour from the picture the game read it from. */
+     * its color from the picture the game read it from. */
     "        } else if (!replaced && capture.z > 0 && mode.x == 2 && mode.z == 0 &&\n"
     "                   ((page.x + (((u & ~window.x) | window.z) & 255)) & 1023) - capture.x >= 0 &&\n"
     "                   ((page.x + (((u & ~window.x) | window.z) & 255)) & 1023) - capture.x < capture.z &&\n"
@@ -690,7 +690,7 @@ static int make_program(int xbr)
     gl_AttachShader(made, fs);
     gl_BindAttribLocation(made, 0, "position");
     gl_BindAttribLocation(made, 1, "texcoord");
-    gl_BindAttribLocation(made, 2, "colour");
+    gl_BindAttribLocation(made, 2, "color");
     gl_BindAttribLocation(made, 3, "texture_page");
     gl_BindAttribLocation(made, 4, "texture_mode");
     gl_BindAttribLocation(made, 5, "persp");
@@ -1132,7 +1132,7 @@ static int texel_left_out(const Vertex *v, int axis)
  * (i / scale from the first), GL interpolates at the centre: the texels
  * move back by half a pixel so the two agree, which shows where a pack's
  * image is sampled between texels. */
-static void block(int x, int y, int w, int h, int u0, int v0, int u1, int v1, const Vertex *colour, int flags)
+static void block(int x, int y, int w, int h, int u0, int v0, int u1, int v1, const Vertex *color, int flags)
 {
     GlVertex *out = push_vertices(6, (flags & 2) && state.blend == 2);
     float x0 = (float)x, y0 = (float)y, x1 = (float)(x + w), y1 = (float)(y + h);
@@ -1143,15 +1143,15 @@ static void block(int x, int y, int w, int h, int u0, int v0, int u1, int v1, co
     bounds_now[1] = v0;
     bounds_now[2] = u1 - 1;
     bounds_now[3] = v1 - 1;
-    set_vertex(&out[0], x0, y0, s0, t0, colour, flags);
-    set_vertex(&out[1], x1, y0, s1, t0, colour, flags);
-    set_vertex(&out[2], x1, y1, s1, t1, colour, flags);
-    set_vertex(&out[3], x0, y0, s0, t0, colour, flags);
-    set_vertex(&out[4], x1, y1, s1, t1, colour, flags);
-    set_vertex(&out[5], x0, y1, s0, t1, colour, flags);
+    set_vertex(&out[0], x0, y0, s0, t0, color, flags);
+    set_vertex(&out[1], x1, y0, s1, t0, color, flags);
+    set_vertex(&out[2], x1, y1, s1, t1, color, flags);
+    set_vertex(&out[3], x0, y0, s0, t0, color, flags);
+    set_vertex(&out[4], x1, y1, s1, t1, color, flags);
+    set_vertex(&out[5], x0, y1, s0, t1, color, flags);
 }
 
-static void set_colour(Vertex *vertex, uint32_t word)
+static void set_color(Vertex *vertex, uint32_t word)
 {
     vertex->r = word & 0xff;
     vertex->g = (word >> 8) & 0xff;
@@ -1178,7 +1178,7 @@ static void set_page(uint32_t value)
     state.glyph = (value & HD_TEXT_MARK) != 0;
 }
 
-static void name_over_panel(int x, int y, int width, int height, int u0, int v0, int w, int h, const Vertex *colour,
+static void name_over_panel(int x, int y, int width, int height, int u0, int v0, int w, int h, const Vertex *color,
                             int flags);
 
 static size_t polygon(const uint32_t *words, size_t count)
@@ -1195,7 +1195,7 @@ static size_t polygon(const uint32_t *words, size_t count)
     memset(v, 0, sizeof(v));
     for (i = 0; i < vertices_n; i++) {
         if (i == 0 || shaded) {
-            set_colour(&v[i], words[at++]);
+            set_color(&v[i], words[at++]);
         } else {
             v[i].r = v[0].r;
             v[i].g = v[0].g;
@@ -1308,12 +1308,12 @@ static size_t polygon(const uint32_t *words, size_t count)
 }
 
 /* The opponent's name over the life-point panel just drawn, and the
- * player's for YOU (hd_text.h): in the panel's colour, drawn from the atlas whatever
+ * player's for YOU (hd_text.h): in the panel's color, drawn from the atlas whatever
  * drew the panel. The panel may be drawn whole or in pieces, at any size
  * (a mod's "ui", pc/cards/duel_ui.h): texels u0, v0 on (w x h of them) drawn
  * over x, y to x + width, y + height of the game's pixels. A name's box goes
  * with the piece that has its rows and the column it joins the panel at. */
-static void name_over_panel(int x, int y, int width, int height, int u0, int v0, int w, int h, const Vertex *colour,
+static void name_over_panel(int x, int y, int width, int height, int u0, int v0, int w, int h, const Vertex *color,
                             int flags)
 {
     int atlas_u, atlas_v, bx, by, bw, bh, which;
@@ -1335,7 +1335,7 @@ static void name_over_panel(int x, int y, int width, int height, int u0, int v0,
         if (by < v0 - 128 || by + bh > v0 - 128 + h || bx + bw <= u0 - 128 || bx + bw > u0 - 128 + w) continue;
         state.pack = 0;
         block((x * w + (bx - (u0 - 128)) * width) * scale / w, (y * h + (by - (v0 - 128)) * height) * scale / h,
-              bw * width * scale / w, bh * height * scale / h, atlas_u, atlas_v, atlas_u + bw, atlas_v + bh, colour,
+              bw * width * scale / w, bh * height * scale / h, atlas_u, atlas_v, atlas_u + bw, atlas_v + bh, color,
               flags | 16);
     }
 }
@@ -1350,7 +1350,7 @@ static size_t rectangle(const uint32_t *words, size_t count)
     Vertex base;
     if (count < need) return 0;
     memset(&base, 0, sizeof(base));
-    set_colour(&base, words[0]);
+    set_color(&base, words[0]);
     set_position(&base, words[1]);
     if (textured) {
         base.u = words[at] & 0xff;
@@ -1452,14 +1452,14 @@ static size_t lines(const uint32_t *words, size_t count)
     Vertex previous, next;
     memset(&previous, 0, sizeof(previous));
     if (count < (shaded ? 4u : 3u)) return 0;
-    set_colour(&previous, words[at++]);
+    set_color(&previous, words[at++]);
     set_position(&previous, words[at++]);
     for (;;) {
         if (poly && at < count && (words[at] & 0xf000f000u) == 0x50005000u) return at + 1;
         next = previous;
         if (shaded) {
             if (at >= count) return 0;
-            set_colour(&next, words[at++]);
+            set_color(&next, words[at++]);
         }
         if (at >= count) return 0;
         set_position(&next, words[at++]);
@@ -1548,7 +1548,7 @@ static void wide_copy(const GlWide *wt, int x, int y, int w, int h)
     gl_BindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-/* The target's sides in rows y to y + h, in a colour. */
+/* The target's sides in rows y to y + h, in a color. */
 static void wide_sides(const GlWide *wt, int y, int h, float r, float g, float b)
 {
     gl_BindFramebuffer(GL_FRAMEBUFFER, wt->ms_fbo ? wt->ms_fbo : wt->fbo);
@@ -2133,7 +2133,7 @@ static void apply_load(int x, int y, int w, int h, const uint16_t *pixels)
 
 static void apply_fill(int x, int y, int w, int h, uint32_t rgb24)
 {
-    /* The colour VRAM gets: 15 bits, expanded as the picture expands them. */
+    /* The color VRAM gets: 15 bits, expanded as the picture expands them. */
     uint32_t r = (rgb24 >> 3) & 0x1f, g = (rgb24 >> 11) & 0x1f, b = (rgb24 >> 19) & 0x1f;
     uint16_t word = (uint16_t)(r | (g << 5) | (b << 10));
     flush_runs();

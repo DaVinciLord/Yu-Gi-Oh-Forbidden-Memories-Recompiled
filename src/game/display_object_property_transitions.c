@@ -15,7 +15,7 @@ void func_8001D344(DisplayObject *object)
     s32 step = object->field_60;
     s32 remaining = 3;
     s32 i = 0;
-    /* Byte cursors even though the object is typed: the three colour bytes
+    /* Byte cursors even though the object is typed: the three color bytes
        of field_0C step against the halfwords at 0x28, 0x2A and 0x2C, which
        are position.h and field_2C.h -- two different members, so no member
        array covers the walk. */

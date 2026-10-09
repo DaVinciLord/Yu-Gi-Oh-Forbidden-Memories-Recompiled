@@ -2,7 +2,7 @@
 #include "triangle_subdivision.h"
 
 /* Recursive triangle subdivision, written twice: once over s16 vertices
-   (func_8006BCA4) and once over three-byte colour triplets (func_8006C120),
+   (func_8006BCA4) and once over three-byte color triplets (func_8006C120),
    followed by the three primitives the triplet version is built from.
 
    The two subdividers are the same algorithm - split at the three edge
@@ -20,7 +20,7 @@
    buffer is a Triplet, which strides 4 - the fourth byte is never read or
    written by any of the four functions here, so it is carried, not used.
 
-   model_subdivided_effect.c initializes six colours with
+   model_subdivided_effect.c initializes six colors with
    Triplet_SetComponents and
    calls both subdividers at depth two for each of its eight base faces. */
 

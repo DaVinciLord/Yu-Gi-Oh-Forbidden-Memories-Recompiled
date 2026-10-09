@@ -1,7 +1,7 @@
 #ifndef MEMORIES_PC_CARD_TEXT_COLORS_H
 #define MEMORIES_PC_CARD_TEXT_COLORS_H
 
-/* Manifest-driven colours for the three pieces of a card detail box. */
+/* Manifest-driven colors for the three pieces of a card detail box. */
 struct DuelEffectChannel;
 
 enum {
@@ -11,7 +11,7 @@ enum {
 };
 
 /* Re-read every applied mod's "card_text_colors" after the card and star
- * names are ready.  The calls around a text box preserve its original colour
+ * names are ready.  The calls around a text box preserve its original color
  * while a rule is temporarily in effect. */
 void CardTextColors_Build(void);
 void CardTextColors_ResetChannel(struct DuelEffectChannel *channel);

@@ -2,7 +2,7 @@
  *
  * Written in the game's text codes, as drops.c and free_duel/page_box.c
  * write theirs: 0xF8 begins a command, 0x04 sets the cell size (2 is the
- * font's letters, which HD text can set) and 0x0A the colour. */
+ * font's letters, which HD text can set) and 0x0A the color. */
 #include "starchip_prize.h"
 #include "pc/text/glyphs.h"
 #include "game/duel_result_display.h"

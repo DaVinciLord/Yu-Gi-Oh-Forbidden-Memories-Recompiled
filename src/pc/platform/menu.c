@@ -69,7 +69,7 @@ static int ui = 1, touch_row;
 #define SHADOW (6 * ui)
 #define FONT_PX (13 * ui)
 
-/* Colours: a dark bar that stays out of the picture's way. */
+/* Colors: a dark bar that stays out of the picture's way. */
 #define C_BAR 0x1e1f22u
 #define C_BAR_EDGE 0x0b0b0dU
 #define C_BAR_HOVER 0x33353aU
@@ -578,17 +578,17 @@ static inline uint32_t blend(uint32_t under, uint32_t over, unsigned alpha)
     return 0xff000000u | r << 16 | g << 8 | b;
 }
 
-static void put(int x, int y, uint32_t colour, unsigned alpha)
+static void put(int x, int y, uint32_t color, unsigned alpha)
 {
     uint32_t *at;
     if (x < 0 || y < 0 || x >= canvas->width || y >= canvas->height || !alpha || y < clip_top || y >= clip_bottom) {
         return;
     }
     at = canvas->pixels + (size_t)y * (size_t)canvas->stride + (size_t)x;
-    *at = alpha >= 255 ? (colour | 0xff000000u) : blend(*at, colour, alpha);
+    *at = alpha >= 255 ? (color | 0xff000000u) : blend(*at, color, alpha);
 }
 
-static void fill(int x, int y, int w, int h, uint32_t colour, unsigned alpha)
+static void fill(int x, int y, int w, int h, uint32_t color, unsigned alpha)
 {
     int i, j;
     if (x < 0) { w += x; x = 0; }
@@ -600,9 +600,9 @@ static void fill(int x, int y, int w, int h, uint32_t colour, unsigned alpha)
     for (j = 0; j < h; j++) {
         uint32_t *row = canvas->pixels + (size_t)(y + j) * (size_t)canvas->stride + (size_t)x;
         if (alpha >= 255) {
-            for (i = 0; i < w; i++) row[i] = colour | 0xff000000u;
+            for (i = 0; i < w; i++) row[i] = color | 0xff000000u;
         } else {
-            for (i = 0; i < w; i++) row[i] = blend(row[i], colour, alpha);
+            for (i = 0; i < w; i++) row[i] = blend(row[i], color, alpha);
         }
     }
 }
@@ -620,28 +620,28 @@ static void clear_alpha_rect(int x, int y, int w, int h)
     }
 }
 
-static void outline(int x, int y, int w, int h, uint32_t colour)
+static void outline(int x, int y, int w, int h, uint32_t color)
 {
-    fill(x, y, w, 1, colour, 255);
-    fill(x, y + h - 1, w, 1, colour, 255);
-    fill(x, y, 1, h, colour, 255);
-    fill(x + w - 1, y, 1, h, colour, 255);
+    fill(x, y, w, 1, color, 255);
+    fill(x, y + h - 1, w, 1, color, 255);
+    fill(x, y, 1, h, color, 255);
+    fill(x + w - 1, y, 1, h, color, 255);
 }
 
 /* An anti-aliased disc: coverage from the distance to the edge. */
-static void disc(int cx, int cy, int radius, uint32_t colour)
+static void disc(int cx, int cy, int radius, uint32_t color)
 {
     int x, y;
     for (y = -radius - 1; y <= radius + 1; y++) {
         for (x = -radius - 1; x <= radius + 1; x++) {
             float d = (float)__builtin_sqrtf((float)(x * x + y * y)) - (float)radius + 0.5f;
             unsigned alpha = d <= 0 ? 255 : d >= 1 ? 0 : (unsigned)((1 - d) * 255);
-            put(cx + x, cy + y, colour, alpha);
+            put(cx + x, cy + y, color, alpha);
         }
     }
 }
 
-static void draw_bitmap_text(int x, int middle, const char *text, uint32_t colour)
+static void draw_bitmap_text(int x, int middle, const char *text, uint32_t color)
 {
     for (; *text; x += 12 * ui) {
         uint32_t character = Glyphs_NextCharacter(&text);
@@ -655,7 +655,7 @@ static void draw_bitmap_text(int x, int middle, const char *text, uint32_t colou
             for (row = 0; row < 7; row++) {
                 for (column = 0; column < 5; column++) {
                     if (bitmap_font[i].rows[row] & (0x10 >> column)) {
-                        fill(x + column * 2 * ui, middle - 7 * ui + row * 2 * ui, 2 * ui, 2 * ui, colour, 255);
+                        fill(x + column * 2 * ui, middle - 7 * ui + row * 2 * ui, 2 * ui, 2 * ui, color, 255);
                     }
                 }
             }
@@ -665,11 +665,11 @@ static void draw_bitmap_text(int x, int middle, const char *text, uint32_t colou
 }
 
 /* Text with its vertical centre on `middle`. */
-static void draw_text(int x, int middle, const char *text, uint32_t colour)
+static void draw_text(int x, int middle, const char *text, uint32_t color)
 {
     int baseline;
     if (!font_loaded) {
-        draw_bitmap_text(x, middle, text, colour);
+        draw_bitmap_text(x, middle, text, color);
         return;
     }
     baseline = middle + (font_ascent - font_descent + 1) / 2;
@@ -678,17 +678,17 @@ static void draw_text(int x, int middle, const char *text, uint32_t colour)
         int row, column;
         for (row = 0; row < g->h && g->coverage; row++) {
             for (column = 0; column < g->w; column++) {
-                put(x + g->left + column, baseline - g->top + row, colour, g->coverage[row * g->w + column]);
+                put(x + g->left + column, baseline - g->top + row, color, g->coverage[row * g->w + column]);
             }
         }
         x += g->advance;
     }
 }
 
-void Menu_DrawText(MenuCanvas *into, int x, int y, const char *text, uint32_t colour)
+void Menu_DrawText(MenuCanvas *into, int x, int y, const char *text, uint32_t color)
 {
     canvas = into;
-    draw_text(x, y, text, colour);
+    draw_text(x, y, text, color);
 }
 
 int Menu_TextWidth(const char *text) { return text_width(text); }
@@ -735,12 +735,12 @@ static const Glyph *big_glyph_for(uint32_t character, int scale)
     return b->missing ? NULL : &b->glyph;
 }
 
-void Menu_DrawTextScaled(MenuCanvas *into, int x, int middle, const char *text, uint32_t colour, int scale)
+void Menu_DrawTextScaled(MenuCanvas *into, int x, int middle, const char *text, uint32_t color, int scale)
 {
     canvas = into;
-    if (scale == ui) { draw_text(x, middle, text, colour); return; }
+    if (scale == ui) { draw_text(x, middle, text, color); return; }
     if (!font_loaded) {
-        int previous = ui; ui = scale; draw_bitmap_text(x, middle, text, colour); ui = previous; return;
+        int previous = ui; ui = scale; draw_bitmap_text(x, middle, text, color); ui = previous; return;
     }
     int baseline = middle + (font_ascent - font_descent + 1) * scale / (2 * ui);
     int advance = 0;
@@ -752,7 +752,7 @@ void Menu_DrawTextScaled(MenuCanvas *into, int x, int middle, const char *text, 
         if (big) {
             for (int row = 0; row < big->h && big->coverage; row++)
                 for (int col = 0; col < big->w; col++)
-                    put(x + advance * scale / ui + big->left + col, baseline - big->top + row, colour,
+                    put(x + advance * scale / ui + big->left + col, baseline - big->top + row, color,
                         big->coverage[row * big->w + col]);
             advance += g->advance;
             continue;
@@ -760,7 +760,7 @@ void Menu_DrawTextScaled(MenuCanvas *into, int x, int middle, const char *text, 
         for (int row = 0; row < g->h * scale / ui && g->coverage; row++)
             for (int col = 0; col < g->w * scale / ui; col++)
                 put(x + advance * scale / ui + g->left * scale / ui + col,
-                    baseline - g->top * scale / ui + row, colour,
+                    baseline - g->top * scale / ui + row, color,
                     g->coverage[(row * ui / scale) * g->w + col * ui / scale]);
         advance += g->advance;
     }
@@ -1186,23 +1186,23 @@ static void slider_geometry(int level, int index, int *sx, int *middle)
 }
 
 /* A small triangle pointing right, for rows that open a submenu. */
-static void draw_arrow(int x, int middle, uint32_t colour)
+static void draw_arrow(int x, int middle, uint32_t color)
 {
     int span = 4 * ui, c;
     for (c = 0; c < span; c++) {
         int half = (span - c) * 7 * ui / (2 * span);
-        fill(x + c, middle - half, 1, 2 * half + 1, colour, 255);
+        fill(x + c, middle - half, 1, 2 * half + 1, color, 255);
     }
 }
 
 /* A triangle pointing up (-1) or down (1) with its middle at cx, middle:
  * a scrolling menu's arrow band. */
-static void draw_band_arrow(int cx, int middle, int direction, uint32_t colour)
+static void draw_band_arrow(int cx, int middle, int direction, uint32_t color)
 {
     int span = 5 * ui, r;
     for (r = 0; r < span; r++) {
         int half = direction < 0 ? r : span - 1 - r;
-        fill(cx - half * 3 / 2, middle - span / 2 + r, half * 3 + 1, 1, colour, 255);
+        fill(cx - half * 3 / 2, middle - span / 2 + r, half * 3 + 1, 1, color, 255);
     }
 }
 

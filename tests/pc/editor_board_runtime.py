@@ -30,7 +30,7 @@ Internal 1x and 2x, with the mod and without it:
 5. without the mod, the same frames as with no mod at all (VRAM hashes
    from boot through the title and a duel's first turns).
 
-Each picture is checked by its colours (the mod's floor where the board
+Each picture is checked by its colors (the mod's floor where the board
 is, none of it without the mod). The pictures are drawn here; nothing is
 kept in the repository.
 
@@ -70,7 +70,7 @@ def check(name, ok, detail=""):
 
 def floor_picture(scale, kind):
     """The floor in the board's order (board_art.FLOOR), `scale` times its
-    256 x 254 texels: tiles of two colours, lines between them."""
+    256 x 254 texels: tiles of two colors, lines between them."""
     from fm_editor import board_art as ba, pngio
     w, h = ba.FLOOR_W * scale, ba.FLOOR_H * scale
     out = bytearray(w * h * 4)

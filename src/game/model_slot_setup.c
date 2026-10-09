@@ -18,7 +18,7 @@
    assembly again.
 
    They are one initializer and its consumer. The reset writes the mode byte
-   at +0xE16 as 0x3E, the pair at +0xE0C/+0xE0D as 7 and 8, the colour scale
+   at +0xE16 as 0x3E, the pair at +0xE0C/+0xE0D as 7 and 8, the color scale
    at +0xE0A as COLOR_FIXED_ONE and the busy byte at +0xE1F as 0; the layout
    pass switches on that same +0xE16 (0x3E is one of its three cases), reads
    +0xE0C, +0xE0D and +0xE0A back, and sets +0xE1F to 1. */

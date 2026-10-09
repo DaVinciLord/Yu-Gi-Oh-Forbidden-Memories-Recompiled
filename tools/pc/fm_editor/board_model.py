@@ -325,9 +325,9 @@ def render_board(project, terrain: str = "normal", camera=None, size=SCREEN) -> 
                                   tuple(size)).image)
 
 
-def outline(picture: Picture, keys, thickness: int = 1, colour=(0x40, 0xE0, 0xFF), dark=(0, 0, 0)) -> pngio.Image:
+def outline(picture: Picture, keys, thickness: int = 1, color=(0x40, 0xE0, 0xFF), dark=(0, 0, 0)) -> pngio.Image:
     """The picture with the edge of what `keys` cover drawn round: a line
-    of `colour` `thickness` pixels wide inside it and one of `dark`
+    of `color` `thickness` pixels wide inside it and one of `dark`
     outside.
 
     A row at a time, a byte a pixel as one number: a pixel of the mask is
@@ -355,7 +355,7 @@ def outline(picture: Picture, keys, thickness: int = 1, colour=(0x40, 0xE0, 0xFF
         below = rows[y + 1] if y + 1 < height else 0
         outside = (ones ^ (row >> 8)) | (ones ^ (row << 8 & (ones * 255))) | (ones ^ above) | (ones ^ below) | 1 | 1 << 8 * (width - 1)
         edges.append(row & outside)
-    for lines, reach, paint, inside in ((edges, thickness - 1, bytes(colour), True),
+    for lines, reach, paint, inside in ((edges, thickness - 1, bytes(color), True),
                                         (rows, thickness, bytes(dark), False)):
         if reach < 0:
             continue

@@ -46,7 +46,7 @@ int CardArt_Crop(const char *path, int w, int h, int *x, int *y, int *cw, int *c
 int CardArt_TitleFromImage(const char *path, unsigned char *plate, char *why, size_t why_size);
 /* A picture of any size with see-through parts, for the title screen
  * (title_images.c): the PNG stretched to w x h, one byte a texel, entry 0
- * clear and 1-255 its colours in `clut` (256 BGR555 entries). */
+ * clear and 1-255 its colors in `clut` (256 BGR555 entries). */
 int CardArt_IndexedImage(const char *path, int w, int h, unsigned char *indices, unsigned short *clut, char *why,
                          size_t why_size);
 /* The PNG's size; 0 when it is not one. */
@@ -55,7 +55,7 @@ int CardArt_ImageSize(const char *path, int *width, int *height);
 int CardArt_PortraitFromImage(const char *path, unsigned char *record, char *why, size_t why_size);
 /* A guardian star's icon, CARD_ICON_SIDE square at 4 bits a pixel (128
  * bytes, the low nibble first), from a PNG (stars.h): with `palette` its 16
- * colours (the disc's stars'), else the PNG's own 15 in `clut` (entry 0
+ * colors (the disc's stars'), else the PNG's own 15 in `clut` (entry 0
  * transparent). */
 #define CARD_ICON_SIDE 16
 int CardArt_IconFromImage(const char *path, const unsigned short *palette, unsigned char *pixels,

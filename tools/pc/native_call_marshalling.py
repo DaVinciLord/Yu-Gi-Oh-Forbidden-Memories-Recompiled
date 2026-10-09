@@ -67,7 +67,7 @@ def emit_native_calls(mapped, texts, stubs=()):
             if kind.startswith('ptr'):
                 values.append(f'({types[-1]})(uintptr_t)a[{word}]')
             elif kind == 'i64':
-                # Four-byte colour structs are coerced to i64 by Apple Clang.
+                # Four-byte color structs are coerced to i64 by Apple Clang.
                 signed = name not in COLOR_WORDS and not (word == 0 and name in UNSIGNED_LONG_FIRST)
                 values.append(f'(uint64_t)({"int32_t" if signed else "uint32_t"})a[{word}]')
             else:

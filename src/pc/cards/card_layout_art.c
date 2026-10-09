@@ -1,8 +1,8 @@
 /* See card_layout_art.h. Decode-once-and-cache + store-into-bank, the same
  * shape as star_icons.c's make()/store()/Stars_IconCell() trio -- the
- * difference is colour depth: guardian star icons and glyphs are 4 bits a
+ * difference is color depth: guardian star icons and glyphs are 4 bits a
  * texel (packed four to a VRAM word, tpage depth field 0), this asset is
- * CardArt_IndexedImage's own 8-bit-a-texel output (up to 255 colours plus
+ * CardArt_IndexedImage's own 8-bit-a-texel output (up to 255 colors plus
  * transparent 0), packed two to a word, tpage depth field 1 (getTPage's own
  * encoding, psyq/libgpu.h) -- there is no existing 8bpp bank user in this
  * codebase to copy, so that packing and tpage math are derived here from
@@ -29,7 +29,7 @@
  * 177x254 texture (the old budget) put a 919x1319 frame through a ~27x area
  * reduction and, drawn at 560x784 on screen (Internal 4x), a 3.2x upscale: the
  * stat boxes' borders and the marbling went blocky. 3x3 tiles are 531x762,
- * about one texel to a screen pixel at 4x. All tiles share one 255-colour
+ * about one texel to a screen pixel at 4x. All tiles share one 255-color
  * palette (a median cut of the whole image), kept under the first tile.
  *
  * Tile i sits at page (2 * (i % 8), i / 8): a 8bpp page is 256 texels (128

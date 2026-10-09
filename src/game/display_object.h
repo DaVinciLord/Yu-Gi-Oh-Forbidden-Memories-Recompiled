@@ -38,7 +38,7 @@ typedef void (*DisplayObjectCallback)(u8 *);
  * read by libgs, and the names are libgs.h's:
  *
  *   DISPLAY_OBJECT_ATTRIBUTE_8BPP / DISPLAY_OBJECT_ATTRIBUTE_16BPP
- *                            colour mode; the texture-page step of 1, 2 or 4
+ *                            color mode; the texture-page step of 1, 2 or 4
  *                            a strip wrap applies is 4bpp, 8bpp and 16bpp
  *   0x04000000  GsPERS       perspective
  *   0x08000000  GsROTOFF     rotation off -- which is why the renderers only
@@ -128,9 +128,9 @@ typedef struct DisplayObject {
        and 0x48.
 
        Whole: display_object_helpers.c zeroes it and writes an initial value,
-       both renderers copy it into a primitive's colour word,
+       both renderers copy it into a primitive's color word,
        text_box_build_step.c clears it, and text_box_layout_helpers.c and
-       Dialog_UpdateChoice write colour constants.
+       Dialog_UpdateChoice write color constants.
 
        Halves: display_object_property_transitions.c compares 0x2C against the
        byte at 0x21, and divides 0x80 and 0x800 by 0x2E to derive its
@@ -155,8 +155,8 @@ typedef struct DisplayObject {
        neighbours.
 
        Whole: display_object_helpers.c zeroes it, both renderers copy it into
-       a primitive's colour word, and text_box_layout_helpers.c and Dialog_UpdateChoice
-       write colour constants into it.
+       a primitive's color word, and text_box_layout_helpers.c and Dialog_UpdateChoice
+       write color constants into it.
 
        Halves: the value-setup screen's widget tween in the main_menu overlay
        saves the live position at 0x30/0x32 into 0x36/0x38 and eases back
@@ -176,7 +176,7 @@ typedef struct DisplayObject {
        six words at stride 0xC -- 0x2C, 0x38, 0x44, 0x50, 0x5C, 0x68 -- and
        DisplayObject_RenderGouraudQuadList and
        DisplayObject_RenderTexturedGouraudQuadList copy it into a primitive's
-       colour word.
+       color word.
 
        Halves: DuelEffect_UpdateObjectLayout writes 0x38 and 0x3A as an x/y
        pair. That function writes six such pairs at stride 8 -- 0x28, 0x30,
@@ -185,7 +185,7 @@ typedef struct DisplayObject {
 
        That is one witness under one object kind, and this halfword has more
        readings than almost any other on the record, so it does not
-       generalise. The stride-0xC run above and the stride-8 colour run at
+       generalise. The stride-0xC run above and the stride-8 color run at
        0x2C both cross this range and disagree with it. So, separately, do
        the three views that already name these halves outside this header:
        DisplayObjectVelocity in display_object_helpers.c calls 0x36, 0x38 and
@@ -236,10 +236,10 @@ typedef struct DisplayObject {
 
        0x44 is the fourth of six words at stride 8 -- 0x2C, 0x34, 0x3C, 0x44,
        0x4C, 0x54 -- which display_object_helpers.c zeroes in one run. For a
-       gouraud-rendered object those six are per-vertex colours:
+       gouraud-rendered object those six are per-vertex colors:
        DisplayObject_RenderTexturedGouraudQuadList, the twelve-word code-0x3C
-       renderer, copies 0x44 into its third vertex's colour word, and
-       Dialog_UpdateChoice writes all six with colour constants (0x2000 four
+       renderer, copies 0x44 into its third vertex's color word, and
+       Dialog_UpdateChoice writes all six with color constants (0x2000 four
        times, 0xC000 twice) before installing Widget_UpdatePulseColour as the
        update callback.
 
@@ -276,10 +276,10 @@ typedef struct DisplayObject {
        the six words at stride 8 -- 0x2C, 0x34, 0x3C, 0x44, 0x4C, 0x54 -- that
        display_object_helpers.c zeroes in one run.
 
-       For a gouraud-rendered object it is a vertex colour:
+       For a gouraud-rendered object it is a vertex color:
        DisplayObject_RenderGouraudQuadList and
        DisplayObject_RenderTexturedGouraudQuadList copy it into a primitive's
-       colour word, Dialog_UpdateChoice writes 0x2000 and func_800391E4 writes
+       color word, Dialog_UpdateChoice writes 0x2000 and func_800391E4 writes
        0xA0A0A0.
 
        For others it holds a second callback: display_object_updates.c calls
@@ -289,7 +289,7 @@ typedef struct DisplayObject {
 
        Neither reading governs, so the offset is the name. s32 is the spelling
        that serves both: the callback writers in this file already cast the
-       function to it, and a colour word is not a pointer. DuelCardDisplayObject
+       function to it, and a color word is not a pointer. DuelCardDisplayObject
        in duel_card_display_state.h names the same word field_4C, as a void *,
        because on that view only the callback reading occurs. */
     s32 field_4C;                  /* 0x4C */
@@ -298,7 +298,7 @@ typedef struct DisplayObject {
 
        src/game/duel_init_scene.c stores a pointer to another display
        object here and Duel_DrawLifePointsAndDeckCounts loads it back.
-       DisplayObject_InitializeTexturedGouraudQuad in display_object_helpers.c writes the colour 0x00808080,
+       DisplayObject_InitializeTexturedGouraudQuad in display_object_helpers.c writes the color 0x00808080,
        as the fourth of six words at stride 0xC -- 0x2C, 0x38, 0x44, 0x50,
        0x5C, 0x68. That is
        a different run from the stride-8 one described at 0x4C, and the two
@@ -424,7 +424,7 @@ typedef struct DisplayObject {
    member's address, *(s32 *)&e->field_2C, stays a scalar reference as the
    old (u8 *) offset did, so the target keeps it after the store before it;
    a read that no scratchpad store precedes can be an ordinary member read.
-   That is the same device duel_card_frame_draw.c uses for its 0x0C colour word, and
+   That is the same device duel_card_frame_draw.c uses for its 0x0C color word, and
    it is how the two DisplayObject_Render*GouraudQuadList functions name
    every offset they touch except 0x72. */
 

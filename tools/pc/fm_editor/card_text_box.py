@@ -1,7 +1,7 @@
 """The Cards tab's card text box: an icon code ({f8 0B NN}) shown as the
-icon off the disc, two letters wide as the game sets it, and a colour code
-({f8 0A NN}) as a hairline of its colour, the letters after it in that
-colour (darker on a light background, so they read; white as the box's own
+icon off the disc, two letters wide as the game sets it, and a color code
+({f8 0A NN}) as a hairline of its color, the letters after it in that
+color (darker on a light background, so they read; white as the box's own
 ink). The preview beside it (preview.py) draws the card view itself
 (notes/more-cards.md, "Card text codes").
 
@@ -74,10 +74,10 @@ class CardTextBox(tk.Text):
                 image = pngio.scale_nearest(pngio.Image(*icon), zoom)
                 self._icons[n] = tk.PhotoImage(master=self, data=base64.b64encode(pngio.encode(image)),
                                                format="png")
-        for n, ramp in enumerate(font.ramps[:len(card_text.COLOUR_NAMES)]):
+        for n, ramp in enumerate(font.ramps[:len(card_text.COLOR_NAMES)]):
             rgb = ramp[15]
             self._inks[n] = rgb
-            # A colour takes no room in the game: a hairline here.
+            # A color takes no room in the game: a hairline here.
             bar = pngio.Image(2, line, bytes((*rgb, 255)) * (2 * line))
             self._bars[n] = tk.PhotoImage(master=self, data=base64.b64encode(pngio.encode(bar)), format="png")
         return True
@@ -148,7 +148,7 @@ class CardTextBox(tk.Text):
 
     def layout(self):
         """The box again from its text: pictures for the codes, the game's
-        line breaks, the colours; the cursor and a selection where they were
+        line breaks, the colors; the cursor and a selection where they were
         in the text."""
         if self._laying or not self.winfo_exists() or str(self.cget("state")) != "normal":
             return
@@ -175,7 +175,7 @@ class CardTextBox(tk.Text):
             self.mark_set("insert", self._index_of(cursor))
             if selection:
                 self.tag_add("sel", self._index_of(selection[0]), self._index_of(selection[1]))
-            self.recolour()
+            self.recolor()
             self.see("insert")
         finally:
             self.edit_modified(False)
@@ -195,31 +195,31 @@ class CardTextBox(tk.Text):
             super().insert("end", text[run:end])
 
     def _ink(self, n: int):
-        """Colour n as the box shows it: on a light background (the theme's
+        """Color n as the box shows it: on a light background (the theme's
         light look) a darker one that reads; white, the box's own ink."""
         r, g, b = (v >> 8 for v in self.winfo_rgb(self.cget("background")))
         if (r * 299 + g * 587 + b * 114) // 1000 < 128:
             return "#%02x%02x%02x" % self._inks[n]
         return "#%02x%02x%02x" % tuple(v * 55 // 100 for v in self._inks[n])
 
-    def recolour(self):
-        """The letters after a colour code in its colour, as the game draws
+    def recolor(self):
+        """The letters after a color code in its color, as the game draws
         them; the box's own ink again after {f8 0A 00}."""
         for n in self._inks:
-            self.tag_remove(f"colour{n}", "1.0", "end")
+            self.tag_remove(f"color{n}", "1.0", "end")
         if not self._inks:
             return
         for n in self._inks:
             if n:
-                self.tag_configure(f"colour{n}", foreground=self._ink(n))
-        colour = 0
+                self.tag_configure(f"color{n}", foreground=self._ink(n))
+        color = 0
         for key, value, index in self.dump("1.0", "end-1c", text=True, image=True):
             if key == "image":
                 match = PICTURED.fullmatch(self.codes.get(value, ""))
                 if match and match.group(1).upper() == "0A":
-                    colour = int(match.group(2), 16)
-            elif colour in self._inks and colour:
-                self.tag_add(f"colour{colour}", index, f"{index}+{len(value)}c")
+                    color = int(match.group(2), 16)
+            elif color in self._inks and color:
+                self.tag_add(f"color{color}", index, f"{index}+{len(value)}c")
 
     # --- the clipboard: the codes, not the pictures --------------------------------
 

@@ -5,7 +5,7 @@ its deck and drop pools.
 The list down the left is the grid's pages: page 1 is the disc's Deck Build
 and thirty-nine, a page past it the duelists the mod adds, forty a page, a
 small portrait beside each name. The right-hand side shows the one chosen:
-its picture and the two the game draws of it (the 64-colour 48x48 at
+its picture and the two the game draws of it (the 64-color 48x48 at
 Internal 1x, the picture itself at 2x and above), where it sits on its page
 (a map of the page, as the game lays it out), and its pools.
 """
@@ -464,7 +464,7 @@ class DuelistsTab(Tab):
                 if face is not None:
                     image = pngio.scale_nearest(face, 2)
                 text = ("Averaged to 48×48, shown at 2×" if own is not None and portrait.sharp(own) else
-                        "48×48 in 64 colours, shown at 2×")
+                        "48×48 in 64 colors, shown at 2×")
             else:
                 if own is not None and portrait.sharp(own):
                     image = pngio.resample(portrait.hd_image(own), width, width)

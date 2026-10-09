@@ -43,7 +43,7 @@ int CardLayoutArt_DigitCell(int digit, int dim, int *tpage, int *u, int *v, int 
 
 /* Once a frame (cards.c's Cards_Frame): builds, one a call and only now and
  * then, any frame image of the active layout not built yet, so the cost of
- * building one (decoding a 919x1319 PNG and a 255-colour median cut of it,
+ * building one (decoding a 919x1319 PNG and a 255-color median cut of it,
  * tens to hundreds of milliseconds) is paid off screen, not on the frame a
  * card first draws. */
 void CardLayoutArt_Prewarm(void);

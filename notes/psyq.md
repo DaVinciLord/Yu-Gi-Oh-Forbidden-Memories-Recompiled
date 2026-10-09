@@ -658,7 +658,7 @@ Every row below is now an applied project symbol.
 | `0x800857E0` | `GsSetFlatLight` | Applied Psy-Q 4.6 identity; the matching scene setup installs three directional light records. |
 | `0x80085C98` | `gte_set_lc` | Private `GS_107.OBJ` label at exact offset `0x4B8` in all three recovered Silent Hill regional maps; Psy-Q 4.0 and the independent PsyZ map preserve the same name and position before `gte_read_lc`. |
 | `0x80085CFC` | `gte_read_lc` | Private `GS_107.OBJ` label at exact offset `0x51C` in all three recovered Silent Hill regional maps; Psy-Q 4.0 and the independent PsyZ map preserve its ordering immediately after `gte_set_lc`. |
-| `0x80085D50` | `GsSetAmbient` | Applied from the unique 48-byte `LIBGS.LIB/GS_110.OBJ` signature; scales its three colour arguments by 1/16 and forwards them to `SetBackColor`. |
+| `0x80085D50` | `GsSetAmbient` | Applied from the unique 48-byte `LIBGS.LIB/GS_110.OBJ` signature; scales its three color arguments by 1/16 and forwards them to `SetBackColor`. |
 | `0x80085DB0` | `GsClearOt` | Applied from the unique 96-byte `LIBGS.LIB/GS_113.OBJ` signature; writes the offset and point halfwords into the `GsOT`, derives its tag pointer from `org` plus `4 << length`, and calls `ClearOTagR`. `func_80013154` already declares the matching `(u16, u16, void *)` prototype. |
 | `0x80085E10` | `GsSortOt` | Applied from the unique 192-byte `LIBGS.LIB/GS_114.OBJ` signature; walks the source ordering table on the `0x00FFFFFF` address mask and links it into the destination `GsOT`. |
 | `0x80085ED0` | `gte_rotate_z_matrix` | Applied from the unique 192-byte `LIBGS.LIB/GS_119.OBJ` signature; builds a Z rotation from `rsin` and `rcos` and folds it in with `MulMatrix`. Internal LIBGS helper, lower case in the library. |

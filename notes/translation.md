@@ -181,7 +181,7 @@ The codes:
 | `{jump L}`, `{call L}` | go on at `L`; insert the text at `L` (`{call L125A}` is the player's name) |
 | `{if FFFF L}`, `{set FFFF}` | go to `L` if a story flag is set; set one |
 | `{state ...}`, `{fx ...}` | pictures, pauses and effects of the story |
-| `{f8 ...}` | the text's formatting and inserts: `{f8 00 20}` the card's name, `{f8 00 40}` its text, `{f8 03 ...}` a number, `{f8 0A NN}` a colour, `{f8 01 NN}`/`{f8 02 NN}`/`{f8 06 ...}` positions, `{f8 0E ...}`/`{f8 10 ...}` music and sound |
+| `{f8 ...}` | the text's formatting and inserts: `{f8 00 20}` the card's name, `{f8 00 40}` its text, `{f8 03 ...}` a number, `{f8 0A NN}` a color, `{f8 01 NN}`/`{f8 02 NN}`/`{f8 06 ...}` positions, `{f8 0E ...}`/`{f8 10 ...}` music and sound |
 | `{g NN}` | a glyph by its number: the few symbols with no character to type |
 
 Move a code with the words it belongs to; do not change its numbers. The
@@ -241,7 +241,7 @@ The shop's menu with the entry is rebuilt from the translation's string
 `0011` when it has one: its four lines as they are, `FE10` (or the English)
 added under the second, centred as the others are, and its `{choice}` given
 the fifth entry. A `0011` that is not four lines of letters, spaces,
-`{f8 02}` steps and `{f8 0A}` colours, or five lines past the box's 44
+`{f8 02}` steps and `{f8 0A}` colors, or five lines past the box's 44
 letters, leaves the menu the translation's four entries, and the log
 (`MEMORIES_TRACE=mods`) says so. A translation whose own four lines have
 more letters than retail's has less room for `FE10`: the pt-BR menu has 38,
@@ -293,7 +293,7 @@ the first time a text uses them:
   caron, macron, breve, dot, double acute and ogonek, on any letter Unicode
   combines them with (251 of them: á, Ž, ő, ę, ǎ, ẽ...; Vietnamese below). Also
   ¿ ¡ ı ø Ø ł Ł đ Đ ħ Ħ, and `:` in the 8x8 font, which has none (two of its
-  `·`, in the letters' colours).
+  `·`, in the letters' colors).
 * **How a mark fits** a cell with no room above the letter. In the 16x16
   font a capital is squeezed down to leave the mark its rows. The small
   fonts have none to spare: an 8x12 capital's outline is on the cell's top
@@ -353,8 +353,8 @@ the first time a text uses them:
   machines, and a machine may have none.
 
 The added letters live in the software GPU's texture bank 15, not in the
-console's VRAM, and take their colours from the text's own palettes, so they
-fade, flash and change colour as the retail ones do. Up to 672 of them.
+console's VRAM, and take their colors from the text's own palettes, so they
+fade, flash and change color as the retail ones do. Up to 672 of them.
 
 ## How the port does it
 
@@ -697,7 +697,7 @@ US box the name, ATK/DEF and icons sat on the stone above the bar: it gets
 the US lines there and back (`F8 01 E4` ... `F8 01 1C`) around the PAL's
 words. Free Duel's record (`0C`) is, in every PAL language, the duelist's
 name and, a line below, the wins and losses (Victoria/Derrota, Sieg/
-Niederlage...) in colours at their own x, where the US has WIN and LOSS on
+Niederlage...) in colors at their own x, where the US has WIN and LOSS on
 the name's line at x 0xA0: in the US box, one line high, they never showed.
 They do not fit on the US line: the longest names take 144 to 162 pixels
 at the PAL's spacing (Magier des Labyrinths, K le Maître des Duels) and

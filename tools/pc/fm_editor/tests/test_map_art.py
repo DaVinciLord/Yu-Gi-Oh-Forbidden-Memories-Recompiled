@@ -18,8 +18,8 @@ def project() -> Project:
     return Project(mf.map_fixture().game())
 
 
-def solid(width, height, colour=RED):
-    return pngio.Image(width, height, bytes(colour) * (width * height))
+def solid(width, height, color=RED):
+    return pngio.Image(width, height, bytes(color) * (width * height))
 
 
 class TextureTest(unittest.TestCase):
@@ -35,7 +35,7 @@ class TextureTest(unittest.TestCase):
         self.assertEqual(t.name, "before/texture00-3c00.png")
         image = ma.texture_image(data.wa, t)
         self.assertEqual(image.size, (128, 64))
-        self.assertEqual(image.pixel(5, 5), cm.colour(mf.TEXTURE_COLOUR))
+        self.assertEqual(image.pixel(5, 5), cm.color(mf.TEXTURE_COLOR))
         after = ma.package_textures(data, "after")[0]
         self.assertNotEqual(after.offset, t.offset)
 
@@ -94,7 +94,7 @@ class TextureTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             written = ma.export_textures(p, "before", tmp)
             self.assertEqual([w.name for w in written], ["texture00-3c00.png"])
-            self.assertEqual(pngio.read(written[0]).pixel(0, 0), cm.colour(mf.TEXTURE_COLOUR))
+            self.assertEqual(pngio.read(written[0]).pixel(0, 0), cm.color(mf.TEXTURE_COLOR))
             pngio.write(written[0], solid(128, 64))
             notes = ma.import_textures(p, "before", tmp)
             self.assertTrue(notes)
@@ -131,7 +131,7 @@ class SpriteTest(unittest.TestCase):
         self.assertEqual(strip.pixel(128, 128), (0, 0, 255, 255))
         self.assertEqual(strip.pixel(128, 128 + 30), (255, 255, 0, 255))
         # The rest of the strip keeps the disc's texels (index 1 is green in palette 0).
-        self.assertEqual(strip.pixel(2, 2), cm.colour(mf.STRIP_COLOUR))
+        self.assertEqual(strip.pixel(2, 2), cm.color(mf.STRIP_COLOR))
         # Drawn with the mod's strip, the arrow and its mirror show the picture.
         strips = {0: strip}
         image, _, _ = cm.arrow_image(data, 0, strips)

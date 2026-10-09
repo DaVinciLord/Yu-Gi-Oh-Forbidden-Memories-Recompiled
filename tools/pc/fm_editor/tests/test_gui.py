@@ -2301,7 +2301,7 @@ class GuiTest(GuiCase):
     def test_card_tags_field(self):
         from fm_editor import manifest, tabs
         app, cards, p = self.app, self.app.cards, self.app.project
-        # The frames by their colour too.
+        # The frames by their color too.
         cards.goto(1)
         self.assertEqual(cards.vars["frame"].get(), "By type")
         cards.vars["frame"].set("Monster (gold)")
@@ -2646,12 +2646,12 @@ class MonsterEffectsGuiTest(GuiCase):
         text.mark_set("insert", "1.0")
         text_menu.insert_code(text, "{f8 0B 00}")
         text.tag_add("sel", "1.21", "1.23")
-        text_menu.colour(text, 6)
+        text_menu.color(text, 6)
         self.assertEqual(text.get("1.0", "end-1c"), "{f8 0B 00}Can attack {f8 0A 06}2x{f8 0A 00} a turn.")
         menu = tk.Menu(text, tearoff=False)
         text_menu.fill(menu, self.app, text, lambda: None)
         labels = [menu.entrycget(i, "label") for i in range(menu.index("end") + 1) if menu.type(i) != "separator"]
-        self.assertEqual(labels, ["Cut", "Copy", "Paste", "Insert icon...", "Text colour"])
+        self.assertEqual(labels, ["Cut", "Copy", "Paste", "Insert icon...", "Text color"])
         menu.destroy()
         # The picker: every icon, no taller than the screen, the icon going
         # where the cursor was when it opened.
@@ -2665,14 +2665,14 @@ class MonsterEffectsGuiTest(GuiCase):
         self.assertFalse(picker.winfo_exists())
 
     def test_effect_monster_swatch_is_orange(self):
-        from fm_editor.tabs import FRAME_COLOURS
+        from fm_editor.tabs import FRAME_COLORS
         cards = self.app.cards
         cards.tree.selection_set("1")
         cards.select()
-        self.assertEqual(cards.swatch.cget("background"), FRAME_COLOURS[0])
+        self.assertEqual(cards.swatch.cget("background"), FRAME_COLORS[0])
         cards.effects_box.effects.append({"when": "summon", "do": "heal", "amount": 500})
         cards.effects_box.store()
-        self.assertEqual(cards.swatch.cget("background"), FRAME_COLOURS[5])
+        self.assertEqual(cards.swatch.cget("background"), FRAME_COLORS[5])
 
 
 class CardTextBoxTest(GuiCase):
@@ -2692,7 +2692,7 @@ class CardTextBoxTest(GuiCase):
         box.insert("1.0", text)
         self.assertEqual(box.get("1.0", "end-1c"), text)
         self.assertEqual(len(box.image_names()), 3)
-        self.assertIn("colour5", box.tag_names("1.2"))
+        self.assertIn("color5", box.tag_names("1.2"))
         # Typed by hand (Tcl's own insert, as a key does): a picture once whole.
         box.tk.call(box._w, "insert", "end", " {f8 0b 00}")
         self.assertTrue(box.bind("<KeyRelease>"))      # a key's release runs it (the window is withdrawn here)

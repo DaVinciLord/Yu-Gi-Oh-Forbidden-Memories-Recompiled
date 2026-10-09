@@ -11,9 +11,9 @@
 #include <string.h>
 
 typedef int (*FlowTextWidth)(const char *text);
-typedef void (*FlowTextDraw)(MenuCanvas *canvas, int x, int y, const char *text, uint32_t colour);
+typedef void (*FlowTextDraw)(MenuCanvas *canvas, int x, int y, const char *text, uint32_t color);
 
-static inline int FlowText(MenuCanvas *canvas, int x, int w, int y, int line_h, const char *text, uint32_t colour,
+static inline int FlowText(MenuCanvas *canvas, int x, int w, int y, int line_h, const char *text, uint32_t color,
                            int *widest, FlowTextWidth width, FlowTextDraw draw)
 {
     char line[256] = "", piece[200], joined[256];
@@ -34,7 +34,7 @@ static inline int FlowText(MenuCanvas *canvas, int x, int w, int y, int line_h, 
             memcpy(joined + used + gap, piece, n + 1);
         }
         if (used && (!fits || width(joined) > w)) {
-            if (canvas) draw(canvas, x, y + lines * line_h, line, colour);
+            if (canvas) draw(canvas, x, y + lines * line_h, line, color);
             lines++;
             memcpy(line, piece, n + 1);
         } else if (fits) {
@@ -44,7 +44,7 @@ static inline int FlowText(MenuCanvas *canvas, int x, int w, int y, int line_h, 
         while (*text == ' ') text++;
     }
     if (line[0]) {
-        if (canvas) draw(canvas, x, y + lines * line_h, line, colour);
+        if (canvas) draw(canvas, x, y + lines * line_h, line, color);
         lines++;
     }
     return lines;

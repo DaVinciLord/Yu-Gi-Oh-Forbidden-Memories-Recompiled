@@ -55,7 +55,7 @@ const unsigned char *DeckMenu_Text(int id);
  * translation's compiled string 0x11 (NULL: retail's lines), with `label`, a
  * translation's compiled DECK SLOTS (NULL: the English), centred as the
  * other lines are. 0 when `menu` is not a menu of four lines of letters,
- * steps and colours, `label` not letters and spaces, or the five lines have
+ * steps and colors, `label` not letters and spaces, or the five lines have
  * more letters than the menu's box shows (44; 79 with a PAL language,
  * TextEntries_PageLetters). */
 int DeckMenu_ShopListing(char *out, size_t size, const unsigned char *menu, const unsigned char *label);

@@ -9,7 +9,7 @@ files describe themselves:
                             attack, defense, level, type, attribute, star1,
                             star2, price, password, equips (the complete list of
                             monsters an equip card fits), ritual ("a, b, c -> r"),
-                            and keys for colours and scripted effects
+                            and keys for colors and scripted effects
   cards/<id>/art.png, thumb.png, title.png
   drop_table_edits.ini      [duelist] then "<card> = <POW>, <BCD>, <TEC>": the
                             card's weight in each drop band, the rest of the
@@ -25,7 +25,7 @@ files describe themselves:
   card_shop.ini, mod_settings.ini
 
 What the port has a key for becomes that key; the rest (scripted effects,
-colours, AI bytes, the shop, the recomp's own settings) is listed in the
+colors, AI bytes, the shop, the recomp's own settings) is listed in the
 report. No code of that project is used here, only its files' format.
 """
 from __future__ import annotations

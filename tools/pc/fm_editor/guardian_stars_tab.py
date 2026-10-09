@@ -2,7 +2,7 @@
 notes/modding.md): the stars' names and icons, new stars past the disc's ten,
 and the matchup grid, one signed bonus for each attacker's star against each
 defender's. The simple view is the list, the grid and the default bonus; the
-advanced one adds names by language, an icon's colours and the summon choice.
+advanced one adds names by language, an icon's colors and the summon choice.
 "Set stars by rule..." sets many cards' stars at once (star_rules.py)."""
 from __future__ import annotations
 
@@ -17,8 +17,8 @@ from .widgets import WrapLabel, px, scrolled_tree, ui_font
 CELL = 44           # a grid cell's side at 96 dpi
 HEAD = 78           # the header row's and column's
 ICON_ZOOM = 3
-# Cell colours by sign: light, dark.
-COLOURS = {
+# Cell colors by sign: light, dark.
+COLORS = {
     "plus": ("#cdeccf", "#1f4d2c"),
     "minus": ("#f6d0cf", "#5a2323"),
     "zero": ("#f4f4f4", "#2a2b2f"),
@@ -29,8 +29,8 @@ COLOURS = {
 }
 
 
-def colour(widget, key: str) -> str:
-    light, dark = COLOURS[key]
+def color(widget, key: str) -> str:
+    light, dark = COLORS[key]
     return dark if theme.is_dark(widget) else light
 
 
@@ -104,12 +104,12 @@ class GuardianStarsTab(Tab):
         names_entry.bind("<FocusOut>", lambda e: self.set_name())
         ttk.Label(self.advanced_star, style="Hint.TLabel", text="fr=Feu, de=Feuer (en-us, en-eu, fr, de, it, es)"
                   ).grid(row=1, column=0, columnspan=2, sticky="w")
-        ttk.Label(self.advanced_star, text="Icon colours").grid(row=2, column=0, sticky="w")
+        ttk.Label(self.advanced_star, text="Icon colors").grid(row=2, column=0, sticky="w")
         palette = ttk.Combobox(self.advanced_star, textvariable=self.palette, values=list(gs.PALETTES),
                                state="readonly", width=8)
         palette.grid(row=2, column=1, sticky="w", padx=4)
         palette.bind("<<ComboboxSelected>>", lambda e: self.set_palette())
-        ttk.Label(self.advanced_star, style="Hint.TLabel", text="game: the disc's stars' 16 colours; own: the PNG's"
+        ttk.Label(self.advanced_star, style="Hint.TLabel", text="game: the disc's stars' 16 colors; own: the PNG's"
                   ).grid(row=3, column=0, columnspan=2, sticky="w")
 
         # The grid.
@@ -346,7 +346,7 @@ class GuardianStarsTab(Tab):
 
     def _photo(self, image, side: int):
         image = pngio.resample(image, side, side) if (image.width, image.height) != (side, side) else image
-        return tk.PhotoImage(master=self, data=pngio.ppm(image, colour_tuple(self)), format="PPM")
+        return tk.PhotoImage(master=self, data=pngio.ppm(image, color_tuple(self)), format="PPM")
 
     def _show_icon(self):
         star = self.selected_star
@@ -407,22 +407,22 @@ class GuardianStarsTab(Tab):
         canvas.delete("all")
         n = self.model.count
         cell, head = px(self, CELL), px(self, HEAD)
-        canvas.configure(width=head + cell * n + 1, height=head + cell * n + 1, background=colour(self, "zero"))
-        ink, line = colour(self, "ink"), colour(self, "line")
+        canvas.configure(width=head + cell * n + 1, height=head + cell * n + 1, background=color(self, "zero"))
+        ink, line = color(self, "ink"), color(self, "line")
         for star in range(1, n + 1):
             x = head + cell * (star - 1)
             y = head + cell * (star - 1)
             name = self.model.name(star)
             short = name if len(name) <= 9 else name[:8] + "."
-            canvas.create_rectangle(x, 0, x + cell, head, fill=colour(self, "head"), outline=line)
+            canvas.create_rectangle(x, 0, x + cell, head, fill=color(self, "head"), outline=line)
             canvas.create_text(x + cell // 2, head - 4, text=short, fill=ink, anchor="w", angle=90)
-            canvas.create_rectangle(0, y, head, y + cell, fill=colour(self, "head"), outline=line)
+            canvas.create_rectangle(0, y, head, y + cell, fill=color(self, "head"), outline=line)
             canvas.create_text(4, y + cell // 2, text=f"{star} {short}", fill=ink, anchor="w")
         for a in range(1, n + 1):
             for d in range(1, n + 1):
                 value = self.model.grid[a][d]
                 x, y = head + cell * (d - 1), head + cell * (a - 1)
-                fill = colour(self, "plus" if value > 0 else "minus" if value < 0 else "zero")
+                fill = color(self, "plus" if value > 0 else "minus" if value < 0 else "zero")
                 canvas.create_rectangle(x, y, x + cell, y + cell, fill=fill, outline=line)
                 if value:
                     changed = value != gs.retail_matchup(a, d)
@@ -431,7 +431,7 @@ class GuardianStarsTab(Tab):
         if self.cell:
             a, d = self.cell
             x, y = head + cell * (d - 1), head + cell * (a - 1)
-            canvas.create_rectangle(x + 1, y + 1, x + cell - 1, y + cell - 1, outline=colour(self, "pick"), width=3)
+            canvas.create_rectangle(x + 1, y + 1, x + cell - 1, y + cell - 1, outline=color(self, "pick"), width=3)
 
     def _click(self, event):
         cell, head = px(self, CELL), px(self, HEAD)
@@ -533,7 +533,7 @@ class GuardianStarsTab(Tab):
             self.advanced_star.grid_remove()
 
 
-def colour_tuple(widget):
+def color_tuple(widget):
     """The icon preview's background, the tab's own."""
-    hex_colour = colour(widget, "zero").lstrip("#")
-    return tuple(int(hex_colour[i:i + 2], 16) for i in (0, 2, 4))
+    hex_color = color(widget, "zero").lstrip("#")
+    return tuple(int(hex_color[i:i + 2], 16) for i in (0, 2, 4))

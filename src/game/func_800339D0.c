@@ -126,7 +126,7 @@ void func_800339D0(BuildDeckTransitionState *record)
     }
 }
 
-/* Per-frame Build Deck transition driver. It pulses both pane colours, then
+/* Per-frame Build Deck transition driver. It pulses both pane colors, then
  * dispatches the current step through D_80090DF8; func_800339D0 above is the
  * table's exit step. */
 s32 func_80033BE8(void)

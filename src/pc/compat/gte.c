@@ -13,8 +13,8 @@ typedef struct Gte {
     uint32_t res1;
     int32_t mac[4];
     uint32_t lzcs, lzcr;
-    int16_t matrix[3][3][3]; /* rotation, light, light colour */
-    int32_t vector[3][3];    /* translation, background, far colour */
+    int16_t matrix[3][3][3]; /* rotation, light, light color */
+    int32_t vector[3][3];    /* translation, background, far color */
     int32_t ofx, ofy;
     uint16_t h;
     int16_t dqa;
@@ -281,7 +281,7 @@ static int64_t row_sums[3];
 static void multiply(const int16_t *m, const int32_t *translation,
                      const int16_t *input, unsigned shift, int lm, int64_t *row3)
 {
-    /* Latched: callers pass IR1..IR3 as the input of the colour stage and of
+    /* Latched: callers pass IR1..IR3 as the input of the color stage and of
      * MVMVA, and the rows below write those registers as they go. */
     const int16_t vector[3] = {input[0], input[1], input[2]};
     unsigned i;
@@ -374,7 +374,7 @@ static void rtp(unsigned index, unsigned shift, int lm, int last)
     }
 }
 
-/* MAC = MAC + (FC - MAC) * IR0, the depth-cue tail shared by colour commands */
+/* MAC = MAC + (FC - MAC) * IR0, the depth-cue tail shared by color commands */
 static void interpolate(int64_t m1, int64_t m2, int64_t m3, unsigned shift, int lm)
 {
     int64_t in[3];
@@ -388,11 +388,11 @@ static void interpolate(int64_t m1, int64_t m2, int64_t m3, unsigned shift, int 
     }
 }
 
-static void light(unsigned index, unsigned shift, int lm, int colour, int depth)
+static void light(unsigned index, unsigned shift, int lm, int color, int depth)
 {
     multiply(gte.matrix[1][0], NULL, gte.v[index], shift, lm, NULL);
     multiply(gte.matrix[2][0], gte.vector[1], &gte.ir[1], shift, lm, NULL);
-    if (colour) {
+    if (color) {
         int64_t r = ((int64_t)gte.rgbc[0] * gte.ir[1]) << 4;
         int64_t g = ((int64_t)gte.rgbc[1] * gte.ir[2]) << 4;
         int64_t b = ((int64_t)gte.rgbc[2] * gte.ir[3]) << 4;
@@ -423,7 +423,7 @@ static void mvmva(uint32_t command, unsigned shift, int lm)
         m = garbage;
     }
     if (tx == 2) {
-        /* Far-colour translation bug: the first product only sets flags. */
+        /* Far-color translation bug: the first product only sets flags. */
         for (i = 0; i < 3; i++) {
             int64_t first = mac_check(i + 1, (int64_t)gte.vector[2][i] * 0x1000 +
                                                  (int64_t)m[i * 3] * v[0]);
@@ -439,7 +439,7 @@ static void mvmva(uint32_t command, unsigned shift, int lm)
     multiply(m, tx == 3 ? NULL : gte.vector[tx], v, shift, lm, NULL);
 }
 
-static void push_colour_ir(unsigned shift, int lm, int64_t r, int64_t g, int64_t b)
+static void push_color_ir(unsigned shift, int lm, int64_t r, int64_t g, int64_t b)
 {
     set_mac_ir(1, r, shift, lm);
     set_mac_ir(2, g, shift, lm);
@@ -502,7 +502,7 @@ int Memories_GteCommand(uint32_t command)
         break;
     case 0x1c:
         multiply(gte.matrix[2][0], gte.vector[1], &gte.ir[1], shift, lm, NULL);
-        push_colour_ir(shift, lm, ((int64_t)gte.rgbc[0] * gte.ir[1]) << 4,
+        push_color_ir(shift, lm, ((int64_t)gte.rgbc[0] * gte.ir[1]) << 4,
                        ((int64_t)gte.rgbc[1] * gte.ir[2]) << 4, ((int64_t)gte.rgbc[2] * gte.ir[3]) << 4);
         break;
     case 0x29:
@@ -524,11 +524,11 @@ int Memories_GteCommand(uint32_t command)
         break;
     }
     case 0x3d:
-        push_colour_ir(shift, lm, (int64_t)gte.ir[1] * gte.ir[0], (int64_t)gte.ir[2] * gte.ir[0],
+        push_color_ir(shift, lm, (int64_t)gte.ir[1] * gte.ir[0], (int64_t)gte.ir[2] * gte.ir[0],
                        (int64_t)gte.ir[3] * gte.ir[0]);
         break;
     case 0x3e:
-        push_colour_ir(shift, lm,
+        push_color_ir(shift, lm,
                        (int64_t)gte.ir[1] * gte.ir[0] + (int64_t)((uint64_t)(int64_t)gte.mac[1] << shift),
                        (int64_t)gte.ir[2] * gte.ir[0] + (int64_t)((uint64_t)(int64_t)gte.mac[2] << shift),
                        (int64_t)gte.ir[3] * gte.ir[0] + (int64_t)((uint64_t)(int64_t)gte.mac[3] << shift));

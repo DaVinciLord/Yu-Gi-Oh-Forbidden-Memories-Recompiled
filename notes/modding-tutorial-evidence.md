@@ -452,7 +452,7 @@ through `LoadImage2`. The resident `RECT` at `0x8009B058` decodes as
 row of 256 BGR555 CLUT entries at VRAM rows `240-247`.
 
 In the retail archive, all six `0x200`-byte chunks from `0x30000` through
-`0x30BFF` contain nonzero 16-bit values consistent with PlayStation colour
+`0x30BFF` contain nonzero 16-bit values consistent with PlayStation color
 data. The following `0x400` bytes at `0x30C00-0x30FFF` are zero padding before
 the executable begins, so the upload consists of six populated palette rows
 followed by two zero rows. The populated `0xC00` bytes hash to:
@@ -500,7 +500,7 @@ calls provide a complete static inventory:
 | `245` | `+0x30A00` | The dedicated `D_801845A4` sprite created by `MainMenu_StartValueSetup` |
 
 Rows `242` and `243` may be retained for another data-driven or resident use;
-the absence of a direct overlay initializer is not proof that their colour
+the absence of a direct overlay initializer is not proof that their color
 data is globally unused. The code also does not establish visual names for
 the three row-`241` singleton objects, so those remain identified by ownership
 rather than appearance.
@@ -518,7 +518,7 @@ projection values remain separate.
 - **Confirmed** that the tutorial's decimal offset is `SU.MRG+0x30000` and
   that this is sector 96, directly before the main-menu code at sector 98.
 - **Confirmed** that the complete `0x1000`-byte phase is uploaded as eight
-  256-colour CLUT rows at VRAM `(0, 240)`, with six populated rows followed by
+  256-color CLUT rows at VRAM `(0, 240)`, with six populated rows followed by
   two zero rows.
 - **Confirmed** that object texture IDs select rows `240`, `241`, and `245`
   for the consumer groups listed above, using the same CLUT packing formula as
@@ -539,8 +539,8 @@ The tutorial identifies two image starts and two palette starts in
 |---|---:|---:|
 | Menu background image | `0xFD3800` | `+0x00000` |
 | Menu symbol image | `0xFE3800` | `+0x10000` |
-| Background palette, 256 colours | `0xFEB800` | `+0x18000` |
-| Symbol palette, 16 colours | `0xFEBA00` | `+0x18200` |
+| Background palette, 256 colors | `0xFEB800` | `+0x18000` |
+| Symbol palette, 16 colors | `0xFEBA00` | `+0x18200` |
 
 The resident loader in `func_8002F630` requests 50 sectors beginning at WA
 sector `0x1FA7`. This is exactly the package
@@ -553,9 +553,9 @@ sector `0x1FA7`. This is exactly the package
 
 Its exact matching callback, `func_8002F4C0`, divides the package at
 `+0x18000`, the tutorial's first palette offset. The callback then uploads a
-`256 x 2` rectangle of 16-bit colour values to VRAM `(0, 244)`. The
-`0x200`-byte 256-colour palette therefore fills the first row, and the
-16-colour palette at `+0x200` begins the second row at VRAM `(0, 245)`.
+`256 x 2` rectangle of 16-bit color values to VRAM `(0, 244)`. The
+`0x200`-byte 256-color palette therefore fills the first row, and the
+16-color palette at `+0x200` begins the second row at VRAM `(0, 245)`.
 
 The two image starts likewise divide the front `0x18000` bytes into a
 `0x10000`-byte first range and a `0x8000`-byte second range. Both ranges and
@@ -568,7 +568,7 @@ WA[0xFEB800:0xFEBA00]  SHA-256 59a8f715e25f09a875747f647b700aefa0d78d75951240017
 WA[0xFEBA00:0xFEBA20]  SHA-256 6c98c1e36e44f6b060ef7c9fd751cb651dc3aea83c362fbfa1a627e10894c25a
 ```
 
-The palette sizes independently pin the two indexed-colour depths:
+The palette sizes independently pin the two indexed-color depths:
 `0x200 / 2 = 256` 16-bit entries, the full CLUT capacity for an 8-bit
 texture, while `0x20 / 2 = 16` entries, the full capacity for a 4-bit texture.
 Separately, a `0x10000`-byte 8-bit image and a `0x8000`-byte 4-bit image each
@@ -583,7 +583,7 @@ visual labels as code-derived names.
 - **Confirmed** that the two palette offsets map to the first full row and
   the first 16 entries of the second row in the callback's VRAM upload.
 - **High** that the image and palette spans are paired as equal 65,536-pixel
-  8-bit/256-colour and 4-bit/16-colour data; the two exact palette capacities
+  8-bit/256-color and 4-bit/16-color data; the two exact palette capacities
   and image-size ratio agree, while the texture consumers are not fully
   mapped.
 - **High** that the two front ranges are respectively the menu background
@@ -633,14 +633,14 @@ the tutorials and are high-confidence asset identifications; no image decoder
 is needed to establish that the offsets belong to the stated image and CLUT
 transfer regions.
 
-## Boot UI colour ramps
+## Boot UI color ramps
 
 **Tutorial:** `Cores Para Add e Como Add Cor Roxa.docx`
 
-The tutorial identifies seven colour ramps at `WA_MRG.MRG+0xB61002`, spaced
+The tutorial identifies seven color ramps at `WA_MRG.MRG+0xB61002`, spaced
 by `0x20` bytes:
 
-| Zero-based row | Tutorial label | Row start | First nontransparent colour |
+| Zero-based row | Tutorial label | Row start | First nontransparent color |
 |---:|---|---:|---:|
 | 0 | White | `0xB61000` | `0xB61002` |
 | 1 | Yellow | `0xB61020` | `0xB61022` |
@@ -651,18 +651,18 @@ by `0x20` bytes:
 | 6 | Red | `0xB610C0` | `0xB610C2` |
 | 7 | Empty | `0xB610E0` | `0xB610E2` |
 
-Each row is one 16-colour PlayStation CLUT. The tutorial starts every listed
-ramp at `+2` because the first halfword is the transparent colour entry. Its
+Each row is one 16-color PlayStation CLUT. The tutorial starts every listed
+ramp at `+2` because the first halfword is the transparent color entry. Its
 seven "original game" byte sequences match the remaining 15 retail entries
 exactly. The eighth row is entirely zero, corroborating the warning that
-selecting the unused eighth colour slot makes affected text or symbols
+selecting the unused eighth color slot makes affected text or symbols
 disappear unless a complete replacement palette is supplied.
 
 The loader independently confirms the region. `Main_RunBootSequence` includes
 `WA_MRG.MRG+0xB61000` in its 54-sector boot UI request, and
 `Main_LoadBootPackageStage` transfers an `0x800`-byte tail beginning there before
 uploading a `(640, 232, 16, 8)` rectangle. That upload consumes exactly the
-first `0x100` bytes: eight rows times sixteen 16-bit colours. Bytes
+first `0x100` bytes: eight rows times sixteen 16-bit colors. Bytes
 `0xB61100-0xB617FF` are zero padding in the retail archive.
 
 ```text
@@ -784,9 +784,9 @@ archive placement are confirmed directly from the retail `WA_MRG.MRG`.
 The tutorial's `0x200`-byte spacing identifies palette rows, not separate
 card images. In each duel-terrain package, resident loader callback
 `Duel_LoadPackageStage` reads the `0x2000`-byte block at package offset
-`+0x20000` and uploads it as a `256 x 16` rectangle of 16-bit colours at
+`+0x20000` and uploads it as a `256 x 16` rectangle of 16-bit colors at
 VRAM `(256, 240)`. Each `0x200`-byte step is therefore one complete
-256-colour row.
+256-color row.
 
 The tutorial's twelve card-frame rows have this common package-relative
 layout:
@@ -826,7 +826,7 @@ tutorial lists its six large-card rows at
 `0xFB8800-0xFB93FF`. Five rows are byte-identical to the terrain and Library
 copies. The large-Magic row differs only in its final `0x20` bytes, where the
 password package uses sixteen `0x0001` entries instead of the shared row's
-final sixteen colours.
+final sixteen colors.
 
 The workbook independently lists the same ten package starts and absolute
 large-card palette offsets. For the seven terrain packages plus Library and
@@ -839,7 +839,7 @@ row locations, but not six distinct category assignments.
 
 **Confidence:**
 
-- **Confirmed** that the listed offsets are 256-colour rows in the
+- **Confirmed** that the listed offsets are 256-color rows in the
   `+0x20000` palette block, based on both exact loader callbacks and their
   VRAM upload geometry.
 - **Confirmed** that all eight full terrain/Library blocks are identical and
@@ -864,7 +864,7 @@ and no code path selects the Fusion or Effect rows:
 - The 3D field card, `func_80015EF4`, uses row `0xF1 + field_42` of its
   display object.
 - The Library grid's mini-cards are a separate 4bpp texture with only four
-  16-colour palettes, `(0x160-0x190, 247)` (`LIBRARY_CARD_SELECTOR_*`); there
+  16-color palettes, `(0x160-0x190, 247)` (`LIBRARY_CARD_SELECTOR_*`); there
   is no Fusion or Effect variant to select.
 
 Rows 245/246 and 252/253 are byte-identical in the terrain, Library and
@@ -879,8 +879,8 @@ above).
 **Tutorial:** `Introduction to Mod - ENG, 1.2.docx`
 
 The editor introduction requires large card images to be `102x96` pixels with
-256 indexed colours and small images to be `40x32` pixels with 64 indexed
-colours. Those dimensions agree with the retail per-card art record:
+256 indexed colors and small images to be `40x32` pixels with 64 indexed
+colors. Those dimensions agree with the retail per-card art record:
 
 | Record offset | Size | Retail role |
 |---:|---:|---|
@@ -894,7 +894,7 @@ The five regions occupy `0x3060` bytes inside each card's `0x3800`-byte,
 seven-sector record. The large-art upload uses a `51x96` rectangle of 16-bit
 VRAM words, which is the expected packed width for `102x96` 8-bpp pixels.
 
-The small image is likewise stored as one byte per pixel. "64 colours"
+The small image is likewise stored as one byte per pixel. "64 colors"
 describes the number of usable palette entries, not a packed 6-bpp format:
 `40 * 32` accounts for the complete `0x500`-byte image, followed by the
 separate `0x80`-byte CLUT. A byte-identical copy of each card's resulting
@@ -935,9 +935,9 @@ associates the first half with the rank, statistics, card, and general
 results backgrounds, and the second with the `YOU` win/lose graphics.
 
 The callback next reads the `0x800` bytes beginning at `0xEE5800` and uploads
-them as a `256 x 4` rectangle of 16-bit colours at VRAM `(0, 248)`. Every
+them as a `256 x 4` rectangle of 16-bit colors at VRAM `(0, 248)`. Every
 tutorial palette offset is within this block and aligned to one
-`0x20`-byte, 16-colour CLUT:
+`0x20`-byte, 16-color CLUT:
 
 | Visual role from tutorial | WA palette offset(s) |
 |---|---|
@@ -963,10 +963,10 @@ with the PlayStation STP bit enabled, not redundant duplicate data.
 
 - **Confirmed** that the image and palette offsets belong to the
   34-sector end-of-duel results package.
-- **Confirmed** that each listed palette is a 16-colour slot in the
+- **Confirmed** that each listed palette is a 16-color slot in the
   `256 x 4` VRAM upload.
 - **Confirmed** that the later win/lose palettes differ only by the STP bit
-  on their nonzero colours.
+  on their nonzero colors.
 - **High** for the tutorial's visual labels within the two image halves; the
   package boundaries and palette locations are exact, but the image atlas has
   not been independently segmented.

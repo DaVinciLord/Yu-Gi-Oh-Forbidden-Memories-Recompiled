@@ -186,7 +186,7 @@ class MapData:
     names: list             # 16 place names
     resource: bytes = b""   # the display resource bank (one sector)
     strip: bytes = b""      # the sprite strip, 256x256 at four bits
-    palettes: bytes = b""   # 256x4 colours
+    palettes: bytes = b""   # 256x4 colors
     notes: list = field(default_factory=list)
     wa: bytes = field(default=b"", repr=False, compare=False)   # the archive, for the map's model and pictures
 
@@ -554,8 +554,8 @@ def _u16(blob: bytes, at: int) -> int:
     return blob[at] | (blob[at + 1] << 8)
 
 
-def colour(word: int):
-    """RGBA of a VRAM colour word; 0 is transparent."""
+def color(word: int):
+    """RGBA of a VRAM color word; 0 is transparent."""
     if word == 0:
         return 0, 0, 0, 0
     r, g, b = word & 31, (word >> 5) & 31, (word >> 10) & 31
@@ -594,7 +594,7 @@ class SpritePart:
     v: int
     width: int
     height: int
-    palette: int        # 16-colour palette index in the 256x4 block (x / 16 + y * 16)
+    palette: int        # 16-color palette index in the 256x4 block (x / 16 + y * 16)
     mirror: bool
 
 
@@ -618,9 +618,9 @@ def strip_index(strip: bytes, u: int, v: int) -> int:
     return byte >> 4 if u & 1 else byte & 15
 
 
-def palette_colours(palettes: bytes, palette: int) -> list:
+def palette_colors(palettes: bytes, palette: int) -> list:
     base = palette * 16
-    return [colour(_u16(palettes, (base + i) * 2)) for i in range(16)]
+    return [color(_u16(palettes, (base + i) * 2)) for i in range(16)]
 
 
 def sprite_image(data: MapData, animation: int, variant: int = 0, strips=None):
@@ -640,7 +640,7 @@ def sprite_image(data: MapData, animation: int, variant: int = 0, strips=None):
     height = max(p.dy + p.height for p in parts) - top
     out = bytearray(width * height * 4)
     for p in parts:
-        colours = palette_colours(data.palettes, p.palette)
+        colors = palette_colors(data.palettes, p.palette)
         own = (strips or {}).get(p.palette)
         scale = own.width // 256 if own is not None and own.width >= 256 else 0
         for j in range(p.height):
@@ -651,7 +651,7 @@ def sprite_image(data: MapData, animation: int, variant: int = 0, strips=None):
                     c = tuple(own.rgba[at:at + 4])
                     c = c if c[3] >= 128 else (0, 0, 0, 0)
                 else:
-                    c = colours[strip_index(data.strip, u, v)]
+                    c = colors[strip_index(data.strip, u, v)]
                 if c[3]:
                     at = ((p.dy - top + j) * width + (p.dx - left + i)) * 4
                     out[at:at + 4] = bytes(c)

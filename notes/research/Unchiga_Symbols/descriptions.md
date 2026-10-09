@@ -240,7 +240,7 @@ on the suspects side until proven.)
 
 | address | name | description |
 |---|---|---|
-| 0x800E9EC8 | `gFade_State` | The screen-fade state block (0x28 bytes): u32 colour, u8 current level, u8 target level, u8 flags (0x80 fade in flight, 0x01 strip-wipe mode, 0x10/0x20 colour latch), u8 step per frame, s16 head, u8 strips[30]. |
+| 0x800E9EC8 | `gFade_State` | The screen-fade state block (0x28 bytes): u32 color, u8 current level, u8 target level, u8 flags (0x80 fade in flight, 0x01 strip-wipe mode, 0x10/0x20 color latch), u8 step per frame, s16 head, u8 strips[30]. |
 | 0x800151D8 | `Fade_StepBands` | Walks 15 mirrored pairs from a signed head using the configured step: increasing levels visit i=14..0 (middle to edges) and subtract step; decreasing levels visit i=0..14 (edges to middle) and add step. Clamps between current and target, then adds step * D_8009B0D8 to the stored head for increasing levels and subtracts it otherwise. Promotes current only when the last pair reaches target. See the local [band-ramp mechanics](../../fade-transition-state.md#band-ramp-mechanics). |
 | 0x80015310 | `Fade_Update` | Per-frame fade update: runs the strip walker (strip mode) or a flat level ramp, and when current reaches target clears the in-flight bit, latches the working RGB from the target RGB, and sets or clears the overlay-on flag. |
 | 0x800154E4 | `Fade_DrawOverlay` | Updates first, then submits boxes when the active flag is set or when the separate control byte is nonzero and level != 255. Band mode submits 30 boxes; non-band mode submits one full-screen box. Combined flags 0x01/0x02 add a tail box at descriptor (0,240), height 8, without restoring full-screen geometry. See the local [draw/submission evidence](../../fade-transition-state.md#draw-eligibility-and-box-submission). |
@@ -277,13 +277,13 @@ on the suspects side until proven.)
 |---|---|---|
 | 0x8009B34D | `gDialog_bChoice` | Index of the selected choice line in the open dialog (0 = first). Updated on every DPAD move, finalised from `gDialog_bInputState` on confirm; screens read it after the box reports done. |
 | 0x8009B345 | `gDialog_bChoiceCount` | Number of selectable lines in the open choice box; the upper bound for DOWN. |
-| 0x8009B336 | `gDialog_bChoiceEnabled` | Bitmask, one bit per line, of choices that may be picked; drives the cursor's highlight colour. |
+| 0x8009B336 | `gDialog_bChoiceEnabled` | Bitmask, one bit per line, of choices that may be picked; drives the cursor's highlight color. |
 | 0x8009B327 | `gDialog_bInputState` | The choice box's input result byte: bit 0x40 confirmed with the chosen line in the low 3 bits, bit 0x80 cancelled. |
 | 0x800374F4 | `Dialog_OpenChoice` | Creates the choice cursor object for a text box at its bottom-right corner (sprite 0x20C) and returns it; the box stores it at +0x30. |
 | 0x800371A8 | `Dialog_UpdateChoice` | Per-frame tick of the cursor object: spawns its sprite on first call, then handles confirm and cancel from `gDialog_bInputState` or passes the DPAD to `Dialog_ReadChoiceInput`. |
 | 0x8003700C | `Dialog_ReadChoiceInput` | Moves the selection down or up within the count (or cycles with the repeat bit), plays SE 6 and re-highlights; returns 0 when nothing relevant was pressed. |
-| 0x80036F80 | `Dialog_HighlightChoice` | Sets the cursor's colour fields to 0xC0 or 0xC0C0 depending on whether the selected line is enabled, then refreshes the object. |
-| 0x80037110 | `Widget_UpdatePulseColour` | Draw callback that folds the global frame counter into a triangle wave and writes it across an object's colour and shadow lanes -- the blinking cursor. |
+| 0x80036F80 | `Dialog_HighlightChoice` | Sets the cursor's color fields to 0xC0 or 0xC0C0 depending on whether the selected line is enabled, then refreshes the object. |
+| 0x80037110 | `Widget_UpdatePulseColour` | Draw callback that folds the global frame counter into a triangle wave and writes it across an object's color and shadow lanes -- the blinking cursor. |
 
 ## Batch: story script engine (2026-09-02, live-traced in the campaign intro, Linux seat)
 
@@ -451,7 +451,7 @@ on the suspects side until proven.)
 
 | address | name | description |
 |---|---|---|
-| 0x80018080 | `Duel_ApplyCardObjectFlags` | Rebuilds a duel card object's face-down, defense-position, and normal/used colour state from its card record, refreshes the object, and clears its image-resource byte unless record flag `0x2000` preserves it. |
+| 0x80018080 | `Duel_ApplyCardObjectFlags` | Rebuilds a duel card object's face-down, defense-position, and normal/used color state from its card record, refreshes the object, and clears its image-resource byte unless record flag `0x2000` preserves it. |
 | 0x800240B0 | `Duel_UpdateCardPickCursor` | Initializes and advances the field card-pick cursor, resolves its current row and column to a card record, publishes a successful pick, and manages the hold and teardown timers around that selection. |
 | 0x80026C6C | `Duel_CollectFieldCardsBelowType` | Collects occupied cards from one five-slot row on the current side whose packed card type is below the requested threshold, null-terminates the output list, and returns its count. |
 | 0x80026D18 | `Duel_CollectFieldCardsByType` | Collects occupied cards from one five-slot row on the current side that match the requested packed card type, accepting every type when the selector is negative, then null-terminates the list and returns its count. |
@@ -497,14 +497,14 @@ on the suspects side until proven.)
 |---|---|---|
 | 0x801681B4 | `FreeDuel_SpawnSparkle` | Allocates and configures one display object for the Free Duel cursor-trail sparkle, using the shared sparkle asset and returning the new object. |
 | 0x8016899C | `FreeDuel_GetSparkleSlot` | Reverse-scans the 16-entry sparkle pointer pool and returns the highest-index empty slot, or null when every slot is occupied. |
-| 0x801689D4 | `FreeDuel_UpdateSparkle` | Initializes newly active sparkles to a 16-update grey fade, subtracts four from every colour channel per update, then releases the object and clears its pool slot. |
+| 0x801689D4 | `FreeDuel_UpdateSparkle` | Initializes newly active sparkles to a 16-update grey fade, subtracts four from every color channel per update, then releases the object and clears its pool slot. |
 
 ## Batch: campaign-map camera
 
 | address | name | description |
 |---|---|---|
 | 0x801681E8 | `CampaignMap_SetCameraFromLocation` | Copies the selected location record's camera position, angle, pitch, and distance into the live map camera, then recomputes the view. |
-| 0x80168258 | `CampaignMap_UpdateView` | Applies the live camera's projection, geometry offset, far colour, and fog settings, then advances the shared view transition state. |
+| 0x80168258 | `CampaignMap_UpdateView` | Applies the live camera's projection, geometry offset, far color, and fog settings, then advances the shared view transition state. |
 | 0x80168310 | `CampaignMap_ResetCamera` | Restores the campaign map's fixed camera, projection, and matrix defaults before recomputing the view. |
 | 0x80168388 | `CampaignMap_MoveCameraDpad` | Provides free-look controls that adjust camera position or angle, pitch, and distance from held pad combinations, then recomputes the view. |
 | 0x801688BC | `CampaignMap_StartCameraTween` | Seeds 16.16 accumulators and per-step deltas from the live camera to a location's position, shortest-path turn, pitch, and distance targets. |
@@ -629,7 +629,7 @@ on the suspects side until proven.)
 | 0x8016D410 | `gPassword_abDigits` | Eight one-byte password digits used to refresh the display and assemble the entered eight-digit card password. |
 | 0x8016D420 | `gPassword_pDigitCursorWidget` | Password digit-highlight widget pointer used as the coordinate reference by cursor-decoration callbacks. This overlay address is reused by other modules. |
 | 0x8016D428 | `gPassword_nDigitIndex` | Selected password digit index from zero through seven, used to position the highlight and gate its end decorations. This overlay address is reused by other modules. |
-| 0x801D5708 | `gText_abColorSlots` | Sixteen text-colour selector slots used by encoded bytes `0x80`–`0x8F`; duel-result labels use slots zero and one. |
+| 0x801D5708 | `gText_abColorSlots` | Sixteen text-color selector slots used by encoded bytes `0x80`–`0x8F`; duel-result labels use slots zero and one. |
 
 ## Batch: file and CD SDK interfaces
 
@@ -723,7 +723,7 @@ entries that were not yet represented in this naming gate.
 | 0x800875E0 | `ApplyMatrixSV` | Applies a matrix and stores the three `IR1`-`IR3` results as signed 16-bit `SVECTOR` components. |
 | 0x80087640 | `TransMatrix` | Copies a three-long vector into the translation fields of a `MATRIX`. |
 | 0x800877E0 | `SetLightMatrix` | Loads a matrix-shaped block into GTE light-matrix control registers 8 through 12. |
-| 0x80087810 | `SetColorMatrix` | Loads a matrix-shaped block into GTE colour-matrix control registers 16 through 20. |
+| 0x80087810 | `SetColorMatrix` | Loads a matrix-shaped block into GTE color-matrix control registers 16 through 20. |
 | 0x80087840 | `SetTransMatrix` | Loads a `MATRIX` translation vector into GTE control registers 5 through 7. |
 | 0x80087860 | `ReadGeomScreen` | Returns GTE control register 26, the projection-plane distance written by `SetGeomScreen`. |
 

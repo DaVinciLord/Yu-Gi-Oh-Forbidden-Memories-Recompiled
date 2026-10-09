@@ -108,12 +108,12 @@ def _samples(line: bytes, width: int, bits: int, channels: int):
     return out
 
 
-# The depths each colour type may have (the PNG spec, table 11.1).
+# The depths each color type may have (the PNG spec, table 11.1).
 DEPTHS = {0: (1, 2, 4, 8, 16), 2: (8, 16), 3: (1, 2, 4, 8), 4: (8, 16), 6: (8, 16)}
 
 
 def decode(data: bytes) -> Image:
-    """A PNG file's bytes as RGBA: every colour type and depth, tRNS,
+    """A PNG file's bytes as RGBA: every color type and depth, tRNS,
     interlaced or not. A damaged file is a PngError, as libpng refuses it."""
     try:
         return _decode(data)
@@ -147,11 +147,11 @@ def _decode(data: bytes) -> Image:
             break
     if not header:
         raise PngError("no IHDR")
-    width, height, bits, colour, _, _, interlace = header
-    channels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}.get(colour)
-    if channels is None or bits not in DEPTHS[colour] or not width or not height or interlace > 1:
+    width, height, bits, color, _, _, interlace = header
+    channels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}.get(color)
+    if channels is None or bits not in DEPTHS[color] or not width or not height or interlace > 1:
         raise PngError("an unsupported PNG layout")
-    if colour == 3 and not palette:
+    if color == 3 and not palette:
         raise PngError("a palette PNG without a palette")
     if width * height > 64_000_000:
         raise PngError("too large")
@@ -163,30 +163,30 @@ def _decode(data: bytes) -> Image:
     except zlib.error as problem:
         raise PngError(f"damaged image data ({problem})")
     out = bytearray(width * height * 4)
-    alpha_of = list(trns) + [255] * 256 if colour == 3 and trns else None
+    alpha_of = list(trns) + [255] * 256 if color == 3 and trns else None
     key = None
-    if trns and colour == 0 and len(trns) >= 2:
+    if trns and color == 0 and len(trns) >= 2:
         key = struct.unpack(">H", trns[:2])[0]
-    elif trns and colour == 2 and len(trns) >= 6:
+    elif trns and color == 2 and len(trns) >= 6:
         key = struct.unpack(">HHH", trns[:6])
 
     def put(x, y, row, i, raw_line):
         o = (y * width + x) * 4
-        if colour == 3:
+        if color == 3:
             index = row[i]
             r, g, b = palette[index] if index < len(palette) else (0, 0, 0)
             a = alpha_of[index] if alpha_of else 255
-        elif colour in (0, 4):
+        elif color in (0, 4):
             v = row[i * channels]
             if bits < 8:
                 v = v * 255 // ((1 << bits) - 1)
             r = g = b = v
-            a = row[i * channels + 1] if colour == 4 else 255
+            a = row[i * channels + 1] if color == 4 else 255
             if key is not None and _raw_value(raw_line, x, 0, bits, 1) == key:
                 a = 0
         else:
             r, g, b = row[i * channels:i * channels + 3]
-            a = row[i * channels + 3] if colour == 6 else 255
+            a = row[i * channels + 3] if color == 6 else 255
             if key is not None and tuple(_raw_value(raw_line, x, c, bits, 3) for c in range(3)) == key:
                 a = 0
         out[o:o + 4] = bytes((r, g, b, a))
@@ -214,7 +214,7 @@ def _decode(data: bytes) -> Image:
 
 
 def _raw_value(line: bytes, x: int, channel: int, bits: int, channels: int) -> int:
-    """A sample at its own depth, for the tRNS colour key."""
+    """A sample at its own depth, for the tRNS color key."""
     if bits == 16:
         at = (x * channels + channel) * 2
         return (line[at] << 8) | line[at + 1]
@@ -322,7 +322,7 @@ def flatten(image: Image, background=(0, 0, 0)) -> Image:
 
 
 def to_15bit(image: Image) -> Image:
-    """Each colour as VRAM keeps it, 5 bits a channel, expanded back as the
+    """Each color as VRAM keeps it, 5 bits a channel, expanded back as the
     picture does (extract_images.expand)."""
     out = bytearray(image.rgba.translate(_FIVE_BITS))
     out[3::4] = image.rgba[3::4]

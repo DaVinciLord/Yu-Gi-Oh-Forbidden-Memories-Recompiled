@@ -4,21 +4,21 @@ life-point panel's two halves and their digits, the FIELD box, the card
 bar, the hand's and the field's cursors -- over a sketch of the field and
 the hand (the 3D field is not drawn here). Drag a picture to move it, the
 mouse wheel sizes it about its middle, and the side has the rest: its
-colours, its words (the life-point halves), a picture of the mod's own,
+colors, its words (the life-point halves), a picture of the mod's own,
 hidden, back to the game's. What the game slides off the screen sideways
 (the LP halves, the FIELD box) moves up and down only and is sized no
 larger than still leaves the screen with the game's; the card bar stays
 where it is, at its size (ui_rules.MOVES, as ui_config.c reads them), but
 its parts -- the card's name, ATK, DEF, the type's icon, the stars, a
 magic card's word -- are listed under it and move about on it, each
-coloured or hidden, the name's letters spread (ui_rules.PARTS)."""
+colored or hidden, the name's letters spread (ui_rules.PARTS)."""
 from __future__ import annotations
 
 import tkinter as tk
 from tkinter import ttk
 
 from . import card_text, duel_screen, gamedata, pngio, ui_assets as ua, ui_rules
-from .ui_tab import (WARN, ColourButton, Stage, as_int, colour_text, ensure, import_image, mod_image, page_layout,
+from .ui_tab import (WARN, ColorButton, Stage, as_int, color_text, ensure, import_image, mod_image, page_layout,
                      section, set_member, sized)
 from .widgets import px
 
@@ -101,7 +101,7 @@ def part_rough_edges(part: str, parts: dict, picture: bool = False) -> list:
 # top, and where they meet the panel.
 LABEL_TOP = {"lp_opponent": 9, "lp_player": 1}
 LABEL_JOIN = 25
-LABEL_COLOUR = {"lp_opponent": ("#2c3c98", "#b0b8ff"), "lp_player": ("#b81818", "#ffd8d8")}
+LABEL_COLOR = {"lp_opponent": ("#2c3c98", "#b0b8ff"), "lp_player": ("#b81818", "#ffd8d8")}
 
 
 def scale_of(name: str, element: dict) -> int:
@@ -209,9 +209,9 @@ class DuelPage(ttk.Frame):
         ttk.Label(sizes, text="%").pack(side="left")
         self.size_row = line("Size", sizes)
         self.size_caption = form.grid_slaves(row=row - 1, column=0)[0]
-        self.tint = line("Colour", ColourButton(form, lambda v: self.set_colour("tint", v), multiplies=True))
+        self.tint = line("Color", ColorButton(form, lambda v: self.set_color("tint", v), multiplies=True))
         self.tint_caption = form.grid_slaves(row=row - 1, column=0)[0]
-        self.digits = line("Digits", ColourButton(form, lambda v: self.set_colour("digits", v), multiplies=True))
+        self.digits = line("Digits", ColorButton(form, lambda v: self.set_color("digits", v), multiplies=True))
         self.digits_label = form.grid_slaves(row=row - 1, column=0)[0]
         self.label_entry = line("Words", ttk.Entry(form, textvariable=self.vars["label"], width=16))
         self.label_caption = form.grid_slaves(row=row - 1, column=0)[0]
@@ -400,7 +400,7 @@ class DuelPage(ttk.Frame):
         if element.get("hide") is True:
             stage.rectangle(name, x0, y0, w, h, outline="#9a9a9a", width=1, drag=True, dash=(3, 3))
             return
-        tint = ua.parse_colour(element.get("tint"))
+        tint = ua.parse_color(element.get("tint"))
         picture = mod_image(self.project, element.get("image")) if element.get("image") else None
         if picture is not None:
             iw, ih = as_int(element.get("width")), as_int(element.get("height"))
@@ -423,7 +423,7 @@ class DuelPage(ttk.Frame):
                 self.draw_label(stage, name, label, rect, at, tint)
 
     def draw_digits(self, stage, name, element, at, duel, turn):
-        tint = ua.parse_colour(element.get("digits"))
+        tint = ua.parse_color(element.get("digits"))
         # The side whose turn it is lit, the other dimmed (0x80 and 0x40, Duel_DrawLifePointsAndDeckCounts).
         lit = (name == "lp_opponent") == turn
         values = {"lp_opponent": ("8000", "40"), "lp_player": ("8000", "35")}[name]
@@ -440,15 +440,15 @@ class DuelPage(ttk.Frame):
                 stage.picture((name, "digit"), ua.tint(digit, tint, 255 if lit else 128), gx0, gy0, drag=False)
 
     def draw_label(self, stage, name, label, rect, at, tint):
-        """The words in the COM or YOU box, coloured as the panel is (the
-        game draws them through its palette and colour)."""
+        """The words in the COM or YOU box, colored as the panel is (the
+        game draws them through its palette and color)."""
         top = rect[1] + LABEL_TOP[name]
 
-        def tinted(colour):
-            value = int(colour[1:], 16)
+        def tinted(color):
+            value = int(color[1:], 16)
             parts = [(value >> s & 255) * (tint >> s & 255) // 255 for s in (16, 8, 0)]
             return "#%02x%02x%02x" % tuple(parts)
-        fill, ink = (tinted(c) for c in LABEL_COLOUR[name])
+        fill, ink = (tinted(c) for c in LABEL_COLOR[name])
         z = stage.zoom
         x1, y0 = at(rect[0] + LABEL_JOIN, top)
         _, y1 = at(rect[0] + LABEL_JOIN, top + 10)
@@ -554,7 +554,7 @@ class DuelPage(ttk.Frame):
             "field": "The terrain's name, top left. It moves up and down: the game slides it off the side for "
                      "battles, and it slides with it.",
             "card_bar": "The strip under the hand. It stays put, at its size: the hand's cards slide in and out with "
-                        "it. Its colours and picture are yours, and its parts, listed under it, move about on it.",
+                        "it. Its colors and picture are yours, and its parts, listed under it, move about on it.",
             "hand_cursor": "The arrow under the card you are on.",
             "field_cursor": "The frame on the zone you are choosing."}[name])
         moves = MOVES[name]
@@ -565,8 +565,8 @@ class DuelPage(ttk.Frame):
         self.scale_box.configure(to=self.most(name) if name in SIZED else SCALE_MAX)
         self.vars["scale"].set(str(scale))
         self.scale_slider.set(scale)
-        self.tint.set(ua.parse_colour(element.get("tint")))
-        self.digits.set(ua.parse_colour(element.get("digits")))
+        self.tint.set(ua.parse_color(element.get("tint")))
+        self.digits.set(ua.parse_color(element.get("digits")))
         label = element.get("label")
         self.vars["label"].set(label if isinstance(label, str) else "")
         image = element.get("image")
@@ -638,10 +638,10 @@ class DuelPage(ttk.Frame):
         self.tab.changed("ui")
         self.draw()
 
-    def set_colour(self, key, value):
+    def set_color(self, key, value):
         if self.loading or self.project is None:
             return
-        set_member(self.edit(self.chosen), key, colour_text(value) if value is not None else None, "#FFFFFF")
+        set_member(self.edit(self.chosen), key, color_text(value) if value is not None else None, "#FFFFFF")
         self.done()
 
     def choose_image(self):
@@ -680,7 +680,7 @@ class DuelPage(ttk.Frame):
     # --- the card bar's parts ----------------------------------------------------------
 
     def fill_part(self, name, element):
-        """The form for a card bar part: its place, colour, hidden, the
+        """The form for a card bar part: its place, color, hidden, the
         name's letter spacing; no size or picture of its own."""
         part = part_of(name)
         self.title.configure(text=f"Card bar: {PART_NAMES[part]}")
@@ -701,7 +701,7 @@ class DuelPage(ttk.Frame):
                 widget.grid()
             else:
                 widget.grid_remove()
-        self.tint.set(ua.parse_colour(element.get("tint")))
+        self.tint.set(ua.parse_color(element.get("tint")))
         self.hidden.set(element.get("hide") is True)
         bar = self.element("card_bar")
         picture = isinstance(bar.get("image"), str) and bool(bar.get("image"))

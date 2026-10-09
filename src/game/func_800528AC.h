@@ -4,10 +4,10 @@
 #include "../types.h"
 
 /* Per-frame tint pass over the ten requests at D_800F2B50. Each live request
- * interpolates its start colour towards its end colour by elapsed/duration,
+ * interpolates its start color towards its end color by elapsed/duration,
  * drops the result into the model slot's field_DC0, redraws the slot through
  * func_800540B4 with the request's part id pushed into every part record, then
- * restores the colour, the part records and field_BF5 and advances the
+ * restores the color, the part records and field_BF5 and advances the
  * request's clock. Requests whose clock reaches their duration clear their
  * live bit.
  *

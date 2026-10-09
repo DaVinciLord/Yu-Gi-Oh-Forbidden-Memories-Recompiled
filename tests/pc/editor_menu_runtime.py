@@ -12,7 +12,7 @@ here):
   picture, with another for the cursor, at 130 % that starts a new game;
 * the second menu: CAMPAIGN at 140 % and a QUICK DUEL picture button at
   70 % that opens Free Duel;
-* the menus' background a plain colour and the logo and copyright line
+* the menus' background a plain color and the logo and copyright line
   shown with PUSH START BUTTON only, so each item's box can be measured.
 
 The page must find nothing wrong with it; then LOAD at 400 % is tried, the
@@ -53,7 +53,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools/pc"))
 EXECUTABLE = ROOT / "tmp/pc/game32/memories-pc"
 MOD = "menusizes-test"
-BACKGROUND = (0xFF, 0x00, 0xFF)     # the menus' plain background, a colour none of theirs is near: what is not it is an item
+BACKGROUND = (0xFF, 0x00, 0xFF)     # the menus' plain background, a color none of theirs is near: what is not it is an item
 WIDE_MARGIN = 54                   # title_config.h TITLE_WIDE_MARGIN
 
 results = []
@@ -319,7 +319,7 @@ def segments(image, scale, margin):
     return boxes
 
 
-def colour_in(image, box, scale, margin, test):
+def color_in(image, box, scale, margin, test):
     x0, y0, x1, y1 = box
     return sum(1 for y in range(int(y0 * scale), int(y1 * scale)) for x in range(int((x0 + margin) * scale),
                                                                                    int((x1 + margin) * scale))
@@ -343,7 +343,7 @@ def to_top(g, rows, shots, scale, margin):
         for _ in range(len(rows) + 1):
             image = read_png(g.shot(probe))
             found = segments(image, scale, margin)
-            if found and colour_in(image, found[0], scale, margin, red_frame) > 20:
+            if found and color_in(image, found[0], scale, margin, red_frame) > 20:
                 return True
             g.press("down", hold=4, after=16)
             g.step(30)
@@ -389,11 +389,11 @@ def walk_menu(g, which, rows, shots, tag, scale, margin):
         name, _, _, _, _, item = rows[k]
         box = found[k]
         if item.get("selected_image"):
-            gold_or_green = colour_in(image, box, scale, margin,
+            gold_or_green = color_in(image, box, scale, margin,
                                       lambda r, g_, b: (g_ > r + 60 and g_ > b + 40) or (r > 150 and g_ > 110 and b < 60))
             if gold_or_green < 20:
                 cursor_bad.append(f"{name}: not its picture for the cursor")
-        elif colour_in(image, box, scale, margin, red_frame) < 20:
+        elif color_in(image, box, scale, margin, red_frame) < 20:
             cursor_bad.append(f"{name}: no red frame under the cursor")
     check(f"{tag}: menu {which + 1} drawn where and as big as the editor shows it, the cursor on each item",
           not bad, "; ".join(bad[:4]))

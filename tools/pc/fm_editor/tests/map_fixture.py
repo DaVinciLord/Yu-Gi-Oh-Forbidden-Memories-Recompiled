@@ -12,8 +12,8 @@ from fm_editor.tests import fixtures
 
 SECTOR = 2048
 NAMES = {0x350 + i: f"Place {chr(65 + i)}" for i in range(16)}
-STRIP_COLOUR = 0x03E0          # green, the palette entry the strip's texels use
-TEXTURE_COLOUR = 0x7C00        # blue, the HMD texture's
+STRIP_COLOR = 0x03E0          # green, the palette entry the strip's texels use
+TEXTURE_COLOR = 0x7C00        # blue, the HMD texture's
 
 
 def locations() -> list:
@@ -79,7 +79,7 @@ def strip() -> bytes:
 
 def palettes() -> bytes:
     data = bytearray(SECTOR)
-    struct.pack_into("<H", data, 2, STRIP_COLOUR)     # palette 0, entry 1
+    struct.pack_into("<H", data, 2, STRIP_COLOR)     # palette 0, entry 1
     return bytes(data)
 
 
@@ -117,7 +117,7 @@ def hmd() -> bytes:
         put(polygons + i // 2, [halves[i] | (halves[i + 1] << 16)])
     for i in range(32 * 64 // 2):
         words[images + i] = 0x11111111      # index 1 everywhere
-    words[cluts] = TEXTURE_COLOUR << 16     # entry 0 clear, entry 1 blue
+    words[cluts] = TEXTURE_COLOR << 16     # entry 0 clear, entry 1 blue
     # image block: next, header, count; GsU_02000001 with 1 image and its palette
     put(image_block, [0xFFFFFFFF, header_section + 6, 0x80000001, 0x02000001, 0x80010007,
                       0 | (256 << 16), 32 | (64 << 16), 0, 0 | (240 << 16), 256 | (1 << 16), 0])

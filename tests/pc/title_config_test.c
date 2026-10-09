@@ -83,7 +83,7 @@ static void retail(void)
     int i;
     CHECK(notes == 0);
     CHECK(config->song == 0 && !config->skip_movie && config->press_start && config->idle_frames == -1);
-    CHECK(config->background[0].picture && config->background[0].shade && config->dim == 0x80 && config->background[0].colour == -1);
+    CHECK(config->background[0].picture && config->background[0].shade && config->dim == 0x80 && config->background[0].color == -1);
     CHECK(config->background[0].tint == 0xFFFFFF && config->lines == 0);
     for (i = 0; i < TITLE_LAYERS; i++) CHECK(!config->layers[i].hidden && config->layers[i].tint == 0xFFFFFF);
     /* frontend.c's own places: 50 + 32i, then 42 + 32(i - 5). */
@@ -105,7 +105,7 @@ static void keys(void)
         "            \"size\": 2, \"show\": \"menu\"}, {\"text\": \"hi\"}]}}");
     CHECK(notes == 0);
     CHECK(config->song == 0x10 && config->skip_movie && !config->press_start && config->idle_frames == 180);
-    CHECK(!config->background[0].picture && !config->background[0].shade && config->background[0].tint == 0x9070FF && config->background[0].colour == 0x102040);
+    CHECK(!config->background[0].picture && !config->background[0].shade && config->background[0].tint == 0x9070FF && config->background[0].color == 0x102040);
     CHECK(config->dim == 64);
     CHECK(config->layers[0].x == -10 && config->layers[0].y == 4 && config->layers[1].hidden);
     CHECK(config->layers[2].tint == 0xFFE040);
@@ -113,11 +113,11 @@ static void keys(void)
     CHECK(config->items[9].set_y && config->items[9].y == 7);
     CHECK(config->lines == 2);
     CHECK(!strcmp(config->line[0].text, "v1") && config->line[0].x == 316 && config->line[0].y == 232);
-    CHECK(config->line[0].align == TITLE_ALIGN_RIGHT && config->line[0].colour == 0xFFD000);
+    CHECK(config->line[0].align == TITLE_ALIGN_RIGHT && config->line[0].color == 0xFFD000);
     CHECK(config->line[0].size == 2 && config->line[0].show == TITLE_SHOW_MENU);
     /* A line's defaults: centred at the bottom, white, size 1, always. */
     CHECK(config->line[1].x == 160 && config->line[1].y == 220 && config->line[1].align == TITLE_ALIGN_CENTRE);
-    CHECK(config->line[1].colour == 0xFFFFFF && config->line[1].size == 1 && config->line[1].show == TITLE_SHOW_ALWAYS);
+    CHECK(config->line[1].color == 0xFFFFFF && config->line[1].size == 1 && config->line[1].show == TITLE_SHOW_ALWAYS);
 }
 
 static void layout(void)
@@ -178,7 +178,7 @@ static void mistakes(void)
     config = one("{\"title\": {\"music\": 4096}}");
     CHECK(notes == 1 && config->song == 0);
     config = one("{\"title\": {\"background\": {\"tint\": \"#12345\"}}}");
-    CHECK(notes == 1 && strstr(note, "colour") && config->background[0].tint == 0xFFFFFF);
+    CHECK(notes == 1 && strstr(note, "color") && config->background[0].tint == 0xFFFFFF);
     config = one("{\"title\": {\"entries\": {\"quit\": {\"hide\": true}}}}");
     CHECK(notes == 1 && strstr(note, "no entry \"quit\""));
     config = one("{\"title\": {\"entries\": {\"11\": {\"hide\": true}}}}");
@@ -241,7 +241,7 @@ static void button_mistakes(void)
     CHECK(notes == 1 && strstr(note, "an entry's name"));
     one("{\"menu\": {\"buttons\": [{\"id\": \"other:x\", \"hide\": true}]}}");
     CHECK(notes == 1 && strstr(note, "no button \"other:x\""));
-    one("{\"menu\": {\"buttons\": [{\"id\": \"a\", \"label\": \"A\", \"menu\": \"third\", \"colour\": 1}]}}");
+    one("{\"menu\": {\"buttons\": [{\"id\": \"a\", \"label\": \"A\", \"menu\": \"third\", \"color\": 1}]}}");
     CHECK(notes == 2);
     one("{\"menu\": {\"order\": [\"new_game\", \"nothing\", \"campaign\"]}}");
     CHECK(notes == 2 && strstr(note, "\"campaign\" in the first menu"));
@@ -286,11 +286,11 @@ static void menu_background(void)
         "             \"copyright\": {\"show\": \"menu\"}},"
         " \"menu\": {\"background\": {\"picture\": false, \"color\": \"#000010\", \"dim\": 0}}}");
     CHECK(notes == 0);
-    CHECK(!config->background[1].picture && config->background[1].colour == 0x10 && config->dim == 0);
+    CHECK(!config->background[1].picture && config->background[1].color == 0x10 && config->dim == 0);
     /* What the menus' did not set is the title's. */
     CHECK(config->background[1].tint == 0xFF0000 && config->background[1].shade);
     CHECK(!strcmp(config->background[1].image.file, "/mods/test/bg.png"));
-    CHECK(config->background[0].picture && config->background[0].colour == -1);
+    CHECK(config->background[0].picture && config->background[0].color == -1);
     CHECK(config->layers[0].show == TITLE_SHOW_PROMPT && config->layers[1].show == TITLE_SHOW_MENU);
     config = one("{\"menu\": {\"background\": {\"image\": \"menu.png\"}}}");
     CHECK(!strcmp(config->background[1].image.file, "/mods/test/menu.png") && !config->background[0].image.file[0]);

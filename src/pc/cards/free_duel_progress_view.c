@@ -66,7 +66,7 @@ unsigned FreeDuelProgress_Signature(void)
  * pixels: over the eye right of the banner, clear of the grid's frame. */
 enum { TITLE_MIDDLE = 23, TEXT_RIGHT = 304 };
 
-/* "12/157" in the game's own text font and colours (font_art.h), white, or
+/* "12/157" in the game's own text font and colors (font_art.h), white, or
  * yellow once every card is owned, laid on the picture in its pixels, so it
  * grows with the window and keeps its place in widescreen. */
 void FreeDuelProgress_Draw(MenuCanvas *canvas, int *x, int *y, int *w, int *h)

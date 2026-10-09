@@ -1,7 +1,7 @@
 """The data mods of this replay, made in the play's folder from the
 repository and the player's disc (a texture pack's images are the game's,
 so they are never kept here): the card-pack example (two cards with their
-own fusion) and a texture pack of the screens' sheets with every colour
+own fusion) and a texture pack of the screens' sheets with every color
 turned around. tools/pc/replay.py calls make() before the game starts, when
 playing and when recording (`record --mods`), with the repository's root:
 this file may be in a .yfmreplay unpacked anywhere."""

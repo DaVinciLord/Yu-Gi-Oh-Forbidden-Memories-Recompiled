@@ -1031,7 +1031,7 @@ class PacksTab(Tab):
                          width=10).grid(row=5, column=1, sticky="w")
             ttk.Label(body, text="Odds: its weight when a slot deals by the tiers' odds (0: only slots and guarantees\n"
                                  "reach it). Label: what a card of it says when it turns over (\"ULTRA RARE!\").\n"
-                                 "Color: the game's text colour, 0-15. Sound: a sound effect id of the game's.",
+                                 "Color: the game's text color, 0-15. Sound: a sound effect id of the game's.",
                       style="Hint.TLabel").grid(row=6, column=0, columnspan=2, sticky="w", pady=(6, 0))
 
         def ok(dialog):

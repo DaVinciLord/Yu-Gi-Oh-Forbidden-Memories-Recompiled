@@ -21,7 +21,7 @@ SIZES = ("Fit", "1x", "2x", "3x")
 
 class CardViewPreview(ttk.Frame):
     def __init__(self, master, app, values, fit_height):
-        """values() gives (type, star 1, star 2, text, colours, the mod's star
+        """values() gives (type, star 1, star 2, text, colors, the mod's star
         names) of the form, or None when there is no card; fit_height() the
         height in pixels "Fit" makes it."""
         super().__init__(master)
@@ -105,7 +105,7 @@ class CardViewPreview(ttk.Frame):
             self.picture.configure(image="")
             self._photo = None
             return
-        card_type, star1, star2, text, colours, star_names = values
+        card_type, star1, star2, text, colors, star_names = values
         size = self.size.get() if self.size.get() in SIZES else "Fit"
         tall = card_view.TEXT_BOTTOM - card_view.TEXT_TOP
         if size == "Fit":
@@ -114,12 +114,12 @@ class CardViewPreview(ttk.Frame):
             # The box's height less the row of lists over the picture.
             height = max(tall, int(self.fit_height() or tall) - self.top.winfo_height() - 2)
             scale = max(1, math.ceil(height / tall))
-            image = view.render(card_type, star1, star2, text, language=self.language.get(), colours=colours,
+            image = view.render(card_type, star1, star2, text, language=self.language.get(), colors=colors,
                                 scale=scale, star_names=star_names, text_only=True)
             if image.height != height:
                 image = pngio.resample(image, round(image.width * height / image.height), height)
         else:
-            image = view.render(card_type, star1, star2, text, language=self.language.get(), colours=colours,
+            image = view.render(card_type, star1, star2, text, language=self.language.get(), colors=colors,
                                 scale=SIZES.index(size), star_names=star_names, text_only=True)
         self._photo = tk.PhotoImage(master=self, data=base64.b64encode(pngio.encode(image)), format="png")
         self.picture.configure(image=self._photo)

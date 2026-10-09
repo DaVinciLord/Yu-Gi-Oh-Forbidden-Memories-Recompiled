@@ -611,7 +611,7 @@ typedef struct DivideVertex {
     ShortVector v;
     uint8_t uv[2];
     uint16_t pad;
-    uint32_t colour;
+    uint32_t color;
     int16_t sx, sy;
     uint32_t sz;
 } DivideVertex;
@@ -741,9 +741,9 @@ static uint32_t *divide_ft4(uint32_t *packet, DividePolygon4 *work, uint32_t dep
 }
 
 POLY_FT4 *DivideFT4(SVECTOR *v0, SVECTOR *v1, SVECTOR *v2, SVECTOR *v3, u32 *uv0, u32 *uv1, u32 *uv2, u32 *uv3,
-                    CVECTOR *colour, POLY_FT4 *first, u32 *ot, DIVPOLYGON4 *divp)
+                    CVECTOR *color, POLY_FT4 *first, u32 *ot, DIVPOLYGON4 *divp)
 {
-    uint32_t *packet = (uint32_t *)first, *rgbc = (uint32_t *)colour;
+    uint32_t *packet = (uint32_t *)first, *rgbc = (uint32_t *)color;
     DividePolygon4 *work = (DividePolygon4 *)divp;
     const ShortVector *corners[4] = {v0, v1, v2, v3};
     const uint32_t *texture[4] = {uv0, uv1, uv2, uv3};

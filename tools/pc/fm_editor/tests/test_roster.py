@@ -12,7 +12,7 @@ from unittest import mock
 
 from fm_editor import gamedata as g, manifest, pngio, portrait, roster, validate
 from fm_editor.model import Project
-from fm_editor.tests.fixtures import art_colour
+from fm_editor.tests.fixtures import art_color
 from fm_editor.tests.test_data import fixture
 from fm_editor.tests.test_gui import GuiCase
 
@@ -26,8 +26,8 @@ def sample(w: int, h: int) -> pngio.Image:
     return pngio.Image(w, h, bytes(out))
 
 
-def flat(w: int, h: int, colour) -> pngio.Image:
-    return pngio.Image(w, h, bytes(colour) * (w * h))
+def flat(w: int, h: int, color) -> pngio.Image:
+    return pngio.Image(w, h, bytes(color) * (w * h))
 
 
 def png(image: pngio.Image) -> bytes:
@@ -45,7 +45,7 @@ class PortraitTest(unittest.TestCase):
             self.assertEqual(len(record), portrait.RECORD)
             self.assertEqual(hashlib.sha256(record).hexdigest(), digest, (w, h))
 
-    def test_the_middle_square_and_its_colours(self):
+    def test_the_middle_square_and_its_colors(self):
         # Three bands across a 96x48 picture: the middle square is x 24 to 71.
         rows = b"".join(bytes((255, 0, 0, 255)) * 32 + bytes((0, 255, 0, 255)) * 32 + bytes((0, 0, 255, 255)) * 32
                         for _ in range(48))
@@ -62,7 +62,7 @@ class PortraitTest(unittest.TestCase):
         used = sorted(set(record[:portrait.PIXELS]))
         self.assertEqual(len(used), 3)
         self.assertEqual(sorted(clut[i] for i in used), [0x001F, 0x03E0, 0x7C00])
-        # Black stays black: 0 is the PS1's see-through colour, so it is 0x8000.
+        # Black stays black: 0 is the PS1's see-through color, so it is 0x8000.
         self.assertEqual(portrait.record_from(flat(10, 10, (0, 0, 0, 255)))[portrait.PIXELS + 2:portrait.PIXELS + 4],
                          b"\x00\x80")
 
@@ -80,12 +80,12 @@ class PortraitTest(unittest.TestCase):
         (texture_pack.c), its black drawn from the record (soft_gpu.c).
         tests/pc/editor_duelists_runtime.py holds this to the game's frames."""
         grey = portrait.in_game(flat(96, 96, (100, 150, 200, 255)), 1)
-        self.assertEqual(grey.pixel(5, 5), tuple(portrait.colour(100 >> 3 | (150 >> 3) << 5 | (200 >> 3) << 10)))
+        self.assertEqual(grey.pixel(5, 5), tuple(portrait.color(100 >> 3 | (150 >> 3) << 5 | (200 >> 3) << 10)))
         # The darkest red and black both make the pack's black: the record
-        # says which (0x8000 black where its colour is black, else 0x0001).
+        # says which (0x8000 black where its color is black, else 0x0001).
         self.assertEqual(portrait.in_game(flat(96, 96, (9, 0, 0, 255)), 1).pixel(0, 0), (8, 0, 0, 255))
         self.assertEqual(portrait.in_game(flat(96, 96, (0, 0, 0, 255)), 1).pixel(0, 0), (0, 0, 0, 255))
-        # 48x48 or less is the record, its 64 colours.
+        # 48x48 or less is the record, its 64 colors.
         small = sample(48, 48)
         self.assertEqual(portrait.in_game(small, 1), portrait.record_image(portrait.record_from(small)))
 
@@ -93,8 +93,8 @@ class PortraitTest(unittest.TestCase):
         wa = fixture().wa
         image = portrait.disc_portrait(wa, 8)
         self.assertEqual(image.size, (48, 48))
-        word = art_colour(48, 8)                            # row 0 of duelist 8 is entry 8
-        self.assertEqual(image.pixel(0, 0), tuple(portrait.colour(word)))
+        word = art_color(48, 8)                            # row 0 of duelist 8 is entry 8
+        self.assertEqual(image.pixel(0, 0), tuple(portrait.color(word)))
 
 
 class RosterTest(unittest.TestCase):

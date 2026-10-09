@@ -3,7 +3,7 @@
 #include "model_primitive_templates.h"
 
 /* The model renderer's prototype GPU primitive words. See the header for what
- * the opcode and colour fields are, and for what is deliberately not claimed
+ * the opcode and color fields are, and for what is deliberately not claimed
  * about which handler uses which word.
  *
  * Each object carries an explicit .sdata section attribute. The last three

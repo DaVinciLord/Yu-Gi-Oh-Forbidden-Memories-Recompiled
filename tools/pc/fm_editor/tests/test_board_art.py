@@ -86,7 +86,7 @@ def board_hmd() -> bytes:
 
 def paint_boards(wa: bytes) -> bytes:
     """Each field's board: texel (x, y) of a column is (x + y + field) % 15 + 1,
-    every palette's colour i a mix of the field, the palette and i; its
+    every palette's color i a mix of the field, the palette and i; its
     model board_hmd()."""
     data = bytearray(wa)
     for t_index, terrain in enumerate(ba.TERRAINS):
@@ -125,8 +125,8 @@ def project() -> Project:
     return p
 
 
-def solid(width, height, colour=(200, 40, 40, 255)):
-    return pngio.Image(width, height, bytes(colour) * (width * height))
+def solid(width, height, color=(200, 40, 40, 255)):
+    return pngio.Image(width, height, bytes(color) * (width * height))
 
 
 class WhereTest(unittest.TestCase):
@@ -204,7 +204,7 @@ class ModTest(unittest.TestCase):
         self.assertEqual(image.size, (256, 52))
         index = (0 + 52 + 0) % 15 + 1
         word = ((index * 2) & 31) | 1 << 5 | (31 - index) << 10
-        self.assertEqual(image.pixel(0, 0), ba.colour(word))
+        self.assertEqual(image.pixel(0, 0), ba.color(word))
 
     def test_floor_split_and_joined(self):
         p = project()
@@ -428,9 +428,9 @@ class BoardPageTest(GuiCase):
         self.page = self.tab.pages["board"]
         self.folder = Path(tempfile.mkdtemp())
 
-    def png(self, name, w, h, colour=(30, 160, 60, 255)):
+    def png(self, name, w, h, color=(30, 160, 60, 255)):
         path = self.folder / name
-        pngio.write(path, solid(w, h, colour))
+        pngio.write(path, solid(w, h, color))
         return path
 
     def test_edits(self):

@@ -22,9 +22,9 @@ int TitleScreen_Update(void);
 /* Main_RunFrontendLoop: 1 to go past the intro movie to the title. */
 int TitleScreen_SkipMovie(void);
 
-/* MainMenu_DrawFrontendBackground's colours: the picture's tint (128 each
+/* MainMenu_DrawFrontendBackground's colors: the picture's tint (128 each
  * unchanged, as the game's 128), whether the picture and the dark-to-light
- * shade over it are drawn, the solid colour drawn under them (0xRRGGBB, or
+ * shade over it are drawn, the solid color drawn under them (0xRRGGBB, or
  * -1 for none), and the menu's dimming level for the game's `level`. */
 void TitleScreen_BackgroundTint(unsigned char *r, unsigned char *g, unsigned char *b);
 int TitleScreen_ShowPicture(void);

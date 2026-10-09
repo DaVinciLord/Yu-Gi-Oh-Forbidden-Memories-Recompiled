@@ -21,7 +21,7 @@ const char *const UiConfig_PartNames[UI_PARTS] = {"name", "atk", "def", "type", 
  * duel_result_runtime.c, func_80018FEC.c), so they are moved up or down
  * only, where they slide with the game's and leave the screen when it
  * does; the card bar, which the hand's cards slide in and out with,
- * takes only its colours, a picture of its own or none, while the parts of
+ * takes only its colors, a picture of its own or none, while the parts of
  * its text (its "name", "atk", ...: read_part) move about on it; only the
  * LP halves have digits and words. */
 enum { TAKES_X = 1, TAKES_Y = 2, TAKES_SCALE = 4, TAKES_LABEL = 8 };
@@ -85,31 +85,31 @@ void UiConfig_PartRange(int part, int spacing, int *x0, int *x1, int *y0, int *y
 }
 
 /* "#RRGGBB", "RRGGBB" or a number; -1 when it is none of those. */
-static long read_colour(const JsonValue *value)
+static long read_color(const JsonValue *value)
 {
     const char *text;
     char *end;
-    long colour;
+    long color;
     if (Json_TypeOf(value) == JSON_NUMBER) {
-        colour = Json_Number(value, -1);
-        return colour >= 0 && colour <= 0xFFFFFF ? colour : -1;
+        color = Json_Number(value, -1);
+        return color >= 0 && color <= 0xFFFFFF ? color : -1;
     }
     text = Json_String(value, NULL);
     if (!text) return -1;
     if (*text == '#') text++;
     if (strlen(text) != 6) return -1;
-    colour = strtol(text, &end, 16);
-    return *end ? -1 : colour;
+    color = strtol(text, &end, 16);
+    return *end ? -1 : color;
 }
 
-static void colour_member(const char *mod, const char *name, const JsonValue *object, const char *key, uint32_t *out)
+static void color_member(const char *mod, const char *name, const JsonValue *object, const char *key, uint32_t *out)
 {
     const JsonValue *value = Json_Member(object, key);
-    long colour;
+    long color;
     if (!value) return;
-    colour = read_colour(value);
-    if (colour < 0) Mods_Note(mod, "ui: duel %s \"%s\" is a colour, \"#RRGGBB\"", name, key);
-    else *out = (uint32_t)colour;
+    color = read_color(value);
+    if (color < 0) Mods_Note(mod, "ui: duel %s \"%s\" is a color, \"#RRGGBB\"", name, key);
+    else *out = (uint32_t)color;
 }
 
 /* A whole number from `low` to `high`, or noted and left as it was. */
@@ -193,7 +193,7 @@ static void fit(const char *mod, int which)
 }
 
 /* One of the card bar's parts: moved no further than keeps it on the bar
- * (the nearest place that does, noted), coloured, hidden; the name's
+ * (the nearest place that does, noted), colored, hidden; the name's
  * letters spread. */
 static void read_part(const char *mod, int which, const JsonValue *object)
 {
@@ -224,7 +224,7 @@ static void read_part(const char *mod, int which, const JsonValue *object)
         int_member(mod, name, object, "spacing", UI_SPACING_MIN, UI_SPACING_MAX, &part->spacing);
     int_member(mod, name, object, "x", -400, 400, &part->x);
     int_member(mod, name, object, "y", -300, 300, &part->y);
-    colour_member(mod, name, object, "tint", &part->tint);
+    color_member(mod, name, object, "tint", &part->tint);
     if ((value = Json_Member(object, "hide"))) part->hidden = Json_Bool(value, part->hidden);
     UiConfig_PartRange(which, part->spacing, &x0, &x1, &y0, &y1);
     if (part->x < x0 || part->x > x1 || part->y < y0 || part->y > y1) {
@@ -280,7 +280,7 @@ static void read_element(const char *mod, const char *directory, int which, cons
     if (takes[which] & TAKES_X) int_member(mod, name, part, "x", -400, 400, &element->x);
     if (takes[which] & TAKES_Y) int_member(mod, name, part, "y", -300, 300, &element->y);
     if (takes[which] & TAKES_SCALE) int_member(mod, name, part, "scale", UI_SCALE_MIN, UI_SCALE_MAX, &element->scale);
-    colour_member(mod, name, part, "tint", &element->tint);
+    color_member(mod, name, part, "tint", &element->tint);
     if ((value = Json_Member(part, "hide"))) element->hidden = Json_Bool(value, element->hidden);
     if ((value = Json_Member(part, "image"))) {
         const char *file = Json_String(value, NULL);
@@ -296,7 +296,7 @@ static void read_element(const char *mod, const char *directory, int which, cons
     int_member(mod, name, part, "width", 0, 320, &element->image.width);
     int_member(mod, name, part, "height", 0, 240, &element->image.height);
     if (takes[which] & TAKES_LABEL) {
-        colour_member(mod, name, part, "digits", &element->digits);
+        color_member(mod, name, part, "digits", &element->digits);
         if ((value = Json_Member(part, "label"))) {
             const char *label = Json_String(value, NULL);
             if (!label) Mods_Note(mod, "ui: duel %s \"label\" is text", name);

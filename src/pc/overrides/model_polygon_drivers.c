@@ -25,20 +25,20 @@
  * Vertices and normals are 8-byte SVECTORs in the sections the scratch area
  * points at.
  *
- * Lighting mode D_8009AFE4: 0 takes colours from the cache at D_8009AFE0
+ * Lighting mode D_8009AFE4: 0 takes colors from the cache at D_8009AFE0
  * (one word per normal), 1 only fills that cache (nothing is drawn, nothing
  * is culled), anything else lights every polygon and, when a cache is set,
  * refreshes it.
  *
- * A translucent template (bit 25 of the colour word) with D_8009AFDC set draws
- * each polygon a second time, flat in the template colour, with that CLUT and
+ * A translucent template (bit 25 of the color word) with D_8009AFDC set draws
+ * each polygon a second time, flat in the template color, with that CLUT and
  * blend mode 2.
  *
  * Shared-vertex models (0x0120xxxx / 0x0130xxxx, 0x80067354 on) are done in
  * two steps. The pre-pass at 0x80067220 projects a run of vertices once into
  * eight-byte results (screen xy; IR0 << 16 | SZ, or -1 when the projection
  * failed) and, unless the lighting mode is 0, lights a run of normals into
- * eight-byte colour slots (the second word of a slot when a colour cache is
+ * eight-byte color slots (the second word of a slot when a color cache is
  * set). The polygon drivers of that bank then only pick results up: a polygon
  * touching a failed vertex is dropped, culling is NCLIP on the stored screen
  * points (a quad is kept if either of its triangles faces the viewer), and
@@ -54,7 +54,7 @@
 
 extern u32 D_8009AFAC, D_8009AFB0, D_8009AFB4, D_8009AFB8; /* templates: FT3, FT4, GT3, GT4 */
 extern u32 D_8009AFBC, D_8009AFC0, D_8009AFC4, D_8009AFC8; /* second-pass templates of the translucent bank */
-extern u32 D_8009AFD8, D_8009AFDC, D_8009AFE0;             /* tpage bits, second-pass CLUT, colour cache */
+extern u32 D_8009AFD8, D_8009AFDC, D_8009AFE0;             /* tpage bits, second-pass CLUT, color cache */
 extern s8 D_8009AFE4, D_8009AFE5;                          /* lighting mode, translucent blend override */
 extern u32 D_800FE240;                                     /* LIBGS packet cursor */
 
@@ -103,14 +103,14 @@ static u32 *draw(u32 *scratch, const Driver *kind)
     const int corners = kind->quad ? 4 : 3, lit = kind->gouraud ? corners : 1;
     const unsigned stride = (kind->quad ? (kind->gouraud ? 0x1c : 0x18) : (kind->gouraud ? 0x18 : 0x14)) +
                             (kind->window ? 4u : 0u);
-    u32 colour = *templates[kind->quad][kind->gouraud], second_colour = colour;
+    u32 color = *templates[kind->quad][kind->gouraud], second_color = color;
     u32 page_bits = D_8009AFD8, second_clut = D_8009AFDC, *cache = (u32 *)(uintptr_t)D_8009AFE0;
     const int mode = D_8009AFE4;
-    const u32 *shared_colours = NULL;
+    const u32 *shared_colors = NULL;
     if (count && kind->translucent) {
         const u32 *first = (const u32 *)(polygon + (kind->window ? 4 : 0));
-        colour |= 0x02000000u;
-        second_colour = colour;
+        color |= 0x02000000u;
+        second_color = color;
         if (D_8009AFE5 != 0 || (first[1] & 0x00600000u) != 0) {
             if (D_8009AFE5 == 0) {
                 page_bits = first[1] & 0x00600000u;
@@ -118,15 +118,15 @@ static u32 *draw(u32 *scratch, const Driver *kind)
             second_clut = 0;
         } else if (second_clut != 0) {
             second_clut = (first[0] >> 16) << 16;
-            second_colour = *second_templates[kind->quad][kind->gouraud];
+            second_color = *second_templates[kind->quad][kind->gouraud];
             page_bits = 0x00200000u;
         } else {
             page_bits = 0;
         }
     }
-    Memories_GteWriteData(6, colour);
+    Memories_GteWriteData(6, color);
     if (kind->shared) {
-        shared_colours = (const u32 *)((uintptr_t)scratch[9] + (cache ? 4u : 0u));
+        shared_colors = (const u32 *)((uintptr_t)scratch[9] + (cache ? 4u : 0u));
         if (mode == 1) {
             count = 0;
         }
@@ -182,9 +182,9 @@ static u32 *draw(u32 *scratch, const Driver *kind)
                 }
             }
             for (i = 0; i < (unsigned)corners; i++) {
-                shade[i] = shared_colours[normal[i] * 2];
+                shade[i] = shared_colors[normal[i] * 2];
             }
-            shade[0] |= colour & 0xff000000u;
+            shade[0] |= color & 0xff000000u;
             Memories_GteCommand(kind->quad ? AVSZ4 : AVSZ3);
             goto emit;
         }
@@ -244,9 +244,9 @@ static u32 *draw(u32 *scratch, const Driver *kind)
             }
         } else {
             for (i = 0; i < (unsigned)lit; i++) {
-                shade[i] = cache ? cache[normal[i]] : colour;
+                shade[i] = cache ? cache[normal[i]] : color;
             }
-            shade[0] = (shade[0] & 0x00ffffffu) | (colour & 0xff000000u);
+            shade[0] = (shade[0] & 0x00ffffffu) | (color & 0xff000000u);
         }
     emit:
         entry = entries + ((Memories_GteReadData(7) >> shift));
@@ -276,14 +276,14 @@ static u32 *draw(u32 *scratch, const Driver *kind)
             packet[0] = (*entry & 0x00ffffffu) | ((u32)packet_words << 24);
             *entry = (u32)(uintptr_t)packet & 0x00ffffffu;
             packet += packet_words + 1;
-            /* The translucent second pass: flat template colour, its CLUT, blend mode 2. */
-            if (at == 1 || !(colour & 0x02000000u) || !second_clut) {
+            /* The translucent second pass: flat template color, its CLUT, blend mode 2. */
+            if (at == 1 || !(color & 0x02000000u) || !second_clut) {
                 break;
             }
             uv[0] = (uv[0] & 0xffffu) | second_clut;
             uv[1] = (uv[1] & 0xff9fffffu) | 0x00400000u;
             for (i = 0; i < (unsigned)lit; i++) {
-                shade[i] = second_colour;
+                shade[i] = second_color;
             }
         }
     }

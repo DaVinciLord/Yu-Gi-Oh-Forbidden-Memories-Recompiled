@@ -67,7 +67,7 @@ A choice box is an ordinary text box whose string ends in a choice attribute. Th
 | `Dialog_OpenChoice` | 0x800374F4 | Spawns the cursor at the box's bottom-right corner (sprite 0x20C). |
 | `Dialog_UpdateChoice` | 0x800371A8 | Per-frame: confirm, cancel, or hand the DPAD to the input handler. |
 | `Dialog_ReadChoiceInput` | 0x8003700C | DOWN and UP move within the count, SE 6, re-highlight. |
-| `Dialog_HighlightChoice / Widget_UpdatePulseColour` | 0x80036F80 / 0x80037110 | Cursor colour by whether the line is enabled; the triangle-wave blink from the frame counter. |
+| `Dialog_HighlightChoice / Widget_UpdatePulseColour` | 0x80036F80 / 0x80037110 | Cursor color by whether the line is enabled; the triangle-wave blink from the frame counter. |
 
 
 ### Screen fades (also everywhere)
@@ -79,7 +79,7 @@ every setup path.
 
 | symbol | address | description |
 |---|---|---|
-| `gFade_State` | 0x800E9EC8 | The fade block: colour, current level, target, flags (0x80 in flight, 0x01 strip mode), step, head, and 30 per-strip brightness bytes. |
+| `gFade_State` | 0x800E9EC8 | The fade block: color, current level, target, flags (0x80 in flight, 0x01 strip mode), step, head, and 30 per-strip brightness bytes. |
 | `Fade_WaitOut` | 0x80015B00 | What mode loops call: starts the fade to black and pumps frames until done. |
 | `Fade_StartOut / Fade_InitOut` | 0x80015904 / 0x800158B8 | Request strip mode/step 8 after initializing head 255, target 0 and all strips at the current level; the final color helper can override the request with non-strip flags and step 12. |
 | `Fade_Update` | 0x80015310 | Per-frame update; latches the RGB and the overlay flag when the target is reached. |
@@ -237,7 +237,7 @@ The persistent block at `0x801D02xx–0x801D07xx` — what actually goes to the 
 | `gDuel_awRecentCardDrops` | 0x801D07BC | Sixteen recently acquired card IDs (drops and password buys both shift in); exact C compacts all 16 slots, and the list drives the trunk's New! tags and NEW sort. |
 | `gLibrary_dwStarchips` | 0x801D07E0 | Your starchip balance — spent on password exchanges (deduction byte-verified live). |
 | `gDuel_wViewerCardID` | 0x8009B246 | The card shown by the shared card-detail viewer (u16); chest/library and duel-field selection paths both publish here. |
-| `gLibrary_aCardArtRecord` | 0x801DC000 | CD-DMA target of a card's 2D record from LBA 10817+7×id: 102×96 8bpp art, its 256-colour CLUT, the baked 96×14 4bpp title, and a 40×32 8bpp thumbnail with a 64-colour CLUT. All 722 embedded thumbnail blocks match their standalone WA sector copies; the final 8×88 `LoadImage` rectangle is transfer geometry, not the source image dimensions. |
+| `gLibrary_aCardArtRecord` | 0x801DC000 | CD-DMA target of a card's 2D record from LBA 10817+7×id: 102×96 8bpp art, its 256-color CLUT, the baked 96×14 4bpp title, and a 40×32 8bpp thumbnail with a 64-color CLUT. All 722 embedded thumbnail blocks match their standalone WA sector copies; the final 8×88 `LoadImage` rectangle is transfer geometry, not the source image dimensions. |
 | `used-password flags` | ~0x801D0698 | Set when a password is redeemed; re-entry then refuses (“already put in that password”). Bit layout still being mapped. |
 
 
@@ -255,7 +255,7 @@ Mode slot 6. An 8×5 opponent grid (Build Deck tile at top-left); the cursor roa
 | `FreeDuel_UpdateScreen` (module: free_duel) | 0x80168C7C | Per-frame: cursor tween, scrollbar, then DPAD / confirm / cancel. |
 | `FreeDuel_UpdateScrollbar` (module: free_duel) | 0x80168004 | Keeps the grid scrolled to the cursor, then places the thumb at `7 + (cursor_y − 40) × 72 / 364` — it glides because it follows the tweened cursor. |
 | `FreeDuel_PlaceCursor / FreeDuel_UpdateCursorTween` (module: free_duel) | 0x80168090 / 0x80168A9C | Cell to pixels (col×56+20, row×52+40); the 8-frame glide and commit. |
-| `FreeDuel_Init` (module: free_duel) | 0x8016824C | Screen init: bumps the returning duelist's W/L, builds the availability table from the met-flags, uploads the 40 portraits (48×48 8bpp + 64-colour CLUT each) to VRAM pages 18/20, spawns one sprite per available cell. |
+| `FreeDuel_Init` (module: free_duel) | 0x8016824C | Screen init: bumps the returning duelist's W/L, builds the availability table from the met-flags, uploads the 40 portraits (48×48 8bpp + 64-color CLUT each) to VRAM pages 18/20, spawns one sprite per available cell. |
 | `gFreeDuel_abGridAvailable` (module: free_duel) | 0x80169030 | 8×5 bytes: which cells can be selected. |
 | `Main_RunNameEntry` | 0x8002D62C | The name-entry screen's mode tick. |
 | `NameEntry_Init` (module: name_entry) | 0x801683EC | Initializes the name-entry state and save-name buffer, creates the text, cursor, and background objects, then starts the screen presentation. |

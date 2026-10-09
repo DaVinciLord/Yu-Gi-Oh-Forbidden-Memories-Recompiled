@@ -33,7 +33,7 @@ constants to decode the type, ATK, and DEF fields, and `CARD_TYPE_MAGIC` to
 exclude non-monsters. It then checks intermediate digit bytes against
 `TEXT_DECIMAL_RADIX` before drawing them. The stat scale and decimal radix
 both happen to be ten but name different operations. The packed deck-entry
-mask and dimming flag, sprite geometry, and colour values remain separate.
+mask and dimming flag, sprite geometry, and color values remain separate.
 
 The two Guardian Star fields draw from the same ten-ID domain.
 `Duel_CalcGuardianStarMatchup` names the independent ID cycles locally:

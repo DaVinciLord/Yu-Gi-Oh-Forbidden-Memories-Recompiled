@@ -2,18 +2,18 @@
 mod's PNG.
 
 A portrait record is 48x48 at one byte a pixel, then a 64-entry palette of
-15-bit colours: 0x980 bytes, the forty of them one after another in
+15-bit colors: 0x980 bytes, the forty of them one after another in
 WA_MRG.MRG from 0xF55000 (src/pc/cards/art.h, PORTRAIT_RECORD; ygomods.py
 addresses them the same way for a texture pack).
 
 A mod's own picture (notes/more-duelists.md, "One file, two pictures") is
 made into such a record by CardArt_PortraitFromImage (src/pc/cards/art.c):
 the PNG over black, its middle square averaged down to 48x48, and median cut
-to 63 colours from palette entry 1. A PNG bigger than 48x48 is registered
+to 63 colors from palette entry 1. A PNG bigger than 48x48 is registered
 with the texture pack as well (duelists.c register_art), and a pack's image
 stands in for the record's texels at every scale: at View > Internal 1x its
-middle square averaged to 48x48 in the console's 15-bit colour (not the 64
-colours of the record), at 2x and above the PNG at its own resolution. A
+middle square averaged to 48x48 in the console's 15-bit color (not the 64
+colors of the record), at 2x and above the PNG at its own resolution. A
 PNG of 48x48 or less is the record. in_game() below is each of those,
 worked out the same way, so the editor shows what the game will: checked
 against the game's own frames by tests/pc/editor_duelists_runtime.py.
@@ -27,20 +27,20 @@ BASE = 0xF55000             # the first record in WA_MRG.MRG
 RECORD = 0x980              # bytes a record: the picture, then its palette
 SIDE = 48                   # PORTRAIT_SIDE
 PIXELS = SIDE * SIDE        # PORTRAIT_PIXELS: the palette follows them
-COLOURS = 63                # the median cut's, from entry 1 (entry 0 is black)
+COLORS = 63                # the median cut's, from entry 1 (entry 0 is black)
 COUNT = 40                  # Deck Build and the disc's thirty-nine
 
 
-def colour(word: int) -> bytes:
-    """A 15-bit word as RGBA, as the screen shows it (art._colour, but 0 too
-    is drawn: the grid's portraits have no transparent colour)."""
+def color(word: int) -> bytes:
+    """A 15-bit word as RGBA, as the screen shows it (art._color, but 0 too
+    is drawn: the grid's portraits have no transparent color)."""
     r, g, b = word & 0x1F, (word >> 5) & 0x1F, (word >> 10) & 0x1F
     return bytes((r << 3 | r >> 2, g << 3 | g >> 2, b << 3 | b >> 2, 255))
 
 
 def record_image(record: bytes) -> Image:
     """A portrait record as the picture it draws: 48x48."""
-    palette = [colour(record[PIXELS + i * 2] | record[PIXELS + i * 2 + 1] << 8) for i in range(64)]
+    palette = [color(record[PIXELS + i * 2] | record[PIXELS + i * 2 + 1] << 8) for i in range(64)]
     palette += [b"\x00\x00\x00\xff"] * (256 - 64)      # an index past the palette reads black
     return Image(SIDE, SIDE, b"".join(palette[i] for i in record[:PIXELS]))
 
@@ -108,16 +108,16 @@ def _resample(rgb: bytes, sw: int, sh: int, w: int, h: int) -> list:
 
 def _to555(r: int, g: int, b: int) -> int:
     word = (r >> 3) | ((g >> 3) << 5) | ((b >> 3) << 10)
-    return word or 0x8000       # 0 is the transparent colour; this is black
+    return word or 0x8000       # 0 is the transparent color; this is black
 
 
-def _quantize(pixels: list, colours: int):
-    """art.c quantize: median cut to `colours` entries, written from entry 1
+def _quantize(pixels: list, colors: int):
+    """art.c quantize: median cut to `colors` entries, written from entry 1
     (entry 0 and those left over 0x8000); each pixel the nearest entry by
     3:4:2 weighted distance, the lower entry between equals. (clut, indices)."""
     ordered = list(pixels)
     boxes = [[0, len(ordered)]]
-    while len(boxes) < colours:
+    while len(boxes) < colors:
         best, best_range, axis = -1, 0, 0
         for i, (first, count) in enumerate(boxes):
             if count < 2:
@@ -138,7 +138,7 @@ def _quantize(pixels: list, colours: int):
         boxes.append([first + half, count - half])
         boxes[best][1] = half
     palette = []
-    clut = [0x8000] * (colours + 1)
+    clut = [0x8000] * (colors + 1)
     for i, (first, count) in enumerate(boxes):
         part = ordered[first:first + count]
         n = count or 1
@@ -165,7 +165,7 @@ def record_from(image: Image) -> bytes:
     """CardArt_PortraitFromImage: the record the game makes of a PNG."""
     rgb = _over_black(image)
     pixels = _resample(rgb, image.width, image.height, SIDE, SIDE)
-    clut, indices = _quantize(pixels, COLOURS)
+    clut, indices = _quantize(pixels, COLORS)
     palette = b"".join(word.to_bytes(2, "little") for word in clut)
     return indices + palette
 
@@ -202,7 +202,7 @@ def pack_texels(image: Image) -> Image:
     black, each texel the average of the pixels in its whole-pixel box,
     rounded down, at 5 bits a channel. A texel that comes out 0 or 1 is
     the pack's opaque black, which the renderer draws from the game's own
-    texel (soft_gpu.c): black where the record's colour there is black
+    texel (soft_gpu.c): black where the record's color there is black
     (0x8000, with the bit), the darkest red (0x0001) where it is not."""
     record = record_from(image)
     clut = [record[PIXELS + 2 * i] | record[PIXELS + 2 * i + 1] << 8 for i in range(64)]
@@ -223,7 +223,7 @@ def pack_texels(image: Image) -> Image:
                 word |= ((total // n) >> 3) << (5 * channel)
             if word <= 1:       # TEXTURE_SHADOW_BLACK
                 word = 0x8000 if clut[record[y * SIDE + x] & 63] & 0x8000 else 0x0001
-            out += colour(word)
+            out += color(word)
     return Image(SIDE, SIDE, bytes(out))
 
 
@@ -231,7 +231,7 @@ def in_game(image: Image, scale: int = 1) -> Image:
     """The portrait at View > Internal `scale`x. A PNG bigger than 48x48:
     its middle square averaged to 48x48 at 15 bits a pixel at 1x (the pack's
     image painted over the record, texture_pack.c), drawn at 48 * scale
-    above it. One of 48x48 or less: the 64-colour record, at any scale."""
+    above it. One of 48x48 or less: the 64-color record, at any scale."""
     if sharp(image):
         if scale > 1:
             return pngio.resample(hd_image(image), SIDE * scale, SIDE * scale)

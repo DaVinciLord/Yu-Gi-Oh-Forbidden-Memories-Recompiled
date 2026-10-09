@@ -7,7 +7,7 @@
  * logical units multiplied by `scale`, which drops towards 1 when the window
  * is too small for the chosen menu scale; the window is resizable, so the
  * layout also reflows (the picture drops out, the table scrolls) rather than
- * assuming its default size. Colours follow menu.c so the game menu, the Mods
+ * assuming its default size. Colors follow menu.c so the game menu, the Mods
  * window and this one look like one piece of UI.
  *
  * The table lists the 16 PlayStation pad destinations in a reading order
@@ -69,7 +69,7 @@ enum {
     FIXED_LINES = 3 /* the fixed keys' text, under its heading */
 };
 
-/* Status severity: picks the colour of the message line. */
+/* Status severity: picks the color of the message line. */
 enum { SAY_INFO, SAY_DONE, SAY_WARN, SAY_BUSY };
 
 typedef struct {
