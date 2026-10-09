@@ -9,7 +9,7 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk
 
-from . import values
+from . import duelist_rules, roster, values
 from .gamedata import DUELIST_NAMES
 from .tabs import Tab
 from .widgets import ScrolledForm
@@ -89,8 +89,12 @@ class ValuesTab(Tab):
         self.duelist_name = tk.StringVar()
         self.duelist_player = tk.StringVar()
         self.duelist_opponent = tk.StringVar()
-        ttk.Combobox(row, textvariable=self.duelist_name, values=["all"] + DUELIST_NAMES[1:],
-                     width=16).pack(side="left")
+        # The disc's, then the duelists the mod adds, listed afresh as it
+        # opens: the game names them as "drops" and "decks" do (tables.c
+        # Duelists_Named).
+        self.duelist_box = ttk.Combobox(row, textvariable=self.duelist_name, values=["all"] + DUELIST_NAMES[1:],
+                                        width=16, postcommand=self.duelist_choices)
+        self.duelist_box.pack(side="left")
         ttk.Label(row, text="You").pack(side="left", padx=(6, 2))
         ttk.Entry(row, textvariable=self.duelist_player, width=6).pack(side="left")
         ttk.Label(row, text="Duelist").pack(side="left", padx=(6, 2))
@@ -156,6 +160,7 @@ class ValuesTab(Tab):
     def refresh(self):
         if self.project is None:
             return
+        self.duelist_choices()
         flat = values.flatten(self.project.other.get("limits"))
         for key, var in self.vars.items():
             var.set(str(flat[key]) if key in flat else "")
@@ -163,8 +168,16 @@ class ValuesTab(Tab):
         self._fill_duelists()
         self._report()
 
+    def duelist_choices(self):
+        if self.project is not None:
+            self.duelist_box.configure(values=["all"] + duelist_rules.references(self.project))
+
+    def named(self, name):
+        """A duelist the mod adds that a name finds, or None (values.check)."""
+        return roster.named(self.project, name)
+
     def _report(self):
-        problems = values.check(self.project.other.get("limits")) if self.project else []
+        problems = values.check(self.project.other.get("limits"), self.named) if self.project else []
         self.status.configure(text="\n".join(f"{level}: {where}: {message}" for level, where, message in problems))
         # A value the game would hold back or leave out: its name in red.
         self.wrong = {where for _, where, _ in problems if where in self.captions}

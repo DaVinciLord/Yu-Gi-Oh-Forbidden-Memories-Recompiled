@@ -193,10 +193,10 @@ def build(flat: dict, kept=None):
     return out or None
 
 
-def check(limits) -> list:
+def check(limits, named=None) -> list:
     """(level, where, message) for what read_limits would note: "error" where
     it leaves a value out, "warning" where it holds one at the most the game
-    keeps."""
+    keeps. `named` finds a duelist the mod adds by a name (roster.named)."""
     out = []
     if limits is None:
         return out
@@ -236,7 +236,7 @@ def check(limits) -> list:
             out.append(("error", "life_points.duelists", "an object of duelists and their LP"))
         for name, entry in (duelists.items() if isinstance(duelists, dict) else ()):
             where = f"life_points.duelists \"{name}\""
-            if name.lower() != "all" and duelist_named(name) < 0:
+            if name.lower() != "all" and duelist_named(name) < 0 and (named is None or named(name) is None):
                 out.append(("warning", where, "not one of the disc's forty duelists: the game looks for it among "
                                               "the mods' added duelists"))
             if isinstance(entry, dict):

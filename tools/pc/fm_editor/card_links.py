@@ -13,7 +13,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from . import fixed_decks, packs as packmath, roster, starter_pools, validate
-from .gamedata import DUELIST_NAMES, POOL_LABELS, POOL_TOTAL, POOLS, TYPE_EQUIP
+from .gamedata import POOL_LABELS, POOL_TOTAL, POOLS, TYPE_EQUIP
 from .widgets import px, scrolled_tree
 
 
@@ -179,9 +179,9 @@ def uses(app, cid) -> list:
         if recipe and recipe[-1] == cid:
             add("Rituals", f"Summoned by {p.card_label(ritual)}", go)
     for d, pools in enumerate(p.pools):
-        name = DUELIST_NAMES[d] if d < len(DUELIST_NAMES) else str(d)
-        if name == "Unused":    # duelist 0: no duel deals or drops its pools
+        if d == 0:      # "Unused": no duel deals or drops its pools
             continue
+        name = roster.shown_name(p, d)
         deck = fixed_decks.deck_of(p, d)
         for pool in POOLS:
             if pool == "deck" and deck is not None:
@@ -195,7 +195,15 @@ def uses(app, cid) -> list:
                 add("Duelists", f"{name}: {POOL_LABELS[pool]}, {weight * 100 / POOL_TOTAL:.2f}%",
                     lambda d=d, pool=pool: app.open_pool(d, pool, cid))
     for e in roster.copies(p):          # the duelists the mod adds
+        deck = fixed_decks.deck_of(p, e)
         for pool in POOLS:
+            if pool == "deck" and deck is not None:
+                copies = deck.cards.get(cid, 0)
+                if copies:
+                    add("Duelists", f"{roster.shown_name(p, e)} (added): fixed deck, "
+                                    f"{plural(copies, 'copy', 'copies')}",
+                        lambda key=e.key: app.open_pool(key, "deck", cid))
+                continue
             weight = e.pools[pool].get(cid, 0)
             if weight:
                 add("Duelists", f"{roster.shown_name(p, e)} (added): {POOL_LABELS[pool]}, "

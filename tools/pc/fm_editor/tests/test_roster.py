@@ -299,6 +299,175 @@ class RosterTest(unittest.TestCase):
         p.remove_card(added)
         self.assertNotIn(added, e.pools["deck"])
 
+    def test_every_pool_of_a_copy_is_its_own_file(self):
+        """An added duelist's deck pool and all three drop pools are saved in
+        decks/<id>.json and drops/<id>.json and read back the same; the
+        base's stay as they were."""
+        p = self.p
+        e = roster.add_copy(p, 7, "Seto Again")
+        e.pools["deck"] = {cid: 2048 // 16 for cid in range(30, 46)}
+        e.pools["pow"] = {40: 1024, 41: 1024}
+        e.pools["bcd"] = {42: 2048}
+        e.pools["tec"] = {43: 512, 44: 1536}
+        manifest.save_mod(p, self.folder)
+        drops = json.loads((self.folder / "drops/seto-again.json").read_text())
+        self.assertEqual(set(drops), {"pow", "bcd", "tec"})
+        self.assertEqual(drops["bcd"], {"replace": True, "Card 42": 2048})
+        self.assertTrue(json.loads((self.folder / "decks/seto-again.json").read_text())["replace"])
+        self.assertNotIn("drops", json.loads((self.folder / "mod.json").read_text()))
+        again, _ = manifest.open_mod(p.retail, self.folder)
+        mine = roster.find(again, "seto-again")
+        self.assertEqual(mine.pools, e.pools)
+        self.assertEqual(again.pools[7], p.retail.pools[7])
+
+    def test_a_copys_fixed_deck(self):
+        """A fixed deck for an added duelist is its decks/<id>.json with
+        "fixed": true: made, read back, edited, duplicated with it, and gone
+        with it; the weighted pool under it stays the base's."""
+        from fm_editor import fixed_decks
+        p = self.p
+        e = roster.add_copy(p, 1, "Dark Simon")
+        fixed_decks.set_deck(p, e, {3: 4, 5: 36})
+        self.assertEqual(fixed_decks.deck_of(p, e).cards, {3: 4, 5: 36})
+        self.assertIsNone(fixed_decks.deck_of(p, 1))
+        self.assertEqual([i for i in validate.validate(p) if i.area == "Duelists"], [])
+        manifest.save_mod(p, self.folder)
+        self.assertEqual(json.loads((self.folder / "decks/dark-simon.json").read_text()),
+                         {"fixed": True, "Kuriboh": 4, "Card 5": 36})
+        self.assertNotIn("decks", json.loads((self.folder / "mod.json").read_text()))
+        again, messages = manifest.open_mod(p.retail, self.folder)
+        mine = roster.find(again, "dark-simon")
+        deck = fixed_decks.deck_of(again, mine)
+        self.assertEqual(deck.cards, {3: 4, 5: 36})
+        self.assertTrue(deck.file)
+        self.assertEqual(mine.pools["deck"], p.retail.pools[1]["deck"])
+        self.assertFalse(any("fixed deck; left as it is" in m for m in messages))
+        before = {f: f.read_bytes() for f in self.folder.rglob("*") if f.is_file()}
+        manifest.save_mod(again, self.folder)
+        self.assertEqual({f: f.read_bytes() for f in self.folder.rglob("*") if f.is_file()}, before)
+        # Short of forty: the port leaves it out, and Conflicts says so.
+        deck.cards[5] = 35
+        text = "\n".join(str(i) for i in validate.validate(again) if i.area == "Duelists")
+        self.assertIn("Dark Simon fixed deck", text)
+        self.assertIn("this one has 39", text)
+        deck.cards[5] = 36
+        # Duplicated: the copy has a fixed deck of its own, in its own file.
+        other = roster.duplicate(again, mine)
+        self.assertIsNot(fixed_decks.deck_of(again, other), deck)
+        self.assertEqual(fixed_decks.deck_of(again, other).cards, deck.cards)
+        manifest.save_mod(again, self.folder)
+        self.assertEqual(json.loads((self.folder / f"decks/{other.key}.json").read_text())["Card 5"], 36)
+        # Back to the weighted deck, and out of the mod: the files go.
+        fixed_decks.remove(again, mine)
+        roster.remove(again, other)
+        self.assertEqual(again.fixed, {})
+        manifest.save_mod(again, self.folder)
+        self.assertFalse((self.folder / "decks/dark-simon.json").exists())
+        self.assertFalse((self.folder / f"decks/{other.key}.json").exists())
+
+    def test_a_fixed_deck_in_the_manifest_naming_a_copy(self):
+        """mod.json's "decks" may name an added duelist by its name or
+        identity: edited there, and written back under the same key."""
+        from fm_editor import fixed_decks
+        p = Project(self.p.retail)
+        data = {"id": "shadow", "duelists": [{"id": "dark-simon", "copy": "Simon Muran", "name": "Dark Simon"}],
+                "decks": {"shadow:dark-simon": {"fixed": True, "Card 9": 40}}}
+        manifest.apply(p, data)
+        e = roster.find(p, "dark-simon")
+        deck = fixed_decks.deck_of(p, e)
+        self.assertEqual(deck.cards, {9: 40})
+        self.assertFalse(deck.file)
+        deck.cards = {9: 20, 10: 20}
+        self.assertEqual(manifest.build(p)["decks"], {"shadow:dark-simon": {"fixed": True, "Card 9": 20,
+                                                                            "Card 10": 20}})
+
+    def test_unlock_play_and_ranks(self):
+        """duelist_rules reads "unlock", "ai" and "ranks" as the game does and
+        writes them back: through a save and an open, on an added duelist and
+        on a disc duelist's replacement."""
+        from fm_editor import duelist_rules as rules
+        p = self.p
+        a = roster.add_copy(p, 1, "Dark Simon")
+        b = roster.add_copy(p, 2, "Teana Locked")
+        unlock = rules.unlock_value(b, beat=rules.reference(p, a), wins=2, story=None, card="Card 5", copies=3)
+        self.assertEqual(unlock, {"beat": "Dark Simon", "wins": 2, "card": "Card 5", "copies": 3})
+        under = rules.under_row(p, a, "Nitemare")
+        self.assertEqual(under, list(g.AI_ROWS[38]))
+        ai = rules.ai_value(a, "Nitemare", [None, None, None, 3], True, under)
+        self.assertEqual(ai, {"copy": "Nitemare", "values": [20, 10, 5, 3], "sight": True})
+        turns = ((3, 12), (6, 4), (12, 0), (20, -20), (g.RANK_ABOVE, -40))
+        ranks = rules.ranks_value(a, {0: turns})
+        self.assertEqual(ranks, {"turns": [[3, 12], [6, 4], [12, 0], [20, -20], [32767, -40]]})
+        rules.set_rules(p, a, None, ai, ranks)
+        rules.set_rules(p, b, unlock, None, None)
+        self.assertEqual(rules.ai_row(p, a), [20, 10, 5, 3, 2, 5, 5, 75, 0])
+        self.assertTrue(rules.sight_of(p, a))
+        self.assertFalse(rules.sight_of(p, b))
+        # Only byte 0: the short "search".
+        self.assertEqual(rules.ai_value(b, "", [12]), {"search": 12})
+        # A disc duelist's go on its replacement, which goes with them.
+        rules.set_rules(p, 8, {"story": 0x6E8}, None, None)
+        self.assertEqual(roster.replacement(p, 8).extra, {"unlock": {"story": 0x6E8}})
+        self.assertEqual([i for i in validate.validate(p) if i.area == "Duelists"], [])
+        manifest.save_mod(p, self.folder)
+        read = lambda rel: json.loads((self.folder / rel).read_text())  # noqa: E731
+        self.assertEqual(read("duelists/dark-simon.json"), {"copy": "Simon Muran", "name": "Dark Simon", "ai": ai,
+                                                            "ranks": ranks})
+        self.assertEqual(read("duelists/teana-locked.json")["unlock"], unlock)
+        self.assertEqual(read("duelists/heishin.json"), {"replace": "Heishin", "unlock": {"story": 0x6E8}})
+        again, _ = manifest.open_mod(p.retail, self.folder)
+        mine = {e.key: e for e in again.roster}
+        self.assertEqual(rules.unlock_of(mine["teana-locked"]), {"beat": "Dark Simon", "wins": 2, "story": None,
+                                                                 "card": "Card 5", "copies": 3})
+        self.assertEqual(rules.ai_of(mine["dark-simon"])["values"], [20, 10, 5, 3, None, None, None, None, None])
+        self.assertEqual(rules.ranks_of(mine["dark-simon"]), {0: turns})
+        self.assertIn("beat Dark Simon 2 times", rules.unlock_text(mine["teana-locked"]))
+        rules.set_rules(again, 8, None, None, None)
+        self.assertIsNone(roster.replacement(again, 8))
+        # The same values again write the entry's own form back, untouched.
+        list_form = roster.add_copy(again, 3, "Listed")
+        list_form.extra["ai"] = [5, 10]
+        self.assertIs(rules.ai_value(list_form, "", [5, 10]), list_form.extra["ai"])
+
+    def test_unlock_play_and_ranks_checks(self):
+        from fm_editor import duelist_rules as rules
+        p = self.p
+        a = roster.add_copy(p, 1, "A")
+        a.extra["unlock"] = {"beat": "Nobody Here", "card": "No Such Card"}
+        a.extra["ai"] = {"copy": "Nobody Either", "search": 30, "values": [30, 400]}
+        a.extra["ranks"] = {"turns": [[1, 2]], "speed": [[1, 1]], "cards used": [[1, 99999]], "pure magic": 3}
+        b = roster.add_copy(p, 2, "B")
+        b.extra["unlock"] = {"beat": "B"}
+        c = roster.add_copy(p, 3, "C")
+        c.extra["unlock"] = {}
+        text = "\n".join(str(i) for i in validate.validate(p) if i.area == "Duelists")
+        for said in ("unlock beat 'Nobody Here' names no duelist", "unlock card 'No Such Card' names no card",
+                     "ai copy 'Nobody Either' names no duelist", "the game holds 30 there", "an ai number is a byte",
+                     "ranks \"speed\": no such rule", "a threshold or change is a whole number",
+                     "ranks \"pure magic\": up to 5", "unlock beat names itself",
+                     "unlock names no condition"):
+            self.assertIn(said, text)
+        self.assertNotIn("ranks \"turns\"", text)
+        # A short rule is filled out with its last pair, as the game fills it.
+        self.assertEqual(rules.ranks_of(a)[0], ((1, 2),) * 4 + ((g.RANK_ABOVE, 2),))
+
+    def test_opponents_and_names(self):
+        """Every list of opponents has the mod's own after the disc's, by the
+        id they get; the values' LP by duelist finds them by name."""
+        from fm_editor import duelist_rules as rules, values
+        p = self.p
+        a = roster.add_copy(p, 1, "Dark Simon")
+        roster.add_copy(p, 2, "Heishin")        # a disc duelist's name: found by its identity instead
+        listed = roster.opponents(p)
+        self.assertEqual(listed[0], ("1 Simon Muran", 1))
+        self.assertEqual(listed[-2:], [("40 Dark Simon", a), ("41 Heishin", roster.find(p, "heishin"))])
+        self.assertEqual(rules.references(p)[-2:], ["Dark Simon", "shadow:heishin"])
+        limits = {"life_points": {"duelists": {"Dark Simon": 1234}}}
+        self.assertTrue(values.check(limits))
+        self.assertEqual(values.check(limits, lambda name: roster.named(p, name)), [])
+        p.other["limits"] = limits
+        self.assertEqual([i for i in validate.validate(p) if i.area == "Values"], [])
+
     def test_undo_keeps_the_roster_and_the_files_on_disk(self):
         """Undo brings the roster back, but not an older idea of which files
         are on disk: saved, undone and saved again leaves no file behind."""
@@ -398,6 +567,188 @@ class DuelistsTabTest(GuiCase):
         tab.map_click(type("E", (), {"x": int(cell[0]) + 2, "y": int(cell[1]) + 2})())
         self.assertEqual(tab.duelist, "dark-heishin")
 
+    def test_a_copys_fixed_deck_in_the_tab(self):
+        """An added duelist's deck pool offers the fixed deck as a disc
+        duelist's does: the most likely forty to start, copies set, back to
+        the weighted deck, and its base's deck again on revert."""
+        from fm_editor import fixed_decks
+        app, tab = self.app, self.app.duelists
+        p = app.project
+        e = roster.add_copy(p, 8, "Dark Heishin")
+        app.notebook.select(tab)
+        tab.goto((e, "deck"))
+        app.update()
+        self.assertTrue(tab.fixed.bar.winfo_manager())          # the choice is there
+        tab.fixed.mode.set("fixed")
+        tab.fixed.switch()
+        deck = fixed_decks.deck_of(p, e)
+        self.assertEqual(deck.cards, fixed_decks.most_likely(p.pools[8]["deck"]))
+        self.assertIsNone(fixed_decks.deck_of(p, 8))            # Heishin's own is not touched
+        self.assertTrue(tab.fixed.panel.winfo_manager())
+        self.assertIn("Dark Heishin: fixed deck, 40 / 40", tab.total.cget("text"))
+        self.assertIn("fixed deck", tab.list.set("+dark-heishin", "state"))
+        first = tab.fixed.tree.get_children()[0]
+        tab.fixed.tree.selection_set(first)
+        tab.fixed.copies.set("0")
+        tab.fixed.set_copies()
+        self.assertNotIn(int(first), deck.cards)
+        self.assertLess(deck.total(), 40)
+        self.assertIn(f" {deck.total()} / 40", tab.total.cget("text"))
+        with mock.patch.object(__import__("fm_editor.fixed_deck_view", fromlist=["x"]), "pick_card",
+                               return_value=int(first)):
+            tab.fixed.copies.set(str(40 - deck.total()))
+            tab.fixed.add_card()
+        self.assertEqual(deck.total(), 40)
+        # Saved where the game reads it: decks/<id>.json.
+        folder = Path(self.tmp.name) / "fixed-mod"
+        manifest.save_mod(p, folder)
+        written = json.loads((folder / "decks/dark-heishin.json").read_text())
+        self.assertTrue(written["fixed"])
+        self.assertEqual(sum(v for k, v in written.items() if k != "fixed"), 40)
+        # Weighted again, then fixed again: the same forty come back.
+        tab.fixed.mode.set("weighted")
+        tab.fixed.switch()
+        self.assertIsNone(fixed_decks.deck_of(p, e))
+        self.assertFalse(tab.fixed.panel.winfo_manager())
+        tab.fixed.mode.set("fixed")
+        tab.fixed.switch()
+        self.assertEqual(fixed_decks.deck_of(p, e).total(), 40)
+        e.pools["deck"].pop(next(iter(e.pools["deck"])))
+        with mock.patch("tkinter.messagebox.askyesno", return_value=True):
+            tab.fixed.revert()
+        self.assertIsNone(fixed_decks.deck_of(p, e))
+        self.assertEqual(e.pools["deck"], p.retail.pools[8]["deck"])
+
+    def test_unlock_play_and_ranks_dialog(self):
+        """The Duelists tab's dialog for "unlock", "ai" and "ranks": filled
+        from the entry, written back to it, and for a disc duelist made into
+        (and taken off) its replacement."""
+        from fm_editor import duelist_rules as rules
+        app, tab = self.app, self.app.duelists
+        p = app.project
+        a = roster.add_copy(p, 1, "Dark Simon")
+        b = roster.add_copy(p, 2, "Teana Locked")
+        app.notebook.select(tab)
+        tab.goto((b, None))
+        app.update()
+        dialog = tab.edit_rules()
+        fields = fields_of(dialog, "beat")
+        self.assertEqual(len(fields["book"].tabs()), 3)
+        self.assertIn("Dark Simon", rules.references(p, but=b))
+        self.assertNotIn("Teana Locked", rules.references(p, but=b))
+        fields["beat"].set("Dark Simon")
+        fields["wins"].set("2")
+        fields["story"].set("0x6E2")
+        self.assertIn("Teana unlocked in Free Duel", fields["story_hint"].cget("text"))
+        fields["copy"].set("Nitemare")
+        app.update()
+        self.assertEqual(fields["under"][1].cget("text"), f"else {g.AI_ROWS[38][1]}")
+        fields["values"][0].set("18")
+        fields["values"][3].set("3")
+        fields["sight"].set("no")
+        fields["own"][7].set(True)
+        for k, (threshold, change) in enumerate(fields["pairs"][7]):
+            change.set(str(-10 * (k + 1)))
+        dialog.ok()
+        self.assertFalse(dialog.winfo_exists())
+        self.assertEqual(b.extra["unlock"], {"beat": "Dark Simon", "wins": 2, "story": 0x6E2})
+        self.assertEqual(b.extra["ai"], {"copy": "Nitemare", "values": [18, 10, 5, 3], "sight": False})
+        self.assertEqual(b.extra["ranks"]["remaining lp"],
+                         [[100, -10], [1000, -20], [7000, -30], [8000, -40], [32767, -50]])
+        self.assertIn("locked", tab.list.set("+teana-locked", "state"))
+        self.assertIn("Unlocks after: beat Dark Simon 2 times", tab.kept_label.cget("text"))
+        self.assertIn("plays like Nitemare", tab.kept_label.cget("text"))
+        self.assertIn("remaining lp", tab.kept_label.cget("text"))
+        # Opened again, the dialog shows what it wrote; out of range is refused.
+        dialog = tab.edit_rules()
+        fields = fields_of(dialog, "beat")
+        self.assertEqual((fields["beat"].get(), fields["wins"].get(), fields["story"].get()),
+                         ("Dark Simon", "2", "0x6E2"))
+        self.assertEqual([v.get() for v in fields["values"][:5]], ["18", "10", "5", "3", ""])
+        self.assertTrue(fields["own"][7].get())
+        fields["values"][0].set("30")
+        dialog.ok()
+        self.assertIn("Deck search is 5 to 20", dialog.error.cget("text"))
+        fields["values"][0].set("18")
+        fields["beat"].set("Teana Locked")
+        dialog.ok()
+        self.assertIn("beating itself", dialog.error.cget("text"))
+        dialog.destroy()
+        # A disc duelist's make its replacement; cleared, it goes.
+        tab.goto((8, None))
+        dialog = tab.edit_rules()
+        fields = fields_of(dialog, "beat")
+        fields["beat"].set("Dark Simon")
+        dialog.ok()
+        self.assertEqual(roster.replacement(p, 8).extra, {"unlock": {"beat": "Dark Simon"}})
+        self.assertIn("locked", tab.list.set("8", "state"))
+        dialog = tab.edit_rules()
+        fields_of(dialog, "beat")["beat"].set("")
+        dialog.ok()
+        self.assertIsNone(roster.replacement(p, 8))
+        self.assertIs(a, roster.find(p, "dark-simon"))
+
+    def test_added_duelists_wherever_one_is_picked(self):
+        """Starter decks, Packs and Values list the mod's own duelists after
+        the disc's: a starter deck of an added duelist's (its fixed deck), a
+        pack of its drops, and its starting LP."""
+        import tkinter as tk
+        from fm_editor import fixed_decks, packs as packmath
+        app = self.app
+        p = app.project
+        e = roster.add_copy(p, 7, "Seto Again")
+        e.pools["tec"] = {40: 1024, 41: 1024}
+        fixed_decks.set_deck(p, e, {3: 40})
+        app.duelists.refresh()
+
+        def answer(field_values):
+            def press():
+                dialog = [w for w in app.starter.winfo_children() if isinstance(w, tk.Toplevel)][-1]
+                boxes = [w for w in dialog.winfo_children()[0].winfo_children() if w.winfo_class() == "TCombobox"]
+                for box, value in zip(boxes, field_values):
+                    self.assertIn(value, box.cget("values"))
+                    box.set(value)
+                dialog.ok()
+            app.after(100, press)
+
+        # Starter decks: "an opponent's fixed deck / most likely 40".
+        tab = app.starter
+        app.notebook.select(tab)
+        tab.refresh()
+        answer(["40 Seto Again"])
+        self.assertIs(tab.ask_opponent(), e)
+        with mock.patch.object(tab, "ask_opponent", return_value=e):
+            dialog = tab.add_deck("opponent")
+        dialog.ok()
+        self.assertEqual(p.starter[-1].cards, {3: 40})
+        self.assertEqual(p.starter[-1].name, "Seto Again's deck")
+        # Packs: a pack of its drops.
+        tab = app.packs
+        app.notebook.select(tab)
+        app.update()
+        dialog = tab.add_from_drops()
+        boxes = [w for w in dialog.winfo_children()[0].winfo_children() if w.winfo_class() == "TCombobox"]
+        self.assertIn("40 Seto Again", boxes[0].cget("values"))
+        boxes[0].set("40 Seto Again")
+        boxes[1].set("S/A-TEC drops")
+        dialog.ok()
+        entry = p.packs[-1]
+        self.assertEqual({p.resolve(ref): w for ref, w in packmath.tier_pool(entry, "cards")}, {40: 1024, 41: 1024})
+        self.assertTrue(entry["name"].startswith("Seto Again"))
+        tab.beat_choices()                  # as the list opens
+        self.assertIn("Seto Again", tab.beat_box.cget("values"))
+        # Values: its starting LP, found by its name, with nothing to warn of.
+        tab = app.values
+        app.notebook.select(tab)
+        app.update()
+        tab.duelist_choices()
+        self.assertIn("Seto Again", tab.duelist_box.cget("values"))
+        tab.duelist_name.set("Seto Again")
+        tab.duelist_opponent.set("12000")
+        tab._set_duelist()
+        self.assertEqual(p.other["limits"]["life_points"]["duelists"], {"Seto Again": 12000})
+        self.assertNotIn("Seto Again", tab.status.cget("text"))
+
     def test_heading_sorts_within_each_page(self):
         app, tab = self.app, self.app.duelists
         roster.add_copy(app.project, 1, "Zed")
@@ -410,6 +761,15 @@ class DuelistsTabTest(GuiCase):
         tab.list.sorting.choose("id")
         tab.list.sorting.choose("id")
         self.assertEqual(tab.list.get_children("page:1")[0], "39")
+
+
+def fields_of(dialog, key) -> dict:
+    """The fields dict holding `key` a FormDialog's OK closes over."""
+    for cell in dialog.on_ok.__closure__ or ():
+        value = cell.cell_contents
+        if isinstance(value, dict) and key in value:
+            return value
+    raise AssertionError("no fields")
 
 
 def vars_of(dialog) -> dict:
