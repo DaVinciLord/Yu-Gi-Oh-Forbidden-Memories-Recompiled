@@ -111,7 +111,8 @@ def features(manifest: dict, project=None) -> list:
             add(10, "a pack's \"image_style\"")
     # --- API 11 -------------------------------------------------------------
     for key, what in (("assets", "named game images (\"assets\")"), ("ui", "duel screen layout (\"ui\")"),
-                      ("card_layout", "the card layout (\"card_layout\")")):
+                      ("card_layout", "the card layout (\"card_layout\")"),
+                      ("palette_ramps", "text color ramps (\"palette_ramps\")")):
         if key in manifest:
             add(11, what)
     title, menu = manifest.get("title"), manifest.get("menu")

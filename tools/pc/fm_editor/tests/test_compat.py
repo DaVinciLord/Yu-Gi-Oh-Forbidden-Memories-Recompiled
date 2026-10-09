@@ -74,7 +74,7 @@ class FeatureTest(unittest.TestCase):
                 self.assertEqual(self.needs(value), 10)
 
     def test_api_11(self):
-        for value in ({"assets": "assets"}, {"ui": {"duel": {}}}, {"card_layout": {}},
+        for value in ({"assets": "assets"}, {"ui": {"duel": {}}}, {"card_layout": {}}, {"palette_ramps": {"0": "#FF0000"}},
                       {"title": {"images": []}}, {"menu": {"scale": 120}},
                       {"menu": {"buttons": [{"id": "b", "scale": 80}]}},
                       {"title": {"entries": {"logo": {"scale": 50}}}},

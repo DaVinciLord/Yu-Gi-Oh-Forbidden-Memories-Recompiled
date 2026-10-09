@@ -68,6 +68,7 @@ editors write, is fine):
 | `limits` | the numbers the game caps (ATK and DEF, life points, starchips, the chest, the records), below |
 | `guardian_stars` | the stars' names and icons, stars 11 to 15, and what each star gets against each other, below |
 | `card_text_colors` | the color a card's name, description and guardian star are written in on its details, below |
+| `palette_ramps` | the game's eight text color ramps, and ramps of the mod's own for its code to draw with, below |
 | `starter` | the forty cards a new game begins with, one deck or a list of them, below |
 | `packs`, `pack_shop` | card packs sold for starchips on the Password screen, and the shop's rules, below |
 | `title`, `menu` | the title screen, and its two menus: their entries, buttons of the mod's own and their background, below |
@@ -110,7 +111,7 @@ checked as well, when it starts.
 |---|---|---|
 | 9 or less | v0.2.0 | everything not listed below; added cards, duelists, starter pools, packs, the title's menus |
 | 10 | v0.2.1-preview.1 | `card_text_colors`; a card's `monster_effects` or `trap_threshold`; an equip's `bonus_attack`/`bonus_defense`; a pack's `image_style`; an added card (`copy`) of another kind than its base (a monster made a magic card, a magic card a monster or a trap), or whose `model` or `effect` is a card's name; the `MEMORIES_EVENT_MONSTER` event |
-| 11 | the release after v0.2.1-preview.1 | `assets`, `ui`, `card_layout`; a card's `tags`, or a `frame` of `Gold`, `Green`, `Pink` or `Blue`; a monster effect's `for_each`; `{"remove": "all"}` in `fusions`; a ritual of other than three tributes, or with `tributes_from` `hand` or `both`; the title's `images`, a `scale` in `title` or `menu`; the `limits` `deck_copies`, `swords_turns`, `crush_card`, `spellbinding_circle`, `shadow_spell`, `rank_score`, `starchip_prize` and `new_game_starchips` |
+| 11 | the release after v0.2.1-preview.1 | `assets`, `ui`, `card_layout`, `palette_ramps`; a card's `tags`, or a `frame` of `Gold`, `Green`, `Pink` or `Blue`; a monster effect's `for_each`; `{"remove": "all"}` in `fusions`; a ritual of other than three tributes, or with `tributes_from` `hand` or `both`; the title's `images`, a `scale` in `title` or `menu`; the `limits` `deck_copies`, `swords_turns`, `crush_card`, `spellbinding_circle`, `shadow_spell`, `rank_score`, `starchip_prize` and `new_game_starchips` |
 
 The FM Editor writes `min_api` on save as the lowest one of these that has
 everything the mod uses, never lowering one written higher, and its Mod
@@ -2018,3 +2019,44 @@ Existing x86 objects do not run on ARM64; other source mods still need
 compilation and individual validation. The optional `test_arm64_life_points.py` runner checks separate
 player/opponent LP, campaign/free-duel scope, both sound timings, sound
 disabled and fresh-process save-state replay against a supplied source mod.
+
+## Palette ramps
+
+`palette_ramps` turns one RGB value into the game's 16-entry text brightness
+ramp: the transparent entry stays transparent and the dark glyph outline
+stays opaque. Put it at the top level of `mod.json`; it needs no library.
+Each value is `"#RRGGBB"` or `[red, green, blue]`, 0 to 255 each.
+
+```json
+"palette_ramps": {
+  "0": "#FFFFFF",
+  "rare": "#54C8FF",
+  "legendary": [255, 184, 56]
+}
+```
+
+A key from `0` to `7` replaces that one of the game's eight text ramps (the
+ones `card_text_colors` numbers: white, yellow, blue, green, grey, orange,
+red, and the unused eighth). That changes every text drawn in it, menus and
+dialogue as well as cards: `"0"` recolors all white text. When two enabled
+mods set the same ramp, the later mod in load order wins. Yamyi Mods' rarity
+colors write the ramps their INI defines too, after `palette_ramps`, and put
+the disc's back when turned off.
+
+Any other key is a named ramp, up to 256 in all, named with the declaring
+mod's ID in front (`"your-mod:rare"`, 63 letters at most). The game keeps it
+but puts it nowhere: no part of VRAM stays free on every screen, so code that
+draws a 4-bit texture with it uploads it to a place it knows is unused on its
+own screen, and uses the CLUT word that returns:
+
+```c
+#include "pc/mods/palette_ramps.h"
+prim->clut = PaletteRamps_Load("your-mod:rare", 992, 400);   /* 0: not declared */
+```
+
+`x` is a multiple of 16 below 1024 and `y` below 512. Load it again whenever
+the screen may have overwritten that place. `PaletteRamps_Ramp(name, ramp)`
+gives the 16 BGR555 entries instead, for code that puts them somewhere itself.
+
+The ramps are made as the game starts, from the disc's white ramp, so turning
+a mod with `palette_ramps` on or off, or changing them, takes a restart.

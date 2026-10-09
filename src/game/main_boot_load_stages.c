@@ -5,6 +5,9 @@
 #include "display_asset_banks.h"
 #include "../unmatched.h"
 
+#ifdef MEMORIES_PC
+#include "pc/mods/palette_ramps.h"
+#endif
 /* The two boot transfer stage callbacks. Main_RunBootSequence queues the boot
    image with Main_LoadBootImageStage (declared as func_800434F4 in
    file_transfer.h) and the boot package with Main_LoadBootPackageStage. */
@@ -52,6 +55,9 @@ void Main_LoadBootPackageStage(FileTransferDescriptor *obj, s32 stage) {
         obj->h = 8;
         LoadImage2((RECT *)obj, (u32 *G32)(D_8009B118 + 2 * FILE_SECTOR_SIZE));
         obj->phase_size = 3 * FILE_SECTOR_SIZE;
+#ifdef MEMORIES_PC
+        PaletteRamps_ApplyManifest((const unsigned short *G32)(D_8009B118 + 2 * FILE_SECTOR_SIZE));
+#endif
         D_8009B0F4 &= 0xFFDCFFFF;
         obj->value_0C = (s32)D_800101D8;
         obj->value_08 = (s32)D_800101D8;
