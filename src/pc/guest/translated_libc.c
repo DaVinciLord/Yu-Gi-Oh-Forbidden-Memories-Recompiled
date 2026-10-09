@@ -3,6 +3,7 @@
 #include "translated_runtime.h"
 #include "translated_libc.h"
 #include <stdint.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -26,6 +27,46 @@ size_t GuestRuntime_strlen(const char *string)
     }
     return length;
 }
+long GuestRuntime_strtol(const char *string, char **end, int base)
+{
+    size_t length = GuestRuntime_strlen(string);
+    if (length == SIZE_MAX) abort();
+    const char *native = GuestRuntime_ResolveData((void *)string, length + 1);
+    char *parsed_end;
+    long value = strtol(native, &parsed_end, base);
+    if (end) {
+        char *guest_end = at(string, (size_t)(parsed_end - native));
+        memcpy(GuestRuntime_ResolveData(end, sizeof(guest_end)), &guest_end, sizeof(guest_end));
+    }
+    return value;
+}
+/* FILE handles come from the native mod host's open_asset/open_data callbacks.
+ * They are opaque host objects, never guest-addressed storage. */
+static FILE *native_file(FILE *file)
+{
+    if ((uintptr_t)file <= UINT32_MAX) abort();
+    return file;
+}
+char *GuestRuntime_fgets(char *buffer, int size, FILE *file)
+{
+    char *native = size > 0 ? GuestRuntime_ResolveData(buffer, (size_t)size) : NULL;
+    return fgets(native, size, native_file(file)) ? buffer : NULL;
+}
+size_t GuestRuntime_fwrite(const void *buffer, size_t size, size_t count, FILE *file)
+{
+    if (size && count > SIZE_MAX / size) abort();
+    size_t bytes = size * count;
+    const void *native = bytes ? GuestRuntime_ResolveData((void *)buffer, bytes) : buffer;
+    return fwrite(native, size, count, native_file(file));
+}
+int GuestRuntime_fseek(FILE *file, long offset, int origin)
+{
+    return fseek(native_file(file), offset, origin);
+}
+int GuestRuntime_fclose(FILE *file) { return fclose(native_file(file)); }
+int GuestRuntime_isalnum(int value) { return isalnum(value); }
+int GuestRuntime_isspace(int value) { return isspace(value); }
+int GuestRuntime_tolower(int value) { return tolower(value); }
 void *GuestRuntime_memcpy(void *destination, const void *source, size_t length)
 {
     if (length) memcpy(GuestRuntime_ResolveData(destination, length), GuestRuntime_ResolveData((void *)source, length), length);

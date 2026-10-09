@@ -22,6 +22,16 @@ from llvm_guest import ROOT, inspect, normalize, process, toolchain, validate_c_
 from macos_deps import sdk_path
 
 
+# Pointer-free math entries from src/pc/mods/mod_libc.c. Calls taking guest
+# pointers must use the game's translated wrappers, never libSystem directly.
+SYSTEM_MATH_IMPORTS = frozenset({
+    "acos", "asin", "atan", "atan2", "atan2f", "ceil", "ceilf", "cos", "cosf",
+    "exp", "expf", "fabs", "fabsf", "floor", "floorf", "fmod", "fmodf", "log",
+    "log10", "logf", "pow", "powf", "sin", "sinf", "sqrt", "sqrtf", "tan", "tanf",
+})
+SYSTEM_RUNTIME_IMPORTS = {"abort", "dyld_stub_binder"}
+
+
 def mod_pins(summary, pin_tables):
     """Build mod guest pins without replacing native PC-owned storage."""
     pc_storage_globals = summary.get("pc_storage_globals")
@@ -156,8 +166,8 @@ def link_library(folder, library_name, objects, routines, compiler, sdk, exporte
         ],
         check=True,
     )
-    # System-linked imports (e.g. sin from libSystem) are resolved by dyld,
-    # rather than the game's export table. Keep checking every lookup import.
+    # dyld resolves these without consulting game exports. Only pointer-free
+    # math and runtime helpers may bypass the translated guest wrappers.
     rows = subprocess.check_output(["nm", "-u", "-m", str(staged)], text=True).splitlines()
     system_imports = set()
     for line in rows:
@@ -173,7 +183,13 @@ def link_library(folder, library_name, objects, routines, compiler, sdk, exporte
         ).splitlines()
         if line.strip()
     }
-    missing = imports - exported - system_imports - {"abort", "dyld_stub_binder"}
+    unsafe_system = system_imports - SYSTEM_MATH_IMPORTS - SYSTEM_RUNTIME_IMPORTS
+    if unsafe_system:
+        raise SystemExit(
+            "ARM64 mod cannot import from libSystem: "
+            + ", ".join(sorted(unsafe_system))
+        )
+    missing = imports - exported - system_imports - SYSTEM_RUNTIME_IMPORTS
     if missing:
         raise SystemExit("ARM64 game does not provide: " + ", ".join(sorted(missing)))
     return staged

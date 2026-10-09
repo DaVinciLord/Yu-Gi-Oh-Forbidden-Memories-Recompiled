@@ -214,7 +214,7 @@ static Art *acquire(int card)
 static int project(int x, int y, int z, int *sx, int *sy)
 {
     SVECTOR v;
-    long sxy, p, flag, depth;
+    PSXLONG sxy, p, flag, depth;
     v.vx = (short)x;
     v.vy = (short)y;
     v.vz = (short)z;

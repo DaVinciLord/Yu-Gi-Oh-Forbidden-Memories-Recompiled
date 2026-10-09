@@ -232,7 +232,8 @@ Keep ordinary .sav files to move progress between versions. Native .state
 files require the same executable and mod profile. Data mods use the existing
 format; code mods require an ARM64 dylib, not an i386 .o.
 Included mods: 3D Monsters, Hand Camera, AI Hard Mode, Yamyi Mods and
-Drop Missing Cards. Open Game > Mods to enable them and adjust their settings.
+Drop Missing Cards. 3D Monsters and Hand Camera are enabled by default.
+Open Game > Mods to enable or disable mods and adjust their settings.
 The included code mods are compiled for this build. Additional user mods go
 in ~/Library/Application Support/YFM Re-Decomp/mods. No mod SDK is bundled;
 see notes/modding.md in the source repository for the ARM64 build commands.

@@ -319,6 +319,24 @@ class GuestMemoryPass : public PassInfoMixin<GuestMemoryPass> {
         if (!isa<CallInst>(call)) fail("invoke/callbr are unsupported in guest units");
         if (auto *memory = dyn_cast<MemIntrinsic>(call)) {
           Value *length = builder.CreateZExtOrTrunc(memory->getLength(), builder.getInt64Ty());
+          // Mod dylibs only link pointer-free math from libSystem. Keep large
+          // structure copies from becoming native memcpy imports at codegen.
+          if (options.getBoolean("mod_unit").value_or(false) && !memory->isVolatile()) {
+            Value *destination = guestBits(builder, memory->getRawDest());
+            if (auto *transfer = dyn_cast<MemTransferInst>(memory)) {
+              Value *source = guestBits(builder, transfer->getRawSource());
+              auto callee = module.getOrInsertFunction(
+                isa<MemMoveInst>(memory) ? "GuestRuntime_memmove" : "GuestRuntime_memcpy",
+                builder.getPtrTy(), builder.getPtrTy(), builder.getPtrTy(), builder.getInt64Ty());
+              builder.CreateCall(callee, {destination, source, length});
+            } else if (auto *set = dyn_cast<MemSetInst>(memory)) {
+              auto callee = module.getOrInsertFunction("GuestRuntime_memset",
+                builder.getPtrTy(), builder.getPtrTy(), builder.getInt32Ty(), builder.getInt64Ty());
+              builder.CreateCall(callee, {destination,
+                builder.CreateZExt(set->getValue(), builder.getInt32Ty()), length});
+            } else fail("unsupported memory intrinsic");
+            memory->eraseFromParent(); continue;
+          }
           Value *destination = resolve(builder, module, memory->getRawDest(), length);
           CallInst *replacement;
           if (auto *transfer = dyn_cast<MemTransferInst>(memory)) {

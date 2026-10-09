@@ -2,6 +2,15 @@
 #define MEMORIES_TRANSLATED_LIBC_H
 #include <stddef.h>
 #include <stdarg.h>
+#include <stdio.h>
+long GuestRuntime_strtol(const char *, char **, int);
+char *GuestRuntime_fgets(char *, int, FILE *);
+size_t GuestRuntime_fwrite(const void *, size_t, size_t, FILE *);
+int GuestRuntime_fseek(FILE *, long, int);
+int GuestRuntime_fclose(FILE *);
+int GuestRuntime_isalnum(int);
+int GuestRuntime_isspace(int);
+int GuestRuntime_tolower(int);
 void *GuestRuntime_memcpy(void *, const void *, size_t);
 void *GuestRuntime_memmove(void *, const void *, size_t);
 void *GuestRuntime_memset(void *, int, size_t);

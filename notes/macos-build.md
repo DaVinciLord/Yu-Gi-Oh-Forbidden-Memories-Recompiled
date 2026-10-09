@@ -58,7 +58,8 @@ The upstream language packs are included; no private disc or HD texture pack
 is copied. The five repository mods are included: 3D Monsters, Hand Camera,
 AI Hard Mode, Yamyi Mods and Drop Missing Cards. The packager compiles their
 code libraries for this ARM64 build and signs them before signing the app.
-Open **Game > Mods** to enable them and adjust their settings. Additional
+3D Monsters and Hand Camera are enabled by default. Open **Game > Mods**
+to enable or disable mods and adjust their settings. Additional
 code mods must be compiled separately for the ARM64 ABI.
 
 The package is ad-hoc signed and verified locally. It is not Developer ID
