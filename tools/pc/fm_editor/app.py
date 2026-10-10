@@ -8,7 +8,7 @@ from tkinter import messagebox, ttk
 from . import disc, file_dialogs, gamedata, manifest, settings, theme, validate
 from .model import KEY_RE, Project
 from .editing import RECOVERY_CHOICES, Editing, recovery_label
-from . import card_links, history, recovery, screen, zoom
+from . import build_info, card_links, history, recovery, screen, zoom
 from .art_tab import ArtTab
 from .map_tab import MapTab
 from .values_tab import ValuesTab
@@ -60,6 +60,7 @@ class App(Editing, tk.Tk):
         self.text_preview = None   # Tools > Card text preview, while open
         self.current_card = None   # the card Cards and Art show, and Fusions and Equips follow (card_links)
         self.init_editing()
+        build_info.prefetch()       # Help > About's git commands, off the Tk thread
         self.build_menu()
         self.notebook = Pages(self)
         self.notebook.pack(fill="both", expand=True)
@@ -645,8 +646,7 @@ class App(Editing, tk.Tk):
         webbrowser.open(f"{PROJECT_URL}/blob/master/{path}")
 
     def about(self):
-        from .build_info import description
-        messagebox.showinfo(APP_TITLE, description() + "\n\nMakes mods for the PC port of Yu-Gi-Oh! Forbidden Memories. "
+        messagebox.showinfo(APP_TITLE, build_info.description() + "\n\nMakes mods for the PC port of Yu-Gi-Oh! Forbidden Memories. "
                             "It reads the retail tables from your own game files and saves a mod folder whose "
                             "mod.json holds only what you changed. It never writes the disc or game/.\n\n"
                             "tools/pc/fm_editor/README.md", parent=self)
