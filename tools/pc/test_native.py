@@ -113,6 +113,22 @@ def main():
     if args.sanitize:
         flags += ["-fsanitize=address,undefined", "-fno-omit-frame-pointer"]
     cases = [
+        ("state-requests", ["tests/pc/state_requests_test.c", "src/pc/guest/state_requests.c"], [], [None]),
+        ("ot-chain", ["tests/pc/ot_chain_test.c"], [], [None]),
+        ("image-loader", ["tests/pc/image_loader_test.c", "src/pc/guest/image_loader.c"], [], [None]),
+        (
+            "translated-function-map",
+            ["tests/pc/function_map_test.c"],
+            [],
+            [None],
+        ),
+        (
+            "gte-native-guest-boundary",
+            ["tests/pc/gte_test.c", "src/pc/compat/gte.c", "src/pc/compat/pgxp.c",
+             "src/pc/guest/translated_runtime.c", "src/pc/memory.c"],
+            ["-DMEMORIES_NATIVE_GTE", "-DMEMORIES_TRANSLATED"],
+            [None],
+        ),
         (
             "darwin-image",
             ["tests/pc/darwin_image_test.c", "src/pc/platform/darwin_image.c"],

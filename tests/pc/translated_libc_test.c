@@ -90,6 +90,7 @@ int main(void)
     assert(end == G(0x505));
     assert(GuestRuntime_strtol("42", NULL, 10) == 42);
     assert(GuestRuntime_strtol("invalid", &end, 10) == 0 && !strcmp(end, "invalid"));
+    assert(GuestRuntime_isdigit('0') && GuestRuntime_isdigit('9') && !GuestRuntime_isdigit('A') && !GuestRuntime_isdigit(EOF));
     assert(GuestRuntime_isalnum('A') && !GuestRuntime_isalnum('!'));
     assert(GuestRuntime_isspace(' ') && GuestRuntime_tolower('A') == 'a');
     FILE *file = tmpfile(); assert(file);

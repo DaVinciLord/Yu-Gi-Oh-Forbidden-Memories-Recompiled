@@ -53,6 +53,7 @@ define i32 @exercise(ptr %native, ptr addrspace(271) %callback) {
 #include <string.h>
 static _Alignas(4) unsigned char memory[32];
 static unsigned resolutions, encodings, callbacks;
+void *GuestRuntime_ActiveMemory;
 void *GuestRuntime_ResolveData(void *pointer, uint64_t size) {
     uintptr_t address = (uintptr_t)pointer;
     assert(address >= 0x80010000u && address <= 0x80010020u);
@@ -104,6 +105,118 @@ int main(void) {
         if mod:
             for name in ('memcpy', 'memmove', 'memset'):
                 self.assertIn('call ptr @GuestRuntime_' + name, translated)
+        with tempfile.TemporaryDirectory(dir=ROOT / 'tmp') as folder:
+            folder = Path(folder)
+            (folder / 'fixture.ll').write_text(translated)
+            (folder / 'harness.c').write_text(harness)
+            binary = folder / 'test'
+            subprocess.run([str(toolchain() / 'bin/clang'), '-isysroot', str(sdk_path()),
+                            '-O2', str(folder / 'fixture.ll'), str(folder / 'harness.c'),
+                            '-o', str(binary)], check=True, capture_output=True, text=True, timeout=60)
+            subprocess.run([str(binary)], check=True, timeout=20)
+
+    def test_native_storage_bypasses_lookup_and_guest_tokens_remain_checked(self):
+        source = """
+target datalayout = "e-p:64:64-p271:32:32"
+@words = global [2 x i32] [i32 11, i32 13]
+@slot = external global i32
+declare void @llvm.memcpy.p0.p0.i64(ptr, ptr, i64, i1)
+define i32 @exercise(ptr %unknown) {
+  %local = alloca [2 x i32], align 4
+  call void @llvm.memcpy.p0.p0.i64(ptr %local, ptr @words, i64 8, i1 false)
+  %old = atomicrmw add ptr %local, i32 1 seq_cst
+  %head = load i32, ptr %local
+  %tailptr = getelementptr [2 x i32], ptr %local, i32 0, i32 1
+  %tail = load i32, ptr %tailptr
+  %guest = load i32, ptr @slot
+  %argument = load i32, ptr %unknown
+  %a = add i32 %head, %tail
+  %b = add i32 %a, %guest
+  %c = add i32 %b, %argument
+  ret i32 %c
+}
+"""
+        harness = r"""
+#include <assert.h>
+#include <stdint.h>
+static unsigned resolutions;
+static int guest = 7;
+void *GuestRuntime_ActiveMemory;
+void *GuestRuntime_ResolveData(void *pointer, uint64_t size) {
+    ++resolutions;
+    assert(size == 4);
+    if ((uintptr_t)pointer == 0x80010000u) return &guest;
+    return pointer;
+}
+extern int exercise(void *);
+int main(void) {
+    int unknown = 9;
+    assert(exercise(&unknown) == 41);
+    assert(resolutions == 1);
+}
+"""
+        translated = translate(source, {'slot': 0x80010000})
+        with tempfile.TemporaryDirectory(dir=ROOT / 'tmp') as folder:
+            folder = Path(folder)
+            (folder / 'fixture.ll').write_text(translated)
+            (folder / 'harness.c').write_text(harness)
+            binary = folder / 'test'
+            subprocess.run([str(toolchain() / 'bin/clang'), '-isysroot', str(sdk_path()),
+                            '-O2', str(folder / 'fixture.ll'), str(folder / 'harness.c'),
+                            '-o', str(binary)], check=True, capture_output=True, text=True, timeout=60)
+            subprocess.run([str(binary)], check=True, timeout=20)
+
+    def test_inline_ram_aliases_native_arguments_and_checked_fallback(self):
+        source = """
+define i32 @read_word(ptr %p) {
+  %v = load i32, ptr %p, align 1
+  ret i32 %v
+}
+"""
+        harness = r"""
+#include <assert.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+void *GuestRuntime_ActiveMemory;
+static unsigned resolutions;
+static int fallback = 91;
+void *GuestRuntime_ResolveData(void *p, uint64_t size) {
+    (void)p;
+    assert(size == 4);
+    ++resolutions;
+    return &fallback;
+}
+extern int read_word(void *);
+int main(void) {
+    unsigned char *ram = calloc(1, 0x200400);
+    assert(ram);
+    GuestRuntime_ActiveMemory = ram;
+    int value = 37;
+    memcpy(ram + 0x100, &value, 4);
+    assert(read_word(ram + 0x100) == 37);
+    assert(read_word((void *)0x100) == 37);
+    assert(read_word((void *)0x80000100) == 37);
+    assert(read_word((void *)0xa0000100) == 37);
+    assert(read_word((void *)(intptr_t)(int32_t)0x80000100u) == 37);
+    assert(read_word((void *)(intptr_t)(int32_t)0xa0000100u) == 37);
+    assert(resolutions == 0);
+    /* Final-byte overflow, RAM end, invalid segment, scratchpad and
+       external allocations must still reach the checked runtime. */
+    uintptr_t slow[] = {0x801ffffe, 0x80200000, 0x20000100,
+                        0xc0000100, 0x1f800000, 0xd0000100};
+    for (unsigned i = 0; i < sizeof(slow) / sizeof(slow[0]); ++i)
+        assert(read_word((void *)slow[i]) == 91);
+    assert(resolutions == 6);
+    GuestRuntime_ActiveMemory = NULL;
+    assert(read_word((void *)0x80000100) == 91);
+    assert(resolutions == 7);
+    /* Native storage works even before binding. */
+    assert(read_word(&value) == 37 && resolutions == 7);
+    free(ram);
+}
+"""
+        translated = translate(source)
         with tempfile.TemporaryDirectory(dir=ROOT / 'tmp') as folder:
             folder = Path(folder)
             (folder / 'fixture.ll').write_text(translated)

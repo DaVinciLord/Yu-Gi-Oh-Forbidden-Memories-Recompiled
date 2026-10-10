@@ -1,6 +1,10 @@
 #include "pgxp.h"
 #include "gte.h"
 #include <string.h>
+#ifdef MEMORIES_NATIVE_GTE
+#include "pc/guest/translated_runtime.h"
+#define GTE_ADDRESS(pointer, size) GuestRuntime_ResolveData((void *)(pointer), (size))
+#endif
 
 typedef struct Gte {
     int16_t v[3][3];
@@ -46,6 +50,11 @@ void Memories_GteReset(void)
 int Memories_GtePrecise(unsigned slot, float *x, float *y, float *w)
 {
     if (slot > 2 || !precise[slot].known) return 0;
+#ifdef MEMORIES_NATIVE_GTE
+    x = GTE_ADDRESS(x, sizeof(*x));
+    y = GTE_ADDRESS(y, sizeof(*y));
+    w = GTE_ADDRESS(w, sizeof(*w));
+#endif
     *x = precise[slot].x;
     *y = precise[slot].y;
     *w = precise[slot].w;
@@ -543,14 +552,22 @@ int Memories_GteCommand(uint32_t command)
 
 void Memories_GteLoad(unsigned index, const void *address)
 {
+#ifdef MEMORIES_NATIVE_GTE
+    const uint8_t *bytes = GTE_ADDRESS(address, 4);
+#else
     const uint8_t *bytes = address;
+#endif
     Memories_GteWriteData(index, (uint32_t)bytes[0] | ((uint32_t)bytes[1] << 8) |
                                      ((uint32_t)bytes[2] << 16) | ((uint32_t)bytes[3] << 24));
 }
 
 void Memories_GteStoreWord(uint32_t value, void *address)
 {
+#ifdef MEMORIES_NATIVE_GTE
+    uint8_t *bytes = GTE_ADDRESS(address, 4);
+#else
     uint8_t *bytes = address;
+#endif
     bytes[0] = (uint8_t)value;
     bytes[1] = (uint8_t)(value >> 8);
     bytes[2] = (uint8_t)(value >> 16);
@@ -573,6 +590,9 @@ void Memories_GteStore(unsigned index, void *address)
 /* Save states: the register file, without tying the GTE to the state code. */
 void *Gte_StateData(unsigned *size)
 {
+#ifdef MEMORIES_NATIVE_GTE
+    size = GTE_ADDRESS(size, sizeof(*size));
+#endif
     *size = sizeof(gte);
     return &gte;
 }

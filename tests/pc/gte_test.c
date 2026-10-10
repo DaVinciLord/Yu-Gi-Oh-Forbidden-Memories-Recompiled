@@ -1,5 +1,9 @@
 #include "pc/compat/gte.h"
 #include <stdio.h>
+#ifdef MEMORIES_NATIVE_GTE
+#include "pc/guest/translated_runtime.h"
+#include <stdlib.h>
+#endif
 
 #define CHECK(c) do { if (!(c)) { \
     fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #c); return 1; \
@@ -151,5 +155,24 @@ int main(void)
     CHECK(Memories_GteCommand(0x049e012));
     CHECK(Memories_GteReadData(9) == 7 && Memories_GteReadData(10) == 5 && Memories_GteReadData(11) == 9);
 
+#ifdef MEMORIES_NATIVE_GTE
+    /* The native math core still accepts guest addresses at its boundary. */
+    MemoriesMemory *memory = calloc(1, sizeof(*memory));
+    CHECK(memory && !GuestRuntime_Bind(memory));
+    memory->ram[0x1000] = 0x12;
+    memory->ram[0x1001] = 0x34;
+    memory->ram[0x1002] = 0x56;
+    memory->ram[0x1003] = 0x78;
+    Memories_GteLoad(6, (const void *)(uintptr_t)0x80001000u);
+    CHECK(Memories_GteReadData(6) == 0x78563412u);
+    Memories_GteStore(6, (void *)(uintptr_t)0x80002000u);
+    CHECK(Memories_ReadLE32(memory->ram + 0x2000) == 0x78563412u);
+    Memories_GteStoreWord(0xabcdef01u, (void *)(uintptr_t)0x80002004u);
+    CHECK(Memories_ReadLE32(memory->ram + 0x2004) == 0xabcdef01u);
+    CHECK(Gte_StateData((unsigned *)(uintptr_t)0x80003000u));
+    CHECK(Memories_ReadLE32(memory->ram + 0x3000) > 0);
+    GuestRuntime_Reset();
+    free(memory);
+#endif
     return 0;
 }

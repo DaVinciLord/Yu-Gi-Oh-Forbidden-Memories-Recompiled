@@ -32,6 +32,7 @@ HOST_LIBC = {
     "fseek",
     "fclose",
     "isalnum",
+    "isdigit",
     "isspace",
     "tolower",
 }

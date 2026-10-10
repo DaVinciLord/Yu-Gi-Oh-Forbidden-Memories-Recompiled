@@ -783,6 +783,26 @@ if(BUILD_TESTING)
     endif()
     add_test(NAME pc_scratch_rules COMMAND memories_scratch_rules_test)
 
+    # Shared guest helpers also run on fixed 32-bit and native 64-bit hosts.
+    add_executable(memories_state_requests_test tests/pc/state_requests_test.c src/pc/guest/state_requests.c)
+    add_executable(memories_image_loader_test tests/pc/image_loader_test.c src/pc/guest/image_loader.c)
+    add_executable(memories_function_map_test tests/pc/function_map_test.c)
+    add_executable(memories_ot_chain_test tests/pc/ot_chain_test.c)
+    foreach(helper state_requests image_loader function_map ot_chain)
+        target_include_directories(memories_${helper}_test PRIVATE src tests/pc)
+        if(WIN32)
+            target_link_libraries(memories_${helper}_test PRIVATE memories_pc_fs)
+        endif()
+        if(NOT MSVC)
+            target_compile_options(memories_${helper}_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+        endif()
+        if(MEMORIES_SANITIZERS)
+            target_compile_options(memories_${helper}_test PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+            target_link_options(memories_${helper}_test PRIVATE -fsanitize=address,undefined)
+        endif()
+        add_test(NAME pc_${helper} COMMAND memories_${helper}_test)
+    endforeach()
+
     # The tests state every expectation with assert(). A Release configuration
     # defines NDEBUG, which would leave them running and checking nothing;
     # the Windows CI job builds Release, so this is what makes it a test run.

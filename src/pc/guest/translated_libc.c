@@ -65,6 +65,7 @@ int GuestRuntime_fseek(FILE *file, long offset, int origin)
 }
 int GuestRuntime_fclose(FILE *file) { return fclose(native_file(file)); }
 int GuestRuntime_isalnum(int value) { return isalnum(value); }
+int GuestRuntime_isdigit(int value) { return isdigit(value); }
 int GuestRuntime_isspace(int value) { return isspace(value); }
 int GuestRuntime_tolower(int value) { return tolower(value); }
 void *GuestRuntime_memcpy(void *destination, const void *source, size_t length)

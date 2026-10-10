@@ -406,6 +406,28 @@ void TextureDump_Moved(int sx, int sy, int dx, int dy, int w, int h)
     if (TextureDump_Follow) TextureDump_Follow(sx, sy, dx, dy, w, h);
 }
 
+#ifdef MEMORIES_TRANSLATED
+void TextureDump_Cleared(int x, int y, int w, int h)
+{
+    int j;
+    if (!TextureDump_Tags) return;
+    for (j = 0; j < h; j++) {
+        /* Clear contiguous spans, retaining VRAM's horizontal wrap. The
+         * translated runtime resolves each span once instead of each cell. */
+        int left = w, column = x & (SOFT_GPU_WIDTH - 1);
+        while (left > 0) {
+            int count = SOFT_GPU_WIDTH - column;
+            if (count > left) count = left;
+            memset(tag_at(column, y + j), 0, (size_t)count * sizeof(uint32_t));
+            if (TextureDump_Shadow)
+                memset(TextureDump_Cell(column, y + j, 0), 0, (size_t)count * 4 * sizeof(uint16_t));
+            left -= count;
+            column = 0;
+        }
+    }
+    if (TextureDump_Forget) TextureDump_Forget(x, y, w, h);
+}
+#else
 void TextureDump_Cleared(int x, int y, int w, int h)
 {
     int i, j;
@@ -418,6 +440,7 @@ void TextureDump_Cleared(int x, int y, int w, int h)
     }
     if (TextureDump_Forget) TextureDump_Forget(x, y, w, h);
 }
+#endif
 
 size_t TextureDump_TagRuns(uint32_t *runs, size_t max)
 {

@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include "state.h"
 #include "state_io.h"
+#include "state_requests.h"
 #include "state_subsystems.h"
 #include "state_remap.h"
 #include "pc/platform/settings.h"
@@ -348,7 +349,7 @@ unsigned Memories_JniGuardCount(void) { return jni_guard_count; }
 
 static int (*game_entry)(void);
 static int game_result;
-static volatile int requested, requested_slot = 1;
+static MemoriesStateRequests requests = MEMORIES_STATE_REQUESTS_INIT;
 static volatile int last_loaded_slot;
 static uint8_t *pending_image;
 static uint32_t build_id; /* from the `buildid` file beside the executable */
@@ -358,10 +359,7 @@ int Memories_LastStateSlot(void) { return last_loaded_slot; }
 
 void Memories_StateRequest(int what, int slot)
 {
-    if (slot > 0) {
-        requested_slot = slot;
-    }
-    requested = what;
+    Memories_StateQueue(&requests, what, slot);
 }
 
 void Memories_StateRemapRange(MemoriesState *state, uint32_t from, uint32_t to, uint32_t size)
@@ -423,19 +421,6 @@ static void hold_signals(int hold)
     sigprocmask(hold ? SIG_BLOCK : SIG_UNBLOCK, &set, NULL);
 }
 
-static void slot_path(char *out, size_t size, int slot)
-{
-    const char *directory = getenv("MEMORIES_STATE_DIR");
-    char relative[32];
-    if (!directory) {
-        snprintf(relative, sizeof(relative), "states/slot%d.state", slot);
-        if (!Paths_User(out, size, relative)) return;
-        directory = "."; /* the user directory is unusable; keep going beside the game */
-    }
-    mkdir(directory, 0777);
-    snprintf(out, size, "%s/slot%d.state", directory, slot);
-}
-
 /* The whole state, to a file. Chunks are found by tag, in any order; the
  * stack, whose size follows the depth of the VSync call, goes last. */
 static void serialize(MemoriesState *state)
@@ -485,33 +470,24 @@ static void serialize(MemoriesState *state)
     hold_signals(0);
 }
 
-/* Where and why a state was not saved: on stderr, and for the player's own
- * request (`tell`) in a notice as well, since F5 is otherwise silent. */
-static int not_saved(const char *path, int tell)
-{
-    static const char *const ok[] = {"OK"};
-    char why[1200], text[1300];
-    Paths_WriteError(why, sizeof(why), path);
-    snprintf(text, sizeof(text), "Could not save the state to %s", why);
-    fprintf(stderr, "memories-pc: %s\n", text);
-    if (tell) Menu_ShowNotice("Save state not saved", text, ok, 1, 0, NULL);
-    return -1;
-}
-
 static int save(const char *path, int tell)
 {
     MemoriesState state = {0, NULL, NULL, 0};
-    char partial[600];
-    int failed;
-    snprintf(partial, sizeof(partial), "%s.partial", path);
+    char partial[1024];
+    int failed, length;
     Paths_WriteBegin();
+    length = snprintf(partial, sizeof(partial), "%s.partial", path);
+    if (length < 0 || (size_t)length >= sizeof(partial)) {
+        errno = ENAMETOOLONG;
+        return Memories_StateSaveFailure(path, tell);
+    }
     state.file = fopen(partial, "wb");
-    if (!state.file) return not_saved(path, tell);
+    if (!state.file) return Memories_StateSaveFailure(path, tell);
     serialize(&state);
     failed = ferror(state.file) != 0; /* a short write (a full disk) leaves fclose content */
     if (fclose(state.file) != 0) failed = 1;
     if (failed || rename(partial, path) != 0) {
-        not_saved(path, tell); /* before remove() changes the reason */
+        Memories_StateSaveFailure(path, tell); /* before remove() changes the reason */
         remove(partial);
         return -1;
     }
@@ -932,87 +908,18 @@ static int from_game_code(void)
     return caller >= (uintptr_t)__start_game_text && caller < (uintptr_t)__stop_game_text;
 }
 
-/* MEMORIES_LOAD_STATE has been acted on (whether or not it loaded). */
-static int startup_done;
-int Memories_StateStartupDone(void) { return startup_done; }
+int Memories_StateStartupDone(void) { return requests.startup_done; }
+
+static void load_requested(const char *path, int slot)
+{
+    if (!load(path)) last_loaded_slot = slot;
+    else Crash_ReportSoft("state load failed", path);
+}
 
 void Memories_StatePoint(unsigned presented_frames)
 {
-    static int scripted_done;
-    static unsigned scripted_frame;
-    static const char *scripted_path;
-    char path[512];
-    int what;
-    if (!from_game_code()) {
-        return; /* a native caller's frame would not mean anything to another build */
-    }
-    if (!startup_done && presented_frames >= 30) {
-        /* MEMORIES_LOAD_STATE=<slot number or path>, once the boot has
-         * initialized every subsystem the state will fill in. */
-        const char *wanted = getenv("MEMORIES_LOAD_STATE");
-        const char *script = getenv("MEMORIES_SAVE_STATE"); /* "<frame>:<path>", for tests */
-        startup_done = 1;
-        if (script && strchr(script, ':')) {
-            scripted_frame = (unsigned)atoi(script);
-            scripted_path = strchr(script, ':') + 1;
-        }
-        if (wanted && *wanted) {
-            int load_result;
-            if (strspn(wanted, "0123456789") == strlen(wanted)) {
-                slot_path(path, sizeof(path), atoi(wanted));
-            } else {
-                snprintf(path, sizeof(path), "%s", wanted);
-            }
-            load_result = load(path);
-            if (!load_result && strspn(wanted, "0123456789") == strlen(wanted)) last_loaded_slot = atoi(wanted);
-            if (load_result) Crash_ReportSoft("state load failed", path);
-        }
-    }
-    if (scripted_path && !scripted_done && presented_frames >= scripted_frame) {
-        scripted_done = 1;
-        save(scripted_path, 0);
-    }
-    {
-        /* MEMORIES_AUTOSAVE=<seconds>: a rolling state every so many seconds
-         * of presented frames, in slots auto1..auto3 of the state folder, so
-         * that a problem report comes with a state from shortly before it.
-         * MEMORIES_AUTOSAVE_DIR puts them elsewhere, leaving the player's own
-         * slots where they are. */
-        static unsigned autosave_every, autosave_next, autosave_index;
-        static int autosave_read;
-        if (!autosave_read) {
-            const char *every = getenv("MEMORIES_AUTOSAVE");
-            autosave_read = 1;
-            autosave_every = every ? (unsigned)atoi(every) * 60u : 0;
-            autosave_next = presented_frames + autosave_every;
-        }
-        if (autosave_every && presented_frames >= autosave_next) {
-            char folder[512];
-            const char *slash;
-            autosave_next = presented_frames + autosave_every;
-            if (getenv("MEMORIES_AUTOSAVE_DIR")) {
-                snprintf(folder, sizeof(folder), "%s/", getenv("MEMORIES_AUTOSAVE_DIR"));
-                Paths_MakeDirs(getenv("MEMORIES_AUTOSAVE_DIR"));
-            } else {
-                slot_path(folder, sizeof(folder), 0); /* creates the folder */
-            }
-            slash = strrchr(folder, '/');
-            snprintf(path, sizeof(path), "%.*s/auto%u.state", slash ? (int)(slash - folder) : 1,
-                     slash ? folder : ".", autosave_index % 3 + 1);
-            autosave_index++;
-            if (!save(path, 0)) LOG(LOG_STATE, "autosave %s at frame %u", path, presented_frames);
-        }
-    }
-    what = __atomic_exchange_n(&requested, 0, __ATOMIC_SEQ_CST);
-    if (what) {
-        slot_path(path, sizeof(path), requested_slot);
-        if (what == 1) {
-            save(path, 1);
-        } else {
-            if (!load(path)) last_loaded_slot = requested_slot;
-            else Crash_ReportSoft("state load failed", path);
-        }
-    }
+    static const MemoriesStateActions actions = {save, load_requested};
+    if (from_game_code()) Memories_StateProcess(&requests, presented_frames, &actions);
 }
 
 /* The control channel (src/pc/debug/control.c), from the end of VSync(0),

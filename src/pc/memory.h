@@ -3,8 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define MEMORIES_RAM_SIZE 0x200000u
-#define MEMORIES_SCRATCHPAD_SIZE 0x400u
+#include "memory_map.h"
 
 /* Guest-layout storage for adapters/fixtures, not a host address-space mapping.
  * MMIO, BIOS, overlay execution and RAM mirrors above 2 MiB are not supported. */

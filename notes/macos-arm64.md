@@ -19,6 +19,14 @@ address and storage contracts. The current frontend marks guest pointers with
 LLVM address space 271; the pass lowers them to host address space zero, routes
 memory operations through the guest runtime, and encodes native pointers
 before they are stored in 32-bit guest slots.
+Direct accesses rooted in native globals or stack allocations bypass the
+resolver, including native GEPs and memory intrinsics. Other accesses use an
+inline fast path: full-width native pointers pass through, and physical,
+KSEG0 and KSEG1 RAM spans are checked against the currently bound 2 MiB image.
+Sign-extended guest addresses retain their low 32 bits. Unbound contexts,
+scratchpad, external regions and invalid spans reach the checked runtime.
+This avoids a resolver call and its register spills for common model accesses;
+it does not widen a registered span or change guest pointer storage.
 Unsupported address-space conversions and ABI shapes fail the build. The
 existing fixed guest image addresses and console matching configuration remain
 the source of truth; use the console matching targets below to verify the
@@ -52,6 +60,28 @@ live registered bytes, heap bytes and allocation cursor. These diagnostics are
 prepared before abort; the crash report copies them with the loaded Mach-O UUID
 and build identity.
 
+External guest accesses cache a region index per 4 KiB page and validate the
+complete requested span on every hit. Small allocations may share a page;
+candidate misses use a guest-base-sorted index with logarithmic lookup. Registry
+growth retains indices, and removal or reset invalidates page candidates with
+an epoch. The page candidates occupy approximately 3.5 MiB of native storage,
+outside guest memory and save payloads.
+Encoding native pointers uses separate host-base-sorted indexes for functions
+and data instead of scanning the entire registry. Function aliases keep their
+first registered token; containing allocations take precedence over adjacent
+one-past pointers. Registry growth and swap removal preserve both indexes.
+External registrations reject spans that overlap RAM or scratchpad aliases,
+and host spans that belong to the bound console image. Console map constants
+are shared with the IR compiler, whose RAM-at-offset-zero assumption is
+checked by the runtime.
+RAM/scratchpad checks for explicit memory contexts share one inline implementation
+with the translated runtime, avoiding a second runtime call. The fixed-address
+resolver retains its mapping-specific checks. Endian helpers and resident-function
+lookup also share their implementations across the backends. Indirect function lookups
+use the generated map's address ordering to search logarithmically, then check
+every equal-address candidate's current overlay residency. No callable target
+is cached across a module switch; the interpreter fallback is unchanged.
+
 Texture-pack tables, resampled pixels and decoded PNG caches are exclusively
 host data with LP64 pointers. Their allocations retain native libc ownership
 and consume no guest tokens. They are rebuilt by the renderer rather than
@@ -66,7 +96,8 @@ shares address tables and Darwin frontend flags with the mod builder; mods
 retain their own ABI validation, registration/cleanup and dynamic linkage.
 The LLVM pass keeps validation, pinning, instruction preparation/lowering,
 hooks and global registration as ordered phases. Host renderer allocations
-remain outside guest heaps.
+remain outside guest heaps. Packet-chain flattening uses one shared algorithm;
+fixed and translated callers supply their own address resolvers.
 
 The isolated function runners compile their own current C sources through
 `guest_test_ir.py`. Function selection uses LLVM definitions and preserves
@@ -100,6 +131,10 @@ logs and private inputs stay under ignored paths.
 
 ## Mods and save-state boundaries
 
+Mod units disable implicit builtin synthesis, so optimized loops cannot
+introduce unchecked libc calls. Character classification, including `isdigit`,
+uses explicit runtime exports; the libSystem import guard stays restricted.
+
 Data mods use the existing platform-independent data format. Code mods need a
 separate native macOS ARM64 Mach-O `.dylib`, built from source with the game's
 translated guest-memory contract. Existing i386 ELF `.o` code mods cannot be
@@ -108,7 +143,7 @@ mod loader checks exports and ABI signatures, and rejects unsupported
 constructors, destructors, and thread-local storage. See
 [modding](modding.md#native-macos-arm64-code-mods) for the build details.
 
-The 3D Monsters mod reads battle models from the player's disc
+The bundled 3D Monsters mod reads battle models from the player's disc
 (`DATA/MODEL.MRG`); no separate model pack is required. Its shared callback
 and ordering tables use the game's canonical headers and guest-width pointer
 declarations on the translated backend. Other ports retain their upstream
@@ -126,11 +161,35 @@ Inspect the generated `tmp/3d-monsters-regression/on/terrain.png` for the
 standing monster. This disc-backed test is separate from the ROM-free package
 and loader checks.
 
+Add `--stress --window --texture-mod /path/to/hd-mod --output tmp/3d-stress-new`
+to measure 1, 3, 4, 5 and 10 different retail models in a 4x window with HD.
+This deliberately changes only the isolated duel's field records. Inspect the
+field captures alongside `on/timings.json`; the timings exclude initial model
+reads and client waits between frames, and are processing times rather than
+normal-play FPS. Each scene measures five batches of 120 frames and reports
+the median alongside every batch in `on/timings.json`; `--timing-batches`
+changes the batch count. These are throughput measurements, not individual
+frame percentiles. Use a fresh output directory when supplying a texture mod.
+
+Optimized macOS builds keep the software GTE math and LIBGS ordering-table
+adapter native, resolving guest spans at their entry points. The diagnostic
+`--no-optimize` path retains full translation. Texture invalidation clears
+contiguous wrapped spans, and the mod flattens its OT through a native adapter
+which preserves packet order and command-length bits. These paths are guarded
+for the translated backend; other ports retain the upstream texture-clear and
+mod ordering-table loops.
+
 Native `.state` files include machine registers and stack data. They cannot
 cross 32-bit/64-bit or operating-system builds. The macOS loader requires the same build identity and Mach-O UUID; it
 relocates host pointers when ASLR moves that executable in a new process. The
 loader also checks the active mod set, mod state layouts, language, and text
 layout. Use ordinary `.sav` files to move a game between builds. See the save-state compatibility section below.
+
+Save request scheduling and path construction are shared across backends.
+Decimal slots and frame settings reject overflow and invalid digits; autosave
+uses elapsed unsigned frames across counter wrap. Oversized paths fail before
+I/O, and autosaves inherit `MEMORIES_STATE_DIR` unless explicitly overridden.
+Backend stack capture, restore and serialized pointer layouts stay separate.
 
 ## Validation matrix
 
@@ -178,6 +237,10 @@ tests/pc/replays/x64-data-mods --check`; other replay fixtures do not need it.
 
 
 ## Save-state use and compatibility
+
+Both backends share slot paths, startup load, scripted saves, autosave rotation
+and manual save-failure notices. Stack capture and payload restoration remain
+backend-specific. Invalid or overflowing autosave intervals disable autosave.
 
 Native save states capture a running game at a frame boundary, including PS1
 RAM and scratchpad, the translated CPU context and stack, game allocations,

@@ -16,6 +16,7 @@
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/raw_ostream.h"
 #include <string>
+#include "../../../src/pc/memory_map.h"
 
 using namespace llvm;
 
@@ -164,6 +165,51 @@ static void normalize(Module &module, const json::Object &options) {
 
 class GuestMemoryPass : public PassInfoMixin<GuestMemoryPass> {
   const json::Object &options;
+  Function *dataResolver = nullptr;
+  Function *fastDataResolver(Module &module) {
+    if (dataResolver) return dataResolver;
+    auto &context = module.getContext();
+    auto *ptr = PointerType::get(context, 0);
+    auto *i64 = Type::getInt64Ty(context);
+    dataResolver = Function::Create(FunctionType::get(ptr, {ptr, i64}, false),
+      GlobalValue::InternalLinkage, "Memories_ResolveDataFast", module);
+    dataResolver->addFnAttr(Attribute::AlwaysInline);
+    auto *entry = BasicBlock::Create(context, "entry", dataResolver);
+    auto *native = BasicBlock::Create(context, "native", dataResolver);
+    auto *guest = BasicBlock::Create(context, "guest", dataResolver);
+    auto *ram = BasicBlock::Create(context, "ram", dataResolver);
+    auto *slow = BasicBlock::Create(context, "slow", dataResolver);
+    Value *pointer = dataResolver->getArg(0), *size = dataResolver->getArg(1);
+    IRBuilder<> b(entry);
+    Value *address = b.CreatePtrToInt(pointer, i64);
+    // Negative PS1 pointers may be sign extended by a signed integer cast.
+    Value *signedGuest = b.CreateICmpUGE(address, b.getInt64(0xffffffff80000000ull));
+    b.CreateCondBr(b.CreateAnd(b.CreateICmpUGT(address, b.getInt64(UINT32_MAX)),
+                              b.CreateNot(signedGuest)), native, guest);
+    b.SetInsertPoint(native); b.CreateRet(pointer);
+    b.SetInsertPoint(guest);
+    Value *bits = b.CreateTrunc(address, b.getInt32Ty());
+    Value *physical = b.CreateAnd(bits, b.getInt32(MEMORIES_GUEST_PHYSICAL_MASK));
+    Value *segment = b.CreateOr(b.CreateICmpULT(bits, b.getInt32(MEMORIES_GUEST_PHYSICAL_END)),
+      b.CreateAnd(b.CreateICmpUGE(bits, b.getInt32(MEMORIES_GUEST_RAM)),
+                  b.CreateICmpULT(bits, b.getInt32(MEMORIES_GUEST_DIRECT_END))));
+    // RAM is the first field of MemoriesMemory. Scratchpad and external
+    // spans retain the checked runtime path, including invalid final bytes.
+    auto *binding = module.getNamedGlobal("GuestRuntime_ActiveMemory");
+    if (!binding) binding = new GlobalVariable(module, ptr, false,
+      GlobalValue::ExternalLinkage, nullptr, "GuestRuntime_ActiveMemory");
+    Value *memory = b.CreateLoad(ptr, binding);
+    Value *offset = b.CreateZExt(physical, i64);
+    Value *valid = b.CreateAnd(segment, b.CreateICmpULT(physical, b.getInt32(MEMORIES_RAM_SIZE)));
+    valid = b.CreateAnd(valid, b.CreateICmpULE(size, b.CreateSub(b.getInt64(MEMORIES_RAM_SIZE), offset)));
+    valid = b.CreateAnd(valid, b.CreateICmpNE(memory, ConstantPointerNull::get(ptr)));
+    b.CreateCondBr(valid, ram, slow);
+    b.SetInsertPoint(ram); b.CreateRet(b.CreateGEP(b.getInt8Ty(), memory, offset));
+    b.SetInsertPoint(slow);
+    auto callee = module.getOrInsertFunction("GuestRuntime_ResolveData", ptr, ptr, i64);
+    b.CreateRet(b.CreateCall(callee, {pointer, size}));
+    return dataResolver;
+  }
   Value *encode(IRBuilder<> &builder, Module &module, Value *pointer) {
     auto callee = module.getOrInsertFunction("GuestRuntime_EncodePointer",
       builder.getInt32Ty(), builder.getPtrTy());
@@ -176,9 +222,18 @@ class GuestMemoryPass : public PassInfoMixin<GuestMemoryPass> {
     return builder.CreateIntToPtr(builder.CreatePtrToInt(pointer, builder.getInt32Ty()), builder.getPtrTy());
   }
   Value *resolve(IRBuilder<> &builder, Module &module, Value *pointer, Value *size) {
-    auto callee = module.getOrInsertFunction("GuestRuntime_ResolveData",
-      builder.getPtrTy(), builder.getPtrTy(), builder.getInt64Ty());
-    return builder.CreateCall(callee, {guestBits(builder, pointer), size});
+    // Pins have already become integer tokens. Direct host globals and stack
+    // storage need no runtime lookup, including their native GEPs. Do not
+    // infer this for arguments, loaded pointers or integer-derived addresses.
+    Value *base = pointer;
+    while (base->getType()->isPointerTy() &&
+           cast<PointerType>(base->getType())->getAddressSpace() == 0) {
+      if (isa<AllocaInst>(base) || isa<GlobalVariable>(base)) return pointer;
+      if (auto *gep = dyn_cast<GEPOperator>(base)) base = gep->getPointerOperand();
+      else if (auto *cast = dyn_cast<BitCastOperator>(base)) base = cast->getOperand(0);
+      else break;
+    }
+    return builder.CreateCall(fastDataResolver(module), {guestBits(builder, pointer), size});
   }
   Value *resolve(IRBuilder<> &builder, Module &module, Value *pointer, Type *type) {
     auto size = module.getDataLayout().getTypeStoreSize(type);
@@ -251,7 +306,7 @@ class GuestMemoryPass : public PassInfoMixin<GuestMemoryPass> {
       if (global.hasInitializer())
         validateInitializer(global.getInitializer(), global.getName());
   }
-  static SmallVector<Instruction *> prepareInstructions(Module &module) {
+  SmallVector<Instruction *> prepareInstructions(Module &module) {
     auto &context = module.getContext();
     SmallVector<Instruction *> originals;
     for (auto &function : module) for (auto &instruction : instructions(function))
@@ -268,6 +323,9 @@ class GuestMemoryPass : public PassInfoMixin<GuestMemoryPass> {
           return parameters;
         }()));
       if (twice) function.addFnAttr(Attribute::ReturnsTwice);
+      // Optimization must not synthesize libSystem memory calls from loops
+      // in a mod: all pointer-taking libc goes through translated wrappers.
+      if (options.getBoolean("mod_unit").value_or(false)) function.addFnAttr("no-builtins");
       for (auto &instruction : instructions(function)) originals.push_back(&instruction);
     }
     return originals;

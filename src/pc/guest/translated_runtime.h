@@ -10,6 +10,8 @@ void GuestRuntime_Reset(void);
 void GuestRuntime_SetFunctionResolver(void *(*resolver)(uint32_t));
 int GuestRuntime_IsBound(void);
 MemoriesMemory *GuestRuntime_Memory(void);
+/* Read by generated fast paths; only Bind/Reset may change this context. */
+extern MemoriesMemory *GuestRuntime_ActiveMemory;
 int GuestRuntime_RegisterData(void *host, size_t length, uint32_t guest);
 void GuestRuntime_RegisterAutomatic(void *host, size_t length);
 enum {
@@ -32,6 +34,11 @@ int GuestRuntime_ReserveRegions(size_t count);
 int GuestRuntime_UnregisterData(void *host);
 int GuestRuntime_RegisterFunction(uint32_t guest, void (*host)(void));
 void *GuestRuntime_ResolveData(void *address, size_t length);
+/* Clear a resolved texture-map span and count entries whose value changed. */
+unsigned GuestRuntime_Clear16(void *address, size_t count);
+/* Flatten an OT's packet chains, preserving packet order and length bits. */
+void GuestRuntime_FlattenOt(void *tags, unsigned count, uint32_t end,
+                            uint32_t *first, uint32_t *last, unsigned *nearest);
 void *GuestRuntime_ResolveFunction(void *address);
 uint32_t GuestRuntime_EncodePointer(void *host);
 /* Generated, typed dispatch for calls leaving an interpreted MIPS module. */

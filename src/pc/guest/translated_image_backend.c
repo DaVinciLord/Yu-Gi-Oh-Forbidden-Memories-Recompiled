@@ -7,6 +7,7 @@
 #include "mips.h"
 #include "translated_image.h"
 #include "translated_runtime.h"
+#include "function_map.h"
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,12 +20,8 @@ void *(*Memories_GuestBranchResolver)(unsigned);
 
 static void *resolve_function(u32 address)
 {
-    unsigned i;
-    for (i = 0; i < Memories_FunctionMapCount; ++i) {
-        const MemoriesGuestFunction *entry = &Memories_FunctionMap[i];
-        if (entry->guest == address && Memories_ModuleIsResident(entry->bank, entry->identifier))
-            return (void *)(uintptr_t)entry->host;
-    }
+    const MemoriesGuestFunction *entry = Memories_FindResidentFunction(address);
+    if (entry) return (void *)(uintptr_t)entry->host;
     if (Memories_MipsInOverlay(address)) {
         Memories_MipsThunkTarget = address;
         return (void *)(uintptr_t)Memories_MipsThunk;
@@ -72,24 +69,6 @@ int Memories_GuestLoadExeData(const unsigned char *data, size_t size, const char
     }
     printf("Native arm64: loaded PS-X EXE, guest entry 0x%08x\n", entry);
     return 0;
-}
-int Memories_GuestLoadExe(const char *path)
-{
-    FILE *file = fopen(path, "rb");
-    long length;
-    unsigned char *data;
-    int result;
-    if (!file) return -1;
-    if (fseek(file, 0, SEEK_END) || (length = ftell(file)) < 0 || fseek(file, 0, SEEK_SET)) {
-        fclose(file); return -1;
-    }
-    data = malloc(length ? (size_t)length : 1);
-    if (!data) { fclose(file); return -1; }
-    if (fread(data, 1, (size_t)length, file) != (size_t)length) { free(data); fclose(file); return -1; }
-    fclose(file);
-    result = Memories_GuestLoadExeData(data, (size_t)length, path);
-    free(data);
-    return result;
 }
 void Memories_Unimplemented(const char *name)
 {

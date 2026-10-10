@@ -61,6 +61,15 @@ class ImportTests(unittest.TestCase):
                 with self.assertRaisesRegex(SystemExit, f"cannot import from libSystem: {name}"):
                     self.link(source, exported={name})
 
+    def test_scalar_character_classification(self):
+        with self.assertRaisesRegex(SystemExit, "cannot import from libSystem: isdigit"):
+            self.link("extern int isdigit(int);\n"
+                      "int fixture(int value) { return isdigit(value); }")
+        rows = self.link("extern int GuestRuntime_isdigit(int);\n"
+                         "int fixture(int value) { return GuestRuntime_isdigit(value); }",
+                         exported={"GuestRuntime_isdigit"})
+        self.assertIn("_GuestRuntime_isdigit (dynamically looked up)", rows)
+
     def test_missing_game_import_rejected(self):
         with self.assertRaisesRegex(SystemExit, "game does not provide: missing_game_function"):
             self.link("extern void missing_game_function(void);\n"

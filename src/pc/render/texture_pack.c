@@ -13,6 +13,9 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#ifdef MEMORIES_TRANSLATED
+#include "pc/guest/translated_runtime.h"
+#endif
 
 typedef struct Entry {
     uint32_t offset, clut_offset, stride; /* disc bytes once resolved; stride in words, 0 with row_offsets */
@@ -661,6 +664,19 @@ static void paint(int x, int y, int w, int h)
  * with them, and moved with them. */
 static void forget(int x, int y, int w, int h)
 {
+#ifdef MEMORIES_TRANSLATED
+    for (int j = 0; j < h; j++) {
+        int left = w, column = x & (SOFT_GPU_WIDTH - 1);
+        size_t row = (size_t)((y + j) & (SOFT_GPU_HEIGHT - 1)) * SOFT_GPU_WIDTH;
+        while (left > 0) {
+            int count = SOFT_GPU_WIDTH - column;
+            if (count > left) count = left;
+            map_generation += GuestRuntime_Clear16(entry_of + row + column, (size_t)count);
+            left -= count;
+            column = 0;
+        }
+    }
+#else
     int i, j;
     for (j = 0; j < h; j++) {
         for (i = 0; i < w; i++) {
@@ -671,6 +687,7 @@ static void forget(int x, int y, int w, int h)
             }
         }
     }
+#endif
 }
 
 static void follow(int sx, int sy, int dx, int dy, int w, int h)

@@ -15,10 +15,11 @@ static void free_entry(void) { free_calls++; }
 static void name_entry(void) { name_calls++; }
 static void alternate_entry(void) { alternate_calls++; }
 const MemoriesGuestFunction Memories_FunctionMap[]={
- {0x8016AA6C,name_entry,0x80168000,0x15},
- {0x8016AA6C,alternate_entry,0x80168000,0x14},
+ /* Generated maps are sorted by guest address; equal keys keep their order. */
  {0x8016866C,(void (*)(void))campaign_entry,0x80168000,0x14},
- {0x80168FB4,free_entry,0x80168000,0x13}};
+ {0x80168FB4,free_entry,0x80168000,0x13},
+ {0x8016AA6C,name_entry,0x80168000,0x15},
+ {0x8016AA6C,alternate_entry,0x80168000,0x14}};
 const unsigned Memories_FunctionMapCount=4;
 uint32_t Memories_MipsThunkTarget;
 /* No interpreter allowed: unknown bank must resolve NULL, never wrong native. */

@@ -99,6 +99,7 @@ def compiler():
     fingerprint_data = {
         "revision": revision,
         "source": hashlib.sha256(source.read_bytes()).hexdigest(),
+        "memory_map": hashlib.sha256((ROOT / "src/pc/memory_map.h").read_bytes()).hexdigest(),
         "config": hashlib.sha256(CONFIG.read_bytes()).hexdigest(),
         "driver": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "dependencies_script": hashlib.sha256(deps_source.read_bytes()).hexdigest(),

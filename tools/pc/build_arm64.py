@@ -53,6 +53,8 @@ ROOT = Path(__file__).resolve().parents[2]
 ORDINARY = {
     "src/pc/memory.c",
     "src/pc/guest/state_translated.c",
+    "src/pc/guest/state_requests.c",
+    "src/pc/guest/image_loader.c",
     "src/pc/mods/hooks.c",
     "src/pc/mods/object_loader.c",
 }
@@ -102,6 +104,8 @@ def compile_sources(jobs, ordinary, path_for, cc, flags, game_extra, args):
         raw = path_for("raw", source, ".ll")
         obj = path_for("obj", source, ".o")
         extra = game_extra if group != "native" else []
+        if source == "src/pc/compat/gte.c" and source in ordinary:
+            extra = [*extra, "-DMEMORIES_NATIVE_GTE"]
         emit_flags = [
             ("-O2" if args.optimize and source in ordinary and flag == "-O0" else flag)
             for flag in flags
@@ -664,6 +668,10 @@ def main():
     ordinary = {s for s in natives if s in ORDINARY or "/translated_" in s}
     if args.optimize and not args.instrument_softgpu:
         ordinary.add(SOFT_GPU)
+    if args.optimize:
+        ordinary.add("src/pc/compat/gte.c")
+        # This adapter already resolves complete guest OT spans explicitly.
+        ordinary.add("src/pc/compat/libgs_ot.c")
     # Local independent runtime helpers must never resolve their own accesses.
     flags = [
         *guest_frontend_flags(sdk),

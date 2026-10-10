@@ -75,10 +75,9 @@ define i8 @read_retail_byte() {
     translated_pc = translate(pc_storage, filtered["resident"], game_unit=True)
     assert "@gCardGrid_bCursorColumn = global i16 5, align 2" in translated_pc
     assert "@gCardGrid_bCursorRow = global i16 7, align 2" in translated_pc
-    assert (
-        "GuestRuntime_ResolveData(ptr @gCardGrid_bCursorColumn, i64 2)" in translated_pc
-    )
-    assert "GuestRuntime_ResolveData(ptr @gCardGrid_bCursorRow, i64 2)" in translated_pc
+    assert "load i16, ptr @gCardGrid_bCursorColumn" in translated_pc
+    assert "load i16, ptr @gCardGrid_bCursorRow" in translated_pc
+    assert "call ptr @GuestRuntime_ResolveData" not in translated_pc
 
     translated_retail = translate(retail_storage, filtered["resident"], game_unit=True)
     assert "@retail_callback_slot =" not in translated_retail

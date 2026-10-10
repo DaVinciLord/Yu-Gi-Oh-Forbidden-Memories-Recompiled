@@ -89,6 +89,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#ifdef MEMORIES_TRANSLATED
+#include "pc/guest/translated_runtime.h"
+#endif
 
 extern u8 D_8009B1D5;          /* the side the view belongs to */
 extern void *G32 D_800E9D98[]; /* D_800E9D90[2]: func_800540B4's table */
@@ -636,7 +639,11 @@ static void sort_monster(Monster *monster, GsOT *into, int at)
     GsOT *live = (GsOT *)D_800E9D98[0];
     GsOT *table = (GsOT *)(scratch + TABLE_AT);
     u32 *tags = (u32 *)scratch, *entry, *last = NULL, first = LINK_END, end;
+#ifdef MEMORIES_TRANSLATED
+    int entries, nearest = 0;
+#else
     int entries, nearest = 0, i;
+#endif
 
     if (!packets_fit(monster)) {
         return;
@@ -657,6 +664,13 @@ static void sort_monster(Monster *monster, GsOT *into, int at)
 
     /* The table's entries run from the far end down to entry 0; chain the
      * packets through them, leaving the empty entries out. */
+#ifdef MEMORIES_TRANSLATED
+    u32 last_guest;
+    unsigned closest;
+    GuestRuntime_FlattenOt(tags, (unsigned)entries, end, &first, &last_guest, &closest);
+    last = (u32 *)(uintptr_t)last_guest;
+    nearest = (int)closest;
+#else
     for (i = entries - 1; i >= 0; i--) {
         u32 link = tags[i] & LINK_MASK;
         u32 stop = i ? (u32)(uintptr_t)&tags[i - 1] & LINK_MASK : end;
@@ -672,6 +686,7 @@ static void sort_monster(Monster *monster, GsOT *into, int at)
             link = *packet & LINK_MASK;
         }
     }
+#endif
     if (!last) {
         return;
     }

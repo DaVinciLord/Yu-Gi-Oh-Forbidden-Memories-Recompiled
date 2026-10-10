@@ -1,3 +1,4 @@
+#include "pc/memory_endian.h"
 /* Memories_Resolve for the mapped ILP32 image: a guest address is already a
  * host address, so this only keeps the range and alignment checks. */
 #include "image.h"
@@ -31,14 +32,9 @@ void *Memories_Resolve(MemoriesMemory *memory, uint32_t address,
 
 uint32_t Memories_ReadLE32(const uint8_t *bytes)
 {
-    return (uint32_t)bytes[0] | ((uint32_t)bytes[1] << 8) |
-           ((uint32_t)bytes[2] << 16) | ((uint32_t)bytes[3] << 24);
+    return Memories_LoadLE32(bytes);
 }
-
 void Memories_WriteLE32(uint8_t *bytes, uint32_t value)
 {
-    bytes[0] = (uint8_t)value;
-    bytes[1] = (uint8_t)(value >> 8);
-    bytes[2] = (uint8_t)(value >> 16);
-    bytes[3] = (uint8_t)(value >> 24);
+    Memories_StoreLE32(bytes, value);
 }

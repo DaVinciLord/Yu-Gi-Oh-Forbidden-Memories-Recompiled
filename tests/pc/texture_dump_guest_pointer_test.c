@@ -96,6 +96,24 @@ int main(void)
     TextureDump_Delivered((const void *)(uintptr_t)registered_region.guest, byte_count, 9, 21);
     TextureDump_Loaded(80, 90, 8, 8, registered_pixels);
     assert(TextureDump_Tags[90 * SOFT_GPU_WIDTH + 80] == 9 * 2048u + 22u);
-    puts("Texture provenance: tokens, registered pointers, uploads and rebased RAM agree");
+    /* Bulk clearing must preserve wrapping and leave adjacent cells intact. */
+    assert(TextureDump_EnableShadow());
+    for (int y = 0; y < SOFT_GPU_HEIGHT; y++) {
+        for (int x = 0; x < SOFT_GPU_WIDTH; x++) {
+            TextureDump_Tags[y * SOFT_GPU_WIDTH + x] = 11;
+            for (int sub = 0; sub < 4; sub++) *TextureDump_Cell(x, y, sub) = 17;
+        }
+    }
+    TextureDump_Cleared(SOFT_GPU_WIDTH - 2, SOFT_GPU_HEIGHT - 1, 4, 2);
+    for (int y = 0; y < SOFT_GPU_HEIGHT; y++) {
+        for (int x = 0; x < SOFT_GPU_WIDTH; x++) {
+            int cleared = (y == 0 || y == SOFT_GPU_HEIGHT - 1) &&
+                          (x < 2 || x >= SOFT_GPU_WIDTH - 2);
+            assert(TextureDump_Tags[y * SOFT_GPU_WIDTH + x] == (cleared ? 0u : 11u));
+            for (int sub = 0; sub < 4; sub++)
+                assert(*TextureDump_Cell(x, y, sub) == (cleared ? 0 : 17));
+        }
+    }
+    puts("Texture provenance: guest pointers, state rebasing and wrapped span clears agree");
     return 0;
 }

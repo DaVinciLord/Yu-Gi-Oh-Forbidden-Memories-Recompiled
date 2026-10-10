@@ -1,6 +1,8 @@
 #define _GNU_SOURCE
 #include "pc/compat/fs.h"
 #include "image.h"
+#include "image_loader.h"
+#include "function_map.h"
 #include "low_memory.h"
 #include "mips.h"
 #include "pc/debug/crash.h"
@@ -141,26 +143,13 @@ static int in_guest_ram(uint32_t address)
 
 static void *guest_call_target(uint32_t address)
 {
-    size_t low = 0, high = Memories_FunctionMapCount;
-    /* Through KSEG1 or the physical address, the console runs the same
-     * code; the map and the overlay slots are keyed by KSEG0. */
+    const MemoriesGuestFunction *entry;
+    /* Normalize RAM mirrors before the shared residency-aware lookup. */
     if (in_guest_ram(address)) {
         address = MEMORIES_GUEST_RAM | (address & (MEMORIES_GUEST_RAM_SIZE - 1u));
     }
-    while (low < high) {
-        size_t middle = (low + high) / 2;
-        if (Memories_FunctionMap[middle].guest < address) {
-            low = middle + 1;
-        } else {
-            high = middle;
-        }
-    }
-    for (; low < Memories_FunctionMapCount && Memories_FunctionMap[low].guest == address; low++) {
-        const MemoriesGuestFunction *entry = &Memories_FunctionMap[low];
-        if (Memories_ModuleIsResident(entry->bank, entry->identifier)) {
-            return (void *)(uintptr_t)entry->host;
-        }
-    }
+    entry = Memories_FindResidentFunction(address);
+    if (entry) return (void *)(uintptr_t)entry->host;
     if (Memories_MipsInOverlay(address)) {
         /* A callback into a loaded overlay: run it interpreted. */
         Memories_MipsThunkTarget = address;
@@ -1071,47 +1060,16 @@ int Memories_GuestMap(void)
 }
 #endif /* _WIN32 */
 
-static uint32_t le32(const unsigned char *bytes)
-{
-    return bytes[0] | ((uint32_t)bytes[1] << 8) | ((uint32_t)bytes[2] << 16) |
-           ((uint32_t)bytes[3] << 24);
-}
-
 int Memories_GuestLoadExeData(const unsigned char *data, size_t length, const char *name)
 {
-    uint32_t address, size;
-    if (length < 0x800 || memcmp(data, "PS-X EXE", 8) != 0) {
-        fprintf(stderr, "%s: not a readable PS-X executable\n", name);
+    MemoriesExeImage image;
+    /* Fixed backends historically accept data-only images without an entry. */
+    if (Memories_ParseExe(data, length, 0, &image)) {
+        fprintf(stderr, "%s: invalid or truncated PS-X EXE\n", name);
         return -1;
     }
-    address = le32(data + 0x18);
-    size = le32(data + 0x1c);
-    if (address < MEMORIES_GUEST_RAM + 0x10000u || size > MEMORIES_GUEST_RAM_SIZE ||
-        address - MEMORIES_GUEST_RAM > MEMORIES_GUEST_RAM_SIZE - size || size > length - 0x800) {
-        fprintf(stderr, "%s: image does not fit guest RAM or is truncated\n", name);
-        return -1;
-    }
-    memcpy((void *)(uintptr_t)address, data + 0x800, size);
+    memcpy((void *)(uintptr_t)image.address, image.data, image.size);
     return 0;
-}
-
-int Memories_GuestLoadExe(const char *path)
-{
-    unsigned char *data;
-    long length;
-    int result;
-    FILE *file = fopen(path, "rb");
-    if (!file || fseek(file, 0, SEEK_END) || (length = ftell(file)) < 0 || fseek(file, 0, SEEK_SET) ||
-        !(data = malloc(length ? (size_t)length : 1))) {
-        fprintf(stderr, "%s: not a readable PS-X executable\n", path);
-        if (file) fclose(file);
-        return -1;
-    }
-    if (fread(data, 1, (size_t)length, file) != (size_t)length) length = 0;
-    fclose(file);
-    result = Memories_GuestLoadExeData(data, (size_t)length, path);
-    free(data);
-    return result;
 }
 
 typedef struct StubCount { const char *name; unsigned count; } StubCount;
