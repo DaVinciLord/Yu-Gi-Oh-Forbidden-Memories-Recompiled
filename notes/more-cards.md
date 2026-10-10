@@ -274,9 +274,14 @@ not take it. The colors are the text ramps (`gText_abColorSlots`) at sector
 played or springs.  Its entries use the same `do`, `card`, `attack`,
 `defense`, `amount`, `target`, `type`, `attribute` and `for_each` values as
 a [monster effect](#monster-effects), but have no `when`: the card itself is
-the occasion.  A spell or trap may target `own`, `opponent` (the default for
-`destroy`) or `all`; it cannot target `self`, `others` or `battle` because it
-is not a monster on the field.
+the occasion.  A `heal` or `damage` targets `own` or `opponent` (whose LP
+changes); a `boost` or `destroy` may also target `all`.  When `target` is
+left out, `damage` and `destroy` take the `opponent`, `heal` and `boost` its
+owner (`own`).  No spell or trap can target `self`, `others` or `battle`,
+because it is not a monster on the field; an entry that does is left out
+with a note.  `"card_effects"`, `"card_effects_mode"` and `"ai_effect"`
+(below) work only on a Magic or Trap card: on any other card they are refused
+with a note, and a copy made a monster drops the ones its base had.
 
 ```json
 { "replace": "Hinotama", "card_effects_mode": "replace",
@@ -294,10 +299,10 @@ The scripted CPU cannot infer a new effect's strategy from its text. A
 `"replace"` card is therefore not treated as its old retail behavior. Give
 it `"ai_effect": "Hinotama"` (a retail card of the same type) when that
 card is the appropriate tactical analogue; its scripts then find, value and
-play the custom card as that effect. Without it, the CPU never identifies a
-replacement as a retail spell/trap effect, rather than using it as the wrong
-one. Card types remain authoritative, so spells and traps never enter monster
-fusion or attack selection.
+play the custom card as that effect. Without it, the CPU's card lookups and
+valuation never take a replacement for a retail spell/trap effect, rather
+than using it as the wrong one. Card types remain authoritative, so spells
+and traps never enter monster fusion or attack selection.
 
 ## Monster effects
 

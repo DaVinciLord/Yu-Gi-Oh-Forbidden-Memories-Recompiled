@@ -1191,7 +1191,7 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     MonsterEffect read_card_effects[MONSTER_EFFECTS_MAX];
     MonsterEffect *own_card_effects = NULL;
     int card_effect_count, card_effect_replace = 0, card_effect_mode_given = 0;
-    int ai_effect = 0, ai_effect_given = 0;
+    int ai_effect = 0, ai_effect_given = 0, spell_or_trap;
     unsigned int trap_threshold;
     unsigned char level_attr, frame;
     unsigned int tags;
@@ -1503,14 +1503,6 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         gCard_awBaseId[id] = (unsigned short)base;
         gCard_asNameSortKey[id - 1] = gCard_asNameSortKey[base - 1];
     own:
-        if (card_effect_count >= 0 && card_effect_count &&
-            (int)((stats >> 26) & 0x1F) != CARD_TYPE_MAGIC &&
-            (int)((stats >> 26) & 0x1F) != CARD_TYPE_TRAP) {
-            Mods_Note(mod, "cards[%d]: \"card_effects\" only work for a Magic or Trap card", index);
-            free(own_card_effects);
-            own_card_effects = NULL;
-            card_effect_count = 0;
-        }
         if (effect_count >= 0) {
             monster_effects[id] = own_effects;
             monster_effect_counts[id] = (unsigned char)effect_count;
@@ -1518,11 +1510,26 @@ static void add_entry(const char *mod, const char *directory, int index, const J
             monster_effects[id] = monster_effects[base];
             monster_effect_counts[id] = monster_effect_counts[base];
         }
+        /* Only a Magic or Trap card is played or springs: on any other
+         * kind the three are refused (a monster that inherited them from
+         * a Magic base drops them), so its AI identity stays its own. */
+        spell_or_trap = (int)((stats >> 26) & 0x1F) == CARD_TYPE_MAGIC ||
+                        (int)((stats >> 26) & 0x1F) == CARD_TYPE_TRAP;
+        if (!spell_or_trap) {
+            if (card_effect_count >= 0 || card_effect_mode_given || ai_effect_given)
+                Mods_Note(mod, "cards[%d]: \"card_effects\", \"card_effects_mode\" and \"ai_effect\" "
+                          "only work for a Magic or Trap card", index);
+            free(own_card_effects);
+            own_card_effects = NULL;
+            card_effect_count = 0;
+            card_effect_replace = card_effect_mode_given = ai_effect_given = 0;
+            ai_effect_ids[id] = 0;
+        }
         if (card_effect_count >= 0) {
             card_effects[id] = own_card_effects;
             card_effect_counts[id] = (unsigned char)card_effect_count;
             card_effect_replaces[id] = (unsigned char)card_effect_replace;
-        } else if (!replace) {
+        } else if (!replace && spell_or_trap) {
             card_effects[id] = card_effects[base];
             card_effect_counts[id] = card_effect_counts[base];
             card_effect_replaces[id] = card_effect_replaces[base];
@@ -1535,7 +1542,7 @@ static void add_entry(const char *mod, const char *directory, int index, const J
                 Mods_Note(mod, "cards[%d]: \"ai_effect\" must name a retail card of this card's type", index);
             else
                 ai_effect_ids[id] = (unsigned short)ai_effect;
-        } else if (!replace) {
+        } else if (!replace && spell_or_trap) {
             ai_effect_ids[id] = ai_effect_ids[base];
         }
         trap_thresholds[id] = trap_threshold;

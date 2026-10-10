@@ -36,7 +36,7 @@ int gDuel_adwCardStats[CARD_TABLE_ID_END];
 short gCard_asNameSortKey[CARD_TABLE_ID_END];
 unsigned char gDuel_abCardLevelAttr[CARD_TABLE_ID_END];
 
-static int notes[7];     /* per mod, "a" to "g" */
+static int notes[8];     /* per mod, "a" to "h" (h: not counting a slot replaced twice) */
 static int effect_notes; /* of them, about "monster_effects" */
 
 void Mods_Note(const char *id, const char *format, ...)
@@ -47,7 +47,8 @@ void Mods_Note(const char *id, const char *format, ...)
     vsnprintf(note, sizeof(note), format, arguments);
     va_end(arguments);
     fprintf(stderr, "note: %s: %s\n", id, note);
-    if (id[0] >= 'a' && id[0] <= 'g' && !id[1]) notes[id[0] - 'a']++;
+    if (id[0] >= 'a' && id[0] <= 'h' && !id[1] && (id[0] != 'h' || !strstr(note, "is replaced by")))
+        notes[id[0] - 'a']++;
     if (strstr(note, "monster_effects")) effect_notes++;
 }
 
@@ -438,6 +439,93 @@ static void copies_made_monsters(void)
     assert(notes[6] == 2);
 }
 
+/* "card_effects", "card_effects_mode" and "ai_effect" (notes/more-cards.md,
+ * "Spell and trap effects"): read with no "when", their default targets, the
+ * targets a card that is no monster on the field cannot have, what a copy
+ * inherits, and all three refused on a card that is not a Magic or Trap. */
+static void card_effect_entries(void)
+{
+    BuildContext context = {0};
+    char error[128];
+    const JsonValue *entry;
+    const MonsterEffect *effects;
+    int i, copy = gCard_nCount + 1;
+    JsonDocument *doc = Json_Parse(
+        "[{\"replace\":600,\"type\":\"Magic\",\"card_effects_mode\":\"replace\",\"ai_effect\":337,"
+        "  \"card_effects\":[{\"do\":\"damage\",\"amount\":800},{\"do\":\"heal\",\"amount\":500},"
+        "                   {\"do\":\"destroy\"},{\"do\":\"boost\",\"target\":\"own\",\"attack\":200}]},"
+        "{\"copy\":600,\"id\":\"inherits\"},"
+        "{\"copy\":600,\"id\":\"own-list\",\"card_effects\":[{\"do\":\"heal\",\"amount\":100}]},"
+        "{\"copy\":600,\"id\":\"mode-only\",\"card_effects_mode\":\"add\"},"
+        "{\"copy\":600,\"id\":\"made-monster\",\"type\":\"Dragon\"},"
+        "{\"replace\":601,\"type\":\"Magic\",\"card_effects_mode\":\"replace\","
+        "  \"card_effects\":[{\"do\":\"heal\",\"amount\":100}]},"
+        "{\"replace\":602,\"type\":\"Magic\",\"card_effects\":["
+        "  {\"do\":\"heal\",\"amount\":1,\"target\":\"all\"},{\"do\":\"damage\",\"amount\":1,\"target\":\"all\"},"
+        "  {\"do\":\"boost\",\"target\":\"self\",\"attack\":1},{\"do\":\"boost\",\"target\":\"others\",\"attack\":1},"
+        "  {\"do\":\"destroy\",\"target\":\"battle\"},{\"do\":\"heal\",\"amount\":1,\"when\":\"flip\"},"
+        "  {\"do\":\"destroy\",\"target\":\"all\"},{\"do\":\"boost\",\"target\":\"all\",\"attack\":100}]},"
+        "{\"replace\":603,\"type\":\"Dragon\",\"card_effects_mode\":\"replace\"},"
+        "{\"replace\":604,\"type\":\"Dragon\",\"ai_effect\":337,"
+        "  \"card_effects\":[{\"do\":\"heal\",\"amount\":1}]},"
+        "{\"replace\":605,\"type\":\"Magic\",\"card_effects_mode\":\"swap\"},"
+        "{\"replace\":606,\"type\":\"Magic\",\"card_effects_mode\":\"replace\",\"card_effects\":[],"
+        "  \"ai_effect\":681}]", error, sizeof(error));
+    assert(doc);
+    test_stats[337 - 1] = STATS(CARD_TYPE_MAGIC, 0, 0);
+    test_stats[681 - 1] = STATS(CARD_TYPE_TRAP, 0, 0);
+    for (i = 0, entry = Json_At(Json_Root(doc), 0); entry; i++, entry = Json_Next(entry))
+        add_entry("h", ".", i, entry, &context);
+    assert(gCard_nCount == copy + 3);
+
+    /* No "when": the card itself is the occasion. Damage and destroy go to
+     * the opponent, the rest to its owner unless a target is given. */
+    assert(Cards_CardEffects(600, &effects) == 4 && Cards_CardEffectsReplace(600));
+    for (i = 0; i < 4; i++) assert(effects[i].when == MONSTER_WHEN_SUMMON);
+    assert(effects[0].action == MONSTER_DO_DAMAGE && effects[0].amount == 800 &&
+           effects[0].target == MONSTER_TARGET_OPPONENT);
+    assert(effects[1].action == MONSTER_DO_HEAL && effects[1].target == MONSTER_TARGET_OWN);
+    assert(effects[2].action == MONSTER_DO_DESTROY && effects[2].target == MONSTER_TARGET_OPPONENT);
+    assert(effects[3].action == MONSTER_DO_BOOST && effects[3].target == MONSTER_TARGET_OWN &&
+           effects[3].attack == 200);
+    assert(!Cards_MonsterEffects(600, &effects));
+    /* A replacement reads as its "ai_effect" only. */
+    assert(Cards_AiId(600) == 337);
+
+    /* A copy inherits the list, the mode and the analogue; its own list
+     * starts over in "add"; a mode alone changes only the mode. */
+    assert(Cards_CardEffects(copy, &effects) == 4 && Cards_CardEffectsReplace(copy) && Cards_AiId(copy) == 337);
+    assert(Cards_CardEffects(copy + 1, &effects) == 1 && effects[0].amount == 100 &&
+           !Cards_CardEffectsReplace(copy + 1));
+    assert(Cards_CardEffects(copy + 2, &effects) == 4 && !Cards_CardEffectsReplace(copy + 2));
+    /* Made a monster, it inherits none of them, and its AI identity is not
+     * forced to "no card" by its base's replacement. */
+    assert(Cards_Type(copy + 3) == 0 && !Cards_CardEffects(copy + 3, &effects) &&
+           !Cards_CardEffectsReplace(copy + 3));
+
+    /* A replacement without "ai_effect": the CPU takes it for no retail card. */
+    assert(Cards_CardEffects(601, &effects) == 1 && Cards_CardEffectsReplace(601) && Cards_AiId(601) == -1);
+
+    /* Not a monster on the field: no self, others or battle, nor an LP
+     * change to "all"; "when" is not read. A destroy or boost of all is. */
+    assert(Cards_CardEffects(602, &effects) == 3 && !Cards_CardEffectsReplace(602));
+    assert(effects[0].action == MONSTER_DO_HEAL && effects[0].when == MONSTER_WHEN_SUMMON);
+    assert(effects[1].action == MONSTER_DO_DESTROY && effects[1].target == MONSTER_TARGET_ALL);
+    assert(effects[2].action == MONSTER_DO_BOOST && effects[2].target == MONSTER_TARGET_ALL);
+
+    /* Refused on a monster: no replacement, so its AI identity is its own. */
+    assert(Cards_Type(603) == 0 && !Cards_CardEffectsReplace(603) && !Cards_CardEffects(603, &effects));
+    assert(Cards_Type(604) == 0 && !Cards_CardEffectsReplace(604) && !Cards_CardEffects(604, &effects));
+    assert(!ai_effect_ids[603] && !ai_effect_ids[604]);
+
+    /* An unknown mode, and an analogue of another type: refused. */
+    assert(!Cards_CardEffectsReplace(605));
+    assert(Cards_CardEffectsReplace(606) && Cards_AiId(606) == -1);
+
+    /* 602's five targets; 603 and 604 on a monster; 605's mode; 606's analogue. */
+    assert(notes[7] == 9);
+}
+
 int main(void)
 {
     int id;
@@ -493,6 +581,7 @@ int main(void)
     monster_effect_entries();
     monster_effect_for_each();
     copies_made_monsters();
+    card_effect_entries();
     puts("cards stars, magic and trap conversions: ok");
     return 0;
 }
