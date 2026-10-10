@@ -5,6 +5,7 @@
 #endif
 #include <assert.h>
 #include <stdio.h>
+#include <stddef.h>
 #include <string.h>
 #include "../../src/game/duel_trap_resolution.c"
 
@@ -28,8 +29,18 @@ int Cards_TrapThreshold(int id, int fallback) { return thresholds[id] >= 0 ? thr
 int Cards_CardEffectsReplace(int id) { return id == replace_id; }
 void MonsterEffects_CardPlayed(int card, int side) { (void)card; (void)side; }
 void MonsterEffects_TrapPlayed(int card, int side) { (void)card; (void)side; }
+void MonsterEffects_TrapPresented(int card, int side) { (void)card; (void)side; }
 void MonsterEffects_AttackTrapPlayed(int card, int side) { played_card = card; played_side = side; }
 void MonsterEffects_TrackBattleParticipants(int attacker, int defender) { (void)attacker; (void)defender; }
+/* gMonsterEffects is in every save state (src/pc/game/trigger_state.c): the
+ * fields earlier builds had keep their offsets, new ones go at the end. */
+_Static_assert(sizeof(MonsterTrigger) == 4, "a queued trigger's save-state size");
+_Static_assert(offsetof(MonsterEffectsState, count) == 8, "save-state layout");
+_Static_assert(offsetof(MonsterEffectsState, trap_pending) == 9, "the old pad byte");
+_Static_assert(offsetof(MonsterEffectsState, queue) == 272, "save-state layout");
+_Static_assert(offsetof(MonsterEffectsState, battle_life) == 486, "save-state layout");
+_Static_assert(offsetof(MonsterEffectsState, battle_abort) == 494, "appended after the old layout");
+_Static_assert(offsetof(MonsterEffectsState, trap_battle_record) == 496, "appended after the old layout");
 int Tables_TrapThreshold(int index, int retail) { (void)index; return retail; }
 s32 Duel_CalcCardStats(DuelCardRecord *card) { (void)card; return attack; }
 

@@ -95,7 +95,6 @@ static void queue(int card, int record, int when)
         S.queue[S.count].card = (short)card;
         S.queue[S.count].record = (unsigned char)record;
         S.queue[S.count].effect = (unsigned char)i;
-        S.queue[S.count].card_effect = 0;
         S.count++;
         trace("queued", card, record, &effects[i]);
     }
@@ -105,10 +104,11 @@ void MonsterEffects_CardPlayed(int card, int side)
 {
     const MonsterEffect *effects;
     int n = Cards_CardEffects(card, &effects), i;
-    /* Any monster-zone record supplies the owning side to the shared target
-     * and LP helpers. CardEffects_Read rejects targets that would identify
-     * the made-up source as a real monster. */
-    int record = side * DUEL_FIELD_SIDE_GRID_SLOT_COUNT + DUEL_FIELD_ROW_SIZE;
+    /* The first monster-zone record of the owner's side (records are 15 a
+     * side: owner()) stands in as the source, giving the shared target and
+     * LP helpers the owning side. CardEffects_Read rejects the targets that
+     * would take this made-up source for a real monster. */
+    int record = side * 15 + 5;
     for (i = 0; i < n; i++) {
         if (S.count == MONSTER_QUEUE_MAX) {
             LOG(LOG_DUEL_EFFECTS, "card effects: queue full: card %d's effect dropped", card);
@@ -116,8 +116,7 @@ void MonsterEffects_CardPlayed(int card, int side)
         }
         S.queue[S.count].card = (short)card;
         S.queue[S.count].record = (unsigned char)record;
-        S.queue[S.count].effect = (unsigned char)i;
-        S.queue[S.count].card_effect = 1;
+        S.queue[S.count].effect = (unsigned char)(i | MONSTER_TRIGGER_CARD_EFFECT);
         S.count++;
     }
 }
@@ -129,8 +128,19 @@ void MonsterEffects_TrapPlayed(int card, int side)
 
 void MonsterEffects_AttackTrapPlayed(int card, int side)
 {
-    S.trap_pending = 1;
+    const MonsterEffect *effects;
+    /* Its effects run within the battle: hold the battle's own triggers
+     * until they are done, and cancel it if they took a participant. */
+    if (Cards_CardEffects(card, &effects)) S.trap_pending = 1;
     MonsterEffects_CardPlayed(card, side);
+}
+
+void MonsterEffects_TrapPresented(int card, int side)
+{
+    /* The same presentation serves the battle's attack traps and the
+     * traps that answer a card put down or a magic card. */
+    if (phase() == PHASE_BATTLE) MonsterEffects_AttackTrapPlayed(card, side);
+    else MonsterEffects_CardPlayed(card, side);
 }
 
 void MonsterEffects_TrackBattleParticipants(int attacker, int defender)
@@ -368,12 +378,13 @@ static int resolve(void)
 {
     MonsterTrigger trigger = S.queue[0];
     const MonsterEffect *effects, *effect;
-    int n = trigger.card_effect ? Cards_CardEffects(trigger.card, &effects) : Cards_MonsterEffects(trigger.card, &effects);
+    int card_effect = trigger.effect & MONSTER_TRIGGER_CARD_EFFECT, index = trigger.effect & ~MONSTER_TRIGGER_CARD_EFFECT;
+    int n = card_effect ? Cards_CardEffects(trigger.card, &effects) : Cards_MonsterEffects(trigger.card, &effects);
     int side = owner(trigger.record), record, hit = 0, count;
     memmove(S.queue, S.queue + 1, (size_t)(--S.count) * sizeof(S.queue[0]));
-    if (trigger.effect >= n) return 0;
-    effect = &effects[trigger.effect];
-    trace(trigger.card_effect ? "resolving card" : "resolving", trigger.card, trigger.record, effect);
+    if (index >= n) return 0;
+    effect = &effects[index];
+    trace(card_effect ? "resolving card" : "resolving", trigger.card, trigger.record, effect);
     S.chain++;
     count = times(effect, trigger.record);
     if (effect->each) LOG(LOG_DUEL_EFFECTS, "monster effects: for each: %d counted", count);
@@ -403,9 +414,9 @@ static int resolve(void)
         SD_SEPlayFull(SE_BOOST);
         break;
     case MONSTER_DO_HEAL:
-        return count ? life_effect(life_side(effect, side, trigger.card_effect), effect->amount * count) : 0;
+        return count ? life_effect(life_side(effect, side, card_effect), effect->amount * count) : 0;
     case MONSTER_DO_DAMAGE:
-        return count ? life_effect(life_side(effect, side, trigger.card_effect), -effect->amount * count) : 0;
+        return count ? life_effect(life_side(effect, side, card_effect), -effect->amount * count) : 0;
     case MONSTER_DO_DESTROY:
         /* Crush Card's removal, on the monsters chosen here
          * (MonsterEffects_RemovalTakes): it takes the other side's, as
@@ -419,7 +430,7 @@ static int resolve(void)
              * effect which explicitly names its owner (or all monsters)
              * removes that row here; the retail sequencer still presents
              * the opposing row below. */
-            if (trigger.card_effect && owner(record) == side) {
+            if (card_effect && owner(record) == side) {
                 DuelCard_RemoveFromField(card);
                 hit = 1;
             } else {

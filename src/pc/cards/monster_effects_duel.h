@@ -30,9 +30,13 @@
 #define MONSTER_RECORDS 30
 #define MONSTER_QUEUE_MAX 48
 
+/* `effect` is the index in the card's list; MONSTER_TRIGGER_CARD_EFFECT set
+ * means its "card_effects" (a Magic/Trap's), not its "monster_effects". The
+ * flag shares the byte so the queue keeps its save-state layout. */
+#define MONSTER_TRIGGER_CARD_EFFECT 0x80
 typedef struct {
     short card;
-    unsigned char record, effect, card_effect;
+    unsigned char record, effect;
 } MonsterTrigger;
 
 typedef struct {
@@ -43,9 +47,8 @@ typedef struct {
     unsigned char turn_side, turn_count;   /* the turn the last look was in */
     unsigned char ritual;       /* a ritual ran since the last look: who left were its tributes */
     unsigned char pause;        /* frames the duel waits after a boost or LP change */
-    unsigned char trap_pending; /* a replacement attack trap paused this battle */
-    unsigned char battle_abort; /* bit mask: replacement removed battle participant(s) */
     unsigned char count;        /* queue */
+    unsigned char trap_pending; /* an attack trap's card_effects paused this battle */
     unsigned char attacker, defender;   /* the last battle's records */
     unsigned short chain;       /* effects resolved since the field last settled */
     short flipped;              /* the card that battle flipped (the defender), its flip still to fire */
@@ -71,6 +74,9 @@ typedef struct {
     unsigned char battle_life_count;
     unsigned char battle_life_side[4];
     short battle_life[4];
+    /* Added after the layout above, which save states of earlier builds
+     * have: new fields go at the end only. */
+    unsigned char battle_abort; /* bit mask: an attack trap removed battle participant(s) */
     short trap_battle_record[2]; /* attacker and defender while a trap resolves */
 } MonsterEffectsState;
 
@@ -82,6 +88,9 @@ int MonsterEffects_Update(void);
 void MonsterEffects_CardPlayed(int card, int side);
 void MonsterEffects_TrapPlayed(int card, int side);
 void MonsterEffects_AttackTrapPlayed(int card, int side);
+/* A trap's presentation finished (Duel_UpdateTrapPresentation): queue its
+ * added card_effects, as an attack trap's when it sprang in a battle. */
+void MonsterEffects_TrapPresented(int card, int side);
 void MonsterEffects_TrackBattleParticipants(int attacker, int defender);
 int MonsterEffects_BattleAbortMask(void);
 /* Placement committed a card to `record` (func_8001B170, the ritual):

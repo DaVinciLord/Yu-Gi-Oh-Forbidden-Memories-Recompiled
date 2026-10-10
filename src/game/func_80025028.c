@@ -2,10 +2,11 @@
 #include "duel_side_state.h"
 #include "duel_grid.h"
 #include "duel_card.h"
-#include "duel_card_record_lifecycle.h"
 #include "display_object.h"
 #include "func_80025028.h"
 #ifdef MEMORIES_PC
+#include "duel_card_layout.h"
+#include "duel_card_record_lifecycle.h"
 #include "pc/cards/cards.h"
 #include "pc/cards/monster_effects_duel.h"
 #endif
@@ -41,7 +42,7 @@ s32 Duel_SelectTrapByCardId(s32 arg0)
                     /* It springs under the same condition, but its custom
                      * work replaces the retail reaction. Return no retail
                      * trap so the caller keeps its ordinary spell path. */
-                    int owner = (int)(record - D_801A7AD8) / DUEL_FIELD_SIDE_GRID_SLOT_COUNT;
+                    int owner = (int)(record - D_801A7AD8) / DUEL_CARD_SIDE_RECORD_COUNT;
                     MonsterEffects_TrapPlayed(record->card_id, owner);
                     DuelCard_RemoveFromField(record);
                     D_800E9FF0[owner].rank.traps_triggered++;

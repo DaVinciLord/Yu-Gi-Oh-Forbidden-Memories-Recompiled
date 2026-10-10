@@ -44,7 +44,7 @@ u8 gDuel_abTrapAttackThresholds[DUEL_ATTACK_TRAP_COUNT] = {
 static int resolve_replacement_attack_trap(void)
 {
     DuelCardRecord *card = &D_801A7AD8[D_8009B1B8];
-    int owner = (int)(card - D_801A7AD8) / DUEL_FIELD_SIDE_GRID_SLOT_COUNT;
+    int owner = (int)(card - D_801A7AD8) / DUEL_CARD_SIDE_RECORD_COUNT;
     if (!Cards_CardEffectsReplace(card->card_id)) return 1;
     MonsterEffects_AttackTrapPlayed(card->card_id, owner);
     DuelCard_RemoveFromField(card);
@@ -334,7 +334,7 @@ m3:
     /* The selected field record is the actual trap, while D_8009B22A is
      * the retail behavior it borrowed.  Queue the former's data-defined
      * actions once its normal trap presentation has completed. */
-    MonsterEffects_CardPlayed(D_801A7AD8[D_8009B1B8].card_id, D_8009B1D5 ^ 1);
+    MonsterEffects_TrapPresented(D_801A7AD8[D_8009B1B8].card_id, D_8009B1D5 ^ 1);
 #endif
     q->rank.traps_triggered = q->rank.traps_triggered + 1;
     return 0;

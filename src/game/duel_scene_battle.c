@@ -137,20 +137,21 @@ void DuelScene_UpdateBattle(void)
     DuelEffectResourceRecord *effects;
 
 #ifdef MEMORIES_PC
-    /* An attack replacement can remove a participant while the battle scene
-     * is starting. Its slot is cleared before the field object is released,
-     * so use the explicit marker rather than dereferencing it here. */
+    /* An attack trap's card_effects can remove a participant during the
+     * battle: a replacement as the scene starts, an added effect after the
+     * trap's presentation. Its field object was released with it, so use
+     * the explicit marker rather than dereferencing it here. */
     if (gDuel_wSceneStateFlags & 0x8000) {
         int abort_mask = MonsterEffects_BattleAbortMask();
         if (abort_mask) {
-            /* Removed records released their field objects. Clear only those
-             * stale battle slots; state 11 recreates surviving field cards
-             * before releasing their still-live battle objects. */
-            if (abort_mask & 1) D_800E9EF0[0] = D_800E9EF0[2] = 0;
-            if (abort_mask & 2) D_800E9EF0[1] = D_800E9EF0[3] = 0;
-            /* Bit 0x10 distinguishes cleanup before presentation from the
-             * retail post-battle cleanup (which relies on slots 2 and 3). */
-            D_8009B174 = 0x1B;
+            /* Clear only the stale battle slots; state 11 recreates the
+             * surviving field cards before releasing their battle objects. */
+            if (abort_mask & 1) D_800E9EF0[0] = 0;
+            if (abort_mask & 2) D_800E9EF0[1] = 0;
+            /* Before the presentation (state 1) there are no stat panels
+             * in slots 2 and 3 for the retail cleanup to key on: bit 0x10
+             * says so. After it, the retail cleanup fades them out. */
+            D_8009B174 = D_800E9EF0[2] || D_800E9EF0[3] ? 0xB : 0x1B;
         }
     }
 #endif
@@ -745,7 +746,14 @@ void DuelScene_UpdateBattle(void)
     case 11:
         if (!(D_8009B174 & 0x80)) {
             D_8009B174 |= 0x80;
+#ifdef MEMORIES_PC
+            /* Bit 0x10 is the replacement-trap abort (above): the battle
+             * never reached its presentation, so slots 2 and 3 were not
+             * filled, and a removed participant's slot was cleared. */
             if (((D_8009B174 & 0x10) || D_800E9EF0[2] != 0) && D_800E9EF0[0] != 0) {
+#else
+            if (D_800E9EF0[2] != 0) {
+#endif
                 func_80024D34(D_800E9EF0[0]->field_6A, D_800E9EF0[0]->field_6B);
                 left = &D_801A7AD8[D_800E9EF0[0]->field_6A];
                 left->flags |= (D_8009B178[0] & 0xA00) | 0x4000;
@@ -755,18 +763,24 @@ void DuelScene_UpdateBattle(void)
 #endif
                 Duel_ApplyCardObjectFlags((DuelCardDisplayObject *)left->object);
             }
-            if (((D_8009B174 & 0x10) || D_800E9EF0[3] != 0) && D_800E9EF0[1] != 0) {
-                func_80024D34(D_800E9EF0[1]->field_6A, D_800E9EF0[1]->field_6B);
-                left = &D_801A7AD8[D_800E9EF0[1]->field_6A];
-                left->flags |= D_8009B178[1] & 0xA00;
-                left->stat_modifier = D_8009B170[1];
 #ifdef MEMORIES_PC
-                left->defense_modifier = gDuel_awSavedDefenseModifier[1];
+            if ((D_8009B174 & 0x10) || D_800E9EF0[3] != 0) {
+#else
+            if (D_800E9EF0[3] != 0) {
 #endif
-                if (D_8009B22A != 0) {
-                    left->flags |= D_8009B178[1] & 0x3000;
+                if (D_800E9EF0[1] != 0) {
+                    func_80024D34(D_800E9EF0[1]->field_6A, D_800E9EF0[1]->field_6B);
+                    left = &D_801A7AD8[D_800E9EF0[1]->field_6A];
+                    left->flags |= D_8009B178[1] & 0xA00;
+                    left->stat_modifier = D_8009B170[1];
+#ifdef MEMORIES_PC
+                    left->defense_modifier = gDuel_awSavedDefenseModifier[1];
+#endif
+                    if (D_8009B22A != 0) {
+                        left->flags |= D_8009B178[1] & 0x3000;
+                    }
+                    Duel_ApplyCardObjectFlags((DuelCardDisplayObject *)left->object);
                 }
-                Duel_ApplyCardObjectFlags((DuelCardDisplayObject *)left->object);
             }
             DisplayObject_ReleaseIfPresent(D_800E9EF0[0]);
             DisplayObject_ReleaseIfPresent(D_800E9EF0[1]);
