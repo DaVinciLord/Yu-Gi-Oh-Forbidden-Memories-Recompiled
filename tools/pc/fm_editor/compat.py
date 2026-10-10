@@ -72,9 +72,12 @@ def external_packs(name: str, project=None) -> tuple:
             if not path.is_relative_to(source):
                 return [], f"packs file {name!r} must be inside the mod"
             blob = path.read_bytes()
-        value = parse(blob.decode("utf-8", errors="surrogateescape"))
+        text = blob.decode("utf-8", errors="surrogateescape")
+        value = parse(text)
     except (OSError, ValueError) as problem:
         return [], f"cannot read packs file {name!r}: {problem}"
+    if value is None and text.strip() != "null":     # overlaps.parse: what json.c cannot read
+        return [], f"packs file {name!r} is not valid JSON"
     if isinstance(value, dict):
         value = value.get("packs", [])
     if not isinstance(value, list):

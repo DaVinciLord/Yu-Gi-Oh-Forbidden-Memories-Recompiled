@@ -200,6 +200,11 @@ class ExternalPacksTest(unittest.TestCase):
         for contents in (b'{', b'null', b'{"packs": "recursive.json"}'):
             p.files[p.packs_file] = contents
             self.assertTrue(compat.problems(manifest.build(p), p))
+        # A syntax error is said as one, not as the wrong kind of value.
+        p.files[p.packs_file] = b'[{"id": "p",]'
+        self.assertEqual(compat.problems(manifest.build(p), p), ["packs file 'missing.json' is not valid JSON"])
+        p.files[p.packs_file] = b'null'
+        self.assertIn("must contain a pack list", compat.problems(manifest.build(p), p)[0])
         for name in ("../packs.json", "/packs.json", "C:\\packs.json", "..\\packs.json",
                      "packs\\list.json", "./packs.json", "packs//list.json", "packs/"):
             p.packs_file = name
